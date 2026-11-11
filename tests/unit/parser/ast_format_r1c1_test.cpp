@@ -152,6 +152,31 @@ TEST(AstFormatR1C1, RefErrorSites) {
   EXPECT_EQ(R1C1("=#REF!", 0, 0), "#REF!");
 }
 
+// A span quotes as one unit when either endpoint needs quoting; a quoted
+// second sheet is a range over a name, its qualifier kept quoted.
+TEST(AstFormatR1C1, SpanQuotesAsOneUnit) {
+  EXPECT_EQ(R1C1("'Data:My Sheet'!A1", 4, 2), "'Data:My Sheet'!R[-4]C[-2]");
+  EXPECT_EQ(R1C1("'My Sheet':Data!A1", 4, 2), "'My Sheet:Data'!R[-4]C[-2]");
+  EXPECT_EQ(R1C1("SUM('Data:My Sheet'!A1:B2)", 4, 2), "SUM('Data:My Sheet'!R[-4]C[-2]:R[-3]C[-1])");
+  EXPECT_EQ(R1C1("Data:Mid!A1", 4, 2), "Data:Mid!R[-4]C[-2]");
+  EXPECT_EQ(R1C1("'Data':Mid!A1", 4, 2), "Data:Mid!R[-4]C[-2]");
+  EXPECT_EQ(R1C1("SUM('Data:Mid'!$A$1)", 4, 2), "SUM(Data:Mid!R1C1)");
+}
+
+TEST(AstFormatR1C1, NonSpanRangeKeepsQuotedRightOperand) {
+  EXPECT_EQ(R1C1("Data:'Mid'!$A$1", 4, 2), "Data:'Mid'!R1C1");
+  EXPECT_EQ(R1C1("'Data':'My Sheet'!A1", 4, 2), "Data:'My Sheet'!R[-4]C[-2]");
+  EXPECT_EQ(R1C1("'My Sheet':'Mid'!A1", 4, 2), "'My Sheet':'Mid'!R[-4]C[-2]");
+
+  // A rename leaves the qualifier without its quoting hint.
+  Arena arena;
+  Reference r;
+  r.sheet = "Mid2";
+  const AstNode* range = make_range_op(arena, make_name_ref(arena, "Data"), make_ref(arena, r), /*spliced=*/false);
+  ASSERT_NE(range, nullptr);
+  EXPECT_EQ(format_formula_r1c1(*range, 0, 0), "Data:'Mid2'!RC");
+}
+
 }  // namespace
 }  // namespace parser
 }  // namespace formulon

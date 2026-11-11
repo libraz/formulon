@@ -224,8 +224,8 @@ class Parser {
   AstNode* parse_sheet_qualified_ref(std::string_view sheet, bool quoted, TextRange sheet_range);
   // Parses the tail of a 3-D reference `<sheet1>:<sheet2>!<cellref>`. The
   // caller has identified `sheet1` (its name and source range) and verified
-  // that the current token is `Colon` followed by an `Ident` / `SheetName`
-  // and then `Bang`. Consumes the colon, second sheet name, bang, and cell
+  // that the current token is `Colon` followed by an `Ident` / `Bool` and
+  // then `Bang`. Consumes the colon, second sheet name, bang, and cell
   // reference. Returns a `Ref3D` node, or `nullptr` on a malformed cell
   // reference after recording a diagnostic.
   AstNode* parse_3d_ref(std::string_view sheet1, TextRange sheet1_range);
@@ -251,11 +251,15 @@ class Parser {
   // True when the tokens from `offset` name a defined name rather than
   // cells: an identifier that does not open a whole-column pair (`A:C`).
   bool defined_name_at(std::size_t offset) const noexcept;
-  // True when the token at `offset` can close a 3-D span `X:Y!`: a sheet
-  // name, bare or quoted, or a bool word, that does not open with a digit.
-  // A digit-leading second sheet makes the `:` the range operator instead
-  // (`Data:2024!A1` is `Data` ranged with `'2024'!A1`).
+  // True when the token at `offset` can close a 3-D span `X:Y!`: a bare
+  // sheet name or a bool word that does not open with a digit. A quoted or
+  // digit-leading second sheet makes the `:` the range operator instead
+  // (`Data:'Mid'!A1` is `Data` ranged with `'Mid'!A1`).
   bool sheet_span_end_at(std::size_t offset) const noexcept;
+  // True when the tokens from `offset` open a sheet-qualified reference: a
+  // sheet name (bare, quoted or a bool word), `!`, and a cell, range or
+  // whole-column / whole-row tail.
+  bool qualified_ref_at(std::size_t offset) const noexcept;
   AstNode* parse_cellref_atom();
   AstNode* parse_full_row_or_number(const Token& first);
 

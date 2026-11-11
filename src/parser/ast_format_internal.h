@@ -50,6 +50,17 @@ void EmitCommaList(std::uint32_t count, std::string& out, EmitAt&& emit_at) {
 void CollectParens(const AstNode& node, int min_bp, ParenCounts& out);
 bool PrintsSpliced(const AstNode& range, std::uint32_t i) noexcept;
 
+// The text operand `i` of a `:` chain prints quoted, so that `Data:'Mid'!A1`
+// never reads back as a span: the qualifier of an operand after an
+// unqualified name, or `quoted_name(name)` for an unqualified name before a
+// qualified operand. Empty when neither applies.
+std::string RangeOperandQuotedUnit(const AstNode& range, std::uint32_t i,
+                                   std::string_view (*quoted_name)(std::string_view) noexcept);
+
+// Quotes the first bare occurrence of `unit` in `text`; one already quoted
+// or behind a name prefix (`_xlnm.`) is left alone.
+void QuoteBareUnit(std::string_view unit, std::string& text);
+
 }  // namespace detail
 }  // namespace parser
 }  // namespace formulon

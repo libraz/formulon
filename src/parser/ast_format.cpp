@@ -362,6 +362,11 @@ void FormatBinary(const AstNode& node, std::string& out, const Layout& layout) {
   }
 }
 
+// An unqualified name that the A1 text must quote; empty when it reads bare.
+std::string_view A1QuotedName(std::string_view name) noexcept {
+  return local_sheet_needs_quoting_a1(name) ? name : std::string_view{};
+}
+
 // Prints a `:` chain with `emit` printing each operand. The two halves of a
 // whole-axis token print as one (`A:C`, each half cut at its own `:`);
 // every other operand prints in full, so `H:H:E:E` keeps both of its
@@ -377,10 +382,15 @@ std::size_t EmitRangeChain(const AstNode& node, std::string& out, Emit&& emit) {
       out.push_back(':');
     }
     const AstNode& operand = node.as_range_operand(i);
-    if ((i > 0U && PrintsSpliced(node, i - 1U)) || (i + 1U < n && PrintsSpliced(node, i))) {
+    const bool spliced = (i > 0U && PrintsSpliced(node, i - 1U)) || (i + 1U < n && PrintsSpliced(node, i));
+    const std::string quoted_unit = detail::RangeOperandQuotedUnit(node, i, A1QuotedName);
+    if (spliced || !quoted_unit.empty()) {
       std::string text;
       emit(operand, text);
-      out.append(text, 0, text.find(':'));
+      if (!quoted_unit.empty()) {
+        detail::QuoteBareUnit(quoted_unit, text);
+      }
+      out.append(text, 0, spliced ? text.find(':') : std::string::npos);
     } else {
       emit(operand, out);
     }

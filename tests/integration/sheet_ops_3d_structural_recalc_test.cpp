@@ -476,6 +476,18 @@ TEST(WorkbookSheetOps, RenameQuotesApostropheInThreeDEndpoint) {
   EXPECT_EQ(wb.defined_names()[0].formula, "SUM('2026 Q1''s:Feb'!A1)");
 }
 
+// `Data:'Mid'!A1` ranges the name `Data` with one sheet's cell; a bare
+// `Mid2` would read back as a span, so the renamed qualifier stays quoted.
+TEST(WorkbookSheetOps, RenameKeepsNonSpanRightOperandQuoted) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Data");
+  wb.add_sheet("Mid");
+  wb.add_sheet("Summary");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(2, 0, 0, "=Data:'Mid'!A1")));
+  ASSERT_TRUE(static_cast<bool>(wb.rename_sheet(1, "Mid2")));
+  EXPECT_EQ(wb.sheet(2).cell_at(0, 0)->formula_text, "=Data:'Mid2'!A1");
+}
+
 TEST(WorkbookSheetOps, RemoveRewritesOnlyAffectedAstSubtreesAndDoesNotRebind) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Drop");

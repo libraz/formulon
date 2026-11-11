@@ -392,6 +392,45 @@ TEST(ParserAtoms, QuotedThreeDFullColumn) {
   EXPECT_EQ(ParseToSexpr("='First Sheet:Last Sheet'!A:A"), "(ref3d First Sheet:Last Sheet A:A)");
 }
 
+// A separately quoted second sheet is never a span: the `:` ranges the name
+// `Data` with the qualified reference. A quoted first sheet before a bare
+// second one, or one quoted span, is a span.
+TEST(ParserSpan, RecognisesExcelSpanShapes) {
+  const struct {
+    const char* src;
+    const char* sexpr;
+  } kRows[] = {
+      {"='My Sheet':Data!A1", "(ref3d My Sheet:Data A1)"},
+      {"='Data':'My Sheet'!A1", "(range (name Data) (ref 'My Sheet'!A1))"},
+      {"='Data':Mid!A1", "(ref3d Data:Mid A1)"},
+      {"=Data:'Mid'!A1", "(range (name Data) (ref 'Mid'!A1))"},
+      {"=SUM(Data:'My Sheet'!A1:A2)", "(call SUM (range (name Data) (ref 'My Sheet'!A1) (ref A2)))"},
+      {"=SUM('Data:My Sheet'!A1:A2)", "(call SUM (ref3d Data:My Sheet A1:A2))"},
+      {"=Data:Mid!A1", "(ref3d Data:Mid A1)"},
+      {"=Data:'My Sheet'!A1", "(range (name Data) (ref 'My Sheet'!A1))"},
+      {"='Data:My Sheet'!A1", "(ref3d Data:My Sheet A1)"},
+      {"=SUM(Data:Mid!A1:A2)", "(call SUM (ref3d Data:Mid A1:A2))"},
+      {"=SUM('Data':Mid!A1:A2)", "(call SUM (ref3d Data:Mid A1:A2))"},
+  };
+  for (const auto& row : kRows) {
+    EXPECT_EQ(ParseToSexpr(row.src), row.sexpr) << row.src;
+  }
+}
+
+// A quoted name before `:` needs a sheet-qualified reference after it;
+// anything else after a quoted token without `!` stays an error.
+TEST(ParserSpan, QuotedNameNeedsAQualifiedRightOperand) {
+  EXPECT_EQ(ParseToSexpr("='My Sheet':'Mid'!A1"), "(range (name My Sheet) (ref 'Mid'!A1))");
+  EXPECT_EQ(ParseToSexpr("='Data':'Mid'!A:A"), "(range (name Data) (ref 'Mid'!A:A))");
+  EXPECT_EQ(ParseToSexpr("='Data':TRUE!A1"), "(ref3d Data:TRUE A1)");
+  for (const char* src : {"='z'+1", "='Data':5", "='Data':A1", "='Data':Rate", "='Data':'Mid'", "='Data':"}) {
+    Arena a;
+    Parser p(src, a);
+    p.parse();
+    EXPECT_FALSE(p.errors().empty()) << src;
+  }
+}
+
 TEST(ParserAtoms, FullRowOverflowDoesNotWrapToSmallRow) {
   // 2^64 + 1 == 18446744073709551617. Unguarded `std::uint64_t`
   // accumulation wraps this back to 1, so `18446744073709551617:1` used

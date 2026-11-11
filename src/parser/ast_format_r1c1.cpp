@@ -80,18 +80,26 @@ void AppendExternalRef(const AstNode& node, const Host& host, std::string& out) 
   }
 }
 
-// Excel's R1C1 reading quotes each sheet of a 3-D span on its own
-// (`Data:'My Sheet'!`), unlike the single quoted unit its A1 storage uses.
+// A 3-D span quotes as one unit when either endpoint needs quoting
+// (`'Data:My Sheet'!`); a separately quoted second sheet is no span.
 void AppendRef3D(const AstNode& node, const Host& host, std::string& out) {
-  AppendSheetName(node.as_ref3d_sheet_begin(), out);
-  out.push_back(':');
-  AppendSheetName(node.as_ref3d_sheet_end(), out);
+  const std::string_view begin = node.as_ref3d_sheet_begin();
+  const std::string_view end = node.as_ref3d_sheet_end();
+  const bool quote = local_sheet_needs_quoting_r1c1(begin) || local_sheet_needs_quoting_r1c1(end);
+  append_sheet_name_quoted_if(std::string(begin) + ':' + std::string(end), quote, out);
   out.push_back('!');
   AppendCell(node.as_ref3d_cell(), host, out);
   if (node.as_ref3d_is_range()) {
     out.push_back(':');
     AppendCell(node.as_ref3d_cell_end(), host, out);
   }
+}
+
+// An unqualified name that the R1C1 text must quote, as its bare spelling;
+// empty when it reads bare.
+std::string_view R1C1QuotedName(std::string_view name) noexcept {
+  const std::string_view bare = cell_shaped_name_bare(name);
+  return local_sheet_needs_quoting_r1c1(bare) ? bare : std::string_view{};
 }
 
 // True for a node whose `@` Excel does not echo back in `FormulaR1C1`.
@@ -158,6 +166,19 @@ struct Emitter {
     }
   }
 
+  // Operand `i` of the `:` chain `range`, with the quoting that keeps a non-span apart from a span.
+  void emit_range_operand(const AstNode& range, std::uint32_t i, std::string& out) const {
+    const std::string unit = detail::RangeOperandQuotedUnit(range, i, R1C1QuotedName);
+    if (unit.empty()) {
+      emit(range.as_range_operand(i), out);
+      return;
+    }
+    std::string text;
+    emit(range.as_range_operand(i), text);
+    detail::QuoteBareUnit(unit, text);
+    out.append(text);
+  }
+
   // Only reached with `display` set; a payload that does not parse prints as stored.
   void emit_structured_ref(const AstNode& node, std::string& out) const {
     const std::string_view table = node.as_structured_ref_table();
@@ -211,7 +232,7 @@ struct Emitter {
           if (i > 0U) {
             out.push_back(':');
           }
-          emit(node.as_range_operand(i), out);
+          emit_range_operand(node, i, out);
         }
         return;
       case NodeKind::UnionOp:
@@ -238,7 +259,7 @@ struct Emitter {
             if (i > 0U) {
               out.append(i + 1U == range.as_range_arity() ? trim_ref_operator(mode) : ":");
             }
-            emit(range.as_range_operand(i), out);
+            emit_range_operand(range, i, out);
           }
           return;
         }

@@ -591,10 +591,10 @@ AstNode* Parser::parse_ident_or_call_or_full_col() {
     return make_recovery_placeholder(sheet_range);
   }
 
-  // 3-D reference `Sheet2:Sheet3!A1`: an Ident followed by `:` then a sheet
-  // name and then `!`. This must be checked before the whole-column `A:A`
-  // rule below so a sheet name that happens to also be column-shaped is not
-  // mis-parsed.
+  // 3-D reference `Sheet2:Sheet3!A1`: an Ident followed by `:` then a bare
+  // sheet name and then `!` (a quoted second sheet leaves `:` the range
+  // operator). This must be checked before the whole-column `A:A` rule below
+  // so a sheet name that happens to also be column-shaped is not mis-parsed.
   if (next == TokenKind::Colon && sheet_span_end_at(2) && peek_kind_at(3) == TokenKind::Bang) {
     const std::string_view sheet1 = ident.lexeme;
     const TextRange sheet1_range = ident.range;

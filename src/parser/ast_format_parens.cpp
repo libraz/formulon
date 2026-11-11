@@ -4,7 +4,9 @@
 // canonical formatter and the XLSB `PtgParen` encoder both read the result.
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
 
 #include "parser/ast.h"
@@ -77,6 +79,58 @@ bool PrintsSpliced(const AstNode& range, std::uint32_t i) noexcept {
   const Reference& rr = rhs.as_ref();
   const bool same_axis = (lr.is_full_col && rr.is_full_col) || (lr.is_full_row && rr.is_full_row);
   return same_axis && !whole_axis_pair_is_single(lr, rr);
+}
+
+namespace {
+
+// The local sheet qualifier `node` prints with (`Begin:End` for a span);
+// empty when it has none.
+std::string LocalQualifier(const AstNode& node) {
+  switch (node.kind()) {
+    case NodeKind::Ref:
+      return std::string(node.as_ref().sheet);
+    case NodeKind::Ref3D:
+      return std::string(node.as_ref3d_sheet_begin()) + ':' + std::string(node.as_ref3d_sheet_end());
+    case NodeKind::NameRef:
+      return std::string(node.as_name_sheet());
+    case NodeKind::ErrorLiteral: {
+      const RefErrorSite* site = node.as_ref_error_site();
+      return site != nullptr && site->form == RefErrorSite::Form::kQualified ? std::string(site->sheet) : std::string();
+    }
+    default:
+      return {};
+  }
+}
+
+bool IsUnqualifiedName(const AstNode& node) noexcept {
+  return node.kind() == NodeKind::NameRef && node.as_name_sheet().empty();
+}
+
+}  // namespace
+
+std::string RangeOperandQuotedUnit(const AstNode& range, std::uint32_t i,
+                                   std::string_view (*quoted_name)(std::string_view) noexcept) {
+  const AstNode& operand = range.as_range_operand(i);
+  if (i > 0U && IsUnqualifiedName(range.as_range_operand(i - 1U))) {
+    if (std::string qualifier = LocalQualifier(operand); !qualifier.empty()) {
+      return qualifier;
+    }
+  }
+  if (i + 1U < range.as_range_arity() && IsUnqualifiedName(operand) &&
+      !LocalQualifier(range.as_range_operand(i + 1U)).empty()) {
+    return std::string(quoted_name(operand.as_name()));
+  }
+  return {};
+}
+
+void QuoteBareUnit(std::string_view unit, std::string& text) {
+  const std::size_t at = text.find(unit);
+  if (at == std::string::npos || (at > 0U && (text[at - 1U] == '\'' || text[at - 1U] == '.'))) {
+    return;
+  }
+  std::string quoted;
+  append_sheet_name_quoted_if(unit, /*quote=*/true, quoted);
+  text.replace(at, unit.size(), quoted);
 }
 
 namespace {

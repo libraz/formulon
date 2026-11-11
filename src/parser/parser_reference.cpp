@@ -20,15 +20,6 @@ using detail::kMaxRow;
 using detail::kMaxRowDigits;
 using detail::SpanRange;
 
-namespace {
-
-// The sheet name a token carries: escape-resolved for a quoted name.
-std::string_view SheetTokenText(const Token& tok) noexcept {
-  return tok.kind == TokenKind::SheetName ? tok.text : tok.lexeme;
-}
-
-}  // namespace
-
 // ---------------------------------------------------------------------------
 // Cell-ref decoding
 // ---------------------------------------------------------------------------
@@ -194,11 +185,21 @@ bool Parser::defined_name_at(std::size_t offset) const noexcept {
 
 bool Parser::sheet_span_end_at(std::size_t offset) const noexcept {
   const Token& tok = peek_at(offset);
-  if (tok.kind != TokenKind::Ident && tok.kind != TokenKind::SheetName && tok.kind != TokenKind::Bool) {
+  if (tok.kind != TokenKind::Ident && tok.kind != TokenKind::Bool) {
     return false;
   }
-  const std::string_view name = SheetTokenText(tok);
-  return !name.empty() && !strings::is_ascii_digit(name.front());
+  return !tok.lexeme.empty() && !strings::is_ascii_digit(tok.lexeme.front());
+}
+
+bool Parser::qualified_ref_at(std::size_t offset) const noexcept {
+  const TokenKind sheet = peek_kind_at(offset);
+  if ((sheet != TokenKind::Ident && sheet != TokenKind::Bool && sheet != TokenKind::SheetName) ||
+      peek_kind_at(offset + 1U) != TokenKind::Bang) {
+    return false;
+  }
+  Reference first;
+  Reference last;
+  return peek_kind_at(offset + 2U) == TokenKind::CellRef || decode_whole_axis_pair(offset + 2U, &first, &last);
 }
 
 AstNode* Parser::parse_quoted_qualifier_ref(SyncContext ctx) {
@@ -269,6 +270,15 @@ AstNode* Parser::parse_quoted_qualifier_ref(SyncContext ctx) {
   if (peek_kind_at(1) == TokenKind::Colon && sheet_span_end_at(2) && peek_kind_at(3) == TokenKind::Bang) {
     advance();
     return finish(parse_3d_ref(text, tok.range));
+  }
+  // `'Data':'My Sheet'!A1` is no span: the quoted token is a name ranged with the qualified reference.
+  if (peek_kind_at(1) == TokenKind::Colon && qualified_ref_at(2)) {
+    advance();
+    AstNode* n = make_name_ref(arena_, text);
+    if (n != nullptr) {
+      n->set_range(tok.range);
+    }
+    return finish(n);
   }
   advance();
   return finish(parse_sheet_qualified_ref(text, /*quoted=*/true, tok.range));
@@ -473,10 +483,10 @@ bool Parser::parse_3d_ref_tail(Reference* first, Reference* last, bool* is_range
 
 AstNode* Parser::parse_3d_ref(std::string_view sheet1, TextRange sheet1_range) {
   // The caller guarantees the current token is `Colon`, the next is an
-  // `Ident` / `SheetName`, and the one after that is `Bang`.
+  // `Ident` / `Bool`, and the one after that is `Bang`.
   advance();  // Colon
   const Token& sheet2_tok = peek();
-  const std::string_view sheet2 = SheetTokenText(sheet2_tok);
+  const std::string_view sheet2 = sheet2_tok.lexeme;
   advance();  // second sheet name
   advance();  // Bang
 

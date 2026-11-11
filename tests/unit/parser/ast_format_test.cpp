@@ -192,6 +192,43 @@ TEST(AstFormat, ThreeDRangeTailAbsolute) {
   ExpectRoundTripsToSame("=SUM(Sheet1:Sheet3!$A$1:$B$2)");
 }
 
+// The `:` between an unqualified name and a qualified reference is no span,
+// so the qualifier prints quoted even when its sheet needs no quotes.
+TEST(AstFormat, NonSpanRangeKeepsQuotedRightOperand) {
+  const auto canonical = [](std::string_view src) {
+    Arena arena;
+    Parser p(src, arena);
+    const AstNode* root = p.parse();
+    EXPECT_TRUE(p.errors().empty()) << src;
+    return root == nullptr ? std::string("<null>") : format_formula(*root);
+  };
+  EXPECT_EQ(canonical("=Data:'Mid'!A1"), "Data:'Mid'!A1");
+  EXPECT_EQ(canonical("='Data':'My Sheet'!A1"), "Data:'My Sheet'!A1");
+  EXPECT_EQ(canonical("='My Sheet':'Mid'!A1"), "'My Sheet':'Mid'!A1");
+  EXPECT_EQ(canonical("=SUM(Data:'My Sheet'!A1:A2)"), "SUM(Data:'My Sheet'!A1:A2)");
+  EXPECT_EQ(canonical("='My Sheet':Data!A1"), "'My Sheet:Data'!A1");
+  EXPECT_EQ(canonical("='Data':Mid!A1"), "Data:Mid!A1");
+  for (const char* src : {"=Data:'Mid'!A1", "='Data':'My Sheet'!A1", "='My Sheet':'Mid'!A1", "='It''s':'Mid'!A:A",
+                          "=SUM(Data:'My Sheet'!A1:A2)"}) {
+    ExpectRoundTripsToSame(src);
+  }
+
+  // A rewritten qualifier carries no quoting hint; the printer supplies the quotes.
+  Arena a;
+  Reference r;
+  r.sheet = "Mid2";
+  AstNode* range = make_range_op(a, make_name_ref(a, "Data"), make_ref(a, r), /*spliced=*/false);
+  ASSERT_NE(range, nullptr);
+  EXPECT_EQ(format_formula(*range), "Data:'Mid2'!A1");
+  EXPECT_EQ(format_formula_storage(*range, [](std::string_view n) { return std::string(n); }), "Data:'Mid2'!A1");
+  AstNode* span = make_range_op(a, make_name_ref(a, "Data"), make_ref3d(a, "Mid", "End", Reference{}), false);
+  ASSERT_NE(span, nullptr);
+  EXPECT_EQ(format_formula(*span), "Data:'Mid:End'!A1");
+  AstNode* name = make_range_op(a, make_name_ref(a, "Data"), make_sheet_name_ref(a, "Mid", "Rate", false), false);
+  ASSERT_NE(name, nullptr);
+  EXPECT_EQ(format_formula(*name), "Data:'Mid'!Rate");
+}
+
 // A sheet renamed to TRUE/FALSE cannot be written as source text directly
 // (the unquoted spelling *is* the bug), so this builds the Reference node
 // the way a rename_sheet-driven re-serialise would and checks that
