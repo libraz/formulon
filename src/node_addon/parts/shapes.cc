@@ -120,7 +120,7 @@ Napi::Object ShapeToJs(Napi::Env env, const fm_shape_info_t& s) {
   Napi::Object item = Napi::Object::New(env);
   item.Set("objectId", JsNumber(env, s.object_id));
   item.Set("kind", JsNumber(env, s.kind));
-  item.Set("presetGeometry", JsString(env, s.preset_geometry));
+  item.Set("presetGeometry", JsStringOrNull(env, s.preset_geometry));
   item.Set("text", JsString(env, s.text));
   item.Set("textBox", Napi::Boolean::New(env, s.text_box != 0));
   item.Set("fill", FillOrNull(env, s.fill));

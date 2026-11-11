@@ -321,7 +321,7 @@ class ChartDataTests(unittest.TestCase):
             chart = wb.sheet(0).add_chart(ChartInput(type=ChartPlotType.BAR, range=SOURCE))
             series = chart.get_data().series[0]
             self.assertEqual(series.number_format, "General")
-            self.assertEqual(series.x_number_format, "")
+            self.assertIsNone(series.x_number_format)
             names = {f.name for f in dataclasses.fields(formulon.ChartDataSeries)}
             self.assertFalse(names & {"format_code", "x_format_code"})
 

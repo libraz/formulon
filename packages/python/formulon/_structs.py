@@ -127,7 +127,7 @@ RECORD_NAMES = frozenset(
         "fm_parsed_reference_info_t",
         "fm_person_t",
         "fm_phonetic_properties_t",
-        "fm_pivot_cache_field_types_t",
+        "fm_pivot_cache_field_types_info_t",
         "fm_pivot_cache_options_patch_t",
         "fm_pivot_cache_options_t",
         "fm_pivot_calculated_item_info_t",
@@ -1006,8 +1006,8 @@ PIVOT_CACHE_OPTIONS = Struct(
     [("save_data", I32), ("has_missing_items_limit", I32), ("missing_items_limit", U32), ("refresh_on_load", I32)],
 )
 
-PIVOT_CACHE_FIELD_TYPES = Struct(
-    "fm_pivot_cache_field_types_t",
+PIVOT_CACHE_FIELD_TYPES_INFO = Struct(
+    "fm_pivot_cache_field_types_info_t",
     [
         ("contains_number", I32),
         ("contains_integer", I32),

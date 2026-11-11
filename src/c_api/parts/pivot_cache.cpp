@@ -317,7 +317,7 @@ extern "C" fm_status_t fm_workbook_get_pivot_cache_field_name(const fm_workbook_
 
 extern "C" fm_status_t fm_workbook_get_pivot_cache_field_types(const fm_workbook_t* wb, std::uint32_t cache_id,
                                                                std::size_t field_index,
-                                                               fm_pivot_cache_field_types_t* out) {
+                                                               fm_pivot_cache_field_types_info_t* out) {
   clear_last_error();
   if (wb == nullptr || out == nullptr) {
     return null_argument();
@@ -333,7 +333,7 @@ extern "C" fm_status_t fm_workbook_get_pivot_cache_field_types(const fm_workbook
     return rc;
   }
   const formulon::pivot::SharedItemsHints h = field_hints(*cache, field_index, wb->workbook().date1904());
-  fm_pivot_cache_field_types_t result{};
+  fm_pivot_cache_field_types_info_t result{};
   result.struct_size = out->struct_size;
   result.contains_number = effective_flag(h.has_contains_number, h.contains_number, false);
   result.contains_integer = effective_flag(h.has_contains_integer, h.contains_integer, false);

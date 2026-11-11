@@ -2660,8 +2660,8 @@ class ShapeProperties:
     object_id: int
     #: The object's kind: shape, connector or group.
     kind: DrawingObjectKind
-    #: Name of the preset geometry; empty for custom geometry or a group.
-    preset_geometry: str
+    #: Name of the preset geometry; ``None`` for custom geometry or a group.
+    preset_geometry: Optional[str]
     #: The shape's text, paragraphs joined with a newline.
     text: str
     #: ``True`` when the shape is a text box.
@@ -3571,8 +3571,8 @@ class ChartDataSeries:
     name: Optional[str]
     #: The number format code of the values (the y values in the XY domain).
     number_format: str
-    #: The number format code of the x values; empty outside the XY domain.
-    x_number_format: str
+    #: The number format code of the x values; ``None`` outside the XY domain.
+    x_number_format: Optional[str]
     #: ``True`` when the chart filter hides the series.
     filtered: bool
     #: The resolved values, one per point (the y values in the XY domain).
@@ -7829,7 +7829,7 @@ def _read_chart_data(data: int) -> ChartData:
                 series_id=s["series_id"],
                 name=_opt_cstr(s["name"]),
                 number_format=LIB.read_cstr(s["number_format"]),
-                x_number_format=LIB.read_cstr(s["x_number_format"]),
+                x_number_format=LIB.read_optional_cstr(s["x_number_format"]),
                 filtered=bool(s["filtered"]),
                 values=_read_chart_data_array(points["values"], n, "d", 8) or [],
                 states=[_enum(ChartPointState, st) for st in _read_chart_data_array(points["states"], n, "B", 1) or []],
@@ -7845,7 +7845,7 @@ def _read_chart_data(data: int) -> ChartData:
             labels=labels,
             levels=levels,
             values=values if info["category_value_count"] else None,
-            number_format=LIB.read_cstr(info["category_number_format"]) or None,
+            number_format=LIB.read_optional_cstr(info["category_number_format"]),
             generated=bool(info["categories_generated"]),
         ),
         series=series,
@@ -8328,7 +8328,7 @@ def _shape_from(d: Dict[str, Any]) -> ShapeProperties:
     return ShapeProperties(
         object_id=d["object_id"],
         kind=_enum(DrawingObjectKind, d["kind"]),
-        preset_geometry=LIB.read_cstr(d["preset_geometry"]),
+        preset_geometry=LIB.read_optional_cstr(d["preset_geometry"]),
         text=LIB.read_cstr(d["text"]),
         text_box=bool(d["text_box"]),
         fill=_shape_paint_read(_read_chart_fill(d["fill"])),
@@ -8589,7 +8589,7 @@ def _decode_filter_column(ptr: int) -> AutoFilterColumn:
         )
     ]
     kwargs.update({name: d[c_name] if d[flag] else None for name, c_name, flag in _FILTER_COLUMN_OPTIONAL})
-    kwargs.update({name: LIB.read_cstr(d[c_name]) or None for name, c_name in _FILTER_COLUMN_STRINGS})
+    kwargs.update({name: LIB.read_optional_cstr(d[c_name]) for name, c_name in _FILTER_COLUMN_STRINGS})
     return AutoFilterColumn(
         column_offset=d["column_offset"],
         dxf_index=d["dxf_index"] if d["has_dxf_index"] else None,
@@ -8606,7 +8606,7 @@ def _decode_sort_condition(ptr: int) -> AutoFilterSortCondition:
         range=_decode_cell_rect_at(ptr + S.SORT_CONDITION.offsets["ref"][1]),
         descending=bool(d["descending"]),
         sort_by=d["sort_by"],
-        custom_list=LIB.read_cstr(d["custom_list"]) or None,
+        custom_list=LIB.read_optional_cstr(d["custom_list"]),
         dxf_index=d["dxf_index"] if d["has_dxf_index"] else None,
         icon_set=d["icon_set"],
         icon_index=d["icon_index"] if d["has_icon_index"] else None,

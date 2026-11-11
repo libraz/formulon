@@ -75,8 +75,8 @@ struct RefreshFixture {
   }
 };
 
-fm_pivot_cache_field_types_t FieldTypes(const fm_workbook_t* wb, std::uint32_t cache_id, std::size_t field) {
-  fm_pivot_cache_field_types_t types = FM_STRUCT_INIT(fm_pivot_cache_field_types_t);
+fm_pivot_cache_field_types_info_t FieldTypes(const fm_workbook_t* wb, std::uint32_t cache_id, std::size_t field) {
+  fm_pivot_cache_field_types_info_t types = FM_STRUCT_INIT(fm_pivot_cache_field_types_info_t);
   EXPECT_EQ(fm_workbook_get_pivot_cache_field_types(wb, cache_id, field, &types), 0) << fm_get_last_error_message();
   return types;
 }
@@ -179,7 +179,7 @@ TEST(CApiPivotRefresh, ASourceOverTheRecordCellLimitIsRefused) {
 TEST(CApiPivotCacheFieldTypes, ReadsDerivedFlagsOfAWorkbookBuiltCache) {
   RefreshFixture f;
   f.Build();
-  const fm_pivot_cache_field_types_t region = FieldTypes(f.wb.handle, f.cache_id, kRegionField);
+  const fm_pivot_cache_field_types_info_t region = FieldTypes(f.wb.handle, f.cache_id, kRegionField);
   EXPECT_EQ(region.contains_string, 1);
   EXPECT_EQ(region.contains_number, 0);
   EXPECT_EQ(region.contains_blank, 0);
@@ -188,7 +188,7 @@ TEST(CApiPivotCacheFieldTypes, ReadsDerivedFlagsOfAWorkbookBuiltCache) {
   EXPECT_EQ(region.contains_semi_mixed_types, 1);
   EXPECT_EQ(region.contains_non_date, 1);
 
-  const fm_pivot_cache_field_types_t amount = FieldTypes(f.wb.handle, f.cache_id, kAmountField);
+  const fm_pivot_cache_field_types_info_t amount = FieldTypes(f.wb.handle, f.cache_id, kAmountField);
   EXPECT_EQ(amount.contains_number, 1);
   EXPECT_EQ(amount.contains_integer, 1);
   EXPECT_EQ(amount.contains_string, 0);
@@ -203,7 +203,7 @@ TEST(CApiPivotCacheFieldTypes, ReadsRefreshedFlags) {
   ASSERT_EQ(fm_sheet_set_number(f.wb.handle, 0U, 1U, 1U, 1.5), 0);
   ASSERT_EQ(fm_sheet_set_blank(f.wb.handle, 0U, 2U, 1U), 0);
   ASSERT_EQ(fm_workbook_refresh_pivot_cache(f.wb.handle, f.cache_id), 0) << fm_get_last_error_message();
-  const fm_pivot_cache_field_types_t amount = FieldTypes(f.wb.handle, f.cache_id, kAmountField);
+  const fm_pivot_cache_field_types_info_t amount = FieldTypes(f.wb.handle, f.cache_id, kAmountField);
   EXPECT_EQ(amount.contains_number, 1);
   EXPECT_EQ(amount.contains_integer, 0);
   EXPECT_EQ(amount.contains_blank, 1);
@@ -214,7 +214,7 @@ TEST(CApiPivotCacheFieldTypes, ReadsRefreshedFlags) {
 TEST(CApiPivotCacheFieldTypes, ReportsStatusesForBadArguments) {
   RefreshFixture f;
   f.Build();
-  fm_pivot_cache_field_types_t types = FM_STRUCT_INIT(fm_pivot_cache_field_types_t);
+  fm_pivot_cache_field_types_info_t types = FM_STRUCT_INIT(fm_pivot_cache_field_types_info_t);
   EXPECT_EQ(fm_workbook_get_pivot_cache_field_types(nullptr, f.cache_id, 0U, &types), kBindingNullPointer);
   EXPECT_EQ(fm_workbook_get_pivot_cache_field_types(f.wb.handle, f.cache_id, 0U, nullptr), kBindingNullPointer);
   EXPECT_EQ(fm_workbook_get_pivot_cache_field_types(f.wb.handle, f.cache_id + 100U, 0U, &types), kNotFound);

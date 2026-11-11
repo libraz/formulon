@@ -263,6 +263,20 @@ class ChartTitleAbsenceTests(unittest.TestCase):
             self.assertIsNone(chart.get_properties().axes[0].title)
 
 
+class ChartXNumberFormatAbsenceTests(unittest.TestCase):
+    def test_non_xy_series_reads_none_x_number_format(self) -> None:
+        with Workbook.create_default() as wb:
+            sheet = wb.sheet(0)
+            sheet.set_text(0, 1, "S1")
+            for r in range(1, 4):
+                sheet.set_text(r, 0, f"c{r}")
+                sheet.set_number(r, 1, float(r))
+            handle = _chart_input.add_chart(sheet, _chart_input.COLUMN, "Sheet1!$A$1:$B$4")
+            series = sheet.chart(handle.object_id).get_data().series[0]
+            self.assertIsNone(series.x_number_format)
+            self.assertEqual(series.number_format, "General")
+
+
 class SparklineColorAbsenceTests(unittest.TestCase):
     def test_unset_colors_read_none_and_clear_with_none(self) -> None:
         with Workbook.create_default() as wb:

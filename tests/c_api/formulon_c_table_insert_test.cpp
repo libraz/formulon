@@ -178,13 +178,15 @@ TEST(CApiTableInsert, ArgumentErrors) {
     const char* text = fm_get_last_error_message();
     return text == nullptr ? std::string() : std::string(text);
   };
-  EXPECT_EQ(fm_sheet_insert_table_rows(wb.handle, 0, 0, 3, 3), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(fm_sheet_insert_table_rows(wb.handle, 0, 0, 3, 3), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(message(), "first 3 is out of range (2 rows)");
+  EXPECT_EQ(fm_sheet_insert_table_rows(wb.handle, 0, 0, 0xFFFFFFFFU, 0xFFFFFFFFU), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_insert_table_columns(wb.handle, 0, 0, 0xFFFFFFFFU, 0xFFFFFFFFU), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_insert_table_rows(wb.handle, 0, 0, 2, 1), FM_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(message(), "last 1 is before first 2");
   EXPECT_EQ(fm_sheet_insert_table_rows(wb.handle, 0, 0, 2, 1048576U), FM_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(message(), "last 1048576 is outside the grid");
-  EXPECT_EQ(fm_sheet_insert_table_columns(wb.handle, 0, 0, 4, 4), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(fm_sheet_insert_table_columns(wb.handle, 0, 0, 4, 4), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(message(), "first 4 is out of range (3 columns)");
   EXPECT_EQ(fm_sheet_insert_table_columns(wb.handle, 0, 0, 3, 2), FM_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(message(), "last 2 is before first 3");

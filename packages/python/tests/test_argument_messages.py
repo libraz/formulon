@@ -86,7 +86,7 @@ class EngineProseMessageTests(_MessageCase):
             table = wb.sheet(0).add_table(TableInput(range="A1:B3", name="T", columns=["a", "b"]))
             message = _raised(InvalidArgumentError, lambda: table.insert_rows(2, 1))
             self.assertEqual(message, "Table.insert_rows last 1 is before first 2")
-            message = _raised(InvalidArgumentError, lambda: table.insert_rows(None, 1))
+            message = _raised(TypeError, lambda: table.insert_rows(None, 1))
             self.assertEqual(message, "Table.insert_rows last needs first")
 
 

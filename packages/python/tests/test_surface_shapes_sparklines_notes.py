@@ -156,6 +156,10 @@ class ShapeTests(unittest.TestCase):
             with self.assertRaises(TypeError):
                 shape.update(name="M", text=None)  # type: ignore[arg-type]
             self.assertEqual(shape.name, "N")
+            # The preset geometry has no cleared form.
+            with self.assertRaises(TypeError):
+                shape.update(preset_geometry=None)  # type: ignore[arg-type]
+            self.assertEqual(shape.get_properties().preset_geometry, "roundRect")
 
     def test_a_shape_paint_default_is_a_real_state_and_none_removes_the_own_paint(self) -> None:
         with Workbook.create_default() as wb:

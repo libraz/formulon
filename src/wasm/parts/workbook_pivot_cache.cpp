@@ -130,7 +130,7 @@ std::string JsWorkbook::pivotCacheFieldName(uint32_t cacheId, uint32_t fieldInde
 }
 
 emscripten::val JsWorkbook::pivotCacheFieldTypes(uint32_t cacheId, uint32_t fieldIndex) const {
-  fm_pivot_cache_field_types_t types = FM_STRUCT_INIT(fm_pivot_cache_field_types_t);
+  fm_pivot_cache_field_types_info_t types = FM_STRUCT_INIT(fm_pivot_cache_field_types_info_t);
   if (!succeeded(handle_ != nullptr ? fm_workbook_get_pivot_cache_field_types(handle_, cacheId, fieldIndex, &types)
                                     : kBindingInvalidHandle)) {
     return emscripten::val::undefined();

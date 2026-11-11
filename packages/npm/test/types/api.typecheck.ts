@@ -244,7 +244,9 @@ export function shapePatch(): void {
   shape.update({ fill: null, line: null });
   // @ts-expect-error the text has no cleared form
   shape.update({ text: null });
-  shape.update({ presetGeometry: shapeProps.presetGeometry, rotationDeg: shapeProps.rotationDeg });
+  shape.update({ rotationDeg: shapeProps.rotationDeg });
+  // @ts-expect-error the preset geometry has no cleared form
+  shape.update({ presetGeometry: null });
   // @ts-expect-error unknown key
   shape.update({ bogus: 1 });
   // @ts-expect-error a string is not an anchor kind

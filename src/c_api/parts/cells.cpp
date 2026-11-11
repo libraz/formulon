@@ -480,20 +480,19 @@ extern "C" fm_status_t fm_sheet_get_show_phonetic_cells(const fm_workbook_t* wb,
                                                         const fm_cell_rect_t* range, fm_cell_address_t* out,
                                                         size_t capacity, size_t* out_count) {
   clear_last_error();
-  if (out_count == nullptr || (out == nullptr && capacity > 0U)) {
+  if (out_count != nullptr) {
+    *out_count = 0U;
+  }
+  if (range == nullptr || out_count == nullptr || (out == nullptr && capacity > 0U)) {
     return null_argument();
   }
-  *out_count = 0U;
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  formulon::StyleRect rect{0U, 0U, formulon::Sheet::kMaxRows - 1U, formulon::Sheet::kMaxCols - 1U};
-  if (range != nullptr) {
-    if (auto rc = check_sheet_rect(*range); rc != 0) {
-      return rc;
-    }
-    rect = {range->first_row, range->first_col, range->last_row, range->last_col};
+  if (auto rc = check_sheet_rect(*range); rc != 0) {
+    return rc;
   }
+  const formulon::StyleRect rect{range->first_row, range->first_col, range->last_row, range->last_col};
   auto cells = wb->workbook().show_phonetic_cells(sheet_index, rect);
   if (!cells) {
     return set_last_error(cells.error());

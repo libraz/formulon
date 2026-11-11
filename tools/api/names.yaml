@@ -14010,7 +14010,7 @@ entries:
   record.pivot_cache_field_types:
     kind: record
     role: result
-    c: fm_pivot_cache_field_types_t
+    c: fm_pivot_cache_field_types_info_t
     surfaces: [c]
   record.pivot_cache_shared_item:
     kind: record

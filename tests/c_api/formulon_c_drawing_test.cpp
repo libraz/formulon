@@ -875,6 +875,59 @@ TEST(FormulonCApiDrawing, SnapshotAndRestoreRejectBadArguments) {
   EXPECT_NE(formulon::io::ooxml::find_passthrough_part(wb.handle->workbook(), "xl/charts/chart1.xml"), nullptr);
 }
 
+std::string TwoCellAnchor(const std::string& content) {
+  return "<xdr:twoCellAnchor><xdr:from><xdr:col>0</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>0</xdr:row>"
+         "<xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>3</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>3</"
+         "xdr:row>"
+         "<xdr:rowOff>0</xdr:rowOff></xdr:to>" +
+         content + "<xdr:clientData/></xdr:twoCellAnchor>";
+}
+
+TEST(FormulonCApiDrawing, ShapeWithoutPresetGeometryReadsNull) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const std::string custom =
+      "<xdr:sp macro=\"\" textlink=\"\"><xdr:nvSpPr><xdr:cNvPr id=\"2\" name=\"Freeform\"/><xdr:cNvSpPr/></xdr:nvSpPr>"
+      "<xdr:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"100\" cy=\"100\"/></a:xfrm><a:custGeom><a:avLst/>"
+      "<a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l=\"0\" t=\"0\" r=\"r\" "
+      "b=\"b\"/><a:pathLst/></a:custGeom></xdr:spPr></xdr:sp>";
+  const std::string preset =
+      "<xdr:sp macro=\"\" textlink=\"\"><xdr:nvSpPr><xdr:cNvPr id=\"3\" name=\"Rect\"/><xdr:cNvSpPr/></xdr:nvSpPr>"
+      "<xdr:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"100\" cy=\"100\"/></a:xfrm>"
+      "<a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></xdr:spPr></xdr:sp>";
+  const std::string group =
+      "<xdr:grpSp><xdr:nvGrpSpPr><xdr:cNvPr id=\"4\" name=\"Group\"/><xdr:cNvGrpSpPr/></xdr:nvGrpSpPr><xdr:grpSpPr>"
+      "<a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"100\" cy=\"100\"/><a:chOff x=\"0\" y=\"0\"/>"
+      "<a:chExt cx=\"100\" cy=\"100\"/></a:xfrm></xdr:grpSpPr></xdr:grpSp>";
+  const std::string drawing =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\r\n"
+      "<xdr:wsDr xmlns:xdr=\"http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing\" "
+      "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\">" +
+      TwoCellAnchor(custom) + TwoCellAnchor(preset) + TwoCellAnchor(group) + "</xdr:wsDr>";
+  formulon::Workbook& model = wb.handle->workbook();
+  ASSERT_TRUE(static_cast<bool>(model.add_passthrough_part(
+      formulon::PassthroughPart(kDrawingPath, "application/vnd.openxmlformats-officedocument.drawing+xml",
+                                Bytes(drawing.begin(), drawing.end())))));
+  model.sheet(0).set_drawing_rel_target(kDrawingPath);
+
+  const auto read = [&](std::uint32_t id) {
+    fm_shape_info_t info = FM_STRUCT_INIT(fm_shape_info_t);
+    std::int32_t present = 0;
+    EXPECT_EQ(fm_sheet_get_shape(wb.handle, 0, id, &present, &info), 0) << fm_get_last_error_message();
+    EXPECT_EQ(present, 1) << "object " << id;
+    return info;
+  };
+  const fm_shape_info_t freeform = read(2U);
+  EXPECT_EQ(freeform.kind, FM_DRAWING_OBJECT_KIND_SHAPE);
+  EXPECT_EQ(freeform.preset_geometry, nullptr);
+  const fm_shape_info_t rect = read(3U);
+  ASSERT_NE(rect.preset_geometry, nullptr);
+  EXPECT_STREQ(rect.preset_geometry, "rect");
+  const fm_shape_info_t grouped = read(4U);
+  EXPECT_EQ(grouped.kind, FM_DRAWING_OBJECT_KIND_GROUP);
+  EXPECT_EQ(grouped.preset_geometry, nullptr);
+}
+
 TEST(FormulonCApiDrawing, XlsbRetainedDrawingRefusesImageEdits) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);

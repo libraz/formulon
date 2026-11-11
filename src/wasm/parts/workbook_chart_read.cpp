@@ -477,7 +477,7 @@ val data_series_to_val(const fm_chart_data_t* data, size_t index, fm_status_t& r
   o.set("seriesId", val(s.series_id));
   o.set("name", s.name != nullptr ? val(std::string(s.name)) : val::null());
   o.set("numberFormat", val(string_from_cstr(s.number_format)));
-  o.set("xNumberFormat", val(string_from_cstr(s.x_number_format)));
+  o.set("xNumberFormat", cstr_or_null(s.x_number_format));
   o.set("filtered", val(s.filtered != 0));
   o.set("values", copy_doubles(pts.values, pts.count));
   o.set("states", bytes_to_val(pts.states, pts.count));

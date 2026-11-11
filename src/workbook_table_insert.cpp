@@ -56,9 +56,10 @@ Expected<std::uint64_t, Error> check_insert_span(std::uint32_t first, std::uint3
                                                  const char* noun, std::uint64_t start, std::uint64_t table_last,
                                                  std::uint64_t axis_extent) {
   if (first > count) {
-    return invalid_argument("first " + std::to_string(first) + " is out of range (" + std::to_string(count) + " " +
-                                noun + (count == 1U ? ")" : "s)"),
-                            "first=" + std::to_string(first));
+    return make_error(FormulonErrorCode::kIndexOutOfRange,
+                      "first " + std::to_string(first) + " is out of range (" + std::to_string(count) + " " + noun +
+                          (count == 1U ? ")" : "s)"),
+                      "first=" + std::to_string(first));
   }
   if (last < first) {
     return invalid_argument("last " + std::to_string(last) + " is before first " + std::to_string(first),

@@ -145,16 +145,23 @@ test('the argument forms are validated like the sheet-level inserts', async () =
       assert.throws(() => table[method](Number.POSITIVE_INFINITY), RangeError, `${method} infinite`);
       assert.throws(() => table[method](2 ** 32), RangeError, `${method} above 32 bits`);
       assert.throws(() => table[method]('1'), TypeError, `${method} string`);
-      rejectsWith(() => table[method](-1), f.StatusCode.InvalidArgument, `${method} negative`);
       rejectsWith(
-        () => table[method](undefined, 1),
-        f.StatusCode.InvalidArgument,
-        `${method} last without first`,
-        `Table.${method} last needs first`,
+        () => table[method](-1),
+        f.StatusCode.IndexOutOfRange,
+        `${method} negative first`,
+        `Table.${method} first -1 is out of range`,
       );
+      rejectsWith(() => table[method](0, -1), f.StatusCode.InvalidArgument, `${method} negative last`);
+      rejectsWith(() => table[method](2 ** 31), f.StatusCode.IndexOutOfRange, `${method} first at 2^31`);
+      for (const first of [undefined, null]) {
+        assert.throws(() => table[method](first, 1), {
+          name: 'TypeError',
+          message: `Table.${method} last needs first`,
+        });
+      }
       rejectsWith(
         () => table[method](4),
-        f.StatusCode.InvalidArgument,
+        f.StatusCode.IndexOutOfRange,
         `${method} first past the count`,
         `Table.${method} first 4 is out of range (${method === 'insertRows' ? '2 rows' : '3 columns'})`,
       );

@@ -2063,12 +2063,10 @@ class Sheet(_NoCopy):
         """
         sheet = self._index()
         h = self._workbook._require()
-        rect = None if range is None else self._rect(range)
+        rect = _WHOLE_SHEET if range is None else self._rect(range)
         with _ArgScope() as scope:
-            rp = 0
-            if rect is not None:
-                rp = scope.struct(S.CELL_RECT)
-                _pack_cell_rect_at(rp, rect)
+            rp = scope.struct(S.CELL_RECT)
+            _pack_cell_rect_at(rp, rect)
             len_ptr = scope.out_ptr()
             # Size the buffer first, then fetch.
             _check(
@@ -3007,7 +3005,7 @@ class Sheet(_NoCopy):
                 return None
             d = S.COMMENT.unpack(LIB, ptr)
             return Comment(
-                author=LIB.read_cstr(d["author"]) or None,
+                author=LIB.read_optional_cstr(d["author"]),
                 text=LIB.read_cstr(d["text"]),
             )
 
@@ -3075,7 +3073,7 @@ class Sheet(_NoCopy):
                 out.append(
                     SheetComment(
                         cell=CellAddress(row=d["row"], col=d["col"]),
-                        author=LIB.read_cstr(d["author"]) or None,
+                        author=LIB.read_optional_cstr(d["author"]),
                         text=LIB.read_cstr(d["text"]),
                     )
                 )
@@ -7586,12 +7584,10 @@ class SheetOoxml(_NoCopy):
         """
         sheet = self._sheet._index()
         h = self._sheet._workbook._require()
-        rect = None if range is None else self._sheet._rect(range)
+        rect = _WHOLE_SHEET if range is None else self._sheet._rect(range)
         with _ArgScope() as scope:
-            rp = 0
-            if rect is not None:
-                rp = scope.struct(S.CELL_RECT)
-                _pack_cell_rect_at(rp, rect)
+            rp = scope.struct(S.CELL_RECT)
+            _pack_cell_rect_at(rp, rect)
             len_ptr = scope.out_ptr()
             # Size the buffer first, then fetch.
             _check(LIB.fm_sheet_get_cell_xf_indices(h, _uint(sheet, "sheet_index", role="sheet"), rp, 0, 0, len_ptr))

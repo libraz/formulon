@@ -349,7 +349,7 @@ Napi::Object DataSeriesToJs(Napi::Env env, const fm_chart_data_t* data, size_t i
   o.Set("seriesId", JsNumber(env, s.series_id));
   o.Set("name", StringOrNull(env, s.name));
   o.Set("numberFormat", JsString(env, s.number_format));
-  o.Set("xNumberFormat", JsString(env, s.x_number_format));
+  o.Set("xNumberFormat", JsStringOrNull(env, s.x_number_format));
   o.Set("filtered", JsBool(env, s.filtered));
   o.Set("values", CopyDoubles(env, pts.values, pts.count));
   o.Set("states", CopyBytes(env, pts.states, pts.count));

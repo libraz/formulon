@@ -9,6 +9,7 @@
 namespace {
 
 constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
+constexpr fm_cell_rect_t kWholeGrid{0U, 0U, 1048575U, 16383U};
 
 // A package of `sheets` empty worksheets; `book_views` is spliced into workbook.xml and `sheet1_xml` replaces the
 // first worksheet when non-empty.
@@ -338,13 +339,13 @@ const std::vector<fm_cell_address_t> kAllFlagged = {{1, 1}, {2, 0}, {4, 7}, {100
 TEST(FormulonCApiWorkbookView, ShowPhoneticCellsListsFlaggedCellsRowMajorWithoutAnUnflaggedOne) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  EXPECT_TRUE(ShowPhoneticCells(wb.handle, nullptr).empty());
+  EXPECT_TRUE(ShowPhoneticCells(wb.handle, &kWholeGrid).empty());
   FlagShowPhoneticCells(wb.handle);
-  ExpectCells(ShowPhoneticCells(wb.handle, nullptr), kAllFlagged);
+  ExpectCells(ShowPhoneticCells(wb.handle, &kWholeGrid), kAllFlagged);
 
   // Clearing the flag removes the cell from the list.
   ASSERT_EQ(fm_sheet_set_cell_show_phonetic(wb.handle, 0, 1, 1, 0), 0);
-  ExpectCells(ShowPhoneticCells(wb.handle, nullptr), {{2, 0}, {4, 7}, {1000, 20}});
+  ExpectCells(ShowPhoneticCells(wb.handle, &kWholeGrid), {{2, 0}, {4, 7}, {1000, 20}});
 }
 
 TEST(FormulonCApiWorkbookView, ShowPhoneticCellsClipsToTheRange) {
@@ -365,11 +366,11 @@ TEST(FormulonCApiWorkbookView, ShowPhoneticCellsCountsPastTheCapacity) {
   FlagShowPhoneticCells(wb.handle);
   std::vector<fm_cell_address_t> out(2, fm_cell_address_t{99, 99});
   size_t total = 0;
-  ASSERT_EQ(fm_sheet_get_show_phonetic_cells(wb.handle, 0, nullptr, out.data(), out.size(), &total), 0);
+  ASSERT_EQ(fm_sheet_get_show_phonetic_cells(wb.handle, 0, &kWholeGrid, out.data(), out.size(), &total), 0);
   EXPECT_EQ(total, 4U);
   ExpectCells(out, {{1, 1}, {2, 0}});
   out.assign(2, fm_cell_address_t{99, 99});
-  ASSERT_EQ(fm_sheet_get_show_phonetic_cells(wb.handle, 0, nullptr, out.data(), 0, &total), 0);
+  ASSERT_EQ(fm_sheet_get_show_phonetic_cells(wb.handle, 0, &kWholeGrid, out.data(), 0, &total), 0);
   EXPECT_EQ(total, 4U);
   ExpectCells(out, {{99, 99}, {99, 99}});
 }
@@ -382,7 +383,7 @@ TEST(FormulonCApiWorkbookView, ShowPhoneticCellsKeepsAFlagOnlyBlankThroughASaveA
     WorkbookGuard reloaded;
     Load(Save(wb.handle, format), reloaded);
     SCOPED_TRACE(format);
-    ExpectCells(ShowPhoneticCells(reloaded.handle, nullptr), kAllFlagged);
+    ExpectCells(ShowPhoneticCells(reloaded.handle, &kWholeGrid), kAllFlagged);
   }
 }
 
@@ -391,14 +392,19 @@ TEST(FormulonCApiWorkbookView, ShowPhoneticCellsRefusesBadArguments) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_cell_address_t cell{};
   size_t total = 0;
-  EXPECT_EQ(fm_sheet_get_show_phonetic_cells(wb.handle, 0, nullptr, nullptr, 0, nullptr),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-  EXPECT_EQ(fm_sheet_get_show_phonetic_cells(wb.handle, 0, nullptr, nullptr, 1, &total),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-  EXPECT_EQ(fm_sheet_get_show_phonetic_cells(nullptr, 0, nullptr, &cell, 1, &total),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer));
-  EXPECT_EQ(fm_sheet_get_show_phonetic_cells(wb.handle, 9, nullptr, &cell, 1, &total),
+  constexpr fm_status_t kNullPointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_get_show_phonetic_cells(wb.handle, 0, &kWholeGrid, nullptr, 0, nullptr), kNullPointer);
+  EXPECT_EQ(fm_sheet_get_show_phonetic_cells(wb.handle, 0, &kWholeGrid, nullptr, 1, &total), kNullPointer);
+  EXPECT_EQ(fm_sheet_get_show_phonetic_cells(nullptr, 0, &kWholeGrid, &cell, 1, &total), kNullPointer);
+  EXPECT_EQ(fm_sheet_get_show_phonetic_cells(wb.handle, 9, &kWholeGrid, &cell, 1, &total),
             FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  // A NULL range is refused, not read as the whole grid; the count is cleared either way.
+  total = 99;
+  EXPECT_EQ(fm_sheet_get_show_phonetic_cells(wb.handle, 0, nullptr, nullptr, 0, &total), kNullPointer);
+  EXPECT_EQ(total, 0U);
+  total = 99;
+  EXPECT_EQ(fm_sheet_get_show_phonetic_cells(wb.handle, 0, nullptr, &cell, 1, &total), kNullPointer);
+  EXPECT_EQ(total, 0U);
   const fm_cell_rect_t outside{0, 0, 1048576, 0};
   EXPECT_EQ(fm_sheet_get_show_phonetic_cells(wb.handle, 0, &outside, &cell, 1, &total), kInvalidArgument);
 }

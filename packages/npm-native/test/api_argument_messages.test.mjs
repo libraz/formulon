@@ -222,7 +222,10 @@ test('a parameter name inside a message body is not relabelled', async () => {
   await withWorkbook((wb, f) => {
     const { table } = makeHandles(f, wb);
     failsWith(() => table.insertRows(1, 0), f.StatusCode.InvalidArgument, 'Table.insertRows last 0 is before first 1');
-    failsWith(() => table.insertRows(undefined, 1), f.StatusCode.InvalidArgument, 'Table.insertRows last needs first');
+    assert.throws(() => table.insertRows(undefined, 1), {
+      name: 'TypeError',
+      message: 'Table.insertRows last needs first',
+    });
   });
 });
 

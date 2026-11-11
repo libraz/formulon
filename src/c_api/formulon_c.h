@@ -1669,15 +1669,15 @@ FM_API fm_status_t fm_sheet_get_cell_show_phonetic(const fm_workbook_t* wb, size
  *        (the flag `fm_sheet_get_cell_show_phonetic` reads), in row-major
  *        order (row, then column, ascending).
  *
- * A blank cell that carries only the flag is listed. A `NULL` `range` covers
- * every stored cell of the sheet, cells outside the used range included.
- * `*out_count` always receives the number of cells; at most `capacity` are
+ * A blank cell that carries only the flag is listed; cells outside the used
+ * range are included, so pass the whole grid to list every stored cell of the
+ * sheet. `*out_count` always receives the number of cells; at most `capacity` are
  * written. Call with `capacity == 0` (`out` may then be `NULL`) to size the
  * buffer first.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_count` is `NULL`, or
- *         `out` is `NULL` while `capacity > 0`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `range` or `out_count` is `NULL`, or
+ *         `out` is `NULL` while `capacity > 0` (`*out_count` is then `0` when `out_count` is non-`NULL`);
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when the rect is out of range.
  */
@@ -2443,7 +2443,7 @@ FM_API fm_status_t fm_sheet_add_table(fm_workbook_t* wb, size_t sheet_index, con
  *        `fm_table_patch_t::columns`), with the fields of `fm_table_column_info_t`
  *        a column's settings are read through.
  *
- * A fixed-stride array element: it has no `struct_size`. Each field has an
+ * Frozen value type: no `struct_size`. Each field has an
  * `fm_patch_op_t` companion; `CLEAR` removes a setting and `KEEP` leaves it.
  * The result is checked as a whole: a custom totals function needs a non-empty
  * formula, and any other function drops the formula. A `SET` of a label or
@@ -2798,8 +2798,10 @@ FM_API fm_status_t fm_sheet_rename_table_column(fm_workbook_t* wb, size_t sheet_
  *
  * @return `FM_STATUS_OK` (0) on success, or a common table failure;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `first` is past the data-row
- *         count, `last` is below `first`, or the span reaches past the last row;
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `first` is past the data-row
+ *         count;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `last` is below `first` or the
+ *         span reaches past the last row;
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when a PivotTable lies in the
  *         shift path, a multi-cell array formula or data table is cut by the
  *         band, or a value, formula, note, fill, border, merge or the table
@@ -2911,7 +2913,7 @@ typedef struct {
   uint32_t row;
   /** The 0-based column of the cell the comment is anchored to; ignored on input, where the call's cell is the key. */
   uint32_t col;
-  /** The comment's author; the empty string when none. */
+  /** The comment's author; `NULL` when none. */
   const char* author;
   /** The comment's text. */
   const char* text;
@@ -7800,7 +7802,7 @@ typedef struct {
   int32_t contains_semi_mixed_types;
   /** Whether the field holds text or a number, something that is not a date. */
   int32_t contains_non_date;
-} fm_pivot_cache_field_types_t;
+} fm_pivot_cache_field_types_info_t;
 
 /**
  * @brief Reads the content flags of the cache field at `field_index` into `*out`.
@@ -7811,7 +7813,7 @@ typedef struct {
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `field_index` is not below the field count.
  */
 FM_API fm_status_t fm_workbook_get_pivot_cache_field_types(const fm_workbook_t* wb, uint32_t cache_id,
-                                                           size_t field_index, fm_pivot_cache_field_types_t* out);
+                                                           size_t field_index, fm_pivot_cache_field_types_info_t* out);
 
 /**
  * @brief Appends a new field with the given UTF-8 name to the cache.
@@ -9342,7 +9344,8 @@ typedef struct {
  *        and `*out` filled when the cell is the anchor or a phantom of a
  *        region, a blocked anchor (see `blocked`), or a PivotTable report's
  *        anchor, which reports what `fm_sheet_get_pivot_spill` does; otherwise
- *        `0` and `*out` zeroed (still `FM_STATUS_OK` (0)). The other cells of
+ *        `0` and `*out` holds no region (every field zero except `cause`, which
+ *        is `FM_SPILL_CAUSE_ABSENT`; still `FM_STATUS_OK` (0)). The other cells of
  *        a drawn report are ordinary cells and read `0`.
  *
  * @return `FM_STATUS_OK` (0) on success;
@@ -9359,7 +9362,8 @@ FM_API fm_status_t fm_sheet_get_spill(const fm_workbook_t* wb, size_t sheet_inde
  *        pending) and `blocked` `0`, and for a blocked report, with the range
  *        it needs clipped to the grid, `blocked` `1` and the `cause`. A drawn
  *        report read from a file and not laid out since reports the location
- *        it was read with. Otherwise `0` and `*out` zeroed (still
+ *        it was read with. Otherwise `0` and `*out` holds no region (every
+ *        field zero except `cause`, which is `FM_SPILL_CAUSE_ABSENT`; still
  *        `FM_STATUS_OK` (0)), for a report neither drawn nor read from a file.
  *        A blocked report loaded from a file reports the range the file
  *        recorded, the anchor alone when it records none, until a recalc lays
@@ -10375,9 +10379,9 @@ typedef struct {
   double dyn_val;
   /** The upper bound Excel last stored for the dynamic filter. */
   double dyn_max_val;
-  /** The ISO date text of the dynamic filter's lower bound, kept as written; empty when absent. */
+  /** The ISO date text of the dynamic filter's lower bound, kept as written; `NULL` when none. */
   const char* val_iso;
-  /** The ISO date text of the dynamic filter's upper bound, kept as written; empty when absent. */
+  /** The ISO date text of the dynamic filter's upper bound, kept as written; `NULL` when none. */
   const char* max_val_iso;
   /** 1 when `dxf_index` is set; 0 means the color filter names no differential format. */
   int32_t has_dxf_index;
@@ -10401,7 +10405,7 @@ typedef struct {
   int32_t descending;
   /** What the condition sorts by: the value, the cell colour, the font colour or the icon, an `fm_sort_by_t`. */
   int32_t sort_by;
-  /** The custom sort list, as comma-separated items; empty when the condition uses none. */
+  /** The custom sort list, as comma-separated items; `NULL` when the condition uses none. */
   const char* custom_list;
   /** The index of the differential format whose colour the condition sorts by. */
   uint32_t dxf_index;
@@ -10876,7 +10880,9 @@ FM_API fm_status_t fm_sheet_get_range_xf_bases_excluding(const fm_workbook_t* wb
                                                          size_t* out_count);
 
 /** @brief One stored cell and its non-default cell-XF index, as
- *         `fm_sheet_get_cell_xf_indices` writes it. */
+ *         `fm_sheet_get_cell_xf_indices` writes it.
+ *
+ * Frozen value type: no `struct_size`. */
 typedef struct {
   /** The 0-based row. */
   uint32_t row;
@@ -10892,15 +10898,15 @@ typedef struct {
  *
  * Styled blank cells and cells with content are both listed; a cell holding
  * the default XF 0 is not, even when it was assigned explicitly, and a spill
- * cell with no stored record is not either. A `NULL` `range` covers every
- * stored cell of the sheet, format-only cells outside the used range included.
- * `*out_count` always receives the number of cells; at most `capacity` are
+ * cell with no stored record is not either. Format-only cells outside the used
+ * range are included, so pass the whole grid to list every stored cell of the
+ * sheet. `*out_count` always receives the number of cells; at most `capacity` are
  * written. Call with `capacity == 0` (`out` may then be `NULL`) to size the
  * buffer first.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_count` is `NULL`, or
- *         `out` is `NULL` while `capacity > 0`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `range` or `out_count` is `NULL`, or
+ *         `out` is `NULL` while `capacity > 0` (`*out_count` is then `0` when `out_count` is non-`NULL`);
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when the rect is out of range.
  */
@@ -11855,9 +11861,9 @@ typedef struct {
   fm_border_t border;
   /** The number format code as UTF-8; NULL when the format sets none. The format's id is assigned on save. */
   const char* number_format;
-  /** The serialized `<alignment/>` element as UTF-8; empty when the format sets no alignment, never NULL. */
+  /** The serialized `<alignment/>` element as UTF-8; `NULL` when the format sets no alignment. */
   const char* alignment_xml;
-  /** The serialized `<protection/>` element as UTF-8; empty when the format sets no protection, never NULL. */
+  /** The serialized `<protection/>` element as UTF-8; `NULL` when the format sets no protection. */
   const char* protection_xml;
 } fm_dxf_t;
 
@@ -13775,7 +13781,7 @@ typedef struct {
   double rotation_deg;
   /** `1` when the shape is a text box. */
   int32_t text_box;
-  /** The `prst` name of the preset geometry, an ECMA-376 `ST_ShapeType` name; empty for custom geometry or a group. */
+  /** The `prst` name of the preset geometry, an ECMA-376 `ST_ShapeType` name; `NULL` for custom geometry or a group. */
   const char* preset_geometry;
   /** The shape's text, paragraphs joined with a newline. */
   const char* text;
@@ -15172,7 +15178,7 @@ typedef struct {
   /** The number of upper levels of a multi-level category axis (the lowest level is the category labels); 0 for a
    *  single-level axis. */
   uint32_t category_level_count;
-  /** The number format code of numeric category values; empty when not numeric. */
+  /** The number format code of numeric category values; `NULL` when not numeric. */
   const char* category_number_format;
   /** 1 when no category reference exists and the labels are generated as 1..n. */
   int32_t categories_generated;
@@ -15204,7 +15210,7 @@ typedef struct {
   /** The number of resolved rectangles of each series input, indexed by `fm_chart_role_t`: 0 name, 1 categories, 2
    *  values, 3 x, 4 y, 5 size. */
   uint32_t range_count[6];
-  /** The number format code of the x values; empty outside the XY domain. */
+  /** The number format code of the x values; `NULL` outside the XY domain. */
   const char* x_number_format;
 } fm_chart_data_series_info_t;
 

@@ -11,6 +11,7 @@ from typing import List
 
 from formulon import (
     FormulonError,
+    IndexOutOfRangeError,
     InvalidArgumentError,
     NotFoundError,
     StatusCode,
@@ -160,19 +161,27 @@ class InsertErrorTests(unittest.TestCase):
                         method(1.5)  # type: ignore[arg-type]
                     with self.assertRaises(TypeError):
                         method(0, "1")  # type: ignore[arg-type]
-                    for args in ((-1,), (None, 1), (4,), (2, 1)):
+                    for args in ((None, 1), (None, 0)):
+                        with self.assertRaises(TypeError):
+                            method(*args)
+                    for args in ((-1,), (4,), (2**31,)):
+                        with self.assertRaises(IndexOutOfRangeError):
+                            method(*args)
+                    for args in ((2, 1), (0, -1)):
                         with self.assertRaises(InvalidArgumentError):
                             method(*args)
                     name = method.__name__
                     noun = "2 rows" if name == "insert_rows" else "3 columns"
-                    for args, message in (
-                        ((None, 1), f"Table.{name} last needs first"),
-                        ((4,), f"Table.{name} first 4 is out of range ({noun})"),
-                        ((2, 1), f"Table.{name} last 1 is before first 2"),
-                    ):
-                        with self.assertRaises(InvalidArgumentError) as caught:
+                    with self.assertRaises(TypeError) as caught_first:
+                        method(None, 1)
+                    self.assertEqual(str(caught_first.exception), f"Table.{name} last needs first")
+                    for args, message in (((4,), f"Table.{name} first 4 is out of range ({noun})"),):
+                        with self.assertRaises(IndexOutOfRangeError) as caught:
                             method(*args)
                         self.assertEqual(caught.exception.message, message)
+                    with self.assertRaises(InvalidArgumentError) as caught_last:
+                        method(2, 1)
+                    self.assertEqual(caught_last.exception.message, f"Table.{name} last 1 is before first 2")
                     with self.assertRaises(TypeError) as caught_type:
                         method(1.5)  # type: ignore[arg-type]
                     self.assertEqual(str(caught_type.exception), f"Table.{name} first must be an integer")

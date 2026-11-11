@@ -166,12 +166,10 @@ TEST(FormulonCApiStyles, DxfAlignmentAndProtectionPreserveIdentityThroughOoxml) 
   ASSERT_EQ(fm_workbook_get_dxf_at(wb.handle, alignment_index, &got_alignment), 0);
   ASSERT_EQ(fm_workbook_get_dxf_at(wb.handle, protection_index, &got_protection), 0);
   ASSERT_NE(got_alignment.alignment_xml, nullptr);
-  ASSERT_NE(got_alignment.protection_xml, nullptr);
-  ASSERT_NE(got_protection.alignment_xml, nullptr);
   ASSERT_NE(got_protection.protection_xml, nullptr);
   EXPECT_STREQ(got_alignment.alignment_xml, "<alignment horizontal=\"center\" wrapText=\"1\"/>");
-  EXPECT_STREQ(got_alignment.protection_xml, "");
-  EXPECT_STREQ(got_protection.alignment_xml, "");
+  EXPECT_EQ(got_alignment.protection_xml, nullptr);
+  EXPECT_EQ(got_protection.alignment_xml, nullptr);
   EXPECT_STREQ(got_protection.protection_xml, "<protection locked=\"0\" hidden=\"1\"/>");
 
   std::uint32_t alignment_again = 0xFFFFFFFFU;
@@ -196,8 +194,8 @@ TEST(FormulonCApiStyles, DxfAlignmentAndProtectionPreserveIdentityThroughOoxml) 
   ASSERT_EQ(fm_workbook_get_dxf_at(reloaded.handle, alignment_index, &reloaded_alignment), 0);
   ASSERT_EQ(fm_workbook_get_dxf_at(reloaded.handle, protection_index, &reloaded_protection), 0);
   EXPECT_STREQ(reloaded_alignment.alignment_xml, "<alignment horizontal=\"center\" wrapText=\"1\"/>");
-  EXPECT_STREQ(reloaded_alignment.protection_xml, "");
-  EXPECT_STREQ(reloaded_protection.alignment_xml, "");
+  EXPECT_EQ(reloaded_alignment.protection_xml, nullptr);
+  EXPECT_EQ(reloaded_protection.alignment_xml, nullptr);
   EXPECT_STREQ(reloaded_protection.protection_xml, "<protection locked=\"0\" hidden=\"1\"/>");
 
   std::uint32_t reloaded_alignment_again = 0xFFFFFFFFU;

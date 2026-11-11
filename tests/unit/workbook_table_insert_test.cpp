@@ -278,7 +278,7 @@ TEST(WorkbookTableInsert, AppendOnATableEndingOnTheLastRowIsRefused) {
 
 TEST(WorkbookTableInsert, RowArgumentsAreChecked) {
   Workbook wb = SalesBook();
-  ExpectCode(wb.insert_table_rows(0U, 0U, 3U, 3U), FormulonErrorCode::kInvalidArgument);           // first > count
+  ExpectCode(wb.insert_table_rows(0U, 0U, 3U, 3U), FormulonErrorCode::kIndexOutOfRange);           // first > count
   ExpectCode(wb.insert_table_rows(0U, 0U, 1U, 0U), FormulonErrorCode::kInvalidArgument);           // last < first
   ExpectCode(wb.insert_table_rows(0U, 0U, 2U, 0xFFFFFFFFU), FormulonErrorCode::kInvalidArgument);  // past the grid
   ExpectCode(wb.insert_table_rows(0U, 1U, 0U, 0U), FormulonErrorCode::kInvalidArgument);           // no such table
@@ -450,7 +450,7 @@ TEST(WorkbookTableInsert, AppendOnATableEndingOnTheLastColumnIsRefused) {
 
 TEST(WorkbookTableInsert, ColumnArgumentsAreChecked) {
   Workbook wb = SalesBook();
-  ExpectCode(wb.insert_table_columns(0U, 0U, 3U, 3U), FormulonErrorCode::kInvalidArgument);  // first > count
+  ExpectCode(wb.insert_table_columns(0U, 0U, 3U, 3U), FormulonErrorCode::kIndexOutOfRange);  // first > count
   ExpectCode(wb.insert_table_columns(0U, 0U, 1U, 0U), FormulonErrorCode::kInvalidArgument);  // last < first
   ExpectCode(wb.insert_table_columns(0U, 0U, 2U, 0xFFFFFFFFU), FormulonErrorCode::kInvalidArgument);
   ExpectCode(wb.insert_table_columns(0U, 1U, 0U, 0U), FormulonErrorCode::kInvalidArgument);

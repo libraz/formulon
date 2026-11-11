@@ -638,15 +638,14 @@ Napi::Value Workbook::ListCellXfIndices(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   const uint32_t sheet = ArgU32(info, 0);
-  fm_cell_rect_t rect{};
-  const fm_cell_rect_t* where = nullptr;
+  fm_cell_rect_t rect = kWholeSheetRect;
   if (!info[1].IsUndefined() && !info[1].IsNull()) {
     CheckedSpecReader reader(env);
     if (!ReadCellRect(reader, ArgObject(info, 1), &rect)) {
       return env.Undefined();
     }
-    where = &rect;
   }
+  const fm_cell_rect_t* where = &rect;
   size_t len = 0;
   fm_status_t rc = fm_sheet_get_cell_xf_indices(handle_, sheet, where, nullptr, 0, &len);
   std::vector<fm_cell_xf_index_t> cells(len);
@@ -673,15 +672,14 @@ Napi::Value Workbook::ListShowPhoneticCells(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   const uint32_t sheet = ArgU32(info, 0);
-  fm_cell_rect_t rect{};
-  const fm_cell_rect_t* where = nullptr;
+  fm_cell_rect_t rect = kWholeSheetRect;
   if (!info[1].IsUndefined() && !info[1].IsNull()) {
     CheckedSpecReader reader(env);
     if (!ReadCellRect(reader, ArgObject(info, 1), &rect)) {
       return env.Undefined();
     }
-    where = &rect;
   }
+  const fm_cell_rect_t* where = &rect;
   size_t len = 0;
   fm_status_t rc = fm_sheet_get_show_phonetic_cells(handle_, sheet, where, nullptr, 0, &len);
   std::vector<fm_cell_address_t> cells(len);

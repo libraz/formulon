@@ -28,6 +28,7 @@
 #include "utils/error.h"
 #include "workbook.h"
 
+using formulon::c_api::parts::c_str_or_null;
 using formulon::c_api::parts::chart_blanks_as_from_c;
 using formulon::c_api::parts::chart_fill_to_c;
 using formulon::c_api::parts::chart_line_to_c;
@@ -680,7 +681,7 @@ extern "C" fm_status_t fm_chart_data_get_info(const fm_chart_data_t* data, fm_ch
   out->category_label_count = static_cast<std::uint32_t>(d.categories.labels.size());
   out->category_value_count = static_cast<std::uint32_t>(d.categories.values.size());
   out->category_level_count = static_cast<std::uint32_t>(d.categories.levels.size());
-  out->category_number_format = d.categories.format_code.c_str();
+  out->category_number_format = d.categories.values.empty() ? nullptr : c_str_or_null(d.categories.format_code);
   out->categories_generated = d.categories.generated ? 1 : 0;
   out->title_text = opt_cstr(d.title_text);
   out->axis_title_count = static_cast<std::uint32_t>(d.axis_title_texts.size());
@@ -751,7 +752,7 @@ extern "C" fm_status_t fm_chart_data_get_series_at(const fm_chart_data_t* data, 
   out->series_id = s.idx;
   out->name = opt_cstr(s.name);
   out->number_format = s.format_code.c_str();
-  out->x_number_format = s.x_format_code.c_str();
+  out->x_number_format = c_str_or_null(s.x_format_code);
   out->filtered = s.filtered ? 1 : 0;
   out->point_count = static_cast<std::uint32_t>(data->points[series].values.size());
   out->has_sizes = s.sizes.empty() ? 0 : 1;

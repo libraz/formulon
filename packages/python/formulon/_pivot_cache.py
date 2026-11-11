@@ -220,10 +220,10 @@ class PivotCache(_NoCopy):
         fields: List[PivotCacheField] = []
         for i in range(_read_count(LIB.fm_workbook_get_pivot_cache_field_count, h, cache_id)):
             with _ArgScope() as scope:
-                ptr = scope.struct(S.PIVOT_CACHE_FIELD_TYPES)
+                ptr = scope.struct(S.PIVOT_CACHE_FIELD_TYPES_INFO)
                 field_index = _uint(i, "field_index", role="position")
                 _check(LIB.fm_workbook_get_pivot_cache_field_types(h, cache_id, field_index, ptr))
-                types = S.PIVOT_CACHE_FIELD_TYPES.unpack(LIB, ptr)
+                types = S.PIVOT_CACHE_FIELD_TYPES_INFO.unpack(LIB, ptr)
             fields.append(
                 PivotCacheField(
                     name=_read_cstr_out(

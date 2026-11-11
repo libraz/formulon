@@ -558,12 +558,11 @@ emscripten::val JsWorkbook::getCellXfIndices(uint32_t sheet, emscripten::val ran
     return emscripten::val::undefined();
   }
   JsNarrowNumericReader reader("Sheet.getCellXfIndices");
-  const bool bounded = js_value_present(range);
-  const fm_cell_rect_t rect = bounded ? js_pull_range(range, &reader) : fm_cell_rect_t{};
+  const fm_cell_rect_t rect = js_value_present(range) ? js_pull_range(range, &reader) : kWholeSheetRect;
   if (!reader.ok()) {
     return emscripten::val::undefined();
   }
-  const fm_cell_rect_t* where = bounded ? &rect : nullptr;
+  const fm_cell_rect_t* where = &rect;
   size_t len = 0;
   fm_status_t rc = fm_sheet_get_cell_xf_indices(handle_, sheet, where, nullptr, 0, &len);
   std::vector<fm_cell_xf_index_t> cells(len);
@@ -590,12 +589,11 @@ emscripten::val JsWorkbook::getShowPhoneticCells(uint32_t sheet, emscripten::val
     return emscripten::val::undefined();
   }
   JsNarrowNumericReader reader("Sheet.getShowPhoneticCells");
-  const bool bounded = js_value_present(range);
-  const fm_cell_rect_t rect = bounded ? js_pull_range(range, &reader) : fm_cell_rect_t{};
+  const fm_cell_rect_t rect = js_value_present(range) ? js_pull_range(range, &reader) : kWholeSheetRect;
   if (!reader.ok()) {
     return emscripten::val::undefined();
   }
-  const fm_cell_rect_t* where = bounded ? &rect : nullptr;
+  const fm_cell_rect_t* where = &rect;
   size_t len = 0;
   fm_status_t rc = fm_sheet_get_show_phonetic_cells(handle_, sheet, where, nullptr, 0, &len);
   std::vector<fm_cell_address_t> cells(len);

@@ -217,6 +217,9 @@ class ListCellXfIndicesTests(unittest.TestCase):
             ws = wb.sheet(0)
             self.assertLess(ws.get_used_range().last_row, 1000)
             self.assertEqual(len(ws.ooxml.get_cell_xf_indices(None)), 3)
+            self.assertEqual(ws.ooxml.get_cell_xf_indices(), ws.ooxml.get_cell_xf_indices("A1:XFD1048576"))
+            whole = CellRect(0, 0, 1048575, 16383)
+            self.assertEqual(ws.ooxml.get_cell_xf_indices(), ws.ooxml.get_cell_xf_indices(whole))
 
     def test_clips_to_a_rect_or_an_a1_range(self) -> None:
         with Workbook.create_default() as wb:
@@ -275,6 +278,8 @@ class ListShowPhoneticCellsTests(unittest.TestCase):
             ws = wb.sheet(0)
             self.assertLess(ws.get_used_range().last_row, 1000)
             self.assertEqual(len(ws.get_show_phonetic_cells(None)), 4)
+            self.assertEqual(ws.get_show_phonetic_cells(), ws.get_show_phonetic_cells("A1:XFD1048576"))
+            self.assertEqual(ws.get_show_phonetic_cells(), ws.get_show_phonetic_cells(CellRect(0, 0, 1048575, 16383)))
 
     def test_clips_to_a_rect_or_an_a1_range(self) -> None:
         with Workbook.create_default() as wb:

@@ -26,6 +26,7 @@
 #include "workbook.h"
 
 using formulon::effective_num_fmt;
+using formulon::c_api::parts::c_str_or_null;
 using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_cell_xf_index;
 using formulon::c_api::parts::check_index;
@@ -408,8 +409,8 @@ extern "C" fm_status_t fm_workbook_get_dxf_at(const fm_workbook_t* wb, uint32_t 
       out->number_format = resolved->data();
     }
   }
-  out->alignment_xml = dxf.alignment_xml.c_str();
-  out->protection_xml = dxf.protection_xml.c_str();
+  out->alignment_xml = c_str_or_null(dxf.alignment_xml);
+  out->protection_xml = c_str_or_null(dxf.protection_xml);
   return 0;
 }
 

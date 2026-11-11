@@ -451,6 +451,24 @@ TEST(FormulonCApiChart, InsertAndReadThroughAccessors) {
   EXPECT_EQ(Info(chart).title.kind, FM_CHART_TITLE_KIND_AUTO);
 }
 
+TEST(FormulonCApiChart, NumericCategoriesReportTheirNumberFormat) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  FillGrid(wb.handle);
+  for (std::uint32_t r = 0; r < 4; ++r) {
+    ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, r + 1, 0, static_cast<double>(2020 + r)), 0);
+  }
+  const uint32_t id = Insert(wb.handle, kColumn);
+
+  DataGuard data;
+  OpenData(wb.handle, id, &data);
+  fm_chart_data_info_t info = FM_STRUCT_INIT(fm_chart_data_info_t);
+  ASSERT_EQ(fm_chart_data_get_info(data.handle, &info), 0);
+  EXPECT_EQ(info.category_value_count, 4U);
+  ASSERT_NE(info.category_number_format, nullptr);
+  EXPECT_STREQ(info.category_number_format, "General");
+}
+
 TEST(FormulonCApiChart, ResolvedDataAccessors) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
@@ -468,6 +486,7 @@ TEST(FormulonCApiChart, ResolvedDataAccessors) {
   EXPECT_EQ(info.category_value_count, 0U);
   EXPECT_EQ(info.category_level_count, 0U);
   EXPECT_EQ(info.categories_generated, 0);
+  EXPECT_EQ(info.category_number_format, nullptr);
   EXPECT_EQ(info.unresolved_count, 0U);
 
   const char* label = nullptr;
@@ -487,7 +506,7 @@ TEST(FormulonCApiChart, ResolvedDataAccessors) {
   EXPECT_STREQ(s.name, "S1");
   EXPECT_EQ(s.point_count, 4U);
   EXPECT_EQ(s.has_sizes, 0);
-  EXPECT_STREQ(s.x_number_format, "");
+  EXPECT_EQ(s.x_number_format, nullptr);
   EXPECT_EQ(s.range_count[FM_CHART_ROLE_NAME], 1U);
   EXPECT_EQ(s.range_count[FM_CHART_ROLE_VALUES], 1U);
   EXPECT_EQ(s.range_count[FM_CHART_ROLE_X], 0U);

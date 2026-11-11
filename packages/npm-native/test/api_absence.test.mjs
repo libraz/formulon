@@ -267,3 +267,18 @@ test('evaluateCfRange without time-period rules matches no time-period rule', as
     assert.throws(() => ws.evaluateCfRange('A1', { timePeriodRule: false }), TypeError);
   });
 });
+
+test('a non-XY chart series reads a null x number format', async () => {
+  await withWorkbook((wb, f) => {
+    const ws = wb.sheet(0);
+    ws.setText(0, 1, 'S1');
+    for (let r = 1; r <= 3; r++) {
+      ws.setText(r, 0, `c${r}`);
+      ws.setNumber(r, 1, r);
+    }
+    const chart = ws.addChart({ type: f.ChartPlotType.Bar, range: 'Sheet1!$A$1:$B$4' });
+    const series = ws.chart(chart.objectId).getData().series[0];
+    assert.equal(series.xNumberFormat, null);
+    assert.equal(series.numberFormat, 'General');
+  });
+});

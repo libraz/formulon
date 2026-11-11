@@ -45,9 +45,15 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   conditional-format, validation, protected and print ranges take `CellRect`
   arrays instead of A1 text. An absent value reads `NULL`, `null` or `None`.
 - `Comment.author`, `AutoFilterColumn.valueIso` / `maxValueIso`,
-  `AutoFilterSortCondition.customList` and `ChartCategories.numberFormat` read
+  `AutoFilterSortCondition.customList`, `ChartCategories.numberFormat`,
+  `ChartDataSeries.xNumberFormat` and `ShapeProperties.presetGeometry` read
   `null` (Python `None`) when absent instead of `''`
   ([result fields](docs/releases/upgrading-0.19.md#result-fields)).
+- C ABI: an absent string in a result record reads `NULL` instead of `""`:
+  `fm_comment_t.author`, `fm_filter_column_t.val_iso` / `max_val_iso`,
+  `fm_sort_condition_t.custom_list`, `fm_chart_data_info_t.category_number_format`,
+  `fm_chart_data_series_info_t.x_number_format`, `fm_dxf_t.alignment_xml` /
+  `protection_xml` and `fm_shape_info_t.preset_geometry`.
 - Units are named by suffix: row heights in points (`heightPt`), column widths
   in characters (`widthChars`), margins in inches (`leftIn`), print scale as a
   percentage (`scalePct`).
@@ -129,10 +135,13 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   beside it for a lossless undo.
 - `Sheet.ooxml.getCellXfIndices(range?)` (`fm_sheet_get_cell_xf_indices`, Python
   `get_cell_xf_indices`) lists the stored cells with a non-default cell XF,
-  styled blanks included, which `listCells` leaves out.
+  styled blanks included, which `listCells` leaves out. The C function takes a
+  required `range`: `NULL` is `FM_STATUS_BINDING_NULL_POINTER`, so pass the whole
+  grid to list every stored cell.
 - `Sheet.getShowPhoneticCells(range?)` (`fm_sheet_get_show_phonetic_cells`, Python
   `get_show_phonetic_cells`) lists the stored cells with the Show Phonetic flag
-  set, flag-only blanks included, which `listCells` leaves out.
+  set, flag-only blanks included, which `listCells` leaves out. The C function
+  takes a required `range` as `fm_sheet_get_cell_xf_indices` does.
 - `PivotCache.refresh()` rebuilds a cache from its worksheet source and
   re-projects every pivot on it; cache fields report their sharedItems type
   flags.
@@ -232,7 +241,10 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   references measured from the base cell.
 - `Table.renameColumn` renames a column as typing over its header does.
 - `Table.insertRows(first?, last?)` / `insertColumns(first?, last?)` insert
-  table rows and columns; new columns are named from their left neighbour.
+  table rows and columns; new columns are named from their left neighbour. A
+  `first` that is negative or past the count is `IndexOutOfRange`, a `last`
+  below `first` or outside the grid is `InvalidArgument`, and a `last` without
+  `first` is a `TypeError`.
 - `Table.update({ columns })` patches columns element by element: element `i`
   is a partial `TableColumn` (`totalsRowFunction`, `totalsRowLabel`,
   `totalsRowFormula`, `calculatedFormula`) for column `i`, `null` clears a

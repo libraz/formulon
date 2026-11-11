@@ -741,7 +741,7 @@ class ChartReadRecordTests(unittest.TestCase):
         with wb:
             data = wb.sheet(0).chart(oid).get_data()
             self.assertIsInstance(data.categories, formulon.ChartCategories)
-            self.assertEqual(data.categories.number_format, "General")
+            self.assertIsNone(data.categories.number_format)  # text categories carry no number format
             self.assertNotIn("format_code", {f.name for f in fields(formulon.ChartCategories)})
             self.assertIsInstance(data.series[0].ranges, formulon.ChartSeriesRanges)
             self.assertTrue(all(isinstance(t, formulon.ChartAxisTitleText) for t in data.axis_title_texts))

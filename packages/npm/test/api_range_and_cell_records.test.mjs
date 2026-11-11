@@ -330,6 +330,9 @@ describe('getCellXfIndices', () => {
       assert.ok(used.lastRow < 1000);
       assert.equal(ws.ooxml.getCellXfIndices(null).length, 3);
       assert.equal(ws.ooxml.getCellXfIndices(undefined).length, 3);
+      const whole = plain(ws.ooxml.getCellXfIndices());
+      assert.deepEqual(plain(ws.ooxml.getCellXfIndices(rect(0, 0, 1048575, 16383))), whole);
+      assert.deepEqual(plain(ws.ooxml.getCellXfIndices('A1:XFD1048576')), whole);
     });
   });
 
@@ -403,6 +406,9 @@ describe('getShowPhoneticCells', () => {
       assert.ok(ws.getUsedRange().lastRow < 1000);
       assert.equal(ws.getShowPhoneticCells(null).length, 4);
       assert.equal(ws.getShowPhoneticCells(undefined).length, 4);
+      const whole = plain(ws.getShowPhoneticCells());
+      assert.deepEqual(plain(ws.getShowPhoneticCells(rect(0, 0, 1048575, 16383))), whole);
+      assert.deepEqual(plain(ws.getShowPhoneticCells('A1:XFD1048576')), whole);
     });
   });
 

@@ -108,6 +108,7 @@ void publish(const fm_workbook_t* wb, const formulon::AutoFilter& filter, fm_aut
   fresh_arena(wb, &fm_workbook_t::filter_condition_scratch);
   fresh_arena(wb, &fm_workbook_t::sort_condition_scratch);
   auto keep = [scratch](const std::string& text) { return store_cstr(scratch->read_scratch, text); };
+  auto keep_or_null = [&keep](const std::string& text) { return text.empty() ? nullptr : keep(text); };
 
   std::vector<fm_filter_column_t> columns;
   columns.reserve(filter.columns.size());
@@ -162,8 +163,8 @@ void publish(const fm_workbook_t* wb, const formulon::AutoFilter& filter, fm_aut
         c.dyn_val = in.dynamic.val.value_or(0.0);
         c.has_dyn_max_val = in.dynamic.max_val.has_value() ? 1 : 0;
         c.dyn_max_val = in.dynamic.max_val.value_or(0.0);
-        c.val_iso = keep(in.dynamic.val_iso);
-        c.max_val_iso = keep(in.dynamic.max_val_iso);
+        c.val_iso = keep_or_null(in.dynamic.val_iso);
+        c.max_val_iso = keep_or_null(in.dynamic.max_val_iso);
         break;
       case formulon::FilterKind::kColor:
         c.has_dxf_index = in.color.dxf_id.has_value() ? 1 : 0;
@@ -201,7 +202,7 @@ void publish(const fm_workbook_t* wb, const formulon::AutoFilter& filter, fm_aut
       c.ref = to_cell_rect(in.ref);
       c.descending = in.descending ? 1 : 0;
       c.sort_by = static_cast<int32_t>(in.sort_by);
-      c.custom_list = keep(in.custom_list);
+      c.custom_list = keep_or_null(in.custom_list);
       c.has_dxf_index = in.dxf_id.has_value() ? 1 : 0;
       c.dxf_index = in.dxf_id.value_or(0U);
       c.icon_set = static_cast<int32_t>(in.icon_set);

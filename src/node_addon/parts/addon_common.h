@@ -192,6 +192,9 @@ Napi::Value ColorSpecOrNull(Napi::Env env, const fm_color_t& spec);
 /// Builds a `CellRect` `{ firstRow, firstCol, lastRow, lastCol }`.
 Napi::Object RangeToJs(Napi::Env env, const fm_cell_rect_t& r);
 
+/// The whole grid, for a list read whose range was omitted.
+constexpr fm_cell_rect_t kWholeSheetRect{0U, 0U, 1048575U, 16383U};
+
 /// JS string from a C string; NULL becomes "".
 Napi::Value JsString(Napi::Env env, const char* s);
 

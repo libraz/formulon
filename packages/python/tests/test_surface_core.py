@@ -55,7 +55,7 @@ class StructLayoutTests(unittest.TestCase):
         "PIVOT_ITEM_INFO": 28,
         "PIVOT_STYLE_OPTIONS": 28,
         "PIVOT_OPTIONS": 108,
-        "PIVOT_CACHE_FIELD_TYPES": 36,
+        "PIVOT_CACHE_FIELD_TYPES_INFO": 36,
         "PIVOT_CACHE_OPTIONS": 20,
         "PIVOT_CALCULATED_ITEM": 20,
         "TABLE_INFO": 56,

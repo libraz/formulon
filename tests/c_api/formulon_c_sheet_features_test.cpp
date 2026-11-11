@@ -367,7 +367,7 @@ TEST_F(FormulonCApiSheetFeatures, CommentEmptyTextWritesAnEmptyNote) {
   ASSERT_EQ(SetNote(wb_, 0, 2, 2, nullptr, nullptr), 0);
   ASSERT_EQ(fm_sheet_get_comment(wb_, 0, 2, 2, &present, &got), 0);
   EXPECT_EQ(present, 1);
-  EXPECT_STREQ(got.author, "");
+  EXPECT_EQ(got.author, nullptr);
   EXPECT_STREQ(got.text, "");
 }
 

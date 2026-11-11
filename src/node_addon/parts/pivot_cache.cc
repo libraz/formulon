@@ -163,7 +163,7 @@ Napi::Value Workbook::PivotCacheFieldTypes(const Napi::CallbackInfo& info) {
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  fm_pivot_cache_field_types_t t = FM_STRUCT_INIT(fm_pivot_cache_field_types_t);
+  fm_pivot_cache_field_types_info_t t = FM_STRUCT_INIT(fm_pivot_cache_field_types_info_t);
   const fm_status_t rc =
       fm_workbook_get_pivot_cache_field_types(handle_, ArgU32(info, 0), static_cast<std::size_t>(ArgU32(info, 1)), &t);
   if (rc != 0) {

@@ -323,6 +323,17 @@ TEST(FormulonCApiAutoFilter, EveryCriterionKindRoundTrips) {
   ExpectEveryKind(GetSheetFilter(wb.handle));
   EXPECT_TRUE(HasDefinedName(wb.handle, "_xlnm._FilterDatabase"));
 
+  fm_auto_filter_t raw = FM_STRUCT_INIT(fm_auto_filter_t);
+  int32_t raw_present = 0;
+  ASSERT_EQ(fm_sheet_get_auto_filter(wb.handle, 0, &raw_present, &raw), 0);
+  ASSERT_EQ(raw_present, 1);
+  ASSERT_EQ(raw.condition_count, 2U);
+  EXPECT_EQ(raw.conditions[0].custom_list, nullptr);
+  EXPECT_EQ(raw.conditions[1].custom_list, nullptr);
+  ASSERT_GT(raw.column_count, 0U);
+  EXPECT_EQ(raw.columns[0].val_iso, nullptr);
+  EXPECT_EQ(raw.columns[0].max_val_iso, nullptr);
+
   WorkbookGuard reloaded;
   SaveAndReload(wb.handle, &reloaded);
   ExpectEveryKind(GetSheetFilter(reloaded.handle));

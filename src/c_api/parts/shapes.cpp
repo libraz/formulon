@@ -234,7 +234,7 @@ extern "C" fm_status_t fm_sheet_get_shape(const fm_workbook_t* wb, size_t sheet_
     out->line = chart_line_to_c(info.paint_line);
     out->rotation_deg = static_cast<double>(info.rotation) / kRotationUnitsPerDegree;
     out->text_box = info.text_box ? 1 : 0;
-    out->preset_geometry = store_cstr(store, info.prst);
+    out->preset_geometry = info.prst.empty() ? nullptr : store_cstr(store, info.prst);
     out->text = store_cstr(store, info.text);
     *out_present = 1;
     break;

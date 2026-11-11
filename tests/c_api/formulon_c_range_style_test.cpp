@@ -623,6 +623,8 @@ TEST(FormulonCApiRangeXfRecords, RepeatedFromXfInvalid) {
 
 namespace {
 
+constexpr fm_cell_rect_t kWholeGrid{0U, 0U, kLastRow, kLastCol};
+
 struct XfCell {
   std::uint32_t row;
   std::uint32_t col;
@@ -665,9 +667,7 @@ TEST(FormulonCApiRangeXfRecords, ListsStoredCellsWithAnOwnXfRowMajor) {
   MakeWorkbook(wb);
   StyleCells(wb);
   const std::vector<XfCell> all = {{2U, 7U, 3U}, {5U, 3U, 2U}, {1000U, 20U, 1U}};
-  EXPECT_EQ(ListXfCells(wb, nullptr), all);
-  const fm_cell_rect_t whole{0U, 0U, kLastRow, kLastCol};
-  EXPECT_EQ(ListXfCells(wb, &whole), all);
+  EXPECT_EQ(ListXfCells(wb, &kWholeGrid), all);
 }
 
 TEST(FormulonCApiRangeXfRecords, ClipsToTheRange) {
@@ -686,7 +686,7 @@ TEST(FormulonCApiRangeXfRecords, ListsNothingForAnUnstyledSheet) {
   WorkbookGuard wb;
   MakeWorkbook(wb);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0U, 0U, 1.0), 0);
-  EXPECT_TRUE(ListXfCells(wb, nullptr).empty());
+  EXPECT_TRUE(ListXfCells(wb, &kWholeGrid).empty());
 }
 
 TEST(FormulonCApiRangeXfRecords, CountsTheTotalAndWritesAtMostCapacity) {
@@ -694,10 +694,10 @@ TEST(FormulonCApiRangeXfRecords, CountsTheTotalAndWritesAtMostCapacity) {
   MakeWorkbook(wb);
   StyleCells(wb);
   size_t total = 99;
-  ASSERT_EQ(fm_sheet_get_cell_xf_indices(wb.handle, 0, nullptr, nullptr, 0U, &total), 0);
+  ASSERT_EQ(fm_sheet_get_cell_xf_indices(wb.handle, 0, &kWholeGrid, nullptr, 0U, &total), 0);
   EXPECT_EQ(total, 3U);
   fm_cell_xf_index_t out[2] = {{0U, 0U, 0U}, {0U, 0U, 0U}};
-  ASSERT_EQ(fm_sheet_get_cell_xf_indices(wb.handle, 0, nullptr, out, 2U, &total), 0);
+  ASSERT_EQ(fm_sheet_get_cell_xf_indices(wb.handle, 0, &kWholeGrid, out, 2U, &total), 0);
   EXPECT_EQ(total, 3U);
   EXPECT_EQ(out[0].row, 2U);
   EXPECT_EQ(out[1].row, 5U);
@@ -710,10 +710,17 @@ TEST(FormulonCApiRangeXfRecords, RejectsNullArgumentsAndBadRects) {
   constexpr fm_status_t kNullPointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
   size_t total = 0;
   fm_cell_xf_index_t out[1];
-  EXPECT_EQ(fm_sheet_get_cell_xf_indices(wb.handle, 0, nullptr, out, 1U, nullptr), kNullPointer);
-  EXPECT_EQ(fm_sheet_get_cell_xf_indices(wb.handle, 0, nullptr, nullptr, 1U, &total), kNullPointer);
-  EXPECT_EQ(fm_sheet_get_cell_xf_indices(nullptr, 0, nullptr, nullptr, 0U, &total), kNullPointer);
-  EXPECT_NE(fm_sheet_get_cell_xf_indices(wb.handle, 5, nullptr, nullptr, 0U, &total), 0);
+  EXPECT_EQ(fm_sheet_get_cell_xf_indices(wb.handle, 0, &kWholeGrid, out, 1U, nullptr), kNullPointer);
+  EXPECT_EQ(fm_sheet_get_cell_xf_indices(wb.handle, 0, &kWholeGrid, nullptr, 1U, &total), kNullPointer);
+  EXPECT_EQ(fm_sheet_get_cell_xf_indices(nullptr, 0, &kWholeGrid, nullptr, 0U, &total), kNullPointer);
+  EXPECT_NE(fm_sheet_get_cell_xf_indices(wb.handle, 5, &kWholeGrid, nullptr, 0U, &total), 0);
+  // A NULL range is refused, not read as the whole grid; the count is cleared either way.
+  total = 99U;
+  EXPECT_EQ(fm_sheet_get_cell_xf_indices(wb.handle, 0, nullptr, nullptr, 0U, &total), kNullPointer);
+  EXPECT_EQ(total, 0U);
+  total = 99U;
+  EXPECT_EQ(fm_sheet_get_cell_xf_indices(wb.handle, 0, nullptr, out, 1U, &total), kNullPointer);
+  EXPECT_EQ(total, 0U);
   const fm_cell_rect_t past_grid{0U, 0U, kLastRow + 1U, 0U};
   EXPECT_EQ(fm_sheet_get_cell_xf_indices(wb.handle, 0, &past_grid, nullptr, 0U, &total), kInvalidArgument);
   const fm_cell_rect_t inverted{5U, 0U, 4U, 0U};
@@ -729,7 +736,7 @@ TEST(FormulonCApiRangeXfRecords, SurvivesSaveLoad) {
     ASSERT_EQ(fm_workbook_save(wb.handle, format, &saved.data, &saved.len), 0);
     WorkbookGuard reloaded;
     ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
-    EXPECT_EQ(ListXfCells(reloaded, nullptr), (std::vector<XfCell>{{2U, 7U, 3U}, {5U, 3U, 2U}, {1000U, 20U, 1U}}))
+    EXPECT_EQ(ListXfCells(reloaded, &kWholeGrid), (std::vector<XfCell>{{2U, 7U, 3U}, {5U, 3U, 2U}, {1000U, 20U, 1U}}))
         << format;
   }
 }

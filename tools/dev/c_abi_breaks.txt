@@ -97,7 +97,7 @@ removed fm_sheet_column_pt_to_chars :: renamed to fm_sheet_convert_column_pt_to_
 removed fm_sheet_column_width_pt :: renamed to fm_sheet_get_column_width_pt
 removed fm_sheet_drawing_object_at :: renamed to fm_sheet_get_drawing_object_at
 removed fm_sheet_drawing_object_count :: renamed to fm_sheet_get_drawing_object_count
-removed fm_sheet_edit_threaded_comment :: renamed to fm_sheet_update_threaded_comment
+removed fm_sheet_edit_threaded_comment :: renamed to fm_sheet_update_threaded_comment, which takes an int32_t offset_unit (fm_text_offset_unit_t) before the patch
 signature fm_sheet_get_auto_filter :: takes int32_t* out_present before the record, whose type is renamed (fm_auto_filter -> fm_auto_filter_t)
 removed fm_sheet_get_column :: renamed to fm_sheet_get_column_layout_at
 removed fm_sheet_get_column_count :: renamed to fm_sheet_get_column_layout_count

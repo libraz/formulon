@@ -5215,8 +5215,8 @@ export interface ShapeProperties {
   readonly objectId: number;
   /** The object's kind: shape, connector or group. */
   readonly kind: DrawingObjectKind;
-  /** Name of the preset geometry; empty for custom geometry or a group. */
-  readonly presetGeometry: string;
+  /** Name of the preset geometry; `null` for custom geometry or a group. */
+  readonly presetGeometry: string | null;
   /** The shape's text, paragraphs joined with a newline. */
   readonly text: string;
   /** `true` when the shape is a text box. */
@@ -5891,8 +5891,8 @@ export interface ChartDataSeries {
   readonly name: string | null;
   /** The number format code of the values (the y values in the XY domain). */
   readonly numberFormat: string;
-  /** The number format code of the x values; empty outside the XY domain. */
-  readonly xNumberFormat: string;
+  /** The number format code of the x values; `null` outside the XY domain. */
+  readonly xNumberFormat: string | null;
   /** `true` when the chart filter hides the series. */
   readonly filtered: boolean;
   /** The resolved values, one per point (the y values in the XY domain). */
@@ -8362,17 +8362,18 @@ export interface Table {
    *  Called with neither argument it appends one row, above the totals row when the table has one. With `first`
    *  alone it inserts one row at `first`.
    *
-   *  A `first` past the data-row count, or a `last` below `first`, fails with `StatusCode.InvalidArgument`. It
-   *  fails with `StatusCode.PreconditionFailed`, changing nothing, when a PivotTable lies in the shift path, a
-   *  multi-cell array formula or data table is cut by the band, or a value, formula, note, fill, border, merge or
-   *  the table itself would be pushed past the last sheet row.
+   *  A `first` past the data-row count (or negative) fails with `StatusCode.IndexOutOfRange`; a `last` below
+   *  `first` fails with `StatusCode.InvalidArgument`. It fails with `StatusCode.PreconditionFailed`, changing
+   *  nothing, when a PivotTable lies in the shift path, a multi-cell array formula or data table is cut by the band,
+   *  or a value, formula, note, fill, border, merge or the table itself would be pushed past the last sheet row.
    *  @param first The 0-based data-row position of the first new row; the data-row count appends. Defaults to the
    *    data-row count.
    *  @param last The 0-based data-row position of the last new row, not below `first`; the span is inclusive.
    *    Defaults to `first`. May be given only together with `first`.
    *  @throws RangeError when `first` or `last` is fractional or above 4294967295.
-   *  @throws FormulonError with `StatusCode.InvalidArgument` when `first` or `last` is negative or above 2147483647,
-   *    or when `last` is given without `first`. */
+   *  @throws FormulonError with `StatusCode.IndexOutOfRange` when `first` is negative or past the data-row count, and
+   *    with `StatusCode.InvalidArgument` when `last` is negative, above 2147483647 or below `first`.
+   *  @throws TypeError when `last` is given without `first`. */
   insertRows(first?: number, last?: number): void;
   /** Inserts columns into the table, as ListColumns.Add does. The cells of the table's rows (header through
    *  totals row) from the first new column rightwards move right, the cells of other rows stay, and the table grows

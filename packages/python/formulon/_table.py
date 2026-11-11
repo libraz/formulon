@@ -457,10 +457,12 @@ class Table(_NoCopy):
             given only together with ``first``.
 
         Raises:
-          TypeError: when ``first`` or ``last`` is not an integer.
-          InvalidArgumentError: when ``first`` is past the data-row count,
-            ``last`` is below ``first`` or given without ``first``, either is
-            negative, or the span reaches past the last sheet row.
+          TypeError: when ``first`` or ``last`` is not an integer, or ``last``
+            is given without ``first``.
+          IndexOutOfRangeError: when ``first`` is negative or past the
+            data-row count.
+          InvalidArgumentError: when ``last`` is negative or below ``first``,
+            or the span reaches past the last sheet row.
           FormulonError: with ``StatusCode.PRECONDITION_FAILED`` when a
             PivotTable lies in the shift path, a multi-cell array formula or
             data table is cut by the band, or a value, formula, note, fill,
@@ -476,8 +478,9 @@ class Table(_NoCopy):
                 h,
                 _uint(sheet, "sheet_index", role="sheet"),
                 _uint(index, "table_index", role="position"),
-                _uint(first, "first", role="coordinate"),
-                _uint(last, "last", role="coordinate"),
+                _uint(first, "first", role="position"),
+                # An omitted last is first, a position; an explicit one was checked as a coordinate above.
+                _uint(last, "last", role="position"),
             )
         )
 
@@ -503,8 +506,8 @@ class Table(_NoCopy):
             be given only together with ``first``.
 
         Raises:
-          InvalidArgumentError: as :meth:`insert_rows`, with the last sheet
-            column as the bound.
+          TypeError, IndexOutOfRangeError, InvalidArgumentError: as
+            :meth:`insert_rows`, with the last sheet column as the bound.
           FormulonError: with ``StatusCode.PRECONDITION_FAILED`` as
             :meth:`insert_rows`.
           NotFoundError: when the table was removed.
@@ -517,8 +520,9 @@ class Table(_NoCopy):
                 h,
                 _uint(sheet, "sheet_index", role="sheet"),
                 _uint(index, "table_index", role="position"),
-                _uint(first, "first", role="coordinate"),
-                _uint(last, "last", role="coordinate"),
+                _uint(first, "first", role="position"),
+                # An omitted last is first, a position; an explicit one was checked as a coordinate above.
+                _uint(last, "last", role="position"),
             )
         )
 
@@ -542,11 +546,10 @@ class Table(_NoCopy):
         """The ``(first, last)`` of an insert: both omitted appends one at ``count``, ``first`` alone is one at it."""
         if first is None:
             if last is not None:
-                raise FormulonError(
-                    StatusCode.INVALID_ARGUMENT, _argument_message("last", "needs first"), f"last={last}"
-                )
+                raise TypeError(_argument_message("last", "needs first"))
             return count, count
-        return first, first if last is None else last
+        start = _uint(first, "first", role="position")
+        return start, start if last is None else _uint(last, "last", role="coordinate")
 
     # -- AutoFilter --------------------------------------------------------
     def get_auto_filter(self) -> Optional[AutoFilter]:

@@ -4864,15 +4864,11 @@ function insertSpan(where, first, last, count) {
   const given = (value) => value !== undefined && value !== null;
   if (!given(first)) {
     if (given(last)) {
-      throw new FormulonError(
-        StatusCode.InvalidArgument,
-        `${argLabel(where, 1)} needs ${argumentPath(where, 0)}`,
-        `last=${last}`,
-      );
+      throw new TypeError(`${argLabel(where, 1)} needs ${argumentPath(where, 0)}`);
     }
     return [count, count];
   }
-  const from = requireIndex(first, argLabel(where, 0), 'coordinate');
+  const from = requireIndex(first, argLabel(where, 0), 'position');
   return [from, given(last) ? requireIndex(last, argLabel(where, 1), 'coordinate') : from];
 }
 

@@ -31,7 +31,8 @@ emscripten::val shape_to_val(const fm_shape_info_t& s) {
   emscripten::val o = emscripten::val::object();
   o.set("objectId", s.object_id);
   o.set("kind", s.kind);
-  js_set_cstr_fields(o, {{"presetGeometry", s.preset_geometry}, {"text", s.text}});
+  o.set("presetGeometry", cstr_or_null(s.preset_geometry));
+  js_set_cstr_fields(o, {{"text", s.text}});
   o.set("textBox", s.text_box != 0);
   o.set("fill", chart_fill_to_val(s.fill));
   o.set("line", chart_line_to_val(s.line));

@@ -102,7 +102,7 @@ fm_status_t convert_hyperlink(const fm_hyperlink_t& hl, formulon::Hyperlink* out
 void fill_comment(const formulon::CellComment& c, fm_comment_t* out) {
   out->row = c.row;
   out->col = c.col;
-  out->author = c.author.c_str();
+  out->author = c_str_or_null(c.author);
   out->text = c.text.c_str();
 }
 

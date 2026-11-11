@@ -434,7 +434,7 @@ TEST(FormulonCApiUsability, ShapePatchWritesOnlyItsSetFieldsAndRefusesAtomically
   fm_shape_info_t after = ReadShape(wb.handle, id);
   EXPECT_EQ(after.rotation_deg, 90.0);
   EXPECT_EQ(after.text_box, before.text_box);
-  EXPECT_EQ(std::string(after.preset_geometry), std::string(before.preset_geometry));
+  EXPECT_STREQ(after.preset_geometry, before.preset_geometry);
 
   fm_shape_patch_t bad = FM_STRUCT_INIT(fm_shape_patch_t);
   bad.text_box_op = FM_PATCH_OP_SET;
