@@ -466,7 +466,7 @@ TEST(PivotRefresh, RulesFieldsMatchByHeaderFoldAndFollowSourceOrder) {
   EXPECT_EQ(plan.remap.names, (std::vector<std::string>{"Amt", "ＲＥＧＩＯＮ", "Prod"}));
 }
 
-TEST(PivotRefresh, RulesNonIntegerNumericGroupIsNotImplemented) {
+TEST(PivotRefresh, RulesNumericGroupOverFractionalDataTakesTheDecimalForm) {
   PivotCache old = RegionCache({});
   PivotCacheField group;
   group.name = "Amt2";
@@ -478,9 +478,15 @@ TEST(PivotRefresh, RulesNonIntegerNumericGroupIsNotImplemented) {
   group.field_group->range.end_num = 400.0;
   group.field_group->range.interval = 100.0;
   old.mutable_fields().push_back(std::move(group));
-  const auto plan = pivot::build_refreshed_cache(old, Source({"Region"}, {{Value::number(5.5)}}), Context({true}));
-  ASSERT_FALSE(static_cast<bool>(plan));
-  EXPECT_EQ(plan.error().code, FormulonErrorCode::kNotImplemented);
+  const RefreshPlan plan = Build(old, Source({"Region"}, {{Value::number(5.5)}}), Context({true}));
+  const pivot::FieldGroup& refreshed = *plan.cache.fields()[1].field_group;
+  EXPECT_EQ(refreshed.range.start_num, 5.5);
+  EXPECT_EQ(refreshed.range.end_num, 5.5);
+  std::vector<std::string> texts;
+  for (const Value& v : refreshed.group_items) {
+    texts.emplace_back(v.is_text() ? std::string(v.as_text()) : std::string("#"));
+  }
+  EXPECT_EQ(texts, (std::vector<std::string>{"<5.5", "5.5-105.5", ">105.5"}));
 }
 
 TEST(PivotRefresh, RulesRefreshReadsCurrentValuesAndReprojects) {
@@ -1202,7 +1208,7 @@ TEST(PivotRefresh, HintsEmptyValuesAreNotPresent) {
 }
 
 // ===========================================================================
-// Numeric groups: automatic bounds regenerate, fixed ones keep their items
+// Numeric groups: items regenerate, automatic bounds first following the data
 // ===========================================================================
 
 std::vector<std::string> GroupTexts(const PivotCacheField& field) {
@@ -1263,16 +1269,21 @@ TEST(PivotRefresh, RulesNumericGroupKeepsItemsWhoseLabelsStay) {
             (std::vector<std::optional<std::uint32_t>>{At(0U), At(1U), At(2U), At(3U), At(4U), At(5U), std::nullopt}));
 }
 
-TEST(PivotRefresh, RulesNumericGroupFixedBoundsKeepLabelsVerbatim) {
-  // Excel keeps an authored label as it is.
-  const PivotCache old = AmountGroupCache(true, {"<0", "0-99", "100-199", "200-299", "300-400", ">400"});
+TEST(PivotRefresh, RulesNumericGroupFixedBoundsRegenerateItemsFromTheBounds) {
+  // A refresh rebuilds the items from the stored bounds, replacing stale labels.
+  const PivotCache old = AmountGroupCache(true, {"<0", "0-99", "100-199", "200-299", "300-399", "400-499", ">500"});
   RefreshPlan plan = Build(old, Source({"Amt"}, {{Value::number(-10)}, {Value::number(150)}, {Value::number(999)}}),
                            Context({false, true}));
   const pivot::FieldGroup& group = *plan.cache.fields()[1].field_group;
   EXPECT_EQ(group.range.start_num, 0.0);
   EXPECT_EQ(group.range.end_num, 400.0);
+  EXPECT_FALSE(group.range.auto_start);
+  EXPECT_FALSE(group.range.auto_end);
+  // The stale labels give way; the end 400 on a range edge closes the last range, `300-400`.
   EXPECT_EQ(GroupTexts(plan.cache.fields()[1]),
             (std::vector<std::string>{"<0", "0-99", "100-199", "200-299", "300-400", ">400"}));
+  EXPECT_EQ(plan.remap.items[1], (std::vector<std::optional<std::uint32_t>>{At(0U), At(1U), At(2U), At(3U),
+                                                                            std::nullopt, std::nullopt, std::nullopt}));
   pivot::materialize_group_fields(plan.cache, /*date1904=*/false);
   std::vector<double> numbers;
   for (const PivotCacheRecord& record : plan.cache.records()) {
@@ -1281,12 +1292,98 @@ TEST(PivotRefresh, RulesNumericGroupFixedBoundsKeepLabelsVerbatim) {
   EXPECT_EQ(numbers, (std::vector<double>{0, 2, 5}));
 }
 
-TEST(PivotRefresh, RulesNumericGroupFixedNonIntegerBoundIsNotImplemented) {
+TEST(PivotRefresh, RulesNumericGroupFixedFractionalBoundTakesTheDecimalForm) {
   PivotCache old = AmountGroupCache(true, {"<0", "0-99", ">100"});
   old.mutable_fields()[1].field_group->range.end_num = 99.5;
-  const auto plan = pivot::build_refreshed_cache(old, Source({"Amt"}, {{Value::number(5)}}), Context({false, true}));
-  ASSERT_FALSE(static_cast<bool>(plan));
-  EXPECT_EQ(plan.error().code, FormulonErrorCode::kNotImplemented);
+  const RefreshPlan plan = Build(old, Source({"Amt"}, {{Value::number(5)}}), Context({false, true}));
+  EXPECT_EQ(GroupTexts(plan.cache.fields()[1]), (std::vector<std::string>{"<0", "0-100", ">100"}));
+}
+
+// Base A of the measured workbook: 0.3 .. 3.6 in steps of 0.3.
+std::vector<std::vector<Value>> BaseARows() {
+  std::vector<std::vector<Value>> rows;
+  for (const double v : {0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3.0, 3.3, 3.6}) {
+    rows.push_back({Value::number(v)});
+  }
+  return rows;
+}
+
+std::vector<double> MaterializedNumbers(PivotCache& cache) {
+  pivot::materialize_group_fields(cache, /*date1904=*/false);
+  std::vector<double> numbers;
+  for (const PivotCacheRecord& record : cache.records()) {
+    numbers.push_back(record.cells[1].as_number());
+  }
+  return numbers;
+}
+
+TEST(PivotRefresh, RulesAnAutomaticStartPastAFixedEndKeepsOneRange) {
+  // Automatic start (data minimum 0.3), fixed end 0.1, By 0.5: every value goes to `>0.8`.
+  PivotCache old = AmountGroupCache(false, {"<0", ">0"});
+  pivot::RangeGroup& range = old.mutable_fields()[1].field_group->range;
+  range.auto_end = false;
+  range.end_num = 0.1;
+  range.interval = 0.5;
+  RefreshPlan plan = Build(old, Source({"Amt"}, BaseARows()), Context({false, true}));
+  const pivot::RangeGroup& refreshed = plan.cache.fields()[1].field_group->range;
+  EXPECT_EQ(refreshed.start_num, 0.3);
+  EXPECT_EQ(refreshed.end_num, 0.1);
+  EXPECT_TRUE(refreshed.auto_start);
+  EXPECT_FALSE(refreshed.auto_end);
+  EXPECT_EQ(GroupTexts(plan.cache.fields()[1]), (std::vector<std::string>{"<0.3", "0.3-0.8", ">0.8"}));
+  EXPECT_EQ(MaterializedNumbers(plan.cache), std::vector<double>(12U, 2.0));
+}
+
+TEST(PivotRefresh, RulesAnAutomaticEndBeforeAFixedStartTakesTheEndValueIntoTheRange) {
+  // Fixed start 5, automatic end (data maximum 3.6), By 0.5: 3.6 equals the end and lands in `5-5.5`.
+  PivotCache old = AmountGroupCache(false, {"<0", ">0"});
+  pivot::RangeGroup& range = old.mutable_fields()[1].field_group->range;
+  range.auto_start = false;
+  range.start_num = 5.0;
+  range.interval = 0.5;
+  RefreshPlan plan = Build(old, Source({"Amt"}, BaseARows()), Context({false, true}));
+  const pivot::RangeGroup& refreshed = plan.cache.fields()[1].field_group->range;
+  EXPECT_EQ(refreshed.start_num, 5.0);
+  EXPECT_EQ(refreshed.end_num, 3.6);
+  EXPECT_EQ(GroupTexts(plan.cache.fields()[1]), (std::vector<std::string>{"<5", "5-5.5", ">5.5"}));
+  std::vector<double> expected(12U, 0.0);
+  expected.back() = 1.0;
+  EXPECT_EQ(MaterializedNumbers(plan.cache), expected);
+}
+
+TEST(PivotRefresh, RulesFractionalGroupRewritesAutomaticBoundsAndItems) {
+  // Bogus stored bounds 0 / 99 with both bounds automatic become the data's 0.3 / 3.6.
+  PivotCache old = AmountGroupCache(false, {"<0", "0-0.5", ">0.5"});
+  pivot::RangeGroup& range = old.mutable_fields()[1].field_group->range;
+  range.start_num = 0.0;
+  range.end_num = 99.0;
+  range.interval = 0.5;
+  const RefreshPlan plan = Build(old, Source({"Amt"}, BaseARows()), Context({false, true}));
+  const pivot::FieldGroup& group = *plan.cache.fields()[1].field_group;
+  EXPECT_EQ(group.range.start_num, 0.3);
+  EXPECT_EQ(group.range.end_num, 3.6);
+  EXPECT_EQ(group.range.interval, 0.5);
+  EXPECT_EQ(GroupTexts(plan.cache.fields()[1]),
+            (std::vector<std::string>{"<0.3", "0.3-0.8", "0.8-1.3", "1.3-1.8", "1.8-2.3", "2.3-2.8", "2.8-3.3",
+                                      "3.3-3.8", ">3.8"}));
+}
+
+TEST(PivotRefresh, RulesFractionalGroupLabelsUseTheRefreshingLocale) {
+  // A group saved with German labels regenerates in the profile that refreshes it.
+  PivotCache old = AmountGroupCache(false, {"<0,3", "0,3-0,8", ">0,8"});
+  pivot::RangeGroup& range = old.mutable_fields()[1].field_group->range;
+  range.start_num = 0.3;
+  range.end_num = 3.6;
+  range.interval = 0.5;
+  const RefreshPlan ja = Build(old, Source({"Amt"}, BaseARows()), Context({false, true}));
+  EXPECT_EQ(GroupTexts(ja.cache.fields()[1]).front(), "<0.3");
+  EXPECT_EQ(GroupTexts(ja.cache.fields()[1])[1], "0.3-0.8");
+  const ExcelProfile de{ExcelHost::kMac365, ExcelLocale::kDeDE};
+  const RefreshPlan german = Build(old, Source({"Amt"}, BaseARows()), Context({false, true}, de));
+  EXPECT_EQ(GroupTexts(german.cache.fields()[1]),
+            (std::vector<std::string>{"<0,3", "0,3-0,8", "0,8-1,3", "1,3-1,8", "1,8-2,3", "2,3-2,8", "2,8-3,3",
+                                      "3,3-3,8", ">3,8"}));
+  EXPECT_EQ(german.cache.fields()[1].field_group->range.start_num, 0.3);
 }
 
 TEST(PivotRefresh, NumericGroupRefreshFollowsTheSourceOnEveryPivot) {
@@ -1297,7 +1394,7 @@ TEST(PivotRefresh, NumericGroupRefreshFollowsTheSourceOnEveryPivot) {
         static_cast<bool>(pivot::set_numeric_group(wb, kPivotSheet, 0U, kAmt, std::nullopt, std::nullopt, 100.0)));
   }
   EXPECT_EQ(GroupTexts(CacheOf(wb).fields()[3]),
-            (std::vector<std::string>{"<100", "100-199", "200-299", "300-399", "400-499", "500-599", ">600"}));
+            (std::vector<std::string>{"<100", "100-199", "200-299", "300-399", "400-500", ">500"}));
   SetNumber(wb, 1U, 2U, 1000.0);  // 100 -> 1000: the data now spans 200..1000
   const Expected<void, Error> refreshed = Refresh(wb);
   ASSERT_TRUE(static_cast<bool>(refreshed)) << refreshed.error().message;
@@ -1305,12 +1402,12 @@ TEST(PivotRefresh, NumericGroupRefreshFollowsTheSourceOnEveryPivot) {
   ASSERT_EQ(cache.fields().size(), 4U);
   EXPECT_EQ(cache.fields()[3].field_group->range.start_num, 200.0);
   EXPECT_EQ(cache.fields()[3].field_group->range.end_num, 1000.0);
-  EXPECT_EQ(cache.fields()[3].field_group->group_items.size(), 11U);
-  EXPECT_EQ(cache.records()[0].cells[3].as_number(), 9.0);  // 1000 in 1000-1099
+  EXPECT_EQ(cache.fields()[3].field_group->group_items.size(), 10U);
+  EXPECT_EQ(cache.records()[0].cells[3].as_number(), 8.0);  // 1000 in 900-1000
   for (std::size_t p = 0; p < 2U; ++p) {
     const std::vector<PivotItem>& items = PivotAt(wb, p).fields()[3].items;
-    ASSERT_EQ(items.size(), 11U);
-    for (std::uint32_t x = 0; x < 11U; ++x) {
+    ASSERT_EQ(items.size(), 10U);
+    for (std::uint32_t x = 0; x < 10U; ++x) {
       EXPECT_EQ(items[x].cache_index, x);
     }
   }

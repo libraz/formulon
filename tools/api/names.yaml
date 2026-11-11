@@ -860,31 +860,31 @@ entries:
     js: PivotOptionsPatch
     surfaces: [c, wasm, native]
     clearable: [alt_text, alt_text_summary, error_caption, grand_total_caption, missing_caption]
-  record.pivot_date_group_input:
-    kind: record
-    role: input
-    c: fm_pivot_date_group_spec_t
-    js: PivotDateGroupInput
-    py: PivotDateGroupInput
-    surfaces: [c, wasm, native, py]
   record.pivot_date_group:
     kind: record
     role: result
+    c: fm_pivot_date_group_t
     js: PivotDateGroup
     py: PivotDateGroup
-    surfaces: [wasm, native, py]
-  record.pivot_numeric_group_input:
+    surfaces: [c, wasm, native, py]
+  record.pivot_date_group_input:
     kind: record
     role: input
-    c: fm_pivot_numeric_group_spec_t
-    js: PivotNumericGroupInput
-    py: PivotNumericGroupInput
-    surfaces: [c, wasm, native, py]
+    js: PivotDateGroupInput
+    py: PivotDateGroupInput
+    surfaces: [wasm, native, py]
   record.pivot_numeric_group:
     kind: record
     role: result
+    c: fm_pivot_numeric_group_t
     js: PivotNumericGroup
     py: PivotNumericGroup
+    surfaces: [c, wasm, native, py]
+  record.pivot_numeric_group_input:
+    kind: record
+    role: input
+    js: PivotNumericGroupInput
+    py: PivotNumericGroupInput
     surfaces: [wasm, native, py]
   record.pivot_cache_options:
     kind: record

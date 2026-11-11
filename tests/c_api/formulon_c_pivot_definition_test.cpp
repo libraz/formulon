@@ -66,10 +66,10 @@ TEST(FormulonCApiPivot, ReadBackRoundTripsWhatTheSettersWrote) {
 
   // Field 0 is "Region" (row), field 1 is "Amount" (value).
   ASSERT_EQ(SetPivotFieldSort(wb.handle, 0, pivot_index, 0, FM_PIVOT_SORT_ORDER_DESCENDING, "Sum of Amount"), 0);
-  // Region holds text, which no date group takes.
+  // Region holds text, which no date group takes; the settings themselves are valid.
   EXPECT_EQ(SetPivotFieldDateGroup(wb.handle, 0, pivot_index, 0, FM_PIVOT_PERIOD_DAYS, FM_PIVOT_CALENDAR_GREGORIAN, 7U,
                                    45000.0, 45100.0),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kPreconditionFailed));
   fm_pivot_field_info_t region = FM_STRUCT_INIT(fm_pivot_field_info_t);
   ASSERT_EQ(fm_sheet_get_pivot_field_at(wb.handle, 0, pivot_index, 0, &region), 0) << fm_get_last_error_message();
   EXPECT_STREQ(region.source_name, "Region");

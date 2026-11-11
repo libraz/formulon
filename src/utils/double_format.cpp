@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <string>
 
 #include "utils/double_parse.h"
@@ -253,6 +254,14 @@ void format_double(std::string& out, double v, int significant_digits) {
 
 void format_formula_number(std::string& out, double v) {
   append_shortest(out, v, 15, kFormulaLiteralDecimalMaxChars, 1);
+}
+
+void format_positional(std::string& out, double v) {
+  append_shortest(out, v, 15, std::numeric_limits<std::size_t>::max(), 2);
+}
+
+void format_scientific(std::string& out, double v) {
+  append_shortest(out, v, 15, 0, 2);
 }
 
 }  // namespace formulon

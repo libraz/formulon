@@ -301,7 +301,7 @@ TEST(FormulonCApiPivot, MutationAndClearExportsCompleteTheirLifecycles) {
   // grouping it does not have changes nothing.
   ASSERT_EQ(SetPivotFieldDateGroup(wb.handle, 0, pivot_index, 0, FM_PIVOT_PERIOD_YEARS, FM_PIVOT_CALENDAR_GREGORIAN, 1,
                                    std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN()),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kPreconditionFailed));
   ASSERT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, pivot_index, 0, nullptr), 0);
   ASSERT_EQ(SetPivotFieldNumberFormat(wb.handle, 0, pivot_index, 1, "#,##0.00"), 0);
   const std::uint32_t col_order[] = {1U};

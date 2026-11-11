@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "eval/text_format/display_text.h"
+#include "excel_locale.h"
 #include "num_fmt_locale.h"
 #include "pivot/date_serial.h"
 #include "pivot/field_grouping_internal.h"
@@ -21,8 +22,10 @@
 #include "pivot/pivot_refresh.h"
 #include "pivot/pivot_types.h"
 #include "pivot/record_access.h"
+#include "utils/cancellation_snap.h"
 #include "utils/checked_index.h"
 #include "utils/date_time.h"
+#include "utils/double_format.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/index_sort.h"
@@ -165,14 +168,22 @@ std::uint32_t range_group_item_number(const RangeGroup& range, const GroupBounds
   const auto last = static_cast<std::uint32_t>(item_count - 1U);
   const double v = value.as_number();
   if (range.by == GroupBy::Range) {
-    if (!std::isfinite(v) || v < bounds.start) {
+    if (!std::isfinite(v)) {
       return 0U;
+    }
+    // The end value falls in the last range even below the start; the end test precedes the start test.
+    if (v == bounds.end) {
+      return inner_item(static_cast<double>(last), last);
     }
     if (v > bounds.end) {
       return last;
     }
+    if (v < bounds.start) {
+      return 0U;
+    }
     const double width = range.interval > 0.0 ? range.interval : 1.0;
-    return inner_item(std::floor((v - bounds.start) / width) + 1.0, last);
+    // A quotient within 15 digits of a whole number counts as that number (0.6 by 0.1 from 0.3 is 3).
+    return inner_item(std::floor(excel_decimal_view((v - bounds.start) / width, 15)) + 1.0, last);
   }
   if (!is_valid_date_serial(v, date1904)) {
     return 0U;
@@ -357,16 +368,44 @@ std::vector<BaseValue> present_base_values(const PivotCache& cache, std::size_t 
 // Excel's unique-item limit of a pivot field.
 constexpr std::size_t kMaxFieldItems = 1048576U;
 
-// Magnitude from which a whole number no longer prints with 15 digits.
-constexpr double kMaxLabelInteger = 1e15;
+// A range of whole settings reads `a-(a+interval-1)` while its upper edge a+interval is at most this,
+// so that label keeps 15 digits; past it the range reads `a-(a+interval)` (Mac Excel, per range).
+constexpr double kMaxIntegerLabelEdge = 1e15;
 
-bool is_label_integer(double v) noexcept {
-  return std::floor(v) == v && std::fabs(v) < kMaxLabelInteger;
+// A label number is spelled in full up to this many characters, else in exponent form
+// (`90000000000000000000` vs `1E+20`, `0.000000000000000043` vs `2.43E-17`).
+constexpr std::size_t kMaxPlainLabelChars = 20;
+
+// True when start, end and interval of `state` are all whole numbers.
+bool whole_settings(const NumericGroupState& state) noexcept {
+  return std::floor(state.start) == state.start && std::floor(state.end) == state.end &&
+         std::floor(state.interval) == state.interval;
 }
 
-// Ranges of `state`: one per `a` from the start in steps of the interval while `a <= end`.
-std::size_t numeric_bucket_count(const NumericGroupState& state) noexcept {
-  return static_cast<std::size_t>(std::floor((state.end - state.start) / state.interval)) + 1U;
+// Ranges of `state` from the start up to the first edge at or past the end, at least one (also when
+// the start follows the end), as a double so an oversized count is caught before any cast.
+double numeric_bucket_count(const NumericGroupState& state) noexcept {
+  const double span = (state.end - state.start) / state.interval;
+  return std::max(1.0, std::ceil(excel_decimal_view(span, 15)));
+}
+
+// Edge `k` of `state`'s ranges.
+double numeric_edge(const NumericGroupState& state, std::size_t k) noexcept {
+  return snapped_add(state.start, static_cast<double>(k) * state.interval);
+}
+
+// Label text of one number: 15 significant digits, spelled in full while the magnitude's text fits
+// `kMaxPlainLabelChars` (a minus sign is not counted), else in exponent form; `separator` is the
+// decimal point.
+std::string label_number(double v, char separator) {
+  std::string text;
+  format_positional(text, v);
+  if (text.size() - (v < 0.0 ? 1U : 0U) > kMaxPlainLabelChars) {
+    text.clear();
+    format_scientific(text, v);
+  }
+  std::replace(text.begin(), text.end(), '.', separator);
+  return text;
 }
 
 }  // namespace
@@ -378,10 +417,6 @@ Expected<GroupBounds, Error> resolve_date_group_bounds(const PivotCache& cache, 
   if (base >= cache.fields().size()) {
     return group_error(FormulonErrorCode::kIndexOutOfRange, "no such cache field",
                        "field=" + std::to_string(base) + " count=" + std::to_string(cache.fields().size()));
-  }
-  if (!cache.fields()[base].is_database_field) {
-    return group_error(FormulonErrorCode::kInvalidArgument, "date grouping needs a database field",
-                       "field=" + std::to_string(base));
   }
   if (spec.periods == 0U || (spec.periods & ~kAllDatePeriods) != 0U) {
     return group_error(FormulonErrorCode::kInvalidArgument, "periods must be a non-empty mask of date periods",
@@ -403,6 +438,10 @@ Expected<GroupBounds, Error> resolve_date_group_bounds(const PivotCache& cache, 
     }
   }
   const PivotCacheField& field = cache.fields()[base];
+  if (!field.is_database_field) {
+    return group_error(FormulonErrorCode::kPreconditionFailed, "date grouping needs a database field",
+                       "field=" + std::to_string(base));
+  }
   // A field read from a file states its types, and a date mark declares one;
   // a value not spelled as a date is then a number.
   bool typed = field.shared_items_hints.present;
@@ -415,13 +454,14 @@ Expected<GroupBounds, Error> resolve_date_group_bounds(const PivotCache& cache, 
   SerialRange range;
   for (const BaseValue& v : base_values(cache, base)) {
     if (!v.value.is_number() || !is_valid_date_serial(v.value.as_number(), date1904) || (typed && !v.is_date)) {
-      return group_error(FormulonErrorCode::kInvalidArgument, "only a field holding nothing but dates can be grouped",
-                         "field=" + field.name);
+      return group_error(FormulonErrorCode::kPreconditionFailed,
+                         "only a field holding nothing but dates can be grouped", "field=" + field.name);
     }
     range.add(v.value.as_number());
   }
   if (!range.any) {
-    return group_error(FormulonErrorCode::kInvalidArgument, "the field holds no date to group", "field=" + field.name);
+    return group_error(FormulonErrorCode::kPreconditionFailed, "the field holds no date to group",
+                       "field=" + field.name);
   }
   GroupBounds bounds = auto_date_group_bounds(range.lo, range.hi, date1904);
   const SharedItemsHints& hints = field.shared_items_hints;
@@ -440,17 +480,10 @@ Expected<GroupBounds, Error> resolve_date_group_bounds(const PivotCache& cache, 
   return bounds;
 }
 
-Expected<void, Error> check_numeric_labels(const NumericGroupState& state) {
-  if (!is_label_integer(state.start) || !is_label_integer(state.end) || !is_label_integer(state.interval)) {
-    return group_error(FormulonErrorCode::kNotImplemented,
-                       "numeric group labels for a non-integer start, end or interval are not implemented");
-  }
-  if (state.interval < 1.0) {
-    return group_error(FormulonErrorCode::kInvalidArgument, "a numeric group's interval must be positive");
-  }
-  if (state.start <= state.end && numeric_bucket_count(state) + 2U > kMaxFieldItems) {
+Expected<void, Error> check_numeric_item_count(const NumericGroupState& state) {
+  if (!(numeric_bucket_count(state) + 2.0 <= static_cast<double>(kMaxFieldItems))) {
     return group_error(FormulonErrorCode::kSecurityResourceLimit, "the numeric group has more items than a field holds",
-                       "items=" + std::to_string(numeric_bucket_count(state) + 2U));
+                       "limit=" + std::to_string(kMaxFieldItems));
   }
   return Expected<void, Error>::Ok();
 }
@@ -463,10 +496,6 @@ Expected<NumericGroupState, Error> resolve_numeric_group(const PivotCache& cache
                        "field=" + std::to_string(base) + " count=" + std::to_string(cache.fields().size()));
   }
   const PivotCacheField& field = cache.fields()[base];
-  if (!field.is_database_field) {
-    return group_error(FormulonErrorCode::kInvalidArgument, "numeric grouping needs a database field",
-                       "field=" + std::to_string(base));
-  }
   if (!std::isfinite(interval) || !(interval > 0.0)) {
     return group_error(FormulonErrorCode::kInvalidArgument, "a numeric group's interval must be finite and positive");
   }
@@ -475,16 +504,20 @@ Expected<NumericGroupState, Error> resolve_numeric_group(const PivotCache& cache
       return group_error(FormulonErrorCode::kInvalidArgument, "a numeric group's bound must be finite");
     }
   }
+  if (!field.is_database_field) {
+    return group_error(FormulonErrorCode::kPreconditionFailed, "numeric grouping needs a database field",
+                       "field=" + std::to_string(base));
+  }
   SerialRange range;
   for (const BaseValue& v : present_base_values(cache, base)) {
     if (!v.value.is_number() || v.is_date) {
-      return group_error(FormulonErrorCode::kInvalidArgument, "only a field holding nothing but numbers can be grouped",
-                         "field=" + field.name);
+      return group_error(FormulonErrorCode::kPreconditionFailed,
+                         "only a field holding nothing but numbers can be grouped", "field=" + field.name);
     }
     range.add(v.value.as_number());
   }
   if (!range.any && (!start.has_value() || !end.has_value())) {
-    return group_error(FormulonErrorCode::kInvalidArgument, "the field holds no number to take a bound from",
+    return group_error(FormulonErrorCode::kPreconditionFailed, "the field holds no number to take a bound from",
                        "field=" + field.name);
   }
   NumericGroupState state;
@@ -496,7 +529,7 @@ Expected<NumericGroupState, Error> resolve_numeric_group(const PivotCache& cache
   if (state.start > state.end) {
     return group_error(FormulonErrorCode::kInvalidArgument, "a numeric group's start must not follow its end");
   }
-  RETURN_IF_ERROR(check_numeric_labels(state));
+  RETURN_IF_ERROR(check_numeric_item_count(state));
   return state;
 }
 
@@ -814,19 +847,30 @@ Expected<std::size_t, Error> ungroup_cache_field(PivotCache& cache, std::size_t 
 
 namespace detail {
 
-Expected<void, Error> set_numeric_range(PivotCache& cache, FieldGroup& group, const NumericGroupState& state) {
-  RETURN_IF_ERROR(check_numeric_labels(state));
-  const auto step = static_cast<long long>(state.interval);
-  const auto first = static_cast<long long>(state.start);
-  const std::size_t buckets = state.start <= state.end ? numeric_bucket_count(state) : 0U;
+Expected<void, Error> set_numeric_range(PivotCache& cache, FieldGroup& group, const NumericGroupState& state,
+                                        ExcelProfile profile) {
+  RETURN_IF_ERROR(check_numeric_item_count(state));
+  const auto buckets = static_cast<std::size_t>(numeric_bucket_count(state));
   std::vector<Value> items;
   items.reserve(buckets + 2U);
-  items.push_back(cache_text(cache, "<" + std::to_string(first)));
+  const char separator = locale_facts(profile).decimal_separator;
+  const bool whole = whole_settings(state);
+  std::string lower = label_number(state.start, separator);
+  items.push_back(cache_text(cache, "<" + lower));
   for (std::size_t n = 0; n < buckets; ++n) {
-    const long long a = first + static_cast<long long>(n) * step;
-    items.push_back(cache_text(cache, std::to_string(a) + "-" + std::to_string(a + step - 1)));
+    const double a = numeric_edge(state, n);
+    const double b = numeric_edge(state, n + 1U);
+    std::string upper = label_number(b, separator);
+    if (whole && a > -kMaxIntegerLabelEdge && b <= kMaxIntegerLabelEdge) {
+      // The last range ends at the end when the end is its upper edge (`110-120`).
+      const double shown = n + 1U == buckets && b == state.end ? b : b - 1.0;
+      items.push_back(cache_text(cache, lower + "-" + label_number(shown, separator)));
+    } else {
+      items.push_back(cache_text(cache, lower + "-" + upper));
+    }
+    lower = std::move(upper);
   }
-  items.push_back(cache_text(cache, ">" + std::to_string(first + static_cast<long long>(buckets) * step)));
+  items.push_back(cache_text(cache, ">" + lower));
   group.kind = GroupKind::Range;
   group.range = RangeGroup{};
   group.range.start_num = state.start;
@@ -841,7 +885,7 @@ Expected<void, Error> set_numeric_range(PivotCache& cache, FieldGroup& group, co
 }
 
 Expected<std::size_t, Error> group_cache_by_number(PivotCache& cache, std::size_t base, const NumericGroupState& state,
-                                                   bool date1904) {
+                                                   bool date1904, ExcelProfile profile) {
   const std::optional<FieldGroup>& existing = cache.fields()[base].field_group;
   if (existing.has_value() && existing->par.has_value()) {
     return group_error(FormulonErrorCode::kPreconditionFailed, "the field is grouped already",
@@ -861,7 +905,7 @@ Expected<std::size_t, Error> group_cache_by_number(PivotCache& cache, std::size_
   field.num_fmt_id = 0U;
   FieldGroup group;
   group.base = static_cast<std::uint32_t>(base);
-  RETURN_IF_ERROR(set_numeric_range(cache, group, state));
+  RETURN_IF_ERROR(set_numeric_range(cache, group, state, profile));
   field.field_group = std::move(group);
   const std::size_t index = cache.fields().size();
   cache.mutable_fields().push_back(std::move(field));

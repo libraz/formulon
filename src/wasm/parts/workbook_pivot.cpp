@@ -626,20 +626,20 @@ void JsWorkbook::pivotFieldSetSubtotalFns(uint32_t sheet, uint32_t pivotIndex, u
 }
 
 void JsWorkbook::pivotFieldSetDateGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t periods,
-                                        uint32_t calendar, uint32_t intervalDays, double start, double end) {
+                                        uint32_t calendar, uint32_t intervalDays, bool autoStart, double start,
+                                        bool autoEnd, double end) {
   if (handle_ == nullptr) {
     record_invalid_handle();
     return;
   }
-  // A NaN bound is an absent one: the group takes the field's first / last value.
-  fm_pivot_date_group_spec_t group = FM_STRUCT_INIT(fm_pivot_date_group_spec_t);
+  fm_pivot_date_group_t group = FM_STRUCT_INIT(fm_pivot_date_group_t);
   group.periods = periods;
   group.calendar = static_cast<std::int32_t>(calendar);
   group.interval_days = intervalDays;
-  group.has_start = std::isnan(start) ? 0 : 1;
-  group.start = std::isnan(start) ? 0.0 : start;
-  group.has_end = std::isnan(end) ? 0 : 1;
-  group.end = std::isnan(end) ? 0.0 : end;
+  group.auto_start = autoStart ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
+  group.start = start;
+  group.auto_end = autoEnd ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
+  group.end = end;
   succeeded(fm_sheet_set_pivot_field_date_group(handle_, sheet, pivotIndex, fieldIndex, &group));
 }
 
@@ -657,17 +657,16 @@ void JsWorkbook::pivotFieldRemoveDateGroup(uint32_t sheet, uint32_t pivotIndex, 
 }
 
 void JsWorkbook::pivotFieldSetNumericGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, double interval,
-                                           double start, double end) {
+                                           bool autoStart, double start, bool autoEnd, double end) {
   if (handle_ == nullptr) {
     record_invalid_handle();
     return;
   }
-  // A NaN bound is an absent one: the group follows the field's own values.
-  fm_pivot_numeric_group_spec_t group = FM_STRUCT_INIT(fm_pivot_numeric_group_spec_t);
-  group.has_start = std::isnan(start) ? 0 : 1;
-  group.start = std::isnan(start) ? 0.0 : start;
-  group.has_end = std::isnan(end) ? 0 : 1;
-  group.end = std::isnan(end) ? 0.0 : end;
+  fm_pivot_numeric_group_t group = FM_STRUCT_INIT(fm_pivot_numeric_group_t);
+  group.auto_start = autoStart ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
+  group.start = start;
+  group.auto_end = autoEnd ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
+  group.end = end;
   group.interval = interval;
   succeeded(fm_sheet_set_pivot_field_numeric_group(handle_, sheet, pivotIndex, fieldIndex, &group));
 }
@@ -686,7 +685,7 @@ void JsWorkbook::pivotFieldRemoveNumericGroup(uint32_t sheet, uint32_t pivotInde
 }
 
 emscripten::val JsWorkbook::pivotFieldGetDateGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex) const {
-  fm_pivot_date_group_spec_t group = FM_STRUCT_INIT(fm_pivot_date_group_spec_t);
+  fm_pivot_date_group_t group = FM_STRUCT_INIT(fm_pivot_date_group_t);
   int32_t present = 0;
   if (!succeeded(handle_ != nullptr
                      ? fm_sheet_get_pivot_field_date_group(handle_, sheet, pivotIndex, fieldIndex, &present, &group)
@@ -702,13 +701,13 @@ emscripten::val JsWorkbook::pivotFieldGetDateGroup(uint32_t sheet, uint32_t pivo
   o.set("intervalDays", group.interval_days);
   o.set("start", group.start);
   o.set("end", group.end);
-  o.set("autoStart", group.has_start == 0);
-  o.set("autoEnd", group.has_end == 0);
+  o.set("autoStart", group.auto_start == FM_TRISTATE_TRUE);
+  o.set("autoEnd", group.auto_end == FM_TRISTATE_TRUE);
   return o;
 }
 
 emscripten::val JsWorkbook::pivotFieldGetNumericGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex) const {
-  fm_pivot_numeric_group_spec_t group = FM_STRUCT_INIT(fm_pivot_numeric_group_spec_t);
+  fm_pivot_numeric_group_t group = FM_STRUCT_INIT(fm_pivot_numeric_group_t);
   int32_t present = 0;
   if (!succeeded(handle_ != nullptr
                      ? fm_sheet_get_pivot_field_numeric_group(handle_, sheet, pivotIndex, fieldIndex, &present, &group)
@@ -719,11 +718,11 @@ emscripten::val JsWorkbook::pivotFieldGetNumericGroup(uint32_t sheet, uint32_t p
     return emscripten::val::null();
   }
   emscripten::val o = emscripten::val::object();
+  o.set("interval", group.interval);
   o.set("start", group.start);
   o.set("end", group.end);
-  o.set("interval", group.interval);
-  o.set("autoStart", group.has_start == 0);
-  o.set("autoEnd", group.has_end == 0);
+  o.set("autoStart", group.auto_start == FM_TRISTATE_TRUE);
+  o.set("autoEnd", group.auto_end == FM_TRISTATE_TRUE);
   return o;
 }
 

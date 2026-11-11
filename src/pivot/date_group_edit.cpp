@@ -276,7 +276,8 @@ Expected<void, Error> set_numeric_group(Workbook& wb, std::size_t sheet, std::si
   ASSIGN_OR_RETURN(NumericGroupState state, resolve_numeric_group(cache, base, start, end, interval));
   ASSIGN_OR_RETURN(GroupRun run, group_run(cache, base));
   remove_group(wb, cache, base, run);
-  ASSIGN_OR_RETURN(std::size_t first, detail::group_cache_by_number(cache, base, state, wb.date1904()));
+  ASSIGN_OR_RETURN(std::size_t first,
+                   detail::group_cache_by_number(cache, base, state, wb.date1904(), wb.excel_profile()));
   for_each_cache_table(wb, cache.cache_id(), [&](PivotTable& table) {
     add_group_pivot_fields(table, cache, base, first, &table == target.table);
     resolve_pivot_names(table, cache);

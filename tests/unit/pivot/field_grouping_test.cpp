@@ -183,6 +183,40 @@ TEST(FieldGrouping, NumericRangeNumbersByInterval) {
   EXPECT_EQ(range_group_item_number(range, bounds, 13U, Value::text("x"), false), 0U);
 }
 
+TEST(FieldGrouping, NumericEndValueTakesTheLastRangeBeforeTheStartTest) {
+  // Start 5 after End 3.6, By 0.5: one range `5-5.5` between `<5` and `>5.5`.
+  RangeGroup range;
+  range.start_num = 5.0;
+  range.end_num = 3.6;
+  range.interval = 0.5;
+  const GroupBounds bounds{5.0, 3.6};
+  EXPECT_EQ(range_group_item_number(range, bounds, 3U, Value::number(3.6), false), 1U);
+  EXPECT_EQ(range_group_item_number(range, bounds, 3U, Value::number(3.3), false), 0U);
+  EXPECT_EQ(range_group_item_number(range, bounds, 3U, Value::number(5.2), false), 2U);
+  // End 0.1 before Start 0.3: every value above the end goes to `>`, the start included.
+  range.start_num = 0.3;
+  range.end_num = 0.1;
+  const GroupBounds crossed{0.3, 0.1};
+  EXPECT_EQ(range_group_item_number(range, crossed, 3U, Value::number(0.3), false), 2U);
+  EXPECT_EQ(range_group_item_number(range, crossed, 3U, Value::number(0.05), false), 0U);
+}
+
+TEST(FieldGrouping, NumericRangeSnapsNearIntegerQuotientsAndFoldsTheEnd) {
+  // Start 0.3, End 3.6, By 0.1: 33 ranges between `<0.3` and `>3.6`.
+  RangeGroup range;
+  range.start_num = 0.3;
+  range.end_num = 3.6;
+  range.interval = 0.1;
+  const GroupBounds bounds{0.3, 3.6};
+  // (0.6 - 0.3) / 0.1 is 2.9999999999999996 in binary, yet 0.6 opens `0.6-0.7`.
+  EXPECT_EQ(range_group_item_number(range, bounds, 35U, Value::number(0.6), false), 4U);
+  EXPECT_EQ(range_group_item_number(range, bounds, 35U, Value::number(1.2), false), 10U);
+  EXPECT_EQ(range_group_item_number(range, bounds, 35U, Value::number(1.5), false), 13U);
+  // The end on a range edge stays in the last range, `3.5-3.6`.
+  EXPECT_EQ(range_group_item_number(range, bounds, 35U, Value::number(3.6), false), 33U);
+  EXPECT_EQ(range_group_item_number(range, bounds, 35U, Value::number(3.7), false), 34U);
+}
+
 TEST(FieldGrouping, DiscreteMapsBaseItems) {
   FieldGroup group;
   group.base = 0U;
@@ -858,22 +892,28 @@ TEST(FieldGrouping, AuthoringRefusesWhatExcelCannotGroup) {
   EXPECT_EQ(code(cache, spec), invalid);
   EXPECT_EQ(cache.fields().size(), 4U);
 
-  // A blank, a text and a saved number are no dates; no records, no dates.
+  // The base data is a state, not a setting: a blank, a text and a saved
+  // number are no dates; no records, no dates.
+  const FormulonErrorCode precondition = FormulonErrorCode::kPreconditionFailed;
   for (const Value& bad : {Value::blank(), Value::text("n/a")}) {
     PivotCache with_bad = DateCache(MeasuredDates(), /*as_saved=*/false);
     with_bad.mutable_records()[3].cells[kDateField] = bad;
-    EXPECT_EQ(code(with_bad, Periods(kMonths)), invalid);
+    EXPECT_EQ(code(with_bad, Periods(kMonths)), precondition);
+    EXPECT_EQ(with_bad.fields().size(), 4U);
   }
   PivotCache saved_number = DateCache(MeasuredDates(), /*as_saved=*/true);
   saved_number.mutable_fields()[kDateField].shared_item_is_date[4] = false;
-  EXPECT_EQ(code(saved_number, Periods(kMonths)), invalid);
+  EXPECT_EQ(code(saved_number, Periods(kMonths)), precondition);
   PivotCache empty = DateCache({}, /*as_saved=*/false);
-  EXPECT_EQ(code(empty, Periods(kMonths)), invalid);
+  EXPECT_EQ(code(empty, Periods(kMonths)), precondition);
+  // A setting is refused before the base data is looked at.
+  EXPECT_EQ(code(empty, Periods(0U)), invalid);
   // A group field is no base to group.
   PivotCache grouped = DateCache(MeasuredDates(), /*as_saved=*/false);
   ASSERT_EQ(code(grouped, Periods(kMonths)), FormulonErrorCode::kOk);
-  EXPECT_EQ(code(grouped, Periods(kYears)), FormulonErrorCode::kPreconditionFailed);
-  EXPECT_EQ(group_cache_by_date(grouped, 4U, Periods(kYears), false, mac_365_ja_jp_profile()).error().code, invalid);
+  EXPECT_EQ(code(grouped, Periods(kYears)), precondition);
+  EXPECT_EQ(group_cache_by_date(grouped, 4U, Periods(kYears), false, mac_365_ja_jp_profile()).error().code,
+            precondition);
 }
 
 TEST(FieldGrouping, ExplicitBoundsAreKeptAndMarkedAsSet) {
@@ -1087,7 +1127,7 @@ TEST(FieldGrouping, MarkedDateBesideAPlainNumberRefusesGrouping) {
   const Expected<std::size_t, Error> refused =
       group_cache_by_date(mixed, kDateField, Periods(kMonths), /*date1904=*/false, mac_365_ja_jp_profile());
   ASSERT_FALSE(static_cast<bool>(refused));
-  EXPECT_EQ(refused.error().code, FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(refused.error().code, FormulonErrorCode::kPreconditionFailed);
 
   PivotCache marked = DateCache(dates, /*as_saved=*/false);
   for (PivotCacheRecord& record : marked.mutable_records()) {

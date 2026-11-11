@@ -34,7 +34,7 @@ removed fm_sheet_set_image_anchor :: replaced by fm_sheet_update_drawing, whose 
 removed fm_sheet_set_image_z_order :: renamed fm_sheet_set_drawing_z_order; it reorders charts as well as pictures
 removed fm_sheet_snapshot_image :: renamed fm_sheet_snapshot_drawing; it captures charts as well as pictures
 removed fm_sheet_restore_image :: renamed fm_sheet_restore_drawing, with flag FM_DRAWING_RESTORE_NEW_ID (was FM_IMAGE_RESTORE_NEW_ID)
-removed fm_workbook_pivot_field_set_date_group :: renamed to fm_sheet_set_pivot_field_date_group, which groups by a FM_PIVOT_PERIOD_* mask into cache group fields with locale labels; it takes const fm_pivot_date_group_spec_t* (the granularity, year and -1 serial arguments are gone; has_start / has_end False take the field's first / last value)
+removed fm_workbook_pivot_field_set_date_group :: renamed to fm_sheet_set_pivot_field_date_group, which groups by a FM_PIVOT_PERIOD_* mask into cache group fields with locale labels; it takes const fm_pivot_date_group_t* (the granularity, year and -1 serial arguments are gone; auto_start / auto_end TRUE take the field's first / last value)
 removed fm_buffer_free :: renamed to fm_buffer_destroy
 removed fm_cell_clear_xf_index :: renamed to fm_sheet_reset_cell_xf_index; it resets the cell to the default XF
 removed fm_cell_get_xf_index :: renamed to fm_sheet_get_cell_xf_index, which takes int32_t* out_present before uint32_t* out_xf_index

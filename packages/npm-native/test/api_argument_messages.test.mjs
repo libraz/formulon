@@ -139,6 +139,11 @@ test('argument errors read Class.method param constraint', async () => {
         'Pivot.getDataField dataFieldIndex 99 is out of range (0 items)',
       ],
       [
+        () => pivot.setFieldNumericGroup(0, { interval: 1, start: Number.NaN }),
+        f.StatusCode.InvalidArgument,
+        'Pivot.setFieldNumericGroup group.start must be finite',
+      ],
+      [
         () => wb.updateIterative({ maxIterations: -1 }),
         f.StatusCode.InvalidArgument,
         'Workbook.updateIterative patch.maxIterations must not be negative',

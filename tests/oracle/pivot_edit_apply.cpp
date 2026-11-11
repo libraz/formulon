@@ -191,7 +191,7 @@ int apply_op(const Target& target, const std::string& text) {
     return fm_sheet_add_pivot_data_field(target.wb, target.sheet, target.pivot, &spec, &index);
   }
   if (kind == "date_group" && args[2] == "months") {
-    fm_pivot_date_group_spec_t spec{};
+    fm_pivot_date_group_t spec{};
     spec.struct_size = sizeof(spec);
     spec.periods = FM_PIVOT_PERIOD_MONTHS;
     spec.calendar = FM_PIVOT_CALENDAR_GREGORIAN;
@@ -199,7 +199,7 @@ int apply_op(const Target& target, const std::string& text) {
     return fm_sheet_set_pivot_field_date_group(target.wb, target.sheet, target.pivot, field, &spec);
   }
   if (kind == "num_group") {
-    fm_pivot_numeric_group_spec_t spec{};
+    fm_pivot_numeric_group_t spec{};
     spec.struct_size = sizeof(spec);
     spec.interval = std::atof(args[2].c_str());
     return fm_sheet_set_pivot_field_numeric_group(target.wb, target.sheet, target.pivot, field, &spec);

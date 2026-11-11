@@ -240,13 +240,133 @@ describe('Pivot numeric grouping', () => {
     });
   });
 
-  it('refuses a non-integer interval with NotImplemented and leaves the pivot alone', () => {
+  it('groups by a fractional interval and labels the ranges with decimals', () => {
+    withSheet((ws, wb) => {
+      const { pivot } = build(
+        ws,
+        wb,
+        Array.from({ length: 12 }, (_, i) => [i % 2 ? 'East' : 'West', Number((0.3 * (i + 1)).toFixed(1))]),
+      );
+      pivot.setFieldNumericGroup('Amount', { interval: 0.5 });
+      assert.deepEqual(pivot.getFieldNumericGroup('Amount'), {
+        interval: 0.5,
+        start: 0.3,
+        end: 3.6,
+        autoStart: true,
+        autoEnd: true,
+      });
+      pivot.setFieldAxis(2, PivotAxis.Row);
+      pivot.project();
+      assert.equal(pivot.listFieldItems(2).length, 9);
+      const shown = [];
+      for (let row = 0; row < 14; row++) for (let col = 4; col < 7; col++) shown.push(ws.getValue(row, col));
+      for (const label of ['0.3-0.8', '0.8-1.3', '1.3-1.8', '1.8-2.3', '2.3-2.8', '2.8-3.3', '3.3-3.8']) {
+        assert.ok(shown.includes(label), label);
+      }
+    });
+  });
+
+  it('labels fractional ranges with the workbook locale decimal separator', () => {
+    withSheet((ws, wb) => {
+      wb.setProfileId('win-365-de_DE');
+      const { pivot } = build(
+        ws,
+        wb,
+        Array.from({ length: 12 }, (_, i) => [i % 2 ? 'East' : 'West', Number((0.3 * (i + 1)).toFixed(1))]),
+      );
+      pivot.setFieldNumericGroup('Amount', { interval: 0.5 });
+      pivot.setFieldAxis(2, PivotAxis.Row);
+      pivot.project();
+      const shown = [];
+      for (let row = 0; row < 14; row++) for (let col = 4; col < 7; col++) shown.push(ws.getValue(row, col));
+      assert.ok(shown.includes('0,3-0,8'));
+      assert.ok(!shown.includes('0.3-0.8'));
+    });
+  });
+
+  it('reads the numeric record in a fixed key order and takes it back unchanged', () => {
     withSheet((ws, wb) => {
       const { pivot } = build(ws, wb, NUMBERS);
-      expectCode(() => pivot.setFieldNumericGroup('Amount', { interval: 1.5 }), StatusCode.NotImplemented);
+      const groups = [{ interval: 100 }, { interval: 100, start: 0, end: 400 }, { interval: 25.5, start: 10.25 }];
+      for (const group of groups) {
+        pivot.setFieldNumericGroup('Amount', group);
+        const read = pivot.getFieldNumericGroup('Amount');
+        assert.deepEqual(Object.keys(read), ['interval', 'start', 'end', 'autoStart', 'autoEnd']);
+        pivot.setFieldNumericGroup('Amount', read);
+        assert.deepEqual(pivot.getFieldNumericGroup('Amount'), read);
+        assert.equal(pivot.listFields().length, 3);
+      }
+    });
+  });
+
+  it('ignores a bound whose auto flag is true', () => {
+    withSheet((ws, wb) => {
+      const { pivot } = build(ws, wb, NUMBERS);
+      pivot.setFieldNumericGroup('Amount', { interval: 10, start: 5, autoStart: true });
+      assert.deepEqual(pivot.getFieldNumericGroup('Amount'), {
+        interval: 10,
+        start: 20,
+        end: 300,
+        autoStart: true,
+        autoEnd: true,
+      });
+      const stale = { interval: 10, start: Number.NaN, end: 1e9, autoStart: true, autoEnd: true };
+      pivot.setFieldNumericGroup('Amount', stale);
+      assert.equal(pivot.getFieldNumericGroup('Amount').end, 300);
+    });
+  });
+
+  it('refuses a non-finite interval or bound with InvalidArgument and leaves the pivot alone', () => {
+    withSheet((ws, wb) => {
+      const { pivot } = build(ws, wb, NUMBERS);
+      for (const key of ['interval', 'start', 'end']) {
+        for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+          const group = { interval: 100, start: 0, end: 400, [key]: bad };
+          assert.throws(
+            () => pivot.setFieldNumericGroup('Amount', group),
+            (e) => {
+              assert.equal(e.name, 'FormulonError');
+              assert.equal(e.code, StatusCode.InvalidArgument);
+              assert.ok(e.message.includes(`Pivot.setFieldNumericGroup group.${key} must be finite`), e.message);
+              return true;
+            },
+          );
+        }
+      }
       expectCode(() => pivot.setFieldNumericGroup('Amount', { interval: 0 }), StatusCode.InvalidArgument);
+      const inverted = { interval: 10, start: 50, end: 20 };
+      expectCode(() => pivot.setFieldNumericGroup('Amount', inverted), StatusCode.InvalidArgument);
       assert.equal(pivot.getFieldNumericGroup('Amount'), null);
       assert.equal(pivot.listFields().length, 2);
+    });
+  });
+
+  it('refuses a field of the wrong type with PreconditionFailed', () => {
+    withSheet((ws, wb) => {
+      const { pivot } = build(ws, wb, NUMBERS);
+      expectCode(() => pivot.setFieldNumericGroup('Region', { interval: 10 }), StatusCode.PreconditionFailed);
+      const years = { periods: f.PivotDatePeriod.Years };
+      expectCode(() => pivot.setFieldDateGroup('Region', years), StatusCode.PreconditionFailed);
+      assert.equal(pivot.getFieldNumericGroup('Region'), null);
+      assert.equal(pivot.listFields().length, 2);
+    });
+  });
+
+  it('requires the bound an explicit false auto flag asks for', () => {
+    withSheet((ws, wb) => {
+      const { pivot } = build(ws, wb, NUMBERS);
+      for (const key of ['start', 'end']) {
+        const auto = `auto${key[0].toUpperCase()}${key.slice(1)}`;
+        assert.throws(
+          () => pivot.setFieldNumericGroup('Amount', { interval: 10, [auto]: false }),
+          (e) => {
+            assert.ok(e instanceof TypeError);
+            assert.equal(e.message, `Pivot.setFieldNumericGroup group.${key} is required`);
+            return true;
+          },
+        );
+      }
+      assert.equal(pivot.getFieldNumericGroup('Amount'), null);
     });
   });
 
@@ -255,6 +375,8 @@ describe('Pivot numeric grouping', () => {
       const { pivot } = build(ws, wb, NUMBERS);
       assert.throws(() => pivot.setFieldNumericGroup('Amount', { interval: 'x' }), TypeError);
       assert.throws(() => pivot.setFieldNumericGroup('Amount', { interval: 10, start: 'x' }), TypeError);
+      assert.throws(() => pivot.setFieldNumericGroup('Amount', { interval: 10, autoStart: 1 }), TypeError);
+      assert.throws(() => pivot.setFieldNumericGroup('Amount', { interval: 10, bogus: 1 }), TypeError);
       assert.throws(() => pivot.setFieldNumericGroup('Amount', 5), TypeError);
     });
   });

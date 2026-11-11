@@ -760,10 +760,89 @@ describe('numbers that were bare become enum members', () => {
       assert.equal(group.periods, periods);
       assert.equal(group.autoStart, true);
       assert.equal(group.autoEnd, true);
-      assert.ok(group.start instanceof Date && group.end instanceof Date);
-      // A group read back can be written again, the automatic bounds left out.
-      pivot.setFieldDateGroup(date, { periods: group.periods, calendar: group.calendar });
+      for (const bound of [group.start, group.end]) {
+        assert.deepEqual(Object.keys(bound), ['year', 'month', 'day', 'hour', 'minute', 'second']);
+        assert.ok(Object.values(bound).every(Number.isInteger));
+      }
+      assert.deepEqual({ ...group.start }, { year: 2024, month: 1, day: 1, hour: 0, minute: 0, second: 0 });
+      // The whole record read back can be written again; the automatic bounds follow the data.
+      pivot.setFieldDateGroup(date, group);
       assert.deepEqual(pivot.getFieldDateGroup(date), group);
+    });
+  });
+
+  it('a pivot date group reads its bounds as civil times, time of day included, and writes them back', () => {
+    withSheet((_ws, wb) => {
+      const { pivot, date } = buildPivot(wb);
+      const start = { year: 2024, month: 1, day: 1, hour: 13, minute: 45, second: 30 };
+      const end = { year: 2025, month: 12, day: 31, hour: 6, minute: 7, second: 8 };
+      pivot.setFieldDateGroup(date, { periods: f.PivotDatePeriod.Months, start, end });
+      const group = pivot.getFieldDateGroup(date);
+      assert.deepEqual({ ...group.start }, start);
+      assert.deepEqual({ ...group.end }, end);
+      assert.equal(group.autoStart, false);
+      assert.equal(group.autoEnd, false);
+      pivot.setFieldDateGroup(date, group);
+      assert.deepEqual(pivot.getFieldDateGroup(date), group);
+    });
+  });
+
+  it('a pivot date group in the 1904 date system reads the same civil bounds', () => {
+    withSheet((_ws, wb) => {
+      wb.setDate1904(true);
+      const { pivot, date } = buildPivot(wb);
+      const start = { year: 2024, month: 1, day: 1, hour: 6, minute: 0, second: 0 };
+      pivot.setFieldDateGroup(date, { periods: f.PivotDatePeriod.Months, start });
+      assert.deepEqual({ ...pivot.getFieldDateGroup(date).start }, start);
+    });
+  });
+
+  it('a pivot date group ignores a bound whose auto flag is true', () => {
+    withSheet((_ws, wb) => {
+      const { pivot, date } = buildPivot(wb);
+      pivot.setFieldDateGroup(date, { periods: f.PivotDatePeriod.Months });
+      const auto = pivot.getFieldDateGroup(date);
+      const stale = { year: 1999, month: 1, day: 1, hour: 0, minute: 0, second: 0 };
+      pivot.setFieldDateGroup(date, { ...auto, start: stale, end: stale });
+      assert.deepEqual(pivot.getFieldDateGroup(date), auto);
+    });
+  });
+
+  it('a pivot date group refuses a number bound, a bad flag and a fractional interval', () => {
+    withSheet((_ws, wb) => {
+      const { pivot, date } = buildPivot(wb);
+      const months = f.PivotDatePeriod.Months;
+      assert.throws(() => pivot.setFieldDateGroup(date, { periods: months, start: 45292 }), TypeError);
+      assert.throws(() => pivot.setFieldDateGroup(date, { periods: months, autoStart: 1 }), TypeError);
+      const days = f.PivotDatePeriod.Days;
+      assert.throws(() => pivot.setFieldDateGroup(date, { periods: days, intervalDays: 1.5 }), RangeError);
+      assert.throws(() => pivot.setFieldDateGroup(date, { periods: days, intervalDays: Number.NaN }), RangeError);
+      assert.equal(pivot.getFieldDateGroup(date), null);
+    });
+  });
+
+  it('a pivot date group requires the bound an explicit false auto flag asks for', () => {
+    withSheet((_ws, wb) => {
+      const { pivot, date } = buildPivot(wb);
+      const months = f.PivotDatePeriod.Months;
+      for (const key of ['start', 'end']) {
+        const auto = `auto${key[0].toUpperCase()}${key.slice(1)}`;
+        assert.throws(
+          () => pivot.setFieldDateGroup(date, { periods: months, [auto]: false }),
+          (e) => e instanceof TypeError && e.message === `Pivot.setFieldDateGroup group.${key} is required`,
+        );
+      }
+      assert.equal(pivot.getFieldDateGroup(date), null);
+    });
+  });
+
+  it('a pivot date group over a text field is PreconditionFailed', () => {
+    withSheet((_ws, wb) => {
+      const { pivot } = buildPivot(wb);
+      assert.throws(
+        () => pivot.setFieldDateGroup(0, { periods: f.PivotDatePeriod.Months }),
+        (e) => e.name === 'FormulonError' && e.code === f.StatusCode.PreconditionFailed,
+      );
     });
   });
 

@@ -2446,8 +2446,8 @@ const INPUT_KEYS = Object.freeze({
     1,
     ['aggregation', 'fieldIndex', 'name', 'numberFormat', 'showAs', 'showAsBaseField', 'showAsBaseItem'],
   ],
-  'Pivot.setFieldDateGroup': [1, ['calendar', 'end', 'intervalDays', 'periods', 'start']],
-  'Pivot.setFieldNumericGroup': [1, ['end', 'interval', 'start']],
+  'Pivot.setFieldDateGroup': [1, ['autoEnd', 'autoStart', 'calendar', 'end', 'intervalDays', 'periods', 'start']],
+  'Pivot.setFieldNumericGroup': [1, ['autoEnd', 'autoStart', 'end', 'interval', 'start']],
   'PivotCache.setWorksheetSource': [0, ['name', 'range', 'sheet']],
   'Sheet.addCfRule': [
     0,
@@ -5996,7 +5996,11 @@ function valueRecord(runtime, raw, value, label) {
   return value;
 }
 
-/** The `Date` whose local fields carry `serial` under the date system `date1904`, rounded to the millisecond. */
+/**
+ * The `Date` whose local wall-clock fields equal the civil fields of `serial` under the date system `date1904`,
+ * rounded to the millisecond. A local time that does not exist (a DST gap) resolves as `new Date(y, m, d, h, mi, s)`
+ * does: it moves forward by the length of the gap; a time that exists is never shifted.
+ */
 function serialDate(runtime, serial, date1904) {
   let days = Math.floor(serial);
   let ms = Math.round((serial - days) * MS_PER_DAY);
@@ -6005,7 +6009,8 @@ function serialDate(runtime, serial, date1904) {
     ms = 0;
   }
   const { year, month, day } = runtime.convertSerialToCivil(days, date1904);
-  const date = new Date(0);
+  // Noon is the base so that setting the day never lands in a gap; the time of day is then set in one call.
+  const date = new Date(2000, 0, 1, 12);
   date.setFullYear(year, month - 1, day);
   date.setHours(Math.floor(ms / 3600000), Math.floor(ms / 60000) % 60, Math.floor(ms / 1000) % 60, ms % 1000);
   return date;
@@ -6685,23 +6690,40 @@ function makeFacade(Raw, registry, runtime) {
       }
       const label = argLabel(where, 1);
       requireObject(group, label);
-      const bound = (key) =>
-        group[key] === undefined
-          ? undefined
-          : dateInputSerial(runtime, group[key], raw.getDate1904(), where, `${argumentPath(where, 1)}.${key}`);
-      const args = [
-        requireInteger(group.periods, `${label}.periods`),
-        group.calendar === undefined ? PivotCalendar.Gregorian : requireInteger(group.calendar, `${label}.calendar`),
-      ];
+      const periods = requireInteger(group.periods, `${label}.periods`);
+      const calendar =
+        group.calendar === undefined ? PivotCalendar.Gregorian : requireInteger(group.calendar, `${label}.calendar`);
       const intervalDays =
-        group.intervalDays === undefined ? undefined : requireNumber(group.intervalDays, `${label}.intervalDays`);
-      // The raw call is positional: a bound after an omitted slot needs that slot's default spelled out.
-      const tail = [intervalDays ?? 1, bound('start') ?? Number.NaN, bound('end') ?? Number.NaN];
-      while (tail.length > 0 && (tail.length === 1 ? tail[0] === 1 : Number.isNaN(tail.at(-1)))) tail.pop();
-      raw.setPivotFieldDateGroup(sheet, pivot, field, ...args, ...tail);
+        group.intervalDays === undefined ? 1 : requireIndex(group.intervalDays, `${label}.intervalDays`, 'quantity');
+      const date1904 = raw.getDate1904();
+      // A bound follows the data when its `auto` flag is true or it is omitted; such a bound is not read.
+      const bound = (key, autoKey) => {
+        if (group[autoKey] !== undefined) requireBoolean(group[autoKey], `${label}.${autoKey}`);
+        if (group[autoKey] === true) return undefined;
+        if (group[key] === undefined) {
+          if (group[autoKey] === false)
+            throw new TypeError(argumentMessage(where, argumentPath(where, 1, key), 'is required'));
+          return undefined;
+        }
+        return dateInputSerial(runtime, group[key], date1904, where, `${argumentPath(where, 1)}.${key}`);
+      };
+      const start = bound('start', 'autoStart');
+      const end = bound('end', 'autoEnd');
+      raw.setPivotFieldDateGroup(
+        sheet,
+        pivot,
+        field,
+        periods,
+        calendar,
+        intervalDays,
+        start === undefined,
+        start ?? 0,
+        end === undefined,
+        end ?? 0,
+      );
     }
 
-    // The stored bounds read back as `Date`s, so a read group can be written back through `setFieldDateGroup`.
+    // The stored bounds read back as `CivilTime`s, so a read group can be written back through `setFieldDateGroup`.
     getFieldDateGroup(field) {
       const [raw, sheet, pivot] = this.#locate();
       const group = raw.getPivotFieldDateGroup(sheet, pivot, field);
@@ -6709,8 +6731,8 @@ function makeFacade(Raw, registry, runtime) {
       const date1904 = raw.getDate1904();
       return {
         ...group,
-        start: serialDate(runtime, group.start, date1904),
-        end: serialDate(runtime, group.end, date1904),
+        start: runtime.convertSerialToCivil(group.start, date1904),
+        end: runtime.convertSerialToCivil(group.end, date1904),
       };
     }
 
@@ -6723,10 +6745,41 @@ function makeFacade(Raw, registry, runtime) {
       }
       const label = argLabel(where, 1);
       requireObject(group, label);
-      const interval = requireNumber(group.interval, `${label}.interval`);
-      const bound = (key) => (group[key] === undefined ? Number.NaN : requireNumber(group[key], `${label}.${key}`));
-      // The raw call is positional: a NaN bound is an omitted one.
-      raw.setPivotFieldNumericGroup(sheet, pivot, field, interval, bound('start'), bound('end'));
+      const finite = (key) => {
+        const value = requireNumber(group[key], `${label}.${key}`);
+        if (!Number.isFinite(value)) {
+          throw new FormulonError(
+            StatusCode.InvalidArgument,
+            argumentMessage(where, argumentPath(where, 1, key), 'must be finite'),
+            `${key}=${value}`,
+          );
+        }
+        return value;
+      };
+      const interval = finite('interval');
+      // A bound follows the data when its `auto` flag is true or it is omitted; such a bound is not read.
+      const bound = (key, autoKey) => {
+        if (group[autoKey] !== undefined) requireBoolean(group[autoKey], `${label}.${autoKey}`);
+        if (group[autoKey] === true) return undefined;
+        if (group[key] === undefined) {
+          if (group[autoKey] === false)
+            throw new TypeError(argumentMessage(where, argumentPath(where, 1, key), 'is required'));
+          return undefined;
+        }
+        return finite(key);
+      };
+      const start = bound('start', 'autoStart');
+      const end = bound('end', 'autoEnd');
+      raw.setPivotFieldNumericGroup(
+        sheet,
+        pivot,
+        field,
+        interval,
+        start === undefined,
+        start ?? 0,
+        end === undefined,
+        end ?? 0,
+      );
     }
   }
 

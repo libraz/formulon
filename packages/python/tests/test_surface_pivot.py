@@ -933,6 +933,16 @@ class PivotMutatorTableTests(unittest.TestCase):
                 None,
                 grid_is(["行ラベル|Sum of Amount", "0-9|12", "10-19|10", "30-39|30", "総計|52"]),
             ),
+            "Pivot.set_field_numeric_group#fractional": (
+                lambda f: f.wb.sheet(0).pivot(f.pivot).set_row_field_order([f.amount]),
+                lambda f: (
+                    f.wb.sheet(0)
+                    .pivot(f.pivot)
+                    .set_field_numeric_group(f.amount, PivotNumericGroupInput(interval=12.5, start=0, end=39))
+                ),
+                None,
+                grid_is(["行ラベル|Sum of Amount", "0-12.5|22", "25-37.5|30", "総計|52"]),
+            ),
             "PivotCache.refresh": (
                 _write_refresh_source,
                 lambda f: f.wb.pivot_cache(f.cache).refresh(),

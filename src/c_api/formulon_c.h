@@ -7171,7 +7171,7 @@ typedef enum {
 
 /**
  * @brief Calendar periods of a date group, as bits of the `periods` of
- *        `fm_pivot_date_group_spec_t`.
+ *        `fm_pivot_date_group_t`.
  */
 #define FM_PIVOT_PERIOD_SECONDS 1u
 #define FM_PIVOT_PERIOD_MINUTES 2u
@@ -8760,7 +8760,10 @@ FM_API fm_status_t fm_sheet_set_pivot_field_subtotal_functions(fm_workbook_t* wb
                                                                size_t pivot_index, size_t field_index,
                                                                const int32_t* aggregations, size_t count);
 
-/** @brief A date grouping to apply (`fm_sheet_set_pivot_field_date_group`). */
+/**
+ * @brief A date grouping, as `fm_sheet_set_pivot_field_date_group` takes it and
+ *        `fm_sheet_get_pivot_field_date_group` returns it.
+ */
 typedef struct {
   uint32_t struct_size;
   /** The date periods to group by, an OR of `FM_PIVOT_PERIOD_*` bits. */
@@ -8769,17 +8772,17 @@ typedef struct {
   int32_t calendar;
   /** The length in days of each group when grouping by days alone; 1 groups by single days. */
   uint32_t interval_days;
-  /** 1 when `start` is given; 0 takes the field's first value. */
-  int32_t has_start;
-  /** The first bound of the grouping as a date serial, read only when `has_start` is 1; with 0 the grouping takes the
-   *  field's first value. */
+  /** An `fm_tristate_t`: default and true make the first bound follow the field's first value (`start` is then not
+   *  read on input); false takes `start`. A read returns false or true. */
+  int32_t auto_start; /* fm_tristate_t */
+  /** The first bound as a date serial: read when `auto_start` is false; on a read always the stored bound. */
   double start;
-  /** 1 when `end` is given; 0 takes the field's last value. */
-  int32_t has_end;
-  /** The last bound of the grouping as a date serial, read only when `has_end` is 1; with 0 the grouping takes the
-   *  field's last value (the midnight after it for a date without a time). */
+  /** As `auto_start`, for the last bound: it follows the field's last value (the midnight after it for a date without
+   *  a time). */
+  int32_t auto_end; /* fm_tristate_t */
+  /** As `start`, for the last bound. */
   double end;
-} fm_pivot_date_group_spec_t;
+} fm_pivot_date_group_t;
 
 /**
  * @brief Groups the date field `field_index` (a source field, or one of its
@@ -8798,17 +8801,21 @@ typedef struct {
  * cache and the field returns to the axis position its group fields held;
  * a field that is not grouped is left as it is.
  *
- * @return `FM_STATUS_OK` (0) on success, or a common pivot failure;
+ * @return `FM_STATUS_OK` (0) on success, also when the grown report cannot be placed (an
+ *           occupied range, the sheet edge): the grouping is applied and the report is withheld
+ *           with `#SPILL!` at its anchor; every refusal below is returned before anything changes;
+ *         a common pivot failure;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) for `periods` of 0
  *         or with an unknown bit, an unknown `calendar`, `interval_days == 0`,
- *         `interval_days > 1` with any period but days, `has_start` / `has_end`
- *         not 0 / 1, a NaN or infinite bound with its flag set, a start after the end, or a field
- *         holding a blank, a value that is not a date, or no value;
- *         `FM_STATUS_PRECONDITION_FAILED` (9) when the field is grouped and its group fields
- *         are not the last fields of the cache.
+ *         `interval_days > 1` with any period but days, `auto_start` / `auto_end`
+ *         outside `fm_tristate_t`, a NaN or infinite bound with its `auto_*` false, a bound that is
+ *         not a valid date serial, or a start after the end;
+ *         `FM_STATUS_PRECONDITION_FAILED` (9) when the field holds a blank, a value that is not a
+ *         date, or no value, is a calculated field, or is grouped and its group fields are not
+ *         the last fields of the cache.
  */
 FM_API fm_status_t fm_sheet_set_pivot_field_date_group(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                       size_t field_index, const fm_pivot_date_group_spec_t* group);
+                                                       size_t field_index, const fm_pivot_date_group_t* group);
 
 /**
  * @brief Reads the date grouping over the field `field_index` (a source field,
@@ -8816,17 +8823,17 @@ FM_API fm_status_t fm_sheet_set_pivot_field_date_group(fm_workbook_t* wb, size_t
  *
  * `*out_present` is `0` when the field is not date-grouped, and `*out` is then
  * left zeroed apart from `struct_size`. Otherwise `*out` holds what
- * `fm_sheet_set_pivot_field_date_group` takes, so a value read can be written
- * back unchanged: `has_start` / `has_end` are `1` when the bound is set
- * explicitly and `0` when it follows the data, and `start` / `end` hold the
- * stored bounds either way.
+ * `fm_sheet_set_pivot_field_date_group` takes, so the record can be written
+ * back unchanged: `auto_start` / `auto_end` read `FM_TRISTATE_TRUE` when the
+ * bound follows the data and `FM_TRISTATE_FALSE` otherwise, and `start` /
+ * `end` hold the stored bound either way.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common pivot failure;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `out_present` or `out` is `NULL`.
  */
 FM_API fm_status_t fm_sheet_get_pivot_field_date_group(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                        size_t field_index, int32_t* out_present,
-                                                       fm_pivot_date_group_spec_t* out);
+                                                       fm_pivot_date_group_t* out);
 
 /**
  * @brief A numeric grouping, as `fm_sheet_set_pivot_field_numeric_group` takes
@@ -8834,56 +8841,70 @@ FM_API fm_status_t fm_sheet_get_pivot_field_date_group(const fm_workbook_t* wb, 
  */
 typedef struct {
   uint32_t struct_size;
-  /** 1 when `start` is given; 0 takes the field's smallest value. */
-  int32_t has_start;
-  /** The first bound; the field's smallest value when not given. */
+  /** An `fm_tristate_t`: default and true make the first bound follow the field's smallest value (`start` is then
+   *  not read on input); false takes `start`. A read returns false or true. */
+  int32_t auto_start; /* fm_tristate_t */
+  /** The first bound: read when `auto_start` is false; on a read always the stored bound. */
   double start;
-  /** 1 when `end` is given; 0 takes the field's largest value. */
-  int32_t has_end;
-  /** The last bound; the field's largest value when not given. */
+  /** As `auto_start`, for the last bound, which follows the field's largest value. */
+  int32_t auto_end; /* fm_tristate_t */
+  /** As `start`, for the last bound. */
   double end;
   /** The width of each group. */
   double interval;
-} fm_pivot_numeric_group_spec_t;
+} fm_pivot_numeric_group_t;
 
 /**
  * @brief Groups the number field `field_index` (a source field, or its group
  *        field) into ranges of `group->interval`, replacing any grouping it
  *        has; a `NULL` `group` removes the grouping.
  *
- * The group field's items are `<start`, then `a-(a+interval-1)` from `start`
- * while `a <= end`, then `>` the first bound past the last range, as a refresh
- * regenerates them. Every pivot on the cache gains the group field and is left
- * pending. With `group == NULL` the grouping is removed from every pivot on
- * the cache; a field that is not grouped is left as it is.
+ * The group field's items, as a refresh regenerates them, are `<start`, one
+ * range per step from `start` up to the first edge at or past `end` (at least
+ * one), then `>` the upper edge of the last range. When `start`, `end` and
+ * `interval` are all whole numbers, a range whose upper edge `a+interval` is
+ * at most 1e15 reads `a-(a+interval-1)`, the last one `a-end` when `end` is
+ * its upper edge; every other range reads `a-(a+interval)`. Each number is
+ * spelled with 15 significant digits, in full while the text of its magnitude
+ * has at most 20 characters and in exponent form otherwise (`1.3E+20`,
+ * `2.43E-17`), with the workbook locale's decimal separator (`0,3-0,8`). A
+ * value equal to `end` falls in the last range, one above `end` in the `>`
+ * item, and one below `start` in the `<` item. Every pivot on the cache gains
+ * the group field and is left pending. With `group == NULL` the grouping is
+ * removed from every pivot on the cache; a field that is not grouped is left
+ * as it is.
  *
- * @return `FM_STATUS_OK` (0) on success, or a common pivot failure;
+ * @return `FM_STATUS_OK` (0) on success, also when the grown report cannot be placed (an
+ *           occupied range, the sheet edge): the grouping is applied and the report is withheld
+ *           with `#SPILL!` at its anchor; every refusal below is returned before anything changes;
+ *         a common pivot failure;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) for a non-positive or non-finite `interval`,
- *         `has_start` / `has_end` not 0 / 1, a NaN or infinite bound with its flag set,
- *         a start after the end, or a field holding a value that is not a number;
- *         `FM_STATUS_NOT_IMPLEMENTED` (3) for a start, end or interval that is not an integer,
- *         or a bound of 1e15 or more in magnitude;
+ *         `auto_start` / `auto_end` outside `fm_tristate_t`, a NaN or infinite bound with its
+ *         `auto_*` false, or a start after the end;
+ *         `FM_STATUS_PRECONDITION_FAILED` (9) when the field holds a blank or a value that is
+ *         not a number, holds no number to take a following bound from, is a calculated field, or
+ *         is grouped and its group fields are not the last fields of the cache;
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) for more group items than a field holds.
  */
 FM_API fm_status_t fm_sheet_set_pivot_field_numeric_group(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
-                                                          size_t field_index,
-                                                          const fm_pivot_numeric_group_spec_t* group);
+                                                          size_t field_index, const fm_pivot_numeric_group_t* group);
 
 /**
  * @brief Reads the numeric grouping over the field `field_index` (a source
  *        field, or its group field) into `*out`.
  *
  * `*out_present` is `0` when the field is not numerically grouped, and `*out`
- * is then left zeroed apart from `struct_size`. Otherwise `*out` can be written
- * back unchanged: `has_start` / `has_end` are `1` when the bound is set
- * explicitly, and `start` / `end` hold the stored bounds either way.
+ * is then left zeroed apart from `struct_size`. Otherwise the record can be
+ * written back unchanged: `auto_start` / `auto_end` read `FM_TRISTATE_TRUE`
+ * when the bound follows the data and `FM_TRISTATE_FALSE` otherwise, and
+ * `start` / `end` hold the stored bound either way.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common pivot failure;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `out_present` or `out` is `NULL`.
  */
 FM_API fm_status_t fm_sheet_get_pivot_field_numeric_group(const fm_workbook_t* wb, size_t sheet_index,
                                                           size_t pivot_index, size_t field_index, int32_t* out_present,
-                                                          fm_pivot_numeric_group_spec_t* out);
+                                                          fm_pivot_numeric_group_t* out);
 
 /**
  * @brief Replaces the row-axis field order with `indices[0..count)`.

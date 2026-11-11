@@ -1357,11 +1357,16 @@ export interface PivotDateGroupInput {
   start?: DateInput;
   /** The last bound of the grouping, a {@link DateInput}; the field's last value when not given. */
   end?: DateInput;
+  /** `true` makes the first bound follow the field's data whatever `start` holds; `false` requires `start`. */
+  autoStart?: boolean;
+  /** `true` makes the last bound follow the field's data whatever `end` holds; `false` requires `end`. */
+  autoEnd?: boolean;
 }
 
 /** A date grouping as `Pivot.getFieldDateGroup` returns it: the members of {@link PivotDateGroupInput} with the
- *  stored bounds as `Date`s. A bound holds its stored value even when `autoStart` / `autoEnd` is `true` (it then
- *  follows the field's data); write the grouping back with a bound only where the matching `auto*` is `false`. */
+ *  stored bounds as {@link CivilTime}s (the serial's calendar fields, time of day included). A bound holds its
+ *  stored value even when `autoStart` / `autoEnd` is `true` (it then follows the field's data). The record can be
+ *  passed to `Pivot.setFieldDateGroup` as it is. */
 export interface PivotDateGroup {
   /** The `PivotDatePeriod` bits the field is grouped by. */
   readonly periods: PivotDatePeriodMask;
@@ -1370,9 +1375,9 @@ export interface PivotDateGroup {
   /** The length in days of each group when grouping by days alone; 1 otherwise. */
   readonly intervalDays: number;
   /** The first bound as stored. */
-  readonly start: Date;
+  readonly start: CivilTime;
   /** The last bound as stored. */
-  readonly end: Date;
+  readonly end: CivilTime;
   /** Whether the first bound follows the field's smallest value. */
   readonly autoStart: boolean;
   /** Whether the last bound follows the field's largest value. */
@@ -1387,11 +1392,15 @@ export interface PivotNumericGroupInput {
   start?: number;
   /** The last bound; the field's largest value when not given. */
   end?: number;
+  /** `true` makes the first bound follow the field's data whatever `start` holds; `false` requires `start`. */
+  autoStart?: boolean;
+  /** `true` makes the last bound follow the field's data whatever `end` holds; `false` requires `end`. */
+  autoEnd?: boolean;
 }
 
 /** A numeric grouping as `Pivot.getFieldNumericGroup` returns it. A bound holds its stored value even when
- *  `autoStart` / `autoEnd` is `true` (it then follows the field's data); write the grouping back with a bound only
- *  where the matching `auto*` is `false`. */
+ *  `autoStart` / `autoEnd` is `true` (it then follows the field's data). The record can be passed to
+ *  `Pivot.setFieldNumericGroup` as it is. */
 export interface PivotNumericGroup {
   /** The width of each group. */
   readonly interval: number;
@@ -7242,9 +7251,11 @@ export interface Sheet {
    *  defaults as for {@link Sheet.getUsedRange}. */
   getTypedValues(range?: CellRect | string | null): readonly (readonly Value[])[];
   /** Reads the cell as a date: the serial's calendar date under the workbook's date system, its fraction rounded to the
-   *  millisecond, as a `Date` whose local fields carry it (the wall clock a `Date` input means). `null` for an empty
-   *  cell; a cell that holds no number, or a serial outside the date system (below 1 in the 1900 system, below 0 in the
-   *  1904 one, or past 9999-12-31), fails with `StatusCode.InvalidArgument`. */
+   *  millisecond, as a `Date` whose local wall-clock fields equal it (the wall clock a `Date` input means). A local
+   *  time that does not exist (a daylight-saving gap) resolves as `new Date(y, m, d, h, mi, s)` does, moving forward
+   *  by the length of the gap; a time that exists is never shifted. `null` for an empty cell; a cell
+   *  that holds no number, or a serial outside the date system (below 1 in the 1900 system, below 0 in the 1904 one,
+   *  or past 9999-12-31), fails with `StatusCode.InvalidArgument`. */
   getDate(row: number, col: number): Date | null;
   /** `getDate` at the A1 address `a1`. */
   getDate(a1: string): Date | null;
@@ -8549,9 +8560,14 @@ export interface Pivot {
    *  year (`calendar` defaults to Gregorian). `intervalDays` (default `1`) above 1 groups by runs of days and
    *  needs `periods === PivotDatePeriod.Days`. `start` / `end` are a
    *  {@link DateInput}; omitted, they take the field's first value and its
-   *  last (the midnight after it for a date without a time). An empty or
-   *  unknown mask, a zero interval, an invalid bound, a start after the end
-   *  or a field holding anything but dates is `StatusCode.InvalidArgument`.
+   *  last (the midnight after it for a date without a time). The record `getFieldDateGroup` returned is
+   *  accepted as it is; an `autoStart` / `autoEnd` of `true` makes that bound follow the data whatever `start` /
+   *  `end` hold; an `autoStart` / `autoEnd` of `false` with its bound omitted is a `TypeError`. An empty or unknown
+   *  mask, an `intervalDays` of 0 or above 1 with a period other than days, an invalid bound or a start after the end
+   *  is `StatusCode.InvalidArgument`; a field that is calculated or holds a blank, a value that is not a date, or no
+   *  value is `StatusCode.PreconditionFailed`, as is a grouped field whose group fields are not the last fields. A
+   *  refusal changes nothing. A report that cannot be placed (occupied range, sheet edge) is blocked with `#SPILL!`
+   *  at its anchor and the call succeeds.
    *
    *  A `group` of `null` removes the date grouping of pivot field `fieldIndex` (a source field, or one of its
    *  group fields) from every pivot on its cache; the field returns to the axis position its group fields held.
@@ -8563,12 +8579,17 @@ export interface Pivot {
    *  when the field is not date-grouped. */
   getFieldDateGroup(fieldIndex: PivotFieldRef): PivotDateGroup | null;
   /** Groups the number field `fieldIndex` (a source field, or its group field) into ranges of `group.interval`,
-   *  replacing any grouping it has. The group field's items are `<start`, then `a-(a+interval-1)` from `start` while
-   *  `a <= end`, then `>` the first bound past the last range; an omitted `start` / `end` follows the field's
-   *  smallest and largest value. A non-positive or non-finite interval, a non-finite bound, a start after the end or
-   *  a field holding anything but numbers is `StatusCode.InvalidArgument`; a start, end or interval that is not an
-   *  integer is `StatusCode.NotImplemented`; more group items than a field holds is
-   *  `StatusCode.SecurityResourceLimit`.
+   *  replacing any grouping it has. The group field's items are `<start`, one range per `interval` from `start` up to
+   *  the first edge at or past `end`, then `>`. With whole-number settings a range reads `a-(a+interval-1)`,
+   *  otherwise `a-(a+interval)`; each number has 15 significant digits, takes exponent form past 20 characters
+   *  and uses the workbook locale's decimal separator. An omitted `start` / `end` follows the field's smallest and
+   *  largest value. The record `getFieldNumericGroup` returned is accepted as it is; an `autoStart` /
+   *  `autoEnd` of `true` makes that bound follow the data whatever `start` / `end` hold; an `autoStart` /
+   *  `autoEnd` of `false` with its bound omitted is a `TypeError`. A non-positive interval, a
+   *  non-finite interval or bound, or a start after the end is `StatusCode.InvalidArgument`; a field that is
+   *  calculated or holds a blank, a value that is not a number, or no value is `StatusCode.PreconditionFailed`; more
+   *  group items than a field holds is `StatusCode.SecurityResourceLimit`. A refusal changes nothing. A report that
+   *  cannot be placed (occupied range, sheet edge) is blocked with `#SPILL!` at its anchor and the call succeeds.
    *
    *  A `group` of `null` removes the numeric grouping of the field from every pivot on its cache; a field that is not
    *  grouped is left as it is. */
@@ -8645,9 +8666,7 @@ export interface PivotCache {
    *  blocked, and of two whose new ranges alone overlap, the one created first renders. Fails with
    *  `StatusCode.PreconditionFailed` when the source does not resolve (none, an external or non-worksheet source,
    *  a missing sheet, name or table, a `#REF!` or dynamic name); with
-   *  `StatusCode.SecurityResourceLimit` when (rows - 1) x columns of the source exceeds the record cell limit;
-   *  with `StatusCode.NotImplemented` when a numeric group has a start, end or interval that is not an
-   *  integer. */
+   *  `StatusCode.SecurityResourceLimit` when (rows - 1) x columns of the source exceeds the record cell limit. */
   refresh(): void;
   /** Reads the cache's options. */
   getOptions(): PivotCacheOptions;

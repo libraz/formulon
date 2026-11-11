@@ -415,6 +415,21 @@ describe('a record a getter returns is accepted by the matching setter', () => {
       assert.equal(pivot.listDataFields()[0].aggregation, f.PivotAggregation.Average);
     });
   });
+
+  it('a pivot numeric group read back is accepted, and autoStart / autoEnd are read-only keys', () => {
+    withSheet((ws, wb) => {
+      const { pivot } = pivotOver(ws, wb);
+      pivot.setFieldNumericGroup(1, { interval: 5, start: 0 });
+      const read = pivot.getFieldNumericGroup(1);
+      assert.equal(read.autoStart, false);
+      assert.equal(read.autoEnd, true);
+      pivot.setFieldNumericGroup(1, read);
+      assert.deepEqual(pivot.getFieldNumericGroup(1), read);
+      pivot.setFieldNumericGroup(1, { interval: 5, autoStart: true, autoEnd: true });
+      assert.equal(pivot.getFieldNumericGroup(1).autoStart, true);
+      assert.throws(() => pivot.setFieldNumericGroup(1, { interval: 5, extra: 1 }), TypeError);
+    });
+  });
 });
 
 describe('required keys are required at runtime', () => {

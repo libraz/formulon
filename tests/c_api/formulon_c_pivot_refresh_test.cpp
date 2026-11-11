@@ -3,11 +3,14 @@
 // leaves everything unchanged when it fails, and the type getter reports
 // effective flag values.
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <limits>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "formulon_c_out_index.h"
 #include "formulon_c_pivot_test_helpers.h"
@@ -17,7 +20,6 @@
 
 namespace {
 
-constexpr fm_status_t kNotImplemented = static_cast<fm_status_t>(formulon::FormulonErrorCode::kNotImplemented);
 constexpr fm_status_t kNotFound = static_cast<fm_status_t>(formulon::FormulonErrorCode::kNotFound);
 constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
 constexpr fm_status_t kPreconditionFailed = static_cast<fm_status_t>(formulon::FormulonErrorCode::kPreconditionFailed);
@@ -234,13 +236,13 @@ struct NumericGroupFixture : RefreshFixture {
     }
   }
 
-  fm_status_t Group(const fm_pivot_numeric_group_spec_t* spec) {
+  fm_status_t Group(const fm_pivot_numeric_group_t* spec) {
     return fm_sheet_set_pivot_field_numeric_group(wb.handle, 0U, 0U, kAmountField, spec);
   }
 
-  bool Read(std::size_t field, fm_pivot_numeric_group_spec_t* out) const {
+  bool Read(std::size_t field, fm_pivot_numeric_group_t* out) const {
     std::int32_t present = -1;
-    *out = FM_STRUCT_INIT(fm_pivot_numeric_group_spec_t);
+    *out = FM_STRUCT_INIT(fm_pivot_numeric_group_t);
     EXPECT_EQ(fm_sheet_get_pivot_field_numeric_group(wb.handle, 0U, 0U, field, &present, out), 0)
         << fm_get_last_error_message();
     return present == 1;
@@ -256,20 +258,20 @@ struct NumericGroupFixture : RefreshFixture {
 TEST(CApiPivotNumericGroup, AutoBoundsGroupTheValuesAndReadBack) {
   NumericGroupFixture f;
   f.BuildNumbers();
-  fm_pivot_numeric_group_spec_t spec = FM_STRUCT_INIT(fm_pivot_numeric_group_spec_t);
+  fm_pivot_numeric_group_t spec = FM_STRUCT_INIT(fm_pivot_numeric_group_t);
   spec.interval = 100.0;
   ASSERT_EQ(f.Group(&spec), 0) << fm_get_last_error_message();
   ASSERT_EQ(f.FieldCount(), 3U);
 
-  fm_pivot_numeric_group_spec_t read{};
+  fm_pivot_numeric_group_t read{};
   ASSERT_TRUE(f.Read(kAmountField, &read));
-  EXPECT_EQ(read.has_start, 0);
-  EXPECT_EQ(read.has_end, 0);
+  EXPECT_EQ(read.auto_start, FM_TRISTATE_TRUE);
+  EXPECT_EQ(read.auto_end, FM_TRISTATE_TRUE);
   EXPECT_EQ(read.start, 20.0);
   EXPECT_EQ(read.end, 300.0);
   EXPECT_EQ(read.interval, 100.0);
   // The group field reads the same grouping.
-  fm_pivot_numeric_group_spec_t from_group{};
+  fm_pivot_numeric_group_t from_group{};
   ASSERT_TRUE(f.Read(2U, &from_group));
   EXPECT_EQ(from_group.interval, 100.0);
 
@@ -285,71 +287,178 @@ TEST(CApiPivotNumericGroup, AutoBoundsGroupTheValuesAndReadBack) {
 
   // A value read can be written back unchanged.
   ASSERT_EQ(f.Group(&read), 0) << fm_get_last_error_message();
-  fm_pivot_numeric_group_spec_t again{};
+  fm_pivot_numeric_group_t again{};
   ASSERT_TRUE(f.Read(kAmountField, &again));
-  EXPECT_EQ(again.has_start, 0);
+  EXPECT_EQ(again.auto_start, FM_TRISTATE_TRUE);
+  EXPECT_EQ(again.auto_end, FM_TRISTATE_TRUE);
   EXPECT_EQ(again.start, 20.0);
+  EXPECT_EQ(again.end, 300.0);
   EXPECT_EQ(again.interval, 100.0);
 }
 
-TEST(CApiPivotNumericGroup, ExplicitBoundsAreReadAsSet) {
+TEST(CApiPivotNumericGroup, ExplicitBoundsAreReadAsSetAndWriteBackUnchanged) {
   NumericGroupFixture f;
   f.BuildNumbers();
-  fm_pivot_numeric_group_spec_t spec = FM_STRUCT_INIT(fm_pivot_numeric_group_spec_t);
-  spec.has_start = 1;
+  fm_pivot_numeric_group_t spec = FM_STRUCT_INIT(fm_pivot_numeric_group_t);
+  spec.auto_start = FM_TRISTATE_FALSE;
   spec.start = 0.0;
-  spec.has_end = 1;
+  spec.auto_end = FM_TRISTATE_FALSE;
   spec.end = 400.0;
   spec.interval = 100.0;
   ASSERT_EQ(f.Group(&spec), 0) << fm_get_last_error_message();
-  fm_pivot_numeric_group_spec_t read{};
+  fm_pivot_numeric_group_t read{};
   ASSERT_TRUE(f.Read(kAmountField, &read));
-  EXPECT_EQ(read.has_start, 1);
+  EXPECT_EQ(read.auto_start, FM_TRISTATE_FALSE);
   EXPECT_EQ(read.start, 0.0);
-  EXPECT_EQ(read.has_end, 1);
+  EXPECT_EQ(read.auto_end, FM_TRISTATE_FALSE);
   EXPECT_EQ(read.end, 400.0);
+
+  ASSERT_EQ(f.Group(&read), 0) << fm_get_last_error_message();
+  fm_pivot_numeric_group_t again{};
+  ASSERT_TRUE(f.Read(kAmountField, &again));
+  EXPECT_EQ(again.auto_start, FM_TRISTATE_FALSE);
+  EXPECT_EQ(again.start, 0.0);
+  EXPECT_EQ(again.auto_end, FM_TRISTATE_FALSE);
+  EXPECT_EQ(again.end, 400.0);
+  EXPECT_EQ(again.interval, 100.0);
+}
+
+TEST(CApiPivotNumericGroup, ABoundThatFollowsTheDataIsNotRead) {
+  NumericGroupFixture f;
+  f.BuildNumbers();
+  fm_pivot_numeric_group_t spec = FM_STRUCT_INIT(fm_pivot_numeric_group_t);
+  spec.auto_start = FM_TRISTATE_TRUE;
+  spec.start = std::numeric_limits<double>::quiet_NaN();
+  spec.auto_end = FM_TRISTATE_DEFAULT;
+  spec.end = -std::numeric_limits<double>::infinity();
+  spec.interval = 100.0;
+  ASSERT_EQ(f.Group(&spec), 0) << fm_get_last_error_message();
+  fm_pivot_numeric_group_t read{};
+  ASSERT_TRUE(f.Read(kAmountField, &read));
+  EXPECT_EQ(read.auto_start, FM_TRISTATE_TRUE);
+  EXPECT_EQ(read.start, 20.0);
+  EXPECT_EQ(read.auto_end, FM_TRISTATE_TRUE);
+  EXPECT_EQ(read.end, 300.0);
 }
 
 TEST(CApiPivotNumericGroup, ANullGroupRemovesTheGrouping) {
   NumericGroupFixture f;
   f.BuildNumbers();
-  fm_pivot_numeric_group_spec_t spec = FM_STRUCT_INIT(fm_pivot_numeric_group_spec_t);
+  fm_pivot_numeric_group_t spec = FM_STRUCT_INIT(fm_pivot_numeric_group_t);
   spec.interval = 100.0;
   ASSERT_EQ(f.Group(&spec), 0);
   ASSERT_EQ(f.FieldCount(), 3U);
   ASSERT_EQ(f.Group(nullptr), 0) << fm_get_last_error_message();
   EXPECT_EQ(f.FieldCount(), 2U);
-  fm_pivot_numeric_group_spec_t read{};
+  fm_pivot_numeric_group_t read{};
   EXPECT_FALSE(f.Read(kAmountField, &read));
+  EXPECT_EQ(read.struct_size, sizeof(fm_pivot_numeric_group_t));
+  EXPECT_EQ(read.auto_start, 0);
+  EXPECT_EQ(read.start, 0.0);
+  EXPECT_EQ(read.auto_end, 0);
+  EXPECT_EQ(read.end, 0.0);
   EXPECT_EQ(read.interval, 0.0);
 }
 
-TEST(CApiPivotNumericGroup, RefusesWhatItCannotGroup) {
+TEST(CApiPivotNumericGroup, RefusesBadSettingsAndGroupsNothing) {
   NumericGroupFixture f;
   f.BuildNumbers();
-  fm_pivot_numeric_group_spec_t spec = FM_STRUCT_INIT(fm_pivot_numeric_group_spec_t);
-  spec.interval = 1.5;
-  EXPECT_EQ(f.Group(&spec), kNotImplemented);
-  spec.interval = 100.0;
-  spec.has_start = 1;
-  spec.start = 0.5;
-  EXPECT_EQ(f.Group(&spec), kNotImplemented);
-  spec.has_start = 2;
+  const double nan = std::numeric_limits<double>::quiet_NaN();
+  const double inf = std::numeric_limits<double>::infinity();
+  const auto base = [] {
+    fm_pivot_numeric_group_t spec = FM_STRUCT_INIT(fm_pivot_numeric_group_t);
+    spec.interval = 100.0;
+    return spec;
+  };
+  fm_pivot_numeric_group_t spec = base();
+  spec.auto_start = 3;
   EXPECT_EQ(f.Group(&spec), kInvalidArgument);
-  spec.has_start = 0;
+  spec = base();
+  spec.auto_end = -1;
+  EXPECT_EQ(f.Group(&spec), kInvalidArgument);
+  for (const double bad : {nan, inf, -inf}) {
+    spec = base();
+    spec.auto_start = FM_TRISTATE_FALSE;
+    spec.start = bad;
+    EXPECT_EQ(f.Group(&spec), kInvalidArgument) << bad;
+    spec = base();
+    spec.auto_end = FM_TRISTATE_FALSE;
+    spec.end = bad;
+    EXPECT_EQ(f.Group(&spec), kInvalidArgument) << bad;
+    spec = base();
+    spec.interval = bad;
+    EXPECT_EQ(f.Group(&spec), kInvalidArgument) << bad;
+  }
+  spec = base();
   spec.interval = 0.0;
   EXPECT_EQ(f.Group(&spec), kInvalidArgument);
-  spec.interval = std::numeric_limits<double>::quiet_NaN();
+  spec.interval = -1.5;
   EXPECT_EQ(f.Group(&spec), kInvalidArgument);
+  spec = base();
+  spec.auto_start = FM_TRISTATE_FALSE;
+  spec.start = 300.0;
+  spec.auto_end = FM_TRISTATE_FALSE;
+  spec.end = 20.0;
+  EXPECT_EQ(f.Group(&spec), kInvalidArgument);
+  spec = base();
+  spec.interval = 1e-300;
+  EXPECT_EQ(f.Group(&spec), kSecurityResourceLimit);
   EXPECT_EQ(f.FieldCount(), 2U);
+  fm_pivot_numeric_group_t read{};
+  EXPECT_FALSE(f.Read(kAmountField, &read));
+}
+
+TEST(CApiPivotNumericGroup, AFieldOfTextOrBlanksOrACalculatedFieldIsAPrecondition) {
+  NumericGroupFixture f;
+  f.BuildNumbers();
+  fm_pivot_numeric_group_t spec = FM_STRUCT_INIT(fm_pivot_numeric_group_t);
+  spec.interval = 100.0;
+  EXPECT_EQ(fm_sheet_set_pivot_field_numeric_group(f.wb.handle, 0U, 0U, kRegionField, &spec), kPreconditionFailed);
+  std::size_t calculated = 0;
+  ASSERT_EQ(fm_workbook_add_pivot_cache_calculated_field(f.wb.handle, f.cache_id, "Twice", "Amount*2", &calculated), 0)
+      << fm_get_last_error_message();
+  EXPECT_EQ(fm_sheet_set_pivot_field_numeric_group(f.wb.handle, 0U, 0U, calculated, &spec), kPreconditionFailed);
+  ASSERT_EQ(fm_workbook_set_pivot_cache_record_blank(f.wb.handle, f.cache_id, 1U, kAmountField), 0);
+  EXPECT_EQ(f.Group(&spec), kPreconditionFailed);
+  fm_pivot_numeric_group_t read{};
+  EXPECT_FALSE(f.Read(kAmountField, &read));
+  EXPECT_FALSE(f.Read(kRegionField, &read));
+}
+
+TEST(CApiPivotNumericGroup, ARefusalLeavesThePreviousGroupingInPlace) {
+  NumericGroupFixture f;
+  f.BuildNumbers();
+  fm_pivot_numeric_group_t spec = FM_STRUCT_INIT(fm_pivot_numeric_group_t);
+  spec.interval = 100.0;
+  ASSERT_EQ(f.Group(&spec), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(f.wb.handle, 0U, 0U, 2U, FM_PIVOT_AXIS_ROW), 0);
+  std::uint32_t order[4] = {};
+  std::size_t order_count = 0;
+  ASSERT_EQ(fm_sheet_get_pivot_row_field_order(f.wb.handle, 0U, 0U, order, 4U, &order_count), 0);
+  const std::vector<std::uint32_t> before(order, order + order_count);
+
+  spec.auto_start = 3;
+  EXPECT_EQ(f.Group(&spec), kInvalidArgument);
+  spec = FM_STRUCT_INIT(fm_pivot_numeric_group_t);
+  spec.interval = 1e-300;
+  EXPECT_EQ(f.Group(&spec), kSecurityResourceLimit);
+  spec.interval = 50.0;
+  EXPECT_EQ(fm_sheet_set_pivot_field_numeric_group(f.wb.handle, 0U, 0U, kRegionField, &spec), kPreconditionFailed);
+
+  EXPECT_EQ(f.FieldCount(), 3U);
+  fm_pivot_numeric_group_t read{};
+  ASSERT_TRUE(f.Read(kAmountField, &read));
+  EXPECT_EQ(read.interval, 100.0);
+  ASSERT_EQ(fm_sheet_get_pivot_row_field_order(f.wb.handle, 0U, 0U, order, 4U, &order_count), 0);
+  EXPECT_EQ(std::vector<std::uint32_t>(order, order + order_count), before);
 }
 
 TEST(CApiPivotNumericGroup, ReportsStatusesForBadArguments) {
   NumericGroupFixture f;
   f.BuildNumbers();
   std::int32_t present = -1;
-  fm_pivot_numeric_group_spec_t numeric = FM_STRUCT_INIT(fm_pivot_numeric_group_spec_t);
-  fm_pivot_date_group_spec_t date = FM_STRUCT_INIT(fm_pivot_date_group_spec_t);
+  fm_pivot_numeric_group_t numeric = FM_STRUCT_INIT(fm_pivot_numeric_group_t);
+  fm_pivot_date_group_t date = FM_STRUCT_INIT(fm_pivot_date_group_t);
   EXPECT_EQ(fm_sheet_get_pivot_field_numeric_group(nullptr, 0U, 0U, 0U, &present, &numeric), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_get_pivot_field_numeric_group(f.wb.handle, 0U, 0U, 0U, nullptr, &numeric), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_get_pivot_field_numeric_group(f.wb.handle, 0U, 0U, 0U, &present, nullptr), kBindingNullPointer);
@@ -361,6 +470,251 @@ TEST(CApiPivotNumericGroup, ReportsStatusesForBadArguments) {
   EXPECT_EQ(fm_sheet_set_pivot_field_numeric_group(nullptr, 0U, 0U, 0U, nullptr), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_get_pivot_field_date_group(f.wb.handle, 0U, 0U, 0U, &present, &date), 0);
   EXPECT_EQ(present, 0);
+}
+
+// A pivot at D1 summing Amount over a source on Sheet1 whose Amount column
+// holds `amounts` (Mac Excel's measured bases), refreshed into a new cache.
+// With `region_rows` the Region column holds the amounts too and sits on the
+// rows; otherwise it holds text and no field is on an axis.
+struct FractionalFixture {
+  WorkbookGuard wb;
+  std::uint32_t cache_id = 0;
+
+  void Build(const std::vector<double>& amounts, const char* profile = nullptr, bool region_rows = false) {
+    ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+    if (profile != nullptr) {
+      ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, profile), 0) << fm_get_last_error_message();
+    }
+    ASSERT_EQ(fm_sheet_set_text(wb.handle, 0U, 0U, 0U, "Region"), 0);
+    ASSERT_EQ(fm_sheet_set_text(wb.handle, 0U, 0U, 1U, "Amount"), 0);
+    for (std::uint32_t i = 0; i < amounts.size(); ++i) {
+      if (region_rows) {
+        ASSERT_EQ(fm_sheet_set_number(wb.handle, 0U, i + 1U, 0U, amounts[i]), 0);
+      } else {
+        ASSERT_EQ(fm_sheet_set_text(wb.handle, 0U, i + 1U, 0U, "North"), 0);
+      }
+      ASSERT_EQ(fm_sheet_set_number(wb.handle, 0U, i + 1U, 1U, amounts[i]), 0);
+    }
+    ASSERT_EQ(fm_workbook_add_pivot_cache(wb.handle, 0U, &cache_id), 0);
+    const std::string ref = "A1:B" + std::to_string(amounts.size() + 1U);
+    ASSERT_EQ(SetPivotCacheWorksheetSource(wb.handle, cache_id, /*present=*/1, ref.c_str(), "Sheet1", nullptr), 0);
+    ASSERT_EQ(fm_workbook_refresh_pivot_cache(wb.handle, cache_id), 0) << fm_get_last_error_message();
+    ASSERT_EQ(AddPivot(wb.handle, 0U, "PT", cache_id, /*anchor_row=*/0U, /*anchor_col=*/3U, ignored_index()), 0)
+        << fm_get_last_error_message();
+    ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0U, 0U, kAmountField, FM_PIVOT_AXIS_VALUE), 0);
+    fm_pivot_data_field_t sum = FM_STRUCT_INIT(fm_pivot_data_field_t);
+    sum.name = "Sum of Amount";
+    sum.field_index = static_cast<std::uint32_t>(kAmountField);
+    sum.aggregation = FM_PIVOT_AGGREGATION_SUM;
+    sum.number_format = "";
+    sum.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
+    ASSERT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0U, 0U, &sum, ignored_index()), 0)
+        << fm_get_last_error_message();
+    if (region_rows) {
+      ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0U, 0U, kRegionField, FM_PIVOT_AXIS_ROW), 0)
+          << fm_get_last_error_message();
+    }
+  }
+
+  // Groups Amount; a NaN bound follows the data. The group field joins the rows.
+  fm_status_t Group(double start_or_nan, double end_or_nan, double interval) {
+    fm_pivot_numeric_group_t spec = FM_STRUCT_INIT(fm_pivot_numeric_group_t);
+    spec.auto_start = std::isnan(start_or_nan) ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
+    spec.start = start_or_nan;
+    spec.auto_end = std::isnan(end_or_nan) ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
+    spec.end = end_or_nan;
+    spec.interval = interval;
+    const fm_status_t rc = fm_sheet_set_pivot_field_numeric_group(wb.handle, 0U, 0U, kAmountField, &spec);
+    if (rc != 0) {
+      return rc;
+    }
+    return fm_sheet_set_pivot_field_axis(wb.handle, 0U, 0U, kGroupField, FM_PIVOT_AXIS_ROW);
+  }
+
+  // The labels of the group field's items, in item order.
+  std::vector<std::string> ItemLabels() const {
+    std::size_t count = 0;
+    EXPECT_EQ(fm_sheet_get_pivot_field_item_count(wb.handle, 0U, 0U, kGroupField, &count), 0);
+    std::vector<std::string> labels;
+    for (std::size_t i = 0; i < count; ++i) {
+      fm_pivot_item_info_t item = FM_STRUCT_INIT(fm_pivot_item_info_t);
+      EXPECT_EQ(fm_sheet_get_pivot_field_item_at(wb.handle, 0U, 0U, kGroupField, i, &item), 0);
+      labels.emplace_back(item.name != nullptr ? item.name : "");
+    }
+    return labels;
+  }
+
+  // The rendered rows as (label, Sum of Amount); the grand total row is a cell kind of its own.
+  std::vector<std::pair<std::string, double>> Rows() const {
+    PivotCellsGuard projected;
+    EXPECT_EQ(fm_sheet_get_pivot_layout(wb.handle, 0U, 0U, &projected.handle), 0) << fm_get_last_error_message();
+    std::vector<std::pair<std::string, double>> rows;
+    std::vector<double> sums;
+    for (const fm_pivot_cell_info_t& cell : CollectCells(projected.handle)) {
+      if (cell.kind == FM_PIVOT_CELL_KIND_ROW_LABEL && cell.value.kind == FM_VALUE_KIND_TEXT) {
+        rows.emplace_back(cell.value.u.text, 0.0);
+      } else if (cell.kind == FM_PIVOT_CELL_KIND_DATA && cell.value.kind == FM_VALUE_KIND_NUMBER) {
+        sums.push_back(cell.value.u.number);
+      }
+    }
+    EXPECT_EQ(rows.size(), sums.size());
+    for (std::size_t i = 0; i < rows.size() && i < sums.size(); ++i) {
+      rows[i].second = sums[i];
+    }
+    return rows;
+  }
+
+  static constexpr std::size_t kGroupField = 2U;
+};
+
+const std::vector<double> kBaseA = {0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3.0, 3.3, 3.6};
+const std::vector<double> kBaseB = {-2.5, -2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5};
+
+void ExpectRows(const std::vector<std::pair<std::string, double>>& actual,
+                const std::vector<std::pair<std::string, double>>& expected, const char* name) {
+  ASSERT_EQ(actual.size(), expected.size()) << name;
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    EXPECT_EQ(actual[i].first, expected[i].first) << name << " row " << i;
+    EXPECT_NEAR(actual[i].second, expected[i].second, 1e-9) << name << " row " << i;
+  }
+}
+
+TEST(CApiPivotNumericGroup, FractionalGroupsLabelAndSumAsExcel) {
+  const double kAuto = std::numeric_limits<double>::quiet_NaN();
+  struct Case {
+    const char* name;
+    const std::vector<double>& base;
+    double start;
+    double end;
+    double interval;
+    std::vector<std::pair<std::string, double>> rows;
+  };
+  const std::vector<Case> cases = {
+      {"c01",
+       kBaseA,
+       kAuto,
+       kAuto,
+       0.5,
+       {{"0.3-0.8", 0.9},
+        {"0.8-1.3", 2.1},
+        {"1.3-1.8", 1.5},
+        {"1.8-2.3", 3.9},
+        {"2.3-2.8", 5.1},
+        {"2.8-3.3", 3.0},
+        {"3.3-3.8", 6.9}}},
+      {"c03", kBaseA, kAuto, kAuto, 1.5, {{"0.3-1.8", 4.5}, {"1.8-3.3", 12.0}, {"3.3-4.8", 6.9}}},
+      {"c05", kBaseA, 0.0, 4.0, 1.5, {{"0-1.5", 3.0}, {"1.5-3", 10.5}, {"3-4.5", 9.9}}},
+      {"c06",
+       kBaseB,
+       kAuto,
+       kAuto,
+       0.5,
+       {{"-2.5--2", -2.5},
+        {"-2--1.5", -2.0},
+        {"-1.5--1", -1.5},
+        {"-1--0.5", -1.0},
+        {"-0.5-0", -0.5},
+        {"0-0.5", 0.0},
+        {"0.5-1", 0.5},
+        {"1-1.5", 1.0},
+        {"1.5-2", 1.5},
+        {"2-2.5", 4.5}}},
+      {"c07",
+       kBaseB,
+       -2.25,
+       2.25,
+       0.75,
+       {{"<-2.25", -2.5},
+        {"-2.25--1.5", -2.0},
+        {"-1.5--0.75", -2.5},
+        {"-0.75-0", -0.5},
+        {"0-0.75", 0.5},
+        {"0.75-1.5", 1.0},
+        {"1.5-2.25", 3.5},
+        {">2.25", 2.5}}},
+      {"c09",
+       kBaseA,
+       1.0,
+       3.0,
+       0.5,
+       {{"<1", 1.8}, {"1-1.5", 1.2}, {"1.5-2", 3.3}, {"2-2.5", 4.5}, {"2.5-3", 5.7}, {">3", 6.9}}},
+  };
+  for (const Case& c : cases) {
+    FractionalFixture f;
+    f.Build(c.base);
+    ASSERT_EQ(f.Group(c.start, c.end, c.interval), 0) << c.name << ": " << fm_get_last_error_message();
+    ExpectRows(f.Rows(), c.rows, c.name);
+  }
+}
+
+TEST(CApiPivotNumericGroup, FractionalGroupItemsIncludeTheEmptyRanges) {
+  FractionalFixture f;
+  f.Build(kBaseA);
+  ASSERT_EQ(f.Group(std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN(), 0.5), 0)
+      << fm_get_last_error_message();
+  EXPECT_EQ(f.ItemLabels(), (std::vector<std::string>{"<0.3", "0.3-0.8", "0.8-1.3", "1.3-1.8", "1.8-2.3", "2.3-2.8",
+                                                      "2.8-3.3", "3.3-3.8", ">3.8"}));
+  fm_pivot_numeric_group_t read = FM_STRUCT_INIT(fm_pivot_numeric_group_t);
+  std::int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_pivot_field_numeric_group(f.wb.handle, 0U, 0U, kAmountField, &present, &read), 0);
+  ASSERT_EQ(present, 1);
+  EXPECT_EQ(read.start, 0.3);
+  EXPECT_EQ(read.end, 3.6);
+  EXPECT_EQ(read.interval, 0.5);
+}
+
+TEST(CApiPivotNumericGroup, FractionalLabelsUseTheProfileDecimalSeparator) {
+  FractionalFixture a;
+  a.Build(kBaseA, "win-365-de_DE");
+  ASSERT_EQ(a.Group(std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::quiet_NaN(), 0.5), 0)
+      << fm_get_last_error_message();
+  EXPECT_EQ(a.ItemLabels(), (std::vector<std::string>{"<0,3", "0,3-0,8", "0,8-1,3", "1,3-1,8", "1,8-2,3", "2,3-2,8",
+                                                      "2,8-3,3", "3,3-3,8", ">3,8"}));
+  ExpectRows(a.Rows(),
+             {{"0,3-0,8", 0.9},
+              {"0,8-1,3", 2.1},
+              {"1,3-1,8", 1.5},
+              {"1,8-2,3", 3.9},
+              {"2,3-2,8", 5.1},
+              {"2,8-3,3", 3.0},
+              {"3,3-3,8", 6.9}},
+             "de c01");
+  FractionalFixture b;
+  b.Build(kBaseB, "win-365-fr_FR");
+  ASSERT_EQ(b.Group(-2.25, 2.25, 0.75), 0) << fm_get_last_error_message();
+  EXPECT_EQ(b.ItemLabels(), (std::vector<std::string>{"<-2,25", "-2,25--1,5", "-1,5--0,75", "-0,75-0", "0-0,75",
+                                                      "0,75-1,5", "1,5-2,25", ">2,25"}));
+}
+
+TEST(CApiPivotNumericGroup, AGroupedReportThatCannotBePlacedIsBlocked) {
+  // Region holds base A on the rows; grouping it puts its group field in its place.
+  FractionalFixture f;
+  f.Build(kBaseA, nullptr, /*region_rows=*/true);
+  fm_pivot_numeric_group_t spec = FM_STRUCT_INIT(fm_pivot_numeric_group_t);
+  spec.interval = 1.5;
+  ASSERT_EQ(fm_sheet_set_pivot_field_numeric_group(f.wb.handle, 0U, 0U, kRegionField, &spec), 0)
+      << fm_get_last_error_message();
+  // Three ranges fill D1:E5; seven need D1:E9, which D7 blocks.
+  ASSERT_EQ(f.Rows().size(), 3U);
+  for (std::uint32_t r = 6U; r < 12U; ++r) {
+    ASSERT_EQ(fm_sheet_set_text(f.wb.handle, 0U, r, 3U, "keep"), 0);
+  }
+  spec.interval = 0.5;
+  ASSERT_EQ(fm_sheet_set_pivot_field_numeric_group(f.wb.handle, 0U, 0U, kRegionField, &spec), 0)
+      << fm_get_last_error_message();
+  fm_pivot_numeric_group_t read = FM_STRUCT_INIT(fm_pivot_numeric_group_t);
+  std::int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_pivot_field_numeric_group(f.wb.handle, 0U, 0U, kRegionField, &present, &read), 0);
+  ASSERT_EQ(present, 1);
+  EXPECT_EQ(read.interval, 0.5);
+  fm_value_t anchor{};
+  ASSERT_EQ(fm_sheet_get_value(f.wb.handle, 0U, 0U, 3U, &anchor), 0);
+  ASSERT_EQ(anchor.kind, FM_VALUE_KIND_ERROR);
+  EXPECT_EQ(anchor.u.error_code, static_cast<std::int32_t>(formulon::ErrorCode::Spill));
+  fm_value_t kept{};
+  ASSERT_EQ(fm_sheet_get_value(f.wb.handle, 0U, 6U, 3U, &kept), 0);
+  ASSERT_EQ(kept.kind, FM_VALUE_KIND_TEXT);
+  EXPECT_STREQ(kept.u.text, "keep");
 }
 
 }  // namespace

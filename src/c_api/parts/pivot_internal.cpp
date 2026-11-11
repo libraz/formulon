@@ -246,17 +246,7 @@ PivotEdit::PivotEdit(formulon::Workbook& wb, std::size_t sheet_index, std::size_
 
 fm_status_t PivotEdit::commit() {
   list_moved_field_items(wb_, table_, *snapshot_);
-  formulon::Expected<void, formulon::Error> projected = reproject_edited_pivot(wb_, sheet_index_, pivot_index_);
-  if (projected) {
-    return 0;
-  }
-  if (projected.error().code == formulon::FormulonErrorCode::kPreconditionFailed) {
-    // The snapshot is a clone, whose runtime id is zero; the restored table is still the same pivot.
-    const std::uint32_t runtime_id = table_.runtime_id().value();
-    table_ = std::move(*snapshot_);
-    table_.runtime_id().assign(runtime_id);
-    return set_last_error(projected.error());
-  }
+  (void)reproject_edited_pivot(wb_, sheet_index_, pivot_index_);
   return 0;
 }
 

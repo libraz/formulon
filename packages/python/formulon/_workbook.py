@@ -6187,14 +6187,19 @@ class PivotDateGroupInput:
     #: The last bound of the grouping, a ``date`` or a ``datetime`` (a naive local wall clock); the field's last value
     #: when not given.
     end: Optional[Union[datetime.datetime, datetime.date]] = None
+    #: ``True`` makes the first bound follow the field's data whatever ``start`` holds; ``False`` requires ``start``.
+    auto_start: Optional[bool] = None
+    #: ``True`` makes the last bound follow the field's data whatever ``end`` holds; ``False`` requires ``end``.
+    auto_end: Optional[bool] = None
 
 
 @dataclass(frozen=True)
 class PivotDateGroup:
     """A date grouping as :meth:`Pivot.get_field_date_group` reads it.
 
-    The members are those of :class:`PivotDateGroupInput`. To write the grouping back, give
-    :class:`PivotDateGroupInput` a bound only where the matching ``auto_*`` is false.
+    The members are those of :class:`PivotDateGroupInput`. A read record is accepted as it is by
+    :meth:`Pivot.set_field_date_group`; a bound whose ``auto_*`` is true follows the data and its stored value is
+    not written.
     """
 
     #: The ``PivotDatePeriod`` bits the field is grouped by.
@@ -6223,14 +6228,18 @@ class PivotNumericGroupInput:
     start: Optional[float] = None
     #: The last bound; the field's largest value when not given.
     end: Optional[float] = None
+    #: ``True`` makes the first bound follow the field's data whatever ``start`` holds; ``False`` requires ``start``.
+    auto_start: Optional[bool] = None
+    #: ``True`` makes the last bound follow the field's data whatever ``end`` holds; ``False`` requires ``end``.
+    auto_end: Optional[bool] = None
 
 
 @dataclass(frozen=True)
 class PivotNumericGroup:
     """A numeric grouping as :meth:`Pivot.get_field_numeric_group` reads it.
 
-    To write the grouping back, give :class:`PivotNumericGroupInput` a bound only where the matching ``auto_*`` is
-    false.
+    A read record is accepted as it is by :meth:`Pivot.set_field_numeric_group`; a bound whose ``auto_*`` is true
+    follows the data and its stored value is not written.
     """
 
     #: The width of each group.
@@ -6749,12 +6758,11 @@ def _pack_pivot_spec(scope: _ArgScope, name: str, cache_id: int, anchor_row: int
 
 
 def _pack_pivot_date_group(scope: _ArgScope, group: PivotDateGroupInput, *, date1904: bool) -> int:
-    """An ``fm_pivot_date_group_spec_t`` for ``fm_sheet_set_pivot_field_date_group``.
+    """An ``fm_pivot_date_group_t`` for ``fm_sheet_set_pivot_field_date_group``.
 
-    ``date1904`` is the workbook's date system, which turns ``start`` / ``end`` into serials.
+    ``group`` is a :class:`PivotDateGroupInput` or a :class:`PivotDateGroup` read back; ``date1904`` is the
+    workbook's date system, which turns ``start`` / ``end`` into serials.
     """
-    if not isinstance(group, PivotDateGroupInput):
-        raise TypeError(f"expected a PivotDateGroupInput, got {type(group).__name__}")
     from ._inputs import civil_datetime, date_serial
 
     fields: Dict[str, object] = {
@@ -6763,11 +6771,41 @@ def _pack_pivot_date_group(scope: _ArgScope, group: PivotDateGroupInput, *, date
         "interval_days": _uint(group.interval_days, "interval_days"),
     }
     for name, bound in (("start", group.start), ("end", group.end)):
-        if bound is not None:
-            fields["has_" + name] = 1
+        auto = getattr(group, "auto_" + name)
+        if auto is not None:
+            _require_bool(auto, "group.auto_" + name)
+        if auto is False and bound is None:
+            raise TypeError(_argument_message("group." + name, "is required"))
+        if bound is not None and auto is not True:
+            fields["auto_" + name] = _tristate_default(False)
             fields[name] = float(date_serial(civil_datetime(bound, name), date1904=date1904)[0])
-    ptr = scope.struct(S.PIVOT_DATE_GROUP_SPEC)
-    S.PIVOT_DATE_GROUP_SPEC.pack(LIB, ptr, fields)
+        else:
+            fields["auto_" + name] = _tristate_default(True)
+    ptr = scope.struct(S.PIVOT_DATE_GROUP)
+    S.PIVOT_DATE_GROUP.pack(LIB, ptr, fields)
+    return ptr
+
+
+def _pack_pivot_numeric_group(scope: _ArgScope, group: Union[PivotNumericGroupInput, PivotNumericGroup]) -> int:
+    """An ``fm_pivot_numeric_group_t`` for ``fm_sheet_set_pivot_field_numeric_group``.
+
+    ``group`` is a :class:`PivotNumericGroupInput` or a :class:`PivotNumericGroup` read back.
+    """
+    fields: Dict[str, object] = {"interval": _finite(group.interval, "group.interval")}
+    for name in ("start", "end"):
+        bound = getattr(group, name)
+        auto = getattr(group, "auto_" + name)
+        if auto is not None:
+            _require_bool(auto, "group.auto_" + name)
+        if auto is False and bound is None:
+            raise TypeError(_argument_message("group." + name, "is required"))
+        if bound is not None and auto is not True:
+            fields["auto_" + name] = _tristate_default(False)
+            fields[name] = _finite(bound, "group." + name)
+        else:
+            fields["auto_" + name] = _tristate_default(True)
+    ptr = scope.struct(S.PIVOT_NUMERIC_GROUP)
+    S.PIVOT_NUMERIC_GROUP.pack(LIB, ptr, fields)
     return ptr
 
 
@@ -7070,10 +7108,10 @@ def _read_optional_cstr_out(fn, *args) -> Optional[str]:
 def _finite(value: Any, name: str) -> float:
     """``value`` as a finite ``float``; ``TypeError`` for a non-number, ``InvalidArgumentError`` for NaN / infinity."""
     if isinstance(value, bool) or not isinstance(value, numbers.Real):
-        raise TypeError(f"{name} must be a number, got {type(value).__name__}")
+        raise TypeError(_argument_message(name, "must be a number"))
     x = float(value)
     if not math.isfinite(x):
-        raise FormulonError(StatusCode.INVALID_ARGUMENT, f"{name} must be finite", f"{name}={x!r}")
+        raise FormulonError(StatusCode.INVALID_ARGUMENT, _argument_message(name, "must be finite"), f"{name}={x!r}")
     return x
 
 

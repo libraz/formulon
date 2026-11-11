@@ -58,12 +58,12 @@ from ._workbook import (
     _decode_cell_rect_at,
     _decode_pivot_filter_operand,
     _encode_pivot_filter_operands,
-    _finite,
     _install_workbook_locks,
     _nullable_enum,
     _pack_pivot_date_group,
     _pack_pivot_field_patch,
     _pack_pivot_item_patch,
+    _pack_pivot_numeric_group,
     _pack_pivot_style_options_patch,
     _read_count,
     _read_cstr_out,
@@ -585,7 +585,7 @@ class Pivot(_NoCopy):
             elif name in _PIVOT_OPTION_FLAGS:
                 _require_bool(value, name)
             elif value is None:
-                raise TypeError(_argument_message(name, "must not be null"))
+                raise TypeError(_argument_message(name, "must not be None"))
         h, sheet, pivot_index = self._locate()
         values: Dict[str, object] = {}
         with _ArgScope() as scope:
@@ -872,7 +872,9 @@ class Pivot(_NoCopy):
             )
         )
 
-    def set_field_date_group(self, field_index: PivotFieldRef, group: Optional[PivotDateGroupInput]) -> None:
+    def set_field_date_group(
+        self, field_index: PivotFieldRef, group: Optional[Union[PivotDateGroupInput, PivotDateGroup]]
+    ) -> None:
         """Group the date field ``field_index`` by the periods of ``group.periods``, or ungroup it with ``None``.
 
         ``field_index`` is a source field or one of its group fields; any grouping
@@ -885,9 +887,11 @@ class Pivot(_NoCopy):
         ``periods`` to be ``PivotDatePeriod.DAYS`` alone. ``start`` / ``end`` are
         a ``date`` or ``datetime`` (a naive local wall clock; an aware one
         is a ValueError); ``None`` takes the field's first value and its last
-        (the midnight after it for a date without a time). An empty or unknown mask, a zero
-        interval, an invalid bound, a start after the end, or a field holding
-        anything but dates raises ``FormulonError``.
+        (the midnight after it for a date without a time). The :class:`PivotDateGroup`
+        that :meth:`get_field_date_group` returned is accepted as it is; an ``auto_start`` /
+        ``auto_end`` of true makes that bound follow the data whatever ``start`` / ``end`` hold.
+        A report that cannot be placed (occupied range, sheet edge) is blocked with ``#SPILL!``
+        at its anchor and the call succeeds; a refusal changes nothing.
 
         ``None`` removes the grouping: the group fields leave every pivot on the
         cache and the field returns to the axis position they held. The group
@@ -895,12 +899,17 @@ class Pivot(_NoCopy):
         cache. A field that is not grouped is left as it is.
 
         Raises:
-          TypeError: when ``group`` is neither ``None`` nor a :class:`PivotDateGroupInput`.
-          FormulonError: with ``code == StatusCode.PRECONDITION_FAILED`` when ``group`` is
-            ``None`` and the group fields are not the last fields of the cache.
+          TypeError: when ``group`` is neither ``None``, a :class:`PivotDateGroupInput` nor a
+            :class:`PivotDateGroup`, or an ``auto_start`` / ``auto_end`` of false has no ``start`` / ``end``.
+          FormulonError: with ``code == StatusCode.INVALID_ARGUMENT`` for an empty or unknown
+            mask, an ``interval_days`` of 0 or above 1 with a period other than days, an invalid
+            bound or a start after the end; with ``PRECONDITION_FAILED`` when the field is
+            calculated or holds a blank, a value that is not a date, or no value, when it is
+            grouped and its group fields are not the last fields of the cache, or when ``group``
+            is ``None`` and the group fields are not the last fields.
         """
-        if group is not None and not isinstance(group, PivotDateGroupInput):
-            raise TypeError(_argument_message("group", "must be a PivotDateGroupInput"))
+        if group is not None and not isinstance(group, (PivotDateGroupInput, PivotDateGroup)):
+            raise TypeError(_argument_message("group", "must be a PivotDateGroupInput, a PivotDateGroup or None"))
         field_index = self._field_index(field_index)
         h, sheet, pivot_index = self._locate()
         with _ArgScope() as scope:
@@ -929,7 +938,7 @@ class Pivot(_NoCopy):
         h, sheet, pivot_index = self._locate()
         with _ArgScope() as scope:
             present = scope.out_ptr()
-            ptr = scope.struct(S.PIVOT_DATE_GROUP_SPEC)
+            ptr = scope.struct(S.PIVOT_DATE_GROUP)
             _check(
                 LIB.fm_sheet_get_pivot_field_date_group(
                     h,
@@ -942,7 +951,7 @@ class Pivot(_NoCopy):
             )
             if not LIB.read_i32(present):
                 return None
-            d = S.PIVOT_DATE_GROUP_SPEC.unpack(LIB, ptr)
+            d = S.PIVOT_DATE_GROUP.unpack(LIB, ptr)
         date1904 = self._sheet._workbook.get_date1904()
         return PivotDateGroup(
             periods=PivotDatePeriod(d["periods"]),
@@ -950,8 +959,8 @@ class Pivot(_NoCopy):
             interval_days=d["interval_days"],
             start=serial_datetime(d["start"], date1904=date1904),
             end=serial_datetime(d["end"], date1904=date1904),
-            auto_start=not d["has_start"],
-            auto_end=not d["has_end"],
+            auto_start=S.tristate_flag(d["auto_start"]),
+            auto_end=S.tristate_flag(d["auto_end"]),
         )
 
     def get_field_numeric_group(self, field_index: PivotFieldRef) -> Optional[PivotNumericGroup]:
@@ -964,7 +973,7 @@ class Pivot(_NoCopy):
         h, sheet, pivot_index = self._locate()
         with _ArgScope() as scope:
             present = scope.out_ptr()
-            ptr = scope.struct(S.PIVOT_NUMERIC_GROUP_SPEC)
+            ptr = scope.struct(S.PIVOT_NUMERIC_GROUP)
             _check(
                 LIB.fm_sheet_get_pivot_field_numeric_group(
                     h,
@@ -977,44 +986,46 @@ class Pivot(_NoCopy):
             )
             if not LIB.read_i32(present):
                 return None
-            d = S.PIVOT_NUMERIC_GROUP_SPEC.unpack(LIB, ptr)
+            d = S.PIVOT_NUMERIC_GROUP.unpack(LIB, ptr)
         return PivotNumericGroup(
             interval=d["interval"],
             start=d["start"],
             end=d["end"],
-            auto_start=not d["has_start"],
-            auto_end=not d["has_end"],
+            auto_start=S.tristate_flag(d["auto_start"]),
+            auto_end=S.tristate_flag(d["auto_end"]),
         )
 
-    def set_field_numeric_group(self, field_index: PivotFieldRef, group: Optional[PivotNumericGroupInput]) -> None:
+    def set_field_numeric_group(
+        self, field_index: PivotFieldRef, group: Optional[Union[PivotNumericGroupInput, PivotNumericGroup]]
+    ) -> None:
         """Group the number field ``field_index`` into ranges of ``group.interval``, or ungroup it with ``None``.
 
         ``field_index`` is a source field or its group field; any grouping it has is replaced. The group field's
-        items are ``<start``, then ``a-(a+interval-1)`` from ``start`` while ``a <= end``, then ``>`` the first
-        bound past the last range. ``start`` / ``end`` of ``None`` take the field's smallest and largest value.
+        items are ``<start``, one range per ``interval`` from ``start`` up to the first edge at or past ``end``, then
+        ``>``. With whole-number settings a range reads ``a-(a+interval-1)``, otherwise ``a-(a+interval)``; each
+        number has 15 significant digits, takes exponent form past 20 characters and uses the workbook locale's
+        decimal separator. ``start`` / ``end`` of ``None`` take the field's smallest and largest value. The
+        :class:`PivotNumericGroup` that :meth:`get_field_numeric_group` returned is accepted as it is; an
+        ``auto_start`` / ``auto_end`` of true makes that bound follow the data whatever ``start`` / ``end`` hold.
         ``None`` removes the grouping from every pivot on the cache; a field that is not grouped is left as it is.
+        A report that cannot be placed (occupied range, sheet edge) is blocked with ``#SPILL!`` at its anchor and
+        the call succeeds; a refusal changes nothing.
 
         Raises:
-          TypeError: when ``group`` is neither ``None`` nor a :class:`PivotNumericGroupInput`.
+          TypeError: when ``group`` is neither ``None``, a :class:`PivotNumericGroupInput` nor a
+            :class:`PivotNumericGroup`, ``interval``, ``start`` or ``end`` is not a number, or an ``auto_start`` / ``auto_end`` of false has
+            no ``start`` / ``end``.
           FormulonError: with ``code == StatusCode.INVALID_ARGUMENT`` for a non-positive or non-finite interval, a
-            non-finite bound, a start after the end or a field holding a value that is not a number; with
-            ``NOT_IMPLEMENTED`` when the start, end or interval is not an integer (or a bound reaches 1e15);
-            with ``SECURITY_RESOURCE_LIMIT`` when the grouping would make more items than a field holds.
+            non-finite bound or a start after the end; with ``PRECONDITION_FAILED`` when the field is calculated
+            or holds a blank, a value that is not a number, or no value; with ``SECURITY_RESOURCE_LIMIT`` when the
+            grouping would make more items than a field holds.
         """
-        if group is not None and not isinstance(group, PivotNumericGroupInput):
-            raise TypeError(_argument_message("group", "must be a PivotNumericGroupInput"))
+        if group is not None and not isinstance(group, (PivotNumericGroupInput, PivotNumericGroup)):
+            raise TypeError(_argument_message("group", "must be a PivotNumericGroupInput, a PivotNumericGroup or None"))
         field_index = self._field_index(field_index)
         h, sheet, pivot_index = self._locate()
         with _ArgScope() as scope:
-            ptr = 0
-            if group is not None:
-                fields: Dict[str, object] = {"interval": _finite(group.interval, "interval")}
-                for name, bound in (("start", group.start), ("end", group.end)):
-                    if bound is not None:
-                        fields["has_" + name] = 1
-                        fields[name] = _finite(bound, name)
-                ptr = scope.struct(S.PIVOT_NUMERIC_GROUP_SPEC)
-                S.PIVOT_NUMERIC_GROUP_SPEC.pack(LIB, ptr, fields)
+            ptr = 0 if group is None else _pack_pivot_numeric_group(scope, group)
             _check(
                 LIB.fm_sheet_set_pivot_field_numeric_group(
                     h,

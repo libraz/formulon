@@ -54,6 +54,17 @@ void format_double(std::string& out, double v, int significant_digits = 15);
 /// `1.2345E-18`). Negative zero prints as "0".
 void format_formula_number(std::string& out, double v);
 
+/// Appends `v` in positional notation at any magnitude: 15 significant digits
+/// of `excel_decimal_view`, trailing zeros dropped, never an exponent
+/// (`0.000003`, `4300000000000000`). Negative zero prints as "0".
+void format_positional(std::string& out, double v);
+
+/// Appends `v` in Excel's exponent form at any magnitude: the shortest
+/// mantissa of its 15-digit `excel_decimal_view`, then `E+NN` / `E-NN` with
+/// the exponent padded to two digits (`3E+299`, `1.3E+300`, `5E-07`).
+/// Zero prints as "0".
+void format_scientific(std::string& out, double v);
+
 }  // namespace formulon
 
 #endif  // FORMULON_UTILS_DOUBLE_FORMAT_H_

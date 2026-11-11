@@ -782,6 +782,15 @@ const PIVOT_MUTATORS = [
     },
   ],
   [
+    'Pivot.setFieldNumericGroup',
+    {
+      setup: (b) => b.wb.sheet(0).pivot(b.pivot).setRowFieldOrder([b.amount]),
+      act: (b) => b.wb.sheet(0).pivot(b.pivot).setFieldNumericGroup(b.amount, { start: 0, end: 39, interval: 12.5 }),
+      expect: (b) =>
+        assert.deepEqual(pivotGrid(b.wb), ['行ラベル|Sum of Amount', '0-12.5|22', '25-37.5|30', '総計|52']),
+    },
+  ],
+  [
     'PivotCache.refresh',
     {
       // The source range A1:D5 gets cells whose last row names a region the cache has not seen.

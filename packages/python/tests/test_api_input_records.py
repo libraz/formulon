@@ -224,6 +224,103 @@ class PivotInputTests(unittest.TestCase):
             with self.assertRaises(TypeError):
                 pivot.set_field_date_group(0, periods=formulon.PivotDatePeriod.YEARS)  # type: ignore[call-overload]
 
+    def _date_group_pivot(self, wb: Workbook):
+        sheet = wb.sheet(0)
+        cache = wb.add_pivot_cache()
+        cache.add_field("When")
+        cache.add_field("Amount")
+        for day in (datetime.date(2024, 1, 5), datetime.date(2024, 3, 9)):
+            record = cache.add_record()
+            cache.set_record_value(record, 0, day)
+            cache.set_record_value(record, 1, 1.0)
+        pivot = sheet.pivot(sheet.add_pivot(PivotInput(name="P", cache_id=cache.cache_id, anchor=CellAddress(0, 4))))
+        pivot.set_field_axis("When", PivotAxis.ROW)
+        return pivot
+
+    def test_date_group_read_record_is_written_back_unchanged(self) -> None:
+        with Workbook.create_default() as wb:
+            pivot = self._date_group_pivot(wb)
+            for group in (
+                formulon.PivotDateGroupInput(periods=formulon.PivotDatePeriod.MONTHS),
+                formulon.PivotDateGroupInput(
+                    periods=formulon.PivotDatePeriod.MONTHS,
+                    start=datetime.datetime(2024, 1, 1, 13, 45, 30),
+                    end=datetime.datetime(2024, 12, 31, 6, 7, 8),
+                ),
+            ):
+                pivot.set_field_date_group(0, group)
+                read = pivot.get_field_date_group(0)
+                assert read is not None
+                pivot.set_field_date_group(0, read)
+                self.assertEqual(pivot.get_field_date_group(0), read)
+
+    def test_date_group_bounds_are_the_stored_civil_fields(self) -> None:
+        with Workbook.create_default() as wb:
+            pivot = self._date_group_pivot(wb)
+            pivot.set_field_date_group(
+                0,
+                formulon.PivotDateGroupInput(
+                    periods=formulon.PivotDatePeriod.MONTHS,
+                    start=datetime.datetime(2024, 1, 1, 13, 45, 30),
+                    end=datetime.datetime(2024, 12, 31, 6, 7, 8),
+                ),
+            )
+            read = pivot.get_field_date_group(0)
+            assert read is not None
+            self.assertEqual(read.start, datetime.datetime(2024, 1, 1, 13, 45, 30))
+            self.assertEqual(read.end, datetime.datetime(2024, 12, 31, 6, 7, 8))
+            self.assertFalse(read.auto_start or read.auto_end)
+
+    def test_date_group_auto_flag_true_ignores_the_stored_bound(self) -> None:
+        with Workbook.create_default() as wb:
+            pivot = self._date_group_pivot(wb)
+            pivot.set_field_date_group(0, formulon.PivotDateGroupInput(periods=formulon.PivotDatePeriod.MONTHS))
+            auto = pivot.get_field_date_group(0)
+            assert auto is not None
+            self.assertTrue(auto.auto_start and auto.auto_end)
+            stale = dataclasses.replace(auto, start=datetime.datetime(1999, 1, 1), end=datetime.datetime(2999, 1, 1))
+            pivot.set_field_date_group(0, stale)
+            self.assertEqual(pivot.get_field_date_group(0), auto)
+
+    def test_date_group_explicit_false_auto_flag_requires_its_bound(self) -> None:
+        with Workbook.create_default() as wb:
+            pivot = self._date_group_pivot(wb)
+            for name in ("start", "end"):
+                fields = {
+                    "periods": formulon.PivotDatePeriod.MONTHS,
+                    "calendar": formulon.PivotCalendar.GREGORIAN,
+                    "interval_days": 1,
+                    "start": datetime.datetime(2024, 1, 1),
+                    "end": datetime.datetime(2024, 12, 31),
+                    "auto_start": False,
+                    "auto_end": False,
+                }
+                fields[name] = None
+                with self.assertRaises(TypeError) as raised:
+                    pivot.set_field_date_group(0, formulon.PivotDateGroup(**fields))  # type: ignore[arg-type]
+                self.assertIn(f"Pivot.set_field_date_group group.{name} is required", str(raised.exception))
+            self.assertIsNone(pivot.get_field_date_group(0))
+
+    def test_date_group_setter_refuses_a_foreign_record_and_a_non_date_field(self) -> None:
+        with Workbook.create_default() as wb:
+            pivot = self._date_group_pivot(wb)
+            with self.assertRaises(TypeError) as raised:
+                pivot.set_field_date_group(0, formulon.PivotNumericGroupInput(interval=1))  # type: ignore[arg-type]
+            self.assertIn("a PivotDateGroup or None", str(raised.exception))
+            self.assertNotIn("null", str(raised.exception))
+        with Workbook.create_default() as wb:
+            sheet = wb.sheet(0)
+            cache = wb.add_pivot_cache()
+            cache.add_field("Region")
+            for region in ("East", "West"):
+                cache.set_record_value(cache.add_record(), 0, region)
+            pivot = sheet.pivot(
+                sheet.add_pivot(PivotInput(name="P", cache_id=cache.cache_id, anchor=CellAddress(0, 4)))
+            )
+            with self.assertRaises(formulon.FormulonError) as err:
+                pivot.set_field_date_group(0, formulon.PivotDateGroupInput(periods=formulon.PivotDatePeriod.YEARS))
+            self.assertEqual(err.exception.code, formulon.StatusCode.PRECONDITION_FAILED)
+
     def test_date_group_record_defaults(self) -> None:
         group = formulon.PivotDateGroupInput(periods=formulon.PivotDatePeriod.YEARS)
         self.assertEqual(group.calendar, formulon.PivotCalendar.GREGORIAN)

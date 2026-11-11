@@ -194,8 +194,22 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   reads them back: the cell's real error, a blocked spill's range and a blocked
   pivot report. A book holding other rich values (images in cells, linked data
   types) keeps them unchanged and gets no rich errors.
-- `Pivot.setFieldNumericGroup` groups a field into numeric ranges, and
-  `getFieldDateGroup` / `getFieldNumericGroup` read a grouping back.
+- `Pivot.setFieldNumericGroup` groups a field into numeric ranges; the
+  interval and the bounds may be fractional, and the item labels use the
+  workbook locale's decimal separator. `Pivot.getFieldDateGroup` and
+  `getFieldNumericGroup` read a grouping back as `PivotDateGroup` and
+  `PivotNumericGroup` (the bounds of a date group are `CivilTime` in
+  JavaScript and `datetime` in Python, with `autoStart` / `autoEnd`), and
+  `setFieldDateGroup` / `setFieldNumericGroup` take those records back as
+  well as `PivotDateGroupInput` / `PivotNumericGroupInput`, whose optional
+  `autoStart` / `autoEnd` make a bound follow the data (`true`) or require it
+  (`false`). A non-finite interval or
+  bound is `InvalidArgument`; a field holding data of the wrong type is
+  `PreconditionFailed`.
+- `Sheet.getDate` returns the `Date` whose local wall-clock fields equal the
+  serial's calendar fields; a local time that does not exist (a daylight-saving
+  gap) resolves as the `Date` constructor does, and a time that exists is
+  never shifted.
 - `Sheet.insertCells(range, shift)` and `deleteCells(range, shift)` shift a
   band of cells in a `CellShift` direction; a reference moves only when its
   extent across the band lies wholly inside it. An insert that would move a

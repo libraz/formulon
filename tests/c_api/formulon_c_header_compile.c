@@ -272,7 +272,7 @@ int main(void) {
   fm_status_t (*get_defined_name)(const fm_workbook_t*, const char*, int32_t, int32_t*, fm_defined_name_t*) =
       fm_workbook_get_defined_name;
   // A date grouping is removed by passing a `NULL` group to its setter.
-  fm_status_t (*set_pivot_field_date_group)(fm_workbook_t*, size_t, size_t, size_t, const fm_pivot_date_group_spec_t*) =
+  fm_status_t (*set_pivot_field_date_group)(fm_workbook_t*, size_t, size_t, size_t, const fm_pivot_date_group_t*) =
       fm_sheet_set_pivot_field_date_group;
   fm_status_t (*pivot_data_field_default_name)(const fm_workbook_t*, size_t, size_t, size_t, int32_t, size_t,
                                                const char**) = fm_sheet_get_pivot_data_field_default_name;

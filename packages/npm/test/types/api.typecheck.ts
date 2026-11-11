@@ -84,6 +84,7 @@ import createFormulon, {
   type DrawingPatch,
   type DrawingProperties,
   type CellValueInput,
+  type PivotDateGroup,
   type PivotDatePeriodMask,
   type PivotNumericGroup,
   type Dxf,
@@ -1317,8 +1318,17 @@ export function nativeBooleansAndDates(): void {
   const group = pivot.getFieldDateGroup(0);
   const mask: PivotDatePeriodMask | undefined = group?.periods;
   void mask;
+  pivot.setFieldDateGroup(0, { periods: 16, start: civil, autoEnd: true });
+  pivot.setFieldNumericGroup(0, { interval: 5, autoStart: true });
+  const dateGroup: PivotDateGroup | null = pivot.getFieldDateGroup(0);
+  if (dateGroup !== null) {
+    pivot.setFieldDateGroup(0, dateGroup);
+    const hour: number = dateGroup.start.hour;
+    void hour;
+  }
   const numeric: PivotNumericGroup | null = pivot.getFieldNumericGroup(0);
   void numeric;
+  if (numeric !== null) pivot.setFieldNumericGroup(0, numeric);
   pivot.setFieldNumericGroup(0, { interval: 100, start: 20 });
   pivot.setFieldNumericGroup(0, null);
   // @ts-expect-error a bound is a DateInput, not a serial

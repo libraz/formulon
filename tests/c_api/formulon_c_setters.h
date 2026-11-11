@@ -263,18 +263,18 @@ inline fm_status_t UpdatePivotStyleOptions(fm_workbook_t* wb, std::size_t sheet_
   return fm_sheet_update_pivot_style_options(wb, sheet_index, pivot_index, &patch);
 }
 
-// Groups a date field. A NaN bound is not set, so the group takes the field's
-// first or last value.
+// Groups a date field. A NaN bound follows the data, so the group takes the
+// field's first or last value.
 inline fm_status_t SetPivotFieldDateGroup(fm_workbook_t* wb, std::size_t sheet_index, std::size_t pivot_index,
                                           std::size_t field_index, std::uint32_t periods, std::int32_t calendar,
                                           std::uint32_t interval_days, double start_or_nan, double end_or_nan) {
-  fm_pivot_date_group_spec_t group = FM_STRUCT_INIT(fm_pivot_date_group_spec_t);
+  fm_pivot_date_group_t group = FM_STRUCT_INIT(fm_pivot_date_group_t);
   group.periods = periods;
   group.calendar = calendar;
   group.interval_days = interval_days;
-  group.has_start = std::isnan(start_or_nan) ? 0 : 1;
+  group.auto_start = std::isnan(start_or_nan) ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
   group.start = start_or_nan;
-  group.has_end = std::isnan(end_or_nan) ? 0 : 1;
+  group.auto_end = std::isnan(end_or_nan) ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
   group.end = end_or_nan;
   return fm_sheet_set_pivot_field_date_group(wb, sheet_index, pivot_index, field_index, &group);
 }

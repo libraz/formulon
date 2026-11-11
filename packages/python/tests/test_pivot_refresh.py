@@ -17,6 +17,8 @@ from formulon import (
     PivotCache,
     PivotCacheField,
     PivotDataFieldInput,
+    PivotDateGroupInput,
+    PivotDatePeriod,
     PivotInput,
     PivotNumericGroup,
     PivotNumericGroupInput,
@@ -179,6 +181,7 @@ class PivotCacheFieldTypeTests(unittest.TestCase):
 
 
 NUMBERS: List[Tuple[str, float]] = [("East", 20.0), ("West", 150.0), ("East", 250.0), ("West", 300.0)]
+FRACTIONS: List[Tuple[str, float]] = [("East" if i % 2 else "West", round(0.3 * i, 1)) for i in range(1, 13)]
 
 
 class PivotNumericGroupTests(unittest.TestCase):
@@ -213,23 +216,134 @@ class PivotNumericGroupTests(unittest.TestCase):
             self.assertIsNone(pivot.get_field_numeric_group("Amount"))
             self.assertEqual(len(pivot.list_fields()), 2)
 
-    def test_non_integer_interval_is_not_implemented(self) -> None:
+    def test_fractional_interval_labels_the_ranges_with_decimals(self) -> None:
+        with Workbook.create_default() as wb:
+            _, pivot = _build(wb, FRACTIONS)
+            pivot.set_field_numeric_group("Amount", PivotNumericGroupInput(interval=0.5))
+            self.assertEqual(
+                pivot.get_field_numeric_group("Amount"),
+                PivotNumericGroup(interval=0.5, start=0.3, end=3.6, auto_start=True, auto_end=True),
+            )
+            pivot.set_field_axis(2, PivotAxis.ROW)
+            pivot.project()
+            self.assertEqual(len(pivot.list_field_items(2)), 9)
+            shown = [wb.sheet(0).get_value(row, col) for row in range(14) for col in range(4, 7)]
+            for label in ("0.3-0.8", "0.8-1.3", "1.3-1.8", "1.8-2.3", "2.3-2.8", "2.8-3.3", "3.3-3.8"):
+                self.assertIn(label, shown)
+
+    def test_fractional_labels_use_the_workbook_locale_decimal_separator(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.set_profile_id("win-365-de_DE")
+            _, pivot = _build(wb, FRACTIONS)
+            pivot.set_field_numeric_group("Amount", PivotNumericGroupInput(interval=0.5))
+            pivot.set_field_axis(2, PivotAxis.ROW)
+            pivot.project()
+            shown = [wb.sheet(0).get_value(row, col) for row in range(14) for col in range(4, 7)]
+            self.assertIn("0,3-0,8", shown)
+            self.assertNotIn("0.3-0.8", shown)
+
+    def test_a_read_record_is_written_back_unchanged(self) -> None:
+        with Workbook.create_default() as wb:
+            _, pivot = _build(wb, NUMBERS)
+            for group in (
+                PivotNumericGroupInput(interval=100),
+                PivotNumericGroupInput(interval=100, start=0, end=400),
+                PivotNumericGroupInput(interval=25.5, start=10.25),
+            ):
+                pivot.set_field_numeric_group("Amount", group)
+                read = pivot.get_field_numeric_group("Amount")
+                assert read is not None
+                pivot.set_field_numeric_group("Amount", read)
+                self.assertEqual(pivot.get_field_numeric_group("Amount"), read)
+                self.assertEqual(len(pivot.list_fields()), 3)
+
+    def test_auto_flag_true_ignores_the_stored_bound(self) -> None:
+        with Workbook.create_default() as wb:
+            _, pivot = _build(wb, NUMBERS)
+            record = PivotNumericGroup(interval=100.0, start=-500.0, end=9000.0, auto_start=True, auto_end=True)
+            pivot.set_field_numeric_group("Amount", record)
+            self.assertEqual(
+                pivot.get_field_numeric_group("Amount"),
+                PivotNumericGroup(interval=100.0, start=20.0, end=300.0, auto_start=True, auto_end=True),
+            )
+
+    def test_a_non_finite_number_is_an_invalid_argument(self) -> None:
+        with Workbook.create_default() as wb:
+            _, pivot = _build(wb, NUMBERS)
+            for name in ("interval", "start", "end"):
+                for bad in (float("nan"), float("inf"), float("-inf")):
+                    fields = {"interval": 100.0, "start": 0.0, "end": 400.0}
+                    fields[name] = bad
+                    with self.assertRaises(FormulonError) as raised:
+                        pivot.set_field_numeric_group("Amount", PivotNumericGroupInput(**fields))
+                    self.assertEqual(raised.exception.code, StatusCode.INVALID_ARGUMENT)
+                    self.assertIn(f"Pivot.set_field_numeric_group group.{name} must be finite", str(raised.exception))
+            self.assertIsNone(pivot.get_field_numeric_group("Amount"))
+            self.assertEqual(len(pivot.list_fields()), 2)
+
+    def test_a_non_positive_interval_or_inverted_bounds_are_refused_and_change_nothing(self) -> None:
+        with Workbook.create_default() as wb:
+            _, pivot = _build(wb, NUMBERS)
+            for group in (
+                PivotNumericGroupInput(interval=0),
+                PivotNumericGroupInput(interval=-1),
+                PivotNumericGroupInput(interval=10, start=50, end=20),
+            ):
+                with self.assertRaises(FormulonError) as raised:
+                    pivot.set_field_numeric_group("Amount", group)
+                self.assertEqual(raised.exception.code, StatusCode.INVALID_ARGUMENT)
+            self.assertIsNone(pivot.get_field_numeric_group("Amount"))
+            self.assertEqual(len(pivot.list_fields()), 2)
+
+    def test_a_field_of_the_wrong_type_is_a_failed_precondition(self) -> None:
         with Workbook.create_default() as wb:
             _, pivot = _build(wb, NUMBERS)
             with self.assertRaises(FormulonError) as raised:
-                pivot.set_field_numeric_group("Amount", PivotNumericGroupInput(interval=1.5))
-            self.assertEqual(raised.exception.code, StatusCode.NOT_IMPLEMENTED)
+                pivot.set_field_numeric_group("Region", PivotNumericGroupInput(interval=10))
+            self.assertEqual(raised.exception.code, StatusCode.PRECONDITION_FAILED)
             with self.assertRaises(FormulonError) as raised:
-                pivot.set_field_numeric_group("Amount", PivotNumericGroupInput(interval=0))
-            self.assertEqual(raised.exception.code, StatusCode.INVALID_ARGUMENT)
-            self.assertIsNone(pivot.get_field_numeric_group("Amount"))
+                pivot.set_field_date_group("Region", PivotDateGroupInput(periods=PivotDatePeriod.YEARS))
+            self.assertEqual(raised.exception.code, StatusCode.PRECONDITION_FAILED)
+            self.assertIsNone(pivot.get_field_numeric_group("Region"))
             self.assertEqual(len(pivot.list_fields()), 2)
+
+    def test_an_explicit_false_auto_flag_requires_its_bound(self) -> None:
+        with Workbook.create_default() as wb:
+            _, pivot = _build(wb, NUMBERS)
+            for name in ("start", "end"):
+                fields = {"interval": 100.0, "start": 0.0, "end": 400.0, "auto_start": False, "auto_end": False}
+                fields[name] = None
+                record = PivotNumericGroup(**fields)  # type: ignore[arg-type]
+                with self.assertRaises(TypeError) as raised:
+                    pivot.set_field_numeric_group("Amount", record)
+                self.assertIn(f"Pivot.set_field_numeric_group group.{name} is required", str(raised.exception))
+            self.assertIsNone(pivot.get_field_numeric_group("Amount"))
+
+    def test_an_input_carries_the_auto_flags(self) -> None:
+        with Workbook.create_default() as wb:
+            _, pivot = _build(wb, NUMBERS)
+            with self.assertRaises(TypeError) as raised:
+                pivot.set_field_numeric_group("Amount", PivotNumericGroupInput(interval=100.0, auto_end=False))
+            self.assertIn("Pivot.set_field_numeric_group group.end is required", str(raised.exception))
+            with self.assertRaises(TypeError) as raised:
+                pivot.set_field_numeric_group("Amount", PivotNumericGroupInput(interval=100.0, auto_start=1))  # type: ignore[arg-type]
+            self.assertIn("group.auto_start must be a boolean", str(raised.exception))
+            pivot.set_field_numeric_group("Amount", PivotNumericGroupInput(interval=100.0, start=-5.0, auto_start=True))
+            read = pivot.get_field_numeric_group("Amount")
+            assert read is not None
+            self.assertTrue(read.auto_start)
 
     def test_rejects_malformed_groups(self) -> None:
         with Workbook.create_default() as wb:
             _, pivot = _build(wb, NUMBERS)
             with self.assertRaises(TypeError):
                 pivot.set_field_numeric_group("Amount", 5)  # type: ignore[arg-type]
+            with self.assertRaises(TypeError) as raised:
+                pivot.set_field_numeric_group("Amount", PivotDateGroupInput(periods=PivotDatePeriod.YEARS))  # type: ignore[arg-type]
+            self.assertIn("a PivotNumericGroup or None", str(raised.exception))
+            self.assertNotIn("null", str(raised.exception))
+            with self.assertRaises(TypeError):
+                pivot.set_field_numeric_group("Amount", PivotNumericGroupInput(interval=10, start="x"))  # type: ignore[arg-type]
             with self.assertRaises(TypeError):
                 pivot.set_field_numeric_group("Amount", PivotNumericGroupInput(interval="x"))  # type: ignore[arg-type]
 

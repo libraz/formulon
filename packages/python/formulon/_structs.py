@@ -131,8 +131,8 @@ RECORD_NAMES = frozenset(
         "fm_pivot_calculated_item_info_t",
         "fm_pivot_cell_info_t",
         "fm_pivot_data_field_t",
-        "fm_pivot_date_group_spec_t",
-        "fm_pivot_numeric_group_spec_t",
+        "fm_pivot_date_group_t",
+        "fm_pivot_numeric_group_t",
         "fm_pivot_field_info_t",
         "fm_pivot_field_patch_t",
         "fm_pivot_filter_t",
@@ -933,22 +933,22 @@ PIVOT_ITEM_PATCH = Struct(
     ],
 )
 
-PIVOT_DATE_GROUP_SPEC = Struct(
-    "fm_pivot_date_group_spec_t",
+PIVOT_DATE_GROUP = Struct(
+    "fm_pivot_date_group_t",
     [
         ("periods", U32),
         ("calendar", I32),
         ("interval_days", U32),
-        ("has_start", I32),
+        ("auto_start", I32),
         ("start", F64),
-        ("has_end", I32),
+        ("auto_end", I32),
         ("end", F64),
     ],
 )
 
-PIVOT_NUMERIC_GROUP_SPEC = Struct(
-    "fm_pivot_numeric_group_spec_t",
-    [("has_start", I32), ("start", F64), ("has_end", I32), ("end", F64), ("interval", F64)],
+PIVOT_NUMERIC_GROUP = Struct(
+    "fm_pivot_numeric_group_t",
+    [("auto_start", I32), ("start", F64), ("auto_end", I32), ("end", F64), ("interval", F64)],
 )
 
 PIVOT_FILTER_SPEC = Struct(

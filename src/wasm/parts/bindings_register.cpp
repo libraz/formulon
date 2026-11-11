@@ -13,8 +13,6 @@
 
 #include <emscripten/bind.h>
 
-#include <limits>
-
 #include "wasm/parts/embind_common.h"
 #include "wasm/parts/workbook.h"
 
@@ -374,30 +372,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
                 emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, uint32_t pivotIndex,
                                                  uint32_t fieldIndex, emscripten::val group) {
                   return self.pivotFieldRemoveDateGroup(sheet, pivotIndex, fieldIndex, group);
-                }))
-      // The trailing three default as on the Node surface: one-day intervals
-      // and the field's own first and last date (NaN).
-      .function(
-          "setPivotFieldDateGroup",
-          emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
-                                           uint32_t periods, uint32_t calendar, uint32_t intervalDays, double start) {
-            return self.pivotFieldSetDateGroup(sheet, pivotIndex, fieldIndex, periods, calendar, intervalDays, start,
-                                               std::numeric_limits<double>::quiet_NaN());
-          }))
-      .function(
-          "setPivotFieldDateGroup",
-          emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex,
-                                           uint32_t periods, uint32_t calendar, uint32_t intervalDays) {
-            return self.pivotFieldSetDateGroup(sheet, pivotIndex, fieldIndex, periods, calendar, intervalDays,
-                                               std::numeric_limits<double>::quiet_NaN(),
-                                               std::numeric_limits<double>::quiet_NaN());
-          }))
-      .function("setPivotFieldDateGroup",
-                emscripten::optional_override([](JsWorkbook& self, uint32_t sheet, uint32_t pivotIndex,
-                                                 uint32_t fieldIndex, uint32_t periods, uint32_t calendar) {
-                  return self.pivotFieldSetDateGroup(sheet, pivotIndex, fieldIndex, periods, calendar, 1U,
-                                                     std::numeric_limits<double>::quiet_NaN(),
-                                                     std::numeric_limits<double>::quiet_NaN());
                 }))
       .function("getPivotFieldDateGroup", &JsWorkbook::pivotFieldGetDateGroup)
       .function("getPivotFieldNumericGroup", &JsWorkbook::pivotFieldGetNumericGroup)

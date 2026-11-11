@@ -151,12 +151,12 @@ Expected<void, Error> refresh_date_bounds(PivotCache& cache, FieldGroup& group, 
   return Expected<void, Error>::Ok();
 }
 
-// Regenerates a numeric range group's automatic bounds and items from the
-// base's current numbers; with both bounds fixed the items stay verbatim.
-// `items` maps each old group item to the new one of the same label while the
-// two lists agree from the start.
+// Regenerates a numeric range group's items in `profile`'s locale, an automatic
+// bound first taking the base's current minimum or maximum. `items` maps each
+// old group item to the new one of the same label while the two lists agree
+// from the start.
 Expected<void, Error> refresh_numeric_range(PivotCache& cache, FieldGroup& group, const std::vector<Value>& base,
-                                            IndexMap& items) {
+                                            ExcelProfile profile, IndexMap& items) {
   const RangeGroup& range = group.range;
   NumericGroupState state;
   state.start = range.start_num;
@@ -177,17 +177,12 @@ Expected<void, Error> refresh_numeric_range(PivotCache& cache, FieldGroup& group
   for (std::size_t k = 0; k < old_count; ++k) {
     items.push_back(static_cast<std::uint32_t>(k));
   }
-  if ((!state.auto_start && !state.auto_end) || !lo.has_value()) {
-    return detail::check_numeric_labels(state);
-  }
-  state.start = state.auto_start ? *lo : state.start;
-  state.end = state.auto_end ? *hi : state.end;
-  if (state.start > state.end) {
-    return make_error(FormulonErrorCode::kNotImplemented,
-                      "Refreshing a numeric group whose fixed bound passes the data's other end is not implemented");
+  if (lo.has_value()) {
+    state.start = state.auto_start ? *lo : state.start;
+    state.end = state.auto_end ? *hi : state.end;
   }
   const std::vector<Value> old_items = group.group_items;
-  RETURN_IF_ERROR(detail::set_numeric_range(cache, group, state));
+  RETURN_IF_ERROR(detail::set_numeric_range(cache, group, state, profile));
   std::size_t same = 0;
   while (same < old_count && same < group.group_items.size() && old_items[same] == group.group_items[same]) {
     ++same;
@@ -484,7 +479,8 @@ Expected<RefreshPlan, Error> build_refreshed_cache(const PivotCache& old, const 
     if (is_date_range(group)) {
       RETURN_IF_ERROR(refresh_date_bounds(cache, group, column_values[base], column_dates[base], context));
     } else if (group.kind == GroupKind::Range) {
-      RETURN_IF_ERROR(refresh_numeric_range(cache, group, column_values[base], plan.remap.items[old_of[j]]));
+      RETURN_IF_ERROR(
+          refresh_numeric_range(cache, group, column_values[base], context.profile, plan.remap.items[old_of[j]]));
     } else if (group.kind == GroupKind::Discrete && old_of[base] < old_count) {
       const std::size_t old_group_items = group.group_items.size();
       refresh_discrete_map(cache, group, fields[base], plan.remap.items[old_of[base]]);

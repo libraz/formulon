@@ -507,7 +507,8 @@ TEST(FormulonCApiPivot, ScalarEnumMutatorsRejectRawValuesWithoutMutation) {
     EXPECT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0, pivot_index, 0, raw), expected) << raw;
     EXPECT_EQ(fm_sheet_set_pivot_field_subtotal_functions(wb.handle, 0, pivot_index, 0, &raw, 1), expected) << raw;
     EXPECT_EQ(SetPivotFieldSort(wb.handle, 0, pivot_index, 0, raw, nullptr), expected) << raw;
-    EXPECT_EQ(SetPivotFieldDateGroup(wb.handle, 0, pivot_index, 0, static_cast<std::uint32_t>(raw),
+    // 99 alone is a valid period mask (bits 1, 2, 32, 64), so an unknown bit is added.
+    EXPECT_EQ(SetPivotFieldDateGroup(wb.handle, 0, pivot_index, 0, static_cast<std::uint32_t>(raw) | 0x80U,
                                      FM_PIVOT_CALENDAR_GREGORIAN, 1, kAutoBound, kAutoBound),
               expected)
         << raw;
@@ -827,7 +828,7 @@ TEST(FormulonCApiPivot, DateGroupRejectsBadArgumentsWithoutMutation) {
       << fm_get_last_error_message();
   EXPECT_EQ(SetPivotFieldDateGroup(wb.handle, 0, pivot_index, date_field, FM_PIVOT_PERIOD_YEARS,
                                    FM_PIVOT_CALENDAR_GREGORIAN, 1, kAutoBound, kAutoBound),
-            expected);
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kPreconditionFailed));
   BufferGuard refused;
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &refused.data, &refused.len), 0)
       << fm_get_last_error_message();

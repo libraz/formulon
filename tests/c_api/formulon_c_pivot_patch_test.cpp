@@ -523,8 +523,8 @@ fm_status_t BuildDatePivot(fm_workbook_t* wb) {
   return fm_sheet_add_pivot_data_field(wb, 0, pivot_index, &data_spec, &data_index);
 }
 
-fm_pivot_date_group_spec_t WeekGroup() {
-  fm_pivot_date_group_spec_t group = FM_STRUCT_INIT(fm_pivot_date_group_spec_t);
+fm_pivot_date_group_t WeekGroup() {
+  fm_pivot_date_group_t group = FM_STRUCT_INIT(fm_pivot_date_group_t);
   group.periods = FM_PIVOT_PERIOD_DAYS;
   group.calendar = FM_PIVOT_CALENDAR_GREGORIAN;
   group.interval_days = 7;
@@ -544,7 +544,7 @@ std::vector<std::string> RowLabels(const fm_workbook_t* wb) {
 }
 
 std::uint32_t DatePeriods(const fm_workbook_t* wb) {
-  fm_pivot_date_group_spec_t group = FM_STRUCT_INIT(fm_pivot_date_group_spec_t);
+  fm_pivot_date_group_t group = FM_STRUCT_INIT(fm_pivot_date_group_t);
   std::int32_t present = 0;
   EXPECT_EQ(fm_sheet_get_pivot_field_date_group(wb, 0, kPivot, 0, &present, &group), FM_STATUS_OK);
   return present != 0 ? group.periods : 0U;
@@ -554,7 +554,7 @@ TEST(FormulonCApiPivotPatch, DateGroupWithoutABoundStartsAtTheFirstValue) {
   WorkbookGuard open_start;
   ASSERT_EQ(fm_workbook_create_default(&open_start.handle), FM_STATUS_OK);
   ASSERT_EQ(BuildDatePivot(open_start.handle), FM_STATUS_OK) << fm_get_last_error_message();
-  fm_pivot_date_group_spec_t group = WeekGroup();
+  fm_pivot_date_group_t group = WeekGroup();
   ASSERT_EQ(fm_sheet_set_pivot_field_date_group(open_start.handle, 0, kPivot, 0, &group), FM_STATUS_OK)
       << fm_get_last_error_message();
   EXPECT_EQ(DatePeriods(open_start.handle), FM_PIVOT_PERIOD_DAYS);
@@ -563,7 +563,7 @@ TEST(FormulonCApiPivotPatch, DateGroupWithoutABoundStartsAtTheFirstValue) {
   WorkbookGuard stated_start;
   ASSERT_EQ(fm_workbook_create_default(&stated_start.handle), FM_STATUS_OK);
   ASSERT_EQ(BuildDatePivot(stated_start.handle), FM_STATUS_OK) << fm_get_last_error_message();
-  group.has_start = 1;
+  group.auto_start = FM_TRISTATE_FALSE;
   group.start = kFirstDay;
   ASSERT_EQ(fm_sheet_set_pivot_field_date_group(stated_start.handle, 0, kPivot, 0, &group), FM_STATUS_OK)
       << fm_get_last_error_message();
@@ -588,28 +588,32 @@ TEST(FormulonCApiPivotPatch, DateGroupRefusesABadBoundFlagOrNaNAndGroupsNothing)
   const double nan = std::numeric_limits<double>::quiet_NaN();
   const double inf = std::numeric_limits<double>::infinity();
 
-  fm_pivot_date_group_spec_t group = WeekGroup();
-  group.has_start = 1;
+  fm_pivot_date_group_t group = WeekGroup();
+  group.auto_start = FM_TRISTATE_FALSE;
   group.start = nan;
   EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot, 0, &group), FM_STATUS_INVALID_ARGUMENT);
   group = WeekGroup();
-  group.has_end = 1;
+  group.auto_end = FM_TRISTATE_FALSE;
   group.end = nan;
   EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot, 0, &group), FM_STATUS_INVALID_ARGUMENT);
   group = WeekGroup();
-  group.has_end = 1;
+  group.auto_end = FM_TRISTATE_FALSE;
   group.end = inf;
   EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot, 0, &group), FM_STATUS_INVALID_ARGUMENT);
   group = WeekGroup();
-  group.has_start = 2;
+  group.auto_start = FM_TRISTATE_FALSE;
+  group.start = -inf;
   EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot, 0, &group), FM_STATUS_INVALID_ARGUMENT);
   group = WeekGroup();
-  group.has_end = -1;
+  group.auto_start = 3;
   EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot, 0, &group), FM_STATUS_INVALID_ARGUMENT);
   group = WeekGroup();
-  group.has_start = 1;
+  group.auto_end = -1;
+  EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot, 0, &group), FM_STATUS_INVALID_ARGUMENT);
+  group = WeekGroup();
+  group.auto_start = FM_TRISTATE_FALSE;
   group.start = kFirstDay + 10.0;
-  group.has_end = 1;
+  group.auto_end = FM_TRISTATE_FALSE;
   group.end = kFirstDay;
   EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot, 0, &group), FM_STATUS_INVALID_ARGUMENT);
   group = WeekGroup();
@@ -623,11 +627,95 @@ TEST(FormulonCApiPivotPatch, DateGroupRefusesABadBoundFlagOrNaNAndGroupsNothing)
   EXPECT_EQ(DatePeriods(wb.handle), 0U);
 }
 
+TEST(FormulonCApiPivotPatch, DateGroupIgnoresTheBoundOfAFollowingFlag) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), FM_STATUS_OK);
+  ASSERT_EQ(BuildDatePivot(wb.handle), FM_STATUS_OK) << fm_get_last_error_message();
+  fm_pivot_date_group_t group = WeekGroup();
+  group.auto_start = FM_TRISTATE_TRUE;
+  group.start = std::numeric_limits<double>::quiet_NaN();
+  group.auto_end = FM_TRISTATE_DEFAULT;
+  group.end = std::numeric_limits<double>::infinity();
+  ASSERT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot, 0, &group), FM_STATUS_OK)
+      << fm_get_last_error_message();
+  fm_pivot_date_group_t read = FM_STRUCT_INIT(fm_pivot_date_group_t);
+  std::int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_pivot_field_date_group(wb.handle, 0, kPivot, 0, &present, &read), FM_STATUS_OK);
+  ASSERT_EQ(present, 1);
+  EXPECT_EQ(read.auto_start, FM_TRISTATE_TRUE);
+  EXPECT_EQ(read.auto_end, FM_TRISTATE_TRUE);
+  EXPECT_EQ(read.start, kFirstDay);
+}
+
+TEST(FormulonCApiPivotPatch, DateGroupRecordWritesBackUnchanged) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), FM_STATUS_OK);
+  ASSERT_EQ(BuildDatePivot(wb.handle), FM_STATUS_OK) << fm_get_last_error_message();
+  fm_pivot_date_group_t group = WeekGroup();
+  group.auto_start = FM_TRISTATE_FALSE;
+  group.start = kFirstDay + 2.0;
+  ASSERT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot, 0, &group), FM_STATUS_OK)
+      << fm_get_last_error_message();
+  const std::vector<std::string> labels = RowLabels(wb.handle);
+  fm_pivot_date_group_t read = FM_STRUCT_INIT(fm_pivot_date_group_t);
+  std::int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_pivot_field_date_group(wb.handle, 0, kPivot, 0, &present, &read), FM_STATUS_OK);
+  ASSERT_EQ(present, 1);
+  EXPECT_EQ(read.auto_start, FM_TRISTATE_FALSE);
+  EXPECT_EQ(read.auto_end, FM_TRISTATE_TRUE);
+  EXPECT_EQ(read.start, kFirstDay + 2.0);
+
+  ASSERT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot, 0, &read), FM_STATUS_OK)
+      << fm_get_last_error_message();
+  fm_pivot_date_group_t again = FM_STRUCT_INIT(fm_pivot_date_group_t);
+  ASSERT_EQ(fm_sheet_get_pivot_field_date_group(wb.handle, 0, kPivot, 0, &present, &again), FM_STATUS_OK);
+  EXPECT_EQ(again.periods, read.periods);
+  EXPECT_EQ(again.interval_days, read.interval_days);
+  EXPECT_EQ(again.auto_start, read.auto_start);
+  EXPECT_EQ(again.start, read.start);
+  EXPECT_EQ(again.auto_end, read.auto_end);
+  EXPECT_EQ(again.end, read.end);
+  EXPECT_EQ(RowLabels(wb.handle), labels);
+}
+
+TEST(FormulonCApiPivotPatch, DateGroupOfAFieldHoldingTextIsAPrecondition) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), FM_STATUS_OK);
+  ASSERT_EQ(BuildDatePivot(wb.handle), FM_STATUS_OK) << fm_get_last_error_message();
+  std::uint32_t cache_id = 0;
+  ASSERT_EQ(fm_sheet_get_pivot_cache_id(wb.handle, 0, kPivot, &cache_id), FM_STATUS_OK);
+  ASSERT_EQ(fm_workbook_set_pivot_cache_record_text(wb.handle, cache_id, 3U, 0U, "later"), FM_STATUS_OK);
+  const fm_pivot_date_group_t group = WeekGroup();
+  EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot, 0, &group), FM_STATUS_PRECONDITION_FAILED);
+  EXPECT_EQ(DatePeriods(wb.handle), 0U);
+
+  // A blank is refused the same way.
+  ASSERT_EQ(fm_workbook_set_pivot_cache_record_blank(wb.handle, cache_id, 3U, 0U), FM_STATUS_OK);
+  EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot, 0, &group), FM_STATUS_PRECONDITION_FAILED);
+  EXPECT_EQ(DatePeriods(wb.handle), 0U);
+}
+
+TEST(FormulonCApiPivotPatch, DateGroupOfACalculatedFieldIsAPrecondition) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), FM_STATUS_OK);
+  ASSERT_EQ(BuildDatePivot(wb.handle), FM_STATUS_OK) << fm_get_last_error_message();
+  std::uint32_t cache_id = 0;
+  ASSERT_EQ(fm_sheet_get_pivot_cache_id(wb.handle, 0, kPivot, &cache_id), FM_STATUS_OK);
+  std::size_t calculated = 0;
+  ASSERT_EQ(fm_workbook_add_pivot_cache_calculated_field(wb.handle, cache_id, "Twice", "Amount*2", &calculated),
+            FM_STATUS_OK)
+      << fm_get_last_error_message();
+  const fm_pivot_date_group_t group = WeekGroup();
+  EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot, calculated, &group),
+            FM_STATUS_PRECONDITION_FAILED);
+  EXPECT_EQ(DatePeriods(wb.handle), 0U);
+}
+
 TEST(FormulonCApiPivotPatch, DateGroupOfAPivotOrFieldPastTheEndIsOutOfRange) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), FM_STATUS_OK);
   ASSERT_EQ(BuildDatePivot(wb.handle), FM_STATUS_OK) << fm_get_last_error_message();
-  const fm_pivot_date_group_spec_t group = WeekGroup();
+  const fm_pivot_date_group_t group = WeekGroup();
   EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot + 1U, 0, &group), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot, 99U, &group), FM_STATUS_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb.handle, 0, kPivot + 1U, 0, nullptr), FM_STATUS_INDEX_OUT_OF_RANGE);

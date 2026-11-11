@@ -379,8 +379,9 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   companions).
 - **C ABI:** `fm_sheet_set_pivot_field_date_group` (`Pivot.setFieldDateGroup`,
   `Pivot.set_field_date_group`) takes a mask of `FM_PIVOT_PERIOD_*` bits, a
-  calendar, an interval in days and start and end serials (NaN for automatic)
-  in place of a granularity and year arguments. `fm_pivot_date_grouping_t` and
+  calendar, an interval in days and start and end serials, each with an
+  `auto_start` / `auto_end` flag that makes the bound follow the data, in place of a
+  granularity and year arguments. `fm_pivot_date_grouping_t` and
   the `date_*` members of `fm_pivot_field_info_t` are gone; the struct now
   reports `group_base_index`, `insert_blank_row` and `fill_down_labels`, and
   a field's date grouping is read with `fm_sheet_get_pivot_field_date_group`
@@ -3670,7 +3671,7 @@ A caller compiled against an earlier header must be recompiled.
 | `fm_workbook_table_create(wb, sheet_index, ref, name, display_name, column_names, column_count, style_name, header_row, totals_row, out_index)` | `fm_sheet_add_table(wb, sheet_index, const fm_table_spec_t*, out_table_index)`; the spec also carries the four style toggles, and the call is atomic |
 | `fm_workbook_pivot_create(wb, sheet_index, utf8_name, cache_id, anchor_row, anchor_col, out_pivot_index)` | `fm_sheet_add_pivot(wb, sheet_index, const fm_pivot_spec_t*, out_pivot_index)`; an unknown `cache_id` is `FM_STATUS_NOT_FOUND` |
 | `fm_workbook_pivot_set_style_info(wb, sheet_index, pivot_index, utf8_style_name, show_row_headers, show_col_headers, show_row_stripes, show_col_stripes, show_last_column)` | `fm_sheet_update_pivot_style_options(wb, sheet_index, pivot_index, const fm_pivot_style_options_patch_t*)`; an all-`KEEP` patch changes nothing |
-| `fm_workbook_pivot_field_set_date_group(..., granularity, calendar, start_year_or_neg1, end_year_or_neg1, interval_days, start_serial_or_neg1, end_serial_or_neg1)` | `fm_sheet_set_pivot_field_date_group(..., const fm_pivot_date_group_spec_t*)`; `has_start` / `has_end` replace the `-1` sentinels |
+| `fm_workbook_pivot_field_set_date_group(..., granularity, calendar, start_year_or_neg1, end_year_or_neg1, interval_days, start_serial_or_neg1, end_serial_or_neg1)` | `fm_sheet_set_pivot_field_date_group(..., const fm_pivot_date_group_t*)`; `auto_start` / `auto_end` replace the `-1` sentinels |
 | `fm_workbook_pivot_field_set_sort`, `_set_subtotal_top`, `_set_number_format`, `fm_workbook_pivot_field_set_item_visible` | removed; `fm_sheet_update_pivot_field(wb, sheet_index, pivot_index, field_index, const fm_pivot_field_patch_t*)` and `fm_sheet_update_pivot_field_item(..., item_index, const fm_pivot_item_patch_t*)` carry every one of them. Each field has an `_op` companion (`KEEP`, `SET`, `CLEAR`), the whole patch is checked before anything changes, and an all-`KEEP` patch is a no-op |
 | `fm_workbook_pivot_cache_get_worksheet_source(wb, cache_id, out_present, out_ref, out_sheet, out_name)`, `fm_workbook_pivot_cache_set_worksheet_source(wb, cache_id, present, ref, sheet, name)` | `fm_workbook_get_pivot_cache_worksheet_source(wb, cache_id, out_present, fm_pivot_worksheet_source_t* out)` and `fm_workbook_set_pivot_cache_worksheet_source(wb, cache_id, const fm_pivot_worksheet_source_t* or NULL)`; `NULL` clears the source |
 | `fm_sheet_set_chart_type(wb, sheet_index, object_id, plot, kind, grouping)` | `fm_sheet_set_chart_type(..., plot, type, bar_direction, grouping)` with an `fm_chart_plot_type_t` and an `fm_chart_bar_direction_t`; `fm_chart_insert_kind_t` and `FM_CHART_INSERT_KIND_*` are removed. A zero `bar_direction` is `COLUMN` and is accepted for any type, `BAR` with a type other than bar is `FM_STATUS_INVALID_ARGUMENT` |
@@ -3778,7 +3779,7 @@ current spelling is in the [Name migration](#name-migration) table.
 | Struct (former name) | Change |
 |---|---|
 | (none) | `fm_defined_name_t` and `fm_iterative_settings_patch_t` are new (see the functions above); `fm_defined_name_t` is both the input of `fm_workbook_set_defined_name` and the record the getters fill |
-| (none) | `fm_table_spec_t`, `fm_pivot_spec_t`, `fm_reference_notation_spec_t`, `fm_pivot_date_group_spec_t`, `fm_pivot_worksheet_source_t`, `fm_pivot_style_options_patch_t`, `fm_pivot_field_patch_t` and `fm_pivot_item_patch_t` are new (see the functions above); each begins with `struct_size` |
+| (none) | `fm_table_spec_t`, `fm_pivot_spec_t`, `fm_reference_notation_spec_t`, `fm_pivot_date_group_t`, `fm_pivot_numeric_group_t`, `fm_pivot_worksheet_source_t`, `fm_pivot_style_options_patch_t`, `fm_pivot_field_patch_t` and `fm_pivot_item_patch_t` are new (see the functions above); each begins with `struct_size` |
 | (none) | `fm_filter_condition_t` and `fm_chart_data_source_spec_t` are new element records (no `struct_size`): one custom AutoFilter condition (`op`, `value`) and one chart series input (`kind`, `formula`, `literal`, `literal_count`) |
 | `fm_filter_column` | `custom_count`, `op1`, `val1`, `op2`, `val2` are `const fm_filter_condition_t* conditions` and `uint32_t condition_count`; another count for a custom column is `FM_STATUS_INVALID_ARGUMENT`, and a non-custom column reads 0 |
 | `fm_pivot_field_info_t` | `show_detail` is appended: 1 only when every item and the default expand marker are expanded, and a field with no items reads 1 |

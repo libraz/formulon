@@ -156,5 +156,42 @@ TEST(FormatFormulaNumber, FifteenSignificantDigitsTrailingZerosDropped) {
   EXPECT_EQ(FormatLiteral(9.99999999999999e307), "9.99999999999999E+307");
 }
 
+std::string FormatPositional(double v) {
+  std::string out;
+  format_positional(out, v);
+  return out;
+}
+
+TEST(FormatPositional, NeverUsesAnExponent) {
+  EXPECT_EQ(FormatPositional(0.000003), "0.000003");
+  EXPECT_EQ(FormatPositional(4.3e15), "4300000000000000");
+  EXPECT_EQ(FormatPositional(1e21), "1000000000000000000000");
+  EXPECT_EQ(FormatPositional(1.5e-19), "0.00000000000000000015");
+  EXPECT_EQ(FormatPositional(-2.5e-7), "-0.00000025");
+}
+
+TEST(FormatPositional, FifteenSignificantDigitsOfTheDecimalView) {
+  EXPECT_EQ(FormatPositional(0.6000000000000001), "0.6");
+  EXPECT_EQ(FormatPositional(0.39999999999999997), "0.4");
+  EXPECT_EQ(FormatPositional(1.2345678901234567e20), "123456789012346000000");
+  EXPECT_EQ(FormatPositional(-0.0), "0");
+  EXPECT_EQ(FormatPositional(-2.5), "-2.5");
+}
+
+std::string FormatScientific(double v) {
+  std::string out;
+  format_scientific(out, v);
+  return out;
+}
+
+TEST(FormatScientific, AlwaysUsesTheShortestMantissaAndAnExponent) {
+  EXPECT_EQ(FormatScientific(3.0000000000000002e299), "3E+299");
+  EXPECT_EQ(FormatScientific(1.3e300), "1.3E+300");
+  EXPECT_EQ(FormatScientific(-4.3e300), "-4.3E+300");
+  EXPECT_EQ(FormatScientific(5e-7), "5E-07");
+  EXPECT_EQ(FormatScientific(12.5), "1.25E+01");
+  EXPECT_EQ(FormatScientific(0.0), "0");
+}
+
 }  // namespace
 }  // namespace formulon

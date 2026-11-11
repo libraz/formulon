@@ -118,20 +118,20 @@ bool pivot_spill_info(const formulon::pivot::PivotTable& table, fm_spill_info_t*
 
 // Re-projects pivot `(sheet_index, pivot_index)` after an edit: shares its
 // axis fields (`pivot::share_axis_fields`), invalidates its derived state and
-// projects the report. A failed projection leaves the report pending and is
-// returned.
+// projects the report. A report that cannot be placed is withheld with
+// `#SPILL!` at its anchor, which is success; any other failed projection
+// leaves the report pending and is returned.
 formulon::Expected<void, formulon::Error> reproject_edited_pivot(formulon::Workbook& wb, std::size_t sheet_index,
                                                                  std::size_t pivot_index);
 
 // One table-level pivot edit. Construct it before touching the table; it keeps
-// a `clone()` of the definition. `commit()` lists the items of a field the edit
-// took off every axis (`pivot::keep_field_items`), then re-projects the report
-// (`reproject_edited_pivot`): when the projection is refused (`kPreconditionFailed`,
-// an overlap) the definition is restored in place, so the table's address is
-// unchanged, and that status is returned with the error populated; cache fields
-// it shared stay shared, their values unchanged. Any other projection failure
-// keeps the edit, leaves the report pending and returns 0; the layout API
-// reports that error.
+// a `clone()` of the definition to tell which fields moved. `commit()` lists
+// the items of a field the edit put on or took off every axis
+// (`pivot::keep_field_items`), then re-projects the report
+// (`reproject_edited_pivot`) and returns 0: a report that cannot be placed is
+// withheld with `#SPILL!` at its anchor, and any other projection failure
+// keeps the edit and leaves the report pending; the layout API reports that
+// error.
 class PivotEdit {
  public:
   PivotEdit(formulon::Workbook& wb, std::size_t sheet_index, std::size_t pivot_index,

@@ -336,15 +336,15 @@ TEST(FormulonCApiPivot, DateGroupRegroupsByPeriodsAndClearsThroughAGroupField) {
   EXPECT_EQ(field_count, 4U);
   fm_pivot_field_info_t date = FM_STRUCT_INIT(fm_pivot_field_info_t);
   ASSERT_EQ(fm_sheet_get_pivot_field_at(wb.handle, 0, pivot_index, 0, &date), 0);
-  fm_pivot_date_group_spec_t state = FM_STRUCT_INIT(fm_pivot_date_group_spec_t);
+  fm_pivot_date_group_t state = FM_STRUCT_INIT(fm_pivot_date_group_t);
   std::int32_t present = 0;
   ASSERT_EQ(fm_sheet_get_pivot_field_date_group(wb.handle, 0, pivot_index, 0, &present, &state), 0);
   EXPECT_EQ(present, 1);
   EXPECT_EQ(state.periods, FM_PIVOT_PERIOD_MONTHS | FM_PIVOT_PERIOD_YEARS);
   EXPECT_EQ(state.calendar, FM_PIVOT_CALENDAR_GREGORIAN);
   EXPECT_EQ(state.interval_days, 1U);
-  EXPECT_EQ(state.has_start, 0);
-  EXPECT_EQ(state.has_end, 0);
+  EXPECT_EQ(state.auto_start, FM_TRISTATE_TRUE);
+  EXPECT_EQ(state.auto_end, FM_TRISTATE_TRUE);
   EXPECT_EQ(date.has_group_base_index, 0);
   EXPECT_EQ(date.axis, FM_PIVOT_AXIS_ABSENT);
   fm_pivot_field_info_t months = FM_STRUCT_INIT(fm_pivot_field_info_t);
@@ -681,13 +681,14 @@ TEST(FormulonCApiPivot, NumericGroupingProjectsTheGroupedPivot) {
   ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0U, pivot_index, 1U, FM_PIVOT_AXIS_ROW), 0)
       << fm_get_last_error_message();
   ASSERT_FALSE(SheetColumnHasText(wb.handle, 3U, "100-199"));
-  fm_pivot_numeric_group_spec_t spec = FM_STRUCT_INIT(fm_pivot_numeric_group_spec_t);
+  fm_pivot_numeric_group_t spec = FM_STRUCT_INIT(fm_pivot_numeric_group_t);
   spec.interval = 100.0;
   ASSERT_EQ(fm_sheet_set_pivot_field_numeric_group(wb.handle, 0U, pivot_index, 1U, &spec), 0)
       << fm_get_last_error_message();
   EXPECT_FALSE(ProjectionPending(wb.handle, pivot_index));
   EXPECT_TRUE(SheetColumnHasText(wb.handle, 3U, "100-199"));
-  EXPECT_TRUE(SheetColumnHasText(wb.handle, 3U, "400-499"));
+  // The last value, 400, is the end on a range edge, so the last range reads up to it.
+  EXPECT_TRUE(SheetColumnHasText(wb.handle, 3U, "300-400"));
 }
 
 namespace {

@@ -380,7 +380,8 @@ TEST(PivotEvaluator, DateGroupingRefusesValuesOutsideTheDateDomain) {
     push_record(cache, raw, 1.0);
     const Expected<PivotTable, Error> table = group_date_rows(cache, days_spec(/*start=*/5.0, 1U, /*end=*/5.0));
     ASSERT_FALSE(static_cast<bool>(table)) << raw;
-    EXPECT_EQ(table.error().code, FormulonErrorCode::kInvalidArgument) << raw;
+    // The base data, not a setting, is what is refused.
+    EXPECT_EQ(table.error().code, FormulonErrorCode::kPreconditionFailed) << raw;
     EXPECT_EQ(cache.fields().size(), 2U) << raw;
   }
 }
@@ -418,7 +419,7 @@ TEST(PivotEvaluator, DateGroupingLastDayWithATimeEndsTheRangeInEitherEpoch) {
     push_record(past, last_valid + 1.0, 1.0);
     const Expected<PivotTable, Error> refused = group_date_rows(past, days_spec(std::nullopt), date1904);
     ASSERT_FALSE(static_cast<bool>(refused)) << date1904;
-    EXPECT_EQ(refused.error().code, FormulonErrorCode::kInvalidArgument);
+    EXPECT_EQ(refused.error().code, FormulonErrorCode::kPreconditionFailed);
   }
 }
 

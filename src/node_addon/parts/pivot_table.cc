@@ -44,13 +44,6 @@ Napi::Value PivotCountResult(const Napi::CallbackInfo& info, const fm_workbook_t
   return ValueOrThrow(env, rc, Napi::Number::New(env, static_cast<double>(count)));
 }
 
-// A date-group bound: absent, `null` or NaN takes the field's own first / last value.
-double ReadOptionalBound(CheckedSpecReader& reader, const Napi::Value& value, const char* key, bool* present) {
-  const double bound = reader.Double(value, key, std::numeric_limits<double>::quiet_NaN());
-  *present = !std::isnan(bound);
-  return *present ? bound : 0.0;
-}
-
 Napi::Value OptionsFlag(Napi::Env env, int32_t v) {
   return Napi::Boolean::New(env, v != 0);
 }
@@ -668,18 +661,16 @@ Napi::Value Workbook::PivotFieldSetDateGroup(const Napi::CallbackInfo& info) {
         env, fm_sheet_set_pivot_field_date_group(handle_, field.sheet, field.pivot_index, field.field_index, nullptr),
         env.Undefined());
   }
-  // The trailing three are optional on both surfaces: one-day intervals and the source data's own bounds.
+  // A bound whose flag is true follows the data and its value is not read.
   CheckedSpecReader reader(env);
-  fm_pivot_date_group_spec_t group = FM_STRUCT_INIT(fm_pivot_date_group_spec_t);
+  fm_pivot_date_group_t group = FM_STRUCT_INIT(fm_pivot_date_group_t);
   group.periods = ArgU32(info, 3);
   group.calendar = ArgI32(info, 4);
   group.interval_days = reader.U32(info[5], "intervalDays", 1U);
-  bool has_start = false;
-  bool has_end = false;
-  group.start = ReadOptionalBound(reader, info[6], "start", &has_start);
-  group.end = ReadOptionalBound(reader, info[7], "end", &has_end);
-  group.has_start = has_start ? 1 : 0;
-  group.has_end = has_end ? 1 : 0;
+  group.auto_start = reader.Bool(info[6], "autoStart", true) ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
+  group.start = reader.Double(info[7], "start", 0.0);
+  group.auto_end = reader.Bool(info[8], "autoEnd", true) ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
+  group.end = reader.Double(info[9], "end", 0.0);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -701,15 +692,14 @@ Napi::Value Workbook::PivotFieldSetNumericGroup(const Napi::CallbackInfo& info) 
         fm_sheet_set_pivot_field_numeric_group(handle_, field.sheet, field.pivot_index, field.field_index, nullptr),
         env.Undefined());
   }
+  // A bound whose flag is true follows the data and its value is not read.
   CheckedSpecReader reader(env);
-  fm_pivot_numeric_group_spec_t group = FM_STRUCT_INIT(fm_pivot_numeric_group_spec_t);
+  fm_pivot_numeric_group_t group = FM_STRUCT_INIT(fm_pivot_numeric_group_t);
   group.interval = reader.Double(info[3], "interval", 0.0);
-  bool has_start = false;
-  bool has_end = false;
-  group.start = ReadOptionalBound(reader, info[4], "start", &has_start);
-  group.end = ReadOptionalBound(reader, info[5], "end", &has_end);
-  group.has_start = has_start ? 1 : 0;
-  group.has_end = has_end ? 1 : 0;
+  group.auto_start = reader.Bool(info[4], "autoStart", true) ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
+  group.start = reader.Double(info[5], "start", 0.0);
+  group.auto_end = reader.Bool(info[6], "autoEnd", true) ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
+  group.end = reader.Double(info[7], "end", 0.0);
   if (!reader.ok()) {
     return env.Undefined();
   }
@@ -724,7 +714,7 @@ Napi::Value Workbook::PivotFieldGetDateGroup(const Napi::CallbackInfo& info) {
     return ThrowInvalidHandle(env);
   }
   const PivotFieldArgs field = ReadPivotField(info);
-  fm_pivot_date_group_spec_t group = FM_STRUCT_INIT(fm_pivot_date_group_spec_t);
+  fm_pivot_date_group_t group = FM_STRUCT_INIT(fm_pivot_date_group_t);
   int32_t present = 0;
   const fm_status_t rc =
       fm_sheet_get_pivot_field_date_group(handle_, field.sheet, field.pivot_index, field.field_index, &present, &group);
@@ -740,8 +730,8 @@ Napi::Value Workbook::PivotFieldGetDateGroup(const Napi::CallbackInfo& info) {
   out.Set("intervalDays", Napi::Number::New(env, group.interval_days));
   out.Set("start", Napi::Number::New(env, group.start));
   out.Set("end", Napi::Number::New(env, group.end));
-  out.Set("autoStart", Napi::Boolean::New(env, group.has_start == 0));
-  out.Set("autoEnd", Napi::Boolean::New(env, group.has_end == 0));
+  out.Set("autoStart", Napi::Boolean::New(env, group.auto_start == FM_TRISTATE_TRUE));
+  out.Set("autoEnd", Napi::Boolean::New(env, group.auto_end == FM_TRISTATE_TRUE));
   return out;
 }
 
@@ -751,7 +741,7 @@ Napi::Value Workbook::PivotFieldGetNumericGroup(const Napi::CallbackInfo& info) 
     return ThrowInvalidHandle(env);
   }
   const PivotFieldArgs field = ReadPivotField(info);
-  fm_pivot_numeric_group_spec_t group = FM_STRUCT_INIT(fm_pivot_numeric_group_spec_t);
+  fm_pivot_numeric_group_t group = FM_STRUCT_INIT(fm_pivot_numeric_group_t);
   int32_t present = 0;
   const fm_status_t rc = fm_sheet_get_pivot_field_numeric_group(handle_, field.sheet, field.pivot_index,
                                                                 field.field_index, &present, &group);
@@ -762,11 +752,11 @@ Napi::Value Workbook::PivotFieldGetNumericGroup(const Napi::CallbackInfo& info) 
     return env.Null();
   }
   Napi::Object out = Napi::Object::New(env);
+  out.Set("interval", Napi::Number::New(env, group.interval));
   out.Set("start", Napi::Number::New(env, group.start));
   out.Set("end", Napi::Number::New(env, group.end));
-  out.Set("interval", Napi::Number::New(env, group.interval));
-  out.Set("autoStart", Napi::Boolean::New(env, group.has_start == 0));
-  out.Set("autoEnd", Napi::Boolean::New(env, group.has_end == 0));
+  out.Set("autoStart", Napi::Boolean::New(env, group.auto_start == FM_TRISTATE_TRUE));
+  out.Set("autoEnd", Napi::Boolean::New(env, group.auto_end == FM_TRISTATE_TRUE));
   return out;
 }
 

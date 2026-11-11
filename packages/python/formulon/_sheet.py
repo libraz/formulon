@@ -1134,7 +1134,7 @@ def _format_value(spec: Tuple[str, bool, Any], value: Any, label: str) -> Any:
     if value is None:
         if nullable:
             return None
-        raise TypeError(_argument_message(label, "must not be null"))
+        raise TypeError(_argument_message(label, "must not be None"))
     if kind == "string":
         if not isinstance(value, str):
             raise TypeError(_argument_message(label, "must be a string"))
@@ -1968,7 +1968,7 @@ class Sheet(_NoCopy):
         """
         row, col, properties = self._cell_args("set_cell_phonetic_properties", args, kwargs, ("properties",))
         if properties is not None and not isinstance(properties, PhoneticProperties):
-            raise TypeError(_argument_message("properties", "must be a PhoneticProperties or null"))
+            raise TypeError(_argument_message("properties", "must be a PhoneticProperties or None"))
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -3319,7 +3319,7 @@ class Sheet(_NoCopy):
         }
         for key, value in given.items():
             if value is None and key not in self._PROTECTED_RANGE_CLEARABLE:
-                raise TypeError(_argument_message(key, "must not be null"))
+                raise TypeError(_argument_message(key, "must not be None"))
         range_name = self._protected_range_name(protected_range)
         sheet = self._index()
         h = self._workbook._require()
@@ -3554,7 +3554,7 @@ class Sheet(_NoCopy):
         }
         for key, value in given.items():
             if value is None and key not in _VALIDATION_TEXTS:
-                raise TypeError(_argument_message("operator" if key == "op" else key, "must not be null"))
+                raise TypeError(_argument_message("operator" if key == "op" else key, "must not be None"))
         validation_id = self._validation_id(validation)
         sheet = self._index()
         h = self._workbook._require()
@@ -3635,7 +3635,7 @@ class Sheet(_NoCopy):
         """
         if protection is not None and not isinstance(protection, (SheetProtectionInput, SheetProtection)):
             raise TypeError(
-                _argument_message("protection", "must be a SheetProtectionInput, a SheetProtection or null")
+                _argument_message("protection", "must be a SheetProtectionInput, a SheetProtection or None")
             )
         sheet = self._index()
         h = self._workbook._require()
@@ -3701,7 +3701,7 @@ class Sheet(_NoCopy):
                 _require_bool(value, name)
             elif name in S.SHEET_PROTECTION_TEXT_FIELDS:
                 if value is not None and not isinstance(value, str):
-                    raise TypeError(_argument_message(name, "must be a string or null"))
+                    raise TypeError(_argument_message(name, "must be a string or None"))
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -3803,7 +3803,7 @@ class Sheet(_NoCopy):
           TypeError: when ``base_column_width_chars`` is ``None`` or a flag is not a ``bool``.
         """
         if base_column_width_chars is None:
-            raise TypeError(_argument_message("base_column_width_chars", "must not be null"))
+            raise TypeError(_argument_message("base_column_width_chars", "must not be None"))
         values: Dict[str, object] = {}
         for name, value in (
             ("default_column_width_chars", default_column_width_chars),
@@ -4303,7 +4303,7 @@ class Sheet(_NoCopy):
         """
         for name, value in (("text", text), ("mentions", mentions), ("done", done)):
             if value is None:
-                raise TypeError(_argument_message(name, "must not be null"))
+                raise TypeError(_argument_message(name, "must not be None"))
         values: Dict[str, object] = {}
         if done is not UNCHANGED:
             values["done_op"] = _PATCH_SET
@@ -4945,7 +4945,7 @@ class Sheet(_NoCopy):
         }
         for key, value in given.items():
             if value is None and key not in ("manual_min", "manual_max", "date_axis_range", *_SPARKLINE_COLORS):
-                raise TypeError(_argument_message(key, "must not be null"))
+                raise TypeError(_argument_message(key, "must not be None"))
         group_id = self._sparkline_group_id(sparkline_group)
         sheet = self._index()
         h = self._workbook._require()
@@ -5306,7 +5306,7 @@ class Sheet(_NoCopy):
         }
         for key, value in given.items():
             if value is None:
-                raise TypeError(_argument_message(key, "must not be null"))
+                raise TypeError(_argument_message(key, "must not be None"))
         for key in flag_keys:
             if key in given:
                 _require_bool(given[key], key)
@@ -5600,7 +5600,7 @@ class Sheet(_NoCopy):
         if brk is None:
             return 0
         if not isinstance(brk, (PageBreakInput, RowBreak, ColumnBreak)):
-            raise TypeError(_argument_message("input", "must be a PageBreakInput, a RowBreak, a ColumnBreak or null"))
+            raise TypeError(_argument_message("input", "must be a PageBreakInput, a RowBreak, a ColumnBreak or None"))
         ptr = scope.struct(layout)
         layout.pack(
             LIB,
@@ -5682,7 +5682,7 @@ class Sheet(_NoCopy):
                 continue
             if value is None:
                 if name != "orientation":
-                    raise TypeError(_argument_message(name, "must not be null"))
+                    raise TypeError(_argument_message(name, "must not be None"))
                 values[name + "_op"] = _PATCH_CLEAR
                 continue
             values[name + "_op"] = _PATCH_SET
@@ -5731,7 +5731,7 @@ class Sheet(_NoCopy):
                 if value is UNCHANGED:
                     continue
                 if value is None:
-                    raise TypeError(_argument_message(name, "must not be null"))
+                    raise TypeError(_argument_message(name, "must not be None"))
                 values[f"{name}_op"] = _PATCH_SET
                 values[name] = _require_number(value, name, finite=False)
             S.PAGE_MARGINS_PATCH.pack(LIB, ptr, values)
@@ -5821,7 +5821,7 @@ class Sheet(_NoCopy):
                     values[f"{name}_op"] = _PATCH_CLEAR
                     continue
                 if not isinstance(text, str):
-                    raise TypeError(_argument_message(name, "must be a string or null"))
+                    raise TypeError(_argument_message(name, "must be a string or None"))
                 values[f"{name}_op"] = _PATCH_SET
                 values[name] = scope.cstr(text)
             ptr = scope.struct(S.HEADER_FOOTER_PATCH)
@@ -6626,7 +6626,7 @@ class Sheet(_NoCopy):
         }
         for key, value in given.items():
             if value is None and key not in ("dxf_index", "formula1", "formula2"):
-                raise TypeError(_argument_message("operator" if key == "op" else key, "must not be null"))
+                raise TypeError(_argument_message("operator" if key == "op" else key, "must not be None"))
         for key in ("stop_if_true", "percent", "bottom", "above_average", "equal_average"):
             if key in given:
                 _require_bool(given[key], key)

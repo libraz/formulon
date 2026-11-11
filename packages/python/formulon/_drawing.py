@@ -129,7 +129,7 @@ def _given(arguments: Dict[str, Any], patch: type, clearable: Optional[Sequence[
     if clearable is not None:
         for key, value in out.items():
             if value is None and key not in clearable:
-                raise TypeError(_argument_message(key, "must not be null"))
+                raise TypeError(_argument_message(key, "must not be None"))
     return out
 
 
@@ -147,7 +147,7 @@ def _present(
         if value is UNCHANGED or (value is None and key in absent):
             continue
         if value is None and key not in clearable:
-            raise TypeError(_argument_message(key, "must not be null"))
+            raise TypeError(_argument_message(key, "must not be None"))
         out[key] = value
     return out
 
@@ -658,7 +658,7 @@ class Chart(_Snapshotable):
         }
         for key, value in given.items():
             if value is None:
-                raise TypeError(_argument_message(key, "must not be null"))
+                raise TypeError(_argument_message(key, "must not be None"))
         if overlay is not UNCHANGED:
             _require_bool(overlay, "overlay")
         if not given:

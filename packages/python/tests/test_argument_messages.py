@@ -21,6 +21,7 @@ from formulon import (
     IndexOutOfRangeError,
     InvalidArgumentError,
     PivotInput,
+    PivotNumericGroupInput,
     ShapeInput,
     SparklineGroupInput,
     TableInput,
@@ -222,6 +223,11 @@ class ArgumentMessageTests(_MessageCase):
                     IndexOutOfRangeError,
                     lambda: pivot.get_data_field(99),
                     "Pivot.get_data_field data_field_index 99 is out of range (0 items)",
+                ),
+                (
+                    InvalidArgumentError,
+                    lambda: pivot.set_field_numeric_group(0, PivotNumericGroupInput(interval=1.0, start=float("nan"))),
+                    "Pivot.set_field_numeric_group group.start must be finite",
                 ),
                 (
                     InvalidArgumentError,

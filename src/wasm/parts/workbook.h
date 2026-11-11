@@ -736,21 +736,23 @@ class JsWorkbook {
   void pivotFieldClearItems(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex);
   /// Replaces the field's custom subtotal functions with the `PivotAggregation` list; an empty list clears them.
   void pivotFieldSetSubtotalFns(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, emscripten::val aggregations);
-  /// Groups a date field by the `PivotDatePeriod` bits of `periods`; NaN
-  /// bounds take the field's own.
+  /// Groups a date field by the `PivotDatePeriod` bits of `periods`; a bound
+  /// whose `auto*` is true follows the field's own and its value is not read.
   void pivotFieldSetDateGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, uint32_t periods,
-                              uint32_t calendar, uint32_t intervalDays, double start, double end);
+                              uint32_t calendar, uint32_t intervalDays, bool autoStart, double start, bool autoEnd,
+                              double end);
   /// The `null` form of `pivotFieldSetDateGroup`: removes the grouping; any other `group` is a type error.
   void pivotFieldRemoveDateGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, emscripten::val group);
-  /// Groups a number field into ranges of `interval`; NaN bounds follow the field's own values.
+  /// Groups a number field into ranges of `interval`; a bound whose `auto*` is
+  /// true follows the field's own values and its value is not read.
   void pivotFieldSetNumericGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, double interval,
-                                 double start, double end);
+                                 bool autoStart, double start, bool autoEnd, double end);
   /// The `null` form of `pivotFieldSetNumericGroup`: removes the grouping; any other `group` is a type error.
   void pivotFieldRemoveNumericGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex, emscripten::val group);
   /// The stored date grouping over a field as `{ periods, calendar, intervalDays, start, end, autoStart, autoEnd }`;
   /// `null` when the field is not date-grouped.
   emscripten::val pivotFieldGetDateGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex) const;
-  /// The stored numeric grouping over a field as `{ start, end, interval, autoStart, autoEnd }`; `null` when the
+  /// The stored numeric grouping over a field as `{ interval, start, end, autoStart, autoEnd }`; `null` when the
   /// field is not numerically grouped.
   emscripten::val pivotFieldGetNumericGroup(uint32_t sheet, uint32_t pivotIndex, uint32_t fieldIndex) const;
 

@@ -56,7 +56,9 @@ std::optional<GroupBounds> stated_group_bounds(const RangeGroup& range, bool dat
 
 /// Group-item number of base value `value` under `range` with `bounds` and
 /// `item_count` group items: 0 below the start, the last item above the end,
-/// and 0 for a blank or a value outside the date domain.
+/// and 0 for a blank or a value outside the date domain. A numeric value
+/// equal to the end falls in the last range, even below the start, and a
+/// quotient within 15 significant digits of a range edge counts as on it.
 std::uint32_t range_group_item_number(const RangeGroup& range, const GroupBounds& bounds, std::size_t item_count,
                                       const Value& value, bool date1904) noexcept;
 
@@ -119,9 +121,9 @@ std::string group_date_iso(double serial, bool date1904);
 ///
 /// `kInvalidArgument` for an empty or unknown period mask, a zero interval,
 /// an interval with any period but days, a bound that is not a valid date or
-/// a start after the end, and a base that holds a blank, a value that is not
-/// a date, or no value at all. `kPreconditionFailed` when `base` is already
-/// grouped.
+/// a start after the end. `kPreconditionFailed` for a base that holds a
+/// blank, a value that is not a date, or no value at all, a calculated base,
+/// and a base already grouped.
 Expected<std::size_t, Error> group_cache_by_date(PivotCache& cache, std::size_t base, const DateGroupSpec& spec,
                                                  bool date1904, ExcelProfile profile);
 
@@ -180,16 +182,27 @@ std::optional<NumericGroupState> numeric_group_state(const PivotCache& cache, st
 /// Groups field `field` (a base field or its group field) of pivot `pivot` on
 /// sheet `sheet` into numeric ranges of `interval`, replacing any grouping it
 /// has, and re-projects every pivot on its cache. An empty bound follows the
-/// base's present values. The group items are `<start`, `a-(a+interval-1)`
-/// from `start` while `a <= end`, then `>start+n*interval`, as a refresh
-/// regenerates them.
+/// base's present values. The group items, as a refresh regenerates them,
+/// are `<start`, one range per step from `start` up to the first edge at or
+/// past `end` (at least one), then `>` and the last range's upper edge:
+///
+/// - With start, end and interval whole, a range whose upper edge a+interval
+///   is at most 1e15 reads `a-(a+interval-1)`, the last one `a-end` when
+///   `end` is its upper edge.
+/// - Every other range reads `a-(a+interval)`; the forms can mix in one field.
+///
+/// Each number is its 15-digit decimal view, spelled in full while the text
+/// of its magnitude has at most 20 characters, else in exponent form
+/// (`1.3E+20`, `2.43E-17`), with the workbook locale's decimal separator
+/// (`0,3-0,8`).
 ///
 /// `kInvalidArgument` for a non-finite or non-positive interval, a non-finite
-/// bound, a start after the end, or a base holding a value that is not a
-/// number; `kNotImplemented` for a non-integer start, end or interval, or a
-/// bound of 1e15 or more in magnitude, whose item labels are not measured;
-/// `kSecurityResourceLimit` for more group items than a field holds;
-/// `kSheetIndexOutOfRange` / `kIndexOutOfRange` for an index out of range.
+/// bound or a start after the end; `kPreconditionFailed` for a base holding a
+/// blank or a value that is not a number, holding no number to take an empty
+/// bound from, a calculated base, or group fields over the base that are not
+/// the last cache fields; `kSecurityResourceLimit` for more group
+/// items than a field holds; `kSheetIndexOutOfRange` / `kIndexOutOfRange` for
+/// an index out of range.
 Expected<void, Error> set_numeric_group(Workbook& wb, std::size_t sheet, std::size_t pivot, std::size_t field,
                                         std::optional<double> start, std::optional<double> end, double interval);
 

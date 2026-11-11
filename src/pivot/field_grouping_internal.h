@@ -29,11 +29,9 @@ Expected<GroupRun, Error> group_run(const PivotCache& cache, std::size_t base);
 Expected<GroupBounds, Error> resolve_date_group_bounds(const PivotCache& cache, std::size_t base,
                                                        const DateGroupSpec& spec, bool date1904);
 
-/// `kNotImplemented` when `state`'s start, end or interval is not an integer
-/// its item labels can spell, `kInvalidArgument` for an interval below 1, and
-/// `kSecurityResourceLimit` when its items would outnumber what a pivot field
-/// holds.
-Expected<void, Error> check_numeric_labels(const NumericGroupState& state);
+/// `kSecurityResourceLimit` when `state`'s items would outnumber what a pivot
+/// field holds.
+Expected<void, Error> check_numeric_item_count(const NumericGroupState& state);
 
 /// Checks a numeric grouping of `base` against its present values and
 /// resolves the bounds an empty `start` / `end` takes from them. Errors as
@@ -44,17 +42,18 @@ Expected<NumericGroupState, Error> resolve_numeric_group(const PivotCache& cache
                                                          double interval);
 
 /// Makes `group` the numeric range of `state` and regenerates its group items
-/// as text in `cache`: `<start`, `a-(a+interval-1)` from `start` while
-/// `a <= end`, then `>start+n*interval`. Errors as `check_numeric_labels`,
+/// as text in `cache`, as `set_numeric_group` describes them, with
+/// `profile`'s decimal separator. Errors as `check_numeric_item_count`,
 /// leaving `group` as it was.
-Expected<void, Error> set_numeric_range(PivotCache& cache, FieldGroup& group, const NumericGroupState& state);
+Expected<void, Error> set_numeric_range(PivotCache& cache, FieldGroup& group, const NumericGroupState& state,
+                                        ExcelProfile profile);
 
 /// Appends to `cache` the numeric group field of `state` over database field
 /// `base`, named as the base plus the smallest free suffix from 2, points the
-/// base's `par` at it and materialises the cache's group fields. Returns its
-/// index.
+/// base's `par` at it and materialises the cache's group fields. Its items
+/// are labelled in `profile`'s locale. Returns its index.
 Expected<std::size_t, Error> group_cache_by_number(PivotCache& cache, std::size_t base, const NumericGroupState& state,
-                                                   bool date1904);
+                                                   bool date1904, ExcelProfile profile);
 
 }  // namespace formulon::pivot::detail
 
