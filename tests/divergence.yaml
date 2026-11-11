@@ -179,6 +179,43 @@ entries:
     prefer: formulon
     first_noted: 2026-11-11
     last_verified_excel_version: "16.114.4"
+  # -- book location: saved hyperlink display and window name -----------------
+  # Local hyperlink targets are written relative to the book's folder on save.
+  # Excel freezes the display text at the first save, keeps the window name of
+  # an unsaved book in CELL("address"), and escapes '%' twice in a relative
+  # target. Formulon has no per-link save history and no window, and keeps the
+  # saved link resolvable. No oracle case exists for these; the entries
+  # document the intent.
+  - id: hyperlink_relative_display_follows_current_save
+    applies_to: [mac]
+    cause: accepted-divergence
+    mode: skip-oracle
+    scope: api-contract
+    evidence: [tests/unit/io/book_location_save_test.cpp]
+    reason: "A local link to `…/loc_probe3/p q/sib.xlsx` saved from `…/loc_probe3/p q/` is written with display `sib.xlsx`; after Save As to `…/loc_probe4/r/` Excel rewrites the Target to `../../loc_probe3/p%20q/sib.xlsx` but keeps display `sib.xlsx`. Formulon derives the display from the relative text of each save, so it writes `../../loc_probe3/p q/sib.xlsx`. Visible only between two saves in one session: after a save and load the display is stored and kept, as in Excel."
+    prefer: formulon
+    first_noted: 2026-11-11
+    last_verified_excel_version: "16.114.4"
+  - id: cell_address_unsaved_book_window_name
+    applies_to: [mac]
+    cause: accepted-divergence
+    mode: skip-oracle
+    scope: api-contract
+    evidence: [tests/unit/eval/cell_location_test.cpp]
+    reason: "In a book that was never saved, `=CELL(\"address\",Sheet2!A1)` returns `[Book11]Sheet2!$A$1` in Excel, prefixed with the window name. A workbook with no location has no window name in Formulon, which returns `Sheet2!$A$1`."
+    prefer: formulon
+    first_noted: 2026-11-11
+    last_verified_excel_version: "16.114.4"
+  - id: hyperlink_relative_target_percent_escaped_twice
+    applies_to: [mac]
+    cause: accepted-divergence
+    mode: skip-oracle
+    scope: api-contract
+    evidence: [tests/unit/io/book_location_save_test.cpp]
+    reason: "A link to `…/f1/a%b.xlsx` saved from `…/f1/` is written by Excel with Target and display `a%2525b.xlsx`, which no longer names the file. Formulon escapes '%' once and writes `a%25b.xlsx`, which decodes to `a%b.xlsx`."
+    prefer: formulon
+    first_noted: 2026-11-11
+    last_verified_excel_version: "16.114.4"
   # -- ISFORMULA over a non-reference argument -----------------------------
   # ISFORMULA's argument is reference-typed, and Excel enforces that when
   # the formula is entered rather than when it is evaluated: `=ISFORMULA(42)`,

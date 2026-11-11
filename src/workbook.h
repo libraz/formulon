@@ -90,6 +90,23 @@ struct PendingShift {
   CellShift shift = CellShift::kDown;
 };
 
+/// Where a workbook is saved: the folder and the file name. Metadata only;
+/// nothing reads or writes a file system through it.
+///
+/// `directory` is absolute in one of three canonical forms, POSIX (`/a/b`,
+/// `/` alone the root), drive (`C:/a`, `C:/` the root) or UNC
+/// (`//server/share/a`), with no trailing separator except at a root.
+/// It is empty when the book has a name but no folder.
+struct WorkbookLocation {
+  std::optional<std::string> directory;
+  std::string file_name;
+
+  bool operator==(const WorkbookLocation& other) const {
+    return directory == other.directory && file_name == other.file_name;
+  }
+  bool operator!=(const WorkbookLocation& other) const { return !(*this == other); }
+};
+
 /// How `Workbook::project_pivot` answers a report range that an occupant covers or that overflows the sheet.
 enum class ReportPlacement : std::uint8_t {
   kBlock,   ///< An edit of an existing report: occupants or the sheet edge block it.
@@ -521,17 +538,30 @@ class Workbook {
   std::string bind_entered_structured_refs(std::string_view text, std::size_t sheet, std::uint32_t row,
                                            std::uint32_t col) const;
 
-  /// The file name the workbook is shown under, extension included and
-  /// without a directory; empty when unset. A formula bar spells `[0]!Name`
-  /// with it (`M5.xlsx!Name`). Loading from bytes leaves it unset.
-  const std::string& file_name() const noexcept { return file_name_; }
+  /// Where the workbook is saved; empty when unset, as for a book that has
+  /// not been saved. Loading from bytes leaves it unset. It drives
+  /// `CELL("filename")`, `CELL("address")` for other sheets, the `[0]!Name`
+  /// spelling, the saved `absPath` and the relative form of local hyperlink
+  /// targets in a saved file.
+  const std::optional<WorkbookLocation>& location() const noexcept { return location_; }
 
-  /// Sets `file_name()`; an empty `name` unsets it. Returns
-  /// `kInvalidArgument`, changing nothing, when `name` does not end in a
-  /// workbook extension, holds one of `[ ] : / \ ? *` or NUL, is not valid
-  /// UTF-8, is longer than 218 bytes, or equals the book name of an external
-  /// link under ASCII case folding.
-  Expected<void, Error> set_file_name(std::string_view name);
+  /// Sets `location()`; an empty `new_location` unsets it. The directory is
+  /// stored in its canonical form (see `WorkbookLocation`): `C:\a`, `c:/a/`
+  /// become `C:/a`, `\\server\share\a` becomes `//server/share/a`. Returns
+  /// `kInvalidArgument`, changing nothing, when the file name is empty, does
+  /// not end in a workbook extension, holds one of `[ ] : / \ ? *` or NUL, is
+  /// not valid UTF-8, is longer than 218 bytes, or equals the book name of an
+  /// external link under ASCII case folding; or when the directory is empty,
+  /// not absolute in one of the three forms (`C:`, `C:rel`, `//a`,
+  /// `\\server` refused), holds NUL, `[` or `]`, is not valid UTF-8, has a
+  /// `.` / `..` or empty inner segment, or makes `directory/file_name` longer
+  /// than 1,024 bytes. When a directory first appears, every relative local
+  /// hyperlink target is resolved against it (`resolve_relative_target`).
+  Expected<void, Error> set_location(std::optional<WorkbookLocation> new_location);
+
+  /// The file name of `location()`, extension included; empty when unset. A
+  /// formula bar spells `[0]!Name` with it (`M5.xlsx!Name`).
+  const std::string& file_name() const noexcept;
 
   /// `text` with every `[0]!Name` spelled with `file_name()`
   /// (`parser::spell_self_book_names`); unchanged when no name is set.
@@ -596,7 +626,9 @@ class Workbook {
   /// merge-covered cells are formatted, a range spanning every row (column)
   /// styles the column (row). An empty top-left cell (no value, formula or
   /// spilled value, not hidden by a merge) receives `display`, else `target`,
-  /// else `location`, as text. `kInvalidArgument` for a bad sheet or range or
+  /// else `location`, as text. With a location directory set, a relative
+  /// local target is stored resolved against it (`resolve_relative_target`).
+  /// `kInvalidArgument` for a bad sheet or range or
   /// that text over 32,767 UTF-16 units; `kPreconditionFailed` when more than
   /// `kMaxStyledRangeCells` cells that are not a whole column or row would be
   /// formatted. Nothing changes on failure. File readers do not come here.
@@ -2021,8 +2053,8 @@ class Workbook {
   void fill_mention_ids(std::vector<Mention>& mentions);
   std::vector<PassthroughPart> passthrough_parts_;
   std::vector<ExternalLinkRecord> external_links_;
-  // See `file_name()`.
-  std::string file_name_;
+  // See `location()`.
+  std::optional<WorkbookLocation> location_;
   // Workbook-rels entries with unrecognised Type URIs (theme, calcChain,
   // vbaProject, customXml, ...). Round-trip metadata only; the parts
   // themselves live in `passthrough_parts_`.

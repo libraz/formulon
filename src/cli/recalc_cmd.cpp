@@ -258,6 +258,10 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
     }
   }
 
+  // Save As: local hyperlink targets are written relative to where the output lands.
+  if (!to_stdout) {
+    set_location_from_path(wb.handle, output_path);
+  }
   SaveBuffer buf;
   fm_save_diagnostics_info_t save_diagnostics = FM_STRUCT_INIT(fm_save_diagnostics_info_t);
   if (auto rc = fm_workbook_save_with_diagnostics(wb.handle, format, &buf.data, &buf.len, &save_diagnostics); rc != 0) {

@@ -28,7 +28,7 @@ export interface SheetView { readonly zoomPct: number; readonly splitXTwips: num
 export interface SheetViewPatch { zoomPct?: number; }
 export interface Workbook {
   setDate1904(enabled: boolean): void;
-  setFileName(name: string | null): void;
+  setTitle(title: string | null): void;
   setCalcMode(mode: number, sticky?: boolean | null): void;
 }
 export interface WorkbookOoxml { getFont(index: number): number; }

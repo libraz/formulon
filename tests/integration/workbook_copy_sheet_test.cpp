@@ -237,11 +237,9 @@ TEST(WorkbookCopySheet, MeasuredFormulas) {
   // recalculation, then #REF!.
   EXPECT_EQ(FormulaAt(wb, 2, "B11"), "=SUM(#REF!A1)");
   EXPECT_TRUE(IsError(ValueAt(wb, 2, "B11"), ErrorCode::Ref));
-  // Excel answers `$A$1`; the copy must at least answer as its source does.
+  // The copy's reference names its own sheet, so Excel answers `$A$1`.
   ASSERT_TRUE(ValueAt(wb, 2, "B13").is_text());
-  ASSERT_TRUE(ValueAt(wb, kSrc, "B13").is_text());
-  EXPECT_EQ(ValueAt(wb, 2, "B13").as_text(),
-            std::string(ValueAt(wb, kSrc, "B13").as_text()).replace(0, 3, "'Src (2)'"));
+  EXPECT_EQ(ValueAt(wb, 2, "B13").as_text(), "$A$1");
 
   // Conditional formatting and validation follow the copy (Excel stores
   // these self-sheet references unqualified: `$A$1>0`, `$A$1:$A$3`); both

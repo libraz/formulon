@@ -105,6 +105,7 @@ constexpr RecordParam kRecordParams[] = {
     {"Workbook.setDxf", "input"},
     {"Workbook.setFill", "record"},
     {"Workbook.setFont", "record"},
+    {"Workbook.setLocation", "location"},
     {"Workbook.setTableStyle", "style"},
     {"Workbook.setThemeColors", "colors"},
     {"Workbook.setThemeFonts", "fonts"},

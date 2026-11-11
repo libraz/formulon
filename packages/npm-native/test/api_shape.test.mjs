@@ -888,7 +888,7 @@ test('A1: a value the workbook does not hold reads as null', async () => {
     const ws = wb.sheet(0);
     ws.setText(9, 0, 'x');
     assert.equal(ws.getCellPhonetic(9, 0), null);
-    assert.equal(wb.getFileName(), null);
+    assert.equal(wb.getLocation(), null);
     assert.equal(ws.ooxml.getAutoFilterXml(), null);
     assert.equal(ws.ooxml.getPageSetupXml(), null);
     assert.equal(ws.getPrintTitles(), null);

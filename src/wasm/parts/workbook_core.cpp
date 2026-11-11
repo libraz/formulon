@@ -724,17 +724,43 @@ double JsWorkbook::memoryUsage() const {
   return static_cast<double>(bytes);
 }
 
-emscripten::val JsWorkbook::fileName() const {
-  const char* name = nullptr;
+emscripten::val JsWorkbook::getLocation() const {
   int32_t present = 0;
-  if (!succeeded(handle_ != nullptr ? fm_workbook_get_file_name(handle_, &present, &name) : kBindingInvalidHandle)) {
+  fm_workbook_location_t location = FM_STRUCT_INIT(fm_workbook_location_t);
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_location(handle_, &present, &location) : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }
-  return present != 0 ? cstr_or_null(name) : emscripten::val::null();
+  if (present == 0) {
+    return emscripten::val::null();
+  }
+  emscripten::val o = emscripten::val::object();
+  js_set_cstr_or_null_fields(o, {{"directory", location.directory}, {"fileName", location.file_name}});
+  return o;
 }
 
-void JsWorkbook::setFileName(const std::string& name) {
-  succeeded(handle_ != nullptr ? fm_workbook_set_file_name(handle_, name.c_str()) : kBindingInvalidHandle);
+// `null` unsets the location; `undefined`, a non-object or a record without `fileName` is a TypeError.
+void JsWorkbook::setLocation(emscripten::val input) {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return;
+  }
+  if (input.isNull()) {
+    succeeded(fm_workbook_set_location(handle_, nullptr));
+    return;
+  }
+  JsNarrowNumericReader reader("Workbook.setLocation");
+  if (!reader.require_object(input, "location")) {
+    return;
+  }
+  std::string directory;
+  fm_workbook_location_t location = FM_STRUCT_INIT(fm_workbook_location_t);
+  location.directory = reader.optional_string(input, "directory", directory, "location.directory");
+  const std::string file_name = reader.required_string(input, "fileName", "location.fileName");
+  location.file_name = file_name.c_str();
+  if (!reader.ok()) {
+    return;
+  }
+  succeeded(fm_workbook_set_location(handle_, &location));
 }
 
 double JsWorkbook::partialRecalc(uint32_t sheet, emscripten::val viewport) {

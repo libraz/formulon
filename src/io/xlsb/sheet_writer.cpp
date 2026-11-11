@@ -17,6 +17,7 @@
 
 #include "cell.h"
 #include "cf/cf_types.h"
+#include "hyperlink_address.h"
 #include "io/dv_overlay.h"
 #include "io/dynamic_array_formula.h"
 #include "io/protection_xml.h"
@@ -224,11 +225,21 @@ void EmitMerges(std::vector<std::uint8_t>& dst, const Sheet& sheet) {
 }
 
 Expected<void, Error> EmitHyperlinks(std::vector<std::uint8_t>& dst, const Sheet& sheet,
-                                     const std::vector<std::string>& relationship_ids) {
+                                     const std::vector<std::string>& relationship_ids,
+                                     std::string_view book_directory) {
   for (std::size_t i = 0; i < sheet.hyperlinks().size(); ++i) {
     const Hyperlink& hyperlink = sheet.hyperlinks()[i];
     const std::string_view rid =
         i < relationship_ids.size() ? std::string_view(relationship_ids[i]) : std::string_view{};
+    SavedHyperlink saved = saved_hyperlink(hyperlink, book_directory);
+    if (saved.display != hyperlink.display) {
+      Hyperlink written = hyperlink;
+      written.display = std::move(saved.display);
+      if (auto s = emit_hyperlink(dst, written, rid); !s) {
+        return s;
+      }
+      continue;
+    }
     if (auto s = emit_hyperlink(dst, hyperlink, rid); !s) {
       return s;
     }
@@ -328,7 +339,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     std::uint32_t* downgraded_formula_count, std::uint32_t dynamic_array_ifmd, const NameShapes& name_shapes,
     const std::vector<std::string>& table_part_rel_ids, std::uint32_t workbook_views,
     std::uint32_t* deferred_sparkline_groups, std::string_view drawing_rel_id, bool owns_drawing,
-    const RichErrorVmMap* rich_error_vm) {
+    const RichErrorVmMap* rich_error_vm, std::string_view book_directory) {
   std::vector<std::uint8_t> body;
 
   // Frame: BrtBeginSheet | BrtBeginSheetData | ... | BrtEndSheetData |
@@ -635,7 +646,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
       !features) {
     return std::move(features.error());
   }
-  if (auto hyperlinks = EmitHyperlinks(body, sheet, hyperlink_ids); !hyperlinks) {
+  if (auto hyperlinks = EmitHyperlinks(body, sheet, hyperlink_ids, book_directory); !hyperlinks) {
     return std::move(hyperlinks.error());
   }
   body.insert(body.end(), tail.after_hyperlinks.begin(), tail.after_hyperlinks.end());

@@ -33,6 +33,8 @@ inline constexpr std::string_view kNsPackageRelationships =
     "http://schemas.openxmlformats.org/package/2006/relationships";
 inline constexpr std::string_view kNsMarkupCompat = "http://schemas.openxmlformats.org/markup-compatibility/2006";
 inline constexpr std::string_view kNsX14 = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
+inline constexpr std::string_view kNsX15 = "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main";
+inline constexpr std::string_view kNsX15ac = "http://schemas.microsoft.com/office/spreadsheetml/2010/11/ac";
 inline constexpr std::string_view kNsExcelMain = "http://schemas.microsoft.com/office/excel/2006/main";
 inline constexpr std::string_view kNsContentTypes = "http://schemas.openxmlformats.org/package/2006/content-types";
 inline constexpr std::string_view kNsXr = "http://schemas.microsoft.com/office/spreadsheetml/2014/revision";

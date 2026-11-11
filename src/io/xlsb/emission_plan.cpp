@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "default_content_type.h"
+#include "hyperlink_address.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/relationship_writer.h"
 #include "io/ooxml_defs.h"
@@ -420,7 +421,8 @@ std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan, const s
     if (!emitted_hyperlink_rids.insert(hyperlink_rids[i]).second) {
       continue;
     }
-    AppendRelationship(entries, hyperlink_rids[i], kRelHyperlink, EncodeTargetSpaces(hyperlink.target),
+    AppendRelationship(entries, hyperlink_rids[i], kRelHyperlink,
+                       EncodeTargetSpaces(saved_hyperlink(hyperlink, plan.book_directory).target),
                        /*target_external=*/true, /*escape_target=*/true);
   }
   for (const XlsbTablePart& table : tables) {

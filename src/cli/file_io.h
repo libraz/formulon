@@ -57,10 +57,12 @@ fm_status_t write_stdout(const std::uint8_t* bytes, std::size_t len);
 /// The temporary's own restrictive creation mode is never observable.
 fm_status_t write_file_atomically(const std::string& path, const std::uint8_t* bytes, std::size_t len);
 
-/// Names `wb` after the last component of `path` (`fm_workbook_set_file_name`),
-/// as Excel names a workbook it opened; a name the setter refuses, such as one
-/// without a workbook extension, leaves the workbook unnamed.
-void set_file_name_from_path(fm_workbook_t* wb, const std::string& path);
+/// Sets the location of `wb` (`fm_workbook_set_location`) to `path`, made
+/// absolute against the current directory and canonicalised lexically, as
+/// Excel records a workbook it opened or saved. A location the setter refuses,
+/// such as a file name without a workbook extension, leaves the workbook
+/// without one.
+void set_location_from_path(fm_workbook_t* wb, const std::string& path);
 
 }  // namespace formulon::cli
 

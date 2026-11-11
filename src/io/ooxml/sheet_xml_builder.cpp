@@ -15,6 +15,7 @@
 #include <utility>
 #include <vector>
 
+#include "hyperlink_address.h"
 #include "io/auto_filter_xml.h"
 #include "io/cf_overlay.h"
 #include "io/cf_writer.h"
@@ -131,8 +132,10 @@ std::string BuildDataValidationsBlock(const Sheet& sheet, const parser::External
 
 /// Builds the `<hyperlinks>` block. `rid_for_index` returns the rels-file
 /// rId integer assigned to the hyperlink at index `i`, or 0 when no rId
-/// was assigned (defensive — every external hyperlink gets one).
-std::string BuildHyperlinksBlock(const Sheet& sheet, const std::vector<std::string>& rid_per_hyperlink) {
+/// was assigned (defensive — every external hyperlink gets one). Each
+/// `display` is the one `saved_hyperlink` gives for `book_directory`.
+std::string BuildHyperlinksBlock(const Sheet& sheet, const std::vector<std::string>& rid_per_hyperlink,
+                                 std::string_view book_directory) {
   if (sheet.hyperlinks().empty()) {
     return {};
   }
@@ -153,8 +156,9 @@ std::string BuildHyperlinksBlock(const Sheet& sheet, const std::vector<std::stri
     if (!h.tooltip.empty()) {
       append_xml_attr(out, "tooltip", h.tooltip);
     }
-    if (!h.display.empty()) {
-      append_xml_attr(out, "display", h.display);
+    const SavedHyperlink saved = saved_hyperlink(h, book_directory);
+    if (!saved.display.empty()) {
+      append_xml_attr(out, "display", saved.display);
     }
     out.append("/>");
   }
@@ -541,7 +545,8 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
                               const SharedStrings* shared_strings, const std::vector<DifferentialFormat>& dxfs,
                               std::size_t sheet_index, std::uint32_t dynamic_array_cm_index,
                               const xlsb::NameShapes& name_shapes, const parser::ExternalBookIndexer* indexer,
-                              const std::vector<std::string>* sheet_names, const RichErrorVmMap* rich_error_vm) {
+                              const std::vector<std::string>* sheet_names, const RichErrorVmMap* rich_error_vm,
+                              std::string_view book_directory) {
   const std::string sheet_view_xml = BuildSheetViewXml(sheet.view());
   const std::string sheet_format_xml =
       BuildSheetFormatPrXml(WithDerivedOutlineLevels(sheet.format_defaults(), sheet.layout()));
@@ -618,7 +623,7 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
       sheet.name(), indexer, dv_xml.empty() ? std::string_view(sheet.validations_extra_attrs()) : std::string_view(),
       sheet_names);
   const std::string merges_xml = BuildMergeCellsBlock(sheet);
-  const std::string hl_xml = BuildHyperlinksBlock(sheet, hyperlink_rids);
+  const std::string hl_xml = BuildHyperlinksBlock(sheet, hyperlink_rids, book_directory);
   // <sheetProtection> sits between <sheetData> and <mergeCells> per
   // ECMA-376 document order. Helper returns "" when protection is
   // disabled, leaving no trailing whitespace in that case.
@@ -825,7 +830,8 @@ SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPla
     }
     hyperlink_targets.emplace(rid, h.target);
     res.hyperlink_rids.push_back(rid);
-    add_rel(rid, kRelHyperlink, EncodeTargetSpaces(h.target), /*target_external=*/true, /*escape_target=*/true);
+    add_rel(rid, kRelHyperlink, EncodeTargetSpaces(saved_hyperlink(h, plan.book_directory).target),
+            /*target_external=*/true, /*escape_target=*/true);
   }
   const SheetPrintSettings& print = sheet.print_settings();
   if (!print.printer_settings_path.empty()) {

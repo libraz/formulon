@@ -188,6 +188,7 @@ RECORD_NAMES = frozenset(
         "fm_threaded_comment_t",
         "fm_validation_outcome_info_t",
         "fm_width_model_info_t",
+        "fm_workbook_location_t",
         "fm_workbook_protection_t",
     )
 )
@@ -331,6 +332,11 @@ HYPERLINK = Struct(
 COMMENT = Struct(
     "fm_comment_t",
     [("row", U32), ("col", U32), ("author", PTR), ("text", PTR)],
+)
+
+WORKBOOK_LOCATION = Struct(
+    "fm_workbook_location_t",
+    [("directory", PTR), ("file_name", PTR)],
 )
 
 WORKBOOK_PROTECTION = Struct(

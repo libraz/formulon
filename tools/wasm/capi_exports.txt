@@ -140,8 +140,8 @@ fm_workbook_get_profile_id
 fm_workbook_set_profile_id
 fm_get_profile_id_count
 fm_get_profile_id_at
-fm_workbook_get_file_name
-fm_workbook_set_file_name
+fm_workbook_get_location
+fm_workbook_set_location
 
 # -- Sheet UI: merges / hyperlinks / comments ------------------------------------
 fm_sheet_add_merge

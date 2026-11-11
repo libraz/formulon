@@ -50,12 +50,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `setHyperlink` stores a target the way Excel does: an http, https or ftp URL
   without userinfo gets a lowercase scheme and host, `/` for an empty path,
   decoded unreserved percent-escapes and its `#fragment` moved to `location`;
-  a mailto: target has its scheme lowercased, a POSIX path becomes `file:///...`
-  and a UNC path `file:////server/...`. A space in an external target is saved
-  as `%20`. Loading a file changes no target. With no display given, a top-left
-  cell that holds other text gets the stored address as the link's display, and
+  a mailto: target has its scheme lowercased, a POSIX path becomes `file:///...`,
+  a drive path `file:///C:/...` and a UNC path `file:////server/...`, each with
+  a `#fragment` split off into `location`; a POSIX path holding `%` stays a
+  plain path with only `%20` decoded to a space; a relative path is resolved
+  against the folder of `getLocation` when one is set. A space in an external
+  target is saved as `%20`. Loading a file changes no target. With no display
+  given, a top-left cell that holds other text gets the stored address as the link's display, and
   a location-only link gets its location. `insertHyperlinkAt` stays verbatim: no
   normalisation and no cell text.
+- `CELL("filename")` returns `<folder>/[<file>]<sheet>` from `getLocation`
+  (the referenced sheet, or the active sheet without a reference, unquoted)
+  and `""` while the workbook has no folder. Under a `win-*` profile the
+  Windows form (`C:\d\[b.xlsx]Sheet1`, `\` separators) is an estimate, not
+  measured. `CELL("address")` for another sheet is prefixed with the file name
+  once a location is set (`[Book.xlsx]Sheet2!$A$1`), quoting the whole
+  `[book]sheet` when the book or the sheet needs it (`'[Book 1.xlsx]Sheet2'!$A$1`);
+  a reference to the formula's own sheet prints `$A$1`, qualified or not.
+- A save writes a local hyperlink target relative to the folder of
+  `getLocation` when the two share at least one folder, compared
+  case-sensitively (`../../Documents/f.xlsx`), with that relative text as the
+  saved `display` (followed by ` - <location>` when there is one) unless the
+  link has its own; other local targets stay absolute. A `%` in a plain path is
+  written `%25`. The model keeps the absolute target.
+- The saved absolute folder path (`.xlsx` and `.xlsb`) is written from the
+  folder of `getLocation` and left out without one; the folder path in a loaded
+  file is not kept and does not set the location.
 - C ABI: `fm_sheet_set_hyperlink(wb, sheet_index, hl)` has no cell arguments and
   no `NULL` form, and `fm_sheet_remove_hyperlink(wb, sheet_index, range)` takes
   a rectangle, a signature change against 0.18
@@ -283,9 +303,15 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   `fm_workbook_remove_defined_name`, `fm_tristate_t` and the
   `FM_VERSION_MAJOR` macros; the header opens with a quick start and the
   pointer lifetime rules.
-- A workbook file name (`setFileName`): formula text shows references to the
-  workbook's own names as the formula bar does (`=Book.xlsx!Rate`), and that
-  spelling can be entered. The command-line tools set it from the input file.
+- A workbook location (`getLocation` / `setLocation`, record
+  `WorkbookLocation` with `directory` and `fileName`; C
+  `fm_workbook_get_location` / `fm_workbook_set_location` with
+  `fm_workbook_location_t`): formula text shows references to the workbook's
+  own names as the formula bar does (`=Book.xlsx!Rate`), and that spelling can
+  be entered. The folder is stored in a canonical POSIX, drive (`C:/a`) or UNC
+  (`//server/share/a`) form. The location is metadata only and never touches a
+  file system. The command-line tools set it from the input path made absolute,
+  and `recalc -o` sets it to the output path before saving.
 - Pivot date grouping as Excel's Group command does it, with labels in the 14
   UI locales and the Japanese calendar.
 - Pivot report options: per-field subtotals, blank rows, repeated labels,

@@ -2,7 +2,9 @@
 // C ABI - recalc / iterative / calc-mode / profile / partial-recalc.
 
 #include <cstdint>
+#include <optional>
 #include <string>
+#include <utility>
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
@@ -22,12 +24,14 @@ using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::patch_op_ok_without_clear;
-using formulon::c_api::parts::publish_scratch;
 using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
+using formulon::c_api::parts::store_cstr;
+using formulon::c_api::parts::TextStore;
 
 namespace {
 
@@ -380,35 +384,52 @@ extern "C" fm_status_t fm_workbook_set_profile_id(fm_workbook_t* wb, const char*
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_get_file_name(const fm_workbook_t* wb, std::int32_t* out_present,
-                                                 const char** out_name) {
+extern "C" fm_status_t fm_workbook_get_location(const fm_workbook_t* wb, std::int32_t* out_present,
+                                                fm_workbook_location_t* out) {
   clear_last_error();
-  if (wb == nullptr || out_present == nullptr || out_name == nullptr) {
+  if (wb == nullptr || out_present == nullptr || out == nullptr) {
     return null_argument();
   }
-  *out_present = 0;
-  *out_name = nullptr;
-  if (wb->workbook().file_name().empty()) {
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
+  const std::uint32_t struct_size = out->struct_size;
+  *out = fm_workbook_location_t{};
+  out->struct_size = struct_size;
+  const std::optional<formulon::WorkbookLocation>& location = wb->workbook().location();
+  *out_present = location ? 1 : 0;
+  if (!location) {
     return 0;
   }
-  *out_present = 1;
-  *out_name = publish_scratch(wb, wb->workbook().file_name());
+  TextStore& store = fresh_read_scratch(wb);
+  out->directory = location->directory ? store_cstr(store, *location->directory) : nullptr;
+  out->file_name = store_cstr(store, location->file_name);
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_set_file_name(fm_workbook_t* wb, const char* name) {
+extern "C" fm_status_t fm_workbook_set_location(fm_workbook_t* wb, const fm_workbook_location_t* location) {
   clear_last_error();
-  if (wb == nullptr || name == nullptr) {
+  if (wb == nullptr) {
     return null_argument();
   }
-  formulon::Workbook& book = wb->workbook();
-  const bool changed = book.file_name() != name;
-  if (auto result = book.set_file_name(name); !result) {
-    return set_last_error(result.error());
+  std::optional<formulon::WorkbookLocation> next;
+  if (location != nullptr) {
+    // The size is checked first so a short record's fields are never read.
+    if (auto rc = check_record_size(*location); rc != 0) {
+      return rc;
+    }
+    if (location->file_name == nullptr) {
+      return null_argument();
+    }
+    next = formulon::WorkbookLocation{
+        location->directory != nullptr ? std::optional<std::string>(location->directory) : std::nullopt,
+        location->file_name};
   }
-  if (changed) {
-    // FORMULATEXT spells the workbook's own names with the file name.
-    book.mark_all_formulas_dirty();
+  // Nothing is marked dirty: the values that read the location (CELL,
+  // FORMULATEXT) are volatile and refresh at the next recalculation, and a save
+  // writes the values as computed, as Excel's Save As does.
+  if (auto result = wb->workbook().set_location(std::move(next)); !result) {
+    return set_last_error(result.error());
   }
   return 0;
 }

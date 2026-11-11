@@ -405,14 +405,14 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     // worksheet body's `r:id` references and the rels file this writer
     // emits always agree on which id names which relationship.
     const SheetRelsResult& rels_result = plan.sheet_rels[i];
-    RETURN_IF_ERROR(
-        AddPart(writer.get(), SheetPartPath(i),
-                BuildWorksheetXml(wb.sheet(i), sheet_tables, rels_result.table_rids, rels_result.hyperlink_rids,
-                                  rels_result.printer_settings_rid, rels_result.drawing_rid,
-                                  rels_result.legacy_drawing_rid, &shared_strings, wb.styles().dxfs, i,
-                                  dynamic_array_cm_index, name_shapes(wb, i), &external_book_indexer, &sheet_names,
-                                  plan.rich_errors.empty() ? nullptr : &plan.rich_errors.vm_by_sheet[i]),
-                &written_paths));
+    RETURN_IF_ERROR(AddPart(
+        writer.get(), SheetPartPath(i),
+        BuildWorksheetXml(wb.sheet(i), sheet_tables, rels_result.table_rids, rels_result.hyperlink_rids,
+                          rels_result.printer_settings_rid, rels_result.drawing_rid, rels_result.legacy_drawing_rid,
+                          &shared_strings, wb.styles().dxfs, i, dynamic_array_cm_index, name_shapes(wb, i),
+                          &external_book_indexer, &sheet_names,
+                          plan.rich_errors.empty() ? nullptr : &plan.rich_errors.vm_by_sheet[i], plan.book_directory),
+        &written_paths));
     // An empty rels file is invalid OOXML; Excel repairs the package and
     // drops it. `relationship_count` is the single predicate for whether
     // this sheet's rels part is worth writing at all — for example, a

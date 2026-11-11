@@ -280,9 +280,9 @@ WORKBOOK_METHODS = (
     "get_default_font",
     "get_defined_name",
     "get_diagnostics",
-    "get_file_name",
     "get_full_precision",
     "get_iterative",
+    "get_location",
     "get_memory_usage",
     "get_person",
     "get_pinned_now",
@@ -325,8 +325,8 @@ WORKBOOK_METHODS = (
     "set_date1904",
     "set_default_font",
     "set_defined_name",
-    "set_file_name",
     "set_full_precision",
+    "set_location",
     "set_pinned_now",
     "set_profile_id",
     "set_ref_mode",
@@ -2834,12 +2834,22 @@ class Sheet(_NoCopy):
         stores it: scheme and host lowercased, an empty path becomes ``/``,
         percent-escapes of unreserved characters decoded, and a ``#fragment``
         split off into ``location`` (a given ``location`` is kept). A mailto:
-        target has only its scheme lowercased; an absolute POSIX path becomes a
-        ``file:///`` URL and a UNC path ``file:////server/share/...``; any other
-        target is stored as written. With no ``display``, a top-left cell that
-        holds other text gets the stored target as ``display``, and a
-        location-only link gets its location. A space in an external target is
-        written as ``%20`` in a saved file.
+        target has only its scheme lowercased. A local path is held absolute:
+        an absolute POSIX path becomes a ``file:///`` URL, a drive path
+        ``file:///C:/...`` and a UNC path ``file:////server/share/...``, each
+        with a ``#fragment`` split off into ``location`` as for a URL; a POSIX
+        path holding ``%`` stays a plain path with only ``%20`` decoded to a
+        space; a relative path is resolved against the folder of
+        :meth:`Workbook.get_location` when one is set (a ``..`` above the root
+        keeps it as written). Any other target is stored as written. With no
+        ``display``, a top-left cell that holds other text gets the stored
+        target as ``display``, and a location-only link gets its location. A
+        saved file writes a local target relative to the location's folder when
+        the two share at least one folder (compared case-sensitively), with
+        that relative text as the saved ``display`` (followed by
+        ``" - <location>"`` when there is one) unless the link has its own; a
+        ``%`` in a plain path is written ``%25``. A space in an external target
+        is written as ``%20`` in a saved file.
 
         Every cell of the range takes Excel's Hyperlink cell style: the
         font is replaced (the Normal font, underlined, theme colour 10) and

@@ -151,10 +151,12 @@ TEST_F(FormulonCApiRemoveMissingKey, KeyedReadsReportAMissThroughOutPresent) {
   EXPECT_EQ(now.year, 0);
 
   present = 99;
-  const char* file_name = "stale";
-  EXPECT_EQ(fm_workbook_get_file_name(wb(), &present, &file_name), 0);
+  fm_workbook_location_t location = FM_STRUCT_INIT(fm_workbook_location_t);
+  location.file_name = "stale";
+  EXPECT_EQ(fm_workbook_get_location(wb(), &present, &location), 0);
   EXPECT_EQ(present, 0);
-  EXPECT_EQ(file_name, nullptr);
+  EXPECT_EQ(location.file_name, nullptr);
+  EXPECT_EQ(location.directory, nullptr);
 
   present = 99;
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);

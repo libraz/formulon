@@ -211,9 +211,10 @@ class JsWorkbook {
   void releasePinnedNow(emscripten::val now);
   std::string profileId() const;
   void setProfileId(const std::string& profile_id);
-  /// The stored file name; `null` when none is set.
-  emscripten::val fileName() const;
-  void setFileName(const std::string& name);
+  /// The location record `{directory, fileName}`; `null` when unset.
+  emscripten::val getLocation() const;
+  /// `null` unsets the location; otherwise a `{directory?, fileName}` record.
+  void setLocation(emscripten::val location);
   double partialRecalc(uint32_t sheet, emscripten::val viewport);
   /// Installs the JS callback the iterative solver invokes after each
   /// sweep, or clears it when `cb` is null / undefined. A callback that

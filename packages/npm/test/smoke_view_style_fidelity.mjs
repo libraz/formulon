@@ -210,23 +210,74 @@ test('calcPr accessors and the date system', async () => {
   release(wb);
 });
 
-test("the file name spells and binds the workbook's own names", async () => {
+test("the location's file name spells and binds the workbook's own names", async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
-  assert.equal(wb.getFileName(), null);
+  assert.equal(wb.getLocation(), null);
   wb.setDefinedName({ name: 'LN', formula: '10' });
-  wb.setFileName('M5.xlsx');
-  assert.equal(wb.getFileName(), 'M5.xlsx');
+  wb.setLocation({ fileName: 'M5.xlsx' });
+  assert.deepEqual(wb.getLocation(), { directory: null, fileName: 'M5.xlsx' });
   wb.sheet(0).setFormula(0, 0, '=M5.xlsx!LN+1');
   assert.equal(wb.sheet(0).getFormula(0, 0), '=M5.xlsx!LN+1');
   assert.equal(wb.sheet(0).listCells()[0].formula, '=M5.xlsx!LN+1');
-  wb.setFileName('M5 b-1.xlsx');
+  wb.setLocation({ fileName: 'M5 b-1.xlsx' });
   assert.equal(wb.sheet(0).getFormula(0, 0), "='M5 b-1.xlsx'!LN+1");
-  expectFailure(() => wb.setFileName('Book1'));
-  assert.equal(wb.getFileName(), 'M5 b-1.xlsx');
-  wb.setFileName(null);
-  assert.equal(wb.getFileName(), null);
+  expectFailure(() => wb.setLocation({ fileName: 'Book1' }));
+  assert.deepEqual(wb.getLocation(), { directory: null, fileName: 'M5 b-1.xlsx' });
+  wb.setLocation(null);
+  assert.equal(wb.getLocation(), null);
   assert.equal(wb.sheet(0).getFormula(0, 0), '=[0]!LN+1');
+  release(wb);
+});
+
+test('setLocation refuses undefined and a record without fileName, and reads back the canonical form', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  assert.throws(() => wb.setLocation(undefined), TypeError);
+  assert.throws(() => wb.setLocation({ directory: '/d' }), TypeError);
+  assert.throws(() => wb.setLocation('Book.xlsx'), TypeError);
+  assert.equal(wb.getLocation(), null);
+  for (const [given, canonical] of [
+    ['/a/b/', '/a/b'],
+    ['/', '/'],
+    ['c:\\a\\', 'C:/a'],
+    ['\\\\server\\share\\a', '//server/share/a'],
+  ]) {
+    wb.setLocation({ directory: given, fileName: 'b.xlsx' });
+    const read = wb.getLocation();
+    assert.deepEqual(read, { directory: canonical, fileName: 'b.xlsx' });
+    wb.setLocation(read);
+    assert.deepEqual(wb.getLocation(), read);
+  }
+  const refused = [{ directory: '', fileName: 'b.xlsx' }, { directory: 'rel', fileName: 'b.xlsx' }, { fileName: '' }];
+  for (const bad of refused) {
+    expectFailure(() => wb.setLocation(bad));
+  }
+  assert.deepEqual(wb.getLocation(), { directory: '//server/share/a', fileName: 'b.xlsx' });
+  release(wb);
+});
+
+test('CELL and saved hyperlink targets follow the location', async () => {
+  const mod = await getModule();
+  const wb = mod.Workbook.createDefault();
+  wb.setProfileId('mac-365-ja_JP');
+  wb.addSheet('Sheet2');
+  const ws = wb.sheet(0);
+  ws.setFormula(0, 0, '=CELL("filename",A1)');
+  ws.setFormula(1, 0, '=CELL("address",Sheet2!A1)');
+  ws.setHyperlink({ range: 'B1', target: '/Users/libraz/Documents/a b/f.xlsx' });
+  const folder = '/Users/libraz/Library/Containers/com.microsoft.Excel/Data/loc_probe3/p q';
+  wb.setLocation({ directory: folder, fileName: 'Book 1.xlsx' });
+  wb.recalc();
+  assert.equal(ws.getValue(0, 0), `${folder}/[Book 1.xlsx]Sheet1`);
+  assert.equal(ws.getValue(1, 0), "'[Book 1.xlsx]Sheet2'!$A$1");
+  assert.equal(ws.listHyperlinks()[0].target, 'file:///Users/libraz/Documents/a b/f.xlsx');
+  const loaded = roundTrip(mod, wb);
+  const link = loaded.sheet(0).listHyperlinks()[0];
+  assert.equal(link.target, '../../../../../../Documents/a%20b/f.xlsx');
+  assert.equal(link.display, '../../../../../../Documents/a b/f.xlsx');
+  assert.equal(loaded.getLocation(), null);
+  release(loaded);
   release(wb);
 });
 

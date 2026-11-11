@@ -1611,6 +1611,30 @@ export interface CivilTime {
   readonly second: number;
 }
 
+/**
+ * Where a workbook is saved, read back from {@link Workbook.getLocation}. The location is metadata only: it is never
+ * read from or written to a file system.
+ *
+ * `directory` is absolute in one of three canonical forms: POSIX (`/a/b`, a backslash being a literal character,
+ * `/` alone the root), drive (`C:/a`, given as `C:\a`, `C:/a` or `c:\a\`; the drive root `C:/`) or UNC
+ * (`//server/share/a`, given as `\\server\share\a` or `//server/share/a`). The trailing separator is stripped
+ * except at a root.
+ */
+export interface WorkbookLocation {
+  /** The folder in canonical form; `null` when the workbook has a name but no folder. */
+  readonly directory: string | null;
+  /** The file name, extension included. */
+  readonly fileName: string;
+}
+
+/** The location `Workbook.setLocation` takes; a {@link WorkbookLocation} is accepted as is. */
+export interface WorkbookLocationInput {
+  /** The folder, absolute in one of the forms {@link WorkbookLocation} lists; omitted or `null` is no folder. */
+  directory?: string | null;
+  /** The file name, extension included; required. */
+  fileName: string;
+}
+
 /** A {@link CivilTime} whose time of day may be left out; an omitted `hour`, `minute` or `second` is 0. */
 export interface CivilTimeInput {
   /** The calendar year, 1900 to 9999 (1904 to 9999 in a 1904 date-system conversion). */
@@ -6914,16 +6938,28 @@ export interface Workbook {
   /** Selects the Excel profile; `StatusCode.InvalidArgument` for an id that is not a {@link ProfileId}.
    *  The change leaves the formulas dirty, computed as {@link CalcMode} says. */
   setProfileId(profileId: ProfileId): void;
-  /** File name the workbook is shown under, extension included and without a directory; `null` when unset.
-   *  While set, every formula getter spells a reference to the workbook's own defined name (stored `[0]!Name`)
-   *  as `Book.xlsx!Name`, quoted when needed (`'My Book.xlsx'!Name`); unset, it reads `[0]!Name`.
-   *  Loading from bytes leaves it unset. */
-  getFileName(): string | null;
-  /** Sets `getFileName()`; `null` (or `""`) unsets it. Entered formulas then read `Book.xlsx!Name` and
-   *  `[Book.xlsx]Sheet1!A1` as this workbook and create no external link. A changed name marks every formula dirty.
-   *  `StatusCode.InvalidArgument` when the name lacks a workbook extension, holds one of `[ ] : / \ ? *`, is longer
-   *  than 218 bytes, or equals an external link's book name. */
-  setFileName(name: string | null): void;
+  /** Where the workbook is saved, its folder and file name; `null` when the workbook has no location, as for a book
+   *  that has not been saved. Loading from bytes leaves it unset.
+   *  The location is metadata only: it is never read from or written to a file system. It drives
+   *  `CELL("filename")`, `CELL("address")` for other sheets, the `[0]!Name` spelling, the saved absolute folder path, and the
+   *  relative form of local hyperlink targets in a saved file. `INFO("directory")` is the application's current
+   *  directory and does not follow it.
+   *  While a file name is set, every formula getter spells a reference to the workbook's own defined name (stored
+   *  `[0]!Name`) as `Book.xlsx!Name`, quoted when needed (`'My Book.xlsx'!Name`); unset, it reads `[0]!Name`. */
+  getLocation(): WorkbookLocation | null;
+  /** Sets `getLocation()`; `null` unsets it. Set the location to the destination before saving to a new place, as
+   *  Excel's Save As does; relative targets in the saved file are computed against it.
+   *  The directory is stored in its canonical form (see {@link WorkbookLocation}), so `setLocation(getLocation())`
+   *  changes nothing. Entered formulas then read `Book.xlsx!Name` and `[Book.xlsx]Sheet1!A1` as this workbook and
+   *  create no external link. When a folder first appears, every relative local hyperlink target is resolved against
+   *  it. Values that read the location (`CELL`, `FORMULATEXT`) refresh at the next recalculation, as Excel's do
+   *  after Save As; a save writes them as computed.
+   *  `undefined`, or a record without `fileName`, throws `TypeError`. `StatusCode.InvalidArgument`, changing
+   *  nothing, when `fileName` is empty, lacks a workbook extension, holds one of `[ ] : / \ ? *`, is longer than 218
+   *  bytes, or equals an external link's book name; when `directory` is `""` (use `null`), is not absolute in one of
+   *  the three forms, holds `[` or `]`, or has a `.`, `..` or empty inner segment; or when the directory and file
+   *  name together are longer than 1,024 bytes. */
+  setLocation(location: WorkbookLocationInput | null): void;
 
   /** Lists the defined names, workbook- and sheet-scoped alike, in file order. */
   listDefinedNames(): readonly DefinedName[];
@@ -7933,10 +7969,16 @@ export interface Sheet {
    *  value keeps it.
    *  An http, https or ftp target without userinfo is stored the way Excel stores it: scheme and host lowercased, an
    *  empty path becomes `/`, percent-escapes of unreserved characters decoded, and a `#fragment` split off into
-   *  `location` (a given `location` is kept). A mailto: target has only its scheme lowercased; an absolute POSIX path
-   *  becomes a `file:///` URL and a UNC path `file:////server/share/...`; any other target is stored as written. With
-   *  no `display`, a top-left cell that holds other text gets the stored target as `display`, and a location-only
-   *  link gets its location. A space in an external target is written as `%20` in a saved file.
+   *  `location` (a given `location` is kept). A mailto: target has only its scheme lowercased. A local path is held
+   *  absolute: an absolute POSIX path becomes a `file:///` URL, a drive path `file:///C:/...` and a UNC path
+   *  `file:////server/share/...`, each with a `#fragment` split off into `location` as for a URL; a POSIX path
+   *  holding `%` stays a plain path with only `%20` decoded to a space; a relative path is resolved against the folder
+   *  of {@link Workbook.getLocation} when one is set (a `..` above the root keeps it as written). Any other target is
+   *  stored as written. With no `display`, a top-left cell that holds other text gets the stored target as `display`,
+   *  and a location-only link gets its location. A saved file writes a local target relative to the location's folder
+   *  when the two share at least one folder (compared case-sensitively), with that relative text as the saved
+   *  `display` (followed by ` - <location>` when there is one) unless the link has its own; a `%` in a plain path is
+   *  written `%25`. A space in an external target is written as `%20` in a saved file.
    *  Every cell of the range takes Excel's Hyperlink cell style: its font
    *  is replaced (Normal font, underlined, theme colour 10) and fill, number format, border, alignment and
    *  protection are kept; blank and merged-away cells are formatted too, and a whole-column range formats the

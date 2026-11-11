@@ -28,7 +28,7 @@ fm_status_t load_workbook_file(const std::string& path, const SharedOptions& sha
     return fail_with_last_error(err, subcommand, rc);
   }
   if (!from_stdin) {
-    set_file_name_from_path(wb.handle, path);
+    set_location_from_path(wb.handle, path);
   }
   if (auto rc = apply_shared_options(wb.handle, shared); rc != 0) {
     return fail_with_last_error(err, subcommand, rc);

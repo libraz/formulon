@@ -259,7 +259,9 @@ int main(void) {
   fm_status_t (*get_comment_visible)(const fm_workbook_t*, size_t, uint32_t, uint32_t, int32_t*, int32_t*) =
       fm_sheet_get_comment_visible;
   fm_status_t (*get_pinned_now)(const fm_workbook_t*, int32_t*, fm_civil_time_t*) = fm_workbook_get_pinned_now;
-  fm_status_t (*get_file_name)(const fm_workbook_t*, int32_t*, const char**) = fm_workbook_get_file_name;
+  fm_status_t (*get_location)(const fm_workbook_t*, int32_t*, fm_workbook_location_t*) = fm_workbook_get_location;
+  fm_status_t (*set_location)(fm_workbook_t*, const fm_workbook_location_t*) = fm_workbook_set_location;
+  _Static_assert(offsetof(fm_workbook_location_t, struct_size) == 0, "struct_size must lead a record");
   fm_status_t (*get_iterative)(const fm_workbook_t*, fm_iterative_settings_info_t*) = fm_workbook_get_iterative;
   fm_status_t (*get_spill)(const fm_workbook_t*, size_t, uint32_t, uint32_t, int32_t*, fm_spill_info_t*) =
       fm_sheet_get_spill;
@@ -553,7 +555,8 @@ int main(void) {
   (void)edit_threaded_comment;
   (void)get_comment_visible;
   (void)get_pinned_now;
-  (void)get_file_name;
+  (void)get_location;
+  (void)set_location;
   (void)get_iterative;
   (void)get_spill;
   (void)get_array_formula;

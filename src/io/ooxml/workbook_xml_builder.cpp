@@ -75,6 +75,30 @@ constexpr std::string_view kCtPerson = "application/vnd.ms-excel.person+xml";
 constexpr std::string_view kCtExternalLink =
     "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml";
 
+/// The `x15ac:absPath` Excel writes after `<workbookPr>`, inside its
+/// `mc:AlternateContent`, naming the location's folder with a trailing `/`;
+/// empty when the location has no folder. `x15` is declared here unless the
+/// root already declares it, so the `Requires` prefix always resolves.
+std::string BuildAbsPath(const Workbook& wb) {
+  if (!wb.location() || !wb.location()->directory) {
+    return {};
+  }
+  std::string url = *wb.location()->directory;
+  if (url.back() != '/') {
+    url.push_back('/');
+  }
+  std::string out = "<mc:AlternateContent";
+  append_xml_ns_decl(out, "mc", kNsMarkupCompat);
+  if (wb.workbook_root_extra_attrs().find("xmlns:x15=\"") == std::string::npos) {
+    append_xml_ns_decl(out, "x15", kNsX15);
+  }
+  out.append("><mc:Choice Requires=\"x15\"><x15ac:absPath");
+  append_xml_attr(out, "url", url);
+  append_xml_ns_decl(out, "x15ac", kNsX15ac);
+  out.append("/></mc:Choice></mc:AlternateContent>");
+  return out;
+}
+
 /// Synchronises the date-system attributes in a retained `<workbookPr>`
 /// fragment with the model flag. For a parseable fragment, the reader's
 /// canonical `date1904` and legacy `1904` attributes are removed before the
@@ -444,6 +468,12 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
   if (!workbook_pr_xml.empty()) {
     out.append("  ");
     out.append(workbook_pr_xml);
+    out.push_back('\n');
+  }
+  // Regenerated from the location; the reader drops the captured one.
+  if (const std::string abs_path = BuildAbsPath(wb); !abs_path.empty()) {
+    out.append("  ");
+    out.append(abs_path);
     out.push_back('\n');
   }
   flush_raw_before("workbookProtection");

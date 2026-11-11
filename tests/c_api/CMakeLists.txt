@@ -34,6 +34,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_input_validation_test.cpp
   formulon_c_lambda_text_test.cpp
   formulon_c_locale_test.cpp
+  formulon_c_location_test.cpp
   formulon_c_logging_test.cpp
   formulon_c_named_styles_test.cpp
   formulon_c_natural_key_test.cpp

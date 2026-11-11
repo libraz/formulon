@@ -36,13 +36,24 @@ uint32_t LinkCount(fm_workbook_t* wb) {
 constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
 constexpr fm_status_t kBindingNullPointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
 
-// The file name, "" when unset (absent reads NULL with `present == 0`).
-std::string FileName(fm_workbook_t* wb) {
+// The location's file name, "" when unset (an absent read has `present == 0`).
+std::string BookName(fm_workbook_t* wb) {
   int32_t present = -1;
-  const char* name = "<stale>";
-  EXPECT_EQ(fm_workbook_get_file_name(wb, &present, &name), 0);
-  EXPECT_EQ(present != 0, name != nullptr);
-  return name != nullptr ? name : "";
+  fm_workbook_location_t location = FM_STRUCT_INIT(fm_workbook_location_t);
+  location.file_name = "<stale>";
+  EXPECT_EQ(fm_workbook_get_location(wb, &present, &location), 0);
+  EXPECT_EQ(present != 0, location.file_name != nullptr);
+  return location.file_name != nullptr ? location.file_name : "";
+}
+
+// Names the book `name` without a folder; "" unsets the location.
+fm_status_t SetBookName(fm_workbook_t* wb, const char* name) {
+  if (name[0] == '\0') {
+    return fm_workbook_set_location(wb, nullptr);
+  }
+  fm_workbook_location_t location = FM_STRUCT_INIT(fm_workbook_location_t);
+  location.file_name = name;
+  return fm_workbook_set_location(wb, &location);
 }
 
 std::string Formula(fm_workbook_t* wb, uint32_t row, uint32_t col) {
@@ -187,23 +198,26 @@ TEST(FormulonCApiExternalLinks, FileNameNullArgumentsAreRefused) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   int32_t present = 0;
-  const char* name = nullptr;
-  EXPECT_EQ(fm_workbook_get_file_name(nullptr, &present, &name), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_get_file_name(wb.handle, &present, nullptr), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_get_file_name(wb.handle, nullptr, &name), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_set_file_name(nullptr, "M5.xlsx"), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_set_file_name(wb.handle, nullptr), kBindingNullPointer);
+  fm_workbook_location_t out = FM_STRUCT_INIT(fm_workbook_location_t);
+  EXPECT_EQ(fm_workbook_get_location(nullptr, &present, &out), kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_get_location(wb.handle, &present, nullptr), kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_get_location(wb.handle, nullptr, &out), kBindingNullPointer);
+  fm_workbook_location_t in = FM_STRUCT_INIT(fm_workbook_location_t);
+  in.file_name = "M5.xlsx";
+  EXPECT_EQ(fm_workbook_set_location(nullptr, &in), kBindingNullPointer);
+  in.file_name = nullptr;
+  EXPECT_EQ(fm_workbook_set_location(wb.handle, &in), kBindingNullPointer);
 }
 
 TEST(FormulonCApiExternalLinks, FileNameIsUnsetByDefaultAndByEmptyText) {
   WorkbookGuard wb;
   CreateWithName(&wb);
-  EXPECT_EQ(FileName(wb.handle), "");
-  ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "M5.xlsx"), 0) << fm_get_last_error_message();
-  EXPECT_EQ(FileName(wb.handle), "M5.xlsx");
+  EXPECT_EQ(BookName(wb.handle), "");
+  ASSERT_EQ(SetBookName(wb.handle, "M5.xlsx"), 0) << fm_get_last_error_message();
+  EXPECT_EQ(BookName(wb.handle), "M5.xlsx");
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=M5.xlsx!LN+1"), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_set_file_name(wb.handle, ""), 0);
-  EXPECT_EQ(FileName(wb.handle), "");
+  ASSERT_EQ(SetBookName(wb.handle, ""), 0);
+  EXPECT_EQ(BookName(wb.handle), "");
   EXPECT_EQ(Formula(wb.handle, 0, 0), "=[0]!LN+1");
   EXPECT_EQ(LinkCount(wb.handle), 0U);
 }
@@ -211,13 +225,13 @@ TEST(FormulonCApiExternalLinks, FileNameIsUnsetByDefaultAndByEmptyText) {
 TEST(FormulonCApiExternalLinks, FileNameRefusesInvalidNames) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "Keep.xlsx"), 0);
+  ASSERT_EQ(SetBookName(wb.handle, "Keep.xlsx"), 0);
   const std::string too_long = std::string(214, 'a') + ".xlsx";
   for (const char* name : {"Book1", ".xlsx", "Book1.txt", "a[b].xlsx", "a]b.xlsx", "a:b.xlsx", "a/b.xlsx", "a\\b.xlsx",
                            "a?b.xlsx", "a*b.xlsx", "\xFF.xlsx", "\xED\xA0\x80.xlsx", too_long.c_str()}) {
-    EXPECT_EQ(fm_workbook_set_file_name(wb.handle, name), kInvalidArgument) << name;
+    EXPECT_EQ(SetBookName(wb.handle, name), kInvalidArgument) << name;
   }
-  EXPECT_EQ(FileName(wb.handle), "Keep.xlsx");
+  EXPECT_EQ(BookName(wb.handle), "Keep.xlsx");
 }
 
 TEST(FormulonCApiExternalLinks, FileNameAcceptsTwoHundredEighteenBytes) {
@@ -225,8 +239,8 @@ TEST(FormulonCApiExternalLinks, FileNameAcceptsTwoHundredEighteenBytes) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const std::string name = std::string(213, 'a') + ".xlsx";
   ASSERT_EQ(name.size(), 218U);
-  EXPECT_EQ(fm_workbook_set_file_name(wb.handle, name.c_str()), 0) << fm_get_last_error_message();
-  EXPECT_EQ(FileName(wb.handle), name);
+  EXPECT_EQ(SetBookName(wb.handle, name.c_str()), 0) << fm_get_last_error_message();
+  EXPECT_EQ(BookName(wb.handle), name);
 }
 
 TEST(FormulonCApiExternalLinks, FileNameRefusesAnExternalLinkBookName) {
@@ -234,15 +248,15 @@ TEST(FormulonCApiExternalLinks, FileNameRefusesAnExternalLinkBookName) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=[Ext.xlsx]Sheet1!A1"), 0) << fm_get_last_error_message();
   ASSERT_EQ(LinkCount(wb.handle), 1U);
-  EXPECT_EQ(fm_workbook_set_file_name(wb.handle, "EXT.XLSX"), kInvalidArgument);
-  EXPECT_EQ(FileName(wb.handle), "");
-  EXPECT_EQ(fm_workbook_set_file_name(wb.handle, "Other.xlsx"), 0) << fm_get_last_error_message();
+  EXPECT_EQ(SetBookName(wb.handle, "EXT.XLSX"), kInvalidArgument);
+  EXPECT_EQ(BookName(wb.handle), "");
+  EXPECT_EQ(SetBookName(wb.handle, "Other.xlsx"), 0) << fm_get_last_error_message();
 }
 
 TEST(FormulonCApiExternalLinks, FileNameSpellsTheWorkbooksOwnNames) {
   WorkbookGuard wb;
   CreateWithName(&wb);
-  ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "M5.xlsx"), 0);
+  ASSERT_EQ(SetBookName(wb.handle, "M5.xlsx"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=M5.xlsx!LN+1"), 0) << fm_get_last_error_message();
   EXPECT_EQ(Formula(wb.handle, 0, 0), "=M5.xlsx!LN+1");
   const struct {
@@ -253,7 +267,7 @@ TEST(FormulonCApiExternalLinks, FileNameSpellsTheWorkbooksOwnNames) {
       {"It's.xlsx", "='It''s.xlsx'!LN+1"}, {"M5x.xlsb", "=M5x.xlsb!LN+1"},
   };
   for (const auto& c : kCases) {
-    ASSERT_EQ(fm_workbook_set_file_name(wb.handle, c.name), 0) << c.name;
+    ASSERT_EQ(SetBookName(wb.handle, c.name), 0) << c.name;
     EXPECT_EQ(Formula(wb.handle, 0, 0), c.shown) << c.name;
   }
   EXPECT_EQ(LinkCount(wb.handle), 0U);
@@ -262,13 +276,13 @@ TEST(FormulonCApiExternalLinks, FileNameSpellsTheWorkbooksOwnNames) {
 TEST(FormulonCApiExternalLinks, FileNameQuotedEntriesBindToTheWorkbook) {
   WorkbookGuard wb;
   CreateWithName(&wb);
-  ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "M5 b-1.xlsx"), 0);
+  ASSERT_EQ(SetBookName(wb.handle, "M5 b-1.xlsx"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "='M5 b-1.xlsx'!LN+1"), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "1M5.xlsx"), 0);
+  ASSERT_EQ(SetBookName(wb.handle, "1M5.xlsx"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 1, 0, "='1M5.xlsx'!LN+1"), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "M5.xlsx"), 0);
+  ASSERT_EQ(SetBookName(wb.handle, "M5.xlsx"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 2, 0, "=m5.XLSX!LN+1"), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_set_file_name(wb.handle, ""), 0);
+  ASSERT_EQ(SetBookName(wb.handle, ""), 0);
   EXPECT_EQ(Formula(wb.handle, 0, 0), "=[0]!LN+1");
   EXPECT_EQ(Formula(wb.handle, 1, 0), "=[0]!LN+1");
   EXPECT_EQ(Formula(wb.handle, 2, 0), "=[0]!LN+1");
@@ -278,7 +292,7 @@ TEST(FormulonCApiExternalLinks, FileNameQuotedEntriesBindToTheWorkbook) {
 TEST(FormulonCApiExternalLinks, FileNameBracketedSelfBookDropsToTheSheet) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "M5.xlsx"), 0);
+  ASSERT_EQ(SetBookName(wb.handle, "M5.xlsx"), 0);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 7.0), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 1, 0, "=[M5.xlsx]Sheet1!A1"), 0) << fm_get_last_error_message();
   EXPECT_EQ(Formula(wb.handle, 1, 0), "=Sheet1!A1");
@@ -293,14 +307,13 @@ TEST(FormulonCApiExternalLinks, FileNameBracketedSelfBookDropsToTheSheet) {
 TEST(FormulonCApiExternalLinks, FileNameNonAsciiNameRoundTrips) {
   WorkbookGuard wb;
   CreateWithName(&wb);
-  ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "\xE3\x83\x96\xE3\x83\x83\xE3\x82\xAF.xlsx"), 0)
-      << fm_get_last_error_message();
+  ASSERT_EQ(SetBookName(wb.handle, "\xE3\x83\x96\xE3\x83\x83\xE3\x82\xAF.xlsx"), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=\xE3\x83\x96\xE3\x83\x83\xE3\x82\xAF.xlsx!LN+1"), 0)
       << fm_get_last_error_message();
   const std::string shown = Formula(wb.handle, 0, 0);
   EXPECT_EQ(shown.find("[0]!"), std::string::npos) << shown;
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 1, 0, shown.c_str()), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_set_file_name(wb.handle, ""), 0);
+  ASSERT_EQ(SetBookName(wb.handle, ""), 0);
   EXPECT_EQ(Formula(wb.handle, 0, 0), "=[0]!LN+1");
   EXPECT_EQ(Formula(wb.handle, 1, 0), "=[0]!LN+1");
   EXPECT_EQ(LinkCount(wb.handle), 0U);
@@ -309,14 +322,14 @@ TEST(FormulonCApiExternalLinks, FileNameNonAsciiNameRoundTrips) {
 TEST(FormulonCApiExternalLinks, FileNameCellGettersSpellTheName) {
   WorkbookGuard wb;
   CreateWithName(&wb);
-  ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "M5.xlsx"), 0);
+  ASSERT_EQ(SetBookName(wb.handle, "M5.xlsx"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=M5.xlsx!LN+1"), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_set_array_formula(wb.handle, 0, record_arg(fm_cell_rect_t{2, 0, 2U, 0U}), "=M5.xlsx!LN*2"), 0)
       << fm_get_last_error_message();
   EXPECT_EQ(LinkCount(wb.handle), 0U);
 
   for (const bool named : {true, false}) {
-    ASSERT_EQ(fm_workbook_set_file_name(wb.handle, named ? "M5.xlsx" : ""), 0);
+    ASSERT_EQ(SetBookName(wb.handle, named ? "M5.xlsx" : ""), 0);
     const std::string book = named ? "M5.xlsx!" : "[0]!";
     EXPECT_EQ(Formula(wb.handle, 0, 0), "=" + book + "LN+1");
 
@@ -351,12 +364,12 @@ TEST(FormulonCApiExternalLinks, FileNameCellGettersSpellTheName) {
 TEST(FormulonCApiExternalLinks, FileNameDefinedNamesStoreAndSpellTheName) {
   WorkbookGuard wb;
   CreateWithName(&wb);
-  ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "M5.xlsx"), 0);
+  ASSERT_EQ(SetBookName(wb.handle, "M5.xlsx"), 0);
   ASSERT_EQ(SetDefinedName(wb.handle, "LP", "M5.xlsx!LN*2"), 0) << fm_get_last_error_message();
   ASSERT_EQ(SetDefinedName(wb.handle, "LQ", "=M5.xlsx!LN*3", 0), 0) << fm_get_last_error_message();
   EXPECT_EQ(LinkCount(wb.handle), 0U);
   for (const bool named : {true, false}) {
-    ASSERT_EQ(fm_workbook_set_file_name(wb.handle, named ? "M5.xlsx" : ""), 0);
+    ASSERT_EQ(SetBookName(wb.handle, named ? "M5.xlsx" : ""), 0);
     const std::string book = named ? "M5.xlsx!" : "[0]!";
     fm_defined_name_t dn = FM_STRUCT_INIT(fm_defined_name_t);
     dn.local_sheet_id = -2;
@@ -373,7 +386,7 @@ TEST(FormulonCApiExternalLinks, FileNameDefinedNamesStoreAndSpellTheName) {
 TEST(FormulonCApiExternalLinks, FileNameValidationsStoreAndSpellTheName) {
   WorkbookGuard wb;
   CreateWithName(&wb);
-  ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "M5.xlsx"), 0);
+  ASSERT_EQ(SetBookName(wb.handle, "M5.xlsx"), 0);
   const fm_cell_rect_t range{0, 0, 9, 0};
   fm_data_validation_t v = FM_STRUCT_INIT(fm_data_validation_t);
   v.ranges = &range;
@@ -384,7 +397,7 @@ TEST(FormulonCApiExternalLinks, FileNameValidationsStoreAndSpellTheName) {
   ASSERT_EQ(fm_sheet_add_validation(wb.handle, 0, &v, ignored_id()), 0) << fm_get_last_error_message();
   EXPECT_EQ(LinkCount(wb.handle), 0U);
   for (const bool named : {true, false}) {
-    ASSERT_EQ(fm_workbook_set_file_name(wb.handle, named ? "M5.xlsx" : ""), 0);
+    ASSERT_EQ(SetBookName(wb.handle, named ? "M5.xlsx" : ""), 0);
     const std::string book = named ? "M5.xlsx!" : "[0]!";
     fm_data_validation_t out = FM_STRUCT_INIT(fm_data_validation_t);
     ASSERT_EQ(fm_sheet_get_validation_at(wb.handle, 0, 0, &out), 0) << fm_get_last_error_message();
@@ -396,7 +409,7 @@ TEST(FormulonCApiExternalLinks, FileNameValidationsStoreAndSpellTheName) {
 TEST(FormulonCApiExternalLinks, FileNameConditionalFormatsStoreAndSpellTheName) {
   WorkbookGuard wb;
   CreateWithName(&wb);
-  ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "M5.xlsx"), 0);
+  ASSERT_EQ(SetBookName(wb.handle, "M5.xlsx"), 0);
   const fm_cell_rect_t sqref{0, 0, 9, 0};
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
   rule.type = 0;  // Expression
@@ -421,7 +434,7 @@ TEST(FormulonCApiExternalLinks, FileNameConditionalFormatsStoreAndSpellTheName) 
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &scale, ignored_id()), 0) << fm_get_last_error_message();
   EXPECT_EQ(LinkCount(wb.handle), 0U);
   for (const bool named : {true, false}) {
-    ASSERT_EQ(fm_workbook_set_file_name(wb.handle, named ? "M5.xlsx" : ""), 0);
+    ASSERT_EQ(SetBookName(wb.handle, named ? "M5.xlsx" : ""), 0);
     const std::string book = named ? "M5.xlsx!" : "[0]!";
     fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
     ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &out), 0) << fm_get_last_error_message();
@@ -435,7 +448,7 @@ TEST(FormulonCApiExternalLinks, FileNameConditionalFormatsStoreAndSpellTheName) 
 TEST(FormulonCApiExternalLinks, FileNameTableTotalsStoreAndSpellTheName) {
   WorkbookGuard wb;
   CreateWithName(&wb);
-  ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "M5.xlsx"), 0);
+  ASSERT_EQ(SetBookName(wb.handle, "M5.xlsx"), 0);
   const char* names[] = {"a", "b"};
   std::size_t table = 99;
   ASSERT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 3, 3, 4}), "Tbl", names, 2, nullptr, 1, 1, &table), 0)
@@ -445,7 +458,7 @@ TEST(FormulonCApiExternalLinks, FileNameTableTotalsStoreAndSpellTheName) {
       << fm_get_last_error_message();
   EXPECT_EQ(LinkCount(wb.handle), 0U);
   for (const bool named : {true, false}) {
-    ASSERT_EQ(fm_workbook_set_file_name(wb.handle, named ? "M5.xlsx" : ""), 0);
+    ASSERT_EQ(SetBookName(wb.handle, named ? "M5.xlsx" : ""), 0);
     const std::string book = named ? "M5.xlsx!" : "[0]!";
     fm_table_column_info_t column = FM_STRUCT_INIT(fm_table_column_info_t);
     ASSERT_EQ(fm_sheet_get_table_column_at(wb.handle, 0, table, 0, &column), 0) << fm_get_last_error_message();
@@ -475,14 +488,14 @@ TEST(FormulonCApiExternalLinks, FileNameChartSeriesStoreAndSpellTheName) {
   opts.placement.anchor.from_row = 6;
   uint32_t id = 0;
   ASSERT_EQ(fm_sheet_add_chart(wb.handle, 0, &opts, &id), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "M5.xlsx"), 0);
+  ASSERT_EQ(SetBookName(wb.handle, "M5.xlsx"), 0);
   fm_chart_series_patch_t patch = FM_STRUCT_INIT(fm_chart_series_patch_t);
   patch.values_op = FM_PATCH_OP_SET;
   patch.values = fm_chart_data_source_spec_t{FM_CHART_SOURCE_KIND_REF, "M5.xlsx!LR", nullptr, 0};
   ASSERT_EQ(fm_sheet_update_chart_series(wb.handle, 0, id, 0, 0, &patch), 0) << fm_get_last_error_message();
   EXPECT_EQ(LinkCount(wb.handle), 0U);
   for (const bool named : {true, false}) {
-    ASSERT_EQ(fm_workbook_set_file_name(wb.handle, named ? "M5.xlsx" : ""), 0);
+    ASSERT_EQ(SetBookName(wb.handle, named ? "M5.xlsx" : ""), 0);
     fm_chart_t* chart = nullptr;
     int32_t present = 0;
     ASSERT_EQ(fm_sheet_get_chart(wb.handle, 0, id, &present, &chart), 0) << fm_get_last_error_message();
@@ -497,7 +510,7 @@ TEST(FormulonCApiExternalLinks, FileNameChartSeriesStoreAndSpellTheName) {
 TEST(FormulonCApiExternalLinks, FileNameAdHocEvaluationReadsTheName) {
   WorkbookGuard wb;
   CreateWithName(&wb);
-  ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "M5.xlsx"), 0);
+  ASSERT_EQ(SetBookName(wb.handle, "M5.xlsx"), 0);
   fm_value_t v{};
   ASSERT_EQ(evaluate_top_left(wb.handle, 0, 0, 0, "=M5.xlsx!LN*3", &v), 0) << fm_get_last_error_message();
   ASSERT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
@@ -512,11 +525,11 @@ TEST(FormulonCApiExternalLinks, FileNameAdHocEvaluationReadsTheName) {
 TEST(FormulonCApiExternalLinks, FileNameFormulaTextSpellsTheName) {
   WorkbookGuard wb;
   CreateWithName(&wb);
-  ASSERT_EQ(fm_workbook_set_file_name(wb.handle, "M10a.xlsx"), 0);
+  ASSERT_EQ(SetBookName(wb.handle, "M10a.xlsx"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=M10a.xlsx!LN+1"), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 1, "=FORMULATEXT(A1)"), 0) << fm_get_last_error_message();
   for (const bool named : {true, false}) {
-    ASSERT_EQ(fm_workbook_set_file_name(wb.handle, named ? "M10a.xlsx" : ""), 0);
+    ASSERT_EQ(SetBookName(wb.handle, named ? "M10a.xlsx" : ""), 0);
     ASSERT_EQ(fm_workbook_recalc(wb.handle), 0) << fm_get_last_error_message();
     fm_value_t v{};
     ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 1, &v), 0);

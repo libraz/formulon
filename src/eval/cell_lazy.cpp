@@ -13,6 +13,7 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -31,6 +32,7 @@
 #include "eval/text_format/display_text.h"
 #include "eval/text_format/number_format.h"
 #include "excel_locale.h"
+#include "excel_profile.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "parser/reference.h"
@@ -360,9 +362,15 @@ Value resolve_cell_width(std::string_view sheet_name, std::uint32_t col, Arena& 
 
 // Builds the `"address"` answer: an A1 absolute address (`$Col$Row`)
 // optionally prefixed with a sheet qualifier, quoted by the cross-workbook
-// sheet rule of the active locale. The workbook has no filename, so no
-// `[Workbook]` part precedes the sheet.
-Value build_address(Arena& arena, std::string_view sheet, std::uint32_t row, std::uint32_t col) {
+// sheet rule of the active locale. A reference to the formula's own sheet
+// prints no qualifier, even when written qualified. With a location set the
+// qualifier is `[<file>]<sheet>`, quoted whole when the book or the sheet
+// needs quoting; without one no `[Workbook]` part is shown.
+Value build_address(Arena& arena, const EvalContext& ctx, std::string_view sheet, std::uint32_t row,
+                    std::uint32_t col) {
+  if (!sheet.empty() && ctx.current_sheet() != nullptr && ctx.sheet_for_qualifier(sheet) == ctx.current_sheet()) {
+    sheet = {};
+  }
   // `a1::encode_a1` returns an unanchored address (e.g. "A1"); we splice the
   // `$` anchors in manually because the caller wants an absolute form.
   // The helper accepts 0-based (row, col) and produces 1-based output.
@@ -378,14 +386,50 @@ Value build_address(Arena& arena, std::string_view sheet, std::uint32_t row, std
   std::string result;
   result.reserve(sheet.size() + a1.size() + 4);
   if (!sheet.empty()) {
-    parser::append_sheet_name_quoted_if(
-        sheet, parser::external_sheet_needs_quoting_display(sheet, locale_facts(current_eval_profile())), result);
+    const bool quote = parser::external_sheet_needs_quoting_display(sheet, locale_facts(current_eval_profile()));
+    const Workbook* workbook = ctx.workbook();
+    if (workbook != nullptr && workbook->location()) {
+      const std::string& book = workbook->location()->file_name;
+      std::string qualifier = "[" + book + "]";
+      qualifier.append(sheet);
+      parser::append_sheet_name_quoted_if(qualifier, quote || parser::external_book_needs_quoting(book), result);
+    } else {
+      parser::append_sheet_name_quoted_if(sheet, quote, result);
+    }
     result.push_back('!');
   }
   result.push_back('$');
   result.append(a1.substr(0, row_start));
   result.push_back('$');
   result.append(a1.substr(row_start));
+  return arena_text(arena, result);
+}
+
+// Builds the `"filename"` answer for the sheet named `sheet_name`:
+// `<directory>/[<file>]<sheet>`, unquoted. A Windows profile shows the
+// directory with `\` separators; a root directory is not followed by a second
+// separator. Empty text when the workbook has no location or no directory.
+Value build_filename(Arena& arena, const Workbook& workbook, std::string_view sheet_name) {
+  const std::optional<WorkbookLocation>& location = workbook.location();
+  if (!location || !location->directory) {
+    return arena_text(arena, "");
+  }
+  const bool windows = current_eval_profile().host == ExcelHost::kWin365;
+  std::string result = *location->directory;
+  if (result.back() != '/') {
+    result.push_back('/');
+  }
+  if (windows) {
+    for (char& c : result) {
+      if (c == '/') {
+        c = '\\';
+      }
+    }
+  }
+  result.push_back('[');
+  result.append(location->file_name);
+  result.push_back(']');
+  result.append(sheet_name);
   return arena_text(arena, result);
 }
 
@@ -538,7 +582,7 @@ Value eval_cell_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
       ctx.note_dynamic_read(sheet, DeclaredRect{row, row, col, col, /*whole_axis=*/false});
     }
     if (key == CellKey::kAddress) {
-      return build_address(arena, sheet, row, col);
+      return build_address(arena, ctx, sheet, row, col);
     }
     if (key == CellKey::kCol) {
       return Value::number(static_cast<double>(col + 1U));
@@ -590,18 +634,35 @@ Value eval_cell_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return arena_text(arena, std::string_view(&facts.cell_type_value, 1));
   }
 
-  // Reference-independent keys. These ignore the supplied reference
-  // entirely (Excel observed: passes through without dereferencing,
-  // even when the reference would otherwise error). If the reference
-  // argument itself is a top-level error literal that path is rare;
-  // the spec calls for fixed stubs here so we don't pre-evaluate.
+  // "filename" reads only the reference's sheet, and only when the book has
+  // a folder; an unsaved book never looks at the reference.
   if (key == CellKey::kFilename) {
-    // No filesystem path on the Workbook yet. Mac returns blank when the
-    // workbook has never been saved; we surface empty text instead so
-    // the top-level blank-as-zero rule (`evaluate()` in tree_walker)
-    // does not collapse the result to 0.
-    return arena_text(arena, "");
+    // An unsaved book gives empty text, which the top-level blank-as-zero
+    // rule (`evaluate()` in tree_walker) does not collapse to 0.
+    const Workbook* workbook = ctx.workbook();
+    if (workbook == nullptr || !workbook->location() || !workbook->location()->directory) {
+      return arena_text(arena, "");
+    }
+    // No reference names the active sheet, not the formula's.
+    if (call.as_call_arity() == 1U) {
+      return build_filename(arena, *workbook, workbook->sheet(workbook->active_sheet()).name());
+    }
+    std::uint32_t row = 0;
+    std::uint32_t col = 0;
+    std::string_view sheet;
+    Value early_result = Value::blank();
+    if (!resolve_topleft_or_formula_cell(call, arena, registry, ctx.without_dynamic_read_callback(), &row, &col, &sheet,
+                                         &early_result)) {
+      return early_result;
+    }
+    const Sheet* target = sheet.empty() ? ctx.current_sheet() : ctx.sheet_for_qualifier(sheet);
+    if (target == nullptr) {
+      return sheet.empty() ? arena_text(arena, "") : Value::error(ErrorCode::Ref);
+    }
+    return build_filename(arena, *workbook, target->name());
   }
+  // "parentheses" ignores the supplied reference entirely (Excel observed:
+  // passes through without dereferencing, even when it would error).
   if (key == CellKey::kParentheses) {
     // No parenthesis-format flag yet.
     return Value::number(0.0);

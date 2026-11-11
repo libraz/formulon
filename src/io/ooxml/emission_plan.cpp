@@ -320,6 +320,9 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
   EmissionPlan plan;
   plan.generated_shared_strings = generated_shared_strings;
   plan.generated_persons = !wb.persons().empty();
+  if (wb.location() && wb.location()->directory) {
+    plan.book_directory = *wb.location()->directory;
+  }
   plan.tables_by_sheet.assign(wb.sheet_count(), {});
   // A retained `xl/metadata.xml` keeps today's meaning and blocks generated
   // rich errors (`keeps_foreign_rich_data`); otherwise the writer generates

@@ -234,11 +234,49 @@ fm_status_t write_file_atomically(const std::string& link_or_path, const std::ui
   return 0;
 }
 
-void set_file_name_from_path(fm_workbook_t* wb, const std::string& path) {
-  const std::size_t slash = path.find_last_of('/');
-  const std::string name = slash == std::string::npos ? path : path.substr(slash + 1);
-  // A refused name leaves the workbook unnamed, which is not an error here.
-  (void)fm_workbook_set_file_name(wb, name.c_str());
+void set_location_from_path(fm_workbook_t* wb, const std::string& path) {
+  std::string absolute = path;
+  if (absolute.empty() || absolute.front() != '/') {
+    std::vector<char> cwd(PATH_MAX + 1, '\0');
+    if (::getcwd(cwd.data(), cwd.size()) == nullptr) {
+      (void)fm_workbook_set_location(wb, nullptr);
+      return;
+    }
+    absolute = std::string(cwd.data()) + "/" + absolute;
+  }
+  // Lexical: `.` and empty segments drop, `..` climbs and stops at the root.
+  std::vector<std::string> segments;
+  std::size_t start = 0;
+  while (start <= absolute.size()) {
+    const std::size_t end = std::min(absolute.find('/', start), absolute.size());
+    const std::string segment = absolute.substr(start, end - start);
+    if (segment == "..") {
+      if (!segments.empty()) {
+        segments.pop_back();
+      }
+    } else if (!segment.empty() && segment != ".") {
+      segments.push_back(segment);
+    }
+    start = end + 1;
+  }
+  if (segments.empty()) {
+    (void)fm_workbook_set_location(wb, nullptr);
+    return;
+  }
+  std::string directory;
+  for (std::size_t i = 0; i + 1 < segments.size(); ++i) {
+    directory += "/" + segments[i];
+  }
+  if (directory.empty()) {
+    directory = "/";
+  }
+  fm_workbook_location_t location = FM_STRUCT_INIT(fm_workbook_location_t);
+  location.directory = directory.c_str();
+  location.file_name = segments.back().c_str();
+  // A refused location leaves the workbook without one, which is not an error here.
+  if (fm_workbook_set_location(wb, &location) != 0) {
+    (void)fm_workbook_set_location(wb, nullptr);
+  }
 }
 
 }  // namespace formulon::cli

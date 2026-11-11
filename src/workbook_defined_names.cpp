@@ -70,9 +70,9 @@ bool erase_slicer_cache_names(std::vector<DefinedName>& names, const std::vector
 
 void Workbook::set_defined_names(std::vector<DefinedName> names) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-  if (!file_name_.empty()) {
+  if (!file_name().empty()) {
     for (DefinedName& entry : names) {
-      entry.formula = parser::bind_self_book_names(entry.formula, file_name_);
+      entry.formula = parser::bind_self_book_names(entry.formula, file_name());
     }
   }
   std::vector<std::string> changed;
@@ -132,8 +132,8 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
     return make_error(FormulonErrorCode::kInvalidArgument, "local_sheet_id is out of range",
                       scope_context(local_sheet_id) + " sheet_count=" + std::to_string(sheets_.size()));
   }
-  if (!file_name_.empty()) {
-    formula = parser::bind_self_book_names(formula, file_name_);
+  if (!file_name().empty()) {
+    formula = parser::bind_self_book_names(formula, file_name());
   }
   bind_external_books_unlocked(std::string_view(formula));
   // An upsert: the name resolves within the requested scope only, and the

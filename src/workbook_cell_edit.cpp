@@ -302,8 +302,8 @@ void Workbook::put_cell_formula_locked(std::size_t sheet_index, std::uint32_t ro
   // formula bar shows. Entered text also takes the whitespace and number
   // literal spelling Excel stores.
   formula = normalize_formula_text(std::move(formula), source);
-  if (source == FormulaSource::kEntered && !file_name_.empty()) {
-    formula = parser::bind_self_book_names(formula, file_name_);
+  if (source == FormulaSource::kEntered && !file_name().empty()) {
+    formula = parser::bind_self_book_names(formula, file_name());
   }
 
   const eval::CellNodeId node = make_node(sheet_index, row, col);

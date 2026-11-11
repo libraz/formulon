@@ -2949,10 +2949,16 @@ typedef struct {
  *
  * An http, https or ftp target without userinfo is stored the way Excel stores it: scheme and host lowercased, an
  * empty path becomes `/`, percent-escapes of unreserved characters decoded, and a `#fragment` split off into
- * `location` (a given `location` is kept). A mailto: target has only its scheme lowercased; an absolute POSIX path
- * becomes a `file:///` URL and a UNC path `file:////server/share/...`; any other target is stored as written. With no
- * `display`, a top-left cell that holds other text gets the stored target as `display`, and a location-only link gets
- * its location. A space in an external target is written as `%20` in a saved file.
+ * `location` (a given `location` is kept). A mailto: target has only its scheme lowercased. A local path is held
+ * absolute: an absolute POSIX path becomes a `file:///` URL, a drive path `file:///C:/...` and a UNC path
+ * `file:////server/share/...`, each with a `#fragment` split off into `location` as for a URL; a POSIX path holding
+ * `%` stays a plain path with only `%20` decoded to a space; a relative path is resolved against the folder of
+ * `fm_workbook_get_location` when one is set (a `..` above the root keeps it as written). Any other target is stored
+ * as written. With no `display`, a top-left cell that holds other text gets the stored target as `display`, and a
+ * location-only link gets its location. A saved file writes a local target relative to the location's folder when
+ * the two share at least one folder (compared case-sensitively), with that relative text as the saved `display`
+ * (followed by ` - <location>` when there is one) unless the link has its own; a `%` in a plain path is written
+ * `%25`. A space in an external target is written as `%20` in a saved file.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `hl` is `NULL`;
@@ -4574,43 +4580,80 @@ FM_API fm_status_t fm_get_profile_id_count(size_t* out_count);
 FM_API fm_status_t fm_get_profile_id_at(size_t index, const char** out_profile_id);
 
 /**
- * @brief Reads the file name the workbook is shown under, extension included
- *        and without a directory. `*out_present` is `1` and `*out_name` set
- *        when a name is set, else `0` and `*out_name` `NULL` (still
- *        `FM_STATUS_OK` (0)).
+ * @brief Where the workbook is saved: its folder and its file name.
  *
- * While a name is set, every getter that returns formula text spells a
- * reference to the workbook's own defined name (stored `[0]!Name`) with it,
- * as Excel's formula bar does: `M5.xlsx!Name`, quoted when the name needs it
- * (`'M5 b-1.xlsx'!Name`). Unset, they return `[0]!Name`. Loading from bytes
- * leaves the name unset. `*out_name` is read-scratch-backed.
+ * The location is metadata only: it is never read from or written to a file
+ * system. It drives `CELL("filename")`, `CELL("address")` for other sheets,
+ * the `[0]!Name` spelling, the saved absolute folder path, and the relative
+ * form of local hyperlink targets in a saved file. `INFO("directory")` is the application's
+ * current directory and does not follow it. Set the location to the
+ * destination before saving to a new place, as Excel's Save As does; relative
+ * targets in the saved file are computed against it.
+ *
+ * `directory` is absolute in one of three forms: POSIX (`/a/b`, a backslash
+ * being a literal character, `/` alone the root), drive (`C:\a`, `C:/a`,
+ * `c:\a\`; stored `C:/a`, the drive root `C:/`) or UNC (`\\server\share\a`,
+ * `//server/share/a`; stored `//server/share/a`). The trailing separator is
+ * stripped except at a root. The getter returns this canonical form, so
+ * setting what it returns changes nothing.
+ */
+typedef struct {
+  uint32_t struct_size;
+  /** The folder, in canonical form; `NULL` when the book has a name but no folder. */
+  const char* directory;
+  /** The file name, extension included; required. */
+  const char* file_name;
+} fm_workbook_location_t;
+
+/**
+ * @brief Reads the workbook's location. `*out_present` is `0` when it is
+ *        unset, as for a book that has not been saved, and `1` with `*out`
+ *        filled otherwise.
+ *
+ * Loading from bytes leaves the location unset. While a file name is set,
+ * every getter that returns formula text spells a reference to the workbook's
+ * own defined name (stored `[0]!Name`) with it, as Excel's formula bar does:
+ * `M5.xlsx!Name`, quoted when the name needs it (`'M5 b-1.xlsx'!Name`).
+ * The strings are read-scratch-backed.
  *
  * Lifetime: transient.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is NULL.
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is NULL;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `out->struct_size` is below v1.
  */
-FM_API fm_status_t fm_workbook_get_file_name(const fm_workbook_t* wb, int32_t* out_present, const char** out_name);
+FM_API fm_status_t fm_workbook_get_location(const fm_workbook_t* wb, int32_t* out_present, fm_workbook_location_t* out);
 
 /**
- * @brief Sets the file name `fm_workbook_get_file_name` reads; `""` unsets it.
+ * @brief Sets the location `fm_workbook_get_location` reads; `location ==
+ *        NULL` unsets it. The whole record is validated before anything
+ *        changes.
  *
- * While a name is set, formula text entered through the C ABI that names it
- * refers to this workbook and creates no external link: `<name>!Name` and
+ * While a file name is set, formula text entered through the C ABI that names
+ * it refers to this workbook and creates no external link: `<name>!Name` and
  * `'<name>'!Name` are stored as `[0]!Name`, and `[<name>]Sheet1!A1` as
- * `Sheet1!A1`. The book is matched under ASCII case folding. The stored form
- * and the saved files do not depend on the name.
- * A changed name marks every formula cell dirty.
+ * `Sheet1!A1`. The book is matched under ASCII case folding. When a folder
+ * first appears, every relative local hyperlink target is resolved against it.
+ * Nothing is marked dirty: values that read the location (`CELL`,
+ * `FORMULATEXT`) refresh at the next recalculation, as Excel's do after Save
+ * As, and a save writes them as computed.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `name` is NULL;
- *         `FM_STATUS_INVALID_ARGUMENT` (2), changing nothing, when `name` does not end in a
- *           workbook extension (`.xlsx`, `.xlsm`, `.xlsb`, `.xls`, `.xltx`,
- *           `.xltm`, `.xlt`, `.xlam`, `.xla`), holds one of `[ ] : / \ ? *`,
- *           is not valid UTF-8, is longer than 218 bytes, or equals the book
- *           name of an external link.
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is NULL, or
+ *           `location->file_name` is NULL;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2), changing nothing, when
+ *           `location->struct_size` is below v1; when `file_name` is empty,
+ *           does not end in a workbook extension (`.xlsx`, `.xlsm`, `.xlsb`,
+ *           `.xls`, `.xltx`, `.xltm`, `.xlt`, `.xlam`, `.xla`), holds one of
+ *           `[ ] : / \ ? *`, is not valid UTF-8, is longer than 218 bytes,
+ *           or equals the book name of an external link; when `directory` is
+ *           `""` (use NULL), is not absolute in one of the three forms
+ *           (`C:`, `C:rel`, `\\server`, `//server` and `//a` are refused),
+ *           holds `[` or `]`, is not valid UTF-8, or has a `.`, `..` or empty
+ *           inner segment; or when `directory` + `/` + `file_name` is longer
+ *           than 1,024 bytes after canonicalisation.
  */
-FM_API fm_status_t fm_workbook_set_file_name(fm_workbook_t* wb, const char* name);
+FM_API fm_status_t fm_workbook_set_location(fm_workbook_t* wb, const fm_workbook_location_t* location);
 
 /* -------------------------------------------------------------------------- */
 /* Sheet protection (per-sheet `<sheetProtection>`)                           */

@@ -1190,7 +1190,7 @@ class ResultShapeTest(BindingRuleTestBase):
         ledger = {"entries": {"sheet.add": {"kind": "op", "c": "fm_workbook_add_sheet", "js": "addSheet"}}}
 
         def ctx() -> api_conventions.Context:
-            wasm = "export interface Sheet { readonly name: string }\n" + _wb("  addSheet(name: string): Sheet;\n")
+            wasm = "export interface Sheet { readonly name: string }\n" + _wb("  addSheet(title: string): Sheet;\n")
             return self.fixture.context(header, ledger, wasm=wasm)
 
         self.assertEqual(hits(ctx(), "R8.js"), [("wasm", "sheet.add", "result")])
@@ -1689,8 +1689,8 @@ class ClassScopeTest(BindingRuleTestBase):
     }  # fmt: skip
 
     def test_r23_js(self) -> None:
-        bad = _wb("  getZoom(sheet: number): number;\n") + _sheet("  addSheet(name: string): Sheet;\n")
-        good = _wb("  addSheet(name: string): Sheet;\n") + _sheet("  getZoom(): number;\n")
+        bad = _wb("  getZoom(sheet: number): number;\n") + _sheet("  addSheet(title: string): Sheet;\n")
+        good = _wb("  addSheet(title: string): Sheet;\n") + _sheet("  getZoom(): number;\n")
         self.assert_rule(
             "R23.js",
             self.fixture.context("", self.LEDGER, wasm=bad, native=_sheet("  getZoom(sheet: number): number;\n")),
@@ -1708,10 +1708,10 @@ class ClassScopeTest(BindingRuleTestBase):
             "R23.py",
             self.fixture.context(
                 "", self.LEDGER, py_workbook=_py_wb("    def get_zoom(self, sheet: int) -> int: ...\n"),
-                py_sheet=_py_sheet("    def add_sheet(self, name: str) -> 'Sheet': ...\n"),
+                py_sheet=_py_sheet("    def add_sheet(self, title: str) -> 'Sheet': ...\n"),
             ),
             self.fixture.context(
-                "", self.LEDGER, py_workbook=_py_wb("    def add_sheet(self, name: str) -> 'Sheet': ...\n"),
+                "", self.LEDGER, py_workbook=_py_wb("    def add_sheet(self, title: str) -> 'Sheet': ...\n"),
                 py_sheet=_py_sheet("    def get_zoom(self) -> int: ...\n"),
             ),
             [("py", "sheet.add", "Sheet"), ("py", "zoom.get", "Workbook")],
@@ -1793,7 +1793,7 @@ class ClassScopeTest(BindingRuleTestBase):
         workbook_only = {"entries": {"binding.table": {**table, "scope": "workbook"}}}
         both = {"entries": {"binding.table": {**table, "scope": "workbook"},
                             "binding.sheet_table": {**table, "scope": "sheet"}}}  # fmt: skip
-        js = _wb("  table(name: string): Table;\n") + _sheet("  table(table: TableRef): Table;\n")
+        js = _wb("  table(title: string): Table;\n") + _sheet("  table(table: TableRef): Table;\n")
         self.assert_rule(
             "R23.js",
             self.fixture.context("", workbook_only, wasm=js, native=js, common=FACADE),
@@ -2028,14 +2028,14 @@ class AbsentValueTest(BindingRuleTestBase):
 
     def test_r7_absent_js(self) -> None:
         bad = "export interface Font {\n  readonly hasBold: boolean;\n  readonly bold: boolean;\n}\n" + _wb(
-            '  /** Reads the file name; `""` when unset. */\n  getFileName(): string;\n'
-            '  /** Sets the file name; `""` clears it. */\n  setFileName(name: string): void;\n'
+            '  /** Reads the title; `""` when unset. */\n  getTitle(): string;\n'
+            '  /** Sets the title; `""` clears it. */\n  setTitle(title: string): void;\n'
             "  setAxis(sheet: number, axis: PivotAxis | -1): void;\n"
             "  /** Every field is zero or empty when absent. */\n  getProtection(sheet: number): Protection;\n"
         )
         good = "export interface Font {\n  readonly bold: boolean | null;\n}\n" + _wb(
-            "  /** Reads the file name; `null` when unset. */\n  getFileName(): string | null;\n"
-            '  /** Sets the file name; `null` or `""` clears it. */\n  setFileName(name: string | null): void;\n'
+            "  /** Reads the title; `null` when unset. */\n  getTitle(): string | null;\n"
+            '  /** Sets the title; `null` or `""` clears it. */\n  setTitle(title: string | null): void;\n'
             "  setAxis(sheet: number, axis: PivotAxis | null): void;\n"
         )
         self.assert_rule(
@@ -2044,21 +2044,21 @@ class AbsentValueTest(BindingRuleTestBase):
             self.fixture.context("", self.LEDGER, wasm=good),
             [
                 ("wasm", "record.font", "has:hasBold"),
-                ("wasm", "getFileName", "doc:Workbook.getFileName"),
+                ("wasm", "getTitle", "doc:Workbook.getTitle"),
                 ("wasm", "setAxis", "-1:Workbook.setAxis(axis)"),
-                ("wasm", "setFileName", "clear:Workbook.setFileName"),
+                ("wasm", "setTitle", "clear:Workbook.setTitle"),
             ],
         )
 
     def test_r7_absent_py(self) -> None:
         bad = "@dataclass(frozen=True)\nclass Font:\n    has_bold: bool\n    bold: bool\n\n" + _py_wb(
-            '    def get_file_name(self) -> str:\n        """Returns ``""`` when unset."""\n'
-            '    def set_file_name(self, name: str) -> None:\n        """Pass ``""`` to clear the name."""\n'
+            '    def get_title(self) -> str:\n        """Returns ``""`` when unset."""\n'
+            '    def set_title(self, title: str) -> None:\n        """Pass ``""`` to clear the title."""\n'
             "    def get_name(self, name: str, local_sheet_id: int = -1) -> str: ...\n"
         )
         good = "@dataclass(frozen=True)\nclass Font:\n    bold: Optional[bool]\n\n" + _py_wb(
-            '    def get_file_name(self) -> Optional[str]:\n        """Returns None when unset."""\n'
-            '    def set_file_name(self, name: Optional[str]) -> None:\n        """Pass None or ``""`` to clear it."""\n'
+            '    def get_title(self) -> Optional[str]:\n        """Returns None when unset."""\n'
+            '    def set_title(self, title: Optional[str]) -> None:\n        """Pass None or ``""`` to clear it."""\n'
             "    def get_name(self, name: str, local_sheet_id: Optional[int] = None) -> str: ...\n"
         )
         self.assert_rule(
@@ -2067,9 +2067,9 @@ class AbsentValueTest(BindingRuleTestBase):
             self.fixture.context("", self.LEDGER, py_workbook=good),
             [
                 ("py", "record.font", "has:has_bold"),
-                ("py", "get_file_name", "doc"),
+                ("py", "get_title", "doc"),
                 ("py", "get_name", "-1:local_sheet_id"),
-                ("py", "set_file_name", "clear"),
+                ("py", "set_title", "clear"),
             ],
         )
 
@@ -2972,9 +2972,9 @@ class HandleRuleTest(BindingRuleTestBase):
             },
         }  # fmt: skip
         good = (
-            _sheet("  rename(name: string): void;\n") + "export interface Pivot {\n  listFields(): PivotField[];\n}\n"
+            _sheet("  rename(title: string): void;\n") + "export interface Pivot {\n  listFields(): PivotField[];\n}\n"
         )
-        bad = _sheet("  rename(name: string): void;\n") + "export interface Pivot {\n}\n"
+        bad = _sheet("  rename(title: string): void;\n") + "export interface Pivot {\n}\n"
         self.assert_rule(
             "R5.list",
             self.fixture.context("", ledger, wasm=bad, native=good),
@@ -3237,7 +3237,7 @@ class AdoptedShapeTest(BindingRuleTestBase):
         )
         members = _wb(
             "  getSelection(): SheetSelection;\n  setSelection(input: SheetSelectionInput): void;\n"
-            "  getDefinedName(name: string): DefinedName;\n  setDefinedName(input: DefinedNameInput): void;\n"
+            "  getDefinedName(title: string): DefinedName;\n  setDefinedName(input: DefinedNameInput): void;\n"
         )
         bad = (
             records.replace("active: CellAddress", "focus: CellAddress").replace(

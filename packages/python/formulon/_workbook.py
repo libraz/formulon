@@ -407,6 +407,8 @@ __all__ = [
     "WidthPlatform",
     "Workbook",
     "WorkbookFormat",
+    "WorkbookLocation",
+    "WorkbookLocationInput",
     "WorkbookProtection",
     "WorkbookProtectionInput",
     "XfCell",
@@ -3974,6 +3976,35 @@ class ProtectedRangeInput:
     #: The security descriptor (SDDL text) naming who may edit the range without a password; omitted or ``None`` is
     #: absent.
     security_descriptor: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class WorkbookLocation:
+    """Where a workbook is saved (:meth:`Workbook.get_location`).
+
+    The location is metadata only: it is never read from or written to a file
+    system. ``directory`` is absolute in one of three canonical forms: POSIX
+    (``/a/b``, a backslash being a literal character, ``/`` alone the root),
+    drive (``C:/a``, given as ``C:\\a``, ``C:/a`` or ``c:\\a\\``; the drive
+    root ``C:/``) or UNC (``//server/share/a``, given as
+    ``\\\\server\\share\\a`` or ``//server/share/a``). The trailing
+    separator is stripped except at a root.
+    """
+
+    #: The folder in canonical form; ``None`` when the workbook has a name but no folder.
+    directory: Optional[str]
+    #: The file name, extension included.
+    file_name: str
+
+
+@dataclass
+class WorkbookLocationInput:
+    """The location :meth:`Workbook.set_location` takes; a :class:`WorkbookLocation` is accepted as is."""
+
+    #: The file name, extension included; required.
+    file_name: str
+    #: The folder, absolute in one of the forms :class:`WorkbookLocation` lists; omitted or ``None`` is no folder.
+    directory: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -9906,35 +9937,76 @@ class Workbook(_NoCopy):
             pid_ptr = scope.cstr(profile_id)
             _check(LIB.fm_workbook_set_profile_id(h, pid_ptr))
 
-    def get_file_name(self) -> Optional[str]:
-        """Return the file name the workbook is shown under, or ``None`` when unset.
+    def get_location(self) -> Optional[WorkbookLocation]:
+        """Return where the workbook is saved; ``None`` when it has no location.
 
-        While set, every formula getter spells a reference to the workbook's
-        own defined name (stored ``[0]!Name``) as ``Book.xlsx!Name``, quoted
-        when needed. Loading from bytes leaves it unset.
+        ``None`` when the workbook has no location, as for a book that has not
+        been saved. The location is metadata only: it is never read from or written to a
+        file system. It drives ``CELL("filename")``, ``CELL("address")`` for
+        other sheets, the ``[0]!Name`` spelling, the saved absolute folder
+        path, and the relative form of local hyperlink targets in a saved file.
+        ``INFO("directory")`` is the application's current directory and does
+        not follow it. Loading (:func:`load`) leaves the location unset, and
+        :meth:`save` does not set it.
+
+        While a file name is set, every formula getter spells a reference to the
+        workbook's own defined name (stored ``[0]!Name``) as ``Book.xlsx!Name``,
+        quoted when needed.
         """
         h = self._require()
         with _ArgScope() as scope:
             present = scope.out_ptr()
-            out = scope.out_ptr()
-            _check(LIB.fm_workbook_get_file_name(h, present, out))
-            return LIB.read_cstr(LIB.read_u32(out)) if LIB.read_i32(present) else None
+            ptr = scope.struct(S.WORKBOOK_LOCATION)
+            _check(LIB.fm_workbook_get_location(h, present, ptr))
+            if not LIB.read_i32(present):
+                return None
+            d = S.WORKBOOK_LOCATION.unpack(LIB, ptr)
+            directory = LIB.read_cstr(d["directory"]) if d["directory"] else None
+            return WorkbookLocation(directory=directory, file_name=LIB.read_cstr(d["file_name"]))
 
-    def set_file_name(self, name: Optional[str]) -> None:
-        """Set :meth:`get_file_name`, extension included and without a directory; ``None`` (or ``""``) unsets it.
+    def set_location(self, location: Union[WorkbookLocationInput, WorkbookLocation, None]) -> None:
+        """Set :meth:`get_location`; ``None`` unsets it.
 
-        Entered formulas then read ``Book.xlsx!Name`` and ``[Book.xlsx]Sheet1!A1``
-        as this workbook and create no external link. A changed name marks
-        every formula cell dirty.
+        Set the location to the destination before saving to a new place, as
+        Excel's Save As does; relative targets in the saved file are computed
+        against it. The directory is stored in its canonical form (see
+        :class:`WorkbookLocation`), so ``set_location(get_location())`` changes
+        nothing. Entered formulas then read ``Book.xlsx!Name`` and
+        ``[Book.xlsx]Sheet1!A1`` as this workbook and create no external link.
+        When a folder first appears, every relative local hyperlink target is
+        resolved against it. Values that read the location (``CELL``,
+        ``FORMULATEXT``) refresh at the next recalculation, as Excel's do
+        after Save As; a save writes them as computed.
 
         Raises:
-          FormulonError: with ``StatusCode.INVALID_ARGUMENT`` when the name lacks a
-            workbook extension, holds one of ``[ ] : / \\ ? *``, is longer
-            than 218 bytes, or equals an external link's book name.
+          TypeError: when ``location`` is neither a :class:`WorkbookLocationInput`,
+            a :class:`WorkbookLocation` nor ``None``, ``file_name`` is not a string,
+            or ``directory`` is neither a string nor ``None``.
+          FormulonError: with ``StatusCode.INVALID_ARGUMENT``, changing nothing,
+            when ``file_name`` is empty, lacks a workbook extension, holds one of
+            ``[ ] : / \\ ? *``, is longer than 218 bytes, or equals an external
+            link's book name; when ``directory`` is ``""`` (use ``None``), is not
+            absolute in one of the three forms, holds ``[`` or ``]``, or has a
+            ``.``, ``..`` or empty inner segment; or when the directory and file
+            name together are longer than 1,024 bytes.
         """
         h = self._require()
+        if location is None:
+            _check(LIB.fm_workbook_set_location(h, 0))
+            return
+        if not isinstance(location, (WorkbookLocationInput, WorkbookLocation)):
+            raise TypeError(
+                _argument_message("location", "must be a WorkbookLocationInput, a WorkbookLocation or None")
+            )
+        if not isinstance(location.file_name, str):
+            raise TypeError(_argument_message("location.file_name", "must be a string"))
+        if location.directory is not None and not isinstance(location.directory, str):
+            raise TypeError(_argument_message("location.directory", "must be a string or None"))
         with _ArgScope() as scope:
-            _check(LIB.fm_workbook_set_file_name(h, scope.cstr(name or "")))
+            ptr = scope.struct(S.WORKBOOK_LOCATION)
+            S.write_str_field(LIB, ptr, S.WORKBOOK_LOCATION, "directory", location.directory, scope, allow_empty=True)
+            S.write_str_field(LIB, ptr, S.WORKBOOK_LOCATION, "file_name", location.file_name, scope, allow_empty=True)
+            _check(LIB.fm_workbook_set_location(h, ptr))
 
     # -- Protection records ------------------------------------------------
     _WORKBOOK_PROTECTION_TEXT = (

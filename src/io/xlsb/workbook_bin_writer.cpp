@@ -53,6 +53,29 @@ namespace {
 // from `XlsbRecordType`) but the writer must emit for a well-formed stream.
 // Workbook-globals structural records Excel expects before the sheet bundle.
 constexpr std::uint16_t kBrtFileVersion = 128;
+// BrtAbsPath15: the book's folder (XLWideString), inside an AC block.
+constexpr std::uint16_t kBrtAbsPath15 = 2071;
+// The BrtACBegin Excel writes around BrtAbsPath15: one ACProductVersion,
+// version 0x0F03, fileExtension set.
+constexpr std::uint8_t kAbsPathAcBegin[] = {0x01, 0x00, 0x03, 0x0f, 0x00, 0x80};
+
+/// The BrtACBegin / BrtAbsPath15 / BrtACEnd block naming the location's
+/// folder with a trailing `/`, as Excel writes it after BrtWbProp; nothing
+/// when the location has no folder.
+void emit_abs_path(std::vector<std::uint8_t>& dst, const Workbook& wb) {
+  if (!wb.location() || !wb.location()->directory) {
+    return;
+  }
+  std::string url = *wb.location()->directory;
+  if (url.back() != '/') {
+    url.push_back('/');
+  }
+  std::vector<std::uint8_t> payload;
+  emit_xlwidestring(payload, url);
+  emit_record(dst, kAcBegin, ByteSpan{kAbsPathAcBegin, sizeof(kAbsPathAcBegin)});
+  emit_record(dst, kBrtAbsPath15, payload);
+  emit_record(dst, kAcEnd, ByteSpan{});
+}
 
 }  // namespace
 
@@ -669,6 +692,7 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
   emit_record(body, kBrtFileVersion, kFileVersionPayload);
   // A `<workbookPr>` attribute without a field is reported by the writer.
   emit_wb_prop(body, wb.workbook_pr_xml(), wb.date1904());
+  emit_abs_path(body, wb);
   // Excel places the protection records between BrtWbProp and the views.
   if (auto protection = emit_book_protection(body, wb.workbook_protection_xml()); !protection) {
     return std::move(protection.error());

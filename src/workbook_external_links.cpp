@@ -9,10 +9,12 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "defined_name.h"
 #include "external_link.h"
+#include "hyperlink_address.h"
 #include "io/format_detect.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
@@ -22,12 +24,14 @@
 #include "parser/ref_transforms.h"
 #include "parser/structured_ref_payload.h"
 #include "parser/structured_ref_spelling.h"
+#include "sheet.h"
 #include "sheet_name.h"
 #include "table.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/formula_text.h"
+#include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "workbook.h"
 #include "workbook_formula_index.h"
@@ -335,52 +339,158 @@ void Workbook::ingest_entered_formula(std::string& formula) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   const EnteredNameScope scope{this, -1};
   formula = parser::bind_structured_refs(formula, {}, parser::BareTableNamePredicate{&IsBareTableName, &scope});
-  if (!file_name_.empty()) {
-    formula = parser::bind_self_book_names(formula, file_name_);
+  if (!file_name().empty()) {
+    formula = parser::bind_self_book_names(formula, file_name());
   }
   bind_external_books_unlocked(std::string_view(formula));
 }
 
-Expected<void, Error> Workbook::set_file_name(std::string_view name) {
-  // Excel's limit on a file name.
-  constexpr std::size_t kMaxFileNameBytes = 218;
-  if (!name.empty()) {
-    const auto refuse = [name](const char* reason) {
-      return make_error(FormulonErrorCode::kInvalidArgument, std::string(reason), "name=" + std::string(name));
-    };
-    if (!parser::detail::HasWorkbookExtension(name)) {
-      return refuse("name has no workbook extension");
+namespace {
+
+// Excel's limit on a file name.
+constexpr std::size_t kMaxFileNameBytes = 218;
+// The engine's bound on `directory/file_name`.
+constexpr std::size_t kMaxLocationPathBytes = 1024;
+
+Expected<void, Error> CheckFileName(std::string_view name, const std::vector<ExternalLinkRecord>& links) {
+  const auto refuse = [name](const char* reason) {
+    return make_error(FormulonErrorCode::kInvalidArgument, std::string(reason), "file_name=" + std::string(name));
+  };
+  if (name.empty()) {
+    return refuse("file_name is empty");
+  }
+  if (!parser::detail::HasWorkbookExtension(name)) {
+    return refuse("file_name has no workbook extension");
+  }
+  if (name.find_first_of(std::string_view("[]:/\\?*\0", 8)) != std::string_view::npos) {
+    return refuse("file_name holds a forbidden character");
+  }
+  if (!sheet_names::valid_utf8(name)) {
+    return refuse("file_name is not valid UTF-8");
+  }
+  if (name.size() > kMaxFileNameBytes) {
+    return refuse("file_name is longer than 218 bytes");
+  }
+  for (const ExternalLinkRecord& link : links) {
+    if (strings::case_insensitive_eq(LinkBookName(link), name)) {
+      return refuse("file_name is the book of an external link");
     }
-    if (name.find_first_of(std::string_view("[]:/\\?*\0", 8)) != std::string_view::npos) {
-      return refuse("name holds a forbidden character");
+  }
+  return Expected<void, Error>::Ok();
+}
+
+// `dir` in the canonical form `WorkbookLocation` documents: `/a/b`, `C:/a`
+// or `//server/share/a`, with no trailing separator except at a root.
+Expected<std::string, Error> CanonicalDirectory(std::string_view dir) {
+  const auto refuse = [dir](const char* reason) {
+    return make_error(FormulonErrorCode::kInvalidArgument, std::string(reason), "directory=" + std::string(dir));
+  };
+  if (dir.empty()) {
+    return refuse("directory is empty");
+  }
+  if (dir.find_first_of(std::string_view("[]\0", 3)) != std::string_view::npos) {
+    return refuse("directory holds a forbidden character");
+  }
+  if (!sheet_names::valid_utf8(dir)) {
+    return refuse("directory is not valid UTF-8");
+  }
+  std::string out;
+  std::string_view rest;
+  bool unc = false;
+  if (dir.size() >= 2 && ((dir[0] == '/' && dir[1] == '/') || (dir[0] == '\\' && dir[1] == '\\'))) {
+    unc = true;
+    out = "/";
+    rest = dir.substr(2);
+  } else if (dir.size() >= 2 && strings::is_ascii_alpha(dir[0]) && dir[1] == ':') {
+    if (dir.size() == 2 || !IsPathSeparator(dir[2])) {
+      return refuse("directory names a drive without a root");
     }
-    if (!sheet_names::valid_utf8(name)) {
-      return refuse("name is not valid UTF-8");
+    out.push_back(strings::ascii_to_upper(dir[0]));
+    out.push_back(':');
+    rest = dir.substr(3);
+  } else if (dir[0] == '/') {
+    rest = dir.substr(1);
+  } else {
+    return refuse("directory is not absolute");
+  }
+  // A backslash is a literal character in a POSIX directory.
+  const bool posix = !unc && out.empty();
+  const auto is_separator = [posix](char c) { return c == '/' || (!posix && c == '\\'); };
+  if (!rest.empty() && is_separator(rest.back())) {
+    rest.remove_suffix(1);
+  }
+  std::size_t segments = 0;
+  std::size_t start = 0;
+  for (std::size_t i = 0; !rest.empty() && i <= rest.size(); ++i) {
+    if (i != rest.size() && !is_separator(rest[i])) {
+      continue;
     }
-    if (name.size() > kMaxFileNameBytes) {
-      return refuse("name is longer than 218 bytes");
+    const std::string_view segment = rest.substr(start, i - start);
+    if (segment.empty()) {
+      return refuse("directory has an empty segment");
     }
-    std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-    for (const ExternalLinkRecord& link : external_links_) {
-      if (strings::case_insensitive_eq(LinkBookName(link), name)) {
-        return refuse("name is the book of an external link");
+    if (segment == "." || segment == "..") {
+      return refuse("directory has a . or .. segment");
+    }
+    out.push_back('/');
+    out.append(segment);
+    ++segments;
+    start = i + 1;
+  }
+  if (unc && segments < 2) {
+    return refuse("directory is a UNC path with no share");
+  }
+  if (segments == 0) {
+    out.push_back('/');
+  }
+  return out;
+}
+
+}  // namespace
+
+const std::string& Workbook::file_name() const noexcept {
+  static const std::string kUnset;
+  return location_ ? location_->file_name : kUnset;
+}
+
+Expected<void, Error> Workbook::set_location(std::optional<WorkbookLocation> new_location) {
+  if (new_location && new_location->directory) {
+    ASSIGN_OR_RETURN(std::string directory, CanonicalDirectory(*new_location->directory));
+    if (directory.size() + 1 + new_location->file_name.size() > kMaxLocationPathBytes) {
+      return make_error(FormulonErrorCode::kInvalidArgument, "directory and file_name together exceed 1024 bytes",
+                        "directory=" + directory);
+    }
+    new_location->directory = std::move(directory);
+  }
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  if (new_location) {
+    RETURN_IF_ERROR(CheckFileName(new_location->file_name, external_links_));
+  }
+  const bool had_directory = location_ && location_->directory;
+  location_ = std::move(new_location);
+  if (!had_directory && location_ && location_->directory) {
+    // A relative local target anchors on the first folder the book gets.
+    for (Sheet& sheet : sheets_) {
+      for (Hyperlink& link : sheet.mutable_hyperlinks()) {
+        if (std::optional<std::string> resolved = resolve_relative_target(link.target, *location_->directory)) {
+          link.target = std::move(*resolved);
+        }
       }
     }
   }
-  file_name_.assign(name);
   return Expected<void, Error>::Ok();
 }
 
 std::string Workbook::spell_self_book_names(std::string_view text) const {
-  return parser::spell_self_book_names(text, file_name_);
+  return parser::spell_self_book_names(text, file_name());
 }
 
 bool Workbook::spells_self_book_names(std::string_view text) const noexcept {
-  return !file_name_.empty() && text.find("[0]!") != std::string_view::npos;
+  return !file_name().empty() && text.find("[0]!") != std::string_view::npos;
 }
 
 std::string Workbook::bind_self_book_names(std::string_view text) const {
-  return parser::bind_self_book_names(text, file_name_);
+  return parser::bind_self_book_names(text, file_name());
 }
 
 }  // namespace formulon

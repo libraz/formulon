@@ -114,6 +114,9 @@ struct EmissionPlan {
   RichErrorTable rich_errors;
   // True when the writer generates `kPersonsPartPath` from `Workbook::persons()`.
   bool generated_persons = false;
+  // The canonical folder of `Workbook::location()`, or empty without one;
+  // local hyperlink targets are written relative to it (`saved_hyperlink`).
+  std::string book_directory;
   // For each sheet (by 0-based index), the in-source TableMetadata
   // entries that target it, paired with the package-relative path the
   // writer assigned (`xl/tables/tableN.xml`). `(table_ref, path)` is

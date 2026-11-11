@@ -1037,7 +1037,7 @@ class AbsentValueTests(unittest.TestCase):
 
     def test_absent_reads_are_none(self) -> None:
         wb, ws = self.wb, self.wb.sheet(0)
-        self.assertIsNone(wb.get_file_name())
+        self.assertIsNone(wb.get_location())
         self.assertIsNone(ws.get_cell_phonetic(0, 0))
         self.assertIsNone(ws.ooxml.get_auto_filter_xml())
         for getter in (

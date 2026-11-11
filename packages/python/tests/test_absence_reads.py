@@ -36,6 +36,8 @@ from formulon import (
     TableColumnPatch,
     TableInput,
     Workbook,
+    WorkbookLocation,
+    WorkbookLocationInput,
     get_function_metadata,
 )
 
@@ -228,13 +230,13 @@ class PrintAbsenceTests(unittest.TestCase):
 
 
 class WorkbookAbsenceTests(unittest.TestCase):
-    def test_file_name_is_none_until_set(self) -> None:
+    def test_location_is_none_until_set(self) -> None:
         with Workbook.create_default() as wb:
-            self.assertIsNone(wb.get_file_name())
-            wb.set_file_name("Book.xlsx")
-            self.assertEqual(wb.get_file_name(), "Book.xlsx")
-            wb.set_file_name(None)
-            self.assertIsNone(wb.get_file_name())
+            self.assertIsNone(wb.get_location())
+            wb.set_location(WorkbookLocationInput("Book.xlsx"))
+            self.assertEqual(wb.get_location(), WorkbookLocation(None, "Book.xlsx"))
+            wb.set_location(None)
+            self.assertIsNone(wb.get_location())
 
     def test_open_ended_function_has_no_max_arity(self) -> None:
         self.assertIsNone(get_function_metadata("SUM").max_arity)

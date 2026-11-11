@@ -414,6 +414,19 @@ entries:
     was: { c: fm_civil_time_t, js: CivilTime, py: CivilTime }
     drop: { py: CivilTime, closes: R18.py }
     exception: "Python reads and writes the pinned time as datetime.datetime"
+  record.workbook_location:
+    kind: record
+    role: result
+    c: fm_workbook_location_t
+    js: WorkbookLocation
+    py: WorkbookLocation
+    surfaces: [c, wasm, native, py]
+  record.workbook_location_input:
+    kind: record
+    role: input
+    js: WorkbookLocationInput
+    py: WorkbookLocationInput
+    surfaces: [wasm, native, py]
   record.sheet_protection:
     kind: record
     role: result
@@ -5538,22 +5551,23 @@ entries:
     py: set_profile_id
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_set_excel_profile_id, js: setExcelProfileId, py: set_excel_profile_id }
-  file_name.get:
+  location.get:
     kind: op
     scope: workbook
-    noun: file_name
-    c: fm_workbook_get_file_name
-    js: getFileName
-    py: get_file_name
+    noun: location
+    c: fm_workbook_get_location
+    js: getLocation
+    py: get_location
     surfaces: [c, wasm, native, py]
-  file_name.set:
+  location.set:
     kind: op
     scope: workbook
-    noun: file_name
-    c: fm_workbook_set_file_name
-    js: setFileName
-    py: set_file_name
+    noun: location
+    c: fm_workbook_set_location
+    js: setLocation
+    py: set_location
     surfaces: [c, wasm, native, py]
+    exception: "the record has two fields that are always replaced together, and a patch would add a third way to express absence"
   sheet_protection.get:
     kind: op
     scope: sheet

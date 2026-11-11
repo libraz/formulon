@@ -55,6 +55,10 @@ struct EmissionPlan {
   std::vector<std::string> sheet_drawing_rids;
   /// Sheets whose model drawing replaces retained drawing relationships.
   std::vector<bool> sheet_owns_drawing;
+  /// The canonical folder of `Workbook::location()`, or empty without one;
+  /// local hyperlink targets are written relative to it (`saved_hyperlink`).
+  /// Set by `write_xlsb` from the value its sheet bodies were written with.
+  std::string book_directory;
 };
 
 /// Fails a retained part (pivot table, pivot cache, styles) whose model state

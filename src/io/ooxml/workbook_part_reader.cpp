@@ -3,18 +3,56 @@
 #include <algorithm>
 #include <cstdint>
 #include <iterator>
+#include <string>
 #include <string_view>
 
 #include "calc_settings.h"
 #include "io/ooxml/raw_child_sweep.h"
+#include "io/ooxml_defs.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
 #include "io/xsd_double.h"
+#include "sheet_passthrough.h"
 #include "workbook.h"
 
 namespace formulon {
 namespace io {
 namespace ooxml {
+
+namespace {
+
+/// The element child of `node` when it has exactly one, else a null node.
+pugi::xml_node sole_element_child(const pugi::xml_node& node) {
+  pugi::xml_node found;
+  for (pugi::xml_node child = node.first_child(); child; child = child.next_sibling()) {
+    if (child.type() != pugi::node_element) {
+      continue;
+    }
+    if (found) {
+      return pugi::xml_node();
+    }
+    found = child;
+  }
+  return found;
+}
+
+/// Whether `node` is the `mc:AlternateContent` Excel writes around
+/// `x15ac:absPath`: one `mc:Choice Requires="x15"` holding only an `absPath`
+/// in the x15ac namespace. Any other shape is retained verbatim.
+bool IsAbsPathAlternateContent(const pugi::xml_node& node) {
+  if (node.type() != pugi::node_element || local_name(node) != "AlternateContent") {
+    return false;
+  }
+  const pugi::xml_node choice = sole_element_child(node);
+  if (!choice || local_name(choice) != "Choice" || std::string_view(choice.attribute("Requires").value()) != "x15") {
+    return false;
+  }
+  const pugi::xml_node abs_path = sole_element_child(choice);
+  return abs_path && local_name(abs_path) == "absPath" &&
+         find_namespace_binding(abs_path, qname_prefix(abs_path.name())) == kNsX15ac;
+}
+
+}  // namespace
 
 void apply_workbook_part_settings(const pugi::xml_node& wb_root, Workbook& wb) {
   // <calcPr> — workbook-level calc mode and iterative-calc options. The
@@ -121,6 +159,17 @@ void apply_workbook_part_settings(const pugi::xml_node& wb_root, Workbook& wb) {
         return std::find(std::begin(kModelled), std::end(kModelled), name) != std::end(kModelled);
       },
       wb.mutable_raw_children());
+  // The writer regenerates `x15ac:absPath` from `Workbook::location()`, which
+  // a load never sets: the captured element is dropped, not passed through.
+  for (pugi::xml_node child = wb_root.first_child(); child; child = child.next_sibling()) {
+    if (!IsAbsPathAlternateContent(child)) {
+      continue;
+    }
+    const std::string xml = raw_xml(child);
+    WorksheetRawExtensions& raw = wb.mutable_raw_children();
+    raw.erase(std::remove_if(raw.begin(), raw.end(), [&xml](const WorksheetRawChild& c) { return c.xml == xml; }),
+              raw.end());
+  }
 }
 
 }  // namespace ooxml

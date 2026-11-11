@@ -50,9 +50,12 @@ class FunctionRegistry;
 /// Supported `info_type` keys (ASCII case-insensitive):
 ///   * `"address"`   - A1 absolute address with `$` anchors. Cross-sheet
 ///                     references include the sheet prefix
-///                     (`Sheet1!$A$1`). The `[Workbook]` filename wrapper
-///                     is intentionally omitted because Workbook has no
-///                     path field.
+///                     (`Sheet1!$A$1`), as `[Book.xlsx]Sheet1!$A$1` when the
+///                     workbook has a location (`'[Book.xlsx]S 1'!$A$1`
+///                     when the book or the sheet needs quoting). Without a
+///                     location no `[Workbook]` part is shown. A reference
+///                     to the formula's own sheet prints bare, qualified or
+///                     not.
 ///   * `"col"`       - 1-based column of the top-left cell.
 ///   * `"row"`       - 1-based row of the top-left cell.
 ///   * `"contents"`  - top-left cell's value. Blank cells return `0`
@@ -63,11 +66,14 @@ class FunctionRegistry;
 ///                     value (Mac folds `""` to `"b"`), `"l"` for any
 ///                     non-empty text, `"v"` for everything else
 ///                     (number, bool, error).
-///   * `"filename"`  - always `""` (Mac returns blank); the workbook has
-///                     no filesystem path. Empty text avoids the
-///                     top-level blank-as-zero collapse; the divergence
-///                     is skip-oracle until the workbook gains a path
-///                     field.
+///   * `"filename"`  - `<directory>/[<file>]<sheet>` from the workbook's
+///                     location, naming the referenced sheet unquoted, or
+///                     the active sheet when `reference` is omitted. A
+///                     Windows profile shows `\` separators
+///                     (`C:\d\[b.xlsx]Sheet1`), an estimate, not
+///                     measured. `""` when the
+///                     location is unset or has no directory, or with no
+///                     workbook bound.
 ///   * `"format"`    - Excel's built-in CELL format code (`G`, `F0`, `P2`,
 ///                     `D1`, etc.) derived from the referenced cell's xf.
 ///   * `"color"`     - `1` when its number format colors negative values,

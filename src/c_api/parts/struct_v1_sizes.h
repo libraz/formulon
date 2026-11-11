@@ -63,6 +63,7 @@ FORMULON_STRUCT_V1(fm_threaded_comment_patch_t, sizeof(fm_threaded_comment_patch
 FORMULON_STRUCT_V1(fm_parallel_recalc_stats_info_t, sizeof(fm_parallel_recalc_stats_info_t))
 FORMULON_STRUCT_V1(fm_iterative_settings_info_t, sizeof(fm_iterative_settings_info_t))
 FORMULON_STRUCT_V1(fm_iterative_settings_patch_t, sizeof(fm_iterative_settings_patch_t))
+FORMULON_STRUCT_V1(fm_workbook_location_t, sizeof(fm_workbook_location_t))
 FORMULON_STRUCT_V1(fm_sheet_protection_t, sizeof(fm_sheet_protection_t))
 FORMULON_STRUCT_V1(fm_sheet_protection_patch_t, sizeof(fm_sheet_protection_patch_t))
 FORMULON_STRUCT_V1(fm_cf_range_evaluation_spec_t, sizeof(fm_cf_range_evaluation_spec_t))

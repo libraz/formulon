@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -173,7 +174,14 @@ Expected<void, Error> Workbook::set_hyperlink(std::size_t sheet_index, Hyperlink
   Sheet& sheet = sheets_[sheet_index];
   // Excel's own text for a target: `<target> - <fragment>` when a fragment was
   // split off, the stored target otherwise.
-  const std::string derived = normalize_hyperlink(link);
+  std::string derived = normalize_hyperlink(link);
+  // With a folder known, a relative local path is held absolute.
+  if (location_ && location_->directory) {
+    if (std::optional<std::string> resolved = resolve_relative_target(link.target, *location_->directory)) {
+      link.target = std::move(*resolved);
+      derived = link.target;
+    }
+  }
   const bool cell_free = takes_link_text(sheet, link.row, link.col);
   if (link.display.empty()) {
     if (!link.target.empty() && !cell_free) {

@@ -235,24 +235,50 @@ Napi::Value Workbook::SetProfileId(const Napi::CallbackInfo& info) {
   return ValueOrThrow(env, rc, env.Undefined());
 }
 
-Napi::Value Workbook::FileName(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::GetLocation(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
   int32_t present = 0;
-  const char* name = nullptr;
-  const fm_status_t rc = fm_workbook_get_file_name(handle_, &present, &name);
-  return ValueOrThrow(env, rc, present != 0 ? JsString(env, name) : env.Null());
+  fm_workbook_location_t location = FM_STRUCT_INIT(fm_workbook_location_t);
+  const fm_status_t rc = fm_workbook_get_location(handle_, &present, &location);
+  if (rc != 0) {
+    return ThrowStatus(env, rc);
+  }
+  if (present == 0) {
+    return env.Null();
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("directory", JsStringOrNull(env, location.directory));
+  out.Set("fileName", JsStringOrNull(env, location.file_name));
+  return out;
 }
 
-Napi::Value Workbook::SetFileName(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::SetLocation(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  const std::string name = ArgString(info, 0);
-  return ValueOrThrow(env, fm_workbook_set_file_name(handle_, name.c_str()), env.Undefined());
+  // `null` unsets the location; the guard has already refused `undefined`.
+  if (info[0].IsNull()) {
+    return ValueOrThrow(env, fm_workbook_set_location(handle_, nullptr), env.Undefined());
+  }
+  CheckedSpecReader reader(env);
+  Napi::Object in;
+  const bool present = reader.Object(info[0], "", &in);
+  std::string directory;
+  std::string file_name;
+  fm_workbook_location_t location = FM_STRUCT_INIT(fm_workbook_location_t);
+  if (present) {
+    location.directory = reader.String(in, "directory", &directory) ? directory.c_str() : nullptr;
+    file_name = reader.RequiredString(in, "fileName");
+    location.file_name = file_name.c_str();
+  }
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  return ValueOrThrow(env, fm_workbook_set_location(handle_, &location), env.Undefined());
 }
 
 // ---- Recalc + save --------------------------------------------------

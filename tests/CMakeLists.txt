@@ -26,6 +26,8 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/sheet_clone_test.cpp
   unit/sheet_hyperlinks_test.cpp
   unit/hyperlink_address_test.cpp
+  unit/hyperlink_relative_target_test.cpp
+  unit/workbook_location_test.cpp
   unit/sheet_copy_names_test.cpp
   unit/sheet_spill_test.cpp
   unit/sheet_spill_cause_test.cpp
@@ -89,6 +91,8 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/defined_names_test.cpp
   unit/io/future_functions_test.cpp
   unit/io/hyperlink_roundtrip_test.cpp
+  unit/io/book_location_save_test.cpp
+  unit/io/book_location_abspath_test.cpp
   unit/io/merge_roundtrip_test.cpp
   unit/io/ooxml_feature_defaults_test.cpp
   unit/io/ooxml_reader_test.cpp
@@ -415,6 +419,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_xirr_xnpv_test.cpp
   unit/eval/builtins_service_stubs_test.cpp
   unit/eval/cell_eval_test.cpp
+  unit/eval/cell_location_test.cpp
   unit/eval/builtins/dynamic_array_test.cpp
   unit/eval/spill_ref_eval_test.cpp
   unit/eval/filter_eval_test.cpp

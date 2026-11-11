@@ -130,7 +130,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       // th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}. New workbooks default to win-365-en_US.
       .function("getProfileId", &JsWorkbook::profileId)
       .function("getVisibility", &JsWorkbook::getVisibility)
-      .function("getFileName", &JsWorkbook::fileName)
+      .function("getLocation", &JsWorkbook::getLocation)
       .function("getFillCount", &JsWorkbook::fillCount)
       .function("getFontCount", &JsWorkbook::fontCount)
       .function("getBorder", &JsWorkbook::getBorder)
@@ -516,7 +516,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("setError", &JsWorkbook::setError)
       // `setProfileId` accepts the ids documented at `getProfileId`.
       .function("setProfileId", &JsWorkbook::setProfileId)
-      .function("setFileName", &JsWorkbook::setFileName)
+      .function("setLocation", &JsWorkbook::setLocation)
       .function("setFormula", &JsWorkbook::setFormula)
       .function("updateIterative", &JsWorkbook::setIterative)
       .function("setIterativeProgress", &JsWorkbook::setIterativeProgress)

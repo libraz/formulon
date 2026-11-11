@@ -318,6 +318,10 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   std::vector<std::string> sheet_drawing_rids(sheet_count);
   std::vector<bool> sheet_owns_drawing(sheet_count, false);
   const std::uint32_t views = workbook_view_count(workbook.book_views_xml());
+  // One folder for the sheet bodies (display) and the sheet rels (target).
+  const std::string_view book_directory = workbook.location() && workbook.location()->directory
+                                              ? std::string_view(*workbook.location()->directory)
+                                              : std::string_view{};
   for (std::size_t i = 0; i < sheet_count; ++i) {
     const NameTable sheet_name_table = BuildNameTableForScope(workbook, ordered_names, static_cast<std::int32_t>(i));
     std::unordered_set<std::string> taken_rel_ids;
@@ -344,10 +348,11 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
       sheet_drawing_rids[i] = FreshRelId(taken_rel_ids);
     }
     std::uint32_t sparklines_lost = 0;
-    auto sheet_body_or = emit_sheet(
-        workbook.sheet(i), sst, sheet_names, sheet_ranges, sheet_name_table, sheet_hyperlink_rids[i],
-        &downgraded_formula_count, metadata.ifmd, name_shapes(workbook, i), table_rel_ids, views, &sparklines_lost,
-        sheet_drawing_rids[i], sheet_owns_drawing[i], metadata.rich.empty() ? nullptr : &metadata.rich.vm_by_sheet[i]);
+    auto sheet_body_or =
+        emit_sheet(workbook.sheet(i), sst, sheet_names, sheet_ranges, sheet_name_table, sheet_hyperlink_rids[i],
+                   &downgraded_formula_count, metadata.ifmd, name_shapes(workbook, i), table_rel_ids, views,
+                   &sparklines_lost, sheet_drawing_rids[i], sheet_owns_drawing[i],
+                   metadata.rich.empty() ? nullptr : &metadata.rich.vm_by_sheet[i], book_directory);
     ReportDeferred(&diagnostics.deferred_feature_count, "sparklines", sparklines_lost, i);
     if (!sheet_body_or) {
       return std::move(sheet_body_or.error());
@@ -365,6 +370,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   plan.sheet_tables = std::move(sheet_tables);
   plan.sheet_drawing_rids = std::move(sheet_drawing_rids);
   plan.sheet_owns_drawing = std::move(sheet_owns_drawing);
+  plan.book_directory = std::string(book_directory);
   const std::vector<const ExternalLinkRecord*> links = written_external_links(workbook);
   std::vector<std::string> link_rel_ids;
   link_rel_ids.reserve(links.size());

@@ -170,9 +170,9 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value ProfileId(const Napi::CallbackInfo& info);
   /// SetProfileId accepts the same 28 ids.
   Napi::Value SetProfileId(const Napi::CallbackInfo& info);
-  /// The file name `[0]!Name` is spelled with; see `fm_workbook_get_file_name`.
-  Napi::Value FileName(const Napi::CallbackInfo& info);
-  Napi::Value SetFileName(const Napi::CallbackInfo& info);
+  /// The workbook location `{directory, fileName}`, `null` when unset; see `fm_workbook_get_location`.
+  Napi::Value GetLocation(const Napi::CallbackInfo& info);
+  Napi::Value SetLocation(const Napi::CallbackInfo& info);
 
   // Dependency-graph trace and dynamic-array spill.
   Napi::Value Precedents(const Napi::CallbackInfo& info);
