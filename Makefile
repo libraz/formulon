@@ -350,11 +350,15 @@ test-wasm:
 # Publishing is a manual, out-of-band step.
 NPM_PKG_DIR := packages/npm
 
-npm-package: wasm wasm-threads
+# The two embind builds run one after the other even under `make -j`: each
+# is a full parallel compile, and two at once oversubscribe the host.
+npm-package:
 	@if ! command -v $(NODE) >/dev/null 2>&1; then \
 	  echo "npm-package: '$(NODE)' not found"; \
 	  exit 1; \
 	fi
+	$(MAKE) wasm
+	$(MAKE) wasm-threads
 	$(NODE) $(NPM_PKG_DIR)/scripts/stage.mjs \
 	  --build-dir $(WASM_BUILD_DIR) \
 	  --threads-build-dir $(WASM_THREADS_BUILD_DIR) \
