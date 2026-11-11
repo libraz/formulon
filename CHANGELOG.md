@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one: the moved endpoint gives way to its neighbour inside the span, which
   collapses to one sheet when one remains (`SUM(Data:Mid!A1)` becomes
   `SUM(Mid!A1)`).
+- A range argument that is neither an A1 string nor a `CellRect` throws
+  `TypeError` in every binding (`Sheet.listShowPhoneticCells(5)`:
+  `Sheet.listShowPhoneticCells range must be a CellRect or an A1 string`;
+  Python `Sheet.get_values range must be a CellRect or an A1 string`).
 
 ## [0.19.0] - 2026-11-10
 
@@ -133,13 +137,13 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   `insert_hyperlink_at`) inserts a hyperlink at a list position without replacing
   one on the same range; `removeHyperlinkAt` / `remove_hyperlink_at` is published
   beside it for a lossless undo.
-- `Sheet.ooxml.getCellXfIndices(range?)` (`fm_sheet_get_cell_xf_indices`, Python
-  `get_cell_xf_indices`) lists the stored cells with a non-default cell XF,
+- `Sheet.ooxml.listCellXfIndices(range?)` (`fm_sheet_get_cell_xf_indices`, Python
+  `list_cell_xf_indices`) lists the stored cells with a non-default cell XF,
   styled blanks included, which `listCells` leaves out. The C function takes a
   required `range`: `NULL` is `FM_STATUS_BINDING_NULL_POINTER`, so pass the whole
   grid to list every stored cell.
-- `Sheet.getShowPhoneticCells(range?)` (`fm_sheet_get_show_phonetic_cells`, Python
-  `get_show_phonetic_cells`) lists the stored cells with the Show Phonetic flag
+- `Sheet.listShowPhoneticCells(range?)` (`fm_sheet_get_show_phonetic_cells`, Python
+  `list_show_phonetic_cells`) lists the stored cells with the Show Phonetic flag
   set, flag-only blanks included, which `listCells` leaves out. The C function
   takes a required `range` as `fm_sheet_get_cell_xf_indices` does.
 - `PivotCache.refresh()` rebuilds a cache from its worksheet source and

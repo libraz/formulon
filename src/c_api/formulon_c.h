@@ -10890,7 +10890,7 @@ typedef struct {
   uint32_t col;
   /** The cell's own cell-XF index; never 0. */
   uint32_t xf_index;
-} fm_cell_xf_index_t;
+} fm_xf_cell_t;
 
 /**
  * @brief Lists every stored cell of `range` whose own cell-XF index is not 0,
@@ -10911,7 +10911,7 @@ typedef struct {
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when the rect is out of range.
  */
 FM_API fm_status_t fm_sheet_get_cell_xf_indices(const fm_workbook_t* wb, size_t sheet_index,
-                                                const fm_cell_rect_t* range, fm_cell_xf_index_t* out, size_t capacity,
+                                                const fm_cell_rect_t* range, fm_xf_cell_t* out, size_t capacity,
                                                 size_t* out_count);
 
 /** @brief One pair of `fm_sheet_remap_range_xfs`: a cell resolving to

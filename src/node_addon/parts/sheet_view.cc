@@ -626,7 +626,7 @@ Napi::Value Workbook::RangeStyleBases(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   fm_cell_rect_t rect{};
-  if (!ReadCellRect(reader, ArgObject(info, 1), &rect)) {
+  if (!ReadCellRectArg(reader, info, 1, &rect)) {
     return env.Undefined();
   }
   return RangeStyleBasesResult(env, handle_, ArgU32(info, 0), rect, {});
@@ -641,14 +641,14 @@ Napi::Value Workbook::ListCellXfIndices(const Napi::CallbackInfo& info) {
   fm_cell_rect_t rect = kWholeSheetRect;
   if (!info[1].IsUndefined() && !info[1].IsNull()) {
     CheckedSpecReader reader(env);
-    if (!ReadCellRect(reader, ArgObject(info, 1), &rect)) {
+    if (!ReadCellRectArg(reader, info, 1, &rect)) {
       return env.Undefined();
     }
   }
   const fm_cell_rect_t* where = &rect;
   size_t len = 0;
   fm_status_t rc = fm_sheet_get_cell_xf_indices(handle_, sheet, where, nullptr, 0, &len);
-  std::vector<fm_cell_xf_index_t> cells(len);
+  std::vector<fm_xf_cell_t> cells(len);
   if (rc == 0 && len > 0) {
     rc = fm_sheet_get_cell_xf_indices(handle_, sheet, where, cells.data(), cells.size(), &len);
   }
@@ -675,7 +675,7 @@ Napi::Value Workbook::ListShowPhoneticCells(const Napi::CallbackInfo& info) {
   fm_cell_rect_t rect = kWholeSheetRect;
   if (!info[1].IsUndefined() && !info[1].IsNull()) {
     CheckedSpecReader reader(env);
-    if (!ReadCellRect(reader, ArgObject(info, 1), &rect)) {
+    if (!ReadCellRectArg(reader, info, 1, &rect)) {
       return env.Undefined();
     }
   }
@@ -718,7 +718,7 @@ Napi::Value Workbook::RangeStyleBasesExcluding(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   fm_cell_rect_t rect{};
-  if (!ReadCellRect(reader, ArgObject(info, 1), &rect)) {
+  if (!ReadCellRectArg(reader, info, 1, &rect)) {
     return env.Undefined();
   }
   std::vector<uint32_t> rows;
@@ -751,7 +751,7 @@ Napi::Value Workbook::RemapRangeStyle(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   fm_cell_rect_t rect{};
-  if (!ReadCellRect(reader, ArgObject(info, 1), &rect)) {
+  if (!ReadCellRectArg(reader, info, 1, &rect)) {
     return env.Undefined();
   }
   std::vector<uint32_t> from;
@@ -776,7 +776,7 @@ Napi::Value Workbook::SnapshotRangeStyle(const Napi::CallbackInfo& info) {
   }
   CheckedSpecReader reader(env);
   fm_cell_rect_t rect{};
-  if (!ReadCellRect(reader, ArgObject(info, 1), &rect)) {
+  if (!ReadCellRectArg(reader, info, 1, &rect)) {
     return env.Undefined();
   }
   uint8_t* bytes = nullptr;

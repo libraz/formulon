@@ -221,7 +221,7 @@ class RenamedMemberTests(SurfaceTestCase):
                     "get_row_xf_index",
                     "get_range_xf_bases",
                     "get_range_xf_bases_excluding",
-                    "get_cell_xf_indices",
+                    "list_cell_xf_indices",
                     "get_effective_style",
                 ),
             )

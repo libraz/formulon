@@ -78,6 +78,16 @@ describe('Spill.cause on a formula', () => {
     });
   });
 
+  it('reads its keys in anchor, blocked, cause, range order on a sheet and a pivot', () => {
+    const order = ['anchor', 'blocked', 'cause', 'range'];
+    withSheet((ws, wb) => {
+      ws.setFormula('H1', '=SEQUENCE(2)');
+      assert.deepEqual(Object.keys(ws.getSpill('H1')), order);
+      const { pivot } = buildPivot(ws, wb);
+      assert.deepEqual(Object.keys(pivot.getSpill()), order);
+    });
+  });
+
   it('a value in the way is Occupied and a merge is Merged', () => {
     withSheet((ws) => {
       ws.setFormula('C1', '=SEQUENCE(3)');

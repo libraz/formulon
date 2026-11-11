@@ -505,8 +505,8 @@ extern "C" fm_status_t fm_sheet_get_range_xf_bases_excluding(const fm_workbook_t
 }
 
 extern "C" fm_status_t fm_sheet_get_cell_xf_indices(const fm_workbook_t* wb, size_t sheet_index,
-                                                    const fm_cell_rect_t* range, fm_cell_xf_index_t* out,
-                                                    size_t capacity, size_t* out_count) {
+                                                    const fm_cell_rect_t* range, fm_xf_cell_t* out, size_t capacity,
+                                                    size_t* out_count) {
   clear_last_error();
   if (out_count != nullptr) {
     *out_count = 0U;

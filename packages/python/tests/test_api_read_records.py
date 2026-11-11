@@ -11,13 +11,13 @@ import formulon
 from formulon import (
     CellAddress,
     CellRect,
-    CellXfIndex,
     CellXfInput,
     ComparisonOperator,
     FilterKind,
     FormulonError,
     SheetRect,
     Workbook,
+    XfCell,
 )
 
 _PERSON = "{11111111-1111-4111-8111-111111111111}"
@@ -203,12 +203,23 @@ class ListCellXfIndicesTests(unittest.TestCase):
         ws.ooxml.set_cell_xf_index("G7", 0)  # explicit default
         return xfs
 
+    def test_cells_are_xf_cells_and_the_get_names_are_gone(self) -> None:
+        with Workbook.create_default() as wb:
+            self._styled(wb)
+            ws = wb.sheet(0)
+            cells = ws.ooxml.list_cell_xf_indices()
+            self.assertTrue(all(isinstance(c, XfCell) for c in cells))
+            self.assertEqual([f.name for f in dataclasses.fields(XfCell)], ["row", "col", "xf_index"])
+            self.assertFalse(hasattr(ws.ooxml, "get_cell_xf_indices"))
+            self.assertFalse(hasattr(ws, "get_show_phonetic_cells"))
+            self.assertFalse(hasattr(formulon, "CellXfIndex"))
+
     def test_lists_styled_blank_and_content_cells_row_major(self) -> None:
         with Workbook.create_default() as wb:
             a, b = self._styled(wb)
             self.assertEqual(
-                wb.sheet(0).ooxml.get_cell_xf_indices(),
-                [CellXfIndex(2, 7, a), CellXfIndex(5, 3, b), CellXfIndex(1000, 20, a)],
+                wb.sheet(0).ooxml.list_cell_xf_indices(),
+                [XfCell(2, 7, a), XfCell(5, 3, b), XfCell(1000, 20, a)],
             )
 
     def test_the_default_range_covers_format_only_cells_outside_the_used_range(self) -> None:
@@ -216,35 +227,35 @@ class ListCellXfIndicesTests(unittest.TestCase):
             self._styled(wb)
             ws = wb.sheet(0)
             self.assertLess(ws.get_used_range().last_row, 1000)
-            self.assertEqual(len(ws.ooxml.get_cell_xf_indices(None)), 3)
-            self.assertEqual(ws.ooxml.get_cell_xf_indices(), ws.ooxml.get_cell_xf_indices("A1:XFD1048576"))
+            self.assertEqual(len(ws.ooxml.list_cell_xf_indices(None)), 3)
+            self.assertEqual(ws.ooxml.list_cell_xf_indices(), ws.ooxml.list_cell_xf_indices("A1:XFD1048576"))
             whole = CellRect(0, 0, 1048575, 16383)
-            self.assertEqual(ws.ooxml.get_cell_xf_indices(), ws.ooxml.get_cell_xf_indices(whole))
+            self.assertEqual(ws.ooxml.list_cell_xf_indices(), ws.ooxml.list_cell_xf_indices(whole))
 
     def test_clips_to_a_rect_or_an_a1_range(self) -> None:
         with Workbook.create_default() as wb:
             a, b = self._styled(wb)
             ooxml = wb.sheet(0).ooxml
-            clipped = [CellXfIndex(2, 7, a), CellXfIndex(5, 3, b)]
-            self.assertEqual(ooxml.get_cell_xf_indices(CellRect(0, 0, 5, 1000)), clipped)
-            self.assertEqual(ooxml.get_cell_xf_indices("A1:Z6"), clipped)
-            self.assertEqual(ooxml.get_cell_xf_indices("D6"), [CellXfIndex(5, 3, b)])
-            self.assertEqual(ooxml.get_cell_xf_indices("A8:C10"), [])
+            clipped = [XfCell(2, 7, a), XfCell(5, 3, b)]
+            self.assertEqual(ooxml.list_cell_xf_indices(CellRect(0, 0, 5, 1000)), clipped)
+            self.assertEqual(ooxml.list_cell_xf_indices("A1:Z6"), clipped)
+            self.assertEqual(ooxml.list_cell_xf_indices("D6"), [XfCell(5, 3, b)])
+            self.assertEqual(ooxml.list_cell_xf_indices("A8:C10"), [])
 
     def test_the_record_is_frozen_and_survives_save_and_load(self) -> None:
         with Workbook.create_default() as wb:
             self._styled(wb)
-            expected = wb.sheet(0).ooxml.get_cell_xf_indices()
+            expected = wb.sheet(0).ooxml.list_cell_xf_indices()
             with self.assertRaises(dataclasses.FrozenInstanceError):
                 expected[0].row = 1  # type: ignore[misc]
             saved = wb.save()
         with Workbook.load(saved) as reloaded:
-            self.assertEqual(reloaded.sheet(0).ooxml.get_cell_xf_indices(), expected)
+            self.assertEqual(reloaded.sheet(0).ooxml.list_cell_xf_indices(), expected)
 
     def test_an_out_of_grid_rect_is_refused(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError):
-                wb.sheet(0).ooxml.get_cell_xf_indices(CellRect(0, 0, 1048576, 0))
+                wb.sheet(0).ooxml.list_cell_xf_indices(CellRect(0, 0, 1048576, 0))
 
 
 class ListShowPhoneticCellsTests(unittest.TestCase):
@@ -268,7 +279,7 @@ class ListShowPhoneticCellsTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             self._flagged(wb)
             ws = wb.sheet(0)
-            self.assertEqual(ws.get_show_phonetic_cells(), self.ALL)
+            self.assertEqual(ws.list_show_phonetic_cells(), self.ALL)
             for cell in self.ALL:
                 self.assertTrue(ws.get_cell_show_phonetic(cell.row, cell.col))
 
@@ -277,32 +288,32 @@ class ListShowPhoneticCellsTests(unittest.TestCase):
             self._flagged(wb)
             ws = wb.sheet(0)
             self.assertLess(ws.get_used_range().last_row, 1000)
-            self.assertEqual(len(ws.get_show_phonetic_cells(None)), 4)
-            self.assertEqual(ws.get_show_phonetic_cells(), ws.get_show_phonetic_cells("A1:XFD1048576"))
-            self.assertEqual(ws.get_show_phonetic_cells(), ws.get_show_phonetic_cells(CellRect(0, 0, 1048575, 16383)))
+            self.assertEqual(len(ws.list_show_phonetic_cells(None)), 4)
+            self.assertEqual(ws.list_show_phonetic_cells(), ws.list_show_phonetic_cells("A1:XFD1048576"))
+            self.assertEqual(ws.list_show_phonetic_cells(), ws.list_show_phonetic_cells(CellRect(0, 0, 1048575, 16383)))
 
     def test_clips_to_a_rect_or_an_a1_range(self) -> None:
         with Workbook.create_default() as wb:
             self._flagged(wb)
             ws = wb.sheet(0)
             clipped = [CellAddress(1, 1), CellAddress(2, 0)]
-            self.assertEqual(ws.get_show_phonetic_cells(CellRect(0, 0, 2, 1)), clipped)
-            self.assertEqual(ws.get_show_phonetic_cells("A1:B3"), clipped)
-            self.assertEqual(ws.get_show_phonetic_cells("H5"), [CellAddress(4, 7)])
-            self.assertEqual(ws.get_show_phonetic_cells("A8:C10"), [])
+            self.assertEqual(ws.list_show_phonetic_cells(CellRect(0, 0, 2, 1)), clipped)
+            self.assertEqual(ws.list_show_phonetic_cells("A1:B3"), clipped)
+            self.assertEqual(ws.list_show_phonetic_cells("H5"), [CellAddress(4, 7)])
+            self.assertEqual(ws.list_show_phonetic_cells("A8:C10"), [])
 
     def test_the_flag_only_blank_survives_save_and_load(self) -> None:
         with Workbook.create_default() as wb:
-            self.assertEqual(wb.sheet(0).get_show_phonetic_cells(), [])
+            self.assertEqual(wb.sheet(0).list_show_phonetic_cells(), [])
             self._flagged(wb)
             saved = wb.save()
         with Workbook.load(saved) as reloaded:
-            self.assertEqual(reloaded.sheet(0).get_show_phonetic_cells(), self.ALL)
+            self.assertEqual(reloaded.sheet(0).list_show_phonetic_cells(), self.ALL)
 
     def test_an_out_of_grid_rect_is_refused(self) -> None:
         with Workbook.create_default() as wb:
             with self.assertRaises(FormulonError):
-                wb.sheet(0).get_show_phonetic_cells(CellRect(0, 0, 1048576, 0))
+                wb.sheet(0).list_show_phonetic_cells(CellRect(0, 0, 1048576, 0))
 
 
 class AutoFilterConditionTests(unittest.TestCase):

@@ -379,3 +379,29 @@ test('static factories and module functions refuse extra arguments', async () =>
   refusesWith(() => f.getVersion(1), TypeError, 'Formulon.getVersion takes at most 0 arguments');
   refusesWith(() => f.evaluateFormula('=1', 2), TypeError, 'Formulon.evaluateFormula takes at most 1 argument');
 });
+
+test('a range argument that is not an A1 string or an object is a TypeError', async () => {
+  await withWorkbook((wb) => {
+    const ws = wb.sheet(0);
+    refusesWith(
+      () => ws.ooxml.listCellXfIndices(5),
+      TypeError,
+      'SheetOoxml.listCellXfIndices range must be a CellRect or an A1 string',
+    );
+    refusesWith(
+      () => ws.listShowPhoneticCells(5),
+      TypeError,
+      'Sheet.listShowPhoneticCells range must be a CellRect or an A1 string',
+    );
+    for (const [range, field] of [
+      [{}, 'firstRow'],
+      [{ firstRow: 0, firstCol: 0 }, 'lastRow'],
+    ]) {
+      refusesWith(
+        () => ws.ooxml.listCellXfIndices(range),
+        TypeError,
+        `SheetOoxml.listCellXfIndices range.${field} is required`,
+      );
+    }
+  });
+});

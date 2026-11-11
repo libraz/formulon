@@ -43,7 +43,7 @@ Napi::Value Workbook::EvaluateCfRange(const Napi::CallbackInfo& info) {
   const uint32_t sheet = ArgU32(info, 0);
   CheckedSpecReader reader(env);
   fm_cell_rect_t rect{};
-  if (!ReadCellRect(reader, ArgObject(info, 1), &rect)) {
+  if (!ReadCellRectArg(reader, info, 1, &rect)) {
     return env.Undefined();
   }
   // `options` is `{ timePeriodRules?, todaySerial? }`; an omitted key is the C default: `timePeriod` rules on,

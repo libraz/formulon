@@ -109,7 +109,6 @@ from ._workbook import (
     CellsInRange,
     CellStyle,
     CellXf,
-    CellXfIndex,
     CellXfInput,
     CfAboveAverageRuleInput,
     CfCell,
@@ -399,6 +398,7 @@ from ._workbook import (
     WorkbookOoxml,
     WorkbookProtection,
     WorkbookProtectionInput,
+    XfCell,
     canonicalize_formula,
     canonicalize_function_name,
     compare_text,
@@ -525,7 +525,6 @@ __all__ = [
     "CellsInRange",
     "CellStyle",
     "CellXf",
-    "CellXfIndex",
     "CellXfInput",
     "CfAboveAverageRuleInput",
     "CfCell",
@@ -867,6 +866,7 @@ __all__ = [
     "WorkbookOoxml",
     "WorkbookProtection",
     "WorkbookProtectionInput",
+    "XfCell",
 ]
 
 

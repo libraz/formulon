@@ -79,7 +79,7 @@ const SHEET_OOXML = [
   'setRangeXfIndex',
   'getRangeXfBases',
   'getRangeXfBasesExcluding',
-  'getCellXfIndices',
+  'listCellXfIndices',
   'remapRangeXfs',
   'snapshotRangeXfs',
   'restoreRangeXfs',

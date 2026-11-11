@@ -3334,12 +3334,12 @@ entries:
     was: { js: PivotWorksheetSourceResult }
     replaced_by: record.pivot_worksheet_source
     closes: R8.js
-  record.cell_xf_index:
+  record.xf_cell:
     kind: record
     role: result
-    c: fm_cell_xf_index_t
-    js: CellXfIndex
-    py: CellXfIndex
+    c: fm_xf_cell_t
+    js: XfCell
+    py: XfCell
     surfaces: [c, wasm, native, py]
   record.range_cell:
     kind: record
@@ -4480,8 +4480,9 @@ entries:
     scope: sheet
     noun: show_phonetic_cells
     c: fm_sheet_get_show_phonetic_cells
-    js: getShowPhoneticCells
-    py: get_show_phonetic_cells
+    js: listShowPhoneticCells
+    py: list_show_phonetic_cells
+    exception: "C reads the cells into a caller buffer through fm_sheet_get_*, which has no list verb; the bindings return the array as list*"
     params: { range: { default: null } }
     rect_args: [0]
     surfaces: [c, wasm, native, py]
@@ -7929,8 +7930,9 @@ entries:
     namespace: ooxml
     noun: cell_xf_indices
     c: fm_sheet_get_cell_xf_indices
-    js: getCellXfIndices
-    py: get_cell_xf_indices
+    js: listCellXfIndices
+    py: list_cell_xf_indices
+    exception: "C reads the cells into a caller buffer through fm_sheet_get_*, which has no list verb; the bindings return the array as list*"
     params: { range: { default: null } }
     rect_args: [0]
     surfaces: [c, wasm, native, py]

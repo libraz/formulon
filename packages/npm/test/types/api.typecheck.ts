@@ -98,7 +98,7 @@ import createFormulon, {
   type Pagination,
   type ParseError,
   type ProfileId,
-  type CellXfIndex,
+  type XfCell,
   type RangeCell,
   type Pivot,
   type PivotCache,
@@ -583,9 +583,9 @@ export function ooxmlLayer(): void {
   sheet.ooxml.resetRowXfIndex('3');
   sheet.ooxml.resetCellXfIndex('A1');
   const bases: readonly number[] = sheet.ooxml.getRangeXfBases('A1:B2');
-  const styledCells: readonly CellXfIndex[] = sheet.ooxml.getCellXfIndices();
-  sheet.ooxml.getCellXfIndices('A1:B2');
-  sheet.ooxml.getCellXfIndices(null);
+  const styledCells: readonly XfCell[] = sheet.ooxml.listCellXfIndices();
+  sheet.ooxml.listCellXfIndices('A1:B2');
+  sheet.ooxml.listCellXfIndices(null);
   const styledXf: number = styledCells[0].xfIndex;
   sheet.ooxml.remapRangeXfs('A1:B2', new Map(bases.map((index) => [index, index])));
   sheet.ooxml.restoreRangeXfs(sheet.ooxml.snapshotRangeXfs('A1:B2'));
@@ -1072,9 +1072,9 @@ export function styleRecords(dxf: Dxf): void {
   const parent: number | undefined = xf.styleXfIndex;
   const format = sheet.getCellFormat('A1');
   const xfIndex: number | null = sheet.ooxml.getCellXfIndex('A1');
-  const flagged: readonly CellAddress[] = sheet.getShowPhoneticCells();
-  sheet.getShowPhoneticCells('A1:B2');
-  sheet.getShowPhoneticCells(null);
+  const flagged: readonly CellAddress[] = sheet.listShowPhoneticCells();
+  sheet.listShowPhoneticCells('A1:B2');
+  sheet.listShowPhoneticCells(null);
   const flaggedRow: number = flagged[0].row;
   const run = sheet.getCellPhoneticRuns('A1')[0];
   const span: number = run.end - run.start;

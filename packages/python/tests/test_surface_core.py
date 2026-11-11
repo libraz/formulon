@@ -33,7 +33,7 @@ class StructLayoutTests(unittest.TestCase):
     # stops a new struct from opting out by simply not being listed.
     EXPECTED_SIZES = {
         "CELL_RECT": 16,
-        "CELL_XF_INDEX": 12,
+        "XF_CELL": 12,
         "HYPERLINK": 36,
         "COMMENT": 20,
         "DATA_VALIDATION": 68,

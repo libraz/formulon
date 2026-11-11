@@ -513,7 +513,7 @@ Napi::Value Workbook::SetRangeXfIndex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   CheckedSpecReader reader(env);
   fm_cell_rect_t rect{};
-  if (!ReadCellRect(reader, ArgObject(info, 1), &rect)) {
+  if (!ReadCellRectArg(reader, info, 1, &rect)) {
     return env.Undefined();
   }
   return StatusCall(info, [&](fm_workbook_t* handle) {

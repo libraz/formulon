@@ -246,7 +246,7 @@ describe('method names', () => {
       present(ws.ooxml, [
         'getRangeXfBases',
         'getRangeXfBasesExcluding',
-        'getCellXfIndices',
+        'listCellXfIndices',
         'remapRangeXfs',
         'snapshotRangeXfs',
         'restoreRangeXfs',

@@ -2046,8 +2046,8 @@ export interface RangeCell {
   readonly kind: ValueKind;
 }
 
-/** One stored cell and its own non-default cell XF, as `SheetOoxml.getCellXfIndices` returns it. */
-export interface CellXfIndex {
+/** One stored cell and its own non-default cell XF, as `SheetOoxml.listCellXfIndices` returns it. */
+export interface XfCell {
   /** The 0-based row. */
   readonly row: number;
   /** The 0-based column. */
@@ -7296,7 +7296,7 @@ export interface Sheet {
   getCellsInRange(range?: CellRect | string | null, options?: PageOptions): CellsInRange;
   /** Lists every populated cell (formula or non-blank value, spill phantoms included) inside `range`, row-major.
    *  `range` defaults as for {@link Sheet.getUsedRange}. Cells with content only; for formatted cells see
-   *  `ooxml.getCellXfIndices`; for blanks carrying only a Show Phonetic flag, `getShowPhoneticCells`. */
+   *  `ooxml.listCellXfIndices`; for blanks carrying only a Show Phonetic flag, `listShowPhoneticCells`. */
   listCells(range?: CellRect | string | null): readonly RangeCell[];
   /** The text Excel displays for the cell, from its value and number format under the workbook's date
    *  system.
@@ -7372,7 +7372,7 @@ export interface Sheet {
   /** `getCellPhoneticProperties` at the A1 address `a1`. */
   getCellPhoneticProperties(a1: string): PhoneticProperties;
   /** Reads the cell's "Show Phonetic" flag (`<c ph="1">`); `false` for an
-   *  absent cell. To enumerate the flagged cells, use `getShowPhoneticCells`. */
+   *  absent cell. To enumerate the flagged cells, use `listShowPhoneticCells`. */
   getCellShowPhonetic(row: number, col: number): boolean;
   /** `getCellShowPhonetic` at the A1 address `a1`. */
   getCellShowPhonetic(a1: string): boolean;
@@ -7382,7 +7382,7 @@ export interface Sheet {
    * `range` covers every stored cell of the sheet, so a flagged cell outside {@link Sheet.getUsedRange} is listed.
    * A rectangle outside the grid fails with `StatusCode.InvalidArgument`.
    */
-  getShowPhoneticCells(range?: CellRect | string | null): readonly CellAddress[];
+  listShowPhoneticCells(range?: CellRect | string | null): readonly CellAddress[];
   /** Sets the cell's "Show Phonetic" display flag. It is independent of the
    *  readings and survives value writes; a formula cell's flag is neither
    *  saved nor read from a file. */
@@ -8231,10 +8231,10 @@ export interface SheetOoxml {
    * styled blank cells and cells with content alike. A cell explicitly set to XF 0 is not listed, nor is a spill
    * cell, which has no stored record. An omitted or `null` `range` covers every stored cell of the sheet, so a
    * formatted cell outside {@link Sheet.getUsedRange} is listed. Complements `Sheet.listCells`, which lists cells
-   * with content only; for flag-only cells see `Sheet.getShowPhoneticCells`. A rectangle outside the grid fails with
+   * with content only; for flag-only cells see `Sheet.listShowPhoneticCells`. A rectangle outside the grid fails with
    * `StatusCode.InvalidArgument`.
    */
-  getCellXfIndices(range?: CellRect | string | null): readonly CellXfIndex[];
+  listCellXfIndices(range?: CellRect | string | null): readonly XfCell[];
   /**
    * `getRangeXfBases` over the selection less the cells of `excluded` (each a {@link CellAddress} or an A1
    * cell): an excluded cell contributes no XF, neither its own nor the row, column or default style

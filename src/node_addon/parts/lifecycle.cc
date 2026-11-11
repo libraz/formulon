@@ -302,7 +302,7 @@ Napi::Value Workbook::PartialRecalc(const Napi::CallbackInfo& info) {
   const std::size_t sheet = ArgU32(info, 0);
   fm_cell_rect_t vp{};
   CheckedSpecReader reader(env);
-  if (!ReadCellRect(reader, ArgObject(info, 1), &vp)) {
+  if (!ReadCellRectArg(reader, info, 1, &vp)) {
     return env.Undefined();
   }
   uint32_t recomputed = 0;

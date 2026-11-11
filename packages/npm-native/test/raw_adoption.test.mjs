@@ -188,3 +188,16 @@ test('the profile id accessors use the profile name', () => {
     assert.equal(wb.getExcelProfileId, undefined);
   });
 });
+
+test('a positional CellRect that is not an object is a TypeError naming the parameter', () => {
+  withWorkbook((wb) => {
+    for (const call of [() => wb.listShowPhoneticCells(0, 5), () => wb.setArrayFormula(0, 5, '=1')]) {
+      const error = thrown(call);
+      assert.ok(error instanceof TypeError, String(error));
+      assert.match(error.message, / must be an object$/);
+    }
+    const missing = thrown(() => wb.listShowPhoneticCells(0, {}));
+    assert.ok(missing instanceof TypeError, String(missing));
+    assert.match(missing.message, /range\.firstRow is required$/);
+  });
+});

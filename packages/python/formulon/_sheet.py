@@ -80,7 +80,6 @@ from ._workbook import (
     CellShift,
     CellsInRange,
     CellXf,
-    CellXfIndex,
     CellXfInput,
     CfCell,
     CfColorScale,
@@ -202,6 +201,7 @@ from ._workbook import (
     VerticalAlign,
     WidthModel,
     Workbook,
+    XfCell,
     _ArgScope,
     _cell_rect_fields,
     _cell_rect_from,
@@ -411,7 +411,6 @@ SHEET_METHODS = (
     "get_row_height_pt",
     "get_selection",
     "get_sheet_protection",
-    "get_show_phonetic_cells",
     "get_sparkline_group",
     "get_spill",
     "get_tab_color",
@@ -445,6 +444,7 @@ SHEET_METHODS = (
     "list_row_breaks",
     "list_row_overrides",
     "list_shapes",
+    "list_show_phonetic_cells",
     "list_slicers",
     "list_sparkline_groups",
     "list_tables",
@@ -553,7 +553,6 @@ OOXML_WORKBOOK_METHODS = (
 OOXML_SHEET_METHODS = (
     "get_auto_filter_xml",
     "get_cell_xf_index",
-    "get_cell_xf_indices",
     "get_column_xf_index",
     "get_effective_style",
     "get_header_footer_xml",
@@ -564,6 +563,7 @@ OOXML_SHEET_METHODS = (
     "get_range_xf_bases_excluding",
     "get_row_xf_index",
     "get_sheet_pr_xml",
+    "list_cell_xf_indices",
     "remap_range_xfs",
     "reset_cell_xf_index",
     "reset_column_xf_index",
@@ -724,17 +724,17 @@ RECT_ARGS = {
     "Sheet.delete_cells": (0,),
     "Sheet.evaluate_cf_range": (0,),
     "Sheet.get_cell_rect_pt": (0,),
-    "Sheet.get_cell_xf_indices": (0,),
     "Sheet.get_cells_in_range": (0,),
     "Sheet.get_merges_in_range": (0,),
     "Sheet.get_range_xf_bases": (0,),
     "Sheet.get_range_xf_bases_excluding": (0,),
-    "Sheet.get_show_phonetic_cells": (0,),
     "Sheet.get_typed_values": (0,),
     "Sheet.get_values": (0,),
     "Sheet.insert_cells": (0,),
     "Sheet.iter_rows": (0,),
+    "Sheet.list_cell_xf_indices": (0,),
     "Sheet.list_cells": (0,),
+    "Sheet.list_show_phonetic_cells": (0,),
     "Sheet.recalc_viewport": (0,),
     "Sheet.remap_range_xfs": (0,),
     "Sheet.remove_merge": (0,),
@@ -1481,15 +1481,17 @@ class Sheet(_NoCopy):
             for p in range(2 * len(pairs) + len(rest))
         ]
 
-    def _rect(self, rect: Union[CellRect, str]) -> CellRect:
-        """``rect`` itself, or the rectangle an unqualified A1 range or cell names."""
-        if not isinstance(rect, str):
+    def _rect(self, rect: Union[CellRect, str], label: str = "range") -> CellRect:
+        """``rect`` itself, or the rectangle an unqualified A1 range or cell names; ``label`` names it in a refusal."""
+        if isinstance(rect, CellRect):
             return rect
+        if not isinstance(rect, str):
+            raise TypeError(_argument_message(label, "must be a CellRect or an A1 string"))
         ref = self._workbook.parse_reference(rect)
         if ref is None or ref.sheet_name is not None:
             raise FormulonError(
                 StatusCode.INVALID_ARGUMENT,
-                _argument_message("range", f"{rect!r} is not an unqualified A1 range"),
+                _argument_message(label, f"{rect!r} is not an unqualified A1 range"),
                 "",
             )
         return ref.range
@@ -1578,7 +1580,7 @@ class Sheet(_NoCopy):
 
     def __setitem__(self, key: Union[str, Tuple[int, int]], value: Any) -> None:
         if isinstance(key, str) and ":" in key:
-            rect = self._rect(key)
+            rect = self._rect(key, "key")
             rows = rect.last_row - rect.first_row + 1
             cols = rect.last_col - rect.first_col + 1
             if isinstance(value, (str, bytes)) or not isinstance(value, Sequence):
@@ -2036,7 +2038,7 @@ class Sheet(_NoCopy):
     def get_cell_show_phonetic(self, *args: Any, **kwargs: Any) -> bool:
         """Whether the cell shows its phonetic guide (``<c ph="1">``).
 
-        To enumerate the flagged cells, use :meth:`get_show_phonetic_cells`.
+        To enumerate the flagged cells, use :meth:`list_show_phonetic_cells`.
         """
         row, col = self._cell_args("get_cell_show_phonetic", args, kwargs, ())
         sheet = self._index()
@@ -2051,7 +2053,7 @@ class Sheet(_NoCopy):
             )
         )
 
-    def get_show_phonetic_cells(self, range: Union[CellRect, str, None] = None) -> List[CellAddress]:
+    def list_show_phonetic_cells(self, range: Union[CellRect, str, None] = None) -> List[CellAddress]:
         """List every stored cell of ``range`` whose Show Phonetic flag is set, row-major.
 
         This is the flag :meth:`get_cell_show_phonetic` reads. A blank cell
@@ -2509,8 +2511,8 @@ class Sheet(_NoCopy):
         Cells come in row-major order; each carries its stored formula, its
         value as native data and the value's kind, as
         :meth:`get_cells_in_range` pages them. Cells with content only; for
-        formatted cells see ``ooxml.get_cell_xf_indices``; for blanks carrying
-        only a Show Phonetic flag, :meth:`get_show_phonetic_cells`.
+        formatted cells see ``ooxml.list_cell_xf_indices``; for blanks carrying
+        only a Show Phonetic flag, :meth:`list_show_phonetic_cells`.
         """
         rect = self._range_or_used(range)
         if rect is None:
@@ -2724,7 +2726,7 @@ class Sheet(_NoCopy):
     # wasmtime-py host cannot synthesise into the module's function table.
     def recalc_viewport(self, viewport: Union[CellRect, str]) -> int:
         """Recalc the dependency closure for the viewport ``viewport``; return cell count."""
-        rect = self._rect(viewport)
+        rect = self._rect(viewport, "viewport")
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -2865,7 +2867,7 @@ class Sheet(_NoCopy):
         if link is not None:
             self._check_hyperlink(link)
             if link.range is not None:
-                rect = self._rect(link.range)
+                rect = self._rect(link.range, "link.range")
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -2899,7 +2901,7 @@ class Sheet(_NoCopy):
         self._check_hyperlink(link)
         if link.range is None:
             raise FormulonError(StatusCode.INVALID_ARGUMENT, _argument_message("link.range", "is required"), "")
-        rect = self._rect(link.range)
+        rect = self._rect(link.range, "link.range")
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -4608,7 +4610,7 @@ class Sheet(_NoCopy):
             spec = DataTableInput(range=spec.range, row_input=spec.row_input, column_input=spec.column_input)
         if not isinstance(spec, DataTableInput):
             raise TypeError(_argument_message("spec", "must be a DataTableInput or DataTable"))
-        rect = self._rect(spec.range)
+        rect = self._rect(spec.range, "spec.range")
         inputs = [
             self._cell(cell) if isinstance(cell, str) else None if cell is None else (cell.row, cell.col)
             for cell in (spec.row_input, spec.column_input)
@@ -5473,7 +5475,8 @@ class Sheet(_NoCopy):
         or rows; one A1 range string is one rectangle. ``None`` or an empty
         list removes the name.
         """
-        rects = [] if ranges is None else [self._rect(r) for r in ([ranges] if isinstance(ranges, str) else ranges)]
+        items = [] if ranges is None else [ranges] if isinstance(ranges, str) else ranges
+        rects = [self._rect(r, f"ranges[{i}]") for i, r in enumerate(items)]
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -7187,7 +7190,7 @@ class Sheet(_NoCopy):
         area, a data table, a PivotTable or (for more than one cell) a table.
         Writing to the top-left cell of a block replaces the whole block.
         """
-        rect = self._rect(array_formula.range)
+        rect = self._rect(array_formula.range, "array_formula.range")
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -7569,7 +7572,7 @@ class SheetOoxml(_NoCopy):
         rect = self._sheet._rect(range)
         return self.get_range_xf_bases_excluding(rect, ())
 
-    def get_cell_xf_indices(self, range: Union[CellRect, str, None] = None) -> List[CellXfIndex]:
+    def list_cell_xf_indices(self, range: Union[CellRect, str, None] = None) -> List[XfCell]:
         """List every stored cell of ``range`` whose own cell XF is not 0, row-major.
 
         Styled blank cells and cells with content are both listed; a cell
@@ -7577,7 +7580,7 @@ class SheetOoxml(_NoCopy):
         stored record. ``range=None`` covers every stored cell of the sheet,
         so a formatted cell outside the used range is listed. Complements
         :meth:`Sheet.list_cells`, which lists cells with content only; for
-        flag-only cells see :meth:`Sheet.get_show_phonetic_cells`.
+        flag-only cells see :meth:`Sheet.list_show_phonetic_cells`.
 
         Raises:
           InvalidArgumentError: when ``range`` is outside the grid.
@@ -7594,8 +7597,8 @@ class SheetOoxml(_NoCopy):
             total = LIB.read_u32(len_ptr)
             if total == 0:
                 return []
-            size = S.CELL_XF_INDEX.size
-            buf = scope.struct_array(S.CELL_XF_INDEX, total)
+            size = S.XF_CELL.size
+            buf = scope.struct_array(S.XF_CELL, total)
             _check(
                 LIB.fm_sheet_get_cell_xf_indices(
                     h, _uint(sheet, "sheet_index", role="sheet"), rp, buf, _uint(total, "cap"), len_ptr
@@ -7603,10 +7606,8 @@ class SheetOoxml(_NoCopy):
             )
             n = min(total, LIB.read_u32(len_ptr))
             raw = LIB.read_bytes(buf, size * n)
-            cells = (
-                S.CELL_XF_INDEX.unpack_from(raw, i * size) for i in builtins.range(n)
-            )  # `range` is the parameter here
-            return [CellXfIndex(row=c["row"], col=c["col"], xf_index=c["xf_index"]) for c in cells]
+            cells = (S.XF_CELL.unpack_from(raw, i * size) for i in builtins.range(n))  # `range` is the parameter here
+            return [XfCell(row=c["row"], col=c["col"], xf_index=c["xf_index"]) for c in cells]
 
     def get_range_xf_bases_excluding(
         self,

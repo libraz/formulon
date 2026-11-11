@@ -552,12 +552,12 @@ emscripten::val JsWorkbook::rangeStyleBases(uint32_t sheet, emscripten::val rang
   return range_style_bases_result(handle_, sheet, rect, {});
 }
 
-emscripten::val JsWorkbook::getCellXfIndices(uint32_t sheet, emscripten::val range) const {
+emscripten::val JsWorkbook::listCellXfIndices(uint32_t sheet, emscripten::val range) const {
   if (handle_ == nullptr) {
     record_invalid_handle();
     return emscripten::val::undefined();
   }
-  JsNarrowNumericReader reader("Sheet.getCellXfIndices");
+  JsNarrowNumericReader reader("Sheet.listCellXfIndices");
   const fm_cell_rect_t rect = js_value_present(range) ? js_pull_range(range, &reader) : kWholeSheetRect;
   if (!reader.ok()) {
     return emscripten::val::undefined();
@@ -565,7 +565,7 @@ emscripten::val JsWorkbook::getCellXfIndices(uint32_t sheet, emscripten::val ran
   const fm_cell_rect_t* where = &rect;
   size_t len = 0;
   fm_status_t rc = fm_sheet_get_cell_xf_indices(handle_, sheet, where, nullptr, 0, &len);
-  std::vector<fm_cell_xf_index_t> cells(len);
+  std::vector<fm_xf_cell_t> cells(len);
   if (rc == 0 && len > 0) {
     rc = fm_sheet_get_cell_xf_indices(handle_, sheet, where, cells.data(), cells.size(), &len);
   }
@@ -573,7 +573,7 @@ emscripten::val JsWorkbook::getCellXfIndices(uint32_t sheet, emscripten::val ran
     return emscripten::val::undefined();
   }
   emscripten::val list = emscripten::val::array();
-  for (const fm_cell_xf_index_t& cell : cells) {
+  for (const fm_xf_cell_t& cell : cells) {
     emscripten::val item = emscripten::val::object();
     item.set("row", cell.row);
     item.set("col", cell.col);
@@ -583,12 +583,12 @@ emscripten::val JsWorkbook::getCellXfIndices(uint32_t sheet, emscripten::val ran
   return list;
 }
 
-emscripten::val JsWorkbook::getShowPhoneticCells(uint32_t sheet, emscripten::val range) const {
+emscripten::val JsWorkbook::listShowPhoneticCells(uint32_t sheet, emscripten::val range) const {
   if (handle_ == nullptr) {
     record_invalid_handle();
     return emscripten::val::undefined();
   }
-  JsNarrowNumericReader reader("Sheet.getShowPhoneticCells");
+  JsNarrowNumericReader reader("Sheet.listShowPhoneticCells");
   const fm_cell_rect_t rect = js_value_present(range) ? js_pull_range(range, &reader) : kWholeSheetRect;
   if (!reader.ok()) {
     return emscripten::val::undefined();

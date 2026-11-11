@@ -200,6 +200,21 @@ class ArgumentMessageTests(_MessageCase):
                     self.assertEqual(message, expected)
                     self.assert_public_words(message)
 
+    def test_range_that_is_neither_rect_nor_a1_string(self) -> None:
+        with Workbook.create_default() as wb:
+            ws = wb.sheet(0)
+            cases = (
+                (lambda: ws.get_values(5), "Sheet.get_values range"),
+                (lambda: ws.get_typed_values(5), "Sheet.get_typed_values range"),
+                (lambda: ws.ooxml.list_cell_xf_indices(5), "SheetOoxml.list_cell_xf_indices range"),
+                (lambda: ws.recalc_viewport(5), "Sheet.recalc_viewport viewport"),
+            )
+            for call, label in cases:
+                with self.subTest(label=label):
+                    message = _raised(TypeError, call)
+                    self.assertEqual(message, f"{label} must be a CellRect or an A1 string")
+                    self.assert_public_words(message)
+
 
 if __name__ == "__main__":
     unittest.main()

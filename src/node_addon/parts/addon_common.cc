@@ -511,7 +511,7 @@ uint32_t CheckedSpecReader::RequiredU32(const Napi::Object& owner, const char* k
   Napi::Value value;
   if (!ReadOptional(owner, key, &value)) {
     if (ok()) {
-      FailType(key, "a number");
+      ReportFailure<Napi::TypeError>(key, "is required");
     }
     return 0U;
   }
@@ -1068,6 +1068,17 @@ bool ReadCellRect(CheckedSpecReader& reader, const Napi::Object& range, fm_cell_
   out->last_row = reader.RequiredU32(range, "lastRow");
   out->last_col = reader.RequiredU32(range, "lastCol");
   return reader.ok();
+}
+
+bool ReadCellRectArg(CheckedSpecReader& reader, const Napi::CallbackInfo& info, size_t idx, fm_cell_rect_t* out) {
+  Napi::Object object;
+  if (!ObjectArg(info, idx, &object)) {
+    ThrowPositionalTypeError(info.Env(), idx, info[idx].IsUndefined() ? "is required" : "must be an object");
+    return false;
+  }
+  const std::string name = CurrentArgumentName(idx);
+  const Napi::Value value = object;
+  return reader.Object(value, name.c_str(), &object) && ReadCellRect(reader, object, out);
 }
 
 bool ReadCellRects(CheckedSpecReader& reader, const Napi::Value& value, const char* key,

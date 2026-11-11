@@ -92,8 +92,8 @@ bool ReadInt32(const Napi::CallbackInfo& info, const char* call, const char* par
 bool ReadDate1904(const Napi::CallbackInfo& info, int32_t* out) {
   const Napi::Value value = info[1];
   if (!value.IsBoolean()) {
-    Napi::TypeError::New(info.Env(), formulon::binding::argument_message(CurrentCallLabel(), "date1904",
-                                                                           "must be a boolean"))
+    Napi::TypeError::New(info.Env(),
+                         formulon::binding::argument_message(CurrentCallLabel(), "date1904", "must be a boolean"))
         .ThrowAsJavaScriptException();
     return false;
   }

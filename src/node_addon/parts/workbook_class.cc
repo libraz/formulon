@@ -104,7 +104,17 @@ std::string PublicArgumentName(const void* data, std::size_t raw_index) {
   if (raw_index < supplied) {
     return {};
   }
-  return std::string(formulon::binding::param_name(PublicMethodLabel(data), raw_index - supplied));
+  const std::string label = PublicMethodLabel(data);
+  const std::size_t index = raw_index - supplied;
+  std::string_view name = formulon::binding::param_name(label, index);
+  // The `ooxml` namespaces share the raw methods of their owner, so their rows are keyed by the namespace class
+  // (the facade's KEY_FALLBACKS).
+  if (name.empty() && label.rfind("Sheet.", 0) == 0) {
+    name = formulon::binding::param_name("SheetOoxml." + label.substr(6), index);
+  } else if (name.empty() && label.rfind("Workbook.", 0) == 0) {
+    name = formulon::binding::param_name("WorkbookOoxml." + label.substr(9), index);
+  }
+  return std::string(name);
 }
 
 // The positional refusals below word their message for the call `ScopedReaderLabel` names.
@@ -822,8 +832,8 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::SetRowCollapsed, 0x7ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x8ULL>("setRowCollapsed"),
           GuardedInstanceMethod<&Workbook::SetRowStyle, 0xFULL>("setRowXfIndex"),
           GuardedInstanceMethod<&Workbook::RangeStyleBases, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("getRangeXfBases"),
-          GuardedInstanceMethod<&Workbook::ListCellXfIndices, 0x1ULL>("getCellXfIndices"),
-          GuardedInstanceMethod<&Workbook::ListShowPhoneticCells, 0x1ULL>("getShowPhoneticCells"),
+          GuardedInstanceMethod<&Workbook::ListCellXfIndices, 0x1ULL>("listCellXfIndices"),
+          GuardedInstanceMethod<&Workbook::ListShowPhoneticCells, 0x1ULL>("listShowPhoneticCells"),
           GuardedInstanceMethod<&Workbook::RangeStyleBasesExcluding, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0xEULL>("getRangeXfBasesExcluding"),
           GuardedInstanceMethod<&Workbook::RemapRangeStyle, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0xEULL>("remapRangeXfs"),
           GuardedInstanceMethod<&Workbook::SnapshotRangeStyle, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("snapshotRangeXfs"),

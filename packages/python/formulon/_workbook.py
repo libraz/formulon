@@ -110,7 +110,6 @@ __all__ = [
     "CellsInRange",
     "CellStyle",
     "CellXf",
-    "CellXfIndex",
     "CellXfInput",
     "CfAboveAverageRuleInput",
     "CfCell",
@@ -410,6 +409,7 @@ __all__ = [
     "WorkbookFormat",
     "WorkbookProtection",
     "WorkbookProtectionInput",
+    "XfCell",
 ]
 
 
@@ -814,8 +814,8 @@ def _folded(grid: List[List[Value]]) -> Value:
 
 
 @dataclass(frozen=True)
-class CellXfIndex:
-    """One stored cell and its own non-default cell XF, as :meth:`SheetOoxml.get_cell_xf_indices` returns it."""
+class XfCell:
+    """One stored cell and its own non-default cell XF, as :meth:`SheetOoxml.list_cell_xf_indices` returns it."""
 
     #: The 0-based row.
     row: int

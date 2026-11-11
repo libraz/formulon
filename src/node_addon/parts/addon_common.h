@@ -398,6 +398,10 @@ bool PatchRects(CheckedSpecReader& reader, const Napi::Object& spec, const char*
 /// field is required.
 bool ReadCellRect(CheckedSpecReader& reader, const Napi::Object& range, fm_cell_rect_t* out);
 
+/// `ReadCellRect` for the required positional argument `info[idx]`; a field refusal names it by its parameter
+/// (`range.firstRow is required`), as the WASM reader does.
+bool ReadCellRectArg(CheckedSpecReader& reader, const Napi::CallbackInfo& info, size_t idx, fm_cell_rect_t* out);
+
 /// Reads the `{ kind, rgb, theme, tint, indexed }` colour specification out
 /// of `owner[key]`. An absent object leaves `kind` at `FM_COLOR_KIND_NONE` (no
 /// colour). A supplied selector is authoritative; this binding does not

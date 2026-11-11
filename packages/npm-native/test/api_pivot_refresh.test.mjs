@@ -102,6 +102,8 @@ describe('PivotCache.refresh', () => {
       // The report fills E1:F4; North makes it one row longer, into E5.
       const drawn = { firstRow: 0, firstCol: 4, lastRow: 3, lastCol: 5 };
       assert.deepEqual(pivot.getSpill(), { anchor: { row: 0, col: 4 }, blocked: false, cause: null, range: drawn });
+      assert.deepEqual(Object.keys(pivot.getSpill()), ['anchor', 'blocked', 'cause', 'range']);
+      assert.deepEqual(Object.keys(ws.getSpill('E1')), ['anchor', 'blocked', 'cause', 'range']);
       for (let row = 4; row < 9; row++) ws.setText(row, 4, 'keep');
       ws.setText('A4', 'North');
       assert.equal(cache.refresh(), undefined);

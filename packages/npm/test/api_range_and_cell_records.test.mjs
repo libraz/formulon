@@ -298,7 +298,7 @@ describe('the XF remap pair takes cells and a Map', () => {
   });
 });
 
-describe('getCellXfIndices', () => {
+describe('listCellXfIndices', () => {
   /** Two XFs beyond the default, and a mix of styled blanks, styled content, unstyled content and an explicit 0. */
   function styledCells(ws, wb) {
     const a = wb.ooxml.addCellXf({ ...wb.ooxml.getCellXf(0), numFmtId: 2 });
@@ -315,11 +315,22 @@ describe('getCellXfIndices', () => {
   it('lists styled blank and styled content cells row-major, and leaves out xf 0 and unstyled content', () => {
     withSheet((ws, wb) => {
       const { a, b } = styledCells(ws, wb);
-      assert.deepEqual(plain(ws.ooxml.getCellXfIndices()), [
+      assert.deepEqual(plain(ws.ooxml.listCellXfIndices()), [
         { row: 2, col: 7, xfIndex: a },
         { row: 5, col: 3, xfIndex: b },
         { row: 1000, col: 20, xfIndex: a },
       ]);
+    });
+  });
+
+  it('reads XfCell records keyed row, col, xfIndex and has no get-named reads', () => {
+    withSheet((ws, wb) => {
+      styledCells(ws, wb);
+      for (const cell of ws.ooxml.listCellXfIndices()) {
+        assert.deepEqual(Object.keys(cell), ['row', 'col', 'xfIndex']);
+      }
+      assert.equal(ws.ooxml.getCellXfIndices, undefined);
+      assert.equal(ws.getShowPhoneticCells, undefined);
     });
   });
 
@@ -328,11 +339,11 @@ describe('getCellXfIndices', () => {
       styledCells(ws, wb);
       const used = ws.getUsedRange();
       assert.ok(used.lastRow < 1000);
-      assert.equal(ws.ooxml.getCellXfIndices(null).length, 3);
-      assert.equal(ws.ooxml.getCellXfIndices(undefined).length, 3);
-      const whole = plain(ws.ooxml.getCellXfIndices());
-      assert.deepEqual(plain(ws.ooxml.getCellXfIndices(rect(0, 0, 1048575, 16383))), whole);
-      assert.deepEqual(plain(ws.ooxml.getCellXfIndices('A1:XFD1048576')), whole);
+      assert.equal(ws.ooxml.listCellXfIndices(null).length, 3);
+      assert.equal(ws.ooxml.listCellXfIndices(undefined).length, 3);
+      const whole = plain(ws.ooxml.listCellXfIndices());
+      assert.deepEqual(plain(ws.ooxml.listCellXfIndices(rect(0, 0, 1048575, 16383))), whole);
+      assert.deepEqual(plain(ws.ooxml.listCellXfIndices('A1:XFD1048576')), whole);
     });
   });
 
@@ -343,22 +354,22 @@ describe('getCellXfIndices', () => {
         { row: 2, col: 7, xfIndex: a },
         { row: 5, col: 3, xfIndex: b },
       ];
-      assert.deepEqual(plain(ws.ooxml.getCellXfIndices(rect(0, 0, 5, 1000))), clipped);
-      assert.deepEqual(plain(ws.ooxml.getCellXfIndices('A1:Z6')), clipped);
-      assert.deepEqual(plain(ws.ooxml.getCellXfIndices('D6')), [{ row: 5, col: 3, xfIndex: b }]);
-      assert.deepEqual(plain(ws.ooxml.getCellXfIndices('A8:C10')), []);
+      assert.deepEqual(plain(ws.ooxml.listCellXfIndices(rect(0, 0, 5, 1000))), clipped);
+      assert.deepEqual(plain(ws.ooxml.listCellXfIndices('A1:Z6')), clipped);
+      assert.deepEqual(plain(ws.ooxml.listCellXfIndices('D6')), [{ row: 5, col: 3, xfIndex: b }]);
+      assert.deepEqual(plain(ws.ooxml.listCellXfIndices('A8:C10')), []);
     });
   });
 
   it('survives a save and a load', () => {
     withSheet((ws, wb) => {
-      const before = plain(ws.ooxml.getCellXfIndices());
+      const before = plain(ws.ooxml.listCellXfIndices());
       assert.equal(before.length, 0);
       styledCells(ws, wb);
-      const expected = plain(ws.ooxml.getCellXfIndices());
+      const expected = plain(ws.ooxml.listCellXfIndices());
       const reloaded = f.Workbook.load(wb.save());
       try {
-        assert.deepEqual(plain(reloaded.sheet(0).ooxml.getCellXfIndices()), expected);
+        assert.deepEqual(plain(reloaded.sheet(0).ooxml.listCellXfIndices()), expected);
       } finally {
         reloaded.dispose();
       }
@@ -367,12 +378,12 @@ describe('getCellXfIndices', () => {
 
   it('refuses a rectangle outside the grid', () => {
     withSheet((ws) => {
-      assert.throws(() => ws.ooxml.getCellXfIndices(rect(0, 0, 1048576, 0)));
+      assert.throws(() => ws.ooxml.listCellXfIndices(rect(0, 0, 1048576, 0)));
     });
   });
 });
 
-describe('getShowPhoneticCells', () => {
+describe('listShowPhoneticCells', () => {
   /** A flagged constant, a flag-only blank, a flagged text, a far flagged blank, and unflagged content and blank. */
   function flaggedCells(ws) {
     ws.setBlank('U1001');
@@ -395,7 +406,7 @@ describe('getShowPhoneticCells', () => {
   it('lists flagged constants and flag-only blanks row-major and leaves out unflagged cells', () => {
     withSheet((ws) => {
       flaggedCells(ws);
-      assert.deepEqual(plain(ws.getShowPhoneticCells()), all);
+      assert.deepEqual(plain(ws.listShowPhoneticCells()), all);
       for (const { row, col } of all) assert.equal(ws.getCellShowPhonetic(row, col), true);
     });
   });
@@ -404,11 +415,11 @@ describe('getShowPhoneticCells', () => {
     withSheet((ws) => {
       flaggedCells(ws);
       assert.ok(ws.getUsedRange().lastRow < 1000);
-      assert.equal(ws.getShowPhoneticCells(null).length, 4);
-      assert.equal(ws.getShowPhoneticCells(undefined).length, 4);
-      const whole = plain(ws.getShowPhoneticCells());
-      assert.deepEqual(plain(ws.getShowPhoneticCells(rect(0, 0, 1048575, 16383))), whole);
-      assert.deepEqual(plain(ws.getShowPhoneticCells('A1:XFD1048576')), whole);
+      assert.equal(ws.listShowPhoneticCells(null).length, 4);
+      assert.equal(ws.listShowPhoneticCells(undefined).length, 4);
+      const whole = plain(ws.listShowPhoneticCells());
+      assert.deepEqual(plain(ws.listShowPhoneticCells(rect(0, 0, 1048575, 16383))), whole);
+      assert.deepEqual(plain(ws.listShowPhoneticCells('A1:XFD1048576')), whole);
     });
   });
 
@@ -419,20 +430,20 @@ describe('getShowPhoneticCells', () => {
         { row: 1, col: 1 },
         { row: 2, col: 0 },
       ];
-      assert.deepEqual(plain(ws.getShowPhoneticCells(rect(0, 0, 2, 1))), clipped);
-      assert.deepEqual(plain(ws.getShowPhoneticCells('A1:B3')), clipped);
-      assert.deepEqual(plain(ws.getShowPhoneticCells('H5')), [{ row: 4, col: 7 }]);
-      assert.deepEqual(plain(ws.getShowPhoneticCells('A8:C10')), []);
+      assert.deepEqual(plain(ws.listShowPhoneticCells(rect(0, 0, 2, 1))), clipped);
+      assert.deepEqual(plain(ws.listShowPhoneticCells('A1:B3')), clipped);
+      assert.deepEqual(plain(ws.listShowPhoneticCells('H5')), [{ row: 4, col: 7 }]);
+      assert.deepEqual(plain(ws.listShowPhoneticCells('A8:C10')), []);
     });
   });
 
   it('survives a save and a load, flag-only A3 included', () => {
     withSheet((ws, wb) => {
-      assert.equal(ws.getShowPhoneticCells().length, 0);
+      assert.equal(ws.listShowPhoneticCells().length, 0);
       flaggedCells(ws);
       const reloaded = f.Workbook.load(wb.save());
       try {
-        assert.deepEqual(plain(reloaded.sheet(0).getShowPhoneticCells()), all);
+        assert.deepEqual(plain(reloaded.sheet(0).listShowPhoneticCells()), all);
       } finally {
         reloaded.dispose();
       }
@@ -441,7 +452,7 @@ describe('getShowPhoneticCells', () => {
 
   it('refuses a rectangle outside the grid', () => {
     withSheet((ws) => {
-      assert.throws(() => ws.getShowPhoneticCells(rect(0, 0, 1048576, 0)));
+      assert.throws(() => ws.listShowPhoneticCells(rect(0, 0, 1048576, 0)));
     });
   });
 });

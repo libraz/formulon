@@ -1375,7 +1375,6 @@ const SHEET_METHODS = Object.freeze([
   'getRowHeightPt',
   'getSelection',
   'getSheetProtection',
-  'getShowPhoneticCells',
   'getSparklineGroup',
   'getSpill',
   'getTabColor',
@@ -1409,6 +1408,7 @@ const SHEET_METHODS = Object.freeze([
   'listRowBreaks',
   'listRowOverrides',
   'listShapes',
+  'listShowPhoneticCells',
   'listSlicers',
   'listSparklineGroups',
   'listTables',
@@ -1517,7 +1517,6 @@ const OOXML_WORKBOOK_METHODS = Object.freeze([
 const OOXML_SHEET_METHODS = Object.freeze([
   'getAutoFilterXml',
   'getCellXfIndex',
-  'getCellXfIndices',
   'getColumnXfIndex',
   'getEffectiveStyle',
   'getHeaderFooterXml',
@@ -1528,6 +1527,7 @@ const OOXML_SHEET_METHODS = Object.freeze([
   'getRangeXfBasesExcluding',
   'getRowXfIndex',
   'getSheetPrXml',
+  'listCellXfIndices',
   'remapRangeXfs',
   'resetCellXfIndex',
   'resetColumnXfIndex',
@@ -1823,17 +1823,17 @@ const RECT_ARGS = Object.freeze({
   'Sheet.deleteCells': [0],
   'Sheet.evaluateCfRange': [0],
   'Sheet.getCellRectPt': [0],
-  'Sheet.getCellXfIndices': [0],
   'Sheet.getCellsInRange': [0],
   'Sheet.getMergesInRange': [0],
   'Sheet.getRangeXfBases': [0],
   'Sheet.getRangeXfBasesExcluding': [0],
-  'Sheet.getShowPhoneticCells': [0],
   'Sheet.getTypedValues': [0],
   'Sheet.getValues': [0],
   'Sheet.insertCells': [0],
   'Sheet.iterRows': [0],
+  'Sheet.listCellXfIndices': [0],
   'Sheet.listCells': [0],
+  'Sheet.listShowPhoneticCells': [0],
   'Sheet.recalcViewport': [0],
   'Sheet.remapRangeXfs': [0],
   'Sheet.removeMerge': [0],
@@ -3527,7 +3527,6 @@ const METHOD_ARITY = Object.freeze({
   'Sheet.getCellRectPt': 2,
   'Sheet.getCellShowPhonetic': 2,
   'Sheet.getCellXfIndex': 2,
-  'Sheet.getCellXfIndices': 1,
   'Sheet.getCellsInRange': 2,
   'Sheet.getCfRule': 1,
   'Sheet.getColumnWidthPt': 2,
@@ -3566,7 +3565,6 @@ const METHOD_ARITY = Object.freeze({
   'Sheet.getSelection': 0,
   'Sheet.getSheetPrXml': 0,
   'Sheet.getSheetProtection': 0,
-  'Sheet.getShowPhoneticCells': 1,
   'Sheet.getSparklineGroup': 1,
   'Sheet.getSpill': 2,
   'Sheet.getTabColor': 0,
@@ -3585,6 +3583,7 @@ const METHOD_ARITY = Object.freeze({
   'Sheet.insertHyperlinkAt': 2,
   'Sheet.insertRows': 2,
   'Sheet.iterRows': 1,
+  'Sheet.listCellXfIndices': 1,
   'Sheet.listCells': 1,
   'Sheet.listCfRules': 0,
   'Sheet.listCharts': 0,
@@ -3600,6 +3599,7 @@ const METHOD_ARITY = Object.freeze({
   'Sheet.listRowBreaks': 0,
   'Sheet.listRowOverrides': 0,
   'Sheet.listShapes': 0,
+  'Sheet.listShowPhoneticCells': 1,
   'Sheet.listSlicers': 0,
   'Sheet.listSparklineGroups': 0,
   'Sheet.listTables': 0,
@@ -3847,15 +3847,15 @@ const TYPED_ARGS = Object.freeze({
   'Table.setAutoFilter': [[0, 'AutoFilterInput']],
 });
 const DEFAULT_ARGS = Object.freeze({
-  'Sheet.getCellXfIndices': [[0, null]],
   'Sheet.getCellsInRange': [[0, null]],
   'Sheet.getDependents': [[2, 1]],
   'Sheet.getPrecedents': [[2, 1]],
-  'Sheet.getShowPhoneticCells': [[0, null]],
   'Sheet.getTypedValues': [[0, null]],
   'Sheet.getValues': [[0, null]],
   'Sheet.iterRows': [[0, null]],
+  'Sheet.listCellXfIndices': [[0, null]],
   'Sheet.listCells': [[0, null]],
+  'Sheet.listShowPhoneticCells': [[0, null]],
   'Sheet.move': [[0, null]],
   'Table.insertColumns': [
     [0, null],
@@ -4274,7 +4274,6 @@ const PARAM_NAMES = Object.freeze({
   'Sheet.getPrecedents': ['row', 'col', 'depth'],
   'Sheet.getProtectedRange': ['protectedRange'],
   'Sheet.getRowHeightPt': ['row'],
-  'Sheet.getShowPhoneticCells': ['range'],
   'Sheet.getSparklineGroup': ['sparklineGroup'],
   'Sheet.getSpill': ['row', 'col'],
   'Sheet.getThreadedComment': ['id'],
@@ -4290,6 +4289,7 @@ const PARAM_NAMES = Object.freeze({
   'Sheet.insertRows': ['first', 'last'],
   'Sheet.iterRows': ['range'],
   'Sheet.listCells': ['range'],
+  'Sheet.listShowPhoneticCells': ['range'],
   'Sheet.move': ['insertBefore'],
   'Sheet.picture': ['objectId'],
   'Sheet.pivot': ['pivot'],
@@ -4361,12 +4361,12 @@ const PARAM_NAMES = Object.freeze({
   'Sheet.updateView': ['patch'],
   'Sheet.validateValue': ['row', 'col', 'value'],
   'SheetOoxml.getCellXfIndex': ['row', 'col'],
-  'SheetOoxml.getCellXfIndices': ['range'],
   'SheetOoxml.getColumnXfIndex': ['col'],
   'SheetOoxml.getEffectiveStyle': ['row', 'col'],
   'SheetOoxml.getRangeXfBases': ['range'],
   'SheetOoxml.getRangeXfBasesExcluding': ['range', 'excluded'],
   'SheetOoxml.getRowXfIndex': ['row'],
+  'SheetOoxml.listCellXfIndices': ['range'],
   'SheetOoxml.remapRangeXfs': ['range', 'mapping'],
   'SheetOoxml.resetCellXfIndex': ['row', 'col'],
   'SheetOoxml.resetColumnXfIndex': ['first', 'last'],
@@ -5323,6 +5323,10 @@ function expandCells(raw, where, pairs, args) {
   return out;
 }
 
+function rangeTypeError(label) {
+  throw new TypeError(`${label} must be a CellRect or an A1 string`);
+}
+
 // `CellRect` arguments (`RECT_ARGS`) given as A1 ranges, alone or in an array.
 function expandRects(raw, where, positions, args) {
   let out = args;
@@ -5334,7 +5338,9 @@ function expandRects(raw, where, positions, args) {
         ? rangeAddress(raw, item, label)
         : isObject(item)
           ? checkRangeFields('CellRect', item, label)
-          : item;
+          : item === null || item === undefined
+            ? item
+            : rangeTypeError(label);
     const next = Array.isArray(value) ? value.map(rect) : rect(value);
     if (next !== value) {
       if (out === args) out = [...args];
