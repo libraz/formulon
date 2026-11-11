@@ -885,7 +885,7 @@ fm_status_t check_sheet_index(const fm_workbook_t* wb, std::size_t sheet_index) 
 
 TextStore& fresh_read_scratch(const fm_workbook_t* wb) {
   TextStore& store = const_cast<TextStore&>(wb->read_scratch);
-  store.clear();
+  formulon::c_api::release_text(store, const_cast<TextStore&>(wb->read_scratch_retired));
   return store;
 }
 

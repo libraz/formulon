@@ -591,6 +591,9 @@ struct fm_workbook {
   // read on the same handle (or any mutation, or handle destruction) — the
   // standard C-ABI scratch contract documented in `formulon_c.h`.
   formulon::c_api::parts::TextStore read_scratch;
+  // What the last refresh released from `read_scratch`, kept poisoned in builds with assertions
+  // (`release_text`); empty otherwise.
+  formulon::c_api::parts::TextStore read_scratch_retired;
 
   // Sorted coordinate caches for the `cell_count` / `cell_at` iteration
   // pair. Slot zero is the most recently used entry; keeping two entries

@@ -19,6 +19,7 @@
 #define FORMULON_C_API_BORROWED_ARENA_H_
 
 #include <cstddef>
+#include <cstring>
 #include <deque>
 #include <string>
 #include <string_view>
@@ -27,6 +28,30 @@
 
 namespace formulon {
 namespace c_api {
+
+/// Byte written over released transient storage in builds with assertions.
+inline constexpr unsigned char kReleasedByte = 0xDD;
+
+/// Empties `live`, the storage behind borrowed views a caller may still hold. With assertions (no `NDEBUG`) the
+/// released bytes are overwritten with `kReleasedByte` and kept, unreused, until the next release: a view read past
+/// its documented lifetime then sees the marker every time instead of whatever the allocator reused the memory for.
+/// `poison` overwrites one element of `live`.
+template <typename Container, typename Poison>
+void release_transient(Container& live, [[maybe_unused]] Container& retired, [[maybe_unused]] Poison poison) {
+#ifndef NDEBUG
+  for (auto& element : live) {
+    poison(element);
+  }
+  retired = std::move(live);
+#endif
+  live.clear();
+}
+
+/// `release_transient` for a store of `std::string`s; the terminating NUL stays, so a stale view reads a marker
+/// string of the original length.
+inline void release_text(std::deque<std::string>& live, std::deque<std::string>& retired) {
+  release_transient(live, retired, [](std::string& text) { std::memset(&text[0], kReleasedByte, text.size()); });
+}
 
 /// Owns the UTF-8 bytes behind borrowed `const char*` fields.
 ///
@@ -44,8 +69,8 @@ class BorrowedStringArena {
   }
 
   /// Drops every stored string, invalidating all previously returned
-  /// pointers.
-  void clear() { storage_.clear(); }
+  /// pointers (see `release_text`).
+  void clear() { release_text(storage_, retired_); }
 
   /// Number of strings currently retained.
   std::size_t size() const noexcept { return storage_.size(); }
@@ -54,6 +79,7 @@ class BorrowedStringArena {
 
  private:
   std::deque<std::string> storage_;
+  std::deque<std::string> retired_;
 };
 
 /// Owns the contiguous arrays behind borrowed `const T*` / count field
@@ -78,8 +104,12 @@ class BorrowedArrayArena {
   }
 
   /// Drops every stored block, invalidating all previously returned
-  /// pointers.
-  void clear() { storage_.clear(); }
+  /// pointers (see `release_transient`).
+  void clear() {
+    release_transient(storage_, retired_, [](std::vector<T>& block) {
+      std::memset(static_cast<void*>(block.data()), kReleasedByte, block.size() * sizeof(T));
+    });
+  }
 
   /// Total number of elements retained across all blocks.
   std::size_t size() const noexcept {
@@ -94,6 +124,7 @@ class BorrowedArrayArena {
 
  private:
   std::vector<std::vector<T>> storage_;
+  std::vector<std::vector<T>> retired_;
 };
 
 }  // namespace c_api

@@ -1,5 +1,6 @@
 // Stable C ABI conditional-format visual payload tests.
 
+#include <string>
 #include <utility>
 
 #include "formulon_c_cf_test_helpers.h"
@@ -372,4 +373,39 @@ TEST(FormulonCApiCfMutate, UnsetDataBarColoursReadBackAsNoneAndASetBorderReadsBa
   EXPECT_EQ(CfG(bordered_back.data_bar_border), 22U);
   EXPECT_EQ(CfB(bordered_back.data_bar_border), 33U);
   EXPECT_EQ(bordered_back.data_bar_negative_border.kind, FM_COLOR_KIND_NONE);
+}
+
+// Builds with assertions overwrite released transient storage with a marker byte and keep it unreused until the
+// next release, so a borrowed view read after the next get fails the same way every time.
+TEST(FormulonCApiCfMutate, AViewReadAfterTheNextGetSeesTheReleasedMarker) {
+#ifdef NDEBUG
+  GTEST_SKIP() << "the marker is written only in builds with assertions";
+#else
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "hello"), 0);
+  fm_value_t first{};
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &first), 0);
+  ASSERT_EQ(first.kind, FM_VALUE_KIND_TEXT);
+  const char* stale_text = first.u.text;
+  fm_value_t second{};
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &second), 0);
+  EXPECT_EQ(std::string(stale_text), std::string(5, '\xDD'));
+  EXPECT_STREQ(second.u.text, "hello");
+
+  // A CF rule held across a second get is refused when written back, every time.
+  const fm_cell_rect_t sqref{0, 0, 9, 0};
+  const fm_cf_rule_t seed = MakeDataBarRule(&sqref);
+  const char* seed_id = nullptr;
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &seed, &seed_id), 0) << fm_get_last_error_message();
+  fm_cf_rule_t held = FM_STRUCT_INIT(fm_cf_rule_t);
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &held), 0);
+  const std::string id = held.id;
+  fm_cf_rule_t again = FM_STRUCT_INIT(fm_cf_rule_t);
+  ASSERT_EQ(fm_sheet_get_cf_rule_at(wb.handle, 0, 0, &again), 0);
+  EXPECT_EQ(std::string(held.id), std::string(id.size(), '\xDD'));
+  ASSERT_EQ(fm_sheet_remove_cf_rule(wb.handle, 0, again.id), 0);
+  const char* readded_id = nullptr;
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &held, &readded_id), FM_STATUS_INVALID_ARGUMENT);
+#endif
 }
