@@ -192,7 +192,7 @@ class Workbook {
   /// pointer-sized object — so they can report the real weight and let
   /// collection pressure track it.
   ///
-  /// Counted: the cell store (materialised slots plus each cell's formula
+  /// Counted: the cell store (row nodes, stored cells, style runs, each cell's formula
   /// text, owned cached text and phonetic text), the shared-string
   /// storage every text value borrows from, the passthrough part payloads
   /// (which embedded media dominates), and the workbook-level round-trip
@@ -201,7 +201,7 @@ class Workbook {
   /// all of which are bounded by the counted parts in practice.
   ///
   /// The result is an estimate for pressure reporting, not an accounting
-  /// figure: it walks every materialised cell, so it is O(cells) and
+  /// figure: it walks every stored cell, so it is O(cells) and
   /// belongs at coarse boundaries (after a load, after a recalc) rather
   /// than in a loop.
   std::size_t approximate_memory_bytes() const noexcept;
@@ -629,16 +629,17 @@ class Workbook {
   /// else `location`, as text. With a location directory set, a relative
   /// local target is stored resolved against it (`resolve_relative_target`).
   /// `kInvalidArgument` for a bad sheet or range or
-  /// that text over 32,767 UTF-16 units; `kPreconditionFailed` when more than
-  /// `kMaxStyledRangeCells` cells that are not a whole column or row would be
-  /// formatted. Nothing changes on failure. File readers do not come here.
+  /// that text over 32,767 UTF-16 units; `kSecurityResourceLimit` when the
+  /// range fails `check_styled_range_area`. Nothing changes on failure. File
+  /// readers do not come here.
   Expected<void, Error> set_hyperlink(std::size_t sheet_index, Hyperlink link);
 
   /// Removes every hyperlink intersecting `range`, each whole, and resets every
   /// cell of each removed link's range to cell format 0, cells another link
   /// still covers included. Returns how many were removed (0 changes nothing).
-  /// `kPreconditionFailed`, nothing removed, when a removed link that is not a
-  /// whole column or row covers more than `kMaxStyledRangeCells` cells.
+  /// `kSecurityResourceLimit`, nothing removed, when a removed link's range
+  /// fails `check_styled_range_area`; `Sheet::mutable_hyperlinks` removes such
+  /// a link without the reset.
   Expected<std::size_t, Error> remove_hyperlinks_intersecting(std::size_t sheet_index, MergeRange range);
 
   /// Removes every hyperlink on the sheet with the reset of
@@ -1814,9 +1815,8 @@ class Workbook {
   const std::deque<std::string>& text_storage() const noexcept { return text_storage_; }
 
   /// Persists the cell-level xf index without otherwise mutating cell
-  /// state. The cell at `(row, col)` is created (as a default-blank
-  /// literal) when it does not yet exist, mirroring the growth
-  /// semantics of `set_cell_value`. Returns `kInvalidArgument` for an
+  /// state, under the rules of `Sheet::set_cell_xf_index` (a blank
+  /// coordinate takes it as a style run). Returns `kInvalidArgument` for an
   /// out-of-range `sheet_index`. Coexists with `set_cell_value` /
   /// `set_cell_formula`: those calls leave `xf_index` untouched, so the
   /// caller can layer a style update on top of a value or formula
@@ -1826,7 +1826,7 @@ class Workbook {
 
   /// Drops the cell-level style assignment at `(row, col)` without touching
   /// value, formula, phonetic or comment state, so a blank cell inherits
-  /// its row / column style again. An absent cell stays absent. Returns
+  /// its row / column style again; a blank coordinate stops existing. Returns
   /// `kInvalidArgument` for an out-of-range sheet or address.
   Expected<void, Error> clear_cell_xf_index(std::size_t sheet_index, std::uint32_t row, std::uint32_t col);
 
@@ -1836,9 +1836,14 @@ class Workbook {
   Expected<std::vector<std::uint32_t>, Error> range_style_bases(std::size_t sheet_index, const StyleRect& rect,
                                                                 std::vector<StyleCell> excluded = {}) const;
 
-  /// Every stored cell of `rect` holding a non-zero xf, row-major. Errors as
-  /// `range_style_bases`.
-  Expected<std::vector<StyleCellXf>, Error> cell_xf_indices(std::size_t sheet_index, const StyleRect& rect) const;
+  /// Number of coordinates of `rect` with a non-zero own xf (see
+  /// `formulon::count_cell_xf_indices`). Errors as `range_style_bases`.
+  Expected<std::size_t, Error> count_cell_xf_indices(std::size_t sheet_index, const StyleRect& rect) const;
+
+  /// Writes the first `capacity` of those coordinates into `out`, row-major,
+  /// and returns how many it wrote. Errors as `range_style_bases`.
+  Expected<std::size_t, Error> copy_cell_xf_indices(std::size_t sheet_index, const StyleRect& rect, StyleCellXf* out,
+                                                    std::size_t capacity) const;
 
   /// Every stored cell of `rect` whose Show Phonetic flag is set, row-major.
   /// Errors as `range_style_bases`.
@@ -1847,9 +1852,16 @@ class Workbook {
   /// Applies an xf remap to a selection the way Excel applies an
   /// attribute-only format change (see `formulon::remap_range_style`).
   /// `from` must not repeat and every `to` must address `cellXfs`, else
-  /// `kInvalidArgument`; more cells than `kMaxStyledRangeCells` to write is
-  /// `kPreconditionFailed`. Nothing changes on failure.
+  /// `kInvalidArgument`; then `check_styled_range_area`. Nothing changes on
+  /// failure.
   Expected<void, Error> remap_range_style(std::size_t sheet_index, const StyleRect& rect, std::vector<XfRemap> map);
+
+  /// Gives every cell of `rect` the format `xf_index` (see
+  /// `formulon::set_range_xf_index`): whole columns or rows become axis
+  /// formats, blank cells style runs. `kInvalidArgument` for a bad sheet or
+  /// rect, `kIndexOutOfRange` for an xf past `cellXfs`, then
+  /// `check_styled_range_area`. Nothing changes on failure.
+  Expected<void, Error> set_range_xf_index(std::size_t sheet_index, const StyleRect& rect, std::uint32_t xf_index);
 
   /// Opaque capture of `rect`'s style state for `restore_range_style`.
   Expected<std::vector<std::uint8_t>, Error> snapshot_range_style(std::size_t sheet_index, const StyleRect& rect) const;

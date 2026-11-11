@@ -547,8 +547,6 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::GetSheetFormatDefaults, 0x1ULL>("getFormatDefaults"),
           GuardedInstanceMethod<&Workbook::GetWidthModel, 0x1ULL, 0x2ULL>("getWidthModel"),
           GuardedInstanceMethod<&Workbook::PinnedNow>("getPinnedNow"),
-          GuardedInstanceMethod<&Workbook::CellAt, 0x3ULL>("getCellAt"),
-          GuardedInstanceMethod<&Workbook::CellCount, 0x1ULL>("getCellCount"),
           GuardedInstanceMethod<&Workbook::ListCellStyles>("listCellStyles"),
           GuardedInstanceMethod<&Workbook::CellStyleXfCount>("getCellStyleXfCount"),
           GuardedInstanceMethod<&Workbook::ClearConditionalFormats, 0x1ULL>("clearCfRules"),

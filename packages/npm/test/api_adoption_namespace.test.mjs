@@ -180,7 +180,7 @@ test('Sheet.ooxml reads and writes the XF indices with the A1 forms', () => {
     const bases = ws.ooxml.getRangeXfBases('A1:D4');
     assert.ok(bases.includes(xf));
     ws.ooxml.remapRangeXfs('D1:D2', new Map([[xf, 0]]));
-    assert.equal(ws.ooxml.getCellXfIndex('D1'), 0);
+    assert.equal(ws.ooxml.getCellXfIndex('D1'), null);
   });
 });
 

@@ -22,7 +22,6 @@
 #include "sheet_name.h"
 #include "utils/error.h"
 #include "utils/index_sort.h"
-#include "utils/resource_budget.h"
 #include "workbook.h"
 
 using formulon::effective_num_fmt;
@@ -39,8 +38,6 @@ using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_arena;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::resolve_num_fmt_code;
-using formulon::c_api::parts::set_binding_error;
-using formulon::c_api::parts::set_last_error;
 
 extern "C" fm_status_t fm_sheet_get_cell_xf_index(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
                                                   uint32_t col, int32_t* out_present, uint32_t* out_xf_index) {
@@ -54,9 +51,9 @@ extern "C" fm_status_t fm_sheet_get_cell_xf_index(const fm_workbook_t* wb, size_
   if (auto rc = check_cell_coord(row, col); rc != 0) {
     return rc;
   }
-  const formulon::Cell* cell = wb->workbook().sheet(sheet_index).cell_at(row, col);
-  *out_present = cell != nullptr ? 1 : 0;
-  *out_xf_index = cell != nullptr ? cell->xf_index : 0U;
+  const std::optional<formulon::StyleSlot> slot = wb->workbook().sheet(sheet_index).cell_style_at(row, col);
+  *out_present = slot.has_value() ? 1 : 0;
+  *out_xf_index = slot.has_value() ? slot->xf : 0U;
   return 0;
 }
 
@@ -98,29 +95,11 @@ extern "C" fm_status_t fm_sheet_set_range_xf_index(fm_workbook_t* wb, size_t she
   if (auto rc = check_sheet_rect(*range); rc != 0) {
     return rc;
   }
-  const std::uint32_t row_lo = range->first_row;
-  const std::uint32_t row_hi = range->last_row;
-  const std::uint32_t col_lo = range->first_col;
-  const std::uint32_t col_hi = range->last_col;
   if (auto rc = check_cell_xf_index(wb, xf_index); rc != 0) {
     return rc;
   }
-  const std::uint64_t cells =
-      (static_cast<std::uint64_t>(row_hi - row_lo) + 1U) * (static_cast<std::uint64_t>(col_hi - col_lo) + 1U);
-  if (cells > formulon::kMaxStyledRangeCells) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kPreconditionFailed, "styled range covers too many cells",
-        "cells=" + std::to_string(cells) + " limit=" + std::to_string(formulon::kMaxStyledRangeCells));
-  }
-  for (std::uint32_t row = row_lo; row <= row_hi; ++row) {
-    for (std::uint32_t col = col_lo; col <= col_hi; ++col) {
-      auto r = wb->workbook().set_cell_xf_index(sheet_index, row, col, xf_index);
-      if (!r) {
-        return set_last_error(r.error());
-      }
-    }
-  }
-  return 0;
+  const formulon::StyleRect rect{range->first_row, range->first_col, range->last_row, range->last_col};
+  return finish_status(wb->workbook().set_range_xf_index(sheet_index, rect, xf_index));
 }
 
 namespace {

@@ -1401,9 +1401,7 @@ class Builder:
                 f"index-key collection `{noun}`: R5 exposes count + getter; drop this list or keep it as an exception"
             )
         elif noun == "cell":
-            reason = (
-                "cells keep getCellCount / getCellAt and the cursor (R5): drop this walker or keep it as an exception"
-            )
+            reason = "cell enumeration is C-only (R5): drop this walker or keep it as an exception"
         else:
             reason = f"collection `{noun}` is not in the R3 table: classify index or natural, then list or drop"
         self.flag(entry, reason)

@@ -262,7 +262,7 @@ TEST(CellParser, EmptyCellIsBlank) {
   EXPECT_TRUE(parsed.formula.empty());
 }
 
-TEST(CellParser, ExplicitZeroStyleMaterializesThroughDomAndSax) {
+TEST(CellParser, ExplicitZeroStyleWithoutAnAxisFormatLeavesNothingThroughDomAndSax) {
   const std::string xml = "<worksheet><sheetData><row r=\"1\"><c r=\"A1\" s=\"0\"/></row></sheetData></worksheet>";
 
   pugi::xml_document doc;
@@ -271,26 +271,22 @@ TEST(CellParser, ExplicitZeroStyleMaterializesThroughDomAndSax) {
   SheetReadContext dom_ctx;
   std::deque<std::string> dom_storage;
   ASSERT_TRUE(static_cast<bool>(read_sheet_data(doc, 0U, dom_workbook, dom_ctx, dom_storage)));
-  const Cell* dom_cell = dom_workbook.sheet(0).cell_at(0U, 0U);
-  ASSERT_NE(dom_cell, nullptr);
-  EXPECT_EQ(dom_cell->xf_index, 0U);
-  EXPECT_TRUE(dom_cell->has_explicit_xf);
+  dom_workbook.sheet(0).apply_blank_slot_rule();
+  EXPECT_FALSE(dom_workbook.sheet(0).has_cell_or_style(0U, 0U));
   std::string dom_xml;
   AppendSheetDataXml(dom_xml, dom_workbook.sheet(0));
-  EXPECT_NE(dom_xml.find("<c r=\"A1\" s=\"0\"/>"), std::string::npos);
+  EXPECT_EQ(dom_xml.find("<c r=\"A1\""), std::string::npos);
 
   Workbook sax_workbook = Workbook::create();
   SheetReadContext sax_ctx;
   std::deque<std::string> sax_storage;
   const ByteSpan bytes{reinterpret_cast<const std::uint8_t*>(xml.data()), xml.size()};
   ASSERT_TRUE(static_cast<bool>(read_sheet_data_sax(bytes, 0U, sax_workbook, sax_ctx, sax_storage)));
-  const Cell* sax_cell = sax_workbook.sheet(0).cell_at(0U, 0U);
-  ASSERT_NE(sax_cell, nullptr);
-  EXPECT_EQ(sax_cell->xf_index, 0U);
-  EXPECT_TRUE(sax_cell->has_explicit_xf);
+  sax_workbook.sheet(0).apply_blank_slot_rule();
+  EXPECT_FALSE(sax_workbook.sheet(0).has_cell_or_style(0U, 0U));
   std::string sax_xml;
   AppendSheetDataXml(sax_xml, sax_workbook.sheet(0));
-  EXPECT_NE(sax_xml.find("<c r=\"A1\" s=\"0\"/>"), std::string::npos);
+  EXPECT_EQ(sax_xml.find("<c r=\"A1\""), std::string::npos);
 }
 
 TEST(CellParser, RejectsMissingRefAttribute) {

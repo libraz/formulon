@@ -235,31 +235,31 @@ TEST(FormulonCApiSpill, CellEnumerationCacheKeepsTwoAlternatingSheetsWarm) {
   ASSERT_EQ(fm_sheet_get_cell_at(wb.handle, 0, 0, &row, &col, nullptr, &value), 0);
   ASSERT_EQ(row, 0U);
   ASSERT_EQ(col, 0U);
-  const auto first_sheet_data = wb.handle->cell_enumeration_cache[0].addresses.data();
+  const auto first_sheet_data = wb.handle->cell_enumeration_cache[0].rows.data();
   ASSERT_EQ(wb.handle->cell_enumeration_cache[0].sheet_index, 0U);
-  ASSERT_EQ(wb.handle->cell_enumeration_cache[0].addresses.size(), 2U);
+  ASSERT_EQ(wb.handle->cell_enumeration_cache[0].rows.size(), 2U);
 
   ASSERT_EQ(fm_sheet_get_cell_at(wb.handle, 1, 0, &row, &col, nullptr, &value), 0);
   ASSERT_EQ(row, 1U);
   ASSERT_EQ(col, 1U);
-  const auto second_sheet_data = wb.handle->cell_enumeration_cache[0].addresses.data();
+  const auto second_sheet_data = wb.handle->cell_enumeration_cache[0].rows.data();
   ASSERT_EQ(wb.handle->cell_enumeration_cache[0].sheet_index, 1U);
   ASSERT_EQ(wb.handle->cell_enumeration_cache[1].sheet_index, 0U);
-  ASSERT_EQ(wb.handle->cell_enumeration_cache[1].addresses.data(), first_sheet_data);
+  ASSERT_EQ(wb.handle->cell_enumeration_cache[1].rows.data(), first_sheet_data);
 
   // Alternating hits promote the existing entries. Their buffers stay put,
   // proving that a two-sheet pass does not repeatedly rebuild either list.
   ASSERT_EQ(fm_sheet_get_cell_at(wb.handle, 0, 1, &row, &col, nullptr, &value), 0);
   ASSERT_EQ(row, 2U);
   ASSERT_EQ(col, 2U);
-  ASSERT_EQ(wb.handle->cell_enumeration_cache[0].addresses.data(), first_sheet_data);
-  ASSERT_EQ(wb.handle->cell_enumeration_cache[1].addresses.data(), second_sheet_data);
+  ASSERT_EQ(wb.handle->cell_enumeration_cache[0].rows.data(), first_sheet_data);
+  ASSERT_EQ(wb.handle->cell_enumeration_cache[1].rows.data(), second_sheet_data);
 
   ASSERT_EQ(fm_sheet_get_cell_at(wb.handle, 1, 1, &row, &col, nullptr, &value), 0);
   ASSERT_EQ(row, 3U);
   ASSERT_EQ(col, 3U);
-  ASSERT_EQ(wb.handle->cell_enumeration_cache[0].addresses.data(), second_sheet_data);
-  ASSERT_EQ(wb.handle->cell_enumeration_cache[1].addresses.data(), first_sheet_data);
+  ASSERT_EQ(wb.handle->cell_enumeration_cache[0].rows.data(), second_sheet_data);
+  ASSERT_EQ(wb.handle->cell_enumeration_cache[1].rows.data(), first_sheet_data);
 }
 
 TEST(FormulonCApiSpill, CellEnumerationCacheSurvivesSheetAddition) {
@@ -272,12 +272,12 @@ TEST(FormulonCApiSpill, CellEnumerationCacheSurvivesSheetAddition) {
   fm_value_t value{};
   ASSERT_EQ(fm_sheet_get_cell_at(wb.handle, 0, 0, &row, &col, nullptr, &value), 0);
   ASSERT_EQ(wb.handle->cell_enumeration_cache[0].sheet_index, 0U);
-  const auto* addresses = wb.handle->cell_enumeration_cache[0].addresses.data();
+  const auto* addresses = wb.handle->cell_enumeration_cache[0].rows.data();
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second", append_position(wb.handle), ignored_index()), 0);
 
   ASSERT_EQ(fm_sheet_get_cell_at(wb.handle, 0, 0, &row, &col, nullptr, &value), 0);
   EXPECT_EQ(wb.handle->cell_enumeration_cache[0].sheet_index, 0U);
-  EXPECT_EQ(wb.handle->cell_enumeration_cache[0].addresses.data(), addresses);
+  EXPECT_EQ(wb.handle->cell_enumeration_cache[0].rows.data(), addresses);
   EXPECT_EQ(row, 0U);
   EXPECT_EQ(col, 0U);
 }
@@ -292,7 +292,7 @@ TEST(FormulonCApiSpill, CellEnumerationCacheSurvivesFailedSheetMutation) {
   uint32_t col = 0;
   fm_value_t value{};
   ASSERT_EQ(fm_sheet_get_cell_at(wb.handle, 0, 0, &row, &col, nullptr, &value), 0);
-  const auto data = wb.handle->cell_enumeration_cache[0].addresses.data();
+  const auto data = wb.handle->cell_enumeration_cache[0].rows.data();
   const auto revision = wb.handle->cell_enumeration_cache[0].revision;
 
   EXPECT_NE(fm_workbook_add_sheet(wb.handle, "SHEET1", append_position(wb.handle), ignored_index()), 0);
@@ -300,7 +300,7 @@ TEST(FormulonCApiSpill, CellEnumerationCacheSurvivesFailedSheetMutation) {
   EXPECT_NE(fm_workbook_remove_sheet(wb.handle, 99U), 0);
   EXPECT_EQ(wb.handle->cell_enumeration_cache[0].sheet_index, 0U);
   EXPECT_EQ(wb.handle->cell_enumeration_cache[0].revision, revision);
-  EXPECT_EQ(wb.handle->cell_enumeration_cache[0].addresses.data(), data);
+  EXPECT_EQ(wb.handle->cell_enumeration_cache[0].rows.data(), data);
 }
 
 TEST(FormulonCApiSpill, CellEnumerationCacheInvalidatesAfterSheetRemoval) {

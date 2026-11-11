@@ -56,6 +56,8 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_pivot_shared_item_limit_test.cpp
   formulon_c_print_settings_test.cpp
   formulon_c_protection_test.cpp
+  formulon_c_range_style_io_test.cpp
+  formulon_c_range_style_runs_test.cpp
   formulon_c_range_style_test.cpp
   formulon_c_read_scratch_test.cpp
   formulon_c_reference_test.cpp
@@ -149,9 +151,34 @@ target_include_directories(formulon_c_api_tests
     ${_FM_SHEET_INDEX_CALLS_DIR}
 )
 
+# Excel-saved packages under tests/fixtures/ (the range-style IO tests).
+target_compile_definitions(formulon_c_api_tests
+  PRIVATE
+    FORMULON_FIXTURES_DIR="${CMAKE_SOURCE_DIR}/tests/fixtures"
+)
+
 formulon_apply_warnings(formulon_c_api_tests)
 
 gtest_discover_tests(formulon_c_api_tests)
+
+# Range-style scale: a 2.6M-cell styled rect through save and load in both
+# formats, with a peak-RSS bound. Its own executable so `ru_maxrss` measures
+# this run alone; every case is SLOW.
+add_executable(formulon_c_range_style_scale_tests formulon_c_range_style_scale_test.cpp)
+target_link_libraries(formulon_c_range_style_scale_tests
+  PRIVATE
+    formulon_static
+    gtest_main
+)
+target_include_directories(formulon_c_range_style_scale_tests
+  PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+)
+formulon_apply_warnings(formulon_c_range_style_scale_tests)
+gtest_discover_tests(formulon_c_range_style_scale_tests
+  PROPERTIES LABELS "SLOW" TIMEOUT 120
+  DISCOVERY_TIMEOUT 120
+)
 
 # Keep the advertised C11 header contract honest. The primary C API tests
 # are C++ gtests, so compile a tiny C translation unit with an actual C

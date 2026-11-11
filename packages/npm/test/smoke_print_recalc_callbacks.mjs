@@ -148,7 +148,7 @@ test('setRangeXfIndex applies one xf across a rectangle', async () => {
       wrapText: true,
     });
     wb.sheet(0).ooxml.setRangeXfIndex({ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 2 }, xf);
-    // Cells that held nothing are materialised so the ruled box renders.
+    // Cells that held nothing take the format so the ruled box renders.
     for (const [row, col] of [
       [0, 0],
       [1, 1],
@@ -158,7 +158,7 @@ test('setRangeXfIndex applies one xf across a rectangle', async () => {
     }
     assert.equal(wb.sheet(0).ooxml.getCellXfIndex(3, 3), null);
     wb.sheet(0).ooxml.setCellXfIndex(3, 3, 0);
-    assert.equal(wb.sheet(0).ooxml.getCellXfIndex(3, 3), 0);
+    assert.equal(wb.sheet(0).ooxml.getCellXfIndex(3, 3), null);
   } finally {
     wb.dispose();
   }

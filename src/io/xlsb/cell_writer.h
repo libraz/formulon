@@ -73,6 +73,12 @@ Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, std::vector<std:
                                 const NameTable& name_table, std::uint32_t* downgraded_formula_count = nullptr,
                                 const NameShapes& name_shapes = NameShapes());
 
+/// Emits a `BrtCellBlank` for column `col` with style `xf_index`: a blank
+/// coordinate that carries only its own format (a style-run column). The
+/// caller has emitted the row's `BrtRowHdr`.
+void emit_blank(std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scratch, std::uint32_t col,
+                std::uint32_t xf_index);
+
 /// Emits the anchor cell of a spilled dynamic-array formula, matching how
 /// Excel structures one: a `BrtFmla*` "shell" record (typed by
 /// `anchor_value`) whose `CellParsedFormula` is a lone `PtgExp` token

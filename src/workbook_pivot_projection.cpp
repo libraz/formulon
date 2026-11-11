@@ -507,8 +507,8 @@ Expected<void, Error> Workbook::withhold_pivot_report(std::size_t sheet_index, s
   const SpillCause cause = plan.past_edge
                                ? SpillCause::kBeyondEdge
                                : detail::report_blocker_cause(*this, sheet_index, pivot_index, *plan.extent, own);
-  const Cell* anchor_cell = sheets_[sheet_index].cell_at(anchor_row, anchor_col);
-  const std::uint32_t anchor_xf = anchor_cell != nullptr ? anchor_cell->xf_index : 0U;
+  const std::optional<StyleSlot> anchor_style = sheets_[sheet_index].cell_style_at(anchor_row, anchor_col);
+  const std::uint32_t anchor_xf = anchor_style.has_value() ? anchor_style->xf : 0U;
   std::vector<MergeRange> own_merges;
   for (const MergeRange& merge : sheets_[sheet_index].merges()) {
     const MergeRange m = normalized(merge);

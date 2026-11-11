@@ -1232,6 +1232,31 @@ entries:
     first_noted: 2026-11-10
     last_verified_excel_version: "16.114"
 
+  # -- Styled-rectangle area guard -------------------------------------------
+  # Excel completed a 2^27-cell partial rectangle and filled 2^28 without a
+  # save; the refusal above 2^27 is Formulon's own bound.
+  - id: range_style_area_guard
+    applies_to: all
+    cause: accepted-divergence
+    mode: skip-oracle
+    scope: api-contract
+    evidence: [tests/c_api/formulon_c_range_style_test.cpp]
+    reason: "Formulon refuses a partial rectangle above 134,217,728 cells (2^27) in setRangeXfIndex, remapRangeXfs and the hyperlink calls with SecurityResourceLimit, because a save writes one cell per address (about 23 bytes each, 2.93 GB at 2^27, past what a WASM build holds) and area-sized reads follow. Excel completed 2^27 (66.5 s, 2.47 GB) and filled 2^28 in 24.75 s, is unmeasured above that, and wedged at 1.7e10 cells with no file. Whole rows and columns are exempt (they are row and column formats)."
+    prefer: formulon
+    first_noted: 2026-11-11
+    last_verified_excel_version: "16.114.4"
+
+  - id: const_save_blank_normalisation
+    applies_to: all
+    cause: accepted-divergence
+    mode: skip-oracle
+    scope: api-contract
+    evidence: [tests/c_api/formulon_c_range_style_io_test.cpp]
+    reason: "Excel's save normalises its in-memory sheet; Formulon's save writes from the sheet without changing it, so Formulon's state after a save equals the desktop application's state before its own save. Two things differ before the next load. (a) First-save form: for a row of explicit-default blank cells that covers every styled column (three or more) next to bare blanks with no row or column format, Excel's first save keeps the blank cells and only a later save writes the row as a row format with no cells; Formulon drops the unformatted blanks when it loads the file, so its first save already writes the row format. (b) The session after a save: blank cells a save wrote as a row format, or left out because they repeat the format they would inherit, are gone from Excel's sheet but stay in Formulon's until the workbook is loaded again. Until then these reads differ: getRowXfIndex reports no format on a row the save wrote as a row format, where the saved file has format 0; the getEffectiveStyle source names the cell rather than the row or column; getCellXfIndex reports the coordinate's own format (0, or the repeated index) where a reload reports none; listCellXfIndices still lists the repeated non-zero ones; fm_sheet_get_cell_count and fm_sheet_get_cell_at still count and enumerate them. The display (xf, number format, colors), getUsedRange, pagination and the saved file are identical, and loading the saved file converges on Excel's state."
+    prefer: formulon
+    first_noted: 2026-11-12
+    last_verified_excel_version: "16.115"
+
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a

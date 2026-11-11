@@ -25,9 +25,12 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "cell.h"
@@ -66,33 +69,27 @@ namespace {
 // Cell emission
 // ---------------------------------------------------------------------------
 
-// True when a cell's explicit default style must be written as `s="0"`: only a
-// blank, formula-less cell does not own its style, so only there does the
-// attribute carry meaning (it blocks row/column style inheritance).
-bool ForcesDefaultStyle(const Cell& cell) {
-  return cell.has_explicit_xf && cell.formula_text.empty() && cell.cached_value.is_blank();
-}
-
-// True when a row or column style would apply to `(row, col)` were its own
-// style not written; an explicit default style is only observable then.
-bool InheritsNonDefaultStyle(const Sheet& sheet, std::uint32_t row, std::uint32_t col) {
-  const SheetLayout& layout = sheet.layout();
-  for (const RowLayout& r : layout.row_overrides) {
-    if (r.row == row && r.has_style && r.style_xf != 0U) {
-      return true;
-    }
+// True when the explicit default style a spill phantom covers is written as
+// `s="0"`. A blank's own explicit default is written bare (`<c r="..."/>`, as
+// Excel does), but a phantom carries a value and reloads as a value cell,
+// whose missing `s` would read as inheriting; the attribute keeps the
+// explicit default across a Formulon reload. Excel itself treats an absent
+// `s` and `s="0"` the same on a present cell.
+bool PhantomForcesDefaultStyle(const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell* stored) {
+  const std::optional<StyleSlot> slot = sheet.cell_style_at(row, col);
+  if (!slot || !slot->explicit_xf || slot->xf != 0U) {
+    return false;
   }
-  for (const ColumnLayout& c : layout.columns) {
-    if (c.first <= col && col <= c.last && c.has_style && c.style_xf != 0U) {
-      return true;
-    }
+  if (stored != nullptr && !(stored->formula_text.empty() && stored->cached_value.is_blank())) {
+    return false;
   }
-  return false;
+  const std::uint64_t end = static_cast<std::uint64_t>(col) + 1U;
+  return !explicit_default_observable(sheet.layout(), row, col, end).empty();
 }
 
 // Emits an `s="N"` attribute when `xf_index` is non-zero. The default
 // xf (index 0) is omitted for byte parity with Excel's writer unless `force`
-// is set (see `ForcesDefaultStyle`).
+// is set (see `PhantomForcesDefaultStyle`).
 void AppendStyleAttr(std::string& out, std::uint32_t xf_index, bool force, bool show_phonetic = false) {
   if (xf_index != 0U || force) {
     append_xml_attr_uint(out, "s", xf_index);
@@ -116,11 +113,11 @@ void AppendVmAttr(std::string& out, std::uint32_t vm) {
 
 // Emits the <c> element for an Error value at `addr`.
 void AppendErrorCellXml(std::string& out, std::string_view addr, ErrorCode code, std::uint32_t xf_index,
-                        bool force_style, bool show_phonetic) {
+                        bool show_phonetic) {
   out.append("<c r=\"");
   out.append(addr);
   out.append("\"");
-  AppendStyleAttr(out, xf_index, force_style, show_phonetic);
+  AppendStyleAttr(out, xf_index, false, show_phonetic);
   out.append(" t=\"e\"><v>");
   out.append(display_name(stored_cell_error(code)));
   out.append("</v></c>");
@@ -148,9 +145,9 @@ void AppendErrorCellXml(std::string& out, std::string_view addr, ErrorCode code,
 // block would read kana over characters it does not cover.
 void AppendLiteralCellBody(std::string& out, const Value& value, const std::vector<PhoneticRun>& phonetic,
                            PhoneticProperties phonetic_props, const SharedStrings* shared_strings,
-                           std::uint32_t xf_index, bool force_style, bool show_phonetic, std::uint32_t vm) {
+                           std::uint32_t xf_index, bool show_phonetic, std::uint32_t vm) {
   out.push_back('"');
-  AppendStyleAttr(out, xf_index, force_style, show_phonetic);
+  AppendStyleAttr(out, xf_index, false, show_phonetic);
   if (value.is_number()) {
     out.append("><v>");
     append_xml_number(out, value.as_number());
@@ -358,7 +355,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
                    const xlsb::NameShapes& name_shapes, const parser::ExternalBookIndexer* indexer,
                    const SharedRole* shared, std::uint32_t vm) {
   const bool has_formula = !cell.formula_text.empty();
-  if (!CellIsEmitted(cell)) {
+  if (!CellIsEmitted(sheet, row, col, cell)) {
     return false;
   }
 
@@ -368,7 +365,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     out.append("<c r=\"");
     AppendCellRefForRef(out, row, col);
     out.append("\"");
-    AppendStyleAttr(out, cell.xf_index, ForcesDefaultStyle(cell));
+    AppendStyleAttr(out, cell.xf_index, false);
     AppendFormulaValueType(out, cell.cached_value);
     out.push_back('>');
     append_data_table_formula(out, *table);
@@ -383,18 +380,17 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
   // Formula cells with non-finite cached values still emit the <f>; only
   // the <v> is downgraded.
   if (!has_formula && cell.cached_value.is_number() && !std::isfinite(cell.cached_value.as_number())) {
-    AppendErrorCellXml(out, addr, ErrorCode::Num, cell.xf_index, ForcesDefaultStyle(cell), cell.show_phonetic);
+    AppendErrorCellXml(out, addr, ErrorCode::Num, cell.xf_index, cell.show_phonetic);
     return true;
   }
 
-  // Style-only cells (blank value, formatting attached) round-trip as a
-  // bare `<c r="..." s="N"/>` shape — Excel preserves these so empty
-  // formatted cells keep their visual.
+  // A blank stored cell (phonetic state, or a format) is written as
+  // `<c r="..." s="N"/>`; an explicit default is the bare `<c r="..."/>`.
   if (!has_formula && cell.cached_value.is_blank()) {
     out.append("<c r=\"");
     out.append(addr);
     out.append("\"");
-    AppendStyleAttr(out, cell.xf_index, ForcesDefaultStyle(cell), cell.show_phonetic);
+    AppendStyleAttr(out, cell.xf_index, false, cell.show_phonetic);
     out.append("/>");
     return true;
   }
@@ -426,7 +422,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     // legacy CSE array on reopen; emitted only when the saved package
     // carries a resolved entry for it.
     // Excel keeps `ph` on constants and blanks only.
-    AppendStyleAttr(out, cell.xf_index, ForcesDefaultStyle(cell));
+    AppendStyleAttr(out, cell.xf_index, false);
     AppendFormulaValueType(out, cell.cached_value);
     if (dynamic) {
       append_xml_attr_uint(out, "cm", dynamic_array_cm_index);
@@ -523,7 +519,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
   out.append("<c r=\"");
   out.append(addr);
   AppendLiteralCellBody(out, cell.cached_value, cell.phonetic_runs, cell.phonetic_props, shared_strings, cell.xf_index,
-                        ForcesDefaultStyle(cell), cell.show_phonetic, vm);
+                        cell.show_phonetic, vm);
   return true;
 }
 
@@ -562,9 +558,11 @@ void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout, bool defa
     emit_xsd_bool_attr(out, "ph", true);
   }
   if (layout.has_style) {
-    // OOXML row style is effective only with customFormat=1. Emit s even
-    // when the explicit style xf is zero so style="0" survives a save.
-    append_xml_attr_uint(out, "s", layout.style_xf);
+    // OOXML row style is effective only with customFormat=1, which alone
+    // reads as xf 0; Excel omits `s` for xf 0.
+    if (layout.style_xf != 0U) {
+      append_xml_attr_uint(out, "s", layout.style_xf);
+    }
     emit_xsd_bool_attr(out, "customFormat", true);
   }
 }
@@ -579,11 +577,11 @@ void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout, bool defa
 // `override_attrs` is non-empty, an empty self-closing `<row r="N" .../>` is still emitted so the override survives the
 // round-trip.
 bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const RowCells& row_cells,
-                  const std::vector<std::uint32_t>& phantom_cols, std::string_view override_attrs,
-                  const SharedStrings* shared_strings, std::uint32_t dynamic_array_cm_index,
-                  const xlsb::NameShapes& name_shapes, std::unordered_map<std::uint64_t, bool>& always_by_anchor,
-                  const parser::ExternalBookIndexer* indexer, const SharedRoles& shared_roles,
-                  const RichErrorVmMap* rich_error_vm) {
+                  const std::vector<EmittedRun>& runs, const std::vector<std::uint32_t>& phantom_cols,
+                  std::string_view override_attrs, const SharedStrings* shared_strings,
+                  std::uint32_t dynamic_array_cm_index, const xlsb::NameShapes& name_shapes,
+                  std::unordered_map<std::uint64_t, bool>& always_by_anchor, const parser::ExternalBookIndexer* indexer,
+                  const SharedRoles& shared_roles, const RichErrorVmMap* rich_error_vm) {
   // Write straight into `out`; a row that ends up with no content is truncated away.
   const std::size_t row_start = out.size();
   out.append("<row r=\"");
@@ -610,22 +608,49 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
     const std::size_t idx =
         static_cast<std::size_t>(row - region->anchor_row) * region->cols + (col - region->anchor_col);
     const Value value = idx < region->cells.size() ? region->cells[idx] : Value::blank();
-    const bool force_style =
-        stored != nullptr && ForcesDefaultStyle(*stored) && InheritsNonDefaultStyle(sheet, row, col);
+    const bool force_style = PhantomForcesDefaultStyle(sheet, row, col, stored);
     AppendPhantomCellXml(out, row, col, select_effective_xf(sheet, row, col).xf_index, force_style, value, it->second,
                          VmAt(rich_error_vm, row, col));
   };
+  // Blank formatted columns, written as `<c r="..." s="N"/>` (bare for xf 0).
+  auto run = runs.begin();
+  std::uint64_t run_col = run != runs.end() ? run->first : UINT64_MAX;
+  const auto advance_run_past = [&](std::uint64_t col) {
+    while (run != runs.end() && run_col <= col) {
+      run_col = col + 1U;
+      if (run_col >= run->end) {
+        ++run;
+        run_col = run != runs.end() ? run->first : UINT64_MAX;
+      }
+    }
+  };
+  // Three-way merge in column order; a phantom wins over a stored cell and
+  // over a run column, and a stored cell and a run never share a column.
   auto entry = row_cells.begin();
   const auto entries_end = row_cells.end();
   auto phantom = phantom_cols.begin();
-  while (entry != entries_end || phantom != phantom_cols.end()) {
+  while (entry != entries_end || phantom != phantom_cols.end() || run != runs.end()) {
     const std::uint32_t entry_col = entry != entries_end ? (*entry).col : UINT32_MAX;
     const std::uint32_t phantom_col = phantom != phantom_cols.end() ? *phantom : UINT32_MAX;
+    if (run_col < entry_col && run_col < phantom_col) {
+      // Run columns up to the next stored cell or phantom.
+      const std::uint64_t stop = std::min<std::uint64_t>({run->end, entry_col, phantom_col});
+      for (std::uint64_t col = run_col; col < stop; ++col) {
+        out.append("<c r=\"");
+        AppendCellRefForRef(out, row, static_cast<std::uint32_t>(col));
+        out.push_back('"');
+        AppendStyleAttr(out, run->xf, false);
+        out.append("/>");
+      }
+      advance_run_past(stop - 1U);
+      continue;
+    }
     if (phantom_col <= entry_col) {
       emit_phantom(phantom_col, phantom_col == entry_col ? &(*entry).cell : nullptr);
       if (phantom_col == entry_col) {
         ++entry;
       }
+      advance_run_past(phantom_col);
       ++phantom;
       continue;
     }
@@ -650,9 +675,61 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
 
 }  // namespace
 
-bool CellIsEmitted(const Cell& cell) {
-  return !cell.formula_text.empty() || !cell.cached_value.is_blank() || cell.xf_index != 0U || cell.has_explicit_xf ||
-         cell.show_phonetic;
+bool CellIsEmitted(const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell& cell) {
+  if (!cell.formula_text.empty() || !cell.cached_value.is_blank() || cell.xf_index != 0U || cell.show_phonetic) {
+    return true;
+  }
+  return cell.has_explicit_xf &&
+         !explicit_default_observable(sheet.layout(), row, col, static_cast<std::uint64_t>(col) + 1U).empty();
+}
+
+std::optional<SheetDimension> sheet_dimension(const Sheet& sheet) {
+  using Span = std::optional<std::pair<std::uint32_t, std::uint32_t>>;
+  const auto widen = [](Span& span, std::uint32_t lo, std::uint32_t hi) {
+    span = span ? std::make_pair(std::min(span->first, lo), std::max(span->second, hi)) : std::make_pair(lo, hi);
+  };
+  Span rows;
+  Span cols;
+  std::unordered_set<std::uint32_t> phantom_rows;
+  for (const CellAddress& phantom : sheet.spill_phantom_addresses()) {
+    widen(rows, phantom.row, phantom.row);
+    widen(cols, phantom.col, phantom.col);
+    phantom_rows.insert(phantom.row);
+  }
+  for (const auto& [row, cells] : sheet.rows()) {
+    bool written = false;
+    for (const auto& [col, cell] : cells) {
+      if (CellIsEmitted(sheet, row, col, cell)) {
+        widen(cols, col, col);
+        written = true;
+      }
+    }
+    const RowEmitPlan plan = row_emit_plan(sheet, row, cells, phantom_rows.count(row) != 0U);
+    if (!plan.runs.empty()) {
+      widen(cols, plan.runs.front().first, static_cast<std::uint32_t>(plan.runs.back().end - 1U));
+      written = true;
+    }
+    if (written || plan.as_row_format) {
+      widen(rows, row, row);
+    }
+  }
+  const SheetLayout& layout = sheet.layout();
+  for (const RowLayout& entry : layout.row_overrides) {
+    if (entry.row < Sheet::kMaxRows) {
+      widen(rows, entry.row, entry.row);
+    }
+  }
+  for (const ColumnLayout& span : layout.columns) {
+    if (span.has_style && span.style_xf != 0U) {
+      widen(cols, span.first, span.last);
+    }
+  }
+  if (!rows && !cols) {
+    return std::nullopt;
+  }
+  const std::pair<std::uint32_t, std::uint32_t> row_span = rows.value_or(std::make_pair(0U, 0U));
+  const std::pair<std::uint32_t, std::uint32_t> col_span = cols.value_or(std::make_pair(0U, 0U));
+  return SheetDimension{row_span.first, col_span.first, row_span.second, col_span.second};
 }
 
 void AppendSheetDataXml(std::string& out, const Sheet& sheet, const SharedStrings* shared_strings,
@@ -710,9 +787,22 @@ void AppendSheetDataXml(std::string& out, const Sheet& sheet, const SharedString
     auto cells_it = rows_map.find(row);
     const RowCells& row_cells = (cells_it != rows_map.end()) ? cells_it->second : kEmptyRow;
     const auto phantoms_it = phantom_cols.find(row);
-    AppendRowXml(out, sheet, row, row_cells, phantoms_it != phantom_cols.end() ? phantoms_it->second : kNoPhantoms,
-                 override_attrs, shared_strings, dynamic_array_cm_index, name_shapes, always_by_anchor, indexer,
-                 shared_roles, rich_error_vm);
+    const RowEmitPlan plan = row_emit_plan(sheet, row, row_cells, phantoms_it != phantom_cols.end());
+    if (plan.as_row_format) {
+      // The row's explicit defaults become its own xf-0 row format.
+      RowLayout converted;
+      if (const RowLayout* row_layout = find_row_override(sheet.layout(), row); row_layout != nullptr) {
+        converted = *row_layout;
+      }
+      converted.row = row;
+      converted.has_style = true;
+      converted.style_xf = 0U;
+      override_attrs.clear();
+      AppendRowOverrideAttrs(override_attrs, converted, sheet.format_defaults().zero_height);
+    }
+    AppendRowXml(out, sheet, row, row_cells, plan.runs,
+                 phantoms_it != phantom_cols.end() ? phantoms_it->second : kNoPhantoms, override_attrs, shared_strings,
+                 dynamic_array_cm_index, name_shapes, always_by_anchor, indexer, shared_roles, rich_error_vm);
   }
 
   if (out.size() == rows_start) {

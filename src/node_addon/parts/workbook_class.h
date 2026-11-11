@@ -249,8 +249,6 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value DeleteCells(const Napi::CallbackInfo& info);
 
   // Iteration / metadata.
-  Napi::Value CellCount(const Napi::CallbackInfo& info);
-  Napi::Value CellAt(const Napi::CallbackInfo& info);
   Napi::Value GetFormula(const Napi::CallbackInfo& info);
   Napi::Value GetFormulaR1C1(const Napi::CallbackInfo& info);
   Napi::Value GetCellsInRange(const Napi::CallbackInfo& info);

@@ -1714,8 +1714,11 @@ class Sheet(_NoCopy):
     def set_blank(self, *args: Any, **kwargs: Any) -> None:
         """Clear the cell at ``(row, col)``.
 
-        ``row`` and ``col`` are 0-based. Clearing drops the
-        stored value or formula; cell formatting is unaffected.
+        ``row`` and ``col`` are 0-based. Clearing drops the stored value or
+        formula and keeps the cell's own non-default format, or an explicit
+        default format where it overrides a row or column format. A cell with
+        neither stops existing: it is no longer counted or listed and inherits
+        its row or column format.
         """
         row, col = self._cell_args("set_blank", args, kwargs, ())
         sheet = self._index()
@@ -2862,8 +2865,8 @@ class Sheet(_NoCopy):
             its ``range`` is ``None``, or its ``target`` and ``location`` are both ``None``.
           InvalidArgumentError: when ``link.range`` lies outside the grid or is not a valid A1 range,
             or the text for the top-left cell exceeds 32,767 characters; nothing changes.
-          PreconditionFailedError: when more than 1,048,576 cells that are not a whole column or row
-            would be formatted; nothing changes.
+          SecurityError: when the range covers more than 134,217,728 cells and is not a whole column
+            or row (the engine's own ceiling, not an Excel limit); nothing changes.
         """
         self._check_hyperlink(link)
         rect = self._rect(link.range, "link.range")
@@ -2935,8 +2938,9 @@ class Sheet(_NoCopy):
         Raises:
           NotFoundError: when no hyperlink intersects ``range``.
           InvalidArgumentError: when ``range`` lies outside the grid or is not a valid A1 range.
-          PreconditionFailedError: when a removed link covers more than 1,048,576 cells and is not a
-            whole column or row; nothing is removed.
+          SecurityError: when a removed link covers more than 134,217,728 cells and is not a whole
+            column or row; nothing is removed. :meth:`remove_hyperlink_at` removes such a link without
+            touching cell formats.
         """
         rect = self._rect(range)
         sheet = self._index()
@@ -2973,8 +2977,9 @@ class Sheet(_NoCopy):
         values stay. Formatting added before or after the link is lost.
 
         Raises:
-          PreconditionFailedError: when a link covers more than 1,048,576 cells and is not a whole
-            column or row; nothing is removed.
+          SecurityError: when a link covers more than 134,217,728 cells and is not a whole column or
+            row; nothing is removed. :meth:`remove_hyperlink_at` removes such a link without touching
+            cell formats.
         """
         sheet = self._index()
         h = self._workbook._require()
@@ -7286,7 +7291,9 @@ class SheetOoxml(_NoCopy):
     def get_row_xf_index(self, row: Union[int, str]) -> Optional[int]:
         """The cell-style XF index row ``row`` makes effective (:meth:`set_row_xf_index`); ``None`` when it has none.
 
-        ``row`` is a zero-based index or one A1 row such as ``"3"``.
+        ``row`` is a zero-based index or one A1 row such as ``"3"``. After a save that writes this row as a row
+        format of XF 0, this reports no format until the workbook is reloaded, although the saved file records
+        XF 0.
         """
         row = _uint(self._sheet._single_axis(row, "row"), "row", role="coordinate")
         rows = self._sheet._layout_overrides(
@@ -7558,8 +7565,10 @@ class SheetOoxml(_NoCopy):
         """Capture the style state of a selection as opaque bytes for :meth:`restore_range_xfs`.
 
         The capture holds the covered column styles (column selection), row
-        styles (row selection) and every stored cell's XF and explicit mark.
-        Take it before :meth:`remap_range_xfs` to be able to undo the edit.
+        styles (row selection) and the XF and explicit mark of every cell
+        with its own format. Take it before :meth:`remap_range_xfs` to be able
+        to undo the edit. There is no cell ceiling on the capture or the
+        restore.
         """
         rect = self._sheet._rect(range)
         sheet = self._sheet._index()
@@ -7589,10 +7598,16 @@ class SheetOoxml(_NoCopy):
     def restore_range_xfs(self, bytes: Union[bytes, bytearray, memoryview]) -> None:
         """Put a :meth:`snapshot_range_xfs` capture back on the sheet.
 
-        Captured axis styles and cell XFs are restored exactly; a stored cell of
-        the captured rectangle that was not captured loses its style. Values and
-        formulas are untouched. An invalid capture raises :class:`FormulonError`
-        and changes nothing.
+        Captured axis styles and cell XFs are restored exactly; a cell of the
+        captured rectangle that was not captured loses its own format. A captured default
+        format on a blank cell comes back only where it overrides a row or
+        column format after the restore. Captures of earlier versions are
+        accepted. Values and formulas are untouched. An invalid capture (an
+        unknown version, a row outside the captured rectangle or out of order,
+        entries out of order or overlapping, a column outside the rectangle, a
+        span whose first column is past its last, a flag or tag with an unknown
+        value, or an XF past the cell-XF table) raises
+        :class:`InvalidArgumentError` and changes nothing.
         """
         sheet = self._sheet._index()
         h = self._sheet._workbook._require()
@@ -7618,14 +7633,18 @@ class SheetOoxml(_NoCopy):
         return self.get_range_xf_bases_excluding(rect, ())
 
     def list_cell_xf_indices(self, range: Union[CellRect, str, None] = None) -> List[XfCell]:
-        """List every stored cell of ``range`` whose own cell XF is not 0, row-major.
+        """List every cell of ``range`` whose own cell XF is not 0, row-major.
 
         Styled blank cells and cells with content are both listed; a cell
         explicitly set to XF 0 is not, nor is a spill cell, which has no
-        stored record. ``range=None`` covers every stored cell of the sheet,
-        so a formatted cell outside the used range is listed. Complements
+        stored record, nor a blank cell that only inherits a row or column
+        format. ``range=None`` covers every cell of the sheet, so a formatted
+        cell outside the used range is listed. Complements
         :meth:`Sheet.list_cells`, which lists cells with content only; for
-        flag-only cells see :meth:`Sheet.list_show_phonetic_cells`.
+        flag-only cells see :meth:`Sheet.list_show_phonetic_cells`. The result
+        is as large as the number of formatted cells, which a large range makes
+        area-sized; there is no cell ceiling, so read a large sheet range by
+        range.
 
         Raises:
           InvalidArgumentError: when ``range`` is outside the grid.
@@ -7724,10 +7743,17 @@ class SheetOoxml(_NoCopy):
         """Remap the XFs of a selection: a cell resolving to key ``k`` ends at ``mapping[k]``.
 
         An XF absent from ``mapping`` is kept. Each target must be a valid cell
-        XF, else :class:`FormulonError` and nothing changes. Patch an attribute
+        XF (checked first). Whole rows or whole columns are written as row or column
+        formats and add no cells; a blank cell that ends at the default XF keeps a record only
+        where that overrides a row or column format. Patch an attribute
         by reading :meth:`get_range_xf_bases`, adding a patched XF for each base
         and passing ``{base: patched}``. Undo with :meth:`snapshot_range_xfs`
         taken beforehand and :meth:`restore_range_xfs`.
+
+        Raises:
+          IndexOutOfRangeError: when a target XF is past the cell-XF table; nothing changes.
+          SecurityError: when the range covers more than 134,217,728 cells and is not a whole row
+            or column selection (the engine's own ceiling, not an Excel limit); nothing changes.
         """
         rect = self._sheet._rect(range)
         sheet = self._sheet._index()
@@ -7763,9 +7789,11 @@ class SheetOoxml(_NoCopy):
     def get_cell_xf_index(self, a1: str) -> Optional[int]: ...
 
     def get_cell_xf_index(self, *args: Any, **kwargs: Any) -> Optional[int]:
-        """Return the xf (style record) index of a cell; ``None`` when no cell is stored at the address.
+        """Return the xf (style record) index of a cell; ``None`` when it has no content or format of its own.
 
-        A stored cell without a style of its own reads 0.
+        A blank cell that only inherits a row or column format is ``None``; a
+        cell with content and no style of its own reads 0, and so does a cell with
+        an explicit 0.
         """
         row, col = self._sheet._cell_args("get_cell_xf_index", args, kwargs, ())
         sheet = self._sheet._index()
@@ -7795,6 +7823,9 @@ class SheetOoxml(_NoCopy):
     def set_cell_xf_index(self, *args: Any, **kwargs: Any) -> None:
         """Store ``xf_index`` on the cell at ``(row, col)``.
 
+        A cell without content takes it as its own format. Setting 0 on a blank
+        cell leaves a cell only where it overrides a row or column format.
+
         Raises:
           IndexOutOfRangeError: when ``xf_index`` is not below the workbook's cell-XF count.
         """
@@ -7821,10 +7852,11 @@ class SheetOoxml(_NoCopy):
     def reset_cell_xf_index(self, *args: Any, **kwargs: Any) -> None:
         """Reset the cell at ``(row, col)`` to its inherited XF by removing its direct style assignment.
 
-        A blank cell inherits the row / column style again; value, formula and
-        comments are kept. An absent cell is a no-op. A non-blank cell keeps
-        owning the default xf. Use the ``source`` of :meth:`get_effective_style`
-        to tell an unassigned cell from one directly assigned the Normal xf.
+        A blank cell inherits the row / column style again and stops being
+        counted; value, formula and comments are kept. An absent cell is a
+        no-op. A non-blank cell keeps owning the default xf. Use the ``source``
+        of :meth:`get_effective_style` to tell an unassigned cell from one
+        directly assigned the Normal xf.
         """
         row, col = self._sheet._cell_args("reset_cell_xf_index", args, kwargs, ())
         sheet = self._sheet._index()
@@ -7841,12 +7873,17 @@ class SheetOoxml(_NoCopy):
     def set_range_xf_index(self, range: Union[CellRect, str], xf_index: int) -> None:
         """Store ``xf_index`` on every cell of ``range``.
 
-        Cells that do not exist yet are materialised as blanks carrying only
-        the style, so an empty ruled box renders. Ruling a report this way
-        costs one call instead of one per cell.
+        Blank cells take the format as their own, so an empty ruled box
+        renders; cells with content keep their content. Whole rows or whole
+        columns are written as row or column formats and add no cells. Setting
+        0 leaves a blank cell only where it overrides a row or column format.
+        Ruling a report this way costs one call instead of one per cell.
 
         Raises:
-          IndexOutOfRangeError: when ``xf_index`` is not below the workbook's cell-XF count.
+          IndexOutOfRangeError: when ``xf_index`` is not below the workbook's cell-XF count
+            (checked first).
+          SecurityError: when the range covers more than 134,217,728 cells and is not a whole row
+            or column selection (the engine's own ceiling, not an Excel limit); nothing changes.
         """
         rect = self._sheet._rect(range)
         sheet = self._sheet._index()

@@ -113,14 +113,13 @@ TEST(SheetTest, SetCellValueStoresError) {
   EXPECT_EQ(cell->cached_value.as_error(), ErrorCode::Div0);
 }
 
-TEST(SheetTest, SetCellValueStoresExplicitBlank) {
+TEST(SheetTest, SetCellValueBlankOnAnUnformattedCoordinateLeavesNothing) {
   Sheet s("Sheet1");
   s.set_cell_value(3U, 7U, Value::blank());
 
-  const Cell* cell = s.cell_at(3U, 7U);
-  ASSERT_NE(cell, nullptr);
-  EXPECT_TRUE(cell->cached_value.is_blank());
-  EXPECT_TRUE(cell->formula_text.empty());
+  EXPECT_EQ(s.cell_at(3U, 7U), nullptr);
+  EXPECT_FALSE(s.has_cell_or_style(3U, 7U));
+  EXPECT_EQ(s.cell_count(), 0U);
 }
 
 // ---------------------------------------------------------------------------

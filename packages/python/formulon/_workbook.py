@@ -9045,7 +9045,7 @@ class Workbook(_NoCopy):
         pressure rather than the process's retained heap; a
         formula-heavy workbook undercounts by the size of its graph.
 
-        The walk visits every materialised cell, so call it at coarse
+        The walk visits every stored cell, so call it at coarse
         boundaries (after a load or a recalc) rather than per edit.
         """
         h = self._require()

@@ -56,8 +56,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   removed link to the default format (cell format 0), including cells a remaining
   link covers. `insertHyperlinkAt` and `removeHyperlinkAt` edit the list only.
 - `setHyperlink`, `removeHyperlink` and `clearHyperlinks` fail with
-  `PreconditionFailed`, changing nothing, when a range to format exceeds
-  1,048,576 cells and is not a whole column or row.
+  `SecurityResourceLimit` (Python `SecurityError`), changing nothing, when a range
+  to format exceeds 134,217,728 cells and is not a whole column or row; a
+  range of 2,600,000 cells (`A1:Z100000`) is formatted. `removeHyperlinkAt`
+  removes a loaded link over that bound without touching cell formats.
 - `setHyperlink` stores a target the way Excel does: an http, https or ftp URL
   without userinfo gets a lowercase scheme and host, `/` for an empty path,
   decoded unreserved percent-escapes and its `#fragment` moved to `location`;
@@ -91,6 +93,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   no `NULL` form, and `fm_sheet_remove_hyperlink(wb, sheet_index, range)` takes
   a rectangle, a signature change against 0.18
   ([C ABI changes](docs/releases/upgrading-0.19.md#c-abi-changes)).
+- `setRangeXfIndex` (C `fm_sheet_set_range_xf_index`, Python
+  `set_range_xf_index`) and `remapRangeXfs` (`fm_sheet_remap_range_xfs`,
+  `remap_range_xfs`) accept any rectangle up to 134,217,728 cells. Beyond that
+  a rectangle that is not a whole row or column selection fails with
+  `StatusCode.SecurityResourceLimit` (C `FM_STATUS_SECURITY_RESOURCE_LIMIT`,
+  Python `SecurityError`), changing nothing; the format index is checked first.
+  Before: 0.18.0 failed with `PreconditionFailed` above 1,048,576 cells (Python
+  `FormulonError`) and wrote one cell per address. A blank cell that only
+  carries a format is now stored as a run of columns in its row, so a
+  rectangle costs memory in proportion to its rows
+  ([C ABI changes](docs/releases/upgrading-0.19.md#c-abi-changes)).
+- A blank cell exists only while it has a format of its own: a non-default
+  format, or an explicit default format where it overrides a row or column
+  format. `setBlank` on a blank without such a format, and `resetCellXfIndex` on
+  a blank that has only its own format, remove the cell, which is then no longer
+  counted by `fm_sheet_get_cell_count` or enumerated by `fm_sheet_get_cell_at`
+  (C only; the undocumented raw cell-count and cell-at exports are removed from
+  the WASM and native bindings); setting the default format
+  on a blank without a row or column format leaves nothing, so
+  `getCellXfIndex` is `null` (Python `None`; C `out_present` 0). A format reset
+  to 0 through `remapRangeXfs` drops blanks the same way. An explicit default
+  whose row or column format is removed later stays in memory but is not saved,
+  and a `restoreRangeXfs` after that removal does not bring it back.
+  `fm_sheet_get_cell_at` lists a coordinate that has only a format as a blank
+  value with a `NULL` formula; `listCellXfIndices` lists the formatted blanks
+  and `listCells` / `getCellsInRange` stay content-only.
+- `setRangeXfIndex` over whole rows or whole columns writes row or column
+  formats. The blank cells it used to create are not stored: `getCellXfIndex`
+  is `null` for them and `listCellXfIndices` omits them; the effective style
+  is unchanged.
+- `listCellXfIndices`, `snapshotRangeXfs`, `restoreRangeXfs` and
+  `fm_sheet_get_cell_xf_indices` have no cell ceiling. A result that is sized by
+  the area of a large rectangle is read range by range.
+- `snapshotRangeXfs` writes version 2 of its capture, which records runs of
+  formatted blanks; `restoreRangeXfs` still accepts version 1. A capture with an
+  unknown version, rows or entries out of order or overlapping, a column outside
+  the range, or an XF past the table fails with `InvalidArgument`.
+- A loaded bare `<c r="A1"/>` under a row or column format is an explicit
+  default format, where it used to be dropped and the row or column format
+  showed through; a loaded `<c s="0"/>` with no row or column format is no
+  longer a cell. A saved explicit-default blank is written as a bare
+  `<c r="A1"/>` instead of `s="0"`, and only where it overrides a row or column
+  format.
+- Saved sheets follow the desktop application's saved form for formatted
+  blanks:
+  - a blank whose format equals the row or column format it would inherit is
+    not written;
+  - a row whose default-format blanks cover every styled column, three or more,
+    is written as a row format of XF 0 with no cells;
+  - a row format of XF 0 is written without `s`;
+  - the `<dimension>` (and its `.xlsb` record) spans the written rows (row 1 when
+    there are none) by the written cell columns plus the styled columns
+    (column A when there are none);
+  - `.xlsb` always writes the dimension record, for an empty sheet too.
+  Saving does not change the open workbook. Until the file is reloaded,
+  `getRowXfIndex` reports no format for a row saved as a row format,
+  `getCellXfIndex` and `listCellXfIndices` still report the blanks that were
+  not written, and `getEffectiveStyle` names the cell as the source. Display,
+  `getUsedRange`, pagination and the saved file are unaffected.
+- A `.xlsb` load is charged against the per-sheet cell budget like an `.xlsx`
+  load: a sheet over the budget fails with `SecurityResourceLimit`.
+- C ABI: `fm_sheet_remap_range_xfs` and `fm_sheet_set_range_xf_index` return
+  `FM_STATUS_SECURITY_RESOURCE_LIMIT` where 0.18.0 returned
+  `FM_STATUS_PRECONDITION_FAILED`, and `fm_sheet_get_cell_count` /
+  `fm_sheet_get_cell_at` follow the blank-cell rule above; no signature or
+  struct changes
+  ([C ABI changes](docs/releases/upgrading-0.19.md#c-abi-changes)).
+- `remapRangeXfs` with a target XF past the cell-XF table fails with
+  `IndexOutOfRange` (C `FM_STATUS_INDEX_OUT_OF_RANGE`, Python
+  `IndexOutOfRangeError`) instead of `InvalidArgument`, like `setRangeXfIndex`;
+  a repeated source XF stays `InvalidArgument`.
 
 ## [0.19.0] - 2026-11-10
 

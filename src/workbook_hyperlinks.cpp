@@ -23,7 +23,6 @@
 #include "styles.h"
 #include "utils/error.h"
 #include "utils/expected.h"
-#include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 #include "utils/utf8_length.h"
 #include "value.h"
@@ -43,21 +42,6 @@ constexpr std::uint32_t kHyperlinkThemeColor = 10U;
 
 StyleRect rect_of(const Hyperlink& link) {
   return StyleRect{link.row, link.col, link.last_row, link.last_col};
-}
-
-/// Refuses, before anything changes, a range `remap_range_style` would refuse
-/// for its size: more than `kMaxStyledRangeCells` cells that are not a whole
-/// column or row.
-Expected<void, Error> check_restyle_area(const StyleRect& rect) {
-  const bool all_rows = rect.first_row == 0U && rect.last_row == Sheet::kMaxRows - 1U;
-  const bool all_cols = rect.first_col == 0U && rect.last_col == Sheet::kMaxCols - 1U;
-  const std::uint64_t area = (static_cast<std::uint64_t>(rect.last_row - rect.first_row) + 1U) *
-                             (static_cast<std::uint64_t>(rect.last_col - rect.first_col) + 1U);
-  if (!all_rows && !all_cols && area > kMaxStyledRangeCells) {
-    return make_error(FormulonErrorCode::kPreconditionFailed, "rect covers too many cells to format",
-                      "cells=" + std::to_string(area));
-  }
-  return Expected<void, Error>::Ok();
 }
 
 /// The `cell_style_xfs` index of the Normal style, by builtin id.
@@ -200,7 +184,7 @@ Expected<void, Error> Workbook::set_hyperlink(std::size_t sheet_index, Hyperlink
     return make_error(FormulonErrorCode::kInvalidArgument, chosen.over_cap);
   }
   const StyleRect rect = rect_of(link);
-  RETURN_IF_ERROR(check_restyle_area(rect));
+  RETURN_IF_ERROR(check_styled_range_area(rect));
 
   const bool write_text = !text.empty() && cell_free;
   if (write_text) {
@@ -255,7 +239,7 @@ Expected<std::size_t, Error> Workbook::remove_hyperlinks_intersecting(std::size_
   std::vector<StyleRect> resets;
   for (const Hyperlink& link : sheet.hyperlinks()) {
     if (link.intersects(range.first_row, range.first_col, range.last_row, range.last_col)) {
-      RETURN_IF_ERROR(check_restyle_area(rect_of(link)));
+      RETURN_IF_ERROR(check_styled_range_area(rect_of(link)));
       resets.push_back(rect_of(link));
     }
   }
@@ -275,7 +259,7 @@ Expected<void, Error> Workbook::clear_hyperlinks(std::size_t sheet_index) {
   Sheet& sheet = sheets_[sheet_index];
   std::vector<StyleRect> resets;
   for (const Hyperlink& link : sheet.hyperlinks()) {
-    RETURN_IF_ERROR(check_restyle_area(rect_of(link)));
+    RETURN_IF_ERROR(check_styled_range_area(rect_of(link)));
     resets.push_back(rect_of(link));
   }
   {

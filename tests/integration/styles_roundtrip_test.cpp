@@ -4,6 +4,7 @@
 // writer -> reader cycle without loss.
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -112,6 +113,9 @@ TEST(StylesRoundTrip, PreservesFontFillBorderAndCellXfs) {
   ASSERT_TRUE(static_cast<bool>(src.set_cell_value(0, 0, 0, Value::number(42.0))));
   ASSERT_TRUE(static_cast<bool>(src.set_cell_xf_index(0, 0, 0, 1)));
   ASSERT_TRUE(static_cast<bool>(src.set_cell_xf_index(0, 1, 1, 2)));
+  const std::optional<StyleSlot> src_b2 = src.sheet(0).cell_style_at(1, 1);
+  ASSERT_TRUE(src_b2.has_value());
+  ASSERT_EQ(src_b2->xf, 2U);
 
   // Save and reload.
   auto save_or = src.save();
@@ -159,9 +163,10 @@ TEST(StylesRoundTrip, PreservesFontFillBorderAndCellXfs) {
   EXPECT_TRUE(a1->cached_value.is_number());
   EXPECT_DOUBLE_EQ(a1->cached_value.as_number(), 42.0);
 
-  const Cell* b2 = dst.sheet(0).cell_at(1, 1);
-  ASSERT_NE(b2, nullptr);
-  EXPECT_EQ(b2->xf_index, 2U);
+  // B2 is a blank with its own format.
+  const std::optional<StyleSlot> b2 = dst.sheet(0).cell_style_at(1, 1);
+  ASSERT_TRUE(b2.has_value());
+  EXPECT_EQ(b2->xf, 2U);
 }
 
 TEST(StylesRoundTrip, FontSizePreservesFullPrecision) {

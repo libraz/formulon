@@ -114,8 +114,8 @@ TEST(SheetSpillTest, CellCountKeepsCountingPhantomsThatShareAMaterialisedSlot) {
   Sheet s("Sheet1");
   // Writing A1 and then E1 stores exactly those two cells. A spill over A1:C1
   // adds phantoms B1 and C1; a style-only write to B1 then gives one phantom
-  // a stored slot that the stored count already includes.
-  s.set_cell_value(0U, 0U, Value::blank());
+  // a style run that the stored count already includes.
+  s.set_cell_value(0U, 0U, Value::number(0.0));
   s.set_cell_value(0U, 4U, Value::number(9.0));
   ASSERT_EQ(s.cell_count(), 2U);
   ASSERT_TRUE(s.commit_spill(0U, 0U, 1U, 3U, {Value::number(1.0), Value::number(2.0), Value::number(3.0)}));

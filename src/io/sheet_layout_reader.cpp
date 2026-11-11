@@ -163,6 +163,7 @@ void ApplyColumnLayouts(const pugi::xml_node& worksheet, SheetLayout& layout) {
     }
     layout.columns.push_back(entry);
   }
+  normalize_column_spans(layout);
 }
 
 /// Walks `<sheetData><row .../></sheetData>` collecting per-row

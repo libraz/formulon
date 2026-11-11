@@ -84,7 +84,8 @@ class InputCell {
   InputCell(Workbook& wb, std::size_t sheet_index, const DataTableInput& input)
       : wb_(wb), sheet_(sheet_index), row_(input.row), col_(input.col) {
     const Cell* cell = wb.sheet(sheet_index).cell_at(row_, col_);
-    present_ = cell != nullptr;
+    // A formatted blank is present: writing the blank back returns it to its style run.
+    present_ = wb.sheet(sheet_index).has_cell_or_style(row_, col_);
     if (cell != nullptr) {
       formula_ = cell->formula_text;
       dynamic_ = cell->dynamic_array;

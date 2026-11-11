@@ -9,9 +9,12 @@ from formulon import (
     CellXfInput,
     ColumnBreak,
     FormulonError,
+    IndexOutOfRangeError,
+    InvalidArgumentError,
     PageOrientation,
     PrintTitles,
     RowBreak,
+    SecurityError,
     Span,
     Workbook,
 )
@@ -204,7 +207,7 @@ class PrintSettingsTests(unittest.TestCase):
             self.assertEqual(reloaded.sheet(0).get_print_titles(), PrintTitles(rows=Span(0, 1), columns=None))
             self.assertEqual([b.row for b in reloaded.sheet(0).list_row_breaks()], [39])
 
-    def test_set_range_xf_index_materialises_the_rectangle(self) -> None:
+    def test_set_range_xf_index_formats_every_cell_of_the_rectangle(self) -> None:
         with Workbook.create_default() as wb:
             # Something other than the seeded default xf, so the range
             # write is observable rather than deduping to index 0.
@@ -223,6 +226,58 @@ class PrintSettingsTests(unittest.TestCase):
             for row, col in ((0, 0), (1, 1), (2, 2)):
                 self.assertEqual(wb.sheet(0).ooxml.get_cell_xf_index(row, col), xf)
             self.assertIsNone(wb.sheet(0).ooxml.get_cell_xf_index(3, 3))
+
+    def test_a_partial_rect_past_134217728_cells_is_a_security_error_and_changes_nothing(self) -> None:
+        with Workbook.create_default() as wb:
+            xf = wb.ooxml.add_cell_xf(
+                CellXfInput(font_index=0, fill_index=0, border_index=0, num_fmt_id=2, wrap_text=None)
+            )
+            ooxml = wb.sheet(0).ooxml
+            ooxml.set_range_xf_index("A1:Z100000", xf)
+            self.assertEqual(ooxml.get_cell_xf_index("Z100000"), xf)
+            ooxml.set_range_xf_index("B1:XFD8192", xf)
+            self.assertEqual(ooxml.get_cell_xf_index("XFD8192"), xf)
+            with self.assertRaises(SecurityError):
+                ooxml.set_range_xf_index("B1:XFD8193", 0)
+            with self.assertRaises(SecurityError):
+                ooxml.remap_range_xfs("B1:XFD8193", {xf: 0})
+            self.assertEqual(ooxml.get_cell_xf_index("XFD8192"), xf)
+            self.assertIsNone(ooxml.get_cell_xf_index("AA8193"))
+
+    def test_a_remap_target_past_the_xf_table_is_an_index_error_and_changes_nothing(self) -> None:
+        with Workbook.create_default() as wb:
+            xf = wb.ooxml.add_cell_xf(
+                CellXfInput(font_index=0, fill_index=0, border_index=0, num_fmt_id=2, wrap_text=None)
+            )
+            ooxml = wb.sheet(0).ooxml
+            ooxml.set_range_xf_index("A1:B2", xf)
+            past = len(wb.ooxml.list_cell_xfs())
+            with self.assertRaises(IndexOutOfRangeError):
+                ooxml.remap_range_xfs("A1:B2", {xf: past})
+            self.assertEqual(ooxml.get_cell_xf_index("A1"), xf)
+            self.assertEqual(ooxml.get_cell_xf_index("B2"), xf)
+
+    def test_restore_range_xfs_refuses_bytes_that_are_not_a_capture(self) -> None:
+        with Workbook.create_default() as wb:
+            xf = wb.ooxml.add_cell_xf(
+                CellXfInput(font_index=0, fill_index=0, border_index=0, num_fmt_id=2, wrap_text=None)
+            )
+            ooxml = wb.sheet(0).ooxml
+            ooxml.set_range_xf_index("A1:B2", xf)
+            with self.assertRaises(InvalidArgumentError):
+                ooxml.restore_range_xfs(b"\xff\xff\xff\xff")
+            self.assertEqual(ooxml.get_cell_xf_index("A1"), xf)
+
+    def test_set_range_xf_index_to_zero_over_a_partial_rect_leaves_no_listed_cell(self) -> None:
+        with Workbook.create_default() as wb:
+            xf = wb.ooxml.add_cell_xf(
+                CellXfInput(font_index=0, fill_index=0, border_index=0, num_fmt_id=2, wrap_text=None)
+            )
+            ooxml = wb.sheet(0).ooxml
+            ooxml.set_range_xf_index("A1:C3", xf)
+            ooxml.set_range_xf_index("A1:C3", 0)
+            self.assertEqual(list(ooxml.list_cell_xf_indices()), [])
+            self.assertIsNone(ooxml.get_cell_xf_index("B2"))
 
 
 if __name__ == "__main__":

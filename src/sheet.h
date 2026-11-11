@@ -95,7 +95,8 @@ class EnumerationRevision {
 /// a member is added.
 namespace sheet_copy {
 
-/// Row store; a copy re-clones every cell (see `clone_cell` in sheet.cpp).
+/// Row store; a copy re-clones every cell (see `clone_cell` in sheet.cpp) and
+/// copies every style run.
 struct RowStore : std::unordered_map<std::uint32_t, RowCells> {
   RowStore() = default;
   RowStore(const RowStore& other);
@@ -159,9 +160,10 @@ struct SharedFormulaGroup {
 /// A single worksheet inside a `Workbook`.
 ///
 /// Owns the worksheet's display name and its cell store. The cell store is
-/// an `unordered_map<row, RowCells>`; each `RowCells` holds only the columns
-/// written in that row. Rows that have never been touched are absent from
-/// the map, so memory follows the number of written coordinates.
+/// an `unordered_map<row, RowCells>`; each `RowCells` holds that row's cells
+/// with content and, as style runs, its blank columns with their own format.
+/// Rows that have never been touched are absent from the map, so memory
+/// follows the content and the run count, not the formatted area.
 class Sheet {
  public:
   /// Excel 365 maximum row count (rows are addressable as 0..kMaxRows-1).
@@ -439,29 +441,70 @@ class Sheet {
   /// materialising a blank cell when needed. Value writes leave it alone.
   void set_cell_show_phonetic(std::uint32_t row, std::uint32_t col, bool show);
 
-  /// Stores the cellXfs index for the cell at `(row, col)`, materialising a
-  /// blank cell when needed. The assignment is tracked even for
-  /// `xf_index = 0`, so an explicit default XF can override row/column
-  /// inheritance while an unrelated row-vector gap continues to inherit.
+  /// Gives `(row, col)` its own format `xf_index`. A cell with content keeps
+  /// it as an explicit assignment; a blank coordinate becomes a style run,
+  /// never a stored cell. A blank xf 0 is kept only where the row (else
+  /// column) format is non-zero, so it overrides something; elsewhere the
+  /// coordinate is left with no format of its own.
   void set_cell_xf_index(std::uint32_t row, std::uint32_t col, std::uint32_t xf_index);
 
-  /// Resets the cell at `(row, col)` to xf 0 with no explicit assignment,
-  /// leaving every other field intact. A blank cell then inherits row /
-  /// column style again; an absent cell is not materialised.
+  /// Drops the coordinate's own format: a cell with content goes to xf 0 with
+  /// no explicit assignment, a blank coordinate stops existing. Either then
+  /// inherits row / column style again.
   void clear_cell_xf_index(std::uint32_t row, std::uint32_t col);
 
-  /// Sets the cell's xf and explicit-assignment mark exactly, as captured
-  /// for undo. xf 0 without the mark does not materialise an absent cell.
+  /// Sets the coordinate's xf and explicit-assignment mark exactly, as
+  /// captured for undo, under the rules of `set_cell_xf_index`; xf 0 without
+  /// the mark is `clear_cell_xf_index`.
   void restore_cell_style(std::uint32_t row, std::uint32_t col, std::uint32_t xf_index, bool explicit_xf);
+
+  /// The coordinate's own format: a stored cell's `{xf_index,
+  /// has_explicit_xf}` (a stored cell owns its style), a style run's `{xf,
+  /// true}`, else nullopt. The only per-coordinate own-format read.
+  std::optional<StyleSlot> cell_style_at(std::uint32_t row, std::uint32_t col) const;
+
+  /// Whether `(row, col)` holds a stored cell or a style run.
+  bool has_cell_or_style(std::uint32_t row, std::uint32_t col) const;
+
+  /// Gives the blank columns of `[first, end)` in `row` the format `xf` as
+  /// style runs, replacing the runs there; stored cells are left alone. A
+  /// resulting xf 0 survives only where the axis format is non-zero. Returns
+  /// the runs the row gained.
+  std::size_t set_style_runs(std::uint32_t row, std::uint32_t first, std::uint64_t end, std::uint32_t xf);
+
+  /// Drops the style runs of `[first, end)` in `row`.
+  void clear_style_runs(std::uint32_t row, std::uint32_t first, std::uint64_t end);
+
+  /// Gives every style-run column of `[first, end)` in `row` the format
+  /// `map(xf)`, each exactly once; absent and stored columns are untouched.
+  /// Returns the runs the row gained.
+  std::size_t remap_style_runs(std::uint32_t row, std::uint32_t first, std::uint64_t end, const XfMap& map);
+
+  /// Writes one planned piece of a range restyle: stored cells that do not
+  /// own their style take `xf`, style-run columns are owners and are skipped,
+  /// absent columns get runs of `xf`. Returns the runs the row gained.
+  std::size_t apply_planned_run(std::uint32_t row, std::uint32_t first, std::uint64_t end, std::uint32_t xf);
+
+  /// Drops every xf-0 style-run column whose axis format is xf 0, so an
+  /// explicit default exists only where it overrides a row or column format,
+  /// and erases the rows left with neither cells nor runs. Loaders call it
+  /// once the sheet's layout is applied.
+  void apply_blank_slot_rule();
+
+  /// Loader entry for one blank formatted coordinate: gives `(row, col)` a
+  /// style run of `xf` (xf 0 included) unless a stored cell is there, without
+  /// the explicit-default rule, which `apply_blank_slot_rule` applies once the
+  /// layout is complete. Returns the runs the row gained.
+  std::size_t load_style_run(std::uint32_t row, std::uint32_t col, std::uint32_t xf);
 
   /// Returns a non-owning pointer to the cell at `(row, col)`, or `nullptr`
   /// when the coordinate is not in storage.
   ///
-  /// "Not in storage" means the coordinate was never written. A returned
-  /// pointer may still reference a cell with no formula and a blank value:
-  /// a style-only write, `set_cell_value(blank)`, or a cleared cell all keep
-  /// their slot. Callers that need content should check
-  /// `cell->formula_text.empty() && cell->cached_value.is_blank()`.
+  /// A stored cell has content (a formula, a non-blank value, phonetic state
+  /// or an array role); a blank coordinate with its own format is a style
+  /// run and returns `nullptr` here (see `cell_style_at`). Clearing a cell's
+  /// content removes it, leaving a run when it owned a format. A stored cell
+  /// may still hold a blank value beside a formula or phonetic state.
   ///
   /// `cell_at` is intentionally narrow: it does not consult the spill
   /// table. Phantom cells of a spill region therefore return `nullptr` here
@@ -486,22 +529,39 @@ class Sheet {
   /// that is safe while leaving `ensure` — the one that is not — unguarded.
   const Cell* cell_at(std::uint32_t row, std::uint32_t col) const noexcept;
 
-  /// Drops the stored cell at `(row, col)`, if any, so the coordinate reads as
-  /// never written. Does not touch the dependency graph or spill state; use
+  /// Drops the stored cell or style-run column at `(row, col)`, if any, so the
+  /// coordinate reads as never written. Does not touch the dependency graph or spill state; use
   /// `Workbook` setters for a user-visible edit.
   void erase_cell(std::uint32_t row, std::uint32_t col);
 
   /// Convenience predicate equivalent to `cell_at(row, col) != nullptr`.
   bool has_cell(std::uint32_t row, std::uint32_t col) const noexcept;
 
-  /// Number of written coordinates plus spill phantoms without a stored slot.
+  /// Number of stored cells and style-run columns, plus spill phantoms on
+  /// neither.
   ///
-  /// A coordinate is written once any value, formula or style setter,
-  /// `set_cell_value(blank)`, or a spill anchor commit / rejection has
-  /// materialised it; clearing keeps the slot, so a cleared cell still
-  /// counts. Unwritten columns between written ones are not stored and are
-  /// not counted.
+  /// A coordinate counts while it has content or its own format (a non-zero
+  /// one, or an explicit default kept where it overrides a row or column
+  /// format). Clearing the content of an unformatted cell removes it from the
+  /// count. Matches `cell_enumeration_rows`.
   std::size_t cell_count() const noexcept;
+
+  /// One row of the flat cell enumeration: `row` and the running count of
+  /// enumerated coordinates up to and including it.
+  struct EnumerationRow {
+    std::uint32_t row = 0;
+    std::uint64_t end = 0;
+  };
+
+  /// The rows holding a stored cell, a style run or a spill phantom,
+  /// ascending, each with the running coordinate count; the last `end` is
+  /// `cell_count()`. Memory follows the rows, not the coordinates.
+  std::vector<EnumerationRow> cell_enumeration_rows() const;
+
+  /// The column of the `ordinal`-th enumerated coordinate of `row`, in
+  /// ascending column order over stored cells, style runs and spill phantoms,
+  /// or nullopt past the row's last one.
+  std::optional<std::uint32_t> cell_enumeration_col(std::uint32_t row, std::uint64_t ordinal) const;
 
   /// Returns the inclusive bounding box of every populated coordinate that
   /// intersects `[first_row..last_row] x [first_col..last_col]`, or
@@ -1352,6 +1412,40 @@ class Sheet {
   /// Caller must hold `spill_mutex_`.
   void inherit_inserted_formatting_locked(const StructuralEdit& edit);
 
+  /// The constant map onto `xf`.
+  static XfMap constant_xf_map(std::uint32_t xf) noexcept;
+
+  /// `cell_style_at` body; assumes `spill_mutex_` is held.
+  std::optional<StyleSlot> cell_style_at_locked(std::uint32_t row, std::uint32_t col) const noexcept;
+
+  /// `has_cell_or_style` body; assumes `spill_mutex_` is held.
+  bool has_cell_or_style_locked(std::uint32_t row, std::uint32_t col) const noexcept;
+
+  /// Erases `row` when it holds neither stored cells nor style runs. Assumes
+  /// `spill_mutex_` is held and that no reference into the row is in use.
+  void erase_row_if_empty_locked(std::uint32_t row);
+
+  /// The one run writer. A constant `map` covers the blank columns of
+  /// `[first, end)` with runs of its xf; a table `map` remaps the run columns
+  /// there. Every resulting xf-0 piece then survives only where the axis
+  /// format is non-zero. Bumps the enumeration revision. Returns the runs the
+  /// row gained. Assumes `spill_mutex_` is held.
+  std::size_t apply_style_runs_locked(std::uint32_t row, std::uint32_t first, std::uint64_t end, const XfMap& map);
+
+  /// Drops the xf-0 run columns of `[first, end)` in `cells` (row `row`) whose
+  /// axis format is xf 0. Assumes `spill_mutex_` is held.
+  void drop_unobservable_default_runs_locked(std::uint32_t row, RowCells& cells, std::uint32_t first,
+                                             std::uint64_t end);
+
+  /// Removes the stored cell at `(row, col)` when it has no content, writing
+  /// the format it owned back as a run. Call after the last use of any
+  /// `Cell&` of the row. Assumes `spill_mutex_` is held.
+  void demote_locked(std::uint32_t row, std::uint32_t col);
+
+  /// Columns `cell_enumeration_col` walks for `row`, as merged half-open
+  /// intervals. Assumes `spill_mutex_` is held.
+  std::vector<std::pair<std::uint32_t, std::uint64_t>> enumeration_intervals_locked(std::uint32_t row) const;
+
   // ---------------------------------------------------------------------------
   // Non-locking spill/cell helpers (caller must already hold `spill_mutex_`).
   // ---------------------------------------------------------------------------
@@ -1375,8 +1469,8 @@ class Sheet {
   /// `spill_region_covering` body; assumes `spill_mutex_` is held.
   const SpillRegion* spill_region_covering_locked(std::uint32_t row, std::uint32_t col) const noexcept;
 
-  /// Number of stored `Cell` slots inside the half-open rectangle
-  /// `[row_begin, row_end) x [col_begin, col_end)`.
+  /// Number of stored cells and style-run columns inside the half-open
+  /// rectangle `[row_begin, row_end) x [col_begin, col_end)`.
   /// Walks the stored rows or probes the rectangle's rows, whichever set is
   /// smaller, so a grid-axis-sized rectangle costs what the sheet stores
   /// rather than what the rectangle spans. Caller must hold `spill_mutex_`.

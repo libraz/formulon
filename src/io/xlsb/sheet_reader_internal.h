@@ -80,6 +80,11 @@ struct CellHeaderInfo {
 /// Reads the common cell header and advances `cursor` past it.
 Expected<CellHeaderInfo, Error> ReadCellHeader(ByteSpan& cursor);
 
+/// Charges `bytes` to the sheet's load budget; the error context is
+/// `context=xlsb_reader sheet_index=N row=R col=C` (R the current row).
+Expected<void, Error> ChargeLoad(SheetDecodeState& state, std::size_t sheet_index, std::uint64_t bytes,
+                                 std::uint32_t col);
+
 /// Stores the cell's xf and counts it as decoded.
 Expected<void, Error> CommitCell(Workbook& wb, std::size_t sheet_index, SheetDecodeState& state,
                                  const CellHeaderInfo& header, bool explicit_xf);

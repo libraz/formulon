@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <iterator>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -23,6 +24,7 @@
 #include "phonetic.h"
 #include "pivot/pivot_table.h"
 #include "sheet_spill_table.h"
+#include "style_resolve.h"
 #include "utils/arena.h"
 #include "utils/derived_guid.h"
 #include "utils/index_sort.h"
@@ -156,6 +158,9 @@ RowStore::RowStore(const RowStore& other) : std::unordered_map<std::uint32_t, Ro
     RowCells& dst = (*this)[row];
     for (const auto& [col, cell] : cells) {
       clone_cell(cell, dst.ensure(col));
+    }
+    for (const StyleRun& run : cells.runs()) {
+      dst.set_runs(run.first, static_cast<std::uint64_t>(run.last) + 1U, run.xf);
     }
   }
 }
@@ -308,6 +313,9 @@ void Sheet::set_cell_value(std::uint32_t row, std::uint32_t col, Value v) {
   }
   index_formula_cell_locked(row, col, false);
   cell_enumeration_revision_.bump();
+  if (v.is_blank()) {
+    demote_locked(row, col);
+  }
 }
 
 void Sheet::set_cell_text(std::uint32_t row, std::uint32_t col, std::string_view text) {
@@ -331,8 +339,12 @@ void Sheet::set_cell_formula(std::uint32_t row, std::uint32_t col, std::string f
   clear_phonetics(slot);
   slot.cached_value = Value::blank();
   slot.cached_text_owned.reset();
-  index_formula_cell_locked(row, col, !slot.formula_text.empty());
+  const bool has_formula = !slot.formula_text.empty();
+  index_formula_cell_locked(row, col, has_formula);
   cell_enumeration_revision_.bump();
+  if (!has_formula) {
+    demote_locked(row, col);
+  }
 }
 
 void Sheet::set_cell_dynamic_array(std::uint32_t row, std::uint32_t col, bool dynamic) {
@@ -401,10 +413,14 @@ void Sheet::set_cell_cached_value(std::uint32_t row, std::uint32_t col, Value v)
   // own `write_mutex`; the outer-to-inner lock ordering (`write_mutex` then
   // `spill_mutex_`) is preserved and never inverted.
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  const bool blank = v.is_blank();
   RowCells& row_cells = rows_[row];
   Cell& slot = row_cells.ensure(col);
   set_cell_cached_value_locked(slot, std::move(v));
   cell_enumeration_revision_.bump();
+  if (blank) {
+    demote_locked(row, col);
+  }
 }
 
 void Sheet::set_cell_cached_value_borrowed(std::uint32_t row, std::uint32_t col, Value v) {
@@ -421,6 +437,9 @@ void Sheet::set_cell_cached_value_borrowed(std::uint32_t row, std::uint32_t col,
   slot.cached_text_owned.reset();
   slot.cached_value = v;
   cell_enumeration_revision_.bump();
+  if (v.is_blank()) {
+    demote_locked(row, col);
+  }
 }
 
 void Sheet::set_cell_phonetic(std::uint32_t row, std::uint32_t col, std::string_view phonetic) {
@@ -448,16 +467,23 @@ void Sheet::set_cell_phonetic(std::uint32_t row, std::uint32_t col, std::string_
     slot.phonetic_runs.push_back(PhoneticRun{0U, utf16_units_in(surface), std::string(phonetic)});
   }
   cell_enumeration_revision_.bump();
+  if (phonetic.empty()) {
+    demote_locked(row, col);
+  }
 }
 
 void Sheet::set_cell_phonetic_runs(std::uint32_t row, std::uint32_t col, std::vector<PhoneticRun> runs) {
   assert(row < kMaxRows && col < kMaxCols);
 
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  const bool cleared = runs.empty();
   RowCells& row_cells = rows_[row];
   Cell& slot = row_cells.ensure(col);
   slot.phonetic_runs = std::move(runs);
   cell_enumeration_revision_.bump();
+  if (cleared) {
+    demote_locked(row, col);
+  }
 }
 
 void Sheet::set_cell_phonetic_props(std::uint32_t row, std::uint32_t col, PhoneticProperties props, bool explicit_pr) {
@@ -469,6 +495,9 @@ void Sheet::set_cell_phonetic_props(std::uint32_t row, std::uint32_t col, Phonet
   slot.phonetic_props = props;
   slot.phonetic_present = explicit_pr;
   cell_enumeration_revision_.bump();
+  if (!explicit_pr) {
+    demote_locked(row, col);
+  }
 }
 
 void Sheet::set_cell_show_phonetic(std::uint32_t row, std::uint32_t col, bool show) {
@@ -478,6 +507,16 @@ void Sheet::set_cell_show_phonetic(std::uint32_t row, std::uint32_t col, bool sh
   RowCells& row_cells = rows_[row];
   row_cells.ensure(col).show_phonetic = show;
   cell_enumeration_revision_.bump();
+  if (!show) {
+    demote_locked(row, col);
+  }
+}
+
+XfMap Sheet::constant_xf_map(std::uint32_t xf) noexcept {
+  XfMap map;
+  map.constant = xf;
+  map.is_constant = true;
+  return map;
 }
 
 void Sheet::set_cell_xf_index(std::uint32_t row, std::uint32_t col, std::uint32_t xf_index) {
@@ -487,11 +526,16 @@ void Sheet::set_cell_xf_index(std::uint32_t row, std::uint32_t col, std::uint32_
   // write would. It can still grow `rows_`, so share the sheet mutation lock
   // used by the spill and cached-value paths.
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
-  RowCells& row_cells = rows_[row];
-  Cell& slot = row_cells.ensure(col);
-  slot.xf_index = xf_index;
-  slot.has_explicit_xf = true;
-  cell_enumeration_revision_.bump();
+  if (const auto it = rows_.find(row); it != rows_.end()) {
+    if (Cell* slot = it->second.find(col); slot != nullptr) {
+      slot->xf_index = xf_index;
+      slot->has_explicit_xf = true;
+      cell_enumeration_revision_.bump();
+      demote_locked(row, col);
+      return;
+    }
+  }
+  apply_style_runs_locked(row, col, static_cast<std::uint64_t>(col) + 1U, constant_xf_map(xf_index));
 }
 
 void Sheet::clear_cell_xf_index(std::uint32_t row, std::uint32_t col) {
@@ -501,12 +545,14 @@ void Sheet::clear_cell_xf_index(std::uint32_t row, std::uint32_t col) {
   if (it == rows_.end()) {
     return;
   }
-  Cell* slot = it->second.find(col);
-  if (slot == nullptr) {
-    return;
+  if (Cell* slot = it->second.find(col); slot != nullptr) {
+    slot->xf_index = 0U;
+    slot->has_explicit_xf = false;
+    demote_locked(row, col);
+  } else {
+    it->second.clear_runs(col, static_cast<std::uint64_t>(col) + 1U);
   }
-  slot->xf_index = 0U;
-  slot->has_explicit_xf = false;
+  erase_row_if_empty_locked(row);
   cell_enumeration_revision_.bump();
 }
 
@@ -517,9 +563,217 @@ void Sheet::restore_cell_style(std::uint32_t row, std::uint32_t col, std::uint32
   }
   assert(row < kMaxRows && col < kMaxCols);
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
-  Cell& slot = rows_[row].ensure(col);
-  slot.xf_index = xf_index;
-  slot.has_explicit_xf = explicit_xf;
+  if (const auto it = rows_.find(row); it != rows_.end()) {
+    if (Cell* slot = it->second.find(col); slot != nullptr) {
+      slot->xf_index = xf_index;
+      slot->has_explicit_xf = explicit_xf;
+      cell_enumeration_revision_.bump();
+      demote_locked(row, col);
+      return;
+    }
+  }
+  apply_style_runs_locked(row, col, static_cast<std::uint64_t>(col) + 1U, constant_xf_map(xf_index));
+}
+
+std::optional<StyleSlot> Sheet::cell_style_at(std::uint32_t row, std::uint32_t col) const {
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  return cell_style_at_locked(row, col);
+}
+
+std::optional<StyleSlot> Sheet::cell_style_at_locked(std::uint32_t row, std::uint32_t col) const noexcept {
+  const auto it = rows_.find(row);
+  return it == rows_.end() ? std::nullopt : it->second.find_style(col);
+}
+
+bool Sheet::has_cell_or_style(std::uint32_t row, std::uint32_t col) const {
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  return has_cell_or_style_locked(row, col);
+}
+
+bool Sheet::has_cell_or_style_locked(std::uint32_t row, std::uint32_t col) const noexcept {
+  return cell_style_at_locked(row, col).has_value();
+}
+
+std::size_t Sheet::set_style_runs(std::uint32_t row, std::uint32_t first, std::uint64_t end, std::uint32_t xf) {
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  return apply_style_runs_locked(row, first, end, constant_xf_map(xf));
+}
+
+void Sheet::clear_style_runs(std::uint32_t row, std::uint32_t first, std::uint64_t end) {
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  if (const auto it = rows_.find(row); it != rows_.end()) {
+    it->second.clear_runs(first, end);
+    erase_row_if_empty_locked(row);
+    cell_enumeration_revision_.bump();
+  }
+}
+
+std::size_t Sheet::remap_style_runs(std::uint32_t row, std::uint32_t first, std::uint64_t end, const XfMap& map) {
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  if (!map.is_constant) {
+    return apply_style_runs_locked(row, first, end, map);
+  }
+  // A constant map covers whatever it is given, so hand it the run pieces only.
+  const auto it = rows_.find(row);
+  if (it == rows_.end()) {
+    return 0U;
+  }
+  std::vector<std::pair<std::uint32_t, std::uint64_t>> pieces;
+  const auto [lo, hi] = it->second.runs_in(first, end);
+  for (const StyleRun* run = lo; run != hi; ++run) {
+    pieces.emplace_back(std::max<std::uint32_t>(run->first, first),
+                        std::min<std::uint64_t>(static_cast<std::uint64_t>(run->last) + 1U, end));
+  }
+  std::size_t added = 0U;
+  for (const auto& [from, to] : pieces) {
+    added += apply_style_runs_locked(row, from, to, map);
+  }
+  return added;
+}
+
+std::size_t Sheet::apply_planned_run(std::uint32_t row, std::uint32_t first, std::uint64_t end, std::uint32_t xf) {
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  std::vector<std::pair<std::uint32_t, std::uint64_t>> gaps;
+  if (const auto it = rows_.find(row); it != rows_.end()) {
+    RowCells& cells = it->second;
+    std::vector<std::uint32_t> inheriting;
+    for (const RowCells::Entry entry : cells.entries_in(first, end)) {
+      if (!cell_owns_style(entry.cell)) {
+        inheriting.push_back(entry.col);
+      }
+    }
+    for (const std::uint32_t col : inheriting) {
+      Cell* cell = cells.find(col);
+      cell->xf_index = xf;
+      cell->has_explicit_xf = true;
+    }
+    std::uint64_t at = first;
+    const auto [lo, hi] = cells.runs_in(first, end);
+    for (const StyleRun* run = lo; run != hi; ++run) {
+      if (run->first > at) {
+        gaps.emplace_back(static_cast<std::uint32_t>(at), run->first);
+      }
+      at = static_cast<std::uint64_t>(run->last) + 1U;
+    }
+    if (at < end) {
+      gaps.emplace_back(static_cast<std::uint32_t>(at), end);
+    }
+  } else {
+    gaps.emplace_back(first, end);
+  }
+  std::size_t added = 0U;
+  for (const auto& [from, to] : gaps) {
+    added += apply_style_runs_locked(row, from, to, constant_xf_map(xf));
+  }
+  cell_enumeration_revision_.bump();
+  return added;
+}
+
+void Sheet::apply_blank_slot_rule() {
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  for (auto it = rows_.begin(); it != rows_.end();) {
+    if (!it->second.runs().empty()) {
+      drop_unobservable_default_runs_locked(it->first, it->second, 0U, kMaxCols);
+    }
+    it = it->second.has_any() ? std::next(it) : rows_.erase(it);
+  }
+  cell_enumeration_revision_.bump();
+}
+
+std::size_t Sheet::load_style_run(std::uint32_t row, std::uint32_t col, std::uint32_t xf) {
+  assert(row < kMaxRows && col < kMaxCols);
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  RowCells& cells = rows_[row];
+  const std::size_t before = cells.runs().size();
+  cells.set_runs(col, static_cast<std::uint64_t>(col) + 1U, xf);
+  cell_enumeration_revision_.bump();
+  const std::size_t after = cells.runs().size();
+  return after > before ? after - before : 0U;
+}
+
+void Sheet::erase_row_if_empty_locked(std::uint32_t row) {
+  if (const auto it = rows_.find(row); it != rows_.end() && !it->second.has_any()) {
+    rows_.erase(it);
+  }
+}
+
+std::size_t Sheet::apply_style_runs_locked(std::uint32_t row, std::uint32_t first, std::uint64_t end,
+                                           const XfMap& map) {
+  const std::uint64_t stop = std::min<std::uint64_t>(end, kMaxCols);
+  if (first >= stop) {
+    return 0U;
+  }
+  auto it = rows_.find(row);
+  const std::size_t before = it == rows_.end() ? 0U : it->second.runs().size();
+  if (map.is_constant && map.constant == 0U) {
+    // An explicit default is kept only where it overrides an axis format, so
+    // a band with none creates no row.
+    const std::vector<AxisSegment> axis = axis_segments(layout_, row, first, stop);
+    const bool overrides = std::any_of(axis.begin(), axis.end(), [](const AxisSegment& seg) { return seg.xf != 0U; });
+    if (!overrides) {
+      if (it != rows_.end()) {
+        it->second.clear_runs(first, stop);
+      }
+    } else {
+      if (it == rows_.end()) {
+        it = rows_.emplace(row, RowCells{}).first;
+      }
+      it->second.set_runs(first, stop, 0U);
+      drop_unobservable_default_runs_locked(row, it->second, first, stop);
+    }
+  } else if (map.is_constant) {
+    if (it == rows_.end()) {
+      it = rows_.emplace(row, RowCells{}).first;
+    }
+    it->second.set_runs(first, stop, map.constant);
+  } else if (it != rows_.end()) {
+    it->second.remap_runs(first, stop, map);
+    drop_unobservable_default_runs_locked(row, it->second, first, stop);
+  }
+  cell_enumeration_revision_.bump();
+  const std::size_t after = it == rows_.end() ? 0U : it->second.runs().size();
+  return after > before ? after - before : 0U;
+}
+
+void Sheet::drop_unobservable_default_runs_locked(std::uint32_t row, RowCells& cells, std::uint32_t first,
+                                                  std::uint64_t end) {
+  std::vector<std::pair<std::uint32_t, std::uint64_t>> zero;
+  const auto [lo, hi] = cells.runs_in(first, end);
+  for (const StyleRun* run = lo; run != hi; ++run) {
+    if (run->xf == 0U) {
+      zero.emplace_back(std::max<std::uint32_t>(run->first, first),
+                        std::min<std::uint64_t>(static_cast<std::uint64_t>(run->last) + 1U, end));
+    }
+  }
+  std::vector<std::pair<std::uint32_t, std::uint64_t>> drop;
+  for (const auto& [from, to] : zero) {
+    std::uint64_t at = from;
+    for (const AxisSegment& seg : axis_segments(layout_, row, from, to)) {
+      if (seg.xf == 0U) {
+        continue;
+      }
+      if (seg.first > at) {
+        drop.emplace_back(static_cast<std::uint32_t>(at), seg.first);
+      }
+      at = std::max<std::uint64_t>(at, seg.end);
+    }
+    if (at < to) {
+      drop.emplace_back(static_cast<std::uint32_t>(at), to);
+    }
+  }
+  for (const auto& [from, to] : drop) {
+    cells.clear_runs(from, to);
+  }
+}
+
+void Sheet::demote_locked(std::uint32_t row, std::uint32_t col) {
+  const auto it = rows_.find(row);
+  if (it == rows_.end()) {
+    return;
+  }
+  if (const std::optional<std::uint32_t> owned = it->second.demote(col)) {
+    apply_style_runs_locked(row, col, static_cast<std::uint64_t>(col) + 1U, constant_xf_map(*owned));
+  }
   cell_enumeration_revision_.bump();
 }
 
@@ -555,7 +809,7 @@ std::size_t Sheet::cell_count() const noexcept {
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
   std::size_t total = 0;
   for (const auto& kv : rows_) {
-    total += kv.second.stored_count();
+    total += kv.second.stored_count() + kv.second.run_count_in(0U, kMaxCols);
   }
   // Add dynamic-array spill phantoms that have no underlying stored slot. A
   // phantom that coincides with a stored cell is already counted above, so
@@ -581,7 +835,7 @@ std::size_t Sheet::cell_count() const noexcept {
       // phantom set excludes; a region whose anchor slot is somehow absent
       // needs that exclusion applied by hand.
       total += area - materialised;
-      if (cell_at_locked(region.anchor_row, region.anchor_col) == nullptr) {
+      if (!has_cell_or_style_locked(region.anchor_row, region.anchor_col)) {
         --total;
       }
     }

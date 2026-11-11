@@ -575,10 +575,69 @@ TEST(SheetReader, ManyRealCellsRejectedOverCellBudget) {
   EXPECT_EQ(rs.error().code, FormulonErrorCode::kSecurityResourceLimit);
 }
 
-// Bare `<c>` elements with no value, style, or formula never call
-// `RowCells::ensure()` (`ApplyParsedCell`'s own no-op path), so charging
-// them would reject a load that costs the sheet nothing at all.
-TEST(SheetReader, TrulyEmptySparseCellsDoNotConsumeTheCellBudget) {
+// One row of 11 numbers costs the row node and 11 cells exactly; a byte less
+// refuses the last cell with the per-coordinate context.
+TEST(SheetReader, RowNodeAndCellsChargeTheBudgetExactly) {
+  std::string xml = "<worksheet><sheetData><row r=\"1\">";
+  for (char col = 'A'; col < 'A' + 11; ++col) {
+    xml += "<c r=\"";
+    xml += col;
+    xml += "1\"><v>1</v></c>";
+  }
+  xml += "</row></sheetData></worksheet>";
+  pugi::xml_document doc;
+  ASSERT_TRUE(doc.load_string(xml.c_str()));
+  const std::uint64_t exact = kSheetLoadRowBytes + 11U * kSheetLoadCellBytes;
+
+  Workbook fits = Workbook::create();
+  SheetReadContext fits_ctx;
+  std::deque<std::string> fits_storage;
+  ASSERT_TRUE(static_cast<bool>(read_sheet_data(doc, 0U, fits, fits_ctx, fits_storage, nullptr, exact)));
+  EXPECT_EQ(fits.sheet(0).cell_count(), 11U);
+
+  Workbook over = Workbook::create();
+  SheetReadContext over_ctx;
+  std::deque<std::string> over_storage;
+  auto rs = read_sheet_data(doc, 0U, over, over_ctx, over_storage, nullptr, exact - 1U);
+  ASSERT_FALSE(static_cast<bool>(rs));
+  EXPECT_EQ(rs.error().code, FormulonErrorCode::kSecurityResourceLimit);
+  EXPECT_EQ(rs.error().context.rfind("context=sheet_reader row=0 col=10 ", 0), 0U) << rs.error().context;
+}
+
+// Formatted blanks are style runs, never cells: two non-adjacent ones cost the
+// row node and two runs.
+TEST(SheetReader, FormattedBlanksChargeTheRowNodeAndEachRun) {
+  const char* xml =
+      "<worksheet><sheetData>"
+      "<row r=\"1\"><c r=\"A1\" s=\"1\"/><c r=\"C1\" s=\"1\"/></row>"
+      "</sheetData></worksheet>";
+  pugi::xml_document doc;
+  ASSERT_TRUE(doc.load_string(xml));
+  const std::uint64_t exact = kSheetLoadRowBytes + 2U * kSheetLoadRunBytes;
+
+  Workbook fits = Workbook::create();
+  fits.mutable_styles().cell_xfs.resize(2U);
+  SheetReadContext fits_ctx;
+  std::deque<std::string> fits_storage;
+  ASSERT_TRUE(static_cast<bool>(read_sheet_data(doc, 0U, fits, fits_ctx, fits_storage, nullptr, exact)));
+  EXPECT_EQ(fits.sheet(0).cell_at(0U, 2U), nullptr);
+  ASSERT_TRUE(fits.sheet(0).cell_style_at(0U, 2U).has_value());
+  EXPECT_EQ(fits.sheet(0).cell_style_at(0U, 2U)->xf, 1U);
+
+  Workbook over = Workbook::create();
+  over.mutable_styles().cell_xfs.resize(2U);
+  SheetReadContext over_ctx;
+  std::deque<std::string> over_storage;
+  auto rs = read_sheet_data(doc, 0U, over, over_ctx, over_storage, nullptr, exact - 1U);
+  ASSERT_FALSE(static_cast<bool>(rs));
+  EXPECT_EQ(rs.error().code, FormulonErrorCode::kSecurityResourceLimit);
+  EXPECT_EQ(rs.error().context.rfind("context=sheet_reader row=0 col=2 ", 0), 0U) << rs.error().context;
+}
+
+// Bare `<c>` elements load as explicit-default style runs, charged as one row
+// node and two runs; with no row or column format the blank-slot rule then
+// leaves nothing, not even the row node.
+TEST(SheetReader, BareCellsFitTheBudgetAndLeaveNothingWithoutAnAxisFormat) {
   const char* xml =
       "<worksheet><sheetData>"
       "<row r=\"1\"><c r=\"A1\"/><c r=\"XFD1\"/></row>"
@@ -591,7 +650,9 @@ TEST(SheetReader, TrulyEmptySparseCellsDoNotConsumeTheCellBudget) {
   std::deque<std::string> text_storage;
   auto rs = read_sheet_data(doc, 0U, wb, ctx, text_storage, /*diagnostics=*/nullptr, /*max_cell_bytes=*/1000U);
   ASSERT_TRUE(static_cast<bool>(rs)) << rs.error().message;
+  wb.sheet(0).apply_blank_slot_rule();
   EXPECT_EQ(wb.sheet(0).cell_count(), 0U);
+  EXPECT_TRUE(wb.sheet(0).rows().empty());
 }
 
 }  // namespace

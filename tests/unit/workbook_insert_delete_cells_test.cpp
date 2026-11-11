@@ -630,14 +630,14 @@ void StyleRow(Workbook& wb, std::uint32_t row, std::uint32_t xf_index) {
   entry.style_xf = xf_index;
 }
 
-// The cell record at `a1`, which must be an explicit default-style one.
+// The blank at `a1`, which must carry an explicit default style of its own.
 void ExpectDefaultStyleRecord(Workbook& wb, std::string_view a1) {
   SCOPED_TRACE(std::string(a1));
-  const Cell* cell = wb.sheet(0).cell_at(Rect(a1).first_row, Rect(a1).first_col);
-  ASSERT_NE(cell, nullptr);
-  EXPECT_TRUE(cell->has_explicit_xf);
-  EXPECT_EQ(cell->xf_index, 0U);
-  EXPECT_TRUE(cell->cached_value.is_blank());
+  const std::optional<StyleSlot> slot = wb.sheet(0).cell_style_at(Rect(a1).first_row, Rect(a1).first_col);
+  ASSERT_TRUE(slot.has_value());
+  EXPECT_TRUE(slot->explicit_xf);
+  EXPECT_EQ(slot->xf, 0U);
+  EXPECT_TRUE(wb.sheet(0).resolve_cell_value(Rect(a1).first_row, Rect(a1).first_col).is_blank());
 }
 
 // Shifting a band's cells toward a styled last column or row stays inside the
@@ -1232,8 +1232,8 @@ TEST(InsertDeleteCells, ASpillStraddlingTheBandReSpillsAfterTheEdit) {
 // ---------------------------------------------------------------------------
 
 std::uint32_t XfAt(const Workbook& wb, std::string_view a1) {
-  const Cell* cell = CellOf(wb, a1);
-  return cell == nullptr ? 0U : cell->xf_index;
+  const std::optional<StyleSlot> slot = wb.sheet(0).cell_style_at(Rect(a1).first_row, Rect(a1).first_col);
+  return slot.has_value() ? slot->xf : 0U;
 }
 
 TEST(InsertDeleteCells, InsertedCellsTakeTheFormatAboveWhenShiftingDown) {

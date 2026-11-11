@@ -138,7 +138,8 @@ TEST(TableTotalsSyncClassify, ValuesAreLabels) {
 TEST(TableTotalsSyncClassify, BlankIsNone) {
   Workbook wb = MakeWorkbook();
   ASSERT_TRUE(wb.set_cell_value(0, kTotalsRow, 1U, Value::blank()).has_value());
-  EXPECT_EQ(Classify(wb, 1).kind, TotalsCellClass::Kind::kNone);
+  EXPECT_EQ(wb.sheet(0).cell_at(kTotalsRow, 1U), nullptr);
+  EXPECT_EQ(classify_totals_cell(wb, wb.tables()[0], 1, Cell{}).kind, TotalsCellClass::Kind::kNone);
 }
 
 TEST(TableTotalsSyncNormalize, FunctionRoundTripsThroughTheCell) {

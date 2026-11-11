@@ -126,13 +126,19 @@ test('the pivot layout names a field null where it has none', async () => {
   });
 });
 
-test('a cell with no style of its own has a null xf index and an explicit zero reads 0', async () => {
+test('an unstyled cell reads a null xf index; an explicit zero reads 0 only over an axis format', async () => {
   await withWorkbook((wb) => {
     const ws = wb.sheet(0);
     assert.equal(ws.ooxml.getCellXfIndex('Z99'), null);
     assert.equal(ws.ooxml.getCellXfIndex(98, 25), null);
+    // With no row or column format an explicit default overrides nothing.
+    ws.ooxml.setCellXfIndex('Z99', 0);
+    assert.equal(ws.ooxml.getCellXfIndex('Z99'), null);
+    const xf = wb.ooxml.addCellXf({ ...wb.ooxml.getCellXf(0), numFmtId: 10 });
+    ws.ooxml.setColumnXfIndex('Z', xf);
     ws.ooxml.setCellXfIndex('Z99', 0);
     assert.equal(ws.ooxml.getCellXfIndex('Z99'), 0);
+    assert.equal(ws.ooxml.getCellXfIndex('Z98'), null);
   });
 });
 

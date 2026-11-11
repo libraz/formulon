@@ -597,7 +597,7 @@ FM_API fm_status_t fm_workbook_get_diagnostics(const fm_workbook_t* wb, fm_read_
  * passthrough part payloads and the workbook-level metadata; it excludes
  * allocator overhead, the dependency graph and the style tables. It is an
  * estimate for pressure reporting, not an allocation ledger, and it walks
- * every materialised cell — call it at coarse boundaries (after a load or
+ * every stored cell — call it at coarse boundaries (after a load or
  * a recalc), not per edit.
  *
  * @param wb         Workbook to measure.
@@ -1308,7 +1308,9 @@ FM_API fm_status_t fm_sheet_set_text(fm_workbook_t* wb, size_t sheet_index, uint
  *
  * `FM_VALUE_KIND_NUMBER`, `_BOOL`, `_ERROR` and `_TEXT` behave as
  * `fm_sheet_set_number`, `fm_sheet_set_bool`, `fm_sheet_set_error` and
- * `fm_sheet_set_text`; `FM_VALUE_KIND_BLANK` as `fm_sheet_set_blank`. A value
+ * `fm_sheet_set_text`; `FM_VALUE_KIND_BLANK` as `fm_sheet_set_blank` (it removes
+ * the content and keeps the cell's own non-default format, or an explicit
+ * default where it overrides a row or column format). A value
  * read with `fm_sheet_get_value` can be written back unchanged.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common cell-mutation failure, or what the
@@ -1503,6 +1505,12 @@ FM_API fm_status_t fm_sheet_set_cell_phonetic_properties(fm_workbook_t* wb, size
 /**
  * @brief Stores a `Blank` literal at `(row, col)`. Equivalent to
  *        clearing a cell.
+ *
+ * Removes the content and keeps the cell's own non-default format, or an
+ * explicit default format where that overrides a row or column format. A
+ * cell with neither stops existing: it is no longer counted or enumerated and
+ * inherits its row or column format. Clearing a blank that has only a format
+ * changes nothing.
  *
  * A table's header cell is not cleared: the column takes the profile's
  * default name (`Column1`, `列1`; `fm_sheet_rename_table_column` with an
@@ -1943,13 +1951,16 @@ FM_API fm_status_t fm_workbook_format_reference(const fm_workbook_t* wb, const c
 /**
  * @brief Returns the number of written coordinates on `sheet_index`.
  *
- * Counts every coordinate that a value, formula or format setter,
- * `fm_sheet_set_blank`, or a spill anchor commit or rejection has
- * written. Clearing a cell keeps its slot, so it stays counted. Columns that
- * were never written are not counted. Also counts every dynamic-array spill
+ * Counts every coordinate that holds content (a value, a formula, phonetic
+ * text, an array role or a spill anchor commit or rejection) and every blank
+ * coordinate with its own format: a non-default format, or an explicit default
+ * format where it overrides a row or column format. A cell that was cleared
+ * without leaving such a format is not counted; neither are coordinates that
+ * only inherit a row or column format. Also counts every dynamic-array spill
  * phantom that has no stored slot: phantoms carry an effective value through
  * `fm_sheet_get_value` / `fm_sheet_get_cell_at` but live only in the spill
- * table.
+ * table. The count is cheap to compute, but a sheet formatted over a large
+ * rectangle counts every coordinate of it.
  *
  * The count is the upper bound for `fm_sheet_get_cell_at` iteration: indices
  * in `[0, count)` are dense and enumerate every counted coordinate in
@@ -1966,8 +1977,12 @@ FM_API fm_status_t fm_sheet_get_cell_count(const fm_workbook_t* wb, size_t sheet
  * @brief Reads the `index`-th cell on `sheet_index`.
  *
  * Enumerates the coordinates counted by `fm_sheet_get_cell_count`, sorted by
- * `(row, col)` ascending; unwritten columns are not enumerated. The values
- * follow the calc-mode read contract of `fm_sheet_get_value`.
+ * `(row, col)` ascending. A coordinate that has only a format is enumerated as
+ * a blank value with a `NULL` formula. The values follow the calc-mode read
+ * contract of `fm_sheet_get_value`. The enumeration can be as large as the
+ * rectangle that was formatted; read a large sheet in ranges
+ * (`fm_sheet_get_cells_in_range`, `fm_sheet_get_cell_xf_indices`) rather than
+ * by index.
  *
  * On success the call writes `*out_row`, `*out_col`, `*out_value`, and
  * — if `out_formula != NULL` — points `*out_formula` at the cell's
@@ -2966,8 +2981,9 @@ typedef struct {
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `struct_size` is below the v1 size, `hl->rect` is
  *         inverted or outside the grid, or the text for the top-left cell is over 32,767 UTF-16 units;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a string is not well-formed UTF-8;
- *         `FM_STATUS_PRECONDITION_FAILED` (9) when more than 1,048,576 cells that are not a whole
- *         column or row would be formatted. Nothing changes on failure.
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the rectangle covers more than 134,217,728 cells and is
+ *         not a whole column or row (the engine's own ceiling, not an Excel limit). Nothing changes on
+ *         failure.
  */
 FM_API fm_status_t fm_sheet_set_hyperlink(fm_workbook_t* wb, size_t sheet_index, const fm_hyperlink_t* hl);
 
@@ -3009,8 +3025,9 @@ FM_API fm_status_t fm_sheet_insert_hyperlink_at(fm_workbook_t* wb, size_t sheet_
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `range` is inverted or outside the grid;
  *         `FM_STATUS_NOT_FOUND` (6) when no hyperlink intersects `range`;
- *         `FM_STATUS_PRECONDITION_FAILED` (9), nothing removed, when a removed hyperlink covers more
- *         than 1,048,576 cells and is not a whole column or row.
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005), nothing removed, when a removed hyperlink covers more
+ *         than 134,217,728 cells and is not a whole column or row; `fm_sheet_remove_hyperlink_at`
+ *         removes such an entry without touching cell formats.
  */
 FM_API fm_status_t fm_sheet_remove_hyperlink(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* range);
 
@@ -3038,8 +3055,9 @@ FM_API fm_status_t fm_sheet_remove_hyperlink_at(fm_workbook_t* wb, size_t sheet_
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_PRECONDITION_FAILED` (9), nothing removed, when a hyperlink covers more than
- *         1,048,576 cells and is not a whole column or row.
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005), nothing removed, when a hyperlink covers more than
+ *         134,217,728 cells and is not a whole column or row; `fm_sheet_remove_hyperlink_at`
+ *         removes such an entry without touching cell formats.
  */
 FM_API fm_status_t fm_sheet_clear_hyperlinks(fm_workbook_t* wb, size_t sheet_index);
 
@@ -10153,7 +10171,9 @@ typedef struct {
   /** `1` when the outline group this row summarises is collapsed (the `collapsed` attribute). */
   int32_t collapsed;
   /* Row s= is effective only when customFormat=1 in OOXML. */
-  /** 1 when the row's style applies (`customFormat="1"`); 0 means the row has no style of its own. */
+  /** 1 when the row's style applies (`customFormat="1"`); 0 means the row has no style of its own.
+   *  After a save that writes this row as a row format of XF 0, this reports no format until the workbook is
+   *  reloaded, although the saved file records XF 0. */
   int32_t has_xf_index;
   /** The cell XF index the row applies; meaningful only when `has_xf_index` is 1. */
   uint32_t xf_index;
@@ -10949,11 +10969,21 @@ FM_API fm_status_t fm_sheet_reset_row_xf_index(fm_workbook_t* wb, size_t sheet_i
  * `fm_sheet_remap_range_xfs`. Every cell then resolves to the patched form
  * of the XF it resolved to before, as Excel applies such a change: covered
  * column and row styles are rewritten, existing cells are remapped, and a
- * cell is materialised only where the row-over-column precedence would
- * otherwise resolve to something else (for a plain range, every cell). Blank
- * cells of a covered row or column are not enumerated. Only style state is
- * touched. `fm_sheet_snapshot_range_xfs` captures what such an edit can
- * change, for undo.
+ * blank cell gets its own format only where the row-over-column precedence
+ * would otherwise resolve to something else (for a plain range, every cell).
+ * A selection that spans whole rows or whole columns is written as row or
+ * column formats and adds no cells. A blank cell that ends at the default
+ * format keeps a record only where that overrides a row or column format. Only
+ * style state is touched. `fm_sheet_snapshot_range_xfs` captures what such an
+ * edit can change, for undo.
+ *
+ * A rectangle that is not a whole row or column selection and covers more
+ * than 134,217,728 cells is refused with `FM_STATUS_SECURITY_RESOURCE_LIMIT`:
+ * a save writes one cell per address. A rectangle within the bound costs
+ * memory in proportion to the rows it covers, not its cells. Results that are
+ * sized by the area (`fm_sheet_get_cell_xf_indices`, enumeration by
+ * `fm_sheet_get_cell_at`) can be as large as the rectangle; read them in
+ * ranges.
  */
 
 /**
@@ -10992,7 +11022,7 @@ FM_API fm_status_t fm_sheet_get_range_xf_bases_excluding(const fm_workbook_t* wb
                                                          size_t excluded_count, uint32_t* out, size_t capacity,
                                                          size_t* out_count);
 
-/** @brief One stored cell and its non-default cell-XF index, as
+/** @brief One cell and its own non-default cell-XF index, as
  *         `fm_sheet_get_cell_xf_indices` writes it.
  *
  * Frozen value type: no `struct_size`. */
@@ -11006,16 +11036,19 @@ typedef struct {
 } fm_xf_cell_t;
 
 /**
- * @brief Lists every stored cell of `range` whose own cell-XF index is not 0,
- *        in row-major order (row, then column, ascending).
+ * @brief Lists every cell of `range` whose own cell-XF index is not 0, in
+ *        row-major order (row, then column, ascending).
  *
  * Styled blank cells and cells with content are both listed; a cell holding
  * the default XF 0 is not, even when it was assigned explicitly, and a spill
- * cell with no stored record is not either. Format-only cells outside the used
- * range are included, so pass the whole grid to list every stored cell of the
+ * cell with no stored record is not either. Blank cells that only inherit a
+ * row or column format are not listed. Format-only cells outside the used
+ * range are included, so pass the whole grid to list every such cell of the
  * sheet. `*out_count` always receives the number of cells; at most `capacity` are
  * written. Call with `capacity == 0` (`out` may then be `NULL`) to size the
- * buffer first.
+ * buffer first. The result is as large as the number of formatted cells, which
+ * a large rectangle makes area-sized; there is no cell ceiling on this call, so
+ * read a large sheet in ranges.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `range` or `out_count` is `NULL`, or
@@ -11040,15 +11073,20 @@ typedef struct {
  * @brief Remaps the XFs of a selection by the `count` pairs of `pairs`; an
  *        unlisted XF is kept.
  *
+ * The XF indices are validated before the area. Rows, columns, blank cells
+ * and the covered cells are handled as the block comment above describes.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `range` is `NULL`, or `pairs`
  *         is `NULL` while `count > 0`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when the rect is out of range,
- *         a `from_xf` repeats, or a `to_xf` is past the
- *         cell-XF table;
- *         `FM_STATUS_PRECONDITION_FAILED` (9) when more than 1,048,576 cells would be
- *         written. Nothing changes on failure.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the rect is out of range or a
+ *         `from_xf` repeats;
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when a `to_xf` is not below
+ *         `fm_workbook_get_cell_xf_count`;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the rectangle covers more than 134,217,728
+ *         cells and is not a whole row or column selection (the engine's own ceiling, not an Excel
+ *         limit). Nothing changes on failure.
  */
 FM_API fm_status_t fm_sheet_remap_range_xfs(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* range,
                                             const fm_xf_remap_t* pairs, size_t count);
@@ -11056,8 +11094,12 @@ FM_API fm_status_t fm_sheet_remap_range_xfs(fm_workbook_t* wb, size_t sheet_inde
 /**
  * @brief Captures the style state of a selection as an opaque, versioned
  *        byte string: the covered column styles (column selection), row
- *        styles (row selection), and every stored cell's XF and
- *        explicit-assignment mark.
+ *        styles (row selection), and the XF and explicit-assignment mark of
+ *        every cell with its own format.
+ *
+ * The capture is versioned (currently version 2); a capture of an earlier
+ * version is still accepted by `fm_sheet_restore_range_xfs`. Neither this call
+ * nor the restore has a cell ceiling.
  *
  * On success `*out_bytes` is a heap-allocated buffer of `*out_len` bytes
  * that MUST be released with `fm_buffer_destroy`. Both are zeroed before
@@ -11077,16 +11119,20 @@ FM_API fm_status_t fm_sheet_snapshot_range_xfs(const fm_workbook_t* wb, size_t s
  * @brief Puts a `fm_sheet_snapshot_range_xfs` capture back on sheet
  *        `sheet_index`.
  *
- * Captured axis styles and cell XFs are restored exactly; a stored cell of
- * the captured rect that was not captured loses its style. Values, formulas,
- * phonetic runs and comments are not touched.
+ * Captured axis styles and cell XFs are restored exactly; a cell of the
+ * captured rect that was not captured loses its own format. A captured default
+ * format on a blank cell comes back only where it overrides a row or column
+ * format after the restore. Values, formulas, phonetic runs and comments are
+ * not touched.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`, or `bytes` is `NULL`
  *         while `len > 0`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when the bytes
- *         are not a valid capture, or an XF is past the cell-XF table.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the bytes are not a valid capture: an unknown
+ *         version, a row outside the captured rectangle or out of order, entries out of order or
+ *         overlapping, a column outside the rectangle, a span whose first column is past its last,
+ *         a flag or tag with an unknown value, or an XF past the cell-XF table.
  *         Nothing changes on failure.
  */
 FM_API fm_status_t fm_sheet_restore_range_xfs(fm_workbook_t* wb, size_t sheet_index, const uint8_t* bytes, size_t len);
@@ -12016,9 +12062,10 @@ typedef struct {
 /**
  * @brief Reads the `xf_index` (style record id) attached to the cell at
  *        `(row, col)` on `sheet_index`. `*out_present` is `1` and
- *        `*out_xf_index` set when a cell exists there (a cell with an
- *        explicit `0` reads `0`); otherwise `0` and `*out_xf_index` `0`
- *        (still `FM_STATUS_OK` (0)).
+ *        `*out_xf_index` set when a cell with content or its own format exists
+ *        there (a cell with an explicit `0` reads `0`); otherwise `0` and
+ *        `*out_xf_index` `0` (still `FM_STATUS_OK` (0)). A blank coordinate
+ *        that only inherits a row or column format is absent.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common cell-read failure (Cell read);
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`.
@@ -12029,17 +12076,18 @@ FM_API fm_status_t fm_sheet_get_cell_xf_index(const fm_workbook_t* wb, size_t sh
 /**
  * @brief Stores `xf_index` on the cell at `(row, col)` on `sheet_index`.
  *
- * Materialises the cell as a default-blank slot when none exists yet,
- * mirroring the row-vector growth semantics of
- * `fm_sheet_set_blank`. Coexists with literal / formula writes:
- * those calls leave `xf_index` untouched, so the caller can layer a
- * style update on top of either order of operations.
+ * A cell with no content takes the format as its own, so a blank cell can
+ * render a ruled box. Setting the default format (`0`) on a blank cell leaves
+ * a cell only where it overrides a row or column format; elsewhere nothing is
+ * stored. Coexists with literal / formula writes: those calls leave
+ * `xf_index` untouched, so the caller can layer a style update on top of
+ * either order of operations.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `xf_index` is not below `fm_workbook_get_cell_xf_count` (no cell
- *           is materialised).
+ *           is changed).
  */
 FM_API fm_status_t fm_sheet_set_cell_xf_index(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
                                               uint32_t xf_index);
@@ -12051,8 +12099,9 @@ FM_API fm_status_t fm_sheet_set_cell_xf_index(fm_workbook_t* wb, size_t sheet_in
  * Resets the cell's `xf_index` to `0` and drops the explicit-assignment
  * mark; the value, formula, phonetic runs and comments are kept. An
  * absent cell is left absent (no-op). A cell holding a value or formula
- * still owns its style, which becomes the default xf; only a blank cell
- * falls back to row / column / default inheritance. Tell an unassigned
+ * still owns its style, which becomes the default xf; a blank cell with its
+ * own format stops existing (it is no longer counted) and falls back to
+ * row / column / default inheritance. Tell an unassigned
  * cell from one assigned the default xf through the `source` of
  * `fm_sheet_get_effective_style`.
  *
@@ -12066,8 +12115,12 @@ FM_API fm_status_t fm_sheet_reset_cell_xf_index(fm_workbook_t* wb, size_t sheet_
 /**
  * @brief Stores `xf_index` on every cell of the rectangle `range`.
  *
- * Cells that do not exist yet are materialised as blanks carrying only the
- * style, which is what makes an empty ruled box render.
+ * Blank cells take the format as their own, which is what makes an empty
+ * ruled box render; cells with content keep it. A rectangle that spans whole
+ * rows or whole columns is written as row or column formats and adds no
+ * cells. Setting the default format (`0`) leaves a blank cell only where it
+ * overrides a row or column format. Writing a large rectangle costs memory in
+ * proportion to its rows, not its cells.
  *
  * Ruling a report means writing one xf across a rectangle; doing that a
  * cell at a time costs one ABI crossing per cell, which dominates the work
@@ -12079,8 +12132,9 @@ FM_API fm_status_t fm_sheet_reset_cell_xf_index(fm_workbook_t* wb, size_t sheet_
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when a corner is out of range;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `xf_index` is not below
  *           `fm_workbook_get_cell_xf_count` (checked before any cell is written);
- *         `FM_STATUS_PRECONDITION_FAILED` (9) when the rectangle exceeds the per-call
- *         cell ceiling.
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the rectangle covers more than
+ *           134,217,728 cells and is not a whole row or column selection (the engine's own
+ *           ceiling, not an Excel limit; `xf_index` is checked first, nothing changes).
  */
 FM_API fm_status_t fm_sheet_set_range_xf_index(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* range,
                                                uint32_t xf_index);

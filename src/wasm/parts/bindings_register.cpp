@@ -102,8 +102,6 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("addCellXf", &JsWorkbook::addXf)
       .function("getBorderCount", &JsWorkbook::borderCount)
       .function("getCalcMode", &JsWorkbook::calcMode)
-      .function("getCellAt", &JsWorkbook::cellAt)
-      .function("getCellCount", &JsWorkbook::cellCount)
       .function("listCellStyles", &JsWorkbook::listCellStyles)
       .function("getCellStyleXfCount", &JsWorkbook::cellStyleXfCount)
       .function("setCellStyleXf", &JsWorkbook::setCellStyleXf)

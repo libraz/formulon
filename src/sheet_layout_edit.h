@@ -36,6 +36,36 @@ struct ColumnSpanOrder {
   }
 };
 
+// Puts loaded column spans in the canonical form every reader of
+// `SheetLayout::columns` assumes: sorted by (first, last) and disjoint. On an
+// overlap the span earlier in that order keeps its columns and the later one
+// is clipped to start after it; a span left empty is dropped. Equal
+// neighbours are not merged.
+inline void normalize_column_spans(SheetLayout& layout) {
+  std::vector<ColumnLayout>& columns = layout.columns;
+  const auto disjoint_ascending = [](const ColumnLayout& lhs, const ColumnLayout& rhs) { return lhs.last < rhs.first; };
+  bool canonical = true;
+  for (std::size_t i = 0; i < columns.size() && canonical; ++i) {
+    canonical = columns[i].first <= columns[i].last && (i == 0U || disjoint_ascending(columns[i - 1U], columns[i]));
+  }
+  if (canonical) {
+    return;
+  }
+  sort_by_index(columns, ColumnSpanOrder{});
+  std::size_t kept = 0;
+  std::uint64_t next_free = 0;
+  for (std::size_t i = 0; i < columns.size(); ++i) {
+    ColumnLayout span = columns[i];
+    if (span.first > span.last || span.last < next_free) {
+      continue;
+    }
+    span.first = static_cast<std::uint32_t>(std::max<std::uint64_t>(span.first, next_free));
+    next_free = static_cast<std::uint64_t>(span.last) + 1U;
+    columns[kept++] = span;
+  }
+  columns.resize(kept);
+}
+
 // Applies one column setter to every intersection with `[first, last]`.
 // Existing entries are split into left residual / updated intersection / right
 // residual, so fields not owned by this setter remain local to the source

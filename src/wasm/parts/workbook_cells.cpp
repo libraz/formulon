@@ -1,7 +1,7 @@
 //
 // JsWorkbook cell-value mutators / readers and iteration accessors:
 // `setNumber` / `setBool` / `setText` / `setBlank` / `setFormula` /
-// `getValue` / `getLambdaText`, plus the `cellCount` / `cellAt` /
+// `getValue` / `getLambdaText`, plus the
 // `definedName*` / `table*` / `passthrough*` / `pivotCount` /
 // `pivotLayout` / `getExternalLink` iteration surface.
 
@@ -234,27 +234,10 @@ emscripten::val JsWorkbook::getLambdaText(uint32_t sheet, uint32_t row, uint32_t
 
 // ---- Iteration / metadata accessors -------------------------------------
 //
-// `cellCount` / `tableCount` / `pivotCount` are now emitted by the
+// `tableCount` / `pivotCount` are now emitted by the
 // binding codegen (see
 // `src/wasm/generated/workbook_counts.cpp` and
 // `src/wasm/generated/sheet_counts.cpp`).
-
-emscripten::val JsWorkbook::cellAt(uint32_t sheet, uint32_t idx) const {
-  uint32_t row = 0;
-  uint32_t col = 0;
-  const char* formula = nullptr;
-  fm_value_t v{};
-  if (!succeeded(handle_ != nullptr ? fm_sheet_get_cell_at(handle_, sheet, idx, &row, &col, &formula, &v)
-                                    : kBindingInvalidHandle)) {
-    return emscripten::val::undefined();
-  }
-  emscripten::val o = emscripten::val::object();
-  o.set("row", row);
-  o.set("col", col);
-  o.set("formula", formula != nullptr ? emscripten::val(std::string(formula)) : emscripten::val::null());
-  o.set("value", value_to_val(v));
-  return o;
-}
 
 namespace {
 

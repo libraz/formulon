@@ -15,7 +15,6 @@
 #include <vector>
 
 #include "cell.h"
-#include "style_region.h"
 #include "utils/a1_ref.h"
 
 namespace formulon {
@@ -47,6 +46,13 @@ struct StyleRun {
 struct StyleSlot {
   std::uint32_t xf = 0;
   bool explicit_xf = false;
+};
+
+/// One `from -> to` pair of a remap; a remap's pairs are sorted by `from`
+/// with no repeats.
+struct XfRemap {
+  std::uint32_t from = 0;
+  std::uint32_t to = 0;
 };
 
 /// An xf mapping in table form (`pairs`, sorted by `from` with no repeats;

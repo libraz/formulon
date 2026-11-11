@@ -4590,10 +4590,9 @@ entries:
     scope: sheet
     noun: cell
     c: fm_sheet_get_cell_count
-    js: getCellCount
-    py: get_cell_count
     reads_values: true
-    surfaces: [c, wasm, native, py]
+    surfaces: [c]
+    exception: "C-only index enumeration of written storage slots; bindings read the same cells as Sheet.listCells / getCellsInRange (content, paged) plus listCellXfIndices (formatted blanks)"
     was: { c: fm_workbook_cell_count, js: cellCount }
     drop: { js: getCellCount, py: get_cell_count, closes: R25.count }
   cell.get_at:
@@ -4601,10 +4600,9 @@ entries:
     scope: sheet
     noun: cell
     c: fm_sheet_get_cell_at
-    js: getCellAt
-    py: get_cell_at
     reads_values: true
-    surfaces: [c, wasm, native, py]
+    surfaces: [c]
+    exception: "C-only index enumeration of written storage slots; bindings read the same cells as Sheet.listCells / getCellsInRange (content, paged) plus listCellXfIndices (formatted blanks)"
     was: { c: fm_workbook_cell_at, js: cellAt }
     drop: { js: getCellAt, py: get_cell_at, closes: R25.count }
   formula.get:
@@ -4647,6 +4645,7 @@ entries:
     noun: cell
     c: fm_cell_range_get_cell_count
     surfaces: [c]
+    exception: "C-only index enumeration of the cells of one paged range result; bindings read the same cells as Sheet.listCells / getCellsInRange (content, paged) plus listCellXfIndices (formatted blanks)"
     was: { c: fm_cell_range_count }
   cell_range.get_cell_at:
     kind: op
@@ -4655,6 +4654,7 @@ entries:
     qualifies: "result-handle view of the cells the sheet scope enumerates"
     c: fm_cell_range_get_cell_at
     surfaces: [c]
+    exception: "C-only index enumeration of the cells of one paged range result; bindings read the same cells as Sheet.listCells / getCellsInRange (content, paged) plus listCellXfIndices (formatted blanks)"
     was: { c: fm_cell_range_at }
   cell_range.next_cursor:
     kind: op

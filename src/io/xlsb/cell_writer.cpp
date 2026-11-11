@@ -266,6 +266,14 @@ void EmitLiteralCellRecord(std::vector<std::uint8_t>& dst, std::vector<std::uint
 
 }  // namespace
 
+void emit_blank(std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scratch, std::uint32_t col,
+                std::uint32_t xf_index) {
+  scratch.clear();
+  // The style index alone: a run column never sets the fPhShow bit.
+  EmitCellHeader(scratch, col, xf_index & 0xFFFFFFU);
+  emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtCellBlank), scratch);
+}
+
 Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scratch, const Cell& cell,
                                 std::uint32_t row, std::uint32_t col, bool always_calculates, SstBuilder& sst,
                                 const std::vector<std::string>& sheet_names, const SheetRangeTable& sheet_ranges,

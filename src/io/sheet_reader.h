@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <deque>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <unordered_map>
 #include <vector>
@@ -115,10 +116,14 @@ Expected<void, Error> RegisterArraySpills(Sheet& sheet, const std::vector<ArrayA
 /// must be `< workbook.sheet_count()`. Returns `kIoSheetCorrupt` on any
 /// malformed cell or on bookkeeping inconsistencies (a slave shared
 /// formula that references an unknown `si` is a hard error). Returns
-/// `kSecurityResourceLimit` once the cumulative storage of the distinct
-/// coordinates the walk would materialise exceeds `max_cell_bytes`
-/// (default `kMaxSheetLoadCellBytes`; tests inject a smaller value, the
-/// same pattern `zip_reader.h`'s `open()` uses for its own budget).
+/// `kSecurityResourceLimit` once the charges of `sheet_load_write_bytes`
+/// and the style runs the walk adds exceed `max_cell_bytes` (default
+/// `kMaxSheetLoadCellBytes`; tests inject a smaller value, the same pattern
+/// `zip_reader.h`'s `open()` uses for its own budget).
+///
+/// A blank, formula-less, non-phonetic `<c>` (with `s="N"`, `s="0"` or no
+/// `s`) becomes a style run of its xf; the caller resolves the explicit
+/// defaults with `Sheet::apply_blank_slot_rule` once the layout is applied.
 ///
 /// `text_storage` is the workbook-lifetime backing-store for
 /// inline-string `Value::text` payloads (a `std::deque<std::string>`
@@ -127,6 +132,25 @@ Expected<void, Error> RegisterArraySpills(Sheet& sheet, const std::vector<ArrayA
 /// resulting deque entry, so the deque must outlive the workbook's use
 /// of the text values. `diagnostics` may be null (tests, and callers
 /// that do not track read diagnostics).
+/// `kMaxSheetLoadCellBytes` charges, shared by the OOXML and XLSB readers: a
+/// new stored cell (the cell and its column key), a new row node, and each
+/// style run a write adds.
+inline constexpr std::uint64_t kSheetLoadCellBytes = sizeof(Cell) + sizeof(std::uint16_t);
+inline constexpr std::uint64_t kSheetLoadRowBytes = 112U;
+inline constexpr std::uint64_t kSheetLoadRunBytes = 16U;
+
+/// Bytes a load write at `(row, col)` of `sheet` adds before it happens: a
+/// row node when the row has none, plus a stored cell when `stores_cell` and
+/// the column holds none. Style runs are charged after the write from what it
+/// added.
+std::uint64_t sheet_load_write_bytes(const Sheet& sheet, std::uint32_t row, std::uint32_t col, bool stores_cell);
+
+/// Charges `bytes` to a sheet's load budget. An exceeded budget returns
+/// `kSecurityResourceLimit` whose context is `context_prefix` followed by
+/// ` row=R col=C` and the budget's own figures.
+Expected<void, Error> charge_sheet_load(ResourceBudget& budget, std::uint64_t bytes, std::string_view context_prefix,
+                                        std::uint32_t row, std::uint32_t col);
+
 Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::size_t sheet_index, Workbook& workbook,
                                       SheetReadContext& ctx, std::deque<std::string>& text_storage,
                                       ReadDiagnostics* diagnostics = nullptr,

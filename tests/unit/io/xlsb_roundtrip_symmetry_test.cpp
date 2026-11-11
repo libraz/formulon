@@ -6,6 +6,7 @@
 #include <cstring>
 #include <iterator>
 #include <limits>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -317,6 +318,52 @@ TEST(XlsbCrossFormatSymmetry, DefinedNamesMatch) {
     EXPECT_EQ(sb[i].hidden, sx[i].hidden) << "index " << i;
     EXPECT_EQ(sb[i].comment, sx[i].comment) << "index " << i;
   }
+}
+
+// Blank formatted cells as style runs read back identically from both
+// formats: a non-zero run crossing a column segment, and explicit defaults
+// kept only under the column format.
+TEST(XlsbCrossFormatSymmetry, BlankStyleRunsMatchAcrossFormats) {
+  Workbook wb = Workbook::create();
+  wb.mutable_styles().cell_xfs.resize(4U);
+  Sheet& sheet = wb.sheet(0);
+  sheet.mutable_layout().columns.push_back(ColumnLayout{});
+  ColumnLayout& column = sheet.mutable_layout().columns.back();
+  column.first = 3U;
+  column.last = 5U;
+  column.has_style = true;
+  column.style_xf = 1U;
+  sheet.set_style_runs(1U, 0U, 1500U, 2U);  // crosses a 1,024-column segment
+  sheet.set_style_runs(2U, 2U, 7U, 0U);     // kept on D:F only
+  sheet.set_cell_value(2U, 0U, Value::number(1.0));
+
+  auto xlsb = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(xlsb)) << xlsb.error().message;
+  auto xlsx = wb.save();
+  ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
+  auto from_xlsb = io::xlsb::read_xlsb(test::span_of(xlsb.value()));
+  ASSERT_TRUE(static_cast<bool>(from_xlsb)) << from_xlsb.error().message;
+  auto from_xlsx = io::read_ooxml(test::span_of(xlsx.value()));
+  ASSERT_TRUE(static_cast<bool>(from_xlsx)) << from_xlsx.error().message;
+  const Sheet& sb = from_xlsb.value().workbook.sheet(0);
+  const Sheet& sx = from_xlsx.value().workbook.sheet(0);
+
+  EXPECT_EQ(sb.cell_count(), 1500U + 3U + 1U);
+  EXPECT_EQ(sx.cell_count(), sb.cell_count());
+  for (std::uint32_t row = 0; row < 4U; ++row) {
+    for (std::uint32_t col = 0; col < 1600U; ++col) {
+      const std::optional<StyleSlot> b = sb.cell_style_at(row, col);
+      const std::optional<StyleSlot> x = sx.cell_style_at(row, col);
+      ASSERT_EQ(b.has_value(), x.has_value()) << "row " << row << " col " << col;
+      if (b.has_value()) {
+        EXPECT_EQ(b->xf, x->xf) << "row " << row << " col " << col;
+      }
+    }
+  }
+  ASSERT_TRUE(sb.cell_style_at(2U, 3U).has_value());
+  EXPECT_EQ(sb.cell_style_at(2U, 3U)->xf, 0U);
+  EXPECT_FALSE(sb.cell_style_at(2U, 2U).has_value());
+  EXPECT_EQ(sb.cell_at(1U, 1200U), nullptr);
 }
 
 }  // namespace

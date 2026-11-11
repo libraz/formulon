@@ -125,6 +125,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/sheet_reader_lexing_parity_test.cpp
   unit/io/sheet_reader_cell_metadata_parity_test.cpp
   unit/io/sheet_reader_test.cpp
+  unit/io/column_span_normalize_test.cpp
   unit/io/sheet_rels_reuse_test.cpp
   unit/io/sst_reader_test.cpp
   unit/io/storage_prefix_container_test.cpp
@@ -191,6 +192,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/writer_layout_test.cpp
   unit/io/xlsb/sheet_view_excel_fixture_test.cpp
   unit/io/xlsb/sheet_fidelity_test.cpp
+  unit/io/xlsb/sheet_budget_test.cpp
   unit/io/sheet_format_pr_roundtrip_test.cpp
   unit/io/xlsb/writer_metadata_test.cpp
   unit/io/xlsb/rich_value_errors_test.cpp

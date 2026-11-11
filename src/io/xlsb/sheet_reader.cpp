@@ -15,6 +15,7 @@
 #include "io/array_anchor_budget.h"
 #include "io/protection_xml.h"
 #include "io/rich_value_errors.h"
+#include "io/sheet_reader.h"
 #include "io/xlsb/cf_records.h"
 #include "io/xlsb/dv_records.h"
 #include "io/xlsb/feature_formula.h"
@@ -49,6 +50,7 @@ namespace xlsb {
 namespace {
 
 using detail::CellHeaderInfo;
+using detail::ChargeLoad;
 using detail::CommitCell;
 using detail::DecodeFormulaText;
 using detail::DecodeLiteralCell;
@@ -370,6 +372,8 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(const XlsbRecord& rec, Xl
         layout.collapsed = (flags & kRowCollapsed) != 0U;
         layout.has_style = has_style;
         layout.style_xf = has_style ? row_style_xf_or.value() : 0U;
+        // Buffered until the record loop ends, so every header is charged.
+        RETURN_IF_ERROR(ChargeLoad(state, sheet_index, sizeof(SheetDecodeState::DecodedRowHeader), 0U));
         state.row_headers.push_back(SheetDecodeState::DecodedRowHeader{
             layout, has_height || layout.hidden || layout.outline_level != 0U || layout.collapsed || has_style});
       }
@@ -410,6 +414,11 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(const XlsbRecord& rec, Xl
       wb.sheet(sheet_index).mutable_layout().columns.push_back(std::move(layout));
       return RecordDisposition::kModelled;
     }
+    case XlsbRecordType::BrtEndColInfos:
+      // Cells decode after this record, so the spans must be canonical before
+      // any of them consults the column formats. The writer regenerates it.
+      normalize_column_spans(wb.sheet(sheet_index).mutable_layout());
+      return RecordDisposition::kRegenerated;
     case XlsbRecordType::BrtMergeCell: {
       // BrtMergeCell ([MS-XLSB] §2.4.713): RfX = first/last row and
       // first/last column, all u32.  Containers are structural only; a
@@ -528,6 +537,9 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(const XlsbRecord& rec, Xl
       const std::string formula_text =
           DecodeFormulaText(rgce, rgcb, in.sheet_names, in.name_table, in.sheet_ranges, in.external_books, sheet_index,
                             state.current_row, col.col, in.undecoded_formula_count, &wb.tables());
+      RETURN_IF_ERROR(ChargeLoad(state, sheet_index,
+                                 sheet_load_write_bytes(wb.sheet(sheet_index), state.current_row, col.col, true),
+                                 col.col));
       if (!formula_text.empty()) {
         // Register the real formula via the workbook-level entry so the
         // dep graph tracks it (matching the OOXML reader). The cached
@@ -664,9 +676,9 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
     const std::vector<PhoneticProperties>& sst_phonetic_props, std::deque<std::string>& text_storage,
     const std::vector<std::string>& sheet_names, const std::vector<XlsbName>& name_table,
     const std::vector<XlsbSheetRange>& sheet_ranges, const XlsbExternalBooks& external_books,
-    std::uint32_t* undecoded_formula_count, const RichErrorSet* rich_errors,
-    std::vector<DeferredSpillAnchor>* deferred) {
-  SheetDecodeState state;
+    std::uint32_t* undecoded_formula_count, const RichErrorSet* rich_errors, std::vector<DeferredSpillAnchor>* deferred,
+    std::uint64_t max_cell_bytes) {
+  SheetDecodeState state(max_cell_bytes);
   const FeatureFormulaReadContext feature_ctx{sheet_names, name_table, sheet_ranges, external_books, sheet_index};
   const SheetDecodeInputs inputs{sst_entries, sst_phonetic, sst_phonetic_props, text_storage,           sheet_names,
                                  name_table,  sheet_ranges, external_books,     undecoded_formula_count};
@@ -714,7 +726,10 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
       state.merges_seen = true;
     }
   }
+  // A stream without BrtEndColInfos still ends with canonical column spans.
+  normalize_column_spans(wb.sheet(sheet_index).mutable_layout());
   ApplyDecodedRowHeaders(wb.sheet(sheet_index), state.row_headers);
+  wb.sheet(sheet_index).apply_blank_slot_rule();
   if (!state.protected_ranges.empty()) {
     write_protected_ranges(wb.sheet(sheet_index).mutable_raw_extensions(), state.protected_ranges);
   }

@@ -296,6 +296,50 @@ describe('the XF remap pair takes cells and a Map', () => {
       expectTypeError(() => ws.ooxml.remapRangeXfs('A1:B2', [0], [1]));
     });
   });
+
+  it('a partial rect up to 134,217,728 cells is formatted; one row more is refused unchanged', () => {
+    withSheet((ws, wb) => {
+      const xf = wb.ooxml.addCellXf({ ...wb.ooxml.getCellXf(0), numFmtId: 2 });
+      ws.ooxml.setRangeXfIndex('A1:Z100000', xf);
+      assert.equal(ws.ooxml.getCellXfIndex('Z100000'), xf);
+      ws.ooxml.setRangeXfIndex('B1:XFD8192', xf);
+      assert.equal(ws.ooxml.getCellXfIndex('XFD8192'), xf);
+      expectCode(() => ws.ooxml.setRangeXfIndex('B1:XFD8193', 0), f.StatusCode.SecurityResourceLimit);
+      expectCode(() => ws.ooxml.remapRangeXfs('B1:XFD8193', new Map([[xf, 0]])), f.StatusCode.SecurityResourceLimit);
+      assert.equal(ws.ooxml.getCellXfIndex('XFD8192'), xf);
+      assert.equal(ws.ooxml.getCellXfIndex('AA8193'), null);
+    });
+  });
+
+  it('a remap target past the XF table is IndexOutOfRange and changes nothing', () => {
+    withSheet((ws, wb) => {
+      const xf = wb.ooxml.addCellXf({ ...wb.ooxml.getCellXf(0), numFmtId: 2 });
+      ws.ooxml.setRangeXfIndex('A1:B2', xf);
+      const past = wb.ooxml.listCellXfs().length;
+      expectCode(() => ws.ooxml.remapRangeXfs('A1:B2', new Map([[xf, past]])), f.StatusCode.IndexOutOfRange);
+      assert.equal(ws.ooxml.getCellXfIndex('A1'), xf);
+      assert.equal(ws.ooxml.getCellXfIndex('B2'), xf);
+    });
+  });
+
+  it('restoreRangeXfs refuses bytes that are not a capture and changes nothing', () => {
+    withSheet((ws, wb) => {
+      const xf = wb.ooxml.addCellXf({ ...wb.ooxml.getCellXf(0), numFmtId: 2 });
+      ws.ooxml.setRangeXfIndex('A1:B2', xf);
+      expectInvalid(() => ws.ooxml.restoreRangeXfs(new Uint8Array([255, 255, 255, 255])));
+      assert.equal(ws.ooxml.getCellXfIndex('A1'), xf);
+    });
+  });
+
+  it('setRangeXfIndex to 0 over a partial rect leaves neither the explicit 0 nor the blank in listCellXfIndices', () => {
+    withSheet((ws, wb) => {
+      const xf = wb.ooxml.addCellXf({ ...wb.ooxml.getCellXf(0), numFmtId: 2 });
+      ws.ooxml.setRangeXfIndex('A1:C3', xf);
+      ws.ooxml.setRangeXfIndex('A1:C3', 0);
+      assert.deepEqual(plain(ws.ooxml.listCellXfIndices()), []);
+      assert.equal(ws.ooxml.getCellXfIndex('B2'), null);
+    });
+  });
 });
 
 describe('listCellXfIndices', () => {

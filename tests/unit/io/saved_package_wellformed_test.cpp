@@ -157,5 +157,10 @@ TEST(SavedPackageWellFormed, StylesAndFormulaFixtures) {
   ExpectSavedPartsParse("storage_prefix_probe.xlsx");
 }
 
+TEST(SavedPackageWellFormed, BlankSlotFixtures) {
+  ExpectSavedPartsParse("blankslot_authored.xlsx");
+  ExpectSavedPartsParse("blankslot_partial_authored.xlsx");
+}
+
 }  // namespace
 }  // namespace formulon

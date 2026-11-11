@@ -1000,6 +1000,8 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
       }
     }
     RETURN_IF_ERROR(ooxml::apply_worksheet_metadata(sheet_doc, i, wb, &diagnostics));
+    // Both axes are final only now, so loaded explicit defaults are resolved here.
+    wb.sheet(i).apply_blank_slot_rule();
 
     RETURN_IF_ERROR(
         ReadSheetRelParts(zip, wb, i, sheet_path, sheet_doc, consumed_parts, extra_passthrough_parts, tables_metadata));

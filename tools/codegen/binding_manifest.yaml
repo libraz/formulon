@@ -17,6 +17,9 @@
 # only) makes the C body bring pending results up to date first. The JS surface (method name on the Workbook
 # class) is identical across embind / N-API; only the C++ identifier
 # casing differs (camelCase for embind, PascalCase for N-API).
+#
+# `c_only: true` emits the C ABI body alone and drops the three JS-facing name
+# fields.
 
 version: 1
 
@@ -64,14 +67,13 @@ functions:
     node_cpp: XfCount
 
   # ----- status + size_t out, with sheet_index arg -----------------------
+  # C ABI only: the JS bindings do not expose cell enumeration.
   - name: fm_sheet_get_cell_count
     area: sheet_counts
     body: status_sizet_out_with_sheet
     accessor: "wb->workbook().sheet(sheet_index).cell_count()"
     reads_values: true
-    js_method: cellCount
-    embind_cpp: cellCount
-    node_cpp: CellCount
+    c_only: true
 
   - name: fm_sheet_get_pivot_count
     area: sheet_counts

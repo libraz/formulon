@@ -12,6 +12,7 @@ from formulon import (
     AutoFilter,
     AutoFilterColumn,
     CellRect,
+    CellXfInput,
     CfCell,
     CfTimePeriodRuleInput,
     Color,
@@ -49,12 +50,24 @@ class CellStyleIndexTests(unittest.TestCase):
             self.assertIsNone(ooxml.get_cell_xf_index(3, 3))
             self.assertIsNone(ooxml.get_cell_xf_index("D4"))
 
-    def test_a_styled_cell_reads_its_index(self) -> None:
+    def test_an_explicit_zero_without_an_axis_format_leaves_nothing(self) -> None:
         with Workbook.create_default() as wb:
             ooxml = wb.sheet(0).ooxml
             ooxml.set_cell_xf_index(0, 0, 0)
+            self.assertIsNone(ooxml.get_cell_xf_index(0, 0))
+            self.assertIsNone(ooxml.get_cell_xf_index("A1"))
+
+    def test_an_explicit_zero_over_a_column_format_reads_zero(self) -> None:
+        with Workbook.create_default() as wb:
+            xf = wb.ooxml.add_cell_xf(
+                CellXfInput(font_index=0, fill_index=0, border_index=0, num_fmt_id=10, wrap_text=None)
+            )
+            ooxml = wb.sheet(0).ooxml
+            ooxml.set_column_xf_index("A", xf)
+            ooxml.set_cell_xf_index(0, 0, 0)
             self.assertEqual(ooxml.get_cell_xf_index(0, 0), 0)
             self.assertEqual(ooxml.get_cell_xf_index("A1"), 0)
+            self.assertIsNone(ooxml.get_cell_xf_index("A2"))
 
 
 class SpillReadTests(unittest.TestCase):

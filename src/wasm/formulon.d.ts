@@ -2077,7 +2077,7 @@ export interface RangeCell {
   readonly kind: ValueKind;
 }
 
-/** One stored cell and its own non-default cell XF, as `SheetOoxml.listCellXfIndices` returns it. */
+/** One cell and its own non-default cell XF, as `SheetOoxml.listCellXfIndices` returns it. */
 export interface XfCell {
   /** The 0-based row. */
   readonly row: number;
@@ -7199,7 +7199,9 @@ export interface Sheet {
   setCellPhoneticProperties(row: number, col: number, properties: PhoneticPropertiesInput | null): void;
   /** `setCellPhoneticProperties` at the A1 address `a1`. */
   setCellPhoneticProperties(a1: string, properties: PhoneticPropertiesInput | null): void;
-  /** Stores a blank literal at the cell; equivalent to clearing it. */
+  /** Stores a blank literal at the cell; equivalent to clearing it. Removes the content and keeps the cell's own
+   *  non-default format, or an explicit default format where it overrides a row or column format. A cell with
+   *  neither stops existing: it is no longer counted or listed and inherits its row or column format. */
   setBlank(row: number, col: number): void;
   /** `setBlank` at the A1 address `a1`. */
   setBlank(a1: string): void;
@@ -7986,9 +7988,9 @@ export interface Sheet {
    *  Every cell of the range takes Excel's Hyperlink cell style: its font
    *  is replaced (Normal font, underlined, theme colour 10) and fill, number format, border, alignment and
    *  protection are kept; blank and merged-away cells are formatted too, and a whole-column range formats the
-   *  column. Text for the top-left cell over 32,767 characters fails with `StatusCode.InvalidArgument`; more than
-   *  1,048,576 formatted cells that are not a whole column or row fail with `StatusCode.PreconditionFailed`. Either
-   *  refusal changes nothing. */
+   *  column. Text for the top-left cell over 32,767 characters fails with `StatusCode.InvalidArgument`; a range over
+   *  134,217,728 cells that is not a whole column or row fails with `StatusCode.SecurityResourceLimit` (the engine's
+   *  own ceiling, not an Excel limit). Either refusal changes nothing. */
   setHyperlink(link: HyperlinkInput): void;
   /** Reads the earliest-added hyperlink whose range contains the cell `(row, col)`; `null` when none does. */
   getHyperlink(row: number, col: number): Hyperlink | null;
@@ -8007,8 +8009,8 @@ export interface Sheet {
   /** Removes every hyperlink whose range intersects `range` (inclusive), each one whole; `StatusCode.NotFound` when
    *  none does. Resets every cell of each removed hyperlink's range to the default format, including cells another
    *  remaining hyperlink still covers; values stay. Formatting added before or after the link is lost. Fails with
-   *  `StatusCode.PreconditionFailed`, nothing removed, when a removed link covers more than 1,048,576 cells and is
-   *  not a whole column or row. */
+   *  `StatusCode.SecurityResourceLimit`, nothing removed, when a removed link covers more than 134,217,728 cells and
+   *  is not a whole column or row; {@link Sheet.removeHyperlinkAt} removes such a link without touching formats. */
   removeHyperlink(range: CellRect | string): void;
   /** Removes the hyperlink at position `hyperlinkIndex` of the list `listHyperlinks()` returns. A position at or
    *  above the count fails with `StatusCode.IndexOutOfRange`. Edits the list only: no cell values or formats are
@@ -8016,8 +8018,9 @@ export interface Sheet {
   removeHyperlinkAt(hyperlinkIndex: number): void;
   /** Drops every hyperlink on the sheet. Resets every cell of each removed hyperlink's range to the default format,
    *  including cells another remaining hyperlink still covers; values stay. Formatting added before or after the
-   *  link is lost. Fails with `StatusCode.PreconditionFailed`, nothing removed, when a removed link covers more than
-   *  1,048,576 cells and is not a whole column or row. */
+   *  link is lost. Fails with `StatusCode.SecurityResourceLimit`, nothing removed, when a removed link covers more than
+   *  134,217,728 cells and is not a whole column or row; {@link Sheet.removeHyperlinkAt} removes such a link without
+   *  touching formats. */
   clearHyperlinks(): void;
   /** Lists the sheet's data-validation rules; a rule's place in this list is its position, its `id` the stable key. */
   listValidations(): readonly DataValidation[];
@@ -8210,7 +8213,8 @@ export interface SheetOoxml {
    *  `StatusCode.InvalidArgument`. */
   getColumnXfIndex(a1: string): number | null;
   /** The cell XF index row `row` makes effective (OOXML `customFormat="1"`, `setRowXfIndex`); `null` when
-   *  the row has none. */
+   *  the row has none. After a save that writes this row as a row format of XF 0, this reports no format until
+   *  the workbook is reloaded, although the saved file records XF 0. */
   getRowXfIndex(row: number): number | null;
   /** `getRowXfIndex` for the A1 row `a1` (`"3"`); a span of several rows fails with `StatusCode.InvalidArgument`. */
   getRowXfIndex(a1: string): number | null;
@@ -8288,12 +8292,14 @@ export interface SheetOoxml {
    */
   getRangeXfBases(range: CellRect | string): readonly number[];
   /**
-   * Lists, row-major (row, then column, ascending), every stored cell inside `range` whose own cell XF is not 0:
+   * Lists, row-major (row, then column, ascending), every cell inside `range` whose own cell XF is not 0:
    * styled blank cells and cells with content alike. A cell explicitly set to XF 0 is not listed, nor is a spill
-   * cell, which has no stored record. An omitted or `null` `range` covers every stored cell of the sheet, so a
-   * formatted cell outside {@link Sheet.getUsedRange} is listed. Complements `Sheet.listCells`, which lists cells
-   * with content only; for flag-only cells see `Sheet.listShowPhoneticCells`. A rectangle outside the grid fails with
-   * `StatusCode.InvalidArgument`.
+   * cell, which has no stored record, nor a blank cell that only inherits a row or column format. An omitted or
+   * `null` `range` covers every cell of the sheet, so a formatted cell outside {@link Sheet.getUsedRange} is listed.
+   * Complements `Sheet.listCells`, which lists cells with content only; for flag-only cells see
+   * `Sheet.listShowPhoneticCells`. A rectangle outside the grid fails with `StatusCode.InvalidArgument`. The result
+   * is as large as the number of formatted cells, which a large range makes area-sized; there is no cell ceiling, so
+   * read a large sheet range by range.
    */
   listCellXfIndices(range?: CellRect | string | null): readonly XfCell[];
   /**
@@ -8307,18 +8313,28 @@ export interface SheetOoxml {
   /**
    * Second step of the attribute patch: every cell of the selection ends at `mapping.get(xf)` where
    * it resolved to the XF `xf` before; an XF not listed is kept. Covered row and column
-   * styles are rewritten and existing cells remapped; a cell is materialised only where
+   * styles are rewritten and existing cells remapped; a blank cell gets its own format only where
    * row-over-column precedence would otherwise resolve differently (for a plain range, every
-   * cell). Values and formulas are untouched. `mapping` must be a `Map` (a plain object throws `TypeError`).
-   * Fails, changing nothing, when a target XF is past the cell-XF table, or more
-   * than 1,048,576 cells would be written.
+   * cell). A range of whole rows or whole columns is written as row or column formats and adds no cells; a blank
+   * cell that ends at the default XF keeps a record only where that overrides a row or column format. Values and
+   * formulas are untouched. `mapping` must be a `Map` (a plain object throws `TypeError`).
+   * Fails with `StatusCode.IndexOutOfRange`, changing nothing, when a target XF is past the cell-XF table (checked
+   * first), and with `StatusCode.SecurityResourceLimit` when the range covers more than 134,217,728 cells and is
+   * not a whole row or column selection (the engine's own ceiling, not an Excel limit).
    */
   remapRangeXfs(range: CellRect | string, mapping: ReadonlyMap<number, number>): void;
-  /** Captures the XF state of a selection (covered column or row XFs and every stored cell's XF) as opaque,
-   *  versioned bytes for `restoreRangeXfs`; use it to undo a `remapRangeXfs`. */
+  /** Captures the XF state of a selection (covered column or row XFs and the XF of every cell with its own format)
+   *  as opaque, versioned bytes for `restoreRangeXfs`; use it to undo a `remapRangeXfs`. Neither call has a cell
+   *  ceiling. */
   snapshotRangeXfs(range: CellRect | string): Uint8Array<ArrayBuffer>;
-  /** Puts a `snapshotRangeXfs` capture back exactly. Values, formulas, phonetic runs and comments are not
-   *  touched; nothing changes when it throws. */
+  /** Puts a `snapshotRangeXfs` capture back; captures of earlier versions are accepted. Captured axis styles and cell
+   *  XFs are restored exactly; a cell of the captured range that was not captured loses its own format. A captured
+   *  default format on a blank cell comes back only where it overrides a row or column format after the restore.
+   *  Values, formulas,
+   *  phonetic runs and comments are not touched. Bytes that are not a valid capture (an unknown version, a row
+   *  outside the captured rectangle or out of order, entries out of order or overlapping, a column outside the
+   *  rectangle, a span whose first column is past its last, a flag or tag with an unknown value, or an XF past the
+   *  cell-XF table) fail with `StatusCode.InvalidArgument`; nothing changes when it throws. */
   restoreRangeXfs(bytes: Uint8Array): void;
   /** The formatting a cell shows: the XF chosen from cell, row, column or the default, with its colours
    *  resolved. Conditional formatting is not applied. */
@@ -8326,28 +8342,34 @@ export interface SheetOoxml {
   /** `getEffectiveStyle` at the A1 address `a1`. */
   getEffectiveStyle(a1: string): EffectiveStyle;
 
-  /** Returns the cell XF index of the cell at `(row, col)`; `null` when no cell is stored at the address. A stored
-   *  cell without a style of its own reads 0. */
+  /** Returns the cell XF index of the cell at `(row, col)`; `null` when the address has neither content nor a format
+   *  of its own (a blank cell that only inherits a row or column format is `null`). A cell with content and no
+   *  style of its own reads 0, and so does a cell with an explicit 0. */
   getCellXfIndex(row: number, col: number): number | null;
   /** `getCellXfIndex` at the A1 address `a1`. */
   getCellXfIndex(a1: string): number | null;
-  /** Persists `xfIndex` on the cell at `(row, col)`. An index not
+  /** Persists `xfIndex` on the cell at `(row, col)`; a cell without content takes it as its own format. Setting 0 on
+   *  a blank cell leaves a cell only where it overrides a row or column format. An index not
    *  below `Workbook.ooxml.listCellXfs().length` fails with `StatusCode.IndexOutOfRange`. */
   setCellXfIndex(row: number, col: number, xfIndex: number): void;
   /** `setCellXfIndex` at the A1 address `a1`. */
   setCellXfIndex(a1: string, xfIndex: number): void;
   /**
    * Resets the cell at `(row, col)` to its inherited XF by removing its direct assignment, so a blank cell
-   * inherits its row / column XF again. Value, formula and comments are kept; an absent cell stays absent. A
-   * non-blank cell keeps owning the default xf. Use `getEffectiveStyle().source` to tell an unassigned cell
-   * (`Row` / `Column` / `Default`) from a direct Normal (`Cell`).
+   * inherits its row / column XF again and stops being counted. Value, formula and comments are kept; an absent
+   * cell stays absent. A non-blank cell keeps owning the default xf. Use `getEffectiveStyle().source` to tell an
+   * unassigned cell (`Row` / `Column` / `Default`) from a direct Normal (`Cell`).
    */
   resetCellXfIndex(row: number, col: number): void;
   /** `resetCellXfIndex` at the A1 address `a1`. */
   resetCellXfIndex(a1: string): void;
-  /** Applies `xfIndex` across the cells of `range`, materialising blank
-   *  cells so an empty ruled box renders. Saves one call per cell. An
-   *  index not below `Workbook.ooxml.listCellXfs().length` fails with `StatusCode.IndexOutOfRange`. */
+  /** Applies `xfIndex` across the cells of `range`; blank cells take it as their own format so an empty ruled box
+   *  renders, and cells with content keep their content. Whole rows or whole columns are written as row or column
+   *  formats and add no cells. Setting 0 leaves a blank cell only where it overrides a row or column format. Saves
+   *  one call per cell. An index not below `Workbook.ooxml.listCellXfs().length` fails with
+   *  `StatusCode.IndexOutOfRange` (checked first); a range over 134,217,728 cells that is not a whole row or column
+   *  selection fails with `StatusCode.SecurityResourceLimit` (the engine's own ceiling, not an Excel limit), changing
+   *  nothing. */
   setRangeXfIndex(range: CellRect | string, xfIndex: number): void;
 }
 

@@ -11,6 +11,7 @@
 #include <utility>
 #include <vector>
 
+#include "io/sheet_reader.h"
 #include "io/xlsb/ptg_reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_ids.h"
@@ -127,6 +128,14 @@ Expected<CellHeaderInfo, Error> ReadCellHeader(ByteSpan& cursor) {
 
 namespace {
 
+/// `xf_index` within the workbook's cellXfs, else the default xf: an index
+/// past the table names no style (the .xlsx reader's rule for `s=`). Without
+/// a styles part there is no table and the index is kept.
+std::uint32_t ClampCellXf(const Workbook& wb, std::uint32_t xf_index) {
+  const std::size_t count = wb.styles().cell_xfs.size();
+  return count != 0U && xf_index >= count ? 0U : xf_index;
+}
+
 /// Stores `xf_index` on `(sheet_index, row, col)` when it differs from
 /// the default xf (`0`); a value record's default style is implicit.
 Expected<void, Error> ApplyXfIndex(Workbook& wb, std::size_t sheet_index, std::uint32_t row, std::uint32_t col,
@@ -142,15 +151,29 @@ namespace detail {
 
 /// Stores the cell's xf and counts it as decoded. Value records skip the
 /// default xf (`0`); blank and formula records store it explicitly.
+Expected<void, Error> ChargeLoad(SheetDecodeState& state, std::size_t sheet_index, std::uint64_t bytes,
+                                 std::uint32_t col) {
+  if (!state.load_budget.would_exceed(bytes)) {
+    return state.load_budget.consume(bytes);
+  }
+  std::string prefix(kReadXlsbContext);
+  prefix.append(" sheet_index=");
+  prefix.append(std::to_string(sheet_index));
+  return charge_sheet_load(state.load_budget, bytes, prefix, state.current_row, col);
+}
+
 Expected<void, Error> CommitCell(Workbook& wb, std::size_t sheet_index, SheetDecodeState& state,
                                  const CellHeaderInfo& header, bool explicit_xf) {
-  if (explicit_xf) {
-    RETURN_IF_ERROR(wb.set_cell_xf_index(sheet_index, state.current_row, header.col, header.xf_index));
-  } else {
-    RETURN_IF_ERROR(ApplyXfIndex(wb, sheet_index, state.current_row, header.col, header.xf_index));
-  }
+  // The phonetic flag first, so a phonetic blank is a stored cell before it
+  // takes its xf.
   if (header.show_phonetic) {
     wb.sheet(sheet_index).set_cell_show_phonetic(state.current_row, header.col, true);
+  }
+  const std::uint32_t xf_index = ClampCellXf(wb, header.xf_index);
+  if (explicit_xf) {
+    RETURN_IF_ERROR(wb.set_cell_xf_index(sheet_index, state.current_row, header.col, xf_index));
+  } else {
+    RETURN_IF_ERROR(ApplyXfIndex(wb, sheet_index, state.current_row, header.col, xf_index));
   }
   ++state.cells_decoded;
   return Expected<void, Error>::Ok();
@@ -252,7 +275,25 @@ Expected<RecordDisposition, Error> DecodeLiteralCell(const XlsbRecord& rec, Xlsb
       break;
   }
   Sheet& sheet = wb.sheet(sheet_index);
-  sheet.set_cell_cached_value_borrowed(state.current_row, col.col, std::move(value));
+  const bool blank_record = type == XlsbRecordType::BrtCellBlank;
+  if (blank_record && !col.show_phonetic && !sheet.has_cell(state.current_row, col.col)) {
+    // A blank formatted coordinate is a style run of its xf, 0 included; the
+    // explicit-default rule runs once the layout is applied.
+    RETURN_IF_ERROR(
+        ChargeLoad(state, sheet_index, sheet_load_write_bytes(sheet, state.current_row, col.col, false), col.col));
+    const std::size_t added = sheet.load_style_run(state.current_row, col.col, ClampCellXf(wb, col.xf_index));
+    RETURN_IF_ERROR(ChargeLoad(state, sheet_index, added * kSheetLoadRunBytes, col.col));
+    ++state.cells_decoded;
+    return RecordDisposition::kModelled;
+  }
+  RETURN_IF_ERROR(ChargeLoad(
+      state, sheet_index,
+      sheet_load_write_bytes(sheet, state.current_row, col.col, !value.is_blank() || col.show_phonetic), col.col));
+  // A blank record onto a stored cell replaces its content; onto an absent
+  // phonetic coordinate there is nothing to clear.
+  if (!blank_record || sheet.has_cell(state.current_row, col.col)) {
+    sheet.set_cell_cached_value_borrowed(state.current_row, col.col, std::move(value));
+  }
   // Attached after the value, mirroring the OOXML reader: every
   // value-mutating setter clears the annotation, so the order is
   // load-bearing. Skipped when the entry carries no guide so an

@@ -22,6 +22,7 @@
 #include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/resource_budget.h"
 
 namespace formulon {
 
@@ -43,6 +44,13 @@ struct SheetDecodeState {
     bool has_override = false;
   };
 
+  /// `max_cell_bytes` is the per-sheet load ceiling `load_budget` enforces.
+  explicit SheetDecodeState(std::uint64_t max_cell_bytes = kMaxSheetLoadCellBytes) : load_budget(max_cell_bytes) {}
+
+  /// Per-sheet load ceiling, charged like the OOXML reader's
+  /// (`io::sheet_load_write_bytes`): new cells, new row nodes, the style runs
+  /// blank cells add, and each buffered row header.
+  ResourceBudget load_budget;
   std::uint32_t current_row = 0;
   bool row_seen = false;
   std::uint32_t cells_decoded = 0;
@@ -105,7 +113,9 @@ struct SheetDecodeState {
 /// `sst_entries`; out-of-range indices are returned as
 /// `kIoXlsbCorrupt`. A non-null `rich_errors` restores the sheet's rich errors
 /// before its spill regions are registered; a constant saved with a spill
-/// value is appended to `*deferred` for the pivot hook.
+/// value is appended to `*deferred` for the pivot hook. Returns
+/// `kSecurityResourceLimit` once the sheet's load charges exceed
+/// `max_cell_bytes` (tests inject a smaller value).
 Expected<SheetDecodeState, Error> DecodeSheetBin(
     const std::vector<std::uint8_t>& body, std::size_t sheet_index, Workbook& wb,
     const std::vector<std::string_view>& sst_entries, const std::vector<std::vector<PhoneticRun>>& sst_phonetic,
@@ -113,7 +123,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
     const std::vector<std::string>& sheet_names, const std::vector<XlsbName>& name_table,
     const std::vector<XlsbSheetRange>& sheet_ranges, const XlsbExternalBooks& external_books,
     std::uint32_t* undecoded_formula_count, const RichErrorSet* rich_errors = nullptr,
-    std::vector<DeferredSpillAnchor>* deferred = nullptr);
+    std::vector<DeferredSpillAnchor>* deferred = nullptr, std::uint64_t max_cell_bytes = kMaxSheetLoadCellBytes);
 
 /// True for a worksheet-tail record the grammar places after the hyperlinks
 /// (print setup through the LISTPARTS block).

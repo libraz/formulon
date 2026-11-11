@@ -218,10 +218,8 @@ TEST(SaxSharedFormula, ManyRealCellsRejectedOverCellBudget) {
   EXPECT_EQ(rs.error().code, FormulonErrorCode::kSecurityResourceLimit);
 }
 
-// Mirrors `SheetReader.TrulyEmptySparseCellsDoNotConsumeTheCellBudget`:
-// a bare `<c>` with no value, style, or formula never materialises a
-// `Cell`, so it must not be charged either.
-TEST(SaxSharedFormula, TrulyEmptySparseCellsDoNotConsumeTheCellBudget) {
+// Mirrors `SheetReader.BareCellsFitTheBudgetAndLeaveNothingWithoutAnAxisFormat`.
+TEST(SaxSharedFormula, BareCellsFitTheBudgetAndLeaveNothingWithoutAnAxisFormat) {
   constexpr std::string_view kXml =
       "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n"
       "<sheetData>\n"
@@ -233,7 +231,9 @@ TEST(SaxSharedFormula, TrulyEmptySparseCellsDoNotConsumeTheCellBudget) {
   auto rs =
       read_sheet_data_sax(SpanOf(kXml), 0U, wb, ctx, text_storage, /*diagnostics=*/nullptr, /*max_cell_bytes=*/1000U);
   ASSERT_TRUE(static_cast<bool>(rs)) << (rs ? "" : rs.error().message);
+  wb.sheet(0).apply_blank_slot_rule();
   EXPECT_EQ(wb.sheet(0).cell_count(), 0U);
+  EXPECT_TRUE(wb.sheet(0).rows().empty());
 }
 
 TEST(SaxSharedFormula, UnknownSharedSiIsRejected) {

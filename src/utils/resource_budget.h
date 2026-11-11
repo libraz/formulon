@@ -106,14 +106,14 @@ inline constexpr std::size_t kMaxPrintFragmentBytes = 4096U;
 inline constexpr std::size_t kMaxSheetPrFragmentBytes = 8192U;
 inline constexpr std::size_t kMaxHeaderFooterFragmentBytes = 65536U;
 
-/// Ceiling on the cells one range-wide style application may touch.
+/// Ceiling on the area of one partial-rect range style application.
 ///
-/// `fm_sheet_set_range_xf_index` materialises a blank cell for every
-/// address in the rectangle, so `A1:XFD1048576` would allocate the entire
-/// grid from a four-argument call. 2^20 cells is a 1024-column by
-/// 1024-row block - far past any report layout - and bounds the allocation
-/// a single call can request.
-inline constexpr std::uint64_t kMaxStyledRangeCells = 1048576U;  // 2^20
+/// Blank cells take the format as style runs, so memory follows rows, not
+/// area; the bound is on what follows: a save writes one cell record per
+/// formatted blank (about 23 B each, 2.9 GB of sheet XML at this size) and
+/// area-sized reads list one entry per coordinate. Whole-column and whole-row
+/// rects become axis formats and are exempt; file readers are never checked.
+inline constexpr std::uint64_t kMaxStyledRangeCells = 134217728U;  // 2^27
 
 /// Ceiling on the result cells of one What-If data table.
 ///
@@ -164,9 +164,10 @@ inline constexpr std::size_t kMaxEvalArenaBytes = 1024U * 1024U * 1024U;  // 1 G
 /// crafted formula string cannot turn a load into an allocation loop.
 inline constexpr std::size_t kMaxLoadArenaBytes = 64U * 1024U * 1024U;  // 64 MiB
 
-/// Per-sheet ceiling on real cells for the OOXML reader (XLSB is not charged):
-/// each new coordinate costs `sizeof(Cell) + sizeof(std::uint16_t)` (90 B),
-/// so the cap admits about 2.98M cells.
+/// Per-sheet load ceiling, charged the same way by the OOXML and XLSB readers:
+/// a new cell with content costs `sizeof(Cell) + sizeof(std::uint16_t)`
+/// (90 B, about 2.98M cells), a new row node 112 B, and each style run a
+/// write adds 16 B.
 /// Reuses `zip_reader.h`'s `kMaxTotalExtractedBytes` archive-layer cap.
 inline constexpr std::uint64_t kMaxSheetLoadCellBytes = 256ULL * 1024ULL * 1024ULL;  // 256 MiB
 

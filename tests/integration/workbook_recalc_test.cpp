@@ -7,6 +7,7 @@
 // to exercise the full pipeline.
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -334,9 +335,11 @@ TEST(WorkbookRecalc, FormattingLiveSpillPhantomPreservesDynamicArray) {
   // B1 is a live spill phantom. Applying an xf is metadata-only and must
   // retain its value and the complete spill region.
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_xf_index(0U, 0U, 1U, 7U)));
-  const Cell* b1 = wb.sheet(0).cell_at(0U, 1U);
-  ASSERT_NE(b1, nullptr);
-  EXPECT_EQ(b1->xf_index, 7U);
+  // The phantom has no stored content, so its format is a style run.
+  const std::optional<StyleSlot> b1 = wb.sheet(0).cell_style_at(0U, 1U);
+  ASSERT_TRUE(b1.has_value());
+  EXPECT_EQ(b1->xf, 7U);
+  EXPECT_NE(wb.sheet(0).spill_region_at_anchor(0U, 0U), nullptr);
 
   const Value a1 = wb.sheet(0).resolve_cell_value(0U, 0U);
   const Value spill_b1 = wb.sheet(0).resolve_cell_value(0U, 1U);

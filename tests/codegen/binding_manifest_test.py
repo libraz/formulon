@@ -11,7 +11,8 @@ Additionally exercises three invariants on the manifest itself:
   - `js_method` is unique across the manifest (collisions would surface
     as embind / N-API registration errors at compile time, but failing
     here is far more helpful).
-  - Each entry covers all three bindings (no partial migrations).
+  - Each entry covers all three bindings (no partial migrations) unless it
+    is `c_only`, which emits the C ABI body alone.
 
 Run directly:
     python3 -m unittest tests.codegen.binding_manifest_test
@@ -52,6 +53,10 @@ REQUIRED_FIELDS = (
     "area",
     "body",
     "accessor",
+)
+
+# Required unless the entry is `c_only`; mirrors gen_bindings.py::BINDING_FIELDS.
+BINDING_FIELDS = (
     "js_method",
     "embind_cpp",
     "node_cpp",
@@ -84,7 +89,8 @@ class BindingManifestTest(unittest.TestCase):
 
     def test_manifest_has_required_fields(self) -> None:
         for i, e in enumerate(self.entries):
-            for field in REQUIRED_FIELDS:
+            fields = REQUIRED_FIELDS if e.get("c_only", False) else REQUIRED_FIELDS + BINDING_FIELDS
+            for field in fields:
                 with self.subTest(entry=i, field=field):
                     self.assertIn(field, e, f"entry {i} missing field `{field}`")
 
@@ -96,10 +102,25 @@ class BindingManifestTest(unittest.TestCase):
     def test_js_methods_are_unique(self) -> None:
         seen: dict[str, str] = {}
         for e in self.entries:
+            if e.get("c_only", False):
+                continue
             js = e["js_method"]
             if js in seen:
                 self.fail(f"duplicate js_method `{js}` for {seen[js]} vs {e['name']}")
             seen[js] = e["name"]
+
+    def test_c_only_entries_emit_no_js_glue(self) -> None:
+        for e in self.entries:
+            if not e.get("c_only", False):
+                continue
+            area = e["area"]
+            with self.subTest(name=e["name"]):
+                self.assertIn(e["name"], (REPO_ROOT / "src" / "c_api" / "generated" / f"{area}.cpp").read_text())
+                for path in (
+                    REPO_ROOT / "src" / "wasm" / "generated" / f"{area}.cpp",
+                    REPO_ROOT / "src" / "node_addon" / "generated" / f"{area}.cc",
+                ):
+                    self.assertNotIn(e["name"], path.read_text(), f"{path} binds a c_only entry")
 
     def test_c_abi_names_are_unique(self) -> None:
         seen = set()

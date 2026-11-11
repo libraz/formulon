@@ -188,7 +188,7 @@ export function registerSheetPivot(Module, test) {
     }
   });
 
-  test('cellCount + cellAt iterate populated cells in order', () => {
+  test('getCellsInRange lists populated cells in order', () => {
     const wb = Module.Workbook.createDefault();
     try {
       wb.setNumber(0, 0, 0, 1);
@@ -196,15 +196,14 @@ export function registerSheetPivot(Module, test) {
       wb.setFormula(0, 1, 0, '=A1+B1');
       wb.recalc();
 
-      const count = wb.getCellCount(0);
-      assert.ok(count >= 3, `expected >=3 cells, got ${count}`);
+      const { cells } = wb.getCellsInRange(0, { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 });
+      assert.ok(cells.length >= 3, `expected >=3 cells, got ${cells.length}`);
 
-      // The very first iteration entry should be A1 (row=0, col=0).
-      const c0 = wb.getCellAt(0, 0);
+      // The very first entry should be A1 (row=0, col=0).
+      const c0 = cells[0];
       assert.equal(c0.row, 0);
       assert.equal(c0.col, 0);
       assert.equal(c0.formula, null);
-      assert.equal(c0.value.kind, VAL.NUMBER);
       assert.equal(c0.value.number, 1);
     } finally {
       wb.delete();
@@ -214,7 +213,10 @@ export function registerSheetPivot(Module, test) {
   test('failed entry lookups throw', () => {
     const wb = Module.Workbook.createDefault();
     try {
-      expectFailure(() => wb.getCellAt(99, 0), StatusCode.SheetIndexOutOfRange);
+      expectFailure(
+        () => wb.getCellsInRange(99, { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }),
+        StatusCode.SheetIndexOutOfRange,
+      );
       expectFailure(() => wb.getTable(0, 0), StatusCode.IndexOutOfRange);
       expectFailure(() => wb.getTable(9, 0), StatusCode.SheetIndexOutOfRange);
     } finally {

@@ -561,6 +561,10 @@ const char* insert_pushes_content_off(const Sheet& sheet, const StylesTable& sty
       }
       formatted = formatted || xf_is_visible(styles, entry.cell.xf_index);
     }
+    const auto [run_lo, run_hi] = cells.runs_in(lost.first_col, lost.last_col + 1ULL);
+    for (const StyleRun* run = run_lo; run != run_hi; ++run) {
+      formatted = formatted || xf_is_visible(styles, run->xf);
+    }
   }
   for (const CellComment& comment : sheet.comments()) {
     if (in_lost(comment.row, comment.col)) {

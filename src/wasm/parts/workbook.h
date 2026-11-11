@@ -224,9 +224,6 @@ class JsWorkbook {
 
   // ---- Iteration / metadata accessors ------------------------------------
 
-  double cellCount(uint32_t sheet) const;
-  emscripten::val cellAt(uint32_t sheet, uint32_t idx) const;
-
   emscripten::val listDefinedNames() const;
   emscripten::val getDefinedName(const std::string& name, int32_t localSheetId) const;
   void removeDefinedName(const std::string& name, int32_t localSheetId);

@@ -521,7 +521,9 @@ TEST(OoxmlDataTable, AddAndRemoveBuildTheTableStructure) {
 
   ASSERT_TRUE(static_cast<bool>(wb.remove_data_table(0, 3, 1)));
   EXPECT_TRUE(wb.sheet(0).data_tables().empty());
-  EXPECT_TRUE(wb.sheet(0).cell_at(2, 1)->cached_value.is_blank());
+  // The blanked result cells carried no format, so nothing is left there.
+  EXPECT_EQ(wb.sheet(0).cell_at(2, 1), nullptr);
+  EXPECT_TRUE(wb.sheet(0).resolve_cell_value(2, 1).is_blank());
   EXPECT_TRUE(static_cast<bool>(wb.set_cell_value(0, 3, 1, Value::number(1.0))));
   EXPECT_EQ(wb.remove_data_table(0, 3, 1).error().code, FormulonErrorCode::kDataTableInvalid);
 }

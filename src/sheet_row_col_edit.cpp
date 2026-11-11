@@ -767,56 +767,62 @@ void Sheet::inherit_inserted_formatting_locked(const StructuralEdit& edit) {
   const std::uint32_t source = edit.index - 1U;
   const std::uint32_t end =
       static_cast<std::uint32_t>(std::min<std::uint64_t>(static_cast<std::uint64_t>(edit.index) + edit.count, bound));
-  const auto owns_xf = [](const Cell& cell) { return cell.has_explicit_xf || cell.xf_index != 0U; };
+  // The inserted coordinates are vacant, so each takes its neighbour's own
+  // format as a style run.
+  const auto owns_xf = [](const StyleSlot& slot) { return slot.explicit_xf || slot.xf != 0U; };
+  struct Piece {
+    std::uint32_t first;
+    std::uint64_t end;
+    std::uint32_t xf;
+  };
+  // The own-format pieces of row `source` inside `[first, stop)`.
+  const auto source_row_pieces = [&](std::uint32_t first, std::uint64_t stop) {
+    std::vector<Piece> pieces;
+    const auto it = rows_.find(source);
+    if (it == rows_.end()) {
+      return pieces;
+    }
+    for (const RowCells::Entry entry : it->second.entries_in(first, stop)) {
+      if (owns_xf(StyleSlot{entry.cell.xf_index, entry.cell.has_explicit_xf})) {
+        pieces.push_back({entry.col, static_cast<std::uint64_t>(entry.col) + 1U, entry.cell.xf_index});
+      }
+    }
+    const auto [lo, hi] = it->second.runs_in(first, stop);
+    for (const StyleRun* run = lo; run != hi; ++run) {
+      pieces.push_back({std::max<std::uint32_t>(run->first, first),
+                        std::min<std::uint64_t>(static_cast<std::uint64_t>(run->last) + 1U, stop), run->xf});
+    }
+    return pieces;
+  };
+  // (row, xf) of every row in `[first_row, last_row]` whose column `source` owns a format.
+  const auto source_col_styles = [&](std::uint32_t first_row, std::uint32_t last_row) {
+    std::vector<std::pair<std::uint32_t, std::uint32_t>> styled;
+    for (const auto& kv : rows_) {
+      if (kv.first < first_row || kv.first > last_row) {
+        continue;
+      }
+      if (const std::optional<StyleSlot> slot = kv.second.find_style(source); slot && owns_xf(*slot)) {
+        styled.emplace_back(kv.first, slot->xf);
+      }
+    }
+    return styled;
+  };
   if (edit.band.has_value()) {
     // Insert Cells: each inserted cell takes the XF of the cell above (row
     // axis) or to the left; the row and column styles stay where they are.
-    const auto give = [&](Cell& to, std::uint32_t xf_index) {
-      to.xf_index = xf_index;
-      to.has_explicit_xf = true;
-    };
     if (edit.row_axis) {
-      const auto it = rows_.find(source);
-      if (it == rows_.end()) {
-        return;
-      }
-      std::vector<std::pair<std::uint32_t, std::uint32_t>> styled;  // (col, xf)
-      for (const RowCells::Entry entry :
-           it->second.entries_in(edit.band->first, static_cast<std::uint64_t>(edit.band->last) + 1U)) {
-        if (owns_xf(entry.cell)) {
-          styled.emplace_back(entry.col, entry.cell.xf_index);
-        }
-      }
-      for (const auto& [col, xf_index] : styled) {
+      for (const Piece& piece : source_row_pieces(edit.band->first, static_cast<std::uint64_t>(edit.band->last) + 1U)) {
         for (std::uint32_t row = edit.index; row < end; ++row) {
-          give(rows_[row].ensure(col), xf_index);
+          apply_style_runs_locked(row, piece.first, piece.end, constant_xf_map(piece.xf));
         }
       }
       return;
     }
-    for (auto& kv : rows_) {
-      if (kv.first < edit.band->first || kv.first > edit.band->last) {
-        continue;
-      }
-      const Cell* from = kv.second.find(source);
-      if (from == nullptr || !owns_xf(*from)) {
-        continue;
-      }
-      const std::uint32_t xf_index = from->xf_index;
-      for (std::uint32_t col = edit.index; col < end; ++col) {
-        give(kv.second.ensure(col), xf_index);
-      }
+    for (const auto& [row, xf_index] : source_col_styles(edit.band->first, edit.band->last)) {
+      apply_style_runs_locked(row, edit.index, end, constant_xf_map(xf_index));
     }
     return;
   }
-  // Gives the cell `cell_at(i)` the style of the source for every i in the inserted band.
-  const auto copy_xf = [&](std::uint32_t xf_index, auto&& cell_at) {
-    for (std::uint32_t i = edit.index; i < end; ++i) {
-      Cell& to = cell_at(i);
-      to.xf_index = xf_index;
-      to.has_explicit_xf = true;
-    }
-  };
   if (edit.row_axis) {
     // Style and an explicit height carry over; hidden state and outline level do not.
     // Copied by value: inserting overrides below invalidates pointers into the list.
@@ -837,16 +843,10 @@ void Sheet::inherit_inserted_formatting_locked(const StructuralEdit& edit) {
         insert_row_override(layout_, entry);
       }
     }
-    const auto it = rows_.find(source);
-    if (it == rows_.end()) {
-      return;
-    }
-    for (const auto& [col, cell] : it->second) {
-      if (!owns_xf(cell)) {
-        continue;
+    for (const Piece& piece : source_row_pieces(0U, kMaxCols)) {
+      for (std::uint32_t row = edit.index; row < end; ++row) {
+        apply_style_runs_locked(row, piece.first, piece.end, constant_xf_map(piece.xf));
       }
-      const std::uint32_t source_col = col;
-      copy_xf(cell.xf_index, [&](std::uint32_t row) -> Cell& { return rows_[row].ensure(source_col); });
     }
     return;
   }
@@ -864,12 +864,8 @@ void Sheet::inherit_inserted_formatting_locked(const StructuralEdit& edit) {
     entry.width = span->width;
     layout_.columns.insert(span + 1, entry);
   }
-  for (auto& kv : rows_) {
-    const Cell* from = kv.second.find(source);
-    if (from == nullptr || !owns_xf(*from)) {
-      continue;
-    }
-    copy_xf(from->xf_index, [&](std::uint32_t col) -> Cell& { return kv.second.ensure(col); });
+  for (const auto& [row, xf_index] : source_col_styles(0U, kMaxRows - 1U)) {
+    apply_style_runs_locked(row, edit.index, end, constant_xf_map(xf_index));
   }
 }
 
@@ -945,7 +941,7 @@ void Sheet::edit_cells_in_band(const StructuralEdit& edit) {
     for (std::uint32_t line = band.first; line <= band.last; ++line) {
       const std::uint32_t row = edit.row_axis ? from : line;
       const std::uint32_t col = edit.row_axis ? line : from;
-      if (const Cell* cell = cell_at_locked(row, col); cell != nullptr && cell_owns_style(*cell)) {
+      if (cell_style_at_locked(row, col).has_value()) {
         continue;
       }
       const std::uint32_t shown = select_axis_xf(layout_, row, col).xf_index;
@@ -974,7 +970,7 @@ void Sheet::edit_cells_in_band(const StructuralEdit& edit) {
     const std::uint64_t delete_end = static_cast<std::uint64_t>(edit.index) + edit.count;
     const auto move = [&](std::uint32_t from, std::uint64_t to, bool drop) {
       const auto it = rows_.find(from);
-      if (it == rows_.end() || it->second.count_in(band.first, band_end) == 0U) {
+      if (it == rows_.end() || !it->second.any_in(band.first, band_end)) {
         return;
       }
       RowCells& source = it->second;
@@ -996,9 +992,9 @@ void Sheet::edit_cells_in_band(const StructuralEdit& edit) {
     }
   }
   for (const auto& [line, xf_index] : edge_xfs) {
-    Cell& cell = edit.row_axis ? rows_[edge].ensure(line) : rows_[line].ensure(edge);
-    cell.xf_index = xf_index;
-    cell.has_explicit_xf = true;
+    const std::uint32_t row = edit.row_axis ? edge : line;
+    const std::uint32_t col = edit.row_axis ? line : edge;
+    apply_style_runs_locked(row, col, static_cast<std::uint64_t>(col) + 1U, constant_xf_map(xf_index));
   }
   finalize_structural_edit_locked(edit);
 }

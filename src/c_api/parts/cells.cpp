@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
@@ -33,7 +34,6 @@
 #include "utils/double_format.h"
 #include "utils/error.h"
 #include "utils/formula_text.h"
-#include "utils/index_sort.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -725,10 +725,10 @@ extern "C" fm_status_t fm_sheet_get_lambda_text(const fm_workbook_t* wb, size_t 
 // Iteration / dump
 // ---------------------------------------------------------------------------
 //
-// Sheets are stored row-sparse (`unordered_map<row, RowCells>`); we
-// surface a flat enumeration to bindings by materialising a sorted
-// `(row, col)` index on demand. The cache is purely an optimisation;
-// correctness does not depend on it.
+// Sheets are stored row-sparse (`unordered_map<row, RowCells>`); bindings
+// see a flat enumeration indexed through per-row running counts, so an
+// area-sized run of formatted blanks costs one entry per row. The cache is
+// purely an optimisation; correctness does not depend on it.
 
 namespace {
 
@@ -744,40 +744,11 @@ std::optional<formulon::Workbook::ArrayFormulaInfo> array_member(const formulon:
   return info;
 }
 
-// Returns the `(row, col)` indices of every written coordinate on `sheet`,
-// sorted by `(row, col)` ascending. Cleared cells keep their slot and stay
-// listed (the CLI filters blanks at render time); unwritten columns are not
-// enumerated. This matches `Sheet::cell_count`.
-std::vector<std::pair<std::uint32_t, std::uint32_t>> collect_cell_addresses(const formulon::Sheet& sheet) {
-  std::vector<std::pair<std::uint32_t, std::uint32_t>> out;
-  for (const auto& [row, cells] : sheet.rows()) {
-    for (const auto& [col, cell] : cells) {
-      (void)cell;
-      out.emplace_back(row, col);
-    }
-  }
-  // Dynamic-array spill phantoms carry an effective value through
-  // `resolve_cell_value` but live only in the spill table, absent from
-  // `rows()`. Merge them so the flat enumeration surfaces spilled cells, then
-  // sort + unique: a phantom that coincides with a stored slot must appear
-  // only once.
-  //
-  // Streamed rather than collected first: a phantom set is a spill
-  // rectangle's whole area, so `=SEQUENCE(1048576)` would otherwise build an
-  // eight-megabyte vector only to append it to this one.
-  sheet.for_each_spill_phantom(
-      [](formulon::CellAddress address, void* ctx) {
-        static_cast<std::vector<std::pair<std::uint32_t, std::uint32_t>>*>(ctx)->emplace_back(address.row, address.col);
-      },
-      &out);
-  formulon::sort_by_index(out, [](const std::pair<std::uint32_t, std::uint32_t>& lhs,
-                                  const std::pair<std::uint32_t, std::uint32_t>& rhs) { return lhs < rhs; });
-  out.erase(std::unique(out.begin(), out.end()), out.end());
-  return out;
-}
-
-const std::vector<std::pair<std::uint32_t, std::uint32_t>>& cached_cell_addresses(const fm_workbook_t* wb,
-                                                                                  std::size_t sheet_index) {
+// The per-row running counts of every enumerated coordinate on `sheet`: stored
+// cells, style-run columns (formatted blanks) and spill phantoms, rows
+// ascending. A cleared unformatted cell is gone and not listed; unwritten
+// columns are not enumerated. This matches `Sheet::cell_count`.
+const std::vector<formulon::Sheet::EnumerationRow>& cached_cell_rows(const fm_workbook_t* wb, std::size_t sheet_index) {
   const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
   const std::uint64_t revision = sheet.cell_enumeration_revision();
   auto& caches = wb->cell_enumeration_cache;
@@ -791,22 +762,22 @@ const std::vector<std::pair<std::uint32_t, std::uint32_t>>& cached_cell_addresse
       continue;
     }
     if (cache.revision != revision) {
-      cache.addresses = collect_cell_addresses(sheet);
+      cache.rows = sheet.cell_enumeration_rows();
       cache.revision = revision;
     }
     if (i != 0U) {
       std::swap(caches[0], cache);
     }
-    return caches[0].addresses;
+    return caches[0].rows;
   }
 
   // Collect before evicting the least-recently-used entry.
-  std::vector<std::pair<std::uint32_t, std::uint32_t>> addresses = collect_cell_addresses(sheet);
+  std::vector<formulon::Sheet::EnumerationRow> rows = sheet.cell_enumeration_rows();
   caches[1] = std::move(caches[0]);
-  caches[0].addresses = std::move(addresses);
+  caches[0].rows = std::move(rows);
   caches[0].sheet_index = sheet_index;
   caches[0].revision = revision;
-  return caches[0].addresses;
+  return caches[0].rows;
 }
 
 }  // namespace
@@ -828,14 +799,25 @@ extern "C" fm_status_t fm_sheet_get_cell_at(const fm_workbook_t* wb, size_t shee
     return rc;
   }
   const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
-  // The sorted address vector is cached on the handle until the Sheet's
-  // enumeration revision changes. A `cell_count` / `cell_at(0..N)` pass
-  // therefore pays the O(N log N) collection once rather than per cell.
-  const auto& addrs = cached_cell_addresses(wb, sheet_index);
-  if (auto rc = check_index(idx, addrs.size(), "index"); rc != 0) {
+  // The per-row counts are cached on the handle until the Sheet's
+  // enumeration revision changes, so a `cell_count` / `cell_at(0..N)` pass
+  // collects them once; each call then finds its row by binary search and
+  // walks that row alone.
+  const auto& rows = cached_cell_rows(wb, sheet_index);
+  const std::size_t total = rows.empty() ? 0U : static_cast<std::size_t>(rows.back().end);
+  if (auto rc = check_index(idx, total, "index"); rc != 0) {
     return rc;
   }
-  const auto [row, col] = addrs[idx];
+  const auto row_it =
+      std::upper_bound(rows.begin(), rows.end(), static_cast<std::uint64_t>(idx),
+                       [](std::uint64_t key, const formulon::Sheet::EnumerationRow& entry) { return key < entry.end; });
+  const std::uint64_t row_start = row_it == rows.begin() ? 0U : std::prev(row_it)->end;
+  const std::uint32_t row = row_it->row;
+  const std::optional<std::uint32_t> found_col = sheet.cell_enumeration_col(row, idx - row_start);
+  if (!found_col) {
+    return check_index(idx, 0U, "index");
+  }
+  const std::uint32_t col = *found_col;
   *out_row = row;
   *out_col = col;
   // `(row, col)` may be a spill phantom, which has no stored `Cell`: that is

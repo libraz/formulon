@@ -69,6 +69,10 @@ REQUIRED_FIELDS = (
     "area",
     "body",
     "accessor",
+)
+
+# Names the JS-facing glue of an entry; omitted for `c_only` entries.
+BINDING_FIELDS = (
     "js_method",
     "embind_cpp",
     "node_cpp",
@@ -90,6 +94,13 @@ def _load_manifest(path: Path) -> Tuple[int, List[dict]]:
         for field in REQUIRED_FIELDS:
             if field not in entry:
                 raise SystemExit(f"{path}: functions[{i}] missing required field `{field}`")
+        c_only = entry.get("c_only", False)
+        if not isinstance(c_only, bool):
+            raise SystemExit(f"{path}: functions[{i}].c_only must be a boolean")
+        if not c_only:
+            for field in BINDING_FIELDS:
+                if field not in entry:
+                    raise SystemExit(f"{path}: functions[{i}] missing required field `{field}`")
         if entry["body"] not in VALID_BODY_KINDS:
             raise SystemExit(f"{path}: functions[{i}].body={entry['body']!r} not in {sorted(VALID_BODY_KINDS)}")
         reads_values = entry.get("reads_values", False)
@@ -142,6 +153,11 @@ _GEN_BANNER = (
 def _file_header(summary: str) -> str:
     """Build a generated-file header without a per-file license notice."""
     return f"// {summary}\n{_GEN_BANNER}\n"
+
+
+def _binding_entries(entries: List[dict]) -> List[dict]:
+    """Returns the entries that also emit embind / N-API glue."""
+    return [e for e in entries if not e.get("c_only", False)]
 
 
 def _entries_by_area(entries: List[dict]) -> Dict[str, List[dict]]:
@@ -322,7 +338,7 @@ def _emit_embind(entries: List[dict]) -> Dict[str, str]:
     """Emit one .cpp per `area` containing JsWorkbook bodies."""
     files: Dict[str, str] = {}
 
-    for area, items in sorted(_entries_by_area(entries).items()):
+    for area, items in sorted(_entries_by_area(_binding_entries(entries)).items()):
         summary = (
             f"Generated embind glue for the `{area}` group: JsWorkbook\n"
             "// method bodies that delegate to the C ABI passthroughs."
@@ -399,7 +415,7 @@ def _emit_node(entries: List[dict]) -> Dict[str, str]:
     """Emit one .cc per `area` containing Workbook N-API method bodies."""
     files: Dict[str, str] = {}
 
-    for area, items in sorted(_entries_by_area(entries).items()):
+    for area, items in sorted(_entries_by_area(_binding_entries(entries)).items()):
         summary = (
             f"Generated N-API glue for the `{area}` group: Workbook\n"
             "// method bodies that delegate to the C ABI passthroughs."

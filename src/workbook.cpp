@@ -301,8 +301,8 @@ std::size_t Workbook::sheet_index_by_name(std::string_view name) const noexcept 
 
 std::size_t Workbook::approximate_memory_bytes() const noexcept {
   // Per-row cost of the cell store's hash map beyond the row's arrays: one
-  // node holding the key and the `RowCells` header (two vectors, 48 B on
-  // 64-bit), plus the bucket slot pointing at it. A constant is enough — the
+  // node holding the key and the `RowCells` header (two vectors and the
+  // style-run pointer, 56 B on 64-bit), plus the bucket slot pointing at it. A constant is enough — the
   // figure is a pressure signal, and no standard library exposes its real
   // per-node overhead.
   constexpr std::size_t kRowNodeOverheadBytes = sizeof(std::uint32_t) + 2U * sizeof(void*) + sizeof(RowCells);
@@ -596,10 +596,15 @@ Expected<std::vector<std::uint32_t>, Error> Workbook::range_style_bases(std::siz
   return formulon::range_style_bases(sheets_[sheet_index], rect, std::move(excluded));
 }
 
-Expected<std::vector<StyleCellXf>, Error> Workbook::cell_xf_indices(std::size_t sheet_index,
-                                                                    const StyleRect& rect) const {
+Expected<std::size_t, Error> Workbook::count_cell_xf_indices(std::size_t sheet_index, const StyleRect& rect) const {
   RETURN_IF_ERROR(check_style_rect(sheet_index, sheets_.size(), rect));
-  return formulon::cell_xf_indices(sheets_[sheet_index], rect);
+  return formulon::count_cell_xf_indices(sheets_[sheet_index], rect);
+}
+
+Expected<std::size_t, Error> Workbook::copy_cell_xf_indices(std::size_t sheet_index, const StyleRect& rect,
+                                                            StyleCellXf* out, std::size_t capacity) const {
+  RETURN_IF_ERROR(check_style_rect(sheet_index, sheets_.size(), rect));
+  return formulon::copy_cell_xf_indices(sheets_[sheet_index], rect, out, capacity);
 }
 
 Expected<std::vector<StyleCell>, Error> Workbook::show_phonetic_cells(std::size_t sheet_index,
@@ -613,12 +618,31 @@ Expected<void, Error> Workbook::remap_range_style(std::size_t sheet_index, const
   RETURN_IF_ERROR(check_style_rect(sheet_index, sheets_.size(), rect));
   sort_by_index(map, [](const XfRemap& lhs, const XfRemap& rhs) { return lhs.from < rhs.from; });
   for (std::size_t i = 0; i < map.size(); ++i) {
-    if (map[i].to >= styles_.cell_xfs.size() || (i > 0U && map[i - 1U].from == map[i].from)) {
-      return make_error(FormulonErrorCode::kInvalidArgument, "pairs holds a repeated or out-of-range xf");
+    if (map[i].to >= styles_.cell_xfs.size()) {
+      return make_error(FormulonErrorCode::kIndexOutOfRange, "to_xf out of range",
+                        "to_xf=" + std::to_string(map[i].to) + " count=" + std::to_string(styles_.cell_xfs.size()));
+    }
+    if (i > 0U && map[i - 1U].from == map[i].from) {
+      return make_error(FormulonErrorCode::kInvalidArgument, "pairs holds a repeated from_xf",
+                        "from_xf=" + std::to_string(map[i].from));
     }
   }
+  XfMap table;
+  table.pairs = map.data();
+  table.count = map.size();
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
-  return formulon::remap_range_style(sheets_[sheet_index], rect, map, kMaxStyledRangeCells);
+  return formulon::remap_range_style(sheets_[sheet_index], rect, table);
+}
+
+Expected<void, Error> Workbook::set_range_xf_index(std::size_t sheet_index, const StyleRect& rect,
+                                                   std::uint32_t xf_index) {
+  RETURN_IF_ERROR(check_style_rect(sheet_index, sheets_.size(), rect));
+  if (xf_index >= styles_.cell_xfs.size()) {
+    return make_error(FormulonErrorCode::kIndexOutOfRange, "xf_index out of range",
+                      "xf_index=" + std::to_string(xf_index) + " count=" + std::to_string(styles_.cell_xfs.size()));
+  }
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  return formulon::set_range_xf_index(sheets_[sheet_index], rect, xf_index);
 }
 
 Expected<std::vector<std::uint8_t>, Error> Workbook::snapshot_range_style(std::size_t sheet_index,

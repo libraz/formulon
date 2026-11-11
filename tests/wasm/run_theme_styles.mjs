@@ -204,9 +204,8 @@ export function registerThemeStyles(Module, test) {
       assert.equal(e.source, 0);
       assert.equal(e.xfIndex, 0);
 
-      const before = wb.getCellCount(0);
       wb.resetCellXfIndex(0, 7, 7);
-      assert.equal(wb.getCellCount(0), before);
+      assert.equal(wb.getCellXfIndex(0, 7, 7), null);
       expectFailure(() => wb.resetCellXfIndex(99, 0, 0));
     });
   });

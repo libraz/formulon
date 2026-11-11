@@ -146,7 +146,7 @@ void normalize_table_totals_cells_locked(Workbook& wb, const eval::RecalcEngine:
     for (std::size_t column = 0; column < table.columns.size(); ++column) {
       // A file that stores no cell there keeps the settings it declares.
       const std::uint32_t col = rect->first_col + static_cast<std::uint32_t>(column);
-      if (wb.sheet(table.sheet_index).cell_at(rect->last_row, col) != nullptr) {
+      if (wb.sheet(table.sheet_index).has_cell_or_style(rect->last_row, col)) {
         apply_totals_cell_locked(wb, mutator, i, column);
       }
     }

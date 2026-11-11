@@ -31,6 +31,22 @@ std::uint64_t GridStop(std::uint64_t end) noexcept {
   return std::min<std::uint64_t>(end, a1::kMaxCols);
 }
 
+// Replaces list[lo, hi) with [first, last) by appending, so no range insert is instantiated.
+void splice_runs(std::vector<StyleRun>& list, std::size_t lo, std::size_t hi, const StyleRun* first,
+                 const StyleRun* last) {
+  std::vector<StyleRun> tail;
+  for (std::size_t i = hi; i < list.size(); ++i) {
+    tail.push_back(list[i]);
+  }
+  list.erase(list.begin() + static_cast<std::ptrdiff_t>(lo), list.end());
+  for (; first != last; ++first) {
+    list.push_back(*first);
+  }
+  for (const StyleRun& run : tail) {
+    list.push_back(run);
+  }
+}
+
 }  // namespace
 
 std::uint32_t XfMap::operator()(std::uint32_t xf) const noexcept {
@@ -136,8 +152,7 @@ std::size_t RowCells::set_runs(std::uint32_t first, std::uint64_t end, std::uint
   }
   const std::size_t lo = split_runs_at(first);
   const std::size_t hi = split_runs_at(stop);
-  runs_->erase(runs_->begin() + static_cast<std::ptrdiff_t>(lo), runs_->begin() + static_cast<std::ptrdiff_t>(hi));
-  runs_->insert(runs_->begin() + static_cast<std::ptrdiff_t>(lo), pieces.begin(), pieces.end());
+  splice_runs(*runs_, lo, hi, pieces.data(), pieces.data() + pieces.size());
   normalize_runs();
   assert(invariants_hold());
   const std::size_t after = run_total();
@@ -278,9 +293,7 @@ void RowCells::move_in_to(std::uint32_t first, std::uint64_t end, RowCells& dest
       }
       // `dest` holds no run inside the band any more, so this is the slot.
       const std::size_t at = dest.split_runs_at(first);
-      dest.runs_->insert(dest.runs_->begin() + static_cast<std::ptrdiff_t>(at),
-                         runs_->begin() + static_cast<std::ptrdiff_t>(run_lo),
-                         runs_->begin() + static_cast<std::ptrdiff_t>(run_hi));
+      splice_runs(*dest.runs_, at, at, runs_->data() + run_lo, runs_->data() + run_hi);
       runs_->erase(runs_->begin() + static_cast<std::ptrdiff_t>(run_lo),
                    runs_->begin() + static_cast<std::ptrdiff_t>(run_hi));
       dest.normalize_runs();

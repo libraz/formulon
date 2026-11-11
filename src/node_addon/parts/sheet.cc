@@ -140,35 +140,10 @@ Napi::Value Workbook::DeleteCells(const Napi::CallbackInfo& info) {
 
 // ---- Iteration / metadata accessors ---------------------------------
 //
-// `CellCount` / `DefinedNameCount` / `TableCount` / `PassthroughCount`
+// `DefinedNameCount` / `TableCount` / `PassthroughCount`
 // / `PivotCount` are now emitted by the binding codegen (see
 // `src/node_addon/generated/workbook_counts.cc` and
 // `src/node_addon/generated/sheet_counts.cc`).
-
-Napi::Value Workbook::CellAt(const Napi::CallbackInfo& info) {
-  uint32_t row = 0;
-  uint32_t col = 0;
-  const char* formula = nullptr;
-  fm_value_t v{};
-  return StatusObject(
-      info,
-      [&](fm_workbook_t* handle) {
-        const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
-        const std::size_t idx = static_cast<std::size_t>(ArgU32(info, 1));
-        return fm_sheet_get_cell_at(handle, sheet, idx, &row, &col, &formula, &v);
-      },
-      [&](Napi::Object& out) {
-        Napi::Env env = info.Env();
-        out.Set("row", Napi::Number::New(env, row));
-        out.Set("col", Napi::Number::New(env, col));
-        if (formula != nullptr) {
-          out.Set("formula", Napi::String::New(env, formula));
-        } else {
-          out.Set("formula", env.Null());
-        }
-        out.Set("value", ValueToJs(env, v));
-      });
-}
 
 namespace {
 

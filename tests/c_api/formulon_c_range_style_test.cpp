@@ -4,6 +4,7 @@
 // and whole-sheet selection when other rows / columns carry styles.
 
 #include <cstdint>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -22,7 +23,9 @@ namespace {
 constexpr std::uint32_t kLastRow = formulon::Sheet::kMaxRows - 1U;
 constexpr std::uint32_t kLastCol = formulon::Sheet::kMaxCols - 1U;
 constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
-constexpr fm_status_t kPreconditionFailed = static_cast<fm_status_t>(formulon::FormulonErrorCode::kPreconditionFailed);
+constexpr fm_status_t kIndexOutOfRange = static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange);
+constexpr fm_status_t kSecurityResourceLimit =
+    static_cast<fm_status_t>(formulon::FormulonErrorCode::kSecurityResourceLimit);
 constexpr std::int32_t kSourceCell = 0;
 constexpr std::int32_t kSourceRow = 1;
 constexpr std::int32_t kSourceColumn = 2;
@@ -60,29 +63,17 @@ const formulon::Cell* CellAt(const WorkbookGuard& wb, std::uint32_t row, std::ui
   return wb.handle->workbook().sheet(0).cell_at(row, col);
 }
 
-void ExpectLayoutEqual(const formulon::SheetLayout& actual, const formulon::SheetLayout& expected) {
-  ASSERT_EQ(actual.columns.size(), expected.columns.size());
-  for (std::size_t i = 0; i < actual.columns.size(); ++i) {
-    EXPECT_EQ(actual.columns[i].first, expected.columns[i].first);
-    EXPECT_EQ(actual.columns[i].last, expected.columns[i].last);
-    EXPECT_DOUBLE_EQ(actual.columns[i].width, expected.columns[i].width);
-    EXPECT_EQ(actual.columns[i].hidden, expected.columns[i].hidden);
-    EXPECT_EQ(actual.columns[i].outline_level, expected.columns[i].outline_level);
-    EXPECT_EQ(actual.columns[i].has_width, expected.columns[i].has_width);
-    EXPECT_EQ(actual.columns[i].has_style, expected.columns[i].has_style);
-    EXPECT_EQ(actual.columns[i].style_xf, expected.columns[i].style_xf);
-  }
-  ASSERT_EQ(actual.row_overrides.size(), expected.row_overrides.size());
-  for (std::size_t i = 0; i < actual.row_overrides.size(); ++i) {
-    EXPECT_EQ(actual.row_overrides[i].row, expected.row_overrides[i].row);
-    EXPECT_DOUBLE_EQ(actual.row_overrides[i].height, expected.row_overrides[i].height);
-    EXPECT_EQ(actual.row_overrides[i].hidden, expected.row_overrides[i].hidden);
-    EXPECT_EQ(actual.row_overrides[i].outline_level, expected.row_overrides[i].outline_level);
-    EXPECT_EQ(actual.row_overrides[i].has_height, expected.row_overrides[i].has_height);
-    EXPECT_EQ(actual.row_overrides[i].custom_height, expected.row_overrides[i].custom_height);
-    EXPECT_EQ(actual.row_overrides[i].has_style, expected.row_overrides[i].has_style);
-    EXPECT_EQ(actual.row_overrides[i].style_xf, expected.row_overrides[i].style_xf);
-  }
+// The coordinate's own xf (stored cell or style run), or -1 when it has none.
+std::int64_t OwnXf(const WorkbookGuard& wb, std::uint32_t row, std::uint32_t col) {
+  const std::optional<formulon::StyleSlot> slot = wb.handle->workbook().sheet(0).cell_style_at(row, col);
+  return slot.has_value() ? static_cast<std::int64_t>(slot->xf) : -1;
+}
+
+formulon::XfMap TableMap(const std::vector<formulon::XfRemap>& pairs) {
+  formulon::XfMap map;
+  map.pairs = pairs.data();
+  map.count = pairs.size();
+  return map;
 }
 
 using Eff = std::pair<std::int32_t, std::uint32_t>;
@@ -426,13 +417,12 @@ TEST(FormulonCApiRangeStyle, RejectsBadPairsAndOversizedWritesWithoutMutation) {
             kInvalidArgument);
   const fm_xf_remap_t past_table[] = {{0U, 10U}};
   EXPECT_EQ(fm_sheet_remap_range_xfs(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, 3U, 3U}), past_table, 1U),
-            kInvalidArgument);
+            kIndexOutOfRange);
   EXPECT_EQ(
       fm_sheet_remap_range_xfs(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, kLastRow + 1U, 3U}), past_table, 1U),
       kInvalidArgument);
-  // Two styled columns crossed by almost every row: over a million writes.
-  EXPECT_EQ(Remap(wb, 0U, 0U, kLastRow - 1U, kLastCol), kPreconditionFailed);
-  EXPECT_EQ(Remap(wb, 0U, 0U, 2048U, 1023U), kPreconditionFailed);
+  // B1:XFD8193 is one row past 2^27 cells and neither whole rows nor whole columns.
+  EXPECT_EQ(Remap(wb, 0U, 1U, 8192U, kLastCol), kSecurityResourceLimit);
 
   size_t cells = 0;
   ASSERT_EQ(fm_sheet_get_cell_count(wb.handle, 0, &cells), 0);
@@ -443,35 +433,26 @@ TEST(FormulonCApiRangeStyle, RejectsBadPairsAndOversizedWritesWithoutMutation) {
   EXPECT_EQ(Columns(wb).size(), 1U);
 }
 
-TEST(FormulonCApiRangeStyle, CountsOwnedCellWritesAgainstColumnBudgetAtomically) {
+TEST(FormulonCApiRangeStyle, RemapsColumnRunOwnersOnce) {
   WorkbookGuard wb;
   MakeWorkbook(wb);
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0U, 0U, 1U), 0);
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 1U, 0U, 1U), 0);
 
   const formulon::StyleRect rect{0U, 0U, kLastRow, 0U};
-  const std::vector<formulon::XfRemap> remap{{1U, 2U}};
+  const std::vector<formulon::XfRemap> remap{{1U, 2U}, {2U, 1U}};
   auto& sheet = wb.handle->workbook().sheet(0);
-  const auto style_before = formulon::snapshot_range_style(sheet, rect);
-  const formulon::SheetLayout layout_before = sheet.layout();
-  const std::uint64_t enumeration_revision_before = sheet.cell_enumeration_revision();
-
-  const auto rejected = formulon::remap_range_style(sheet, rect, remap, 1U);
-  ASSERT_FALSE(rejected.has_value());
-  EXPECT_EQ(rejected.error().code, formulon::FormulonErrorCode::kPreconditionFailed);
-  EXPECT_EQ(formulon::snapshot_range_style(sheet, rect), style_before);
-  ExpectLayoutEqual(sheet.layout(), layout_before);
-  EXPECT_EQ(sheet.cell_enumeration_revision(), enumeration_revision_before);
-  EXPECT_EQ(CellAt(wb, 0U, 0U)->xf_index, 1U);
-  EXPECT_EQ(CellAt(wb, 1U, 0U)->xf_index, 1U);
-
-  const auto accepted = formulon::remap_range_style(sheet, rect, remap, 2U);
-  ASSERT_TRUE(accepted.has_value());
-  EXPECT_EQ(CellAt(wb, 0U, 0U)->xf_index, 2U);
-  EXPECT_EQ(CellAt(wb, 1U, 0U)->xf_index, 2U);
+  ASSERT_EQ(formulon::count_cell_xf_indices(sheet, rect), 2U);
+  ASSERT_TRUE(formulon::remap_range_style(sheet, rect, TableMap(remap)).has_value());
+  // A swap maps each blank owner exactly once.
+  EXPECT_EQ(OwnXf(wb, 0U, 0U), 2);
+  EXPECT_EQ(OwnXf(wb, 1U, 0U), 2);
+  EXPECT_EQ(CellAt(wb, 0U, 0U), nullptr);
+  EXPECT_EQ(formulon::count_cell_xf_indices(sheet, rect), 2U);
+  EXPECT_TRUE(sheet.layout().columns.empty());
 }
 
-TEST(FormulonCApiRangeStyle, CountsAxisRunAndOwnedWritesOnceAtExactBudget) {
+TEST(FormulonCApiRangeStyle, RemapsAxisRunAndOwnedCellsOnce) {
   WorkbookGuard wb;
   MakeWorkbook(wb);
   ASSERT_EQ(fm_sheet_set_column_xf_index(wb.handle, 0, 0U, 1U, 1U), 0);
@@ -483,30 +464,18 @@ TEST(FormulonCApiRangeStyle, CountsAxisRunAndOwnedWritesOnceAtExactBudget) {
   const formulon::StyleRect rect{0U, 0U, 1U, kLastCol};
   const std::vector<formulon::XfRemap> remap{{1U, 2U}};
   auto& sheet = wb.handle->workbook().sheet(0);
-  const auto style_before = formulon::snapshot_range_style(sheet, rect);
-  const formulon::SheetLayout layout_before = sheet.layout();
-  const std::uint64_t enumeration_revision_before = sheet.cell_enumeration_revision();
-
-  const auto rejected = formulon::remap_range_style(sheet, rect, remap, 3U);
-  ASSERT_FALSE(rejected.has_value());
-  EXPECT_EQ(rejected.error().code, formulon::FormulonErrorCode::kPreconditionFailed);
-  EXPECT_EQ(formulon::snapshot_range_style(sheet, rect), style_before);
-  ExpectLayoutEqual(sheet.layout(), layout_before);
-  EXPECT_EQ(sheet.cell_enumeration_revision(), enumeration_revision_before);
-  EXPECT_EQ(CellAt(wb, 0U, 0U)->xf_index, 1U);
-  EXPECT_EQ(CellAt(wb, 1U, 0U)->xf_index, 1U);
-  EXPECT_EQ(CellAt(wb, 1U, 1U)->xf_index, 3U);
-
-  const auto accepted = formulon::remap_range_style(sheet, rect, remap, 4U);
-  ASSERT_TRUE(accepted.has_value());
+  ASSERT_TRUE(formulon::remap_range_style(sheet, rect, TableMap(remap)).has_value());
   EXPECT_EQ(Effective(wb, 0U, 0U), Eff(kSourceCell, 2U));
   EXPECT_EQ(Effective(wb, 0U, 1U), Eff(kSourceCell, 2U));
   EXPECT_EQ(Effective(wb, 1U, 0U), Eff(kSourceCell, 2U));
   EXPECT_EQ(Effective(wb, 1U, 1U), Eff(kSourceCell, 3U));
   EXPECT_EQ(sheet.layout().row_overrides[0].style_xf, 2U);
+  // A1, B1 (the planned piece), A2 and B2: no stored cell among them.
+  EXPECT_EQ(formulon::count_cell_xf_indices(sheet, rect), 4U);
+  EXPECT_EQ(CellAt(wb, 0U, 1U), nullptr);
 }
 
-TEST(FormulonCApiRangeStyle, CountsSparseWholeSheetOwnersAtExactBudget) {
+TEST(FormulonCApiRangeStyle, RemapsSparseWholeSheetOwnersOnce) {
   WorkbookGuard wb;
   MakeWorkbook(wb);
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0U, 0U, 1U), 0);
@@ -516,27 +485,15 @@ TEST(FormulonCApiRangeStyle, CountsSparseWholeSheetOwnersAtExactBudget) {
   const formulon::StyleRect rect{0U, 0U, kLastRow, kLastCol};
   const std::vector<formulon::XfRemap> remap{{1U, 2U}};
   auto& sheet = wb.handle->workbook().sheet(0);
-  const auto style_before = formulon::snapshot_range_style(sheet, rect);
-  const formulon::SheetLayout layout_before = sheet.layout();
-  const std::uint64_t enumeration_revision_before = sheet.cell_enumeration_revision();
-
-  const auto rejected = formulon::remap_range_style(sheet, rect, remap, 2U);
-  ASSERT_FALSE(rejected.has_value());
-  EXPECT_EQ(rejected.error().code, formulon::FormulonErrorCode::kPreconditionFailed);
-  EXPECT_EQ(formulon::snapshot_range_style(sheet, rect), style_before);
-  ExpectLayoutEqual(sheet.layout(), layout_before);
-  EXPECT_EQ(sheet.cell_enumeration_revision(), enumeration_revision_before);
-  EXPECT_EQ(CellAt(wb, 0U, 0U)->xf_index, 1U);
-  EXPECT_EQ(CellAt(wb, 1U, 0U)->xf_index, 1U);
-  EXPECT_FALSE(CellAt(wb, 2U, 2U)->has_explicit_xf);
-  EXPECT_DOUBLE_EQ(CellAt(wb, 2U, 2U)->cached_value.as_number(), 4.0);
-
-  const auto accepted = formulon::remap_range_style(sheet, rect, remap, 3U);
-  ASSERT_TRUE(accepted.has_value());
-  EXPECT_EQ(CellAt(wb, 0U, 0U)->xf_index, 2U);
-  EXPECT_EQ(CellAt(wb, 1U, 0U)->xf_index, 2U);
+  ASSERT_TRUE(formulon::remap_range_style(sheet, rect, TableMap(remap)).has_value());
+  EXPECT_EQ(OwnXf(wb, 0U, 0U), 2);
+  EXPECT_EQ(OwnXf(wb, 1U, 0U), 2);
   EXPECT_TRUE(CellAt(wb, 2U, 2U)->has_explicit_xf);
   EXPECT_EQ(CellAt(wb, 2U, 2U)->xf_index, 0U);
+  EXPECT_DOUBLE_EQ(CellAt(wb, 2U, 2U)->cached_value.as_number(), 4.0);
+  size_t cells = 0;
+  ASSERT_EQ(fm_sheet_get_cell_count(wb.handle, 0, &cells), 0);
+  EXPECT_EQ(cells, 3U);
 }
 
 TEST(FormulonCApiRangeStyle, RestoreRejectsMalformedCaptures) {

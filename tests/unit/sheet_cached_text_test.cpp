@@ -102,6 +102,11 @@ TEST(SheetCachedTextTest, NonTextUpdatesReleaseLargeCachedText) {
     s.set_cell_cached_value(0U, 0U, Value::text(large));
     s.set_cell_cached_value(0U, 0U, next);
     const Cell* cell = s.cell_at(0U, 0U);
+    if (next.is_blank()) {
+      // An unformatted cell left with no content is removed, text and all.
+      EXPECT_EQ(cell, nullptr);
+      continue;
+    }
     ASSERT_NE(cell, nullptr);
     EXPECT_EQ(cell->cached_text_owned, nullptr);
     EXPECT_EQ(cell->cached_value.kind(), next.kind());

@@ -12,6 +12,7 @@
 #define FORMULON_IO_OOXML_WRITER_CELL_H_
 
 #include <cstdint>
+#include <optional>
 #include <string>
 
 #include "io/rich_value_errors.h"
@@ -26,18 +27,37 @@ struct ExternalBookIndexer;
 namespace io {
 class SharedStrings;
 
-/// True when a save writes a `<c>` element for `cell`.
+/// True when a save writes a `<c>` element for `cell`, the stored cell at
+/// `(row, col)` of `sheet`.
 ///
-/// A cell is omitted only when it holds nothing at all: no formula, a
-/// blank value, and no explicit style assignment. A blank cell carrying
-/// a style index (including explicit `s="0"`) still ships, as a bare
-/// `<c r="..." s="N"/>`, because Excel preserves the formatting of an
-/// empty cell.
+/// A cell with a formula, a value, a non-zero style or phonetic state ships.
+/// A blank one holding only an explicit default style ships, as a bare
+/// `<c r="..."/>`, only where that default overrides a row or column format
+/// (`explicit_default_observable`); elsewhere it is indistinguishable from
+/// an absent cell and Excel drops it too. Style runs follow the same rule
+/// through `row_emit_plan`.
 ///
 /// Shared so `<dimension>` is derived from the same test that decides
 /// what `<sheetData>` contains. The two answering differently is what
 /// makes a package's declared used range contradict its own cells.
-bool CellIsEmitted(const Cell& cell);
+bool CellIsEmitted(const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell& cell);
+
+/// An inclusive cell rectangle.
+struct SheetDimension {
+  std::uint32_t first_row = 0;
+  std::uint32_t first_col = 0;
+  std::uint32_t last_row = 0;
+  std::uint32_t last_col = 0;
+};
+
+/// The used range a save declares (`<dimension ref>`, BrtWsDim), the one
+/// source both writers use: the span of the rows the save writes (rows with
+/// a written cell, run or spill phantom, rows written as a row format, rows
+/// with a layout override) by the span of the written cell columns together
+/// with every column of non-zero style. Width-only columns do not count. An
+/// axis with nothing on it is its first index; nullopt when neither has
+/// anything.
+std::optional<SheetDimension> sheet_dimension(const Sheet& sheet);
 
 /// Appends the <sheetData>...</sheetData> markup for a single sheet to `out`.
 /// The caller wraps it in <worksheet>. Pure function: no I/O.

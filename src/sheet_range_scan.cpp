@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <mutex>
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include "cell.h"
@@ -54,9 +55,94 @@ void for_each_stored_row_in(const Rows& rows, std::uint64_t row_begin, std::uint
 std::size_t Sheet::materialised_cells_in_rect_locked(std::uint32_t row_begin, std::uint64_t row_end,
                                                      std::uint32_t col_begin, std::uint64_t col_end) const noexcept {
   std::size_t total = 0;
-  for_each_stored_row_in(rows_, row_begin, row_end,
-                         [&](std::uint32_t, const RowCells& cells) { total += cells.count_in(col_begin, col_end); });
+  for_each_stored_row_in(rows_, row_begin, row_end, [&](std::uint32_t, const RowCells& cells) {
+    total += cells.count_in(col_begin, col_end) + cells.run_count_in(col_begin, col_end);
+  });
   return total;
+}
+
+std::vector<std::pair<std::uint32_t, std::uint64_t>> Sheet::enumeration_intervals_locked(std::uint32_t row) const {
+  std::vector<std::pair<std::uint32_t, std::uint64_t>> spans;
+  if (const auto it = rows_.find(row); it != rows_.end()) {
+    for (const RowCells::Entry entry : it->second) {
+      spans.emplace_back(entry.col, static_cast<std::uint64_t>(entry.col) + 1U);
+    }
+    for (const StyleRun& run : it->second.runs()) {
+      spans.emplace_back(run.first, static_cast<std::uint64_t>(run.last) + 1U);
+    }
+  }
+  if (spill_table_ != nullptr) {
+    for (const auto& [unused, region] : spill_table_->by_anchor) {
+      (void)unused;
+      if (row < region.anchor_row || row - region.anchor_row >= region.rows) {
+        continue;
+      }
+      // The anchor is a stored cell, not a phantom.
+      const std::uint32_t from = region.anchor_col + (row == region.anchor_row ? 1U : 0U);
+      const std::uint64_t to = static_cast<std::uint64_t>(region.anchor_col) + region.cols;
+      if (from < to) {
+        spans.emplace_back(from, to);
+      }
+    }
+  }
+  sort_by_index(spans, [](const std::pair<std::uint32_t, std::uint64_t>& lhs,
+                          const std::pair<std::uint32_t, std::uint64_t>& rhs) { return lhs.first < rhs.first; });
+  std::size_t kept = 0U;
+  for (std::size_t i = 0; i < spans.size(); ++i) {
+    if (kept != 0U && spans[i].first <= spans[kept - 1U].second) {
+      spans[kept - 1U].second = std::max(spans[kept - 1U].second, spans[i].second);
+    } else {
+      spans[kept++] = spans[i];
+    }
+  }
+  spans.resize(kept);
+  return spans;
+}
+
+std::vector<Sheet::EnumerationRow> Sheet::cell_enumeration_rows() const {
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  std::vector<std::uint32_t> keys;
+  keys.reserve(rows_.size());
+  for (const auto& [row, cells] : rows_) {
+    if (cells.has_any()) {
+      keys.push_back(row);
+    }
+  }
+  if (spill_table_ != nullptr) {
+    for (const auto& [unused, region] : spill_table_->by_anchor) {
+      (void)unused;
+      for (std::uint32_t r = 0; r < region.rows; ++r) {
+        keys.push_back(region.anchor_row + r);
+      }
+    }
+  }
+  sort_ascending(keys);
+  keys.erase(std::unique(keys.begin(), keys.end()), keys.end());
+  std::vector<EnumerationRow> out;
+  out.reserve(keys.size());
+  std::uint64_t total = 0U;
+  for (const std::uint32_t row : keys) {
+    std::uint64_t count = 0U;
+    for (const auto& [from, to] : enumeration_intervals_locked(row)) {
+      count += to - from;
+    }
+    if (count != 0U) {
+      total += count;
+      out.push_back({row, total});
+    }
+  }
+  return out;
+}
+
+std::optional<std::uint32_t> Sheet::cell_enumeration_col(std::uint32_t row, std::uint64_t ordinal) const {
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  for (const auto& [from, to] : enumeration_intervals_locked(row)) {
+    if (ordinal < to - from) {
+      return static_cast<std::uint32_t>(from + ordinal);
+    }
+    ordinal -= to - from;
+  }
+  return std::nullopt;
 }
 
 std::optional<Sheet::PopulatedExtent> Sheet::populated_extent(std::uint32_t first_row, std::uint32_t first_col,

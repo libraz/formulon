@@ -83,32 +83,6 @@ struct SharedFormulaMaster {
   bool parse_failed = false;
 };
 
-/// Budget charge for one newly stored coordinate: the cell plus its column key.
-constexpr std::uint64_t kCellChargeBytes = sizeof(Cell) + sizeof(std::uint16_t);
-
-/// Charges the cell budget for a coordinate that `ApplyParsedCell` is about to
-/// materialise; a truly empty cell (matching its no-op condition) or an
-/// already-stored coordinate is free. `context_prefix` ends just before `row=`.
-Expected<void, Error> ChargeNewCell(ResourceBudget& budget, const Sheet& sheet, const ParsedCell& cell,
-                                    std::string_view formula_text, std::uint32_t xf_index,
-                                    std::string_view context_prefix) {
-  const bool materializes = !formula_text.empty() || !cell.value.is_blank() || cell.is_sst_index || xf_index != 0U ||
-                            cell.has_explicit_xf || cell.show_phonetic;
-  if (!materializes || sheet.has_cell(cell.row, cell.col)) {
-    return Expected<void, Error>::Ok();
-  }
-  std::string ctxs(context_prefix);
-  ctxs.append(" row=");
-  ctxs.append(std::to_string(cell.row));
-  ctxs.append(" col=");
-  ctxs.append(std::to_string(cell.col));
-  auto charged = charge(budget, kCellChargeBytes, std::move(ctxs));
-  if (!charged) {
-    return std::move(charged.error());
-  }
-  return Expected<void, Error>::Ok();
-}
-
 /// Error for a follower `<f t="shared">` whose `si` has no registered master.
 Error UnknownSharedSi(std::string_view context_prefix, std::uint32_t si) {
   std::string ctx("context=");
@@ -328,9 +302,15 @@ Expected<void, Error> ResolveFormula(const pugi::xml_node& c_node,
   return Expected<void, Error>::Ok();
 }
 
+/// Stores one parsed `<c>` and charges `budget` for what it adds (see
+/// `sheet_load_write_bytes`); `context_prefix` opens the error context of an
+/// exceeded budget. A blank, formula-less, non-phonetic `<c>` is a style run,
+/// written for every xf including 0 (`Sheet::load_style_run`); the
+/// explicit-default rule runs once the layout is applied.
 Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view formula_text, std::uint32_t xf_index,
                                       const std::vector<PhoneticRun>* phonetic_runs, PhoneticProperties phonetic_props,
-                                      std::size_t sheet_index, Workbook& workbook, SheetReadContext& ctx) {
+                                      std::size_t sheet_index, Workbook& workbook, SheetReadContext& ctx,
+                                      ResourceBudget& budget, std::string_view context_prefix) {
   // `decode_cell_payload` deliberately produces all ISO dates on the
   // canonical 1900 serial axis so DOM and SAX share one pure decoder. The
   // workbook epoch is applied exactly once at this shared storage boundary,
@@ -353,6 +333,16 @@ Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view
   if (cell_xf_count != 0U && xf_index >= cell_xf_count) {
     xf_index = 0U;
   }
+  Sheet& target = workbook.sheet(sheet_index);
+  const bool content = !formula_text.empty() || !stored_value.is_blank() || parsed.is_sst_index || parsed.show_phonetic;
+  if (!content && !target.has_cell(parsed.row, parsed.col)) {
+    RETURN_IF_ERROR(charge_sheet_load(budget, sheet_load_write_bytes(target, parsed.row, parsed.col, false),
+                                      context_prefix, parsed.row, parsed.col));
+    const std::size_t added = target.load_style_run(parsed.row, parsed.col, xf_index);
+    return charge_sheet_load(budget, added * kSheetLoadRunBytes, context_prefix, parsed.row, parsed.col);
+  }
+  RETURN_IF_ERROR(charge_sheet_load(budget, sheet_load_write_bytes(target, parsed.row, parsed.col, content),
+                                    context_prefix, parsed.row, parsed.col));
   if (!formula_text.empty()) {
     // `Workbook::set_cell_formula` accepts both spellings, but to
     // match the parser/evaluator's expected input form (the existing
@@ -374,9 +364,8 @@ Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view
       workbook.sheet(sheet_index).set_cell_cached_value_borrowed(parsed.row, parsed.col, stored_value);
     }
   } else if (stored_value.is_blank()) {
-    // Skip blank-blank cells to keep the row map sparse, unless a style
-    // index or explicit style attribute exists: then the format metadata
-    // is the payload and must materialise the cell below.
+    // A phonetic blank, or a formatted duplicate of a stored coordinate: the
+    // format lands on the stored cell below. A bare duplicate changes nothing.
     if (xf_index == 0U && !parsed.has_explicit_xf && !parsed.show_phonetic) {
       return Expected<void, Error>::Ok();
     }
@@ -402,6 +391,12 @@ Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view
     ctx.pending_sst_cells.emplace_back(parsed.row, parsed.col, parsed.sst_index);
   }
 
+  // Before the style, so a phonetic blank is stored first and takes its xf
+  // as a cell rather than as a run the cell then splits.
+  if (parsed.show_phonetic) {
+    workbook.sheet(sheet_index).set_cell_show_phonetic(parsed.row, parsed.col, true);
+  }
+
   if (xf_index != 0U || parsed.has_explicit_xf) {
     auto sx = workbook.set_cell_xf_index(sheet_index, parsed.row, parsed.col, xf_index);
     if (!sx) {
@@ -414,13 +409,31 @@ Expected<void, Error> ApplyParsedCell(const ParsedCell& parsed, std::string_view
     workbook.sheet(sheet_index)
         .set_cell_phonetic_props(parsed.row, parsed.col, phonetic_props, parsed.phonetic_pr_present);
   }
-  if (parsed.show_phonetic) {
-    workbook.sheet(sheet_index).set_cell_show_phonetic(parsed.row, parsed.col, true);
-  }
   return Expected<void, Error>::Ok();
 }
 
 }  // namespace
+
+std::uint64_t sheet_load_write_bytes(const Sheet& sheet, std::uint32_t row, std::uint32_t col, bool stores_cell) {
+  const auto it = sheet.rows().find(row);
+  if (it == sheet.rows().end()) {
+    return kSheetLoadRowBytes + (stores_cell ? kSheetLoadCellBytes : 0U);
+  }
+  return stores_cell && it->second.find(col) == nullptr ? kSheetLoadCellBytes : 0U;
+}
+
+Expected<void, Error> charge_sheet_load(ResourceBudget& budget, std::uint64_t bytes, std::string_view context_prefix,
+                                        std::uint32_t row, std::uint32_t col) {
+  if (!budget.would_exceed(bytes)) {
+    return budget.consume(bytes);
+  }
+  std::string ctxs(context_prefix);
+  ctxs.append(" row=");
+  ctxs.append(std::to_string(row));
+  ctxs.append(" col=");
+  ctxs.append(std::to_string(col));
+  return charge(budget, bytes, std::move(ctxs));
+}
 
 Expected<void, Error> RegisterArraySpills(Sheet& sheet, const std::vector<ArrayAnchor>& anchors) {
   return register_array_spills(sheet, anchors, FormulonErrorCode::kIoSheetCorrupt, "sheet_reader", "ooxml");
@@ -445,10 +458,8 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
   }
 
   std::unordered_map<std::uint32_t, SharedFormulaMaster> shared_formulas;
-  // Per-sheet ceiling on real cells: each new coordinate is charged before
-  // it materialises.
+  // Per-sheet load ceiling, charged by `ApplyParsedCell`.
   ResourceBudget cell_budget(max_cell_bytes);
-  const Sheet& target_sheet = workbook.sheet(sheet_index);
 
   for (pugi::xml_node row = sheet_data.child("row"); row; row = row.next_sibling("row")) {
     for (pugi::xml_node c = row.child("c"); c; c = c.next_sibling("c")) {
@@ -472,15 +483,9 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
         }
       }
 
-      // Charge a new coordinate before `ApplyParsedCell` materialises it.
-      if (auto charged =
-              ChargeNewCell(cell_budget, target_sheet, parsed, formula_text, parsed.xf_index, "context=sheet_reader");
-          !charged) {
-        return std::move(charged.error());
-      }
-
-      auto applied = ApplyParsedCell(parsed, formula_text, parsed.xf_index, &parsed.phonetic_runs,
-                                     parsed.phonetic_props, sheet_index, workbook, ctx);
+      auto applied =
+          ApplyParsedCell(parsed, formula_text, parsed.xf_index, &parsed.phonetic_runs, parsed.phonetic_props,
+                          sheet_index, workbook, ctx, cell_budget, "context=sheet_reader");
       if (!applied) {
         return std::move(applied.error());
       }
@@ -616,17 +621,12 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
   ASSIGN_OR_RETURN(auto formula, ResolveSharedFromRecord(rec, shared));
   const std::string& formula_text = formula;
 
-  // Mirrors the DOM path's placement and no-op guard (see `read_sheet_data`).
-  if (auto charged =
-          ChargeNewCell(cell_budget, workbook.sheet(sheet_index), cell, formula_text, xf, "context=sheet_reader_sax");
-      !charged) {
-    return std::move(charged.error());
-  }
   // Inline-string cells with <rPh> annotations carry their kana on the
   // SAX record. SST-referenced cells (rec.phonetic stays null by
   // construction) route their phonetic through the post-loop SST
   // resolution pass instead — same contract the DOM path uses.
-  auto applied = ApplyParsedCell(cell, formula_text, xf, rec.phonetic, rec.phonetic_props, sheet_index, workbook, ctx);
+  auto applied = ApplyParsedCell(cell, formula_text, xf, rec.phonetic, rec.phonetic_props, sheet_index, workbook, ctx,
+                                 cell_budget, "context=sheet_reader_sax");
   if (!applied) {
     return std::move(applied.error());
   }

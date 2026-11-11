@@ -16,18 +16,6 @@ namespace formulon {
 namespace wasm {
 namespace parts {
 
-double JsWorkbook::cellCount(uint32_t sheet) const {
-  if (handle_ == nullptr) {
-    record_invalid_handle();
-    return 0.0;
-  }
-  std::size_t count = 0;
-  if (!succeeded(fm_sheet_get_cell_count(handle_, sheet, &count))) {
-    return 0.0;
-  }
-  return static_cast<double>(count);
-}
-
 double JsWorkbook::pivotCount(uint32_t sheet) const {
   if (handle_ == nullptr) {
     record_invalid_handle();

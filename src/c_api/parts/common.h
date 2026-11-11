@@ -595,15 +595,16 @@ struct fm_workbook {
   // (`release_text`); empty otherwise.
   formulon::c_api::parts::TextStore read_scratch_retired;
 
-  // Sorted coordinate caches for the `cell_count` / `cell_at` iteration
-  // pair. Slot zero is the most recently used entry; keeping two entries
-  // avoids rebuilding when callers alternate between two sheets. The
-  // associated Sheet revision invalidates an entry after any cell, spill,
-  // or structural mutation.
+  // Per-row running counts for the `cell_count` / `cell_at` iteration pair
+  // (`Sheet::cell_enumeration_rows`), so memory follows rows rather than
+  // coordinates. Slot zero is the most recently used entry; keeping two
+  // entries avoids rebuilding when callers alternate between two sheets. The
+  // associated Sheet revision invalidates an entry after any cell, style-run,
+  // spill, or structural mutation.
   struct CellEnumerationCache {
     std::size_t sheet_index = std::numeric_limits<std::size_t>::max();
     std::uint64_t revision = std::numeric_limits<std::uint64_t>::max();
-    std::vector<std::pair<std::uint32_t, std::uint32_t>> addresses;
+    std::vector<formulon::Sheet::EnumerationRow> rows;
   };
   mutable std::array<CellEnumerationCache, 2> cell_enumeration_cache{};
 

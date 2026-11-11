@@ -518,15 +518,19 @@ extern "C" fm_status_t fm_sheet_get_cell_xf_indices(const fm_workbook_t* wb, siz
   if (auto rc = resolve_style_rect(wb, sheet_index, range, &rect); rc != 0) {
     return rc;
   }
-  auto cells = wb->workbook().cell_xf_indices(sheet_index, rect);
-  if (!cells) {
-    return set_last_error(cells.error());
+  auto total = wb->workbook().count_cell_xf_indices(sheet_index, rect);
+  if (!total) {
+    return set_last_error(total.error());
   }
-  const size_t total = cells.value().size();
-  *out_count = total;
-  for (size_t i = 0; i < std::min(capacity, total); ++i) {
-    const formulon::StyleCellXf& cell = cells.value()[i];
-    out[i] = {cell.row, cell.col, cell.xf};
+  *out_count = total.value();
+  // Sized by what the caller asked for, never by the rect's area.
+  std::vector<formulon::StyleCellXf> cells(std::min(capacity, total.value()));
+  auto written = wb->workbook().copy_cell_xf_indices(sheet_index, rect, cells.data(), cells.size());
+  if (!written) {
+    return set_last_error(written.error());
+  }
+  for (size_t i = 0; i < written.value(); ++i) {
+    out[i] = {cells[i].row, cells[i].col, cells[i].xf};
   }
   return 0;
 }

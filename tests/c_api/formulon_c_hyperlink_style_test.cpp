@@ -25,8 +25,10 @@ constexpr std::uint32_t kLastRow = formulon::Sheet::kMaxRows - 1U;
 constexpr std::uint32_t kLastCol = formulon::Sheet::kMaxCols - 1U;
 constexpr std::int32_t kSourceCell = 0;
 constexpr std::int32_t kSourceColumn = 2;
+constexpr std::int32_t kSourceDefault = 3;
 constexpr std::uint32_t kHyperlinkBuiltinId = 8U;
-constexpr fm_status_t kPreconditionFailed = static_cast<fm_status_t>(formulon::FormulonErrorCode::kPreconditionFailed);
+constexpr fm_status_t kSecurityResourceLimit =
+    static_cast<fm_status_t>(formulon::FormulonErrorCode::kSecurityResourceLimit);
 constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
 
 class HyperlinkStyle : public ::testing::Test {
@@ -451,19 +453,15 @@ TEST_F(HyperlinkStyle, SetRefusesOverlongTextBeforeChangingAnything) {
   EXPECT_EQ(Set({0U, 0U, 0U, 0U}, "https://example.com", at_cap.c_str()), 0);
 }
 
-TEST_F(HyperlinkStyle, SetOverTooManyCellsIsPreconditionFailedAndChangesNothing) {
+TEST_F(HyperlinkStyle, SetPastTheStyledRangeCeilingIsSecurityResourceLimitAndChangesNothing) {
   const std::vector<std::size_t> sizes = TableSizes();
-  // 100,000 x 26 = 2.6 million cells, not a whole row or column.
-  EXPECT_EQ(Set({0U, 0U, 99999U, 25U}, "https://example.com", "Shown"), kPreconditionFailed);
+  // B1:XFD8193 is 8,193 x 16,383 cells, past 2^27 and not a whole row or column.
+  EXPECT_EQ(Set({0U, 1U, 8192U, kLastCol}, "https://example.com", "Shown"), kSecurityResourceLimit);
   EXPECT_EQ(LinkCount(), 0U);
   EXPECT_EQ(TableSizes(), sizes);
   EXPECT_TRUE(HyperlinkStyles().empty());
-  EXPECT_EQ(TextAt(0, 0), "<none>");
+  EXPECT_EQ(TextAt(0, 1), "<none>");
   EXPECT_EQ(CellCount(), 0U);
-  // One cell more than 2^20.
-  EXPECT_EQ(Set({0U, 0U, 1024U, 1023U}), kPreconditionFailed);
-  EXPECT_EQ(LinkCount(), 0U);
-  EXPECT_EQ(TableSizes(), sizes);
 }
 
 TEST_F(HyperlinkStyle, RemoveResetsTheWholeRangeEvenCellsAnotherLinkStillCovers) {
@@ -483,10 +481,13 @@ TEST_F(HyperlinkStyle, RemoveResetsTheWholeRangeEvenCellsAnotherLinkStillCovers)
   ASSERT_EQ(present, 1);
   EXPECT_STREQ(got.target, "https://narrow.example/");
 
-  // Every cell of A1:C3 is back to xf 0, B2 included although its link survives.
+  // Every cell of A1:C3 is back to xf 0, B2 included although its link survives:
+  // the text cells hold it, the blank ones have no format of their own left.
   for (std::uint32_t row = 0; row <= 2U; ++row) {
     for (std::uint32_t col = 0; col <= 2U; ++col) {
-      EXPECT_EQ(Effective(row, col), (std::pair<std::int32_t, std::uint32_t>{kSourceCell, 0U})) << row << "," << col;
+      const bool text = row == col && row <= 1U;
+      EXPECT_EQ(Effective(row, col), (std::pair<std::int32_t, std::uint32_t>{text ? kSourceCell : kSourceDefault, 0U}))
+          << row << "," << col;
     }
   }
   // Values stay.
@@ -535,18 +536,18 @@ TEST_F(HyperlinkStyle, ClearResetsEveryLinkRange) {
   EXPECT_EQ(fm_sheet_clear_hyperlinks(wb(), 0), 0);
 }
 
-TEST_F(HyperlinkStyle, RemoveAndClearRefuseALinkOverTooManyCellsAndRemoveAtIsTheEscape) {
+TEST_F(HyperlinkStyle, RemoveAndClearRefuseALinkPastTheCeilingAndRemoveAtIsTheEscape) {
   // Only a file load or the positional insert can produce such a link.
-  const fm_hyperlink_t big = Link({0U, 0U, 99999U, 25U}, "https://big.example");
+  const fm_hyperlink_t big = Link({0U, 1U, 8192U, kLastCol}, "https://big.example");
   ASSERT_EQ(fm_sheet_insert_hyperlink_at(wb(), 0, 0, &big), 0);
   ASSERT_EQ(Set({200000U, 0U, 200000U, 0U}, "https://small.example"), 0);
   ASSERT_EQ(LinkCount(), 2U);
   const std::vector<std::size_t> sizes = TableSizes();
   const std::uint32_t small_xf = XfOf(200000U, 0U);
 
-  EXPECT_EQ(Remove({0U, 0U, 0U, 0U}), kPreconditionFailed);
+  EXPECT_EQ(Remove({0U, 1U, 0U, 1U}), kSecurityResourceLimit);
   EXPECT_EQ(LinkCount(), 2U);
-  EXPECT_EQ(fm_sheet_clear_hyperlinks(wb(), 0), kPreconditionFailed);
+  EXPECT_EQ(fm_sheet_clear_hyperlinks(wb(), 0), kSecurityResourceLimit);
   EXPECT_EQ(LinkCount(), 2U);
   EXPECT_EQ(TableSizes(), sizes);
   EXPECT_EQ(XfOf(200000U, 0U), small_xf);

@@ -20,7 +20,11 @@
 #include "gtest/gtest.h"
 #include "io/cf_reader.h"
 #include "io/cf_writer.h"
+#include "io/ooxml_reader.h"
 #include "pugixml.hpp"
+#include "sheet.h"
+#include "styles.h"
+#include "value.h"
 #include "workbook.h"
 
 #ifndef FORMULON_FIXTURES_DIR
@@ -163,6 +167,40 @@ TEST(RoundtripSymmetry, DataBarCfvoSurvivesReadWrite) {
   EXPECT_TRUE(test::attributes_preserved(before, after, "//dataBar/cfvo[1]", {"type"}));
   EXPECT_TRUE(test::attributes_preserved(before, after, "//dataBar/cfvo[2]", {"type"}));
   EXPECT_TRUE(test::attributes_preserved(before, after, "//dataBar/color", {"rgb"}));
+}
+
+// Style runs (blank formatted cells) cycle through save -> load -> save with
+// the second sheet part equal to the first: no growth, no loss.
+TEST(RoundtripSymmetry, BlankStyleRunsAreIdempotentAcrossTwoCycles) {
+  Workbook wb = Workbook::create();
+  wb.mutable_styles().cell_xfs.resize(3U);
+  Sheet& sheet = wb.sheet(0);
+  ColumnLayout column;
+  column.first = 1U;
+  column.last = 1U;
+  column.has_style = true;
+  column.style_xf = 1U;
+  sheet.mutable_layout().columns.push_back(column);
+  sheet.set_style_runs(0U, 0U, 5U, 2U);
+  sheet.set_style_runs(3U, 0U, 3U, 0U);  // only B4 overrides the column
+  sheet.set_cell_value(3U, 3U, Value::text("x"));
+
+  const auto first = wb.save();
+  ASSERT_TRUE(static_cast<bool>(first)) << first.error().message;
+  auto reread = io::read_ooxml(test::span_of(first.value()));
+  ASSERT_TRUE(static_cast<bool>(reread)) << reread.error().message;
+  const auto second = reread.value().workbook.save();
+  ASSERT_TRUE(static_cast<bool>(second)) << second.error().message;
+
+  std::string first_sheet;
+  std::string second_sheet;
+  ASSERT_TRUE(test::extract_part(test::span_of(first.value()), "xl/worksheets/sheet1.xml", &first_sheet));
+  ASSERT_TRUE(test::extract_part(test::span_of(second.value()), "xl/worksheets/sheet1.xml", &second_sheet));
+  EXPECT_EQ(first_sheet, second_sheet);
+  EXPECT_NE(first_sheet.find("<c r=\"B4\"/>"), std::string::npos);
+  EXPECT_EQ(first_sheet.find("<c r=\"A4\""), std::string::npos);
+  EXPECT_NE(first_sheet.find("<c r=\"E1\" s=\"2\"/>"), std::string::npos);
+  EXPECT_EQ(reread.value().workbook.sheet(0).cell_count(), 5U + 1U + 1U);
 }
 
 }  // namespace

@@ -35,7 +35,6 @@ exercises every embind export at least once:
 - `setNumber`, `setBool`, `setText`, `setBlank`, `setFormula`, `recalc`,
   `getValue`, `setIterative`
 - `addSheet`, `sheetCount`, `sheetName`
-- `cellCount`, `cellAt`
 - `save()` / `load()` round-trip on a small workbook
 
 A failing test prints `FAIL <name>` plus a stack trace, and the runner

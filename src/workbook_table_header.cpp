@@ -105,7 +105,7 @@ Expected<void, Error> Workbook::set_table_header_row_cells(std::size_t index, bo
   if (!shown) {
     // The header cells go outright, formats included, and nothing moves.
     for (std::uint32_t col = rect.first_col; col <= rect.last_col; ++col) {
-      if (sheets_[sheet_index].cell_at(rect.first_row, col) != nullptr) {
+      if (sheets_[sheet_index].has_cell_or_style(rect.first_row, col)) {
         put_cell_value_locked(sheet_index, rect.first_row, col, Value::blank());
         sheets_[sheet_index].erase_cell(rect.first_row, col);
       }

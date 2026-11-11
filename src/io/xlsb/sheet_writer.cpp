@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdint>
 #include <map>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -20,6 +21,7 @@
 #include "hyperlink_address.h"
 #include "io/dv_overlay.h"
 #include "io/dynamic_array_formula.h"
+#include "io/ooxml_writer_cell.h"
 #include "io/protection_xml.h"
 #include "io/xlsb/cell_writer.h"
 #include "io/xlsb/cf_records.h"
@@ -50,12 +52,23 @@ namespace io {
 namespace xlsb {
 namespace {
 
-/// Returns `true` when a `Cell` is "empty" in the sense that nothing
-/// useful would be carried by emitting a `BrtCellBlank` for it. Used
-/// to skip stored slots whose content was cleared.
-bool IsEmptySlot(const Cell& cell) {
-  return cell.formula_text.empty() && cell.cached_value.is_blank() && cell.xf_index == 0U && !cell.has_explicit_xf &&
-         !cell.show_phonetic;
+/// True when the stored cell at `(row, col)` writes no record: the .xlsx
+/// writer's `CellIsEmitted` rule, so an explicit default is a `BrtCellBlank`
+/// only where it overrides a row or column format.
+bool IsEmptySlot(const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell& cell) {
+  return !CellIsEmitted(sheet, row, col, cell);
+}
+
+/// Adds columns `[first, end)` to a row's spans, which `add_col` keeps per
+/// 1,024-column segment: each segment the piece crosses gains its clipped ends.
+template <typename AddCol>
+void AddPieceToSpans(std::uint32_t first, std::uint64_t end, AddCol&& add_col) {
+  for (std::uint64_t seg_first = first; seg_first < end;) {
+    const std::uint64_t seg_end = std::min<std::uint64_t>(end, (seg_first / 1024U + 1U) * 1024U);
+    add_col(static_cast<std::uint32_t>(seg_first));
+    add_col(static_cast<std::uint32_t>(seg_end - 1U));
+    seg_first = seg_end;
+  }
 }
 
 /// First and last emitted column within one 1,024-column segment of a row.
@@ -163,36 +176,14 @@ void EmitWorksheetViewsAndFormatting(std::vector<std::uint8_t>& dst, const Sheet
   emit_ws_fmt_info(dst, defaults);
 }
 
-/// Emits the bounding RfX of actual emitted cells.  Although BrtWsDim is
-/// optional in the grammar, Excel itself writes it for every non-empty sheet
-/// and uses it to establish the worksheet's used range before reading the
-/// cell table.
+/// Emits BrtWsDim, the `sheet_dimension` box the .xlsx `<dimension>` shares,
+/// or A1 (0..0 / 0..0) when there is nothing to cover. BrtWsDim is optional in
+/// the grammar, but Excel writes it for every sheet, empty ones included, and
+/// uses it to establish the used range before reading the cell table.
 void EmitWorksheetDimensions(std::vector<std::uint8_t>& dst, const Sheet& sheet) {
-  std::uint32_t first_row = Sheet::kMaxRows;
-  std::uint32_t last_row = 0U;
-  std::uint32_t first_col = Sheet::kMaxCols;
-  std::uint32_t last_col = 0U;
-  bool any = false;
-  auto include = [&](std::uint32_t row, std::uint32_t col) {
-    first_row = std::min(first_row, row);
-    last_row = std::max(last_row, row);
-    first_col = std::min(first_col, col);
-    last_col = std::max(last_col, col);
-    any = true;
-  };
-
-  for (const auto& [row, cells] : sheet.rows()) {
-    for (const auto& [col, cell] : cells) {
-      if (!IsEmptySlot(cell)) {
-        include(row, col);
-      }
-    }
-  }
-  if (!any) {
-    return;
-  }
+  const SheetDimension box = sheet_dimension(sheet).value_or(SheetDimension{});
   std::vector<std::uint8_t> payload;
-  emit_rfx(payload, MergeRange{first_row, first_col, last_row, last_col});
+  emit_rfx(payload, MergeRange{box.first_row, box.first_col, box.last_row, box.last_col});
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtWsDim), payload);
 }
 
@@ -443,13 +434,28 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     const std::map<std::uint32_t, PhantomShell>* row_phantoms =
         phantom_it != phantoms.end() ? &phantom_it->second : nullptr;
 
+    // Blank formatted columns, written as `BrtCellBlank` records, or the
+    // row's explicit defaults written as its own xf-0 row format.
+    const RowEmitPlan plan =
+        row_cells != nullptr ? row_emit_plan(sheet, row, *row_cells, row_phantoms != nullptr) : RowEmitPlan();
+    const std::vector<EmittedRun>& runs = plan.runs;
+    RowLayout converted;
+    if (plan.as_row_format) {
+      if (row_layout != nullptr) {
+        converted = *row_layout;
+      }
+      converted.row = row;
+      converted.has_style = true;
+      converted.style_xf = 0U;
+      row_layout = &converted;
+    }
+
     // A row with nothing to emit is skipped so we do not emit
     // a bare BrtRowHdr.
-    bool any = false;
-    if (row_cells != nullptr) {
+    bool any = !runs.empty();
+    if (row_cells != nullptr && !any) {
       for (const auto& [col, cell] : *row_cells) {
-        (void)col;
-        if (!IsEmptySlot(cell)) {
+        if (!IsEmptySlot(sheet, row, col, cell)) {
           any = true;
           break;
         }
@@ -485,10 +491,13 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     };
     if (row_cells != nullptr) {
       for (const auto& [col, cell] : *row_cells) {
-        if (!IsEmptySlot(cell)) {
+        if (!IsEmptySlot(sheet, row, col, cell)) {
           add_to_span(col);
         }
       }
+    }
+    for (const EmittedRun& piece : runs) {
+      AddPieceToSpans(piece.first, piece.end, add_to_span);
     }
     if (row_phantoms != nullptr) {
       for (const auto& [col, phantom] : *row_phantoms) {
@@ -498,16 +507,39 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     }
 
     EmitRowHeader(body, row, row_layout, sheet.format_defaults().zero_height, spans);
-    // Ascending merge of stored entries and phantoms; a column in both takes the entry path unless it is style-only.
+    // Ascending three-way merge of stored entries, phantoms and run columns; a
+    // column in both a stored entry and a phantom takes the entry path unless
+    // it is style-only, a phantom wins over a run column, and a stored entry
+    // and a run never share a column.
     RowCells::const_iterator entry_it = row_cells != nullptr ? row_cells->begin() : RowCells::const_iterator();
     const RowCells::const_iterator entry_end = row_cells != nullptr ? row_cells->end() : RowCells::const_iterator();
     auto ph = row_phantoms != nullptr ? row_phantoms->begin() : std::map<std::uint32_t, PhantomShell>::const_iterator();
     const auto ph_end =
         row_phantoms != nullptr ? row_phantoms->end() : std::map<std::uint32_t, PhantomShell>::const_iterator();
-    while (entry_it != entry_end || ph != ph_end) {
+    auto run = runs.begin();
+    std::uint64_t run_col = run != runs.end() ? run->first : UINT64_MAX;
+    const auto advance_run_past = [&](std::uint64_t col) {
+      while (run != runs.end() && run_col <= col) {
+        run_col = col + 1U;
+        if (run_col >= run->end) {
+          ++run;
+          run_col = run != runs.end() ? run->first : UINT64_MAX;
+        }
+      }
+    };
+    while (entry_it != entry_end || ph != ph_end || run != runs.end()) {
       const std::uint32_t entry_col = entry_it != entry_end ? (*entry_it).col : UINT32_MAX;
       const std::uint32_t phantom_col = ph != ph_end ? ph->first : UINT32_MAX;
+      if (run_col < entry_col && run_col < phantom_col) {
+        const std::uint64_t stop = std::min<std::uint64_t>({run->end, entry_col, phantom_col});
+        for (std::uint64_t run_at = run_col; run_at < stop; ++run_at) {
+          emit_blank(body, cell_payload, static_cast<std::uint32_t>(run_at), run->xf);
+        }
+        advance_run_past(stop - 1U);
+        continue;
+      }
       const std::uint32_t col = std::min(entry_col, phantom_col);
+      advance_run_past(col);
       const Cell* cell = nullptr;
       if (entry_col == col) {
         cell = &(*entry_it).cell;
@@ -519,7 +551,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
         ++ph;
       }
       // A spilled cell carrying only its own style is still the spill's.
-      if (cell != nullptr && !IsEmptySlot(*cell) && !(phantom && cell->formula_text.empty())) {
+      if (cell != nullptr && !IsEmptySlot(sheet, row, col, *cell) && !(phantom && cell->formula_text.empty())) {
         const bool always = formula_cell_always_calculates(sheet, row, col, *cell, name_shapes);
         const SpillRegion* region = cell->formula_text.empty() ? nullptr : sheet.spill_region_at_anchor(row, col);
         // A dynamic-array formula keeps that form (its `BrtCellMeta` naming

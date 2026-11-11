@@ -501,7 +501,7 @@ test('setRangeXfIndex applies one xf across a rectangle', async () => {
   const xf = wb.ooxml.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: border, numFmtId: 0 });
 
   wb.sheet(0).ooxml.setRangeXfIndex({ firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 2 }, xf);
-  // Every cell in the rectangle is materialised, including ones that held
+  // Every cell in the rectangle takes the format, including ones that held
   // no value, so the box renders.
   for (const [row, col] of [
     [0, 0],
@@ -512,7 +512,7 @@ test('setRangeXfIndex applies one xf across a rectangle', async () => {
   }
   assert.equal(wb.sheet(0).ooxml.getCellXfIndex(3, 3), null);
   wb.sheet(0).ooxml.setCellXfIndex(3, 3, 0);
-  assert.equal(wb.sheet(0).ooxml.getCellXfIndex(3, 3), 0);
+  assert.equal(wb.sheet(0).ooxml.getCellXfIndex(3, 3), null);
 });
 
 test('pivotCount + pivotLayout expose the PivotTable projection', async () => {

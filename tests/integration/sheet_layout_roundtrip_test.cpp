@@ -421,7 +421,8 @@ TEST(SheetLayoutRoundTrip, AttributePresenceSurvivesWithoutCellMaterialization) 
   EXPECT_NE(xml.find("<col min=\"3\" max=\"3\" hidden=\"1\"/>"), std::string::npos) << xml;
   EXPECT_NE(xml.find("<col min=\"4\" max=\"4\" outlineLevel=\"2\"/>"), std::string::npos) << xml;
   EXPECT_NE(xml.find("<col min=\"5\" max=\"5\" style=\"3\"/>"), std::string::npos) << xml;
-  EXPECT_NE(xml.find("<row r=\"13\" s=\"0\" customFormat=\"1\"/>"), std::string::npos) << xml;
+  // customFormat alone is the xf-0 row format; Excel omits `s` for it.
+  EXPECT_NE(xml.find("<row r=\"13\" customFormat=\"1\"/>"), std::string::npos) << xml;
   EXPECT_NE(xml.find("<row r=\"14\" s=\"3\" customFormat=\"1\"/>"), std::string::npos) << xml;
 
   auto result_or = io::read_ooxml(SpanOf(bytes));

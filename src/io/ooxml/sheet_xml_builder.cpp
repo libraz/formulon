@@ -8,6 +8,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -477,50 +478,18 @@ std::string BuildColsXml(const SheetLayout& layout) {
   return out;
 }
 
-/// Emits `<dimension ref="A1:..."/>` for the sheet's populated bounding
-/// box. ECMA-376 places `<dimension>` between `<sheetPr>` and
-/// `<sheetViews>`; some readers (and Excel's Name Box) use it to seed the
-/// used range, so an accurate box avoids a divergent used-range guess.
-///
-/// The box covers exactly what the same save writes into `<sheetData>`,
-/// which is two populations rather than one. A stored cell contributes
-/// whenever `AppendCellXml` would emit a `<c>` for it -- the shared
-/// predicate below, which includes a blank cell carrying only a style
-/// index, since that ships as `<c s="N"/>`. A dynamic-array formula
-/// contributes its whole spill footprint: the anchor is a stored cell,
-/// but its phantoms live only in the spill table, and the anchor's
-/// `<f t="array" ref="...">` already declares the full rectangle.
-/// An empty sheet emits `<dimension ref="A1"/>` (Excel's convention for
-/// a sheet with no content).
+/// Emits `<dimension ref="A1:..."/>`. ECMA-376 places `<dimension>` between
+/// `<sheetPr>` and `<sheetViews>`; some readers (and Excel's Name Box) use it
+/// to seed the used range. The box is `sheet_dimension`, the rule the .xlsb
+/// writer's BrtWsDim shares; with nothing to cover it is `A1`, Excel's form
+/// for an empty sheet.
 std::string BuildDimensionXml(const Sheet& sheet) {
-  bool any = false;
-  std::uint32_t min_row = 0;
-  std::uint32_t min_col = 0;
-  std::uint32_t max_row = 0;
-  std::uint32_t max_col = 0;
-  const auto include = [&](std::uint32_t row_index, std::uint32_t col_index) {
-    if (!any) {
-      min_row = max_row = row_index;
-      min_col = max_col = col_index;
-      any = true;
-      return;
-    }
-    min_row = std::min(min_row, row_index);
-    max_row = std::max(max_row, row_index);
-    min_col = std::min(min_col, col_index);
-    max_col = std::max(max_col, col_index);
-  };
-  for (const auto& [row_index, cells] : sheet.rows()) {
-    for (const auto& [col, cell] : cells) {
-      if (!CellIsEmitted(cell)) {
-        continue;
-      }
-      include(row_index, col);
-    }
-  }
-  for (const CellAddress& phantom : sheet.spill_phantom_addresses()) {
-    include(phantom.row, phantom.col);
-  }
+  const std::optional<SheetDimension> box = sheet_dimension(sheet);
+  const bool any = box.has_value();
+  const std::uint32_t min_row = any ? box->first_row : 0U;
+  const std::uint32_t min_col = any ? box->first_col : 0U;
+  const std::uint32_t max_row = any ? box->last_row : 0U;
+  const std::uint32_t max_col = any ? box->last_col : 0U;
   std::string out;
   out.append("<dimension ref=\"");
   if (!any) {

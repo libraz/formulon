@@ -338,11 +338,11 @@ TEST(PivotBlocked, FieldlessReportIsTheBorderedPlaceholder) {
   for (std::uint32_t r = 0; r < 18U; ++r) {
     for (std::uint32_t c = 0; c < 3U; ++c) {
       const std::string where = A1(2U + r, 6U + c);
-      const Cell* cell = wb.sheet(kPivotSheet).cell_at(2U + r, 6U + c);
-      ASSERT_NE(cell, nullptr) << where;
-      EXPECT_TRUE(cell->formula_text.empty() && cell->cached_value.is_blank()) << where;
-      ASSERT_LT(cell->xf_index, styles.cell_xfs.size()) << where;
-      const CellXf& xf = styles.cell_xfs[cell->xf_index];
+      const std::optional<StyleSlot> slot = wb.sheet(kPivotSheet).cell_style_at(2U + r, 6U + c);
+      ASSERT_TRUE(slot.has_value()) << where;
+      EXPECT_EQ(wb.sheet(kPivotSheet).cell_at(2U + r, 6U + c), nullptr) << where;
+      ASSERT_LT(slot->xf, styles.cell_xfs.size()) << where;
+      const CellXf& xf = styles.cell_xfs[slot->xf];
       EXPECT_TRUE(xf.apply_border) << where;
       ASSERT_LT(xf.border_index, styles.borders.size()) << where;
       const BorderRecord& border = styles.borders[xf.border_index];
@@ -757,10 +757,8 @@ TEST(PivotBlocked, FieldlessReportWritesNoCellValues) {
   // A5:C22 holds styled empty cells only; the anchor carries no "Row Labels" caption.
   for (std::uint32_t r = 4U; r <= 21U; ++r) {
     for (std::uint32_t c = 0U; c <= 2U; ++c) {
-      const Cell* cell = wb.sheet(kDataSheet).cell_at(r, c);
-      ASSERT_NE(cell, nullptr) << A1(r, c);
-      EXPECT_TRUE(cell->formula_text.empty()) << A1(r, c);
-      EXPECT_TRUE(cell->cached_value.is_blank()) << A1(r, c);
+      EXPECT_TRUE(wb.sheet(kDataSheet).cell_style_at(r, c).has_value()) << A1(r, c);
+      EXPECT_EQ(wb.sheet(kDataSheet).cell_at(r, c), nullptr) << A1(r, c);
     }
   }
   EXPECT_TRUE(At(wb, 4U, 0U, kDataSheet).is_blank());

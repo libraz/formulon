@@ -197,21 +197,29 @@ void Workbook::erase_cells_in(std::size_t sheet_index, const MergeRange& rect) {
   Sheet& sheet = sheets_[sheet_index];
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  const std::uint64_t col_end = static_cast<std::uint64_t>(rect.last_col) + 1U;
   std::vector<CellAddress> stored;
+  std::vector<std::uint32_t> styled_rows;
   for (std::uint64_t row = rect.first_row; row <= rect.last_row; ++row) {
     const auto it = sheet.rows().find(static_cast<std::uint32_t>(row));
     if (it == sheet.rows().end()) {
       continue;
     }
-    for (const RowCells::Entry entry :
-         it->second.entries_in(rect.first_col, static_cast<std::uint64_t>(rect.last_col) + 1U)) {
+    for (const RowCells::Entry entry : it->second.entries_in(rect.first_col, col_end)) {
       stored.push_back(CellAddress{static_cast<std::uint32_t>(row), entry.col});
+    }
+    if (it->second.run_count_in(rect.first_col, col_end) != 0U) {
+      styled_rows.push_back(static_cast<std::uint32_t>(row));
     }
   }
   // Like a literal write, the erase re-evaluates whatever read the cell.
   for (const CellAddress address : stored) {
     prepare_cell_overwrite(mutator, sheet_index, sheets_, address.row, address.col);
     sheet.erase_cell(address.row, address.col);
+  }
+  // Formatted blanks carry no value, so nothing reads them.
+  for (const std::uint32_t row : styled_rows) {
+    sheet.clear_style_runs(row, rect.first_col, col_end);
   }
 }
 

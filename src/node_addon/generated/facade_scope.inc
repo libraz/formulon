@@ -54,8 +54,6 @@ constexpr const char* kSheetMethods[] = {
     "getArrayFormula",
     "getAutoFilter",
     "getAutoFilterXml",
-    "getCellAt",
-    "getCellCount",
     "getCellFormat",
     "getCellPhonetic",
     "getCellPhoneticProperties",
