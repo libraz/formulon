@@ -9,9 +9,13 @@
 #include <cstdint>
 #include <iterator>
 #include <limits>
+#include <memory>
+#include <optional>
+#include <utility>
 #include <vector>
 
 #include "cell.h"
+#include "style_region.h"
 #include "utils/a1_ref.h"
 
 namespace formulon {
@@ -30,6 +34,33 @@ struct CellAddressHash {
   }
 };
 
+/// Blank columns `[first, last]` (inclusive) of one row that carry their own
+/// format `xf` without a stored cell.
+struct StyleRun {
+  std::uint16_t first = 0;
+  std::uint16_t last = 0;
+  std::uint32_t xf = 0;
+};
+
+/// A coordinate's own format: the stored cell's xf and explicit flag, or a
+/// run's xf (always explicit).
+struct StyleSlot {
+  std::uint32_t xf = 0;
+  bool explicit_xf = false;
+};
+
+/// An xf mapping in table form (`pairs`, sorted by `from` with no repeats;
+/// an xf with no pair maps to itself) or constant form (every xf maps to
+/// `constant`).
+struct XfMap {
+  const XfRemap* pairs = nullptr;
+  std::size_t count = 0;
+  std::uint32_t constant = 0;
+  bool is_constant = false;
+
+  std::uint32_t operator()(std::uint32_t xf) const noexcept;
+};
+
 /// One populated row's cells: a sorted array of column keys and a parallel
 /// array of cells, so a row's memory follows the number of columns written
 /// to it, not the distance between its extreme columns.
@@ -38,6 +69,12 @@ struct CellAddressHash {
 /// absent and `find()` reports it as `nullptr`. Iteration is const and yields
 /// `Entry{col, cell}` in ascending column order; mutation goes through
 /// `find`, `ensure` and the structural edits.
+///
+/// Blank columns with their own format are held as style runs beside the
+/// stored cells, never as cells. No column is both stored and in a run, and
+/// runs are sorted, disjoint, with touching equal-xf runs merged. The stored
+/// cell accessors (`empty`, iteration, `entries_in`, `count_in`, `find`)
+/// see stored cells only; the structural edits move both together.
 ///
 /// Every column range argument is half-open, `[first, end)`, with a 64-bit
 /// `end` so `last_col + 1` never wraps.
@@ -96,7 +133,11 @@ class RowCells {
     const_iterator end_;
   };
 
+  /// True when no cell is stored; runs are not looked at.
   bool empty() const noexcept { return cols_.empty(); }
+
+  /// True when a cell is stored or a run exists.
+  bool has_any() const noexcept { return !cols_.empty() || runs_ != nullptr; }
 
   /// Number of columns held.
   std::size_t stored_count() const noexcept { return cols_.size(); }
@@ -113,8 +154,45 @@ class RowCells {
 
   /// Returns the cell at `col`, inserting a default one when absent. Inserting
   /// may move the cells to its right; their `cached_text_owned` payload is
-  /// heap-stable across the move.
+  /// heap-stable across the move. A column inside a run leaves the run, and
+  /// the new cell takes the run's xf as an explicit format.
   Cell& ensure(std::uint32_t col);
+
+  /// Every run, ascending (an empty vector when there is none).
+  const std::vector<StyleRun>& runs() const noexcept;
+
+  /// The runs intersecting `[first, end)`, unclipped, as a pointer range.
+  std::pair<const StyleRun*, const StyleRun*> runs_in(std::uint32_t first, std::uint64_t end) const noexcept;
+
+  /// Number of run columns inside `[first, end)`.
+  std::uint32_t run_count_in(std::uint32_t first, std::uint64_t end) const noexcept;
+
+  /// True when a stored or run column lies inside `[first, end)`.
+  bool any_in(std::uint32_t first, std::uint64_t end) const noexcept {
+    return count_in(first, end) != 0U || run_count_in(first, end) != 0U;
+  }
+
+  /// The own format at `col`: a stored cell's `{xf_index, has_explicit_xf}`
+  /// (a stored cell owns its style), else a run's `{xf, true}`, else nullopt.
+  std::optional<StyleSlot> find_style(std::uint32_t col) const noexcept;
+
+  /// Covers the columns of `[first, end)` that hold no stored cell with runs
+  /// of `xf`, replacing the runs there. Returns how many runs the row gained.
+  std::size_t set_runs(std::uint32_t first, std::uint64_t end, std::uint32_t xf);
+
+  /// Removes run coverage from `[first, end)`.
+  void clear_runs(std::uint32_t first, std::uint64_t end);
+
+  /// Gives every run column inside `[first, end)` the xf `map(xf)`. Returns
+  /// how many runs the row gained.
+  std::size_t remap_runs(std::uint32_t first, std::uint64_t end, const XfMap& map);
+
+  /// Erases the cell stored at `col` when it holds no content (no formula,
+  /// cached value, phonetic state or array role). Returns its xf when it
+  /// owned a format (`xf_index != 0 || has_explicit_xf`), for the caller to
+  /// write back as a run; nullopt otherwise, and for a column with content
+  /// or nothing stored. Invalidates references to this and later cells.
+  std::optional<std::uint32_t> demote(std::uint32_t col);
 
   const_iterator begin() const noexcept { return const_iterator(cols_.data(), cells_.data()); }
   const_iterator end() const noexcept {
@@ -142,31 +220,61 @@ class RowCells {
     return hi > lo ? hi - lo : 0U;
   }
 
-  /// Adds `count` to every key at or after `col`; keys pushed to `kMaxCols` or
-  /// beyond are dropped with their cells.
+  /// Adds `count` to every key and run column at or after `col` (a run
+  /// straddling `col` splits there); keys pushed to `kMaxCols` or beyond are
+  /// dropped with their cells, a run pushed partly past is truncated.
   void shift_cols_from(std::uint32_t col, std::uint32_t count);
 
-  /// Drops the cell stored at `col`, leaving the other keys where they are.
+  /// Drops the cell stored at `col` and the run column there, leaving the
+  /// other columns where they are.
   void erase(std::uint32_t col);
 
-  /// Drops the keys in `[col, col + count)` with their cells and subtracts
-  /// `count` from every key after the band.
+  /// Drops the keys and run columns in `[col, col + count)` and subtracts
+  /// `count` from every column after the band.
   void erase_cols(std::uint32_t col, std::uint32_t count);
 
-  /// Drops the keys in `[first, end)` with their cells; other keys stay.
+  /// Drops the keys and run columns in `[first, end)`; other columns stay.
   void erase_in(std::uint32_t first, std::uint64_t end);
 
-  /// Moves the cells keyed in `[first, end)` to the same keys of `dest`
-  /// (another row), replacing what `dest` stored there.
+  /// Moves the cells and run columns in `[first, end)` to the same columns of
+  /// `dest` (another row), replacing what `dest` held there.
   void move_in_to(std::uint32_t first, std::uint64_t end, RowCells& dest);
 
-  /// Heap bytes reserved by the key and cell arrays.
+  /// Heap bytes reserved by the key, cell and run arrays.
   std::size_t capacity_bytes() const noexcept {
-    return cols_.capacity() * sizeof(std::uint16_t) + cells_.capacity() * sizeof(Cell);
+    std::size_t bytes = cols_.capacity() * sizeof(std::uint16_t) + cells_.capacity() * sizeof(Cell);
+    if (runs_ != nullptr) {
+      bytes += sizeof(std::vector<StyleRun>) + runs_->capacity() * sizeof(StyleRun);
+    }
+    return bytes;
   }
 
  private:
   static constexpr std::size_t kNpos = static_cast<std::size_t>(-1);
+
+  /// Inserts a default cell at `col`, which holds none.
+  Cell& insert_cell(std::uint32_t col);
+
+  /// Index of the first run whose `last >= col` (`runs_` non-null).
+  std::size_t run_lower(std::uint64_t col) const noexcept;
+
+  /// Splits the run straddling `col` so a run boundary falls there; returns
+  /// the index of the first run starting at or after `col` (`runs_` non-null).
+  std::size_t split_runs_at(std::uint64_t col);
+
+  /// Merges touching equal-xf runs and releases an empty vector.
+  void normalize_runs();
+
+  /// Removes run column `col` and returns its xf, or nullopt when no run
+  /// holds it.
+  std::optional<std::uint32_t> take_run_column(std::uint32_t col);
+
+  /// Number of runs held.
+  std::size_t run_total() const noexcept { return runs_ == nullptr ? 0U : runs_->size(); }
+
+  /// Checks that no column is both stored and run, and that runs are sorted,
+  /// disjoint and merged. For assertions.
+  bool invariants_hold() const noexcept;
 
   /// Index of `col` in `cols_`, or `kNpos`. Tries the dense-prefix guess first.
   std::size_t index_of(std::uint32_t col) const noexcept {
@@ -207,7 +315,8 @@ class RowCells {
 
   std::vector<std::uint16_t> cols_;  // ascending, unique
   static_assert(a1::kMaxCols - 1U <= std::numeric_limits<std::uint16_t>::max(), "column keys must fit uint16_t");
-  std::vector<Cell> cells_;  // cells_[i] is column cols_[i]
+  std::vector<Cell> cells_;                      // cells_[i] is column cols_[i]
+  std::unique_ptr<std::vector<StyleRun>> runs_;  // null when the row has no run
 };
 
 }  // namespace formulon
