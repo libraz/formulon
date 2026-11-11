@@ -114,7 +114,8 @@ TEST(FormulonCApiCfMutate, DataBarRuleSurvivesGetAtFedBackIntoAddRule) {
   EXPECT_EQ(CfB(round_trip.data_bar_axis_color), 66U);
 
   round_trip.stop_if_true = 1;
-  ASSERT_EQ(fm_sheet_remove_cf_rule(wb.handle, 0, CfRuleIdAt(wb.handle, 0, 0).c_str()), 0);
+  // Another get would release the storage `round_trip` points into, so remove by its own id.
+  ASSERT_EQ(fm_sheet_remove_cf_rule(wb.handle, 0, round_trip.id), 0);
   const char* rewritten_id = nullptr;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &round_trip, &rewritten_id), 0) << fm_get_last_error_message();
 
