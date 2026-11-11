@@ -817,6 +817,12 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_internal_refs.py
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
+  # gtest name-generator lambdas must not shadow the macro's `info` (GCC -Wshadow).
+  add_test(
+    NAME GtestParamNameShadowing
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_gtest_param_names.py
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
   add_test(
     NAME OracleGeneratorDivergenceMetadata
     COMMAND ${_FORMULON_BEHAVIOR_PY} -m tools.oracle.oracle_gen_metadata_test

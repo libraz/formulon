@@ -98,8 +98,9 @@ TEST_P(FormulonCApiRangeStyleScale, HyperlinkOverA1ToZ100000SurvivesSaveAndLoad)
 
 INSTANTIATE_TEST_SUITE_P(Formats, FormulonCApiRangeStyleScale,
                          ::testing::Values(FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB),
-                         [](const ::testing::TestParamInfo<fm_workbook_format_t>& info) {
-                           return info.param == FM_WORKBOOK_FORMAT_XLSX ? std::string("Xlsx") : std::string("Xlsb");
+                         [](const ::testing::TestParamInfo<fm_workbook_format_t>& param_info) {
+                           return param_info.param == FM_WORKBOOK_FORMAT_XLSX ? std::string("Xlsx")
+                                                                              : std::string("Xlsb");
                          });
 
 }  // namespace

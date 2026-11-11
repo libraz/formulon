@@ -621,7 +621,7 @@ INSTANTIATE_TEST_SUITE_P(
         AxisDimensionCase{
             "ColumnStyleBesideTextInA1", {{7, 7, 1}}, {}, true, "A1:H1", std::vector<std::uint32_t>{0, 0, 0, 7}},
         AxisDimensionCase{"Empty", {}, {}, false, "A1", std::vector<std::uint32_t>{0, 0, 0, 0}}),
-    [](const ::testing::TestParamInfo<AxisDimensionCase>& info) { return std::string(info.param.name); });
+    [](const ::testing::TestParamInfo<AxisDimensionCase>& param_info) { return std::string(param_info.param.name); });
 
 namespace {
 
@@ -945,7 +945,7 @@ INSTANTIATE_TEST_SUITE_P(
                                    {},
                                    kConvertedRow,
                                    "D3:F3"}),
-    [](const ::testing::TestParamInfo<EmitPlanCase>& info) { return std::string(info.param.name); });
+    [](const ::testing::TestParamInfo<EmitPlanCase>& param_info) { return std::string(param_info.param.name); });
 
 namespace {
 
@@ -1009,4 +1009,4 @@ INSTANTIATE_TEST_SUITE_P(
                         Blanks(wb, 8, 7, 7);
                       },
                       "A1:H9", std::vector<std::uint32_t>{0, 8, 0, 7}}),
-    [](const ::testing::TestParamInfo<DimensionCase>& info) { return std::string(info.param.name); });
+    [](const ::testing::TestParamInfo<DimensionCase>& param_info) { return std::string(param_info.param.name); });

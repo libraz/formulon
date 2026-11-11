@@ -239,7 +239,9 @@ INSTANTIATE_TEST_SUITE_P(Maps, FormulonCApiRangeStyleRunsMap,
                              MapCase{"swap", {{1U, 2U}, {2U, 1U}}, {2, 1, kNoFormat, 2, 1, kNoFormat, 2, 1}},
                              // Each coordinate is mapped once: 0 -> 1 never continues to 2.
                              MapCase{"chain", {{0U, 1U}, {1U, 2U}}, {2, 2, 1, 2, 2, 1, 2, 2}}),
-                         [](const ::testing::TestParamInfo<MapCase>& info) { return std::string(info.param.name); });
+                         [](const ::testing::TestParamInfo<MapCase>& param_info) {
+                           return std::string(param_info.param.name);
+                         });
 
 TEST(FormulonCApiRangeStyleRuns, AxisRemapDecidesExplicitDefaultsAgainstTheRewrittenAxis) {
   WorkbookGuard wb;
@@ -476,7 +478,7 @@ INSTANTIATE_TEST_SUITE_P(
                       EdgeCase{"blank_on_unformatted_content_removes", Number, Blank, kNoFormat, false, 0U},
                       EdgeCase{"reset_on_run_removes", RunXf3, ResetXf, kNoFormat, false, 0U},
                       EdgeCase{"reset_on_content_keeps_cell", NumberXf3, ResetXf, 0, true, 1U}),
-    [](const ::testing::TestParamInfo<EdgeCase>& info) { return std::string(info.param.name); });
+    [](const ::testing::TestParamInfo<EdgeCase>& param_info) { return std::string(param_info.param.name); });
 
 TEST(FormulonCApiRangeStyleRuns, EnumerationSeesRunsAndFollowsARangeWrite) {
   WorkbookGuard wb;
@@ -636,4 +638,4 @@ INSTANTIATE_TEST_SUITE_P(
         RefusalCase{"explicit_flag_out_of_range", Blob::Header(2U).u32(1U).u32(1U).u32(1U).cell(0U, 3U, 2U)},
         RefusalCase{"unknown_version", Blob::Header(3U).u32(0U)},
         RefusalCase{"trailing_bytes", Blob::Header(2U).u32(0U).u8(0U)}),
-    [](const ::testing::TestParamInfo<RefusalCase>& info) { return std::string(info.param.name); });
+    [](const ::testing::TestParamInfo<RefusalCase>& param_info) { return std::string(param_info.param.name); });

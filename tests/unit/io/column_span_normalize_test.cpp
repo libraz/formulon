@@ -58,8 +58,8 @@ INSTANTIATE_TEST_SUITE_P(
                       // Adjacent equal spans are not merged.
                       NormalizeCase{"adjacent", {Span(2, 3, 1), Span(0, 1, 1)}, {{0, 1, 1}, {2, 3, 1}}},
                       NormalizeCase{"reversed bounds dropped", {Span(4, 2, 1), Span(0, 0, 2)}, {{0, 0, 2}}}),
-    [](const ::testing::TestParamInfo<NormalizeCase>& info) {
-      std::string name = info.param.name;
+    [](const ::testing::TestParamInfo<NormalizeCase>& param_info) {
+      std::string name = param_info.param.name;
       for (char& c : name) {
         if (c == ' ') {
           c = '_';
