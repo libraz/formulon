@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -16,6 +17,7 @@
 #include <vector>
 
 #include "eval/eval_profile_scope.h"
+#include "eval/recalc_engine.h"
 #include "new_workbook_defaults.h"
 #include "pivot/calculated.h"
 #include "pivot/field_grouping.h"
@@ -265,7 +267,11 @@ Expected<std::size_t, Error> Workbook::show_pivot_details(std::size_t sheet, std
     }
   }
 
-  (void)move_sheet(static_cast<std::uint32_t>(appended), static_cast<std::uint32_t>(sheet));
+  {
+    // A new sheet is no span endpoint, so its placement rewrites nothing.
+    std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+    move_sheet_locked(static_cast<std::uint32_t>(appended), static_cast<std::uint32_t>(sheet));
+  }
   set_active_sheet(static_cast<std::uint32_t>(sheet));
   return sheet;
 }

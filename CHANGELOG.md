@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- A 3-D span is recognised in Excel's shapes: `Data:Mid!A1`, `'Data':Mid!A1`
+  and `'Data:My Sheet'!A1` are spans, while a separately quoted second sheet
+  (`Data:'My Sheet'!A1`, `'Data':'My Sheet'!A1`) ranges the name `Data` with
+  that sheet's cell and evaluates `#NAME?`.
+- A1 and R1C1 text quote a span as one unit when either sheet needs quotes
+  (`'Data:My Sheet'!R[-4]C[-2]`), and keep the qualifier after an unqualified
+  name quoted (`Data:'Mid'!A1`), including after a sheet rename.
+- Moving a sheet rewrites a 3-D span when an endpoint moves past the other
+  one: the moved endpoint gives way to its neighbour inside the span, which
+  collapses to one sheet when one remains (`SUM(Data:Mid!A1)` becomes
+  `SUM(Mid!A1)`).
+
 ## [0.19.0] - 2026-11-10
 
 Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0.19.md).

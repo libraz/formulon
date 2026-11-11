@@ -151,6 +151,35 @@ class SheetRemovalTransform final : public RefTransform {
   std::vector<std::string> rebound_names_;
 };
 
+/// Rewrites 3-D spans for moving the sheet at `from` to `to` (a position in
+/// the sheet list after the sheet is lifted out, as `Workbook::move_sheet`).
+///
+/// A span's text changes only when the move carries one endpoint across the
+/// other: a first endpoint moved past the last takes the sheet that followed
+/// it, a last endpoint moved before the first takes the sheet that preceded
+/// it. A span left on one sheet, or `X:X` with `X` moved, is spelled as the
+/// single-sheet reference. Any other span keeps its text, since membership
+/// follows position. A reversed span is read in tab order and, when rewritten,
+/// spelled in it. An endpoint that names no sheet leaves the span unchanged.
+/// Every other reference is untouched.
+///
+/// The transform copies `pre_move_sheet_order`.
+class SheetMoveTransform final : public RefTransform {
+ public:
+  SheetMoveTransform(const std::vector<std::string_view>& pre_move_sheet_order, std::uint32_t from, std::uint32_t to);
+
+  std::optional<Reference> apply(const Reference& ref) const override { return ref; }
+  std::optional<Ref3DSheetSpan> apply_ref3d_span(std::string_view begin, std::string_view end) const override;
+
+ private:
+  std::size_t find_sheet(std::string_view sheet) const noexcept;
+  std::size_t post_move_index(std::size_t index) const noexcept;
+
+  std::vector<std::string> pre_move_sheet_order_;
+  std::size_t from_;
+  std::size_t to_;
+};
+
 /// Direction of a row/column structural edit.
 enum class RowColEdit : std::uint8_t {
   kInsert,  ///< `count` rows/cols inserted starting at `index`.

@@ -189,6 +189,53 @@ std::optional<RefTransform::Ref3DSheetSpan> SheetRemovalTransform::apply_ref3d_s
   return Ref3DSheetSpan{begin, pre_removal_sheet_order_[inward], /*collapse=*/inward == begin_index};
 }
 
+SheetMoveTransform::SheetMoveTransform(const std::vector<std::string_view>& pre_move_sheet_order, std::uint32_t from,
+                                       std::uint32_t to)
+    : pre_move_sheet_order_(pre_move_sheet_order.begin(), pre_move_sheet_order.end()), from_(from), to_(to) {}
+
+std::size_t SheetMoveTransform::find_sheet(std::string_view sheet) const noexcept {
+  return sheet_names::resolve_by(pre_move_sheet_order_.size(), [&](std::size_t i, sheet_names::Fold fold) {
+    return sheet_names::same(pre_move_sheet_order_[i], sheet, fold);
+  });
+}
+
+std::size_t SheetMoveTransform::post_move_index(std::size_t index) const noexcept {
+  if (index == from_) {
+    return to_;
+  }
+  if (from_ < to_ && index > from_ && index <= to_) {
+    return index - 1U;
+  }
+  if (from_ > to_ && index >= to_ && index < from_) {
+    return index + 1U;
+  }
+  return index;
+}
+
+std::optional<RefTransform::Ref3DSheetSpan> SheetMoveTransform::apply_ref3d_span(std::string_view begin,
+                                                                                 std::string_view end) const {
+  const std::size_t begin_index = find_sheet(begin);
+  const std::size_t end_index = find_sheet(end);
+  if (begin_index == sheet_names::kNotFound || end_index == sheet_names::kNotFound) {
+    return Ref3DSheetSpan{begin, end};
+  }
+  if (begin_index == end_index) {
+    return Ref3DSheetSpan{begin, end, /*collapse=*/begin_index == from_};
+  }
+  const std::size_t first = std::min(begin_index, end_index);
+  const std::size_t last = std::max(begin_index, end_index);
+  std::size_t new_first = first;
+  std::size_t new_last = last;
+  if (first == from_ && post_move_index(first) > post_move_index(last)) {
+    new_first = first + 1U;
+  } else if (last == from_ && post_move_index(last) < post_move_index(first)) {
+    new_last = last - 1U;
+  } else {
+    return Ref3DSheetSpan{begin, end};
+  }
+  return Ref3DSheetSpan{pre_move_sheet_order_[new_first], pre_move_sheet_order_[new_last], new_first == new_last};
+}
+
 RowColShiftTransform::RowColShiftTransform(std::string_view target_sheet, RowColAxis axis, RowColEdit edit,
                                            std::uint32_t index, std::uint32_t count, bool local_means_target,
                                            const sheet_names::NameList* sheet_list) noexcept

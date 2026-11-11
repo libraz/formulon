@@ -413,13 +413,12 @@ extern "C" fm_status_t fm_workbook_add_sheet(fm_workbook_t* wb, const char* utf8
   if (insert_before > count) {
     return sheet_index_out_of_range(insert_before, count, "insert_before");
   }
-  auto r = book.add_sheet_entered(utf8_name != nullptr ? std::string(utf8_name) : book.next_default_sheet_name());
+  auto r = book.add_sheet_entered(utf8_name != nullptr ? std::string(utf8_name) : book.next_default_sheet_name(),
+                                  insert_before);
   if (!r) {
     return set_last_error(r.error());
   }
-  // The new sheet is last; the engine's move interprets its target in the list without it.
   if (insert_before < count) {
-    book.move_sheet(static_cast<std::uint32_t>(count), static_cast<std::uint32_t>(insert_before));
     wb->clear_cell_enumeration_cache();
   }
   *out_index = std::min(insert_before, count);

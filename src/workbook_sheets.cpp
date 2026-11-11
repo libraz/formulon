@@ -128,12 +128,21 @@ std::string Workbook::next_default_sheet_name() const {
   }
 }
 
-Expected<Sheet*, Error> Workbook::add_sheet_entered(std::string name) {
+Expected<Sheet*, Error> Workbook::add_sheet_entered(std::string name, std::size_t insert_before) {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  const std::size_t count = sheets_.size();
+  if (insert_before == kAppendSheet) {
+    insert_before = count;
+  }
+  if (insert_before > count) {
+    return make_error(FormulonErrorCode::kSheetIndexOutOfRange, "index out of range",
+                      "insert_before=" + std::to_string(insert_before) + " sheet_count=" + std::to_string(count));
+  }
   RETURN_IF_ERROR(check_entered_new_sheet_name(name));
-  RETURN_IF_ERROR(check_sheet_headroom(sheets_.size()));
+  RETURN_IF_ERROR(check_sheet_headroom(count));
   append_sheet(sheets_, engine_->locked_mutator(), *this, std::move(name), new_sheet_profile());
-  return &sheets_.back();
+  move_sheet_locked(static_cast<std::uint32_t>(count), static_cast<std::uint32_t>(insert_before));
+  return &sheets_[insert_before];
 }
 
 namespace {
@@ -500,6 +509,21 @@ Expected<void, Error> Workbook::move_sheet(std::uint32_t from_index, std::uint32
     return make_error(FormulonErrorCode::kSheetIndexOutOfRange, "index out of range",
                       "from=" + std::to_string(from_index) + " to=" + std::to_string(to_index) +
                           " sheet_count=" + std::to_string(sheets_.size()));
+  }
+  if (from_index != to_index) {
+    // Spans resolve against the pre-move order, so the rewrite runs before the reorder.
+    std::vector<std::string_view> pre_move_sheet_order;
+    pre_move_sheet_order.reserve(sheets_.size());
+    for (const Sheet& sheet : sheets_) {
+      pre_move_sheet_order.push_back(sheet.name());
+    }
+    const parser::SheetMoveTransform transform(pre_move_sheet_order, from_index, to_index);
+    const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+    std::vector<std::uint32_t> ignored_cache_ids;
+    bool defined_names_changed = false;
+    rewrite_workbook_references(sheets_, defined_names_, tables_, pivot_caches_, transform, mutator, {}, {}, {},
+                                ignored_cache_ids, defined_names_changed);
+    RETURN_IF_ERROR(chart_ref::rewrite_all(*this, transform));
   }
   move_sheet_locked(from_index, to_index);
   return Expected<void, Error>::Ok();

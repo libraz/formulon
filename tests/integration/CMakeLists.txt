@@ -56,6 +56,7 @@ set(FORMULON_INTEGRATION_TEST_SOURCES
   sheet_ops_name_rename_test.cpp
   sheet_ops_remove_move_defined_names_test.cpp
   sheet_ops_row_col_edits_test.cpp
+  sheet_move_span_test.cpp
   sheet_ops_3d_structural_recalc_test.cpp
   structural_edit_matrix_test.cpp
   spill_collision_test.cpp

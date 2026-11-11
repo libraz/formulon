@@ -160,6 +160,9 @@ class Workbook {
   /// and no real workbook approaches this number.
   static constexpr std::size_t kMaxSheets = 0xFFFFU;
 
+  /// `insert_before` value that appends a new sheet.
+  static constexpr std::size_t kAppendSheet = static_cast<std::size_t>(-1);
+
   /// Number of sheets in the workbook. Always at least 1 for
   /// `create()`-constructed instances, never more than `kMaxSheets`.
   std::size_t sheet_count() const noexcept { return sheets_.size(); }
@@ -245,7 +248,9 @@ class Workbook {
   /// (`sheet_names::write_collides`).
   std::string next_default_sheet_name() const;
 
-  /// Appends a new sheet whose name a user entered, validating it exactly as
+  /// Adds a new sheet whose name a user entered, placed before the sheet now
+  /// at `insert_before` (`sheet_count()`, the default, appends), validating
+  /// the name exactly as
   /// `rename_sheet` does: `add_sheet_validated`'s structural rules, a
   /// collision under `sheet_names::write_collides` (the wide fold, not only
   /// case), plus, under a Windows profile, not `History` in any case, which
@@ -253,8 +258,11 @@ class Workbook {
   /// of every binding goes through here; the file readers stay on
   /// `add_sheet_validated`.
   ///
-  /// Errors: as `add_sheet_validated`.
-  Expected<Sheet*, Error> add_sheet_entered(std::string name);
+  /// Placing a new sheet rewrites no formula: it is no endpoint of any span.
+  ///
+  /// Errors: as `add_sheet_validated`; `kSheetIndexOutOfRange` when
+  /// `insert_before > sheet_count()`.
+  Expected<Sheet*, Error> add_sheet_entered(std::string name, std::size_t insert_before = kAppendSheet);
 
   /// Renames the sheet at `index` to `new_name`.
   ///
@@ -299,10 +307,14 @@ class Workbook {
   /// `to_index` is interpreted in the post-removal sheet list (matches
   /// Excel's UI semantics). For example, with three sheets, moving
   /// sheet 0 to the end uses `to_index == 2`, not `3`. A move to the
-  /// same position is a successful no-op. Cell formulas and defined
-  /// names continue to reference sheets by name, so observers reading
-  /// `sheet(i)` see the new positional layout while cross-sheet
-  /// formulas remain correct.
+  /// same position is a successful no-op. References name their sheets,
+  /// so they keep pointing at the same sheets; a 3-D span changes only
+  /// when the move carries one endpoint past the other (the first moved
+  /// after the last becomes the sheet that followed it, the last moved
+  /// before the first the sheet that preceded it), collapsing to one
+  /// sheet when the endpoints meet or when a single-sheet span's sheet
+  /// moves. Formulas, defined names, conditional formats, validations,
+  /// tables and charts are rewritten alike.
   ///
   /// Errors:
   ///   * `kSheetIndexOutOfRange` when either `from_index >=

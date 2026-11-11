@@ -5,6 +5,7 @@
 
 #include "parser/ref_transforms.h"
 
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -448,6 +449,103 @@ TEST(SheetRemovalTransform, SpanShrunkToOneSheetCollapses) {
     ASSERT_TRUE(out.has_value());
     EXPECT_FALSE(out->collapse);
   }
+}
+
+namespace {
+
+struct MovedSpan {
+  std::string begin;
+  std::string end;
+  bool collapse;
+};
+
+// S1..S6 in tab order; moves the sheet at `from` to `to` and maps the span.
+std::optional<MovedSpan> MoveSpan(std::uint32_t from, std::uint32_t to, std::string_view begin, std::string_view end) {
+  const std::vector<std::string_view> order = {"S1", "S2", "S3", "S4", "S5", "S6"};
+  const SheetMoveTransform transform(order, from, to);
+  const std::optional<RefTransform::Ref3DSheetSpan> out = transform.apply_ref3d_span(begin, end);
+  if (!out.has_value()) {
+    return std::nullopt;
+  }
+  return MovedSpan{std::string(out->begin), std::string(out->end), out->collapse};
+}
+
+void ExpectSpan(const std::optional<MovedSpan>& out, std::string_view begin, std::string_view end, bool collapse) {
+  ASSERT_TRUE(out.has_value());
+  EXPECT_EQ(out->begin, begin);
+  EXPECT_EQ(out->end, end);
+  EXPECT_EQ(out->collapse, collapse);
+}
+
+}  // namespace
+
+TEST(RefTransforms, SheetMoveMiddleSheetInsideSpanKeepsText) {
+  ExpectSpan(MoveSpan(2, 4, "S2", "S4"), "S2", "S4", false);
+  ExpectSpan(MoveSpan(2, 1, "S2", "S4"), "S2", "S4", false);
+}
+
+TEST(RefTransforms, SheetMoveSheetOutsideSpanKeepsText) {
+  ExpectSpan(MoveSpan(0, 5, "S2", "S4"), "S2", "S4", false);
+  ExpectSpan(MoveSpan(5, 0, "S2", "S4"), "S2", "S4", false);
+  ExpectSpan(MoveSpan(0, 2, "S2", "S4"), "S2", "S4", false);
+}
+
+TEST(RefTransforms, SheetMoveFirstEndpointPastLastTakesTheFollowingSheet) {
+  ExpectSpan(MoveSpan(1, 3, "S2", "S4"), "S3", "S4", false);
+  ExpectSpan(MoveSpan(1, 5, "S2", "S4"), "S3", "S4", false);
+}
+
+TEST(RefTransforms, SheetMoveLastEndpointBeforeFirstTakesThePrecedingSheet) {
+  ExpectSpan(MoveSpan(3, 1, "S2", "S4"), "S2", "S3", false);
+  ExpectSpan(MoveSpan(3, 0, "S2", "S4"), "S2", "S3", false);
+}
+
+TEST(RefTransforms, SheetMoveFirstEndpointWithinSpanKeepsText) {
+  ExpectSpan(MoveSpan(1, 2, "S2", "S4"), "S2", "S4", false);
+  ExpectSpan(MoveSpan(1, 0, "S2", "S4"), "S2", "S4", false);
+}
+
+TEST(RefTransforms, SheetMoveLastEndpointWithinSpanKeepsText) {
+  ExpectSpan(MoveSpan(3, 2, "S2", "S4"), "S2", "S4", false);
+  ExpectSpan(MoveSpan(3, 5, "S2", "S4"), "S2", "S4", false);
+}
+
+TEST(RefTransforms, SheetMoveEndpointsBecomingEqualCollapses) {
+  ExpectSpan(MoveSpan(1, 2, "S2", "S3"), "S3", "S3", true);
+  ExpectSpan(MoveSpan(2, 1, "S2", "S3"), "S2", "S2", true);
+}
+
+TEST(RefTransforms, SheetMoveOfTheOnlySheetOfASameEndpointSpanCollapses) {
+  const std::optional<MovedSpan> out = MoveSpan(2, 4, "S3", "S3");
+  ASSERT_TRUE(out.has_value());
+  EXPECT_TRUE(out->collapse);
+  EXPECT_EQ(out->begin, "S3");
+  ExpectSpan(MoveSpan(0, 4, "S3", "S3"), "S3", "S3", false);
+}
+
+TEST(RefTransforms, SheetMoveReversedSpanIsReadInTabOrder) {
+  ExpectSpan(MoveSpan(1, 3, "S4", "S2"), "S3", "S4", false);
+  ExpectSpan(MoveSpan(3, 1, "S4", "S2"), "S2", "S3", false);
+  ExpectSpan(MoveSpan(2, 4, "S4", "S2"), "S4", "S2", false);
+}
+
+TEST(RefTransforms, SheetMoveUnknownEndpointLeavesTheSpan) {
+  ExpectSpan(MoveSpan(1, 3, "S2", "Nope"), "S2", "Nope", false);
+  ExpectSpan(MoveSpan(1, 3, "Nope", "S4"), "Nope", "S4", false);
+}
+
+TEST(RefTransforms, SheetMoveResolvesEndpointsByTheSheetNameComparison) {
+  ExpectSpan(MoveSpan(1, 3, "s2", "s4"), "S3", "S4", false);
+}
+
+TEST(RefTransforms, SheetMoveLeavesOrdinaryReferencesAlone) {
+  const std::vector<std::string_view> order = {"S1", "S2", "S3"};
+  const SheetMoveTransform transform(order, 0, 2);
+  Reference ref;
+  ref.sheet = "S1";
+  const std::optional<Reference> out = transform.apply(ref);
+  ASSERT_TRUE(out.has_value());
+  EXPECT_EQ(out->sheet, "S1");
 }
 
 TEST(SheetRemovalTransform, CollapseFormOfEachStructuralTransform) {
