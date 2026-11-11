@@ -30,7 +30,7 @@ make node-package    # stage build/bin/formulon.node into packages/npm-native/di
 
 Then import `packages/npm-native/dist/index.mjs`, or link the `packages/npm-native` directory into your project with `npm install /path/to/formulon/packages/npm-native`. A checkout carries no prebuilt `.node` binary; the `prebuild` CI workflow stages one per OS and architecture as a workflow artifact only. `createFormulon()` rejects when the native prebuild is not available.
 
-The package is ES modules only (no `require`); `createFormulon` is both the default export and a named export. Its TypeScript declarations need TypeScript 5.2 or later. Changes between releases are in the [CHANGELOG](https://github.com/libraz/formulon/blob/main/CHANGELOG.md).
+The package is ES modules only (no `require`); `createFormulon` is both the default export and a named export. Its TypeScript declarations need TypeScript 5.7 or later. Changes between releases are in the [CHANGELOG](https://github.com/libraz/formulon/blob/main/CHANGELOG.md).
 
 ## Quick start
 

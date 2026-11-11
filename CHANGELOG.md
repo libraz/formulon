@@ -253,6 +253,9 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
 
 ### Changed
 
+- The type declarations need TypeScript 5.7 or later (they use
+  `Uint8Array<ArrayBuffer>`); `make npm-typecheck` also checks them with
+  TypeScript 5.7 so the stated floor cannot drift.
 - `localizeFormula` requotes sheet qualifiers by the profile's display rule
   (de `'Z1S1'!A1`) and quotes a defined name that reads as a reference in the
   profile's R1C1 letters (de `='z'+1`); `canonicalizeFormula` writes

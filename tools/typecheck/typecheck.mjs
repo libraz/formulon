@@ -18,7 +18,11 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repo = resolve(here, '../..');
 const readmes = ['README.md', 'README_ja.md', 'packages/npm/README.md', 'packages/npm-native/README.md'];
 const typeTest = join(repo, 'packages/npm/test/types/api.typecheck.ts');
-const tsc = join(here, 'node_modules/typescript/bin/tsc');
+// The floor run drops @types/node (it conflicts with TypeScript 5.7's lib.dom) and so skips blocks importing node: modules.
+const compilers = [
+  { label: 'typescript', tsc: join(here, 'node_modules/typescript/bin/tsc'), compilerOptions: {} },
+  { label: 'typescript-floor', tsc: join(here, 'node_modules/typescript-floor/bin/tsc'), compilerOptions: { types: [] }, skipNode: true },
+];
 
 function parseArgs(argv) {
   const out = { typesOnly: false, docs: null, marker: null };
@@ -70,6 +74,7 @@ const docFiles = new Set(args.docs ? markdownFiles(args.docs) : []);
 const tmp = realpathSync(mkdtempSync(join(tmpdir(), 'formulon-typecheck-')));
 const origins = new Map();
 const files = [typeTest];
+const nodeFiles = new Set();
 let blockCount = 0;
 try {
   for (const source of sources) {
@@ -78,33 +83,41 @@ try {
       writeFileSync(name, block.code);
       origins.set(name, block);
       files.push(name);
+      if (/from\s+['"]node:/.test(block.code)) nodeFiles.add(name);
     }
   }
   if ((!args.typesOnly || args.marker) && blockCount === 0) {
     console.error('typecheck: no js blocks found');
     process.exit(1);
   }
-  const project = join(tmp, 'tsconfig.json');
-  writeFileSync(project, JSON.stringify({ extends: join(here, 'tsconfig.json'), files }, null, 2));
-  const run = spawnSync(process.execPath, [tsc, '-p', project, '--pretty', 'false'], { encoding: 'utf8', cwd: tmp });
-  const output = `${run.stdout}${run.stderr}`;
   const diagnostic = /^(.+?)\((\d+),(\d+)\): (.*)$/;
-  let failed = 0;
-  for (const text of output.split('\n')) {
-    if (!text.trim()) continue;
-    const m = diagnostic.exec(text);
-    const file = m && resolve(tmp, m[1]);
-    const block = file && origins.get(file);
-    if (block) console.error(`${relative(repo, block.file)}:${block.line + Number(m[2])}:${m[3]}: ${m[4]}`);
-    else if (file) console.error(`${relative(repo, file)}:${m[2]}:${m[3]}: ${m[4]}`);
-    else console.error(text);
-    failed++;
+  let anyFailed = false;
+  for (const compiler of compilers) {
+    const project = join(tmp, `tsconfig.${compiler.label}.json`);
+    writeFileSync(
+      project,
+      JSON.stringify({ extends: join(here, 'tsconfig.json'), compilerOptions: compiler.compilerOptions, files: compiler.skipNode ? files.filter((f) => !nodeFiles.has(f)) : files }, null, 2),
+    );
+    const run = spawnSync(process.execPath, [compiler.tsc, '-p', project, '--pretty', 'false'], { encoding: 'utf8', cwd: tmp });
+    const output = `${run.stdout}${run.stderr}`;
+    let failed = 0;
+    for (const text of output.split('\n')) {
+      if (!text.trim()) continue;
+      const m = diagnostic.exec(text);
+      const file = m && resolve(tmp, m[1]);
+      const block = file && origins.get(file);
+      if (block) console.error(`${relative(repo, block.file)}:${block.line + Number(m[2])}:${m[3]}: ${m[4]}`);
+      else if (file) console.error(`${relative(repo, file)}:${m[2]}:${m[3]}: ${m[4]}`);
+      else console.error(text);
+      failed++;
+    }
+    const ok = run.status === 0 && failed === 0;
+    if (!ok) anyFailed = true;
+    (ok ? console.log : console.error)(
+      `typecheck [${compiler.label}]: ${ok ? 'ok' : 'failed'} (${blockCount} block(s), 1 type test)`,
+    );
   }
-  if (run.status !== 0 || failed > 0) {
-    console.error(`typecheck: failed (${blockCount} block(s), 1 type test)`);
-    process.exit(1);
-  }
-  console.log(`typecheck: ok (${blockCount} block(s), 1 type test)`);
+  if (anyFailed) process.exit(1);
 } finally {
   rmSync(tmp, { recursive: true, force: true });
 }

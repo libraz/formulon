@@ -160,8 +160,19 @@ __metadata:
   dependencies:
     "@types/node": "npm:26.6.6"
     typescript: "npm:7.0.2"
+    typescript-floor: "npm:typescript@5.7.3"
   languageName: unknown
   linkType: soft
+
+"typescript-floor@npm:typescript@5.7.3":
+  version: 5.7.3
+  resolution: "typescript@npm:5.7.3"
+  bin:
+    tsc: bin/tsc
+    tsserver: bin/tsserver
+  checksum: 10c0/b7580d716cf1824736cc6e628ab4cd8b51877408ba2be0869d2866da35ef8366dd6ae9eb9d0851470a39be17cbd61df1126f9e211d8799d764ea7431d5435afa
+  languageName: node
+  linkType: hard
 
 "typescript@npm:7.0.2":
   version: 7.0.2

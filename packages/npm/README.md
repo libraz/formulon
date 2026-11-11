@@ -26,7 +26,7 @@ Known differences from Excel are listed case by case in [`tests/divergence.yaml`
 npm install @libraz/formulon   # browsers and Node 22+
 ```
 
-The package is ES modules only (no `require`) and ships its TypeScript declarations, which need TypeScript 5.2 or later. It runs on Node 22+ and the current releases of the major browsers; the `threads` build also needs a cross-origin isolated page (see [Choosing a build](#choosing-a-build)). Deno and Bun are not tested.
+The package is ES modules only (no `require`) and ships its TypeScript declarations, which need TypeScript 5.7 or later. It runs on Node 22+ and the current releases of the major browsers; the `threads` build also needs a cross-origin isolated page (see [Choosing a build](#choosing-a-build)). Deno and Bun are not tested.
 
 Changes between releases are listed in the [CHANGELOG](https://github.com/libraz/formulon/blob/main/CHANGELOG.md). Until 1.0 a minor release may break the API; a patch release does not.
 
