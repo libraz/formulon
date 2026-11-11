@@ -10,6 +10,7 @@
 #include "parser/formula_prefix.h"
 #include "parser/parser.h"
 #include "utils/arena.h"
+#include "utils/name_syntax.h"
 #include "utils/strings.h"
 
 namespace formulon {
@@ -305,6 +306,21 @@ const AstNode* find_refused_error_literal(const AstNode& root) {
   const AstNode* hit = nullptr;
   parser::any_child_node(root, [&](const AstNode& child) {
     hit = find_refused_error_literal(child);
+    return hit != nullptr;
+  });
+  return hit;
+}
+
+const AstNode* find_refused_table_reference(const AstNode& root, char row_letter, char col_letter,
+                                            bool (*is_table)(const void* ctx, std::string_view name), const void* ctx) {
+  if (root.kind() == NodeKind::StructuredRef &&
+      opens_with_r1c1(root.as_structured_ref_table(), row_letter, col_letter) &&
+      is_table(ctx, root.as_structured_ref_table())) {
+    return &root;
+  }
+  const AstNode* hit = nullptr;
+  parser::any_child_node(root, [&](const AstNode& child) {
+    hit = find_refused_table_reference(child, row_letter, col_letter, is_table, ctx);
     return hit != nullptr;
   });
   return hit;

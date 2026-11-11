@@ -138,5 +138,19 @@ TEST(NameSyntax, DefinedNamesRefuseBackslashAndOneCharacter) {
   }
 }
 
+TEST(NameSyntax, OpensWithR1C1TakesTheLocaleLetters) {
+  EXPECT_TRUE(opens_with_r1c1("z", 'Z', 'S'));
+  EXPECT_TRUE(opens_with_r1c1("S", 'Z', 'S'));
+  EXPECT_TRUE(opens_with_r1c1("Z2S3x", 'Z', 'S'));
+  EXPECT_TRUE(opens_with_r1c1("k", 'R', 'K'));
+  EXPECT_TRUE(opens_with_r1c1("F", 'F', 'C'));
+  EXPECT_TRUE(opens_with_r1c1("FC4", 'F', 'C'));
+  EXPECT_FALSE(opens_with_r1c1("F", 'R', 'C'));
+  EXPECT_FALSE(opens_with_r1c1("z", 'R', 'C'));
+  EXPECT_FALSE(opens_with_r1c1("Fruit", 'F', 'C'));
+  EXPECT_FALSE(opens_with_r1c1("Z0", 'Z', 'S'));
+  EXPECT_FALSE(opens_with_r1c1("Z1048577", 'Z', 'S'));
+}
+
 }  // namespace
 }  // namespace formulon

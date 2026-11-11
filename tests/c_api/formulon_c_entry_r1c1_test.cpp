@@ -282,9 +282,10 @@ TEST(FormulonCApiEntryR1C1, Out7LetWithTypedXlnmNameShowsQuoted) {
   ExpectOut7Row(32U, "=LET(B1,5,B1+'B2')");
 }
 
-// A table named `RC` keeps `RC[Qty]` a structured reference. Excel refuses
-// that display name, so only a loaded file carries one.
-TEST(FormulonCApiEntryR1C1, BracketedEndpointNamingATableStaysStructured) {
+// A table named `RC` (only a loaded file carries one; Excel refuses that
+// display name) cannot be referenced by typed text under a profile whose R1C1
+// letters spell it, as Excel refuses es `F[Col]` for a table named F.
+TEST(FormulonCApiEntryR1C1, TypedReferenceToTableNamedLikeR1C1IsRefused) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "Qty"), 0);
@@ -297,8 +298,7 @@ TEST(FormulonCApiEntryR1C1, BracketedEndpointNamingATableStaysStructured) {
   tables[0].name = "RC";
   tables[0].display_name = "RC";
   wb.handle->workbook().set_tables(std::move(tables));
-  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 4, 6, "=SUM(RC[Qty])"), 0) << fm_get_last_error_message();
-  EXPECT_EQ(FormulaAt(wb.handle, 4, 6), "=SUM(RC[Qty])");
+  EXPECT_EQ(fm_sheet_set_formula(wb.handle, 0, 4, 6, "=SUM(RC[Qty])"), FM_STATUS_PARSER_INVALID_REFERENCE);
 }
 
 // An array formula reads R1C1 at its top-left cell.

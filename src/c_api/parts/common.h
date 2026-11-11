@@ -152,8 +152,10 @@ fm_status_t check_cell_text_length(std::string_view text, const char* field);
 // `*out` receives the stored spelling a cell would take
 // (`Workbook::normalize_formula_text`, `kEntered`) without its one leading
 // '=', the spelling files carry and readers produce; a second leading '=' is
-// refused. An empty `formula` yields "".
-fm_status_t check_stored_formula(std::string_view formula, std::string_view context, std::string* out);
+// refused, and so is a table reference whose table name opens with an R1C1 reference
+// of `wb`'s profile locale. An empty `formula` yields "".
+fm_status_t check_stored_formula(const fm_workbook_t* wb, std::string_view formula, std::string_view context,
+                                 std::string* out);
 
 // Stored form of a `formula` that passed `check_stored_formula`, taken as the
 // entry commits: `Workbook::ingest_entered_formula` (which binds the books it

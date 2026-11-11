@@ -74,6 +74,15 @@ const parser::AstNode* find_wrong_arity_call(const parser::AstNode& root);
 /// codes legitimately.
 const parser::AstNode* find_refused_error_literal(const parser::AstNode& root);
 
+/// Returns the first structured reference in `root` whose table name opens
+/// with an R1C1 reference spelled with `row_letter` / `col_letter` (a
+/// locale's R1C1 tokens) and for which `is_table(ctx, name)` holds, which
+/// Excel refuses when typed under that locale. nullptr when there is none.
+/// Meaningful for entered text only.
+const parser::AstNode* find_refused_table_reference(const parser::AstNode& root, char row_letter, char col_letter,
+                                                    bool (*is_table)(const void* ctx, std::string_view name),
+                                                    const void* ctx);
+
 /// Parses a formula body at a public formula-entry boundary. The parser
 /// accepts qualified names syntactically because they may denote defined
 /// names; a qualified built-in is nevertheless invalid formula entry and is

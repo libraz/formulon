@@ -10,6 +10,7 @@
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
+#include "defined_name.h"
 #include "formulon_c_count_of.h"
 #include "formulon_c_out_index.h"
 #include "formulon_c_record_arg.h"
@@ -216,6 +217,168 @@ TEST(FormulonCApiFormulaEntry, DefinedNameAcceptsParseableText) {
   EXPECT_EQ(SetDefinedName(wb.handle, "Const", "1.5"), 0);
   EXPECT_EQ(SetDefinedName(wb.handle, "Local", "'S2'!$A$1", 1), 0);
   ASSERT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 4U);
+}
+
+// A workbook of `profile`.
+void MakeProfileWorkbook(WorkbookGuard* wb, const char* profile) {
+  ASSERT_EQ(fm_workbook_create_for_profile(profile, &wb->handle), 0) << fm_get_last_error_message();
+}
+
+TEST(FormulonCApiFormulaEntry, DefinedNameOpeningWithLocaleR1C1TokenIsRefused) {
+  struct Case {
+    const char* profile;
+    const char* name;
+  };
+  for (const Case& c : {Case{"win-365-de_DE", "z"}, Case{"win-365-de_DE", "S"}, Case{"win-365-de_DE", "Z2S3"},
+                        Case{"win-365-es_ES", "f"}, Case{"win-365-es_MX", "F"}, Case{"win-365-nl_NL", "k"},
+                        Case{"win-365-nl_NL", "K"}}) {
+    SCOPED_TRACE(std::string(c.profile) + " " + c.name);
+    WorkbookGuard wb;
+    MakeProfileWorkbook(&wb, c.profile);
+    EXPECT_EQ(SetDefinedName(wb.handle, c.name, "Sheet1!$A$1"), static_cast<fm_status_t>(2));
+    EXPECT_STREQ(fm_get_last_error_message(), "name is not a valid defined name");
+    EXPECT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 0U);
+  }
+}
+
+TEST(FormulonCApiFormulaEntry, DefinedNameLocaleR1C1TokenIsAcceptedUnderOtherProfiles) {
+  struct Case {
+    const char* profile;
+    const char* name;
+  };
+  for (const Case& c :
+       {Case{"win-365-en_US", "z"}, Case{"win-365-en_US", "s"}, Case{"win-365-en_US", "f"}, Case{"win-365-en_US", "k"},
+        Case{"win-365-ja_JP", "z"}, Case{"win-365-ja_JP", "f"}, Case{"win-365-ja_JP", "k"}, Case{"win-365-de_DE", "f"},
+        Case{"win-365-es_ES", "z"}, Case{"win-365-nl_NL", "s"}}) {
+    SCOPED_TRACE(std::string(c.profile) + " " + c.name);
+    WorkbookGuard wb;
+    MakeProfileWorkbook(&wb, c.profile);
+    EXPECT_EQ(SetDefinedName(wb.handle, c.name, "Sheet1!$A$1"), 0) << fm_get_last_error_message();
+  }
+}
+
+TEST(FormulonCApiFormulaEntry, DefinedNameRefusedEverywhereForRAndC) {
+  for (const char* profile : {"win-365-en_US", "win-365-de_DE", "win-365-es_ES", "win-365-nl_NL"}) {
+    WorkbookGuard wb;
+    MakeProfileWorkbook(&wb, profile);
+    EXPECT_NE(SetDefinedName(wb.handle, "r", "Sheet1!$A$1"), 0) << profile;
+    EXPECT_NE(SetDefinedName(wb.handle, "c", "Sheet1!$A$1"), 0) << profile;
+  }
+}
+
+TEST(FormulonCApiFormulaEntry, LoadedDefinedNameOpeningWithLocaleR1C1TokenIsKept) {
+  WorkbookGuard source;
+  MakeProfileWorkbook(&source, "win-365-de_DE");
+  // Workbook::set_defined_names is the readers' ingestion point and stores names as given.
+  formulon::DefinedName entry;
+  entry.name = "z";
+  entry.formula = "Sheet1!$A$1";
+  source.handle->workbook().set_defined_names({entry});
+
+  std::uint8_t* bytes = nullptr;
+  std::size_t len = 0;
+  ASSERT_EQ(fm_workbook_save(source.handle, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0) << fm_get_last_error_message();
+  WorkbookGuard loaded;
+  const fm_status_t rc = fm_workbook_load(bytes, len, &loaded.handle);
+  fm_buffer_destroy(bytes);
+  ASSERT_EQ(rc, 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_set_profile_id(loaded.handle, "win-365-de_DE"), 0) << fm_get_last_error_message();
+  ASSERT_EQ(count_of(fm_workbook_get_defined_name_count, loaded.handle), 1U);
+  fm_defined_name_t out = FM_STRUCT_INIT(fm_defined_name_t);
+  ASSERT_EQ(fm_workbook_get_defined_name_at(loaded.handle, 0, &out), 0);
+  EXPECT_STREQ(out.name, "z");
+  // The loaded name stays editable under its own spelling; a new one is still refused.
+  EXPECT_EQ(SetDefinedName(loaded.handle, "z", "Sheet1!$A$2"), 0) << fm_get_last_error_message();
+  EXPECT_NE(SetDefinedName(loaded.handle, "s", "Sheet1!$A$2"), 0);
+  EXPECT_EQ(count_of(fm_workbook_get_defined_name_count, loaded.handle), 1U);
+}
+
+// A table over A1:A3 named `table_name` (header Col, data 1 and 2).
+void MakeTableWorkbook(WorkbookGuard* wb, const char* profile, const char* table_name) {
+  MakeProfileWorkbook(wb, profile);
+  ASSERT_EQ(fm_sheet_set_text(wb->handle, 0, 0, 0, "Col"), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb->handle, 0, 1, 0, 1.0), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb->handle, 0, 2, 0, 2.0), 0);
+  const char* columns[] = {"Col"};
+  std::size_t index = 0;
+  ASSERT_EQ(AddTable(wb->handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 0}), table_name, columns, 1, "", 1, 0, &index),
+            0)
+      << fm_get_last_error_message();
+}
+
+TEST(FormulonCApiFormulaEntry, TableNamedLikeLocaleR1C1TokenIsCreatedButItsReferenceIsRefusedOnEntry) {
+  struct Case {
+    const char* profile;
+    const char* table;
+  };
+  for (const Case& c : {Case{"win-365-es_ES", "F"}, Case{"win-365-nl_NL", "K"}}) {
+    SCOPED_TRACE(std::string(c.profile) + " " + c.table);
+    WorkbookGuard wb;
+    MakeTableWorkbook(&wb, c.profile, c.table);
+    for (const std::string body : {"SUM(%s[Col])", "SUM(%s[[#Data],[Col]])"}) {
+      std::string formula = "=" + body;
+      formula.replace(formula.find("%s"), 2, c.table);
+      SCOPED_TRACE(formula);
+      ExpectParseRefusal(fm_sheet_set_formula(wb.handle, 0, 0, 3, formula.c_str()), formula);
+      EXPECT_EQ(GetFormula(wb.handle, 0, 3), "");
+    }
+  }
+}
+
+TEST(FormulonCApiFormulaEntry, TableReferenceInStoredFormulaFieldsIsRefusedUnderItsLocale) {
+  WorkbookGuard wb;
+  MakeTableWorkbook(&wb, "win-365-es_ES", "F");
+  const std::string formula = "=SUM(F[Col])";
+  ExpectParseRefusal(SetDefinedName(wb.handle, "Rate", formula.c_str()), formula);
+  EXPECT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 0U);
+}
+
+TEST(FormulonCApiFormulaEntry, ThisRowReferenceInsideTableNamedLikeLocaleR1C1TokenIsAccepted) {
+  WorkbookGuard wb;
+  MakeProfileWorkbook(&wb, "win-365-es_ES");
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "Col"), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 1, "Other"), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 1, 0, 1.0), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 2, 0, 2.0), 0);
+  const char* columns[] = {"Col", "Other"};
+  std::size_t index = 0;
+  ASSERT_EQ(AddTable(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, 2, 1}), "F", columns, 2, "", 1, 0, &index), 0)
+      << fm_get_last_error_message();
+  EXPECT_EQ(fm_sheet_set_formula(wb.handle, 0, 1, 1, "=[@Col]"), 0) << fm_get_last_error_message();
+}
+
+TEST(FormulonCApiFormulaEntry, TableReferenceOpeningWithR1C1TokenIsAcceptedOutsideItsLocale) {
+  for (const auto& [profile, table] : {std::pair<const char*, const char*>{"win-365-en_US", "F"},
+                                       {"win-365-ja_JP", "K"},
+                                       {"win-365-de_DE", "F"},
+                                       {"win-365-de_DE", "K"},
+                                       {"win-365-es_ES", "K"},
+                                       {"win-365-nl_NL", "F"}}) {
+    SCOPED_TRACE(std::string(profile) + " " + table);
+    WorkbookGuard wb;
+    MakeTableWorkbook(&wb, profile, table);
+    const std::string formula = std::string("=SUM(") + table + "[Col])";
+    EXPECT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 3, formula.c_str()), 0) << fm_get_last_error_message();
+  }
+}
+
+TEST(FormulonCApiFormulaEntry, LoadedFormulaReferencingTableNamedLikeLocaleR1C1TokenStillEvaluates) {
+  WorkbookGuard source;
+  MakeTableWorkbook(&source, "win-365-es_ES", "F");
+  ASSERT_TRUE(source.handle->workbook().set_cell_formula(0, 0, 3, "=SUM(F[Col])"));
+
+  std::uint8_t* bytes = nullptr;
+  std::size_t len = 0;
+  ASSERT_EQ(fm_workbook_save(source.handle, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0) << fm_get_last_error_message();
+  WorkbookGuard loaded;
+  const fm_status_t rc = fm_workbook_load(bytes, len, &loaded.handle);
+  fm_buffer_destroy(bytes);
+  ASSERT_EQ(rc, 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_recalc(loaded.handle), 0);
+  fm_value_t value{};
+  ASSERT_EQ(fm_sheet_get_value(loaded.handle, 0, 0, 3, &value), 0);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
+  EXPECT_EQ(value.u.number, 3.0);
 }
 
 fm_cf_rule_t MakeCfRule(const fm_cell_rect_t* sqref, const char* formula1, const char* formula2) {

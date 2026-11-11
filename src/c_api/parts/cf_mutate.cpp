@@ -487,7 +487,7 @@ fm_status_t store_cfvo_formulas(fm_workbook_t* wb, formulon::cf::CFRule* out_rul
       continue;
     }
     std::string stored;
-    if (auto rc = check_stored_formula(v->value, context, &stored); rc != 0) {
+    if (auto rc = check_stored_formula(wb, v->value, context, &stored); rc != 0) {
       return rc;
     }
   }
@@ -675,12 +675,12 @@ fm_status_t build_rule(fm_workbook_t* wb, const fm_cf_rule_t& rule, const std::v
     out_rule->dxf_id = rule.dxf_index;
   }
   if (rule.formula1 != nullptr) {
-    if (auto rc = check_stored_formula(rule.formula1, "field=formula1", &out_rule->formula1.emplace()); rc != 0) {
+    if (auto rc = check_stored_formula(wb, rule.formula1, "field=formula1", &out_rule->formula1.emplace()); rc != 0) {
       return rc;
     }
   }
   if (rule.formula2 != nullptr) {
-    if (auto rc = check_stored_formula(rule.formula2, "field=formula2", &out_rule->formula2.emplace()); rc != 0) {
+    if (auto rc = check_stored_formula(wb, rule.formula2, "field=formula2", &out_rule->formula2.emplace()); rc != 0) {
       return rc;
     }
   }

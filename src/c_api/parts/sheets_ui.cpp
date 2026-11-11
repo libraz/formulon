@@ -710,8 +710,8 @@ extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::size_t sh
   std::string* const formula_slots[] = {&out.formula1, &out.formula2};
   for (std::size_t i = 0; i < 2; ++i) {
     if (formula_fields[i] != nullptr) {
-      if (auto rc =
-              check_stored_formula(formula_fields[i], i == 0 ? "field=formula1" : "field=formula2", formula_slots[i]);
+      if (auto rc = check_stored_formula(wb, formula_fields[i], i == 0 ? "field=formula1" : "field=formula2",
+                                         formula_slots[i]);
           rc != 0) {
         return rc;
       }
@@ -757,7 +757,8 @@ struct PatchedText {
   std::string stored;
 };
 
-fm_status_t check_validation_patch(const fm_data_validation_patch_t& p, std::array<PatchedText, 6>* texts) {
+fm_status_t check_validation_patch(const fm_workbook_t* wb, const fm_data_validation_patch_t& p,
+                                   std::array<PatchedText, 6>* texts) {
   if (!formulon::c_api::parts::patch_op_ok_without_clear(p.ranges_op) ||
       !formulon::c_api::parts::patch_op_ok_without_clear(p.type_op) ||
       !formulon::c_api::parts::patch_op_ok_without_clear(p.op_op) ||
@@ -818,7 +819,7 @@ fm_status_t check_validation_patch(const fm_data_validation_patch_t& p, std::arr
       return rc;
     }
     if (t.is_formula) {
-      if (auto rc = check_stored_formula(t.text, t.field, &t.stored); rc != 0) {
+      if (auto rc = check_stored_formula(wb, t.text, t.field, &t.stored); rc != 0) {
         return rc;
       }
     }
@@ -848,7 +849,7 @@ extern "C" fm_status_t fm_sheet_update_validation(fm_workbook_t* wb, std::size_t
     return validation_not_found(id);
   }
   std::array<PatchedText, 6> texts{};
-  if (auto rc = check_validation_patch(*patch, &texts); rc != 0) {
+  if (auto rc = check_validation_patch(wb, *patch, &texts); rc != 0) {
     return rc;
   }
   formulon::DataValidation& v = wb->workbook().sheet(sheet_index).mutable_validations()[*index];

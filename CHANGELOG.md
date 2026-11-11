@@ -243,6 +243,9 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   (de `'Z1S1'!A1`) and quotes a defined name that reads as a reference in the
   profile's R1C1 letters (de `='z'+1`); `canonicalizeFormula` writes
   qualifiers quoted as Excel stores them.
+- A new defined name that opens with a reference in the profile's R1C1
+  letters (de `Z1S1x`) is refused, as is a typed structured reference to an
+  existing table so named; names and tables that already exist keep working.
 - A column inserted inside a table is named from its left neighbour (`Q2`
   gives `Q3`, else `Q22`); otherwise it takes the locale's column word.
 - Writing a value, formula or blank to a visible totals-row cell updates the

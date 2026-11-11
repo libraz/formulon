@@ -60,19 +60,20 @@ bool ReadInGridNumber(std::string_view text, std::size_t* i, std::uint32_t limit
 }
 
 /// True when the upper-cased `name` is an R1C1 reference or opens with one
-/// that carries an in-grid number.
-bool OpensWithR1C1(std::string_view name) {
+/// that carries an in-grid number, the row and column letters being `row` and
+/// `col` (upper case).
+bool OpensWithR1C1(std::string_view name, char row, char col) {
   const auto at = [name](std::size_t i, char upper) { return i < name.size() && name[i] == upper; };
   std::size_t i = 0;
-  if (at(0, 'R')) {
+  if (at(0, row)) {
     i = 1;
     if (i < name.size() && strings::is_ascii_digit(name[i])) {
       return ReadInGridNumber(name, &i, a1::kMaxRows);
     }
-    if (!at(i, 'C')) {
+    if (!at(i, col)) {
       return i == name.size();
     }
-  } else if (!at(0, 'C')) {
+  } else if (!at(0, col)) {
     return false;
   }
   ++i;
@@ -96,7 +97,12 @@ bool is_valid_table_name(std::string_view name) {
   }
   std::uint32_t row = 0;
   std::uint32_t col = 0;
-  return folded != "TRUE" && folded != "FALSE" && !a1::parse_a1_ref(folded, &row, &col) && !OpensWithR1C1(folded);
+  return folded != "TRUE" && folded != "FALSE" && !a1::parse_a1_ref(folded, &row, &col) &&
+         !OpensWithR1C1(folded, 'R', 'C');
+}
+
+bool opens_with_r1c1(std::string_view name, char row_letter, char col_letter) {
+  return OpensWithR1C1(FoldName(name), strings::ascii_to_upper(row_letter), strings::ascii_to_upper(col_letter));
 }
 
 bool is_valid_defined_name(std::string_view name) {

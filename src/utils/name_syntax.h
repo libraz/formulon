@@ -23,6 +23,11 @@ bool is_valid_table_name(std::string_view name);
 /// True when `name` is a valid defined name.
 bool is_valid_defined_name(std::string_view name);
 
+/// True when `name` is, or opens with, an R1C1 reference spelled with the
+/// given row and column letters (a locale's R1C1 tokens), by the rule that
+/// refuses `R` / `C` names. Full-width ASCII folds first.
+bool opens_with_r1c1(std::string_view name, char row_letter, char col_letter);
+
 }  // namespace formulon
 
 #endif  // FORMULON_UTILS_NAME_SYNTAX_H_

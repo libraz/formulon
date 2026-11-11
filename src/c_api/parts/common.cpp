@@ -24,6 +24,7 @@
 #include "eval/coerce.h"
 #include "eval/formula_entry_r1c1.h"
 #include "eval/function_registry.h"
+#include "excel_locale.h"
 #include "num_fmt_locale.h"
 #include "parser/formula_prefix.h"
 #include "parser/literal_spelling.h"
@@ -1166,6 +1167,34 @@ std::optional<ParseFailure> refused_entry_prefix(std::string_view formula) {
   return failure;
 }
 
+// The refusal of typed `formula` text, a table reference whose table name opens with an R1C1
+// reference spelled in the profile locale of `book` and that names a table of `book`: Excel reads
+// the typed `F[` as a row reference. Run on the text as typed, before structured references are
+// bound, so a bare `[@Col]` has no such token and text naming no table falls through to R1C1.
+std::optional<ParseFailure> refused_typed_table_reference(std::string_view formula, const formulon::Workbook& book) {
+  const formulon::LocaleFacts& locale = formulon::locale_facts(book.excel_profile());
+  const std::string_view body = strip_formula_prefix(formula);
+  formulon::Arena arena;
+  ParseFailure ignored;
+  const AstNode* root = formulon::eval::parse_formula_entry_with_diagnostics(body, arena, &ignored);
+  const AstNode* ref = root != nullptr ? formulon::eval::find_refused_table_reference(
+                                             *root, locale.r1c1_row, locale.r1c1_col,
+                                             [](const void* ctx, std::string_view name) {
+                                               return static_cast<const formulon::Workbook*>(ctx)->is_table_name(name);
+                                             },
+                                             &book)
+                                       : nullptr;
+  if (ref == nullptr) {
+    return std::nullopt;
+  }
+  ParseFailure failure;
+  failure.code = ParseErrorCode::InvalidReference;
+  failure.range = ref->range();
+  failure.range.end = failure.range.start + formulon::utf16_units_in(ref->as_structured_ref_table());
+  failure.message = formulon::parser::default_message(failure.code);
+  return shifted(failure, prefix_units(formula, body));
+}
+
 // AST of entered `formula`'s stored spelling, written to `*stored`, or
 // nullptr with `*failure` placed in `caller` (the text the caller passed,
 // which `formula` binds): whitespace Excel refuses, or a stored spelling
@@ -1207,13 +1236,17 @@ fm_status_t check_entered_formula_parses(std::string_view formula, std::string_v
 
 }  // namespace
 
-fm_status_t check_stored_formula(std::string_view formula, std::string_view context, std::string* out) {
+fm_status_t check_stored_formula(const fm_workbook_t* wb, std::string_view formula, std::string_view context,
+                                 std::string* out) {
   if (formula.empty()) {
     out->clear();
     return 0;
   }
   // The parser skips one '=' of its own, so a second one is refused here.
   if (const std::optional<ParseFailure> refused = refused_entry_prefix(formula)) {
+    return formula_parse_failed(formula, *refused, std::string(context));
+  }
+  if (const std::optional<ParseFailure> refused = refused_typed_table_reference(formula, wb->workbook())) {
     return formula_parse_failed(formula, *refused, std::string(context));
   }
   std::string stored;
@@ -1261,6 +1294,9 @@ fm_status_t check_entered_cell_formula(const fm_workbook_t* wb, std::size_t shee
     return rc;
   }
   if (const std::optional<ParseFailure> refused = refused_entry_prefix(formula)) {
+    return formula_parse_failed(formula, *refused, std::string(context));
+  }
+  if (const std::optional<ParseFailure> refused = refused_typed_table_reference(formula, wb->workbook())) {
     return formula_parse_failed(formula, *refused, std::string(context));
   }
   *bound = wb->workbook().bind_entered_structured_refs(formula, sheet, row, col);
