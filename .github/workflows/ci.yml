@@ -112,7 +112,7 @@ jobs:
         run: cmake --preset coverage
 
       - name: Build
-        run: cmake --build build-coverage --parallel
+        run: cmake --build build-coverage --parallel "$JOBS"
 
       - name: Run fast tests
         id: ctest

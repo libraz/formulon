@@ -154,7 +154,7 @@ jobs:
         run: cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DFM_BUILD_TESTING=OFF
 
       - name: Build CLI
-        run: cmake --build build --parallel --target formulon_cli
+        run: cmake --build build --parallel "$JOBS" --target formulon_cli
 
       - name: Stage archive
         id: stage
