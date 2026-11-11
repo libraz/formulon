@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 
+#include "c_api/binding_message.h"
 #include "c_api/formulon_c.h"
 #include "wasm/parts/embind_common.h"
 #include "wasm/parts/workbook.h"
@@ -503,16 +504,18 @@ bool pull_table_column_patches(JsNarrowNumericReader& reader, const emscripten::
   texts.reserve(3U * count);
   items.reserve(count);
   for (uint32_t i = 0; reader.ok() && i < count; ++i) {
-    const emscripten::val entry = reader.array_element(array, i, "columns[]");
-    reader.require_object(entry, "columns[]");
+    const std::string element = binding::element_path("columns", i);
+    const emscripten::val entry = reader.array_element(array, i, element.c_str());
+    reader.require_object(entry, element.c_str());
+    const auto at = [&](const char* key) { return binding::field_path(element, key); };
     fm_table_column_patch_t item{};
-    js_patch_int(reader, entry, "totalsRowFunction", "columns[].totalsRowFunction", true, &item.totals_row_function_op,
-                 &item.totals_row_function);
-    js_patch_string(reader, entry, "totalsRowLabel", "columns[].totalsRowLabel", true, texts.emplace_back(),
+    js_patch_int(reader, entry, "totalsRowFunction", at("totalsRowFunction").c_str(), true,
+                 &item.totals_row_function_op, &item.totals_row_function);
+    js_patch_string(reader, entry, "totalsRowLabel", at("totalsRowLabel").c_str(), true, texts.emplace_back(),
                     &item.totals_row_label_op, &item.totals_row_label);
-    js_patch_string(reader, entry, "totalsRowFormula", "columns[].totalsRowFormula", true, texts.emplace_back(),
+    js_patch_string(reader, entry, "totalsRowFormula", at("totalsRowFormula").c_str(), true, texts.emplace_back(),
                     &item.totals_row_formula_op, &item.totals_row_formula);
-    js_patch_string(reader, entry, "calculatedFormula", "columns[].calculatedFormula", true, texts.emplace_back(),
+    js_patch_string(reader, entry, "calculatedFormula", at("calculatedFormula").c_str(), true, texts.emplace_back(),
                     &item.calculated_formula_op, &item.calculated_formula);
     items.push_back(item);
   }

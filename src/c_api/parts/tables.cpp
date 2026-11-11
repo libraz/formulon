@@ -298,10 +298,10 @@ fm_status_t plan_column_patches(const fm_workbook_t* wb, std::size_t index, cons
   if (patch->columns_count > table.columns.size()) {
     return set_binding_error(
         formulon::FormulonErrorCode::kIndexOutOfRange,
-        ("columns_count " + std::to_string(patch->columns_count) + " is out of range (" +
-         std::to_string(table.columns.size()) + " columns)")
+        ("columns has " + std::to_string(patch->columns_count) + " entries; the table has " +
+         std::to_string(table.columns.size()) + " columns")
             .c_str(),
-        "columns_count=" + std::to_string(patch->columns_count) + " count=" + std::to_string(table.columns.size()));
+        "columns=" + std::to_string(patch->columns_count) + " count=" + std::to_string(table.columns.size()));
   }
   const std::uint32_t first_data_row = next.rect.first_row + (next.header_row ? 1U : 0U);
   const std::uint32_t data_end = next.rect.last_row + 1U - (next.totals_row ? 1U : 0U);

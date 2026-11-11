@@ -288,21 +288,9 @@ bool CheckedSpecReader::String(const Napi::Value& value, const char* key, std::s
     out->clear();
     return false;
   }
-  // Same acceptance as the WASM surface: a string or a one-byte buffer, never
-  // a coerced value.
-  const bool byte_view = present.IsTypedArray() && [&present] {
-    const napi_typedarray_type type = present.As<Napi::TypedArray>().TypedArrayType();
-    return type == napi_int8_array || type == napi_uint8_array || type == napi_uint8_clamped_array;
-  }();
+  // Same acceptance as the WASM surface: a string, never a coerced value or a byte buffer.
   if (present.IsString()) {
     *out = present.As<Napi::String>().Utf8Value();
-  } else if (present.IsArrayBuffer()) {
-    Napi::ArrayBuffer buffer = present.As<Napi::ArrayBuffer>();
-    out->assign(static_cast<const char*>(buffer.Data()), buffer.ByteLength());
-  } else if (byte_view) {
-    Napi::TypedArray view = present.As<Napi::TypedArray>();
-    const auto* data = static_cast<const char*>(view.ArrayBuffer().Data()) + view.ByteOffset();
-    out->assign(data, view.ByteLength());
   } else {
     out->clear();
     FailType(key, "a string");

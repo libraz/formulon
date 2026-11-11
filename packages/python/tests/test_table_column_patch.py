@@ -375,6 +375,18 @@ class ColumnPatchValidationTests(unittest.TestCase):
         self.assertIsNone(_col(table, 2).calculated_formula)
         self.assertEqual(_col(table, 1).totals_row_function, Fn.NONE)
 
+    def test_a_refusal_names_the_element_and_the_field(self) -> None:
+        _, table = _calc_table(self.wb)
+        refusals = [
+            ([{}, {"totals_row_function": "x"}], "Table.update columns[1].totals_row_function must be an integer"),
+            ([{}, {"foo": 1}], "Table.update columns[1] has no field foo"),
+            ([{}, 5], "Table.update columns must be a sequence of TableColumnPatch"),
+        ]
+        for columns, message in refusals:
+            with self.subTest(message), self.assertRaises(TypeError) as ctx:
+                table.update(columns=columns)  # type: ignore[arg-type]
+            self.assertEqual(str(ctx.exception), message)
+
 
 class CellWriteRuleTests(unittest.TestCase):
     def setUp(self) -> None:

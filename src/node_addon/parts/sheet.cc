@@ -438,11 +438,15 @@ bool PullTableColumnPatches(CheckedSpecReader& reader, const Napi::Array& array,
   items.reserve(count);
   for (uint32_t i = 0; reader.ok() && i < count; ++i) {
     Napi::Value element;
-    if (!reader.ArrayElement(array, i, &element) || !element.IsObject()) {
+    Napi::Object entry;
+    if (!reader.ArrayElement(array, i, &element)) {
+      // A nullish element is absent to the reader; a patch entry must be an object.
       reader.FailType("columns[]", "an object");
       return false;
     }
-    const Napi::Object entry = element.As<Napi::Object>();
+    if (!reader.Object(element, "columns[]", &entry)) {
+      return false;
+    }
     fm_table_column_patch_t item{};
     item.totals_row_function_op = PatchNullableI32(reader, entry, "totalsRowFunction", &item.totals_row_function);
     item.totals_row_label_op =

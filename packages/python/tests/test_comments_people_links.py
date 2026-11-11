@@ -62,7 +62,7 @@ class NoteTests(_Base):
         self.assertEqual(self.ws.get_comment("C1"), read)
 
     def test_set_comment_rejects_another_record(self) -> None:
-        with self.assertRaisesRegex(TypeError, r"must be a CommentInput, a Comment or null"):
+        with self.assertRaisesRegex(TypeError, r"must be a CommentInput, a Comment or None"):
             self.ws.set_comment("A1", HyperlinkInput(target="https://example.test/"))  # type: ignore[arg-type]
 
     def test_list_comments_cell(self) -> None:

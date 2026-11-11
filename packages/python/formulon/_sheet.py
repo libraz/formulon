@@ -2766,8 +2766,8 @@ class Sheet(_NoCopy):
 
         Raises:
           AlreadyExistsError: when ``range`` intersects a merge already on the sheet.
-          PreconditionFailedError: when ``range`` intersects a table, a pivot table, an array formula or a
-            data table.
+          FormulonError: with ``StatusCode.PRECONDITION_FAILED`` when ``range`` intersects a table, a pivot table, an
+            array formula or a data table.
         """
         merge = self._rect(range)
         sheet = self._index()
@@ -2858,7 +2858,7 @@ class Sheet(_NoCopy):
     @staticmethod
     def _check_hyperlink(link: object) -> None:
         if not isinstance(link, (HyperlinkInput, Hyperlink)):
-            raise TypeError(_argument_message("link", "must be a HyperlinkInput, a Hyperlink or null"))
+            raise TypeError(_argument_message("link", "must be a HyperlinkInput, a Hyperlink or None"))
         if link.target is None and link.location is None:
             raise TypeError(_argument_message("link", "needs a target or a location"))
 
@@ -3032,7 +3032,7 @@ class Sheet(_NoCopy):
         """
         row, col, comment = self._cell_args("set_comment", args, kwargs, ("comment",))
         if comment is not None and not isinstance(comment, (CommentInput, Comment)):
-            raise TypeError(_argument_message("comment", "must be a CommentInput, a Comment or null"))
+            raise TypeError(_argument_message("comment", "must be a CommentInput, a Comment or None"))
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:

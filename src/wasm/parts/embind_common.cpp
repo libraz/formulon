@@ -88,14 +88,6 @@ EM_JS(emscripten::EM_VAL, fm_wasm_safe_reader_operation,
             }
           }
         }
-      } else if (owner instanceof ArrayBuffer) {
-        var bufferCopy = new Uint8Array(owner.byteLength);
-        bufferCopy.set(new Uint8Array(owner));
-        result = bufferCopy;
-      } else if (ArrayBuffer.isView(owner) && owner.BYTES_PER_ELEMENT === 1) {
-        var viewCopy = new Uint8Array(owner.byteLength);
-        viewCopy.set(new Uint8Array(owner.buffer, owner.byteOffset, owner.byteLength));
-        result = viewCopy;
       } else {
         result = undefined;
       }
@@ -567,7 +559,7 @@ std::string JsNarrowNumericReader::string_value(const emscripten::val& value, co
     return std::string();
   }
   if (!js_value_present(safe_value)) {
-    reject_type(field, "a string or one-byte buffer");
+    reject_type(field, "a string");
     return std::string();
   }
   return safe_value.as<std::string>();

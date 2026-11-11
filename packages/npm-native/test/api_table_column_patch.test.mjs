@@ -365,6 +365,35 @@ test('a malformed column patch element is a TypeError and changes nothing', asyn
   });
 });
 
+test('a column patch refusal names the element and the field', async () => {
+  await withWorkbook((wb, f) => {
+    const { table } = calcTable(wb);
+    const refusals = [
+      [[{}, { totalsRowFunction: 'x' }], 'Table.update patch.columns[1].totalsRowFunction must be a number'],
+      [[{}, { totalsRowLabel: 5 }], 'Table.update patch.columns[1].totalsRowLabel must be a string'],
+      [[5], 'Table.update patch.columns[0] must be an object'],
+      [[{}, null], 'Table.update patch.columns[1] must be an object'],
+      [[{}, { totalsRowLabel: new Uint8Array([65]) }], 'Table.update patch.columns[1].totalsRowLabel must be a string'],
+      [[{ totalsRowLabel: new ArrayBuffer(1) }], 'Table.update patch.columns[0].totalsRowLabel must be a string'],
+      [[{ foo: 1 }], 'Table.update patch.columns[0] has no field foo'],
+    ];
+    for (const [columns, message] of refusals) {
+      assert.throws(
+        () => table.update({ columns }),
+        (e) => e instanceof TypeError && e.message === message,
+        message,
+      );
+    }
+    assert.throws(
+      () => table.update({ columns: [{}, {}, {}, {}] }),
+      (e) =>
+        e.code === f.StatusCode.IndexOutOfRange &&
+        !e.message.includes('columns_count') &&
+        e.message.includes('columns has 4 entries'),
+    );
+  });
+});
+
 test('a single-cell write keeps the calculated column and touches only that cell', async () => {
   const writes = {
     'a constant': (ws) => ws.setNumber('C4', 7),

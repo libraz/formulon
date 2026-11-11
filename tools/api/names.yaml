@@ -3640,6 +3640,7 @@ entries:
     surfaces: [c, wasm, native]
     clearable: []
     read_only_keys: [name]
+    exception: "columns_op SET applies columns entry i to column i in place (a shorter array leaves the rest) instead of replacing the array"
   record.table_column_patch:
     kind: record
     role: patch

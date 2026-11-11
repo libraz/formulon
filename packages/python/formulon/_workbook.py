@@ -7880,7 +7880,9 @@ def _title_fields(title: Union[str, ChartTitle], scope: _ArgScope) -> Dict[str, 
     return {"kind": 1, "text": scope.cstr(title)}
 
 
-def _patch_scalar(kind: str, value, key: str, scope: _ArgScope):
+def _patch_scalar(kind: str, value, key: str, scope: _ArgScope, path: str = ""):
+    if path:
+        key = f"{path}.{key}"
     if kind == "u32":
         return _uint(value, key)
     if kind == "color":
@@ -7896,21 +7898,24 @@ def _patch_scalar(kind: str, value, key: str, scope: _ArgScope):
     return scope.cstr(value)
 
 
-def _check_patch_keys(patch: Mapping, spec: Sequence, extra: Sequence[str], what: str) -> None:
+def _check_patch_keys(patch: Mapping, spec: Sequence, extra: Sequence[str], what: str, path: str = "") -> None:
     unknown = set(patch) - {key for key, _, _ in spec} - set(extra)
+    if unknown and path:
+        raise TypeError(_argument_message(path, f"has no field {sorted(unknown)[0]}"))
     if unknown:
         raise TypeError(f"unknown {what} key(s): {sorted(unknown)}")
 
 
 def _encode_patch(
-    spec: Sequence, patch: Mapping, extra: Sequence[str], what: str, scope: _ArgScope
+    spec: Sequence, patch: Mapping, extra: Sequence[str], what: str, scope: _ArgScope, path: str = ""
 ) -> Dict[str, object]:
     """Encode the ``(op, value)`` pair of every ``spec`` key present in ``patch``.
 
     An absent key stays zero (keep), ``None`` writes the clear op and any other
-    value the set op beside it.
+    value the set op beside it. A non-empty ``path`` names the patch (an element of an array
+    argument) in the messages of its refusals.
     """
-    _check_patch_keys(patch, spec, extra, what)
+    _check_patch_keys(patch, spec, extra, what, path)
     out: Dict[str, object] = {}
     for key, field_name, kind in spec:
         if key not in patch:
@@ -7921,7 +7926,7 @@ def _encode_patch(
             out[op_field] = _PATCH_CLEAR
         else:
             out[op_field] = _PATCH_SET
-            out[field_name] = _patch_scalar(kind, value, key, scope)
+            out[field_name] = _patch_scalar(kind, value, key, scope, path)
     return out
 
 
@@ -7933,13 +7938,15 @@ _TABLE_COLUMN_PATCH_SPEC = (
 )
 
 
-def _encode_table_column_patch(entry: Union[TableColumnPatch, TableColumn], scope: _ArgScope) -> Dict[str, object]:
-    """Encode one element of ``Table.update``'s ``columns``: a patch mapping, or a read :class:`TableColumn`."""
+def _encode_table_column_patch(
+    entry: Union[TableColumnPatch, TableColumn], scope: _ArgScope, index: int
+) -> Dict[str, object]:
+    """Encode element ``index`` of ``Table.update``'s ``columns``: a patch mapping, or a read :class:`TableColumn`."""
     if isinstance(entry, TableColumn):
         entry = {key: getattr(entry, key) for key, _, _ in _TABLE_COLUMN_PATCH_SPEC}
     elif not isinstance(entry, Mapping):
-        raise TypeError("columns must be a sequence of TableColumnPatch")
-    return _encode_patch(_TABLE_COLUMN_PATCH_SPEC, entry, ("name",), "column patch", scope)
+        raise TypeError(_argument_message("columns", "must be a sequence of TableColumnPatch"))
+    return _encode_patch(_TABLE_COLUMN_PATCH_SPEC, entry, ("name",), "column patch", scope, f"columns[{index}]")
 
 
 def _encode_paint_patches(out: Dict[str, object], patch: Mapping, scope: _ArgScope) -> None:

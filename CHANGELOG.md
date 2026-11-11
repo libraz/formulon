@@ -23,6 +23,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   one: the moved endpoint gives way to its neighbour inside the span, which
   collapses to one sheet when one remains (`SUM(Data:Mid!A1)` becomes
   `SUM(Mid!A1)`).
+- A refused `Table.update` `columns` element names its index and field
+  (`Table.update patch.columns[1].totalsRowFunction must be a number`; Python
+  `Table.update columns[1].totals_row_function must be an integer`), and a
+  `columns` array longer than the table is `IndexOutOfRange` ("columns has 4
+  entries; the table has 3 columns").
+- A string argument or field takes a JavaScript string only: an `ArrayBuffer` or
+  a one-byte typed array is a `TypeError` ("must be a string") in the WASM and
+  native bindings, as the declarations already said.
 - A range argument that is neither an A1 string nor a `CellRect` throws
   `TypeError` in every binding (`Sheet.listShowPhoneticCells(5)`:
   `Sheet.listShowPhoneticCells range must be a CellRect or an A1 string`;

@@ -232,10 +232,11 @@ class Table(_NoCopy):
             type (``None`` included), or ``columns`` is not a sequence of :class:`TableColumnPatch`.
           FormulonError: with ``StatusCode.INVALID_ARGUMENT`` when ``range``
             names another sheet or is not an A1 range.
-          PreconditionFailedError: when turning the header row off leaves no data row, or the shift for turning it
-            on cannot be made; when turning the totals row on finds the row below
-            occupied while something straddles the table's columns, or the table on the last grid row; or
-            when turning it off finds a formula or defined name referencing the totals row.
+          FormulonError: with ``StatusCode.PRECONDITION_FAILED`` when turning the header
+            row off leaves no data row, or the shift for turning it on cannot be made;
+            when turning the totals row on finds the row below occupied while something
+            straddles the table's columns, or the table on the last grid row; or when
+            turning it off finds a formula or defined name referencing the totals row.
         """
         for key, flag in (("header_row", header_row), ("totals_row", totals_row)):
             if flag is not UNCHANGED:
@@ -281,7 +282,7 @@ class Table(_NoCopy):
         layout = S.TABLE_COLUMN_PATCH
         raw = bytearray(layout.size * len(columns))
         for i, entry in enumerate(columns):
-            layout.pack_into(raw, i * layout.size, _encode_table_column_patch(entry, scope))
+            layout.pack_into(raw, i * layout.size, _encode_table_column_patch(entry, scope, i))
         ptr = scope.alloc(len(raw))
         LIB.write_bytes(ptr, bytes(raw))
         return ptr
