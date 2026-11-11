@@ -215,7 +215,7 @@ TEST(SaxSharedFormula, ManyRealCellsRejectedOverCellBudget) {
   ReadDiagnostics diagnostics;
   auto rs = read_sheet_data_sax(SpanOf(xml), 0U, wb, ctx, text_storage, &diagnostics, /*max_cell_bytes=*/1000U);
   ASSERT_FALSE(static_cast<bool>(rs));
-  EXPECT_EQ(rs.error().code, FormulonErrorCode::kIoFileTooLarge);
+  EXPECT_EQ(rs.error().code, FormulonErrorCode::kSecurityResourceLimit);
 }
 
 // Mirrors `SheetReader.TrulyEmptySparseCellsDoNotConsumeTheCellBudget`:

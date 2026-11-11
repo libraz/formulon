@@ -116,7 +116,7 @@ TEST(SheetRelsReuse, OneExtractionFeedsEveryCollectorAndPreservesOrderAndTargets
 
   auto reread_or = zip.read_entry(kSheetRelsPath);
   ASSERT_FALSE(static_cast<bool>(reread_or));
-  EXPECT_EQ(reread_or.error().code, FormulonErrorCode::kIoFileTooLarge);
+  EXPECT_EQ(reread_or.error().code, FormulonErrorCode::kSecurityResourceLimit);
 }
 
 TEST(SheetRelsReuse, DocumentLoaderKeepsMalformedAndMissingEnvelopeErrors) {

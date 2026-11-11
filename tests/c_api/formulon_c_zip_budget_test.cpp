@@ -119,7 +119,7 @@ Bytes BuildXlsbBudgetPackage() {
   return result;
 }
 
-TEST(FormulonCApiZipBudget, XlsbLoadReturnsStableFileTooLarge) {
+TEST(FormulonCApiZipBudget, XlsbLoadReturnsStableResourceLimit) {
   const Bytes package = BuildXlsbBudgetPackage();
   ASSERT_FALSE(package.empty());
 
@@ -135,10 +135,10 @@ TEST(FormulonCApiZipBudget, XlsbLoadReturnsStableFileTooLarge) {
   const std::string context = fm_get_last_error_context();
   const std::string message = fm_get_last_error_message();
 
-  EXPECT_EQ(status, static_cast<fm_status_t>(5002));
-  EXPECT_EQ(status, static_cast<fm_status_t>(formulon::FormulonErrorCode::kIoFileTooLarge));
+  EXPECT_EQ(status, static_cast<fm_status_t>(6005));
+  EXPECT_EQ(status, static_cast<fm_status_t>(formulon::FormulonErrorCode::kSecurityResourceLimit));
   EXPECT_EQ(workbook, nullptr);
-  EXPECT_EQ(std::string_view(fm_get_status_name(status)), "IO_FILE_TOO_LARGE");
+  EXPECT_EQ(std::string_view(fm_get_status_name(status)), "SECURITY_RESOURCE_LIMIT");
   EXPECT_NE(context.find("limit=total"), std::string::npos);
   EXPECT_NE(context.find("entry=xl/formulon-budget-"), std::string::npos);
   EXPECT_NE(message.find("cumulative"), std::string::npos);

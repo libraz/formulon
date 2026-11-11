@@ -88,8 +88,6 @@ inline const char* status_name(std::int32_t status) {
       return "GRAPH_RECALC_REENTRANT";
     case FM_STATUS_IO_FILE_NOT_FOUND:
       return "IO_FILE_NOT_FOUND";
-    case FM_STATUS_IO_FILE_TOO_LARGE:
-      return "IO_FILE_TOO_LARGE";
     case FM_STATUS_IO_ZIP_CORRUPT:
       return "IO_ZIP_CORRUPT";
     case FM_STATUS_IO_ZIP_ENCRYPTED:

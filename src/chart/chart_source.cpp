@@ -224,7 +224,7 @@ Error chart_cell_budget_error(std::uint64_t cells) {
 }
 
 Error chart_point_limit_error(std::uint64_t points) {
-  return make_error(FormulonErrorCode::kSecurityResourceLimit, "Point count exceeds Excel row limit",
+  return make_error(FormulonErrorCode::kInvalidArgument, "Point count exceeds Excel row limit",
                     "points=" + std::to_string(points) + " ceiling=" + std::to_string(Sheet::kMaxRows));
 }
 

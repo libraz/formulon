@@ -572,7 +572,7 @@ TEST(SheetReader, ManyRealCellsRejectedOverCellBudget) {
   ReadDiagnostics diagnostics;
   auto rs = read_sheet_data(doc, 0U, wb, ctx, text_storage, &diagnostics, /*max_cell_bytes=*/1000U);
   ASSERT_FALSE(static_cast<bool>(rs));
-  EXPECT_EQ(rs.error().code, FormulonErrorCode::kIoFileTooLarge);
+  EXPECT_EQ(rs.error().code, FormulonErrorCode::kSecurityResourceLimit);
 }
 
 // Bare `<c>` elements with no value, style, or formula never call

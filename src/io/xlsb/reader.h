@@ -107,7 +107,7 @@ struct XlsbReadResult {
 ///
 /// Returns:
 ///   * `kIoZipCorrupt`         — archive-level miniz failure.
-///   * `kIoFileTooLarge`       — cumulative decompression exceeds the
+///   * `kSecurityResourceLimit` — cumulative decompression exceeds the
 ///                                per-open 256 MiB budget.
 ///   * `kIoXmlParse`           — malformed `[Content_Types].xml`,
 ///                                `_rels/.rels`, or

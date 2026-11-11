@@ -105,11 +105,11 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
 ///
 /// Every `<r>` is charged one slot per cache field plus one before it is
 /// allocated; past `max_record_cells` (default `kMaxPivotCacheRecordCells`,
-/// tests inject a smaller value) the read fails with `kIoFileTooLarge`.
+/// tests inject a smaller value) the read fails with `kSecurityResourceLimit`.
 ///
 /// Errors:
 ///   * `kIoXmlParse`, `kIoContentTypeInvalid`, `kIoSheetCorrupt`,
-///     `kIoFileTooLarge`.
+///     `kSecurityResourceLimit`.
 Expected<void, Error> read_pivot_cache_records(std::vector<std::uint8_t> records_bytes, pivot::PivotCache& cache,
                                                std::uint64_t max_record_cells = kMaxPivotCacheRecordCells,
                                                bool date1904 = false);

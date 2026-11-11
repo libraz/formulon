@@ -539,7 +539,7 @@ TEST(ZipReader, ReadEntryRejectsZipBombSizedEntry) {
 
   auto result = zip.read_entry("huge.bin");
   ASSERT_FALSE(static_cast<bool>(result));
-  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoZipBomb);
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kSecurityResourceLimit);
   // Context must mention the offending entry so callers can attribute
   // the rejection in logs.
   EXPECT_NE(result.error().context.find("entry=huge.bin"), std::string::npos);
@@ -560,14 +560,14 @@ TEST(ZipReader, ReadEntryAcceptsBelowCapEntry) {
 }
 
 TEST(ZipReader, OpenRejectsTooManyParts) {
-  // One entry past the cap is enough to flip `kIoZipBomb`; the writer
+  // One entry past the cap is enough to flip `kSecurityResourceLimit`; the writer
   // produces a structurally-valid archive so the rejection is solely on
   // policy grounds.
   const std::vector<std::uint8_t> bytes = BuildManyEmptyEntriesZip(kMaxParts + 1);
   ZipReader zip;
   auto result = zip.open(SpanOf(bytes));
   ASSERT_FALSE(static_cast<bool>(result));
-  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoZipBomb);
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kSecurityResourceLimit);
   EXPECT_NE(result.error().context.find("limit=parts"), std::string::npos);
   // The reader must surface as not-open after a refused open(); subsequent
   // reads return a not-open / not-found error rather than aliasing into a
@@ -625,13 +625,13 @@ TEST(ZipReader, ReadEntryRejectsCumulativeTotal) {
 
   auto reread = zip.read_entry("blob_0.bin");
   ASSERT_FALSE(static_cast<bool>(reread));
-  EXPECT_EQ(reread.error().code, FormulonErrorCode::kIoFileTooLarge);
+  EXPECT_EQ(reread.error().code, FormulonErrorCode::kSecurityResourceLimit);
   EXPECT_EQ(reread.error().context,
             CumulativeOverflowContext("blob_0.bin", kCumulativeCeilingBytes, kCumulativeChunkBytes));
 
   auto over = zip.read_entry("one.bin");
   ASSERT_FALSE(static_cast<bool>(over));
-  EXPECT_EQ(over.error().code, FormulonErrorCode::kIoFileTooLarge);
+  EXPECT_EQ(over.error().code, FormulonErrorCode::kSecurityResourceLimit);
   EXPECT_EQ(over.error().context, CumulativeOverflowContext("one.bin", kCumulativeCeilingBytes, 1U));
 
   // A miniz validation failure after the budget charge must also consume the
@@ -653,7 +653,7 @@ TEST(ZipReader, ReadEntryRejectsCumulativeTotal) {
   }
   auto charged_failure_over = corrupt_zip.read_entry("one.bin");
   ASSERT_FALSE(static_cast<bool>(charged_failure_over));
-  EXPECT_EQ(charged_failure_over.error().code, FormulonErrorCode::kIoFileTooLarge);
+  EXPECT_EQ(charged_failure_over.error().code, FormulonErrorCode::kSecurityResourceLimit);
   EXPECT_EQ(charged_failure_over.error().context, CumulativeOverflowContext("one.bin", kCumulativeCeilingBytes, 1U));
 
   ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(bytes), kCumulativeCeilingBytes)));
@@ -675,7 +675,7 @@ TEST(ZipReader, OpenCeilingOnlyTightensTheCumulativeBudget) {
   }
   auto over = zip.read_entry("blob_2.bin");
   ASSERT_FALSE(static_cast<bool>(over));
-  EXPECT_EQ(over.error().code, FormulonErrorCode::kIoFileTooLarge);
+  EXPECT_EQ(over.error().code, FormulonErrorCode::kSecurityResourceLimit);
   EXPECT_NE(over.error().context.find("ceiling=" + std::to_string(2U * kCumulativeChunkBytes)), std::string::npos);
 
   // A request above the default cannot raise it. The archive stays well inside
@@ -709,14 +709,14 @@ TEST(ZipReader, CumulativeBudgetSurvivesMoveConstructionAndAssignment) {
   }
   auto construct_over = move_constructed.read_entry("one.bin");
   ASSERT_FALSE(static_cast<bool>(construct_over));
-  EXPECT_EQ(construct_over.error().code, FormulonErrorCode::kIoFileTooLarge);
+  EXPECT_EQ(construct_over.error().code, FormulonErrorCode::kSecurityResourceLimit);
   EXPECT_EQ(construct_over.error().context, CumulativeOverflowContext("one.bin", kCumulativeCeilingBytes, 1U));
 
   ZipReader move_assigned;
   move_assigned = std::move(move_constructed);
   auto assignment_over = move_assigned.read_entry("one.bin");
   ASSERT_FALSE(static_cast<bool>(assignment_over));
-  EXPECT_EQ(assignment_over.error().code, FormulonErrorCode::kIoFileTooLarge);
+  EXPECT_EQ(assignment_over.error().code, FormulonErrorCode::kSecurityResourceLimit);
   EXPECT_EQ(assignment_over.error().context, CumulativeOverflowContext("one.bin", kCumulativeCeilingBytes, 1U));
 }
 
@@ -761,12 +761,12 @@ TEST(ZipReader, PolicyRejectionsDoNotConsumeCumulativeBudget) {
     }
     auto over = zip.read_entry("one.bin");
     ASSERT_FALSE(static_cast<bool>(over));
-    EXPECT_EQ(over.error().code, FormulonErrorCode::kIoFileTooLarge);
+    EXPECT_EQ(over.error().code, FormulonErrorCode::kSecurityResourceLimit);
     EXPECT_EQ(over.error().context, CumulativeOverflowContext("one.bin", kCumulativeCeilingBytes, 1U));
   };
 
   assert_boundary_after_rejection("encrypted.bin", FormulonErrorCode::kIoZipEncrypted, "entry=encrypted.bin");
-  assert_boundary_after_rejection("huge.bin", FormulonErrorCode::kIoZipBomb, "limit=entry");
+  assert_boundary_after_rejection("huge.bin", FormulonErrorCode::kSecurityResourceLimit, "limit=entry");
   assert_boundary_after_rejection("ratio.bin", FormulonErrorCode::kIoZipBomb, "limit=ratio");
 }
 

@@ -115,7 +115,7 @@ Expected<void, Error> RegisterArraySpills(Sheet& sheet, const std::vector<ArrayA
 /// must be `< workbook.sheet_count()`. Returns `kIoSheetCorrupt` on any
 /// malformed cell or on bookkeeping inconsistencies (a slave shared
 /// formula that references an unknown `si` is a hard error). Returns
-/// `kIoFileTooLarge` once the cumulative storage of the distinct
+/// `kSecurityResourceLimit` once the cumulative storage of the distinct
 /// coordinates the walk would materialise exceeds `max_cell_bytes`
 /// (default `kMaxSheetLoadCellBytes`; tests inject a smaller value, the
 /// same pattern `zip_reader.h`'s `open()` uses for its own budget).

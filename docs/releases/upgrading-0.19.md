@@ -66,6 +66,12 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   malformed timestamp, a mention outside the text, an empty display name,
   `done` on a reply, removing a person a comment still names and the other
   cases it covered are `InvalidArgument`.
+- **C ABI, JavaScript, Python:** the status 5002, documented as
+  `kIoFileTooLarge`, is retired and the number is never reused. Every
+  engine ceiling that is not an Excel limit, an oversized or over-budget input,
+  an oversized archive entry and too many archive parts included, is
+  `SECURITY_RESOURCE_LIMIT` (6005; Python `SecurityError`), whose message names
+  the part and both numbers. The compression-ratio check keeps `IO_ZIP_BOMB`.
 - **C ABI, JavaScript, Python:** "absent" is one thing on every read: `NULL` in
   C, `null` in JavaScript and `None` in Python, never `""`, `0`, `-1` or a
   presence flag in the record. `getSpill` returns `Spill | null`,
@@ -3833,6 +3839,7 @@ current spelling is in the [Name migration](#name-migration) table.
 | `fm_pivot_style_info_t.present` | `int32_t* out_present` before the out record of `fm_sheet_get_pivot_style_options`, and of `fm_sheet_get_table_style_options`; a NULL `out_present` is `FM_STATUS_INVALID_ARGUMENT` |
 | `fm_workbook_pivot_field_clear_date_group` | removed; `fm_sheet_set_pivot_field_date_group(..., NULL)` clears the grouping |
 | `kSheetIndexOutOfRange` (5050), `kInvalidSheetName` (5051), `kSheetCountLimitExceeded` (5053) | `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10), `FM_STATUS_INVALID_SHEET_NAME` (11) and `FM_STATUS_SHEET_COUNT_LIMIT_EXCEEDED` (12). 5050 to 5053 are retired and never reused |
+| `kIoFileTooLarge` (5002) | `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) for an oversized or over-budget input, an oversized archive entry and too many archive parts; 5002 is retired and never reused |
 | `<field>_engaged` presence fields (`fm_page_setup_t`, `fm_page_margins_t`, `fm_print_options_t`, `fm_header_footer_t`, `fm_cf_rule_t`, `fm_dxf_record` records and the others) | `has_<field>` |
 | a `-1`, `UINT32_MAX` or `0xFFFFFFFF` meaning "none" in a record field: `fm_pivot_field_info_t.cache_field_index`, `fm_pivot_item_info_t.cache_index`, `fm_pivot_data_field_spec_t` `show_as_base_field` and `show_as_base_item`, `fm_function_metadata_t.max_arity`, `fm_filter_column.dxf_id` | `has_<field>` before a `uint32_t` field. `fm_filter_column_t` has no `struct_size` and gains `has_dxf_index`, so its array stride changes |
 | `-1` as a pivot `axis` (`fm_pivot_field_spec_t`, `fm_pivot_field_info_t`, `fm_workbook_pivot_field_set_axis`) | `FM_PIVOT_AXIS_ABSENT` |

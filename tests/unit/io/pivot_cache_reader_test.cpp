@@ -355,7 +355,7 @@ TEST(PivotCacheReader, RecordsPastTheSlotCeilingFailWithoutAllocating) {
   // 65 slots per record: 15 records fit under 1000, the 16th does not.
   auto status = read_pivot_cache_records(Bytes(rec_xml), cache, 1000U);
   ASSERT_FALSE(static_cast<bool>(status));
-  EXPECT_EQ(status.error().code, FormulonErrorCode::kIoFileTooLarge);
+  EXPECT_EQ(status.error().code, FormulonErrorCode::kSecurityResourceLimit);
   EXPECT_EQ(cache.records().size(), 15U);
 
   pivot::PivotCache fits;

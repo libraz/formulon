@@ -671,7 +671,6 @@ export const StatusCode = Object.freeze({
   GraphScheduleFailed: 4003,
   GraphRecalcReentrant: 4005,
   IoFileNotFound: 5000,
-  IoFileTooLarge: 5002,
   IoZipCorrupt: 5003,
   IoZipEncrypted: 5004,
   IoZipBomb: 5005,

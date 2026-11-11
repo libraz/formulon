@@ -702,7 +702,7 @@ TEST(ChartData, RejectsSparseCacheWithOutOfGridIndex) {
 
   auto data = resolve_chart_data(wb, 0, model);
   ASSERT_FALSE(static_cast<bool>(data));
-  EXPECT_EQ(data.error().code, FormulonErrorCode::kSecurityResourceLimit);
+  EXPECT_EQ(data.error().code, FormulonErrorCode::kInvalidArgument);
 }
 
 TEST(ChartData, RejectsOutOfGridPointFromXmlLiteralBeforeDenseAllocation) {
@@ -720,7 +720,7 @@ TEST(ChartData, RejectsOutOfGridPointFromXmlLiteralBeforeDenseAllocation) {
 
   auto data = resolve_chart_data(wb, 0U, model.value());
   ASSERT_FALSE(static_cast<bool>(data));
-  EXPECT_EQ(data.error().code, FormulonErrorCode::kSecurityResourceLimit);
+  EXPECT_EQ(data.error().code, FormulonErrorCode::kInvalidArgument);
 }
 
 TEST(ChartData, RejectsOutOfGridPointFromXmlCacheBeforeDenseAllocation) {
@@ -739,7 +739,7 @@ TEST(ChartData, RejectsOutOfGridPointFromXmlCacheBeforeDenseAllocation) {
 
   auto data = resolve_chart_data(wb, 0U, model.value());
   ASSERT_FALSE(static_cast<bool>(data));
-  EXPECT_EQ(data.error().code, FormulonErrorCode::kSecurityResourceLimit);
+  EXPECT_EQ(data.error().code, FormulonErrorCode::kInvalidArgument);
 }
 
 TEST(ChartData, RejectsRectangularReferenceBeforePositionAllocation) {
@@ -760,7 +760,7 @@ TEST(ChartData, RejectsExcessiveSparsePointCountBeforeAllocation) {
 
   auto data = resolve_chart_data(wb, 0, model);
   ASSERT_FALSE(static_cast<bool>(data));
-  EXPECT_EQ(data.error().code, FormulonErrorCode::kSecurityResourceLimit);
+  EXPECT_EQ(data.error().code, FormulonErrorCode::kInvalidArgument);
 }
 
 TEST(ChartData, RejectsMultiLevelCacheBeyondCellBudgetBeforeAllocation) {

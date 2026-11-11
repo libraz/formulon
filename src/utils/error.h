@@ -81,7 +81,6 @@ enum class FormulonErrorCode : int32_t {
 
   // ===== 5000-5999: I/O (OOXML / XLSB / CSV) =====
   kIoFileNotFound = 5000,
-  kIoFileTooLarge = 5002,
   kIoZipCorrupt = 5003,
   kIoZipEncrypted = 5004,
   kIoZipBomb = 5005,
@@ -252,8 +251,6 @@ inline const char* to_cstring(FormulonErrorCode code) {
     // I/O
     case FormulonErrorCode::kIoFileNotFound:
       return "kIoFileNotFound";
-    case FormulonErrorCode::kIoFileTooLarge:
-      return "kIoFileTooLarge";
     case FormulonErrorCode::kIoZipCorrupt:
       return "kIoZipCorrupt";
     case FormulonErrorCode::kIoZipEncrypted:

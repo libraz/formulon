@@ -39,6 +39,7 @@ struct ByteSpan {
 /// bombs whose 99:1 compression ratio would otherwise allow a few KB of
 /// archive bytes to expand into multi-GiB allocations and trigger OOM /
 /// DoS during `read_entry`.
+/// An entry above the cap fails with `kSecurityResourceLimit`.
 inline constexpr std::size_t kMaxExtractedBytesPerEntry = 100ULL * 1024ULL * 1024ULL;
 
 /// Hard cap on the cumulative uncompressed bytes charged to one successful
@@ -115,9 +116,9 @@ class ZipReader {
 
   /// Reads the entire decompressed contents of `name` into a freshly
   /// allocated buffer. Returns `kIoFileNotFound` when the entry is absent,
-  /// `kIoZipEncrypted` for an encrypted entry, `kIoZipBomb` for the
-  /// per-entry/ratio policy, and `kIoFileTooLarge` when this open session's
-  /// cumulative budget would be exceeded. Returns `kIoZipCorrupt` on other
+  /// `kIoZipEncrypted` for an encrypted entry, `kIoZipBomb` for the ratio
+  /// policy, `kSecurityResourceLimit` for an oversized entry or when this open
+  /// session's cumulative budget would be exceeded. Returns `kIoZipCorrupt` on other
   /// miniz extraction failures (e.g. stored size disagrees with central
   /// directory). The returned buffer is independent of the underlying ZIP
   /// bytes.

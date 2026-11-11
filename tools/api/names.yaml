@@ -13116,11 +13116,6 @@ entries:
     enum: enum.status_code
     surfaces: [c]
     drop: { c: FM_STATUS_IO_FILE_PERMISSION, closes: R0.coverage }
-  constant.fm_status_io_file_too_large:
-    kind: constant
-    c: FM_STATUS_IO_FILE_TOO_LARGE
-    enum: enum.status_code
-    surfaces: [c]
   constant.fm_status_io_zip_corrupt:
     kind: constant
     c: FM_STATUS_IO_ZIP_CORRUPT

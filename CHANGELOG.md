@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- C ABI: every engine ceiling that is not an Excel limit returns
+  `SECURITY_RESOURCE_LIMIT` (6005; `StatusCode.SecurityResourceLimit`, Python
+  `SecurityError`), with the part and both numbers in the message. This covers an
+  oversized or over-budget input, an oversized archive entry and too many archive
+  parts; callers that matched the status 5002, documented as `kIoFileTooLarge`
+  (Python `IoError`), or `IO_ZIP_BOMB` (Python `InvalidFileError`) for those cases
+  must match the new status. The compression-ratio check keeps `IO_ZIP_BOMB`.
+  The status 5002 is retired and the number is never reused
+  ([C ABI changes](docs/releases/upgrading-0.19.md#c-abi-changes)).
+- A chart series with more points than an Excel column holds fails with
+  `InvalidArgument` instead of `SecurityResourceLimit`.
 - The reference notation options are one type: `ReferenceNotationOptions` (C
   `fm_reference_notation_spec_t`) serves `parseReference`, `localizeFormula`
   and `canonicalizeFormula`.

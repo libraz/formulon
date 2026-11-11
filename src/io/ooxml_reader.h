@@ -120,7 +120,7 @@ struct OoxmlReadResult {
 ///     round-trip but not yet wired into evaluation.
 ///
 /// Returns `FormulonErrorCode::kIoZipCorrupt` for archive-level failures,
-/// `kIoFileTooLarge` when cumulative decompression exceeds the per-open
+/// `kSecurityResourceLimit` when cumulative decompression exceeds the per-open
 /// 256 MiB budget, `kIoXmlParse` for malformed XML, and
 /// `kIoRelationshipBroken` / `kIoContentTypeInvalid` when required
 /// relationships or content types are missing. `kIoSheetCorrupt` surfaces

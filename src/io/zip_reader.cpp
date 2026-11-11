@@ -45,9 +45,7 @@ struct ZipReader::Impl {
   // failed extraction remains charged and cannot be retried indefinitely.
   mutable ResourceBudget total_extracted_bytes;
 
-  Impl() : total_extracted_bytes(kMaxTotalExtractedBytes, FormulonErrorCode::kIoFileTooLarge) {
-    name_buf.resize(kInitialNameCapacity);
-  }
+  Impl() : total_extracted_bytes(kMaxTotalExtractedBytes) { name_buf.resize(kInitialNameCapacity); }
 
   // The miniz archive holds internal pointers into the user's input
   // buffer (after `init_mem`); copying or moving the struct would
@@ -111,7 +109,7 @@ Expected<void, Error> ZipReader::open(ByteSpan bytes, std::size_t max_total_extr
   impl_->close();
   // Clamped, so the parameter can only tighten the bound.
   const std::size_t ceiling = std::min(max_total_extracted_bytes, kMaxTotalExtractedBytes);
-  impl_->total_extracted_bytes = ResourceBudget(ceiling, FormulonErrorCode::kIoFileTooLarge);
+  impl_->total_extracted_bytes = ResourceBudget(ceiling);
 
   if (bytes.data == nullptr || bytes.size == 0) {
     return make_error(FormulonErrorCode::kIoZipCorrupt, "the archive buffer is empty",
@@ -140,7 +138,7 @@ Expected<void, Error> ZipReader::open(ByteSpan bytes, std::size_t max_total_extr
     ctx.append(std::to_string(static_cast<std::uint64_t>(num_files)));
     ctx.append(" cap=");
     ctx.append(std::to_string(static_cast<std::uint64_t>(kMaxParts)));
-    return make_error(FormulonErrorCode::kIoZipBomb, "the archive holds more entries than the limit allows",
+    return make_error(FormulonErrorCode::kSecurityResourceLimit, "the archive holds more entries than the limit allows",
                       std::move(ctx));
   }
 
@@ -279,8 +277,8 @@ Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_vie
     ctx.append(std::to_string(static_cast<std::uint64_t>(stat.m_uncomp_size)));
     ctx.append(" cap=");
     ctx.append(std::to_string(static_cast<std::uint64_t>(kMaxExtractedBytesPerEntry)));
-    return make_error(FormulonErrorCode::kIoZipBomb, "the entry uncompressed size exceeds the per-entry limit",
-                      std::move(ctx));
+    return make_error(FormulonErrorCode::kSecurityResourceLimit,
+                      "the entry uncompressed size exceeds the per-entry limit", std::move(ctx));
   }
 
   // Reject pathological compression ratios. The compressed size comes from

@@ -423,7 +423,7 @@ Expected<void, Error> read_pivot_cache_records(std::vector<std::uint8_t> records
   std::vector<pivot::PivotCacheRecord>& records = cache.mutable_records();
   // Each `<r>` costs one slot per field however few children it carries, so
   // the slots are charged before the record is allocated.
-  ResourceBudget slots(max_record_cells, FormulonErrorCode::kIoFileTooLarge);
+  ResourceBudget slots(max_record_cells);
 
   for (pugi::xml_node r = root.child("r"); r; r = r.next_sibling("r")) {
     RETURN_IF_ERROR(slots.consume(1U + field_count));
