@@ -426,6 +426,8 @@ TEST(FormulonCApiUsability, ShapePatchWritesOnlyItsSetFieldsAndRefusesAtomically
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const std::uint32_t id = AddShape(wb.handle);
   const fm_shape_info_t before = ReadShape(wb.handle, id);
+  // The next read releases the strings `before` points into.
+  const std::string before_geometry = before.preset_geometry;
 
   fm_shape_patch_t patch = FM_STRUCT_INIT(fm_shape_patch_t);
   patch.rotation_deg_op = FM_PATCH_OP_SET;
@@ -434,7 +436,7 @@ TEST(FormulonCApiUsability, ShapePatchWritesOnlyItsSetFieldsAndRefusesAtomically
   fm_shape_info_t after = ReadShape(wb.handle, id);
   EXPECT_EQ(after.rotation_deg, 90.0);
   EXPECT_EQ(after.text_box, before.text_box);
-  EXPECT_STREQ(after.preset_geometry, before.preset_geometry);
+  EXPECT_EQ(std::string(after.preset_geometry), before_geometry);
 
   fm_shape_patch_t bad = FM_STRUCT_INIT(fm_shape_patch_t);
   bad.text_box_op = FM_PATCH_OP_SET;
@@ -546,6 +548,8 @@ TEST(FormulonCApiUsability, DrawingPatchMergesTheAnchorAndSetsTheCommonFields) {
   ASSERT_EQ(fm_sheet_add_chart(wb.handle, 0, &opts, &chart), 0) << fm_get_last_error_message();
   const fm_drawing_object_info_t before = ReadDrawing(wb.handle, chart);
   ASSERT_GT(before.anchor.to_row, 7U);
+  // The next read releases the strings `before` points into.
+  const std::string before_name = before.name;
 
   fm_drawing_patch_t patch = FM_STRUCT_INIT(fm_drawing_patch_t);
   patch.anchor.from_row_op = FM_PATCH_OP_SET;
@@ -563,7 +567,7 @@ TEST(FormulonCApiUsability, DrawingPatchMergesTheAnchorAndSetsTheCommonFields) {
   EXPECT_EQ(after.anchor.to_col, before.anchor.to_col);
   EXPECT_EQ(std::string(after.description), "sales");
   EXPECT_EQ(after.hidden, 1);
-  EXPECT_EQ(std::string(after.name), std::string(before.name));
+  EXPECT_EQ(std::string(after.name), before_name);
 
   const std::uint32_t shape = AddShape(wb.handle);
   fm_drawing_patch_t rename = FM_STRUCT_INIT(fm_drawing_patch_t);

@@ -61,11 +61,13 @@ fm_protected_range_patch_t Patch() {
 }
 
 // The ranges of `r` as space-separated A1 text.
+// Formatting releases the strings a read record points into, so call this after reading them.
 std::string RangesText(const WorkbookGuard& wb, const fm_protected_range_t& r) {
+  const std::vector<fm_cell_rect_t> ranges(r.ranges, r.ranges + r.range_count);
   std::string out;
-  for (size_t i = 0; i < r.range_count; ++i) {
+  for (const fm_cell_rect_t& range : ranges) {
     const char* text = nullptr;
-    EXPECT_EQ(fm_workbook_format_reference(wb.handle, nullptr, &r.ranges[i], 0, &text), 0);
+    EXPECT_EQ(fm_workbook_format_reference(wb.handle, nullptr, &range, 0, &text), 0);
     if (!out.empty()) {
       out.push_back(' ');
     }
@@ -211,8 +213,8 @@ TEST(FormulonCApiProtectedRanges, AddListUpdateRemove) {
   fm_protected_range_t out = FM_STRUCT_INIT(fm_protected_range_t);
   ASSERT_EQ(fm_sheet_get_protected_range_at(loaded.handle, 0, 0, &out), 0);
   EXPECT_STREQ(out.name, "Inputs");
-  EXPECT_EQ(RangesText(loaded, out), "B2:C3 E5");
   EXPECT_STREQ(out.legacy_password_hash, "CC1A");
+  EXPECT_EQ(RangesText(loaded, out), "B2:C3 E5");
   ASSERT_EQ(fm_sheet_get_protected_range_at(loaded.handle, 0, 1, &out), 0);
   EXPECT_STREQ(out.algorithm_name, "SHA-512");
   EXPECT_STREQ(out.hash_value, "aA==");
@@ -230,9 +232,9 @@ TEST(FormulonCApiProtectedRanges, AddListUpdateRemove) {
   ASSERT_EQ(fm_sheet_update_protected_range(loaded.handle, 0, "Inputs", &renamed), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_get_protected_range_at(loaded.handle, 0, 0, &out), 0);
   EXPECT_STREQ(out.name, "Renamed");
-  EXPECT_EQ(RangesText(loaded, out), "D4");
   EXPECT_STREQ(out.legacy_password_hash, "CC1A");
   EXPECT_EQ(out.algorithm_name, nullptr);
+  EXPECT_EQ(RangesText(loaded, out), "D4");
 
   ASSERT_EQ(fm_sheet_remove_protected_range(loaded.handle, 0, "Renamed"), 0);
   ASSERT_EQ(RangeCount(loaded), 1U);
@@ -515,13 +517,13 @@ void ExpectFixtureUnchanged(const WorkbookGuard& wb) {
   fm_protected_range_t out = FM_STRUCT_INIT(fm_protected_range_t);
   ASSERT_EQ(fm_sheet_get_protected_range_at(wb.handle, 0, 0, &out), 0);
   EXPECT_STREQ(out.name, "Inputs");
-  EXPECT_EQ(RangesText(wb, out), "B2:C3 E5");
   EXPECT_STREQ(out.legacy_password_hash, "CC1A");
   EXPECT_STREQ(out.algorithm_name, "SHA-512");
   EXPECT_STREQ(out.hash_value, "aA==");
   EXPECT_STREQ(out.salt_value, "cw==");
   EXPECT_EQ(out.spin_count, 100000U);
   EXPECT_STREQ(out.security_descriptor, "O:WDG:WD");
+  EXPECT_EQ(RangesText(wb, out), "B2:C3 E5");
 }
 
 }  // namespace
@@ -547,9 +549,9 @@ TEST(FormulonCApiProtectedRangePatch, OneSetFieldChangesOnlyThatField) {
   ASSERT_EQ(fm_sheet_get_protected_range_at(wb.handle, 0, 0, &out), 0);
   EXPECT_EQ(out.spin_count, 5U);
   EXPECT_STREQ(out.name, "Inputs");
-  EXPECT_EQ(RangesText(wb, out), "B2:C3 E5");
   EXPECT_STREQ(out.hash_value, "aA==");
   EXPECT_STREQ(out.security_descriptor, "O:WDG:WD");
+  EXPECT_EQ(RangesText(wb, out), "B2:C3 E5");
 
   patch = Patch();
   patch.security_descriptor_op = FM_PATCH_OP_SET;
