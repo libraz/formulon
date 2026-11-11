@@ -1,6 +1,7 @@
 // Reference text: `parseReference` / `formatReference`, the A1 / R1C1
-// reference grammar `INDIRECT` reads, exposed to hosts, and the sheet lookup
-// by name, `getSheetIndex`.
+// reference grammar `INDIRECT` reads, exposed to hosts, the sheet lookup by
+// name, `getSheetIndex`, and the `{ r1c1, baseRow, baseCol }` options reader
+// `localizeFormula` / `canonicalizeFormula` share with `parseReference`.
 
 #include <cstddef>
 #include <cstdint>
@@ -10,9 +11,6 @@
 
 namespace formulon_node {
 
-namespace {
-
-/// Reads the optional `options` object at `info[idx]`; false after throwing for a non-object.
 bool OptionsArg(const Napi::CallbackInfo& info, size_t idx, Napi::Object* out) {
   const Napi::Env env = info.Env();
   if (info.Length() <= idx || info[idx].IsUndefined() || info[idx].IsNull()) {
@@ -26,16 +24,11 @@ bool OptionsArg(const Napi::CallbackInfo& info, size_t idx, Napi::Object* out) {
   return true;
 }
 
-}  // namespace
-
-Napi::Value Workbook::ParseReference(const Napi::CallbackInfo& info) {
-  Napi::Env env = info.Env();
-  if (handle_ == nullptr) {
-    return ThrowInvalidHandle(env);
-  }
+bool NotationOptionsArg(const Napi::CallbackInfo& info, size_t idx, NotationOptions* out) {
+  const Napi::Env env = info.Env();
   Napi::Object options;
-  if (!OptionsArg(info, 1, &options)) {
-    return env.Undefined();
+  if (!OptionsArg(info, idx, &options)) {
+    return false;
   }
   CheckedSpecReader reader(env);
   const bool r1c1 = reader.Bool(options, "r1c1", false);
@@ -44,19 +37,31 @@ Napi::Value Workbook::ParseReference(const Napi::CallbackInfo& info) {
   const uint32_t base_row = reader.U32(options, "baseRow", 0U, &has_row);
   const uint32_t base_col = reader.U32(options, "baseCol", 0U, &has_col);
   if (!reader.ok()) {
-    return env.Undefined();
+    return false;
   }
   if (has_row != has_col) {
     ThrowArgumentTypeError(env, "options.baseRow and options.baseCol", "must be given together");
+    return false;
+  }
+  out->r1c1 = r1c1;
+  out->has_base = has_row;
+  out->base_row = base_row;
+  out->base_col = base_col;
+  return true;
+}
+
+Napi::Value Workbook::ParseReference(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  NotationOptions notation;
+  if (!NotationOptionsArg(info, 1, &notation)) {
     return env.Undefined();
   }
   const std::string text = ArgString(info, 0);
   fm_parsed_reference_info_t ref = FM_STRUCT_INIT(fm_parsed_reference_info_t);
-  fm_parse_reference_spec_t spec = FM_STRUCT_INIT(fm_parse_reference_spec_t);
-  spec.r1c1 = r1c1 ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
-  spec.has_base = has_row ? 1 : 0;
-  spec.base_row = base_row;
-  spec.base_col = base_col;
+  const fm_parse_reference_spec_t spec = NotationSpec<fm_parse_reference_spec_t>(notation);
   const fm_status_t rc = fm_workbook_parse_reference(handle_, text.c_str(), &spec, &ref);
   if (rc != 0) {
     return ThrowStatus(env, rc);

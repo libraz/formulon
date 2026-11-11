@@ -22,6 +22,7 @@
 #include "parser/structured_ref_payload.h"
 #include "parser/structured_ref_spelling.h"
 #include "sheet_name.h"
+#include "utils/number_text.h"
 
 namespace formulon {
 namespace parser {
@@ -32,19 +33,8 @@ struct Host {
   std::int64_t col;
 };
 
-// One axis of a cell reference: `R3` (absolute), `R[-1]` (relative), `R` (same).
 void AppendAxis(char axis, std::int64_t index, std::int64_t host, bool absolute, std::string& out) {
-  out.push_back(axis);
-  if (absolute) {
-    out.append(std::to_string(index + 1));
-    return;
-  }
-  const std::int64_t delta = index - host;
-  if (delta != 0) {
-    out.push_back('[');
-    out.append(std::to_string(delta));
-    out.push_back(']');
-  }
+  append_r1c1_axis(axis, '[', ']', index, host, absolute, out);
 }
 
 // The cell part of `r` (no sheet): a whole column / row prints its axis only.
@@ -320,6 +310,22 @@ struct Emitter {
 };
 
 }  // namespace
+
+void append_r1c1_axis(char letter, char open, char close, std::int64_t index, std::int64_t host, bool absolute,
+                      std::string& out) {
+  char digits[24];
+  out.push_back(letter);
+  if (absolute) {
+    out.append(digits, static_cast<std::size_t>(format_signed(digits, sizeof digits, index + 1)));
+    return;
+  }
+  const std::int64_t delta = index - host;
+  if (delta != 0) {
+    out.push_back(open);
+    out.append(digits, static_cast<std::size_t>(format_signed(digits, sizeof digits, delta)));
+    out.push_back(close);
+  }
+}
 
 std::string format_formula_r1c1(const AstNode& node, std::uint32_t anchor_row, std::uint32_t anchor_col,
                                 const StructuredRefDisplay* display) {

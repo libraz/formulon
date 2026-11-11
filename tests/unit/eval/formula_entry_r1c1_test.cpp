@@ -12,10 +12,14 @@
 
 #include "eval/a1_parse.h"
 #include "eval/builtin_names.h"
+#include "eval/formula_localize.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
+#include "parser/parse_error.h"
+#include "parser/parse_status.h"
 #include "table.h"
 #include "utils/arena.h"
+#include "utils/expected.h"
 #include "utils/formula_text.h"
 #include "workbook.h"
 
@@ -200,6 +204,67 @@ TEST(FormulaEntryR1C1, WhitespaceIsKept) {
   EXPECT_EQ(Translate("= LET( B1 , 5 , B1+B2 )"), "= LET( _xlpm.B1 , 5 , _xlpm.B1+_xlnm.B2 )");
   EXPECT_EQ(Translate("=SUM( RC[-1] , 1 )", 12, 4), "=SUM( D13 , 1 )");
   EXPECT_EQ(Translate("=RC[-1] + 1", 11, 4), "=D12 + 1");
+}
+
+// ---------------------------------------------------------------------------
+// rewrite_r1c1_text outside entry
+// ---------------------------------------------------------------------------
+
+R1C1RewriteOptions Rewriting(const R1C1Letters& letters, char array_row_separator, std::uint32_t row,
+                             std::uint32_t col) {
+  R1C1RewriteOptions options;
+  options.letters = letters;
+  options.array_row_separator = array_row_separator;
+  options.has_base = true;
+  options.base_row = row;
+  options.base_col = col;
+  return options;
+}
+
+std::string Rewrite(std::string_view text, const R1C1RewriteOptions& options) {
+  const Expected<MappedFormulaText, parser::ParseFailure> a1 = rewrite_r1c1_text(text, options);
+  return a1 ? a1.value().text : std::string("<failed>");
+}
+
+TEST(FormulaEntryR1C1, RewriteReadsTheGivenLetters) {
+  const R1C1RewriteOptions de = Rewriting(R1C1Letters{'Z', 'S', '(', ')'}, ';', 4, 4);
+  EXPECT_EQ(Rewrite("=SUMME(Z(-2)S(-2);Z2S2)", de), "=SUMME(C3;$B$2)");
+  EXPECT_EQ(Rewrite("=SUMME(S1:S2)+ZEILE(Z)", de), "=SUMME($A:$B)+ZEILE(5:5)");
+  // The invariant letters are names under other letters; a cell-shaped name takes `_xlpm.`.
+  EXPECT_EQ(Rewrite("=R1C1+B1", de), "=R1C1+_xlpm.B1");
+  EXPECT_EQ(Rewrite("=Tbl[Col]+\"Z1S1\"+'Z1'!Z1S1", de), "=Tbl[Col]+\"Z1S1\"+'Z1'!$A$1");
+  // Qualifiers take the stored quoting rule; a partly quoted 3-D span stays as written.
+  EXPECT_EQ(Rewrite("=S2!Z1S1+'Data'!Z1S1+Data:S2!Z1S1+Data:'My Sheet'!Z1S1", de),
+            "='S2'!$A$1+Data!$A$1+'Data:S2'!$A$1+Data:'My Sheet'!$A$1");
+  EXPECT_EQ(Rewrite("=[1]S2!Z1S1+'[1]S2'!Z1S1", de), "=[1]S2!$A$1+'[1]S2'!$A$1");
+}
+
+TEST(FormulaEntryR1C1, RewriteOutsideEntryKeepsArrayRows) {
+  const R1C1RewriteOptions ru = Rewriting(R1C1Letters{}, ':', 4, 4);
+  EXPECT_EQ(Rewrite("=SUM(R1C1;{1;2:3;4})", ru), "=SUM($A$1;{1;2:3;4})");
+  // Entry refuses a number before `:` even inside braces.
+  EXPECT_EQ(Translate("={1,2:3,4}"), "<refused>");
+}
+
+TEST(FormulaEntryR1C1, RewriteJoinsTrimOperatorsOutsideEntry) {
+  const R1C1RewriteOptions en = Rewriting(R1C1Letters{}, ';', 4, 2);
+  EXPECT_EQ(Rewrite("=SUM(R[-4]C[-2].:R[-3]C[-1])", en), "=SUM(A1.:B2)");
+  EXPECT_EQ(Rewrite("=SUM(C[-2]:.C[-2])", en), "=SUM(A:.A)");
+  EXPECT_EQ(Rewrite("=SUM(R1.:.R3)", en), "=SUM($1.:.$3)");
+}
+
+TEST(FormulaEntryR1C1, RewriteFailuresCarryTheEndpoint) {
+  R1C1RewriteOptions no_base;
+  const Expected<MappedFormulaText, parser::ParseFailure> relative = rewrite_r1c1_text("=1+RC[-1]", no_base);
+  ASSERT_FALSE(relative);
+  EXPECT_EQ(relative.error().code, parser::ParseErrorCode::InvalidReference);
+  EXPECT_EQ(relative.error().range.start, 3U);
+  EXPECT_EQ(relative.error().range.end, 9U);
+  const Expected<MappedFormulaText, parser::ParseFailure> malformed = rewrite_r1c1_text("=R[x]+1", no_base);
+  ASSERT_FALSE(malformed);
+  EXPECT_EQ(malformed.error().code, parser::ParseErrorCode::InvalidReference);
+  EXPECT_EQ(malformed.error().range.start, 1U);
+  EXPECT_EQ(malformed.error().range.end, 5U);
 }
 
 // ---------------------------------------------------------------------------

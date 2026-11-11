@@ -126,12 +126,32 @@ std::string canonicalize_function_name(const std::string& localized_name, const 
   return map_profile_text(fm_canonicalize_function_name, localized_name, profile_id);
 }
 
-std::string localize_formula(const std::string& formula, const std::string& profile_id) {
-  return map_profile_text(fm_localize_formula, formula, profile_id);
+namespace {
+
+using FormulaTextMapFn = fm_status_t (*)(const char*, const char*, const fm_formula_notation_spec_t*, const char**);
+
+std::string map_formula_text(FormulaTextMapFn fn, const char* call, const std::string& formula,
+                             const std::string& profile_id, const emscripten::val& options) {
+  JsNotationOptions notation;
+  if (!read_notation_options(options, call, &notation)) {
+    return std::string();
+  }
+  const fm_formula_notation_spec_t spec = notation_spec<fm_formula_notation_spec_t>(notation);
+  const char* out = nullptr;
+  if (!succeeded(fn(formula.c_str(), profile_id.c_str(), &spec, &out))) {
+    return std::string();
+  }
+  return string_from_cstr(out);
 }
 
-std::string canonicalize_formula(const std::string& formula, const std::string& profile_id) {
-  return map_profile_text(fm_canonicalize_formula, formula, profile_id);
+}  // namespace
+
+std::string localize_formula(const std::string& formula, const std::string& profile_id, emscripten::val options) {
+  return map_formula_text(fm_localize_formula, "Formulon.localizeFormula", formula, profile_id, options);
+}
+
+std::string canonicalize_formula(const std::string& formula, const std::string& profile_id, emscripten::val options) {
+  return map_formula_text(fm_canonicalize_formula, "Formulon.canonicalizeFormula", formula, profile_id, options);
 }
 
 namespace {

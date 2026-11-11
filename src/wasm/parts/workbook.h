@@ -845,8 +845,36 @@ emscripten::val function_names();
 
 std::string localize_function_name(const std::string& canonical_name, const std::string& profile_id);
 std::string canonicalize_function_name(const std::string& localized_name, const std::string& profile_id);
-std::string localize_formula(const std::string& formula, const std::string& profile_id);
-std::string canonicalize_formula(const std::string& formula, const std::string& profile_id);
+/// `fm_localize_formula` / `fm_canonicalize_formula`, `options` read by `read_notation_options`.
+std::string localize_formula(const std::string& formula, const std::string& profile_id, emscripten::val options);
+std::string canonicalize_formula(const std::string& formula, const std::string& profile_id, emscripten::val options);
+
+/// `options` as an object (absent reads as `{}`); false after recording a TypeError, worded for the call `call`
+/// (`Workbook.formatReference`), for another type.
+bool options_object(const emscripten::val& options, const char* call, emscripten::val* out);
+
+/// The `{ r1c1?, baseRow?, baseCol? }` options of `parseReference`, `localizeFormula` and `canonicalizeFormula`.
+struct JsNotationOptions {
+  bool r1c1 = false;
+  bool has_base = false;
+  uint32_t base_row = 0;
+  uint32_t base_col = 0;
+};
+
+/// Reads `options` of the call `call`; false after recording the argument error: a non-object, a non-boolean
+/// `r1c1`, a coordinate that is not a uint32, or one base coordinate without the other.
+bool read_notation_options(const emscripten::val& options, const char* call, JsNotationOptions* out);
+
+/// `options` as the C record `Spec` (`fm_parse_reference_spec_t`, `fm_formula_notation_spec_t`).
+template <typename Spec>
+Spec notation_spec(const JsNotationOptions& options) {
+  Spec spec = FM_STRUCT_INIT(Spec);
+  spec.r1c1 = options.r1c1 ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
+  spec.has_base = options.has_base ? 1 : 0;
+  spec.base_row = options.base_row;
+  spec.base_col = options.base_col;
+  return spec;
+}
 
 /// Separators, boolean names, date order, currency placement and localized
 /// error names of a profile. See `fm_get_locale_facts`.

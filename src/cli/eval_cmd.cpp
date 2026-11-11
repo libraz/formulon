@@ -269,7 +269,7 @@ int run_eval(const ArgList& args, std::ostream& out, std::ostream& err) {
     if (auto rc = fm_workbook_get_profile_id(wb.handle, &profile_id); rc != 0) {
       return fail_with_last_error(err, "eval", kExitFailure);
     }
-    if (auto rc = fm_canonicalize_formula(formula_str.c_str(), profile_id, &canonical); rc != 0) {
+    if (auto rc = fm_canonicalize_formula(formula_str.c_str(), profile_id, nullptr, &canonical); rc != 0) {
       return report_eval_failure(err);
     }
     formula_str = canonical;

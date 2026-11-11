@@ -1,7 +1,9 @@
 //
 // JsWorkbook reference-text surface: `parseReference` / `formatReference`,
 // the A1 / R1C1 grammar `INDIRECT` reads, over `fm_workbook_parse_reference`
-// and `fm_workbook_format_reference`, and the sheet lookup by name. An
+// and `fm_workbook_format_reference`, the sheet lookup by name, and the
+// `{ r1c1, baseRow, baseCol }` options reader `localizeFormula` /
+// `canonicalizeFormula` share with `parseReference`. An
 // argument JS cannot represent (a wrong type, a non-integer) is raised as a
 // TypeError / RangeError by the pre-js method wrapper; an engine rejection
 // is thrown there as a `FormulonError`.
@@ -49,30 +51,24 @@ emscripten::val reject(int32_t kind, const std::string& message) {
   return emscripten::val::undefined();
 }
 
-/// `options` as an object (absent reads as `{}`); false after recording a TypeError for another type.
-bool options_object(const emscripten::val& options, const char* api, emscripten::val* out) {
+}  // namespace
+
+bool options_object(const emscripten::val& options, const char* call, emscripten::val* out) {
   *out = js_object_or_empty(options);
   if (out->typeOf().strictlyEquals(emscripten::val("object"))) {
     return true;
   }
-  reject(kReferenceTypeError,
-         binding::argument_message(std::string("Workbook.") + api, "options", "must be an object"));
+  reject(kReferenceTypeError, binding::argument_message(call, "options", "must be an object"));
   return false;
 }
 
-}  // namespace
-
-emscripten::val JsWorkbook::parseReference(const std::string& text, emscripten::val options) const {
+bool read_notation_options(const emscripten::val& options, const char* call, JsNotationOptions* out) {
   using emscripten::val;
-  if (handle_ == nullptr) {
-    record_invalid_handle();
-    return val::undefined();
-  }
   val opts = val::undefined();
-  if (!options_object(options, "parseReference", &opts)) {
-    return val::undefined();
+  if (!options_object(options, call, &opts)) {
+    return false;
   }
-  JsNarrowNumericReader reader("Workbook.parseReference");
+  JsNarrowNumericReader reader(call);
   const bool r1c1 = reader.boolean(opts, "r1c1", false, "r1c1");
   const val row_value = reader.value(opts, "baseRow", "baseRow");
   const val col_value = reader.value(opts, "baseCol", "baseCol");
@@ -81,19 +77,32 @@ emscripten::val JsWorkbook::parseReference(const std::string& text, emscripten::
   const uint32_t base_row = has_row ? reader.u32_value(row_value, 0U, "baseRow") : 0U;
   const uint32_t base_col = has_col ? reader.u32_value(col_value, 0U, "baseCol") : 0U;
   if (!reader.ok()) {
-    return val::undefined();
+    return false;
   }
   if (has_row != has_col) {
-    return reject(kReferenceTypeError,
-                  binding::argument_message("Workbook.parseReference", "options.baseRow and options.baseCol",
-                                            "must be given together"));
+    reject(kReferenceTypeError,
+           binding::argument_message(call, "options.baseRow and options.baseCol", "must be given together"));
+    return false;
+  }
+  out->r1c1 = r1c1;
+  out->has_base = has_row;
+  out->base_row = base_row;
+  out->base_col = base_col;
+  return true;
+}
+
+emscripten::val JsWorkbook::parseReference(const std::string& text, emscripten::val options) const {
+  using emscripten::val;
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return val::undefined();
+  }
+  JsNotationOptions notation;
+  if (!read_notation_options(options, "Workbook.parseReference", &notation)) {
+    return val::undefined();
   }
   fm_parsed_reference_info_t ref = FM_STRUCT_INIT(fm_parsed_reference_info_t);
-  fm_parse_reference_spec_t spec = FM_STRUCT_INIT(fm_parse_reference_spec_t);
-  spec.r1c1 = r1c1 ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
-  spec.has_base = has_row ? 1 : 0;
-  spec.base_row = base_row;
-  spec.base_col = base_col;
+  const fm_parse_reference_spec_t spec = notation_spec<fm_parse_reference_spec_t>(notation);
   const fm_status_t rc = fm_workbook_parse_reference(handle_, text.c_str(), &spec, &ref);
   if (!succeeded(rc)) {
     return val::undefined();
@@ -111,7 +120,7 @@ std::string JsWorkbook::formatReference(emscripten::val range, emscripten::val o
     return std::string();
   }
   val opts = val::undefined();
-  if (!options_object(options, "formatReference", &opts)) {
+  if (!options_object(options, "Workbook.formatReference", &opts)) {
     return std::string();
   }
   JsNarrowNumericReader reader("Workbook.formatReference");

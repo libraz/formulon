@@ -984,8 +984,6 @@ const RUNTIME_MEMBERS = new Set([
   'listFunctionNames',
   'localizeFunctionName',
   'canonicalizeFunctionName',
-  'localizeFormula',
-  'canonicalizeFormula',
   'getLocaleFacts',
   'listProfileIds',
   'compareText',
@@ -999,9 +997,6 @@ function dateSystem(options, where) {
   if (options === undefined) return false;
   const label = argLabel(where, 1);
   requireObject(options, label);
-  for (const key of Object.keys(options)) {
-    if (key !== 'date1904') throw new TypeError(`${label} has no field ${key}`);
-  }
   return options.date1904 === undefined ? false : requireBoolean(options.date1904, `${label}.date1904`);
 }
 
@@ -1034,8 +1029,23 @@ function logRecord(bytes) {
 
 // Members built over a runtime function, keyed by member name: [the runtime function, the wrapper factory]. The
 // civil-date wrappers default `date1904` and the time of day and refuse what the fields cannot represent; the
-// engine judges the calendar. The evaluation wrappers fold the raw `{rows, cols, cells}` result.
+// engine judges the calendar. The evaluation wrappers fold the raw `{rows, cols, cells}` result. The formula-text
+// wrappers always pass the optional options argument, which the runtime reads.
 const RUNTIME_WRAPPERS = Object.freeze({
+  canonicalizeFormula: [
+    'canonicalizeFormula',
+    (canonicalize) =>
+      function canonicalizeFormula(formula, profileId, options) {
+        return canonicalize(formula, profileId, options);
+      },
+  ],
+  localizeFormula: [
+    'localizeFormula',
+    (localize) =>
+      function localizeFormula(formula, profileId, options) {
+        return localize(formula, profileId, options);
+      },
+  ],
   convertCivilToSerial: [
     'convertCivilToSerial',
     (convert) =>
@@ -1125,6 +1135,7 @@ export function buildFormulon(runtime, shared, registry) {
     }
     formulon[name] = value;
   }
+  installInputGuards(formulon, 'Formulon');
   installArityGuards(formulon, 'Formulon');
   installErrorLabels(formulon, 'Formulon', (name) => Object.hasOwn(METHOD_ARITY, `Formulon.${name}`));
   return Object.freeze(formulon);
@@ -2421,6 +2432,10 @@ const INPUT_KEYS = Object.freeze({
   'Chart.setPoint': [3, ['fill', 'index', 'line', 'marker']],
   'Chart.setSource': [0, ['direction', 'headerColumn', 'headerRow', 'range']],
   'Chart.setTitle': [0, ['formula', 'kind', 'text']],
+  'Formulon.canonicalizeFormula': [2, ['baseCol', 'baseRow', 'r1c1']],
+  'Formulon.convertCivilToSerial': [1, ['date1904']],
+  'Formulon.convertSerialToCivil': [1, ['date1904']],
+  'Formulon.localizeFormula': [2, ['baseCol', 'baseRow', 'r1c1']],
   'Pivot.addDataField': [
     0,
     ['aggregation', 'fieldIndex', 'name', 'numberFormat', 'showAs', 'showAsBaseField', 'showAsBaseItem'],
@@ -3367,7 +3382,7 @@ const METHOD_ARITY = Object.freeze({
   'Chart.updateSeries': 3,
   'Drawing.getDrawingProperties': 0,
   'Drawing.update': 1,
-  'Formulon.canonicalizeFormula': 2,
+  'Formulon.canonicalizeFormula': 3,
   'Formulon.canonicalizeFunctionName': 2,
   'Formulon.compareText': 4,
   'Formulon.convertCivilToSerial': 2,
@@ -3381,7 +3396,7 @@ const METHOD_ARITY = Object.freeze({
   'Formulon.getVersion': 0,
   'Formulon.listFunctionNames': 0,
   'Formulon.listProfileIds': 0,
-  'Formulon.localizeFormula': 2,
+  'Formulon.localizeFormula': 3,
   'Formulon.localizeFunctionName': 2,
   'Formulon.setLogMinLevel': 1,
   'Formulon.setLogSink': 1,
@@ -4144,7 +4159,7 @@ const PARAM_NAMES = Object.freeze({
   'Chart.updatePoint': ['plot', 'seriesId', 'pointIndex', 'patch'],
   'Chart.updateSeries': ['plot', 'seriesId', 'patch'],
   'Drawing.update': ['patch'],
-  'Formulon.canonicalizeFormula': ['formula', 'profileId'],
+  'Formulon.canonicalizeFormula': ['formula', 'profileId', 'options'],
   'Formulon.canonicalizeFunctionName': ['localizedName', 'profileId'],
   'Formulon.compareText': ['a', 'b', 'strength', 'profileId'],
   'Formulon.convertCivilToSerial': ['date', 'options'],
@@ -4155,7 +4170,7 @@ const PARAM_NAMES = Object.freeze({
   'Formulon.getFunctionMetadata': ['name'],
   'Formulon.getImageInfo': ['bytes'],
   'Formulon.getLocaleFacts': ['profileId'],
-  'Formulon.localizeFormula': ['formula', 'profileId'],
+  'Formulon.localizeFormula': ['formula', 'profileId', 'options'],
   'Formulon.localizeFunctionName': ['canonicalName', 'profileId'],
   'Formulon.setLogMinLevel': ['level'],
   'Formulon.setLogSink': ['sink'],

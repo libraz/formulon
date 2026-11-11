@@ -48,10 +48,10 @@ Napi::Value LocalizeFunctionName(const Napi::CallbackInfo& info);
 /// `canonicalizeFunctionName(name, profileId)`.
 Napi::Value CanonicalizeFunctionName(const Napi::CallbackInfo& info);
 
-/// `localizeFormula(formula, profileId)`.
+/// `localizeFormula(formula, profileId, options?)`.
 Napi::Value LocalizeFormula(const Napi::CallbackInfo& info);
 
-/// `canonicalizeFormula(formula, profileId)`.
+/// `canonicalizeFormula(formula, profileId, options?)`.
 Napi::Value CanonicalizeFormula(const Napi::CallbackInfo& info);
 
 /// `getLocaleFacts(profileId)`: separators, boolean names, date order,

@@ -41,6 +41,7 @@ FORMULON_STRUCT_V1(fm_read_diagnostics_info_t, sizeof(fm_read_diagnostics_info_t
 FORMULON_STRUCT_V1(fm_save_diagnostics_info_t, sizeof(fm_save_diagnostics_info_t))
 FORMULON_STRUCT_V1(fm_parsed_reference_info_t, sizeof(fm_parsed_reference_info_t))
 FORMULON_STRUCT_V1(fm_parse_reference_spec_t, sizeof(fm_parse_reference_spec_t))
+FORMULON_STRUCT_V1(fm_formula_notation_spec_t, sizeof(fm_formula_notation_spec_t))
 FORMULON_STRUCT_V1(fm_phonetic_properties_t, sizeof(fm_phonetic_properties_t))
 FORMULON_STRUCT_V1(fm_defined_name_t, sizeof(fm_defined_name_t))
 FORMULON_STRUCT_V1(fm_table_info_t, sizeof(fm_table_info_t))

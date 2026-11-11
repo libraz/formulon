@@ -440,6 +440,33 @@ bool BytesArg(const Napi::CallbackInfo& info, size_t idx, Napi::Uint8Array* out)
 void BuildDataFieldSpec(CheckedSpecReader& reader, const Napi::Object& spec, fm_pivot_data_field_t& out,
                         std::string& name_buf, std::string& nfmt_buf);
 
+/// Reads the optional `options` object at `info[idx]` (absent or nullish reads as `{}`); false after throwing a
+/// TypeError for another type.
+bool OptionsArg(const Napi::CallbackInfo& info, size_t idx, Napi::Object* out);
+
+/// The `{ r1c1?, baseRow?, baseCol? }` options of `parseReference`, `localizeFormula` and `canonicalizeFormula`.
+struct NotationOptions {
+  bool r1c1 = false;
+  bool has_base = false;
+  uint32_t base_row = 0;
+  uint32_t base_col = 0;
+};
+
+/// Reads the optional notation options at `info[idx]`; false after throwing: a non-object, a non-boolean `r1c1`, a
+/// coordinate that is not a uint32, or one base coordinate without the other.
+bool NotationOptionsArg(const Napi::CallbackInfo& info, size_t idx, NotationOptions* out);
+
+/// `options` as the C record `Spec` (`fm_parse_reference_spec_t`, `fm_formula_notation_spec_t`).
+template <typename Spec>
+Spec NotationSpec(const NotationOptions& options) {
+  Spec spec = FM_STRUCT_INIT(Spec);
+  spec.r1c1 = options.r1c1 ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
+  spec.has_base = options.has_base ? 1 : 0;
+  spec.base_row = options.base_row;
+  spec.base_col = options.base_col;
+  return spec;
+}
+
 }  // namespace formulon_node
 
 #endif  // FORMULON_NODE_ADDON_PARTS_ADDON_COMMON_H_

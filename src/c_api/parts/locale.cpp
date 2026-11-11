@@ -26,6 +26,8 @@
 #include "utils/utf8_length.h"
 #include "value.h"
 
+using formulon::c_api::parts::check_cell_coord;
+using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_profile_id;
 using formulon::c_api::parts::check_record_size;
@@ -75,8 +77,35 @@ fm_status_t check_parses(std::string_view text, std::string_view caller_text, Pl
   return formula_parse_failed(caller_text, place(failure.range, failure), "field=formula");
 }
 
+// Reads `spec` (NULL = A1, no base) into `*out` after the checks of `fm_workbook_parse_reference`.
+fm_status_t read_notation(const fm_formula_notation_spec_t* spec, formulon::eval::FormulaNotation* out) {
+  const fm_formula_notation_spec_t plain = FM_STRUCT_INIT(fm_formula_notation_spec_t);
+  if (spec == nullptr) {
+    spec = &plain;
+  } else if (auto rc = check_record_size(*spec); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_enum_domain(spec->r1c1, FM_TRISTATE_DEFAULT, FM_TRISTATE_TRUE, "r1c1"); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_enum_domain(spec->has_base, 0, 1, "has_base"); rc != 0) {
+    return rc;
+  }
+  if (spec->has_base == 1) {
+    if (auto rc = check_cell_coord(spec->base_row, spec->base_col); rc != 0) {
+      return rc;
+    }
+  }
+  out->r1c1 = spec->r1c1 == FM_TRISTATE_TRUE;
+  out->has_base = spec->has_base == 1;
+  out->base_row = spec->base_row;
+  out->base_col = spec->base_col;
+  return 0;
+}
+
 // Shared body of `fm_localize_formula` / `fm_canonicalize_formula`.
-fm_status_t convert_formula(const char* formula, const char* profile_id, bool localize, const char** out_formula) {
+fm_status_t convert_formula(const char* formula, const char* profile_id, const fm_formula_notation_spec_t* spec,
+                            bool localize, const char** out_formula) {
   clear_last_error();
   if (formula == nullptr || profile_id == nullptr || out_formula == nullptr) {
     return null_argument();
@@ -88,40 +117,45 @@ fm_status_t convert_formula(const char* formula, const char* profile_id, bool lo
   if (auto rc = check_profile_id(profile_id, &profile); rc != 0) {
     return rc;
   }
+  formulon::eval::FormulaNotation notation;
+  if (auto rc = read_notation(spec, &notation); rc != 0) {
+    return rc;
+  }
+  const std::string_view source(formula);
   thread_local std::string buffer;
-  if (localize) {
-    // The input is the canonical text, so the failure is already in the caller's coordinates.
-    if (auto rc = check_parses(formula, formula,
-                               [](const formulon::parser::TextRange&, formulon::parser::ParseFailure f) { return f; });
-        rc != 0) {
-      return rc;
-    }
-    buffer = formulon::eval::localize_formula_text(formula, profile);
-  } else {
-    const formulon::eval::MappedFormulaText mapped = formulon::eval::canonicalize_formula_text_mapped(formula, profile);
-    const std::string_view source(formula);
-    if (auto rc = check_parses(mapped.text, source,
+  // Both rewrites read the caller's text, so their failures are already in its coordinates.
+  auto mapped = localize ? formulon::eval::localize_formula_text_r1c1(source, profile, notation)
+                         : formulon::eval::canonicalize_formula_text_r1c1(source, profile, notation);
+  if (!mapped) {
+    return formula_parse_failed(source, mapped.error(), "field=formula");
+  }
+  const formulon::eval::MappedFormulaText& text = mapped.value();
+  // The A1 canonicalize rewrite does not parse its result.
+  if (!localize && !notation.r1c1) {
+    if (auto rc = check_parses(text.text, source,
                                [&](const formulon::parser::TextRange& range, formulon::parser::ParseFailure f) {
-                                 f.range = mapped.source_range(source, range);
+                                 f.range = text.source_range(source, range);
                                  return f;
                                });
         rc != 0) {
       return rc;
     }
-    buffer = mapped.text;
   }
+  buffer = text.text;
   *out_formula = buffer.c_str();
   return 0;
 }
 
 }  // namespace
 
-extern "C" fm_status_t fm_localize_formula(const char* formula, const char* profile_id, const char** out_formula) {
-  return convert_formula(formula, profile_id, /*localize=*/true, out_formula);
+extern "C" fm_status_t fm_localize_formula(const char* formula, const char* profile_id,
+                                           const fm_formula_notation_spec_t* spec, const char** out_formula) {
+  return convert_formula(formula, profile_id, spec, /*localize=*/true, out_formula);
 }
 
-extern "C" fm_status_t fm_canonicalize_formula(const char* formula, const char* profile_id, const char** out_formula) {
-  return convert_formula(formula, profile_id, /*localize=*/false, out_formula);
+extern "C" fm_status_t fm_canonicalize_formula(const char* formula, const char* profile_id,
+                                               const fm_formula_notation_spec_t* spec, const char** out_formula) {
+  return convert_formula(formula, profile_id, spec, /*localize=*/false, out_formula);
 }
 
 extern "C" fm_status_t fm_get_locale_facts(const char* profile_id, fm_locale_facts_info_t* out) {

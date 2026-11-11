@@ -8,6 +8,13 @@
 // items change; column names are copied as-is. Each written piece can be
 // recorded with the input span it came from, so a position in the result
 // maps back to the input.
+//
+// R1C1 localization takes the reference nodes of the parsed formula and
+// replaces their cell parts inside the same token pass; R1C1 canonicalization
+// reads the endpoints back into A1 first (`rewrite_r1c1_text`) and composes
+// the two position maps.
+//
+// @size-budget: 8 KB (R1C1 notation and qualifier / name quoting)
 
 #include "eval/formula_localize.h"
 
@@ -17,13 +24,26 @@
 #include <cstring>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
+#include "eval/a1_parse.h"
+#include "eval/builtin_names.h"
+#include "eval/formula_entry_r1c1.h"
 #include "eval/locale_function_names.h"
 #include "excel_locale.h"
+#include "parser/ast.h"
+#include "parser/ast_format.h"
+#include "parser/ast_format_r1c1.h"
+#include "parser/formula_prefix.h"
+#include "parser/parse_error.h"
+#include "parser/reference.h"
 #include "parser/token.h"
 #include "parser/tokenizer.h"
+#include "utils/arena.h"
 #include "utils/double_format.h"
+#include "utils/formula_text.h"
+#include "utils/index_sort.h"
 #include "utils/strings.h"
 #include "utils/text_ops.h"
 #include "utils/utf8_length.h"
@@ -176,22 +196,43 @@ std::size_t rewrite_structured_group(std::string_view f, std::size_t begin, Exce
 
 enum class Direction { kToLocale, kToCanonical };
 
+// Which rule a local sheet qualifier is requoted by.
+enum class QualifierRule : std::uint8_t { kStored, kA1Display, kR1C1Display };
+
+struct RewriteRules {
+  Direction direction = Direction::kToLocale;
+  QualifierRule qualifiers = QualifierRule::kStored;
+  /// R1C1 output prints a cell-shaped name bare (`_xlpm.B1` -> `B1`).
+  bool bare_cell_names = false;
+};
+
+// The cell part of one reference in the formula and its R1C1 spelling.
+struct ReferenceRewrite {
+  std::size_t begin = 0;
+  std::size_t end = 0;
+  std::string text;
+};
+
 // Writes the rewritten spelling of `tokens[i]` (a non-bracket token) to `out`.
-void rewrite_token(const std::vector<parser::Token>& tokens, std::size_t i, ExcelProfile profile, bool to_locale,
-                   const LocaleFacts& facts, int& braces, std::string& out) {
+void rewrite_token(const std::vector<parser::Token>& tokens, std::size_t i, ExcelProfile profile,
+                   const RewriteRules& rules, const LocaleFacts& facts, int& braces, std::string& out) {
+  const bool to_locale = rules.direction == Direction::kToLocale;
   const parser::Token& token = tokens[i];
+  const std::string_view lexeme = rules.bare_cell_names && token.kind == parser::TokenKind::Ident
+                                      ? parser::cell_shaped_name_bare(token.lexeme)
+                                      : token.lexeme;
   const bool is_qualified_name =
       i > 0 && tokens[i - 1].kind == parser::TokenKind::Bang && is_function_name_token(token.kind);
   if (is_qualified_name) {
     // A qualified name (`Sheet1!TRUE`, `[0]!SUM`) is scoped, never a builtin to localize.
-    out.append(token.lexeme);
+    out.append(lexeme);
     return;
   }
   const bool is_call = i + 1 < tokens.size() && tokens[i + 1].kind == parser::TokenKind::LParen;
   if (is_call && is_function_name_token(token.kind)) {
     const char* renamed = to_locale ? localized_function_name(profile.locale, token.lexeme)
                                     : canonical_function_name(profile.locale, token.lexeme);
-    out.append(renamed != nullptr ? std::string_view(renamed) : token.lexeme);
+    out.append(renamed != nullptr ? std::string_view(renamed) : lexeme);
     return;
   }
   switch (token.kind) {
@@ -243,17 +284,99 @@ void rewrite_token(const std::vector<parser::Token>& tokens, std::size_t i, Exce
       break;
     }
     default:
-      out.append(token.lexeme);
+      out.append(lexeme);
       break;
   }
 }
 
+bool needs_quoting(std::string_view sheet, QualifierRule rule, const LocaleFacts& facts) {
+  switch (rule) {
+    case QualifierRule::kStored:
+      return parser::local_sheet_needs_quoting_a1(sheet);
+    case QualifierRule::kA1Display:
+      return parser::local_sheet_needs_quoting_display(sheet, facts);
+    case QualifierRule::kR1C1Display:
+      return parser::local_sheet_needs_quoting_r1c1_display(sheet, facts);
+  }
+  return true;
+}
+
+std::size_t token_start(std::string_view formula, const parser::Token& token) {
+  return static_cast<std::size_t>(token.lexeme.data() - formula.data());
+}
+
+// True when `tokens[i]` exists, is one of the sheet-name kinds, and starts
+// where `tokens[i - 1]` ends.
+bool sheet_token_at(std::string_view formula, const std::vector<parser::Token>& tokens, std::size_t i,
+                    bool cell_shaped) {
+  if (i >= tokens.size()) {
+    return false;
+  }
+  const parser::TokenKind kind = tokens[i].kind;
+  const bool sheet_kind = kind == parser::TokenKind::Ident || kind == parser::TokenKind::SheetName ||
+                          (cell_shaped && kind == parser::TokenKind::CellRef);
+  return sheet_kind && (i == 0U || token_start(formula, tokens[i - 1U]) + tokens[i - 1U].lexeme.size() ==
+                                       token_start(formula, tokens[i]));
+}
+
+bool bang_at(std::string_view formula, const std::vector<parser::Token>& tokens, std::size_t i) {
+  return i < tokens.size() && tokens[i].kind == parser::TokenKind::Bang &&
+         token_start(formula, tokens[i - 1U]) + tokens[i - 1U].lexeme.size() == token_start(formula, tokens[i]);
+}
+
+std::string_view sheet_text(const parser::Token& token) {
+  return token.kind == parser::TokenKind::SheetName ? token.text : token.lexeme;
+}
+
+// A local sheet qualifier starting at `tokens[i]`: a name and `!`, or two
+// names joined by `:` and `!`. Writes it under `rule` (a partly quoted 3-D
+// span as written) and returns the index of its `!`; 0 when none starts here.
+std::size_t append_qualifier_at(std::string_view formula, const std::vector<parser::Token>& tokens, std::size_t i,
+                                QualifierRule rule, const LocaleFacts& facts, std::string& out) {
+  std::string_view first;
+  std::string_view last;
+  std::size_t bang = 0;
+  bool partial = false;
+  if (sheet_token_at(formula, tokens, i, true) && bang_at(formula, tokens, i + 1U)) {
+    first = sheet_text(tokens[i]);
+    bang = i + 1U;
+    if (tokens[i].kind == parser::TokenKind::SheetName) {
+      if (first.find('[') != std::string_view::npos) {
+        return 0;  // a cross-workbook qualifier
+      }
+      if (const std::size_t colon = first.find(':'); colon != std::string_view::npos) {
+        last = first.substr(colon + 1U);
+        first = first.substr(0, colon);
+      }
+    }
+  } else if (sheet_token_at(formula, tokens, i, false) && i + 1U < tokens.size() &&
+             tokens[i + 1U].kind == parser::TokenKind::Colon && sheet_token_at(formula, tokens, i + 2U, true) &&
+             bang_at(formula, tokens, i + 3U)) {
+    first = sheet_text(tokens[i]);
+    last = sheet_text(tokens[i + 2U]);
+    bang = i + 3U;
+    partial = tokens[i].kind == parser::TokenKind::SheetName || tokens[i + 2U].kind == parser::TokenKind::SheetName;
+  } else {
+    return 0;
+  }
+  if (partial) {
+    out.append(formula.substr(token_start(formula, tokens[i]),
+                              token_start(formula, tokens[bang]) - token_start(formula, tokens[i])));
+    return bang;
+  }
+  const bool quote = needs_quoting(first, rule, facts) || (!last.empty() && needs_quoting(last, rule, facts));
+  append_sheet_qualifier(out, first, last, quote);
+  return bang;
+}
+
 // Re-emits `formula` token by token. Inter-token bytes are copied verbatim
-// and only the token kinds Excel localizes change; nothing is validated.
-// `spans`, when non-null, receives the position map of the result.
-std::string rewrite_formula_text(std::string_view formula, ExcelProfile profile, Direction direction,
-                                 std::vector<FormulaSourceSpan>* spans) {
-  const bool to_locale = direction == Direction::kToLocale;
+// and only the token kinds Excel localizes change, with local sheet
+// qualifiers requoted under `rules`; nothing is validated. `spans`, when
+// non-null, receives the position map of the result. Each of `rewrites`
+// (ascending, each starting at a token) replaces its bytes.
+std::string rewrite_formula_text(std::string_view formula, ExcelProfile profile, const RewriteRules& rules,
+                                 std::vector<FormulaSourceSpan>* spans, const std::vector<ReferenceRewrite>& rewrites) {
+  const bool to_locale = rules.direction == Direction::kToLocale;
   const LocaleFacts& facts = locale_facts(profile);
   parser::TokenizerOptions options;
   if (!to_locale) {
@@ -265,6 +388,7 @@ std::string rewrite_formula_text(std::string_view formula, ExcelProfile profile,
   std::string out;
   out.reserve(formula.size() + formula.size() / 4);
   std::size_t copied = 0;
+  std::size_t next_rewrite = 0;
   int braces = 0;
   for (std::size_t i = 0; i < tokens.size(); ++i) {
     const parser::Token& token = tokens[i];
@@ -275,6 +399,17 @@ std::string rewrite_formula_text(std::string_view formula, ExcelProfile profile,
     if (start < copied) {
       continue;
     }
+    if (next_rewrite < rewrites.size() && rewrites[next_rewrite].begin <= start) {
+      const ReferenceRewrite& rewrite = rewrites[next_rewrite++];
+      std::size_t out_begin = out.size();
+      out.append(formula.substr(copied, rewrite.begin - copied));
+      record_span(spans, formula, copied, rewrite.begin, out, out_begin);
+      out_begin = out.size();
+      out.append(rewrite.text);
+      record_span(spans, formula, rewrite.begin, rewrite.end, out, out_begin);
+      copied = rewrite.end;
+      continue;
+    }
     std::size_t out_begin = out.size();
     out.append(formula.substr(copied, start - copied));
     record_span(spans, formula, copied, start, out, out_begin);
@@ -283,9 +418,14 @@ std::string rewrite_formula_text(std::string_view formula, ExcelProfile profile,
       copied = rewrite_structured_group(formula, start, profile, to_locale, facts, out, spans);
       continue;
     }
-    copied = start + token.lexeme.size();
     out_begin = out.size();
-    rewrite_token(tokens, i, profile, to_locale, facts, braces, out);
+    if (const std::size_t bang = append_qualifier_at(formula, tokens, i, rules.qualifiers, facts, out); bang != 0U) {
+      copied = token_start(formula, tokens[bang]);
+      record_span(spans, formula, start, copied, out, out_begin);
+      continue;
+    }
+    copied = start + token.lexeme.size();
+    rewrite_token(tokens, i, profile, rules, facts, braces, out);
     record_span(spans, formula, start, copied, out, out_begin);
   }
   const std::size_t out_begin = out.size();
@@ -312,7 +452,288 @@ void line_and_column(std::string_view text, std::size_t offset, parser::TextRang
   range.column = 1U + utf16_units_in(text.substr(line_start, offset - line_start));
 }
 
+bool is_endpoint_byte(char c) noexcept {
+  return c == '$' || strings::is_ascii_alpha(c) || strings::is_ascii_digit(c);
+}
+
+// Collects the R1C1 spelling of every reference node of a parsed formula.
+class ReferenceCollector {
+ public:
+  ReferenceCollector(std::string_view formula, std::size_t body_at, const LocaleFacts& facts,
+                     const FormulaNotation& notation)
+      : formula_(formula), body_(formula.substr(body_at)), body_at_(body_at), facts_(facts), notation_(notation) {}
+
+  void visit(const parser::AstNode& node) {
+    switch (node.kind()) {
+      case parser::NodeKind::Ref:
+        add(node, node.as_ref(), nullptr, false);
+        return;
+      case parser::NodeKind::SpillRef:
+        if (node.as_spill_ref_anchor_expr() == nullptr) {
+          add(node, node.as_spill_ref(), nullptr, true);
+          return;
+        }
+        break;
+      case parser::NodeKind::Ref3D:
+        add(node, node.as_ref3d_cell(), node.as_ref3d_is_range() ? &node.as_ref3d_cell_end() : nullptr, false);
+        return;
+      case parser::NodeKind::ExternalRef:
+        if (node.as_external_ref_name().empty()) {
+          add(node, node.as_external_ref_cell(),
+              node.as_external_ref_is_range() ? &node.as_external_ref_cell_end() : nullptr, false);
+        }
+        return;
+      case parser::NodeKind::ErrorLiteral: {
+        // A dead sheet's address (`#REF!A1`) is relative to the formula's cell too.
+        const parser::RefErrorSite* site = node.as_ref_error_site();
+        if (site != nullptr && site->form == parser::RefErrorSite::Form::kDeadSheet && site->has_address) {
+          add(node, site->first, site->is_range ? &site->last : nullptr, false);
+        }
+        return;
+      }
+      default:
+        break;
+    }
+    parser::any_child_node(node, [this](const parser::AstNode& child) {
+      visit(child);
+      return false;
+    });
+  }
+
+  /// Quotes every unbound name that reads as a reference in the locale's
+  /// R1C1 letters (de `z` -> `'z'`); LET / LAMBDA names stay as written.
+  void quote_names(const parser::AstNode& root) {
+    for_each_unbound_name(
+        root,
+        [](void* ctx, const parser::AstNode& node) {
+          auto& self = *static_cast<ReferenceCollector*>(ctx);
+          const std::string_view name = node.as_name();
+          const refs_internal::R1C1Letters letters{self.facts_.r1c1_row, self.facts_.r1c1_col, self.facts_.r1c1_open,
+                                                   self.facts_.r1c1_close};
+          const refs_internal::R1C1Endpoint ep = refs_internal::parse_r1c1_endpoint_axes(name, 0, letters);
+          if (ep.kind != refs_internal::R1C1EndpointKind::kReference || ep.end != name.size()) {
+            return;
+          }
+          const parser::TextRange range = node.range();
+          const std::size_t begin = self.body_at_ + utf16_to_byte_offset(self.body_, range.start);
+          const std::size_t end = self.body_at_ + utf16_to_byte_offset(self.body_, range.end);
+          std::string text;
+          append_sheet_qualifier(text, name, {}, true);
+          self.rewrites_.push_back(ReferenceRewrite{begin, end, std::move(text)});
+        },
+        this);
+  }
+
+  /// True when a reference holds a relative axis and there is no base.
+  bool failed() const noexcept { return failed_begin_ != std::string_view::npos; }
+  std::size_t failed_begin() const noexcept { return failed_begin_; }
+  std::size_t failed_end() const noexcept { return failed_end_; }
+
+  /// The rewrites in source order.
+  std::vector<ReferenceRewrite> take_sorted() {
+    const auto earlier = [this](std::uint32_t lhs, std::uint32_t rhs) {
+      return rewrites_[lhs].begin < rewrites_[rhs].begin;
+    };
+    std::vector<std::uint32_t> order;
+    sorted_index_order(order, static_cast<std::uint32_t>(rewrites_.size()), make_index_less(earlier));
+    apply_index_order(rewrites_, order);
+    return std::move(rewrites_);
+  }
+
+ private:
+  void append_axis(char letter, std::uint32_t index, std::uint32_t base, bool absolute, std::string& out) {
+    relative_ = relative_ || !absolute;
+    parser::append_r1c1_axis(letter, facts_.r1c1_open, facts_.r1c1_close, index, base, absolute, out);
+  }
+
+  // A whole column or row prints its own axis only.
+  void append_cell(const parser::Reference& r, std::string& out) {
+    if (!r.is_full_col) {
+      append_axis(facts_.r1c1_row, r.row, notation_.base_row, r.row_abs, out);
+    }
+    if (!r.is_full_row) {
+      append_axis(facts_.r1c1_col, r.col, notation_.base_col, r.col_abs, out);
+    }
+  }
+
+  // Rewrites the cell part of `node`'s text, after its last `!` and before a
+  // spill `#`: `first`, or `first`, the operator as written and `last`.
+  void add(const parser::AstNode& node, const parser::Reference& first, const parser::Reference* last, bool spill) {
+    const parser::TextRange range = node.range();
+    const std::size_t begin = body_at_ + utf16_to_byte_offset(body_, range.start);
+    const std::size_t end = body_at_ + utf16_to_byte_offset(body_, range.end);
+    if (end <= begin) {
+      return;
+    }
+    std::string_view span = formula_.substr(begin, end - begin);
+    if (const std::size_t hash = spill ? span.rfind('#') : std::string_view::npos; hash != std::string_view::npos) {
+      span = span.substr(0, hash);
+    }
+    const std::size_t bang = span.rfind('!');
+    const std::size_t tail_at = bang == std::string_view::npos ? 0U : bang + 1U;
+    const std::string_view tail = span.substr(tail_at);
+    std::size_t first_end = 0;
+    while (first_end < tail.size() && is_endpoint_byte(tail[first_end])) {
+      ++first_end;
+    }
+    std::size_t last_begin = tail.size();
+    while (last_begin > first_end && is_endpoint_byte(tail[last_begin - 1U])) {
+      --last_begin;
+    }
+    relative_ = false;
+    ReferenceRewrite rewrite{begin + tail_at, begin + span.size(), {}};
+    append_cell(first, rewrite.text);
+    if (first_end < tail.size()) {
+      // One whole column or row prints as one axis unless a trim operator joins its halves.
+      const std::string_view op = tail.substr(first_end, last_begin - first_end);
+      if (last != nullptr || op != ":") {
+        rewrite.text.append(op);
+        append_cell(last != nullptr ? *last : first, rewrite.text);
+      }
+    }
+    if (relative_ && !notation_.has_base && begin < failed_begin_) {
+      failed_begin_ = begin;
+      failed_end_ = end;
+    }
+    rewrites_.push_back(std::move(rewrite));
+  }
+
+  std::string_view formula_;
+  std::string_view body_;
+  std::size_t body_at_;
+  const LocaleFacts& facts_;
+  FormulaNotation notation_;
+  std::vector<ReferenceRewrite> rewrites_;
+  bool relative_ = false;
+  std::size_t failed_begin_ = std::string_view::npos;
+  std::size_t failed_end_ = 0;
+};
+
+// `outer` maps a text onto an intermediate text, which `inner` maps onto the
+// input; the result maps the text onto the input. A verbatim piece splits at
+// the inner pieces it crosses; a rewritten one widens to every input byte
+// its intermediate bytes came from.
+std::vector<FormulaSourceSpan> compose_spans(const std::vector<FormulaSourceSpan>& outer,
+                                             const std::vector<FormulaSourceSpan>& inner) {
+  std::vector<FormulaSourceSpan> composed;
+  composed.reserve(outer.size() + inner.size());
+  std::size_t first = 0;
+  for (const FormulaSourceSpan& o : outer) {
+    while (first < inner.size() && inner[first].out_end < o.in_begin) {
+      ++first;
+    }
+    if (o.verbatim) {
+      for (std::size_t k = first; k < inner.size() && inner[k].out_begin < o.in_end; ++k) {
+        const FormulaSourceSpan& in = inner[k];
+        const std::size_t a = std::max(o.in_begin, in.out_begin);
+        const std::size_t b = std::min(o.in_end, in.out_end);
+        if (a >= b) {
+          continue;
+        }
+        FormulaSourceSpan piece;
+        piece.out_begin = o.out_begin + (a - o.in_begin);
+        piece.out_end = o.out_begin + (b - o.in_begin);
+        piece.in_begin = in.verbatim ? in.in_begin + (a - in.out_begin) : in.in_begin;
+        piece.in_end = in.verbatim ? in.in_begin + (b - in.out_begin) : in.in_end;
+        piece.verbatim = in.verbatim;
+        composed.push_back(piece);
+      }
+      continue;
+    }
+    std::size_t lo = std::string_view::npos;
+    std::size_t hi = 0;
+    for (std::size_t k = first; k < inner.size() && inner[k].out_begin <= o.in_end; ++k) {
+      const FormulaSourceSpan& in = inner[k];
+      const bool overlaps = in.out_begin < o.in_end && o.in_begin < in.out_end;
+      // An empty intermediate range maps to its point in the input.
+      const bool holds_point = o.in_begin == o.in_end && in.out_begin <= o.in_begin && o.in_begin <= in.out_end;
+      if (overlaps) {
+        lo = std::min(lo, in.in_begin);
+        hi = std::max(hi, in.in_end);
+      } else if (holds_point && lo == std::string_view::npos) {
+        lo = in.verbatim ? in.in_begin + (o.in_begin - in.out_begin) : in.in_begin;
+        hi = lo;
+      }
+    }
+    if (lo == std::string_view::npos) {
+      lo = 0;
+      hi = 0;
+    }
+    composed.push_back(FormulaSourceSpan{o.out_begin, o.out_end, lo, hi, false});
+  }
+  return composed;
+}
+
+RewriteRules a1_display_rules() {
+  RewriteRules rules;
+  rules.qualifiers = QualifierRule::kA1Display;
+  return rules;
+}
+
+RewriteRules stored_rules() {
+  RewriteRules rules;
+  rules.direction = Direction::kToCanonical;
+  return rules;
+}
+
+// A parse failure over a body, moved past the `prefix` (the `=`) before it.
+parser::ParseFailure shift_past_prefix(parser::ParseFailure failure, std::string_view prefix) {
+  const std::uint32_t units = utf16_units_in(prefix);
+  failure.range.start += units;
+  failure.range.end += units;
+  if (failure.range.line == 1U) {
+    failure.range.column += units;
+  }
+  return failure;
+}
+
+// Parses `formula` once and collects its rewrites in source order: the
+// quoted spelling of every name that reads as a reference in `profile`'s R1C1
+// letters and, with `notation.r1c1`, the R1C1 spelling of every reference.
+// Fails with the parse failure, or over a relative reference with no base.
+Expected<std::vector<ReferenceRewrite>, parser::ParseFailure> collect_rewrites(std::string_view formula,
+                                                                               ExcelProfile profile,
+                                                                               const FormulaNotation& notation) {
+  if (formula.empty()) {
+    return std::vector<ReferenceRewrite>{};
+  }
+  const std::string_view body = strip_formula_prefix(formula);
+  const std::size_t body_at = formula.size() - body.size();
+  Arena arena;
+  parser::ParseFailure failure;
+  const parser::AstNode* root = parse_formula_entry_with_diagnostics(body, arena, &failure);
+  if (root == nullptr) {
+    return shift_past_prefix(failure, formula.substr(0, body_at));
+  }
+  ReferenceCollector collector(formula, body_at, locale_facts(profile), notation);
+  if (notation.r1c1) {
+    collector.visit(*root);
+    if (collector.failed()) {
+      return parser::ParseFailure{parser::ParseErrorCode::InvalidReference,
+                                  formula_text_range(formula, collector.failed_begin(), collector.failed_end()),
+                                  parser::default_message(parser::ParseErrorCode::InvalidReference)};
+    }
+  }
+  collector.quote_names(*root);
+  return collector.take_sorted();
+}
+
+// The A1 display's rewrites: the quoted names, none when `formula` does not parse.
+std::vector<ReferenceRewrite> quoted_names(std::string_view formula, ExcelProfile profile) {
+  Expected<std::vector<ReferenceRewrite>, parser::ParseFailure> rewrites =
+      collect_rewrites(formula, profile, FormulaNotation{});
+  return rewrites ? std::move(rewrites.value()) : std::vector<ReferenceRewrite>{};
+}
+
 }  // namespace
+
+parser::TextRange formula_text_range(std::string_view text, std::size_t begin, std::size_t end) {
+  parser::TextRange range;
+  range.start = utf16_units_in(text.substr(0, begin));
+  range.end = utf16_units_in(text.substr(0, end));
+  line_and_column(text, begin, range);
+  return range;
+}
 
 parser::TextRange MappedFormulaText::source_range(std::string_view source, parser::TextRange range) const {
   // Offsets of `range` in bytes of `text`; the start rounds down, the end up.
@@ -349,24 +770,101 @@ const char* canonical_function_name(ExcelLocale locale, std::string_view localiz
   });
 }
 
+void append_sheet_qualifier(std::string& out, std::string_view first, std::string_view last, bool quote) {
+  if (quote) {
+    out.push_back('\'');
+  }
+  const auto append = [&](std::string_view sheet) {
+    if (quote) {
+      parser::append_quote_escaped(sheet, out);
+    } else {
+      out.append(sheet);
+    }
+  };
+  append(first);
+  if (!last.empty()) {
+    out.push_back(':');
+    append(last);
+  }
+  if (quote) {
+    out.push_back('\'');
+  }
+}
+
 std::string localize_formula_text(std::string_view formula, ExcelProfile profile) {
-  return rewrite_formula_text(formula, profile, Direction::kToLocale, nullptr);
+  return rewrite_formula_text(formula, profile, a1_display_rules(), nullptr, quoted_names(formula, profile));
 }
 
 std::string canonicalize_formula_text(std::string_view formula, ExcelProfile profile) {
-  return rewrite_formula_text(formula, profile, Direction::kToCanonical, nullptr);
+  return rewrite_formula_text(formula, profile, stored_rules(), nullptr, {});
 }
 
 MappedFormulaText localize_formula_text_mapped(std::string_view formula, ExcelProfile profile) {
   MappedFormulaText mapped;
-  mapped.text = rewrite_formula_text(formula, profile, Direction::kToLocale, &mapped.spans);
+  mapped.text =
+      rewrite_formula_text(formula, profile, a1_display_rules(), &mapped.spans, quoted_names(formula, profile));
   return mapped;
 }
 
 MappedFormulaText canonicalize_formula_text_mapped(std::string_view formula, ExcelProfile profile) {
   MappedFormulaText mapped;
-  mapped.text = rewrite_formula_text(formula, profile, Direction::kToCanonical, &mapped.spans);
+  mapped.text = rewrite_formula_text(formula, profile, stored_rules(), &mapped.spans, {});
   return mapped;
+}
+
+Expected<MappedFormulaText, parser::ParseFailure> localize_formula_text_r1c1(std::string_view formula,
+                                                                             ExcelProfile profile,
+                                                                             const FormulaNotation& notation) {
+  const Expected<std::vector<ReferenceRewrite>, parser::ParseFailure> rewrites =
+      collect_rewrites(formula, profile, notation);
+  if (!rewrites) {
+    return rewrites.error();
+  }
+  RewriteRules rules = a1_display_rules();
+  if (notation.r1c1) {
+    rules.qualifiers = QualifierRule::kR1C1Display;
+    rules.bare_cell_names = true;
+  }
+  MappedFormulaText mapped;
+  mapped.text = rewrite_formula_text(formula, profile, rules, &mapped.spans, rewrites.value());
+  return mapped;
+}
+
+Expected<MappedFormulaText, parser::ParseFailure> canonicalize_formula_text_r1c1(std::string_view formula,
+                                                                                 ExcelProfile profile,
+                                                                                 const FormulaNotation& notation) {
+  if (!notation.r1c1) {
+    return canonicalize_formula_text_mapped(formula, profile);
+  }
+  const LocaleFacts& facts = locale_facts(profile);
+  R1C1RewriteOptions options;
+  options.letters = refs_internal::R1C1Letters{facts.r1c1_row, facts.r1c1_col, facts.r1c1_open, facts.r1c1_close};
+  options.array_row_separator = facts.array_row_separator;
+  options.has_base = notation.has_base;
+  options.base_row = notation.base_row;
+  options.base_col = notation.base_col;
+  Expected<MappedFormulaText, parser::ParseFailure> a1 = rewrite_r1c1_text(formula, options);
+  if (!a1) {
+    return a1.error();
+  }
+  MappedFormulaText canonical = canonicalize_formula_text_mapped(a1.value().text, profile);
+  canonical.spans = compose_spans(canonical.spans, a1.value().spans);
+  if (canonical.text.empty()) {
+    return canonical;
+  }
+  const std::string_view body = strip_formula_prefix(canonical.text);
+  Arena arena;
+  parser::ParseFailure failure;
+  const parser::AstNode* root = parse_formula_entry_with_diagnostics(body, arena, &failure);
+  if (root == nullptr) {
+    const std::string_view prefix = std::string_view(canonical.text).substr(0, canonical.text.size() - body.size());
+    failure = shift_past_prefix(failure, prefix);
+    failure.range = canonical.source_range(formula, failure.range);
+    return failure;
+  }
+  // A cell-shaped name reads back with `_xlpm.` when a LET / LAMBDA binds it, else `_xlnm.`.
+  respell_unbound_cell_names(*root, canonical.text);
+  return canonical;
 }
 
 }  // namespace eval

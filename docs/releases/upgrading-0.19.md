@@ -1397,6 +1397,12 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 
 ## Behaviour changes under an unchanged name
 
+- `localizeFormula` requotes sheet qualifiers by the profile's display rule
+  (de `'Z1S1'!A1`, which would otherwise read back as a reference) and quotes a
+  defined name that reads as a reference in the profile's R1C1 letters (de
+  `='z'+1`); `canonicalizeFormula` writes qualifiers quoted as Excel stores
+  them. With `{ r1c1: true }` both functions convert the profile's R1C1
+  spelling (Python `r1c1=True`, C `fm_formula_notation_spec_t`).
 - Formula text read back carries a leading `=` where Excel shows one:
   `getFormulaR1C1`, `PivotCacheField.formula`, table totals-row formulas,
   calculated-item formulas, conditional-format and validation `formula1` /
@@ -3632,6 +3638,7 @@ A caller compiled against an earlier header must be recompiled.
 | Before | After |
 |---|---|
 | `fm_workbook_set_defined_name(wb, name, formula)`, `fm_workbook_set_defined_name_scoped`, `fm_workbook_set_defined_name_attrs` | `fm_workbook_set_defined_name(wb, const fm_defined_name_t*)` (name, formula, `local_sheet_id`, comment, hidden); an empty formula is `FM_STATUS_INVALID_ARGUMENT` instead of a removal |
+| `fm_formula_localize(formula, profile_id, out_formula)`, `fm_formula_canonicalize` | `fm_localize_formula(formula, profile_id, const fm_formula_notation_spec_t* spec, out_formula)` and `fm_canonicalize_formula` with the same arguments; `spec == NULL` keeps A1, and `r1c1` `FM_TRISTATE_TRUE` with `has_base`, `base_row`, `base_col` spells references in the profile's R1C1 |
 | `fm_workbook_defined_name_at` (two strings and a scope), `fm_workbook_defined_name_attrs_at` | `fm_workbook_get_defined_name_at(wb, index, fm_defined_name_t*)` |
 | `fm_workbook_set_iterative(wb, enabled, max_iterations, max_change)`, `fm_workbook_set_iterative_enabled` | `fm_workbook_update_iterative(wb, const fm_iterative_settings_patch_t*)`; a negative field keeps the stored value |
 | `fm_sheet_set_print_titles(wb, sheet_index, repeat_rows, repeat_cols)`, `fm_sheet_get_print_titles` (A1 text) | take and fill an `fm_print_titles_t` (per-axis `has_*` flag and 0-based span); `NULL` clears |
@@ -3769,7 +3776,7 @@ current spelling is in the [Name migration](#name-migration) table.
 | Struct (former name) | Change |
 |---|---|
 | (none) | `fm_defined_name_t` and `fm_iterative_settings_patch_t` are new (see the functions above); `fm_defined_name_t` is both the input of `fm_workbook_set_defined_name` and the record the getters fill |
-| (none) | `fm_table_spec_t`, `fm_pivot_spec_t`, `fm_parse_reference_spec_t`, `fm_pivot_date_group_spec_t`, `fm_pivot_worksheet_source_t`, `fm_pivot_style_options_patch_t`, `fm_pivot_field_patch_t` and `fm_pivot_item_patch_t` are new (see the functions above); each begins with `struct_size` |
+| (none) | `fm_table_spec_t`, `fm_pivot_spec_t`, `fm_parse_reference_spec_t`, `fm_formula_notation_spec_t`, `fm_pivot_date_group_spec_t`, `fm_pivot_worksheet_source_t`, `fm_pivot_style_options_patch_t`, `fm_pivot_field_patch_t` and `fm_pivot_item_patch_t` are new (see the functions above); each begins with `struct_size` |
 | (none) | `fm_filter_condition_t` and `fm_chart_data_source_spec_t` are new element records (no `struct_size`): one custom AutoFilter condition (`op`, `value`) and one chart series input (`kind`, `formula`, `literal`, `literal_count`) |
 | `fm_filter_column` | `custom_count`, `op1`, `val1`, `op2`, `val2` are `const fm_filter_condition_t* conditions` and `uint32_t condition_count`; another count for a custom column is `FM_STATUS_INVALID_ARGUMENT`, and a non-custom column reads 0 |
 | `fm_pivot_field_info_t` | `show_detail` is appended: 1 only when every item and the default expand marker are expanded, and a field with no items reads 1 |

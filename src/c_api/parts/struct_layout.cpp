@@ -137,6 +137,12 @@ static_assert(offsetof(fm_parse_reference_spec_t, has_base) == 8U);
 static_assert(offsetof(fm_parse_reference_spec_t, base_row) == 12U);
 static_assert(offsetof(fm_parse_reference_spec_t, base_col) == 16U);
 
+static_assert(sizeof(fm_formula_notation_spec_t) == 20U);
+static_assert(offsetof(fm_formula_notation_spec_t, r1c1) == 4U);
+static_assert(offsetof(fm_formula_notation_spec_t, has_base) == 8U);
+static_assert(offsetof(fm_formula_notation_spec_t, base_row) == 12U);
+static_assert(offsetof(fm_formula_notation_spec_t, base_col) == 16U);
+
 static_assert(sizeof(fm_phonetic_properties_t) == 20U);
 static_assert(offsetof(fm_phonetic_properties_t, font_index) == 4U);
 static_assert(offsetof(fm_phonetic_properties_t, type) == 8U);

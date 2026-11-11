@@ -32,6 +32,13 @@ namespace parser {
 std::string format_formula_r1c1(const AstNode& node, std::uint32_t anchor_row, std::uint32_t anchor_col,
                                 const StructuredRefDisplay* display = nullptr);
 
+/// Appends one axis of an R1C1 reference spelled with `letter` and the
+/// `open` / `close` brackets: `letter` + the 1-based `index` when absolute,
+/// else `letter` + the bracketed plain difference `index - host`, or the bare
+/// letter at offset 0.
+void append_r1c1_axis(char letter, char open, char close, std::int64_t index, std::int64_t host, bool absolute,
+                      std::string& out);
+
 }  // namespace parser
 }  // namespace formulon
 

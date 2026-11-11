@@ -242,6 +242,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/format_localize_test.cpp
   unit/eval/formula_localize_map_test.cpp
   unit/eval/formula_localize_test.cpp
+  unit/eval/formula_localize_r1c1_test.cpp
   unit/eval/dbcs_table_test.cpp
   unit/eval/references_locale_test.cpp
   unit/eval/eval_profile_scope_test.cpp

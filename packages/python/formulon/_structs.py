@@ -104,6 +104,7 @@ RECORD_NAMES = frozenset(
         "fm_drawing_placement_spec_t",
         "fm_effective_style_info_t",
         "fm_external_link_info_t",
+        "fm_formula_notation_spec_t",
         "fm_function_metadata_info_t",
         "fm_header_footer_patch_t",
         "fm_header_footer_t",
@@ -1058,6 +1059,11 @@ SPILL_INFO = Struct(
 
 PARSE_REFERENCE_SPEC = Struct(
     "fm_parse_reference_spec_t",
+    [("r1c1", I32), ("has_base", I32), ("base_row", U32), ("base_col", U32)],
+)
+
+FORMULA_NOTATION_SPEC = Struct(
+    "fm_formula_notation_spec_t",
     [("r1c1", I32), ("has_base", I32), ("base_row", U32), ("base_col", U32)],
 )
 

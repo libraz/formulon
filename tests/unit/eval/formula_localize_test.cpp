@@ -9,8 +9,10 @@
 #include <string_view>
 
 #include "c_api/formulon_c.h"
+#include "excel_locale.h"
 #include "excel_profile.h"
 #include "gtest/gtest.h"
+#include "parser/reference.h"
 #include "parser/token.h"
 #include "parser/tokenizer.h"
 
@@ -212,8 +214,127 @@ bool has_exponent_literal(const std::string& formula) {
   return false;
 }
 
+// `text` without its single quotes: the display requotes sheet qualifiers and
+// names, which the entered text may quote differently.
+bool is_bare_sheet_byte(char c) {
+  const auto u = static_cast<unsigned char>(c);
+  return u >= 0x80U || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '.' ||
+         c == '_';
+}
+
+void append_requoted(std::string_view first, std::string_view last, const LocaleFacts& facts, std::string& out) {
+  const bool quote = parser::local_sheet_needs_quoting_display(first, facts) ||
+                     (!last.empty() && parser::local_sheet_needs_quoting_display(last, facts));
+  std::string name(first);
+  if (!last.empty()) {
+    name.append(":").append(last);
+  }
+  if (!quote) {
+    out.append(name);
+    return;
+  }
+  out.push_back('\'');
+  for (const char c : name) {
+    out.push_back(c);
+    if (c == '\'') {
+      out.push_back('\'');
+    }
+  }
+  out.push_back('\'');
+}
+
+// `formula` with each local sheet qualifier (`name!`, `'name'!`, `a:b!`,
+// `'a:b'!`) requoted under the en-US display rule, found by a plain text scan
+// independent of the tokenizer. Strings, `[...]` groups, error literals and
+// partly quoted 3-D spans stay as written.
+std::string with_display_quoting(std::string_view formula) {
+  const LocaleFacts& facts = locale_facts(ExcelProfile{ExcelHost::kMac365, ExcelLocale::kEnUS});
+  std::string out;
+  std::size_t i = 0;
+  int brackets = 0;
+  while (i < formula.size()) {
+    const char c = formula[i];
+    if (c == '"') {
+      const std::size_t start = i++;
+      while (i < formula.size() && !(formula[i] == '"' && (i + 1 >= formula.size() || formula[i + 1] != '"'))) {
+        i += formula[i] == '"' ? 2U : 1U;
+      }
+      out.append(formula.substr(start, ++i - start));
+      continue;
+    }
+    if (c == '#') {  // an error literal (`#DIV/0!`, `#N/A`, `#NAME?`) or a spill `#`
+      std::size_t j = i + 1;
+      while (j < formula.size() && (is_bare_sheet_byte(formula[j]) || formula[j] == '/')) {
+        ++j;
+      }
+      if (j < formula.size() && (formula[j] == '!' || formula[j] == '?')) {
+        ++j;
+      }
+      out.append(formula.substr(i, j - i));
+      i = j;
+      continue;
+    }
+    if (c == '[' || c == ']') {
+      brackets += c == '[' ? 1 : -1;
+      out.push_back(c);
+      ++i;
+      continue;
+    }
+    if (brackets == 0 && c == '\'' && (i == 0 || formula[i - 1] != ']')) {
+      std::string name;
+      std::size_t j = i + 1;
+      while (j < formula.size() && !(formula[j] == '\'' && (j + 1 >= formula.size() || formula[j + 1] != '\''))) {
+        name.push_back(formula[j]);
+        j += formula[j] == '\'' ? 2U : 1U;
+      }
+      if (j + 1 < formula.size() && formula[j + 1] == '!' && name.find('[') == std::string::npos) {
+        const std::size_t colon = name.find(':');
+        const std::string_view view(name);
+        append_requoted(view.substr(0, colon), colon == std::string::npos ? std::string_view{} : view.substr(colon + 1),
+                        facts, out);
+        i = j + 1;
+        continue;
+      }
+      out.append(formula.substr(i, j + 1 - i));
+      i = j + 1;
+      continue;
+    }
+    if (brackets == 0 && is_bare_sheet_byte(c) &&
+        (i == 0 || (!is_bare_sheet_byte(formula[i - 1]) && formula[i - 1] != ']' && formula[i - 1] != '\''))) {
+      std::size_t j = i;
+      while (j < formula.size() && is_bare_sheet_byte(formula[j])) {
+        ++j;
+      }
+      std::size_t k = j;
+      if (k < formula.size() && formula[k] == ':' && k + 1 < formula.size() && is_bare_sheet_byte(formula[k + 1]) &&
+          !parser::is_a1_cell_shaped(formula.substr(i, j - i))) {
+        k += 1;
+        while (k < formula.size() && is_bare_sheet_byte(formula[k])) {
+          ++k;
+        }
+        if (k < formula.size() && formula[k] == '!') {
+          append_requoted(formula.substr(i, j - i), formula.substr(j + 1, k - j - 1), facts, out);
+          i = k;
+          continue;
+        }
+      }
+      if (j < formula.size() && formula[j] == '!') {
+        append_requoted(formula.substr(i, j - i), {}, facts, out);
+      } else {
+        out.append(formula.substr(i, j - i));
+      }
+      i = j;
+      continue;
+    }
+    out.push_back(c);
+    ++i;
+  }
+  return out;
+}
+
 // With en-US facts the rewrite is the identity on every formula the oracle
-// corpus enters, except exponent literals Excel redisplays in normalized form.
+// corpus enters, except exponent literals Excel redisplays in normalized form
+// and sheet qualifiers, which take the en-US display quoting.
 TEST(FormulaLocalize, EnglishRewriteIsIdentityOnGoldenFormulas) {
   const std::filesystem::path targets = std::filesystem::path(FORMULON_FIXTURES_DIR) / ".." / "oracle" / "targets";
   std::set<std::string> formulas;
@@ -239,7 +360,7 @@ TEST(FormulaLocalize, EnglishRewriteIsIdentityOnGoldenFormulas) {
     if (has_exponent_literal(formula)) {
       continue;
     }
-    EXPECT_EQ(localize_in(ExcelLocale::kEnUS, formula), formula);
+    EXPECT_EQ(localize_in(ExcelLocale::kEnUS, formula), with_display_quoting(formula)) << formula;
     ++checked;
   }
   EXPECT_GT(checked, formulas.size() * 9 / 10);

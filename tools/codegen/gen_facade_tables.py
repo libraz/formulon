@@ -1397,7 +1397,8 @@ def _input_nested(surface: JsSurface, ledger: facade_scope.Ledger, record: str) 
 def input_keys(
     ledger: Optional[facade_scope.Ledger] = None, dts: Optional[str] = None
 ) -> Tuple[Dict[str, list], Dict[str, Dict[str, list]]]:
-    """`(INPUT_KEYS, INPUT_NESTED_KEYS)` rows of every non-patch op taking a d.ts input record."""
+    """`(INPUT_KEYS, INPUT_NESTED_KEYS)` rows of every non-patch op, and every `Formulon` module function, taking a
+    d.ts input record."""
     ledger = ledger or facade_scope.load()
     surface = JsSurface(WASM_DTS.read_text(encoding="utf-8") if dts is None else dts)
     top: Dict[str, list] = {}
@@ -1419,6 +1420,20 @@ def input_keys(
             paths = _input_nested(surface, ledger, record)
             if paths:
                 nested[qualified_name] = paths
+    # The `Formulon` module functions are guarded on the object `createFormulon()` resolves to.
+    process_ops = {e.get("js"): e for _k, e in facade_scope._ops(ledger, ("op",)) if e.get("scope") == "process"}
+    decl = surface.decls.get("Formulon")
+    for member in decl.members if decl is not None and decl.kind == "interface" else ():
+        if not member.is_method:
+            continue
+        found = _input_arg(surface, ledger, process_ops.get(member.name, {}), member)
+        if found is None:
+            continue
+        position, record = found
+        top[f"Formulon.{member.name}"] = [position, _input_keys_of(surface, ledger, record)]
+        paths = _input_nested(surface, ledger, record)
+        if paths:
+            nested[f"Formulon.{member.name}"] = paths
     return dict(sorted(top.items())), dict(sorted(nested.items()))
 
 

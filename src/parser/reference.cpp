@@ -106,10 +106,10 @@ bool IsBareRunIn(std::string_view name, bool dbcs) noexcept {
 
 // The rules both notations share: an empty name, a byte outside the bare
 // qualifier run, a leading digit or `.` (read as a number), TRUE / FALSE (read as a
-// bool) and an R1C1 shape.
+// bool), an R1C1 shape and `R<n>K<n>`.
 bool LocalSheetNeedsQuotingInEitherNotation(std::string_view name) noexcept {
   return name.empty() || !IsBareRun(name) || OpensLikeNumber(name) || strings::case_insensitive_eq(name, "TRUE") ||
-         strings::case_insensitive_eq(name, "FALSE") || IsR1C1Shaped(name);
+         strings::case_insensitive_eq(name, "FALSE") || IsR1C1Shaped(name) || IsRowKColShaped(name);
 }
 
 }  // namespace
@@ -161,6 +161,10 @@ bool local_sheet_needs_quoting_display(std::string_view name, const LocaleFacts&
 
 bool local_sheet_needs_quoting_r1c1(std::string_view name) noexcept {
   return LocalSheetNeedsQuotingInEitherNotation(name);
+}
+
+bool local_sheet_needs_quoting_r1c1_display(std::string_view name, const LocaleFacts& facts) noexcept {
+  return LocalSheetNeedsQuotingInEitherNotation(name) || IsR1C1ShapedWith(name, facts.r1c1_row, facts.r1c1_col);
 }
 
 bool external_book_needs_quoting(std::string_view book) noexcept {

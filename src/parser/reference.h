@@ -96,7 +96,7 @@ bool is_a1_column_shaped(std::string_view name) noexcept;
 /// (ASCII letters, digits, `.`, `_` and non-ASCII characters other than
 /// U+3000 and U+FEFF), names opening with a digit or `.`, TRUE / FALSE, names shaped like an
 /// A1 cell inside the grid, and names shaped like an R1C1 reference (`R`,
-/// `C`, `R2`, `C3`, `R2C3`, `RC3`, `R2C`, `RC`).
+/// `C`, `R2`, `C3`, `R2C3`, `RC3`, `R2C`, `RC`, and `R2K3` in every locale).
 bool local_sheet_needs_quoting_a1(std::string_view name) noexcept;
 
 /// The quoting rule of a sheet name that a display producer (ADDRESS) writes
@@ -112,6 +112,12 @@ bool local_sheet_needs_quoting_display(std::string_view name, const LocaleFacts&
 /// minus the A1 cell shape, which is no reference in R1C1 notation (`S2`,
 /// `A1` and `XFE1` print bare).
 bool local_sheet_needs_quoting_r1c1(std::string_view name) noexcept;
+
+/// The R1C1 quoting rule of a sheet name that a localized R1C1 display
+/// writes: `local_sheet_needs_quoting_r1c1` plus the shapes of the locale's
+/// own R1C1 letters (`S2` and `Z1S1` in de, `F1C1` in es), which read as
+/// references there.
+bool local_sheet_needs_quoting_r1c1_display(std::string_view name, const LocaleFacts& facts) noexcept;
 
 /// True iff the book part of a cross-workbook qualifier (the text between
 /// `[` and `]`, or the file name of a book-scope name) contains a byte

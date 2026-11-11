@@ -10585,22 +10585,12 @@ class Workbook(_NoCopy):
           FormulaSyntaxError: with ``StatusCode.PARSER_INVALID_REFERENCE`` when ``text`` is not a reference.
           TypeError: when only one of ``base_row`` and ``base_col`` is given.
         """
-        if (base_row is None) != (base_col is None):
-            raise TypeError("base_row and base_col must be given together")
+        fields = _notation_fields(r1c1=r1c1, base_row=base_row, base_col=base_col)
         h = self._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.REFERENCE)
             spec = scope.struct(S.PARSE_REFERENCE_SPEC)
-            S.PARSE_REFERENCE_SPEC.pack(
-                LIB,
-                spec,
-                {
-                    "r1c1": _tristate_default(_require_bool(r1c1, "r1c1")),
-                    "has_base": 0 if base_row is None else 1,
-                    "base_row": _uint(base_row or 0, "base_row", role="coordinate"),
-                    "base_col": _uint(base_col or 0, "base_col", role="coordinate"),
-                },
-            )
+            S.PARSE_REFERENCE_SPEC.pack(LIB, spec, fields)
             _check(LIB.fm_workbook_parse_reference(h, scope.cstr(text), spec, ptr))
             d = S.REFERENCE.unpack(LIB, ptr)
             return ParsedReference(
@@ -11159,6 +11149,35 @@ def _map_profile_text(fn_name: str, text: str, profile_id: str) -> str:
         return _read_cstr_out(getattr(LIB, fn_name), text_ptr, pid_ptr)
 
 
+def _notation_fields(*, r1c1: bool, base_row: Optional[int], base_col: Optional[int]) -> Dict[str, int]:
+    """The fields of an ``fm_parse_reference_spec_t`` / ``fm_formula_notation_spec_t`` from the keyword arguments.
+
+    Raises:
+      TypeError: when ``r1c1`` is not a boolean, or only one of ``base_row`` and ``base_col`` is given.
+    """
+    if (base_row is None) != (base_col is None):
+        raise TypeError("base_row and base_col must be given together")
+    return {
+        "r1c1": _tristate_default(_require_bool(r1c1, "r1c1")),
+        "has_base": 0 if base_row is None else 1,
+        "base_row": _uint(base_row or 0, "base_row", role="coordinate"),
+        "base_col": _uint(base_col or 0, "base_col", role="coordinate"),
+    }
+
+
+def _map_formula_text(
+    fn_name: str, formula: str, profile_id: str, *, r1c1: bool, base_row: Optional[int], base_col: Optional[int]
+) -> str:
+    """Call ``fm_localize_formula`` / ``fm_canonicalize_formula`` with the notation keyword arguments."""
+    fields = _notation_fields(r1c1=r1c1, base_row=base_row, base_col=base_col)
+    with _ArgScope() as scope:
+        text_ptr = scope.cstr(formula)
+        pid_ptr = scope.cstr(profile_id)
+        spec = scope.struct(S.FORMULA_NOTATION_SPEC)
+        S.FORMULA_NOTATION_SPEC.pack(LIB, spec, fields)
+        return _read_cstr_out(getattr(LIB, fn_name), text_ptr, pid_ptr, spec)
+
+
 @_lock_workbook_method
 def list_function_names() -> List[str]:
     """Return the canonical names of every registered Formulon function, sorted."""
@@ -11191,32 +11210,62 @@ def canonicalize_function_name(localized_name: str, profile_id: ProfileId) -> st
 
 
 @_lock_workbook_method
-def localize_formula(formula: str, profile_id: ProfileId) -> str:
+def localize_formula(
+    formula: str,
+    profile_id: ProfileId,
+    *,
+    r1c1: bool = False,
+    base_row: Optional[int] = None,
+    base_col: Optional[int] = None,
+) -> str:
     """Rewrite stored (en-invariant) formula text into ``profile_id``'s spelling.
 
     Function names, list / array separators, decimal points, booleans
-    and error names take the locale form; strings, quoted sheet names,
-    external qualifiers and structured-reference brackets are kept
-    verbatim.
+    and error names take the locale form; sheet qualifiers are requoted by
+    the profile's display rule; strings, external qualifiers and
+    structured-reference brackets are kept verbatim.
+
+    With ``r1c1=True`` every reference is written in R1C1 with the profile's
+    row / column letters and brackets (de ``Z(-1)S(1)``), relative references
+    measured from ``base_row`` / ``base_col``, which are given together or not
+    at all.
 
     Raises:
-      FormulaSyntaxError: when ``formula`` does not parse; ``parse_error`` locates the
-        failure as code-point offsets into ``formula``.
-      InvalidArgumentError: when ``profile_id`` is not a documented profile.
+      FormulaSyntaxError: when ``formula`` does not parse, or with
+        ``StatusCode.PARSER_INVALID_REFERENCE`` when an R1C1 relative reference has no base;
+        ``parse_error`` locates the failure as code-point offsets into ``formula``.
+      InvalidArgumentError: when ``profile_id`` is not a documented profile, or the base is outside the grid.
+      TypeError: when ``r1c1`` is not a boolean, or only one of ``base_row`` and ``base_col`` is given.
     """
-    return _map_profile_text("fm_localize_formula", formula, profile_id)
+    return _map_formula_text(
+        "fm_localize_formula", formula, profile_id, r1c1=r1c1, base_row=base_row, base_col=base_col
+    )
 
 
 @_lock_workbook_method
-def canonicalize_formula(formula: str, profile_id: ProfileId) -> str:
+def canonicalize_formula(
+    formula: str,
+    profile_id: ProfileId,
+    *,
+    r1c1: bool = False,
+    base_row: Optional[int] = None,
+    base_col: Optional[int] = None,
+) -> str:
     """Rewrite ``profile_id``-spelled formula text into the en-invariant form.
 
+    With ``r1c1=True`` the profile's R1C1 references are read back into A1,
+    relative references measured from ``base_row`` / ``base_col``.
+
     Raises:
-      FormulaSyntaxError: when ``formula`` does not parse under the profile; ``parse_error``
-        locates the failure as code-point offsets into ``formula``, the text as passed.
-      InvalidArgumentError: when ``profile_id`` is not a documented profile.
+      FormulaSyntaxError: when ``formula`` does not parse under the profile, or with
+        ``StatusCode.PARSER_INVALID_REFERENCE`` when an R1C1 reference is malformed or relative with no
+        base; ``parse_error`` locates the failure as code-point offsets into ``formula``, the text as passed.
+      InvalidArgumentError: when ``profile_id`` is not a documented profile, or the base is outside the grid.
+      TypeError: when ``r1c1`` is not a boolean, or only one of ``base_row`` and ``base_col`` is given.
     """
-    return _map_profile_text("fm_canonicalize_formula", formula, profile_id)
+    return _map_formula_text(
+        "fm_canonicalize_formula", formula, profile_id, r1c1=r1c1, base_row=base_row, base_col=base_col
+    )
 
 
 def _read_locale_error_names(scope: _ArgScope, pid_ptr: int) -> List[LocaleErrorName]:

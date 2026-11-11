@@ -244,6 +244,33 @@ TEST(SheetQuoting, DisplayRuleFollowsTheLocale) {
   }
 }
 
+// Quoting of a sheet name in `FormulaR1C1Local` and in the stored / invariant
+// R1C1 forms (Mac Excel 365 de-DE / es-ES / nl-NL). `quoted` holds one flag per
+// locale in en, de, es, nl order.
+TEST(SheetQuoting, R1C1DisplayRuleAddsTheLocaleLetters) {
+  constexpr ExcelLocale kLocales[] = {ExcelLocale::kEnUS, ExcelLocale::kDeDE, ExcelLocale::kEsES, ExcelLocale::kNlNL};
+  struct Row {
+    const char* name;
+    const char* quoted;
+  };
+  constexpr Row kRows[] = {
+      {"S2", "0100"},   {"Z1S1", "0100"}, {"F1C1", "0010"}, {"R1K1", "1111"}, {"R1C1", "1111"},
+      {"Data", "0000"}, {"A1", "0000"},   {"Z", "0100"},    {"F", "0010"},    {"K", "0001"},
+  };
+  for (const Row& row : kRows) {
+    for (std::size_t i = 0; i < std::size(kLocales); ++i) {
+      const LocaleFacts& facts = locale_facts(ExcelProfile{ExcelHost::kMac365, kLocales[i]});
+      EXPECT_EQ(local_sheet_needs_quoting_r1c1_display(row.name, facts), row.quoted[i] == '1')
+          << row.name << " locale " << i;
+    }
+  }
+  // `R<n>K<n>` reads as a reference in every form.
+  EXPECT_TRUE(local_sheet_needs_quoting_a1("R1K1"));
+  EXPECT_TRUE(local_sheet_needs_quoting_r1c1("R1K1"));
+  EXPECT_FALSE(local_sheet_needs_quoting_a1("Z1S1"));
+  EXPECT_FALSE(local_sheet_needs_quoting_a1("F1C1"));
+}
+
 }  // namespace
 }  // namespace parser
 }  // namespace formulon

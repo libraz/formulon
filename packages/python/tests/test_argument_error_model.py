@@ -237,6 +237,67 @@ class FormulaLocaleValidationTests(unittest.TestCase):
         self.assertEqual(formulon.canonicalize_formula(local, _PROFILE), "=SUM(1.5,2)")
 
 
+class FormulaNotationTests(unittest.TestCase):
+    """``r1c1`` / ``base_row`` / ``base_col`` of ``localize_formula`` / ``canonicalize_formula``, as ``parse_reference``."""
+
+    _CASES = (
+        ("mac-365-de_DE", "=SUM(C3,$B$2)", "=SUMME(Z(-2)S(-2);Z2S2)"),
+        ("mac-365-es_ES", "=SUM(C3,$B$2)", "=SUMA(F[-2]C[-2];F2C2)"),
+        ("mac-365-en_US", "=SUM(C3,$B$2)", "=SUM(R[-2]C[-2],R2C2)"),
+    )
+
+    def test_r1c1_round_trips_with_a_base(self) -> None:
+        for profile, a1, local in self._CASES:
+            with self.subTest(profile=profile):
+                self.assertEqual(formulon.localize_formula(a1, profile, r1c1=True, base_row=4, base_col=4), local)
+                self.assertEqual(formulon.canonicalize_formula(local, profile, r1c1=True, base_row=4, base_col=4), a1)
+
+    def test_default_keeps_a1_and_the_base_alone_changes_nothing(self) -> None:
+        a1 = "=SUM(C3,$B$2)"
+        shown = formulon.localize_formula(a1, _PROFILE)
+        self.assertEqual(shown, "=SUMME(C3;$B$2)")
+        self.assertEqual(formulon.localize_formula(a1, _PROFILE, r1c1=False, base_row=4, base_col=4), shown)
+        self.assertEqual(formulon.canonicalize_formula(shown, _PROFILE, base_row=4, base_col=4), a1)
+
+    def test_absolute_references_need_no_base(self) -> None:
+        local = formulon.localize_formula("=$A$1+SUM($1:$2)", _PROFILE, r1c1=True)
+        self.assertEqual(local, "=Z1S1+SUMME(Z1:Z2)")
+        self.assertEqual(formulon.canonicalize_formula(local, _PROFILE, r1c1=True), "=$A$1+SUM($1:$2)")
+
+    def test_a_relative_reference_without_a_base_is_an_invalid_reference(self) -> None:
+        text = "=SUM(A1,$B$2)"
+        with self.assertRaises(FormulaSyntaxError) as caught:
+            formulon.localize_formula(text, "mac-365-en_US", r1c1=True)
+        self.assertEqual(caught.exception.code, StatusCode.PARSER_INVALID_REFERENCE)
+        record = caught.exception.parse_error
+        self.assertIsNotNone(record)
+        self.assertEqual((record.start, record.end), (5, 7))
+        with self.assertRaises(FormulaSyntaxError) as caught:
+            formulon.canonicalize_formula("=1+Z(-1)S", _PROFILE, r1c1=True)
+        self.assertEqual(caught.exception.code, StatusCode.PARSER_INVALID_REFERENCE)
+
+    def test_arguments_are_checked_as_parse_reference_checks_them(self) -> None:
+        for convert in (formulon.localize_formula, formulon.canonicalize_formula):
+            with self.subTest(convert=convert.__name__):
+                with self.assertRaises(TypeError):
+                    convert("=1", _PROFILE, r1c1=True, base_row=1)
+                with self.assertRaises(TypeError):
+                    convert("=1", _PROFILE, r1c1=True, base_col=1)
+                with self.assertRaises(TypeError):
+                    convert("=1", _PROFILE, r1c1=1)  # type: ignore[arg-type]
+                with self.assertRaises(TypeError):
+                    convert("=1", _PROFILE, r1c1=True, base_row=True, base_col=0)  # type: ignore[arg-type]
+                with self.assertRaises(FormulonError):
+                    convert("=1", _PROFILE, base_row=1048576, base_col=0)
+                with self.assertRaises(TypeError):
+                    convert("=1", _PROFILE, True)  # type: ignore[misc]
+                with self.assertRaises(TypeError):
+                    convert("=1", _PROFILE, r1c1=True, base=1)  # type: ignore[call-arg]
+                with Workbook.create_default() as wb:
+                    with self.assertRaises(TypeError):
+                        wb.parse_reference("RC", r1c1=True, base_row=1)
+
+
 def _add_pivot(wb: Workbook):
     ws = wb.sheet(0)
     ws.set_text(0, 0, "Region")

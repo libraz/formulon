@@ -2881,6 +2881,18 @@ export interface ParseReferenceOptions {
   baseCol?: number;
 }
 
+/** Options for `localizeFormula` and `canonicalizeFormula`. `baseRow` and `baseCol` anchor R1C1 relative references
+ *  and are given together. */
+export interface FormulaNotationOptions {
+  /** Spells references on the profile side in R1C1, with the profile's row / column letters and brackets
+   *  (de `Z(-1)S(1)`, es `F[-1]C[1]`), when `true`; omitted keeps A1. */
+  r1c1?: boolean;
+  /** The 0-based row that R1C1 relative references are measured from; given together with `baseCol`. */
+  baseRow?: number;
+  /** The 0-based column that R1C1 relative references are measured from; given together with `baseRow`. */
+  baseCol?: number;
+}
+
 /** Options for `formatReference`. */
 export interface FormatReferenceOptions {
   /** The qualifier to write; it overrides the sheet name of a parsed reference. Omitted, `null` or an empty string
@@ -9170,17 +9182,26 @@ export interface Formulon {
   canonicalizeFunctionName(localizedName: string, profileId: ProfileId): string;
   /** Rewrites stored (en-invariant) formula text into `profileId`'s Excel
    *  spelling: function names, list / array separators, decimal points,
-   *  booleans and error names. Strings, quoted sheet names, external
-   *  qualifiers and structured-reference brackets are kept verbatim. The
-   *  canonical `formula` must parse: a syntax error fails with a parser status
-   *  and `FormulonError.parseError`, whose offsets (UTF-16) index into
-   *  `formula`. An unknown `profileId` fails with `StatusCode.InvalidArgument`. */
-  localizeFormula(formula: string, profileId: ProfileId): string;
+   *  booleans and error names; sheet qualifiers are requoted by the profile's
+   *  display rule. Strings, external qualifiers and structured-reference
+   *  brackets are kept verbatim. With `options.r1c1` every reference is
+   *  written in R1C1 with the profile's letters and brackets, relative
+   *  references measured from `baseRow` / `baseCol`; a relative reference
+   *  with no base fails with `StatusCode.ParserInvalidReference` over that
+   *  reference. The canonical `formula` must parse: a syntax error fails with
+   *  a parser status and `FormulonError.parseError`, whose offsets (UTF-16)
+   *  index into `formula`. An unknown `profileId` fails with
+   *  `StatusCode.InvalidArgument`.
+   *  @example
+   *  formulon.localizeFormula('=SUM(C3,$B$2)', 'mac-365-de_DE', { r1c1: true, baseRow: 4, baseCol: 4 });
+   *  // '=SUMME(Z(-2)S(-2);Z2S2)' */
+  localizeFormula(formula: string, profileId: ProfileId, options?: FormulaNotationOptions): string;
   /** Inverse of `localizeFormula`: rewrites `profileId`-spelled formula text
-   *  into the en-invariant form. A syntax error fails with a parser status and
+   *  into the en-invariant form, reading R1C1 references back into A1 with
+   *  `options.r1c1`. A syntax error fails with a parser status and
    *  `FormulonError.parseError`, whose offsets (UTF-16) index into the localized
    *  `formula` as passed. */
-  canonicalizeFormula(formula: string, profileId: ProfileId): string;
+  canonicalizeFormula(formula: string, profileId: ProfileId, options?: FormulaNotationOptions): string;
   /** Returns the locale facts (separators, boolean names, date order,
    *  currency, error names) of `profileId`. */
   getLocaleFacts(profileId: ProfileId): LocaleFacts;

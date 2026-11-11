@@ -2926,6 +2926,11 @@ entries:
     kind: typedef
     js: FormatReferenceOptions
     surfaces: [wasm, native]
+  type.formula_notation_options:
+    kind: typedef
+    js: FormulaNotationOptions
+    a1_exempt: { fields: [baseRow, baseCol], reason: "the base cell R1C1 relative references are measured from" }
+    surfaces: [wasm, native]
   record.formula_result:
     kind: record
     role: result
@@ -7472,6 +7477,7 @@ entries:
     c: fm_localize_formula
     js: localizeFormula
     py: localize_formula
+    params: { r1c1: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_formula_localize, js: localizeFormula, py: Workbook.localize_formula }
   formula.canonicalize:
@@ -7482,6 +7488,7 @@ entries:
     c: fm_canonicalize_formula
     js: canonicalizeFormula
     py: canonicalize_formula
+    params: { r1c1: bool }
     surfaces: [c, wasm, native, py]
     was: { c: fm_formula_canonicalize, js: canonicalizeFormula, py: Workbook.canonicalize_formula }
   locale_facts.get:
@@ -13934,6 +13941,11 @@ entries:
     kind: record
     role: input
     c: fm_parse_reference_spec_t
+    surfaces: [c]
+  record.formula_notation_spec:
+    kind: record
+    role: input
+    c: fm_formula_notation_spec_t
     surfaces: [c]
   record.pivot_summary:
     kind: record

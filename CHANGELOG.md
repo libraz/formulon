@@ -211,6 +211,11 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
 - `getSpill` reports a spill blocked with `#SPILL!` and its intended range.
 - `parseReference` and `formatReference` convert between reference text and a
   sheet name with a 0-based rectangle.
+- `localizeFormula` and `canonicalizeFormula` take `{ r1c1, baseRow, baseCol }`
+  (Python `r1c1=`, `base_row=`, `base_col=`; C `fm_formula_notation_spec_t`)
+  and convert between the stored A1 text and the profile's R1C1 spelling, with
+  its row and column letters (de `Z(-1)S(1)`, es `F[-1]C[1]`) and relative
+  references measured from the base cell.
 - `Table.renameColumn` renames a column as typing over its header does.
 - `Table.insertRows(first?, last?)` / `insertColumns(first?, last?)` insert
   table rows and columns; new columns are named from their left neighbour.
@@ -234,6 +239,10 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
 
 ### Changed
 
+- `localizeFormula` requotes sheet qualifiers by the profile's display rule
+  (de `'Z1S1'!A1`) and quotes a defined name that reads as a reference in the
+  profile's R1C1 letters (de `='z'+1`); `canonicalizeFormula` writes
+  qualifiers quoted as Excel stores them.
 - A column inserted inside a table is named from its left neighbour (`Q2`
   gives `Q3`, else `Q22`); otherwise it takes the locale's column word.
 - Writing a value, formula or blank to a visible totals-row cell updates the
