@@ -256,6 +256,7 @@ _SPARKLINE_FLAGS = (
     "negative",
     "display_x_axis",
     "display_hidden",
+    "right_to_left",
     "date_axis",
 )
 
@@ -4791,6 +4792,7 @@ class Sheet(_NoCopy):
                 negative=bool(d["negative"]),
                 display_x_axis=bool(d["display_x_axis"]),
                 display_hidden=bool(d["display_hidden"]),
+                right_to_left=bool(d["right_to_left"]),
                 min_axis_type=d["min_axis_type"],
                 max_axis_type=d["max_axis_type"],
                 manual_min=d["manual_min"] if d["has_manual_min"] else None,
@@ -4916,6 +4918,7 @@ class Sheet(_NoCopy):
         negative: Union[bool, Unchanged] = UNCHANGED,
         display_x_axis: Union[bool, Unchanged] = UNCHANGED,
         display_hidden: Union[bool, Unchanged] = UNCHANGED,
+        right_to_left: Union[bool, Unchanged] = UNCHANGED,
         min_axis_type: Union[SparklineAxisType, Unchanged] = UNCHANGED,
         max_axis_type: Union[SparklineAxisType, Unchanged] = UNCHANGED,
         manual_min: Union[float, None, Unchanged] = UNCHANGED,
@@ -4961,6 +4964,7 @@ class Sheet(_NoCopy):
                 ("negative", negative),
                 ("display_x_axis", display_x_axis),
                 ("display_hidden", display_hidden),
+                ("right_to_left", right_to_left),
                 ("min_axis_type", min_axis_type),
                 ("max_axis_type", max_axis_type),
                 ("manual_min", manual_min),

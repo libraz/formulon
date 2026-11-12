@@ -167,6 +167,7 @@ SparklineGroup AuthoredGroup() {
   g.negative = true;
   g.display_x_axis = true;
   g.display_hidden = true;
+  g.right_to_left = true;
   g.min_axis_type = SparklineAxisType::kGroup;
   g.max_axis_type = SparklineAxisType::kCustom;
   g.has_manual_max = true;
@@ -187,6 +188,7 @@ void ExpectAuthored(const SparklineGroup& g) {
   EXPECT_TRUE(g.negative);
   EXPECT_TRUE(g.display_x_axis);
   EXPECT_TRUE(g.display_hidden);
+  EXPECT_TRUE(g.right_to_left);
   EXPECT_EQ(g.min_axis_type, SparklineAxisType::kGroup);
   EXPECT_EQ(g.max_axis_type, SparklineAxisType::kCustom);
   EXPECT_DOUBLE_EQ(g.manual_max, 42.0);

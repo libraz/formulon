@@ -216,6 +216,7 @@ const FAMILIES = {
       'maxAxisType',
       'minAxisType',
       'negative',
+      'rightToLeft',
       'sparklines',
       'type',
     ],

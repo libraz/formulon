@@ -259,7 +259,8 @@ void apply_group(pugi::xml_node node, const SparklineGroup& g) {
                {"negative", g.negative},
                {"displayXAxis", g.display_x_axis},
                {"displayHidden", g.display_hidden},
-               {"dateAxis", g.date_axis}};
+               {"dateAxis", g.date_axis},
+               {"rightToLeft", g.right_to_left}};
   for (const auto& flag : flags) {
     set_flag(node, flag.name, flag.value);
   }
@@ -361,7 +362,6 @@ Expected<void, Error> add_sparkline_group(std::string& ext_lst_xml, const Sparkl
   const std::string px(qname_prefix_colon(list.name()));
   pugi::xml_node node = list.append_child((px + "sparklineGroup").c_str());
   apply_group(node, group);
-  set_flag(node, "rightToLeft", group.right_to_left);
   if (!group.uid.empty()) {
     node.append_attribute("xmlns:xr2").set_value(kNsXr2.data());
     node.append_attribute("xr2:uid").set_value(group.uid.c_str());

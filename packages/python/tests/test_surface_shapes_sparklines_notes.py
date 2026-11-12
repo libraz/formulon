@@ -210,6 +210,7 @@ def _group(**overrides) -> SparklineGroupInput:
         markers=True,
         negative=True,
         display_x_axis=True,
+        right_to_left=True,
         min_axis_type=SparklineAxisType.CUSTOM,
         manual_min=-1.5,
         line_width_pt=1.25,
@@ -237,6 +238,7 @@ class SparklineGroupTests(unittest.TestCase):
                 self.assertEqual(first.color_low.indexed, 12)
                 self.assertIsNone(first.color_high)
                 self.assertEqual((first.markers, first.high, first.negative), (True, False, True))
+                self.assertEqual((first.right_to_left, second.right_to_left), (True, False))
                 self.assertEqual(first.min_axis_type, SparklineAxisType.CUSTOM)
                 self.assertEqual((first.manual_min, first.manual_max), (-1.5, None))
                 self.assertEqual(first.line_width_pt, 1.25)
@@ -264,6 +266,10 @@ class SparklineGroupTests(unittest.TestCase):
                 self.assertEqual((updated.markers, updated.negative, updated.manual_min), (True, True, -1.5))
                 self.assertEqual((updated.type, updated.high, updated.date_axis), (SparklineType.STACKED, True, True))
                 self.assertEqual(updated.date_axis_range, SheetRect(0, CellRect(3, 0, 3, 3)))
+                self.assertTrue(updated.right_to_left)
+                loaded.sheet(0).update_sparkline_group(0, right_to_left=False)
+                self.assertFalse(loaded.sheet(0).list_sparkline_groups()[0].right_to_left)
+                loaded.sheet(0).update_sparkline_group(0, right_to_left=True)
                 self.assertEqual(len(updated.sparklines), 2)
 
                 loaded.sheet(0).update_sparkline_group(0, sparklines=[SparklineInput("Sheet1!B1:B5", "H1")])

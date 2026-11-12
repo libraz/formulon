@@ -14377,6 +14377,8 @@ typedef struct {
   int32_t display_x_axis;
   /** `1` to plot data in hidden rows and columns. */
   int32_t display_hidden;
+  /** `1` to plot the group right to left; the default is `0`. */
+  int32_t right_to_left;
   /** How the vertical axis minimum is chosen: per sparkline, shared by the group, or the custom value, an
    *  `fm_sparkline_axis_type_t`. */
   int32_t min_axis_type;
@@ -14495,6 +14497,10 @@ typedef struct {
   fm_patch_op_t display_hidden_op;
   /** `1` to plot data in hidden rows and columns. Applies when `display_hidden_op` sets it. */
   int32_t display_hidden;
+  /** Patch operation for `right_to_left`: leave it unchanged, set it, or (where it can be cleared) remove it. */
+  fm_patch_op_t right_to_left_op;
+  /** `1` to plot the group right to left. Applies when `right_to_left_op` sets it. */
+  int32_t right_to_left;
   /** Patch operation for `min_axis_type`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t min_axis_type_op;
   /** How the vertical axis minimum is chosen: per sparkline, shared by the group, or the custom value. Applies when

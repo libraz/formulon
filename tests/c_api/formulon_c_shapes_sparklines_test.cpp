@@ -22,7 +22,7 @@ constexpr bool kWasm32 = sizeof(void*) == 4U;
 static_assert(sizeof(fm_shape_info_t) == (kWasm32 ? 160U : 168U), "fm_shape_info_t ABI layout changed");
 static_assert(sizeof(fm_shape_spec_t) == (kWasm32 ? 240U : 264U), "fm_shape_spec_t ABI layout changed");
 static_assert(sizeof(fm_shape_patch_t) == (kWasm32 ? 184U : 200U), "fm_shape_patch_t ABI layout changed");
-static_assert(sizeof(fm_sparkline_group_patch_t) == (kWasm32 ? 432U : 448U),
+static_assert(sizeof(fm_sparkline_group_patch_t) == (kWasm32 ? 440U : 456U),
               "fm_sparkline_group_patch_t ABI layout changed");
 static_assert(sizeof(fm_sparkline_t) == 2U * sizeof(void*), "fm_sparkline_t ABI layout changed");
 static_assert(sizeof(fm_sparkline_group_t) == (kWasm32 ? 296U : 312U), "fm_sparkline_group_t ABI layout changed");
@@ -749,6 +749,7 @@ fm_sparkline_group_t ColumnGroup() {
   g.negative = 1;
   g.markers = 1;
   g.display_x_axis = 1;
+  g.right_to_left = 1;
   g.min_axis_type = FM_SPARKLINE_AXIS_TYPE_CUSTOM;
   g.has_manual_min = 1;
   g.manual_min = -1.5;
@@ -810,6 +811,7 @@ TEST(FormulonCApiSparklines, AddReadUpdateReplaceRemoveAndReload) {
   EXPECT_EQ(out.markers, 1);
   EXPECT_EQ(out.high, 0);
   EXPECT_EQ(out.display_x_axis, 1);
+  EXPECT_EQ(out.right_to_left, 1);
   EXPECT_EQ(out.min_axis_type, FM_SPARKLINE_AXIS_TYPE_CUSTOM);
   EXPECT_EQ(out.max_axis_type, FM_SPARKLINE_AXIS_TYPE_INDIVIDUAL);
   EXPECT_EQ(out.has_manual_min, 1);
@@ -899,6 +901,62 @@ TEST(FormulonCApiSparklines, AddReadUpdateReplaceRemoveAndReload) {
   ASSERT_EQ(fm_sheet_remove_sparkline_group(again.handle, 0, remaining_id.c_str()), 0);
   ASSERT_EQ(fm_sheet_get_sparkline_group_count(again.handle, 0, &count), 0);
   EXPECT_EQ(count, 0U);
+}
+
+TEST(FormulonCApiSparklines, RightToLeftPatchAndRoundTrip) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const fm_sparkline_t items[] = {{"Sheet1!A1:D1", "F1"}};
+  fm_sparkline_group_t g = FM_STRUCT_INIT(fm_sparkline_group_t);
+  g.type = FM_SPARKLINE_TYPE_LINE;
+  g.line_width_pt = 0.75;
+  g.empty_cells_as = FM_BLANKS_AS_GAP;
+  const char* added_id = nullptr;
+  ASSERT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, items, 1, &added_id), 0) << fm_get_last_error_message();
+  const std::string id = added_id;
+  fm_sparkline_group_t out = FM_STRUCT_INIT(fm_sparkline_group_t);
+  ASSERT_EQ(fm_sheet_get_sparkline_group_at(wb.handle, 0, 0, &out), 0);
+  EXPECT_EQ(out.right_to_left, 0);
+
+  fm_sparkline_group_patch_t set = FM_STRUCT_INIT(fm_sparkline_group_patch_t);
+  Set(set.right_to_left_op, set.right_to_left, 1);
+  ASSERT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, id.c_str(), &set), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_get_sparkline_group_at(wb.handle, 0, 0, &out), 0);
+  EXPECT_EQ(out.right_to_left, 1);
+
+  // KEEP leaves the flag as it is.
+  fm_sparkline_group_patch_t keep = FM_STRUCT_INIT(fm_sparkline_group_patch_t);
+  Set(keep.high_op, keep.high, 1);
+  ASSERT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, id.c_str(), &keep), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_get_sparkline_group_at(wb.handle, 0, 0, &out), 0);
+  EXPECT_EQ(out.right_to_left, 1);
+
+  fm_sparkline_group_patch_t unset = FM_STRUCT_INIT(fm_sparkline_group_patch_t);
+  Set(unset.right_to_left_op, unset.right_to_left, 0);
+  ASSERT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, id.c_str(), &unset), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_get_sparkline_group_at(wb.handle, 0, 0, &out), 0);
+  EXPECT_EQ(out.right_to_left, 0);
+
+  // The flag cannot be cleared, and an unknown operation is refused; neither changes the group.
+  ASSERT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, id.c_str(), &set), 0) << fm_get_last_error_message();
+  fm_sparkline_group_patch_t clear = FM_STRUCT_INIT(fm_sparkline_group_patch_t);
+  clear.right_to_left_op = FM_PATCH_OP_CLEAR;
+  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, id.c_str(), &clear), kInvalidArgument);
+  fm_sparkline_group_patch_t unknown = FM_STRUCT_INIT(fm_sparkline_group_patch_t);
+  unknown.right_to_left_op = static_cast<fm_patch_op_t>(3);
+  EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, id.c_str(), &unknown), kInvalidArgument);
+  ASSERT_EQ(fm_sheet_get_sparkline_group_at(wb.handle, 0, 0, &out), 0);
+  EXPECT_EQ(out.right_to_left, 1);
+
+  for (const fm_workbook_format_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
+    BufferGuard buf;
+    ASSERT_EQ(fm_workbook_save(wb.handle, format, &buf.data, &buf.len), 0) << fm_get_last_error_message();
+    WorkbookGuard again;
+    ASSERT_EQ(fm_workbook_load(buf.data, buf.len, &again.handle), 0) << fm_get_last_error_message();
+    fm_sparkline_group_t reloaded = FM_STRUCT_INIT(fm_sparkline_group_t);
+    ASSERT_EQ(fm_sheet_get_sparkline_group_at(again.handle, 0, 0, &reloaded), 0);
+    EXPECT_EQ(reloaded.right_to_left, 1) << "format " << format;
+  }
 }
 
 TEST(FormulonCApiSparklines, Validation) {

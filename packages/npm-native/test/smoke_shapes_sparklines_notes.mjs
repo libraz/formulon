@@ -150,6 +150,7 @@ const sparklineGroup = (mod) => ({
   markers: true,
   negative: true,
   displayXAxis: true,
+  rightToLeft: true,
   minAxisType: mod.SparklineAxisType.Custom,
   manualMin: -1.5,
   lineWidthPt: 1.25,
@@ -180,6 +181,8 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
   assert.equal(second.colorSeries, null);
   assert.equal(first.markers, true);
   assert.equal(first.high, false);
+  assert.equal(first.rightToLeft, true);
+  assert.equal(second.rightToLeft, false);
   assert.equal(first.minAxisType, mod.SparklineAxisType.Custom);
   assert.equal(first.manualMin, -1.5);
   assert.equal(first.manualMax, null);
@@ -209,6 +212,7 @@ test('sparkline groups add, list, update, replace, remove and follow row edits',
   const updated = loaded.sheet(0).listSparklineGroups()[0];
   assert.equal(updated.type, mod.SparklineType.Stacked);
   assert.equal(updated.high, true);
+  assert.equal(updated.rightToLeft, true);
   assert.equal(updated.dateAxis, true);
   assert.deepEqual(plainOf(updated.dateAxisRange), onSheet1(3, 0, 3, 3));
   assert.equal(updated.sparklines.length, 2);

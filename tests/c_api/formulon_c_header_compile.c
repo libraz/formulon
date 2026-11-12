@@ -206,7 +206,7 @@ int main(void) {
   // The common drawing fields share one patch; each kind's update takes its own fields only.
   _Static_assert(sizeof(fm_shape_patch_t) == (sizeof(void*) == 4 ? 184 : 200), "fm_shape_patch_t ABI layout changed");
   _Static_assert(sizeof(fm_slicer_patch_t) == (sizeof(void*) == 4 ? 56 : 72), "fm_slicer_patch_t ABI layout changed");
-  _Static_assert(sizeof(fm_sparkline_group_patch_t) == (sizeof(void*) == 4 ? 432 : 448),
+  _Static_assert(sizeof(fm_sparkline_group_patch_t) == (sizeof(void*) == 4 ? 440 : 456),
                  "fm_sparkline_group_patch_t ABI layout changed");
   fm_status_t (*add_shape)(fm_workbook_t*, size_t, const fm_shape_spec_t*, uint32_t*) = fm_sheet_add_shape;
   fm_status_t (*add_slicer)(fm_workbook_t*, size_t, size_t, size_t, size_t, const fm_slicer_spec_t*, uint32_t*) =

@@ -2891,6 +2891,8 @@ class SparklineGroup:
     display_x_axis: bool = False
     #: ``True`` to plot data in hidden rows and columns.
     display_hidden: bool = False
+    #: ``True`` to plot the group right to left; the default is ``False``.
+    right_to_left: bool = False
     #: How the vertical axis minimum is chosen: per sparkline, shared by the group, or the custom value.
     min_axis_type: SparklineAxisType = SparklineAxisType.INDIVIDUAL
     #: How the vertical axis maximum is chosen: per sparkline, shared by the group, or the custom value.
@@ -2955,6 +2957,8 @@ class SparklineGroupInput:
     display_x_axis: bool = False
     #: ``True`` to plot data in hidden rows and columns.
     display_hidden: bool = False
+    #: ``True`` to plot the group right to left; the default is ``False``.
+    right_to_left: bool = False
     #: How the vertical axis minimum is chosen: per sparkline, shared by the group, or the custom value.
     min_axis_type: SparklineAxisType = SparklineAxisType.INDIVIDUAL
     #: How the vertical axis maximum is chosen: per sparkline, shared by the group, or the custom value.
@@ -7490,6 +7494,7 @@ def _pack_sparkline_group(
             "negative": _require_bool(group.negative, "negative"),
             "display_x_axis": _require_bool(group.display_x_axis, "display_x_axis"),
             "display_hidden": _require_bool(group.display_hidden, "display_hidden"),
+            "right_to_left": _require_bool(group.right_to_left, "right_to_left"),
             "min_axis_type": _sint(group.min_axis_type, "min_axis_type"),
             "max_axis_type": _sint(group.max_axis_type, "max_axis_type"),
             "has_manual_min": 0 if group.manual_min is None else 1,

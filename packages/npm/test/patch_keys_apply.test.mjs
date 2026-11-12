@@ -929,6 +929,7 @@ const SPARKLINE_GROUP = {
     negative: k(FLIP),
     displayXAxis: k(FLIP),
     displayHidden: k(FLIP),
+    rightToLeft: k(FLIP),
     minAxisType: k(f.SparklineAxisType.Group),
     maxAxisType: k(f.SparklineAxisType.Group),
     dateAxis: k(FLIP, { patch: (v) => ({ dateAxisRange: 'Sheet1!A2:D2', dateAxis: v }) }),

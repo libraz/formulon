@@ -73,6 +73,7 @@ fm_sparkline_group_t PullGroup(CheckedSpecReader& reader, const Napi::Object& sp
   g.negative = reader.Bool(spec, "negative", false) ? 1 : 0;
   g.display_x_axis = reader.Bool(spec, "displayXAxis", false) ? 1 : 0;
   g.display_hidden = reader.Bool(spec, "displayHidden", false) ? 1 : 0;
+  g.right_to_left = reader.Bool(spec, "rightToLeft", false) ? 1 : 0;
   g.min_axis_type = reader.I32(spec, "minAxisType", FM_SPARKLINE_AXIS_TYPE_INDIVIDUAL);
   g.max_axis_type = reader.I32(spec, "maxAxisType", FM_SPARKLINE_AXIS_TYPE_INDIVIDUAL);
   bool present = false;
@@ -246,6 +247,7 @@ Napi::Value Workbook::GetSparklineGroup(const Napi::CallbackInfo& info) {
   item.Set("negative", Napi::Boolean::New(env, g.negative != 0));
   item.Set("displayXAxis", Napi::Boolean::New(env, g.display_x_axis != 0));
   item.Set("displayHidden", Napi::Boolean::New(env, g.display_hidden != 0));
+  item.Set("rightToLeft", Napi::Boolean::New(env, g.right_to_left != 0));
   item.Set("minAxisType", JsNumber(env, g.min_axis_type));
   item.Set("maxAxisType", JsNumber(env, g.max_axis_type));
   item.Set("manualMin", g.has_manual_min != 0 ? JsNumber(env, g.manual_min) : env.Null());
@@ -321,6 +323,7 @@ fm_sparkline_group_patch_t PullGroupPatch(CheckedSpecReader& reader, const Napi:
   g.negative_op = PatchBool(reader, spec, "negative", &g.negative);
   g.display_x_axis_op = PatchBool(reader, spec, "displayXAxis", &g.display_x_axis);
   g.display_hidden_op = PatchBool(reader, spec, "displayHidden", &g.display_hidden);
+  g.right_to_left_op = PatchBool(reader, spec, "rightToLeft", &g.right_to_left);
   g.min_axis_type_op = PatchI32(reader, spec, "minAxisType", &g.min_axis_type);
   g.max_axis_type_op = PatchI32(reader, spec, "maxAxisType", &g.max_axis_type);
   g.manual_min_op = PatchNullableDouble(reader, spec, "manualMin", &g.manual_min);

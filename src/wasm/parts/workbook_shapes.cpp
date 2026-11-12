@@ -98,6 +98,7 @@ emscripten::val sparkline_group_to_val(fm_sparkline_group_t g, emscripten::val s
   o.set("negative", g.negative != 0);
   o.set("displayXAxis", g.display_x_axis != 0);
   o.set("displayHidden", g.display_hidden != 0);
+  o.set("rightToLeft", g.right_to_left != 0);
   o.set("minAxisType", g.min_axis_type);
   o.set("maxAxisType", g.max_axis_type);
   o.set("manualMin", g.has_manual_min != 0 ? emscripten::val(g.manual_min) : emscripten::val::null());
@@ -125,6 +126,7 @@ fm_sparkline_group_t pull_group(JsNarrowNumericReader& reader, const emscripten:
   g.negative = reader.boolean(spec, "negative", false, "spec.negative") ? 1 : 0;
   g.display_x_axis = reader.boolean(spec, "displayXAxis", false, "spec.displayXAxis") ? 1 : 0;
   g.display_hidden = reader.boolean(spec, "displayHidden", false, "spec.displayHidden") ? 1 : 0;
+  g.right_to_left = reader.boolean(spec, "rightToLeft", false, "spec.rightToLeft") ? 1 : 0;
   g.min_axis_type = reader.i32(spec, "minAxisType", FM_SPARKLINE_AXIS_TYPE_INDIVIDUAL, "spec.minAxisType");
   g.max_axis_type = reader.i32(spec, "maxAxisType", FM_SPARKLINE_AXIS_TYPE_INDIVIDUAL, "spec.maxAxisType");
   if (present(reader, spec, "manualMin")) {
@@ -351,6 +353,7 @@ void JsWorkbook::updateSparklineGroup(uint32_t sheet, const std::string& groupId
   flag("negative", &p.negative_op, &p.negative);
   flag("displayXAxis", &p.display_x_axis_op, &p.display_x_axis);
   flag("displayHidden", &p.display_hidden_op, &p.display_hidden);
+  flag("rightToLeft", &p.right_to_left_op, &p.right_to_left);
   i32("minAxisType", &p.min_axis_type_op, &p.min_axis_type);
   i32("maxAxisType", &p.max_axis_type_op, &p.max_axis_type);
   flag("dateAxis", &p.date_axis_op, &p.date_axis);

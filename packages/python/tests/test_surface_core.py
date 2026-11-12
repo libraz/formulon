@@ -182,7 +182,7 @@ class StructLayoutTests(unittest.TestCase):
         "SHEET_FORMAT_DEFAULTS_PATCH": 64,
         "SHEET_VIEW_PATCH": 152,
         "SLICER_PATCH": 56,
-        "SPARKLINE_GROUP_PATCH": 432,
+        "SPARKLINE_GROUP_PATCH": 440,
         "TABLE_PATCH": 52,
         "TABLE_COLUMN_PATCH": 32,
         "TABLE_STYLE_DEFAULTS_PATCH": 20,

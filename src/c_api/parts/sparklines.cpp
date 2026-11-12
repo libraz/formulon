@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -67,6 +68,7 @@ io::SparklineGroup group_from_c(const fm_sparkline_group_t& g) {
   out.negative = g.negative != 0;
   out.display_x_axis = g.display_x_axis != 0;
   out.display_hidden = g.display_hidden != 0;
+  out.right_to_left = g.right_to_left != 0;
   out.min_axis_type = static_cast<io::SparklineAxisType>(g.min_axis_type);
   out.max_axis_type = static_cast<io::SparklineAxisType>(g.max_axis_type);
   out.has_manual_min = g.has_manual_min != 0;
@@ -132,6 +134,7 @@ fm_status_t apply_patch(const fm_sparkline_group_patch_t& p, io::SparklineGroup&
                     {p.negative_op, "negative", false},
                     {p.display_x_axis_op, "display_x_axis", false},
                     {p.display_hidden_op, "display_hidden", false},
+                    {p.right_to_left_op, "right_to_left", false},
                     {p.min_axis_type_op, "min_axis_type", false},
                     {p.max_axis_type_op, "max_axis_type", false},
                     {p.date_axis_op, "date_axis", false},
@@ -166,10 +169,12 @@ fm_status_t apply_patch(const fm_sparkline_group_patch_t& p, io::SparklineGroup&
                                                           {p.negative_op, p.negative},
                                                           {p.display_x_axis_op, p.display_x_axis},
                                                           {p.display_hidden_op, p.display_hidden},
+                                                          {p.right_to_left_op, p.right_to_left},
                                                           {p.date_axis_op, p.date_axis}};
-  bool* const flag_targets[] = {&g.markers,        &g.high,           &g.low,      &g.first, &g.last, &g.negative,
-                                &g.display_x_axis, &g.display_hidden, &g.date_axis};
-  for (std::size_t i = 0; i < 9; ++i) {
+  bool* const flag_targets[] = {
+      &g.markers,        &g.high,           &g.low,           &g.first,    &g.last, &g.negative,
+      &g.display_x_axis, &g.display_hidden, &g.right_to_left, &g.date_axis};
+  for (std::size_t i = 0; i < std::size(flags); ++i) {
     if (set(flags[i].first)) {
       *flag_targets[i] = flags[i].second != 0;
     }
@@ -345,6 +350,7 @@ extern "C" fm_status_t fm_sheet_get_sparkline_group_at(const fm_workbook_t* wb, 
   out->negative = g.negative ? 1 : 0;
   out->display_x_axis = g.display_x_axis ? 1 : 0;
   out->display_hidden = g.display_hidden ? 1 : 0;
+  out->right_to_left = g.right_to_left ? 1 : 0;
   out->min_axis_type = static_cast<int32_t>(g.min_axis_type);
   out->max_axis_type = static_cast<int32_t>(g.max_axis_type);
   out->has_manual_min = g.has_manual_min ? 1 : 0;

@@ -125,6 +125,7 @@ const FAMILIES = {
       'negative',
       'displayXAxis',
       'displayHidden',
+      'rightToLeft',
       'minAxisType',
       'maxAxisType',
       'dateAxis',

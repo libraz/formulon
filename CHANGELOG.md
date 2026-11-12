@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `SparklineGroup`, `SparklineGroupInput` and `SparklineGroupPatch` carry `rightToLeft` (Python `right_to_left`, C `fm_sparkline_group_t::right_to_left` and `fm_sparkline_group_patch_t::right_to_left_op` / `right_to_left`), read from and written to `.xlsx` and `.xlsb`.
+
 ### Changed
 
 - C ABI: every engine ceiling that is not an Excel limit returns

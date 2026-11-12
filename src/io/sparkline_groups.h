@@ -4,7 +4,7 @@
 //
 // The XML stays the source of truth: reads parse it and writes patch the
 // parsed DOM, so attributes and children the model does not carry (`uid`,
-// `rightToLeft`, unknown extensions) survive an edit, and an `ext` holding
+// unknown extensions) survive an edit, and an `ext` holding
 // other payloads keeps them. A group is addressed by its position among all
 // groups of the sheet in document order; add and remove shift later indices.
 // Row/column edits move and drop sparklines through the extension rewrite in
@@ -71,9 +71,9 @@ struct SparklineGroup {
   double line_weight = 0.75;
   SparklineEmptyCells empty_cells_as = SparklineEmptyCells::kGap;
   std::vector<SparklineItem> items;
-  /// `rightToLeft` and the revision `uid` (`{GUID}`, empty when absent): read,
-  /// and written by `add_sparkline_group`; an update keeps the group's own.
-  bool right_to_left = false;
+  bool right_to_left = false;  ///< `rightToLeft`: the sparklines plot right to left.
+  /// The revision `uid` (`{GUID}`, empty when absent): read, and written by
+  /// `add_sparkline_group`; an update keeps the group's own.
   std::string uid;
 };
 

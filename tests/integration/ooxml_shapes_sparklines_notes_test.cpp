@@ -698,6 +698,15 @@ TEST(SparklineFidelity, UpdateKeepsSparklinesAndUnmodelledAttributes) {
   EXPECT_NE(xml.find("rightToLeft=\"1\""), std::string::npos);
   EXPECT_NE(xml.find("{11111111-2222-3333-4444-555555555555}"), std::string::npos);
   EXPECT_EQ(io::read_sparkline_groups(xml)[1].items[0].location, "F5");
+
+  // rightToLeft is modelled: an update clears it and sets it again.
+  g = io::read_sparkline_groups(xml)[0];
+  g.right_to_left = false;
+  ASSERT_TRUE(static_cast<bool>(io::update_sparkline_group(xml, 0, g)));
+  EXPECT_FALSE(io::read_sparkline_groups(xml)[0].right_to_left);
+  g.right_to_left = true;
+  ASSERT_TRUE(static_cast<bool>(io::update_sparkline_group(xml, 0, g)));
+  EXPECT_TRUE(io::read_sparkline_groups(xml)[0].right_to_left);
 }
 
 TEST(SparklineFidelity, AddReplaceAndRemoveGroups) {

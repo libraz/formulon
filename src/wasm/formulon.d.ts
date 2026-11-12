@@ -5461,6 +5461,8 @@ export interface SparklineGroup {
   readonly displayXAxis: boolean;
   /** `true` to plot data in hidden rows and columns. */
   readonly displayHidden: boolean;
+  /** `true` to plot the group right to left; the default is `false`. */
+  readonly rightToLeft: boolean;
   /** How the vertical axis minimum is chosen: per sparkline, shared by the group, or the custom value. */
   readonly minAxisType: SparklineAxisType;
   /** How the vertical axis maximum is chosen: per sparkline, shared by the group, or the custom value. */
@@ -5518,6 +5520,8 @@ export interface SparklineGroupInput {
   readonly displayXAxis?: boolean;
   /** `true` to plot data in hidden rows and columns. */
   readonly displayHidden?: boolean;
+  /** `true` to plot the group right to left; the default is `false`. */
+  readonly rightToLeft?: boolean;
   /** How the vertical axis minimum is chosen: per sparkline, shared by the group, or the custom value. */
   readonly minAxisType?: SparklineAxisType;
   /** How the vertical axis maximum is chosen: per sparkline, shared by the group, or the custom value. */

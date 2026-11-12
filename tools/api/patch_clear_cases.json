@@ -460,6 +460,7 @@
       "max_axis_type",
       "min_axis_type",
       "negative",
+      "right_to_left",
       "sparklines",
       "type"
     ]
