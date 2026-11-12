@@ -28,7 +28,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
+#include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
@@ -86,15 +88,30 @@ struct XlsbTableParts {
     std::string path;
     TableMetadata table;
     TableFormulaBytes formulas;
+    /// Columns whose header dxf or header cell style the read dropped.
+    std::uint32_t header_drops = 0;
+    /// The part's bytes with those slots cleared, kept for the case the part ends up retained verbatim; empty when
+    /// `header_drops` is zero.
+    std::vector<std::uint8_t> cleared_bytes;
+  };
+  /// A part `read_table_bin` refused, which is kept verbatim (with its column header slots cleared) or, when it
+  /// cannot be read far enough to clear them, dropped together with its relationship.
+  struct Unreadable {
+    std::size_t sheet_index = 0;
+    std::string rel_id;
+    std::string path;
+    std::uint32_t header_drops = 0;
+    std::optional<std::vector<std::uint8_t>> cleared_bytes;
   };
   std::vector<Part> parts;
+  std::vector<Unreadable> unreadable;
 };
 
-/// Appends the readable table parts sheet `sheet_index`'s relationships
-/// (`rels`) name to `out`. A part the model cannot hold is left out.
-/// `diagnostics` is passed to `read_table_bin`.
+/// Appends the table parts sheet `sheet_index`'s relationships (`rels`) name to `out`: the readable ones to `parts`
+/// (an unreadable one too, by identity and captions only, so structured references still resolve) and the unreadable
+/// ones to `unreadable`.
 void read_xlsb_table_parts(const ZipReader& zip, std::size_t sheet_index, const std::vector<UnknownRelationship>& rels,
-                           XlsbTableParts& out, ReadDiagnostics* diagnostics);
+                           XlsbTableParts& out);
 
 /// The tables of `parts`, formulas not yet rendered: what cell formulas
 /// resolve structured references against while the sheets decode.
@@ -104,10 +121,16 @@ std::vector<TableMetadata> xlsb_table_directory(const XlsbTableParts& parts);
 /// each sheet's LISTPARTS order, removing their BrtListPart records and
 /// relationships from the sheet and adding their paths to `consumed_parts`.
 /// Runs after every sheet body is decoded. Any other table part stays
-/// passthrough, its record and relationship retained.
-void load_xlsb_tables(Workbook& wb, XlsbTableParts parts, const std::vector<std::string>& sheet_names,
-                      const std::vector<XlsbName>& name_table, const std::vector<XlsbSheetRange>& sheet_ranges,
-                      const XlsbExternalBooks& external_books, std::unordered_set<std::string>& consumed_parts);
+/// passthrough, its record and relationship retained, except that Excel refuses a column header dxf or header cell
+/// style: a retained part carrying one is kept with those slots cleared (its bytes in `retained_bytes`, by path), and
+/// a part that cannot be read far enough to clear them is dropped with its record, relationship and rels part, its
+/// path added to `consumed_parts`. Each cleared column and each dropped part counts in
+/// `diagnostics.skipped_feature_count`. Returns the dropped paths.
+std::vector<std::string> load_xlsb_tables(
+    Workbook& wb, XlsbTableParts parts, const std::vector<std::string>& sheet_names,
+    const std::vector<XlsbName>& name_table, const std::vector<XlsbSheetRange>& sheet_ranges,
+    const XlsbExternalBooks& external_books, std::unordered_set<std::string>& consumed_parts,
+    std::unordered_map<std::string, std::vector<std::uint8_t>>& retained_bytes, ReadDiagnostics& diagnostics);
 
 /// Identity, sheet and column captions of every table part kept verbatim in
 /// `wb`'s passthrough parts, read from its BrtBeginList and BrtBeginListCol

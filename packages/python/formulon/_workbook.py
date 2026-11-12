@@ -562,7 +562,8 @@ class ReadDiagnostics:
     undecoded_part_count: int
     #: The number of entries dropped on load: one per merge, hyperlink or data validation and one per
     #: conditional-format block with an unusable reference (XLSX only), and one per table column whose header dxf or
-    #: header cell style was dropped, which Excel refuses to open (XLSX and XLSB).
+    #: header cell style was dropped, which Excel refuses to open (XLSX and XLSB), and one per XLSB table part dropped
+    #: whole because its header slots could not be cleared.
     skipped_feature_count: int
     #: The number of workbook parts whose content type was unrecognised; at most 1. XLSX only.
     unknown_content_type_count: int

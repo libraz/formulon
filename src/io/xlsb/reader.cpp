@@ -34,6 +34,7 @@
 #include "io/future_functions.h"
 #include "io/ooxml/package_rels_reader.h"
 #include "io/ooxml/package_validator.h"
+#include "io/ooxml/part_graph.h"
 #include "io/ooxml/relationship_xml.h"
 #include "io/ooxml/rels_walker.h"
 #include "io/ooxml_defs.h"
@@ -686,7 +687,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     if (!rels_or) {
       return std::move(rels_or.error());
     }
-    read_xlsb_table_parts(zip, i, rels_or.value(), table_parts, &table_diagnostics);
+    read_xlsb_table_parts(zip, i, rels_or.value(), table_parts);
   }
   wb.set_tables(xlsb_table_directory(table_parts));
 
@@ -834,7 +835,10 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   wb.apply_open_active_sheet_rule();
 
   // Table parts the sheets relate to, through the relationships stored above.
-  load_xlsb_tables(wb, std::move(table_parts), sheet_names, name_table, sheet_ranges, external_books, consumed_parts);
+  std::unordered_map<std::string, std::vector<std::uint8_t>> retained_table_bytes;
+  const std::vector<std::string> dropped_tables =
+      load_xlsb_tables(wb, std::move(table_parts), sheet_names, name_table, sheet_ranges, external_books,
+                       consumed_parts, retained_table_bytes, table_diagnostics);
 
   // Drawings the sheets link through one BrtDrawing record and its relationship.
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
@@ -870,6 +874,13 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     part.model_fingerprint = current_retained_part_fingerprint(wb, part);
   };
 
+  // A retained table part carries the bytes `load_xlsb_tables` cleared, not the archive's.
+  auto read_retained = [&](const std::string& name) -> Expected<std::vector<std::uint8_t>, Error> {
+    if (auto it = retained_table_bytes.find(name); it != retained_table_bytes.end()) {
+      return std::move(it->second);
+    }
+    return zip.read_entry(name);
+  };
   std::vector<PassthroughPart> unknown_parts;
   unknown_parts.reserve(ct_view.overrides.size());
   std::unordered_set<std::string> captured_parts;
@@ -890,7 +901,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     if (!zip.has_entry(part_name)) {
       continue;
     }
-    ASSIGN_OR_RETURN(auto part_bytes, zip.read_entry(part_name));
+    ASSIGN_OR_RETURN(auto part_bytes, read_retained(part_name));
     PassthroughPart part;
     part.path = part_name;
     part.content_type = content_type;
@@ -938,7 +949,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
       ++dropped_part_count;
       continue;
     }
-    ASSIGN_OR_RETURN(auto part_bytes, zip.read_entry(entry));
+    ASSIGN_OR_RETURN(auto part_bytes, read_retained(entry));
     PassthroughPart part;
     part.path = entry;
     // Default-typed parts deliberately do not copy the effective content
@@ -966,6 +977,22 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   wb.set_default_content_types(std::move(ct_view.defaults));
   wb.set_unknown_package_rels(std::move(package_rels));
   wb.set_unknown_workbook_rels(std::move(wb_rels_or.value().unknown_rels));
+  // The parts only a dropped table part's rels referenced go with it, once every model root is in place.
+  std::vector<std::string> orphaned;
+  for (const std::string& path : dropped_tables) {
+    auto rels_bytes = zip.read_entry(ooxml::rels_path_for_part(path));
+    if (!rels_bytes) {
+      continue;
+    }
+    if (auto rels = ooxml::parse_part_rels(rels_bytes.value(), path.substr(0, path.rfind('/')))) {
+      for (const ooxml::DrawingRel& rel : rels.value()) {
+        if (!rel.external) {
+          orphaned.push_back(rel.target);
+        }
+      }
+    }
+  }
+  ooxml::remove_orphans(wb, std::move(orphaned));
 
   wb.apply_legacy_implicit_intersections();
 

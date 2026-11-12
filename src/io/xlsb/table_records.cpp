@@ -5,10 +5,12 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 
 #include "auto_filter.h"
 #include "io/auto_filter_xml.h"
+#include "io/ooxml/package_validator.h"
 #include "io/ooxml_defs.h"
 #include "io/xlsb/auto_filter_records.h"
 #include "io/xlsb/cf_x14_link.h"
@@ -538,6 +540,58 @@ void EmitStyleClient(std::vector<std::uint8_t>& out, const TableStyleInfo& info)
   emit_record(out, kTableStyleClient, payload);
 }
 
+/// `bytes` re-framed with every BrtBeginListCol's header dxf and header cell style cleared, each cleared column
+/// counted in `*cleared`. Empty when the part does not frame whole or a column record is too short to hold the
+/// slots, so they cannot be located.
+std::optional<std::vector<std::uint8_t>> ClearColumnHeaders(const std::vector<std::uint8_t>& bytes,
+                                                            std::uint32_t* cleared) {
+  // The header dxf follows the field id and totals function; the header cell style follows the three names.
+  constexpr std::size_t kHeaderDxfOffset = 8;
+  constexpr std::size_t kNamesOffset = 24;
+  const std::vector<FramedRecord> recs = split_records(bytes);
+  if (recs.empty() && !bytes.empty()) {
+    return std::nullopt;
+  }
+  std::vector<std::uint8_t> out;
+  out.reserve(bytes.size());
+  for (const FramedRecord& rec : recs) {
+    if (rec.type != kBrtBeginListCol) {
+      append_record(out, bytes, rec);
+      continue;
+    }
+    if (rec.payload.size < kNamesOffset) {
+      return std::nullopt;
+    }
+    ByteSpan dxf_cursor{rec.payload.data + kHeaderDxfOffset, 4U};
+    const auto header_dxf = read_u32(dxf_cursor);
+    ByteSpan cursor{rec.payload.data + kNamesOffset, rec.payload.size - kNamesOffset};
+    for (int i = 0; i < 3; ++i) {
+      if (!read_xlnullablewidestring(cursor)) {
+        return std::nullopt;
+      }
+    }
+    const std::size_t style_begin = rec.payload.size - cursor.size;
+    const auto header_style = read_xlnullablewidestring(cursor);
+    if (!header_dxf || !header_style) {
+      return std::nullopt;
+    }
+    if (header_dxf.value() == kNoDxf && header_style.value().empty()) {
+      append_record(out, bytes, rec);
+      continue;
+    }
+    const std::size_t style_end = rec.payload.size - cursor.size;
+    const std::uint8_t* data = rec.payload.data;
+    std::vector<std::uint8_t> payload(data, data + kHeaderDxfOffset);
+    emit_u32(payload, kNoDxf);
+    payload.insert(payload.end(), data + kHeaderDxfOffset + 4U, data + style_begin);
+    emit_xlnullablewidestring(payload, std::nullopt);
+    payload.insert(payload.end(), data + style_end, data + rec.payload.size);
+    emit_record(out, kBrtBeginListCol, payload);
+    ++*cleared;
+  }
+  return out;
+}
+
 /// Id, names and column captions of a table part, read without the checks that
 /// make it model-readable. Empty when the list record cannot be read.
 std::optional<TableMetadata> ReadRetainedIdentity(const std::vector<std::uint8_t>& bytes) {
@@ -818,7 +872,7 @@ std::vector<std::uint8_t> write_table_bin(const TableMetadata& table, std::uint3
 }
 
 void read_xlsb_table_parts(const ZipReader& zip, std::size_t sheet_index, const std::vector<UnknownRelationship>& rels,
-                           XlsbTableParts& out, ReadDiagnostics* diagnostics) {
+                           XlsbTableParts& out) {
   for (const UnknownRelationship& rel : rels) {
     if (rel.type != kRelTable || rel.target_external || !zip.has_entry(rel.target)) {
       continue;
@@ -828,10 +882,17 @@ void read_xlsb_table_parts(const ZipReader& zip, std::size_t sheet_index, const 
       continue;
     }
     XlsbTableParts::Part part;
+    ReadDiagnostics read;
     auto table =
-        read_table_bin(ByteSpan{bytes.value().data(), bytes.value().size()}, sheet_index, &part.formulas, diagnostics);
+        read_table_bin(ByteSpan{bytes.value().data(), bytes.value().size()}, sheet_index, &part.formulas, &read);
     if (!table) {
       StructuredLog("xlsb.table.retained_raw").field("part", rel.target).field("reason", table.error().message).warn();
+      XlsbTableParts::Unreadable unreadable;
+      unreadable.sheet_index = sheet_index;
+      unreadable.rel_id = rel.id;
+      unreadable.path = rel.target;
+      unreadable.cleared_bytes = ClearColumnHeaders(bytes.value(), &unreadable.header_drops);
+      out.unreadable.push_back(std::move(unreadable));
       // Structured references into the kept part still resolve by identity and
       // captions; an empty rel_id keeps the entry out of every sheet's LISTPARTS match.
       if (auto head = ReadRetainedIdentity(bytes.value())) {
@@ -846,6 +907,14 @@ void read_xlsb_table_parts(const ZipReader& zip, std::size_t sheet_index, const 
     part.rel_id = rel.id;
     part.path = rel.target;
     part.table = std::move(table.value());
+    // The read framed every record, so the slots it dropped are locatable.
+    std::uint32_t cleared = 0;
+    if (read.skipped_feature_count != 0U) {
+      if (auto cleared_bytes = ClearColumnHeaders(bytes.value(), &cleared)) {
+        part.cleared_bytes = std::move(*cleared_bytes);
+        part.header_drops = cleared;
+      }
+    }
     out.parts.push_back(std::move(part));
   }
 }
@@ -859,20 +928,20 @@ std::vector<TableMetadata> xlsb_table_directory(const XlsbTableParts& parts) {
   return out;
 }
 
-void load_xlsb_tables(Workbook& wb, XlsbTableParts parts, const std::vector<std::string>& sheet_names,
-                      const std::vector<XlsbName>& name_table, const std::vector<XlsbSheetRange>& sheet_ranges,
-                      const XlsbExternalBooks& external_books, std::unordered_set<std::string>& consumed_parts) {
+std::vector<std::string> load_xlsb_tables(
+    Workbook& wb, XlsbTableParts parts, const std::vector<std::string>& sheet_names,
+    const std::vector<XlsbName>& name_table, const std::vector<XlsbSheetRange>& sheet_ranges,
+    const XlsbExternalBooks& external_books, std::unordered_set<std::string>& consumed_parts,
+    std::unordered_map<std::string, std::vector<std::uint8_t>>& retained_bytes, ReadDiagnostics& diagnostics) {
   // Formulas decode against every readable table, as the cells did.
   const std::vector<TableMetadata> directory = xlsb_table_directory(parts);
   std::vector<TableMetadata> tables;
+  std::vector<std::string> dropped;
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    std::vector<std::string> released;
     const std::optional<ListPartsBlock> block = FindListParts(split_records(wb.sheet(i).xlsb_tail().after_hyperlinks));
-    if (!block) {
-      continue;
-    }
     const FeatureFormulaReadContext ctx{sheet_names, name_table, sheet_ranges, external_books, i};
-    std::vector<std::string> modelled;
-    for (const std::string& rel_id : block->rel_ids) {
+    for (const std::string& rel_id : block ? block->rel_ids : std::vector<std::string>{}) {
       auto it = std::find_if(parts.parts.begin(), parts.parts.end(), [&](const XlsbTableParts::Part& part) {
         return part.sheet_index == i && part.rel_id == rel_id;
       });
@@ -885,13 +954,42 @@ void load_xlsb_tables(Workbook& wb, XlsbTableParts parts, const std::vector<std:
       }
       tables.push_back(std::move(it->table));
       consumed_parts.insert(it->path);
-      modelled.push_back(rel_id);
+      released.push_back(rel_id);
     }
-    if (!modelled.empty()) {
-      ReleaseSheetTables(wb.sheet(i), modelled);
+    for (const XlsbTableParts::Unreadable& part : parts.unreadable) {
+      if (part.sheet_index == i && !part.cleared_bytes) {
+        StructuredLog("xlsb.table.unreadable_dropped").field("part", part.path).warn();
+        ++diagnostics.skipped_feature_count;
+        consumed_parts.insert(part.path);
+        consumed_parts.insert(ooxml::rels_path_for_part(part.path));
+        released.push_back(part.rel_id);
+        dropped.push_back(part.path);
+      }
+    }
+    if (!released.empty()) {
+      ReleaseSheetTables(wb.sheet(i), released);
+    }
+  }
+  // A part that stays passthrough is written back with its column header slots cleared. A part related from two
+  // sheets is still one part, counted once.
+  std::unordered_set<std::string> counted;
+  for (XlsbTableParts::Part& part : parts.parts) {
+    if (part.header_drops == 0U || !counted.insert(part.path).second) {
+      continue;
+    }
+    diagnostics.skipped_feature_count += part.header_drops;
+    if (consumed_parts.count(part.path) == 0U) {
+      retained_bytes[part.path] = std::move(part.cleared_bytes);
+    }
+  }
+  for (XlsbTableParts::Unreadable& part : parts.unreadable) {
+    if (part.cleared_bytes && part.header_drops != 0U && counted.insert(part.path).second) {
+      diagnostics.skipped_feature_count += part.header_drops;
+      retained_bytes[part.path] = std::move(*part.cleared_bytes);
     }
   }
   wb.set_tables(std::move(tables));
+  return dropped;
 }
 
 std::vector<XlsbRetainedTable> xlsb_retained_tables(const Workbook& wb) {

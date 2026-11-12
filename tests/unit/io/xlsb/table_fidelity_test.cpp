@@ -29,6 +29,8 @@
 #include "io/xlsb/table_records.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
+#include "miniz.h"
+#include "passthrough_part.h"
 #include "table.h"
 #include "value.h"
 #include "workbook.h"
@@ -233,11 +235,9 @@ TEST(XlsbTableFidelity, XlsbResaveReproducesTheTablePart) {
   ExpectSameTable(LoadXlsb(second).tables().at(0), AuthoredTable());
 }
 
-// Excel refuses a file whose column carries a header dxf or header cell style, so neither BrtBeginListCol slot
-// is read into the model, each drop is counted, and a written column always leaves both empty.
-TEST(XlsbTableFidelity, AColumnHeaderDxfOrStyleIsDroppedOnReadAndNeverWritten) {
-  const std::vector<std::uint8_t> package = SaveXlsb(AuthoredBook());
-  std::vector<std::uint8_t> part = Entry(package, "xl/tables/table3.bin");
+// `part` with the first column's header dxf and the second column's header cell style set, after checking that
+// every column was written with both slots empty.
+std::vector<std::uint8_t> WithColumnHeaderSlotsSet(const std::vector<std::uint8_t>& part) {
   constexpr std::uint16_t kBrtBeginListCol = 347;
   constexpr std::size_t kHeaderDxfOffset = 8;
   constexpr std::size_t kFirstStringOffset = 24;
@@ -259,10 +259,8 @@ TEST(XlsbTableFidelity, AColumnHeaderDxfOrStyleIsDroppedOnReadAndNeverWritten) {
     std::vector<std::uint8_t> body(rec.payload.data, rec.payload.data + rec.payload.size);
     if (rec.type == kBrtBeginListCol) {
       ++columns;
-      ASSERT_GE(body.size(), kFirstStringOffset);
-      EXPECT_TRUE(std::equal(kNull, kNull + 4, body.begin() + kHeaderDxfOffset)) << "column " << columns;
       const std::size_t style_at = header_style_offset(body);
-      ASSERT_LE(style_at + 4U, body.size());
+      EXPECT_TRUE(std::equal(kNull, kNull + 4, body.begin() + kHeaderDxfOffset)) << "column " << columns;
       EXPECT_TRUE(std::equal(kNull, kNull + 4, body.begin() + static_cast<std::ptrdiff_t>(style_at)))
           << "column " << columns;
       if (columns == 1U) {
@@ -278,6 +276,14 @@ TEST(XlsbTableFidelity, AColumnHeaderDxfOrStyleIsDroppedOnReadAndNeverWritten) {
     emit_record(patched, rec.type, body);
   }
   EXPECT_EQ(columns, 3U);
+  return patched;
+}
+
+// Excel refuses a file whose column carries a header dxf or header cell style, so neither BrtBeginListCol slot
+// is read into the model, each drop is counted, and a written column always leaves both empty.
+TEST(XlsbTableFidelity, AColumnHeaderDxfOrStyleIsDroppedOnReadAndNeverWritten) {
+  const std::vector<std::uint8_t> package = SaveXlsb(AuthoredBook());
+  const std::vector<std::uint8_t> patched = WithColumnHeaderSlotsSet(Entry(package, "xl/tables/table3.bin"));
   TableFormulaBytes formulas;
   ReadDiagnostics diagnostics;
   auto table = read_table_bin(SpanOf(patched), 0, &formulas, &diagnostics);
@@ -479,6 +485,9 @@ TEST(XlsbTableFidelity, PartOutsideTheModelStaysVerbatim) {
   std::vector<std::uint8_t> part = Entry(package, "xl/tables/table3.bin");
   const std::vector<std::uint8_t> patched = WithUnknownFutureRecord(part);
   const std::vector<std::uint8_t> source = RepackWithEntries(package, {{"xl/tables/table3.bin", patched}});
+  auto read = read_xlsb(SpanOf(source));
+  ASSERT_TRUE(static_cast<bool>(read)) << read.error().message;
+  EXPECT_EQ(read.value().skipped_feature_count, 0U);
   const Workbook wb = LoadXlsb(source);
   EXPECT_TRUE(wb.tables().empty());
   // Resaving keeps the part, its relationship and its BrtListPart as read.
@@ -491,6 +500,143 @@ TEST(XlsbTableFidelity, PartOutsideTheModelStaysVerbatim) {
     has_table_rel = has_table_rel || rel.target == "xl/tables/table3.bin";
   }
   EXPECT_TRUE(has_table_rel);
+}
+
+// A part kept verbatim is still written without the column header slots Excel refuses.
+TEST(XlsbTableFidelity, AVerbatimPartIsKeptWithItsColumnHeaderSlotsCleared) {
+  const std::vector<std::uint8_t> package = SaveXlsb(AuthoredBook());
+  const std::vector<std::uint8_t> part = Entry(package, "xl/tables/table3.bin");
+  const std::vector<std::uint8_t> patched = WithUnknownFutureRecord(WithColumnHeaderSlotsSet(part));
+  auto loaded = read_xlsb(SpanOf(RepackWithEntries(package, {{"xl/tables/table3.bin", patched}})));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  EXPECT_TRUE(loaded.value().workbook.tables().empty());
+  EXPECT_EQ(loaded.value().skipped_feature_count, 2U);
+  EXPECT_EQ(Entry(SaveXlsb(loaded.value().workbook), "xl/tables/table3.bin"), WithUnknownFutureRecord(part));
+}
+
+// A part whose records do not frame cannot be cleared, so it is dropped with its relationship and list record.
+TEST(XlsbTableFidelity, AnUnframeablePartIsDroppedWithItsRelationship) {
+  const std::vector<std::uint8_t> package = SaveXlsb(AuthoredBook());
+  std::vector<std::uint8_t> part = WithColumnHeaderSlotsSet(Entry(package, "xl/tables/table3.bin"));
+  part.pop_back();
+  auto loaded = read_xlsb(SpanOf(RepackWithEntries(package, {{"xl/tables/table3.bin", part}})));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  const Workbook& wb = loaded.value().workbook;
+  EXPECT_TRUE(wb.tables().empty());
+  EXPECT_EQ(loaded.value().skipped_feature_count, 1U);
+  for (const PassthroughPart& kept : wb.passthrough_parts()) {
+    EXPECT_NE(kept.path, "xl/tables/table3.bin");
+  }
+  for (const UnknownRelationship& rel : wb.sheet(0).unknown_relationships()) {
+    EXPECT_NE(rel.target, "xl/tables/table3.bin");
+  }
+  const std::vector<std::uint8_t> resaved = SaveXlsb(wb);
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(resaved))));
+  EXPECT_FALSE(zip.has_entry("xl/tables/table3.bin"));
+  for (const FramedRecord& rec : split_records(Entry(resaved, "xl/worksheets/sheet1.bin"))) {
+    EXPECT_NE(rec.type, kBrtBeginListParts);
+  }
+  EXPECT_TRUE(LoadXlsb(resaved).tables().empty());
+}
+
+// A column with an unknown totals function makes the part unreadable to the model, but its header slots are still
+// located and cleared, so the part is kept rather than dropped.
+TEST(XlsbTableFidelity, AnUnreadableColumnStillHasItsHeaderSlotsCleared) {
+  const std::vector<std::uint8_t> package = SaveXlsb(AuthoredBook());
+  const auto with_unknown_totals_function = [](const std::vector<std::uint8_t>& part) {
+    std::vector<std::uint8_t> out;
+    for (const FramedRecord& rec : split_records(part)) {
+      std::vector<std::uint8_t> body(rec.payload.data, rec.payload.data + rec.payload.size);
+      if (rec.type == 347U) {
+        body[4] = 0x63U;
+      }
+      emit_record(out, rec.type, body);
+    }
+    return out;
+  };
+  const std::vector<std::uint8_t> part = Entry(package, "xl/tables/table3.bin");
+  const std::vector<std::uint8_t> patched = with_unknown_totals_function(WithColumnHeaderSlotsSet(part));
+  auto loaded = read_xlsb(SpanOf(RepackWithEntries(package, {{"xl/tables/table3.bin", patched}})));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  EXPECT_TRUE(loaded.value().workbook.tables().empty());
+  EXPECT_EQ(loaded.value().skipped_feature_count, 2U);
+  EXPECT_EQ(Entry(SaveXlsb(loaded.value().workbook), "xl/tables/table3.bin"), with_unknown_totals_function(part));
+}
+
+// `package` with `added` appended as new entries.
+std::vector<std::uint8_t> WithAddedEntries(const std::vector<std::uint8_t>& package,
+                                           const std::map<std::string, std::string>& added) {
+  ZipReader zip;
+  EXPECT_TRUE(static_cast<bool>(zip.open(SpanOf(package))));
+  mz_zip_archive writer{};
+  EXPECT_NE(mz_zip_writer_init_heap(&writer, 0, 4096), MZ_FALSE);
+  const auto add = [&writer](const std::string& name, const void* data, std::size_t size) {
+    EXPECT_NE(mz_zip_writer_add_mem(&writer, name.c_str(), data, size, static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION)),
+              MZ_FALSE)
+        << name;
+  };
+  for (const std::string& name : zip.list_entries()) {
+    const std::vector<std::uint8_t> bytes = Entry(package, name);
+    add(name, bytes.data(), bytes.size());
+  }
+  for (const auto& [name, body] : added) {
+    add(name, body.data(), body.size());
+  }
+  void* archive = nullptr;
+  std::size_t size = 0;
+  EXPECT_NE(mz_zip_writer_finalize_heap_archive(&writer, &archive, &size), MZ_FALSE);
+  EXPECT_NE(mz_zip_writer_end(&writer), MZ_FALSE);
+  std::vector<std::uint8_t> out(static_cast<const std::uint8_t*>(archive),
+                                static_cast<const std::uint8_t*>(archive) + size);
+  mz_free(archive);
+  return out;
+}
+
+// A dropped table part takes its rels part and the parts only that rels part referenced with it; a kept one keeps
+// them.
+TEST(XlsbTableFidelity, ADroppedPartTakesItsRelsAndTheirOnlyTargetsWithIt) {
+  const std::vector<std::uint8_t> package = SaveXlsb(AuthoredBook());
+  std::string types = EntryText(package, "[Content_Types].xml");
+  const std::size_t close = types.rfind("</Types>");
+  ASSERT_NE(close, std::string::npos);
+  types.insert(close,
+               "<Override PartName=\"/xl/queryTables/queryTable1.bin\" "
+               "ContentType=\"application/vnd.ms-excel.queryTable\"/>");
+  const std::vector<std::uint8_t> with_query = WithAddedEntries(
+      RepackWithEntries(package, {{"[Content_Types].xml", std::vector<std::uint8_t>(types.begin(), types.end())}}),
+      {{"xl/tables/_rels/table3.bin.rels",
+        "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n<Relationships "
+        "xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"><Relationship Id=\"rId1\" "
+        "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/queryTable\" "
+        "Target=\"../queryTables/queryTable1.bin\"/></Relationships>"},
+       {"xl/queryTables/queryTable1.bin", std::string("\x00\x00", 2)}});
+  const std::vector<std::uint8_t> part = Entry(package, "xl/tables/table3.bin");
+  const auto kept_paths = [](const Workbook& wb) {
+    std::vector<std::string> paths;
+    for (const PassthroughPart& kept : wb.passthrough_parts()) {
+      paths.push_back(kept.path);
+    }
+    return paths;
+  };
+  const auto contains = [](const std::vector<std::string>& paths, const char* path) {
+    return std::find(paths.begin(), paths.end(), path) != paths.end();
+  };
+
+  const Workbook kept =
+      LoadXlsb(RepackWithEntries(with_query, {{"xl/tables/table3.bin", WithUnknownFutureRecord(part)}}));
+  EXPECT_TRUE(contains(kept_paths(kept), "xl/tables/table3.bin"));
+  EXPECT_TRUE(contains(kept_paths(kept), "xl/queryTables/queryTable1.bin"));
+
+  std::vector<std::uint8_t> truncated = part;
+  truncated.pop_back();
+  auto dropped = read_xlsb(SpanOf(RepackWithEntries(with_query, {{"xl/tables/table3.bin", truncated}})));
+  ASSERT_TRUE(static_cast<bool>(dropped)) << dropped.error().message;
+  EXPECT_EQ(dropped.value().skipped_feature_count, 1U);
+  const std::vector<std::string> paths = kept_paths(dropped.value().workbook);
+  EXPECT_FALSE(contains(paths, "xl/tables/table3.bin"));
+  EXPECT_FALSE(contains(paths, "xl/tables/_rels/table3.bin.rels"));
+  EXPECT_FALSE(contains(paths, "xl/queryTables/queryTable1.bin"));
 }
 
 TEST(XlsbTableFidelity, ModelTableJoinsARetainedListPartsBlock) {
@@ -728,6 +874,39 @@ TEST(XlsbTableFidelity, StructuredRefsIntoAPartRejectedOnReadSurviveResave) {
   const Workbook back = LoadXlsb(resaved);
   EXPECT_TRUE(back.tables().empty());
   expect_formulas(back);
+}
+
+// A formula referencing a table part dropped on load cannot be decoded: it counts as undecoded, the cell keeps its
+// value, and the save neither references the table nor fails.
+TEST(XlsbTableFidelity, StructuredRefsIntoADroppedPartCountAsUndecoded) {
+  const std::vector<std::uint8_t> package = SaveXlsb(StructuredRefBook());
+  // A first column record too short to hold its names: the identity still reads, the header slots do not.
+  std::vector<std::uint8_t> part;
+  bool shortened = false;
+  for (const FramedRecord& rec : split_records(Entry(package, "xl/tables/table4.bin"))) {
+    std::vector<std::uint8_t> body(rec.payload.data, rec.payload.data + rec.payload.size);
+    if (rec.type == 347U && !shortened) {
+      body.resize(20U);
+      shortened = true;
+    }
+    emit_record(part, rec.type, body);
+  }
+  auto loaded = read_xlsb(SpanOf(RepackWithEntries(package, {{"xl/tables/table4.bin", part}})));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  const Workbook& wb = loaded.value().workbook;
+  EXPECT_EQ(loaded.value().skipped_feature_count, 1U);
+  EXPECT_GT(loaded.value().undecoded_formula_count, 0U);
+  EXPECT_TRUE(wb.tables().empty());
+  const Cell* cell = wb.sheet(1).cell_at(0, 0);
+  ASSERT_NE(cell, nullptr);
+  EXPECT_TRUE(cell->formula_text.empty());
+  WriteDiagnostics diagnostics;
+  const std::vector<std::uint8_t> resaved = SaveXlsb(wb, &diagnostics);
+  EXPECT_EQ(diagnostics.downgraded_formula_count, 0U);
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(resaved))));
+  EXPECT_FALSE(zip.has_entry("xl/tables/table4.bin"));
+  EXPECT_TRUE(LoadXlsb(resaved).tables().empty());
 }
 
 TEST(XlsbTableFidelity, NameUsedOnlyInATableFormulaIsWritten) {

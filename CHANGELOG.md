@@ -195,9 +195,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A table column's header dxf or header cell style (`<tableColumn headerRowDxfId>`
   / `<tableColumn headerRowCellStyle>` in `.xlsx`, the header slots of the
   column record in `.xlsb`) is dropped on load and never written, and each
-  dropped column counts in `skippedFeatureCount`. Excel refuses to open a
-  workbook that carries either, so such a table saved by Formulon would not
-  open.
+  dropped column counts in `skippedFeatureCount`. A `.xlsb` table part
+  Formulon cannot model is written with those slots cleared, and one that
+  cannot be read far enough to clear them is dropped and counted once.
+  Excel refuses to open a workbook that carries either, so such a table saved
+  by Formulon would not open.
 
 - Every saved `.xlsx` worksheet carries `<sheetViews>`, as Excel writes it.
   Mac Excel opened a worksheet without that element with every custom row

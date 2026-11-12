@@ -566,7 +566,8 @@ typedef struct {
   uint32_t undecoded_part_count;
   /** The number of entries dropped on load: one per merge, hyperlink or data validation and one per
    *  conditional-format block with an unusable reference (XLSX only), and one per table column whose header dxf or
-   *  header cell style was dropped, which Excel refuses to open (XLSX and XLSB). */
+   *  header cell style was dropped, which Excel refuses to open (XLSX and XLSB), and one per XLSB table part dropped
+   *  whole because its header slots could not be cleared. */
   uint32_t skipped_feature_count;
   /** The number of workbook parts whose content type was unrecognised; at most 1. XLSX only. */
   uint32_t unknown_content_type_count;

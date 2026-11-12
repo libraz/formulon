@@ -222,7 +222,7 @@ entries:
     mode: skip-oracle
     scope: api-contract
     evidence: [tests/unit/io/tables_reader_test.cpp, tests/unit/io/xlsb/table_fidelity_test.cpp]
-    reason: "Excel refuses to open a workbook whose table column carries a header dxf or a header cell style (`<tableColumn headerRowDxfId>` / `headerRowCellStyle` in .xlsx, the header slots of .xlsb BrtBeginListCol), and never writes either itself. Formulon opens such a file, drops the two column header attributes with a load diagnostic (skipped_feature_count) and keeps the rest of the table, so a table it saves opens in Excel."
+    reason: "Excel refuses to open a workbook whose table column carries a header dxf or a header cell style (`<tableColumn headerRowDxfId>` / `headerRowCellStyle` in .xlsx, the header slots of .xlsb BrtBeginListCol), and never writes either itself. Formulon opens such a file, drops the two column header attributes with a load diagnostic (skipped_feature_count) and keeps the rest of the table; an .xlsb table part it keeps verbatim is written with the header slots cleared, and one it cannot read far enough to clear is dropped with its relationship and counted once, so a table it saves opens in Excel."
     prefer: formulon
     first_noted: 2026-11-12
     last_verified_excel_version: "16.115"
