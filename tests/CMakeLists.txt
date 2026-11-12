@@ -823,6 +823,12 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_gtest_param_names.py
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
+  # Excel's alert switch is only flipped through the helper that restores it.
+  add_test(
+    NAME DisplayAlertsRestored
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_display_alerts.py
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
   add_test(
     NAME OracleGeneratorDivergenceMetadata
     COMMAND ${_FORMULON_BEHAVIOR_PY} -m tools.oracle.oracle_gen_metadata_test

@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import unittest
+from contextlib import ExitStack
 from types import SimpleNamespace
 from unittest.mock import patch
 
 from tools.oracle.drivers import _locale, base, cell_result, macos_excel, windows_excel
+from tools.oracle.drivers.excel_alerts import alerts_off
 
 
 class CellObservationTests(unittest.TestCase):
@@ -965,6 +967,36 @@ class MacPrintPathTest(unittest.TestCase):
                 {"id": "c", "sheets": {"Sheet1": {}}}, {"sheet": "Sheet1", "page_setup": {"scale": 50}}
             )
         self.assertEqual(order, ["font", "page_setup", "content", "read", "close"])
+
+
+class _AlertApp:
+    def __init__(self):
+        self.display_alerts = True
+
+
+class AlertsOffTest(unittest.TestCase):
+    def test_turns_alerts_back_on_when_the_block_exits_or_raises(self):
+        app = _AlertApp()
+        with alerts_off(app):
+            self.assertFalse(app.display_alerts)
+        self.assertTrue(app.display_alerts)
+        with self.assertRaises(RuntimeError), alerts_off(app):
+            raise RuntimeError("capture failed")
+        self.assertTrue(app.display_alerts)
+
+    def test_drivers_turn_alerts_back_on_before_quitting(self):
+        for cls in (macos_excel.ExcelOracle, windows_excel.WindowsExcelOracle):
+            with self.subTest(driver=cls.__name__):
+                app = _AlertApp()
+                seen_at_quit = []
+                app.quit = lambda app=app, seen=seen_at_quit: seen.append(app.display_alerts)
+                oracle = object.__new__(cls)
+                oracle._app = app
+                oracle._alerts = ExitStack()
+                oracle._alerts.enter_context(alerts_off(app))
+                self.assertFalse(app.display_alerts)
+                oracle.close()
+                self.assertEqual(seen_at_quit, [True])
 
 
 if __name__ == "__main__":

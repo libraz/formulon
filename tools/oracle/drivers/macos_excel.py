@@ -15,8 +15,8 @@ have Automation permission for "System Events" + "Microsoft Excel".
 - `calculation = 'manual'` — we call `app.calculate()` after every batch
   ourselves, so formulas never race partial input.
 - `screen_updating = False` — large batches are 10-20x faster without it.
-- `display_alerts = False` — suppresses dialogs that would otherwise block
-  the AppleEvent thread.
+- alerts off (`excel_alerts.alerts_off`) — suppresses dialogs that would
+  otherwise block the AppleEvent thread; `close` turns them back on.
 - `date_1904` is set and read back per workbook through the Mac
   AppleScript reference immediately after `books.add()`.
 - `iteration = False` on the app. Iterative cases flip this locally and
@@ -39,6 +39,7 @@ from __future__ import annotations
 
 import platform
 import re
+from contextlib import ExitStack
 from typing import Any, Dict, List, Optional
 
 from . import case_sheet, cell_result
@@ -52,6 +53,7 @@ from .base import (
     case_formula_cell,
     probe_spill_shape,
 )
+from .excel_alerts import alerts_off
 
 try:
     import xlwings as xw  # type: ignore
@@ -320,7 +322,8 @@ class ExcelOracle(OracleDriver):
         self._app = xw.App(visible=visible, add_book=False)
         self._app.calculation = "manual"
         self._app.screen_updating = False
-        self._app.display_alerts = False
+        self._alerts = ExitStack()
+        self._alerts.enter_context(alerts_off(self._app))
         # The iterative-calc setting is an app-level flag on Mac Excel.
         # Restore to False at construction time; per-suite overrides flip
         # and restore as needed.
@@ -337,6 +340,7 @@ class ExcelOracle(OracleDriver):
         self.close()
 
     def close(self) -> None:
+        self._alerts.close()
         try:
             self._app.quit()
         except Exception:

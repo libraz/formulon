@@ -276,6 +276,7 @@ def build(out_path: str, *, visible: bool) -> None:
     sys.path.insert(0, os.path.join(REPO_ROOT, "tools", "oracle"))
 
     import xlwings as xw  # noqa: PLC0415
+    from drivers.excel_alerts import alerts_off  # noqa: PLC0415
     from drivers.macos_excel import _assign_formula  # noqa: PLC0415
 
     out_path = os.path.abspath(out_path)
@@ -283,32 +284,32 @@ def build(out_path: str, *, visible: bool) -> None:
         os.remove(out_path)
 
     app = xw.App(visible=visible, add_book=False)
-    app.display_alerts = False
     rejected: List[Tuple[str, str, str]] = []
     try:
-        app.calculation = "manual"
-        book = app.books.add()
-        try:
-            sheet = book.sheets[0]
-            for addr, value in HELPERS.items():
-                sheet.range(addr).value = value
-            for i, probe in enumerate(PROBES):
-                row = PROBE_ROW_0 + i + 1  # xlwings rows are 1-based
-                sheet.range((row, LABEL_COL + 1)).value = probe.name
-                cell = sheet.range((row, FORMULA_COL + 1))
-                try:
-                    cell.number_format = "General"
-                    _assign_formula(cell, probe.formula, context=f"{probe.name} probe")
-                except Exception as exc:  # noqa: BLE001 - reported, not raised
-                    rejected.append((probe.name, probe.formula, f"{type(exc).__name__}: {exc}"[:200]))
-                    cell.clear_contents()
-            app.calculate()
-            book.save(out_path)
-        finally:
+        with alerts_off(app):
+            app.calculation = "manual"
+            book = app.books.add()
             try:
-                book.close()
-            except Exception:  # noqa: BLE001
-                pass
+                sheet = book.sheets[0]
+                for addr, value in HELPERS.items():
+                    sheet.range(addr).value = value
+                for i, probe in enumerate(PROBES):
+                    row = PROBE_ROW_0 + i + 1  # xlwings rows are 1-based
+                    sheet.range((row, LABEL_COL + 1)).value = probe.name
+                    cell = sheet.range((row, FORMULA_COL + 1))
+                    try:
+                        cell.number_format = "General"
+                        _assign_formula(cell, probe.formula, context=f"{probe.name} probe")
+                    except Exception as exc:  # noqa: BLE001 - reported, not raised
+                        rejected.append((probe.name, probe.formula, f"{type(exc).__name__}: {exc}"[:200]))
+                        cell.clear_contents()
+                app.calculate()
+                book.save(out_path)
+            finally:
+                try:
+                    book.close()
+                except Exception:  # noqa: BLE001
+                    pass
     finally:
         try:
             app.quit()

@@ -50,12 +50,14 @@ import tempfile
 import time
 import xml.etree.ElementTree as ET
 import zipfile
+from contextlib import ExitStack
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 try:  # pragma: no cover - trivial fallback
     from tools.oracle import chart_case_schema as schema
     from tools.oracle.cf_oracle_gen import _assert_m365_or_abort
+    from tools.oracle.drivers.excel_alerts import alerts_off
     from tools.oracle.oracle_gen import _load_divergence_reprobes, _load_divergence_skips
     from tools.oracle.provenance import _M365_SENTINEL
     from tools.oracle.targets_manifest import target_root, track_primary, utc_timestamp
@@ -63,6 +65,7 @@ except ImportError:  # pragma: no cover
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import chart_case_schema as schema  # type: ignore
     from cf_oracle_gen import _assert_m365_or_abort  # type: ignore
+    from drivers.excel_alerts import alerts_off  # type: ignore
     from oracle_gen import _load_divergence_reprobes, _load_divergence_skips  # type: ignore
     from provenance import _M365_SENTINEL  # type: ignore
     from targets_manifest import target_root, track_primary, utc_timestamp  # type: ignore
@@ -177,19 +180,32 @@ class Excel:
         from appscript import k  # type: ignore
 
         self.k = k
+        self._alerts = ExitStack()
         self._attach()
         CONTAINER_DIR.mkdir(parents=True, exist_ok=True)
+
+    def __enter__(self) -> "Excel":
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.close()
+
+    def close(self) -> None:
+        """Turns the attached Excel's alerts back on; the session stays open."""
+
+        self._alerts.close()
 
     def _attach(self) -> None:
         import xlwings as xw  # type: ignore
 
         self.app = xw.apps.active if xw.apps else xw.App(visible=True, add_book=False)
-        self.app.display_alerts = False
+        self._alerts.enter_context(alerts_off(self.app))
         self.keep = {b.name for b in self.app.books}
 
     def restart(self) -> None:
         """Replaces an Excel that stopped answering Apple events (-1712 / -50)."""
 
+        self._alerts.close()
         try:
             self.app.kill()
         except Exception as exc:  # the process may already be gone
@@ -644,10 +660,9 @@ def _cmd_capture(args: argparse.Namespace) -> int:
     golden_dir.mkdir(parents=True, exist_ok=True)
     generated_at = utc_timestamp()
     capture_id = f"{target['_name']}:{environment['excel_version']}:{target.get('locale')}:{generated_at}"
-    excel = Excel()
     counts: Dict[str, int] = {}
     failed = False
-    with tempfile.TemporaryDirectory(prefix="formulon-chart-oracle-") as tmp:
+    with Excel() as excel, tempfile.TemporaryDirectory(prefix="formulon-chart-oracle-") as tmp:
         for stem in wanted:
             suite = suites[stem]
             cases, failures = capture_suite(excel, dump, stem, suite, Path(tmp), skips, reprobes)
@@ -678,9 +693,8 @@ def _cmd_capture(args: argparse.Namespace) -> int:
 
 def _cmd_open_check(args: argparse.Namespace) -> int:
     dump = Dump(args.dump)
-    excel = Excel()
     failed = False
-    with tempfile.TemporaryDirectory(prefix="formulon-chart-open-check-") as tmp:
+    with Excel() as excel, tempfile.TemporaryDirectory(prefix="formulon-chart-open-check-") as tmp:
         for path in args.files:
             try:
                 _, problems = open_check(excel, dump, Path(path).resolve(), Path(tmp))

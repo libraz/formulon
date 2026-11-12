@@ -90,33 +90,38 @@ def _exact(sheet: Any, addr: str) -> Any:
 def capture(_: argparse.Namespace) -> int:
     import xlwings as xw
 
-    app = xw.apps.active
-    app.display_alerts = False
-    for book in list(app.books):
-        book.close()
-    book = app.books.add()
-    sheet = book.sheets[0]
-    results = {}
     try:
-        app.api.iteration.set(False)
-        for case in load_cases():
-            app.api.max_change.set(case["max_change"])
-            sheet.range("A1").value = case["x0"]
-            sheet.range("B1").formula = case["formula"]
-            try:
-                flag = sheet.range("B1").api.goal_seek(goal=case["goal"], changing_cell=sheet.range("A1").api)
-                result = "converged" if flag is True else "failed"
-            except Exception:  # Excel refuses when B1 is an error at x0.
-                result = "refused"
-            x, y = _exact(sheet, "A1"), _exact(sheet, "B1")
-            entry: Dict[str, Any] = {"result": result, "x": to_hex(float(x))}
-            if isinstance(y, (int, float)):
-                entry["y"] = to_hex(float(y))
-            results[case["id"]] = entry
-    finally:
-        app.api.max_change.set(0.001)
-        book.close()
-        app.display_alerts = True
+        from tools.oracle.drivers.excel_alerts import alerts_off
+    except ImportError:  # direct `python tools/oracle/goal_seek_golden.py`
+        sys.path.insert(0, str(Path(__file__).resolve().parent))
+        from drivers.excel_alerts import alerts_off  # type: ignore
+
+    app = xw.apps.active
+    with alerts_off(app):
+        for book in list(app.books):
+            book.close()
+        book = app.books.add()
+        sheet = book.sheets[0]
+        results = {}
+        try:
+            app.api.iteration.set(False)
+            for case in load_cases():
+                app.api.max_change.set(case["max_change"])
+                sheet.range("A1").value = case["x0"]
+                sheet.range("B1").formula = case["formula"]
+                try:
+                    flag = sheet.range("B1").api.goal_seek(goal=case["goal"], changing_cell=sheet.range("A1").api)
+                    result = "converged" if flag is True else "failed"
+                except Exception:  # Excel refuses when B1 is an error at x0.
+                    result = "refused"
+                x, y = _exact(sheet, "A1"), _exact(sheet, "B1")
+                entry: Dict[str, Any] = {"result": result, "x": to_hex(float(x))}
+                if isinstance(y, (int, float)):
+                    entry["y"] = to_hex(float(y))
+                results[case["id"]] = entry
+        finally:
+            app.api.max_change.set(0.001)
+            book.close()
     doc = {
         "suite": "goal_seek",
         "environment": {"target": "mac-365-ja_JP", "excel_version": str(app.version)},

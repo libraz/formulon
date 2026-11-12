@@ -24,8 +24,8 @@ Windows-only. ``xlwings.App()`` here uses COM, so:
   batch ourselves, so formulas never race partial input.
 - ``screen_updating = False`` -- large batches are 10-20x faster without
   it.
-- ``display_alerts = False`` -- suppresses dialogs that would otherwise
-  block the COM thread.
+- alerts off (``excel_alerts.alerts_off``) -- suppresses dialogs that would
+  otherwise block the COM thread; ``close`` turns them back on.
 - ``date_1904 = False`` per workbook (set after ``books.add()``).
 - ``enable_iterative_calculation = False`` on the app. Iterative cases
   flip this locally and restore it.
@@ -64,6 +64,7 @@ import shutil
 import sys
 import tempfile
 import time
+from contextlib import ExitStack
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -78,6 +79,7 @@ from .base import (
     case_formula_cell,
     probe_spill_shape,
 )
+from .excel_alerts import alerts_off
 
 try:
     import xlwings as xw  # type: ignore
@@ -228,7 +230,8 @@ class WindowsExcelOracle(OracleDriver):
         # only the workbook-independent properties here and re-apply
         # the gated ones inside run_suite() once books.add() succeeds.
         self._app.screen_updating = False
-        self._app.display_alerts = False
+        self._alerts = ExitStack()
+        self._alerts.enter_context(alerts_off(self._app))
         self._printer_pinned = False
         self._printer_warned = False
 
@@ -239,6 +242,7 @@ class WindowsExcelOracle(OracleDriver):
         self.close()
 
     def close(self) -> None:
+        self._alerts.close()
         try:
             self._app.quit()
         except Exception:

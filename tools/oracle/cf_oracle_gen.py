@@ -174,57 +174,59 @@ def _assert_m365_or_abort() -> Dict[str, str]:
 
     try:
         from tools.oracle.drivers._locale import detect_locale_from_app
+        from tools.oracle.drivers.excel_alerts import alerts_off
     except ImportError:  # direct `python tools/oracle/cf_oracle_gen.py`
         from drivers._locale import detect_locale_from_app  # type: ignore
+        from drivers.excel_alerts import alerts_off  # type: ignore
 
     app = xw.App(visible=False, add_book=False)
-    app.display_alerts = False
     try:
-        _sentinel_wb = app.books.add()
-        try:
-            _sht = _sentinel_wb.sheets[0]
+        with alerts_off(app):
+            _sentinel_wb = app.books.add()
             try:
-                _sht.range("A1").formula2 = "=ARRAYTOTEXT(1)"
-            except Exception:
-                _sht.range("A1").formula = "=ARRAYTOTEXT(1)"
-            app.calculate()
-            _v = _sht.range("A1").value
-            if isinstance(_v, str) and _v == "#NAME?":
-                raise RuntimeError(
-                    "Excel does not recognise ARRAYTOTEXT — this Excel "
-                    "install is pre-M365 (Office 2019 or earlier). "
-                    "Formulon's oracle requires Microsoft 365. "
-                    "See CONTRIBUTING.md."
-                )
-            if _v != "1":
-                raise RuntimeError(
-                    "Microsoft 365 sentinel ARRAYTOTEXT(1) returned an unexpected "
-                    f"value: {_v!r}; refusing an unverified CF capture."
-                )
-            version = ""
-            try:
-                version = str(app.version).strip() if app.version else ""
-            except Exception:
-                pass
-            if not version:
+                _sht = _sentinel_wb.sheets[0]
                 try:
-                    api = app.api
-                    raw_version = api.version() if callable(api.version) else api.version
-                    raw_build = api.build() if callable(api.build) else api.build
-                    version = str(raw_version).strip()
-                    if raw_build and str(raw_build) not in version:
-                        version = f"{version} (Build {raw_build})"
+                    _sht.range("A1").formula2 = "=ARRAYTOTEXT(1)"
+                except Exception:
+                    _sht.range("A1").formula = "=ARRAYTOTEXT(1)"
+                app.calculate()
+                _v = _sht.range("A1").value
+                if isinstance(_v, str) and _v == "#NAME?":
+                    raise RuntimeError(
+                        "Excel does not recognise ARRAYTOTEXT — this Excel "
+                        "install is pre-M365 (Office 2019 or earlier). "
+                        "Formulon's oracle requires Microsoft 365. "
+                        "See CONTRIBUTING.md."
+                    )
+                if _v != "1":
+                    raise RuntimeError(
+                        "Microsoft 365 sentinel ARRAYTOTEXT(1) returned an unexpected "
+                        f"value: {_v!r}; refusing an unverified CF capture."
+                    )
+                version = ""
+                try:
+                    version = str(app.version).strip() if app.version else ""
                 except Exception:
                     pass
-            if not version:
-                raise RuntimeError("could not read the Excel version; refusing an unproven CF capture")
-            locale = detect_locale_from_app(app) or ""
-            return {"excel_version": f"Microsoft Excel for Mac {version}", "excel_locale": locale}
-        finally:
-            try:
-                _sentinel_wb.close()
-            except Exception:
-                pass
+                if not version:
+                    try:
+                        api = app.api
+                        raw_version = api.version() if callable(api.version) else api.version
+                        raw_build = api.build() if callable(api.build) else api.build
+                        version = str(raw_version).strip()
+                        if raw_build and str(raw_build) not in version:
+                            version = f"{version} (Build {raw_build})"
+                    except Exception:
+                        pass
+                if not version:
+                    raise RuntimeError("could not read the Excel version; refusing an unproven CF capture")
+                locale = detect_locale_from_app(app) or ""
+                return {"excel_version": f"Microsoft Excel for Mac {version}", "excel_locale": locale}
+            finally:
+                try:
+                    _sentinel_wb.close()
+                except Exception:
+                    pass
     finally:
         try:
             app.quit()
@@ -792,6 +794,11 @@ def _capture_via_excel(xlsx: Path, case: Dict[str, Any], descriptors: List[Dict[
     """
     import xlwings as xw  # type: ignore
 
+    try:
+        from tools.oracle.drivers.excel_alerts import alerts_off
+    except ImportError:  # direct `python tools/oracle/cf_oracle_gen.py`
+        from drivers.excel_alerts import alerts_off  # type: ignore
+
     rng_spec = case["range"]
     r1 = int(rng_spec["first_row"])
     c1 = int(rng_spec["first_col"])
@@ -808,31 +815,31 @@ def _capture_via_excel(xlsx: Path, case: Dict[str, Any], descriptors: List[Dict[
     app = xw.App(visible=False, add_book=False)
     app.calculation = "manual"
     app.screen_updating = False
-    app.display_alerts = False
     try:
-        wb = app.books.open(str(xlsx))
-        try:
-            app.calculate()
-            sht = wb.sheets[0]
-            cells: List[Dict[str, Any]] = []
-            for r in range(r1, r2 + 1):
-                for c in range(c1, c2 + 1):
-                    addr = _addr(r, c)
-                    cell = sht.range(addr)
-                    matches = _classify_cell(cell, r, c, descriptors)
-                    matches.extend(visual_matches.get((r, c), []))
-                    if matches:
-                        # Sort priority-ascending so the on-disk order is
-                        # stable across regenerations and matches the
-                        # priority-ordered list the C++ evaluator emits.
-                        matches.sort(key=lambda m: int(m["priority"]))
-                        cells.append({"row": r, "col": c, "matches": matches})
-            return cells
-        finally:
+        with alerts_off(app):
+            wb = app.books.open(str(xlsx))
             try:
-                wb.close()
-            except Exception:
-                pass
+                app.calculate()
+                sht = wb.sheets[0]
+                cells: List[Dict[str, Any]] = []
+                for r in range(r1, r2 + 1):
+                    for c in range(c1, c2 + 1):
+                        addr = _addr(r, c)
+                        cell = sht.range(addr)
+                        matches = _classify_cell(cell, r, c, descriptors)
+                        matches.extend(visual_matches.get((r, c), []))
+                        if matches:
+                            # Sort priority-ascending so the on-disk order is
+                            # stable across regenerations and matches the
+                            # priority-ordered list the C++ evaluator emits.
+                            matches.sort(key=lambda m: int(m["priority"]))
+                            cells.append({"row": r, "col": c, "matches": matches})
+                return cells
+            finally:
+                try:
+                    wb.close()
+                except Exception:
+                    pass
     finally:
         try:
             app.quit()
