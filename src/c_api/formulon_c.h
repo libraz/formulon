@@ -2974,8 +2974,8 @@ typedef struct {
  * as written. With no `display`, a top-left cell that holds other text gets the stored target as `display`, and a
  * location-only link gets its location. A saved file writes a local target relative to the location's folder when
  * the two share at least one folder (compared case-sensitively), with that relative text as the saved `display`
- * (followed by ` - <location>` when there is one) unless the link has its own; a `%` in a plain path is written
- * `%25`. A space in an external target is written as `%20` in a saved file.
+ * (followed by ` - <location>` when there is one) unless the link has its own; a stray `%` in a plain path (one
+ * not starting a `%XX` escape) is written `%25`. A space in an external target is written as `%20` in a saved file.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `hl` is `NULL`;

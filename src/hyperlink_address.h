@@ -43,8 +43,8 @@ std::string normalize_hyperlink(Hyperlink& link);
 /// `directory` is empty, the target is not local and absolute, the roots
 /// differ in kind, the drive letters or UNC server/share differ (ASCII
 /// case-insensitive), or no folder segment is shared; segments compare
-/// case-sensitively. `%20` in a `file:` URL reads as a space; a `%` in a
-/// plain path is literal and written `%25`.
+/// case-sensitively. `%20` in a `file:` URL reads as a space; a stray `%` in
+/// a plain path is literal and written `%25`.
 std::optional<std::string> book_relative_target(std::string_view abs_target, std::string_view directory);
 
 /// `target`, a relative local path (no scheme, root or drive), resolved
@@ -58,12 +58,18 @@ std::optional<std::string> resolve_relative_target(std::string_view target, std:
 /// the canonical `directory` (empty when none): the relative form when
 /// `book_relative_target` gives one, with that text (plus ` - <location>`
 /// when the link has a location) as the display unless the link has its own;
-/// otherwise the link's own target and display.
+/// otherwise the link's own target and display. A stray `%` (one not starting
+/// a `%XX` escape) in a plain POSIX path is written `%25`, as Excel saves it.
 struct SavedHyperlink {
   std::string target;
   std::string display;
 };
 SavedHyperlink saved_hyperlink(const Hyperlink& link, std::string_view directory);
+
+/// A hyperlink rel target as a load stores it: a plain POSIX path has its
+/// `%20` read as a space, as Excel opens it; every other `%XX` and every other
+/// target stays verbatim.
+std::string loaded_hyperlink_target(std::string_view target);
 
 }  // namespace formulon
 

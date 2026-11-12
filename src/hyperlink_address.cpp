@@ -45,6 +45,21 @@ bool is_unreserved(char c) {
          c == '_' || c == '~';
 }
 
+/// `text` with every `%` that does not start a `%XX` escape written `%25`.
+std::string escape_stray_percent(std::string_view text) {
+  std::string out;
+  out.reserve(text.size());
+  for (std::size_t i = 0; i < text.size(); ++i) {
+    const bool starts_escape = i + 2 < text.size() && hex_value(text[i + 1]) >= 0 && hex_value(text[i + 2]) >= 0;
+    if (text[i] == '%' && !starts_escape) {
+      out += "%25";
+    } else {
+      out.push_back(text[i]);
+    }
+  }
+  return out;
+}
+
 /// `text` with every `%XX` that spells an unreserved character decoded.
 std::string decode_unreserved(std::string_view text) {
   std::string out;
@@ -87,6 +102,11 @@ bool is_separator(char c) {
 }
 
 /// Whether `text` opens with a drive letter and a separator (`C:\`, `C:/`).
+/// A scheme-less absolute POSIX path (`/a/b`), the form a target holding `%` keeps.
+bool is_plain_posix_path(std::string_view text) {
+  return !text.empty() && text[0] == '/' && (text.size() < 2U || text[1] != '/');
+}
+
 bool is_drive_path(std::string_view text) {
   return text.size() >= 3U && is_ascii_alpha(text[0]) && text[1] == ':' && is_separator(text[2]);
 }
@@ -344,7 +364,7 @@ std::optional<std::string> book_relative_target(std::string_view abs_target, std
   if (shared == 0U) {
     return std::nullopt;
   }
-  // A plain path's `%` is literal, so the saved form escapes it.
+  // A plain path's stray `%` is literal, so the saved form escapes it.
   const bool plain = !starts_with_ignore_case(abs_target, "file:");
   std::string out;
   for (std::size_t i = shared; i < dir->segments.size(); ++i) {
@@ -354,13 +374,7 @@ std::optional<std::string> book_relative_target(std::string_view abs_target, std
     if (i != shared) {
       out.push_back('/');
     }
-    for (const char c : target->segments[i]) {
-      if (plain && c == '%') {
-        out += "%25";
-      } else {
-        out.push_back(c);
-      }
-    }
+    out += plain ? escape_stray_percent(target->segments[i]) : target->segments[i];
   }
   return out;
 }
@@ -397,6 +411,25 @@ SavedHyperlink saved_hyperlink(const Hyperlink& link, std::string_view directory
     out.target = std::move(*relative);
     if (out.display.empty()) {
       out.display = link.location.empty() ? out.target : out.target + " - " + link.location;
+    }
+  } else if (is_plain_posix_path(link.target)) {
+    out.target = escape_stray_percent(link.target);
+  }
+  return out;
+}
+
+std::string loaded_hyperlink_target(std::string_view target) {
+  if (!is_plain_posix_path(target)) {
+    return std::string(target);
+  }
+  std::string out;
+  out.reserve(target.size());
+  for (std::size_t i = 0; i < target.size(); ++i) {
+    if (target.substr(i, 3) == "%20") {
+      out.push_back(' ');
+      i += 2;
+    } else {
+      out.push_back(target[i]);
     }
   }
   return out;

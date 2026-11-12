@@ -346,6 +346,41 @@ TEST(BookLocationSave, FragmentPercentAndEscapingRows) {
   }
 }
 
+// A plain absolute path outside the book's folder (Mac Excel 16.115): the
+// save writes a stray `%` as `%25` and a space as `%20`, a load reads `%20`
+// back as a space and keeps `%25`, so a second save writes the same Target.
+TEST(BookLocationSave, PlainAbsolutePathsEscapeOnlyAStrayPercent) {
+  Workbook wb = Workbook::create();
+  Hyperlink stray;
+  stray.target = "/private/tmp/p q/a%b.xlsx";
+  ASSERT_TRUE(static_cast<bool>(wb.set_hyperlink(0, stray)));
+  ASSERT_EQ(wb.sheet(0).hyperlinks().at(0).target, "/private/tmp/p q/a%b.xlsx");
+  Hyperlink spaced;
+  spaced.row = 1U;
+  spaced.last_row = 1U;
+  spaced.target = "/private/tmp/p q/a.xlsx";
+  wb.sheet(0).mutable_hyperlinks().push_back(spaced);
+
+  std::string rels;
+  ASSERT_TRUE(test::extract_part(test::span_of(SaveXlsx(wb)), "xl/worksheets/_rels/sheet1.xml.rels", &rels));
+  EXPECT_NE(rels.find("Target=\"/private/tmp/p%20q/a%25b.xlsx\""), std::string::npos) << rels;
+  EXPECT_NE(rels.find("Target=\"/private/tmp/p%20q/a.xlsx\""), std::string::npos) << rels;
+
+  for (const bool xlsb : {false, true}) {
+    const std::vector<Hyperlink> loaded = SavedLinks(wb, xlsb);
+    ASSERT_EQ(loaded.size(), 2U) << xlsb;
+    EXPECT_EQ(loaded[0].target, "/private/tmp/p q/a%25b.xlsx") << xlsb;
+    EXPECT_EQ(loaded[1].target, "/private/tmp/p q/a.xlsx") << xlsb;
+  }
+
+  auto reloaded = read_ooxml(test::span_of(SaveXlsx(wb)));
+  ASSERT_TRUE(static_cast<bool>(reloaded));
+  std::string resaved;
+  ASSERT_TRUE(test::extract_part(test::span_of(SaveXlsx(reloaded.value().workbook)),
+                                 "xl/worksheets/_rels/sheet1.xml.rels", &resaved));
+  EXPECT_EQ(resaved, rels);
+}
+
 std::string SavedWorkbookXml(const Workbook& wb) {
   const std::vector<std::uint8_t> bytes = SaveXlsx(wb);
   std::string xml;

@@ -28,6 +28,7 @@
 #include <vector>
 
 #include "default_content_type.h"
+#include "hyperlink_address.h"
 #include "io/cf_reader.h"
 #include "io/dynamic_array_formula.h"
 #include "io/future_functions.h"
@@ -452,7 +453,7 @@ Expected<void, Error> ResolveSheetHyperlinks(Sheet& sheet, std::vector<UnknownRe
                                            : "xlsb BrtHLink relationship has wrong type or target mode",
                         "context=xlsb_reader rid=" + hyperlink.rid);
     }
-    hyperlink.target = matched->target;
+    hyperlink.target = loaded_hyperlink_target(matched->target);
     consumed.insert(hyperlink.rid);
   }
   if (!consumed.empty()) {

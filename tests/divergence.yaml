@@ -212,10 +212,10 @@ entries:
     mode: skip-oracle
     scope: api-contract
     evidence: [tests/unit/io/book_location_save_test.cpp]
-    reason: "A link to `…/f1/a%b.xlsx` saved from `…/f1/` is written by Excel with Target and display `a%2525b.xlsx`, which no longer names the file. Formulon escapes '%' once and writes `a%25b.xlsx`, which decodes to `a%b.xlsx`."
+    reason: "A link to `…/f1/a%b.xlsx` saved from `…/f1/` is written by Excel with Target and display `a%2525b.xlsx`, which no longer names the file, and every reopen and save adds another level (`a%252525b.xlsx`). Formulon escapes a stray '%' once and writes `a%25b.xlsx`, which decodes to `a%b.xlsx` and stays the same across saves."
     prefer: formulon
     first_noted: 2026-11-11
-    last_verified_excel_version: "16.114.4"
+    last_verified_excel_version: "16.115"
   # -- ISFORMULA over a non-reference argument -----------------------------
   # ISFORMULA's argument is reference-typed, and Excel enforces that when
   # the formula is entered rather than when it is evaluated: `=ISFORMULA(42)`,

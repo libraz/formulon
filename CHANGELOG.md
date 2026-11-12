@@ -88,8 +88,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `getLocation` when the two share at least one folder, compared
   case-sensitively (`../../Documents/f.xlsx`), with that relative text as the
   saved `display` (followed by ` - <location>` when there is one) unless the
-  link has its own; other local targets stay absolute. A `%` in a plain path is
-  written `%25`. The model keeps the absolute target.
+  link has its own; other local targets stay absolute. A stray `%` in a plain
+  path (one not starting a `%XX` escape), relative or absolute, is written
+  `%25`, and a load reads `%20` in a plain absolute path as a space, as Excel
+  does. The model keeps the absolute target.
 - The saved absolute folder path (`.xlsx` and `.xlsb`) is written from the
   folder of `getLocation` and left out without one; the folder path in a loaded
   file is not kept and does not set the location.

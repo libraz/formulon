@@ -13,6 +13,7 @@
 #include <utility>
 #include <vector>
 
+#include "hyperlink_address.h"
 #include "io/cell_parser.h"
 #include "io/cf_reader.h"
 #include "io/data_validation_attr_names.h"
@@ -169,7 +170,7 @@ void apply_hyperlink_rels(std::vector<Hyperlink>& hyperlinks,
     if (it == rid_to_target.end()) {
       continue;
     }
-    h.target = it->second;
+    h.target = loaded_hyperlink_target(it->second);
   }
 }
 

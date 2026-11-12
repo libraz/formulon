@@ -2852,7 +2852,8 @@ class Sheet(_NoCopy):
         the two share at least one folder (compared case-sensitively), with
         that relative text as the saved ``display`` (followed by
         ``" - <location>"`` when there is one) unless the link has its own; a
-        ``%`` in a plain path is written ``%25``. A space in an external target
+        stray ``%`` in a plain path (one not starting a ``%XX`` escape) is
+        written ``%25``. A space in an external target
         is written as ``%20`` in a saved file.
 
         Every cell of the range takes Excel's Hyperlink cell style: the

@@ -41,10 +41,11 @@ TEST(HyperlinkRelativeTarget, WritesRelativeOnlyWhenAFolderSegmentIsShared) {
       {probe3, "file://" + probe3 + "/sib.xlsx", "sib.xlsx"},
       {probe4, "file://" + probe3 + "/sib.xlsx", "../../loc_probe3/p q/sib.xlsx"},
       {"/a/b", "/a/c/f.xlsx", "../c/f.xlsx"},  // a plain path reads like its `file:` URL
-      // A plain path's `%` is literal and saved as `%25`.
+      // A plain path's stray `%` is saved as `%25`; a `%XX` escape is kept.
       {"/a/b", "/a/b/x%y.xlsx", "x%25y.xlsx"},
       {"/a/b", "/a/b/x y.xlsx", "x y.xlsx"},
-      {"/a/b", "/a/c/p%20q.xlsx", "../c/p%2520q.xlsx"},
+      {"/a/b", "/a/c/p%20q.xlsx", "../c/p%20q.xlsx"},
+      {"/a/b", "/a/b/x%2", "x%252"},
       {"/", "file:///a/f.xlsx", std::nullopt},
       // UNC: another root kind than a POSIX book, so absolute.
       {probe3, "file:////server/share/f.xlsx", std::nullopt},
