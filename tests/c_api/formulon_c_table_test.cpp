@@ -1156,6 +1156,48 @@ TEST(FormulonCApiTableStyleKinds, ALoadedSlicerStyleNameIsKeptThroughASave) {
             std::string::npos);
 }
 
+// Excel refuses a file whose table column carries a header dxf or header cell style, so a load drops it and
+// counts the column in the read diagnostics, in either format.
+TEST(FormulonCApiTable, AColumnHeaderDxfIsCountedAsASkippedFeatureOnLoad) {
+  WorkbookGuard source;
+  CreateSalesTable(source);
+  const std::vector<std::uint8_t> xlsx = RewriteEntry(Save(source.handle), "xl/tables/table1.xml", [](std::string xml) {
+    return ReplaceOnce(std::move(xml), "<tableColumn id=\"1\"", "<tableColumn id=\"1\" headerRowDxfId=\"0\"");
+  });
+
+  BufferGuard xlsb_buffer;
+  ASSERT_EQ(fm_workbook_save(source.handle, FM_WORKBOOK_FORMAT_XLSB, &xlsb_buffer.data, &xlsb_buffer.len), 0);
+  const std::vector<std::uint8_t> xlsb_saved(xlsb_buffer.data, xlsb_buffer.data + xlsb_buffer.len);
+  constexpr std::uint16_t kBrtBeginListCol = 347;
+  constexpr std::size_t kHeaderDxfOffset = 8;
+  const std::vector<std::uint8_t> xlsb = RewriteEntry(xlsb_saved, "xl/tables/table1.bin", [&](std::string part) {
+    std::vector<std::uint8_t> out;
+    bool patched = false;
+    const std::vector<std::uint8_t> bytes(part.begin(), part.end());
+    for (const formulon::io::xlsb::FramedRecord& rec : formulon::io::xlsb::split_records(bytes)) {
+      std::vector<std::uint8_t> body(rec.payload.data, rec.payload.data + rec.payload.size);
+      if (rec.type == kBrtBeginListCol && !patched) {
+        EXPECT_GE(body.size(), kHeaderDxfOffset + 4U);
+        body[kHeaderDxfOffset] = 0U;
+        body[kHeaderDxfOffset + 1] = body[kHeaderDxfOffset + 2] = body[kHeaderDxfOffset + 3] = 0U;
+        patched = true;
+      }
+      formulon::io::xlsb::emit_record(out, rec.type, body);
+    }
+    EXPECT_TRUE(patched);
+    return std::string(out.begin(), out.end());
+  });
+
+  for (const std::vector<std::uint8_t>* bytes : {&xlsx, &xlsb}) {
+    WorkbookGuard wb;
+    Load(*bytes, wb);
+    fm_read_diagnostics_info_t d = FM_STRUCT_INIT(fm_read_diagnostics_info_t);
+    ASSERT_EQ(fm_workbook_get_diagnostics(wb.handle, &d), 0);
+    EXPECT_EQ(d.skipped_feature_count, 1U) << (bytes == &xlsx ? "xlsx" : "xlsb");
+    EXPECT_EQ(TableCount(wb.handle), 1U);
+  }
+}
+
 TEST(FormulonCApiTableStyleKinds, SetTableStyleRefusesEveryBuiltInFamilyName) {
   WorkbookGuard wb;
   KindStyles(wb);

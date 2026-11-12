@@ -676,6 +676,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   // Table parts decode before any formula so a structured reference
   // (PtgList) resolves; the sheet loop loads these relationships again.
   XlsbTableParts table_parts;
+  ReadDiagnostics table_diagnostics;
   for (std::size_t i = 0; i < sheet_part_paths.size(); ++i) {
     const std::string rels_path = ooxml::rels_path_for_part(sheet_part_paths[i]);
     if (!zip.has_entry(rels_path)) {
@@ -685,7 +686,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     if (!rels_or) {
       return std::move(rels_or.error());
     }
-    read_xlsb_table_parts(zip, i, rels_or.value(), table_parts);
+    read_xlsb_table_parts(zip, i, rels_or.value(), table_parts, &table_diagnostics);
   }
   wb.set_tables(xlsb_table_directory(table_parts));
 
@@ -968,8 +969,13 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
 
   wb.apply_legacy_implicit_intersections();
 
-  XlsbReadResult result{std::move(wb),      cells_read,          undecoded_formula_count, undecoded_defined_name_count,
-                        dropped_part_count, dropped_record_count};
+  XlsbReadResult result{std::move(wb),
+                        cells_read,
+                        undecoded_formula_count,
+                        undecoded_defined_name_count,
+                        dropped_part_count,
+                        dropped_record_count,
+                        table_diagnostics.skipped_feature_count};
   return result;
 }
 

@@ -32,6 +32,7 @@
 #include <unordered_set>
 #include <vector>
 
+#include "io/package_diagnostics.h"
 #include "io/xlsb/feature_formula.h"
 #include "io/zip_reader.h"
 #include "table.h"
@@ -58,8 +59,11 @@ struct TableFormulaBytes {
 /// Decodes one table part. Formulas are returned encoded in `formulas`
 /// because a structured reference inside them can name any table of the
 /// workbook; `decode_table_formulas` renders them once every part is read.
-/// `kIoXlsbUnknownRecord` names content the model does not hold.
-Expected<TableMetadata, Error> read_table_bin(ByteSpan part, std::size_t sheet_index, TableFormulaBytes* formulas);
+/// `kIoXlsbUnknownRecord` names content the model does not hold. A column's
+/// header dxf and header cell style make Excel refuse the file, so they are
+/// dropped and counted in `diagnostics->skipped_feature_count` (when non-null).
+Expected<TableMetadata, Error> read_table_bin(ByteSpan part, std::size_t sheet_index, TableFormulaBytes* formulas,
+                                              ReadDiagnostics* diagnostics = nullptr);
 
 /// Renders the formulas `read_table_bin` returned into `table`; `tables`
 /// resolves the structured references inside them.
@@ -88,8 +92,9 @@ struct XlsbTableParts {
 
 /// Appends the readable table parts sheet `sheet_index`'s relationships
 /// (`rels`) name to `out`. A part the model cannot hold is left out.
+/// `diagnostics` is passed to `read_table_bin`.
 void read_xlsb_table_parts(const ZipReader& zip, std::size_t sheet_index, const std::vector<UnknownRelationship>& rels,
-                           XlsbTableParts& out);
+                           XlsbTableParts& out, ReadDiagnostics* diagnostics);
 
 /// The tables of `parts`, formulas not yet rendered: what cell formulas
 /// resolve structured references against while the sheets decode.

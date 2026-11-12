@@ -101,6 +101,9 @@ struct XlsbReadResult {
   /// wrote: worksheet selection state, for one, has no model field and no
   /// slot in the emitted sheet prefix.
   std::uint32_t dropped_record_count = 0;
+  /// Content dropped on load in the sense of `ReadDiagnostics::skipped_feature_count`:
+  /// one per table column whose header dxf or header cell style was dropped.
+  std::uint32_t skipped_feature_count = 0;
 };
 
 /// Reads a `.xlsb` package from in-memory bytes.

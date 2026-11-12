@@ -192,6 +192,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A table column's header dxf or header cell style (`<tableColumn headerRowDxfId>`
+  / `<tableColumn headerRowCellStyle>` in `.xlsx`, the header slots of the
+  column record in `.xlsb`) is dropped on load and never written, and each
+  dropped column counts in `skippedFeatureCount`. Excel refuses to open a
+  workbook that carries either, so such a table saved by Formulon would not
+  open.
+
 - Every saved `.xlsx` worksheet carries `<sheetViews>`, as Excel writes it.
   Mac Excel opened a worksheet without that element with every custom row
   height scaled by 4/3. A new workbook's first sheet is now its selected tab,

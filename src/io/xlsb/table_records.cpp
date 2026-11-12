@@ -88,7 +88,11 @@ constexpr std::string_view kTableDxfAttrs[] = {"headerRowDxfId",       "dataDxfI
                                                "headerRowBorderDxfId", "totalsRowBorderDxfId"};
 constexpr std::size_t kTableDxfSchemaOrder[] = {0, 1, 2, 4, 3, 5};
 constexpr std::string_view kTableStyleAttrs[] = {"headerRowCellStyle", "dataCellStyle", "totalsRowCellStyle"};
-constexpr std::string_view kColumnDxfAttrs[] = {"headerRowDxfId", "dataDxfId", "totalsRowDxfId"};
+// BrtBeginListCol's data and totals dxf ids and cell styles, each after its header slot. Excel refuses a
+// file whose column carries a header dxf or header cell style, so those slots are never read into the
+// model and are written empty.
+constexpr std::string_view kColumnDxfAttrs[] = {"dataDxfId", "totalsRowDxfId"};
+constexpr std::string_view kColumnStyleAttrs[] = {"dataCellStyle", "totalsRowCellStyle"};
 
 using Attrs = std::vector<std::pair<std::string, std::string>>;
 
@@ -324,11 +328,13 @@ Expected<void, Error> ReadBeginList(ByteSpan payload, TableMetadata* table, bool
   return Expected<void, Error>::Ok();
 }
 
-Expected<TableColumn, Error> ReadBeginListCol(ByteSpan payload) {
+/// `header_dropped` (when non-null) is set when the column carried a header dxf or header cell style.
+Expected<TableColumn, Error> ReadBeginListCol(ByteSpan payload, bool* header_dropped) {
   TableColumn col;
   ASSIGN_OR_RETURN(const std::uint32_t id, read_u32(payload));
   ASSIGN_OR_RETURN(const std::uint32_t ilta, read_u32(payload));
-  std::uint32_t dxfs[3] = {};
+  ASSIGN_OR_RETURN(const std::uint32_t header_dxf, read_u32(payload));
+  std::uint32_t dxfs[2] = {};
   for (std::uint32_t& dxf : dxfs) {
     ASSIGN_OR_RETURN(const std::uint32_t value, read_u32(payload));
     dxf = value;
@@ -354,11 +360,14 @@ Expected<TableColumn, Error> ReadBeginListCol(ByteSpan payload) {
   if (qsi_field != 0U) {
     append_xml_attr_uint(extra, "queryTableFieldId", qsi_field);
   }
-  for (std::size_t i = 0; i < 3U; ++i) {
+  for (std::size_t i = 0; i < std::size(kColumnDxfAttrs); ++i) {
     append_xml_attr_uint_if(extra, kColumnDxfAttrs[i], dxfs[i], kNoDxf);
   }
-  for (std::size_t i = 0; i < 3U; ++i) {
-    AppendText(extra, kTableStyleAttrs[i], styles[i]);
+  for (std::size_t i = 0; i < std::size(kColumnStyleAttrs); ++i) {
+    AppendText(extra, kColumnStyleAttrs[i], styles[i + 1U]);
+  }
+  if (header_dropped != nullptr) {
+    *header_dropped = header_dxf != kNoDxf || !styles[0].empty();
   }
   return col;
 }
@@ -482,6 +491,7 @@ std::uint32_t EmitListCol(std::vector<std::uint8_t>& out, const TableColumn& col
   std::vector<std::uint8_t> payload;
   emit_u32(payload, col.id);
   emit_u32(payload, ilta);
+  emit_u32(payload, kNoDxf);
   for (const std::string_view name : kColumnDxfAttrs) {
     emit_u32(payload, DxfAttr(attrs, name));
   }
@@ -492,7 +502,8 @@ std::uint32_t EmitListCol(std::vector<std::uint8_t>& out, const TableColumn& col
   emit_xlnullablewidestring(payload, col.totals_label.empty() || ilta == kIltaCustom
                                          ? std::nullopt
                                          : std::optional<std::string_view>(col.totals_label));
-  for (const std::string_view name : kTableStyleAttrs) {
+  emit_xlnullablewidestring(payload, std::nullopt);
+  for (const std::string_view name : kColumnStyleAttrs) {
     emit_xlnullablewidestring(payload, NullableAttr(attrs, name));
   }
   emit_record(out, kBrtBeginListCol, payload);
@@ -539,7 +550,7 @@ std::optional<TableMetadata> ReadRetainedIdentity(const std::vector<std::uint8_t
       }
       head = std::move(table);
     } else if (rec.type == kBrtBeginListCol && head) {
-      auto col = ReadBeginListCol(rec.payload);
+      auto col = ReadBeginListCol(rec.payload, nullptr);
       head->columns.push_back(col ? std::move(col.value()) : TableColumn{});
     }
   }
@@ -548,7 +559,8 @@ std::optional<TableMetadata> ReadRetainedIdentity(const std::vector<std::uint8_t
 
 }  // namespace
 
-Expected<TableMetadata, Error> read_table_bin(ByteSpan part, std::size_t sheet_index, TableFormulaBytes* formulas) {
+Expected<TableMetadata, Error> read_table_bin(ByteSpan part, std::size_t sheet_index, TableFormulaBytes* formulas,
+                                              ReadDiagnostics* diagnostics) {
   TableMetadata table;
   table.sheet_index = sheet_index;
   bool begun = false;
@@ -644,7 +656,14 @@ Expected<TableMetadata, Error> read_table_bin(ByteSpan part, std::size_t sheet_i
         if (!in_columns || in_column) {
           return Corrupt("xlsb table column outside its collection");
         }
-        ASSIGN_OR_RETURN(TableColumn col, ReadBeginListCol(rec.payload));
+        bool header_dropped = false;
+        ASSIGN_OR_RETURN(TableColumn col, ReadBeginListCol(rec.payload, &header_dropped));
+        if (header_dropped) {
+          StructuredLog("io.table.column_header.skip").field("column", std::string_view(col.name)).warn();
+          if (diagnostics != nullptr) {
+            ++diagnostics->skipped_feature_count;
+          }
+        }
         if (uid) {
           std::string attrs;
           append_xml_attr(attrs, "xr3:uid", *uid);
@@ -799,7 +818,7 @@ std::vector<std::uint8_t> write_table_bin(const TableMetadata& table, std::uint3
 }
 
 void read_xlsb_table_parts(const ZipReader& zip, std::size_t sheet_index, const std::vector<UnknownRelationship>& rels,
-                           XlsbTableParts& out) {
+                           XlsbTableParts& out, ReadDiagnostics* diagnostics) {
   for (const UnknownRelationship& rel : rels) {
     if (rel.type != kRelTable || rel.target_external || !zip.has_entry(rel.target)) {
       continue;
@@ -809,7 +828,8 @@ void read_xlsb_table_parts(const ZipReader& zip, std::size_t sheet_index, const 
       continue;
     }
     XlsbTableParts::Part part;
-    auto table = read_table_bin(ByteSpan{bytes.value().data(), bytes.value().size()}, sheet_index, &part.formulas);
+    auto table =
+        read_table_bin(ByteSpan{bytes.value().data(), bytes.value().size()}, sheet_index, &part.formulas, diagnostics);
     if (!table) {
       StructuredLog("xlsb.table.retained_raw").field("part", rel.target).field("reason", table.error().message).warn();
       // Structured references into the kept part still resolve by identity and

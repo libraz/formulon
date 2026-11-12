@@ -216,6 +216,16 @@ entries:
     prefer: formulon
     first_noted: 2026-11-11
     last_verified_excel_version: "16.115"
+  - id: table_column_header_dxf_refused_by_excel
+    applies_to: [mac]
+    cause: accepted-divergence
+    mode: skip-oracle
+    scope: api-contract
+    evidence: [tests/unit/io/tables_reader_test.cpp, tests/unit/io/xlsb/table_fidelity_test.cpp]
+    reason: "Excel refuses to open a workbook whose table column carries a header dxf or a header cell style (`<tableColumn headerRowDxfId>` / `headerRowCellStyle` in .xlsx, the header slots of .xlsb BrtBeginListCol), and never writes either itself. Formulon opens such a file, drops the two column header attributes with a load diagnostic (skipped_feature_count) and keeps the rest of the table, so a table it saves opens in Excel."
+    prefer: formulon
+    first_noted: 2026-11-12
+    last_verified_excel_version: "16.115"
   # -- ISFORMULA over a non-reference argument -----------------------------
   # ISFORMULA's argument is reference-typed, and Excel enforces that when
   # the formula is entered rather than when it is evaluated: `=ISFORMULA(42)`,

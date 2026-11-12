@@ -14,6 +14,7 @@
 
 #include "gtest/gtest.h"
 #include "io/ooxml_writer.h"
+#include "io/package_diagnostics.h"
 #include "io/xml_utils.h"
 #include "io/zip_reader.h"
 #include "pugixml.hpp"
@@ -137,6 +138,31 @@ TEST(TablesReader, MinimalTableTwoColumns) {
   EXPECT_EQ(t.columns[0].name, "A");
   EXPECT_EQ(t.columns[1].id, 2U);
   EXPECT_EQ(t.columns[1].name, "B");
+}
+
+// Excel refuses a file whose column carries `headerRowDxfId`, so the reader drops it and keeps the
+// table-level one and the column's other dxf ids.
+TEST(TablesReader, AColumnHeaderDxfOrCellStyleIsDroppedAndCounted) {
+  std::string xml(kXmlDecl);
+  xml.append(
+      "<table xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" id=\"1\" name=\"T1\" "
+      "displayName=\"T1\" ref=\"A1:C5\" headerRowDxfId=\"0\">");
+  xml.append("<tableColumns count=\"3\">");
+  xml.append("<tableColumn id=\"1\" name=\"A\" headerRowDxfId=\"1\" dataDxfId=\"2\" totalsRowDxfId=\"3\"/>");
+  xml.append("<tableColumn id=\"2\" name=\"B\" headerRowCellStyle=\"Heading 1\" dataCellStyle=\"Good\"/>");
+  xml.append("<tableColumn id=\"3\" name=\"C\"/>");
+  xml.append("</tableColumns></table>");
+
+  ReadDiagnostics diagnostics;
+  auto table_or = read_table(Bytes(xml), 0U, &diagnostics);
+  ASSERT_TRUE(static_cast<bool>(table_or)) << "read failed: " << table_or.error().message;
+  const TableMetadata& t = table_or.value();
+  EXPECT_EQ(t.root_extra_attrs, " headerRowDxfId=\"0\"");
+  ASSERT_EQ(t.columns.size(), 3U);
+  EXPECT_EQ(t.columns[0].extra_attrs, " dataDxfId=\"2\" totalsRowDxfId=\"3\"");
+  EXPECT_EQ(t.columns[1].extra_attrs, " dataCellStyle=\"Good\"");
+  EXPECT_EQ(t.columns[2].extra_attrs, "");
+  EXPECT_EQ(diagnostics.skipped_feature_count, 2U);
 }
 
 TEST(TablesReader, ColumnLocalNamespaceDeclarationSurvivesSerialization) {

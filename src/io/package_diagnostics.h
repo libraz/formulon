@@ -62,8 +62,11 @@ struct ReadDiagnostics {
   /// `<conditionalFormatting>` block (a block carries several rules, so a
   /// single increment can cost more than one rule). Also counts one per
   /// `<f t="dataTable">` whose `ref` does not parse: the cell keeps its
-  /// cached value but no data table is modelled.
-  /// Fed by: `io.sheet.overlay.skip`, `io.cf.skip`, `io.sheet.formula.data_table_skip`.
+  /// cached value but no data table is modelled. Also counts one per table
+  /// column whose header dxf or header cell style was dropped: Excel refuses
+  /// a file that carries either, in .xlsx and .xlsb alike.
+  /// Fed by: `io.sheet.overlay.skip`, `io.cf.skip`, `io.sheet.formula.data_table_skip`,
+  /// `io.table.column_header.skip`.
   std::uint32_t skipped_feature_count = 0;
   /// Workbook parts whose declared content type was unrecognised, so the
   /// read fell back to `WorkbookKind::kXlsx`. At most 1 per read.

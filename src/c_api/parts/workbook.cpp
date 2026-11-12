@@ -260,6 +260,7 @@ extern "C" fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, fm_wor
     handle->read_diagnostics.undecoded_formula_count = read_result.undecoded_formula_count;
     handle->read_diagnostics.undecoded_defined_name_count = read_result.undecoded_defined_name_count;
     handle->read_diagnostics.undecoded_part_count = read_result.dropped_part_count;
+    handle->read_diagnostics.skipped_feature_count = read_result.skipped_feature_count;
     handle->wb.emplace(std::move(read_result.workbook));
   } else {
     auto result = formulon::io::read_ooxml(span);

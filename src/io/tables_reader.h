@@ -21,6 +21,7 @@
 #include <utility>
 #include <vector>
 
+#include "io/package_diagnostics.h"
 #include "table.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -46,6 +47,9 @@ namespace io {
 ///     default.
 ///   * `totalsRowCount=` defaults to 0; any value `>= 1` flips
 ///     `totals_row` to `true`.
+///   * A column's `headerRowDxfId` and `headerRowCellStyle` are dropped
+///     (Excel refuses a file carrying either) and counted in
+///     `diagnostics->skipped_feature_count` when `diagnostics` is non-null.
 ///   * `<tableColumns>` is walked in document order. Each
 ///     `<tableColumn>` captures `id`, `name`, `totalsRowLabel`, and
 ///     `totalsRowFunction`. If both `totalsRowLabel` and
@@ -63,7 +67,8 @@ namespace io {
 ///   * `kIoContentTypeInvalid` — root element is not `<table>`.
 ///   * `kIoSheetCorrupt` — required `ref` attribute is missing or
 ///     empty.
-Expected<TableMetadata, Error> read_table(const std::vector<std::uint8_t>& table_bytes, std::size_t sheet_index);
+Expected<TableMetadata, Error> read_table(const std::vector<std::uint8_t>& table_bytes, std::size_t sheet_index,
+                                          ReadDiagnostics* diagnostics = nullptr);
 
 }  // namespace io
 }  // namespace formulon

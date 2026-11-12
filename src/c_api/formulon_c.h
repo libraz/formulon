@@ -564,8 +564,9 @@ typedef struct {
   /** The number of package parts whose content type could not be resolved, so they were not decoded. XLSB only; the
    *  XLSX reader keeps unmodelled parts as passthrough. */
   uint32_t undecoded_part_count;
-  /** The number of presentation-overlay entries dropped for an unusable reference: one per merge, hyperlink or data
-   *  validation, and one per conditional-format block. XLSX only. */
+  /** The number of entries dropped on load: one per merge, hyperlink or data validation and one per
+   *  conditional-format block with an unusable reference (XLSX only), and one per table column whose header dxf or
+   *  header cell style was dropped, which Excel refuses to open (XLSX and XLSB). */
   uint32_t skipped_feature_count;
   /** The number of workbook parts whose content type was unrecognised; at most 1. XLSX only. */
   uint32_t unknown_content_type_count;

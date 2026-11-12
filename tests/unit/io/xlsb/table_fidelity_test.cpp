@@ -4,6 +4,7 @@
 // totals row, AutoFilter and formulas. A part the model cannot hold stays
 // verbatim.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <map>
@@ -20,6 +21,7 @@
 #include "io/auto_filter_xml.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
+#include "io/package_diagnostics.h"
 #include "io/xlsb/auto_filter_records.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/record.h"
@@ -68,7 +70,7 @@ TableMetadata AuthoredTable() {
       " totalsRowDxfId=\"3\" headerRowBorderDxfId=\"5\" tableBorderDxfId=\"4\" totalsRowBorderDxfId=\"6\""
       " headerRowCellStyle=\"Heading 1\" dataCellStyle=\"Normal\" totalsRowCellStyle=\"Total\"";
   TableColumn region(1, "Region", "Total", "", "");
-  region.extra_attrs = " headerRowDxfId=\"7\" dataDxfId=\"8\" totalsRowDxfId=\"9\"";
+  region.extra_attrs = " dataDxfId=\"8\" totalsRowDxfId=\"9\"";
   TableColumn amount(2, "Amount", "", "sum", "");
   amount.extra_attrs = " dataCellStyle=\"Currency\"";
   TableColumn tax(3, "Tax", "", "custom", "C3*0.08");
@@ -229,6 +231,92 @@ TEST(XlsbTableFidelity, XlsbResaveReproducesTheTablePart) {
   const std::vector<std::uint8_t> second = SaveXlsb(LoadXlsb(first));
   EXPECT_EQ(Entry(second, "xl/tables/table3.bin"), Entry(first, "xl/tables/table3.bin"));
   ExpectSameTable(LoadXlsb(second).tables().at(0), AuthoredTable());
+}
+
+// Excel refuses a file whose column carries a header dxf or header cell style, so neither BrtBeginListCol slot
+// is read into the model, each drop is counted, and a written column always leaves both empty.
+TEST(XlsbTableFidelity, AColumnHeaderDxfOrStyleIsDroppedOnReadAndNeverWritten) {
+  const std::vector<std::uint8_t> package = SaveXlsb(AuthoredBook());
+  std::vector<std::uint8_t> part = Entry(package, "xl/tables/table3.bin");
+  constexpr std::uint16_t kBrtBeginListCol = 347;
+  constexpr std::size_t kHeaderDxfOffset = 8;
+  constexpr std::size_t kFirstStringOffset = 24;
+  constexpr std::uint8_t kNull[4] = {0xFFU, 0xFFU, 0xFFU, 0xFFU};
+  // Skips the unique name, caption and totals label to reach the header cell style slot.
+  const auto header_style_offset = [](const std::vector<std::uint8_t>& body) {
+    std::size_t at = kFirstStringOffset;
+    for (int i = 0; i < 3; ++i) {
+      const std::uint32_t len =
+          static_cast<std::uint32_t>(body.at(at)) | (static_cast<std::uint32_t>(body.at(at + 1)) << 8U) |
+          (static_cast<std::uint32_t>(body.at(at + 2)) << 16U) | (static_cast<std::uint32_t>(body.at(at + 3)) << 24U);
+      at += 4U + (len == 0xFFFFFFFFU ? 0U : len * 2U);
+    }
+    return at;
+  };
+  std::size_t columns = 0;
+  std::vector<std::uint8_t> patched;
+  for (const FramedRecord& rec : split_records(part)) {
+    std::vector<std::uint8_t> body(rec.payload.data, rec.payload.data + rec.payload.size);
+    if (rec.type == kBrtBeginListCol) {
+      ++columns;
+      ASSERT_GE(body.size(), kFirstStringOffset);
+      EXPECT_TRUE(std::equal(kNull, kNull + 4, body.begin() + kHeaderDxfOffset)) << "column " << columns;
+      const std::size_t style_at = header_style_offset(body);
+      ASSERT_LE(style_at + 4U, body.size());
+      EXPECT_TRUE(std::equal(kNull, kNull + 4, body.begin() + static_cast<std::ptrdiff_t>(style_at)))
+          << "column " << columns;
+      if (columns == 1U) {
+        body[kHeaderDxfOffset] = 0x07U;
+        body[kHeaderDxfOffset + 1] = body[kHeaderDxfOffset + 2] = body[kHeaderDxfOffset + 3] = 0U;
+      } else if (columns == 2U) {
+        const std::uint8_t style[] = {0x01U, 0U, 0U, 0U, 'X', 0U};
+        body.erase(body.begin() + static_cast<std::ptrdiff_t>(style_at),
+                   body.begin() + static_cast<std::ptrdiff_t>(style_at) + 4);
+        body.insert(body.begin() + static_cast<std::ptrdiff_t>(style_at), std::begin(style), std::end(style));
+      }
+    }
+    emit_record(patched, rec.type, body);
+  }
+  EXPECT_EQ(columns, 3U);
+  TableFormulaBytes formulas;
+  ReadDiagnostics diagnostics;
+  auto table = read_table_bin(SpanOf(patched), 0, &formulas, &diagnostics);
+  ASSERT_TRUE(static_cast<bool>(table)) << table.error().message;
+  for (const TableColumn& col : table.value().columns) {
+    EXPECT_EQ(col.extra_attrs.find("headerRow"), std::string::npos) << col.extra_attrs;
+  }
+  EXPECT_EQ(table.value().columns.at(0).extra_attrs, " dataDxfId=\"8\" totalsRowDxfId=\"9\"");
+  EXPECT_EQ(diagnostics.skipped_feature_count, 2U);
+
+  auto loaded = read_xlsb(SpanOf(RepackWithEntries(package, {{"xl/tables/table3.bin", patched}})));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  EXPECT_EQ(loaded.value().skipped_feature_count, 2U);
+  ASSERT_EQ(loaded.value().workbook.tables().size(), 1U);
+  for (const TableColumn& col : loaded.value().workbook.tables()[0].columns) {
+    EXPECT_EQ(col.extra_attrs.find("headerRow"), std::string::npos) << col.extra_attrs;
+  }
+}
+
+TEST(XlsbTableFidelity, AnXlsxColumnHeaderDxfOrStyleIsCountedOnLoad) {
+  auto xlsx = write_ooxml(AuthoredBook());
+  ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
+  const std::string path = "xl/tables/table3.xml";
+  std::string xml = EntryText(xlsx.value(), path);
+  const std::string column = "<tableColumn id=\"";
+  const std::size_t first = xml.find(column);
+  ASSERT_NE(first, std::string::npos) << xml;
+  const std::size_t second = xml.find(column, first + 1U);
+  ASSERT_NE(second, std::string::npos) << xml;
+  xml.insert(second + 13U, "headerRowCellStyle=\"Heading 1\" ");
+  xml.insert(first + 13U, "headerRowDxfId=\"0\" ");
+  auto loaded =
+      read_ooxml(SpanOf(RepackWithEntries(xlsx.value(), {{path, std::vector<std::uint8_t>(xml.begin(), xml.end())}})));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  EXPECT_EQ(loaded.value().diagnostics.skipped_feature_count, 2U);
+  ASSERT_EQ(loaded.value().workbook.tables().size(), 1U);
+  for (const TableColumn& col : loaded.value().workbook.tables()[0].columns) {
+    EXPECT_EQ(col.extra_attrs.find("headerRow"), std::string::npos) << col.extra_attrs;
+  }
 }
 
 TEST(XlsbTableFidelity, XlsxTableSurvivesConversionToXlsb) {

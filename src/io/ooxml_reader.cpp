@@ -325,7 +325,8 @@ static Expected<void, Error> ReadSheetRelParts(ZipReader& zip, Workbook& wb, std
                                                const std::string& sheet_path, const pugi::xml_document& sheet_doc,
                                                std::unordered_set<std::string>& consumed_parts,
                                                std::vector<PassthroughPart>& extra_passthrough_parts,
-                                               std::vector<TableMetadata>& tables_metadata) {
+                                               std::vector<TableMetadata>& tables_metadata,
+                                               ReadDiagnostics* diagnostics) {
   const std::string sheet_rels_path = ooxml::rels_path_for_part(sheet_path);
   if (!zip.has_entry(sheet_rels_path)) {
     return Expected<void, Error>::Ok();
@@ -341,7 +342,7 @@ static Expected<void, Error> ReadSheetRelParts(ZipReader& zip, Workbook& wb, std
     ASSIGN_OR_RETURN(auto table_bytes,
                      ReadRequiredPart(zip, table_path, FormulonErrorCode::kIoRelationshipBroken,
                                       "table: rel target missing from package", sheet_head, "table_path"));
-    ASSIGN_OR_RETURN(auto table, read_table(table_bytes, i));
+    ASSIGN_OR_RETURN(auto table, read_table(table_bytes, i, diagnostics));
     tables_metadata.push_back(std::move(table));
     consumed_parts.insert(table_path);
   }
@@ -1003,8 +1004,8 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
     // Both axes are final only now, so loaded explicit defaults are resolved here.
     wb.sheet(i).apply_blank_slot_rule();
 
-    RETURN_IF_ERROR(
-        ReadSheetRelParts(zip, wb, i, sheet_path, sheet_doc, consumed_parts, extra_passthrough_parts, tables_metadata));
+    RETURN_IF_ERROR(ReadSheetRelParts(zip, wb, i, sheet_path, sheet_doc, consumed_parts, extra_passthrough_parts,
+                                      tables_metadata, &diagnostics));
   }
 
   // 5b. Conditional-format and data-validation formulas name other books

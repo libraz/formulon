@@ -19,6 +19,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/status_macros.h"
+#include "utils/structured_log.h"
 
 namespace formulon {
 namespace io {
@@ -41,7 +42,9 @@ std::string CaptureExtraAttrs(const pugi::xml_node& node, bool root) {
   }
 
   std::vector<std::pair<std::string, std::string>> captured;
-  capture_unknown_attrs(node, {"id", "name", "totalsRowLabel", "totalsRowFunction"}, captured);
+  // `headerRowDxfId` and `headerRowCellStyle` on a column make Excel refuse the whole file, so they are dropped.
+  capture_unknown_attrs(
+      node, {"id", "name", "totalsRowLabel", "totalsRowFunction", "headerRowDxfId", "headerRowCellStyle"}, captured);
 
   std::vector<std::pair<std::string, std::string>> namespace_attrs;
   std::vector<std::pair<std::string, std::string>> other_attrs;
@@ -110,7 +113,8 @@ std::string CaptureExtraAttrs(const pugi::xml_node& node, bool root) {
 
 }  // namespace
 
-Expected<TableMetadata, Error> read_table(const std::vector<std::uint8_t>& table_bytes, std::size_t sheet_index) {
+Expected<TableMetadata, Error> read_table(const std::vector<std::uint8_t>& table_bytes, std::size_t sheet_index,
+                                          ReadDiagnostics* diagnostics) {
   pugi::xml_document doc;
   RETURN_IF_ERROR(load_xml_buffer(doc, table_bytes, "tables_reader", "table*.xml"));
   pugi::xml_node root = doc.child("table");
@@ -163,6 +167,12 @@ Expected<TableMetadata, Error> read_table(const std::vector<std::uint8_t>& table
       entry.totals_label = attr_str(col, "totalsRowLabel");
       entry.totals_function = attr_str(col, "totalsRowFunction");
       entry.extra_attrs = CaptureExtraAttrs(col, /*root=*/false);
+      if (col.attribute("headerRowDxfId") || col.attribute("headerRowCellStyle")) {
+        StructuredLog("io.table.column_header.skip").field("column", std::string_view(entry.name)).warn();
+        if (diagnostics != nullptr) {
+          ++diagnostics->skipped_feature_count;
+        }
+      }
       // Preserve <calculatedColumnFormula> verbatim. Children come
       // after attributes per the OOXML schema, so this lookup runs
       // last for the column. pugixml's `text().as_string()` already
