@@ -444,8 +444,17 @@ std::uint32_t IltaFor(const std::string& function) {
   return 0U;
 }
 
-void EmitBeginList(std::vector<std::uint8_t>& out, const TableMetadata& table, const MergeRange& rfx,
-                   std::uint32_t id) {
+/// The cell-style attribute `name`, or nothing when it names no cell style of the saved styles part.
+std::optional<std::string_view> SavedStyleAttr(const Attrs& attrs, std::string_view name, const StylesTable& styles) {
+  const std::optional<std::string_view> value = NullableAttr(attrs, name);
+  if (value && !has_saved_cell_style(styles, *value)) {
+    return std::nullopt;
+  }
+  return value;
+}
+
+void EmitBeginList(std::vector<std::uint8_t>& out, const TableMetadata& table, const MergeRange& rfx, std::uint32_t id,
+                   const StylesTable& styles) {
   const Attrs attrs = ParseAttrs(table.root_extra_attrs);
   const std::string* type = FindAttr(attrs, "tableType");
   std::uint32_t lt = kLtRange;
@@ -479,13 +488,13 @@ void EmitBeginList(std::vector<std::uint8_t>& out, const TableMetadata& table, c
   const std::string* comment = FindAttr(attrs, "comment");
   emit_xlnullablewidestring(payload, std::string_view(comment != nullptr ? *comment : std::string()));
   for (const std::string_view name : kTableStyleAttrs) {
-    emit_xlnullablewidestring(payload, NullableAttr(attrs, name));
+    emit_xlnullablewidestring(payload, SavedStyleAttr(attrs, name, styles));
   }
   emit_record(out, kBrtBeginList, payload);
 }
 
-std::uint32_t EmitListCol(std::vector<std::uint8_t>& out, const TableColumn& col,
-                          const FeatureFormulaWriteContext& ctx) {
+std::uint32_t EmitListCol(std::vector<std::uint8_t>& out, const TableColumn& col, const FeatureFormulaWriteContext& ctx,
+                          const StylesTable& styles) {
   const Attrs attrs = ParseAttrs(col.extra_attrs);
   EmitAcuid(out, FindAttr(attrs, "xr3:uid"));
   const std::uint32_t ilta = IltaFor(col.totals_function);
@@ -506,7 +515,7 @@ std::uint32_t EmitListCol(std::vector<std::uint8_t>& out, const TableColumn& col
                                          : std::optional<std::string_view>(col.totals_label));
   emit_xlnullablewidestring(payload, std::nullopt);
   for (const std::string_view name : kColumnStyleAttrs) {
-    emit_xlnullablewidestring(payload, NullableAttr(attrs, name));
+    emit_xlnullablewidestring(payload, SavedStyleAttr(attrs, name, styles));
   }
   emit_record(out, kBrtBeginListCol, payload);
   if (!col.calculated_column_formula.empty()) {
@@ -814,7 +823,8 @@ Expected<void, Error> decode_table_formulas(TableMetadata& table, const TableFor
 }
 
 std::vector<std::uint8_t> write_table_bin(const TableMetadata& table, std::uint32_t id,
-                                          const FeatureFormulaWriteContext& ctx, std::uint32_t* lost) {
+                                          const FeatureFormulaWriteContext& ctx, const StylesTable& styles,
+                                          std::uint32_t* lost) {
   std::vector<std::uint8_t> out;
   const std::optional<MergeRange> rfx = parse_a1_rectangle(table.ref);
   if (!rfx || table.columns.empty() || table.display_name.empty()) {
@@ -822,7 +832,7 @@ std::vector<std::uint8_t> write_table_bin(const TableMetadata& table, std::uint3
     return out;
   }
   EmitAcuid(out, FindAttr(ParseAttrs(table.root_extra_attrs), "xr:uid"));
-  EmitBeginList(out, table, *rfx, id);
+  EmitBeginList(out, table, *rfx, id, styles);
   std::optional<SortState> sort;
   if (!table.sort_state_xml.empty()) {
     sort = SortStateFromXml(table.sort_state_xml);
@@ -850,7 +860,7 @@ std::vector<std::uint8_t> write_table_bin(const TableMetadata& table, std::uint3
   emit_u32(payload, static_cast<std::uint32_t>(table.columns.size()));
   emit_record(out, kBrtBeginListCols, payload);
   for (const TableColumn& col : table.columns) {
-    *lost += EmitListCol(out, col, ctx);
+    *lost += EmitListCol(out, col, ctx, styles);
   }
   emit_record(out, kBrtEndListCols, ByteSpan{});
   EmitStyleClient(out, table.style_info);
@@ -1049,7 +1059,7 @@ std::vector<XlsbTablePart> encode_sheet_tables(const Workbook& wb, std::size_t s
       continue;
     }
     const std::uint32_t id = xlsb_table_id(wb.tables(), index, ctx.sheet_ranges.reserved_table_ids);
-    std::vector<std::uint8_t> bytes = write_table_bin(table, id, ctx, lost);
+    std::vector<std::uint8_t> bytes = write_table_bin(table, id, ctx, wb.styles(), lost);
     if (bytes.empty()) {
       continue;
     }

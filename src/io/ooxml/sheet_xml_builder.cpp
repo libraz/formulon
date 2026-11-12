@@ -314,7 +314,9 @@ std::string BuildPageBreaksXml(std::string_view element, const std::vector<Manua
   for (const ManualBreak& brk : breaks) {
     out.append("<brk");
     append_xml_attr_uint(out, "id", brk.id);
-    append_xml_attr_uint(out, "min", brk.min);
+    if (brk.min != 0U) {
+      append_xml_attr_uint(out, "min", brk.min);
+    }
     append_xml_attr_uint(out, "max", brk.max);
     if (brk.manual) {
       emit_xsd_bool_attr(out, "man", true);

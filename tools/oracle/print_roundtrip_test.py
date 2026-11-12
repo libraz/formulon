@@ -175,7 +175,7 @@ class AuthoringTest(unittest.TestCase):
                 }
             )
         )
-        self.assertIn('fitToPage="true"', xml)
+        self.assertIn('fitToPage="1"', xml)
         self.assertIn('fitToWidth="1"', xml)
         self.assertIn('fitToHeight="2"', xml)
 

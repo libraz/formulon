@@ -659,7 +659,8 @@ Expected<void, Error> SaxOnCellTrampoline(void* user_data, const CellRecord& rec
 // Captures per-row overrides on the SAX path, mirroring the DOM
 // `ApplyRowOverrides`: a row contributes a `RowLayout` when it carries
 // `ht`, `hidden`, `outlineLevel`, or effective `customFormat=1` style
-// metadata. `customHeight` alone does not, matching the DOM path.
+// metadata. `customHeight` alone does not, matching the DOM path. Under
+// `zeroHeight` every present row contributes, as a visible entry.
 Expected<void, Error> SaxOnRowStartTrampoline(void* user_data, const RowRecord& rec) {
   auto* st = static_cast<SaxApplyState*>(user_data);
   const bool custom_format = !rec.custom_format.empty() && parse_xsd_bool(rec.custom_format, false);
@@ -667,8 +668,9 @@ Expected<void, Error> SaxOnRowStartTrampoline(void* user_data, const RowRecord& 
   const bool has_height = parse_xsd_nonneg_double(rec.ht, &height);
   const bool show_phonetic = parse_xsd_bool(rec.ph, false);
   const bool collapsed = parse_xsd_bool(rec.collapsed, false);
+  const bool default_hidden = st->workbook->sheet(st->sheet_index).format_defaults().zero_height;
   if (!has_height && rec.hidden.empty() && rec.outline_level.empty() && !custom_format && !show_phonetic &&
-      !collapsed) {
+      !collapsed && !default_hidden) {
     return Expected<void, Error>::Ok();
   }
   if (rec.row_1based < 1U) {
@@ -708,6 +710,24 @@ Expected<void, Error> read_sheet_data_sax(ByteSpan sheet_xml, std::size_t sheet_
                                           ReadDiagnostics* diagnostics, std::uint64_t max_cell_bytes) {
   if (sheet_index >= workbook.sheet_count()) {
     return SheetIndexOutOfRange("read_sheet_data_sax", "sheet_reader_sax", sheet_index, workbook.sheet_count());
+  }
+  // `<sheetFormatPr>` precedes the rows; row visibility needs its zeroHeight before the scan.
+  {
+    const std::string_view text(reinterpret_cast<const char*>(sheet_xml.data), sheet_xml.size);
+    const std::size_t open = text.find("<sheetFormatPr");
+    const std::size_t close = open == std::string_view::npos ? open : text.find('>', open);
+    if (close != std::string_view::npos) {
+      std::string tag(text.substr(open, close - open));
+      if (!tag.empty() && tag.back() == '/') {
+        tag.pop_back();
+      }
+      tag.append("/>");
+      pugi::xml_document fmt_doc;
+      if (fmt_doc.load_buffer(tag.data(), tag.size())) {
+        workbook.sheet(sheet_index).mutable_format_defaults().zero_height =
+            read_xsd_bool(fmt_doc.document_element(), "zeroHeight", false);
+      }
+    }
   }
   SaxApplyState state{
       sheet_index, &workbook, &ctx, &text_storage, {}, diagnostics, ResourceBudget(max_cell_bytes, "sheet_load_bytes")};

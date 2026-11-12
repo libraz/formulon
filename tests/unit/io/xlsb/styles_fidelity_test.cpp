@@ -3,12 +3,14 @@
 // xlsx-model -> xl/styles.bin -> model and xlsb -> xlsb paths.
 
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <string>
 #include <utility>
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "io/ooxml_writer.h"
 #include "io/styles_reader.h"
 #include "io/xlsb/dxf_props.h"
 #include "io/xlsb/reader.h"
@@ -17,10 +19,15 @@
 #include "io/xlsb/styles_writer.h"
 #include "io/xlsb/writer.h"
 #include "styles.h"
+#include "support/roundtrip_symmetry.h"
 #include "utils/error.h"
 #include "value.h"
 #include "workbook.h"
 #include "writer_test_helpers.h"
+
+#ifndef FORMULON_FIXTURES_DIR
+#error "FORMULON_FIXTURES_DIR must be defined by the build"
+#endif
 
 namespace formulon {
 namespace io {
@@ -223,6 +230,98 @@ TEST(XlsbStylesFidelity, WorkbookSaveKeepsGradientsAndToggles) {
   auto reloaded = read_xlsb(SpanOf(second.value()));
   ASSERT_TRUE(static_cast<bool>(reloaded)) << reloaded.error().message;
   ExpectFidelity(source, reloaded.value().workbook.styles());
+}
+
+StylesTable WithNamedStyles() {
+  StylesTable table = ParseXlsxStyles();
+  table.cell_styles.clear();
+  CellStyleRecord normal;
+  normal.name = "Normal";
+  normal.builtin_id = 0U;
+  CellStyleRecord heading;
+  heading.name = "Heading 1";
+  heading.builtin_id = 16U;
+  heading.i_level = 1U;
+  heading.custom_builtin = true;
+  CellStyleRecord custom;
+  custom.name = "My Style";
+  custom.hidden = true;
+  table.cell_styles = {normal, heading, custom};
+  return table;
+}
+
+TEST(XlsbStylesFidelity, NamedCellStylesRoundTripThroughStylesBin) {
+  const StylesTable source = WithNamedStyles();
+  auto back = read_styles_bin(SpanOf(write_styles_bin(source)));
+  ASSERT_TRUE(static_cast<bool>(back)) << back.error().message;
+  ASSERT_EQ(back.value().cell_styles.size(), source.cell_styles.size());
+  for (std::size_t i = 0; i < source.cell_styles.size(); ++i) {
+    const CellStyleRecord& a = back.value().cell_styles[i];
+    const CellStyleRecord& e = source.cell_styles[i];
+    EXPECT_EQ(a.name, e.name) << i;
+    EXPECT_EQ(a.xf_id, e.xf_id) << i;
+    EXPECT_EQ(a.builtin_id, e.builtin_id) << i;
+    EXPECT_EQ(a.i_level, e.i_level) << i;
+    EXPECT_EQ(a.hidden, e.hidden) << i;
+    EXPECT_EQ(a.custom_builtin, e.custom_builtin) << i;
+  }
+}
+
+TEST(XlsbStylesFidelity, ATruncatedBrtStyleFailsTheRead) {
+  std::vector<std::uint8_t> bad;
+  constexpr std::uint8_t kShortStyle[] = {48, 3, 0, 0, 0};
+  bad.assign(std::begin(kShortStyle), std::end(kShortStyle));
+  EXPECT_FALSE(static_cast<bool>(read_styles_bin(SpanOf(bad))));
+}
+
+TEST(XlsbStylesFidelity, NamedCellStylesSurviveXlsbToXlsbAndXlsx) {
+  Workbook wb = Workbook::create_empty();
+  wb.sheet(wb.add_sheet("S")).set_cell_value(0U, 0U, Value::number(1.0));
+  wb.set_styles(WithNamedStyles());
+  auto first = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(first)) << first.error().message;
+  auto loaded = read_xlsb(SpanOf(first.value()));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  auto second = write_xlsb(loaded.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(second)) << second.error().message;
+  auto reloaded = read_xlsb(SpanOf(second.value()));
+  ASSERT_TRUE(static_cast<bool>(reloaded)) << reloaded.error().message;
+  const auto& styles = reloaded.value().workbook.styles().cell_styles;
+  ASSERT_EQ(styles.size(), 3U);
+  EXPECT_EQ(styles[1].name, "Heading 1");
+  EXPECT_EQ(styles[1].builtin_id, 16U);
+
+  auto xlsx = write_ooxml(reloaded.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
+  std::string xml;
+  ASSERT_TRUE(test::extract_part(test::span_of(xlsx.value()), "xl/styles.xml", &xml));
+  EXPECT_NE(xml.find("name=\"Heading 1\""), std::string::npos) << xml;
+  EXPECT_NE(xml.find("name=\"My Style\""), std::string::npos) << xml;
+  EXPECT_NE(xml.find("builtinId=\"16\""), std::string::npos) << xml;
+}
+
+TEST(XlsbStylesFidelity, ExcelWrittenNamedStylesLoad) {
+  const std::string path = std::string(FORMULON_FIXTURES_DIR) + "/excel/sheet_view_frozen.xlsb";
+  std::vector<std::uint8_t> bytes;
+  FILE* f = std::fopen(path.c_str(), "rb");
+  ASSERT_NE(f, nullptr) << path;
+  std::uint8_t buf[4096];
+  for (std::size_t n; (n = std::fread(buf, 1, sizeof buf, f)) > 0;) {
+    bytes.insert(bytes.end(), buf, buf + n);
+  }
+  std::fclose(f);
+  auto loaded = read_xlsb(SpanOf(bytes));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  const auto& styles = loaded.value().workbook.styles().cell_styles;
+  ASSERT_GT(styles.size(), 10U);
+  bool accent = false;
+  bool normal = false;
+  for (const CellStyleRecord& style : styles) {
+    accent = accent || (style.builtin_id == 30U && style.xf_id == 19U);
+    normal = normal || (style.builtin_id == 0U && style.xf_id == 0U);
+  }
+  EXPECT_TRUE(accent);
+  EXPECT_TRUE(normal);
 }
 
 StylesTable TableWithGradientStops(std::size_t stops, bool in_dxf) {

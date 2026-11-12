@@ -436,6 +436,11 @@ struct StylesTable {
   std::vector<std::string> unknown_top_level_xml;
 };
 
+/// True when a saved styles part names a cell style `name` resolves to
+/// (`sheet_names::resolve_named`), counting the Normal style the writers
+/// synthesize into an empty collection.
+bool has_saved_cell_style(const StylesTable& styles, std::string_view name);
+
 /// Removes the `<cellStyle>` `name` resolves to (`sheet_names::resolve_named`) and
 /// detaches the cell xfs that used it.
 ///

@@ -191,7 +191,7 @@ TEST(OoxmlPrintAuthoring, EmptyWorkbookToFullyConfiguredReport) {
   EXPECT_LT(page_setup, header_footer);
   EXPECT_LT(header_footer, row_breaks);
 
-  EXPECT_STREQ(worksheet.child("sheetPr").child("pageSetUpPr").attribute("fitToPage").value(), "true");
+  EXPECT_STREQ(worksheet.child("sheetPr").child("pageSetUpPr").attribute("fitToPage").value(), "1");
   EXPECT_STREQ(worksheet.child("pageSetup").attribute("paperSize").value(), "9");
   EXPECT_STREQ(worksheet.child("pageSetup").attribute("fitToHeight").value(), "0");
   // The header code reaches the file escaped and decodes back to `&C...`.
@@ -405,7 +405,7 @@ TEST(OoxmlPrintAuthoring, FitToPageOnATemplateKeepsTabColorAndCodeName) {
   const pugi::xml_node sheet_pr = doc.child("worksheet").child("sheetPr");
   EXPECT_STREQ(sheet_pr.attribute("codeName").value(), "Sheet1");
   EXPECT_STREQ(sheet_pr.child("tabColor").attribute("rgb").value(), "FF00B050");
-  EXPECT_STREQ(sheet_pr.child("pageSetUpPr").attribute("fitToPage").value(), "true");
+  EXPECT_STREQ(sheet_pr.child("pageSetUpPr").attribute("fitToPage").value(), "1");
 }
 
 TEST(OoxmlPrintAuthoring, ManualBreakCountExcludesAutomaticBreaks) {

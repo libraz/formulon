@@ -57,7 +57,7 @@ class PrintSettingsTests(unittest.TestCase):
             # toggling fit-to-page must not be how they get lost.
             self.assertIn('codeName="Sheet1"', xml)
             self.assertIn('<tabColor argb="FFFF0000"/>', xml)
-            self.assertIn('fitToPage="true"', xml)
+            self.assertIn('fitToPage="1"', xml)
             self.assertTrue(wb.sheet(0).get_page_setup().fit_to_page)
 
     def test_typed_patch_preserves_unmodelled_attributes(self) -> None:
@@ -122,7 +122,7 @@ class PrintSettingsTests(unittest.TestCase):
             wb.sheet(0).update_print_options(grid_lines=True, horizontal_centered=True)
             self.assertEqual(
                 wb.sheet(0).ooxml.get_print_options_xml(),
-                '<printOptions gridLines="true" horizontalCentered="true"/>',
+                '<printOptions gridLines="1" horizontalCentered="1"/>',
             )
 
     def test_print_area_and_titles(self) -> None:

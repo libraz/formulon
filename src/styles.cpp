@@ -228,6 +228,13 @@ constexpr std::array<const char*, 164> kBuiltinNumFmts = {
 
 }  // namespace
 
+bool has_saved_cell_style(const StylesTable& styles, std::string_view name) {
+  if (styles.cell_styles.empty()) {
+    return name == "Normal";
+  }
+  return sheet_names::resolve_named(styles.cell_styles, name) != sheet_names::kNotFound;
+}
+
 Expected<void, Error> remove_cell_style(StylesTable& styles, std::string_view name) {
   const std::size_t pos = sheet_names::resolve_named(styles.cell_styles, name);
   if (pos == sheet_names::kNotFound) {

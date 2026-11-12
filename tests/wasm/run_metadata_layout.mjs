@@ -514,7 +514,7 @@ export function registerMetadataLayout(Module, test) {
         },
       });
       assert.throws(() => wb.updatePrintOptions(0, throwingOptions), /print-options getter/);
-      assert.match(wb.getPrintOptionsXml(0), /gridLines="true"/);
+      assert.match(wb.getPrintOptionsXml(0), /gridLines="1"/);
 
       wb.updatePageMargins(0, { leftIn: 0.5 });
       assert.throws(() => wb.updatePageMargins(0, { leftIn: '0.75' }), {

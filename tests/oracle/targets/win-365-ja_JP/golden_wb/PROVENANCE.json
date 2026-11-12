@@ -99,7 +99,7 @@
     {
       "suite": "print_roundtrip",
       "case_count": 6,
-      "sha256": "960b25783fd5e4979e54ed369ff1ff135f43a41173a7d0f095aed657ea05e726",
+      "sha256": "42b73763a857ca31a8f14fb5054998f6bdcbe04326204940d2ec54afe145b5c9",
       "capture_id": "win-365-ja_JP:16.0.20527:ja-JP:2026-11-10T06:39:49Z"
     }
   ]

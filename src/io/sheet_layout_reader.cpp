@@ -172,8 +172,9 @@ void ApplyColumnLayouts(const pugi::xml_node& worksheet, SheetLayout& layout) {
 /// `customFormat="1"`; when customFormat is true but `s` is absent, the
 /// effective style is the explicit default xf 0.
 /// Rows that carry only `r` (the row number) are skipped — they are
-/// just position markers and have no override payload.
-void ApplyRowOverrides(const pugi::xml_node& worksheet, SheetLayout& layout) {
+/// just position markers and have no override payload — except under
+/// `zeroHeight`, where a present row is visible and its entry says so.
+void ApplyRowOverrides(const pugi::xml_node& worksheet, SheetLayout& layout, bool default_hidden) {
   pugi::xml_node sheet_data = worksheet.child("sheetData");
   if (!sheet_data) {
     return;
@@ -194,7 +195,8 @@ void ApplyRowOverrides(const pugi::xml_node& worksheet, SheetLayout& layout) {
     const bool has_height = ht_attr && parse_xsd_nonneg_double(attr_str(row, "ht"), &height);
     const bool show_phonetic = read_xsd_bool(row, "ph", false);
     const bool collapsed = read_xsd_bool(row, "collapsed", false);
-    if (!has_height && !hidden_attr && !outline_attr && !custom_format && !show_phonetic && !collapsed) {
+    if (!has_height && !hidden_attr && !outline_attr && !custom_format && !show_phonetic && !collapsed &&
+        !default_hidden) {
       continue;
     }
     if (!r_attr) {
@@ -254,7 +256,7 @@ Expected<void, Error> read_sheet_view_and_layout(const pugi::xml_document& sheet
   ApplySheetPrTabHidden(worksheet, view);
   ApplySheetFormatDefaults(worksheet, sheet.mutable_format_defaults());
   ApplyColumnLayouts(worksheet, layout);
-  ApplyRowOverrides(worksheet, layout);
+  ApplyRowOverrides(worksheet, layout, sheet.format_defaults().zero_height);
   return Expected<void, Error>::Ok();
 }
 

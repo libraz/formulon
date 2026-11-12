@@ -234,6 +234,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cannot be read far enough to clear them is dropped and counted once.
   Excel refuses to open a workbook that carries either, so such a table saved
   by Formulon would not open.
+- On a sheet whose rows default to hidden (`<sheetFormatPr zeroHeight="1">`),
+  a row the file lists without `hidden` loads visible, as Excel shows it;
+  only rows the file omits take the hidden default. Saving writes `hidden="1"`
+  on a listed hidden row and never `hidden="0"`.
+- `.xlsb` named cell styles load, so they survive a `.xlsb` or `.xlsx` re-save
+  instead of collapsing to Normal.
+- Saved files use Excel's forms: print-settings booleans are written `1`/`0`
+  (also in `getPrintOptionsXml`, `getHeaderFooterXml` and `getSheetPrXml`;
+  Python `get_print_options_xml` and siblings), a page break omits `min="0"`,
+  and a table or table column names a cell style only when the saved workbook
+  has a cell style of that name.
 
 - Every saved `.xlsx` worksheet carries `<sheetViews>`, as Excel writes it.
   Mac Excel opened a worksheet without that element with every custom row

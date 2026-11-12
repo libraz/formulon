@@ -145,7 +145,8 @@ TEST(RowCustomHeight, ExplicitVisibleRowOverridesZeroHeightDefault) {
   std::string xml;
   ASSERT_TRUE(test::extract_part(test::span_of(saved.value()), kSheetPart, &xml));
   EXPECT_NE(xml.find("zeroHeight=\"1\""), std::string::npos) << xml;
-  EXPECT_NE(xml.find("<row r=\"1\" hidden=\"0\"/>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<row r=\"1\"/>"), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("hidden=\"0\""), std::string::npos) << xml;
 
   Workbook back = Workbook::create_empty();
   ASSERT_TRUE(ThroughXlsx(wb, &back));
@@ -172,6 +173,46 @@ TEST(RowCustomHeight, XlsbUnsyncedRoundTrips) {
   // fUnsynced clear: the row reads back without a custom override.
   const RowLayout* autoh = FindRow(back, 1);
   EXPECT_TRUE(autoh == nullptr || !autoh->custom_height);
+}
+
+TEST(RowCustomHeight, PresentRowsUnderZeroHeightLoadVisible) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.sheet(0).mutable_format_defaults().zero_height = true;
+  for (std::uint32_t row = 0; row < 5U; ++row) {
+    RowLayout visible;
+    visible.row = row;
+    wb.sheet(0).mutable_layout().row_overrides.push_back(visible);
+    wb.sheet(0).set_cell_value(row, 0, Value::number(1.0));
+  }
+  // A hidden row with a cell, and a row with a cell but no entry (hidden by the sheet default).
+  RowLayout hidden;
+  hidden.row = 5;
+  hidden.hidden = true;
+  wb.sheet(0).mutable_layout().row_overrides.push_back(hidden);
+  wb.sheet(0).set_cell_value(5, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(6, 0, Value::number(1.0));
+
+  auto saved = io::write_ooxml(wb);
+  ASSERT_TRUE(saved.has_value());
+  std::string xml;
+  ASSERT_TRUE(test::extract_part(test::span_of(saved.value()), kSheetPart, &xml));
+  EXPECT_EQ(xml.find("hidden=\"0\""), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<row r=\"6\" hidden=\"1\">"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<row r=\"7\" hidden=\"1\">"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<row r=\"1\">"), std::string::npos) << xml;
+
+  Workbook back = Workbook::create_empty();
+  ASSERT_TRUE(ThroughXlsx(wb, &back));
+  for (std::uint32_t row = 0; row < 5U; ++row) {
+    const RowLayout* found = FindRow(back, row);
+    ASSERT_NE(found, nullptr) << row;
+    EXPECT_FALSE(found->hidden) << row;
+  }
+  for (std::uint32_t row = 5; row < 7U; ++row) {
+    const RowLayout* found = FindRow(back, row);
+    EXPECT_TRUE(found == nullptr || found->hidden) << row;
+  }
 }
 
 }  // namespace

@@ -193,10 +193,10 @@ void set_attr_u32(pugi::xml_node node, const char* name, std::uint32_t value) {
   set_attr(node, name, std::to_string(value));
 }
 
-/// Upserts a boolean attribute in the `"true"` / `"false"` lexical form
-/// Excel writes for `<printOptions>` and `<headerFooter>`.
+/// Upserts a boolean attribute in the `"1"` / `"0"` lexical form Excel
+/// writes for `<printOptions>`, `<headerFooter>` and `<pageSetUpPr>`.
 void set_attr_bool(pugi::xml_node node, const char* name, bool value) {
-  set_attr(node, name, value ? "true" : "false");
+  set_attr(node, name, value ? "1" : "0");
 }
 
 /// The status of a patch op outside 0..2, or a CLEAR on a field that cannot be cleared.

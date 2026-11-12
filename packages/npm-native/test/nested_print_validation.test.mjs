@@ -174,7 +174,7 @@ test('nested print readers snapshot each stateful getter once', () => {
     });
     wb.updatePrintOptions(0, firstGrid);
     assert.equal(gridReads, 1);
-    assert.match(wb.getPrintOptionsXml(0), /gridLines="true"/);
+    assert.match(wb.getPrintOptionsXml(0), /gridLines="1"/);
 
     let omittedGridReads = 0;
     const omittedGrid = {};
@@ -186,7 +186,7 @@ test('nested print readers snapshot each stateful getter once', () => {
     });
     wb.updatePrintOptions(0, omittedGrid);
     assert.equal(omittedGridReads, 1);
-    assert.match(wb.getPrintOptionsXml(0), /gridLines="true"/);
+    assert.match(wb.getPrintOptionsXml(0), /gridLines="1"/);
 
     let headerFlagReads = 0;
     const headerFlag = {};
@@ -198,7 +198,7 @@ test('nested print readers snapshot each stateful getter once', () => {
     });
     wb.updateHeaderFooter(0, headerFlag);
     assert.equal(headerFlagReads, 1);
-    assert.match(wb.getHeaderFooterXml(0), /differentFirst="true"/);
+    assert.match(wb.getHeaderFooterXml(0), /differentFirst="1"/);
   } finally {
     wb.dispose();
   }

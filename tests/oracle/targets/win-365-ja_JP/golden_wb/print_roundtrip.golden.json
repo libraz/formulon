@@ -90,8 +90,8 @@
           "print_title_cols": "",
           "manual_row_breaks": [],
           "manual_col_breaks": [],
-          "xlsx_sha256": "bfae344dda6cff29ea622eb16e80807ee1ef6240ce3366600e5e4b8caf0fc0ba",
-          "xlsx_bytes": 2655
+          "xlsx_sha256": "c00d12d075c9b2fb910a61168eab91ed001b47b18d71228428294ba68b94d78a",
+          "xlsx_bytes": 2651
         }
       }
     },
@@ -266,8 +266,8 @@
           "print_title_cols": "",
           "manual_row_breaks": [],
           "manual_col_breaks": [],
-          "xlsx_sha256": "4576209ec977e277db362da60d8c37c080471dc630ef3d31df432cd4d765757f",
-          "xlsx_bytes": 2676
+          "xlsx_sha256": "5d6d669e3080edf48675ab8ec99f5f40b8eae80775594f4a1e1eecdf908274b2",
+          "xlsx_bytes": 2667
         }
       }
     },
@@ -354,8 +354,8 @@
           "print_title_cols": "",
           "manual_row_breaks": [],
           "manual_col_breaks": [],
-          "xlsx_sha256": "20a3c9941b0ff92ccad2ef4b525a1ccce572640901e7bb9dbcf92006c263e771",
-          "xlsx_bytes": 2782
+          "xlsx_sha256": "4a734840b764e923b7463ec5e59013bb013246a4b229bdd4e6ce8c50a32e9cc2",
+          "xlsx_bytes": 2778
         }
       }
     },
@@ -528,8 +528,8 @@
           "manual_col_breaks": [
             3
           ],
-          "xlsx_sha256": "a3a9179c568bbd28efff54ff9d8cfe8cd8eb61a7a739992186aab5df35dbd781",
-          "xlsx_bytes": 2723
+          "xlsx_sha256": "0a6b86a4ebee37cf6a8da069e550a66730531052881bea0f1d536dbf8178e269",
+          "xlsx_bytes": 2715
         }
       }
     }

@@ -75,9 +75,10 @@ Expected<void, Error> decode_table_formulas(TableMetadata& table, const TableFor
 
 /// Serialises `table` as a table part with BrtBeginList `idList` = `id`.
 /// `lost` counts the settings the records cannot hold and the formulas that
-/// failed to encode.
+/// failed to encode. A cell-style name that `styles` does not save is written empty.
 std::vector<std::uint8_t> write_table_bin(const TableMetadata& table, std::uint32_t id,
-                                          const FeatureFormulaWriteContext& ctx, std::uint32_t* lost);
+                                          const FeatureFormulaWriteContext& ctx, const StylesTable& styles,
+                                          std::uint32_t* lost);
 
 /// The table parts a workbook's sheets relate to, read before any formula
 /// so a structured reference (PtgList) in a cell resolves.

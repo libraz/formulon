@@ -385,7 +385,7 @@ test('print settings: fitToPage keeps the rest of sheetPr', async () => {
   const xml = wb.sheet(0).ooxml.getSheetPrXml();
   assert.match(xml, /codeName="Sheet1"/);
   assert.match(xml, /<tabColor rgb="FFFF0000"\/>/);
-  assert.match(xml, /fitToPage="true"/);
+  assert.match(xml, /fitToPage="1"/);
   assert.equal(wb.sheet(0).getPageSetup().fitToPage, true);
   // fitToPage: false removes the attribute and the stated flag reads false.
   wb.sheet(0).updatePageSetup({ fitToPage: false });

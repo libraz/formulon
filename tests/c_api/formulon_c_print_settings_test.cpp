@@ -218,7 +218,7 @@ TEST(FormulonCApiPrintSettings, FitToPagePreservesOtherSheetPrContent) {
   // fit-to-page must not be how a caller loses them.
   EXPECT_NE(xml.find("codeName=\"Sheet1\""), std::string::npos) << xml;
   EXPECT_NE(xml.find("<tabColor rgb=\"FFFF0000\"/>"), std::string::npos) << xml;
-  EXPECT_NE(xml.find("fitToPage=\"true\""), std::string::npos) << xml;
+  EXPECT_NE(xml.find("fitToPage=\"1\""), std::string::npos) << xml;
 
   fm_page_setup_t setup = FM_STRUCT_INIT(fm_page_setup_t);
   ASSERT_EQ(fm_sheet_get_page_setup(wb.handle, 0, &setup), 0);
@@ -248,7 +248,7 @@ TEST(FormulonCApiPrintSettings, FitToPageCreatesSheetPrWhenAbsent) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(SetFitToPage(wb.handle, 0, 1), 0);
-  EXPECT_EQ(GetSheetPrXml(wb.handle), "<sheetPr><pageSetUpPr fitToPage=\"true\"/></sheetPr>");
+  EXPECT_EQ(GetSheetPrXml(wb.handle), "<sheetPr><pageSetUpPr fitToPage=\"1\"/></sheetPr>");
 }
 
 /* -------------------------------------------------------------------------- */
@@ -728,7 +728,7 @@ TEST(FormulonCApiPrintSettings, PageSetupPatchRoutesFitToPageToSheetPr) {
 
   // `fitToPage` selects the mode and lives in `<sheetPr>`; the page counts
   // that state the target live in `<pageSetup>`. Both halves are needed.
-  EXPECT_NE(GetSheetPrXml(wb.handle).find("fitToPage=\"true\""), std::string::npos);
+  EXPECT_NE(GetSheetPrXml(wb.handle).find("fitToPage=\"1\""), std::string::npos);
   const std::string setup_xml = GetPageSetupXml(wb.handle);
   EXPECT_NE(setup_xml.find("fitToWidth=\"1\""), std::string::npos) << setup_xml;
   EXPECT_NE(setup_xml.find("fitToHeight=\"0\""), std::string::npos) << setup_xml;
@@ -781,7 +781,7 @@ TEST(FormulonCApiPrintSettings, PrintOptionsAndHeaderFooterPatch) {
   ASSERT_EQ(fm_sheet_update_print_options(wb.handle, 0, &options), 0);
   const char* options_xml = nullptr;
   ASSERT_EQ(fm_sheet_get_print_options_xml(wb.handle, 0, &options_xml), 0);
-  EXPECT_STREQ(options_xml, "<printOptions gridLines=\"true\" horizontalCentered=\"true\"/>");
+  EXPECT_STREQ(options_xml, "<printOptions gridLines=\"1\" horizontalCentered=\"1\"/>");
 
   fm_header_footer_patch_t hf = FM_STRUCT_INIT(fm_header_footer_patch_t);
   hf.odd_header_op = FM_PATCH_OP_SET;
@@ -1291,9 +1291,9 @@ constexpr fm_patch_op_t kBadOp = static_cast<fm_patch_op_t>(3);
 const char* const kPageSetupXml = "<pageSetup paperSize=\"9\" orientation=\"landscape\" scale=\"80\"/>";
 const char* const kMarginsXml =
     "<pageMargins left=\"1\" right=\"1\" top=\"1\" bottom=\"1\" header=\"0.5\" footer=\"0.5\"/>";
-const char* const kOptionsXml = "<printOptions gridLines=\"true\"/>";
+const char* const kOptionsXml = "<printOptions gridLines=\"1\"/>";
 const char* const kHeaderFooterXml =
-    "<headerFooter differentFirst=\"true\"><oddHeader>H</oddHeader><oddFooter>F</oddFooter></headerFooter>";
+    "<headerFooter differentFirst=\"1\"><oddHeader>H</oddHeader><oddFooter>F</oddFooter></headerFooter>";
 
 std::string Fragment(fm_status_t (*get)(const fm_workbook_t*, size_t, const char**), const fm_workbook_t* wb) {
   const char* xml = nullptr;

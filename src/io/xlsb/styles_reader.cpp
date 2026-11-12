@@ -386,6 +386,30 @@ Expected<void, Error> DecodeFmt(ByteSpan payload, StylesTable& table) {
   return Expected<void, Error>::Ok();
 }
 
+// BrtStyle record id and its flag bits (fBuiltIn, fHidden, fCustom).
+constexpr std::uint16_t kBrtStyle = 48;
+constexpr std::uint16_t kStyleBuiltin = 0x01U;
+constexpr std::uint16_t kStyleHidden = 0x02U;
+constexpr std::uint16_t kStyleCustom = 0x04U;
+
+Expected<void, Error> DecodeStyle(ByteSpan payload, StylesTable& table) {
+  ByteSpan p = payload;
+  ASSIGN_OR_RETURN(const std::uint32_t xf_id, read_u32(p));
+  ASSIGN_OR_RETURN(const std::uint16_t flags, read_u16(p));
+  ASSIGN_OR_RETURN(const std::uint8_t builtin_id, read_u8(p));
+  ASSIGN_OR_RETURN(const std::uint8_t i_level, read_u8(p));
+  ASSIGN_OR_RETURN(auto name, read_xlwidestring(p));
+  CellStyleRecord rec;
+  rec.name = std::move(name);
+  rec.xf_id = xf_id;
+  rec.builtin_id = (flags & kStyleBuiltin) != 0U ? builtin_id : CellStyleRecord::kBuiltinIdNone;
+  rec.i_level = i_level;
+  rec.hidden = (flags & kStyleHidden) != 0U;
+  rec.custom_builtin = (flags & kStyleCustom) != 0U;
+  table.cell_styles.push_back(std::move(rec));
+  return Expected<void, Error>::Ok();
+}
+
 Expected<void, Error> DecodeXf(ByteSpan payload, XfTarget target, StylesTable& table) {
   ByteSpan p = payload;
   // 8 x u16: [ixfeParent, numFmtId, fontId, fillId, borderId,
@@ -685,6 +709,12 @@ Expected<StylesTable, Error> read_styles_bin(ByteSpan bytes) {
     const XlsbRecord& rec = rec_or.value();
     if (rec.type == kBrtDxf) {
       if (auto r = DecodeDxf(rec.payload, table); !r) {
+        return std::move(r.error());
+      }
+      continue;
+    }
+    if (rec.type == kBrtStyle) {
+      if (auto r = DecodeStyle(rec.payload, table); !r) {
         return std::move(r.error());
       }
       continue;

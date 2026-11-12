@@ -200,7 +200,35 @@ bool CacheSourceInWorkbook(const Workbook& wb, const pivot::PivotCache& cache) {
   return !source.name.empty();
 }
 
-std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
+/// `attrs` without the table cell-style attributes naming no cell style of the saved styles part.
+std::string DropUnsavedCellStyleAttrs(const std::string& attrs, const StylesTable& styles) {
+  if (attrs.find("CellStyle=\"") == std::string::npos) {
+    return attrs;
+  }
+  std::string doc_text("<x");
+  doc_text.append(attrs);
+  doc_text.append("/>");
+  pugi::xml_document doc;
+  if (!doc.load_buffer(doc_text.data(), doc_text.size(), pugi::parse_default, pugi::encoding_utf8)) {
+    return attrs;
+  }
+  std::string out = attrs;
+  for (const char* name : {"headerRowCellStyle", "dataCellStyle", "totalsRowCellStyle"}) {
+    const pugi::xml_attribute attr = doc.first_child().attribute(name);
+    if (!attr || has_saved_cell_style(styles, attr.value())) {
+      continue;
+    }
+    const std::string key = std::string(" ") + name + "=\"";
+    const std::size_t start = out.find(key);
+    const std::size_t end = start == std::string::npos ? start : out.find('"', start + key.size());
+    if (end != std::string::npos) {
+      out.erase(start, end - start + 1U);
+    }
+  }
+  return out;
+}
+
+std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id, const StylesTable& styles) {
   std::string out;
   out.reserve(256 + t.columns.size() * 64);
   out.append(kXmlDecl);
@@ -215,7 +243,7 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
   out.append("\" ref=\"");
   AppendXmlAttrEscaped(out, t.ref);
   out.push_back('"');
-  out.append(t.root_extra_attrs);
+  out.append(DropUnsavedCellStyleAttrs(t.root_extra_attrs, styles));
   // headerRowCount: emit explicit "0" when disabled; default (1) is
   // implicit via OOXML schema and we omit it.
   if (!t.header_row) {
@@ -262,7 +290,7 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id) {
     if (!col.totals_function.empty()) {
       append_xml_attr(out, "totalsRowFunction", col.totals_function);
     }
-    out.append(col.extra_attrs);
+    out.append(DropUnsavedCellStyleAttrs(col.extra_attrs, styles));
     // CT_TableColumn children: calculatedColumnFormula, totalsRowFormula,
     // then the retained xmlColumnPr / extLst. An empty formula omits its
     // element (Excel never emits an empty one).
@@ -453,7 +481,8 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   // xl/tables/tableN.xml — one per planned table.
   for (const auto& per_sheet : plan.tables_by_sheet) {
     for (const EmissionPlan::PerSheetTable& t : per_sheet) {
-      RETURN_IF_ERROR(AddPart(writer.get(), t.path, BuildTableXml(*t.table, t.numeric_id), &written_paths));
+      RETURN_IF_ERROR(
+          AddPart(writer.get(), t.path, BuildTableXml(*t.table, t.numeric_id, wb.styles()), &written_paths));
     }
   }
 

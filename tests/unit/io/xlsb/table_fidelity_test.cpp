@@ -90,6 +90,18 @@ TableMetadata AuthoredTable() {
   return t;
 }
 
+/// Adds the cell styles `AuthoredTable` names, as a saved styles part would hold them.
+void AddAuthoredCellStyles(Workbook& wb) {
+  std::vector<CellStyleRecord>& styles = wb.mutable_styles().cell_styles;
+  for (const char* name : {"Normal", "Heading 1", "Total", "Currency"}) {
+    if (std::none_of(styles.begin(), styles.end(), [name](const CellStyleRecord& s) { return s.name == name; })) {
+      CellStyleRecord style;
+      style.name = name;
+      styles.push_back(style);
+    }
+  }
+}
+
 Workbook AuthoredBook() {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Sheet1");
@@ -101,6 +113,7 @@ Workbook AuthoredBook() {
   link.target = "https://example.com/";
   wb.sheet(0).mutable_hyperlinks().push_back(link);
   wb.mutable_tables().push_back(AuthoredTable());
+  AddAuthoredCellStyles(wb);
   return wb;
 }
 
@@ -230,7 +243,10 @@ TEST(XlsbTableFidelity, PackageCarriesThePartItsRelationshipAndContentType) {
 
 TEST(XlsbTableFidelity, XlsbResaveReproducesTheTablePart) {
   const std::vector<std::uint8_t> first = SaveXlsb(AuthoredBook());
-  const std::vector<std::uint8_t> second = SaveXlsb(LoadXlsb(first));
+  // The styles part is not read back, so the named styles are supplied again for the second save.
+  Workbook reloaded = LoadXlsb(first);
+  AddAuthoredCellStyles(reloaded);
+  const std::vector<std::uint8_t> second = SaveXlsb(reloaded);
   EXPECT_EQ(Entry(second, "xl/tables/table3.bin"), Entry(first, "xl/tables/table3.bin"));
   ExpectSameTable(LoadXlsb(second).tables().at(0), AuthoredTable());
 }
@@ -339,6 +355,35 @@ TEST(XlsbTableFidelity, XlsxTableSurvivesConversionToXlsb) {
   ExpectSameTable(back.tables()[0], from_xlsx.tables()[0]);
 }
 
+TEST(XlsbTableFidelity, ADanglingCellStyleNameIsWrittenEmpty) {
+  Workbook wb = AuthoredBook();
+  wb.mutable_styles().cell_styles.erase(wb.mutable_styles().cell_styles.begin() + 2);  // "Total"
+  wb.mutable_tables()[0].columns[1].extra_attrs = " dataCellStyle=\"Missing\"";
+  const Workbook back = LoadXlsb(SaveXlsb(wb));
+  ASSERT_EQ(back.tables().size(), 1U);
+  const TableMetadata& table = back.tables()[0];
+  EXPECT_NE(table.root_extra_attrs.find("headerRowCellStyle=\"Heading 1\""), std::string::npos);
+  EXPECT_NE(table.root_extra_attrs.find("dataCellStyle=\"Normal\""), std::string::npos);
+  EXPECT_EQ(table.root_extra_attrs.find("totalsRowCellStyle"), std::string::npos) << table.root_extra_attrs;
+  EXPECT_EQ(table.columns[1].extra_attrs.find("CellStyle"), std::string::npos) << table.columns[1].extra_attrs;
+}
+
+TEST(XlsxTableCellStyles, OnlyNamesOfSavedCellStylesAreWritten) {
+  Workbook wb = AuthoredBook();
+  wb.mutable_styles().cell_styles.erase(wb.mutable_styles().cell_styles.begin() + 2);  // "Total"
+  wb.mutable_tables()[0].columns[1].extra_attrs = " dataCellStyle=\"Currency\"";
+  wb.mutable_tables()[0].columns[0].extra_attrs = " dataCellStyle=\"Missing\" dataDxfId=\"8\"";
+  auto xlsx = write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
+  const std::string xml = EntryText(xlsx.value(), "xl/tables/table3.xml");
+  EXPECT_NE(xml.find("headerRowCellStyle=\"Heading 1\""), std::string::npos) << xml;
+  EXPECT_NE(xml.find(" dataCellStyle=\"Normal\""), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("totalsRowCellStyle"), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("Missing"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("dataDxfId=\"8\""), std::string::npos) << xml;
+  EXPECT_NE(xml.find("dataCellStyle=\"Currency\""), std::string::npos) << xml;
+}
+
 TEST(XlsbTableFidelity, RevisionUidsTravelAsAcuidBlocks) {
   Workbook wb = AuthoredBook();
   TableMetadata& t = wb.mutable_tables()[0];
@@ -359,10 +404,11 @@ TEST(XlsbTableFidelity, RevisionUidsTravelAsAcuidBlocks) {
     acuids += rec.type == 3072U ? 1U : 0U;
   }
   EXPECT_EQ(acuids, 3U);
-  const Workbook back = LoadXlsb(package);
+  Workbook back = LoadXlsb(package);
   ASSERT_EQ(back.tables().size(), 1U);
   ExpectSameTable(back.tables()[0], t);
   // And the `.xlsx` the uids reach stays well formed.
+  AddAuthoredCellStyles(back);
   auto xlsx = write_ooxml(back);
   ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
   auto again = read_ooxml(SpanOf(xlsx.value()));

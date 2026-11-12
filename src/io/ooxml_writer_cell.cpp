@@ -526,12 +526,10 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
 // Appends OOXML-conformant `<row>` start-tag attributes derived from a
 // `RowLayout` override. Caller has already emitted `<row r="N"`. Each
 // override field is emitted only when it differs from the OOXML
-// default (height -> none, hidden -> "0", outlineLevel -> 0). A visible
-// row must carry `hidden="0"` when the sheet default is `zeroHeight="1"`;
-// otherwise the inherited default hides the row again on reload. Excel
-// emits `customHeight="1"` only for an explicit override, so an auto
-// height stays auto across a save.
-void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout, bool default_zero_height) {
+// default (height -> none, hidden -> "0", outlineLevel -> 0); `hidden="0"`
+// is never written. Excel emits `customHeight="1"` only for an explicit
+// override, so an auto height stays auto across a save.
+void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout) {
   if (layout.has_height || layout.height > 0.0) {
     out.append(" ht=\"");
     // Shortest round-trip spelling, the same one cell values use: a
@@ -545,8 +543,6 @@ void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout, bool defa
   }
   if (layout.hidden) {
     emit_xsd_bool_attr(out, "hidden", true);
-  } else if (default_zero_height) {
-    emit_xsd_bool_attr(out, "hidden", false);
   }
   if (layout.outline_level != 0U) {
     append_xml_attr_uint(out, "outlineLevel", layout.outline_level);
@@ -575,13 +571,15 @@ void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout, bool defa
 // `override_attrs` is non-empty it is appended to the `<row>` start-tag (between `r="N"` and the closing `>`), allowing
 // the caller to merge per-row layout overrides without reshaping the body. When the row body collapses to nothing but
 // `override_attrs` is non-empty, an empty self-closing `<row r="N" .../>` is still emitted so the override survives the
-// round-trip.
+// round-trip. `keep_empty_row` forces that bare element even with no attributes, for a visible row under `zeroHeight`;
+// `implicit_hidden` adds `hidden="1"` to a written row that has no override under `zeroHeight`.
 bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const RowCells& row_cells,
                   const std::vector<EmittedRun>& runs, const std::vector<std::uint32_t>& phantom_cols,
-                  std::string_view override_attrs, const SharedStrings* shared_strings,
-                  std::uint32_t dynamic_array_cm_index, const xlsb::NameShapes& name_shapes,
-                  std::unordered_map<std::uint64_t, bool>& always_by_anchor, const parser::ExternalBookIndexer* indexer,
-                  const SharedRoles& shared_roles, const RichErrorVmMap* rich_error_vm) {
+                  std::string_view override_attrs, bool keep_empty_row, bool implicit_hidden,
+                  const SharedStrings* shared_strings, std::uint32_t dynamic_array_cm_index,
+                  const xlsb::NameShapes& name_shapes, std::unordered_map<std::uint64_t, bool>& always_by_anchor,
+                  const parser::ExternalBookIndexer* indexer, const SharedRoles& shared_roles,
+                  const RichErrorVmMap* rich_error_vm) {
   // Write straight into `out`; a row that ends up with no content is truncated away.
   const std::size_t row_start = out.size();
   out.append("<row r=\"");
@@ -589,6 +587,9 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
   out.push_back('"');
   if (!override_attrs.empty()) {
     out.append(override_attrs);
+  }
+  if (implicit_hidden) {
+    emit_xsd_bool_attr(out, "hidden", true);
   }
   out.push_back('>');
   const std::size_t body_start = out.size();
@@ -661,7 +662,7 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
     ++entry;
   }
   if (out.size() == body_start) {
-    if (override_attrs.empty()) {
+    if (override_attrs.empty() && !keep_empty_row) {
       out.resize(row_start);
       return false;
     }
@@ -781,9 +782,14 @@ void AppendSheetDataXml(std::string& out, const Sheet& sheet, const SharedString
   const SharedRoles shared_roles = CollectSharedRoles(sheet, name_shapes);
   for (std::uint32_t row : row_indices) {
     std::string override_attrs;
-    if (const RowLayout* row_layout = find_row_override(sheet.layout(), row); row_layout != nullptr) {
-      AppendRowOverrideAttrs(override_attrs, *row_layout, sheet.format_defaults().zero_height);
+    const bool zero_height = sheet.format_defaults().zero_height;
+    const RowLayout* row_layout = find_row_override(sheet.layout(), row);
+    if (row_layout != nullptr) {
+      AppendRowOverrideAttrs(override_attrs, *row_layout);
     }
+    // Under zeroHeight a present row is visible unless it says otherwise; an entry-less row is hidden.
+    const bool keep_empty_row = zero_height && row_layout != nullptr && !row_layout->hidden;
+    bool implicit_hidden = zero_height && row_layout == nullptr;
     auto cells_it = rows_map.find(row);
     const RowCells& row_cells = (cells_it != rows_map.end()) ? cells_it->second : kEmptyRow;
     const auto phantoms_it = phantom_cols.find(row);
@@ -791,18 +797,22 @@ void AppendSheetDataXml(std::string& out, const Sheet& sheet, const SharedString
     if (plan.as_row_format) {
       // The row's explicit defaults become its own xf-0 row format.
       RowLayout converted;
-      if (const RowLayout* row_layout = find_row_override(sheet.layout(), row); row_layout != nullptr) {
+      if (row_layout != nullptr) {
         converted = *row_layout;
+      } else {
+        converted.hidden = zero_height;
       }
       converted.row = row;
       converted.has_style = true;
       converted.style_xf = 0U;
       override_attrs.clear();
-      AppendRowOverrideAttrs(override_attrs, converted, sheet.format_defaults().zero_height);
+      AppendRowOverrideAttrs(override_attrs, converted);
+      implicit_hidden = false;
     }
     AppendRowXml(out, sheet, row, row_cells, plan.runs,
-                 phantoms_it != phantom_cols.end() ? phantoms_it->second : kNoPhantoms, override_attrs, shared_strings,
-                 dynamic_array_cm_index, name_shapes, always_by_anchor, indexer, shared_roles, rich_error_vm);
+                 phantoms_it != phantom_cols.end() ? phantoms_it->second : kNoPhantoms, override_attrs, keep_empty_row,
+                 implicit_hidden, shared_strings, dynamic_array_cm_index, name_shapes, always_by_anchor, indexer,
+                 shared_roles, rich_error_vm);
   }
 
   if (out.size() == rows_start) {

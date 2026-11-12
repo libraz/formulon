@@ -99,6 +99,7 @@ void AppendSharedItem(std::string& out, const Value& v, bool as_date, bool missi
   if (missing) {
     out.insert(out.size() - 2U, " u=\"1\"");
   }
+  // Excel writes `f` on any item kind it marks calculated.
   if (calculated) {
     out.insert(out.size() - 2U, " f=\"1\"");
   }
