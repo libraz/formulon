@@ -339,13 +339,11 @@ std::string BuildPageBreaksXml(std::string_view element, const std::vector<Manua
 // the public Sheet accessors documented in `src/sheet.h`.
 
 /// Emits `<sheetViews><sheetView>...</sheetView></sheetViews>` for the
-/// sheet's view state. Returns an empty string when every field is at
-/// its default (zoom 100, no panes, tab not hidden) — Excel
-/// itself omits the element in that case.
+/// sheet's view state. The element is always written, a default view as
+/// `<sheetView workbookViewId="0"/>`, as the desktop application does: on a
+/// worksheet without it, Mac Excel opens every custom row height at 4/3 of
+/// its stored value.
 std::string BuildSheetViewXml(const SheetView& view) {
-  if (sheet_view_element_is_default(view) && !view.tab_hidden && view.extra_views_xml.empty()) {
-    return std::string();
-  }
   std::string out("<sheetViews>");
   out.append(build_sheet_view_element_xml(view, 0U));
   out.append(view.extra_views_xml);

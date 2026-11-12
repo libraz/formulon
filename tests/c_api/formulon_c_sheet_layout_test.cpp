@@ -103,8 +103,25 @@ TEST(FormulonCApiSheetLayout, GetViewDefaults) {
   EXPECT_EQ(v.show_row_column_headers, 1);
   EXPECT_EQ(v.show_zeros, 1);
   EXPECT_EQ(v.right_to_left, 0);
-  EXPECT_EQ(v.tab_selected, 0);
+  EXPECT_EQ(v.tab_selected, 1);  // a new workbook's only sheet is its selected tab
   EXPECT_EQ(v.view_mode, FM_SHEET_VIEW_MODE_NORMAL);
+}
+
+TEST(FormulonCApiSheetLayout, NewWorkbookSelectsOnlyItsFirstTab) {
+  for (const char* profile : {static_cast<const char*>(nullptr), "mac-365-ja_JP"}) {
+    SCOPED_TRACE(profile == nullptr ? "default" : profile);
+    WorkbookGuard wb;
+    ASSERT_EQ(profile == nullptr ? fm_workbook_create_default(&wb.handle)
+                                 : fm_workbook_create_for_profile(profile, &wb.handle),
+              0);
+    ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Second", 1U, ignored_index()), 0);
+    fm_sheet_view_info_t first = FM_STRUCT_INIT(fm_sheet_view_info_t);
+    fm_sheet_view_info_t second = FM_STRUCT_INIT(fm_sheet_view_info_t);
+    ASSERT_EQ(fm_sheet_get_view(wb.handle, 0, &first), 0);
+    ASSERT_EQ(fm_sheet_get_view(wb.handle, 1, &second), 0);
+    EXPECT_EQ(first.tab_selected, 1);
+    EXPECT_EQ(second.tab_selected, 0);
+  }
 }
 
 TEST(FormulonCApiSheetLayout, ViewPatchSetsZoomAndFreeze) {

@@ -259,6 +259,8 @@ void seed_default_styles(StylesTable& styles) {
 Workbook Workbook::create() {
   Workbook wb;
   wb.sheets_.emplace_back(Sheet{std::string("Sheet1")});
+  // A new workbook's only sheet is its selected tab, as in an Excel-made one.
+  wb.sheets_.front().mutable_view().tab_selected = true;
   seed_default_styles(wb.styles_);
   return wb;
 }
@@ -268,6 +270,7 @@ Workbook Workbook::create_for_profile(const ExcelProfile& profile) {
   wb.excel_profile_ = profile;
   wb.new_sheet_profile_ = profile;
   wb.sheets_.emplace_back(Sheet{std::string(new_workbook_defaults(profile.locale).sheet_name)});
+  wb.sheets_.front().mutable_view().tab_selected = true;
   seed_default_styles(wb.styles_);
   apply_new_workbook_defaults(profile, wb.styles_, wb.sheets_.front());
   return wb;

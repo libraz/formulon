@@ -99,16 +99,6 @@ void read_sheet_view_element(const pugi::xml_node& sheet_view, SheetView& view) 
   }
 }
 
-bool sheet_view_element_is_default(const SheetView& view) {
-  return view.zoom_scale == SheetView::kDefaultZoomScale && !view.divides_rows() && !view.divides_cols() &&
-         view.show_grid_lines && view.show_row_col_headers && view.show_zeros && !view.right_to_left &&
-         !view.tab_selected && view.view_mode.empty() && !view.window_protection && !view.show_formulas &&
-         view.show_ruler && view.show_outline_symbols && view.default_grid_color && view.show_white_space &&
-         view.color_id == SheetView::kDefaultColorId && view.zoom_scale_normal == 0U &&
-         view.zoom_scale_sheet_layout_view == 0U && view.zoom_scale_page_layout_view == 0U && view.tail_xml.empty() &&
-         view.top_left_cell.empty() && view.selections.empty();
-}
-
 std::string build_sheet_view_element_xml(const SheetView& view, std::uint32_t workbook_view_id) {
   std::string children;
   if (view.divides_rows() || view.divides_cols()) {

@@ -207,8 +207,15 @@ class SheetViewProtectionTests(unittest.TestCase):
             self.assertTrue(view.show_row_column_headers)
             self.assertTrue(view.show_zeros)
             self.assertFalse(view.right_to_left)
-            self.assertFalse(view.tab_selected)
+            self.assertTrue(view.tab_selected)
             self.assertEqual(view.view_mode, SheetViewMode.NORMAL)
+
+    def test_new_workbook_selects_only_its_first_tab(self) -> None:
+        for make in (Workbook.create_default, lambda: Workbook.create_for_profile("mac-365-ja_JP")):
+            with make() as wb:
+                wb.add_sheet("Second")
+                self.assertTrue(wb.sheet(0).get_view().tab_selected)
+                self.assertFalse(wb.sheet(1).get_view().tab_selected)
 
     def test_view_display_setters_roundtrip(self) -> None:
         with Workbook.create_default() as wb:
@@ -216,14 +223,14 @@ class SheetViewProtectionTests(unittest.TestCase):
             wb.sheet(0).update_view(show_row_column_headers=False)
             wb.sheet(0).update_view(show_zeros=False)
             wb.sheet(0).update_view(right_to_left=True)
-            wb.sheet(0).update_view(tab_selected=True)
+            wb.sheet(0).update_view(tab_selected=False)
             wb.sheet(0).update_view(view_mode=SheetViewMode.PAGE_BREAK_PREVIEW)
             view = wb.sheet(0).get_view()
             self.assertFalse(view.show_grid_lines)
             self.assertFalse(view.show_row_column_headers)
             self.assertFalse(view.show_zeros)
             self.assertTrue(view.right_to_left)
-            self.assertTrue(view.tab_selected)
+            self.assertFalse(view.tab_selected)
             self.assertEqual(view.view_mode, SheetViewMode.PAGE_BREAK_PREVIEW)
             wb.sheet(0).update_view(view_mode=SheetViewMode.NORMAL)
             self.assertEqual(wb.sheet(0).get_view().view_mode, SheetViewMode.NORMAL)

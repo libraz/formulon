@@ -170,6 +170,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `table` / `pivot` flags, instead of leaving them naming a style that no
   longer exists.
 
+### Fixed
+
+- Every saved `.xlsx` worksheet carries `<sheetViews>`, as Excel writes it.
+  Mac Excel opened a worksheet without that element with every custom row
+  height scaled by 4/3. A new workbook's first sheet is now its selected tab,
+  as in an Excel-made workbook: `getView().tabSelected` (Python
+  `get_view().tab_selected`, C `fm_sheet_view_t.tab_selected`) reads true there.
+  Call `updateView({ tabSelected: false })` for the previous state.
+
 ## [0.19.0] - 2026-11-10
 
 Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0.19.md).

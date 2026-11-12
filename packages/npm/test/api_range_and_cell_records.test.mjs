@@ -168,6 +168,20 @@ describe('threaded comments carry their anchor as a cell', () => {
   });
 });
 
+describe('a new workbook selects only its first tab', () => {
+  it('marks sheet 0 selected and an added sheet unselected, with or without a profile', () => {
+    for (const wb of [f.Workbook.createDefault(), f.Workbook.createForProfile('mac-365-ja_JP')]) {
+      try {
+        wb.addSheet('Second');
+        assert.equal(wb.sheet(0).getView().tabSelected, true);
+        assert.equal(wb.sheet(1).getView().tabSelected, false);
+      } finally {
+        wb.dispose();
+      }
+    }
+  });
+});
+
 describe('a pivot worksheet source is a range and a name', () => {
   function cacheWithData() {
     const wb = f.Workbook.createDefault();

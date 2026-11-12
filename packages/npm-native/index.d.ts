@@ -2155,8 +2155,8 @@ export interface SheetView {
   readonly showZeros: boolean;
   /** `true` when the sheet is laid out right to left; the default is `false`. */
   readonly rightToLeft: boolean;
-  /** `true` when the sheet's tab is selected; the default is `false`. Plain metadata: it does not by itself make the
-   *  sheet the active one. */
+  /** `true` when the sheet's tab is selected: `false` when a loaded file leaves it unset and on an added sheet, `true`
+   *  on the first sheet of a new workbook. Plain metadata: it does not by itself make the sheet the active one. */
   readonly tabSelected: boolean;
   /** The view mode (normal, page break preview or page layout); the normal view when the attribute is absent. */
   readonly viewMode: SheetViewMode;

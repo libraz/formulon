@@ -279,10 +279,25 @@ TEST(SheetViewFidelity, EveryViewAttributeSurvives) {
   }
 }
 
-TEST(SheetViewFidelity, DefaultViewEmitsNoViewElement) {
+// Excel always writes the element; on a worksheet without it, Mac Excel
+// opens every custom row height at 4/3 of its stored value.
+TEST(SheetViewFidelity, NewWorkbookWritesExcelsDefaultView) {
   Workbook wb = Workbook::create();
   const std::string xml = ReadPart(SaveOrDie(wb), "xl/worksheets/sheet1.xml");
-  EXPECT_FALSE(Has(xml, "<sheetViews>")) << xml;
+  EXPECT_TRUE(Has(xml, "<sheetViews><sheetView tabSelected=\"1\" workbookViewId=\"0\"/></sheetViews>")) << xml;
+}
+
+TEST(SheetViewFidelity, UnselectedDefaultViewIsStillWritten) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Second");
+  const std::string xml = ReadPart(SaveOrDie(wb), "xl/worksheets/sheet2.xml");
+  EXPECT_TRUE(Has(xml, "<sheetViews><sheetView workbookViewId=\"0\"/></sheetViews>")) << xml;
+}
+
+TEST(SheetViewFidelity, DefaultViewSurvivesARoundTrip) {
+  Workbook wb = Workbook::create();
+  const std::string xml = ReadPart(Resave(SaveOrDie(wb)), "xl/worksheets/sheet1.xml");
+  EXPECT_TRUE(Has(xml, "<sheetViews><sheetView tabSelected=\"1\" workbookViewId=\"0\"/></sheetViews>")) << xml;
 }
 
 TEST(SheetViewFidelity, PivotSelectionAndExtensionListAreKept) {

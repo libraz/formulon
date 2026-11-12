@@ -24,10 +24,6 @@ void read_sheet_view_element(const pugi::xml_node& sheet_view, SheetView& view);
 /// `view.extra_views_xml` is not part of it.
 std::string build_sheet_view_element_xml(const SheetView& view, std::uint32_t workbook_view_id);
 
-/// Whether `view`'s own `<sheetView>` element would carry nothing beyond
-/// `workbookViewId`.
-bool sheet_view_element_is_default(const SheetView& view);
-
 }  // namespace io
 }  // namespace formulon
 

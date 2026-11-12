@@ -10000,8 +10000,8 @@ typedef struct {
   int32_t show_zeros;
   /** `1` when the sheet is laid out right to left; the default is `0`. */
   int32_t right_to_left;
-  /** `1` when the sheet's tab is selected; the default is `0`. Plain metadata: it does not by itself make the sheet the
-   *  active one. */
+  /** `1` when the sheet's tab is selected: `0` when a loaded file leaves it unset and on an added sheet, `1` on the
+   *  first sheet of a new workbook. Plain metadata: it does not by itself make the sheet the active one. */
   int32_t tab_selected;
   /** The view mode, an `fm_sheet_view_mode_t`; the normal view when the attribute is absent. A `view` value outside the
    *  OOXML set reads as the normal view and is kept verbatim on save. */

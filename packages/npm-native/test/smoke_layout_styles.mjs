@@ -213,8 +213,18 @@ test('getSheetView surfaces display / orientation defaults', async () => {
   assert.equal(v.showRowColumnHeaders, true);
   assert.equal(v.showZeros, true);
   assert.equal(v.rightToLeft, false);
-  assert.equal(v.tabSelected, false);
+  assert.equal(v.tabSelected, true);
   assert.equal(v.viewMode, mod.SheetViewMode.Normal);
+});
+
+test('a new workbook selects only its first tab', async () => {
+  const mod = await getModule();
+  for (const wb of [mod.Workbook.createDefault(), mod.Workbook.createForProfile('mac-365-ja_JP')]) {
+    wb.addSheet('Second');
+    assert.equal(wb.sheet(0).getView().tabSelected, true);
+    assert.equal(wb.sheet(1).getView().tabSelected, false);
+    wb.dispose();
+  }
 });
 
 test('setSheetShowGridLines / setSheetRightToLeft / setSheetTabSelected / setSheetViewMode round-trip', async () => {
@@ -224,14 +234,14 @@ test('setSheetShowGridLines / setSheetRightToLeft / setSheetTabSelected / setShe
   wb.sheet(0).updateView({ showRowColumnHeaders: false });
   wb.sheet(0).updateView({ showZeros: false });
   wb.sheet(0).updateView({ rightToLeft: true });
-  wb.sheet(0).updateView({ tabSelected: true });
+  wb.sheet(0).updateView({ tabSelected: false });
   wb.sheet(0).updateView({ viewMode: mod.SheetViewMode.PageBreakPreview });
   const v = wb.sheet(0).getView();
   assert.equal(v.showGridLines, false);
   assert.equal(v.showRowColumnHeaders, false);
   assert.equal(v.showZeros, false);
   assert.equal(v.rightToLeft, true);
-  assert.equal(v.tabSelected, true);
+  assert.equal(v.tabSelected, false);
   assert.equal(v.viewMode, mod.SheetViewMode.PageBreakPreview);
 });
 

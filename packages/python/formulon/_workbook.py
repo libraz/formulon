@@ -4126,8 +4126,8 @@ class SheetView:
     show_zeros: bool = True
     #: ``True`` when the sheet is laid out right to left; the default is ``False``.
     right_to_left: bool = False
-    #: ``True`` when the sheet's tab is selected; the default is ``False``. Plain metadata: it does not by itself make
-    #: the sheet the active one.
+    #: ``True`` when the sheet's tab is selected: ``False`` when a loaded file leaves it unset and on an added sheet,
+    #: ``True`` on the first sheet of a new workbook. Plain metadata: it does not by itself make the sheet the active one.
     tab_selected: bool = False
     #: The view mode (normal, page break preview or page layout); the normal view when the attribute is absent.
     view_mode: SheetViewMode = SheetViewMode.NORMAL
