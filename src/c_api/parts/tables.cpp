@@ -634,14 +634,25 @@ extern "C" fm_status_t fm_sheet_add_table(fm_workbook_t* wb, size_t sheet_index,
   if (!styled && spec->style_name != nullptr) {
     return invalid_argument("style_name must be NULL when styled is false", "styled=false");
   }
-  const bool header_row = spec->header_row != FM_TRISTATE_FALSE;
   formulon::Workbook& book = wb->workbook();
+  if (styled && spec->style_name != nullptr) {
+    if (auto rc = finish_status(book.check_style_kind(spec->style_name, formulon::StyleKind::kTable)); rc != 0) {
+      return rc;
+    }
+  }
+  const bool header_row = spec->header_row != FM_TRISTATE_FALSE;
   std::vector<std::string> names;
   std::vector<bool> blank_headers;
   if (auto rc = table_column_names(book, sheet_index, rect, header_row, column_names, spec->column_count, &names,
                                    &blank_headers);
       rc != 0) {
     return rc;
+  }
+  // The workbook default is state, not an argument: it is checked after every argument and before any write.
+  if (styled && spec->style_name == nullptr) {
+    if (auto rc = formulon::c_api::parts::check_default_style_kind(book, formulon::StyleKind::kTable); rc != 0) {
+      return rc;
+    }
   }
   formulon::TableMetadata table;
   table.sheet_index = sheet_index;
@@ -987,6 +998,12 @@ extern "C" fm_status_t fm_sheet_update_table_style_options(fm_workbook_t* wb, si
         {patch->show_row_stripes_op, patch->show_row_stripes, "show_row_stripes"},
         {patch->show_column_stripes_op, patch->show_column_stripes, "show_column_stripes"}}) {
     if (auto rc = check_toggle_patch(op, value, field); rc != 0) {
+      return rc;
+    }
+  }
+  if (patch->style_name_op == FM_PATCH_OP_SET) {
+    if (auto rc = finish_status(wb->workbook().check_style_kind(patch->style_name, formulon::StyleKind::kTable));
+        rc != 0) {
       return rc;
     }
   }

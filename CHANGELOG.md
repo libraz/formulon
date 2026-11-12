@@ -171,10 +171,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `IndexOutOfRangeError`) instead of `InvalidArgument`, like `setRangeXfIndex`;
   a repeated source XF stays `InvalidArgument`.
 - `removeTableStyle` (Python `remove_table_style`, C
-  `fm_workbook_remove_table_style`) re-points the tables and PivotTables that
-  used the style to the default table / PivotTable style, per the style's
-  `table` / `pivot` flags, instead of leaving them naming a style that no
-  longer exists.
+  `fm_workbook_remove_table_style`) re-points every table and PivotTable that
+  used the style to the default table / PivotTable style of its own kind,
+  whatever the style's `table` / `pivot` flags say, instead of leaving them
+  naming a style that no longer exists.
+- Table and PivotTable style names are checked at entry. `addTable`,
+  `Table.updateStyleOptions`, `Pivot.updateStyleOptions` and
+  `updateTableStyleDefaults` (Python `add_table`, `update_style_options`,
+  `update_table_style_defaults`; C `fm_sheet_add_table`,
+  `fm_sheet_update_table_style_options`, `fm_sheet_update_pivot_style_options`,
+  `fm_workbook_update_table_style_defaults`) refuse a custom style whose
+  `table` / `pivot` flag excludes the object and a built-in slicer style with
+  `InvalidArgument`. `addTable` without a style name and `addPivot` fail with
+  `PreconditionFailed` when the workbook default excludes its kind, and
+  `setTableStyle` replacing a style in a way that excludes a kind one of its
+  users still has fails with `PreconditionFailed` and changes nothing.
+  `setTableStyle` also refuses a name that is a built-in table, PivotTable or
+  slicer style, and loading drops a custom style with such a name, as the
+  desktop application does; tables and PivotTables naming it keep the name.
 
 ### Fixed
 

@@ -18,7 +18,6 @@
 #include "sheet_name.h"
 #include "styles.h"
 #include "utils/error.h"
-#include "utils/strings.h"
 #include "workbook.h"
 
 using formulon::c_api::parts::c_str_or_null;
@@ -41,46 +40,47 @@ using formulon::c_api::parts::token_of;
 
 namespace {
 
-/// True for a built-in style name such as `TableStyleMedium2` or
-/// `PivotStyleDark28`, which a custom style may not take.
+/// True for a built-in style name such as `TableStyleMedium2`, `PivotStyleDark28` or
+/// `SlicerStyleLight1`, which a custom style may not take.
 bool is_builtin_style_name(std::string_view name) {
-  struct Family {
-    std::string_view prefix;
-    unsigned count;
-  };
-  constexpr Family kFamilies[] = {
-      {"TableStyleLight", 21U}, {"TableStyleMedium", 28U}, {"TableStyleDark", 11U},
-      {"PivotStyleLight", 28U}, {"PivotStyleMedium", 28U}, {"PivotStyleDark", 28U},
-  };
-  for (const Family& family : kFamilies) {
-    if (name.size() <= family.prefix.size() ||
-        !formulon::strings::case_insensitive_eq(name.substr(0, family.prefix.size()), family.prefix)) {
-      continue;
-    }
-    const std::string_view digits = name.substr(family.prefix.size());
-    if (digits.size() > 2U || digits.front() == '0') {
-      continue;
-    }
-    unsigned value = 0;
-    bool numeric = true;
-    for (const char ch : digits) {
-      if (ch < '0' || ch > '9') {
-        numeric = false;
-        break;
-      }
-      value = value * 10U + static_cast<unsigned>(ch - '0');
-    }
-    if (numeric && value >= 1U && value <= family.count) {
-      return true;
-    }
-  }
-  return false;
+  return formulon::builtin_style_family(name) != formulon::BuiltinStyleFamily::kNone;
 }
 
 // The custom style `name` resolves to (`sheet_names::resolve_named`), or `section.styles.size()` when none.
 std::size_t find_style(const formulon::TableStylesSection& section, std::string_view name) {
   const std::size_t found = formulon::sheet_names::resolve_named(section.styles, name);
   return found == formulon::sheet_names::kNotFound ? section.styles.size() : found;
+}
+
+// A replacement whose flags exclude a kind must not strand a table, a PivotTable or a default of that kind.
+fm_status_t check_replacement_keeps_users(const formulon::Workbook& book, std::size_t index,
+                                          const formulon::CustomTableStyle& next) {
+  const formulon::TableStylesSection& section = book.styles().table_styles;
+  for (const formulon::StyleKind kind : {formulon::StyleKind::kTable, formulon::StyleKind::kPivot}) {
+    const bool table = kind == formulon::StyleKind::kTable;
+    if (table ? next.table : next.pivot) {
+      continue;
+    }
+    const std::size_t users = book.style_users(index, kind);
+    if (users == 0U) {
+      continue;
+    }
+    const std::string_view default_name = table ? section.effective_table_default() : section.effective_pivot_default();
+    const bool default_uses = formulon::sheet_names::resolve_named(section.styles, default_name) == index;
+    const char* const needs =
+        table ? "; the new style must apply to tables" : "; the new style must apply to PivotTables";
+    const std::string context =
+        "name=" + next.name + (table ? " kind=table" : " kind=pivot") + " users=" + std::to_string(users);
+    const bool listed_user = users > (default_uses ? 1U : 0U);
+    const std::string message =
+        listed_user
+            ? std::string(table ? "table style is in use by a table" : "table style is in use by a PivotTable") + needs
+            : std::string(table ? "table style is the default table style"
+                                : "table style is the default PivotTable style") +
+                  needs;
+    return formulon::c_api::parts::precondition_failed(message.c_str(), context);
+  }
+  return 0;
 }
 
 }  // namespace
@@ -93,6 +93,17 @@ std::string_view default_table_style_name(const formulon::Workbook& book) {
 
 std::string_view default_pivot_style_name(const formulon::Workbook& book) {
   return book.styles().table_styles.effective_pivot_default();
+}
+
+fm_status_t check_default_style_kind(const formulon::Workbook& book, formulon::StyleKind kind) {
+  const bool table = kind == formulon::StyleKind::kTable;
+  const std::string_view name = table ? default_table_style_name(book) : default_pivot_style_name(book);
+  if (book.check_style_kind(name, kind).has_value()) {
+    return 0;
+  }
+  return precondition_failed(table ? "the workbook's default table style does not apply to tables"
+                                   : "the workbook's default PivotTable style does not apply to PivotTables",
+                             "default=" + std::string(name) + (table ? " kind=table" : " kind=pivot"));
 }
 
 }  // namespace formulon::c_api::parts
@@ -239,6 +250,9 @@ extern "C" fm_status_t fm_workbook_set_table_style(fm_workbook_t* wb, const fm_t
   }
   const std::size_t existing = find_style(section, name);
   if (existing < section.styles.size()) {
+    if (auto rc = check_replacement_keeps_users(wb->workbook(), existing, next); rc != 0) {
+      return rc;
+    }
     // Attributes the record does not carry (`xr9:uid`) stay with the style.
     next.extra_attrs = std::move(section.styles[existing].extra_attrs);
     section.styles[existing] = std::move(next);
@@ -304,6 +318,12 @@ extern "C" fm_status_t fm_workbook_update_table_style_defaults(fm_workbook_t* wb
         return invalid_argument((std::string(field) + " must not be empty").c_str(), std::string(field) + "=");
       }
       if (auto rc = check_utf8(name, "field", field); rc != 0) {
+        return rc;
+      }
+      const bool table = field == std::string_view("table_style_name");
+      if (auto rc = finish_status(wb->workbook().check_style_kind(
+              name, table ? formulon::StyleKind::kTable : formulon::StyleKind::kPivot, field));
+          rc != 0) {
         return rc;
       }
     }

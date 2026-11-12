@@ -998,7 +998,10 @@ class TableInput:
     #: and repeated names are numbered as :meth:`Sheet.add_table` describes.
     columns: Optional[Sequence[str]] = None
     #: The built-in or custom table style to apply; omitted or ``None`` is the workbook's table-style default
-    #: (:meth:`Workbook.get_table_style_defaults`), else ``TableStyleMedium2``; an empty string is invalid.
+    #: (:meth:`Workbook.get_table_style_defaults`), else ``TableStyleMedium2``; an empty string is invalid. A
+    #: custom style that does not apply to tables, and a built-in slicer style (``SlicerStyleLight1``, ...), raise
+    #: :class:`InvalidArgumentError`; when the default is used and does not apply to tables, the call fails with
+    #: ``StatusCode.PRECONDITION_FAILED``.
     style_name: Optional[str] = None
     #: ``False`` creates the table without a style element, which needs ``style_name`` omitted; default ``True``.
     styled: bool = True
@@ -1037,9 +1040,9 @@ class TableStyle:
 
     #: The style name.
     name: str
-    #: Whether PivotTables may use the style.
+    #: Whether PivotTables may use the style; a PivotTable given a style that excludes them is refused at entry.
     pivot: bool = True
-    #: Whether tables may use the style.
+    #: Whether tables may use the style; a table given a style that excludes them is refused at entry.
     table: bool = True
     #: The formatted regions of the style.
     elements: List[TableStyleElement] = field(default_factory=list)
@@ -10370,9 +10373,15 @@ class Workbook(_NoCopy):
     def set_table_style(self, style: TableStyle) -> None:
         """Add a custom table style, or replace the one with the same name.
 
-        The name may not be a built-in style name; each element type may
+        The name may not be a built-in style name (table, PivotTable or slicer); a loaded file's custom
+        style with such a name is dropped. Each element type may
         appear once, ``size`` must be at least 1 and ``dxf_index`` must name an
         existing differential format (:meth:`WorkbookOoxml.add_dxf`).
+
+        Raises:
+          FormulonError: with ``code == StatusCode.PRECONDITION_FAILED`` when replacing a style whose new
+            ``table`` or ``pivot`` flag excludes a kind that a table, a PivotTable or the default style of that
+            kind still uses; nothing changes.
         """
         h = self._require()
         with _ArgScope() as scope:
@@ -10410,11 +10419,10 @@ class Workbook(_NoCopy):
     def remove_table_style(self, name: str) -> None:
         """Remove the custom table style ``name`` (Unicode simple case folding).
 
-        Tables using it take the default table style and PivotTables using
-        it take the default PivotTable style, each only when the style's
-        ``table`` / ``pivot`` flag allows that kind. A default naming it
-        first reverts to the built-in default (``TableStyleMedium2`` /
-        ``PivotStyleLight16``).
+        Every table using it takes the default table style and every
+        PivotTable using it takes the default PivotTable style. A default
+        naming it first reverts to the built-in default
+        (``TableStyleMedium2`` / ``PivotStyleLight16``).
         """
         h = self._require()
         with _ArgScope() as scope:
@@ -10438,7 +10446,8 @@ class Workbook(_NoCopy):
         """Set the default style names; an omitted argument keeps its name and ``None`` removes it.
 
         Raises:
-          InvalidArgumentError: for an empty name.
+          InvalidArgumentError: for an empty name, a custom style that does not apply to the kind (tables for
+            ``table_style_name``, PivotTables for ``pivot_style_name``) or a built-in slicer style.
         """
         fields: Dict[str, object] = {}
         h = self._require()

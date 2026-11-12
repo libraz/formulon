@@ -2453,11 +2453,13 @@ typedef struct {
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `spec`, `spec->name` or `out_table_index` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `range` is inverted or outside the grid, a
- *         name breaks the rules above, `style_name` is empty or given with `styled`
- *         `FALSE`, the column names do not match the range, or a flag is outside
+ *         name breaks the rules above, `style_name` is empty, given with `styled`
+ *         `FALSE`, names a custom style that does not apply to tables or names a built-in slicer style
+ *         (`SlicerStyleLight1`, ...), the column names do not match the range, or a flag is outside
  *         `fm_tristate_t`;
  *         `FM_STATUS_ALREADY_EXISTS` (7) when `name` is taken;
- *         `FM_STATUS_PRECONDITION_FAILED` (9) when the range overlaps one of the objects above;
+ *         `FM_STATUS_PRECONDITION_FAILED` (9) when the range overlaps one of the objects above, or the
+ *         workbook's default table style, used when `style_name` is `NULL`, does not apply to tables;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a string is not valid UTF-8.
  */
 FM_API fm_status_t fm_sheet_add_table(fm_workbook_t* wb, size_t sheet_index, const fm_table_spec_t* spec,
@@ -2750,7 +2752,8 @@ FM_API fm_status_t fm_sheet_get_table_style_options(const fm_workbook_t* wb, siz
  * @return `FM_STATUS_OK` (0) on success, or a common table failure;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `patch` is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is out of range, `CLEAR` hits a
- *         toggle, `SET` carries a `NULL` or empty `style_name`, or a toggle is not 0 / 1;
+ *         toggle, `SET` carries a `NULL` or empty `style_name`, a `SET` `style_name` names a custom
+ *         style that does not apply to tables or a built-in slicer style, or a toggle is not 0 / 1;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `style_name` is not valid UTF-8.
  */
 FM_API fm_status_t fm_sheet_update_table_style_options(fm_workbook_t* wb, size_t sheet_index, size_t table_index,
@@ -8421,7 +8424,8 @@ typedef struct {
  *         the sheet under Unicode simple case folding;
  *         `FM_STATUS_PRECONDITION_FAILED` (9), creating nothing, when the report's range
  *         (the 3 x 18 placeholder of a pivot without fields) is occupied or runs past the
- *         sheet edge. Creation is not an edit of an existing report, so it never blocks.
+ *         sheet edge, or when the workbook's default PivotTable style does not apply to
+ *         PivotTables. Creation is not an edit of an existing report, so it never blocks.
  */
 FM_API fm_status_t fm_sheet_add_pivot(fm_workbook_t* wb, size_t sheet_index, const fm_pivot_spec_t* spec,
                                       size_t* out_pivot_index);
@@ -8551,7 +8555,8 @@ typedef struct {
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `pivot_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is out of range, `CLEAR` hits a
- *         toggle, `SET` carries a `NULL` or empty `style_name`, or a toggle is not 0 / 1;
+ *         toggle, `SET` carries a `NULL` or empty `style_name`, a `SET` `style_name` names a custom
+ *         style that does not apply to PivotTables or a built-in slicer style, or a toggle is not 0 / 1;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `style_name` is not valid UTF-8.
  */
 FM_API fm_status_t fm_sheet_update_pivot_style_options(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
@@ -12369,11 +12374,11 @@ typedef struct {
   uint32_t struct_size;
   /** The style name. */
   const char* name;
-  /** Whether PivotTables may use the style (an `fm_tristate_t`): default or true is usable, false is not; a read
-   *  returns true or false. */
+  /** Whether PivotTables may use the style (an `fm_tristate_t`): default or true is usable, false is not and is
+   *  refused at entry for a PivotTable; a read returns true or false. */
   int32_t pivot; /* fm_tristate_t */
-  /** Whether tables may use the style (an `fm_tristate_t`): default or true is usable, false is not; a read returns
-   *  true or false. */
+  /** Whether tables may use the style (an `fm_tristate_t`): default or true is usable, false is not and is refused
+   *  at entry for a table; a read returns true or false. */
   int32_t table; /* fm_tristate_t */
   /** The formatted regions of the style. */
   const fm_table_style_element_t* elements;
@@ -12420,8 +12425,12 @@ FM_API fm_status_t fm_workbook_get_table_style(const fm_workbook_t* wb, const ch
  *        (Unicode simple case folding) in place.
  *
  * The name must be non-empty and must not be a built-in style name
- * (`TableStyleLight1`, `PivotStyleMedium2`, ...). Each element type may
- * appear once. A table's style name or a pivot's style name may then name it.
+ * (`TableStyleLight1`, `PivotStyleMedium2`, `SlicerStyleLight1`, ...). A loaded file's custom
+ * style that has a built-in name is dropped, as the desktop application does; the tables and
+ * PivotTables naming it keep the name. Each element type may
+ * appear once. A table's style name or a pivot's style name may then name it,
+ * except that a kind whose flag is false is refused at entry. A name that is
+ * already in use cannot take flags that exclude a kind of its users.
  * The first style added to a workbook without `<tableStyles>` sets the
  * defaults to `TableStyleMedium2` / `PivotStyleLight16`, as the desktop
  * application writes them.
@@ -12430,17 +12439,18 @@ FM_API fm_status_t fm_workbook_get_table_style(const fm_workbook_t* wb, const ch
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `style` or `style->name` is `NULL`,
  *         or `elements` is `NULL` with a non-zero count;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) for an invalid name, an element type outside its
- *         enumeration or repeated, a zero `size`, or a `dxf_index` past `<dxfs>`.
+ *         enumeration or repeated, a zero `size`, or a `dxf_index` past `<dxfs>`;
+ *         `FM_STATUS_PRECONDITION_FAILED` (9) when a replacement's flags exclude a kind that a
+ *         table, a PivotTable or the default style of that kind still uses; nothing changes.
  */
 FM_API fm_status_t fm_workbook_set_table_style(fm_workbook_t* wb, const fm_table_style_t* style);
 
 /**
  * @brief Removes the custom table style `name` (Unicode simple case folding).
  *
- * Tables using it take the default table style and PivotTables using it
- * take the default PivotTable style, each only when the style's `table` /
- * `pivot` flag allows that kind. A default naming it first reverts to the
- * built-in default (`TableStyleMedium2` / `PivotStyleLight16`).
+ * Every table using it takes the default table style and every PivotTable
+ * using it takes the default PivotTable style. A default naming it first
+ * reverts to the built-in default (`TableStyleMedium2` / `PivotStyleLight16`).
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is `NULL`;
@@ -12496,8 +12506,9 @@ typedef struct {
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `patch` is `NULL`;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a `SET` name is malformed UTF-8;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is outside 0..2 or a `SET` name is `NULL`
- *         or empty. Nothing is written on failure.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is outside 0..2, a `SET` name is `NULL`
+ *         or empty, or `table_style_name` / `pivot_style_name` names a custom style that does not
+ *         apply to tables / PivotTables or a built-in slicer style. Nothing is written on failure.
  */
 FM_API fm_status_t fm_workbook_update_table_style_defaults(fm_workbook_t* wb,
                                                            const fm_table_style_defaults_patch_t* patch);

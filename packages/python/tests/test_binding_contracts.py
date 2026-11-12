@@ -49,6 +49,7 @@ from formulon import (
     Fill,
     Font,
     FormulonError,
+    InvalidArgumentError,
     LocaleDateOrder,
     LogLevel,
     PhoneticProperties,
@@ -65,6 +66,7 @@ from formulon import (
     SheetRect,
     SheetSelection,
     SheetSelectionInput,
+    StatusCode,
     TableColumnPatch,
     TableInput,
     TableStyle,
@@ -694,6 +696,23 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             other = wb.sheet(0).add_table(TableInput(range=CellRect(0, 2, 1, 2), name="Other", columns=["X"]))
             with self.assertRaises(FormulonError):
                 other.rename("revenue")
+
+    def test_table_style_names_are_checked_against_the_kind(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.sheet(0).set_text(0, 0, "X")
+            table = wb.sheet(0).add_table(TableInput(range=CellRect(0, 0, 1, 0), name="T", columns=["X"]))
+            wb.set_table_style(TableStyle(name="PivotOnly", table=False))
+            with self.assertRaises(InvalidArgumentError) as caught:
+                table.update_style_options(style_name="PivotOnly")
+            self.assertIn("Table.update_style_options", str(caught.exception))
+            with self.assertRaises(InvalidArgumentError):
+                table.update_style_options(style_name="SlicerStyleLight1")
+            self.assertNotEqual(table.get_style_options().style_name, "PivotOnly")
+            wb.set_table_style(TableStyle(name="TableOnly", pivot=False))
+            table.update_style_options(style_name="TableOnly")
+            with self.assertRaises(FormulonError) as stranded:
+                wb.set_table_style(TableStyle(name="TableOnly", table=False))
+            self.assertEqual(stranded.exception.code, StatusCode.PRECONDITION_FAILED)
 
     def test_custom_table_style_round_trips(self) -> None:
         with Workbook.create_default() as wb:

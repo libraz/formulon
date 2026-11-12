@@ -6979,7 +6979,8 @@ class Sheet(_NoCopy):
         Raises:
           InvalidArgumentError: when ``input.cache_id`` is a :class:`PivotCache` of another workbook.
           FormulonError: with ``code == StatusCode.PRECONDITION_FAILED``, creating nothing, when the report's range is
-            occupied (see :class:`Pivot`) or runs past the sheet edge.
+            occupied (see :class:`Pivot`) or runs past the sheet edge, or when the workbook's default PivotTable
+            style does not apply to PivotTables.
 
         Example::
 
@@ -7063,6 +7064,11 @@ class Sheet(_NoCopy):
         raises ``AlreadyExistsError``. A new name that is, or starts with, a reference in the
         profile locale's R1C1 letters (de ``Z1S1``) raises ``InvalidArgumentError``. See
         :class:`TableInput` for the defaults.
+
+        A ``style_name`` that is a custom style that does not apply to tables, or a built-in slicer style
+        (``SlicerStyleLight1``, ...), raises ``InvalidArgumentError``; when the workbook's default table style
+        is used and does not apply to tables, the call raises ``FormulonError`` with
+        ``code == StatusCode.PRECONDITION_FAILED``.
 
         A one-row ``range`` with a header row creates the header plus one empty data row below it, shifting
         occupied cells of the table's columns down; it is refused on the last grid row, and ``header_row``

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import { assert, expectFailure, getModule } from './smoke_support.mjs';
+import { rewritePackage } from './zip_rewrite.mjs';
 
 const release = (wb) => wb.dispose();
 const failsWith = (code) => (e) => e.name === 'FormulonError' && e.code === code;
@@ -165,6 +166,200 @@ test('renameTableColumn renames the column and its structured references', async
     assert.equal(wb.sheet(0).getTypedValue(0, 1).text, 'Revenue');
     assert.equal(wb.sheet(0).table(0).renameColumn(1, ''), 'Column1');
     expectFailure(() => wb.sheet(0).table(0).renameColumn(9, 'X'));
+  } finally {
+    release(wb);
+  }
+});
+
+function addScratchPivot(wb, name = 'ByProduct', anchor = 'E10') {
+  const cache = wb.addPivotCache();
+  cache.setWorksheetSource({ range: 'A1:B3', sheet: 'Sheet1' });
+  cache.addField('Product');
+  cache.addField('Amount');
+  for (const [product, amount] of [
+    ['Widget', 10],
+    ['Gadget', 20],
+  ]) {
+    const record = cache.addRecord();
+    cache.setRecordValue(record, 0, product);
+    cache.setRecordValue(record, 1, amount);
+  }
+  return wb.sheet(0).addPivot({ name, cacheId: cache.cacheId, anchor });
+}
+
+/** `bytes` with the custom style `Both` flagged as `flag` (for example `table="0"`), as a loaded file may carry it. */
+function flagStyle(bytes, flag) {
+  return rewritePackage(bytes, {
+    'xl/styles.xml': (xml) => xml.replace('<tableStyle name="Both"', `<tableStyle name="Both" ${flag}`),
+  });
+}
+
+test('addTable refuses a style that excludes tables and a slicer style, and creates no table', async () => {
+  const mod = await getModule();
+  const wb = salesWorkbook(mod);
+  try {
+    wb.setTableStyle({ name: 'PivotOnly', table: false });
+    for (const styleName of ['PivotOnly', 'SlicerStyleLight1']) {
+      assert.throws(
+        () => wb.sheet(0).addTable({ range: 'D1:E3', name: 'Other', columns: ['A', 'B'], styleName }),
+        failsWith(mod.StatusCode.InvalidArgument),
+      );
+    }
+    assert.equal(wb.sheet(0).listTables().length, 1);
+    wb.setTableStyle({ name: 'TableOnly', pivot: false });
+    wb.sheet(0).addTable({ range: 'D1:E3', name: 'Other', columns: ['A', 'B'], styleName: 'TableOnly' });
+    assert.equal(wb.sheet(0).listTables().length, 2);
+  } finally {
+    release(wb);
+  }
+});
+
+test('a pivot style and the style defaults refuse a style that excludes the kind', async () => {
+  const mod = await getModule();
+  const wb = salesWorkbook(mod);
+  try {
+    const pivot = addScratchPivot(wb);
+    wb.setTableStyle({ name: 'PivotOnly', table: false });
+    wb.setTableStyle({ name: 'TableOnly', pivot: false });
+    assert.throws(
+      () => pivot.updateStyleOptions({ styleName: 'TableOnly' }),
+      failsWith(mod.StatusCode.InvalidArgument),
+    );
+    assert.throws(
+      () => pivot.updateStyleOptions({ styleName: 'SlicerStyleDark2' }),
+      failsWith(mod.StatusCode.InvalidArgument),
+    );
+    assert.notEqual(pivot.getStyleOptions().styleName, 'TableOnly');
+    pivot.updateStyleOptions({ styleName: 'PivotOnly' });
+    assert.throws(
+      () => wb.updateTableStyleDefaults({ tableStyleName: 'PivotOnly' }),
+      failsWith(mod.StatusCode.InvalidArgument),
+    );
+    assert.throws(
+      () => wb.updateTableStyleDefaults({ pivotStyleName: 'TableOnly' }),
+      failsWith(mod.StatusCode.InvalidArgument),
+    );
+    wb.updateTableStyleDefaults({ tableStyleName: 'TableOnly', pivotStyleName: 'PivotOnly' });
+    assert.equal(wb.getTableStyleDefaults().tableStyleName, 'TableOnly');
+  } finally {
+    release(wb);
+  }
+});
+
+test('a loaded default that excludes its kind makes addTable and addPivot fail with PreconditionFailed', async () => {
+  const mod = await getModule();
+  const wb = salesWorkbook(mod);
+  let saved;
+  try {
+    wb.setTableStyle({ name: 'Both' });
+    wb.updateTableStyleDefaults({ tableStyleName: 'Both', pivotStyleName: 'Both' });
+    saved = wb.save();
+  } finally {
+    release(wb);
+  }
+  const noTables = mod.Workbook.load(flagStyle(saved, 'table="0"'));
+  try {
+    assert.throws(
+      () => noTables.sheet(0).addTable({ range: 'D1:E3', name: 'Other', columns: ['A', 'B'] }),
+      failsWith(mod.StatusCode.PreconditionFailed),
+    );
+    assert.equal(noTables.sheet(0).listTables().length, 1);
+    noTables.sheet(0).addTable({ range: 'D1:E3', name: 'Other', columns: ['A', 'B'], styleName: 'TableStyleLight1' });
+    noTables.updateTableStyleDefaults({ tableStyleName: 'TableStyleLight1' });
+  } finally {
+    release(noTables);
+  }
+  const noPivots = mod.Workbook.load(flagStyle(saved, 'pivot="0"'));
+  try {
+    assert.throws(() => addScratchPivot(noPivots), failsWith(mod.StatusCode.PreconditionFailed));
+    assert.equal(noPivots.sheet(0).listPivots().length, 0);
+  } finally {
+    release(noPivots);
+  }
+});
+
+test('removeTableStyle re-points every user to the default of its own kind', async () => {
+  const mod = await getModule();
+  const wb = salesWorkbook(mod);
+  let saved;
+  try {
+    wb.setTableStyle({ name: 'Both' });
+    wb.sheet(0).table(0).updateStyleOptions({ styleName: 'Both' });
+    addScratchPivot(wb).updateStyleOptions({ styleName: 'Both' });
+    saved = wb.save();
+  } finally {
+    release(wb);
+  }
+  for (const flag of ['table="0"', 'pivot="0"']) {
+    const loaded = mod.Workbook.load(flagStyle(saved, flag));
+    try {
+      assert.equal(loaded.sheet(0).table(0).getStyleOptions().styleName, 'Both');
+      assert.equal(loaded.sheet(0).pivot(0).getStyleOptions().styleName, 'Both');
+      loaded.removeTableStyle('Both');
+      assert.equal(loaded.sheet(0).table(0).getStyleOptions().styleName, 'TableStyleMedium2');
+      assert.equal(loaded.sheet(0).pivot(0).getStyleOptions().styleName, 'PivotStyleLight16');
+    } finally {
+      release(loaded);
+    }
+  }
+});
+
+test('setTableStyle refuses a built-in style name and a loaded custom style with one is dropped', async () => {
+  const mod = await getModule();
+  const wb = salesWorkbook(mod);
+  let saved;
+  try {
+    for (const name of ['SlicerStyleLight1', 'TableStyleMedium9', 'PivotStyleDark3']) {
+      assert.throws(() => wb.setTableStyle({ name }), failsWith(mod.StatusCode.InvalidArgument));
+    }
+    wb.setTableStyle({ name: 'Mine' });
+    wb.sheet(0).table(0).updateStyleOptions({ styleName: 'Mine' });
+    saved = wb.save();
+  } finally {
+    release(wb);
+  }
+  for (const builtin of ['SlicerStyleLight1', 'TableStyleMedium9']) {
+    const renamed = rewritePackage(saved, {
+      'xl/styles.xml': (xml) => xml.replace('<tableStyle name="Mine"', `<tableStyle name="${builtin}"`),
+      'xl/tables/table1.xml': (xml) => xml.replace('name="Mine"', `name="${builtin}"`),
+    });
+    const loaded = mod.Workbook.load(renamed);
+    try {
+      assert.equal(loaded.listTableStyles().length, 0);
+      assert.equal(loaded.sheet(0).table(0).getStyleOptions().styleName, builtin);
+      const again = mod.Workbook.load(loaded.save());
+      try {
+        assert.equal(again.sheet(0).table(0).getStyleOptions().styleName, builtin);
+      } finally {
+        release(again);
+      }
+    } finally {
+      release(loaded);
+    }
+  }
+});
+
+test('a table or pivot style name is refused for a kind the style excludes and for a slicer style', async () => {
+  const mod = await getModule();
+  const wb = salesWorkbook(mod);
+  try {
+    wb.setTableStyle({ name: 'PivotOnly', table: false });
+    assert.throws(
+      () => wb.sheet(0).table(0).updateStyleOptions({ styleName: 'PivotOnly' }),
+      failsWith(mod.StatusCode.InvalidArgument),
+    );
+    assert.throws(
+      () => wb.sheet(0).table(0).updateStyleOptions({ styleName: 'SlicerStyleLight1' }),
+      failsWith(mod.StatusCode.InvalidArgument),
+    );
+    assert.notEqual(wb.sheet(0).table(0).getStyleOptions().styleName, 'PivotOnly');
+    wb.sheet(0).table(0).updateStyleOptions({ styleName: 'PivotStyleLight16' });
+    wb.setTableStyle({ name: 'TableOnly', pivot: false });
+    wb.sheet(0).table(0).updateStyleOptions({ styleName: 'TableOnly' });
+    assert.throws(
+      () => wb.setTableStyle({ name: 'TableOnly', table: false }),
+      failsWith(mod.StatusCode.PreconditionFailed),
+    );
   } finally {
     release(wb);
   }

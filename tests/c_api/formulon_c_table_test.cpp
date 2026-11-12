@@ -871,18 +871,26 @@ TEST(FormulonCApiTableStyles, DefaultsAndRemove) {
 
 namespace {
 
-/// The sales table (A1:B3) and the scratch pivot (D1) on one sheet, both
-/// naming `style`, which is a custom style with the given kind flags.
+/// Loads into `wb` the sales table (A1:B3) and the scratch pivot (D1) on one sheet, both naming `style`. The style
+/// is created applying to both kinds and the flags are then rewritten in the saved package, as the reader takes a
+/// file whose flags exclude a kind its users have.
 void TableAndPivotUsing(WorkbookGuard& wb, const char* style, int32_t pivot, int32_t table) {
-  CreateSalesTable(wb);
-  ASSERT_EQ(BuildScratchPivot(wb.handle, nullptr, nullptr), 0) << fm_get_last_error_message();
-  fm_table_style_t custom = MakeTableStyle(style, pivot, table, nullptr, 0U);
-  ASSERT_EQ(fm_workbook_set_table_style(wb.handle, &custom), 0);
-  ASSERT_EQ(SetTableStyleName(wb.handle, 0U, style), 0);
+  WorkbookGuard source;
+  CreateSalesTable(source);
+  ASSERT_EQ(BuildScratchPivot(source.handle, nullptr, nullptr), 0) << fm_get_last_error_message();
+  fm_table_style_t custom = MakeTableStyle(style, 1, 1, nullptr, 0U);
+  ASSERT_EQ(fm_workbook_set_table_style(source.handle, &custom), 0);
+  ASSERT_EQ(SetTableStyleName(source.handle, 0U, style), 0);
   fm_pivot_style_options_patch_t patch = FM_STRUCT_INIT(fm_pivot_style_options_patch_t);
   patch.style_name_op = FM_PATCH_OP_SET;
   patch.style_name = style;
-  ASSERT_EQ(fm_sheet_update_pivot_style_options(wb.handle, 0, 0, &patch), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_update_pivot_style_options(source.handle, 0, 0, &patch), 0) << fm_get_last_error_message();
+  const std::string element = std::string("<tableStyle name=\"") + style + "\"";
+  const std::vector<std::uint8_t> flagged = RewriteEntry(Save(source.handle), "xl/styles.xml", [&](std::string xml) {
+    return ReplaceOnce(std::move(xml), element,
+                       element + (pivot != 0 ? "" : " pivot=\"0\"") + (table != 0 ? "" : " table=\"0\""));
+  });
+  Load(flagged, wb);
 }
 
 std::string TableStyleOf(fm_workbook_t* wb) {
@@ -909,19 +917,21 @@ TEST(FormulonCApiTableStyles, RemoveRepointsTablesAndPivotsToTheirDefaults) {
   EXPECT_EQ(PivotStyleOf(wb.handle), "PivotStyleMedium4");
 }
 
-// A style flagged for one kind leaves the other kind's users naming it.
-TEST(FormulonCApiTableStyles, RemoveRepointsOnlyTheKindsTheStyleAppliesTo) {
+// A loaded style that excludes a kind its users have is removed like any other: every user takes its own default.
+TEST(FormulonCApiTableStyles, RemoveRepointsEveryUserToItsOwnKindsDefault) {
   WorkbookGuard pivot_only;
   TableAndPivotUsing(pivot_only, "PivotOnly", 1, 0);
+  ASSERT_EQ(TableStyleOf(pivot_only.handle), "PivotOnly");
   ASSERT_EQ(fm_workbook_remove_table_style(pivot_only.handle, "PivotOnly"), 0);
-  EXPECT_EQ(TableStyleOf(pivot_only.handle), "PivotOnly");
+  EXPECT_EQ(TableStyleOf(pivot_only.handle), "TableStyleMedium2");
   EXPECT_EQ(PivotStyleOf(pivot_only.handle), "PivotStyleLight16");
 
   WorkbookGuard table_only;
   TableAndPivotUsing(table_only, "TableOnly", 0, 1);
+  ASSERT_EQ(PivotStyleOf(table_only.handle), "TableOnly");
   ASSERT_EQ(fm_workbook_remove_table_style(table_only.handle, "TableOnly"), 0);
   EXPECT_EQ(TableStyleOf(table_only.handle), "TableStyleMedium2");
-  EXPECT_EQ(PivotStyleOf(table_only.handle), "TableOnly");
+  EXPECT_EQ(PivotStyleOf(table_only.handle), "PivotStyleLight16");
 }
 
 // Removing the style that is the default of both kinds resets both defaults, and users take them.
@@ -959,6 +969,239 @@ TEST(FormulonCApiTableStyles, DefaultsPatchRefusesABadOpAndChangesNothing) {
   fm_table_style_defaults_t defaults = FM_STRUCT_INIT(fm_table_style_defaults_t);
   ASSERT_EQ(fm_workbook_get_table_style_defaults(wb.handle, &defaults), 0);
   EXPECT_STREQ(defaults.table_style_name, "TableStyleLight1") << "a refused patch writes nothing";
+}
+
+namespace {
+
+/// A workbook holding the sales table and the scratch pivot plus the custom styles `PivotOnly` (not for tables) and
+/// `TableOnly` (not for PivotTables).
+void KindStyles(WorkbookGuard& wb) {
+  CreateSalesTable(wb);
+  ASSERT_EQ(BuildScratchPivot(wb.handle, nullptr, nullptr), 0) << fm_get_last_error_message();
+  fm_table_style_t pivot_only = MakeTableStyle("PivotOnly", 1, 0, nullptr, 0U);
+  fm_table_style_t table_only = MakeTableStyle("TableOnly", 0, 1, nullptr, 0U);
+  ASSERT_EQ(fm_workbook_set_table_style(wb.handle, &pivot_only), 0);
+  ASSERT_EQ(fm_workbook_set_table_style(wb.handle, &table_only), 0);
+}
+
+fm_status_t SetPivotStyleName(fm_workbook_t* wb, const char* style) {
+  fm_pivot_style_options_patch_t patch = FM_STRUCT_INIT(fm_pivot_style_options_patch_t);
+  patch.style_name_op = FM_PATCH_OP_SET;
+  patch.style_name = style;
+  return fm_sheet_update_pivot_style_options(wb, 0, 0, &patch);
+}
+
+std::size_t TableCount(fm_workbook_t* wb) {
+  std::size_t count = 99U;
+  EXPECT_EQ(fm_sheet_get_table_count(wb, 0, &count), 0);
+  return count;
+}
+
+}  // namespace
+
+TEST(FormulonCApiTableStyleKinds, AddTableRefusesAStyleThatExcludesTables) {
+  WorkbookGuard wb;
+  KindStyles(wb);
+  const char* columns[] = {"A", "B"};
+  const fm_cell_rect_t range = {5, 5, 7, 6};
+  std::size_t index = 99U;
+  EXPECT_EQ(AddTable(wb.handle, 0, &range, "Other", columns, 2, "PivotOnly", 1, 0, &index), kInvalidArgument);
+  EXPECT_STREQ(fm_get_last_error_message(), "style_name must name a style that applies to tables");
+  EXPECT_STREQ(fm_get_last_error_context(), "style_name=PivotOnly kind=table");
+  EXPECT_EQ(TableCount(wb.handle), 1U) << "a refused add creates nothing";
+  ASSERT_EQ(AddTable(wb.handle, 0, &range, "Other", columns, 2, "TableOnly", 1, 0, &index), 0);
+}
+
+TEST(FormulonCApiTableStyleKinds, UpdateStyleOptionsRefusesAStyleThatExcludesTheKind) {
+  WorkbookGuard wb;
+  KindStyles(wb);
+  EXPECT_EQ(SetTableStyleName(wb.handle, 0, "PivotOnly"), kInvalidArgument);
+  EXPECT_STREQ(fm_get_last_error_context(), "style_name=PivotOnly kind=table");
+  EXPECT_EQ(TableStyleOf(wb.handle), "TableStyleMedium2");
+  EXPECT_EQ(SetPivotStyleName(wb.handle, "TableOnly"), kInvalidArgument);
+  EXPECT_STREQ(fm_get_last_error_message(), "style_name must name a style that applies to PivotTables");
+  EXPECT_STREQ(fm_get_last_error_context(), "style_name=TableOnly kind=pivot");
+  EXPECT_EQ(PivotStyleOf(wb.handle), "PivotStyleLight16");
+  EXPECT_EQ(SetTableStyleName(wb.handle, 0, "TableOnly"), 0);
+  EXPECT_EQ(SetPivotStyleName(wb.handle, "PivotOnly"), 0);
+}
+
+TEST(FormulonCApiTableStyleKinds, BuiltInSlicerStylesAreRefusedOnTablesAndPivots) {
+  WorkbookGuard wb;
+  KindStyles(wb);
+  const char* columns[] = {"A", "B"};
+  const fm_cell_rect_t range = {5, 5, 7, 6};
+  std::size_t index = 99U;
+  for (const char* name : {"SlicerStyleLight1", "slicerstyledark6", "SlicerStyleOther2"}) {
+    EXPECT_EQ(AddTable(wb.handle, 0, &range, "Other", columns, 2, name, 1, 0, &index), kInvalidArgument) << name;
+    EXPECT_EQ(SetTableStyleName(wb.handle, 0, name), kInvalidArgument) << name;
+    EXPECT_EQ(SetPivotStyleName(wb.handle, name), kInvalidArgument) << name;
+    EXPECT_EQ(UpdateStyleDefaults(wb.handle, name, nullptr), kInvalidArgument) << name;
+    EXPECT_EQ(UpdateStyleDefaults(wb.handle, nullptr, name), kInvalidArgument) << name;
+  }
+  EXPECT_STREQ(fm_get_last_error_context(), "pivot_style_name=SlicerStyleOther2 kind=pivot");
+  EXPECT_EQ(TableCount(wb.handle), 1U);
+  EXPECT_EQ(TableStyleOf(wb.handle), "TableStyleMedium2");
+  EXPECT_EQ(PivotStyleOf(wb.handle), "PivotStyleLight16");
+  // A name outside every family is unknown, not a slicer style.
+  EXPECT_EQ(SetTableStyleName(wb.handle, 0, "SlicerStyleLight7"), 0);
+}
+
+TEST(FormulonCApiTableStyleKinds, UnknownAndCrossKindBuiltInNamesAreAccepted) {
+  WorkbookGuard wb;
+  KindStyles(wb);
+  EXPECT_EQ(SetTableStyleName(wb.handle, 0, "PivotStyleLight16"), 0);
+  EXPECT_EQ(SetTableStyleName(wb.handle, 0, "NoSuchStyle"), 0);
+  EXPECT_EQ(SetPivotStyleName(wb.handle, "TableStyleMedium2"), 0);
+  EXPECT_EQ(SetPivotStyleName(wb.handle, "NoSuchStyle"), 0);
+  EXPECT_EQ(PivotStyleOf(wb.handle), "NoSuchStyle");
+}
+
+TEST(FormulonCApiTableStyleKinds, DefaultsPatchRefusesAStyleThatExcludesTheKind) {
+  WorkbookGuard wb;
+  KindStyles(wb);
+  EXPECT_EQ(UpdateStyleDefaults(wb.handle, "PivotOnly", nullptr), kInvalidArgument);
+  EXPECT_STREQ(fm_get_last_error_message(), "table_style_name must name a style that applies to tables");
+  EXPECT_EQ(UpdateStyleDefaults(wb.handle, nullptr, "TableOnly"), kInvalidArgument);
+  EXPECT_STREQ(fm_get_last_error_message(), "pivot_style_name must name a style that applies to PivotTables");
+  EXPECT_EQ(UpdateStyleDefaults(wb.handle, "TableOnly", "PivotOnly"), 0);
+}
+
+TEST(FormulonCApiTableStyleKinds, SetTableStyleRefusesToStrandAUser) {
+  WorkbookGuard wb;
+  KindStyles(wb);
+  ASSERT_EQ(SetTableStyleName(wb.handle, 0, "TableOnly"), 0);
+  fm_table_style_t no_tables = MakeTableStyle("TableOnly", 1, 0, nullptr, 0U);
+  EXPECT_EQ(fm_workbook_set_table_style(wb.handle, &no_tables), FM_STATUS_PRECONDITION_FAILED);
+  EXPECT_STREQ(fm_get_last_error_message(), "table style is in use by a table; the new style must apply to tables");
+  EXPECT_STREQ(fm_get_last_error_context(), "name=TableOnly kind=table users=1");
+  fm_table_style_t still_table = MakeTableStyle("TableOnly", 0, 1, nullptr, 0U);
+  EXPECT_EQ(fm_workbook_set_table_style(wb.handle, &still_table), 0) << "flags that keep the users are accepted";
+
+  ASSERT_EQ(SetPivotStyleName(wb.handle, "PivotOnly"), 0);
+  fm_table_style_t no_pivots = MakeTableStyle("PivotOnly", 0, 1, nullptr, 0U);
+  EXPECT_EQ(fm_workbook_set_table_style(wb.handle, &no_pivots), FM_STATUS_PRECONDITION_FAILED);
+  EXPECT_STREQ(fm_get_last_error_message(),
+               "table style is in use by a PivotTable; the new style must apply to PivotTables");
+  EXPECT_STREQ(fm_get_last_error_context(), "name=PivotOnly kind=pivot users=1");
+
+  ASSERT_EQ(UpdateStyleDefaults(wb.handle, "TableOnly", nullptr), 0);
+  ASSERT_EQ(SetTableStyleName(wb.handle, 0, "TableStyleLight1"), 0);
+  fm_table_style_t no_default = MakeTableStyle("TableOnly", 1, 0, nullptr, 0U);
+  EXPECT_EQ(fm_workbook_set_table_style(wb.handle, &no_default), FM_STATUS_PRECONDITION_FAILED);
+  EXPECT_STREQ(fm_get_last_error_message(),
+               "table style is the default table style; the new style must apply to tables");
+  EXPECT_STREQ(fm_get_last_error_context(), "name=TableOnly kind=table users=1");
+  fm_table_style_t read = FM_STRUCT_INIT(fm_table_style_t);
+  int32_t present = 0;
+  ASSERT_EQ(fm_workbook_get_table_style(wb.handle, "TableOnly", &present, &read), 0);
+  EXPECT_EQ(read.table, FM_TRISTATE_TRUE) << "a refused replacement changes nothing";
+}
+
+TEST(FormulonCApiTableStyleKinds, ALoadedDefaultThatExcludesItsKindRefusesNewObjects) {
+  WorkbookGuard source;
+  CreateSalesTable(source);
+  ASSERT_EQ(BuildScratchPivot(source.handle, nullptr, nullptr), 0) << fm_get_last_error_message();
+  fm_table_style_t both = MakeTableStyle("Both", 1, 1, nullptr, 0U);
+  ASSERT_EQ(fm_workbook_set_table_style(source.handle, &both), 0);
+  ASSERT_EQ(UpdateStyleDefaults(source.handle, "Both", "Both"), 0);
+  const std::vector<std::uint8_t> saved = Save(source.handle);
+  const auto flagged = [&](const char* flag) {
+    return RewriteEntry(saved, "xl/styles.xml", [&](std::string xml) {
+      return ReplaceOnce(std::move(xml), "<tableStyle name=\"Both\"", std::string("<tableStyle name=\"Both\" ") + flag);
+    });
+  };
+
+  WorkbookGuard no_tables;
+  Load(flagged("table=\"0\""), no_tables);
+  const char* columns[] = {"A", "B"};
+  const fm_cell_rect_t range = {5, 5, 7, 6};
+  std::size_t index = 99U;
+  EXPECT_EQ(AddTable(no_tables.handle, 0, &range, "Other", columns, 2, nullptr, 1, 0, &index),
+            FM_STATUS_PRECONDITION_FAILED);
+  EXPECT_STREQ(fm_get_last_error_message(), "the workbook's default table style does not apply to tables");
+  EXPECT_STREQ(fm_get_last_error_context(), "default=Both kind=table");
+  EXPECT_EQ(TableCount(no_tables.handle), 1U);
+  EXPECT_EQ(AddTable(no_tables.handle, 0, &range, "Other", columns, 2, "TableStyleLight1", 1, 0, &index), 0);
+  ASSERT_EQ(UpdateStyleDefaults(no_tables.handle, "TableStyleLight1", nullptr), 0)
+      << "recoverable through the defaults";
+
+  WorkbookGuard no_pivots;
+  Load(flagged("pivot=\"0\""), no_pivots);
+  std::uint32_t cache_id = 0;
+  ASSERT_EQ(fm_workbook_add_pivot_cache(no_pivots.handle, 0, &cache_id), 0);
+  fm_pivot_spec_t spec = FM_STRUCT_INIT(fm_pivot_spec_t);
+  spec.name = "Second";
+  spec.cache_id = cache_id;
+  spec.anchor_row = 20;
+  spec.anchor_col = 0;
+  std::size_t pivot_index = 99U;
+  EXPECT_EQ(fm_sheet_add_pivot(no_pivots.handle, 0, &spec, &pivot_index), FM_STATUS_PRECONDITION_FAILED);
+  EXPECT_STREQ(fm_get_last_error_message(), "the workbook's default PivotTable style does not apply to PivotTables");
+  EXPECT_STREQ(fm_get_last_error_context(), "default=Both kind=pivot");
+}
+
+TEST(FormulonCApiTableStyleKinds, ALoadedSlicerStyleNameIsKeptThroughASave) {
+  WorkbookGuard source;
+  CreateSalesTable(source, "TableStyleLight9");
+  const std::vector<std::uint8_t> patched =
+      RewriteEntry(Save(source.handle), "xl/tables/table1.xml", [](std::string xml) {
+        return ReplaceOnce(std::move(xml), "name=\"TableStyleLight9\"", "name=\"SlicerStyleLight1\"");
+      });
+  WorkbookGuard wb;
+  Load(patched, wb);
+  EXPECT_STREQ(Info(wb.handle).style_name, "SlicerStyleLight1");
+  const std::vector<std::uint8_t> saved = Save(wb.handle);
+  EXPECT_NE(ExtractZipEntry(saved, "xl/tables/table1.xml").find("<tableStyleInfo name=\"SlicerStyleLight1\""),
+            std::string::npos);
+}
+
+TEST(FormulonCApiTableStyleKinds, SetTableStyleRefusesEveryBuiltInFamilyName) {
+  WorkbookGuard wb;
+  KindStyles(wb);
+  for (const char* name :
+       {"SlicerStyleLight1", "slicerstyleother2", "SlicerStyleDark6", "TableStyleMedium9", "PivotStyleLight16"}) {
+    fm_table_style_t style = MakeTableStyle(name, 1, 1, nullptr, 0U);
+    EXPECT_EQ(fm_workbook_set_table_style(wb.handle, &style), kInvalidArgument) << name;
+  }
+  std::size_t count = 99U;
+  ASSERT_EQ(fm_workbook_get_table_style_count(wb.handle, &count), 0);
+  EXPECT_EQ(count, 2U);
+}
+
+namespace {
+
+/// Loads a package whose custom style `Mine` and the sales table naming it are renamed to `builtin`.
+void LoadCustomStyleNamedLike(const char* builtin, WorkbookGuard& wb) {
+  WorkbookGuard source;
+  CreateSalesTable(source);
+  fm_table_style_t mine = MakeTableStyle("Mine", 1, 1, nullptr, 0U);
+  ASSERT_EQ(fm_workbook_set_table_style(source.handle, &mine), 0);
+  ASSERT_EQ(SetTableStyleName(source.handle, 0, "Mine"), 0);
+  const std::string quoted = std::string("name=\"") + builtin + "\"";
+  std::vector<std::uint8_t> bytes = RewriteEntry(Save(source.handle), "xl/styles.xml", [&](std::string xml) {
+    return ReplaceOnce(std::move(xml), "<tableStyle name=\"Mine\"", "<tableStyle " + quoted);
+  });
+  bytes = RewriteEntry(bytes, "xl/tables/table1.xml",
+                       [&](std::string xml) { return ReplaceOnce(std::move(xml), "name=\"Mine\"", quoted); });
+  Load(bytes, wb);
+}
+
+}  // namespace
+
+TEST(FormulonCApiTableStyleKinds, ALoadedCustomStyleNamedLikeABuiltInIsDroppedAndTheUsersKeepTheName) {
+  for (const char* builtin : {"SlicerStyleLight1", "slicerstyledark3", "TableStyleMedium9"}) {
+    WorkbookGuard wb;
+    LoadCustomStyleNamedLike(builtin, wb);
+    std::size_t count = 99U;
+    ASSERT_EQ(fm_workbook_get_table_style_count(wb.handle, &count), 0) << builtin;
+    EXPECT_EQ(count, 0U) << builtin;
+    EXPECT_EQ(TableStyleOf(wb.handle), builtin);
+    const std::vector<std::uint8_t> saved = Save(wb.handle);
+    EXPECT_NE(ExtractZipEntry(saved, "xl/tables/table1.xml").find(std::string("<tableStyleInfo name=\"") + builtin),
+              std::string::npos)
+        << builtin;
+  }
 }
 
 /// An `.xlsb` package whose only table `Sales` (id `id`) stays a verbatim

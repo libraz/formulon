@@ -587,6 +587,10 @@ void ReadTableStyles(const pugi::xml_node& node, StylesTable& table) {
       element.extra_attrs = CaptureExtraAttrs(element_node, {"type", "size", "dxfId"});
       style.elements.push_back(std::move(element));
     }
+    // Excel discards a custom style named like a built-in one; tables and pivots keep the name.
+    if (builtin_style_family(style.name) != BuiltinStyleFamily::kNone) {
+      continue;
+    }
     section.styles.push_back(std::move(style));
   }
 }

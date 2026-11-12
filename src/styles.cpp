@@ -16,6 +16,7 @@
 
 #include "num_fmt_locale.h"
 #include "sheet_name.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace {
@@ -413,6 +414,44 @@ std::uint32_t intern_cell_xf(StylesTable& styles, CellXf candidate) {
   }
   styles.cell_xfs.push_back(std::move(candidate));
   return static_cast<std::uint32_t>(styles.cell_xfs.size() - 1U);
+}
+
+BuiltinStyleFamily builtin_style_family(std::string_view name) noexcept {
+  struct Family {
+    std::string_view prefix;
+    unsigned count;
+    BuiltinStyleFamily family;
+  };
+  constexpr Family kFamilies[] = {
+      {"TableStyleLight", 21U, BuiltinStyleFamily::kTable},  {"TableStyleMedium", 28U, BuiltinStyleFamily::kTable},
+      {"TableStyleDark", 11U, BuiltinStyleFamily::kTable},   {"PivotStyleLight", 28U, BuiltinStyleFamily::kPivot},
+      {"PivotStyleMedium", 28U, BuiltinStyleFamily::kPivot}, {"PivotStyleDark", 28U, BuiltinStyleFamily::kPivot},
+      {"SlicerStyleLight", 6U, BuiltinStyleFamily::kSlicer}, {"SlicerStyleOther", 2U, BuiltinStyleFamily::kSlicer},
+      {"SlicerStyleDark", 6U, BuiltinStyleFamily::kSlicer},
+  };
+  for (const Family& family : kFamilies) {
+    if (name.size() <= family.prefix.size() ||
+        !strings::case_insensitive_eq(name.substr(0, family.prefix.size()), family.prefix)) {
+      continue;
+    }
+    const std::string_view digits = name.substr(family.prefix.size());
+    if (digits.size() > 2U || digits.front() == '0') {
+      continue;
+    }
+    unsigned value = 0;
+    bool numeric = true;
+    for (const char ch : digits) {
+      if (ch < '0' || ch > '9') {
+        numeric = false;
+        break;
+      }
+      value = value * 10U + static_cast<unsigned>(ch - '0');
+    }
+    if (numeric && value >= 1U && value <= family.count) {
+      return family.family;
+    }
+  }
+  return BuiltinStyleFamily::kNone;
 }
 
 }  // namespace formulon

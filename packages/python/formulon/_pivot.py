@@ -423,7 +423,8 @@ class Pivot(_NoCopy):
     ) -> None:
         """Update the pivot's table style, making the style element present; an omitted argument keeps its value.
 
-        ``style_name=None`` writes the element without a style name; ``""`` raises ``InvalidArgumentError``. On a
+        ``style_name=None`` writes the element without a style name; ``""``, a custom style that does not apply to
+        PivotTables and a built-in slicer style (``SlicerStyleLight1``, ...) raise ``InvalidArgumentError``. On a
         pivot without a style element the arguments left out take the creation
         defaults: the workbook's PivotTable style default (else
         ``PivotStyleLight16``) and row / column headers and last column on.

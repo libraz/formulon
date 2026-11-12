@@ -1713,6 +1713,20 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
   and then means Excel's automatic colour. In C, a cell font with
   `has_size_pt == 0` or a `NULL` `name` takes the Normal font's value, and
   `size_pt` is range-checked only when stated.
+- A table or PivotTable style name is checked against the kinds the style
+  applies to. Naming a custom style whose `table` / `pivot` flag excludes the
+  object, or a built-in slicer style (`SlicerStyleLight1`, ...), is
+  `InvalidArgument` in `addTable`, `Table.updateStyleOptions`,
+  `Pivot.updateStyleOptions` and `updateTableStyleDefaults`; a workbook default
+  that excludes its kind makes `addTable` without a style name and `addPivot`
+  `PreconditionFailed`. `removeTableStyle` re-points every user of the removed
+  style to its own kind's default whatever the style's flags say, and
+  `setTableStyle` replacing a style with flags that exclude a kind one of its
+  users still has is `PreconditionFailed`. Built-in names of the other kind
+  (`PivotStyleLight16` on a table) and unknown names are still accepted.
+  `setTableStyle` also refuses a slicer-style name, and a loaded custom style
+  named like any built-in style is dropped; tables and PivotTables naming it
+  keep the name.
 
 ## Reference tables
 

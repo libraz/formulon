@@ -367,7 +367,8 @@ class Table(_NoCopy):
     ) -> None:
         """Update the table's style name and toggles; an omitted argument keeps its setting.
 
-        ``style_name=None`` removes the style name, ``""`` raises ``InvalidArgumentError``; a new ``style_name`` keeps
+        ``style_name=None`` removes the style name; ``""``, a custom style that does not apply to tables and a
+        built-in slicer style (``SlicerStyleLight1``, ...) raise ``InvalidArgumentError``; a new ``style_name`` keeps
         the four toggles. The update is all-or-nothing.
 
         Raises:

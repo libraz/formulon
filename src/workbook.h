@@ -113,6 +113,12 @@ enum class ReportPlacement : std::uint8_t {
   kRefuse,  ///< Creation: occupants or the sheet edge refuse it.
 };
 
+/// The object kind a table style is applied to.
+enum class StyleKind : std::uint8_t {
+  kTable,
+  kPivot,
+};
+
 /// Move-only container representing a spreadsheet workbook.
 ///
 /// Instances are constructed via the `create()` factory, which returns a
@@ -1774,11 +1780,22 @@ class Workbook {
   StylesTable& mutable_styles() noexcept { return styles_; }
 
   /// Removes the custom table style `name` (resolved like any style name).
-  /// Tables using it take the default table style and pivots using it the
-  /// default PivotTable style, each only when the style's `table` / `pivot`
-  /// flag allows that kind. A default naming it first reverts to the
-  /// built-in default. Returns `kNotFound` when no custom style has that name.
+  /// Every table using it takes the default table style and every PivotTable
+  /// using it the default PivotTable style, whatever the style's `table` /
+  /// `pivot` flags say. A default naming it first reverts to the built-in
+  /// default. Returns `kNotFound` when no custom style has that name.
   Expected<void, Error> remove_table_style(std::string_view name);
+
+  /// Refuses (`kInvalidArgument`) a `name` that resolves to a custom style
+  /// whose flag for `kind` is false, or that names a built-in slicer style.
+  /// Any other name, built-in or unknown, is accepted. `field` names the argument in the refusal.
+  Expected<void, Error> check_style_kind(std::string_view name, StyleKind kind,
+                                         std::string_view field = "style_name") const;
+
+  /// The number of tables (`kTable`) or PivotTables (`kPivot`) whose style name
+  /// resolves to the custom style at `index`, plus one when the default style
+  /// of that kind does.
+  std::size_t style_users(std::size_t index, StyleKind kind) const;
 
   // ---------------------------------------------------------------------------
   // Text storage (workbook-lifetime backing for `Value::text` views)

@@ -1039,5 +1039,89 @@ TEST(WorkbookTableChecks, TheTotalsRowCheckReadsCellsWhereAPendingShiftMovesThem
   EXPECT_FALSE(taken.value().has_value());
 }
 
+// ---------------------------------------------------------------------------
+// Style kinds
+// ---------------------------------------------------------------------------
+
+CustomTableStyle KindStyle(const char* name, bool pivot, bool table) {
+  CustomTableStyle style;
+  style.name = name;
+  style.pivot = pivot;
+  style.table = table;
+  return style;
+}
+
+TEST(WorkbookStyleKind, CheckRefusesOnlyAnExcludedCustomStyleAndSlicerStyles) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.mutable_styles().table_styles.styles.push_back(KindStyle("PivotOnly", true, false));
+  wb.mutable_styles().table_styles.styles.push_back(KindStyle("TableOnly", false, true));
+
+  const Expected<void, Error> table = wb.check_style_kind("pivotonly", StyleKind::kTable);
+  ASSERT_FALSE(table.has_value());
+  EXPECT_EQ(table.error().code, FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(table.error().message, "style_name must name a style that applies to tables");
+  EXPECT_EQ(table.error().context, "style_name=pivotonly kind=table");
+  const Expected<void, Error> pivot = wb.check_style_kind("TableOnly", StyleKind::kPivot);
+  ASSERT_FALSE(pivot.has_value());
+  EXPECT_EQ(pivot.error().message, "style_name must name a style that applies to PivotTables");
+  EXPECT_EQ(pivot.error().context, "style_name=TableOnly kind=pivot");
+
+  EXPECT_TRUE(wb.check_style_kind("PivotOnly", StyleKind::kPivot).has_value());
+  EXPECT_TRUE(wb.check_style_kind("TableOnly", StyleKind::kTable).has_value());
+  EXPECT_TRUE(wb.check_style_kind("PivotStyleLight16", StyleKind::kTable).has_value());
+  EXPECT_TRUE(wb.check_style_kind("TableStyleMedium2", StyleKind::kPivot).has_value());
+  EXPECT_TRUE(wb.check_style_kind("Unknown", StyleKind::kTable).has_value());
+  for (const char* slicer : {"SlicerStyleLight1", "slicerstyleother2", "SLICERSTYLEDARK6"}) {
+    EXPECT_FALSE(wb.check_style_kind(slicer, StyleKind::kTable).has_value()) << slicer;
+    EXPECT_FALSE(wb.check_style_kind(slicer, StyleKind::kPivot).has_value()) << slicer;
+  }
+  for (const char* other : {"SlicerStyleLight7", "SlicerStyleOther3", "SlicerStyleDark0", "SlicerStyleLight01"}) {
+    EXPECT_TRUE(wb.check_style_kind(other, StyleKind::kTable).has_value()) << other;
+  }
+}
+
+TEST(WorkbookStyleKind, BuiltinFamilyTableHasOneAnswerPerName) {
+  EXPECT_EQ(builtin_style_family("TableStyleMedium28"), BuiltinStyleFamily::kTable);
+  EXPECT_EQ(builtin_style_family("PivotStyleDark28"), BuiltinStyleFamily::kPivot);
+  EXPECT_EQ(builtin_style_family("SlicerStyleOther2"), BuiltinStyleFamily::kSlicer);
+  EXPECT_EQ(builtin_style_family("TableStyleDark12"), BuiltinStyleFamily::kNone);
+  EXPECT_EQ(builtin_style_family("SlicerStyleLight"), BuiltinStyleFamily::kNone);
+  EXPECT_EQ(builtin_style_family(""), BuiltinStyleFamily::kNone);
+}
+
+TEST(WorkbookStyleKind, AddTableRefusesAnExcludedStyleAndLoadingKeepsTheName) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.mutable_styles().table_styles.styles.push_back(KindStyle("PivotOnly", true, false));
+  for (const char* name : {"PivotOnly", "SlicerStyleLight1"}) {
+    TableMetadata table = MakeTable("T", "A1:B2", {"X", "Y"});
+    table.style_info.present = true;
+    table.style_info.name = name;
+    const Expected<std::size_t, Error> added = wb.add_table(std::move(table));
+    ASSERT_FALSE(added.has_value()) << name;
+    EXPECT_EQ(added.error().code, FormulonErrorCode::kInvalidArgument) << name;
+  }
+  EXPECT_TRUE(wb.tables().empty());
+  TableMetadata plain = MakeTable("T", "A1:B2", {"X", "Y"});
+  plain.style_info.present = true;
+  plain.style_info.name = "PivotStyleLight16";
+  EXPECT_TRUE(wb.add_table(std::move(plain)).has_value());
+}
+
+TEST(WorkbookStyleKind, RemovalRepointsEveryUserWhateverTheFlagsSay) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  wb.mutable_styles().table_styles.styles.push_back(KindStyle("PivotOnly", true, false));
+  TableMetadata table = MakeTable("T", "A1:B2", {"X", "Y"});
+  table.style_info.present = true;
+  table.style_info.name = "PivotOnly";
+  wb.mutable_tables().push_back(table);
+  EXPECT_EQ(wb.style_users(0, StyleKind::kTable), 1U);
+  EXPECT_EQ(wb.style_users(0, StyleKind::kPivot), 0U);
+  ASSERT_TRUE(wb.remove_table_style("PivotOnly").has_value());
+  EXPECT_EQ(wb.tables()[0].style_info.name, "TableStyleMedium2");
+}
+
 }  // namespace
 }  // namespace formulon

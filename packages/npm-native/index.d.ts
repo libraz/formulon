@@ -531,7 +531,9 @@ export interface TableInput {
    *  an empty header cell takes the profile's column word and a number (`Column2`). */
   columns?: readonly string[];
   /** The built-in or custom table style to apply; omitted or `null` is the workbook's table-style default, else
-   *  `TableStyleMedium2`; an empty string is invalid. */
+   *  `TableStyleMedium2`; an empty string is invalid. A custom style that does not apply to tables, and a built-in
+   *  slicer style (`SlicerStyleLight1`, ...), fail with `StatusCode.InvalidArgument`; when the default is used and
+   *  does not apply to tables, the call fails with `StatusCode.PreconditionFailed`. */
   styleName?: string | null;
   /** `false` creates the table without a style element, which needs `styleName` omitted; default `true`. */
   styled?: boolean;
@@ -600,7 +602,8 @@ export interface TableStyleOptions {
 }
 
 /** Argument of `Table.updateStyleOptions`. `styleName: null` removes the style name (the only key that accepts
- *  `null`) and `''` is `StatusCode.InvalidArgument`; a new `styleName` keeps the four toggles. */
+ *  `null`) and `''` is `StatusCode.InvalidArgument`, as is a custom style that does not apply to tables or a
+ *  built-in slicer style; a new `styleName` keeps the four toggles. */
 export type TableStyleOptionsPatch = Patch<TableStyleOptions, 'styleName'>;
 
 /** A region of a custom table style, in `ST_TableStyleType` order. The PivotTable
@@ -692,9 +695,9 @@ export interface TableStyleElementInput {
 export interface TableStyle {
   /** The style name. */
   readonly name: string;
-  /** Whether PivotTables may use the style. */
+  /** Whether PivotTables may use the style; a PivotTable given a style that excludes them is refused at entry. */
   readonly pivot: boolean;
-  /** Whether tables may use the style. */
+  /** Whether tables may use the style; a table given a style that excludes them is refused at entry. */
   readonly table: boolean;
   /** The formatted regions of the style. */
   readonly elements: readonly TableStyleElement[];
@@ -705,9 +708,11 @@ export interface TableStyle {
 export interface TableStyleInput {
   /** The style name. */
   name: string;
-  /** Whether PivotTables may use the style; omitted is `true`. */
+  /** Whether PivotTables may use the style; omitted is `true`. A PivotTable given a style that excludes them is
+   *  refused at entry. */
   pivot?: boolean;
-  /** Whether tables may use the style; omitted is `true`. */
+  /** Whether tables may use the style; omitted is `true`. A table given a style that excludes them is refused at
+   *  entry. */
   table?: boolean;
   /** The formatted regions of the style; omitted is none. */
   elements?: readonly TableStyleElementInput[];
@@ -721,7 +726,9 @@ export interface TableStyleDefaults {
   readonly pivotStyleName: string | null;
 }
 
-/** Argument of `Workbook.updateTableStyleDefaults`. `null` unsets a name; `''` is `StatusCode.InvalidArgument`. */
+/** Argument of `Workbook.updateTableStyleDefaults`. `null` unsets a name; `''` is `StatusCode.InvalidArgument`, as
+ *  is a custom style that does not apply to the kind (tables for `tableStyleName`, PivotTables for `pivotStyleName`)
+ *  or a built-in slicer style. */
 export type TableStyleDefaultsPatch = Patch<TableStyleDefaults, 'tableStyleName' | 'pivotStyleName'>;
 
 /** PivotTable layout cell kind. */
@@ -1076,7 +1083,8 @@ export interface PivotStyleOptions {
 }
 
 /** Argument of `Pivot.updateStyleOptions`. `styleName: null` writes the style element without a style name and
- *  `''` is `StatusCode.InvalidArgument`; the flags have no cleared form. An empty patch changes nothing. */
+ *  `''` is `StatusCode.InvalidArgument`, as is a custom style that does not apply to PivotTables or a built-in
+ *  slicer style; the flags have no cleared form. An empty patch changes nothing. */
 export type PivotStyleOptionsPatch = Patch<PivotStyleOptions, 'styleName'>;
 
 /** Return type of `Pivot.getGrandTotals()`: whether the row and the column grand total bands show. */
@@ -7049,16 +7057,18 @@ export interface Workbook {
   /** Reads the custom table style `name` (by name identity, see {@link Workbook}); `null` when there is none. */
   getTableStyle(name: string): TableStyle | null;
   /** Adds a custom table style, or replaces the one with the same name
-   *  (by name identity, see {@link Workbook}). The name may not be a built-in style name; each
+   *  (by name identity, see {@link Workbook}). The name may not be a built-in style name (table, PivotTable or
+   *  slicer); a loaded file's custom style with such a name is dropped. Each
    *  element type may appear once, `size` must be at least 1 and `dxfIndex`
    *  must name an existing differential format. A first style also sets the
-   *  defaults to `TableStyleMedium2` / `PivotStyleLight16`. */
+   *  defaults to `TableStyleMedium2` / `PivotStyleLight16`. A name that is already in use cannot take flags that
+   *  exclude a kind of its users: replacing a style that a table, a PivotTable or the default of that kind still
+   *  uses with `table` or `pivot` false fails with `StatusCode.PreconditionFailed` and changes nothing. */
   setTableStyle(style: TableStyleInput): void;
   /** Removes the custom table style `name` (by name identity, see {@link Workbook}).
-   *  Tables using it take the default table style and PivotTables using it
-   *  take the default PivotTable style, each only when the style's `table` /
-   *  `pivot` flag allows that kind. A default naming it first reverts to the
-   *  built-in default (`TableStyleMedium2` / `PivotStyleLight16`). */
+   *  Every table using it takes the default table style and every PivotTable using it takes the default
+   *  PivotTable style. A default naming it first reverts to the built-in default (`TableStyleMedium2` /
+   *  `PivotStyleLight16`). */
   removeTableStyle(name: string): void;
   /** Reads the default table and PivotTable style names. */
   getTableStyleDefaults(): TableStyleDefaults;
@@ -7671,7 +7681,8 @@ export interface Sheet {
    *  axis. Place them with `Pivot.setFieldAxis` (or `setRowFieldOrder` / `setColumnFieldOrder`) and add values with
    *  `addDataField`. Until a field is placed, the report is Excel's empty placeholder: a bordered frame 3 columns
    *  wide and 18 rows high from the anchor, with no values. When that range is occupied (see {@link Pivot}) or runs
-   *  past the sheet edge, the call fails with `StatusCode.PreconditionFailed` and creates nothing.
+   *  past the sheet edge, or the workbook's default PivotTable style does not apply to PivotTables, the call fails
+   *  with `StatusCode.PreconditionFailed` and creates nothing.
    *
    *  @example
    *  ```ts
@@ -8437,7 +8448,8 @@ export interface Table {
   rename(name: string): void;
   /** Reads the table's style name and toggles; `null` when the table has no style element. */
   getStyleOptions(): TableStyleOptions | null;
-  /** Updates the table's style name and toggles with the keys `patch` names. */
+  /** Updates the table's style name and toggles with the keys `patch` names. A `styleName` that is a custom style
+   *  that does not apply to tables, or a built-in slicer style, fails with `StatusCode.InvalidArgument`. */
   updateStyleOptions(patch: TableStyleOptionsPatch): void;
   /** Renames column `column` (0-based), as typing over its header cell does, and returns the final name. An empty
    *  `name` takes the Excel profile's `Column<N>` (`列<N>`) with the lowest unused N, a name another column already has
@@ -8544,7 +8556,9 @@ export interface Pivot {
   getStyleOptions(): PivotStyleOptions | null;
   /** Updates the pivot's style and toggles with the keys `patch` names, making the style element present; a
    *  pivot without one starts from no style name and every flag off. A new pivot starts with the workbook's
-   *  PivotTable style default (else `PivotStyleLight16`) and row / column headers and last column on. */
+   *  PivotTable style default (else `PivotStyleLight16`) and row / column headers and last column on. A
+   *  `styleName` that is a custom style that does not apply to PivotTables, or a built-in slicer style, fails with
+   *  `StatusCode.InvalidArgument`. */
   updateStyleOptions(patch: PivotStyleOptionsPatch): void;
   /** Reads the pivot's compact / tabular / outline report layout. */
   getReportLayout(): PivotReportLayout;

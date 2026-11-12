@@ -355,6 +355,13 @@ struct CustomTableStyle {
 inline constexpr std::string_view kBuiltinDefaultTableStyle = "TableStyleMedium2";
 inline constexpr std::string_view kBuiltinDefaultPivotStyle = "PivotStyleLight16";
 
+/// The family a built-in style name belongs to.
+enum class BuiltinStyleFamily { kNone, kTable, kPivot, kSlicer };
+
+/// The built-in family `name` names (`TableStyleMedium2`, `PivotStyleDark28`,
+/// `SlicerStyleLight1`, matched case-insensitively), or `kNone`.
+BuiltinStyleFamily builtin_style_family(std::string_view name) noexcept;
+
 /// `<tableStyles>`: the custom styles plus the workbook's default table and
 /// PivotTable style names (empty when the attribute is absent).
 struct TableStylesSection {

@@ -169,6 +169,17 @@ extern "C" fm_status_t fm_sheet_add_pivot(fm_workbook_t* wb, std::size_t sheet_i
     pivots.erase(pivots.begin() + static_cast<std::ptrdiff_t>(pivot_index));
     return set_last_error(projected.error());
   }
+  // The workbook default is state: it is checked once the name and the placement are accepted, and the new
+  // report is taken back out when the default excludes PivotTables.
+  if (auto rc = formulon::c_api::parts::check_default_style_kind(wb->workbook(), formulon::StyleKind::kPivot);
+      rc != 0) {
+    if (auto cleared = wb->workbook().clear_pivot_projection(sheet_index, pivot_index); !cleared) {
+      return set_last_error(cleared.error());
+    }
+    auto& pivots = sheet.mutable_pivot_tables();
+    pivots.erase(pivots.begin() + static_cast<std::ptrdiff_t>(pivot_index));
+    return rc;
+  }
   *out_pivot_index = pivot_index;
   wb->workbook().mark_all_formulas_dirty();
   return 0;
@@ -345,6 +356,13 @@ extern "C" fm_status_t fm_sheet_update_pivot_style_options(fm_workbook_t* wb, st
         return rc;
       }
       changes = true;
+    }
+  }
+  if (patch->style_name_op == FM_PATCH_OP_SET) {
+    if (auto rc = formulon::c_api::parts::finish_status(
+            wb->workbook().check_style_kind(patch->style_name, formulon::StyleKind::kPivot));
+        rc != 0) {
+      return rc;
     }
   }
   if (!changes) {
