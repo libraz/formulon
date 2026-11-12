@@ -828,6 +828,9 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   // through the same `[N]` cell formulas do.
   ingest_feature_formulas(wb, Workbook::FormulaSource::kRendered);
 
+  // Every sheet view and visibility is loaded: settle the active sheet as Excel does on open.
+  wb.apply_open_active_sheet_rule();
+
   // Table parts the sheets relate to, through the relationships stored above.
   load_xlsb_tables(wb, std::move(table_parts), sheet_names, name_table, sheet_ranges, external_books, consumed_parts);
 

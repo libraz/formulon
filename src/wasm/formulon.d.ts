@@ -6818,9 +6818,10 @@ export interface Workbook {
    *  `StatusCode.NotImplemented` (slicers, shapes, pivot charts and other content the copy cannot model); the workbook
    *  is unchanged when it throws. */
   copySheet(source: SheetRef, options?: CopySheetOptions): Sheet;
-  /** Returns the sheet the first `<workbookView>` marks active (`activeTab`); without workbook views (an XLSB
-   *  load) the first tab-selected sheet; the first sheet when neither is recorded. Removing or hiding the
-   *  active sheet activates the next visible sheet, else the previous one. */
+  /** Returns the sheet the first `<workbookView>` marks active (`activeTab`); the first sheet without workbook
+   *  views. Tab selection is not consulted. A load follows Excel's open rule: a hidden active sheet is unhidden,
+   *  and a very hidden one passes activation to the first visible sheet. Removing or hiding the active sheet
+   *  activates the next visible sheet, else the previous one. */
   activeSheet(): Sheet;
   /** Marks `sheet` active so a save records it, creating a minimal `<bookViews>` when the workbook has none.
    *  Other `<workbookView>` attributes survive; `firstSheet` is lowered to the sheet's index when larger. The

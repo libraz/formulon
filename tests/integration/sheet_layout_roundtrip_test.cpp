@@ -75,6 +75,8 @@ TEST(SheetLayoutRoundTrip, ViewStateZoomFreezeAndTabHidden) {
   sheet.mutable_view().freeze_rows = 3U;
   sheet.mutable_view().freeze_cols = 2U;
   sheet.mutable_view().tab_hidden = true;
+  // A load unhides a hidden active sheet, so another sheet is active.
+  src.set_active_sheet(static_cast<std::uint32_t>(src.add_sheet("Active")));
 
   const std::vector<std::uint8_t> bytes = SaveOrDie(src);
   auto result_or = io::read_ooxml(SpanOf(bytes));
@@ -217,6 +219,8 @@ TEST(SheetLayoutRoundTrip, ReShowingSheetRemovesLegacySheetPrTabHidden) {
   // explicit re-show through a binding setter.
   sheet.mutable_print_settings().sheet_pr_xml = "<sheetPr tabHidden=\"1\"><tabHidden/></sheetPr>";
   sheet.mutable_view().tab_hidden = true;
+  // A load unhides a hidden active sheet, so another sheet is active.
+  src.set_active_sheet(static_cast<std::uint32_t>(src.add_sheet("Active")));
 
   const std::vector<std::uint8_t> hidden_bytes = SaveOrDie(src);
   auto hidden_or = io::read_ooxml(SpanOf(hidden_bytes));

@@ -358,11 +358,10 @@ TEST(XlsbWriter, DefinedNameBodyRootReferenceStaysReferenceClass) {
   EXPECT_EQ(rgce, want);
 }
 
-TEST(XlsbWriter, ItabCurMatchesTheTabSelectedSheet) {
+TEST(XlsbWriter, ItabCurMatchesTheActiveSheet) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Sheet1");
-  Sheet& sheet2 = wb.sheet(wb.add_sheet("Sheet2"));
-  sheet2.mutable_view().tab_selected = true;
+  wb.set_active_sheet(static_cast<std::uint32_t>(wb.add_sheet("Sheet2")));
 
   auto bytes_or = write_xlsb(wb);
   ASSERT_TRUE(static_cast<bool>(bytes_or)) << bytes_or.error().message << " | " << bytes_or.error().context;

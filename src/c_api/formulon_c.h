@@ -892,9 +892,11 @@ FM_API fm_status_t fm_workbook_copy_sheet(fm_workbook_t* wb, size_t source_index
 /**
  * @brief Reads the active sheet: the first `<workbookView>`'s `activeTab`.
  *
- * A workbook with no `<bookViews>` (an XLSB load included) reports its first
- * `tabSelected` sheet, else `0`; an `activeTab` outside the sheet list
- * reports `0`. Inserting, removing and moving sheets keep the stored index
+ * `0` is reported when the workbook has no `<bookViews>` or `activeTab` is
+ * outside the sheet list; `tabSelected` is not consulted. A load follows
+ * Excel's open rule: a hidden active sheet is unhidden (only that one), a very
+ * hidden one passes activation to the first visible sheet, and an active sheet
+ * that is not selected becomes the only `tabSelected` one. Inserting, removing and moving sheets keep the stored index
  * on the sheet it named; removing or hiding the active sheet activates the
  * first visible sheet after it, else the nearest visible one before it, as
  * Excel does.

@@ -182,6 +182,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   as in an Excel-made workbook: `getView().tabSelected` (Python
   `get_view().tab_selected`, C `fm_sheet_view_t.tab_selected`) reads true there.
   Call `updateView({ tabSelected: false })` for the previous state.
+- `activeSheet()` (Python `active_sheet()`, C `fm_workbook_get_active_sheet`)
+  reports the first sheet for a workbook without `<bookViews>`, as Excel
+  activates it, instead of the first `tabSelected` sheet. A load also applies
+  Excel's open rule: a hidden active sheet is unhidden (only that sheet), a very
+  hidden one passes activation to the first visible sheet, and an active sheet
+  that is not selected becomes the only selected tab.
 
 ## [0.19.0] - 2026-11-10
 

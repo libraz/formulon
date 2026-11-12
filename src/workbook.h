@@ -1678,10 +1678,15 @@ class Workbook {
   const std::string& book_views_xml() const noexcept { return book_views_xml_; }
   void set_book_views_xml(std::string xml) { book_views_xml_ = std::move(xml); }
 
-  /// Index of the sheet the first `<workbookView>` marks active (`activeTab`);
-  /// without `<bookViews>` (an XLSB load), the first `tabSelected` sheet. A
-  /// missing or out-of-range value reads as the first sheet.
+  /// Index of the sheet the first `<workbookView>` marks active (`activeTab`).
+  /// Without `<bookViews>`, or with a missing or out-of-range value, the first
+  /// sheet; `tabSelected` is not consulted, as in Excel.
   std::uint32_t active_sheet() const;
+
+  /// Applies Excel's open-time rule to a loaded workbook: a hidden active
+  /// sheet is unhidden, a very hidden one hands activation to the first
+  /// visible sheet, and the active sheet becomes `tabSelected` when it is not.
+  void apply_open_active_sheet_rule();
 
   /// Marks sheet `index` active in the first `<workbookView>`, synthesizing a
   /// minimal `<bookViews>` when none exists and keeping `firstSheet` at or

@@ -1011,6 +1011,9 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   // through the same `[N]` cell formulas do.
   ingest_feature_formulas(wb, Workbook::FormulaSource::kEntered);
 
+  // Every sheet view and visibility is loaded: settle the active sheet as Excel does on open.
+  wb.apply_open_active_sheet_rule();
+
   // 6. Resolve every queued SST reference: replace each cell's
   // `Text("")` placeholder with a view into the SST entry. We use
   // `Sheet::set_cell_cached_value` directly rather than

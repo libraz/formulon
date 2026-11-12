@@ -302,15 +302,36 @@ Expected<void, Error> Workbook::rename_sheet(std::uint32_t index, std::string ne
 
 std::uint32_t Workbook::active_sheet() const {
   if (book_views_xml_.empty()) {
-    for (std::size_t i = 0; i < sheets_.size(); ++i) {
-      if (sheets_[i].view().tab_selected) {
-        return static_cast<std::uint32_t>(i);
-      }
-    }
     return 0U;
   }
   const std::uint32_t index = book_views_active_tab(book_views_xml_);
   return index < sheets_.size() ? index : 0U;
+}
+
+void Workbook::apply_open_active_sheet_rule() {
+  if (sheets_.empty()) {
+    return;
+  }
+  const std::uint32_t named = active_sheet();
+  std::uint32_t index = named;
+  SheetView& view = sheets_[index].mutable_view();
+  if (view.visibility() == SheetVisibility::kHidden) {
+    view.set_visibility(SheetVisibility::kVisible);
+  } else if (view.visibility() == SheetVisibility::kVeryHidden) {
+    for (std::size_t i = 0; i < sheets_.size(); ++i) {
+      if (sheets_[i].view().visibility() == SheetVisibility::kVisible) {
+        index = static_cast<std::uint32_t>(i);
+        break;
+      }
+    }
+  }
+  if (index != named) {
+    set_active_sheet(index);
+  } else if (!sheets_[index].view().tab_selected) {
+    for (std::size_t i = 0; i < sheets_.size(); ++i) {
+      sheets_[i].mutable_view().tab_selected = i == index;
+    }
+  }
 }
 
 std::uint32_t Workbook::nearest_visible_sheet(std::uint32_t index) const {

@@ -9230,9 +9230,11 @@ class Workbook(_NoCopy):
     def active_sheet(self) -> Sheet:
         """The active sheet (``activeTab`` of the first workbook view).
 
-        Without workbook views (an XLSB load) the first tab-selected sheet;
-        the first sheet when the workbook records neither. Removing or hiding
-        the active sheet activates the next visible sheet, else the previous one.
+        The first sheet without workbook views; tab selection is not
+        consulted. A load follows Excel's open rule: a hidden active sheet is
+        unhidden, and a very hidden one passes activation to the first visible
+        sheet. Removing or hiding the active sheet activates the next visible
+        sheet, else the previous one.
         """
         h = self._require()
         handles = self._sheet_handles()
