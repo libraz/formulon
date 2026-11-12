@@ -388,7 +388,7 @@ TEST(NameIdentityCollation, CellStyleLookupMatchesUnderCollationEquality) {
       style.name = p.first;
       styles.cell_styles.push_back(style);
       EXPECT_EQ(Code(remove_cell_style(styles, p.second)),
-                p.same ? FormulonErrorCode::kOk : FormulonErrorCode::kInvalidArgument);
+                p.same ? FormulonErrorCode::kOk : FormulonErrorCode::kNotFound);
       EXPECT_EQ(styles.cell_styles.size(), p.same ? before : before + 1U);
     }
   }
