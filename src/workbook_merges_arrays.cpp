@@ -199,11 +199,14 @@ Expected<void, Error> Workbook::set_array_formula(std::size_t sheet_index, std::
     return make_error(FormulonErrorCode::kInvalidArgument, "rows and cols must be >= 1",
                       "rows=" + std::to_string(rows) + " cols=" + std::to_string(cols));
   }
-  if (rows > Sheet::kMaxRows - row || cols > Sheet::kMaxCols - col ||
-      static_cast<std::uint64_t>(rows) * cols > kMaxRangeExpansionCells) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "array outside grid or too large",
+  if (rows > Sheet::kMaxRows - row || cols > Sheet::kMaxCols - col) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "array outside grid",
                       "row=" + std::to_string(row) + " col=" + std::to_string(col) + " rows=" + std::to_string(rows) +
                           " cols=" + std::to_string(cols));
+  }
+  if (const std::uint64_t cells = static_cast<std::uint64_t>(rows) * cols; cells > kMaxRangeExpansionCells) {
+    return make_error(FormulonErrorCode::kSecurityResourceLimit, "array has more cells than the limit allows",
+                      limit_context("array_cells", cells, kMaxRangeExpansionCells));
   }
   const MergeRange target{row, col, row + rows - 1U, col + cols - 1U};
   RETURN_IF_ERROR(check_array_target_free(*this, sheet_index, target));

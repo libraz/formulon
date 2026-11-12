@@ -118,7 +118,8 @@ TEST(WorkbookLocation, BoundsTheCanonicalPathAt1024Bytes) {
   EXPECT_EQ(*wb.location()->directory, fits);
   const auto over = wb.set_location(WorkbookLocation{"/" + std::string(1017, 'd'), "b.xlsx"});
   ASSERT_FALSE(static_cast<bool>(over));
-  EXPECT_EQ(over.error().code, FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(over.error().code, FormulonErrorCode::kSecurityResourceLimit);
+  EXPECT_EQ(over.error().context, "part=location_path requested=1025 limit=1024");
   // The bound applies after canonicalisation: a stripped trailing separator
   // does not count.
   EXPECT_TRUE(static_cast<bool>(wb.set_location(WorkbookLocation{fits + "/", "b.xlsx"})));

@@ -36,6 +36,7 @@ constexpr std::uint32_t kDefaultMaxIterations = 100U;
 /// sweeps is an unrecoverable hang rather than a long calculation.
 /// Clamping here matches the reference implementation instead of
 /// trading fidelity for safety.
+// @limit: excel
 constexpr std::uint32_t kMaxIterationsCap = 32767U;
 /// Excel's default absolute convergence threshold.
 constexpr double kDefaultMaxChange = 0.001;

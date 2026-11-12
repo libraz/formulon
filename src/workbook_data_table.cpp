@@ -159,7 +159,8 @@ Expected<TableResult, Error> compute_table(Workbook& wb, std::size_t sheet_index
                                            const eval::FunctionRegistry& registry, ResourceBudget& passes) {
   TableResult result;
   const MergeRange& ref = table.ref;
-  if (ref.first_row == 0U || ref.first_col == 0U || ResourceBudget(kMaxDataTableCells).would_exceed(cell_count(ref))) {
+  if (ref.first_row == 0U || ref.first_col == 0U ||
+      ResourceBudget(kMaxDataTableCells, "data_table_cells").would_exceed(cell_count(ref))) {
     return result;
   }
   const std::uint32_t rows = ref.last_row - ref.first_row + 1U;
@@ -294,7 +295,7 @@ Expected<void, Error> Workbook::add_data_table(std::size_t sheet_index, MergeRan
   if (ref.first_row == 0U || ref.first_col == 0U) {
     return make_error(FormulonErrorCode::kDataTableInvalid, "ref needs a row above and a column left of it");
   }
-  if (auto charged = ResourceBudget(kMaxDataTableCells).consume(cell_count(ref)); !charged) {
+  if (auto charged = ResourceBudget(kMaxDataTableCells, "data_table_cells").consume(cell_count(ref)); !charged) {
     return std::move(charged.error());
   }
   for (const DataTableInput* input : {&row_input, &col_input}) {
@@ -364,7 +365,7 @@ Expected<void, Error> Workbook::remove_data_table(std::size_t sheet_index, std::
 Expected<void, Error> Workbook::compute_data_tables(const eval::FunctionRegistry& registry) {
   data_tables_pending_ = false;
   bool wrote = false;
-  ResourceBudget passes(kMaxDataTableRecalcPasses);
+  ResourceBudget passes(kMaxDataTableRecalcPasses, "data_table_passes");
   for (std::size_t sheet_index = 0; sheet_index < sheets_.size(); ++sheet_index) {
     // Copied: computing a table rewrites cells, never the table list.
     const std::vector<DataTable> tables = sheets_[sheet_index].data_tables();

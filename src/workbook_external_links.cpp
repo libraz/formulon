@@ -31,6 +31,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/formula_text.h"
+#include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "workbook.h"
@@ -348,8 +349,10 @@ void Workbook::ingest_entered_formula(std::string& formula) {
 namespace {
 
 // Excel's limit on a file name.
+// @limit: excel
 constexpr std::size_t kMaxFileNameBytes = 218;
-// The engine's bound on `directory/file_name`.
+// The engine's bound on `directory/file_name`, not a platform limit.
+// @limit: engine
 constexpr std::size_t kMaxLocationPathBytes = 1024;
 
 Expected<void, Error> CheckFileName(std::string_view name, const std::vector<ExternalLinkRecord>& links) {
@@ -456,9 +459,10 @@ const std::string& Workbook::file_name() const noexcept {
 Expected<void, Error> Workbook::set_location(std::optional<WorkbookLocation> new_location) {
   if (new_location && new_location->directory) {
     ASSIGN_OR_RETURN(std::string directory, CanonicalDirectory(*new_location->directory));
-    if (directory.size() + 1 + new_location->file_name.size() > kMaxLocationPathBytes) {
-      return make_error(FormulonErrorCode::kInvalidArgument, "directory and file_name together exceed 1024 bytes",
-                        "directory=" + directory);
+    const std::size_t path_bytes = directory.size() + 1 + new_location->file_name.size();
+    if (path_bytes > kMaxLocationPathBytes) {
+      return make_error(FormulonErrorCode::kSecurityResourceLimit, "directory and file_name together exceed 1024 bytes",
+                        limit_context("location_path", path_bytes, kMaxLocationPathBytes));
     }
     new_location->directory = std::move(directory);
   }

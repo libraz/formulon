@@ -200,8 +200,8 @@ std::optional<NumericGroupState> numeric_group_state(const PivotCache& cache, st
 /// bound or a start after the end; `kPreconditionFailed` for a base holding a
 /// blank or a value that is not a number, holding no number to take an empty
 /// bound from, a calculated base, or group fields over the base that are not
-/// the last cache fields; `kSecurityResourceLimit` for more group
-/// items than a field holds; `kSheetIndexOutOfRange` / `kIndexOutOfRange` for
+/// the last cache fields; `kInvalidArgument` also for more group
+/// items than a field holds (Excel's unique-item limit); `kSheetIndexOutOfRange` / `kIndexOutOfRange` for
 /// an index out of range.
 Expected<void, Error> set_numeric_group(Workbook& wb, std::size_t sheet, std::size_t pivot, std::size_t field,
                                         std::optional<double> start, std::optional<double> end, double interval);

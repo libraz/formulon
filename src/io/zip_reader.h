@@ -40,6 +40,7 @@ struct ByteSpan {
 /// archive bytes to expand into multi-GiB allocations and trigger OOM /
 /// DoS during `read_entry`.
 /// An entry above the cap fails with `kSecurityResourceLimit`.
+// @limit: engine
 inline constexpr std::size_t kMaxExtractedBytesPerEntry = 100ULL * 1024ULL * 1024ULL;
 
 /// Hard cap on the cumulative uncompressed bytes charged to one successful
@@ -47,6 +48,7 @@ inline constexpr std::size_t kMaxExtractedBytesPerEntry = 100ULL * 1024ULL * 102
 /// attempt before its destination buffer is allocated, including rereads and
 /// attempts whose extraction later fails. Reopening the reader starts a new
 /// session and resets the budget.
+// @limit: engine
 inline constexpr std::size_t kMaxTotalExtractedBytes = 256ULL * 1024ULL * 1024ULL;
 
 /// Hard cap on the number of entries in a ZIP. OOXML packages emitted by
@@ -54,6 +56,7 @@ inline constexpr std::size_t kMaxTotalExtractedBytes = 256ULL * 1024ULL * 1024UL
 /// and embedded media; 2048 leaves plenty of headroom while preventing a
 /// crafted archive from forcing the central-directory walk to allocate
 /// proportional memory before any extraction takes place.
+// @limit: engine
 inline constexpr std::size_t kMaxParts = 2048;
 
 /// Hard cap on the per-entry uncompressed-to-compressed ratio. A ratio of
@@ -62,6 +65,7 @@ inline constexpr std::size_t kMaxParts = 2048;
 /// single low-entropy entry whose compressed bytes are disproportionately
 /// small. The independent cumulative-session cap covers aggregate extraction
 /// volume.
+// @limit: engine
 inline constexpr std::size_t kMaxRatio = 1024;
 
 /// Read-only accessor for a ZIP archive backed by an in-memory buffer.
@@ -93,10 +97,11 @@ class ZipReader {
   /// closes the previous archive first.
   ///
   /// `max_total_extracted_bytes` lowers this session's cumulative
-  /// extraction budget below `kMaxTotalExtractedBytes`. It is clamped to
-  /// that constant, so the ceiling can only be tightened, never raised: a
-  /// caller handling untrusted input can budget more strictly than the
-  /// default, and no caller can weaken the ZIP-bomb bound.
+  /// extraction budget below `kMaxTotalExtractedBytes`. A value above that
+  /// constant is refused with `kSecurityResourceLimit`
+  /// (`part=zip_total_bytes`), so a caller handling untrusted input can
+  /// budget more strictly than the default and no caller can weaken the
+  /// ZIP-bomb bound.
   Expected<void, Error> open(ByteSpan bytes, std::size_t max_total_extracted_bytes = kMaxTotalExtractedBytes);
 
   /// Number of entries in the open archive. Returns 0 if the reader has

@@ -747,6 +747,20 @@ TEST(DrawingEdit, IdsStayUniqueAcrossNestedObjects) {
   EXPECT_TRUE(jpeg_default);
 }
 
+TEST(DrawingEdit, APackageWithTooManyPartsIsAResourceLimit) {
+  Workbook wb = Workbook::create();
+  for (std::size_t i = 0; i < io::kMaxParts; ++i) {
+    ASSERT_TRUE(static_cast<bool>(
+        wb.add_passthrough_part(PassthroughPart("xl/media/filler" + std::to_string(i) + ".png", "", ToBytes("x")))));
+  }
+  const Bytes png = Png(4, 4);
+  auto result = insert_image(wb, 0, png.data(), png.size(), ImageInsertOptions{});
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kSecurityResourceLimit);
+  EXPECT_EQ(result.error().context.rfind("part=zip_parts requested=", 0U), 0U) << result.error().context;
+  EXPECT_NE(result.error().context.find(" limit=" + std::to_string(io::kMaxParts)), std::string::npos);
+}
+
 TEST(DrawingEdit, RejectsInvalidInsertions) {
   Workbook wb = Workbook::create();
   const Bytes png = Png(4, 4);
@@ -773,7 +787,10 @@ TEST(DrawingEdit, RejectsInvalidInsertions) {
   EXPECT_EQ(code(ImageInsertOptions{}, ToBytes("not an image")), FormulonErrorCode::kIoImageUnsupported);
   Bytes oversized = Png(4, 4);
   oversized.resize(kMaxImageBytes + 1);
-  EXPECT_EQ(code(ImageInsertOptions{}, oversized), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(code(ImageInsertOptions{}, oversized), FormulonErrorCode::kSecurityResourceLimit);
+  EXPECT_EQ(
+      insert_image(wb, 0, oversized.data(), oversized.size(), ImageInsertOptions{}).error().context,
+      "part=image_bytes requested=" + std::to_string(kMaxImageBytes + 1U) + " limit=" + std::to_string(kMaxImageBytes));
   auto bad_sheet = insert_image(wb, 3, png.data(), png.size(), ImageInsertOptions{});
   ASSERT_FALSE(static_cast<bool>(bad_sheet));
   EXPECT_EQ(bad_sheet.error().code, FormulonErrorCode::kInvalidArgument);

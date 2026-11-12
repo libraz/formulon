@@ -17,6 +17,7 @@
 #include "pugixml.hpp"
 #include "sheet.h"
 #include "utils/number_text.h"
+#include "utils/resource_budget.h"
 #include "utils/runtime_id.h"
 #include "utils/status_macros.h"
 #include "workbook.h"
@@ -25,6 +26,7 @@ namespace formulon::io {
 namespace {
 
 constexpr const char* kSparklineUri = "{05C60535-1F16-4fd2-B633-F4F36F0B64E0}";
+// @limit: engine
 constexpr std::size_t kMaxItems = 1U << 16;
 
 constexpr const char* kTypeNames[] = {"line", "column", "stacked"};
@@ -193,8 +195,12 @@ void set_color(pugi::xml_node group, const std::string& prefix, const char* name
 }
 
 Expected<void, Error> validate_items(const std::vector<SparklineItem>& items) {
-  if (items.empty() || items.size() > kMaxItems) {
-    return invalid("count must be between 1 and 65536");
+  if (items.empty()) {
+    return invalid("count must be at least 1");
+  }
+  if (items.size() > kMaxItems) {
+    return make_error(FormulonErrorCode::kSecurityResourceLimit, "The group holds more items than the limit allows",
+                      limit_context("sparkline_items", items.size(), kMaxItems));
   }
   for (const SparklineItem& item : items) {
     std::vector<MergeRange> cells;

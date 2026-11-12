@@ -6,6 +6,8 @@ from formulon import (
     FormulonError,
     HyperlinkInput,
     InvalidArgumentError,
+    SecurityError,
+    StatusCode,
     Workbook,
     WorkbookLocation,
     WorkbookLocationInput,
@@ -42,12 +44,20 @@ class LocationArgumentTests(unittest.TestCase):
                 ("b.xlsx", "C:"),
                 ("b.xlsx", "//server"),
                 ("b.xlsx", "/a/../b"),
-                ("b.xlsx", "/" + "d" * 1017),
             ]
             for file_name, directory in rows:
                 with self.assertRaises(InvalidArgumentError, msg=(file_name, directory)):
                     wb.set_location(WorkbookLocationInput(file_name, directory=directory))
                 self.assertEqual(wb.get_location(), WorkbookLocation("/keep", "Keep.xlsx"))
+
+    def test_a_path_past_1024_bytes_is_a_resource_limit_and_changes_nothing(self) -> None:
+        with Workbook.create_default() as wb:
+            wb.set_location(WorkbookLocationInput("Keep.xlsx", directory="/keep"))
+            with self.assertRaises(SecurityError) as caught:
+                wb.set_location(WorkbookLocationInput("b.xlsx", directory="/" + "d" * 1017))
+            self.assertEqual(caught.exception.code, StatusCode.SECURITY_RESOURCE_LIMIT)
+            self.assertEqual(caught.exception.context, "part=location_path requested=1025 limit=1024")
+            self.assertEqual(wb.get_location(), WorkbookLocation("/keep", "Keep.xlsx"))
 
     def test_read_back_is_canonical_and_a_fixed_point(self) -> None:
         with Workbook.create_default() as wb:

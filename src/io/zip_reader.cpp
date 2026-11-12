@@ -5,7 +5,6 @@
 
 #include "io/zip_reader.h"
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
@@ -45,7 +44,7 @@ struct ZipReader::Impl {
   // failed extraction remains charged and cannot be retried indefinitely.
   mutable ResourceBudget total_extracted_bytes;
 
-  Impl() : total_extracted_bytes(kMaxTotalExtractedBytes) { name_buf.resize(kInitialNameCapacity); }
+  Impl() : total_extracted_bytes(kMaxTotalExtractedBytes, "zip_total_bytes") { name_buf.resize(kInitialNameCapacity); }
 
   // The miniz archive holds internal pointers into the user's input
   // buffer (after `init_mem`); copying or moving the struct would
@@ -107,9 +106,13 @@ Expected<void, Error> ZipReader::open(ByteSpan bytes, std::size_t max_total_extr
   // Reset any previously opened archive first so callers can reuse the
   // instance (idempotent open).
   impl_->close();
-  // Clamped, so the parameter can only tighten the bound.
-  const std::size_t ceiling = std::min(max_total_extracted_bytes, kMaxTotalExtractedBytes);
-  impl_->total_extracted_bytes = ResourceBudget(ceiling);
+  // The parameter can only tighten the bound; a request above it is refused.
+  if (max_total_extracted_bytes > kMaxTotalExtractedBytes) {
+    return make_error(
+        FormulonErrorCode::kSecurityResourceLimit, "the extraction budget exceeds the limit",
+        limit_context("zip_total_bytes", max_total_extracted_bytes, kMaxTotalExtractedBytes) + " context=zip_reader");
+  }
+  impl_->total_extracted_bytes = ResourceBudget(max_total_extracted_bytes, "zip_total_bytes");
 
   if (bytes.data == nullptr || bytes.size == 0) {
     return make_error(FormulonErrorCode::kIoZipCorrupt, "the archive buffer is empty",
@@ -134,10 +137,8 @@ Expected<void, Error> ZipReader::open(ByteSpan bytes, std::size_t max_total_extr
   const mz_uint num_files = mz_zip_reader_get_num_files(&impl_->archive);
   if (static_cast<std::size_t>(num_files) > kMaxParts) {
     mz_zip_reader_end(&impl_->archive);
-    std::string ctx("context=zip_reader limit=parts num_files=");
-    ctx.append(std::to_string(static_cast<std::uint64_t>(num_files)));
-    ctx.append(" cap=");
-    ctx.append(std::to_string(static_cast<std::uint64_t>(kMaxParts)));
+    std::string ctx = limit_context("zip_parts", num_files, kMaxParts);
+    ctx.append(" context=zip_reader");
     return make_error(FormulonErrorCode::kSecurityResourceLimit, "the archive holds more entries than the limit allows",
                       std::move(ctx));
   }
@@ -271,12 +272,10 @@ Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_vie
                       std::move(ctx));
   }
   if (stat.m_uncomp_size > static_cast<mz_uint64>(kMaxExtractedBytesPerEntry)) {
-    std::string ctx("context=zip_reader limit=entry entry=");
+    std::string ctx = limit_context("zip_entry_bytes", stat.m_uncomp_size, kMaxExtractedBytesPerEntry);
+    ctx.append(" entry=");
     ctx.append(c_name);
-    ctx.append(" uncompressed_size=");
-    ctx.append(std::to_string(static_cast<std::uint64_t>(stat.m_uncomp_size)));
-    ctx.append(" cap=");
-    ctx.append(std::to_string(static_cast<std::uint64_t>(kMaxExtractedBytesPerEntry)));
+    ctx.append(" context=zip_reader");
     return make_error(FormulonErrorCode::kSecurityResourceLimit,
                       "the entry uncompressed size exceeds the per-entry limit", std::move(ctx));
   }
@@ -289,16 +288,14 @@ Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_vie
     const std::uint64_t ratio =
         static_cast<std::uint64_t>(stat.m_uncomp_size) / static_cast<std::uint64_t>(stat.m_comp_size);
     if (ratio > static_cast<std::uint64_t>(kMaxRatio)) {
-      std::string ctx("context=zip_reader limit=ratio entry=");
+      std::string ctx = limit_context("zip_entry_ratio", ratio, kMaxRatio);
+      ctx.append(" entry=");
       ctx.append(c_name);
       ctx.append(" uncompressed_size=");
       ctx.append(std::to_string(static_cast<std::uint64_t>(stat.m_uncomp_size)));
       ctx.append(" compressed_size=");
       ctx.append(std::to_string(static_cast<std::uint64_t>(stat.m_comp_size)));
-      ctx.append(" ratio=");
-      ctx.append(std::to_string(ratio));
-      ctx.append(" cap=");
-      ctx.append(std::to_string(static_cast<std::uint64_t>(kMaxRatio)));
+      ctx.append(" context=zip_reader");
       return make_error(FormulonErrorCode::kIoZipBomb, "the entry compression ratio exceeds the limit", std::move(ctx));
     }
   }
@@ -310,16 +307,11 @@ Expected<std::vector<std::uint8_t>, Error> ZipReader::read_entry(std::string_vie
   // still consume the session's bounded work budget.
   auto charged = impl_->total_extracted_bytes.consume(static_cast<std::uint64_t>(stat.m_uncomp_size));
   if (!charged) {
-    const std::string_view budget_context = charged.error().context;
-    std::string context("limit=total entry=");
-    context.append(c_name);
-    if (!budget_context.empty()) {
-      context.push_back(' ');
-      context.append(budget_context);
-    }
     Error error = std::move(charged.error());
     error.message = "the cumulative extracted size exceeds the limit";
-    error.context = std::move(context);
+    error.context.append(" entry=");
+    error.context.append(c_name);
+    error.context.append(" context=zip_reader");
     return error;
   }
 

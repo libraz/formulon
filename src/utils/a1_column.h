@@ -6,6 +6,7 @@
 
 namespace formulon::a1 {
 
+// @limit: excel
 inline constexpr std::uint32_t kMaxColumns = 16384U;
 
 /// Appends Excel's uppercase bijective-base-26 column name for the 0-based

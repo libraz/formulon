@@ -1007,6 +1007,16 @@ TEST(FormulonCApiSparklines, Validation) {
   EXPECT_EQ(fm_sheet_get_sparkline_group_at(wb.handle, 0, 0, nullptr), kBindingNullPointer);
 }
 
+TEST(FormulonCApiSparklines, MoreThan65536ItemsIsAResourceLimit) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const std::vector<fm_sparkline_t> items(65537U, fm_sparkline_t{"Sheet1!A1:D1", "F1"});
+  const fm_sparkline_group_t g = ColumnGroup();
+  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, items.data(), items.size(), ignored_id()),
+            FM_STATUS_SECURITY_RESOURCE_LIMIT);
+  EXPECT_STREQ(fm_get_last_error_context(), "part=sparkline_items requested=65537 limit=65536");
+}
+
 TEST(FormulonCApiSparklines, UpdateWithItemsIsAllOrNothing) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);

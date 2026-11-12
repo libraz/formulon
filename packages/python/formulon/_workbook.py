@@ -5456,7 +5456,7 @@ class GradientFill:
     top: float = 0.0
     #: The bottom edge (0..1) of a path gradient's focus.
     bottom: float = 0.0
-    #: The gradient's colour stops.
+    #: The gradient's colour stops; writing more than 1024 raises ``SecurityError``.
     stops: List[GradientStop] = field(default_factory=list)
 
 
@@ -8975,6 +8975,8 @@ class Workbook(_NoCopy):
           InvalidArgumentError: when the input is empty.
           InvalidFileError: when the input cannot be parsed as a valid
             OOXML or XLSB archive.
+          SecurityError: when the file exceeds an engine ceiling; the error
+            context's ``part=`` names it.
 
         Example::
 
@@ -9290,8 +9292,8 @@ class Workbook(_NoCopy):
           FormulonError: ``StatusCode.INVALID_SHEET_NAME`` when the name is
             empty, longer than 31 UTF-16 units, contains one of ``:``,
             backslash, ``/``, ``?``, ``*``, ``[`` or ``]``, begins or ends
-            with an apostrophe, or is ``History`` in any case;
-            ``StatusCode.SHEET_COUNT_LIMIT_EXCEEDED`` at the maximum sheet count.
+            with an apostrophe, or is ``History`` in any case.
+          SecurityError: at the maximum sheet count.
         """
         h = self._require()
         handles = self._sheet_handles()
@@ -9677,9 +9679,10 @@ class Workbook(_NoCopy):
 
         Raises:
           AlreadyExistsError: when ``new_name`` collides with an existing sheet.
+          SecurityError: when the workbook is already at the maximum sheet count.
           FormulonError: ``StatusCode.SHEET_INDEX_OUT_OF_RANGE``, ``StatusCode.INVALID_SHEET_NAME``,
-            ``StatusCode.SHEET_COUNT_LIMIT_EXCEEDED``, ``StatusCode.PRECONDITION_FAILED`` (very hidden
-            source) or ``StatusCode.NOT_IMPLEMENTED`` (content the copy cannot model).
+            ``StatusCode.PRECONDITION_FAILED`` (very hidden source) or
+            ``StatusCode.NOT_IMPLEMENTED`` (content the copy cannot model).
         """
         source_index = self.sheet(source).index
         h = self._require()
@@ -9999,8 +10002,9 @@ class Workbook(_NoCopy):
             ``[ ] : / \\ ? *``, is longer than 218 bytes, or equals an external
             link's book name; when ``directory`` is ``""`` (use ``None``), is not
             absolute in one of the three forms, holds ``[`` or ``]``, or has a
-            ``.``, ``..`` or empty inner segment; or when the directory and file
-            name together are longer than 1,024 bytes.
+            ``.``, ``..`` or empty inner segment.
+          SecurityError: when the directory and file name together are longer than
+            1,024 bytes.
         """
         h = self._require()
         if location is None:
@@ -11067,7 +11071,11 @@ class WorkbookOoxml(_NoCopy):
             _check(LIB.fm_workbook_set_font(h, _uint(font_index, "font_index", role="position"), ptr))
 
     def set_fill(self, fill_index: int, record: Fill) -> None:
-        """Overwrite an existing fill slot in place, as :meth:`set_font` does for a font."""
+        """Overwrite an existing fill slot in place, as :meth:`set_font` does for a font.
+
+        Raises:
+          SecurityError: when the fill has more than 1024 gradient stops.
+        """
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.FILL_RECORD)
@@ -11075,7 +11083,11 @@ class WorkbookOoxml(_NoCopy):
             _check(LIB.fm_workbook_set_fill(h, _uint(fill_index, "fill_index", role="position"), ptr))
 
     def add_fill(self, record: Fill) -> int:
-        """Add (dedup) a fill record; return its index."""
+        """Add (dedup) a fill record; return its index.
+
+        Raises:
+          SecurityError: when the fill has more than 1024 gradient stops.
+        """
         h = self._workbook._require()
         with _ArgScope() as scope:
             ptr = scope.struct(S.FILL_RECORD)
@@ -11165,6 +11177,9 @@ class WorkbookOoxml(_NoCopy):
 
         Accepts a :class:`DxfInput` or the :class:`Dxf` :meth:`get_dxf` returns.
         A ``number_format`` is registered as :meth:`add_number_format` does.
+
+        Raises:
+          SecurityError: when its fill has more than 1024 gradient stops.
         """
         if not isinstance(input, (DxfInput, Dxf)):
             raise TypeError(f"expected a DxfInput, got {type(input).__name__}")
@@ -11178,7 +11193,8 @@ class WorkbookOoxml(_NoCopy):
 
     def set_dxf(self, dxf_index: int, input: Union[DxfInput, Dxf]) -> None:  # noqa: A002 -- named after the declaration
         """Overwrite an existing differential format in place, as :meth:`set_font` does for a font: every
-        conditional format naming ``dxf_index`` restyles at once. Accepts what :meth:`add_dxf` accepts."""
+        conditional format naming ``dxf_index`` restyles at once. Accepts what :meth:`add_dxf` accepts, and
+        raises ``SecurityError`` for a fill with more than 1024 gradient stops."""
         if not isinstance(input, (DxfInput, Dxf)):
             raise TypeError(f"expected a DxfInput, got {type(input).__name__}")
         h = self._workbook._require()

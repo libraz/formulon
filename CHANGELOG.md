@@ -15,12 +15,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - C ABI: every engine ceiling that is not an Excel limit returns
   `SECURITY_RESOURCE_LIMIT` (6005; `StatusCode.SecurityResourceLimit`, Python
-  `SecurityError`), with the part and both numbers in the message. This covers an
+  `SecurityError`), whose error context carries `part=<name> requested=<n>
+  limit=<n>` (the message is prose). This covers an
   oversized or over-budget input, an oversized archive entry and too many archive
   parts; callers that matched the status 5002, documented as `kIoFileTooLarge`
   (Python `IoError`), or `IO_ZIP_BOMB` (Python `InvalidFileError`) for those cases
   must match the new status. The compression-ratio check keeps `IO_ZIP_BOMB`.
   The status 5002 is retired and the number is never reused
+  ([C ABI changes](docs/releases/upgrading-0.19.md#c-abi-changes)).
+- More engine ceilings return `SecurityResourceLimit` (6005, Python
+  `SecurityError`), each with a `part=<name> requested=<n> limit=<n>` context:
+  adding or copying a sheet past 65,535 (part=sheets, was status 12, now
+  retired), a page grid over 2^24 pages (part=print_pages, was status 9005,
+  now retired), a pivot result over its cell limit (part=pivot_result_cells,
+  was `FunctionOverflow`), an array formula or dynamic array past its cell
+  budget when loading, a raw print-settings XML fragment over its size limit
+  (part=page_setup_xml, page_margins_xml, print_options_xml,
+  header_footer_xml or sheet_pr_xml; was `PreconditionFailed`), a picture
+  over 32 MiB (part=image_bytes), a workbook location path over 1,024 bytes
+  (part=location_path), a sparkline group of more than 65,536 sparklines
+  (part=sparkline_items), a legacy array formula over more than 10,000,000
+  cells (part=array_cells), an `.xlsb` array constant of more than 65,536
+  elements on load (part=array_elements, was a corrupt-file status), a
+  drawing edit whose package would exceed the reader's part or size limits
+  (part=zip_parts or part=zip_total_bytes, was `InvalidArgument`), more than
+  16,384 ranges in one call
+  (part=ranges; zero ranges stays `InvalidArgument`), more than 1,024
+  gradient stops in a fill, written or loaded from `.xlsx` or `.xlsb`
+  (part=gradient_stops; a load fails instead of dropping stops, and the
+  `.xlsb` writer writes every stop), `getValues` and `getTypedValues` over
+  2^22 cells (part=values_range, was `InvalidArgument`), and a thread count
+  above 8 (part=threads; a negative count stays `InvalidArgument`). Excel's
+  own limits stay `InvalidArgument`: a slicer column count past 20,000, and
+  now more than 1,026 manual page breaks on an axis (part=manual_breaks, was
+  `PreconditionFailed`) and more than 1,048,576 items in a numeric pivot
+  group (part=pivot_field_items; `PreconditionFailed` when a refresh
+  rebuilds the group, was `SecurityResourceLimit`). The same key shape now
+  leads the context of a chart series past an Excel column's rows
+  (part=chart_points, `InvalidArgument`) and of the compression-ratio check
+  (part=zip_entry_ratio, `IO_ZIP_BOMB`). Callers that matched the old
+  statuses or context keys must match the new ones
   ([C ABI changes](docs/releases/upgrading-0.19.md#c-abi-changes)).
 - A chart series with more points than an Excel column holds fails with
   `InvalidArgument` instead of `SecurityResourceLimit`.
@@ -231,9 +265,9 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   `IndexOutOfRange`, a bad coordinate or quantity `InvalidArgument`, a taken
   name `AlreadyExists`, a state conflict `PreconditionFailed` and an unknown
   id `NotFound`. Match on the class and `code`, not the message text.
-- `SheetIndexOutOfRange`, `InvalidSheetName` and `SheetCountLimitExceeded`
-  move from 5050, 5051 and 5053 to 10, 11 and 12; 5050 to 5053 and 9006 are
-  retired.
+- `SheetIndexOutOfRange` and `InvalidSheetName` move from 5050 and 5051 to
+  10 and 11; 5050 to 5053 and 9006 are retired. Adding a sheet past the
+  maximum fails with `SecurityResourceLimit`.
 - `fm_cell_rect_t` (`CellRect`) replaces the per-feature range records, and
   conditional-format, validation, protected and print ranges take `CellRect`
   arrays instead of A1 text. An absent value reads `NULL`, `null` or `None`.

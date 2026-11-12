@@ -12,9 +12,11 @@
 #include "drawing/drawing_edit.h"
 #include "drawing/drawing_xml.h"
 #include "io/ooxml/part_graph.h"
+#include "io/zip_reader.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/resource_budget.h"
 
 namespace formulon {
 
@@ -25,6 +27,21 @@ namespace drawing_edit {
 
 inline Error invalid(const char* message) {
   return make_error(FormulonErrorCode::kInvalidArgument, message);
+}
+
+/// `kSecurityResourceLimit` when a package of `part_count` parts holding `total_bytes` would exceed what the
+/// reader accepts on load, named by the reader's own part.
+inline Expected<void, Error> check_package_limits(std::size_t part_count, std::size_t total_bytes) {
+  if (part_count > io::kMaxParts) {
+    return make_error(FormulonErrorCode::kSecurityResourceLimit,
+                      "The package would hold more parts than the reader accepts",
+                      limit_context("zip_parts", part_count, io::kMaxParts));
+  }
+  if (total_bytes > io::kMaxTotalExtractedBytes) {
+    return make_error(FormulonErrorCode::kSecurityResourceLimit, "The package would exceed the reader's size limit",
+                      limit_context("zip_total_bytes", total_bytes, io::kMaxTotalExtractedBytes));
+  }
+  return {};
 }
 
 inline Error not_found(const char* message) {

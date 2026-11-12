@@ -265,7 +265,7 @@ TEST(SaxArrayAnchor, RejectsFullGridBeforeSpillWalk) {
   // see `SheetReadContext::array_anchors`.
   auto rs = RegisterArraySpills(wb.sheet(0), ctx.array_anchors);
   ASSERT_FALSE(static_cast<bool>(rs));
-  EXPECT_EQ(rs.error().code, FormulonErrorCode::kIoSheetCorrupt);
+  EXPECT_EQ(rs.error().code, FormulonErrorCode::kSecurityResourceLimit);
   EXPECT_EQ(wb.sheet(0).spill_region_at_anchor(0U, 0U), nullptr);
 }
 
@@ -282,10 +282,11 @@ TEST(SaxArrayAnchor, RejectsCumulativeAnchorsOverSheetBudget) {
   ASSERT_TRUE(static_cast<bool>(read_sheet_data_sax(SpanOf(kXml), 0U, wb, ctx, text_storage)));
   auto rs = RegisterArraySpills(wb.sheet(0), ctx.array_anchors);
   ASSERT_FALSE(static_cast<bool>(rs));
-  EXPECT_EQ(rs.error().code, FormulonErrorCode::kIoSheetCorrupt);
+  EXPECT_EQ(rs.error().code, FormulonErrorCode::kSecurityResourceLimit);
   EXPECT_NE(rs.error().context.find("format=ooxml"), std::string::npos);
   EXPECT_NE(rs.error().context.find("anchor_row=0 anchor_col=1"), std::string::npos);
-  EXPECT_NE(rs.error().context.find("used=600000 requested=600000 ceiling=1048576"), std::string::npos);
+  EXPECT_NE(rs.error().context.find("part=dynamic_array_cells requested=600000 limit=1048576 used=600000 context="),
+            std::string::npos);
   EXPECT_EQ(wb.sheet(0).spill_region_at_anchor(0U, 0U), nullptr);
   EXPECT_EQ(wb.sheet(0).spill_region_at_anchor(0U, 1U), nullptr);
 }

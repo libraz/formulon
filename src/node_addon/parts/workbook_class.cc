@@ -60,6 +60,7 @@ struct GuardedMethodData {
 
 // A uint64 argument arrives as a Number, which is exact only up to 2^53 - 1;
 // a larger value could not name the cursor the caller holds.
+// @limit: format
 constexpr double kMaxSafeInteger = 9007199254740991.0;
 
 bool IsSheetMethod(const char* name) {

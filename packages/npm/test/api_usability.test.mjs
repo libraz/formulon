@@ -541,7 +541,7 @@ test('criterion 4: getValues includes spilled values', async () => {
 test('criterion 4: getValues bounds the cell count at 2^22', async () => {
   await withWorkbook((wb, f) => {
     const ws = wb.sheet(0);
-    expectCode(() => ws.getTypedValues('A:XFD'), f.StatusCode.InvalidArgument);
+    expectCode(() => ws.getTypedValues('A:XFD'), f.StatusCode.SecurityResourceLimit);
     const out = ws.getTypedValues('A1:D1048576');
     assert.equal(out.length, 1048576);
     assert.equal(out[0].length, 4);

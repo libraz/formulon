@@ -27,6 +27,7 @@ class Workbook;
 namespace formulon::pivot {
 
 /// Longest field custom name or item caption Excel accepts, in UTF-16 code units.
+// @limit: excel
 inline constexpr std::uint32_t kMaxPivotNameUnits = 255U;
 
 /// Item order a field patch sets; kManual keeps `PivotField::items` order and takes no by-field.

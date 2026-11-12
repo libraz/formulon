@@ -43,7 +43,6 @@ TEST(ErrorTest, ErrorCodeNameRoundTrip) {
       {FormulonErrorCode::kSecurityResourceLimit, "kSecurityResourceLimit"},
       {FormulonErrorCode::kBindingInvalidHandle, "kBindingInvalidHandle"},
       {FormulonErrorCode::kAutoFilterInvalid, "kAutoFilterInvalid"},
-      {FormulonErrorCode::kPrintPageCountOverflow, "kPrintPageCountOverflow"},
   };
   for (const auto& s : samples) {
     EXPECT_STREQ(s.name, to_cstring(s.code)) << "code=" << static_cast<int>(s.code);
@@ -57,7 +56,6 @@ TEST(ErrorTest, ErrorCodesAreWithinDocumentedRanges) {
   static_assert(band(FormulonErrorCode::kPreconditionFailed) == 0, "general band is 0-999");
   static_assert(band(FormulonErrorCode::kSheetIndexOutOfRange) == 0, "general band is 0-999");
   static_assert(band(FormulonErrorCode::kInvalidSheetName) == 0, "general band is 0-999");
-  static_assert(band(FormulonErrorCode::kSheetCountLimitExceeded) == 0, "general band is 0-999");
   static_assert(band(FormulonErrorCode::kIndexOutOfRange) == 0, "general band is 0-999");
   static_assert(band(FormulonErrorCode::kParserUnexpectedToken) == 1, "parser band is 1000-1999");
   static_assert(band(FormulonErrorCode::kEvalPivotMissing) == 2, "evaluator band is 2000-2999");
@@ -74,7 +72,6 @@ TEST(ErrorTest, ErrorCodesAreWithinDocumentedRanges) {
 TEST(ErrorTest, WorkbookStructuralCodesUseGeneralNumbers) {
   EXPECT_EQ(10, static_cast<int32_t>(FormulonErrorCode::kSheetIndexOutOfRange));
   EXPECT_EQ(11, static_cast<int32_t>(FormulonErrorCode::kInvalidSheetName));
-  EXPECT_EQ(12, static_cast<int32_t>(FormulonErrorCode::kSheetCountLimitExceeded));
   EXPECT_EQ(13, static_cast<int32_t>(FormulonErrorCode::kIndexOutOfRange));
   EXPECT_EQ(3004, static_cast<int32_t>(FormulonErrorCode::kFunctionOverflow));
   EXPECT_EQ(6005, static_cast<int32_t>(FormulonErrorCode::kSecurityResourceLimit));

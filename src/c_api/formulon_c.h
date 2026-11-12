@@ -521,6 +521,9 @@ FM_API fm_status_t fm_workbook_create_empty(fm_workbook_t** out);
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `bytes` or `out` is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) if `len == 0`;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the file exceeds an engine
+ *         ceiling (the context's `part=` names it, e.g. part=zip_parts,
+ *         part=gradient_stops or part=array_elements);
  *         a `kIo*` / `kCrypto*` code from
  *         `formulon::FormulonErrorCode` on parse / archive failure.
  */
@@ -829,8 +832,8 @@ FM_API fm_status_t fm_workbook_get_sheet_index(const fm_workbook_t* wb, const ch
  *         `History` in any case -- the rules `fm_workbook_rename_sheet` applies;
  *         `FM_STATUS_ALREADY_EXISTS` (7) when `name` equals an existing sheet's
  *         name under the wide fold;
- *         `FM_STATUS_SHEET_COUNT_LIMIT_EXCEEDED` (12) when the workbook already contains
- *         the maximum supported sheet count.
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the workbook already contains
+ *         the maximum supported sheet count (context `part=sheets requested=<n> limit=65535`).
  */
 FM_API fm_status_t fm_workbook_add_sheet(fm_workbook_t* wb, const char* name, size_t insert_before,
                                          size_t* out_sheet_index);
@@ -882,7 +885,7 @@ FM_API fm_status_t fm_workbook_move_sheet(fm_workbook_t* wb, size_t from_index, 
  *         `FM_STATUS_INVALID_SHEET_NAME` (11) when `new_name` is empty, too long or contains a
  *         forbidden character;
  *         `FM_STATUS_ALREADY_EXISTS` (7) when `new_name` is an existing sheet's name;
- *         `FM_STATUS_SHEET_COUNT_LIMIT_EXCEEDED` (12) when the workbook is full;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the workbook is full;
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when the source is very hidden;
  *         `FM_STATUS_NOT_IMPLEMENTED` (3) when the source is not a worksheet or carries
  *         content the copy cannot model (unrecognised relationships, slicers,
@@ -3500,8 +3503,9 @@ FM_API fm_status_t fm_sheet_get_protected_range(const fm_workbook_t* wb, size_t 
  *           `range.ranges` is `NULL` while `range.range_count > 0`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `name` is empty, or when
- *         `range.range_count` is 0 or past the per-call range cap, or a
- *         rectangle is inverted or outside the grid;
+ *         `range.range_count` is 0, or a rectangle is inverted or outside the grid;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when `range.range_count` is past
+ *         the per-call range cap of 16,384 (context `part=ranges requested=<n> limit=16384`);
  *         `FM_STATUS_ALREADY_EXISTS` (7) when `name` already names another range
  *         of the sheet.
  */
@@ -3518,8 +3522,10 @@ FM_API fm_status_t fm_sheet_add_protected_range(fm_workbook_t* wb, size_t sheet_
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is outside 0..2, `CLEAR` hits a
  *           field other than `legacy_password_hash`, `SET` carries a `NULL` string or
- *           an empty name, or a `SET` `ranges` is empty, past the per-call range cap,
- *           or holds an inverted or out-of-grid rectangle;
+ *           an empty name, or a `SET` `ranges` is empty or holds an inverted or
+ *           out-of-grid rectangle;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when a `SET` `ranges` is past the
+ *           per-call range cap of 16,384 (context `part=ranges requested=<n> limit=16384`);
  *         `FM_STATUS_NOT_FOUND` (6) when no range of the sheet has `name`;
  *         `FM_STATUS_ALREADY_EXISTS` (7) when a `SET` name already names another
  *           range of the sheet;
@@ -3710,11 +3716,12 @@ FM_API fm_status_t fm_sheet_get_validation(const fm_workbook_t* wb, size_t sheet
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `v` or `out_validation_id` is `NULL`, or `v.ranges` is
  *           `NULL` while `v.range_count > 0`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `v.range_count` is 0 or
- *         exceeds the per-call range cap, when any supplied range is
- *         inverted or outside the Excel grid, or when `v.type`, `v.op`,
- *         `v.error_style`, `v.allow_blank` or `v.show_in_cell_dropdown` is
- *         outside the domain listed above;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `v.range_count` is 0, when
+ *         any supplied range is inverted or outside the Excel grid, or when
+ *         `v.type`, `v.op`, `v.error_style`, `v.allow_blank` or
+ *         `v.show_in_cell_dropdown` is outside the domain listed above;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when `v.range_count` exceeds the
+ *         per-call range cap of 16,384 (context `part=ranges requested=<n> limit=16384`);
  *         a parser status (1000-1014; `fm_get_last_parse_error` gives the code and position) when a non-empty
  * `v.formula1` or `v.formula2` does not parse (the rule is not stored).
  */
@@ -3802,8 +3809,10 @@ typedef struct {
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is outside 0..2, `CLEAR` hits a field
  *           that cannot be cleared, `SET` carries a `NULL` string, a `SET` enumeration is outside
- *           its domain, or a `SET` `ranges` is empty, past the per-call range cap, or holds an
- *           inverted or out-of-grid rectangle;
+ *           its domain, or a `SET` `ranges` is empty or holds an inverted or out-of-grid
+ *           rectangle;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when a `SET` `ranges` is past the
+ *           per-call range cap of 16,384 (context `part=ranges requested=<n> limit=16384`);
  *         `FM_STATUS_NOT_FOUND` (6) when no rule has `id`;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `id` or a `SET` string is not valid UTF-8;
  *         a parser status (1000-1014; `fm_get_last_parse_error` gives the code and position) when a
@@ -4249,7 +4258,8 @@ typedef struct {
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `thread_count > 8`;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when `thread_count > 8` (context
+ *           `part=threads requested=<n> limit=8`);
  *         `FM_STATUS_GRAPH_RECALC_REENTRANT` (4005) when called recursively from a recalc
  *         callback (including a scheduler worker);
  *         an `FM_STATUS_EVAL_*` or `FM_STATUS_GRAPH_*` code on engine failure.
@@ -4675,8 +4685,10 @@ FM_API fm_status_t fm_workbook_get_location(const fm_workbook_t* wb, int32_t* ou
  *           `""` (use NULL), is not absolute in one of the three forms
  *           (`C:`, `C:rel`, `\\server`, `//server` and `//a` are refused),
  *           holds `[` or `]`, is not valid UTF-8, or has a `.`, `..` or empty
- *           inner segment; or when `directory` + `/` + `file_name` is longer
- *           than 1,024 bytes after canonicalisation.
+ *           inner segment;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005), changing nothing, when
+ *           `directory` + `/` + `file_name` is longer than 1,024 bytes after
+ *           canonicalisation.
  */
 FM_API fm_status_t fm_workbook_set_location(fm_workbook_t* wb, const fm_workbook_location_t* location);
 
@@ -5117,9 +5129,9 @@ typedef struct {
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_PRINT_INVALID_AREA` (9002) when the sheet's `_xlnm.Print_Area` exists but does not parse;
- *         `FM_STATUS_PRINT_PAGE_COUNT_OVERFLOW` (9005) when the page grid the sheet declares exceeds the
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the page grid the sheet declares exceeds the
  *           supported page count, which a file listing a manual break before nearly every row and column
- *           can reach.
+ *           can reach (context `part=print_pages requested=<n> limit=16777216`).
  */
 FM_API fm_status_t fm_sheet_paginate(const fm_workbook_t* wb, size_t sheet_index, fm_pagination_t** out);
 
@@ -5426,7 +5438,7 @@ FM_API fm_status_t fm_sheet_get_page_setup_xml(const fm_workbook_t* wb, size_t s
  *           top-level element, or names the wrong root; and when it declares an `r:id` on a sheet that
  *           has no printer-settings part, which would leave a dangling relationship that makes Excel
  *           repair the file;
- *         `FM_STATUS_PRECONDITION_FAILED` (9) when the fragment exceeds 4 KiB.
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the fragment exceeds 4 KiB.
  */
 FM_API fm_status_t fm_sheet_set_page_setup_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml);
 
@@ -5449,7 +5461,7 @@ FM_API fm_status_t fm_sheet_get_page_margins_xml(const fm_workbook_t* wb, size_t
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `xml` is malformed UTF-8;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when the fragment is malformed or names the wrong root;
- *         `FM_STATUS_PRECONDITION_FAILED` (9) when the fragment exceeds 4 KiB. */
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the fragment exceeds 4 KiB. */
 FM_API fm_status_t fm_sheet_set_page_margins_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml);
 
 /** @brief Reads `<printOptions>` as raw XML. `*out_xml` is a read-scratch-backed
@@ -5470,7 +5482,7 @@ FM_API fm_status_t fm_sheet_get_print_options_xml(const fm_workbook_t* wb, size_
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `xml` is malformed UTF-8;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when the fragment is malformed or names the wrong root;
- *         `FM_STATUS_PRECONDITION_FAILED` (9) when the fragment exceeds 4 KiB. */
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the fragment exceeds 4 KiB. */
 FM_API fm_status_t fm_sheet_set_print_options_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml);
 
 /** @brief Reads `<headerFooter>` as raw XML. `*out_xml` is a read-scratch-backed
@@ -5499,7 +5511,7 @@ FM_API fm_status_t fm_sheet_get_header_footer_xml(const fm_workbook_t* wb, size_
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `xml` is malformed UTF-8;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when the fragment is malformed or names the wrong root;
- *         `FM_STATUS_PRECONDITION_FAILED` (9) when the fragment exceeds 64 KiB. */
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the fragment exceeds 64 KiB. */
 FM_API fm_status_t fm_sheet_set_header_footer_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml);
 
 /** @brief Reads `<sheetPr>` as raw XML. `*out_xml` is a read-scratch-backed
@@ -5525,7 +5537,7 @@ FM_API fm_status_t fm_sheet_get_sheet_pr_xml(const fm_workbook_t* wb, size_t she
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `xml` is malformed UTF-8;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when the fragment is malformed or names the wrong root;
- *         `FM_STATUS_PRECONDITION_FAILED` (9) when the fragment exceeds 8 KiB. */
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the fragment exceeds 8 KiB. */
 FM_API fm_status_t fm_sheet_set_sheet_pr_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml);
 
 /* -------------------------------------------------------------------------- */
@@ -5546,8 +5558,10 @@ FM_API fm_status_t fm_sheet_set_sheet_pr_xml(fm_workbook_t* wb, size_t sheet_ind
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`, or `ranges` is `NULL` with a
  *           non-zero `range_count`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `range_count` is past the per-call range cap
- *           every range-taking entry point shares, or a rectangle is inverted or outside the grid.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when a rectangle is inverted or outside the grid;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when `range_count` is past the per-call range
+ *           cap of 16,384 every range-taking entry point shares (context
+ *           `part=ranges requested=<n> limit=16384`).
  */
 FM_API fm_status_t fm_sheet_set_print_area(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* ranges,
                                            size_t range_count);
@@ -5617,10 +5631,11 @@ FM_API fm_status_t fm_sheet_get_print_titles(const fm_workbook_t* wb, size_t she
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) for a row past the grid, an inverted
- *         span, a span past the last column, or a `manual` outside `fm_tristate_t`;
- *         `FM_STATUS_PRECONDITION_FAILED` (9) when adding a break to an axis
- *         that holds 1026 breaks. A row break divides the page horizontally,
- *         and 1026 is the limit Excel publishes for horizontal page breaks.
+ *         span, a span past the last column, a `manual` outside `fm_tristate_t`,
+ *         or adding a break to an axis that holds 1026 breaks (context
+ *         `part=manual_breaks requested=1027 limit=1026`). A row break divides
+ *         the page horizontally, and 1026 is the limit Excel publishes for
+ *         horizontal page breaks.
  */
 FM_API fm_status_t fm_sheet_set_row_break(fm_workbook_t* wb, size_t sheet_index, uint32_t row,
                                           const fm_row_break_t* brk);
@@ -6590,7 +6605,9 @@ FM_API fm_status_t fm_sheet_get_cf_rule(const fm_workbook_t* wb, size_t sheet_in
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb`, `rule` or `out_cf_rule_id` is `NULL`, or
  *           `rule.ranges` is `NULL` while `rule.range_count > 0`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `rule.range_count == 0` or exceeds the per-call range cap,
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when `rule.range_count` exceeds the per-call range
+ *           cap of 16,384 (context `part=ranges requested=<n> limit=16384`);
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `rule.range_count == 0`,
  *           when any `rule.ranges` entry is inverted (`first` past
  *           `last`) or reaches outside the grid (`row >= 1048576`,
  *           `col >= 16384`) and therefore has no A1 spelling, when
@@ -7875,6 +7892,8 @@ FM_API fm_status_t fm_workbook_set_pivot_cache_worksheet_source(fm_workbook_t* w
  *         name or table, a `#REF!` or dynamic name);
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when (rows - 1) x columns
  *         of the source exceeds the pivot cache record cell limit;
+ *         `FM_STATUS_PRECONDITION_FAILED` (9) also when a numeric group of the cache would
+ *         hold more items than a field does (context `part=pivot_field_items requested=<n> limit=1048576`);
  *         `FM_STATUS_NOT_IMPLEMENTED` (3) when a numeric group of the cache
  *         has a start, end or interval that is not an integer.
  */
@@ -8964,11 +8983,11 @@ typedef struct {
  *         a common pivot failure;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) for a non-positive or non-finite `interval`,
  *         `auto_start` / `auto_end` outside `fm_tristate_t`, a NaN or infinite bound with its
- *         `auto_*` false, or a start after the end;
+ *         `auto_*` false, a start after the end, or more group items than a field holds (Excel's
+ *         limit of 1,048,576 unique items; context `part=pivot_field_items requested=<n> limit=1048576`);
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when the field holds a blank or a value that is
  *         not a number, holds no number to take a following bound from, is a calculated field, or
- *         is grouped and its group fields are not the last fields of the cache;
- *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) for more group items than a field holds.
+ *         is grouped and its group fields are not the last fields of the cache.
  */
 FM_API fm_status_t fm_sheet_set_pivot_field_numeric_group(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                           size_t field_index, const fm_pivot_numeric_group_t* group);
@@ -9588,8 +9607,9 @@ FM_API fm_status_t fm_sheet_get_array_formula(const fm_workbook_t* wb, size_t sh
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb`, `range` or `formula` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when the rectangle
- *         is inverted, leaves the grid or exceeds the
- *         dynamic-array cell ceiling;
+ *         is inverted or leaves the grid;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when it holds more than 10,000,000 cells
+ *         (context `part=array_cells requested=<n> limit=10000000`);
  *         a parser code when `formula` does not parse;
  *         `FM_STATUS_PRECONDITION_FAILED` (9), changing nothing, when the rectangle
  *         partially overlaps another array block, intersects a merged
@@ -11892,9 +11912,10 @@ typedef struct {
   double gradient_top;
   /** The bottom edge (0..1) of a path gradient's focus. */
   double gradient_bottom;
-  /** The gradient's colour stops; at most 1024 are kept and a non-finite number is stored as 0. On a read the array is
-   *  valid until the next `fm_workbook_get_fill_at` / `fm_workbook_get_dxf_at` call, a mutation or handle destruction;
-   *  on a write it is borrowed for the call. */
+  /** The gradient's colour stops; a non-finite number is stored as 0, and a write with more than 1024 stops fails with
+   *  `FM_STATUS_SECURITY_RESOURCE_LIMIT` (context `part=gradient_stops requested=<n> limit=1024`). On a read the array
+   * is valid until the next `fm_workbook_get_fill_at` / `fm_workbook_get_dxf_at` call, a mutation or handle
+   * destruction; on a write it is borrowed for the call. */
   const fm_gradient_stop_t* gradient_stops;
   /** The number of entries in `gradient_stops`. */
   uint32_t gradient_stop_count;
@@ -12295,7 +12316,8 @@ FM_API fm_status_t fm_workbook_get_dxf_at(const fm_workbook_t* wb, uint32_t dxf_
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when the present font's `name`,
  *           `number_format`, `alignment_xml` or `protection_xml` is malformed UTF-8;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when the present font states a `size_pt` outside
- *           `1..409` or not finite.
+ *           `1..409` or not finite;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the present fill has more than 1024 gradient stops.
  */
 FM_API fm_status_t fm_workbook_add_dxf(fm_workbook_t* wb, const fm_dxf_t* record, uint32_t* out_dxf_index);
 
@@ -12311,6 +12333,7 @@ FM_API fm_status_t fm_workbook_add_dxf(fm_workbook_t* wb, const fm_dxf_t* record
  *           `number_format`, `alignment_xml` or `protection_xml` is malformed UTF-8;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when the present font states a `size_pt` outside
  *           `1..409` or not finite;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the present fill has more than 1024 gradient stops;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `dxf_index` is not below the dxf count.
  */
 FM_API fm_status_t fm_workbook_set_dxf(fm_workbook_t* wb, uint32_t dxf_index, const fm_dxf_t* record);
@@ -12707,7 +12730,8 @@ FM_API fm_status_t fm_workbook_set_default_font(fm_workbook_t* wb, const fm_font
  * batch when possible.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `record` or `out_fill_index` is `NULL`.
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `record` or `out_fill_index` is `NULL`;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when `record->gradient_stop_count` is above 1024.
  */
 FM_API fm_status_t fm_workbook_add_fill(fm_workbook_t* wb, const fm_fill_t* record, uint32_t* out_fill_index);
 
@@ -12719,6 +12743,7 @@ FM_API fm_status_t fm_workbook_add_fill(fm_workbook_t* wb, const fm_fill_t* reco
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `record` is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when a value `fm_workbook_add_fill` refuses is set;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when `record->gradient_stop_count` is above 1024;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `fill_index` is not below the fill count.
  */
 FM_API fm_status_t fm_workbook_set_fill(fm_workbook_t* wb, uint32_t fill_index, const fm_fill_t* record);
@@ -12919,6 +12944,7 @@ FM_API fm_status_t fm_workbook_remove_cell_style(fm_workbook_t* wb, const char* 
  *           outside `1..409`, or an xf is invalid;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when an xf's font, fill, border or style xf index
  *           is past its table (counting the batch's own records);
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when a fill has more than 1024 gradient stops;
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when custom number-format ids are exhausted.
  */
 FM_API fm_status_t fm_workbook_add_batch(fm_workbook_t* wb, const fm_styles_batch_spec_t* batch);
@@ -13687,8 +13713,10 @@ FM_API fm_status_t fm_sheet_get_picture(const fm_workbook_t* wb, size_t sheet_in
  *         first layout of `fm_drawing_placement_spec_t`, an enum
  *         field is outside its domain, the anchor kind is absolute, an
  *         offset or size is negative or 2^31 EMU or more, the anchor lies
- *         outside the sheet, a two-cell `to` marker lies before `from`, the
- *         image exceeds 32 MiB, or the package would exceed the reader's limits;
+ *         outside the sheet, or a two-cell `to` marker lies before `from`;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the image exceeds 32 MiB, or the
+ *         package would exceed the reader's limits (context `part=zip_parts` or
+ *         `part=zip_total_bytes`, then `requested=` and `limit=`);
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when the drawing's id space is exhausted;
  *         `FM_STATUS_IO_IMAGE_UNSUPPORTED` (5023) when `bytes` is not a recognised image;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
@@ -13824,8 +13852,9 @@ FM_API fm_status_t fm_sheet_snapshot_drawing(const fm_workbook_t* wb, size_t she
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when the bytes
  *         are not a valid capture, `flags` has an unknown bit, the id is
- *         held by another kind of object, or the package would exceed the
- *         reader's limits;
+ *         held by another kind of object;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the package would exceed the
+ *         reader's limits (context `part=zip_parts` or `part=zip_total_bytes`);
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when a fresh id is needed and the
  *         drawing's id space is exhausted;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
@@ -14623,7 +14652,9 @@ FM_API fm_status_t fm_sheet_get_sparkline_at(const fm_workbook_t* wb, size_t she
  *         `FM_STATUS_INVALID_ARGUMENT` (2) for `count == 0`, a sparkline whose
  *         location is not one A1 cell or whose formula is empty, a
  *         non-finite number, a negative line weight, or an enumeration out of
- *         range.
+ *         range;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when `count` is above 65536
+ *         (context `part=sparkline_items requested=<n> limit=65536`).
  */
 FM_API fm_status_t fm_sheet_add_sparkline_group(fm_workbook_t* wb, size_t sheet_index,
                                                 const fm_sparkline_group_t* group, const fm_sparkline_t* items,
@@ -14642,6 +14673,7 @@ FM_API fm_status_t fm_sheet_add_sparkline_group(fm_workbook_t* wb, size_t sheet_
  *           field other than the eight colours, `manual_min`, `manual_max` and `date_axis_ref`,
  *           `SET` carries a `NULL` string, a `SET` `items` is empty, or a `SET` value fails
  *           a rule of `fm_sheet_add_sparkline_group`;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when a `SET` `items` holds more than 65536 sparklines;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `group_id` or a `SET` string is not valid UTF-8.
  */
 FM_API fm_status_t fm_sheet_update_sparkline_group(fm_workbook_t* wb, size_t sheet_index, const char* group_id,
@@ -15966,8 +15998,10 @@ typedef struct {
  *         `FM_STATUS_IO_CHART_INVALID_REFERENCE` (5026) when `source` does not resolve to
  *         one rectangle, or a `REF` title's `formula` does not resolve;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
- *         or is an `.xlsb` drawing the reader could not lift. The workbook is then
- *         unchanged.
+ *         or is an `.xlsb` drawing the reader could not lift;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the package would exceed the
+ *         reader's part or size limits (part=zip_parts or part=zip_total_bytes). The
+ *         workbook is then unchanged.
  */
 FM_API fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index, const fm_chart_spec_t* spec,
                                       uint32_t* out_object_id);

@@ -34,6 +34,7 @@ bool parse_numeric(std::string_view s, char decimal_sep, char group_sep, int per
 
 /// Longest text, in UTF-16 units and spaces included, that Excel converts to
 /// a number.
+// @limit: excel
 inline constexpr std::size_t kMaxNumericTextLength = 255;
 
 /// True when the raw text exceeds `kMaxNumericTextLength`; checked on the

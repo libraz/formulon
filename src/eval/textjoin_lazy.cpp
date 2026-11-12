@@ -30,6 +30,7 @@ namespace {
 
 // Longest UTF-8 sequence, and therefore the most trailing bytes of a buffer
 // whose decoding a later append can still change.
+// @limit: internal
 constexpr std::size_t kMaxUtf8SequenceBytes = 4u;
 
 // Running UTF-16 unit count for a buffer that is appended to repeatedly.

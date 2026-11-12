@@ -87,7 +87,9 @@ bool ParseCellRef(std::string_view text, std::uint32_t* out_row, std::uint32_t* 
 /// Largest valid 0-based row / column index (Excel's grid ceiling). Used
 /// to clamp synthesized whole-axis spans and to cap over-large endpoints
 /// so a malformed area cannot reserve a runaway track vector.
+// @limit: excel
 constexpr std::uint32_t kMaxRowIndex = Sheet::kMaxRows - 1U;
+// @limit: excel
 constexpr std::uint32_t kMaxColIndex = Sheet::kMaxCols - 1U;
 
 /// Parses both endpoints of an axis span as pure column letters (`columns`)

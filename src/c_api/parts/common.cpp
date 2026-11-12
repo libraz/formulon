@@ -38,6 +38,7 @@
 #include "utils/error.h"
 #include "utils/formula_text.h"
 #include "utils/number_text.h"
+#include "utils/resource_budget.h"
 #include "utils/strings.h"
 #include "utils/text_ops.h"
 #include "utils/utf8_length.h"
@@ -264,8 +265,8 @@ namespace {
 
 fm_status_t check_range_count(std::size_t n) {
   if (n > kMaxRangesPerCApiCall) {
-    return invalid_argument(("range_count must be in 1.." + std::to_string(kMaxRangesPerCApiCall)).c_str(),
-                            "range_count=" + std::to_string(n) + " cap=" + std::to_string(kMaxRangesPerCApiCall));
+    return set_binding_error(formulon::FormulonErrorCode::kSecurityResourceLimit, "range_count is above the limit",
+                             formulon::limit_context("ranges", n, kMaxRangesPerCApiCall));
   }
   return 0;
 }
@@ -299,7 +300,7 @@ fm_status_t check_sheet_rect(const fm_cell_rect_t& rect) {
 
 fm_status_t check_rect_list(const fm_cell_rect_t* ranges, std::size_t range_count) {
   if (range_count == 0U) {
-    return invalid_argument("range_count must not be 0", "range_count=0");
+    return invalid_argument("range_count must be at least 1", "range_count=0");
   }
   if (ranges == nullptr) {
     return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer, "ranges must not be NULL");
@@ -677,7 +678,16 @@ fm_status_t validate(const fm_fill_t& fill) {
   if (fm_status_t rc = check_enum_domain(fill.pattern, 0, FM_FILL_PATTERN_GRAY0625, "fill.pattern"); rc != 0) {
     return rc;
   }
-  return check_enum_domain(fill.gradient_type, 0, FM_GRADIENT_TYPE_PATH, "fill.gradient_type");
+  if (fm_status_t rc = check_enum_domain(fill.gradient_type, 0, FM_GRADIENT_TYPE_PATH, "fill.gradient_type"); rc != 0) {
+    return rc;
+  }
+  if (fill.has_gradient != 0 && fill.gradient_stops != nullptr &&
+      fill.gradient_stop_count > formulon::kMaxGradientStops) {
+    return set_binding_error(
+        formulon::FormulonErrorCode::kSecurityResourceLimit, "gradient_stop_count is above the limit",
+        formulon::limit_context("gradient_stops", fill.gradient_stop_count, formulon::kMaxGradientStops));
+  }
+  return 0;
 }
 
 fm_status_t validate(const fm_border_t& border) {

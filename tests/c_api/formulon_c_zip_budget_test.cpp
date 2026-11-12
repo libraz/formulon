@@ -139,7 +139,7 @@ TEST(FormulonCApiZipBudget, XlsbLoadReturnsStableResourceLimit) {
   EXPECT_EQ(status, static_cast<fm_status_t>(formulon::FormulonErrorCode::kSecurityResourceLimit));
   EXPECT_EQ(workbook, nullptr);
   EXPECT_EQ(std::string_view(fm_get_status_name(status)), "SECURITY_RESOURCE_LIMIT");
-  EXPECT_NE(context.find("limit=total"), std::string::npos);
+  EXPECT_NE(context.find("part=zip_total_bytes"), std::string::npos);
   EXPECT_NE(context.find("entry=xl/formulon-budget-"), std::string::npos);
   EXPECT_NE(message.find("cumulative"), std::string::npos);
 }

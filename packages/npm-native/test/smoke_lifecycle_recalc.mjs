@@ -74,7 +74,7 @@ test('recalcParallel evaluates a wide DAG and reports bounded telemetry', async 
   // An integer above the cap is refused by the engine.
   assert.throws(
     () => wb.recalcParallel(9),
-    (e) => isFormulonError(e, mod.StatusCode.InvalidArgument),
+    (e) => isFormulonError(e, mod.StatusCode.SecurityResourceLimit),
     'threadCount above cap',
   );
   wb.dispose();

@@ -264,6 +264,16 @@ TEST(WorkbookArrayFormula, InvalidArgumentsAreRefused) {
   EXPECT_EQ(wb.sheet(0).cell_at(0, 0), nullptr);
 }
 
+TEST(WorkbookArrayFormula, ABlockPastTheCellCeilingIsAResourceLimit) {
+  Workbook wb = OneSheet();
+  // 3200 x 3200 is 10,240,000 cells, past the 10,000,000 a block may hold.
+  const auto refused = wb.set_array_formula(0, 0, 0, 3200, 3200, "=1");
+  ASSERT_FALSE(static_cast<bool>(refused));
+  EXPECT_EQ(refused.error().code, FormulonErrorCode::kSecurityResourceLimit);
+  EXPECT_EQ(refused.error().context, "part=array_cells requested=10240000 limit=10000000");
+  EXPECT_EQ(wb.sheet(0).cell_at(0, 0), nullptr);
+}
+
 TEST(WorkbookArrayFormula, UnparseableFormulaIsStoredLikeTheOrdinarySetter) {
   Workbook wb = OneSheet();
   ASSERT_TRUE(wb.set_array_formula(0, 0, 0, 2, 1, "=1+"));

@@ -945,6 +945,7 @@ extern "C" fm_status_t fm_workbook_set_pivot_cache_record_error(fm_workbook_t* w
 namespace {
 
 // The largest `missingItemsLimit` the API sets: one item per worksheet row.
+// @limit: excel
 constexpr std::uint32_t kMaxMissingItemsLimit = 1048576;
 
 }  // namespace
@@ -1028,6 +1029,7 @@ extern "C" fm_status_t fm_workbook_update_pivot_cache_options(fm_workbook_t* wb,
 namespace {
 
 // Longest calculated formula, in UTF-16 code units.
+// @limit: excel
 constexpr std::uint32_t kMaxFormulaUnits = 8192U;
 
 // Validates a required name or formula argument: NULL, malformed UTF-8, empty

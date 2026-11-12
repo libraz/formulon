@@ -252,7 +252,8 @@ TEST(WorkbookSheetOps, AppendStopsAtTheSheetIdCeiling) {
 
   auto validated = wb.add_sheet_validated("Overflow");
   ASSERT_FALSE(static_cast<bool>(validated));
-  EXPECT_EQ(validated.error().code, FormulonErrorCode::kSheetCountLimitExceeded);
+  EXPECT_EQ(validated.error().code, FormulonErrorCode::kSecurityResourceLimit);
+  EXPECT_EQ(validated.error().context, "part=sheets requested=65536 limit=65535");
 
   // The name-unchecked overload has no error channel, but it must not grow
   // the workbook past the ceiling either, and the index it reports back must

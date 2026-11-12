@@ -45,6 +45,7 @@ constexpr std::uint16_t kGroupAutoMax = 0x2000;
 constexpr std::uint16_t kGroupAutoMin = 0x4000;
 constexpr std::uint16_t kRightToLeft = 0x8000;
 constexpr std::size_t kGroupFixedBytes = 2U + 8U * 8U + 3U * 8U + 4U;
+// @limit: excel
 constexpr double kMaxLineWeight = 1584.0;
 
 std::optional<ColorSpec> DecodeSpec(const std::uint8_t* p) {

@@ -82,6 +82,7 @@ Expected<double, ErrorCode> coerce_real_arg(const Value& v) {
 
 // Largest BESSEL order Excel evaluates; the next integer is #NUM! for every x
 // in all four functions (Mac Excel 365).
+// @limit: excel
 constexpr double kMaxBesselOrder = 10000000.0;
 
 // Coerces a BESSEL order argument. The order is floored and then must lie in
@@ -190,6 +191,7 @@ Value ErfcPrecise(const Value* args, std::uint32_t arity, Arena& arena) {
 
 // Largest asymptotic phase |x| - pi/4 (or 3pi/4) Excel evaluates in J_0 /
 // J_1; beyond it BESSELJ is #NUM! (Mac Excel 365, located within 0.05).
+// @limit: excel
 constexpr double kMaxBesselPhase = 134217727.0;
 
 // J_0(x): rational polynomial for |x| < 8, asymptotic for |x| >= 8. The

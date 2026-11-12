@@ -58,13 +58,18 @@ inline constexpr int kBpAtPrefix = 65;
 
 // Keep the historical parser-detail aliases for callers that use them, while
 // sourcing the workbook grid limits from the shared A1 reference constants.
+// @limit: excel
 inline constexpr std::uint32_t kMaxColumn = a1::kMaxCols;
+// @limit: excel
 inline constexpr std::uint32_t kMaxRow = a1::kMaxRows;
 
 // Longest column-letter run (`XFD`), longest row digit run (`1048576`) and the
 // UTF-16 unit cap on a defined or LET binding name.
+// @limit: excel
 inline constexpr std::size_t kMaxColumnLetters = a1::kMaxColumnLetters;
+// @limit: excel
 inline constexpr std::size_t kMaxRowDigits = 7;
+// @limit: excel
 inline constexpr std::size_t kMaxDefinedNameUnits = 255;
 
 // UTF-8 spellings of U+3000 (ideographic space) and U+FEFF (byte-order mark).

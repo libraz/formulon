@@ -20,8 +20,7 @@ namespace xlsb {
 /// Empty font/fill/border/XF collections are normalised to one default record,
 /// as required by the XLSB collection contracts.  The writer preserves the
 /// modelled font, fill (pattern and gradient), border, number-format, XF,
-/// named-style and differential-format fields. Gradient stops past the 256
-/// `cNumStop` allows are dropped.
+/// named-style and differential-format fields. Every gradient stop is written.
 std::vector<std::uint8_t> write_styles_bin(const StylesTable& table);
 
 }  // namespace xlsb

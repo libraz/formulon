@@ -71,7 +71,9 @@ using formulon::c_api::parts::validate;
 namespace {
 
 // Largest `indent` and `pageWrap` the options dialog accepts.
+// @limit: excel
 constexpr std::uint32_t kMaxIndent = 126U;
+// @limit: excel
 constexpr std::uint32_t kMaxPageWrap = 255U;
 
 // A NULL or empty caption is no caption.

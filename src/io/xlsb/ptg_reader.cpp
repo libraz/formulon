@@ -28,6 +28,7 @@
 #include "parser/formula_prefix.h"
 #include "parser/reference.h"
 #include "sheet.h"
+#include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "value.h"
@@ -41,6 +42,7 @@ namespace {
 constexpr const char* kCtx = "context=xlsb_ptg_reader";
 
 /// Most elements a `PtgArray` constant may hold.
+// @limit: engine
 constexpr std::uint64_t kMaxArrayElements = 0x10000U;
 
 // Excel sheet dimensions: the RefErr forms encode the maximum sentinel
@@ -867,8 +869,9 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
         if (rows == 0 || cols == 0) {
           return make_error(FormulonErrorCode::kIoXlsbCorrupt, "PtgArray zero dimension", kCtx);
         }
-        if (static_cast<std::uint64_t>(rows) * cols > kMaxArrayElements) {
-          return make_error(FormulonErrorCode::kIoXlsbCorrupt, "PtgArray dimension overflow", kCtx);
+        if (const std::uint64_t elements = static_cast<std::uint64_t>(rows) * cols; elements > kMaxArrayElements) {
+          return make_error(FormulonErrorCode::kSecurityResourceLimit, "PtgArray holds more elements than the limit",
+                            limit_context("array_elements", elements, kMaxArrayElements) + " " + kCtx);
         }
         const std::uint32_t count = rows * cols;
         auto** elems = arena.create_array<const parser::AstNode*>(count);

@@ -750,6 +750,8 @@ TEST(ChartData, RejectsRectangularReferenceBeforePositionAllocation) {
   auto data = resolve_chart_data(wb, 0U, model);
   ASSERT_FALSE(static_cast<bool>(data));
   EXPECT_EQ(data.error().code, FormulonErrorCode::kSecurityResourceLimit);
+  EXPECT_EQ(data.error().context.rfind("part=chart_range_cells requested=", 0U), 0U) << data.error().context;
+  EXPECT_NE(data.error().context.find(" limit=10000000"), std::string::npos) << data.error().context;
 }
 
 TEST(ChartData, RejectsExcessiveSparsePointCountBeforeAllocation) {

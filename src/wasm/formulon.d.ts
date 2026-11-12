@@ -40,7 +40,6 @@ export const StatusCode: Readonly<{
   PreconditionFailed: 9;
   SheetIndexOutOfRange: 10;
   InvalidSheetName: 11;
-  SheetCountLimitExceeded: 12;
   IndexOutOfRange: 13;
   ParserUnexpectedToken: 1000;
   ParserUnterminatedString: 1001;
@@ -87,7 +86,6 @@ export const StatusCode: Readonly<{
   DataTableInvalid: 8005;
   AutoFilterInvalid: 8006;
   PrintInvalidArea: 9002;
-  PrintPageCountOverflow: 9005;
 }>;
 /** Union of the {@link StatusCode} values. */
 export type StatusCode =
@@ -101,7 +99,6 @@ export type StatusCode =
   | 9
   | 10
   | 11
-  | 12
   | 13
   | 1000
   | 1001
@@ -147,8 +144,7 @@ export type StatusCode =
   | 7003
   | 8005
   | 8006
-  | 9002
-  | 9005;
+  | 9002;
 // <status-codes:end>
 
 /** Why a formula failed to parse, as carried by {@link ParseError.code}. Values are fixed; new codes are only
@@ -3685,7 +3681,7 @@ export interface GradientFillInput {
   top?: number;
   /** The bottom edge (0..1) of a path gradient's focus. */
   bottom?: number;
-  /** The gradient's colour stops; omitted is none. */
+  /** The gradient's colour stops; omitted is none. More than 1024 fails with `StatusCode.SecurityResourceLimit`. */
   stops?: readonly GradientStopInput[];
 }
 
@@ -6809,7 +6805,7 @@ export interface Workbook {
    *  used. An unknown `insertBefore` name fails with `StatusCode.NotFound`. Fails with `StatusCode.InvalidSheetName`
    *  when the name is empty, longer than 31 UTF-16 units, contains one of `: \ / ? * [ ]`, begins or ends with an
    *  apostrophe or is `History` in any case, with `StatusCode.AlreadyExists` when it collides with an existing sheet
-   *  under name identity (see {@link Workbook}), and with `StatusCode.SheetCountLimitExceeded` at the maximum sheet
+   *  under name identity (see {@link Workbook}), and with `StatusCode.SecurityResourceLimit` at the maximum sheet
    *  count. */
   addSheet(name?: string | null, options?: AddSheetOptions): Sheet;
   /** Removes `sheet`; its handle then throws `StatusCode.NotFound`, and the handles after it move down one place.
@@ -6824,7 +6820,7 @@ export interface Workbook {
    *  copy is named `Src (2)`; an explicit name follows the `addSheet` rules. References qualified with the source sheet
    *  are re-pointed at the copy, tables are renamed, and the active sheet does not change. Fails with
    *  `StatusCode.SheetIndexOutOfRange`, `StatusCode.InvalidSheetName`, `StatusCode.AlreadyExists` (the name is taken),
-   *  `StatusCode.SheetCountLimitExceeded`, `StatusCode.PreconditionFailed` (very hidden source) or
+   *  `StatusCode.SecurityResourceLimit` (the workbook is full), `StatusCode.PreconditionFailed` (very hidden source) or
    *  `StatusCode.NotImplemented` (slicers, shapes, pivot charts and other content the copy cannot model); the workbook
    *  is unchanged when it throws. */
   copySheet(source: SheetRef, options?: CopySheetOptions): Sheet;
@@ -6863,8 +6859,8 @@ export interface Workbook {
    * workers have joined. `threadCount` is an integer: 0 (the default) selects
    * automatic detection (capped at 8), 1 keeps evaluation on the caller and
    * starts no workers, and 2..8 set the worker upper bound. `threadCount` is optional (0 = automatic, capped
-   * at 8); a non-number is `TypeError`, a fractional or non-finite number `RangeError`, a negative number or
-   * one above 8 `StatusCode.InvalidArgument`.
+   * at 8); a non-number is `TypeError`, a fractional or non-finite number `RangeError`, a negative number
+   * `StatusCode.InvalidArgument`, one above 8 `StatusCode.SecurityResourceLimit`.
    * The 64-bit counters in `stats` are JavaScript numbers and are exact
    * through `Number.MAX_SAFE_INTEGER` (2^53 - 1).
    * As with `recalc`, an exception thrown by an `IterativeProgressCallback` is
@@ -6976,8 +6972,8 @@ export interface Workbook {
    *  `undefined`, or a record without `fileName`, throws `TypeError`. `StatusCode.InvalidArgument`, changing
    *  nothing, when `fileName` is empty, lacks a workbook extension, holds one of `[ ] : / \ ? *`, is longer than 218
    *  bytes, or equals an external link's book name; when `directory` is `""` (use `null`), is not absolute in one of
-   *  the three forms, holds `[` or `]`, or has a `.`, `..` or empty inner segment; or when the directory and file
-   *  name together are longer than 1,024 bytes. */
+   *  the three forms, holds `[` or `]`, or has a `.`, `..` or empty inner segment. `StatusCode.SecurityResourceLimit`
+   *  when the directory and file name together are longer than 1,024 bytes. */
   setLocation(location: WorkbookLocationInput | null): void;
 
   /** Lists the defined names, workbook- and sheet-scoped alike, in file order. */
@@ -7299,7 +7295,7 @@ export interface Sheet {
   /** `getTypedValue` at the A1 address `a1`. */
   getTypedValue(a1: string): Value;
   /** Reads the values of `range` as a dense row-major grid of native data: an empty cell is `null` and a spilled
-   *  cell holds its spilled value. A range over 4,194,304 (2^22) cells fails with `StatusCode.InvalidArgument`.
+   *  cell holds its spilled value. A range over 4,194,304 (2^22) cells fails with `StatusCode.SecurityResourceLimit`.
    *
    *  @example
    *  ```ts
@@ -7620,7 +7616,9 @@ export interface Sheet {
   shape(objectId: number | Drawing): Shape;
   /** The `Slicer` handle of `objectId` (a table slicer's frame); fails as `picture` does otherwise. */
   slicer(objectId: number | Drawing): Slicer;
-  /** Inserts `bytes` as a picture and returns its handle; existing drawing content is kept. */
+  /** Inserts `bytes` as a picture and returns its handle; existing drawing content is kept. Fails with
+   *  `StatusCode.SecurityResourceLimit` when `bytes` is longer than 32 MiB or the package would exceed the reader's
+   *  part or size limits. */
   addPicture(bytes: BytesInput, input?: DrawingPlacementInput): Picture;
   /** Appends a shape on top and returns its handle; a sheet without a drawing gets one and existing drawing
    *  content is kept. */
@@ -7633,7 +7631,8 @@ export interface Sheet {
   addSlicer(table: Table | string, column: number | string, spec: SlicerInput): Slicer;
   /** Puts a `snapshot` capture of a picture, chart or shape back and returns the object's handle: in place of
    *  an object with the same id at its recorded position, where a handle of that id addresses it again, or as a
-   *  copy on top with `assignNewId`. */
+   *  copy on top with `assignNewId`. Fails with `StatusCode.SecurityResourceLimit` when the package would exceed
+   *  the reader's part or size limits. */
   restoreDrawing(bytes: BytesInput, opts?: RestoreDrawingOptions): Picture | Chart | Shape;
   /** Removes the drawing object `objectId` and the parts only it reaches; other drawing content is kept. A
    *  shape, connector or group goes with its children; a slicer with its frame, and its cache when no other
@@ -7657,7 +7656,8 @@ export interface Sheet {
   removeDataTable(row: number, col: number): void;
   /** `removeDataTable` at the A1 address `a1`. */
   removeDataTable(a1: string): void;
-  /** Appends a group and returns its id; `spec.sparklines` must hold at least one sparkline. */
+  /** Appends a group and returns its id; `spec.sparklines` must hold at least one sparkline, and more than 65536
+   *  fail with `StatusCode.SecurityResourceLimit`. */
   addSparklineGroup(spec: SparklineGroupInput): SparklineGroupId;
   /** Lists the sheet's sparkline groups; a group's place in this list is its position, its `id` the stable key. */
   listSparklineGroups(): readonly SparklineGroup[];
@@ -7666,12 +7666,13 @@ export interface Sheet {
   /** Updates the attributes, colours and date range of group `sparklineGroup` that `patch` names, and its
    *  sparklines when `patch.sparklines` is present; unmodelled XML is kept. `{ sparklines }` replaces the
    *  sparklines alone. See {@link SparklineGroupPatch} for the `null` rules. An empty `sparklines` fails with
-   *  `StatusCode.InvalidArgument`. */
+   *  `StatusCode.InvalidArgument`, more than 65536 with `StatusCode.SecurityResourceLimit`. */
   updateSparklineGroup(sparklineGroup: SparklineGroupRef, patch: SparklineGroupPatch): void;
   /** Removes group `sparklineGroup`. */
   removeSparklineGroup(sparklineGroup: SparklineGroupRef): void;
 
-  /** Creates a chart with filled caches and returns its handle.
+  /** Creates a chart with filled caches and returns its handle. Fails with `StatusCode.SecurityResourceLimit`
+   *  when the package would exceed the reader's part or size limits.
    *
    *  @example
    *  ```ts
@@ -7741,7 +7742,8 @@ export interface Sheet {
    *  passed, so no `TimePeriod` rule matches. */
   evaluateCfRange(range: CellRect | string, options?: CfRangeEvaluationOptions): readonly CfCell[];
 
-  /** Computes print-area page breaks and physical page count for the sheet. */
+  /** Computes print-area page breaks and physical page count for the sheet. Fails with
+   *  `StatusCode.SecurityResourceLimit` when the page grid the sheet declares exceeds the supported page count. */
   getPagination(): Pagination;
 
   /** Reads `_xlnm.Print_Area` as rectangles, in print order; `null` without a print area. A whole-axis
@@ -7749,7 +7751,7 @@ export interface Sheet {
   getPrintArea(): readonly CellRect[] | null;
   /** Writes `_xlnm.Print_Area` from one or more rectangles, printed in the
    *  given order; a rectangle spanning every row or column is stored as whole
-   *  columns or rows; one A1 range string is one rectangle. `null` (or an empty array) removes it. */
+   *  columns or rows; one A1 range string is one rectangle. `null` (or an empty array) removes it. More than 16384 ranges fail with `StatusCode.SecurityResourceLimit`. */
   setPrintArea(ranges: readonly (CellRect | string)[] | string | null): void;
   /** Reads `_xlnm.Print_Titles` as a row span and a column span; `null` when neither axis repeats. */
   getPrintTitles(): PrintTitles | null;
@@ -7759,8 +7761,8 @@ export interface Sheet {
 
   /** Sets the row break before `row`, replacing the span and `manual` flag of one already there, or with `null`
    *  removes it (doing nothing when there is none). See {@link PageBreakInput} for the defaults. A row past the
-   *  grid, an inverted span or a span past the last column fails with `StatusCode.InvalidArgument`; adding a
-   *  break to an axis that holds 1026 fails with `StatusCode.PreconditionFailed`. */
+   *  grid, an inverted span, a span past the last column, or adding a break to an axis that holds 1026 fails
+   *  with `StatusCode.InvalidArgument`. */
   setRowBreak(row: number, input: PageBreakInput | null): void;
   /** Sets or removes the column break before `col`, as `setRowBreak` does for rows; the whole-sheet span covers
    *  every row. */
@@ -7980,10 +7982,10 @@ export interface Sheet {
   /** Reads the protected range `protectedRange`; `null` when the sheet has none. */
   getProtectedRange(protectedRange: ProtectedRangeRef): ProtectedRange | null;
   /** Appends a protected range and returns its name. `name` must be non-empty (`StatusCode.InvalidArgument`) and unique
-   *  on the sheet (`StatusCode.AlreadyExists`); `ranges` must hold at least one rectangle. */
+   *  on the sheet (`StatusCode.AlreadyExists`); `ranges` must hold at least one rectangle. More than 16384 ranges fail with `StatusCode.SecurityResourceLimit`. */
   addProtectedRange(input: ProtectedRangeInput): string;
   /** Updates the protected range `protectedRange` with the keys `patch` names; the others keep their value.
-   *  Leaving `ranges` out keeps the stored ranges. See {@link ProtectedRangePatch}. */
+   *  Leaving `ranges` out keeps the stored ranges. See {@link ProtectedRangePatch}. More than 16384 ranges fail with `StatusCode.SecurityResourceLimit`. */
   updateProtectedRange(protectedRange: ProtectedRangeRef, patch: ProtectedRangePatch): void;
   /** Removes the protected range `protectedRange`. */
   removeProtectedRange(protectedRange: ProtectedRangeRef): void;
@@ -8049,10 +8051,10 @@ export interface Sheet {
   getValidation(validation: ValidationRef): DataValidation | null;
   /** Appends a data-validation rule to the sheet. A non-empty `formula1` / `formula2`
    *  that does not parse fails with a parser status (1000-1014; `FormulonError.parseError` gives the position).
-   *  Returns the new rule's id; an `id` on `validation` is ignored. */
+   *  Returns the new rule's id; an `id` on `validation` is ignored. More than 16384 ranges fail with `StatusCode.SecurityResourceLimit`. */
   addValidation(validation: DataValidationInput): ValidationId;
   /** Updates the rule `validation` with the keys `patch` names; see {@link DataValidationPatch}. A formula that does
-   *  not parse fails with a parser status and the rule is unchanged. */
+   *  not parse fails with a parser status and the rule is unchanged. More than 16384 ranges fail with `StatusCode.SecurityResourceLimit`. */
   updateValidation(validation: ValidationRef, patch: DataValidationPatch): void;
   /** Removes the validation rule `validation`. */
   removeValidation(validation: ValidationRef): void;
@@ -8069,11 +8071,11 @@ export interface Sheet {
    *  A non-empty `formula1` / `formula2` that does not parse fails with its parser status and
    *  `FormulonError.parseError`. `id` is a brace-wrapped GUID
    *  (`{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}`, hex digits in either case); omitted, empty or already used on the
-   *  sheet, the engine generates an upper-case one; anything else fails with `StatusCode.InvalidArgument`. */
+   *  sheet, the engine generates an upper-case one; anything else fails with `StatusCode.InvalidArgument`. More than 16384 ranges fail with `StatusCode.SecurityResourceLimit`. */
   addCfRule(rule: ConditionalFormatInput): CfRuleId;
-  /** Adds back a rule `listCfRules` returned, as it is. */
+  /** Adds back a rule `listCfRules` returned, as it is. More than 16384 ranges fail with `StatusCode.SecurityResourceLimit`. */
   addCfRule(rule: ConditionalFormat): CfRuleId;
-  /** Updates the CF rule `cfRule` with the keys `patch` names; see {@link ConditionalFormatPatch}. */
+  /** Updates the CF rule `cfRule` with the keys `patch` names; see {@link ConditionalFormatPatch}. More than 16384 ranges fail with `StatusCode.SecurityResourceLimit`. */
   updateCfRule(cfRule: CfRuleRef, patch: ConditionalFormatPatch): void;
   /** Removes the CF rule `cfRule`. When the containing block becomes empty it is removed too. */
   removeCfRule(cfRule: CfRuleRef): void;
@@ -8119,7 +8121,7 @@ export interface Sheet {
    *  array (one wholly inside is replaced), intersects a merged area, a data table or a PivotTable,
    *  or, for more than one cell, a table. Writing a value, blank or formula to a block's top-left
    *  cell replaces the whole block, which is how a block is cleared; a write to any other cell of
-   *  a block is refused. */
+   *  a block is refused. A block of more than 10,000,000 cells fails with `StatusCode.SecurityResourceLimit`. */
   setArrayFormula(arrayFormula: ArrayFormulaInput): void;
 }
 
@@ -8162,10 +8164,12 @@ export interface WorkbookOoxml {
    *  must already exist (`StatusCode.IndexOutOfRange`) -- the table does not auto-grow; a size outside 1 to 409
    *  points fails with `StatusCode.InvalidArgument`. */
   setFont(fontIndex: number, record: FontInput): void;
-  /** Adds a fill (deduplicating against existing entries). */
+  /** Adds a fill (deduplicating against existing entries). More than 1024 gradient stops fail with
+   *  `StatusCode.SecurityResourceLimit`. */
   addFill(record: FillInput): number;
   /** Overwrites the fill at `fillIndex` in place, restyling every `<xf>` that names it; the {@link Fill} `getFill`
-   *  returns passes as is. An index past the end fails with `StatusCode.IndexOutOfRange`. */
+   *  returns passes as is. An index past the end fails with `StatusCode.IndexOutOfRange`, more than 1024 gradient stops with
+   *  `StatusCode.SecurityResourceLimit`. */
   setFill(fillIndex: number, record: FillInput): void;
   /** Adds a border (deduplicating against existing entries). */
   addBorder(record: BorderInput): number;
@@ -8185,10 +8189,12 @@ export interface WorkbookOoxml {
    *  the end and a font / fill / border index past its table fail with `StatusCode.IndexOutOfRange`, an
    *  unregistered `numFmtId` with `StatusCode.InvalidArgument`. */
   setCellXf(xfIndex: number, record: CellXfInput): void;
-  /** Adds a `<dxf> differential-format record for conditional formats and returns its `dxfIndex`. */
+  /** Adds a `<dxf> differential-format record for conditional formats and returns its `dxfIndex`. More than 1024 gradient stops in its
+   *  fill fail with `StatusCode.SecurityResourceLimit`. */
   addDxf(input: DxfInput): number;
   /** Overwrites the `<dxf>` at `dxfIndex` in place; the {@link Dxf} `getDxf` returns passes as is. An index past the
-   *  end fails with `StatusCode.IndexOutOfRange`. */
+   *  end fails with `StatusCode.IndexOutOfRange`, more than 1024 gradient stops in its fill with
+   *  `StatusCode.SecurityResourceLimit`. */
   setDxf(dxfIndex: number, input: DxfInput): void;
 
   /** Lists the font records; a record's position is its font index. */
@@ -8252,32 +8258,32 @@ export interface SheetOoxml {
   getPageSetupXml(): string | null;
   /** OOXML fragment for round trips; normally use `updatePageSetup`. Replaces `<pageSetup>`; `null` (or `""`)
    *  removes it and restores the defaults. A fragment carrying `r:id` is rejected unless the sheet already has a
-   *  printerSettings part, since the reference would otherwise dangle. */
+   *  printerSettings part, since the reference would otherwise dangle. A fragment over 4 KiB fails with `StatusCode.SecurityResourceLimit`. */
   setPageSetupXml(xml: string | null): void;
   /** OOXML fragment for round trips; normally use `getPageMargins`. Reads the worksheet's `<pageMargins>`
    *  element; `null` when absent. */
   getPageMarginsXml(): string | null;
   /** OOXML fragment for round trips; normally use `updatePageMargins`. Replaces `<pageMargins>`; `null` (or `""`)
-   *  removes it. */
+   *  removes it. A fragment over 4 KiB fails with `StatusCode.SecurityResourceLimit`. */
   setPageMarginsXml(xml: string | null): void;
   /** OOXML fragment for round trips; normally use `getPrintOptions`. Reads the worksheet's `<printOptions>`
    *  element; `null` when absent. */
   getPrintOptionsXml(): string | null;
   /** OOXML fragment for round trips; normally use `updatePrintOptions`. Replaces `<printOptions>`; `null` (or `""`)
-   *  removes it. */
+   *  removes it. A fragment over 4 KiB fails with `StatusCode.SecurityResourceLimit`. */
   setPrintOptionsXml(xml: string | null): void;
   /** OOXML fragment for round trips; normally use `getHeaderFooter`. Reads the worksheet's `<headerFooter>`
    *  element; `null` when absent. */
   getHeaderFooterXml(): string | null;
   /** OOXML fragment for round trips; normally use `updateHeaderFooter`. Replaces `<headerFooter>`; `null` (or `""`)
    *  removes it. Header codes live in XML element text, so a hand-built fragment writes them escaped
-   *  (`<oddHeader>&amp;C...</oddHeader>`); `updateHeaderFooter` takes the decoded text instead. */
+   *  (`<oddHeader>&amp;C...</oddHeader>`); `updateHeaderFooter` takes the decoded text instead. A fragment over 64 KiB fails with `StatusCode.SecurityResourceLimit`. */
   setHeaderFooterXml(xml: string | null): void;
   /** OOXML fragment for round trips; normally use `getPageSetup`, which reads its `fitToPage`. Reads the
    *  worksheet's `<sheetPr>` element; `null` when absent. It also carries the tab colour and VBA code name. */
   getSheetPrXml(): string | null;
   /** OOXML fragment for round trips; normally use `updatePageSetup`, which writes its `fitToPage`. Replaces
-   *  `<sheetPr>`; `null` (or `""`) removes it. */
+   *  `<sheetPr>`; `null` (or `""`) removes it. A fragment over 8 KiB fails with `StatusCode.SecurityResourceLimit`. */
   setSheetPrXml(xml: string | null): void;
   /** Sets / replaces the cell XF on `[first, last]`; index 0 is the default XF. A value later entered into an unstyled
    *  cell of the span takes this XF, unless its row has one. An index not below `Workbook.ooxml.listCellXfs().length`
@@ -8690,9 +8696,9 @@ export interface Pivot {
    *  largest value. The record `getFieldNumericGroup` returned is accepted as it is; an `autoStart` /
    *  `autoEnd` of `true` makes that bound follow the data whatever `start` / `end` hold; an `autoStart` /
    *  `autoEnd` of `false` with its bound omitted is a `TypeError`. A non-positive interval, a
-   *  non-finite interval or bound, or a start after the end is `StatusCode.InvalidArgument`; a field that is
-   *  calculated or holds a blank, a value that is not a number, or no value is `StatusCode.PreconditionFailed`; more
-   *  group items than a field holds is `StatusCode.SecurityResourceLimit`. A refusal changes nothing. A report that
+   *  non-finite interval or bound, a start after the end, or more group items than a field holds (Excel's limit of
+   *  1,048,576 unique items) is `StatusCode.InvalidArgument`; a field that is calculated or holds a blank, a value
+   *  that is not a number, or no value is `StatusCode.PreconditionFailed`. A refusal changes nothing. A report that
    *  cannot be placed (occupied range, sheet edge) is blocked with `#SPILL!` at its anchor and the call succeeds.
    *
    *  A `group` of `null` removes the numeric grouping of the field from every pivot on its cache; a field that is not
@@ -8770,7 +8776,8 @@ export interface PivotCache {
    *  blocked, and of two whose new ranges alone overlap, the one created first renders. Fails with
    *  `StatusCode.PreconditionFailed` when the source does not resolve (none, an external or non-worksheet source,
    *  a missing sheet, name or table, a `#REF!` or dynamic name); with
-   *  `StatusCode.SecurityResourceLimit` when (rows - 1) x columns of the source exceeds the record cell limit. */
+   *  `StatusCode.SecurityResourceLimit` when (rows - 1) x columns of the source exceeds the record cell limit; with
+   *  `StatusCode.PreconditionFailed` also when a numeric group would hold more items than a field does. */
   refresh(): void;
   /** Reads the cache's options. */
   getOptions(): PivotCacheOptions;
@@ -9005,7 +9012,8 @@ export interface WorkbookCtor {
    *  Names that collide only under the full comparison of name identity (see {@link Workbook}) load and stay as
    *  they are; only letter case makes a loaded sheet name a duplicate. A threaded-comment stamp is normalised on
    *  load: a trailing `Z` is dropped, and a stamp with a numeric UTC offset or any other shape reads as no stamp
-   *  (`created` is `null`) and is not written back.
+   *  (`created` is `null`) and is not written back. A file past an engine ceiling fails with
+   *  `StatusCode.SecurityResourceLimit`; the error context's `part=` names the ceiling.
    *
    *  @example
    *  ```ts

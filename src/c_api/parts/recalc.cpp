@@ -16,6 +16,7 @@
 #include "eval/scheduler.h"
 #include "utils/date_time.h"
 #include "utils/error.h"
+#include "utils/resource_budget.h"
 #include "workbook.h"
 
 using formulon::c_api::parts::check_finite_non_negative;
@@ -99,10 +100,9 @@ extern "C" fm_status_t fm_workbook_recalc_parallel(fm_workbook_t* wb, uint32_t t
     return null_argument("wb");
   }
   if (thread_count > formulon::eval::kMaxSchedulerThreads) {
-    return invalid_argument(
-        ("thread_count must be in 0.." + std::to_string(formulon::eval::kMaxSchedulerThreads)).c_str(),
-        "thread_count=" + std::to_string(thread_count) +
-            " max=" + std::to_string(formulon::eval::kMaxSchedulerThreads));
+    return set_binding_error(formulon::FormulonErrorCode::kSecurityResourceLimit,
+                             "thread_count is above the scheduler limit",
+                             formulon::limit_context("threads", thread_count, formulon::eval::kMaxSchedulerThreads));
   }
 
   formulon::eval::SchedulerConfig config;

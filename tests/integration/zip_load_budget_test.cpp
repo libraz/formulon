@@ -159,7 +159,7 @@ TEST(ZipLoadBudget, OoxmlReaderRejectsCumulativePayload) {
   auto loaded = io::read_ooxml(SpanOf(package));
   ASSERT_FALSE(static_cast<bool>(loaded));
   EXPECT_EQ(loaded.error().code, FormulonErrorCode::kSecurityResourceLimit);
-  EXPECT_NE(loaded.error().context.find("limit=total"), std::string::npos);
+  EXPECT_NE(loaded.error().context.find("part=zip_total_bytes"), std::string::npos);
   EXPECT_NE(loaded.error().message.find("cumulative"), std::string::npos);
 }
 
@@ -171,7 +171,7 @@ TEST(ZipLoadBudget, XlsbReaderRejectsCumulativePayload) {
   auto loaded = io::xlsb::read_xlsb(SpanOf(package));
   ASSERT_FALSE(static_cast<bool>(loaded));
   EXPECT_EQ(loaded.error().code, FormulonErrorCode::kSecurityResourceLimit);
-  EXPECT_NE(loaded.error().context.find("limit=total"), std::string::npos);
+  EXPECT_NE(loaded.error().context.find("part=zip_total_bytes"), std::string::npos);
   EXPECT_NE(loaded.error().message.find("cumulative"), std::string::npos);
 }
 

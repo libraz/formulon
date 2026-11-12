@@ -39,6 +39,7 @@ from formulon import (
     NotFoundError,
     PhoneticProperties,
     PivotInput,
+    SecurityError,
     Sheet,
     Value,
     ValueKind,
@@ -516,7 +517,7 @@ class BulkValuesTests(unittest.TestCase):
 
     def test_whole_row_range_is_rejected(self) -> None:
         with _open() as wb:
-            with self.assertRaises(InvalidArgumentError):
+            with self.assertRaises(SecurityError):
                 wb.sheet(0).get_values("A:XFD")
 
     def test_limit_of_two_pow_22_cells_is_accepted(self) -> None:

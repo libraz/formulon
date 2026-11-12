@@ -21,6 +21,7 @@ namespace ets {
 /// Bound on the step and day counts the family turns into integers: below
 /// 2^53 every integer is exact in a double, and the calendar and variance
 /// arithmetic on such counts stays inside the int64 range.
+// @limit: internal
 inline constexpr double kMaxWholeCount = 9007199254740992.0;
 
 /// Truncates `v` toward zero, or returns nullopt when `v` is non-finite or its

@@ -23,6 +23,7 @@ namespace {
 // limit on a single formula token. PCRE2 itself can compile much longer
 // patterns, but Excel's REGEX argument cannot in practice exceed this,
 // and capping early gives a clean #VALUE! instead of a slow compile.
+// @limit: excel
 constexpr std::size_t kMaxPatternBytes = 32767U;
 
 // The match limit bounds backtracking iterations; the depth limit bounds
@@ -116,7 +117,7 @@ KernelResult regex_kernel(const CompiledPattern& program, std::string_view subje
   // retains across attempts. Charge each retained match its whole-match slot
   // plus one per capture group so a many-group pattern over a long subject
   // cannot accumulate without bound.
-  ResourceBudget match_slots(kMaxRegexMatchSlots);
+  ResourceBudget match_slots(kMaxRegexMatchSlots, "regex_match_slots");
   bool budget_exhausted = false;
 
   const ScanEnd end = scan_matches(program, subject, find_all, [&](const PCRE2_SIZE* ovec) {

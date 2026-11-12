@@ -1021,9 +1021,9 @@ class Pivot(_NoCopy):
             :class:`PivotNumericGroup`, ``interval``, ``start`` or ``end`` is not a number, or an ``auto_start`` / ``auto_end`` of false has
             no ``start`` / ``end``.
           FormulonError: with ``code == StatusCode.INVALID_ARGUMENT`` for a non-positive or non-finite interval, a
-            non-finite bound or a start after the end; with ``PRECONDITION_FAILED`` when the field is calculated
-            or holds a blank, a value that is not a number, or no value; with ``SECURITY_RESOURCE_LIMIT`` when the
-            grouping would make more items than a field holds.
+            non-finite bound, a start after the end, or a grouping that would make more items than a field holds
+            (Excel's limit of 1,048,576 unique items); with ``PRECONDITION_FAILED`` when the field is calculated
+            or holds a blank, a value that is not a number, or no value.
         """
         if group is not None and not isinstance(group, (PivotNumericGroupInput, PivotNumericGroup)):
             raise TypeError(_argument_message("group", "must be a PivotNumericGroupInput, a PivotNumericGroup or None"))

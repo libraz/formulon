@@ -22,6 +22,7 @@ namespace c_api {
 namespace parts {
 
 // Page size cap for a cell-range page, and the size a zero limit asks for.
+// @limit: internal
 constexpr std::uint32_t kMaxCellRangeLimit = 65536U;
 
 // One past the largest cursor the grid can encode.

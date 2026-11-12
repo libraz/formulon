@@ -84,6 +84,7 @@ using detail::ScanEnd;
 // integer surfaces #VALUE! (or the upstream error code).
 
 // Largest magnitude a coerced integer argument may take.
+// @limit: internal
 constexpr double kMaxIntArgMagnitude = 2147483647.0;
 
 // Shared helper: evaluates `node`, propagates errors, coerces to a

@@ -97,6 +97,7 @@ Expected<std::uint64_t, ErrorCode> read_nonneg_uint_arg(const Value* args, std::
 }
 
 // Largest `n` the combinatorial functions accept; `n` at or above 2^31 - 1 is #NUM!.
+// @limit: excel
 constexpr std::uint64_t kMaxCombinatorialN = 2147483646U;
 
 // 2^53: the exclusive bound of the integers a double holds exactly.
@@ -573,12 +574,16 @@ Value Roman(const Value* args, std::uint32_t arity, Arena& arena) {
 // ---------------------------------------------------------------------------
 
 constexpr double kMinRadix = 2.0;
+// @limit: excel
 constexpr double kMaxRadix = 36.0;
 // BASE accepts a minimum length up to this many digits.
+// @limit: excel
 constexpr double kMaxBaseMinLength = 255.0;
 // DECIMAL accepts text of at most this many UTF-16 units.
+// @limit: excel
 constexpr std::uint32_t kMaxDecimalTextUnits = 255U;
 // Largest integer BASE renders (2^53 - 1).
+// @limit: excel
 constexpr double kMaxBaseNumber = static_cast<double>(kTwoPow53 - 1);
 
 // BASE(num, radix, [min_len]) - non-negative integer -> string in `radix`

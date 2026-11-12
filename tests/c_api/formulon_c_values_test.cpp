@@ -165,7 +165,7 @@ TEST(FormulonCApi, ParallelRecalcInvalidAndNullPathsResetStats) {
   const fm_parallel_recalc_stats_info_t zero = FM_STRUCT_INIT(fm_parallel_recalc_stats_info_t);
   fm_parallel_recalc_stats_info_t stats = poison;
   EXPECT_EQ(fm_workbook_recalc_parallel(wb.handle, 9U, &stats),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+            static_cast<fm_status_t>(formulon::FormulonErrorCode::kSecurityResourceLimit));
   EXPECT_EQ(std::memcmp(&stats, &zero, sizeof(stats)), 0);
 
   stats = poison;

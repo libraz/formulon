@@ -11,6 +11,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "formulon_c_record_arg.h"
+#include "formulon_c_resource_limit.h"
 #include "formulon_c_test_helpers.h"
 #include "gtest/gtest.h"
 #include "sheet.h"
@@ -24,8 +25,6 @@ constexpr std::uint32_t kLastRow = formulon::Sheet::kMaxRows - 1U;
 constexpr std::uint32_t kLastCol = formulon::Sheet::kMaxCols - 1U;
 constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
 constexpr fm_status_t kIndexOutOfRange = static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange);
-constexpr fm_status_t kSecurityResourceLimit =
-    static_cast<fm_status_t>(formulon::FormulonErrorCode::kSecurityResourceLimit);
 constexpr std::int32_t kSourceCell = 0;
 constexpr std::int32_t kSourceRow = 1;
 constexpr std::int32_t kSourceColumn = 2;
@@ -422,7 +421,8 @@ TEST(FormulonCApiRangeStyle, RejectsBadPairsAndOversizedWritesWithoutMutation) {
       fm_sheet_remap_range_xfs(wb.handle, 0, record_arg(fm_cell_rect_t{0U, 0U, kLastRow + 1U, 3U}), past_table, 1U),
       kInvalidArgument);
   // B1:XFD8193 is one row past 2^27 cells and neither whole rows nor whole columns.
-  EXPECT_EQ(Remap(wb, 0U, 1U, 8192U, kLastCol), kSecurityResourceLimit);
+  const std::string context = ExpectResourceLimit(Remap(wb, 0U, 1U, 8192U, kLastCol), "styled_range_cells");
+  EXPECT_NE(context.find(" limit=134217728"), std::string::npos) << context;
 
   size_t cells = 0;
   ASSERT_EQ(fm_sheet_get_cell_count(wb.handle, 0, &cells), 0);

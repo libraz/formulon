@@ -46,6 +46,7 @@ namespace eval {
 /// elementwise operator result, a reshape, a filtered copy). The source array
 /// passed `kMaxRangeExpansionCells` on the way in, so reusing that bound keeps
 /// derivation from being narrower than the read that produced its operand.
+// @limit: engine
 inline constexpr std::uint64_t kMaxDerivedArrayCells = kMaxRangeExpansionCells;
 
 // The evaluation arena's byte ceiling has to admit the largest array this
@@ -62,6 +63,7 @@ static_assert(kMaxDerivedArrayCells * sizeof(Value) <= kMaxEvalArenaBytes,
 /// `SEQUENCE(1048576,103)` (108,003,328). The whole formula then evaluates to
 /// the number 0, so `SUM(A:A+1:1)`, `ISERROR(...)` and `ROWS(...)` of such an
 /// array are all 0.
+// @limit: excel
 inline constexpr std::uint64_t kMaxEvaluatedArrayElements = 107'374'182U;
 
 /// True when an array of `rows` x `cols` elements abandons its formula, which

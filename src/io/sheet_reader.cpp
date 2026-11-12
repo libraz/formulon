@@ -459,7 +459,7 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
 
   std::unordered_map<std::uint32_t, SharedFormulaMaster> shared_formulas;
   // Per-sheet load ceiling, charged by `ApplyParsedCell`.
-  ResourceBudget cell_budget(max_cell_bytes);
+  ResourceBudget cell_budget(max_cell_bytes, "sheet_load_bytes");
 
   for (pugi::xml_node row = sheet_data.child("row"); row; row = row.next_sibling("row")) {
     for (pugi::xml_node c = row.child("c"); c; c = c.next_sibling("c")) {
@@ -709,7 +709,8 @@ Expected<void, Error> read_sheet_data_sax(ByteSpan sheet_xml, std::size_t sheet_
   if (sheet_index >= workbook.sheet_count()) {
     return SheetIndexOutOfRange("read_sheet_data_sax", "sheet_reader_sax", sheet_index, workbook.sheet_count());
   }
-  SaxApplyState state{sheet_index, &workbook, &ctx, &text_storage, {}, diagnostics, ResourceBudget(max_cell_bytes)};
+  SaxApplyState state{
+      sheet_index, &workbook, &ctx, &text_storage, {}, diagnostics, ResourceBudget(max_cell_bytes, "sheet_load_bytes")};
   SheetSaxCallbacks cb;
   cb.user_data = &state;
   cb.on_row_start = &SaxOnRowStartTrampoline;

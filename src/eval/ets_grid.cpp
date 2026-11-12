@@ -24,11 +24,15 @@ namespace {
 constexpr double kStepTolerance = 1e-5;
 // Percentage of the steps that must fall in the chosen histogram window.
 constexpr std::int64_t kMinWindowPercent = 50;
+// @limit: internal
 constexpr std::int64_t kMaxHistogramBins = 3000;
+// @limit: internal
 constexpr std::int64_t kMaxRefinePasses = 11;
 constexpr double kSameStepTolerance = 3e-7;
 // Longest run of regular steps tracked when anchoring the grid.
+// @limit: internal
 constexpr std::size_t kMaxAnchorRun = 20U;
+// @limit: internal
 constexpr std::int64_t kMaxGridNodes = 1000000;
 
 // -- step detection -----------------------------------------------------

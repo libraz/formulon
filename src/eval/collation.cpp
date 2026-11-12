@@ -54,6 +54,7 @@ constexpr std::size_t kUroSize = kUroLast - kUroFirst + 1u;
 constexpr std::uint32_t kSyllableFirst = 0xAC00u;
 constexpr std::uint32_t kSyllableLast = 0xD7A3u;
 constexpr std::int32_t kWeightRadix = 254;
+// @limit: internal
 constexpr std::int32_t kMaxWeight = cd::kMaxCollationWeight;
 
 // Element classes; kMark is an expansion or repeat level marker whose level sits in `s`.

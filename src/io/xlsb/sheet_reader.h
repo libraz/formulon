@@ -45,7 +45,8 @@ struct SheetDecodeState {
   };
 
   /// `max_cell_bytes` is the per-sheet load ceiling `load_budget` enforces.
-  explicit SheetDecodeState(std::uint64_t max_cell_bytes = kMaxSheetLoadCellBytes) : load_budget(max_cell_bytes) {}
+  explicit SheetDecodeState(std::uint64_t max_cell_bytes = kMaxSheetLoadCellBytes)
+      : load_budget(max_cell_bytes, "sheet_load_bytes") {}
 
   /// Per-sheet load ceiling, charged like the OOXML reader's
   /// (`io::sheet_load_write_bytes`): new cells, new row nodes, the style runs

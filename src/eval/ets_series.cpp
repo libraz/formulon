@@ -136,6 +136,7 @@ using namespace series_detail;
 namespace {
 
 // Largest share (percent) of grid nodes that may be missing.
+// @limit: internal
 constexpr std::int64_t kMaxMissingPercent = 30;
 
 // Pairs the cells in order. A pair with a blank, text or boolean timeline or

@@ -93,10 +93,6 @@ void EmitGradientGeometry(std::vector<std::uint8_t>& payload, const GradientFill
   }
 }
 
-std::size_t GradientStopCount(const GradientFill& gradient) {
-  return std::min(gradient.stops.size(), kMaxBrtGradientStops);
-}
-
 void EmitFill(std::vector<std::uint8_t>& out, const FillRecord& fill) {
   std::vector<std::uint8_t> payload;
   if (fill.has_gradient) {
@@ -105,7 +101,7 @@ void EmitFill(std::vector<std::uint8_t>& out, const FillRecord& fill) {
     EmitColor(payload, fill.fg_argb, fill.fg);
     EmitColor(payload, fill.bg_argb, fill.bg);
     EmitGradientGeometry(payload, fill.gradient);
-    const std::size_t stops = GradientStopCount(fill.gradient);
+    const std::size_t stops = fill.gradient.stops.size();
     emit_u32(payload, static_cast<std::uint32_t>(stops));
     for (std::size_t i = 0; i < stops; ++i) {
       // GradientStop (2.5.68): BrtColor, then Xnum position.
@@ -238,7 +234,7 @@ void EmitDxf(std::vector<std::uint8_t>& out, const DifferentialFormat& dxf) {
     std::vector<std::uint8_t> geometry;
     EmitGradientGeometry(geometry, gradient);
     AppendProp(props, count, kDxfPropFillGradient, geometry);
-    for (std::size_t i = 0; i < GradientStopCount(gradient); ++i) {
+    for (std::size_t i = 0; i < gradient.stops.size(); ++i) {
       const GradientStop& stop = gradient.stops[i];
       std::vector<std::uint8_t> data;
       emit_u16(data, 0U);

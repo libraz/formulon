@@ -28,6 +28,7 @@
 #include "table.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "utils/utf8_length.h"
@@ -55,8 +56,8 @@ namespace {
 // dep graph's 16-bit `sheet_id` is lossless by construction.
 Expected<void, Error> check_sheet_headroom(std::size_t current_count) {
   if (current_count >= Workbook::kMaxSheets) {
-    return make_error(FormulonErrorCode::kSheetCountLimitExceeded, "Workbook already holds the maximum sheets",
-                      "limit=" + std::to_string(Workbook::kMaxSheets));
+    return make_error(FormulonErrorCode::kSecurityResourceLimit, "Workbook already holds the maximum sheets",
+                      limit_context("sheets", current_count + 1U, Workbook::kMaxSheets));
   }
   return {};
 }

@@ -33,6 +33,7 @@ namespace {
 
 // An 18-digit fixed denominator keeps one decimal digit times the
 // denominator plus carry below UINT64_MAX in the fraction renderer.
+// @limit: internal
 constexpr std::uint64_t kMaxFractionDenominator = 999999999999999999ULL;
 
 // After tokenization, rewrite DateMOrMin tokens into either DateM/DateMM

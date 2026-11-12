@@ -49,7 +49,9 @@ using formulon::c_api::parts::set_last_error;
 namespace {
 
 // Excel's widest column, in stored character units, and its tallest row, in points.
+// @limit: excel
 constexpr double kMaxColumnWidthChars = 255.0;
+// @limit: excel
 constexpr double kMaxRowHeightPt = 409.0;
 
 // A finite, non-negative `value` no larger than `max`.

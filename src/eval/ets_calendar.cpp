@@ -19,6 +19,7 @@ namespace series_detail {
 
 namespace {
 
+// @limit: excel
 constexpr std::uint32_t kMaxDateSerial = static_cast<std::uint32_t>(date_time::kMaxSerial1900);
 
 // Days since 1970-01-01 of a proleptic Gregorian date.

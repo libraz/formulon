@@ -39,7 +39,6 @@ static_assert(offsetof(fm_page_margins_t, left_in) == 8U, "fm_page_margins_t.lef
 static_assert(sizeof(fm_print_options_t) == 36U, "fm_print_options_t ABI layout changed");
 
 constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
-constexpr fm_status_t kPreconditionFailed = static_cast<fm_status_t>(formulon::FormulonErrorCode::kPreconditionFailed);
 constexpr fm_status_t kPrintInvalidArea = static_cast<fm_status_t>(formulon::FormulonErrorCode::kPrintInvalidArea);
 
 struct WorkbookGuard {
@@ -170,7 +169,9 @@ TEST(FormulonCApiPrintSettings, RejectsOversizedFragment) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::string padding(5000, 'x');
   const std::string oversized = "<pageSetup firstPageNumber=\"" + padding + "\"/>";
-  EXPECT_EQ(fm_sheet_set_page_setup_xml(wb.handle, 0, oversized.c_str()), kPreconditionFailed);
+  EXPECT_EQ(fm_sheet_set_page_setup_xml(wb.handle, 0, oversized.c_str()), FM_STATUS_SECURITY_RESOURCE_LIMIT);
+  EXPECT_EQ(std::string(fm_get_last_error_context()),
+            "part=page_setup_xml requested=" + std::to_string(oversized.size()) + " limit=4096");
 
   // `<headerFooter>` gets a wider ceiling because six sections of
   // formatting codes legitimately live there.
@@ -325,7 +326,7 @@ TEST(FormulonCApiPrintSettings, SetPrintAreaRejectsABadRectangleAndLeavesNameUnc
   EXPECT_EQ(wb.handle->workbook().defined_names()[0].formula, "Sheet1!$A$1:$F$8");
 }
 
-TEST(FormulonCApiPrintSettings, SetPrintAreaOverTheRangeCapReportsInvalidArgument) {
+TEST(FormulonCApiPrintSettings, SetPrintAreaOverTheRangeCapReportsResourceLimit) {
   // The per-call range cap is shared with the conditional-formatting and
   // data-validation entry points, and one failure condition carries one
   // status across all of them.
@@ -335,7 +336,8 @@ TEST(FormulonCApiPrintSettings, SetPrintAreaOverTheRangeCapReportsInvalidArgumen
   ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, &area, 1), 0);
 
   const std::vector<fm_cell_rect_t> areas(formulon::c_api::parts::kMaxRangesPerCApiCall + 1U, fm_cell_rect_t{});
-  EXPECT_EQ(fm_sheet_set_print_area(wb.handle, 0, areas.data(), areas.size()), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_set_print_area(wb.handle, 0, areas.data(), areas.size()), FM_STATUS_SECURITY_RESOURCE_LIMIT);
+  EXPECT_STREQ(fm_get_last_error_context(), "part=ranges requested=16385 limit=16384");
   EXPECT_EQ(wb.handle->workbook().defined_names()[0].formula, "Sheet1!$A$1:$F$8");
 }
 
@@ -555,7 +557,7 @@ TEST(FormulonCApiPrintSettings, LoadedBreakCountStaysWithinTheAuthoringCap) {
   fm_row_break_t brk = FM_STRUCT_INIT(fm_row_break_t);
   ASSERT_EQ(fm_sheet_get_row_break_at(wb.handle, 0, 0, &brk), 0);
   EXPECT_EQ(SetRowBreak(wb.handle, brk.row, FM_TRISTATE_FALSE), 0);
-  EXPECT_EQ(SetRowBreak(wb.handle, formulon::Sheet::kMaxRows - 1U, FM_TRISTATE_TRUE), kPreconditionFailed);
+  EXPECT_EQ(SetRowBreak(wb.handle, formulon::Sheet::kMaxRows - 1U, FM_TRISTATE_TRUE), kInvalidArgument);
 }
 
 TEST(FormulonCApiPrintSettings, BreakCountReportsARejectedSheetThroughItsStatus) {
@@ -654,7 +656,8 @@ TEST(FormulonCApiPrintSettings, BreaksRejectOutOfGridAndOverflow) {
     ASSERT_EQ(SetRowBreak(wb.handle, row, FM_TRISTATE_TRUE), 0) << "row " << row;
   }
   // Excel's own ceiling; going past it produces a file Excel truncates.
-  EXPECT_EQ(SetRowBreak(wb.handle, 2000, FM_TRISTATE_TRUE), kPreconditionFailed);
+  EXPECT_EQ(SetRowBreak(wb.handle, 2000, FM_TRISTATE_TRUE), kInvalidArgument);
+  EXPECT_STREQ(fm_get_last_error_context(), "part=manual_breaks requested=1027 limit=1026");
   // Replacing an existing break is still allowed at the ceiling.
   EXPECT_EQ(SetRowBreak(wb.handle, 0, FM_TRISTATE_FALSE), 0);
 }

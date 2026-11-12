@@ -32,6 +32,7 @@ namespace {
 
 // `<sheetView zoomScale>` is a percentage Excel accepts only inside this band.
 constexpr std::uint32_t kMinZoomPercent = 10U;
+// @limit: excel
 constexpr std::uint32_t kMaxZoomPercent = 400U;
 
 // `<sheetView view>` text of an `fm_sheet_view_mode_t`; the normal view is

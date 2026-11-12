@@ -75,6 +75,22 @@ TEST(XlsbPtgCodec, PtgArrayDecodesRowsBeforeColsFromRawWireBytes) {
   ASSERT_TRUE(static_cast<bool>(decoded)) << (decoded ? "" : decoded.error().message);
   EXPECT_EQ(parser::format_formula(*decoded.value()), "{1,2,3}");
 }
+TEST(XlsbPtgCodec, PtgArrayPastTheElementCeilingIsAResourceLimit) {
+  const std::vector<std::uint8_t> rgce = {
+      0x60,                                                  // PtgArray (array-class)
+      0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,  // 14-byte placeholder
+      0x00, 0x00, 0x00, 0x00, 0x00,
+  };
+  std::vector<std::uint8_t> rgcb;
+  emit_u32(rgcb, 256U);
+  emit_u32(rgcb, 257U);
+  Arena arena;
+  auto decoded =
+      decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, ByteSpan{rgcb.data(), rgcb.size()}, arena, {}, {}, {}, {});
+  ASSERT_FALSE(static_cast<bool>(decoded));
+  EXPECT_EQ(decoded.error().code, FormulonErrorCode::kSecurityResourceLimit);
+  EXPECT_EQ(decoded.error().context, "part=array_elements requested=65792 limit=65536 context=xlsb_ptg_reader");
+}
 TEST(XlsbPtgCodec, PtgArrayElementsMatchExcelBytes) {
   struct Case {
     const char* formula;

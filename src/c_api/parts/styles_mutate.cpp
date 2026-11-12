@@ -302,8 +302,6 @@ double finite_or_zero(double value) noexcept {
   return std::isfinite(value) ? value : 0.0;
 }
 
-constexpr std::size_t kMaxGradientStops = 1024;
-
 formulon::FillRecord fill_from_c(const fm_fill_t& record) {
   formulon::FillRecord out;
   out.pattern = static_cast<std::uint8_t>(record.pattern);
@@ -325,8 +323,8 @@ formulon::FillRecord fill_from_c(const fm_fill_t& record) {
     gradient.right = finite_or_zero(record.gradient_right);
     gradient.top = finite_or_zero(record.gradient_top);
     gradient.bottom = finite_or_zero(record.gradient_bottom);
-    const std::size_t count =
-        record.gradient_stops == nullptr ? 0U : std::min<std::size_t>(record.gradient_stop_count, kMaxGradientStops);
+    // `validate` has already refused a count past `kMaxGradientStops`.
+    const std::size_t count = record.gradient_stops == nullptr ? 0U : record.gradient_stop_count;
     gradient.stops.reserve(count);
     for (std::size_t i = 0; i < count; ++i) {
       const fm_gradient_stop_t& in = record.gradient_stops[i];

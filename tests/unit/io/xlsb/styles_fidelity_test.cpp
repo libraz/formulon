@@ -17,6 +17,7 @@
 #include "io/xlsb/styles_writer.h"
 #include "io/xlsb/writer.h"
 #include "styles.h"
+#include "utils/error.h"
 #include "value.h"
 #include "workbook.h"
 #include "writer_test_helpers.h"
@@ -222,6 +223,36 @@ TEST(XlsbStylesFidelity, WorkbookSaveKeepsGradientsAndToggles) {
   auto reloaded = read_xlsb(SpanOf(second.value()));
   ASSERT_TRUE(static_cast<bool>(reloaded)) << reloaded.error().message;
   ExpectFidelity(source, reloaded.value().workbook.styles());
+}
+
+StylesTable TableWithGradientStops(std::size_t stops, bool in_dxf) {
+  StylesTable table = ParseXlsxStyles();
+  GradientFill gradient;
+  gradient.stops.assign(stops, GradientStop{});
+  if (in_dxf) {
+    table.dxfs[1].fill.gradient = gradient;
+    table.dxfs[1].fill.has_gradient = true;
+  } else {
+    table.fills[3].gradient = gradient;
+  }
+  return table;
+}
+
+TEST(XlsbStylesFidelity, EveryGradientStopIsWrittenAndThoseOverTheEngineCeilingFailTheLoad) {
+  for (const bool in_dxf : {false, true}) {
+    // 300 stops are past the 256 a BrtFill record is documented to hold; all of them survive.
+    const std::vector<std::uint8_t> wide = write_styles_bin(TableWithGradientStops(300U, in_dxf));
+    auto back = read_styles_bin(SpanOf(wide));
+    ASSERT_TRUE(static_cast<bool>(back)) << in_dxf << ": " << back.error().message;
+    const GradientFill& kept = in_dxf ? back.value().dxfs[1].fill.gradient : back.value().fills[3].gradient;
+    EXPECT_EQ(kept.stops.size(), 300U);
+
+    const std::vector<std::uint8_t> over = write_styles_bin(TableWithGradientStops(kMaxGradientStops + 1U, in_dxf));
+    auto refused = read_styles_bin(SpanOf(over));
+    ASSERT_FALSE(static_cast<bool>(refused)) << in_dxf;
+    EXPECT_EQ(refused.error().code, FormulonErrorCode::kSecurityResourceLimit);
+    EXPECT_EQ(refused.error().context, "part=gradient_stops requested=1025 limit=1024");
+  }
 }
 
 }  // namespace

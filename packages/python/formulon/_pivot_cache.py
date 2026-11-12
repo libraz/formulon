@@ -144,9 +144,10 @@ class PivotCache(_NoCopy):
             source, a missing sheet, name or table, a ``#REF!`` or dynamic
             name); with
             ``SECURITY_RESOURCE_LIMIT`` when (rows - 1) x columns of the
-            source exceeds the record cell limit; with ``NOT_IMPLEMENTED``
-            when a numeric group has a start, end or interval that is not an
-            integer.
+            source exceeds the record cell limit; with ``PRECONDITION_FAILED``
+            also when a numeric group would hold more items than a field does;
+            with ``NOT_IMPLEMENTED`` when a numeric group has a start, end or
+            interval that is not an integer.
         """
         h, cache_id = self._call()
         _check(LIB.fm_workbook_refresh_pivot_cache(h, cache_id))

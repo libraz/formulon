@@ -50,6 +50,7 @@
 #include "io/xlsb/record.h"
 #include "io/xlsb/xf_flags.h"
 #include "io/xml_utils.h"
+#include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 
 namespace formulon {
@@ -251,6 +252,12 @@ Expected<void, Error> DecodeGradientGeometry(ByteSpan& p, GradientFill& gradient
   return Expected<void, Error>::Ok();
 }
 
+/// The refusal of a gradient holding `requested` stops, past `kMaxGradientStops`.
+Error GradientStopLimit(std::size_t requested) {
+  return make_error(FormulonErrorCode::kSecurityResourceLimit, "xlsb gradient fill holds too many stops",
+                    limit_context("gradient_stops", requested, kMaxGradientStops));
+}
+
 /// BrtFill with `fls` 0x28 ([MS-XLSB] 2.4.681): the pattern colours are
 /// ignored, then the geometry, `cNumStop`, and GradientStop (2.5.68) entries.
 Expected<void, Error> DecodeGradientFill(ByteSpan& p, FillRecord& rec) {
@@ -265,8 +272,10 @@ Expected<void, Error> DecodeGradientFill(ByteSpan& p, FillRecord& rec) {
   if (auto geometry = DecodeGradientGeometry(p, rec.gradient); !geometry) {
     return std::move(geometry.error());
   }
-  // A count past the 256 the spec allows is still bounded by the payload.
   ASSIGN_OR_RETURN(const std::uint32_t stops, read_u32(p));
+  if (stops > kMaxGradientStops) {
+    return GradientStopLimit(stops);
+  }
   for (std::uint32_t i = 0; i < stops; ++i) {
     GradientStop stop;
     if (auto color = DecodeStatedColor(p, /*unset_argb=*/0U, stop.argb, stop.color); !color) {
@@ -524,9 +533,10 @@ Expected<void, Error> ApplyDxfProp(std::uint16_t type, ByteSpan d, DifferentialF
       }
       dxf.has_fill = true;
       fill.has_gradient = true;
-      if (fill.gradient.stops.size() < kMaxBrtGradientStops) {
-        fill.gradient.stops.push_back(stop);
+      if (fill.gradient.stops.size() >= kMaxGradientStops) {
+        return GradientStopLimit(fill.gradient.stops.size() + 1U);
       }
+      fill.gradient.stops.push_back(stop);
       break;
     }
     case kDxfPropFontColor:

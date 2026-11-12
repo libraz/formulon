@@ -11,6 +11,7 @@
 #include "formulon_c_out_index.h"
 #include "formulon_c_pivot_test_helpers.h"
 #include "formulon_c_record_arg.h"
+#include "formulon_c_resource_limit.h"
 #include "formulon_c_sheet_view_patch.h"
 #include "gtest/gtest.h"
 #include "utils/error.h"
@@ -157,7 +158,10 @@ TEST(CApiCopySheet, SheetCountLimit) {
     name.append(std::to_string(model.sheet_count()));
     model.add_sheet(name);
   }
-  ExpectCopyStatus(wb.handle, 0, 1, nullptr, Code(FormulonErrorCode::kSheetCountLimitExceeded));
+  ExpectCopyStatus(wb.handle, 0, 1, nullptr, FM_STATUS_SECURITY_RESOURCE_LIMIT);
+  std::size_t out = kSentinel;
+  EXPECT_EQ(ExpectResourceLimit(fm_workbook_copy_sheet(wb.handle, 0, 1, nullptr, &out), "sheets"),
+            "part=sheets requested=65536 limit=65535");
 }
 
 TEST(CApiCopySheet, VeryHiddenSourceRefused) {

@@ -169,7 +169,7 @@ test('byte inputs accept Uint8Array, ArrayBuffer and views, and refuse anything 
   });
 });
 
-test('recalcParallel: threadCount is optional, a non-number is TypeError, a fraction or non-finite RangeError, a negative or above 8 InvalidArgument', async () => {
+test('recalcParallel: threadCount is optional, a non-number is TypeError, a fraction or non-finite RangeError, a negative InvalidArgument, above 8 SecurityResourceLimit', async () => {
   await withWorkbook((wb, { StatusCode }) => {
     assert.equal(typeof wb.recalcParallel(), 'object');
     assert.equal(typeof wb.recalcParallel(undefined), 'object');
@@ -182,7 +182,24 @@ test('recalcParallel: threadCount is optional, a non-number is TypeError, a frac
       assert.throws(() => wb.recalcParallel(bad), TypeError, String(bad));
     }
     rejectsWith(() => wb.recalcParallel(-1), StatusCode.InvalidArgument, 'negative');
-    rejectsWith(() => wb.recalcParallel(9), StatusCode.InvalidArgument, 'above the cap');
+    rejectsWith(() => wb.recalcParallel(9), StatusCode.SecurityResourceLimit, 'above the cap');
+  });
+});
+
+test('an engine ceiling fails with SecurityResourceLimit and a part, requested and limit context', async () => {
+  await withWorkbook((wb, { StatusCode }) => {
+    const ceiling = (fn, part, requested, limit) =>
+      assert.throws(fn, (e) => {
+        assert.equal(e.code, StatusCode.SecurityResourceLimit);
+        assert.equal(e.context.split(' ').slice(0, 3).join(' '), `part=${part} requested=${requested} limit=${limit}`);
+        return true;
+      });
+    const wide = { firstRow: 0, firstCol: 0, lastRow: 2048, lastCol: 2047 };
+    ceiling(() => wb.sheet(0).getValues(wide), 'values_range', 2049 * 2048, 4194304);
+    ceiling(() => wb.sheet(0).getTypedValues(wide), 'values_range', 2049 * 2048, 4194304);
+    ceiling(() => wb.recalcParallel(9), 'threads', 9, 8);
+    const sheetPr = `<sheetPr>${'x'.repeat(9000)}</sheetPr>`;
+    ceiling(() => wb.sheet(0).ooxml.setSheetPrXml(sheetPr), 'sheet_pr_xml', sheetPr.length, 8192);
   });
 });
 

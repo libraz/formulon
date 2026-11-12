@@ -49,7 +49,9 @@ namespace eval {
 //
 // On overflow the offending sub-expression returns `#NUM!` for lambda
 // recursion (what Excel reports) and `#CALC!` for the eval-depth cap.
+// @limit: internal
 constexpr std::uint32_t kMaxEvalDepth = 2U * parser::kMaxFormulaAstDepth;
+// @limit: internal
 constexpr std::uint32_t kMaxLambdaDepth = 256;
 
 // RAII guard: bumps `*p` on construction (when `*p < cap`) and decrements

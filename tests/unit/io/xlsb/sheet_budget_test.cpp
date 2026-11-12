@@ -66,7 +66,8 @@ TEST(XlsbSheetBudget, ValueCellsChargeTheRowNodeAndEachCell) {
   auto refused = Decode(body, over, exact - 1U);
   ASSERT_FALSE(static_cast<bool>(refused));
   EXPECT_EQ(refused.error().code, FormulonErrorCode::kSecurityResourceLimit);
-  EXPECT_EQ(refused.error().context.rfind("context=xlsb_reader sheet_index=0 row=0 col=10 ", 0), 0U)
+  EXPECT_EQ(refused.error().context.rfind("part=sheet_load_bytes requested=", 0), 0U) << refused.error().context;
+  EXPECT_NE(refused.error().context.find(" context=xlsb_reader sheet_index=0 row=0 col=10"), std::string::npos)
       << refused.error().context;
 }
 
@@ -94,7 +95,8 @@ TEST(XlsbSheetBudget, BlankCellsLoadAsRunsAndChargeEachRun) {
   auto refused = Decode(body, over, exact - 1U);
   ASSERT_FALSE(static_cast<bool>(refused));
   EXPECT_EQ(refused.error().code, FormulonErrorCode::kSecurityResourceLimit);
-  EXPECT_EQ(refused.error().context.rfind("context=xlsb_reader sheet_index=0 row=0 col=4 ", 0), 0U)
+  EXPECT_EQ(refused.error().context.rfind("part=sheet_load_bytes requested=", 0), 0U) << refused.error().context;
+  EXPECT_NE(refused.error().context.find(" context=xlsb_reader sheet_index=0 row=0 col=4"), std::string::npos)
       << refused.error().context;
 }
 

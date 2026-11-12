@@ -577,7 +577,9 @@ TEST(NumericGroup, TooManyItemsAreRefusedAndChangeNothing) {
            set_numeric_group(wb, 0U, 0U, kAmt, 0.0, 1048576.0, 1.0),
        }) {
     ASSERT_FALSE(static_cast<bool>(result));
-    EXPECT_EQ(result.error().code, FormulonErrorCode::kSecurityResourceLimit);
+    EXPECT_EQ(result.error().code, FormulonErrorCode::kInvalidArgument);
+    EXPECT_EQ(result.error().context.rfind("part=pivot_field_items requested=", 0U), 0U) << result.error().context;
+    EXPECT_NE(result.error().context.find(" limit=1048576"), std::string::npos) << result.error().context;
   }
   ASSERT_EQ(CacheOf(wb).fields().size(), 4U);
   EXPECT_EQ(GroupTexts(CacheOf(wb).fields()[kGroup]), before);

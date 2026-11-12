@@ -20,6 +20,7 @@ namespace formulon::eval {
 namespace {
 
 // Largest runtime read rectangle whose open cells are checked one by one before admitting a producer.
+// @limit: internal
 constexpr std::uint64_t kMaxCheckedSpillReadCells = 256U;
 
 }  // namespace

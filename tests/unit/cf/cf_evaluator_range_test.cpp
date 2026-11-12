@@ -384,7 +384,8 @@ TEST(CFEvaluator, RangeEvaluatorReportsParseExhaustionWithoutPartialResults) {
   ASSERT_FALSE(static_cast<bool>(result));
   EXPECT_EQ(result.error().code, FormulonErrorCode::kSecurityResourceLimit);
   EXPECT_NE(result.error().context.find("cell="), std::string::npos);
-  EXPECT_NE(result.error().context.find("ceiling="), std::string::npos);
+  EXPECT_EQ(result.error().context.rfind("part=cf_formula_arena limit=", 0U), 0U);
+  EXPECT_EQ(result.error().context.find("requested="), std::string::npos);
 }
 
 TEST(CFEvaluator, ParseShiftEvaluationLatchesScratchExhaustionForNonzeroShift) {
@@ -444,7 +445,8 @@ TEST(CFEvaluator, RangeEvaluatorReportsShiftExhaustionEvenWhenRuleDoesNotMatch) 
   ASSERT_FALSE(static_cast<bool>(result));
   EXPECT_EQ(result.error().code, FormulonErrorCode::kSecurityResourceLimit);
   EXPECT_NE(result.error().context.find("cell="), std::string::npos);
-  EXPECT_NE(result.error().context.find("ceiling="), std::string::npos);
+  EXPECT_EQ(result.error().context.rfind("part=cf_formula_arena limit=", 0U), 0U);
+  EXPECT_EQ(result.error().context.find("requested="), std::string::npos);
 }
 
 TEST(CFEvaluator, RecursiveComputedTextUsesPrivateMemoAcrossTargetsAndAnchors) {

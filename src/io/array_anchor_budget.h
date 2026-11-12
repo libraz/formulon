@@ -76,7 +76,7 @@ inline Expected<void, Error> register_array_spills(Sheet& sheet, const std::vect
   // after an earlier one has already started an attacker-sized operation.
   // The budget is local to this sheet so independent sheets cannot consume
   // one another's dynamic-array allowance.
-  ResourceBudget budget(kMaxDynamicArrayCells, error_code);
+  ResourceBudget budget(kMaxDynamicArrayCells, "dynamic_array_cells");
   std::string cells_context("context=");
   cells_context.append(reader);
   cells_context.append(" array_anchor");

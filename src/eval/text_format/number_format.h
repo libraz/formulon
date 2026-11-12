@@ -67,6 +67,7 @@ enum class FormatStatus : int {
 };
 
 /// The most decimal places a TEXT() / FIXED() argument may ask for.
+// @limit: excel
 constexpr int kMaxFormatDecimalPlaces = 127;
 
 /// Renders the numeric scalar `value` through `format`, appending the result

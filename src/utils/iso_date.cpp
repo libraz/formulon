@@ -15,6 +15,7 @@ namespace {
 
 // Fractional-second digits kept: below 2^53, so the integer and its power of
 // ten are exact doubles. Later digits sit far below a serial's resolution.
+// @limit: internal
 constexpr int kMaxFractionDigits = 15;
 
 /// Consumes exactly `count` ASCII digits from `s` starting at `*pos`,

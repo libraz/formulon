@@ -38,6 +38,7 @@ struct fm_cell_nodes {
 
 namespace {
 
+// @limit: internal
 constexpr std::uint32_t kMaxTraceDepth = 32U;
 
 // Effective depth: 0 / 1 -> 1-step (direct neighbors only); larger

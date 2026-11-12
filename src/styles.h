@@ -126,6 +126,10 @@ struct GradientFill {
   std::vector<GradientStop> stops;
 };
 
+/// Most stops a `<gradientFill>` holds; a styles part or entry past it is refused.
+// @limit: engine
+inline constexpr std::size_t kMaxGradientStops = 1024U;
+
 /// One `<fill>` entry inside `<fills>`.
 ///
 /// `pattern` is the OOXML pattern index. `0=none`, `1=solid`,

@@ -41,6 +41,7 @@ using builtins_detail::to_finite_value;
 // laid out in a worksheet — so a longer request is rejected as `#NUM!`
 // rather than accepted and never answered. DDB needs no such cap: it has a
 // closed form for the same schedule.
+// @limit: excel
 inline constexpr double kMaxDepreciationPeriods = static_cast<double>(::formulon::a1::kMaxRows);
 
 // Reads a required date argument, truncating toward zero. Dates outside
@@ -73,6 +74,7 @@ inline Expected<void, ErrorCode> read_required_numbers(const Value* args, const 
 }
 
 // Largest valid day-count basis; the valid range is [0, kMaxDayCountBasis].
+// @limit: excel
 inline constexpr int kMaxDayCountBasis = 4;
 
 // Reads an optional day-count basis argument. Excel truncates numeric basis

@@ -37,11 +37,6 @@ enum class FormulonErrorCode : int32_t {
   /// than 31 UTF-16 units, or contains a forbidden character (`: \ / ? * [ ]`).
   /// A well-formed name already taken is `kAlreadyExists`.
   kInvalidSheetName = 11,
-  /// Appending a sheet would push `sheet_count()` past `Workbook::kMaxSheets`.
-  /// The dependency graph identifies a cell by a 16-bit sheet id, so a
-  /// workbook holding more sheets than that could not address the excess
-  /// ones without aliasing an existing sheet.
-  kSheetCountLimitExceeded = 12,
   /// A non-sheet index addresses past the end of a counted collection.
   kIndexOutOfRange = 13,
 
@@ -131,12 +126,6 @@ enum class FormulonErrorCode : int32_t {
 
   // ===== 9000-9999: UI integration / Printing =====
   kPrintInvalidArea = 9002,
-  /// The physical page count of a pagination request exceeds
-  /// `kMaxPaginationPages`. A page grid may be split by one manual break per
-  /// grid row and per grid column, so a crafted break configuration reaches a
-  /// count no 32-bit total can hold; pagination reports this instead of
-  /// returning a truncated count.
-  kPrintPageCountOverflow = 9005,
 };
 
 /// Structured error payload returned by every fallible internal API.
@@ -203,8 +192,6 @@ inline const char* to_cstring(FormulonErrorCode code) {
       return "kSheetIndexOutOfRange";
     case FormulonErrorCode::kInvalidSheetName:
       return "kInvalidSheetName";
-    case FormulonErrorCode::kSheetCountLimitExceeded:
-      return "kSheetCountLimitExceeded";
     case FormulonErrorCode::kIndexOutOfRange:
       return "kIndexOutOfRange";
 
@@ -315,8 +302,6 @@ inline const char* to_cstring(FormulonErrorCode code) {
     // UI / Printing
     case FormulonErrorCode::kPrintInvalidArea:
       return "kPrintInvalidArea";
-    case FormulonErrorCode::kPrintPageCountOverflow:
-      return "kPrintPageCountOverflow";
   }
   return "kUnknownError";
 }

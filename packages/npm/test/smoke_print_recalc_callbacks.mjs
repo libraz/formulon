@@ -293,7 +293,7 @@ test('Workbook.recalcParallel evaluates a wide DAG and reports bounded telemetry
     assert.equal(callerOnly.workerThreadsUsed, 0);
     assert.equal(wb.sheet(0).getTypedValue(branchCount, 2).number, (5 + branchCount + 1) * 2);
 
-    expectFailure(() => wb.recalcParallel(9), Module.StatusCode.InvalidArgument);
+    expectFailure(() => wb.recalcParallel(9), Module.StatusCode.SecurityResourceLimit);
 
     for (const invalidThreadCount of [
       -0.5,

@@ -56,8 +56,6 @@ inline constexpr std::uint16_t kDxfPropNumFmtId = 41;
 
 /// BrtFill (45) `fls` of a gradient fill ([MS-XLSB] 2.4.681).
 inline constexpr std::uint32_t kBrtFillGradient = 0x28U;
-/// `cNumStop` ceiling of BrtFill; XFProps uses the same bound.
-inline constexpr std::size_t kMaxBrtGradientStops = 256U;
 
 /// `FontRecord::underline` ordinal -> the wire underline value.
 inline constexpr std::uint8_t kDxfUnderlineWire[] = {0U, 1U, 2U, 0x21U, 0x22U};

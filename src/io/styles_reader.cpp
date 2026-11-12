@@ -27,6 +27,7 @@
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 
 namespace formulon {
@@ -162,32 +163,38 @@ FontRecord ParseFontNode(const pugi::xml_node& f) {
   return rec;
 }
 
-/// Upper bound on the stops kept from one `<gradientFill>`; Excel's own
-/// editor offers ten.
-constexpr std::size_t kMaxGradientStops = 1024;
-
-void ParseGradientFill(const pugi::xml_node& node, GradientFill* out) {
+/// Fills `out` from a `<gradientFill>`; one holding more than
+/// `kMaxGradientStops` stops fails the load rather than losing the excess.
+Expected<void, Error> ParseGradientFill(const pugi::xml_node& node, GradientFill* out) {
+  std::size_t stop_count = 0;
+  for (pugi::xml_node stop = node.child("stop"); stop; stop = stop.next_sibling("stop")) {
+    ++stop_count;
+  }
+  if (stop_count > kMaxGradientStops) {
+    return make_error(FormulonErrorCode::kSecurityResourceLimit, "styles.xml: gradient fill holds too many stops",
+                      limit_context("gradient_stops", stop_count, kMaxGradientStops));
+  }
   out->path = attr_str(node, "type") == "path";
   out->degree = attr_f64(node, "degree", 0.0);
   out->left = attr_f64(node, "left", 0.0);
   out->right = attr_f64(node, "right", 0.0);
   out->top = attr_f64(node, "top", 0.0);
   out->bottom = attr_f64(node, "bottom", 0.0);
-  for (pugi::xml_node stop = node.child("stop"); stop && out->stops.size() < kMaxGradientStops;
-       stop = stop.next_sibling("stop")) {
+  for (pugi::xml_node stop = node.child("stop"); stop; stop = stop.next_sibling("stop")) {
     GradientStop entry;
     entry.position = attr_f64(stop, "position", 0.0);
     entry.argb = ParseColorArgb(stop.child("color"), 0U);
     entry.color = read_color_spec(stop.child("color"));
     out->stops.push_back(entry);
   }
+  return {};
 }
 
-FillRecord ParseFillNode(const pugi::xml_node& fill) {
+Expected<FillRecord, Error> ParseFillNode(const pugi::xml_node& fill) {
   FillRecord rec;
   if (pugi::xml_node gradient = fill.child("gradientFill")) {
     rec.has_gradient = true;
-    ParseGradientFill(gradient, &rec.gradient);
+    RETURN_IF_ERROR(ParseGradientFill(gradient, &rec.gradient));
     return rec;
   }
   pugi::xml_node pattern = fill.child("patternFill");
@@ -254,6 +261,18 @@ void ReadRecordList(const pugi::xml_node& root, const char* list_name, const cha
   if (out.empty()) {
     out.emplace_back();
   }
+}
+
+Expected<void, Error> ReadFills(const pugi::xml_node& root, std::vector<FillRecord>& out) {
+  pugi::xml_node list = root.child("fills");
+  for (pugi::xml_node n = list.child("fill"); n; n = n.next_sibling("fill")) {
+    ASSIGN_OR_RETURN(FillRecord rec, ParseFillNode(n));
+    out.push_back(std::move(rec));
+  }
+  if (out.empty()) {
+    out.emplace_back();
+  }
+  return {};
 }
 
 void ReadNumFmts(const pugi::xml_node& root, StylesTable& table) {
@@ -610,19 +629,18 @@ std::string CaptureRootExtraAttrs(const pugi::xml_node& root) {
   return out;
 }
 
-void ReadDxfs(const pugi::xml_node& root, StylesTable& table) {
+Expected<void, Error> ReadDxfs(const pugi::xml_node& root, StylesTable& table) {
   pugi::xml_node dxfs = root.child("dxfs");
-  if (!dxfs) {
-    return;
-  }
   for (pugi::xml_node dxf = dxfs.child("dxf"); dxf; dxf = dxf.next_sibling("dxf")) {
-    table.dxfs.push_back(read_dxf(dxf));
+    ASSIGN_OR_RETURN(DifferentialFormat rec, read_dxf(dxf));
+    table.dxfs.push_back(std::move(rec));
   }
+  return {};
 }
 
 }  // namespace
 
-DifferentialFormat read_dxf(const pugi::xml_node& dxf) {
+Expected<DifferentialFormat, Error> read_dxf(const pugi::xml_node& dxf) {
   DifferentialFormat rec;
   if (pugi::xml_node font = dxf.child("font")) {
     rec.has_font = true;
@@ -630,7 +648,7 @@ DifferentialFormat read_dxf(const pugi::xml_node& dxf) {
   }
   if (pugi::xml_node fill = dxf.child("fill")) {
     rec.has_fill = true;
-    rec.fill = ParseFillNode(fill);
+    ASSIGN_OR_RETURN(rec.fill, ParseFillNode(fill));
   }
   if (pugi::xml_node border = dxf.child("border")) {
     rec.has_border = true;
@@ -700,12 +718,12 @@ Expected<StylesTable, Error> read_styles(const std::vector<std::uint8_t>& styles
   StylesTable table;
   ReadNumFmts(root, table);
   ReadRecordList(root, "fonts", "font", table.fonts, ParseFontNode);
-  ReadRecordList(root, "fills", "fill", table.fills, ParseFillNode);
+  RETURN_IF_ERROR(ReadFills(root, table.fills));
   ReadRecordList(root, "borders", "border", table.borders, ParseBorderNode);
   RETURN_IF_ERROR(ReadCellStyleXfs(root, table));
   RETURN_IF_ERROR(ReadCellXfs(root, table));
   ReadCellStyles(root, table);
-  ReadDxfs(root, table);
+  RETURN_IF_ERROR(ReadDxfs(root, table));
   NormalizeStyleIndices(table);
   table.root_extra_attrs = CaptureRootExtraAttrs(root);
   if (pugi::xml_node colors = root.child("colors")) {

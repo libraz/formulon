@@ -811,6 +811,16 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_source_seams.py layers
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
+  add_test(
+    NAME SeamIntegrityLimitOrigin
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_source_seams.py limit-origin
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
+    NAME SeamIntegrityLimitOriginTests
+    COMMAND ${_FORMULON_BEHAVIOR_PY} -m unittest tools.dev.check_source_seams_test
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
   # Tracked files must not cite the gitignored corpus or measurement notes.
   add_test(
     NAME InternalRefsInTrackedFiles

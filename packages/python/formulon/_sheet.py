@@ -785,6 +785,7 @@ _TEXT_OFFSET_UNIT_CODE_POINT = 1
 # The built-in number format each en-US date code a date write gives a General cell names.
 _BUILTIN_DATE_NUM_FMT_IDS = {"m/d/yyyy": 14, "m/d/yyyy h:mm": 22, "h:mm:ss": 21}
 # Largest rectangle :meth:`Sheet.get_values` reads.
+# @limit: engine
 _GET_VALUES_CELL_CAP = 1 << 22
 _BLANK = Value(ValueKind.BLANK)
 _WHOLE_SHEET = CellRect(first_row=0, first_col=0, last_row=_LAST_ROW, last_col=_LAST_COL)
@@ -2219,8 +2220,7 @@ class Sheet(_NoCopy):
         holds its spilled value. ``sheet["A1:B2"]`` reads the same grid.
 
         Raises:
-          InvalidArgumentError: when the range holds more than 4,194,304
-            (2**22) cells.
+          SecurityError: when the range holds more than 4,194,304 (2**22) cells.
 
         Example::
 
@@ -2232,8 +2232,7 @@ class Sheet(_NoCopy):
         """:meth:`get_values` with each value tagged with its kind; :meth:`set_values` stores the grid back unchanged.
 
         Raises:
-          InvalidArgumentError: when the range holds more than 4,194,304
-            (2**22) cells.
+          SecurityError: when the range holds more than 4,194,304 (2**22) cells.
         """
         rect = self._range_or_used(range)
         if rect is None:
@@ -2242,9 +2241,9 @@ class Sheet(_NoCopy):
         cols = rect.last_col - rect.first_col + 1
         if rows * cols > _GET_VALUES_CELL_CAP:
             raise FormulonError(
-                StatusCode.INVALID_ARGUMENT,
+                StatusCode.SECURITY_RESOURCE_LIMIT,
                 _argument_message("range", f"must name at most {_GET_VALUES_CELL_CAP} cells"),
-                f"cells={rows * cols}",
+                f"part=values_range requested={rows * cols} limit={_GET_VALUES_CELL_CAP}",
             )
         cells = self._typed_cells(rect)
         # The first page is read before the grid is allocated, so a rectangle the engine refuses allocates nothing.
@@ -3292,6 +3291,7 @@ class Sheet(_NoCopy):
 
         Raises:
           TypeError: when ``input`` is not one of the two record types.
+          SecurityError: when more than 16384 ranges are given.
         """
         if not isinstance(input, (ProtectedRangeInput, ProtectedRange)):
             raise TypeError(_argument_message("input", "must be a ProtectedRangeInput"))
@@ -3334,6 +3334,7 @@ class Sheet(_NoCopy):
           NotFoundError: when no protected range has the name ``protected_range``.
           IndexOutOfRangeError: when ``protected_range`` is an index past the last one.
           InvalidArgumentError: when ``ranges`` is empty.
+          SecurityError: when more than 16384 ranges are given.
         """
         given = {
             key: value
@@ -3452,6 +3453,9 @@ class Sheet(_NoCopy):
         ``validation.ranges`` takes :class:`CellRect` values, A1 ranges or one A1 range string. A
         :class:`DataValidation` read back is accepted in place of a :class:`DataValidationInput`; its ``id``
         is ignored and the new rule gets a fresh one.
+
+        Raises:
+          SecurityError: when more than 16384 ranges are given.
         """
         sheet = self._index()
         validation = normalize_record_ranges(validation, self._workbook, sheet=sheet, label="validation")
@@ -3563,6 +3567,7 @@ class Sheet(_NoCopy):
           NotFoundError: when no rule has the id ``validation``.
           IndexOutOfRangeError: when ``validation`` is a position past the last rule.
           InvalidArgumentError: when ``ranges`` is empty or a value is outside its domain.
+          SecurityError: when more than 16384 ranges are given.
         """
         given = {
             key: value
@@ -4512,6 +4517,10 @@ class Sheet(_NoCopy):
         or ``height_emu`` of ``0`` means the image's pixel size times 9525.
         ``edit_as`` is honoured for a two-cell anchor only. Existing drawing
         content is kept.
+
+        Raises:
+          SecurityError: when ``bytes`` is longer than 32 MiB or the package would
+            exceed the reader's part or size limits.
         """
         sheet = self._index()
         h = self._workbook._require()
@@ -4606,6 +4615,9 @@ class Sheet(_NoCopy):
         An object with the same id is replaced and the capture returns to its
         recorded list position; a handle of that id addresses it again. With
         ``assign_new_id`` it is added on top as a copy with a fresh id.
+
+        Raises:
+          SecurityError: when the package would exceed the reader's part or size limits.
         """
         sheet = self._index()
         h = self._workbook._require()
@@ -4868,6 +4880,7 @@ class Sheet(_NoCopy):
         Raises:
           TypeError: when ``spec`` is not one of the two record types.
           InvalidArgumentError: when ``spec.sparklines`` is empty.
+          SecurityError: when ``spec.sparklines`` holds more than 65536 sparklines.
         """
         if not isinstance(spec, (SparklineGroupInput, SparklineGroup)):
             raise TypeError(_argument_message("spec", "must be a SparklineGroupInput"))
@@ -4944,6 +4957,7 @@ class Sheet(_NoCopy):
           IndexOutOfRangeError: when ``sparkline_group`` is a position past the last group.
           InvalidArgumentError: when ``sparklines`` is empty (a group holds at
             least one sparkline; remove the group instead).
+          SecurityError: when ``sparklines`` holds more than 65536 sparklines.
         """
         given = {
             key: value
@@ -5062,6 +5076,7 @@ class Sheet(_NoCopy):
           TypeError: when ``input`` is not a :class:`ChartInput`, or for
             ``bar_direction`` on a type other than ``BAR``.
           InvalidArgumentError: when ``input.title`` is an empty string.
+          SecurityError: when the package would exceed the reader's part or size limits.
 
         Example::
 
@@ -5145,6 +5160,10 @@ class Sheet(_NoCopy):
 
         The result is a snapshot: later workbook or layout changes do not
         mutate the returned lists.
+
+        Raises:
+          SecurityError: when the page grid the sheet declares exceeds the
+            supported page count.
         """
         sheet = self._index()
         h = self._workbook._require()
@@ -5529,6 +5548,9 @@ class Sheet(_NoCopy):
         A rectangle spanning every row or column is stored as whole columns
         or rows; one A1 range string is one rectangle. ``None`` or an empty
         list removes the name.
+
+        Raises:
+          SecurityError: when more than 16384 ranges are given.
         """
         items = [] if ranges is None else [ranges] if isinstance(ranges, str) else ranges
         rects = [self._rect(r, f"ranges[{i}]") for i, r in enumerate(items)]
@@ -5600,9 +5622,8 @@ class Sheet(_NoCopy):
 
         Raises:
           TypeError: when ``input`` is neither a break record nor ``None``, or ``manual`` is not a ``bool``.
-          InvalidArgumentError: for a row past the grid, an inverted span or a
-            span past the last column.
-          FormulonError: with ``code == StatusCode.PRECONDITION_FAILED`` when the axis already holds 1026 breaks.
+          InvalidArgumentError: for a row past the grid, an inverted span, a
+            span past the last column, or when the axis already holds 1026 breaks.
         """
         sheet = self._index()
         h = self._workbook._require()
@@ -6448,6 +6469,9 @@ class Sheet(_NoCopy):
         too. A color scale, data bar or icon set rule carries its payload in ``rule.color_scale``,
         ``rule.data_bar`` or ``rule.icon_set``. ``rule.ranges`` takes :class:`CellRect` values, A1 ranges or
         one A1 range string.
+
+        Raises:
+          SecurityError: when more than 16384 ranges are given.
         """
         sheet = self._index()
         ranges = _cell_rects(self._workbook, rule.ranges, "rule.ranges")
@@ -6634,6 +6658,7 @@ class Sheet(_NoCopy):
           NotFoundError: when no rule has the id ``cf_rule``.
           IndexOutOfRangeError: when ``cf_rule`` is an index past the last rule.
           InvalidArgumentError: when an argument is not used by the rule's type, or a value is outside its domain.
+          SecurityError: when more than 16384 ranges are given.
         """
         given = {
             key: value
@@ -7250,6 +7275,9 @@ class Sheet(_NoCopy):
         rectangle partially overlaps another array, or intersects a merged
         area, a data table, a PivotTable or (for more than one cell) a table.
         Writing to the top-left cell of a block replaces the whole block.
+
+        Raises:
+          SecurityError: when the rectangle holds more than 10,000,000 cells.
         """
         rect = self._rect(array_formula.range, "array_formula.range")
         sheet = self._index()
@@ -7362,6 +7390,9 @@ class SheetOoxml(_NoCopy):
         in ``<sheetPr>``. A fragment carrying ``r:id`` is rejected
         unless the sheet already has a printerSettings part, because the
         reference would otherwise dangle and Excel would repair the file.
+
+        Raises:
+          SecurityError: when the fragment is over 4 KiB.
         """
         self._sheet._set_print_xml("fm_sheet_set_page_setup_xml", xml)
 
@@ -7376,6 +7407,9 @@ class SheetOoxml(_NoCopy):
         """OOXML fragment for round trips; normally use :meth:`Sheet.update_page_margins`.
 
         Replace the sheet's ``<pageMargins>`` element; ``None`` (or ``""``) removes it.
+
+        Raises:
+          SecurityError: when the fragment is over 4 KiB.
         """
         self._sheet._set_print_xml("fm_sheet_set_page_margins_xml", xml)
 
@@ -7390,6 +7424,9 @@ class SheetOoxml(_NoCopy):
         """OOXML fragment for round trips; normally use :meth:`Sheet.update_print_options`.
 
         Replace the sheet's ``<printOptions>`` element; ``None`` (or ``""``) removes it.
+
+        Raises:
+          SecurityError: when the fragment is over 4 KiB.
         """
         self._sheet._set_print_xml("fm_sheet_set_print_options_xml", xml)
 
@@ -7408,6 +7445,9 @@ class SheetOoxml(_NoCopy):
         element text and so must arrive escaped: Excel writes
         ``<oddHeader>&amp;C...</oddHeader>``. Pass decoded text to
         :meth:`Sheet.update_header_footer` instead to let the engine escape it.
+
+        Raises:
+          SecurityError: when the fragment is over 64 KiB.
         """
         self._sheet._set_print_xml("fm_sheet_set_header_footer_xml", xml)
 
@@ -7423,6 +7463,9 @@ class SheetOoxml(_NoCopy):
         """OOXML fragment for round trips; normally use :meth:`Sheet.update_page_setup`, which writes its ``fitToPage``.
 
         Replace the sheet's ``<sheetPr>`` element; ``None`` (or ``""``) removes it.
+
+        Raises:
+          SecurityError: when the fragment is over 8 KiB.
         """
         self._sheet._set_print_xml("fm_sheet_set_sheet_pr_xml", xml)
 

@@ -22,6 +22,7 @@
 #include "new_workbook_defaults.h"
 #include "passthrough_part.h"
 #include "sheet.h"
+#include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "workbook.h"
@@ -414,10 +415,7 @@ Expected<InsertBox, Error> insert_box(const Workbook& wb, std::size_t sheet, con
   for (const PassthroughPart& part : wb.passthrough_parts()) {
     total_bytes += part.bytes.size();
   }
-  if (wb.passthrough_parts().size() + wb.sheet_count() + parts + 2U > io::kMaxParts ||
-      total_bytes > io::kMaxTotalExtractedBytes) {
-    return invalid("Package would exceed the reader's limits");
-  }
+  RETURN_IF_ERROR(check_package_limits(wb.passthrough_parts().size() + wb.sheet_count() + parts + 2U, total_bytes));
   const Geometry geo(wb, wb.sheet(sheet));
   InsertBox box;
   box.from = AnchorPoint{options.row, options.col, options.row_off, options.col_off};
@@ -525,7 +523,8 @@ Expected<std::uint32_t, Error> insert_image(Workbook& wb, std::size_t sheet, con
                                             const ImageInsertOptions& options) {
   ASSIGN_OR_RETURN(std::string path, editable_drawing_path(wb, sheet));
   if (len > kMaxImageBytes) {
-    return invalid("len must not exceed 32 MiB");
+    return make_error(FormulonErrorCode::kSecurityResourceLimit, "The image exceeds the size limit",
+                      limit_context("image_bytes", len, kMaxImageBytes));
   }
   ASSIGN_OR_RETURN(ImageInfo info, probe_image(bytes, len));
   const std::int64_t cx = options.width_emu != 0 ? options.width_emu : info.px_width * kEmuPerPixel;

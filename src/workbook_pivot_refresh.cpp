@@ -186,7 +186,7 @@ Expected<void, Error> Workbook::refresh_pivot_cache(std::uint32_t cache_id, cons
                                      static_cast<std::uint64_t>(rect.last_col - rect.first_col + 1U);
   if (record_cells > kMaxPivotCacheRecordCells) {
     return make_error(FormulonErrorCode::kSecurityResourceLimit, "The pivot cache source exceeds the record cell limit",
-                      "cells=" + std::to_string(record_cells));
+                      limit_context("pivot_cache_record_cells", record_cells, kMaxPivotCacheRecordCells));
   }
 
   const eval::ScopedEvalProfile profile_scope(excel_profile_);

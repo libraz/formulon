@@ -45,15 +45,13 @@ class StatusCodeTest(unittest.TestCase):
             (
                 StatusCode.SHEET_INDEX_OUT_OF_RANGE,
                 StatusCode.INVALID_SHEET_NAME,
-                StatusCode.SHEET_COUNT_LIMIT_EXCEEDED,
                 StatusCode.INDEX_OUT_OF_RANGE,
             ),
-            (10, 11, 12, 13),
+            (10, 11, 13),
         )
         for member in (
             StatusCode.SHEET_INDEX_OUT_OF_RANGE,
             StatusCode.INVALID_SHEET_NAME,
-            StatusCode.SHEET_COUNT_LIMIT_EXCEEDED,
             StatusCode.INDEX_OUT_OF_RANGE,
         ):
             with self.subTest(member=member.name):
@@ -61,8 +59,10 @@ class StatusCodeTest(unittest.TestCase):
 
     def test_retired_structural_numbers_are_not_assigned(self) -> None:
         values = {int(member) for member in StatusCode}
-        for retired in (5050, 5051, 5053, 5054):
+        for retired in (12, 5050, 5051, 5053, 5054, 9005):
             self.assertNotIn(retired, values)
+        for gone in ("SHEET_COUNT_LIMIT_EXCEEDED", "PRINT_PAGE_COUNT_OVERFLOW"):
+            self.assertFalse(hasattr(StatusCode, gone), gone)
 
     def test_renamed_members_replace_the_abbreviated_ones(self) -> None:
         self.assertEqual(StatusCode.FUNCTION_OVERFLOW, 3004)

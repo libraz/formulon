@@ -116,7 +116,8 @@ class Reader {
         continue;
       }
       const std::uint64_t area_cells = cell_count(r);
-      if (area_cells > kMaxRangeExpansionCells - std::min(cells, kMaxRangeExpansionCells)) {
+      // `cells` never exceeds the ceiling, so the sum cannot wrap.
+      if (cells + area_cells > kMaxRangeExpansionCells) {
         return chart_cell_budget_error(cells + area_cells);
       }
       cells += area_cells;

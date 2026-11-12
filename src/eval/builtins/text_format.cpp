@@ -52,6 +52,7 @@ Value apply_text_format_text(std::string_view value, std::string_view format_tex
 }
 
 // A formatted number is at most this many characters (UTF-16 units); beyond is #VALUE!.
+// @limit: excel
 constexpr std::uint32_t kMaxFormattedLength = 255;
 
 Value formatted_number_text(const std::string& text, Arena& arena) {

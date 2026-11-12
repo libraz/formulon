@@ -126,7 +126,7 @@ TEST(XlsbReader, RejectsFullGridArrayFormulaBeforeSpillWalk) {
   const std::vector<std::uint8_t> archive = BuildZip(parts);
   auto result = read_xlsb(SpanOf(archive));
   ASSERT_FALSE(static_cast<bool>(result));
-  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kSecurityResourceLimit);
 }
 TEST(XlsbReader, RejectsCumulativeArrayFormulasOverSheetBudget) {
   const std::vector<std::uint8_t> rgce = {0x1E, 0x05, 0x00};  // PtgInt 5
@@ -145,10 +145,11 @@ TEST(XlsbReader, RejectsCumulativeArrayFormulasOverSheetBudget) {
   const std::vector<std::uint8_t> archive = BuildZip(parts);
   auto result = read_xlsb(SpanOf(archive));
   ASSERT_FALSE(static_cast<bool>(result));
-  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kSecurityResourceLimit);
   EXPECT_NE(result.error().context.find("format=xlsb"), std::string::npos);
   EXPECT_NE(result.error().context.find("anchor_row=0 anchor_col=1"), std::string::npos);
-  EXPECT_NE(result.error().context.find("used=600000 requested=600000 ceiling=1048576"), std::string::npos);
+  EXPECT_NE(result.error().context.find("part=dynamic_array_cells requested=600000 limit=1048576 used=600000 context="),
+            std::string::npos);
 }
 TEST(XlsbReader, MissingContentTypesIsContentTypeInvalid) {
   std::vector<PartFile> parts;

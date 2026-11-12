@@ -371,9 +371,11 @@ std::uint32_t resolve_thread_count(std::uint32_t requested) {
     if (hw == 0U) {
       return 2U;  // Fallback when the runtime cannot probe the CPU.
     }
-    return std::min<std::uint32_t>(static_cast<std::uint32_t>(hw), kMaxSchedulerThreads);
+    // Auto mode picks at most the ceiling; a caller request past it is refused earlier.
+    return hw > kMaxSchedulerThreads ? kMaxSchedulerThreads : static_cast<std::uint32_t>(hw);
   }
-  return std::min<std::uint32_t>(requested, kMaxSchedulerThreads);
+  // A request past `kMaxSchedulerThreads` was refused before this point.
+  return requested;
 }
 
 }  // namespace
@@ -384,16 +386,16 @@ std::uint32_t resolve_thread_count(std::uint32_t requested) {
 Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry& registry, const SchedulerConfig& cfg,
                                            SchedulerStats* stats, RecalcEngine& engine) {
   // Keep the public scheduler contract bounded as well as the C ABI wrapper:
-  // values above the eight-worker ceiling are invalid, not silently rounded
+  // values above the eight-worker ceiling are refused, not silently rounded
   // down. The output is already reset before any validation or re-entry
   // check, so every failure path leaves a caller-provided stats object clean.
   if (stats != nullptr) {
     *stats = SchedulerStats{};
   }
   if (cfg.num_threads > kMaxSchedulerThreads) {
-    return make_error(
-        FormulonErrorCode::kInvalidArgument, "Parallel recalc thread count exceeds the scheduler limit",
-        "thread_count=" + std::to_string(cfg.num_threads) + " max=" + std::to_string(kMaxSchedulerThreads));
+    return make_error(FormulonErrorCode::kSecurityResourceLimit,
+                      "Parallel recalc thread count exceeds the scheduler limit",
+                      limit_context("threads", cfg.num_threads, kMaxSchedulerThreads));
   }
 
   // Re-entrancy check. If this thread is already inside a

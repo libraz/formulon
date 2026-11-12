@@ -23,6 +23,7 @@
 namespace formulon {
 namespace {
 
+// @limit: internal
 constexpr int kMaxDigits = 780;
 // Exponent digits beyond this magnitude cannot change the result: every
 // value is already 0 or ±inf, whatever the mantissa length.

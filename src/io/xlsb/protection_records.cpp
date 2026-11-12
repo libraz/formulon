@@ -23,6 +23,7 @@ namespace xlsb {
 namespace {
 
 constexpr std::size_t kFlagCount = 16;
+// @limit: format
 constexpr std::uint32_t kMaxBlobBytes = 1024;
 
 /// The fifteen action flags after fLocked, in record order. XLSB stores
@@ -373,7 +374,9 @@ namespace {
 
 // UncheckedSqRfX of BrtRangeProtection: below 8192 ranges, the rest need the
 // BrtRangeProtection14 future record.
+// @limit: format
 constexpr std::uint32_t kMaxRangeProtectionRfx = 8191U;
+// @limit: format
 constexpr std::size_t kMaxRangeTitleChars = 255U;
 
 bool ReadSqRfx(ByteSpan& p, std::vector<MergeRange>& out) {

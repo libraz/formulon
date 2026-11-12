@@ -38,10 +38,12 @@ constexpr double kPi = 3.141592653589793;
 constexpr double kInt32Min = -2147483648.0;
 constexpr double kInt32Max = 2147483647.0;
 // Longest series considered by the detector.
+// @limit: internal
 constexpr std::size_t kMaxDetectLength = 175680U;
 // From this length on, only the largest power-of-two tail is analysed.
 constexpr std::size_t kWindowedLength = 2049U;
 // Detected periods at or above this are reported as none.
+// @limit: internal
 constexpr std::uint32_t kMaxDetectedPeriod = 8785U;
 // Fraction of the series tapered at each end before the periodogram.
 constexpr double kTaperFraction = 0.1;

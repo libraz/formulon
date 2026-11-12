@@ -999,7 +999,9 @@ TEST(PaginationTest, PageGridBeyondTheCeilingIsRejected) {
 
   auto result = paginate(wb, 0);
   ASSERT_FALSE(static_cast<bool>(result)) << "page_count=" << result.value().page_count;
-  EXPECT_EQ(result.error().code, FormulonErrorCode::kPrintPageCountOverflow);
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kSecurityResourceLimit);
+  EXPECT_EQ(result.error().context.rfind("part=print_pages requested=", 0), 0U) << result.error().context;
+  EXPECT_NE(result.error().context.find(" limit=16777216"), std::string::npos) << result.error().context;
 }
 
 TEST(PaginationTest, LargePageCountBelowTheCeilingIsExact) {

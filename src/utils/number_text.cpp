@@ -25,7 +25,9 @@ using double_conversion::DoubleToStringConverter;
 
 // A double has at most 767 significant digits and 1074 fractional places;
 // requests beyond these only add zeros, which the layout pads itself.
+// @limit: internal
 constexpr int kMaxSignificant = 800;
+// @limit: internal
 constexpr int kMaxFraction = 1100;
 // 309 integer digits + kMaxFraction places + one tie digit + NUL.
 constexpr int kDigitBufferSize = 1500;

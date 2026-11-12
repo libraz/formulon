@@ -14,6 +14,7 @@
 
 #include "formulon_c_out_index.h"
 #include "formulon_c_pivot_test_helpers.h"
+#include "formulon_c_resource_limit.h"
 #include "pivot/pivot_cache.h"
 #include "sheet.h"
 #include "workbook.h"
@@ -25,8 +26,6 @@ constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::Form
 constexpr fm_status_t kPreconditionFailed = static_cast<fm_status_t>(formulon::FormulonErrorCode::kPreconditionFailed);
 constexpr fm_status_t kIndexOutOfRange = static_cast<fm_status_t>(formulon::FormulonErrorCode::kIndexOutOfRange);
 constexpr fm_status_t kBindingNullPointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
-constexpr fm_status_t kSecurityResourceLimit =
-    static_cast<fm_status_t>(formulon::FormulonErrorCode::kSecurityResourceLimit);
 
 constexpr std::size_t kRegionField = 0U;
 constexpr std::size_t kAmountField = 1U;
@@ -174,7 +173,9 @@ TEST(CApiPivotRefresh, ASourceOverTheRecordCellLimitIsRefused) {
   f.Build();
   // 1048575 data rows x 33 columns is past 2^25 cells.
   ASSERT_EQ(SetPivotCacheWorksheetSource(f.wb.handle, f.cache_id, /*present=*/1, "A1:AG1048576", "Sheet1", nullptr), 0);
-  EXPECT_EQ(fm_workbook_refresh_pivot_cache(f.wb.handle, f.cache_id), kSecurityResourceLimit);
+  const std::string context =
+      ExpectResourceLimit(fm_workbook_refresh_pivot_cache(f.wb.handle, f.cache_id), "pivot_cache_record_cells");
+  EXPECT_NE(context.find(" limit=33554432"), std::string::npos) << context;
   EXPECT_EQ(f.SharedItemCount(kRegionField), 2U);
 }
 
@@ -402,7 +403,7 @@ TEST(CApiPivotNumericGroup, RefusesBadSettingsAndGroupsNothing) {
   EXPECT_EQ(f.Group(&spec), kInvalidArgument);
   spec = base();
   spec.interval = 1e-300;
-  EXPECT_EQ(f.Group(&spec), kSecurityResourceLimit);
+  EXPECT_EQ(f.Group(&spec), kInvalidArgument);
   EXPECT_EQ(f.FieldCount(), 2U);
   fm_pivot_numeric_group_t read{};
   EXPECT_FALSE(f.Read(kAmountField, &read));
@@ -441,7 +442,7 @@ TEST(CApiPivotNumericGroup, ARefusalLeavesThePreviousGroupingInPlace) {
   EXPECT_EQ(f.Group(&spec), kInvalidArgument);
   spec = FM_STRUCT_INIT(fm_pivot_numeric_group_t);
   spec.interval = 1e-300;
-  EXPECT_EQ(f.Group(&spec), kSecurityResourceLimit);
+  EXPECT_EQ(f.Group(&spec), kInvalidArgument);
   spec.interval = 50.0;
   EXPECT_EQ(fm_sheet_set_pivot_field_numeric_group(f.wb.handle, 0U, 0U, kRegionField, &spec), kPreconditionFailed);
 

@@ -51,6 +51,7 @@ namespace {
 
 /// `a:xfrm/@rot` counts 60000ths of a degree.
 constexpr double kRotationUnitsPerDegree = 60000.0;
+// @limit: excel
 constexpr double kMaxRotationDeg = 3600.0;
 constexpr double kFullTurnDeg = 360.0;
 

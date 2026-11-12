@@ -78,6 +78,7 @@ struct DrawingAnchor {
 inline constexpr std::uint32_t kDrawingRestoreNewId = 1U;
 
 /// Largest image `insert_image` accepts, in bytes.
+// @limit: engine
 inline constexpr std::size_t kMaxImageBytes = 32U * 1024U * 1024U;
 
 /// Lists the anchored objects of sheet `sheet`'s drawing in document order,
@@ -88,8 +89,9 @@ Expected<std::vector<DrawingObject>, Error> list_drawing_objects(const Workbook&
 /// Inserts `bytes` as a picture and returns its `cNvPr` id, which is unique
 /// within the sheet's drawing. Fails with `kInvalidArgument` for a bad sheet,
 /// an absolute anchor kind, a negative or 2^31-EMU-or-larger offset or size,
-/// an anchor outside the sheet, an image over `kMaxImageBytes`, or a package
-/// that would exceed the reader's part or size limits.
+/// or an anchor outside the sheet; with `kSecurityResourceLimit` for an image
+/// over `kMaxImageBytes` or a package that would exceed the reader's part or
+/// size limits.
 Expected<std::uint32_t, Error> insert_image(Workbook& wb, std::size_t sheet, const std::uint8_t* bytes, std::size_t len,
                                             const ImageInsertOptions& options);
 

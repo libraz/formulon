@@ -31,6 +31,7 @@ constexpr std::string_view kRelSlicer = "http://schemas.microsoft.com/office/200
 constexpr std::string_view kRelCache = "http://schemas.microsoft.com/office/2007/relationships/slicerCache";
 constexpr std::int64_t kEmuLimit = std::int64_t{1} << 31;
 constexpr std::int64_t kDefaultRowHeight = 241300;
+// @limit: excel Excel's slicer column-count bound (1..20000).
 constexpr std::uint32_t kMaxColumnCount = 20000;
 
 // Skeletons of the new parts and of the extension-list entries that point at them.
@@ -283,9 +284,11 @@ Expected<void, Error> check_spec(const SlicerSpec& s) {
       ((s.fields & kName) != 0U && s.name.empty())) {
     return invalid("Slicer spec has an unknown field bit, an empty name or a control character in its text");
   }
-  if (((s.fields & kColumnCount) != 0U && (s.column_count == 0U || s.column_count > kMaxColumnCount)) ||
-      ((s.fields & kRowHeight) != 0U && (s.row_height <= 0 || s.row_height >= kEmuLimit))) {
-    return invalid("column_count or row_height_pt is out of range");
+  if ((s.fields & kColumnCount) != 0U && (s.column_count == 0U || s.column_count > kMaxColumnCount)) {
+    return invalid("column_count must be in 1..20000");
+  }
+  if ((s.fields & kRowHeight) != 0U && (s.row_height <= 0 || s.row_height >= kEmuLimit)) {
+    return invalid("row_height_pt must be positive and within the sheet");
   }
   if ((s.fields & kAnchor) != 0U &&
       (bad_marker(s.from) || bad_marker(s.to) || s.to.row < s.from.row || s.to.col < s.from.col)) {

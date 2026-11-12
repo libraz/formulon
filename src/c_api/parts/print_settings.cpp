@@ -86,6 +86,7 @@ using formulon::io::ooxml::refresh_structured_views;
 // `<pageSetup scale>` is a percentage Excel accepts only inside this band;
 // the UI spinner enforces the same range.
 constexpr std::uint32_t kMinPrintScalePercent = 10U;
+// @limit: excel
 constexpr std::uint32_t kMaxPrintScalePercent = 400U;
 
 // Perpendicular span Excel writes for a break inserted across the whole
@@ -98,18 +99,20 @@ constexpr std::uint32_t kWholeSheetRowSpanMax = Sheet::kMaxRows - 1U;
 struct FragmentSlot {
   std::string SheetPrintSettings::*member;
   std::string_view element;
+  std::string_view part;
   std::size_t limit_bytes;
 };
 
-constexpr FragmentSlot kPageSetupSlot{&SheetPrintSettings::page_setup_xml, "pageSetup",
+constexpr FragmentSlot kPageSetupSlot{&SheetPrintSettings::page_setup_xml, "pageSetup", "page_setup_xml",
                                       formulon::kMaxPrintFragmentBytes};
-constexpr FragmentSlot kPageMarginsSlot{&SheetPrintSettings::page_margins_xml, "pageMargins",
+constexpr FragmentSlot kPageMarginsSlot{&SheetPrintSettings::page_margins_xml, "pageMargins", "page_margins_xml",
                                         formulon::kMaxPrintFragmentBytes};
-constexpr FragmentSlot kPrintOptionsSlot{&SheetPrintSettings::print_options_xml, "printOptions",
+constexpr FragmentSlot kPrintOptionsSlot{&SheetPrintSettings::print_options_xml, "printOptions", "print_options_xml",
                                          formulon::kMaxPrintFragmentBytes};
-constexpr FragmentSlot kHeaderFooterSlot{&SheetPrintSettings::header_footer_xml, "headerFooter",
+constexpr FragmentSlot kHeaderFooterSlot{&SheetPrintSettings::header_footer_xml, "headerFooter", "header_footer_xml",
                                          formulon::kMaxHeaderFooterFragmentBytes};
-constexpr FragmentSlot kSheetPrSlot{&SheetPrintSettings::sheet_pr_xml, "sheetPr", formulon::kMaxSheetPrFragmentBytes};
+constexpr FragmentSlot kSheetPrSlot{&SheetPrintSettings::sheet_pr_xml, "sheetPr", "sheet_pr_xml",
+                                    formulon::kMaxSheetPrFragmentBytes};
 
 /// Shared body of the five raw-XML getters.
 fm_status_t get_fragment(const fm_workbook_t* wb, std::size_t sheet_index, const FragmentSlot& slot,
@@ -141,9 +144,9 @@ fm_status_t set_fragment(fm_workbook_t* wb, std::size_t sheet_index, const Fragm
     // would exercise, so it must not see one the engine would reject
     // anyway.
     if (!fragment_within_size_limit(fragment, slot.limit_bytes)) {
-      return set_binding_error(formulon::FormulonErrorCode::kPreconditionFailed, "XML fragment exceeds the size limit",
-                               "element=" + std::string(slot.element) + " bytes=" + std::to_string(fragment.size()) +
-                                   " limit=" + std::to_string(slot.limit_bytes));
+      return set_binding_error(formulon::FormulonErrorCode::kSecurityResourceLimit,
+                               "XML fragment exceeds the size limit",
+                               formulon::limit_context(slot.part, fragment.size(), slot.limit_bytes));
     }
     if (auto rc = check_utf8(fragment, "element", slot.element); rc != 0) {
       return rc;
@@ -395,9 +398,9 @@ fm_status_t upsert_break(std::vector<ManualBreak>& breaks, std::uint32_t index, 
     return 0;
   }
   if (breaks.size() >= formulon::kMaxManualBreaksPerAxis) {
-    return set_binding_error(
-        formulon::FormulonErrorCode::kPreconditionFailed, "too many manual page breaks",
-        "breaks=" + std::to_string(breaks.size()) + " limit=" + std::to_string(formulon::kMaxManualBreaksPerAxis));
+    return invalid_argument(
+        "The axis already holds the most manual page breaks",
+        formulon::limit_context("manual_breaks", breaks.size() + 1U, formulon::kMaxManualBreaksPerAxis));
   }
   ManualBreak entry;
   entry.id = index;

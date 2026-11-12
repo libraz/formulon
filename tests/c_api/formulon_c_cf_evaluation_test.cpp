@@ -9,6 +9,7 @@
 #include "formulon_c_count_of.h"
 #include "formulon_c_out_index.h"
 #include "formulon_c_record_arg.h"
+#include "formulon_c_resource_limit.h"
 
 TEST(FormulonCApiCf, EvaluateRangeOnEmptyCfWorkbookReturnsZero) {
   WorkbookGuard wb;
@@ -82,9 +83,10 @@ TEST(FormulonCApiCf, EvaluateRangeRejectsRequestPastViewportCeiling) {
   // Two full columns are past the viewport ceiling the engine enforces;
   // the binding must surface the refusal instead of returning a handle.
   CfResultsGuard results;
-  EXPECT_EQ(fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, formulon::cf::kCfMaxRows - 1U, 1}),
-                                       nullptr, &results.handle),
-            static_cast<fm_status_t>(formulon::FormulonErrorCode::kSecurityResourceLimit));
+  ExpectResourceLimit(
+      fm_sheet_evaluate_cf_range(wb.handle, 0, record_arg(fm_cell_rect_t{0, 0, formulon::cf::kCfMaxRows - 1U, 1}),
+                                 nullptr, &results.handle),
+      "cf_viewport_cells");
   EXPECT_EQ(results.handle, nullptr);
 }
 

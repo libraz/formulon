@@ -47,9 +47,11 @@ using formulon::c_api::kBindingCallbackException;
 using formulon::c_api::kBindingInvalidHandle;
 
 /// Largest integer a JS number holds exactly (`Number.MAX_SAFE_INTEGER`).
+// @limit: format
 constexpr double kMaxSafeInteger = 9007199254740991.0;
 
 /// Largest `uint32_t`, as the double bound handed to the numeric readers.
+// @limit: format
 constexpr double kMaxU32 = 4294967295.0;
 
 // ---- Value-object mirrors -----------------------------------------------

@@ -316,7 +316,7 @@ Expected<void, Error> check_styled_range_area(const StyleRect& rect) {
                              (static_cast<std::uint64_t>(rect.last_col - rect.first_col) + 1U);
   if (!covers_all_rows(rect) && !covers_all_cols(rect) && area > kMaxStyledRangeCells) {
     return make_error(FormulonErrorCode::kSecurityResourceLimit, "range is past the styled-range cell ceiling",
-                      "cells=" + std::to_string(area) + " limit=" + std::to_string(kMaxStyledRangeCells));
+                      limit_context("styled_range_cells", area, kMaxStyledRangeCells));
   }
   return Expected<void, Error>::Ok();
 }

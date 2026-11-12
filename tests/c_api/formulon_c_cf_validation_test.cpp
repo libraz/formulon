@@ -87,7 +87,8 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsExcessiveSqrefCount) {
   rule.range_count = 0xFFFFFFFFu;
   const char* rule_id = nullptr;
   fm_status_t rc = fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_id);
-  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument));
+  EXPECT_EQ(rc, static_cast<fm_status_t>(formulon::FormulonErrorCode::kSecurityResourceLimit));
+  EXPECT_STREQ(fm_get_last_error_context(), "part=ranges requested=4294967295 limit=16384");
 
   std::size_t after = 0;
   ASSERT_EQ(fm_sheet_get_cf_rule_count(wb.handle, 0, &after), 0);

@@ -43,12 +43,15 @@ namespace parser {
 /// Excel 365's nesting limits on entered formula text, measured on Mac
 /// Excel: 65 calls deep (the outermost plus 64 nested), whatever operators or
 /// parentheses sit between them.
+// @limit: excel
 inline constexpr std::uint32_t kMaxFunctionNesting = 65;
 /// Grouping parentheses nest 256 deep; a call's own parentheses do not count.
 /// A `-(-(...` or `1+(1+(...` run is bound by this, one pair per level.
+// @limit: excel
 inline constexpr std::uint32_t kMaxGroupingParenDepth = 256;
 /// Prefix operators nest 1024 deep over one operand (`---...-1`), the deepest
 /// single shape Excel accepts.
+// @limit: excel
 inline constexpr std::uint32_t kMaxOperatorNesting = 1024;
 
 /// Shared ceiling, in nodes along any path, for every recursive AST walker
@@ -57,6 +60,7 @@ inline constexpr std::uint32_t kMaxOperatorNesting = 1024;
 /// Keep this in lockstep with ParserOptions' default. A flat operator chain
 /// (`1+2+...+n`) is one `BinaryOp` node, so its length is bounded by the
 /// formula-length limit rather than by this depth.
+// @limit: excel
 inline constexpr std::uint32_t kMaxFormulaAstDepth = kMaxOperatorNesting + 1;
 
 /// Discriminator tag for every AST variant.

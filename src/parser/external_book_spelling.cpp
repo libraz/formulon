@@ -14,6 +14,7 @@ namespace formulon {
 namespace parser {
 namespace {
 
+// @limit: internal
 constexpr std::size_t kMaxIndexDigits = 9;
 
 // `s` up to and including its last separator; empty when it has none.

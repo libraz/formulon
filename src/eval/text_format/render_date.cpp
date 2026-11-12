@@ -137,6 +137,7 @@ void append_elapsed_int_dbnum(std::string& out, long long value, std::size_t wid
   append_dbnum_positional(out, style, digits);
 }
 
+// @limit: internal
 constexpr std::size_t kMaxMeaningfulFractionDigits = 15;
 
 // Japanese era classification. The boundary table and classifier live in

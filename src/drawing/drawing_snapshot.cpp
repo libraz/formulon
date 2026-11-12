@@ -577,10 +577,8 @@ Expected<std::uint32_t, Error> restore_drawing(Workbook& wb, std::size_t sheet, 
   for (const SnapshotPart& part : snap.parts) {
     total_bytes += part.bytes.size();
   }
-  if (wb.passthrough_parts().size() + wb.sheet_count() + snap.rels.size() + snap.parts.size() + 2U > io::kMaxParts ||
-      total_bytes > io::kMaxTotalExtractedBytes) {
-    return invalid("Package would exceed the reader's limits");
-  }
+  RETURN_IF_ERROR(check_package_limits(
+      wb.passthrough_parts().size() + wb.sheet_count() + snap.rels.size() + snap.parts.size() + 2U, total_bytes));
 
   const bool fresh = path.empty();
   pugi::xml_document doc;

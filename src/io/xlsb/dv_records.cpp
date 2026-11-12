@@ -28,8 +28,11 @@ constexpr std::size_t kHeaderZeroBytes = 14;
 constexpr std::size_t kFrtHeaderBytes = 4;
 
 constexpr std::uint8_t kTypeList = 3;
+// @limit: format
 constexpr std::uint8_t kMaxType = 7;
+// @limit: format
 constexpr std::uint8_t kMaxErrorStyle = 2;
+// @limit: format
 constexpr std::uint8_t kMaxOperator = 7;
 constexpr std::uint32_t kStrLookup = 1U << 7U;
 constexpr std::uint32_t kAllowBlank = 1U << 8U;

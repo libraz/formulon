@@ -31,6 +31,7 @@ namespace formulon::eval {
 
 namespace {
 
+// @limit: excel
 constexpr std::uint32_t kMaxFormulaUnits = 8192;
 constexpr std::string_view kSyntheticPrefix = "_fmpv";
 

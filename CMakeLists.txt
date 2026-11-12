@@ -119,6 +119,7 @@ set(FORMULON_CORE_SOURCES
   src/utils/japanese_era.cpp
   src/utils/name_syntax.cpp
   src/utils/number_text.cpp
+  src/utils/resource_budget.cpp
   src/utils/structured_log.cpp
   src/utils/text_ops.cpp
   src/utils/thread_launch.cpp

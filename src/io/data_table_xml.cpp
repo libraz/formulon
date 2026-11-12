@@ -46,7 +46,7 @@ bool parse_data_table(const DataTableAttrs& attrs, DataTable* out) {
   table.ref = normalized(ref[0]);
   const std::uint64_t cells = static_cast<std::uint64_t>(table.ref.last_row - table.ref.first_row + 1U) *
                               (table.ref.last_col - table.ref.first_col + 1U);
-  if (ResourceBudget(kMaxDataTableCells).would_exceed(cells)) {
+  if (ResourceBudget(kMaxDataTableCells, "data_table_cells").would_exceed(cells)) {
     return false;
   }
   const auto flag = [](std::string_view text, std::uint8_t bit, std::uint8_t* explicit_attrs) {

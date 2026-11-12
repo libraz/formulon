@@ -20,9 +20,13 @@ namespace io {
 namespace xlsb {
 namespace {
 
+// @limit: format
 constexpr std::uint32_t kMaxHyperlinkRelIdUnits = 32767U;
+// @limit: format
 constexpr std::uint32_t kMaxHyperlinkLocationUnits = 2083U;
+// @limit: format
 constexpr std::uint32_t kMaxHyperlinkTooltipUnits = 255U;
+// @limit: format
 constexpr std::uint32_t kMaxHyperlinkDisplayUnits = 32767U;
 
 Expected<std::string, Error> ReadHyperlinkWideString(ByteSpan& cursor, const char* field, std::uint32_t max_units) {

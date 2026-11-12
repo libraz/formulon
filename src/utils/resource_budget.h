@@ -9,8 +9,8 @@
 //   * The budget is a plain value type with no global state; its lifetime is
 //     the request (one evaluation, one recalc pass, one pivot build).
 //   * `consume(n)` either charges `n` units and succeeds, or leaves the
-//     consumed count untouched and returns an `Error` carrying the code the
-//     budget was constructed with (default `kSecurityResourceLimit`).
+//     consumed count untouched and returns a `kSecurityResourceLimit` `Error`
+//     whose context names the budget's `part`.
 //   * `would_exceed(n)` is the side-effect-free variant for call sites that
 //     no-op instead of propagating an error.
 //   * Arithmetic is `uint64_t` and overflow-safe: a request larger than the
@@ -25,6 +25,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -35,20 +36,24 @@ namespace formulon {
 /// (`row_leaf_count * col_leaf_count`). A real pivot body is orders of
 /// magnitude smaller; past this point the dense bucket/value matrices would
 /// commit hundreds of megabytes before any aggregation runs.
+// @limit: engine
 inline constexpr std::uint64_t kMaxPivotResultCells = 4194304U;  // 2^22
 
 /// Default ceiling for partial-recalc viewport seeding, in coordinates.
 /// Sized to one full Excel column (`Sheet::kMaxRows`), which comfortably
 /// covers any UI redraw region while rejecting near-full-grid rectangles
 /// (~17e9 coordinates).
+// @limit: engine
 inline constexpr std::uint64_t kMaxRecalcViewportCells = 1048576U;  // 2^20
 
 /// Maximum dense dynamic-array result size. This is also the historic
 /// SEQUENCE ceiling; applying it at the shared allocation seam prevents
 /// other array constructors from bypassing the same resource bound.
+// @limit: engine
 inline constexpr std::uint64_t kMaxDynamicArrayCells = 1048576U;  // 2^20
 
 /// Maximum cells eagerly materialised from one rectangular reference.
+// @limit: engine
 inline constexpr std::uint64_t kMaxRangeExpansionCells = 10'000'000U;
 
 /// Maximum cells one rectangular reference may materialise as individual
@@ -67,6 +72,7 @@ inline constexpr std::uint64_t kMaxRangeExpansionCells = 10'000'000U;
 /// they give against formulas inside the rectangle — for the hand-authored
 /// aggregates that dominate real workbooks, while capping one formula's
 /// permanent graph footprint at ~160 KB.
+// @limit: engine
 inline constexpr std::uint64_t kMaxMaterializedDependencyCells = 1024U;
 
 /// Maximum span slots one REGEX* call may accumulate, counted as
@@ -76,6 +82,7 @@ inline constexpr std::uint64_t kMaxMaterializedDependencyCells = 1024U;
 /// per capture group. Sized to `kMaxDynamicArrayCells` because
 /// `REGEXEXTRACT(..., 3)` projects exactly that product into an array
 /// result, so accumulating more could never produce a usable value.
+// @limit: engine
 inline constexpr std::uint64_t kMaxRegexMatchSlots = kMaxDynamicArrayCells;
 
 /// Maximum physical page count one pagination request may report.
@@ -89,6 +96,7 @@ inline constexpr std::uint64_t kMaxRegexMatchSlots = kMaxDynamicArrayCells;
 /// print — the full 1,048,576-row sheet at the default row height paginates
 /// to roughly 21,800 pages — so it rejects only break configurations whose
 /// count could never be reported faithfully.
+// @limit: engine
 inline constexpr std::uint64_t kMaxPaginationPages = 16777216U;  // 2^24
 
 /// Ceilings on a caller-authored print-settings XML fragment, in bytes.
@@ -102,8 +110,11 @@ inline constexpr std::uint64_t kMaxPaginationPages = 16777216U;  // 2^24
 /// on files with header images, `&G` alongside their `<legacyDrawingHF>`
 /// counterpart). Every limit is orders of magnitude past what Excel writes,
 /// so only a runaway or hostile caller trips one.
+// @limit: engine
 inline constexpr std::size_t kMaxPrintFragmentBytes = 4096U;
+// @limit: engine
 inline constexpr std::size_t kMaxSheetPrFragmentBytes = 8192U;
+// @limit: engine
 inline constexpr std::size_t kMaxHeaderFooterFragmentBytes = 65536U;
 
 /// Ceiling on the area of one partial-rect range style application.
@@ -113,6 +124,7 @@ inline constexpr std::size_t kMaxHeaderFooterFragmentBytes = 65536U;
 /// formatted blank (about 23 B each, 2.9 GB of sheet XML at this size) and
 /// area-sized reads list one entry per coordinate. Whole-column and whole-row
 /// rects become axis formats and are exempt; file readers are never checked.
+// @limit: engine
 inline constexpr std::uint64_t kMaxStyledRangeCells = 134217728U;  // 2^27
 
 /// Ceiling on the result cells of one What-If data table.
@@ -120,6 +132,7 @@ inline constexpr std::uint64_t kMaxStyledRangeCells = 134217728U;  // 2^27
 /// Each result cell is a stored value, so the ref sizes both the result grid
 /// and the cell writes that create or clear it. One full column of results
 /// fits; a near-full-grid ref from a file is kept as cached values only.
+// @limit: engine
 inline constexpr std::uint64_t kMaxDataTableCells = 1048576U;  // 2^20
 
 /// Ceiling on the recalc passes one data-table computation may run.
@@ -128,11 +141,13 @@ inline constexpr std::uint64_t kMaxDataTableCells = 1048576U;  // 2^20
 /// table once per result cell, so the pass count is the cost that matters.
 /// 2^16 covers a 256 x 256 two-variable table; a table that would push the
 /// total past it keeps its cached results.
+// @limit: engine
 inline constexpr std::uint64_t kMaxDataTableRecalcPasses = 65536U;  // 2^16
 
 /// Ceiling on the record cell slots one pivot cache may hold, counted as
 /// `records * cache fields`. Every slot is a `Value` plus an index flag, so
 /// 2^25 slots bound a records part at about 1 GiB of heap.
+// @limit: engine
 inline constexpr std::uint64_t kMaxPivotCacheRecordCells = 33554432U;  // 2^25
 
 /// Ceiling on manual page breaks per axis.
@@ -144,6 +159,7 @@ inline constexpr std::uint64_t kMaxPivotCacheRecordCells = 33554432U;  // 2^25
 /// authoring past a limit Excel does enforce would produce a file it
 /// refuses to open. Bounding both axes also keeps the break vectors small
 /// enough that the paginator's per-break scan stays trivial.
+// @limit: excel
 inline constexpr std::size_t kMaxManualBreaksPerAxis = 1026U;
 
 /// Ceiling on the arena backing one evaluation, in bytes.
@@ -155,6 +171,7 @@ inline constexpr std::size_t kMaxManualBreaksPerAxis = 1026U;
 /// host page) down. Sized at four times the largest legitimate single
 /// result — `kMaxRangeExpansionCells` cells at 24 bytes each is ~240 MB —
 /// so the intermediates of a genuinely large evaluation still fit.
+// @limit: engine
 inline constexpr std::size_t kMaxEvalArenaBytes = 1024U * 1024U * 1024U;  // 1 GiB
 
 /// Ceiling on an arena backing one parse during a file load, in bytes.
@@ -162,6 +179,7 @@ inline constexpr std::size_t kMaxEvalArenaBytes = 1024U * 1024U * 1024U;  // 1 G
 /// These arenas hold the AST of a single formula read from the file, which
 /// is orders of magnitude smaller than this; the ceiling exists so a
 /// crafted formula string cannot turn a load into an allocation loop.
+// @limit: engine
 inline constexpr std::size_t kMaxLoadArenaBytes = 64U * 1024U * 1024U;  // 64 MiB
 
 /// Per-sheet load ceiling, charged the same way by the OOXML and XLSB readers:
@@ -169,14 +187,19 @@ inline constexpr std::size_t kMaxLoadArenaBytes = 64U * 1024U * 1024U;  // 64 Mi
 /// (90 B, about 2.98M cells), a new row node 112 B, and each style run a
 /// write adds 16 B.
 /// Reuses `zip_reader.h`'s `kMaxTotalExtractedBytes` archive-layer cap.
+// @limit: engine
 inline constexpr std::uint64_t kMaxSheetLoadCellBytes = 256ULL * 1024ULL * 1024ULL;  // 256 MiB
+
+/// The leading keys of a limit refusal's context:
+/// `part=<part> requested=<requested> limit=<limit>`.
+std::string limit_context(std::string_view part, std::uint64_t requested, std::uint64_t limit);
 
 /// Running work-unit counter checked against a fixed ceiling.
 ///
 /// Typical use:
 ///
 /// ```cpp
-/// ResourceBudget cells(kMaxPivotResultCells, FormulonErrorCode::kFunctionOverflow);
+/// ResourceBudget cells(kMaxPivotResultCells, "pivot_result_cells");
 /// auto ok = cells.consume(rows * cols);
 /// if (!ok) {
 ///   return std::move(ok.error());
@@ -184,26 +207,22 @@ inline constexpr std::uint64_t kMaxSheetLoadCellBytes = 256ULL * 1024ULL * 1024U
 /// ```
 class ResourceBudget {
  public:
-  /// Builds a budget with the given ceiling. `code` selects the error code
-  /// surfaced when the ceiling is exceeded, so call sites can keep their
-  /// module's established code (e.g. `kFunctionOverflow` for function-layer
-  /// overflows).
-  explicit constexpr ResourceBudget(std::uint64_t ceiling,
-                                    FormulonErrorCode code = FormulonErrorCode::kSecurityResourceLimit) noexcept
-      : ceiling_(ceiling), code_(code) {}
+  /// Builds a budget with the given ceiling. `part` names the bounded
+  /// resource (a snake_case string literal) and leads the context of the
+  /// `kSecurityResourceLimit` error surfaced when the ceiling is exceeded.
+  constexpr ResourceBudget(std::uint64_t ceiling, std::string_view part) noexcept : ceiling_(ceiling), part_(part) {}
 
   /// True when charging `units` more work would exceed the ceiling.
   constexpr bool would_exceed(std::uint64_t units) const noexcept { return units > ceiling_ - used_; }
 
   /// Charges `units` of work against the budget. On success the consumed
   /// count advances; on failure it is left untouched and the returned error
-  /// carries the budget's error code plus a `used/requested/ceiling`
-  /// context string.
+  /// carries `kSecurityResourceLimit` and the context
+  /// `part=<part> requested=<units> limit=<ceiling> used=<used>`.
   Expected<void, Error> consume(std::uint64_t units) {
     if (would_exceed(units)) {
-      return make_error(code_, "resource budget exceeded",
-                        "used=" + std::to_string(used_) + " requested=" + std::to_string(units) +
-                            " ceiling=" + std::to_string(ceiling_));
+      return make_error(FormulonErrorCode::kSecurityResourceLimit, "resource budget exceeded",
+                        limit_context(part_, units, ceiling_) + " used=" + std::to_string(used_));
     }
     used_ += units;
     return {};
@@ -215,13 +234,16 @@ class ResourceBudget {
   /// Configured ceiling.
   constexpr std::uint64_t ceiling() const noexcept { return ceiling_; }
 
+  /// Name of the bounded resource.
+  constexpr std::string_view part() const noexcept { return part_; }
+
   /// Headroom left before the ceiling is hit.
   constexpr std::uint64_t remaining() const noexcept { return ceiling_ - used_; }
 
  private:
   std::uint64_t ceiling_;
   std::uint64_t used_ = 0;
-  FormulonErrorCode code_;
+  std::string_view part_;
 };
 
 }  // namespace formulon

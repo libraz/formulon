@@ -31,6 +31,7 @@
 #include "utils/index_sort.h"
 #include "utils/iso_date.h"
 #include "utils/japanese_era.h"
+#include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 #include "value.h"
 
@@ -379,14 +380,17 @@ std::vector<BaseValue> present_base_values(const PivotCache& cache, std::size_t 
 }
 
 // Excel's unique-item limit of a pivot field.
+// @limit: excel
 constexpr std::size_t kMaxFieldItems = 1048576U;
 
 // A range of whole settings reads `a-(a+interval-1)` while its upper edge a+interval is at most this,
 // so that label keeps 15 digits; past it the range reads `a-(a+interval)` (Mac Excel, per range).
+// @limit: excel
 constexpr double kMaxIntegerLabelEdge = 1e15;
 
 // A label number is spelled in full up to this many characters, else in exponent form
 // (`90000000000000000000` vs `1E+20`, `0.000000000000000043` vs `2.43E-17`).
+// @limit: excel
 constexpr std::size_t kMaxPlainLabelChars = 20;
 
 // True when start, end and interval of `state` are all whole numbers.
@@ -484,10 +488,13 @@ Expected<GroupBounds, Error> resolve_date_group_bounds(const PivotCache& cache, 
   return bounds;
 }
 
-Expected<void, Error> check_numeric_item_count(const NumericGroupState& state) {
-  if (!(numeric_bucket_count(state) + 2.0 <= static_cast<double>(kMaxFieldItems))) {
-    return group_error(FormulonErrorCode::kSecurityResourceLimit, "the numeric group has more items than a field holds",
-                       "limit=" + std::to_string(kMaxFieldItems));
+Expected<void, Error> check_numeric_item_count(const NumericGroupState& state, FormulonErrorCode code) {
+  const double items = numeric_bucket_count(state) + 2.0;
+  if (!(items <= static_cast<double>(kMaxFieldItems))) {
+    // The demand can exceed any integer type, so it is clamped to what a decimal field prints.
+    const double shown = items < 1e18 ? items : 1e18;
+    return group_error(code, "the numeric group has more items than a field holds",
+                       limit_context("pivot_field_items", static_cast<std::uint64_t>(shown), kMaxFieldItems));
   }
   return Expected<void, Error>::Ok();
 }
@@ -533,7 +540,7 @@ Expected<NumericGroupState, Error> resolve_numeric_group(const PivotCache& cache
   if (state.start > state.end) {
     return group_error(FormulonErrorCode::kInvalidArgument, "a numeric group's start must not follow its end");
   }
-  RETURN_IF_ERROR(check_numeric_item_count(state));
+  RETURN_IF_ERROR(check_numeric_item_count(state, FormulonErrorCode::kInvalidArgument));
   return state;
 }
 
@@ -853,7 +860,7 @@ namespace detail {
 
 Expected<void, Error> set_numeric_range(PivotCache& cache, FieldGroup& group, const NumericGroupState& state,
                                         ExcelProfile profile) {
-  RETURN_IF_ERROR(check_numeric_item_count(state));
+  RETURN_IF_ERROR(check_numeric_item_count(state, FormulonErrorCode::kPreconditionFailed));
   const auto buckets = static_cast<std::size_t>(numeric_bucket_count(state));
   std::vector<Value> items;
   items.reserve(buckets + 2U);

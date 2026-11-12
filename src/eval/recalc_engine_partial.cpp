@@ -73,7 +73,7 @@ Expected<RecalcStats, Error> RecalcEngine::partial_recalc_locked(Workbook& workb
   // other invalid-viewport shapes above (no-op, dirty set preserved) so
   // callers fall back to a full `recalc()`.
   const utils::RectRange viewport_rect(viewport.first_row, viewport.first_col, viewport.last_row, viewport.last_col);
-  ResourceBudget seed_budget(kMaxRecalcViewportCells);
+  ResourceBudget seed_budget(kMaxRecalcViewportCells, "recalc_viewport_cells");
   if (seed_budget.would_exceed(viewport_rect.size())) {
     return stats;
   }

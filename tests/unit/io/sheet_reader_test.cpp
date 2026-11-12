@@ -350,7 +350,7 @@ TEST(SheetReader, RejectsFullGridArrayAnchorBeforeSpillWalk) {
   // caller now runs separately after SST resolution.
   auto result = RegisterArraySpills(wb.sheet(0), ctx.array_anchors);
   ASSERT_FALSE(static_cast<bool>(result));
-  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoSheetCorrupt);
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kSecurityResourceLimit);
   EXPECT_EQ(wb.sheet(0).spill_region_at_anchor(0U, 0U), nullptr);
 }
 
@@ -368,10 +368,11 @@ TEST(SheetReader, RejectsCumulativeArrayAnchorsOverSheetBudget) {
   ASSERT_TRUE(static_cast<bool>(read_sheet_data(doc, 0U, wb, ctx, text_storage)));
   auto result = RegisterArraySpills(wb.sheet(0), ctx.array_anchors);
   ASSERT_FALSE(static_cast<bool>(result));
-  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoSheetCorrupt);
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kSecurityResourceLimit);
   EXPECT_NE(result.error().context.find("format=ooxml"), std::string::npos);
   EXPECT_NE(result.error().context.find("anchor_row=0 anchor_col=1"), std::string::npos);
-  EXPECT_NE(result.error().context.find("used=600000 requested=600000 ceiling=1048576"), std::string::npos);
+  EXPECT_NE(result.error().context.find("part=dynamic_array_cells requested=600000 limit=1048576 used=600000 context="),
+            std::string::npos);
   EXPECT_EQ(wb.sheet(0).spill_region_at_anchor(0U, 0U), nullptr);
   EXPECT_EQ(wb.sheet(0).spill_region_at_anchor(0U, 1U), nullptr);
 }
@@ -601,7 +602,8 @@ TEST(SheetReader, RowNodeAndCellsChargeTheBudgetExactly) {
   auto rs = read_sheet_data(doc, 0U, over, over_ctx, over_storage, nullptr, exact - 1U);
   ASSERT_FALSE(static_cast<bool>(rs));
   EXPECT_EQ(rs.error().code, FormulonErrorCode::kSecurityResourceLimit);
-  EXPECT_EQ(rs.error().context.rfind("context=sheet_reader row=0 col=10 ", 0), 0U) << rs.error().context;
+  EXPECT_EQ(rs.error().context.rfind("part=sheet_load_bytes requested=", 0), 0U) << rs.error().context;
+  EXPECT_NE(rs.error().context.find(" context=sheet_reader row=0 col=10"), std::string::npos) << rs.error().context;
 }
 
 // Formatted blanks are style runs, never cells: two non-adjacent ones cost the
@@ -631,7 +633,8 @@ TEST(SheetReader, FormattedBlanksChargeTheRowNodeAndEachRun) {
   auto rs = read_sheet_data(doc, 0U, over, over_ctx, over_storage, nullptr, exact - 1U);
   ASSERT_FALSE(static_cast<bool>(rs));
   EXPECT_EQ(rs.error().code, FormulonErrorCode::kSecurityResourceLimit);
-  EXPECT_EQ(rs.error().context.rfind("context=sheet_reader row=0 col=2 ", 0), 0U) << rs.error().context;
+  EXPECT_EQ(rs.error().context.rfind("part=sheet_load_bytes requested=", 0), 0U) << rs.error().context;
+  EXPECT_NE(rs.error().context.find(" context=sheet_reader row=0 col=2"), std::string::npos) << rs.error().context;
 }
 
 // Bare `<c>` elements load as explicit-default style runs, charged as one row

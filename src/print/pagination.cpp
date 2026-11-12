@@ -467,8 +467,8 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
 
     total_pages += static_cast<std::uint64_t>(col_pages) * static_cast<std::uint64_t>(row_pages);
     if (total_pages > kMaxPaginationPages) {
-      return make_error(FormulonErrorCode::kPrintPageCountOverflow, "Pagination page count exceeds the supported limit",
-                        "pages=" + std::to_string(total_pages) + " limit=" + std::to_string(kMaxPaginationPages));
+      return make_error(FormulonErrorCode::kSecurityResourceLimit, "Pagination page count exceeds the supported limit",
+                        limit_context("print_pages", total_pages, kMaxPaginationPages));
     }
 
     // Pages of this area: the walk's page starts bound each page's track

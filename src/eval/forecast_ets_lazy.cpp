@@ -55,6 +55,7 @@ using builtins_detail::to_finite_value;
 // ---------------------------------------------------------------------------
 
 // Largest accepted seasonality argument; above this it is `#NUM!`.
+// @limit: excel
 constexpr std::int64_t kMaxSeasonalityArg = 8784;
 
 // A seasonality argument at or above this percentage of the series length
@@ -64,6 +65,7 @@ constexpr std::size_t kSeasonalityLengthPercent = 70U;
 // Largest forecast horizon in steps past the last node; Mac Excel 365 returns
 // `#NUM!` for a target beyond it (2147483659 answers, 2147483660 does not, on
 // a 1..12 timeline).
+// @limit: internal
 constexpr double kMaxHorizonSteps = 2147483647.0;
 
 // Confidence level of FORECAST.ETS.CONFINT when the argument is omitted.

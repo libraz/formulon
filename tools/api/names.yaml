@@ -13395,6 +13395,7 @@ entries:
     c: FM_STATUS_PRINT_PAGE_COUNT_OVERFLOW
     enum: enum.status_code
     surfaces: [c]
+    drop: { c: FM_STATUS_PRINT_PAGE_COUNT_OVERFLOW, closes: R0.coverage }
   constant.fm_status_sheet_index_out_of_range:
     kind: constant
     c: FM_STATUS_SHEET_INDEX_OUT_OF_RANGE
@@ -13416,6 +13417,7 @@ entries:
     c: FM_STATUS_SHEET_COUNT_LIMIT_EXCEEDED
     enum: enum.status_code
     surfaces: [c]
+    drop: { c: FM_STATUS_SHEET_COUNT_LIMIT_EXCEEDED, closes: R0.coverage }
   constant.fm_status_index_out_of_range:
     kind: constant
     c: FM_STATUS_INDEX_OUT_OF_RANGE

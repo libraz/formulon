@@ -29,6 +29,7 @@ namespace {
 // Excel caps variable-denominator approximation at seven digits even when
 // the format has more placeholders. The improper numerator is a decimal
 // string: a finite double's whole part can run to 309 digits.
+// @limit: internal
 constexpr std::uint64_t kMaxVariableDenominator = 9999999ULL;
 
 // Excel takes the last convergent of the binary64 continued-fraction expansion

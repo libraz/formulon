@@ -567,6 +567,37 @@ TEST(BuiltinNumFmt, ResolvesKnownIds) {
   EXPECT_STREQ(builtin_num_fmt(200), "");
 }
 
+std::string GradientStyles(std::size_t stops, bool in_dxf) {
+  std::string gradient = "<gradientFill degree=\"90\">";
+  for (std::size_t i = 0; i < stops; ++i) {
+    gradient += "<stop position=\"0\"><color rgb=\"FF112233\"/></stop>";
+  }
+  gradient += "</gradientFill>";
+  std::string xml(kXmlDecl);
+  xml.append("<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">");
+  if (in_dxf) {
+    xml.append("<dxfs count=\"1\"><dxf><fill>" + gradient + "</fill></dxf></dxfs>");
+  } else {
+    xml.append("<fills count=\"1\"><fill>" + gradient + "</fill></fills>");
+  }
+  xml.append("</styleSheet>");
+  return xml;
+}
+
+TEST(StylesReader, GradientStopsAtTheCeilingLoadAndPastItFailTheLoad) {
+  for (const bool in_dxf : {false, true}) {
+    auto fits = read_styles(Bytes(GradientStyles(kMaxGradientStops, in_dxf)));
+    ASSERT_TRUE(static_cast<bool>(fits)) << in_dxf << ": " << fits.error().message;
+    const GradientFill& kept = in_dxf ? fits.value().dxfs[0].fill.gradient : fits.value().fills[0].gradient;
+    EXPECT_EQ(kept.stops.size(), kMaxGradientStops);
+
+    auto over = read_styles(Bytes(GradientStyles(kMaxGradientStops + 1U, in_dxf)));
+    ASSERT_FALSE(static_cast<bool>(over)) << in_dxf;
+    EXPECT_EQ(over.error().code, FormulonErrorCode::kSecurityResourceLimit);
+    EXPECT_EQ(over.error().context, "part=gradient_stops requested=1025 limit=1024");
+  }
+}
+
 }  // namespace
 }  // namespace io
 }  // namespace formulon

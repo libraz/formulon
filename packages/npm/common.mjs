@@ -652,7 +652,6 @@ export const StatusCode = Object.freeze({
   PreconditionFailed: 9,
   SheetIndexOutOfRange: 10,
   InvalidSheetName: 11,
-  SheetCountLimitExceeded: 12,
   IndexOutOfRange: 13,
   ParserUnexpectedToken: 1000,
   ParserUnterminatedString: 1001,
@@ -699,7 +698,6 @@ export const StatusCode = Object.freeze({
   DataTableInvalid: 8005,
   AutoFilterInvalid: 8006,
   PrintInvalidArea: 9002,
-  PrintPageCountOverflow: 9005,
 });
 // <status-codes:end>
 
@@ -4966,6 +4964,7 @@ const REF_KINDS = Object.freeze({
 const GRID_ROWS = 1048576;
 const GRID_COLS = 16384;
 // 2^22 cells: the largest range `getValues` reads.
+// @limit: engine
 const MAX_VALUES_CELLS = 4194304;
 const BLANK = Object.freeze({ kind: ValueKind.Blank });
 const DEFAULT_LEGEND = Object.freeze({ position: ChartLegendPosition.Right, overlay: false, hiddenEntries: [] });
@@ -7272,9 +7271,9 @@ function makeFacade(Raw, registry, runtime) {
       const cols = range.lastCol - range.firstCol + 1;
       if (rows * cols > MAX_VALUES_CELLS) {
         throw new FormulonError(
-          StatusCode.InvalidArgument,
+          StatusCode.SecurityResourceLimit,
           `${argLabel(where, 0)} must name at most ${MAX_VALUES_CELLS} cells`,
-          `cells=${rows * cols}`,
+          `part=values_range requested=${rows * cols} limit=${MAX_VALUES_CELLS}`,
         );
       }
       // Allocated once the engine has accepted the rectangle.

@@ -86,7 +86,9 @@ std::vector<BlockedSpillState> snapshot_blocked_spills(const Workbook& workbook)
 std::vector<CellNodeId> canonical_release_targets(const std::vector<CellNodeId>& targets);
 
 /// Ceilings that stop a release loop that cannot converge.
+// @limit: internal
 constexpr std::size_t kMaxSpillReleaseWaves = 4096U;
+// @limit: internal
 constexpr std::size_t kMaxNoProgressSpillWaves = 8U;
 
 /// Error message when the release / dependency retry waves exceed their budget.

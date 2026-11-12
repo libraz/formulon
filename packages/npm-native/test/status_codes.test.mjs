@@ -25,7 +25,7 @@ const upperSnake = (key) => key.replace(/([a-z])([A-Z])/g, '$1_$2').toUpperCase(
 test('StatusCode mirrors the C status defines', async () => {
   const mod = await loadStagedModule();
   const expected = await headerCodes();
-  assert.equal(expected.size, 58);
+  assert.equal(expected.size, 56);
   assert.ok(Object.isFrozen(mod.StatusCode));
   const actual = new Map(Object.entries(mod.StatusCode).map(([key, value]) => [upperSnake(key), value]));
   assert.deepEqual([...actual].sort(), [...expected].sort());
@@ -51,14 +51,15 @@ test('renamed and renumbered codes: the old names are gone and every workbook-st
   assert.equal('FnOverflow' in StatusCode, false);
   assert.equal('SecResourceLimit' in StatusCode, false);
   assert.deepEqual(
-    [
-      StatusCode.SheetIndexOutOfRange,
-      StatusCode.InvalidSheetName,
-      StatusCode.SheetCountLimitExceeded,
-      StatusCode.IndexOutOfRange,
-    ],
-    [10, 11, 12, 13],
+    [StatusCode.SheetIndexOutOfRange, StatusCode.InvalidSheetName, StatusCode.IndexOutOfRange],
+    [10, 11, 13],
   );
+  for (const gone of ['SheetCountLimitExceeded', 'PrintPageCountOverflow']) {
+    assert.equal(gone in StatusCode, false, `${gone} is retired`);
+  }
+  for (const retired of [12, 9005]) {
+    assert.equal(Object.values(StatusCode).includes(retired), false, `${retired} is retired`);
+  }
   for (const retired of [5050, 5051, 5052, 5053, 5054]) {
     assert.equal(Object.values(StatusCode).includes(retired), false, `${retired} is retired`);
   }

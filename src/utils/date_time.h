@@ -84,6 +84,7 @@ inline constexpr double kDate1904EpochGap = 1462.0;
 
 /// Last serial of the 1900 calendar (9999-12-31). The 1904 system ends the
 /// same day, `kDate1904EpochGap` serials earlier.
+// @limit: excel
 inline constexpr double kMaxSerial1900 = 2958465.0;
 
 /// Last valid day-of-month for a Gregorian (year, month) pair, under the

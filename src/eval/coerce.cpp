@@ -30,6 +30,7 @@ namespace {
 
 // Largest integer exponent Excel evaluates by square-and-multiply; beyond it
 // the power is exp(log(x) * y).
+// @limit: internal
 constexpr double kMaxSquaringExponent = 4294967294.0;
 
 // Correctly rounded 10^n for 0 <= n <= 308; a base of exactly 10 reads this
@@ -55,6 +56,7 @@ constexpr double kPowersOfTen[] = {
     1e272, 1e273, 1e274, 1e275, 1e276, 1e277, 1e278, 1e279, 1e280, 1e281, 1e282, 1e283, 1e284, 1e285, 1e286, 1e287,
     1e288, 1e289, 1e290, 1e291, 1e292, 1e293, 1e294, 1e295, 1e296, 1e297, 1e298, 1e299, 1e300, 1e301, 1e302, 1e303,
     1e304, 1e305, 1e306, 1e307, 1e308};
+// @limit: internal
 constexpr std::uint64_t kMaxTabulatedPowerOfTen = 308U;
 
 // Excel's power for a non-negative exponent, bit-exact on Mac Excel

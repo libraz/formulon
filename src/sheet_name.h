@@ -32,6 +32,7 @@ namespace sheet_names {
 /// Excel measures the sheet-name limit in UTF-16 code units (its internal
 /// string representation), not UTF-8 bytes; a supplementary-plane character
 /// counts as two units.
+// @limit: excel
 inline constexpr std::uint32_t kMaxNameUnits = 31U;
 
 /// Returns true when `lhs` and `rhs` have the same worksheet identity under

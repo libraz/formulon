@@ -42,6 +42,7 @@ struct SpillTable {
   // `kMaxIndexedBands` bands (a whole-column spill) goes to `tall_regions`,
   // which every query visits, so insertion stays bounded.
   static constexpr std::uint32_t kBandRows = 64U;
+  // @limit: internal
   static constexpr std::uint64_t kMaxIndexedBands = 64U;
 
   // Map nodes are stable across rehash, so the index holds region pointers.

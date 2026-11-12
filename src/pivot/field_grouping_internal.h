@@ -29,22 +29,23 @@ Expected<GroupRun, Error> group_run(const PivotCache& cache, std::size_t base);
 Expected<GroupBounds, Error> resolve_date_group_bounds(const PivotCache& cache, std::size_t base,
                                                        const DateGroupSpec& spec, bool date1904);
 
-/// `kSecurityResourceLimit` when `state`'s items would outnumber what a pivot
-/// field holds.
-Expected<void, Error> check_numeric_item_count(const NumericGroupState& state);
+/// `code` when `state`'s items would outnumber what a pivot field holds
+/// (Excel's unique-item limit), with context
+/// `part=pivot_field_items requested=<n> limit=<n>`.
+Expected<void, Error> check_numeric_item_count(const NumericGroupState& state, FormulonErrorCode code);
 
 /// Checks a numeric grouping of `base` against its present values and
 /// resolves the bounds an empty `start` / `end` takes from them. Errors as
-/// `set_numeric_group`, plus `kSecurityResourceLimit` for more group items than
-/// a pivot field holds.
+/// `set_numeric_group`, plus `kInvalidArgument` for more group items than a
+/// pivot field holds.
 Expected<NumericGroupState, Error> resolve_numeric_group(const PivotCache& cache, std::size_t base,
                                                          std::optional<double> start, std::optional<double> end,
                                                          double interval);
 
 /// Makes `group` the numeric range of `state` and regenerates its group items
 /// as text in `cache`, as `set_numeric_group` describes them, with
-/// `profile`'s decimal separator. Errors as `check_numeric_item_count`,
-/// leaving `group` as it was.
+/// `profile`'s decimal separator. Fails with `kPreconditionFailed` for more
+/// group items than a pivot field holds, leaving `group` as it was.
 Expected<void, Error> set_numeric_range(PivotCache& cache, FieldGroup& group, const NumericGroupState& state,
                                         ExcelProfile profile);
 

@@ -181,6 +181,7 @@ class Workbook {
   /// bound, which is what makes each `static_cast<std::uint16_t>` of a
   /// sheet index lossless. Excel itself caps sheets at available memory
   /// and no real workbook approaches this number.
+  // @limit: engine
   static constexpr std::size_t kMaxSheets = 0xFFFFU;
 
   /// `insert_before` value that appends a new sheet.
@@ -262,7 +263,7 @@ class Workbook {
   ///   * `kInvalidSheetName` on any name violation.
   ///   * `kAlreadyExists` when another sheet holds the name under Unicode
   ///     simple case folding.
-  ///   * `kSheetCountLimitExceeded` when `sheet_count() == kMaxSheets`.
+  ///   * `kSecurityResourceLimit` when `sheet_count() == kMaxSheets`.
   Expected<Sheet*, Error> add_sheet_validated(std::string name);
 
   /// The name a sheet added without one takes: the profile's first sheet
@@ -361,7 +362,7 @@ class Workbook {
   /// Errors (the workbook is left unchanged):
   ///   * `kSheetIndexOutOfRange` when `source >= sheet_count()` or
   ///     `insert_before > sheet_count()`.
-  ///   * `kSheetCountLimitExceeded` when the workbook is full.
+  ///   * `kSecurityResourceLimit` when the workbook is full.
   ///   * `kPreconditionFailed` for a very hidden source.
   ///   * `kNotImplemented` when the source is not a worksheet or carries
   ///     content the copy cannot model: unrecognised relationships, slicers,
@@ -505,7 +506,8 @@ class Workbook {
   /// block is cleared.
   ///
   /// Returns `kInvalidArgument` for a missing sheet, a zero extent, or a
-  /// rectangle outside the grid or larger than a spill may be. Returns
+  /// rectangle outside the grid. Returns `kSecurityResourceLimit` for more
+  /// cells than a spill may hold. Returns
   /// `kPreconditionFailed`, changing nothing, when the rectangle partially
   /// overlaps another array block (one wholly inside it is replaced),
   /// intersects a merged area, a data table's result range or a PivotTable,
@@ -559,10 +561,11 @@ class Workbook {
   /// not valid UTF-8, is longer than 218 bytes, or equals the book name of an
   /// external link under ASCII case folding; or when the directory is empty,
   /// not absolute in one of the three forms (`C:`, `C:rel`, `//a`,
-  /// `\\server` refused), holds NUL, `[` or `]`, is not valid UTF-8, has a
-  /// `.` / `..` or empty inner segment, or makes `directory/file_name` longer
-  /// than 1,024 bytes. When a directory first appears, every relative local
-  /// hyperlink target is resolved against it (`resolve_relative_target`).
+  /// `\\server` refused), holds NUL, `[` or `]`, is not valid UTF-8, or has a
+  /// `.` / `..` or empty inner segment; `kSecurityResourceLimit` when
+  /// `directory/file_name` is longer than 1,024 bytes. When a directory first
+  /// appears, every relative local hyperlink target is resolved against it
+  /// (`resolve_relative_target`).
   Expected<void, Error> set_location(std::optional<WorkbookLocation> new_location);
 
   /// The file name of `location()`, extension included; empty when unset. A
@@ -1563,6 +1566,8 @@ class Workbook {
   ///     (`pivot::resolve_worksheet_source`).
   ///   * `kSecurityResourceLimit` when (rows - 1) x columns of the source
   ///     exceeds `kMaxPivotCacheRecordCells`.
+  ///   * `kPreconditionFailed` as `pivot::build_refreshed_cache`, for a
+  ///     numeric group with more items than a field holds.
   ///   * `kNotImplemented` as `pivot::build_refreshed_cache`.
   ///   * an evaluation error of `ensure_calculated` or of a pivot.
   Expected<void, Error> refresh_pivot_cache(std::uint32_t cache_id, const eval::FunctionRegistry& registry);

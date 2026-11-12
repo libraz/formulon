@@ -132,7 +132,7 @@ struct PaginationResult {
 /// `kPrintInvalidArea` propagated from print-area resolution. An empty
 /// sheet with no print area yields a result with `page_count == 0`.
 ///
-/// Returns `kPrintPageCountOverflow` when the page grid a sheet declares
+/// Returns `kSecurityResourceLimit` when the page grid a sheet declares
 /// exceeds `kMaxPaginationPages`, which a file listing a manual break
 /// before nearly every row and column can reach. `page_count` is either
 /// the true total for the whole print area or that error; it is never a

@@ -1524,6 +1524,7 @@ constexpr std::uint8_t kRuleRepeatMarks = 16;    // zh repeat marks take the pre
 enum class CollationRepeatKind : std::uint8_t { kSame = 0, kVoiced = 1, kVowel = 2 };
 
 /// Largest weight a key can hold (two base-254 digits).
+// @limit: internal
 constexpr std::uint16_t kMaxCollationWeight = @MAX_WEIGHT@;
 
 /// One LEB128 varint column.

@@ -13,6 +13,7 @@
 namespace formulon {
 namespace {
 
+// @limit: excel
 constexpr std::uint32_t kMaxNameUnits = 255U;
 
 /// Full-width ASCII and U+3000 as the ASCII they stand for, upper-cased;

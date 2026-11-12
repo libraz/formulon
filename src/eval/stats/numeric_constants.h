@@ -21,10 +21,12 @@ inline constexpr double kInvSqrt2 = 0.7071067811865476;
 inline constexpr double kInvSqrt2Pi = 0.3989422804014327;
 
 /// Iteration cap of the series and continued-fraction kernels.
+// @limit: internal
 inline constexpr int kMaxTerms = 100000;
 /// Replacement for a zero denominator in a modified-Lentz continued fraction.
 inline constexpr double kLentzTiny = 1e-30;
 /// Largest degrees-of-freedom value the chi-squared, t and F families accept.
+// @limit: internal
 inline constexpr double kMaxDegreesOfFreedom = 1.0e10;
 
 /// True when `df` lies outside `[1, kMaxDegreesOfFreedom]`; NaN is not out of range.

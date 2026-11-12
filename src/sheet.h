@@ -167,10 +167,12 @@ struct SharedFormulaGroup {
 class Sheet {
  public:
   /// Excel 365 maximum row count (rows are addressable as 0..kMaxRows-1).
+  // @limit: excel
   static constexpr std::uint32_t kMaxRows = a1::kMaxRows;
 
   /// Excel 365 maximum column count (columns are addressable as
   /// 0..kMaxCols-1, mapping to A..XFD).
+  // @limit: excel
   static constexpr std::uint32_t kMaxCols = a1::kMaxCols;
 
   /// Inclusive bounding box of populated coordinates returned by

@@ -55,12 +55,12 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   parameter and never a C type; match on the class and `code`, not the text.
   Python `wb[-1]` counts from the end and is the last sheet, while
   `wb.sheet(-1)` is `IndexOutOfRangeError`.
-- **C ABI, JavaScript, Python:** the statuses `kSheetIndexOutOfRange`,
-  `kInvalidSheetName` and `kSheetCountLimitExceeded` move from 5050, 5051 and
-  5053 to 10, 11 and 12 (`SheetIndexOutOfRange`, `InvalidSheetName`,
-  `SheetCountLimitExceeded`), so that general codes sit in the general range;
-  5050 to 5053 are retired and never reused. A caller that compares numbers
-  must update them.
+- **C ABI, JavaScript, Python:** the statuses `kSheetIndexOutOfRange` and
+  `kInvalidSheetName` move from 5050 and 5051 to 10 and 11
+  (`SheetIndexOutOfRange`, `InvalidSheetName`), so that general codes sit in
+  the general range; 5050 to 5053 are retired and never reused. Adding or
+  copying a sheet past the maximum is `SECURITY_RESOURCE_LIMIT` (6005). A
+  caller that compares numbers must update them.
 - **C ABI, JavaScript, Python:** the status 9006, documented as
   `kThreadedCommentInvalid`, is retired and the number is never reused. A
   malformed timestamp, a mention outside the text, an empty display name,
@@ -70,8 +70,10 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   `kIoFileTooLarge`, is retired and the number is never reused. Every
   engine ceiling that is not an Excel limit, an oversized or over-budget input,
   an oversized archive entry and too many archive parts included, is
-  `SECURITY_RESOURCE_LIMIT` (6005; Python `SecurityError`), whose message names
-  the part and both numbers. The compression-ratio check keeps `IO_ZIP_BOMB`.
+  `SECURITY_RESOURCE_LIMIT` (6005; Python `SecurityError`), whose context
+  (`fm_get_last_error_context`, `FormulonError.context`) starts with
+  `part=<name> requested=<n> limit=<n>`; the message is prose. The
+  compression-ratio check keeps `IO_ZIP_BOMB`.
 - **C ABI, JavaScript, Python:** "absent" is one thing on every read: `NULL` in
   C, `null` in JavaScript and `None` in Python, never `""`, `0`, `-1` or a
   presence flag in the record. `getSpill` returns `Spill | null`,
@@ -3852,7 +3854,20 @@ current spelling is in the [Name migration](#name-migration) table.
 | `fm_cell_get_xf_index(wb, sheet, row, col, uint32_t* out_xf_index)`, which wrote 0 for a cell with no XF | `fm_sheet_get_cell_xf_index(…, int32_t* out_present, uint32_t* out_xf_index)` |
 | `fm_pivot_style_info_t.present` | `int32_t* out_present` before the out record of `fm_sheet_get_pivot_style_options`, and of `fm_sheet_get_table_style_options`; a NULL `out_present` is `FM_STATUS_INVALID_ARGUMENT` |
 | `fm_workbook_pivot_field_clear_date_group` | removed; `fm_sheet_set_pivot_field_date_group(..., NULL)` clears the grouping |
-| `kSheetIndexOutOfRange` (5050), `kInvalidSheetName` (5051), `kSheetCountLimitExceeded` (5053) | `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10), `FM_STATUS_INVALID_SHEET_NAME` (11) and `FM_STATUS_SHEET_COUNT_LIMIT_EXCEEDED` (12). 5050 to 5053 are retired and never reused |
+| `kSheetIndexOutOfRange` (5050), `kInvalidSheetName` (5051), `kSheetCountLimitExceeded` (5053) | `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) and `FM_STATUS_INVALID_SHEET_NAME` (11); adding or copying a sheet past the maximum is `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) with `part=sheets`. 5050 to 5053 are retired and never reused |
+| `kPrintPageCountOverflow` (9005) | `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) with part=print_pages; 9005 is retired and never reused. Python raises `SecurityError` instead of `PrintError` |
+| the pivot result-cell ceiling, which returned status 3004 | `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) with part=pivot_result_cells; an arithmetic overflow of the size product keeps 3004 |
+| a raw print-settings XML fragment over its size limit, which returned the state-conflict status | `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) from `fm_sheet_set_page_setup_xml` and the four other raw-XML setters, with part=page_setup_xml, part=page_margins_xml, part=print_options_xml, part=header_footer_xml or part=sheet_pr_xml |
+| a picture over 32 MiB, a workbook location path over 1,024 bytes, and more than 16,384 ranges in one call, which returned the invalid-argument status | `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) from `fm_sheet_add_picture`, `fm_workbook_set_location` and the range-taking functions, with part=image_bytes, part=location_path and part=ranges; a `range_count` of 0 stays `FM_STATUS_INVALID_ARGUMENT` |
+| more than 1,024 gradient stops in a fill, silently cut to 1,024 on write and on `.xlsx` load, and cut to 256 on `.xlsb` | `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) with part=gradient_stops on write and on load from either format; the `.xlsb` writer writes every stop |
+| reading a range of more than 2^22 cells as values, which returned the invalid-argument status | `SecurityResourceLimit` (Python `SecurityError`) from `getValues` and `getTypedValues` (Python `get_values`, `get_typed_values`), with part=values_range |
+| `fm_workbook_recalc_parallel` with a thread count above 8, which returned the invalid-argument status | `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) with part=threads; a negative count in JavaScript stays `InvalidArgument` |
+| a manual page break past 1,026 on an axis, which returned the state-conflict status | `FM_STATUS_INVALID_ARGUMENT` (2) from `fm_sheet_set_row_break` and `fm_sheet_set_column_break`, Excel's published limit, with part=manual_breaks |
+| a numeric pivot group over 1,048,576 items, which returned the resource-limit status | `FM_STATUS_INVALID_ARGUMENT` from `fm_sheet_set_pivot_field_numeric_group` and the state-conflict status from `fm_workbook_refresh_pivot_cache`, both with part=pivot_field_items |
+| a sparkline group of more than 65,536 sparklines, a legacy array formula over more than 10,000,000 cells, and a drawing edit whose package would exceed the reader's part or size limits, which returned the invalid-argument status | `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) from `fm_sheet_add_sparkline_group`, `fm_sheet_update_sparkline_group`, `fm_sheet_set_array_formula`, `fm_sheet_add_picture`, `fm_sheet_add_chart` and `fm_sheet_restore_drawing`, with part=sparkline_items, part=array_cells, and part=zip_parts or part=zip_total_bytes |
+| an `.xlsb` array constant of more than 65,536 elements, which failed the load as a corrupt file | `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) with part=array_elements |
+| the error context of a 6005 failure: `cells=`, `ceiling=`, `cap=`, `limit=parts` or `limit=entry` keys, or none | part=<name> requested=<n> limit=<n> first, then site keys; only part=cf_formula_arena has no requested |
+| the error context of a chart series past an Excel column's rows (`points=`, `ceiling=`) and of the ZIP-bomb status (`limit=ratio`, `ratio=`, `cap=`) | part=chart_points requested=<n> limit=<n> and part=zip_entry_ratio requested=<ratio> limit=<n>, then site keys; the statuses are unchanged |
 | `kIoFileTooLarge` (5002) | `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) for an oversized or over-budget input, an oversized archive entry and too many archive parts; 5002 is retired and never reused |
 | `fm_sheet_set_range_xf_index` over more than the styled-cell ceiling (134,217,728 cells, not a whole row or column selection), and the range remap past the same ceiling | `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) for both, with `fm_sheet_remap_range_xfs` as the remap; it was `FM_STATUS_PRECONDITION_FAILED` |
 | a range remap with a target XF past the cell-XF table | `fm_sheet_remap_range_xfs` returns `FM_STATUS_INDEX_OUT_OF_RANGE` (13); it was `FM_STATUS_INVALID_ARGUMENT` |

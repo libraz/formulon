@@ -18,7 +18,9 @@ namespace formulon::a1 {
 
 /// Excel 365 grid bounds: rows are addressable as 0..kMaxRows-1 and columns
 /// as 0..kMaxCols-1 (A..XFD). `Sheet::kMaxRows` / `Sheet::kMaxCols` alias these.
+// @limit: excel
 inline constexpr std::uint32_t kMaxRows = 1048576U;
+// @limit: excel
 inline constexpr std::uint32_t kMaxCols = kMaxColumns;
 
 /// Grid extent along an axis: `kMaxRows` for the row axis, `kMaxCols` otherwise.
@@ -28,6 +30,7 @@ constexpr std::uint32_t axis_extent(bool row_axis) noexcept {
 
 /// Excel's column-letter ceiling. The largest valid Excel column is XFD
 /// (3 letters); references with 4 or more leading letters are rejected.
+// @limit: excel
 constexpr std::size_t kMaxColumnLetters = 3U;
 
 /// Parses Excel column letters (A-Z, AA-XFD) starting at `text[*pos]` into

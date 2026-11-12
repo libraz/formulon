@@ -50,8 +50,6 @@ inline const char* status_name(std::int32_t status) {
       return "SHEET_INDEX_OUT_OF_RANGE";
     case FM_STATUS_INVALID_SHEET_NAME:
       return "INVALID_SHEET_NAME";
-    case FM_STATUS_SHEET_COUNT_LIMIT_EXCEEDED:
-      return "SHEET_COUNT_LIMIT_EXCEEDED";
     case FM_STATUS_INDEX_OUT_OF_RANGE:
       return "INDEX_OUT_OF_RANGE";
     case FM_STATUS_PARSER_UNEXPECTED_TOKEN:
@@ -144,8 +142,6 @@ inline const char* status_name(std::int32_t status) {
       return "AUTO_FILTER_INVALID";
     case FM_STATUS_PRINT_INVALID_AREA:
       return "PRINT_INVALID_AREA";
-    case FM_STATUS_PRINT_PAGE_COUNT_OVERFLOW:
-      return "PRINT_PAGE_COUNT_OVERFLOW";
     default:
       return nullptr;
   }

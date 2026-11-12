@@ -333,6 +333,7 @@ namespace {
 // Conservative byte bound for the cap: a UTF-16 unit never needs more than
 // 4 UTF-8 bytes, so a required substitution output beyond this many bytes
 // always exceeds the cap and can be rejected before any buffer growth.
+// @limit: internal
 constexpr std::size_t kMaxSubstituteOutputBytes = static_cast<std::size_t>(kExcelTextCapUnits) * 4U;
 
 // Output of one expansion. A pending `\u` / `\l` maps the next character on its

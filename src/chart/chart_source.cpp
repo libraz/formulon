@@ -220,12 +220,12 @@ bool col_hidden(const Sheet& sheet, std::uint32_t col) {
 
 Error chart_cell_budget_error(std::uint64_t cells) {
   return make_error(FormulonErrorCode::kSecurityResourceLimit, "Source exceeds materialization limit",
-                    "cells=" + std::to_string(cells) + " ceiling=" + std::to_string(kMaxRangeExpansionCells));
+                    limit_context("chart_range_cells", cells, kMaxRangeExpansionCells));
 }
 
 Error chart_point_limit_error(std::uint64_t points) {
   return make_error(FormulonErrorCode::kInvalidArgument, "Point count exceeds Excel row limit",
-                    "points=" + std::to_string(points) + " ceiling=" + std::to_string(Sheet::kMaxRows));
+                    limit_context("chart_points", points, Sheet::kMaxRows));
 }
 
 std::string count_text(std::uint64_t n) {

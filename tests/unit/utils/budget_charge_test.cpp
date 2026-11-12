@@ -18,41 +18,38 @@ namespace formulon {
 namespace {
 
 TEST(BudgetCharge, SuccessfulChargeAdvancesBudget) {
-  ResourceBudget budget(100U);
+  ResourceBudget budget(100U, "test_part");
   ASSERT_TRUE(static_cast<bool>(charge(budget, 40U, "sheet=0 anchor=A1")));
   EXPECT_EQ(budget.used(), 40U);
 }
 
 TEST(BudgetCharge, OverCeilingChargeKeepsContextAndBudgetDiagnostics) {
-  ResourceBudget budget(10U);
+  ResourceBudget budget(10U, "test_part");
   auto over = charge(budget, 11U, "sheet=0 anchor=A1");
   ASSERT_FALSE(static_cast<bool>(over));
   EXPECT_EQ(over.error().code, FormulonErrorCode::kSecurityResourceLimit);
   EXPECT_EQ(budget.used(), 0U);
 
   const std::string& context = over.error().context;
-  EXPECT_NE(context.find("sheet=0 anchor=A1"), std::string::npos);
-  EXPECT_NE(context.find("used=0"), std::string::npos);
-  EXPECT_NE(context.find("requested=11"), std::string::npos);
-  EXPECT_NE(context.find("ceiling=10"), std::string::npos);
+  EXPECT_EQ(context, "part=test_part requested=11 limit=10 used=0 sheet=0 anchor=A1");
 }
 
 TEST(BudgetCharge, EmptyContextLeavesBudgetDiagnosticsUnpadded) {
-  ResourceBudget budget(1U);
+  ResourceBudget budget(1U, "test_part");
   auto over = charge(budget, 2U, std::string());
   ASSERT_FALSE(static_cast<bool>(over));
-  EXPECT_EQ(over.error().context.rfind("used=", 0U), 0U);
+  EXPECT_EQ(over.error().context, "part=test_part requested=2 limit=1 used=0");
 }
 
-TEST(BudgetCharge, ChargeUsesTheBudgetsConfiguredErrorCode) {
-  ResourceBudget budget(1U, FormulonErrorCode::kFunctionOverflow);
+TEST(BudgetCharge, ChargeRefusalIsResourceLimit) {
+  ResourceBudget budget(1U, "test_part");
   auto over = charge(budget, 2U, "ctx");
   ASSERT_FALSE(static_cast<bool>(over));
-  EXPECT_EQ(over.error().code, FormulonErrorCode::kFunctionOverflow);
+  EXPECT_EQ(over.error().code, FormulonErrorCode::kSecurityResourceLimit);
 }
 
 TEST(ChargeThenReserve, SuccessfulChargeReservesTheContainer) {
-  ResourceBudget budget(100U);
+  ResourceBudget budget(100U, "test_part");
   std::vector<int> cells;
   ASSERT_TRUE(static_cast<bool>(charge_then_reserve(budget, cells, 64U, "ctx")));
   EXPECT_GE(cells.capacity(), 64U);
@@ -61,7 +58,7 @@ TEST(ChargeThenReserve, SuccessfulChargeReservesTheContainer) {
 }
 
 TEST(ChargeThenReserve, OverCeilingChargeLeavesCapacityUntouched) {
-  ResourceBudget budget(8U);
+  ResourceBudget budget(8U, "test_part");
   std::vector<int> cells;
   const std::size_t before = cells.capacity();
 
@@ -73,14 +70,11 @@ TEST(ChargeThenReserve, OverCeilingChargeLeavesCapacityUntouched) {
   EXPECT_EQ(budget.used(), 0U);
 
   const std::string& context = over.error().context;
-  EXPECT_NE(context.find("sheet=0 record=BrtArrFmla"), std::string::npos);
-  EXPECT_NE(context.find("used=0"), std::string::npos);
-  EXPECT_NE(context.find("requested=9"), std::string::npos);
-  EXPECT_NE(context.find("ceiling=8"), std::string::npos);
+  EXPECT_EQ(context, "part=test_part requested=9 limit=8 used=0 sheet=0 record=BrtArrFmla");
 }
 
 TEST(ChargeThenReserve, ZeroCountSucceedsWithoutReserving) {
-  ResourceBudget budget(8U);
+  ResourceBudget budget(8U, "test_part");
   std::vector<int> cells;
   ASSERT_TRUE(static_cast<bool>(charge_then_reserve(budget, cells, 0U, "ctx")));
   EXPECT_EQ(budget.used(), 0U);
@@ -90,7 +84,7 @@ TEST(ChargeThenReserve, ZeroCountSucceedsWithoutReserving) {
 TEST(ChargeThenReserve, HugeCountFailsInsteadOfNarrowing) {
   // A count past any addressable size must be rejected by the ceiling before
   // it can be narrowed to `size_t`, on 64-bit hosts as well as on WASM.
-  ResourceBudget budget(1024U);
+  ResourceBudget budget(1024U, "test_part");
   std::vector<int> cells;
   auto over = charge_then_reserve(budget, cells, 0xFFFFFFFFFFFFFFFFULL, "ctx");
   ASSERT_FALSE(static_cast<bool>(over));

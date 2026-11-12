@@ -93,7 +93,7 @@ bool same_header(std::string_view a, std::string_view b);
 ///
 /// Errors, none of which builds anything: `kNotImplemented` for a years or
 /// multi-day date group whose bounds move and for a blank header in a locale
-/// whose word is unmeasured, and `kSecurityResourceLimit` for a numeric range
+/// whose word is unmeasured, and `kPreconditionFailed` for a numeric range
 /// group with more items than a field holds.
 Expected<RefreshPlan, Error> build_refreshed_cache(const PivotCache& old, const RefreshSource& source,
                                                    const RefreshContext& context);

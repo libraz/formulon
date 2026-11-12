@@ -52,6 +52,16 @@ Checks:
                    writer. Known exceptions are listed in `LAYER_BASELINE`
                    with their reason.
 
+  limit-origin     Every `kMax*` ceiling carries an origin tag and is refused accordingly.
+
+                   `// @limit: engine|excel|format|internal` sits on the line
+                   above the definition or trails it (`# @limit:` in the
+                   Python facade). An `engine` ceiling is refused with
+                   SecurityResourceLimit and never clamps silently; an
+                   `excel` or `format` ceiling is never SecurityResourceLimit.
+                   Not checked: ceilings reached through a variable, codes
+                   chosen in a callee, and whether a tag is semantically true.
+
   all              Run every check above (default).
 
 Stdlib only; no build artifacts or network access required.
@@ -329,10 +339,163 @@ def check_xml_passthrough() -> bool:
     )
 
 
+LIMIT_TAGS = frozenset({"engine", "excel", "format", "internal"})
+
+# Facade sources that define limit constants outside src/.
+_LIMIT_JS_FILES = ("packages/npm/common.mjs",)
+_LIMIT_PY_DIR = "packages/python/formulon"
+
+_LIMIT_CPP_DEF_RE = re.compile(r"^(?:(?:inline )?constexpr\b|  static constexpr\b).*?\b(kMax\w+)\s*=")
+_LIMIT_JS_DEF_RE = re.compile(r"^(?:export )?const\s+(MAX_\w+)\s*=")
+_LIMIT_PY_DEF_RE = re.compile(r"^(_\w*_CAP)\s*=")
+_LIMIT_TAG_RE = re.compile(r"(?://|#)\s*@limit:\s*(\S*)")
+_LIMIT_CPP_NAME_RE = re.compile(r"\bkMax\w+\b")
+_LIMIT_JS_NAME_RE = re.compile(r"\bMAX_\w+\b")
+_LIMIT_PY_NAME_RE = re.compile(r"\b_\w*_CAP\b")
+_LIMIT_ERROR_HELPER_RE = re.compile(r"\b(?:make_error|invalid_argument|invalid|set_binding_error|group_error)\s*\(")
+_LIMIT_RESOURCE_CODE_RE = re.compile(r"\bkSecurityResourceLimit\b|\bFM_STATUS_SECURITY_RESOURCE_LIMIT\b")
+_LIMIT_FACADE_CODE_RE = re.compile(r"StatusCode\.(?:SecurityResourceLimit|SECURITY_RESOURCE_LIMIT)\b")
+_LIMIT_BUDGET_RE = re.compile(r"\bResourceBudget(?:\s+\w+)?\s*[({]")
+_LIMIT_CPP_WINDOW = 6
+_LIMIT_FACADE_WINDOW = 8
+
+
+def _limit_tag_for(lines: list[str], idx: int) -> tuple[str | None, bool]:
+    """Returns (tag value, present) from the definition line or the one above."""
+    above = lines[idx - 1].lstrip() if idx > 0 else ""
+    for text in (lines[idx], above if above.startswith(("//", "#")) else ""):
+        match = _LIMIT_TAG_RE.search(text)
+        if match:
+            return match.group(1), True
+    return None, False
+
+
+def _limit_call_args(code: list[str], idx: int, start: int) -> tuple[str, int]:
+    """Returns the text between the bracket at (idx, start) and its match, and the arg count."""
+    text = "\n".join(code[idx : idx + 4])[start:]
+    depth, commas, body = 0, 0, []
+    for ch in text:
+        if ch in "({[":
+            depth += 1
+            if depth == 1:
+                continue
+        elif ch in ")}]":
+            depth -= 1
+            if depth == 0:
+                break
+        elif ch == "," and depth == 1:
+            commas += 1
+        body.append(ch)
+    return "".join(body), commas + 1
+
+
+def limit_origin_violations(sources: dict[str, str]) -> list[str]:
+    """Checks the origin-tag rules over `{relative path: text}`; the language follows the suffix."""
+    kinds: dict[str, str] = {}
+    for rel in sources:
+        suffix = Path(rel).suffix
+        kinds[rel] = "cpp" if suffix in SOURCE_SUFFIXES else "js" if suffix == ".mjs" else "py"
+    def_res = {"cpp": _LIMIT_CPP_DEF_RE, "js": _LIMIT_JS_DEF_RE, "py": _LIMIT_PY_DEF_RE}
+    name_res = {"cpp": _LIMIT_CPP_NAME_RE, "js": _LIMIT_JS_NAME_RE, "py": _LIMIT_PY_NAME_RE}
+
+    hits: list[str] = []
+    raw: dict[str, list[str]] = {}
+    local: dict[str, dict[str, str]] = {}
+    shared: dict[str, str] = {}
+    definitions: set[tuple[str, int]] = set()
+    for rel, text in sources.items():
+        raw[rel] = text.splitlines()
+        local[rel] = {}
+        for idx, line in enumerate(raw[rel]):
+            match = def_res[kinds[rel]].match(line)
+            if not match:
+                continue
+            definitions.add((rel, idx))
+            name = match.group(1)
+            tag, present = _limit_tag_for(raw[rel], idx)
+            if not present:
+                hits.append(f"{rel}:{idx + 1}: {name} has no `@limit:` tag")
+            elif tag not in LIMIT_TAGS:
+                hits.append(f"{rel}:{idx + 1}: {name} has unknown `@limit: {tag}` (use engine|excel|format|internal)")
+            else:
+                local[rel][name] = tag
+                shared.setdefault(name, tag)
+
+    for rel, lines in raw.items():
+        kind = kinds[rel]
+        code = _blank_comments_and_strings("\n".join(lines)).splitlines() if kind == "cpp" else lines
+        for idx, line in enumerate(code):
+            if (rel, idx) in definitions or (kind != "cpp" and line.lstrip().startswith(("//", "#"))):
+                continue
+            for name in dict.fromkeys(name_res[kind].findall(line)):
+                tag = local[rel].get(name) or shared.get(name)
+                if tag not in ("engine", "excel", "format"):
+                    continue
+                where = f"{rel}:{idx + 1}: {name}"
+                esc = re.escape(name)
+                comparison = re.search(rf"(?<![<>\-])[<>]=?\s*{esc}\b|\b{esc}\s*(?:[<>]=?)(?![<>])", line)
+                if kind != "cpp":
+                    window = "\n".join(lines[idx : idx + _LIMIT_FACADE_WINDOW + 1])
+                    if tag == "engine" and comparison and not _LIMIT_FACADE_CODE_RE.search(window):
+                        hits.append(
+                            f"{where} (engine) is compared without StatusCode.SecurityResourceLimit "
+                            f"within {_LIMIT_FACADE_WINDOW} lines"
+                        )
+                    continue
+                clamp = re.search(
+                    rf"\b(?:std::)?(?:min|clamp)\s*(?:<[^>()]*>)?\s*\([^;]*\b{esc}\b|\.resize\(\s*{esc}\b", line
+                )
+                budget = _LIMIT_BUDGET_RE.search(line)
+                if budget and name not in line[budget.end() - 1 :]:
+                    budget = None
+                window = "\n".join(code[idx : idx + _LIMIT_CPP_WINDOW + 1])
+                if tag == "engine":
+                    if clamp:
+                        hits.append(f"{where} (engine) clamps instead of refusing with kSecurityResourceLimit")
+                    if budget:
+                        _, argc = _limit_call_args(code, idx, budget.end() - 1)
+                        if argc > 2:
+                            hits.append(f"{where} (engine) is a ResourceBudget ceiling with a third argument")
+                    elif comparison and not clamp:
+                        helper = None
+                        for j in range(idx, min(idx + _LIMIT_CPP_WINDOW + 1, len(code))):
+                            helper = _LIMIT_ERROR_HELPER_RE.search(code[j])
+                            if helper:
+                                call = "\n".join(code[j : j + 4])[helper.start() :].split(";", 1)[0]
+                                if not _LIMIT_RESOURCE_CODE_RE.search(call):
+                                    hits.append(
+                                        f"{where} (engine) is followed by a refusal other than "
+                                        f"kSecurityResourceLimit (line {j + 1})"
+                                    )
+                                break
+                elif (comparison or budget or clamp) and _LIMIT_RESOURCE_CODE_RE.search(window):
+                    hits.append(f"{where} ({tag}) is followed by kSecurityResourceLimit")
+    return hits
+
+
+def check_limit_origin() -> bool:
+    sources: dict[str, str] = {}
+    for path in sorted(SRC_ROOT.rglob("*")):
+        if path.suffix in SOURCE_SUFFIXES:
+            sources[path.relative_to(REPO_ROOT).as_posix()] = path.read_text(encoding="utf-8")
+    for rel in _LIMIT_JS_FILES:
+        sources[rel] = (REPO_ROOT / rel).read_text(encoding="utf-8")
+    for path in sorted((REPO_ROOT / _LIMIT_PY_DIR).glob("*.py")):
+        sources[path.relative_to(REPO_ROOT).as_posix()] = path.read_text(encoding="utf-8")
+    return _report(
+        "limit-origin",
+        limit_origin_violations(sources),
+        "Tag every ceiling `// @limit: engine|excel|format|internal` (`# @limit:` in Python).\n"
+        "engine: refused with kSecurityResourceLimit, never clamped; excel/format: never\n"
+        "kSecurityResourceLimit. Fix the code or the tag; there is no allow-list.",
+    )
+
+
 CHECKS = {
     "array-alloc": check_array_alloc,
     "xml-passthrough": check_xml_passthrough,
     "layers": check_layers,
+    "limit-origin": check_limit_origin,
 }
 
 

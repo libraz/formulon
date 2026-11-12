@@ -43,6 +43,7 @@ namespace cli {
 namespace {
 
 /// Largest worker count `--threads` accepts.
+// @limit: engine
 constexpr std::uint32_t kMaxRecalcThreads = 8U;
 
 void print_recalc_usage(std::ostream& out) {

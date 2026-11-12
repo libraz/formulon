@@ -223,7 +223,7 @@ class Gatherer {
   /// populated part is read and charged against the cell budget.
   bool build_levels(const SheetRect& r, bool hide, Cache& cache) const {
     const SheetRect t = trim_to_populated(wb_, r);
-    ResourceBudget cells(kMaxRangeExpansionCells);
+    ResourceBudget cells(kMaxRangeExpansionCells, "chart_range_cells");
     if (!cells.consume(cell_count(t))) {
       return false;
     }
@@ -269,7 +269,7 @@ class Gatherer {
                std::uint64_t& point_count) const {
     std::vector<SheetRect> trimmed;
     trimmed.reserve(areas.size());
-    ResourceBudget cells(kMaxRangeExpansionCells);
+    ResourceBudget cells(kMaxRangeExpansionCells, "chart_range_cells");
     for (const SheetRect& area : areas) {
       trimmed.push_back(trim_to_populated(wb_, area));
       if (!cells.consume(cell_count(trimmed.back()))) {

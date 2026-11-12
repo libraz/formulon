@@ -35,6 +35,7 @@ using namespace detail;
 namespace {
 
 // Formulas nested deeper than this, a cycle included, evaluate to #REF!.
+// @limit: internal
 constexpr std::size_t kMaxCalculatedDepth = 64;
 
 /// Every per-data-field vector of `result`.

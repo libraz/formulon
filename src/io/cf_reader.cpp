@@ -594,11 +594,13 @@ std::optional<std::uint32_t> RegisterDxf(DifferentialFormat dxf, std::vector<Dif
 
 /// Reads an `<x14:cfRule>` Excel stores in the extension alone (a rule naming
 /// another sheet, a custom icon set) into the model, or nothing when the
-/// model cannot hold it. Its inline `<x14:dxf>` joins `dxfs` when given.
-std::optional<cf::CFRule> ReadX14OnlyRule(const pugi::xml_node& rule, std::vector<DifferentialFormat>* dxfs) {
+/// model cannot hold it. Its inline `<x14:dxf>` joins `dxfs` when given; one
+/// the styles reader refuses fails the read.
+Expected<std::optional<cf::CFRule>, Error> ReadX14OnlyRule(const pugi::xml_node& rule,
+                                                           std::vector<DifferentialFormat>* dxfs) {
   const std::string_view type = attr_str(rule, "type");
   if (!IsModelledRuleType(type)) {
-    return std::nullopt;
+    return std::optional<cf::CFRule>();
   }
   cf::CFRule out;
   ReadCfRuleAttributes(rule, &out);
@@ -606,7 +608,7 @@ std::optional<cf::CFRule> ReadX14OnlyRule(const pugi::xml_node& rule, std::vecto
   if (out.type == cf::RuleType::ColorScale) {
     const pugi::xml_node scale = rule.child("x14:colorScale");
     if (!scale) {
-      return std::nullopt;
+      return std::optional<cf::CFRule>();
     }
     cf::ColorScaleSpec spec;
     for (pugi::xml_node child = scale.first_child(); child; child = child.next_sibling()) {
@@ -618,12 +620,12 @@ std::optional<cf::CFRule> ReadX14OnlyRule(const pugi::xml_node& rule, std::vecto
       }
     }
     out.color_scale = std::move(spec);
-    return out;
+    return std::optional<cf::CFRule>(std::move(out));
   }
   if (out.type == cf::RuleType::DataBar) {
     const pugi::xml_node bar = rule.child("x14:dataBar");
     if (!bar) {
-      return std::nullopt;
+      return std::optional<cf::CFRule>();
     }
     cf::DataBarSpec spec;
     bool min_read = false;
@@ -638,12 +640,12 @@ std::optional<cf::CFRule> ReadX14OnlyRule(const pugi::xml_node& rule, std::vecto
     spec.show_value = attr_bool(bar, "showValue", spec.show_value);
     ApplyX14DataBarOverlay(bar, &spec);
     out.data_bar = std::move(spec);
-    return out;
+    return std::optional<cf::CFRule>(std::move(out));
   }
   if (out.type == cf::RuleType::IconSet) {
     const pugi::xml_node iset = rule.child("x14:iconSet");
     if (!iset || !x14_cf_rule_model_can_hold(rule)) {
-      return std::nullopt;
+      return std::optional<cf::CFRule>();
     }
     cf::IconSetSpec spec;
     spec.name = ParseIconSetName(attr_str(iset, "iconSet"));
@@ -657,7 +659,7 @@ std::optional<cf::CFRule> ReadX14OnlyRule(const pugi::xml_node& rule, std::vecto
     }
     spec.custom_icons = ReadX14CfIcons(iset);
     out.icon_set = std::move(spec);
-    return out;
+    return std::optional<cf::CFRule>(std::move(out));
   }
   std::size_t formula_idx = 0;
   for (pugi::xml_node f : rule.children("xm:f")) {
@@ -671,9 +673,10 @@ std::optional<cf::CFRule> ReadX14OnlyRule(const pugi::xml_node& rule, std::vecto
     ++formula_idx;
   }
   if (const pugi::xml_node dxf = rule.child("x14:dxf"); dxf && dxfs != nullptr) {
-    out.dxf_id = RegisterDxf(read_dxf(dxf), dxfs);
+    ASSIGN_OR_RETURN(DifferentialFormat format, read_dxf(dxf));
+    out.dxf_id = RegisterDxf(std::move(format), dxfs);
   }
-  return out;
+  return std::optional<cf::CFRule>(std::move(out));
 }
 
 // Drops the qualifier that resolves to the CF's own sheet, as Excel does on load.
@@ -793,7 +796,7 @@ Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(con
         if (id.empty() || !rule.attribute("priority") || linked.count(id) != 0U) {
           continue;
         }
-        std::optional<cf::CFRule> parsed = ReadX14OnlyRule(rule, dxfs);
+        ASSIGN_OR_RETURN(std::optional<cf::CFRule> parsed, ReadX14OnlyRule(rule, dxfs));
         if (!parsed.has_value()) {
           continue;
         }

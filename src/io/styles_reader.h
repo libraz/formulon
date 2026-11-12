@@ -22,8 +22,10 @@ namespace formulon {
 namespace io {
 
 /// Decodes one `CT_Dxf` element: a `<dxf>` of the `<dxfs>` table, or the
-/// inline `<x14:dxf>` of an extension-only conditional-format rule.
-DifferentialFormat read_dxf(const pugi::xml_node& dxf);
+/// inline `<x14:dxf>` of an extension-only conditional-format rule. Fails with
+/// `kSecurityResourceLimit` when a gradient fill holds more stops than
+/// `kMaxGradientStops`.
+Expected<DifferentialFormat, Error> read_dxf(const pugi::xml_node& dxf);
 
 /// Parses an OOXML styles part.
 ///

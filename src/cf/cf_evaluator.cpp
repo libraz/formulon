@@ -31,6 +31,7 @@
 #include "utils/error.h"
 #include "utils/index_sort.h"
 #include "utils/rect_iterator.h"
+#include "utils/resource_budget.h"
 #include "value.h"
 
 namespace formulon::cf {
@@ -186,9 +187,10 @@ struct PreparedCfEvaluator::Impl {
   }
 
   Error resource_error(CellAddress target) const {
-    return make_error(
-        FormulonErrorCode::kSecurityResourceLimit, "conditional-format formula evaluation exhausted its arena budget",
-        "cell=" + a1::encode_a1(target.row, target.col) + " ceiling=" + std::to_string(formula_cache.available_bytes));
+    return make_error(FormulonErrorCode::kSecurityResourceLimit,
+                      "conditional-format formula evaluation exhausted its arena budget",
+                      "part=cf_formula_arena limit=" + std::to_string(formula_cache.available_bytes) +
+                          " cell=" + a1::encode_a1(target.row, target.col));
   }
 
   Expected<std::vector<CFMatch>, Error> evaluate(CellAddress target) {
@@ -296,7 +298,7 @@ Expected<std::vector<CFRangeCellMatches>, Error> evaluate_cf_for_range(const She
   if (request.size() > kCfMaxViewportCells) {
     return make_error(FormulonErrorCode::kSecurityResourceLimit,
                       "conditional-format range exceeds the viewport ceiling",
-                      "cells=" + std::to_string(request.size()) + " ceiling=" + std::to_string(kCfMaxViewportCells));
+                      limit_context("cf_viewport_cells", request.size(), kCfMaxViewportCells));
   }
 
   std::vector<CFRangeCellMatches> results;

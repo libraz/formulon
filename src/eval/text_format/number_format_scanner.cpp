@@ -407,6 +407,7 @@ std::size_t scan_run_exact(std::string_view fmt, std::size_t& i, char letter) no
 namespace {
 
 // Highest index the indexed form accepts; `Color57` is rejected.
+// @limit: excel
 constexpr int kMaxColorIndex = 56;
 
 // Reads one decimal digit at `body[i]`, accepting the ASCII digits and their

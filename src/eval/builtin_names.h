@@ -25,6 +25,7 @@ class Arena;
 namespace eval {
 
 /// Most arguments a call may be written with, whatever the callee.
+// @limit: excel
 inline constexpr std::uint32_t kMaxCallArguments = 255U;
 
 /// Returns the canonical UPPERCASE name of the built-in `name` refers to

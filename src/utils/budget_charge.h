@@ -25,8 +25,8 @@
 
 namespace formulon {
 
-/// Charges `count` work units to `budget`, prepending `context` to the
-/// budget's own `used/requested/ceiling` diagnostics when the ceiling is hit.
+/// Charges `count` work units to `budget`, appending `context` after the
+/// budget's own `part/requested/limit/used` diagnostics when the ceiling is hit.
 /// The caller's context is what makes an exceeded ceiling attributable to a
 /// specific record, anchor or formula rather than to the engine at large.
 inline Expected<void, Error> charge(ResourceBudget& budget, std::uint64_t count, std::string context) {
@@ -34,13 +34,11 @@ inline Expected<void, Error> charge(ResourceBudget& budget, std::uint64_t count,
   if (charged) {
     return Expected<void, Error>::Ok();
   }
-  const std::string_view budget_context = charged.error().context;
-  if (!context.empty() && !budget_context.empty()) {
-    context.push_back(' ');
-  }
-  context.append(budget_context);
   Error error = std::move(charged.error());
-  error.context = std::move(context);
+  if (!context.empty()) {
+    error.context.push_back(' ');
+    error.context.append(context);
+  }
   return error;
 }
 
@@ -60,7 +58,7 @@ Expected<void, Error> charge_then_reserve(ResourceBudget& budget, Container& con
     // container (the WASM main build), so reject before either step runs.
     if (count > static_cast<std::uint64_t>(std::numeric_limits<std::size_t>::max())) {
       return make_error(FormulonErrorCode::kSecurityResourceLimit, "reserve count exceeds addressable size",
-                        context + " requested=" + std::to_string(count));
+                        limit_context(budget.part(), count, std::numeric_limits<std::size_t>::max()));
     }
   }
   auto charged = charge(budget, count, std::move(context));

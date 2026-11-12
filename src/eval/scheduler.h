@@ -76,6 +76,7 @@ class FunctionRegistry;
 
 /// Largest accepted worker count; matches the WASM `PTHREAD_POOL_SIZE` the
 /// build reserves, so behaviour is consistent across native and browser runtimes.
+// @limit: engine
 inline constexpr std::uint32_t kMaxSchedulerThreads = 8U;
 
 /// Scheduler tuning knobs. Default-constructed values pick automatic

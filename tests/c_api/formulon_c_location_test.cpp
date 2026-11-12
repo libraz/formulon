@@ -112,7 +112,6 @@ TEST_F(FormulonCApiLocation, ReadsBackTheCanonicalFormAsAFixedPoint) {
 TEST_F(FormulonCApiLocation, EveryRefusalIsInvalidArgumentAndChangesNothing) {
   ASSERT_EQ(Set(wb(), "/keep", "Keep.xlsx"), 0);
   const std::string long_name = std::string(214, 'n') + ".xlsx";
-  const std::string long_directory = "/" + std::string(1017, 'd');
   struct Row {
     const char* directory;
     const char* file_name;
@@ -135,7 +134,6 @@ TEST_F(FormulonCApiLocation, EveryRefusalIsInvalidArgumentAndChangesNothing) {
       {"/a\xFF", "b.xlsx"},
       {"/a/../b", "b.xlsx"},
       {"/a//b", "b.xlsx"},
-      {long_directory.c_str(), "b.xlsx"},
   };
   for (const Row& row : rows) {
     EXPECT_EQ(Set(wb(), row.directory, row.file_name), kInvalidArgument) << row.directory << " | " << row.file_name;
@@ -143,6 +141,16 @@ TEST_F(FormulonCApiLocation, EveryRefusalIsInvalidArgumentAndChangesNothing) {
     EXPECT_EQ(kept.directory, "/keep");
     EXPECT_EQ(kept.file_name, "Keep.xlsx");
   }
+}
+
+TEST_F(FormulonCApiLocation, APathPast1024BytesIsAResourceLimitAndChangesNothing) {
+  ASSERT_EQ(Set(wb(), "/keep", "Keep.xlsx"), 0);
+  const std::string long_directory = "/" + std::string(1017, 'd');
+  EXPECT_EQ(Set(wb(), long_directory.c_str(), "b.xlsx"), FM_STATUS_SECURITY_RESOURCE_LIMIT);
+  EXPECT_STREQ(fm_get_last_error_context(), "part=location_path requested=1025 limit=1024");
+  const Location kept = Read(wb());
+  EXPECT_EQ(kept.directory, "/keep");
+  EXPECT_EQ(kept.file_name, "Keep.xlsx");
 }
 
 TEST_F(FormulonCApiLocation, CellFilenameAndAddressFollowTheLocation) {

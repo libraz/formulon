@@ -263,6 +263,7 @@ class Arena {
     alignas(std::max_align_t) unsigned char data[1];
   };
 
+  // @limit: internal
   static constexpr std::size_t kMaxChunkBytes = 1u << 20;  // 1 MiB
 
   static void* try_allocate_in(Chunk* c, std::size_t bytes, std::size_t alignment) noexcept {

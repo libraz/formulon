@@ -502,6 +502,7 @@ Value LognormInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 //     treats the infeasible-but-non-negative branch as measure-zero
 //     rather than malformed input.
 // Exclusive upper bound of every floored HYPGEOM.DIST count.
+// @limit: excel
 constexpr double kMaxCount = 2147483647.0;
 
 Value HypgeomDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {

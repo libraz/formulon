@@ -879,5 +879,26 @@ TEST(PivotAggregator, SumResultModePreservesItsZeroSeed) {
   EXPECT_TRUE(std::signbit(state_sum.as_number()));    // The state path seeds from its first number.
 }
 
+TEST(PivotEvaluatorBudget, ALeafMatrixPastTheResultCellCeilingNamesThePivotResultCellsPart) {
+  // 2049 distinct row labels by 2049 distinct column labels: 4,198,401 result cells, past 2^22.
+  constexpr std::size_t kLeaves = 2049U;
+  PivotCache cache;
+  cache.set_cache_id(1);
+  cache.mutable_fields().push_back(PivotCacheField{"Region", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Product", {}});
+  cache.mutable_fields().push_back(PivotCacheField{"Amount", {}});
+  for (std::size_t i = 0; i < kLeaves; ++i) {
+    PivotCacheRecord rec;
+    rec.cells.push_back(owned_text(cache, "r" + std::to_string(i)));
+    rec.cells.push_back(owned_text(cache, "c" + std::to_string(i)));
+    rec.cells.push_back(Value::number(1.0));
+    cache.mutable_records().push_back(std::move(rec));
+  }
+  auto result = evaluate(build_sum_amount_table({0}, {1}), cache);
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kSecurityResourceLimit);
+  EXPECT_EQ(result.error().context, "part=pivot_result_cells requested=4198401 limit=4194304 used=0");
+}
+
 }  // namespace
 }  // namespace formulon::pivot
