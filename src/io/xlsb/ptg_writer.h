@@ -257,8 +257,12 @@ struct EncodedFormula {
 /// Names already present in `seen` are skipped (both to dedupe and so
 /// callers can pre-seed `seen` with names that already have an assigned
 /// `ilbl`, e.g. from the workbook's existing defined-name table).
+///
+/// `implied_intersections` (`legacy_intersections` of a legacy cell formula) lists the `@` nodes the encoder drops;
+/// they need no hidden SINGLE name.
 void collect_ptg_names(const parser::AstNode& node, std::vector<std::string>& names, NameSet& seen,
-                       const std::vector<const parser::AstNode*>* function_values = nullptr);
+                       const std::vector<const parser::AstNode*>* function_values = nullptr,
+                       const std::vector<const parser::AstNode*>* implied_intersections = nullptr);
 
 /// `collect_ptg_names` without the self-book `[0]!Rate`: every name the
 /// formula resolves from its own scope.

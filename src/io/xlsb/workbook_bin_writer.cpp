@@ -113,10 +113,13 @@ bool HasUniqueWideKey(const NameSet& keys, std::string_view key) {
 /// workbook-scope record of its own rather than an ordinal borrowed from
 /// another sheet's definition, which would read back as that sheet's
 /// qualified name. Every sheet-qualified reference is appended to
-/// `qualified` as `(sheet, name)`.
+/// `qualified` as `(sheet, name)`. `legacy_shapes` is non-null for a cell
+/// formula encoded in the legacy form; the `@` nodes that form drops need no
+/// hidden SINGLE name.
 void CollectNamesFromFormula(std::string_view formula, std::int32_t scope_sheet_id, const DefinedScopes& defined_scopes,
                              std::vector<std::string>& names, NameSet& seen, std::vector<std::string>& invisible,
-                             NameSet& invisible_seen, std::vector<std::pair<std::string, std::string>>& qualified) {
+                             NameSet& invisible_seen, std::vector<std::pair<std::string, std::string>>& qualified,
+                             const NameShapes* legacy_shapes = nullptr) {
   formula = strip_formula_prefix(formula);
   Arena arena;
   parser::Parser p(formula, arena);
@@ -139,7 +142,9 @@ void CollectNamesFromFormula(std::string_view formula, std::int32_t scope_sheet_
     return shape;
   };
   const std::vector<const parser::AstNode*> function_values = function_value_refs(*root, visible_names);
-  collect_ptg_names(*root, names, seen, &function_values);
+  const std::vector<const parser::AstNode*> implied =
+      legacy_shapes != nullptr ? legacy_intersections(*root, *legacy_shapes) : std::vector<const parser::AstNode*>{};
+  collect_ptg_names(*root, names, seen, &function_values, &implied);
   collect_sheet_qualified_names(*root, qualified);
   std::vector<std::string> referenced;
   NameSet referenced_seen;
@@ -161,7 +166,9 @@ void CollectNamesFromFormula(std::string_view formula, std::int32_t scope_sheet_
 /// Calls `visit` with the text (no leading `=`) of every formula a sheet
 /// part carries: cell formulas in row-major order, as Excel numbers their
 /// entries, then conditional-format rule and threshold formulas, and
-/// data-validation formulas. The name and ExternSheet tables are both built
+/// data-validation formulas. The second argument is true for a cell formula
+/// the writer encodes in the legacy form (not dynamic-array, not a CSE block,
+/// not a spill anchor). The name and ExternSheet tables are both built
 /// over this one walk, so every formula the sheet writer encodes finds its
 /// entries.
 template <typename Visit>
@@ -174,16 +181,16 @@ void ForEachSheetFormula(const Sheet& sheet, Visit&& visit) {
   sort_ascending(rows);
   for (const std::uint32_t row : rows) {
     for (const auto& [col, cell] : sheet.rows().at(row)) {
-      (void)col;
       const std::string_view body = strip_formula_prefix(cell.formula_text);
       if (!body.empty()) {
-        visit(body);
+        visit(body,
+              !cell.dynamic_array && cell.array_block_rows == 0U && sheet.spill_region_at_anchor(row, col) == nullptr);
       }
     }
   }
   const auto visit_text = [&visit](const std::string& text) {
     if (!text.empty()) {
-      visit(std::string_view(text));
+      visit(std::string_view(text), false);
     }
   };
   const auto visit_cfvo = [&visit_text](const cf::CfValueObject& v) {
@@ -272,9 +279,10 @@ void BuildOrderedNames(const Workbook& wb, std::vector<OrderedName>& ordered_nam
                             qualified);
   }
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
-    ForEachSheetFormula(wb.sheet(i), [&](std::string_view formula) {
+    const NameShapes legacy_shapes = name_shapes(wb, i);
+    ForEachSheetFormula(wb.sheet(i), [&](std::string_view formula, bool legacy) {
       CollectNamesFromFormula(formula, static_cast<std::int32_t>(i), defined_scopes, names, seen, invisible,
-                              invisible_seen, qualified);
+                              invisible_seen, qualified, legacy ? &legacy_shapes : nullptr);
     });
   }
   ForEachTableFormula(wb, [&](std::string_view formula, std::size_t sheet_index) {
@@ -513,7 +521,7 @@ Expected<SheetRangeTable, Error> BuildSheetRangeTable(const Workbook& wb, const 
     CollectSheetRangesFromFormula(dn.formula, sheet_names, collected, seen);
   }
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
-    ForEachSheetFormula(wb.sheet(i), [&](std::string_view formula) {
+    ForEachSheetFormula(wb.sheet(i), [&](std::string_view formula, bool) {
       CollectSheetRangesFromFormula(formula, sheet_names, collected, seen);
     });
   }

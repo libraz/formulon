@@ -108,6 +108,25 @@ TEST(XlsbParityClaims, LegacyCfRuleRecordsMatchExcel) {
   EXPECT_EQ(ours, excel);
 }
 
+// A legacy cell formula whose `@` stands where Excel's own intersection does is written without it, so the workbook
+// carries no hidden SINGLE name for it; Excel's names part has the defined name alone.
+TEST(XlsbParityClaims, ImpliedIntersectionDeclaresNoHiddenName) {
+  constexpr std::uint16_t kBrtName = 39;
+  const auto names = [](const std::vector<std::uint8_t>& part) {
+    std::vector<std::vector<std::uint8_t>> out;
+    for (const FramedRecord& rec : split_records(part)) {
+      if (rec.type == kBrtName) {
+        out.emplace_back(rec.payload.data, rec.payload.data + rec.payload.size);
+      }
+    }
+    return out;
+  };
+  const auto ours = names(Part(Converted("name_scope_zero"), "xl/workbook.bin"));
+  const auto excel = names(Part(ReadFile(Claim("name_scope_zero.xlsb")), "xl/workbook.bin"));
+  ASSERT_EQ(excel.size(), 1U);
+  EXPECT_EQ(ours, excel);
+}
+
 }  // namespace
 }  // namespace xlsb
 }  // namespace io
