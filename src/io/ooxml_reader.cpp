@@ -54,6 +54,7 @@
 #include "io/pivot_table_reader.h"
 #include "io/rich_value_errors.h"
 #include "io/sheet_overlay_reader.h"
+#include "io/sheet_phonetic.h"
 #include "io/sheet_reader.h"
 #include "io/sst_reader.h"
 #include "io/styles_reader.h"
@@ -1116,6 +1117,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   wb.set_default_content_types(std::move(default_content_types));
 
   wb.apply_legacy_implicit_intersections();
+  clamp_sheet_phonetic_fonts(wb);
 
   OoxmlReadResult result{std::move(wb), pending_sst_count, diagnostics};
   return result;

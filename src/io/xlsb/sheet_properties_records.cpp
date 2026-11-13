@@ -10,7 +10,7 @@
 #include <string_view>
 #include <utility>
 
-#include "io/phonetic_pr.h"
+#include "io/sheet_phonetic.h"
 #include "io/xlsb/brt_color.h"
 #include "io/xlsb/frt_records.h"
 #include "io/xlsb/guid_text.h"
@@ -389,34 +389,6 @@ bool decode_phonetic_info(ByteSpan payload, PhoneticProperties& out) {
   out.type = static_cast<std::uint8_t>(type_or.value());
   out.alignment = static_cast<std::uint8_t>(alignment_or.value());
   return true;
-}
-
-std::optional<PhoneticProperties> sheet_phonetic_properties(const Sheet& sheet) {
-  const auto slot = static_cast<std::uint32_t>(worksheet_child::slot_of("phoneticPr"));
-  for (const WorksheetRawChild& child : sheet.raw_extensions()) {
-    pugi::xml_document doc;
-    if (child.slot == slot && doc.load_buffer(child.xml.data(), child.xml.size()) && doc.child("phoneticPr")) {
-      return read_phonetic_properties(doc);
-    }
-  }
-  return std::nullopt;
-}
-
-void set_sheet_phonetic_properties(Sheet& sheet, const PhoneticProperties& props) {
-  std::string xml = "<phoneticPr fontId=\"" + std::to_string(props.font_id) + "\"";
-  if (props.type != 1U) {
-    append_xml_attr(xml, "type", phonetic_type_name(props.type));
-  }
-  if (props.alignment != 1U) {
-    append_xml_attr(xml, "alignment", phonetic_alignment_name(props.alignment));
-  }
-  xml.append("/>");
-  WorksheetRawExtensions& children = sheet.mutable_raw_extensions();
-  const auto slot = static_cast<std::uint32_t>(worksheet_child::slot_of("phoneticPr"));
-  children.erase(std::remove_if(children.begin(), children.end(),
-                                [slot](const WorksheetRawChild& child) { return child.slot == slot; }),
-                 children.end());
-  insert_raw_child(children, WorksheetRawChild{slot, std::move(xml)});
 }
 
 void emit_phonetic_info(std::vector<std::uint8_t>& dst, const Sheet& sheet) {

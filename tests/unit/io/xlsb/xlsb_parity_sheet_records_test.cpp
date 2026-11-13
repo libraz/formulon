@@ -10,6 +10,7 @@
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
+#include "io/sheet_phonetic.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/writer.h"
@@ -119,6 +120,39 @@ TEST(XlsbParitySheetRecords, PhoneticInfoMatchesExcel) {
 // fonts, so the sheet stays without the record and reads back without the element.
 TEST(XlsbParitySheetRecords, AbsentPhoneticWritesNoRecord) {
   EXPECT_TRUE(Payloads(Part(FromXlsx("phon_absent"), "xl/worksheets/sheet1.bin"), kBrtPhoneticInfo).empty());
+}
+
+// Excel points a phoneticPr whose fontId lies past the font table at font 0 when it loads the book, keeping type and
+// alignment; the readers do the same, so both writers match Excel's saves.
+TEST(XlsbParitySheetRecords, OutOfRangeFontClampsAtLoad) {
+  const Bytes excel_xlsx = ReadFile(Fixture("phon_font_out_of_range.xlsx"));
+  const Bytes excel_xlsb = ReadFile(Fixture("phon_font_out_of_range.xlsb"));
+  EXPECT_EQ(Payloads(Part(FromXlsx("phon_font_out_of_range"), "xl/worksheets/sheet1.bin"), kBrtPhoneticInfo),
+            Payloads(Part(excel_xlsb, "xl/worksheets/sheet1.bin"), kBrtPhoneticInfo));
+
+  auto loaded = read_ooxml(SpanOf(ReadFile(Fixture("phon_font_out_of_range_src.xlsx"))));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  auto xlsx = write_ooxml(loaded.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
+  const auto element = [](const std::string& xml) {
+    const std::size_t at = xml.find("<phoneticPr");
+    return at == std::string::npos ? std::string() : xml.substr(at, xml.find("/>", at) + 2U - at);
+  };
+  EXPECT_EQ(element(SheetXml(xlsx.value(), 1)), "<phoneticPr fontId=\"0\" type=\"Hiragana\"/>");
+  EXPECT_EQ(element(SheetXml(xlsx.value(), 1)), element(SheetXml(excel_xlsx, 1)));
+
+  // The xlsb reader applies the same rule to a record naming a font the book does not have.
+  Workbook& wb = loaded.value().workbook;
+  set_sheet_phonetic_properties(wb.sheet(0), PhoneticProperties{9U, 2U, 3U});
+  auto xlsb = write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(xlsb)) << xlsb.error().message;
+  auto reread = read_xlsb(SpanOf(xlsb.value().bytes));
+  ASSERT_TRUE(static_cast<bool>(reread)) << reread.error().message;
+  const auto props = sheet_phonetic_properties(reread.value().workbook.sheet(0));
+  ASSERT_TRUE(props.has_value());
+  EXPECT_EQ(props->font_id, 0U);
+  EXPECT_EQ(props->type, 2U);
+  EXPECT_EQ(props->alignment, 3U);
 }
 
 // A stated uid is written as stated; a sheet without one gets the uid Excel assigns from its position.

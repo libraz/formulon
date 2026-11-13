@@ -16,6 +16,7 @@
 #include "io/array_anchor_budget.h"
 #include "io/protection_xml.h"
 #include "io/rich_value_errors.h"
+#include "io/sheet_phonetic.h"
 #include "io/sheet_reader.h"
 #include "io/xlsb/cf_records.h"
 #include "io/xlsb/dv_records.h"

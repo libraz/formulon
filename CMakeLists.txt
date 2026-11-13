@@ -194,6 +194,7 @@ set(FORMULON_CORE_SOURCES
   src/io/sparkline_groups.cpp
   src/io/sqref_text.cpp
   src/io/protection_xml.cpp
+  src/io/sheet_phonetic.cpp
   src/io/worksheet_child_refs.cpp
   src/io/future_functions.cpp
   src/io/ooxml_reader.cpp

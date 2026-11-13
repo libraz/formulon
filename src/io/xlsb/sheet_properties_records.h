@@ -63,14 +63,6 @@ void emit_ws_prop(std::vector<std::uint8_t>& dst, const Sheet& sheet);
 /// other shape or an ordinal past 3.
 bool decode_phonetic_info(ByteSpan payload, PhoneticProperties& out);
 
-/// The sheet's `<phoneticPr>`, when its raw children hold one.
-std::optional<PhoneticProperties> sheet_phonetic_properties(const Sheet& sheet);
-
-/// Stores `props` as the sheet's `<phoneticPr>` child, written as Excel
-/// writes it: `fontId`, then `type` and `alignment` only where they differ
-/// from the schema defaults.
-void set_sheet_phonetic_properties(Sheet& sheet, const PhoneticProperties& props);
-
 /// Emits `BrtPhoneticInfo` for the sheet's `<phoneticPr>`; nothing for a
 /// sheet without one.
 void emit_phonetic_info(std::vector<std::uint8_t>& dst, const Sheet& sheet);

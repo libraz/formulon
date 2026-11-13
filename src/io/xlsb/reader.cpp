@@ -41,6 +41,7 @@
 #include "io/ooxml_defs.h"
 #include "io/pivot_table_reader.h"
 #include "io/rich_value_errors.h"
+#include "io/sheet_phonetic.h"
 #include "io/xlsb/drawing_record.h"
 #include "io/xlsb/external_link_reader.h"
 #include "io/xlsb/metadata_bin.h"
@@ -997,6 +998,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   ooxml::remove_orphans(wb, std::move(orphaned));
 
   wb.apply_legacy_implicit_intersections();
+  clamp_sheet_phonetic_fonts(wb);
 
   XlsbReadResult result{std::move(wb),
                         cells_read,
