@@ -437,6 +437,7 @@ TEST(WorkbookCopySheet, VeryHiddenRefused) {
 
 // Copies `sheet` and expects a kNotImplemented refusal that leaves the saved
 // package byte-identical.
+// `what` is the refusal reason the copy reports (`Error::context`).
 void ExpectRefused(Workbook& wb, std::size_t sheet, const char* what) {
   auto before = wb.save();
   ASSERT_TRUE(static_cast<bool>(before)) << what;
@@ -444,6 +445,7 @@ void ExpectRefused(Workbook& wb, std::size_t sheet, const char* what) {
   auto copy = wb.copy_sheet(sheet, sheet + 1U, std::nullopt);
   ASSERT_FALSE(static_cast<bool>(copy)) << what;
   EXPECT_EQ(copy.error().code, FormulonErrorCode::kNotImplemented) << what << ": " << copy.error().message;
+  EXPECT_EQ(copy.error().context, what);
   EXPECT_EQ(wb.sheet_count(), count) << what;
   auto after = wb.save();
   ASSERT_TRUE(static_cast<bool>(after)) << what;
@@ -468,7 +470,7 @@ TEST(WorkbookCopySheet, UnsupportedRefusedWithoutChange) {
     wb.sheet(kSrc).set_unknown_relationships(
         {UnknownRelationship{"rId9", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/ctrlProp",
                              "../ctrlProps/ctrlProp1.xml", false}});
-    ExpectRefused(wb, kSrc, "unknown relationship");
+    ExpectRefused(wb, kSrc, "unrecognised relationship");
   }
   {
     Workbook wb = LoadCopyFixture("main.xlsx");
@@ -477,7 +479,7 @@ TEST(WorkbookCopySheet, UnsupportedRefusedWithoutChange) {
         ToBytes("<chartsheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"/>")))));
     wb.sheet(kOther).set_opaque_ooxml_sheet(
         "xl/chartsheets/sheet1.xml", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet");
-    ExpectRefused(wb, kOther, "opaque sheet");
+    ExpectRefused(wb, kOther, "not a worksheet");
   }
   {
     Workbook wb = Workbook::create();
@@ -490,7 +492,7 @@ TEST(WorkbookCopySheet, UnsupportedRefusedWithoutChange) {
         PassthroughPart("xl/drawings/drawing1.xml", "application/vnd.openxmlformats-officedocument.drawing+xml",
                         ToBytes(DrawingWith(shape))))));
     wb.sheet(0).set_drawing_rel_target("xl/drawings/drawing1.xml");
-    ExpectRefused(wb, 0, "shape");
+    ExpectRefused(wb, 0, "shape, group, connector, text box or other frame");
   }
   {
     Workbook wb = LoadCopyFixture("main.xlsx");
@@ -503,11 +505,12 @@ TEST(WorkbookCopySheet, UnsupportedRefusedWithoutChange) {
     ExpectRefused(wb, kSrc, "pivot chart");
   }
   {
-    // The slicer relationship alone already refuses; without it the frame does.
+    // The slicer relationship alone already refuses; without it the slicer's
+    // graphic frame is an unmodelled frame and refuses as one.
     Workbook wb = Load("excel", "table_slicer.xlsx");
-    ExpectRefused(wb, 0, "slicer relationship");
+    ExpectRefused(wb, 0, "unrecognised relationship");
     wb.sheet(0).set_unknown_relationships({});
-    ExpectRefused(wb, 0, "slicer");
+    ExpectRefused(wb, 0, "shape, group, connector, text box or other frame");
   }
   {
     // An .xlsb drawing the reader could not lift stays an unmodelled
@@ -519,7 +522,7 @@ TEST(WorkbookCopySheet, UnsupportedRefusedWithoutChange) {
     rels.push_back(UnknownRelationship{"rId9", std::string(io::kRelDrawing), sheet.drawing_rel_target(), false});
     sheet.set_unknown_relationships(std::move(rels));
     sheet.set_drawing_rel_target(std::string());
-    ExpectRefused(wb, 0, "xlsb sheet with an unlifted drawing");
+    ExpectRefused(wb, 0, "unrecognised relationship");
   }
 }
 

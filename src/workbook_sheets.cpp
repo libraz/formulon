@@ -26,6 +26,7 @@
 #include "sheet.h"
 #include "sheet_name.h"
 #include "table.h"
+#include "unknown_relationship.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/resource_budget.h"
@@ -399,10 +400,16 @@ Expected<void, Error> Workbook::remove_sheet_locked(std::uint32_t index) {
     pre_removal_sheet_order.push_back(sheet.name());
   }
 
-  // Resolved before the sheet leaves: its chart parts are cleaned up after the erase.
-  std::vector<std::string> drawing_candidates;
+  // Resolved before the sheet leaves: its drawing and the parts its unrecognised
+  // relationships name are dropped after the erase unless something else still links them.
+  std::vector<std::string> orphan_candidates;
   if (auto drawing = sheet_drawing_path(*this, index); drawing && !drawing.value().empty()) {
-    drawing_candidates.push_back(drawing.value());
+    orphan_candidates.push_back(drawing.value());
+  }
+  for (const UnknownRelationship& rel : sheets_[index].unknown_relationships()) {
+    if (!rel.target_external) {
+      orphan_candidates.push_back(rel.target);
+    }
   }
 
   // Decided before any formula is rewritten: the removed sheet's own cells would otherwise count.
@@ -520,7 +527,7 @@ Expected<void, Error> Workbook::remove_sheet_locked(std::uint32_t index) {
   if (removes_active) {
     set_active_sheet(old_to_new[index]);
   }
-  io::ooxml::remove_orphans(*this, std::move(drawing_candidates));
+  io::ooxml::remove_orphans(*this, std::move(orphan_candidates));
   reindex_all_formulas(sheets_, mutator, *this);
   return Expected<void, Error>::Ok();
 }

@@ -13,10 +13,14 @@
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/protection_xml.h"
+#include "io/xlsb/reader.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
+#include "passthrough_part.h"
 #include "sheet.h"
+#include "unknown_relationship.h"
 #include "workbook.h"
+#include "workbook_format.h"
 
 namespace formulon {
 namespace {
@@ -357,6 +361,110 @@ TEST(NamedSheetViewsFidelity, PartIsKeptVerbatimAcrossStructuralEdits) {
   EXPECT_EQ(ReadPart(saved, "xl/namedSheetViews/namedSheetView1.xml"), part);
   EXPECT_TRUE(Has(ReadPart(saved, "xl/worksheets/_rels/sheet1.xml.rels"), kNamedSheetViewType));
 }
+
+Workbook LoadXlsbOrDie(const std::vector<std::uint8_t>& bytes) {
+  auto load_or = io::xlsb::read_xlsb(SpanOf(bytes));
+  EXPECT_TRUE(static_cast<bool>(load_or)) << (load_or ? "" : load_or.error().message);
+  return std::move(load_or.value().workbook);
+}
+
+std::vector<std::uint8_t> SaveXlsbOrDie(const Workbook& wb) {
+  auto save_or = wb.save_as(WorkbookFormat::Xlsb);
+  EXPECT_TRUE(static_cast<bool>(save_or)) << (save_or ? "" : save_or.error().message);
+  return save_or.value();
+}
+
+TEST(NamedSheetViewsFidelity, PartAndRelationshipSurviveXlsbSaves) {
+  const std::string part =
+      "<namedSheetViews xmlns=\"http://schemas.microsoft.com/office/spreadsheetml/2019/namedsheetviews\">"
+      "<namedSheetView name=\"Mine\" id=\"{8F2D3B6A-1111-4222-8333-944455556666}\">"
+      "<nsvFilter filterId=\"{AAAAAAAA-1111-4222-8333-944455556666}\" ref=\"A1:B3\" tableId=\"0\"/>"
+      "</namedSheetView></namedSheetViews>";
+  const std::string rels = "<Relationship Id=\"rId7\" Type=\"" + std::string(kNamedSheetViewType) +
+                           "\" Target=\"../namedSheetViews/namedSheetView1.xml\"/>";
+  const auto source = BuildPackage("<sheetData><row r=\"1\"><c r=\"A1\"><v>1</v></c></row></sheetData>", {}, rels,
+                                   {{"xl/namedSheetViews/namedSheetView1.xml", part, std::string(kNamedSheetViewCt)}});
+  const auto once = SaveXlsbOrDie(LoadOrDie(source));
+  const auto twice = SaveXlsbOrDie(LoadXlsbOrDie(once));
+  for (const auto* saved : {&once, &twice}) {
+    ASSERT_TRUE(HasPart(*saved, "xl/namedSheetViews/namedSheetView1.xml"));
+    EXPECT_EQ(ReadPart(*saved, "xl/namedSheetViews/namedSheetView1.xml"), part);
+    EXPECT_TRUE(Has(ReadPart(*saved, "xl/worksheets/_rels/sheet1.bin.rels"), kNamedSheetViewType));
+    EXPECT_TRUE(Has(ReadPart(*saved, "[Content_Types].xml"), kNamedSheetViewCt));
+  }
+  const auto back = SaveOrDie(LoadXlsbOrDie(twice));
+  EXPECT_EQ(ReadPart(back, "xl/namedSheetViews/namedSheetView1.xml"), part);
+  EXPECT_TRUE(Has(ReadPart(back, "xl/worksheets/_rels/sheet1.xml.rels"), kNamedSheetViewType));
+}
+
+// ---------------------------------------------------------------------------
+// Sheet delete and the parts a sheet's unrecognised relationships name
+// ---------------------------------------------------------------------------
+
+constexpr std::string_view kNamedSheetViewPath = "xl/namedSheetViews/namedSheetView1.xml";
+
+/// Two sheets; the second (and, when `shared`, also the first) links a named
+/// sheet view part through an unrecognised relationship. Returned after one
+/// save and reload in `format`.
+Workbook NamedSheetViewBook(bool shared, WorkbookFormat format) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  const std::string part =
+      "<namedSheetViews xmlns=\"http://schemas.microsoft.com/office/spreadsheetml/2019/namedsheetviews\"/>";
+  EXPECT_TRUE(static_cast<bool>(
+      wb.add_passthrough_part(PassthroughPart(std::string(kNamedSheetViewPath), std::string(kNamedSheetViewCt),
+                                              std::vector<std::uint8_t>(part.begin(), part.end())))));
+  const UnknownRelationship rel{"rId7", std::string(kNamedSheetViewType), std::string(kNamedSheetViewPath), false};
+  wb.sheet(1).set_unknown_relationships({rel});
+  if (shared) {
+    wb.sheet(0).set_unknown_relationships({rel});
+  }
+  if (format == WorkbookFormat::Xlsb) {
+    return LoadXlsbOrDie(SaveXlsbOrDie(wb));
+  }
+  return LoadOrDie(SaveOrDie(wb));
+}
+
+bool HoldsPassthrough(const Workbook& wb, std::string_view path) {
+  for (const PassthroughPart& part : wb.passthrough_parts()) {
+    if (part.path == path) {
+      return true;
+    }
+  }
+  return false;
+}
+
+class SheetDeletePassthrough : public ::testing::TestWithParam<WorkbookFormat> {
+ protected:
+  std::vector<std::uint8_t> Save(const Workbook& wb) const {
+    return GetParam() == WorkbookFormat::Xlsb ? SaveXlsbOrDie(wb) : SaveOrDie(wb);
+  }
+};
+
+TEST_P(SheetDeletePassthrough, DropsAPartOnlyTheRemovedSheetLinked) {
+  Workbook wb = NamedSheetViewBook(/*shared=*/false, GetParam());
+  ASSERT_TRUE(HoldsPassthrough(wb, kNamedSheetViewPath));
+  ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(1)));
+  EXPECT_FALSE(HoldsPassthrough(wb, kNamedSheetViewPath));
+  const auto saved = Save(wb);
+  EXPECT_FALSE(HasPart(saved, kNamedSheetViewPath));
+  EXPECT_FALSE(Has(ReadPart(saved, "[Content_Types].xml"), kNamedSheetViewCt));
+}
+
+TEST_P(SheetDeletePassthrough, KeepsAPartAnotherSheetStillLinks) {
+  Workbook wb = NamedSheetViewBook(/*shared=*/true, GetParam());
+  ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(1)));
+  EXPECT_TRUE(HoldsPassthrough(wb, kNamedSheetViewPath));
+  const auto saved = Save(wb);
+  EXPECT_TRUE(HasPart(saved, kNamedSheetViewPath));
+  EXPECT_EQ(wb.sheet(0).unknown_relationships().size(), 1U);
+}
+
+INSTANTIATE_TEST_SUITE_P(Formats, SheetDeletePassthrough,
+                         ::testing::Values(WorkbookFormat::Ooxml, WorkbookFormat::Xlsb),
+                         [](const ::testing::TestParamInfo<WorkbookFormat>& param_info) {
+                           return param_info.param == WorkbookFormat::Xlsb ? std::string("Xlsb") : std::string("Xlsx");
+                         });
 
 // ---------------------------------------------------------------------------
 // Legacy notes
