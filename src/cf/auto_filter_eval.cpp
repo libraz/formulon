@@ -64,13 +64,16 @@ struct PreparedCustomCondition {
   const CustomFilter* source;
   std::optional<double> numeric;
   bool has_wildcard;
+  /// Holds `*` or `?`, escaped or not: an ordering operator then tests the match.
+  bool pattern;
 };
 
 std::vector<PreparedCustomCondition> prepare_custom_conditions(const CustomFilters& filters) {
   std::vector<PreparedCustomCondition> prepared;
   prepared.reserve(filters.filters.size());
   for (const CustomFilter& condition : filters.filters) {
-    prepared.push_back({&condition, parse_full_double(condition.val), eval::scan_has_wildcard(condition.val)});
+    prepared.push_back({&condition, parse_full_double(condition.val), eval::scan_has_wildcard(condition.val),
+                        condition.val.find_first_of("*?") != std::string::npos});
   }
   return prepared;
 }
@@ -181,6 +184,15 @@ bool match_custom_one(const PreparedCustomCondition& prepared, const Value& v, c
   }
   if (c.op == FilterOperator::kNotEqual) {
     return !custom_equals(prepared, v, run, row, col);
+  }
+  if (prepared.pattern) {
+    // Excel orders a text against a pattern by the match alone: a match ranks
+    // equal, anything else above, so `<=` keeps matches, `>` the rest, `>=` all
+    // text and `<` nothing. Numbers never pass.
+    if (!v.is_text() || v.as_text().empty()) {
+      return false;
+    }
+    return ordered(c.op, eval::wildcard_match(c.val, v.as_text()) ? 0 : 1);
   }
   if (const std::optional<double>& n = prepared.numeric) {
     if (!v.is_number()) {

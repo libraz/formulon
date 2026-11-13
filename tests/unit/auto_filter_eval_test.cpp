@@ -467,6 +467,75 @@ TEST(AutoFilterEval, CustomNumericCriteriaKeepWhitespaceParsing) {
   }
 }
 
+// Measured in Excel 16.115 (Mac): an ordering criterion holding `*` or `?`
+// keeps the texts it matches (`<=`), the texts it does not (`>`), every
+// text (`>=`) or nothing (`<`); numbers never pass.
+TEST(AutoFilterEval, OrderingAgainstAPatternTestsTheMatch) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  Sheet& sheet = wb.sheet(0);
+  const std::vector<Value> values = {Value::text("a"),     Value::text("a0"), Value::text("a1"), Value::text("az"),
+                                     Value::text("apple"), Value::text("b"),  Value::text("B2"), Value::text("ab*"),
+                                     Value::text("aa"),    Value::text("A"),  Value::text("Ab"), Value::text("_a"),
+                                     Value::text("~"),     Value::text("a*"), Value::text("za"), Value::text("ba"),
+                                     Value::text("1"),     Value::text("5"),  Value::number(5),  Value::number(50),
+                                     Value::number(500),   Value::number(0)};
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    sheet.set_cell_value(static_cast<std::uint32_t>(i + 1U), 0, values[i]);
+  }
+  struct Case {
+    FilterOperator op;
+    const char* pattern;
+    const char* kept;  ///< One flag per value: 1 = row stays visible.
+  };
+  const Case cases[] = {
+      {FilterOperator::kGreaterThan, "a*", "0000011000011011110000"},
+      {FilterOperator::kGreaterThan, "a?", "1000111101011011110000"},
+      {FilterOperator::kGreaterThan, "*a", "0111111100101100110000"},
+      {FilterOperator::kGreaterThan, "a~*", "1111111111111011110000"},
+      {FilterOperator::kGreaterThan, "b*", "1111100111111110110000"},
+      {FilterOperator::kGreaterThan, "a", "0111111110100111000000"},
+      {FilterOperator::kGreaterThan, "?", "0111101110110111000000"},
+      {FilterOperator::kGreaterThanOrEqual, "a*", "1111111111111111110000"},
+      {FilterOperator::kGreaterThanOrEqual, "a?", "1111111111111111110000"},
+      {FilterOperator::kGreaterThanOrEqual, "*a", "1111111111111111110000"},
+      {FilterOperator::kGreaterThanOrEqual, "a~*", "1111111111111111110000"},
+      {FilterOperator::kGreaterThanOrEqual, "b*", "1111111111111111110000"},
+      {FilterOperator::kGreaterThanOrEqual, "a", "1111111111100111000000"},
+      {FilterOperator::kGreaterThanOrEqual, "?", "1111111111111111110000"},
+      {FilterOperator::kLessThan, "a*", "0000000000000000000000"},
+      {FilterOperator::kLessThan, "a?", "0000000000000000000000"},
+      {FilterOperator::kLessThan, "*a", "0000000000000000000000"},
+      {FilterOperator::kLessThan, "a~*", "0000000000000000000000"},
+      {FilterOperator::kLessThan, "b*", "0000000000000000000000"},
+      {FilterOperator::kLessThan, "a", "0000000000011000110000"},
+      {FilterOperator::kLessThan, "?", "0000000000000000000000"},
+      {FilterOperator::kLessThanOrEqual, "a*", "1111100111100100000000"},
+      {FilterOperator::kLessThanOrEqual, "a?", "0111000010100100000000"},
+      {FilterOperator::kLessThanOrEqual, "*a", "1000000011010011000000"},
+      {FilterOperator::kLessThanOrEqual, "a~*", "0000000000000100000000"},
+      {FilterOperator::kLessThanOrEqual, "b*", "0000011000000001000000"},
+      {FilterOperator::kLessThanOrEqual, "a", "1000000001011000110000"},
+      {FilterOperator::kLessThanOrEqual, "?", "1000010001001000110000"},
+  };
+  for (const Case& c : cases) {
+    SCOPED_TRACE(std::string(c.pattern));
+    AutoFilter filter;
+    filter.range = MergeRange{0, 0, static_cast<std::uint32_t>(values.size()), 0};
+    FilterColumn column;
+    column.kind = FilterKind::kCustom;
+    column.custom.filters.push_back({c.op, c.pattern});
+    filter.columns.push_back(std::move(column));
+    const auto visible = evaluate_auto_filter(wb, sheet, filter);
+    ASSERT_TRUE(static_cast<bool>(visible));
+    std::string got;
+    for (const bool kept : visible.value()) {
+      got.push_back(kept ? '1' : '0');
+    }
+    EXPECT_EQ(got, c.kept) << static_cast<int>(c.op);
+  }
+}
+
 TEST(AutoFilterEval, OpaqueFilterIsRejected) {
   Workbook wb = Workbook::create();
   AutoFilter filter;
