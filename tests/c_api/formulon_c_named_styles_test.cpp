@@ -185,7 +185,9 @@ TEST(FormulonCApiNamedStyles, BuiltinId53RoundTrips) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::uint32_t font = 0;
   const uint32_t xf_id = AddBoldDateStyleXf(wb.handle, &font);
-  const fm_cell_style_t record = StyleRecord("Explanatory Text", xf_id, 53U);
+  // Marked changed so the save keeps it although no cell uses it.
+  fm_cell_style_t record = StyleRecord("Explanatory Text", xf_id, 53U);
+  record.custom_builtin = 1;
   ASSERT_EQ(fm_workbook_set_cell_style(wb.handle, &record), 0);
 
   uint8_t* saved_data = nullptr;
@@ -225,7 +227,8 @@ TEST(FormulonCApiNamedStyles, SetCellStyleCarriesEveryFieldAndReplacesByName) {
   EXPECT_EQ(reread.hidden, 1);
   EXPECT_EQ(reread.custom_builtin, 1);
 
-  // Setting the same name again overwrites every field instead of appending.
+  // Setting the same name again updates the style in place instead of appending;
+  // a built-in keeps its id and outline level, everything else comes from the record.
   std::size_t before = 0;
   ASSERT_EQ(fm_workbook_get_cell_style_count(wb.handle, &before), 0);
   const fm_cell_style_t replacement = StyleRecord("RowLevel_4", 0U, kCustomStyle);
@@ -235,9 +238,9 @@ TEST(FormulonCApiNamedStyles, SetCellStyleCarriesEveryFieldAndReplacesByName) {
   EXPECT_EQ(after, before);
   ASSERT_NE(FindStyle(wb.handle, "RowLevel_4", &reread), UINT32_MAX);
   EXPECT_EQ(reread.style_xf_index, 0U);
-  EXPECT_EQ(reread.has_builtin_id, 0) << "a custom style reads has_builtin_id 0";
-  EXPECT_EQ(reread.builtin_id, 0U);
-  EXPECT_EQ(reread.outline_level, 0U);
+  EXPECT_EQ(reread.has_builtin_id, 1);
+  EXPECT_EQ(reread.builtin_id, 1U);
+  EXPECT_EQ(reread.outline_level, 3U);
   EXPECT_EQ(reread.hidden, 0);
   EXPECT_EQ(reread.custom_builtin, 0);
 }
