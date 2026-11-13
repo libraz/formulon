@@ -331,6 +331,19 @@ TEST(XlsbParityClaims, ConditionalFormatFormulasMatchExcel) {
   }
 }
 
+// A validation formula is a legacy one: an area under an operator inside a function is intersected, so Excel stores it
+// value class.
+TEST(XlsbParityClaims, ValidationFormulasMatchExcel) {
+  constexpr std::uint16_t kDValRecord = 64;
+  for (const char* stem : {"dv_area_op", "dv_root_op"}) {
+    SCOPED_TRACE(stem);
+    const std::string path = std::string("../arraymode/") + stem;
+    const auto excel = RecordsOf(Part(ReadFile(Claim(path + ".xlsb")), "xl/worksheets/sheet1.bin"), kDValRecord);
+    ASSERT_EQ(excel.size(), 1U);
+    EXPECT_EQ(RecordsOf(Part(Converted(path), "xl/worksheets/sheet1.bin"), kDValRecord), excel);
+  }
+}
+
 }  // namespace
 }  // namespace xlsb
 }  // namespace io

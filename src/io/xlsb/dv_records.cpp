@@ -193,8 +193,9 @@ Expected<void, Error> EmitDVal14(std::vector<std::uint8_t>& dst, const DataValid
     if (sources[i]->empty()) {
       continue;
     }
-    ASSIGN_OR_RETURN(EncodedFeatureFormula f,
-                     encode_feature_formula(*sources[i], base.first_row, base.first_col, RootClass(dv.type), ctx));
+    // Excel evaluates a validation formula as a legacy one: an area under an operator is intersected.
+    ASSIGN_OR_RETURN(EncodedFeatureFormula f, encode_feature_formula(*sources[i], base.first_row, base.first_col,
+                                                                     RootClass(dv.type), ctx, PtgEvaluation::kLegacy));
     emit_frt_formula(list, f);
     present |= bits[i];
     ++count;
@@ -385,7 +386,8 @@ Expected<void, Error> emit_dv_block(std::vector<std::uint8_t>& dst, const std::v
     EmitStrings(p, *dv);
     const MergeRange base = sqref_base(dv->ranges);
     for (const std::string* f : {&dv->formula1, &dv->formula2}) {
-      auto encoded = encode_feature_formula(*f, base.first_row, base.first_col, RootClass(dv->type), ctx);
+      auto encoded =
+          encode_feature_formula(*f, base.first_row, base.first_col, RootClass(dv->type), ctx, PtgEvaluation::kLegacy);
       if (!encoded) {
         return std::move(encoded.error());
       }

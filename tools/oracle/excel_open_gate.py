@@ -13,8 +13,9 @@ autofilter mode, tables, shapes, charts). The rest (notes, PivotTables, threaded
 protected ranges, slicers, page breaks, header/footer) is read by letting Excel re-save the opened book
 as .xlsx and counting the parts or elements Excel wrote.
 
-A base listed as ``values:<path>`` also has its cell values compared after Excel recalculates the whole
-book, so a formula Excel reads differently from the source shows as a different number. Only bases
+A base listed as ``values:<path>`` also has its cell values, and whether each cell passes its data
+validation, compared after Excel recalculates the whole book, so a formula Excel reads differently from
+the source shows as a different number or verdict. Only bases
 without volatile functions are listed that way.
 
 Lines of the form ``control:refused <path>`` or ``control:repaired <path>`` name files that are opened
@@ -153,10 +154,18 @@ def resave_readings(book, stem: str) -> dict:
 
 
 def value_readings(app, book) -> dict:
-    """Every sheet's used-range values after Excel recalculates the whole book."""
+    """Every sheet's used-range values after Excel recalculates the whole book, and whether each used cell passes
+    its data validation (Excel reports True for a cell without one)."""
 
     app.api.calculate_full()
-    return {sheet.name: safe(lambda s=sheet: s.used_range.value) for sheet in book.sheets}
+    out = {}
+    for sheet in book.sheets:
+        out[sheet.name] = safe(lambda s=sheet: s.used_range.value)
+        valid = {}
+        for cell in sheet.used_range:
+            valid[cell.address] = safe(lambda c=cell: c.api.validation.value.get())
+        out[sheet.name + ".validation"] = valid
+    return out
 
 
 def open_and_read(app, path: Path, sheets: int | None, stem: str, values: bool = False):

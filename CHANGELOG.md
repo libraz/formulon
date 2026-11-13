@@ -314,7 +314,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   function, such as `{=SUM(A1:A3*2)}`, calculated a different result in Excel after the
   workbook was saved as `.xlsb`: Excel read the range as a single cell, so the example gave 2
   instead of 12. The `.xlsb` writer now stores such ranges and calls the way Excel does, and a
-  defined name whose body uses `@` is stored the same way.
+  defined name whose body uses `@` is stored the same way. Present since 0.12.0.
+
+- A custom data validation whose range sits under an operator inside a function, such as
+  `SUM($A$1:$A$3*2)>5`, was saved to `.xlsb` in a form Excel evaluates over the whole range,
+  while Excel reads a validation formula with the range intersected at the validated cell. A cell
+  Excel rejects could then pass in the saved file. The `.xlsb` writer now stores validation
+  formulas as Excel does. Present since 0.12.0.
 
 - Under a Mac profile, a Normal font outside the measured set fell back to Calibri 11's
   metrics, so column widths and row heights for fonts such as Meiryo 11 came out one digit
