@@ -215,12 +215,12 @@ void AppendRecordListOpen(std::string& out, std::string_view tag, std::size_t re
   out.append(">\n");
 }
 
-void AppendFonts(std::string& out, const StylesTable& table) {
-  AppendRecordListOpen(out, "fonts", table.fonts.size());
-  if (table.fonts.empty()) {
+void AppendFonts(std::string& out, const std::vector<FontRecord>& fonts) {
+  AppendRecordListOpen(out, "fonts", fonts.size());
+  if (fonts.empty()) {
     out.append("    <font><sz val=\"11\"/><name val=\"Calibri\"/></font>\n");
   } else {
-    for (const FontRecord& f : table.fonts) {
+    for (const FontRecord& f : fonts) {
       out.append("    <font>");
       AppendFontToggle(out, "b", f.has_bold, f.bold);
       AppendFontToggle(out, "i", f.has_italic, f.italic);
@@ -735,7 +735,8 @@ std::uint32_t intern_border(StylesTable& table, BorderRecord candidate) {
   return static_cast<std::uint32_t>(table.borders.size() - 1U);
 }
 
-std::string write_styles(const StylesTable& table, const DxfSavePlan* dxf_plan, const CellStyleSavePlan* style_plan) {
+std::string write_styles(const StylesTable& table, const DxfSavePlan* dxf_plan, const CellStyleSavePlan* style_plan,
+                         const FontSavePlan* font_plan) {
   std::string out;
   out.reserve(1024);
   out.append(kXmlDecl);
@@ -745,7 +746,7 @@ std::string write_styles(const StylesTable& table, const DxfSavePlan* dxf_plan, 
   out.append(table.root_extra_attrs);
   out.append(">\n");
   AppendNumFmts(out, table);
-  AppendFonts(out, table);
+  AppendFonts(out, font_plan != nullptr ? font_plan->fonts() : table.fonts);
   AppendFills(out, table);
   AppendBorders(out, table);
   AppendCellStyleXfs(out, table, style_plan);

@@ -37,6 +37,7 @@ class DxfSavePlan;
 }  // namespace io
 
 class CellStyleSavePlan;
+class FontSavePlan;
 
 namespace io {
 
@@ -65,8 +66,10 @@ namespace io {
 /// `style_plan` selects, names and orders `<cellStyles>` / `<cellStyleXfs>`
 /// and remaps each `<cellXfs>` `xfId`; null writes the named styles as the
 /// model holds them.
+///
+/// `font_plan` supplies the `<fonts>` written; null writes the model's fonts.
 std::string write_styles(const StylesTable& table, const DxfSavePlan* dxf_plan = nullptr,
-                         const CellStyleSavePlan* style_plan = nullptr);
+                         const CellStyleSavePlan* style_plan = nullptr, const FontSavePlan* font_plan = nullptr);
 
 /// Serialises one style record as the XML fragment `write_styles` emits
 /// for it inside a `<dxf>`.

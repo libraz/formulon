@@ -266,7 +266,8 @@ TEST(Theme, DefaultThemeCarriesOfficeScriptFonts) {
 
   const LoadedTheme loaded = Workbook::create().load_theme();
   EXPECT_EQ(loaded.source, ThemeSource::kDefault);
-  EXPECT_TRUE(loaded.theme.minor_scripts.empty());
+  EXPECT_EQ(loaded.theme.minor_scripts.size(), kOfficeScriptCount);
+  EXPECT_EQ(ScriptFace(loaded.theme.minor_scripts, "Hang"), "맑은 고딕");
 }
 
 TEST(Theme, ExcelSavedThemeScriptFontsMatchDefaultTable) {

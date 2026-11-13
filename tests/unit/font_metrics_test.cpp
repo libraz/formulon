@@ -185,7 +185,11 @@ const char* ExpectedMinorFace(ExcelLocale locale, bool jpan_override) {
 
 Theme JpanOverriddenTheme() {
   Theme theme = default_theme();
-  theme.minor_scripts.push_back({"Jpan", "ＭＳ Ｐゴシック"});
+  for (ThemeScriptFont& font : theme.minor_scripts) {
+    if (font.script == "Jpan") {
+      font.typeface = "ＭＳ Ｐゴシック";
+    }
+  }
   return theme;
 }
 

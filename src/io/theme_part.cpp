@@ -110,23 +110,12 @@ std::vector<ThemeScriptFont> script_fonts(const pugi::xml_node& font_node) {
   return out;
 }
 
-/// The default Office script faces, for a part that lacks the font block.
-std::vector<ThemeScriptFont> office_script_fonts(bool major) {
-  std::vector<ThemeScriptFont> out;
-  for (std::size_t i = 0; i < kOfficeScriptCount; ++i) {
-    out.push_back({office_script(i), office_script_face(i, major)});
-  }
-  return out;
-}
-
 std::optional<Theme> parse_theme(const pugi::xml_document& doc) {
   const pugi::xml_node clr = clr_scheme_of(doc);
   if (!clr) {
     return std::nullopt;
   }
   Theme out = default_theme();
-  out.major_scripts = office_script_fonts(true);
-  out.minor_scripts = office_script_fonts(false);
   for (std::size_t i = 0; i < kThemeColorCount; ++i) {
     const std::optional<std::uint32_t> argb = read_scheme_color(find_child(clr, kSchemeNames[i]));
     if (!argb) {

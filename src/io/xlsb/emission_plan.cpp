@@ -186,7 +186,8 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
   // not represent.  Without a raw part (XLSX/native source) or once the model
   // styles changed since load, styles.bin is generated from the model and the
   // stale raw part is dropped as a generated-path collision. A save that
-  // renames, merges, drops or reorders named styles also regenerates it.
+  // renames, merges, drops or reorders named styles, or writes a font under
+  // another face, also regenerates it.
   const PassthroughPart* raw_styles = FindRawStylesPart(wb);
   const bool raw_styles_fresh = raw_styles != nullptr && static_cast<bool>(CheckRetainedPartFreshness(wb, *raw_styles));
   plan.has_generated_styles =

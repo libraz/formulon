@@ -14,6 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Saving `.xlsx` and `.xlsb` now writes a font linked to the theme (`scheme`
+  `minor` or `major`) under the name of the theme's face for the script of the
+  workbook profile's locale, as Excel does on save. For example, a minor font
+  stored as `ＭＳ Ｐゴシック` in a book whose theme has a Calibri minor Latin
+  face is saved as `Calibri` under an `en_US` profile and stays
+  `ＭＳ Ｐゴシック` under `ja_JP`. A book without a theme part uses the built-in
+  Office theme (`Aptos Narrow`, `游ゴシック`, `等线`, …). The workbook keeps the
+  stored name; only the written file changes. Fonts without a scheme are written
+  as stored, and a new workbook of any profile saves unchanged.
+
 - Saving `.xlsb` writes each sheet's own phonetic (furigana) settings, the
   `<phoneticPr>` font, type and alignment, and closes the sheet with its revision
   id, as Excel does. A sheet without a stated id gets the one Excel assigns from

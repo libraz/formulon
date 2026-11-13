@@ -79,6 +79,10 @@ Theme build_default_theme() {
                   0xFF196B24U, 0xFF0F9ED5U, 0xFFA02B93U, 0xFF4EA72EU, 0xFF467886U, 0xFF96607DU};
   // The Jpan entry heads the table; `*_ea` reports it while `a:ea` is empty.
   theme.fonts = {"Aptos Display", office_script_face(0, true), "Aptos Narrow", office_script_face(0, false)};
+  for (std::size_t i = 0; i < kOfficeScriptCount; ++i) {
+    theme.major_scripts.push_back({office_script(i), office_script_face(i, true)});
+    theme.minor_scripts.push_back({office_script(i), office_script_face(i, false)});
+  }
   return theme;
 }
 

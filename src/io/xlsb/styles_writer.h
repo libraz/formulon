@@ -19,6 +19,7 @@
 namespace formulon {
 
 class CellStyleSavePlan;
+class FontSavePlan;
 
 namespace io {
 namespace xlsb {
@@ -32,8 +33,10 @@ namespace xlsb {
 /// `plan` (null: every dxf in model order) selects and orders the dxfs written; a model dxf may repeat.
 /// `style_plan` (null: as the model holds them) selects, names and orders the
 /// BrtStyle records and style BrtXFs and remaps each cell BrtXF's parent.
+/// `font_plan` (null: the model's fonts) supplies the BrtFont records.
 std::vector<std::uint8_t> write_styles_bin(const StylesTable& table, const DxfSavePlan* plan = nullptr,
-                                           const CellStyleSavePlan* style_plan = nullptr);
+                                           const CellStyleSavePlan* style_plan = nullptr,
+                                           const FontSavePlan* font_plan = nullptr);
 
 /// The BrtDXF count of a source styles part whose BrtDXF records form one list
 /// directly under its only BrtBeginDXFs (zero when it has neither); nullopt for

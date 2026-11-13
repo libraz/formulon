@@ -24,6 +24,7 @@
 
 #include "excel_profile.h"
 #include "styles.h"
+#include "theme.h"
 
 namespace formulon {
 
@@ -93,6 +94,30 @@ CellStyleSavePlan build_cell_style_save_plan(const StylesTable& styles, const Us
 /// style, written or dropped as unused. A built-in matches only under its
 /// locale name. This describes the saved file and is not a name lookup.
 bool saved_file_names_cell_style(const CellStyleSavePlan& plan, std::string_view name);
+
+/// The `<fonts>` a save writes. A font linked to the theme (`scheme` minor or
+/// major) is written with the theme's face for the script of the profile's UI
+/// locale, which is what Excel stores for it on save; the model keeps the
+/// stored name. A font without a scheme, or one the theme names no face for,
+/// is written as stored.
+class FontSavePlan {
+ public:
+  /// The fonts in output order, one per model font.
+  const std::vector<FontRecord>& fonts() const noexcept { return fonts_; }
+
+  /// True when every font is written as the model holds it.
+  bool is_identity() const noexcept { return identity_; }
+
+ private:
+  friend FontSavePlan build_font_save_plan(const StylesTable& styles, const Theme& theme, ExcelProfile profile);
+
+  std::vector<FontRecord> fonts_;
+  bool identity_ = true;
+};
+
+/// Plans the fonts of `styles` for a save under `profile`, with `theme` the
+/// workbook's theme (the default theme when the book has no theme part).
+FontSavePlan build_font_save_plan(const StylesTable& styles, const Theme& theme, ExcelProfile profile);
 
 }  // namespace formulon
 

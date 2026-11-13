@@ -371,6 +371,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   // The named cell styles styles.bin writes and the names table parts may keep.
   const CellStyleSavePlan style_plan =
       build_cell_style_save_plan(workbook.styles(), collect_used_cell_xfs(workbook), workbook.excel_profile());
+  const FontSavePlan font_plan =
+      build_font_save_plan(workbook.styles(), workbook.load_theme().theme, workbook.excel_profile());
   std::vector<std::vector<XlsbTablePart>> sheet_tables(sheet_count);
   std::vector<std::vector<std::string>> sheet_hyperlink_rids;
   sheet_hyperlink_rids.reserve(sheet_count);
@@ -420,8 +422,9 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   }
   const bool emit_sst_part = !sst.empty();
 
-  auto plan_or = BuildEmissionPlan(workbook, emit_sst_part, metadata.generate_part, !metadata.rich.empty(),
-                                   sheet_ranges.links.size(), style_plan.is_identity(), &diagnostics);
+  auto plan_or =
+      BuildEmissionPlan(workbook, emit_sst_part, metadata.generate_part, !metadata.rich.empty(),
+                        sheet_ranges.links.size(), style_plan.is_identity() && font_plan.is_identity(), &diagnostics);
   if (!plan_or) {
     return std::move(plan_or.error());
   }
@@ -478,7 +481,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   // an opaque style payload to preserve.  Its relationship is emitted above
   // in lockstep with this part.
   if (plan.has_generated_styles) {
-    const std::vector<std::uint8_t> styles_bytes = write_styles_bin(workbook.styles(), &dxf_plan, &style_plan);
+    const std::vector<std::uint8_t> styles_bytes =
+        write_styles_bin(workbook.styles(), &dxf_plan, &style_plan, &font_plan);
     RETURN_IF_ERROR(AddPartBytes(writer.get(), kStylesBinPath, styles_bytes));
   }
   // 4c. xl/metadata.bin for dynamic-array spill anchors and rich errors, with

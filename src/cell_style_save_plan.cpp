@@ -279,4 +279,60 @@ bool saved_file_names_cell_style(const CellStyleSavePlan& plan, std::string_view
   return false;
 }
 
+namespace {
+
+constexpr std::uint8_t kSchemeMajor = 1U;
+constexpr std::uint8_t kSchemeMinor = 2U;
+
+// The theme script whose face Excel writes for a theme-linked font, by UI
+// locale; "" for the Latin face. Mac 16.115; Windows reuses the Mac rows.
+const char* theme_font_script(ExcelLocale locale) {
+  switch (locale) {
+    case ExcelLocale::kJaJP:
+      return "Jpan";
+    case ExcelLocale::kZhCN:
+      return "Hans";
+    case ExcelLocale::kZhTW:
+      return "Hant";
+    case ExcelLocale::kKoKR:
+      return "Hang";
+    case ExcelLocale::kThTH:
+      return "Thai";
+    default:
+      return "";
+  }
+}
+
+// The theme's major or minor face for `script`; null when the theme names none.
+const std::string* theme_face(const Theme& theme, bool major, const char* script) {
+  if (*script == '\0') {
+    return &(major ? theme.fonts.major_latin : theme.fonts.minor_latin);
+  }
+  for (const ThemeScriptFont& font : major ? theme.major_scripts : theme.minor_scripts) {
+    if (font.script == script) {
+      return &font.typeface;
+    }
+  }
+  return nullptr;
+}
+
+}  // namespace
+
+FontSavePlan build_font_save_plan(const StylesTable& styles, const Theme& theme, ExcelProfile profile) {
+  FontSavePlan plan;
+  plan.fonts_ = styles.fonts;
+  const char* script = theme_font_script(profile.locale);
+  for (FontRecord& font : plan.fonts_) {
+    if (font.scheme != kSchemeMajor && font.scheme != kSchemeMinor) {
+      continue;
+    }
+    const std::string* face = theme_face(theme, font.scheme == kSchemeMajor, script);
+    if (face != nullptr && !face->empty() && *face != font.name) {
+      font.name = *face;
+      plan.identity_ = false;
+    }
+  }
+  return plan;
+}
+
 }  // namespace formulon

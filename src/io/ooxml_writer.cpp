@@ -412,6 +412,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   // The named cell styles `styles.xml` writes and the names table parts may keep.
   const CellStyleSavePlan style_plan =
       build_cell_style_save_plan(wb.styles(), collect_used_cell_xfs(wb), wb.excel_profile());
+  const FontSavePlan font_plan = build_font_save_plan(wb.styles(), wb.load_theme().theme, wb.excel_profile());
   // The XLDAPR entry dynamic-array formulas' `cm=` names: a generated part's
   // first entry, else a retained `xl/metadata.xml`'s own. A retained part
   // without one leaves `cm=` off, as does a workbook with no such formula.
@@ -483,8 +484,9 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   }
 
   // xl/styles.xml
-  ASSIGN_OR_RETURN(const std::string styles_xml, SavedDxfPart(write_styles(wb.styles(), &dxf_plan, &style_plan), 0U,
-                                                              dxf_plan, DxfPartKey{-1, DxfPartType::kStyles, 0U}));
+  ASSIGN_OR_RETURN(const std::string styles_xml,
+                   SavedDxfPart(write_styles(wb.styles(), &dxf_plan, &style_plan, &font_plan), 0U, dxf_plan,
+                                DxfPartKey{-1, DxfPartType::kStyles, 0U}));
   RETURN_IF_ERROR(AddPart(writer.get(), kStylesPartPath, styles_xml, &written_paths));
 
   // xl/metadata.xml — the dynamic-array and rich-value metadata, and the
