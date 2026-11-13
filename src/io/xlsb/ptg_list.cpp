@@ -28,12 +28,11 @@ constexpr std::uint8_t kRowsTotals = 0x08;
 constexpr std::uint8_t kRowsDataTotals = 0x0C;
 constexpr std::uint8_t kRowsCurrent = 0x10;
 
-// PtgList flag fields.
+// PtgList flags: columns (bits 0-1), rowType (2-6), the two space bits (7-8), an unused bit (9, written clear,
+// ignored on read), type (10-11), invalid (12) and nonresident (13).
 constexpr std::uint16_t kColumnsMask = 0x0003U;
 constexpr unsigned kRowTypeShift = 2U;
 constexpr std::uint16_t kRowTypeMask = 0x1FU;
-// Excel sets the "unused" bit on the PtgLists it writes ([MS-XLSB] 3.3.11).
-constexpr std::uint16_t kUnusedBit = 0x0200U;
 constexpr unsigned kTypeShift = 10U;
 constexpr std::uint16_t kInvalidBit = 0x1000U;
 constexpr std::uint16_t kNonresidentBit = 0x2000U;
@@ -316,7 +315,6 @@ Expected<void, Error> encode_ptg_list(std::vector<std::uint8_t>& out, const pars
   const std::uint16_t type = cls == 0x20U ? 0U : cls == 0x60U ? 2U : 1U;
   std::uint16_t flags = columns;
   flags |= static_cast<std::uint16_t>(*row_type << kRowTypeShift);
-  flags |= kUnusedBit;
   flags |= static_cast<std::uint16_t>(type << kTypeShift);
   emit_u8(out, kPtgList);
   emit_u8(out, kEptgList);

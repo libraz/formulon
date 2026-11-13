@@ -277,6 +277,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An `.xlsb` file whose formulas refer to a table (for example a totals row's
+  `SUBTOTAL(109,Table1[Amount])`) could not be opened in Excel: Excel refused the whole
+  file. Such formulas are now written the way Excel writes them, and loading an affected
+  file and saving it again with this version repairs it.
+
 - A threaded comment mention after a line break is placed where Excel places it.
   The file counts mention offsets over the text as stored, with every line break
   written as CRLF; `.xlsx` loading and saving now convert between that count and the

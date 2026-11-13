@@ -1043,9 +1043,9 @@ TEST(XlsbTableFidelity, SheetIdsSurviveSaveAndLoad) {
   EXPECT_EQ(again.sheet(2).source_sheet_id(), 4U);
 }
 
-TEST(XlsbTableFidelity, CalculatedColumnPtgListMatchesTheSpecExample) {
-  // [MS-XLSB] 3.3.11: "=Table1[[#This Row],[Price]]*.08" over Table1 (id 1)
-  // whose second column is Price, on the first sheet.
+TEST(XlsbTableFidelity, CalculatedColumnPtgListHasExcelFlags) {
+  // The [MS-XLSB] 3.3.11 example "=Table1[[#This Row],[Price]]*.08" over Table1 (id 1) whose second column is
+  // Price, on the first sheet. The flags keep the unused bit clear, as Excel writes them.
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Sheet1");
   TableMetadata t;
@@ -1067,7 +1067,7 @@ TEST(XlsbTableFidelity, CalculatedColumnPtgListMatchesTheSpecExample) {
   }
   const std::vector<std::uint8_t> expected = {0x00,                    // fArray clear
                                               0x18, 0x00, 0x00, 0x00,  // cce
-                                              0x18, 0x19, 0x00, 0x00, 0x41, 0x06, 0x01, 0x00, 0x00,
+                                              0x18, 0x19, 0x00, 0x00, 0x41, 0x04, 0x01, 0x00, 0x00,
                                               0x00, 0x01, 0x00,                                      // PtgList
                                               0x01, 0x00,                                            //
                                               0x1F, 0x7B, 0x14, 0xAE, 0x47, 0xE1, 0x7A, 0xB4, 0x3F,  // PtgNum 0.08
