@@ -1,6 +1,6 @@
 //
 // An .xlsx save writes only the dxfs some written reference names, one record
-// per user (CF rules of one sheet share), in Excel's order, renumbers every
+// per user, in Excel's order, renumbers every
 // reference (modelled and raw XML), and leaves the model's dxf table
 // untouched. A styles part whose slicer styles may index the main table, or a
 // raw fragment the scanner cannot read, saves the table as held.
@@ -294,7 +294,7 @@ TEST(DxfCompactionXlsx, DxfSharedByTwoKindsSavesOneRecordPerUser) {
   EXPECT_EQ(element_id, std::optional<std::uint32_t>(1U));
 }
 
-TEST(DxfCompactionXlsx, CfRulesShareARecordOnlyWithinASheet) {
+TEST(DxfCompactionXlsx, CfRulesSharingADxfTakeARecordEach) {
   Workbook wb = Workbook::create();
   wb.add_sheet("Sheet2");
   wb.mutable_styles().dxfs.push_back(TaggedDxf(0U));
@@ -303,25 +303,24 @@ TEST(DxfCompactionXlsx, CfRulesShareARecordOnlyWithinASheet) {
   const std::string body = Body(wb.styles().dxfs[0]);
 
   const std::vector<std::uint8_t> one_sheet = Save(wb);
-  EXPECT_EQ(SavedDxfCount(Parts(one_sheet)), 1U);
+  EXPECT_EQ(SavedDxfCount(Parts(one_sheet)), 2U);
   const Workbook back = Reload(one_sheet);
-  ASSERT_EQ(back.styles().dxfs.size(), 1U);
-  for (const cf::ConditionalFormat& block : back.sheet(0).conditional_formats()) {
-    EXPECT_EQ(block.rules.at(0).dxf_id, std::optional<std::uint32_t>(0U));
-  }
+  ASSERT_EQ(back.styles().dxfs.size(), 2U);
+  // Blocks register in document order; the later block's record is written first.
+  EXPECT_EQ(back.sheet(0).conditional_formats().at(0).rules.at(0).dxf_id, std::optional<std::uint32_t>(1U));
+  EXPECT_EQ(back.sheet(0).conditional_formats().at(1).rules.at(0).dxf_id, std::optional<std::uint32_t>(0U));
 
   wb.sheet(1).mutable_conditional_formats().push_back(CellIsBlock(0, 0U, "70", 3));
   const std::vector<std::uint8_t> two_sheets = Save(wb);
   const std::map<std::string, std::string> parts = Parts(two_sheets);
-  EXPECT_EQ(SavedDxfCount(parts), 2U);
+  EXPECT_EQ(SavedDxfCount(parts), 3U);
   ExpectEveryIdResolves(parts);
   const Workbook again = Reload(two_sheets);
-  ASSERT_EQ(again.styles().dxfs.size(), 2U);
-  EXPECT_EQ(Bodies(again.styles().dxfs), (std::vector<std::string>{body, body}));
+  ASSERT_EQ(again.styles().dxfs.size(), 3U);
+  EXPECT_EQ(Bodies(again.styles().dxfs), (std::vector<std::string>{body, body, body}));
   // CF registers by sheet in tab order; the later sheet's record is written first.
-  for (const cf::ConditionalFormat& block : again.sheet(0).conditional_formats()) {
-    EXPECT_EQ(block.rules.at(0).dxf_id, std::optional<std::uint32_t>(1U));
-  }
+  EXPECT_EQ(again.sheet(0).conditional_formats().at(0).rules.at(0).dxf_id, std::optional<std::uint32_t>(2U));
+  EXPECT_EQ(again.sheet(0).conditional_formats().at(1).rules.at(0).dxf_id, std::optional<std::uint32_t>(1U));
   EXPECT_EQ(again.sheet(1).conditional_formats().at(0).rules.at(0).dxf_id, std::optional<std::uint32_t>(0U));
 }
 

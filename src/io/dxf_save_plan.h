@@ -5,8 +5,8 @@
 // every written part through one plan, reference by reference.
 //
 // Excel saves one record per user, so a model dxf named by several users is
-// written once per user. CF rules of one sheet naming the same dxf share one
-// record. Users register in this order and the records are written reversed:
+// written once per user. Users register in this order and the records are
+// written reversed:
 // styles-part users; then each sheet's other users, the active sheet first and
 // the rest in tab order, its worksheet part before its pivots before its
 // tables; then CF users by sheet in tab order, block in document order and
@@ -125,8 +125,8 @@ class DxfPartCursor {
   std::vector<std::uint32_t> seen_;  ///< References so far, by model index; empty until the first.
 };
 
-/// The plan writing one record per use of a model dxf in `uses` (one per sheet
-/// and model dxf for CF), in Excel's order. A use naming no model dxf gets no
+/// The plan writing one record per use of a model dxf in `uses`, in Excel's
+/// order. A use naming no model dxf gets no
 /// record. `blocked` yields the identity plan; an empty `uses` without it
 /// yields an empty table. `active_sheet` is the tab index of the active sheet.
 DxfSavePlan build_dxf_save_plan(std::size_t model_count, const std::vector<DxfUse>& uses, bool blocked,

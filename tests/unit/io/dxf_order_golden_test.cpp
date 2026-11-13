@@ -2,7 +2,8 @@
 // The dxf table a save writes, against Excel 16.115 (Mac) re-saving the same
 // files. Each fixture gives every dxf user its own solid fill (one factor
 // varied per file: active sheet, tab order, CF priority, block split, table
-// style element order, a dxf shared across users, kinds on one sheet); the
+// style element order, a dxf shared across users or equal in content, kinds on
+// one sheet, two formats in one pivot, a table colorFilter); the
 // expected list is the fill of each `<dxfs>` record Excel wrote, in order.
 // Excel writes the same order to xlsx and xlsb.
 
@@ -38,6 +39,9 @@ struct Golden {
   /// Records compared in order; the rest are compared as a set (Excel orders
   /// two pivots on one sheet differently from one save to the next).
   std::size_t ordered;
+  /// Users the xlsb writer has no record for (custom table style elements,
+  /// pivot formats, the sheet colorFilter).
+  std::size_t xlsb_unwritten = 6;
 };
 
 const std::vector<Golden>& Goldens() {
@@ -88,10 +92,32 @@ const std::vector<Golden>& Goldens() {
         "23E1A7", "476735", "7B5893", "9A3C69", "967221", "5979BC", "378278", "7E937B", "1E6E22"},
        27},
       {"f9_cf_cf_same_sheet",
-       {"9AB665", "88CF51", "2E9548", "51CCC8", "4F687F", "DD9A42", "8BC9E0", "56C95B", "C05F68",
-        "A68D3F", "A2AA3C", "6FC658", "A94BD0", "94D4D3", "4C28CB", "5979BC", "23E1A7", "7B5893",
-        "476735", "9A3C69", "967221", "7BCB9B", "378278", "7E937B", "1E6E22", "D2395E"},
-       26},
+       {"9AB665", "88CF51", "2E9548", "51CCC8", "4F687F", "4F687F", "DD9A42", "8BC9E0", "56C95B",
+        "C05F68", "A68D3F", "A2AA3C", "6FC658", "A94BD0", "94D4D3", "4C28CB", "5979BC", "23E1A7",
+        "7B5893", "476735", "9A3C69", "967221", "7BCB9B", "378278", "7E937B", "1E6E22", "D2395E"},
+       27},
+      {"r5_cf_same_content",
+       {"94D4D3", "967221", "23E1A7", "2E9548", "6FC658", "6FC658", "DD9A42", "8BC9E0", "56C95B",
+        "A2AA3C", "A68D3F", "378278", "4F687F", "5979BC", "D2395E", "476735", "9A3C69", "A94BD0",
+        "7B5893", "1E6E22", "88CF51", "7E937B", "2B4291", "4C28CB", "C05F68", "9AB665", "7BCB9B"},
+       27},
+      {"r2_pivot_two_formats",
+       {"23E1A7", "2B4291", "7B5893", "56C95B", "A68D3F", "5979BC", "88CF51", "4C28CB", "7BCB9B", "4F687F",
+        "476735", "95D555", "6FC658", "9A3C69", "51CCC8", "7E937B", "C05F68", "94D4D3", "DD9A42", "D2395E",
+        "1E6E22", "8BC9E0", "9AB665", "C4D431", "378278", "A2AA3C", "967221", "2E9548"},
+       28,
+       7},
+      {"r2_pivot_two_formats_rev",
+       {"23E1A7", "2B4291", "7B5893", "56C95B", "A68D3F", "5979BC", "88CF51", "4C28CB", "7BCB9B", "4F687F",
+        "476735", "95D555", "6FC658", "9A3C69", "51CCC8", "7E937B", "94D4D3", "C05F68", "DD9A42", "D2395E",
+        "1E6E22", "8BC9E0", "9AB665", "C4D431", "378278", "A2AA3C", "967221", "2E9548"},
+       28,
+       7},
+      {"r4_table_colorfilter",
+       {"23E1A7", "2B4291", "7B5893", "56C95B", "A68D3F", "5979BC", "88CF51", "4C28CB", "7BCB9B", "4F687F",
+        "476735", "95D555", "6FC658", "9A3C69", "51CCC8", "7E937B", "94D4D3", "DD9A42", "D2395E", "1E6E22",
+        "C05F68", "8BC9E0", "9AB665", "C4D431", "378278", "A2AA3C", "967221", "2E9548"},
+       28},
       {"f9_cf_cf_two_sheets",
        {"9AB665", "C05F68", "88CF51", "2E9548", "51CCC8", "4F687F", "DD9A42", "8BC9E0", "56C95B",
         "C05F68", "A68D3F", "A2AA3C", "6FC658", "A94BD0", "94D4D3", "4C28CB", "5979BC", "23E1A7",
@@ -155,7 +181,7 @@ Golden WrittenPart(const Golden& golden, const std::vector<std::string>& saved) 
   for (const std::string& fill : saved) {
     ++left[fill];
   }
-  Golden out{golden.file, {}, 0};
+  Golden out{golden.file, {}, 0, golden.xlsb_unwritten};
   for (std::size_t i = 0; i < golden.fills.size(); ++i) {
     if (left[golden.fills[i]] > 0U) {
       --left[golden.fills[i]];
@@ -176,7 +202,7 @@ TEST(DxfOrderGolden, XlsbSaveWritesExcelsOrder) {
     const std::vector<std::string> saved = Fills(reread.value().workbook);
     const Golden written = WrittenPart(golden, saved);
     // Every CF and table user is written in xlsb.
-    EXPECT_GE(written.fills.size(), golden.fills.size() - 6U) << golden.file;
+    EXPECT_GE(written.fills.size(), golden.fills.size() - golden.xlsb_unwritten) << golden.file;
     ExpectGolden(written, saved, "xlsb");
   }
 }

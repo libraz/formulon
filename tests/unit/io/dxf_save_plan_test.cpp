@@ -166,7 +166,7 @@ TEST(DxfSavePlanOrder, CfBlocksRegisterInDocumentOrderBeforePriority) {
             (std::vector<std::uint32_t>{2, 1, 0}));
 }
 
-TEST(DxfSavePlanOrder, CfRulesOfOneSheetShareARecordAndOtherUsersDoNot) {
+TEST(DxfSavePlanOrder, EveryUseTakesItsOwnRecord) {
   const std::vector<DxfUse> uses = {
       At(0, DxfUseKind::kConditionalFormat, Sheet(0), 0, 1),
       At(0, DxfUseKind::kConditionalFormat, Sheet(0), 1, 2),
@@ -175,11 +175,11 @@ TEST(DxfSavePlanOrder, CfRulesOfOneSheetShareARecordAndOtherUsersDoNot) {
       At(0, DxfUseKind::kTable, Sheet(0, DxfPartType::kTable), 1),
   };
   const DxfSavePlan plan = build_dxf_save_plan(1, uses, false, 0);
-  // Registered: table attr 0, table attr 1, CF sheet 0 (both rules), CF sheet 1.
-  EXPECT_EQ(plan.order(), (std::vector<std::uint32_t>{0, 0, 0, 0}));
-  EXPECT_EQ(plan.saved(Sheet(0, DxfPartType::kTable), 0, 0), 3U);
-  EXPECT_EQ(plan.saved(Sheet(0, DxfPartType::kTable), 0, 1), 2U);
-  EXPECT_EQ(plan.saved(Sheet(0), 0, 0), 1U);
+  // Registered: table attr 0, table attr 1, CF sheet 0 rule 1, rule 2, CF sheet 1.
+  EXPECT_EQ(plan.order(), (std::vector<std::uint32_t>{0, 0, 0, 0, 0}));
+  EXPECT_EQ(plan.saved(Sheet(0, DxfPartType::kTable), 0, 0), 4U);
+  EXPECT_EQ(plan.saved(Sheet(0, DxfPartType::kTable), 0, 1), 3U);
+  EXPECT_EQ(plan.saved(Sheet(0), 0, 0), 2U);
   EXPECT_EQ(plan.saved(Sheet(0), 0, 1), 1U);
   EXPECT_EQ(plan.saved(Sheet(1), 0, 0), 0U);
 }

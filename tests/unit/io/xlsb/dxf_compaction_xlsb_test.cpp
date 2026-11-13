@@ -437,20 +437,20 @@ TEST(DxfCompactionXlsb, OneDxfUsedByACfRuleAndATableIsSavedOncePerUser) {
   ExpectNoDanglingSlot(package);
 }
 
-// CF rules of one sheet naming the same dxf share one record.
-TEST(DxfCompactionXlsb, CfRulesOfOneSheetSharingADxfShareARecord) {
+// CF rules of one sheet naming the same dxf take a record each.
+TEST(DxfCompactionXlsb, CfRulesOfOneSheetSharingADxfTakeARecordEach) {
   Workbook wb = BookWithDxfs(2);
   AddRule(wb, 0, 1, 0U, "$A$1>0");
   AddRule(wb, 0, 2, 0U, "$A$1>1");
   const std::vector<std::uint8_t> package = Save(wb);
   const Workbook back = Load(package);
-  ASSERT_EQ(back.styles().dxfs.size(), 1U);
+  ASSERT_EQ(back.styles().dxfs.size(), 2U);
   const auto& formats = back.sheet(0).conditional_formats();
   ASSERT_EQ(formats.size(), 2U);
-  for (const auto& format : formats) {
-    ASSERT_EQ(format.rules.size(), 1U);
-    EXPECT_EQ(format.rules[0].dxf_id, std::optional<std::uint32_t>(0U));
-  }
+  ASSERT_EQ(formats[0].rules.size(), 1U);
+  ASSERT_EQ(formats[1].rules.size(), 1U);
+  EXPECT_EQ(formats[0].rules[0].dxf_id, std::optional<std::uint32_t>(1U));
+  EXPECT_EQ(formats[1].rules[0].dxf_id, std::optional<std::uint32_t>(0U));
   ExpectNoDanglingSlot(package);
 }
 

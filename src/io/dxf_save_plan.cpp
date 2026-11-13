@@ -159,24 +159,13 @@ DxfSavePlan build_dxf_save_plan(std::size_t model_count, const std::vector<DxfUs
   const auto registration_less = [&keys](std::uint32_t lhs, std::uint32_t rhs) { return keys[lhs] < keys[rhs]; };
   std::vector<std::uint32_t> registered;
   sorted_index_order(registered, use_count, make_index_less(registration_less));
-  // Registration index of each use. CF uses of one sheet are contiguous in
-  // registration order, and those naming one model dxf share its record.
+  // Registration index of each use: one record per use naming a model dxf.
   std::vector<std::uint32_t> record_of(uses.size(), 0U);
   std::vector<std::uint32_t> record_model;
-  std::vector<std::int64_t> cf_sheet(model_count, std::numeric_limits<std::int64_t>::min());
-  std::vector<std::uint32_t> cf_record(model_count, 0U);
   for (const std::uint32_t i : registered) {
     const DxfUse& use = uses[i];
     if (use.model_index >= model_count) {
       continue;
-    }
-    if (use.kind == DxfUseKind::kConditionalFormat) {
-      if (cf_sheet[use.model_index] == use.part.sheet) {
-        record_of[i] = cf_record[use.model_index];
-        continue;
-      }
-      cf_sheet[use.model_index] = use.part.sheet;
-      cf_record[use.model_index] = static_cast<std::uint32_t>(record_model.size());
     }
     record_of[i] = static_cast<std::uint32_t>(record_model.size());
     record_model.push_back(use.model_index);
