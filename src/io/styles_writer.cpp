@@ -391,7 +391,12 @@ void AppendCellStyleXfs(std::string& out, const StylesTable& table, const CellSt
 }
 
 void AppendCellXfs(std::string& out, const StylesTable& table, const CellStyleSavePlan* style_plan) {
-  const std::size_t count = table.cell_xfs.empty() ? std::size_t{1} : table.cell_xfs.size();
+  std::size_t count = table.cell_xfs.size();
+  if (count == 0U) {
+    count = 1U;
+  } else if (style_plan != nullptr) {
+    count = style_plan->cell_xf_order().size();
+  }
   out.append("  <cellXfs");
   append_xml_attr_uint(out, "count", count);
   out.append(">\n");
@@ -399,12 +404,15 @@ void AppendCellXfs(std::string& out, const StylesTable& table, const CellStyleSa
     out.append("    <xf numFmtId=\"0\" fontId=\"0\" fillId=\"0\" borderId=\"0\" xfId=\"0\"/>\n");
   } else {
     const StyleTableCounts bounds = EmittedCounts(table);
-    for (const CellXf& xf : table.cell_xfs) {
-      std::uint32_t xf_id = xf.xf_id < bounds.cell_style_xfs ? xf.xf_id : 0U;
-      if (style_plan != nullptr) {
-        xf_id = style_plan->cell_xf_parent(xf.xf_id);
+    if (style_plan != nullptr) {
+      for (const std::uint32_t c : style_plan->cell_xf_order()) {
+        const CellXf& xf = table.cell_xfs[c];
+        AppendXfBody(out, xf, style_plan->cell_xf_parent(xf.xf_id), bounds);
       }
-      AppendXfBody(out, xf, xf_id, bounds);
+    } else {
+      for (const CellXf& xf : table.cell_xfs) {
+        AppendXfBody(out, xf, xf.xf_id < bounds.cell_style_xfs ? xf.xf_id : 0U, bounds);
+      }
     }
   }
   out.append("  </cellXfs>\n");

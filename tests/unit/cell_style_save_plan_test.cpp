@@ -13,6 +13,7 @@
 #include "eval/collation.h"
 #include "excel_profile.h"
 #include "gtest/gtest.h"
+#include "passthrough_part.h"
 #include "sheet.h"
 #include "sheet_layout.h"
 #include "styles.h"
@@ -413,6 +414,173 @@ TEST(CellStyleSavePlan, CollectUsedCellXfsOpaqueSheetUsesAll) {
   const std::size_t index = wb.add_sheet("Macro1");
   wb.sheet(index).set_opaque_ooxml_sheet("xl/macrosheets/sheet1.xml",
                                          "http://schemas.microsoft.com/office/2006/relationships/xlMacrosheet");
+  EXPECT_TRUE(collect_used_cell_xfs(wb).all_used);
+}
+
+// Cell xf compaction. `num_fmts[c]` is cell xf c's number format, `parents[c]` its style xf.
+StylesTable CellXfTable(const std::vector<std::uint32_t>& num_fmts, const std::vector<std::uint32_t>& parents = {}) {
+  StylesTable table;
+  table.cell_style_xfs.assign(1, CellXf{});
+  for (std::size_t c = 0; c < num_fmts.size(); ++c) {
+    CellXf xf;
+    xf.num_fmt_id = static_cast<std::uint16_t>(num_fmts[c]);
+    xf.apply_number_format = num_fmts[c] != 0U;
+    xf.xf_id = c < parents.size() ? parents[c] : 0U;
+    table.cell_xfs.push_back(xf);
+  }
+  return table;
+}
+
+// The cx1 authored table: cell xf k carries number format k unless `overrides` names it.
+std::vector<std::uint32_t> Cx1NumFmts(std::initializer_list<std::pair<std::uint32_t, std::uint32_t>> overrides) {
+  std::vector<std::uint32_t> out = Iota(13);
+  for (const auto& o : overrides) {
+    out[o.first] = o.second;
+  }
+  return out;
+}
+
+CellStyleSavePlan Plan(const StylesTable& table, const UsedCellXfs& used) {
+  return build_cell_style_save_plan(table, used, mac_365_ja_jp_profile());
+}
+
+std::vector<std::uint32_t> Indices(const CellStyleSavePlan& plan, std::uint32_t count) {
+  std::vector<std::uint32_t> out(count);
+  for (std::uint32_t c = 0; c < count; ++c) {
+    out[c] = plan.cell_xf_index(c);
+  }
+  return out;
+}
+
+TEST(CellStyleSavePlan, Cx1D1EqualCellXfsCollapseIntoTheFirst) {
+  const CellStyleSavePlan plan = Plan(CellXfTable(Cx1NumFmts({{1, 3}, {2, 3}})), Used(13, {2, 1, 3}));
+  // Cell xf 3 carries number format 3 as well, so all three are one group.
+  EXPECT_EQ(plan.cell_xf_order(), (std::vector<std::uint32_t>{0, 1}));
+  EXPECT_EQ(plan.cell_xf_index(1), 1U);
+  EXPECT_EQ(plan.cell_xf_index(2), 1U);
+  EXPECT_EQ(plan.cell_xf_index(3), 1U);
+  EXPECT_FALSE(plan.cell_xfs_identity());
+}
+
+TEST(CellStyleSavePlan, Cx1D3SurvivorsKeepSourceOrder) {
+  const CellStyleSavePlan plan = Plan(CellXfTable(Cx1NumFmts({})), Used(13, {9, 4, 7}));
+  EXPECT_EQ(plan.cell_xf_order(), (std::vector<std::uint32_t>{0, 4, 7, 9}));
+  EXPECT_EQ(plan.cell_xf_index(9), 3U);
+  EXPECT_EQ(plan.cell_xf_index(4), 1U);
+}
+
+TEST(CellStyleSavePlan, Cx1D7CellXfEqualToXf0CollapsesIntoXf0) {
+  const CellStyleSavePlan plan = Plan(CellXfTable(Cx1NumFmts({{5, 0}})), Used(13, {5, 7}));
+  EXPECT_EQ(plan.cell_xf_order(), (std::vector<std::uint32_t>{0, 7}));
+  EXPECT_EQ(plan.cell_xf_index(5), 0U);
+  EXPECT_EQ(plan.cell_xf_index(7), 1U);
+}
+
+TEST(CellStyleSavePlan, Cx1D13GroupSitsAtItsUnusedFirstMember) {
+  const CellStyleSavePlan plan = Plan(CellXfTable(Cx1NumFmts({{6, 2}})), Used(13, {6, 4}));
+  EXPECT_EQ(plan.cell_xf_order(), (std::vector<std::uint32_t>{0, 2, 4}));
+  EXPECT_EQ(plan.cell_xf_index(6), 1U);
+  EXPECT_EQ(plan.cell_xf_index(4), 2U);
+}
+
+TEST(CellStyleSavePlan, Cx1D2ApplyFlagsKeepCellXfsApart) {
+  StylesTable table = CellXfTable(Cx1NumFmts({{1, 3}, {2, 3}}));
+  table.cell_xfs[2].apply_number_format = false;
+  const CellStyleSavePlan plan = Plan(table, Used(13, {1, 2}));
+  EXPECT_EQ(plan.cell_xf_order(), (std::vector<std::uint32_t>{0, 1, 2}));
+}
+
+TEST(CellStyleSavePlan, CellXfsAllUsedIsIdentity) {
+  const CellStyleSavePlan plan = Plan(CellXfTable(Cx1NumFmts({{1, 3}, {2, 3}})), Every(13));
+  UsedCellXfs all;
+  all.all_used = true;
+  const CellStyleSavePlan opaque = Plan(CellXfTable(Cx1NumFmts({{1, 3}, {2, 3}})), all);
+  EXPECT_FALSE(plan.cell_xfs_identity());
+  EXPECT_TRUE(opaque.cell_xfs_identity());
+  EXPECT_EQ(opaque.cell_xf_order(), Iota(13));
+  EXPECT_EQ(Indices(opaque, 13), Iota(13));
+}
+
+TEST(CellStyleSavePlan, CellXfsEveryXfUsedAndDistinctIsIdentity) {
+  const CellStyleSavePlan plan = Plan(CellXfTable(Cx1NumFmts({})), Every(13));
+  EXPECT_TRUE(plan.cell_xfs_identity());
+  EXPECT_EQ(Indices(plan, 13), Iota(13));
+}
+
+TEST(CellStyleSavePlan, CellXfsEmptyTableWritesNoOrder) {
+  const CellStyleSavePlan plan = Plan(StylesTable{}, UsedCellXfs{});
+  EXPECT_TRUE(plan.cell_xf_order().empty());
+  EXPECT_TRUE(plan.cell_xfs_identity());
+  EXPECT_EQ(plan.cell_xf_index(5), 5U);
+}
+
+TEST(CellStyleSavePlan, CellXfIndexOutsideTheTableIsKept) {
+  const CellStyleSavePlan plan = Plan(CellXfTable(Cx1NumFmts({})), Used(13, {4}));
+  EXPECT_EQ(plan.cell_xf_index(13), 13U);
+  EXPECT_EQ(plan.cell_xf_index(99), 99U);
+}
+
+TEST(CellStyleSavePlan, CellXfsCompareTheWrittenFontFillAndBorder) {
+  StylesTable table = CellXfTable({0, 3, 3});
+  table.fonts.resize(1);
+  table.cell_xfs[1].font_index = 5U;
+  table.cell_xfs[1].fill_index = 7U;
+  table.cell_xfs[1].border_index = 9U;
+  const CellStyleSavePlan plan = Plan(table, Used(3, {1, 2}));
+  EXPECT_EQ(plan.cell_xf_order(), (std::vector<std::uint32_t>{0, 1}));
+  EXPECT_EQ(plan.cell_xf_index(2), 1U);
+}
+
+TEST(CellStyleSavePlan, CellXfsWhoseParentsMergeCollapse) {
+  StylesTable table = Table({Style("標準", 0, 0), Style("Good", 1, 26), Style("Good", 2, 26)}, 3, {0, 1, 2});
+  table.cell_xfs[1].num_fmt_id = 3U;
+  table.cell_xfs[2].num_fmt_id = 3U;
+  const CellStyleSavePlan plan = Plan(table, Used(3, {1, 2}));
+  ASSERT_EQ(plan.cell_xf_parent(1), plan.cell_xf_parent(2));
+  EXPECT_EQ(plan.cell_xf_order(), (std::vector<std::uint32_t>{0, 1}));
+  EXPECT_EQ(plan.cell_xf_index(2), 1U);
+}
+
+TEST(CellStyleSavePlan, CellXfUnderADroppedStyleDoesNotCollapseIntoOneUnderNormal) {
+  // Cell xf 1 is unused under Good, which drops; cell xf 3 is used under Normal with the same content.
+  StylesTable table = Table({Style("標準", 0, 0), Style("Good", 1, 26)}, 2, {0, 1, 0, 0});
+  table.cell_xfs[1].num_fmt_id = 5U;
+  table.cell_xfs[2].num_fmt_id = 7U;
+  table.cell_xfs[3].num_fmt_id = 5U;
+  const CellStyleSavePlan plan = Plan(table, Used(4, {2, 3}));
+  ASSERT_EQ(plan.cell_xf_parent(1), 0U);
+  EXPECT_EQ(plan.cell_xf_order(), (std::vector<std::uint32_t>{0, 2, 3}));
+  EXPECT_EQ(plan.cell_xf_index(3), 2U);
+}
+
+TEST(CellStyleSavePlan, CellXfsDifferingInExtLstStayApart) {
+  StylesTable table = CellXfTable({0, 3, 3});
+  table.cell_xfs[2].trailing_children_xml = "<extLst><ext uri=\"{X}\"/></extLst>";
+  const CellStyleSavePlan plan = Plan(table, Used(3, {1, 2}));
+  EXPECT_EQ(plan.cell_xf_order(), (std::vector<std::uint32_t>{0, 1, 2}));
+}
+
+TEST(CellStyleSavePlan, CollectUsedCellXfsChartsheetDoesNotUseAll) {
+  Workbook wb = Workbook::create();
+  const std::size_t index = wb.add_sheet("Chart1");
+  wb.sheet(index).set_opaque_ooxml_sheet(
+      "xl/chartsheets/sheet1.xml", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet");
+  EXPECT_FALSE(collect_used_cell_xfs(wb).all_used);
+}
+
+TEST(CellStyleSavePlan, CollectUsedCellXfsRetainedRevisionLogUsesAll) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(wb.add_passthrough_part(PassthroughPart("xl/revisions/revisionLog1.xml",
+                                                      "application/vnd.openxmlformats-officedocument."
+                                                      "spreadsheetml.revisionLog+xml",
+                                                      {}))
+                  .has_value());
+  EXPECT_TRUE(collect_used_cell_xfs(wb).all_used);
+}
+
+TEST(CellStyleSavePlan, CollectUsedCellXfsRetainedMacroSheetPartUsesAll) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(wb.add_passthrough_part(PassthroughPart("xl/macrosheets/sheet1.bin", "", {})).has_value());
   EXPECT_TRUE(collect_used_cell_xfs(wb).all_used);
 }
 

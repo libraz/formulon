@@ -479,6 +479,7 @@ TEST(StylesRoundTrip, PreservesCellXfPresenceProjectionAndNormalizesParentId) {
   xf.hidden = false;
   styles.cell_xfs.push_back(xf);
   src.set_styles(std::move(styles));
+  src.sheet(0).set_cell_xf_index(0U, 0U, 1U);  // a save drops unreferenced cell xfs.
 
   auto save_or = src.save();
   ASSERT_TRUE(static_cast<bool>(save_or)) << save_or.error().message;

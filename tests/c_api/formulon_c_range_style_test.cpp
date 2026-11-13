@@ -35,6 +35,10 @@ const std::vector<fm_xf_remap_t> kPairs = {{0U, 5U}, {1U, 6U}, {2U, 7U}};
 void MakeWorkbook(WorkbookGuard& wb) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   wb.handle->workbook().mutable_styles().cell_xfs.resize(10U);
+  // Distinct records, so a save keeps each at its own index.
+  for (std::uint16_t xf = 1U; xf < 10U; ++xf) {
+    wb.handle->workbook().mutable_styles().cell_xfs[xf].num_fmt_id = static_cast<std::uint16_t>(xf + 1U);
+  }
 }
 
 std::pair<std::int32_t, std::uint32_t> Effective(const WorkbookGuard& wb, std::uint32_t row, std::uint32_t col) {
@@ -394,6 +398,10 @@ TEST(FormulonCApiRangeStyle, ResultSurvivesSaveLoad) {
   MakeWorkbook(wb);
   ASSERT_EQ(fm_sheet_set_row_xf_index(wb.handle, 0, 2U, 2U, 1U), 0);
   ASSERT_EQ(Remap(wb, 0U, 1U, kLastRow, 1U), 0);
+  // A save drops unreferenced cell xfs; reference the rest away from the cells checked.
+  for (std::uint32_t xf = 1U; xf < 10U; ++xf) {
+    ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 5000U + xf, 10U, xf), 0);
+  }
 
   for (const std::int32_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
     BufferGuard saved;

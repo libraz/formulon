@@ -136,6 +136,10 @@ TEST(FormulonCApiArgumentRange, CellXfIndexPastTheTableIsRejectedBeforeAnyWrite)
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   wb.handle->workbook().mutable_styles().cell_xfs.resize(3U);
+  // Distinct records, so a save keeps each at its own index.
+  for (std::uint16_t xf = 1U; xf < 3U; ++xf) {
+    wb.handle->workbook().mutable_styles().cell_xfs[xf].num_fmt_id = static_cast<std::uint16_t>(xf + 1U);
+  }
   std::size_t xf_count = 0U;
   ASSERT_EQ(fm_workbook_get_cell_xf_count(wb.handle, &xf_count), 0);
   ASSERT_EQ(xf_count, 3U);
@@ -149,6 +153,8 @@ TEST(FormulonCApiArgumentRange, CellXfIndexPastTheTableIsRejectedBeforeAnyWrite)
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 1U, 1U, count - 1U), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_set_range_xf_index(wb.handle, 0, record_arg(fm_cell_rect_t{3U, 0U, 4U, 0U}), count - 1U), 0)
       << fm_get_last_error_message();
+  // Xf 1 is referenced too, so the save keeps the last xf at its own index.
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 10U, 5U, 1U), 0);
   WorkbookGuard reloaded;
   SaveAndReload(wb, FM_WORKBOOK_FORMAT_XLSX, &reloaded);
   const std::pair<std::uint32_t, std::uint32_t> kStyled[] = {{1U, 1U}, {3U, 0U}, {4U, 0U}};

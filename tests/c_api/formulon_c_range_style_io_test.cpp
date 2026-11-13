@@ -37,6 +37,10 @@ constexpr std::int64_t kNoFormat = -1;
 void MakeWorkbook(WorkbookGuard& wb) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   wb.handle->workbook().mutable_styles().cell_xfs.resize(10U);
+  // Distinct records, so a save keeps each at its own index.
+  for (std::uint16_t xf = 1U; xf < 10U; ++xf) {
+    wb.handle->workbook().mutable_styles().cell_xfs[xf].num_fmt_id = static_cast<std::uint16_t>(xf + 1U);
+  }
 }
 
 formulon::Sheet& SheetOf(WorkbookGuard& wb) {
@@ -223,6 +227,10 @@ fm_status_t SetLink(WorkbookGuard& wb, fm_cell_rect_t rect) {
 Bytes PackageWith(const std::string& cols, const std::string& sheet_data) {
   WorkbookGuard base;
   MakeWorkbook(base);
+  // A save drops unreferenced cell xfs; the replaced sheet part names them by model index.
+  for (std::uint32_t xf = 1U; xf < 10U; ++xf) {
+    EXPECT_EQ(fm_sheet_set_cell_xf_index(base.handle, 0, 1000U + xf, 0U, xf), 0);
+  }
   const std::string xml =
       "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
       "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">" +

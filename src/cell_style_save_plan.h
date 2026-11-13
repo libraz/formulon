@@ -13,6 +13,12 @@
 // `collect_used_cell_xfs` is the single enumeration of the structures that
 // hold a cell xf. A new structure holding a cell xf must be added there, or
 // the styles it uses are dropped on save.
+//
+// The plan also compacts `<cellXfs>` as Excel does on save: cell xfs that
+// write identically collapse into the first one's position, groups no
+// structure references drop (xf 0 always stays), and the rest keep source
+// order. Identity compares the written record, apply flags, parent and xf
+// extLst included.
 
 #ifndef FORMULON_CELL_STYLE_SAVE_PLAN_H_
 #define FORMULON_CELL_STYLE_SAVE_PLAN_H_
@@ -40,8 +46,10 @@ struct UsedCellXfs {
 };
 
 /// Collects the cell xfs referenced by every sheet: stored cells, style runs,
-/// row styles (`has_style`) and column styles (`has_style`). An opaque sheet
-/// sets `all_used`. Indices outside `styles().cell_xfs` are ignored.
+/// row styles (`has_style`) and column styles (`has_style`). `all_used` is set
+/// by a part the save writes back unread that names cell xfs: an opaque sheet
+/// other than a chartsheet, or a retained revision log, macro sheet or dialog
+/// sheet part. Indices outside `styles().cell_xfs` are ignored.
 UsedCellXfs collect_used_cell_xfs(const Workbook& wb);
 
 /// What a save writes for the named cell styles.
@@ -63,6 +71,17 @@ class CellStyleSavePlan {
     return old_xf_id < parent_of_.size() ? parent_of_[old_xf_id] : parent_of_[0];
   }
 
+  /// `<cellXfs>` in output order, as model `cell_xfs` indices (each group's
+  /// first member). Empty when the model table is empty, as the writers then
+  /// synthesize the default xf.
+  const std::vector<std::uint32_t>& cell_xf_order() const noexcept { return cell_xf_order_; }
+  /// Output index of model cell xf `model_xf`. An index outside the model
+  /// table is returned unchanged, as the writers have always written it.
+  std::uint32_t cell_xf_index(std::uint32_t model_xf) const noexcept {
+    return model_xf < cell_xf_index_.size() ? cell_xf_index_[model_xf] : model_xf;
+  }
+  /// True when every cell xf is written at its model index.
+  bool cell_xfs_identity() const noexcept { return cell_xfs_identity_; }
   /// The profile the names, merges and order were decided under.
   ExcelProfile profile() const noexcept { return profile_; }
 
@@ -79,6 +98,9 @@ class CellStyleSavePlan {
   std::vector<std::uint32_t> style_xf_order_;
   std::vector<std::uint32_t> parent_of_;
   std::vector<std::string> planned_names_;
+  std::vector<std::uint32_t> cell_xf_order_;
+  std::vector<std::uint32_t> cell_xf_index_;
+  bool cell_xfs_identity_ = true;
   ExcelProfile profile_;
   bool identity_ = false;
 

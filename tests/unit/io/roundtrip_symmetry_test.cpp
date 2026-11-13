@@ -174,6 +174,10 @@ TEST(RoundtripSymmetry, DataBarCfvoSurvivesReadWrite) {
 TEST(RoundtripSymmetry, BlankStyleRunsAreIdempotentAcrossTwoCycles) {
   Workbook wb = Workbook::create();
   wb.mutable_styles().cell_xfs.resize(3U);
+  // Distinct records, so a save keeps each at its own index.
+  for (std::uint16_t xf = 1U; xf < 3U; ++xf) {
+    wb.mutable_styles().cell_xfs[xf].num_fmt_id = static_cast<std::uint16_t>(xf + 1U);
+  }
   Sheet& sheet = wb.sheet(0);
   ColumnLayout column;
   column.first = 1U;

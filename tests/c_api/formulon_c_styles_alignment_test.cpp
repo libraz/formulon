@@ -202,6 +202,9 @@ TEST(FormulonCApiStyles, CellXfIgnoresPoisonForOmittedAlignmentAttributes) {
   EXPECT_EQ(got.has_wrap_text, 0);
   EXPECT_EQ(got.has_justify_last_line, 0);
 
+  // A save drops unreferenced cell xfs.
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0U, 0U, explicit_index), 0);
+
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   const std::string styles_xml = ExtractStylesXml(saved);
@@ -227,6 +230,9 @@ TEST(FormulonCApiStyles, CellXfExplicitTopAlignmentRemainsPresent) {
   ASSERT_EQ(fm_workbook_get_cell_xf_at(wb.handle, index, &got), 0);
   EXPECT_EQ(got.vertical, 0);
   EXPECT_EQ(got.has_vertical, 1);
+
+  // A save drops unreferenced cell xfs.
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0U, 0U, index), 0);
 
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
@@ -293,6 +299,9 @@ TEST(FormulonCApiStyles, CellXfVerticalAlignZeroIsExplicitTopOnlyWithItsPresence
   ASSERT_EQ(fm_workbook_get_cell_xf_at(wb.handle, explicit_index, &got_explicit), 0);
   EXPECT_EQ(got_explicit.vertical, 0);
   EXPECT_EQ(got_explicit.has_vertical, 1);
+
+  // A save drops unreferenced cell xfs.
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0U, 0U, explicit_index), 0);
 
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);

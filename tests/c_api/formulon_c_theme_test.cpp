@@ -477,6 +477,11 @@ Bytes PrecedencePackage(fm_workbook_t* wb, const PrecedenceXfs& xfs) {
       std::to_string(xfs.row) +
       "\"><c r=\"D7\"><v>2</v></c></row>"
       "</sheetData></worksheet>";
+  // A save drops unreferenced cell xfs; name each from cells the replacement discards.
+  uint32_t row = 1000U;
+  for (const auto xf : {xfs.cell, xfs.row, xfs.column}) {
+    EXPECT_EQ(fm_sheet_set_cell_xf_index(wb, 0, row++, 0, static_cast<uint32_t>(xf)), 0);
+  }
   return ReplaceEntries(Save(wb), {{"xl/worksheets/sheet1.xml", sheet}});
 }
 

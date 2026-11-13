@@ -906,6 +906,7 @@ TEST(FormulonCApiSheetLayout, AutoRowHeightRefreshesTheCacheAndStaysAutomatic) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_load(source_bytes.value().data(), source_bytes.value().size(), &wb.handle), 0);
   wb.handle->workbook().mutable_styles().cell_xfs.resize(2U);
+  wb.handle->workbook().mutable_styles().cell_xfs[1].num_fmt_id = 2U;  // distinct from xf 0, so a save keeps it
 
   ASSERT_EQ(fm_sheet_set_row_auto_height(wb.handle, 0, 2U, 2U, 31.5), 0);
   ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 4U, 4U, 25.0), 0);
@@ -1131,6 +1132,7 @@ TEST(FormulonCApiSheetLayout, StyleOverridesSurviveSaveLoad) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   wb.handle->workbook().mutable_styles().cell_xfs.resize(2U);
+  wb.handle->workbook().mutable_styles().cell_xfs[1].num_fmt_id = 2U;  // distinct from xf 0, so a save keeps it
   ASSERT_EQ(fm_sheet_set_column_width(wb.handle, 0, 0U, 2U, 18.0), 0);
   ASSERT_EQ(fm_sheet_set_column_xf_index(wb.handle, 0, 0U, 2U, 1U), 0);
   ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 3U, 3U, 24.0), 0);

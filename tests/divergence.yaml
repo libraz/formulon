@@ -954,6 +954,16 @@ entries:
     prefer: formulon
     first_noted: 2026-11-13
     last_verified_excel_version: "16.115"
+  - id: cell_xf_apply_flags_not_recomputed_on_save
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    scope: unit-test
+    evidence: [tests/unit/io/cellxfs_compaction_golden_test.cpp]
+    reason: "Excel recomputes a cell xf's applyNumberFormat on save (set when its number format differs from its cell style's), so two <cellXfs> entries that differ only in that flag collapse into one: authored xfs 1 and 2 with numFmtId 3, one without applyNumberFormat, are saved as a single entry that both cells name. Formulon writes the apply flags as stored and compares them when it collapses equal entries, so it keeps both. The same holds for two entries whose cell styles merge on save and whose flags then differ only because their parents did. Closes when the save recomputes the apply flags."
+    prefer: mac-excel-365
+    first_noted: 2026-11-14
+    last_verified_excel_version: "16.115"
   - id: pivot_tie_after_reopen_undetermined
     applies_to: all
     cause: non-identifiable

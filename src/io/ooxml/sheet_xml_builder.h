@@ -27,6 +27,7 @@
 #include "styles.h"
 
 namespace formulon {
+class CellStyleSavePlan;
 class Sheet;
 namespace parser {
 struct ExternalBookIndexer;
@@ -55,6 +56,8 @@ class SharedStrings;
 /// `book_directory` is `EmissionPlan::book_directory`, which the hyperlink
 /// `display` attributes follow. `absent_phonetic` is the `<phoneticPr>` a sheet
 /// without its own is written with (`FontSavePlan::absent_sheet_phonetic`).
+/// `style_plan` renumbers the written cell, row and column xfs; null writes
+/// model indices.
 std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
                               const std::vector<std::string>& table_rids,
                               const std::vector<std::string>& hyperlink_rids, std::string_view printer_settings_rid,
@@ -64,7 +67,8 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
                               const xlsb::NameShapes& name_shapes, const parser::ExternalBookIndexer* indexer,
                               const std::vector<std::string>* sheet_names = nullptr,
                               const RichErrorVmMap* rich_error_vm = nullptr, std::string_view book_directory = {},
-                              const std::optional<PhoneticProperties>& absent_phonetic = std::nullopt);
+                              const std::optional<PhoneticProperties>& absent_phonetic = std::nullopt,
+                              const CellStyleSavePlan* style_plan = nullptr);
 
 /// Builds the `_rels` document for a single sheet, covering tables,
 /// pivot tables, hyperlinks, printer settings, comments / VML, and

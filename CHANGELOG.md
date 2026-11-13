@@ -24,6 +24,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   properties (`<sheetPr>`) and a printer-settings part are still reported as
   deferred print settings.
 
+- `.xlsx` saves compact the cell formats (`<cellXfs>`) as Excel does: entries
+  that write identically collapse into the first one, entries no cell, row or
+  column uses are dropped (the default entry stays), and the rest keep their
+  order. Every cell, row and column style index in the saved file is
+  renumbered to match, so a book saved and reopened can report different
+  style indices for the same cells; the formats and cell style names they
+  resolve to are unchanged, and the workbook in memory is not modified. A
+  book that keeps a macro sheet, dialog sheet or shared-workbook revision log
+  is saved with its cell formats as stored.
+
 - A pivot cache marked `refreshOnLoad` in an opened `.xlsx` or `.xlsb` is
   refreshed from its source before the workbook is first read, edited,
   calculated or saved, as Excel refreshes it on open. A profile set right after

@@ -126,6 +126,11 @@ TEST(FormulonCApiStyles, SetThenSaveLoadPreservesXfIndex) {
   // to the default rather than handing back an index whose record
   // `fm_workbook_get_cell_xf_at` would then refuse to return.
   wb.handle->workbook().mutable_styles().cell_xfs.resize(8);
+  // Distinct, referenced records, so a save keeps each at its own index.
+  for (std::uint16_t xf = 1U; xf < 8U; ++xf) {
+    wb.handle->workbook().mutable_styles().cell_xfs[xf].num_fmt_id = static_cast<std::uint16_t>(xf + 1U);
+    EXPECT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 10U + xf, 0, xf), 0);
+  }
 
   // Stamp xf_index = 7 on cell A1 and save.
   EXPECT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 3.14), 0);
@@ -550,6 +555,10 @@ TEST(FormulonCApiStyles, ResetCellKeepsInheritanceAcrossSaveLoad) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   wb.handle->workbook().mutable_styles().cell_xfs.resize(3);
+  // Distinct records, so a save keeps each at its own index.
+  for (std::uint16_t xf = 1U; xf < 3U; ++xf) {
+    wb.handle->workbook().mutable_styles().cell_xfs[xf].num_fmt_id = static_cast<std::uint16_t>(xf + 1U);
+  }
   ASSERT_EQ(fm_sheet_set_column_xf_index(wb.handle, 0, 0, 0, 1), 0);
   ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 0, 2), 0);
   ASSERT_EQ(fm_sheet_reset_cell_xf_index(wb.handle, 0, 0, 0), 0);

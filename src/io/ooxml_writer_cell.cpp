@@ -34,6 +34,7 @@
 #include <vector>
 
 #include "cell.h"
+#include "cell_style_save_plan.h"
 #include "io/data_table_xml.h"
 #include "io/dynamic_array_formula.h"
 #include "io/future_functions.h"
@@ -90,6 +91,11 @@ bool PhantomForcesDefaultStyle(const Sheet& sheet, std::uint32_t row, std::uint3
 // Emits an `s="N"` attribute when `xf_index` is non-zero. The default
 // xf (index 0) is omitted for byte parity with Excel's writer unless `force`
 // is set (see `PhantomForcesDefaultStyle`).
+// The saved index of model cell xf `xf_index`; unchanged without a plan.
+std::uint32_t SavedXf(const CellStyleSavePlan* style_plan, std::uint32_t xf_index) {
+  return style_plan != nullptr ? style_plan->cell_xf_index(xf_index) : xf_index;
+}
+
 void AppendStyleAttr(std::string& out, std::uint32_t xf_index, bool force, bool show_phonetic = false) {
   if (xf_index != 0U || force) {
     append_xml_attr_uint(out, "s", xf_index);
@@ -353,8 +359,9 @@ SharedRoles CollectSharedRoles(const Sheet& sheet, const xlsb::NameShapes& name_
 bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell& cell,
                    const SharedStrings* shared_strings, std::uint32_t dynamic_array_cm_index,
                    const xlsb::NameShapes& name_shapes, const parser::ExternalBookIndexer* indexer,
-                   const SharedRole* shared, std::uint32_t vm) {
+                   const SharedRole* shared, std::uint32_t vm, const CellStyleSavePlan* style_plan) {
   const bool has_formula = !cell.formula_text.empty();
+  const std::uint32_t xf = SavedXf(style_plan, cell.xf_index);
   if (!CellIsEmitted(sheet, row, col, cell)) {
     return false;
   }
@@ -365,7 +372,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     out.append("<c r=\"");
     AppendCellRefForRef(out, row, col);
     out.append("\"");
-    AppendStyleAttr(out, cell.xf_index, false);
+    AppendStyleAttr(out, xf, false);
     AppendFormulaValueType(out, cell.cached_value);
     out.push_back('>');
     append_data_table_formula(out, *table);
@@ -380,7 +387,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
   // Formula cells with non-finite cached values still emit the <f>; only
   // the <v> is downgraded.
   if (!has_formula && cell.cached_value.is_number() && !std::isfinite(cell.cached_value.as_number())) {
-    AppendErrorCellXml(out, addr, ErrorCode::Num, cell.xf_index, cell.show_phonetic);
+    AppendErrorCellXml(out, addr, ErrorCode::Num, xf, cell.show_phonetic);
     return true;
   }
 
@@ -390,7 +397,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     out.append("<c r=\"");
     out.append(addr);
     out.append("\"");
-    AppendStyleAttr(out, cell.xf_index, false, cell.show_phonetic);
+    AppendStyleAttr(out, xf, false, cell.show_phonetic);
     out.append("/>");
     return true;
   }
@@ -422,7 +429,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     // legacy CSE array on reopen; emitted only when the saved package
     // carries a resolved entry for it.
     // Excel keeps `ph` on constants and blanks only.
-    AppendStyleAttr(out, cell.xf_index, false);
+    AppendStyleAttr(out, xf, false);
     AppendFormulaValueType(out, cell.cached_value);
     if (dynamic) {
       append_xml_attr_uint(out, "cm", dynamic_array_cm_index);
@@ -518,7 +525,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
   // through the inline-string block, spans intact.
   out.append("<c r=\"");
   out.append(addr);
-  AppendLiteralCellBody(out, cell.cached_value, cell.phonetic_runs, cell.phonetic_props, shared_strings, cell.xf_index,
+  AppendLiteralCellBody(out, cell.cached_value, cell.phonetic_runs, cell.phonetic_props, shared_strings, xf,
                         cell.show_phonetic, vm);
   return true;
 }
@@ -529,7 +536,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
 // default (height -> none, hidden -> "0", outlineLevel -> 0); `hidden="0"`
 // is never written. Excel emits `customHeight="1"` only for an explicit
 // override, so an auto height stays auto across a save.
-void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout) {
+void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout, const CellStyleSavePlan* style_plan) {
   if (layout.has_height || layout.height > 0.0) {
     out.append(" ht=\"");
     // Shortest round-trip spelling, the same one cell values use: a
@@ -556,8 +563,9 @@ void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout) {
   if (layout.has_style) {
     // OOXML row style is effective only with customFormat=1, which alone
     // reads as xf 0; Excel omits `s` for xf 0.
-    if (layout.style_xf != 0U) {
-      append_xml_attr_uint(out, "s", layout.style_xf);
+    const std::uint32_t xf = SavedXf(style_plan, layout.style_xf);
+    if (xf != 0U) {
+      append_xml_attr_uint(out, "s", xf);
     }
     emit_xsd_bool_attr(out, "customFormat", true);
   }
@@ -579,7 +587,7 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
                   const SharedStrings* shared_strings, std::uint32_t dynamic_array_cm_index,
                   const xlsb::NameShapes& name_shapes, std::unordered_map<std::uint64_t, bool>& always_by_anchor,
                   const parser::ExternalBookIndexer* indexer, const SharedRoles& shared_roles,
-                  const RichErrorVmMap* rich_error_vm) {
+                  const RichErrorVmMap* rich_error_vm, const CellStyleSavePlan* style_plan) {
   // Write straight into `out`; a row that ends up with no content is truncated away.
   const std::size_t row_start = out.size();
   out.append("<row r=\"");
@@ -610,8 +618,8 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
         static_cast<std::size_t>(row - region->anchor_row) * region->cols + (col - region->anchor_col);
     const Value value = idx < region->cells.size() ? region->cells[idx] : Value::blank();
     const bool force_style = PhantomForcesDefaultStyle(sheet, row, col, stored);
-    AppendPhantomCellXml(out, row, col, select_effective_xf(sheet, row, col).xf_index, force_style, value, it->second,
-                         VmAt(rich_error_vm, row, col));
+    AppendPhantomCellXml(out, row, col, SavedXf(style_plan, select_effective_xf(sheet, row, col).xf_index), force_style,
+                         value, it->second, VmAt(rich_error_vm, row, col));
   };
   // Blank formatted columns, written as `<c r="..." s="N"/>` (bare for xf 0).
   auto run = runs.begin();
@@ -640,7 +648,7 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
         out.append("<c r=\"");
         AppendCellRefForRef(out, row, static_cast<std::uint32_t>(col));
         out.push_back('"');
-        AppendStyleAttr(out, run->xf, false);
+        AppendStyleAttr(out, SavedXf(style_plan, run->xf), false);
         out.append("/>");
       }
       advance_run_past(stop - 1U);
@@ -658,7 +666,8 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
     const RowCells::Entry e = *entry;
     const auto role = shared_roles.find(CellKey(row, e.col));
     (void)AppendCellXml(out, sheet, row, e.col, e.cell, shared_strings, dynamic_array_cm_index, name_shapes, indexer,
-                        role != shared_roles.end() ? &role->second : nullptr, VmAt(rich_error_vm, row, e.col));
+                        role != shared_roles.end() ? &role->second : nullptr, VmAt(rich_error_vm, row, e.col),
+                        style_plan);
     ++entry;
   }
   if (out.size() == body_start) {
@@ -735,7 +744,8 @@ std::optional<SheetDimension> sheet_dimension(const Sheet& sheet) {
 
 void AppendSheetDataXml(std::string& out, const Sheet& sheet, const SharedStrings* shared_strings,
                         std::uint32_t dynamic_array_cm_index, const xlsb::NameShapes& name_shapes,
-                        const parser::ExternalBookIndexer* indexer, const RichErrorVmMap* rich_error_vm) {
+                        const parser::ExternalBookIndexer* indexer, const RichErrorVmMap* rich_error_vm,
+                        const CellStyleSavePlan* style_plan) {
   // Collect populated row indices and sort ascending so the output is
   // deterministic regardless of unordered_map iteration order.
   const auto& rows_map = sheet.rows();
@@ -785,7 +795,7 @@ void AppendSheetDataXml(std::string& out, const Sheet& sheet, const SharedString
     const bool zero_height = sheet.format_defaults().zero_height;
     const RowLayout* row_layout = find_row_override(sheet.layout(), row);
     if (row_layout != nullptr) {
-      AppendRowOverrideAttrs(override_attrs, *row_layout);
+      AppendRowOverrideAttrs(override_attrs, *row_layout, style_plan);
     }
     // Under zeroHeight a present row is visible unless it says otherwise; an entry-less row is hidden.
     const bool keep_empty_row = zero_height && row_layout != nullptr && !row_layout->hidden;
@@ -806,13 +816,13 @@ void AppendSheetDataXml(std::string& out, const Sheet& sheet, const SharedString
       converted.has_style = true;
       converted.style_xf = 0U;
       override_attrs.clear();
-      AppendRowOverrideAttrs(override_attrs, converted);
+      AppendRowOverrideAttrs(override_attrs, converted, style_plan);
       implicit_hidden = false;
     }
     AppendRowXml(out, sheet, row, row_cells, plan.runs,
                  phantoms_it != phantom_cols.end() ? phantoms_it->second : kNoPhantoms, override_attrs, keep_empty_row,
                  implicit_hidden, shared_strings, dynamic_array_cm_index, name_shapes, always_by_anchor, indexer,
-                 shared_roles, rich_error_vm);
+                 shared_roles, rich_error_vm, style_plan);
   }
 
   if (out.size() == rows_start) {

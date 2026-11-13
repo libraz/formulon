@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -48,10 +49,96 @@ struct Group {
   bool survives = false;
 };
 
+// Parts written back unread whose records name cell xfs.
+constexpr std::string_view kCellXfPartPrefixes[] = {"xl/revisions/", "xl/macrosheets/", "xl/dialogsheets/"};
+
+bool ends_with(std::string_view text, std::string_view suffix) {
+  return text.size() >= suffix.size() && text.substr(text.size() - suffix.size()) == suffix;
+}
+
+bool retains_cell_xf_part(const Workbook& wb) {
+  for (const PassthroughPart& part : wb.passthrough_parts()) {
+    for (const std::string_view prefix : kCellXfPartPrefixes) {
+      if (std::string_view(part.path).substr(0, prefix.size()) == prefix) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 void mark(UsedCellXfs& out, std::uint32_t xf) {
   if (xf < out.used.size()) {
     out.used[xf] = true;
   }
+}
+
+struct CellXfLayout {
+  std::vector<std::uint32_t> order;
+  std::vector<std::uint32_t> index;
+  bool identity = true;
+};
+
+// Step 10: `<cellXfs>` compaction. `parent_index[x]` is the written `xfId`
+// of model style xf x, kNone when that style xf is not written.
+CellXfLayout plan_cell_xfs(const StylesTable& styles, const UsedCellXfs& used,
+                           const std::vector<std::uint32_t>& parent_index) {
+  CellXfLayout out;
+  const auto count = static_cast<std::uint32_t>(styles.cell_xfs.size());
+  if (count == 0U || used.all_used) {
+    for (std::uint32_t c = 0; c < count; ++c) {
+      out.order.push_back(c);
+      out.index.push_back(c);
+    }
+    return out;
+  }
+  // Compare what the writers emit: font, fill and border clamped to the written lists, the written parent.
+  const auto at_least_one = [](std::size_t n) { return n == 0U ? std::size_t{1} : n; };
+  const std::size_t fonts = at_least_one(styles.fonts.size());
+  const std::size_t fills = at_least_one(styles.fills.size());
+  const std::size_t borders = at_least_one(styles.borders.size());
+  const std::size_t style_count = parent_index.size();
+  std::vector<std::uint32_t> first_of(count);
+  {
+    std::unordered_map<std::string, std::uint32_t> by_key;
+    for (std::uint32_t c = 0; c < count; ++c) {
+      CellXf xf = styles.cell_xfs[c];
+      xf.font_index = xf.font_index < fonts ? xf.font_index : 0U;
+      xf.fill_index = xf.fill_index < fills ? xf.fill_index : 0U;
+      xf.border_index = xf.border_index < borders ? xf.border_index : 0U;
+      const std::uint32_t parent = xf.xf_id < style_count ? xf.xf_id : 0U;
+      const bool parent_written = parent_index[parent] != kNone;
+      // A parent that is not written keeps its model identity, apart from every written index.
+      xf.xf_id = parent_written ? parent_index[parent] : parent;
+      std::string key = cell_xf_key(xf);
+      key.push_back(parent_written ? 'w' : 'm');
+      key.append(xf.trailing_children_xml);
+      first_of[c] = by_key.emplace(std::move(key), c).first->second;
+    }
+  }
+  std::vector<bool> group_used(count, false);
+  group_used[0] = true;
+  for (std::uint32_t c = 0; c < count; ++c) {
+    if (c < used.used.size() && used.used[c]) {
+      group_used[first_of[c]] = true;
+    }
+  }
+  std::vector<std::uint32_t> position(count, 0U);
+  for (std::uint32_t g = 0; g < count; ++g) {
+    if (first_of[g] == g && group_used[g]) {
+      position[g] = static_cast<std::uint32_t>(out.order.size());
+      out.order.push_back(g);
+    }
+  }
+  out.index.resize(count);
+  bool identity = out.order.size() == count;
+  for (std::uint32_t c = 0; c < count; ++c) {
+    // Members of a dropped group are never written; 0 keeps the value in range.
+    out.index[c] = group_used[first_of[c]] ? position[first_of[c]] : 0U;
+    identity = identity && out.index[c] == c;
+  }
+  out.identity = identity;
+  return out;
 }
 
 }  // namespace
@@ -59,10 +146,12 @@ void mark(UsedCellXfs& out, std::uint32_t xf) {
 UsedCellXfs collect_used_cell_xfs(const Workbook& wb) {
   UsedCellXfs out;
   out.used.assign(wb.styles().cell_xfs.size(), false);
+  out.all_used = retains_cell_xf_part(wb);
   for (std::size_t si = 0; si < wb.sheet_count(); ++si) {
     const Sheet& sheet = wb.sheet(si);
     if (sheet.is_opaque_ooxml_sheet()) {
-      out.all_used = true;
+      // A chartsheet holds no cells.
+      out.all_used = out.all_used || !ends_with(sheet.opaque_ooxml_relationship_type(), "/chartsheet");
       continue;
     }
     for (const auto& row : sheet.rows()) {
@@ -229,9 +318,10 @@ CellStyleSavePlan build_cell_style_save_plan(const StylesTable& styles, const Us
     }
   }
   plan.parent_of_.resize(xf_count);
+  std::vector<std::uint32_t> parent_index(xf_count);
   for (std::uint32_t x = 0; x < xf_count; ++x) {
-    const std::uint32_t to = new_index[dest[x]];
-    plan.parent_of_[x] = to == kNone ? 0U : to;
+    parent_index[x] = new_index[dest[x]];
+    plan.parent_of_[x] = parent_index[x] == kNone ? 0U : parent_index[x];
   }
 
   // Step 6: survivors by saved name under the sort collation, ties in group order.
@@ -270,6 +360,10 @@ CellStyleSavePlan build_cell_style_save_plan(const StylesTable& styles, const Us
   }
   // A table with no named styles has nothing to plan; the writers' default Normal is not a change.
   plan.identity_ = identity || (styles.cell_styles.empty() && styles.cell_style_xfs.empty());
+  CellXfLayout cell_xfs = plan_cell_xfs(styles, used, parent_index);
+  plan.cell_xf_order_ = std::move(cell_xfs.order);
+  plan.cell_xf_index_ = std::move(cell_xfs.index);
+  plan.cell_xfs_identity_ = cell_xfs.identity;
   return plan;
 }
 

@@ -96,7 +96,16 @@ Bytes ReplaceEntries(const Bytes& package, const std::map<std::string, std::stri
   return result;
 }
 
+/// Saves `wb` with its sheet1 replaced by `sheet_xml`, which names cell xfs by
+/// their model index. A save drops the cell xfs nothing references and
+/// renumbers the rest, so every one is first referenced from sheet1 cells the
+/// replacement discards.
 Bytes PackageWithSheetXml(fm_workbook_t* wb, std::string sheet_xml) {
+  size_t xf_count = 0;
+  EXPECT_EQ(fm_workbook_get_cell_xf_count(wb, &xf_count), 0);
+  for (size_t xf = 0; xf < xf_count; ++xf) {
+    EXPECT_EQ(fm_sheet_set_cell_xf_index(wb, 0, static_cast<uint32_t>(1000U + xf), 0, static_cast<uint32_t>(xf)), 0);
+  }
   return ReplaceEntries(SavePackage(wb), {{"xl/worksheets/sheet1.xml", std::move(sheet_xml)}});
 }
 

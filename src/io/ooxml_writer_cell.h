@@ -19,6 +19,7 @@
 #include "io/xlsb/ptg_writer.h"
 
 namespace formulon {
+class CellStyleSavePlan;
 class Sheet;
 struct Cell;
 namespace parser {
@@ -69,12 +70,15 @@ std::optional<SheetDimension> sheet_dimension(const Sheet& sheet);
 /// feeds a legacy formula's `xlsb::legacy_intersections`. `indexer` numbers
 /// the external books formulas name; null spells them by name.
 /// `rich_error_vm` gives the `vm=` of each cell saved with a rich error
-/// (null when the save writes none); it follows `cm=`.
+/// (null when the save writes none); it follows `cm=`. `style_plan` renumbers
+/// every written cell, row and phantom xf (`CellStyleSavePlan::cell_xf_index`);
+/// whether a cell or row is written is still decided on the model xf. Null
+/// writes model indices.
 void AppendSheetDataXml(std::string& out, const Sheet& sheet, const SharedStrings* shared_strings = nullptr,
                         std::uint32_t dynamic_array_cm_index = 0U,
                         const xlsb::NameShapes& name_shapes = xlsb::NameShapes(),
                         const parser::ExternalBookIndexer* indexer = nullptr,
-                        const RichErrorVmMap* rich_error_vm = nullptr);
+                        const RichErrorVmMap* rich_error_vm = nullptr, const CellStyleSavePlan* style_plan = nullptr);
 
 }  // namespace io
 }  // namespace formulon

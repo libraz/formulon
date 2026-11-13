@@ -16,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include "cell_style_save_plan.h"
 #include "hyperlink_address.h"
 #include "io/auto_filter_xml.h"
 #include "io/cf_overlay.h"
@@ -433,8 +434,9 @@ std::string BuildSheetProtectionXml(const SheetProtection& p) {
 
 /// Emits `<cols>...</cols>` containing one `<col>` per
 /// `ColumnLayout` entry. Returns an empty string when there are no
-/// column layout overrides.
-std::string BuildColsXml(const SheetLayout& layout) {
+/// column layout overrides. `style_plan` renumbers each `style`; null writes
+/// model indices.
+std::string BuildColsXml(const SheetLayout& layout, const CellStyleSavePlan* style_plan) {
   if (layout.columns.empty()) {
     return std::string();
   }
@@ -459,7 +461,8 @@ std::string BuildColsXml(const SheetLayout& layout) {
       emit_xsd_bool_attr(out, "customWidth", true);
     }
     if (col.has_style) {
-      append_xml_attr_uint(out, "style", col.style_xf);
+      append_xml_attr_uint(out, "style",
+                           style_plan != nullptr ? style_plan->cell_xf_index(col.style_xf) : col.style_xf);
     }
     if (col.hidden) {
       emit_xsd_bool_attr(out, "hidden", true);
@@ -516,12 +519,12 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
                               std::size_t sheet_index, std::uint32_t dynamic_array_cm_index,
                               const xlsb::NameShapes& name_shapes, const parser::ExternalBookIndexer* indexer,
                               const std::vector<std::string>* sheet_names, const RichErrorVmMap* rich_error_vm,
-                              std::string_view book_directory,
-                              const std::optional<PhoneticProperties>& absent_phonetic) {
+                              std::string_view book_directory, const std::optional<PhoneticProperties>& absent_phonetic,
+                              const CellStyleSavePlan* style_plan) {
   const std::string sheet_view_xml = BuildSheetViewXml(sheet.view());
   const std::string sheet_format_xml =
       BuildSheetFormatPrXml(WithDerivedOutlineLevels(sheet.format_defaults(), sheet.layout()));
-  const std::string cols_xml = BuildColsXml(sheet.layout());
+  const std::string cols_xml = BuildColsXml(sheet.layout(), style_plan);
   const SheetPrintSettings& print = sheet.print_settings();
   const WorksheetRawExtensions& raw_extensions = sheet.raw_extensions();
   const std::string page_setup_xml = PageSetupWithRelationshipId(print.page_setup_xml, printer_settings_rid);
@@ -576,7 +579,8 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   // Built after the preceding parts and before the blocks below; external
   // book numbering depends on that order.
   out.append("  ");
-  AppendSheetDataXml(out, sheet, shared_strings, dynamic_array_cm_index, name_shapes, indexer, rich_error_vm);
+  AppendSheetDataXml(out, sheet, shared_strings, dynamic_array_cm_index, name_shapes, indexer, rich_error_vm,
+                     style_plan);
   out.push_back('\n');
   // Conditional-format blocks live between <sheetData> and <tableParts>
   // in ECMA-376 document order. Empty list => empty string, no

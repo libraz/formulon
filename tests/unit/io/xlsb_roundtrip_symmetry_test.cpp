@@ -326,6 +326,10 @@ TEST(XlsbCrossFormatSymmetry, DefinedNamesMatch) {
 TEST(XlsbCrossFormatSymmetry, BlankStyleRunsMatchAcrossFormats) {
   Workbook wb = Workbook::create();
   wb.mutable_styles().cell_xfs.resize(4U);
+  // Distinct records, so a save keeps each at its own index.
+  for (std::uint16_t xf = 1U; xf < 4U; ++xf) {
+    wb.mutable_styles().cell_xfs[xf].num_fmt_id = static_cast<std::uint16_t>(xf + 1U);
+  }
   Sheet& sheet = wb.sheet(0);
   sheet.mutable_layout().columns.push_back(ColumnLayout{});
   ColumnLayout& column = sheet.mutable_layout().columns.back();
