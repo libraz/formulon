@@ -39,7 +39,8 @@ fm_status_t check_geometry_args(const fm_workbook_t* wb, size_t sheet_index, int
 }
 
 formulon::ColumnWidthModel width_model_for(const fm_workbook_t* wb, int32_t mode) {
-  return formulon::resolve_column_width_model(wb->workbook().styles(), static_cast<formulon::GeometryMode>(mode));
+  return formulon::resolve_column_width_model(wb->workbook(), wb->workbook().excel_profile(),
+                                              static_cast<formulon::GeometryMode>(mode));
 }
 
 }  // namespace

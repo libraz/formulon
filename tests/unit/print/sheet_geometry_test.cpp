@@ -53,7 +53,7 @@ void AddRow(Sheet* sheet, std::uint32_t row, double height, bool hidden) {
 
 TEST(SheetGeometry, CalibriModelDiffersByMode) {
   Workbook wb = Workbook::create();
-  const ColumnWidthModel display = resolve_column_width_model(wb.styles(), GeometryMode::kDisplay);
+  const ColumnWidthModel display = resolve_column_width_model(wb, wb.excel_profile(), GeometryMode::kDisplay);
   EXPECT_DOUBLE_EQ(display.points_per_char, kDisplayMdw);
   EXPECT_DOUBLE_EQ(display.padding_pt, kDisplayPad);
   EXPECT_TRUE(display.calibrated);
@@ -61,7 +61,7 @@ TEST(SheetGeometry, CalibriModelDiffersByMode) {
   EXPECT_DOUBLE_EQ(display.normal_font_size, 11.0);
   EXPECT_STREQ(display.platform, "win");
 
-  const ColumnWidthModel print = resolve_column_width_model(wb.styles(), GeometryMode::kPrint);
+  const ColumnWidthModel print = resolve_column_width_model(wb, wb.excel_profile(), GeometryMode::kPrint);
   EXPECT_DOUBLE_EQ(print.points_per_char, kPrintMdw);
   EXPECT_DOUBLE_EQ(print.padding_pt, kPrintPad);
   EXPECT_TRUE(print.calibrated);
@@ -69,8 +69,8 @@ TEST(SheetGeometry, CalibriModelDiffersByMode) {
 
 TEST(SheetGeometry, ThirtyCharColumnMatchesExcelWidths) {
   Workbook wb = Workbook::create();
-  const ColumnWidthModel display = resolve_column_width_model(wb.styles(), GeometryMode::kDisplay);
-  const ColumnWidthModel print = resolve_column_width_model(wb.styles(), GeometryMode::kPrint);
+  const ColumnWidthModel display = resolve_column_width_model(wb, wb.excel_profile(), GeometryMode::kDisplay);
+  const ColumnWidthModel print = resolve_column_width_model(wb, wb.excel_profile(), GeometryMode::kPrint);
   // Range.Width for a 30-character Calibri 11 column at 96 DPI.
   EXPECT_DOUBLE_EQ(column_chars_to_points(kThirtyCharsStored, display), 161.25);
   // Print-layout figure, 1197/7.
@@ -79,7 +79,7 @@ TEST(SheetGeometry, ThirtyCharColumnMatchesExcelWidths) {
 
 TEST(SheetGeometry, ZeroCharsIsZeroPointsAndInverseRoundTrips) {
   Workbook wb = Workbook::create();
-  const ColumnWidthModel model = resolve_column_width_model(wb.styles(), GeometryMode::kDisplay);
+  const ColumnWidthModel model = resolve_column_width_model(wb, wb.excel_profile(), GeometryMode::kDisplay);
   EXPECT_EQ(column_chars_to_points(0.0, model), 0.0);
   EXPECT_EQ(column_points_to_chars(0.0, model), 0.0);
   EXPECT_DOUBLE_EQ(column_points_to_chars(161.25, model), kThirtyCharsStored);
@@ -88,7 +88,7 @@ TEST(SheetGeometry, ZeroCharsIsZeroPointsAndInverseRoundTrips) {
 
 TEST(SheetGeometry, StoredWidthSnapsToWholeScreenPixels) {
   Workbook wb = Workbook::create();
-  const ColumnWidthModel model = resolve_column_width_model(wb.styles(), GeometryMode::kDisplay);
+  const ColumnWidthModel model = resolve_column_width_model(wb, wb.excel_profile(), GeometryMode::kDisplay);
   EXPECT_EQ(model.max_digit_width_px, 7);
   EXPECT_EQ(model.padding_px, 5);
   // The stored width already carries the padding: 9.140625 is 64 px, not
@@ -105,7 +105,7 @@ TEST(SheetGeometry, StoredWidthSnapsToWholeScreenPixels) {
 TEST(SheetGeometry, DefaultColumnFollowsBaseColWidthAndNormalFont) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
-  const ColumnWidthModel calibri = resolve_column_width_model(wb.styles(), GeometryMode::kDisplay);
+  const ColumnWidthModel calibri = resolve_column_width_model(wb, wb.excel_profile(), GeometryMode::kDisplay);
   // Base 10: 10 * 7 + 5 = 75 px, rounded up to 80 px (10.71 characters).
   sheet.mutable_format_defaults().base_col_width = 10.0;
   EXPECT_DOUBLE_EQ(default_column_width_chars(sheet, calibri), 2925.0 / 256.0);
@@ -114,7 +114,7 @@ TEST(SheetGeometry, DefaultColumnFollowsBaseColWidthAndNormalFont) {
   // 游ゴシック 11, base 8: 8 * 8 + 5 = 69 px, rounded up to 72 px (8.38).
   SetNormalFont(&wb, "游ゴシック", 11.0);
   sheet.mutable_format_defaults().base_col_width = 8.0;
-  const ColumnWidthModel yu = resolve_column_width_model(wb.styles(), GeometryMode::kDisplay);
+  const ColumnWidthModel yu = resolve_column_width_model(wb, wb.excel_profile(), GeometryMode::kDisplay);
   EXPECT_DOUBLE_EQ(default_column_width_chars(sheet, yu), 9.0);
   EXPECT_DOUBLE_EQ(effective_column_width_pt(sheet, 0, yu), 54.0);
 }
@@ -122,13 +122,13 @@ TEST(SheetGeometry, DefaultColumnFollowsBaseColWidthAndNormalFont) {
 TEST(SheetGeometry, SampledFontSizesUseTheirOwnCalibration) {
   Workbook wb = Workbook::create();
   SetNormalFont(&wb, "游ゴシック", 11.0);
-  ColumnWidthModel model = resolve_column_width_model(wb.styles(), GeometryMode::kDisplay);
+  ColumnWidthModel model = resolve_column_width_model(wb, wb.excel_profile(), GeometryMode::kDisplay);
   EXPECT_TRUE(model.calibrated);
   EXPECT_DOUBLE_EQ(model.points_per_char, 6.0);
   EXPECT_DOUBLE_EQ(model.padding_pt, 3.75);
 
   SetNormalFont(&wb, "Calibri", 14.0);
-  model = resolve_column_width_model(wb.styles(), GeometryMode::kDisplay);
+  model = resolve_column_width_model(wb, wb.excel_profile(), GeometryMode::kDisplay);
   EXPECT_TRUE(model.calibrated);
   EXPECT_DOUBLE_EQ(model.points_per_char, 7.5);
   EXPECT_DOUBLE_EQ(model.padding_pt, 5.25);
@@ -154,7 +154,7 @@ TEST(SheetGeometry, UnsupportedFontSizesFallBackWithoutChangingReportedSize) {
       SCOPED_TRACE(::testing::Message() << "mode=" << static_cast<int>(mode) << ", size=" << size);
       SetNormalFont(&wb, "Calibri", size);
 
-      const ColumnWidthModel model = resolve_column_width_model(wb.styles(), mode);
+      const ColumnWidthModel model = resolve_column_width_model(wb, wb.excel_profile(), mode);
       EXPECT_FALSE(model.calibrated);
       EXPECT_EQ(model.normal_font_name, "Calibri");
       EXPECT_DOUBLE_EQ(model.points_per_char, fallback_mdw);
@@ -167,7 +167,7 @@ TEST(SheetGeometry, UnsupportedFontSizesFallBackWithoutChangingReportedSize) {
     }
 
     SetNormalFont(&wb, "Calibri", 11.0);
-    const ColumnWidthModel sampled = resolve_column_width_model(wb.styles(), mode);
+    const ColumnWidthModel sampled = resolve_column_width_model(wb, wb.excel_profile(), mode);
     EXPECT_TRUE(sampled.calibrated);
     EXPECT_DOUBLE_EQ(sampled.normal_font_size, 11.0);
     EXPECT_DOUBLE_EQ(sampled.points_per_char, mode == GeometryMode::kDisplay ? kDisplayMdw : kPrintMdw);
@@ -178,7 +178,7 @@ TEST(SheetGeometry, UnsupportedFontSizesFallBackWithoutChangingReportedSize) {
 TEST(SheetGeometry, UncalibratedFontReportsExtrapolated) {
   Workbook wb = Workbook::create();
   SetNormalFont(&wb, "Comic Sans MS", 11.0);
-  ColumnWidthModel model = resolve_column_width_model(wb.styles(), GeometryMode::kDisplay);
+  ColumnWidthModel model = resolve_column_width_model(wb, wb.excel_profile(), GeometryMode::kDisplay);
   EXPECT_FALSE(model.calibrated);
   EXPECT_EQ(model.normal_font_name, "Comic Sans MS");
   // The Calibri 11 figure stands in for a font without a table.
@@ -187,7 +187,7 @@ TEST(SheetGeometry, UncalibratedFontReportsExtrapolated) {
 
   // A calibrated family at an unsampled size is extrapolated too.
   SetNormalFont(&wb, "Calibri", 13.0);
-  model = resolve_column_width_model(wb.styles(), GeometryMode::kPrint);
+  model = resolve_column_width_model(wb, wb.excel_profile(), GeometryMode::kPrint);
   EXPECT_FALSE(model.calibrated);
   EXPECT_DOUBLE_EQ(model.points_per_char, kPrintMdw);
 }
@@ -213,7 +213,7 @@ TEST(SheetGeometry, LocalizedNormalStyleIsFoundByBuiltinId) {
 TEST(SheetGeometry, DefaultsFallBackToExcelStandards) {
   Workbook wb = Workbook::create();
   const Sheet& sheet = wb.sheet(0);
-  const ColumnWidthModel model = resolve_column_width_model(wb.styles(), GeometryMode::kDisplay);
+  const ColumnWidthModel model = resolve_column_width_model(wb, wb.excel_profile(), GeometryMode::kDisplay);
   EXPECT_DOUBLE_EQ(default_column_width_chars(sheet, model), kStandardColChars);
   EXPECT_DOUBLE_EQ(default_row_height_pt(sheet), kStandardRowPt);
 }
@@ -225,7 +225,7 @@ TEST(SheetGeometry, SheetDefaultsOverrideStandards) {
   sheet.mutable_format_defaults().default_col_width = 12.0;
   sheet.mutable_format_defaults().has_default_row_height = true;
   sheet.mutable_format_defaults().default_row_height = 20.0;
-  const ColumnWidthModel model = resolve_column_width_model(wb.styles(), GeometryMode::kDisplay);
+  const ColumnWidthModel model = resolve_column_width_model(wb, wb.excel_profile(), GeometryMode::kDisplay);
   EXPECT_DOUBLE_EQ(effective_column_width_chars(sheet, 5, model), 12.0);
   EXPECT_DOUBLE_EQ(effective_row_height_pt(sheet, 5), 20.0);
 }
@@ -270,7 +270,7 @@ TEST(SheetGeometry, OverridesAndHiddenTracksShapeEffectiveSizes) {
   AddColumn(&sheet, 2, 2, 0.0, true);
   AddRow(&sheet, 1, 30.0, false);
   AddRow(&sheet, 2, 0.0, true);
-  const ColumnWidthModel model = resolve_column_width_model(wb.styles(), GeometryMode::kDisplay);
+  const ColumnWidthModel model = resolve_column_width_model(wb, wb.excel_profile(), GeometryMode::kDisplay);
 
   EXPECT_DOUBLE_EQ(effective_column_width_chars(sheet, 0, model), kStandardColChars);
   EXPECT_DOUBLE_EQ(effective_column_width_chars(sheet, 1, model), 10.0);
@@ -302,7 +302,7 @@ TEST(SheetGeometry, OverlappingColumnSpansResolveFirstWinsInLinearTime) {
     AddColumn(&sheet, 1, Sheet::kMaxCols - 1U, 30.0, false);
   }
   AddColumn(&sheet, 0, 0, 40.0, false);
-  const ColumnWidthModel model = resolve_column_width_model(wb.styles(), GeometryMode::kDisplay);
+  const ColumnWidthModel model = resolve_column_width_model(wb, wb.excel_profile(), GeometryMode::kDisplay);
   const std::vector<double> widths = column_widths_chars(sheet, 0, Sheet::kMaxCols - 1U, model);
   ASSERT_EQ(widths.size(), static_cast<std::size_t>(Sheet::kMaxCols));
   EXPECT_DOUBLE_EQ(widths[0], 40.0);
@@ -335,7 +335,7 @@ TEST(SheetGeometry, CellRectHasTopLeftOriginAndSkipsHiddenTracks) {
   AddColumn(&sheet, 2, 2, 0.0, true);
   AddRow(&sheet, 1, 30.0, false);
   AddRow(&sheet, 2, 0.0, true);
-  const ColumnWidthModel model = resolve_column_width_model(wb.styles(), GeometryMode::kDisplay);
+  const ColumnWidthModel model = resolve_column_width_model(wb, wb.excel_profile(), GeometryMode::kDisplay);
 
   const RectPt a1 = cell_rect_pt(sheet, 0, 0, model);
   EXPECT_DOUBLE_EQ(a1.x, 0.0);

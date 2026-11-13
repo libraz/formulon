@@ -11230,7 +11230,9 @@ typedef struct {
   /** `1` when rows are hidden by default unless they say otherwise. */
   int32_t zero_height;
   /** Stored width in characters the sheet lays columns out with: the stated default column width when set, else the
-   *  width Excel derives from the base column width and the Normal font (Calibri 11, base 8: 9.140625, shown as 8.43).
+   *  width Excel derives from the base column width and the Normal font (Windows, Calibri 11, base 8: 9.140625, shown
+   *  as 8.43; Mac, Calibri 11, base 10: 10.83203125, shown as 10). Under a Mac profile a sheet that stores no default
+   *  row height (no `<sheetFormatPr>`) derives it from base 10, although `base_column_width_chars` still reads 8.
    *  Read-only. */
   double effective_default_column_width_chars;
   /** Points the sheet lays rows out with: the stated default row height when set, else 102/7 (about 14.57); 0 when the
@@ -11295,11 +11297,12 @@ FM_API fm_status_t fm_sheet_update_format_defaults(fm_workbook_t* wb, size_t she
                                                    const fm_sheet_format_defaults_patch_t* patch);
 
 /**
- * @brief Which Windows column-width figure a geometry call uses.
+ * @brief Which column-width figure a geometry call uses.
  *
- * `FM_GEOMETRY_MODE_DISPLAY` is the screen figure (`Range.Width` at 96 DPI);
- * `FM_GEOMETRY_MODE_PRINT` is the DPI-stable figure pagination breaks on. Row
- * heights are the same in both modes. Only Windows is calibrated.
+ * `FM_GEOMETRY_MODE_DISPLAY` is the screen figure of the workbook profile's host:
+ * Windows `Range.Width` at 96 DPI, or Mac Excel's whole-point layout.
+ * `FM_GEOMETRY_MODE_PRINT` is the DPI-stable Windows figure pagination breaks on,
+ * on every host. Row heights are the same in both modes.
  */
 typedef enum {
   FM_GEOMETRY_MODE_DISPLAY = 0,
@@ -11323,7 +11326,7 @@ typedef enum {
  * `points_per_char` and `padding_pt` describe a column in displayed
  * characters (`Range.ColumnWidth`): `width_pt = chars * points_per_char +
  * padding_pt`. Stored widths go through `fm_sheet_convert_column_chars_to_pt`,
- * which also snaps to whole screen pixels.
+ * which also snaps to whole screen pixels (whole points under a Mac profile, where a pixel is a point).
  */
 typedef struct {
   uint32_t struct_size;
@@ -11333,11 +11336,13 @@ typedef struct {
   double padding_pt;
   /** The point size of the Normal font. */
   double normal_font_size_pt;
-  /** `0` when the Normal font is not a measured calibration point and the Calibri 11 figure was extrapolated. */
+  /** `0` when the Normal font is not a measured column-width calibration point of the platform and that platform's
+   *  Calibri 11 figure was extrapolated. */
   int32_t calibrated;
-  /** The `fm_width_platform_t` whose metrics the model uses. */
+  /** The `fm_width_platform_t` whose metrics the model uses. Print mode always reports Windows. */
   int32_t platform;
-  /** The name of the Normal font, a read-scratch-backed view. */
+  /** The name of the Normal font the metrics were looked up for, a read-scratch-backed view. Under a Mac profile a
+   *  Normal font that follows the theme reports the theme's font. */
   const char* normal_font_name;
 } fm_width_model_info_t;
 
@@ -11400,7 +11405,8 @@ FM_API fm_status_t fm_sheet_get_width_model(const fm_workbook_t* wb, size_t shee
  * @brief Converts a stored column width (character units with the column
  *        padding included, as `<col width>` holds it) to points. On screen
  *        the width snaps to whole pixels of the Normal font's maximum digit
- *        width (ECMA-376 §18.3.1.13). Zero is exactly zero points.
+ *        width (ECMA-376 §18.3.1.13; whole points under a Mac profile). Zero is
+ *        exactly zero points.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;

@@ -157,6 +157,70 @@ TEST(FormulonCApiCellGeometry, WidthModelReportsCalibratedCalibri) {
   EXPECT_EQ(fm_sheet_get_width_model(wb.handle, 0, -1, &print), kInvalidArgument);
 }
 
+TEST(FormulonCApiCellGeometry, MacProfileWidthModelUsesWholePoints) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "mac-365-en_US"), 0);
+  fm_width_model_info_t display = FM_STRUCT_INIT(fm_width_model_info_t);
+  ASSERT_EQ(fm_sheet_get_width_model(wb.handle, 0, FM_GEOMETRY_MODE_DISPLAY, &display), 0);
+  EXPECT_DOUBLE_EQ(display.points_per_char, 6.0);
+  EXPECT_DOUBLE_EQ(display.padding_pt, 5.0);
+  EXPECT_EQ(display.calibrated, 1);
+  EXPECT_STREQ(display.normal_font_name, "Calibri");
+  EXPECT_EQ(display.platform, FM_WIDTH_PLATFORM_MAC);
+
+  // Print is the Windows figure on every host.
+  fm_width_model_info_t print = FM_STRUCT_INIT(fm_width_model_info_t);
+  ASSERT_EQ(fm_sheet_get_width_model(wb.handle, 0, FM_GEOMETRY_MODE_PRINT, &print), 0);
+  EXPECT_EQ(print.platform, FM_WIDTH_PLATFORM_WIN);
+  EXPECT_DOUBLE_EQ(print.points_per_char, 39.0 / 7.0);
+
+  // A sheet with no <sheetFormatPr> derives its default from base 10 although the base still reads 8.
+  fm_sheet_format_defaults_t defaults = FM_STRUCT_INIT(fm_sheet_format_defaults_t);
+  ASSERT_EQ(fm_sheet_get_format_defaults(wb.handle, 0, &defaults), 0);
+  EXPECT_DOUBLE_EQ(defaults.base_column_width_chars, 8.0);
+  EXPECT_DOUBLE_EQ(defaults.effective_default_column_width_chars, 10.83203125);
+
+  double pt = 0.0;
+  ASSERT_EQ(fm_sheet_convert_column_chars_to_pt(wb.handle, 0, 10.83203125, FM_GEOMETRY_MODE_DISPLAY, &pt), 0);
+  EXPECT_DOUBLE_EQ(pt, 65.0);
+  ASSERT_EQ(fm_sheet_convert_column_chars_to_pt(wb.handle, 0, 10.0, FM_GEOMETRY_MODE_DISPLAY, &pt), 0);
+  EXPECT_DOUBLE_EQ(pt, 60.0);
+  double chars = 0.0;
+  ASSERT_EQ(fm_sheet_convert_column_pt_to_chars(wb.handle, 0, 60.0, FM_GEOMETRY_MODE_DISPLAY, &chars), 0);
+  EXPECT_DOUBLE_EQ(chars, 10.0);
+
+  // Back to Windows: the same workbook reads the 96-DPI figures again.
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "win-365-en_US"), 0);
+  ASSERT_EQ(fm_sheet_get_width_model(wb.handle, 0, FM_GEOMETRY_MODE_DISPLAY, &display), 0);
+  EXPECT_DOUBLE_EQ(display.points_per_char, 5.25);
+  EXPECT_EQ(display.platform, FM_WIDTH_PLATFORM_WIN);
+}
+
+// The body font of a new Mac workbook follows the theme; its face is the locale's theme face, not the stored name.
+TEST(FormulonCApiCellGeometry, MacNewWorkbookReportsTheThemeFace) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_for_profile("mac-365-ja_JP", &wb.handle), 0);
+  fm_width_model_info_t display = FM_STRUCT_INIT(fm_width_model_info_t);
+  ASSERT_EQ(fm_sheet_get_width_model(wb.handle, 0, FM_GEOMETRY_MODE_DISPLAY, &display), 0);
+  EXPECT_STREQ(display.normal_font_name, "游ゴシック");
+  EXPECT_DOUBLE_EQ(display.normal_font_size_pt, 12.0);
+  EXPECT_DOUBLE_EQ(display.points_per_char, 7.0);
+  EXPECT_DOUBLE_EQ(display.padding_pt, 5.0);
+  EXPECT_EQ(display.calibrated, 1);
+
+  fm_sheet_format_defaults_t defaults = FM_STRUCT_INIT(fm_sheet_format_defaults_t);
+  ASSERT_EQ(fm_sheet_get_format_defaults(wb.handle, 0, &defaults), 0);
+  EXPECT_DOUBLE_EQ(defaults.effective_default_column_width_chars, 10.0 + 182.0 / 256.0);
+  double pt = 0.0;
+  ASSERT_EQ(fm_sheet_convert_column_chars_to_pt(wb.handle, 0, defaults.effective_default_column_width_chars,
+                                                FM_GEOMETRY_MODE_DISPLAY, &pt),
+            0);
+  EXPECT_DOUBLE_EQ(pt, 75.0);
+  ASSERT_EQ(fm_sheet_convert_column_chars_to_pt(wb.handle, 0, 10.0, FM_GEOMETRY_MODE_DISPLAY, &pt), 0);
+  EXPECT_DOUBLE_EQ(pt, 70.0);
+}
+
 TEST(FormulonCApiCellGeometry, CharsAndPointsConvertBothWays) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);

@@ -1163,7 +1163,12 @@ class WidthPlatform(IntEnum):
 
 
 class GeometryMode(IntEnum):
-    """Which Windows column-width figure a geometry call uses."""
+    """Which column-width figure a geometry call uses.
+
+    ``DISPLAY`` is the screen figure of the workbook profile's host: Windows ``Range.Width`` at 96 DPI, or Mac Excel's
+    whole-point layout. ``PRINT`` is the DPI-stable Windows figure pagination breaks on, on every host. Row heights are
+    the same in both modes.
+    """
 
     DISPLAY = 0
     PRINT = 1
@@ -4403,7 +4408,9 @@ class SheetFormatDefaults:
     #: always present, the OOXML default is 8.
     base_column_width_chars: float = 8.0
     #: Stored width in characters the sheet lays columns out with: the stated default column width when set, else the
-    #: width Excel derives from the base column width and the Normal font (Calibri 11, base 8: 9.140625, shown as 8.43).
+    #: width Excel derives from the base column width and the Normal font (Windows, Calibri 11, base 8: 9.140625, shown
+    #: as 8.43; Mac, Calibri 11, base 10: 10.83203125, shown as 10). Under a Mac profile a sheet that stores no default
+    #: row height (no ``<sheetFormatPr>``) derives it from base 10, although ``base_column_width_chars`` still reads 8.
     #: Read-only.
     effective_default_column_width_chars: float = 0.0
     #: Points the sheet lays rows out with: the stated default row height when set, else 102/7 (about 14.57); 0 when the
@@ -4421,7 +4428,8 @@ class WidthModel:
     """Column-width conversion model for the workbook's Normal font.
 
     A width of ``chars`` characters is ``chars * points_per_char + padding_pt``; stored widths go through
-    ``column_chars_to_pt``.
+    ``convert_column_chars_to_pt``, which snaps to whole screen pixels (whole points under a Mac profile, where a pixel
+    is a point).
     """
 
     #: The points added per displayed character.
@@ -4430,11 +4438,13 @@ class WidthModel:
     padding_pt: float
     #: The point size of the Normal font.
     normal_font_size_pt: float
-    #: ``False`` when the Normal font is not a measured calibration point and the Calibri 11 figure was extrapolated.
+    #: ``False`` when the Normal font is not a measured column-width calibration point of the platform and that
+    #: platform's Calibri 11 figure was extrapolated.
     calibrated: bool
-    #: The name of the Normal font.
+    #: The name of the Normal font the metrics were looked up for. Under a Mac profile a Normal font that follows the
+    #: theme reports the theme's font.
     normal_font_name: str
-    #: The ``WidthPlatform`` whose metrics the model uses.
+    #: The ``WidthPlatform`` whose metrics the model uses. ``PRINT`` mode always reports Windows.
     platform: WidthPlatform
 
     def __post_init__(self) -> None:

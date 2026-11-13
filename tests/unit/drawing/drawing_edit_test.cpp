@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "../small_stack.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "io/ooxml/part_graph.h"
 #include "io/ooxml_reader.h"
@@ -1181,6 +1182,18 @@ TEST(DrawingAnchorUpdate, SheetOffsetFollowsLineSizes) {
   const std::int64_t col = sheet_offset_emu(wb, 0, false, 1);
   EXPECT_GT(col, 0);
   EXPECT_NEAR(static_cast<double>(sheet_offset_emu(wb, 0, false, 4)), 4.0 * static_cast<double>(col), 2.0);
+}
+
+// Mac Calibri 11 (MDW 6, padding 5), base 8 stored: the default column is
+// 8 + 213/256 characters and lays out at 53 whole points.
+TEST(DrawingAnchorUpdate, MacProfileOffsetsUseWholePointColumns) {
+  Workbook wb = ThreePlacements();
+  wb.set_excel_profile(mac_365_en_us_profile());
+  constexpr std::int64_t kColumnEmu = 53 * 12700;
+  EXPECT_EQ(sheet_offset_emu(wb, 0, false, 1), kColumnEmu);
+  EXPECT_EQ(sheet_offset_emu(wb, 0, false, 4), 4 * kColumnEmu);
+  // Rows are not part of this model change.
+  EXPECT_EQ(sheet_offset_emu(wb, 0, true, 6), 6 * 228600);
 }
 
 TEST(DrawingAnchorUpdate, ListedPlacementWritesNothing) {

@@ -629,7 +629,8 @@ extern "C" fm_status_t fm_sheet_get_format_defaults(const fm_workbook_t* wb, siz
   out->zero_height = defaults.zero_height ? 1 : 0;
   const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
   out->effective_default_column_width_chars = formulon::default_column_width_chars(
-      sheet, formulon::resolve_column_width_model(wb->workbook().styles(), formulon::GeometryMode::kDisplay));
+      sheet, formulon::resolve_column_width_model(wb->workbook(), wb->workbook().excel_profile(),
+                                                  formulon::GeometryMode::kDisplay));
   out->effective_default_row_height_pt = defaults.zero_height ? 0.0 : formulon::print::default_row_height_pt(sheet);
   return 0;
 }

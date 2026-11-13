@@ -509,6 +509,32 @@ TEST(BuiltinsCellWidth, DefaultFollowsBaseColumnWidth) {
   EXPECT_TRUE(v.as_array()->cells[1].as_boolean());
 }
 
+// Mac lays columns out in whole points: Calibri 11 has MDW 6 and padding 5, and a
+// sheet with no <sheetFormatPr> derives its default from base 10 (65 pt, shown as 10).
+TEST(BuiltinsCellWidth, MacDefaultComesFromBaseTenInWholePoints) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_en_us_profile());
+  const Value v = EvalSourceIn("=CELL(\"width\", A1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array());
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[0].as_number(), 10.0);
+  EXPECT_TRUE(v.as_array()->cells[1].as_boolean());
+}
+
+TEST(BuiltinsCellWidth, MacExplicitColumnSnapsToWholePoints) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).mutable_layout().columns.push_back(ColumnLayout{0U, 0U, 10.0, false, 0U});
+  // Stored 10 is 60 pt, shown as (60 - 5) / 6 = 9.17.
+  wb.set_excel_profile(mac_365_en_us_profile());
+  const Value mac = EvalSourceIn("=CELL(\"width\", A1)", wb, wb.sheet(0));
+  ASSERT_TRUE(mac.is_array());
+  EXPECT_DOUBLE_EQ(mac.as_array()->cells[0].as_number(), 9.0);
+  EXPECT_FALSE(mac.as_array()->cells[1].as_boolean());
+  // Windows snaps the same stored width to 70 px, shown as 9.29.
+  wb.set_excel_profile(win_365_en_us_profile());
+  const Value win = EvalSourceIn("=CELL(\"width\", A1)", wb, wb.sheet(0));
+  EXPECT_DOUBLE_EQ(win.as_array()->cells[0].as_number(), 9.0);
+}
+
 TEST(BuiltinsCellWidth, ExplicitZeroAndStyleOnlyColumnLayoutsRemainDistinct) {
   Workbook wb = Workbook::create();
   ColumnLayout explicit_zero;

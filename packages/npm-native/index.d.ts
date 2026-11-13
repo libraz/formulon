@@ -1990,9 +1990,10 @@ export interface PaginationPage {
   readonly heightPt: number;
 }
 
-/** Which Windows column-width figure a geometry call uses.
- *  `Display` is the screen figure (`Range.Width` at 96 DPI); `Print` is the
- *  DPI-stable figure pagination breaks on. Row heights are identical in both. */
+/** Which column-width figure a geometry call uses.
+ *  `Display` is the screen figure of the workbook profile's host: Windows `Range.Width` at 96 DPI, or Mac Excel's
+ *  whole-point layout. `Print` is the DPI-stable Windows figure pagination breaks on, on every host. Row heights are
+ *  identical in both. */
 export const GeometryMode: Readonly<{
   Display: 0;
   Print: 1;
@@ -2009,7 +2010,8 @@ export const WidthPlatform: Readonly<{
 export type WidthPlatform = 0 | 1;
 
 /** Return type of `Sheet.getWidthModel(...)`. `pointsPerChar` and `paddingPt` are per displayed
- *  character: `chars * pointsPerChar + paddingPt`; stored widths go through `convertColumnCharsToPt`. */
+ *  character: `chars * pointsPerChar + paddingPt`; stored widths go through `convertColumnCharsToPt`, which
+ *  snaps to whole screen pixels (whole points under a Mac profile, where a pixel is a point). */
 export interface WidthModel {
   /** The points added per displayed character. */
   readonly pointsPerChar: number;
@@ -2017,11 +2019,13 @@ export interface WidthModel {
   readonly paddingPt: number;
   /** The point size of the Normal font. */
   readonly normalFontSizePt: number;
-  /** `false` when the Normal font is not a measured calibration point and the Calibri 11 figure was extrapolated. */
+  /** `false` when the Normal font is not a measured column-width calibration point of the platform and that platform's
+   *  Calibri 11 figure was extrapolated. */
   readonly calibrated: boolean;
-  /** The name of the Normal font. */
+  /** The name of the Normal font the metrics were looked up for. Under a Mac profile a Normal font that follows the
+   *  theme reports the theme's font. */
   readonly normalFontName: string;
-  /** The `WidthPlatform` whose metrics the model uses. */
+  /** The `WidthPlatform` whose metrics the model uses. `Print` mode always reports Windows. */
   readonly platform: WidthPlatform;
 }
 
@@ -2055,7 +2059,9 @@ export type SheetFormatDefaultsPatch = Patch<
  *  values are read-only and ignored by `updateFormatDefaults`. */
 export interface SheetFormatDefaults extends SheetFormatDefaultsInput {
   /** Stored width in characters the sheet lays columns out with: the stated default column width when set, else the
-   *  width Excel derives from the base column width and the Normal font (Calibri 11, base 8: 9.140625, shown as 8.43).
+   *  width Excel derives from the base column width and the Normal font (Windows, Calibri 11, base 8: 9.140625, shown
+   *  as 8.43; Mac, Calibri 11, base 10: 10.83203125, shown as 10). Under a Mac profile a sheet that stores no default
+   *  row height (no `<sheetFormatPr>`) derives it from base 10, although `baseColumnWidthChars` still reads 8.
    *  Read-only. */
   readonly effectiveDefaultColumnWidthChars: number;
   /** Points the sheet lays rows out with: the stated default row height when set, else 102/7 (about 14.57); 0 when the
@@ -7908,8 +7914,8 @@ export interface Sheet {
    *  throws `TypeError`. */
   getWidthModel(mode?: GeometryMode): WidthModel;
   /** Converts a stored column width (padding included) to points under `mode` (default `Display`), snapped to
-   *  whole screen pixels. A `mode` outside `GeometryMode` fails with `StatusCode.InvalidArgument`; a non-number
-   *  throws `TypeError`. */
+   *  whole screen pixels (whole points under a Mac profile). A `mode` outside `GeometryMode` fails with
+   *  `StatusCode.InvalidArgument`; a non-number throws `TypeError`. */
   convertColumnCharsToPt(chars: number, mode?: GeometryMode): number;
   /** Inverse of `convertColumnCharsToPt`: the stored width Excel writes for a column of `pt`, under `mode`
    *  (default `Display`). A `mode` outside `GeometryMode` fails with `StatusCode.InvalidArgument`; a non-number

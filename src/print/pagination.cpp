@@ -202,7 +202,7 @@ Expected<PaginationResult, Error> paginate(const Workbook& wb, std::uint32_t she
   const Sheet& sheet = wb.sheet(sheet_index);
 
   // Break math needs the print-layout geometry, not the display one.
-  const ColumnWidthModel column_geometry = resolve_column_width_model(wb.styles(), GeometryMode::kPrint);
+  const ColumnWidthModel column_geometry = resolve_column_width_model(wb, wb.excel_profile(), GeometryMode::kPrint);
 
   // 1. Resolve the print area. The reported `result.print_area` mirrors
   // Excel's `PageSetup.PrintArea` exactly: empty when the workbook

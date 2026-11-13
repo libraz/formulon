@@ -45,7 +45,7 @@ constexpr const char* kPrintTitlesName = "_xlnm.Print_Titles";
 /// ("A" / "A:D"); each entry becomes one `ColumnLayout{first,last,width}`.
 /// A `row_heights` key is a 1-based Excel row number ("3"); each entry
 /// becomes one `RowLayout{row,height}`. Both maps are optional.
-Expected<void, Error> apply_layout_dimensions(const JsonValue& spec, const StylesTable& styles, Sheet* sheet) {
+Expected<void, Error> apply_layout_dimensions(const JsonValue& spec, const Workbook& workbook, Sheet* sheet) {
   // Hidden lines are emitted before the size maps on purpose: both the
   // pagination fast path and `ColumnWidthChars` resolve a track against the
   // *first* matching span, so a `column_widths` span covering a hidden
@@ -98,7 +98,8 @@ Expected<void, Error> apply_layout_dimensions(const JsonValue& spec, const Style
     if (!widths_v->is_object()) {
       return invalid("'column_widths' must be an object");
     }
-    const ColumnWidthModel display_model = resolve_column_width_model(styles, GeometryMode::kDisplay);
+    const ColumnWidthModel display_model =
+        resolve_column_width_model(workbook, workbook.excel_profile(), GeometryMode::kDisplay);
     for (const auto& [key, value] : widths_v->as_object()) {
       if (!value.is_number()) {
         return invalid("column_widths/" + key + ": width must be a number");
@@ -282,7 +283,7 @@ Expected<BuiltPrint, Error> build_print_from_spec(const JsonValue& spec, ExcelPr
   Sheet& sheet = workbook->sheet(sheet_index);
 
   // --- case-level layout dimensions ---------------------------------------
-  RETURN_IF_ERROR(apply_layout_dimensions(spec, workbook->styles(), &sheet));
+  RETURN_IF_ERROR(apply_layout_dimensions(spec, *workbook, &sheet));
 
   // --- page setup ----------------------------------------------------------
   if (const JsonValue* setup_v = print.find("page_setup"); setup_v != nullptr && !setup_v->is_null()) {

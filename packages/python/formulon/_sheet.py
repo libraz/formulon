@@ -3953,7 +3953,9 @@ class Sheet(_NoCopy):
             )
 
     def convert_column_chars_to_pt(self, chars: float, mode: GeometryMode = GeometryMode.DISPLAY) -> float:
-        """Convert a stored column width (padding included) to points, snapped to whole screen pixels.
+        """Convert a stored column width (padding included) to points.
+
+        The result snaps to whole screen pixels (whole points under a Mac profile).
 
         Raises:
           InvalidArgumentError: when ``mode`` is not a :class:`GeometryMode` member.

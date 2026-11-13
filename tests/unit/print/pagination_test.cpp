@@ -483,7 +483,7 @@ TEST(PaginationTest, PrintTitleGeometryOutsidePrintAreaPreservesTrackSemantics) 
   // tracks inside the union.
   constexpr double kTitleHeightPt = 120.5 + 20.25;
   EXPECT_NEAR(result.value().pages.front().origin_y_pt - result.value().printable.y, kTitleHeightPt, 1e-9);
-  const ColumnWidthModel model = resolve_column_width_model(wb.styles(), GeometryMode::kPrint);
+  const ColumnWidthModel model = resolve_column_width_model(wb, wb.excel_profile(), GeometryMode::kPrint);
   double title_width_pt = 0.0;
   title_width_pt += column_chars_to_points(10.0, model);
   title_width_pt += column_chars_to_points(defaults.default_col_width, model);

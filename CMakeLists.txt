@@ -342,6 +342,7 @@ set(FORMULON_CORE_SOURCES
   src/print/print_area.cpp
   src/print/pagination.cpp
   src/column_width.cpp
+  src/font_metrics.cpp
   src/print/sheet_geometry.cpp
   src/drawing/drawing_color.cpp
   src/drawing/drawing_xml.cpp

@@ -14,6 +14,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Column geometry under a Mac profile follows Mac Excel's layout: `Sheet.getWidthModel`,
+  `Sheet.convertColumnCharsToPt`, `Sheet.getCellRectPt`, `CELL("width")` and the
+  drawing anchors (Python `get_width_model`, `convert_column_chars_to_pt`,
+  `get_cell_rect_pt`; C `fm_sheet_get_width_model`,
+  `fm_sheet_convert_column_chars_to_pt`, `fm_sheet_get_cell_rect_pt`) use the Mac
+  maximum digit width and padding of the Normal font and snap stored widths to
+  whole points. A sheet without `<sheetFormatPr>` derives its default stored width
+  (`getFormatDefaults().effectiveDefaultColumnWidthChars`) from base width 10 under
+  a Mac profile. `WidthModel.calibrated` is `false` when the Normal font is not a
+  measured point of the profile host and its Calibri 11 figure was used;
+  `WidthModel.platform` reports `mac` under a Mac profile in `Display` mode, and
+  `Print` mode always reports the Windows figure. Under a Mac profile a Normal font
+  linked to the theme's minor font reports the face the theme resolves for the
+  profile locale. Values under `win-*` profiles are unchanged. The Mac widths are
+  measured in Mac Excel; fonts reached through English family aliases are
+  estimates.
+
 - Saving `.xlsx` writes each threaded comment's legacy note (the `tc=` note in the
   comments part) in the UI language of the workbook profile's locale, as one plain
   run with CRLF line breaks, and orders a thread's replies by creation time and

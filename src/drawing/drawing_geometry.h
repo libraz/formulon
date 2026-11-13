@@ -22,7 +22,7 @@ class Geometry {
  public:
   Geometry(const Workbook& wb, const Sheet& sheet)
       : sheet_(sheet),
-        model_(resolve_column_width_model(wb.styles(), GeometryMode::kDisplay)),
+        model_(resolve_column_width_model(wb, wb.excel_profile(), GeometryMode::kDisplay)),
         column_chars_(print::column_widths_chars(sheet, 0U, Sheet::kMaxCols - 1U, model_)) {}
 
   std::int64_t size(bool row_axis, std::uint32_t index) const {

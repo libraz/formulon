@@ -39,6 +39,7 @@
 #include "sheet.h"
 #include "style_resolve.h"
 #include "styles.h"
+#include "theme.h"
 #include "utils/a1_ref.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -355,8 +356,10 @@ Value resolve_cell_width(std::string_view sheet_name, std::uint32_t col, Arena& 
   }
   const Workbook* workbook = ctx.workbook();
   static const StylesTable kNoStyles{};
-  const StylesTable& styles = workbook != nullptr ? workbook->styles() : kNoStyles;
-  const ColumnWidthModel model = resolve_column_width_model(styles, GeometryMode::kDisplay);
+  const ColumnWidthModel model =
+      workbook != nullptr
+          ? resolve_column_width_model(*workbook, ctx.excel_profile(), GeometryMode::kDisplay)
+          : resolve_column_width_model(kNoStyles, default_theme(), ctx.excel_profile(), GeometryMode::kDisplay);
   return build_width_result(*target, col, model, arena);
 }
 

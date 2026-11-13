@@ -4,8 +4,12 @@
 #include <cmath>
 #include <string>
 
+#include "font_metrics.h"
+#include "new_workbook_defaults.h"
 #include "sheet.h"
 #include "styles.h"
+#include "theme.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace {
@@ -48,15 +52,15 @@ namespace {
 /// padding: the pre-existing figure that both DPI captures' page breaks
 /// agree with, matching the classic `39/7`, `27/7` sevenths that predate
 /// this file's DPI investigation. This is also the print-layout fallback
-/// for any (Normal font family, size) `kColumnWidthCalibrations` below
-/// does not cover.
+/// for any (Normal font family, size) the Windows width table does not
+/// cover.
 constexpr double kPrintPointsPerColumnCharCalibri11 = 39.0 / 7.0;
 constexpr double kPrintColumnPaddingPtCalibri11 = 27.0 / 7.0;
 
 /// Calibri 11's *display* points-per-character-unit and per-column
-/// padding (`Range.Width` at 96 DPI) -- the `kColumnWidthCalibrations`
-/// entry for `{"Calibri", 11}`, restated here so the print/display
-/// ratios below don't depend on table lookup order.
+/// padding (`Range.Width` at 96 DPI) -- the Windows width table entry for
+/// `{"Calibri", 11}`, restated here so the print/display ratios below don't
+/// depend on table lookup order.
 constexpr double kDisplayPointsPerColumnCharCalibri11 = 5.25;
 constexpr double kDisplayColumnPaddingPtCalibri11 = 3.75;
 
@@ -76,54 +80,6 @@ constexpr double kStoredWidthSteps = 256.0;
 /// Windows rounds a default column derived from `baseColWidth` up to a
 /// multiple of 8 pixels: Calibri 11 base 8 is 61 px, shown as 64 px (8.43).
 constexpr int kDefaultColumnPixelStep = 8;
-
-/// One (Normal font family, size) -> (MDW, padding) *display* calibration
-/// point on Windows Excel 365 ja-JP (build 16.0.20228, 100%
-/// display scaling / 96 DPI) via `Range.Width` at stored widths 30/100
-/// chars. `Calibri`/11 reproduces `kDisplayPointsPerColumnCharCalibri11` /
-/// `kDisplayColumnPaddingPtCalibri11` above exactly.
-struct ColumnWidthCalibration {
-  const char* family;
-  int size;
-  double mdw_pt;
-  double pad_pt;
-};
-
-constexpr ColumnWidthCalibration kColumnWidthCalibrations[] = {
-    {"Calibri", 8, 4.5, 3.75},          {"Calibri", 9, 4.5, 3.75},           {"Calibri", 10, 5.25, 3.75},
-    {"Calibri", 11, 5.25, 3.75},        {"Calibri", 12, 6.0, 3.75},          {"Calibri", 14, 7.5, 5.25},
-    {"Calibri", 16, 8.25, 5.25},        {"Calibri", 18, 9.0, 5.25},          {"ＭＳ Ｐゴシック", 8, 4.5, 3.75},
-    {"ＭＳ Ｐゴシック", 9, 4.5, 3.75},  {"ＭＳ Ｐゴシック", 10, 5.25, 3.75}, {"ＭＳ Ｐゴシック", 11, 6.0, 3.75},
-    {"ＭＳ Ｐゴシック", 12, 6.0, 3.75}, {"ＭＳ Ｐゴシック", 14, 7.5, 5.25},  {"ＭＳ Ｐゴシック", 16, 8.25, 5.25},
-    {"ＭＳ Ｐゴシック", 18, 9.0, 5.25}, {"游ゴシック", 8, 4.5, 3.75},        {"游ゴシック", 9, 5.25, 3.75},
-    {"游ゴシック", 10, 5.25, 3.75},     {"游ゴシック", 11, 6.0, 3.75},       {"游ゴシック", 12, 6.75, 5.25},
-    {"游ゴシック", 14, 8.25, 5.25},     {"游ゴシック", 16, 9.0, 5.25},       {"游ゴシック", 18, 9.75, 6.75},
-    {"Meiryo UI", 8, 5.25, 3.75},       {"Meiryo UI", 9, 5.25, 3.75},        {"Meiryo UI", 10, 6.0, 3.75},
-    {"Meiryo UI", 11, 6.75, 5.25},      {"Meiryo UI", 12, 7.5, 5.25},        {"Meiryo UI", 14, 9.0, 5.25},
-    {"Meiryo UI", 16, 9.75, 6.75},      {"Meiryo UI", 18, 11.25, 6.75},
-};
-
-/// The resolved points-per-character-unit and per-column padding for either
-/// mode, plus whether the font was a tabulated calibration point.
-struct ColumnWidthGeometry {
-  double points_per_char = kPrintPointsPerColumnCharCalibri11;
-  double padding_pt = kPrintColumnPaddingPtCalibri11;
-  bool calibrated = false;
-};
-
-/// Looks up the *display* calibration for `(family, size)` in
-/// `kColumnWidthCalibrations`. Falls back to the Calibri-11 display
-/// figure (with `calibrated == false`) for any `(family, size)` pair the
-/// table does not cover -- interpolating between sampled sizes would be
-/// inventing data the capture does not support.
-ColumnWidthGeometry ResolveColumnDisplayGeometry(const std::string& family, double size) {
-  for (const ColumnWidthCalibration& row : kColumnWidthCalibrations) {
-    if (static_cast<double>(row.size) == size && family == row.family) {
-      return ColumnWidthGeometry{row.mdw_pt, row.pad_pt, true};
-    }
-  }
-  return ColumnWidthGeometry{kDisplayPointsPerColumnCharCalibri11, kDisplayColumnPaddingPtCalibri11, false};
-}
 }  // namespace
 
 const FontRecord* resolve_normal_font(const StylesTable& styles) {
@@ -146,25 +102,43 @@ const FontRecord* resolve_normal_font(const StylesTable& styles) {
   return &styles.fonts[0];
 }
 
-ColumnWidthModel resolve_column_width_model(const StylesTable& styles, GeometryMode mode) {
-  const FontRecord* font = resolve_normal_font(styles);
+ColumnWidthModel resolve_column_width_model(const StylesTable& styles, const Theme& theme, ExcelProfile profile,
+                                            GeometryMode mode) {
+  // Print is the Windows figure on every host.
+  const ExcelProfile host_profile{mode == GeometryMode::kPrint ? ExcelHost::kWin365 : profile.host, profile.locale};
+  const NormalFontMetrics metrics = normal_font_metrics(styles, theme, host_profile);
   ColumnWidthModel model;
-  ColumnWidthGeometry display{kDisplayPointsPerColumnCharCalibri11, kDisplayColumnPaddingPtCalibri11, false};
-  if (font != nullptr) {
-    display = ResolveColumnDisplayGeometry(font->name, font->size);
-    model.normal_font_name = font->name;
-    model.normal_font_size = font->size;
+  model.normal_font_name = metrics.family;
+  model.normal_font_size = metrics.size_pt;
+  model.calibrated = metrics.width_calibrated;
+  model.host = metrics.host;
+  if (metrics.host == ExcelHost::kMac365) {
+    // A pixel is a point on Mac.
+    model.points_per_char = metrics.mdw_pt;
+    model.padding_pt = metrics.padding_pt;
+    model.max_digit_width_px = static_cast<int>(std::lround(metrics.mdw_pt));
+    model.padding_px = static_cast<int>(std::lround(metrics.padding_pt));
+    model.platform = "mac";
+    return model;
   }
   // Print scales the display calibration by Calibri 11's print/display ratios.
-  const ColumnWidthGeometry print{display.points_per_char * kPrintMdwRatio, display.padding_pt * kPrintPaddingRatio,
-                                  display.calibrated};
-  const ColumnWidthGeometry& geometry = mode == GeometryMode::kDisplay ? display : print;
-  model.points_per_char = geometry.points_per_char;
-  model.padding_pt = geometry.padding_pt;
-  model.max_digit_width_px = static_cast<int>(std::lround(display.points_per_char / kPointsPerPixel));
-  model.padding_px = static_cast<int>(std::lround(display.padding_pt / kPointsPerPixel));
-  model.calibrated = geometry.calibrated;
+  const bool print = mode == GeometryMode::kPrint;
+  model.points_per_char = print ? metrics.mdw_pt * kPrintMdwRatio : metrics.mdw_pt;
+  model.padding_pt = print ? metrics.padding_pt * kPrintPaddingRatio : metrics.padding_pt;
+  model.max_digit_width_px = static_cast<int>(std::lround(metrics.mdw_pt / kPointsPerPixel));
+  model.padding_px = static_cast<int>(std::lround(metrics.padding_pt / kPointsPerPixel));
   return model;
+}
+
+ColumnWidthModel resolve_column_width_model(const Workbook& wb, ExcelProfile profile, GeometryMode mode) {
+  const StylesTable& styles = wb.styles();
+  if (profile.host == ExcelHost::kMac365 && mode == GeometryMode::kDisplay) {
+    const FontRecord* font = resolve_normal_font(styles);
+    if (font != nullptr && font->scheme == kFontSchemeMinor) {
+      return resolve_column_width_model(styles, wb.load_theme().theme, profile, mode);
+    }
+  }
+  return resolve_column_width_model(styles, default_theme(), profile, mode);
 }
 
 namespace {
@@ -220,6 +194,11 @@ double default_column_width_chars(const Sheet& sheet, const ColumnWidthModel& mo
   const SheetFormatDefaults& defaults = sheet.format_defaults();
   if (defaults.has_default_col_width) {
     return defaults.default_col_width;
+  }
+  if (model.host == ExcelHost::kMac365) {
+    // Whole points, no pixel step; a sheet without `<sheetFormatPr>` starts at base 10.
+    const double base = defaults.has_default_row_height ? defaults.base_col_width : kNewWorkbookMacBaseColWidth;
+    return base + std::floor(kStoredWidthSteps * model.padding_pt / model.points_per_char) / kStoredWidthSteps;
   }
   const double mdw = static_cast<double>(model.max_digit_width_px);
   const double step = static_cast<double>(kDefaultColumnPixelStep);
