@@ -30,6 +30,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   added. A sheet holding conditional formats Formulon keeps only verbatim is not
   merged.
 
+- Saving `.xlsx` and `.xlsb` writes conditional-format blocks in Excel's layout.
+  Rules with the same range share one `<conditionalFormatting>` block, in priority
+  order. Blocks are ordered by their first area: left column, then top row, right
+  column and bottom row. The order the workbook holds them in no longer matters.
+  The saved dxf table follows this block order. Files Excel saved already have this
+  layout and are written unchanged. A workbook Formulon saves and reloads can list
+  its rules in a different order than before the save.
+
 - Column geometry under a Mac profile follows Mac Excel's layout: `Sheet.getWidthModel`,
   `Sheet.convertColumnCharsToPt`, `Sheet.getCellRectPt`, `CELL("width")` and the
   drawing anchors (Python `get_width_model`, `convert_column_chars_to_pt`,
@@ -292,6 +300,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   desktop application does; tables and PivotTables naming it keep the name.
 
 ### Fixed
+
+- An AutoFilter custom criterion holding `*` or `?` under `<`, `<=`, `>` or `>=`
+  is tested by match, as in Excel. Before, it was compared as text. `<=` keeps the
+  text values the pattern matches, `>` the text values it does not, `>=` every text
+  value and `<` nothing. Numbers never pass. A criterion without `*` or `?` is
+  compared as before.
 
 - A PivotTable cache read from `.xlsx` lost the mark on shared items a refresh kept although
   the source no longer holds them (`u="1"`), so a later save wrote them as ordinary items.
