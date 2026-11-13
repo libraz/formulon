@@ -277,6 +277,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A PivotTable cache read from `.xlsb` whose field holds only dates and no shared items
+  loaded each record's date as a meaningless number. Those cells now load as the dates
+  they are, under the workbook's date system, the same as the `.xlsx` cache.
+
 - An `.xlsb` file whose formulas refer to a table (for example a totals row's
   `SUBTOTAL(109,Table1[Amount])`) could not be opened in Excel: Excel refused the whole
   file. Such formulas are now written the way Excel writes them, and loading an affected

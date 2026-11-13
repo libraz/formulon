@@ -15,6 +15,7 @@
 #include "io/xlsb/frt_records.h"
 #include "io/xlsb/record.h"
 #include "io/xml_utils.h"
+#include "pivot/field_grouping.h"
 #include "pivot/pivot_types.h"
 #include "sheet.h"
 #include "utils/error.h"
@@ -203,9 +204,46 @@ Error CorruptError(const char* message) {
 ///
 /// The record stream is not self-describing: the width and meaning of a
 /// cell come from what the definition said about its field. A field with
-/// shared items stores a 4-byte index into them; a range-typed numeric
-/// field stores the 8-byte value inline.
-enum class CellEncoding : std::uint8_t { SharedIndex, Double };
+/// shared items stores a 4-byte index into them; a range-typed field
+/// stores its value inline, as an 8-byte double or an 8-byte date.
+enum class CellEncoding : std::uint8_t { SharedIndex, Double, Date };
+
+// BrtBeginPCDFAtbl flags: fNonDates (bit 1) and fDateInField (bit 2). A field with no shared items whose only
+// values are dates stores each record cell as an 8-byte date: u16 year, u16 month, u8 day, u8 hour, u8 minute,
+// u8 second.
+constexpr std::uint16_t kPCDFAtblNonDates = 0x0002U;
+constexpr std::uint16_t kPCDFAtblDateInField = 0x0004U;
+constexpr std::size_t kInlineDateBytes = 8;
+
+/// The serial of an inline record date, through the same conversion the xlsx reader applies to `<d v>`. Only
+/// midnight values are characterised; a time of day is refused rather than guessed.
+Expected<double, Error> InlineDateSerial(ByteSpan& payload, bool date1904) {
+  ASSIGN_OR_RETURN(const std::uint16_t year, read_u16(payload));
+  ASSIGN_OR_RETURN(const std::uint16_t month, read_u16(payload));
+  ASSIGN_OR_RETURN(const std::uint8_t day, read_u8(payload));
+  ASSIGN_OR_RETURN(const std::uint8_t hour, read_u8(payload));
+  ASSIGN_OR_RETURN(const std::uint8_t minute, read_u8(payload));
+  ASSIGN_OR_RETURN(const std::uint8_t second, read_u8(payload));
+  if (hour != 0U || minute != 0U || second != 0U) {
+    return CorruptError("xlsb pivot cache record date carries a time of day this reader has not characterised");
+  }
+  std::string iso;
+  const auto append_padded = [&iso](unsigned value, std::size_t width) {
+    std::string digits = std::to_string(value);
+    iso.append(digits.size() < width ? width - digits.size() : 0U, '0').append(digits);
+  };
+  append_padded(year, 4U);
+  iso.push_back('-');
+  append_padded(month, 2U);
+  iso.push_back('-');
+  append_padded(day, 2U);
+  iso.append("T00:00:00");
+  const std::optional<double> serial = pivot::group_date_serial(iso, date1904);
+  if (!serial.has_value()) {
+    return CorruptError("xlsb pivot cache record date is not a calendar date");
+  }
+  return *serial;
+}
 
 /// Maps an XLSB aggregation selector to the model enum.
 ///
@@ -278,6 +316,7 @@ Expected<void, Error> DecodeCacheDefinition(ByteSpan cursor, pivot::PivotCache* 
   bool in_field = false;
   bool in_shared_items = false;
   bool field_has_shared_items = false;
+  bool field_is_date_only = false;
   while (cursor.size > 0) {
     auto rec_or = read_record(cursor);
     if (!rec_or) {
@@ -316,24 +355,29 @@ Expected<void, Error> DecodeCacheDefinition(ByteSpan cursor, pivot::PivotCache* 
         cache->mutable_fields().push_back(std::move(field));
         in_field = true;
         field_has_shared_items = false;
+        field_is_date_only = false;
         break;
       }
       case kEndPCDField: {
         if (!in_field) {
           return CorruptError("xlsb pivot cache field end without a start");
         }
-        // A field with shared items indexes into them; one without stores
-        // its values inline, and the only inline width this module
-        // supports is an 8-byte double. The record-width check in
-        // `DecodeCacheRecords` is what catches a field whose real inline
-        // encoding is something else.
-        encodings->push_back(field_has_shared_items ? CellEncoding::SharedIndex : CellEncoding::Double);
+        // A field with shared items indexes into them; one without stores its values inline: an 8-byte date
+        // when the field holds dates only, else an 8-byte double. The record-width check in
+        // `DecodeCacheRecords` catches a field whose real inline encoding is something else.
+        encodings->push_back(field_has_shared_items ? CellEncoding::SharedIndex
+                             : field_is_date_only   ? CellEncoding::Date
+                                                    : CellEncoding::Double);
         in_field = false;
         break;
       }
-      case kBeginPCDFAtbl:
+      case kBeginPCDFAtbl: {
         in_shared_items = true;
+        ByteSpan payload = rec.payload;
+        ASSIGN_OR_RETURN(const std::uint16_t flags, read_u16(payload));
+        field_is_date_only = (flags & (kPCDFAtblNonDates | kPCDFAtblDateInField)) == kPCDFAtblDateInField;
         break;
+      }
       case kEndPCDFAtbl:
         in_shared_items = false;
         break;
@@ -423,11 +467,13 @@ Expected<void, Error> DecodeCacheDefinition(ByteSpan cursor, pivot::PivotCache* 
 }
 
 /// Decodes the records part against the encodings the definition implied.
-Expected<void, Error> DecodeCacheRecords(ByteSpan cursor, const std::vector<CellEncoding>& encodings,
+Expected<void, Error> DecodeCacheRecords(ByteSpan cursor, const std::vector<CellEncoding>& encodings, bool date1904,
                                          pivot::PivotCache* cache) {
   std::size_t expected_width = 0;
   for (const CellEncoding encoding : encodings) {
-    expected_width += (encoding == CellEncoding::SharedIndex) ? sizeof(std::uint32_t) : sizeof(double);
+    expected_width += encoding == CellEncoding::SharedIndex ? sizeof(std::uint32_t)
+                      : encoding == CellEncoding::Date      ? kInlineDateBytes
+                                                            : sizeof(double);
   }
   while (cursor.size > 0) {
     auto rec_or = read_record(cursor);
@@ -459,6 +505,12 @@ Expected<void, Error> DecodeCacheRecords(ByteSpan cursor, const std::vector<Cell
         }
         record.cells.push_back(Value::number(static_cast<double>(index)));
         record.cell_is_index.push_back(true);
+      } else if (encodings[i] == CellEncoding::Date) {
+        ASSIGN_OR_RETURN(const double serial, InlineDateSerial(payload, date1904));
+        record.cells.push_back(Value::number(serial));
+        record.cell_is_index.push_back(false);
+        record.cell_is_date.resize(encodings.size(), false);
+        record.cell_is_date[i] = true;
       } else {
         ASSIGN_OR_RETURN(auto value, read_double(payload));
         record.cells.push_back(Value::number(value));
@@ -569,7 +621,7 @@ Expected<void, Error> AppendFiltersXml(ByteSpan& cursor, ByteSpan begin, std::st
 
 }  // namespace
 
-Expected<pivot::PivotCache, Error> read_pivot_cache_bin(ByteSpan definition, ByteSpan records) {
+Expected<pivot::PivotCache, Error> read_pivot_cache_bin(ByteSpan definition, ByteSpan records, bool date1904) {
   pivot::PivotCache cache;
   std::vector<CellEncoding> encodings;
   if (auto status = DecodeCacheDefinition(definition, &cache, &encodings); !status) {
@@ -578,7 +630,7 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_bin(ByteSpan definition, Byt
   if (encodings.size() != cache.fields().size()) {
     return CorruptError("xlsb pivot cache definition closed fewer fields than it opened");
   }
-  if (auto status = DecodeCacheRecords(records, encodings, &cache); !status) {
+  if (auto status = DecodeCacheRecords(records, encodings, date1904, &cache); !status) {
     return std::move(status.error());
   }
   return cache;

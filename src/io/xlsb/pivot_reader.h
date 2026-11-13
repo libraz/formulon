@@ -43,14 +43,15 @@ namespace xlsb {
 /// The two parts are decoded together because the record layout is not
 /// self-describing: a record cell is a 4-byte shared-item index or an
 /// 8-byte double depending on what the *definition* said about that
-/// field, so the records cannot be parsed without it.
+/// field, so the records cannot be parsed without it. `date1904` is the
+/// workbook's date system, which inline record dates are converted under.
 ///
 /// Errors:
 ///   * `kIoXlsbRecordTruncated` — a record overruns its part.
 ///   * `kIoXlsbRecordCorrupt`   — a record id, field count or record
 ///                                width this module cannot account for.
 ///                                Callers treat this as "skip the pivot".
-Expected<pivot::PivotCache, Error> read_pivot_cache_bin(ByteSpan definition, ByteSpan records);
+Expected<pivot::PivotCache, Error> read_pivot_cache_bin(ByteSpan definition, ByteSpan records, bool date1904);
 
 /// Decodes a pivot table definition part.
 ///

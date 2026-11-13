@@ -163,8 +163,8 @@ std::optional<std::uint32_t> LoadPivotCacheFor(const ZipReader& zip, Workbook& w
   }
   const std::vector<std::uint8_t>& def_bytes = def_bytes_or.value();
   const std::vector<std::uint8_t>& rec_bytes = rec_bytes_or.value();
-  auto cache_or =
-      read_pivot_cache_bin(ByteSpan{def_bytes.data(), def_bytes.size()}, ByteSpan{rec_bytes.data(), rec_bytes.size()});
+  auto cache_or = read_pivot_cache_bin(ByteSpan{def_bytes.data(), def_bytes.size()},
+                                       ByteSpan{rec_bytes.data(), rec_bytes.size()}, wb.date1904());
   if (!cache_or) {
     StructuredLog("xlsb.pivot.skipped").field("part", def_path).field("reason", cache_or.error().message).warn();
     return std::nullopt;

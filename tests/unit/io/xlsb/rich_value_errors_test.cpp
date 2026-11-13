@@ -1016,7 +1016,7 @@ void PatchAfter(std::vector<std::uint8_t>& bytes, const std::vector<std::uint8_t
 }
 
 Expected<pivot::PivotCache, Error> ReadCache(const PivotParts& p) {
-  return read_pivot_cache_bin(SpanOf(p.definition), SpanOf(p.records));
+  return read_pivot_cache_bin(SpanOf(p.definition), SpanOf(p.records), false);
 }
 
 TEST(XlsbPivotSamples, ANumericSharedItemArrayDecodesLikeTheTwinsNumberItems) {

@@ -38,6 +38,7 @@
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
+#include "io/ooxml_reader.h"
 #include "io/xlsb/pivot_reader.h"
 #include "io/xlsb/reader.h"
 #include "io/zip_reader.h"
@@ -341,7 +342,7 @@ std::vector<std::uint8_t> EncodeRecord(std::uint16_t type, const std::vector<std
 
 TEST(XlsbPivotFixture, CacheFieldOutsideDefinitionIsRejected) {
   const std::vector<std::uint8_t> bytes = EncodeRecord(kBeginPCDField, {});
-  auto cache_or = io::xlsb::read_pivot_cache_bin(io::ByteSpan{bytes.data(), bytes.size()}, io::ByteSpan{});
+  auto cache_or = io::xlsb::read_pivot_cache_bin(io::ByteSpan{bytes.data(), bytes.size()}, io::ByteSpan{}, false);
   ASSERT_FALSE(static_cast<bool>(cache_or));
   EXPECT_EQ(cache_or.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
   EXPECT_EQ(cache_or.error().message, "xlsb pivot cache field outside a cache definition");
@@ -372,9 +373,13 @@ std::vector<std::uint8_t> OneFieldCacheDefinition(const std::vector<std::vector<
 TEST(XlsbPivotFixture, CacheFieldWithOnlyCharacterisedRecordsDecodes) {
   constexpr std::uint16_t kBeginPCDFAtbl = 189;
   constexpr std::uint16_t kEndPCDFAtbl = 190;
+  // The BrtBeginPCDFAtbl payload Excel writes for a numeric field with no shared items (flags, item count 0,
+  // minimum 10, maximum 120).
+  const std::vector<std::uint8_t> numeric_atbl = {0xC2, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                                                  0x00, 0x24, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x5E, 0x40};
   const std::vector<std::uint8_t> bytes =
-      OneFieldCacheDefinition({EncodeRecord(kBeginPCDFAtbl, {}), EncodeRecord(kEndPCDFAtbl, {})});
-  auto cache_or = io::xlsb::read_pivot_cache_bin(io::ByteSpan{bytes.data(), bytes.size()}, io::ByteSpan{});
+      OneFieldCacheDefinition({EncodeRecord(kBeginPCDFAtbl, numeric_atbl), EncodeRecord(kEndPCDFAtbl, {})});
+  auto cache_or = io::xlsb::read_pivot_cache_bin(io::ByteSpan{bytes.data(), bytes.size()}, io::ByteSpan{}, false);
   ASSERT_TRUE(static_cast<bool>(cache_or)) << cache_or.error().message;
   ASSERT_EQ(cache_or.value().fields().size(), 1U);
   EXPECT_EQ(cache_or.value().fields()[0].name, "F");
@@ -385,7 +390,7 @@ TEST(XlsbPivotFixture, CacheFieldWithAnUncharacterisedRecordIsRejected) {
   // a grouping block whose layout has not been decoded.
   constexpr std::uint16_t kUncharacterised = 373;
   const std::vector<std::uint8_t> bytes = OneFieldCacheDefinition({EncodeRecord(kUncharacterised, {0U, 0U})});
-  auto cache_or = io::xlsb::read_pivot_cache_bin(io::ByteSpan{bytes.data(), bytes.size()}, io::ByteSpan{});
+  auto cache_or = io::xlsb::read_pivot_cache_bin(io::ByteSpan{bytes.data(), bytes.size()}, io::ByteSpan{}, false);
   ASSERT_FALSE(static_cast<bool>(cache_or));
   EXPECT_EQ(cache_or.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
   EXPECT_EQ(cache_or.error().message, "xlsb pivot cache field carries an uncharacterised record (grouping?)");
@@ -538,6 +543,40 @@ TEST(XlsbPivotFixture, DuplicatedPivotRelsResolveToTheLastEntry) {
   const Workbook& wb = result_or.value().workbook;
   ASSERT_EQ(wb.pivot_caches().size(), 1U);
   EXPECT_EQ(wb.pivot_caches().front()->records().size(), 6U);
+}
+
+// A field whose cache holds only dates and no shared items stores each record cell as an inline date. The
+// xlsb cache must carry the same serials, flagged as dates, as the xlsx twin Excel saved beside it.
+TEST(XlsbPivotFixture, InlineRecordDatesMatchTheXlsxTwin) {
+  const std::string stem =
+      std::string(FORMULON_FIXTURES_DIR) + "/excel/pivot_line_shapes/M1a_values_above_two_rows_compact";
+  const std::vector<std::uint8_t> xlsb = ReadFileBytes(stem + ".xlsb");
+  const std::vector<std::uint8_t> xlsx = ReadFileBytes(stem + ".xlsx");
+  auto from_xlsb = io::xlsb::read_xlsb(io::ByteSpan{xlsb.data(), xlsb.size()});
+  auto from_xlsx = io::read_ooxml(io::ByteSpan{xlsx.data(), xlsx.size()});
+  ASSERT_TRUE(static_cast<bool>(from_xlsb)) << from_xlsb.error().message;
+  ASSERT_TRUE(static_cast<bool>(from_xlsx)) << from_xlsx.error().message;
+  const Workbook& b = from_xlsb.value().workbook;
+  const Workbook& x = from_xlsx.value().workbook;
+  ASSERT_EQ(b.pivot_caches().size(), 1U);
+  ASSERT_EQ(x.pivot_caches().size(), 1U);
+  const auto& b_records = b.pivot_caches().front()->records();
+  const auto& x_records = x.pivot_caches().front()->records();
+  ASSERT_EQ(b_records.size(), x_records.size());
+  ASSERT_FALSE(b_records.empty());
+  std::size_t dates = 0;
+  for (std::size_t r = 0; r < b_records.size(); ++r) {
+    ASSERT_EQ(b_records[r].cells.size(), x_records[r].cells.size());
+    for (std::size_t c = 0; c < b_records[r].cells.size(); ++c) {
+      SCOPED_TRACE("record " + std::to_string(r) + " field " + std::to_string(c));
+      const bool x_date = c < x_records[r].cell_is_date.size() && x_records[r].cell_is_date[c];
+      const bool b_date = c < b_records[r].cell_is_date.size() && b_records[r].cell_is_date[c];
+      EXPECT_EQ(b_date, x_date);
+      EXPECT_DOUBLE_EQ(b_records[r].cells[c].as_number(), x_records[r].cells[c].as_number());
+      dates += x_date ? 1U : 0U;
+    }
+  }
+  EXPECT_GT(dates, 0U);
 }
 
 }  // namespace
