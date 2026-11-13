@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "cf/cf_types.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_writer.h"
 #include "io/styles_reader.h"
@@ -218,6 +219,17 @@ TEST(XlsbStylesFidelity, WorkbookSaveKeepsGradientsAndToggles) {
   Workbook wb = Workbook::create_empty();
   wb.sheet(wb.add_sheet("S")).set_cell_value(0U, 0U, Value::number(1.0));
   wb.set_styles(StylesTable(source));
+  // A save writes only referenced dxfs, so one CF rule names each.
+  for (std::size_t i = 0; i < source.dxfs.size(); ++i) {
+    cf::ConditionalFormat block;
+    block.sqref = {cf::CFCellRange{{0, 0}, {0, 0}}};
+    cf::CFRule rule;
+    rule.priority = static_cast<std::int32_t>(i + 1U);
+    rule.formula1 = "$A$1>0";
+    rule.dxf_id = static_cast<std::uint32_t>(i);
+    block.rules.push_back(std::move(rule));
+    wb.sheet(0).mutable_conditional_formats().push_back(std::move(block));
+  }
   auto first = write_xlsb(wb);
   ASSERT_TRUE(static_cast<bool>(first)) << first.error().message;
   auto loaded = read_xlsb(SpanOf(first.value()));

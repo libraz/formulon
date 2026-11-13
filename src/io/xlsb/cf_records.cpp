@@ -635,6 +635,10 @@ Expected<double, Error> parse_threshold_number(const std::string& text) {
   return num;
 }
 
+bool cf_rule_type_has_dxf(std::uint32_t itype) {
+  return itype != kTypeColorScale && itype != kTypeDataBar && itype != kTypeIconSet;
+}
+
 bool cf_rule_has_formulas(cf::RuleType type) {
   switch (type) {
     case cf::RuleType::ColorScale:

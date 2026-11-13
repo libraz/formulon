@@ -422,6 +422,31 @@ TEST(XlsbDxfRecordSlots, UnlocatableSlotIsAnError) {
   EXPECT_TRUE(empty.value().slots.empty());
 }
 
+TEST(XlsbDxfRecordSlots, VisualCfRuleSlotIsNotAReference) {
+  // Colour scale, data bar and icon set rules state no dxf; Excel writes 0 in the slot.
+  std::vector<std::uint8_t> s;
+  for (const std::uint32_t itype : {3U, 4U, 6U}) {
+    std::vector<std::uint8_t> legacy;
+    for (const std::uint32_t v : {itype, 0U, 0U, 1U, 0U, 0U, 0U}) {
+      emit_u32(legacy, v);
+    }
+    emit_u16(legacy, 0U);
+    EmitNullStrings(legacy, 1);
+    emit_record(s, kBrtBeginCFRule, legacy);
+    std::vector<std::uint8_t> x14;
+    for (const std::uint32_t v : {0U, itype, 0U, 0U, 1U}) {
+      emit_u32(x14, v);
+    }
+    emit_record(s, kBeginCfRule14, x14);
+  }
+  auto scan = scan_dxf_slots(s);
+  ASSERT_TRUE(scan);
+  EXPECT_TRUE(scan.value().slots.empty());
+  auto rewritten = rewrite_dxf_slots(s, build_dxf_save_plan(1, {}, false));
+  ASSERT_TRUE(rewritten);
+  EXPECT_EQ(rewritten.value(), s);
+}
+
 }  // namespace
 }  // namespace xlsb
 }  // namespace formulon::io

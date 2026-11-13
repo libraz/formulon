@@ -3,14 +3,18 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <string_view>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include "io/xlsb/brt_color.h"
 #include "io/xlsb/dxf_props.h"
+#include "io/xlsb/dxf_record_slots.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/xf_flags.h"
@@ -344,7 +348,7 @@ void EmitCount(std::vector<std::uint8_t>& out, std::uint16_t type, std::size_t c
 
 }  // namespace
 
-std::vector<std::uint8_t> write_styles_bin(const StylesTable& table) {
+std::vector<std::uint8_t> write_styles_bin(const StylesTable& table, const DxfSavePlan* plan) {
   std::vector<std::uint8_t> out;
   out.reserve(256U + table.fonts.size() * 40U + table.fills.size() * 64U + table.borders.size() * 56U +
               table.cell_xfs.size() * 20U);
@@ -429,16 +433,84 @@ std::vector<std::uint8_t> write_styles_bin(const StylesTable& table) {
     }
   }
   emit_record(out, kBrtEndStyles, empty);
-  if (!table.dxfs.empty()) {
+  const DxfSavePlan identity = plan == nullptr ? identity_dxf_plan(table.dxfs.size()) : DxfSavePlan();
+  const std::vector<std::uint32_t>& order = plan == nullptr ? identity.order() : plan->order();
+  if (!order.empty()) {
     std::vector<std::uint8_t> dxf_count;
-    emit_u32(dxf_count, static_cast<std::uint32_t>(table.dxfs.size()));
+    emit_u32(dxf_count, static_cast<std::uint32_t>(order.size()));
     emit_record(out, kBrtBeginDxfs, dxf_count);
-    for (const DifferentialFormat& dxf : table.dxfs) {
-      EmitDxf(out, dxf);
+    for (const std::uint32_t index : order) {
+      EmitDxf(out, table.dxfs[index]);
     }
     emit_record(out, kBrtEndDxfs, empty);
   }
   emit_record(out, kBrtEndStyleSheet, empty);
+  return out;
+}
+
+std::optional<std::size_t> styles_bin_dxf_count(const std::vector<std::uint8_t>& raw) {
+  const std::vector<FramedRecord> recs = split_records(raw);
+  if (recs.empty() && !raw.empty()) {
+    return std::nullopt;
+  }
+  std::optional<std::size_t> begin;
+  std::size_t count = 0;
+  for (std::size_t i = 0; i < recs.size(); ++i) {
+    if (recs[i].type == kBrtBeginDxfs) {
+      if (begin.has_value() || recs[i].payload.size < 4U) {
+        return std::nullopt;
+      }
+      begin = i;
+    } else if (recs[i].type == kBrtDxf) {
+      if (!begin.has_value() || i != *begin + 1U + count) {
+        return std::nullopt;
+      }
+      ++count;
+    }
+  }
+  return count;
+}
+
+Expected<std::vector<std::uint8_t>, Error> compact_styles_bin(const std::vector<std::uint8_t>& raw,
+                                                              const DxfSavePlan& plan) {
+  if (!styles_bin_dxf_count(raw).has_value()) {
+    return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb styles part's dxf list is not one block",
+                      "context=xlsb_styles_dxfs");
+  }
+  auto mapped = rewrite_dxf_slots(raw, plan);
+  if (!mapped) {
+    return std::move(mapped.error());
+  }
+  const std::vector<std::uint8_t>& src = mapped.value();
+  const std::vector<FramedRecord> recs = split_records(src);
+  std::vector<const FramedRecord*> dxfs;
+  for (const FramedRecord& rec : recs) {
+    if (rec.type == kBrtDxf) {
+      dxfs.push_back(&rec);
+    }
+  }
+  for (const std::uint32_t index : plan.order()) {
+    if (index >= dxfs.size()) {
+      return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb styles part holds fewer dxfs than the plan",
+                        "context=xlsb_styles_dxfs");
+    }
+  }
+  std::vector<std::uint8_t> out;
+  out.reserve(src.size());
+  for (const FramedRecord& rec : recs) {
+    if (rec.type == kBrtDxf) {
+      continue;
+    }
+    append_record(out, src, rec);
+    if (rec.type == kBrtBeginDxfs) {
+      // The count is the payload's first u32; the record's framing bytes are kept.
+      const std::size_t payload_at = static_cast<std::size_t>(rec.payload.data - src.data());
+      store_u32(out.data() + out.size() - (rec.end - payload_at), static_cast<std::uint32_t>(plan.saved_count()));
+      for (const std::uint32_t index : plan.order()) {
+        append_record(out, src, *dxfs[index]);
+      }
+    }
+  }
   return out;
 }
 

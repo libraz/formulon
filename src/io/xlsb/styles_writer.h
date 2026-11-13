@@ -6,10 +6,15 @@
 #ifndef FORMULON_IO_XLSB_STYLES_WRITER_H_
 #define FORMULON_IO_XLSB_STYLES_WRITER_H_
 
+#include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <vector>
 
+#include "io/dxf_save_plan.h"
 #include "styles.h"
+#include "utils/error.h"
+#include "utils/expected.h"
 
 namespace formulon {
 namespace io {
@@ -21,7 +26,20 @@ namespace xlsb {
 /// as required by the XLSB collection contracts.  The writer preserves the
 /// modelled font, fill (pattern and gradient), border, number-format, XF,
 /// named-style and differential-format fields. Every gradient stop is written.
-std::vector<std::uint8_t> write_styles_bin(const StylesTable& table);
+/// `plan` (null: every dxf in model order) selects and orders the dxfs written.
+std::vector<std::uint8_t> write_styles_bin(const StylesTable& table, const DxfSavePlan* plan = nullptr);
+
+/// The BrtDXF count of a source styles part whose BrtDXF records form one list
+/// directly under its only BrtBeginDXFs (zero when it has neither); nullopt for
+/// any other layout or a part that does not frame whole.
+std::optional<std::size_t> styles_bin_dxf_count(const std::vector<std::uint8_t>& raw);
+
+/// The source styles part `raw` with its dxf list written in `plan.order()`,
+/// BrtBeginDXFs counting it, and every dxf slot mapped through `plan`; every
+/// other record is byte-equal. Fails for a dxf list `styles_bin_dxf_count`
+/// rejects or a dxf slot that cannot be located.
+Expected<std::vector<std::uint8_t>, Error> compact_styles_bin(const std::vector<std::uint8_t>& raw,
+                                                              const DxfSavePlan& plan);
 
 }  // namespace xlsb
 }  // namespace io

@@ -72,7 +72,7 @@ TableMetadata AuthoredTable() {
       " totalsRowDxfId=\"3\" headerRowBorderDxfId=\"5\" tableBorderDxfId=\"4\" totalsRowBorderDxfId=\"6\""
       " headerRowCellStyle=\"Heading 1\" dataCellStyle=\"Normal\" totalsRowCellStyle=\"Total\"";
   TableColumn region(1, "Region", "Total", "", "");
-  region.extra_attrs = " dataDxfId=\"8\" totalsRowDxfId=\"9\"";
+  region.extra_attrs = " dataDxfId=\"0\" totalsRowDxfId=\"7\"";
   TableColumn amount(2, "Amount", "", "sum", "");
   amount.extra_attrs = " dataCellStyle=\"Currency\"";
   TableColumn tax(3, "Tax", "", "custom", "C3*0.08");
@@ -114,6 +114,14 @@ Workbook AuthoredBook() {
   wb.sheet(0).mutable_hyperlinks().push_back(link);
   wb.mutable_tables().push_back(AuthoredTable());
   AddAuthoredCellStyles(wb);
+  // One dxf per id `AuthoredTable` names, each used, so a save keeps every id.
+  for (std::size_t i = 0; i < 8U; ++i) {
+    DifferentialFormat dxf;
+    dxf.has_num_fmt = true;
+    dxf.num_fmt_id = static_cast<std::uint16_t>(164U + i);
+    dxf.num_fmt_code = std::string(i + 1U, '0');
+    wb.mutable_styles().dxfs.push_back(dxf);
+  }
   return wb;
 }
 
@@ -307,7 +315,7 @@ TEST(XlsbTableFidelity, AColumnHeaderDxfOrStyleIsDroppedOnReadAndNeverWritten) {
   for (const TableColumn& col : table.value().columns) {
     EXPECT_EQ(col.extra_attrs.find("headerRow"), std::string::npos) << col.extra_attrs;
   }
-  EXPECT_EQ(table.value().columns.at(0).extra_attrs, " dataDxfId=\"8\" totalsRowDxfId=\"9\"");
+  EXPECT_EQ(table.value().columns.at(0).extra_attrs, " dataDxfId=\"0\" totalsRowDxfId=\"7\"");
   EXPECT_EQ(diagnostics.skipped_feature_count, 2U);
 
   auto loaded = read_xlsb(SpanOf(RepackWithEntries(package, {{"xl/tables/table3.bin", patched}})));
@@ -372,7 +380,7 @@ TEST(XlsxTableCellStyles, OnlyNamesOfSavedCellStylesAreWritten) {
   Workbook wb = AuthoredBook();
   wb.mutable_styles().cell_styles.erase(wb.mutable_styles().cell_styles.begin() + 2);  // "Total"
   wb.mutable_tables()[0].columns[1].extra_attrs = " dataCellStyle=\"Currency\"";
-  wb.mutable_tables()[0].columns[0].extra_attrs = " dataCellStyle=\"Missing\" dataDxfId=\"8\"";
+  wb.mutable_tables()[0].columns[0].extra_attrs = " dataCellStyle=\"Missing\" dataDxfId=\"0\"";
   auto xlsx = write_ooxml(wb);
   ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
   const std::string xml = EntryText(xlsx.value(), "xl/tables/table3.xml");
@@ -380,7 +388,7 @@ TEST(XlsxTableCellStyles, OnlyNamesOfSavedCellStylesAreWritten) {
   EXPECT_NE(xml.find(" dataCellStyle=\"Normal\""), std::string::npos) << xml;
   EXPECT_EQ(xml.find("totalsRowCellStyle"), std::string::npos) << xml;
   EXPECT_EQ(xml.find("Missing"), std::string::npos) << xml;
-  EXPECT_NE(xml.find("dataDxfId=\"8\""), std::string::npos) << xml;
+  EXPECT_NE(xml.find("dataDxfId=\"0\""), std::string::npos) << xml;
   EXPECT_NE(xml.find("dataCellStyle=\"Currency\""), std::string::npos) << xml;
 }
 

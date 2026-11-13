@@ -4,6 +4,7 @@
 #include <initializer_list>
 #include <string>
 
+#include "io/xlsb/cf_records.h"
 #include "io/xlsb/dxf_props.h"
 #include "io/xlsb/frt_formula.h"
 #include "io/xlsb/frt_records.h"
@@ -41,8 +42,14 @@ bool BeginListCol(ByteSpan payload, SlotOffsets* out) {
   return Fixed(payload, {8, 12, 16}, out);
 }
 
-/// iType, iTemplate, then dxfId.
+/// iType, iTemplate, then dxfId; a visual rule's dxfId names nothing.
 bool BeginCfRule(ByteSpan payload, SlotOffsets* out) {
+  if (payload.size < 4U) {
+    return false;
+  }
+  if (!cf_rule_type_has_dxf(load_u32(payload.data))) {
+    return true;
+  }
   return Fixed(payload, {8}, out);
 }
 
@@ -73,6 +80,12 @@ bool BeginCfRule14(ByteSpan payload, SlotOffsets* out) {
     }
   }
   const std::size_t offset = payload.size - p.size + 8U;
+  if (p.size < 4U) {
+    return false;
+  }
+  if (!cf_rule_type_has_dxf(load_u32(p.data))) {
+    return true;
+  }
   return Fixed(payload, {offset}, out);
 }
 

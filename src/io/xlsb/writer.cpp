@@ -15,6 +15,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -24,6 +25,7 @@
 #include "cf/cf_types.h"
 #include "chart/chart_cache.h"
 #include "external_link.h"
+#include "io/dxf_save_plan.h"
 #include "io/dynamic_array_formula.h"
 #include "io/future_functions.h"
 #include "io/ooxml/package_validator.h"
@@ -36,6 +38,7 @@
 #include "io/rich_value_errors.h"
 #include "io/writer_common.h"
 #include "io/xlsb/drawing_record.h"
+#include "io/xlsb/dxf_uses_xlsb.h"
 #include "io/xlsb/emission_plan.h"
 #include "io/xlsb/external_link_writer.h"
 #include "io/xlsb/metadata_bin.h"
@@ -258,6 +261,44 @@ MetadataPlan BuildMetadataPlan(const Workbook& wb) {
   return plan;
 }
 
+/// The streams this save writes that can name a model dxf. The kept
+/// passthrough parts among them are copied into `copies`, by path, and written
+/// from there.
+XlsbEmission DxfStreams(const Workbook& wb, std::vector<std::vector<std::uint8_t>>& sheet_bodies, EmissionPlan& plan,
+                        std::unordered_map<std::string, std::vector<std::uint8_t>>& copies) {
+  XlsbEmission emission;
+  std::vector<std::uint32_t> table_parts(sheet_bodies.size(), 0U);
+  for (std::size_t i = 0; i < sheet_bodies.size(); ++i) {
+    // Records before BrtEndSheetData are cells, which carry no dxf slot.
+    const std::size_t tail =
+        find_record_offset(sheet_bodies[i], static_cast<std::uint16_t>(XlsbRecordType::BrtEndSheetData));
+    emission.streams.push_back(XlsbDxfStream{&sheet_bodies[i], tail, static_cast<std::int32_t>(i), 0U});
+    for (XlsbTablePart& table : plan.sheet_tables[i]) {
+      emission.streams.push_back(XlsbDxfStream{&table.bytes, 0U, static_cast<std::int32_t>(i), ++table_parts[i]});
+    }
+  }
+  for (const PassthroughPart* part : plan.passthrough_kept) {
+    if (part->retained_origin == PassthroughPart::RetainedOrigin::kPivotTable) {
+      emission.retained_pivot = true;
+    } else if (part->path == kStylesBinPath) {
+      emission.raw_styles = &(copies[part->path] = part->bytes);
+    } else if (strings::starts_with(part->path, "xl/tables/") && strings::ends_with(part->path, ".bin")) {
+      XlsbDxfStream stream{&(copies[part->path] = part->bytes), 0U, -1, 0U};
+      for (std::size_t i = 0; i < wb.sheet_count() && stream.sheet < 0; ++i) {
+        for (const UnknownRelationship& rel : wb.sheet(i).unknown_relationships()) {
+          if (rel.target == part->path) {
+            stream.sheet = static_cast<std::int32_t>(i);
+            stream.part = ++table_parts[i];
+            break;
+          }
+        }
+      }
+      emission.streams.push_back(stream);
+    }
+  }
+  return emission;
+}
+
 }  // namespace
 
 Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook) {
@@ -371,6 +412,16 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   plan.sheet_drawing_rids = std::move(sheet_drawing_rids);
   plan.sheet_owns_drawing = std::move(sheet_owns_drawing);
   plan.book_directory = std::string(book_directory);
+  // Every stream above names dxfs by model index; the save keeps the dxfs
+  // they name and renumbers every slot, unless a stream it cannot rewrite
+  // pins the table as it is.
+  std::unordered_map<std::string, std::vector<std::uint8_t>> dxf_copies;
+  XlsbEmission dxf_emission = DxfStreams(workbook, sheet_bodies, plan, dxf_copies);
+  const DxfUseSet dxf_uses = collect_xlsb_dxf_uses(workbook, dxf_emission);
+  const DxfSavePlan dxf_plan = build_dxf_save_plan(workbook.styles().dxfs.size(), dxf_uses.uses, dxf_uses.blocked);
+  if (!dxf_uses.blocked) {
+    RETURN_IF_ERROR(apply_xlsb_dxf_plan(dxf_emission, dxf_plan));
+  }
   const std::vector<const ExternalLinkRecord*> links = written_external_links(workbook);
   std::vector<std::string> link_rel_ids;
   link_rel_ids.reserve(links.size());
@@ -408,7 +459,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   // an opaque style payload to preserve.  Its relationship is emitted above
   // in lockstep with this part.
   if (plan.has_generated_styles) {
-    const std::vector<std::uint8_t> styles_bytes = write_styles_bin(workbook.styles());
+    const std::vector<std::uint8_t> styles_bytes = write_styles_bin(workbook.styles(), &dxf_plan);
     RETURN_IF_ERROR(AddPartBytes(writer.get(), kStylesBinPath, styles_bytes));
   }
   // 4c. xl/metadata.bin for dynamic-array spill anchors and rich errors, with
@@ -467,7 +518,10 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
       return std::move(fresh.error());
     }
     const PassthroughPart* replacement = refreshed_index.find(part->path);
-    const auto& part_bytes = replacement != nullptr ? replacement->bytes : part->bytes;
+    const auto copy = dxf_copies.find(part->path);
+    const auto& part_bytes = copy != dxf_copies.end() ? copy->second
+                             : replacement != nullptr ? replacement->bytes
+                                                      : part->bytes;
     RETURN_IF_ERROR(AddPartBytes(writer.get(), part->path, part_bytes));
   }
 

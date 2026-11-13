@@ -4,7 +4,8 @@
 // byte offset of every such slot, each offset the one the record's reader
 // decodes; `scan_dxf_slots` reports them and `rewrite_dxf_slots` maps them
 // through a `DxfSavePlan` in place, so framing and every other byte stay
-// unchanged. A slot holding kNoDxf is not a reference.
+// unchanged. A slot holding kNoDxf, or the dxfId of a colour-scale, data-bar
+// or icon-set CF rule, is not a reference.
 //
 // A dxf-bearing record no reader decodes cannot be rewritten; a stream
 // holding one is reported so the caller can keep the dxf table as it is.

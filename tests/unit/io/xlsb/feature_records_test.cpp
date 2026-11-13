@@ -704,8 +704,9 @@ TEST(XlsbFeatureRecords, UneditedSaveKeepsStylesBinVerbatim) {
   EXPECT_EQ(PartBytes(written.value(), "xl/styles.bin"), original);
 }
 
-// Adding a dxf to a loaded .xlsb regenerates styles.bin; Excel's dxfs and the
-// dxf ids CF rules name survive.
+// Adding a dxf to a loaded .xlsb regenerates styles.bin. Excel's dxfs and the
+// dxf ids CF rules name survive; the added dxf, which nothing references, is
+// not saved, as Excel drops an unreferenced dxf.
 TEST(XlsbFeatureRecords, AddingADxfAfterLoadRegeneratesStylesBin) {
   const Workbook source = ReadXlsbBytes(ReadFileBytes(FixturePath("dxf", "xlsb")));
   Workbook wb = ReadXlsbBytes(ReadFileBytes(FixturePath("dxf", "xlsb")));
@@ -720,13 +721,9 @@ TEST(XlsbFeatureRecords, AddingADxfAfterLoadRegeneratesStylesBin) {
   auto written = io::xlsb::write_xlsb(wb);
   ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
   const Workbook back = ReadXlsbBytes(written.value());
-  ASSERT_EQ(back.styles().dxfs.size(), original_count + 1U);
-  EXPECT_TRUE(back.styles().dxfs.back().has_font);
-  EXPECT_TRUE(back.styles().dxfs.back().font.bold);
-
-  StylesTable expected = source.styles();
-  expected.dxfs.push_back(added);
-  EXPECT_EQ(DescribeDxfs(back.styles()), DescribeDxfs(expected));
+  ASSERT_EQ(back.styles().dxfs.size(), original_count);
+  EXPECT_EQ(wb.styles().dxfs.size(), original_count + 1U);
+  EXPECT_EQ(DescribeDxfs(back.styles()), DescribeDxfs(source.styles()));
   EXPECT_EQ(DescribeCf(back.sheet(0)), DescribeCf(source.sheet(0)));
   for (const cf::ConditionalFormat& f : back.sheet(0).conditional_formats()) {
     for (const cf::CFRule& r : f.rules) {
@@ -863,7 +860,29 @@ TEST(XlsbFeatureRecords, ModelEditsReachTheSavedFile) {
   sheet.mutable_protection().legacy_password = "CC1A";
   auto written = io::xlsb::write_xlsb(wb);
   ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
-  const Workbook back = ReadXlsbBytes(written.value());
+  Workbook back = ReadXlsbBytes(written.value());
+  // The removed block's dxf is no longer saved, so the surviving ids are
+  // renumbered; each must still name the same record.
+  const auto one_dxf = [](const StylesTable& styles, std::uint32_t id) {
+    StylesTable single;
+    single.dxfs.push_back(styles.dxfs.at(id));
+    return DescribeDxfs(single);
+  };
+  auto& back_blocks = back.sheet(0).mutable_conditional_formats();
+  const auto& model_blocks = wb.sheet(0).conditional_formats();
+  ASSERT_EQ(back_blocks.size(), model_blocks.size());
+  for (std::size_t b = 0; b < back_blocks.size(); ++b) {
+    ASSERT_EQ(back_blocks[b].rules.size(), model_blocks[b].rules.size());
+    for (std::size_t r = 0; r < back_blocks[b].rules.size(); ++r) {
+      auto& saved_id = back_blocks[b].rules[r].dxf_id;
+      const auto& model_id = model_blocks[b].rules[r].dxf_id;
+      ASSERT_EQ(saved_id.has_value(), model_id.has_value());
+      if (saved_id) {
+        EXPECT_EQ(one_dxf(back.styles(), *saved_id), one_dxf(wb.styles(), *model_id));
+        saved_id = model_id;
+      }
+    }
+  }
   EXPECT_EQ(DescribeFeatures(back), DescribeFeatures(wb));
   EXPECT_EQ(back.sheet(0).conditional_formats().front().rules.front().priority, 42);
   EXPECT_EQ(back.sheet(0).protection().legacy_password, "CC1A");
