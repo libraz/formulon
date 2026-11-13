@@ -60,6 +60,8 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/auto_filter_model_test.cpp
   unit/validation_eval_test.cpp
   unit/theme_test.cpp
+  unit/builtin_style_names_test.cpp
+  unit/cell_style_save_plan_test.cpp
   unit/new_workbook_defaults_test.cpp
   unit/color_resolve_test.cpp
   unit/sheet_layout_edit_test.cpp

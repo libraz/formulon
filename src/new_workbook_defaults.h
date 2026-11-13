@@ -1,6 +1,6 @@
 //
 // What a new Excel workbook starts as in each UI locale: Normal font,
-// phonetic font, Normal style name, first sheet name, row metrics and page
+// phonetic font, first sheet name, row metrics and page
 // margins. Values are those of the empty workbooks Mac Excel 365 saves per
 // locale; Windows reuses them with its own body size and leaves the row
 // metrics to the engine defaults.
@@ -41,7 +41,6 @@ struct NewWorkbookDefaults {
   /// locale with a phonetic font also centres cells vertically.
   std::uint8_t phonetic_size;
   bool phonetic_no_conversion;  ///< `phoneticPr type="noConversion"`.
-  const char* normal_style_name;
   std::uint8_t mac_row_height;  ///< Mac `defaultRowHeight`, points.
   const char* sheet_name;
   const NewSheetMargins* margins;
@@ -50,15 +49,13 @@ struct NewWorkbookDefaults {
   const char* table_word;    ///< Default table name word.
   const char* column_word;   ///< Default table column name word ("Column1").
   const char* totals_label;  ///< Table totals row label a never-shown totals row starts with.
-  /// Name of the built-in Hyperlink cell style (builtin id 8) when the engine adds it.
-  const char* hyperlink_style_name;
 };
 
 /// The table row for `locale`.
 const NewWorkbookDefaults& new_workbook_defaults(ExcelLocale locale);
 
 /// Applies `profile`'s row to the seeded style table and first sheet of a
-/// new workbook: font 0 / font 1, the xf alignment, the Normal style name,
+/// new workbook: font 0 / font 1, the xf alignment, the Normal style name (from the built-in name table),
 /// the sheet row metrics, page margins and `phoneticPr`.
 void apply_new_workbook_defaults(ExcelProfile profile, StylesTable& styles, Sheet& sheet);
 

@@ -134,6 +134,8 @@ set(FORMULON_CORE_SOURCES
   src/style_region.cpp
   src/style_resolve.cpp
   src/theme.cpp
+  src/builtin_style_names.cpp
+  src/cell_style_save_plan.cpp
   src/new_workbook_defaults.cpp
   src/color_resolve.cpp
   src/value.cpp

@@ -214,6 +214,7 @@ LAYER_BASELINE: dict[tuple[str, str], str] = {
     ),
     ("io/ooxml_writer.cpp", "eval/eval_profile_scope.h"): "Pivot write plans collate shared items like evaluation.",
     ("sheet_name.cpp", "eval/collation.h"): "Name identity is the measured Mac '=' text collation equality.",
+    ("cell_style_save_plan.cpp", "eval/collation.h"): "Saved cell styles merge and sort under the profile collation.",
 }
 
 _INCLUDE_RE = re.compile(r'^\s*#\s*include\s+"([^"]+)"')

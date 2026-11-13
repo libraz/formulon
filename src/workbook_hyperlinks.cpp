@@ -12,12 +12,12 @@
 #include <utility>
 #include <vector>
 
+#include "builtin_style_names.h"
 #include "cell.h"
 #include "column_width.h"
 #include "eval/coerce.h"
 #include "eval/recalc_engine.h"
 #include "hyperlink_address.h"
-#include "new_workbook_defaults.h"
 #include "sheet.h"
 #include "style_region.h"
 #include "styles.h"
@@ -195,8 +195,7 @@ Expected<void, Error> Workbook::set_hyperlink(std::size_t sheet_index, Hyperlink
   const std::size_t style_xf_count = styles_.cell_style_xfs.size();
   const std::size_t style_count = styles_.cell_styles.size();
   const std::size_t xf_count = styles_.cell_xfs.size();
-  const std::uint32_t style_index =
-      hyperlink_style_xf(styles_, new_workbook_defaults(excel_profile_.locale).hyperlink_style_name);
+  const std::uint32_t style_index = hyperlink_style_xf(styles_, builtin_style_name(8U, 0U, excel_profile_.locale));
   std::vector<XfRemap> map;
   for (const std::uint32_t base : formulon::range_style_bases(sheet, rect, {})) {
     map.push_back({base, intern_cell_xf(styles_, hyperlink_cell_xf(styles_, base, style_index))});

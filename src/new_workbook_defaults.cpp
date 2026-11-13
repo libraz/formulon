@@ -4,6 +4,7 @@
 #include <string>
 #include <utility>
 
+#include "builtin_style_names.h"
 #include "sheet.h"
 #include "sheet_passthrough.h"
 #include "styles.h"
@@ -28,37 +29,32 @@ constexpr NewSheetMargins kPtBrMargins = {
 
 // @size-budget: 3 KB
 // Indexed by `ExcelLocale`; values from Mac Excel 365 16.113 new workbooks (column words and totals labels
-// 16.114; Hyperlink style names from the 16.114 built-in style table). Windows profiles reuse the rows; their totals
+// 16.114). Windows profiles reuse the rows; their totals
 // labels are estimates from the Mac measurement.
 constexpr NewWorkbookDefaults kDefaults[] = {
-    {"游ゴシック", 128, 6, false, "標準", 20, "Sheet1", &kDefaultMargins, "グラフ", "図", "テーブル", "列", "集計",
-     "ハイパーリンク"},  // ja_JP
-    {"Aptos Narrow", 0, 0, false, "Normal", 16, "Sheet1", &kDefaultMargins, "Chart", "Picture", "Table", "Column",
-     "Total", "Hyperlink"},  // en_US
-    {"Aptos Narrow", 0, 0, false, "Standard", 16, "Tabelle1", &kDeMargins, "Diagramm", "Grafik", "Tabelle", "Spalte",
-     "Ergebnis", "Link"},  // de_DE
-    {"Aptos Narrow", 0, 0, false, "Normal", 16, "Feuil1", &kDefaultMargins, "Graphique", "Image", "Tableau", "Colonne",
-     "Total", "Lien hypertexte"},  // fr_FR
-    {"等线", 134, 9, true, "常规", 16, "Sheet1", &kDefaultMargins, "图表", "图片", "表", "列", "汇总",
-     "超链接"},  // zh_CN
-    {"맑은 고딕", 129, 8, true, "표준", 18, "Sheet1", &kDefaultMargins, "차트", "그림", "표", "열", "요약",
-     "하이퍼링크"},  // ko_KR
-    {"Tahoma", 222, 0, false, "ปกติ", 15, "Sheet1", &kDefaultMargins, "แผนภูมิ", "รูปภาพ", "Table", "คอลัมน์", "ผลรวม",
-     "Hyperlink"},  // th_TH
-    {"Aptos Narrow", 0, 0, false, "Normal", 16, "Hoja1", &kDefaultMargins, "Gráfico", "Imagen", "Tabla", "Columna",
-     "Total", "Hipervínculo"},  // es_ES
-    {"Aptos Narrow", 0, 0, false, "Normal", 16, "Hoja1", &kDefaultMargins, "Gráfico", "Imagen", "Tabla", "Columna",
-     "Total", "Hipervínculo"},  // es_MX
-    {"Aptos Narrow", 0, 0, false, "Normal", 16, "Planilha1", &kPtBrMargins, "Gráfico", "Imagem", "Tabela", "Coluna",
-     "Total", "Hiperlink"},  // pt_BR
-    {"Aptos Narrow", 204, 0, false, "Обычный", 16, "Лист1", &kDefaultMargins, "Диаграмма", "Рисунок", "Таблица",
-     "Столбец", "Итог", "Гиперссылка"},  // ru_RU
-    {"新細明體", 136, 9, true, "一般", 15, "工作表1", &kDefaultMargins, "圖表", "圖片", "表格", "欄", "合計",
-     "超連結"},  // zh_TW
-    {"Aptos Narrow", 0, 0, false, "Normale", 16, "Foglio1", &kDefaultMargins, "Grafico", "Immagine", "Tabella",
-     "Colonna", "Totale", "Collegamento ipertestuale"},  // it_IT
-    {"Aptos Narrow", 0, 0, false, "Standaard", 16, "Blad1", &kDefaultMargins, "Grafiek", "Afbeelding", "Tabel", "Kolom",
-     "Totaal", "Hyperlink"},  // nl_NL
+    {"游ゴシック", 128, 6, false, 20, "Sheet1", &kDefaultMargins, "グラフ", "図", "テーブル", "列", "集計"},  // ja_JP
+    {"Aptos Narrow", 0, 0, false, 16, "Sheet1", &kDefaultMargins, "Chart", "Picture", "Table", "Column",
+     "Total"},  // en_US
+    {"Aptos Narrow", 0, 0, false, 16, "Tabelle1", &kDeMargins, "Diagramm", "Grafik", "Tabelle", "Spalte",
+     "Ergebnis"},  // de_DE
+    {"Aptos Narrow", 0, 0, false, 16, "Feuil1", &kDefaultMargins, "Graphique", "Image", "Tableau", "Colonne",
+     "Total"},                                                                                               // fr_FR
+    {"等线", 134, 9, true, 16, "Sheet1", &kDefaultMargins, "图表", "图片", "表", "列", "汇总"},              // zh_CN
+    {"맑은 고딕", 129, 8, true, 18, "Sheet1", &kDefaultMargins, "차트", "그림", "표", "열", "요약"},         // ko_KR
+    {"Tahoma", 222, 0, false, 15, "Sheet1", &kDefaultMargins, "แผนภูมิ", "รูปภาพ", "Table", "คอลัมน์", "ผลรวม"},  // th_TH
+    {"Aptos Narrow", 0, 0, false, 16, "Hoja1", &kDefaultMargins, "Gráfico", "Imagen", "Tabla", "Columna",
+     "Total"},  // es_ES
+    {"Aptos Narrow", 0, 0, false, 16, "Hoja1", &kDefaultMargins, "Gráfico", "Imagen", "Tabla", "Columna",
+     "Total"},  // es_MX
+    {"Aptos Narrow", 0, 0, false, 16, "Planilha1", &kPtBrMargins, "Gráfico", "Imagem", "Tabela", "Coluna",
+     "Total"},  // pt_BR
+    {"Aptos Narrow", 204, 0, false, 16, "Лист1", &kDefaultMargins, "Диаграмма", "Рисунок", "Таблица", "Столбец",
+     "Итог"},                                                                                           // ru_RU
+    {"新細明體", 136, 9, true, 15, "工作表1", &kDefaultMargins, "圖表", "圖片", "表格", "欄", "合計"},  // zh_TW
+    {"Aptos Narrow", 0, 0, false, 16, "Foglio1", &kDefaultMargins, "Grafico", "Immagine", "Tabella", "Colonna",
+     "Totale"},  // it_IT
+    {"Aptos Narrow", 0, 0, false, 16, "Blad1", &kDefaultMargins, "Grafiek", "Afbeelding", "Tabel", "Kolom",
+     "Totaal"},  // nl_NL
 };
 static_assert(sizeof(kDefaults) / sizeof(kDefaults[0]) == static_cast<std::size_t>(ExcelLocale::kNlNL) + 1U,
               "one row per ExcelLocale");
@@ -100,7 +96,7 @@ void apply_new_workbook_defaults(ExcelProfile profile, StylesTable& styles, Shee
   body.size = mac ? kNewWorkbookMacFontSize : kNewWorkbookWinFontSize;
   body.color.kind = ColorSpec::Kind::kTheme;
   body.color.theme = 1U;
-  styles.cell_styles[0].name = row.normal_style_name;
+  styles.cell_styles[0].name = builtin_style_name(0U, 0U, profile.locale);
 
   apply_new_sheet_defaults(profile, sheet);
 }
