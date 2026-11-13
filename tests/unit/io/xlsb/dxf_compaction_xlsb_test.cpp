@@ -446,11 +446,11 @@ TEST(DxfCompactionXlsb, CfRulesOfOneSheetSharingADxfTakeARecordEach) {
   const Workbook back = Load(package);
   ASSERT_EQ(back.styles().dxfs.size(), 2U);
   const auto& formats = back.sheet(0).conditional_formats();
-  ASSERT_EQ(formats.size(), 2U);
-  ASSERT_EQ(formats[0].rules.size(), 1U);
-  ASSERT_EQ(formats[1].rules.size(), 1U);
+  // The two blocks share a sqref, so they save as one block.
+  ASSERT_EQ(formats.size(), 1U);
+  ASSERT_EQ(formats[0].rules.size(), 2U);
   EXPECT_EQ(formats[0].rules[0].dxf_id, std::optional<std::uint32_t>(1U));
-  EXPECT_EQ(formats[1].rules[0].dxf_id, std::optional<std::uint32_t>(0U));
+  EXPECT_EQ(formats[0].rules[1].dxf_id, std::optional<std::uint32_t>(0U));
   ExpectNoDanglingSlot(package);
 }
 
@@ -489,12 +489,14 @@ TEST(DxfCompactionXlsb, CfRulesOfOneBlockRegisterByPriority) {
   ExpectNoDanglingSlot(package);
 }
 
-TEST(DxfCompactionXlsb, CfBlocksRegisterInDocumentOrder) {
+// Two blocks of one sqref save as one block with its rules by priority
+// (Excel's re-save of tie_same_sqref_two_blocks_rev), so the lower priority
+// registers first though its block comes later in the model.
+TEST(DxfCompactionXlsb, CfBlocksOfOneSqrefSaveAsOneBlockByPriority) {
   Workbook wb = BookWithDxfs(2);
   AddRule(wb, 0, 2, 0U, "$A$1>0");
   AddRule(wb, 0, 1, 1U, "$A$1>1");
-  // The first block registers first though its rule has the lower priority.
-  EXPECT_EQ(SavedTags(Save(wb)), (std::vector<std::string>{Tag(1), Tag(0)}));
+  EXPECT_EQ(SavedTags(Save(wb)), (std::vector<std::string>{Tag(0), Tag(1)}));
 }
 
 // No reader decodes a retained pivot table part's dxf records, so the table

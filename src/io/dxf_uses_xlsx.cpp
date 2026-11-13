@@ -12,6 +12,7 @@
 
 #include "auto_filter.h"
 #include "cf/cf_types.h"
+#include "io/cf_layout.h"
 #include "io/cf_writer.h"
 #include "io/dxf_xml_ids.h"
 #include "io/ooxml/emission_plan.h"
@@ -125,28 +126,39 @@ void CollectAutoFilter(Collector& c, const AutoFilter& filter) {
   c.xml(filter.ext_lst_xml, DxfUseKind::kColorFilter);
 }
 
-/// The uses of every CF rule, each ranked by its priority. An x14-only rule's
-/// dxf is written inline, yet Excel keeps it in `<dxfs>` too
-/// (structural_ref_m6b.xlsx), so it is a user with no index in the part.
+/// The uses of every CF rule, each ranked by its priority, in the order the
+/// writer emits them: the legacy rules block by block of the saved layout,
+/// then the x14-only rules in x14 write order. An x14-only rule's dxf is
+/// written inline, yet Excel keeps it in `<dxfs>` too (structural_ref_m6b.xlsx),
+/// so it is a user with no index in the part.
 void CollectConditionalFormats(Collector& c, const Sheet& sheet, const std::vector<std::string>& sheet_names) {
+  const auto priority_of = [](const cf::CFRule& rule) {
+    return static_cast<std::uint32_t>(rule.priority > 0 ? rule.priority : 0);
+  };
   std::uint32_t ordinal = 0;
-  for (const cf::ConditionalFormat& block : sheet.conditional_formats()) {
+  for (const CfBlockView& view : cf_saved_layout(sheet.conditional_formats())) {
     c.cf_block(ordinal++);
-    bool any_legacy = block.rules.empty();
-    for (const cf::CFRule& rule : block.rules) {
-      const bool x14_only = cf_rule_is_x14_only(rule, sheet.name(), &sheet_names);
-      const auto priority = static_cast<std::uint32_t>(rule.priority > 0 ? rule.priority : 0);
-      c.add(rule.dxf_id, DxfUseKind::kConditionalFormat, priority, !x14_only);
-      if (x14_only) {
+    bool any_legacy = view.rules.empty();
+    for (const cf::CFRule* rule : view.rules) {
+      if (cf_rule_is_x14_only(*rule, sheet.name(), &sheet_names)) {
         continue;
       }
       any_legacy = true;
-      if (rule.ext_lst_raw.has_value()) {
-        c.xml(*rule.ext_lst_raw, DxfUseKind::kConditionalFormat);
+      c.add(rule->dxf_id, DxfUseKind::kConditionalFormat, priority_of(*rule), true);
+      if (rule->ext_lst_raw.has_value()) {
+        c.xml(*rule->ext_lst_raw, DxfUseKind::kConditionalFormat);
       }
     }
-    if (any_legacy && block.ext_lst_raw.has_value()) {
-      c.xml(*block.ext_lst_raw, DxfUseKind::kConditionalFormat);
+    if (any_legacy && view.ext_lst_raw->has_value()) {
+      c.xml(**view.ext_lst_raw, DxfUseKind::kConditionalFormat);
+    }
+  }
+  for (const cf::ConditionalFormat& block : sheet.conditional_formats()) {
+    for (const cf::CFRule& rule : block.rules) {
+      if (cf_rule_is_x14_only(rule, sheet.name(), &sheet_names)) {
+        c.cf_block(ordinal++);
+        c.add(rule.dxf_id, DxfUseKind::kConditionalFormat, priority_of(rule), false);
+      }
     }
   }
 }

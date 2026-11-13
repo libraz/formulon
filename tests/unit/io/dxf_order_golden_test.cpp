@@ -123,6 +123,8 @@ const std::vector<Golden>& Goldens() {
         "C05F68", "A68D3F", "A2AA3C", "6FC658", "A94BD0", "94D4D3", "4C28CB", "5979BC", "23E1A7",
         "7B5893", "476735", "9A3C69", "967221", "7BCB9B", "378278", "7E937B", "1E6E22", "D2395E"},
        27},
+      // Authored blocks K2, H9, I1 save as H9, I1, K2; the fills follow the saved order.
+      {"cf_unsorted_blocks", {"22CC22", "2222CC", "CC2222"}, 3, 0},
       {"f1_one_sheet_cf", {"4C28CB", "A68D3F", "7B5893", "378278", "2E9548", "8BC9E0", "51CCC8", "7BCB9B"}, 8},
       {"f5_two_tables_two_pivots", {"51CCC8", "7BCB9B", "8BC9E0", "7B5893", "378278", "2E9548", "A68D3F", "4C28CB"}, 6},
   };

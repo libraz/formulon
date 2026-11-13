@@ -9,7 +9,7 @@
 // written reversed:
 // styles-part users; then each sheet's other users, the active sheet first and
 // the rest in tab order, its worksheet part before its pivots before its
-// tables; then CF users by sheet in tab order, block in document order and
+// tables; then CF users by sheet in tab order, saved block order and
 // priority ascending.
 
 #ifndef FORMULON_IO_DXF_SAVE_PLAN_H_
@@ -64,7 +64,7 @@ struct DxfUse {
   /// False for a use that takes a record but has no index in the written part
   /// (an xlsx x14-only CF rule's inline dxf).
   bool written = true;
-  /// A CF rule's block (`<conditionalFormatting>`) ordinal within its sheet.
+  /// A CF rule's saved block (`<conditionalFormatting>`) ordinal within its sheet.
   std::uint32_t block = 0;
 };
 

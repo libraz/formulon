@@ -19,6 +19,7 @@
 #include "cell.h"
 #include "cf/cf_types.h"
 #include "hyperlink_address.h"
+#include "io/cf_layout.h"
 #include "io/dv_overlay.h"
 #include "io/dynamic_array_formula.h"
 #include "io/ooxml_writer_cell.h"
@@ -248,8 +249,8 @@ Expected<void, Error> EmitFormattingAndValidation(std::vector<std::uint8_t>& bod
                                                   const std::unordered_set<std::string>& x14_linked) {
   const auto raw_dvals = static_cast<std::ptrdiff_t>(find_record_offset(retained, kBrtBeginDVals));
   body.insert(body.end(), retained.begin(), retained.begin() + raw_dvals);
-  for (const cf::ConditionalFormat& format : sheet.conditional_formats()) {
-    if (auto s = emit_cf_block(body, format, ctx, x14_linked, sheet.name()); !s) {
+  for (const CfBlockView& view : cf_saved_layout(sheet.conditional_formats())) {
+    if (auto s = emit_cf_block(body, view, ctx, x14_linked, sheet.name()); !s) {
       return s;
     }
   }

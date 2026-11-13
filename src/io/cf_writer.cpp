@@ -16,6 +16,7 @@
 #include "cf/cf_types.h"
 #include "cf/cf_x14_id.h"
 #include "io/cf_attr_names.h"
+#include "io/cf_layout.h"
 #include "io/color_spec_xml.h"
 #include "io/future_functions.h"
 #include "io/ooxml/external_link_writer.h"
@@ -663,28 +664,28 @@ std::string write_conditional_formattings(const std::vector<cf::ConditionalForma
   std::string out;
   out.reserve(formats.size() * 128);
   std::string rules;
-  for (const auto& cf : formats) {
+  for (const CfBlockView& view : cf_saved_layout(formats)) {
     rules.clear();
-    for (const auto& rule : cf.rules) {
-      if (!cf_rule_is_x14_only(rule, sheet.sheet_name, sheet.sheet_names)) {
-        AppendCfRule(rules, rule, dxf_count, indexer);
+    for (const cf::CFRule* rule : view.rules) {
+      if (!cf_rule_is_x14_only(*rule, sheet.sheet_name, sheet.sheet_names)) {
+        AppendCfRule(rules, *rule, dxf_count, indexer);
       }
     }
-    if (rules.empty() && !cf.rules.empty()) {
+    if (rules.empty() && !view.rules.empty()) {
       continue;
     }
     out.append("<conditionalFormatting sqref=\"");
-    AppendXmlAttrEscaped(out, EncodeSqref(cf.sqref));
+    AppendXmlAttrEscaped(out, EncodeSqref(*view.sqref));
     out.push_back('"');
-    if (cf.pivot_scope) {
+    if (view.pivot_scope) {
       out.append(" pivot=\"1\"");
     }
     out.push_back('>');
     out.append(rules);
     // `CT_ConditionalFormatting`'s schema-trailing `extLst?`, round-tripped
     // byte-for-byte (see `ConditionalFormat::ext_lst_raw`).
-    if (cf.ext_lst_raw.has_value()) {
-      out.append(cf.ext_lst_raw.value());
+    if (view.ext_lst_raw->has_value()) {
+      out.append(view.ext_lst_raw->value());
     }
     out.append("</conditionalFormatting>");
   }

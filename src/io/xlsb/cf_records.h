@@ -22,6 +22,7 @@
 #include <vector>
 
 #include "cf/cf_types.h"
+#include "io/cf_layout.h"
 #include "io/xlsb/feature_formula.h"
 #include "io/zip_reader.h"
 #include "sheet_passthrough.h"
@@ -152,13 +153,13 @@ Expected<void, Error> add_x14_rules(std::vector<std::uint8_t>& records,
                                     const FeatureFormulaWriteContext& ctx, std::string_view own_sheet,
                                     std::size_t sheet_index, const std::unordered_set<std::string>& linked);
 
-/// Emits `format` as one framed block, leaving out the rules
+/// Emits `view` as one framed block, leaving out the rules
 /// `is_x14_only_rule` places in the x14 records. A data bar whose id is in
 /// `linked` has an x14 counterpart carrying its lengths, and keeps the
 /// pre-2010 10/90 in the legacy record as Excel does. Fails on a rule the
 /// records cannot carry (a formula the Ptg codec refuses, an x14 link id that
 /// is not a GUID, a malformed number threshold).
-Expected<void, Error> emit_cf_block(std::vector<std::uint8_t>& dst, const cf::ConditionalFormat& format,
+Expected<void, Error> emit_cf_block(std::vector<std::uint8_t>& dst, const CfBlockView& view,
                                     const FeatureFormulaWriteContext& ctx,
                                     const std::unordered_set<std::string>& linked, std::string_view own_sheet);
 

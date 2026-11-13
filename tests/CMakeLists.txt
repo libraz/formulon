@@ -84,6 +84,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/deps/pugixml_smoke_test.cpp
   unit/io/a1_ref_test.cpp
   unit/io/cell_parser_test.cpp
+  unit/io/cf_layout_test.cpp
   unit/io/cf_merge_test.cpp
   unit/io/cf_overlay_test.cpp
   unit/io/cf_reader_test.cpp

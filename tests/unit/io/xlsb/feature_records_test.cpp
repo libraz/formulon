@@ -861,6 +861,10 @@ TEST(XlsbFeatureRecords, ModelEditsReachTheSavedFile) {
   auto written = io::xlsb::write_xlsb(wb);
   ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
   Workbook back = ReadXlsbBytes(written.value());
+  // A saved block lists its rules by priority, so the re-prioritised rule moves last.
+  auto& edited_rules = sheet.mutable_conditional_formats().front().rules;
+  std::stable_sort(edited_rules.begin(), edited_rules.end(),
+                   [](const cf::CFRule& lhs, const cf::CFRule& rhs) { return lhs.priority < rhs.priority; });
   // The removed block's dxf is no longer saved, so the surviving ids are
   // renumbered; each must still name the same record.
   const auto one_dxf = [](const StylesTable& styles, std::uint32_t id) {
@@ -884,7 +888,7 @@ TEST(XlsbFeatureRecords, ModelEditsReachTheSavedFile) {
     }
   }
   EXPECT_EQ(DescribeFeatures(back), DescribeFeatures(wb));
-  EXPECT_EQ(back.sheet(0).conditional_formats().front().rules.front().priority, 42);
+  EXPECT_EQ(back.sheet(0).conditional_formats().front().rules.back().priority, 42);
   EXPECT_EQ(back.sheet(0).protection().legacy_password, "CC1A");
 }
 
