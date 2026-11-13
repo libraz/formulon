@@ -40,7 +40,7 @@ std::vector<std::uint8_t> SlotRange(const XlsbDxfStream& stream) {
 }
 
 /// Adds the uses of `bytes`; false when its slots cannot be located.
-bool AddUses(const std::vector<std::uint8_t>& bytes, std::int32_t sheet, std::uint32_t part, DxfUseSet& out) {
+bool AddUses(const std::vector<std::uint8_t>& bytes, const DxfPartKey& part, DxfUseSet& out) {
   auto scan = scan_dxf_slots(bytes);
   if (!scan) {
     return false;
@@ -50,7 +50,16 @@ bool AddUses(const std::vector<std::uint8_t>& bytes, std::int32_t sheet, std::ui
   }
   std::uint32_t position = 0;
   for (const DxfRecordSlot& slot : scan.value().slots) {
-    out.uses.push_back(DxfUse{slot.value, KindOf(slot.record_type), sheet, part, position++});
+    DxfUse use;
+    use.model_index = slot.value;
+    use.kind = KindOf(slot.record_type);
+    use.part = part;
+    use.position = position++;
+    if (slot.priority.has_value()) {
+      use.priority = *slot.priority;
+    }
+    use.block = slot.block;
+    out.uses.push_back(use);
   }
   return true;
 }
@@ -63,8 +72,9 @@ Expected<void, Error> MapSlots(const XlsbDxfStream& stream, const DxfSavePlan& p
     return std::move(scan.error());
   }
   std::uint8_t* base = stream.bytes->data() + stream.begin;
+  DxfPartCursor cursor(plan, stream.part);
   for (const DxfRecordSlot& slot : scan.value().slots) {
-    store_u32(base + slot.offset, plan.map(slot.value).value_or(kNoDxf));
+    store_u32(base + slot.offset, cursor.next(slot.value).value_or(kNoDxf));
   }
   return Expected<void, Error>::Ok();
 }
@@ -76,7 +86,7 @@ DxfUseSet collect_xlsb_dxf_uses(const Workbook& wb, const XlsbEmission& emission
   // No reader decodes a pivot table part's dxf records.
   out.blocked = emission.retained_pivot;
   for (const XlsbDxfStream& stream : emission.streams) {
-    if (!AddUses(SlotRange(stream), stream.sheet, stream.part, out)) {
+    if (!AddUses(SlotRange(stream), stream.part, out)) {
       out.blocked = true;
     }
   }
@@ -84,7 +94,7 @@ DxfUseSet collect_xlsb_dxf_uses(const Workbook& wb, const XlsbEmission& emission
     // The raw list is rewritten by model index, so it must be the model's.
     const std::optional<std::size_t> raw_count = styles_bin_dxf_count(*emission.raw_styles);
     if (!raw_count.has_value() || *raw_count != wb.styles().dxfs.size() ||
-        !AddUses(*emission.raw_styles, -1, 0U, out)) {
+        !AddUses(*emission.raw_styles, DxfPartKey{-1, DxfPartType::kStyles, 0U}, out)) {
       out.blocked = true;
     }
   }

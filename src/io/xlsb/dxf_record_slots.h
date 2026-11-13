@@ -3,7 +3,7 @@
 // record type that carries an index into the styles part's BrtDXF list to the
 // byte offset of every such slot, each offset the one the record's reader
 // decodes; `scan_dxf_slots` reports them and `rewrite_dxf_slots` maps them
-// through a `DxfSavePlan` in place, so framing and every other byte stay
+// through a `DxfSavePlan`, as one written part, in place, so framing and every other byte stay
 // unchanged. A slot holding kNoDxf, or the dxfId of a colour-scale, data-bar
 // or icon-set CF rule, is not a reference.
 //
@@ -15,6 +15,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 #include "io/dxf_save_plan.h"
@@ -30,6 +31,8 @@ struct DxfRecordSlot {
   std::size_t slot = 0;          ///< Ordinal of the slot within the record's slot list.
   std::size_t offset = 0;        ///< Byte offset of the u32 within the stream.
   std::uint32_t value = 0;
+  std::optional<std::uint32_t> priority;  ///< A CF rule's priority.
+  std::uint32_t block = 0;                ///< A CF rule's block ordinal in the stream.
 };
 
 /// What a stream holds that bears on the dxf table.
@@ -46,10 +49,11 @@ bool is_undecodable_dxf_record(std::uint16_t type);
 /// slot-bearing record is too short or shaped so its slots cannot be located.
 Expected<DxfSlotScan, Error> scan_dxf_slots(const std::vector<std::uint8_t>& stream);
 
-/// `stream` with every slot mapped through `plan`; a slot `plan` maps to
-/// nothing becomes kNoDxf. Fails as `scan_dxf_slots` does.
+/// `stream`, written as `part`, with every slot mapped through `plan` in
+/// stream order; a slot `plan` maps to nothing becomes kNoDxf. Fails as
+/// `scan_dxf_slots` does.
 Expected<std::vector<std::uint8_t>, Error> rewrite_dxf_slots(const std::vector<std::uint8_t>& stream,
-                                                             const DxfSavePlan& plan);
+                                                             const DxfSavePlan& plan, const DxfPartKey& part);
 
 }  // namespace formulon::io::xlsb
 

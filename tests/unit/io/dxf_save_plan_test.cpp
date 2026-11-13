@@ -7,8 +7,11 @@
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
+#include <limits>
+#include <optional>
 #include <set>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <vector>
 
@@ -25,57 +28,191 @@
 namespace formulon::io {
 namespace {
 
+/// Styles-part uses of `indices`, in document order.
 std::vector<DxfUse> Uses(std::initializer_list<std::uint32_t> indices) {
   std::vector<DxfUse> out;
+  std::uint32_t position = 0;
   for (const std::uint32_t index : indices) {
     DxfUse use;
     use.model_index = index;
+    use.kind = DxfUseKind::kTableStyleElement;
+    use.position = position++;
     out.push_back(use);
   }
   return out;
 }
 
-TEST(DxfSavePlan, OrphanIsDroppedAndUsersRenumbered) {
-  const DxfSavePlan plan = build_dxf_save_plan(4, Uses({3, 0, 2, 3}), false);
-  EXPECT_EQ(plan.order(), (std::vector<std::uint32_t>{0, 2, 3}));
-  EXPECT_EQ(plan.saved_count(), 3U);
+DxfUse At(std::uint32_t model, DxfUseKind kind, DxfPartKey part, std::uint32_t position = 0,
+          std::uint32_t priority = std::numeric_limits<std::uint32_t>::max()) {
+  DxfUse use;
+  use.model_index = model;
+  use.kind = kind;
+  use.part = part;
+  use.position = position;
+  use.priority = priority;
+  return use;
+}
+
+constexpr DxfPartKey kStylesPart{};
+
+DxfPartKey Sheet(std::int32_t sheet, DxfPartType type = DxfPartType::kWorksheet, std::uint32_t ordinal = 0) {
+  return DxfPartKey{sheet, type, ordinal};
+}
+
+Expected<std::string, Error> RewriteXml(std::string_view xml, const DxfSavePlan& plan) {
+  DxfPartCursor cursor(plan, kStylesPart);
+  return rewrite_dxf_xml_ids(xml, cursor);
+}
+
+Expected<std::string, Error> RewriteAttrs(std::string_view attrs, const DxfSavePlan& plan) {
+  DxfPartCursor cursor(plan, kStylesPart);
+  return rewrite_dxf_attr_ids(attrs, cursor);
+}
+
+/// The saved model order of `plan` as written.
+std::vector<std::uint32_t> Order(const DxfSavePlan& plan) {
+  return plan.order();
+}
+
+TEST(DxfSavePlan, OneRecordPerUseInReverseRegistrationOrder) {
+  const DxfSavePlan plan = build_dxf_save_plan(4, Uses({3, 0, 2, 3}), false, 0);
+  EXPECT_EQ(plan.order(), (std::vector<std::uint32_t>{3, 2, 0, 3}));
+  EXPECT_EQ(plan.saved_count(), 4U);
   EXPECT_FALSE(plan.identity());
-  EXPECT_EQ(plan.map(0), 0U);
-  EXPECT_EQ(plan.map(1), std::nullopt);
-  EXPECT_EQ(plan.map(2), 1U);
-  EXPECT_EQ(plan.map(3), 2U);
+  EXPECT_EQ(plan.saved(kStylesPart, 3, 0), 3U);
+  EXPECT_EQ(plan.saved(kStylesPart, 0, 0), 2U);
+  EXPECT_EQ(plan.saved(kStylesPart, 2, 0), 1U);
+  EXPECT_EQ(plan.saved(kStylesPart, 3, 1), 0U);
+  EXPECT_EQ(plan.saved(kStylesPart, 1, 0), std::nullopt);
 }
 
 TEST(DxfSavePlan, OutOfRangeIndexMapsToNothing) {
-  const DxfSavePlan plan = build_dxf_save_plan(3, Uses({1, 9, 0xFFFFFFFFU}), false);
+  const DxfSavePlan plan = build_dxf_save_plan(3, Uses({1, 9, 0xFFFFFFFFU}), false, 0);
   EXPECT_EQ(plan.order(), (std::vector<std::uint32_t>{1}));
-  EXPECT_EQ(plan.map(3), std::nullopt);
-  EXPECT_EQ(plan.map(9), std::nullopt);
-  EXPECT_EQ(plan.map(0xFFFFFFFFU), std::nullopt);
-  EXPECT_EQ(identity_dxf_plan(3).map(3), std::nullopt);
+  EXPECT_EQ(plan.saved(kStylesPart, 3, 0), std::nullopt);
+  EXPECT_EQ(plan.saved(kStylesPart, 9, 0), std::nullopt);
+  EXPECT_EQ(plan.saved(kStylesPart, 0xFFFFFFFFU, 0), std::nullopt);
+  EXPECT_EQ(identity_dxf_plan(3).saved(kStylesPart, 3, 0), std::nullopt);
 }
 
 TEST(DxfSavePlan, BlockedYieldsIdentity) {
-  const DxfSavePlan plan = build_dxf_save_plan(3, Uses({1}), true);
+  const DxfSavePlan plan = build_dxf_save_plan(3, Uses({1, 1}), true, 0);
   EXPECT_EQ(plan.order(), (std::vector<std::uint32_t>{0, 1, 2}));
   EXPECT_TRUE(plan.identity());
   for (std::uint32_t i = 0; i < 3U; ++i) {
-    EXPECT_EQ(plan.map(i), i);
+    EXPECT_EQ(plan.saved(Sheet(1, DxfPartType::kTable, 2), i, 1), i);
   }
 }
 
 TEST(DxfSavePlan, EmptyUsesOverNonEmptyTableIsEmpty) {
-  const DxfSavePlan plan = build_dxf_save_plan(2, {}, false);
+  const DxfSavePlan plan = build_dxf_save_plan(2, {}, false, 0);
   EXPECT_TRUE(plan.order().empty());
   EXPECT_EQ(plan.saved_count(), 0U);
   EXPECT_FALSE(plan.identity());
-  EXPECT_EQ(plan.map(0), std::nullopt);
+  EXPECT_EQ(plan.saved(kStylesPart, 0, 0), std::nullopt);
 }
 
-TEST(DxfSavePlan, EveryDxfUsedIsIdentity) {
-  EXPECT_TRUE(build_dxf_save_plan(2, Uses({1, 0}), false).identity());
-  EXPECT_TRUE(build_dxf_save_plan(0, {}, false).identity());
-  EXPECT_EQ(build_dxf_save_plan(0, {}, false).saved_count(), 0U);
+TEST(DxfSavePlan, ReverseRegistrationOfEveryDxfOnceIsIdentity) {
+  EXPECT_TRUE(build_dxf_save_plan(2, Uses({1, 0}), false, 0).identity());
+  EXPECT_FALSE(build_dxf_save_plan(2, Uses({0, 1}), false, 0).identity());
+  EXPECT_FALSE(build_dxf_save_plan(1, Uses({0, 0}), false, 0).identity());
+  EXPECT_TRUE(build_dxf_save_plan(0, {}, false, 0).identity());
+  EXPECT_EQ(build_dxf_save_plan(0, {}, false, 0).saved_count(), 0U);
+}
+
+TEST(DxfSavePlanOrder, ActiveSheetFirstThenTabOrder) {
+  const std::vector<DxfUse> uses = {
+      At(0, DxfUseKind::kColorFilter, Sheet(0)),
+      At(1, DxfUseKind::kPivotFormat, Sheet(1, DxfPartType::kPivot)),
+      At(2, DxfUseKind::kTable, Sheet(2, DxfPartType::kTable)),
+  };
+  // Registered: sheet 2 (active), then sheets 0 and 1; written reversed.
+  EXPECT_EQ(Order(build_dxf_save_plan(3, uses, false, 2)), (std::vector<std::uint32_t>{1, 0, 2}));
+  EXPECT_EQ(Order(build_dxf_save_plan(3, uses, false, 0)), (std::vector<std::uint32_t>{2, 1, 0}));
+}
+
+TEST(DxfSavePlanOrder, WorksheetThenPivotsThenTablesWithinASheet) {
+  const std::vector<DxfUse> uses = {
+      At(0, DxfUseKind::kTable, Sheet(0, DxfPartType::kTable, 1), 0),
+      At(1, DxfUseKind::kTableColumn, Sheet(0, DxfPartType::kTable, 0), 1),
+      At(2, DxfUseKind::kTable, Sheet(0, DxfPartType::kTable, 0), 0),
+      At(3, DxfUseKind::kPivotFormat, Sheet(0, DxfPartType::kPivot, 0)),
+      At(4, DxfUseKind::kSortCondition, Sheet(0), 1),
+      At(5, DxfUseKind::kColorFilter, Sheet(0), 0),
+  };
+  // Registered: colorFilter, sortCondition, pivot, table 0 (attr, column), table 1.
+  EXPECT_EQ(Order(build_dxf_save_plan(6, uses, false, 0)), (std::vector<std::uint32_t>{0, 1, 2, 3, 4, 5}));
+}
+
+TEST(DxfSavePlanOrder, StylesFirstAndCfLastByTabOrderThenPriority) {
+  const std::vector<DxfUse> uses = {
+      At(0, DxfUseKind::kConditionalFormat, Sheet(1), 0, 1), At(1, DxfUseKind::kConditionalFormat, Sheet(0), 0, 2),
+      At(2, DxfUseKind::kConditionalFormat, Sheet(0), 1, 1), At(3, DxfUseKind::kTable, Sheet(1, DxfPartType::kTable)),
+      At(4, DxfUseKind::kTableStyleElement, kStylesPart),
+  };
+  // Active sheet 1 leads the non-CF users only; CF follows tab order, then priority.
+  // Registered: style, table, CF(0, p1), CF(0, p2), CF(1, p1).
+  EXPECT_EQ(Order(build_dxf_save_plan(5, uses, false, 1)), (std::vector<std::uint32_t>{0, 1, 2, 3, 4}));
+}
+
+TEST(DxfSavePlanOrder, CfBlocksRegisterInDocumentOrderBeforePriority) {
+  DxfUse first_block = At(0, DxfUseKind::kConditionalFormat, Sheet(0), 0, 12);
+  DxfUse second_block = At(1, DxfUseKind::kConditionalFormat, Sheet(0), 1, 1);
+  DxfUse second_block_later = At(2, DxfUseKind::kConditionalFormat, Sheet(0), 2, 2);
+  second_block.block = 1;
+  second_block_later.block = 1;
+  // Registered: block 0 (priority 12), then block 1 by priority.
+  EXPECT_EQ(Order(build_dxf_save_plan(3, {second_block_later, first_block, second_block}, false, 0)),
+            (std::vector<std::uint32_t>{2, 1, 0}));
+}
+
+TEST(DxfSavePlanOrder, CfRulesOfOneSheetShareARecordAndOtherUsersDoNot) {
+  const std::vector<DxfUse> uses = {
+      At(0, DxfUseKind::kConditionalFormat, Sheet(0), 0, 1),
+      At(0, DxfUseKind::kConditionalFormat, Sheet(0), 1, 2),
+      At(0, DxfUseKind::kConditionalFormat, Sheet(1), 0, 1),
+      At(0, DxfUseKind::kTable, Sheet(0, DxfPartType::kTable), 0),
+      At(0, DxfUseKind::kTable, Sheet(0, DxfPartType::kTable), 1),
+  };
+  const DxfSavePlan plan = build_dxf_save_plan(1, uses, false, 0);
+  // Registered: table attr 0, table attr 1, CF sheet 0 (both rules), CF sheet 1.
+  EXPECT_EQ(plan.order(), (std::vector<std::uint32_t>{0, 0, 0, 0}));
+  EXPECT_EQ(plan.saved(Sheet(0, DxfPartType::kTable), 0, 0), 3U);
+  EXPECT_EQ(plan.saved(Sheet(0, DxfPartType::kTable), 0, 1), 2U);
+  EXPECT_EQ(plan.saved(Sheet(0), 0, 0), 1U);
+  EXPECT_EQ(plan.saved(Sheet(0), 0, 1), 1U);
+  EXPECT_EQ(plan.saved(Sheet(1), 0, 0), 0U);
+}
+
+TEST(DxfSavePlanOrder, UnwrittenUseTakesARecordButNoReference) {
+  DxfUse inline_dxf = At(1, DxfUseKind::kConditionalFormat, Sheet(0), 0, 1);
+  inline_dxf.written = false;
+  const std::vector<DxfUse> uses = {inline_dxf, At(1, DxfUseKind::kConditionalFormat, Sheet(1), 0, 1),
+                                    At(0, DxfUseKind::kTable, Sheet(0, DxfPartType::kTable))};
+  const DxfSavePlan plan = build_dxf_save_plan(2, uses, false, 0);
+  // Registered: table, CF sheet 0 (inline), CF sheet 1.
+  EXPECT_EQ(plan.order(), (std::vector<std::uint32_t>{1, 1, 0}));
+  // Sheet 1's reference is the first written one of model 1 there.
+  EXPECT_EQ(plan.saved(Sheet(1), 1, 0), 0U);
+}
+
+TEST(DxfSavePlanOrder, CursorCountsReferencesPerModelAndFallsBackToTheFirstRecord) {
+  const std::vector<DxfUse> uses = {
+      At(0, DxfUseKind::kTable, Sheet(0, DxfPartType::kTable), 0),
+      At(1, DxfUseKind::kTable, Sheet(0, DxfPartType::kTable), 1),
+      At(0, DxfUseKind::kTableColumn, Sheet(0, DxfPartType::kTable), 2),
+  };
+  const DxfSavePlan plan = build_dxf_save_plan(3, uses, false, 0);
+  EXPECT_EQ(plan.order(), (std::vector<std::uint32_t>{0, 1, 0}));
+  DxfPartCursor cursor(plan, Sheet(0, DxfPartType::kTable));
+  EXPECT_EQ(cursor.next(0), 2U);
+  EXPECT_EQ(cursor.next(1), 1U);
+  EXPECT_EQ(cursor.next(0), 0U);
+  // A third reference to model 0 no use describes takes model 0's first record.
+  EXPECT_EQ(cursor.next(0), 2U);
+  EXPECT_EQ(cursor.next(2), std::nullopt);
+  DxfPartCursor other(plan, Sheet(3));
+  EXPECT_EQ(other.next(1), 1U);
 }
 
 TEST(DxfXmlIds, CollectsDxfIdAndTheSixTableNames) {
@@ -97,18 +234,18 @@ TEST(DxfXmlIds, CollectsDxfIdAndTheSixTableNames) {
 }
 
 TEST(DxfXmlIds, RewriteSplicesDigitsOnly) {
-  const DxfSavePlan plan = build_dxf_save_plan(8, Uses({3, 7}), false);
-  auto out = rewrite_dxf_xml_ids("<a dxfId = '003' x=\"1\"/>\n<b\tdxfId=\"7\">t</b>", plan);
+  const DxfSavePlan plan = build_dxf_save_plan(8, Uses({3, 7}), false, 0);
+  auto out = RewriteXml("<a dxfId = '003' x=\"1\"/>\n<b\tdxfId=\"7\">t</b>", plan);
   ASSERT_TRUE(out);
-  EXPECT_EQ(out.value(), "<a dxfId = '0' x=\"1\"/>\n<b\tdxfId=\"1\">t</b>");
+  EXPECT_EQ(out.value(), "<a dxfId = '1' x=\"1\"/>\n<b\tdxfId=\"0\">t</b>");
 }
 
 TEST(DxfXmlIds, UnmappedIdRemovesAttributeAndLeadingWhitespace) {
-  const DxfSavePlan plan = build_dxf_save_plan(3, Uses({0}), false);
-  auto out = rewrite_dxf_xml_ids("<cfRule type=\"x\"  dxfId=\"2\" priority=\"1\"/><cfRule dxfId=\"0\"/>", plan);
+  const DxfSavePlan plan = build_dxf_save_plan(3, Uses({0}), false, 0);
+  auto out = RewriteXml("<cfRule type=\"x\"  dxfId=\"2\" priority=\"1\"/><cfRule dxfId=\"0\"/>", plan);
   ASSERT_TRUE(out);
   EXPECT_EQ(out.value(), "<cfRule type=\"x\" priority=\"1\"/><cfRule dxfId=\"0\"/>");
-  auto last = rewrite_dxf_xml_ids("<cfRule dxfId=\"5\"/>", plan);
+  auto last = RewriteXml("<cfRule dxfId=\"5\"/>", plan);
   ASSERT_TRUE(last);
   EXPECT_EQ(last.value(), "<cfRule/>");
 }
@@ -120,7 +257,7 @@ TEST(DxfXmlIds, LeavesOtherNamesTextCommentsCdataAndPisUntouched) {
   auto ids = visit_dxf_xml_ids(xml);
   ASSERT_TRUE(ids);
   EXPECT_TRUE(ids.value().empty());
-  auto out = rewrite_dxf_xml_ids(xml, build_dxf_save_plan(8, {}, false));
+  auto out = RewriteXml(xml, build_dxf_save_plan(8, {}, false, 0));
   ASSERT_TRUE(out);
   EXPECT_EQ(out.value(), xml);
 }
@@ -132,7 +269,7 @@ TEST(DxfXmlIds, NonIntegerValueIsNotAReference) {
   auto ids = visit_dxf_xml_ids(xml);
   ASSERT_TRUE(ids);
   EXPECT_TRUE(ids.value().empty());
-  auto out = rewrite_dxf_xml_ids(xml, build_dxf_save_plan(2, {}, false));
+  auto out = RewriteXml(xml, build_dxf_save_plan(2, {}, false, 0));
   ASSERT_TRUE(out);
   EXPECT_EQ(out.value(), xml);
   auto max = visit_dxf_xml_ids("<a dxfId=\"4294967295\"/>");
@@ -142,16 +279,16 @@ TEST(DxfXmlIds, NonIntegerValueIsNotAReference) {
 }
 
 TEST(DxfXmlIds, MultiRootFragmentWithPrefixedElements) {
-  const DxfSavePlan plan = build_dxf_save_plan(3, Uses({1, 2}), false);
+  const DxfSavePlan plan = build_dxf_save_plan(3, Uses({1, 2}), false, 0);
   const std::string xml = "<x14:cfRule dxfId=\"1\"/><x:sortCondition descending=\"1\" dxfId=\"2\"></x:sortCondition>";
   auto ids = visit_dxf_xml_ids(xml);
   ASSERT_TRUE(ids);
   ASSERT_EQ(ids.value().size(), 2U);
   EXPECT_EQ(ids.value()[0].element, "x14:cfRule");
   EXPECT_EQ(ids.value()[1].element, "x:sortCondition");
-  auto out = rewrite_dxf_xml_ids(xml, plan);
+  auto out = RewriteXml(xml, plan);
   ASSERT_TRUE(out);
-  EXPECT_EQ(out.value(), "<x14:cfRule dxfId=\"0\"/><x:sortCondition descending=\"1\" dxfId=\"1\"></x:sortCondition>");
+  EXPECT_EQ(out.value(), "<x14:cfRule dxfId=\"1\"/><x:sortCondition descending=\"1\" dxfId=\"0\"></x:sortCondition>");
 }
 
 TEST(DxfXmlIds, SlicerAndTimelineStyleElementsAreIgnored) {
@@ -162,7 +299,7 @@ TEST(DxfXmlIds, SlicerAndTimelineStyleElementsAreIgnored) {
   ASSERT_TRUE(ids);
   ASSERT_EQ(ids.value().size(), 1U);
   EXPECT_EQ(ids.value()[0].element, "tableStyleElement");
-  auto out = rewrite_dxf_xml_ids(xml, build_dxf_save_plan(5, {}, false));
+  auto out = RewriteXml(xml, build_dxf_save_plan(5, {}, false, 0));
   ASSERT_TRUE(out);
   EXPECT_EQ(out.value(),
             "<x14:slicerStyleElement type=\"wholeTable\" dxfId=\"0\"/><slicerStyleElement dxfId=\"1\"/>"
@@ -174,7 +311,7 @@ TEST(DxfXmlIds, MalformedMarkupIsAnError) {
   for (const char* xml : {"<a dxfId=\"1\"", "<a dxfId=\"1/>", "<a dxfId=1/>", "<a dxfId/>", "<!-- open",
                           "<![CDATA[ open", "<?pi open", "</a", "<>", "<a / dxfId=\"1\">"}) {
     EXPECT_FALSE(visit_dxf_xml_ids(xml)) << xml;
-    EXPECT_FALSE(rewrite_dxf_xml_ids(xml, plan)) << xml;
+    EXPECT_FALSE(RewriteXml(xml, plan)) << xml;
   }
 }
 
@@ -186,10 +323,10 @@ TEST(DxfXmlIds, AttributeListVisitAndRewrite) {
   EXPECT_TRUE(ids.value()[0].element.empty());
   EXPECT_EQ(ids.value()[0].attribute, "dataDxfId");
   EXPECT_EQ(ids.value()[1].value, 1U);
-  auto out = rewrite_dxf_attr_ids(attrs, build_dxf_save_plan(3, Uses({2}), false));
+  auto out = RewriteAttrs(attrs, build_dxf_save_plan(3, Uses({2}), false, 0));
   ASSERT_TRUE(out);
   EXPECT_EQ(out.value(), " dataDxfId=\"0\" dataCellStyle=\"S\" xr3:uid=\"{X}\"");
-  auto empty = rewrite_dxf_attr_ids("", identity_dxf_plan(1));
+  auto empty = RewriteAttrs("", identity_dxf_plan(1));
   ASSERT_TRUE(empty);
   EXPECT_TRUE(empty.value().empty());
 }
@@ -323,14 +460,15 @@ TEST(XlsbDxfRecordSlots, VisitsEachRowsOffset) {
 TEST(XlsbDxfRecordSlots, RewriteMapsEverySlotAndKeepsOtherBytes) {
   const Fixture f = BuildFixture();
   // Model dxf 3 is unused: everything above it moves down one, and its slot is cleared.
+  // Registered in descending model order, so the records come out ascending.
   std::vector<DxfUse> uses;
-  for (std::uint32_t i = 0; i < 11U; ++i) {
+  for (std::uint32_t i = 11U; i-- > 0U;) {
     if (i != 3U) {
-      uses.push_back(DxfUse{i, DxfUseKind::kTable, 0, 0, 0});
+      uses.push_back(At(i, DxfUseKind::kTable, kStylesPart, static_cast<std::uint32_t>(uses.size())));
     }
   }
-  const DxfSavePlan plan = build_dxf_save_plan(11, uses, false);
-  auto out = rewrite_dxf_slots(f.stream, plan);
+  const DxfSavePlan plan = build_dxf_save_plan(11, uses, false, 0);
+  auto out = rewrite_dxf_slots(f.stream, plan, kStylesPart);
   ASSERT_TRUE(out);
   ASSERT_EQ(out.value().size(), f.stream.size());
   auto scan = scan_dxf_slots(f.stream);
@@ -348,7 +486,7 @@ TEST(XlsbDxfRecordSlots, RewriteMapsEverySlotAndKeepsOtherBytes) {
       EXPECT_EQ(out.value()[i], f.stream[i]) << i;
     }
   }
-  auto identity = rewrite_dxf_slots(f.stream, identity_dxf_plan(11));
+  auto identity = rewrite_dxf_slots(f.stream, identity_dxf_plan(11), kStylesPart);
   ASSERT_TRUE(identity);
   EXPECT_EQ(identity.value(), f.stream);
 }
@@ -371,7 +509,7 @@ TEST(XlsbDxfRecordSlots, TableStyleElementSlotIsVisitedAndRewritten) {
   EXPECT_EQ(slot.value, 2U);
   const std::vector<FramedRecord> recs = split_records(s);
   EXPECT_EQ(slot.offset - static_cast<std::size_t>(recs[slot.record_index].payload.data - s.data()), 8U);
-  auto out = rewrite_dxf_slots(s, build_dxf_save_plan(3, {DxfUse{2, DxfUseKind::kTableStyleElement, -1, 0, 0}}, false));
+  auto out = rewrite_dxf_slots(s, build_dxf_save_plan(3, Uses({2}), false, 0), kStylesPart);
   ASSERT_TRUE(out);
   std::vector<std::uint8_t> expected = s;
   store_u32(expected.data() + slot.offset, 0U);
@@ -384,7 +522,7 @@ TEST(XlsbDxfRecordSlots, OutOfRangeSlotBecomesNoDxf) {
   emit_u32(p, 5U);
   emit_u32(p, 0U);
   emit_record(s, kBrtColorFilter, p);
-  auto out = rewrite_dxf_slots(s, identity_dxf_plan(2));
+  auto out = rewrite_dxf_slots(s, identity_dxf_plan(2), kStylesPart);
   ASSERT_TRUE(out);
   auto scan = scan_dxf_slots(out.value());
   ASSERT_TRUE(scan);
@@ -416,10 +554,37 @@ TEST(XlsbDxfRecordSlots, UnlocatableSlotIsAnError) {
   std::vector<std::uint8_t> torn = one(kBrtColorFilter, std::vector<std::uint8_t>(8, 0));
   torn.pop_back();
   EXPECT_FALSE(scan_dxf_slots(torn));
-  EXPECT_FALSE(rewrite_dxf_slots(torn, identity_dxf_plan(1)));
+  EXPECT_FALSE(rewrite_dxf_slots(torn, identity_dxf_plan(1), kStylesPart));
   auto empty = scan_dxf_slots({});
   ASSERT_TRUE(empty);
   EXPECT_TRUE(empty.value().slots.empty());
+}
+
+TEST(XlsbDxfRecordSlots, CfRuleSlotCarriesItsPriority) {
+  std::vector<std::uint8_t> s;
+  std::vector<std::uint8_t> legacy;
+  for (const std::uint32_t v : {1U, 0U, 4U, 7U, 0U, 0U, 0U}) {
+    emit_u32(legacy, v);
+  }
+  emit_u16(legacy, 0U);
+  EmitNullStrings(legacy, 1);
+  emit_record(s, kBrtBeginCFRule, legacy);
+  std::vector<std::uint8_t> x14;
+  for (const std::uint32_t v : {0U, 1U, 0U, 5U, 9U}) {
+    emit_u32(x14, v);
+  }
+  emit_record(s, kBeginCfRule14, x14);
+  std::vector<std::uint8_t> filter;
+  emit_u32(filter, 2U);
+  emit_u32(filter, 0U);
+  emit_record(s, kBrtColorFilter, filter);
+  auto scan = scan_dxf_slots(s);
+  ASSERT_TRUE(scan);
+  ASSERT_EQ(scan.value().slots.size(), 3U);
+  EXPECT_EQ(scan.value().slots[0].priority, 7U);
+  EXPECT_EQ(scan.value().slots[1].value, 5U);
+  EXPECT_EQ(scan.value().slots[1].priority, 9U);
+  EXPECT_EQ(scan.value().slots[2].priority, std::nullopt);
 }
 
 TEST(XlsbDxfRecordSlots, VisualCfRuleSlotIsNotAReference) {
@@ -442,7 +607,7 @@ TEST(XlsbDxfRecordSlots, VisualCfRuleSlotIsNotAReference) {
   auto scan = scan_dxf_slots(s);
   ASSERT_TRUE(scan);
   EXPECT_TRUE(scan.value().slots.empty());
-  auto rewritten = rewrite_dxf_slots(s, build_dxf_save_plan(1, {}, false));
+  auto rewritten = rewrite_dxf_slots(s, build_dxf_save_plan(1, {}, false, 0), kStylesPart);
   ASSERT_TRUE(rewritten);
   EXPECT_EQ(rewritten.value(), s);
 }

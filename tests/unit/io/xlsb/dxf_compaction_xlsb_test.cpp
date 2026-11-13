@@ -359,7 +359,8 @@ TEST(DxfCompactionXlsb, ARetainedSheetAutoFilterIsRenumbered) {
   Workbook wb = BookWithDxfs(3);
   AddRule(wb, 0, 1, 0U);
   AddRule(wb, 0, 2, 1U);
-  // Keeps dxf 2 in the first save; the injected colour filter then names it.
+  // The first save writes the CF dxfs reversed (model 2 at index 0); the
+  // injected colour filter names saved index 2, which holds model dxf 0.
   AddRule(wb, 0, 3, 2U);
   const std::vector<std::uint8_t> package = Save(wb);
   std::vector<std::uint8_t> block;
@@ -385,8 +386,115 @@ TEST(DxfCompactionXlsb, ARetainedSheetAutoFilterIsRenumbered) {
   EXPECT_EQ(SlotValues(Entry(saved, path), kBrtColorFilter), std::vector<std::uint32_t>{0U});
   const Workbook back = Load(saved);
   ASSERT_EQ(back.styles().dxfs.size(), 1U);
-  EXPECT_EQ(back.styles().dxfs[0].num_fmt_code, Tag(2));
+  EXPECT_EQ(back.styles().dxfs[0].num_fmt_code, Tag(0));
   ExpectNoDanglingSlot(saved);
+}
+
+/// A table on Sheet1 whose only dxf reference is its own data dxf.
+TableMetadata TableNamingDxf(std::uint32_t dxf) {
+  TableMetadata t = TableNamingOddDxfs();
+  t.root_extra_attrs = " dataDxfId=\"" + std::to_string(dxf) + "\"";
+  t.columns[1].extra_attrs.clear();
+  t.auto_filter_xml.reset();
+  t.sort_state_xml.clear();
+  return t;
+}
+
+/// The model dxf each saved BrtDXF of `package` carries, as tags.
+std::vector<std::string> SavedTags(const std::vector<std::uint8_t>& package) {
+  const Workbook back = Load(package);
+  std::vector<std::string> out;
+  for (const DifferentialFormat& dxf : back.styles().dxfs) {
+    out.push_back(dxf.num_fmt_code);
+  }
+  return out;
+}
+
+// Excel writes a record per user: a CF rule and a table attribute naming one
+// model dxf each get their own record, and each slot resolves to its own.
+TEST(DxfCompactionXlsb, OneDxfUsedByACfRuleAndATableIsSavedOncePerUser) {
+  Workbook wb = BookWithDxfs(2);
+  AddRule(wb, 0, 1, 0U);
+  wb.mutable_tables().push_back(TableNamingDxf(0U));
+  const std::vector<std::uint8_t> package = Save(wb);
+  const Workbook back = Load(package);
+  ASSERT_EQ(back.styles().dxfs.size(), 2U);
+  EXPECT_EQ(back.styles().dxfs[0].num_fmt_code, Tag(0));
+  EXPECT_EQ(back.styles().dxfs[1].num_fmt_code, Tag(0));
+  std::vector<std::vector<std::uint8_t>> records;
+  const std::vector<std::uint8_t> styles = Entry(package, "xl/styles.bin");
+  for (const FramedRecord& rec : split_records(styles)) {
+    if (rec.type == kBrtDxf) {
+      records.emplace_back(styles.begin() + static_cast<std::ptrdiff_t>(rec.begin),
+                           styles.begin() + static_cast<std::ptrdiff_t>(rec.end));
+    }
+  }
+  ASSERT_EQ(records.size(), 2U);
+  EXPECT_EQ(records[0], records[1]);
+  // The table registers before CF, so it takes the later record.
+  EXPECT_EQ(SlotValues(Entry(package, "xl/tables/table1.bin"), kBrtBeginList), std::vector<std::uint32_t>{1U});
+  EXPECT_EQ(FirstRuleDxf(back, 0), std::optional<std::uint32_t>(0U));
+  ExpectNoDanglingSlot(package);
+}
+
+// CF rules of one sheet naming the same dxf share one record.
+TEST(DxfCompactionXlsb, CfRulesOfOneSheetSharingADxfShareARecord) {
+  Workbook wb = BookWithDxfs(2);
+  AddRule(wb, 0, 1, 0U, "$A$1>0");
+  AddRule(wb, 0, 2, 0U, "$A$1>1");
+  const std::vector<std::uint8_t> package = Save(wb);
+  const Workbook back = Load(package);
+  ASSERT_EQ(back.styles().dxfs.size(), 1U);
+  const auto& formats = back.sheet(0).conditional_formats();
+  ASSERT_EQ(formats.size(), 2U);
+  for (const auto& format : formats) {
+    ASSERT_EQ(format.rules.size(), 1U);
+    EXPECT_EQ(format.rules[0].dxf_id, std::optional<std::uint32_t>(0U));
+  }
+  ExpectNoDanglingSlot(package);
+}
+
+// Registration: the table's dxf, then CF by tab order; records are reversed.
+TEST(DxfCompactionXlsb, RecordsFollowExcelRegistrationOrderReversed) {
+  Workbook wb = BookWithDxfs(3, 2U);
+  AddRule(wb, 0, 1, 0U);
+  AddRule(wb, 1, 1, 1U, "Sheet1!$A$1>0");
+  wb.mutable_tables().push_back(TableNamingDxf(2U));
+  const std::vector<std::uint8_t> package = Save(wb);
+  EXPECT_EQ(SavedTags(package), (std::vector<std::string>{Tag(1), Tag(0), Tag(2)}));
+  const Workbook back = Load(package);
+  EXPECT_EQ(FirstRuleDxf(back, 0), std::optional<std::uint32_t>(1U));
+  EXPECT_EQ(FirstRuleDxf(back, 1), std::optional<std::uint32_t>(0U));
+  EXPECT_EQ(SlotValues(Entry(package, "xl/tables/table1.bin"), kBrtBeginList), std::vector<std::uint32_t>{2U});
+  ExpectNoDanglingSlot(package);
+}
+
+// CF rules register by priority, not by document order.
+TEST(DxfCompactionXlsb, CfRulesOfOneBlockRegisterByPriority) {
+  Workbook wb = BookWithDxfs(2);
+  AddRule(wb, 0, 2, 0U, "$A$1>0");
+  AddRule(wb, 0, 1, 1U, "$A$1>1");
+  auto& formats = wb.sheet(0).mutable_conditional_formats();
+  formats[0].rules.push_back(formats[1].rules[0]);
+  formats.pop_back();
+  const std::vector<std::uint8_t> package = Save(wb);
+  // Priority 1 (model 1) registers first, so it is written last.
+  EXPECT_EQ(SavedTags(package), (std::vector<std::string>{Tag(0), Tag(1)}));
+  const Workbook back = Load(package);
+  ASSERT_EQ(back.sheet(0).conditional_formats().size(), 1U);
+  for (const auto& rule : back.sheet(0).conditional_formats()[0].rules) {
+    ASSERT_TRUE(rule.dxf_id.has_value());
+    EXPECT_EQ(Resolve(back, rule.dxf_id), rule.priority == 1 ? Tag(1) : Tag(0));
+  }
+  ExpectNoDanglingSlot(package);
+}
+
+TEST(DxfCompactionXlsb, CfBlocksRegisterInDocumentOrder) {
+  Workbook wb = BookWithDxfs(2);
+  AddRule(wb, 0, 2, 0U, "$A$1>0");
+  AddRule(wb, 0, 1, 1U, "$A$1>1");
+  // The first block registers first though its rule has the lower priority.
+  EXPECT_EQ(SavedTags(Save(wb)), (std::vector<std::string>{Tag(1), Tag(0)}));
 }
 
 // No reader decodes a retained pivot table part's dxf records, so the table

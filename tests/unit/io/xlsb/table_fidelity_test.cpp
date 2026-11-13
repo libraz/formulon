@@ -31,6 +31,7 @@
 #include "io/zip_reader.h"
 #include "miniz.h"
 #include "passthrough_part.h"
+#include "styles.h"
 #include "table.h"
 #include "value.h"
 #include "workbook.h"
@@ -156,7 +157,34 @@ std::string EntryText(const std::vector<std::uint8_t>& package, const std::strin
   return std::string(bytes.begin(), bytes.end());
 }
 
-void ExpectSameTable(const TableMetadata& actual, const TableMetadata& expected) {
+/// `attrs` with every dxf id (`...DxfId="N"` / `dxfId="N"`) replaced by the number format code of the dxf it
+/// names in `styles`, so two tables compare by the formats they reference rather than by saved indices.
+std::string ByDxfContent(const std::string& attrs, const StylesTable& styles) {
+  std::string out;
+  std::size_t at = 0;
+  while (at < attrs.size()) {
+    const std::size_t hit = attrs.find("xfId=\"", at);
+    if (hit == std::string::npos || hit == 0U || (attrs[hit - 1] != 'D' && attrs[hit - 1] != 'd')) {
+      const std::size_t next = hit == std::string::npos ? attrs.size() : hit + 1U;
+      out.append(attrs, at, next - at);
+      at = next;
+      continue;
+    }
+    const std::size_t digits = hit + 6U;
+    out.append(attrs, at, digits - at);
+    const unsigned long id = std::stoul(attrs.substr(digits));
+    out += id < styles.dxfs.size() ? "<" + styles.dxfs[id].num_fmt_code + ">" : "<dangling>";
+    at = attrs.find('"', digits);
+  }
+  return out;
+}
+
+/// Compares two tables; with both style tables given, dxf ids compare by the dxf they name.
+void ExpectSameTable(const TableMetadata& actual, const TableMetadata& expected,
+                     const StylesTable* actual_styles = nullptr, const StylesTable* expected_styles = nullptr) {
+  const auto attrs = [&](const std::string& text, bool is_actual) {
+    return actual_styles == nullptr ? text : ByDxfContent(text, is_actual ? *actual_styles : *expected_styles);
+  };
   EXPECT_EQ(actual.id, expected.id);
   EXPECT_EQ(actual.name, expected.name);
   EXPECT_EQ(actual.display_name, expected.display_name);
@@ -167,7 +195,7 @@ void ExpectSameTable(const TableMetadata& actual, const TableMetadata& expected)
   EXPECT_EQ(actual.totals_row_shown, expected.totals_row_shown);
   EXPECT_EQ(actual.insert_row, expected.insert_row);
   EXPECT_EQ(actual.insert_row_shift, expected.insert_row_shift);
-  EXPECT_EQ(actual.root_extra_attrs, expected.root_extra_attrs);
+  EXPECT_EQ(attrs(actual.root_extra_attrs, true), attrs(expected.root_extra_attrs, false));
   ASSERT_EQ(actual.columns.size(), expected.columns.size());
   for (std::size_t i = 0; i < expected.columns.size(); ++i) {
     SCOPED_TRACE(i);
@@ -179,7 +207,7 @@ void ExpectSameTable(const TableMetadata& actual, const TableMetadata& expected)
     EXPECT_EQ(a.totals_function, e.totals_function);
     EXPECT_EQ(a.calculated_column_formula, e.calculated_column_formula);
     EXPECT_EQ(a.totals_row_formula, e.totals_row_formula);
-    EXPECT_EQ(a.extra_attrs, e.extra_attrs);
+    EXPECT_EQ(attrs(a.extra_attrs, true), attrs(e.extra_attrs, false));
   }
   EXPECT_EQ(actual.style_info.present, expected.style_info.present);
   EXPECT_EQ(actual.style_info.name, expected.style_info.name);
@@ -197,10 +225,11 @@ void ExpectSameTable(const TableMetadata& actual, const TableMetadata& expected)
 
 TEST(XlsbTableFidelity, ModelTableRoundTripsThroughXlsb) {
   WriteDiagnostics diagnostics;
-  const Workbook back = LoadXlsb(SaveXlsb(AuthoredBook(), &diagnostics));
+  const Workbook source = AuthoredBook();
+  const Workbook back = LoadXlsb(SaveXlsb(source, &diagnostics));
   EXPECT_EQ(diagnostics.deferred_feature_count, 0U);
   ASSERT_EQ(back.tables().size(), 1U);
-  ExpectSameTable(back.tables()[0], AuthoredTable());
+  ExpectSameTable(back.tables()[0], AuthoredTable(), &back.styles(), &source.styles());
   // The hyperlink keeps its own relationship next to the table's.
   ASSERT_EQ(back.sheet(0).hyperlinks().size(), 1U);
   EXPECT_EQ(back.sheet(0).hyperlinks()[0].target, "https://example.com/");
@@ -256,7 +285,9 @@ TEST(XlsbTableFidelity, XlsbResaveReproducesTheTablePart) {
   AddAuthoredCellStyles(reloaded);
   const std::vector<std::uint8_t> second = SaveXlsb(reloaded);
   EXPECT_EQ(Entry(second, "xl/tables/table3.bin"), Entry(first, "xl/tables/table3.bin"));
-  ExpectSameTable(LoadXlsb(second).tables().at(0), AuthoredTable());
+  const Workbook source = AuthoredBook();
+  const Workbook again = LoadXlsb(second);
+  ExpectSameTable(again.tables().at(0), AuthoredTable(), &again.styles(), &source.styles());
 }
 
 // `part` with the first column's header dxf and the second column's header cell style set, after checking that
@@ -315,7 +346,10 @@ TEST(XlsbTableFidelity, AColumnHeaderDxfOrStyleIsDroppedOnReadAndNeverWritten) {
   for (const TableColumn& col : table.value().columns) {
     EXPECT_EQ(col.extra_attrs.find("headerRow"), std::string::npos) << col.extra_attrs;
   }
-  EXPECT_EQ(table.value().columns.at(0).extra_attrs, " dataDxfId=\"0\" totalsRowDxfId=\"7\"");
+  const Workbook saved_book = LoadXlsb(package);
+  const Workbook source_book = AuthoredBook();
+  EXPECT_EQ(ByDxfContent(table.value().columns.at(0).extra_attrs, saved_book.styles()),
+            ByDxfContent(" dataDxfId=\"0\" totalsRowDxfId=\"7\"", source_book.styles()));
   EXPECT_EQ(diagnostics.skipped_feature_count, 2U);
 
   auto loaded = read_xlsb(SpanOf(RepackWithEntries(package, {{"xl/tables/table3.bin", patched}})));
@@ -360,7 +394,7 @@ TEST(XlsbTableFidelity, XlsxTableSurvivesConversionToXlsb) {
   const Workbook back = LoadXlsb(SaveXlsb(from_xlsx, &diagnostics));
   EXPECT_EQ(diagnostics.deferred_feature_count, 0U);
   ASSERT_EQ(back.tables().size(), 1U);
-  ExpectSameTable(back.tables()[0], from_xlsx.tables()[0]);
+  ExpectSameTable(back.tables()[0], from_xlsx.tables()[0], &back.styles(), &from_xlsx.styles());
 }
 
 TEST(XlsbTableFidelity, ADanglingCellStyleNameIsWrittenEmpty) {
@@ -414,7 +448,7 @@ TEST(XlsbTableFidelity, RevisionUidsTravelAsAcuidBlocks) {
   EXPECT_EQ(acuids, 3U);
   Workbook back = LoadXlsb(package);
   ASSERT_EQ(back.tables().size(), 1U);
-  ExpectSameTable(back.tables()[0], t);
+  ExpectSameTable(back.tables()[0], t, &back.styles(), &wb.styles());
   // And the `.xlsx` the uids reach stays well formed.
   AddAuthoredCellStyles(back);
   auto xlsx = write_ooxml(back);
@@ -423,7 +457,8 @@ TEST(XlsbTableFidelity, RevisionUidsTravelAsAcuidBlocks) {
   ASSERT_TRUE(static_cast<bool>(again)) << again.error().message;
   ASSERT_EQ(again.value().workbook.tables().size(), 1U);
   const TableMetadata& reread = again.value().workbook.tables()[0];
-  EXPECT_EQ(reread.root_extra_attrs, t.root_extra_attrs);
+  EXPECT_EQ(ByDxfContent(reread.root_extra_attrs, again.value().workbook.styles()),
+            ByDxfContent(t.root_extra_attrs, wb.styles()));
   EXPECT_NE(reread.columns[0].extra_attrs.find("xr3:uid=\"{0FB2B22E-7B6A-4D4C-9C1E-0D3B3A51E7F1}\""),
             std::string::npos);
 }
@@ -470,12 +505,14 @@ TEST(XlsbTableFidelity, SortStateTravelsInsideTheAutoFilter) {
   EXPECT_EQ(diagnostics.deferred_feature_count, 0U);
   const Workbook back = LoadXlsb(package);
   ASSERT_EQ(back.tables().size(), 1U);
-  EXPECT_EQ(CanonicalSort(back.tables()[0].sort_state_xml), CanonicalSort(sort));
+  EXPECT_EQ(ByDxfContent(CanonicalSort(back.tables()[0].sort_state_xml), back.styles()),
+            ByDxfContent(CanonicalSort(sort), wb.styles()));
   // Without an AutoFilter the sort state is its own block after BrtBeginList.
   wb.mutable_tables()[0].auto_filter_xml.reset();
   const Workbook bare = LoadXlsb(SaveXlsb(wb));
   ASSERT_EQ(bare.tables().size(), 1U);
-  EXPECT_EQ(CanonicalSort(bare.tables()[0].sort_state_xml), CanonicalSort(sort));
+  EXPECT_EQ(ByDxfContent(CanonicalSort(bare.tables()[0].sort_state_xml), bare.styles()),
+            ByDxfContent(CanonicalSort(sort), wb.styles()));
   EXPECT_TRUE(bare.tables()[0].auto_filter_xml.empty());
 }
 

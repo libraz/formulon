@@ -1,7 +1,7 @@
 //
 // dxf references inside verbatim XML: a markup tokenizer (not a DOM) that
 // finds every dxf attribute of a fragment or of an attribute list, and
-// rewrites their values through a `DxfSavePlan` with every other byte kept.
+// rewrites their values through a `DxfPartCursor` with every other byte kept.
 //
 // A dxf attribute is one named exactly `dxfId`, `headerRowDxfId`,
 // `dataDxfId`, `totalsRowDxfId`, `headerRowBorderDxfId`, `tableBorderDxfId`
@@ -40,12 +40,13 @@ Expected<std::vector<DxfXmlId>, Error> visit_dxf_xml_ids(std::string_view fragme
 /// Every dxf attribute of `attrs` (` name="value"` pairs), in order.
 Expected<std::vector<DxfXmlId>, Error> visit_dxf_attr_ids(std::string_view attrs);
 
-/// `fragment` with each dxf value replaced by its saved index, or the
-/// attribute and its leading whitespace removed when `plan` maps it to nothing.
-Expected<std::string, Error> rewrite_dxf_xml_ids(std::string_view fragment, const DxfSavePlan& plan);
+/// `fragment` with each dxf value, in document order, replaced by the saved
+/// index `cursor` hands out, or the attribute and its leading whitespace
+/// removed when it hands out nothing.
+Expected<std::string, Error> rewrite_dxf_xml_ids(std::string_view fragment, DxfPartCursor& cursor);
 
 /// `attrs` rewritten as `rewrite_dxf_xml_ids` rewrites a fragment.
-Expected<std::string, Error> rewrite_dxf_attr_ids(std::string_view attrs, const DxfSavePlan& plan);
+Expected<std::string, Error> rewrite_dxf_attr_ids(std::string_view attrs, DxfPartCursor& cursor);
 
 }  // namespace formulon::io
 

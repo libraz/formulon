@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
+#include <limits>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -52,15 +53,20 @@ DxfUseKind KindOf(std::string_view element, DxfUseKind fallback) {
 /// Records uses in document order within one part.
 class Collector {
  public:
-  void at(std::int32_t sheet, std::uint32_t part) {
-    sheet_ = sheet;
+  void at(DxfPartKey part) {
     part_ = part;
     position_ = 0;
+    cf_block_ = 0;
   }
 
-  void add(std::optional<std::uint32_t> id, DxfUseKind kind) {
+  /// The CF block the following uses belong to.
+  void cf_block(std::uint32_t block) { cf_block_ = block; }
+
+  /// Records a use; `written` is false when the part holds no index for it.
+  void add(std::optional<std::uint32_t> id, DxfUseKind kind,
+           std::uint32_t priority = std::numeric_limits<std::uint32_t>::max(), bool written = true) {
     if (id.has_value()) {
-      out_.uses.push_back(DxfUse{*id, kind, sheet_, part_, position_++});
+      out_.uses.push_back(DxfUse{*id, kind, part_, position_++, priority, written, cf_block_});
     }
   }
 
@@ -92,9 +98,9 @@ class Collector {
   }
 
   DxfUseSet out_;
-  std::int32_t sheet_ = -1;
-  std::uint32_t part_ = 0;
+  DxfPartKey part_;
   std::uint32_t position_ = 0;
+  std::uint32_t cf_block_ = 0;
 };
 
 /// The uses `serialize_auto_filter` writes for `filter`.
@@ -119,14 +125,19 @@ void CollectAutoFilter(Collector& c, const AutoFilter& filter) {
   c.xml(filter.ext_lst_xml, DxfUseKind::kColorFilter);
 }
 
-/// The uses of every CF rule. An x14-only rule's dxf is written inline, yet
-/// Excel keeps it in `<dxfs>` too (structural_ref_m6b.xlsx), so it is a user.
+/// The uses of every CF rule, each ranked by its priority. An x14-only rule's
+/// dxf is written inline, yet Excel keeps it in `<dxfs>` too
+/// (structural_ref_m6b.xlsx), so it is a user with no index in the part.
 void CollectConditionalFormats(Collector& c, const Sheet& sheet, const std::vector<std::string>& sheet_names) {
+  std::uint32_t ordinal = 0;
   for (const cf::ConditionalFormat& block : sheet.conditional_formats()) {
+    c.cf_block(ordinal++);
     bool any_legacy = block.rules.empty();
     for (const cf::CFRule& rule : block.rules) {
-      c.add(rule.dxf_id, DxfUseKind::kConditionalFormat);
-      if (cf_rule_is_x14_only(rule, sheet.name(), &sheet_names)) {
+      const bool x14_only = cf_rule_is_x14_only(rule, sheet.name(), &sheet_names);
+      const auto priority = static_cast<std::uint32_t>(rule.priority > 0 ? rule.priority : 0);
+      c.add(rule.dxf_id, DxfUseKind::kConditionalFormat, priority, !x14_only);
+      if (x14_only) {
         continue;
       }
       any_legacy = true;
@@ -231,23 +242,23 @@ Expected<DxfUseSet, Error> collect_xlsx_dxf_uses(const Workbook& wb, const Emiss
         }
       }
     } else {
-      c.at(sheet_index, 0U);
+      c.at(DxfPartKey{sheet_index, DxfPartType::kWorksheet, 0U});
       CollectWorksheet(c, sheet, sheet_names);
     }
-    for (std::size_t ti = 0; ti < plan.tables_by_sheet[si].size(); ++ti) {
-      c.at(sheet_index, static_cast<std::uint32_t>(ti));
-      CollectTable(c, *plan.tables_by_sheet[si][ti].table);
-    }
     for (std::size_t ti = 0; ti < plan.pivot_tables_by_sheet[si].size(); ++ti) {
-      c.at(sheet_index, static_cast<std::uint32_t>(ti));
+      c.at(DxfPartKey{sheet_index, DxfPartType::kPivot, static_cast<std::uint32_t>(ti)});
       const pivot::PivotTable& table = *plan.pivot_tables_by_sheet[si][ti].table;
       for (const PivotRawField field : kPivotRawFields) {
         c.xml((table.*field)(), DxfUseKind::kPivotFormat);
       }
     }
+    for (std::size_t ti = 0; ti < plan.tables_by_sheet[si].size(); ++ti) {
+      c.at(DxfPartKey{sheet_index, DxfPartType::kTable, static_cast<std::uint32_t>(ti)});
+      CollectTable(c, *plan.tables_by_sheet[si][ti].table);
+    }
   }
   const StylesTable& styles = wb.styles();
-  c.at(-1, 0U);
+  c.at(DxfPartKey{-1, DxfPartType::kStyles, 0U});
   for (const CustomTableStyle& style : styles.table_styles.styles) {
     for (const TableStyleElement& element : style.elements) {
       c.add(element.dxf_id, DxfUseKind::kTableStyleElement);
@@ -260,29 +271,6 @@ Expected<DxfUseSet, Error> collect_xlsx_dxf_uses(const Workbook& wb, const Emiss
     c.block();
   }
   return c.take();
-}
-
-std::optional<std::uint32_t> saved_dxf_id(std::optional<std::uint32_t> model_id, const DxfSavePlan* plan) {
-  if (plan == nullptr || !model_id.has_value()) {
-    return model_id;
-  }
-  return plan->map(*model_id);
-}
-
-std::string saved_dxf_xml(std::string_view xml, const DxfSavePlan* plan) {
-  if (plan == nullptr || xml.empty()) {
-    return std::string(xml);
-  }
-  auto rewritten = rewrite_dxf_xml_ids(xml, *plan);
-  return rewritten ? std::move(rewritten.value()) : std::string(xml);
-}
-
-std::string saved_dxf_attrs(std::string_view attrs, const DxfSavePlan* plan) {
-  if (plan == nullptr || attrs.empty()) {
-    return std::string(attrs);
-  }
-  auto rewritten = rewrite_dxf_attr_ids(attrs, *plan);
-  return rewritten ? std::move(rewritten.value()) : std::string(attrs);
 }
 
 }  // namespace formulon::io

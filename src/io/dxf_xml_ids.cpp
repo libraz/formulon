@@ -196,12 +196,12 @@ std::vector<DxfXmlId> Ids(const std::vector<Found>& found) {
   return out;
 }
 
-std::string Rewrite(std::string_view text, const std::vector<Found>& found, const DxfSavePlan& plan) {
+std::string Rewrite(std::string_view text, const std::vector<Found>& found, DxfPartCursor& ids) {
   std::string out;
   out.reserve(text.size());
   std::size_t cursor = 0;
   for (const Found& f : found) {
-    if (const std::optional<std::uint32_t> saved = plan.map(f.id.value)) {
+    if (const std::optional<std::uint32_t> saved = ids.next(f.id.value)) {
       out.append(text.substr(cursor, f.value_begin - cursor));
       out.append(std::to_string(*saved));
       cursor = f.value_end;
@@ -232,20 +232,20 @@ Expected<std::vector<DxfXmlId>, Error> visit_dxf_attr_ids(std::string_view attrs
   return Ids(found.value());
 }
 
-Expected<std::string, Error> rewrite_dxf_xml_ids(std::string_view fragment, const DxfSavePlan& plan) {
+Expected<std::string, Error> rewrite_dxf_xml_ids(std::string_view fragment, DxfPartCursor& cursor) {
   auto found = ScanFragment(fragment);
   if (!found) {
     return std::move(found.error());
   }
-  return Rewrite(fragment, found.value(), plan);
+  return Rewrite(fragment, found.value(), cursor);
 }
 
-Expected<std::string, Error> rewrite_dxf_attr_ids(std::string_view attrs, const DxfSavePlan& plan) {
+Expected<std::string, Error> rewrite_dxf_attr_ids(std::string_view attrs, DxfPartCursor& cursor) {
   auto found = ScanAttrList(attrs);
   if (!found) {
     return std::move(found.error());
   }
-  return Rewrite(attrs, found.value(), plan);
+  return Rewrite(attrs, found.value(), cursor);
 }
 
 }  // namespace formulon::io

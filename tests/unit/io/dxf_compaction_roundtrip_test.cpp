@@ -1,6 +1,7 @@
 //
-// An .xlsx save writes only the dxfs some written reference names, renumbers
-// every reference (modelled and raw XML), and leaves the model's dxf table
+// An .xlsx save writes only the dxfs some written reference names, one record
+// per user (CF rules of one sheet share), in Excel's order, renumbers every
+// reference (modelled and raw XML), and leaves the model's dxf table
 // untouched. A styles part whose slicer styles may index the main table, or a
 // raw fragment the scanner cannot read, saves the table as held.
 
@@ -264,6 +265,92 @@ TEST(DxfCompactionXlsx, OrphansDropAndEveryReferenceResolvesToItsRecord) {
     }
   }
   expect_resolves(raw_sort, 10U, "worksheet sortState");
+}
+
+TEST(DxfCompactionXlsx, DxfSharedByTwoKindsSavesOneRecordPerUser) {
+  Workbook wb = Workbook::create();
+  wb.mutable_styles().dxfs.push_back(TaggedDxf(0U));
+  wb.sheet(0).mutable_conditional_formats().push_back(CellIsBlock(0, 0U, "50", 1));
+  CustomTableStyle style;
+  style.name = "Custom1";
+  style.elements.push_back(TableStyleElement{"wholeTable", 1U, 0U, ""});
+  wb.mutable_styles().table_styles.present = true;
+  wb.mutable_styles().table_styles.styles.push_back(style);
+  const std::string body = Body(wb.styles().dxfs[0]);
+
+  const std::vector<std::uint8_t> bytes = Save(wb);
+  EXPECT_EQ(wb.styles().dxfs.size(), 1U);
+  const std::map<std::string, std::string> parts = Parts(bytes);
+  EXPECT_EQ(SavedDxfCount(parts), 2U);
+  ExpectEveryIdResolves(parts);
+
+  const Workbook back = Reload(bytes);
+  ASSERT_EQ(back.styles().dxfs.size(), 2U);
+  EXPECT_EQ(Bodies(back.styles().dxfs), (std::vector<std::string>{body, body}));
+  const std::optional<std::uint32_t> cf_id = back.sheet(0).conditional_formats().at(0).rules.at(0).dxf_id;
+  const std::optional<std::uint32_t> element_id = back.styles().table_styles.styles.at(0).elements.at(0).dxf_id;
+  // The styles-part user registers first, so it is written last.
+  EXPECT_EQ(cf_id, std::optional<std::uint32_t>(0U));
+  EXPECT_EQ(element_id, std::optional<std::uint32_t>(1U));
+}
+
+TEST(DxfCompactionXlsx, CfRulesShareARecordOnlyWithinASheet) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  wb.mutable_styles().dxfs.push_back(TaggedDxf(0U));
+  wb.sheet(0).mutable_conditional_formats().push_back(CellIsBlock(0, 0U, "50", 1));
+  wb.sheet(0).mutable_conditional_formats().push_back(CellIsBlock(1, 0U, "60", 2));
+  const std::string body = Body(wb.styles().dxfs[0]);
+
+  const std::vector<std::uint8_t> one_sheet = Save(wb);
+  EXPECT_EQ(SavedDxfCount(Parts(one_sheet)), 1U);
+  const Workbook back = Reload(one_sheet);
+  ASSERT_EQ(back.styles().dxfs.size(), 1U);
+  for (const cf::ConditionalFormat& block : back.sheet(0).conditional_formats()) {
+    EXPECT_EQ(block.rules.at(0).dxf_id, std::optional<std::uint32_t>(0U));
+  }
+
+  wb.sheet(1).mutable_conditional_formats().push_back(CellIsBlock(0, 0U, "70", 3));
+  const std::vector<std::uint8_t> two_sheets = Save(wb);
+  const std::map<std::string, std::string> parts = Parts(two_sheets);
+  EXPECT_EQ(SavedDxfCount(parts), 2U);
+  ExpectEveryIdResolves(parts);
+  const Workbook again = Reload(two_sheets);
+  ASSERT_EQ(again.styles().dxfs.size(), 2U);
+  EXPECT_EQ(Bodies(again.styles().dxfs), (std::vector<std::string>{body, body}));
+  // CF registers by sheet in tab order; the later sheet's record is written first.
+  for (const cf::ConditionalFormat& block : again.sheet(0).conditional_formats()) {
+    EXPECT_EQ(block.rules.at(0).dxf_id, std::optional<std::uint32_t>(1U));
+  }
+  EXPECT_EQ(again.sheet(1).conditional_formats().at(0).rules.at(0).dxf_id, std::optional<std::uint32_t>(0U));
+}
+
+TEST(DxfCompactionXlsx, RecordsFollowExcelOrderNotModelOrder) {
+  Workbook wb = Workbook::create();
+  SetTableHeaders(wb);
+  for (std::uint32_t i = 0; i < 3U; ++i) {
+    wb.mutable_styles().dxfs.push_back(TaggedDxf(i));
+  }
+  // Model order: table 0, style element 1, CF 2.
+  wb.mutable_tables().push_back(TwoColumnTable(" headerRowDxfId=\"0\"", ""));
+  CustomTableStyle style;
+  style.name = "Custom1";
+  style.elements.push_back(TableStyleElement{"wholeTable", 1U, 1U, ""});
+  wb.mutable_styles().table_styles.present = true;
+  wb.mutable_styles().table_styles.styles.push_back(style);
+  wb.sheet(0).mutable_conditional_formats().push_back(CellIsBlock(0, 2U, "50", 1));
+  const std::vector<std::string> model = Bodies(wb.styles().dxfs);
+
+  const std::vector<std::uint8_t> bytes = Save(wb);
+  EXPECT_EQ(Bodies(wb.styles().dxfs), model);
+  ExpectEveryIdResolves(Parts(bytes));
+  const Workbook back = Reload(bytes);
+  // Registered style, table, CF; written reversed.
+  EXPECT_EQ(Bodies(back.styles().dxfs), (std::vector<std::string>{model[2], model[0], model[1]}));
+  EXPECT_EQ(back.sheet(0).conditional_formats().at(0).rules.at(0).dxf_id, std::optional<std::uint32_t>(0U));
+  ASSERT_EQ(back.tables().size(), 1U);
+  EXPECT_EQ(DxfAttr(back.tables()[0].root_extra_attrs, "headerRowDxfId", true), std::optional<std::uint32_t>(1U));
+  EXPECT_EQ(back.styles().table_styles.styles.at(0).elements.at(0).dxf_id, std::optional<std::uint32_t>(2U));
 }
 
 TEST(DxfCompactionXlsx, PivotFormatInRawXmlIsRenumbered) {

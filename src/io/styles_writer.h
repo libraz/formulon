@@ -51,9 +51,9 @@ class DxfSavePlan;
 /// The four `CellXf::has_*` alignment-attribute flags likewise preserve
 /// explicit schema defaults such as `horizontal="general"` and `wrapText="0"`.
 ///
-/// `dxf_plan` selects and orders the `<dxf>` records and renumbers every
-/// `dxfId` written here except those in `ext_lst_xml`, whose slicer and
-/// timeline styles index the extension dxfs. Null writes the table as held.
+/// `dxf_plan` selects and orders the `<dxf>` records; null writes every model
+/// dxf. Every `dxfId` is written as a model index; the caller rewrites the part
+/// through the plan.
 std::string write_styles(const StylesTable& table, const DxfSavePlan* dxf_plan = nullptr);
 
 /// Serialises one style record as the XML fragment `write_styles` emits

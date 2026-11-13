@@ -2,6 +2,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <regex>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -15,6 +16,7 @@
 #include "io/auto_filter_xml.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
+#include "io/styles_writer.h"
 #include "io/xlsb/writer.h"
 #include "io/xml_utils.h"
 #include "io/zip_reader.h"
@@ -75,7 +77,26 @@ std::vector<std::uint8_t> Save(const Workbook& wb) {
 }
 
 /// Every `<autoFilter>` element in the package's worksheet parts, as written.
+/// `xml` with each dxfId replaced by the dxf it names in `wb`: Excel numbers a
+/// saved dxf table in its own registration order, which a re-save of the same
+/// filters need not reproduce.
+std::string ResolveDxfIds(const std::string& xml, const Workbook& wb) {
+  static const std::regex kDxfId("dxfId=\"(\\d+)\"");
+  std::string out;
+  auto cursor = xml.cbegin();
+  for (std::sregex_iterator it(xml.begin(), xml.end(), kDxfId), end; it != end; ++it) {
+    out.append(cursor, (*it)[0].first);
+    const std::size_t index = std::stoul((*it)[1].str());
+    out += "dxf=\"" +
+           (index < wb.styles().dxfs.size() ? io::dxf_body_fragment(wb.styles().dxfs[index]) : std::string("?")) + "\"";
+    cursor = (*it)[0].second;
+  }
+  out.append(cursor, xml.cend());
+  return out;
+}
+
 std::vector<std::string> WorksheetAutoFilters(const std::vector<std::uint8_t>& package) {
+  const Workbook wb = Load(package);
   io::ZipReader zip;
   EXPECT_TRUE(static_cast<bool>(zip.open(io::ByteSpan{package.data(), package.size()})));
   std::vector<std::string> out;
@@ -94,7 +115,7 @@ std::vector<std::string> WorksheetAutoFilters(const std::vector<std::uint8_t>& p
     const std::size_t end = xml[tag_end - 1U] == '/'
                                 ? tag_end + 1U
                                 : xml.find("</autoFilter>", begin) + std::string("</autoFilter>").size();
-    out.push_back(xml.substr(begin, end - begin));
+    out.push_back(ResolveDxfIds(xml.substr(begin, end - begin), wb));
   }
   std::sort(out.begin(), out.end());
   return out;
@@ -104,7 +125,7 @@ std::vector<std::string> ModelAutoFilters(const Workbook& wb) {
   std::vector<std::string> out;
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     if (wb.sheet(i).has_auto_filter()) {
-      out.push_back(io::auto_filter_xml(wb.sheet(i).auto_filter()));
+      out.push_back(ResolveDxfIds(io::auto_filter_xml(wb.sheet(i).auto_filter()), wb));
     }
   }
   std::sort(out.begin(), out.end());

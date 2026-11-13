@@ -2,6 +2,7 @@
 
 #include <array>
 #include <initializer_list>
+#include <optional>
 #include <string>
 
 #include "io/xlsb/cf_records.h"
@@ -167,8 +168,12 @@ Expected<DxfSlotScan, Error> scan_dxf_slots(const std::vector<std::uint8_t>& str
                       "context=xlsb_dxf_slots");
   }
   DxfSlotScan scan;
+  std::uint32_t cf_blocks = 0;
   for (std::size_t i = 0; i < recs.size(); ++i) {
     const FramedRecord& rec = recs[i];
+    if (rec.type == kBrtBeginConditionalFormatting || rec.type == kBeginCondFmt14) {
+      ++cf_blocks;
+    }
     if (rec.type == kBrtDxf) {
       ++scan.dxf_records;
       continue;
@@ -186,25 +191,37 @@ Expected<DxfSlotScan, Error> scan_dxf_slots(const std::vector<std::uint8_t>& str
       return Corrupt("xlsb record's dxf slot cannot be located", rec.type);
     }
     const std::size_t base = static_cast<std::size_t>(rec.payload.data - stream.data());
+    // A CF rule's priority follows its dxfId.
+    const bool cf_rule = rec.type == kBrtBeginCFRule || rec.type == kBeginCfRule14;
     for (std::size_t s = 0; s < offsets.count; ++s) {
       const std::uint32_t value = load_u32(rec.payload.data + offsets.at[s]);
-      if (value != kNoDxf) {
-        scan.slots.push_back(DxfRecordSlot{rec.type, i, s, base + offsets.at[s], value});
+      if (value == kNoDxf) {
+        continue;
       }
+      DxfRecordSlot slot{rec.type, i, s, base + offsets.at[s], value, std::nullopt, 0U};
+      if (cf_rule) {
+        slot.block = cf_blocks == 0U ? 0U : cf_blocks - 1U;
+        if (rec.payload.size < offsets.at[s] + 8U) {
+          return Corrupt("xlsb CF rule has no priority", rec.type);
+        }
+        slot.priority = load_u32(rec.payload.data + offsets.at[s] + 4U);
+      }
+      scan.slots.push_back(slot);
     }
   }
   return scan;
 }
 
 Expected<std::vector<std::uint8_t>, Error> rewrite_dxf_slots(const std::vector<std::uint8_t>& stream,
-                                                             const DxfSavePlan& plan) {
+                                                             const DxfSavePlan& plan, const DxfPartKey& part) {
   auto scan = scan_dxf_slots(stream);
   if (!scan) {
     return std::move(scan.error());
   }
   std::vector<std::uint8_t> out = stream;
+  DxfPartCursor cursor(plan, part);
   for (const DxfRecordSlot& slot : scan.value().slots) {
-    store_u32(out.data() + slot.offset, plan.map(slot.value).value_or(kNoDxf));
+    store_u32(out.data() + slot.offset, cursor.next(slot.value).value_or(kNoDxf));
   }
   return out;
 }

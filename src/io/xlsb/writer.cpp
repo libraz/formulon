@@ -268,13 +268,16 @@ XlsbEmission DxfStreams(const Workbook& wb, std::vector<std::vector<std::uint8_t
                         std::unordered_map<std::string, std::vector<std::uint8_t>>& copies) {
   XlsbEmission emission;
   std::vector<std::uint32_t> table_parts(sheet_bodies.size(), 0U);
+  std::uint32_t loose_tables = 0;
   for (std::size_t i = 0; i < sheet_bodies.size(); ++i) {
     // Records before BrtEndSheetData are cells, which carry no dxf slot.
     const std::size_t tail =
         find_record_offset(sheet_bodies[i], static_cast<std::uint16_t>(XlsbRecordType::BrtEndSheetData));
-    emission.streams.push_back(XlsbDxfStream{&sheet_bodies[i], tail, static_cast<std::int32_t>(i), 0U});
+    emission.streams.push_back(
+        XlsbDxfStream{&sheet_bodies[i], tail, DxfPartKey{static_cast<std::int32_t>(i), DxfPartType::kWorksheet, 0U}});
     for (XlsbTablePart& table : plan.sheet_tables[i]) {
-      emission.streams.push_back(XlsbDxfStream{&table.bytes, 0U, static_cast<std::int32_t>(i), ++table_parts[i]});
+      emission.streams.push_back(XlsbDxfStream{
+          &table.bytes, 0U, DxfPartKey{static_cast<std::int32_t>(i), DxfPartType::kTable, table_parts[i]++}});
     }
   }
   for (const PassthroughPart* part : plan.passthrough_kept) {
@@ -283,15 +286,17 @@ XlsbEmission DxfStreams(const Workbook& wb, std::vector<std::vector<std::uint8_t
     } else if (part->path == kStylesBinPath) {
       emission.raw_styles = &(copies[part->path] = part->bytes);
     } else if (strings::starts_with(part->path, "xl/tables/") && strings::ends_with(part->path, ".bin")) {
-      XlsbDxfStream stream{&(copies[part->path] = part->bytes), 0U, -1, 0U};
-      for (std::size_t i = 0; i < wb.sheet_count() && stream.sheet < 0; ++i) {
+      XlsbDxfStream stream{&(copies[part->path] = part->bytes), 0U, DxfPartKey{-1, DxfPartType::kTable, 0U}};
+      for (std::size_t i = 0; i < wb.sheet_count() && stream.part.sheet < 0; ++i) {
         for (const UnknownRelationship& rel : wb.sheet(i).unknown_relationships()) {
           if (rel.target == part->path) {
-            stream.sheet = static_cast<std::int32_t>(i);
-            stream.part = ++table_parts[i];
+            stream.part = DxfPartKey{static_cast<std::int32_t>(i), DxfPartType::kTable, table_parts[i]++};
             break;
           }
         }
+      }
+      if (stream.part.sheet < 0) {
+        stream.part.ordinal = loose_tables++;
       }
       emission.streams.push_back(stream);
     }
@@ -418,7 +423,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   std::unordered_map<std::string, std::vector<std::uint8_t>> dxf_copies;
   XlsbEmission dxf_emission = DxfStreams(workbook, sheet_bodies, plan, dxf_copies);
   const DxfUseSet dxf_uses = collect_xlsb_dxf_uses(workbook, dxf_emission);
-  const DxfSavePlan dxf_plan = build_dxf_save_plan(workbook.styles().dxfs.size(), dxf_uses.uses, dxf_uses.blocked);
+  const DxfSavePlan dxf_plan = build_dxf_save_plan(workbook.styles().dxfs.size(), dxf_uses.uses, dxf_uses.blocked,
+                                                   static_cast<std::int32_t>(workbook.active_sheet()));
   if (!dxf_uses.blocked) {
     RETURN_IF_ERROR(apply_xlsb_dxf_plan(dxf_emission, dxf_plan));
   }

@@ -34,8 +34,6 @@
 
 namespace formulon::io {
 
-class DxfSavePlan;
-
 /// Extent, in cells, of the grid a pivot actually renders.
 ///
 /// Supplied by the caller (which owns the evaluator and the layout
@@ -111,15 +109,12 @@ struct PivotItemsXml {
 /// (`layout_dirty()`) drops the ones it was read with only when the plan asks
 /// Excel to refresh the cache on load; any other table re-emits them.
 ///
-/// `dxf_plan` renumbers every `dxfId` in the re-emitted raw bins (the
-/// `<format>` elements); null writes them as read.
-///
 /// Returns an owning `std::string`; there is no error channel because
 /// the inputs are pure-data (no I/O, no allocation failure surfaced).
 std::string write_pivot_table_definition(const pivot::PivotTable& table,
                                          std::optional<PivotRenderedSpan> rendered_span = std::nullopt,
                                          const PivotCacheWritePlan* plan = nullptr,
-                                         const PivotItemsXml* items = nullptr, const DxfSavePlan* dxf_plan = nullptr);
+                                         const PivotItemsXml* items = nullptr);
 
 }  // namespace formulon::io
 

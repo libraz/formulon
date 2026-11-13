@@ -188,14 +188,16 @@ class StyleTests(unittest.TestCase):
             wb.sheet(0).add_cf_rule(CfExpressionRuleInput(ranges="A2", formula1="TRUE", dxf_index=protection_index))
 
             with Workbook.load(wb.save()) as reloaded:
-                reloaded_alignment = reloaded.ooxml.get_dxf(alignment_index)
-                reloaded_protection = reloaded.ooxml.get_dxf(protection_index)
+                # A save writes dxfs in Excel's order, so the reloaded indices are read from the rules naming them.
+                alignment_rule, protection_rule = reloaded.sheet(0).list_cf_rules()
+                reloaded_alignment = reloaded.ooxml.get_dxf(alignment_rule.dxf_index)
+                reloaded_protection = reloaded.ooxml.get_dxf(protection_rule.dxf_index)
                 self.assertEqual(reloaded_alignment.alignment, got_alignment.alignment)
                 self.assertIsNone(reloaded_alignment.protection)
                 self.assertIsNone(reloaded_protection.alignment)
                 self.assertEqual(reloaded_protection.protection, protection)
-                self.assertEqual(reloaded.ooxml.add_dxf(reloaded_alignment), alignment_index)
-                self.assertEqual(reloaded.ooxml.add_dxf(reloaded_protection), protection_index)
+                self.assertEqual(reloaded.ooxml.add_dxf(reloaded_alignment), alignment_rule.dxf_index)
+                self.assertEqual(reloaded.ooxml.add_dxf(reloaded_protection), protection_rule.dxf_index)
 
     def test_selector_colours_survive_get_add_identity_and_save_load(self) -> None:
         theme = Color(kind=2, theme=3, tint=0.5)

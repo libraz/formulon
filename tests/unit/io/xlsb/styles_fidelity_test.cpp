@@ -219,12 +219,13 @@ TEST(XlsbStylesFidelity, WorkbookSaveKeepsGradientsAndToggles) {
   Workbook wb = Workbook::create_empty();
   wb.sheet(wb.add_sheet("S")).set_cell_value(0U, 0U, Value::number(1.0));
   wb.set_styles(StylesTable(source));
-  // A save writes only referenced dxfs, so one CF rule names each.
-  for (std::size_t i = 0; i < source.dxfs.size(); ++i) {
+  // A save writes only referenced dxfs, so one CF rule names each. Saved dxfs
+  // run in reverse block order, so the blocks name the dxfs last to first.
+  for (std::size_t i = source.dxfs.size(); i-- > 0U;) {
     cf::ConditionalFormat block;
     block.sqref = {cf::CFCellRange{{0, 0}, {0, 0}}};
     cf::CFRule rule;
-    rule.priority = static_cast<std::int32_t>(i + 1U);
+    rule.priority = static_cast<std::int32_t>(source.dxfs.size() - i);
     rule.formula1 = "$A$1>0";
     rule.dxf_id = static_cast<std::uint32_t>(i);
     block.rules.push_back(std::move(rule));

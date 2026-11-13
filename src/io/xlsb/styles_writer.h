@@ -26,7 +26,7 @@ namespace xlsb {
 /// as required by the XLSB collection contracts.  The writer preserves the
 /// modelled font, fill (pattern and gradient), border, number-format, XF,
 /// named-style and differential-format fields. Every gradient stop is written.
-/// `plan` (null: every dxf in model order) selects and orders the dxfs written.
+/// `plan` (null: every dxf in model order) selects and orders the dxfs written; a model dxf may repeat.
 std::vector<std::uint8_t> write_styles_bin(const StylesTable& table, const DxfSavePlan* plan = nullptr);
 
 /// The BrtDXF count of a source styles part whose BrtDXF records form one list

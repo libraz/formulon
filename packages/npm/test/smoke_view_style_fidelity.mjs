@@ -140,7 +140,8 @@ test('a dxf carries its number format as a format code and reads null without on
   wb.sheet(0).addCfRule({ type: mod.CfRuleType.Expression, ranges: 'A1', formula1: 'TRUE', dxfIndex: dxf });
   wb.sheet(0).addCfRule({ type: mod.CfRuleType.Expression, ranges: 'A2', formula1: 'TRUE', dxfIndex: bare });
   const loaded = mod.Workbook.load(wb.save());
-  assert.equal(loaded.ooxml.getDxf(dxf).numberFormat, '0.00%');
+  // A save writes dxfs in Excel's order, so the reloaded index is read from the rule naming it.
+  assert.equal(loaded.ooxml.getDxf(loaded.sheet(0).listCfRules()[0].dxfIndex).numberFormat, '0.00%');
   loaded.dispose();
   wb.dispose();
 });

@@ -130,18 +130,21 @@ struct BufferGuard {
   BufferGuard& operator=(const BufferGuard&) = delete;
 };
 
-/// Gives every dxf a conditional-format user, so a save keeps each one at its index.
+/// Gives every dxf a conditional-format user, so a save keeps each one at its
+/// index: the rules name the dxfs last to first, and a save writes CF dxfs in
+/// reverse rule order.
 [[maybe_unused]] inline void UseEveryDxf(fm_workbook_t* wb) {
   size_t count = 0;
   ASSERT_EQ(fm_workbook_get_dxf_count(wb, &count), 0);
   fm_cell_rect_t sqref{};
   std::string formula = "TRUE";
-  for (size_t i = 0; i < count; ++i) {
+  for (size_t i = count; i-- > 0;) {
     fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
     rule.type = 0;  // Expression
     rule.formula1 = formula.c_str();
     rule.has_dxf_index = 1;
     rule.dxf_index = static_cast<uint32_t>(i);
+    rule.priority = static_cast<int32_t>(count - i);
     rule.ranges = &sqref;
     rule.range_count = 1;
     const char* rule_id = nullptr;

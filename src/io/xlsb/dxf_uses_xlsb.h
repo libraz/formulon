@@ -26,8 +26,7 @@ namespace formulon::io::xlsb {
 struct XlsbDxfStream {
   std::vector<std::uint8_t>* bytes = nullptr;
   std::size_t begin = 0;
-  std::int32_t sheet = -1;  ///< Tab index; -1 when no sheet relates the part.
-  std::uint32_t part = 0;   ///< Table ordinal within the sheet; 0 for a sheet body.
+  DxfPartKey part;  ///< The part the stream is written as.
 };
 
 /// The streams an xlsb save writes that can name a model dxf.
@@ -42,8 +41,8 @@ struct XlsbEmission {
 /// The dxf references `emission` writes against `wb`'s dxf table.
 DxfUseSet collect_xlsb_dxf_uses(const Workbook& wb, const XlsbEmission& emission);
 
-/// Maps every dxf slot of `emission` through `plan`, a slot naming no model dxf
-/// becoming kNoDxf, and writes the raw styles part's dxf list in
+/// Maps every dxf slot of `emission` through `plan`, in stream order per part,
+/// a slot the plan maps to nothing becoming kNoDxf, and writes the raw styles part's dxf list in
 /// `plan.order()`. Under an identity plan a stream whose slots all name model
 /// dxfs keeps every byte. Not called for a blocked use set, whose ids stay as
 /// written.

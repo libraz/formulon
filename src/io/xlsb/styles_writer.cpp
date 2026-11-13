@@ -477,7 +477,7 @@ Expected<std::vector<std::uint8_t>, Error> compact_styles_bin(const std::vector<
     return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb styles part's dxf list is not one block",
                       "context=xlsb_styles_dxfs");
   }
-  auto mapped = rewrite_dxf_slots(raw, plan);
+  auto mapped = rewrite_dxf_slots(raw, plan, DxfPartKey{-1, DxfPartType::kStyles, 0U});
   if (!mapped) {
     return std::move(mapped.error());
   }

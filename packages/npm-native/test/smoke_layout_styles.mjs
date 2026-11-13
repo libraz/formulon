@@ -466,7 +466,8 @@ test('selector colours survive get/add identity and save/load', async () => {
   const loadedFont = loaded.ooxml.getFont(font);
   const loadedFill = loaded.ooxml.getFill(fill);
   const loadedBorder = loaded.ooxml.getBorder(border);
-  const loadedDxf = loaded.ooxml.getDxf(dxf);
+  // A save writes dxfs in Excel's order, so the reloaded index is read from the rule naming it.
+  const loadedDxf = loaded.ooxml.getDxf(loaded.sheet(0).listCfRules()[0].dxfIndex);
   assert.equal(loadedFont.color.kind, 2);
   assert.equal(loadedFill.foreground.kind, 3);
   assert.equal(loadedBorder.left.color.kind, 2);
@@ -514,16 +515,18 @@ test('dxf alignment and protection records survive get/add identity and save/loa
   const saved = wb.save();
   const loaded = mod.Workbook.load(saved);
   assert.equal(loaded.disposed, false);
-  const loadedAlignment = loaded.ooxml.getDxf(alignment);
+  // A save writes dxfs in Excel's order, so the reloaded indices are read from the rules naming them.
+  const [alignmentRule, protectionRule] = loaded.sheet(0).listCfRules();
+  const loadedAlignment = loaded.ooxml.getDxf(alignmentRule.dxfIndex);
   assert.deepEqual(loadedAlignment.alignment, alignmentRecord);
   assert.equal(loadedAlignment.protection, null);
-  const loadedProtection = loaded.ooxml.getDxf(protection);
+  const loadedProtection = loaded.ooxml.getDxf(protectionRule.dxfIndex);
   assert.equal(loadedProtection.alignment, null);
   assert.deepEqual(loadedProtection.protection, protectionRecord);
   const loadedAlignmentAgain = loaded.ooxml.addDxf(loadedAlignment);
-  assert.equal(loadedAlignmentAgain, alignment);
+  assert.equal(loadedAlignmentAgain, alignmentRule.dxfIndex);
   const loadedProtectionAgain = loaded.ooxml.addDxf(loadedProtection);
-  assert.equal(loadedProtectionAgain, protection);
+  assert.equal(loadedProtectionAgain, protectionRule.dxfIndex);
   loaded.dispose();
   wb.dispose();
 });
@@ -541,7 +544,7 @@ test('a dxf carries its number format as a format code and reads null without on
   wb.sheet(0).addCfRule({ type: mod.CfRuleType.Expression, ranges: 'A1', formula1: 'TRUE', dxfIndex: dxf });
   wb.sheet(0).addCfRule({ type: mod.CfRuleType.Expression, ranges: 'A2', formula1: 'TRUE', dxfIndex: bare });
   const loaded = mod.Workbook.load(wb.save());
-  assert.equal(loaded.ooxml.getDxf(dxf).numberFormat, '0.00%');
+  assert.equal(loaded.ooxml.getDxf(loaded.sheet(0).listCfRules()[0].dxfIndex).numberFormat, '0.00%');
   loaded.dispose();
   wb.dispose();
 });

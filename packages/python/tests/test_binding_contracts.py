@@ -737,9 +737,21 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             )
             with self.assertRaises(FormulonError):
                 wb.set_table_style(TableStyle(name="TableStyleMedium2"))
+            # A save writes one dxf per user, as Excel does: the two elements that shared
+            # a dxf now name two equal records, written in reverse element order.
+            saved_style = TableStyle(
+                name="Corporate",
+                pivot=False,
+                elements=[
+                    TableStyleElement(TableStyleElementType.WHOLE_TABLE, dxf_index=1),
+                    TableStyleElement(TableStyleElementType.FIRST_ROW_STRIPE, size=2, dxf_index=0),
+                    TableStyleElement(TableStyleElementType.TOTAL_ROW),
+                ],
+            )
             with Workbook.load(wb.save()) as reloaded:
-                self.assertEqual(reloaded.list_table_styles(), [style])
-                self.assertEqual(reloaded.get_table_style("corporate"), style)
+                self.assertEqual(reloaded.list_table_styles(), [saved_style])
+                self.assertEqual(reloaded.get_table_style("corporate"), saved_style)
+                self.assertEqual(reloaded.ooxml.get_dxf(0), reloaded.ooxml.get_dxf(1))
                 self.assertIsNone(reloaded.get_table_style("Other"))
                 self.assertEqual(
                     reloaded.sheet(0).list_tables()[table.index].get_style_options().style_name, "Corporate"

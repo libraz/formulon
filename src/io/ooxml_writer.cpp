@@ -40,6 +40,7 @@
 #include "io/comments_writer.h"
 #include "io/dxf_save_plan.h"
 #include "io/dxf_uses_xlsx.h"
+#include "io/dxf_xml_ids.h"
 #include "io/dynamic_array_formula.h"
 #include "io/ooxml/emission_plan.h"
 #include "io/ooxml/external_link_writer.h"
@@ -230,9 +231,21 @@ std::string DropUnsavedCellStyleAttrs(const std::string& attrs, const StylesTabl
   return out;
 }
 
-/// The table part of `t`, every dxf reference written through `dxf_plan`.
-std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id, const StylesTable& styles,
-                          const DxfSavePlan& dxf_plan) {
+/// `xml` with every dxf reference from offset `from` on rewritten through
+/// `dxf_plan` as the references of `part`; unchanged under an identity plan.
+Expected<std::string, Error> SavedDxfPart(std::string xml, std::size_t from, const DxfSavePlan& dxf_plan,
+                                          const DxfPartKey& part) {
+  if (dxf_plan.identity()) {
+    return xml;
+  }
+  DxfPartCursor cursor(dxf_plan, part);
+  ASSIGN_OR_RETURN(std::string tail, rewrite_dxf_xml_ids(std::string_view(xml).substr(from), cursor));
+  xml.resize(from);
+  xml.append(tail);
+  return xml;
+}
+
+std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id, const StylesTable& styles) {
   std::string out;
   out.reserve(256 + t.columns.size() * 64);
   out.append(kXmlDecl);
@@ -247,7 +260,7 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id, cons
   out.append("\" ref=\"");
   AppendXmlAttrEscaped(out, t.ref);
   out.push_back('"');
-  out.append(saved_dxf_attrs(DropUnsavedCellStyleAttrs(t.root_extra_attrs, styles), &dxf_plan));
+  out.append(DropUnsavedCellStyleAttrs(t.root_extra_attrs, styles));
   // headerRowCount: emit explicit "0" when disabled; default (1) is
   // implicit via OOXML schema and we omit it.
   if (!t.header_row) {
@@ -271,12 +284,12 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id, cons
   // the sort and extension fragments are retained verbatim.
   if (!t.auto_filter_xml.empty()) {
     out.append("  ");
-    out.append(serialize_auto_filter(*t.auto_filter_xml.get(), &dxf_plan));
+    out.append(serialize_auto_filter(*t.auto_filter_xml.get()));
     out.push_back('\n');
   }
   if (!t.sort_state_xml.empty()) {
     out.append("  ");
-    out.append(saved_dxf_xml(t.sort_state_xml, &dxf_plan));
+    out.append(t.sort_state_xml);
     out.push_back('\n');
   }
   out.append("  <tableColumns count=\"");
@@ -294,7 +307,7 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id, cons
     if (!col.totals_function.empty()) {
       append_xml_attr(out, "totalsRowFunction", col.totals_function);
     }
-    out.append(saved_dxf_attrs(DropUnsavedCellStyleAttrs(col.extra_attrs, styles), &dxf_plan));
+    out.append(DropUnsavedCellStyleAttrs(col.extra_attrs, styles));
     // CT_TableColumn children: calculatedColumnFormula, totalsRowFormula,
     // then the retained xmlColumnPr / extLst. An empty formula omits its
     // element (Excel never emits an empty one).
@@ -315,7 +328,7 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id, cons
       }
       if (!col.trailing_children_xml.empty()) {
         out.append("      ");
-        out.append(saved_dxf_xml(col.trailing_children_xml, &dxf_plan));
+        out.append(col.trailing_children_xml);
         out.push_back('\n');
       }
       out.append("    </tableColumn>\n");
@@ -338,7 +351,7 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id, cons
   }
   if (!t.ext_lst_xml.empty()) {
     out.append("  ");
-    out.append(saved_dxf_xml(t.ext_lst_xml, &dxf_plan));
+    out.append(t.ext_lst_xml);
     out.push_back('\n');
   }
   out.append("</table>\n");
@@ -389,9 +402,12 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
 
   const SharedStrings shared_strings = BuildSharedStrings(wb);
   const EmissionPlan plan = BuildEmissionPlan(wb, !shared_strings.empty(), &diagnostics);
-  // One dxf plan for every part: which dxfs `<dxfs>` keeps, and each reference's saved index.
+  // One dxf plan for every part: the records `<dxfs>` writes, and each
+  // reference's saved index. Emitters write model indices; each part with
+  // dxf references is rewritten through the plan before it is added.
   ASSIGN_OR_RETURN(const DxfUseSet dxf_uses, collect_xlsx_dxf_uses(wb, plan));
-  const DxfSavePlan dxf_plan = build_dxf_save_plan(wb.styles().dxfs.size(), dxf_uses.uses, dxf_uses.blocked);
+  const DxfSavePlan dxf_plan = build_dxf_save_plan(wb.styles().dxfs.size(), dxf_uses.uses, dxf_uses.blocked,
+                                                   static_cast<std::int32_t>(wb.active_sheet()));
   // The XLDAPR entry dynamic-array formulas' `cm=` names: a generated part's
   // first entry, else a retained `xl/metadata.xml`'s own. A retained part
   // without one leaves `cm=` off, as does a workbook with no such formula.
@@ -440,14 +456,17 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     // worksheet body's `r:id` references and the rels file this writer
     // emits always agree on which id names which relationship.
     const SheetRelsResult& rels_result = plan.sheet_rels[i];
-    RETURN_IF_ERROR(AddPart(
-        writer.get(), SheetPartPath(i),
-        BuildWorksheetXml(wb.sheet(i), sheet_tables, rels_result.table_rids, rels_result.hyperlink_rids,
-                          rels_result.printer_settings_rid, rels_result.drawing_rid, rels_result.legacy_drawing_rid,
-                          &shared_strings, wb.styles().dxfs, dxf_plan, i, dynamic_array_cm_index, name_shapes(wb, i),
-                          &external_book_indexer, &sheet_names,
-                          plan.rich_errors.empty() ? nullptr : &plan.rich_errors.vm_by_sheet[i], plan.book_directory),
-        &written_paths));
+    std::string sheet_xml = BuildWorksheetXml(
+        wb.sheet(i), sheet_tables, rels_result.table_rids, rels_result.hyperlink_rids, rels_result.printer_settings_rid,
+        rels_result.drawing_rid, rels_result.legacy_drawing_rid, &shared_strings, wb.styles().dxfs, i,
+        dynamic_array_cm_index, name_shapes(wb, i), &external_book_indexer, &sheet_names,
+        plan.rich_errors.empty() ? nullptr : &plan.rich_errors.vm_by_sheet[i], plan.book_directory);
+    // No dxf reference precedes `</sheetData>`.
+    const std::size_t sheet_data_end = sheet_xml.find("</sheetData>");
+    ASSIGN_OR_RETURN(sheet_xml,
+                     SavedDxfPart(std::move(sheet_xml), sheet_data_end == std::string::npos ? 0U : sheet_data_end,
+                                  dxf_plan, DxfPartKey{static_cast<std::int32_t>(i), DxfPartType::kWorksheet, 0U}));
+    RETURN_IF_ERROR(AddPart(writer.get(), SheetPartPath(i), sheet_xml, &written_paths));
     // An empty rels file is invalid OOXML; Excel repairs the package and
     // drops it. `relationship_count` is the single predicate for whether
     // this sheet's rels part is worth writing at all — for example, a
@@ -460,7 +479,9 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   }
 
   // xl/styles.xml
-  RETURN_IF_ERROR(AddPart(writer.get(), kStylesPartPath, write_styles(wb.styles(), &dxf_plan), &written_paths));
+  ASSIGN_OR_RETURN(const std::string styles_xml, SavedDxfPart(write_styles(wb.styles(), &dxf_plan), 0U, dxf_plan,
+                                                              DxfPartKey{-1, DxfPartType::kStyles, 0U}));
+  RETURN_IF_ERROR(AddPart(writer.get(), kStylesPartPath, styles_xml, &written_paths));
 
   // xl/metadata.xml — the dynamic-array and rich-value metadata, and the
   // rich values themselves, as Excel 365 writes them.
@@ -486,10 +507,14 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   }
 
   // xl/tables/tableN.xml — one per planned table.
-  for (const auto& per_sheet : plan.tables_by_sheet) {
-    for (const EmissionPlan::PerSheetTable& t : per_sheet) {
-      RETURN_IF_ERROR(
-          AddPart(writer.get(), t.path, BuildTableXml(*t.table, t.numeric_id, wb.styles(), dxf_plan), &written_paths));
+  for (std::size_t si = 0; si < plan.tables_by_sheet.size(); ++si) {
+    for (std::size_t ti = 0; ti < plan.tables_by_sheet[si].size(); ++ti) {
+      const EmissionPlan::PerSheetTable& t = plan.tables_by_sheet[si][ti];
+      ASSIGN_OR_RETURN(
+          const std::string table_xml,
+          SavedDxfPart(BuildTableXml(*t.table, t.numeric_id, wb.styles()), 0U, dxf_plan,
+                       DxfPartKey{static_cast<std::int32_t>(si), DxfPartType::kTable, static_cast<std::uint32_t>(ti)}));
+      RETURN_IF_ERROR(AddPart(writer.get(), t.path, table_xml, &written_paths));
     }
   }
 
@@ -596,11 +621,13 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     for (std::size_t ti = 0; ti < plan.pivot_tables_by_sheet[si].size(); ++ti) {
       const EmissionPlan::PivotTablePlan& t = plan.pivot_tables_by_sheet[si][ti];
       const ProjectedPivot& projection = projected[si][ti];
-      RETURN_IF_ERROR(
-          AddPart(writer.get(), t.path,
-                  write_pivot_table_definition(*t.table, projection.span, plan_for(t.table->pivot_cache_id()),
-                                               projection.items ? &*projection.items : nullptr, &dxf_plan),
-                  &written_paths));
+      ASSIGN_OR_RETURN(
+          const std::string pivot_xml,
+          SavedDxfPart(write_pivot_table_definition(*t.table, projection.span, plan_for(t.table->pivot_cache_id()),
+                                                    projection.items ? &*projection.items : nullptr),
+                       0U, dxf_plan,
+                       DxfPartKey{static_cast<std::int32_t>(si), DxfPartType::kPivot, static_cast<std::uint32_t>(ti)}));
+      RETURN_IF_ERROR(AddPart(writer.get(), t.path, pivot_xml, &written_paths));
       // The table's own rels file names the cache definition it draws
       // from. A table whose cache id resolved to no planned cache gets
       // no rels part, so the package never carries a dangling target.

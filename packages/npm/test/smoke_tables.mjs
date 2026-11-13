@@ -406,13 +406,19 @@ test('custom table styles round-trip and a table can use one', async () => {
     assert.equal(got.pivot, false);
     assert.equal(got.table, true);
     assert.deepEqual(
-      got.elements.map((e) => [e.type, e.size, e.dxfIndex]),
+      got.elements.map((e) => [e.type, e.size]),
       [
-        [mod.TableStyleElementType.WholeTable, 1, got.elements[0].dxfIndex],
-        [mod.TableStyleElementType.FirstRowStripe, 2, got.elements[0].dxfIndex],
-        [mod.TableStyleElementType.TotalRow, 1, null],
+        [mod.TableStyleElementType.WholeTable, 1],
+        [mod.TableStyleElementType.FirstRowStripe, 2],
+        [mod.TableStyleElementType.TotalRow, 1],
       ],
     );
+    // A save writes one dxf per user, as Excel does: the two elements that shared
+    // a dxf now name two equal records, written in reverse element order.
+    const [whole, stripe, total] = got.elements;
+    assert.equal(whole.dxfIndex, stripe.dxfIndex + 1);
+    assert.deepEqual(reloaded.ooxml.getDxf(whole.dxfIndex), reloaded.ooxml.getDxf(stripe.dxfIndex));
+    assert.equal(total.dxfIndex, null);
     assert.equal(reloaded.sheet(0).listTables()[0].getStyleOptions().styleName, 'Corporate');
     reloaded.updateTableStyleDefaults({ tableStyleName: 'Corporate' });
     assert.equal(reloaded.getTableStyleDefaults().tableStyleName, 'Corporate');

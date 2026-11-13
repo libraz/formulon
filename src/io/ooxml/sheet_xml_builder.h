@@ -20,7 +20,6 @@
 #include <string_view>
 #include <vector>
 
-#include "io/dxf_save_plan.h"
 #include "io/ooxml/emission_plan.h"
 #include "io/xlsb/ptg_writer.h"
 #include "styles.h"
@@ -41,9 +40,10 @@ class SharedStrings;
 /// file actually declared; `hyperlink_rids` carries the per-hyperlink
 /// rId strings the same way; `printer_settings_rid` is the rId of the
 /// printer-settings rel (empty when the sheet has no printer settings).
-/// `dxfs` is the model's dxf table, which supplies the inline formatting of
-/// rules written to the x14 extension; `dxf_plan` maps every `dxfId` the part
-/// writes, retained raw children included; `sheet_index` is the sheet's
+/// `dxfs` is the model's dxf table, which bounds the `dxfId` values the
+/// conditional-format block may name and supplies the inline formatting of
+/// rules written to the x14 extension. Every `dxfId` is written as a model
+/// index; the caller rewrites the part through its dxf plan. `sheet_index` is the sheet's
 /// zero-based position (see `write_conditional_formattings`). `dynamic_array_cm_index` is the
 /// 1-based `<cellMetadata>/<bk>` index a spill anchor's `<c cm="N">`
 /// names (0 when no retained `xl/metadata.xml` part carries an XLDAPR
@@ -57,9 +57,8 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
                               const std::vector<std::string>& hyperlink_rids, std::string_view printer_settings_rid,
                               std::string_view drawing_rid, std::string_view legacy_drawing_rid,
                               const SharedStrings* shared_strings, const std::vector<DifferentialFormat>& dxfs,
-                              const DxfSavePlan& dxf_plan, std::size_t sheet_index,
-                              std::uint32_t dynamic_array_cm_index, const xlsb::NameShapes& name_shapes,
-                              const parser::ExternalBookIndexer* indexer,
+                              std::size_t sheet_index, std::uint32_t dynamic_array_cm_index,
+                              const xlsb::NameShapes& name_shapes, const parser::ExternalBookIndexer* indexer,
                               const std::vector<std::string>* sheet_names = nullptr,
                               const RichErrorVmMap* rich_error_vm = nullptr, std::string_view book_directory = {});
 

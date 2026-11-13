@@ -18,7 +18,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   something in the saved file references (conditional-format rules, table and
   table column formats, custom table style elements, colour filters, sort
   conditions, PivotTable formats, verbatim parts included) and renumbers every
-  reference, as Excel does on save. The live workbook keeps its dxf indices.
+  reference, as Excel does on save. The saved table follows Excel's order:
+  table styles last, then each sheet's other users (the active sheet's last),
+  then conditional-format rules first, by sheet, `<conditionalFormatting>`
+  block and priority. As in Excel,
+  each user gets its own record, so a dxf shared by several users is written
+  once per user and a reloaded file can hold more dxfs than the live workbook;
+  conditional-format rules of one sheet still share one record. The order of
+  two PivotTables' formats on one sheet varies between Excel saves, and
+  Formulon writes them in model order. The live workbook keeps its dxf indices.
   A reference to an index past the dxf table is omitted from the saved file.
   A workbook whose saved parts hold a dxf reference the writer cannot rewrite
   (a retained `.xlsb` PivotTable part) keeps its dxf table as it is.
