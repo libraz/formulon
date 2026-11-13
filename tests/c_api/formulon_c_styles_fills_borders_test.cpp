@@ -142,6 +142,7 @@ TEST(FormulonCApiStyles, SelectorColoursRemainAuthoritativeAcrossGetAddAndSaveLo
   EXPECT_EQ(dxf_again, dxf_index);
 
   BufferGuard saved;
+  UseEveryDxf(wb.handle);
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   ASSERT_GT(saved.len, 0U);
   WorkbookGuard reloaded;

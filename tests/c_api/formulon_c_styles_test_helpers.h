@@ -130,6 +130,25 @@ struct BufferGuard {
   BufferGuard& operator=(const BufferGuard&) = delete;
 };
 
+/// Gives every dxf a conditional-format user, so a save keeps each one at its index.
+[[maybe_unused]] inline void UseEveryDxf(fm_workbook_t* wb) {
+  size_t count = 0;
+  ASSERT_EQ(fm_workbook_get_dxf_count(wb, &count), 0);
+  fm_cell_rect_t sqref{};
+  std::string formula = "TRUE";
+  for (size_t i = 0; i < count; ++i) {
+    fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
+    rule.type = 0;  // Expression
+    rule.formula1 = formula.c_str();
+    rule.has_dxf_index = 1;
+    rule.dxf_index = static_cast<uint32_t>(i);
+    rule.ranges = &sqref;
+    rule.range_count = 1;
+    const char* rule_id = nullptr;
+    ASSERT_EQ(fm_sheet_add_cf_rule(wb, 0, &rule, &rule_id), 0) << fm_get_last_error_message();
+  }
+}
+
 [[maybe_unused]] constexpr char kNumFmtOverrideStyles[] =
     "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
     "<styleSheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"

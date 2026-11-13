@@ -398,6 +398,9 @@ TEST(OoxmlSheetFeaturesBatch, TableStyleInfoRoundTrips) {
   EXPECT_NE(load_or.value().workbook.tables()[0].ext_lst_xml.find("urn:test:table-extension"), std::string::npos);
   EXPECT_NE(load_or.value().workbook.tables()[0].columns[0].extra_attrs.find("dataDxfId=\"4\""), std::string::npos);
 
+  // The package has no styles part; give the two column dxf ids records to
+  // name, which the save keeps and renumbers to 0 and 1.
+  load_or.value().workbook.mutable_styles().dxfs.resize(8);
   auto save_or = load_or.value().workbook.save();
   ASSERT_TRUE(static_cast<bool>(save_or)) << save_or.error().message;
   io::ZipReader zip;
@@ -410,14 +413,14 @@ TEST(OoxmlSheetFeaturesBatch, TableStyleInfoRoundTrips) {
   EXPECT_STREQ(style.attribute("name").value(), "TableStyleMedium2");
   EXPECT_STREQ(style.attribute("showRowStripes").value(), "1");
   EXPECT_STREQ(doc.child("table").attribute("xr:uid").value(), "{T1}");
-  EXPECT_STREQ(doc.child("table").child("tableColumns").child("tableColumn").attribute("dataDxfId").value(), "4");
+  EXPECT_STREQ(doc.child("table").child("tableColumns").child("tableColumn").attribute("dataDxfId").value(), "0");
   EXPECT_STREQ(doc.child("table")
                    .child("tableColumns")
                    .child("tableColumn")
                    .next_sibling("tableColumn")
                    .attribute("totalsRowDxfId")
                    .value(),
-               "7");
+               "1");
   EXPECT_STREQ(doc.child("table")
                    .child("autoFilter")
                    .child("filterColumn")

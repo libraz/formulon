@@ -6,12 +6,15 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
 
 #include "color_resolve.h"
 #include "io/color_spec_xml.h"
+#include "io/dxf_save_plan.h"
+#include "io/dxf_uses_xlsx.h"
 #include "io/ooxml_defs.h"
 #include "io/styles_vocab.h"
 #include "io/xml_utils.h"
@@ -441,7 +444,7 @@ void AppendCellStyles(std::string& out, const StylesTable& table) {
 }
 
 /// Emits `<tableStyles>` when the source carried it or a custom style exists.
-void AppendTableStyles(std::string& out, const StylesTable& table) {
+void AppendTableStyles(std::string& out, const StylesTable& table, const DxfSavePlan* dxf_plan) {
   const TableStylesSection& section = table.table_styles;
   if (!section.present && section.styles.empty()) {
     return;
@@ -482,8 +485,8 @@ void AppendTableStyles(std::string& out, const StylesTable& table) {
       if (element.size != 1U) {
         append_xml_attr_uint(out, "size", element.size);
       }
-      if (element.dxf_id.has_value()) {
-        append_xml_attr_uint(out, "dxfId", *element.dxf_id);
+      if (const std::optional<std::uint32_t> dxf_id = saved_dxf_id(element.dxf_id, dxf_plan)) {
+        append_xml_attr_uint(out, "dxfId", *dxf_id);
       }
       out.append(element.extra_attrs);
       out.append("/>");
@@ -650,16 +653,18 @@ void AppendDxfBody(std::string& out, const DifferentialFormat& dxf) {
   out.append(dxf.protection_xml);
 }
 
-void AppendDxfs(std::string& out, const StylesTable& table) {
-  if (table.dxfs.empty()) {
+/// Writes the model dxfs `dxf_plan` saves, in its order; every one under a null plan.
+void AppendDxfs(std::string& out, const StylesTable& table, const DxfSavePlan* dxf_plan) {
+  const std::size_t count = dxf_plan != nullptr ? dxf_plan->saved_count() : table.dxfs.size();
+  if (count == 0U) {
     return;
   }
   out.append("  <dxfs");
-  append_xml_attr_uint(out, "count", table.dxfs.size());
+  append_xml_attr_uint(out, "count", count);
   out.append(">\n");
-  for (const DifferentialFormat& dxf : table.dxfs) {
+  for (std::size_t i = 0; i < count; ++i) {
     out.append("    <dxf>");
-    AppendDxfBody(out, dxf);
+    AppendDxfBody(out, table.dxfs[dxf_plan != nullptr ? dxf_plan->order()[i] : i]);
     out.append("</dxf>\n");
   }
   out.append("  </dxfs>\n");
@@ -702,7 +707,7 @@ std::uint32_t intern_border(StylesTable& table, BorderRecord candidate) {
   return static_cast<std::uint32_t>(table.borders.size() - 1U);
 }
 
-std::string write_styles(const StylesTable& table) {
+std::string write_styles(const StylesTable& table, const DxfSavePlan* dxf_plan) {
   std::string out;
   out.reserve(1024);
   out.append(kXmlDecl);
@@ -718,12 +723,12 @@ std::string write_styles(const StylesTable& table) {
   AppendCellStyleXfs(out, table);
   AppendCellXfs(out, table);
   AppendCellStyles(out, table);
-  AppendDxfs(out, table);
-  AppendTableStyles(out, table);
+  AppendDxfs(out, table, dxf_plan);
+  AppendTableStyles(out, table, dxf_plan);
   AppendColors(out, table);
   for (const std::string& raw : table.unknown_top_level_xml) {
     out.append("  ");
-    out.append(raw);
+    out.append(saved_dxf_xml(raw, dxf_plan));
     out.push_back('\n');
   }
   if (!table.ext_lst_xml.empty()) {

@@ -34,6 +34,12 @@ struct DxfUse {
   std::uint32_t position = 0;  ///< Document position within that part.
 };
 
+/// The dxf references a save writes; `blocked` asks for the identity plan.
+struct DxfUseSet {
+  std::vector<DxfUse> uses;
+  bool blocked = false;
+};
+
 /// The dxfs a save writes and the saved index of each model dxf.
 class DxfSavePlan {
  public:

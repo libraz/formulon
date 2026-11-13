@@ -103,6 +103,7 @@ TEST(FormulonCApiStyles, DxfNumberFormatSurvivesSaveAndReload) {
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &index), 0);
 
   BufferGuard saved;
+  UseEveryDxf(wb.handle);
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard reloaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
@@ -184,6 +185,7 @@ TEST(FormulonCApiStyles, DxfAlignmentAndProtectionPreserveIdentityThroughOoxml) 
   EXPECT_NE(before_save.find("<protection locked=\"0\" hidden=\"1\"/>"), std::string::npos);
 
   BufferGuard saved;
+  UseEveryDxf(wb.handle);
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   ASSERT_GT(saved.len, 0U);
   WorkbookGuard reloaded;

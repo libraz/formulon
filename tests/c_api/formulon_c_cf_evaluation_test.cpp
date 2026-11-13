@@ -34,7 +34,8 @@ TEST(FormulonCApiCf, EvaluateRangeWithCellIsRule) {
     formulon::cf::CFRule rule;
     rule.type = formulon::cf::RuleType::CellIs;
     rule.priority = 1;
-    rule.dxf_id = 7U;
+    w.mutable_styles().dxfs.resize(1);
+    rule.dxf_id = 0U;
     rule.op = formulon::cf::CellIsOperator::GreaterThan;
     rule.formula1 = "50";
     block.rules.push_back(std::move(rule));
@@ -64,7 +65,7 @@ TEST(FormulonCApiCf, EvaluateRangeWithCellIsRule) {
   EXPECT_EQ(m.kind, FM_CF_MATCH_KIND_DIFFERENTIAL_FORMAT);
   EXPECT_EQ(m.priority, 1);
   EXPECT_EQ(m.has_dxf_index, 1);
-  EXPECT_EQ(m.dxf_index, 7U);
+  EXPECT_EQ(m.dxf_index, 0U);
 
   // Second matched cell: A3 (row=2).
   ASSERT_EQ(fm_cf_results_get_cell_at(results.handle, 1, &row, &col, &match_count), 0);
@@ -73,7 +74,7 @@ TEST(FormulonCApiCf, EvaluateRangeWithCellIsRule) {
   ASSERT_EQ(match_count, 1U);
   ASSERT_EQ(fm_cf_results_get_match_at(results.handle, 1, 0, &m), 0);
   EXPECT_EQ(m.kind, FM_CF_MATCH_KIND_DIFFERENTIAL_FORMAT);
-  EXPECT_EQ(m.dxf_index, 7U);
+  EXPECT_EQ(m.dxf_index, 0U);
 }
 
 TEST(FormulonCApiCf, EvaluateRangeRejectsRequestPastViewportCeiling) {
@@ -101,7 +102,8 @@ TEST(FormulonCApiCf, EvaluateWholeColumnRangeReturnsBlockMatches) {
     formulon::cf::CFRule rule;
     rule.type = formulon::cf::RuleType::CellIs;
     rule.priority = 1;
-    rule.dxf_id = 7U;
+    w.mutable_styles().dxfs.resize(1);
+    rule.dxf_id = 0U;
     rule.op = formulon::cf::CellIsOperator::GreaterThan;
     rule.formula1 = "50";
     block.rules.push_back(std::move(rule));
@@ -129,7 +131,7 @@ TEST(FormulonCApiCf, EvaluateWholeColumnRangeReturnsBlockMatches) {
   fm_cf_match_info_t m = FM_STRUCT_INIT(fm_cf_match_info_t);
   ASSERT_EQ(fm_cf_results_get_match_at(results.handle, 0, 0, &m), 0);
   EXPECT_EQ(m.has_dxf_index, 1);
-  EXPECT_EQ(m.dxf_index, 7U);
+  EXPECT_EQ(m.dxf_index, 0U);
 }
 
 TEST(FormulonCApiCf, EvaluateRangeWithColorScale) {

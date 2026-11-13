@@ -40,6 +40,7 @@
 #include <vector>
 
 #include "cf/cf_types.h"
+#include "io/dxf_save_plan.h"
 #include "styles.h"
 
 namespace formulon::parser {
@@ -84,9 +85,9 @@ std::string storage_feature_formula(std::string_view formula, const parser::Exte
 /// Returns an empty string when `formats` is empty so the caller can
 /// concatenate unconditionally without a wrapper element.
 ///
-/// `dxf_count` is the number of `<dxf>` records the same package's
-/// `xl/styles.xml` will contain. A rule whose `dxf_id` is not below it
-/// names no differential format, so the `dxfId` attribute is omitted
+/// Each `dxfId`, and each one inside a rule's or block's retained `<extLst>`,
+/// is written as `dxf_plan` maps it. A rule whose `dxf_id` the plan does not
+/// map names no saved differential format, so the attribute is omitted
 /// rather than written dangling: Excel treats an unresolvable `dxfId`
 /// as package corruption and repairs the sheet by discarding *all* of
 /// its conditional formatting, which costs far more than the one rule's
@@ -95,9 +96,22 @@ std::string storage_feature_formula(std::string_view formula, const parser::Exte
 ///
 /// A rule `sheet` places in the extension is left out; a block all of whose
 /// rules it places there is left out entirely.
+std::string write_conditional_formattings(const std::vector<cf::ConditionalFormat>& formats,
+                                          const DxfSavePlan& dxf_plan,
+                                          const parser::ExternalBookIndexer* indexer = nullptr,
+                                          const CfSheetContext& sheet = {});
+
+/// `write_conditional_formattings` under the identity plan of a `<dxfs>`
+/// table holding `dxf_count` records.
 std::string write_conditional_formattings(const std::vector<cf::ConditionalFormat>& formats, std::size_t dxf_count,
                                           const parser::ExternalBookIndexer* indexer = nullptr,
                                           const CfSheetContext& sheet = {});
+
+/// True when `rule` is written only in the x14 extension: a formula or `cfvo`
+/// of it names a sheet other than `own_sheet`, spellings resolved among
+/// `sheet_list`. An empty `own_sheet` places no rule there.
+bool cf_rule_is_x14_only(const cf::CFRule& rule, std::string_view own_sheet,
+                         const std::vector<std::string>* sheet_list);
 
 /// Builds the `<x14:conditionalFormatting>` entries that carry the
 /// data-bar settings the legacy `<dataBar>` element cannot express, for

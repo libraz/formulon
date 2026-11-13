@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "io/dxf_uses_xlsx.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
 #include "io/xsd_double.h"
@@ -565,7 +566,7 @@ void append_value_filters(std::string& out, const ValueFilters& values, std::str
   out.append("filters>");
 }
 
-void append_filter_column(std::string& out, const FilterColumn& col) {
+void append_filter_column(std::string& out, const FilterColumn& col, const DxfSavePlan* dxf_plan) {
   out.append("<filterColumn");
   write_attrs(out, kColumnAttrs, {&col.col_id, &col.hidden_button, &col.show_button, &col.extra_attrs});
   const bool rich_dates = col.kind == FilterKind::kValues && !col.values.date_groups.empty();
@@ -601,18 +602,20 @@ void append_filter_column(std::string& out, const FilterColumn& col) {
           {&col.dynamic.type, &col.dynamic.val, &col.dynamic.val_iso, &col.dynamic.max_val, &col.dynamic.max_val_iso});
       body.append("/>");
       break;
-    case FilterKind::kColor:
+    case FilterKind::kColor: {
       body.append("<colorFilter");
-      write_attrs(body, kColorAttrs, {&col.color.dxf_id, &col.color.cell_color});
+      const std::optional<std::uint32_t> dxf_id = saved_dxf_id(col.color.dxf_id, dxf_plan);
+      write_attrs(body, kColorAttrs, {&dxf_id, &col.color.cell_color});
       body.append("/>");
       break;
+    }
     case FilterKind::kIcon:
       body.append("<iconFilter");
       write_attrs(body, kIconAttrs, {&col.icon.icon_set, &col.icon.icon_id});
       body.append("/>");
       break;
   }
-  body.append(col.extra_xml);
+  body.append(saved_dxf_xml(col.extra_xml, dxf_plan));
   if (rich_dates || !col.ext_xml.empty()) {
     body.append("<extLst>");
     if (rich_dates) {
@@ -623,7 +626,7 @@ void append_filter_column(std::string& out, const FilterColumn& col) {
       append_value_filters(body, col.values, "xlrd2:");
       body.append("</xlrd2:filterColumn></ext>");
     }
-    body.append(col.ext_xml);
+    body.append(saved_dxf_xml(col.ext_xml, dxf_plan));
     body.append("</extLst>");
   }
   if (body.empty()) {
@@ -635,7 +638,7 @@ void append_filter_column(std::string& out, const FilterColumn& col) {
   out.append("</filterColumn>");
 }
 
-void append_sort_state(std::string& out, const SortState& sort) {
+void append_sort_state(std::string& out, const SortState& sort, const DxfSavePlan* dxf_plan) {
   out.append("<sortState");
   write_attrs(out, kSortStateAttrs,
               {&sort.column_sort, &sort.case_sensitive, &sort.sort_method, &sort.extra_attrs, &sort.ref});
@@ -646,8 +649,9 @@ void append_sort_state(std::string& out, const SortState& sort) {
   out.push_back('>');
   for (const SortCondition& cond : sort.conditions) {
     out.append("<sortCondition");
+    const std::optional<std::uint32_t> dxf_id = saved_dxf_id(cond.dxf_id, dxf_plan);
     const void* const targets[] = {&cond.descending, &cond.sort_by,  &cond.ref,    &cond.custom_list,
-                                   &cond.dxf_id,     &cond.icon_set, &cond.icon_id};
+                                   &dxf_id,          &cond.icon_set, &cond.icon_id};
     write_attrs(out, kSortConditionAttrs, kSortConditionIconSet, targets);
     if (cond.sort_by == SortBy::kIcon || cond.icon_set != cf::IconSetName::Three_Arrows) {
       append_xml_attr(out, "iconSet", cf::kIconSetNames[static_cast<std::size_t>(cond.icon_set)]);
@@ -655,7 +659,7 @@ void append_sort_state(std::string& out, const SortState& sort) {
     write_attrs(out, kSortConditionAttrs + kSortConditionIconSet + 1U, 1U, targets + kSortConditionIconSet + 1U);
     out.append("/>");
   }
-  out.append(sort.ext_lst_xml);
+  out.append(saved_dxf_xml(sort.ext_lst_xml, dxf_plan));
   out.append("</sortState>");
 }
 
@@ -735,9 +739,9 @@ AutoFilter auto_filter_from_node(const pugi::xml_node& root) {
   return opaque;
 }
 
-std::string serialize_auto_filter(const AutoFilter& filter) {
+std::string serialize_auto_filter(const AutoFilter& filter, const DxfSavePlan* dxf_plan) {
   if (filter.is_opaque()) {
-    return filter.opaque_xml;
+    return saved_dxf_xml(filter.opaque_xml, dxf_plan);
   }
   std::string out = "<autoFilter";
   write_attrs(out, kRootAttrs, {&filter.range, &filter.extra_attrs});
@@ -747,12 +751,12 @@ std::string serialize_auto_filter(const AutoFilter& filter) {
   }
   out.push_back('>');
   for (const FilterColumn& col : filter.columns) {
-    append_filter_column(out, col);
+    append_filter_column(out, col, dxf_plan);
   }
   if (filter.sort) {
-    append_sort_state(out, *filter.sort);
+    append_sort_state(out, *filter.sort, dxf_plan);
   }
-  out.append(filter.ext_lst_xml);
+  out.append(saved_dxf_xml(filter.ext_lst_xml, dxf_plan));
   out.append("</autoFilter>");
   return out;
 }

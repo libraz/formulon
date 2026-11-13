@@ -30,14 +30,17 @@ class xml_node;
 
 namespace formulon::io {
 
+class DxfSavePlan;
+
 /// Parses one `<autoFilter>` element. Returns `kAutoFilterInvalid` when the
 /// fragment is not a single well-formed `autoFilter` element the model can
 /// represent.
 Expected<AutoFilter, Error> parse_auto_filter_xml(std::string_view xml);
 
 /// Serializes `filter` as an `<autoFilter>` element. An opaque filter
-/// returns its retained bytes.
-std::string serialize_auto_filter(const AutoFilter& filter);
+/// returns its retained bytes. Every `dxfId`, raw XML included, is written
+/// as `dxf_plan` maps it; null writes them as held.
+std::string serialize_auto_filter(const AutoFilter& filter, const DxfSavePlan* dxf_plan = nullptr);
 
 /// The serialized element of `filter`, or empty when it is null.
 std::string auto_filter_xml(const AutoFilter* filter);

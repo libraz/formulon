@@ -329,6 +329,17 @@ TEST(FormulonCApiGradientFill, SurvivesSaveLoadOnCellsAndDxfs) {
   dxf.fill.gradient_left = dxf.fill.gradient_right = dxf.fill.gradient_top = dxf.fill.gradient_bottom = 0.0;
   std::uint32_t dxf_index = 0;
   ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &dxf_index), 0);
+  // A save keeps only a dxf something references.
+  fm_cell_rect_t sqref{};
+  fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
+  rule.type = 0;  // Expression
+  rule.formula1 = "TRUE";
+  rule.has_dxf_index = 1;
+  rule.dxf_index = dxf_index;
+  rule.ranges = &sqref;
+  rule.range_count = 1;
+  const char* rule_id = nullptr;
+  ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_id), 0);
 
   WorkbookGuard reloaded;
   std::string xml;

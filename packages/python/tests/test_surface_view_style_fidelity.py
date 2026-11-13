@@ -6,6 +6,7 @@ import unittest
 
 from formulon import (
     CellRect,
+    CfExpressionRuleInput,
     CfIcon,
     CfIconSetInput,
     CfIconSetRuleInput,
@@ -132,6 +133,7 @@ class GradientFillTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             fill_index = wb.ooxml.add_fill(self._fill())
             dxf_index = wb.ooxml.add_dxf(DxfInput(fill=self._fill()))
+            wb.sheet(0).add_cf_rule(CfExpressionRuleInput(ranges="A1", formula1="TRUE", dxf_index=dxf_index))
             with Workbook.load(wb.save()) as reloaded:
                 gradient = reloaded.ooxml.get_fill(fill_index).gradient
                 assert gradient is not None

@@ -31,6 +31,8 @@
 namespace formulon {
 namespace io {
 
+class DxfSavePlan;
+
 /// Emits the OOXML `xl/styles.xml` document for `table`. The output
 /// always begins with the canonical XML declaration and the
 /// `<styleSheet xmlns="...">` root.
@@ -48,7 +50,11 @@ namespace io {
 /// `CellXf::has_alignment`, including when all alignment values are defaults.
 /// The four `CellXf::has_*` alignment-attribute flags likewise preserve
 /// explicit schema defaults such as `horizontal="general"` and `wrapText="0"`.
-std::string write_styles(const StylesTable& table);
+///
+/// `dxf_plan` selects and orders the `<dxf>` records and renumbers every
+/// `dxfId` written here except those in `ext_lst_xml`, whose slicer and
+/// timeline styles index the extension dxfs. Null writes the table as held.
+std::string write_styles(const StylesTable& table, const DxfSavePlan* dxf_plan = nullptr);
 
 /// Serialises one style record as the XML fragment `write_styles` emits
 /// for it inside a `<dxf>`.

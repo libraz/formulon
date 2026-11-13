@@ -458,6 +458,8 @@ test('selector colours survive get/add identity and save/load', async () => {
   const bareDxf = wb.ooxml.addDxf({ font: { bold: true } });
   assert.equal(wb.ooxml.getDxf(bareDxf).font.sizePt, null);
   assert.equal(dxfAgain, dxf);
+  wb.sheet(0).addCfRule({ type: mod.CfRuleType.Expression, ranges: 'A1', formula1: 'TRUE', dxfIndex: dxf });
+  wb.sheet(0).addCfRule({ type: mod.CfRuleType.Expression, ranges: 'A2', formula1: 'TRUE', dxfIndex: bareDxf });
 
   const saved = wb.save();
   const loaded = mod.Workbook.load(saved);
@@ -506,6 +508,8 @@ test('dxf alignment and protection records survive get/add identity and save/loa
   assert.equal(alignmentAgain, alignment);
   const protectionAgain = wb.ooxml.addDxf(gotProtection);
   assert.equal(protectionAgain, protection);
+  wb.sheet(0).addCfRule({ type: mod.CfRuleType.Expression, ranges: 'A1', formula1: 'TRUE', dxfIndex: alignment });
+  wb.sheet(0).addCfRule({ type: mod.CfRuleType.Expression, ranges: 'A2', formula1: 'TRUE', dxfIndex: protection });
 
   const saved = wb.save();
   const loaded = mod.Workbook.load(saved);
@@ -534,6 +538,8 @@ test('a dxf carries its number format as a format code and reads null without on
   assert.equal(wb.ooxml.addDxf(read), dxf);
   const bare = wb.ooxml.addDxf({ font: { bold: true } });
   assert.equal(wb.ooxml.getDxf(bare).numberFormat, null);
+  wb.sheet(0).addCfRule({ type: mod.CfRuleType.Expression, ranges: 'A1', formula1: 'TRUE', dxfIndex: dxf });
+  wb.sheet(0).addCfRule({ type: mod.CfRuleType.Expression, ranges: 'A2', formula1: 'TRUE', dxfIndex: bare });
   const loaded = mod.Workbook.load(wb.save());
   assert.equal(loaded.ooxml.getDxf(dxf).numberFormat, '0.00%');
   loaded.dispose();

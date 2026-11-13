@@ -13,6 +13,7 @@ from formulon import (
     BorderSide,
     CellProtection,
     CellXfInput,
+    CfExpressionRuleInput,
     Color,
     ColorKind,
     DxfInput,
@@ -183,6 +184,8 @@ class StyleTests(unittest.TestCase):
             self.assertEqual(got_protection.protection, protection)
             self.assertEqual(wb.ooxml.add_dxf(got_alignment), alignment_index)
             self.assertEqual(wb.ooxml.add_dxf(got_protection), protection_index)
+            wb.sheet(0).add_cf_rule(CfExpressionRuleInput(ranges="A1", formula1="TRUE", dxf_index=alignment_index))
+            wb.sheet(0).add_cf_rule(CfExpressionRuleInput(ranges="A2", formula1="TRUE", dxf_index=protection_index))
 
             with Workbook.load(wb.save()) as reloaded:
                 reloaded_alignment = reloaded.ooxml.get_dxf(alignment_index)
@@ -240,6 +243,7 @@ class StyleTests(unittest.TestCase):
             self.assertEqual(got_dxf.fill.foreground, indexed)
             self.assertEqual(got_dxf.border.left.color, theme)
             self.assertEqual(wb.ooxml.add_dxf(got_dxf), dxf_index)
+            wb.sheet(0).add_cf_rule(CfExpressionRuleInput(ranges="A1", formula1="TRUE", dxf_index=dxf_index))
 
             with Workbook.load(wb.save()) as reloaded:
                 self.assertEqual(reloaded.ooxml.get_font(font_index).color, theme)

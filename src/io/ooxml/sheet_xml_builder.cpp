@@ -21,6 +21,7 @@
 #include "io/cf_overlay.h"
 #include "io/cf_writer.h"
 #include "io/dv_overlay.h"
+#include "io/dxf_uses_xlsx.h"
 #include "io/ooxml/cell_ref_writer.h"
 #include "io/ooxml/emission_plan.h"
 #include "io/ooxml/relationship_writer.h"
@@ -512,10 +513,10 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
                               const std::vector<std::string>& hyperlink_rids, std::string_view printer_settings_rid,
                               std::string_view drawing_rid, std::string_view legacy_drawing_rid,
                               const SharedStrings* shared_strings, const std::vector<DifferentialFormat>& dxfs,
-                              std::size_t sheet_index, std::uint32_t dynamic_array_cm_index,
-                              const xlsb::NameShapes& name_shapes, const parser::ExternalBookIndexer* indexer,
-                              const std::vector<std::string>* sheet_names, const RichErrorVmMap* rich_error_vm,
-                              std::string_view book_directory) {
+                              const DxfSavePlan& dxf_plan, std::size_t sheet_index,
+                              std::uint32_t dynamic_array_cm_index, const xlsb::NameShapes& name_shapes,
+                              const parser::ExternalBookIndexer* indexer, const std::vector<std::string>* sheet_names,
+                              const RichErrorVmMap* rich_error_vm, std::string_view book_directory) {
   const std::string sheet_view_xml = BuildSheetViewXml(sheet.view());
   const std::string sheet_format_xml =
       BuildSheetFormatPrXml(WithDerivedOutlineLevels(sheet.format_defaults(), sheet.layout()));
@@ -549,7 +550,7 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   };
   const auto flush_raw_upto = [&](std::size_t slot) {
     while (raw_cursor < raw_extensions.size() && raw_extensions[raw_cursor].slot < slot) {
-      emit_line(raw_extensions[raw_cursor].xml);
+      emit_line(saved_dxf_xml(raw_extensions[raw_cursor].xml, &dxf_plan));
       ++raw_cursor;
     }
   };
@@ -581,16 +582,18 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   // wrapper.
   // Rules naming another sheet go to the x14 extension instead.
   const CfSheetContext cf_sheet{sheet.name(), sheet_index, &dxfs, sheet_names};
-  const std::string cf_xml = write_conditional_formattings(sheet.conditional_formats(), dxfs.size(), indexer, cf_sheet);
+  const std::string cf_xml = write_conditional_formattings(sheet.conditional_formats(), dxf_plan, indexer, cf_sheet);
   // Data-bar settings with no legacy attribute live in the worksheet
   // `<extLst>`, which is emitted much further down; build them here so
   // the CF model is read once.
   const std::string dv_xml = BuildDataValidationsBlock(sheet, indexer, sheet_names);
   // With no `<dataValidations>` written, its attributes move to the x14 container.
-  const std::string ext_lst_xml = merge_x14_dv_entries(
-      merge_x14_cf_entries(sheet.ext_lst_xml(), sheet.conditional_formats(), indexer, cf_sheet), sheet.validations(),
-      sheet.name(), indexer, dv_xml.empty() ? std::string_view(sheet.validations_extra_attrs()) : std::string_view(),
-      sheet_names);
+  const std::string ext_lst_xml = saved_dxf_xml(
+      merge_x14_dv_entries(merge_x14_cf_entries(sheet.ext_lst_xml(), sheet.conditional_formats(), indexer, cf_sheet),
+                           sheet.validations(), sheet.name(), indexer,
+                           dv_xml.empty() ? std::string_view(sheet.validations_extra_attrs()) : std::string_view(),
+                           sheet_names),
+      &dxf_plan);
   const std::string merges_xml = BuildMergeCellsBlock(sheet);
   const std::string hl_xml = BuildHyperlinksBlock(sheet, hyperlink_rids, book_directory);
   // <sheetProtection> sits between <sheetData> and <mergeCells> per
@@ -607,7 +610,7 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   // <mergeCells> in ECMA-376 document order, serialized from the model.
   flush_raw_before("autoFilter");
   if (sheet.has_auto_filter()) {
-    emit_line(serialize_auto_filter(*sheet.auto_filter()));
+    emit_line(serialize_auto_filter(*sheet.auto_filter(), &dxf_plan));
   }
   // Merge cells precede CF in ECMA-376 document order.
   flush_raw_before("mergeCells");

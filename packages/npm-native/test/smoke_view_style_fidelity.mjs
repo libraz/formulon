@@ -119,6 +119,7 @@ test('gradient fills add, read, dedup and round-trip in cells and dxfs', async (
   assert.equal(wb.ooxml.getFill(0).gradient, null);
 
   const dxf = wb.ooxml.addDxf({ fill: { gradient: { ...gradient, type: 0, angleDeg: 45 } } });
+  wb.sheet(0).addCfRule({ type: mod.CfRuleType.Expression, ranges: 'A1', formula1: 'TRUE', dxfIndex: dxf });
   const loaded = roundTrip(mod, wb);
   assert.equal(loaded.ooxml.getFill(added).gradient.stops.length, 2);
   assert.equal(loaded.ooxml.getDxf(dxf).fill.gradient.angleDeg, 45);

@@ -15,6 +15,7 @@
 #include <variant>
 #include <vector>
 
+#include "io/dxf_uses_xlsx.h"
 #include "io/ooxml_defs.h"
 #include "io/pivot_attr_names.h"
 #include "io/pivot_items_binding.h"
@@ -80,11 +81,10 @@ void AppendTableExt(std::string& out, const pivot::PivotTable& table, bool hide_
   out.append("/></ext>");
 }
 
-/// Appends the tail bin with the table's alternative text put on its x14
-/// `<pivotTableDefinition>` extension, adding the extension when the bin
-/// carries an `<extLst>` without one.
-void AppendTailWithAltText(std::string& out, const pivot::PivotTable& table) {
-  const std::string& tail = table.raw_passthrough_xml();
+/// Appends `tail`, the table's tail bin, with the table's alternative text put
+/// on its x14 `<pivotTableDefinition>` extension, adding the extension when the
+/// bin carries an `<extLst>` without one.
+void AppendTailWithAltText(std::string& out, const pivot::PivotTable& table, const std::string& tail) {
   const bool has_alt = !table.alt_text().empty() || !table.alt_text_summary().empty();
   if (!has_alt) {
     out.append(tail);
@@ -370,7 +370,8 @@ LocationDefaults ComputeLocationDefaults(const pivot::PivotTable& table, std::si
 }  // namespace
 
 std::string write_pivot_table_definition(const pivot::PivotTable& table, std::optional<PivotRenderedSpan> rendered_span,
-                                         const PivotCacheWritePlan* plan, const PivotItemsXml* items) {
+                                         const PivotCacheWritePlan* plan, const PivotItemsXml* items,
+                                         const DxfSavePlan* dxf_plan) {
   std::string out;
   // Pre-reserve a rough lower bound. The XML declaration + root + location
   // run ~200B; per-field cost is ~80B with a few items each, per data-
@@ -568,7 +569,7 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
   if (!fieldless && items != nullptr) {
     out.append(items->row_items);
   } else if (!fieldless && !rebuilt_on_open) {
-    out.append(table.raw_passthrough_after_row_fields());
+    out.append(saved_dxf_xml(table.raw_passthrough_after_row_fields(), dxf_plan));
   }
 
   if (!table.col_field_order().empty() || col_values_position.has_value()) {
@@ -577,7 +578,7 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
   if (!fieldless && items != nullptr) {
     out.append(items->col_items);
   } else if (!fieldless && !rebuilt_on_open) {
-    out.append(table.raw_col_items());
+    out.append(saved_dxf_xml(table.raw_col_items(), dxf_plan));
   }
   // `<pageFields>`, which the schema places before `<dataFields>`, from the
   // model's page order; a field with no entry of its own gets the non-OLAP
@@ -629,12 +630,12 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
   // verbatim so a read -> write round trip preserves features this version
   // does not model structurally. Tables built from scratch leave every bin
   // empty.
-  out.append(table.raw_passthrough_before_style_info());
+  out.append(saved_dxf_xml(table.raw_passthrough_before_style_info(), dxf_plan));
   if (table.style_info().has_value()) {
     AppendStyleInfo(out, *table.style_info());
   }
   AppendFilters(out, table);
-  AppendTailWithAltText(out, table);
+  AppendTailWithAltText(out, table, saved_dxf_xml(table.raw_passthrough_xml(), dxf_plan));
   // Without the hidden-row extension Excel adds a caption row above the pivot
   // on refresh. A table read from a file keeps its own `<extLst>`.
   if (table.raw_passthrough_xml().find("<extLst") == std::string::npos) {

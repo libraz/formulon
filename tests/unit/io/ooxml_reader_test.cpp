@@ -929,6 +929,23 @@ constexpr std::string_view kSheetWithUnresolvableDxfIds =
     "</conditionalFormatting>"
     "</worksheet>";
 
+/// A workbook whose one dxf a CF rule names, so the save keeps it in `<dxfs>`.
+Workbook WorkbookWithOneUsedDxf() {
+  Workbook wb = Workbook::create();
+  wb.mutable_styles().dxfs.resize(1);
+  cf::ConditionalFormat block{};
+  block.sqref.push_back({{0, 0}, {0, 0}});
+  cf::CFRule rule;
+  rule.type = cf::RuleType::CellIs;
+  rule.op = cf::CellIsOperator::GreaterThan;
+  rule.priority = 1;
+  rule.dxf_id = 0U;
+  rule.formula1 = "1";
+  block.rules.push_back(std::move(rule));
+  wb.sheet(0).mutable_conditional_formats().push_back(std::move(block));
+  return wb;
+}
+
 TEST(OoxmlReader, UnresolvableCfDxfIdIsDisengagedOnLoad) {
   // A stored style index is supposed to resolve -- that is the promise
   // `NormalizeStyleIndices` keeps for the `<xf>` tables, and the reason a
@@ -936,8 +953,7 @@ TEST(OoxmlReader, UnresolvableCfDxfIdIsDisengagedOnLoad) {
   // a workbook that loaded without error handed out an index its own
   // styles table rejects, so a get / modify / put round trip through any
   // binding could not complete.
-  Workbook src = Workbook::create();
-  src.mutable_styles().dxfs.resize(1);
+  const Workbook src = WorkbookWithOneUsedDxf();
   const std::vector<std::uint8_t> base = SaveOrDie(src);
   const std::vector<std::uint8_t> mutated =
       RebuildArchiveReplacing(base, "xl/worksheets/sheet1.xml", kSheetWithUnresolvableDxfIds);
@@ -972,8 +988,7 @@ TEST(OoxmlReader, UnresolvableCfDxfIdIsDisengagedOnLoad) {
 TEST(OoxmlReader, DisengagedCfDxfIdIsNotReEmitted) {
   // Normalising on read is what stops the dangling index being written
   // back out, so the defect does not survive a round trip through us.
-  Workbook src = Workbook::create();
-  src.mutable_styles().dxfs.resize(1);
+  const Workbook src = WorkbookWithOneUsedDxf();
   const std::vector<std::uint8_t> mutated =
       RebuildArchiveReplacing(SaveOrDie(src), "xl/worksheets/sheet1.xml", kSheetWithUnresolvableDxfIds);
 

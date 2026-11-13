@@ -17,6 +17,7 @@
 #include "cf/cf_x14_id.h"
 #include "io/cf_attr_names.h"
 #include "io/color_spec_xml.h"
+#include "io/dxf_uses_xlsx.h"
 #include "io/future_functions.h"
 #include "io/ooxml/external_link_writer.h"
 #include "io/ooxml_defs.h"
@@ -194,41 +195,6 @@ bool CfvoReferencesOtherSheet(const cf::CfValueObject& v, std::string_view own_s
   return v.type == cf::CfvoType::Formula && parser::formula_references_other_sheet(v.value, own_sheet, sheet_list);
 }
 
-/// True when `r` is written only in the x14 extension: a formula or `cfvo`
-/// of it names a sheet other than `own_sheet`, spellings resolved among `sheet_list`.
-bool RuleIsX14Only(const cf::CFRule& r, std::string_view own_sheet, const std::vector<std::string>* sheet_list) {
-  if (own_sheet.empty()) {
-    return false;
-  }
-  for (const std::optional<std::string>* formula : {&r.formula1, &r.formula2}) {
-    if (formula->has_value() && parser::formula_references_other_sheet(**formula, own_sheet, sheet_list)) {
-      return true;
-    }
-  }
-  if (r.color_scale.has_value()) {
-    for (const cf::CfValueObject& v : r.color_scale->thresholds) {
-      if (CfvoReferencesOtherSheet(v, own_sheet, sheet_list)) {
-        return true;
-      }
-    }
-  }
-  if (r.data_bar.has_value() && (CfvoReferencesOtherSheet(r.data_bar->min, own_sheet, sheet_list) ||
-                                 CfvoReferencesOtherSheet(r.data_bar->max, own_sheet, sheet_list))) {
-    return true;
-  }
-  if (r.icon_set.has_value()) {
-    if (CfvoReferencesOtherSheet(r.icon_set->floor, own_sheet, sheet_list)) {
-      return true;
-    }
-    for (const cf::CfValueObject& v : r.icon_set->thresholds) {
-      if (CfvoReferencesOtherSheet(v, own_sheet, sheet_list)) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 /// The legacy `operator` hint Excel writes on the text rule types, or null
 /// for any other type.
 const char* TextRuleOperator(cf::RuleType type) {
@@ -291,11 +257,10 @@ bool HasCapturedX14Link(const cf::CFRule& r) {
 /// `<cfRule>` itself: `CT_CfRule` has no such attribute, and Excel
 /// discards both the attribute and the worksheet-level payload it was
 /// meant to reach when it re-saves a file spelled that way.
-void AppendRuleExtLst(std::string& out, const cf::CFRule& r) {
+void AppendRuleExtLst(std::string& out, const cf::CFRule& r, const DxfSavePlan& dxf_plan) {
+  const std::string captured = r.ext_lst_raw.has_value() ? saved_dxf_xml(*r.ext_lst_raw, &dxf_plan) : std::string();
   if (!RuleNeedsX14Payload(r) || HasCapturedX14Link(r)) {
-    if (r.ext_lst_raw.has_value()) {
-      out.append(r.ext_lst_raw.value());
-    }
+    out.append(captured);
     return;
   }
 
@@ -309,7 +274,7 @@ void AppendRuleExtLst(std::string& out, const cf::CFRule& r) {
 
   // `CT_CfRule` allows a single `extLst`, so a captured one is extended
   // with another `<ext>` sibling rather than joined by a second element.
-  const std::size_t close = r.ext_lst_raw.has_value() ? r.ext_lst_raw->rfind("</extLst>") : std::string::npos;
+  const std::size_t close = captured.rfind("</extLst>");
   if (close == std::string::npos) {
     // No capture, or a self-closing `<extLst/>` capture with no content
     // worth preserving.
@@ -318,9 +283,9 @@ void AppendRuleExtLst(std::string& out, const cf::CFRule& r) {
     out.append("</extLst>");
     return;
   }
-  out.append(r.ext_lst_raw.value(), 0, close);
+  out.append(captured, 0, close);
   out.append(link);
-  out.append(r.ext_lst_raw.value(), close, std::string::npos);
+  out.append(captured, close, std::string::npos);
 }
 
 /// Emits one x14 colour element. The x14 schema names each colour slot
@@ -568,7 +533,7 @@ void AppendX14OnlyRuleEntry(std::string& out, const cf::CFRule& r, std::string_v
   out.append("</xm:sqref></x14:conditionalFormatting>");
 }
 
-void AppendCfRule(std::string& out, const cf::CFRule& r, std::size_t dxf_count,
+void AppendCfRule(std::string& out, const cf::CFRule& r, const DxfSavePlan& dxf_plan,
                   const parser::ExternalBookIndexer* indexer) {
   out.append("<cfRule type=\"");
   out.append(enum_name(kCfRuleTypeNames, r.type, "expression"));
@@ -578,11 +543,11 @@ void AppendCfRule(std::string& out, const cf::CFRule& r, std::size_t dxf_count,
   if (r.stop_if_true) {
     out.append(" stopIfTrue=\"1\"");
   }
-  // A `dxfId` the package's `<dxfs>` table cannot resolve is dropped
+  // A `dxfId` the saved `<dxfs>` table cannot resolve is dropped
   // rather than emitted dangling — see `cf_writer.h` for why Excel's
   // reaction makes that the cheaper loss.
-  if (r.dxf_id.has_value() && r.dxf_id.value() < dxf_count) {
-    append_xml_attr_uint(out, "dxfId", r.dxf_id.value());
+  if (const std::optional<std::uint32_t> saved = saved_dxf_id(r.dxf_id, &dxf_plan)) {
+    append_xml_attr_uint(out, "dxfId", *saved);
   }
   if (r.type == cf::RuleType::CellIs && r.op.has_value()) {
     append_xml_attr(out, "operator", enum_name(kCfCellIsOperatorNames, r.op.value(), "equal"));
@@ -649,15 +614,55 @@ void AppendCfRule(std::string& out, const cf::CFRule& r, std::size_t dxf_count,
   if (r.icon_set.has_value()) {
     AppendIconSet(out, r.icon_set.value(), indexer);
   }
-  AppendRuleExtLst(out, r);
+  AppendRuleExtLst(out, r, dxf_plan);
 
   out.append("</cfRule>");
 }
 
 }  // namespace
 
+bool cf_rule_is_x14_only(const cf::CFRule& rule, std::string_view own_sheet,
+                         const std::vector<std::string>* sheet_list) {
+  if (own_sheet.empty()) {
+    return false;
+  }
+  for (const std::optional<std::string>* formula : {&rule.formula1, &rule.formula2}) {
+    if (formula->has_value() && parser::formula_references_other_sheet(**formula, own_sheet, sheet_list)) {
+      return true;
+    }
+  }
+  if (rule.color_scale.has_value()) {
+    for (const cf::CfValueObject& v : rule.color_scale->thresholds) {
+      if (CfvoReferencesOtherSheet(v, own_sheet, sheet_list)) {
+        return true;
+      }
+    }
+  }
+  if (rule.data_bar.has_value() && (CfvoReferencesOtherSheet(rule.data_bar->min, own_sheet, sheet_list) ||
+                                    CfvoReferencesOtherSheet(rule.data_bar->max, own_sheet, sheet_list))) {
+    return true;
+  }
+  if (rule.icon_set.has_value()) {
+    if (CfvoReferencesOtherSheet(rule.icon_set->floor, own_sheet, sheet_list)) {
+      return true;
+    }
+    for (const cf::CfValueObject& v : rule.icon_set->thresholds) {
+      if (CfvoReferencesOtherSheet(v, own_sheet, sheet_list)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 std::string write_conditional_formattings(const std::vector<cf::ConditionalFormat>& formats, std::size_t dxf_count,
                                           const parser::ExternalBookIndexer* indexer, const CfSheetContext& sheet) {
+  return write_conditional_formattings(formats, identity_dxf_plan(dxf_count), indexer, sheet);
+}
+
+std::string write_conditional_formattings(const std::vector<cf::ConditionalFormat>& formats,
+                                          const DxfSavePlan& dxf_plan, const parser::ExternalBookIndexer* indexer,
+                                          const CfSheetContext& sheet) {
   if (formats.empty()) {
     return std::string{};
   }
@@ -667,8 +672,8 @@ std::string write_conditional_formattings(const std::vector<cf::ConditionalForma
   for (const auto& cf : formats) {
     rules.clear();
     for (const auto& rule : cf.rules) {
-      if (!RuleIsX14Only(rule, sheet.sheet_name, sheet.sheet_names)) {
-        AppendCfRule(rules, rule, dxf_count, indexer);
+      if (!cf_rule_is_x14_only(rule, sheet.sheet_name, sheet.sheet_names)) {
+        AppendCfRule(rules, rule, dxf_plan, indexer);
       }
     }
     if (rules.empty() && !cf.rules.empty()) {
@@ -685,7 +690,7 @@ std::string write_conditional_formattings(const std::vector<cf::ConditionalForma
     // `CT_ConditionalFormatting`'s schema-trailing `extLst?`, round-tripped
     // byte-for-byte (see `ConditionalFormat::ext_lst_raw`).
     if (cf.ext_lst_raw.has_value()) {
-      out.append(cf.ext_lst_raw.value());
+      out.append(saved_dxf_xml(cf.ext_lst_raw.value(), &dxf_plan));
     }
     out.append("</conditionalFormatting>");
   }
@@ -736,7 +741,7 @@ std::string build_x14_cf_overlay_entries(const std::vector<cf::ConditionalFormat
   std::string out;
   for (const auto& block : formats) {
     for (const auto& rule : block.rules) {
-      if (RuleIsX14Only(rule, sheet.sheet_name, sheet.sheet_names)) {
+      if (cf_rule_is_x14_only(rule, sheet.sheet_name, sheet.sheet_names)) {
         std::string id = rule.id;
         if (id.empty()) {
           const std::uint32_t ordinal = rule.priority > 0 ? static_cast<std::uint32_t>(rule.priority) : 0U;

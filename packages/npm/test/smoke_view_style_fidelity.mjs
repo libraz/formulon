@@ -118,6 +118,7 @@ test('gradient fills add, read, dedup and round-trip in cells and dxfs', async (
   assert.equal(wb.ooxml.getFill(0).gradient, null);
 
   const dxf = wb.ooxml.addDxf({ fill: { gradient: { ...gradient, type: 0, angleDeg: 45 } } });
+  wb.sheet(0).addCfRule({ type: mod.CfRuleType.Expression, ranges: 'A1', formula1: 'TRUE', dxfIndex: dxf });
   const loaded = roundTrip(mod, wb);
   assert.equal(loaded.ooxml.getFill(added).gradient.stops.length, 2);
   assert.equal(loaded.ooxml.getDxf(dxf).fill.gradient.angleDeg, 45);
@@ -136,6 +137,8 @@ test('a dxf carries its number format as a format code and reads null without on
   assert.equal(wb.ooxml.addDxf(read), dxf);
   const bare = wb.ooxml.addDxf({ font: { bold: true } });
   assert.equal(wb.ooxml.getDxf(bare).numberFormat, null);
+  wb.sheet(0).addCfRule({ type: mod.CfRuleType.Expression, ranges: 'A1', formula1: 'TRUE', dxfIndex: dxf });
+  wb.sheet(0).addCfRule({ type: mod.CfRuleType.Expression, ranges: 'A2', formula1: 'TRUE', dxfIndex: bare });
   const loaded = mod.Workbook.load(wb.save());
   assert.equal(loaded.ooxml.getDxf(dxf).numberFormat, '0.00%');
   loaded.dispose();

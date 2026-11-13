@@ -376,7 +376,11 @@ TEST(StyleFidelity, GradientFillsAreModelled) {
 
 TEST(StyleFidelity, GradientFillsSurviveResave) {
   const std::string xml =
-      ReadPart(Resave(BuildPackage(Worksheet("<sheetData/>"), {}, kStylesWithGradients)), "xl/styles.xml");
+      ReadPart(Resave(BuildPackage(Worksheet("<sheetData/><conditionalFormatting sqref=\"A1\">"
+                                             "<cfRule type=\"expression\" dxfId=\"0\" priority=\"1\">"
+                                             "<formula>TRUE</formula></cfRule></conditionalFormatting>"),
+                                   {}, kStylesWithGradients)),
+               "xl/styles.xml");
   EXPECT_TRUE(Has(xml,
                   "<gradientFill degree=\"90\"><stop position=\"0\"><color rgb=\"FFFF0000\"/></stop>"
                   "<stop position=\"1\"><color theme=\"4\" tint=\"0.5\"/></stop></gradientFill>"))
