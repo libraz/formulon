@@ -177,6 +177,12 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/writer_external_link_test.cpp
   unit/io/xlsb/ptg_class_fixture_test.cpp
   unit/io/xlsb/ptg_list_flags_test.cpp
+  unit/io/xlsb/xlsb_twin_compare.cpp
+  unit/io/xlsb/xlsb_twin_compare_test.cpp
+  unit/io/xlsb/xlsb_flag_corpus_test.cpp
+  unit/io/xlsb/xlsb_package_consistency_test.cpp
+  unit/io/xlsb/xlsb_own_output_test.cpp
+  unit/io/xlsb/xlsb_parity_win_corpus_test.cpp
   unit/io/xlsb/ptg_codec_test.cpp
   unit/io/xlsb/ptg_codec_function_classes_test.cpp
   unit/io/xlsb/ptg_codec_scalar_array_test.cpp

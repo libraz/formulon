@@ -1,0 +1,12 @@
+# Excel-made workbooks excel_open_gate.py converts with formulon_cli and opens in Excel, one per line,
+# relative to tests/fixtures. Each one covers a feature an .xlsx or .xlsb save must carry.
+excel/table_totals/base.xlsx       # tables with totals rows and structured references, a PivotTable, page margins
+excel/auto_filter_kinds.xlsx       # sheet autofilters
+copy_sheet/main.xlsx               # conditional formats
+copy_sheet/pivot_refresh_M2.xlsx   # PivotTable with a refreshed cache
+copy_sheet/t3.xlsx                 # tables
+excel/xlsb_parity/notes/base.xlsx       # notes with authors, a line break and Japanese text
+excel/xlsb_parity/print/base.xlsx       # margins, page setup, print options, header/footer (odd/even/first), row and column breaks, fit to page
+# Controls: opened as they are; the gate fails if they do not produce the stated outcome.
+control:refused excel/open_gate_controls/refused_ptglist.xlsb
+control:refused excel/open_gate_controls/damaged_style_index.xlsx

@@ -1,0 +1,1 @@
+Formulon xlsb outputs of the excel_open_gate bases, written by formulon_cli built at the commit in WRITTEN_AT.txt. XlsbOwnOutput checks that output an earlier Formulon build wrote keeps loading with no skipped features.
