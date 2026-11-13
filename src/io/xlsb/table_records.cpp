@@ -44,11 +44,9 @@ using detail::ListPartsBlock;
 using detail::ReleaseSheetTables;
 
 enum : std::uint16_t {
-  kBrtBeginList = 343,
   kBrtEndList = 344,
   kBrtBeginListCols = 345,
   kBrtEndListCols = 346,
-  kBrtBeginListCol = 347,
   kBrtEndListCol = 348,
   kBrtListCCFmla = 351,
   kBrtListTrFmla = 352,

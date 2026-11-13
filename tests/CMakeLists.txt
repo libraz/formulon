@@ -90,6 +90,8 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/comments_roundtrip_test.cpp
   unit/io/data_validation_roundtrip_test.cpp
   unit/io/defined_names_test.cpp
+  unit/io/dxf_compaction_roundtrip_test.cpp
+  unit/io/dxf_save_plan_test.cpp
   unit/io/future_functions_test.cpp
   unit/io/hyperlink_roundtrip_test.cpp
   unit/io/book_location_save_test.cpp
@@ -159,6 +161,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/data_table_xml_test.cpp
   unit/workbook_data_table_test.cpp
   unit/workbook_array_formula_test.cpp
+  unit/io/xlsb/dxf_compaction_xlsb_test.cpp
   unit/io/xlsb/feature_records_test.cpp
   unit/io/xlsb/func_id_fixture_test.cpp
   unit/io/xlsb/func_id_test.cpp

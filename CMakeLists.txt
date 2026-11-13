@@ -181,6 +181,9 @@ set(FORMULON_CORE_SOURCES
   src/io/comments_reader.cpp
   src/io/comments_writer.cpp
   src/io/defined_names.cpp
+  src/io/dxf_save_plan.cpp
+  src/io/dxf_uses_xlsx.cpp
+  src/io/dxf_xml_ids.cpp
   src/io/data_table_xml.cpp
   src/io/dynamic_array_formula.cpp
   src/io/ext_lst_refs.cpp
@@ -242,6 +245,8 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/cf_x14_icon_set.cpp
   src/io/xlsb/dv_records.cpp
   src/io/xlsb/drawing_record.cpp
+  src/io/xlsb/dxf_record_slots.cpp
+  src/io/xlsb/dxf_uses_xlsb.cpp
   src/io/xlsb/external_link_reader.cpp
   src/io/xlsb/external_link_writer.cpp
   src/io/xlsb/feature_formula.cpp

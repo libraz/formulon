@@ -100,6 +100,17 @@ inline constexpr std::uint16_t kBrtBeginTableParts = 660;
 inline constexpr std::uint16_t kBrtTablePart = 661;
 inline constexpr std::uint16_t kBrtEndTableParts = 662;
 
+// Table part records.
+inline constexpr std::uint16_t kBrtBeginList = 343;
+inline constexpr std::uint16_t kBrtBeginListCol = 347;
+
+// Custom table styles (styles part). BrtTableStyleElement: u32 tseType, u32 size, u32 dxf index.
+inline constexpr std::uint16_t kBrtBeginTableStyles = 508;
+inline constexpr std::uint16_t kBrtEndTableStyles = 509;
+inline constexpr std::uint16_t kBrtBeginTableStyle = 510;
+inline constexpr std::uint16_t kBrtEndTableStyle = 511;
+inline constexpr std::uint16_t kBrtTableStyleElement = 512;
+
 // Page setup block.
 inline constexpr std::uint16_t kBrtMargins = 476;
 inline constexpr std::uint16_t kBrtPrintOptions = 477;
