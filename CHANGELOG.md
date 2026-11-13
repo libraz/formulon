@@ -301,6 +301,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Under a Mac profile, a Normal font outside the measured set fell back to Calibri 11's
+  metrics, so column widths and row heights for fonts such as Meiryo 11 came out one digit
+  width off. Mac Excel 16.115 metrics are now in place for 32 more fonts and sizes: Aptos,
+  Arial, Calibri 10 and 12, Cambria, Courier New, Helvetica, Helvetica Neue, Meiryo,
+  Meiryo UI, ＭＳ ゴシック, ＭＳ 明朝, ＭＳ Ｐゴシック 12, 游明朝, 游ゴシック 10 and 14, Aptos
+  Narrow 10 and 14, 等线 11, 맑은 고딕 11, Tahoma 10 and 11, Times New Roman, Verdana and
+  新細明體 11. A font still outside the set reports `calibrated: false` in the width model.
+
 - An AutoFilter custom criterion holding `*` or `?` under `<`, `<=`, `>` or `>=`
   is tested by match, as in Excel. Before, it was compared as text. `<=` keeps the
   text values the pattern matches, `>` the text values it does not, `>=` every text

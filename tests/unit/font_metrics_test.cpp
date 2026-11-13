@@ -44,10 +44,21 @@ struct MacRow {
 };
 
 constexpr MacRow kMacRows[] = {
-    {"Calibri", 11, 6, 5, 15},      {"Calibri", 14, 7, 5, 19},      {"Calibri", 20, 10, 7, 26},
-    {"Aptos Narrow", 11, 6, 5, 15}, {"Aptos Narrow", 12, 6, 5, 16}, {"游ゴシック", 11, 6, 5, 18},
-    {"游ゴシック", 12, 7, 5, 20},   {"等线", 12, 6, 5, 16},         {"맑은 고딕", 12, 7, 5, 18},
-    {"Tahoma", 12, 7, 5, 15},       {"新細明體", 12, 6, 5, 15},     {"ＭＳ Ｐゴシック", 11, 6, 5, 14},
+    {"Calibri", 11, 6, 5, 15},         {"Calibri", 14, 7, 5, 19},      {"Calibri", 20, 10, 7, 26},
+    {"Aptos Narrow", 11, 6, 5, 15},    {"Aptos Narrow", 12, 6, 5, 16}, {"游ゴシック", 11, 6, 5, 18},
+    {"游ゴシック", 12, 7, 5, 20},      {"等线", 12, 6, 5, 16},         {"맑은 고딕", 12, 7, 5, 18},
+    {"Tahoma", 12, 7, 5, 15},          {"新細明體", 12, 6, 5, 15},     {"ＭＳ Ｐゴシック", 11, 6, 5, 14},
+    {"Calibri", 12, 6, 5, 16},         {"Meiryo", 11, 7, 5, 19},       {"Aptos", 11, 6, 5, 15},
+    {"Aptos", 12, 6, 5, 16},           {"Arial", 10, 6, 5, 13},        {"Arial", 11, 6, 5, 14},
+    {"Arial", 12, 7, 5, 16},           {"Calibri", 10, 5, 5, 14},      {"Cambria", 11, 6, 5, 14},
+    {"Times New Roman", 12, 6, 5, 16}, {"Verdana", 10, 6, 5, 13},      {"Helvetica", 12, 7, 5, 16},
+    {"Helvetica Neue", 12, 7, 5, 16},  {"Meiryo", 10, 6, 5, 17},       {"Meiryo", 12, 7, 5, 20},
+    {"Meiryo UI", 9, 6, 5, 14},        {"Meiryo UI", 11, 7, 5, 16},    {"ＭＳ ゴシック", 11, 6, 5, 14},
+    {"ＭＳ 明朝", 11, 6, 5, 14},       {"游明朝", 11, 6, 5, 18},       {"メイリオ", 11, 7, 5, 19},
+    {"游ゴシック", 10, 6, 5, 17},      {"游ゴシック", 14, 8, 5, 24},   {"Aptos Narrow", 10, 5, 5, 14},
+    {"Aptos Narrow", 14, 7, 5, 19},    {"等线", 11, 6, 5, 15},         {"맑은 고딕", 11, 6, 5, 17},
+    {"Tahoma", 10, 5, 5, 13},          {"Tahoma", 11, 6, 5, 14},       {"Courier New", 10, 6, 5, 14},
+    {"ＭＳ Ｐゴシック", 12, 6, 5, 15}, {"新細明體", 11, 5, 5, 14},
 };
 
 TEST(FontMetrics, MacTableRowsAreCalibratedWholePoints) {
@@ -87,13 +98,13 @@ TEST(FontMetrics, WindowsTableIsUnchangedAndNeverRowCalibrated) {
 }
 
 TEST(FontMetrics, UnknownFontOrSizeFallsBackToTheHostCalibri11) {
-  const NormalFontMetrics mac = Metrics("Arial", 10, mac_365_ja_jp_profile());
+  const NormalFontMetrics mac = Metrics("Garamond", 10, mac_365_ja_jp_profile());
   EXPECT_DOUBLE_EQ(mac.mdw_pt, 6.0);
   EXPECT_DOUBLE_EQ(mac.padding_pt, 5.0);
   EXPECT_DOUBLE_EQ(mac.row_height_pt, 15.0);
   EXPECT_FALSE(mac.width_calibrated);
   EXPECT_FALSE(mac.row_height_calibrated);
-  EXPECT_EQ(mac.family, "Arial");
+  EXPECT_EQ(mac.family, "Garamond");
 
   const NormalFontMetrics mac_size = Metrics("Calibri", 13, mac_365_ja_jp_profile());
   EXPECT_FALSE(mac_size.width_calibrated);
@@ -321,4 +332,25 @@ TEST(FontMetrics, ModelReportsTheResolvedThemeFace) {
 }
 
 }  // namespace
+// A Normal font set without the theme link on a ja-JP Mac book keeps its own metrics (Mac Excel 16.115:
+// Meiryo 11 draws column B at stored width 10 as 70 pt, Calibri 12 and Aptos Narrow 12 as 60 pt).
+TEST(FontMetrics, MacExplicitNormalFontOnAJapaneseBookUsesThatFont) {
+  struct Case {
+    const char* family;
+    double size;
+    double pt_at[3];
+  };
+  const Case cases[] = {
+      {"Aptos Narrow", 12, {55, 64, 124}}, {"Calibri", 12, {55, 64, 124}}, {"Meiryo", 11, {64, 75, 145}}};
+  const double stored[3] = {9.140625, 10.7109375, 20.7109375};
+  for (const Case& c : cases) {
+    const ColumnWidthModel model = resolve_column_width_model(StylesWith(c.family, c.size), default_theme(),
+                                                              mac_365_ja_jp_profile(), GeometryMode::kDisplay);
+    EXPECT_TRUE(model.calibrated) << c.family;
+    for (int i = 0; i < 3; ++i) {
+      EXPECT_DOUBLE_EQ(column_chars_to_points(stored[i], model), c.pt_at[i]) << c.family << " " << stored[i];
+    }
+  }
+}
+
 }  // namespace formulon
