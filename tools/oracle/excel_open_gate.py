@@ -13,6 +13,10 @@ autofilter mode, tables, shapes, charts). The rest (notes, PivotTables, threaded
 protected ranges, slicers, page breaks, header/footer) is read by letting Excel re-save the opened book
 as .xlsx and counting the parts or elements Excel wrote.
 
+A base listed as ``values:<path>`` also has its cell values compared after Excel recalculates the whole
+book, so a formula Excel reads differently from the source shows as a different number. Only bases
+without volatile functions are listed that way.
+
 Lines of the form ``control:refused <path>`` or ``control:repaired <path>`` name files that are opened
 as they are and must produce that outcome, so the gate proves it can fail.
 
@@ -57,7 +61,9 @@ RESAVE_PATTERNS = {
 }
 
 
-def manifest() -> tuple[list[Path], list[tuple[str, Path]]]:
+def manifest() -> tuple[list[tuple[Path, bool]], list[tuple[str, Path]]]:
+    """(bases, controls): each base with whether its recalculated values are compared."""
+
     bases, controls = [], []
     for line in MANIFEST.read_text(encoding="utf-8").splitlines():
         line = line.split("#", 1)[0].strip()
@@ -66,8 +72,10 @@ def manifest() -> tuple[list[Path], list[tuple[str, Path]]]:
         if line.startswith("control:"):
             outcome, path = line[len("control:") :].split(None, 1)
             controls.append((outcome, ROOT / "tests" / "fixtures" / path.strip()))
+        elif line.startswith("values:"):
+            bases.append((ROOT / "tests" / "fixtures" / line[len("values:") :].strip(), True))
         else:
-            bases.append(ROOT / "tests" / "fixtures" / line)
+            bases.append((ROOT / "tests" / "fixtures" / line, False))
     return bases, controls
 
 
@@ -144,7 +152,14 @@ def resave_readings(book, stem: str) -> dict:
     return counts
 
 
-def open_and_read(app, path: Path, sheets: int | None, stem: str):
+def value_readings(app, book) -> dict:
+    """Every sheet's used-range values after Excel recalculates the whole book."""
+
+    app.api.calculate_full()
+    return {sheet.name: safe(lambda s=sheet: s.used_range.value) for sheet in book.sheets}
+
+
+def open_and_read(app, path: Path, sheets: int | None, stem: str, values: bool = False):
     """(error, readings): error is None when Excel opens `path` cleanly."""
 
     before = {b.name for b in app.books}
@@ -164,6 +179,9 @@ def open_and_read(app, path: Path, sheets: int | None, stem: str):
                 error = "repaired: %d sheets, source has %d" % (len(book.sheets), sheets)
             else:
                 readings = {"om": om_readings(book)}
+                if values:
+                    with alerts_off(app):
+                        readings["values"] = value_readings(app, book)
                 with alerts_off(app):
                     readings["resave"] = resave_readings(book, stem)
         for b in [b for b in app.books if b.name not in before]:
@@ -183,6 +201,9 @@ def diff(source: dict, output: dict) -> list[str]:
     for key, value in source.get("resave", {}).items():
         if output.get("resave", {}).get(key) != value:
             lost.append("resave.%s: source %r, output %r" % (key, value, output.get("resave", {}).get(key)))
+    for sheet, value in source.get("values", {}).items():
+        if output.get("values", {}).get(sheet) != value:
+            lost.append("values.%s: source %r, output %r" % (sheet, value, output.get("values", {}).get(sheet)))
     return lost
 
 
@@ -204,11 +225,11 @@ def main() -> int:
         ok = got == outcome
         print("%s control %s: expected %s, got %s" % ("ok  " if ok else "FAIL", control.name, outcome, error or got))
         failures += 0 if ok else 1
-    for base in bases:
+    for base, values in bases:
         sheets = source_sheet_count(base)
         staged = CONTAINER / ("source_" + base.name)
         shutil.copy(base, staged)
-        error, source = open_and_read(app, staged, sheets, "source_" + base.stem)
+        error, source = open_and_read(app, staged, sheets, "source_" + base.stem, values)
         if error:
             print("FAIL %s: the source itself does not open cleanly: %s" % (base.relative_to(ROOT), error))
             failures += 1
@@ -224,7 +245,7 @@ def main() -> int:
                 print("FAIL %s -> %s: formulon_cli: %s" % (base.relative_to(ROOT), ext, r.stderr.strip()))
                 failures += 1
                 continue
-            error, output = open_and_read(app, out, sheets, "%s_%s" % (base.stem, ext))
+            error, output = open_and_read(app, out, sheets, "%s_%s" % (base.stem, ext), values)
             problems = [error] if error else ["feature lost: " + d for d in diff(source, output)]
             status = "FAIL" if problems else "ok  "
             print("%s %s -> %s%s" % (status, base.relative_to(ROOT), ext, "".join("\n       " + p for p in problems)))

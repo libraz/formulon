@@ -7,6 +7,7 @@ copy_sheet/pivot_refresh_M2.xlsx   # PivotTable with a refreshed cache
 copy_sheet/t3.xlsx                 # tables
 excel/xlsb_parity/notes/base.xlsx       # notes with authors, a line break and Japanese text
 excel/xlsb_parity/print/base.xlsx       # margins, page setup, print options, header/footer (odd/even/first), row and column breaks, fit to page
+values:excel/xlsb_parity/arraymode/cse_values.xlsx  # array formulas with areas under an operator inside a function, compared as recalculated values
 # Controls: opened as they are; the gate fails if they do not produce the stated outcome.
 control:refused excel/open_gate_controls/refused_ptglist.xlsb
 control:refused excel/open_gate_controls/damaged_style_index.xlsx

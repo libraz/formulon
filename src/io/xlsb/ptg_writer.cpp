@@ -355,9 +355,12 @@ class Encoder {
     const bool promote = root && promote_root_;
     const Slot slot = std::exchange(next_slot_, Slot{});
     // A conditional-format operand under a parameter other than a value one
-    // is evaluated as an array, and so is everything inside it.
-    const ArrayScope scope(in_array_operand_, evaluation_ == PtgEvaluation::kConditionalFormat && slot.operand &&
-                                                  slot.letter != 0 && slot.letter != 'V');
+    // is evaluated as an array, and so is everything inside it; in an array
+    // (CSE) formula, any argument under such a parameter is.
+    const bool non_value_parameter = slot.letter != 0 && slot.letter != 'V';
+    const ArrayScope scope(in_array_operand_,
+                           non_value_parameter && ((evaluation_ == PtgEvaluation::kConditionalFormat && slot.operand) ||
+                                                   evaluation_ == PtgEvaluation::kLegacyArray));
     // A reference's class follows its slot in a cell formula and a defined
     // name's body; other formulas without a value root keep reference class.
     auto cls = [&](bool area) -> std::uint8_t {
@@ -462,7 +465,7 @@ class Encoder {
           next_slot_ = slot;
           return emit(node.as_implicit_intersection_operand());
         }
-        return emit_implicit_intersection(node, name_body_ && reference_slot);
+        return emit_implicit_intersection(node, reference_slot);
       case parser::NodeKind::Lambda:
         return emit_lambda(node);
       case parser::NodeKind::LetBinding:
@@ -1431,12 +1434,20 @@ class Encoder {
   /// In a defined name's body, which is evaluated as an array, the operand
   /// is a reference and the token one where its slot takes one (at
   /// the root: `@Sheet1!$A$1:$A$2` -> 0x3B, 0x22).
-  Expected<void, Error> emit_implicit_intersection(const parser::AstNode& node, bool reference_result) {
+  /// `SINGLE(operand)`. In a defined name's body and an array (CSE) formula the operand is a reference and the
+  /// result takes the class of its slot: reference where `reference_slot` says the slot takes one, array inside an
+  /// array scope, else value.
+  Expected<void, Error> emit_implicit_intersection(const parser::AstNode& node, bool reference_slot) {
+    const bool array_mode = name_body_ || evaluation_ == PtgEvaluation::kLegacyArray;
+    const std::uint8_t result_class = !array_mode         ? kPtgValueClass
+                                      : reference_slot    ? kPtgReferenceClass
+                                      : in_array_operand_ ? kPtgArrayClass
+                                                          : kPtgValueClass;
     RETURN_IF_ERROR(emit_hidden_callee("SINGLE"));
-    next_slot_ = Slot{name_body_ ? 'R' : xlsb_parameter_class("SINGLE", 0), false};
+    next_slot_ = Slot{array_mode ? 'R' : xlsb_parameter_class("SINGLE", 0), false};
     RETURN_IF_ERROR(emit(node.as_implicit_intersection_operand()));
-    emit_u8(out_, reference_result ? kPtgFuncVar : ValueClassPtg(kPtgFuncVar));  // PtgFuncVar result
-    emit_u8(out_, 2);                                                            // cparams: name-ref + the operand
+    emit_u8(out_, ClassedPtg(kPtgFuncVar, result_class));  // PtgFuncVar result
+    emit_u8(out_, 2);                                      // cparams: name-ref + the operand
     emit_u16(out_, kFutureFunctionId);
     return Expected<void, Error>::Ok();
   }

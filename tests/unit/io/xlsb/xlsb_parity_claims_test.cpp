@@ -1,5 +1,5 @@
 // Writer bytes that earlier rested on an unchecked belief about what Excel writes, each now held against an xlsb
-// Excel 16.115 saved from the same source (tests/fixtures/excel/xlsb_parity/claims).
+// Excel 16.115 saved from the same source (tests/fixtures/excel/xlsb_parity/claims and sibling directories).
 
 #include <cstddef>
 #include <cstdint>
@@ -241,6 +241,93 @@ TEST(XlsbParityClaims, ExternSheetMatchesExcel) {
     const std::string path = std::string("../externsheet/") + stem;
     EXPECT_EQ(table(Part(Converted(path), "xl/workbook.bin")),
               table(Part(ReadFile(Claim(path + ".xlsb")), "xl/workbook.bin")));
+  }
+}
+
+/// The payloads of `type` records in `part`.
+std::vector<std::vector<std::uint8_t>> RecordsOf(const std::vector<std::uint8_t>& part, std::uint16_t type) {
+  std::vector<std::vector<std::uint8_t>> out;
+  for (const FramedRecord& rec : split_records(part)) {
+    if (rec.type == type) {
+      out.emplace_back(rec.payload.data, rec.payload.data + rec.payload.size);
+    }
+  }
+  return out;
+}
+
+std::uint32_t U32At(const std::vector<std::uint8_t>& b, std::size_t at) {
+  return static_cast<std::uint32_t>(b[at]) | (static_cast<std::uint32_t>(b[at + 1U]) << 8U) |
+         (static_cast<std::uint32_t>(b[at + 2U]) << 16U) | (static_cast<std::uint32_t>(b[at + 3U]) << 24U);
+}
+
+// Formulas Excel evaluates as arrays (tests/fixtures/excel/xlsb_parity/arraymode): array (CSE) formulas, a defined
+// name's body carrying `@`, and conditional-format formulas. Inside an array formula an argument under a parameter
+// other than a value one is evaluated as an array; the formula's root is not.
+constexpr std::uint16_t kBrtArrFmla = 426;
+// BrtArrFmla: rfx (16 bytes) and flags (1) precede the formula.
+constexpr std::size_t kArrFmlaFormulaAt = 17;
+constexpr std::uint8_t kPtgName = 0x23;
+
+constexpr std::uint16_t kNameRecord = 39;
+constexpr std::uint16_t kCfRuleRecord = 463;
+
+TEST(XlsbParityClaims, ArrayFormulasMatchExcel) {
+  for (const char* stem :
+       {"cse_abs_area", "cse_abs_at",    "cse_area_op", "cse_at_cell",    "cse_at_op_ctrl", "cse_at_root",
+        "cse_sum_at",   "g_abs_op_root", "g_abs_root",  "g_area_op_root", "g_area_root",    "g_cell_op_sum",
+        "g_if_root",    "g_index_op",    "g_len_root",  "g_max_abs",      "g_rows_op",      "g_sum_abs_cell",
+        "g_sum_area",   "g_sum_if",      "g_sumproduct"}) {
+    SCOPED_TRACE(stem);
+    const auto ours =
+        RecordsOf(Part(Converted(std::string("../arraymode/") + stem), "xl/worksheets/sheet1.bin"), kBrtArrFmla);
+    const auto excel = RecordsOf(
+        Part(ReadFile(Claim(std::string("../arraymode/") + stem + ".xlsb")), "xl/worksheets/sheet1.bin"), kBrtArrFmla);
+    ASSERT_EQ(excel.size(), 1U);
+    ASSERT_EQ(ours.size(), 1U);
+    EXPECT_EQ(std::vector<std::uint8_t>(ours[0].begin() + kArrFmlaFormulaAt, ours[0].end()),
+              std::vector<std::uint8_t>(excel[0].begin() + kArrFmlaFormulaAt, excel[0].end()));
+  }
+}
+
+// Bodies of names carrying `@` as an operand, a reference argument and a value argument, read from Excel's xlsb and
+// written back. The leading PtgName's index into the name table is masked: the two tables order the hidden SINGLE
+// name differently.
+TEST(XlsbParityClaims, NameBodiesWithAtMatchExcel) {
+  const auto bodies = [](const std::vector<std::uint8_t>& part) {
+    std::vector<std::vector<std::uint8_t>> out;
+    for (std::vector<std::uint8_t> payload : RecordsOf(part, kNameRecord)) {
+      // grbit (4), chKey (1), itab (4), name (XLWideString), then cce and rgce.
+      const std::size_t cce_at = 4U + 1U + 4U + 4U + 2U * U32At(payload, 9U);
+      const std::size_t rgce_at = cce_at + 4U;
+      std::vector<std::uint8_t> rgce(payload.begin() + static_cast<std::ptrdiff_t>(rgce_at),
+                                     payload.begin() + static_cast<std::ptrdiff_t>(rgce_at + U32At(payload, cce_at)));
+      if (rgce.size() > 5U && rgce[0] == kPtgName) {
+        std::fill(rgce.begin() + 1, rgce.begin() + 5, 0U);
+        out.push_back(std::move(rgce));
+      }
+    }
+    return out;
+  };
+  const std::vector<std::uint8_t> excel = ReadFile(Claim("../arraymode/name_at.xlsb"));
+  auto loaded = read_xlsb(SpanOf(excel));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  auto written = write_xlsb_with_result(loaded.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(written));
+  const auto theirs = bodies(Part(excel, "xl/workbook.bin"));
+  ASSERT_EQ(theirs.size(), 4U);
+  EXPECT_EQ(bodies(Part(written.value().bytes, "xl/workbook.bin")), theirs);
+}
+
+TEST(XlsbParityClaims, ConditionalFormatFormulasMatchExcel) {
+  for (const char* stem : {"cf_area_op", "cf_root_op"}) {
+    SCOPED_TRACE(stem);
+    const auto excel =
+        RecordsOf(Part(ReadFile(Claim(std::string("../arraymode/") + stem + ".xlsb")), "xl/worksheets/sheet1.bin"),
+                  kCfRuleRecord);
+    ASSERT_EQ(excel.size(), 1U);
+    EXPECT_EQ(
+        RecordsOf(Part(Converted(std::string("../arraymode/") + stem), "xl/worksheets/sheet1.bin"), kCfRuleRecord),
+        excel);
   }
 }
 

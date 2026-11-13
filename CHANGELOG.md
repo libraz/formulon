@@ -310,6 +310,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An array formula entered with Ctrl+Shift+Enter whose range sits under an operator inside a
+  function, such as `{=SUM(A1:A3*2)}`, calculated a different result in Excel after the
+  workbook was saved as `.xlsb`: Excel read the range as a single cell, so the example gave 2
+  instead of 12. The `.xlsb` writer now stores such ranges and calls the way Excel does, and a
+  defined name whose body uses `@` is stored the same way.
+
 - Under a Mac profile, a Normal font outside the measured set fell back to Calibri 11's
   metrics, so column widths and row heights for fonts such as Meiryo 11 came out one digit
   width off. Mac Excel 16.115 metrics are now in place for 32 more fonts and sizes: Aptos,
