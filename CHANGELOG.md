@@ -337,6 +337,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Narrow 10 and 14, 等线 11, 맑은 고딕 11, Tahoma 10 and 11, Times New Roman, Verdana and
   新細明體 11. A font still outside the set reports `calibrated: false` in the width model.
 
+- A new workbook from `createForProfile` under a Windows profile stated no default row height,
+  so it read as 102/7 pt (about 14.57), where Excel's own new book states the height its Normal
+  font takes. It now states it: a `win-*` profile means Windows Excel at 100% display scaling,
+  where 游ゴシック 11 (`win-365-ja_JP`) is 18.75 pt. Calibri, ＭＳ Ｐゴシック, 游ゴシック and Meiryo UI
+  at 8 to 12, 14, 16 and 18 pt are measured; Aptos Narrow, the other locales' font, has no
+  Windows measurement and takes Calibri 11's 15 pt.
+
 - An AutoFilter custom criterion holding `*` or `?` under `<`, `<=`, `>` or `>=`
   is tested by match, as in Excel. Before, it was compared as text. `<=` keeps the
   text values the pattern matches, `>` the text values it does not, `>=` every text

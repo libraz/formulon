@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "builtin_style_names.h"
+#include "font_metrics.h"
 #include "sheet.h"
 #include "sheet_passthrough.h"
 #include "styles.h"
@@ -109,12 +110,16 @@ void apply_new_sheet_defaults(ExcelProfile profile, Sheet& sheet) {
                           row.phonetic_no_conversion ? "<phoneticPr fontId=\"1\" type=\"noConversion\"/>"
                                                      : "<phoneticPr fontId=\"1\"/>"});
   }
+  SheetFormatDefaults& format = sheet.mutable_format_defaults();
   if (profile.host == ExcelHost::kMac365) {
-    SheetFormatDefaults& format = sheet.mutable_format_defaults();
     format.base_col_width = kNewWorkbookMacBaseColWidth;
     format.default_row_height = row.mac_row_height;
-    format.has_default_row_height = true;
+  } else {
+    // Measured for ja-JP's 游ゴシック 11; a face without a Windows measurement (Aptos Narrow) takes Calibri 11's,
+    // an estimate.
+    format.default_row_height = windows_row_height_pt(row.font_name, kNewWorkbookWinFontSize);
   }
+  format.has_default_row_height = true;
   SheetPrintSettings& print = sheet.mutable_print_settings();
   print.page_margins_xml = row.margins->xml;
   print.page_margins = row.margins->values;

@@ -128,17 +128,16 @@ void ExpectStylesXml(const pugi::xml_document& doc, const Captured& c, double bo
   EXPECT_STREQ(style.attribute("builtinId").value(), "0");
 }
 
-/// Checks the written `sheet1.xml`; `mac` selects the Mac row
-/// height and base column width, which the Windows estimate leaves unset.
-void ExpectSheetXml(const pugi::xml_document& doc, const Captured& c, bool mac) {
+/// Checks the written `sheet1.xml`: the default row height is `row_height`, and `mac` selects the Mac base column
+/// width, which a Windows book leaves unset.
+void ExpectSheetXml(const pugi::xml_document& doc, const Captured& c, bool mac, double row_height) {
   const pugi::xml_node ws = doc.child("worksheet");
   const pugi::xml_node fmt = ws.child("sheetFormatPr");
+  EXPECT_DOUBLE_EQ(fmt.attribute("defaultRowHeight").as_double(), row_height);
   if (mac) {
     EXPECT_DOUBLE_EQ(fmt.attribute("baseColWidth").as_double(), 10.0);
-    EXPECT_DOUBLE_EQ(fmt.attribute("defaultRowHeight").as_double(), c.row_height);
   } else {
     EXPECT_FALSE(fmt.attribute("baseColWidth"));
-    EXPECT_FALSE(fmt.attribute("defaultRowHeight"));
   }
 
   const pugi::xml_node phonetic = ws.child("phoneticPr");
@@ -206,7 +205,7 @@ void ExpectReloaded(const Workbook& wb, const Captured& c) {
   EXPECT_EQ(found_phonetic, c.phonetic_size != 0);
 }
 
-void CheckProfile(const Captured& c, const char* profile_id, bool mac) {
+void CheckProfile(const Captured& c, const char* profile_id, bool mac, double row_height) {
   SCOPED_TRACE(profile_id);
   const ExcelProfile profile = ProfileOf(profile_id);
   const Workbook wb = Workbook::create_for_profile(profile);
@@ -221,7 +220,7 @@ void CheckProfile(const Captured& c, const char* profile_id, bool mac) {
   LoadPart(pkg, "xl/worksheets/sheet1.xml", &sheet);
   LoadPart(pkg, "xl/workbook.xml", &book);
   ExpectStylesXml(styles, c, mac ? 12.0 : 11.0);
-  ExpectSheetXml(sheet, c, mac);
+  ExpectSheetXml(sheet, c, mac, row_height);
   ExpectWorkbookXmlSheetName(book, c);
 
   auto reloaded = io::read_ooxml(io::ByteSpan{pkg.data(), pkg.size()});
@@ -231,13 +230,15 @@ void CheckProfile(const Captured& c, const char* profile_id, bool mac) {
 
 TEST(NewWorkbookDefaults, MacProfilesMatchExcelCaptures) {
   for (const Captured& c : kMac) {
-    CheckProfile(c, c.profile_id, /*mac=*/true);
+    CheckProfile(c, c.profile_id, /*mac=*/true, c.row_height);
   }
 }
 
+// Windows Excel 365 at 100% display scaling: 游ゴシック 11 stands 18.75 pt high (measured); Aptos Narrow has no Windows
+// measurement and takes Calibri 11's 15 pt.
 TEST(NewWorkbookDefaults, WindowsEstimateUsesBodySize11AndEngineRowMetrics) {
-  CheckProfile(kMac[10], "win-365-ja_JP", /*mac=*/false);
-  CheckProfile(kMac[0], "win-365-en_US", /*mac=*/false);
+  CheckProfile(kMac[10], "win-365-ja_JP", /*mac=*/false, 18.75);
+  CheckProfile(kMac[0], "win-365-en_US", /*mac=*/false, 15.0);
 }
 
 TEST(NewWorkbookDefaults, AddedSheetsMatchTheFirstSheet) {
@@ -261,7 +262,7 @@ TEST(NewWorkbookDefaults, AddedSheetsMatchTheFirstSheet) {
       SCOPED_TRACE(part);
       pugi::xml_document sheet;
       LoadPart(pkg, part, &sheet);
-      ExpectSheetXml(sheet, *c, mac);
+      ExpectSheetXml(sheet, *c, mac, mac ? c->row_height : 18.75);
     }
   }
 }

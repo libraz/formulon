@@ -8,7 +8,9 @@
 
 namespace formulon {
 
-/// Excel host profile used for observed host-specific formula semantics.
+/// Excel host profile used for observed host-specific formula semantics. A
+/// Windows host means Excel at 100% display scaling (96 DPI), which sets its
+/// row heights and column widths.
 enum class ExcelHost : std::uint8_t {
   kMac365 = 0,
   kWin365 = 1,

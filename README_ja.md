@@ -110,7 +110,7 @@ try {
 }
 ```
 
-プロファイル ID は `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}` です。`mac-*` のすべてと `win-365-ja_JP` は Excel で測定したもので、それ以外の `win-*` は Mac での測定値からの推定です。プロファイルはファイルに保存されないため、読み込み後に設定し直してください。`formulon.Workbook.createForProfile(id)` を使うと、新しいブックのフォント、スタイル名、シート名も Excel がそのロケールで使うものになります。詳しくは [ロケールプロファイル](https://formulon.libraz.net/ja/compatibility/locale-profiles) と [テキストの比較と並べ替え](https://formulon.libraz.net/ja/compatibility/text-collation) を参照してください。
+プロファイル ID は `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}` です。`mac-*` のすべてと `win-365-ja_JP` は Excel で測定したもので、それ以外の `win-*` は Mac での測定値からの推定です。`win-*` は表示スケール 100% の Windows を表し、行の高さと列幅はこのスケールでの値になります。プロファイルはファイルに保存されないため、読み込み後に設定し直してください。`formulon.Workbook.createForProfile(id)` を使うと、新しいブックのフォント、スタイル名、シート名も Excel がそのロケールで使うものになります。詳しくは [ロケールプロファイル](https://formulon.libraz.net/ja/compatibility/locale-profiles) と [テキストの比較と並べ替え](https://formulon.libraz.net/ja/compatibility/text-collation) を参照してください。
 
 ## 対象外
 

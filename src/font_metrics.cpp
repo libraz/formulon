@@ -50,27 +50,27 @@ constexpr FontMetricsRow kMacRows[] = {
     {"ＭＳ Ｐゴシック", 12, 6.0, 5.0, 15.0}, {"新細明體", 11, 5.0, 5.0, 14.0},
 };
 
-// Windows Excel 365 ja-JP (build 16.0.20228, 96 DPI) `Range.Width` at stored
-// widths 30/100 chars. Row heights are not measured per font. Calibri 11 is
-// the Windows fallback and matches the print-layout derivation in
-// `column_width.cpp`.
+// Windows Excel 365 ja-JP (build 16.0.20228) at 100% display scaling (96 DPI), the scaling a win-* profile means:
+// `Range.Width` at stored widths 30/100 chars and the new book's `StandardHeight`
+// (tests/fixtures/excel/win/column_width_dpi100). Calibri 11 is the Windows fallback and matches the print-layout
+// derivation in `column_width.cpp`.
 constexpr FontMetricsRow kWinRows[] = {
-    {"Calibri", 8, 4.5, 3.75, 0.0},           {"Calibri", 9, 4.5, 3.75, 0.0},
-    {"Calibri", 10, 5.25, 3.75, 0.0},         {"Calibri", 11, 5.25, 3.75, 0.0},
-    {"Calibri", 12, 6.0, 3.75, 0.0},          {"Calibri", 14, 7.5, 5.25, 0.0},
-    {"Calibri", 16, 8.25, 5.25, 0.0},         {"Calibri", 18, 9.0, 5.25, 0.0},
-    {"ＭＳ Ｐゴシック", 8, 4.5, 3.75, 0.0},   {"ＭＳ Ｐゴシック", 9, 4.5, 3.75, 0.0},
-    {"ＭＳ Ｐゴシック", 10, 5.25, 3.75, 0.0}, {"ＭＳ Ｐゴシック", 11, 6.0, 3.75, 0.0},
-    {"ＭＳ Ｐゴシック", 12, 6.0, 3.75, 0.0},  {"ＭＳ Ｐゴシック", 14, 7.5, 5.25, 0.0},
-    {"ＭＳ Ｐゴシック", 16, 8.25, 5.25, 0.0}, {"ＭＳ Ｐゴシック", 18, 9.0, 5.25, 0.0},
-    {"游ゴシック", 8, 4.5, 3.75, 0.0},        {"游ゴシック", 9, 5.25, 3.75, 0.0},
-    {"游ゴシック", 10, 5.25, 3.75, 0.0},      {"游ゴシック", 11, 6.0, 3.75, 0.0},
-    {"游ゴシック", 12, 6.75, 5.25, 0.0},      {"游ゴシック", 14, 8.25, 5.25, 0.0},
-    {"游ゴシック", 16, 9.0, 5.25, 0.0},       {"游ゴシック", 18, 9.75, 6.75, 0.0},
-    {"Meiryo UI", 8, 5.25, 3.75, 0.0},        {"Meiryo UI", 9, 5.25, 3.75, 0.0},
-    {"Meiryo UI", 10, 6.0, 3.75, 0.0},        {"Meiryo UI", 11, 6.75, 5.25, 0.0},
-    {"Meiryo UI", 12, 7.5, 5.25, 0.0},        {"Meiryo UI", 14, 9.0, 5.25, 0.0},
-    {"Meiryo UI", 16, 9.75, 6.75, 0.0},       {"Meiryo UI", 18, 11.25, 6.75, 0.0},
+    {"Calibri", 8, 4.5, 3.75, 11.25},           {"Calibri", 9, 4.5, 3.75, 12.0},
+    {"Calibri", 10, 5.25, 3.75, 12.75},         {"Calibri", 11, 5.25, 3.75, 15.0},
+    {"Calibri", 12, 6.0, 3.75, 15.75},          {"Calibri", 14, 7.5, 5.25, 18.75},
+    {"Calibri", 16, 8.25, 5.25, 21.0},          {"Calibri", 18, 9.0, 5.25, 23.25},
+    {"ＭＳ Ｐゴシック", 8, 4.5, 3.75, 10.5},    {"ＭＳ Ｐゴシック", 9, 4.5, 3.75, 11.25},
+    {"ＭＳ Ｐゴシック", 10, 5.25, 3.75, 12.0},  {"ＭＳ Ｐゴシック", 11, 6.0, 3.75, 13.5},
+    {"ＭＳ Ｐゴシック", 12, 6.0, 3.75, 14.25},  {"ＭＳ Ｐゴシック", 14, 7.5, 5.25, 17.25},
+    {"ＭＳ Ｐゴシック", 16, 8.25, 5.25, 18.75}, {"ＭＳ Ｐゴシック", 18, 9.0, 5.25, 21.0},
+    {"游ゴシック", 8, 4.5, 3.75, 12.75},        {"游ゴシック", 9, 5.25, 3.75, 15.75},
+    {"游ゴシック", 10, 5.25, 3.75, 16.5},       {"游ゴシック", 11, 6.0, 3.75, 18.75},
+    {"游ゴシック", 12, 6.75, 5.25, 19.5},       {"游ゴシック", 14, 8.25, 5.25, 24.0},
+    {"游ゴシック", 16, 9.0, 5.25, 25.5},        {"游ゴシック", 18, 9.75, 6.75, 30.0},
+    {"Meiryo UI", 8, 5.25, 3.75, 12.0},         {"Meiryo UI", 9, 5.25, 3.75, 12.0},
+    {"Meiryo UI", 10, 6.0, 3.75, 14.25},        {"Meiryo UI", 11, 6.75, 5.25, 15.75},
+    {"Meiryo UI", 12, 7.5, 5.25, 16.5},         {"Meiryo UI", 14, 9.0, 5.25, 19.5},
+    {"Meiryo UI", 16, 9.75, 6.75, 21.0},        {"Meiryo UI", 18, 11.25, 6.75, 24.0},
 };
 
 struct MacAlias {
@@ -164,13 +164,14 @@ NormalFontMetrics normal_font_metrics(const StylesTable& styles, const Theme& th
   }
   out.mdw_pt = row->mdw_pt;
   out.padding_pt = row->pad_pt;
-  if (mac) {
-    out.row_height_pt = row->row_height_pt;
-    out.row_height_calibrated = out.width_calibrated;
-  } else {
-    out.row_height_pt = ooxml_defaults::kStandardRowHeightPt;
-  }
+  out.row_height_pt = row->row_height_pt;
+  out.row_height_calibrated = out.width_calibrated;
   return out;
+}
+
+double windows_row_height_pt(std::string_view family, double size) {
+  const FontMetricsRow* row = find_row(kWinRows, family, size);
+  return (row != nullptr ? row : find_row(kWinRows, "Calibri", 11.0))->row_height_pt;
 }
 
 }  // namespace formulon

@@ -19,8 +19,6 @@
 namespace formulon {
 namespace {
 
-constexpr double kWinRowHeight = 102.0 / 7.0;
-
 StylesTable StylesWith(const std::string& name, double size, std::uint8_t scheme = 0) {
   StylesTable styles;
   FontRecord font;
@@ -75,25 +73,29 @@ TEST(FontMetrics, MacTableRowsAreCalibratedWholePoints) {
   }
 }
 
-TEST(FontMetrics, WindowsTableIsUnchangedAndNeverRowCalibrated) {
+// Windows Excel 365 at 100% display scaling: `StandardHeight` of a new book per Normal font
+// (tests/fixtures/excel/win/column_width_dpi100).
+TEST(FontMetrics, WindowsTableRowsAreCalibrated) {
   struct Case {
     const char* family;
     double size;
     double mdw;
     double pad;
+    double row_height;
   };
-  const Case cases[] = {{"Calibri", 8, 4.5, 3.75},      {"Calibri", 11, 5.25, 3.75},
-                        {"Calibri", 18, 9.0, 5.25},     {"ＭＳ Ｐゴシック", 11, 6.0, 3.75},
-                        {"游ゴシック", 12, 6.75, 5.25}, {"游ゴシック", 18, 9.75, 6.75},
-                        {"Meiryo UI", 11, 6.75, 5.25},  {"Meiryo UI", 18, 11.25, 6.75}};
+  const Case cases[] = {{"Calibri", 8, 4.5, 3.75, 11.25},     {"Calibri", 11, 5.25, 3.75, 15.0},
+                        {"Calibri", 18, 9.0, 5.25, 23.25},    {"ＭＳ Ｐゴシック", 11, 6.0, 3.75, 13.5},
+                        {"游ゴシック", 11, 6.0, 3.75, 18.75}, {"游ゴシック", 12, 6.75, 5.25, 19.5},
+                        {"游ゴシック", 18, 9.75, 6.75, 30.0}, {"Meiryo UI", 11, 6.75, 5.25, 15.75},
+                        {"Meiryo UI", 18, 11.25, 6.75, 24.0}};
   for (const Case& c : cases) {
     const NormalFontMetrics m = Metrics(c.family, c.size, win_365_ja_jp_profile());
     EXPECT_EQ(m.host, ExcelHost::kWin365);
     EXPECT_DOUBLE_EQ(m.mdw_pt, c.mdw) << c.family << c.size;
     EXPECT_DOUBLE_EQ(m.padding_pt, c.pad) << c.family << c.size;
     EXPECT_TRUE(m.width_calibrated) << c.family << c.size;
-    EXPECT_FALSE(m.row_height_calibrated) << c.family << c.size;
-    EXPECT_DOUBLE_EQ(m.row_height_pt, kWinRowHeight) << c.family << c.size;
+    EXPECT_TRUE(m.row_height_calibrated) << c.family << c.size;
+    EXPECT_DOUBLE_EQ(m.row_height_pt, c.row_height) << c.family << c.size;
   }
 }
 
@@ -112,6 +114,7 @@ TEST(FontMetrics, UnknownFontOrSizeFallsBackToTheHostCalibri11) {
   const NormalFontMetrics win = Metrics("Arial", 10, win_365_en_us_profile());
   EXPECT_DOUBLE_EQ(win.mdw_pt, 5.25);
   EXPECT_DOUBLE_EQ(win.padding_pt, 3.75);
+  EXPECT_DOUBLE_EQ(win.row_height_pt, 15.0);
   EXPECT_FALSE(win.width_calibrated);
   EXPECT_FALSE(win.row_height_calibrated);
 }

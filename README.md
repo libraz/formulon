@@ -110,7 +110,7 @@ try {
 }
 ```
 
-The ids are `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}`. Every `mac-*` profile and `win-365-ja_JP` is measured against Excel; the other `win-*` profiles are estimated from the Mac measurements. The profile is not saved into the file, so apply it again after loading. `formulon.Workbook.createForProfile(id)` also gives a new workbook the fonts, style names and sheet names Excel uses in that locale. See [Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles) and [Text comparison and sorting](https://formulon.libraz.net/compatibility/text-collation).
+The ids are `{mac,win}-365-{ja_JP,en_US,de_DE,fr_FR,zh_CN,ko_KR,th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}`. Every `mac-*` profile and `win-365-ja_JP` is measured against Excel; the other `win-*` profiles are estimated from the Mac measurements. A `win-*` profile means Windows at 100% display scaling, which sets row heights and column widths. The profile is not saved into the file, so apply it again after loading. `formulon.Workbook.createForProfile(id)` also gives a new workbook the fonts, style names and sheet names Excel uses in that locale. See [Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles) and [Text comparison and sorting](https://formulon.libraz.net/compatibility/text-collation).
 
 ## Non-goals
 
