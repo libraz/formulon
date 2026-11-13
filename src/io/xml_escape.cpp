@@ -155,6 +155,17 @@ void AppendXmlEscaped(std::string& out, std::string_view in) {
   AppendXmlEscapedImpl(out, in, XmlEscapingMode::kElementText);
 }
 
+void AppendXmlEscapedCrlf(std::string& out, std::string_view in) {
+  std::size_t start = 0;
+  for (std::size_t lf = in.find('\n'); lf != std::string_view::npos; lf = in.find('\n', start)) {
+    const std::size_t end = lf > start && in[lf - 1U] == '\r' ? lf - 1U : lf;
+    AppendXmlEscapedImpl(out, in.substr(start, end - start), XmlEscapingMode::kElementText);
+    out.append("\r\n");
+    start = lf + 1U;
+  }
+  AppendXmlEscapedImpl(out, in.substr(start), XmlEscapingMode::kElementText);
+}
+
 void AppendOoxmlTextEscaped(std::string& out, std::string_view in) {
   AppendXmlEscapedImpl(out, in, XmlEscapingMode::kOoxmlNotationOnly);
 }

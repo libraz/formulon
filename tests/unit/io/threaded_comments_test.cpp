@@ -278,7 +278,7 @@ TEST(ThreadedComments, StubNotListedAsNote) {
   EXPECT_NE(comments.find("xr:uid=\"{2BD0B1A4-7C3E-4F2A-9D11-6A5E8C0F1B23}\""), std::string::npos);
   EXPECT_NE(comments.find("[Threaded comment]"), std::string::npos);
   EXPECT_NE(comments.find("Check this total"), std::string::npos);
-  EXPECT_NE(comments.find("Reply:\n    @Alice Smith fixed"), std::string::npos);
+  EXPECT_NE(comments.find("Reply:\r\n    @Alice Smith fixed"), std::string::npos);
 }
 
 TEST(ThreadedComments, TcAuthorWithoutThreadStaysNote) {
@@ -307,7 +307,7 @@ TEST(ThreadedComments, BatchStubIndexesPreserveFirstMatchesAndSourceOrder) {
       CellComment(4U, 4U, "tc=missing", "unknown stub"),    CellComment(9U, 9U, "Carol", "reply-cell note"),
       CellComment(5U, 5U, "Carol", "ordinary note")};
 
-  const std::vector<CellComment> generated = io::legacy_comments_with_stubs(sheet);
+  const std::vector<CellComment> generated = io::legacy_comments_with_stubs(sheet, ExcelLocale::kEnUS);
   ASSERT_EQ(generated.size(), 7U);
   EXPECT_EQ(generated[0].text, "unknown stub");
   EXPECT_EQ(generated[1].text, "reply-cell note");
@@ -316,10 +316,14 @@ TEST(ThreadedComments, BatchStubIndexesPreserveFirstMatchesAndSourceOrder) {
   EXPECT_EQ(generated[4].author, "tc=duplicate");
   EXPECT_EQ(generated[5].author, "tc=unique");
   EXPECT_EQ(generated[6].author, "tc=");
-  EXPECT_EQ(generated[3].text, threaded_comment_stub_text(threads, 0U));
-  EXPECT_EQ(generated[4].text, threaded_comment_stub_text(threads, 2U));
-  EXPECT_EQ(generated[5].text, threaded_comment_stub_text(threads, 3U));
-  EXPECT_EQ(generated[6].text, threaded_comment_stub_text(threads, 6U));
+  EXPECT_EQ(generated[3].text,
+            threaded_comment_stub_text(threads, 0U, thread_replies_in_save_order(threads, 0U), ExcelLocale::kEnUS));
+  EXPECT_EQ(generated[4].text,
+            threaded_comment_stub_text(threads, 2U, thread_replies_in_save_order(threads, 2U), ExcelLocale::kEnUS));
+  EXPECT_EQ(generated[5].text,
+            threaded_comment_stub_text(threads, 3U, thread_replies_in_save_order(threads, 3U), ExcelLocale::kEnUS));
+  EXPECT_EQ(generated[6].text,
+            threaded_comment_stub_text(threads, 6U, thread_replies_in_save_order(threads, 6U), ExcelLocale::kEnUS));
   const std::size_t first_reply = generated[3].text.find("Reply:\n    reply one");
   const std::size_t second_reply = generated[3].text.find("Reply:\n    reply two");
   EXPECT_NE(first_reply, std::string::npos);
@@ -718,6 +722,129 @@ TEST(ThreadedComments, GuidIdsAreTakenInEitherCaseStoredUppercaseAndMatchedAcros
   ASSERT_TRUE(static_cast<bool>(wb.set_thread_resolved(0, lower_thread, true)));
   ASSERT_TRUE(static_cast<bool>(wb.remove_threaded_comment(0, lower_thread)));
   EXPECT_TRUE(wb.sheet(0).threaded_comments().empty());
+}
+
+namespace {
+
+// A thread with three replies whose list order is neither their time order nor their id order.
+Workbook ReplyOrderBook(ExcelLocale locale) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(ExcelProfile{ExcelHost::kMac365, locale});
+  std::vector<ThreadedComment>& threads = wb.sheet(0).mutable_threaded_comments();
+  ThreadedComment root = Comment(kThread, 0U, 0U, kAlice, "root line1\nroot line2");
+  ThreadedComment r1 = Comment("{20000000-0000-4000-8000-000000000000}", 0U, 0U, kBob, "r1", kThread);
+  ThreadedComment r2 = Comment("{10000000-0000-4000-8000-000000000000}", 0U, 0U, kBob, "r2\nsecond", kThread);
+  ThreadedComment r3 = Comment("{30000000-0000-4000-8000-000000000000}", 0U, 0U, kBob, "r3", kThread);
+  r3.created = "2026-10-05T10:00:01.00";
+  threads = {root, r3, r1, r2};
+  return wb;
+}
+
+std::string StubOf(const Workbook& wb, ExcelLocale locale) {
+  const std::vector<ThreadedComment>& threads = wb.sheet(0).threaded_comments();
+  return threaded_comment_stub_text(threads, 0U, thread_replies_in_save_order(threads, 0U), locale);
+}
+
+}  // namespace
+
+// Mac Excel 16.115 ja re-save: replies by time then id, one plain run, raw CRLF line breaks, ja lead-ins.
+TEST(ThreadedComments, StubMatchesExcelJaBytes) {
+  const std::string comments = Part(Save(ReplyOrderBook(ExcelLocale::kJaJP)), "xl/comments1.xml");
+  const std::string expected =
+      "<text><t>[スレッド化されたコメント]\r\n\r\n使用している Excel "
+      "のバージョンでは、このスレッド化されたコメントを表示できますが、"
+      "新しいバージョンの Excel でファイルを開いた場合はコメントに対する編集がすべて削除されます。詳細: "
+      "https://go.microsoft.com/fwlink/?linkid=870924\r\n\r\nコメント:\r\n    root line1\r\nroot "
+      "line2\r\n返信:\r\nr2\r\n"
+      "second\r\n返信:\r\nr1\r\n返信:\r\nr3</t></text>";
+  EXPECT_NE(comments.find(expected), std::string::npos) << comments;
+}
+
+TEST(ThreadedComments, ThreadPartWritesRepliesInSaveOrderWithCrlf) {
+  const std::vector<std::uint8_t> saved = Save(ReplyOrderBook(ExcelLocale::kJaJP));
+  const std::string part = Part(saved, "xl/threadedComments/threadedComment1.xml");
+  const std::size_t root = part.find("<text>root line1\r\nroot line2</text>");
+  const std::size_t r2 = part.find("<text>r2\r\nsecond</text>");
+  const std::size_t r1 = part.find("<text>r1</text>");
+  const std::size_t r3 = part.find("<text>r3</text>");
+  ASSERT_NE(root, std::string::npos) << part;
+  ASSERT_NE(r2, std::string::npos) << part;
+  EXPECT_LT(root, r2);
+  EXPECT_LT(r2, r1);
+  EXPECT_LT(r1, r3);
+
+  const Workbook back = Load(saved);
+  const std::vector<ThreadedComment>& read = back.sheet(0).threaded_comments();
+  ASSERT_EQ(read.size(), 4U);
+  EXPECT_EQ(read[0].text, "root line1\nroot line2");
+  EXPECT_EQ(read[1].text, "r2\nsecond");
+  EXPECT_TRUE(back.sheet(0).comments().empty());
+}
+
+// Locales other than ja come from the application's own strings for that UI language, an estimate: only the ja
+// re-save is measured. Each keeps the fixed link and the opening comment.
+TEST(ThreadedComments, StubIsWordedForEveryProfileLocale) {
+  for (std::uint8_t l = 0; l <= static_cast<std::uint8_t>(ExcelLocale::kNlNL); ++l) {
+    const ExcelLocale locale = static_cast<ExcelLocale>(l);
+    const std::string text = StubOf(ReplyOrderBook(locale), locale);
+    EXPECT_NE(text.find("https://go.microsoft.com/fwlink/?linkid=870924"), std::string::npos) << int{l};
+    EXPECT_NE(text.find("root line1\nroot line2"), std::string::npos) << int{l};
+  }
+  const Workbook wb = ReplyOrderBook(ExcelLocale::kEnUS);
+  EXPECT_EQ(StubOf(wb, ExcelLocale::kEnUS).rfind("[Threaded comment]\n\n", 0), 0U);
+  const std::string de = StubOf(wb, ExcelLocale::kDeDE);
+  EXPECT_NE(de.find("870924.\n\nKommentar:\n    root"), std::string::npos) << de;
+  EXPECT_NE(de.find("\nAntwort:\n    r2"), std::string::npos) << de;
+}
+
+// Mac Excel 16.115 keeps mention offsets as written and counts them over the stored CRLF text; the model text keeps LF.
+TEST(ThreadedComments, MentionOffsetsCountStoredCrlfBreaks) {
+  const std::string excel =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\r\n<ThreadedComments "
+      "xmlns=\"http://schemas.microsoft.com/office/spreadsheetml/2018/threadedcomments\">"
+      "<threadedComment ref=\"A1\" dT=\"2026-11-13T09:30:00.00\" personId=\"{11111111-AAAA-4BBB-8CCC-DDDDDDDDDDDD}\" "
+      "id=\"{2BD0B1A4-7C3E-4F2A-9D11-6A5E8C0F1B23}\"><text>line1\r\n@Probe Person x</text><mentions><mention "
+      "mentionpersonId=\"{11111111-AAAA-4BBB-8CCC-DDDDDDDDDDDD}\" mentionId=\"{91D9597F-ABFB-4D81-B869-6EE6AA3E2B45}\" "
+      "startIndex=\"7\" length=\"13\"/></mentions></threadedComment>"
+      "<threadedComment ref=\"B2\" dT=\"2026-11-13T09:30:00.00\" personId=\"{11111111-AAAA-4BBB-8CCC-DDDDDDDDDDDD}\" "
+      "id=\"{3BD0B1A4-7C3E-4F2A-9D11-6A5E8C0F1B23}\"><text>a\r\nb\r\n@Probe Person y</text><mentions><mention "
+      "mentionpersonId=\"{11111111-AAAA-4BBB-8CCC-DDDDDDDDDDDD}\" mentionId=\"{1973AC3F-C284-4457-8714-BDF923863401}\" "
+      "startIndex=\"6\" length=\"13\"/></mentions></threadedComment></ThreadedComments>";
+  const auto read = io::read_threaded_comments(std::vector<std::uint8_t>(excel.begin(), excel.end()));
+  ASSERT_TRUE(static_cast<bool>(read)) << read.error().message;
+  ASSERT_EQ(read.value().size(), 2U);
+  for (const ThreadedComment& c : read.value()) {
+    ASSERT_EQ(c.mentions.size(), 1U);
+    EXPECT_EQ(c.text.substr(c.mentions[0].start, c.mentions[0].length), "@Probe Person") << c.text;
+  }
+  EXPECT_EQ(read.value()[0].mentions[0].start, 6U);
+  EXPECT_EQ(read.value()[1].mentions[0].start, 4U);
+
+  const std::string written = io::write_threaded_comments(read.value());
+  EXPECT_NE(written.find("<text>line1\r\n@Probe Person x</text>"), std::string::npos) << written;
+  EXPECT_NE(written.find("startIndex=\"7\" length=\"13\""), std::string::npos) << written;
+  EXPECT_NE(written.find("startIndex=\"6\" length=\"13\""), std::string::npos) << written;
+}
+
+// A span crossing a break grows by the CR on write and shrinks back on read; non-BMP text counts two units per side.
+TEST(ThreadedComments, MentionSpanAcrossBreakAndSurrogatesRoundTrips) {
+  ThreadedComment c = Comment(kThread, 0U, 0U, kAlice, "\xF0\x9F\x98\x80\nx\r\ny @A\nB");
+  Mention m;
+  m.person_id = std::string(kAlice);
+  m.mention_id = "{91D9597F-ABFB-4D81-B869-6EE6AA3E2B45}";
+  m.start = 8U;  // "@A\nB" after: U+1F600 (2) LF (1) x (1) CRLF (2) y (1) space (1)
+  m.length = 4U;
+  c.mentions = {m};
+  const std::string written = io::write_threaded_comments({c});
+  EXPECT_NE(written.find("startIndex=\"9\" length=\"5\""), std::string::npos) << written;
+  const auto read = io::read_threaded_comments(std::vector<std::uint8_t>(written.begin(), written.end()));
+  ASSERT_TRUE(static_cast<bool>(read));
+  ASSERT_EQ(read.value().size(), 1U);
+  const ThreadedComment& back = read.value()[0];
+  ASSERT_EQ(back.mentions.size(), 1U);
+  EXPECT_EQ(back.text, "\xF0\x9F\x98\x80\nx\ny @A\nB");  // the stored CRLF reads back as LF
+  EXPECT_EQ(back.mentions[0].start, 7U);
+  EXPECT_EQ(back.mentions[0].length, 4U);  // "@A" LF "B", offsets in UTF-16 units
 }
 
 }  // namespace formulon

@@ -26,6 +26,11 @@ namespace io {
 // subsequent OOXML reader preserves it literally.
 void AppendXmlEscaped(std::string& out, std::string_view in);
 
+// `AppendXmlEscaped`, with every line break (LF or CRLF) written as the raw
+// CRLF Excel stores in threaded-comment text and its legacy note. A parser's
+// line-end normalisation reads it back as LF.
+void AppendXmlEscapedCrlf(std::string& out, std::string_view in);
+
 // Encodes OOXML `_xHHHH_` escapes without XML-escaping markup characters.
 // Use before assigning text to a DOM node for legacy ST_Xstring payloads:
 // pugi::xml will escape `&` / `<` / `>` when it serialises the node.

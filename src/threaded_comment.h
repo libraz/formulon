@@ -21,6 +21,8 @@
 #include <string_view>
 #include <vector>
 
+#include "excel_profile.h"
+
 namespace formulon {
 
 /// One `@person` mention inside a threaded comment's text.
@@ -65,15 +67,19 @@ std::size_t find_threaded_comment(const std::vector<ThreadedComment>& list, std:
 /// `list.size()` when the cell has none.
 std::size_t find_thread_at(const std::vector<ThreadedComment>& list, std::uint32_t row, std::uint32_t col) noexcept;
 
-/// Text of the legacy note Excel stores for the thread opened at
-/// `list[root]`: a fixed preamble followed by the opening comment and every
-/// reply in list order.
-std::string threaded_comment_stub_text(const std::vector<ThreadedComment>& list, std::size_t root);
+/// Indices of the replies to the thread opened at `list[root]`, in the order
+/// Excel saves them: by `created`, then by id.
+std::vector<std::size_t> thread_replies_in_save_order(const std::vector<ThreadedComment>& list, std::size_t root);
 
-/// Same text using a caller-precomputed, source-ordered list of reply indices.
-/// Batch serializers can reuse one parent-id index across every root.
+/// Arranges reply indices into `list` in Excel's save order (see above).
+void sort_replies_for_save(const std::vector<ThreadedComment>& list, std::vector<std::size_t>& replies);
+
+/// Text of the legacy note Excel stores for the thread opened at
+/// `list[root]` in the UI language of `locale`: a heading, the opening
+/// comment and each of `replies` (indices, in save order) under its lead-in.
+/// Line breaks are LF; the writer stores them as CRLF.
 std::string threaded_comment_stub_text(const std::vector<ThreadedComment>& list, std::size_t root,
-                                       const std::vector<std::size_t>& reply_indices);
+                                       const std::vector<std::size_t>& replies, ExcelLocale locale);
 
 }  // namespace formulon
 

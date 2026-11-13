@@ -30,7 +30,9 @@ Expected<std::vector<ThreadedComment>, Error> read_threaded_comments(const std::
 /// Parses a persons part. Fails with `kIoSheetCorrupt` on a missing root.
 Expected<std::vector<Person>, Error> read_persons(const std::vector<std::uint8_t>& bytes);
 
-/// Serialises one sheet's threaded comments; empty input returns "".
+/// Serialises one sheet's threaded comments in Excel's save order (each thread
+/// followed by its replies by time, then id), line breaks as CRLF; empty input
+/// returns "".
 std::string write_threaded_comments(const std::vector<ThreadedComment>& comments);
 
 /// Serialises the person list; empty input returns "".
@@ -45,9 +47,9 @@ void drop_thread_stubs(std::vector<CellComment>& notes, const std::vector<Thread
 bool is_thread_stub_author(std::string_view author);
 
 /// The comments-part list for `sheet`: its notes in order, then one stub per
-/// thread (author `tc={id}`, `xr:uid` = thread id). A note sharing a cell with
-/// a thread is left out, since a cell carries one comment.
-std::vector<CellComment> legacy_comments_with_stubs(const Sheet& sheet);
+/// thread (author `tc={id}`, `xr:uid` = thread id) worded for `locale`. A note
+/// sharing a cell with a thread is left out, since a cell carries one comment.
+std::vector<CellComment> legacy_comments_with_stubs(const Sheet& sheet, ExcelLocale locale);
 
 }  // namespace formulon::io
 

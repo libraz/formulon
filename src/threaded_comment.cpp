@@ -1,5 +1,6 @@
 #include "threaded_comment.h"
 
+#include <array>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -12,6 +13,7 @@
 #include "utils/date_time.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/index_sort.h"
 #include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "utils/utf8_length.h"
@@ -20,10 +22,71 @@
 namespace formulon {
 namespace {
 
-constexpr std::string_view kStubPreamble =
-    "[Threaded comment]\n\nYour version of Excel allows you to read this threaded comment; however, any edits to it "
-    "will get removed if the file is opened in a newer version of Excel. Learn more: "
-    "https://go.microsoft.com/fwlink/?linkid=870924\n\nComment:\n    ";
+// The legacy-note text Excel writes for a thread in each UI locale: a heading, the lead-in before the opening
+// comment and the lead-in before each reply. Line breaks are LF here; the writer stores them as CRLF.
+struct StubWords {
+  std::string_view head;
+  std::string_view comment;
+  std::string_view reply;
+};
+
+// Indexed by `ExcelLocale`.
+constexpr std::array<StubWords, 14> kStubWords = {{
+    {"[スレッド化されたコメント]\n\n使用している Excel "
+     "のバージョンでは、このスレッド化されたコメントを表示できますが、新しいバージョンの Excel "
+     "でファイルを開いた場合はコメントに対する編集がすべて削除されます。詳細: "
+     "https://go.microsoft.com/fwlink/?linkid=870924\n\n",
+     "コメント:\n    ", "\n返信:\n"},  // kJaJP
+    {"[Threaded comment]\n\nYour version of Excel allows you to read this threaded comment; however, any edits to it "
+     "will get removed if the file is opened in a newer version of Excel. Learn more: "
+     "https://go.microsoft.com/fwlink/?linkid=870924\n\n",
+     "Comment:\n    ", "\nReply:\n    "},  // kEnUS
+    {"[Kommentarthread]\n\nIhre Version von Excel gestattet Ihnen das Lesen dieses Kommentarthreads. Jegliche "
+     "Bearbeitungen daran werden jedoch entfernt, wenn die Datei in einer neueren Version von Excel geöffnet wird. "
+     "Weitere Informationen: https://go.microsoft.com/fwlink/?linkid=870924.\n\n",
+     "Kommentar:\n    ", "\nAntwort:\n    "},  // kDeDE
+    {"[Commentaire à thread]\n\nVotre version d’Excel vous permet de lire ce commentaire à thread. Toutefois, les "
+     "modifications qui y sont apportées seront supprimées si le fichier est ouvert dans une version plus récente "
+     "d’Excel. En savoir plus : https://go.microsoft.com/fwlink/?linkid=870924\n\n",
+     "Commentaire :\n    ", "\nRéponse :\n    "},  // kFrFR
+    {"[线程批注]\n\n你的Excel版本可读取此线程批注; "
+     "但如果在更新版本的Excel中打开文件，则对批注所作的任何改动都将被删除。了解详细信息: "
+     "https://go.microsoft.com/fwlink/?linkid=870924\n\n",
+     "注释:\n    ", "\n答复:\n    "},  // kZhCN
+    {"[스레드 댓글]\n\n사용 중인 버전의 Excel에서 이 스레드 댓글을 읽을 수 있지만 파일을 이후 버전의 Excel에서 열면 "
+     "편집 내용이 모두 제거됩니다. 자세한 정보: https://go.microsoft.com/fwlink/?linkid=870924.\n\n",
+     "댓글:\n    ", "\n답글:\n    "},  // kKoKR
+    {"[ข้อคิดเห็นแบบเธรด]\n\nExcel เวอร์ชันของคุณช่วยให้คุณสามารถอ่านข้อคิดเห็นแบบเธรดนี้ อย่างไรก็ตาม การแก้ไขใดๆ "
+     "จะได้รับการเอาออกถ้าไฟล์ถูกเปิดใน Excel เวอร์ชันใหม่กว่า เรียนรู้เพิ่มเติม: https://go.microsoft.com/fwlink/?linkid=870924\n\n",
+     "ข้อคิดเห็น:\n    ", "\nตอบกลับ:\n    "},  // kThTH
+    {"[Comentario encadenado]\n\nSu versión de Excel le permite leer este comentario encadenado; sin embargo, las "
+     "ediciones que se apliquen se quitarán si el archivo se abre en una versión más reciente de Excel. Más "
+     "información: https://go.microsoft.com/fwlink/?linkid=870924\n\n",
+     "Comentario:\n    ", "\nRespuesta:\n    "},  // kEsES
+    {"[Comentario encadenado]\n\nTu versión de Excel te permite leer este comentario encadenado; sin embargo, las "
+     "ediciones que se apliquen se quitarán si el archivo se abre en una versión más reciente de Excel. Más "
+     "información: https://go.microsoft.com/fwlink/?linkid=870924\n\n",
+     "Comentario:\n    ", "\nRespuesta:\n    "},  // kEsMX
+    {"[Comentário encadeado]\n\nSua versão do Excel permite que você leia este comentário encadeado, no entanto, as "
+     "edições serão removidas se o arquivo for aberto em uma versão mais recente do Excel. Saiba mais: "
+     "https://go.microsoft.com/fwlink/?linkid=870924\n\n",
+     "Comentário:\n    ", "\nResponder:\n    "},  // kPtBR
+    {"[Цепочка примечаний]\n\nВаша версия Excel позволяет прочитать эту цепочку примечаний, но если открыть файл в "
+     "более поздней версии Excel, все внесенные в нее изменения будут удалены. Подробнее: "
+     "https://go.microsoft.com/fwlink/?linkid=870924\n\n",
+     "Комментарий:\n    ", "\nОтветить:\n    "},  // kRuRU
+    {"[對話串註解]\n\n您的 Excel 版本可讓您讀取此對話串註解; 但若以較新的 Excel "
+     "版本開啟此檔案，將會移除對它進行的所有編輯。深入了解: https://go.microsoft.com/fwlink/?linkid=870924。\n\n",
+     "註解:\n    ", "\n回覆:\n    "},  // kZhTW
+    {"[Commento in thread]\n\nLa versione di Excel in uso consente di leggere questo commento in thread, ma tutte le "
+     "modifiche a esso apportate verranno rimosse se il file viene aperto in una versione più recente di Excel. "
+     "Ulteriori informazioni: https://go.microsoft.com/fwlink/?linkid=870924\n\n",
+     "Commento:\n", "\nRispondi:\n"},  // kItIT
+    {"[Opmerkingenthread]\n\nU kunt deze opmerkingenthread lezen in uw versie van Excel. Eventuele wijzigingen aan de "
+     "thread gaan echter verloren als het bestand wordt geopend in een nieuwere versie van Excel. Meer informatie: "
+     "https://go.microsoft.com/fwlink/?linkid=870924\n\n",
+     "Opmerking:\n    ", "\nBeantwoorden:\n    "},  // kNlNL
+}};
 
 // The uppercase spelling Excel writes; `id` is a well-formed GUID in either case.
 std::string CanonicalGuid(std::string_view id) {
@@ -117,17 +180,6 @@ std::string FormatStamp(const date_time::CivilTime& t) {
   return out;
 }
 
-std::string BeginStubText(const ThreadedComment& root) {
-  std::string out(kStubPreamble);
-  out.append(root.text);
-  return out;
-}
-
-void AppendStubReply(std::string& out, const ThreadedComment& reply) {
-  out.append("\nReply:\n    ");
-  out.append(reply.text);
-}
-
 Expected<void, Error> ValidateText(std::string_view text, std::vector<Mention>& mentions,
                                    const std::vector<Person>& persons) {
   const std::uint64_t units = utf16_units_in(text);
@@ -198,21 +250,34 @@ std::size_t find_thread_at(const std::vector<ThreadedComment>& list, std::uint32
   return list.size();
 }
 
-std::string threaded_comment_stub_text(const std::vector<ThreadedComment>& list, std::size_t root) {
-  std::vector<std::size_t> reply_indices;
+std::vector<std::size_t> thread_replies_in_save_order(const std::vector<ThreadedComment>& list, std::size_t root) {
+  std::vector<std::size_t> replies;
   for (std::size_t i = 0; i < list.size(); ++i) {
     if (strings::case_insensitive_eq(list[i].parent_id, list[root].id)) {
-      reply_indices.push_back(i);
+      replies.push_back(i);
     }
   }
-  return threaded_comment_stub_text(list, root, reply_indices);
+  sort_replies_for_save(list, replies);
+  return replies;
+}
+
+void sort_replies_for_save(const std::vector<ThreadedComment>& list, std::vector<std::size_t>& replies) {
+  sort_by_index(replies, [&list](std::size_t a, std::size_t b) {
+    const ThreadedComment& x = list[a];
+    const ThreadedComment& y = list[b];
+    return x.created != y.created ? x.created < y.created : x.id < y.id;
+  });
 }
 
 std::string threaded_comment_stub_text(const std::vector<ThreadedComment>& list, std::size_t root,
-                                       const std::vector<std::size_t>& reply_indices) {
-  std::string out = BeginStubText(list[root]);
-  for (const std::size_t index : reply_indices) {
-    AppendStubReply(out, list[index]);
+                                       const std::vector<std::size_t>& replies, ExcelLocale locale) {
+  const StubWords& words = kStubWords.at(static_cast<std::size_t>(locale));
+  std::string out(words.head);
+  out.append(words.comment);
+  out.append(list[root].text);
+  for (const std::size_t index : replies) {
+    out.append(words.reply);
+    out.append(list[index].text);
   }
   return out;
 }

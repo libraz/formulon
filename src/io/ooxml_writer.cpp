@@ -683,9 +683,10 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     }
     const Sheet& sheet = wb.sheet(i);
     if (!cplan.comments_path.empty()) {
-      RETURN_IF_ERROR(AddPart(writer.get(), cplan.comments_path,
-                              write_comments(legacy_comments_with_stubs(sheet), sheet.comment_authors()),
-                              &written_paths));
+      RETURN_IF_ERROR(
+          AddPart(writer.get(), cplan.comments_path,
+                  write_comments(legacy_comments_with_stubs(sheet, wb.excel_profile().locale), sheet.comment_authors()),
+                  &written_paths));
     }
     if (cplan.vml_source != nullptr) {
       RETURN_IF_ERROR(AddPartBytes(writer.get(), cplan.vml_path, cplan.vml_source->bytes, &written_paths));

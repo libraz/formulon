@@ -55,8 +55,92 @@ struct LegacyStubIndexes {
       // Empty parent ids are indexed too, matching parent ids verbatim like the per-root scan.
       replies_by_parent_id[std::string_view(thread.parent_id)].push_back(i);
     }
+    for (auto& entry : replies_by_parent_id) {
+      sort_replies_for_save(threads, entry.second);
+    }
   }
 };
+
+// The order Excel writes a sheet's threaded comments in: each thread opener in list order followed by its replies
+// in save order, then any reply whose opener is missing, in list order.
+std::vector<std::size_t> threads_in_save_order(const std::vector<ThreadedComment>& threads) {
+  const LegacyStubIndexes indexes(threads);
+  std::vector<bool> placed(threads.size(), false);
+  std::vector<std::size_t> order;
+  order.reserve(threads.size());
+  for (std::size_t i = 0; i < threads.size(); ++i) {
+    if (!threads[i].parent_id.empty()) {
+      continue;
+    }
+    order.push_back(i);
+    placed[i] = true;
+    const auto replies = indexes.replies_by_parent_id.find(std::string_view(threads[i].id));
+    if (replies == indexes.replies_by_parent_id.end()) {
+      continue;
+    }
+    for (const std::size_t reply : replies->second) {
+      if (!placed[reply]) {
+        order.push_back(reply);
+        placed[reply] = true;
+      }
+    }
+  }
+  for (std::size_t i = 0; i < threads.size(); ++i) {
+    if (!placed[i]) {
+      order.push_back(i);
+    }
+  }
+  return order;
+}
+
+// Mention offsets in the part count UTF-16 units over the text as stored, where every line break is CRLF; the model
+// text keeps a bare LF. Both walks advance by UTF-16 units; a LF not preceded by CR is one unit in the model and two
+// in the file.
+std::uint32_t Utf16Width(unsigned char lead) {
+  return lead >= 0xF0U ? 2U : 1U;
+}
+
+bool IsBareLf(std::string_view text, std::size_t i) {
+  return text[i] == '\n' && (i == 0 || text[i - 1U] != '\r');
+}
+
+std::uint32_t FileOffset(std::string_view text, std::uint32_t offset) {
+  std::uint32_t model = 0;
+  std::uint32_t file = 0;
+  for (std::size_t i = 0; i < text.size(); ++i) {
+    const auto byte = static_cast<unsigned char>(text[i]);
+    if ((byte & 0xC0U) == 0x80U) {
+      continue;
+    }
+    const std::uint32_t width = Utf16Width(byte);
+    if (offset < model + width) {
+      return file + (offset - model);
+    }
+    model += width;
+    file += IsBareLf(text, i) ? 2U : width;
+  }
+  return file + (offset - model);
+}
+
+// The inverse; an offset between the CR and LF of a stored break lands before the break.
+std::uint32_t ModelOffset(std::string_view text, std::uint32_t offset) {
+  std::uint32_t model = 0;
+  std::uint32_t file = 0;
+  for (std::size_t i = 0; i < text.size(); ++i) {
+    const auto byte = static_cast<unsigned char>(text[i]);
+    if ((byte & 0xC0U) == 0x80U) {
+      continue;
+    }
+    const std::uint32_t width = Utf16Width(byte);
+    const std::uint32_t stored = IsBareLf(text, i) ? 2U : width;
+    if (offset < file + stored) {
+      return model + (stored == width ? offset - file : 0U);
+    }
+    model += width;
+    file += stored;
+  }
+  return model + (offset - file);
+}
 
 }  // namespace
 
@@ -94,8 +178,10 @@ Expected<std::vector<ThreadedComment>, Error> read_threaded_comments(const std::
       Mention mention;
       mention.person_id = m.attribute("mentionpersonId").value();
       mention.mention_id = m.attribute("mentionId").value();
-      mention.start = attr_u32(m, "startIndex");
-      mention.length = attr_u32(m, "length");
+      const std::uint32_t start = attr_u32(m, "startIndex");
+      const std::uint32_t length = attr_u32(m, "length");
+      mention.start = ModelOffset(c.text, start);
+      mention.length = length > UINT32_MAX - start ? length : ModelOffset(c.text, start + length) - mention.start;
       c.mentions.push_back(std::move(mention));
     }
     out.push_back(std::move(c));
@@ -130,7 +216,8 @@ std::string write_threaded_comments(const std::vector<ThreadedComment>& comments
   std::string out;
   out.reserve(256 + comments.size() * 256);
   AppendRootOpen(out, "ThreadedComments");
-  for (const ThreadedComment& c : comments) {
+  for (const std::size_t index : threads_in_save_order(comments)) {
+    const ThreadedComment& c = comments[index];
     out.append("  <threadedComment");
     append_xml_attr(out, "ref", a1::encode_a1(c.row, c.col));
     if (!c.created.empty()) {
@@ -144,7 +231,7 @@ std::string write_threaded_comments(const std::vector<ThreadedComment>& comments
       out.append(" done=\"1\"");
     }
     out.append("><text>");
-    AppendXmlEscaped(out, c.text);
+    AppendXmlEscapedCrlf(out, c.text);
     out.append("</text>");
     if (!c.mentions.empty()) {
       out.append("<mentions>");
@@ -152,8 +239,9 @@ std::string write_threaded_comments(const std::vector<ThreadedComment>& comments
         out.append("<mention");
         append_xml_attr(out, "mentionpersonId", m.person_id);
         append_xml_attr(out, "mentionId", m.mention_id);
-        append_xml_attr_uint(out, "startIndex", m.start);
-        append_xml_attr_uint(out, "length", m.length);
+        const std::uint32_t start = FileOffset(c.text, m.start);
+        append_xml_attr_uint(out, "startIndex", start);
+        append_xml_attr_uint(out, "length", FileOffset(c.text, m.start + m.length) - start);
         out.append("/>");
       }
       out.append("</mentions>");
@@ -219,7 +307,7 @@ void drop_thread_stubs(std::vector<CellComment>& notes, const std::vector<Thread
   notes = std::move(kept);
 }
 
-std::vector<CellComment> legacy_comments_with_stubs(const Sheet& sheet) {
+std::vector<CellComment> legacy_comments_with_stubs(const Sheet& sheet, ExcelLocale locale) {
   const std::vector<ThreadedComment>& threads = sheet.threaded_comments();
   std::vector<CellComment> out;
   out.reserve(sheet.comments().size() + threads.size());
@@ -229,15 +317,15 @@ std::vector<CellComment> legacy_comments_with_stubs(const Sheet& sheet) {
       out.push_back(note);
     }
   }
+  const std::vector<std::size_t> no_replies;
   for (std::size_t i = 0; i < threads.size(); ++i) {
     const ThreadedComment& t = threads[i];
     if (t.parent_id.empty()) {
       const auto replies = indexes.replies_by_parent_id.find(std::string_view(t.id));
-      const std::vector<std::size_t> no_replies;
       const std::vector<std::size_t>& reply_indices =
           replies == indexes.replies_by_parent_id.end() ? no_replies : replies->second;
       out.emplace_back(t.row, t.col, std::string(kStubAuthorPrefix) + t.id,
-                       threaded_comment_stub_text(threads, i, reply_indices), t.id);
+                       threaded_comment_stub_text(threads, i, reply_indices, locale), t.id);
     }
   }
   return out;

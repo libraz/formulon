@@ -20,6 +20,7 @@
 
 #include "io/ooxml/cell_ref_writer.h"
 #include "io/ooxml_defs.h"
+#include "io/threaded_comments_io.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "sheet.h"
@@ -79,9 +80,16 @@ std::string write_comments(const std::vector<CellComment>& comments, const std::
       append_xml_attr(out, "xr:uid", c.uid);
     }
     out.append(">\n");
-    out.append("      <text><r><t xml:space=\"preserve\">");
-    AppendXmlEscaped(out, c.text);
-    out.append("</t></r></text>\n");
+    if (is_thread_stub_author(c.author)) {
+      // A thread's legacy note is one plain run with CRLF line breaks, as Excel writes it.
+      out.append("      <text><t>");
+      AppendXmlEscapedCrlf(out, c.text);
+      out.append("</t></text>\n");
+    } else {
+      out.append("      <text><r><t xml:space=\"preserve\">");
+      AppendXmlEscaped(out, c.text);
+      out.append("</t></r></text>\n");
+    }
     out.append("    </comment>\n");
   }
   out.append("  </commentList>\n");

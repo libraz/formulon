@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Saving `.xlsx` writes each threaded comment's legacy note (the `tc=` note in the
+  comments part) in the UI language of the workbook profile's locale, as one plain
+  run with CRLF line breaks, and orders a thread's replies by creation time and
+  then id, as Excel does on save. Threaded comment text is written with CRLF line
+  breaks and the replies in the same order. The Japanese wording is measured; the
+  other languages use the wording Excel ships for that UI language.
+
 - Saving `.xlsx` and `.xlsb` writes only the differential formats (dxfs) that
   something in the saved file references (conditional-format rules, table and
   table column formats, custom table style elements, colour filters, sort
@@ -252,6 +259,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   desktop application does; tables and PivotTables naming it keep the name.
 
 ### Fixed
+
+- A threaded comment mention after a line break is placed where Excel places it.
+  The file counts mention offsets over the text as stored, with every line break
+  written as CRLF; `.xlsx` loading and saving now convert between that count and the
+  in-memory text, which keeps LF, instead of writing the in-memory offsets as they
+  were, which put each mention one position early per preceding line break.
 
 - A table column's header dxf or header cell style (`<tableColumn headerRowDxfId>`
   / `<tableColumn headerRowCellStyle>` in `.xlsx`, the header slots of the
