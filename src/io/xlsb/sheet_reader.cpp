@@ -1,5 +1,6 @@
 #include "io/xlsb/sheet_reader.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -19,6 +20,8 @@
 #include "io/xlsb/cf_records.h"
 #include "io/xlsb/dv_records.h"
 #include "io/xlsb/feature_formula.h"
+#include "io/xlsb/frt_records.h"
+#include "io/xlsb/guid_text.h"
 #include "io/xlsb/hyperlink_records.h"
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_reader.h"
@@ -114,7 +117,8 @@ bool DecodeDataTableRecord(ByteSpan p, DataTable* out) {
 }
 
 /// Decodes the model-owned tail features -- sheet and range protection,
-/// conditional formatting blocks and the data-validation container -- which the writer
+/// the phonetic settings, conditional formatting blocks, the data-validation
+/// container and the sheet's closing revision uid -- which the writer
 /// re-emits from `Sheet`. `rec` has just been read from `cursor`; a block's
 /// remaining records are consumed here. A record or block holding content
 /// outside the supported set is retained verbatim instead. Returns false
@@ -154,6 +158,32 @@ Expected<bool, Error> DecodeTailFeature(ByteSpan& cursor, const std::uint8_t* fr
       RetainTailRecord(state, type, framed, static_cast<std::size_t>(cursor.data - framed));
     }
     return true;
+  }
+  if (rec.type == kBrtPhoneticInfo) {
+    PhoneticProperties props;
+    if (decode_phonetic_info(rec.payload, props)) {
+      set_sheet_phonetic_properties(sheet, props);
+    } else {
+      RetainTailRecord(state, type, framed, static_cast<std::size_t>(cursor.data - framed));
+    }
+    state.merges_seen = true;
+    return true;
+  }
+  if (rec.type == kAcBegin && rec.payload.size == kAcUidBeginPayload.size() &&
+      std::equal(kAcUidBeginPayload.begin(), kAcUidBeginPayload.end(), rec.payload.data)) {
+    // The sheet's own wrapper is the one BrtEndSheet follows.
+    ByteSpan after = cursor;
+    auto uid = read_record(after);
+    auto end = read_record(after);
+    ByteSpan peek = after;
+    auto next = read_record(peek);
+    if (uid && uid.value().type == kUid && uid.value().payload.size == kGuidBytes && end &&
+        end.value().type == kAcEnd && next &&
+        next.value().type == static_cast<std::uint16_t>(XlsbRecordType::BrtEndSheet)) {
+      set_sheet_uid(sheet, uid.value().payload.data);
+      cursor = after;
+      return true;
+    }
   }
   const bool is_cf = rec.type == kBrtBeginConditionalFormatting;
   if (!is_cf && rec.type != kBrtBeginDVals) {

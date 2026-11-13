@@ -239,15 +239,16 @@ Expected<void, Error> EmitHyperlinks(std::vector<std::uint8_t>& dst, const Sheet
   return Expected<void, Error>::Ok();
 }
 
-/// Emits the retained records between the merge and hyperlink blocks
-/// (BrtPhoneticInfo, and any block the reader could not decode) with the
-/// model's conditional formats and validations in grammar order: phonetic
-/// info, CF blocks, then the single DVals container.
+/// Emits the model's phonetic settings, the retained records between the
+/// merge and hyperlink blocks (any block the reader could not decode), and
+/// the model's conditional formats and validations in grammar order:
+/// phonetic info, CF blocks, then the single DVals container.
 Expected<void, Error> EmitFormattingAndValidation(std::vector<std::uint8_t>& body, const Sheet& sheet,
                                                   const std::vector<std::uint8_t>& retained,
                                                   const FeatureFormulaWriteContext& ctx,
                                                   const std::unordered_set<std::string>& x14_linked) {
   const auto raw_dvals = static_cast<std::ptrdiff_t>(find_record_offset(retained, kBrtBeginDVals));
+  emit_phonetic_info(body, sheet);
   body.insert(body.end(), retained.begin(), retained.begin() + raw_dvals);
   for (const CfBlockView& view : cf_saved_layout(sheet.conditional_formats())) {
     if (auto s = emit_cf_block(body, view, ctx, x14_linked, sheet.name()); !s) {
@@ -683,6 +684,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     return std::move(hyperlinks.error());
   }
   body.insert(body.end(), tail.after_hyperlinks.begin(), tail.after_hyperlinks.end());
+  emit_sheet_uid(body, sheet, own_index);
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtEndSheet), ByteSpan{});
   return body;
 }

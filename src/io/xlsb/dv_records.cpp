@@ -3,7 +3,6 @@
 #include "io/xlsb/dv_records.h"
 
 #include <algorithm>
-#include <array>
 #include <string>
 #include <utility>
 
@@ -22,7 +21,6 @@ namespace io {
 namespace xlsb {
 namespace {
 
-constexpr std::array<std::uint8_t, 6> kAcBeginPayload = {0x01, 0x00, 0x00, 0x10, 0x00, 0x80};
 constexpr std::size_t kUidBytes = 16;
 constexpr std::size_t kHeaderZeroBytes = 14;
 constexpr std::size_t kFrtHeaderBytes = 4;
@@ -221,8 +219,8 @@ bool IsUidWrapper(const std::vector<FramedRecord>& recs, std::size_t i) {
     return false;
   }
   const ByteSpan begin = recs[i].payload;
-  return recs[i].type == kAcBegin && begin.size == kAcBeginPayload.size() &&
-         std::equal(kAcBeginPayload.begin(), kAcBeginPayload.end(), begin.data) && recs[i + 1U].type == kUid &&
+  return recs[i].type == kAcBegin && begin.size == kAcUidBeginPayload.size() &&
+         std::equal(kAcUidBeginPayload.begin(), kAcUidBeginPayload.end(), begin.data) && recs[i + 1U].type == kUid &&
          recs[i + 1U].payload.size == kUidBytes && recs[i + 2U].type == kAcEnd && recs[i + 2U].payload.size == 0U;
 }
 
@@ -341,9 +339,9 @@ std::optional<std::vector<DataValidation>> decode_dv_block(ByteSpan block, const
         return std::nullopt;
       }
       auto end = read_record(cursor);
-      if (r.payload.size != kAcBeginPayload.size() ||
-          !std::equal(kAcBeginPayload.begin(), kAcBeginPayload.end(), r.payload.data) || uid.value().type != kUid ||
-          uid.value().payload.size != kUidBytes || !end || end.value().type != kAcEnd ||
+      if (r.payload.size != kAcUidBeginPayload.size() ||
+          !std::equal(kAcUidBeginPayload.begin(), kAcUidBeginPayload.end(), r.payload.data) ||
+          uid.value().type != kUid || uid.value().payload.size != kUidBytes || !end || end.value().type != kAcEnd ||
           end.value().payload.size != 0U) {
         return std::nullopt;
       }

@@ -1,5 +1,6 @@
 // BrtWsProp codec: the sheet's `<sheetPr>` code name and tab colour to and
-// from the worksheet-properties record.
+// from the worksheet-properties record; with it the other sheet-level records
+// the model owns: BrtWsFmtInfo, BrtPhoneticInfo and the sheet's revision uid.
 
 #ifndef FORMULON_IO_XLSB_SHEET_PROPERTIES_RECORDS_H_
 #define FORMULON_IO_XLSB_SHEET_PROPERTIES_RECORDS_H_
@@ -7,9 +8,11 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 #include "io/xlsb/record.h"
+#include "phonetic.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 
@@ -55,6 +58,33 @@ void emit_ws_fmt_info(std::vector<std::uint8_t>& dst, const SheetFormatDefaults&
 /// Emits the worksheet-properties record which starts the mandatory
 /// worksheet prefix.
 void emit_ws_prop(std::vector<std::uint8_t>& dst, const Sheet& sheet);
+
+/// Reads `BrtPhoneticInfo` (u16 ifnt, u32 phType, u32 alcH); false for any
+/// other shape or an ordinal past 3.
+bool decode_phonetic_info(ByteSpan payload, PhoneticProperties& out);
+
+/// The sheet's `<phoneticPr>`, when its raw children hold one.
+std::optional<PhoneticProperties> sheet_phonetic_properties(const Sheet& sheet);
+
+/// Stores `props` as the sheet's `<phoneticPr>` child, written as Excel
+/// writes it: `fontId`, then `type` and `alignment` only where they differ
+/// from the schema defaults.
+void set_sheet_phonetic_properties(Sheet& sheet, const PhoneticProperties& props);
+
+/// Emits `BrtPhoneticInfo` for the sheet's `<phoneticPr>`; nothing for a
+/// sheet without one.
+void emit_phonetic_info(std::vector<std::uint8_t>& dst, const Sheet& sheet);
+
+/// Stores the 16-byte GUID of a sheet's revision-uid wrapper as the
+/// worksheet root's `xr:uid`.
+void set_sheet_uid(Sheet& sheet, const std::uint8_t* guid);
+
+/// Emits the sheet's revision-uid wrapper (BrtACBegin, BrtUid, BrtACEnd),
+/// which ends the worksheet. The GUID is the root's `xr:uid`; a sheet
+/// without one gets `{00000000-0001-0000-XX00-000000000000}`, `XX` its
+/// zero-based position, which is what Excel assigns a sheet it loads
+/// without a uid.
+void emit_sheet_uid(std::vector<std::uint8_t>& dst, const Sheet& sheet, std::size_t sheet_index);
 
 }  // namespace xlsb
 }  // namespace io

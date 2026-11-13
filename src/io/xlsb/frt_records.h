@@ -6,6 +6,7 @@
 #ifndef FORMULON_IO_XLSB_FRT_RECORDS_H_
 #define FORMULON_IO_XLSB_FRT_RECORDS_H_
 
+#include <array>
 #include <cstdint>
 
 namespace formulon {
@@ -45,6 +46,9 @@ inline constexpr std::uint16_t kBeginCfs14 = 1135;
 inline constexpr std::uint16_t kEndCfs14 = 1136;
 inline constexpr std::uint16_t kEndDVals14 = 1154;
 inline constexpr std::uint16_t kUid = 3072;
+
+/// BrtACBegin payload of a revision-uid wrapper (BrtACBegin, BrtUid, BrtACEnd).
+inline constexpr std::array<std::uint8_t, 6> kAcUidBeginPayload = {0x01, 0x00, 0x00, 0x10, 0x00, 0x80};
 
 }  // namespace xlsb
 }  // namespace io

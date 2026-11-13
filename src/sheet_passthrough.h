@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace formulon {
@@ -105,6 +106,16 @@ struct WorksheetRawChild {
 /// preserved by default rather than dropped, which is what keeps a save
 /// from silently damaging an Excel-authored sheet.
 using WorksheetRawExtensions = std::vector<WorksheetRawChild>;
+
+/// Inserts `child` after every child whose slot is not later than its own,
+/// keeping `children` ordered by slot.
+inline void insert_raw_child(WorksheetRawExtensions& children, WorksheetRawChild child) {
+  std::size_t at = 0;
+  while (at < children.size() && children[at].slot <= child.slot) {
+    ++at;
+  }
+  children.insert(children.begin() + static_cast<std::ptrdiff_t>(at), std::move(child));
+}
 
 /// One entry of a source `.xlsb` workbook's `BrtExternSheet` table, by
 /// sheet name so it survives sheet reordering.

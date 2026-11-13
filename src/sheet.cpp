@@ -207,6 +207,7 @@ Sheet Sheet::clone_as(std::string name) const {
   for (DataValidation& validation : copy.validations_) {
     rederive_attr_guid(validation.extra_attrs, "xr:uid", salt);
   }
+  rederive_attr_guid(copy.root_extra_ns_attrs_, "xr:uid", salt);
   copy.view_.tab_selected = false;
   copy.print_settings_.printer_settings_rid.clear();
   strip_code_name(copy.print_settings_.sheet_pr_xml);

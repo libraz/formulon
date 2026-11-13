@@ -392,5 +392,14 @@ TEST(SheetClone, FreshIdentity) {
   EXPECT_NE(other.threaded_comments()[0].id, thread.id);
 }
 
+// The worksheet root's revision uid is derived like the other uids, so the copy does not share its source's.
+TEST(SheetClone, RootUidIsDerived) {
+  constexpr std::string_view kRootUid = "{6B2E0F4A-1C3D-4E5F-8A9B-0C1D2E3F4A5B}";
+  Workbook wb = PopulatedWorkbook();
+  wb.sheet(0).set_root_extra_ns_attrs(" xmlns:x14ac=\"urn:x14ac\" xr:uid=\"" + std::string(kRootUid) + "\"");
+  const Sheet copy = wb.sheet(0).clone_as(std::string(kCopyName));
+  EXPECT_EQ(copy.root_extra_ns_attrs(), " xmlns:x14ac=\"urn:x14ac\" xr:uid=\"" + Guid(kRootUid) + "\"");
+}
+
 }  // namespace
 }  // namespace formulon

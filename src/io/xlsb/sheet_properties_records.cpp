@@ -1,6 +1,7 @@
 #include "io/xlsb/sheet_properties_records.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -9,13 +10,18 @@
 #include <string_view>
 #include <utility>
 
+#include "io/phonetic_pr.h"
 #include "io/xlsb/brt_color.h"
+#include "io/xlsb/frt_records.h"
+#include "io/xlsb/guid_text.h"
 #include "io/xlsb/record.h"
+#include "io/xlsb/record_ids.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "sheet_passthrough.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/number_text.h"
@@ -369,6 +375,89 @@ void emit_ws_fmt_info(std::vector<std::uint8_t>& dst, const SheetFormatDefaults&
   emit_u16(formatting, miy_default_row_height);
   emit_u32(formatting, format_flags);
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtWsFmtInfo), formatting);
+}
+
+bool decode_phonetic_info(ByteSpan payload, PhoneticProperties& out) {
+  ByteSpan p = payload;
+  auto font_or = read_u16(p);
+  auto type_or = read_u32(p);
+  auto alignment_or = read_u32(p);
+  if (!font_or || !type_or || !alignment_or || p.size != 0U || type_or.value() > 3U || alignment_or.value() > 3U) {
+    return false;
+  }
+  out.font_id = font_or.value();
+  out.type = static_cast<std::uint8_t>(type_or.value());
+  out.alignment = static_cast<std::uint8_t>(alignment_or.value());
+  return true;
+}
+
+std::optional<PhoneticProperties> sheet_phonetic_properties(const Sheet& sheet) {
+  const auto slot = static_cast<std::uint32_t>(worksheet_child::slot_of("phoneticPr"));
+  for (const WorksheetRawChild& child : sheet.raw_extensions()) {
+    pugi::xml_document doc;
+    if (child.slot == slot && doc.load_buffer(child.xml.data(), child.xml.size()) && doc.child("phoneticPr")) {
+      return read_phonetic_properties(doc);
+    }
+  }
+  return std::nullopt;
+}
+
+void set_sheet_phonetic_properties(Sheet& sheet, const PhoneticProperties& props) {
+  std::string xml = "<phoneticPr fontId=\"" + std::to_string(props.font_id) + "\"";
+  if (props.type != 1U) {
+    append_xml_attr(xml, "type", phonetic_type_name(props.type));
+  }
+  if (props.alignment != 1U) {
+    append_xml_attr(xml, "alignment", phonetic_alignment_name(props.alignment));
+  }
+  xml.append("/>");
+  WorksheetRawExtensions& children = sheet.mutable_raw_extensions();
+  const auto slot = static_cast<std::uint32_t>(worksheet_child::slot_of("phoneticPr"));
+  children.erase(std::remove_if(children.begin(), children.end(),
+                                [slot](const WorksheetRawChild& child) { return child.slot == slot; }),
+                 children.end());
+  insert_raw_child(children, WorksheetRawChild{slot, std::move(xml)});
+}
+
+void emit_phonetic_info(std::vector<std::uint8_t>& dst, const Sheet& sheet) {
+  const std::optional<PhoneticProperties> props = sheet_phonetic_properties(sheet);
+  if (!props) {
+    return;
+  }
+  std::vector<std::uint8_t> payload;
+  emit_u16(payload, props->font_id);
+  emit_u32(payload, props->type);
+  emit_u32(payload, props->alignment);
+  emit_record(dst, kBrtPhoneticInfo, payload);
+}
+
+void set_sheet_uid(Sheet& sheet, const std::uint8_t* guid) {
+  std::string attrs = sheet.root_extra_ns_attrs();
+  append_xml_attr(attrs, "xmlns:mc", "http://schemas.openxmlformats.org/markup-compatibility/2006");
+  append_xml_attr(attrs, "mc:Ignorable", "xr");
+  append_xml_attr(attrs, "xmlns:xr", "http://schemas.microsoft.com/office/spreadsheetml/2014/revision");
+  append_xml_attr(attrs, "xr:uid", FormatGuid(guid));
+  sheet.set_root_extra_ns_attrs(std::move(attrs));
+}
+
+void emit_sheet_uid(std::vector<std::uint8_t>& dst, const Sheet& sheet, std::size_t sheet_index) {
+  std::array<std::uint8_t, kGuidBytes> guid{};
+  constexpr std::string_view kKey = " xr:uid=\"";
+  const std::string& attrs = sheet.root_extra_ns_attrs();
+  const std::size_t at = attrs.find(kKey);
+  const std::size_t start = at == std::string::npos ? at : at + kKey.size();
+  const std::size_t end = start == std::string::npos ? start : attrs.find('"', start);
+  if (end == std::string::npos || !ParseGuid(std::string_view(attrs).substr(start, end - start), guid)) {
+    // u32 0, u32 1, u32 position, u32 0.
+    guid = {};
+    guid[4] = 1U;
+    for (std::size_t i = 0; i < 4U; ++i) {
+      guid[8U + i] = static_cast<std::uint8_t>((sheet_index >> (8U * i)) & 0xFFU);
+    }
+  }
+  emit_record(dst, kAcBegin, ByteSpan{kAcUidBeginPayload.data(), kAcUidBeginPayload.size()});
+  emit_record(dst, kUid, ByteSpan{guid.data(), guid.size()});
+  emit_record(dst, kAcEnd, ByteSpan{});
 }
 
 }  // namespace xlsb

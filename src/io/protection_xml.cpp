@@ -182,12 +182,8 @@ void write_protected_ranges(WorksheetRawExtensions& children, const std::vector<
     }
   }
   xml.append("</protectedRanges>");
-  const auto slot = static_cast<std::uint32_t>(worksheet_child::slot_of(kProtectedRanges));
-  std::size_t at = 0;
-  while (at < children.size() && children[at].slot <= slot) {
-    ++at;
-  }
-  children.insert(children.begin() + static_cast<std::ptrdiff_t>(at), WorksheetRawChild{slot, std::move(xml)});
+  insert_raw_child(children, WorksheetRawChild{static_cast<std::uint32_t>(worksheet_child::slot_of(kProtectedRanges)),
+                                               std::move(xml)});
 }
 
 }  // namespace formulon::io
