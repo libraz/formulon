@@ -1287,6 +1287,17 @@ entries:
     first_noted: 2026-11-13
     last_verified_excel_version: "16.115"
 
+  - id: xlsb_cf_legacy_companion_block
+    applies_to: all
+    cause: non-identifiable
+    mode: skip-oracle
+    scope: api-contract
+    evidence: [tests/unit/io/xlsb/xlsb_parity_claims_test.cpp]
+    reason: "An xlsb may carry a legacy conditional-format block beside an x14 rule (icon set, data bar), depending on how the book was produced; a fresh Excel save of the same rule writes none. Which history produced the block is not recorded in the file, so the reader loads the pair as one rule and the writer matches the fresh save."
+    prefer: formulon
+    first_noted: 2026-11-13
+    last_verified_excel_version: "16.115"
+
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a
