@@ -313,11 +313,11 @@ struct AwaitingEvidence {
 };
 
 const AwaitingEvidence kAwaitingExcelEvidence[] = {
-    {0, 11, {0x10U}, "BrtRowHdr fDyZero: no manifest file holds a hidden row"},
-    {46, 43, {0x04U}, "BrtBorder diagonal colour as RGB: no manifest file colours a diagonal border"},
-    {147, 3, {0x05U}, "BrtWsProp tab colour: no manifest file has a tab colour"},
-    {156, 0, {1U, 2U}, "BrtBundleSh hidden and very hidden: no manifest file hides a sheet"},
-    {157, 24, {0x01U}, "BrtCalcProp fFullCalcOnLoad: copy_sheet/t3.xlsx asks for it, no manifest file carries it"},
+    {157,
+     24,
+     {0x01U},
+     "BrtCalcProp fFullCalcOnLoad: Excel clears this one-shot request when it saves (claims/full_calc_on_load keeps "
+     "0x6a although its source asks for a full calculation), so no Excel save carries it"},
 };
 
 std::string FixturesRoot() {

@@ -300,3 +300,13 @@ excel/xlsb_pivot_twins/E_ft_v01_eq.xlsb
 excel/xlsb_pivot_twins/E_ft_v06_between.xlsb
 excel/xlsb_ptg_class.xlsb
 excel/xlsb_range_chains.xlsb
+excel/xlsb_parity/claims/row_zero_height.xlsb
+excel/xlsb_parity/claims/row_zero_height.2.xlsb
+excel/xlsb_parity/claims/border_diagonal_rgb.xlsb
+excel/xlsb_parity/claims/border_diagonal_rgb.2.xlsb
+excel/xlsb_parity/claims/tab_color_kinds.xlsb
+excel/xlsb_parity/claims/tab_color_kinds.2.xlsb
+excel/xlsb_parity/claims/sheet_states.xlsb
+excel/xlsb_parity/claims/sheet_states.2.xlsb
+excel/xlsb_parity/claims/full_calc_on_load.xlsb
+excel/xlsb_parity/claims/full_calc_on_load.2.xlsb
