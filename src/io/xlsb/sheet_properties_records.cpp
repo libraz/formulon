@@ -40,6 +40,27 @@ constexpr std::uint16_t kDefaultWsPropFlags = 0x04C9U;
 constexpr std::uint8_t kDefaultWsPropFlags2 = 0x02U;
 constexpr std::uint32_t kWsPropSyncUnused = 0xFFFFFFFFU;
 
+/// BrtWsProp flag bits the writer derives from `<outlinePr>` and `<pageSetUpPr>`.
+constexpr std::uint16_t kWsPropApplyStyles = 0x0020U;
+constexpr std::uint16_t kWsPropFitToPage = 0x0100U;
+constexpr std::uint16_t kWsPropShowOutlineSymbols = 0x0400U;
+
+/// The `<sheetPr>` members BrtWsProp writes from the model; any other member or value is reported as deferred.
+bool IsWrittenSheetPrAttribute(std::string_view element, const pugi::xml_attribute& attr) {
+  const std::string_view name = attr.name();
+  if (element == "sheetPr") {
+    return name == "codeName";
+  }
+  if (element == "outlinePr") {
+    return name == "applyStyles" || name == "showOutlineSymbols" ||
+           ((name == "summaryBelow" || name == "summaryRight") && attr.as_bool(true));
+  }
+  if (element == "pageSetUpPr") {
+    return name == "fitToPage";
+  }
+  return element == "tabColor";
+}
+
 /// BrtWsFmtInfo: the dxGCol sentinel for "no default column width" and the
 /// row height Excel writes when no default is set.
 constexpr std::uint32_t kAbsentDefaultColumnWidth = 0xFFFFFFFFU;
@@ -84,6 +105,7 @@ void AppendTabColor(std::string& out, const ColorSpec& spec, std::uint32_t argb)
 /// together with the automatic palette index is the "no tab colour" state
 /// Excel writes for an untinted tab.
 struct WorksheetProperties {
+  std::uint16_t flags = kDefaultWsPropFlags;
   std::string code_name;
   std::uint8_t color_type = 0U;
   std::uint8_t color_index = 0x40U;
@@ -117,10 +139,10 @@ void ApplyTabColor(const ColorSpec& spec, WorksheetProperties& out) {
 /// Reads the code name back out of the sheet's retained `<sheetPr>` fragment,
 /// the inverse of `decode_ws_prop`. The tab colour comes from the typed field.
 ///
-/// Members `<sheetPr>` can carry that `BrtWsProp` has no field for --
-/// `<outlinePr>`, `<pageSetUpPr>`, `filterMode` -- stay in the fragment
-/// and reach an `.xlsx` save unchanged; they are simply not part of what
-/// this record emits.
+/// The `<outlinePr>` applyStyles and showOutlineSymbols and the
+/// `<pageSetUpPr>` fitToPage set their flag bits. Members the record does
+/// not write (`sheet_pr_writes_all`) stay in the fragment and reach an
+/// `.xlsx` save unchanged.
 WorksheetProperties ParseSheetProperties(std::string_view raw) {
   WorksheetProperties out;
   if (raw.empty()) {
@@ -135,10 +157,51 @@ WorksheetProperties ParseSheetProperties(std::string_view raw) {
     return out;
   }
   out.code_name = sheet_pr.attribute("codeName").value();
+  const pugi::xml_node outline = sheet_pr.child("outlinePr");
+  if (outline.attribute("applyStyles").as_bool()) {
+    out.flags |= kWsPropApplyStyles;
+  }
+  if (!outline.attribute("showOutlineSymbols").as_bool(true)) {
+    out.flags &= static_cast<std::uint16_t>(~kWsPropShowOutlineSymbols);
+  }
+  if (sheet_pr.child("pageSetUpPr").attribute("fitToPage").as_bool()) {
+    out.flags |= kWsPropFitToPage;
+  }
   return out;
 }
 
 }  // namespace
+
+bool sheet_pr_writes_all(std::string_view raw) {
+  if (raw.empty()) {
+    return true;
+  }
+  pugi::xml_document doc;
+  if (!doc.load_buffer(raw.data(), raw.size())) {
+    return false;
+  }
+  const pugi::xml_node sheet_pr = doc.document_element();
+  if (std::string_view(sheet_pr.name()) != "sheetPr") {
+    return false;
+  }
+  for (const pugi::xml_attribute& attr : sheet_pr.attributes()) {
+    if (!IsWrittenSheetPrAttribute("sheetPr", attr)) {
+      return false;
+    }
+  }
+  for (const pugi::xml_node& child : sheet_pr.children()) {
+    const std::string_view element = child.name();
+    if (element != "outlinePr" && element != "pageSetUpPr" && element != "tabColor") {
+      return false;
+    }
+    for (const pugi::xml_attribute& attr : child.attributes()) {
+      if (!IsWrittenSheetPrAttribute(element, attr)) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
 
 /// Decodes `BrtWsProp` ([MS-XLSB] §2.4.858) into the sheet's raw
 /// `<sheetPr>` fragment. Layout, verified against a real
@@ -229,8 +292,8 @@ void emit_ws_prop(std::vector<std::uint8_t>& dst, const Sheet& sheet) {
   WorksheetProperties properties_model = ParseSheetProperties(sheet.print_settings().sheet_pr_xml);
   ApplyTabColor(sheet.print_settings().tab_color, properties_model);
   std::vector<std::uint8_t> properties;
-  emit_u16(properties, kDefaultWsPropFlags);  // page breaks, publish, outline defaults
-  emit_u8(properties, kDefaultWsPropFlags2);  // evaluate conditional formatting
+  emit_u16(properties, properties_model.flags);  // page breaks, publish, outline and fit-to-page
+  emit_u8(properties, kDefaultWsPropFlags2);     // evaluate conditional formatting
   // BrtColor. An automatic type with the automatic palette index is the
   // untinted tab; any other selector sets fValidRGB alongside it, matching
   // how the styles writer spells the same structure.

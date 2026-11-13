@@ -20,9 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   setup keeps paper size, scale, resolution, copies, first page number, page
   order, orientation, black and white, draft, comments and error printing;
   automatic breaks are left out, as Excel leaves them out. A fresh book of any
-  profile now saves to `.xlsb` with nothing reported as deferred. Only sheet
-  properties (`<sheetPr>`) and a printer-settings part are still reported as
-  deferred print settings.
+  profile now saves to `.xlsb` with nothing reported as deferred. The sheet
+  properties record also carries the outline settings for automatic styles
+  and outline symbols, and fit-to-page. Other `<sheetPr>` settings
+  and a printer-settings part are still reported as deferred print settings.
 
 - `.xlsx` saves compact the cell formats (`<cellXfs>`) as Excel does: entries
   that write identically collapse into the first one, entries no cell, row or

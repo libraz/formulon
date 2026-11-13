@@ -1,5 +1,5 @@
-// BrtWsProp codec: the sheet's `<sheetPr>` code name and tab colour to and
-// from the worksheet-properties record; with it the other sheet-level records
+// BrtWsProp codec: the sheet's `<sheetPr>` code name, tab colour, outline and
+// fit-to-page flags to and from the worksheet-properties record; with it the other sheet-level records
 // the model owns: BrtWsFmtInfo, BrtPhoneticInfo and the sheet's revision uid.
 
 #ifndef FORMULON_IO_XLSB_SHEET_PROPERTIES_RECORDS_H_
@@ -9,6 +9,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string_view>
 #include <vector>
 
 #include "io/xlsb/record.h"
@@ -54,6 +55,12 @@ inline bool IsRepresentableDefaultRowHeight(double value) {
 
 /// Emits `BrtWsFmtInfo` for `defaults`.
 void emit_ws_fmt_info(std::vector<std::uint8_t>& dst, const SheetFormatDefaults& defaults);
+
+/// True when BrtWsProp writes every member of the `<sheetPr>` fragment `raw`:
+/// the code name, the tab colour, `<outlinePr>` applyStyles and
+/// showOutlineSymbols (summaryBelow / summaryRight only at their default) and
+/// `<pageSetUpPr>` fitToPage. An empty fragment is fully written.
+bool sheet_pr_writes_all(std::string_view raw);
 
 /// Emits the worksheet-properties record which starts the mandatory
 /// worksheet prefix.

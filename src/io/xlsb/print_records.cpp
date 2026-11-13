@@ -15,6 +15,7 @@
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_ids.h"
 #include "io/xlsb/record_writer.h"
+#include "io/xlsb/sheet_properties_records.h"
 #include "pugixml.hpp"
 
 namespace formulon {
@@ -286,7 +287,7 @@ bool model_owns_print_records(const SheetPrintSettings& print) {
 
 bool has_deferred_print_settings(const SheetPrintSettings& print) {
   // The xlsb save writes no printer-settings part, so a sheet linking one loses it.
-  return !print.sheet_pr_xml.empty() || !print.printer_settings_rid.empty();
+  return !sheet_pr_writes_all(print.sheet_pr_xml) || !print.printer_settings_rid.empty();
 }
 
 void splice_print_records(std::vector<std::uint8_t>& after_hyperlinks, const SheetPrintSettings& print) {
