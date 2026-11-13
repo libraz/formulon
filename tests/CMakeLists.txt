@@ -96,6 +96,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/defined_names_test.cpp
   unit/io/dxf_compaction_roundtrip_test.cpp
   unit/io/dxf_order_golden_test.cpp
+  unit/io/cell_style_save_golden_test.cpp
   unit/io/dxf_save_plan_test.cpp
   unit/io/future_functions_test.cpp
   unit/io/hyperlink_roundtrip_test.cpp
