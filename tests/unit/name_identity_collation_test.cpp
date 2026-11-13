@@ -387,7 +387,7 @@ TEST(NameIdentityCollation, CellStyleLookupMatchesUnderCollationEquality) {
       CellStyleRecord style;
       style.name = p.first;
       styles.cell_styles.push_back(style);
-      EXPECT_EQ(Code(remove_cell_style(styles, p.second)),
+      EXPECT_EQ(Code(remove_cell_style(styles, p.second, wb.excel_profile())),
                 p.same ? FormulonErrorCode::kOk : FormulonErrorCode::kNotFound);
       EXPECT_EQ(styles.cell_styles.size(), p.same ? before : before + 1U);
     }

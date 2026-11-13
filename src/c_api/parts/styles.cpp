@@ -441,7 +441,7 @@ extern "C" fm_status_t fm_workbook_get_cell_style(const fm_workbook_t* wb, const
   }
   *out_present = 0;
   *out = fm_cell_style_t{};
-  const std::size_t found = formulon::sheet_names::resolve_named(wb->workbook().styles().cell_styles, name);
+  const std::size_t found = formulon::resolve_cell_style(wb->workbook().styles(), name, wb->workbook().excel_profile());
   if (found == formulon::sheet_names::kNotFound) {
     return 0;
   }

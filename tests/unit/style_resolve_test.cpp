@@ -289,14 +289,14 @@ StylesTable BuildDeletionTable() {
 
 TEST(StylesCellStyleRemoval, MatchesTheNameAcrossCase) {
   StylesTable t = BuildDeletionTable();
-  ASSERT_TRUE(static_cast<bool>(remove_cell_style(t, "PROBESTYLE")));
+  ASSERT_TRUE(static_cast<bool>(remove_cell_style(t, "PROBESTYLE", default_excel_profile())));
   ASSERT_EQ(t.cell_styles.size(), 1U);
   EXPECT_EQ(t.cell_styles[0].name, "Normal");
 }
 
 TEST(StylesCellStyleRemoval, RepointsXfsAndKeepsAppliedGroups) {
   StylesTable t = BuildDeletionTable();
-  ASSERT_TRUE(static_cast<bool>(remove_cell_style(t, "ProbeStyle")));
+  ASSERT_TRUE(static_cast<bool>(remove_cell_style(t, "ProbeStyle", default_excel_profile())));
 
   ASSERT_EQ(t.cell_styles.size(), 1U);
   EXPECT_EQ(t.cell_styles[0].name, "Normal");
@@ -338,7 +338,7 @@ TEST(StylesCellStyleRemoval, KeepsXfsWhileAnotherStyleSharesTheRecord) {
   twin.name = "Twin";
   twin.xf_id = 1;
   t.cell_styles.push_back(twin);
-  ASSERT_TRUE(static_cast<bool>(remove_cell_style(t, "ProbeStyle")));
+  ASSERT_TRUE(static_cast<bool>(remove_cell_style(t, "ProbeStyle", default_excel_profile())));
   ASSERT_EQ(t.cell_styles.size(), 2U);
   EXPECT_EQ(t.cell_xfs[1].xf_id, 1U);
   EXPECT_EQ(t.cell_xfs[1].font_index, 1U);
@@ -346,10 +346,10 @@ TEST(StylesCellStyleRemoval, KeepsXfsWhileAnotherStyleSharesTheRecord) {
 
 TEST(StylesCellStyleRemoval, RejectsNormalAndUnknownNames) {
   StylesTable t = BuildDeletionTable();
-  const auto normal = remove_cell_style(t, "Normal");
+  const auto normal = remove_cell_style(t, "Normal", default_excel_profile());
   ASSERT_FALSE(static_cast<bool>(normal));
   EXPECT_EQ(normal.error().code, FormulonErrorCode::kInvalidArgument);
-  const auto unknown = remove_cell_style(t, "NoSuchStyle");
+  const auto unknown = remove_cell_style(t, "NoSuchStyle", default_excel_profile());
   ASSERT_FALSE(static_cast<bool>(unknown));
   EXPECT_EQ(unknown.error().code, FormulonErrorCode::kNotFound);
   EXPECT_EQ(t.cell_styles.size(), 2U);
@@ -358,7 +358,8 @@ TEST(StylesCellStyleRemoval, RejectsNormalAndUnknownNames) {
 
 TEST(StylesCellStyleRemoval, SurvivesSaveAndReload) {
   Workbook wb = LoadFixture("builtin_cell_styles.xlsx");
-  ASSERT_TRUE(static_cast<bool>(remove_cell_style(wb.mutable_styles(), "\xE8\xAA\xAC\xE6\x98\x8E\xE6\x96\x87")));
+  ASSERT_TRUE(static_cast<bool>(
+      remove_cell_style(wb.mutable_styles(), "\xE8\xAA\xAC\xE6\x98\x8E\xE6\x96\x87", wb.excel_profile())));
   const Workbook reloaded = RoundTrip(wb);
   EXPECT_EQ(reloaded.styles().cell_styles.size(), 53U);
   EXPECT_EQ(FindStyle(reloaded.styles(), 53U), nullptr);

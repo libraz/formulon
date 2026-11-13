@@ -765,6 +765,8 @@ FM_API fm_status_t fm_workbook_get_sheet_count(const fm_workbook_t* wb, size_t* 
  * `FM_STATUS_ALREADY_EXISTS` when another member holds the name under the
  * wide fold. A lookup by name tries an exact match, then a case-only match,
  * then the one member matching under the wide fold, if exactly one does. A
+ * built-in cell style also answers to its name in the workbook profile's
+ * locale, and among exact or case-only matches the first record wins. A
  * default sheet name is free under the wide fold as well. Folding is not
  * normalization, full (expanding) case folding or locale tailoring.
  */
@@ -12112,7 +12114,8 @@ typedef struct {
   uint32_t outline_level;
   /** Whether the style is hidden from the style gallery. */
   int32_t hidden;
-  /** Whether this is a built-in style the workbook has changed. */
+  /** Whether this is a built-in style the workbook has changed; `fm_workbook_set_cell_style_xf`
+   *  sets it on every built-in style naming the edited slot. */
   int32_t custom_builtin;
 } fm_cell_style_t;
 
@@ -12630,8 +12633,8 @@ FM_API fm_status_t fm_workbook_get_cell_style_count(const fm_workbook_t* wb, siz
 FM_API fm_status_t fm_workbook_get_cell_style_at(const fm_workbook_t* wb, size_t index, fm_cell_style_t* out);
 
 /**
- * @brief Reads the named cell style `name` (Unicode simple case
- *        folding, as `fm_workbook_remove_cell_style` matches). `*out_present` is `1` and
+ * @brief Reads the named cell style `name`, resolved as the name identity
+ *        notes above describe. `*out_present` is `1` and
  *        `*out` filled when there is one, else `0` and `*out` zeroed (still
  *        `FM_STATUS_OK` (0)). Lifetimes as `fm_workbook_get_cell_style_at`.
  *
@@ -12913,7 +12916,8 @@ FM_API fm_status_t fm_workbook_add_cell_style_xf(fm_workbook_t* wb, const fm_cel
  * @brief Overwrites the `cell_style_xf_index`-th named-style xf
  *        (`<cellStyleXfs>`) in place, with the bulk-restyle and no-dedup
  *        semantics of `fm_workbook_set_font`: every named style naming this
- *        slot takes the new record. The record is validated as
+ *        slot takes the new record, and when the record changes the slot each
+ *        built-in style naming it is marked changed (`fm_cell_style_t.custom_builtin`). The record is validated as
  *        `fm_workbook_add_cell_style_xf` validates it.
  *
  * @return `FM_STATUS_OK` (0) on success;
@@ -12930,8 +12934,11 @@ FM_API fm_status_t fm_workbook_set_cell_style_xf(fm_workbook_t* wb, uint32_t cel
 /**
  * @brief Adds or replaces the named `<cellStyle>` record `record->name`.
  *
- * An existing style of that name is overwritten field for field; otherwise
- * the record is appended. `record->name` is copied. `style_xf_index` must reference
+ * The name resolves as the name identity notes above describe. A custom style
+ * it resolves to is overwritten field for field; a built-in one keeps its
+ * `builtin_id` and `outline_level` and takes the record's name, `style_xf_index`,
+ * `hidden` and `custom_builtin`. Otherwise the record is appended.
+ * `record->name` is copied. `style_xf_index` must reference
  * an existing named-style xf; with `has_builtin_id` set `builtin_id` is
  * `0..53`, and `has_builtin_id == 0` makes a custom style; `outline_level` is
  * `0..6` for `builtin_id` 1 / 2 and must be `0` otherwise.
@@ -12939,12 +12946,16 @@ FM_API fm_status_t fm_workbook_set_cell_style_xf(fm_workbook_t* wb, uint32_t cel
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `record` or `record->name` is `NULL`;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `record->name` is malformed UTF-8;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) for an empty name or an out-of-range field.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) for an empty name or an out-of-range field;
+ *         `FM_STATUS_ALREADY_EXISTS` (7) when the name resolves to a built-in
+ *           style and `record` carries a different `builtin_id`, or when it collides with another
+ *           style under the wide fold.
  */
 FM_API fm_status_t fm_workbook_set_cell_style(fm_workbook_t* wb, const fm_cell_style_t* record);
 
 /**
- * @brief Removes the named `<cellStyle>` record `name`.
+ * @brief Removes the named `<cellStyle>` record `name`, resolved as the name
+ *        identity notes above describe.
  *
  * When no other named style shares the removed record's `style_xf_index`, every
  * cell xf that inherits from it is repointed at Normal (`style_xf_index` 0), and each
@@ -12955,7 +12966,8 @@ FM_API fm_status_t fm_workbook_set_cell_style(fm_workbook_t* wb, const fm_cell_s
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `name` is `NULL`;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `name` is malformed UTF-8;
- *         `FM_STATUS_NOT_FOUND` (6) when no style has that name;
+ *         `FM_STATUS_NOT_FOUND` (6) when no style has that name, or two styles match it only under
+ *           the wide fold;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when it is the Normal style (`builtin_id` 0).
  */
 FM_API fm_status_t fm_workbook_remove_cell_style(fm_workbook_t* wb, const char* name);

@@ -4144,7 +4144,8 @@ export interface CellStyle {
   readonly outlineLevel: number;
   /** Whether the style is hidden from the style gallery. */
   readonly hidden: boolean;
-  /** Whether this is a built-in style the workbook has changed. */
+  /** Whether this is a built-in style the workbook has changed; `setCellStyleXf` sets it on every built-in style
+   *  naming the edited slot. */
   readonly customBuiltin: boolean;
 }
 
@@ -7057,13 +7058,19 @@ export interface Workbook {
 
   /** Lists the named cell styles (`<cellStyle>` entries) in file order. */
   listCellStyles(): readonly CellStyle[];
-  /** Reads the named cell style `name` (resolved by name identity, see {@link Workbook}); `null` when there is none. */
+  /** Reads the named cell style `name` (resolved by name identity, see {@link Workbook}; a built-in style also answers
+   *  to its name in the workbook profile's locale); `null` when there is none. */
   getCellStyle(name: string): CellStyle | null;
   /** Adds or replaces the `<cellStyle>` entry named `record.name` (names collide by name identity, see {@link
-   *  Workbook}). Absent fields default to `styleXfIndex` 0, a custom style (`0xFFFFFFFF`), level 0 and both flags
-   *  false. */
+   *  Workbook}; a built-in style also answers to its name in the workbook profile's locale). A custom style the name
+   *  resolves to is replaced whole; a built-in one keeps its `builtinId` and `outlineLevel` and takes the record's
+   *  `name`, `styleXfIndex`, `hidden` and `customBuiltin`. A name that resolves to a built-in style while the record
+   *  carries a different `builtinId` fails with `StatusCode.AlreadyExists`. Absent fields default to `styleXfIndex` 0,
+   *  a custom style (`0xFFFFFFFF`), level 0 and both flags false. */
   setCellStyle(record: CellStyleInput): void;
-  /** Removes the `<cellStyle>` named `name`; cell formats that used it are repointed at the Normal style. */
+  /** Removes the `<cellStyle>` named `name` (resolved as {@link Workbook.getCellStyle} does); cell formats that used
+   *  it are repointed at the Normal style. A name no style has, or that two styles match only under the wide fold,
+   *  fails with `StatusCode.NotFound`. */
   removeCellStyle(name: string): void;
 
   /** Lists the custom table / PivotTable styles (`<tableStyles>`) in file order. */
@@ -8231,7 +8238,7 @@ export interface WorkbookOoxml {
    *  `CellXf.styleXfIndex` reference. */
   addCellStyleXf(record: CellXfInput): number;
   /** Overwrites the named-style xf at `cellStyleXfIndex` in place; the {@link CellXf} `getCellStyleXf` returns
-   *  passes as is. An index past the end fails with `StatusCode.IndexOutOfRange`, an invalid record with
+   *  passes as is. When the record changes the slot, every built-in style naming it gets `customBuiltin`. An index past the end fails with `StatusCode.IndexOutOfRange`, an invalid record with
    *  `StatusCode.InvalidArgument`. */
   setCellStyleXf(cellStyleXfIndex: number, record: CellXfInput): void;
 

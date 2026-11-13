@@ -637,10 +637,23 @@ extern "C" fm_status_t fm_workbook_set_cell_style(fm_workbook_t* wb, const fm_ce
   style.i_level = record->outline_level;
   style.hidden = record->hidden != 0;
   style.custom_builtin = record->custom_builtin != 0;
-  // An upsert: the style the name resolves to takes the record, new spelling included.
-  if (const std::size_t found = formulon::sheet_names::resolve_named(styles.cell_styles, style.name);
+  // An upsert: a custom style the name resolves to takes the record whole; a
+  // built-in one keeps its identity and takes the rest.
+  if (const std::size_t found = formulon::resolve_cell_style(styles, style.name, wb->workbook().excel_profile());
       found != formulon::sheet_names::kNotFound) {
-    styles.cell_styles[found] = std::move(style);
+    formulon::CellStyleRecord& existing = styles.cell_styles[found];
+    if (existing.builtin_id == formulon::CellStyleRecord::kBuiltinIdNone) {
+      existing = std::move(style);
+      return 0;
+    }
+    if (style.builtin_id != formulon::CellStyleRecord::kBuiltinIdNone && style.builtin_id != existing.builtin_id) {
+      return set_binding_error(formulon::FormulonErrorCode::kAlreadyExists, "name already in use",
+                               "name=" + style.name);
+    }
+    existing.name = std::move(style.name);
+    existing.xf_id = style.xf_id;
+    existing.hidden = style.hidden;
+    existing.custom_builtin = style.custom_builtin;
     return 0;
   }
   if (std::any_of(styles.cell_styles.begin(), styles.cell_styles.end(), [&](const formulon::CellStyleRecord& s) {
@@ -660,7 +673,8 @@ extern "C" fm_status_t fm_workbook_remove_cell_style(fm_workbook_t* wb, const ch
   if (auto rc = check_utf8({name}); rc != 0) {
     return rc;
   }
-  return finish_status(formulon::remove_cell_style(wb->workbook().mutable_styles(), name));
+  return finish_status(
+      formulon::remove_cell_style(wb->workbook().mutable_styles(), name, wb->workbook().excel_profile()));
 }
 
 extern "C" fm_status_t fm_workbook_add_batch(fm_workbook_t* wb, const fm_styles_batch_spec_t* batch) {

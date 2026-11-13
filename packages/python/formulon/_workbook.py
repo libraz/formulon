@@ -6038,7 +6038,8 @@ class CellStyle:
     outline_level: int = 0
     #: Whether the style is hidden from the style gallery.
     hidden: bool = False
-    #: Whether this is a built-in style the workbook has changed.
+    #: Whether this is a built-in style the workbook has changed;
+    #: :meth:`WorkbookOoxml.set_cell_style_xf` sets it on every built-in style naming the edited slot.
     custom_builtin: bool = False
 
 
@@ -10322,7 +10323,11 @@ class Workbook(_NoCopy):
         return out
 
     def get_cell_style(self, name: str) -> Optional[CellStyle]:
-        """Return the named cell style ``name`` (Unicode simple case folding), or ``None``."""
+        """Return the named cell style ``name``, or ``None``.
+
+        Names resolve by name identity; a built-in style also answers to its name in the workbook
+        profile's locale, and among exact or case-only matches the first style wins.
+        """
         return self._lookup(LIB.fm_workbook_get_cell_style, (name,), S.CELL_STYLE_RECORD, _cell_style_from)
 
     def set_cell_style(self, record: CellStyle) -> None:
@@ -10331,7 +10336,14 @@ class Workbook(_NoCopy):
         ``record.style_xf_index`` must reference an existing named-style xf --
         register one with :meth:`WorkbookOoxml.add_cell_style_xf` first.
         ``builtin_id`` is an Excel built-in style ordinal (0..53); ``None`` marks a
-        custom style.
+        custom style. The name resolves as in :meth:`get_cell_style`. A custom style it
+        resolves to is replaced whole; a built-in one keeps its ``builtin_id`` and
+        ``outline_level`` and takes the record's name, ``style_xf_index``, ``hidden`` and
+        ``custom_builtin``.
+
+        Raises:
+          AlreadyExistsError: when the name resolves to a built-in style and the record
+            carries a different ``builtin_id``, or collides with another style.
         """
         h = self._require()
         with _ArgScope() as scope:
@@ -10355,8 +10367,9 @@ class Workbook(_NoCopy):
         """Remove the named cell style ``name``.
 
         Cell xfs inheriting from it are repointed at Normal; no xf index
-        shifts. An unknown name raises ``NotFoundError`` and the Normal
-        style ``InvalidArgumentError``.
+        shifts. The name resolves as in :meth:`get_cell_style`. A name no style has, or
+        that two styles match only under the wide fold, raises ``NotFoundError`` and the
+        Normal style ``InvalidArgumentError``.
         """
         h = self._require()
         with _ArgScope() as scope:
@@ -11160,7 +11173,8 @@ class WorkbookOoxml(_NoCopy):
 
     def set_cell_style_xf(self, cell_style_xf_index: int, record: Union[CellXfInput, CellXf]) -> None:
         """Overwrite an existing ``<cellStyleXfs>`` slot in place, as :meth:`set_cell_xf` does for a cell xf:
-        every named style naming ``cell_style_xf_index`` takes the record. The index must already exist.
+        every named style naming ``cell_style_xf_index`` takes the record, and when the record changes the slot each built-in style naming it
+        gets ``custom_builtin``. The index must already exist.
 
         Raises:
           IndexOutOfRangeError: past the named-style xf count, or for a font, fill or border index past its table.

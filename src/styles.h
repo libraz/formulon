@@ -441,7 +441,13 @@ struct StylesTable {
 /// synthesize into an empty collection.
 bool has_saved_cell_style(const StylesTable& styles, std::string_view name);
 
-/// Removes the `<cellStyle>` `name` resolves to (`sheet_names::resolve_named`) and
+/// The index of the cell style `name` resolves to (`sheet_names::resolve_by`), or
+/// `sheet_names::kNotFound`. A custom style answers to its stored name; a
+/// built-in one also to its name in `profile`'s locale. Among exact or narrow
+/// matches the first record wins.
+std::size_t resolve_cell_style(const StylesTable& styles, std::string_view name, ExcelProfile profile);
+
+/// Removes the `<cellStyle>` `name` resolves to (`resolve_cell_style`) and
 /// detaches the cell xfs that used it.
 ///
 /// Every `cell_xfs` entry whose `xf_id` is the removed style's is repointed to
@@ -453,9 +459,10 @@ bool has_saved_cell_style(const StylesTable& styles, std::string_view name);
 ///
 /// Returns `kNotFound` when no style has that name and `kInvalidArgument`
 /// when it is the Normal style (`builtin_id == 0`).
-Expected<void, Error> remove_cell_style(StylesTable& styles, std::string_view name);
+Expected<void, Error> remove_cell_style(StylesTable& styles, std::string_view name, ExcelProfile profile);
 
-/// Replaces `cell_style_xfs[index]` with `record`, keeping the index. Returns
+/// Replaces `cell_style_xfs[index]` with `record`, keeping the index. Every
+/// built-in cell style pointing at the slot gets `custom_builtin`. Returns
 /// `kIndexOutOfRange` past the table and `kInvalidArgument` when the record
 /// names a font, fill or border the table does not have; nothing changes on
 /// failure.

@@ -340,3 +340,155 @@ TEST(FormulonCApiStyles, AddBatchFailureLeavesTableAndOutputsUnchanged) {
   EXPECT_EQ(wb.handle->workbook().styles().cell_xfs.size(), before_cell_xfs);
   EXPECT_EQ(formulon::io::write_styles(wb.handle->workbook().styles()), before_xml);
 }
+
+namespace {
+
+constexpr const char* kJaHeading1 = "\xE8\xA6\x8B\xE5\x87\xBA\xE3\x81\x97 1";  // 見出し 1
+constexpr const char* kJaHeading2 = "\xE8\xA6\x8B\xE5\x87\xBA\xE3\x81\x97 2";  // 見出し 2
+
+void UseJaProfile(WorkbookGuard& wb) {
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "mac-365-ja_JP"), 0);
+}
+
+fm_status_t PutStyle(fm_workbook_t* wb, const char* name, bool builtin, uint32_t builtin_id, uint32_t xf = 0) {
+  fm_cell_style_t record{};
+  record.name = name;
+  record.style_xf_index = xf;
+  record.has_builtin_id = builtin ? 1 : 0;
+  record.builtin_id = builtin ? builtin_id : 0U;
+  return fm_workbook_set_cell_style(wb, &record);
+}
+
+int32_t Present(const fm_workbook_t* wb, const char* name, fm_cell_style_t* out) {
+  int32_t present = -1;
+  EXPECT_EQ(fm_workbook_get_cell_style(wb, name, &present, out), 0);
+  return present;
+}
+
+}  // namespace
+
+TEST(FormulonCApiStyles, BuiltinStyleAnswersToStoredAndLocaleName) {
+  WorkbookGuard wb;
+  UseJaProfile(wb);
+  ASSERT_EQ(PutStyle(wb.handle, "Heading 1", true, 16U), 0);
+  fm_cell_style_t style{};
+  ASSERT_EQ(Present(wb.handle, kJaHeading1, &style), 1);
+  EXPECT_STREQ(style.name, "Heading 1");
+  EXPECT_EQ(style.builtin_id, 16U);
+  ASSERT_EQ(Present(wb.handle, "Heading 1", &style), 1);
+  EXPECT_STREQ(style.name, "Heading 1");
+
+  ASSERT_EQ(fm_workbook_remove_cell_style(wb.handle, kJaHeading1), 0);
+  EXPECT_EQ(Present(wb.handle, "Heading 1", &style), 0);
+
+  ASSERT_EQ(PutStyle(wb.handle, "Heading 1", true, 16U), 0);
+  ASSERT_EQ(fm_workbook_remove_cell_style(wb.handle, "Heading 1"), 0);
+  EXPECT_EQ(Present(wb.handle, kJaHeading1, &style), 0);
+}
+
+TEST(FormulonCApiStyles, LocaleNameCollisionResolvesToFirstRecord) {
+  // Under en_US the two names differ, so both records exist; under ja they collide.
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(PutStyle(wb.handle, kJaHeading2, false, 0U), 0);
+  ASSERT_EQ(PutStyle(wb.handle, "Heading 2", true, 17U), 0);
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "mac-365-ja_JP"), 0);
+  fm_cell_style_t style{};
+  ASSERT_EQ(Present(wb.handle, kJaHeading2, &style), 1);
+  EXPECT_STREQ(style.name, kJaHeading2);
+  EXPECT_EQ(style.has_builtin_id, 0);
+}
+
+TEST(FormulonCApiStyles, SetOnBuiltinKeepsIdentityAndTakesTheRest) {
+  WorkbookGuard wb;
+  UseJaProfile(wb);
+  fm_cell_xf_t style_xf{};
+  style_xf.has_alignment = 1;
+  style_xf.horizontal = 2;
+  style_xf.has_horizontal = 1;
+  std::uint32_t xf_id = 0;
+  ASSERT_EQ(fm_workbook_add_cell_style_xf(wb.handle, &style_xf, &xf_id), 0);
+  ASSERT_EQ(PutStyle(wb.handle, "Heading 1", true, 16U), 0);
+
+  // A custom input resolving to the built-in keeps the built-in's id.
+  fm_cell_style_t input{};
+  input.name = kJaHeading1;
+  input.style_xf_index = xf_id;
+  input.hidden = 1;
+  input.custom_builtin = 1;
+  ASSERT_EQ(fm_workbook_set_cell_style(wb.handle, &input), 0);
+  fm_cell_style_t style{};
+  ASSERT_EQ(Present(wb.handle, kJaHeading1, &style), 1);
+  EXPECT_STREQ(style.name, kJaHeading1);
+  EXPECT_EQ(style.has_builtin_id, 1);
+  EXPECT_EQ(style.builtin_id, 16U);
+  EXPECT_EQ(style.style_xf_index, xf_id);
+  EXPECT_EQ(style.hidden, 1);
+  EXPECT_EQ(style.custom_builtin, 1);
+
+  // A different built-in id under the same name is refused and changes nothing.
+  EXPECT_EQ(PutStyle(wb.handle, kJaHeading1, true, 17U), FM_STATUS_ALREADY_EXISTS);
+  ASSERT_EQ(Present(wb.handle, kJaHeading1, &style), 1);
+  EXPECT_EQ(style.builtin_id, 16U);
+
+  // A custom style it resolves to is replaced whole.
+  ASSERT_EQ(PutStyle(wb.handle, "Mine", false, 0U), 0);
+  ASSERT_EQ(PutStyle(wb.handle, "mine", true, 20U), 0);
+  ASSERT_EQ(Present(wb.handle, "Mine", &style), 1);
+  EXPECT_STREQ(style.name, "mine");
+  EXPECT_EQ(style.has_builtin_id, 1);
+  EXPECT_EQ(style.builtin_id, 20U);
+}
+
+TEST(FormulonCApiStyles, SetOfReadBackBuiltinByLocaleNameIsNoOp) {
+  WorkbookGuard wb;
+  UseJaProfile(wb);
+  ASSERT_EQ(PutStyle(wb.handle, "Heading 1", true, 16U), 0);
+  size_t before = 0;
+  ASSERT_EQ(fm_workbook_get_cell_style_count(wb.handle, &before), 0);
+  fm_cell_style_t style{};
+  ASSERT_EQ(Present(wb.handle, kJaHeading1, &style), 1);
+  const std::string name = style.name;
+  fm_cell_style_t copy = style;
+  copy.name = name.c_str();
+  ASSERT_EQ(fm_workbook_set_cell_style(wb.handle, &copy), 0);
+  size_t after = 0;
+  ASSERT_EQ(fm_workbook_get_cell_style_count(wb.handle, &after), 0);
+  EXPECT_EQ(after, before);
+  fm_cell_style_t again{};
+  ASSERT_EQ(Present(wb.handle, kJaHeading1, &again), 1);
+  EXPECT_STREQ(again.name, "Heading 1");
+  EXPECT_EQ(again.builtin_id, 16U);
+  EXPECT_EQ(again.style_xf_index, style.style_xf_index);
+  EXPECT_EQ(again.hidden, style.hidden);
+  EXPECT_EQ(again.custom_builtin, style.custom_builtin);
+}
+
+TEST(FormulonCApiStyles, SetCellStyleXfMarksBuiltinStylesNamingTheSlot) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_cell_xf_t style_xf{};
+  style_xf.has_alignment = 1;
+  style_xf.horizontal = 2;
+  style_xf.has_horizontal = 1;
+  std::uint32_t xf_id = 0;
+  ASSERT_EQ(fm_workbook_add_cell_style_xf(wb.handle, &style_xf, &xf_id), 0);
+  ASSERT_EQ(PutStyle(wb.handle, "Heading 1", true, 16U, xf_id), 0);
+  ASSERT_EQ(PutStyle(wb.handle, "Mine", false, 0U, xf_id), 0);
+  fm_cell_style_t style{};
+  ASSERT_EQ(Present(wb.handle, "Heading 1", &style), 1);
+  ASSERT_EQ(style.custom_builtin, 0);
+
+  // Rewriting the same format is not an edit.
+  ASSERT_EQ(fm_workbook_set_cell_style_xf(wb.handle, xf_id, &style_xf), 0);
+  ASSERT_EQ(Present(wb.handle, "Heading 1", &style), 1);
+  EXPECT_EQ(style.custom_builtin, 0);
+
+  style_xf.horizontal = 3;
+  ASSERT_EQ(fm_workbook_set_cell_style_xf(wb.handle, xf_id, &style_xf), 0);
+  ASSERT_EQ(Present(wb.handle, "Heading 1", &style), 1);
+  EXPECT_EQ(style.custom_builtin, 1);
+  ASSERT_EQ(Present(wb.handle, "Mine", &style), 1);
+  EXPECT_EQ(style.custom_builtin, 0);
+}

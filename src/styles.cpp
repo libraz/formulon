@@ -13,7 +13,9 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
+#include "builtin_style_names.h"
 #include "num_fmt_locale.h"
 #include "sheet_name.h"
 #include "utils/strings.h"
@@ -235,8 +237,29 @@ bool has_saved_cell_style(const StylesTable& styles, std::string_view name) {
   return sheet_names::resolve_named(styles.cell_styles, name) != sheet_names::kNotFound;
 }
 
-Expected<void, Error> remove_cell_style(StylesTable& styles, std::string_view name) {
-  const std::size_t pos = sheet_names::resolve_named(styles.cell_styles, name);
+std::size_t resolve_cell_style(const StylesTable& styles, std::string_view name, ExcelProfile profile) {
+  struct Query {
+    const std::vector<CellStyleRecord>* styles;
+    std::string_view name;
+    ExcelLocale locale;
+  };
+  const Query query{&styles.cell_styles, name, profile.locale};
+  return sheet_names::resolve_by(
+      styles.cell_styles.size(),
+      [](const void* context, std::size_t index, sheet_names::Fold fold) {
+        const Query& q = *static_cast<const Query*>(context);
+        const CellStyleRecord& record = (*q.styles)[index];
+        if (sheet_names::same(record.name, q.name, fold)) {
+          return true;
+        }
+        return record.builtin_id != CellStyleRecord::kBuiltinIdNone &&
+               sheet_names::same(builtin_style_name(record.builtin_id, record.i_level, q.locale), q.name, fold);
+      },
+      &query);
+}
+
+Expected<void, Error> remove_cell_style(StylesTable& styles, std::string_view name, ExcelProfile profile) {
+  const std::size_t pos = resolve_cell_style(styles, name, profile);
   if (pos == sheet_names::kNotFound) {
     return make_error(FormulonErrorCode::kNotFound, "name names no cell style", "name=" + std::string(name));
   }
@@ -293,9 +316,19 @@ Expected<void, Error> set_cell_style_xf(StylesTable& styles, std::uint32_t index
       record.border_index >= styles.borders.size()) {
     return make_error(FormulonErrorCode::kInvalidArgument, "record names a missing font, fill or border", "");
   }
+  const std::string before = cell_xf_key(styles.cell_style_xfs[index]);
   styles.cell_style_xfs[index] = record;
   // A `<cellStyleXfs>` record has no parent style.
   styles.cell_style_xfs[index].xf_id = 0U;
+  if (cell_xf_key(styles.cell_style_xfs[index]) == before) {
+    return Expected<void, Error>::Ok();
+  }
+  // Excel marks a built-in style whose format was edited.
+  for (CellStyleRecord& style : styles.cell_styles) {
+    if (style.builtin_id != CellStyleRecord::kBuiltinIdNone && style.xf_id == index) {
+      style.custom_builtin = true;
+    }
+  }
   return Expected<void, Error>::Ok();
 }
 
