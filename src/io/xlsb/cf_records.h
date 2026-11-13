@@ -121,6 +121,12 @@ bool is_x14_only_rule(const cf::CFRule& rule, std::string_view own_sheet,
 void take_x14_rules(std::vector<std::uint8_t>& records, const FeatureFormulaReadContext& ctx,
                     std::vector<cf::ConditionalFormat>& formats);
 
+/// True when the retained sheet tail `tail` holds a conditional-format rule
+/// `formats` does not: a legacy block `decode_cf_block` refused, or an x14
+/// rule whose id names no rule of `formats`. Also true for a tail whose
+/// records do not frame.
+bool tail_holds_unmodelled_cf(const XlsbSheetTail& tail, const std::vector<cf::ConditionalFormat>& formats);
+
 /// Rewrites, in place, every retained standalone formula rule of `records`
 /// from the model rule with its id, keeping Excel's dxf copy while the dxf is
 /// unchanged, and adds the id to `linked`. A rule whose model ranges differ

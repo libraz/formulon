@@ -14,6 +14,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Opening `.xlsx` and `.xlsb` merges conditional-format rules the way Excel does
+  on open. Two rules combine into one when they match in type, operator,
+  stop-if-true, formula and differential-format content, with formulas compared
+  relative to each rule's range. Their ranges must together form one rectangle or
+  cover the same cells, and no rule with a priority between theirs may overlap the
+  range of the later one. The surviving rule keeps the lower priority number and
+  takes the combined range. Merging repeats until no pair is left. It applies to
+  formula-based rules: expression, cell value, text, blank and error rules, and
+  date periods. Top/bottom, above-average, duplicate and unique values, colour
+  scales, data bars and icon sets never merge. A loaded workbook can therefore
+  hold fewer rules than the file lists (C `fm_sheet_get_cf_rule_count`,
+  `listCfRules()`, Python `list_cf_rules()`), matching what Excel shows.
+  Evaluation results do not change. Rules added through the API are kept as
+  added. A sheet holding conditional formats Formulon keeps only verbatim is not
+  merged.
+
 - Column geometry under a Mac profile follows Mac Excel's layout: `Sheet.getWidthModel`,
   `Sheet.convertColumnCharsToPt`, `Sheet.getCellRectPt`, `CELL("width")` and the
   drawing anchors (Python `get_width_model`, `convert_column_chars_to_pt`,

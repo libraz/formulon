@@ -802,6 +802,37 @@ void take_x14_rules(std::vector<std::uint8_t>& records, const FeatureFormulaRead
   });
 }
 
+bool tail_holds_unmodelled_cf(const XlsbSheetTail& tail, const std::vector<cf::ConditionalFormat>& formats) {
+  std::unordered_set<std::string> model_ids;
+  for (const cf::ConditionalFormat& format : formats) {
+    for (const cf::CFRule& rule : format.rules) {
+      if (!rule.id.empty()) {
+        model_ids.insert(rule.id);
+      }
+    }
+  }
+  for (const std::vector<std::uint8_t>* slot :
+       {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
+    ByteSpan cursor{slot->data(), slot->size()};
+    while (cursor.size != 0U) {
+      auto rec = read_record(cursor);
+      if (!rec) {
+        return true;
+      }
+      const ByteSpan p = rec.value().payload;
+      if (rec.value().type == kBrtBeginConditionalFormatting) {
+        return true;
+      }
+      // Every BrtBeginCFRule14 ends with the rule GUID and fGuid.
+      if (rec.value().type == kBeginCfRule14 &&
+          (p.size < kRule14TailBytes || model_ids.count(FormatGuid(p.data + p.size - kRule14TailBytes)) == 0U)) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 Expected<void, Error> reconcile_x14_rules(std::vector<std::uint8_t>& records,
                                           const std::vector<cf::ConditionalFormat>& formats,
                                           const FeatureFormulaWriteContext& ctx, std::string_view own_sheet,

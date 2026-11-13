@@ -29,6 +29,7 @@
 
 #include "default_content_type.h"
 #include "hyperlink_address.h"
+#include "io/cf_merge.h"
 #include "io/cf_reader.h"
 #include "io/dynamic_array_formula.h"
 #include "io/future_functions.h"
@@ -830,6 +831,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   // Conditional-format and data-validation formulas name other books
   // through the same `[N]` cell formulas do.
   ingest_feature_formulas(wb, Workbook::FormulaSource::kRendered);
+  merge_cf_rules_on_load(wb);
 
   // Every sheet view and visibility is loaded: settle the active sheet as Excel does on open.
   wb.apply_open_active_sheet_rule();
