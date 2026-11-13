@@ -14,6 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Saving `.xlsb` writes each sheet's own phonetic (furigana) settings, the
+  `<phoneticPr>` font, type and alignment, and closes the sheet with its revision
+  id, as Excel does. A sheet without a stated id gets the one Excel assigns from
+  the sheet's position. Opening `.xlsb` reads both back, so they also survive a
+  conversion to `.xlsx`. A copied sheet gets a new revision id. A sheet
+  `<phoneticPr>` whose font index lies past the workbook's font table now points
+  at font 0 when the book is opened (`.xlsx` and `.xlsb`), keeping its type and
+  alignment, which is how Excel reads it.
+
 - A font patch that names a different face (`updateCellFormat` / Python `update_cell_format`,
   `font.name`) without stating `scheme` now also sets `scheme` to `None`, as Excel does when the
   font name changes. A font linked to the theme is drawn with the theme's face whatever name it
