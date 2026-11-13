@@ -163,8 +163,9 @@ TEST(XlsbParityClaims, LegacyCompanionLoadsAsOneRule) {
   EXPECT_EQ(RuleCount(back_xlsx.value().workbook), 1U);
 }
 
-// Conditional-format records of a data bar, a two-colour scale, icon sets with showValue=0 and with reverse, and a
-// custom icon set, converted from xlsx, equal Excel's fresh xlsb save of the same source.
+// Conditional-format records of a data bar, a two-colour scale, icon sets with showValue=0 and with reverse, a custom
+// icon set, and an x14 icon set beside a colour scale, converted from xlsx, equal Excel's fresh xlsb save of the same
+// source.
 TEST(XlsbParityClaims, CfKindsMatchExcelsFreshSave) {
   const auto cf_records = [](const std::vector<std::uint8_t>& part) {
     std::vector<std::pair<std::uint16_t, std::vector<std::uint8_t>>> out;
@@ -178,9 +179,10 @@ TEST(XlsbParityClaims, CfKindsMatchExcelsFreshSave) {
     }
     return out;
   };
-  for (const char* kind : {"databar", "colorscale", "iconset_novalue", "iconset_reverse", "custom_iconset"}) {
-    SCOPED_TRACE(kind);
-    const std::string stem = std::string("../cfcompanion/") + kind;
+  for (const char* stem_text : {"../cfcompanion/databar", "../cfcompanion/colorscale", "../cfcompanion/iconset_novalue",
+                                "../cfcompanion/iconset_reverse", "../cfcompanion/custom_iconset", "icon_set_x14"}) {
+    SCOPED_TRACE(stem_text);
+    const std::string stem = stem_text;
     const auto ours = cf_records(Part(Converted(stem), "xl/worksheets/sheet1.bin"));
     const auto excel = cf_records(Part(ReadFile(Claim(stem + ".xlsb")), "xl/worksheets/sheet1.bin"));
     ASSERT_FALSE(excel.empty());
@@ -242,6 +244,9 @@ TEST(XlsbParityClaims, ExternSheetMatchesExcel) {
     EXPECT_EQ(table(Part(Converted(path), "xl/workbook.bin")),
               table(Part(ReadFile(Claim(path + ".xlsb")), "xl/workbook.bin")));
   }
+  // Cell formulas naming the third, first and second sheets in row-major order.
+  EXPECT_EQ(table(Part(Converted("externsheet_order"), "xl/workbook.bin")),
+            table(Part(ReadFile(Claim("externsheet_order.xlsb")), "xl/workbook.bin")));
 }
 
 /// The payloads of `type` records in `part`.
