@@ -188,8 +188,8 @@ bool match_custom_one(const PreparedCustomCondition& prepared, const Value& v, c
   if (prepared.pattern) {
     // Excel orders a text against a pattern by the match alone: a match ranks
     // equal, anything else above, so `<=` keeps matches, `>` the rest, `>=` all
-    // text and `<` nothing. Numbers never pass.
-    if (!v.is_text() || v.as_text().empty()) {
+    // text (empty text included) and `<` nothing. Only text passes.
+    if (!v.is_text()) {
       return false;
     }
     return ordered(c.op, eval::wildcard_match(c.val, v.as_text()) ? 0 : 1);
@@ -201,7 +201,8 @@ bool match_custom_one(const PreparedCustomCondition& prepared, const Value& v, c
     const double x = v.as_number();
     return ordered(c.op, x < *n ? -1 : (x > *n ? 1 : 0));
   }
-  if (!v.is_text() || v.as_text().empty()) {
+  // Empty text collates below every criterion; blanks, booleans and errors never pass.
+  if (!v.is_text()) {
     return false;
   }
   return ordered(c.op, collate(v.as_text(), c.val));

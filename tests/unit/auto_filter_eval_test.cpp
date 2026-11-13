@@ -536,6 +536,93 @@ TEST(AutoFilterEval, OrderingAgainstAPatternTestsTheMatch) {
   }
 }
 
+// Measured in Excel 16.115 (Mac): empty text (a formula's "" included) is a
+// text, so it fails a pattern and collates below any criterion; blanks,
+// booleans, errors and numbers never pass; a criterion without `*` or `?`
+// collates literally, `~` included.
+TEST(AutoFilterEval, OrderingCriteriaOverEmptyTextAndNonTextValues) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  Sheet& sheet = wb.sheet(0);
+  const std::vector<Value> values = {Value::text("a"),
+                                     Value::text("b"),
+                                     Value::text("~"),
+                                     Value::text("a~"),
+                                     Value::text("a~b"),
+                                     Value::text("*"),
+                                     Value::text(""),
+                                     Value::blank(),
+                                     Value::boolean(true),
+                                     Value::boolean(false),
+                                     Value::error(ErrorCode::NA),
+                                     Value::error(ErrorCode::Div0),
+                                     Value::number(5),
+                                     Value::text(""),
+                                     Value::text("z")};
+  for (std::size_t i = 0; i < values.size(); ++i) {
+    sheet.set_cell_value(static_cast<std::uint32_t>(i + 1U), 0, values[i]);
+  }
+  struct Case {
+    FilterOperator op;
+    const char* criterion;
+    const char* kept;  ///< One flag per value: 1 = row stays visible.
+  };
+  const Case cases[] = {
+      {FilterOperator::kGreaterThan, "a*", "011001100000011"},
+      {FilterOperator::kGreaterThan, "*", "000000000000000"},
+      {FilterOperator::kGreaterThan, "?", "000110100000010"},
+      {FilterOperator::kGreaterThan, "~", "110110000000001"},
+      {FilterOperator::kGreaterThan, "a~", "010010000000001"},
+      {FilterOperator::kGreaterThan, "~a", "110110000000001"},
+      {FilterOperator::kGreaterThan, "a~~", "010010000000001"},
+      {FilterOperator::kGreaterThan, "~~", "110110000000001"},
+      {FilterOperator::kGreaterThan, "b", "000000000000001"},
+      {FilterOperator::kGreaterThanOrEqual, "a*", "111111100000011"},
+      {FilterOperator::kGreaterThanOrEqual, "*", "111111100000011"},
+      {FilterOperator::kGreaterThanOrEqual, "?", "111111100000011"},
+      {FilterOperator::kGreaterThanOrEqual, "~", "111110000000001"},
+      {FilterOperator::kGreaterThanOrEqual, "a~", "010110000000001"},
+      {FilterOperator::kGreaterThanOrEqual, "~a", "110110000000001"},
+      {FilterOperator::kGreaterThanOrEqual, "a~~", "010010000000001"},
+      {FilterOperator::kGreaterThanOrEqual, "~~", "110110000000001"},
+      {FilterOperator::kGreaterThanOrEqual, "b", "010000000000001"},
+      {FilterOperator::kLessThan, "a*", "000000000000000"},
+      {FilterOperator::kLessThan, "*", "000000000000000"},
+      {FilterOperator::kLessThan, "?", "000000000000000"},
+      {FilterOperator::kLessThan, "~", "000001100000010"},
+      {FilterOperator::kLessThan, "a~", "101001100000010"},
+      {FilterOperator::kLessThan, "~a", "001001100000010"},
+      {FilterOperator::kLessThan, "a~~", "101101100000010"},
+      {FilterOperator::kLessThan, "~~", "001001100000010"},
+      {FilterOperator::kLessThan, "b", "101111100000010"},
+      {FilterOperator::kLessThanOrEqual, "a*", "100110000000000"},
+      {FilterOperator::kLessThanOrEqual, "*", "111111100000011"},
+      {FilterOperator::kLessThanOrEqual, "?", "111001000000001"},
+      {FilterOperator::kLessThanOrEqual, "~", "001001100000010"},
+      {FilterOperator::kLessThanOrEqual, "a~", "101101100000010"},
+      {FilterOperator::kLessThanOrEqual, "~a", "001001100000010"},
+      {FilterOperator::kLessThanOrEqual, "a~~", "101101100000010"},
+      {FilterOperator::kLessThanOrEqual, "~~", "001001100000010"},
+      {FilterOperator::kLessThanOrEqual, "b", "111111100000010"},
+  };
+  for (const Case& c : cases) {
+    SCOPED_TRACE(std::string(c.criterion));
+    AutoFilter filter;
+    filter.range = MergeRange{0, 0, static_cast<std::uint32_t>(values.size()), 0};
+    FilterColumn column;
+    column.kind = FilterKind::kCustom;
+    column.custom.filters.push_back({c.op, c.criterion});
+    filter.columns.push_back(std::move(column));
+    const auto visible = evaluate_auto_filter(wb, sheet, filter);
+    ASSERT_TRUE(static_cast<bool>(visible));
+    std::string got;
+    for (const bool kept : visible.value()) {
+      got.push_back(kept ? '1' : '0');
+    }
+    EXPECT_EQ(got, c.kept) << static_cast<int>(c.op);
+  }
+}
+
 TEST(AutoFilterEval, OpaqueFilterIsRejected) {
   Workbook wb = Workbook::create();
   AutoFilter filter;
