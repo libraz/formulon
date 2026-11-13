@@ -479,9 +479,8 @@ void EmitBeginList(std::vector<std::uint8_t>& out, const TableMetadata& table, c
   // dwConnID must be zero except on an XML table.
   const std::uint32_t conn_id = DxfAttr(attrs, "connectionId");
   emit_u32(payload, lt == kLtXml && conn_id != kNoDxf ? conn_id : 0U);
-  emit_xlnullablewidestring(payload, table.name.empty() || table.name == table.display_name
-                                         ? std::nullopt
-                                         : std::optional<std::string_view>(table.name));
+  // Excel writes the programmatic name even when it equals the display name.
+  emit_xlnullablewidestring(payload, std::string_view(table.name.empty() ? table.display_name : table.name));
   emit_xlnullablewidestring(payload, std::string_view(table.display_name));
   const std::string* comment = FindAttr(attrs, "comment");
   emit_xlnullablewidestring(payload, std::string_view(comment != nullptr ? *comment : std::string()));

@@ -9,6 +9,7 @@
 #include "io/cf_reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
+#include "io/xlsb/tail_refs.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "parser/parser.h"
@@ -141,7 +142,8 @@ Expected<EncodedFeatureFormula, Error> encode_feature_formula(std::string_view t
     return std::move(encoded.error());
   }
   const std::vector<std::uint8_t>& rgce = encoded.value().rgce;
-  out.cb_fmla = static_cast<std::uint32_t>(rgce.size());
+  out.cb_fmla =
+      legacy_cf_formula_size_field(rgce.data(), rgce.size()).value_or(static_cast<std::uint32_t>(rgce.size()));
   const std::vector<std::uint8_t>& rgcb = encoded.value().rgcb;
   emit_u32(out.bytes, static_cast<std::uint32_t>(rgce.size()));
   out.bytes.insert(out.bytes.end(), rgce.begin(), rgce.end());

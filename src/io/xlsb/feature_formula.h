@@ -63,10 +63,10 @@ class FeatureFormulaLoadView final {
 
 /// A feature formula as its records carry it: `cce` + `rgce` + `cb` +
 /// `rgcb` (`bytes`), plus the size field BrtBeginCFRule / BrtCFVO keep
-/// alongside it (`cb_fmla`). Excel writes `cce` plus 2 per reference token
-/// and 4 per PtgName there but reads it only as present / absent: a file
-/// storing `cce` opens and re-saves identically, so `cce` is
-/// what is written.
+/// alongside it (`cb_fmla`): `cce` plus 2 per reference token, absolute or
+/// relative, plus 4 per PtgName, as Excel writes it
+/// (`legacy_cf_formula_size_field`); `cce` alone for a token the size walk
+/// cannot step over.
 struct EncodedFeatureFormula {
   std::vector<std::uint8_t> bytes;
   std::uint32_t cb_fmla = 0;

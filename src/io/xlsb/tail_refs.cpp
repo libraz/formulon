@@ -386,6 +386,22 @@ std::optional<std::uint32_t> frt_formula_size_field(const std::uint8_t* rgce, st
   return static_cast<std::uint32_t>(cce + 2U * relative);
 }
 
+std::optional<std::uint32_t> legacy_cf_formula_size_field(const std::uint8_t* rgce, std::size_t cce) {
+  std::size_t extra = 0;
+  for (std::size_t i = 0; i < cce;) {
+    const std::optional<std::size_t> size = TokenSize(rgce + i, cce - i);
+    if (!size || *size > cce - i - 1U) {
+      return std::nullopt;
+    }
+    const std::uint8_t kind = rgce[i] & 0x1FU;
+    if (rgce[i] >= 0x20U) {
+      extra += kind == 0x04U || kind == 0x05U || kind == 0x0CU || kind == 0x0DU ? 2U : kind == 0x03U ? 4U : 0U;
+    }
+    i += 1U + *size;
+  }
+  return static_cast<std::uint32_t>(cce + extra);
+}
+
 namespace {
 
 /// Rewrites every reference in `rgce[0, cce)` in place. False when a token
