@@ -8,6 +8,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <initializer_list>
 #include <limits>
 #include <memory>
 #include <optional>
@@ -57,6 +58,12 @@ std::vector<std::uint8_t> ReadFixture(const char* file) {
 
 /// One rendered row: its label and one value per data field.
 struct Row {
+  Row(std::string row_label, std::vector<double> row_values)
+      : label(std::move(row_label)), values(std::move(row_values)) {}
+  // From a range: GCC 14 -Werror=stringop-overflow misjudges a vector built from a one-element braced list.
+  Row(std::string row_label, std::initializer_list<double> row_values)
+      : label(std::move(row_label)), values(row_values.begin(), row_values.end()) {}
+
   std::string label;
   std::vector<double> values;
 

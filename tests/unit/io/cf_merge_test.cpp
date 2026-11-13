@@ -12,6 +12,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <optional>
 #include <regex>
 #include <string>
@@ -202,11 +203,18 @@ struct ExpectedRule {
 };
 
 struct MergeCase {
+  // From ranges: GCC 14 -Werror=stringop-overflow misjudges a vector built from a one-element braced list.
+  MergeCase(const char* case_name, std::initializer_list<ExpectedRule> case_rules,
+            std::initializer_list<ExpectedRule> case_xlsb_rules = {})
+      : name(case_name),
+        rules(case_rules.begin(), case_rules.end()),
+        xlsb_rules(case_xlsb_rules.begin(), case_xlsb_rules.end()) {}
+
   const char* name;
   std::vector<ExpectedRule> rules;
   /// The rules the xlsb load holds when it differs: the xlsb loader keeps a
   /// pivot-scoped block as raw records, which also keeps the sheet unmerged.
-  std::vector<ExpectedRule> xlsb_rules = {};
+  std::vector<ExpectedRule> xlsb_rules;
 };
 
 constexpr std::size_t kCfSheet = 2;

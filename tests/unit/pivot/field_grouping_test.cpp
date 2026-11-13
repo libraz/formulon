@@ -283,7 +283,7 @@ TEST(FieldGrouping, MaterializeResolvesUnstatedDateBoundsFromTheData) {
   cache.mutable_fields().push_back(GroupField("Week", week));
   for (const double serial : {Day(2024, 1U, 10U) + 0.5, Day(2024, 1U, 17U), Day(2024, 1U, 30U)}) {
     PivotCacheRecord record;
-    record.cells = {Value::number(serial)};
+    record.cells.push_back(Value::number(serial));
     record.cell_is_date = {true};
     cache.mutable_records().push_back(std::move(record));
   }
@@ -310,7 +310,7 @@ TEST(FieldGrouping, MaterializeFallbackBoundsReadOnlyDateMarkedValues) {
       {Day(2024, 1U, 1U), false}, {Day(2024, 1U, 10U), true}, {Day(2024, 1U, 17U), true}};
   for (const auto& [serial, is_date] : rows) {
     PivotCacheRecord record;
-    record.cells = {Value::number(serial)};
+    record.cells.push_back(Value::number(serial));
     record.cell_is_date = {is_date};
     cache.mutable_records().push_back(std::move(record));
   }
@@ -331,7 +331,7 @@ TEST(FieldGrouping, MaterializeHonoursTheDateEpoch) {
   months.group_items.assign(14U, Value::text("m"));
   cache.mutable_fields().push_back(GroupField("Months", months));
   PivotCacheRecord record;
-  record.cells = {Value::number(date_time::serial_from_ymd(2024, 5U, 31U, /*date1904=*/true))};
+  record.cells.push_back(Value::number(date_time::serial_from_ymd(2024, 5U, 31U, /*date1904=*/true)));
   cache.mutable_records().push_back(std::move(record));
 
   materialize_group_fields(cache, /*date1904=*/true);
@@ -351,15 +351,15 @@ TEST(FieldGrouping, MaterializeMapsDiscreteGroupsThroughSharedItems) {
   cache.mutable_fields().push_back(GroupField("Region2", group));
   // An index cell, an inline value of the same field, and an unknown value.
   PivotCacheRecord indexed;
-  indexed.cells = {Value::number(2.0)};
+  indexed.cells.push_back(Value::number(2.0));
   indexed.cell_is_index = {true};
   cache.mutable_records().push_back(std::move(indexed));
   PivotCacheRecord inline_value;
-  inline_value.cells = {Value::text("South")};
+  inline_value.cells.push_back(Value::text("South"));
   inline_value.cell_is_index = {false};
   cache.mutable_records().push_back(std::move(inline_value));
   PivotCacheRecord unknown;
-  unknown.cells = {Value::text("West")};
+  unknown.cells.push_back(Value::text("West"));
   unknown.cell_is_index = {false};
   cache.mutable_records().push_back(std::move(unknown));
 
@@ -380,7 +380,7 @@ TEST(FieldGrouping, MaterializeLeavesDatabaseAndBaseFieldsAlone) {
   par_only.par = 1U;
   cache.mutable_fields()[0].field_group = par_only;
   PivotCacheRecord record;
-  record.cells = {Value::number(Day(2024, 1U, 15U))};
+  record.cells.push_back(Value::number(Day(2024, 1U, 15U)));
   cache.mutable_records().push_back(std::move(record));
 
   materialize_group_fields(cache, /*date1904=*/false);
