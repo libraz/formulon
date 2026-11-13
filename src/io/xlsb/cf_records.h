@@ -59,8 +59,9 @@ bool decode_cf_rule_fields(const CfRuleFields& fields, std::string text, cf::CFR
 Expected<CfRuleFields, Error> encode_cf_rule_fields(const cf::CFRule& rule);
 
 /// False for an iType whose rules state no dxf (colour scale, data bar, icon
-/// set): their dxfId slot names nothing, and Excel writes 0 there in an x14
-/// rule whatever the styles part holds.
+/// set): their dxfId slot names nothing whatever the styles part holds. Excel
+/// writes 0 there for a data bar and -1 for an icon set in an x14 rule, and
+/// -1 in a legacy rule.
 bool cf_rule_type_has_dxf(std::uint32_t itype);
 
 /// Whether the rule type stores formula slots (the rank / average /

@@ -27,7 +27,8 @@ constexpr std::uint16_t kCalcSaveRecalc = 1U << 5U;
 constexpr std::uint16_t kCalcMtrEnabled = 1U << 6U;
 constexpr std::uint16_t kCalcUserSetThreadCount = 1U << 7U;
 constexpr std::uint16_t kCalcNoDeps = 1U << 8U;
-// cUserThreadCount must lie in [1, 1024]; 1 is what Excel writes unset.
+// cUserThreadCount must lie in [1, 1024]. Unset, Excel writes 1 or the host's core count (16 and 18 seen);
+// 1 is written and opens.
 constexpr std::int32_t kDefaultThreadCount = 1;
 
 // BrtWbProp flag word (2.4.868).
