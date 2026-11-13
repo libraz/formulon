@@ -44,6 +44,9 @@
 #include "workbook.h"
 
 namespace formulon {
+
+class CellStyleSavePlan;
+
 namespace io {
 namespace xlsb {
 
@@ -75,9 +78,10 @@ Expected<void, Error> decode_table_formulas(TableMetadata& table, const TableFor
 
 /// Serialises `table` as a table part with BrtBeginList `idList` = `id`.
 /// `lost` counts the settings the records cannot hold and the formulas that
-/// failed to encode. A cell-style name that `styles` does not save is written empty.
+/// failed to encode. A cell-style name the file `style_plan` writes does not
+/// name (`saved_file_names_cell_style`) is written empty.
 std::vector<std::uint8_t> write_table_bin(const TableMetadata& table, std::uint32_t id,
-                                          const FeatureFormulaWriteContext& ctx, const StylesTable& styles,
+                                          const FeatureFormulaWriteContext& ctx, const CellStyleSavePlan& style_plan,
                                           std::uint32_t* lost);
 
 /// The table parts a workbook's sheets relate to, read before any formula
@@ -138,6 +142,13 @@ std::vector<std::string> load_xlsb_tables(
 /// records. A part whose list record cannot be read is left out.
 std::vector<XlsbRetainedTable> xlsb_retained_tables(const Workbook& wb);
 
+/// The retained table part `bytes` re-encoded with every BrtBeginList /
+/// BrtBeginListCol cell-style name the file `style_plan` writes does not name
+/// written empty, every other record byte-equal. nullopt when every name is
+/// kept or a list record cannot be read, so the part passes through as is.
+std::optional<std::vector<std::uint8_t>> drop_unsaved_table_cell_styles(const std::vector<std::uint8_t>& bytes,
+                                                                        const CellStyleSavePlan& style_plan);
+
 /// One generated table part and the sheet relationship that names it.
 struct XlsbTablePart {
   std::string path;
@@ -161,9 +172,11 @@ class XlsbTableAllocator {
 /// Encodes the model tables of sheet `sheet_index`, each with the id
 /// `xlsb_table_id` gives it (the one PtgList tokens name). Relationship ids avoid
 /// `taken_rel_ids` (the sheet's retained and hyperlink ids). Adds the
-/// settings the parts could not hold to `*lost`.
+/// settings the parts could not hold to `*lost`. Cell-style names are kept as
+/// `write_table_bin` keeps them under `style_plan`.
 std::vector<XlsbTablePart> encode_sheet_tables(const Workbook& wb, std::size_t sheet_index,
                                                const FeatureFormulaWriteContext& ctx,
+                                               const CellStyleSavePlan& style_plan,
                                                const std::unordered_set<std::string>& taken_rel_ids,
                                                XlsbTableAllocator& allocator, std::uint32_t* lost);
 

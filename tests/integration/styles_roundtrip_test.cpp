@@ -13,6 +13,7 @@
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/zip_reader.h"
@@ -266,6 +267,61 @@ TEST(StylesRoundTrip, PreservesNamedCellStyles) {
   EXPECT_EQ(rt.cell_styles[1].builtin_id, CellStyleRecord::kBuiltinIdNone);
   EXPECT_TRUE(rt.cell_styles[1].hidden);
   EXPECT_TRUE(rt.cell_styles[1].custom_builtin);
+}
+
+// A save under the ja-JP profile writes what Excel ja-JP writes: the unused
+// built-in is dropped with its style xf, the used one takes its locale name,
+// and the cell xf follows its style xf to the new index. The model is untouched.
+TEST(StylesRoundTrip, JaProfileSaveDropsAnUnusedBuiltinAndLocalizesAUsedOne) {
+  Workbook src = Workbook::create_for_profile(mac_365_ja_jp_profile());
+  StylesTable styles = src.styles();
+  const auto add_style = [&styles](const char* name, std::uint32_t builtin_id, std::uint16_t num_fmt_id) {
+    CellXf xf;
+    xf.num_fmt_id = num_fmt_id;
+    styles.cell_style_xfs.push_back(xf);
+    CellStyleRecord record;
+    record.name = name;
+    record.builtin_id = builtin_id;
+    record.xf_id = static_cast<std::uint32_t>(styles.cell_style_xfs.size() - 1U);
+    styles.cell_styles.push_back(record);
+    return record.xf_id;
+  };
+  add_style("Heading 1", 16U, 1U);
+  const std::uint32_t good_xf = add_style("Good", 26U, 2U);
+  CellXf cell_xf;
+  cell_xf.xf_id = good_xf;
+  styles.cell_xfs.push_back(cell_xf);
+  const auto cell_xf_index = static_cast<std::uint32_t>(styles.cell_xfs.size() - 1U);
+  const std::size_t style_count = styles.cell_styles.size();
+  src.set_styles(std::move(styles));
+  ASSERT_TRUE(static_cast<bool>(src.set_cell_value(0, 0, 0, Value::number(1.0))));
+  ASSERT_TRUE(static_cast<bool>(src.set_cell_xf_index(0, 0, 0, cell_xf_index)));
+
+  auto save_or = src.save();
+  ASSERT_TRUE(static_cast<bool>(save_or)) << save_or.error().message;
+  ASSERT_EQ(src.styles().cell_styles.size(), style_count);
+  auto load_or = io::read_ooxml(SpanOf(save_or.value()));
+  ASSERT_TRUE(static_cast<bool>(load_or)) << load_or.error().message;
+  const StylesTable& rt = load_or.value().workbook.styles();
+
+  ASSERT_EQ(rt.cell_styles.size(), style_count - 1U);
+  const CellStyleRecord* good = nullptr;
+  for (const CellStyleRecord& record : rt.cell_styles) {
+    EXPECT_NE(record.builtin_id, 16U) << record.name;
+    EXPECT_NE(record.name, "Heading 1");
+    if (record.builtin_id == 26U) {
+      good = &record;
+    }
+  }
+  ASSERT_NE(good, nullptr);
+  EXPECT_EQ(good->name, "良い");
+  ASSERT_LT(good->xf_id, rt.cell_style_xfs.size());
+  EXPECT_EQ(rt.cell_style_xfs[good->xf_id].num_fmt_id, 2U);
+  ASSERT_LT(cell_xf_index, rt.cell_xfs.size());
+  EXPECT_EQ(rt.cell_xfs[cell_xf_index].xf_id, good->xf_id);
+  for (const CellXf& xf : rt.cell_style_xfs) {
+    EXPECT_NE(xf.num_fmt_id, 1U);
+  }
 }
 
 TEST(StylesRoundTrip, EmptyWorkbookNormalizesDefaultNamedStyle) {

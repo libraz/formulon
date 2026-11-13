@@ -6,10 +6,12 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
 
+#include "cell_style_save_plan.h"
 #include "color_resolve.h"
 #include "io/color_spec_xml.h"
 #include "io/dxf_save_plan.h"
@@ -283,15 +285,17 @@ void AppendBorders(std::string& out, const StylesTable& table) {
 // in-memory reference must not produce a dangling OOXML relationship.
 // Keeping this normalization local to serialization leaves the caller's
 // model byte-for-byte unchanged.
-void AppendXfBody(std::string& out, const CellXf& xf, bool emit_xf_id, const StyleTableCounts& bounds) {
+// `xf_id` is the written `xfId`, absent for a `<cellStyleXfs>` entry.
+void AppendXfBody(std::string& out, const CellXf& xf, std::optional<std::uint32_t> xf_id,
+                  const StyleTableCounts& bounds) {
   const auto in_bounds = [](std::uint32_t index, std::size_t count) { return index < count ? index : 0U; };
   out.append("    <xf");
   append_xml_attr_uint(out, "numFmtId", xf.num_fmt_id);
   append_xml_attr_uint(out, "fontId", in_bounds(xf.font_index, bounds.fonts));
   append_xml_attr_uint(out, "fillId", in_bounds(xf.fill_index, bounds.fills));
   append_xml_attr_uint(out, "borderId", in_bounds(xf.border_index, bounds.borders));
-  if (emit_xf_id) {
-    append_xml_attr_uint(out, "xfId", in_bounds(xf.xf_id, bounds.cell_style_xfs));
+  if (xf_id.has_value()) {
+    append_xml_attr_uint(out, "xfId", *xf_id);
   }
   auto append_apply = [&out](const char* name, bool value) {
     if (value) {
@@ -358,7 +362,7 @@ void AppendXfBody(std::string& out, const CellXf& xf, bool emit_xf_id, const Sty
   out.append("</xf>\n");
 }
 
-void AppendCellStyleXfs(std::string& out, const StylesTable& table) {
+void AppendCellStyleXfs(std::string& out, const StylesTable& table, const CellStyleSavePlan* style_plan) {
   // OOXML packages produced by Excel always carry the base named-style xf,
   // even when the in-memory model has never declared a named style. Keep
   // this normalization local to the writer so serializing a table remains a
@@ -370,16 +374,23 @@ void AppendCellStyleXfs(std::string& out, const StylesTable& table) {
     return;
   }
   out.append("  <cellStyleXfs");
-  append_xml_attr_uint(out, "count", table.cell_style_xfs.size());
+  append_xml_attr_uint(out, "count",
+                       style_plan != nullptr ? style_plan->style_xf_order().size() : table.cell_style_xfs.size());
   out.append(">\n");
   const StyleTableCounts bounds = EmittedCounts(table);
-  for (const CellXf& xf : table.cell_style_xfs) {
-    AppendXfBody(out, xf, /*emit_xf_id=*/false, bounds);
+  if (style_plan != nullptr) {
+    for (const std::uint32_t x : style_plan->style_xf_order()) {
+      AppendXfBody(out, table.cell_style_xfs[x], std::nullopt, bounds);
+    }
+  } else {
+    for (const CellXf& xf : table.cell_style_xfs) {
+      AppendXfBody(out, xf, std::nullopt, bounds);
+    }
   }
   out.append("  </cellStyleXfs>\n");
 }
 
-void AppendCellXfs(std::string& out, const StylesTable& table) {
+void AppendCellXfs(std::string& out, const StylesTable& table, const CellStyleSavePlan* style_plan) {
   const std::size_t count = table.cell_xfs.empty() ? std::size_t{1} : table.cell_xfs.size();
   out.append("  <cellXfs");
   append_xml_attr_uint(out, "count", count);
@@ -389,13 +400,46 @@ void AppendCellXfs(std::string& out, const StylesTable& table) {
   } else {
     const StyleTableCounts bounds = EmittedCounts(table);
     for (const CellXf& xf : table.cell_xfs) {
-      AppendXfBody(out, xf, /*emit_xf_id=*/true, bounds);
+      std::uint32_t xf_id = xf.xf_id < bounds.cell_style_xfs ? xf.xf_id : 0U;
+      if (style_plan != nullptr) {
+        xf_id = style_plan->cell_xf_parent(xf.xf_id);
+      }
+      AppendXfBody(out, xf, xf_id, bounds);
     }
   }
   out.append("  </cellXfs>\n");
 }
 
-void AppendCellStyles(std::string& out, const StylesTable& table) {
+void AppendCellStyle(std::string& out, const CellStyleRecord& cs, std::uint32_t xf_id) {
+  out.append("    <cellStyle");
+  append_xml_attr(out, "name", cs.name);
+  append_xml_attr_uint(out, "xfId", xf_id);
+  if (cs.builtin_id != CellStyleRecord::kBuiltinIdNone) {
+    append_xml_attr_uint(out, "builtinId", cs.builtin_id);
+  }
+  if (cs.i_level != 0U) {
+    append_xml_attr_uint(out, "iLevel", cs.i_level);
+  }
+  if (cs.hidden) {
+    emit_xsd_bool_attr(out, "hidden", true);
+  }
+  if (cs.custom_builtin) {
+    emit_xsd_bool_attr(out, "customBuiltin", true);
+  }
+  out.append("/>\n");
+}
+
+void AppendCellStyles(std::string& out, const StylesTable& table, const CellStyleSavePlan* style_plan) {
+  if (style_plan != nullptr) {
+    out.append("  <cellStyles");
+    append_xml_attr_uint(out, "count", style_plan->cell_styles().size());
+    out.append(">\n");
+    for (const CellStyleRecord& cs : style_plan->cell_styles()) {
+      AppendCellStyle(out, cs, cs.xf_id);
+    }
+    out.append("  </cellStyles>\n");
+    return;
+  }
   // A synthesized cellStyleXfs base requires a matching Normal style. If
   // callers supplied other styles while leaving the xf table empty, retain
   // those records and append Normal so their source ordering is unchanged.
@@ -416,24 +460,9 @@ void AppendCellStyles(std::string& out, const StylesTable& table) {
   out.append("  <cellStyles");
   append_xml_attr_uint(out, "count", table.cell_styles.size() + extra);
   out.append(">\n");
+  const std::size_t style_xf_count = table.cell_style_xfs.empty() ? 1U : table.cell_style_xfs.size();
   for (const CellStyleRecord& cs : table.cell_styles) {
-    out.append("    <cellStyle");
-    append_xml_attr(out, "name", cs.name);
-    const std::size_t style_xf_count = table.cell_style_xfs.empty() ? 1U : table.cell_style_xfs.size();
-    append_xml_attr_uint(out, "xfId", cs.xf_id < style_xf_count ? cs.xf_id : 0U);
-    if (cs.builtin_id != CellStyleRecord::kBuiltinIdNone) {
-      append_xml_attr_uint(out, "builtinId", cs.builtin_id);
-    }
-    if (cs.i_level != 0U) {
-      append_xml_attr_uint(out, "iLevel", cs.i_level);
-    }
-    if (cs.hidden) {
-      emit_xsd_bool_attr(out, "hidden", true);
-    }
-    if (cs.custom_builtin) {
-      emit_xsd_bool_attr(out, "customBuiltin", true);
-    }
-    out.append("/>\n");
+    AppendCellStyle(out, cs, cs.xf_id < style_xf_count ? cs.xf_id : 0U);
   }
   if (extra != 0U) {
     out.append("    <cellStyle name=\"Normal\" xfId=\"0\" builtinId=\"0\"/>\n");
@@ -706,7 +735,7 @@ std::uint32_t intern_border(StylesTable& table, BorderRecord candidate) {
   return static_cast<std::uint32_t>(table.borders.size() - 1U);
 }
 
-std::string write_styles(const StylesTable& table, const DxfSavePlan* dxf_plan) {
+std::string write_styles(const StylesTable& table, const DxfSavePlan* dxf_plan, const CellStyleSavePlan* style_plan) {
   std::string out;
   out.reserve(1024);
   out.append(kXmlDecl);
@@ -719,9 +748,9 @@ std::string write_styles(const StylesTable& table, const DxfSavePlan* dxf_plan) 
   AppendFonts(out, table);
   AppendFills(out, table);
   AppendBorders(out, table);
-  AppendCellStyleXfs(out, table);
-  AppendCellXfs(out, table);
-  AppendCellStyles(out, table);
+  AppendCellStyleXfs(out, table, style_plan);
+  AppendCellXfs(out, table, style_plan);
+  AppendCellStyles(out, table, style_plan);
   AppendDxfs(out, table, dxf_plan);
   AppendTableStyles(out, table);
   AppendColors(out, table);

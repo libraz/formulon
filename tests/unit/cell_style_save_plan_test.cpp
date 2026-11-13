@@ -311,7 +311,7 @@ TEST(CellStyleSavePlan, EmptyTablesSynthesizeNormal) {
   EXPECT_EQ(plan.style_xf_order(), (std::vector<std::uint32_t>{0}));
   EXPECT_EQ(plan.cell_xf_parent(0), 0U);
   EXPECT_EQ(plan.cell_xf_parent(7), 0U);
-  EXPECT_FALSE(plan.is_identity());
+  EXPECT_TRUE(plan.is_identity());
 }
 
 TEST(CellStyleSavePlan, MissingNormalIsSynthesizedFirst) {
@@ -360,18 +360,20 @@ TEST(CellStyleSavePlan, SortTiesKeepSourceOrder) {
 }
 
 TEST(CellStyleSavePlan, SavedFileNamesCellStyle) {
-  // cs3 Y3: only the custom "mine" and Normal survive.
+  // Only the custom "mine" and Normal survive; Neutral and Good are dropped as unused.
   const StylesTable table =
       Table({Style("標準", 0, 0), Style("Neutral", 1, 28), Style("Good", 2, 26), Style("mine", 3)}, 4, Iota(4));
   const CellStyleSavePlan plan = build_cell_style_save_plan(table, Used(4, {0}), mac_365_ja_jp_profile());
-  // A dropped built-in's locale name still names a style (cs2 X2, cs3 Y3).
+  // A dropped built-in's locale name still names a style.
   EXPECT_TRUE(saved_file_names_cell_style(plan, "どちらでもない"));
   EXPECT_TRUE(saved_file_names_cell_style(plan, "良い"));
   EXPECT_TRUE(saved_file_names_cell_style(plan, "mine"));
   EXPECT_TRUE(saved_file_names_cell_style(plan, "ＭＩＮＥ"));
-  EXPECT_TRUE(saved_file_names_cell_style(plan, "行レベル_7"));
-  EXPECT_FALSE(saved_file_names_cell_style(plan, "行レベル_8"));
-  // English spellings and unknown names do not (cm12 U1, cs3 Y2).
+  EXPECT_TRUE(saved_file_names_cell_style(plan, "標準"));
+  // A built-in the book does not hold names nothing, even under its locale name.
+  EXPECT_FALSE(saved_file_names_cell_style(plan, "悪い"));
+  EXPECT_FALSE(saved_file_names_cell_style(plan, "行レベル_1"));
+  // English spellings and unknown names do not.
   EXPECT_FALSE(saved_file_names_cell_style(plan, "Neutral"));
   EXPECT_FALSE(saved_file_names_cell_style(plan, "Good"));
   EXPECT_FALSE(saved_file_names_cell_style(plan, "NoSuch"));

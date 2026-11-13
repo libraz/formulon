@@ -391,6 +391,11 @@ TEST(FormulonCApiStyles, XfApplyFlagsRoundTrip) {
   ASSERT_NE(xf_index, 0U);
   std::uint32_t style_xf_id = 0;
   ASSERT_EQ(fm_workbook_add_cell_style_xf(wb.handle, record_arg(MakeFlaggedXf()), &style_xf_id), 0);
+  // A save writes a named-style xf only when a style names it or a used cell xf inherits from it.
+  fm_cell_style_t flagged{};
+  flagged.name = "Flagged";
+  flagged.style_xf_index = style_xf_id;
+  ASSERT_EQ(fm_workbook_set_cell_style(wb.handle, &flagged), 0);
 
   fm_cell_xf_t got{};
   ASSERT_EQ(fm_workbook_get_cell_xf_at(wb.handle, xf_index, &got), 0);

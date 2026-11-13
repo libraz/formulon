@@ -9,6 +9,7 @@
 #include <utility>
 
 #include "auto_filter.h"
+#include "cell_style_save_plan.h"
 #include "io/auto_filter_xml.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml_defs.h"
@@ -442,17 +443,18 @@ std::uint32_t IltaFor(const std::string& function) {
   return 0U;
 }
 
-/// The cell-style attribute `name`, or nothing when it names no cell style of the saved styles part.
-std::optional<std::string_view> SavedStyleAttr(const Attrs& attrs, std::string_view name, const StylesTable& styles) {
+/// The cell-style attribute `name`, or nothing when it names no cell style of the saved file.
+std::optional<std::string_view> SavedStyleAttr(const Attrs& attrs, std::string_view name,
+                                               const CellStyleSavePlan& style_plan) {
   const std::optional<std::string_view> value = NullableAttr(attrs, name);
-  if (value && !has_saved_cell_style(styles, *value)) {
+  if (value && !saved_file_names_cell_style(style_plan, *value)) {
     return std::nullopt;
   }
   return value;
 }
 
 void EmitBeginList(std::vector<std::uint8_t>& out, const TableMetadata& table, const MergeRange& rfx, std::uint32_t id,
-                   const StylesTable& styles) {
+                   const CellStyleSavePlan& style_plan) {
   const Attrs attrs = ParseAttrs(table.root_extra_attrs);
   const std::string* type = FindAttr(attrs, "tableType");
   std::uint32_t lt = kLtRange;
@@ -485,13 +487,13 @@ void EmitBeginList(std::vector<std::uint8_t>& out, const TableMetadata& table, c
   const std::string* comment = FindAttr(attrs, "comment");
   emit_xlnullablewidestring(payload, std::string_view(comment != nullptr ? *comment : std::string()));
   for (const std::string_view name : kTableStyleAttrs) {
-    emit_xlnullablewidestring(payload, SavedStyleAttr(attrs, name, styles));
+    emit_xlnullablewidestring(payload, SavedStyleAttr(attrs, name, style_plan));
   }
   emit_record(out, kBrtBeginList, payload);
 }
 
 std::uint32_t EmitListCol(std::vector<std::uint8_t>& out, const TableColumn& col, const FeatureFormulaWriteContext& ctx,
-                          const StylesTable& styles) {
+                          const CellStyleSavePlan& style_plan) {
   const Attrs attrs = ParseAttrs(col.extra_attrs);
   EmitAcuid(out, FindAttr(attrs, "xr3:uid"));
   const std::uint32_t ilta = IltaFor(col.totals_function);
@@ -512,7 +514,7 @@ std::uint32_t EmitListCol(std::vector<std::uint8_t>& out, const TableColumn& col
                                          : std::optional<std::string_view>(col.totals_label));
   emit_xlnullablewidestring(payload, std::nullopt);
   for (const std::string_view name : kColumnStyleAttrs) {
-    emit_xlnullablewidestring(payload, SavedStyleAttr(attrs, name, styles));
+    emit_xlnullablewidestring(payload, SavedStyleAttr(attrs, name, style_plan));
   }
   emit_record(out, kBrtBeginListCol, payload);
   if (!col.calculated_column_formula.empty()) {
@@ -820,7 +822,7 @@ Expected<void, Error> decode_table_formulas(TableMetadata& table, const TableFor
 }
 
 std::vector<std::uint8_t> write_table_bin(const TableMetadata& table, std::uint32_t id,
-                                          const FeatureFormulaWriteContext& ctx, const StylesTable& styles,
+                                          const FeatureFormulaWriteContext& ctx, const CellStyleSavePlan& style_plan,
                                           std::uint32_t* lost) {
   std::vector<std::uint8_t> out;
   const std::optional<MergeRange> rfx = parse_a1_rectangle(table.ref);
@@ -829,7 +831,7 @@ std::vector<std::uint8_t> write_table_bin(const TableMetadata& table, std::uint3
     return out;
   }
   EmitAcuid(out, FindAttr(ParseAttrs(table.root_extra_attrs), "xr:uid"));
-  EmitBeginList(out, table, *rfx, id, styles);
+  EmitBeginList(out, table, *rfx, id, style_plan);
   std::optional<SortState> sort;
   if (!table.sort_state_xml.empty()) {
     sort = SortStateFromXml(table.sort_state_xml);
@@ -857,7 +859,7 @@ std::vector<std::uint8_t> write_table_bin(const TableMetadata& table, std::uint3
   emit_u32(payload, static_cast<std::uint32_t>(table.columns.size()));
   emit_record(out, kBrtBeginListCols, payload);
   for (const TableColumn& col : table.columns) {
-    *lost += EmitListCol(out, col, ctx, styles);
+    *lost += EmitListCol(out, col, ctx, style_plan);
   }
   emit_record(out, kBrtEndListCols, ByteSpan{});
   EmitStyleClient(out, table.style_info);
@@ -1031,6 +1033,63 @@ std::vector<XlsbRetainedTable> xlsb_retained_tables(const Workbook& wb) {
   return out;
 }
 
+std::optional<std::vector<std::uint8_t>> drop_unsaved_table_cell_styles(const std::vector<std::uint8_t>& bytes,
+                                                                        const CellStyleSavePlan& style_plan) {
+  // Both records hold three names, then the three cell-style names, after a fixed prefix.
+  constexpr std::size_t kListNamesOffset = 64;
+  constexpr std::size_t kColumnNamesOffset = 24;
+  constexpr int kNameCount = 3;
+  const std::vector<FramedRecord> recs = split_records(bytes);
+  std::vector<std::uint8_t> out;
+  out.reserve(bytes.size());
+  bool changed = false;
+  for (const FramedRecord& rec : recs) {
+    const std::size_t names_offset = rec.type == kBrtBeginList      ? kListNamesOffset
+                                     : rec.type == kBrtBeginListCol ? kColumnNamesOffset
+                                                                    : 0U;
+    if (names_offset == 0U) {
+      append_record(out, bytes, rec);
+      continue;
+    }
+    if (rec.payload.size < names_offset) {
+      return std::nullopt;
+    }
+    const std::uint8_t* data = rec.payload.data;
+    ByteSpan cursor{data + names_offset, rec.payload.size - names_offset};
+    for (int i = 0; i < kNameCount; ++i) {
+      if (!read_xlnullablewidestring(cursor)) {
+        return std::nullopt;
+      }
+    }
+    std::vector<std::uint8_t> payload(data, data + (rec.payload.size - cursor.size));
+    bool dropped = false;
+    for (int i = 0; i < kNameCount; ++i) {
+      const std::size_t begin = rec.payload.size - cursor.size;
+      const auto style = read_xlnullablewidestring(cursor);
+      if (!style) {
+        return std::nullopt;
+      }
+      if (!style.value().empty() && !saved_file_names_cell_style(style_plan, style.value())) {
+        emit_xlnullablewidestring(payload, std::nullopt);
+        dropped = true;
+      } else {
+        payload.insert(payload.end(), data + begin, data + (rec.payload.size - cursor.size));
+      }
+    }
+    if (!dropped) {
+      append_record(out, bytes, rec);
+      continue;
+    }
+    payload.insert(payload.end(), data + (rec.payload.size - cursor.size), data + rec.payload.size);
+    emit_record(out, rec.type, payload);
+    changed = true;
+  }
+  if (!changed) {
+    return std::nullopt;
+  }
+  return out;
+}
+
 XlsbTableAllocator::XlsbTableAllocator(std::unordered_set<std::string> taken_paths)
     : taken_paths_(std::move(taken_paths)) {}
 
@@ -1046,6 +1105,7 @@ std::string XlsbTableAllocator::path_for(std::uint32_t id) {
 
 std::vector<XlsbTablePart> encode_sheet_tables(const Workbook& wb, std::size_t sheet_index,
                                                const FeatureFormulaWriteContext& ctx,
+                                               const CellStyleSavePlan& style_plan,
                                                const std::unordered_set<std::string>& taken_rel_ids,
                                                XlsbTableAllocator& allocator, std::uint32_t* lost) {
   std::vector<XlsbTablePart> parts;
@@ -1056,7 +1116,7 @@ std::vector<XlsbTablePart> encode_sheet_tables(const Workbook& wb, std::size_t s
       continue;
     }
     const std::uint32_t id = xlsb_table_id(wb.tables(), index, ctx.sheet_ranges.reserved_table_ids);
-    std::vector<std::uint8_t> bytes = write_table_bin(table, id, ctx, wb.styles(), lost);
+    std::vector<std::uint8_t> bytes = write_table_bin(table, id, ctx, style_plan, lost);
     if (bytes.empty()) {
       continue;
     }

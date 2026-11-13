@@ -12,10 +12,11 @@
 //
 // When `cellStyleXfs` is empty, the writer emits a synthesized default
 // `cellStyleXfs` record and a built-in `Normal` `cellStyles` entry. This is a
-// writer-only normalization: the input table is never modified. Existing
-// non-empty named-style tables retain their source ordering. Dangling
-// `xfId` references are emitted as `0` against the effective style-xf table;
-// this normalization is also writer-only.
+// writer-only normalization: the input table is never modified. Without a
+// cell style save plan, existing non-empty named-style tables retain their
+// source ordering; a plan selects, names and orders them as Excel saves.
+// Dangling `xfId` references are emitted as `0` against the effective
+// style-xf table; this normalization is also writer-only.
 //
 // Design references:
 //   * src/io/styles_reader.h (sister reader; canonical schema)
@@ -32,6 +33,12 @@ namespace formulon {
 namespace io {
 
 class DxfSavePlan;
+
+}  // namespace io
+
+class CellStyleSavePlan;
+
+namespace io {
 
 /// Emits the OOXML `xl/styles.xml` document for `table`. The output
 /// always begins with the canonical XML declaration and the
@@ -54,7 +61,12 @@ class DxfSavePlan;
 /// `dxf_plan` selects and orders the `<dxf>` records; null writes every model
 /// dxf. Every `dxfId` is written as a model index; the caller rewrites the part
 /// through the plan.
-std::string write_styles(const StylesTable& table, const DxfSavePlan* dxf_plan = nullptr);
+///
+/// `style_plan` selects, names and orders `<cellStyles>` / `<cellStyleXfs>`
+/// and remaps each `<cellXfs>` `xfId`; null writes the named styles as the
+/// model holds them.
+std::string write_styles(const StylesTable& table, const DxfSavePlan* dxf_plan = nullptr,
+                         const CellStyleSavePlan* style_plan = nullptr);
 
 /// Serialises one style record as the XML fragment `write_styles` emits
 /// for it inside a `<dxf>`.

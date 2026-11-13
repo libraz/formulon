@@ -173,10 +173,10 @@ TEST(FormulonCApiStyles, NamedCellStyleRoundTripsThroughSaveLoad) {
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0);
   std::size_t style_count = 0;
   ASSERT_EQ(fm_workbook_get_cell_style_count(loaded.handle, &style_count), 0);
-  // The seeded `Normal` keeps index 0; `Highlight` is appended after it.
+  // A save writes the styles sorted by name, as Excel does: `Highlight` precedes `Normal`.
   ASSERT_EQ(style_count, 2U);
   fm_cell_style_t style{};
-  ASSERT_EQ(fm_workbook_get_cell_style_at(loaded.handle, 1, &style), 0);
+  ASSERT_EQ(fm_workbook_get_cell_style_at(loaded.handle, 0, &style), 0);
   EXPECT_STREQ(style.name, "Highlight");
   std::uint32_t reread_cell_xf = 0;
   ASSERT_EQ(GetCellXfIndex(loaded.handle, 0, 0, 0, &reread_cell_xf), 0);

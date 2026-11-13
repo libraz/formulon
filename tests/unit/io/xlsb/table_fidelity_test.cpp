@@ -17,6 +17,7 @@
 #include "cell.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "io/auto_filter_xml.h"
 #include "io/ooxml_reader.h"
@@ -397,6 +398,8 @@ TEST(XlsbTableFidelity, XlsxTableSurvivesConversionToXlsb) {
   ExpectSameTable(back.tables()[0], from_xlsx.tables()[0], &back.styles(), &from_xlsx.styles());
 }
 
+// A name naming no style the book holds is written empty, even when it is a
+// built-in's locale name ("Total" no longer has a record).
 TEST(XlsbTableFidelity, ADanglingCellStyleNameIsWrittenEmpty) {
   Workbook wb = AuthoredBook();
   wb.mutable_styles().cell_styles.erase(wb.mutable_styles().cell_styles.begin() + 2);  // "Total"
@@ -420,10 +423,83 @@ TEST(XlsxTableCellStyles, OnlyNamesOfSavedCellStylesAreWritten) {
   const std::string xml = EntryText(xlsx.value(), "xl/tables/table3.xml");
   EXPECT_NE(xml.find("headerRowCellStyle=\"Heading 1\""), std::string::npos) << xml;
   EXPECT_NE(xml.find(" dataCellStyle=\"Normal\""), std::string::npos) << xml;
+  // A built-in's locale name is not kept without a record naming it.
   EXPECT_EQ(xml.find("totalsRowCellStyle"), std::string::npos) << xml;
   EXPECT_EQ(xml.find("Missing"), std::string::npos) << xml;
   EXPECT_NE(xml.find("dataDxfId=\"0\""), std::string::npos) << xml;
   EXPECT_NE(xml.find("dataCellStyle=\"Currency\""), std::string::npos) << xml;
+}
+
+/// `AuthoredBook` under ja-JP plus an unused builtin 26 record stored as
+/// "Good", with the table's cell styles named "Good" (that record's stored
+/// en-US name), "良い" (its ja-JP name) and "Normal", and a column naming the
+/// custom "Currency".
+Workbook JaCellStyleBook() {
+  Workbook wb = AuthoredBook();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  CellStyleRecord good;
+  good.name = "Good";
+  good.builtin_id = 26U;
+  wb.mutable_styles().cell_styles.push_back(good);
+  std::string& attrs = wb.mutable_tables()[0].root_extra_attrs;
+  const std::string authored =
+      " headerRowCellStyle=\"Heading 1\" dataCellStyle=\"Normal\" totalsRowCellStyle=\"Total\"";
+  const std::size_t at = attrs.find(authored);
+  EXPECT_NE(at, std::string::npos) << attrs;
+  if (at != std::string::npos) {
+    attrs.replace(at, authored.size(),
+                  " headerRowCellStyle=\"Good\" dataCellStyle=\"良い\" totalsRowCellStyle=\"Normal\"");
+  }
+  return wb;
+}
+
+// Under ja-JP Excel keeps a held built-in's ja-JP name, even when the save
+// drops that built-in as unused, and a custom's name; it removes an English
+// built-in spelling, even the stored name of a record.
+TEST(XlsxTableCellStyles, JaSaveKeepsLocaleBuiltinNamesAndDropsEnglishOnes) {
+  auto xlsx = write_ooxml(JaCellStyleBook());
+  ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
+  const std::string xml = EntryText(xlsx.value(), "xl/tables/table3.xml");
+  EXPECT_EQ(xml.find("headerRowCellStyle"), std::string::npos) << xml;
+  EXPECT_NE(xml.find(" dataCellStyle=\"良い\""), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("totalsRowCellStyle=\"Normal\""), std::string::npos) << xml;
+  EXPECT_NE(xml.find("dataCellStyle=\"Currency\""), std::string::npos) << xml;
+}
+
+TEST(XlsbTableFidelity, JaSaveKeepsLocaleBuiltinNamesAndDropsEnglishOnes) {
+  const Workbook back = LoadXlsb(SaveXlsb(JaCellStyleBook()));
+  ASSERT_EQ(back.tables().size(), 1U);
+  const TableMetadata& table = back.tables()[0];
+  EXPECT_EQ(table.root_extra_attrs.find("headerRowCellStyle"), std::string::npos) << table.root_extra_attrs;
+  EXPECT_NE(table.root_extra_attrs.find("dataCellStyle=\"良い\""), std::string::npos) << table.root_extra_attrs;
+  EXPECT_EQ(table.root_extra_attrs.find("totalsRowCellStyle"), std::string::npos) << table.root_extra_attrs;
+  EXPECT_NE(table.columns[1].extra_attrs.find("dataCellStyle=\"Currency\""), std::string::npos)
+      << table.columns[1].extra_attrs;
+}
+
+/// The three cell-style names of `part`'s BrtBeginList, null read as empty.
+std::vector<std::string> ListCellStyleNames(const std::vector<std::uint8_t>& part) {
+  // The names follow the 64-byte fixed fields and the name, display name and comment.
+  constexpr std::size_t kNamesOffset = 64;
+  for (const FramedRecord& rec : split_records(part)) {
+    if (rec.type != kBrtBeginList || rec.payload.size < kNamesOffset) {
+      continue;
+    }
+    ByteSpan cursor{rec.payload.data + kNamesOffset, rec.payload.size - kNamesOffset};
+    std::vector<std::string> names;
+    for (int i = 0; i < 6; ++i) {
+      auto name = read_xlnullablewidestring(cursor);
+      EXPECT_TRUE(static_cast<bool>(name));
+      if (!name) {
+        return {};
+      }
+      if (i >= 3) {
+        names.push_back(std::move(name.value()));
+      }
+    }
+    return names;
+  }
+  return {};
 }
 
 TEST(XlsbTableFidelity, RevisionUidsTravelAsAcuidBlocks) {
@@ -569,6 +645,33 @@ std::vector<std::uint8_t> WithUnknownFutureRecord(const std::vector<std::uint8_t
     append_record(patched, part, rec);
   }
   return patched;
+}
+
+// A part kept verbatim whose cell-style name the saved file does not name is
+// re-encoded without it; every other record stays byte-equal.
+TEST(XlsbTableFidelity, ARetainedPartNamingAnEnglishBuiltinIsReencodedWithoutIt) {
+  const std::vector<std::uint8_t> package = SaveXlsb(AuthoredBook());
+  const std::vector<std::uint8_t> patched = WithUnknownFutureRecord(Entry(package, "xl/tables/table3.bin"));
+  Workbook wb = LoadXlsb(RepackWithEntries(package, {{"xl/tables/table3.bin", patched}}));
+  ASSERT_TRUE(wb.tables().empty());
+  EXPECT_EQ(Entry(SaveXlsb(wb), "xl/tables/table3.bin"), patched);
+
+  // Under ja-JP the builtin 0 record is written as 標準, so "Normal" names nothing.
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  const std::vector<std::uint8_t> resaved = Entry(SaveXlsb(wb), "xl/tables/table3.bin");
+  EXPECT_EQ(ListCellStyleNames(patched), (std::vector<std::string>{"Heading 1", "Normal", "Total"}));
+  EXPECT_EQ(ListCellStyleNames(resaved), (std::vector<std::string>{"Heading 1", "", "Total"}));
+  const std::vector<FramedRecord> before = split_records(patched);
+  const std::vector<FramedRecord> after = split_records(resaved);
+  ASSERT_EQ(after.size(), before.size());
+  for (std::size_t i = 0; i < before.size(); ++i) {
+    ASSERT_EQ(after[i].type, before[i].type) << i;
+    if (before[i].type != kBrtBeginList) {
+      EXPECT_TRUE(std::equal(before[i].payload.data, before[i].payload.data + before[i].payload.size,
+                             after[i].payload.data, after[i].payload.data + after[i].payload.size))
+          << i;
+    }
+  }
 }
 
 TEST(XlsbTableFidelity, PartOutsideTheModelStaysVerbatim) {

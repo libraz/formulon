@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
@@ -199,8 +200,10 @@ TEST(StyleResolve, LiteralAndUnparseableThemeColorsKeepTheirResolution) {
 // Styles: built-in ids, cellStyle removal, indexed colours
 // ---------------------------------------------------------------------------
 
+// The fixture is an Excel ja-JP save whose cells use all 54 built-ins, so a
+// save under ja-JP keeps every one under the same name and style xf.
 TEST(StylesBuiltinIds, ExcelSavedRangeZeroTo53LoadsAndRoundTrips) {
-  const Workbook wb = LoadFixture("builtin_cell_styles.xlsx");
+  Workbook wb = LoadFixture("builtin_cell_styles.xlsx");
   const StylesTable& styles = wb.styles();
   std::set<std::uint32_t> loaded;
   for (const CellStyleRecord& rec : styles.cell_styles) {
@@ -216,6 +219,7 @@ TEST(StylesBuiltinIds, ExcelSavedRangeZeroTo53LoadsAndRoundTrips) {
   EXPECT_EQ(FindStyle(styles, 53U)->name, "\xE8\xAA\xAC\xE6\x98\x8E\xE6\x96\x87");
   EXPECT_EQ(FindStyle(styles, 1U)->i_level, 0U);
 
+  wb.set_excel_profile(mac_365_ja_jp_profile());
   const Workbook reloaded = RoundTrip(wb);
   ASSERT_EQ(reloaded.styles().cell_styles.size(), 54U);
   for (std::uint32_t id = 0; id <= CellStyleRecord::kBuiltinIdMax; ++id) {
@@ -225,6 +229,21 @@ TEST(StylesBuiltinIds, ExcelSavedRangeZeroTo53LoadsAndRoundTrips) {
     EXPECT_EQ(after->name, before->name);
     EXPECT_EQ(after->xf_id, before->xf_id);
   }
+}
+
+// A save writes each built-in under the name of the profile's UI locale,
+// whatever name the file carried.
+TEST(StylesBuiltinIds, AnEnUsSaveWritesTheEnglishNames) {
+  const Workbook wb = LoadFixture("builtin_cell_styles.xlsx");
+  ASSERT_TRUE(same_profile(wb.excel_profile(), win_365_en_us_profile()));
+  const Workbook reloaded = RoundTrip(wb);
+  ASSERT_EQ(reloaded.styles().cell_styles.size(), 54U);
+  ASSERT_NE(FindStyle(reloaded.styles(), 0U), nullptr);
+  EXPECT_EQ(FindStyle(reloaded.styles(), 0U)->name, "Normal");
+  ASSERT_NE(FindStyle(reloaded.styles(), 16U), nullptr);
+  EXPECT_EQ(FindStyle(reloaded.styles(), 16U)->name, "Heading 1");
+  ASSERT_NE(FindStyle(reloaded.styles(), 1U), nullptr);
+  EXPECT_EQ(FindStyle(reloaded.styles(), 1U)->name, "RowLevel_1");
 }
 
 TEST(StylesBuiltinIds, ExcelSavedThemeIsParsed) {

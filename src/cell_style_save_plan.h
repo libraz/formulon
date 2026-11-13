@@ -18,6 +18,7 @@
 #define FORMULON_CELL_STYLE_SAVE_PLAN_H_
 
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -65,7 +66,7 @@ class CellStyleSavePlan {
 
   /// True when the plan writes the model unchanged: nothing merged, dropped or
   /// synthesized, every saved name equal to its stored name, and both tables
-  /// already in the planned order.
+  /// already in the planned order. A table with no named styles is identity.
   bool is_identity() const noexcept { return identity_; }
 
  private:
@@ -75,8 +76,11 @@ class CellStyleSavePlan {
   std::vector<CellStyleRecord> cell_styles_;
   std::vector<std::uint32_t> style_xf_order_;
   std::vector<std::uint32_t> parent_of_;
+  std::vector<std::string> planned_names_;
   ExcelProfile profile_;
   bool identity_ = false;
+
+  friend bool saved_file_names_cell_style(const CellStyleSavePlan& plan, std::string_view name);
 };
 
 /// Plans the named cell styles of `styles` for a save under `profile`. A book
@@ -84,10 +88,10 @@ class CellStyleSavePlan {
 /// first style; an empty `cell_style_xfs` is planned as one default xf.
 CellStyleSavePlan build_cell_style_save_plan(const StylesTable& styles, const UsedCellXfs& used, ExcelProfile profile);
 
-/// Whether the file `plan` writes names `name` as a cell style: `name` equals,
-/// under the profile's compare collation, a written custom style's name or
-/// the locale name of any built-in (RowLevel_ / ColLevel_ at levels 1..7),
-/// written or not. This describes the saved file and is not a name lookup.
+/// Whether a table cell-style attribute naming `name` is kept on save: `name`
+/// equals, under the profile's compare collation, the saved name of a planned
+/// style, written or dropped as unused. A built-in matches only under its
+/// locale name. This describes the saved file and is not a name lookup.
 bool saved_file_names_cell_style(const CellStyleSavePlan& plan, std::string_view name);
 
 }  // namespace formulon

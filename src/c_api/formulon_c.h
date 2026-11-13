@@ -12917,7 +12917,8 @@ FM_API fm_status_t fm_workbook_add_cell_style_xf(fm_workbook_t* wb, const fm_cel
  *        (`<cellStyleXfs>`) in place, with the bulk-restyle and no-dedup
  *        semantics of `fm_workbook_set_font`: every named style naming this
  *        slot takes the new record, and when the record changes the slot each
- *        built-in style naming it is marked changed (`fm_cell_style_t.custom_builtin`). The record is validated as
+ *        built-in style naming it is marked changed
+ *        (`fm_cell_style_t.custom_builtin`). The record is validated as
  *        `fm_workbook_add_cell_style_xf` validates it.
  *
  * @return `FM_STATUS_OK` (0) on success;
@@ -12936,8 +12937,9 @@ FM_API fm_status_t fm_workbook_set_cell_style_xf(fm_workbook_t* wb, uint32_t cel
  *
  * The name resolves as the name identity notes above describe. A custom style
  * it resolves to is overwritten field for field; a built-in one keeps its
- * `builtin_id` and `outline_level` and takes the record's name, `style_xf_index`,
- * `hidden` and `custom_builtin`. Otherwise the record is appended.
+ * `builtin_id` and `outline_level`, even when `has_builtin_id` is 0, and takes
+ * the record's name, `style_xf_index`, `hidden` and `custom_builtin`. Otherwise
+ * the record is appended.
  * `record->name` is copied. `style_xf_index` must reference
  * an existing named-style xf; with `has_builtin_id` set `builtin_id` is
  * `0..53`, and `has_builtin_id == 0` makes a custom style; `outline_level` is

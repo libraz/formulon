@@ -694,10 +694,13 @@ std::vector<std::uint8_t> PartBytes(const std::vector<std::uint8_t>& xlsb, const
   return body ? body.value() : std::vector<std::uint8_t>{};
 }
 
-// An unedited load -> save keeps Excel's styles.bin byte for byte.
+// An unedited load -> save under the UI locale the file was saved in keeps
+// Excel's styles.bin byte for byte.
 TEST(XlsbFeatureRecords, UneditedSaveKeepsStylesBinVerbatim) {
   const std::vector<std::uint8_t> source = ReadFileBytes(FixturePath("dxf", "xlsb"));
-  auto written = io::xlsb::write_xlsb(ReadXlsbBytes(source));
+  Workbook loaded = ReadXlsbBytes(source);
+  loaded.set_excel_profile(mac_365_ja_jp_profile());
+  auto written = io::xlsb::write_xlsb(loaded);
   ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
   const std::vector<std::uint8_t> original = PartBytes(source, "xl/styles.bin");
   ASSERT_FALSE(original.empty());

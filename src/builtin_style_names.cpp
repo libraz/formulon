@@ -7,7 +7,8 @@
 
 #include "utils/number_text.h"
 
-// @size-budget: 12 KB (name table, accent synthesizer and the cell-style save plan)
+// @size-budget: 24 KB raw / 6.5 KB Brotli (name table, mostly CJK and about 12 KB raw; accent
+// synthesizer; the cell-style save plan; the xlsb table re-encode and the styles writers)
 
 namespace formulon {
 namespace {

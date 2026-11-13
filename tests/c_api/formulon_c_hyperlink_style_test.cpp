@@ -178,6 +178,30 @@ TEST_F(HyperlinkStyle, TheStyleNameFollowsTheProfileLocale) {
   EXPECT_EQ(names[0], "ハイパーリンク");
 }
 
+// A save keeps the Hyperlink style while a cell uses it and drops it once no
+// cell does, as Excel drops every unused built-in; the model keeps it.
+TEST_F(HyperlinkStyle, ASaveDropsTheHyperlinkStyleOnceNoCellUsesIt) {
+  const auto saved_hyperlink_styles = [](fm_workbook_t* book) {
+    BufferGuard bytes;
+    EXPECT_EQ(fm_workbook_save(book, FM_WORKBOOK_FORMAT_XLSX, &bytes.data, &bytes.len), 0);
+    WorkbookGuard loaded;
+    EXPECT_EQ(fm_workbook_load(bytes.data, bytes.len, &loaded.handle), 0);
+    std::size_t count = 0;
+    if (loaded.handle != nullptr) {
+      for (const auto& record : loaded.handle->workbook().styles().cell_styles) {
+        count += record.builtin_id == kHyperlinkBuiltinId ? 1U : 0U;
+      }
+    }
+    return count;
+  };
+  ASSERT_EQ(Set({0U, 0U, 0U, 0U}), 0);
+  EXPECT_EQ(saved_hyperlink_styles(wb()), 1U);
+  ASSERT_EQ(Remove({0U, 0U, 0U, 0U}), 0);
+  ASSERT_EQ(HyperlinkStyles().size(), 1U);
+  EXPECT_EQ(saved_hyperlink_styles(wb()), 0U);
+  EXPECT_EQ(HyperlinkStyles().size(), 1U);
+}
+
 TEST_F(HyperlinkStyle, SetReusesAnExistingBuiltinHyperlinkStyleWhateverItsName) {
   formulon::StylesTable& s = styles();
   formulon::CellXf style_xf = s.cell_style_xfs.at(0);

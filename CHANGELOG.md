@@ -38,6 +38,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Evaluation results do not change. Rules added through the API are kept as
   added. A sheet holding conditional formats Formulon keeps only verbatim is not
   merged.
+- Saving `.xlsx` and `.xlsb` writes named cell styles the way Excel does under
+  the workbook profile's UI language:
+  - A built-in style is written under its name in that language, whatever name
+    the file carried (`Comma` becomes `桁区切り [0.00]` under ja-JP).
+  - A built-in style is dropped unless a cell, row or column format uses it, or
+    it is Normal, hidden or marked changed (`customBuiltin`). Custom styles are
+    always kept.
+  - Styles whose saved names are equal under the profile's collation are
+    written as one. The first keeps its name and flags, takes the last one's
+    format, and the cell formats that pointed at any of them point at it.
+  - `<cellStyles>` is sorted by name under the profile's collation.
+    `<cellStyleXfs>` lists Normal first, then the outline styles, then the rest.
+  - A table or table column keeps a cell style name only when it names a style
+    the workbook holds, a built-in under its name in that language. An English
+    built-in spelling is removed under another language.
+  - A workbook whose styles are already in that form saves them unchanged.
+    Saving an Excel file under a profile of another language rewrites its
+    styles part.
+  - The loaded workbook is not changed by a save.
+- `getCellStyle`, `setCellStyle` and `removeCellStyle` (Python `get_cell_style`,
+  `set_cell_style`, `remove_cell_style`; C `fm_workbook_get_cell_style`,
+  `fm_workbook_set_cell_style`, `fm_workbook_remove_cell_style`) find a built-in
+  style by its stored name or by its name in the workbook profile's language.
+  `setCellStyle` on a built-in style keeps its `builtinId` and `outlineLevel`
+  and fails with `AlreadyExists` when the record carries a different
+  `builtinId`. `setCellStyleXf` (Python `set_cell_style_xf`, C
+  `fm_workbook_set_cell_style_xf`) marks every built-in style using the
+  changed slot `customBuiltin`, as Excel does when a built-in style's format is
+  edited, so the save keeps it. No C signature changes.
 
 - Saving `.xlsx` and `.xlsb` writes conditional-format blocks in Excel's layout.
   Rules with the same range share one `<conditionalFormatting>` block, in priority
@@ -386,8 +415,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Saved files use Excel's forms: print-settings booleans are written `1`/`0`
   (also in `getPrintOptionsXml`, `getHeaderFooterXml` and `getSheetPrXml`;
   Python `get_print_options_xml` and siblings), a page break omits `min="0"`,
-  and a table or table column names a cell style only when the saved workbook
-  has a cell style of that name.
+  and a table or table column names a cell style only when the workbook holds
+  a cell style of that name (see the named cell style entry below).
 
 - Every saved `.xlsx` worksheet carries `<sheetViews>`, as Excel writes it.
   Mac Excel opened a worksheet without that element with every custom row

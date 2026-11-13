@@ -10338,8 +10338,8 @@ class Workbook(_NoCopy):
         ``builtin_id`` is an Excel built-in style ordinal (0..53); ``None`` marks a
         custom style. The name resolves as in :meth:`get_cell_style`. A custom style it
         resolves to is replaced whole; a built-in one keeps its ``builtin_id`` and
-        ``outline_level`` and takes the record's name, ``style_xf_index``, ``hidden`` and
-        ``custom_builtin``.
+        ``outline_level``, even when ``record.builtin_id`` is ``None``, and takes the
+        record's name, ``style_xf_index``, ``hidden`` and ``custom_builtin``.
 
         Raises:
           AlreadyExistsError: when the name resolves to a built-in style and the record
@@ -11172,9 +11172,11 @@ class WorkbookOoxml(_NoCopy):
             _check(LIB.fm_workbook_set_cell_xf(h, _uint(xf_index, "xf_index", role="position"), ptr))
 
     def set_cell_style_xf(self, cell_style_xf_index: int, record: Union[CellXfInput, CellXf]) -> None:
-        """Overwrite an existing ``<cellStyleXfs>`` slot in place, as :meth:`set_cell_xf` does for a cell xf:
-        every named style naming ``cell_style_xf_index`` takes the record, and when the record changes the slot each built-in style naming it
-        gets ``custom_builtin``. The index must already exist.
+        """Overwrite an existing ``<cellStyleXfs>`` slot in place, as :meth:`set_cell_xf` does for a cell xf.
+
+        Every named style naming ``cell_style_xf_index`` takes the record, and when
+        the record changes the slot each built-in style naming it gets
+        ``custom_builtin``. The index must already exist.
 
         Raises:
           IndexOutOfRangeError: past the named-style xf count, or for a font, fill or border index past its table.

@@ -33,6 +33,7 @@
 #include <utility>
 #include <vector>
 
+#include "cell_style_save_plan.h"
 #include "chart/chart_cache.h"
 #include "eval/eval_profile_scope.h"
 #include "external_link.h"
@@ -204,7 +205,7 @@ bool CacheSourceInWorkbook(const Workbook& wb, const pivot::PivotCache& cache) {
 }
 
 /// `attrs` without the table cell-style attributes naming no cell style of the saved styles part.
-std::string DropUnsavedCellStyleAttrs(const std::string& attrs, const StylesTable& styles) {
+std::string DropUnsavedCellStyleAttrs(const std::string& attrs, const CellStyleSavePlan& style_plan) {
   if (attrs.find("CellStyle=\"") == std::string::npos) {
     return attrs;
   }
@@ -218,7 +219,7 @@ std::string DropUnsavedCellStyleAttrs(const std::string& attrs, const StylesTabl
   std::string out = attrs;
   for (const char* name : {"headerRowCellStyle", "dataCellStyle", "totalsRowCellStyle"}) {
     const pugi::xml_attribute attr = doc.first_child().attribute(name);
-    if (!attr || has_saved_cell_style(styles, attr.value())) {
+    if (!attr || saved_file_names_cell_style(style_plan, attr.value())) {
       continue;
     }
     const std::string key = std::string(" ") + name + "=\"";
@@ -245,7 +246,7 @@ Expected<std::string, Error> SavedDxfPart(std::string xml, std::size_t from, con
   return xml;
 }
 
-std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id, const StylesTable& styles) {
+std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id, const CellStyleSavePlan& style_plan) {
   std::string out;
   out.reserve(256 + t.columns.size() * 64);
   out.append(kXmlDecl);
@@ -260,7 +261,7 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id, cons
   out.append("\" ref=\"");
   AppendXmlAttrEscaped(out, t.ref);
   out.push_back('"');
-  out.append(DropUnsavedCellStyleAttrs(t.root_extra_attrs, styles));
+  out.append(DropUnsavedCellStyleAttrs(t.root_extra_attrs, style_plan));
   // headerRowCount: emit explicit "0" when disabled; default (1) is
   // implicit via OOXML schema and we omit it.
   if (!t.header_row) {
@@ -307,7 +308,7 @@ std::string BuildTableXml(const TableMetadata& t, std::uint32_t numeric_id, cons
     if (!col.totals_function.empty()) {
       append_xml_attr(out, "totalsRowFunction", col.totals_function);
     }
-    out.append(DropUnsavedCellStyleAttrs(col.extra_attrs, styles));
+    out.append(DropUnsavedCellStyleAttrs(col.extra_attrs, style_plan));
     // CT_TableColumn children: calculatedColumnFormula, totalsRowFormula,
     // then the retained xmlColumnPr / extLst. An empty formula omits its
     // element (Excel never emits an empty one).
@@ -408,6 +409,9 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   ASSIGN_OR_RETURN(const DxfUseSet dxf_uses, collect_xlsx_dxf_uses(wb, plan));
   const DxfSavePlan dxf_plan = build_dxf_save_plan(wb.styles().dxfs.size(), dxf_uses.uses, dxf_uses.blocked,
                                                    static_cast<std::int32_t>(wb.active_sheet()));
+  // The named cell styles `styles.xml` writes and the names table parts may keep.
+  const CellStyleSavePlan style_plan =
+      build_cell_style_save_plan(wb.styles(), collect_used_cell_xfs(wb), wb.excel_profile());
   // The XLDAPR entry dynamic-array formulas' `cm=` names: a generated part's
   // first entry, else a retained `xl/metadata.xml`'s own. A retained part
   // without one leaves `cm=` off, as does a workbook with no such formula.
@@ -479,8 +483,8 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   }
 
   // xl/styles.xml
-  ASSIGN_OR_RETURN(const std::string styles_xml, SavedDxfPart(write_styles(wb.styles(), &dxf_plan), 0U, dxf_plan,
-                                                              DxfPartKey{-1, DxfPartType::kStyles, 0U}));
+  ASSIGN_OR_RETURN(const std::string styles_xml, SavedDxfPart(write_styles(wb.styles(), &dxf_plan, &style_plan), 0U,
+                                                              dxf_plan, DxfPartKey{-1, DxfPartType::kStyles, 0U}));
   RETURN_IF_ERROR(AddPart(writer.get(), kStylesPartPath, styles_xml, &written_paths));
 
   // xl/metadata.xml — the dynamic-array and rich-value metadata, and the
@@ -512,7 +516,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
       const EmissionPlan::PerSheetTable& t = plan.tables_by_sheet[si][ti];
       ASSIGN_OR_RETURN(
           const std::string table_xml,
-          SavedDxfPart(BuildTableXml(*t.table, t.numeric_id, wb.styles()), 0U, dxf_plan,
+          SavedDxfPart(BuildTableXml(*t.table, t.numeric_id, style_plan), 0U, dxf_plan,
                        DxfPartKey{static_cast<std::int32_t>(si), DxfPartType::kTable, static_cast<std::uint32_t>(ti)}));
       RETURN_IF_ERROR(AddPart(writer.get(), t.path, table_xml, &written_paths));
     }

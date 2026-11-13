@@ -969,7 +969,9 @@ TEST(XlsbToOoxml, DroppingBinaryPartsIsScopedToTheOoxmlPipeline) {
   ASSERT_FALSE(source.empty());
   auto loaded = io::xlsb::read_xlsb(test::span_of(source));
   ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
-  const Workbook& wb = loaded.value().workbook;
+  Workbook& wb = loaded.value().workbook;
+  // The source was saved by a ja-JP Excel; saving under that locale changes no style name.
+  wb.set_excel_profile(mac_365_ja_jp_profile());
 
   std::string source_styles;
   ASSERT_TRUE(test::extract_part(test::span_of(source), "xl/styles.bin", &source_styles));

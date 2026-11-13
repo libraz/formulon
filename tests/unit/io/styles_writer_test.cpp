@@ -13,6 +13,8 @@
 #include <string>
 #include <vector>
 
+#include "cell_style_save_plan.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "io/styles_reader.h"
 
@@ -50,6 +52,91 @@ TEST(StylesWriter, NormalizesEmptyNamedStyleTablesWithoutMutatingModel) {
   EXPECT_EQ(round_or.value().cell_styles[0].name, "Normal");
   EXPECT_EQ(round_or.value().cell_styles[0].xf_id, 0U);
   EXPECT_EQ(round_or.value().cell_styles[0].builtin_id, 0U);
+}
+
+/// Style xfs 0..2, each tagged by its numFmtId; Normal, Heading 1 (builtin 16,
+/// xf 1) and Good (builtin 26, xf 2); cell xf 1 inherits Good's xf.
+StylesTable NamedStyleTable() {
+  StylesTable table;
+  table.fonts.emplace_back();
+  table.fills.emplace_back();
+  table.borders.emplace_back();
+  for (std::uint16_t i = 0; i < 3U; ++i) {
+    CellXf xf;
+    xf.num_fmt_id = i;
+    table.cell_style_xfs.push_back(xf);
+  }
+  table.cell_xfs.assign(2U, CellXf{});
+  table.cell_xfs[1].xf_id = 2U;
+  CellStyleRecord normal;
+  normal.name = "Normal";
+  normal.builtin_id = 0U;
+  CellStyleRecord heading;
+  heading.name = "Heading 1";
+  heading.builtin_id = 16U;
+  heading.xf_id = 1U;
+  CellStyleRecord good;
+  good.name = "Good";
+  good.builtin_id = 26U;
+  good.xf_id = 2U;
+  table.cell_styles = {normal, heading, good};
+  return table;
+}
+
+/// The `<tag ...>...</tag>` section of `xml`, or empty when absent.
+std::string Section(const std::string& xml, const std::string& tag) {
+  const std::size_t begin = xml.find("<" + tag);
+  const std::string close = "</" + tag + ">";
+  const std::size_t end = begin == std::string::npos ? begin : xml.find(close, begin);
+  return end == std::string::npos ? std::string() : xml.substr(begin, end + close.size() - begin);
+}
+
+// Without a plan the named styles are written as the model holds them; this
+// output is the retained-part fingerprint input.
+TEST(StylesWriter, NullStylePlanWritesNamedStylesAsTheModelHoldsThem) {
+  const StylesTable table = NamedStyleTable();
+  const std::string xml = write_styles(table, nullptr, nullptr);
+  EXPECT_EQ(xml, write_styles(table));
+  EXPECT_EQ(Section(xml, "cellStyles"),
+            "<cellStyles count=\"3\">\n"
+            "    <cellStyle name=\"Normal\" xfId=\"0\" builtinId=\"0\"/>\n"
+            "    <cellStyle name=\"Heading 1\" xfId=\"1\" builtinId=\"16\"/>\n"
+            "    <cellStyle name=\"Good\" xfId=\"2\" builtinId=\"26\"/>\n"
+            "  </cellStyles>");
+  const std::string style_xfs = Section(xml, "cellStyleXfs");
+  EXPECT_NE(style_xfs.find("<cellStyleXfs count=\"3\">"), std::string::npos) << style_xfs;
+  EXPECT_NE(style_xfs.find("numFmtId=\"1\""), std::string::npos) << style_xfs;
+  EXPECT_NE(Section(xml, "cellXfs").find("xfId=\"2\""), std::string::npos) << xml;
+}
+
+// Excel drops a built-in no worksheet cell xf inherits and writes the kept
+// ones under the UI-locale name, sorted by that name; the cell xfs follow
+// their style xf to its new index.
+TEST(StylesWriter, StylePlanDropsAnUnusedBuiltinAndLocalizesAUsedOne) {
+  const StylesTable table = NamedStyleTable();
+  UsedCellXfs used;
+  used.used = {false, true};
+  const CellStyleSavePlan plan = build_cell_style_save_plan(table, used, mac_365_ja_jp_profile());
+  EXPECT_FALSE(plan.is_identity());
+  const std::string xml = write_styles(table, nullptr, &plan);
+
+  EXPECT_EQ(Section(xml, "cellStyles"),
+            "<cellStyles count=\"2\">\n"
+            "    <cellStyle name=\"標準\" xfId=\"0\" builtinId=\"0\"/>\n"
+            "    <cellStyle name=\"良い\" xfId=\"1\" builtinId=\"26\"/>\n"
+            "  </cellStyles>");
+  const std::string style_xfs = Section(xml, "cellStyleXfs");
+  EXPECT_NE(style_xfs.find("<cellStyleXfs count=\"2\">"), std::string::npos) << style_xfs;
+  EXPECT_LT(style_xfs.find("numFmtId=\"0\""), style_xfs.find("numFmtId=\"2\"")) << style_xfs;
+  EXPECT_EQ(style_xfs.find("numFmtId=\"1\""), std::string::npos) << style_xfs;
+  const std::string cell_xfs = Section(xml, "cellXfs");
+  EXPECT_NE(cell_xfs.find("xfId=\"1\""), std::string::npos) << cell_xfs;
+  EXPECT_EQ(cell_xfs.find("xfId=\"2\""), std::string::npos) << cell_xfs;
+
+  // The model is untouched.
+  ASSERT_EQ(table.cell_styles.size(), 3U);
+  EXPECT_EQ(table.cell_styles[1].name, "Heading 1");
+  EXPECT_EQ(table.cell_xfs[1].xf_id, 2U);
 }
 
 TEST(StylesWriter, RetainsUnmodelledTopLevelStyleSections) {

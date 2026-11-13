@@ -230,13 +230,6 @@ constexpr std::array<const char*, 164> kBuiltinNumFmts = {
 
 }  // namespace
 
-bool has_saved_cell_style(const StylesTable& styles, std::string_view name) {
-  if (styles.cell_styles.empty()) {
-    return name == "Normal";
-  }
-  return sheet_names::resolve_named(styles.cell_styles, name) != sheet_names::kNotFound;
-}
-
 std::size_t resolve_cell_style(const StylesTable& styles, std::string_view name, ExcelProfile profile) {
   struct Query {
     const std::vector<CellStyleRecord>* styles;

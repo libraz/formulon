@@ -12,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include "cell_style_save_plan.h"
 #include "io/xlsb/brt_color.h"
 #include "io/xlsb/dxf_props.h"
 #include "io/xlsb/dxf_record_slots.h"
@@ -144,9 +145,10 @@ void EmitBorder(std::vector<std::uint8_t>& out, const BorderRecord& border) {
   emit_record(out, static_cast<std::uint16_t>(XlsbRecordType::BrtBorder), payload);
 }
 
-void EmitXf(std::vector<std::uint8_t>& out, const CellXf& xf, bool is_style_xf) {
+// `parent` is the written ixfeParent, absent for a style xf.
+void EmitXf(std::vector<std::uint8_t>& out, const CellXf& xf, std::optional<std::uint32_t> parent) {
   std::vector<std::uint8_t> payload;
-  emit_u16(payload, is_style_xf ? kXfNoParent : ClampIndex(xf.xf_id));
+  emit_u16(payload, parent.has_value() ? ClampIndex(*parent) : kXfNoParent);
   emit_u16(payload, xf.num_fmt_id);
   emit_u16(payload, ClampIndex(xf.font_index));
   emit_u16(payload, ClampIndex(xf.fill_index));
@@ -346,9 +348,23 @@ void EmitCount(std::vector<std::uint8_t>& out, std::uint16_t type, std::size_t c
   emit_record(out, type, payload);
 }
 
+void EmitStyle(std::vector<std::uint8_t>& out, const CellStyleRecord& style) {
+  std::vector<std::uint8_t> payload;
+  emit_u32(payload, style.xf_id);
+  std::uint16_t flags = static_cast<std::uint16_t>((style.builtin_id != CellStyleRecord::kBuiltinIdNone ? 1U : 0U) |
+                                                   (style.hidden ? 2U : 0U) | (style.custom_builtin ? 4U : 0U));
+  emit_u16(payload, flags);
+  emit_u8(payload,
+          style.builtin_id == CellStyleRecord::kBuiltinIdNone ? 0U : static_cast<std::uint8_t>(style.builtin_id));
+  emit_u8(payload, static_cast<std::uint8_t>(style.i_level));
+  emit_xlwidestring(payload, style.name);
+  emit_record(out, kBrtStyle, payload);
+}
+
 }  // namespace
 
-std::vector<std::uint8_t> write_styles_bin(const StylesTable& table, const DxfSavePlan* plan) {
+std::vector<std::uint8_t> write_styles_bin(const StylesTable& table, const DxfSavePlan* plan,
+                                           const CellStyleSavePlan* style_plan) {
   std::vector<std::uint8_t> out;
   out.reserve(256U + table.fonts.size() * 40U + table.fills.size() * 64U + table.borders.size() * 56U +
               table.cell_xfs.size() * 20U);
@@ -393,24 +409,34 @@ std::vector<std::uint8_t> write_styles_bin(const StylesTable& table, const DxfSa
 
   std::vector<CellXf> style_default;
   const std::vector<CellXf>& style_xfs = Normalized(table.cell_style_xfs, style_default);
-  EmitCount(out, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginCellStyleXFs), style_xfs.size());
-  for (const CellXf& xf : style_xfs)
-    EmitXf(out, xf, true);
+  if (style_plan != nullptr) {
+    EmitCount(out, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginCellStyleXFs),
+              style_plan->style_xf_order().size());
+    for (const std::uint32_t x : style_plan->style_xf_order())
+      EmitXf(out, style_xfs[x], std::nullopt);
+  } else {
+    EmitCount(out, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginCellStyleXFs), style_xfs.size());
+    for (const CellXf& xf : style_xfs)
+      EmitXf(out, xf, std::nullopt);
+  }
   emit_record(out, static_cast<std::uint16_t>(XlsbRecordType::BrtEndCellStyleXFs), empty);
 
   std::vector<CellXf> cell_default;
   const std::vector<CellXf>& cell_xfs = Normalized(table.cell_xfs, cell_default);
   EmitCount(out, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginCellXFs), cell_xfs.size());
   for (const CellXf& xf : cell_xfs)
-    EmitXf(out, xf, false);
+    EmitXf(out, xf, style_plan != nullptr ? style_plan->cell_xf_parent(xf.xf_id) : xf.xf_id);
   emit_record(out, static_cast<std::uint16_t>(XlsbRecordType::BrtEndCellXFs), empty);
 
-  // The collection is mandatory.  A synthetic Normal style is sufficient for
-  // workbooks that do not carry named OOXML styles; style-XF 0 is always
-  // present because it was normalised above.
-  const std::size_t style_count = std::max<std::size_t>(table.cell_styles.size(), 1U);
-  EmitCount(out, kBrtBeginStyles, style_count);
-  if (table.cell_styles.empty()) {
+  // The collection is mandatory. A plan always holds Normal; without one, a
+  // book with no named styles gets a synthetic Normal on style-XF 0, which is
+  // always present because it was normalised above.
+  if (style_plan != nullptr) {
+    EmitCount(out, kBrtBeginStyles, style_plan->cell_styles().size());
+    for (const CellStyleRecord& style : style_plan->cell_styles())
+      EmitStyle(out, style);
+  } else if (table.cell_styles.empty()) {
+    EmitCount(out, kBrtBeginStyles, 1U);
     std::vector<std::uint8_t> payload;
     emit_u32(payload, 0U);
     emit_u16(payload, 0U);
@@ -419,18 +445,9 @@ std::vector<std::uint8_t> write_styles_bin(const StylesTable& table, const DxfSa
     emit_xlwidestring(payload, "Normal");
     emit_record(out, kBrtStyle, payload);
   } else {
-    for (const CellStyleRecord& style : table.cell_styles) {
-      std::vector<std::uint8_t> payload;
-      emit_u32(payload, style.xf_id);
-      std::uint16_t flags = static_cast<std::uint16_t>((style.builtin_id != CellStyleRecord::kBuiltinIdNone ? 1U : 0U) |
-                                                       (style.hidden ? 2U : 0U) | (style.custom_builtin ? 4U : 0U));
-      emit_u16(payload, flags);
-      emit_u8(payload,
-              style.builtin_id == CellStyleRecord::kBuiltinIdNone ? 0U : static_cast<std::uint8_t>(style.builtin_id));
-      emit_u8(payload, static_cast<std::uint8_t>(style.i_level));
-      emit_xlwidestring(payload, style.name);
-      emit_record(out, kBrtStyle, payload);
-    }
+    EmitCount(out, kBrtBeginStyles, table.cell_styles.size());
+    for (const CellStyleRecord& style : table.cell_styles)
+      EmitStyle(out, style);
   }
   emit_record(out, kBrtEndStyles, empty);
   const DxfSavePlan identity = plan == nullptr ? identity_dxf_plan(table.dxfs.size()) : DxfSavePlan();

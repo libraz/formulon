@@ -23,7 +23,6 @@ constexpr std::uint32_t kNormalBuiltinId = 0U;
 constexpr std::uint32_t kRowLevelBuiltinId = 1U;
 constexpr std::uint32_t kColLevelBuiltinId = 2U;
 // RowLevel_n / ColLevel_n exist for n = 1..7.
-constexpr std::uint32_t kOutlineLevelCount = 7U;
 
 bool is_builtin(const CellStyleRecord& record) {
   return record.builtin_id != CellStyleRecord::kBuiltinIdNone;
@@ -234,7 +233,9 @@ CellStyleSavePlan build_cell_style_save_plan(const StylesTable& styles, const Us
   // Step 6: survivors by saved name under the sort collation, ties in group order.
   std::vector<std::uint32_t> survivors;
   std::vector<std::string> sort_keys;
+  plan.planned_names_.reserve(group_count);
   for (std::uint32_t g = 0; g < group_count; ++g) {
+    plan.planned_names_.push_back(saved_names[groups[g].rep]);
     if (groups[g].survives) {
       survivors.push_back(g);
       sort_keys.push_back(eval::collation_key(saved_names[groups[g].rep], profile, eval::CollationStrength::kDynamic));
@@ -263,24 +264,16 @@ CellStyleSavePlan build_cell_style_save_plan(const StylesTable& styles, const Us
   for (std::uint32_t x = 0; identity && x < xf_count; ++x) {
     identity = plan.style_xf_order_[x] == x;
   }
-  plan.identity_ = identity;
+  // A table with no named styles has nothing to plan; the writers' default Normal is not a change.
+  plan.identity_ = identity || (styles.cell_styles.empty() && styles.cell_style_xfs.empty());
   return plan;
 }
 
 bool saved_file_names_cell_style(const CellStyleSavePlan& plan, std::string_view name) {
   const eval::CollateQuery query(name, plan.profile(), eval::CollationStrength::kCompare);
-  for (const CellStyleRecord& style : plan.cell_styles()) {
-    if (!is_builtin(style) && query.compare(style.name) == 0) {
+  for (const std::string& planned : plan.planned_names_) {
+    if (query.compare(planned) == 0) {
       return true;
-    }
-  }
-  const ExcelLocale locale = plan.profile().locale;
-  for (std::uint32_t id = 0; id < kBuiltinStyleCount; ++id) {
-    const std::uint32_t levels = is_outline(id) ? kOutlineLevelCount : 1U;
-    for (std::uint32_t level = 0; level < levels; ++level) {
-      if (query.compare(builtin_style_name(id, level, locale)) == 0) {
-        return true;
-      }
     }
   }
   return false;

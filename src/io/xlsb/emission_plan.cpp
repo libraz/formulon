@@ -178,17 +178,19 @@ std::unordered_set<std::string> BuildGeneratedPathSet(const Workbook& wb, bool e
 
 Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_present, bool generate_metadata,
                                                 bool generate_rich_values, std::size_t external_link_count,
-                                                WriteDiagnostics* diagnostics) {
+                                                bool style_plan_identity, WriteDiagnostics* diagnostics) {
   EmissionPlan plan;
   plan.has_text_cells = sst_present;
   // A retained styles.bin that still matches the model is emitted verbatim,
   // which keeps BrtXF fMergeCell/fSxButton and dxf properties the table does
   // not represent.  Without a raw part (XLSX/native source) or once the model
   // styles changed since load, styles.bin is generated from the model and the
-  // stale raw part is dropped as a generated-path collision.
+  // stale raw part is dropped as a generated-path collision. A save that
+  // renames, merges, drops or reorders named styles also regenerates it.
   const PassthroughPart* raw_styles = FindRawStylesPart(wb);
   const bool raw_styles_fresh = raw_styles != nullptr && static_cast<bool>(CheckRetainedPartFreshness(wb, *raw_styles));
-  plan.has_generated_styles = !raw_styles_fresh && (raw_styles != nullptr || HasModelledStyles(wb));
+  plan.has_generated_styles =
+      (!raw_styles_fresh || !style_plan_identity) && (raw_styles != nullptr || HasModelledStyles(wb));
   // Decided by `BuildMetadataPlan`, which the sheet bodies were already
   // emitted against.
   plan.has_generated_metadata = generate_metadata;

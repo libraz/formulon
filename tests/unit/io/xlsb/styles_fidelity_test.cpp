@@ -10,10 +10,12 @@
 #include <vector>
 
 #include "cf/cf_types.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_writer.h"
 #include "io/styles_reader.h"
 #include "io/xlsb/dxf_props.h"
+#include "io/xlsb/emission_plan.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/styles_reader.h"
@@ -299,10 +301,14 @@ TEST(XlsbStylesFidelity, NamedCellStylesSurviveXlsbToXlsbAndXlsx) {
   ASSERT_TRUE(static_cast<bool>(second)) << second.error().message;
   auto reloaded = read_xlsb(SpanOf(second.value()));
   ASSERT_TRUE(static_cast<bool>(reloaded)) << reloaded.error().message;
+  // Every style survives (Normal, a customBuiltin built-in, a custom), sorted
+  // by saved name as Excel writes BrtStyle.
   const auto& styles = reloaded.value().workbook.styles().cell_styles;
   ASSERT_EQ(styles.size(), 3U);
-  EXPECT_EQ(styles[1].name, "Heading 1");
-  EXPECT_EQ(styles[1].builtin_id, 16U);
+  EXPECT_EQ(styles[0].name, "Heading 1");
+  EXPECT_EQ(styles[0].builtin_id, 16U);
+  EXPECT_EQ(styles[1].name, "My Style");
+  EXPECT_EQ(styles[2].name, "Normal");
 
   auto xlsx = write_ooxml(reloaded.value().workbook);
   ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
@@ -311,6 +317,79 @@ TEST(XlsbStylesFidelity, NamedCellStylesSurviveXlsbToXlsbAndXlsx) {
   EXPECT_NE(xml.find("name=\"Heading 1\""), std::string::npos) << xml;
   EXPECT_NE(xml.find("name=\"My Style\""), std::string::npos) << xml;
   EXPECT_NE(xml.find("builtinId=\"16\""), std::string::npos) << xml;
+}
+
+// A save under the ja-JP profile drops the unused built-in and writes the used
+// one under its locale name, its cell xf following it to the new style xf.
+TEST(XlsbStylesFidelity, JaProfileSaveDropsAnUnusedBuiltinAndLocalizesAUsedOne) {
+  Workbook wb = Workbook::create_for_profile(mac_365_ja_jp_profile());
+  StylesTable styles = wb.styles();
+  for (const std::uint32_t builtin_id : {16U, 26U}) {
+    CellXf xf;
+    xf.num_fmt_id = static_cast<std::uint16_t>(builtin_id);
+    styles.cell_style_xfs.push_back(xf);
+    CellStyleRecord record;
+    record.name = builtin_id == 16U ? "Heading 1" : "Good";
+    record.builtin_id = builtin_id;
+    record.xf_id = static_cast<std::uint32_t>(styles.cell_style_xfs.size() - 1U);
+    styles.cell_styles.push_back(record);
+  }
+  CellXf cell_xf;
+  cell_xf.xf_id = styles.cell_styles.back().xf_id;
+  styles.cell_xfs.push_back(cell_xf);
+  const auto cell_xf_index = static_cast<std::uint32_t>(styles.cell_xfs.size() - 1U);
+  wb.set_styles(std::move(styles));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_xf_index(0U, 0U, 0U, cell_xf_index)));
+
+  auto saved = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  auto loaded = read_xlsb(SpanOf(saved.value()));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  const StylesTable& back = loaded.value().workbook.styles();
+  ASSERT_EQ(back.cell_styles.size(), 2U);
+  const CellStyleRecord* good = nullptr;
+  for (const CellStyleRecord& record : back.cell_styles) {
+    EXPECT_NE(record.builtin_id, 16U) << record.name;
+    good = record.builtin_id == 26U ? &record : good;
+  }
+  ASSERT_NE(good, nullptr);
+  EXPECT_EQ(good->name, "良い");
+  ASSERT_LT(good->xf_id, back.cell_style_xfs.size());
+  EXPECT_EQ(back.cell_style_xfs[good->xf_id].num_fmt_id, 26U);
+  ASSERT_LT(cell_xf_index, back.cell_xfs.size());
+  EXPECT_EQ(back.cell_xfs[cell_xf_index].xf_id, good->xf_id);
+  EXPECT_EQ(wb.styles().cell_styles.size(), 3U);
+}
+
+// A retained styles.bin still matching the model is regenerated when the save
+// would rename, drop or reorder its named styles.
+TEST(XlsbStylesFidelity, ARetainedStylesPartIsRegeneratedWhenTheStylePlanIsNotIdentity) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));
+  auto first = write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(first)) << first.error().message;
+  auto loaded = read_xlsb(SpanOf(first.value()));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  Workbook& book = loaded.value().workbook;
+
+  auto kept = BuildEmissionPlan(book, false, false, false, 0U, /*style_plan_identity=*/true, nullptr);
+  ASSERT_TRUE(static_cast<bool>(kept)) << kept.error().message;
+  EXPECT_FALSE(kept.value().has_generated_styles);
+  auto regenerated = BuildEmissionPlan(book, false, false, false, 0U, /*style_plan_identity=*/false, nullptr);
+  ASSERT_TRUE(static_cast<bool>(regenerated)) << regenerated.error().message;
+  EXPECT_TRUE(regenerated.value().has_generated_styles);
+
+  // Under ja-JP the retained part would still say "Normal"; the save writes 標準.
+  book.set_excel_profile(mac_365_ja_jp_profile());
+  auto second = write_xlsb(book);
+  ASSERT_TRUE(static_cast<bool>(second)) << second.error().message;
+  auto reloaded = read_xlsb(SpanOf(second.value()));
+  ASSERT_TRUE(static_cast<bool>(reloaded)) << reloaded.error().message;
+  const auto& names = reloaded.value().workbook.styles().cell_styles;
+  ASSERT_EQ(names.size(), 1U);
+  EXPECT_EQ(names[0].name, "標準");
+  EXPECT_EQ(names[0].builtin_id, 0U);
 }
 
 TEST(XlsbStylesFidelity, ExcelWrittenNamedStylesLoad) {

@@ -228,9 +228,11 @@ test('setCellStyle round-trips a record and validates its fields', async () => {
     assert.equal(read.hidden, true);
     assert.equal(read.customBuiltin, true);
 
+    // A record naming a built-in style updates it in place and keeps its builtinId.
     wb.setCellStyle({ name: 'Probe Style' });
     assert.equal(wb.listCellStyles().length, before + 1);
-    assert.equal(wb.listCellStyles()[before].builtinId, null);
+    assert.equal(wb.listCellStyles()[before].builtinId, 53);
+    assert.equal(wb.listCellStyles()[before].hidden, false);
 
     assert.throws(() => wb.setCellStyle({ name: 'Bad Level', outlineLevel: 3 }), isFormulonError);
     assert.throws(() => wb.setCellStyle({ name: '' }), isFormulonError);
