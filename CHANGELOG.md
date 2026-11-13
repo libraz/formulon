@@ -14,11 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `.xlsb` saves write each sheet's print options and page margins from the
-  workbook, as Excel does, so a book loaded from `.xlsx` or created through the
-  API keeps them. A fresh book of any profile now saves to `.xlsb` with nothing
-  reported as deferred; it used to report its margins as deferred print
-  settings.
+- `.xlsb` saves write each sheet's print options, page margins, page setup,
+  header and footer, and manual page breaks from the workbook, as Excel does,
+  so a book loaded from `.xlsx` or created through the API keeps them. Page
+  setup keeps paper size, scale, resolution, copies, first page number, page
+  order, orientation, black and white, draft, comments and error printing;
+  automatic breaks are left out, as Excel leaves them out. A fresh book of any
+  profile now saves to `.xlsb` with nothing reported as deferred. Only sheet
+  properties (`<sheetPr>`) and a printer-settings part are still reported as
+  deferred print settings.
 
 - A pivot cache marked `refreshOnLoad` in an opened `.xlsx` or `.xlsb` is
   refreshed from its source before the workbook is first read, edited,

@@ -1,6 +1,6 @@
-// The worksheet print records the xlsb writer derives from the model, held against Excel 16.115's own xlsb saves of
-// the same sources (tests/fixtures/excel/xlsb_parity/print), and a fresh book of every profile saving with nothing
-// deferred.
+// The worksheet print records the xlsb writer derives from the model (print options, margins, page setup, header and
+// footer, manual breaks), held against Excel 16.115's own xlsb saves of the same sources
+// (tests/fixtures/excel/xlsb_parity/print), and a fresh book of every profile saving with nothing deferred.
 
 #include <cstddef>
 #include <cstdint>
@@ -52,6 +52,24 @@ std::string Fixture(const std::string& name) {
   return std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_parity/print/" + name;
 }
 
+bool IsPrintRecord(std::uint16_t type) {
+  switch (type) {
+    case kBrtPrintOptions:
+    case kBrtMargins:
+    case kBrtPageSetup:
+    case kBrtBeginHeaderFooter:
+    case kBrtEndHeaderFooter:
+    case kBrtBeginRwBrk:
+    case kBrtEndRwBrk:
+    case kBrtBeginColBrk:
+    case kBrtEndColBrk:
+    case kBrtBrk:
+      return true;
+    default:
+      return false;
+  }
+}
+
 /// The type and payload of each print record in the first worksheet, in stream order.
 std::vector<std::pair<std::uint16_t, Bytes>> PrintRecords(const Bytes& package) {
   ZipReader zip;
@@ -63,7 +81,7 @@ std::vector<std::pair<std::uint16_t, Bytes>> PrintRecords(const Bytes& package) 
     return out;
   }
   for (const FramedRecord& rec : split_records(part.value())) {
-    if (rec.type == kBrtPrintOptions || rec.type == kBrtMargins) {
+    if (IsPrintRecord(rec.type)) {
       out.emplace_back(rec.type, Bytes(rec.payload.data, rec.payload.data + rec.payload.size));
     }
   }
@@ -71,7 +89,42 @@ std::vector<std::pair<std::uint16_t, Bytes>> PrintRecords(const Bytes& package) 
 }
 
 TEST(XlsbParityPrint, PrintOptionsAndMarginsMatchExcel) {
-  for (const char* name : {"defaults_only", "margins_fine", "margins_zero", "opt_vcenter", "opt_gridlinesset0"}) {
+  for (const char* name : {"base",
+                           "defaults_only",
+                           "margins_fine",
+                           "margins_zero",
+                           "opt_vcenter",
+                           "opt_gridlinesset0",
+                           "paper_custom",
+                           "ps_bw",
+                           "ps_comments_atend",
+                           "ps_comments_displayed",
+                           "ps_copies",
+                           "ps_dpi",
+                           "ps_draft",
+                           "ps_errors_blank",
+                           "ps_errors_dash",
+                           "ps_errors_na",
+                           "ps_firstpage_unused",
+                           "ps_orient_portrait",
+                           "ps_pageorder",
+                           "ps_paper_b5",
+                           "ps_paper_letter",
+                           "ps_printerdefaults0",
+                           "scale_edges",
+                           "hf_codes",
+                           "hf_empty_header",
+                           "hf_odd_even_first",
+                           "hf_scale_align0",
+                           "header_255",
+                           "breaks_many",
+                           "breaks_row_1024",
+                           "breaks_col_1024",
+                           "brk_auto_pt",
+                           "brk_minmax",
+                           "wsprop_bits",
+                           "outline_apply_styles",
+                           "outline_symbols0"}) {
     SCOPED_TRACE(name);
     auto loaded = read_ooxml(SpanOf(ReadFile(Fixture(std::string(name) + "_src.xlsx"))));
     ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
