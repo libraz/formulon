@@ -13,6 +13,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Saving `.xlsx` and `.xlsb` writes only the differential formats (dxfs) that
+  something in the saved file references (conditional-format rules, table and
+  table column formats, custom table style elements, colour filters, sort
+  conditions, PivotTable formats, verbatim parts included) and renumbers every
+  reference, as Excel does on save. The live workbook keeps its dxf indices.
+  A reference to an index past the dxf table is omitted from the saved file.
+  A workbook whose saved parts hold a dxf reference the writer cannot rewrite
+  (a retained `.xlsb` PivotTable part) keeps its dxf table as it is.
+
+- A colour filter's or sort condition's `dxfIndex` (C `fm_filter_column_t::dxf_index`
+  and `fm_sort_condition_t::dxf_index`) and a custom table style element's
+  `dxfIndex` that is not below the workbook's dxf count now fail with
+  `IndexOutOfRange` (`FM_STATUS_INDEX_OUT_OF_RANGE`), as a conditional-format
+  rule's does; table style elements used to return `InvalidArgument`, and the
+  auto-filter setters used to accept the index and write a dangling id. A
+  stored index past the count reads back as absent, so `set(get())` of a loaded
+  file succeeds.
+
 - C ABI: every engine ceiling that is not an Excel limit returns
   `SECURITY_RESOURCE_LIMIT` (6005; `StatusCode.SecurityResourceLimit`, Python
   `SecurityError`), whose error context carries `part=<name> requested=<n>

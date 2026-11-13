@@ -7063,8 +7063,8 @@ export interface Workbook {
   /** Adds a custom table style, or replaces the one with the same name
    *  (by name identity, see {@link Workbook}). The name may not be a built-in style name (table, PivotTable or
    *  slicer); a loaded file's custom style with such a name is dropped. Each
-   *  element type may appear once, `size` must be at least 1 and `dxfIndex`
-   *  must name an existing differential format. A first style also sets the
+   *  element type may appear once and `size` must be at least 1; a `dxfIndex` not below `listDxfs().length` fails
+   *  with `StatusCode.IndexOutOfRange`. A first style also sets the
    *  defaults to `TableStyleMedium2` / `PivotStyleLight16`. A name that is already in use cannot take flags that
    *  exclude a kind of its users: replacing a style that a table, a PivotTable or the default of that kind still
    *  uses with `table` or `pivot` false fails with `StatusCode.PreconditionFailed` and changes nothing. */
@@ -7547,7 +7547,8 @@ export interface Sheet {
   getAutoFilter(): AutoFilter | null;
   /** Replaces the sheet AutoFilter and its hidden `_xlnm._FilterDatabase` name, or with `null` removes it (a
    *  sheet without one is left as it is). Row visibility is unchanged; call `applyAutoFilter` to hide the
-   *  excluded rows. */
+   *  excluded rows. A color-filter or sort-condition `dxfIndex` that is not below `listDxfs().length` fails with
+   *  `StatusCode.IndexOutOfRange`. */
   setAutoFilter(filter: AutoFilterInput | null): void;
   /** Hides every body row the criteria exclude and shows the rest, as
    *  Excel's Reapply does. Fails with StatusCode.NotFound when the sheet has no AutoFilter. */
@@ -8190,7 +8191,8 @@ export interface WorkbookOoxml {
    *  unregistered `numFmtId` with `StatusCode.InvalidArgument`. */
   setCellXf(xfIndex: number, record: CellXfInput): void;
   /** Adds a `<dxf> differential-format record for conditional formats and returns its `dxfIndex`. More than 1024 gradient stops in its
-   *  fill fail with `StatusCode.SecurityResourceLimit`. */
+   *  fill fail with `StatusCode.SecurityResourceLimit`. A dxf no reference uses is not saved; indices are stable only
+   *  within the live workbook. */
   addDxf(input: DxfInput): number;
   /** Overwrites the `<dxf>` at `dxfIndex` in place; the {@link Dxf} `getDxf` returns passes as is. An index past the
    *  end fails with `StatusCode.IndexOutOfRange`, more than 1024 gradient stops in its fill with
@@ -8509,7 +8511,8 @@ export interface Table {
   /** Reads the table's AutoFilter; `null` when it has none. */
   getAutoFilter(): AutoFilter | null;
   /** Replaces the table's AutoFilter, or with `null` removes it (a table without one is left as it is). Row
-   *  visibility is unchanged. */
+   *  visibility is unchanged. A color-filter or sort-condition `dxfIndex` that is not below `listDxfs().length`
+   *  fails with `StatusCode.IndexOutOfRange`. */
   setAutoFilter(filter: AutoFilterInput | null): void;
   /** Hides every body row the table's criteria exclude and shows the rest. */
   applyAutoFilter(): void;

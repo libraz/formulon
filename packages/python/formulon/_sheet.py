@@ -4120,7 +4120,8 @@ class Sheet(_NoCopy):
         Row visibility is unchanged; see :meth:`apply_auto_filter`. ``range``
         of the filter, of its sort state and of its sort conditions takes an
         unqualified A1 range too; an :class:`AutoFilter` read back is accepted
-        in place of an :class:`AutoFilterInput`.
+        in place of an :class:`AutoFilterInput`. A color-filter or sort-condition ``dxf_index`` that does not name
+        an existing differential format fails with ``StatusCode.INDEX_OUT_OF_RANGE``.
         """
         sheet = self._index()
         if filter is not None:

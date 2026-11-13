@@ -27,7 +27,21 @@ import unittest
 from pathlib import Path
 
 import formulon
-from formulon import Workbook, _structs
+from formulon import (
+    AutoFilter,
+    AutoFilterColumn,
+    AutoFilterSortCondition,
+    AutoFilterSortState,
+    CellRect,
+    DxfInput,
+    FilterKind,
+    SortBy,
+    TableStyle,
+    TableStyleElement,
+    TableStyleElementType,
+    Workbook,
+    _structs,
+)
 from formulon._c import _sint, _uint
 
 _PKG_ROOT = Path(__file__).resolve().parent.parent
@@ -823,6 +837,38 @@ class IndexRangeTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             with self.assertRaises(formulon.FormulonError):
                 wb.sheet(0).set_number(0xFFFFFFFF, 0, 1.0)
+
+    def test_dxf_index_past_the_table_is_refused(self) -> None:
+        with Workbook.create_default() as wb:
+            sheet = wb.sheet(0)
+            registered = wb.ooxml.add_dxf(DxfInput())
+            count = len(wb.ooxml.list_dxfs())
+            area = CellRect(0, 0, 3, 0)
+
+            def color(dxf: int) -> AutoFilter:
+                return AutoFilter(
+                    range=area,
+                    columns=[AutoFilterColumn(column_offset=0, kind=FilterKind.COLOR, cell_color=True, dxf_index=dxf)],
+                )
+
+            def sort(dxf: int) -> AutoFilter:
+                condition = AutoFilterSortCondition(range=area, sort_by=SortBy.CELL_COLOR, dxf_index=dxf)
+                return AutoFilter(range=area, sort=AutoFilterSortState(range=area, conditions=[condition]))
+
+            def style(dxf: int) -> TableStyle:
+                element = TableStyleElement(type=TableStyleElementType.HEADER_ROW, dxf_index=dxf)
+                return TableStyle(name="S", elements=[element])
+
+            for make in (color, sort):
+                for bad in (count, 2**32 - 1):
+                    with self.assertRaises(formulon.IndexOutOfRangeError) as ctx:
+                        sheet.set_auto_filter(make(bad))
+                    self.assertEqual(ctx.exception.code, formulon.StatusCode.INDEX_OUT_OF_RANGE)
+                sheet.set_auto_filter(make(registered))
+            with self.assertRaises(formulon.IndexOutOfRangeError) as ctx:
+                wb.set_table_style(style(count))
+            self.assertEqual(ctx.exception.code, formulon.StatusCode.INDEX_OUT_OF_RANGE)
+            wb.set_table_style(style(registered))
 
 
 if __name__ == "__main__":

@@ -136,8 +136,10 @@ extern "C" fm_status_t fm_workbook_get_table_style_at(const fm_workbook_t* wb, s
     fm_table_style_element_t c{};
     c.type = ordinal_of(kTableStyleElementTypeTokens, element.type, -1);
     c.size = element.size;
-    c.has_dxf_index = element.dxf_id.has_value() ? 1 : 0;
-    c.dxf_index = element.dxf_id.value_or(0U);
+    if (element.dxf_id.has_value() && static_cast<std::size_t>(*element.dxf_id) < wb->workbook().styles().dxfs.size()) {
+      c.has_dxf_index = 1;
+      c.dxf_index = *element.dxf_id;
+    }
     elements.push_back(c);
   }
   fresh_read_scratch(wb);
@@ -227,11 +229,11 @@ extern "C" fm_status_t fm_workbook_set_table_style(fm_workbook_t* wb, const fm_t
     if (in.size == 0U) {
       return invalid_argument(("elements[" + std::to_string(i) + "].size must be at least 1").c_str(), context);
     }
-    if (in.has_dxf_index != 0 && in.dxf_index >= styles.dxfs.size()) {
-      return invalid_argument(("elements[" + std::to_string(i) + "].dxf_index " + std::to_string(in.dxf_index) +
-                               " is out of range (" + std::to_string(styles.dxfs.size()) + " items)")
-                                  .c_str(),
-                              context + " dxf_index=" + std::to_string(in.dxf_index));
+    if (in.has_dxf_index != 0) {
+      const std::string field = "elements[" + std::to_string(i) + "].dxf_index";
+      if (auto rc = check_index(in.dxf_index, styles.dxfs.size(), field.c_str()); rc != 0) {
+        return rc;
+      }
     }
     formulon::TableStyleElement element;
     element.type = std::string(type);

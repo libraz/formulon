@@ -378,6 +378,31 @@ describe('updateCfRule changes the named keys of one rule', () => {
     });
   });
 
+  it('a color-filter, sort-condition or table-style dxf index past the table is IndexOutOfRange', () => {
+    withSheet((ws, wb) => {
+      const dxf = wb.ooxml.addDxf({});
+      const count = wb.ooxml.listDxfs().length;
+      const colorFilter = (dxfIndex) => ({
+        range: 'A1:A4',
+        columns: [{ columnOffset: 0, kind: f.FilterKind.Color, cellColor: true, dxfIndex }],
+      });
+      const sortFilter = (dxfIndex) => ({
+        range: 'A1:A4',
+        sort: { range: 'A2:A4', conditions: [{ range: 'A2:A4', sortBy: f.SortBy.CellColor, dxfIndex }] },
+      });
+      for (const make of [colorFilter, sortFilter]) {
+        expectCode(() => ws.setAutoFilter(make(count)), StatusCode.IndexOutOfRange);
+        expectCode(() => ws.setAutoFilter(make(4294967295)), StatusCode.IndexOutOfRange);
+        ws.setAutoFilter(make(dxf));
+      }
+      expectCode(
+        () => wb.setTableStyle({ name: 'S', elements: [{ type: f.TableStyleElementType.HeaderRow, dxfIndex: count }] }),
+        StatusCode.IndexOutOfRange,
+      );
+      wb.setTableStyle({ name: 'S', elements: [{ type: f.TableStyleElementType.HeaderRow, dxfIndex: dxf }] });
+    });
+  });
+
   it('an id no rule has is NotFound and a position past the end is IndexOutOfRange', () => {
     withSheet((ws) => {
       ws.addCfRule(expression);

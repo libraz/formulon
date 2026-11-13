@@ -109,6 +109,9 @@ void publish(const fm_workbook_t* wb, const formulon::AutoFilter& filter, fm_aut
   fresh_arena(wb, &fm_workbook_t::sort_condition_scratch);
   auto keep = [scratch](const std::string& text) { return store_cstr(scratch->read_scratch, text); };
   auto keep_or_null = [&keep](const std::string& text) { return text.empty() ? nullptr : keep(text); };
+  // A dxf id the styles table cannot resolve is published as absent, so a
+  // loaded filter still round-trips through the setter.
+  const std::size_t dxf_count = wb->workbook().styles().dxfs.size();
 
   std::vector<fm_filter_column_t> columns;
   columns.reserve(filter.columns.size());
@@ -167,8 +170,10 @@ void publish(const fm_workbook_t* wb, const formulon::AutoFilter& filter, fm_aut
         c.max_val_iso = keep_or_null(in.dynamic.max_val_iso);
         break;
       case formulon::FilterKind::kColor:
-        c.has_dxf_index = in.color.dxf_id.has_value() ? 1 : 0;
-        c.dxf_index = in.color.dxf_id.value_or(0U);
+        if (in.color.dxf_id.has_value() && static_cast<std::size_t>(*in.color.dxf_id) < dxf_count) {
+          c.has_dxf_index = 1;
+          c.dxf_index = *in.color.dxf_id;
+        }
         c.cell_color = in.color.cell_color ? 1 : 0;
         break;
       case formulon::FilterKind::kIcon:
@@ -203,8 +208,10 @@ void publish(const fm_workbook_t* wb, const formulon::AutoFilter& filter, fm_aut
       c.descending = in.descending ? 1 : 0;
       c.sort_by = static_cast<int32_t>(in.sort_by);
       c.custom_list = keep_or_null(in.custom_list);
-      c.has_dxf_index = in.dxf_id.has_value() ? 1 : 0;
-      c.dxf_index = in.dxf_id.value_or(0U);
+      if (in.dxf_id.has_value() && static_cast<std::size_t>(*in.dxf_id) < dxf_count) {
+        c.has_dxf_index = 1;
+        c.dxf_index = *in.dxf_id;
+      }
       c.icon_set = static_cast<int32_t>(in.icon_set);
       c.has_icon_index = in.icon_id.has_value() ? 1 : 0;
       c.icon_index = static_cast<int32_t>(in.icon_id.value_or(0U));
@@ -224,7 +231,7 @@ fm_status_t check_array(const void* data, uint32_t count, const char* field) {
   return 0;
 }
 
-fm_status_t column_from_fm(const fm_filter_column_t& in, formulon::FilterColumn* out) {
+fm_status_t column_from_fm(const fm_filter_column_t& in, std::size_t dxf_count, formulon::FilterColumn* out) {
   if (auto rc = check_enum_domain(in.kind, 0, static_cast<int64_t>(formulon::FilterKind::kIcon), "kind"); rc != 0) {
     return rc;
   }
@@ -311,6 +318,9 @@ fm_status_t column_from_fm(const fm_filter_column_t& in, formulon::FilterColumn*
       return 0;
     case formulon::FilterKind::kColor:
       if (in.has_dxf_index != 0) {
+        if (auto rc = check_index(in.dxf_index, dxf_count, "dxf_index"); rc != 0) {
+          return rc;
+        }
         out->color.dxf_id = in.dxf_index;
       }
       out->color.cell_color = in.cell_color != 0;
@@ -335,7 +345,7 @@ fm_status_t column_from_fm(const fm_filter_column_t& in, formulon::FilterColumn*
   return 0;
 }
 
-fm_status_t sort_condition_from_fm(const fm_sort_condition_t& in, formulon::SortCondition* out) {
+fm_status_t sort_condition_from_fm(const fm_sort_condition_t& in, std::size_t dxf_count, formulon::SortCondition* out) {
   if (auto rc = check_enum_domain(in.sort_by, 0, static_cast<int64_t>(formulon::SortBy::kIcon), "sort_by"); rc != 0) {
     return rc;
   }
@@ -343,6 +353,11 @@ fm_status_t sort_condition_from_fm(const fm_sort_condition_t& in, formulon::Sort
                                   "conditions.icon_set");
       rc != 0) {
     return rc;
+  }
+  if (in.has_dxf_index != 0) {
+    if (auto rc = check_index(in.dxf_index, dxf_count, "conditions.dxf_index"); rc != 0) {
+      return rc;
+    }
   }
   out->ref = to_merge_range(in.ref);
   out->descending = in.descending != 0;
@@ -362,14 +377,14 @@ fm_status_t sort_condition_from_fm(const fm_sort_condition_t& in, formulon::Sort
   return 0;
 }
 
-fm_status_t filter_from_fm(const fm_auto_filter_t& in, formulon::AutoFilter* out) {
+fm_status_t filter_from_fm(const fm_auto_filter_t& in, std::size_t dxf_count, formulon::AutoFilter* out) {
   if (auto rc = check_array(in.columns, in.column_count, "columns"); rc != 0) {
     return rc;
   }
   out->range = to_merge_range(in.range);
   for (uint32_t i = 0; i < in.column_count; ++i) {
     formulon::FilterColumn column;
-    if (auto rc = column_from_fm(in.columns[i], &column); rc != 0) {
+    if (auto rc = column_from_fm(in.columns[i], dxf_count, &column); rc != 0) {
       return rc;
     }
     out->columns.push_back(std::move(column));
@@ -392,7 +407,7 @@ fm_status_t filter_from_fm(const fm_auto_filter_t& in, formulon::AutoFilter* out
   sort.sort_method = static_cast<formulon::SortMethod>(in.sort_method);
   for (uint32_t i = 0; i < in.condition_count; ++i) {
     formulon::SortCondition condition;
-    if (auto rc = sort_condition_from_fm(in.conditions[i], &condition); rc != 0) {
+    if (auto rc = sort_condition_from_fm(in.conditions[i], dxf_count, &condition); rc != 0) {
       return rc;
     }
     sort.conditions.push_back(std::move(condition));
@@ -478,7 +493,7 @@ fm_status_t set_body(fm_workbook_t* wb, const Target& target, const fm_auto_filt
     return rc;
   }
   formulon::AutoFilter model;
-  if (auto rc = filter_from_fm(*filter, &model); rc != 0) {
+  if (auto rc = filter_from_fm(*filter, wb->workbook().styles().dxfs.size(), &model); rc != 0) {
     return rc;
   }
   if (target.filter != nullptr && !target.filter->is_opaque()) {

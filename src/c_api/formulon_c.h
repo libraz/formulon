@@ -10547,7 +10547,8 @@ typedef struct {
   const char* max_val_iso;
   /** 1 when `dxf_index` is set; 0 means the color filter names no differential format. */
   int32_t has_dxf_index;
-  /** The index of the differential format whose fill or font colour the color filter matches. */
+  /** The index of the differential format whose fill or font colour the color filter matches. A stored index past the
+   *  workbook's dxf count reads as absent. */
   uint32_t dxf_index;
   /** 1 when the color filter matches the cell fill, 0 when it matches the font colour. */
   int32_t cell_color;
@@ -10569,7 +10570,8 @@ typedef struct {
   int32_t sort_by;
   /** The custom sort list, as comma-separated items; `NULL` when the condition uses none. */
   const char* custom_list;
-  /** The index of the differential format whose colour the condition sorts by. */
+  /** The index of the differential format whose colour the condition sorts by. A stored index past the workbook's dxf
+   *  count reads as absent. */
   uint32_t dxf_index;
   /** 1 when `dxf_index` is set; 0 means the condition names no differential format. */
   int32_t has_dxf_index;
@@ -10652,7 +10654,9 @@ FM_API fm_status_t fm_sheet_get_auto_filter(const fm_workbook_t* wb, size_t shee
  *         `FM_STATUS_AUTO_FILTER_INVALID` (8006) when the range is outside the grid,
  *         column offsets are outside the range or not ascending, a custom filter
  *         has other than one or two conditions, or a date group item does
- *         not fit its grouping.
+ *         not fit its grouping;
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when a present color filter or sort condition `dxf_index` is not below
+ *         the workbook's dxf count (`fm_workbook_get_dxf_count`); nothing changes.
  */
 FM_API fm_status_t fm_sheet_set_auto_filter(fm_workbook_t* wb, size_t sheet_index, const fm_auto_filter_t* filter);
 
@@ -10732,8 +10736,8 @@ FM_API fm_status_t fm_sheet_get_table_auto_filter(const fm_workbook_t* wb, size_
  *
  * @return `FM_STATUS_OK` (0) on success, or a common table failure;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) and `FM_STATUS_AUTO_FILTER_INVALID` (8006) as for
- *         `fm_sheet_set_auto_filter`.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2), `FM_STATUS_AUTO_FILTER_INVALID` (8006) and
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) as for `fm_sheet_set_auto_filter`.
  */
 FM_API fm_status_t fm_sheet_set_table_auto_filter(fm_workbook_t* wb, size_t sheet_index, size_t table_index,
                                                   const fm_auto_filter_t* filter);
@@ -12311,6 +12315,8 @@ FM_API fm_status_t fm_workbook_get_dxf_at(const fm_workbook_t* wb, uint32_t dxf_
  * becomes the dxf's `<numFmt>`; `NULL` stores none. `alignment_xml` and `protection_xml` are always deep-copied when
  * non-`NULL`; passing `NULL` stores an empty fragment.
  *
+ * A dxf no reference uses is not saved; indices are stable only within the live workbook.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `record` or `out_dxf_index` is `NULL`;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when the present font's `name`,
@@ -12385,7 +12391,8 @@ typedef struct {
   uint32_t size;
   /** 1 when `dxf_index` is set; 0 means the region is listed without formatting. */
   int32_t has_dxf_index;
-  /** Index of the differential format applied to the region; read only when `has_dxf_index` is 1. */
+  /** Index of the differential format applied to the region; read only when `has_dxf_index` is 1. A stored index past
+   *  the workbook's dxf count reads as absent. */
   uint32_t dxf_index;
 } fm_table_style_element_t;
 
@@ -12464,7 +12471,8 @@ FM_API fm_status_t fm_workbook_get_table_style(const fm_workbook_t* wb, const ch
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `style` or `style->name` is `NULL`,
  *         or `elements` is `NULL` with a non-zero count;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) for an invalid name, an element type outside its
- *         enumeration or repeated, a zero `size`, or a `dxf_index` past `<dxfs>`;
+ *         enumeration or repeated, or a zero `size`;
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when an element's `dxf_index` is not below the dxf count;
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when a replacement's flags exclude a kind that a
  *         table, a PivotTable or the default style of that kind still uses; nothing changes.
  */

@@ -10381,8 +10381,8 @@ class Workbook(_NoCopy):
 
         The name may not be a built-in style name (table, PivotTable or slicer); a loaded file's custom
         style with such a name is dropped. Each element type may
-        appear once, ``size`` must be at least 1 and ``dxf_index`` must name an
-        existing differential format (:meth:`WorkbookOoxml.add_dxf`).
+        appear once and ``size`` must be at least 1. A ``dxf_index`` that does not name an existing
+        differential format (:meth:`WorkbookOoxml.add_dxf`) fails with ``StatusCode.INDEX_OUT_OF_RANGE``.
 
         Raises:
           FormulonError: with ``code == StatusCode.PRECONDITION_FAILED`` when replacing a style whose new
@@ -11176,7 +11176,8 @@ class WorkbookOoxml(_NoCopy):
         """Add (dedup) a differential format and return its index.
 
         Accepts a :class:`DxfInput` or the :class:`Dxf` :meth:`get_dxf` returns.
-        A ``number_format`` is registered as :meth:`add_number_format` does.
+        A ``number_format`` is registered as :meth:`add_number_format` does. A differential format no reference
+        uses is not saved; indices are stable only within the live workbook.
 
         Raises:
           SecurityError: when its fill has more than 1024 gradient stops.

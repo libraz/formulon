@@ -563,6 +563,8 @@ class Table(_NoCopy):
         """Replace the table's AutoFilter, or remove it with ``None`` (no-op without one). Row visibility is unchanged.
 
         ``range`` of the filter, of its sort state and of its sort conditions takes an A1 range too.
+        A color-filter or sort-condition ``dxf_index`` that does not name an existing differential format fails with
+        ``StatusCode.INDEX_OUT_OF_RANGE``.
         """
         _, sheet, index = self._locate()
         if filter is not None:

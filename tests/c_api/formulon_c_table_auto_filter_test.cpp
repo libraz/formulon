@@ -194,4 +194,29 @@ TEST(FormulonCApiTableAutoFilter, FilterOfATableOnASecondSheetHidesThatSheetsRow
   EXPECT_EQ(match, (std::vector<std::uint8_t>{0, 0, 0, 1, 1}));
 }
 
+TEST(FormulonCApiTableAutoFilter, DxfIndexRangeRefusesColorFilterPastTheDxfTable) {
+  WorkbookGuard wb;
+  CreateNumbersTable(wb);
+  fm_dxf_t dxf{};
+  std::uint32_t registered = 0;
+  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &registered), 0);
+  size_t count = 0;
+  ASSERT_EQ(fm_workbook_get_dxf_count(wb.handle, &count), 0);
+
+  fm_filter_column_t column{};
+  column.show_button = 1;
+  column.kind = 5;
+  column.has_dxf_index = 1;
+  column.dxf_index = static_cast<std::uint32_t>(count);
+  fm_auto_filter_t filter = FM_STRUCT_INIT(fm_auto_filter_t);
+  filter.range = fm_cell_rect_t{0, 0, 5, 0};
+  filter.columns = &column;
+  filter.column_count = 1;
+  EXPECT_EQ(fm_sheet_set_table_auto_filter(wb.handle, 0, 0, &filter), FM_STATUS_INDEX_OUT_OF_RANGE);
+  column.dxf_index = UINT32_MAX;
+  EXPECT_EQ(fm_sheet_set_table_auto_filter(wb.handle, 0, 0, &filter), FM_STATUS_INDEX_OUT_OF_RANGE);
+  column.dxf_index = static_cast<std::uint32_t>(count - 1U);
+  EXPECT_EQ(fm_sheet_set_table_auto_filter(wb.handle, 0, 0, &filter), 0) << fm_get_last_error_message();
+}
+
 }  // namespace

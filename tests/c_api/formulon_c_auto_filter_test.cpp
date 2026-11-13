@@ -754,3 +754,74 @@ TEST(FormulonCApiAutoFilter, ColumnOffsetAndIconIndexRoundTripThroughTheRecord) 
   EXPECT_EQ(got.columns[0].record.column_offset, 1U);
   EXPECT_EQ(got.columns[0].record.has_icon_index, 0);
 }
+
+TEST(FormulonCApiAutoFilter, DxfIndexRangeRefusesColorFilterAndSortCondition) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_dxf_t dxf{};
+  std::uint32_t registered = 0;
+  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, &dxf, &registered), 0);
+  const std::size_t count = count_of(fm_workbook_get_dxf_count, wb.handle);
+  ASSERT_GT(count, 0U);
+
+  fm_filter_column_t column{};
+  column.show_button = 1;
+  column.kind = 5;
+  column.has_dxf_index = 1;
+  fm_sort_condition_t condition{};
+  condition.ref = fm_cell_rect_t{1, 0, 5, 0};
+  condition.sort_by = 1;
+  condition.has_dxf_index = 1;
+  fm_auto_filter_t by_color = FM_STRUCT_INIT(fm_auto_filter_t);
+  by_color.range = fm_cell_rect_t{0, 0, 5, 0};
+  by_color.columns = &column;
+  by_color.column_count = 1;
+  fm_auto_filter_t by_sort = FM_STRUCT_INIT(fm_auto_filter_t);
+  by_sort.range = fm_cell_rect_t{0, 0, 5, 0};
+  by_sort.has_sort = 1;
+  by_sort.sort_ref = fm_cell_rect_t{1, 0, 5, 0};
+  by_sort.conditions = &condition;
+  by_sort.condition_count = 1;
+
+  for (const std::uint32_t bad : {static_cast<std::uint32_t>(count), std::numeric_limits<std::uint32_t>::max()}) {
+    column.dxf_index = bad;
+    condition.dxf_index = bad;
+    EXPECT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &by_color), FM_STATUS_INDEX_OUT_OF_RANGE);
+    EXPECT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &by_sort), FM_STATUS_INDEX_OUT_OF_RANGE);
+    EXPECT_EQ(wb.handle->workbook().sheet(0).auto_filter(), nullptr);
+  }
+  column.dxf_index = static_cast<std::uint32_t>(count - 1U);
+  condition.dxf_index = static_cast<std::uint32_t>(count - 1U);
+  EXPECT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &by_color), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &by_sort), 0) << fm_get_last_error_message();
+}
+
+TEST(FormulonCApiAutoFilter, DxfIndexRangeReadsADanglingStoredIdAsAbsent) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const std::uint32_t dangling = static_cast<std::uint32_t>(count_of(fm_workbook_get_dxf_count, wb.handle)) + 7U;
+  formulon::AutoFilter model;
+  model.range = formulon::MergeRange{0, 0, 5, 0};
+  formulon::FilterColumn column;
+  column.kind = formulon::FilterKind::kColor;
+  column.color.dxf_id = dangling;
+  model.columns.push_back(column);
+  formulon::SortState sort;
+  sort.ref = formulon::MergeRange{1, 0, 5, 0};
+  formulon::SortCondition condition;
+  condition.ref = formulon::MergeRange{1, 0, 5, 0};
+  condition.dxf_id = dangling;
+  sort.conditions.push_back(condition);
+  model.sort = std::move(sort);
+  ASSERT_TRUE(wb.handle->workbook().set_sheet_auto_filter(0, std::move(model)).has_value());
+
+  fm_auto_filter_t out = FM_STRUCT_INIT(fm_auto_filter_t);
+  int32_t present = 0;
+  ASSERT_EQ(fm_sheet_get_auto_filter(wb.handle, 0, &present, &out), 0);
+  ASSERT_EQ(present, 1);
+  ASSERT_EQ(out.column_count, 1U);
+  EXPECT_EQ(out.columns[0].has_dxf_index, 0);
+  ASSERT_EQ(out.condition_count, 1U);
+  EXPECT_EQ(out.conditions[0].has_dxf_index, 0);
+  EXPECT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, &out), 0) << fm_get_last_error_message();
+}

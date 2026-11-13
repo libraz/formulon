@@ -794,6 +794,26 @@ TEST(FormulonCApiTableStyles, ElementTypeOrdinalsFollowTheSchemaOrder) {
   EXPECT_EQ(FM_TABLE_STYLE_ELEMENT_TYPE_PAGE_FIELD_VALUES, 27);
 }
 
+TEST(FormulonCApiTableStyles, DxfIndexRangeRefusesAnElementPastTheDxfTable) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::uint32_t dxf = 0;
+  ASSERT_EQ(fm_workbook_add_dxf(wb.handle, record_arg(FillDxf()), &dxf), 0);
+  std::size_t dxf_count = 0;
+  ASSERT_EQ(fm_workbook_get_dxf_count(wb.handle, &dxf_count), 0);
+  for (const std::uint32_t bad : {static_cast<std::uint32_t>(dxf_count), UINT32_MAX}) {
+    const fm_table_style_element_t past[] = {{FM_TABLE_STYLE_ELEMENT_TYPE_HEADER_ROW, 1U, 1, bad}};
+    fm_table_style_t style = MakeTableStyle("Past", 1, 1, past, 1U);
+    EXPECT_EQ(fm_workbook_set_table_style(wb.handle, &style), FM_STATUS_INDEX_OUT_OF_RANGE);
+  }
+  std::size_t styles = 0;
+  ASSERT_EQ(fm_workbook_get_table_style_count(wb.handle, &styles), 0);
+  EXPECT_EQ(styles, 0U);
+  const fm_table_style_element_t last[] = {{FM_TABLE_STYLE_ELEMENT_TYPE_HEADER_ROW, 1U, 1, dxf}};
+  fm_table_style_t style = MakeTableStyle("Last", 1, 1, last, 1U);
+  EXPECT_EQ(fm_workbook_set_table_style(wb.handle, &style), 0) << fm_get_last_error_message();
+}
+
 TEST(FormulonCApiTableStyles, SetReplacesByNameAndValidates) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
@@ -832,7 +852,7 @@ TEST(FormulonCApiTableStyles, SetReplacesByNameAndValidates) {
   const fm_table_style_element_t dangling[] = {
       {FM_TABLE_STYLE_ELEMENT_TYPE_WHOLE_TABLE, 1U, 1, static_cast<uint32_t>(dxf + 1U)}};
   bad = MakeTableStyle("Other", 1, 1, dangling, 1U);
-  EXPECT_EQ(fm_workbook_set_table_style(wb.handle, &bad), kInvalidArgument);
+  EXPECT_EQ(fm_workbook_set_table_style(wb.handle, &bad), FM_STATUS_INDEX_OUT_OF_RANGE);
   bad = MakeTableStyle("TableStyleMedium2", 1, 1, nullptr, 0U);
   EXPECT_EQ(fm_workbook_set_table_style(wb.handle, &bad), kInvalidArgument);
   bad = MakeTableStyle("pivotstylelight16", 1, 1, nullptr, 0U);
