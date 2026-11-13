@@ -910,6 +910,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_workbook_get_pivot_cache_options",
     "fm_workbook_refresh_pivot_cache",
     "fm_workbook_get_pivot_cache_worksheet_source",
+    "fm_workbook_get_pivot_cache_worksheet_source_range",
     "fm_workbook_get_pivot_cache_id_at",
     "fm_workbook_add_pivot_cache_record",
     "fm_workbook_clear_pivot_cache_records",

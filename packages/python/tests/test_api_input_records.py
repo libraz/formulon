@@ -177,6 +177,20 @@ class PivotInputTests(unittest.TestCase):
                 cache.set_worksheet_source(given)
                 self.assertEqual(cache.get_worksheet_source().range, expected)
 
+    def test_worksheet_source_range_follows_a_name_and_reads_none_once_it_is_deleted(self) -> None:
+        with Workbook.create_default() as wb:
+            cache = _pivot_cache(wb)
+            self.assertEqual(cache.get_worksheet_source_range(), SheetRect(0, CellRect(0, 0, 3, 2)))
+            wb.set_defined_name(formulon.DefinedNameInput(name="Src", formula="=Sheet1!$A$1:$C$3"))
+            cache.set_worksheet_source(formulon.PivotWorksheetSourceInput(name="Src"))
+            self.assertEqual(cache.get_worksheet_source_range(), SheetRect(0, CellRect(0, 0, 2, 2)))
+            self.assertIsNone(cache.get_worksheet_source().range)
+            wb.remove_defined_name("Src")
+            self.assertIsNone(cache.get_worksheet_source_range())
+            self.assertEqual(cache.get_worksheet_source().name, "Src")
+            cache.set_worksheet_source(None)
+            self.assertIsNone(cache.get_worksheet_source_range())
+
     def test_worksheet_source_with_a_disagreeing_sheet_is_refused(self) -> None:
         with Workbook.create_default() as wb:
             cache = _pivot_cache(wb)

@@ -281,6 +281,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotCacheCreate(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheRemove(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheGetWorksheetSource(const Napi::CallbackInfo& info);
+  Napi::Value PivotCacheWorksheetSourceRange(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheSetWorksheetSource(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheRefresh(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheFieldCount(const Napi::CallbackInfo& info);

@@ -373,6 +373,7 @@ constexpr HandleMethod kHandleMethods[] = {
     {"getPivotCacheRecordCount", "PivotCache.getRecordCount", 1},
     {"getPivotCacheRecordValue", "PivotCache.getRecordValue", 1},
     {"getPivotCacheWorksheetSource", "PivotCache.getWorksheetSource", 1},
+    {"getPivotCacheWorksheetSourceRange", "PivotCache.getWorksheetSourceRange", 1},
     {"getPivotColumnFieldOrder", "Pivot.getColumnFieldOrder", 2},
     {"getPivotDataField", "Pivot.getDataField", 2},
     {"getPivotDataFieldDefaultName", "Pivot.getDataFieldDefaultName", 2},

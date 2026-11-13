@@ -636,6 +636,7 @@ class JsWorkbook {
   /// `{ present, ref, sheet, name }`, the strings `null` when absent; `null`
   /// when the cache has no worksheet source.
   emscripten::val pivotCacheGetWorksheetSource(uint32_t cacheId) const;
+  emscripten::val pivotCacheGetWorksheetSourceRange(uint32_t cacheId) const;
   void pivotCacheSetWorksheetSource(uint32_t cacheId, emscripten::val source);
   /// Rebuilds the cache from its worksheet source and re-projects the pivots drawing from it.
   void pivotCacheRefresh(uint32_t cacheId);

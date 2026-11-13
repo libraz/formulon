@@ -334,6 +334,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getPivotCacheFieldSharedItemCount", &JsWorkbook::pivotCacheFieldSharedItemCount)
       .function("getPivotCacheFieldSharedItemValue", &JsWorkbook::pivotCacheFieldSharedItemValue)
       .function("getPivotCacheWorksheetSource", &JsWorkbook::pivotCacheGetWorksheetSource)
+      .function("getPivotCacheWorksheetSourceRange", &JsWorkbook::pivotCacheGetWorksheetSourceRange)
       .function("addPivotCacheRecord", &JsWorkbook::pivotCacheRecordAdd)
       .function("clearPivotCacheRecords", &JsWorkbook::pivotCacheRecordClear)
       .function("getPivotCacheRecordCount", &JsWorkbook::pivotCacheRecordCount)

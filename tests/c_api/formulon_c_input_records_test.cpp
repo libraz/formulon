@@ -390,6 +390,156 @@ TEST(FormulonCApiInputRecords, WorksheetSourceRefusesMissingOutputsAndAnUnknownC
   EXPECT_EQ(fm_workbook_set_pivot_cache_worksheet_source(wb.handle, cache_id + 100U, nullptr), FM_STATUS_NOT_FOUND);
 }
 
+namespace {
+
+struct SourceRangeFixture {
+  WorkbookGuard wb;
+  std::uint32_t cache_id = 0;
+
+  SourceRangeFixture() {
+    EXPECT_EQ(fm_workbook_create_default(&wb.handle), FM_STATUS_OK);
+    EXPECT_EQ(fm_workbook_add_pivot_cache(wb.handle, 0, &cache_id), FM_STATUS_OK) << fm_get_last_error_message();
+    EXPECT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 0, "Key"), FM_STATUS_OK);
+    EXPECT_EQ(fm_sheet_set_text(wb.handle, 0, 0, 1, "Amount"), FM_STATUS_OK);
+  }
+
+  void SetSource(const char* ref, const char* sheet, const char* name) {
+    fm_pivot_worksheet_source_t source = FM_STRUCT_INIT(fm_pivot_worksheet_source_t);
+    source.ref = ref;
+    source.sheet = sheet;
+    source.name = name;
+    ASSERT_EQ(fm_workbook_set_pivot_cache_worksheet_source(wb.handle, cache_id, &source), FM_STATUS_OK)
+        << fm_get_last_error_message();
+  }
+
+  void AddTable(const char* name, fm_cell_rect_t range, bool totals) {
+    fm_table_spec_t spec = FM_STRUCT_INIT(fm_table_spec_t);
+    spec.range = range;
+    spec.name = name;
+    spec.totals_row = totals ? FM_TRISTATE_TRUE : FM_TRISTATE_DEFAULT;
+    std::size_t index = 0;
+    ASSERT_EQ(fm_sheet_add_table(wb.handle, 0, &spec, &index), FM_STATUS_OK) << fm_get_last_error_message();
+  }
+
+  void SetName(const char* name, const char* formula, int32_t local_sheet_id) {
+    fm_defined_name_t def = FM_STRUCT_INIT(fm_defined_name_t);
+    def.name = name;
+    def.formula = formula;
+    def.local_sheet_id = local_sheet_id;
+    ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, &def), FM_STATUS_OK) << fm_get_last_error_message();
+  }
+
+  /** Reads the resolved range; `present` is returned through the out parameter. */
+  fm_sheet_rect_t Read(std::int32_t* present) const {
+    fm_sheet_rect_t rect{};
+    rect.sheet_index = 99U;
+    EXPECT_EQ(fm_workbook_get_pivot_cache_worksheet_source_range(wb.handle, cache_id, present, &rect), FM_STATUS_OK);
+    return rect;
+  }
+
+  void ExpectRange(fm_cell_rect_t expected) const {
+    std::int32_t present = -1;
+    const fm_sheet_rect_t rect = Read(&present);
+    ASSERT_EQ(present, 1);
+    EXPECT_EQ(rect.sheet_index, 0U);
+    EXPECT_EQ(rect.rect.first_row, expected.first_row);
+    EXPECT_EQ(rect.rect.first_col, expected.first_col);
+    EXPECT_EQ(rect.rect.last_row, expected.last_row);
+    EXPECT_EQ(rect.rect.last_col, expected.last_col);
+  }
+
+  void ExpectAbsent() const {
+    std::int32_t present = -1;
+    const fm_sheet_rect_t rect = Read(&present);
+    EXPECT_EQ(present, 0);
+    EXPECT_EQ(rect.sheet_index, 0U);
+    EXPECT_EQ(rect.rect.last_row, 0U);
+    EXPECT_EQ(rect.rect.last_col, 0U);
+  }
+};
+
+}  // namespace
+
+TEST(PivotCacheWorksheetSourceRange, TableSourceExcludesTheTotalsRow) {
+  SourceRangeFixture f;
+  f.AddTable("Sales", fm_cell_rect_t{0, 0, 3, 1}, /*totals=*/true);
+  f.SetSource(nullptr, nullptr, "Sales");
+  f.ExpectRange(fm_cell_rect_t{0, 0, 2, 1});
+}
+
+TEST(PivotCacheWorksheetSourceRange, TableSourceFollowsTheTableWhenItGrows) {
+  SourceRangeFixture f;
+  f.AddTable("Sales", fm_cell_rect_t{0, 0, 2, 1}, /*totals=*/false);
+  f.SetSource(nullptr, nullptr, "Sales");
+  f.ExpectRange(fm_cell_rect_t{0, 0, 2, 1});
+  fm_table_patch_t patch = FM_STRUCT_INIT(fm_table_patch_t);
+  patch.range_op = FM_PATCH_OP_SET;
+  patch.range = fm_cell_rect_t{0, 0, 4, 1};
+  ASSERT_EQ(fm_sheet_update_table(f.wb.handle, 0, 0, &patch), FM_STATUS_OK) << fm_get_last_error_message();
+  f.ExpectRange(fm_cell_rect_t{0, 0, 4, 1});
+}
+
+TEST(PivotCacheWorksheetSourceRange, DefinedNameSourcesResolveInSheetAndWorkbookScope) {
+  SourceRangeFixture f;
+  f.SetName("Everywhere", "=Sheet1!$A$1:$B$3", FM_DEFINED_NAME_SCOPE_WORKBOOK);
+  f.SetSource(nullptr, nullptr, "Everywhere");
+  f.ExpectRange(fm_cell_rect_t{0, 0, 2, 1});
+
+  f.SetName("Here", "=Sheet1!$A$1:$B$5", 0);
+  f.SetSource(nullptr, "Sheet1", "Here");
+  f.ExpectRange(fm_cell_rect_t{0, 0, 4, 1});
+}
+
+TEST(PivotCacheWorksheetSourceRange, RangeSourceIsQualifiedBySheet) {
+  SourceRangeFixture f;
+  f.SetSource("$A$1:$B$4", "Sheet1", nullptr);
+  f.ExpectRange(fm_cell_rect_t{0, 0, 3, 1});
+}
+
+TEST(PivotCacheWorksheetSourceRange, NameWinsOverRef) {
+  SourceRangeFixture f;
+  f.SetName("Wins", "=Sheet1!$A$1:$B$3", FM_DEFINED_NAME_SCOPE_WORKBOOK);
+  f.SetSource("A1:B9", "Sheet1", "Wins");
+  f.ExpectRange(fm_cell_rect_t{0, 0, 2, 1});
+}
+
+TEST(PivotCacheWorksheetSourceRange, DeletedTableOrNameReadsAbsentAndKeepsTheName) {
+  SourceRangeFixture f;
+  f.AddTable("Sales", fm_cell_rect_t{0, 0, 2, 1}, /*totals=*/false);
+  f.SetSource(nullptr, nullptr, "Sales");
+  ASSERT_EQ(fm_sheet_remove_table(f.wb.handle, 0, 0), FM_STATUS_OK) << fm_get_last_error_message();
+  f.ExpectAbsent();
+
+  f.SetName("Gone", "=Sheet1!$A$1:$B$3", FM_DEFINED_NAME_SCOPE_WORKBOOK);
+  f.SetSource(nullptr, nullptr, "Gone");
+  ASSERT_EQ(fm_workbook_remove_defined_name(f.wb.handle, "Gone", FM_DEFINED_NAME_SCOPE_WORKBOOK), FM_STATUS_OK);
+  f.ExpectAbsent();
+  std::int32_t present = 0;
+  fm_pivot_worksheet_source_t source = FM_STRUCT_INIT(fm_pivot_worksheet_source_t);
+  ASSERT_EQ(fm_workbook_get_pivot_cache_worksheet_source(f.wb.handle, f.cache_id, &present, &source), FM_STATUS_OK);
+  EXPECT_EQ(present, 1);
+  EXPECT_STREQ(source.name, "Gone");
+}
+
+TEST(PivotCacheWorksheetSourceRange, NoSourceReadsAbsent) {
+  SourceRangeFixture f;
+  f.ExpectAbsent();
+}
+
+TEST(PivotCacheWorksheetSourceRange, RefusesAnUnknownCacheAndNullPointers) {
+  SourceRangeFixture f;
+  std::int32_t present = 0;
+  fm_sheet_rect_t rect{};
+  EXPECT_EQ(fm_workbook_get_pivot_cache_worksheet_source_range(f.wb.handle, f.cache_id + 100U, &present, &rect),
+            FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(fm_workbook_get_pivot_cache_worksheet_source_range(nullptr, f.cache_id, &present, &rect),
+            FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_workbook_get_pivot_cache_worksheet_source_range(f.wb.handle, f.cache_id, nullptr, &rect),
+            FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_workbook_get_pivot_cache_worksheet_source_range(f.wb.handle, f.cache_id, &present, nullptr),
+            FM_STATUS_BINDING_NULL_POINTER);
+}
+
 // ---------------------------------------------------------------------------
 // AutoFilter custom conditions
 // ---------------------------------------------------------------------------

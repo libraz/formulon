@@ -65,6 +65,23 @@ test('a cache worksheet source has no present key and an input carrying one is r
   });
 });
 
+test('a cache worksheet source range follows its name and reads null once the name is deleted', async () => {
+  await withWorkbook((wb) => {
+    const cache = wb.addPivotCache();
+    assert.equal(cache.getWorksheetSourceRange(), null);
+    wb.setDefinedName({ name: 'Src', formula: '=Sheet1!$A$1:$B$3' });
+    cache.setWorksheetSource({ name: 'Src' });
+    const range = JSON.parse(JSON.stringify(cache.getWorksheetSourceRange()));
+    assert.deepEqual(range, { sheet: 0, rect: { firstRow: 0, firstCol: 0, lastRow: 2, lastCol: 1 } });
+    assert.equal(cache.getWorksheetSource().range, null);
+    wb.removeDefinedName('Src');
+    assert.equal(cache.getWorksheetSourceRange(), null);
+    assert.equal(cache.getWorksheetSource().name, 'Src');
+    cache.setWorksheetSource({ range: 'A1:B4', sheet: 'Sheet1' });
+    assert.equal(cache.getWorksheetSourceRange().rect.lastRow, 3);
+  });
+});
+
 test('the date-group clear method is gone and a null group ungroups', async () => {
   await withWorkbook((wb, f) => {
     const { pivot } = pivotOver(wb.sheet(0), wb, f);

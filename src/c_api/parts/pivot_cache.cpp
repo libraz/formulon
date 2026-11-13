@@ -28,6 +28,7 @@
 #include "pivot/date_serial.h"
 #include "pivot/pivot_formula_host.h"
 #include "pivot/pivot_refresh.h"
+#include "pivot/pivot_source.h"
 #include "pivot/record_access.h"
 #include "pivot/shared_items_hints.h"
 #include "sheet.h"
@@ -235,6 +236,34 @@ extern "C" fm_status_t fm_workbook_get_pivot_cache_worksheet_source(const fm_wor
   }
   *out_present = src.present ? 1 : 0;
   *out = result;
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_get_pivot_cache_worksheet_source_range(const fm_workbook_t* wb,
+                                                                          std::uint32_t cache_id,
+                                                                          std::int32_t* out_present,
+                                                                          fm_sheet_rect_t* out) {
+  clear_last_error();
+  if (wb == nullptr || out_present == nullptr || out == nullptr) {
+    return null_argument();
+  }
+  const formulon::pivot::PivotCache* cache = nullptr;
+  if (fm_status_t rc = resolve_cache(wb, cache_id, &cache); rc != 0) {
+    return rc;
+  }
+  const auto resolved = formulon::pivot::resolve_worksheet_source(wb->workbook(), *cache);
+  if (!resolved) {
+    if (resolved.error().code != formulon::FormulonErrorCode::kPreconditionFailed) {
+      return set_last_error(resolved.error());
+    }
+    *out_present = 0;
+    *out = fm_sheet_rect_t{};
+    return 0;
+  }
+  const formulon::MergeRange& r = resolved.value().rect;
+  *out = fm_sheet_rect_t{static_cast<std::uint32_t>(resolved.value().sheet),
+                         fm_cell_rect_t{r.first_row, r.first_col, r.last_row, r.last_col}};
+  *out_present = 1;
   return 0;
 }
 

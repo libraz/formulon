@@ -72,6 +72,7 @@ function failureProbes(wb, Module) {
     [false, () => wb.getDiagnostics()],
     [true, () => wb.sheet(99).pivot(0).getLayout()],
     [true, () => wb.pivotCache(9999).getWorksheetSource()],
+    [true, () => wb.pivotCache(9999).getWorksheetSourceRange()],
     [true, () => wb.sheet(99).pivot(0).getReportLayout()],
     [true, () => wb.sheet(0).pivot(99).listFilters()],
     [true, () => wb.sheet(99).pivot(0).getGrandTotals()],

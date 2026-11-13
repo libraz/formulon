@@ -92,6 +92,26 @@ Napi::Value Workbook::PivotCacheGetWorksheetSource(const Napi::CallbackInfo& inf
   return out;
 }
 
+Napi::Value Workbook::PivotCacheWorksheetSourceRange(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  int32_t present = 0;
+  fm_sheet_rect_t range{};
+  const fm_status_t rc = fm_workbook_get_pivot_cache_worksheet_source_range(handle_, ArgU32(info, 0), &present, &range);
+  if (rc != 0) {
+    return ThrowStatus(env, rc);
+  }
+  if (present == 0) {
+    return env.Null();
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("sheet", JsNumber(env, static_cast<double>(range.sheet_index)));
+  out.Set("rect", RangeToJs(env, range.rect));
+  return out;
+}
+
 Napi::Value Workbook::PivotCacheSetWorksheetSource(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {

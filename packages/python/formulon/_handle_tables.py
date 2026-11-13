@@ -89,6 +89,7 @@ HANDLE_FORWARDERS = {
     "PivotCache.get_record_count": "get_pivot_cache_record_count",
     "PivotCache.get_record_value": "get_pivot_cache_record_value",
     "PivotCache.get_worksheet_source": "get_pivot_cache_worksheet_source",
+    "PivotCache.get_worksheet_source_range": "get_pivot_cache_worksheet_source_range",
     "PivotCache.list_calculated_items": None,
     "PivotCache.list_field_shared_items": None,
     "PivotCache.list_fields": None,

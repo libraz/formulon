@@ -24,9 +24,11 @@ from ._workbook import (
     PivotFieldRef,
     PivotWorksheetSource,
     PivotWorksheetSourceInput,
+    SheetRect,
     Unchanged,
     Value,
     _ArgScope,
+    _cell_rect_from,
     _check,
     _pack_pivot_worksheet_source,
     _pivot_cache_value_kind,
@@ -105,6 +107,27 @@ class PivotCache(_NoCopy):
             if not LIB.read_i32(present):
                 return None
             return _pivot_worksheet_source_from(self._workbook, S.PIVOT_WORKSHEET_SOURCE.unpack(LIB, ptr))
+
+    def get_worksheet_source_range(self) -> Optional[SheetRect]:
+        """Return the sheet and rectangle the cache's worksheet source resolves to now, or ``None``.
+
+        That is the current range of its table (header row through the last data
+        row, without the totals row) or defined name, or its range as written;
+        the one :meth:`refresh` reads. ``None`` when the source does not resolve:
+        no source, a source of another kind or in another workbook, a table or
+        name that is missing or does not name one rectangle on one sheet, or a
+        missing sheet. A deleted table or name leaves the source as that name, so
+        this reads ``None`` while ``get_worksheet_source().name`` still reports it.
+        """
+        h, cache_id = self._call()
+        with _ArgScope() as scope:
+            present = scope.out_ptr()
+            ptr = scope.struct(S.SHEET_RECT)
+            _check(LIB.fm_workbook_get_pivot_cache_worksheet_source_range(h, cache_id, present, ptr))
+            if not LIB.read_i32(present):
+                return None
+            r = S.SHEET_RECT.unpack(LIB, ptr)
+            return SheetRect(sheet=r["sheet_index"], rect=_cell_rect_from(r["rect"]))
 
     def set_worksheet_source(self, source: Optional[Union[PivotWorksheetSourceInput, PivotWorksheetSource]]) -> None:
         """Set the cache's worksheet source from a record, or clear it with ``None``.

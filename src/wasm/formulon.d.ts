@@ -1040,7 +1040,8 @@ export interface PivotWorksheetSourceInput {
  *  source. */
 export interface PivotWorksheetSource {
   /** The source's sheet and reference folded into one rectangle; `null` when the source has no reference or names a
-   *  sheet the workbook does not have. */
+   *  sheet the workbook does not have. For a name source it is `null`; `PivotCache.getWorksheetSourceRange()` gives
+   *  the resolved range. */
   readonly range: SheetRect | null;
   /** The defined name or table the source reads; `null` when absent. */
   readonly name: string | null;
@@ -8767,6 +8768,13 @@ export interface PivotCache {
   /** Reads the cache's worksheet source range / defined-name metadata; `null` when the cache has no worksheet
    *  source. */
   getWorksheetSource(): PivotWorksheetSource | null;
+  /** The sheet and rectangle the cache's worksheet source resolves to now: the current range of its table
+   *  (header row through the last data row, without the totals row) or defined name, or its range as written;
+   *  the one `refresh()` reads. `null` when the source does not resolve: no source, a source of another kind
+   *  or in another workbook, a table or name that is missing or does not name one rectangle on one sheet, or a
+   *  missing sheet. A deleted table or name leaves the source as that name, so this reads `null` while
+   *  `getWorksheetSource().name` still reports it. */
+  getWorksheetSourceRange(): SheetRect | null;
   /** Sets the cache's worksheet source metadata, or removes the source with `null`. An empty object writes a
    *  source with no attributes. Setting the source does not re-read the range, and neither does `project()` or a
    *  cell edit; `refresh()` rebuilds the records from it. */

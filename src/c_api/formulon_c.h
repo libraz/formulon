@@ -7871,6 +7871,23 @@ FM_API fm_status_t fm_workbook_set_pivot_cache_worksheet_source(fm_workbook_t* w
                                                                 const fm_pivot_worksheet_source_t* source);
 
 /**
+ * @brief Reads the range the cache's worksheet source resolves to now.
+ *
+ * Follows the source's name or table to its current range, or takes a range source as written, so it is the
+ * rectangle `fm_workbook_refresh_pivot_cache` would read. A table resolves to its header row through its last data
+ * row, without the totals row. `*out_present` is `0`, and `*out` zeroed, when the source does not resolve: no
+ * source, a source of another kind or in another workbook, a table or name that is missing or does not name one
+ * rectangle on one sheet, or a missing sheet. A source whose table or name was deleted stays as the dangling name
+ * and reads absent here.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `out_present` or `out` is `NULL`;
+ *         `FM_STATUS_NOT_FOUND` (6) when no cache matches `cache_id`.
+ */
+FM_API fm_status_t fm_workbook_get_pivot_cache_worksheet_source_range(const fm_workbook_t* wb, uint32_t cache_id,
+                                                                      int32_t* out_present, fm_sheet_rect_t* out);
+
+/**
  * @brief Rebuilds the cache from its worksheet source and re-projects every
  *        PivotTable drawing from it, as Excel's Refresh does.
  *

@@ -76,6 +76,24 @@ emscripten::val JsWorkbook::pivotCacheGetWorksheetSource(uint32_t cacheId) const
   return o;
 }
 
+emscripten::val JsWorkbook::pivotCacheGetWorksheetSourceRange(uint32_t cacheId) const {
+  int32_t present = 0;
+  fm_sheet_rect_t range{};
+  const fm_status_t rc = handle_ != nullptr
+                             ? fm_workbook_get_pivot_cache_worksheet_source_range(handle_, cacheId, &present, &range)
+                             : kBindingInvalidHandle;
+  if (!succeeded(rc)) {
+    return emscripten::val::undefined();
+  }
+  if (present == 0) {
+    return emscripten::val::null();
+  }
+  emscripten::val o = emscripten::val::object();
+  o.set("sheet", emscripten::val(range.sheet_index));
+  o.set("rect", cell_rect_to_val(range.rect));
+  return o;
+}
+
 void JsWorkbook::pivotCacheSetWorksheetSource(uint32_t cacheId, emscripten::val source) {
   if (handle_ == nullptr) {
     record_invalid_handle();

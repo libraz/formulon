@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `PivotCache.getWorksheetSourceRange()` (Python `get_worksheet_source_range()`, C `fm_workbook_get_pivot_cache_worksheet_source_range`) reports the sheet and rectangle a cache's worksheet source resolves to now: a table's header row through its last data row, a defined name's current range, or the range as written. It is `null` / `None` / `out_present == 0` when the source does not resolve, for example after its table or name is deleted.
 - `SparklineGroup`, `SparklineGroupInput` and `SparklineGroupPatch` carry `rightToLeft` (Python `right_to_left`, C `fm_sparkline_group_t::right_to_left` and `fm_sparkline_group_patch_t::right_to_left_op` / `right_to_left`), read from and written to `.xlsx` and `.xlsb`.
 
 ### Changed

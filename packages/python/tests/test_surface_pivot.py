@@ -245,6 +245,7 @@ _PIVOT_READERS = {
     "PivotCache.get_record_count",
     "PivotCache.get_record_value",
     "PivotCache.get_worksheet_source",
+    "PivotCache.get_worksheet_source_range",
     "PivotCache.list_calculated_items",
     "PivotCache.list_field_shared_items",
     "PivotCache.list_fields",

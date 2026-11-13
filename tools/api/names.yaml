@@ -6315,6 +6315,16 @@ entries:
     was: { c: fm_workbook_pivot_cache_get_worksheet_source, js: pivotCacheGetWorksheetSource, py: get_pivot_cache_worksheet_source }
     missing: null
     handle: { class: PivotCache, supplies: [cache_id] }
+  pivot_cache_worksheet_source_range.get:
+    kind: op
+    scope: workbook
+    noun: pivot_cache_worksheet_source_range
+    c: fm_workbook_get_pivot_cache_worksheet_source_range
+    js: getPivotCacheWorksheetSourceRange
+    py: get_pivot_cache_worksheet_source_range
+    surfaces: [c, wasm, native, py]
+    missing: null
+    handle: { class: PivotCache, supplies: [cache_id] }
   pivot_cache_worksheet_source.set:
     kind: op
     scope: workbook
