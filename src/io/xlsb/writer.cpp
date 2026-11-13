@@ -128,8 +128,8 @@ std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
     ReportDeferred(&count, "threaded_comments", sheet.threaded_comments().size(), i);
     ReportDeferred(&count, "pivot_tables", pivots_survive_via_passthrough ? 0U : sheet.pivot_tables().size(), i);
     const SheetPrintSettings& print = sheet.print_settings();
-    const bool has_print = !print.sheet_pr_xml.empty() || !print.page_margins_xml.empty() ||
-                           !print.page_setup_xml.empty() || !print.print_options_xml.empty() ||
+    // Print options and margins are written from the model (io/xlsb/print_records.h).
+    const bool has_print = !print.sheet_pr_xml.empty() || !print.page_setup_xml.empty() ||
                            !print.header_footer_xml.empty() || !print.manual_row_breaks.empty() ||
                            !print.manual_col_breaks.empty();
     ReportDeferred(&count, "print_settings", has_print ? 1U : 0U, i);

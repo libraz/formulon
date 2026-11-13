@@ -269,6 +269,7 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/ptg_writer.cpp
   src/io/xlsb/ptg_whitespace.cpp
   src/io/xlsb/pivot_reader.cpp
+  src/io/xlsb/print_records.cpp
   src/io/xlsb/protection_records.cpp
   src/io/xlsb/package_loader.cpp
   src/io/xlsb/reader.cpp

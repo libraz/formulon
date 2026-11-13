@@ -14,6 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `.xlsb` saves write each sheet's print options and page margins from the
+  workbook (`BrtPrintOptions`, and `BrtMargins` when the sheet states
+  `<pageMargins>`), as Excel does, so a book loaded from `.xlsx` or created
+  through the API keeps them. A fresh book of any profile now saves to `.xlsb`
+  with nothing reported as deferred; it used to report its margins under
+  `print_settings`.
+
 - A pivot cache marked `refreshOnLoad` in an opened `.xlsx` or `.xlsb` is
   refreshed from its source before the workbook is first read, edited,
   calculated or saved, as Excel refreshes it on open. A profile set right after

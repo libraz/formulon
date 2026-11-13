@@ -30,6 +30,7 @@
 #include "io/xlsb/dv_records.h"
 #include "io/xlsb/feature_formula.h"
 #include "io/xlsb/hyperlink_records.h"
+#include "io/xlsb/print_records.h"
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
@@ -619,6 +620,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   // The x14 data-bar rules follow the model: retained ones are brought in
   // line with it, missing ones are added.
   XlsbSheetTail tail = sheet.xlsb_tail();
+  // Print options and margins come from the model ahead of the FRT splices below.
+  splice_print_records(tail.after_hyperlinks, sheet.print_settings());
   std::unordered_set<std::string> x14_linked;
   for (std::vector<std::uint8_t>* slot :
        {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
