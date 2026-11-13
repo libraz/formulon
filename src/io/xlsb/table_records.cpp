@@ -55,8 +55,7 @@ enum : std::uint16_t {
 };
 
 // ACUID ([MS-XLSB] 2.4.2 BrtACBegin, 2.4.857 BrtUid): the revision uid OOXML
-// spells `xr:uid` / `xr3:uid`. The BrtACBegin payload is the one Excel writes.
-constexpr std::uint8_t kAcBeginPayload[] = {0x01, 0x00, 0x00, 0x10, 0x00, 0x80};
+// spells `xr:uid` / `xr3:uid`.
 constexpr std::string_view kXr3Namespace = "http://schemas.microsoft.com/office/spreadsheetml/2016/revision3";
 
 // BrtBeginList flag bits ([MS-XLSB] 2.4.100).
@@ -249,7 +248,7 @@ void EmitAcuid(std::vector<std::uint8_t>& out, const std::string* guid) {
   if (!ParseGuid(*guid, bytes)) {
     return;
   }
-  emit_record(out, kAcBegin, ByteSpan{kAcBeginPayload, sizeof(kAcBeginPayload)});
+  emit_record(out, kAcBegin, ByteSpan{kAcUidBeginPayload.data(), kAcUidBeginPayload.size()});
   emit_record(out, kUid, ByteSpan{bytes.data(), bytes.size()});
   emit_record(out, kAcEnd, ByteSpan{});
 }
