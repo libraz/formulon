@@ -944,6 +944,16 @@ entries:
     prefer: formulon
     first_noted: 2026-10-14
     last_verified_excel_version: "16.113.4"
+  - id: dxf_order_two_pivots_one_sheet_undetermined
+    applies_to: [mac-365-ja_JP]
+    cause: non-identifiable
+    mode: skip-oracle
+    scope: unit-test
+    evidence: [tests/unit/io/dxf_order_golden_test.cpp]
+    reason: "When two pivot tables on one sheet each name a dxf, Excel writes their two <dxfs> / BrtDXF records in either order: one authored file re-saved four times as xlsx and four times as xlsb gave both orders, sometimes within one xlsx/xlsb pair. Every other pair of dxf users has a fixed place in the saved table. Formulon writes the two pivots' records in the pivots' model order, and dxf_order_golden_test compares those records as a set."
+    prefer: formulon
+    first_noted: 2026-11-13
+    last_verified_excel_version: "16.115"
   - id: pivot_tie_after_reopen_undetermined
     applies_to: all
     cause: non-identifiable
