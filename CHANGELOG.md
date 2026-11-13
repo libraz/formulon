@@ -46,9 +46,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   table styles last, then each sheet's other users (the active sheet's last),
   then conditional-format rules first, by sheet, `<conditionalFormatting>`
   block and priority. As in Excel,
-  each user gets its own record, so a dxf shared by several users is written
-  once per user and a reloaded file can hold more dxfs than the live workbook;
-  conditional-format rules of one sheet still share one record. The order of
+  each user gets its own record, conditional-format rules included, so a dxf
+  shared by several users is written once per user and a reloaded file can
+  hold more dxfs than the live workbook. The order of
   two PivotTables' formats on one sheet varies between Excel saves, and
   Formulon writes them in model order. The live workbook keeps its dxf indices.
   A reference to an index past the dxf table is omitted from the saved file.
