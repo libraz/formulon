@@ -347,13 +347,15 @@ std::uint32_t external_name_ilbl(const XlsbLinkTables& link, std::string_view na
 }
 
 void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std::string>& sheet_names,
-                              SheetRangeTable& ranges, std::unordered_set<std::uint64_t>& seen) {
+                              SheetRangeTable& ranges, std::unordered_set<std::uint64_t>& seen, std::int32_t own_itab) {
   switch (node.kind()) {
     case parser::NodeKind::Ref: {
       const parser::Reference& r = node.as_ref();
       if (!r.sheet.empty()) {
         const int itab = resolve_ixti(sheet_names, r.sheet);
         AddSheetRange(0U, itab, itab, ranges, seen);
+      } else if (own_itab >= 0) {
+        AddSheetRange(0U, own_itab, own_itab, ranges, seen);
       }
       return;
     }
@@ -379,10 +381,12 @@ void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std
     }
     case parser::NodeKind::SpillRef:
       if (const parser::AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
-        collect_ptg_sheet_ranges(*anchor, sheet_names, ranges, seen);
+        collect_ptg_sheet_ranges(*anchor, sheet_names, ranges, seen, own_itab);
       } else if (const parser::Reference& r = node.as_spill_ref(); !r.sheet.empty()) {
         const int itab = resolve_ixti(sheet_names, r.sheet);
         AddSheetRange(0U, itab, itab, ranges, seen);
+      } else if (own_itab >= 0) {
+        AddSheetRange(0U, own_itab, own_itab, ranges, seen);
       }
       return;
     case parser::NodeKind::StructuredRef: {
@@ -410,53 +414,53 @@ void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std
       return;
     }
     case parser::NodeKind::LambdaCall: {
-      collect_ptg_sheet_ranges(node.as_lambda_call_callee(), sheet_names, ranges, seen);
+      collect_ptg_sheet_ranges(node.as_lambda_call_callee(), sheet_names, ranges, seen, own_itab);
       const std::uint32_t arity = node.as_lambda_call_arity();
       for (std::uint32_t i = 0; i < arity; ++i) {
-        collect_ptg_sheet_ranges(node.as_lambda_call_arg(i), sheet_names, ranges, seen);
+        collect_ptg_sheet_ranges(node.as_lambda_call_arg(i), sheet_names, ranges, seen, own_itab);
       }
       return;
     }
     case parser::NodeKind::Call: {
       const std::uint32_t arity = node.as_call_arity();
       for (std::uint32_t i = 0; i < arity; ++i) {
-        collect_ptg_sheet_ranges(node.as_call_arg(i), sheet_names, ranges, seen);
+        collect_ptg_sheet_ranges(node.as_call_arg(i), sheet_names, ranges, seen, own_itab);
       }
       return;
     }
     case parser::NodeKind::UnaryOp:
-      collect_ptg_sheet_ranges(node.as_unary_operand(), sheet_names, ranges, seen);
+      collect_ptg_sheet_ranges(node.as_unary_operand(), sheet_names, ranges, seen, own_itab);
       return;
     case parser::NodeKind::BinaryOp:
       for (std::uint32_t i = 0; i < node.as_binary_arity(); ++i) {
-        collect_ptg_sheet_ranges(node.as_binary_operand(i), sheet_names, ranges, seen);
+        collect_ptg_sheet_ranges(node.as_binary_operand(i), sheet_names, ranges, seen, own_itab);
       }
       return;
     case parser::NodeKind::RangeOp:
       for (std::uint32_t i = 0; i < node.as_range_arity(); ++i) {
-        collect_ptg_sheet_ranges(node.as_range_operand(i), sheet_names, ranges, seen);
+        collect_ptg_sheet_ranges(node.as_range_operand(i), sheet_names, ranges, seen, own_itab);
       }
       return;
     case parser::NodeKind::IntersectOp:
-      collect_ptg_sheet_ranges(node.as_intersect_lhs(), sheet_names, ranges, seen);
-      collect_ptg_sheet_ranges(node.as_intersect_rhs(), sheet_names, ranges, seen);
+      collect_ptg_sheet_ranges(node.as_intersect_lhs(), sheet_names, ranges, seen, own_itab);
+      collect_ptg_sheet_ranges(node.as_intersect_rhs(), sheet_names, ranges, seen, own_itab);
       return;
     case parser::NodeKind::UnionOp: {
       const std::uint32_t arity = node.as_union_arity();
       for (std::uint32_t i = 0; i < arity; ++i) {
-        collect_ptg_sheet_ranges(node.as_union_child(i), sheet_names, ranges, seen);
+        collect_ptg_sheet_ranges(node.as_union_child(i), sheet_names, ranges, seen, own_itab);
       }
       return;
     }
     case parser::NodeKind::ImplicitIntersection:
-      collect_ptg_sheet_ranges(node.as_implicit_intersection_operand(), sheet_names, ranges, seen);
+      collect_ptg_sheet_ranges(node.as_implicit_intersection_operand(), sheet_names, ranges, seen, own_itab);
       return;
     case parser::NodeKind::ArrayLiteral: {
       const std::uint32_t rows = node.as_array_rows();
       const std::uint32_t cols = node.as_array_cols();
       for (std::uint32_t r = 0; r < rows; ++r) {
         for (std::uint32_t c = 0; c < cols; ++c) {
-          collect_ptg_sheet_ranges(node.as_array_element(r, c), sheet_names, ranges, seen);
+          collect_ptg_sheet_ranges(node.as_array_element(r, c), sheet_names, ranges, seen, own_itab);
         }
       }
       return;
@@ -464,17 +468,21 @@ void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std
     case parser::NodeKind::LetBinding: {
       const std::uint32_t n = node.as_let_binding_count();
       for (std::uint32_t i = 0; i < n; ++i) {
-        collect_ptg_sheet_ranges(node.as_let_binding_expr(i), sheet_names, ranges, seen);
+        collect_ptg_sheet_ranges(node.as_let_binding_expr(i), sheet_names, ranges, seen, own_itab);
       }
-      collect_ptg_sheet_ranges(node.as_let_body(), sheet_names, ranges, seen);
+      collect_ptg_sheet_ranges(node.as_let_body(), sheet_names, ranges, seen, own_itab);
       return;
     }
     case parser::NodeKind::Lambda:
-      collect_ptg_sheet_ranges(node.as_lambda_body(), sheet_names, ranges, seen);
+      collect_ptg_sheet_ranges(node.as_lambda_body(), sheet_names, ranges, seen, own_itab);
       return;
     default:
       return;
   }
+}
+
+void collect_own_sheet_range(std::int32_t itab, SheetRangeTable& ranges, std::unordered_set<std::uint64_t>& seen) {
+  AddSheetRange(0U, itab, itab, ranges, seen);
 }
 
 }  // namespace xlsb

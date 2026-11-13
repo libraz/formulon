@@ -163,14 +163,53 @@ void CollectNamesFromFormula(std::string_view formula, std::int32_t scope_sheet_
   }
 }
 
-/// Calls `visit` with the text (no leading `=`) of every formula a sheet
-/// part carries: cell formulas in row-major order, as Excel numbers their
-/// entries, then conditional-format rule and threshold formulas, and
-/// data-validation formulas. The second argument is true for a cell formula
-/// the writer encodes in the legacy form (not dynamic-array, not a CSE block,
-/// not a spill anchor). The name and ExternSheet tables are both built
-/// over this one walk, so every formula the sheet writer encodes finds its
-/// entries.
+/// Where a formula `ForEachSheetFormula` visits lives.
+enum class SheetFormulaSite : std::uint8_t {
+  kCell,        // a cell formula in a dynamic-array, CSE or spill form, or a sparkline formula
+  kLegacyCell,  // a cell formula the writer encodes in the legacy form
+  kRule,        // a conditional-format or data-validation formula
+  kOwnRange,    // no formula: the point where the sheet's own range joins the ExternSheet table
+};
+
+/// Whether a threshold is measured against the values of the rule's range (min, max, percent, percentile) rather
+/// than stated (a number or a formula).
+bool ThresholdReadsRange(const cf::CfValueObject& v) {
+  return v.type != cf::CfvoType::Number && v.type != cf::CfvoType::Formula;
+}
+
+/// Whether a conditional-format rule adds its sheet's own range after its formulas: a scale, bar or icon set does
+/// when a threshold reads the range, every other kind but an expression or cell-value rule always does.
+bool RuleAddsOwnRange(const cf::CFRule& rule) {
+  if (rule.color_scale) {
+    return std::any_of(rule.color_scale->thresholds.begin(), rule.color_scale->thresholds.end(), ThresholdReadsRange);
+  }
+  if (rule.data_bar) {
+    return ThresholdReadsRange(rule.data_bar->min) || ThresholdReadsRange(rule.data_bar->max);
+  }
+  if (rule.icon_set) {
+    return ThresholdReadsRange(rule.icon_set->floor) ||
+           std::any_of(rule.icon_set->thresholds.begin(), rule.icon_set->thresholds.end(), ThresholdReadsRange);
+  }
+  return rule.type != cf::RuleType::Expression && rule.type != cf::RuleType::CellIs;
+}
+
+/// Whether a data validation adds its sheet's own range after its formulas: any with a formula, except a list of
+/// literal items.
+bool ValidationAddsOwnRange(const DataValidation& dv) {
+  constexpr std::uint8_t kListType = 3;
+  if (dv.formula1.empty() && dv.formula2.empty()) {
+    return false;
+  }
+  return dv.type != kListType || strip_formula_prefix(dv.formula1).substr(0, 1) != "\"";
+}
+
+/// Calls `visit(text, site)` with the text (no leading `=`) of every formula a
+/// sheet part carries, in the order Excel numbers ExternSheet entries: cell
+/// formulas in row-major order, then each conditional-format rule's formulas
+/// and thresholds, then data-validation formulas, then sparkline formulas.
+/// A `kOwnRange` visit (empty text) follows a rule or validation that adds the
+/// sheet's own range. The name and ExternSheet tables are both built over this
+/// one walk, so every formula the sheet writer encodes finds its entries.
 template <typename Visit>
 void ForEachSheetFormula(const Sheet& sheet, Visit&& visit) {
   std::vector<std::uint32_t> rows;
@@ -183,25 +222,26 @@ void ForEachSheetFormula(const Sheet& sheet, Visit&& visit) {
     for (const auto& [col, cell] : sheet.rows().at(row)) {
       const std::string_view body = strip_formula_prefix(cell.formula_text);
       if (!body.empty()) {
-        visit(body,
-              !cell.dynamic_array && cell.array_block_rows == 0U && sheet.spill_region_at_anchor(row, col) == nullptr);
+        const bool legacy =
+            !cell.dynamic_array && cell.array_block_rows == 0U && sheet.spill_region_at_anchor(row, col) == nullptr;
+        visit(body, legacy ? SheetFormulaSite::kLegacyCell : SheetFormulaSite::kCell);
       }
     }
   }
-  const auto visit_text = [&visit](const std::string& text) {
+  const auto visit_text = [&visit](const std::string& text, SheetFormulaSite site) {
     if (!text.empty()) {
-      visit(std::string_view(text), false);
+      visit(std::string_view(text), site);
     }
   };
   const auto visit_cfvo = [&visit_text](const cf::CfValueObject& v) {
     if (v.type == cf::CfvoType::Formula) {
-      visit_text(v.value);
+      visit_text(v.value, SheetFormulaSite::kRule);
     }
   };
   for (const cf::ConditionalFormat& format : sheet.conditional_formats()) {
     for (const cf::CFRule& rule : format.rules) {
-      visit_text(rule.formula1.value_or(std::string()));
-      visit_text(rule.formula2.value_or(std::string()));
+      visit_text(rule.formula1.value_or(std::string()), SheetFormulaSite::kRule);
+      visit_text(rule.formula2.value_or(std::string()), SheetFormulaSite::kRule);
       if (rule.color_scale) {
         std::for_each(rule.color_scale->thresholds.begin(), rule.color_scale->thresholds.end(), visit_cfvo);
       }
@@ -213,16 +253,22 @@ void ForEachSheetFormula(const Sheet& sheet, Visit&& visit) {
         visit_cfvo(rule.icon_set->floor);
         std::for_each(rule.icon_set->thresholds.begin(), rule.icon_set->thresholds.end(), visit_cfvo);
       }
+      if (RuleAddsOwnRange(rule)) {
+        visit(std::string_view(), SheetFormulaSite::kOwnRange);
+      }
     }
   }
   for (const DataValidation& dv : sheet.validations()) {
-    visit_text(dv.formula1);
-    visit_text(dv.formula2);
+    visit_text(dv.formula1, SheetFormulaSite::kRule);
+    visit_text(dv.formula2, SheetFormulaSite::kRule);
+    if (ValidationAddsOwnRange(dv)) {
+      visit(std::string_view(), SheetFormulaSite::kOwnRange);
+    }
   }
   for (const SparklineGroup& group : read_sparkline_groups(sheet.ext_lst_xml())) {
-    visit_text(group.date_axis_ref);
+    visit_text(group.date_axis_ref, SheetFormulaSite::kCell);
     for (const SparklineItem& item : group.items) {
-      visit_text(item.formula);
+      visit_text(item.formula, SheetFormulaSite::kCell);
     }
   }
 }
@@ -280,9 +326,13 @@ void BuildOrderedNames(const Workbook& wb, std::vector<OrderedName>& ordered_nam
   }
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     const NameShapes legacy_shapes = name_shapes(wb, i);
-    ForEachSheetFormula(wb.sheet(i), [&](std::string_view formula, bool legacy) {
+    ForEachSheetFormula(wb.sheet(i), [&](std::string_view formula, SheetFormulaSite site) {
+      if (site == SheetFormulaSite::kOwnRange) {
+        return;
+      }
       CollectNamesFromFormula(formula, static_cast<std::int32_t>(i), defined_scopes, names, seen, invisible,
-                              invisible_seen, qualified, legacy ? &legacy_shapes : nullptr);
+                              invisible_seen, qualified,
+                              site == SheetFormulaSite::kLegacyCell ? &legacy_shapes : nullptr);
     });
   }
   ForEachTableFormula(wb, [&](std::string_view formula, std::size_t sheet_index) {
@@ -400,14 +450,15 @@ namespace {
 /// `EncodeCellFormula` surfaces the same failure as a proper `Expected`
 /// error when the formula is actually encoded.
 void CollectSheetRangesFromFormula(std::string_view formula, const std::vector<std::string>& sheet_names,
-                                   SheetRangeTable& ranges, std::unordered_set<std::uint64_t>& seen) {
+                                   SheetRangeTable& ranges, std::unordered_set<std::uint64_t>& seen,
+                                   std::int32_t own_itab = -1) {
   Arena arena;
   parser::Parser p(formula, arena);
   parser::AstNode* root = p.parse();
   if (root == nullptr || !p.errors().empty()) {
     return;
   }
-  collect_ptg_sheet_ranges(*root, sheet_names, ranges, seen);
+  collect_ptg_sheet_ranges(*root, sheet_names, ranges, seen, own_itab);
 }
 
 /// The XTI that names, among the saved `links`, what a retained entry of
@@ -521,8 +572,14 @@ Expected<SheetRangeTable, Error> BuildSheetRangeTable(const Workbook& wb, const 
     CollectSheetRangesFromFormula(dn.formula, sheet_names, collected, seen);
   }
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
-    ForEachSheetFormula(wb.sheet(i), [&](std::string_view formula, bool) {
-      CollectSheetRangesFromFormula(formula, sheet_names, collected, seen);
+    const auto itab = static_cast<std::int32_t>(i);
+    ForEachSheetFormula(wb.sheet(i), [&](std::string_view formula, SheetFormulaSite site) {
+      if (site == SheetFormulaSite::kOwnRange) {
+        collect_own_sheet_range(itab, collected, seen);
+      } else {
+        CollectSheetRangesFromFormula(formula, sheet_names, collected, seen,
+                                      site == SheetFormulaSite::kRule ? itab : -1);
+      }
     });
   }
   // A table part's own formulas are encoded against the same tables.

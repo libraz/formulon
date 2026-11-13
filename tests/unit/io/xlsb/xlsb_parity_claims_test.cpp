@@ -188,6 +188,62 @@ TEST(XlsbParityClaims, CfKindsMatchExcelsFreshSave) {
   }
 }
 
+// The ExternSheet table equals Excel's: defined names first, then each sheet in order with its cell formulas'
+// sheet-qualified references, its conditional-format rules' and validations' references (an unqualified one names the
+// sheet itself), and the sheet's own range where a rule or validation reads it.
+TEST(XlsbParityClaims, ExternSheetMatchesExcel) {
+  constexpr std::uint16_t kBrtExternSheet = 362;
+  const auto table = [](const std::vector<std::uint8_t>& part) {
+    for (const FramedRecord& rec : split_records(part)) {
+      if (rec.type == kBrtExternSheet) {
+        return std::vector<std::uint8_t>(rec.payload.data, rec.payload.data + rec.payload.size);
+      }
+    }
+    return std::vector<std::uint8_t>{};
+  };
+  for (const char* stem : {"above_average",
+                           "cell_and_x14",
+                           "cell_only",
+                           "cell_self_and_x14",
+                           "cell_then_name",
+                           "cellis_const",
+                           "cellis_ref",
+                           "cellis_sheet_with_cell",
+                           "cf_cross_only",
+                           "colorscale_cfvo_cross",
+                           "colorscale_num",
+                           "databar_cfvo_cross",
+                           "databar_first_cell_last",
+                           "databar_num",
+                           "databar_then_later_cell",
+                           "databar_two_sheets",
+                           "duplicates",
+                           "dv_and_cf",
+                           "dv_const_between",
+                           "dv_const_list",
+                           "dv_cross_sheet",
+                           "dv_same_sheet",
+                           "dv_then_databar_next_sheet",
+                           "dv_third_to_second",
+                           "dv_whole_cross",
+                           "expr_const",
+                           "iconset_cfvo_cross",
+                           "iconset_cfvo_self",
+                           "iconset_formula_consts",
+                           "iconset_num",
+                           "iconset_percent_plain",
+                           "name_only",
+                           "top10",
+                           "x14_on_second_sheet",
+                           "x14_same_sheet",
+                           "x14_third_to_second"}) {
+    SCOPED_TRACE(stem);
+    const std::string path = std::string("../externsheet/") + stem;
+    EXPECT_EQ(table(Part(Converted(path), "xl/workbook.bin")),
+              table(Part(ReadFile(Claim(path + ".xlsb")), "xl/workbook.bin")));
+  }
+}
+
 }  // namespace
 }  // namespace xlsb
 }  // namespace io

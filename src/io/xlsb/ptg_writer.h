@@ -289,9 +289,16 @@ void collect_sheet_qualified_names(const parser::AstNode& node,
 /// precise error instead of silently fabricating an entry). `seen` dedupes
 /// (both across one call and across callers pre-seeding it), and
 /// `ranges.xti`'s index order becomes the `ixti` assignment `encode_ptgs`
-/// consults via `sheet_ranges`.
+/// consults via `sheet_ranges`. With `own_itab` set, an unqualified
+/// reference contributes `(own_itab, own_itab)` too, as a conditional-format
+/// or data-validation formula's references do in Excel's table.
 void collect_ptg_sheet_ranges(const parser::AstNode& node, const std::vector<std::string>& sheet_names,
-                              SheetRangeTable& ranges, std::unordered_set<std::uint64_t>& seen);
+                              SheetRangeTable& ranges, std::unordered_set<std::uint64_t>& seen,
+                              std::int32_t own_itab = -1);
+
+/// Adds the `(itab, itab)` entry, deduped through `seen`, at the point a
+/// sheet's own range joins Excel's table (see `BuildSheetRangeTable`).
+void collect_own_sheet_range(std::int32_t itab, SheetRangeTable& ranges, std::unordered_set<std::uint64_t>& seen);
 
 /// `d` as the integer `PtgInt` stores for a literal (1..65535); 0 for any
 /// other number.
