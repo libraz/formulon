@@ -14,6 +14,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A pivot cache marked `refreshOnLoad` in an opened `.xlsx` or `.xlsb` is
+  refreshed from its source before the workbook is first read, edited,
+  calculated or saved, as Excel refreshes it on open. A profile set right after
+  the load (`setProfileId`, Python `set_profile_id`) comes first, so blank-header
+  field names and date-group labels follow it. A cache whose refresh fails, for
+  example because its source sheet is gone, keeps the records the file stored.
+  A cache built through the API is saved with `refreshOnLoad` unless a refresh
+  filled its records, so such a book reopened shows what its source holds
+  rather than the records written by hand.
+
+- Deleting the sheet a pivot cache reads keeps the cache, its records and every
+  pivot on it, as Excel does. The source still names the deleted sheet, and a
+  refresh fails with `PreconditionFailed`. The cache and its pivots used to be
+  removed.
+
+- Refreshing a cache whose date field is grouped by years, or by days in
+  intervals longer than one day, after the dates move past the group's bounds
+  rebuilds the group's items as grouping does, and the pivot field keeps the
+  items whose label survives in their order, followed by the new ones. Such a
+  refresh used to fail with `NotImplemented`.
+
 - Saving `.xlsx` and `.xlsb` under a `ja_JP`, `zh_CN`, `zh_TW` or `ko_KR`
   profile gives each sheet that has no `<phoneticPr>` the locale's phonetic
   font, as Excel does. The font is font 0's face and theme link at the

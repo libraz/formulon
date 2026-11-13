@@ -275,7 +275,6 @@ Expected<void, Error> Workbook::rename_sheet(std::uint32_t index, std::string ne
   const std::string old_name = sheets_[index].name();
 
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-  std::vector<std::uint32_t> ignored_cache_ids;
   bool defined_names_changed = false;
   const sheet_names::NameList sheet_list = detail::sheet_name_list(sheets_);
   const parser::SheetRenameTransform transform(old_name, new_name, &sheet_list);
@@ -283,7 +282,7 @@ Expected<void, Error> Workbook::rename_sheet(std::uint32_t index, std::string ne
   // metadata holder has been transformed. In particular, do not re-register
   // a changed formula against `new_name` before the workbook can resolve it.
   rewrite_workbook_references(sheets_, defined_names_, tables_, pivot_caches_, transform, mutator, old_name, new_name,
-                              {}, ignored_cache_ids, defined_names_changed);
+                              {}, defined_names_changed);
   RETURN_IF_ERROR(chart_ref::rewrite_all(*this, transform));
   if (defined_names_changed) {
     // Defined-name expansion can change a formula's value without changing
@@ -434,10 +433,9 @@ Expected<void, Error> Workbook::remove_sheet_locked(std::uint32_t index) {
   }
   const sheet_names::NameList table_list = sheet_names::table_name_list(tables_);
   const TableLossTransform transform(removal, table_losses, &table_list);
-  std::vector<std::uint32_t> dropped_cache_ids;
   bool defined_names_changed = false;
   rewrite_workbook_references(sheets_, defined_names_, tables_, pivot_caches_, transform, mutator, {}, {}, removed_name,
-                              dropped_cache_ids, defined_names_changed);
+                              defined_names_changed);
   (void)defined_names_changed;
   RETURN_IF_ERROR(chart_ref::rewrite_all(*this, transform));
 
@@ -459,55 +457,6 @@ Expected<void, Error> Workbook::remove_sheet_locked(std::uint32_t index) {
   defined_names_ = std::move(retained);
   remove_and_reindex_tables(tables_, index);
 
-  // Remove caches whose worksheet source resolved to the deleted sheet and
-  // remove every surviving pivot table that would otherwise retain one of
-  // those cache ids. This keeps the workbook graph free of dangling cache
-  // bindings after the structural mutation.
-  std::vector<std::unique_ptr<pivot::PivotCache>> retained_caches;
-  retained_caches.reserve(pivot_caches_.size());
-  for (std::unique_ptr<pivot::PivotCache>& cache : pivot_caches_) {
-    if (cache == nullptr) {
-      continue;
-    }
-    const bool dropped =
-        std::find(dropped_cache_ids.begin(), dropped_cache_ids.end(), cache->cache_id()) != dropped_cache_ids.end();
-    if (!dropped) {
-      retained_caches.push_back(std::move(cache));
-    }
-  }
-  pivot_caches_ = std::move(retained_caches);
-  const auto cache_survives = [this](std::uint32_t cache_id) {
-    return std::any_of(pivot_caches_.begin(), pivot_caches_.end(),
-                       [cache_id](const auto& cache) { return cache != nullptr && cache->cache_id() == cache_id; });
-  };
-  for (std::size_t sheet_pos = 0; sheet_pos < sheets_.size(); ++sheet_pos) {
-    Sheet& sheet = sheets_[sheet_pos];
-    std::vector<std::unique_ptr<pivot::PivotTable>> retained_pivots;
-    retained_pivots.reserve(sheet.pivot_tables().size());
-    // Position of each pre-removal pivot among the survivors; SIZE_MAX marks a dropped one.
-    std::vector<std::size_t> pivot_new_pos(sheet.pivot_tables().size(), static_cast<std::size_t>(-1));
-    std::size_t pivot_pos = 0;
-    for (std::unique_ptr<pivot::PivotTable>& pivot_table : sheet.mutable_pivot_tables()) {
-      const std::size_t old_pos = pivot_pos++;
-      if (pivot_table == nullptr) {
-        continue;
-      }
-      const std::uint32_t cache_id = pivot_table->pivot_cache_id();
-      if (cache_survives(cache_id) &&
-          std::find(dropped_cache_ids.begin(), dropped_cache_ids.end(), cache_id) == dropped_cache_ids.end()) {
-        pivot_new_pos[old_pos] = retained_pivots.size();
-        retained_pivots.push_back(std::move(pivot_table));
-      }
-    }
-    sheet.mutable_pivot_tables() = std::move(retained_pivots);
-    for (PassthroughPart& part : passthrough_parts_) {
-      if (part.retained_origin == PassthroughPart::RetainedOrigin::kPivotTable &&
-          part.origin_sheet_index == sheet_pos && part.origin_pivot_index < pivot_new_pos.size() &&
-          pivot_new_pos[part.origin_pivot_index] != static_cast<std::size_t>(-1)) {
-        part.origin_pivot_index = pivot_new_pos[part.origin_pivot_index];
-      }
-    }
-  }
   // Parts owned by the removed sheet point past the end afterwards, so they read as stale.
   for (PassthroughPart& part : passthrough_parts_) {
     if (part.retained_origin != PassthroughPart::RetainedOrigin::kPivotTable) {
@@ -548,10 +497,9 @@ Expected<void, Error> Workbook::move_sheet(std::uint32_t from_index, std::uint32
     }
     const parser::SheetMoveTransform transform(pre_move_sheet_order, from_index, to_index);
     const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-    std::vector<std::uint32_t> ignored_cache_ids;
     bool defined_names_changed = false;
     rewrite_workbook_references(sheets_, defined_names_, tables_, pivot_caches_, transform, mutator, {}, {}, {},
-                                ignored_cache_ids, defined_names_changed);
+                                defined_names_changed);
     RETURN_IF_ERROR(chart_ref::rewrite_all(*this, transform));
   }
   move_sheet_locked(from_index, to_index);

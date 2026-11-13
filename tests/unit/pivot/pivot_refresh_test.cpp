@@ -2,6 +2,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -13,15 +15,19 @@
 #include "cell.h"
 #include "eval/eval_profile_scope.h"
 #include "eval/function_registry.h"
+#include "eval/recalc_engine.h"
 #include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
+#include "io/xlsb/reader.h"
 #include "merge_range.h"
+#include "miniz.h"
 #include "pivot/field_grouping.h"
 #include "pivot/field_remap.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_locale.h"
+#include "pivot/pivot_source.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
 #include "pivot/record_access.h"
@@ -33,6 +39,7 @@
 #include "utils/resource_budget.h"
 #include "value.h"
 #include "workbook.h"
+#include "workbook_format.h"
 
 namespace formulon {
 namespace {
@@ -316,6 +323,51 @@ TEST(PivotRefresh, SaveRefreshedCacheNeedsNoRefreshOnLoad) {
   EXPECT_FALSE(saved.pivot_caches().front()->refresh_on_load());
   EXPECT_NE(saved.sheet(kPivotSheet).pivot_tables().front()->raw_passthrough_after_row_fields().find("<rowItems"),
             std::string::npos);
+}
+
+// A file whose cache asks for a refresh on open is refreshed at the first
+// evaluation after the load, before any formula reads the report.
+TEST(PivotRefresh, OnLoadRefreshesAStaleCacheAtTheFirstEvaluation) {
+  Workbook wb = Book();
+  SetNumber(wb, 1U, 2U, 999.0);  // North: 999 + 400, while the cache still holds 100 + 400.
+  Workbook loaded = SaveAndReload(wb);
+  ASSERT_TRUE(loaded.pivot_caches().front()->refresh_on_load());
+  EXPECT_FALSE(ReportShows(loaded, 0U, 1399.0));
+  ASSERT_TRUE(static_cast<bool>(loaded.ensure_calculated(eval::default_registry())));
+  EXPECT_TRUE(ReportShows(loaded, 0U, 1399.0));
+}
+
+TEST(PivotRefresh, OnLoadKeepsTheStoredCacheWhenTheSourceDoesNotResolve) {
+  Workbook wb = Book();
+  CacheOf(wb).mutable_worksheet_source().sheet = "Gone";
+  Workbook loaded = SaveAndReload(wb);
+  ASSERT_TRUE(loaded.pivot_caches().front()->refresh_on_load());
+  const Snapshot before = Snapshot::Of(loaded);
+  ASSERT_TRUE(static_cast<bool>(loaded.ensure_calculated(eval::default_registry())));
+  EXPECT_TRUE(Snapshot::Of(loaded) == before);
+}
+
+// A cache whose records a refresh filled is saved without refreshOnLoad; opening it refreshes nothing.
+TEST(PivotRefresh, OnLoadLeavesABookWithoutRefreshOnLoadAlone) {
+  Workbook wb = Book();
+  ASSERT_TRUE(static_cast<bool>(Refresh(wb)));
+  SetNumber(wb, 1U, 2U, 999.0);
+  Workbook loaded = SaveAndReload(wb);
+  ASSERT_FALSE(loaded.pivot_caches().front()->refresh_on_load());
+  const Snapshot before = Snapshot::Of(loaded);
+  loaded.settle_pivot_refresh_on_load(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(loaded.ensure_calculated(eval::default_registry())));
+  EXPECT_TRUE(Snapshot::Of(loaded) == before);
+  EXPECT_FALSE(ReportShows(loaded, 0U, 1399.0));
+}
+
+// Marking a cache in a session does not refresh it: Excel refreshes only on open.
+TEST(PivotRefresh, OnLoadDoesNotRunForACacheMarkedInTheSession) {
+  Workbook wb = Book();
+  SetNumber(wb, 1U, 2U, 999.0);
+  CacheOf(wb).set_refresh_on_load(true);
+  ASSERT_TRUE(static_cast<bool>(wb.ensure_calculated(eval::default_registry())));
+  EXPECT_FALSE(ReportShows(wb, 0U, 1399.0));
 }
 
 TEST(PivotRefresh, AFieldLeftWithoutSharedItemsListsNoItems) {
@@ -885,6 +937,87 @@ TEST(PivotRefresh, RemapDateGroupBoundsAndBoundaryLabelsFollowTheData) {
   EXPECT_EQ(group.group_items.back().as_text(), ">2026/3/2");
 }
 
+// A Date field grouped by `by` (`interval` days a bucket) over 2024-01-15..2024-07-23, with `labels` as its items.
+PivotCache RangeGroupedDateCache(pivot::GroupBy by, double interval, std::vector<const char*> labels) {
+  PivotCache old;
+  old.set_cache_id(kCacheId);
+  old.mutable_fields().push_back(PivotCacheField{"Date", {}});
+  PivotCacheField grouped;
+  grouped.name = "Grouped";
+  grouped.is_database_field = false;
+  grouped.field_group = pivot::FieldGroup{};
+  grouped.field_group->base = 0U;
+  grouped.field_group->kind = pivot::GroupKind::Range;
+  grouped.field_group->range.by = by;
+  grouped.field_group->range.is_date = true;
+  grouped.field_group->range.interval = interval;
+  grouped.field_group->range.start_date = "2024-01-15T00:00:00";
+  grouped.field_group->range.end_date = "2024-07-23T00:00:00";
+  for (const char* label : labels) {
+    grouped.field_group->group_items.push_back(Value::text(label));
+  }
+  old.mutable_fields().push_back(std::move(grouped));
+  return old;
+}
+
+RefreshPlan RefreshDates(const PivotCache& old, std::vector<double> serials) {
+  std::vector<std::vector<Value>> rows;
+  std::vector<std::vector<bool>> dates;
+  for (const double serial : serials) {
+    rows.push_back({Value::number(serial)});
+    dates.push_back({true});
+  }
+  return Build(old, Source({"Date"}, rows, dates), Context({false, true}));
+}
+
+std::vector<std::string> Labels(const pivot::FieldGroup& group) {
+  std::vector<std::string> out;
+  for (const Value& item : group.group_items) {
+    out.emplace_back(item.as_text());
+  }
+  return out;
+}
+
+// Excel rebuilds a years group's items as creation does; old items keep only a surviving label.
+TEST(PivotRefresh, RemapYearsGroupRebuildsItsItemsWhenTheBoundsMove) {
+  const eval::ScopedEvalProfile scope(mac_365_ja_jp_profile());
+  const PivotCache old = RangeGroupedDateCache(pivot::GroupBy::Years, 1.0, {"<2024/1/15", "2024年", ">2024/7/23"});
+  const RefreshPlan plan = RefreshDates(old, {45078.0, 45361.0, 45719.0});  // 2023-06-01, 2024-03-10, 2025-03-03
+  const pivot::FieldGroup& group = *plan.cache.fields()[1].field_group;
+  EXPECT_EQ(group.range.start_date, "2023-06-01T00:00:00");
+  EXPECT_EQ(group.range.end_date, "2025-03-04T00:00:00");
+  EXPECT_EQ(Labels(group), (std::vector<std::string>{"<2023/6/1", "2023年", "2024年", "2025年", ">2025/3/4"}));
+  EXPECT_EQ(plan.remap.items[1], (std::vector<std::optional<std::uint32_t>>{std::nullopt, At(2U), std::nullopt}));
+}
+
+TEST(PivotRefresh, RemapMultiDayGroupRebuildsItsBucketsWhenTheBoundsMove) {
+  const eval::ScopedEvalProfile scope(mac_365_ja_jp_profile());
+  const PivotCache old = RangeGroupedDateCache(
+      pivot::GroupBy::Days, 7.0, {"<2024/1/15", "2024/1/15 - 2024/1/21", "2024/7/22 - 2024/7/23", ">2024/7/23"});
+  {
+    SCOPED_TRACE("the end moves");
+    const RefreshPlan plan = RefreshDates(old, {45306.0, 45514.0});  // 2024-01-15, 2024-08-10
+    const std::vector<std::string> labels = Labels(*plan.cache.fields()[1].field_group);
+    ASSERT_EQ(labels.size(), 32U);
+    EXPECT_EQ(labels[1], "2024/1/15 - 2024/1/21");
+    EXPECT_EQ(labels[28], "2024/7/22 - 2024/7/28");
+    EXPECT_EQ(labels[30], "2024/8/5 - 2024/8/11");
+    EXPECT_EQ(labels[31], ">2024/8/11");
+    EXPECT_EQ(plan.remap.items[1],
+              (std::vector<std::optional<std::uint32_t>>{At(0U), At(1U), std::nullopt, std::nullopt}));
+  }
+  {
+    SCOPED_TRACE("both bounds move: the last bucket stops at the end");
+    const RefreshPlan plan = RefreshDates(old, {45301.0, 45514.0});  // 2024-01-10, 2024-08-10
+    const std::vector<std::string> labels = Labels(*plan.cache.fields()[1].field_group);
+    ASSERT_EQ(labels.size(), 33U);
+    EXPECT_EQ(labels[0], "<2024/1/10");
+    EXPECT_EQ(labels[1], "2024/1/10 - 2024/1/16");
+    EXPECT_EQ(labels[31], "2024/8/7 - 2024/8/11");
+    EXPECT_EQ(plan.remap.items[1], (std::vector<std::optional<std::uint32_t>>(4U, std::nullopt)));
+  }
+}
+
 PivotCache MonthGroupedDateCache(const char* start, const char* end, bool auto_start, bool auto_end) {
   PivotCache old;
   old.set_cache_id(kCacheId);
@@ -1161,6 +1294,173 @@ bool HoldsSpill(const Workbook& wb, std::uint32_t row, std::uint32_t col) {
 }
 
 // Two Region reports on the one cache, PT2 directly below PT1; with `lower_first` PT2 comes first on the sheet.
+// ===========================================================================
+// Structure: the source range follows row, column and sheet edits
+// ===========================================================================
+
+// The source rectangle as (first_row, first_col, last_row, last_col), or all
+// ones when it does not resolve.
+std::tuple<std::uint32_t, std::uint32_t, std::uint32_t, std::uint32_t> SourceRect(const Workbook& wb) {
+  auto range = pivot::resolve_worksheet_source(wb, *wb.pivot_caches().front());
+  if (!range) {
+    return {~0U, ~0U, ~0U, ~0U};
+  }
+  const MergeRange& r = range.value().rect;
+  return {r.first_row, r.first_col, r.last_row, r.last_col};
+}
+
+using Rect = std::tuple<std::uint32_t, std::uint32_t, std::uint32_t, std::uint32_t>;
+
+TEST(PivotRefresh, StructureRowsInsertedInsideGrowTheSource) {
+  Workbook wb = Book();
+  ASSERT_TRUE(static_cast<bool>(wb.insert_rows(kDataSheet, 2U, 2U)));
+  EXPECT_EQ(SourceRect(wb), (Rect{0U, 0U, 7U, 2U}));
+}
+
+TEST(PivotRefresh, StructureRowsInsertedAtTheLastRowGrowTheSource) {
+  Workbook wb = Book();
+  ASSERT_TRUE(static_cast<bool>(wb.insert_rows(kDataSheet, 5U, 1U)));
+  EXPECT_EQ(SourceRect(wb), (Rect{0U, 0U, 6U, 2U}));
+}
+
+TEST(PivotRefresh, StructureRowsInsertedAboveMoveTheSource) {
+  Workbook wb = Book();
+  ASSERT_TRUE(static_cast<bool>(wb.insert_rows(kDataSheet, 0U, 1U)));
+  EXPECT_EQ(SourceRect(wb), (Rect{1U, 0U, 6U, 2U}));
+}
+
+TEST(PivotRefresh, StructureRowsInsertedBelowLeaveTheSource) {
+  Workbook wb = Book();
+  ASSERT_TRUE(static_cast<bool>(wb.insert_rows(kDataSheet, 6U, 1U)));
+  EXPECT_EQ(SourceRect(wb), (Rect{0U, 0U, 5U, 2U}));
+}
+
+TEST(PivotRefresh, StructureColumnsInsertedInsideGrowTheSource) {
+  Workbook wb = Book();
+  ASSERT_TRUE(static_cast<bool>(wb.insert_cols(kDataSheet, 1U, 1U)));
+  EXPECT_EQ(SourceRect(wb), (Rect{0U, 0U, 5U, 3U}));
+}
+
+TEST(PivotRefresh, StructureColumnsInsertedAtTheLastColumnGrowTheSource) {
+  Workbook wb = Book();
+  ASSERT_TRUE(static_cast<bool>(wb.insert_cols(kDataSheet, 2U, 1U)));
+  EXPECT_EQ(SourceRect(wb), (Rect{0U, 0U, 5U, 3U}));
+}
+
+TEST(PivotRefresh, StructureColumnsInsertedLeftMoveTheSource) {
+  Workbook wb = Book();
+  ASSERT_TRUE(static_cast<bool>(wb.insert_cols(kDataSheet, 0U, 2U)));
+  EXPECT_EQ(SourceRect(wb), (Rect{0U, 2U, 5U, 4U}));
+}
+
+TEST(PivotRefresh, StructureColumnsInsertedRightLeaveTheSource) {
+  Workbook wb = Book();
+  ASSERT_TRUE(static_cast<bool>(wb.insert_cols(kDataSheet, 3U, 1U)));
+  EXPECT_EQ(SourceRect(wb), (Rect{0U, 0U, 5U, 2U}));
+}
+
+TEST(PivotRefresh, StructureRowsAndColumnsDeletedShrinkTheSource) {
+  Workbook wb = Book();
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(kDataSheet, 2U, 1U)));
+  ASSERT_TRUE(static_cast<bool>(wb.delete_cols(kDataSheet, 1U, 1U)));
+  EXPECT_EQ(SourceRect(wb), (Rect{0U, 0U, 4U, 1U}));
+  ASSERT_TRUE(static_cast<bool>(Refresh(wb)));
+  EXPECT_EQ(CacheOf(wb).records().size(), 4U);
+}
+
+TEST(PivotRefresh, StructureSheetRenameAndMoveKeepTheSource) {
+  Workbook wb = Book();
+  ASSERT_TRUE(static_cast<bool>(wb.rename_sheet(static_cast<std::uint32_t>(kDataSheet), "Renamed")));
+  ASSERT_TRUE(static_cast<bool>(wb.move_sheet(0U, 1U)));
+  const auto range = pivot::resolve_worksheet_source(wb, *wb.pivot_caches().front());
+  ASSERT_TRUE(static_cast<bool>(range));
+  EXPECT_EQ(wb.sheet(range.value().sheet).name(), "Renamed");
+  EXPECT_EQ(SourceRect(wb), (Rect{0U, 0U, 5U, 2U}));
+}
+
+TEST(PivotRefresh, StructureDeletedSourceSheetIsRefused) {
+  Workbook wb = Book();
+  ASSERT_TRUE(static_cast<bool>(wb.add_sheet_entered("Spare")));
+  ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(static_cast<std::uint32_t>(kDataSheet))));
+  const Expected<void, Error> refreshed = wb.refresh_pivot_cache(kCacheId, eval::default_registry());
+  ASSERT_FALSE(static_cast<bool>(refreshed));
+  EXPECT_EQ(refreshed.error().code, FormulonErrorCode::kPreconditionFailed);
+}
+
+// The cache keeps its records and the source as written; opening refreshes nothing.
+TEST(PivotRefresh, StructureDeletedSourceSurvivesSaveAndReload) {
+  Workbook wb = Book();
+  ASSERT_TRUE(static_cast<bool>(wb.add_sheet_entered("Spare")));
+  const std::string data_name = wb.sheet(kDataSheet).name();
+  ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(static_cast<std::uint32_t>(kDataSheet))));
+  Workbook loaded = SaveAndReload(wb);
+  ASSERT_TRUE(static_cast<bool>(loaded.recalc(eval::default_registry())));
+  ASSERT_EQ(loaded.pivot_caches().size(), 1U);
+  const PivotCache& cache = *loaded.pivot_caches()[0];
+  EXPECT_EQ(cache.worksheet_source().sheet, data_name);
+  EXPECT_EQ(cache.worksheet_source().ref, "A1:C6");
+  EXPECT_EQ(cache.records().size(), 5U);
+  ASSERT_EQ(loaded.sheet(0).pivot_tables().size(), 1U);
+  const Expected<void, Error> refreshed = loaded.refresh_pivot_cache(kCacheId, eval::default_registry());
+  ASSERT_FALSE(static_cast<bool>(refreshed));
+  EXPECT_EQ(refreshed.error().code, FormulonErrorCode::kPreconditionFailed);
+}
+
+// The pivotCacheDefinition / pivotCacheRecords parts of `package`, by name.
+std::map<std::string, std::string> PivotCacheParts(const std::vector<std::uint8_t>& package) {
+  std::map<std::string, std::string> parts;
+  mz_zip_archive zip{};
+  if (mz_zip_reader_init_mem(&zip, package.data(), package.size(), 0) == MZ_FALSE) {
+    return parts;
+  }
+  for (mz_uint i = 0; i < mz_zip_reader_get_num_files(&zip); ++i) {
+    char name[256];
+    mz_zip_reader_get_filename(&zip, i, name, sizeof name);
+    const std::string_view entry(name);
+    if (entry.rfind("xl/pivotCache/pivotCache", 0) != 0) {
+      continue;
+    }
+    std::size_t size = 0;
+    void* data = mz_zip_reader_extract_to_heap(&zip, i, &size, 0);
+    parts.emplace(name, std::string(static_cast<const char*>(data), size));
+    mz_free(data);
+  }
+  mz_zip_reader_end(&zip);
+  return parts;
+}
+
+// An Excel-saved .xlsb whose seven pivots read Sheet1!A1:D9 keeps every cache part byte for byte
+// when Sheet1 is deleted, the source included, and opens again.
+TEST(PivotRefresh, StructureDeletedSourceSurvivesAnXlsbSave) {
+  const std::string path = std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_pivot_source_sheet.xlsb";
+  std::vector<std::uint8_t> bytes;
+  if (FILE* handle = std::fopen(path.c_str(), "rb"); handle != nullptr) {
+    for (int c = std::fgetc(handle); c != EOF; c = std::fgetc(handle)) {
+      bytes.push_back(static_cast<std::uint8_t>(c));
+    }
+    std::fclose(handle);
+  }
+  ASSERT_FALSE(bytes.empty()) << path;
+  auto first = io::xlsb::read_xlsb(io::ByteSpan{bytes.data(), bytes.size()});
+  ASSERT_TRUE(static_cast<bool>(first)) << first.error().message;
+  Workbook wb = std::move(first.value().workbook);
+  std::size_t data = wb.sheet_count();
+  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
+    if (wb.sheet(s).name() == "Sheet1") {
+      data = s;
+    }
+  }
+  ASSERT_LT(data, wb.sheet_count());
+  ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(static_cast<std::uint32_t>(data))));
+  auto saved = wb.save_as(WorkbookFormat::Xlsb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  const auto before = PivotCacheParts(bytes);
+  ASSERT_FALSE(before.empty());
+  EXPECT_EQ(PivotCacheParts(saved.value()), before);
+  auto again = io::xlsb::read_xlsb(io::ByteSpan{saved.value().data(), saved.value().size()});
+  ASSERT_TRUE(static_cast<bool>(again)) << again.error().message;
+}
+
 Workbook StackedBook(bool lower_first) {
   Workbook wb = Book();
   const std::uint32_t below = PivotAt(wb, 0U).projected_extent()->row1 + 1U;

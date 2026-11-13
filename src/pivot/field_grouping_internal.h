@@ -2,8 +2,10 @@
 #define FORMULON_PIVOT_FIELD_GROUPING_INTERNAL_H_
 
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "pivot/field_grouping.h"
 #include "pivot/pivot_cache.h"
@@ -48,6 +50,12 @@ Expected<NumericGroupState, Error> resolve_numeric_group(const PivotCache& cache
 /// group items than a pivot field holds, leaving `group` as it was.
 Expected<void, Error> set_numeric_range(PivotCache& cache, FieldGroup& group, const NumericGroupState& state,
                                         ExcelProfile profile);
+
+/// The group items of a calendar range group by `period` over the days
+/// `start` to `end` (`interval` days a bucket for `GroupBy::Days`), labelled
+/// in `profile`'s locale: `<start`, the periods, `>end`.
+std::vector<std::string> date_range_group_labels(GroupBy period, std::uint32_t interval, double start, double end,
+                                                 bool date1904, ExcelProfile profile);
 
 /// Appends to `cache` the numeric group field of `state` over database field
 /// `base`, named as the base plus the smallest free suffix from 2, points the

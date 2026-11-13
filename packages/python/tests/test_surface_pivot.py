@@ -132,6 +132,22 @@ class _PivotFixture:
     def __init__(self, wb: Workbook) -> None:
         self.wb = wb
         wb.set_profile_id("win-365-ja_JP")
+        # A loaded cache is refreshed from its source, so the source holds the records.
+        for c, name in enumerate(("Region", "Product", "Amount", "Date")):
+            wb.sheet(0).set_text(0, c, name)
+        for r, (region, product, amount, date) in enumerate(
+            (
+                ("East", "Apple", 10, 45292),
+                ("West", "Apple", 30, 45323),
+                ("East", "Pear", 5, 45658),
+                ("West", "Pear", 7, 45689),
+            ),
+            start=1,
+        ):
+            wb.sheet(0).set_text(r, 0, region)
+            wb.sheet(0).set_text(r, 1, product)
+            wb.sheet(0).set_number(r, 2, amount)
+            wb.sheet(0).set_number(r, 3, date)
         self.cache = wb.add_pivot_cache().cache_id
         wb.pivot_cache(self.cache).set_worksheet_source(PivotWorksheetSourceInput(range="A1:D5", sheet="Sheet1"))
         for name in ("Region", "Product", "Amount", "Date"):

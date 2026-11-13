@@ -77,6 +77,10 @@ void AddItem(fm_workbook_t* wb, std::uint32_t cache_id) {
   ASSERT_EQ(fm_workbook_add_pivot_cache_record(wb, cache_id, &record), 0);
   ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(wb, cache_id, record, 0U, 2.0), 0);
   ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(wb, cache_id, record, 1U, 500.0), 0);
+  // The source carries the record too, so a reload's refresh reads the same cache.
+  ASSERT_EQ(fm_sheet_set_text(wb, 0U, 5U, 0U, "West"), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb, 0U, 5U, 1U, 500.0), 0);
+  ASSERT_EQ(SetPivotCacheWorksheetSource(wb, cache_id, /*present=*/1, "A1:B6", "Sheet1", nullptr), 0);
 }
 
 void Grow(fm_workbook_t* wb, std::uint32_t cache_id) {
@@ -272,6 +276,7 @@ TEST(FormulonCApiSpillCause, PivotPastTheEdgeIsReportedClipped) {
 TEST(FormulonCApiSpillCause, LoadedDrawnPivotReportsItsLocation) {
   WorkbookGuard wb;
   Build(wb);
+  FillScratchSource(wb.handle);
   WorkbookGuard loaded;
   SaveAndLoad(wb.handle, loaded);
   // Not laid out since the load, the report covers the location it was read with.
@@ -288,12 +293,15 @@ TEST(FormulonCApiSpillCause, ManualCalcReportsTheLoadedRange) {
   WorkbookGuard wb;
   std::uint32_t cache_id = 0;
   Build(wb, &cache_id);
+  FillScratchSource(wb.handle);
   // A11 meets A13; a formula near the last row runs past it; the report meets a merge.
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0U, 10U, 0U, "=SEQUENCE(3)"), 0);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0U, 12U, 0U, "x"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0U, kLastRow - 1U, 0U, "=SEQUENCE(5)"), 0);
   ASSERT_EQ(fm_sheet_add_merge(wb.handle, 0U, record_arg(fm_cell_rect_t{4U, 3U, 4U, 4U}), nullptr), 0);
   Grow(wb.handle, cache_id);
+  // Refreshed from its source, the cache is saved as Excel saves it, with nothing to refresh on load.
+  ASSERT_EQ(fm_workbook_refresh_pivot_cache(wb.handle, cache_id), 0) << fm_get_last_error_message();
   ExpectBlockedPivot(wb.handle, FM_SPILL_CAUSE_MERGED, kGrown);
   ASSERT_EQ(fm_workbook_set_calc_mode(wb.handle, FM_CALC_MODE_MANUAL), 0);
 
@@ -323,6 +331,7 @@ TEST(FormulonCApiSpillCause, ReportWhoseCacheHasNoRecordsKeepsTheLoadedRange) {
   WorkbookGuard wb;
   std::uint32_t cache_id = 0;
   Build(wb, &cache_id);
+  FillScratchSource(wb.handle);
   ASSERT_EQ(fm_sheet_set_text(wb.handle, 0U, kGrown.last_row, kGrown.last_col, "x"), 0);
   Grow(wb.handle, cache_id);
   fm_pivot_cache_options_patch_t options = FM_STRUCT_INIT(fm_pivot_cache_options_patch_t);

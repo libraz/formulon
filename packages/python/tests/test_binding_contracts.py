@@ -878,6 +878,13 @@ class PivotFilterPersistenceTests(unittest.TestCase):
     @staticmethod
     def _workbook_with_pivot():
         wb = Workbook.create_default()
+        # A loaded cache is refreshed from its source, so the source holds the records.
+        for r, (region, amount) in enumerate((("Region", "Amount"), ("East", 10.0), ("West", 30.0))):
+            wb.sheet(0).set_text(r, 0, region)
+            if isinstance(amount, float):
+                wb.sheet(0).set_number(r, 1, amount)
+            else:
+                wb.sheet(0).set_text(r, 1, amount)
         cache_id = wb.add_pivot_cache().cache_id
         # A cache with no declared source cannot be saved: Excel offers to
         # repair any package containing one, so the writer refuses instead.

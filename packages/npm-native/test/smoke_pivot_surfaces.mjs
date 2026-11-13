@@ -5,6 +5,17 @@ import { assert, getModule, isFormulonError } from './smoke_support.mjs';
 // `dispose` is the caller's job; the WASM package uses `delete` instead.
 function makePivotWorkbook(Workbook) {
   const wb = Workbook.createDefault();
+  const rows = [
+    ['Region', 'Amount'],
+    ['East', 10],
+    ['West', 30],
+  ];
+  // A loaded cache is refreshed from its source, so the source holds the records.
+  rows.forEach(([text, value], r) => {
+    wb.sheet(0).setText(r, 0, text);
+    if (typeof value === 'number') wb.sheet(0).setNumber(r, 1, value);
+    else wb.sheet(0).setText(r, 1, value);
+  });
   const cache = wb.addPivotCache();
   const { cacheId } = cache;
   // A cache with no declared source cannot be saved: Excel offers to repair

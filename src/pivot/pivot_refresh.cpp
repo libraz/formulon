@@ -106,9 +106,12 @@ std::string short_date_text(double serial, const RefreshContext& context) {
       .text;
 }
 
-// Moves a date range group's bounds and boundary labels to the base's current dates.
+// Moves a date range group's bounds and boundary labels to the base's current dates. A years or
+// multi-day group whose bounds move rebuilds its items as creation does; `items` then maps each old
+// item to the new one of the same label.
 Expected<void, Error> refresh_date_bounds(PivotCache& cache, FieldGroup& group, const std::vector<Value>& base,
-                                          const std::vector<bool>& base_is_date, const RefreshContext& context) {
+                                          const std::vector<bool>& base_is_date, const RefreshContext& context,
+                                          IndexMap& items) {
   RangeGroup& range = group.range;
   // Fixed bounds stay unless one is missing or unreadable, which refresh recomputes.
   if (!range.auto_start && !range.auto_end && group_date_serial(range.start_date, context.date1904).has_value() &&
@@ -138,12 +141,26 @@ Expected<void, Error> refresh_date_bounds(PivotCache& cache, FieldGroup& group, 
   if (start_iso == range.start_date && end_iso == range.end_date) {
     return Expected<void, Error>::Ok();
   }
-  if (range.by == GroupBy::Years || (range.by == GroupBy::Days && range.interval > 1.0)) {
-    return make_error(FormulonErrorCode::kNotImplemented,
-                      "Refreshing a years or multi-day date group whose bounds move is not implemented");
-  }
   range.start_date = start_iso;
   range.end_date = end_iso;
+  if (range.by == GroupBy::Years || (range.by == GroupBy::Days && range.interval > 1.0)) {
+    const std::vector<std::string> labels = detail::date_range_group_labels(
+        range.by, static_cast<std::uint32_t>(range.interval), start, end, context.date1904, context.profile);
+    std::unordered_map<std::string_view, std::uint32_t> by_label;
+    for (std::size_t n = 0; n < labels.size(); ++n) {
+      by_label.emplace(labels[n], static_cast<std::uint32_t>(n));
+    }
+    items.clear();
+    for (const Value& old : group.group_items) {
+      const auto it = old.is_text() ? by_label.find(old.as_text()) : by_label.end();
+      items.push_back(it != by_label.end() ? std::optional<std::uint32_t>(it->second) : std::nullopt);
+    }
+    group.group_items.clear();
+    for (const std::string& label : labels) {
+      group.group_items.push_back(intern_text(cache.mutable_text_storage(), label));
+    }
+    return Expected<void, Error>::Ok();
+  }
   if (group.group_items.size() >= 2U) {
     group.group_items.front() =
         intern_text(cache.mutable_text_storage(), date_group_before_label(short_date_text(start, context)));
@@ -492,7 +509,8 @@ Expected<RefreshPlan, Error> build_refreshed_cache(const PivotCache& old, const 
     }
     const std::uint32_t base = *group.base;
     if (is_date_range(group)) {
-      RETURN_IF_ERROR(refresh_date_bounds(cache, group, column_values[base], column_dates[base], context));
+      RETURN_IF_ERROR(refresh_date_bounds(cache, group, column_values[base], column_dates[base], context,
+                                          plan.remap.items[old_of[j]]));
     } else if (group.kind == GroupKind::Range) {
       RETURN_IF_ERROR(
           refresh_numeric_range(cache, group, column_values[base], context.profile, plan.remap.items[old_of[j]]));

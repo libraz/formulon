@@ -75,16 +75,30 @@ void AddField(fm_workbook_t* wb, const char* name, fm_pivot_axis_t axis) {
 
 // The measured source in a ja-JP workbook: Region on rows, Sum of Amt and Sum
 // of Qty as data fields; with `product_on_cols`, Product on columns and Amt
-// alone. The pivot sits at A3, as in the Excel files.
+// alone. The pivot sits at A3, as in the Excel files; the source, H1:K6, holds the records so a
+// reload's refresh reads the same cache.
 void BuildSales(WorkbookGuard& wb, std::uint32_t* out_cache, bool product_on_cols = false) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "win-365-ja_JP"), 0);
   std::uint32_t cache = 0;
   ASSERT_EQ(fm_workbook_add_pivot_cache(wb.handle, 0, &cache), 0);
-  ASSERT_EQ(SetPivotCacheWorksheetSource(wb.handle, cache, 1, "A1:D6", "Sheet1", nullptr), 0);
-  for (const char* name : {"Region", "Product", "Amt", "Qty"}) {
+  ASSERT_EQ(SetPivotCacheWorksheetSource(wb.handle, cache, 1, "H1:K6", "Sheet1", nullptr), 0);
+  constexpr std::uint32_t kSourceCol = 7U;
+  const char* const headers[] = {"Region", "Product", "Amt", "Qty"};
+  for (std::uint32_t c = 0; c < 4U; ++c) {
     std::size_t index = 99;
-    ASSERT_EQ(fm_workbook_add_pivot_cache_field(wb.handle, cache, name, &index), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_workbook_add_pivot_cache_field(wb.handle, cache, headers[c], &index), 0)
+        << fm_get_last_error_message();
+    ASSERT_EQ(fm_sheet_set_text(wb.handle, 0U, 0U, kSourceCol + c, headers[c]), 0);
+  }
+  const char* const regions[] = {"North", "South", "East"};
+  const char* const products[] = {"A", "B"};
+  for (std::uint32_t r = 0; r < 5U; ++r) {
+    const SourceRow& row = kRows[r];
+    ASSERT_EQ(fm_sheet_set_text(wb.handle, 0U, r + 1U, kSourceCol, regions[static_cast<int>(row.region)]), 0);
+    ASSERT_EQ(fm_sheet_set_text(wb.handle, 0U, r + 1U, kSourceCol + 1U, products[static_cast<int>(row.product)]), 0);
+    ASSERT_EQ(fm_sheet_set_number(wb.handle, 0U, r + 1U, kSourceCol + 2U, row.amt), 0);
+    ASSERT_EQ(fm_sheet_set_number(wb.handle, 0U, r + 1U, kSourceCol + 3U, row.qty), 0);
   }
   for (const char* item : {"North", "South", "East"}) {
     ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb.handle, cache, kRegion, item, ignored_index()), 0);

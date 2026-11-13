@@ -451,6 +451,7 @@ TEST(FormulonCApiPivot, ProfileRenderedBuiltinCodeKeepsItsId) {
   std::uint32_t cache_id = 0;
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
+  FillScratchSource(wb.handle);
 
   // Id 27 has no ECMA-376 code; ja-JP renders it as the Japanese-era date.
   int32_t present = 0;

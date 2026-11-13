@@ -17,6 +17,7 @@
 #include <utility>
 #include <vector>
 
+#include "eval/function_registry.h"
 #include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
@@ -230,6 +231,89 @@ TEST(PivotDateGroupFixture, RenamedItemShowsItsCaptionInItsOwnPlace) {
       {TOTAL, {1500, 15}},
   };
   EXPECT_EQ(EvaluatedRows("item_caption.xlsx", "Tabelle1", "PivotTable1"), expected);
+}
+
+// Workbooks Excel saved with the years / 7-day group field on rows, before and after moving the
+// earliest (C2) and latest (C9) source date and refreshing. The engine's refresh of the "before"
+// book must give Excel's group items and the row field's item order.
+struct DateGroupRefreshCase {
+  const char* before;
+  const char* after;
+  std::optional<double> c2;
+  std::optional<double> c9;
+};
+
+Workbook LoadPivotOptions(const std::string& file) {
+  const std::vector<std::uint8_t> bytes = ReadFixture(file.c_str());
+  auto read_or = io::read_ooxml(io::ByteSpan{bytes.data(), bytes.size()});
+  EXPECT_TRUE(static_cast<bool>(read_or)) << file;
+  Workbook wb = std::move(read_or.value().workbook);
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  return wb;
+}
+
+std::vector<std::string> GroupLabels(const Workbook& wb, std::uint32_t cache_id, std::size_t field) {
+  std::vector<std::string> out;
+  const pivot::PivotCache* cache = wb.find_pivot_cache(cache_id);
+  if (cache == nullptr || field >= cache->fields().size() || !cache->fields()[field].field_group.has_value()) {
+    ADD_FAILURE() << "cache " << cache_id << " has no group field " << field;
+    return out;
+  }
+  for (const Value& item : cache->fields()[field].field_group->group_items) {
+    out.emplace_back(item.is_text() ? std::string(item.as_text()) : std::string("<not text>"));
+  }
+  return out;
+}
+
+std::vector<std::uint32_t> FieldItemOrder(const Workbook& wb, std::size_t field) {
+  std::vector<std::uint32_t> out;
+  if (wb.sheet(0).pivot_tables().empty() || field >= wb.sheet(0).pivot_tables()[0]->fields().size()) {
+    ADD_FAILURE() << "no pivot field " << field;
+    return out;
+  }
+  for (const pivot::PivotItem& item : wb.sheet(0).pivot_tables()[0]->fields()[field].items) {
+    if (item.has_cache_index) {
+      out.push_back(item.cache_index);
+    }
+  }
+  return out;
+}
+
+TEST(PivotDateGroupFixture, RefreshMovingYearsAndSevenDayBoundsMatchesExcel) {
+  constexpr std::size_t kGroupField = 4U;
+  const DateGroupRefreshCase cases[] = {
+      {"years_before", "years_start", 45078.0, std::nullopt},  // 2023-06-01
+      {"years_before", "years_end", std::nullopt, 45719.0},    // 2025-03-03
+      {"years_before", "years_both", 45078.0, 45719.0},
+      {"days7_before", "days7_start", 45301.0, std::nullopt},  // 2024-01-10
+      {"days7_before", "days7_end", std::nullopt, 45514.0},    // 2024-08-10
+      {"days7_before", "days7_both", 45301.0, 45514.0},
+  };
+  for (const DateGroupRefreshCase& c : cases) {
+    SCOPED_TRACE(c.after);
+    Workbook wb = LoadPivotOptions(std::string("refresh_dategroup/") + c.before + ".xlsx");
+    const Workbook excel = LoadPivotOptions(std::string("refresh_dategroup/") + c.after + ".xlsx");
+    std::size_t data = wb.sheet_count();
+    for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
+      if (wb.sheet(s).name() == "Sheet1") {
+        data = s;
+      }
+    }
+    ASSERT_LT(data, wb.sheet_count());
+    for (const auto& [row, serial] : {std::pair<std::uint32_t, std::optional<double>>{1U, c.c2}, {8U, c.c9}}) {
+      if (serial.has_value()) {
+        ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(data, row, 2U, Value::number(*serial))));
+      }
+    }
+    ASSERT_FALSE(wb.sheet(0).pivot_tables().empty());
+    const std::uint32_t cache_id = wb.sheet(0).pivot_tables()[0]->pivot_cache_id();
+    const auto refreshed = wb.refresh_pivot_cache(cache_id, eval::default_registry());
+    ASSERT_TRUE(static_cast<bool>(refreshed)) << refreshed.error().message;
+    // Excel renumbers its caches on save; each book's pivot names its own.
+    const std::uint32_t excel_cache_id = excel.sheet(0).pivot_tables()[0]->pivot_cache_id();
+    EXPECT_EQ(GroupLabels(wb, cache_id, kGroupField), GroupLabels(excel, excel_cache_id, kGroupField));
+    EXPECT_EQ(FieldItemOrder(wb, kGroupField), FieldItemOrder(excel, kGroupField));
+  }
 }
 
 }  // namespace

@@ -1428,3 +1428,7 @@ fm_status_t patch_op_refusal(fm_patch_op_t op, const std::string& field) {
 }  // namespace parts
 }  // namespace c_api
 }  // namespace formulon
+
+void fm_workbook::settle_pivot_refresh_on_load() {
+  wb->settle_pivot_refresh_on_load(formulon::eval::default_registry());
+}

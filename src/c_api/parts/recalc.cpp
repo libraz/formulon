@@ -371,7 +371,7 @@ extern "C" fm_status_t fm_workbook_set_profile_id(fm_workbook_t* wb, const char*
   if (auto rc = check_profile_id(profile_id, &profile); rc != 0) {
     return rc;
   }
-  formulon::Workbook& book = wb->workbook();
+  formulon::Workbook& book = wb->workbook_before_refresh_on_load();
   const bool changed = !formulon::same_profile(book.excel_profile(), profile);
   book.set_excel_profile(profile);
   if (changed) {

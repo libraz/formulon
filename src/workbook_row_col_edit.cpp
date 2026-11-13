@@ -849,9 +849,8 @@ Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, 
   // The text is rewritten against pre-edit coordinates, like the cells above
   // and unlike the sqref/anchor rectangles, which `Sheet::insert_rows` and
   // friends move afterwards.
-  std::vector<std::uint32_t> ignored_cache_ids;
   rewrite_sheet_metadata_formulas(sheets, per_sheet_transforms, wb.mutable_tables(), wb.mutable_pivot_caches(), {}, {},
-                                  {}, ignored_cache_ids, name_rewrite);
+                                  {}, name_rewrite);
   // Chart refs are always sheet-qualified, so the unowned policy is the right one.
   RETURN_IF_ERROR(chart_ref::rewrite_all(wb, name_rewrite));
   if (edit.band.has_value()) {

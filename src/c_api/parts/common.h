@@ -660,8 +660,19 @@ struct fm_workbook {
   fm_iterative_progress_cb iterative_progress_cb = nullptr;
   void* iterative_progress_user_data = nullptr;
 
-  formulon::Workbook& workbook() { return *wb; }
-  const formulon::Workbook& workbook() const { return *wb; }
+  // Every access but setting the profile first runs a load's pending refresh-on-load, so it sees the
+  // refreshed caches an Excel open shows; like a read that calculates, a const access may do it.
+  formulon::Workbook& workbook() {
+    settle_pivot_refresh_on_load();
+    return *wb;
+  }
+  const formulon::Workbook& workbook() const {
+    const_cast<fm_workbook*>(this)->settle_pivot_refresh_on_load();
+    return *wb;
+  }
+  // The workbook without that refresh, for `fm_workbook_set_profile_id`: the refresh runs under the profile set.
+  formulon::Workbook& workbook_before_refresh_on_load() { return *wb; }
+  void settle_pivot_refresh_on_load();
 };
 
 namespace formulon {

@@ -16,18 +16,6 @@ constexpr std::size_t kPivot = 0U;
 constexpr std::size_t kRegionField = 0U;
 constexpr std::size_t kAmountField = 1U;
 
-/// A saved and reloaded scratch pivot: Region (row field, items North and
-/// South) and Amount summed as "Sum of Amount".
-void LoadScratchPivot(WorkbookGuard& out) {
-  WorkbookGuard built;
-  ASSERT_EQ(fm_workbook_create_default(&built.handle), FM_STATUS_OK);
-  ASSERT_EQ(BuildScratchPivot(built.handle, nullptr, nullptr), FM_STATUS_OK) << fm_get_last_error_message();
-  BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(built.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), FM_STATUS_OK)
-      << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &out.handle), FM_STATUS_OK) << fm_get_last_error_message();
-}
-
 struct StyleSnapshot {
   std::string style_name;
   int32_t present;

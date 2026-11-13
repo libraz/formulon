@@ -251,6 +251,7 @@ TEST(FormulonCApiPivot, LoadedPivotCacheMutationReprojectsAuthoredLocation) {
   std::uint32_t cache_id = 0;
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(original.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
+  FillScratchSource(original.handle);
 
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(original.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
@@ -548,6 +549,7 @@ TEST(FormulonCApiPivot, ManualSortKeepsItemOrderThroughSaveAndReload) {
   std::uint32_t cache_id = 0;
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
+  FillScratchSource(wb.handle);
 
   // Shared items are North, South; the items are added in the opposite order.
   ASSERT_EQ(fm_sheet_clear_pivot_field_items(wb.handle, 0, pivot_index, 0), 0);

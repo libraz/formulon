@@ -530,6 +530,8 @@ TEST(FormulonCApiPivot, EveryFilterTypeRoundTripsThroughSaveAndLoad) {
   std::uint32_t cache_id = 0;
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
+  // A refresh discards date filters on the text field; with a source that does not resolve the reload has none.
+  ASSERT_EQ(SetPivotCacheWorksheetSource(wb.handle, cache_id, /*present=*/1, "A1:B5", "NoSuchSheet", nullptr), 0);
   for (int type = 0; type <= FM_PIVOT_FILTER_KIND_M12; ++type) {
     const fm_pivot_filter_t spec = FilterSpecFor(type);
     ASSERT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, pivot_index, &spec, ignored_index()), 0)

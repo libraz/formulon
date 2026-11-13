@@ -1118,6 +1118,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
 
   wb.apply_legacy_implicit_intersections();
   clamp_sheet_phonetic_fonts(wb);
+  wb.request_pivot_refresh_on_load();
 
   OoxmlReadResult result{std::move(wb), pending_sst_count, diagnostics};
   return result;

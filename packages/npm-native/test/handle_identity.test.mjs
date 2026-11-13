@@ -227,7 +227,8 @@ test(
 );
 
 test(
-  'identity 6: removing the source sheet of a cache removes its pivots and the cache handle',
+  // Excel keeps every pivot and cache when a source sheet goes; only the refresh fails.
+  'identity 6: removing the source sheet of a cache keeps its pivots and the cache handle',
   withBook((wb, mod) => {
     const ws = wb.sheet(0);
     const data = wb.addSheet('Data');
@@ -240,13 +241,14 @@ test(
     const boundPivot = addPivot(ws, bound, 'Bound', 0, 10);
     const otherPivot = addPivot(ws, unrelated, 'Other', 20, 10);
     wb.removeSheet(data);
-    assert.throws(() => boundPivot.getLayout(), notFound(mod));
-    assert.throws(() => bound.getOptions(), notFound(mod));
-    assert.equal(ws.listPivots().length, 1);
-    assert.equal(ws.listPivots()[0], otherPivot);
+    assert.equal(boundPivot.cache(), bound);
+    assert.throws(
+      () => bound.refresh(),
+      (e) => isFormulonError(e, mod.StatusCode.PreconditionFailed),
+    );
+    assert.deepEqual(ws.listPivots(), [boundPivot, otherPivot]);
     assert.equal(otherPivot.cache(), unrelated);
-    assert.equal(wb.listPivotCaches().length, 1);
-    assert.equal(wb.listPivotCaches()[0], unrelated);
+    assert.deepEqual(wb.listPivotCaches(), [bound, unrelated]);
   }),
 );
 

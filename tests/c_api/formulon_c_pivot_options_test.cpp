@@ -34,18 +34,6 @@ formulon::pivot::PivotTable& Table(WorkbookGuard& wb, std::size_t sheet = 0U) {
   return *wb.handle->wb->sheet(sheet).mutable_pivot_tables()[kPivot];
 }
 
-// The scratch pivot saved and loaded again, so its table starts layout-clean.
-void LoadScratchPivot(WorkbookGuard& out) {
-  WorkbookGuard built;
-  ASSERT_EQ(fm_workbook_create_default(&built.handle), 0);
-  ASSERT_EQ(BuildScratchPivot(built.handle, nullptr, nullptr), 0) << fm_get_last_error_message();
-  BufferGuard saved;
-  ASSERT_EQ(fm_workbook_save(built.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
-      << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &out.handle), 0) << fm_get_last_error_message();
-  ASSERT_EQ(out.handle->wb->sheet(0U).pivot_tables().size(), 1U);
-}
-
 // Adds a second data field so the Values level exists.
 void AddSecondDataField(fm_workbook_t* wb) {
   fm_pivot_data_field_t spec = FM_STRUCT_INIT(fm_pivot_data_field_t);
@@ -588,8 +576,12 @@ TEST(FormulonCApiPivotOptions, ValuesFieldRejectsDuplicatesAndStrayIndices) {
 TEST(FormulonCApiPivotOptions, ValuesFieldOrderMarksLayoutDirty) {
   WorkbookGuard built;
   ASSERT_EQ(fm_workbook_create_default(&built.handle), 0);
-  ASSERT_EQ(BuildScratchPivot(built.handle, nullptr, nullptr), 0);
+  std::uint32_t cache_id = 0;
+  ASSERT_EQ(BuildScratchPivot(built.handle, &cache_id, nullptr), 0);
   AddSecondDataField(built.handle);
+  // Refreshed from its source before the save, as a book Excel saved is: the reload has nothing to refresh.
+  FillScratchSource(built.handle);
+  ASSERT_EQ(fm_workbook_refresh_pivot_cache(built.handle, cache_id), 0) << fm_get_last_error_message();
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(built.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
       << fm_get_last_error_message();
@@ -1239,6 +1231,7 @@ TEST(FormulonCApiPivotOptions, ShowAllListsItemsWithoutData) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::uint32_t cache_id = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, nullptr), 0) << fm_get_last_error_message();
+  FillScratchSource(wb.handle);
   // East is an item of the field with no records.
   ASSERT_EQ(fm_workbook_add_pivot_cache_field_shared_item_text(wb.handle, cache_id, 0U, "East", ignored_index()), 0);
   ASSERT_EQ(fm_sheet_add_pivot_field_item(wb.handle, 0U, kPivot, kRegionField, "East", 1, ignored_index()), 0);

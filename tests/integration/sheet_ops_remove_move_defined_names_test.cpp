@@ -138,7 +138,8 @@ TEST(WorkbookSheetOps, RemoveDropsSheet) {
   EXPECT_EQ(wb.sheet(1).name(), "Gamma");
 }
 
-TEST(WorkbookSheetOps, RemoveDropsPivotCacheWhoseWorksheetSourceWasRemoved) {
+// Excel keeps a cache whose source sheet goes, with the source as written.
+TEST(WorkbookSheetOps, RemoveKeepsPivotCacheWhoseWorksheetSourceWasRemoved) {
   Workbook wb = ThreeSheetWorkbook();
   auto removed_source_cache = std::make_unique<pivot::PivotCache>();
   removed_source_cache->set_cache_id(1U);
@@ -151,10 +152,12 @@ TEST(WorkbookSheetOps, RemoveDropsPivotCacheWhoseWorksheetSourceWasRemoved) {
   wb.add_pivot_cache(std::move(surviving_source_cache));
 
   ASSERT_TRUE(static_cast<bool>(wb.remove_sheet(1U)));  // Beta
-  ASSERT_EQ(wb.pivot_caches().size(), 1U);
-  ASSERT_NE(wb.pivot_caches()[0], nullptr);
-  EXPECT_EQ(wb.pivot_caches()[0]->cache_id(), 2U);
-  EXPECT_EQ(wb.pivot_caches()[0]->worksheet_source().sheet, "Gamma");
+  ASSERT_EQ(wb.pivot_caches().size(), 2U);
+  EXPECT_EQ(wb.pivot_caches()[0]->cache_id(), 1U);
+  EXPECT_EQ(wb.pivot_caches()[0]->worksheet_source().sheet, "Beta");
+  EXPECT_EQ(wb.pivot_caches()[0]->worksheet_source().ref, "$A$1:$B$10");
+  EXPECT_EQ(wb.pivot_caches()[1]->cache_id(), 2U);
+  EXPECT_EQ(wb.pivot_caches()[1]->worksheet_source().sheet, "Gamma");
 }
 
 TEST(WorkbookSheetOps, SheetOperationsKeepTablesAttachedToTheirOwningSheet) {

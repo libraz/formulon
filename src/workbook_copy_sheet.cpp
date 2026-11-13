@@ -212,8 +212,7 @@ Expected<std::size_t, Error> Workbook::copy_sheet(std::size_t source, std::size_
   const parser::IdentityTransform identity;
   std::vector<const parser::RefTransform*> per_sheet(sheets_.size(), &identity);
   per_sheet[n] = &transform;
-  std::vector<std::uint32_t> dropped_cache_ids;
-  rewrite_sheet_metadata_formulas(sheets_, per_sheet, tables_, pivot_caches_, {}, {}, {}, dropped_cache_ids, identity);
+  rewrite_sheet_metadata_formulas(sheets_, per_sheet, tables_, pivot_caches_, {}, {}, {}, identity);
 
   for (DefinedName& entry : name_copies) {
     defined_names_.push_back(std::move(entry));

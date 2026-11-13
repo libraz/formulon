@@ -44,9 +44,8 @@ using parser::rewrite_formula;
 // worksheet must not be treated as local to the first sheet.
 //
 // `direct_sheet_old/new` covers OOXML's worksheetSource/@sheet field, which is
-// a plain metadata string rather than a formula AST. For removal,
-// `removed_sheet_name` additionally reports cache ids whose real worksheet
-// source became unavailable.
+// a plain metadata string rather than a formula AST. For removal, a pivot
+// cache source is left exactly as written, as Excel keeps it.
 //
 // Callers pass one slot per sheet. A short `per_sheet` degrades the excess
 // sheet-attached metadata to the first slot rather than skipping the rewrite,
@@ -56,15 +55,15 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
                                      std::vector<TableMetadata>& tables,
                                      std::vector<std::unique_ptr<pivot::PivotCache>>& pivot_caches,
                                      std::string_view direct_sheet_old, std::string_view direct_sheet_new,
-                                     std::string_view removed_sheet_name, std::vector<std::uint32_t>& dropped_cache_ids,
+                                     std::string_view removed_sheet_name,
                                      const parser::RefTransform& unowned_transform);
 
 // Applies one AST transform to every formula-bearing holder in the workbook.
 // The caller supplies the transform policy, so rename and removal share the
 // exact same parse/identity/error behaviour. `direct_sheet_old/new` covers
 // OOXML's worksheetSource/@sheet field, which is a plain metadata string
-// rather than a formula AST. For removal, `removed_sheet_name` additionally
-// reports cache ids whose real worksheet source became unavailable.
+// rather than a formula AST. For removal, `removed_sheet_name` leaves pivot
+// cache sources as written.
 //
 // Precondition: caller holds the engine mutex. Formula writes use
 // `Sheet::set_cell_formula` directly and never route through the public
@@ -79,7 +78,7 @@ void rewrite_workbook_references(std::vector<Sheet>& sheets, std::vector<Defined
                                  const parser::RefTransform& transform,
                                  const eval::RecalcEngine::LockedMutator& mutator, std::string_view direct_sheet_old,
                                  std::string_view direct_sheet_new, std::string_view removed_sheet_name,
-                                 std::vector<std::uint32_t>& dropped_cache_ids, bool& defined_names_changed);
+                                 bool& defined_names_changed);
 
 /// Remaps valid `<workbookView>` `activeTab` / `firstSheet` indices in the raw
 /// `<bookViews>` fragment. Each entry in `old_to_new` maps one pre-mutation

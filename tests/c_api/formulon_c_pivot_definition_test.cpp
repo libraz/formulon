@@ -168,6 +168,7 @@ TEST(FormulonCApiPivot, ReadBackSurvivesSaveAndReload) {
   std::uint32_t cache_id = 0;
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
+  FillScratchSource(wb.handle);
   ASSERT_EQ(SetGrandTotals(wb.handle, pivot_index, 1, 0), 0);
   ASSERT_EQ(SetPivotFieldItemVisible(wb.handle, 0, pivot_index, 0, 1, 0), 0);
 
@@ -625,6 +626,7 @@ TEST(FormulonCApiPivot, LoadedStyleInfoKeepsSchemaOrderBetweenFormatsAndExtLst) 
   std::uint32_t cache_id = 0;
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(source.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
+  FillScratchSource(source.handle);
 
   WorkbookGuard loaded;
   LoadWithPivotTail(source.handle,

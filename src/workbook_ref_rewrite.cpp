@@ -150,9 +150,8 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
                                      std::vector<TableMetadata>& tables,
                                      std::vector<std::unique_ptr<pivot::PivotCache>>& pivot_caches,
                                      std::string_view direct_sheet_old, std::string_view direct_sheet_new,
-                                     std::string_view removed_sheet_name, std::vector<std::uint32_t>& dropped_cache_ids,
+                                     std::string_view removed_sheet_name,
                                      const parser::RefTransform& unowned_transform) {
-  dropped_cache_ids.clear();
   if (per_sheet.empty()) {
     // No transform to apply at all. A short `per_sheet` is instead absorbed
     // per sheet below: degrading one sheet to the first slot keeps the rest
@@ -239,7 +238,8 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
   }
 
   for (std::unique_ptr<pivot::PivotCache>& cache : pivot_caches) {
-    if (cache == nullptr) {
+    // A deleted sheet leaves every cache source as written; its refresh then fails.
+    if (cache == nullptr || !removed_sheet_name.empty()) {
       continue;
     }
     pivot::WorksheetSource& source = cache->mutable_worksheet_source();
@@ -254,11 +254,6 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
     if (ref_result.changed) {
       source.ref = std::move(ref_result.text);
     }
-    if (!removed_sheet_name.empty() && source.present &&
-        ((owner_sheet != Workbook::kNoSheet && owner_sheet == detail::find_sheet_index(sheets, removed_sheet_name)) ||
-         ref_result.changed)) {
-      dropped_cache_ids.push_back(cache->cache_id());
-    }
   }
 }
 
@@ -268,7 +263,7 @@ void rewrite_workbook_references(std::vector<Sheet>& sheets, std::vector<Defined
                                  const parser::RefTransform& transform,
                                  const eval::RecalcEngine::LockedMutator& mutator, std::string_view direct_sheet_old,
                                  std::string_view direct_sheet_new, std::string_view removed_sheet_name,
-                                 std::vector<std::uint32_t>& dropped_cache_ids, bool& defined_names_changed) {
+                                 bool& defined_names_changed) {
   defined_names_changed = false;
 
   struct CellUpdate {
@@ -310,7 +305,7 @@ void rewrite_workbook_references(std::vector<Sheet>& sheets, std::vector<Defined
   const std::vector<const parser::RefTransform*> uniform(sheets.size(), &transform);
   defined_names_changed = rewrite_defined_names(defined_names, uniform, transform);
   rewrite_sheet_metadata_formulas(sheets, uniform, tables, pivot_caches, direct_sheet_old, direct_sheet_new,
-                                  removed_sheet_name, dropped_cache_ids, transform);
+                                  removed_sheet_name, transform);
 }
 
 bool rewrite_defined_names(std::vector<DefinedName>& names, const std::vector<const parser::RefTransform*>& per_sheet,

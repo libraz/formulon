@@ -544,6 +544,39 @@ Expected<NumericGroupState, Error> resolve_numeric_group(const PivotCache& cache
   return state;
 }
 
+std::vector<std::string> date_range_group_labels(GroupBy period, std::uint32_t interval, double start, double end,
+                                                 bool date1904, ExcelProfile profile) {
+  const std::string_view short_date = localized_builtin_num_fmt(14U, profile);
+  const auto date_text = [&](double serial) {
+    return text_format::format_value_for_display(Value::number(std::floor(serial)), short_date, date1904, profile).text;
+  };
+  std::vector<std::string> labels;
+  labels.push_back(date_group_before_label(date_text(start)));
+  const double start_day = std::floor(start);
+  const double end_day = std::floor(end);
+  if (period == GroupBy::Days && interval > 1U) {
+    for (double first = start_day; first <= end_day; first += static_cast<double>(interval)) {
+      const double last = std::min(first + static_cast<double>(interval) - 1.0, end_day);
+      labels.push_back(date_group_interval_label(date_text(first), date_text(last)));
+    }
+  } else if (period == GroupBy::Years) {
+    const int last_year = ymd_of_day(end_day, date1904).y;
+    for (int year = ymd_of_day(start_day, date1904).y; year <= last_year; ++year) {
+      labels.push_back(date_group_year_label(year, profile));
+    }
+  } else {
+    for (unsigned index = 0;; ++index) {
+      std::string label = date_group_unit_label(period, index, profile);
+      if (label.empty()) {
+        break;
+      }
+      labels.push_back(std::move(label));
+    }
+  }
+  labels.push_back(date_group_after_label(date_text(end)));
+  return labels;
+}
+
 }  // namespace detail
 
 namespace {
@@ -577,34 +610,8 @@ PivotCacheField range_group_field(PivotCache& cache, std::size_t base, GroupBy p
   const std::uint32_t interval = period == GroupBy::Days ? spec.interval_days : 1U;
   group.range.interval = static_cast<double>(interval);
 
-  const std::string_view short_date = localized_builtin_num_fmt(14U, profile);
-  const auto date_text = [&](double serial) {
-    return text_format::format_value_for_display(Value::number(std::floor(serial)), short_date, date1904, profile).text;
-  };
-  std::vector<std::string> labels;
-  labels.push_back(date_group_before_label(date_text(bounds.start)));
-  const double start_day = std::floor(bounds.start);
-  const double end_day = std::floor(bounds.end);
-  if (period == GroupBy::Days && interval > 1U) {
-    for (double first = start_day; first <= end_day; first += static_cast<double>(interval)) {
-      const double last = std::min(first + static_cast<double>(interval) - 1.0, end_day);
-      labels.push_back(date_group_interval_label(date_text(first), date_text(last)));
-    }
-  } else if (period == GroupBy::Years) {
-    const int last_year = ymd_of_day(end_day, date1904).y;
-    for (int year = ymd_of_day(start_day, date1904).y; year <= last_year; ++year) {
-      labels.push_back(date_group_year_label(year, profile));
-    }
-  } else {
-    for (unsigned index = 0;; ++index) {
-      std::string label = date_group_unit_label(period, index, profile);
-      if (label.empty()) {
-        break;
-      }
-      labels.push_back(std::move(label));
-    }
-  }
-  labels.push_back(date_group_after_label(date_text(bounds.end)));
+  std::vector<std::string> labels =
+      detail::date_range_group_labels(period, interval, bounds.start, bounds.end, date1904, profile);
   group.group_items.reserve(labels.size());
   for (std::string& label : labels) {
     group.group_items.push_back(cache_text(cache, std::move(label)));

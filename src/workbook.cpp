@@ -409,6 +409,7 @@ bool Workbook::has_dirty_cells() const {
 }
 
 Expected<eval::RecalcStats, Error> Workbook::recalc(const eval::FunctionRegistry& registry) {
+  settle_pivot_refresh_on_load(registry);
   // A write that dirtied only a data table's header or input cell evaluates nothing, yet changes the table.
   const bool had_dirty = has_dirty_cells();
   const std::size_t blocked = count_blocked_pivots(sheets_);
@@ -429,6 +430,7 @@ Expected<eval::RecalcStats, Error> Workbook::recalc(const eval::FunctionRegistry
 }
 
 Expected<void, Error> Workbook::ensure_calculated(const eval::FunctionRegistry& registry) {
+  settle_pivot_refresh_on_load(registry);
   if (calc_mode_ == CalcMode::kManual) {
     return {};
   }
@@ -445,6 +447,7 @@ Expected<void, Error> Workbook::ensure_calculated(const eval::FunctionRegistry& 
 
 Expected<void, Error> Workbook::recalc_parallel(const eval::FunctionRegistry& registry,
                                                 const eval::SchedulerConfig& cfg, eval::SchedulerStats* stats) {
+  settle_pivot_refresh_on_load(registry);
   eval::SchedulerStats local_stats;
   eval::SchedulerStats& pass_stats = stats != nullptr ? *stats : local_stats;
   const bool had_dirty = has_dirty_cells();

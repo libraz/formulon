@@ -68,7 +68,10 @@ std::vector<std::uint8_t> BuildFilterPackage(std::string_view region_field_attrs
       "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
       "<pivotCacheDefinition xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
       "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" r:id=\"rId1\" "
-      "recordCount=\"4\"><cacheSource type=\"worksheet\"><worksheetSource ref=\"A1:C5\" sheet=\"Sheet1\"/>"
+      // Excel's own root attributes: the records stand as written, and a reload does not refresh them.
+      "refreshedBy=\"Author\" refreshedDate=\"45400\" createdVersion=\"8\" refreshedVersion=\"8\" "
+      "minRefreshableVersion=\"3\" recordCount=\"4\"><cacheSource type=\"worksheet\">"
+      "<worksheetSource ref=\"A1:C5\" sheet=\"Sheet1\"/>"
       "</cacheSource><cacheFields count=\"3\">"
       "<cacheField name=\"Region\"><sharedItems count=\"3\"><s v=\"North\"/><s v=\"South\"/><s v=\"East\"/>"
       "</sharedItems></cacheField>"
@@ -243,6 +246,7 @@ TEST(FormulonCApiPivotFilterPersistence, ScratchPivotFilterSurvivesSaveAndReload
   std::uint32_t cache_id = 0;
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
+  FillScratchSource(wb.handle);
   const fm_pivot_filter_t spec = TextSpec(FM_PIVOT_FILTER_KIND_LABEL_BEGINS_WITH, 0U, "N");
   ASSERT_EQ(fm_sheet_add_pivot_filter(wb.handle, 0, pivot_index, &spec, ignored_index()), 0)
       << fm_get_last_error_message();
@@ -327,6 +331,7 @@ TEST(FormulonCApiPivotFilterPersistence, SubtotalFunctionsReadBack) {
   std::uint32_t cache_id = 0;
   std::size_t pivot_index = 0;
   ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, &pivot_index), 0) << fm_get_last_error_message();
+  FillScratchSource(wb.handle);
   fm_pivot_field_info_t info = FM_STRUCT_INIT(fm_pivot_field_info_t);
   ASSERT_EQ(fm_sheet_get_pivot_field_at(wb.handle, 0, pivot_index, 0, &info), 0);
   EXPECT_EQ(info.default_subtotal, 1);

@@ -10,6 +10,7 @@
 // definitions in and projects each report, blocking one whose new range is
 // occupied.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -165,6 +166,27 @@ bool on_axis(pivot::PivotAxis axis) {
 }
 
 }  // namespace
+
+void Workbook::request_pivot_refresh_on_load() noexcept {
+  pivot_refresh_on_load_pending_ = std::any_of(pivot_caches_.begin(), pivot_caches_.end(), [](const auto& cache) {
+    return cache != nullptr && cache->refresh_on_load();
+  });
+}
+
+void Workbook::refresh_pivot_caches_pending_on_load(const eval::FunctionRegistry& registry) {
+  // Cleared first: the refresh itself enters ensure_calculated.
+  pivot_refresh_on_load_pending_ = false;
+  std::vector<std::uint32_t> cache_ids;
+  for (const auto& cache : pivot_caches_) {
+    if (cache != nullptr && cache->refresh_on_load()) {
+      cache_ids.push_back(cache->cache_id());
+    }
+  }
+  for (const std::uint32_t cache_id : cache_ids) {
+    // A failed refresh leaves the cache as stored, as Excel still opens the file.
+    (void)refresh_pivot_cache(cache_id, registry);
+  }
+}
 
 Expected<void, Error> Workbook::refresh_pivot_cache(std::uint32_t cache_id, const eval::FunctionRegistry& registry) {
   std::size_t slot = pivot_caches_.size();

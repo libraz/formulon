@@ -541,7 +541,7 @@ TEST(WorkbookSheetOps, RemoveAdjustsThreeDBeginMiddleEndAndReverseSpans) {
   run(2, "=SUM(Feb:Jan!A1)", 3.0, "=SUM(Mar:Jan!A1)");
 }
 
-TEST(WorkbookSheetOps, RemoveTransformsAllFormulaMetadataAndDropsDanglingPivotState) {
+TEST(WorkbookSheetOps, RemoveTransformsAllFormulaMetadataAndKeepsPivotState) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Drop");
   wb.add_sheet("Survivor");
@@ -614,21 +614,23 @@ TEST(WorkbookSheetOps, RemoveTransformsAllFormulaMetadataAndDropsDanglingPivotSt
   EXPECT_EQ(wb.tables()[0].sheet_index, 0U);
   EXPECT_EQ(wb.tables()[0].columns[0].calculated_column_formula, "#REF!A1");
   EXPECT_EQ(wb.defined_names()[0].formula, "#REF!A1");
-  ASSERT_EQ(wb.pivot_caches().size(), 1U);
-  EXPECT_EQ(wb.pivot_caches()[0]->cache_id(), 12U);
-  ASSERT_EQ(wb.sheet(0).pivot_tables().size(), 1U);
-  EXPECT_EQ(wb.sheet(0).pivot_tables()[0]->pivot_cache_id(), 12U);
+  // Excel keeps every pivot and cache; the lost source stays as written.
+  ASSERT_EQ(wb.pivot_caches().size(), 2U);
+  EXPECT_EQ(wb.pivot_caches()[0]->cache_id(), 11U);
+  EXPECT_EQ(wb.pivot_caches()[0]->worksheet_source().sheet, "Drop");
+  EXPECT_EQ(wb.pivot_caches()[0]->worksheet_source().ref, "$A$1:$B$2");
+  EXPECT_EQ(wb.pivot_caches()[1]->cache_id(), 12U);
+  ASSERT_EQ(wb.sheet(0).pivot_tables().size(), 2U);
+  EXPECT_EQ(wb.sheet(0).pivot_tables()[0]->pivot_cache_id(), 11U);
+  EXPECT_EQ(wb.sheet(0).pivot_tables()[1]->pivot_cache_id(), 12U);
 
-  // Re-adding the removed display name must not rebind any surviving holder
-  // or resurrect the dropped cache/pivot relationship.
+  // Re-adding the removed display name must not rebind any surviving holder.
   wb.add_sheet("Drop");
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(1U, 0U, 0U, Value::number(99.0))));
   EXPECT_EQ(wb.tables()[0].columns[0].calculated_column_formula, "#REF!A1");
   EXPECT_EQ(wb.defined_names()[0].formula, "#REF!A1");
-  ASSERT_EQ(wb.pivot_caches().size(), 1U);
-  EXPECT_EQ(wb.pivot_caches()[0]->cache_id(), 12U);
-  ASSERT_EQ(wb.sheet(0).pivot_tables().size(), 1U);
-  EXPECT_EQ(wb.sheet(0).pivot_tables()[0]->pivot_cache_id(), 12U);
+  ASSERT_EQ(wb.pivot_caches().size(), 2U);
+  ASSERT_EQ(wb.sheet(0).pivot_tables().size(), 2U);
 }
 
 TEST(WorkbookSheetOps, RenameDoesNotClearUnrelatedCommittedSpill) {

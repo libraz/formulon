@@ -196,6 +196,17 @@ test('staged constant tables carry the ordinals the staged .d.ts declares', asyn
 // `delete` is embind's auto-added finaliser; the caller must call it.
 function makePivotWorkbook(Workbook) {
   const wb = Workbook.createDefault();
+  const rows = [
+    ['Region', 'Amount'],
+    ['East', 10],
+    ['West', 30],
+  ];
+  // A loaded cache is refreshed from its source, so the source holds the records.
+  rows.forEach(([text, value], r) => {
+    wb.sheet(0).setText(r, 0, text);
+    if (typeof value === 'number') wb.sheet(0).setNumber(r, 1, value);
+    else wb.sheet(0).setText(r, 1, value);
+  });
   const cache = wb.addPivotCache();
   const cacheId = cache.cacheId;
   // A cache without a worksheet source cannot be saved, so the fixture

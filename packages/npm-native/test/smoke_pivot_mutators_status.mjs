@@ -21,6 +21,20 @@ function buildPivot(mod) {
   const { cacheId } = cache;
   wb.pivotCache(cacheId).setWorksheetSource({ range: 'A1:D5', sheet: 'Sheet1' });
   for (const name of ['Region', 'Product', 'Amount', 'Date']) wb.pivotCache(cacheId).addField(name);
+  // The source holds the records, so a reload's refresh reads the same cache.
+  const sourceRows = [
+    ['Region', 'Product', 'Amount', 'Date'],
+    ['East', 'Apple', 10, 45292],
+    ['West', 'Apple', 30, 45323],
+    ['East', 'Pear', 5, 45658],
+    ['West', 'Pear', 7, 45689],
+  ];
+  for (const [r, row] of sourceRows.entries()) {
+    for (const [c, v] of row.entries()) {
+      if (typeof v === 'number') wb.sheet(0).setNumber(r, c, v);
+      else wb.sheet(0).setText(r, c, v);
+    }
+  }
   for (const item of ['East', 'West']) wb.pivotCache(cacheId).addFieldSharedItem(0, item);
   for (const item of ['Apple', 'Pear']) wb.pivotCache(cacheId).addFieldSharedItem(1, item);
   for (const values of [

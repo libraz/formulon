@@ -156,6 +156,19 @@ template <typename Enum>
   return false;
 }
 
+// Writes `BuildScratchPivot`'s records into its declared source, Sheet1!A1:B5, so a refresh
+// (a reload's included) reads the same cache.
+[[maybe_unused]] inline void FillScratchSource(fm_workbook_t* wb) {
+  ASSERT_EQ(fm_sheet_set_text(wb, 0U, 0U, 0U, "Region"), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb, 0U, 0U, 1U, "Amount"), 0);
+  const char* const regions[] = {"North", "South", "North", "South"};
+  const double amounts[] = {100.0, 200.0, 300.0, 400.0};
+  for (std::uint32_t i = 0; i < 4U; ++i) {
+    ASSERT_EQ(fm_sheet_set_text(wb, 0U, i + 1U, 0U, regions[i]), 0);
+    ASSERT_EQ(fm_sheet_set_number(wb, 0U, i + 1U, 1U, amounts[i]), 0);
+  }
+}
+
 // Builds a pivot cache + table from scratch via the C ABI:
 //   * 2 fields: "Region" (text) and "Amount" (numeric).
 //   * 4 records: (North, 100), (South, 200), (North, 300), (South, 400).
@@ -169,9 +182,8 @@ template <typename Enum>
     return st;
   }
   // Excel refuses a package whose cache declares no source, so a cache
-  // that is going to be saved needs one. The range only has to describe
-  // where the records came from; it is not required to hold data, since
-  // the records themselves carry the values.
+  // that is going to be saved needs one. The cells stay empty unless
+  // `FillScratchSource` fills them: a reload refreshes from them.
   st = SetPivotCacheWorksheetSource(wb, cache_id, /*present=*/1, "A1:B5", "Sheet1", nullptr);
   if (st != 0) {
     return st;
@@ -265,6 +277,22 @@ template <typename Enum>
     *out_pivot_index = pivot_index;
   }
   return 0;
+}
+
+// `BuildScratchPivot` saved and loaded again, so its table starts layout-clean: Region (row field,
+// items North and South) and Amount summed as "Sum of Amount". The cache is refreshed from its
+// source before the save, as a book Excel saved is, so the reload has no refresh to run.
+[[maybe_unused]] inline void LoadScratchPivot(WorkbookGuard& out) {
+  WorkbookGuard built;
+  ASSERT_EQ(fm_workbook_create_default(&built.handle), 0);
+  std::uint32_t cache_id = 0;
+  ASSERT_EQ(BuildScratchPivot(built.handle, &cache_id, nullptr), 0) << fm_get_last_error_message();
+  FillScratchSource(built.handle);
+  ASSERT_EQ(fm_workbook_refresh_pivot_cache(built.handle, cache_id), 0) << fm_get_last_error_message();
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(built.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
+      << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &out.handle), 0) << fm_get_last_error_message();
 }
 
 }  // namespace

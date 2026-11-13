@@ -261,7 +261,8 @@ test('identity 5: deleting the rows of a pivot report orphans it and no other pi
   });
 });
 
-test('identity 6: removing a source sheet orphans the pivots and the cache that read it', async () => {
+// Excel keeps every pivot and cache when a source sheet goes; only the refresh fails.
+test('identity 6: removing a source sheet keeps the pivots and the cache that read it', async () => {
   await withWorkbook((wb, f) => {
     const out = wb.sheet(0);
     const dataA = wb.addSheet('DataA');
@@ -273,13 +274,13 @@ test('identity 6: removing a source sheet orphans the pivots and the cache that 
     const { pivot: pa } = addPivot(f, out, cacheA, 'PA', 0, 0);
     const { pivot: pb } = addPivot(f, out, cacheB, 'PB', 20, 0);
     wb.removeSheet(dataA);
-    expectCode(() => pa.getProperties(), f.StatusCode.NotFound);
-    expectCode(() => cacheA.getOptions(), f.StatusCode.NotFound);
+    assert.equal(pa.getProperties().name, 'PA');
+    assert.equal(pa.cache(), cacheA);
+    expectCode(() => cacheA.refresh(), f.StatusCode.PreconditionFailed);
     assert.equal(pb.getProperties().name, 'PB');
     assert.equal(pb.cache(), cacheB);
     assert.equal(cacheB.getWorksheetSource().range.sheet, dataB.index);
-    assert.equal(out.listPivots().length, 1);
-    assert.equal(out.listPivots()[0], pb);
+    assert.deepEqual(out.listPivots(), [pa, pb]);
   });
 });
 

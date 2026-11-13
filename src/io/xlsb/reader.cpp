@@ -999,6 +999,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
 
   wb.apply_legacy_implicit_intersections();
   clamp_sheet_phonetic_fonts(wb);
+  wb.request_pivot_refresh_on_load();
 
   XlsbReadResult result{std::move(wb),
                         cells_read,

@@ -43,9 +43,19 @@ void BuildHostPivot(fm_workbook_t* wb) {
   ASSERT_EQ(fm_workbook_add_pivot_cache(wb, 0, &cache_id), 0) << fm_get_last_error_message();
   ASSERT_EQ(SetPivotCacheWorksheetSource(wb, cache_id, 1, "A1:D9", "Sheet1", nullptr), 0);
   const char* const headers[] = {"Region", "Product", "Qty", "Amt"};
-  for (const char* header : headers) {
+  for (std::uint32_t c = 0; c < 4U; ++c) {
     std::size_t idx = 99;
-    ASSERT_EQ(fm_workbook_add_pivot_cache_field(wb, cache_id, header, &idx), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_workbook_add_pivot_cache_field(wb, cache_id, headers[c], &idx), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_sheet_set_text(wb, 0U, 0U, c, headers[c]), 0);
+  }
+  // The source holds the records, so a reload's refresh reads the same cache.
+  for (std::uint32_t r = 0; r < 8U; ++r) {
+    if (kRows[r].region != nullptr) {
+      ASSERT_EQ(fm_sheet_set_text(wb, 0U, r + 1U, 0U, kRows[r].region), 0);
+    }
+    ASSERT_EQ(fm_sheet_set_text(wb, 0U, r + 1U, 1U, kRows[r].product), 0);
+    ASSERT_EQ(fm_sheet_set_number(wb, 0U, r + 1U, 2U, kRows[r].qty), 0);
+    ASSERT_EQ(fm_sheet_set_number(wb, 0U, r + 1U, 3U, kRows[r].amt), 0);
   }
   for (const SourceRow& row : kRows) {
     std::size_t record = 99;
@@ -207,6 +217,7 @@ void ExpectSheetText(fm_workbook_t* wb, std::uint32_t row, std::uint32_t col, co
 void BuildScratch(WorkbookGuard& wb, std::uint32_t* cache_id = nullptr) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(BuildScratchPivot(wb.handle, cache_id, nullptr), 0) << fm_get_last_error_message();
+  FillScratchSource(wb.handle);
 }
 
 std::int32_t Pending(const fm_workbook_t* wb) {
@@ -439,6 +450,8 @@ TEST(FormulonCApiPivotSaveShape, ProjectingAPivotWithoutRecordsWritesNothing) {
   options.save_data_op = FM_PATCH_OP_SET;
   options.save_data = 0;
   ASSERT_EQ(fm_workbook_update_pivot_cache_options(wb.handle, cache_id, &options), 0) << fm_get_last_error_message();
+  // A source that does not resolve refuses the reload's refresh, so the cache stays without records.
+  ASSERT_EQ(SetPivotCacheWorksheetSource(wb.handle, cache_id, /*present=*/1, "A1:B5", "NoSuchSheet", nullptr), 0);
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
       << fm_get_last_error_message();

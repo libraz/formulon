@@ -38,14 +38,7 @@ struct RefreshFixture {
   void Build() {
     ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
     ASSERT_EQ(BuildScratchPivot(wb.handle, &cache_id, nullptr), 0) << fm_get_last_error_message();
-    ASSERT_EQ(fm_sheet_set_text(wb.handle, 0U, 0U, 0U, "Region"), 0);
-    ASSERT_EQ(fm_sheet_set_text(wb.handle, 0U, 0U, 1U, "Amount"), 0);
-    const char* const regions[] = {"North", "South", "North", "South"};
-    const double amounts[] = {100.0, 200.0, 300.0, 400.0};
-    for (std::uint32_t i = 0; i < 4U; ++i) {
-      ASSERT_EQ(fm_sheet_set_text(wb.handle, 0U, i + 1U, 0U, regions[i]), 0);
-      ASSERT_EQ(fm_sheet_set_number(wb.handle, 0U, i + 1U, 1U, amounts[i]), 0);
-    }
+    FillScratchSource(wb.handle);
     ASSERT_EQ(fm_sheet_project_pivot(wb.handle, 0U, 0U), 0) << fm_get_last_error_message();
   }
 
@@ -177,6 +170,81 @@ TEST(CApiPivotRefresh, ASourceOverTheRecordCellLimitIsRefused) {
       ExpectResourceLimit(fm_workbook_refresh_pivot_cache(f.wb.handle, f.cache_id), "pivot_cache_record_cells");
   EXPECT_NE(context.find(" limit=33554432"), std::string::npos) << context;
   EXPECT_EQ(f.SharedItemCount(kRegionField), 2U);
+}
+
+// --- Refresh on load ---------------------------------------------------------
+// A cache built in memory is saved with refreshOnLoad, so the reloaded book refreshes it from the
+// source before anything else reads or writes it, as an Excel open does.
+
+std::vector<std::uint8_t> SaveAs(fm_workbook_t* wb, fm_workbook_format_t format) {
+  BufferGuard saved;
+  EXPECT_EQ(fm_workbook_save(wb, format, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+  return std::vector<std::uint8_t>(saved.data, saved.data + saved.len);
+}
+
+void Load(const std::vector<std::uint8_t>& bytes, WorkbookGuard& out) {
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &out.handle), 0) << fm_get_last_error_message();
+}
+
+double RecordNumber(const fm_workbook_t* wb, std::uint32_t cache_id, std::size_t record, std::size_t field) {
+  fm_value_t v{};
+  EXPECT_EQ(fm_workbook_get_pivot_cache_record_value(wb, cache_id, record, field, &v), 0)
+      << fm_get_last_error_message();
+  return v.kind == FM_VALUE_KIND_NUMBER ? v.u.number : std::numeric_limits<double>::quiet_NaN();
+}
+
+TEST(CApiPivotRefreshOnLoad, AnEditBeforeTheFirstEvaluationIsKept) {
+  RefreshFixture f;
+  f.Build();
+  WorkbookGuard loaded;
+  Load(SaveAs(f.wb.handle, FM_WORKBOOK_FORMAT_XLSX), loaded);
+  std::size_t record = 99;
+  ASSERT_EQ(fm_workbook_add_pivot_cache_record(loaded.handle, f.cache_id, &record), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(loaded.handle, f.cache_id, record, kRegionField, 0.0), 0);
+  ASSERT_EQ(fm_workbook_set_pivot_cache_record_number(loaded.handle, f.cache_id, record, kAmountField, 7.0), 0);
+  PivotCellsGuard layout;
+  ASSERT_EQ(fm_sheet_get_pivot_layout(loaded.handle, 0, 0, &layout.handle), 0) << fm_get_last_error_message();
+  std::size_t records = 0;
+  ASSERT_EQ(fm_workbook_get_pivot_cache_record_count(loaded.handle, f.cache_id, &records), 0);
+  EXPECT_EQ(records, 5U);
+  EXPECT_EQ(RecordNumber(loaded.handle, f.cache_id, 4U, kAmountField), 7.0);
+}
+
+TEST(CApiPivotRefreshOnLoad, TheProfileSetAfterTheLoadNamesBlankHeaders) {
+  RefreshFixture f;
+  f.Build();
+  // A third source column with a blank header joins the cache as a field the profile names.
+  for (std::uint32_t r = 1U; r < 5U; ++r) {
+    ASSERT_EQ(fm_sheet_set_number(f.wb.handle, 0U, r, 2U, 1.0), 0);
+  }
+  ASSERT_EQ(SetPivotCacheWorksheetSource(f.wb.handle, f.cache_id, /*present=*/1, "A1:C5", "Sheet1", nullptr), 0);
+  const std::vector<std::uint8_t> saved = SaveAs(f.wb.handle, FM_WORKBOOK_FORMAT_XLSX);
+  for (const auto& [profile, word] : {std::pair<const char*, const char*>{"win-365-ja_JP", "フィールド3"},
+                                      std::pair<const char*, const char*>{"win-365-de_DE", "Feld3"}}) {
+    SCOPED_TRACE(profile);
+    WorkbookGuard loaded;
+    Load(saved, loaded);
+    ASSERT_EQ(fm_workbook_set_profile_id(loaded.handle, profile), 0);
+    std::size_t fields = 0;
+    ASSERT_EQ(fm_workbook_get_pivot_cache_field_count(loaded.handle, f.cache_id, &fields), 0);
+    ASSERT_EQ(fields, 3U);
+    const char* name = nullptr;
+    ASSERT_EQ(fm_workbook_get_pivot_cache_field_name(loaded.handle, f.cache_id, 2U, &name), 0);
+    EXPECT_STREQ(name, word);
+  }
+}
+
+TEST(CApiPivotRefreshOnLoad, ASaveWithNoEvaluationWritesTheRefreshedRecords) {
+  RefreshFixture f;
+  f.Build();
+  // The stored records keep 100; the source says 1000.
+  ASSERT_EQ(fm_sheet_set_number(f.wb.handle, 0U, 1U, 1U, 1000.0), 0);
+  WorkbookGuard loaded;
+  Load(SaveAs(f.wb.handle, FM_WORKBOOK_FORMAT_XLSX), loaded);
+  const std::vector<std::uint8_t> xlsx = SaveAs(loaded.handle, FM_WORKBOOK_FORMAT_XLSX);
+  const std::string records = ExtractZipEntry(xlsx, "xl/pivotCache/pivotCacheRecords1.xml");
+  EXPECT_NE(records.find("<n v=\"1000\"/>"), std::string::npos) << records;
+  EXPECT_EQ(records.find("<n v=\"100\"/>"), std::string::npos) << records;
 }
 
 TEST(CApiPivotCacheFieldTypes, ReadsDerivedFlagsOfAWorkbookBuiltCache) {

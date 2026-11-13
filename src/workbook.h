@@ -1576,6 +1576,23 @@ class Workbook {
   ///   * an evaluation error of `ensure_calculated` or of a pivot.
   Expected<void, Error> refresh_pivot_cache(std::uint32_t cache_id, const eval::FunctionRegistry& registry);
 
+  /// Called by the readers once a package is loaded. When a cache is marked
+  /// refreshOnLoad, every such cache is refreshed at the first
+  /// `settle_pivot_refresh_on_load`, `recalc`, `recalc_parallel` or
+  /// `ensure_calculated`, under the profile in force then and before any
+  /// formula is evaluated, as Excel refreshes it on open. A cache whose
+  /// refresh fails keeps the records the file stored.
+  void request_pivot_refresh_on_load() noexcept;
+
+  /// Runs the refresh `request_pivot_refresh_on_load` scheduled, once; a
+  /// no-op otherwise. The bindings call it before the first access after a
+  /// load other than setting the profile.
+  void settle_pivot_refresh_on_load(const eval::FunctionRegistry& registry) {
+    if (pivot_refresh_on_load_pending_) {
+      refresh_pivot_caches_pending_on_load(registry);
+    }
+  }
+
   /// Returns the OOXML workbook variant this instance round-trips as.
   /// Defaults to `WorkbookKind::kXlsx`; the reader updates it from the
   /// workbook part's content type, and the writer consults it when
@@ -2063,6 +2080,8 @@ class Workbook {
   bool has_data_tables() const;
   // The data-table step of `recalc()` / `recalc_parallel()`.
   Expected<void, Error> recalc_data_tables_after_pass(bool evaluated_any, const eval::FunctionRegistry& registry);
+  // `settle_pivot_refresh_on_load` once a refresh is pending.
+  void refresh_pivot_caches_pending_on_load(const eval::FunctionRegistry& registry);
   Expected<void, Error> compute_data_tables(const eval::FunctionRegistry& registry);
 
   // `project_pivot`'s blocked state under `kBlock`: clears the report's cells and merges, leaves `#SPILL!` in the
@@ -2139,6 +2158,7 @@ class Workbook {
   // 1904 date system flag parsed from `<workbookPr date1904>`. Default
   // false (1900 system).
   bool date1904_ = false;
+  bool pivot_refresh_on_load_pending_ = false;
   // Most callers receive parts from a reader that already sorted them by
   // package path. Keep that fact across the move-only workbook operations so
   // the common insertion path can use one lower-bound search instead of

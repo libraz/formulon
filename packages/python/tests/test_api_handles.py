@@ -253,7 +253,8 @@ class IdentityTests(HandleTestCase):
             self.assertIs(ws.list_pivots()[0], p2)
             self.assertIs(ws.pivot("P2"), p2)
 
-    def test_6_removing_a_source_sheet_orphans_the_pivots_and_the_cache_that_read_it(self) -> None:
+    def test_6_removing_a_source_sheet_keeps_the_pivots_and_the_cache_that_read_it(self) -> None:
+        # Excel keeps every pivot and cache when a source sheet goes; only the refresh fails.
         with Workbook.create_default() as wb:
             out = wb.sheet(0)
             data_a = wb.add_sheet("DataA")
@@ -265,13 +266,13 @@ class IdentityTests(HandleTestCase):
             pa, _ = add_pivot(out, cache_a, "PA", 0, 0)
             pb, _ = add_pivot(out, cache_b, "PB", 20, 0)
             wb.remove_sheet(data_a)
-            self.assertCode(NotFoundError, pa.get_properties, StatusCode.NOT_FOUND)
-            self.assertCode(NotFoundError, cache_a.get_options, StatusCode.NOT_FOUND)
+            self.assertEqual(pa.get_properties().name, "PA")
+            self.assertIs(pa.cache(), cache_a)
+            self.assertCode(FormulonError, cache_a.refresh, StatusCode.PRECONDITION_FAILED)
             self.assertEqual(pb.get_properties().name, "PB")
             self.assertIs(pb.cache(), cache_b)
             self.assertEqual(cache_b.get_worksheet_source().range.sheet, data_b.index)
-            self.assertEqual(len(out.list_pivots()), 1)
-            self.assertIs(out.list_pivots()[0], pb)
+            self.assertEqual(out.list_pivots(), [pa, pb])
 
     def test_7_copy_sheet_keeps_the_existing_handles_and_a_sheet_with_a_slicer_is_not_copied(self) -> None:
         with Workbook.create_default() as wb:
