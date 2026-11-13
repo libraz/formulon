@@ -14,6 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A font patch that names a different face (`updateCellFormat` / Python `update_cell_format`,
+  `font.name`) without stating `scheme` now also sets `scheme` to `None`, as Excel does when the
+  font name changes. A font linked to the theme is drawn with the theme's face whatever name it
+  stores, so the renamed font kept the old face under a Mac profile. A size-only or same-name
+  patch keeps the link, and a stated `scheme` wins. `charset` is kept unless stated: Excel
+  derives it from the new face. The record setters (`setDefaultFont`, `ooxml.setFont`,
+  `ooxml.addFont` and their C and Python equivalents) are unchanged and write exactly the record
+  they are given.
+
 - Opening `.xlsx` and `.xlsb` merges conditional-format rules the way Excel does
   on open. Two rules combine into one when they match in type, operator,
   stop-if-true, formula and differential-format content, with formulas compared

@@ -193,6 +193,24 @@ TEST(FormulonCApiStyles, FontSchemeSurvivesAReadModifyWriteThroughTheAbi) {
   EXPECT_GT(unlinked_index, 0U);
 }
 
+// A record setter writes exactly the record: a font named without a scheme is not linked to the theme, whatever
+// scheme the font it replaces had.
+TEST(FormulonCApiStyles, RecordSettersWriteTheSchemeTheRecordStates) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_for_profile("mac-365-ja_JP", &wb.handle), 0);
+  fm_font_t before{};
+  ASSERT_EQ(fm_workbook_get_font_at(wb.handle, 0, &before), 0);
+  ASSERT_EQ(before.scheme, 2);
+
+  fm_font_t named{};
+  named.name = "Arial";
+  ASSERT_EQ(fm_workbook_set_default_font(wb.handle, &named), 0);
+  fm_font_t after{};
+  ASSERT_EQ(fm_workbook_get_font_at(wb.handle, 0, &after), 0);
+  EXPECT_STREQ(after.name, "Arial");
+  EXPECT_EQ(after.scheme, 0);
+}
+
 TEST(FormulonCApiStyles, CreateForProfileSeedsTheLocaleDefaults) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_for_profile("mac-365-ja_JP", &wb.handle), 0);

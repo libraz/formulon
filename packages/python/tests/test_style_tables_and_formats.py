@@ -137,6 +137,32 @@ class TableStyleDefaultsTests(_Base):
         self.assertEqual((defaults.table_style_name, defaults.pivot_style_name), ("TableStyleLight1", None))
 
 
+class FontPatchSchemeTests(_Base):
+    """A patch naming a different face unlinks the font from the theme; size-only and same-name patches keep the link."""
+
+    def _cell_font(self):
+        return self.ws.get_cell_format("B2").font
+
+    def test_a_new_name_without_scheme_unlinks_from_the_theme(self) -> None:
+        wb = formulon.Workbook.create_for_profile("mac-365-ja_JP")
+        ws = wb.sheet(0)
+        self.assertEqual(ws.get_cell_format("B2").font.scheme, formulon.FontScheme.MINOR)
+        ws.update_cell_format("B2", font={"size_pt": 14.0})
+        self.assertEqual(ws.get_cell_format("B2").font.scheme, formulon.FontScheme.MINOR)
+        ws.update_cell_format("B2", font={"name": ws.get_cell_format("B2").font.name})
+        self.assertEqual(ws.get_cell_format("B2").font.scheme, formulon.FontScheme.MINOR)
+        ws.update_cell_format("B2", font={"name": "Arial"})
+        font = ws.get_cell_format("B2").font
+        self.assertEqual((font.name, font.scheme), ("Arial", formulon.FontScheme.NONE))
+        self.assertEqual(font.charset, 128)
+
+    def test_a_stated_scheme_wins(self) -> None:
+        wb = formulon.Workbook.create_for_profile("mac-365-ja_JP")
+        ws = wb.sheet(0)
+        ws.update_cell_format("B2", font={"name": "Arial", "scheme": formulon.FontScheme.MAJOR})
+        self.assertEqual(ws.get_cell_format("B2").font.scheme, formulon.FontScheme.MAJOR)
+
+
 class NormalFontInheritanceTests(_Base):
     def test_cleared_size_and_name_take_the_normal_font_and_cleared_colour_is_none(self) -> None:
         self.wb.set_default_font(formulon.Font(name="Arial", size_pt=14.0))

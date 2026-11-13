@@ -1276,6 +1276,16 @@ entries:
     prefer: formulon
     first_noted: 2026-11-12
     last_verified_excel_version: "16.115"
+  - id: font_patch_charset_after_face_change
+    applies_to: all
+    cause: non-identifiable
+    mode: skip-oracle
+    scope: api-contract
+    evidence: [packages/python/tests/test_style_tables_and_formats.py, packages/npm/test/api_style_tables_and_formats.test.mjs]
+    reason: "When the Normal style's font name changes, Excel sets <charset> from the new face's own character coverage: renaming a ja-JP book's 游ゴシック to Arial drops it, while メイリオ, ＭＳ Ｐゴシック and 游明朝 keep 128 (游明朝 also switches <family> to 1). The value depends on data about each face that the workbook does not carry, so a font patch that renames a face keeps the current charset unless the caller states one; the theme link (scheme) is dropped as Excel drops it."
+    prefer: formulon
+    first_noted: 2026-11-13
+    last_verified_excel_version: "16.115"
 
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect

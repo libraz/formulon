@@ -6310,8 +6310,14 @@ function checkCellFormatPatch(patch) {
   return out;
 }
 
+// Naming a different face without stating `scheme` unlinks the font from the theme, as Excel does when the font name
+// changes: a theme-linked font is drawn with the theme's face whatever name it stores. Charset is kept unless stated.
 function mergeFont(current, patch) {
-  return { ...current, ...patch };
+  const out = { ...current, ...patch };
+  if (typeof patch.name === 'string' && patch.name !== current.name && patch.scheme === undefined) {
+    out.scheme = FontScheme.None;
+  }
+  return out;
 }
 
 // Setting a colour on a fill without a pattern makes it solid, Excel's "fill

@@ -154,3 +154,26 @@ test('a cell font cleared of its size or name takes the Normal font, and of its 
     assert.equal(wb.ooxml.getFont(0).sizePt, 14);
   });
 });
+
+test('a font patch naming a different face unlinks it from the theme; size-only and same-name keep the link', async () => {
+  await withWorkbook((wb0, f) => {
+    const wb = f.Workbook.createForProfile('mac-365-ja_JP');
+    try {
+      const ws = wb.sheet(0);
+      assert.equal(ws.getCellFormat('B2').font.scheme, f.FontScheme.Minor);
+      ws.updateCellFormat('B2', { font: { sizePt: 14 } });
+      assert.equal(ws.getCellFormat('B2').font.scheme, f.FontScheme.Minor);
+      ws.updateCellFormat('B2', { font: { name: ws.getCellFormat('B2').font.name } });
+      assert.equal(ws.getCellFormat('B2').font.scheme, f.FontScheme.Minor);
+      ws.updateCellFormat('B2', { font: { name: 'Arial' } });
+      const font = ws.getCellFormat('B2').font;
+      assert.equal(font.name, 'Arial');
+      assert.equal(font.scheme, f.FontScheme.None);
+      assert.equal(font.charset, 128);
+      ws.updateCellFormat('C3', { font: { name: 'Arial', scheme: f.FontScheme.Major } });
+      assert.equal(ws.getCellFormat('C3').font.scheme, f.FontScheme.Major);
+    } finally {
+      wb.dispose();
+    }
+  });
+});

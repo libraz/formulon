@@ -3867,7 +3867,9 @@ export type ColorInput = string | Color;
 
 /** The font keys of a {@link CellFormatPatch}; an omitted key keeps its value. */
 export interface FontPatch {
-  /** The typeface name; omitted keeps it, `null` resets it to the Normal style's font name. */
+  /** The typeface name; omitted keeps it, `null` resets it to the Normal style's font name. A different name with
+   *  `scheme` omitted also sets `scheme` to `None`, as Excel unlinks a font from the theme when its name changes:
+   *  a theme-linked font is drawn with the theme's face whatever name it stores. */
   readonly name?: string | null;
   /** The font size in points, 1 to 409; omitted keeps it, `null` resets it to the Normal style's font size. */
   readonly sizePt?: number | null;
@@ -3891,7 +3893,8 @@ export interface FontPatch {
   readonly vertAlign?: FontVerticalAlign;
   /** The font-family class; omitted keeps it, `null` removes the `<family>` element. */
   readonly family?: FontFamily | null;
-  /** The charset codepage id; omitted keeps it, `null` removes the `<charset>` element. */
+  /** The charset codepage id; omitted keeps it, `null` removes the `<charset>` element. A name change keeps it:
+   *  Excel derives it from the new face, so a caller that knows the face's charset states it. */
   readonly charset?: number | null;
   /** The theme font set the font links to; omitted keeps it. */
   readonly scheme?: FontScheme;

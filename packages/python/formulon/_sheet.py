@@ -1215,7 +1215,13 @@ def _check_cell_format_patch(given: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _merge_font(current: Font, patch: Dict[str, Any]) -> Font:
-    return dataclasses.replace(current, **patch)
+    """Naming a different face without stating ``scheme`` unlinks the font from the theme, as Excel does when the font
+    name changes; charset is kept unless stated."""
+    changes = dict(patch)
+    name = patch.get("name")
+    if isinstance(name, str) and name != current.name and "scheme" not in patch:
+        changes["scheme"] = FontScheme.NONE
+    return dataclasses.replace(current, **changes)
 
 
 def _merge_fill(current: Fill, patch: Dict[str, Any]) -> Fill:
