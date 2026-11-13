@@ -222,15 +222,19 @@ PreparedRecordFilter::PreparedRecordFilter(const PivotTable& table, const PivotC
     // subtotalHiddenItems its hidden items are not a filter at all.
     const PivotPageField* page = table.find_page_field(static_cast<std::uint32_t>(fi));
     const bool is_page = page != nullptr;
-    const std::optional<std::uint32_t> selected = is_page ? page->item_index : std::nullopt;
     if (is_page && table.subtotal_hidden_items()) {
       continue;
     }
     const std::vector<PivotItem>& field_items = table.fields()[fi].items;
+    // The selected page item's position; `field_items.size()` when none is in range.
+    std::size_t selected_pos = field_items.size();
+    if (is_page && page->item_index.has_value() && *page->item_index < field_items.size()) {
+      selected_pos = *page->item_index;
+    }
     const bool group_field = fi < cache.fields().size() && is_group_field(cache.fields()[fi]);
     for (std::size_t item_pos = 0; item_pos < field_items.size(); ++item_pos) {
       const PivotItem& item = field_items[item_pos];
-      const bool selected_out = selected.has_value() && *selected < field_items.size() && *selected != item_pos;
+      const bool selected_out = selected_pos < field_items.size() && selected_pos != item_pos;
       if (item.visible && !selected_out) {
         continue;
       }
