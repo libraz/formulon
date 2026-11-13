@@ -744,5 +744,26 @@ TEST(PivotCacheReader, DateGroupWithOneUsableBoundLoads) {
   }
 }
 
+// The shared items Excel 16.115 wrote for tests/fixtures/excel/pivot_aggregation/K4__average.xlsx after a refresh
+// dropped two regions: `u="1"` marks the items kept although the source no longer holds them.
+TEST(PivotCacheReader, DefinitionUnusedSharedItemsKeepTheirMark) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotCacheDefinition").append(kPivotNs).append(">");
+  xml.append("<cacheSource type=\"worksheet\"/><cacheFields count=\"1\"><cacheField name=\"Region\">");
+  xml.append("<sharedItems containsBlank=\"1\" count=\"5\"><s v=\"N\"/><s v=\"S\"/><s v=\"North\" u=\"1\"/>");
+  xml.append("<m u=\"1\"/><s v=\"South\" u=\"1\"/></sharedItems></cacheField></cacheFields></pivotCacheDefinition>");
+
+  auto cache_or = read_pivot_cache_definition(Bytes(xml));
+  ASSERT_TRUE(static_cast<bool>(cache_or)) << "read failed: " << cache_or.error().message;
+  const pivot::PivotCacheField& field = cache_or.value().fields()[0];
+  ASSERT_EQ(field.shared_items.size(), 5U);
+  EXPECT_EQ(field.shared_item_is_missing, (std::vector<bool>{false, false, true, true, true}));
+  const std::string written = write_pivot_cache_definition(cache_or.value());
+  EXPECT_NE(written.find("<s v=\"North\" u=\"1\"/>"), std::string::npos) << written;
+  EXPECT_NE(written.find("<m u=\"1\"/>"), std::string::npos) << written;
+  EXPECT_NE(written.find("<s v=\"South\" u=\"1\"/>"), std::string::npos) << written;
+  EXPECT_NE(written.find("<s v=\"N\"/>"), std::string::npos) << written;
+}
+
 }  // namespace
 }  // namespace formulon::io

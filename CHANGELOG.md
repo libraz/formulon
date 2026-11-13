@@ -277,6 +277,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A PivotTable cache read from `.xlsx` lost the mark on shared items a refresh kept although
+  the source no longer holds them (`u="1"`), so a later save wrote them as ordinary items.
+  The mark is now read and written back.
+
 - A PivotTable cache read from `.xlsb` whose field holds only dates and no shared items
   loaded each record's date as a meaningless number. Those cells now load as the dates
   they are, under the workbook's date system, the same as the `.xlsx` cache.

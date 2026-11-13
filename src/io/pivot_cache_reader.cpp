@@ -360,6 +360,7 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
           field.shared_items.push_back(val_or.value());
           field.shared_item_is_date.push_back(is_date);
           field.shared_item_is_calculated.push_back(attr_bool(child, "f"));
+          field.shared_item_is_missing.push_back(attr_bool(child, "u"));
         }
       }
       cache.mutable_fields().push_back(std::move(field));
