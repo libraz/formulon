@@ -318,9 +318,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A custom data validation whose range sits under an operator inside a function, such as
   `SUM($A$1:$A$3*2)>5`, was saved to `.xlsb` in a form Excel evaluates over the whole range,
-  while Excel reads a validation formula with the range intersected at the validated cell. A cell
-  Excel rejects could then pass in the saved file. The `.xlsb` writer now stores validation
-  formulas as Excel does. Present since 0.12.0.
+  while Excel reads such a range in a validation formula as its top-left cell. A cell Excel
+  rejects could then pass in the saved file. The `.xlsb` writer now stores validation formulas as
+  Excel does. Present since 0.12.0.
+
+- Data-validation results (`validateValue`, Python `validate_value`, C `fm_sheet_validate_value`)
+  could differ from Excel for formulas that use a range in a calculation. Excel reads such a range
+  in a validation formula as its top-left cell, whichever cell is validated: with A1:A3 = 1, 2, 3,
+  `SUM($A$1:$A$3*2)>5` rejects every cell, where Formulon summed the whole range and accepted
+  them. Ranges passed to a function that takes a range (`SUM($A$1:$A$3)`, `COUNTIF`,
+  `SUMPRODUCT`) and list sources are unchanged, and `ROW()` still reads the validated cell.
 
 - Under a Mac profile, a Normal font outside the measured set fell back to Calibri 11's
   metrics, so column widths and row heights for fonts such as Meiryo 11 came out one digit

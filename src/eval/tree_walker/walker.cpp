@@ -451,7 +451,7 @@ Shaped eval_node_shaped(const parser::AstNode& node, Arena& arena, const Functio
       // parser folds `A:A` / `1:1` into -- go through the projection shared
       // with `_xlfn.SINGLE`, so `=@A:B` and `=@A1:B3` agree wherever they
       // denote the same rectangle.
-      if (ctx.has_formula_cell()) {
+      if (ctx.projects_intersection()) {
         parser::Reference target{};
         switch (project_implicit_intersection(operand, ctx.formula_row(), ctx.formula_col(), &target, ctx.workbook())) {
           case IntersectionProjection::kCell:
@@ -464,20 +464,11 @@ Shaped eval_node_shaped(const parser::AstNode& node, Arena& arena, const Functio
         if (Value projected = Value::blank(); project_reference_result(operand, arena, registry, ctx, &projected)) {
           return Shaped{projected, nullptr};
         }
-      } else if (operand.kind() == parser::NodeKind::RangeOp) {
-        // No formula-cell context (top-level evaluator entry) -> degrade to
-        // top-left, matching the bare-range fallback. Production calls
-        // through Workbook always supply a formula cell, so this branch
-        // only fires for parser-driven smoke tests.
-        const Shaped operand_value = eval_node_shaped(operand, arena, registry, ctx);
-        if (operand_value.tail_array != nullptr) {
-          return Shaped{first_element(operand_value), nullptr};
-        }
-        return operand_value;
       }
-      // Dynamic arrays produced by a call, spill reference, or expression no
-      // longer retain static range coordinates. Excel's `@` takes their
-      // top-left element instead of allowing the value to spill.
+      // Without a projection (no formula cell, or `with_intersection_at_top_left`
+      // in force) an area takes its top-left cell. Dynamic arrays produced by a
+      // call, spill reference, or expression no longer retain static range
+      // coordinates, and Excel's `@` takes their top-left element too.
       return Shaped{first_element(eval_node_shaped(operand, arena, registry, ctx)), nullptr};
     }
 

@@ -473,6 +473,24 @@ class EvalContext {
     return copy;
   }
 
+  /// Returns a copy of `*this` whose implicit intersection (`@`, `_xlfn.SINGLE`)
+  /// reduces an area to its top-left cell instead of projecting the formula
+  /// cell onto it; the formula cell still answers `ROW()` and the like. Excel
+  /// evaluates a data-validation formula this way (Mac Excel 16.115), and
+  /// validation is the one caller: another needs its own measurement.
+  EvalContext with_intersection_at_top_left() const noexcept {
+    EvalContext copy = *this;
+    copy.intersection_at_top_left_ = true;
+    return copy;
+  }
+
+  /// True when implicit intersection projects the formula cell onto an area:
+  /// a formula cell is bound and `with_intersection_at_top_left` is not in force.
+  bool projects_intersection() const noexcept { return has_formula_cell() && !intersection_at_top_left_; }
+
+  /// True under `with_intersection_at_top_left`.
+  bool intersection_at_top_left() const noexcept { return intersection_at_top_left_; }
+
   /// True when the `evaluate()`-level iterative-calc driver is suppressed
   /// for this context (the recalc engine sets this; see
   /// `with_iterative_driver_suppressed`).
@@ -738,6 +756,8 @@ class EvalContext {
   // is skipped. Set by the recalc engine, which drives iterative calc
   // itself; left false for direct-`evaluate()` callers.
   bool suppress_iterative_driver_ = false;
+  // See `with_intersection_at_top_left`.
+  bool intersection_at_top_left_ = false;
   // Whole-axis scope of the call being dispatched; see `WholeAxisScope`.
   WholeAxisScope* whole_axis_scope_ = nullptr;
 };

@@ -485,7 +485,7 @@ Value eval_single_lazy(const parser::AstNode& call, Arena& arena, const Function
   // `A:A` / `1:1` into — goes through one projection. Out-of-axis formula
   // cells surface `#VALUE!`, matching the `@` operator's documented
   // behaviour.
-  if (ctx.has_formula_cell()) {
+  if (ctx.projects_intersection()) {
     parser::Reference target{};
     switch (project_implicit_intersection(arg, ctx.formula_row(), ctx.formula_col(), &target, ctx.workbook())) {
       case IntersectionProjection::kCell:
@@ -498,7 +498,7 @@ Value eval_single_lazy(const parser::AstNode& call, Arena& arena, const Function
     if (Value projected = Value::blank(); project_reference_result(arg, arena, registry, ctx, &projected)) {
       return projected;
     }
-  } else if (arg.kind() == parser::NodeKind::RangeOp) {
+  } else if (arg.kind() == parser::NodeKind::RangeOp && !ctx.intersection_at_top_left()) {
     // Without a bound formula cell there is no row/col to project onto.
     return Value::error(ErrorCode::Value);
   }

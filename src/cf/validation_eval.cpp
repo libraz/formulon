@@ -91,8 +91,12 @@ struct Evaluator {
     return cf::helpers::parse_shift_evaluate(source, ctx);
   }
 
-  /// Evaluates `source` to a scalar; an array result is already reduced to its first element.
-  Value scalar(const std::string& source) { return run(source); }
+  /// Evaluates `source` to a scalar as Excel evaluates a validation formula: as a legacy formula, its `@`s taking
+  /// the top-left cell of their areas; an array result is reduced to its first element.
+  Value scalar(const std::string& source) {
+    const eval::EvalContext top_left = eval_ctx.with_intersection_at_top_left();
+    return run(wb.with_legacy_intersections(source, wb.sheet_index_by_name(sheet.name())), &top_left);
+  }
 };
 
 std::optional<double> as_bound(const Value& v) {

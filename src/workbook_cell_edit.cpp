@@ -223,6 +223,41 @@ void Workbook::erase_cells_in(std::size_t sheet_index, const MergeRange& rect) {
   }
 }
 
+namespace {
+
+/// `text` with an `@` inserted at each node `io::xlsb::legacy_intersections` names.
+std::string InsertLegacyIntersections(std::string text, const io::xlsb::NameShapes& name_shapes) {
+  const std::size_t body_at = !text.empty() && text.front() == '=' ? 1U : 0U;
+  Arena arena;
+  const parser::AstNode* root = parser::parse_strict(std::string_view(text).substr(body_at), arena);
+  if (root == nullptr) {
+    return text;
+  }
+  // Byte offsets into the body; a node's range counts UTF-16 units.
+  const std::string_view body = std::string_view(text).substr(body_at);
+  std::vector<std::uint32_t> at;
+  for (const parser::AstNode* node : io::xlsb::legacy_intersections(*root, name_shapes)) {
+    if (node->kind() != parser::NodeKind::ImplicitIntersection) {
+      // A parenthesised operand takes the `@` inside its parentheses: `(@A1:A3)`.
+      auto start = static_cast<std::uint32_t>(utf16_to_byte_offset(body, node->range().start));
+      for (std::uint16_t pairs = node->paren_depth(); pairs > 0U && body_at + start < text.size(); ++start) {
+        if (text[body_at + start] == '(') {
+          --pairs;
+        }
+      }
+      at.push_back(start);
+    }
+  }
+  // Right to left, so each insertion leaves the earlier offsets valid.
+  sort_ascending(at);
+  for (auto it = at.rbegin(); it != at.rend(); ++it) {
+    text.insert(body_at + *it, 1U, '@');
+  }
+  return text;
+}
+
+}  // namespace
+
 void Workbook::apply_legacy_implicit_intersections() {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   for (std::size_t sheet_index = 0; sheet_index < sheets_.size(); ++sheet_index) {
@@ -235,39 +270,16 @@ void Workbook::apply_legacy_implicit_intersections() {
       if (cell == nullptr || cell->dynamic_array || cell->array_block_rows != 0U) {
         continue;
       }
-      std::string text = cell->formula_text;
-      const std::size_t body_at = !text.empty() && text.front() == '=' ? 1U : 0U;
-      Arena arena;
-      const parser::AstNode* root = parser::parse_strict(std::string_view(text).substr(body_at), arena);
-      if (root == nullptr) {
-        continue;
+      std::string text = InsertLegacyIntersections(cell->formula_text, name_shapes);
+      if (text != cell->formula_text) {
+        sheet.set_cell_formula_text(address.row, address.col, std::move(text));
       }
-      // Byte offsets into the body; a node's range counts UTF-16 units.
-      const std::string_view body = std::string_view(text).substr(body_at);
-      std::vector<std::uint32_t> at;
-      for (const parser::AstNode* node : io::xlsb::legacy_intersections(*root, name_shapes)) {
-        if (node->kind() != parser::NodeKind::ImplicitIntersection) {
-          // A parenthesised operand takes the `@` inside its parentheses: `(@A1:A3)`.
-          auto start = static_cast<std::uint32_t>(utf16_to_byte_offset(body, node->range().start));
-          for (std::uint16_t pairs = node->paren_depth(); pairs > 0U && body_at + start < text.size(); ++start) {
-            if (text[body_at + start] == '(') {
-              --pairs;
-            }
-          }
-          at.push_back(start);
-        }
-      }
-      if (at.empty()) {
-        continue;
-      }
-      // Right to left, so each insertion leaves the earlier offsets valid.
-      sort_ascending(at);
-      for (auto it = at.rbegin(); it != at.rend(); ++it) {
-        text.insert(body_at + *it, 1U, '@');
-      }
-      sheet.set_cell_formula_text(address.row, address.col, std::move(text));
     }
   }
+}
+
+std::string Workbook::with_legacy_intersections(std::string text, std::size_t sheet_index) const {
+  return InsertLegacyIntersections(std::move(text), io::name_shapes(*this, sheet_index));
 }
 
 std::string Workbook::normalize_formula_text(std::string formula, FormulaSource source) {

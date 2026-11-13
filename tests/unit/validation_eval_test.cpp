@@ -1135,5 +1135,258 @@ TEST(ValidationEvalInline, BooleanAndBlank) {
   EXPECT_FALSE(InlineValid("Yes,No", Blank()));
 }
 
+/// One validation rule of the Excel grid: A1:A3 = 1, 2, 3, A5:C5 = 1, 2, 3, NArea = S!$A$1:$A$3; each cell of
+/// `range` holds `value`, and `expected` is Excel's verdict per cell, row-major (Mac Excel 16.115, Validation.value).
+struct ExcelGridRule {
+  const char* name;
+  MergeRange range;
+  Ty ty;
+  Op op;
+  const char* f1;
+  const char* f2;
+  double number;  // the cell value, unless `text` is set
+  const char* text;
+  std::vector<bool> expected;
+};
+
+MergeRange Rect(std::uint32_t r0, std::uint32_t c0, std::uint32_t r1, std::uint32_t c1) {
+  return MergeRange{r0, c0, r1, c1};
+}
+
+// A value-position area in a validation formula reduces to its top-left cell, not to the validated cell's
+// intersection; a reference or array parameter keeps the area, ROW() sees the validated cell, an error is invalid, and
+// a list source offers its whole area.
+const ExcelGridRule kExcelGrid[] = {
+    {"sum_over_area_under_operator",
+     Rect(0, 5, 2, 5),
+     Ty::kCustom,
+     Op::kNone,
+     "SUM($A$1:$A$3*2)>5",
+     "",
+     1,
+     nullptr,
+     {false, false, false}},
+    {"sum_alone_at_third_row", Rect(2, 5, 2, 5), Ty::kCustom, Op::kNone, "SUM($A$1:$A$3*2)>5", "", 1, nullptr, {false}},
+    {"sum_anchor_on_second_row",
+     Rect(1, 16, 2, 16),
+     Ty::kCustom,
+     Op::kNone,
+     "SUM($A$1:$A$3*2)>5",
+     "",
+     1,
+     nullptr,
+     {false, false}},
+    {"value_parameter",
+     Rect(0, 6, 2, 6),
+     Ty::kCustom,
+     Op::kNone,
+     "ABS($A$1:$A$3)>1",
+     "",
+     1,
+     nullptr,
+     {false, false, false}},
+    {"reference_parameter",
+     Rect(0, 7, 2, 7),
+     Ty::kCustom,
+     Op::kNone,
+     "SUM($A$1:$A$3)>5",
+     "",
+     1,
+     nullptr,
+     {true, true, true}},
+    {"countif_range",
+     Rect(0, 8, 2, 8),
+     Ty::kCustom,
+     Op::kNone,
+     "COUNTIF($A$1:$A$3,\">1\")=2",
+     "",
+     1,
+     nullptr,
+     {true, true, true}},
+    {"array_parameter", Rect(0, 5, 0, 5), Ty::kCustom, Op::kNone, "SUMPRODUCT($A$1:$A$3*2)>5", "", 1, nullptr, {true}},
+    {"relative_cell", Rect(0, 9, 2, 9), Ty::kCustom, Op::kNone, "A1*2>3", "", 1, nullptr, {false, true, true}},
+    {"relative_area",
+     Rect(0, 15, 2, 15),
+     Ty::kCustom,
+     Op::kNone,
+     "SUM(A1:A3*2)>5",
+     "",
+     1,
+     nullptr,
+     {false, false, true}},
+    {"relative_area_alone_second_row",
+     Rect(1, 15, 1, 15),
+     Ty::kCustom,
+     Op::kNone,
+     "SUM(A2:A4*2)>5",
+     "",
+     1,
+     nullptr,
+     {false}},
+    {"relative_area_alone_third_row",
+     Rect(2, 15, 2, 15),
+     Ty::kCustom,
+     Op::kNone,
+     "SUM(A3:A5*2)>5",
+     "",
+     1,
+     nullptr,
+     {true}},
+    {"relative_value_parameter",
+     Rect(0, 17, 2, 17),
+     Ty::kCustom,
+     Op::kNone,
+     "ABS(A1:A3)>1",
+     "",
+     1,
+     nullptr,
+     {false, true, true}},
+    {"horizontal_area",
+     Rect(6, 0, 6, 3),
+     Ty::kCustom,
+     Op::kNone,
+     "$A$5:$C$5*2>3",
+     "",
+     1,
+     nullptr,
+     {false, false, false, false}},
+    {"horizontal_area_off_column_a", Rect(6, 2, 6, 2), Ty::kCustom, Op::kNone, "$B$5:$D$5>0", "", 1, nullptr, {true}},
+    {"area_outside_row_and_column", Rect(9, 5, 9, 5), Ty::kCustom, Op::kNone, "$A$1:$A$3*2>1", "", 1, nullptr, {true}},
+    {"area_below_first_row", Rect(2, 5, 2, 5), Ty::kCustom, Op::kNone, "SUM($A$2:$A$4*2)>3", "", 1, nullptr, {true}},
+    {"bare_area_below_first_row", Rect(1, 5, 1, 5), Ty::kCustom, Op::kNone, "$A$2:$A$4>0", "", 1, nullptr, {true}},
+    {"two_dimensional_area", Rect(2, 6, 2, 6), Ty::kCustom, Op::kNone, "$A$2:$B$3>1", "", 1, nullptr, {true}},
+    {"row_relative_area", Rect(1, 6, 1, 6), Ty::kCustom, Op::kNone, "$A2:$A4*2>3", "", 1, nullptr, {true}},
+    {"column_relative_area", Rect(7, 7, 7, 7), Ty::kCustom, Op::kNone, "A$5:C$5>1", "", 1, nullptr, {false}},
+    {"name_of_area", Rect(1, 5, 1, 5), Ty::kCustom, Op::kNone, "NArea*2>3", "", 1, nullptr, {false}},
+    {"row_function", Rect(19, 5, 21, 5), Ty::kCustom, Op::kNone, "ROW()=21", "", 1, nullptr, {false, true, false}},
+    {"row_of_area", Rect(1, 7, 1, 7), Ty::kCustom, Op::kNone, "ROW($A$1:$A$3)=2", "", 1, nullptr, {false}},
+    {"error_na", Rect(0, 18, 0, 18), Ty::kCustom, Op::kNone, "NA()", "", 1, nullptr, {false}},
+    {"error_div0", Rect(1, 18, 1, 18), Ty::kCustom, Op::kNone, "1/0>0", "", 1, nullptr, {false}},
+    {"error_value", Rect(2, 18, 2, 18), Ty::kCustom, Op::kNone, "\"x\"+1>0", "", 1, nullptr, {false}},
+    {"false_result", Rect(3, 18, 3, 18), Ty::kCustom, Op::kNone, "FALSE", "", 1, nullptr, {false}},
+    {"zero_result", Rect(4, 18, 4, 18), Ty::kCustom, Op::kNone, "0", "", 1, nullptr, {false}},
+    {"whole_between_area_bound",
+     Rect(0, 10, 2, 10),
+     Ty::kWhole,
+     Op::kBetween,
+     "MIN($A$1:$A$3*2)",
+     "10",
+     3,
+     nullptr,
+     {true, true, true}},
+    {"whole_between_area_bound_outside",
+     Rect(9, 10, 9, 10),
+     Ty::kWhole,
+     Op::kBetween,
+     "MIN($A$1:$A$3*2)",
+     "10",
+     3,
+     nullptr,
+     {true}},
+    {"whole_greater_than_error_bound",
+     Rect(0, 19, 0, 19),
+     Ty::kWhole,
+     Op::kGreaterThan,
+     "NA()",
+     "",
+     3,
+     nullptr,
+     {false}},
+    {"whole_greater_than_area",
+     Rect(1, 19, 1, 19),
+     Ty::kWhole,
+     Op::kGreaterThan,
+     "$A$1:$A$3*2",
+     "",
+     3,
+     nullptr,
+     {true}},
+    {"whole_greater_than_area_outside",
+     Rect(9, 19, 9, 19),
+     Ty::kWhole,
+     Op::kGreaterThan,
+     "$A$1:$A$3*2",
+     "",
+     3,
+     nullptr,
+     {true}},
+    {"decimal_greater_than_area",
+     Rect(0, 12, 2, 12),
+     Ty::kDecimal,
+     Op::kGreaterThan,
+     "$A$1:$A$3+0.5",
+     "",
+     2,
+     nullptr,
+     {true, true, true}},
+    {"text_length_less_than_area",
+     Rect(0, 13, 2, 13),
+     Ty::kTextLength,
+     Op::kLessThan,
+     "$A$1:$A$3+1",
+     "",
+     0,
+     "ab",
+     {false, false, false}},
+    {"date_greater_than_area",
+     Rect(0, 14, 2, 14),
+     Ty::kDate,
+     Op::kGreaterThan,
+     "$A$1:$A$3",
+     "",
+     2,
+     nullptr,
+     {true, true, true}},
+    {"list_area", Rect(0, 11, 2, 11), Ty::kList, Op::kNone, "$A$1:$A$3", "", 2, nullptr, {true, true, true}},
+    {"list_area_last_item", Rect(4, 11, 4, 11), Ty::kList, Op::kNone, "$A$1:$A$3", "", 3, nullptr, {true}},
+    {"list_formula_returning_area",
+     Rect(0, 11, 2, 11),
+     Ty::kList,
+     Op::kNone,
+     "OFFSET($A$1,0,0,3,1)",
+     "",
+     3,
+     nullptr,
+     {true, true, true}},
+    {"list_formula_returning_area_absent",
+     Rect(6, 11, 6, 11),
+     Ty::kList,
+     Op::kNone,
+     "OFFSET($A$1,0,0,3,1)",
+     "",
+     9,
+     nullptr,
+     {false}},
+};
+
+TEST(ValidationEval, MatchesExcelOnAreasInFormulas) {
+  for (const ExcelGridRule& rule : kExcelGrid) {
+    SCOPED_TRACE(rule.name);
+    Workbook wb = Workbook::create_empty();
+    const std::size_t s = wb.add_sheet("S");
+    for (std::uint32_t i = 0; i < 3U; ++i) {
+      wb.set_cell_value(s, i, 0, Value::number(static_cast<double>(i + 1U)));
+      wb.set_cell_value(s, 4, i, Value::number(static_cast<double>(i + 1U)));
+    }
+    ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("NArea", "S!$A$1:$A$3")));
+    DataValidation dv;
+    dv.ranges.push_back(rule.range);
+    dv.type = static_cast<std::uint8_t>(rule.ty);
+    dv.op = rule.op == Op::kNone ? 0 : static_cast<std::uint8_t>(rule.op);
+    dv.formula1 = rule.f1;
+    dv.formula2 = rule.f2;
+    wb.sheet(s).mutable_validations().push_back(std::move(dv));
+    const Value value = rule.text != nullptr ? Value::text(rule.text) : Value::number(rule.number);
+    std::size_t i = 0;
+    for (std::uint32_t r = rule.range.first_row; r <= rule.range.last_row; ++r) {
+      for (std::uint32_t c = rule.range.first_col; c <= rule.range.last_col; ++c, ++i) {
+        auto outcome = validate_value(wb, wb.sheet(s), r, c, value);
+        ASSERT_TRUE(static_cast<bool>(outcome));
+        EXPECT_EQ(outcome.value().valid, rule.expected[i]) << "row " << r << " col " << c;
+      }
+    }
+  }
+}
+
 }  // namespace
 }  // namespace formulon

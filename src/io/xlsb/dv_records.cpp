@@ -193,7 +193,7 @@ Expected<void, Error> EmitDVal14(std::vector<std::uint8_t>& dst, const DataValid
     if (sources[i]->empty()) {
       continue;
     }
-    // Excel evaluates a validation formula as a legacy one: an area under an operator is intersected.
+    // Excel stores a validation formula as a legacy one: an area under an operator is a single value.
     ASSIGN_OR_RETURN(EncodedFeatureFormula f, encode_feature_formula(*sources[i], base.first_row, base.first_col,
                                                                      RootClass(dv.type), ctx, PtgEvaluation::kLegacy));
     emit_frt_formula(list, f);

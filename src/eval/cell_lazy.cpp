@@ -98,7 +98,7 @@ bool extract_topleft_ref(const parser::AstNode& ref_node, Arena& arena, const Fu
              strings::case_insensitive_eq(ref_node.as_call_name(), "SINGLE")) {
     operand = &resolve_name_ast(ref_node.as_call_arg(0), ctx.name_env());
   }
-  if (operand != nullptr && ctx.has_formula_cell()) {
+  if (operand != nullptr && ctx.projects_intersection()) {
     parser::Reference target{};
     switch (project_implicit_intersection(*operand, ctx.formula_row(), ctx.formula_col(), &target, ctx.workbook())) {
       case IntersectionProjection::kCell:

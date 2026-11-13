@@ -590,6 +590,10 @@ class Workbook {
   /// each reader once cells, marks and defined names are in.
   void apply_legacy_implicit_intersections();
 
+  /// `text`, a formula without the dynamic-array mark on sheet `sheet_index` (leading `=` optional), with an `@`
+  /// wherever Excel 365 shows one for it; unchanged when it has none or does not parse.
+  std::string with_legacy_intersections(std::string text, std::size_t sheet_index) const;
+
   /// Dirties every existing dependent of `(sheet_index, row, col)` via the
   /// engine's ordinary dep-graph edges, without touching the cell's own
   /// value, formula, or registration. Out-of-range coordinates are a no-op.
