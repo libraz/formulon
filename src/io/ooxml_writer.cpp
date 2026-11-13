@@ -412,7 +412,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   // The named cell styles `styles.xml` writes and the names table parts may keep.
   const CellStyleSavePlan style_plan =
       build_cell_style_save_plan(wb.styles(), collect_used_cell_xfs(wb), wb.excel_profile());
-  const FontSavePlan font_plan = build_font_save_plan(wb.styles(), wb.load_theme().theme, wb.excel_profile());
+  const FontSavePlan font_plan = build_font_save_plan(wb);
   // The XLDAPR entry dynamic-array formulas' `cm=` names: a generated part's
   // first entry, else a retained `xl/metadata.xml`'s own. A retained part
   // without one leaves `cm=` off, as does a workbook with no such formula.
@@ -465,7 +465,8 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
         wb.sheet(i), sheet_tables, rels_result.table_rids, rels_result.hyperlink_rids, rels_result.printer_settings_rid,
         rels_result.drawing_rid, rels_result.legacy_drawing_rid, &shared_strings, wb.styles().dxfs, i,
         dynamic_array_cm_index, name_shapes(wb, i), &external_book_indexer, &sheet_names,
-        plan.rich_errors.empty() ? nullptr : &plan.rich_errors.vm_by_sheet[i], plan.book_directory);
+        plan.rich_errors.empty() ? nullptr : &plan.rich_errors.vm_by_sheet[i], plan.book_directory,
+        font_plan.absent_sheet_phonetic());
     // No dxf reference precedes `</sheetData>`.
     const std::size_t sheet_data_end = sheet_xml.find("</sheetData>");
     ASSIGN_OR_RETURN(sheet_xml,

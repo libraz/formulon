@@ -63,9 +63,10 @@ void emit_ws_prop(std::vector<std::uint8_t>& dst, const Sheet& sheet);
 /// other shape or an ordinal past 3.
 bool decode_phonetic_info(ByteSpan payload, PhoneticProperties& out);
 
-/// Emits `BrtPhoneticInfo` for the sheet's `<phoneticPr>`; nothing for a
-/// sheet without one.
-void emit_phonetic_info(std::vector<std::uint8_t>& dst, const Sheet& sheet);
+/// Emits `BrtPhoneticInfo` for the sheet's `<phoneticPr>`, else for
+/// `absent` (`FontSavePlan::absent_sheet_phonetic`); nothing when both are empty.
+void emit_phonetic_info(std::vector<std::uint8_t>& dst, const Sheet& sheet,
+                        const std::optional<PhoneticProperties>& absent);
 
 /// Stores the 16-byte GUID of a sheet's revision-uid wrapper as the
 /// worksheet root's `xr:uid`.

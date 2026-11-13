@@ -5,6 +5,7 @@
 #define FORMULON_IO_SHEET_PHONETIC_H_
 
 #include <optional>
+#include <string>
 
 #include "phonetic.h"
 
@@ -18,9 +19,11 @@ namespace io {
 /// The sheet's `<phoneticPr>`, when its raw children hold one.
 std::optional<PhoneticProperties> sheet_phonetic_properties(const Sheet& sheet);
 
-/// Stores `props` as the sheet's `<phoneticPr>` child, written as Excel
-/// writes it: `fontId`, then `type` and `alignment` only where they differ
-/// from the schema defaults.
+/// The `<phoneticPr>` element for `props`, as Excel writes it: `fontId`, then
+/// `type` and `alignment` only where they differ from the schema defaults.
+std::string sheet_phonetic_xml(const PhoneticProperties& props);
+
+/// Stores `props` as the sheet's `<phoneticPr>` child (`sheet_phonetic_xml`).
 void set_sheet_phonetic_properties(Sheet& sheet, const PhoneticProperties& props);
 
 /// Points each sheet `<phoneticPr>` whose `fontId` lies past the font table

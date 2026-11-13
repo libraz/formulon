@@ -391,8 +391,12 @@ bool decode_phonetic_info(ByteSpan payload, PhoneticProperties& out) {
   return true;
 }
 
-void emit_phonetic_info(std::vector<std::uint8_t>& dst, const Sheet& sheet) {
-  const std::optional<PhoneticProperties> props = sheet_phonetic_properties(sheet);
+void emit_phonetic_info(std::vector<std::uint8_t>& dst, const Sheet& sheet,
+                        const std::optional<PhoneticProperties>& absent) {
+  std::optional<PhoneticProperties> props = sheet_phonetic_properties(sheet);
+  if (!props) {
+    props = absent;
+  }
   if (!props) {
     return;
   }

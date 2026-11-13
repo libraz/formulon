@@ -62,7 +62,8 @@ void EmitColor(std::vector<std::uint8_t>& payload, std::uint32_t argb, const Col
 void EmitFont(std::vector<std::uint8_t>& out, const FontRecord& font) {
   std::vector<std::uint8_t> payload;
   emit_u16(payload, FontHeightTwips(font.size));
-  std::uint16_t flags = 0U;
+  // Excel mirrors a bold weight in grbit bit 0.
+  std::uint16_t flags = font.bold ? 0x0001U : 0U;
   if (font.italic)
     flags |= 0x0002U;
   if (font.strike)
@@ -82,7 +83,14 @@ void EmitFont(std::vector<std::uint8_t>& out, const FontRecord& font) {
   emit_u8(payload, font.has_family ? font.family : 0U);
   emit_u8(payload, font.has_charset ? font.charset : 0U);
   emit_u8(payload, 0U);
-  EmitColor(payload, font.color_argb, font.color);
+  if (font.color.kind == ColorSpec::Kind::kNone && font.color_argb == 0xFF000000U) {
+    // A font without `<color>` is saved as automatic with a zero RGB.
+    ColorSpec automatic;
+    automatic.kind = ColorSpec::Kind::kAuto;
+    EmitColor(payload, 0U, automatic);
+  } else {
+    EmitColor(payload, font.color_argb, font.color);
+  }
   emit_u8(payload, font.scheme);  // bFontScheme shares the shared model's ordinals
   emit_xlwidestring(payload, font.name.empty() ? std::string_view("Calibri") : std::string_view(font.name));
   emit_record(out, static_cast<std::uint16_t>(XlsbRecordType::BrtFont), payload);

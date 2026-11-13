@@ -371,8 +371,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   // The named cell styles styles.bin writes and the names table parts may keep.
   const CellStyleSavePlan style_plan =
       build_cell_style_save_plan(workbook.styles(), collect_used_cell_xfs(workbook), workbook.excel_profile());
-  const FontSavePlan font_plan =
-      build_font_save_plan(workbook.styles(), workbook.load_theme().theme, workbook.excel_profile());
+  const FontSavePlan font_plan = build_font_save_plan(workbook);
   std::vector<std::vector<XlsbTablePart>> sheet_tables(sheet_count);
   std::vector<std::vector<std::string>> sheet_hyperlink_rids;
   sheet_hyperlink_rids.reserve(sheet_count);
@@ -409,11 +408,11 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
       sheet_drawing_rids[i] = FreshRelId(taken_rel_ids);
     }
     std::uint32_t sparklines_lost = 0;
-    auto sheet_body_or =
-        emit_sheet(workbook.sheet(i), sst, sheet_names, sheet_ranges, sheet_name_table, sheet_hyperlink_rids[i],
-                   &downgraded_formula_count, metadata.ifmd, name_shapes(workbook, i), table_rel_ids, views,
-                   &sparklines_lost, sheet_drawing_rids[i], sheet_owns_drawing[i],
-                   metadata.rich.empty() ? nullptr : &metadata.rich.vm_by_sheet[i], book_directory);
+    auto sheet_body_or = emit_sheet(
+        workbook.sheet(i), sst, sheet_names, sheet_ranges, sheet_name_table, sheet_hyperlink_rids[i],
+        &downgraded_formula_count, metadata.ifmd, name_shapes(workbook, i), table_rel_ids, views, &sparklines_lost,
+        sheet_drawing_rids[i], sheet_owns_drawing[i], metadata.rich.empty() ? nullptr : &metadata.rich.vm_by_sheet[i],
+        book_directory, font_plan.absent_sheet_phonetic());
     ReportDeferred(&diagnostics.deferred_feature_count, "sparklines", sparklines_lost, i);
     if (!sheet_body_or) {
       return std::move(sheet_body_or.error());

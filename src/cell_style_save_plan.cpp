@@ -1,5 +1,6 @@
 #include "cell_style_save_plan.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -9,9 +10,12 @@
 
 #include "builtin_style_names.h"
 #include "eval/collation.h"
+#include "new_workbook_defaults.h"
 #include "row_cells.h"
 #include "sheet.h"
 #include "sheet_layout.h"
+#include "sheet_passthrough.h"
+#include "theme.h"
 #include "utils/index_sort.h"
 #include "workbook.h"
 
@@ -303,6 +307,33 @@ const char* theme_font_script(ExcelLocale locale) {
   }
 }
 
+// `<phoneticPr>` ordinals (`PhoneticProperties`) and the phonetic font's `<family>`.
+constexpr std::uint8_t kPhoneticFullwidthKatakana = 1U;
+constexpr std::uint8_t kPhoneticNoConversion = 3U;
+constexpr std::uint8_t kPhoneticAlignLeft = 1U;
+constexpr std::uint8_t kPhoneticFontFamily = 3U;
+
+bool any_sheet_without_phonetic(const Workbook& wb) {
+  const auto slot = static_cast<std::uint32_t>(worksheet_child::slot_of("phoneticPr"));
+  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    const WorksheetRawExtensions& children = wb.sheet(i).raw_extensions();
+    if (std::none_of(children.begin(), children.end(),
+                     [slot](const WorksheetRawChild& child) { return child.slot == slot; })) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// True when `font` writes the same `<font>` as `phonetic`, which states only a face, size, family, charset and scheme.
+bool writes_phonetic_font(const FontRecord& font, const FontRecord& phonetic) {
+  return font.name == phonetic.name && font.size == phonetic.size && font.has_family &&
+         font.family == phonetic.family && font.has_charset && font.charset == phonetic.charset &&
+         font.scheme == phonetic.scheme && !font.bold && !font.italic && !font.strike && !font.outline &&
+         !font.shadow && !font.condense && !font.extend && font.underline == 0U && font.vert_align == 0U &&
+         font.color.kind == ColorSpec::Kind::kNone && font.color_argb == 0xFF000000U;
+}
+
 // The theme's major or minor face for `script`; null when the theme names none.
 const std::string* theme_face(const Theme& theme, bool major, const char* script) {
   if (*script == '\0') {
@@ -318,20 +349,49 @@ const std::string* theme_face(const Theme& theme, bool major, const char* script
 
 }  // namespace
 
-FontSavePlan build_font_save_plan(const StylesTable& styles, const Theme& theme, ExcelProfile profile) {
+FontSavePlan build_font_save_plan(const Workbook& wb) {
   FontSavePlan plan;
-  plan.fonts_ = styles.fonts;
-  const char* script = theme_font_script(profile.locale);
+  plan.fonts_ = wb.styles().fonts;
+  const ExcelLocale locale = wb.excel_profile().locale;
+  const LoadedTheme loaded = wb.load_theme();
+  const char* script = theme_font_script(locale);
   for (FontRecord& font : plan.fonts_) {
     if (font.scheme != kSchemeMajor && font.scheme != kSchemeMinor) {
       continue;
     }
-    const std::string* face = theme_face(theme, font.scheme == kSchemeMajor, script);
+    const std::string* face = theme_face(loaded.theme, font.scheme == kSchemeMajor, script);
     if (face != nullptr && !face->empty() && *face != font.name) {
       font.name = *face;
       plan.identity_ = false;
     }
   }
+
+  const NewWorkbookDefaults& row = new_workbook_defaults(locale);
+  if (row.phonetic_size == 0U || plan.fonts_.empty() || plan.fonts_[0].scheme == 0U ||
+      !any_sheet_without_phonetic(wb)) {
+    return plan;
+  }
+  FontRecord phonetic;
+  phonetic.name = plan.fonts_[0].name;
+  phonetic.size = row.phonetic_size;
+  phonetic.has_family = true;
+  phonetic.family = kPhoneticFontFamily;
+  phonetic.has_charset = true;
+  phonetic.charset = row.charset;
+  phonetic.scheme = plan.fonts_[0].scheme;
+  std::size_t id = 0;
+  while (id < plan.fonts_.size() && !writes_phonetic_font(plan.fonts_[id], phonetic)) {
+    ++id;
+  }
+  if (id == plan.fonts_.size()) {
+    plan.fonts_.push_back(std::move(phonetic));
+    plan.identity_ = false;
+  }
+  PhoneticProperties props;
+  props.font_id = static_cast<std::uint16_t>(id);
+  props.type = row.phonetic_no_conversion ? kPhoneticNoConversion : kPhoneticFullwidthKatakana;
+  props.alignment = kPhoneticAlignLeft;
+  plan.absent_sheet_phonetic_ = props;
   return plan;
 }
 

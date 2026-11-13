@@ -1,12 +1,13 @@
 // The save-time font plan held against Excel 16.115's own xlsx and xlsb saves of the same sources under each of the
 // fourteen Mac UI locales (tests/fixtures/excel/xlsb_parity/phonfont): a font linked to the theme is written with the
-// theme's face for the locale's script.
+// theme's face for the locale's script, and a sheet without phonetic settings names the locale's phonetic font.
 
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <regex>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "cell_style_save_plan.h"
@@ -17,6 +18,7 @@
 #include "io/xlsb/record.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
+#include "new_workbook_defaults.h"
 #include "workbook.h"
 #include "writer_test_helpers.h"
 
@@ -30,7 +32,7 @@ namespace xlsb {
 namespace {
 
 constexpr std::uint16_t kBrtFont = 43;
-constexpr std::size_t kBrtFontNameOffset = 21;
+constexpr std::uint16_t kBrtPhoneticInfo = 537;
 
 using Bytes = std::vector<std::uint8_t>;
 
@@ -64,8 +66,9 @@ Bytes Part(const Bytes& package, const std::string& path) {
   return bytes ? std::move(bytes.value()) : Bytes{};
 }
 
-/// The `<name val>` of every `<font>` in the `<fonts>` list of an xlsx package.
-std::vector<std::string> XlsxFontNames(const Bytes& package) {
+/// The theme-linked `<font>` elements of an xlsx package's `<fonts>` list, as written. A literal font is outside the
+/// plan, and Excel completes its family from the host's installed face.
+std::vector<std::string> XlsxFonts(const Bytes& package) {
   const Bytes part = Part(package, "xl/styles.xml");
   const std::string xml(part.begin(), part.end());
   const std::size_t begin = xml.find("<fonts");
@@ -75,41 +78,59 @@ std::vector<std::string> XlsxFontNames(const Bytes& package) {
     return out;
   }
   const std::string fonts = xml.substr(begin, end - begin);
-  const std::regex name("<name val=\"([^\"]*)\"/>");
-  for (auto it = std::sregex_iterator(fonts.begin(), fonts.end(), name); it != std::sregex_iterator(); ++it) {
-    out.push_back((*it)[1].str());
+  const std::regex font("<font>(.*?)</font>");
+  for (auto it = std::sregex_iterator(fonts.begin(), fonts.end(), font); it != std::sregex_iterator(); ++it) {
+    if ((*it)[1].str().find("<scheme ") != std::string::npos) {
+      out.push_back((*it)[1].str());
+    }
   }
   return out;
 }
 
-/// The name of every BrtFont of an xlsb package, as UTF-8.
-std::vector<std::string> XlsbFontNames(const Bytes& package) {
+/// The `<phoneticPr>` element of each worksheet part, "" for a sheet without one.
+std::vector<std::string> XlsxSheetPhonetics(const Bytes& package, std::size_t sheets) {
   std::vector<std::string> out;
-  for (const FramedRecord& rec : split_records(Part(package, "xl/styles.bin"))) {
-    if (rec.type != kBrtFont || rec.payload.size < kBrtFontNameOffset + 4U) {
-      continue;
+  const std::regex phonetic("<phoneticPr[^>]*/>");
+  for (std::size_t i = 1; i <= sheets; ++i) {
+    const Bytes part = Part(package, "xl/worksheets/sheet" + std::to_string(i) + ".xml");
+    const std::string xml(part.begin(), part.end());
+    std::smatch match;
+    out.push_back(std::regex_search(xml, match, phonetic) ? match.str() : std::string());
+  }
+  return out;
+}
+
+/// The payloads of every record of `type` in an xlsb part.
+std::vector<Bytes> XlsbRecords(const Bytes& package, const std::string& path, std::uint16_t type) {
+  std::vector<Bytes> out;
+  const Bytes part = Part(package, path);
+  for (const FramedRecord& rec : split_records(part)) {
+    if (rec.type == type) {
+      out.emplace_back(rec.payload.data, rec.payload.data + rec.payload.size);
     }
-    const std::uint8_t* p = rec.payload.data + kBrtFontNameOffset;
-    const auto byte = [p](std::size_t at) { return static_cast<std::uint32_t>(p[at]); };
-    const std::uint32_t chars = byte(0) | (byte(1) << 8U) | (byte(2) << 16U) | (byte(3) << 24U);
-    std::u16string text;
-    for (std::uint32_t i = 0; i < chars; ++i) {
-      text.push_back(static_cast<char16_t>(byte(4U + 2U * i) | (byte(5U + 2U * i) << 8U)));
+  }
+  return out;
+}
+
+/// The theme-linked `BrtFont` payloads of an xlsb package (bFontScheme, byte 20, non-zero).
+std::vector<Bytes> XlsbThemeFonts(const Bytes& package) {
+  constexpr std::size_t kSchemeOffset = 20;
+  std::vector<Bytes> out;
+  for (Bytes& font : XlsbRecords(package, "xl/styles.bin", kBrtFont)) {
+    if (font.size() > kSchemeOffset && font[kSchemeOffset] != 0U) {
+      out.push_back(std::move(font));
     }
-    std::string utf8;
-    for (char16_t c : text) {
-      if (c < 0x80U) {
-        utf8.push_back(static_cast<char>(c));
-      } else if (c < 0x800U) {
-        utf8.push_back(static_cast<char>(0xC0U | (c >> 6U)));
-        utf8.push_back(static_cast<char>(0x80U | (c & 0x3FU)));
-      } else {
-        utf8.push_back(static_cast<char>(0xE0U | (c >> 12U)));
-        utf8.push_back(static_cast<char>(0x80U | ((c >> 6U) & 0x3FU)));
-        utf8.push_back(static_cast<char>(0x80U | (c & 0x3FU)));
-      }
-    }
-    out.push_back(utf8);
+  }
+  return out;
+}
+
+/// Each worksheet's `BrtPhoneticInfo` payload, empty for a sheet without one.
+std::vector<Bytes> XlsbSheetPhonetics(const Bytes& package, std::size_t sheets) {
+  std::vector<Bytes> out;
+  for (std::size_t i = 1; i <= sheets; ++i) {
+    std::vector<Bytes> records =
+        XlsbRecords(package, "xl/worksheets/sheet" + std::to_string(i) + ".bin", kBrtPhoneticInfo);
+    out.push_back(records.empty() ? Bytes{} : std::move(records.front()));
   }
   return out;
 }
@@ -136,8 +157,12 @@ std::vector<LocaleCase> Measured() {
   };
 }
 
-// Our fonts are the model's; Excel appends the phonetic font after them, so the comparison covers the model's count.
-TEST(XlsbParityFontPlan, FacesMatchExcel) {
+// A literal font 0 makes Excel add a literal phonetic font with a host-installed face, which the save leaves out.
+bool HostFacePhoneticFont(const std::string& name, const ExcelProfile& profile) {
+  return name == "arial_font0" && new_workbook_defaults(profile.locale).phonetic_size != 0U;
+}
+
+TEST(XlsbParityFontPlan, FontsAndSheetPhoneticsMatchExcel) {
   for (const LocaleCase& locale : Measured()) {
     for (const char* name : locale.cases) {
       const std::string stem = std::string("pf_") + name + "_" + locale.suffix;
@@ -150,17 +175,22 @@ TEST(XlsbParityFontPlan, FacesMatchExcel) {
       ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
       auto xlsb = write_xlsb_with_result(wb);
       ASSERT_TRUE(static_cast<bool>(xlsb)) << xlsb.error().message;
+      const Bytes excel_xlsx = ReadFile(Fixture(stem + ".xlsx"));
+      const Bytes excel_xlsb = ReadFile(Fixture(stem + ".xlsb"));
+      const std::size_t sheets = wb.sheet_count();
 
-      const std::vector<std::string> ours = XlsxFontNames(xlsx.value());
-      std::vector<std::string> excel = XlsxFontNames(ReadFile(Fixture(stem + ".xlsx")));
-      ASSERT_EQ(ours.size(), wb.styles().fonts.size());
-      ASSERT_GE(excel.size(), ours.size());
-      excel.resize(ours.size());
-      EXPECT_EQ(ours, excel);
-      std::vector<std::string> excel_bin = XlsbFontNames(ReadFile(Fixture(stem + ".xlsb")));
-      ASSERT_GE(excel_bin.size(), ours.size());
-      excel_bin.resize(ours.size());
-      EXPECT_EQ(XlsbFontNames(xlsb.value().bytes), excel_bin);
+      const std::vector<std::string> fonts = XlsxFonts(excel_xlsx);
+      std::vector<std::string> phonetics = XlsxSheetPhonetics(excel_xlsx, sheets);
+      const std::vector<Bytes> bin_fonts = XlsbThemeFonts(excel_xlsb);
+      std::vector<Bytes> bin_phonetics = XlsbSheetPhonetics(excel_xlsb, sheets);
+      if (HostFacePhoneticFont(name, locale.profile)) {
+        phonetics.assign(sheets, std::string());
+        bin_phonetics.assign(sheets, Bytes{});
+      }
+      EXPECT_EQ(XlsxFonts(xlsx.value()), fonts);
+      EXPECT_EQ(XlsxSheetPhonetics(xlsx.value(), sheets), phonetics);
+      EXPECT_EQ(XlsbThemeFonts(xlsb.value().bytes), bin_fonts);
+      EXPECT_EQ(XlsbSheetPhonetics(xlsb.value().bytes, sheets), bin_phonetics);
     }
   }
 }
@@ -168,11 +198,11 @@ TEST(XlsbParityFontPlan, FacesMatchExcel) {
 // A new book of every measured profile already stores the faces the plan would write.
 TEST(XlsbParityFontPlan, NewWorkbookIsIdentity) {
   for (const ::formulon::detail::ExcelProfileIdEntry& entry : ::formulon::detail::kExcelProfileIds) {
-    const Workbook wb = Workbook::create_for_profile(entry.profile);
-    EXPECT_TRUE(build_font_save_plan(wb.styles(), wb.load_theme().theme, wb.excel_profile()).is_identity()) << entry.id;
+    Workbook wb = Workbook::create_for_profile(entry.profile);
+    wb.add_sheet("Second");
+    EXPECT_TRUE(build_font_save_plan(wb).is_identity()) << entry.id;
   }
-  const Workbook plain = Workbook::create();
-  EXPECT_TRUE(build_font_save_plan(plain.styles(), plain.load_theme().theme, plain.excel_profile()).is_identity());
+  EXPECT_TRUE(build_font_save_plan(Workbook::create()).is_identity());
 }
 
 }  // namespace

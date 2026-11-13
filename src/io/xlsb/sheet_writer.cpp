@@ -246,9 +246,10 @@ Expected<void, Error> EmitHyperlinks(std::vector<std::uint8_t>& dst, const Sheet
 Expected<void, Error> EmitFormattingAndValidation(std::vector<std::uint8_t>& body, const Sheet& sheet,
                                                   const std::vector<std::uint8_t>& retained,
                                                   const FeatureFormulaWriteContext& ctx,
-                                                  const std::unordered_set<std::string>& x14_linked) {
+                                                  const std::unordered_set<std::string>& x14_linked,
+                                                  const std::optional<PhoneticProperties>& absent_phonetic) {
   const auto raw_dvals = static_cast<std::ptrdiff_t>(find_record_offset(retained, kBrtBeginDVals));
-  emit_phonetic_info(body, sheet);
+  emit_phonetic_info(body, sheet, absent_phonetic);
   body.insert(body.end(), retained.begin(), retained.begin() + raw_dvals);
   for (const CfBlockView& view : cf_saved_layout(sheet.conditional_formats())) {
     if (auto s = emit_cf_block(body, view, ctx, x14_linked, sheet.name()); !s) {
@@ -332,7 +333,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     std::uint32_t* downgraded_formula_count, std::uint32_t dynamic_array_ifmd, const NameShapes& name_shapes,
     const std::vector<std::string>& table_part_rel_ids, std::uint32_t workbook_views,
     std::uint32_t* deferred_sparkline_groups, std::string_view drawing_rel_id, bool owns_drawing,
-    const RichErrorVmMap* rich_error_vm, std::string_view book_directory) {
+    const RichErrorVmMap* rich_error_vm, std::string_view book_directory,
+    const std::optional<PhoneticProperties>& absent_phonetic) {
   std::vector<std::uint8_t> body;
 
   // Frame: BrtBeginSheet | BrtBeginSheetData | ... | BrtEndSheetData |
@@ -675,8 +677,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   }
   body.insert(body.end(), tail.before_merges.begin(), tail.before_merges.end());
   EmitMerges(body, sheet);
-  if (auto features =
-          EmitFormattingAndValidation(body, sheet, tail.after_merges_before_hyperlinks, frt_ctx, x14_linked);
+  if (auto features = EmitFormattingAndValidation(body, sheet, tail.after_merges_before_hyperlinks, frt_ctx, x14_linked,
+                                                  absent_phonetic);
       !features) {
     return std::move(features.error());
   }

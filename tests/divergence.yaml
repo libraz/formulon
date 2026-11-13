@@ -1298,6 +1298,17 @@ entries:
     first_noted: 2026-11-13
     last_verified_excel_version: "16.115"
 
+  - id: phonetic_font_for_literal_font0_follows_host_fonts
+    applies_to: [mac-365-ja_JP, mac-365-zh_CN, mac-365-zh_TW, mac-365-ko_KR]
+    cause: non-identifiable
+    mode: skip-oracle
+    scope: api-contract
+    evidence: [tests/unit/io/xlsb/xlsb_parity_font_plan_test.cpp]
+    reason: "When a sheet has no <phoneticPr>, Excel appends the locale's phonetic font on save and points the sheet at it. If font 0 is linked to the theme, that font takes font 0's theme face. If font 0 is a literal face (Arial with no scheme), Excel picks a face from the fonts installed on the host. On the measuring host that was 07LightNovelPOP (ja), FangSong (zh_CN), Wawati TC (zh_TW) and 나눔명조 (ko). The workbook does not determine that face, so for such a book Formulon adds no phonetic font and writes those sheets without <phoneticPr>."
+    prefer: formulon
+    first_noted: 2026-11-14
+    last_verified_excel_version: "16.115"
+
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a

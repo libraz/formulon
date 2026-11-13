@@ -18,13 +18,14 @@
 #define FORMULON_CELL_STYLE_SAVE_PLAN_H_
 
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "excel_profile.h"
+#include "phonetic.h"
 #include "styles.h"
-#include "theme.h"
 
 namespace formulon {
 
@@ -95,29 +96,42 @@ CellStyleSavePlan build_cell_style_save_plan(const StylesTable& styles, const Us
 /// locale name. This describes the saved file and is not a name lookup.
 bool saved_file_names_cell_style(const CellStyleSavePlan& plan, std::string_view name);
 
-/// The `<fonts>` a save writes. A font linked to the theme (`scheme` minor or
-/// major) is written with the theme's face for the script of the profile's UI
-/// locale, which is what Excel stores for it on save; the model keeps the
-/// stored name. A font without a scheme, or one the theme names no face for,
-/// is written as stored.
+/// The `<fonts>` a save writes, and the `<phoneticPr>` of the sheets that state
+/// none. A font linked to the theme (`scheme` minor or major) is written with
+/// the theme's face for the script of the profile's UI locale, which is what
+/// Excel stores for it on save; the model keeps the stored name. A font without
+/// a scheme, or one the theme names no face for, is written as stored.
+///
+/// Under a locale whose new workbooks carry a phonetic font (ja, zh_CN, zh_TW,
+/// ko), a book with a sheet lacking `<phoneticPr>` gets that locale's phonetic
+/// font: font 0's written face and scheme at the locale's phonetic size,
+/// family 3 and charset. An equal font already in the table is reused, else the
+/// font is appended last; every such sheet then names it. A font 0 without a
+/// scheme gets none, as Excel's choice of face there follows the host's
+/// installed fonts.
 class FontSavePlan {
  public:
-  /// The fonts in output order, one per model font.
+  /// The fonts in output order: the model's, then any appended phonetic font.
   const std::vector<FontRecord>& fonts() const noexcept { return fonts_; }
 
-  /// True when every font is written as the model holds it.
+  /// The `<phoneticPr>` a sheet without its own is written with; empty when
+  /// such sheets are written without one.
+  const std::optional<PhoneticProperties>& absent_sheet_phonetic() const noexcept { return absent_sheet_phonetic_; }
+
+  /// True when every font is written as the model holds it and none is added.
   bool is_identity() const noexcept { return identity_; }
 
  private:
-  friend FontSavePlan build_font_save_plan(const StylesTable& styles, const Theme& theme, ExcelProfile profile);
+  friend FontSavePlan build_font_save_plan(const Workbook& wb);
 
   std::vector<FontRecord> fonts_;
+  std::optional<PhoneticProperties> absent_sheet_phonetic_;
   bool identity_ = true;
 };
 
-/// Plans the fonts of `styles` for a save under `profile`, with `theme` the
-/// workbook's theme (the default theme when the book has no theme part).
-FontSavePlan build_font_save_plan(const StylesTable& styles, const Theme& theme, ExcelProfile profile);
+/// Plans the fonts of `wb` for a save under its profile, with its theme (the
+/// default theme when the book has no theme part).
+FontSavePlan build_font_save_plan(const Workbook& wb);
 
 }  // namespace formulon
 

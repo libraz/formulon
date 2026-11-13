@@ -28,6 +28,7 @@
 #include "io/ooxml_defs.h"
 #include "io/ooxml_writer_cell.h"
 #include "io/protection_xml.h"
+#include "io/sheet_phonetic.h"
 #include "io/sheet_view_xml.h"
 #include "io/sqref_text.h"
 #include "io/xml_escape.h"
@@ -515,7 +516,8 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
                               std::size_t sheet_index, std::uint32_t dynamic_array_cm_index,
                               const xlsb::NameShapes& name_shapes, const parser::ExternalBookIndexer* indexer,
                               const std::vector<std::string>* sheet_names, const RichErrorVmMap* rich_error_vm,
-                              std::string_view book_directory) {
+                              std::string_view book_directory,
+                              const std::optional<PhoneticProperties>& absent_phonetic) {
   const std::string sheet_view_xml = BuildSheetViewXml(sheet.view());
   const std::string sheet_format_xml =
       BuildSheetFormatPrXml(WithDerivedOutlineLevels(sheet.format_defaults(), sheet.layout()));
@@ -613,6 +615,10 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   flush_raw_before("mergeCells");
   if (!merges_xml.empty()) {
     emit_line(merges_xml);
+  }
+  if (absent_phonetic && !sheet_phonetic_properties(sheet)) {
+    flush_raw_before("phoneticPr");
+    emit_line(sheet_phonetic_xml(*absent_phonetic));
   }
   flush_raw_before("conditionalFormatting");
   if (!cf_xml.empty()) {

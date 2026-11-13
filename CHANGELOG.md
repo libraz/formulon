@@ -14,6 +14,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Saving `.xlsx` and `.xlsb` under a `ja_JP`, `zh_CN`, `zh_TW` or `ko_KR`
+  profile gives each sheet that has no `<phoneticPr>` the locale's phonetic
+  font, as Excel does. The font is font 0's face and theme link at the
+  locale's phonetic size (6 pt with charset 128 for `ja_JP`; 9 pt, 9 pt and
+  8 pt with `type="noConversion"` for the others). For example, a `ja_JP` book
+  whose only font is the theme's minor `ＭＳ Ｐゴシック` 11 pt is saved with a
+  second font `ＭＳ Ｐゴシック` 6 pt (family 3, charset 128) and
+  `<phoneticPr fontId="1"/>` on its sheets. An equal font already in the table is
+  reused. Sheets that state their own `<phoneticPr>` are written as they are.
+  A book whose font 0 has no theme link gets no phonetic font, because Excel
+  picks that face from the fonts installed on the machine. The workbook model
+  is unchanged; only the written file differs.
+
+- `.xlsb` saves write a font with no `<color>` as automatic and mark a bold
+  font in its flags the way Excel does; such fonts used to be written as black
+  RGB with the bold flag clear.
+
 - Saving `.xlsx` and `.xlsb` now writes a font linked to the theme (`scheme`
   `minor` or `major`) under the name of the theme's face for the script of the
   workbook profile's locale, as Excel does on save. For example, a minor font

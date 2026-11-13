@@ -27,7 +27,7 @@ std::optional<PhoneticProperties> sheet_phonetic_properties(const Sheet& sheet) 
   return std::nullopt;
 }
 
-void set_sheet_phonetic_properties(Sheet& sheet, const PhoneticProperties& props) {
+std::string sheet_phonetic_xml(const PhoneticProperties& props) {
   std::string xml = "<phoneticPr fontId=\"" + std::to_string(props.font_id) + "\"";
   if (props.type != 1U) {
     append_xml_attr(xml, "type", phonetic_type_name(props.type));
@@ -36,6 +36,11 @@ void set_sheet_phonetic_properties(Sheet& sheet, const PhoneticProperties& props
     append_xml_attr(xml, "alignment", phonetic_alignment_name(props.alignment));
   }
   xml.append("/>");
+  return xml;
+}
+
+void set_sheet_phonetic_properties(Sheet& sheet, const PhoneticProperties& props) {
+  std::string xml = sheet_phonetic_xml(props);
   WorksheetRawExtensions& children = sheet.mutable_raw_extensions();
   const auto slot = static_cast<std::uint32_t>(worksheet_child::slot_of("phoneticPr"));
   children.erase(std::remove_if(children.begin(), children.end(),
