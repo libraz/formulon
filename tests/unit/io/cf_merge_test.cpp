@@ -336,7 +336,9 @@ TEST_P(CfMergeFixture, XlsbLoadHoldsExcelsRules) {
 }
 
 INSTANTIATE_TEST_SUITE_P(Cases, CfMergeFixture, ::testing::ValuesIn(Cases()),
-                         [](const ::testing::TestParamInfo<MergeCase>& info) { return std::string(info.param.name); });
+                         [](const ::testing::TestParamInfo<MergeCase>& param_info) {
+                           return std::string(param_info.param.name);
+                         });
 
 std::size_t CountRecords(const std::vector<std::uint8_t>& slot, std::uint16_t type) {
   std::size_t count = 0;
