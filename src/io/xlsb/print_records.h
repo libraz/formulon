@@ -18,6 +18,10 @@ namespace xlsb {
 /// writer then emits itself.
 bool model_owns_print_records(const SheetPrintSettings& print);
 
+/// True when `print` holds a setting the XLSB writer does not write from the
+/// model yet, which the save reports as a deferred `print_settings` feature.
+bool has_deferred_print_settings(const SheetPrintSettings& print);
+
 /// When `model_owns_print_records(print)`, replaces the BrtPrintOptions and
 /// BrtMargins records of `after_hyperlinks` with ones written from `print`:
 /// BrtPrintOptions always (gridLinesSet on unless stated off), BrtMargins

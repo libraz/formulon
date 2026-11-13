@@ -68,6 +68,11 @@ bool model_owns_print_records(const SheetPrintSettings& print) {
   return !print.print_options_xml.empty() || !print.page_margins_xml.empty();
 }
 
+bool has_deferred_print_settings(const SheetPrintSettings& print) {
+  return !print.sheet_pr_xml.empty() || !print.page_setup_xml.empty() || !print.header_footer_xml.empty() ||
+         !print.manual_row_breaks.empty() || !print.manual_col_breaks.empty();
+}
+
 void splice_print_records(std::vector<std::uint8_t>& after_hyperlinks, const SheetPrintSettings& print) {
   if (!model_owns_print_records(print)) {
     return;

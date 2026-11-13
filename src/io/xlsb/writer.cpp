@@ -44,6 +44,7 @@
 #include "io/xlsb/external_link_writer.h"
 #include "io/xlsb/metadata_bin.h"
 #include "io/xlsb/part_paths.h"
+#include "io/xlsb/print_records.h"
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_targets.h"
 #include "io/xlsb/ptg_writer.h"
@@ -127,12 +128,7 @@ std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
     ReportDeferred(&count, "comments", sheet.comments().size(), i);
     ReportDeferred(&count, "threaded_comments", sheet.threaded_comments().size(), i);
     ReportDeferred(&count, "pivot_tables", pivots_survive_via_passthrough ? 0U : sheet.pivot_tables().size(), i);
-    const SheetPrintSettings& print = sheet.print_settings();
-    // Print options and margins are written from the model (io/xlsb/print_records.h).
-    const bool has_print = !print.sheet_pr_xml.empty() || !print.page_setup_xml.empty() ||
-                           !print.header_footer_xml.empty() || !print.manual_row_breaks.empty() ||
-                           !print.manual_col_breaks.empty();
-    ReportDeferred(&count, "print_settings", has_print ? 1U : 0U, i);
+    ReportDeferred(&count, "print_settings", has_deferred_print_settings(sheet.print_settings()) ? 1U : 0U, i);
     const SheetFormatDefaults& defaults = sheet.format_defaults();
     std::size_t invalid_defaults = 0U;
     if (!IsRepresentableBaseColumnWidth(defaults.base_col_width)) {
