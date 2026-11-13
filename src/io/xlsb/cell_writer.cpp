@@ -146,11 +146,11 @@ void EmitFormulaCellRecord(std::vector<std::uint8_t>& dst, std::vector<std::uint
   std::vector<std::uint8_t>& p = scratch;
   EmitCellHeader(p, col, xf_index);
 
-  XlsbRecordType type;
+  // A number, and the stand-in for a cached value that is none of the four scalar kinds.
+  XlsbRecordType type = XlsbRecordType::BrtFmlaNum;
   const StoredScalar scalar = StoreScalar(cached);
   switch (scalar.shape) {
     case StoredScalar::Shape::kNumber:
-      type = XlsbRecordType::BrtFmlaNum;
       emit_double(p, scalar.number);
       break;
     case StoredScalar::Shape::kBool:
@@ -171,7 +171,6 @@ void EmitFormulaCellRecord(std::vector<std::uint8_t>& dst, std::vector<std::uint
         // above. For round-trip we default to BrtFmlaNum with a 0.0
         // payload — the read-back path uses the decoded formula, and this
         // keeps the wire format well-formed.
-        type = XlsbRecordType::BrtFmlaNum;
         emit_double(p, 0.0);
       }
       break;
