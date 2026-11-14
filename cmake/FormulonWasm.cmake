@@ -451,6 +451,12 @@ set_target_properties(formulon_wasm_stack_probe PROPERTIES
 # always-active SAX). Native builds keep the threshold at 256 KiB.
 target_compile_definitions(formulon_core PRIVATE FORMULON_WASM=1)
 
+# The standalone module asks its host for the local UTC offset, as WASI
+# carries no time zone; the embind build keeps libc's localtime.
+if(FM_WASM_VARIANT STREQUAL "capi")
+  target_compile_definitions(formulon_core PRIVATE FORMULON_WASM_HOST_UTC_OFFSET=1)
+endif()
+
 # pugixml parses numbers with strtod and prints them with snprintf. Wrapping
 # the symbols routes those calls to the engine's decimal parser
 # (`__wrap_strtod` in src/utils/double_parse.cpp) and formatter

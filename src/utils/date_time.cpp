@@ -360,6 +360,13 @@ CivilTime host_utc_civil_time() noexcept {
   return CivilFromTm(utc);
 }
 
+#if defined(FORMULON_WASM_HOST_UTC_OFFSET)
+// The standalone module has no time zone of its own; the host answers the
+// local UTC offset in seconds at a given Unix time.
+extern "C" __attribute__((import_module("env"), import_name("formulon_host_utc_offset"))) std::int32_t
+formulon_host_utc_offset(std::int64_t unix_seconds);
+#endif
+
 CivilTime host_civil_time() noexcept {
   // Excel's clock functions are locale-bound: a worksheet shows the user's
   // local calendar, not UTC. `localtime_r` / `localtime_s` is therefore the
@@ -368,7 +375,10 @@ CivilTime host_civil_time() noexcept {
   using std::chrono::system_clock;
   const std::time_t stamp = system_clock::to_time_t(system_clock::now());
   std::tm local{};
-#if defined(_WIN32)
+#if defined(FORMULON_WASM_HOST_UTC_OFFSET)
+  const std::time_t shifted = stamp + formulon_host_utc_offset(static_cast<std::int64_t>(stamp));
+  gmtime_r(&shifted, &local);
+#elif defined(_WIN32)
   localtime_s(&local, &stamp);
 #else
   localtime_r(&stamp, &local);

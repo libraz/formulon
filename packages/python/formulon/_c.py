@@ -48,6 +48,7 @@ import operator
 import struct
 import sys
 import threading
+import time
 from dataclasses import dataclass
 from enum import IntEnum
 from pathlib import Path
@@ -1117,6 +1118,15 @@ class ValueKind(IntEnum):
 # ---------------------------------------------------------------------------
 
 
+def _host_utc_offset(unix_seconds: int) -> int:
+    """The local UTC offset in seconds at ``unix_seconds``, under the current
+    ``TZ``. Never raises: an exception in a host import traps the module."""
+    try:
+        return int(time.localtime(unix_seconds).tm_gmtoff or 0)
+    except (OverflowError, OSError, ValueError):
+        return 0
+
+
 def _locate_wasm() -> Path:
     """Return the on-disk path to ``formulon_capi.wasm``.
 
@@ -1229,6 +1239,18 @@ class _WasmInstance:
                 "env",
                 "emscripten_notify_memory_growth",
                 wasmtime.Func(store, ty, lambda _i: None),
+            )
+            # The module reads the local time zone through this import, as
+            # WASI has none: the local UTC offset in seconds at a Unix time.
+            linker.define(
+                store,
+                "env",
+                "formulon_host_utc_offset",
+                wasmtime.Func(
+                    store,
+                    wasmtime.FuncType([wasmtime.ValType.i64()], [wasmtime.ValType.i32()]),
+                    _host_utc_offset,
+                ),
             )
 
             instance = linker.instantiate(store, module)

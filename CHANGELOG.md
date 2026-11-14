@@ -683,6 +683,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `<dimension>`, a column keeps its width without the style, and the format
   is folded into the first entry of `<cellXfs>`. A blank cell inside a merged
   range keeps its format.
+- The Python package read `NOW()`, `TODAY()` and every other unpinned clock
+  (the conditional-format and AutoFilter "today", PivotTable date filters) in
+  UTC instead of local time, as its WebAssembly module had no time zone. The
+  module now asks the host for the local UTC offset at each read, so the
+  `TZ` in effect and a daylight-saving change are followed. A pinned clock is
+  unaffected, as are the npm package and the native builds.
 
 ## [0.19.0] - 2026-11-10
 
