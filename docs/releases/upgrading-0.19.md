@@ -113,9 +113,10 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   `IndexOutOfRange`.
 - **Behaviour:** a conditional formatting rule whose id is already in use gets
   a fresh id instead of being refused. A JavaScript `Date` written to a
-  General cell gets the date format `m/d/yyyy` (id 14) at local midnight and
-  `m/d/yyyy h:mm` (id 22) otherwise; a Python `date` takes 14, a `datetime`
-  22 and a `time` `h:mm:ss` (21).
+  General cell gets the built-in date format id 14 at local midnight and id 22
+  otherwise; a Python `date` takes 14, a `datetime` 22 and a `time` `h:mm:ss`
+  (21). Id 14 displays `m/d/yy` under en-US (`1/2/26`) and `yyyy/m/d` under
+  ja-JP; id 22 adds `h:mm`.
 - **C ABI, JavaScript, Python:** one unit per quantity, named by its suffix
   and converted at the boundary. Row heights are points (`heightPt`,
   `setRowHeight(rows, heightPt)`, `setRowAutoHeight(rows, heightPt)`,
@@ -385,8 +386,9 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   `split_x` and `split_y`, are `split_x_twips` and `split_y_twips` in
   `fm_sheet_view_info_t` and `fm_sheet_view_patch_t` (with the `_op`
   companions).
-- **C ABI:** `fm_sheet_set_pivot_field_date_group` (`Pivot.setFieldDateGroup`,
-  `Pivot.set_field_date_group`) takes a mask of `FM_PIVOT_PERIOD_*` bits, a
+- **C ABI:** `fm_workbook_pivot_field_set_date_group` is renamed
+  `fm_sheet_set_pivot_field_date_group` (`Pivot.setFieldDateGroup`,
+  `Pivot.set_field_date_group`), and it takes a mask of `FM_PIVOT_PERIOD_*` bits, a
   calendar, an interval in days and start and end serials, each with an
   `auto_start` / `auto_end` flag that makes the bound follow the data, in place of a
   granularity and year arguments. `fm_pivot_date_grouping_t` and
@@ -405,10 +407,10 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   quarter and month); the existing numbers are unchanged.
   `fm_pivot_field_info_t` gains `show_all` at its end. A caller compiled
   against an earlier header must be recompiled.
-- **C ABI:** `fm_sheet_update_chart_display` takes a `fm_chart_display_patch_t`
+- **C ABI:** `fm_sheet_set_chart_display` is renamed `fm_sheet_update_chart_display`
+  and takes a `fm_chart_display_patch_t`
   (keep / clear / set per field, like the legend and axis patches) in place of
-  the `blanks_as` and `plot_vis_only` arguments of the former
-  `fm_sheet_set_chart_display`. To port a call, clear a field
+  the `blanks_as` and `plot_vis_only` arguments. To port a call, clear a field
   whose old value was `ABSENT` and set the others; `ABSENT` as a set value is
   now `FM_STATUS_INVALID_ARGUMENT`. `fm_chart_info_t` gains `na_as_blank`,
   `fm_chart_preview_overrides_spec_t` gains `na_as_blank_op` / `na_as_blank`, and
@@ -429,13 +431,12 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   either. The shape fields `fill_rgb` and `line_rgb` are `fill` and `line`, an
   `fm_chart_fill_t` and an `fm_chart_line_t` as in the chart records.
   A caller compiled against an earlier header must be recompiled.
-- **C ABI:** the text-comparison functions take the collation strength before
-  the profile id. `fm_compare_text(a, b, profile_id, strength, out_order)`
-  is `fm_compare_text(a, b, strength, profile_id, out_order)`, and
-  `fm_get_collation_classes(values, count, profile_id, strength, ...)` is
-  `fm_get_collation_classes(values, count, strength, profile_id, ...)`. Both
-  take `const char*` and `int32_t`, so a stale call compiles and passes the
-  wrong arguments.
+- **C ABI:** the text-comparison functions are renamed and take the collation
+  strength before the profile id. `fm_text_compare(a, b, profile_id, ...)` is
+  `fm_compare_text(a, b, strength, profile_id, out_order)`, and
+  `fm_collation_classes(values, count, profile_id, ...)` is
+  `fm_get_collation_classes(values, count, strength, profile_id, ...)`. A call
+  written against the old names does not compile.
 - **C ABI:** the three CLI-only statuses `kCliInvalidArgs` (7005),
   `kCliFileNotFound` (7006) and `kCliOutputFailed` (7007) are removed from the
   engine's status range, and the numbers stay unused. They are internal to the
@@ -802,6 +803,9 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   `instanceof FormulonError` holds within one package; test
   `e.name === 'FormulonError'` across `@libraz/formulon` and
   `@libraz/formulon-native`.
+- **TypeScript:** the declarations type byte results as `Uint8Array<ArrayBuffer>`
+  (`save`, drawing and picture bytes and the other byte-returning calls), which
+  needs TypeScript 5.7 or later.
 - **JavaScript:** `createFormulon()` resolves to the `Formulon` object, and
   both packages expose it the same way. `@libraz/formulon-native` no longer
   exports `Workbook` and `evalFormula` at the top level; use
@@ -921,6 +925,9 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
 
 ### Python callers
 
+- **Python:** `NOW()`, `TODAY()` and every other clock read that is not pinned
+  use local time, where they read UTC. A script that ran on a machine set to
+  UTC sees no change; elsewhere the serial moves by the UTC offset.
 - **Python:** the handle classes (`Sheet`, `Table`, `Pivot`, `PivotCache`,
   `Chart`, `Picture`, `Shape`, `Slicer`, `SheetOoxml`, `WorkbookOoxml`) cannot
   be constructed directly; they come only from the workbook, and a direct
@@ -1303,8 +1310,7 @@ These parameters can no longer be passed by position.
 | Method | Keyword-only parameters |
 |---|---|
 | `HyperlinkInput` | `range` (required), `target`, `location`, `display`, `tooltip` (a dataclass passed to `Sheet.set_hyperlink`) |
-| `Sheet.add_picture` | `name`, `description`, `anchor` |
-| `Sheet.add_shape`, `Shape.update` | `anchor`, `preset_geometry` and the other shape fields |
+| `Shape.update` | `anchor`, `preset_geometry` and the other shape fields |
 | `Sheet.add_slicer`, `Slicer.update` | `anchor`, `row_height_pt` and the other slicer fields |
 | `Chart.update_legend` | `position`, `overlay`, `hidden_entries` |
 | `Pivot.update_grand_totals` | `rows`, `columns` |
@@ -1319,7 +1325,9 @@ These parameters can no longer be passed by position.
 
 `Chart.set_source`, `Sheet.set_selection`,
 `Sheet.add_chart` and the other signatures listed under BREAKING take one
-record instead of keywords. `Sheet.add_table` takes the fields of the JavaScript `TableInput` (`range` is a
+record instead of keywords. `Sheet.add_picture(bytes, input=None)` takes an
+optional `DrawingPlacementInput` (`name`, `description`, `anchor` are its
+fields, not parameters) and `Sheet.add_shape(spec)` takes a `ShapeInput`. `Sheet.add_table` takes the fields of the JavaScript `TableInput` (`range` is a
 `SheetRect`, `columns` the column names); `Sheet.set_selection` takes a
 `SheetSelection`; `get_border` returns and `add_border` takes a `Border`
 dataclass. `PrintTitles` keeps its name but holds `rows` and `columns` as
@@ -1691,7 +1699,14 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
   outside 10 to 400, a column outline level above 7 and a pane origin outside
   the grid. A file that carries such a value still loads and the value is
   clamped as Excel clamps it. A negative `maxChange` in an iterative-settings
-  patch is `InvalidArgument`.
+  patch is `InvalidArgument`. `updateFormatDefaults` refuses a column width
+  above 255, a row height above 409.6 and a base column width that is
+  fractional or above 255; `setSheetFormatDefaults` accepted a width of 300.
+  A protected range with an empty name, a name over 255 UTF-16 units or more
+  than 8,191 rectangles, and a sparkline source or date range that is not one
+  reference or name (a union, for example), are `InvalidArgument`; both were
+  accepted. A chart series with more points than a column holds is
+  `InvalidArgument` where it was `SecurityResourceLimit`.
 - `ws.updateView(patch)` (Python `ws.update_view`) is the single call that
   changes the view. A patch that sets both a freeze and a split is
   `InvalidArgument`. `ws.setVisibility` hiding the only visible sheet is
@@ -1729,6 +1744,33 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
   `setTableStyle` also refuses a slicer-style name, and a loaded custom style
   named like any built-in style is dropped; tables and PivotTables naming it
   keep the name.
+- A conditional formatting `dxfIndex` past the differential-format table is
+  `IndexOutOfRange`; it was `InvalidArgument`.
+- A new workbook's first sheet has `tabSelected` set; it was not. This replaces
+  the removed `setSheetTabSelected()`.
+- `setBlank` (Python `set_blank`) on a cell without a format of its own removes
+  the cell, so `cellCount` drops; it kept an empty cell.
+- A structured reference reads back as the formula bar shows it:
+  `=Tbl[[#This Row],[a]]` reads back as `=Tbl[@a]`.
+- Opening a file merges equal conditional formatting rules, so `listCfRules()`
+  can return fewer rules than the file holds: a file with two equal rules on
+  `A1:A2` and `A3:A4` lists one.
+- Column geometry under a `mac-*` profile follows Mac Excel: `getWidthModel`
+  reports platform `mac`, 6 pt per character and Aptos Narrow 12, and
+  `convertColumnCharsToPt`, `getCellRectPt`, `CELL("width")` and drawing
+  anchors use that model. Every profile used the Windows model (5.25 pt per
+  character, Calibri 11) before.
+- An `.xlsb` save that cannot hold a feature returns `IoFeatureNotWritable`
+  (5028) for protected ranges and sparkline sources the records cannot
+  represent, and for data bars with a formula minimum or maximum.
+- `addTable` names a blank or repeated header cell `Column1`, `Column2`, and so
+  on, where it refused an empty column name.
+- `GROUPBY` and `PIVOTBY` with a `total_depth` of 2 or more over a single key
+  column return `#VALUE!`; they returned a result.
+- A union holding a 3-D reference, such as `SUM((Sheet1:Sheet1!A1,B1))`,
+  returns `#NAME?`; it returned 0.
+- Inserting rows or columns that would push a value off the sheet is
+  `PreconditionFailed` and changes nothing; the value used to be dropped.
 
 ## Reference tables
 
@@ -3663,6 +3705,16 @@ A caller compiled against an earlier header must be recompiled.
 |---|---|
 | `fm_workbook_set_defined_name(wb, name, formula)`, `fm_workbook_set_defined_name_scoped`, `fm_workbook_set_defined_name_attrs` | `fm_workbook_set_defined_name(wb, const fm_defined_name_t*)` (name, formula, `local_sheet_id`, comment, hidden); an empty formula is `FM_STATUS_INVALID_ARGUMENT` instead of a removal |
 | `fm_formula_localize(formula, profile_id, out_formula)`, `fm_formula_canonicalize` | `fm_localize_formula(formula, profile_id, const fm_reference_notation_spec_t* spec, out_formula)` and `fm_canonicalize_formula` with the same arguments; `spec == NULL` keeps A1, and `r1c1` `FM_TRISTATE_TRUE` with `has_base`, `base_row`, `base_col` spells references in the profile's R1C1 |
+| `fm_workbook_remove_sheet(wb, uint32_t index)`, `fm_workbook_rename_sheet(wb, uint32_t index, name)` | `size_t sheet_index` in place of `uint32_t index` |
+| `fm_sheet_clear_hyperlinks(wb, uint32_t sheet)`, `fm_sheet_clear_merges`, `fm_sheet_clear_validations` | `size_t sheet_index` in place of `uint32_t sheet` |
+| `fm_sheet_get_hyperlink_count(wb, uint32_t sheet, uint32_t* out_count)`, `fm_sheet_get_merge_count`, `fm_sheet_get_validation_count` | `(const wb, size_t sheet_index, size_t* out_count)` |
+| `fm_sheet_get_hyperlink_at(wb, sheet, uint32_t index, fm_hyperlink*)`, `fm_sheet_get_merge_at(wb, sheet, index, fm_merge_range*)` | `(const wb, size_t sheet_index, size_t index, fm_hyperlink_t*)` and `(..., fm_cell_rect_t*)` |
+| `fm_sheet_remove_hyperlink_at(wb, sheet, uint32_t index)`, `fm_sheet_remove_merge_at` | `size_t sheet_index` and `size_t index` |
+| `fm_sheet_remove_merge(wb, sheet, fm_merge_range range)` | `fm_sheet_remove_merge(wb, size_t sheet_index, const fm_cell_rect_t* range)` |
+| `fm_sheet_set_print_area(wb, sheet_index, const char* ranges_a1)`, `fm_sheet_get_print_area(wb, sheet_index, const char** out_ranges_a1)` | `fm_sheet_set_print_area(wb, sheet_index, const fm_cell_rect_t* ranges, size_t range_count)` and `fm_sheet_get_print_area(wb, sheet_index, fm_cell_rect_t* out, size_t capacity, size_t* out_count)` |
+| `fm_sheet_validate_value`, `fm_sheet_get_effective_style` and `fm_sheet_get_format_defaults` filling `fm_validation_outcome`, `fm_effective_style` and `fm_sheet_format_defaults` | fill `fm_validation_outcome_info_t`, `fm_effective_style_info_t` and `fm_sheet_format_defaults_t` |
+| `fm_workbook_get_theme_colors`, `fm_workbook_set_theme_colors`, `fm_workbook_get_theme_fonts`, `fm_workbook_set_theme_fonts` taking `fm_theme_colors` and `fm_theme_fonts` | take `fm_theme_colors_t` and `fm_theme_fonts_t` |
+| `fm_workbook_resolve_color(wb, fm_color_spec spec, context, ...)` | `fm_workbook_resolve_color(wb, const fm_color_t* spec, context, ...)` |
 | `fm_workbook_defined_name_at` (two strings and a scope), `fm_workbook_defined_name_attrs_at` | `fm_workbook_get_defined_name_at(wb, index, fm_defined_name_t*)` |
 | `fm_workbook_set_iterative(wb, enabled, max_iterations, max_change)`, `fm_workbook_set_iterative_enabled` | `fm_workbook_update_iterative(wb, const fm_iterative_settings_patch_t*)`; a negative field keeps the stored value |
 | `fm_sheet_set_print_titles(wb, sheet_index, repeat_rows, repeat_cols)`, `fm_sheet_get_print_titles` (A1 text) | take and fill an `fm_print_titles_t` (per-axis `has_*` flag and 0-based span); `NULL` clears |
