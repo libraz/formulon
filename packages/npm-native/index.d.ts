@@ -2051,7 +2051,8 @@ export interface WidthModel {
 /** Sheet default column / row metrics (`<sheetFormatPr>`). `defaultColumnWidthChars` and `defaultRowHeightPt`
  *  are `null` when the sheet stores none; on update, `null` clears the stored value and an omitted key keeps it.
  *  The ranges below are what an update accepts; a sheet loaded from a file Excel itself refuses can read a width or
- *  base above 255, and an `.xlsb` save of it fails with `StatusCode.IoFeatureNotWritable`. */
+ *  base above 255, and an `.xlsb` save writes the format's default in its place and counts it in
+ *  `deferredFeatureCount`. */
 export interface SheetFormatDefaultsInput {
   /** The stored default column width in characters, column padding included, 0 to 255; `null` when the sheet stores
    *  none (on update, `null` clears it). */

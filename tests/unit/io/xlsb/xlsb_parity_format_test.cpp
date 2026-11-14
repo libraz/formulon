@@ -1,11 +1,14 @@
 // The worksheet default-format record (BrtWsFmtInfo) held against Excel 16.115's own xlsb and xlsx saves of the same
 // sources (tests/fixtures/excel/xlsb_parity/format), the xlsx reader's normalisation of what Excel normalises on
-// open, the encoder's refusal of what Excel does not hold, and the reader's skip of what it does not open.
+// open, the encoder's stand-ins for what Excel does not hold, and the reader's skip of what it does not open.
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -15,7 +18,8 @@
 #include "io/xlsb/writer.h"
 #include "reader_test_helpers.h"
 #include "sheet.h"
-#include "utils/error.h"
+#include "support/xlsb_package_validator.h"
+#include "utils/structured_log.h"
 #include "workbook.h"
 #include "xlsb_twin_compare.h"
 
@@ -169,38 +173,116 @@ TEST(XlsbParityFormatDefaults, XlsxSaveKeepsOutlineSummaryAtSeven) {
   }
 }
 
-/// The error of an xlsb save of `workbook`; the save must fail.
-Error SaveError(const Workbook& workbook) {
-  auto written = write_xlsb_with_result(workbook);
-  EXPECT_FALSE(static_cast<bool>(written));
-  return written ? Error{} : written.error();
-}
+/// The per-kind counts of the deferred-feature log records of the saves made while it lives.
+class DeferredKinds {
+ public:
+  DeferredKinds() {
+    set_structured_log_sink(&Collect, &records_);
+    set_structured_log_min_level(StructuredLogLevel::kWarn);
+  }
+  ~DeferredKinds() {
+    set_structured_log_min_level(StructuredLogLevel::kOff);
+    set_structured_log_sink(nullptr);
+  }
+  DeferredKinds(const DeferredKinds&) = delete;
+  DeferredKinds& operator=(const DeferredKinds&) = delete;
 
-TEST(XlsbParityFormatDefaults, EncoderRefusesUnrepresentable) {
-  const auto with_defaults = [](void (*edit)(SheetFormatDefaults&)) {
-    Workbook wb = Workbook::create_empty();
-    wb.add_sheet("Sheet1");
-    edit(wb.sheet(0).mutable_format_defaults());
-    return wb;
-  };
-  const Workbook refused[] = {
-      with_defaults([](SheetFormatDefaults& d) { d.base_col_width = 8.5; }),
-      with_defaults([](SheetFormatDefaults& d) { d.base_col_width = 256.0; }),
-      with_defaults([](SheetFormatDefaults& d) {
-        d.has_default_col_width = true;
-        d.default_col_width = 255.5;
-      }),
-      with_defaults([](SheetFormatDefaults& d) {
-        d.has_default_row_height = true;
-        d.default_row_height = 409.65;
-      }),
-  };
-  for (const Workbook& wb : refused) {
-    const Error error = SaveError(wb);
-    EXPECT_EQ(error.code, FormulonErrorCode::kIoFeatureNotWritable);
-    EXPECT_EQ(error.context, "context=write_xlsb kind=format_defaults sheet_index=0");
+  /// The items the saves reported deferred under `kind`.
+  std::size_t count(std::string_view kind) const {
+    const std::string key = "\"kind\":\"" + std::string(kind) + "\"";
+    std::size_t total = 0U;
+    for (const std::string& record : records_) {
+      const std::size_t count_at = record.find("\"count\":");
+      if (record.find(key) != std::string::npos && count_at != std::string::npos) {
+        total += std::strtoul(record.c_str() + count_at + 8U, nullptr, 10);
+      }
+    }
+    return total;
   }
 
+ private:
+  static void Collect(std::string_view record, void* user) {
+    if (record.find("xlsb.writer.deferred") != std::string_view::npos) {
+      static_cast<std::vector<std::string>*>(user)->emplace_back(record);
+    }
+  }
+  std::vector<std::string> records_;
+};
+
+/// BrtWsFmtInfo's fields, decoded from its fixed 12-byte payload.
+struct FmtFields {
+  std::uint32_t dx_g_col = 0U;
+  std::uint16_t base_col_width = 0U;
+  std::uint16_t row_height_twips = 0U;
+  std::uint32_t flags = 0U;
+};
+
+FmtFields DecodeFmt(const Bytes& payload) {
+  EXPECT_EQ(payload.size(), 12U);
+  FmtFields out;
+  if (payload.size() != 12U) {
+    return out;
+  }
+  const auto le = [&](std::size_t at, std::size_t width) {
+    std::uint32_t v = 0U;
+    for (std::size_t i = 0; i < width; ++i) {
+      v |= static_cast<std::uint32_t>(payload[at + i]) << (8U * i);
+    }
+    return v;
+  };
+  out.dx_g_col = le(0U, 4U);
+  out.base_col_width = static_cast<std::uint16_t>(le(4U, 2U));
+  out.row_height_twips = static_cast<std::uint16_t>(le(6U, 2U));
+  out.flags = le(8U, 4U);
+  return out;
+}
+
+constexpr std::uint32_t kAbsentWidth = 0xFFFFFFFFU;
+
+TEST(XlsbParityFormatDefaults, EncoderWritesStandInsAndReportsThem) {
+  struct Case {
+    void (*edit)(SheetFormatDefaults&);
+    std::uint32_t dx_g_col;
+    std::uint16_t base_col_width;
+    std::uint16_t row_height_twips;
+  };
+  const Case cases[] = {
+      {[](SheetFormatDefaults& d) { d.base_col_width = 8.5; }, kAbsentWidth, 8U, 300U},
+      {[](SheetFormatDefaults& d) { d.base_col_width = 256.0; }, kAbsentWidth, 8U, 300U},
+      {[](SheetFormatDefaults& d) {
+         d.has_default_col_width = true;
+         d.default_col_width = 255.5;
+       },
+       kAbsentWidth, 8U, 300U},
+      {[](SheetFormatDefaults& d) {
+         d.has_default_row_height = true;
+         d.default_row_height = 409.65;
+       },
+       kAbsentWidth, 8U, 300U},
+  };
+  for (const Case& c : cases) {
+    Workbook wb = Workbook::create_empty();
+    wb.add_sheet("Sheet1");
+    SheetFormatDefaults& defaults = wb.sheet(0).mutable_format_defaults();
+    defaults.base_col_width = 8.0;
+    defaults.has_default_row_height = true;
+    defaults.default_row_height = 15.0;
+    c.edit(defaults);
+    const DeferredKinds deferred;
+    auto written = write_xlsb_with_result(wb);
+    ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
+    EXPECT_EQ(deferred.count("format_defaults"), 1U);
+    EXPECT_GE(written.value().diagnostics.deferred_feature_count, 1U);
+    const std::optional<Bytes> payload = FmtInfo(written.value().bytes);
+    ASSERT_TRUE(payload.has_value());
+    const FmtFields fields = DecodeFmt(*payload);
+    EXPECT_EQ(fields.dx_g_col, c.dx_g_col);
+    EXPECT_EQ(fields.base_col_width, c.base_col_width);
+    EXPECT_EQ(fields.row_height_twips, c.row_height_twips);
+    EXPECT_EQ(fields.flags, 0U);
+  }
+
+  // Outline level 8 is clamped to 7 in the summary and not reported.
   Workbook rows = Workbook::create_empty();
   rows.add_sheet("Sheet1");
   RowLayout row;
@@ -214,10 +296,16 @@ TEST(XlsbParityFormatDefaults, EncoderRefusesUnrepresentable) {
   column.last = 1U;
   column.outline_level = 8U;
   columns.sheet(0).mutable_layout().columns.push_back(column);
-  for (const Workbook* wb : {&rows, &columns}) {
-    const Error error = SaveError(*wb);
-    EXPECT_EQ(error.code, FormulonErrorCode::kIoFeatureNotWritable);
-    EXPECT_EQ(error.context, "context=write_xlsb kind=outline_level sheet_index=0");
+  const std::pair<const Workbook*, std::uint32_t> outlines[] = {{&rows, 7U << 16U}, {&columns, 7U << 24U}};
+  for (const auto& [wb, flags] : outlines) {
+    const DeferredKinds deferred;
+    auto written = write_xlsb_with_result(*wb);
+    ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
+    EXPECT_EQ(deferred.count("format_defaults"), 0U);
+    EXPECT_EQ(deferred.count("outline_level"), 0U);
+    const std::optional<Bytes> payload = FmtInfo(written.value().bytes);
+    ASSERT_TRUE(payload.has_value());
+    EXPECT_EQ(DecodeFmt(*payload).flags, flags);
   }
 }
 
@@ -277,6 +365,71 @@ TEST(XlsbParityFormatDefaults, ReadClampsDefaultRowHeightAsExcel) {
     const XlsbReadResult read = ReadXlsb(BookWithFormatPayload(WorksheetFormatPayload(0xFFFFFFFFU, 8U, twips, 1U)));
     EXPECT_EQ(read.skipped_feature_count, 0U);
     EXPECT_EQ(read.workbook.sheet(0).format_defaults().default_row_height, 409.5);
+  }
+}
+
+constexpr std::uint16_t kBrtBeginWsView = 137;
+
+/// The BrtBeginWsView records of worksheet part `sheet` (1-based).
+std::size_t ViewCount(const Bytes& package, std::size_t sheet) {
+  const std::optional<Bytes> part = test::ReadPart(package, "xl/worksheets/sheet" + std::to_string(sheet) + ".bin");
+  EXPECT_TRUE(part.has_value());
+  std::size_t views = 0U;
+  for (const test::IndexedRecord& record : test::SplitPart(part.value_or(Bytes{}))) {
+    views += record.type == kBrtBeginWsView ? 1U : 0U;
+  }
+  return views;
+}
+
+// Sources whose xlsb save once succeeded: each saves again, writing a stand-in for a default Excel does not hold
+// (reported as format_defaults), outline level 8 as 7 (not reported), and leaving out an extra view of a window
+// the workbook lacks (reported as sheet_view); the package validates and reads back.
+TEST(XlsbSaveRestoredSources, TenSourcesSaveOpenValidateAndReload) {
+  struct Case {
+    const char* path;
+    std::size_t format_defaults;
+    std::size_t sheet_view;
+    std::uint32_t dx_g_col;
+    std::uint16_t base_col_width;
+    std::uint16_t row_height_twips;
+    std::uint32_t flags;
+  };
+  const Case cases[] = {
+      {"format/base_256_src.xlsx", 1U, 0U, kAbsentWidth, 8U, 300U, 0U},
+      {"format/base_large_src.xlsx", 1U, 0U, kAbsentWidth, 8U, 300U, 0U},
+      {"format/width_256_src.xlsx", 1U, 0U, kAbsentWidth, 8U, 300U, 0U},
+      {"format/width_large_src.xlsx", 1U, 0U, kAbsentWidth, 8U, 300U, 0U},
+      {"format/width_record_max_src.xlsx", 1U, 0U, kAbsentWidth, 8U, 300U, 0U},
+      {"format/width_record_max.xlsx", 1U, 0U, kAbsentWidth, 10U, 280U, 0U},
+      {"format/outline_col_8_src.xlsx", 0U, 0U, kAbsentWidth, 8U, 300U, 7U << 24U},
+      {"format/outline_row_8_src.xlsx", 0U, 0U, kAbsentWidth, 8U, 300U, 7U << 16U},
+      {"views/bad_window_id_src.xlsx", 0U, 1U, kAbsentWidth, 8U, 300U, 0U},
+      {"views/window_id_past_src.xlsx", 0U, 1U, kAbsentWidth, 8U, 300U, 0U},
+  };
+  for (const Case& c : cases) {
+    SCOPED_TRACE(c.path);
+    auto read = read_ooxml(reader_test_support::SpanOf(
+        test::ReadBytes(std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_parity/" + c.path)));
+    ASSERT_TRUE(static_cast<bool>(read)) << read.error().message;
+    const DeferredKinds deferred;
+    auto written = write_xlsb_with_result(read.value().workbook);
+    ASSERT_TRUE(static_cast<bool>(written)) << written.error().message << " | " << written.error().context;
+    const Bytes& bytes = written.value().bytes;
+    EXPECT_EQ(::formulon::test::ValidateXlsbPackage(reader_test_support::SpanOf(bytes)), std::vector<std::string>{});
+    EXPECT_TRUE(static_cast<bool>(read_xlsb(reader_test_support::SpanOf(bytes))));
+    EXPECT_EQ(deferred.count("format_defaults"), c.format_defaults);
+    EXPECT_EQ(deferred.count("sheet_view"), c.sheet_view);
+    EXPECT_EQ(deferred.count("outline_level"), 0U);
+    EXPECT_GE(written.value().diagnostics.deferred_feature_count, c.format_defaults + c.sheet_view);
+    const std::optional<Bytes> payload = FmtInfo(bytes);
+    ASSERT_TRUE(payload.has_value());
+    const FmtFields fields = DecodeFmt(*payload);
+    EXPECT_EQ(fields.dx_g_col, c.dx_g_col);
+    EXPECT_EQ(fields.base_col_width, c.base_col_width);
+    EXPECT_EQ(fields.row_height_twips, c.row_height_twips);
+    EXPECT_EQ(fields.flags, c.flags);
+    // The extra view of window 5 is left out; only the main view is written.
+    EXPECT_EQ(ViewCount(bytes, 1U), 1U);
   }
 }
 

@@ -56,12 +56,14 @@
 #include "io/xlsb/ptg_writer.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
+#include "io/xlsb/sheet_properties_records.h"
 #include "io/xlsb/sheet_writer.h"
 #include "io/xlsb/slicer_records.h"
 #include "io/xlsb/sst_writer.h"
 #include "io/xlsb/styles_writer.h"
 #include "io/xlsb/table_records.h"
 #include "io/xlsb/user_book_views.h"
+#include "io/xlsb/view_records.h"
 #include "io/xlsb/workbook_bin_writer.h"
 #include "io/xlsb/workbook_props_records.h"
 #include "miniz.h"
@@ -126,12 +128,15 @@ bool HasPivotPassthroughPart(const Workbook& workbook) {
 std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
   std::uint32_t count = 0U;
   const bool pivots_survive_via_passthrough = HasPivotPassthroughPart(workbook);
+  const std::uint32_t views = workbook_view_count(workbook.book_views_xml());
   for (std::size_t i = 0; i < workbook.sheet_count(); ++i) {
     const Sheet& sheet = workbook.sheet(i);
     ReportDeferred(&count, "auto_filter", unwritten_auto_filter_settings(sheet), i);
     ReportDeferred(&count, "pivot_tables", pivots_survive_via_passthrough ? 0U : sheet.pivot_tables().size(), i);
     ReportDeferred(&count, "print_settings", has_deferred_print_settings(sheet.print_settings()) ? 1U : 0U, i);
     ReportDeferred(&count, "custom_sheet_views", unwritten_xml_sheet_views(sheet), i);
+    ReportDeferred(&count, "format_defaults", unwritable_format_default_count(sheet.format_defaults()), i);
+    ReportDeferred(&count, "sheet_view", unwritten_sheet_view_count(sheet.view(), views), i);
   }
   ReportDeferred(&count, "custom_workbook_views", unwritten_xml_book_views(workbook), 0U);
   // Workbook globals the BrtBookProtection / BrtWbProp / BrtBookView records

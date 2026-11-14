@@ -1,5 +1,6 @@
-"""Features the xlsb writer cannot store fail the save with IoFeatureNotWritable; inputs outside Excel's limits are
-refused with InvalidArgumentError."""
+"""Features the xlsb writer cannot store fail the save with IoFeatureNotWritable, while a sheet default or view Excel
+does not hold is saved as a stand-in and reported; inputs outside Excel's limits are refused with
+InvalidArgumentError."""
 
 from __future__ import annotations
 
@@ -134,20 +135,18 @@ class XlsbNotWritableTests(unittest.TestCase):
         self.ws.update_sparkline_group(gid, sparklines=[read])
         self.assertEqual(len(self.ws.list_sparkline_groups()), 2)
 
-    def test_xlsb_save_of_sources_excel_refuses_fails_and_names_the_feature(self) -> None:
-        for kind, parts in (
-            ("format_defaults", ("format", "base_256_src.xlsx")),
-            ("format_defaults", ("format", "width_256_src.xlsx")),
-            ("outline_level", ("format", "outline_row_8_src.xlsx")),
-            ("sheet_view", ("views", "bad_window_id_src.xlsx")),
+    def test_xlsb_save_of_sources_excel_refuses_writes_stand_ins_and_reports_them(self) -> None:
+        for parts, min_deferred in (
+            (("format", "base_256_src.xlsx"), 1),
+            (("format", "width_256_src.xlsx"), 1),
+            (("format", "outline_row_8_src.xlsx"), 0),
+            (("views", "bad_window_id_src.xlsx"), 1),
         ):
             with self.subTest(fixture="/".join(parts)), Workbook.load(FIXTURES.joinpath(*parts)) as wb:
-                with self.assertRaises(IoError) as cm:
-                    wb.save(format=WorkbookFormat.XLSB)
-                self.assertNotIsInstance(cm.exception, InvalidFileError)
-                self.assertEqual(cm.exception.code, StatusCode.IO_FEATURE_NOT_WRITABLE)
-                self.assertIn(f"kind={kind}", cm.exception.context)
-                self.assertIn("sheet_index=0", cm.exception.context)
+                saved = wb.save_with_diagnostics(format=WorkbookFormat.XLSB)
+                self.assertGreaterEqual(saved.deferred_feature_count, min_deferred)
+                with Workbook.load(saved.bytes) as reloaded:
+                    self.assertEqual(len(reloaded), len(wb))
                 self.assertTrue(wb.save(format=WorkbookFormat.XLSX))
 
     def test_format_defaults_outside_excel_limits_are_refused_and_write_nothing(self) -> None:

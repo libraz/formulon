@@ -69,6 +69,8 @@ bool IsWrittenSheetPrAttribute(std::string_view element, const pugi::xml_attribu
 /// row height Excel writes when no default is set.
 constexpr std::uint32_t kAbsentDefaultColumnWidth = 0xFFFFFFFFU;
 constexpr std::uint16_t kCanonicalDefaultRowHeightTwips = 300U;
+/// cchDefColWidth written for a base column width Excel does not hold.
+constexpr std::uint16_t kStandInBaseColumnWidth = 8U;
 /// dxGCol counts 1/256 characters; miyDefRwHeight counts twips.
 constexpr double kColumnWidthUnits = 256.0;
 constexpr double kTwipsPerPoint = 20.0;
@@ -407,25 +409,26 @@ bool decode_ws_fmt_info(const XlsbRecord& rec, Sheet& sheet) {
   return true;
 }
 
+std::size_t unwritable_format_default_count(const SheetFormatDefaults& defaults) {
+  return (IsValidBaseColWidth(defaults.base_col_width) ? 0U : 1U) +
+         (defaults.has_default_col_width && !IsValidDefaultColWidth(defaults.default_col_width) ? 1U : 0U) +
+         (defaults.has_default_row_height && !IsValidDefaultRowHeight(defaults.default_row_height) ? 1U : 0U);
+}
+
 /// Emits BrtWsFmtInfo from the sheet's modelled `<sheetFormatPr>` values.
 Expected<void, Error> emit_ws_fmt_info(std::vector<std::uint8_t>& dst, const SheetFormatDefaults& defaults,
-                                       std::size_t sheet_index) {
-  if (defaults.outline_level_row > kMaxOutlineLevel || defaults.outline_level_col > kMaxOutlineLevel) {
-    return not_writable("outline_level", sheet_index);
-  }
-  if (!IsValidBaseColWidth(defaults.base_col_width) ||
-      (defaults.has_default_col_width && !IsValidDefaultColWidth(defaults.default_col_width)) ||
-      (defaults.has_default_row_height && !IsValidDefaultRowHeight(defaults.default_row_height))) {
-    return not_writable("format_defaults", sheet_index);
-  }
-  // Both sizes are truncated to the record's units, as Excel stores them.
+                                       std::size_t /*sheet_index*/) {
+  // A size Excel does not hold is written as the record's stand-in; valid sizes are truncated to its units.
+  const std::uint16_t base_col_width = IsValidBaseColWidth(defaults.base_col_width)
+                                           ? static_cast<std::uint16_t>(defaults.base_col_width)
+                                           : kStandInBaseColumnWidth;
   const std::uint32_t dx_g_col =
-      defaults.has_default_col_width
+      defaults.has_default_col_width && IsValidDefaultColWidth(defaults.default_col_width)
           ? static_cast<std::uint32_t>(std::floor(defaults.default_col_width * kColumnWidthUnits))
           : kAbsentDefaultColumnWidth;
   std::uint16_t miy_default_row_height = kCanonicalDefaultRowHeightTwips;
   std::uint32_t format_flags = 0U;
-  if (defaults.has_default_row_height) {
+  if (defaults.has_default_row_height && IsValidDefaultRowHeight(defaults.default_row_height)) {
     miy_default_row_height = static_cast<std::uint16_t>(std::floor(defaults.default_row_height * kTwipsPerPoint));
     if (miy_default_row_height == 0U) {
       format_flags |= kWsFmtDyZero;  // An explicit zero height hides rows by default.
@@ -443,12 +446,13 @@ Expected<void, Error> emit_ws_fmt_info(std::vector<std::uint8_t>& dst, const She
   if (defaults.thick_bottom) {
     format_flags |= kWsFmtExDsc;
   }
-  format_flags |= static_cast<std::uint32_t>(defaults.outline_level_row) << 16U;
-  format_flags |= static_cast<std::uint32_t>(defaults.outline_level_col) << 24U;
+  // The record holds outline levels up to 7, as Excel does; deeper levels are clamped.
+  format_flags |= static_cast<std::uint32_t>(std::min(defaults.outline_level_row, kMaxOutlineLevel)) << 16U;
+  format_flags |= static_cast<std::uint32_t>(std::min(defaults.outline_level_col, kMaxOutlineLevel)) << 24U;
 
   std::vector<std::uint8_t> formatting;
   emit_u32(formatting, dx_g_col);
-  emit_u16(formatting, static_cast<std::uint16_t>(defaults.base_col_width));
+  emit_u16(formatting, base_col_width);
   emit_u16(formatting, miy_default_row_height);
   emit_u32(formatting, format_flags);
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtWsFmtInfo), formatting);

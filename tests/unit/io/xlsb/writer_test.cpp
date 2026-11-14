@@ -350,26 +350,39 @@ TEST(XlsbWriter, EncodesWorksheetFormatDefaultsAndPresenceFlags) {
   EXPECT_EQ(quantized_flags_or.value(), 2U);
 }
 
-TEST(XlsbWriter, UnrepresentableWorksheetFormatDefaultsRefuseTheSave) {
-  const auto save_error = [](void (*edit)(SheetFormatDefaults&)) {
-    Workbook wb = Workbook::create();
-    edit(wb.sheet(0).mutable_format_defaults());
-    auto write_or = write_xlsb_with_result(wb);
-    EXPECT_FALSE(static_cast<bool>(write_or));
-    return write_or ? FormulonErrorCode::kOk : write_or.error().code;
-  };
-  EXPECT_EQ(save_error([](SheetFormatDefaults& d) { d.base_col_width = 8.5; }),
-            FormulonErrorCode::kIoFeatureNotWritable);
-  EXPECT_EQ(save_error([](SheetFormatDefaults& d) {
-              d.default_col_width = -1.0;
-              d.has_default_col_width = true;
-            }),
-            FormulonErrorCode::kIoFeatureNotWritable);
-  EXPECT_EQ(save_error([](SheetFormatDefaults& d) {
-              d.default_row_height = std::numeric_limits<double>::infinity();
-              d.has_default_row_height = true;
-            }),
-            FormulonErrorCode::kIoFeatureNotWritable);
+TEST(XlsbWriter, InvalidWorksheetFormatDefaultsUseSafeFallbacksAndAreDeferred) {
+  auto baseline_or = write_xlsb_with_result(Workbook::create());
+  ASSERT_TRUE(static_cast<bool>(baseline_or)) << baseline_or.error().message;
+  const std::uint32_t baseline = baseline_or.value().diagnostics.deferred_feature_count;
+
+  Workbook wb = Workbook::create();
+  SheetFormatDefaults& defaults = wb.sheet(0).mutable_format_defaults();
+  defaults.base_col_width = 8.5;
+  defaults.default_col_width = -1.0;
+  defaults.has_default_col_width = true;
+  defaults.default_row_height = std::numeric_limits<double>::infinity();
+  defaults.has_default_row_height = true;
+
+  auto write_or = write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
+  EXPECT_EQ(write_or.value().diagnostics.deferred_feature_count, baseline + 3U);
+
+  ZipReader zip;
+  ASSERT_TRUE(static_cast<bool>(zip.open(SpanOf(write_or.value().bytes))));
+  auto sheet_or = zip.read_entry("xl/worksheets/sheet1.bin");
+  ASSERT_TRUE(static_cast<bool>(sheet_or));
+  const std::vector<std::uint8_t> payload = WorksheetFormatPayloadFromSheet(sheet_or.value());
+  ASSERT_EQ(payload.size(), 12U);
+  ByteSpan cursor = SpanOf(payload);
+  auto dx_or = read_u32(cursor);
+  auto cch_or = read_u16(cursor);
+  auto miy_or = read_u16(cursor);
+  auto flags_or = read_u32(cursor);
+  ASSERT_TRUE(dx_or && cch_or && miy_or && flags_or);
+  EXPECT_EQ(dx_or.value(), 0xFFFFFFFFU);
+  EXPECT_EQ(cch_or.value(), 8U);
+  EXPECT_EQ(miy_or.value(), 300U);
+  EXPECT_EQ(flags_or.value(), 0U);
 }
 
 TEST(XlsbWriter, DefinedNameCommentSurvivesWriteReadRoundTrip) {

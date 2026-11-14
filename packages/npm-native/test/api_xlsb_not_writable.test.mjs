@@ -1,5 +1,6 @@
-// Features the xlsb writer cannot store fail the save with IoFeatureNotWritable; protected-range and sparkline
-// inputs outside Excel's limits fail with InvalidArgument.
+// Features the xlsb writer cannot store fail the save with IoFeatureNotWritable, while a sheet default or view Excel
+// does not hold is saved as a stand-in and reported; protected-range and sparkline inputs outside Excel's limits fail
+// with InvalidArgument.
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -203,25 +204,22 @@ test('a sparkline whose source is #REF! reads back without one and the read-back
   });
 });
 
-for (const [kind, parts] of [
-  ['format_defaults', ['format', 'base_256_src.xlsx']],
-  ['format_defaults', ['format', 'width_256_src.xlsx']],
-  ['outline_level', ['format', 'outline_row_8_src.xlsx']],
-  ['sheet_view', ['views', 'bad_window_id_src.xlsx']],
+// Sources whose xlsb save Excel would refuse as read: the save writes what Excel opens and reports what it changed.
+for (const [parts, minDeferred] of [
+  [['format', 'base_256_src.xlsx'], 1],
+  [['format', 'width_256_src.xlsx'], 1],
+  [['format', 'outline_row_8_src.xlsx'], 0],
+  [['views', 'bad_window_id_src.xlsx'], 1],
 ]) {
-  test(`an xlsb save of ${parts.join('/')} fails with kind=${kind} and the xlsx save succeeds`, async () => {
+  test(`an xlsb save of ${parts.join('/')} succeeds, reports the deferral and reloads`, async () => {
     const f = await getModule();
     const wb = f.Workbook.load(fixture(...parts));
     try {
-      assert.throws(
-        () => wb.save(f.WorkbookFormat.Xlsb),
-        (e) => {
-          assert.ok(isFormulonError(e, f.StatusCode.IoFeatureNotWritable), String(e));
-          assert.ok(e.context.includes(`kind=${kind}`), e.context);
-          assert.match(e.context, /sheet_index=0/);
-          return true;
-        },
-      );
+      const saved = wb.saveWithDiagnostics(f.WorkbookFormat.Xlsb);
+      assert.ok(saved.bytes.length > 0);
+      assert.ok(saved.deferredFeatureCount >= minDeferred, String(saved.deferredFeatureCount));
+      const reloaded = f.Workbook.load(saved.bytes);
+      reloaded.dispose();
       assert.ok(wb.save(f.WorkbookFormat.Xlsx).length > 0);
     } finally {
       wb.dispose();

@@ -43,14 +43,6 @@ x14_formula_edit_1_s1_insert_row2.xlsx save_xlsb 5028 save_refused  # data bar w
 x14_formula_edit_2_s1_delete_colB.xlsx save_xlsb 5028 save_refused  # data bar with a formula threshold (kind=data_bar)
 x14_formula_edit_3_s2_insert_row1.xlsx save_xlsb 5028 save_refused  # data bar with a formula threshold (kind=data_bar)
 x14_formula_edit_4_s1_insert_row1.xlsx save_xlsb 5028 save_refused  # data bar with a formula threshold (kind=data_bar)
-xlsb_parity/format/base_256_src.xlsx save_xlsb 5028 save_refused  # column width past the format (kind=format_defaults)
-xlsb_parity/format/base_large_src.xlsx save_xlsb 5028 save_refused  # column width past the format (kind=format_defaults)
-xlsb_parity/format/outline_col_8_src.xlsx save_xlsb 5028 save_refused  # outline level of 8 or more (kind=outline_level)
-xlsb_parity/format/outline_row_8_src.xlsx save_xlsb 5028 save_refused  # outline level of 8 or more (kind=outline_level)
-xlsb_parity/format/width_256_src.xlsx save_xlsb 5028 save_refused  # column width past the format (kind=format_defaults)
-xlsb_parity/format/width_large_src.xlsx save_xlsb 5028 save_refused  # column width past the format (kind=format_defaults)
-xlsb_parity/format/width_record_max.xlsx save_xlsb 5028 save_refused  # column width past the format (kind=format_defaults)
-xlsb_parity/format/width_record_max_src.xlsx save_xlsb 5028 save_refused  # column width past the format (kind=format_defaults)
 xlsb_parity/protection/name_empty_src.xlsx save_xlsb 5028 save_refused  # protected range title the format cannot hold (kind=protected_range_title)
 xlsb_parity/protection/rects_8192_src.xlsx save_xlsb 5028 save_refused  # protected range with too many areas (kind=protected_range_rects)
 xlsb_parity/protection/sddl.xlsx save_xlsb 5028 save_refused  # protected range security descriptor (kind=protected_range_descriptor)
@@ -64,8 +56,6 @@ xlsb_parity/sparklines/expr_source_src.xlsx save_xlsb 5028 save_refused  # spark
 xlsb_parity/sparklines/ref_error_rows_src.xlsx save_xlsb 5028 save_refused  # sparkline source the format cannot hold (kind=sparklines)
 xlsb_parity/sparklines/structured_source_src.xlsx save_xlsb 5028 save_refused  # sparkline source the format cannot hold (kind=sparklines)
 xlsb_parity/sparklines/union_source_src.xlsx save_xlsb 5028 save_refused  # sparkline source the format cannot hold (kind=sparklines)
-xlsb_parity/views/bad_window_id_src.xlsx save_xlsb 5028 save_refused  # sheet view of a window the workbook lacks (kind=sheet_view)
-xlsb_parity/views/window_id_past_src.xlsx save_xlsb 5028 save_refused  # sheet view of a window the workbook lacks (kind=sheet_view)
 
 # Validator findings on sources Excel itself refuses.
 win/book_protection/hand_lockWindows_afterWorkbookPr.rejected.input.xlsx validate_xlsx workbook_protection_order mirrors_excel_refused_source  # carries the refused source value through
@@ -81,6 +71,10 @@ xlsb_parity/print/breaks_row_1025_src.xlsx validate_xlsx page_breaks_max_1024 mi
 xlsb_parity/protection/name_empty_src.xlsx validate_xlsx protected_range_title mirrors_excel_refused_source  # carries the refused source value through
 xlsb_parity/protection/title_256_src.xlsx validate_xlsx protected_range_title mirrors_excel_refused_source  # carries the refused source value through
 xlsb_parity/protection/title_astral_128_src.xlsx validate_xlsx protected_range_title mirrors_excel_refused_source  # carries the refused source value through
+
+# An xlsb save leaves out a sheet view of a window the workbook lacks.
+xlsb_parity/views/bad_window_id_src.xlsx model_xlsb sheet_view_count known_gap  # extra view of a missing window left out of xlsb
+xlsb_parity/views/window_id_past_src.xlsx model_xlsb sheet_view_count known_gap  # extra view of a missing window left out of xlsb
 
 # Custom views are not carried between formats.
 retained_children_edit/children_0_base.xlsb model_xlsx custom_view_count known_gap  # custom views across formats

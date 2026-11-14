@@ -16,7 +16,6 @@
 #include "io/xlsb/writer.h"
 #include "reader_test_helpers.h"
 #include "sheet.h"
-#include "utils/error.h"
 #include "workbook.h"
 #include "xlsb_twin_compare.h"
 
@@ -185,15 +184,21 @@ TEST(XlsbParitySheetView, NormaliseViewExtensionIsLeftOutOfXlsb) {
   EXPECT_EQ(types, (std::vector<std::uint16_t>{133, kBrtBeginWsView, kBrtSel, kBrtEndWsView, 134}));
 }
 
-TEST(XlsbParitySheetView, NormaliseWindowPastTheBookViewsReadsButRefusesXlsb) {
+TEST(XlsbParitySheetView, NormaliseWindowPastTheBookViewsReadsAndIsLeftOutOfXlsb) {
   for (const char* name : {"window_id_past_src.xlsx", "bad_window_id_src.xlsx"}) {
     SCOPED_TRACE(name);
     const Workbook book = ReadXlsx(name);
     EXPECT_NE(book.sheet(0).view().extra_views_xml.find("workbookViewId=\"5\""), std::string::npos);
-    auto written = write_xlsb_with_result(book);
-    ASSERT_FALSE(static_cast<bool>(written));
-    EXPECT_EQ(written.error().code, FormulonErrorCode::kIoFeatureNotWritable);
-    EXPECT_EQ(written.error().context, "context=write_xlsb kind=sheet_view sheet_index=0");
+    std::vector<std::uint16_t> types;
+    for (const auto& [part, records] : ViewRecords(WriteXlsb(book))) {
+      if (part == "xl/worksheets/sheet1.bin") {
+        for (const auto& record : records) {
+          types.push_back(record.first);
+        }
+      }
+    }
+    // The main view alone; the view of window 5 has no window to attach to.
+    EXPECT_EQ(types, (std::vector<std::uint16_t>{133, kBrtBeginWsView, kBrtSel, kBrtEndWsView, 134}));
   }
   // The repeated window on bad_window_id's second sheet folds as in window_id_repeat.
   const Workbook bad = ReadXlsx("bad_window_id_src.xlsx");

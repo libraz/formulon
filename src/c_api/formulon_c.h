@@ -11349,8 +11349,9 @@ FM_API fm_status_t fm_sheet_reset_row_height(fm_workbook_t* wb, size_t sheet_ind
  * Each stored default is meaningful only when its `has_*` flag is non-zero,
  * since an absent attribute and an explicit `0` are different states. A sheet
  * loaded from a file Excel itself refuses can read a width or base above 255;
- * `fm_sheet_update_format_defaults` refuses such a value, and an `.xlsb` save of
- * it fails with `FM_STATUS_IO_FEATURE_NOT_WRITABLE`.
+ * `fm_sheet_update_format_defaults` refuses such a value, and an `.xlsb` save
+ * writes the format's default in its place and counts it in
+ * `deferred_feature_count`.
  */
 typedef struct {
   uint32_t struct_size;

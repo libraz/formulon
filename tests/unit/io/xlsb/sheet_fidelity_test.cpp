@@ -125,7 +125,7 @@ TEST(XlsbSheetFidelity, ViewModeAndActiveRangeIndexSurvive) {
   EXPECT_EQ(RoundTrip(wb).sheet(0).view().view_mode, "pageLayout");
 }
 
-TEST(XlsbSheetFidelity, ViewExtensionsAreLeftOutAndAnUnknownViewModeRefusesTheSave) {
+TEST(XlsbSheetFidelity, ViewExtensionsAreLeftOutAndAnUnknownViewModeIsWrittenAsNormal) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("View");
   const std::uint32_t baseline = DeferredCount(wb);
@@ -136,10 +136,10 @@ TEST(XlsbSheetFidelity, ViewExtensionsAreLeftOutAndAnUnknownViewModeRefusesTheSa
   EXPECT_TRUE(RoundTrip(wb).sheet(0).view().tail_xml.empty());
 
   view.view_mode = "futureMode";
-  auto written = write_xlsb_with_result(wb);
-  ASSERT_FALSE(static_cast<bool>(written));
-  EXPECT_EQ(written.error().code, FormulonErrorCode::kIoFeatureNotWritable);
-  EXPECT_EQ(written.error().context, "context=write_xlsb kind=sheet_view sheet_index=0");
+  EXPECT_EQ(unwritten_sheet_view_count(view, 1U), 1U);
+  std::uint32_t deferred = 0U;
+  EXPECT_EQ(RoundTrip(wb, &deferred).sheet(0).view().view_mode, "");
+  EXPECT_EQ(deferred, baseline + 1U);
 }
 
 TEST(XlsbSheetFidelity, ExtraWindowViewDecodesIntoExtraViewsXml) {
@@ -187,14 +187,26 @@ TEST(XlsbSheetFidelity, ExtraWindowViewDecodesIntoExtraViewsXml) {
   EXPECT_TRUE(one_window.sheet(0).view().extra_views_xml.empty());
 }
 
-TEST(XlsbSheetFidelity, ExtraWindowViewFromXlsxWithoutItsWindowRefusesTheSave) {
+TEST(XlsbSheetFidelity, ExtraWindowViewFromXlsxWithoutItsWindowIsLeftOutAndReported) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Windows");
+  const std::uint32_t baseline = DeferredCount(wb);
   wb.sheet(0).mutable_view().extra_views_xml = "<sheetView workbookViewId=\"1\" zoomScale=\"80\"/>";
-  auto written = write_xlsb_with_result(wb);
-  ASSERT_FALSE(static_cast<bool>(written));
-  EXPECT_EQ(written.error().code, FormulonErrorCode::kIoFeatureNotWritable);
-  EXPECT_EQ(written.error().context, "context=write_xlsb kind=sheet_view sheet_index=0");
+  EXPECT_EQ(unwritten_sheet_view_count(wb.sheet(0).view(), 1U), 1U);
+  EXPECT_EQ(unwritten_sheet_view_count(wb.sheet(0).view(), 2U), 0U);
+  std::uint32_t deferred = 0U;
+  EXPECT_TRUE(RoundTrip(wb, &deferred).sheet(0).view().extra_views_xml.empty());
+  EXPECT_EQ(deferred, baseline + 1U);
+  const std::vector<std::uint16_t> types = RecordTypes(EmitSheetBody(wb.sheet(0)));
+  EXPECT_EQ(CountOf(types, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginWsView)), 1U);
+
+  // A fragment that does not parse is left out and counted once.
+  Workbook broken = Workbook::create_empty();
+  broken.add_sheet("Windows");
+  broken.sheet(0).mutable_view().extra_views_xml = "<sheetView workbookViewId=\"1\"";
+  EXPECT_EQ(unwritten_sheet_view_count(broken.sheet(0).view(), 2U), 1U);
+  EXPECT_TRUE(RoundTrip(broken, &deferred).sheet(0).view().extra_views_xml.empty());
+  EXPECT_EQ(deferred, baseline + 1U);
 
   wb.set_book_views_xml(kTwoWindows);
   const Workbook back = RoundTrip(wb);

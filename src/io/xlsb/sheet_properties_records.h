@@ -36,11 +36,15 @@ Expected<bool, Error> decode_ws_prop(const XlsbRecord& rec, Sheet& sheet, std::s
 bool decode_ws_fmt_info(const XlsbRecord& rec, Sheet& sheet);
 
 /// Emits `BrtWsFmtInfo` for `defaults`, sizes truncated to the record's
-/// units. Fails with `kIoFeatureNotWritable` (context `kind=format_defaults`
-/// or `kind=outline_level`, and `sheet_index`) for a metric or outline level
-/// Excel does not hold.
+/// units. A size Excel does not hold is written as the record's stand-in
+/// (base width 8, no default width, the standard row height) and an outline
+/// level past 7 as 7. Always succeeds; `sheet_index` is not used.
 Expected<void, Error> emit_ws_fmt_info(std::vector<std::uint8_t>& dst, const SheetFormatDefaults& defaults,
                                        std::size_t sheet_index);
+
+/// The base width, default width and default row height of `defaults` Excel
+/// does not hold, each of which `emit_ws_fmt_info` writes as its stand-in.
+std::size_t unwritable_format_default_count(const SheetFormatDefaults& defaults);
 
 /// True when BrtWsProp writes every member of the `<sheetPr>` fragment `raw`:
 /// the code name, the tab colour, `<outlinePr>` applyStyles and

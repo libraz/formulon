@@ -20,7 +20,6 @@
 #include "utils/a1_ref.h"
 #include "utils/error.h"
 #include "utils/expected.h"
-#include "utils/status_macros.h"
 
 namespace formulon {
 namespace io {
@@ -99,14 +98,38 @@ std::uint16_t zoom_or_absent(std::uint32_t zoom) {
   return static_cast<std::uint16_t>(zoom >= 10U && zoom <= 400U ? zoom : 0U);
 }
 
-Error ViewNotWritable(std::size_t sheet_index) {
-  return not_writable("sheet_view", sheet_index);
-}
-
 /// Parses `extra_views_xml` into `doc`; false when the fragment does not parse.
 bool parse_extra_views(const std::string& extra_views_xml, pugi::xml_document& doc) {
   return extra_views_xml.empty() || static_cast<bool>(doc.load_buffer(extra_views_xml.data(), extra_views_xml.size(),
                                                                       pugi::parse_default | pugi::parse_fragment));
+}
+
+bool names_view_mode(const SheetView& view) {
+  return view_mode_index(view.view_mode) < kViewModes.size();
+}
+
+/// Calls `fn(view, workbook_view)` for each `<sheetView>` of `extra_views_xml`
+/// shown in a window 1 to `workbook_views` - 1, in document order. Returns how
+/// many it leaves out: window 0 is the main view's and Excel refuses a window
+/// the workbook lacks; a fragment that does not parse counts as one.
+template <typename Fn>
+std::size_t for_each_written_extra_view(const std::string& extra_views_xml, std::uint32_t workbook_views, Fn&& fn) {
+  pugi::xml_document doc;
+  if (!parse_extra_views(extra_views_xml, doc)) {
+    return 1U;
+  }
+  std::size_t left_out = 0U;
+  for (pugi::xml_node node = doc.child("sheetView"); node; node = node.next_sibling("sheetView")) {
+    const std::uint32_t workbook_view = attr_u32(node, "workbookViewId", 0U);
+    if (workbook_view == 0U || workbook_view >= workbook_views) {
+      ++left_out;
+      continue;
+    }
+    SheetView extra;
+    read_sheet_view_element(node, extra);
+    fn(extra, workbook_view);
+  }
+  return left_out;
 }
 
 }  // namespace
@@ -275,11 +298,9 @@ Expected<bool, Error> decode_ws_view(const XlsbRecord& rec, SheetView& view, std
 }
 
 Expected<void, Error> emit_ws_view(std::vector<std::uint8_t>& dst, const SheetView& view, std::uint32_t workbook_view,
-                                   std::size_t sheet_index) {
-  const std::uint32_t mode = view_mode_index(view.view_mode);
-  if (mode >= kViewModes.size()) {
-    return ViewNotWritable(sheet_index);
-  }
+                                   std::size_t /*sheet_index*/) {
+  // A mode xlView cannot name is written as normal.
+  const std::uint32_t mode = names_view_mode(view) ? view_mode_index(view.view_mode) : 0U;
   std::vector<std::uint8_t> payload;
   std::uint16_t flags = 0U;
   const std::pair<bool, std::uint16_t> bits[] = {
@@ -323,21 +344,19 @@ Expected<void, Error> emit_ws_view(std::vector<std::uint8_t>& dst, const SheetVi
 
 Expected<void, Error> emit_extra_ws_views(std::vector<std::uint8_t>& dst, const SheetView& view,
                                           std::uint32_t workbook_views, std::size_t sheet_index) {
-  pugi::xml_document doc;
-  if (!parse_extra_views(view.extra_views_xml, doc)) {
-    return ViewNotWritable(sheet_index);
-  }
-  for (pugi::xml_node node = doc.child("sheetView"); node; node = node.next_sibling("sheetView")) {
-    // Window 0 is the main view's; Excel refuses a view of a window the workbook lacks.
-    const std::uint32_t workbook_view = attr_u32(node, "workbookViewId", 0U);
-    if (workbook_view == 0U || workbook_view >= workbook_views) {
-      return ViewNotWritable(sheet_index);
-    }
-    SheetView extra;
-    read_sheet_view_element(node, extra);
-    RETURN_IF_ERROR(emit_ws_view(dst, extra, workbook_view, sheet_index));
-  }
+  (void)for_each_written_extra_view(view.extra_views_xml, workbook_views,
+                                    [&](const SheetView& extra, std::uint32_t workbook_view) {
+                                      (void)emit_ws_view(dst, extra, workbook_view, sheet_index);
+                                    });
   return Expected<void, Error>::Ok();
+}
+
+std::size_t unwritten_sheet_view_count(const SheetView& view, std::uint32_t workbook_views) {
+  std::size_t renamed_modes = names_view_mode(view) ? 0U : 1U;
+  const std::size_t left_out = for_each_written_extra_view(
+      view.extra_views_xml, workbook_views,
+      [&](const SheetView& extra, std::uint32_t) { renamed_modes += names_view_mode(extra) ? 0U : 1U; });
+  return renamed_modes + left_out;
 }
 
 bool append_extra_view(SheetView& main, const SheetView& extra, std::uint32_t workbook_view,

@@ -475,14 +475,16 @@ TEST(XlsbWorkbookFidelity, UnmeasuredCustomTableStylesAreReportedDeferred) {
   EXPECT_EQ(deferred, baseline);
 }
 
-// A sheet view naming a window the workbook does not have, which Excel refuses to open, refuses the save.
-TEST(XlsbWorkbookFidelity, SheetViewForAMissingWindowRefusesTheSave) {
+// A sheet view naming a window the workbook does not have, which Excel refuses to open, is left out and reported.
+TEST(XlsbWorkbookFidelity, SheetViewForAMissingWindowIsLeftOutAndReported) {
   Workbook wb = TwoWindowWorkbook();
+  std::uint32_t baseline = 99U;
+  ToXlsb(wb, &baseline);
   wb.sheet(1).mutable_view().extra_views_xml = "<sheetView workbookViewId=\"2\" zoomScale=\"90\"/>";
-  auto saved = write_xlsb_with_result(wb);
-  ASSERT_FALSE(static_cast<bool>(saved));
-  EXPECT_EQ(saved.error().code, FormulonErrorCode::kIoFeatureNotWritable);
-  EXPECT_EQ(saved.error().context, "context=write_xlsb kind=sheet_view sheet_index=1");
+  std::uint32_t deferred = 0U;
+  const Workbook back = FromXlsb(ToXlsb(wb, &deferred));
+  EXPECT_EQ(deferred, baseline + 1U);
+  EXPECT_EQ(back.sheet(1).view().extra_views_xml.find("zoomScale=\"90\""), std::string::npos);
 }
 
 // Excel's .xlsb twins pin BrtBookView: the xlsx-sourced save writes Excel's

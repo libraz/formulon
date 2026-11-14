@@ -27,18 +27,22 @@ Expected<bool, Error> decode_ws_view(const XlsbRecord& rec, SheetView& view, std
 
 /// Emits BrtBeginWsView, BrtPane, the BrtSels and BrtEndWsView of `view`
 /// shown in workbook window `workbook_view`. The view's `<extLst>` has no
-/// record and is left out, as Excel does. Fails with `kIoFeatureNotWritable`
-/// (context `kind=sheet_view` and `sheet_index`) for a view mode xlView
-/// cannot name.
+/// record and is left out, as Excel does; a view mode xlView cannot name is
+/// written as normal. Always succeeds; `sheet_index` is not used.
 Expected<void, Error> emit_ws_view(std::vector<std::uint8_t>& dst, const SheetView& view, std::uint32_t workbook_view,
                                    std::size_t sheet_index);
 
 /// Emits one view per `<sheetView>` of `view.extra_views_xml`, in document
-/// order. Fails like `emit_ws_view`, and when the fragment does not parse or
-/// names a window other than 1 to `workbook_views` - 1 (the BrtBookView
-/// records the workbook part writes).
+/// order, as `emit_ws_view` does. A view of a window other than 1 to
+/// `workbook_views` - 1 (the BrtBookView records the workbook part writes),
+/// or a fragment that does not parse, is left out. Always succeeds.
 Expected<void, Error> emit_extra_ws_views(std::vector<std::uint8_t>& dst, const SheetView& view,
                                           std::uint32_t workbook_views, std::size_t sheet_index);
+
+/// What the view records of `view` and its extra windows leave out or change:
+/// each view mode written as normal, each extra view of a window outside 1 to
+/// `workbook_views` - 1, and a fragment that does not parse, one apiece.
+std::size_t unwritten_sheet_view_count(const SheetView& view, std::uint32_t workbook_views);
 
 /// Adds the view of workbook window `workbook_view` decoded from XLSB after
 /// the sheet's first: it replaces the main view or an extra view of the same

@@ -1,7 +1,7 @@
 //
 // Edge values of the sheet format defaults and the outline level: what the
 // typed setters accept and refuse, and what an xlsx Excel refuses to open does
-// on load and on an xlsb save.
+// on load and on an xlsb save, which writes a stand-in Excel opens.
 
 #include <cmath>
 #include <cstdint>
@@ -22,7 +22,6 @@
 namespace {
 
 constexpr fm_status_t kInvalidArgument = static_cast<fm_status_t>(formulon::FormulonErrorCode::kInvalidArgument);
-constexpr fm_status_t kNotWritable = static_cast<fm_status_t>(formulon::FormulonErrorCode::kIoFeatureNotWritable);
 
 enum class Field { kWidth, kHeight, kBase };
 
@@ -180,16 +179,35 @@ TEST(ApiEdge, FormatDefaultsMaximaSurviveBothFormats) {
   }
 }
 
-TEST(ApiEdge, FormatDefaultsExcelRefusesLoadLenientlyAndXlsbSaveRefuses) {
-  for (const char* name : {"base_256_src.xlsx", "base_large_src.xlsx", "width_256_src.xlsx", "width_large_src.xlsx",
-                           "width_record_max_src.xlsx"}) {
+/// The deferred-feature count of an xlsb save of `wb`, reloading the saved bytes into `reloaded`.
+std::uint32_t SaveXlsbDeferred(const WorkbookGuard& wb, WorkbookGuard* reloaded) {
+  BufferGuard saved;
+  fm_save_diagnostics_info_t diagnostics = FM_STRUCT_INIT(fm_save_diagnostics_info_t);
+  EXPECT_EQ(
+      fm_workbook_save_with_diagnostics(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &saved.data, &saved.len, &diagnostics), 0)
+      << fm_get_last_error_message() << " | " << fm_get_last_error_context();
+  EXPECT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded->handle), 0) << fm_get_last_error_message();
+  return diagnostics.deferred_feature_count;
+}
+
+TEST(ApiEdge, FormatDefaultsExcelRefusesLoadLenientlyAndXlsbSaveWritesStandIns) {
+  for (const char* name : {"base_256_src.xlsx", "base_large_src.xlsx"}) {
     SCOPED_TRACE(name);
     WorkbookGuard wb;
     Load(name, &wb);
     EXPECT_EQ(SaveStatus(wb, FM_WORKBOOK_FORMAT_XLSX), 0) << fm_get_last_error_message();
-    EXPECT_EQ(SaveStatus(wb, FM_WORKBOOK_FORMAT_XLSB), kNotWritable);
-    EXPECT_NE(std::string(fm_get_last_error_context()).find("kind=format_defaults sheet_index=0"), std::string::npos)
-        << fm_get_last_error_context();
+    WorkbookGuard reloaded;
+    EXPECT_GE(SaveXlsbDeferred(wb, &reloaded), 1U);
+    EXPECT_EQ(Read(reloaded).base_column_width_chars, 8.0);
+  }
+  for (const char* name : {"width_256_src.xlsx", "width_large_src.xlsx", "width_record_max_src.xlsx"}) {
+    SCOPED_TRACE(name);
+    WorkbookGuard wb;
+    Load(name, &wb);
+    EXPECT_EQ(SaveStatus(wb, FM_WORKBOOK_FORMAT_XLSX), 0) << fm_get_last_error_message();
+    WorkbookGuard reloaded;
+    EXPECT_GE(SaveXlsbDeferred(wb, &reloaded), 1U);
+    EXPECT_EQ(Read(reloaded).has_default_column_width_chars, 0);
   }
 }
 
@@ -203,7 +221,7 @@ TEST(ApiEdge, OutlineLevel) {
   EXPECT_EQ(fm_sheet_set_row_outline(wb.handle, 0, 3U, 3U, 8U), kInvalidArgument);
   EXPECT_EQ(fm_sheet_set_column_outline(wb.handle, 0, 2U, 2U, 8U), kInvalidArgument);
 
-  // Level 8 from an xlsx Excel refuses loads as written and is never wrapped into the xlsb's three bits.
+  // Level 8 from an xlsx Excel refuses loads as written; an xlsb save clamps the sheet's outline summary to 7.
   for (const char* name : {"outline_row_8_src.xlsx", "outline_col_8_src.xlsx"}) {
     SCOPED_TRACE(name);
     WorkbookGuard loaded;
@@ -224,9 +242,7 @@ TEST(ApiEdge, OutlineLevel) {
       deepest = column.outline_level > deepest ? column.outline_level : deepest;
     }
     EXPECT_EQ(deepest, 8U);
-    EXPECT_EQ(SaveStatus(loaded, FM_WORKBOOK_FORMAT_XLSB), kNotWritable);
-    EXPECT_NE(std::string(fm_get_last_error_context()).find("kind=outline_level sheet_index=0"), std::string::npos)
-        << fm_get_last_error_context();
+    EXPECT_EQ(SaveStatus(loaded, FM_WORKBOOK_FORMAT_XLSB), 0) << fm_get_last_error_message();
   }
 }
 
