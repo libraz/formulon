@@ -28,13 +28,25 @@ inline constexpr std::uint32_t kNoField = 0xFFFFFFFFU;
 /// Field index of the data pseudo-field (`4294967294`).
 inline constexpr std::uint32_t kDataField = 0xFFFFFFFEU;
 
-/// BrtBeginPRule `type` byte for `normal`, the only type Excel's parts show.
+/// BrtBeginPRule `type` byte, in ST_PivotAreaType order; the four Excel's parts show.
 inline constexpr std::uint8_t kAreaTypeNormal = 1U;
-/// BrtBeginPRule flag bits (bytes 5-7, little-endian): `dataOnly` and `cacheIndex`.
+inline constexpr std::uint8_t kAreaTypeData = 2U;
+inline constexpr std::uint8_t kAreaTypeAll = 3U;
+inline constexpr std::uint8_t kAreaTypeButton = 5U;
+/// BrtBeginPRule flag bits (bytes 5-7, little-endian).
 inline constexpr std::uint32_t kAreaDataOnly = 0x000001U;
+inline constexpr std::uint32_t kAreaLabelOnly = 0x000002U;
+inline constexpr std::uint32_t kAreaGrandRow = 0x000004U;
+inline constexpr std::uint32_t kAreaGrandCol = 0x000008U;
 inline constexpr std::uint32_t kAreaCacheIndex = 0x000010U;
+inline constexpr std::uint32_t kAreaCollapsedLevelsAreSubtotals = 0x000080U;
+/// Byte 6 holds `axis`: 0 absent, 1 `axisRow` (the only axis measured).
+inline constexpr std::uint32_t kAreaAxisMask = 0x00FF00U;
+inline constexpr std::uint32_t kAreaAxisRow = 0x000100U;
 
-/// BrtBeginPRFilter flag bits (bytes 8-10, little-endian): `selected`.
+/// BrtBeginPRFilter flag bits (bytes 8-10, little-endian): one set in every
+/// Excel-saved reference, and `selected`.
+inline constexpr std::uint32_t kFilterAlways = 0x000001U;
 inline constexpr std::uint32_t kFilterSelected = 0x010000U;
 
 /// One `reference` (BrtBeginPRFilter .. BrtEndPRFilter).

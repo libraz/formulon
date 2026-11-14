@@ -1,6 +1,8 @@
 #include "io/xlsb/pivot_table_records.h"
 
+#include <algorithm>
 #include <array>
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -41,6 +43,32 @@ PivotTableDoc Decode(const std::string& stem) {
   const std::vector<std::uint8_t> bytes = TablePart(stem);
   auto doc = decode_pivot_table(SpanOf(bytes));
   EXPECT_TRUE(doc.has_value()) << stem << ": " << (doc ? "" : doc.error().message);
+  return doc ? std::move(doc.value()) : PivotTableDoc{};
+}
+
+/// The M-pivot table-side variants under tests/fixtures/excel/xlsb_parity/pivot.
+constexpr const char* kParityVariants[] = {"formats_areas", "formats_dxf_order", "chart_formats", "x14_fill_down",
+                                           "x14_show_as",   "hide_values_row",   "unknown_ext"};
+
+std::string ParityPath(const std::string& file) {
+  return std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_parity/pivot/" + file;
+}
+
+/// Bytes of pivotTable1.bin in the parity fixture `file`.
+std::vector<std::uint8_t> ParityTablePart(const std::string& file) {
+  for (auto& part : Parts(ParityPath(file), kTablePrefix)) {
+    if (part.first == "xl/pivotTables/pivotTable1.bin") {
+      return std::move(part.second);
+    }
+  }
+  ADD_FAILURE() << "no pivot table part in " << file;
+  return {};
+}
+
+PivotTableDoc DecodeParity(const std::string& variant) {
+  const std::vector<std::uint8_t> bytes = ParityTablePart(variant + ".xlsb");
+  auto doc = decode_pivot_table(SpanOf(bytes));
+  EXPECT_TRUE(doc.has_value()) << variant << ": " << (doc ? "" : doc.error().message);
   return doc ? std::move(doc.value()) : PivotTableDoc{};
 }
 
@@ -283,8 +311,9 @@ TEST(XlsbPivotTableRecords, AxisFieldsStyleFiltersAndFrt) {
   EXPECT_EQ(base.style.name, std::optional<std::string>("PivotStyleLight16"));
   EXPECT_EQ(base.style.flags, 0x0032U);
   EXPECT_TRUE(base.filters.empty());
-  EXPECT_EQ(base.view14.frt_payload, std::vector<std::uint8_t>({0x02, 0x0e, 0x00, 0x00}));
-  EXPECT_EQ(base.view14.payload.size(), 21U);
+  ASSERT_TRUE(base.view14.has_value());
+  EXPECT_EQ(base.view14->frt_payload, std::vector<std::uint8_t>({0x02, 0x0e, 0x00, 0x00}));
+  EXPECT_EQ(base.view14->payload.size(), 21U);
   EXPECT_EQ(base.view16.frt_payload, std::vector<std::uint8_t>({0x03, 0x11, 0x00, 0x00}));
   EXPECT_EQ(base.view16.payload, std::vector<std::uint8_t>({0x01, 0x01, 0x00}));
 
@@ -310,6 +339,147 @@ TEST(XlsbPivotTableRecords, DecodeRefusesTrailingRecord) {
   auto doc = decode_pivot_table(SpanOf(bytes));
   ASSERT_FALSE(doc.has_value());
   EXPECT_EQ(doc.error().code, FormulonErrorCode::kIoXlsbUnknownRecord);
+}
+
+TEST(XlsbPivotTableRecords, ParityVariantsRoundTripByteForByte) {
+  for (const char* variant : kParityVariants) {
+    for (const std::string& file : {std::string(variant) + ".xlsb", std::string(variant) + ".2.xlsb"}) {
+      SCOPED_TRACE(file);
+      const std::vector<std::uint8_t> bytes = ParityTablePart(file);
+      ASSERT_FALSE(bytes.empty());
+      auto doc = decode_pivot_table(SpanOf(bytes));
+      ASSERT_TRUE(doc.has_value()) << doc.error().message;
+      auto encoded = encode_pivot_table(doc.value());
+      ASSERT_TRUE(encoded.has_value()) << encoded.error().message;
+      EXPECT_EQ(encoded.value(), bytes);
+    }
+  }
+}
+
+TEST(XlsbPivotTableRecords, FormatsAreas) {
+  const PivotTableDoc doc = DecodeParity("formats_areas");
+  EXPECT_TRUE(doc.chart_formats.empty());
+  ASSERT_EQ(doc.formats.size(), 5U);
+  // dxfId 4: outline="0" fieldPosition="0", reference field 0 x 1 selected="0".
+  EXPECT_EQ(doc.formats[0].dxf_id, 4U);
+  const pivot_area::PivotArea& item = doc.formats[0].area;
+  EXPECT_EQ(item.field, pivot_area::kNoField);
+  EXPECT_EQ(item.type, pivot_area::kAreaTypeNormal);
+  EXPECT_EQ(item.flags, pivot_area::kAreaDataOnly);
+  ASSERT_TRUE(item.filters.has_value());
+  ASSERT_EQ(item.filters->size(), 1U);
+  EXPECT_EQ((*item.filters)[0].field, 0U);
+  EXPECT_EQ((*item.filters)[0].flags, pivot_area::kFilterAlways);
+  EXPECT_EQ((*item.filters)[0].items, std::vector<std::uint32_t>({1U}));
+  // dxfId 3: dataOnly="0" labelOnly="1", reference selected by default.
+  EXPECT_EQ(doc.formats[1].area.flags, pivot_area::kAreaLabelOnly);
+  ASSERT_TRUE(doc.formats[1].area.filters.has_value());
+  EXPECT_EQ((*doc.formats[1].area.filters)[0].flags, pivot_area::kFilterAlways | pivot_area::kFilterSelected);
+  // dxfId 2: field="0" type="button" labelOnly="1" axis="axisRow".
+  const pivot_area::PivotArea& button = doc.formats[2].area;
+  EXPECT_EQ(button.field, 0U);
+  EXPECT_EQ(button.type, pivot_area::kAreaTypeButton);
+  EXPECT_EQ(button.flags, pivot_area::kAreaLabelOnly | pivot_area::kAreaAxisRow);
+  EXPECT_FALSE(button.filters.has_value());
+  // dxfId 1 and 0: grandRow and grandCol, label only.
+  EXPECT_EQ(doc.formats[3].area.flags, pivot_area::kAreaLabelOnly | pivot_area::kAreaGrandRow);
+  EXPECT_EQ(doc.formats[4].area.flags, pivot_area::kAreaLabelOnly | pivot_area::kAreaGrandCol);
+  EXPECT_EQ(doc.formats[4].dxf_id, 0U);
+}
+
+TEST(XlsbPivotTableRecords, FormatsDxfOrder) {
+  const PivotTableDoc doc = DecodeParity("formats_dxf_order");
+  ASSERT_EQ(doc.formats.size(), 2U);
+  EXPECT_EQ(doc.formats[0].dxf_id, 17U);
+  EXPECT_EQ(doc.formats[0].area.type, pivot_area::kAreaTypeAll);
+  EXPECT_EQ(doc.formats[0].area.flags, 0U);
+  EXPECT_EQ(doc.formats[1].dxf_id, 16U);
+  EXPECT_EQ(doc.formats[1].area.flags, pivot_area::kAreaDataOnly | pivot_area::kAreaCollapsedLevelsAreSubtotals);
+}
+
+TEST(XlsbPivotTableRecords, ChartFormats) {
+  const PivotTableDoc doc = DecodeParity("chart_formats");
+  EXPECT_TRUE(doc.formats.empty());
+  ASSERT_EQ(doc.chart_formats.size(), 2U);
+  for (std::uint32_t i = 0; i < 2U; ++i) {
+    const SxChartFormat& format = doc.chart_formats[i];
+    EXPECT_EQ(format.format, i);
+    EXPECT_EQ(format.area.type, pivot_area::kAreaTypeData);
+    EXPECT_EQ(format.area.flags, pivot_area::kAreaDataOnly);
+    ASSERT_TRUE(format.area.filters.has_value());
+    EXPECT_EQ((*format.area.filters)[0].field, pivot_area::kDataField);
+    EXPECT_EQ((*format.area.filters)[0].items, std::vector<std::uint32_t>({i}));
+  }
+  // The root `chartFormat="1"`.
+  EXPECT_EQ(doc.view.reserved24, 1U);
+}
+
+TEST(XlsbPivotTableRecords, X14FieldAndDataField) {
+  const PivotTableDoc fill = DecodeParity("x14_fill_down");
+  ASSERT_EQ(fill.fields.size(), 5U);
+  EXPECT_TRUE(fill.fields[0].fill_down_labels);
+  for (std::size_t i = 1; i < fill.fields.size(); ++i) {
+    EXPECT_FALSE(fill.fields[i].fill_down_labels) << i;
+  }
+  const PivotTableDoc show = DecodeParity("x14_show_as");
+  ASSERT_EQ(show.data_fields.size(), 2U);
+  EXPECT_EQ(show.data_fields[0].pivot_show_as, std::optional<std::uint32_t>(kSxDataShowAsPercentOfParentRow));
+  EXPECT_EQ(show.data_fields[0].show_data_as, 0U);
+  EXPECT_FALSE(show.data_fields[1].pivot_show_as.has_value());
+}
+
+TEST(XlsbPivotTableRecords, HideValuesRowOffHasNoView14) {
+  EXPECT_FALSE(DecodeParity("hide_values_row").view14.has_value());
+  const PivotTableDoc base = DecodeParity("unknown_ext");
+  EXPECT_TRUE(base.view14.has_value());
+  EXPECT_TRUE(base.formats.empty());
+  EXPECT_TRUE(base.chart_formats.empty());
+}
+
+TEST(XlsbPivotTableRecords, EncodeRefusesUnmeasuredFormatStates) {
+  const PivotTableDoc formats = DecodeParity("formats_areas");
+  const PivotTableDoc charts = DecodeParity("chart_formats");
+  const PivotTableDoc show = DecodeParity("x14_show_as");
+  const auto refused = [](const PivotTableDoc& doc) {
+    auto bytes = encode_pivot_table(doc);
+    return !bytes.has_value() && bytes.error().code == FormulonErrorCode::kInvalidArgument;
+  };
+
+  PivotTableDoc both = formats;
+  both.chart_formats = charts.chart_formats;
+  EXPECT_TRUE(refused(both));
+
+  PivotTableDoc origin = formats;
+  origin.formats[0].area.type = 4U;  // `origin`
+  EXPECT_TRUE(refused(origin));
+
+  PivotTableDoc col_axis = formats;
+  col_axis.formats[2].area.flags = pivot_area::kAreaLabelOnly | 0x000200U;  // `axisCol`
+  EXPECT_TRUE(refused(col_axis));
+
+  PivotTableDoc empty_ref = formats;
+  (*empty_ref.formats[0].area.filters)[0].items.clear();
+  EXPECT_TRUE(refused(empty_ref));
+
+  PivotTableDoc show_col = show;
+  show_col.data_fields[0].pivot_show_as = 10U;  // `percentOfParentCol`
+  EXPECT_TRUE(refused(show_col));
+
+  PivotTableDoc fill_no_items = DecodeParity("x14_fill_down");
+  fill_no_items.fields[1].fill_down_labels = true;  // a field without items
+  EXPECT_TRUE(refused(fill_no_items));
+}
+
+TEST(XlsbPivotTableRecords, DecodeRefusesUnmeasuredFormatAction) {
+  std::vector<std::uint8_t> bytes = ParityTablePart("formats_areas.xlsb");
+  // BrtBeginSXFormat (303 = AF 02), 6-byte payload opening with action bytes 01 00.
+  const std::vector<std::uint8_t> head = {0xAF, 0x02, 0x06, 0x01, 0x00};
+  const auto at = std::search(bytes.begin(), bytes.end(), head.begin(), head.end());
+  ASSERT_NE(at, bytes.end());
+  *(at + 3) = 0x02;
+  auto doc = decode_pivot_table(SpanOf(bytes));
+  ASSERT_FALSE(doc.has_value());
+  EXPECT_EQ(doc.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
 }
 
 }  // namespace

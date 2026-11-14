@@ -1,8 +1,9 @@
 // Byte codec for an XLSB pivot table part (`xl/pivotTables/pivotTableN.bin`).
 //
-// Record order: [ACUID] SXView( Location, SXVDs( SXVD( [SXVIs] [AutoSortScope] )* ),
-// [ISXVDRws], SXLIRws, [ISXVDCols], SXLICols, [SXPIs], SXDIs, TableStyleClient,
-// [SXFilters], FRT(SXView14), FRT(SXView16) ). Every record is decoded into a
+// Record order: [ACUID] SXView( Location, SXVDs( SXVD( [SXVIs] [FRT(SXVD14)] [AutoSortScope] )* ),
+// [ISXVDRws], SXLIRws, [ISXVDCols], SXLICols, [SXPIs], SXDIs( SXDI( [FRT(SXDI14)] )* ),
+// [SXFormats | SXCrtFormats], TableStyleClient, [SXFilters], [FRT(SXView14)], FRT(SXView16) ).
+// Every record is decoded into a
 // field of the structs below and re-encoded byte for byte; flag bytes whose
 // bits are not all named are carried whole. The autoSortScope and filter
 // blocks are carried verbatim as raw records for the codecs that own them.
@@ -17,6 +18,7 @@
 #include <string>
 #include <vector>
 
+#include "io/xlsb/pivot_area_records.h"
 #include "io/xlsb/pivot_line_item_records.h"
 #include "io/xlsb/pivot_records_common.h"
 #include "io/zip_reader.h"
@@ -132,6 +134,9 @@ struct SxField {
   std::optional<std::string> display_name;
   /// Absent when the field has no BrtBeginSXVIs block.
   std::optional<std::vector<SxItem>> items;
+  /// The x14 `fillDownLabels="1"`, held by the one SXVD14 payload Excel writes.
+  /// The block is written after the items; a field without items is unmeasured.
+  bool fill_down_labels = false;
   /// BrtBeginAutoSortScope through BrtEndAutoSortScope, verbatim; empty when absent.
   std::vector<pivot_records::RawRecord> auto_sort_scope;
 };
@@ -143,6 +148,9 @@ struct SxPageField {
   std::uint32_t hierarchy = 0xFFFFFFFFU;
 };
 
+/// SXDI14 `pivotShowAs` for `percentOfParentRow`, the only value measured.
+inline constexpr std::uint32_t kSxDataShowAsPercentOfParentRow = 9U;
+
 /// BrtBeginSXDI: one `<dataField>`.
 struct SxDataField {
   std::uint32_t field = 0;
@@ -152,6 +160,23 @@ struct SxDataField {
   std::uint32_t base_item = 0;
   std::uint32_t num_fmt = 0;
   std::string name;
+  /// The x14 `pivotShowAs` (SXDI14 bytes 4-7); only kSxDataShowAsPercentOfParentRow,
+  /// with `show_data_as` 0, is measured.
+  std::optional<std::uint32_t> pivot_show_as;
+};
+
+/// BrtBeginSXFormat: one `<format>`. Bytes 0-1 are `01 00` for `action="formatting"`,
+/// the only action measured.
+struct SxFormat {
+  std::uint32_t dxf_id = 0;  ///< bytes 2-5
+  pivot_area::PivotArea area;
+};
+
+/// BrtBeginSXCrtFormat: one `<chartFormat>`. Only `chart="0"` (bytes 0-3) and
+/// `series="1"` (bytes 8-11) are measured, so they are not members.
+struct SxChartFormat {
+  std::uint32_t format = 0;  ///< bytes 4-7
+  pivot_area::PivotArea area;
 };
 
 /// BrtTableStyleClient: `pivotTableStyleInfo`.
@@ -178,10 +203,15 @@ struct PivotTableDoc {
   SxLineItems col_items;
   std::optional<std::vector<SxPageField>> page_fields;
   std::vector<SxDataField> data_fields;
+  /// SXFormats; empty when absent. A table with both lists is unmeasured.
+  std::vector<SxFormat> formats;
+  /// SXCrtFormats; empty when absent.
+  std::vector<SxChartFormat> chart_formats;
   SxStyleClient style;
   /// BrtBeginSXFilters through BrtEndSXFilters, verbatim; empty when absent.
   std::vector<pivot_records::RawRecord> filters;
-  SxFrtBlock view14;  ///< around BrtBeginSXView14 / BrtEndSXView14
+  /// Around BrtBeginSXView14 / BrtEndSXView14; Excel omits it for `hideValuesRow="0"`.
+  std::optional<SxFrtBlock> view14;
   SxFrtBlock view16;  ///< around BrtBeginSXView16 / BrtEndSXView16
 };
 
@@ -189,13 +219,15 @@ struct PivotTableDoc {
 ///
 /// Errors: `kIoXlsbRecordTruncated` for broken framing, `kIoXlsbUnknownRecord`
 /// for a record out of place, `kIoXlsbRecordCorrupt` for a malformed or
-/// uncharacterised payload.
+/// uncharacterised payload, including a format, chart format, pivot area or
+/// x14 record state no Excel-saved part shows.
 Expected<PivotTableDoc, Error> decode_pivot_table(ByteSpan part);
 
 /// Encodes `doc` as a pivot table part. Counts are derived from the vectors and
 /// optional-string presence bits from the optionals.
 ///
-/// Errors: `kInvalidArgument` when `doc` sets more than one view caption.
+/// Errors: `kInvalidArgument` when `doc` sets more than one view caption, or
+/// holds a format, chart format, pivot area or x14 state no Excel-saved part shows.
 Expected<std::vector<std::uint8_t>, Error> encode_pivot_table(const PivotTableDoc& doc);
 
 }  // namespace xlsb

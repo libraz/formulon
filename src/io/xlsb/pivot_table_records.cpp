@@ -30,6 +30,22 @@ constexpr std::size_t kUidSize = 16;
 constexpr std::uint8_t kDataFieldHasName = 0x01;
 constexpr std::uint16_t kKnownItemFlags =
     kSxItemHidden | kSxItemCollapsed | kSxItemHasCaption | kSxItemCalculated | kSxItemMissing;
+/// BrtFRTBegin payload around SXVD14 and SXDI14.
+constexpr std::array<std::uint8_t, 4> kFrt14 = {0x02, 0x0E, 0x00, 0x00};
+/// SXVD14 for `fillDownLabels="1"` and every other x14 field attribute at its default.
+constexpr std::array<std::uint8_t, 12> kFillDownLabels = {0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
+                                                          0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+constexpr std::size_t kDataField14Size = 13;
+constexpr std::size_t kFormatSize = 6;
+/// BrtBeginSXFormat bytes 0-1 for `action="formatting"`.
+constexpr std::uint16_t kFormatActionFormatting = 0x0001;
+constexpr std::size_t kChartFormatSize = 12;
+/// BrtBeginSXCrtFormat bytes 8-11 for `series="1"`.
+constexpr std::uint32_t kChartFormatSeries = 1U;
+constexpr std::uint32_t kKnownAreaFlags = pivot_area::kAreaDataOnly | pivot_area::kAreaLabelOnly |
+                                          pivot_area::kAreaGrandRow | pivot_area::kAreaGrandCol |
+                                          pivot_area::kAreaCollapsedLevelsAreSubtotals | pivot_area::kAreaAxisMask;
+constexpr std::uint32_t kKnownFilterFlags = pivot_area::kFilterAlways | pivot_area::kFilterSelected;
 
 Error Corrupt(const char* message) {
   return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, message, kContext);
@@ -45,6 +61,9 @@ class Records {
   explicit Records(std::vector<XlsbRecord> records) : records_(std::move(records)) {}
 
   bool peek(std::uint16_t type) const { return pos_ < records_.size() && records_[pos_].type == type; }
+
+  /// Whether the record after the next one is of `type`.
+  bool peek_second(std::uint16_t type) const { return pos_ + 1U < records_.size() && records_[pos_ + 1U].type == type; }
 
   /// Payload of the next record, which must be of `type`.
   Expected<ByteSpan, Error> take(std::uint16_t type, const char* missing) {
@@ -96,6 +115,121 @@ Expected<std::uint32_t, Error> CountOf(ByteSpan payload) {
 
 std::vector<std::uint8_t> Copy(ByteSpan payload) {
   return std::vector<std::uint8_t>(payload.data, payload.data + payload.size);
+}
+
+template <std::size_t N>
+bool Equals(ByteSpan payload, const std::array<std::uint8_t, N>& want) {
+  return payload.size == N && std::equal(want.begin(), want.end(), payload.data);
+}
+
+/// A format or chart format pivot area in a shape Excel's parts show: a type
+/// of kAreaTypeNormal/Data/All/Button, the named flag bits, no axis but
+/// `axisRow`, and references each with items and the always-set filter bit.
+bool IsMeasuredArea(const pivot_area::PivotArea& area) {
+  const std::uint8_t type = area.type;
+  if (type != pivot_area::kAreaTypeNormal && type != pivot_area::kAreaTypeData && type != pivot_area::kAreaTypeAll &&
+      type != pivot_area::kAreaTypeButton) {
+    return false;
+  }
+  const std::uint32_t axis = area.flags & pivot_area::kAreaAxisMask;
+  if ((area.flags & ~kKnownAreaFlags) != 0U || (axis != 0U && axis != pivot_area::kAreaAxisRow)) {
+    return false;
+  }
+  if (!area.filters) {
+    return true;
+  }
+  if (area.filters->empty()) {
+    return false;
+  }
+  for (const pivot_area::PivotAreaFilter& filter : *area.filters) {
+    if ((filter.flags & ~kKnownFilterFlags) != 0U || (filter.flags & pivot_area::kFilterAlways) == 0U ||
+        filter.items.empty()) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/// The pivot area that opens at the next record, in a measured shape.
+Expected<pivot_area::PivotArea, Error> DecodeArea(Records& recs) {
+  if (!recs.peek(ids::kBeginPRule)) {
+    return Unexpected("xlsb pivot format has no pivot area");
+  }
+  ASSIGN_OR_RETURN(const std::vector<ids::RawRecord> block, recs.take_raw_block(ids::kEndPRule));
+  std::size_t pos = 0;
+  // Checked in place and returned as decoded: GCC flags a copy of the area's optional filters as maybe-uninitialized.
+  Expected<pivot_area::PivotArea, Error> area = pivot_area::decode_pivot_area(block, &pos);
+  if (area && pos != block.size()) {
+    return Corrupt("xlsb pivot format area continues after its end record");
+  }
+  if (area && !IsMeasuredArea(area.value())) {
+    return Corrupt("xlsb pivot format area is in an unmeasured shape");
+  }
+  return area;
+}
+
+/// BrtBeginSXFormats through BrtEndSXFormats.
+Expected<std::vector<SxFormat>, Error> DecodeFormats(Records& recs) {
+  ASSIGN_OR_RETURN(const ByteSpan begin, recs.take(ids::kBeginSXFormats, "xlsb pivot formats expected"));
+  ASSIGN_OR_RETURN(const std::uint32_t count, CountOf(begin));
+  std::vector<SxFormat> out;
+  while (recs.peek(ids::kBeginSXFormat)) {
+    ASSIGN_OR_RETURN(const ByteSpan head, recs.take(ids::kBeginSXFormat, "xlsb pivot format expected"));
+    if (head.size != kFormatSize) {
+      return Corrupt("xlsb pivot format record has an unexpected size");
+    }
+    if (load_u16(head.data) != kFormatActionFormatting) {
+      return Corrupt("xlsb pivot format carries an unmeasured action");
+    }
+    SxFormat format;
+    format.dxf_id = load_u32(head.data + 2);
+    ASSIGN_OR_RETURN(format.area, DecodeArea(recs));
+    RETURN_IF_ERROR(recs.take_end(ids::kEndSXFormat, "xlsb pivot format is not closed"));
+    out.push_back(std::move(format));
+  }
+  RETURN_IF_ERROR(recs.take_end(ids::kEndSXFormats, "xlsb pivot format list carries an uncharacterised record"));
+  if (out.empty() || out.size() != count) {
+    return Corrupt("xlsb pivot format count does not match the formats decoded");
+  }
+  return out;
+}
+
+/// BrtBeginSXCrtFormats through BrtEndSXCrtFormats.
+Expected<std::vector<SxChartFormat>, Error> DecodeChartFormats(Records& recs) {
+  ASSIGN_OR_RETURN(const ByteSpan begin, recs.take(ids::kBeginSXCrtFormats, "xlsb pivot chart formats expected"));
+  ASSIGN_OR_RETURN(const std::uint32_t count, CountOf(begin));
+  std::vector<SxChartFormat> out;
+  while (recs.peek(ids::kBeginSXCrtFormat)) {
+    ASSIGN_OR_RETURN(const ByteSpan head, recs.take(ids::kBeginSXCrtFormat, "xlsb pivot chart format expected"));
+    if (head.size != kChartFormatSize) {
+      return Corrupt("xlsb pivot chart format record has an unexpected size");
+    }
+    if (load_u32(head.data) != 0U || load_u32(head.data + 8) != kChartFormatSeries) {
+      return Corrupt("xlsb pivot chart format carries an unmeasured chart or series");
+    }
+    SxChartFormat format;
+    format.format = load_u32(head.data + 4);
+    ASSIGN_OR_RETURN(format.area, DecodeArea(recs));
+    RETURN_IF_ERROR(recs.take_end(ids::kEndSXCrtFormat, "xlsb pivot chart format is not closed"));
+    out.push_back(std::move(format));
+  }
+  RETURN_IF_ERROR(
+      recs.take_end(ids::kEndSXCrtFormats, "xlsb pivot chart format list carries an uncharacterised record"));
+  if (out.empty() || out.size() != count) {
+    return Corrupt("xlsb pivot chart format count does not match the formats decoded");
+  }
+  return out;
+}
+
+/// BrtFRTBegin, the lone x14 record of `type`, BrtFRTEnd; returns the x14 payload.
+Expected<ByteSpan, Error> DecodeFrt14(Records& recs, std::uint16_t type) {
+  ASSIGN_OR_RETURN(const ByteSpan frt, recs.take(kFrtBegin, "xlsb pivot x14 block expected"));
+  if (!Equals(frt, kFrt14)) {
+    return Corrupt("xlsb pivot x14 block carries an unmeasured header");
+  }
+  ASSIGN_OR_RETURN(const ByteSpan payload, recs.take(type, "xlsb pivot x14 record expected"));
+  RETURN_IF_ERROR(recs.take_end(kFrtEnd, "xlsb pivot x14 block is not closed"));
+  return payload;
 }
 
 Expected<SxView, Error> DecodeView(ByteSpan payload) {
@@ -222,7 +356,20 @@ Expected<SxField, Error> DecodeField(Records& recs) {
     }
     field.items = std::move(items);
   }
+  if (recs.peek(kFrtBegin)) {
+    if (!field.items) {
+      return Corrupt("xlsb pivot field x14 block without items is unmeasured");
+    }
+    ASSIGN_OR_RETURN(const ByteSpan x14, DecodeFrt14(recs, ids::kSXVD14));
+    if (!Equals(x14, kFillDownLabels)) {
+      return Corrupt("xlsb pivot field x14 record carries an unmeasured state");
+    }
+    field.fill_down_labels = true;
+  }
   if (recs.peek(ids::kBeginAutoSortScope)) {
+    if (field.fill_down_labels) {
+      return Corrupt("xlsb pivot field with both an x14 block and a sort scope is unmeasured");
+    }
     ASSIGN_OR_RETURN(field.auto_sort_scope, recs.take_raw_block(ids::kEndAutoSortScope));
   }
   RETURN_IF_ERROR(recs.take_end(ids::kEndSXVD, "xlsb pivot field carries an uncharacterised record"));
@@ -369,6 +516,18 @@ void EmitRaw(std::vector<std::uint8_t>& dst, const std::vector<ids::RawRecord>& 
   }
 }
 
+void EmitFrt14(std::vector<std::uint8_t>& dst, std::uint16_t type, const std::uint8_t* payload, std::size_t size) {
+  emit_record(dst, kFrtBegin, ByteSpan{kFrt14.data(), kFrt14.size()});
+  emit_record(dst, type, ByteSpan{payload, size});
+  EmitEmpty(dst, kFrtEnd);
+}
+
+void EmitArea(std::vector<std::uint8_t>& dst, const pivot_area::PivotArea& area) {
+  std::vector<ids::RawRecord> block;
+  pivot_area::encode_pivot_area(area, &block);
+  EmitRaw(dst, block);
+}
+
 void EmitField(std::vector<std::uint8_t>& dst, const SxField& field) {
   std::uint8_t name_flags = static_cast<std::uint8_t>(field.name_flags & ~kSxFieldHasDisplayName);
   if (field.display_name) {
@@ -404,6 +563,9 @@ void EmitField(std::vector<std::uint8_t>& dst, const SxField& field) {
       EmitEmpty(dst, ids::kEndSXVI);
     }
     EmitEmpty(dst, ids::kEndSXVIs);
+  }
+  if (field.fill_down_labels) {
+    EmitFrt14(dst, ids::kSXVD14, kFillDownLabels.data(), kFillDownLabels.size());
   }
   EmitRaw(dst, field.auto_sort_scope);
   EmitEmpty(dst, ids::kEndSXVD);
@@ -506,6 +668,14 @@ Expected<PivotTableDoc, Error> decode_pivot_table(ByteSpan part) {
   while (recs.peek(ids::kBeginSXDI)) {
     ASSIGN_OR_RETURN(const ByteSpan di, recs.take(ids::kBeginSXDI, "xlsb pivot data field expected"));
     ASSIGN_OR_RETURN(SxDataField data, DecodeDataField(di));
+    if (recs.peek(kFrtBegin)) {
+      ASSIGN_OR_RETURN(const ByteSpan x14, DecodeFrt14(recs, ids::kSXDI14));
+      if (x14.size != kDataField14Size || load_u32(x14.data) != 0U || load_u32(x14.data + 8) != 0xFFFFFFFFU ||
+          x14.data[12] != 0U || load_u32(x14.data + 4) != kSxDataShowAsPercentOfParentRow || data.show_data_as != 0U) {
+        return Corrupt("xlsb pivot data field x14 record carries an unmeasured state");
+      }
+      data.pivot_show_as = load_u32(x14.data + 4);
+    }
     RETURN_IF_ERROR(recs.take_end(ids::kEndSXDI, "xlsb pivot data field is not closed"));
     doc.data_fields.push_back(std::move(data));
   }
@@ -513,13 +683,24 @@ Expected<PivotTableDoc, Error> decode_pivot_table(ByteSpan part) {
   if (doc.data_fields.size() != data_count) {
     return Corrupt("xlsb pivot data field count does not match the fields decoded");
   }
+  if (recs.peek(ids::kBeginSXFormats)) {
+    ASSIGN_OR_RETURN(doc.formats, DecodeFormats(recs));
+  }
+  if (recs.peek(ids::kBeginSXCrtFormats)) {
+    if (!doc.formats.empty()) {
+      return Corrupt("xlsb pivot table with both formats and chart formats is unmeasured");
+    }
+    ASSIGN_OR_RETURN(doc.chart_formats, DecodeChartFormats(recs));
+  }
 
   ASSIGN_OR_RETURN(const ByteSpan style, recs.take(ids::kTableStyleClient, "xlsb pivot style client expected"));
   ASSIGN_OR_RETURN(doc.style, DecodeStyle(style));
   if (recs.peek(ids::kBeginSXFilters)) {
     ASSIGN_OR_RETURN(doc.filters, recs.take_raw_block(ids::kEndSXFilters));
   }
-  ASSIGN_OR_RETURN(doc.view14, DecodeFrt(recs, ids::kBeginSXView14, ids::kEndSXView14));
+  if (recs.peek(kFrtBegin) && recs.peek_second(ids::kBeginSXView14)) {
+    ASSIGN_OR_RETURN(doc.view14, DecodeFrt(recs, ids::kBeginSXView14, ids::kEndSXView14));
+  }
   ASSIGN_OR_RETURN(doc.view16, DecodeFrt(recs, ids::kBeginSXView16, ids::kEndSXView16));
   RETURN_IF_ERROR(recs.take_end(ids::kEndSXView, "xlsb pivot table carries an uncharacterised record"));
   if (!recs.done()) {
@@ -534,6 +715,29 @@ Expected<std::vector<std::uint8_t>, Error> encode_pivot_table(const PivotTableDo
           static_cast<int>(view.missing_caption.has_value()) >
       1) {
     return refuse_write("XLSB pivot table view sets several captions whose order is uncharacterised");
+  }
+  if (!doc.formats.empty() && !doc.chart_formats.empty()) {
+    return refuse_write("XLSB pivot table holds both formats and chart formats, whose order is unmeasured");
+  }
+  for (const SxField& field : doc.fields) {
+    if (field.fill_down_labels && (!field.items || !field.auto_sort_scope.empty())) {
+      return refuse_write("XLSB pivot field x14 block without items or beside a sort scope is unmeasured");
+    }
+  }
+  for (const SxDataField& data : doc.data_fields) {
+    if (data.pivot_show_as && (*data.pivot_show_as != kSxDataShowAsPercentOfParentRow || data.show_data_as != 0U)) {
+      return refuse_write("XLSB pivot data field x14 show-as value is unmeasured");
+    }
+  }
+  for (const SxFormat& format : doc.formats) {
+    if (!IsMeasuredArea(format.area)) {
+      return refuse_write("XLSB pivot format area is in an unmeasured shape");
+    }
+  }
+  for (const SxChartFormat& format : doc.chart_formats) {
+    if (!IsMeasuredArea(format.area)) {
+      return refuse_write("XLSB pivot chart format area is in an unmeasured shape");
+    }
   }
   std::vector<std::uint8_t> out;
   if (doc.uid) {
@@ -581,15 +785,50 @@ Expected<std::vector<std::uint8_t>, Error> encode_pivot_table(const PivotTableDo
     emit_u8(p, kDataFieldHasName);
     emit_xlwidestring(p, data.name);
     emit_record(out, ids::kBeginSXDI, p);
+    if (data.pivot_show_as) {
+      std::vector<std::uint8_t> x14;
+      emit_u32(x14, 0U);
+      emit_u32(x14, *data.pivot_show_as);
+      emit_u32(x14, 0xFFFFFFFFU);
+      emit_u8(x14, 0U);
+      EmitFrt14(out, ids::kSXDI14, x14.data(), x14.size());
+    }
     EmitEmpty(out, ids::kEndSXDI);
   }
   EmitEmpty(out, ids::kEndSXDIs);
+  if (!doc.formats.empty()) {
+    EmitCount(out, ids::kBeginSXFormats, doc.formats.size());
+    for (const SxFormat& format : doc.formats) {
+      p.clear();
+      emit_u16(p, kFormatActionFormatting);
+      emit_u32(p, format.dxf_id);
+      emit_record(out, ids::kBeginSXFormat, p);
+      EmitArea(out, format.area);
+      EmitEmpty(out, ids::kEndSXFormat);
+    }
+    EmitEmpty(out, ids::kEndSXFormats);
+  }
+  if (!doc.chart_formats.empty()) {
+    EmitCount(out, ids::kBeginSXCrtFormats, doc.chart_formats.size());
+    for (const SxChartFormat& format : doc.chart_formats) {
+      p.clear();
+      emit_u32(p, 0U);
+      emit_u32(p, format.format);
+      emit_u32(p, kChartFormatSeries);
+      emit_record(out, ids::kBeginSXCrtFormat, p);
+      EmitArea(out, format.area);
+      EmitEmpty(out, ids::kEndSXCrtFormat);
+    }
+    EmitEmpty(out, ids::kEndSXCrtFormats);
+  }
   p.clear();
   emit_u16(p, doc.style.flags);
   emit_xlnullablewidestring(p, doc.style.name ? std::optional<std::string_view>(*doc.style.name) : std::nullopt);
   emit_record(out, ids::kTableStyleClient, p);
   EmitRaw(out, doc.filters);
-  EmitFrt(out, doc.view14, ids::kBeginSXView14, ids::kEndSXView14);
+  if (doc.view14) {
+    EmitFrt(out, *doc.view14, ids::kBeginSXView14, ids::kEndSXView14);
+  }
   EmitFrt(out, doc.view16, ids::kBeginSXView16, ids::kEndSXView16);
   EmitEmpty(out, ids::kEndSXView);
   return out;

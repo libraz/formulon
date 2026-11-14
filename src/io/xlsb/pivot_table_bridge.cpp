@@ -294,8 +294,9 @@ Expected<void, Error> CheckView(const PivotTableDoc& doc) {
   if (v.data_position != kNoDataPosition || (v.data_axis != kDataOnRows && v.data_axis != kDataOnCols)) {
     return Unmeasured("data axis or position");
   }
-  if (!SameBytes(doc.view14.frt_payload, kView14Frt) || !SameBytes(doc.view14.payload, kView14Payload) ||
-      !SameBytes(doc.view16.frt_payload, kView16Frt) || !SameBytes(doc.view16.payload, kView16Payload)) {
+  if (!doc.view14 || !SameBytes(doc.view14->frt_payload, kView14Frt) ||
+      !SameBytes(doc.view14->payload, kView14Payload) || !SameBytes(doc.view16.frt_payload, kView16Frt) ||
+      !SameBytes(doc.view16.payload, kView16Payload)) {
     return Unmeasured("table future records");
   }
   return Expected<void, Error>::Ok();
@@ -1412,8 +1413,7 @@ bool WriteTable(const pivot::PivotTable& table, ExcelHost host, PivotTableDoc& d
   if (!style.name.empty()) {
     doc.style.name = style.name;
   }
-  doc.view14.frt_payload.assign(kView14Frt.begin(), kView14Frt.end());
-  doc.view14.payload.assign(kView14Payload.begin(), kView14Payload.end());
+  doc.view14 = SxFrtBlock{{kView14Frt.begin(), kView14Frt.end()}, {kView14Payload.begin(), kView14Payload.end()}};
   doc.view16.frt_payload.assign(kView16Frt.begin(), kView16Frt.end());
   doc.view16.payload.assign(kView16Payload.begin(), kView16Payload.end());
   return true;

@@ -64,8 +64,21 @@ inline constexpr std::uint16_t kBeginSXView14 = 1062;
 inline constexpr std::uint16_t kEndSXView14 = 1063;
 inline constexpr std::uint16_t kBeginSXView16 = 5000;
 inline constexpr std::uint16_t kEndSXView16 = 5001;
+inline constexpr std::uint16_t kBeginSXFormats = 305;
+inline constexpr std::uint16_t kEndSXFormats = 306;
+inline constexpr std::uint16_t kBeginSXFormat = 303;
+inline constexpr std::uint16_t kEndSXFormat = 304;
+inline constexpr std::uint16_t kBeginSXCrtFormats = 483;
+inline constexpr std::uint16_t kEndSXCrtFormats = 484;
+inline constexpr std::uint16_t kBeginSXCrtFormat = 481;
+inline constexpr std::uint16_t kEndSXCrtFormat = 482;
+/// The x14 `<pivotField>` record (FRTSXVD slot), a lone record inside an FRT block.
+inline constexpr std::uint16_t kSXVD14 = 1061;
+/// The x14 `<dataField>` record (FRTSXDI slot), a lone record inside an FRT block.
+inline constexpr std::uint16_t kSXDI14 = 1044;
 
-// Pivot rules (pivotArea), used by the table's autoSortScope and the cache's calculated items.
+// Pivot rules (pivotArea), used by the table's autoSortScope, formats and chart formats, and the cache's calculated
+// items.
 inline constexpr std::uint16_t kBeginPRule = 247;
 inline constexpr std::uint16_t kEndPRule = 248;
 inline constexpr std::uint16_t kBeginPRFilters = 249;
