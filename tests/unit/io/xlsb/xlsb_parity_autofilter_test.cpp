@@ -11,6 +11,7 @@
 
 #include "auto_filter.h"
 #include "gtest/gtest.h"
+#include "io/auto_filter_xml.h"
 #include "io/ooxml_reader.h"
 #include "io/xlsb/auto_filter_records.h"
 #include "io/xlsb/frt_records.h"
@@ -106,17 +107,9 @@ AutoFilter SourceFilter(const std::string& name) {
   return *loaded.value().workbook.sheet(0).auto_filter();
 }
 
-const char* const kCases[] = {"values",
-                              "filtered_rows_hidden",
-                              "custom_two",
-                              "top10",
-                              "dynamic",
-                              "color_dxf",
-                              "color_no_dxf",
-                              "icon",
-                              "phonetic_sort",
-                              "x14_ext",
-                              "sort_beside_filter"};
+const char* const kCases[] = {"values",  "calendar_type",     "filtered_rows_hidden", "custom_two", "top10",
+                              "dynamic", "color_dxf",         "color_no_dxf",         "icon",       "phonetic_sort",
+                              "x14_ext", "sort_beside_filter"};
 
 TEST(XlsbParityAutoFilterTwins, BlockFromTheSourceMatchesExcel) {
   for (const char* name : kCases) {
@@ -204,12 +197,11 @@ TEST(XlsbParityAutoFilterEdit, SavedSheetMatchesExcel) {
 }
 
 TEST(XlsbParityAutoFilterTwins, UnmeasuredCriteriaStayUnwritten) {
-  // Excel keeps one value of three custom criteria, saves a date group in one of two record forms, and writes bounds
-  // it computes from the data; none of that is in the model, so each filter is reported as lost.
-  for (const char* name : {"custom_three", "calendar_type"}) {
-    SCOPED_TRACE(name);
+  // Excel keeps one value of three custom criteria and writes bounds it computes from the data; neither is in the
+  // model, so each filter is reported as lost.
+  {
     Bytes out;
-    EXPECT_GT(emit_auto_filter_block(out, SourceFilter(name)), 0U);
+    EXPECT_GT(emit_auto_filter_block(out, SourceFilter("custom_three")), 0U);
   }
   for (const char* name : {"top10_src.xlsx", "dynamic_src.xlsx"}) {
     SCOPED_TRACE(name);
@@ -304,12 +296,12 @@ TEST(XlsbParityAutoFilterKinds, EveryWrittenKindMatchesExcel) {
     ASSERT_EQ(ours[i].first, theirs[i].first);
     const AutoFilter* filter = book.sheet(i).auto_filter();
     if (filter != nullptr && unwritten_auto_filter_settings(book.sheet(i)) != 0U) {
-      // Only date groups are left unwritten in this book.
-      bool dated = false;
+      // Only date groups in the rich-data form are left unwritten in this book.
+      bool rich_dates = false;
       for (const FilterColumn& col : filter->columns) {
-        dated = dated || !col.values.date_groups.empty();
+        rich_dates = rich_dates || (!col.values.date_groups.empty() && !col.values.plain_date_groups);
       }
-      EXPECT_TRUE(dated);
+      EXPECT_TRUE(rich_dates);
       continue;
     }
     EXPECT_EQ(PartFilterRecords(ours[i].second), PartFilterRecords(theirs[i].second));
@@ -330,6 +322,53 @@ TEST(XlsbParityAutoFilterKinds, ExcelSaveWritesBackUnchanged) {
   for (std::size_t i = 0; i < ours.size(); ++i) {
     SCOPED_TRACE(theirs[i].first);
     EXPECT_EQ(PartFilterRecords(ours[i].second), PartFilterRecords(theirs[i].second));
+  }
+}
+
+TEST(XlsbParityAutoFilterDateGroups, EveryPlainGroupingMatchesExcel) {
+  // One sheet per grouping, year through second, each a plain `<filters><dateGroupItem>`.
+  const Bytes excel = ReadFile(Fixture("date_group_plain.xlsb"));
+  auto loaded = read_ooxml(SpanOf(ReadFile(Fixture("date_group_plain_src.xlsx"))));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  const Workbook& book = loaded.value().workbook;
+  auto saved = write_xlsb_with_result(book);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  auto reread = read_xlsb(SpanOf(excel));
+  ASSERT_TRUE(static_cast<bool>(reread)) << reread.error().message;
+  auto resaved = write_xlsb_with_result(reread.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(resaved)) << resaved.error().message;
+  const auto ours = SheetParts(saved.value().bytes);
+  const auto theirs = SheetParts(excel);
+  const auto back = SheetParts(resaved.value().bytes);
+  ASSERT_EQ(book.sheet_count(), 6U);
+  ASSERT_EQ(ours.size(), book.sheet_count());
+  ASSERT_EQ(theirs.size(), book.sheet_count());
+  ASSERT_EQ(back.size(), book.sheet_count());
+  // Excel's own .xlsx save keeps the plain form, which the model writes back as read.
+  const Bytes twin_package = ReadFile(Fixture("date_group_plain.xlsx"));
+  auto twin = read_ooxml(SpanOf(twin_package));
+  ASSERT_TRUE(static_cast<bool>(twin)) << twin.error().message;
+  ZipReader twin_zip;
+  ASSERT_TRUE(static_cast<bool>(twin_zip.open(SpanOf(twin_package))));
+  for (std::size_t i = 0; i < book.sheet_count(); ++i) {
+    SCOPED_TRACE(theirs[i].first);
+    EXPECT_EQ(unwritten_auto_filter_settings(book.sheet(i)), 0U);
+    EXPECT_EQ(PartFilterRecords(ours[i].second), PartFilterRecords(theirs[i].second));
+    EXPECT_EQ(PartFilterRecords(back[i].second), PartFilterRecords(theirs[i].second));
+    const AutoFilter* from_xlsb = reread.value().workbook.sheet(i).auto_filter();
+    const AutoFilter* from_xlsx = twin.value().workbook.sheet(i).auto_filter();
+    ASSERT_NE(from_xlsb, nullptr);
+    ASSERT_NE(from_xlsx, nullptr);
+    EXPECT_TRUE(from_xlsx->columns.at(0).values.plain_date_groups);
+    auto sheet_xml = twin_zip.read_entry("xl/worksheets/sheet" + std::to_string(i + 1U) + ".xml");
+    ASSERT_TRUE(static_cast<bool>(sheet_xml));
+    const std::string text(sheet_xml.value().begin(), sheet_xml.value().end());
+    const std::size_t begin = text.find("<autoFilter");
+    const std::size_t end = text.find("</autoFilter>");
+    ASSERT_NE(begin, std::string::npos);
+    ASSERT_NE(end, std::string::npos);
+    EXPECT_EQ(serialize_auto_filter(*from_xlsx), text.substr(begin, end + 13U - begin));
+    EXPECT_EQ(serialize_auto_filter(*from_xlsb), serialize_auto_filter(*book.sheet(i).auto_filter()));
   }
 }
 

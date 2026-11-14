@@ -9,10 +9,11 @@
 // rectangle, an unknown enumeration value -- is kept verbatim as `opaque_xml`
 // and round-trips unchanged.
 //
-// Excel writes date-group criteria only inside a `filterColumn` extension
-// (`xlrd2:filterColumn`, uri {1AD28BCE-077C-4C59-8B6E-1921CE8616D4}); the
-// reader lifts them into `ValueFilters::date_groups` and the writer emits
-// them back in that form, whichever form the source used.
+// Excel writes date-group criteria either as plain `<dateGroupItem>` children
+// of `<filters>` or inside a `filterColumn` extension (`xlrd2:filterColumn`,
+// uri {1AD28BCE-077C-4C59-8B6E-1921CE8616D4}); the reader lifts both into
+// `ValueFilters::date_groups`, marks the plain form, and the writer emits
+// each back in the form it was read in.
 
 #ifndef FORMULON_IO_AUTO_FILTER_XML_H_
 #define FORMULON_IO_AUTO_FILTER_XML_H_

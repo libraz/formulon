@@ -62,6 +62,9 @@ struct ValueFilters {
   std::string calendar_type;
   std::vector<std::string> values;
   std::vector<DateGroupItem> date_groups;
+  /// The date groups were read as plain `<dateGroupItem>` children of `<filters>` rather than in the rich-data filter
+  /// extension, the form Excel gives a date filter it creates; each form is written back as it was read.
+  bool plain_date_groups = false;
 };
 
 /// `ST_FilterOperator`.

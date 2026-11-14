@@ -139,12 +139,16 @@ Expected<void, Error> ReadDateGroup(ByteSpan payload, DateGroupItem* out) {
     return Corrupt("xlsb BrtAFilterDateGroupItem is out of range");
   }
   out->grouping = static_cast<DateTimeGrouping>(dnt);
+  // Fields finer than the grouping hold Excel's placeholders; the model keeps them zero.
+  const auto finer = [&](DateTimeGrouping field, std::uint32_t value) {
+    return static_cast<std::uint8_t>(out->grouping < field ? 0U : value);
+  };
   out->year = yr;
-  out->month = static_cast<std::uint8_t>(mon);
-  out->day = static_cast<std::uint8_t>(dom);
-  out->hour = static_cast<std::uint8_t>(hour);
-  out->minute = static_cast<std::uint8_t>(min);
-  out->second = static_cast<std::uint8_t>(sec);
+  out->month = finer(DateTimeGrouping::kMonth, mon);
+  out->day = finer(DateTimeGrouping::kDay, dom);
+  out->hour = finer(DateTimeGrouping::kHour, hour);
+  out->minute = finer(DateTimeGrouping::kMinute, min);
+  out->second = finer(DateTimeGrouping::kSecond, sec);
   return Expected<void, Error>::Ok();
 }
 
@@ -233,6 +237,7 @@ Expected<FilterColumn, Error> ReadFilterColumn(ByteSpan& cursor, ByteSpan begin)
         DateGroupItem item;
         RETURN_IF_ERROR(ReadDateGroup(rec.payload, &item));
         col.values.date_groups.push_back(item);
+        col.values.plain_date_groups = true;
         break;
       }
       case kBrtEndFilters:
@@ -323,6 +328,23 @@ void EmitCustomFilter(std::vector<std::uint8_t>& out, const CustomFilter& filter
   emit_record(out, kBrtCustomFilter, payload);
 }
 
+void EmitDateGroup(std::vector<std::uint8_t>& out, const DateGroupItem& item) {
+  // Excel fills an unused month and day with 1 and the unused time fields with 0.
+  const bool by_year = item.grouping == DateTimeGrouping::kYear;
+  const bool by_month = by_year || item.grouping == DateTimeGrouping::kMonth;
+  std::vector<std::uint8_t> payload;
+  emit_u16(payload, item.year);
+  emit_u16(payload, static_cast<std::uint16_t>(by_year ? 1U : item.month));
+  emit_u32(payload, by_month ? 1U : static_cast<std::uint32_t>(item.day));
+  emit_u16(payload, item.hour);
+  emit_u16(payload, item.minute);
+  emit_u16(payload, item.second);
+  emit_u16(payload, 0U);
+  emit_u32(payload, 0U);
+  emit_u32(payload, static_cast<std::uint32_t>(item.grouping));
+  emit_record(out, kBrtAFilterDateGroupItem, payload);
+}
+
 std::uint32_t DynamicCft(DynamicFilterType type) {
   const auto index = static_cast<std::uint32_t>(type);
   return index <= 2U ? index : index - 3U + kCftDateBase;
@@ -342,8 +364,9 @@ ColumnFate FateOf(const FilterColumn& col) {
       // Excel saves no column for a colour criterion without a format.
       return col.color.dxf_id ? ColumnFate::kWritten : ColumnFate::kDropped;
     case FilterKind::kValues:
-      // Excel saves a date group in one of two record forms the model does not tell apart.
-      return col.values.date_groups.empty() ? ColumnFate::kWritten : ColumnFate::kDeferred;
+      // The rich date-group form is saved as future records the model does not write.
+      return col.values.date_groups.empty() || col.values.plain_date_groups ? ColumnFate::kWritten
+                                                                            : ColumnFate::kDeferred;
     case FilterKind::kTop10:
       // Excel writes the threshold it computed from the data; the model has none until a save that applied it.
       return col.top10.filter_val ? ColumnFate::kWritten : ColumnFate::kDeferred;
@@ -372,6 +395,9 @@ std::uint32_t EmitCriterion(std::vector<std::uint8_t>& out, const FilterColumn& 
         payload.clear();
         emit_xlwidestring(payload, value);
         emit_record(out, kBrtFilter, payload);
+      }
+      for (const DateGroupItem& item : col.values.date_groups) {
+        EmitDateGroup(out, item);
       }
       emit_record(out, kBrtEndFilters, ByteSpan{});
       return col.values.calendar_type.empty() || japan ? 0U : 1U;

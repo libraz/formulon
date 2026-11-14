@@ -1240,7 +1240,7 @@ TEST(XlsbTableFidelity, AutoFilterRecordsMatchTheExcelXlsxTwin) {
 TEST(XlsbTableFidelity, EveryFilterCriterionKindRoundTrips) {
   const char* const kFilters[] = {
       "<autoFilter ref=\"A1:F9\"><filterColumn colId=\"0\"><filters blank=\"1\"><filter val=\"a\"/>"
-      "</filters></filterColumn></autoFilter>",
+      "<dateGroupItem year=\"2024\" month=\"3\" dateTimeGrouping=\"month\"/></filters></filterColumn></autoFilter>",
       "<autoFilter ref=\"A1:F9\"><filterColumn colId=\"1\"><top10 top=\"0\" percent=\"1\" val=\"10\" "
       "filterVal=\"4\"/></filterColumn></autoFilter>",
       "<autoFilter ref=\"A1:F9\"><filterColumn colId=\"2\"><dynamicFilter type=\"aboveAverage\" val=\"3.5\"/>"
@@ -1267,13 +1267,18 @@ TEST(XlsbTableFidelity, EveryFilterCriterionKindRoundTrips) {
     EXPECT_EQ(serialize_auto_filter(back.value()), serialize_auto_filter(model));
     EXPECT_EQ(cursor.size, 0U);
   }
-  // Excel saves a date group in one of two record forms the model does not tell apart, so it is reported.
+  // The rich-data date-group form is saved as future records the model does not write, so it is reported.
   std::vector<std::uint8_t> written;
-  EXPECT_EQ(emit_auto_filter_block(
-                written, auto_filter_from_xml("<autoFilter ref=\"A1:F9\"><filterColumn colId=\"0\"><filters>"
-                                              "<dateGroupItem year=\"2024\" month=\"3\" dateTimeGrouping=\"month\"/>"
-                                              "</filters></filterColumn></autoFilter>")),
-            1U);
+  EXPECT_EQ(
+      emit_auto_filter_block(
+          written, auto_filter_from_xml(
+                       "<autoFilter ref=\"A1:F9\"><filterColumn colId=\"0\"><extLst>"
+                       "<ext uri=\"{1AD28BCE-077C-4C59-8B6E-1921CE8616D4}\" "
+                       "xmlns:xlrd2=\"http://schemas.microsoft.com/office/spreadsheetml/2017/richdata2\">"
+                       "<xlrd2:filterColumn><xlrd2:filters><xlrd2:dateGroupItem year=\"2024\" month=\"3\" "
+                       "dateTimeGrouping=\"month\"/></xlrd2:filters></xlrd2:filterColumn></ext></extLst></filterColumn>"
+                       "</autoFilter>")),
+      1U);
 }
 
 }  // namespace

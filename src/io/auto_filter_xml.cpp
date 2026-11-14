@@ -392,6 +392,7 @@ void read_filter_column(Reader& r, const pugi::xml_node& node, FilterColumn& col
     if (name == "filters") {
       col.kind = FilterKind::kValues;
       read_value_filters(r, child, "", col.values);
+      col.values.plain_date_groups = !col.values.date_groups.empty();
     } else if (name == "customFilters") {
       col.kind = FilterKind::kCustom;
       r.attrs(child, kCustomFiltersAttrs, {&col.custom.and_join});
@@ -568,7 +569,8 @@ void append_value_filters(std::string& out, const ValueFilters& values, std::str
 void append_filter_column(std::string& out, const FilterColumn& col) {
   out.append("<filterColumn");
   write_attrs(out, kColumnAttrs, {&col.col_id, &col.hidden_button, &col.show_button, &col.extra_attrs});
-  const bool rich_dates = col.kind == FilterKind::kValues && !col.values.date_groups.empty();
+  const bool rich_dates =
+      col.kind == FilterKind::kValues && !col.values.date_groups.empty() && !col.values.plain_date_groups;
   std::string body;
   switch (col.kind) {
     case FilterKind::kNone:

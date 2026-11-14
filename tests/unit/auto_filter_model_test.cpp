@@ -493,18 +493,16 @@ TEST(AutoFilterModel, ExtLstRoundTrips) {
   EXPECT_EQ(parsed.value().ext_lst_xml, "<extLst><ext uri=\"{00000000-0000-0000-0000-00000000EEEE}\"/></extLst>");
   EXPECT_EQ(io::serialize_auto_filter(parsed.value()), xml);
 
-  // A legacy `<filters><dateGroupItem>` is written in the extension form
-  // Excel uses (O5b dgi_year_2024).
-  auto legacy = io::parse_auto_filter_xml(
+  EXPECT_FALSE(col.values.plain_date_groups);
+
+  // A plain `<filters><dateGroupItem>` is written back plain, as Excel keeps it.
+  const std::string plain =
       "<autoFilter ref=\"A1:A10\"><filterColumn colId=\"0\"><filters>"
-      "<dateGroupItem year=\"2024\" dateTimeGrouping=\"year\"/></filters></filterColumn></autoFilter>");
+      "<dateGroupItem year=\"2024\" dateTimeGrouping=\"year\"/></filters></filterColumn></autoFilter>";
+  auto legacy = io::parse_auto_filter_xml(plain);
   ASSERT_TRUE(static_cast<bool>(legacy));
-  EXPECT_EQ(io::serialize_auto_filter(legacy.value()),
-            "<autoFilter ref=\"A1:A10\"><filterColumn colId=\"0\"><extLst>"
-            "<ext uri=\"{1AD28BCE-077C-4C59-8B6E-1921CE8616D4}\" "
-            "xmlns:xlrd2=\"http://schemas.microsoft.com/office/spreadsheetml/2017/richdata2\"><xlrd2:filterColumn>"
-            "<xlrd2:filters><xlrd2:dateGroupItem year=\"2024\" dateTimeGrouping=\"year\"/></xlrd2:filters>"
-            "</xlrd2:filterColumn></ext></extLst></filterColumn></autoFilter>");
+  EXPECT_TRUE(legacy.value().columns.at(0).values.plain_date_groups);
+  EXPECT_EQ(io::serialize_auto_filter(legacy.value()), plain);
 }
 
 TEST(AutoFilterModel, SortStateRoundTripsAndMoves) {

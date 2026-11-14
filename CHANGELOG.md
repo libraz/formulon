@@ -28,11 +28,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `.xlsb` saves write each sheet's AutoFilter and sort state from the
   workbook, as Excel does, so a filter set in `.xlsx` or through the API is
   kept, and the sheet's filter mode follows its criteria. A date-group
-  criterion, and a top-ten or dynamic criterion without the bounds Excel
-  computed when it last applied the filter, are left out and reported as
-  deferred; a colour criterion without a format is left out, as Excel leaves
-  it out. A sheet filter read from `.xlsb` that cannot be written back whole
-  is kept as stored.
+  criterion in the rich-data form Excel gives a date filter it creates, and a
+  top-ten or dynamic criterion without the bounds Excel computed when it last
+  applied the filter, are left out and reported as deferred; a colour
+  criterion without a format is left out, as Excel leaves it out. A sheet
+  filter read from `.xlsb` that cannot be written back whole is kept as
+  stored.
+
+- A date-group criterion read in its plain form is written back in that form
+  to `.xlsx` and `.xlsb`, as Excel keeps it. Before, `.xlsx` saves rewrote it
+  in the rich-data form.
 
 - `.xlsx` and `.xlsb` saves compact the cell formats (`<cellXfs>`, and the
   `BrtXF` list in `styles.bin`) as Excel does: entries that write identically
