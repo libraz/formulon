@@ -31,6 +31,8 @@ inline constexpr std::uint32_t kNoField = 0xFFFFFFFFU;
 /// PtgSxName: ptg 0x18, eptg 0x1D, then a u32 index into the PNames table.
 inline constexpr std::uint8_t kPtgSxName = 0x18U;
 inline constexpr std::uint8_t kEptgSxName = 0x1DU;
+/// PtgInt: ptg 0x1E, then a u16 integer.
+inline constexpr std::uint8_t kPtgInt = 0x1EU;
 
 /// One (field, item) pair of a name (BrtBeginPNPair .. BrtEndPNPair).
 struct PNPair {
@@ -60,6 +62,7 @@ struct CalcItem {
 struct FormulaToken {
   std::uint8_t ptg = 0;
   std::uint32_t sx_name = 0;  ///< PNames index; PtgSxName only.
+  std::uint16_t integer = 0;  ///< PtgInt only.
 };
 
 /// Decodes the block starting at `records[*pos]` (BrtBeginPCDCalcItems) and
@@ -70,7 +73,7 @@ Expected<std::vector<CalcItem>, Error> decode_calc_items(const std::vector<pivot
 /// Appends the records of `items` to `*out`.
 void encode_calc_items(const std::vector<CalcItem>& items, std::vector<pivot_records::RawRecord>* out);
 
-/// Tokenises `rgce`: PtgSxName and the payload-free operators 0x03-0x15.
+/// Tokenises `rgce`: PtgSxName, PtgInt and the payload-free operators 0x03-0x15.
 /// Any other token is refused with kIoXlsbUnsupportedPtg.
 Expected<std::vector<FormulaToken>, Error> walk_calc_item_formula(const std::vector<std::uint8_t>& rgce);
 

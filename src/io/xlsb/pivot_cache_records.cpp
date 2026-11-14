@@ -52,7 +52,8 @@ Error Corrupt(const char* message) {
 
 bool IsCalendarDate(const RecordDate& date) {
   return date.month >= 1U && date.month <= 12U && date.day >= 1U &&
-         date.day <= date_time::days_in_month(static_cast<int>(date.year), date.month);
+         date.day <= date_time::days_in_month(static_cast<int>(date.year), date.month) && date.hour < 24U &&
+         date.minute < 60U && date.second < 60U;
 }
 
 Expected<CellKind, Error> KindOfAtbl(ByteSpan payload) {
@@ -110,12 +111,11 @@ Expected<RecordCell, Error> DecodeCell(ByteSpan& cursor, CellKind kind) {
       cell.date.year = load_u16(cursor.data);
       cell.date.month = load_u16(cursor.data + 2);
       cell.date.day = cursor.data[4];
-      const bool midnight = cursor.data[5] == 0U && cursor.data[6] == 0U && cursor.data[7] == 0U;
+      cell.date.hour = cursor.data[5];
+      cell.date.minute = cursor.data[6];
+      cell.date.second = cursor.data[7];
       cursor.data += kDateBytes;
       cursor.size -= kDateBytes;
-      if (!midnight) {
-        return Corrupt("xlsb pivot cache record date carries a time of day that is not characterised");
-      }
       if (!IsCalendarDate(cell.date)) {
         return Corrupt("xlsb pivot cache record date is not a calendar date");
       }
@@ -143,10 +143,9 @@ Expected<void, Error> EncodeCell(std::vector<std::uint8_t>& dst, const RecordCel
       emit_u16(dst, cell.date.year);
       emit_u16(dst, cell.date.month);
       emit_u8(dst, cell.date.day);
-      // Hour, minute, second: midnight only.
-      emit_u8(dst, 0U);
-      emit_u8(dst, 0U);
-      emit_u8(dst, 0U);
+      emit_u8(dst, cell.date.hour);
+      emit_u8(dst, cell.date.minute);
+      emit_u8(dst, cell.date.second);
       break;
   }
   return Expected<void, Error>::Ok();
@@ -299,26 +298,45 @@ Expected<double, Error> record_date_serial(const cache_records::RecordDate& date
   if (!IsCalendarDate(date)) {
     return Corrupt("xlsb pivot cache record date is not a calendar date");
   }
-  const double serial = date_time::serial_from_ymd(static_cast<int>(date.year), date.month, date.day, date1904);
+  const double day = date_time::serial_from_ymd(static_cast<int>(date.year), date.month, date.day, false);
+  const double gap = date1904 ? date_time::kDate1904EpochGap : 0.0;
   // Days before 1900-03-01 sit across the phantom day, where the inline form is not characterised.
-  if (serial < (date1904 ? 0.0 : kFirstSerialAfterPhantomDay) || serial > date_time::max_date_serial(date1904)) {
+  if (day < kFirstSerialAfterPhantomDay || day - gap < 0.0 || day > date_time::max_date_serial(false)) {
     return Corrupt("xlsb pivot cache record date lies outside the characterised serial range");
   }
-  return serial;
+  // The day plus the time as one 1900-system serial, then the 1904 shift: the xlsx `<d v>` arithmetic.
+  const double seconds = static_cast<double>(date.hour) * 3600.0 + static_cast<double>(date.minute) * 60.0 +
+                         static_cast<double>(date.second);
+  return (day + seconds / static_cast<double>(date_time::kSecondsPerDay)) - gap;
 }
 
 Expected<cache_records::RecordDate, Error> record_date_from_serial(double serial, bool date1904) {
-  if (!std::isfinite(serial) || serial != std::floor(serial)) {
-    return refuse_write("XLSB pivot cache record date carries a time of day that is not characterised");
+  if (!std::isfinite(serial)) {
+    return refuse_write("XLSB pivot cache record date is not finite");
   }
-  if (serial < (date1904 ? 0.0 : kFirstSerialAfterPhantomDay) || serial > date_time::max_date_serial(date1904)) {
+  const double serial1900 = serial + (date1904 ? date_time::kDate1904EpochGap : 0.0);
+  double day = std::floor(serial1900);
+  long long seconds = std::llround((serial1900 - day) * static_cast<double>(date_time::kSecondsPerDay));
+  if (seconds >= date_time::kSecondsPerDay) {
+    day += 1.0;
+    seconds -= date_time::kSecondsPerDay;
+  }
+  if (day < kFirstSerialAfterPhantomDay || day > date_time::max_date_serial(false)) {
     return refuse_write("XLSB pivot cache record date lies outside the characterised serial range");
   }
-  const date_time::YMD ymd = date_time::ymd_from_serial(serial, date1904);
+  const date_time::YMD ymd = date_time::ymd_from_serial(day, false);
   RecordDate date;
   date.year = static_cast<std::uint16_t>(ymd.y);
   date.month = static_cast<std::uint16_t>(ymd.m);
   date.day = static_cast<std::uint8_t>(ymd.d);
+  date.hour = static_cast<std::uint8_t>(seconds / 3600);
+  date.minute = static_cast<std::uint8_t>(seconds / 60 % 60);
+  date.second = static_cast<std::uint8_t>(seconds % 60);
+  // A fraction of a second, or a serial the decode side would not reproduce, has no cell spelling.
+  auto back = record_date_serial(date, date1904);
+  if (!back || back.value() != serial) {
+    return refuse_write("XLSB pivot cache record date is not a whole second");
+  }
   return date;
 }
 

@@ -308,15 +308,27 @@ TEST(XlsbPivotCacheDefinitionRecords, Week1900DateRun) {
   EXPECT_EQ(doc.fields[0].items->entries[0].run.dates.back().day, 10U);
 }
 
-TEST(XlsbPivotCacheDefinitionRecords, LoneItemRecordsAreUnmeasured) {
+TEST(XlsbPivotCacheDefinitionRecords, LoneItemRecordsOfTheWrongSizeAreCorrupt) {
   const auto base = PartNamed(Fixture("xlsb_pivot_twins/B01_base.xlsb"), "xl/pivotCache/pivotCacheDefinition1.bin");
   ASSERT_TRUE(decode_pivot_cache_definition(SpanOf(base)));
+  // Each inserted record carries 8 zero bytes: too long for 20, 22 and 23, and one item too many for the count.
   for (const std::uint16_t lone : std::initializer_list<std::uint16_t>{20, 22, 23, 25}) {
     const auto bytes = InsertAfterFirst(base, pivot_records::kBeginPCDFAtbl, lone);
     auto decoded = decode_pivot_cache_definition(SpanOf(bytes));
     ASSERT_FALSE(decoded) << lone;
-    EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbUnknownRecord) << lone;
-    EXPECT_EQ(decoded.error().message.rfind("unmeasured", 0), 0U) << decoded.error().message;
+    EXPECT_EQ(decoded.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt) << lone;
+  }
+}
+
+TEST(XlsbPivotCacheDefinitionRecords, LoneItemRecordsRoundTrip) {
+  for (const char* stem : {"item_bare_m", "item_mixed_d", "item_b_e"}) {
+    for (const char* save : {".xlsb", ".2.xlsb"}) {
+      const std::string package = Fixture(std::string("xlsb_parity/pivot/") + stem + save);
+      const auto bytes = PartNamed(package, "xl/pivotCache/pivotCacheDefinition1.bin");
+      auto decoded = decode_pivot_cache_definition(SpanOf(bytes));
+      ASSERT_TRUE(decoded) << package << ": " << decoded.error().message;
+      EXPECT_EQ(encode_pivot_cache_definition(decoded.value()), bytes) << package;
+    }
   }
 }
 

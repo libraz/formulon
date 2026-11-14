@@ -25,6 +25,7 @@ constexpr std::size_t kPairSize = 9U;
 constexpr std::uint8_t kFirstOperatorPtg = 0x03U;
 constexpr std::uint8_t kLastOperatorPtg = 0x15U;
 constexpr std::size_t kSxNameSize = 6U;
+constexpr std::size_t kIntSize = 3U;
 
 Error Corrupt(const char* message) {
   return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, message, "context=xlsb_pivot_calc_item");
@@ -222,10 +223,18 @@ Expected<std::vector<FormulaToken>, Error> walk_calc_item_formula(const std::vec
                           "xlsb pivot calculated item formula carries a malformed PtgSxName",
                           "context=xlsb_pivot_calc_item");
       }
-      tokens.push_back(FormulaToken{ptg, load_u32(rgce.data() + i + 2)});
+      tokens.push_back(FormulaToken{ptg, load_u32(rgce.data() + i + 2), 0U});
       i += kSxNameSize;
+    } else if (ptg == kPtgInt) {
+      if (rgce.size() - i < kIntSize) {
+        return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
+                          "xlsb pivot calculated item formula carries a truncated PtgInt",
+                          "context=xlsb_pivot_calc_item");
+      }
+      tokens.push_back(FormulaToken{ptg, 0U, load_u16(rgce.data() + i + 1)});
+      i += kIntSize;
     } else if (ptg >= kFirstOperatorPtg && ptg <= kLastOperatorPtg) {
-      tokens.push_back(FormulaToken{ptg, 0U});
+      tokens.push_back(FormulaToken{ptg, 0U, 0U});
       ++i;
     } else {
       return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,

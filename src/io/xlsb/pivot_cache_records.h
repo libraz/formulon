@@ -31,12 +31,14 @@ enum class CellKind : std::uint8_t {
   kDate,         ///< u16 year, u16 month, u8 day, u8 hour, u8 minute, u8 second (`<d>`).
 };
 
-/// The calendar day of a date cell. Only midnight is accepted: a time of day
-/// is refused on both decode and encode.
+/// A date cell: calendar day and wall-clock time to the second.
 struct RecordDate {
   std::uint16_t year = 0;
   std::uint16_t month = 0;
   std::uint8_t day = 0;
+  std::uint8_t hour = 0;
+  std::uint8_t minute = 0;
+  std::uint8_t second = 0;
 };
 
 /// One record cell; only the member matching `kind` is meaningful.
@@ -58,7 +60,7 @@ struct PivotCacheRecordsDoc {
 /// Decodes a records part against `kinds` (one entry per database field).
 /// Fails on any record other than 193 / 33 / 194 in that order, a count that
 /// disagrees with the rows, a row whose width `kinds` does not explain
-/// exactly, a non-calendar date or a time of day.
+/// exactly, or a date that is not a calendar day and time.
 Expected<cache_records::PivotCacheRecordsDoc, Error> decode_pivot_cache_records(
     ByteSpan part, const std::vector<cache_records::CellKind>& kinds);
 
@@ -74,12 +76,12 @@ Expected<std::vector<std::uint8_t>, Error> encode_pivot_cache_records(
 /// mixed-type cells are refused.
 Expected<std::vector<cache_records::CellKind>, Error> cell_kinds_of_cache_definition(ByteSpan definition_part);
 
-/// Serial of a date cell under the workbook's date system. Days before
-/// 1900-03-01 in the 1900 system are refused.
+/// Serial of a date cell under the workbook's date system, computed as the
+/// xlsx reader computes `<d v>`. Days before 1900-03-01 are refused.
 Expected<double, Error> record_date_serial(const cache_records::RecordDate& date, bool date1904);
 
-/// The date cell naming `serial`; a fractional serial (time of day) and a
-/// serial outside the range `record_date_serial` produces are refused.
+/// The date cell naming `serial`; a serial `record_date_serial` does not
+/// produce (a fraction of a second, a day outside its range) is refused.
 Expected<cache_records::RecordDate, Error> record_date_from_serial(double serial, bool date1904);
 
 }  // namespace xlsb

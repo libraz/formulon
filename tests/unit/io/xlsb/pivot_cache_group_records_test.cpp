@@ -343,10 +343,16 @@ TEST(XlsbPivotCacheGroupRecords, CalcItemFieldsMatchTwin) {
 }
 
 TEST(XlsbPivotCacheGroupRecords, CalcItemFormulaWalkRefusesUnknownToken) {
-  auto tokens = pivot_calc::walk_calc_item_formula({0x1e, 0x01, 0x00});
+  // PtgNum (0x1F) has no Excel-saved calculated-item sample; PtgInt does.
+  auto tokens = pivot_calc::walk_calc_item_formula({0x1f, 0, 0, 0, 0, 0, 0, 0xf0, 0x3f});
   ASSERT_FALSE(tokens);
   EXPECT_EQ(tokens.error().code, FormulonErrorCode::kIoXlsbUnsupportedPtg);
   EXPECT_FALSE(pivot_calc::walk_calc_item_formula({0x18, 0x1d, 0x00}));
+  EXPECT_FALSE(pivot_calc::walk_calc_item_formula({0x1e, 0x02}));
+  auto integer = pivot_calc::walk_calc_item_formula({0x1e, 0x02, 0x00});
+  ASSERT_TRUE(integer);
+  ASSERT_EQ(integer.value().size(), 1U);
+  EXPECT_EQ(integer.value()[0].integer, 2U);
 }
 
 TEST(XlsbPivotCacheGroupRecords, CalcItemRefusesCountMismatch) {

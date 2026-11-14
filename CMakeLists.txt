@@ -277,6 +277,7 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/pivot_cache_group_records.cpp
   src/io/xlsb/pivot_cache_ids.cpp
   src/io/xlsb/pivot_cache_records.cpp
+  src/io/xlsb/pivot_cache_bridge.cpp
   src/io/xlsb/pivot_calc_item_records.cpp
   src/io/xlsb/pivot_line_item_records.cpp
   src/io/xlsb/pivot_reader.cpp

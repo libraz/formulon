@@ -244,7 +244,7 @@ TEST(XlsbPivotCacheRecords, RefusesKindsThatDoNotExplainTheRowWidth) {
   }
 }
 
-TEST(XlsbPivotCacheRecords, RefusesATimeOfDay) {
+TEST(XlsbPivotCacheRecords, RefusesAnHourPastTheDay) {
   const std::vector<RecordsPart> parts = RecordsParts(Fixture("A8_custom_subtotal_max"));
   ASSERT_FALSE(parts.empty());
   std::vector<std::uint8_t> bytes = parts.front().records;
@@ -253,7 +253,7 @@ TEST(XlsbPivotCacheRecords, RefusesATimeOfDay) {
   ASSERT_EQ(recs[1].type, pivot_records::kPCRRecord);
   // Row x, x, d: the date's hour byte is payload offset 4 + 4 + 5.
   const auto hour_at = static_cast<std::size_t>(recs[1].payload.data - bytes.data()) + 13U;
-  bytes[hour_at] = 9U;
+  bytes[hour_at] = 24U;
   auto doc = decode_pivot_cache_records(SpanOf(bytes), {kX, kX, kD, kN, kN});
   ASSERT_FALSE(doc);
   EXPECT_EQ(doc.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
@@ -325,7 +325,11 @@ TEST(XlsbPivotCacheRecords, DateCellsConvertToSerialsBothWays) {
   ASSERT_TRUE(epoch1904);
   EXPECT_EQ(epoch1904.value().year, 1904U);
 
-  EXPECT_FALSE(record_date_from_serial(kJan5Serial1900 + 0.5, /*date1904=*/false));
+  auto noon = record_date_from_serial(kJan5Serial1900 + 0.5, /*date1904=*/false);
+  ASSERT_TRUE(noon);
+  EXPECT_EQ(noon.value().hour, 12U);
+  EXPECT_EQ(noon.value().minute, 0U);
+  EXPECT_FALSE(record_date_from_serial(kJan5Serial1900 + 0.5 / 86400.0, /*date1904=*/false));
   EXPECT_FALSE(record_date_from_serial(60.0, /*date1904=*/false));
   EXPECT_FALSE(record_date_serial(RecordDate{1900, 2, 28}, /*date1904=*/false));
   EXPECT_FALSE(record_date_serial(RecordDate{2023, 2, 29}, /*date1904=*/false));

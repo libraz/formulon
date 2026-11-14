@@ -48,6 +48,7 @@ inline constexpr std::uint16_t kAtblSemiMixedTypesString = 0x0009U;  ///< contai
 inline constexpr std::uint16_t kAtblNonDate = 0x0002U;
 inline constexpr std::uint16_t kAtblDate = 0x0004U;
 inline constexpr std::uint16_t kAtblBlank = 0x0010U;
+inline constexpr std::uint16_t kAtblMixedTypes = 0x0020U;
 inline constexpr std::uint16_t kAtblNumber = 0x0040U;
 inline constexpr std::uint16_t kAtblInteger = 0x0080U;
 /// The min/max doubles follow (`minValue`/`maxValue`, or `minDate`/`maxDate` as serials).
@@ -71,10 +72,14 @@ struct Date {
 
 /// One single-record shared item.
 enum class ItemType : std::uint8_t {
-  kString,            ///< BrtPCDIString (24): `text`.
-  kNumber,            ///< BrtPCDINumber (21): `number`.
-  kAttributedString,  ///< BrtPCDIAString (31): `text` + `attributes`.
-  kAttributedMissing  ///< BrtPCDIAMissing (27): `attributes` only.
+  kString,             ///< BrtPCDIString (24): `text`.
+  kNumber,             ///< BrtPCDINumber (21): `number`.
+  kAttributedString,   ///< BrtPCDIAString (31): `text` + `attributes`.
+  kAttributedMissing,  ///< BrtPCDIAMissing (27): `attributes` only.
+  kMissing,            ///< BrtPCDIMissing (20): no payload (`<m/>`).
+  kBoolean,            ///< BrtPCDIBoolean (22): `boolean`.
+  kError,              ///< BrtPCDIError (23): `error`, the BErr byte.
+  kDate                ///< BrtPCDIDatetime (25): `date`.
 };
 
 struct Item {
@@ -82,6 +87,9 @@ struct Item {
   std::string text;
   double number = 0.0;
   std::uint8_t attributes = 0;  ///< kItemUnused / kItemFormula.
+  bool boolean = false;
+  std::uint8_t error = 0;
+  Date date;
 };
 
 /// BrtBeginPCDIRun element type.

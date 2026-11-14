@@ -70,7 +70,7 @@ using pivot_records::kPCDINumber;
 using pivot_records::kPCDIString;
 using pivot_records::RawRecord;
 
-/// Single shared-item records with no Excel-saved sample: bare missing, boolean, error, lone date.
+/// Single shared-item records: bare missing, boolean, error, lone date.
 constexpr std::uint16_t kPCDIMissing = 20;
 constexpr std::uint16_t kPCDIBoolean = 22;
 constexpr std::uint16_t kPCDIError = 23;
@@ -95,8 +95,8 @@ constexpr std::uint8_t kSRangeSheetFlags[] = {0x00, 0x00, 0x02};
 constexpr std::size_t kFieldReservedBytes = 16;
 
 constexpr std::uint16_t kAtblKnownFlags = pcd::kAtblSemiMixedTypesString | pcd::kAtblNonDate | pcd::kAtblDate |
-                                          pcd::kAtblBlank | pcd::kAtblNumber | pcd::kAtblInteger | pcd::kAtblMinMax |
-                                          pcd::kAtblAlways;
+                                          pcd::kAtblBlank | pcd::kAtblMixedTypes | pcd::kAtblNumber |
+                                          pcd::kAtblInteger | pcd::kAtblMinMax | pcd::kAtblAlways;
 
 /// Attribute block of BrtPCDIAString / BrtPCDIAMissing: flag byte then five zero bytes.
 constexpr std::size_t kItemAttributeBytes = 6;
@@ -318,10 +318,31 @@ Expected<pcd::Item, Error> DecodeItem(const XlsbRecord& rec) {
       break;
     }
     case kPCDIMissing:
-    case kPCDIBoolean:
-    case kPCDIError:
-    case kPCDIDatetime:
-      return Unmeasured("lone shared item record", rec.type);
+      item.type = pcd::ItemType::kMissing;
+      RETURN_IF_ERROR(ExpectConsumed(p, rec.type));
+      break;
+    case kPCDIBoolean: {
+      item.type = pcd::ItemType::kBoolean;
+      ASSIGN_OR_RETURN(const std::uint8_t flag, read_u8(p));
+      if (flag > 1U) {
+        return Corrupt("xlsb pivot cache boolean item is neither 0 nor 1", rec.type);
+      }
+      item.boolean = flag != 0U;
+      RETURN_IF_ERROR(ExpectConsumed(p, rec.type));
+      break;
+    }
+    case kPCDIError: {
+      item.type = pcd::ItemType::kError;
+      ASSIGN_OR_RETURN(item.error, read_u8(p));
+      RETURN_IF_ERROR(ExpectConsumed(p, rec.type));
+      break;
+    }
+    case kPCDIDatetime: {
+      item.type = pcd::ItemType::kDate;
+      ASSIGN_OR_RETURN(item.date, ReadDate(p));
+      RETURN_IF_ERROR(ExpectConsumed(p, rec.type));
+      break;
+    }
     default:
       return Unknown("xlsb pivot cache item table carries an unknown record", rec.type);
   }
@@ -499,6 +520,21 @@ void EmitItemEntry(std::vector<std::uint8_t>& dst, const pcd::ItemEntry& entry) 
     case pcd::ItemType::kAttributedMissing:
       EmitItemAttributes(p, item.attributes);
       emit_record(dst, kPCDIAMissing, p);
+      break;
+    case pcd::ItemType::kMissing:
+      emit_record(dst, kPCDIMissing, p);
+      break;
+    case pcd::ItemType::kBoolean:
+      emit_u8(p, item.boolean ? 1U : 0U);
+      emit_record(dst, kPCDIBoolean, p);
+      break;
+    case pcd::ItemType::kError:
+      emit_u8(p, item.error);
+      emit_record(dst, kPCDIError, p);
+      break;
+    case pcd::ItemType::kDate:
+      EmitDate(p, item.date);
+      emit_record(dst, kPCDIDatetime, p);
       break;
   }
 }
