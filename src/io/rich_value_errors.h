@@ -8,7 +8,8 @@
 // One workbook-wide table numbers the values by first occurrence, sheets in
 // tab order and cells row-major; values are deduplicated by content and
 // structures by key set. Reading accepts only measured key sets and values,
-// so a book carrying anything else keeps its parts verbatim.
+// so a book carrying anything else keeps its parts verbatim. An .xlsx save
+// also lists the cells' opaque rich values (`rich_values.h`) in that table.
 
 #ifndef FORMULON_IO_RICH_VALUE_ERRORS_H_
 #define FORMULON_IO_RICH_VALUE_ERRORS_H_
@@ -23,6 +24,7 @@
 
 #include "io/array_anchor_budget.h"
 #include "passthrough_part.h"
+#include "sheet.h"
 #include "sheet_metadata.h"
 
 namespace formulon {
@@ -63,17 +65,25 @@ using RichErrorVmMap = std::vector<std::pair<std::uint64_t, std::uint32_t>>;
 /// The `vm` of `(row, col)` in `map`, or 0 for none.
 std::uint32_t rich_error_vm_at(const RichErrorVmMap& map, std::uint32_t row, std::uint32_t col) noexcept;
 
-/// The rich errors a save writes. `vm` n names value n-1.
+/// The rich values a save writes. `vm` n names value n-1. A value or
+/// structure whose `opaque_of` / `structure_opaque` entry is non-zero is an
+/// opaque one, and its `values` / `structures` slot is unused.
 struct RichErrorTable {
   std::vector<RichError> values;
-  std::vector<std::uint32_t> structure_of;  // per value, its structure index
-  std::vector<RichError::Kind> structures;  // in first-use order
-  std::vector<RichErrorVmMap> vm_by_sheet;  // parallel to the workbook's sheets
+  std::vector<std::uint32_t> structure_of;      // per value, its structure index
+  std::vector<RichError::Kind> structures;      // in first-use order
+  std::vector<RichErrorVmMap> vm_by_sheet;      // parallel to the workbook's sheets
+  std::vector<std::uint32_t> opaque_of;         // per value: 0, or 1 + its index in `opaque`
+  std::vector<std::uint32_t> structure_opaque;  // per structure: 0, or 1 + the `opaque` value declaring it
+  /// Opaque values, each `_rvRel:` key's `value` set to its index in `rels`.
+  std::vector<OpaqueRichValue> opaque;
+  /// `xl/richData/richValueRel.xml` in index order: (target part, relationship type).
+  std::vector<std::pair<std::string, std::string>> rels;
   bool empty() const noexcept { return values.empty(); }
 };
 
 /// True when `parts` keeps a metadata or richData part the reader did not
-/// consume; the writer then generates no rich errors for the book.
+/// consume; the .xlsb writer then generates no rich errors for the book.
 bool keeps_foreign_rich_data(const std::vector<PassthroughPart>& parts);
 
 /// The rich value a recorded detail is saved as, or nullopt when it is saved
@@ -90,6 +100,12 @@ using PivotAnchorFilter = bool (*)(const Workbook& wb, std::size_t sheet, std::s
 /// spill anchor, every cell whose detail matches its cached error, and the
 /// phantoms such a detail covers. Empty when the book keeps foreign rich data.
 RichErrorTable build_rich_error_table(const Workbook& wb, PivotAnchorFilter pivot_filter = nullptr);
+
+/// The .xlsx table: `build_rich_error_table`'s values with each error cell's
+/// opaque rich value in its row-major place (a cell's rich error wins), and
+/// the `_rvRel:` targets numbered in first-use order. Empty when the book
+/// keeps its rich-value parts verbatim (`rich_value_parts_kept_verbatim`).
+RichErrorTable build_rich_value_table(const Workbook& wb);
 
 /// `xl/metadata.xml` listing XLDAPR when `dynamic_arrays` and XLRICHVALUE
 /// with `rich_values` blocks when non-zero, as Excel writes it.
@@ -117,6 +133,8 @@ struct RichValueMetadata {
   bool consumable = false;
   /// Per `vm` - 1, the rich value index.
   std::vector<std::uint32_t> vm_rv;
+  /// Why the part is not consumable, when `parse_metadata_xml` can name it.
+  std::string_view fallback_reason;
 };
 
 RichValueMetadata parse_metadata_xml(const std::vector<std::uint8_t>& metadata_xml);

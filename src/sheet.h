@@ -157,6 +157,36 @@ struct SharedFormulaGroup {
   MergeRange ref;
 };
 
+/// One key of an `OpaqueRichValue`: its declaration in the value's structure
+/// and the value's text for it.
+struct OpaqueRichValueKey {
+  std::string name;   ///< `<k n>`
+  std::string type;   ///< `<k t>`, empty when absent
+  std::string style;  ///< `<k s>` (an index into the retained rich styles), empty when absent
+  std::string value;  ///< the `<v>` text; unused for a `_rvRel:` key
+  /// For a `_rvRel:` key, the package path its relationship targets and that
+  /// relationship's type; the saved index is assigned when the book is written.
+  std::string rel_target;
+  std::string rel_type;
+};
+
+/// A rich value read from a file whose kind the engine does not model (an
+/// in-cell picture, a linked data type), kept so a save writes it back.
+struct OpaqueRichValue {
+  std::string structure_type;  ///< `<s t>`
+  std::vector<OpaqueRichValueKey> keys;
+};
+
+bool operator==(const OpaqueRichValueKey& a, const OpaqueRichValueKey& b) noexcept;
+bool operator==(const OpaqueRichValue& a, const OpaqueRichValue& b) noexcept;
+
+/// The opaque rich value a cell carries.
+struct CellRichValue {
+  std::uint32_t row = 0;
+  std::uint32_t col = 0;
+  OpaqueRichValue value;
+};
+
 /// A single worksheet inside a `Workbook`.
 ///
 /// Owns the worksheet's display name and its cell store. The cell store is
@@ -888,6 +918,30 @@ class Sheet {
   /// it to put the details back at their mapped addresses.
   void replace_error_details(std::vector<std::pair<CellAddress, CellErrorDetail>> entries);
 
+  // ---------------------------------------------------------------------------
+  // Opaque rich-value side record
+  // ---------------------------------------------------------------------------
+  //
+  // The unmodelled rich value a loaded cell carries, keyed by address. It
+  // moves with row/column edits (`shift_sheet_metadata`) and is dropped by
+  // any write of the cell's value or formula, by `erase_cell`, and by a
+  // cached value other than #VALUE!. Locking as for the error details.
+
+  /// The value recorded for `(row, col)`, or nullopt.
+  std::optional<OpaqueRichValue> rich_value_at(std::uint32_t row, std::uint32_t col) const;
+
+  /// Records `value` for `(row, col)`, replacing any earlier one.
+  void set_rich_value(std::uint32_t row, std::uint32_t col, OpaqueRichValue value);
+
+  /// Drops the value of `(row, col)`, if any.
+  void clear_rich_value(std::uint32_t row, std::uint32_t col);
+
+  /// True when any cell of the sheet carries a value.
+  bool has_rich_values() const noexcept { return rich_value_count_.get() != 0U; }
+
+  /// Copies of every recorded value, in (row, col) order.
+  std::vector<CellRichValue> rich_values() const;
+
   /// Returns the spill-aware effective value of `(row, col)`:
   ///
   ///   1. If the cell is a phantom of a spill region, returns the
@@ -1521,6 +1575,14 @@ class Sheet {
   /// cell slot, creating it. Caller must hold `spill_mutex_`.
   Cell& ensure_overwritten_cell_locked(std::uint32_t row, std::uint32_t col);
 
+  /// `clear_rich_value` body. Caller must hold `spill_mutex_`.
+  void clear_rich_value_locked(std::uint32_t row, std::uint32_t col);
+
+  /// Drops the rich value of `(row, col)` unless the cached value `v` it is
+  /// about to take is #VALUE!, the form a rich value's cell stores. Caller
+  /// must hold `spill_mutex_`.
+  void clear_rich_value_for_cached_locked(std::uint32_t row, std::uint32_t col, const Value& v);
+
   /// Records whether `(row, col)` holds formula text in `formula_cells_`.
   /// Caller must hold `spill_mutex_`.
   void index_formula_cell_locked(std::uint32_t row, std::uint32_t col, bool has_formula);
@@ -1589,6 +1651,10 @@ class Sheet {
   // Guarded by `spill_mutex_`; the count mirrors its size for the lock-free checks.
   std::vector<std::pair<CellAddress, CellErrorDetail>> error_details_;
   sheet_copy::GuardedCount error_detail_count_;
+  // Opaque rich values sorted by (row, col); a copied sheet keeps them.
+  // Guarded by `spill_mutex_`; the count mirrors its size.
+  std::vector<CellRichValue> rich_values_;
+  sheet_copy::GuardedCount rich_value_count_;
   // What-If data tables (`<f t="dataTable">`), shifted with row/column edits.
   std::vector<DataTable> data_tables_;
   // See `shared_formula_groups()`; not read from files.

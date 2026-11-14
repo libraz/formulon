@@ -721,6 +721,12 @@ void Sheet::shift_sheet_metadata(const StructuralEdit& edit) {
   ShiftHyperlinkList(hyperlinks_, edit);
   ShiftCellAnchored(comments_, edit);
   ShiftCellAnchored(threaded_comments_, edit);
+  // A band edit moves only part of a row, so the address order is rebuilt.
+  ShiftCellAnchored(rich_values_, edit);
+  sort_by_index(rich_values_, [](const CellRichValue& a, const CellRichValue& b) {
+    return a.row != b.row ? a.row < b.row : a.col < b.col;
+  });
+  rich_value_count_.set(rich_values_.size());
   ShiftMerges(merges_, edit);
   ShiftDataTables(data_tables_, edit);
   for (DataValidation& dv : validations_) {

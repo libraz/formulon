@@ -228,6 +228,7 @@ set(FORMULON_CORE_SOURCES
   src/io/pivot_items_binding.cpp
   src/io/pivot_line_items_writer.cpp
   src/io/rich_value_errors.cpp
+  src/io/rich_values.cpp
   src/io/format_detect.cpp
   src/io/sax_xml_reader.cpp
   src/io/sheet_layout_reader.cpp

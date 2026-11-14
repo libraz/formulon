@@ -25,6 +25,7 @@
 #include "io/ooxml/relationship_writer.h"
 #include "io/ooxml/sheet_xml_builder.h"
 #include "io/ooxml_defs.h"
+#include "io/rich_values.h"
 #include "passthrough_part.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
@@ -389,9 +390,23 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
   }
   plan.tables_by_sheet.assign(wb.sheet_count(), {});
   // A retained `xl/metadata.xml` keeps today's meaning and blocks generated
-  // rich errors (`keeps_foreign_rich_data`); otherwise the writer generates
-  // the part for dynamic-array formulas and rich errors alike.
-  plan.rich_errors = build_rich_error_table(wb);
+  // rich values (`rich_value_parts_kept_verbatim`); otherwise the writer
+  // generates the part for dynamic-array formulas and rich values alike.
+  plan.rich_errors = build_rich_value_table(wb);
+  if (const std::string_view reason = rich_value_fallback_reason(wb); !reason.empty()) {
+    // The rich values go out verbatim, but no cell refers to them any more.
+    StructuredLog("ooxml_writer.rich_values_kept_verbatim").field("reason", reason).warn();
+    if (diagnostics != nullptr) {
+      ++diagnostics->deferred_feature_count;
+    }
+  }
+  RichValueRelPlan rich_value_rels = plan_rich_value_rels(wb, plan.rich_errors);
+  plan.rich_value_rel_parts = std::move(rich_value_rels.parts);
+  if (plan.rich_value_rel_parts.empty() && rich_value_rels.skipped.count(std::string(kRichValueRelPartPath)) != 0U) {
+    for (const UnknownRelationship& r : wb.unknown_workbook_rels()) {
+      plan.rich_value_rels_retired += !r.target_external && r.target == kRichValueRelPartPath ? 1U : 0U;
+    }
+  }
   bool retained_metadata = false;
   for (const PassthroughPart& part : wb.passthrough_parts()) {
     retained_metadata = retained_metadata || part.path == kMetadataPartPath;
@@ -572,6 +587,11 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
     if (regenerated_link_bodies.count(part.path) != 0U) {
       continue;
     }
+    // A read `richValueRel` pair is superseded by the regenerated one, and a
+    // media part only rich values referenced goes when they no longer do.
+    if (rich_value_rels.skipped.count(part.path) != 0U) {
+      continue;
+    }
     if (generated.count(part.path) != 0U) {
       RecordDroppedPart("ooxml_writer.passthrough_collision", part.path, "generated_path_wins", diagnostics);
       continue;
@@ -595,6 +615,9 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
       }
       continue;
     }
+    plan.passthrough_kept.push_back(&part);
+  }
+  for (const PassthroughPart& part : plan.rich_value_rel_parts) {
     plan.passthrough_kept.push_back(&part);
   }
   plan.passthrough_path_index.reset(plan.passthrough_kept);

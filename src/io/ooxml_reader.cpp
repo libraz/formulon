@@ -53,6 +53,7 @@
 #include "io/pivot_cache_reader.h"
 #include "io/pivot_table_reader.h"
 #include "io/rich_value_errors.h"
+#include "io/rich_values.h"
 #include "io/sheet_overlay_reader.h"
 #include "io/sheet_phonetic.h"
 #include "io/sheet_reader.h"
@@ -687,12 +688,13 @@ static Expected<void, Error> ResolveSharedStrings(Workbook& wb, const std::vecto
   return Expected<void, Error>::Ok();
 }
 
-/// Consumes `xl/metadata.xml` and the `xl/richData/` parts into `*set` when
-/// they hold nothing but standard dynamic-array metadata and measured rich
-/// errors, no sheet is kept opaque and no external link carries `vm=`; their
-/// workbook relationships go with them, and the writer regenerates the parts.
-/// Otherwise every part stays passthrough and false is returned.
-static bool ConsumeRichValueParts(ZipReader& zip, const Workbook& wb, RichErrorSet* set,
+/// Consumes `xl/metadata.xml` and the rich values into `*set` when every part
+/// reads (`read_rich_value_parts`), no sheet is kept opaque and no external
+/// link carries `vm=`; their workbook relationships go with them, and the
+/// writer regenerates the parts. `richValueRel` with its rels, the
+/// supporting-property bags and `richStyles` stay passthrough. Otherwise every
+/// part stays passthrough and false is returned.
+static bool ConsumeRichValueParts(ZipReader& zip, const Workbook& wb, RichValueSet* set,
                                   std::unordered_set<std::string>& consumed_parts,
                                   std::vector<UnknownRelationship>& unknown_rels) {
   constexpr std::string_view kMetadata = "xl/metadata.xml";
@@ -706,6 +708,7 @@ static bool ConsumeRichValueParts(ZipReader& zip, const Workbook& wb, RichErrorS
     }
   }
   std::vector<std::string> parts{std::string(kMetadata)};
+  RichValuePackage package;
   for (const std::string& name : zip.list_entries()) {
     if (name.compare(0, kExternalLinks.size(), kExternalLinks) == 0) {
       auto bytes = zip.read_entry(name);
@@ -716,40 +719,38 @@ static bool ConsumeRichValueParts(ZipReader& zip, const Workbook& wb, RichErrorS
       }
     }
     if (name.compare(0, kRichDataDirPrefix.size(), kRichDataDirPrefix) == 0 && name.back() != '/') {
-      if (name != kRdRichValuePartPath && name != kRdRichValueStructurePartPath && name != kRdRichValueTypesPartPath) {
-        return false;
+      if (name == kRdRichValuePartPath || name == kRdRichValueStructurePartPath || name == kRdRichValueTypesPartPath) {
+        parts.push_back(name);
+      } else if (!is_retained_rich_data_part(name) && package.unknown_part.empty()) {
+        package.unknown_part = name;
       }
-      parts.push_back(name);
     }
   }
-  auto metadata = zip.read_entry(kMetadata);
-  if (!metadata) {
+  // The parts `package` points into.
+  std::vector<std::vector<std::uint8_t>> bytes;
+  bytes.reserve(5U);
+  const auto load = [&zip, &bytes](std::string_view path) -> const std::vector<std::uint8_t>* {
+    if (!zip.has_entry(path)) {
+      return nullptr;
+    }
+    auto read = zip.read_entry(path);
+    if (!read) {
+      return nullptr;
+    }
+    bytes.push_back(std::move(read.value()));
+    return &bytes.back();
+  };
+  package.metadata = load(kMetadata);
+  package.values = load(kRdRichValuePartPath);
+  package.structures = load(kRdRichValueStructurePartPath);
+  package.rel = load(kRichValueRelPartPath);
+  package.rel_rels = load(kRichValueRelRelsPartPath);
+  package.rel_registered = rich_value_rel_registered(unknown_rels);
+  RichValueRead read = read_rich_value_parts(package);
+  if (!read.fallback_reason.empty()) {
     return false;
   }
-  RichValueMetadata info = parse_metadata_xml(metadata.value());
-  if (!info.consumable) {
-    return false;
-  }
-  if (zip.has_entry(kRdRichValuePartPath) || !info.vm_rv.empty()) {
-    auto values = zip.read_entry(kRdRichValuePartPath);
-    auto structures = zip.read_entry(kRdRichValueStructurePartPath);
-    if (!values || !structures) {
-      return false;
-    }
-    for (const std::optional<RichError>& v : parse_rich_errors(values.value(), structures.value())) {
-      if (!v.has_value()) {
-        return false;
-      }
-      set->values.push_back(*v);
-    }
-  }
-  for (const std::uint32_t rv : info.vm_rv) {
-    if (rv >= set->values.size()) {
-      set->values.clear();
-      return false;
-    }
-  }
-  set->vm_rv = std::move(info.vm_rv);
+  *set = std::move(read.set);
   for (const std::string& part : parts) {
     consumed_parts.insert(part);
   }
@@ -1027,15 +1028,18 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   std::uint32_t pending_sst_count = 0;
   RETURN_IF_ERROR(ResolveSharedStrings(wb, sheet_contexts, sst, !wb_rels.sst_path.empty(), &pending_sst_count));
 
-  // 6a. Restore the rich errors the file saved, before the spill regions are
+  // 6a. Restore the rich values the file saved, before the spill regions are
   // registered: a blocked anchor keeps its footprint rather than a one-cell
   // region, and a phantom's real error is captured into its region. A
-  // constant saved with a spill rich value waits for the pivots (step 9).
-  RichErrorSet rich_errors;
+  // constant saved with a spill rich value waits for the pivots (step 9). An
+  // opaque value is kept on its cell.
+  RichValueSet rich_values;
   std::vector<DeferredSpillAnchor> deferred_spill_anchors;
-  if (ConsumeRichValueParts(zip, wb, &rich_errors, consumed_parts, wb_rels.unknown_rels)) {
+  if (ConsumeRichValueParts(zip, wb, &rich_values, consumed_parts, wb_rels.unknown_rels)) {
     for (std::size_t i = 0; i < sheet_contexts.size(); ++i) {
-      restore_rich_error_cells(wb, i, sheet_contexts[i].value_metadata, sheet_contexts[i].array_anchors, rich_errors,
+      const std::vector<RichErrorCell> error_cells =
+          restore_opaque_rich_values(wb.sheet(i), sheet_contexts[i].value_metadata, rich_values);
+      restore_rich_error_cells(wb, i, error_cells, sheet_contexts[i].array_anchors, rich_values.errors,
                                &deferred_spill_anchors);
     }
   }

@@ -18,8 +18,10 @@
 
 #include "cell.h"
 #include "io/ooxml_defs.h"
+#include "io/rich_values.h"
 #include "io/xlsb/func_id_table.h"
 #include "io/xlsb/ptg.h"
+#include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "io/xsd_int.h"
 #include "parser/ast.h"
@@ -201,6 +203,7 @@ struct Candidate {
   std::uint32_t row;
   std::uint32_t col;
   RichError value;
+  const OpaqueRichValue* opaque = nullptr;  // set for an opaque value; `value` is then unused
 };
 
 // Every rich error of `sheet`, unordered.
@@ -249,10 +252,11 @@ std::vector<Candidate> SheetCandidates(const Workbook& wb, std::size_t sheet_ind
   return out;
 }
 
-bool AnyRichErrorSource(const Workbook& wb) {
+bool AnyRichErrorSource(const Workbook& wb, bool with_opaque) {
   for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
     const Sheet& sheet = wb.sheet(s);
-    if (sheet.has_error_details() || !sheet.blocked_spill_anchors().empty()) {
+    if (sheet.has_error_details() || !sheet.blocked_spill_anchors().empty() ||
+        (with_opaque && sheet.has_rich_values())) {
       return true;
     }
     for (const std::unique_ptr<pivot::PivotTable>& table : sheet.pivot_tables()) {
@@ -386,6 +390,106 @@ const ArrayAnchor* PhantomOf(const std::vector<ArrayAnchor>& anchors, std::uint3
   return nullptr;
 }
 
+// The index of `rel` in `rels`, appending it on first use.
+std::uint32_t RelIndex(std::vector<std::pair<std::string, std::string>>& rels, const OpaqueRichValueKey& key) {
+  std::size_t index = 0;
+  while (index < rels.size() && !(rels[index].first == key.rel_target && rels[index].second == key.rel_type)) {
+    ++index;
+  }
+  if (index == rels.size()) {
+    rels.emplace_back(key.rel_target, key.rel_type);
+  }
+  return static_cast<std::uint32_t>(index);
+}
+
+// Same key declarations: name, type and style, in order.
+bool SameStructure(const OpaqueRichValue& a, const OpaqueRichValue& b) {
+  if (a.structure_type != b.structure_type || a.keys.size() != b.keys.size()) {
+    return false;
+  }
+  for (std::size_t k = 0; k < a.keys.size(); ++k) {
+    if (a.keys[k].name != b.keys[k].name || a.keys[k].type != b.keys[k].type || a.keys[k].style != b.keys[k].style) {
+      return false;
+    }
+  }
+  return true;
+}
+
+// The table of `build_rich_error_table` and, `with_opaque`, of `build_rich_value_table`.
+RichErrorTable BuildTable(const Workbook& wb, PivotAnchorFilter pivot_filter, bool with_opaque) {
+  RichErrorTable table;
+  table.vm_by_sheet.resize(wb.sheet_count());
+  const bool kept_verbatim = with_opaque ? rich_value_parts_kept_verbatim(wb.passthrough_parts())
+                                         : keeps_foreign_rich_data(wb.passthrough_parts());
+  if (kept_verbatim || !AnyRichErrorSource(wb, with_opaque)) {
+    return table;
+  }
+  // Opaque values as read, parallel to `table.opaque`, for deduplication before renumbering.
+  std::vector<OpaqueRichValue> opaque_source;
+  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
+    std::vector<Candidate> cells = SheetCandidates(wb, s, pivot_filter);
+    // Appended after the errors, so the stable sort keeps a cell's rich error first.
+    const std::vector<CellRichValue> opaque_cells =
+        with_opaque ? wb.sheet(s).rich_values() : std::vector<CellRichValue>();
+    for (const CellRichValue& c : opaque_cells) {
+      if (CachesError(wb.sheet(s).cell_at(c.row, c.col), ErrorCode::Value)) {
+        cells.push_back({c.row, c.col, RichError{}, &c.value});
+      }
+    }
+    sort_by_index(
+        cells, [](const Candidate& a, const Candidate& b) { return a.row != b.row ? a.row < b.row : a.col < b.col; });
+    RichErrorVmMap& vm = table.vm_by_sheet[s];
+    for (const Candidate& c : cells) {
+      const std::uint64_t key = rich_error_cell_key(c.row, c.col);
+      if (!vm.empty() && vm.back().first == key) {
+        continue;
+      }
+      std::size_t index = 0;
+      while (index < table.values.size()) {
+        const std::uint32_t opaque = index < table.opaque_of.size() ? table.opaque_of[index] : 0U;
+        if (c.opaque == nullptr ? opaque == 0U && table.values[index] == c.value
+                                : opaque != 0U && opaque_source[opaque - 1U] == *c.opaque) {
+          break;
+        }
+        ++index;
+      }
+      if (index == table.values.size()) {
+        std::size_t structure = 0;
+        while (structure < table.structures.size()) {
+          const std::uint32_t opaque =
+              structure < table.structure_opaque.size() ? table.structure_opaque[structure] : 0U;
+          if (c.opaque == nullptr ? opaque == 0U && table.structures[structure] == c.value.kind
+                                  : opaque != 0U && SameStructure(opaque_source[opaque - 1U], *c.opaque)) {
+            break;
+          }
+          ++structure;
+        }
+        std::uint32_t opaque = 0U;
+        if (c.opaque != nullptr) {
+          OpaqueRichValue saved = *c.opaque;
+          for (OpaqueRichValueKey& k : saved.keys) {
+            if (is_rich_value_rel_key(k.name)) {
+              k.value = std::to_string(RelIndex(table.rels, k));
+            }
+          }
+          table.opaque.push_back(std::move(saved));
+          opaque_source.push_back(*c.opaque);
+          opaque = static_cast<std::uint32_t>(table.opaque.size());
+        }
+        if (structure == table.structures.size()) {
+          table.structures.push_back(c.value.kind);
+          table.structure_opaque.push_back(opaque);
+        }
+        table.values.push_back(c.value);
+        table.structure_of.push_back(static_cast<std::uint32_t>(structure));
+        table.opaque_of.push_back(opaque);
+      }
+      vm.emplace_back(key, static_cast<std::uint32_t>(index + 1U));
+    }
+  }
+  return table;
+}
+
 }  // namespace
 
 bool operator==(const RichError& a, const RichError& b) noexcept {
@@ -446,40 +550,11 @@ std::uint32_t rich_error_vm_at(const RichErrorVmMap& map, std::uint32_t row, std
 }
 
 RichErrorTable build_rich_error_table(const Workbook& wb, PivotAnchorFilter pivot_filter) {
-  RichErrorTable table;
-  table.vm_by_sheet.resize(wb.sheet_count());
-  if (keeps_foreign_rich_data(wb.passthrough_parts()) || !AnyRichErrorSource(wb)) {
-    return table;
-  }
-  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
-    std::vector<Candidate> cells = SheetCandidates(wb, s, pivot_filter);
-    sort_by_index(
-        cells, [](const Candidate& a, const Candidate& b) { return a.row != b.row ? a.row < b.row : a.col < b.col; });
-    RichErrorVmMap& vm = table.vm_by_sheet[s];
-    for (const Candidate& c : cells) {
-      const std::uint64_t key = rich_error_cell_key(c.row, c.col);
-      if (!vm.empty() && vm.back().first == key) {
-        continue;
-      }
-      std::size_t index = 0;
-      while (index < table.values.size() && !(table.values[index] == c.value)) {
-        ++index;
-      }
-      if (index == table.values.size()) {
-        std::size_t structure = 0;
-        while (structure < table.structures.size() && table.structures[structure] != c.value.kind) {
-          ++structure;
-        }
-        if (structure == table.structures.size()) {
-          table.structures.push_back(c.value.kind);
-        }
-        table.values.push_back(c.value);
-        table.structure_of.push_back(static_cast<std::uint32_t>(structure));
-      }
-      vm.emplace_back(key, static_cast<std::uint32_t>(index + 1U));
-    }
-  }
-  return table;
+  return BuildTable(wb, pivot_filter, /*with_opaque=*/false);
+}
+
+RichErrorTable build_rich_value_table(const Workbook& wb) {
+  return BuildTable(wb, nullptr, /*with_opaque=*/true);
 }
 
 MetadataModel metadata_model(bool dynamic_arrays, std::size_t rich_values) {
@@ -595,6 +670,15 @@ std::string serialize_rdrichvalue(const RichErrorTable& table) {
     out.append("<rv");
     append_xml_attr_uint(out, "s", table.structure_of[i]);
     out.push_back('>');
+    if (i < table.opaque_of.size() && table.opaque_of[i] != 0U) {
+      for (const OpaqueRichValueKey& key : table.opaque[table.opaque_of[i] - 1U].keys) {
+        out.append("<v>");
+        AppendXmlRawTextEscaped(out, key.value);
+        out.append("</v>");
+      }
+      out.append("</rv>");
+      continue;
+    }
     for (const char* key : kKeys[KindIndex(v.kind)]) {
       if (key != nullptr) {
         out.append("<v>").append(std::to_string(KeyValue(v, key))).append("</v>");
@@ -611,7 +695,27 @@ std::string serialize_rdrichvaluestructure(const RichErrorTable& table) {
   out.append("<rvStructures");
   append_xml_ns_decl(out, "", kNsRichData);
   AppendCount(out, "", table.structures.size());
-  for (const RichError::Kind kind : table.structures) {
+  for (std::size_t i = 0; i < table.structures.size(); ++i) {
+    const RichError::Kind kind = table.structures[i];
+    if (i < table.structure_opaque.size() && table.structure_opaque[i] != 0U) {
+      const OpaqueRichValue& value = table.opaque[table.structure_opaque[i] - 1U];
+      out.append("<s");
+      append_xml_attr(out, "t", value.structure_type);
+      out.push_back('>');
+      for (const OpaqueRichValueKey& key : value.keys) {
+        out.append("<k");
+        append_xml_attr(out, "n", key.name);
+        if (!key.type.empty()) {
+          append_xml_attr(out, "t", key.type);
+        }
+        if (!key.style.empty()) {
+          append_xml_attr(out, "s", key.style);
+        }
+        out.append("/>");
+      }
+      out.append("</s>");
+      continue;
+    }
     out.append("<s t=\"_error\">");
     for (const char* key : kKeys[KindIndex(kind)]) {
       if (key != nullptr) {
@@ -704,15 +808,20 @@ std::vector<std::optional<RichError>> parse_rich_errors(const std::vector<std::u
 }
 
 RichValueMetadata parse_metadata_xml(const std::vector<std::uint8_t>& metadata_xml) {
+  const auto refuse = [](std::string_view reason) {
+    RichValueMetadata out;
+    out.fallback_reason = reason;
+    return out;
+  };
   pugi::xml_document doc;
   pugi::xml_node root;
   if (!LoadPart(doc, metadata_xml, "metadata.xml", "metadata", &root)) {
-    return {};
+    return refuse(kRichFallbackMetadataBlock);
   }
   MetadataModel model;
   for (pugi::xml_node type : child_local(root, "metadataTypes").children()) {
     if (!add_metadata_type(model, type.attribute("name").value())) {
-      return {};
+      return refuse(kRichFallbackMetadataType);
     }
   }
   for (pugi::xml_node child : root.children()) {
@@ -728,20 +837,27 @@ RichValueMetadata parse_metadata_xml(const std::vector<std::uint8_t>& metadata_x
       std::size_t blocks = 0;
       for (pugi::xml_node bk : child.children()) {
         if (!StandardDynamicArrayBlock(bk)) {
-          return {};
+          return refuse(kRichFallbackMetadataBlock);
         }
         ++blocks;
       }
       if (blocks != 1U) {
-        return {};
+        return refuse(kRichFallbackMetadataBlock);
       }
       ++model.dynamic_blocks;
     } else if (element == "futureMetadata" && name == kRichValueMetadataType) {
       for (pugi::xml_node bk : child.children()) {
         pugi::xml_node ext = child_local(child_local(bk, "extLst"), "ext");
+        const pugi::xml_node rvb = child_local(ext, "rvb");
         std::uint32_t i = 0;
-        if (!UintAttr(child_local(ext, "rvb"), "i", &i)) {
-          return {};
+        if (!UintAttr(rvb, "i", &i)) {
+          return refuse(kRichFallbackMetadataBlock);
+        }
+        for (pugi::xml_attribute attr = rvb.first_attribute(); attr; attr = attr.next_attribute()) {
+          const std::string_view attr_name = attr.name();
+          if (attr_name != "i" && attr_name.compare(0, 5, "xmlns") != 0) {
+            return refuse(kRichFallbackRvbAttribute);
+          }
         }
         model.rich_blocks.push_back(i);
       }
@@ -751,19 +867,23 @@ RichValueMetadata parse_metadata_xml(const std::vector<std::uint8_t>& metadata_x
         const pugi::xml_node rc = child_local(bk, "rc");
         MetadataEntry entry;
         if (!UintAttr(rc, "t", &entry.type) || !UintAttr(rc, "v", &entry.id) || rc.next_sibling()) {
-          return {};
+          return refuse(kRichFallbackMetadataBlock);
         }
         // A value entry names a block declared before it.
         if (!cell && entry.id >= model.rich_blocks.size()) {
-          return {};
+          return refuse(kRichFallbackMetadataBlock);
         }
         (cell ? model.cell_entries : model.value_entries).push_back(entry);
       }
     } else {
-      return {};
+      return refuse(kRichFallbackMetadataBlock);
     }
   }
-  return resolve_metadata(model);
+  RichValueMetadata out = resolve_metadata(model);
+  if (!out.consumable) {
+    out.fallback_reason = kRichFallbackMetadataBlock;
+  }
+  return out;
 }
 
 void restore_rich_error_cells(Workbook& wb, std::size_t sheet_index, const std::vector<RichErrorCell>& cells,

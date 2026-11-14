@@ -20,6 +20,7 @@
 #include "io/ooxml/external_link_writer.h"
 #include "io/package_diagnostics.h"
 #include "io/rich_value_errors.h"
+#include "passthrough_part.h"
 
 namespace formulon {
 
@@ -109,9 +110,17 @@ struct EmissionPlan {
   // `metadata_dynamic_arrays`, and the XLRICHVALUE blocks `rich_errors` needs.
   bool generated_metadata = false;
   bool metadata_dynamic_arrays = false;
-  // The rich errors the save writes, with the `xl/richData/` parts; empty
-  // when the book keeps foreign rich data or has none.
+  // The rich values the save writes, errors and opaque ones, with the
+  // `xl/richData/` parts; empty when the book keeps its rich-value parts
+  // verbatim or has none.
   RichErrorTable rich_errors;
+  // The regenerated `richValueRel` part and its rels, listed in
+  // `passthrough_kept` in place of the read ones. `passthrough_kept` points
+  // into this vector, so the plan is moved, never copied.
+  std::vector<PassthroughPart> rich_value_rel_parts;
+  // Workbook relationships to the read `richValueRel` that the save drops
+  // because no rich value names a relationship any more; they are not losses.
+  std::uint32_t rich_value_rels_retired = 0;
   // True when the writer generates `kPersonsPartPath` from `Workbook::persons()`.
   bool generated_persons = false;
   // The canonical folder of `Workbook::location()`, or empty without one;

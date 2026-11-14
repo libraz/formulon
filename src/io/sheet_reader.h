@@ -58,7 +58,7 @@ struct SheetReadContext {
   /// as dynamic-array formulas those whose `cm` names the XLDAPR entry of
   /// `xl/metadata.xml` (`apply_loaded_dynamic_array_marks`).
   std::vector<std::tuple<std::uint32_t, std::uint32_t, std::uint32_t>> cell_metadata;
-  /// Every cell carrying `vm=` (formula or constant), for the rich-error
+  /// Every cell carrying `vm=` (formula or constant), for the rich-value
   /// restore; a malformed value is recorded as 0, which names no value.
   std::vector<RichErrorCell> value_metadata;
 };

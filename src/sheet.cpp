@@ -295,6 +295,7 @@ Cell& Sheet::ensure_overwritten_cell_locked(std::uint32_t row, std::uint32_t col
   if (const std::optional<CellAddress> anchor = spill_displaced_by_write(spill_table_.get(), row, col)) {
     clear_spill_locked(anchor->row, anchor->col);
   }
+  clear_rich_value_locked(row, col);
   return rows_[row].ensure(col);
 }
 
@@ -415,6 +416,7 @@ void Sheet::set_cell_cached_value(std::uint32_t row, std::uint32_t col, Value v)
   // `spill_mutex_`) is preserved and never inverted.
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
   const bool blank = v.is_blank();
+  clear_rich_value_for_cached_locked(row, col, v);
   RowCells& row_cells = rows_[row];
   Cell& slot = row_cells.ensure(col);
   set_cell_cached_value_locked(slot, std::move(v));
@@ -433,6 +435,7 @@ void Sheet::set_cell_cached_value_borrowed(std::uint32_t row, std::uint32_t col,
   // compact SST into O(number of cells) storage. Clear any evaluator-owned
   // backing allocation before installing the borrowed view.
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  clear_rich_value_for_cached_locked(row, col, v);
   RowCells& row_cells = rows_[row];
   Cell& slot = row_cells.ensure(col);
   slot.cached_text_owned.reset();
@@ -798,6 +801,7 @@ void Sheet::erase_cell(std::uint32_t row, std::uint32_t col) {
     return;
   }
   it->second.erase(col);
+  clear_rich_value_locked(row, col);
   index_formula_cell_locked(row, col, false);
   cell_enumeration_revision_.bump();
 }
@@ -1056,6 +1060,83 @@ void Sheet::replace_error_details(std::vector<std::pair<CellAddress, CellErrorDe
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
   error_details_ = std::move(entries);
   error_detail_count_.set(error_details_.size());
+}
+
+bool operator==(const OpaqueRichValueKey& a, const OpaqueRichValueKey& b) noexcept {
+  return a.name == b.name && a.type == b.type && a.style == b.style && a.value == b.value &&
+         a.rel_target == b.rel_target && a.rel_type == b.rel_type;
+}
+
+bool operator==(const OpaqueRichValue& a, const OpaqueRichValue& b) noexcept {
+  return a.structure_type == b.structure_type && a.keys == b.keys;
+}
+
+namespace {
+
+bool rich_value_key_less(const CellRichValue& entry, CellAddress key) noexcept {
+  return entry.row != key.row ? entry.row < key.row : entry.col < key.col;
+}
+
+}  // namespace
+
+std::optional<OpaqueRichValue> Sheet::rich_value_at(std::uint32_t row, std::uint32_t col) const {
+  if (rich_value_count_.get() == 0U) {
+    return std::nullopt;
+  }
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  const CellAddress key{row, col};
+  const auto it = std::lower_bound(rich_values_.begin(), rich_values_.end(), key, rich_value_key_less);
+  if (it == rich_values_.end() || it->row != row || it->col != col) {
+    return std::nullopt;
+  }
+  return it->value;
+}
+
+void Sheet::set_rich_value(std::uint32_t row, std::uint32_t col, OpaqueRichValue value) {
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  const CellAddress key{row, col};
+  const auto it = std::lower_bound(rich_values_.begin(), rich_values_.end(), key, rich_value_key_less);
+  if (it != rich_values_.end() && it->row == row && it->col == col) {
+    it->value = std::move(value);
+  } else {
+    rich_values_.insert(it, CellRichValue{row, col, std::move(value)});
+  }
+  rich_value_count_.set(rich_values_.size());
+}
+
+void Sheet::clear_rich_value(std::uint32_t row, std::uint32_t col) {
+  if (rich_value_count_.get() == 0U) {
+    return;
+  }
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  clear_rich_value_locked(row, col);
+}
+
+void Sheet::clear_rich_value_locked(std::uint32_t row, std::uint32_t col) {
+  if (rich_values_.empty()) {
+    return;
+  }
+  const CellAddress key{row, col};
+  const auto it = std::lower_bound(rich_values_.begin(), rich_values_.end(), key, rich_value_key_less);
+  if (it != rich_values_.end() && it->row == row && it->col == col) {
+    rich_values_.erase(it);
+    rich_value_count_.set(rich_values_.size());
+  }
+}
+
+void Sheet::clear_rich_value_for_cached_locked(std::uint32_t row, std::uint32_t col, const Value& v) {
+  // A rich value's cell caches #VALUE!; any other result is no longer that value.
+  if (!rich_values_.empty() && !(v.is_error() && v.as_error() == ErrorCode::Value)) {
+    clear_rich_value_locked(row, col);
+  }
+}
+
+std::vector<CellRichValue> Sheet::rich_values() const {
+  if (rich_value_count_.get() == 0U) {
+    return {};
+  }
+  const std::lock_guard<std::mutex> guard(*spill_mutex_);
+  return rich_values_;
 }
 
 Value Sheet::resolve_cell_value(std::uint32_t row, std::uint32_t col) const noexcept {

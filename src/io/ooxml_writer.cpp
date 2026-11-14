@@ -447,6 +447,10 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   // xl/_rels/workbook.xml.rels
   RETURN_IF_ERROR(AddPart(writer.get(), "xl/_rels/workbook.xml.rels",
                           BuildWorkbookRels(sheet_count, plan, wb, &diagnostics), &written_paths));
+  // A `richValueRel` link left with no part once every rich value naming it
+  // is gone is dropped on purpose, as Excel does, and is no loss.
+  diagnostics.dropped_relationship_count -=
+      std::min(diagnostics.dropped_relationship_count, plan.rich_value_rels_retired);
 
   // Per-sheet: worksheet, sheet rels (when the sheet's rels file
   // declares at least one relationship).
