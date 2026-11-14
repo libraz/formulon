@@ -56,3 +56,23 @@ class IsCellStaleTests(unittest.TestCase):
         self.wb.set_calc_mode(CalcMode.MANUAL)
         self.assertFalse(self.ws.is_cell_stale("D4"))
         self.assertFalse(self.ws.is_cell_stale(3, 3))
+
+    def test_a_manual_mode_save_computes_stale_formulas_first_unless_calc_on_save_is_off(self) -> None:
+        self.wb.set_calc_mode(CalcMode.MANUAL)
+        self.ws.set_value("A1", 1)
+        self.ws.set_formula("B1", "=A1*2")
+        self.wb.recalc()
+        self.ws.set_value("A1", 5)
+        self.assertTrue(self.wb.get_calc_on_save())
+        self.wb.save()
+        self.assertFalse(self.ws.is_cell_stale("B1"))
+        self.assertEqual(self.ws.get_value("B1"), 10)
+
+        self.ws.set_value("A1", 7)
+        self.wb.set_calc_on_save(False)
+        data = self.wb.save()
+        self.assertTrue(self.ws.is_cell_stale("B1"))
+        self.assertEqual(self.ws.get_value("B1"), 10)
+        with Workbook.load(data) as loaded:
+            self.assertTrue(loaded.sheet(0).is_cell_stale("B1"))
+            self.assertEqual(loaded.sheet(0).get_value("B1"), 10)

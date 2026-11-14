@@ -696,7 +696,8 @@ typedef struct {
   uint32_t struct_size;
   /** The number of formula cells emitted as cached literals. Always 0 for XLSX. */
   uint32_t downgraded_formula_count;
-  /** The number of sheet features not lowered to records. Always 0 for XLSX. */
+  /** The number of features the writer left out or kept only verbatim (for XLSB, sheet features not lowered to records;
+   * for XLSX, a rich-data layout the model cannot carry). */
   uint32_t deferred_feature_count;
   /** The number of passthrough parts dropped for colliding with a generated path, or for two entries claiming one path.
    *  Applies to both containers. */

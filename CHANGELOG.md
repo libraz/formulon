@@ -80,11 +80,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Sheet.isCellStale` (Python `is_cell_stale()`, C `fm_sheet_is_cell_stale`);
   the first `recalc` computes those, the formulas without a cached value and
   what reads them, and keeps every other cached value, where before it
-  recomputed every formula. A save marks every stale formula and every
-  formula that reads a volatile one that way, as Excel keeps them after a
-  full calculation, and the workbook as not fully calculated
-  (`<calcPr calcCompleted="0">`, fSomeUncalced) while a stale one is left. A recalc
-  that leaves nothing stale clears that state.
+  recomputed every formula. A save under manual calculation computes the
+  stale formulas first while recalculate-before-saving is on
+  (`calcOnSave`, the default, as in Excel), so the workbook in memory is
+  recalculated too. With it off, the save keeps them stale: it marks every
+  stale formula that way and the workbook as not fully calculated
+  (`<calcPr calcCompleted="0">`, fSomeUncalced). Either way a save marks
+  every formula that reads a volatile one, as Excel keeps them after a full
+  calculation. A recalc that leaves nothing stale clears that state.
 
 - `.xlsb` saves write each sheet's print options, page margins, page setup,
   header and footer, and manual page breaks from the workbook, as Excel does,

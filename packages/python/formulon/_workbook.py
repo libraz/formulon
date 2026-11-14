@@ -536,7 +536,7 @@ class SaveDiagnostics:
     bytes: bytes
     #: The number of formula cells emitted as cached literals. Always 0 for XLSX.
     downgraded_formula_count: int
-    #: The number of sheet features not lowered to records. Always 0 for XLSX.
+    #: The number of features the writer left out or kept only verbatim (for XLSB, sheet features not lowered to records; for XLSX, a rich-data layout the model cannot carry).
     deferred_feature_count: int
     #: The number of passthrough parts dropped for colliding with a generated path, or for two entries claiming one
     #: path. Applies to both containers.

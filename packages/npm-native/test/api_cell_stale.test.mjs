@@ -74,3 +74,31 @@ test('isCellStale is false for an empty cell', async () => {
     assert.equal(ws.isCellStale(3, 3), false);
   });
 });
+
+test('a manual-mode save computes stale formulas first unless calcOnSave is off', async () => {
+  await withWorkbook((wb, f) => {
+    const ws = wb.sheet(0);
+    wb.setCalcMode(f.CalcMode.Manual);
+    ws.setValue('A1', 1);
+    ws.setFormula('B1', '=A1*2');
+    wb.recalc();
+    ws.setValue('A1', 5);
+    assert.equal(wb.getCalcOnSave(), true);
+    wb.save();
+    assert.equal(ws.isCellStale('B1'), false);
+    assert.equal(ws.getValue('B1'), 10);
+
+    ws.setValue('A1', 7);
+    wb.setCalcOnSave(false);
+    const bytes = wb.save();
+    assert.equal(ws.isCellStale('B1'), true);
+    assert.equal(ws.getValue('B1'), 10);
+    const loaded = f.Workbook.load(bytes);
+    try {
+      assert.equal(loaded.sheet(0).isCellStale('B1'), true);
+      assert.equal(loaded.sheet(0).getValue('B1'), 10);
+    } finally {
+      loaded.dispose();
+    }
+  });
+});
