@@ -35,7 +35,6 @@
 #include "utils/expected.h"
 #include "utils/index_sort.h"
 #include "utils/strings.h"
-#include "utils/structured_log.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -274,14 +273,10 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
     // here, so keeping them would leave dangling / mismatched parts. A
     // source external link part the generated set does not replace (an
     // `.xml` one, or a number past the model's links) would be an orphan.
+    // An xlsx metadata part is replaced by the generated metadata.bin; Excel keeps only the types the model holds
+    // (a further type such as XLMDX is dropped from its own xlsb save as well).
     if (IsBinaryIndexPart(part.path) || part.path == "xl/calcChain.bin" || IsXlsxOnlyMetadataPart(part.path) ||
         is_xml_slicer_part(part.path) || IsExternalLinkPart(part.path)) {
-      if (IsXlsxOnlyMetadataPart(part.path)) {
-        StructuredLog("xlsb.writer.deferred")
-            .field("kind", std::string_view("xlsx_metadata"))
-            .field("count", static_cast<std::int64_t>(1))
-            .warn();
-      }
       continue;
     }
     if (!kept_paths.insert(part.path).second) {

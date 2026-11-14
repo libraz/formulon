@@ -182,7 +182,7 @@ bool EmitBookView(std::vector<std::uint8_t>& dst, const pugi::xml_node& node, st
           std::any_of(kViewBools.begin(), kViewBools.end(), [&](const ViewBool& field) { return name == field.attr; });
       carried = carried && known;
     }
-    carried = carried && !node.first_child();
+    // Excel's xlsb keeps no extension list of a window (its xlsx save does).
   }
   emit_u8(p, flags);
   emit_record(dst, kBrtBookView, p);
@@ -342,11 +342,9 @@ bool emit_wb_prop(std::vector<std::uint8_t>& dst, const std::string& workbook_pr
             name == "showObjects" || name == "codeName" || name == "defaultThemeVersion") {
           continue;
         }
-        // No field: only a non-default value is a loss.
-        if (name == "dateCompatibility" && read_xsd_bool(node, "dateCompatibility", true)) {
-          continue;
-        }
-        if (name == "allowRefreshQuery" && !read_xsd_bool(node, "allowRefreshQuery", false)) {
+        // Excel drops these from its own saves, xlsx and xlsb alike: dateCompatibility, allowRefreshQuery and an
+        // attribute of a foreign namespace.
+        if (name == "dateCompatibility" || name == "allowRefreshQuery" || name.find(':') != std::string_view::npos) {
           continue;
         }
         carried = false;

@@ -245,22 +245,41 @@ TEST(XlsbWorkbookFidelity, WorkbookPrSurvivesXlsxToXlsbAndXlsbResave) {
   EXPECT_EQ(resaved.workbook_pr_xml(), xml);
 }
 
-TEST(XlsbWorkbookFidelity, WorkbookPrWithoutAFieldIsReportedDeferred) {
+TEST(XlsbWorkbookFidelity, OnlyAWorkbookPrSettingExcelKeepsIsReportedDeferred) {
   std::uint32_t baseline = 99U;
   ToXlsb(Workbook::create(), &baseline);
-  for (const char* xml : {"<workbookPr dateCompatibility=\"0\"/>", "<workbookPr allowRefreshQuery=\"1\"/>"}) {
+  // Excel drops these from its own xlsb save (tests/fixtures/excel/xlsb_parity/globals).
+  for (const char* xml : {"<workbookPr dateCompatibility=\"0\"/>", "<workbookPr allowRefreshQuery=\"1\"/>",
+                          "<workbookPr xmlns:tst=\"urn:formulon-test\" tst:flag=\"1\"/>"}) {
     Workbook wb = Workbook::create();
     wb.set_workbook_pr_xml(xml);
     std::uint32_t deferred = 0U;
     ToXlsb(wb, &deferred);
-    EXPECT_EQ(deferred, baseline + 1U) << xml;
+    EXPECT_EQ(deferred, baseline) << xml;
   }
-  // Their default values lose nothing.
+  // An attribute of the main namespace the record has no field for is not measured.
   Workbook wb = Workbook::create();
-  wb.set_workbook_pr_xml("<workbookPr dateCompatibility=\"1\" allowRefreshQuery=\"0\"/>");
+  wb.set_workbook_pr_xml("<workbookPr notAnAttribute=\"1\"/>");
   std::uint32_t deferred = 0U;
   ToXlsb(wb, &deferred);
-  EXPECT_EQ(deferred, baseline);
+  EXPECT_EQ(deferred, baseline + 1U);
+}
+
+// Each workbook-global setting Excel drops from its own xlsb save is written as Excel writes it and not reported:
+// the workbook properties and book view records equal Excel's, and nothing is deferred.
+TEST(XlsbParityWorkbookGlobals, SettingsExcelDropsAreDroppedAsExcelDoes) {
+  for (const char* name : {"date_compat_off", "refresh_query", "unknown_attr", "bookview_extlst", "metadata_types"}) {
+    SCOPED_TRACE(name);
+    const std::string base = std::string("excel/xlsb_parity/globals/") + name;
+    const std::vector<std::uint8_t> source = ReadFixture(base + "_src.xlsx");
+    auto loaded = read_ooxml(Span(source));
+    ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+    auto saved = write_xlsb_with_result(loaded.value().workbook);
+    ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+    EXPECT_EQ(saved.value().diagnostics.deferred_feature_count, 0U);
+    const std::vector<std::uint8_t> excel = ReadFixture(base + ".xlsb");
+    EXPECT_EQ(WorkbookRecords(saved.value().bytes, 153U), WorkbookRecords(excel, 153U));
+  }
 }
 
 TEST(XlsbWorkbookFidelity, WorkbookProtectionHashesSurviveBothPaths) {

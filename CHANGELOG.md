@@ -24,6 +24,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   automatic-except-tables calculation; it is always false under automatic
   calculation and never recalculates. A cell without a formula and a member of
   a spill read false. Hosts can use it to draw stale-value formatting.
+- `Workbook.getCompatibilityVersion()` / `setCompatibilityVersion()` (Python
+  `get_compatibility_version()` / `set_compatibility_version()`, C
+  `fm_workbook_get_compatibility_version` /
+  `fm_workbook_set_compatibility_version`) and the `CompatibilityVersion`
+  enum read and set Excel's Compatibility Version, which `.xlsx` and `.xlsb`
+  now read and write. Version 1 makes `LEN`, `MID`, `FIND`, `SEARCH` and
+  `REPLACE` count UTF-16 units; version 2, the value of a new workbook and of
+  one whose file carries none, counts characters. Version 3 (nested arrays) is
+  stored and written as given and evaluates as version 2. A change marks
+  formulas for recalculation only when it switches between version 1 and
+  version 2 or 3; setting the current value changes nothing, and a value
+  outside 1-3 is rejected.
 
 ### Changed
 
@@ -46,6 +58,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   properties record also carries the outline settings for automatic styles
   and outline symbols, and fit-to-page. Other `<sheetPr>` settings
   and a printer-settings part are still reported as deferred print settings.
+
+- `.xlsb` saves no longer report as deferred the workbook settings Excel
+  itself drops from an `.xlsb` save: the date-compatibility and
+  refresh-query workbook settings, an attribute of another namespace on the
+  workbook properties, a window's extension list, and metadata types other
+  than the ones the workbook holds.
 
 - `.xlsb` saves write custom table and PivotTable styles and the default
   table and PivotTable style names from the workbook, as Excel does, with the
