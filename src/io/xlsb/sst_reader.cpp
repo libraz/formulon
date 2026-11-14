@@ -1,8 +1,5 @@
 #include "io/xlsb/sst_reader.h"
 
-#include <algorithm>
-#include <array>
-#include <cstddef>
 #include <cstdint>
 #include <deque>
 #include <string>
@@ -13,173 +10,12 @@
 #include "io/xlsb/record.h"
 #include "io/xlsb/rich_str.h"
 #include "phonetic.h"
-#include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/status_macros.h"
-#include "utils/text_ops.h"
-#include "utils/utf8_length.h"
 
 namespace formulon {
 namespace io {
 namespace xlsb {
-namespace {
-
-/// One `StrRun` ([MS-XLSB] §2.5.94) is `(u16 ich, u16 ifnt)`.
-constexpr std::size_t kStrRunSize = 4U;
-
-/// UTF-16 offsets into one phonetic string, indexed once before its runs are
-/// sliced. At a supplementary-plane midpoint, the floor and ceil entries
-/// intentionally differ just as they do in `utf16_substring`.
-class Utf16SliceIndex {
- public:
-  explicit Utf16SliceIndex(std::string_view text) : text_(text) {
-    floor_bytes_.push_back(0U);
-    ceil_bytes_.push_back(0U);
-    std::size_t byte = 0U;
-    while (byte < text_.size()) {
-      std::size_t byte_length = 0U;
-      const std::uint32_t codepoint = decode_utf8_step(text_, byte, &byte_length);
-      if (codepoint > 0xFFFFU) {
-        floor_bytes_.push_back(byte);
-        ceil_bytes_.push_back(byte + byte_length);
-      }
-      byte += byte_length;
-      floor_bytes_.push_back(byte);
-      ceil_bytes_.push_back(byte);
-    }
-  }
-
-  std::uint32_t utf16_units() const noexcept { return static_cast<std::uint32_t>(floor_bytes_.size() - 1U); }
-
-  std::string substring(std::uint32_t start_units, std::uint32_t length_units) const {
-    if (length_units == 0U) {
-      return {};
-    }
-    std::uint32_t end_units = start_units + length_units;
-    if (end_units < start_units) {
-      end_units = UINT32_MAX;
-    }
-    const std::size_t last_unit = floor_bytes_.size() - 1U;
-    const std::size_t start_byte = floor_bytes_[std::min<std::size_t>(start_units, last_unit)];
-    const std::size_t end_byte = ceil_bytes_[std::min<std::size_t>(end_units, last_unit)];
-    if (end_byte <= start_byte) {
-      return {};
-    }
-    return std::string(text_.substr(start_byte, end_byte - start_byte));
-  }
-
- private:
-  std::string_view text_;
-  std::vector<std::size_t> floor_bytes_;
-  std::vector<std::size_t> ceil_bytes_;
-};
-
-/// Decodes the phonetic tail a `RichStr` carries when `fExtStr` is set,
-/// appending one `PhoneticRun` per `PhRun` to `out`.
-///
-/// The binary shape stores the kana once, concatenated across every run,
-/// and each `PhRun` names where its slice starts rather than carrying the
-/// slice: `(u16 ichFirst, u16 ichMom, u16 cchMom)` is the start of this
-/// run's kana inside the concatenation, the surface-text offset it reads,
-/// and how many surface characters it covers. A run's kana therefore ends
-/// where the next run's begins, and the last run's runs to the end. All
-/// offsets are UTF-16 code units, which is what `PhoneticRun` uses too.
-///
-/// Excel elides the runs entirely for a whole-string reading (the
-/// concatenation is then simply the whole annotation), so an empty run
-/// array with a non-empty phonetic string is the single-run case rather
-/// than an absent one -- the same shape `<rPh sb="0" eb="len">` takes in
-/// OOXML.
-///
-/// The trailing `(u16 ifnt, u16 flags)` -- phonetic font, plus the
-/// annotation type and alignment `<phoneticPr>` carries in OOXML -- is
-/// decoded into `out_props` via `DecodePhoneticProperties` below. The
-/// OOXML reader models the same element too, parsing `<phoneticPr>` in
-/// its DOM, SAX and SST paths (`cell_parser.cpp`, `sax_xml_reader.cpp`,
-/// `sst_reader.cpp`).
-
-/// Reads the phonetic tail's closing `(u16 ifnt, u16 flags)` pair.
-///
-/// Leniently: a record that stops short of the pair keeps the defaults
-/// rather than failing the load. The runs have already been decoded by
-/// then, and a guide missing only its rendering hints is still the
-/// reading the user typed.
-void DecodePhoneticProperties(ByteSpan& cursor, PhoneticProperties& out) {
-  auto font_or = read_u16(cursor);
-  if (!font_or) {
-    return;
-  }
-  auto flags_or = read_u16(cursor);
-  if (!flags_or) {
-    return;
-  }
-  out.font_id = font_or.value();
-  out.type = static_cast<std::uint8_t>(flags_or.value() & 0x03U);
-  out.alignment = static_cast<std::uint8_t>((flags_or.value() >> 2U) & 0x03U);
-}
-
-Expected<void, Error> DecodePhoneticTail(ByteSpan& cursor, std::string_view surface, std::vector<PhoneticRun>& out,
-                                         PhoneticProperties& out_props) {
-  auto phonetic_or = read_xlwidestring(cursor);
-  if (!phonetic_or) {
-    return std::move(phonetic_or.error());
-  }
-  const std::string phonetic = std::move(phonetic_or.value());
-  auto count_or = read_u32(cursor);
-  if (!count_or) {
-    return std::move(count_or.error());
-  }
-  const std::uint32_t run_count = count_or.value();
-  if (run_count == 0U) {
-    if (!phonetic.empty()) {
-      out.push_back(PhoneticRun{0U, utf16_units_in(surface), phonetic});
-    }
-    DecodePhoneticProperties(cursor, out_props);
-    return {};
-  }
-
-  // Each PhRun is three `u16`s; bound the count against the remaining
-  // payload before reserving so a corrupt count cannot drive a large
-  // allocation.
-  constexpr std::size_t kPhRunSize = 6U;
-  if (static_cast<std::size_t>(run_count) > cursor.size / kPhRunSize) {
-    std::string ctx("context=xlsb.sst run_count=");
-    ctx.append(std::to_string(run_count));
-    ctx.append(" cursor_size=").append(std::to_string(cursor.size));
-    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb phonetic run array truncated", std::move(ctx));
-  }
-  std::vector<std::array<std::uint16_t, 3>> runs;
-  runs.reserve(run_count);
-  for (std::uint32_t i = 0; i < run_count; ++i) {
-    std::array<std::uint16_t, 3> fields{};
-    for (std::uint16_t& field : fields) {
-      auto field_or = read_u16(cursor);
-      if (!field_or) {
-        return std::move(field_or.error());
-      }
-      field = field_or.value();
-    }
-    runs.push_back(fields);
-  }
-
-  const Utf16SliceIndex phonetic_index(phonetic);
-  const std::uint32_t phonetic_units = phonetic_index.utf16_units();
-  for (std::size_t i = 0; i < runs.size(); ++i) {
-    const std::uint32_t kana_start = runs[i][0];
-    const std::uint32_t surface_start = runs[i][1];
-    const std::uint32_t surface_length = runs[i][2];
-    const std::uint32_t kana_end = (i + 1U < runs.size()) ? runs[i + 1U][0] : phonetic_units;
-    // A backwards or out-of-range slice yields an empty reading rather
-    // than an error: the surrounding cell is still usable, and the run
-    // boundaries are Excel's own bookkeeping rather than user data.
-    const std::uint32_t kana_length = kana_end > kana_start ? kana_end - kana_start : 0U;
-    out.push_back(
-        PhoneticRun{surface_start, surface_start + surface_length, phonetic_index.substring(kana_start, kana_length)});
-  }
-  DecodePhoneticProperties(cursor, out_props);
-  return {};
-}
-}  // namespace
 
 Expected<std::vector<std::string_view>, Error> DecodeSharedStringsBin(
     const std::vector<std::uint8_t>& body, std::deque<std::string>& text_storage,
@@ -195,38 +31,13 @@ Expected<std::vector<std::string_view>, Error> DecodeSharedStringsBin(
     if (rec.type != static_cast<std::uint16_t>(XlsbRecordType::BrtSSTItem)) {
       continue;
     }
-    // BrtSSTItem ([MS-XLSB] §2.4.293) is a `RichStr`: a flags byte, the
-    // string, then the optional rich-format runs and phonetic guide the
-    // flags announce.
+    // BrtSSTItem ([MS-XLSB] §2.4.293) is a `RichStr`; cells keep the text flat, so its runs are not used.
     ByteSpan p = rec.payload;
-    ASSIGN_OR_RETURN(const std::uint8_t flags, read_u8(p));
-    ASSIGN_OR_RETURN(auto str, read_xlwidestring(p));
-    text_storage.push_back(std::move(str));
+    ASSIGN_OR_RETURN(RichStr item, read_rich_str(p));
+    text_storage.push_back(std::move(item.text));
     entries.push_back(text_storage.back());
-    out_phonetic.emplace_back();
-    out_phonetic_props.emplace_back();
-
-    // Rich runs precede the phonetic tail; validate them even when it is absent.
-    if ((flags & kRichStrRichRuns) != 0U) {
-      ASSIGN_OR_RETURN(auto run_count, read_u32(p));
-      const std::uint32_t rich_runs = run_count;
-      if (static_cast<std::size_t>(rich_runs) > p.size / kStrRunSize) {
-        std::string ctx("context=xlsb.sst rich_runs=");
-        ctx.append(std::to_string(rich_runs));
-        ctx.append(" cursor_size=").append(std::to_string(p.size));
-        return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb rich-text run array truncated",
-                          std::move(ctx));
-      }
-      p.data += static_cast<std::size_t>(rich_runs) * kStrRunSize;
-      p.size -= static_cast<std::size_t>(rich_runs) * kStrRunSize;
-    }
-    if ((flags & kRichStrPhonetic) == 0U) {
-      continue;
-    }
-    if (auto decoded = DecodePhoneticTail(p, entries.back(), out_phonetic.back(), out_phonetic_props.back());
-        !decoded) {
-      return std::move(decoded.error());
-    }
+    out_phonetic.push_back(std::move(item.phonetic));
+    out_phonetic_props.push_back(item.phonetic_props);
   }
   return entries;
 }

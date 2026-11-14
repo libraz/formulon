@@ -8,7 +8,9 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
 #include <deque>
+#include <filesystem>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -17,6 +19,7 @@
 #include "gtest/gtest.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
+#include "io/xlsb/rich_str.h"
 #include "io/xlsb/sst_reader.h"
 #include "io/zip_reader.h"
 #include "phonetic.h"
@@ -336,6 +339,84 @@ TEST(XlsbSstBuilder, BeginRecordSeparatesRepeatedReferencesFromUniqueEntries) {
   EXPECT_EQ(total.value(), 3U);
   EXPECT_EQ(unique.value(), 2U);
   EXPECT_EQ(DecodeSstStream(body_or.value()), (std::vector<std::string>{"same", "other"}));
+}
+
+#ifndef FORMULON_FIXTURES_DIR
+#error "FORMULON_FIXTURES_DIR must be defined by the build"
+#endif
+
+/// Whether a `RichStr` carries a phonetic tail with no `PhRun`s: Excel's form for a whole-string reading or for
+/// properties without a reading, which the writer spells with an explicit run or leaves out.
+bool PhoneticRunsElided(ByteSpan payload) {
+  auto flags = read_u8(payload);
+  if (!flags || (flags.value() & kRichStrPhonetic) == 0U || !read_xlwidestring(payload)) {
+    return false;
+  }
+  if ((flags.value() & kRichStrRichRuns) != 0U) {
+    auto runs = read_u32(payload);
+    if (!runs || payload.size < runs.value() * 4ULL) {
+      return false;
+    }
+    payload.data += runs.value() * 4ULL;
+    payload.size -= runs.value() * 4ULL;
+  }
+  auto kana = read_xlwidestring(payload);
+  auto count = read_u32(payload);
+  return kana && count && count.value() == 0U;
+}
+
+// Every `BrtSSTItem` in the fixtures decodes and re-encodes to its own bytes. Items whose phonetic tail has no runs
+// are counted apart: the writer has always written those differently, and the codec keeps that.
+TEST(XlsbRichStr, EverySharedStringInTheFixturesReEncodesByteIdentical) {
+  std::size_t items = 0;
+  std::size_t with_phonetic = 0;
+  std::size_t elided = 0;
+  for (const auto& entry : std::filesystem::recursive_directory_iterator(FORMULON_FIXTURES_DIR)) {
+    if (!entry.is_regular_file() || entry.path().extension() != ".xlsb") {
+      continue;
+    }
+    std::vector<std::uint8_t> package;
+    if (FILE* f = std::fopen(entry.path().string().c_str(), "rb"); f != nullptr) {
+      std::uint8_t buf[65536];
+      std::size_t n = 0;
+      while ((n = std::fread(buf, 1, sizeof(buf), f)) > 0U) {
+        package.insert(package.end(), buf, buf + n);
+      }
+      std::fclose(f);
+    }
+    ZipReader zip;
+    if (!zip.open(SpanOf(package))) {
+      continue;
+    }
+    auto sst = zip.read_entry("xl/sharedStrings.bin");
+    if (!sst) {
+      continue;
+    }
+    ByteSpan cursor = SpanOf(sst.value());
+    while (cursor.size > 0U) {
+      auto rec = read_record(cursor);
+      ASSERT_TRUE(static_cast<bool>(rec)) << entry.path();
+      if (rec.value().type != static_cast<std::uint16_t>(XlsbRecordType::BrtSSTItem)) {
+        continue;
+      }
+      const ByteSpan payload = rec.value().payload;
+      ByteSpan item_cursor = payload;
+      auto item = read_rich_str(item_cursor);
+      ASSERT_TRUE(static_cast<bool>(item)) << entry.path();
+      if (PhoneticRunsElided(payload)) {
+        ++elided;
+        continue;
+      }
+      std::vector<std::uint8_t> out;
+      emit_rich_str(out, item.value().text, item.value().runs, item.value().phonetic, item.value().phonetic_props);
+      EXPECT_EQ(out, std::vector<std::uint8_t>(payload.data, payload.data + payload.size)) << entry.path();
+      ++items;
+      with_phonetic += item.value().phonetic.empty() ? 0U : 1U;
+    }
+  }
+  EXPECT_GT(items, 1000U);
+  EXPECT_GT(with_phonetic, 0U);
+  EXPECT_GT(elided, 0U);
 }
 
 }  // namespace

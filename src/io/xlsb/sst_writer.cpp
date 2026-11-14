@@ -4,7 +4,6 @@
 #include "io/xlsb/sst_writer.h"
 
 #include <cstdint>
-#include <limits>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -17,61 +16,10 @@
 #include "phonetic.h"
 #include "utils/error.h"
 #include "utils/expected.h"
-#include "utils/utf8_length.h"
 
 namespace formulon {
 namespace io {
 namespace xlsb {
-namespace {
-
-/// The constant high bits of the phonetic tail's closing flags word.
-///
-/// The word packs the annotation type in bits 0-1 and its alignment in
-/// bits 2-3; bits 4-5 are set on every guide Excel writes. An all-default
-/// `PhoneticProperties` therefore encodes as `0x0030`, which is
-/// `halfwidthKatakana` / `noControl` — the pair Excel infers for a guide
-/// that arrived without a `<phoneticPr>`.
-constexpr std::uint16_t kPhoneticFlagsBase = 0x0030U;
-
-std::uint16_t pack_phonetic_flags(PhoneticProperties props) {
-  return static_cast<std::uint16_t>(kPhoneticFlagsBase | (props.type & 0x03U) |
-                                    static_cast<std::uint16_t>((props.alignment & 0x03U) << 2U));
-}
-
-/// Narrows a UTF-16 offset to the `u16` the record format stores.
-///
-/// Excel's own string ceiling is 32767 characters, so a well-formed
-/// annotation always fits; clamping rather than truncating keeps a
-/// hostile in-memory workbook from wrapping an offset around into a
-/// different, valid-looking span.
-std::uint16_t narrow_offset(std::uint32_t units) {
-  constexpr std::uint32_t kMax = std::numeric_limits<std::uint16_t>::max();
-  return static_cast<std::uint16_t>(units < kMax ? units : kMax);
-}
-
-/// Appends the phonetic tail for `runs` to `payload`.
-void emit_phonetic_tail(std::vector<std::uint8_t>& payload, const std::vector<PhoneticRun>& runs,
-                        PhoneticProperties props) {
-  std::string kana;
-  for (const PhoneticRun& run : runs) {
-    kana.append(run.text);
-  }
-  emit_xlwidestring(payload, kana);
-  emit_u32(payload, static_cast<std::uint32_t>(runs.size()));
-  // `ichFirst` is a running offset into the concatenation above, so the
-  // slice boundaries are recovered on read from consecutive runs.
-  std::uint32_t kana_offset = 0;
-  for (const PhoneticRun& run : runs) {
-    emit_u16(payload, narrow_offset(kana_offset));
-    emit_u16(payload, narrow_offset(run.sb));
-    emit_u16(payload, narrow_offset(run.eb > run.sb ? run.eb - run.sb : 0U));
-    kana_offset += utf16_units_in(run.text);
-  }
-  emit_u16(payload, props.font_id);
-  emit_u16(payload, pack_phonetic_flags(props));
-}
-
-}  // namespace
 
 std::uint32_t SstBuilder::intern(std::string_view text, const std::vector<PhoneticRun>& phonetic,
                                  PhoneticProperties phonetic_props) {
@@ -107,12 +55,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sst(const SstBuilder& sst) {
   std::vector<std::uint8_t> p;
   for (const SstEntry& entry : sst.entries()) {
     p.clear();
-    const bool has_phonetic = !entry.phonetic.empty();
-    emit_u8(p, has_phonetic ? kRichStrPhonetic : 0U);
-    emit_xlwidestring(p, entry.text);
-    if (has_phonetic) {
-      emit_phonetic_tail(p, entry.phonetic, entry.phonetic_props);
-    }
+    emit_rich_str(p, entry.text, {}, entry.phonetic, entry.phonetic_props);
     emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtSSTItem), p);
   }
 
