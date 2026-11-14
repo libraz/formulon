@@ -61,7 +61,7 @@ std::vector<std::string> ItemKindPaths() {
       paths.push_back(root + stem + save);
     }
   }
-  for (const char* stem : {"calc_items", "d1904_inline", "d1904_items", "run_threshold"}) {
+  for (const char* stem : {"calc_items", "calc_items2", "d1904_inline", "d1904_items", "run_threshold"}) {
     paths.push_back(root + stem + ".xlsb");
   }
   return paths;
@@ -466,31 +466,34 @@ std::vector<std::vector<std::uint8_t>> ExcelFormulas(const std::string& stem) {
   return out;
 }
 
-TEST(XlsbPivotCacheBridge, CalculatedItemFormulasCompileToExcelsTokens) {
-  const char* const kFormulas[] = {
-      "-Region[East]",   "(Region[East]+Region[West])*2", "Region[East]*3",           "Region[West]/2",
-      "Region[North]^2", "Region[East]&Region[West]",     "Region[East]>Region[West]"};
-  const std::vector<std::vector<std::uint8_t>> excel = ExcelFormulas("calc_items");
-  ASSERT_EQ(excel.size(), std::size(kFormulas));
+void ExpectFormulasCompileToExcelsTokens(const std::string& stem, const std::vector<std::string>& formulas) {
+  const std::vector<std::vector<std::uint8_t>> excel = ExcelFormulas(stem);
+  ASSERT_EQ(excel.size(), formulas.size()) << stem;
   pivot::PivotCache cache = FirstCache("C13_calc_item");
   ASSERT_EQ(cache.calculated_items().size(), 1U);
   for (std::size_t i = 0; i < excel.size(); ++i) {
-    cache.mutable_calculated_items()[0].formula = kFormulas[i];
-    EXPECT_EQ(WrittenFormula(cache), excel[i]) << kFormulas[i];
+    cache.mutable_calculated_items()[0].formula = formulas[i];
+    EXPECT_EQ(WrittenFormula(cache), excel[i]) << formulas[i];
   }
+}
+
+TEST(XlsbPivotCacheBridge, CalculatedItemFormulasCompileToExcelsTokens) {
+  ExpectFormulasCompileToExcelsTokens(
+      "calc_items", {"-Region[East]", "(Region[East]+Region[West])*2", "Region[East]*3", "Region[West]/2",
+                     "Region[North]^2", "Region[East]&Region[West]", "Region[East]>Region[West]"});
+  ExpectFormulasCompileToExcelsTokens(
+      "calc_items2", {"Region[East]-Region[West]", "Region[East]<Region[West]", "Region[East]=Region[West]",
+                      "Region[East]<=Region[West]", "Region[East]>=Region[West]", "Region[East]<>Region[West]"});
 }
 
 TEST(XlsbPivotCacheBridge, RefusesUnmeasuredFormulaOperators) {
   pivot::PivotCache cache = FirstCache("C13_calc_item");
-  for (const char* formula :
-       {"+Region[East]", "Region[East]%", "Region[East]=Region[West]", "Region[East]<Region[West]",
-        "Region[East]<>Region[West]", "Region[East]>=Region[West]", "Region[East]<=Region[West]"}) {
+  for (const char* formula : {"+Region[East]", "Region[East]%", "Region[East] Region[West]",
+                              "Region[East],Region[West]", "Region[East]:Region[West]", "Region[East]==Region[West]"}) {
     cache.mutable_calculated_items()[0].formula = formula;
     SCOPED_TRACE(formula);
     ExpectNotWritable(cache);
   }
-  cache.mutable_calculated_items()[0].formula = "Region[East]-Region[West]";
-  EXPECT_TRUE(pivot_cache_to_xlsb(cache, false, "rId1").has_value());
 }
 
 TEST(XlsbPivotCacheBridge, RefusesFormulaTextWithoutATokenSpelling) {

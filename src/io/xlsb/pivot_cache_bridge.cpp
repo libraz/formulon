@@ -80,7 +80,12 @@ constexpr std::uint8_t kPtgMul = 0x05U;
 constexpr std::uint8_t kPtgDiv = 0x06U;
 constexpr std::uint8_t kPtgPower = 0x07U;
 constexpr std::uint8_t kPtgConcat = 0x08U;
+constexpr std::uint8_t kPtgLt = 0x09U;
+constexpr std::uint8_t kPtgLe = 0x0AU;
+constexpr std::uint8_t kPtgEq = 0x0BU;
+constexpr std::uint8_t kPtgGe = 0x0CU;
 constexpr std::uint8_t kPtgGt = 0x0DU;
+constexpr std::uint8_t kPtgNe = 0x0EU;
 constexpr std::uint8_t kPtgUminus = 0x13U;
 constexpr std::uint8_t kPtgParen = 0x15U;
 
@@ -99,8 +104,18 @@ std::string_view BinaryOperatorText(std::uint8_t ptg) {
       return "^";
     case kPtgConcat:
       return "&";
+    case kPtgLt:
+      return "<";
+    case kPtgLe:
+      return "<=";
+    case kPtgEq:
+      return "=";
+    case kPtgGe:
+      return ">=";
     case kPtgGt:
       return ">";
+    case kPtgNe:
+      return "<>";
     default:
       return {};
   }
@@ -321,7 +336,7 @@ Expected<std::string, Error> RenderFormula(const std::vector<pivot_calc::Formula
 }
 
 /// Compiles calculated-item formula text to rgce and its PNames (cache field, shared item) pairs. The grammar
-/// is the operators Excel's saved items use, by precedence: `>` < `&` < `+ -` < `* /` < `^` < unary `-`, over
+/// is the operators Excel's saved items use, by precedence: comparisons < `&` < `+ -` < `* /` < `^` < unary `-`, over
 /// `Field[Item]` names, integers and parentheses. Only parentheses recurse, at most kMaxGroupingParenDepth deep.
 class FormulaCompiler {
  public:
@@ -357,8 +372,31 @@ class FormulaCompiler {
   }
 
   bool Comparison() {
-    static constexpr std::uint8_t kPtgs[] = {kPtgGt};
-    return Level(&FormulaCompiler::Concat, ">", kPtgs);
+    if (!Concat()) {
+      return false;
+    }
+    for (;;) {
+      const std::string_view rest = text_.substr(pos_);
+      std::uint8_t ptg = 0;
+      std::size_t width = 2;
+      if (rest.substr(0, 2) == "<=") {
+        ptg = kPtgLe;
+      } else if (rest.substr(0, 2) == ">=") {
+        ptg = kPtgGe;
+      } else if (rest.substr(0, 2) == "<>") {
+        ptg = kPtgNe;
+      } else if (At('<') || At('>') || At('=')) {
+        ptg = At('<') ? kPtgLt : At('>') ? kPtgGt : kPtgEq;
+        width = 1;
+      } else {
+        return true;
+      }
+      pos_ += width;
+      if (!Concat()) {
+        return false;
+      }
+      rgce_.push_back(ptg);
+    }
   }
   bool Concat() {
     static constexpr std::uint8_t kPtgs[] = {kPtgConcat};
