@@ -1141,7 +1141,8 @@ fm_status_t edit_calculated(fm_workbook_t* wb, std::uint32_t cache_id, const cha
   if (fm_status_t rc = resolve_cache_mut(wb, cache_id, &cache); rc != 0) {
     return rc;
   }
-  const formulon::eval::ScopedEvalProfile profile_scope(wb->workbook().excel_profile());
+  const formulon::eval::ScopedEvalProfile profile_scope(wb->workbook().excel_profile(),
+                                                        wb->workbook().text_index_unit());
   EntryHost host;
   const formulon::Expected<void, formulon::Error> done =
       std::forward<Edit>(edit)(*cache, cache_tables(wb->workbook(), cache_id), host);

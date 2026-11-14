@@ -153,22 +153,22 @@ Expected<TextAndCount, ErrorCode> read_text_and_count(const Value* args, std::ui
   return TextAndCount{std::move(text.value()), parsed.value()};
 }
 
-// LEFT(text, [n]) - first `n` positions (`text_index_unit`). Default n=1. n<0 -> `#VALUE!`.
+// LEFT(text, [n]) - first `n` code points on every Compatibility Version. Default n=1. n<0 -> `#VALUE!`.
 Value Left(const Value* args, std::uint32_t arity, Arena& arena) {
   auto in = read_text_and_count(args, arity);
   if (!in) {
     return Value::error(in.error());
   }
-  return text_detail::left_in(in.value().text, in.value().count, text_index_unit(), arena);
+  return text_detail::left_in(in.value().text, in.value().count, TextIndexUnit::kCodePoints, arena);
 }
 
-// RIGHT(text, [n]) - last `n` positions (`text_index_unit`). Default n=1. n<0 -> `#VALUE!`.
+// RIGHT(text, [n]) - last `n` code points on every Compatibility Version. Default n=1. n<0 -> `#VALUE!`.
 Value Right(const Value* args, std::uint32_t arity, Arena& arena) {
   auto in = read_text_and_count(args, arity);
   if (!in) {
     return Value::error(in.error());
   }
-  return text_detail::right_in(in.value().text, in.value().count, text_index_unit(), arena);
+  return text_detail::right_in(in.value().text, in.value().count, TextIndexUnit::kCodePoints, arena);
 }
 
 // REPT(text, n) - repeat. n<0 -> `#VALUE!`. Excel caps the result length at

@@ -269,7 +269,7 @@ bool check_list(Evaluator& ev, const DataValidation& dv, const Value& proposed, 
     if (proposed.is_blank()) {
       return false;
     }
-    eval::ScopedEvalProfile profile_scope(ev.wb.excel_profile());
+    eval::ScopedEvalProfile profile_scope(ev.wb.excel_profile(), ev.wb.text_index_unit());
     return inline_list_matches(inline_items(dv.formula1), displayed_text(ev.wb, ev.sheet, row, col, proposed));
   }
   // A range source is tested with an exact MATCH: a spilled range read at the target cell

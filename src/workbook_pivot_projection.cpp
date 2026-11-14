@@ -372,7 +372,7 @@ Expected<detail::PivotReportPlan, Error> detail::plan_pivot_report(const Workboo
   if (!cache->save_data() && cache->records().empty()) {
     return plan;
   }
-  const eval::ScopedEvalProfile profile_scope(wb.excel_profile());
+  const eval::ScopedEvalProfile profile_scope(wb.excel_profile(), wb.text_index_unit());
   const pivot::PivotLayoutOptions options = pivot::pivot_layout_options_for(wb.excel_profile());
   eval::PivotFormulaEvaluator formulas;
   auto result_or = pivot::evaluate(table, *cache, options,

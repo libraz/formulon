@@ -201,7 +201,7 @@ struct PreparedCfEvaluator::Impl {
     if (formula_cache.resource_failure) {
       return resource_error(target);
     }
-    const eval::ScopedEvalProfile profile_scope(host.eval_ctx->excel_profile());
+    const eval::ScopedEvalProfile profile_scope(host.eval_ctx->excel_profile(), host.eval_ctx->text_index_unit());
     const Value cell_value = sheet.resolve_cell_value(target.row, target.col);
     for (const RulePlanEntry& entry : plan) {
       const ConditionalFormat& block = *entry.block;

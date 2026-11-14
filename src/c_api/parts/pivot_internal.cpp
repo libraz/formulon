@@ -229,7 +229,7 @@ void list_moved_field_items(formulon::Workbook& wb, formulon::pivot::PivotTable&
     return;
   }
   formulon::pivot::share_axis_fields(*cache, table);
-  const formulon::eval::ScopedEvalProfile scope(wb.excel_profile());
+  const formulon::eval::ScopedEvalProfile scope(wb.excel_profile(), wb.text_index_unit());
   const std::size_t count = std::min({table.fields().size(), before.fields().size(), cache->fields().size()});
   for (std::size_t f = 0; f < count; ++f) {
     if (on_axis(before.fields()[f].axis) != on_axis(table.fields()[f].axis)) {

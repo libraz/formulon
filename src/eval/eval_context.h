@@ -34,6 +34,7 @@
 #include "utils/date_time.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/text_ops.h"
 #include "value.h"
 
 namespace formulon {
@@ -397,6 +398,10 @@ class EvalContext {
   /// Returns the active Excel formula compatibility profile.
   ExcelProfile excel_profile() const noexcept { return excel_profile_; }
 
+  /// The evaluated workbook's text position unit (`Workbook::text_index_unit`);
+  /// code points without a workbook.
+  TextIndexUnit text_index_unit() const noexcept { return text_index_unit_; }
+
   /// Returns a copy of `*this` with a different Excel formula profile.
   EvalContext with_excel_profile(ExcelProfile profile) const noexcept {
     EvalContext copy = *this;
@@ -724,6 +729,7 @@ class EvalContext {
   // sheet. Set while a sheet-local name's body evaluates.
   std::int32_t name_scope_sheet_ = -1;
   ExcelProfile excel_profile_ = default_excel_profile();
+  TextIndexUnit text_index_unit_ = TextIndexUnit::kCodePoints;
   // 1904 date-system flag, sourced from `Workbook::date1904()`. Threaded
   // to date-aware evaluators so serial <-> calendar conversions pick the
   // correct epoch. Defaults to the 1900 system.

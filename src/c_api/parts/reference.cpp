@@ -77,7 +77,8 @@ extern "C" fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, cons
   namespace refs = formulon::eval::refs_internal;
   refs::A1Parse parsed;
   {
-    const formulon::eval::ScopedEvalProfile profile_scope(wb->workbook().excel_profile());
+    const formulon::eval::ScopedEvalProfile profile_scope(wb->workbook().excel_profile(),
+                                                          wb->workbook().text_index_unit());
     if (r1c1) {
       refs::R1C1Base base;
       base.present = has_base == 1;

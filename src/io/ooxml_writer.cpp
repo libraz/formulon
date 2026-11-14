@@ -537,7 +537,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   // Parallel to `plan.pivot_tables_by_sheet`.
   std::vector<std::vector<ProjectedPivot>> projected(plan.pivot_tables_by_sheet.size());
   {
-    const eval::ScopedEvalProfile profile_scope(wb.excel_profile());
+    const eval::ScopedEvalProfile profile_scope(wb.excel_profile(), wb.text_index_unit());
     for (const std::unique_ptr<pivot::PivotCache>& cache : wb.pivot_caches()) {
       if (cache == nullptr) {
         continue;

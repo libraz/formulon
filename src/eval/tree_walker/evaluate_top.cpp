@@ -85,7 +85,7 @@ enum class TopResult : std::uint8_t {
 Value evaluate_top_body(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx, TopResult mode) {
   const bool first_element_only = mode == TopResult::kFirstElement;
-  const ScopedEvalProfile profile_scope(ctx.excel_profile());
+  const ScopedEvalProfile profile_scope(ctx.excel_profile(), ctx.text_index_unit());
   const ScopedEvalClock clock_scope(ctx.pinned_now());
 
   // Allocate the depth counters on this stack frame iff the inbound

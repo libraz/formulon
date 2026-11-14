@@ -93,7 +93,7 @@ DisplayText format_cell_for_display(const Workbook& workbook, const Sheet& sheet
     const std::uint32_t xf_index = choice.xf_index < xfs.size() ? choice.xf_index : 0U;
     xf = &xfs[xf_index];
   }
-  eval::ScopedEvalProfile profile_scope(workbook.excel_profile());
+  eval::ScopedEvalProfile profile_scope(workbook.excel_profile(), workbook.text_index_unit());
   return format_value_for_display(sheet.resolve_cell_value(row, col),
                                   number_format_code_for_xf(workbook.styles(), xf, workbook.excel_profile()),
                                   workbook.date1904(), workbook.excel_profile());

@@ -167,7 +167,7 @@ Expected<ResolvedSource, Error> resolve_chart_source(const Workbook& wb, std::si
   if (wb.sheet_count() == 0 || (host_sheet != kChartNoHostSheet && host_sheet >= wb.sheet_count())) {
     return invalid(formula, "no such host sheet");
   }
-  eval::ScopedEvalProfile profile_scope(wb.excel_profile());
+  eval::ScopedEvalProfile profile_scope(wb.excel_profile(), wb.text_index_unit());
   Resolver resolver(wb, host_sheet, registry, formula);
   const parser::AstNode* root = eval::parse_formula_entry(formula, resolver.arena);
   if (root == nullptr) {

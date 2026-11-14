@@ -567,7 +567,10 @@ TEST(TextProfileByteFunctions, NonDbcsUsesUtf16UnitsForSupplementaryText) {
 
 // Mac counts a supplementary-plane character as one position; Windows counts
 // its two UTF-16 units.
-TEST(TextProfilePositions, SupplementaryCharacterIsOnePositionOnMac) {
+// A new workbook is Compatibility Version 2 on every profile, where a
+// supplementary-plane character is one position (version 1 is covered by
+// compatibility_version_eval_test.cpp).
+TEST(TextProfilePositions, SupplementaryCharacterIsOnePositionOnEveryProfile) {
   const std::string text =
       "a\xF0\x9F\x98\x80"
       "b\xF0\x90\x90\xA8"
@@ -575,30 +578,28 @@ TEST(TextProfilePositions, SupplementaryCharacterIsOnePositionOnMac) {
   const std::string quoted = "\"" + text + "\"";
   for (const TextProfileCase& test_case : kTextProfiles) {
     SCOPED_TRACE(test_case.id);
-    const bool mac = test_case.profile.host == ExcelHost::kMac365;
     const auto number = [&](const std::string& formula) {
       const Value v = EvalWithProfile(formula, test_case.profile);
       EXPECT_TRUE(v.is_number()) << formula;
       return v.is_number() ? v.as_number() : -1.0;
     };
-    EXPECT_DOUBLE_EQ(number("=LEN(" + quoted + ")"), mac ? 5.0 : 7.0);
-    EXPECT_DOUBLE_EQ(number("=FIND(\"b\"," + quoted + ")"), mac ? 3.0 : 4.0);
-    EXPECT_DOUBLE_EQ(number("=SEARCH(\"c\"," + quoted + ")"), mac ? 5.0 : 7.0);
-    EXPECT_DOUBLE_EQ(number("=LEN(LEFT(" + quoted + ",3))"), mac ? 3.0 : 3.0);
-    EXPECT_DOUBLE_EQ(number("=LEN(MID(" + quoted + ",2,3))"), mac ? 3.0 : 3.0);
+    EXPECT_DOUBLE_EQ(number("=LEN(" + quoted + ")"), 5.0);
+    EXPECT_DOUBLE_EQ(number("=FIND(\"b\"," + quoted + ")"), 3.0);
+    EXPECT_DOUBLE_EQ(number("=SEARCH(\"c\"," + quoted + ")"), 5.0);
+    EXPECT_DOUBLE_EQ(number("=LEN(LEFT(" + quoted + ",3))"), 3.0);
+    EXPECT_DOUBLE_EQ(number("=LEN(MID(" + quoted + ",2,3))"), 3.0);
 
     const Value left = EvalWithProfile("=LEFT(" + quoted + ",3)", test_case.profile);
     ASSERT_TRUE(left.is_text());
-    EXPECT_EQ(left.as_text(), mac ? "a\xF0\x9F\x98\x80"
-                                    "b"
-                                  : "a\xF0\x9F\x98\x80");
+    EXPECT_EQ(left.as_text(),
+              "a\xF0\x9F\x98\x80"
+              "b");
 
     const Value replaced = EvalWithProfile("=REPLACE(" + quoted + ",2,2,\"X\")", test_case.profile);
     ASSERT_TRUE(replaced.is_text());
-    EXPECT_EQ(replaced.as_text(), mac ? "aX\xF0\x90\x90\xA8"
-                                        "c"
-                                      : "aXb\xF0\x90\x90\xA8"
-                                        "c");
+    EXPECT_EQ(replaced.as_text(),
+              "aX\xF0\x90\x90\xA8"
+              "c");
   }
 }
 

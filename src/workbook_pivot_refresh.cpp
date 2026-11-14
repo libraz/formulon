@@ -211,7 +211,7 @@ Expected<void, Error> Workbook::refresh_pivot_cache(std::uint32_t cache_id, cons
                       limit_context("pivot_cache_record_cells", record_cells, kMaxPivotCacheRecordCells));
   }
 
-  const eval::ScopedEvalProfile profile_scope(excel_profile_);
+  const eval::ScopedEvalProfile profile_scope(excel_profile_, text_index_unit());
   const pivot::RefreshSource source = read_source(*this, sheets_[range.sheet], rect);
   pivot::RefreshContext context;
   context.axis_fields.assign(old.fields().size(), false);

@@ -359,7 +359,7 @@ Expected<std::optional<std::string>, Error> title_text(const Workbook& wb, std::
 }  // namespace
 
 Expected<ChartData, Error> resolve_chart_data(const Workbook& wb, std::size_t host_sheet, const ChartModel& model) {
-  eval::ScopedEvalProfile profile_scope(wb.excel_profile());
+  eval::ScopedEvalProfile profile_scope(wb.excel_profile(), wb.text_index_unit());
   const bool plot_vis_only = model.plot_vis_only != Tri::kFalse;
   const Reader reader(wb, host_sheet, plot_vis_only, model.is_pivot_chart);
   // A series name keeps its text in a hidden row or column.

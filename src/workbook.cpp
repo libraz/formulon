@@ -494,6 +494,25 @@ void Workbook::set_excel_profile(ExcelProfile profile) {
   invalidate_context_dependent_state_locked(sheets_, engine_->locked_mutator());
 }
 
+Expected<void, Error> Workbook::set_compatibility_version(std::uint32_t version) {
+  if (version < 1U || version > 3U) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "Compatibility Version must be 1, 2 or 3");
+  }
+  if (version == 3U) {
+    return make_error(FormulonErrorCode::kNotImplemented, "Compatibility Version 3 (nested arrays) is not implemented");
+  }
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  if (version == compatibility_version()) {
+    return Expected<void, Error>::Ok();
+  }
+  if (!compat_set_version_.has_value() && !compat_warn_below_version_.has_value()) {
+    compat_warn_below_version_ = 2U;
+  }
+  compat_set_version_ = version;
+  invalidate_context_dependent_state_locked(sheets_, engine_->locked_mutator());
+  return Expected<void, Error>::Ok();
+}
+
 void Workbook::set_iterative_options(IterativeOptions opts) {
   // Bound the iteration budget where it enters the model rather than at
   // each producer. The solver has no wall-clock limit, and cancellation

@@ -551,7 +551,7 @@ Expected<std::vector<bool>, Error> evaluate_auto_filter(const Workbook& wb, cons
                         .with_excel_profile(wb.excel_profile()));
     ctx = &*own_ctx;
   }
-  const eval::ScopedEvalProfile profile_scope(ctx->excel_profile());
+  const eval::ScopedEvalProfile profile_scope(ctx->excel_profile(), ctx->text_index_unit());
 
   const MergeRange& range = filter.range;
   const std::uint32_t body_rows = range.last_row - range.first_row;

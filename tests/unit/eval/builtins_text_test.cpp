@@ -373,11 +373,12 @@ TEST(TextLeft, MultiByte) {
   EXPECT_EQ(v.as_text(), "\xE3\x81\x82\xE3\x81\x84");
 }
 
-TEST(TextLeft, EmojiTwoUnitsKeepsOneCodepoint) {
-  // "🎉🎊" — each emoji is 2 units. LEFT(.., 2) returns the first emoji.
+TEST(TextLeft, EmojiCountsAsOnePosition) {
+  // "🎉🎊" — LEFT counts code points on every Compatibility Version, so
+  // LEFT(.., 2) returns both emoji.
   const Value v = EvalSource("=LEFT(\"\xF0\x9F\x8E\x89\xF0\x9F\x8E\x8A\", 2)");
   ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(v.as_text(), "\xF0\x9F\x8E\x89");
+  EXPECT_EQ(v.as_text(), "\xF0\x9F\x8E\x89\xF0\x9F\x8E\x8A");
 }
 
 TEST(TextLeft, ZeroArgsIsArityViolation) {

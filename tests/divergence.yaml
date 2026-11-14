@@ -1330,6 +1330,17 @@ entries:
     first_noted: 2026-11-14
     last_verified_excel_version: "16.115"
 
+  - id: compat_version_1_mid_replace_lone_surrogate
+    applies_to: [mac]
+    cause: accepted-divergence
+    mode: skip-oracle
+    scope: api-contract
+    evidence: [tests/unit/eval/compatibility_version_eval_test.cpp]
+    reason: "In a workbook at Compatibility Version 1, MID and REPLACE count UTF-16 units, and Excel returns a lone surrogate when a cut falls inside a supplementary-plane character (MID(\"a😀b😁c\",2,4) gives 😀b and a lone U+D83D). Formulon holds text as UTF-8, which cannot carry a lone surrogate, so a cut through a pair takes the whole character (😀b😁)."
+    prefer: formulon
+    first_noted: 2026-11-14
+    last_verified_excel_version: "16.115"
+
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a

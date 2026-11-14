@@ -27,6 +27,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `LEN`, `MID`, `FIND`, `SEARCH` and `REPLACE` count characters the way the
+  workbook's Compatibility Version says, on every profile: a character outside
+  the Basic Multilingual Plane (an emoji, a rare CJK ideograph) counts as one
+  position, unless the workbook declares version 1, where it counts as two.
+  Before, Windows profiles, including the default `win-365-en_US`, always
+  counted two. A workbook without the setting, and every new workbook, uses
+  version 2, as Excel does. `LEFT` and `RIGHT` count such a character as one
+  position on every profile and version, as Excel does.
+
 - `.xlsb` saves write each sheet's print options, page margins, page setup,
   header and footer, and manual page breaks from the workbook, as Excel does,
   so a book loaded from `.xlsx` or created through the API keeps them. Page

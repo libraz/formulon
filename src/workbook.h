@@ -35,6 +35,7 @@
 #include "utils/date_time.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/text_ops.h"
 #include "value.h"
 
 namespace formulon {
@@ -1780,6 +1781,36 @@ class Workbook {
   /// Sets the full formula-behaviour profile used by future recalc calls.
   void set_excel_profile(ExcelProfile profile);
 
+  /// The Compatibility Version the workbook evaluates under: its stamp, or 2
+  /// for a book without one, as Excel computes an unstamped book. Version 1
+  /// makes LEN, MID, FIND, SEARCH and REPLACE count UTF-16 units; every other
+  /// value counts code points (version 3, nested arrays, is not implemented
+  /// and evaluates as 2).
+  std::uint32_t compatibility_version() const noexcept { return compat_set_version_.value_or(2U); }
+
+  /// The position unit of LEN, MID, FIND, SEARCH and REPLACE under `compatibility_version()`.
+  TextIndexUnit text_index_unit() const noexcept {
+    return compatibility_version() == 1U ? TextIndexUnit::kUtf16Units : TextIndexUnit::kCodePoints;
+  }
+
+  /// Sets the Compatibility Version. A value other than 1, 2 or 3 is
+  /// `kInvalidArgument`; 3 is `kNotImplemented`, both checked before the
+  /// value is compared. Setting the current value changes nothing; another
+  /// value stamps the book and marks every formula dirty, as a profile change
+  /// does.
+  Expected<void, Error> set_compatibility_version(std::uint32_t version);
+
+  /// The stamp as read from or written to the file: `setVersion` and
+  /// `warnBelowVersion`, each absent when the file had none. Readers restore
+  /// them unvalidated so any value round-trips; this changes no result.
+  void restore_compatibility_stamp(std::optional<std::uint32_t> set_version,
+                                   std::optional<std::uint32_t> warn_below_version) noexcept {
+    compat_set_version_ = set_version;
+    compat_warn_below_version_ = warn_below_version;
+  }
+  std::optional<std::uint32_t> compatibility_stamp() const noexcept { return compat_set_version_; }
+  std::optional<std::uint32_t> compatibility_warn_below() const noexcept { return compat_warn_below_version_; }
+
   // ---------------------------------------------------------------------------
   // Styles
   // ---------------------------------------------------------------------------
@@ -2184,6 +2215,9 @@ class Workbook {
   std::string workbook_root_extra_attrs_;
   // Formula compatibility profile. Runtime default is `win-365-en_US`.
   ExcelProfile excel_profile_ = default_excel_profile();
+  // Compatibility Version stamp; a new workbook carries Excel's new-book stamp.
+  std::optional<std::uint32_t> compat_set_version_ = 2U;
+  std::optional<std::uint32_t> compat_warn_below_version_ = 2U;
   // Set by `create_for_profile` and kept across `set_excel_profile`: sheets
   // added later receive the same sheet defaults as the first one. Loaded
   // and plain workbooks keep bare new sheets, since their Normal font need

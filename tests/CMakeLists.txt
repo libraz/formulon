@@ -316,6 +316,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_text2_test.cpp
   unit/eval/builtins_bahttext_test.cpp
   unit/eval/builtins_textb_test.cpp
+  unit/eval/compatibility_version_eval_test.cpp
   unit/eval/builtins_text3_test.cpp
   unit/eval/builtins_width_test.cpp
   unit/eval/text_format_number_test.cpp

@@ -13,6 +13,7 @@ set(FORMULON_ORACLE_TEST_SOURCES
   oracle_runner.cpp
   oracle_test.cpp
   oracle_skip_registry_test.cpp
+  win_text_unit_golden_test.cpp
 )
 
 add_executable(formulon_oracle_tests ${FORMULON_ORACLE_TEST_SOURCES})

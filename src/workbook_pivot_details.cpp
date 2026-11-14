@@ -175,7 +175,7 @@ Expected<std::size_t, Error> Workbook::show_pivot_details(std::size_t sheet, std
   std::vector<std::size_t> records;
   std::vector<std::vector<std::size_t>> keys;
   {
-    const eval::ScopedEvalProfile profile_scope(excel_profile_);
+    const eval::ScopedEvalProfile profile_scope(excel_profile_, text_index_unit());
     const pivot::PreparedRecordFilter filter(table, *cache, env);
     for (std::size_t r = 0; r < cache->records().size(); ++r) {
       const pivot::PivotCacheRecord& record = cache->records()[r];
@@ -363,7 +363,7 @@ Expected<std::size_t, Error> Workbook::add_pivot(std::size_t sheet, std::unique_
   pivot::sync_table_fields(*cache, {table.get()});
   pivot::share_axis_fields(*cache, *table);
   {
-    const eval::ScopedEvalProfile scope(excel_profile());
+    const eval::ScopedEvalProfile scope(excel_profile(), text_index_unit());
     pivot::list_axis_field_items(*table, *cache);
   }
   // Creation order: one past every pivot of the workbook, so it stays monotonic after removals.

@@ -206,11 +206,11 @@ TEST(BuiltinsLen, BmpCharactersCountAsOneEach) {
   EXPECT_EQ(v.as_number(), 3.0);
 }
 
-TEST(BuiltinsLen, SupplementaryPlaneCountsAsTwo) {
-  // "🎉" U+1F389 -> surrogate pair -> 2 UTF-16 units.
+TEST(BuiltinsLen, SupplementaryPlaneCountsAsOne) {
+  // "🎉" U+1F389 is one position outside a Compatibility Version 1 workbook.
   const Value v = EvalSource("=LEN(\"\xF0\x9F\x8E\x89\")");
   ASSERT_TRUE(v.is_number());
-  EXPECT_EQ(v.as_number(), 2.0);
+  EXPECT_EQ(v.as_number(), 1.0);
 }
 
 TEST(BuiltinsLen, ErrorPropagates) {
