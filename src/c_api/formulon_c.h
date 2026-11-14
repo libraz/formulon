@@ -524,8 +524,7 @@ FM_API fm_status_t fm_workbook_create_empty(fm_workbook_t** out);
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the file exceeds an engine
  *         ceiling (the context's `part=` names it, e.g. part=zip_parts,
  *         part=gradient_stops or part=array_elements);
- *         a `kIo*` / `kCrypto*` code from
- *         `formulon::FormulonErrorCode` on parse / archive failure.
+ *         another `FM_STATUS_IO_*` code on parse / archive failure.
  */
 FM_API fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, fm_workbook_t** out);
 

@@ -304,7 +304,12 @@ class TypedErrorTests(unittest.TestCase):
             with self.subTest(status=status.name):
                 error = FormulonError(status, "bad")
                 self.assertIs(type(error), InvalidFileError)
-        for status in (StatusCode.IO_WRITE_FAILED, StatusCode.NOT_FOUND):
+        for status in (
+            StatusCode.IO_WRITE_FAILED,
+            StatusCode.IO_XLSB_RETAINED_PART_STALE,
+            StatusCode.IO_FEATURE_NOT_WRITABLE,
+            StatusCode.NOT_FOUND,
+        ):
             with self.subTest(status=status.name):
                 self.assertNotIsInstance(FormulonError(status, "x"), InvalidFileError)
         with self.assertRaises(InvalidFileError):

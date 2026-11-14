@@ -368,7 +368,6 @@ _INVALID_FILE_CODES = frozenset(
         StatusCode.IO_XLSB_UNKNOWN_RECORD,
         StatusCode.IO_XLSB_UNSUPPORTED_PTG,
         StatusCode.IO_XLSB_CORRUPT,
-        StatusCode.IO_XLSB_RETAINED_PART_STALE,
     }
 )
 
