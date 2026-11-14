@@ -231,9 +231,11 @@ bool sheet_pr_writes_all(std::string_view raw) {
 /// because `<sheetPr>` is what `SheetPrintSettings` stores and what the
 /// introspection API hands back: routing the XLSB form through the same
 /// string makes a `.xlsb`-loaded sheet answer exactly as its `.xlsx` twin
-/// does. A sheet with no code name, filter mode or tab colour produces no
-/// fragment at all, which is also what the OOXML reader records for a
-/// worksheet with no `<sheetPr>` element.
+/// does. The outline flags and fitToPage become `<outlinePr>` and
+/// `<pageSetUpPr>` as Excel writes them in `.xlsx`. A sheet with none of
+/// these and no code name, filter mode or tab colour produces no fragment
+/// at all, which is also what the OOXML reader records for a worksheet with
+/// no `<sheetPr>` element.
 ///
 /// Returns `false` when the record carried flag or sync fields the model
 /// has no room for, so the caller can report the residue.
@@ -277,6 +279,23 @@ Expected<bool, Error> decode_ws_prop(const XlsbRecord& rec, Sheet& sheet, std::s
   const std::string& code_name = code_name_or.value();
   std::string body;
   AppendTabColor(body, tab, argb);
+  const bool has_tab_color = !body.empty();
+  const std::uint16_t flags = flags_or.value();
+  const bool apply_styles = (flags & kWsPropApplyStyles) != 0U;
+  const bool hides_outline_symbols = (flags & kWsPropShowOutlineSymbols) == 0U;
+  if (apply_styles || hides_outline_symbols) {
+    body.append("<outlinePr");
+    if (apply_styles) {
+      body.append(" applyStyles=\"1\"");
+    }
+    if (hides_outline_symbols) {
+      body.append(" showOutlineSymbols=\"0\"");
+    }
+    body.append("/>");
+  }
+  if ((flags & kWsPropFitToPage) != 0U) {
+    body.append("<pageSetUpPr fitToPage=\"1\"/>");
+  }
   const bool filter_mode = (flags2_or.value() & kWsPropFilterMode) != 0U;
   if (!code_name.empty() || filter_mode || !body.empty()) {
     sheet_pr.append("<sheetPr");
@@ -298,14 +317,16 @@ Expected<bool, Error> decode_ws_prop(const XlsbRecord& rec, Sheet& sheet, std::s
     SheetPrintSettings& print = sheet.mutable_print_settings();
     print.sheet_pr_xml = std::move(sheet_pr);
     // The automatic tab emits no `<tabColor>`, so the typed field is absent too.
-    print.tab_color = body.empty() ? ColorSpec{} : tab;
+    print.tab_color = has_tab_color ? tab : ColorSpec{};
     if (print.tab_color.kind == ColorSpec::Kind::kRgb) {
       print.tab_color.rgb = argb;
     }
   }
 
-  return flags_or.value() == kDefaultWsPropFlags && (flags2_or.value() & ~kWsPropFilterMode) == kDefaultWsPropFlags2 &&
-         rw_sync_or.value() == kWsPropSyncUnused && col_sync_or.value() == kWsPropSyncUnused;
+  constexpr std::uint16_t kDecodedFlags = kWsPropApplyStyles | kWsPropFitToPage | kWsPropShowOutlineSymbols;
+  return (flags & ~kDecodedFlags) == (kDefaultWsPropFlags & ~kDecodedFlags) &&
+         (flags2_or.value() & ~kWsPropFilterMode) == kDefaultWsPropFlags2 && rw_sync_or.value() == kWsPropSyncUnused &&
+         col_sync_or.value() == kWsPropSyncUnused;
 }
 
 /// Emits the worksheet-properties record which starts the mandatory worksheet

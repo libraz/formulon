@@ -198,6 +198,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/xlsb_parity_sheet_records_test.cpp
   unit/io/xlsb/xlsb_parity_font_plan_test.cpp
   unit/io/xlsb/xlsb_parity_print_test.cpp
+  unit/io/xlsb/print_fit_values_test.cpp
   unit/io/xlsb/xlsb_parity_autofilter_test.cpp
   unit/io/xlsb/auto_filter_forms_test.cpp
   unit/io/xlsb/xlsb_parity_notes_test.cpp

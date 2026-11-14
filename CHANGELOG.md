@@ -659,6 +659,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   was loaded under a different profile. The styles part is rebuilt only when
   the styles or the cell formats in use change; a conditional format, table or
   filter edit only renumbers its differential formats.
+- A loaded `.xlsb` sheet keeps Fit to page and its outline settings (summary
+  styles applied, outline symbols hidden), which were dropped on load and
+  counted as unread; they now read back as the `<sheetPr>` an `.xlsx` twin
+  carries and save again.
 
 ## [0.19.0] - 2026-11-10
 

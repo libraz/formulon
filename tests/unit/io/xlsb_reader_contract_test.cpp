@@ -848,16 +848,17 @@ TEST(XlsbWorksheetProperties, TabColorAndCodeNameSurviveAWriteReadCycle) {
 }
 
 TEST(XlsbWorksheetProperties, SheetFlagsWithNoModelFieldAreCounted) {
-  // `BrtWsProp` also carries dialog-sheet, fit-to-page and outline-
-  // direction bits that no model field holds. Decoding the two members
-  // that do fit must not make the rest look preserved.
+  // `BrtWsProp` also carries dialog-sheet, page-break and outline-
+  // direction bits that no model field holds. Decoding the members that
+  // do fit must not make the rest look preserved.
   const std::vector<std::uint8_t> archive = BuildPackage(SheetBinFramed(
       WsPropPayload(/*flags=*/0x0000U, /*color_type=*/2U, /*color_index=*/0U, 0xFF00FF00U, "AlphaCode")));
   auto result = io::xlsb::read_xlsb(test::span_of(archive));
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
   EXPECT_EQ(result.value().dropped_record_count, 1U);
   EXPECT_EQ(result.value().workbook.sheet(0).print_settings().sheet_pr_xml,
-            "<sheetPr codeName=\"AlphaCode\"><tabColor rgb=\"FF00FF00\"/></sheetPr>");
+            "<sheetPr codeName=\"AlphaCode\"><tabColor rgb=\"FF00FF00\"/><outlinePr "
+            "showOutlineSymbols=\"0\"/></sheetPr>");
 }
 
 // ---------------------------------------------------------------------------
