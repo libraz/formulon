@@ -365,7 +365,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
                    bool recalc_marked) {
   const bool has_formula = !cell.formula_text.empty();
   const std::uint32_t xf = saved_cell_xf(style_plan, cell.xf_index, merged);
-  if (!CellIsEmitted(sheet, row, col, cell)) {
+  if (!CellIsEmitted(sheet, row, col, cell, style_plan, merged)) {
     return false;
   }
 
@@ -570,9 +570,9 @@ void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout, const Cel
   if (layout.show_phonetic) {
     emit_xsd_bool_attr(out, "ph", true);
   }
-  if (layout.has_style) {
+  if (layout.has_style && !(style_plan != nullptr && style_plan->collapsed_to_default(layout.style_xf))) {
     // OOXML row style is effective only with customFormat=1, which alone
-    // reads as xf 0; Excel omits `s` for xf 0.
+    // reads as xf 0; Excel omits `s` for xf 0. A style equal to xf 0 is not written.
     const std::uint32_t xf = saved_cell_xf(style_plan, layout.style_xf);
     if (xf != 0U) {
       append_xml_attr_uint(out, "s", xf);
@@ -701,15 +701,21 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
 
 }  // namespace
 
-bool CellIsEmitted(const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell& cell) {
-  if (!cell.formula_text.empty() || !cell.cached_value.is_blank() || cell.xf_index != 0U || cell.show_phonetic) {
+bool CellIsEmitted(const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell& cell,
+                   const CellStyleSavePlan* style_plan, bool merged) {
+  const bool collapsed = style_plan != nullptr && !merged && style_plan->collapsed_to_default(cell.xf_index);
+  if (!cell.formula_text.empty() || !cell.cached_value.is_blank() || (cell.xf_index != 0U && !collapsed) ||
+      cell.show_phonetic) {
     return true;
   }
-  return cell.has_explicit_xf &&
+  return (cell.has_explicit_xf || collapsed) &&
          !explicit_default_observable(sheet.layout(), row, col, static_cast<std::uint64_t>(col) + 1U).empty();
 }
 
-std::optional<SheetDimension> sheet_dimension(const Sheet& sheet) {
+std::optional<SheetDimension> sheet_dimension(const Sheet& sheet, const CellStyleSavePlan* style_plan) {
+  const auto collapsed = [style_plan](std::uint32_t xf) {
+    return style_plan != nullptr && style_plan->collapsed_to_default(xf);
+  };
   using Span = std::optional<std::pair<std::uint32_t, std::uint32_t>>;
   const auto widen = [](Span& span, std::uint32_t lo, std::uint32_t hi) {
     span = span ? std::make_pair(std::min(span->first, lo), std::max(span->second, hi)) : std::make_pair(lo, hi);
@@ -717,6 +723,7 @@ std::optional<SheetDimension> sheet_dimension(const Sheet& sheet) {
   Span rows;
   Span cols;
   std::unordered_set<std::uint32_t> phantom_rows;
+  MergedCellIndex merged_cells(style_plan != nullptr ? sheet.merges() : std::vector<MergeRange>{});
   for (const CellAddress& phantom : sheet.spill_phantom_addresses()) {
     widen(rows, phantom.row, phantom.row);
     widen(cols, phantom.col, phantom.col);
@@ -725,12 +732,14 @@ std::optional<SheetDimension> sheet_dimension(const Sheet& sheet) {
   for (const auto& [row, cells] : sheet.rows()) {
     bool written = false;
     for (const auto& [col, cell] : cells) {
-      if (CellIsEmitted(sheet, row, col, cell)) {
+      const bool merged = !merged_cells.empty() && merged_cells.covers(row, col);
+      if (CellIsEmitted(sheet, row, col, cell, style_plan, merged)) {
         widen(cols, col, col);
         written = true;
       }
     }
-    const RowEmitPlan plan = row_emit_plan(sheet, row, cells, phantom_rows.count(row) != 0U);
+    const RowEmitPlan plan = row_emit_plan(sheet, row, cells, phantom_rows.count(row) != 0U, style_plan,
+                                           merged_cells.empty() ? nullptr : &merged_cells.spans(row));
     if (!plan.runs.empty()) {
       widen(cols, plan.runs.front().first, static_cast<std::uint32_t>(plan.runs.back().end - 1U));
       written = true;
@@ -741,12 +750,15 @@ std::optional<SheetDimension> sheet_dimension(const Sheet& sheet) {
   }
   const SheetLayout& layout = sheet.layout();
   for (const RowLayout& entry : layout.row_overrides) {
-    if (entry.row < Sheet::kMaxRows) {
+    // A row whose only override is a style written as xf 0 is not written.
+    const bool style_only = entry.has_style && collapsed(entry.style_xf) && !entry.has_height && entry.height <= 0.0 &&
+                            !entry.hidden && entry.outline_level == 0U && !entry.collapsed && !entry.show_phonetic;
+    if (entry.row < Sheet::kMaxRows && !style_only) {
       widen(rows, entry.row, entry.row);
     }
   }
   for (const ColumnLayout& span : layout.columns) {
-    if (span.has_style && span.style_xf != 0U) {
+    if (span.has_style && span.style_xf != 0U && !collapsed(span.style_xf)) {
       widen(cols, span.first, span.last);
     }
   }
@@ -821,7 +833,8 @@ void AppendSheetDataXml(std::string& out, const Sheet& sheet, const SharedString
     auto cells_it = rows_map.find(row);
     const RowCells& row_cells = (cells_it != rows_map.end()) ? cells_it->second : kEmptyRow;
     const auto phantoms_it = phantom_cols.find(row);
-    const RowEmitPlan plan = row_emit_plan(sheet, row, row_cells, phantoms_it != phantom_cols.end());
+    const RowEmitPlan plan = row_emit_plan(sheet, row, row_cells, phantoms_it != phantom_cols.end(), style_plan,
+                                           merged_cells.empty() ? nullptr : &merged_cells.spans(row));
     if (plan.as_row_format) {
       // The row's explicit defaults become its own xf-0 row format.
       RowLayout converted;

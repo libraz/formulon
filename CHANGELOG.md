@@ -677,6 +677,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   charset 129; MS Pゴシック is written as ＭＳ Ｐゴシック, family 2 with
   charset 128. Any other face is written as stored, and the workbook in
   memory keeps what was loaded.
+- An `.xlsx` save treats a cell format identical to the default one as the
+  default, as Excel does: a blank cell, alone or in a run, or a customFormat
+  row carrying only such a format is no longer written and leaves the
+  `<dimension>`, a column keeps its width without the style, and the format
+  is folded into the first entry of `<cellXfs>`. A blank cell inside a merged
+  range keeps its format.
 
 ## [0.19.0] - 2026-11-10
 

@@ -44,7 +44,11 @@ class SharedStrings;
 /// Shared so `<dimension>` is derived from the same test that decides
 /// what `<sheetData>` contains. The two answering differently is what
 /// makes a package's declared used range contradict its own cells.
-bool CellIsEmitted(const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell& cell);
+///
+/// With `style_plan`, a cell outside a merged range (`merged` false) whose xf
+/// the plan collapses into xf 0 is judged as an explicit xf 0.
+bool CellIsEmitted(const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell& cell,
+                   const CellStyleSavePlan* style_plan = nullptr, bool merged = false);
 
 /// An inclusive cell rectangle.
 struct SheetDimension {
@@ -60,8 +64,9 @@ struct SheetDimension {
 /// with a layout override) by the span of the written cell columns together
 /// with every column of non-zero style. Width-only columns do not count. An
 /// axis with nothing on it is its first index; nullopt when neither has
-/// anything.
-std::optional<SheetDimension> sheet_dimension(const Sheet& sheet);
+/// anything. With `style_plan`, an xf the plan collapses into xf 0 counts as
+/// xf 0, so a row or column carrying only such a style is not counted.
+std::optional<SheetDimension> sheet_dimension(const Sheet& sheet, const CellStyleSavePlan* style_plan = nullptr);
 
 /// Appends the <sheetData>...</sheetData> markup for a single sheet to `out`.
 /// The caller wraps it in <worksheet>. Pure function: no I/O.

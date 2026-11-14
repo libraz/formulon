@@ -12,11 +12,14 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "color_resolve.h"
 
 namespace formulon {
+
+class CellStyleSavePlan;
 
 class Workbook;
 class Sheet;
@@ -115,7 +118,13 @@ struct RowEmitPlan {
 /// and at least three of them, becomes a row format. Otherwise each run piece
 /// is written unless its xf equals the xf it would inherit (the row format,
 /// else the column format, else 0), split per `axis_segments` piece.
-RowEmitPlan row_emit_plan(const Sheet& sheet, std::uint32_t row, const RowCells& cells, bool row_has_phantoms);
+///
+/// With `style_plan`, a run piece outside `merged_spans` (the row's merged
+/// column spans, `{first, last}`) whose xf the plan collapses into xf 0 is
+/// judged as an xf-0 run.
+RowEmitPlan row_emit_plan(const Sheet& sheet, std::uint32_t row, const RowCells& cells, bool row_has_phantoms,
+                          const CellStyleSavePlan* style_plan = nullptr,
+                          const std::vector<std::pair<std::uint32_t, std::uint32_t>>* merged_spans = nullptr);
 
 /// Whether `cell` supplies its own XF rather than inheriting one: an explicit
 /// assignment, a non-zero index, a formula or a non-blank value.

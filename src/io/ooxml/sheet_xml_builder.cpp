@@ -462,7 +462,8 @@ std::string BuildColsXml(const SheetLayout& layout, const CellStyleSavePlan* sty
       // present so a reload preserves the column metric.
       emit_xsd_bool_attr(out, "customWidth", true);
     }
-    if (col.has_style) {
+    // A style written as xf 0 is left out; the width stays.
+    if (col.has_style && !(style_plan != nullptr && style_plan->collapsed_to_default(col.style_xf))) {
       append_xml_attr_uint(out, "style",
                            style_plan != nullptr ? style_plan->cell_xf_index(col.style_xf) : col.style_xf);
     }
@@ -489,8 +490,8 @@ std::string BuildColsXml(const SheetLayout& layout, const CellStyleSavePlan* sty
 /// to seed the used range. The box is `sheet_dimension`, the rule the .xlsb
 /// writer's BrtWsDim shares; with nothing to cover it is `A1`, Excel's form
 /// for an empty sheet.
-std::string BuildDimensionXml(const Sheet& sheet) {
-  const std::optional<SheetDimension> box = sheet_dimension(sheet);
+std::string BuildDimensionXml(const Sheet& sheet, const CellStyleSavePlan* style_plan) {
+  const std::optional<SheetDimension> box = sheet_dimension(sheet, style_plan);
   const bool any = box.has_value();
   const std::uint32_t min_row = any ? box->first_row : 0U;
   const std::uint32_t min_col = any ? box->first_col : 0U;
@@ -569,7 +570,7 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   if (!sheet_pr_xml.empty()) {
     emit_line(sheet_pr_xml);
   }
-  emit_line(BuildDimensionXml(sheet));
+  emit_line(BuildDimensionXml(sheet, style_plan));
   if (!sheet_view_xml.empty()) {
     emit_line(sheet_view_xml);
   }

@@ -327,6 +327,72 @@ TEST_P(CellXfsCompactionGolden, UneditedXlsbKeepsItsStylesPart) {
 
 INSTANTIATE_TEST_SUITE_P(Cases, CellXfsCompactionGolden, ::testing::ValuesIn(MatchingCases()), CaseName);
 
+// A cell xf equal to xf 0 counts as xf 0 in an .xlsx save: a blank cell or a customFormat row carrying only it is not
+// written and leaves the used range, and a column keeps its width without the style. B4, B5 (a bare and an `s="0"`
+// blank) and B7 (a blank on a distinct xf, kept) are the controls.
+const std::vector<Case>& XfCollapseCases() {
+  static const std::vector<Case> cases = {
+      {"xfcollapse", "xc_B1_blank_cell_dup_xf0"},      {"xfcollapse", "xc_B2_row_custom_dup_xf0"},
+      {"xfcollapse", "xc_B3_col_style_dup_xf0"},       {"xfcollapse", "xc_B4_bare_blank_cell"},
+      {"xfcollapse", "xc_B5_blank_cell_s0"},           {"xfcollapse", "xc_B6_col_style_dup_xf0_nowidth"},
+      {"xfcollapse", "xc_B7_blank_cell_styled_kept"},  {"xfcollapse", "xc_H1_row_run_blank_dup_xf0"},
+      {"xfcollapse", "xc_H1b_row_run_values_dup_xf0"}, {"xfcollapse", "xc_H1c_row_run_values_s0"},
+      {"xfcollapse", "xc_H2_col_run_blank_dup_xf0"},   {"xfcollapse", "xc_H2b_col_run_values_dup_xf0"},
+  };
+  return cases;
+}
+
+std::string DimensionRef(const Bytes& pkg) {
+  pugi::xml_document doc;
+  const pugi::xml_node ws = LoadRoot(doc, PartText(pkg, "xl/worksheets/sheet1.xml"), "worksheet");
+  return ws.child("dimension").attribute("ref").value();
+}
+
+/// Each `<col>` as "min-max width=W" (the style is in SheetRefLines).
+Lines ColWidthLines(const Bytes& pkg) {
+  pugi::xml_document doc;
+  const pugi::xml_node ws = LoadRoot(doc, PartText(pkg, "xl/worksheets/sheet1.xml"), "worksheet");
+  Lines out;
+  for (const pugi::xml_node col : ws.child("cols").children("col")) {
+    out.push_back(std::string(col.attribute("min").value()) + "-" + col.attribute("max").value() +
+                  " width=" + col.attribute("width").value());
+  }
+  return out;
+}
+
+class XfCollapseGolden : public ::testing::TestWithParam<Case> {
+ protected:
+  std::string Msg() const { return std::string("case ") + GetParam().id + " (left: Excel, right: Formulon)"; }
+};
+
+TEST_P(XfCollapseGolden, XlsxMatchesExcel) {
+  const auto wb = LoadAuthored(GetParam());
+  ASSERT_TRUE(wb);
+  Bytes ours;
+  ASSERT_TRUE(SaveXlsx(*wb, &ours));
+  const Bytes excel = test::read_file_bytes(FixturePath(GetParam(), "_resaved.xlsx"));
+  EXPECT_EQ(CellXfLines(excel), CellXfLines(ours)) << Msg();
+  EXPECT_EQ(SheetRefLines(excel), SheetRefLines(ours)) << Msg();
+  EXPECT_EQ(DimensionRef(excel), DimensionRef(ours)) << Msg();
+  EXPECT_EQ(ColWidthLines(excel), ColWidthLines(ours)) << Msg();
+}
+
+TEST_P(XfCollapseGolden, XlsxSaveIsIdempotent) {
+  const auto wb = LoadAuthored(GetParam());
+  ASSERT_TRUE(wb);
+  Bytes first;
+  ASSERT_TRUE(SaveXlsx(*wb, &first));
+  const auto reloaded = LoadXlsxBytes(first, "first save");
+  ASSERT_TRUE(reloaded);
+  Bytes second;
+  ASSERT_TRUE(SaveXlsx(*reloaded, &second));
+  EXPECT_EQ(PartText(first, "xl/styles.xml"), PartText(second, "xl/styles.xml")) << Msg();
+  EXPECT_EQ(SheetRefLines(first), SheetRefLines(second)) << Msg();
+  EXPECT_EQ(DimensionRef(first), DimensionRef(second)) << Msg();
+}
+
+INSTANTIATE_TEST_SUITE_P(Cases, XfCollapseGolden, ::testing::ValuesIn(XfCollapseCases()), CaseName);
+
 // Excel recomputes the apply flags on save, so two cell xfs that differ only in
 // applyNumberFormat collapse there. Formulon writes the flags as stored and
 // keeps both (tests/divergence.yaml).

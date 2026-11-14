@@ -113,6 +113,11 @@ class CellStyleSavePlan {
   /// True when every cell xf is written at its model index and every
   /// reference keeps its model index.
   bool cell_xfs_identity() const noexcept { return cell_xfs_identity_; }
+  /// True when non-default model cell xf `model_xf` is written as xf 0 because it
+  /// equals it; a reference to it outside a merged range then reads as xf 0.
+  bool collapsed_to_default(std::uint32_t model_xf) const noexcept {
+    return model_xf != 0U && cell_xf_index(model_xf) == 0U;
+  }
   /// The profile the names, merges and order were decided under.
   ExcelProfile profile() const noexcept { return profile_; }
 

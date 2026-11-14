@@ -7,6 +7,7 @@
 #include <utility>
 
 #include "cell.h"
+#include "cell_style_save_plan.h"
 #include "row_cells.h"
 #include "sheet.h"
 #include "sheet_layout_edit.h"
@@ -109,12 +110,62 @@ bool converts_to_row_format(const SheetLayout& layout, std::uint32_t row, const 
 
 }  // namespace
 
-RowEmitPlan row_emit_plan(const Sheet& sheet, std::uint32_t row, const RowCells& cells, bool row_has_phantoms) {
+namespace {
+
+// `runs` with every piece outside `merged_spans` whose xf `style_plan` collapses into xf 0 set to xf 0.
+std::vector<StyleRun> collapse_default_runs(const std::vector<StyleRun>& runs, const CellStyleSavePlan& style_plan,
+                                            const std::vector<std::pair<std::uint32_t, std::uint32_t>>* merged_spans) {
+  std::vector<StyleRun> out;
+  out.reserve(runs.size());
+  for (const StyleRun& run : runs) {
+    if (!style_plan.collapsed_to_default(run.xf)) {
+      out.push_back(run);
+      continue;
+    }
+    std::uint32_t at = run.first;
+    const auto piece = [&out](std::uint32_t first, std::uint32_t last, std::uint32_t xf) {
+      if (first <= last) {
+        out.push_back({static_cast<std::uint16_t>(first), static_cast<std::uint16_t>(last), xf});
+      }
+    };
+    if (merged_spans != nullptr) {
+      for (const auto& [first, last] : *merged_spans) {
+        if (last < at || first > run.last) {
+          continue;
+        }
+        const std::uint32_t lo = std::max<std::uint32_t>(first, at);
+        const std::uint32_t hi = std::min<std::uint32_t>(last, run.last);
+        if (lo > at) {
+          piece(at, lo - 1U, 0U);
+        }
+        piece(lo, hi, run.xf);
+        at = hi + 1U;
+        if (at > run.last) {
+          break;
+        }
+      }
+    }
+    if (at <= run.last) {
+      piece(at, run.last, 0U);
+    }
+  }
+  return out;
+}
+
+}  // namespace
+
+RowEmitPlan row_emit_plan(const Sheet& sheet, std::uint32_t row, const RowCells& cells, bool row_has_phantoms,
+                          const CellStyleSavePlan* style_plan,
+                          const std::vector<std::pair<std::uint32_t, std::uint32_t>>* merged_spans) {
   RowEmitPlan plan;
-  const std::vector<StyleRun>& runs = cells.runs();
-  if (runs.empty()) {
+  if (cells.runs().empty()) {
     return plan;
   }
+  std::vector<StyleRun> collapsed;
+  if (style_plan != nullptr) {
+    collapsed = collapse_default_runs(cells.runs(), *style_plan, merged_spans);
+  }
+  const std::vector<StyleRun>& runs = style_plan != nullptr ? collapsed : cells.runs();
   const SheetLayout& layout = sheet.layout();
   if (converts_to_row_format(layout, row, cells, row_has_phantoms)) {
     plan.as_row_format = true;
