@@ -759,6 +759,14 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/api/check_changelog_identifiers_test.py
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
+  # The upgrade guide names every C ABI break the last published release's
+  # consumers can meet; the unit tests include the check over the repository.
+  add_test(
+    NAME ApiUpgradeGuideAbi
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/api/check_upgrade_guide_abi_test.py
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  set_tests_properties(ApiUpgradeGuideAbi PROPERTIES LABELS "Api")
   # The propagated rich-value table and its test rows are what the measured sweep generates.
   add_test(
     NAME RichValueErrorIftabDrift
