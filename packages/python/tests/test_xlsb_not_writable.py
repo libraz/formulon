@@ -134,6 +134,54 @@ class XlsbNotWritableTests(unittest.TestCase):
         self.ws.update_sparkline_group(gid, sparklines=[read])
         self.assertEqual(len(self.ws.list_sparkline_groups()), 2)
 
+    def test_xlsb_save_of_sources_excel_refuses_fails_and_names_the_feature(self) -> None:
+        for kind, parts in (
+            ("format_defaults", ("format", "base_256_src.xlsx")),
+            ("format_defaults", ("format", "width_256_src.xlsx")),
+            ("outline_level", ("format", "outline_row_8_src.xlsx")),
+            ("sheet_view", ("views", "bad_window_id_src.xlsx")),
+        ):
+            with self.subTest(fixture="/".join(parts)), Workbook.load(FIXTURES.joinpath(*parts)) as wb:
+                with self.assertRaises(IoError) as cm:
+                    wb.save(format=WorkbookFormat.XLSB)
+                self.assertNotIsInstance(cm.exception, InvalidFileError)
+                self.assertEqual(cm.exception.code, StatusCode.IO_FEATURE_NOT_WRITABLE)
+                self.assertIn(f"kind={kind}", cm.exception.context)
+                self.assertIn("sheet_index=0", cm.exception.context)
+                self.assertTrue(wb.save(format=WorkbookFormat.XLSX))
+
+    def test_format_defaults_outside_excel_limits_are_refused_and_write_nothing(self) -> None:
+        self.ws.update_format_defaults(
+            default_column_width_chars=10, default_row_height_pt=20, base_column_width_chars=9
+        )
+        before = self.ws.get_format_defaults()
+        for patch in (
+            {"default_column_width_chars": 255.5},
+            {"default_column_width_chars": 256},
+            {"default_row_height_pt": 409.7},
+            {"base_column_width_chars": 8.5},
+            {"base_column_width_chars": 256},
+        ):
+            with self.subTest(patch=patch):
+                with self.assertRaises(InvalidArgumentError) as cm:
+                    self.ws.update_format_defaults(**patch)
+                self.assertEqual(cm.exception.code, StatusCode.INVALID_ARGUMENT)
+                after = self.ws.get_format_defaults()
+                self.assertEqual(after.default_column_width_chars, before.default_column_width_chars)
+                self.assertEqual(after.default_row_height_pt, before.default_row_height_pt)
+                self.assertEqual(after.base_column_width_chars, before.base_column_width_chars)
+
+    def test_format_defaults_at_excel_limits_are_accepted(self) -> None:
+        self.ws.update_format_defaults(
+            default_column_width_chars=255, default_row_height_pt=409.6, base_column_width_chars=255
+        )
+        d = self.ws.get_format_defaults()
+        self.assertEqual(d.default_column_width_chars, 255)
+        self.assertEqual(d.default_row_height_pt, 409.6)
+        self.assertEqual(d.base_column_width_chars, 255)
+        self.ws.update_format_defaults(base_column_width_chars=0)
+        self.assertEqual(self.ws.get_format_defaults().base_column_width_chars, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

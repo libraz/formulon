@@ -545,11 +545,6 @@ fm_status_t check_sheet_row(const fm_workbook_t* wb, std::size_t sheet_index, st
 // Rejects an `anchor_kind` / `edit_as` ordinal outside the drawing anchor enums.
 fm_status_t check_anchor_enums(std::int64_t anchor_kind, std::int64_t edit_as);
 
-// Deepest row / column outline level the file formats encode (`outlineLevel`
-// is 0-7 in OOXML and three bits in XLSB).
-// @limit: excel
-constexpr std::uint8_t kMaxOutlineLevel = 7U;
-
 // `check_index` of `xf_index` against the workbook's cell-XF table. Every
 // setter storing a cell, row or column `xf_index` runs it before writing.
 fm_status_t check_cell_xf_index(const fm_workbook_t* wb, std::size_t xf_index);

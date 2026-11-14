@@ -34,6 +34,7 @@
 #include "io/data_table_xml.h"
 #include "io/future_functions.h"
 #include "io/sax_xml_reader.h"
+#include "io/sheet_layout_reader.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
@@ -725,7 +726,7 @@ Expected<void, Error> read_sheet_data_sax(ByteSpan sheet_xml, std::size_t sheet_
       pugi::xml_document fmt_doc;
       if (fmt_doc.load_buffer(tag.data(), tag.size())) {
         workbook.sheet(sheet_index).mutable_format_defaults().zero_height =
-            read_xsd_bool(fmt_doc.document_element(), "zeroHeight", false);
+            sheet_format_hides_rows(fmt_doc.document_element());
       }
     }
   }

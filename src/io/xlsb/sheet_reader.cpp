@@ -35,6 +35,7 @@
 #include "io/xlsb/sheet_record_flags.h"
 #include "io/xlsb/sparkline_records.h"
 #include "io/xlsb/view_records.h"
+#include "io/xlsb/workbook_props_records.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "phonetic.h"
@@ -315,6 +316,15 @@ struct SheetDecodeInputs {
   std::uint32_t* undecoded_formula_count;
 };
 
+/// Counts a feature instance the sheet is loaded without, naming its kind.
+void CountSkippedFeature(SheetDecodeState& state, std::string_view kind, std::size_t sheet_index) {
+  ++state.skipped_features;
+  StructuredLog("xlsb.reader.skipped")
+      .field("kind", kind)
+      .field("sheet", static_cast<std::int64_t>(sheet_index))
+      .warn();
+}
+
 /// Classifies and decodes one worksheet record.
 ///
 /// The switch below has no fall-through exit: every arm ends in a
@@ -341,8 +351,12 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(const XlsbRecord& rec, Xl
         state.in_main_ws_view = true;
       }
       std::uint32_t workbook_view = 0U;
-      if (auto view_status = decode_ws_view(rec, *target, &workbook_view); !view_status) {
-        return std::move(view_status.error());
+      auto known_mode = decode_ws_view(rec, *target, &workbook_view);
+      if (!known_mode) {
+        return std::move(known_mode.error());
+      }
+      if (!known_mode.value()) {
+        CountSkippedFeature(state, "sheet_view", sheet_index);
       }
       if (state.in_extra_ws_view) {
         state.extra_workbook_view = workbook_view;
@@ -365,9 +379,8 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(const XlsbRecord& rec, Xl
       return RecordDisposition::kModelled;
     }
     case XlsbRecordType::BrtWsFmtInfo: {
-      auto format_status = decode_ws_fmt_info(rec, wb.sheet(sheet_index), sheet_index);
-      if (!format_status) {
-        return std::move(format_status.error());
+      if (!decode_ws_fmt_info(rec, wb.sheet(sheet_index))) {
+        CountSkippedFeature(state, "format_defaults", sheet_index);
       }
       return RecordDisposition::kModelled;
     }
@@ -783,7 +796,10 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
       state.in_tail = true;
     } else if (type == XlsbRecordType::BrtEndWsView) {
       if (state.in_extra_ws_view) {
-        append_extra_view(wb.sheet(sheet_index).mutable_view(), state.extra_view, state.extra_workbook_view);
+        if (!append_extra_view(wb.sheet(sheet_index).mutable_view(), state.extra_view, state.extra_workbook_view,
+                               workbook_view_count(wb.book_views_xml()))) {
+          CountSkippedFeature(state, "sheet_view", sheet_index);
+        }
         state.in_extra_ws_view = false;
       }
       state.in_main_ws_view = false;

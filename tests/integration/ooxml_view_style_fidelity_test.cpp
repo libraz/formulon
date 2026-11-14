@@ -300,7 +300,8 @@ TEST(SheetViewFidelity, DefaultViewSurvivesARoundTrip) {
   EXPECT_TRUE(Has(xml, "<sheetViews><sheetView tabSelected=\"1\" workbookViewId=\"0\"/></sheetViews>")) << xml;
 }
 
-TEST(SheetViewFidelity, PivotSelectionAndExtensionListAreKept) {
+// Excel keeps no pivotSelection in either format, and keeps the view's extLst in xlsx.
+TEST(SheetViewFidelity, PivotSelectionIsDroppedAndExtensionListKept) {
   const std::string sheet = Worksheet(
       "<sheetViews><sheetView workbookViewId=\"0\">"
       "<selection activeCell=\"B2\" sqref=\"B2\"/>"
@@ -310,10 +311,9 @@ TEST(SheetViewFidelity, PivotSelectionAndExtensionListAreKept) {
       "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\"><x14:ignore/></ext></extLst>"
       "</sheetView></sheetViews><sheetData/>");
   const std::string xml = ReadPart(Resave(BuildPackage(sheet)), "xl/worksheets/sheet1.xml");
-  EXPECT_TRUE(Has(xml, "<pivotSelection pane=\"bottomRight\"")) << xml;
+  EXPECT_FALSE(Has(xml, "<pivotSelection")) << xml;
   EXPECT_TRUE(Has(xml, "<x14:ignore/>")) << xml;
-  EXPECT_LT(xml.find("<selection"), xml.find("<pivotSelection")) << xml;
-  EXPECT_LT(xml.find("<pivotSelection"), xml.find("<extLst>")) << xml;
+  EXPECT_LT(xml.find("<selection"), xml.find("<extLst>")) << xml;
 }
 
 // ---------------------------------------------------------------------------

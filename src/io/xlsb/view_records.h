@@ -21,26 +21,32 @@ namespace io {
 namespace xlsb {
 
 /// Decodes a BrtBeginWsView into `view`'s display fields, scroll origin,
-/// zooms and view mode, and its iWbkView into `*workbook_view`.
-Expected<void, Error> decode_ws_view(const XlsbRecord& rec, SheetView& view, std::uint32_t* workbook_view);
+/// zooms and view mode, and its iWbkView into `*workbook_view`. False when
+/// the xlView is not one Excel writes; the view then reads as normal.
+Expected<bool, Error> decode_ws_view(const XlsbRecord& rec, SheetView& view, std::uint32_t* workbook_view);
 
 /// Emits BrtBeginWsView, BrtPane, the BrtSels and BrtEndWsView of `view`
-/// shown in workbook window `workbook_view`.
-void emit_ws_view(std::vector<std::uint8_t>& dst, const SheetView& view, std::uint32_t workbook_view);
+/// shown in workbook window `workbook_view`. The view's `<extLst>` has no
+/// record and is left out, as Excel does. Fails with `kIoFeatureNotWritable`
+/// (context `kind=sheet_view` and `sheet_index`) for a view mode xlView
+/// cannot name.
+Expected<void, Error> emit_ws_view(std::vector<std::uint8_t>& dst, const SheetView& view, std::uint32_t workbook_view,
+                                   std::size_t sheet_index);
 
-/// Emits one view per `<sheetView>` of `view.extra_views_xml` whose window
-/// is among the `workbook_views` BrtBookView records the workbook part
-/// writes, in document order.
-void emit_extra_ws_views(std::vector<std::uint8_t>& dst, const SheetView& view, std::uint32_t workbook_views = 1U);
+/// Emits one view per `<sheetView>` of `view.extra_views_xml`, in document
+/// order. Fails like `emit_ws_view`, and when the fragment does not parse or
+/// names a window other than 1 to `workbook_views` - 1 (the BrtBookView
+/// records the workbook part writes).
+Expected<void, Error> emit_extra_ws_views(std::vector<std::uint8_t>& dst, const SheetView& view,
+                                          std::uint32_t workbook_views, std::size_t sheet_index);
 
-/// Appends the `<sheetView>` of an extra window decoded from XLSB to
-/// `main.extra_views_xml`.
-void append_extra_view(SheetView& main, const SheetView& extra, std::uint32_t workbook_view);
-
-/// Parts of `view` and its extra windows the view records cannot carry: a
-/// `<pivotSelection>` or view `<extLst>`, an unknown view mode, and a window
-/// outside the `workbook_views` the workbook part writes.
-std::size_t unwritten_view_part_count(const SheetView& view, std::uint32_t workbook_views = 1U);
+/// Adds the view of workbook window `workbook_view` decoded from XLSB after
+/// the sheet's first: it replaces the main view or an extra view of the same
+/// window, as the later view does in Excel, else joins
+/// `main.extra_views_xml`. False, changing nothing, for a window past the
+/// `workbook_views` the workbook part declares.
+bool append_extra_view(SheetView& main, const SheetView& extra, std::uint32_t workbook_view,
+                       std::uint32_t workbook_views);
 
 /// Decodes one BrtPane into `view`'s freeze or split fields. False for an
 /// unfrozen pane with no valid split; an error when a frozen pane's counts

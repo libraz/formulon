@@ -45,13 +45,11 @@ void read_sheet_view_element(const pugi::xml_node& sheet_view, SheetView& view) 
   view.zoom_scale_normal = read_zoom("zoomScaleNormal");
   view.zoom_scale_sheet_layout_view = read_zoom("zoomScaleSheetLayoutView");
   view.zoom_scale_page_layout_view = read_zoom("zoomScalePageLayoutView");
-  if (pugi::xml_attribute v = sheet_view.attribute("view"); v) {
-    const std::string_view mode = v.value();
-    // "normal" is the schema default; keep the model empty for it so a
-    // default sheet stays byte-clean on re-emit.
-    if (mode != "normal") {
-      view.view_mode.assign(mode);
-    }
+  // Excel opens any other `view` value, "Normal" and "" included, as normal,
+  // which the model keeps empty.
+  const std::string_view mode = attr_str(sheet_view, "view");
+  if (mode == "pageBreakPreview" || mode == "pageLayout") {
+    view.view_mode.assign(mode);
   }
   view.top_left_cell = attr_str(sheet_view, "topLeftCell");
   for (pugi::xml_node sel = sheet_view.child("selection"); sel; sel = sel.next_sibling("selection")) {
@@ -60,9 +58,7 @@ void read_sheet_view_element(const pugi::xml_node& sheet_view, SheetView& view) 
                                              std::string(attr_str(sel, "activeCell")),
                                              std::string(attr_str(sel, "sqref")), attr_u32(sel, "activeCellId", 0U)});
   }
-  for (pugi::xml_node child = sheet_view.child("pivotSelection"); child; child = child.next_sibling("pivotSelection")) {
-    append_raw_xml(view.tail_xml, child);
-  }
+  // Excel keeps no `<pivotSelection>` in either format, so it is not read.
   if (pugi::xml_node ext = sheet_view.child("extLst"); ext) {
     append_raw_xml(view.tail_xml, ext);
   }

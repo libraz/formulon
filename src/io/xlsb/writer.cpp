@@ -56,13 +56,11 @@
 #include "io/xlsb/ptg_writer.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
-#include "io/xlsb/sheet_properties_records.h"
 #include "io/xlsb/sheet_writer.h"
 #include "io/xlsb/slicer_records.h"
 #include "io/xlsb/sst_writer.h"
 #include "io/xlsb/styles_writer.h"
 #include "io/xlsb/table_records.h"
-#include "io/xlsb/view_records.h"
 #include "io/xlsb/workbook_bin_writer.h"
 #include "io/xlsb/workbook_props_records.h"
 #include "miniz.h"
@@ -127,25 +125,11 @@ bool HasPivotPassthroughPart(const Workbook& workbook) {
 std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
   std::uint32_t count = 0U;
   const bool pivots_survive_via_passthrough = HasPivotPassthroughPart(workbook);
-  const std::uint32_t views = workbook_view_count(workbook.book_views_xml());
   for (std::size_t i = 0; i < workbook.sheet_count(); ++i) {
     const Sheet& sheet = workbook.sheet(i);
     ReportDeferred(&count, "auto_filter", unwritten_auto_filter_settings(sheet), i);
     ReportDeferred(&count, "pivot_tables", pivots_survive_via_passthrough ? 0U : sheet.pivot_tables().size(), i);
     ReportDeferred(&count, "print_settings", has_deferred_print_settings(sheet.print_settings()) ? 1U : 0U, i);
-    const SheetFormatDefaults& defaults = sheet.format_defaults();
-    std::size_t invalid_defaults = 0U;
-    if (!IsRepresentableBaseColumnWidth(defaults.base_col_width)) {
-      ++invalid_defaults;
-    }
-    if (defaults.has_default_col_width && !IsRepresentableDefaultColumnWidth(defaults.default_col_width)) {
-      ++invalid_defaults;
-    }
-    if (defaults.has_default_row_height && !IsRepresentableDefaultRowHeight(defaults.default_row_height)) {
-      ++invalid_defaults;
-    }
-    ReportDeferred(&count, "sheet_format_defaults", invalid_defaults, i);
-    ReportDeferred(&count, "sheet_views", unwritten_view_part_count(sheet.view(), views), i);
   }
   // Workbook globals the BrtBookProtection / BrtWbProp / BrtBookView records
   // cannot hold.
@@ -214,7 +198,7 @@ std::string FreshRelId(const std::unordered_set<std::string>& taken) {
 // identified. Both the index and the part are decided here, once, so the
 // worksheet bodies and the package can never disagree about which entry a
 // cell names. A retained part carries a numbering of its own, so no rich
-// error is generated over it.
+// value is generated over it.
 struct MetadataPlan {
   bool generate_part = false;
   bool dynamic_arrays = false;

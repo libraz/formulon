@@ -169,14 +169,19 @@ void EmitColumnInfos(std::vector<std::uint8_t>& dst, const SheetLayout& layout, 
 /// repairs before opening. The defaults match an Excel-created normal
 /// worksheet: visible grid/headings and 100% zoom. The default metrics come
 /// from the sheet's modelled `<sheetFormatPr>` values.
-void EmitWorksheetViewsAndFormatting(std::vector<std::uint8_t>& dst, const SheetView& sheet_view,
-                                     const SheetFormatDefaults& defaults, std::uint32_t workbook_views) {
+Expected<void, Error> EmitWorksheetViewsAndFormatting(std::vector<std::uint8_t>& dst, const SheetView& sheet_view,
+                                                      const SheetFormatDefaults& defaults, std::uint32_t workbook_views,
+                                                      std::size_t sheet_index) {
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginWsViews), ByteSpan{});
-  emit_ws_view(dst, sheet_view, 0U);
-  emit_extra_ws_views(dst, sheet_view, workbook_views);
+  if (auto main = emit_ws_view(dst, sheet_view, 0U, sheet_index); !main) {
+    return std::move(main.error());
+  }
+  if (auto extras = emit_extra_ws_views(dst, sheet_view, workbook_views, sheet_index); !extras) {
+    return std::move(extras.error());
+  }
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtEndWsViews), ByteSpan{});
 
-  emit_ws_fmt_info(dst, defaults);
+  return emit_ws_fmt_info(dst, defaults, sheet_index);
 }
 
 /// Emits BrtWsDim, the `sheet_dimension` box the .xlsx `<dimension>` shares,
@@ -338,6 +343,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginSheet), ByteSpan{});
   emit_ws_prop(body, sheet);
   EmitWorksheetDimensions(body, sheet);
+  const auto own_index =
+      static_cast<std::size_t>(std::find(sheet_names.begin(), sheet_names.end(), sheet.name()) - sheet_names.begin());
   // BrtWsFmtInfo always carries a row height, so an unset default is written
   // as Excel's standard row height.
   SheetFormatDefaults format_defaults = WithDerivedOutlineLevels(sheet.format_defaults(), sheet.layout());
@@ -345,7 +352,10 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     format_defaults.default_row_height = ooxml_defaults::kStandardRowHeightPt;
     format_defaults.has_default_row_height = true;
   }
-  EmitWorksheetViewsAndFormatting(body, sheet.view(), format_defaults, workbook_views);
+  if (auto views = EmitWorksheetViewsAndFormatting(body, sheet.view(), format_defaults, workbook_views, own_index);
+      !views) {
+    return std::move(views.error());
+  }
   EmitColumnInfos(body, sheet.layout(), style_plan);
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginSheetData), ByteSpan{});
 
@@ -643,8 +653,6 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
       return std::move(s.error());
     }
   }
-  const auto own_index =
-      static_cast<std::size_t>(std::find(sheet_names.begin(), sheet_names.end(), sheet.name()) - sheet_names.begin());
   if (auto rules14 = add_x14_rules(tail.after_hyperlinks, sheet.conditional_formats(), frt_ctx, sheet.name(), own_index,
                                    rules14_linked);
       !rules14) {

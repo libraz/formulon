@@ -6,6 +6,7 @@
 set(FORMULON_C_API_TEST_SOURCES
   formulon_c_protected_range_edge_test.cpp
   formulon_c_sparkline_edge_test.cpp
+  formulon_c_api_edge_format_test.cpp
   formulon_c_adhoc_arena_cap_test.cpp
   formulon_c_api_usability_test.cpp
   formulon_c_argument_range_test.cpp

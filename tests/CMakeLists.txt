@@ -201,6 +201,8 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/xlsb_parity_tablestyles_test.cpp
   unit/io/xlsb/xlsb_parity_protected_range_test.cpp
   unit/io/xlsb/xlsb_parity_sparkline_test.cpp
+  unit/io/xlsb/xlsb_parity_format_test.cpp
+  unit/io/xlsb/xlsb_parity_sheet_view_test.cpp
   unit/io/xlsb/ptg_codec_test.cpp
   unit/io/xlsb/ptg_codec_function_classes_test.cpp
   unit/io/xlsb/ptg_codec_scalar_array_test.cpp

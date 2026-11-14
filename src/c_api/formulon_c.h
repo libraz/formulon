@@ -11344,7 +11344,10 @@ FM_API fm_status_t fm_sheet_reset_row_height(fm_workbook_t* wb, size_t sheet_ind
  * @brief Sheet default column / row metrics (`<sheetFormatPr>`).
  *
  * Each stored default is meaningful only when its `has_*` flag is non-zero,
- * since an absent attribute and an explicit `0` are different states.
+ * since an absent attribute and an explicit `0` are different states. A sheet
+ * loaded from a file Excel itself refuses can read a width or base above 255;
+ * `fm_sheet_update_format_defaults` refuses such a value, and an `.xlsb` save of
+ * it fails with `FM_STATUS_IO_FEATURE_NOT_WRITABLE`.
  */
 typedef struct {
   uint32_t struct_size;
@@ -11399,15 +11402,15 @@ typedef struct {
   uint32_t struct_size;
   /** Operation on `default_column_width_chars`: keep leaves it, set writes it, clear removes it. */
   fm_patch_op_t default_column_width_chars_op;
-  /** The default column width in characters to set, finite and non-negative. */
+  /** The default column width in characters to set, 0 to 255. */
   double default_column_width_chars;
   /** Operation on `default_row_height_pt`: keep leaves it, set writes it, clear removes it. */
   fm_patch_op_t default_row_height_pt_op;
-  /** The default row height in points to set, finite and non-negative. */
+  /** The default row height in points to set, 0 to 409.6; Excel reads an `.xlsb` default above 409.5 as 409.5. */
   double default_row_height_pt;
   /** Operation on `base_column_width_chars`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t base_column_width_chars_op;
-  /** The base column width in characters to set, finite and non-negative. */
+  /** The base column width in characters to set, a whole number from 0 to 255. */
   double base_column_width_chars;
   /** Operation on `custom_height`: keep leaves it, set writes it; it cannot be cleared. */
   fm_patch_op_t custom_height_op;
@@ -11426,7 +11429,8 @@ typedef struct {
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `patch` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is outside 0..2, `CLEAR` hits a field other
- *           than the two defaults, or a `SET` number is negative, NaN, or infinite.
+ *           than the two defaults, a `SET` number is negative, NaN, infinite or above its maximum,
+ *           or the base column width is not a whole number.
  *         Nothing is written on failure.
  */
 FM_API fm_status_t fm_sheet_update_format_defaults(fm_workbook_t* wb, size_t sheet_index,

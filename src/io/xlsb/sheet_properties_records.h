@@ -5,7 +5,6 @@
 #ifndef FORMULON_IO_XLSB_SHEET_PROPERTIES_RECORDS_H_
 #define FORMULON_IO_XLSB_SHEET_PROPERTIES_RECORDS_H_
 
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -30,31 +29,18 @@ namespace xlsb {
 /// room for.
 Expected<bool, Error> decode_ws_prop(const XlsbRecord& rec, Sheet& sheet, std::size_t sheet_index);
 
-/// Decodes `BrtWsFmtInfo` into the sheet's default column/row metrics.
-Expected<void, Error> decode_ws_fmt_info(const XlsbRecord& rec, Sheet& sheet, std::size_t sheet_index);
+/// Decodes `BrtWsFmtInfo` into the sheet's default column/row metrics, a
+/// default row height past what Excel opens clamped as Excel does. False,
+/// leaving the defaults untouched, for a truncated record, a reserved flag
+/// bit, or a width, base width or outline level Excel does not open.
+bool decode_ws_fmt_info(const XlsbRecord& rec, Sheet& sheet);
 
-/// Whether a `<sheetFormatPr>` base column width fits BrtWsFmtInfo.
-inline bool IsRepresentableBaseColumnWidth(double value) {
-  return std::isfinite(value) && value >= 0.0 && value <= 255.0 && std::floor(value) == value;
-}
-
-/// Whether a default column width (character units) fits 1/256-unit storage.
-inline bool IsRepresentableDefaultColumnWidth(double value) {
-  constexpr double kMaxDefaultColumnWidth = 65535.0 / 256.0;
-  return std::isfinite(value) && value >= 0.0 && value <= kMaxDefaultColumnWidth;
-}
-
-/// Whether a default row height (points) fits twip storage.
-inline bool IsRepresentableDefaultRowHeight(double value) {
-  constexpr double kMaxDefaultRowHeight = 65535.0 / 20.0;
-  if (!std::isfinite(value) || value < 0.0 || value > kMaxDefaultRowHeight) {
-    return false;
-  }
-  return std::isfinite(std::round(value * 20.0));
-}
-
-/// Emits `BrtWsFmtInfo` for `defaults`.
-void emit_ws_fmt_info(std::vector<std::uint8_t>& dst, const SheetFormatDefaults& defaults);
+/// Emits `BrtWsFmtInfo` for `defaults`, sizes truncated to the record's
+/// units. Fails with `kIoFeatureNotWritable` (context `kind=format_defaults`
+/// or `kind=outline_level`, and `sheet_index`) for a metric or outline level
+/// Excel does not hold.
+Expected<void, Error> emit_ws_fmt_info(std::vector<std::uint8_t>& dst, const SheetFormatDefaults& defaults,
+                                       std::size_t sheet_index);
 
 /// True when BrtWsProp writes every member of the `<sheetPr>` fragment `raw`:
 /// the code name, the tab colour, `<outlinePr>` applyStyles and

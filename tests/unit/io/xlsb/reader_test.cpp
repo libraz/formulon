@@ -16,7 +16,6 @@
 #include "miniz.h"
 #include "reader_test_helpers.h"
 #include "sheet.h"
-#include "utils/error.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -132,44 +131,6 @@ TEST(XlsbReader, DecodesAbsentAndExcelCompatibleWorksheetFormatDefaults) {
   EXPECT_DOUBLE_EQ(zero_defaults.default_col_width, 0.0);
   EXPECT_TRUE(zero_defaults.has_default_row_height);
   EXPECT_DOUBLE_EQ(zero_defaults.default_row_height, 0.0);
-}
-TEST(XlsbReader, RejectsMalformedWorksheetFormatInfoPayloads) {
-  const auto read_payload = [](const std::vector<std::uint8_t>& payload) {
-    std::vector<PartFile> parts;
-    parts.push_back({"[Content_Types].xml", StringToBytes(ContentTypesXml())});
-    parts.push_back({"_rels/.rels", StringToBytes(PackageRelsXml())});
-    parts.push_back({"xl/_rels/workbook.bin.rels", StringToBytes(WorkbookRelsXml())});
-    parts.push_back({"xl/workbook.bin", WorkbookBin()});
-    parts.push_back({"xl/worksheets/sheet1.bin", SheetBinWorksheetFormat(payload)});
-    parts.push_back({"xl/worksheets/sheet2.bin", SheetBinReal(1.0)});
-    return read_xlsb(SpanOf(BuildZip(parts)));
-  };
-
-  const std::vector<std::uint8_t> valid = WorksheetFormatPayload(0xFFFFFFFFU, 8U, 300U, 0U);
-  for (const std::size_t length : {3U, 5U, 7U, 11U}) {
-    std::vector<std::uint8_t> truncated(valid.data(), valid.data() + length);
-    auto result = read_payload(truncated);
-    ASSERT_FALSE(static_cast<bool>(result)) << "payload length " << length << " unexpectedly succeeded";
-    EXPECT_EQ(result.error().code, FormulonErrorCode::kIoXlsbRecordTruncated);
-  }
-
-  auto invalid_dx = read_payload(WorksheetFormatPayload(65536U, 8U, 300U, 0U));
-  ASSERT_FALSE(static_cast<bool>(invalid_dx));
-  EXPECT_EQ(invalid_dx.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
-
-  auto invalid_cch = read_payload(WorksheetFormatPayload(0xFFFFFFFFU, 256U, 300U, 0U));
-  ASSERT_FALSE(static_cast<bool>(invalid_cch));
-  EXPECT_EQ(invalid_cch.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
-
-  auto invalid_outline = read_payload(WorksheetFormatPayload(0xFFFFFFFFU, 8U, 300U, 8U << 16U));
-  ASSERT_FALSE(static_cast<bool>(invalid_outline));
-  EXPECT_EQ(invalid_outline.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
-
-  std::vector<std::uint8_t> trailing = valid;
-  trailing.push_back(0U);
-  auto trailing_result = read_payload(trailing);
-  ASSERT_FALSE(static_cast<bool>(trailing_result));
-  EXPECT_EQ(trailing_result.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
 }
 TEST(XlsbReader, RowStylePresenceUsesFGhostDirtyFlag) {
   std::vector<PartFile> parts;

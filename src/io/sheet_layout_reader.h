@@ -47,6 +47,14 @@ namespace io {
 Expected<void, Error> read_sheet_view_and_layout(const pugi::xml_document& sheet_doc, std::size_t sheet_index,
                                                  Workbook& workbook);
 
+/// The default row height Excel holds for an xlsx `defaultRowHeight` of `pt`:
+/// whole twips, truncated, at most `kMaxDefaultRowHeightPt`.
+double xlsx_default_row_height(double pt);
+
+/// Whether `<sheetFormatPr>` hides rows by default: `zeroHeight`, or a custom
+/// default height of zero, which Excel saves as `zeroHeight`.
+bool sheet_format_hides_rows(const pugi::xml_node& sheet_format_pr);
+
 }  // namespace io
 }  // namespace formulon
 

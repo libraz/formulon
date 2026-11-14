@@ -15,8 +15,8 @@ namespace formulon {
 namespace io {
 
 /// Folds a `<sheetView>` element's attributes, `<pane>`, `<selection>`s and
-/// raw `<pivotSelection>` / `<extLst>` children into `view`. Elements after
-/// it are not read.
+/// raw `<extLst>` into `view`, an unknown `view` mode read as normal.
+/// Elements after it are not read.
 void read_sheet_view_element(const pugi::xml_node& sheet_view, SheetView& view);
 
 /// The `<sheetView>` element of `view` for workbook window

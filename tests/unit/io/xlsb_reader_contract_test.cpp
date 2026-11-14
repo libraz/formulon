@@ -754,9 +754,10 @@ TEST(XlsbSheetView, ABadSplitIsSkippedAndAnEmptyFreezeIsNotAFrozenSplit) {
   }
 }
 
-TEST(XlsbSheetView, PaneAndSelectionOutsideTheMainViewAreNotFoldedIntoIt) {
-  // A second window's view, and pane / selection records in the tail (as a
-  // custom sheet view carries them), leave the main view alone.
+TEST(XlsbSheetView, ALaterMainWindowViewReplacesTheFirstAndTailPanesStayOut) {
+  // A second view of window 0 replaces the first, as Excel keeps the later of
+  // two; pane / selection records in the tail (as a custom sheet view carries
+  // them) are not folded into it.
   const std::vector<std::uint8_t> archive = BuildPackage(
       SheetBinFramed(WsPropPayload(kDefaultWsPropFlags, 0U, 0x40U, 0U, ""),
                      {{137, WsViewPayload(3U, 2U)},
@@ -768,16 +769,15 @@ TEST(XlsbSheetView, PaneAndSelectionOutsideTheMainViewAreNotFoldedIntoIt) {
   auto result = io::xlsb::read_xlsb(test::span_of(archive));
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
   const SheetView& view = result.value().workbook.sheet(0).view();
-  EXPECT_EQ(view.freeze_rows, 0U);
-  EXPECT_EQ(view.freeze_cols, 0U);
-  EXPECT_EQ(view.top_left_cell, "");
+  EXPECT_EQ(view.freeze_rows, 2U);
+  EXPECT_EQ(view.freeze_cols, 1U);
+  EXPECT_EQ(view.top_left_cell, "C4");
   ASSERT_EQ(view.selections.size(), 1U);
-  EXPECT_EQ(view.selections[0].active_cell, "B2");
-  // The second view becomes an extra `<sheetView>`; the tail's two records are retained.
+  EXPECT_EQ(view.selections[0].active_cell, "F6");
+  EXPECT_TRUE(view.extra_views_xml.empty()) << view.extra_views_xml;
+  // The tail's two records are retained.
   EXPECT_EQ(result.value().dropped_record_count, 0U);
-  EXPECT_NE(view.extra_views_xml.find("topLeftCell=\"C4\" workbookViewId=\"0\""), std::string::npos)
-      << view.extra_views_xml;
-  EXPECT_NE(view.extra_views_xml.find("<pane "), std::string::npos) << view.extra_views_xml;
+  EXPECT_EQ(result.value().skipped_feature_count, 0U);
   EXPECT_FALSE(result.value().workbook.sheet(0).xlsb_tail().empty());
 }
 

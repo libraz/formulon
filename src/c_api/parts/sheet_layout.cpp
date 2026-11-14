@@ -26,6 +26,8 @@
 #include "workbook.h"
 
 using formulon::drop_stateless_columns;
+using formulon::kMaxColumnWidthChars;
+using formulon::kMaxOutlineLevel;
 using formulon::overlay_column_span;
 using formulon::c_api::parts::check_cell_xf_index;
 using formulon::c_api::parts::check_column_span;
@@ -40,7 +42,6 @@ using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::copy_owned_bytes;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::invalid_argument;
-using formulon::c_api::parts::kMaxOutlineLevel;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::patch_op_ok;
 using formulon::c_api::parts::patch_op_ok_without_clear;
@@ -48,9 +49,7 @@ using formulon::c_api::parts::set_last_error;
 
 namespace {
 
-// Excel's widest column, in stored character units, and its tallest row, in points.
-// @limit: excel
-constexpr double kMaxColumnWidthChars = 255.0;
+// Excel's tallest row, in points.
 // @limit: excel
 constexpr double kMaxRowHeightPt = 409.0;
 
@@ -655,19 +654,28 @@ extern "C" fm_status_t fm_sheet_update_format_defaults(fm_workbook_t* wb, size_t
   struct NumberField {
     fm_patch_op_t op;
     double value;
+    double max;
     const char* field;
   };
   const NumberField numbers[] = {
-      {patch->default_column_width_chars_op, patch->default_column_width_chars, "default_column_width_chars"},
-      {patch->default_row_height_pt_op, patch->default_row_height_pt, "default_row_height_pt"},
-      {patch->base_column_width_chars_op, patch->base_column_width_chars, "base_column_width_chars"},
+      {patch->default_column_width_chars_op, patch->default_column_width_chars, kMaxColumnWidthChars,
+       "default_column_width_chars"},
+      {patch->default_row_height_pt_op, patch->default_row_height_pt, formulon::kMaxDefaultRowHeightPt,
+       "default_row_height_pt"},
+      {patch->base_column_width_chars_op, patch->base_column_width_chars, kMaxColumnWidthChars,
+       "base_column_width_chars"},
   };
   for (const NumberField& number : numbers) {
     if (number.op == FM_PATCH_OP_SET) {
-      if (auto rc = check_finite_non_negative(number.value, number.field); rc != 0) {
+      if (auto rc = check_bounded(number.value, number.max, number.field); rc != 0) {
         return rc;
       }
     }
+  }
+  if (patch->base_column_width_chars_op == FM_PATCH_OP_SET &&
+      !formulon::IsValidBaseColWidth(patch->base_column_width_chars)) {
+    return invalid_argument("base_column_width_chars must be a whole number of characters",
+                            "base_column_width_chars=" + formulon::fixed_string(patch->base_column_width_chars, 6));
   }
   formulon::SheetFormatDefaults& target = wb->workbook().sheet(sheet_index).mutable_format_defaults();
   if (patch->default_column_width_chars_op != FM_PATCH_OP_KEEP) {

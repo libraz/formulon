@@ -20,6 +20,7 @@
 #include "utils/a1_ref.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/status_macros.h"
 
 namespace formulon {
 namespace io {
@@ -98,25 +99,14 @@ std::uint16_t zoom_or_absent(std::uint32_t zoom) {
   return static_cast<std::uint16_t>(zoom >= 10U && zoom <= 400U ? zoom : 0U);
 }
 
-/// Calls `fn(view, workbook_view, written)` for each `<sheetView>` of
-/// `extra_views_xml`, `written` when its window is one of `workbook_views`;
-/// false when the fragment does not parse.
-template <typename Fn>
-bool for_each_extra_view(const std::string& extra_views_xml, std::uint32_t workbook_views, Fn&& fn) {
-  if (extra_views_xml.empty()) {
-    return true;
-  }
-  pugi::xml_document doc;
-  if (!doc.load_buffer(extra_views_xml.data(), extra_views_xml.size(), pugi::parse_default | pugi::parse_fragment)) {
-    return false;
-  }
-  for (pugi::xml_node node = doc.child("sheetView"); node; node = node.next_sibling("sheetView")) {
-    SheetView view;
-    read_sheet_view_element(node, view);
-    const std::uint32_t workbook_view = attr_u32(node, "workbookViewId", 0U);
-    fn(view, workbook_view, workbook_view != 0U && workbook_view < workbook_views);
-  }
-  return true;
+Error ViewNotWritable(std::size_t sheet_index) {
+  return not_writable("sheet_view", sheet_index);
+}
+
+/// Parses `extra_views_xml` into `doc`; false when the fragment does not parse.
+bool parse_extra_views(const std::string& extra_views_xml, pugi::xml_document& doc) {
+  return extra_views_xml.empty() || static_cast<bool>(doc.load_buffer(extra_views_xml.data(), extra_views_xml.size(),
+                                                                      pugi::parse_default | pugi::parse_fragment));
 }
 
 }  // namespace
@@ -231,7 +221,7 @@ void emit_pane_and_selections(std::vector<std::uint8_t>& dst, const SheetView& v
   }
 }
 
-Expected<void, Error> decode_ws_view(const XlsbRecord& rec, SheetView& view, std::uint32_t* workbook_view) {
+Expected<bool, Error> decode_ws_view(const XlsbRecord& rec, SheetView& view, std::uint32_t* workbook_view) {
   // BrtBeginWsView: flags u16, xlView u32, rwTop u32, colLeft u32, icvHdr u8,
   // two reserved fields, wScale u16, then wScaleNormal / wScaleSLV / wScalePLV
   // u16 and iWbkView u32.
@@ -265,7 +255,8 @@ Expected<void, Error> decode_ws_view(const XlsbRecord& rec, SheetView& view, std
   view.default_grid_color = (flags & kDefaultHdr) != 0U;
   view.show_white_space = (flags & kWhitespaceHidden) == 0U;
   view.color_id = color_or.value();
-  view.view_mode = mode_or.value() < kViewModes.size() ? std::string(kViewModes[mode_or.value()]) : std::string();
+  const bool known_mode = mode_or.value() < kViewModes.size();
+  view.view_mode = known_mode ? std::string(kViewModes[mode_or.value()]) : std::string();
   if (zoom_or.value() >= 10U && zoom_or.value() <= 400U) {
     view.zoom_scale = zoom_or.value();
   }
@@ -280,10 +271,15 @@ Expected<void, Error> decode_ws_view(const XlsbRecord& rec, SheetView& view, std
   }
   auto workbook_view_or = read_u32(p);
   *workbook_view = workbook_view_or ? workbook_view_or.value() : 0U;
-  return Expected<void, Error>::Ok();
+  return known_mode;
 }
 
-void emit_ws_view(std::vector<std::uint8_t>& dst, const SheetView& view, std::uint32_t workbook_view) {
+Expected<void, Error> emit_ws_view(std::vector<std::uint8_t>& dst, const SheetView& view, std::uint32_t workbook_view,
+                                   std::size_t sheet_index) {
+  const std::uint32_t mode = view_mode_index(view.view_mode);
+  if (mode >= kViewModes.size()) {
+    return ViewNotWritable(sheet_index);
+  }
   std::vector<std::uint8_t> payload;
   std::uint16_t flags = 0U;
   const std::pair<bool, std::uint16_t> bits[] = {
@@ -305,8 +301,7 @@ void emit_ws_view(std::vector<std::uint8_t>& dst, const SheetView& view, std::ui
     }
   }
   emit_u16(payload, flags);
-  const std::uint32_t mode = view_mode_index(view.view_mode);
-  emit_u32(payload, mode < kViewModes.size() ? mode : 0U);  // xlView
+  emit_u32(payload, mode);  // xlView
   std::uint32_t top_row = 0U;
   std::uint32_t left_col = 0U;
   (void)a1::parse_a1_ref(view.top_left_cell, &top_row, &left_col);
@@ -323,30 +318,63 @@ void emit_ws_view(std::vector<std::uint8_t>& dst, const SheetView& view, std::ui
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginWsView), payload);
   emit_pane_and_selections(dst, view);
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtEndWsView), ByteSpan{});
+  return Expected<void, Error>::Ok();
 }
 
-void emit_extra_ws_views(std::vector<std::uint8_t>& dst, const SheetView& view, std::uint32_t workbook_views) {
-  (void)for_each_extra_view(view.extra_views_xml, workbook_views,
-                            [&](const SheetView& extra, std::uint32_t workbook_view, bool written) {
-                              if (written) {
-                                emit_ws_view(dst, extra, workbook_view);
-                              }
-                            });
+Expected<void, Error> emit_extra_ws_views(std::vector<std::uint8_t>& dst, const SheetView& view,
+                                          std::uint32_t workbook_views, std::size_t sheet_index) {
+  pugi::xml_document doc;
+  if (!parse_extra_views(view.extra_views_xml, doc)) {
+    return ViewNotWritable(sheet_index);
+  }
+  for (pugi::xml_node node = doc.child("sheetView"); node; node = node.next_sibling("sheetView")) {
+    // Window 0 is the main view's; Excel refuses a view of a window the workbook lacks.
+    const std::uint32_t workbook_view = attr_u32(node, "workbookViewId", 0U);
+    if (workbook_view == 0U || workbook_view >= workbook_views) {
+      return ViewNotWritable(sheet_index);
+    }
+    SheetView extra;
+    read_sheet_view_element(node, extra);
+    RETURN_IF_ERROR(emit_ws_view(dst, extra, workbook_view, sheet_index));
+  }
+  return Expected<void, Error>::Ok();
 }
 
-void append_extra_view(SheetView& main, const SheetView& extra, std::uint32_t workbook_view) {
-  main.extra_views_xml.append(build_sheet_view_element_xml(extra, workbook_view));
-}
-
-std::size_t unwritten_view_part_count(const SheetView& view, std::uint32_t workbook_views) {
-  const auto own_parts = [](const SheetView& v) -> std::size_t {
-    return (v.tail_xml.empty() ? 0U : 1U) + (view_mode_index(v.view_mode) < kViewModes.size() ? 0U : 1U);
-  };
-  std::size_t count = own_parts(view);
-  const bool parsed = for_each_extra_view(
-      view.extra_views_xml, workbook_views,
-      [&](const SheetView& extra, std::uint32_t, bool written) { count += written ? own_parts(extra) : 1U; });
-  return parsed ? count : count + 1U;
+bool append_extra_view(SheetView& main, const SheetView& extra, std::uint32_t workbook_view,
+                       std::uint32_t workbook_views) {
+  if (workbook_view >= workbook_views) {
+    return false;
+  }
+  if (workbook_view == 0U) {
+    // A later view of the main window replaces it; the sheet-level state stays.
+    SheetView replaced = extra;
+    replaced.tab_hidden = main.tab_hidden;
+    replaced.tab_very_hidden = main.tab_very_hidden;
+    replaced.tail_xml = std::move(main.tail_xml);
+    replaced.extra_views_xml = std::move(main.extra_views_xml);
+    main = std::move(replaced);
+    return true;
+  }
+  const std::string element = build_sheet_view_element_xml(extra, workbook_view);
+  pugi::xml_document doc;
+  if (!parse_extra_views(main.extra_views_xml, doc)) {
+    return false;
+  }
+  std::string rebuilt;
+  bool replaced = false;
+  for (pugi::xml_node node = doc.child("sheetView"); node; node = node.next_sibling("sheetView")) {
+    if (attr_u32(node, "workbookViewId", 0U) == workbook_view) {
+      rebuilt.append(element);
+      replaced = true;
+    } else {
+      append_raw_xml(rebuilt, node);
+    }
+  }
+  if (!replaced) {
+    rebuilt.append(element);
+  }
+  main.extra_views_xml = std::move(rebuilt);
+  return true;
 }
 
 }  // namespace xlsb

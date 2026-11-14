@@ -5,12 +5,14 @@
 
 #include "io/sheet_layout_reader.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "io/sheet_view_xml.h"
 #include "io/xml_utils.h"
@@ -35,16 +37,29 @@ namespace io {
 
 namespace {
 
-/// Parses the first `<sheetView>` into `view` and keeps the later ones (extra
-/// workbook windows) verbatim.
+/// Parses the first window's `<sheetView>` into `view` and keeps the other
+/// windows' verbatim. Of two views naming one window Excel keeps the later,
+/// at the earlier one's place.
 void ApplySheetView(const pugi::xml_node& worksheet, SheetView& view) {
-  pugi::xml_node sheet_view = worksheet.child("sheetViews").child("sheetView");
-  if (!sheet_view) {
+  std::vector<pugi::xml_node> windows;
+  for (pugi::xml_node node = worksheet.child("sheetViews").child("sheetView"); node;
+       node = node.next_sibling("sheetView")) {
+    const std::uint32_t id = attr_u32(node, "workbookViewId", 0U);
+    const auto same = std::find_if(windows.begin(), windows.end(), [&](const pugi::xml_node& kept) {
+      return attr_u32(kept, "workbookViewId", 0U) == id;
+    });
+    if (same == windows.end()) {
+      windows.push_back(node);
+    } else {
+      *same = node;
+    }
+  }
+  if (windows.empty()) {
     return;
   }
-  read_sheet_view_element(sheet_view, view);
-  for (pugi::xml_node extra = sheet_view.next_sibling("sheetView"); extra; extra = extra.next_sibling("sheetView")) {
-    append_raw_xml(view.extra_views_xml, extra);
+  read_sheet_view_element(windows.front(), view);
+  for (std::size_t i = 1; i < windows.size(); ++i) {
+    append_raw_xml(view.extra_views_xml, windows[i]);
   }
 }
 
@@ -90,7 +105,8 @@ void ApplySheetPrTabHidden(const pugi::xml_node& worksheet, SheetView& view) {
 /// A measurement outside the shared non-negative-double lexical space is
 /// treated as absent, flag included: these three sizes are what the
 /// paginator falls back to for every un-overridden track, so admitting an
-/// infinity or a NaN here changes the page count of the whole sheet.
+/// infinity or a NaN here changes the page count of the whole sheet. A size
+/// Excel refuses to open is kept as read.
 void ApplySheetFormatDefaults(const pugi::xml_node& worksheet, SheetFormatDefaults& defaults) {
   pugi::xml_node fmt = worksheet.child("sheetFormatPr");
   if (!fmt) {
@@ -102,14 +118,15 @@ void ApplySheetFormatDefaults(const pugi::xml_node& worksheet, SheetFormatDefaul
     defaults.has_default_col_width = true;
   }
   if (parse_xsd_nonneg_double(attr_str(fmt, "defaultRowHeight"), &measurement)) {
-    defaults.default_row_height = measurement;
+    defaults.default_row_height = xlsx_default_row_height(measurement);
     defaults.has_default_row_height = true;
   }
   if (parse_xsd_nonneg_double(attr_str(fmt, "baseColWidth"), &measurement)) {
-    defaults.base_col_width = measurement;
+    // Excel reads a fractional base width as its whole part.
+    defaults.base_col_width = std::floor(measurement);
   }
   defaults.custom_height = read_xsd_bool(fmt, "customHeight", false);
-  defaults.zero_height = read_xsd_bool(fmt, "zeroHeight", false);
+  defaults.zero_height = sheet_format_hides_rows(fmt);
   defaults.thick_top = read_xsd_bool(fmt, "thickTop", false);
   defaults.thick_bottom = read_xsd_bool(fmt, "thickBottom", false);
   defaults.outline_level_row = parse_outline_level(fmt.attribute("outlineLevelRow").value());
@@ -234,6 +251,21 @@ void ApplyRowOverrides(const pugi::xml_node& worksheet, SheetLayout& layout, boo
 }
 
 }  // namespace
+
+double xlsx_default_row_height(double pt) {
+  constexpr double kTwipsPerPoint = 20.0;
+  return std::floor(std::min(pt, kMaxDefaultRowHeightPt) * kTwipsPerPoint) / kTwipsPerPoint;
+}
+
+bool sheet_format_hides_rows(const pugi::xml_node& sheet_format_pr) {
+  if (read_xsd_bool(sheet_format_pr, "zeroHeight", false)) {
+    return true;
+  }
+  double height = 0.0;
+  return read_xsd_bool(sheet_format_pr, "customHeight", false) &&
+         parse_xsd_nonneg_double(attr_str(sheet_format_pr, "defaultRowHeight"), &height) &&
+         xlsx_default_row_height(height) == 0.0;
+}
 
 Expected<void, Error> read_sheet_view_and_layout(const pugi::xml_document& sheet_doc, std::size_t sheet_index,
                                                  Workbook& workbook) {

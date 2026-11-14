@@ -4004,8 +4004,15 @@ class Sheet(_NoCopy):
         ``default_column_width_chars`` / ``default_row_height_pt`` given as
         ``None`` clear the stored value; the other arguments cannot be cleared.
 
+        ``default_column_width_chars`` takes 0 to 255, ``default_row_height_pt`` 0 to 409.6 (Excel
+        reads an ``.xlsb`` default above 409.5 as 409.5) and ``base_column_width_chars`` a whole number
+        from 0 to 255. A sheet loaded from a file Excel itself refuses can read a width or base above
+        255; this method refuses such a value.
+
         Raises:
           TypeError: when ``base_column_width_chars`` is ``None`` or a flag is not a ``bool``.
+          InvalidArgumentError: when a number is outside its range or the base column width is
+            fractional; nothing is written.
         """
         if base_column_width_chars is None:
             raise TypeError(_argument_message("base_column_width_chars", "must not be None"))

@@ -2049,16 +2049,18 @@ export interface WidthModel {
 }
 
 /** Sheet default column / row metrics (`<sheetFormatPr>`). `defaultColumnWidthChars` and `defaultRowHeightPt`
- *  are `null` when the sheet stores none; on update, `null` clears the stored value and an omitted key keeps it. */
+ *  are `null` when the sheet stores none; on update, `null` clears the stored value and an omitted key keeps it.
+ *  The ranges below are what an update accepts; a sheet loaded from a file Excel itself refuses can read a width or
+ *  base above 255, and an `.xlsb` save of it fails with `StatusCode.IoFeatureNotWritable`. */
 export interface SheetFormatDefaultsInput {
   /** The stored default column width in characters, column padding included, 0 to 255; `null` when the sheet stores
    *  none (on update, `null` clears it). */
   readonly defaultColumnWidthChars: number | null;
-  /** The stored default row height in points, 0 to 409; `null` when the sheet stores none (on update, `null` clears
-   *  it). */
+  /** The stored default row height in points, 0 to 409.6; `null` when the sheet stores none (on update, `null` clears
+   *  it). Excel reads an `.xlsb` default above 409.5 as 409.5. */
   readonly defaultRowHeightPt: number | null;
-  /** The base column width in characters, from which Excel derives the default column width when none is stored; the
-   *  OOXML default is 8. */
+  /** The base column width in characters, a whole number from 0 to 255, from which Excel derives the default column
+   *  width when none is stored; the OOXML default is 8. */
   readonly baseColumnWidthChars: number;
   /** `true` when `defaultRowHeightPt` is an explicit override that stays as written, rather than a cached figure Excel
    *  recomputes from the Normal font; an omitted key on update keeps the stored flag. */
@@ -7987,7 +7989,8 @@ export interface Sheet {
   /** Reads the sheet's default column / row metrics. */
   getFormatDefaults(): SheetFormatDefaults;
   /** Updates the sheet's default column / row metrics; an omitted key keeps its value and `null` clears
-   *  `defaultColumnWidthChars` / `defaultRowHeightPt`. */
+   *  `defaultColumnWidthChars` / `defaultRowHeightPt`. A value outside its range or a fractional base column width
+   *  fails with `StatusCode.InvalidArgument` and writes nothing. */
   updateFormatDefaults(patch: SheetFormatDefaultsPatch): void;
 
   /** Rectangle covering the inclusive cell range, in points from the top-left of A1.

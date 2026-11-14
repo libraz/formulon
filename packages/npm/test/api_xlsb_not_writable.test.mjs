@@ -202,3 +202,63 @@ test('a sparkline whose source is #REF! reads back without one and the read-back
     assert.equal(ws.listSparklineGroups().length, 3);
   });
 });
+
+for (const [kind, parts] of [
+  ['format_defaults', ['format', 'base_256_src.xlsx']],
+  ['format_defaults', ['format', 'width_256_src.xlsx']],
+  ['outline_level', ['format', 'outline_row_8_src.xlsx']],
+  ['sheet_view', ['views', 'bad_window_id_src.xlsx']],
+]) {
+  test(`an xlsb save of ${parts.join('/')} fails with kind=${kind} and the xlsx save succeeds`, async () => {
+    const f = await getModule();
+    const wb = f.Workbook.load(fixture(...parts));
+    try {
+      assert.throws(
+        () => wb.save(f.WorkbookFormat.Xlsb),
+        (e) => {
+          assert.ok(isFormulonError(e, f.StatusCode.IoFeatureNotWritable), String(e));
+          assert.ok(e.context.includes(`kind=${kind}`), e.context);
+          assert.match(e.context, /sheet_index=0/);
+          return true;
+        },
+      );
+      assert.ok(wb.save(f.WorkbookFormat.Xlsx).length > 0);
+    } finally {
+      wb.dispose();
+    }
+  });
+}
+
+test('format defaults outside Excel limits are InvalidArgument and write nothing', async () => {
+  await withWorkbook((wb, f) => {
+    const ws = wb.sheet(0);
+    ws.updateFormatDefaults({ defaultColumnWidthChars: 10, defaultRowHeightPt: 20, baseColumnWidthChars: 9 });
+    const before = ws.getFormatDefaults();
+    for (const patch of [
+      { defaultColumnWidthChars: 255.5 },
+      { defaultColumnWidthChars: 256 },
+      { defaultRowHeightPt: 409.7 },
+      { baseColumnWidthChars: 8.5 },
+      { baseColumnWidthChars: 256 },
+    ]) {
+      assert.throws(() => ws.updateFormatDefaults(patch), invalidArgument(f), JSON.stringify(patch));
+      const after = ws.getFormatDefaults();
+      assert.equal(after.defaultColumnWidthChars, before.defaultColumnWidthChars);
+      assert.equal(after.defaultRowHeightPt, before.defaultRowHeightPt);
+      assert.equal(after.baseColumnWidthChars, before.baseColumnWidthChars);
+    }
+  });
+});
+
+test('format defaults at Excel limits are accepted', async () => {
+  await withWorkbook((wb) => {
+    const ws = wb.sheet(0);
+    ws.updateFormatDefaults({ defaultColumnWidthChars: 255, defaultRowHeightPt: 409.6, baseColumnWidthChars: 255 });
+    const d = ws.getFormatDefaults();
+    assert.equal(d.defaultColumnWidthChars, 255);
+    assert.equal(d.defaultRowHeightPt, 409.6);
+    assert.equal(d.baseColumnWidthChars, 255);
+    ws.updateFormatDefaults({ baseColumnWidthChars: 0 });
+    assert.equal(ws.getFormatDefaults().baseColumnWidthChars, 0);
+  });
+});

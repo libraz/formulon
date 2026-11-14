@@ -91,14 +91,15 @@ struct SheetView {
   std::uint32_t zoom_scale_normal = 0;
   std::uint32_t zoom_scale_sheet_layout_view = 0;
   std::uint32_t zoom_scale_page_layout_view = 0;
-  /// Raw `<pivotSelection>` and `<extLst>` children of `<sheetView>`, kept
-  /// verbatim and re-emitted after the selections.
+  /// Raw `<extLst>` child of `<sheetView>`, kept verbatim and re-emitted
+  /// after the selections. XLSB has no record for it and leaves it out, as
+  /// Excel does.
   std::string tail_xml;
   /// Raw `<sheetView>` elements after the first (one per extra workbook
   /// window), kept verbatim and re-emitted after the modelled view.
   std::string extra_views_xml;
   /// `view` mode: empty (== "normal"), "pageBreakPreview", or
-  /// "pageLayout". Stored verbatim so unknown future values round-trip.
+  /// "pageLayout".
   std::string view_mode;
   /// `<sheetView topLeftCell>`: the scroll origin of the top-left pane. Empty
   /// is the default `A1`.

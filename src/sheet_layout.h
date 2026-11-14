@@ -8,6 +8,7 @@
 #define FORMULON_SHEET_LAYOUT_H_
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -144,6 +145,34 @@ struct SheetFormatDefaults {
   std::uint8_t outline_level_col = 0;   ///< `outlineLevelCol`: highest column outline level in use.
 };
 
+/// Deepest row / column outline level; Excel refuses a file with level 8.
+// @limit: excel
+inline constexpr std::uint8_t kMaxOutlineLevel = 7U;
+
+/// Widest column, base column width and default column width, in characters; Excel refuses 256.
+// @limit: excel
+inline constexpr double kMaxColumnWidthChars = 255.0;
+
+/// Tallest default row height, in points: 8192 twips, what Excel clamps a larger xlsx `defaultRowHeight` to. It sits
+/// above the 409-point row-height cap because a sheet default is held in twips, not entered as a row height.
+// @limit: excel
+inline constexpr double kMaxDefaultRowHeightPt = 409.6;
+
+/// Whether `chars` is a base column width Excel holds: a whole number of characters up to the maximum.
+inline bool IsValidBaseColWidth(double chars) {
+  return std::isfinite(chars) && chars >= 0.0 && chars <= kMaxColumnWidthChars && std::floor(chars) == chars;
+}
+
+/// Whether `chars` is a default column width Excel holds.
+inline bool IsValidDefaultColWidth(double chars) {
+  return std::isfinite(chars) && chars >= 0.0 && chars <= kMaxColumnWidthChars;
+}
+
+/// Whether `pt` is a default row height Excel holds.
+inline bool IsValidDefaultRowHeight(double pt) {
+  return std::isfinite(pt) && pt >= 0.0 && pt <= kMaxDefaultRowHeightPt;
+}
+
 /// Returns `defaults` with `outline_level_row` / `outline_level_col` set to the
 /// deepest level any row or column override carries, which is what the
 /// outline gutter is sized from.
@@ -151,10 +180,10 @@ inline SheetFormatDefaults WithDerivedOutlineLevels(SheetFormatDefaults defaults
   defaults.outline_level_row = 0;
   defaults.outline_level_col = 0;
   for (const RowLayout& row : layout.row_overrides) {
-    defaults.outline_level_row = std::max(defaults.outline_level_row, std::min<std::uint8_t>(row.outline_level, 7U));
+    defaults.outline_level_row = std::max(defaults.outline_level_row, row.outline_level);
   }
   for (const ColumnLayout& col : layout.columns) {
-    defaults.outline_level_col = std::max(defaults.outline_level_col, std::min<std::uint8_t>(col.outline_level, 7U));
+    defaults.outline_level_col = std::max(defaults.outline_level_col, col.outline_level);
   }
   return defaults;
 }

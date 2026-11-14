@@ -68,6 +68,8 @@ std::size_t CountOf(const std::vector<std::uint16_t>& types, std::uint16_t type)
   return static_cast<std::size_t>(std::count(types.begin(), types.end(), type));
 }
 
+constexpr const char* kTwoWindows = "<bookViews><workbookView/><workbookView/></bookViews>";
+
 std::vector<std::uint8_t> EmitSheetBody(const Sheet& sheet) {
   SstBuilder sst;
   auto body = emit_sheet(sheet, sst, {sheet.name()}, SheetRangeTable{}, NameTable{}, hyperlink_relationship_ids(sheet));
@@ -123,15 +125,21 @@ TEST(XlsbSheetFidelity, ViewModeAndActiveRangeIndexSurvive) {
   EXPECT_EQ(RoundTrip(wb).sheet(0).view().view_mode, "pageLayout");
 }
 
-TEST(XlsbSheetFidelity, UnknownViewModeAndViewExtensionsAreDeferred) {
+TEST(XlsbSheetFidelity, ViewExtensionsAreLeftOutAndAnUnknownViewModeRefusesTheSave) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("View");
   const std::uint32_t baseline = DeferredCount(wb);
   SheetView& view = wb.sheet(0).mutable_view();
-  view.view_mode = "futureMode";
+  // Excel writes no record for a view extLst.
   view.tail_xml = "<extLst/>";
-  EXPECT_EQ(DeferredCount(wb), baseline + 2U);
-  EXPECT_EQ(RoundTrip(wb).sheet(0).view().view_mode, "");
+  EXPECT_EQ(DeferredCount(wb), baseline);
+  EXPECT_TRUE(RoundTrip(wb).sheet(0).view().tail_xml.empty());
+
+  view.view_mode = "futureMode";
+  auto written = write_xlsb_with_result(wb);
+  ASSERT_FALSE(static_cast<bool>(written));
+  EXPECT_EQ(written.error().code, FormulonErrorCode::kIoFeatureNotWritable);
+  EXPECT_EQ(written.error().context, "context=write_xlsb kind=sheet_view sheet_index=0");
 }
 
 TEST(XlsbSheetFidelity, ExtraWindowViewDecodesIntoExtraViewsXml) {
@@ -143,13 +151,15 @@ TEST(XlsbSheetFidelity, ExtraWindowViewDecodesIntoExtraViewsXml) {
   extra.set_freeze(2U, 0U);
   extra.selections.push_back(SheetSelection{"bottomLeft", "A5", "A5", 0U});
   std::vector<std::uint8_t> extra_records;
-  emit_ws_view(extra_records, extra, 1U);
+  ASSERT_TRUE(static_cast<bool>(emit_ws_view(extra_records, extra, 1U, 0U)));
   const std::vector<std::uint8_t> body = AfterMainView(EmitSheetBody(wb.sheet(0)), extra_records);
 
   Workbook loaded = Workbook::create_empty();
   loaded.add_sheet("Windows");
+  loaded.set_book_views_xml(kTwoWindows);
   const SheetDecodeState state = DecodeBody(body, loaded);
   EXPECT_EQ(state.dropped_records, 0U);
+  EXPECT_EQ(state.skipped_features, 0U);
   const SheetView& main = loaded.sheet(0).view();
   EXPECT_EQ(main.zoom_scale, SheetView::kDefaultZoomScale);
   EXPECT_FALSE(main.is_frozen());
@@ -169,22 +179,26 @@ TEST(XlsbSheetFidelity, ExtraWindowViewDecodesIntoExtraViewsXml) {
   EXPECT_EQ(reread.selections[0].pane, "bottomLeft");
   EXPECT_EQ(reread.selections[0].active_cell, "A5");
 
-  // The workbook part writes one window, so the second sheet view has none
-  // to attach to: it is not written and is reported.
-  const std::vector<std::uint16_t> types = RecordTypes(EmitSheetBody(loaded.sheet(0)));
-  EXPECT_EQ(CountOf(types, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginWsView)), 1U);
-  EXPECT_EQ(unwritten_view_part_count(main), 1U);
+  // With one window in the workbook part the same view has none to attach to and is skipped.
+  Workbook one_window = Workbook::create_empty();
+  one_window.add_sheet("Windows");
+  const SheetDecodeState skipped = DecodeBody(body, one_window);
+  EXPECT_EQ(skipped.skipped_features, 1U);
+  EXPECT_TRUE(one_window.sheet(0).view().extra_views_xml.empty());
 }
 
-TEST(XlsbSheetFidelity, ExtraWindowViewFromXlsxIsReportedWhenNotWritten) {
+TEST(XlsbSheetFidelity, ExtraWindowViewFromXlsxWithoutItsWindowRefusesTheSave) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Windows");
-  const std::uint32_t baseline = DeferredCount(wb);
   wb.sheet(0).mutable_view().extra_views_xml = "<sheetView workbookViewId=\"1\" zoomScale=\"80\"/>";
-  std::uint32_t deferred = 0;
-  const Workbook back = RoundTrip(wb, &deferred);
-  EXPECT_EQ(deferred, baseline + 1U);
-  EXPECT_TRUE(back.sheet(0).view().extra_views_xml.empty());
+  auto written = write_xlsb_with_result(wb);
+  ASSERT_FALSE(static_cast<bool>(written));
+  EXPECT_EQ(written.error().code, FormulonErrorCode::kIoFeatureNotWritable);
+  EXPECT_EQ(written.error().context, "context=write_xlsb kind=sheet_view sheet_index=0");
+
+  wb.set_book_views_xml(kTwoWindows);
+  const Workbook back = RoundTrip(wb);
+  EXPECT_NE(back.sheet(0).view().extra_views_xml.find("zoomScale=\"80\""), std::string::npos);
 }
 
 std::vector<ProtectedRange> SampleRanges() {
