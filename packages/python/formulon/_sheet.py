@@ -2082,7 +2082,9 @@ class Sheet(_NoCopy):
 
         This applies under manual or automatic-except-tables calculation; under automatic calculation it is always
         ``False``. A cell without a formula, an empty cell and a spill member read ``False``; query the spill's
-        anchor. The read never recalculates. Hosts can use it to draw stale-value formatting.
+        anchor. While any edit is pending, every volatile formula (``NOW``, ``RAND``, ``OFFSET``, ``INDIRECT`` and
+        the like) and every formula that reads one is stale too, as Excel marks them. The read never recalculates.
+        Hosts can use it to draw stale-value formatting.
         """
         row, col = self._cell_args("is_cell_stale", args, kwargs, ())
         sheet = self._index()

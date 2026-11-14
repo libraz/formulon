@@ -4278,9 +4278,10 @@ FM_API fm_status_t fm_sheet_get_circular_reference_at(const fm_workbook_t* wb, s
  * anchor. A cell is out of date while it, or a cell it reads directly or
  * through other cells, carries a change no recalc has applied: an edit, a
  * row / column insert or delete, a defined-name edit, and every formula of a
- * loaded workbook until its first recalc. Volatile cells are not out of date
- * on their own. The read never recalculates. Hosts can use it to draw
- * stale-value formatting.
+ * loaded workbook until its first recalc. While any such change is pending,
+ * every volatile cell (NOW, RAND, OFFSET, INDIRECT and the like) and every
+ * cell that reads one is out of date too, as Excel marks them. The read never
+ * recalculates. Hosts can use it to draw stale-value formatting.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;

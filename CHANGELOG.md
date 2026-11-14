@@ -23,8 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fm_sheet_is_cell_stale`) reports whether a formula cell holds a value not
   computed since its inputs changed, under manual or
   automatic-except-tables calculation; it is always false under automatic
-  calculation and never recalculates. A cell without a formula and a member of
-  a spill read false. Hosts can use it to draw stale-value formatting.
+  calculation and never recalculates. While any edit is pending, every
+  volatile formula and every formula reading one is stale too, as Excel marks
+  them. A cell without a formula and a member of a spill read false. Hosts can
+  use it to draw stale-value formatting.
 - `Workbook.getCompatibilityVersion()` / `setCompatibilityVersion()` (Python
   `get_compatibility_version()` / `set_compatibility_version()`, C
   `fm_workbook_get_compatibility_version` /

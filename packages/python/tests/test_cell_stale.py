@@ -28,6 +28,21 @@ class IsCellStaleTests(unittest.TestCase):
         self.assertFalse(self.ws.is_cell_stale("B1"))
         self.assertFalse(self.ws.is_cell_stale(0, 1))
 
+    def test_flags_every_volatile_and_its_dependents_after_any_edit(self) -> None:
+        self.wb.set_calc_mode(CalcMode.MANUAL)
+        self.ws.set_formula("A1", "=RAND()")
+        self.ws.set_formula("B1", "=A1+1")
+        self.ws.set_formula("C1", "=1+1")
+        self.wb.recalc()
+        self.assertFalse(self.ws.is_cell_stale("A1"))
+        self.ws.set_value("F9", 1)  # nothing reads it
+        self.assertTrue(self.ws.is_cell_stale("A1"))
+        self.assertTrue(self.ws.is_cell_stale("B1"))
+        self.assertFalse(self.ws.is_cell_stale("C1"))
+        self.wb.recalc()
+        self.assertFalse(self.ws.is_cell_stale("A1"))
+        self.assertFalse(self.ws.is_cell_stale("B1"))
+
     def test_false_under_automatic_calculation_after_an_edit(self) -> None:
         self.wb.set_calc_mode(CalcMode.AUTO)
         self.ws.set_value("A1", 1)

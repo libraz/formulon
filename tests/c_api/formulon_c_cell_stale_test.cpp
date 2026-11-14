@@ -1,8 +1,9 @@
 //
 // fm_sheet_is_cell_stale: a formula cell whose value has not been computed
 // since its inputs changed, under manual (or automatic-except-tables)
-// calculation; always 0 under automatic. These pin the engine's rule; which
-// cells Excel draws with stale-value formatting is not measured.
+// calculation; always 0 under automatic. Excel's rule (Mac-measured): an edit
+// leaves the formulas that read it stale, and every volatile with its
+// dependents; a full recalc clears them all.
 
 #include <cstdint>
 
@@ -59,19 +60,25 @@ TEST(FormulonCApiCellStale, AnEditMarksTheFormulasThatReadIt) {
   EXPECT_FALSE(Stale(wb.handle, 0U, 3U));  // reads nothing that changed
 }
 
-// A volatile formula is not stale on its own; one that reads an edited cell is.
-TEST(FormulonCApiCellStale, AVolatileIsStaleOnlyThroughWhatItReads) {
+// Any edit, even one nothing reads, leaves every volatile and the formulas reading one stale.
+TEST(FormulonCApiCellStale, AnyEditLeavesVolatilesAndTheirDependentsStale) {
   WorkbookGuard wb;
   ManualChain(wb);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 1U, 0U, "=NOW()"), FM_STATUS_OK);
-  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 1U, 1U, "=RAND()+A1"), FM_STATUS_OK);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 1U, 1U, "=A2+1"), FM_STATUS_OK);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 1U, 2U, "=B2*2"), FM_STATUS_OK);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), FM_STATUS_OK);
+  EXPECT_FALSE(Stale(wb.handle, 1U, 0U));
+  EXPECT_FALSE(Stale(wb.handle, 1U, 2U));
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 5U, 5U, 9.0), FM_STATUS_OK);  // unrelated edit
-  EXPECT_FALSE(Stale(wb.handle, 1U, 0U));
-  EXPECT_FALSE(Stale(wb.handle, 1U, 1U));
-  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0U, 0U, 3.0), FM_STATUS_OK);
-  EXPECT_FALSE(Stale(wb.handle, 1U, 0U));
+  EXPECT_TRUE(Stale(wb.handle, 1U, 0U));
   EXPECT_TRUE(Stale(wb.handle, 1U, 1U));
+  EXPECT_TRUE(Stale(wb.handle, 1U, 2U));
+  EXPECT_FALSE(Stale(wb.handle, 0U, 1U));  // reads neither the edit nor a volatile
+  EXPECT_FALSE(Stale(wb.handle, 0U, 3U));
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), FM_STATUS_OK);
+  EXPECT_FALSE(Stale(wb.handle, 1U, 0U));
+  EXPECT_FALSE(Stale(wb.handle, 1U, 2U));
 }
 
 // Every formula of a loaded manual-mode workbook is stale until its first recalc.

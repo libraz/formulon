@@ -465,6 +465,11 @@ bool RecalcEngine::awaits_recalc(CellNodeId cell) const {
   if (dirty_.contains(cell)) {
     return true;
   }
+  // Any pending edit leaves every volatile and its dependents out of date too, as Excel flags them.
+  const bool edits_pending = dirty_.size() != 0U;
+  if (edits_pending && volatiles_.contains(cell)) {
+    return true;
+  }
   // Dirtiness reaches dependents only at recalc time, so walk the cells this one reads.
   std::unordered_set<CellNodeId, CellNodeIdHash> seen{cell};
   std::vector<CellNodeId> queue{cell};
@@ -473,7 +478,7 @@ bool RecalcEngine::awaits_recalc(CellNodeId cell) const {
       if (!seen.insert(precedent).second) {
         continue;
       }
-      if (dirty_.contains(precedent)) {
+      if (dirty_.contains(precedent) || (edits_pending && volatiles_.contains(precedent))) {
         return true;
       }
       queue.push_back(precedent);
