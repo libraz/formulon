@@ -6,8 +6,11 @@
 // tests/fixtures/excel/retained_children_edit/.
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -126,6 +129,82 @@ TEST(XlsbUserBookView, XlsxSourceLeavesBothSidesOutAndCountsThem) {
     EXPECT_TRUE(RecordsOf(sheet, kBrtBeginUserShView).empty());
     EXPECT_GE(written.value().diagnostics.deferred_feature_count, 2U);
   }
+}
+
+using Guid = std::array<std::uint8_t, 16>;
+
+/// GUIDs of the records of `type` in `body`, read at payload offset `at`.
+std::set<Guid> GuidsOf(const std::vector<std::uint8_t>& body, std::uint16_t type, std::size_t at) {
+  std::set<Guid> out;
+  for (const FramedRecord& rec : split_records(body)) {
+    if (rec.type == type && rec.payload.size >= at + 16U) {
+      Guid guid{};
+      std::copy_n(rec.payload.data + at, 16U, guid.begin());
+      out.insert(guid);
+    }
+  }
+  return out;
+}
+
+/// Saves `wb` and checks that every written workbook view has a sheet view
+/// naming it and every sheet view a workbook view: Excel refuses the one
+/// unpaired form and crashes on the other.
+void ExpectPairedViews(const Workbook& wb, std::size_t expected_views) {
+  auto written = write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
+  const std::set<Guid> book = GuidsOf(Entry(written.value().bytes, kWorkbookBin), kBrtUserBookView, 24U);
+  std::set<Guid> sheets;
+  for (std::size_t i = 1; i <= wb.sheet_count(); ++i) {
+    const std::set<Guid> one = GuidsOf(Entry(written.value().bytes, "xl/worksheets/sheet" + std::to_string(i) + ".bin"),
+                                       kBrtBeginUserShView, 0U);
+    sheets.insert(one.begin(), one.end());
+  }
+  EXPECT_EQ(book, sheets);
+  EXPECT_EQ(book.size(), expected_views);
+}
+
+Workbook ReadChildren(const char* name) {
+  auto read = read_xlsb(SpanOf(Fixture(std::string(name) + ".xlsb")));
+  EXPECT_TRUE(static_cast<bool>(read)) << read.error().message;
+  return read ? std::move(read.value().workbook) : Workbook::create_empty();
+}
+
+TEST(XlsbUserBookView, ReorderedCopiedAndEditedSheetsKeepThePair) {
+  {
+    Workbook wb = ReadChildren("children_0_base");
+    wb.add_sheet("Other");
+    ASSERT_TRUE(static_cast<bool>(wb.move_sheet(0U, 1U)));
+    ExpectPairedViews(wb, 1U);
+  }
+  {
+    Workbook wb = ReadChildren("children_0_base");
+    ASSERT_TRUE(static_cast<bool>(wb.copy_sheet(0U, 1U, std::nullopt)));
+    ExpectPairedViews(wb, 1U);
+  }
+  {
+    Workbook wb = ReadChildren("children_0_base");
+    ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0U, 3U, 2U)));
+    ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0U, 0U, 1U)));
+    ExpectPairedViews(wb, 1U);
+  }
+}
+
+TEST(XlsbUserBookView, OnlyViewsASheetStillCarriesAreWritten) {
+  Workbook wb = ReadChildren("children_0_base");
+  // A second workbook view no sheet names: it goes, the carried one stays.
+  std::vector<std::uint8_t> views = wb.xlsb_user_book_views();
+  const std::vector<FramedRecord> recs = split_records(views);
+  ASSERT_EQ(recs.size(), 1U);
+  std::vector<std::uint8_t> other(views.begin() + static_cast<std::ptrdiff_t>(recs[0].begin),
+                                  views.begin() + static_cast<std::ptrdiff_t>(recs[0].end));
+  const std::size_t guid_at = recs[0].payload.data - views.data() - recs[0].begin + 24U;
+  other[guid_at] ^= 0xFFU;
+  views.insert(views.end(), other.begin(), other.end());
+  wb.set_xlsb_user_book_views(views);
+  ExpectPairedViews(wb, 1U);
+  auto written = write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(written));
+  EXPECT_GE(written.value().diagnostics.deferred_feature_count, 1U);
 }
 
 TEST(XlsbUserBookView, ViewWithoutASheetSideIsLeftOut) {
