@@ -61,6 +61,7 @@
 #include "io/xlsb/sst_writer.h"
 #include "io/xlsb/styles_writer.h"
 #include "io/xlsb/table_records.h"
+#include "io/xlsb/user_book_views.h"
 #include "io/xlsb/workbook_bin_writer.h"
 #include "io/xlsb/workbook_props_records.h"
 #include "miniz.h"
@@ -130,7 +131,9 @@ std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
     ReportDeferred(&count, "auto_filter", unwritten_auto_filter_settings(sheet), i);
     ReportDeferred(&count, "pivot_tables", pivots_survive_via_passthrough ? 0U : sheet.pivot_tables().size(), i);
     ReportDeferred(&count, "print_settings", has_deferred_print_settings(sheet.print_settings()) ? 1U : 0U, i);
+    ReportDeferred(&count, "custom_sheet_views", unwritten_xml_sheet_views(sheet), i);
   }
+  ReportDeferred(&count, "custom_workbook_views", unwritten_xml_book_views(workbook), 0U);
   // Workbook globals the BrtBookProtection / BrtWbProp / BrtBookView records
   // cannot hold.
   std::vector<std::uint8_t> scratch;
@@ -531,6 +534,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   // 4. xl/workbook.bin
   {
     ASSIGN_OR_RETURN(auto wb_bytes, BuildWorkbookBin(workbook, ordered_names, sheet_ranges, sheet_names, link_rel_ids));
+    ReportDeferred(&diagnostics.deferred_feature_count, "custom_workbook_views",
+                   splice_book_user_views(wb_bytes, workbook), 0U);
     splice_book_pivot_cache_ids(wb_bytes, workbook.xlsb_pivot_cache_ids(), workbook_rel_ids);
     splice_book_slicer_cache_ids(wb_bytes, workbook.xlsb_book_frt(), workbook_rel_ids);
     RETURN_IF_ERROR(AddPartBytes(writer.get(), kWorkbookBinPath, wb_bytes));

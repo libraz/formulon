@@ -233,6 +233,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/sparkline_fidelity_test.cpp
   unit/io/xlsb/table_fidelity_test.cpp
   unit/io/xlsb/pivot_fidelity_test.cpp
+  unit/io/xlsb/user_book_view_test.cpp
   unit/io/xlsb/slicer_fidelity_test.cpp
   unit/io/xlsb/drawing_record_test.cpp
   unit/io/xlsb/drawing_write_test.cpp

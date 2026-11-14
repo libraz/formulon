@@ -296,6 +296,7 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/table_records.cpp
   src/io/xlsb/table_list_parts.cpp
   src/io/xlsb/tail_refs.cpp
+  src/io/xlsb/user_book_views.cpp
   src/io/xlsb/workbook_bin_reader.cpp
   src/io/xlsb/workbook_bin_writer.cpp
   src/io/xlsb/workbook_props_records.cpp
