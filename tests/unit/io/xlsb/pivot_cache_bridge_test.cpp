@@ -1,5 +1,6 @@
 #include "io/xlsb/pivot_cache_bridge.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
@@ -12,6 +13,7 @@
 #include "io/xlsb/pivot_cache_definition_records.h"
 #include "io/xlsb/pivot_calc_item_records.h"
 #include "io/zip_reader.h"
+#include "pivot/field_grouping.h"
 #include "pivot/pivot_cache.h"
 #include "pivot_twin_corpus.h"
 #include "utils/resource_budget.h"
@@ -280,6 +282,27 @@ TEST(XlsbPivotCacheBridge, CorpusReadsWritesBackAndMatchesTheXlsxTwin) {
     }
   }
   EXPECT_GT(caches, 80U);
+}
+
+TEST(XlsbPivotCacheBridge, MaterialisedGroupFieldsWriteBackExcelsRecords) {
+  std::size_t grouped = 0;
+  for (const std::string& path : pivot_twins::CorpusPaths()) {
+    for (const CacheCase& c : Cases(path)) {
+      auto cache = pivot_cache_from_xlsb(SpanOf(c.definition), SpanOf(c.records), c.date1904);
+      ASSERT_TRUE(cache.has_value()) << c.label << ": " << cache.error().message;
+      const auto& fields = cache.value().fields();
+      if (std::all_of(fields.begin(), fields.end(),
+                      [](const pivot::PivotCacheField& f) { return f.is_database_field; })) {
+        continue;
+      }
+      ++grouped;
+      pivot::materialize_group_fields(cache.value(), c.date1904);
+      auto parts = pivot_cache_to_xlsb(cache.value(), c.date1904, RecordsRelId(c.definition));
+      ASSERT_TRUE(parts.has_value()) << c.label << ": " << parts.error().message;
+      EXPECT_EQ(parts.value().records, c.records) << c.label;
+    }
+  }
+  EXPECT_GT(grouped, 0U);
 }
 
 TEST(XlsbPivotCacheBridge, InlineDateRecordCellIsASerial) {

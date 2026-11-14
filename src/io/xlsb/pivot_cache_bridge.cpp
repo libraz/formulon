@@ -1472,11 +1472,7 @@ Expected<std::vector<std::uint8_t>, Error> WriteRecords(const pivot::PivotCache&
         return NotWritable();
       }
     }
-    for (std::size_t i = 0; i < record.cells.size(); ++i) {
-      if (!cache.fields()[i].is_database_field && !record.cells[i].is_blank()) {
-        return NotWritable();
-      }
-    }
+    // A group or calculated field's cell (the group number a load materialises) has no record cell.
     doc.rows.push_back(std::move(row));
   }
   auto bytes = encode_pivot_cache_records(doc, kinds.value());
