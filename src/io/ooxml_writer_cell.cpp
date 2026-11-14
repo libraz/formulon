@@ -91,9 +91,13 @@ bool PhantomForcesDefaultStyle(const Sheet& sheet, std::uint32_t row, std::uint3
 // Emits an `s="N"` attribute when `xf_index` is non-zero. The default
 // xf (index 0) is omitted for byte parity with Excel's writer unless `force`
 // is set (see `PhantomForcesDefaultStyle`).
-// The saved index of model cell xf `xf_index`; unchanged without a plan.
-std::uint32_t SavedXf(const CellStyleSavePlan* style_plan, std::uint32_t xf_index) {
-  return style_plan != nullptr ? style_plan->cell_xf_index(xf_index) : xf_index;
+// The saved index of model cell xf `xf_index`, for a cell inside a merged range when `merged`; unchanged without a
+// plan.
+std::uint32_t SavedXf(const CellStyleSavePlan* style_plan, std::uint32_t xf_index, bool merged = false) {
+  if (style_plan == nullptr) {
+    return xf_index;
+  }
+  return merged ? style_plan->merged_cell_xf_index(xf_index) : style_plan->cell_xf_index(xf_index);
 }
 
 void AppendStyleAttr(std::string& out, std::uint32_t xf_index, bool force, bool show_phonetic = false) {
@@ -359,9 +363,9 @@ SharedRoles CollectSharedRoles(const Sheet& sheet, const xlsb::NameShapes& name_
 bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell& cell,
                    const SharedStrings* shared_strings, std::uint32_t dynamic_array_cm_index,
                    const xlsb::NameShapes& name_shapes, const parser::ExternalBookIndexer* indexer,
-                   const SharedRole* shared, std::uint32_t vm, const CellStyleSavePlan* style_plan) {
+                   const SharedRole* shared, std::uint32_t vm, const CellStyleSavePlan* style_plan, bool merged) {
   const bool has_formula = !cell.formula_text.empty();
-  const std::uint32_t xf = SavedXf(style_plan, cell.xf_index);
+  const std::uint32_t xf = SavedXf(style_plan, cell.xf_index, merged);
   if (!CellIsEmitted(sheet, row, col, cell)) {
     return false;
   }
@@ -587,7 +591,8 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
                   const SharedStrings* shared_strings, std::uint32_t dynamic_array_cm_index,
                   const xlsb::NameShapes& name_shapes, std::unordered_map<std::uint64_t, bool>& always_by_anchor,
                   const parser::ExternalBookIndexer* indexer, const SharedRoles& shared_roles,
-                  const RichErrorVmMap* rich_error_vm, const CellStyleSavePlan* style_plan) {
+                  const RichErrorVmMap* rich_error_vm, const CellStyleSavePlan* style_plan,
+                  MergedCellIndex& merged_cells) {
   // Write straight into `out`; a row that ends up with no content is truncated away.
   const std::size_t row_start = out.size();
   out.append("<row r=\"");
@@ -648,7 +653,8 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
         out.append("<c r=\"");
         AppendCellRefForRef(out, row, static_cast<std::uint32_t>(col));
         out.push_back('"');
-        AppendStyleAttr(out, SavedXf(style_plan, run->xf), false);
+        AppendStyleAttr(out, SavedXf(style_plan, run->xf, merged_cells.covers(row, static_cast<std::uint32_t>(col))),
+                        false);
         out.append("/>");
       }
       advance_run_past(stop - 1U);
@@ -667,7 +673,7 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
     const auto role = shared_roles.find(CellKey(row, e.col));
     (void)AppendCellXml(out, sheet, row, e.col, e.cell, shared_strings, dynamic_array_cm_index, name_shapes, indexer,
                         role != shared_roles.end() ? &role->second : nullptr, VmAt(rich_error_vm, row, e.col),
-                        style_plan);
+                        style_plan, merged_cells.covers(row, e.col));
     ++entry;
   }
   if (out.size() == body_start) {
@@ -790,6 +796,7 @@ void AppendSheetDataXml(std::string& out, const Sheet& sheet, const SharedString
   static const std::vector<std::uint32_t> kNoPhantoms;
   std::unordered_map<std::uint64_t, bool> always_by_anchor;
   const SharedRoles shared_roles = CollectSharedRoles(sheet, name_shapes);
+  MergedCellIndex merged_cells(style_plan != nullptr ? sheet.merges() : std::vector<MergeRange>{});
   for (std::uint32_t row : row_indices) {
     std::string override_attrs;
     const bool zero_height = sheet.format_defaults().zero_height;
@@ -822,7 +829,7 @@ void AppendSheetDataXml(std::string& out, const Sheet& sheet, const SharedString
     AppendRowXml(out, sheet, row, row_cells, plan.runs,
                  phantoms_it != phantom_cols.end() ? phantoms_it->second : kNoPhantoms, override_attrs, keep_empty_row,
                  implicit_hidden, shared_strings, dynamic_array_cm_index, name_shapes, always_by_anchor, indexer,
-                 shared_roles, rich_error_vm, style_plan);
+                 shared_roles, rich_error_vm, style_plan, merged_cells);
   }
 
   if (out.size() == rows_start) {

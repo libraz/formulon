@@ -73,9 +73,16 @@ void mark(UsedCellXfs& out, std::uint32_t xf) {
   }
 }
 
+// A stored cell the xlsx writer may emit; a blank xf-0 cell only when its explicit default is written.
+bool may_emit(const Cell& cell) {
+  return !cell.formula_text.empty() || !cell.cached_value.is_blank() || cell.xf_index != 0U || cell.show_phonetic ||
+         cell.has_explicit_xf;
+}
+
 struct CellXfLayout {
   std::vector<std::uint32_t> order;
   std::vector<std::uint32_t> index;
+  std::vector<std::uint32_t> merged_index;
   bool identity = true;
 };
 
@@ -90,6 +97,7 @@ CellXfLayout plan_cell_xfs(const StylesTable& styles, const UsedCellXfs& used,
       out.order.push_back(c);
       out.index.push_back(c);
     }
+    out.merged_index = out.index;
     return out;
   }
   // Compare what the writers emit: font, fill and border clamped to the written lists, the written parent.
@@ -130,18 +138,72 @@ CellXfLayout plan_cell_xfs(const StylesTable& styles, const UsedCellXfs& used,
       out.order.push_back(g);
     }
   }
+  // Merged-cell entries follow, one per group, written as the group's first merged member.
+  std::vector<std::uint32_t> merged_position(count, kNone);
+  for (const std::uint32_t m : used.merged) {
+    if (m < count && merged_position[first_of[m]] == kNone) {
+      merged_position[first_of[m]] = static_cast<std::uint32_t>(out.order.size());
+      out.order.push_back(m);
+    }
+  }
   out.index.resize(count);
+  out.merged_index.resize(count);
+  std::vector<bool> merged_used(count, false);
+  for (const std::uint32_t m : used.merged) {
+    if (m < count) {
+      merged_used[m] = true;
+    }
+  }
   bool identity = out.order.size() == count;
   for (std::uint32_t c = 0; c < count; ++c) {
     // Members of a dropped group are never written; 0 keeps the value in range.
     out.index[c] = group_used[first_of[c]] ? position[first_of[c]] : 0U;
-    identity = identity && out.index[c] == c;
+    const std::uint32_t merged = merged_position[first_of[c]];
+    out.merged_index[c] = merged != kNone ? merged : out.index[c];
+    identity = identity && out.order[c] == c && (c == 0U || !used.used[c] || out.index[c] == c) &&
+               (!merged_used[c] || out.merged_index[c] == c);
   }
   out.identity = identity;
   return out;
 }
 
 }  // namespace
+
+MergedCellIndex::MergedCellIndex(const std::vector<MergeRange>& merges) : by_first_row_(merges) {
+  sort_by_index(by_first_row_, [](const MergeRange& a, const MergeRange& b) { return a.first_row < b.first_row; });
+}
+
+const std::vector<std::pair<std::uint32_t, std::uint32_t>>& MergedCellIndex::spans(std::uint32_t row) {
+  if (row != row_) {
+    row_ = row;
+    spans_.clear();
+    for (const MergeRange& m : by_first_row_) {
+      if (m.first_row > row) {
+        break;
+      }
+      if (m.last_row >= row) {
+        spans_.emplace_back(m.first_col, m.last_col);
+      }
+    }
+    sort_by_index(spans_, [](const auto& a, const auto& b) { return a < b; });
+  }
+  return spans_;
+}
+
+bool MergedCellIndex::covers(std::uint32_t row, std::uint32_t col) {
+  if (by_first_row_.empty()) {
+    return false;
+  }
+  for (const auto& span : spans(row)) {
+    if (span.first > col) {
+      break;
+    }
+    if (col <= span.second) {
+      return true;
+    }
+  }
+  return false;
+}
 
 UsedCellXfs collect_used_cell_xfs(const Workbook& wb) {
   UsedCellXfs out;
@@ -154,12 +216,57 @@ UsedCellXfs collect_used_cell_xfs(const Workbook& wb) {
       out.all_used = out.all_used || !ends_with(sheet.opaque_ooxml_relationship_type(), "/chartsheet");
       continue;
     }
+    MergedCellIndex merges(sheet.merges());
+    // Merged references are recorded in sheet, row, column order, the order Excel appends their entries.
+    std::vector<std::uint32_t> row_order;
+    row_order.reserve(sheet.rows().size());
     for (const auto& row : sheet.rows()) {
-      for (const RowCells::Entry entry : row.second) {
-        mark(out, entry.cell.xf_index);
+      row_order.push_back(row.first);
+    }
+    if (!merges.empty()) {
+      sort_ascending(row_order);
+    }
+    std::vector<std::pair<std::uint32_t, std::uint32_t>> merged_refs;
+    for (const std::uint32_t r : row_order) {
+      const RowCells& cells = sheet.rows().at(r);
+      merged_refs.clear();
+      for (const RowCells::Entry entry : cells) {
+        if (merges.empty() || !may_emit(entry.cell) || !merges.covers(r, entry.col)) {
+          mark(out, entry.cell.xf_index);
+        } else {
+          merged_refs.emplace_back(entry.col, entry.cell.xf_index);
+        }
       }
-      for (const StyleRun& run : row.second.runs()) {
-        mark(out, run.xf);
+      for (const StyleRun& run : cells.runs()) {
+        if (merges.empty()) {
+          mark(out, run.xf);
+          continue;
+        }
+        // Columns of the run inside a merge are merged references; any other column is a plain one.
+        std::uint32_t next = run.first;
+        for (const auto& span : merges.spans(r)) {
+          if (span.second < next || span.first > run.last) {
+            continue;
+          }
+          if (span.first > next) {
+            mark(out, run.xf);
+          }
+          merged_refs.emplace_back(std::max<std::uint32_t>(span.first, next), run.xf);
+          next = span.second + 1U;
+          if (next > run.last) {
+            break;
+          }
+        }
+        if (next <= run.last) {
+          mark(out, run.xf);
+        }
+      }
+      sort_by_index(merged_refs, [](const auto& a, const auto& b) { return a.first < b.first; });
+      for (const auto& ref : merged_refs) {
+        if (ref.second < out.used.size() &&
+            std::find(out.merged.begin(), out.merged.end(), ref.second) == out.merged.end()) {
+          out.merged.push_back(ref.second);
+        }
       }
     }
     for (const RowLayout& row : sheet.layout().row_overrides) {
@@ -363,6 +470,7 @@ CellStyleSavePlan build_cell_style_save_plan(const StylesTable& styles, const Us
   CellXfLayout cell_xfs = plan_cell_xfs(styles, used, parent_index);
   plan.cell_xf_order_ = std::move(cell_xfs.order);
   plan.cell_xf_index_ = std::move(cell_xfs.index);
+  plan.merged_cell_xf_index_ = std::move(cell_xfs.merged_index);
   plan.cell_xfs_identity_ = cell_xfs.identity;
   return plan;
 }

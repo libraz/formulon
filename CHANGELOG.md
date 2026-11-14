@@ -28,7 +28,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `.xlsx` saves compact the cell formats (`<cellXfs>`) as Excel does: entries
   that write identically collapse into the first one, entries no cell, row or
   column uses are dropped (the default entry stays), and the rest keep their
-  order. Every cell, row and column style index in the saved file is
+  order. Cells inside a merged range take an entry of their own after the
+  others, as Excel writes them. Every cell, row and column style index in the saved file is
   renumbered to match, so a book saved and reopened can report different
   style indices for the same cells; the formats and cell style names they
   resolve to are unchanged, and the workbook in memory is not modified. A

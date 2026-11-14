@@ -58,6 +58,13 @@ const std::vector<Case>& MatchingCases() {
       {"cellxfs_compaction", "cx1_D11_dup_position"},
       {"cellxfs_compaction", "cx1_D12_lone_lacks_apply"},
       {"cellxfs_compaction", "cx1_D13_dup_position_late_first_use"},
+      {"cellxfs_compaction", "mg1_M3_in_and_out"},
+      {"cellxfs_compaction", "mg1_M5_two_merge_dups"},
+      {"cellxfs_compaction", "mg1_M6_merge_dup_of_plain"},
+      {"cellxfs_compaction", "mg1_M7_merge_first"},
+      {"cellxfs_compaction", "mg1_M8_merge_dup_of_xf0"},
+      {"cellxfs_compaction", "mg1_M9_two_merge_variants_order"},
+      {"cellxfs_compaction", "mg2_s_merge"},
       {"cell_style_save", "cs1_C0_none"},
       {"cell_style_save", "cs1_C1_all_blank"},
       {"cell_style_save", "cs1_C2_all_valued"},
@@ -232,6 +239,67 @@ TEST(CellXfsCompactionGoldenApplyFlags, CellXfsDifferingOnlyInApplyFlagsStayApar
       }
     }
     EXPECT_EQ(row20, (Lines{"sheet1.xml cell A20 s=1", "sheet1.xml cell B20 s=2"})) << id;
+  }
+}
+
+// A merge over xf-0 cells takes its own entry. The model keeps no blank xf-0
+// cell, so the merge's empty second cell B20, which Excel writes with that
+// entry, is not written; everything else matches Excel.
+TEST(CellXfsCompactionGoldenMergeOnXf0, MergedXf0CellsTakeTheirOwnEntry) {
+  const Case c{"cellxfs_compaction", "mg1_M2_merge_on_xf0"};
+  const auto wb = LoadAuthored(c);
+  ASSERT_TRUE(wb);
+  Bytes ours;
+  ASSERT_TRUE(SaveXlsx(*wb, &ours));
+  const Bytes excel = test::read_file_bytes(FixturePath(c, "_resaved.xlsx"));
+  EXPECT_EQ(CellXfLines(excel), CellXfLines(ours));
+  Lines expected;
+  for (const std::string& line : SheetRefLines(excel)) {
+    if (line != "sheet1.xml cell B20 s=2") {
+      expected.push_back(line);
+    }
+  }
+  ASSERT_EQ(expected.size() + 1U, SheetRefLines(excel).size());
+  EXPECT_EQ(expected, SheetRefLines(ours));
+}
+
+// Pivot tables Excel wrote with merged item labels. Excel also collapses the
+// entry that differs from xf 0 only in applyNumberFormat (index 2 in B14, 1 in
+// op_merge_tabular); with that entry folded back into 0, Formulon's output is
+// Excel's.
+TEST(CellXfsCompactionGoldenMergedPivotLabels, MergedCellsTakeTheirOwnEntriesAfterTheOthers) {
+  const std::pair<const char*, unsigned> cases[] = {{"mg2_B14_merge_items", 2U}, {"mg2_op_merge_tabular", 1U}};
+  for (const auto& [id, apply_only] : cases) {
+    const Case c{"cellxfs_compaction", id};
+    const auto wb = LoadAuthored(c);
+    ASSERT_TRUE(wb);
+    Bytes ours;
+    ASSERT_TRUE(SaveXlsx(*wb, &ours));
+    const Bytes excel = test::read_file_bytes(FixturePath(c, "_resaved.xlsx"));
+    Lines xfs = CellXfLines(ours);
+    ASSERT_GT(xfs.size(), apply_only) << id;
+    EXPECT_EQ(xfs[apply_only], CellXfLines(excel)[0]) << id;
+    xfs.erase(xfs.begin() + apply_only);
+    EXPECT_EQ(CellXfLines(excel), xfs) << id;
+    Lines refs;
+    for (std::string line : SheetRefLines(ours)) {
+      const std::size_t at = line.find(" s=");
+      if (at == std::string::npos) {
+        refs.push_back(line);
+        continue;
+      }
+      const std::size_t end = line.find(' ', at + 3U);
+      const std::string n = line.substr(at + 3U, end == std::string::npos ? std::string::npos : end - at - 3U);
+      unsigned k = 0U;
+      for (const char ch : n) {
+        k = k * 10U + static_cast<unsigned>(ch - '0');
+      }
+      if (!n.empty() && k >= apply_only) {
+        line.replace(at + 3U, n.size(), k == apply_only ? std::string() : std::to_string(k - 1U));
+      }
+      refs.push_back(line);
+    }
+    EXPECT_EQ(SheetRefLines(excel), refs) << id;
   }
 }
 

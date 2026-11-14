@@ -584,5 +584,86 @@ TEST(CellStyleSavePlan, CollectUsedCellXfsRetainedMacroSheetPartUsesAll) {
   EXPECT_TRUE(collect_used_cell_xfs(wb).all_used);
 }
 
+// Merged-cell entries: one per group, after the other survivors, in first-appearance order.
+UsedCellXfs UsedMerged(std::uint32_t count, std::initializer_list<std::uint32_t> plain,
+                       std::vector<std::uint32_t> merged) {
+  UsedCellXfs out = Used(count, plain);
+  out.merged = std::move(merged);
+  return out;
+}
+
+std::vector<std::uint32_t> MergedIndices(const CellStyleSavePlan& plan, std::uint32_t count) {
+  std::vector<std::uint32_t> out(count);
+  for (std::uint32_t c = 0; c < count; ++c) {
+    out[c] = plan.merged_cell_xf_index(c);
+  }
+  return out;
+}
+
+TEST(CellStyleSavePlan, MergedCellsTakeAnEntryOfTheirOwnAfterTheOthers) {
+  // A merged cell and a plain cell on the same xf 3 split into two entries.
+  const CellStyleSavePlan plan = Plan(CellXfTable(Cx1NumFmts({})), UsedMerged(13, {3}, {3}));
+  EXPECT_EQ(plan.cell_xf_order(), (std::vector<std::uint32_t>{0, 3, 3}));
+  EXPECT_EQ(plan.cell_xf_index(3), 1U);
+  EXPECT_EQ(plan.merged_cell_xf_index(3), 2U);
+  EXPECT_FALSE(plan.cell_xfs_identity());
+}
+
+TEST(CellStyleSavePlan, MergedEntriesFollowFirstAppearanceNotSourceOrder) {
+  const CellStyleSavePlan plan = Plan(CellXfTable(Cx1NumFmts({})), UsedMerged(13, {4}, {5, 3}));
+  EXPECT_EQ(plan.cell_xf_order(), (std::vector<std::uint32_t>{0, 4, 5, 3}));
+  EXPECT_EQ(plan.merged_cell_xf_index(5), 2U);
+  EXPECT_EQ(plan.merged_cell_xf_index(3), 3U);
+}
+
+TEST(CellStyleSavePlan, MergedCellsShareOneEntryPerGroup) {
+  // Cell xfs 1 and 2 are equal; both only inside merges.
+  const CellStyleSavePlan plan = Plan(CellXfTable(Cx1NumFmts({{1, 3}, {2, 3}})), UsedMerged(13, {}, {1, 2}));
+  EXPECT_EQ(plan.cell_xf_order(), (std::vector<std::uint32_t>{0, 1}));
+  EXPECT_EQ(plan.merged_cell_xf_index(1), 1U);
+  EXPECT_EQ(plan.merged_cell_xf_index(2), 1U);
+}
+
+TEST(CellStyleSavePlan, MergedCellsOnXf0TakeTheirOwnEntry) {
+  const CellStyleSavePlan plan = Plan(CellXfTable(Cx1NumFmts({})), UsedMerged(13, {3}, {0}));
+  EXPECT_EQ(plan.cell_xf_order(), (std::vector<std::uint32_t>{0, 3, 0}));
+  EXPECT_EQ(plan.cell_xf_index(0), 0U);
+  EXPECT_EQ(plan.merged_cell_xf_index(0), 2U);
+}
+
+TEST(CellStyleSavePlan, ExcelsOwnMergedEntryIsIdentity) {
+  // As Excel writes it: xf 1 equals xf 0 and only merged cells use it.
+  const CellStyleSavePlan plan = Plan(CellXfTable({0, 0}), UsedMerged(2, {}, {1}));
+  EXPECT_EQ(plan.cell_xf_order(), (std::vector<std::uint32_t>{0, 1}));
+  EXPECT_EQ(plan.merged_cell_xf_index(1), 1U);
+  EXPECT_TRUE(plan.cell_xfs_identity());
+}
+
+TEST(CellStyleSavePlan, MergedIndicesWithoutMergesAreThePlainIndices) {
+  const CellStyleSavePlan plan = Plan(CellXfTable(Cx1NumFmts({{6, 2}})), Used(13, {6, 4}));
+  EXPECT_EQ(MergedIndices(plan, 13), Indices(plan, 13));
+}
+
+TEST(CellStyleSavePlan, CollectUsedCellXfsSendsMergedCellsAndRunColumnsApart) {
+  Workbook wb = Workbook::create();
+  wb.mutable_styles().cell_xfs.resize(8);
+  Sheet& sheet = wb.sheet(0);
+  // Row 3: C3 (xf 5, merged), D3 blank run xf 5 (merged), F3 xf 6 plain.
+  sheet.set_cell_value(2, 2, Value::number(1.0));
+  sheet.set_cell_xf_index(2, 2, 5U);
+  sheet.set_cell_xf_index(2, 3, 5U);
+  sheet.set_cell_value(2, 5, Value::number(1.0));
+  sheet.set_cell_xf_index(2, 5, 6U);
+  // Row 1: a run over A1:E1 with B1:C1 merged; A1, D1 and E1 stay plain.
+  sheet.set_style_runs(0, 0, 5, 4U);
+  // Row 2: A2 xf 3 merged, appearing before row 3 although its xf is lower.
+  sheet.set_cell_value(1, 0, Value::number(1.0));
+  sheet.set_cell_xf_index(1, 0, 3U);
+  sheet.mutable_merges() = {MergeRange{2, 2, 2, 3}, MergeRange{0, 1, 0, 2}, MergeRange{1, 0, 1, 1}};
+  const UsedCellXfs used = collect_used_cell_xfs(wb);
+  EXPECT_EQ(used.used, (std::vector<bool>{false, false, false, false, true, false, true, false}));
+  EXPECT_EQ(used.merged, (std::vector<std::uint32_t>{4, 3, 5}));
+}
+
 }  // namespace
 }  // namespace formulon

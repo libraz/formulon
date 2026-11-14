@@ -18,7 +18,9 @@
 // write identically collapse into the first one's position, groups no
 // structure references drop (xf 0 always stays), and the rest keep source
 // order. Identity compares the written record, apply flags, parent and xf
-// extLst included.
+// extLst included. A cell inside a merged range takes a separate entry of
+// the same content: those entries follow the others, one per group, in the
+// order the cells first appear (sheet, row, column).
 
 #ifndef FORMULON_CELL_STYLE_SAVE_PLAN_H_
 #define FORMULON_CELL_STYLE_SAVE_PLAN_H_
@@ -27,9 +29,11 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "excel_profile.h"
+#include "merge_range.h"
 #include "phonetic.h"
 #include "styles.h"
 
@@ -43,10 +47,30 @@ struct UsedCellXfs {
   std::vector<bool> used;
   /// Every cell xf counts as referenced (a sheet the engine cannot scan is present).
   bool all_used = false;
+  /// Cell xfs referenced by cells inside a merged range, each once, in the
+  /// order such a cell first appears. `used` does not count these references.
+  std::vector<std::uint32_t> merged;
+};
+
+/// Answers whether a cell lies inside one of a sheet's merged ranges. Queries
+/// for one row reuse that row's column spans.
+class MergedCellIndex {
+ public:
+  explicit MergedCellIndex(const std::vector<MergeRange>& merges);
+  bool empty() const noexcept { return by_first_row_.empty(); }
+  bool covers(std::uint32_t row, std::uint32_t col);
+  /// Sorted, possibly overlapping `{first, last}` column spans merged on `row`.
+  const std::vector<std::pair<std::uint32_t, std::uint32_t>>& spans(std::uint32_t row);
+
+ private:
+  std::vector<MergeRange> by_first_row_;
+  std::uint32_t row_ = 0xFFFFFFFFU;
+  std::vector<std::pair<std::uint32_t, std::uint32_t>> spans_;
 };
 
 /// Collects the cell xfs referenced by every sheet: stored cells, style runs,
-/// row styles (`has_style`) and column styles (`has_style`). `all_used` is set
+/// row styles (`has_style`) and column styles (`has_style`); a stored cell or
+/// run column inside a merged range goes to `merged` instead. `all_used` is set
 /// by a part the save writes back unread that names cell xfs: an opaque sheet
 /// other than a chartsheet, or a retained revision log, macro sheet or dialog
 /// sheet part. Indices outside `styles().cell_xfs` are ignored.
@@ -71,16 +95,23 @@ class CellStyleSavePlan {
     return old_xf_id < parent_of_.size() ? parent_of_[old_xf_id] : parent_of_[0];
   }
 
-  /// `<cellXfs>` in output order, as model `cell_xfs` indices (each group's
-  /// first member). Empty when the model table is empty, as the writers then
-  /// synthesize the default xf.
+  /// `<cellXfs>` in output order, as model `cell_xfs` indices (a group's first
+  /// member; a merged-cell entry's first merged member). Empty when the model
+  /// table is empty, as the writers then synthesize the default xf.
   const std::vector<std::uint32_t>& cell_xf_order() const noexcept { return cell_xf_order_; }
-  /// Output index of model cell xf `model_xf`. An index outside the model
-  /// table is returned unchanged, as the writers have always written it.
+  /// Output index of model cell xf `model_xf` referenced from outside a merged
+  /// range. An index outside the model table is returned unchanged, as the
+  /// writers have always written it.
   std::uint32_t cell_xf_index(std::uint32_t model_xf) const noexcept {
     return model_xf < cell_xf_index_.size() ? cell_xf_index_[model_xf] : model_xf;
   }
-  /// True when every cell xf is written at its model index.
+  /// Output index of model cell xf `model_xf` referenced by a cell inside a
+  /// merged range.
+  std::uint32_t merged_cell_xf_index(std::uint32_t model_xf) const noexcept {
+    return model_xf < merged_cell_xf_index_.size() ? merged_cell_xf_index_[model_xf] : cell_xf_index(model_xf);
+  }
+  /// True when every cell xf is written at its model index and every
+  /// reference keeps its model index.
   bool cell_xfs_identity() const noexcept { return cell_xfs_identity_; }
   /// The profile the names, merges and order were decided under.
   ExcelProfile profile() const noexcept { return profile_; }
@@ -100,6 +131,7 @@ class CellStyleSavePlan {
   std::vector<std::string> planned_names_;
   std::vector<std::uint32_t> cell_xf_order_;
   std::vector<std::uint32_t> cell_xf_index_;
+  std::vector<std::uint32_t> merged_cell_xf_index_;
   bool cell_xfs_identity_ = true;
   ExcelProfile profile_;
   bool identity_ = false;
