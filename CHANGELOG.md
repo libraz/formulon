@@ -25,6 +25,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and outline symbols, and fit-to-page. Other `<sheetPr>` settings
   and a printer-settings part are still reported as deferred print settings.
 
+- `.xlsb` saves write each sheet's AutoFilter and sort state from the
+  workbook, as Excel does, so a filter set in `.xlsx` or through the API is
+  kept, and the sheet's filter mode follows its criteria. A date-group
+  criterion, and a top-ten or dynamic criterion without the bounds Excel
+  computed when it last applied the filter, are left out and reported as
+  deferred; a colour criterion without a format is left out, as Excel leaves
+  it out. A sheet filter read from `.xlsb` that cannot be written back whole
+  is kept as stored.
+
 - `.xlsx` saves compact the cell formats (`<cellXfs>`) as Excel does: entries
   that write identically collapse into the first one, entries no cell, row or
   column uses are dropped (the default entry stays), and the rest keep their

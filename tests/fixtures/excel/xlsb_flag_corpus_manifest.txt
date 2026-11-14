@@ -4,6 +4,7 @@
 # Excluded: excel/open_gate_controls/ (deliberately damaged), excel/own_output/ (Formulon outputs), any *_resaved*
 # file (a re-save of a workbook not authored in Excel), and every other Formulon output. xlsb_parity/**/<case>.xlsb and
 # <case>.2.xlsb are Excel's two saves of one source. win/** files are Windows Excel saves.
+excel/auto_filter_kinds.xlsb
 excel/blankslot_saved.xlsb
 excel/cf_custom_icon_set.xlsb
 excel/chart_xlsb.xlsb

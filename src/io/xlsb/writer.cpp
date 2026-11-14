@@ -38,6 +38,7 @@
 #include "io/passthrough_part_index.h"
 #include "io/rich_value_errors.h"
 #include "io/writer_common.h"
+#include "io/xlsb/auto_filter_records.h"
 #include "io/xlsb/drawing_record.h"
 #include "io/xlsb/dxf_uses_xlsb.h"
 #include "io/xlsb/emission_plan.h"
@@ -124,7 +125,7 @@ std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
   const std::uint32_t views = workbook_view_count(workbook.book_views_xml());
   for (std::size_t i = 0; i < workbook.sheet_count(); ++i) {
     const Sheet& sheet = workbook.sheet(i);
-    ReportDeferred(&count, "auto_filter", sheet.has_auto_filter() ? 1U : 0U, i);
+    ReportDeferred(&count, "auto_filter", unwritten_auto_filter_settings(sheet), i);
     ReportDeferred(&count, "comments", sheet.comments().size(), i);
     ReportDeferred(&count, "threaded_comments", sheet.threaded_comments().size(), i);
     ReportDeferred(&count, "pivot_tables", pivots_survive_via_passthrough ? 0U : sheet.pivot_tables().size(), i);

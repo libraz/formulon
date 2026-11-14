@@ -315,13 +315,14 @@ TEST(XlsbWriter, ReportsDeferredSheetFeatures) {
   hyperlink.target = "https://example.com";
   sheet.mutable_hyperlinks().push_back(std::move(hyperlink));
   sheet.mutable_validations().push_back(DataValidation{});
-  sheet.set_auto_filter(io::auto_filter_from_xml("<autoFilter ref=\"A1:B2\"/>"));
+  sheet.set_auto_filter(io::auto_filter_from_xml(
+      "<autoFilter ref=\"A1:B2\"><filterColumn colId=\"0\"><top10 val=\"5\"/></filterColumn></autoFilter>"));
   sheet.mutable_view().freeze_rows = 1U;
 
   auto write_or = write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
-  // Auto-filter state remains deferred; hyperlinks and validations are
-  // written from the model and therefore no longer inflate this counter.
+  // A top-ten criterion without its computed threshold stays unwritten;
+  // hyperlinks and validations are written from the model.
   EXPECT_EQ(write_or.value().diagnostics.deferred_feature_count, 1U);
 }
 

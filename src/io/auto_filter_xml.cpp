@@ -709,6 +709,26 @@ Expected<AutoFilter, Error> parse_auto_filter_xml(std::string_view xml) {
   return parse_auto_filter_node(root);
 }
 
+Expected<SortState, Error> parse_sort_state_xml(std::string_view xml) {
+  pugi::xml_document doc;
+  const pugi::xml_parse_result parsed =
+      doc.load_buffer(xml.data(), xml.size(), pugi::parse_default, pugi::encoding_utf8);
+  if (!parsed) {
+    return invalid(std::string("sortState: XML parse failed: ") + parsed.description());
+  }
+  const pugi::xml_node root = doc.first_child();
+  if (root.next_sibling() || std::string_view(root.name()) != "sortState") {
+    return invalid("xml is not a single sortState element");
+  }
+  Reader r;
+  SortState sort;
+  read_sort_state(r, root, sort);
+  if (!r.ok) {
+    return invalid("xml carries content the model cannot represent");
+  }
+  return sort;
+}
+
 AutoFilter auto_filter_from_node(const pugi::xml_node& root) {
   // Fall back to the string entry when the DOM holds nodes parse_default would drop.
   for (pugi::xml_node node = root.first_child(); node;) {

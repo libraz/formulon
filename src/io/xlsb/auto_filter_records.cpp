@@ -2,13 +2,16 @@
 
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 
+#include "io/auto_filter_xml.h"
 #include "io/xlsb/dxf_props.h"
 #include "io/xlsb/frt_records.h"
 #include "io/xlsb/record_ids.h"
 #include "io/xlsb/record_writer.h"
 #include "sheet.h"
+#include "sheet_passthrough.h"
 #include "utils/double_format.h"
 #include "utils/double_parse.h"
 #include "utils/status_macros.h"
@@ -21,8 +24,16 @@ namespace {
 // BrtCustomFilter vts values.
 constexpr std::uint8_t kVtsNumber = 0x04;
 constexpr std::uint8_t kVtsString = 0x06;
+// The non-blank criterion, which Excel's `.xlsx` spells as notEqual to a single space.
+constexpr std::uint8_t kVtsNonBlank = 0x0E;
+constexpr std::string_view kNonBlankText = " ";
 
 constexpr std::uint32_t kKpiNil = 0xFFFFFFFFU;
+// BrtBeginFilters calendarType: Excel writes 3 for `japan`; no other calendar is measured.
+constexpr std::uint32_t kCalendarJapan = 3U;
+constexpr std::string_view kCalendarJapanName = "japan";
+// BrtBeginSortState fAltMethod: Excel sets it for either alternate method and reads it back as stroke.
+constexpr std::uint16_t kSortAltMethod = 0x0004U;
 // BrtDynamicFilter cft: CFTNIL..CFTBELOWAVERAGE are 0..2, CFTTOMORROW.. start at 8.
 constexpr std::uint32_t kCftDateBase = 8U;
 constexpr std::uint32_t kCftLast = 0x27U;
@@ -98,8 +109,14 @@ Expected<void, Error> ReadCustomFilter(ByteSpan payload, CustomFilter* out) {
       out->val = std::move(text);
       return Expected<void, Error>::Ok();
     }
+    case kVtsNonBlank:
+      if (*op != FilterOperator::kNotEqual) {
+        return Unsupported(kBrtCustomFilter);
+      }
+      out->val = std::string(kNonBlankText);
+      return Expected<void, Error>::Ok();
     default:
-      // Booleans (0x08) and the blank / non-blank forms (0x0C / 0x0E) have no
+      // Booleans (0x08) and the blank form (0x0C) have no
       // OOXML spelling the model keeps apart from a string criterion.
       return Unsupported(kBrtCustomFilter);
   }
@@ -190,8 +207,13 @@ Expected<FilterColumn, Error> ReadFilterColumn(ByteSpan& cursor, ByteSpan begin)
         }
         ByteSpan payload = rec.payload;
         ASSIGN_OR_RETURN(const std::uint32_t blank, read_u32(payload));
+        ASSIGN_OR_RETURN(const std::uint32_t calendar, read_u32(payload));
+        if (calendar != 0U && calendar != kCalendarJapan) {
+          return Unsupported(kBrtBeginFilters);
+        }
         col.kind = FilterKind::kValues;
         col.values.blank = blank != 0U;
+        col.values.calendar_type = calendar == kCalendarJapan ? std::string(kCalendarJapanName) : std::string();
         in_filters = true;
         break;
       }
@@ -290,33 +312,49 @@ Expected<FilterColumn, Error> ReadFilterColumn(ByteSpan& cursor, ByteSpan begin)
 
 void EmitCustomFilter(std::vector<std::uint8_t>& out, const CustomFilter& filter) {
   std::vector<std::uint8_t> payload;
+  const bool non_blank = filter.op == FilterOperator::kNotEqual && filter.val == kNonBlankText;
   const std::optional<double> number = parse_full_double(filter.val);
-  emit_u8(payload, number ? kVtsNumber : kVtsString);
+  emit_u8(payload, non_blank ? kVtsNonBlank : number ? kVtsNumber : kVtsString);
   emit_u8(payload, SgnFromOperator(filter.op));
   emit_double(payload, number.value_or(0.0));
-  if (!number) {
+  if (!number && !non_blank) {
     emit_xlwidestring(payload, filter.val);
   }
   emit_record(out, kBrtCustomFilter, payload);
 }
 
-void EmitDateGroup(std::vector<std::uint8_t>& out, const DateGroupItem& item) {
-  std::vector<std::uint8_t> payload;
-  emit_u16(payload, item.year);
-  emit_u16(payload, item.month);
-  emit_u32(payload, item.day);
-  emit_u16(payload, item.hour);
-  emit_u16(payload, item.minute);
-  emit_u16(payload, item.second);
-  emit_u16(payload, 0);
-  emit_u32(payload, 0);
-  emit_u32(payload, static_cast<std::uint32_t>(item.grouping));
-  emit_record(out, kBrtAFilterDateGroupItem, payload);
-}
-
 std::uint32_t DynamicCft(DynamicFilterType type) {
   const auto index = static_cast<std::uint32_t>(type);
   return index <= 2U ? index : index - 3U + kCftDateBase;
+}
+
+/// Above / below average and the relative date ranges carry the bounds Excel computed when it applied them.
+bool DynamicNeedsBounds(std::uint32_t cft) {
+  return cft != 0U && cft < kCftFirstPeriod;
+}
+
+enum class ColumnFate : std::uint8_t { kWritten, kDropped, kDeferred };
+
+/// Whether a column is written, left out as Excel leaves it out, or left out and reported.
+ColumnFate FateOf(const FilterColumn& col) {
+  switch (col.kind) {
+    case FilterKind::kColor:
+      // Excel saves no column for a colour criterion without a format.
+      return col.color.dxf_id ? ColumnFate::kWritten : ColumnFate::kDropped;
+    case FilterKind::kValues:
+      // Excel saves a date group in one of two record forms the model does not tell apart.
+      return col.values.date_groups.empty() ? ColumnFate::kWritten : ColumnFate::kDeferred;
+    case FilterKind::kTop10:
+      // Excel writes the threshold it computed from the data; the model has none until a save that applied it.
+      return col.top10.filter_val ? ColumnFate::kWritten : ColumnFate::kDeferred;
+    case FilterKind::kDynamic: {
+      const std::uint32_t cft = DynamicCft(col.dynamic.type);
+      const bool bounded = col.dynamic.val && (cft < kCftDateBase || col.dynamic.max_val);
+      return !DynamicNeedsBounds(cft) || bounded ? ColumnFate::kWritten : ColumnFate::kDeferred;
+    }
+    default:
+      return ColumnFate::kWritten;
+  }
 }
 
 /// Emits one column's criterion; returns the settings it could not hold.
@@ -326,19 +364,17 @@ std::uint32_t EmitCriterion(std::vector<std::uint8_t>& out, const FilterColumn& 
     case FilterKind::kNone:
       return 0U;
     case FilterKind::kValues: {
+      const bool japan = col.values.calendar_type == kCalendarJapanName;
       emit_u32(payload, col.values.blank ? 1U : 0U);
-      emit_u32(payload, 0U);
+      emit_u32(payload, japan ? kCalendarJapan : 0U);
       emit_record(out, kBrtBeginFilters, payload);
       for (const std::string& value : col.values.values) {
         payload.clear();
         emit_xlwidestring(payload, value);
         emit_record(out, kBrtFilter, payload);
       }
-      for (const DateGroupItem& item : col.values.date_groups) {
-        EmitDateGroup(out, item);
-      }
       emit_record(out, kBrtEndFilters, ByteSpan{});
-      return col.values.calendar_type.empty() ? 0U : 1U;
+      return col.values.calendar_type.empty() || japan ? 0U : 1U;
     }
     case FilterKind::kCustom:
       emit_u32(payload, col.custom.and_join ? 1U : 0U);
@@ -352,28 +388,25 @@ std::uint32_t EmitCriterion(std::vector<std::uint8_t>& out, const FilterColumn& 
       std::uint32_t flags = 0;
       flags |= col.top10.top ? 0x01U : 0U;
       flags |= col.top10.percent ? 0x02U : 0U;
-      flags |= col.top10.filter_val ? 0x04U : 0U;
+      flags |= 0x04U;
       emit_u8(payload, static_cast<std::uint8_t>(flags));
       emit_double(payload, col.top10.val);
-      emit_double(payload, col.top10.filter_val.value_or(0.0));
+      emit_double(payload, *col.top10.filter_val);
       emit_record(out, kBrtTop10Filter, payload);
       return 0U;
     }
     case FilterKind::kDynamic: {
       const std::uint32_t cft = DynamicCft(col.dynamic.type);
-      const bool applied = col.dynamic.val.has_value() && cft != 0U && cft < kCftFirstPeriod;
+      const bool applied = DynamicNeedsBounds(cft);
       emit_u32(payload, cft);
       emit_u8(payload, applied ? 0x01U : 0U);
       emit_double(payload, applied ? *col.dynamic.val : 0.0);
-      emit_double(payload, applied && cft >= kCftDateBase ? col.dynamic.max_val.value_or(0.0) : 0.0);
+      emit_double(payload, applied && cft >= kCftDateBase ? *col.dynamic.max_val : 0.0);
       emit_record(out, kBrtDynamicFilter, payload);
       return 0U;
     }
     case FilterKind::kColor:
-      if (!col.color.dxf_id) {
-        return 1U;
-      }
-      emit_u32(payload, *col.color.dxf_id);
+      emit_u32(payload, col.color.dxf_id.value_or(0U));
       emit_u32(payload, col.color.cell_color ? 1U : 0U);
       emit_record(out, kBrtColorFilter, payload);
       return 0U;
@@ -420,16 +453,13 @@ Expected<SortState, Error> read_sort_state_block(ByteSpan& cursor, ByteSpan begi
   SortState sort;
   ASSIGN_OR_RETURN(const std::uint16_t flags, read_u16(begin));
   ASSIGN_OR_RETURN(const MergeRange rfx, read_rfx(begin));
-  if ((flags & 0x0004U) != 0U) {
-    // fAltMethod does not say which of pinYin / stroke the sort used.
-    return Unsupported(kBrtBeginSortState);
-  }
   if (!in_grid(rfx)) {
     return Corrupt("xlsb BrtBeginSortState range is inverted or outside the grid");
   }
   sort.ref = rfx;
   sort.column_sort = (flags & 0x0001U) != 0U;
   sort.case_sensitive = (flags & 0x0002U) != 0U;
+  sort.sort_method = (flags & kSortAltMethod) != 0U ? SortMethod::kStroke : SortMethod::kNone;
   for (;;) {
     ASSIGN_OR_RETURN(const XlsbRecord rec, read_record(cursor));
     if (rec.type == kBrtEndSortState) {
@@ -452,7 +482,7 @@ std::uint32_t emit_sort_state_block(std::vector<std::uint8_t>& out, const SortSt
   std::uint16_t flags = 0;
   flags |= sort.column_sort ? 0x0001U : 0U;
   flags |= sort.case_sensitive ? 0x0002U : 0U;
-  flags |= sort.sort_method != SortMethod::kNone ? 0x0004U : 0U;
+  flags |= sort.sort_method != SortMethod::kNone ? kSortAltMethod : 0U;
   emit_u16(payload, flags);
   emit_rfx(payload, sort.ref);
   emit_record(out, kBrtBeginSortState, payload);
@@ -476,7 +506,7 @@ std::uint32_t emit_sort_state_block(std::vector<std::uint8_t>& out, const SortSt
     emit_record(out, kBrtEndSortCond, ByteSpan{});
   }
   emit_record(out, kBrtEndSortState, ByteSpan{});
-  return (sort.sort_method != SortMethod::kNone ? 1U : 0U) + (sort.ext_lst_xml.empty() ? 0U : 1U);
+  return sort.ext_lst_xml.empty() ? 0U : 1U;
 }
 
 Expected<AutoFilter, Error> read_auto_filter_block(ByteSpan& cursor, ByteSpan begin) {
@@ -507,6 +537,18 @@ Expected<AutoFilter, Error> read_auto_filter_block(ByteSpan& cursor, ByteSpan be
   }
 }
 
+bool auto_filter_block_has_criteria(const AutoFilter& filter) noexcept {
+  if (filter.is_opaque()) {
+    return false;
+  }
+  for (const FilterColumn& col : filter.columns) {
+    if (col.kind != FilterKind::kNone && FateOf(col) == ColumnFate::kWritten) {
+      return true;
+    }
+  }
+  return false;
+}
+
 std::uint32_t emit_auto_filter_block(std::vector<std::uint8_t>& out, const AutoFilter& filter) {
   if (filter.is_opaque()) {
     return 1U;
@@ -516,6 +558,11 @@ std::uint32_t emit_auto_filter_block(std::vector<std::uint8_t>& out, const AutoF
   emit_rfx(payload, filter.range);
   emit_record(out, kBeginAFilter, payload);
   for (const FilterColumn& col : filter.columns) {
+    const ColumnFate fate = FateOf(col);
+    if (fate != ColumnFate::kWritten) {
+      lost += fate == ColumnFate::kDeferred ? 1U : 0U;
+      continue;
+    }
     payload.clear();
     emit_u32(payload, col.col_id);
     std::uint16_t flags = 0;
@@ -530,9 +577,72 @@ std::uint32_t emit_auto_filter_block(std::vector<std::uint8_t>& out, const AutoF
   if (filter.sort) {
     lost += emit_sort_state_block(out, *filter.sort);
   }
+  // The filter's own extLst has no record; Excel drops it from its xlsb save too.
   emit_record(out, kBrtEndAFilter, ByteSpan{});
-  lost += filter.ext_lst_xml.empty() ? 0U : 1U;
   return lost;
+}
+
+namespace {
+
+/// The worksheet-level `<sortState>` kept from an `.xlsx` source, if any.
+const std::string* SheetSortStateXml(const Sheet& sheet) {
+  const std::string* sort_xml = nullptr;
+  for (const WorksheetRawChild& child : sheet.raw_extensions()) {
+    if (child.slot == worksheet_child::slot_of("sortState") && child.xml.rfind("<sortState", 0) == 0U) {
+      sort_xml = &child.xml;
+    }
+  }
+  return sort_xml;
+}
+
+/// Appends the sheet's AutoFilter and sort-state blocks; returns the settings they cannot hold.
+std::uint32_t EmitSheetFilterBlocks(std::vector<std::uint8_t>& out, const Sheet& sheet) {
+  std::uint32_t lost = 0;
+  if (const AutoFilter* filter = sheet.auto_filter(); filter != nullptr) {
+    lost += emit_auto_filter_block(out, *filter);
+  }
+  if (const std::string* sort_xml = SheetSortStateXml(sheet); sort_xml != nullptr) {
+    if (auto sort = parse_sort_state_xml(*sort_xml)) {
+      lost += emit_sort_state_block(out, sort.value());
+    } else {
+      ++lost;
+    }
+  }
+  return lost;
+}
+
+}  // namespace
+
+std::uint32_t unwritten_auto_filter_settings(const Sheet& sheet) {
+  std::vector<std::uint8_t> scratch;
+  return EmitSheetFilterBlocks(scratch, sheet);
+}
+
+void splice_auto_filter(std::vector<std::uint8_t>& before_merges, const Sheet& sheet) {
+  const AutoFilter* filter = sheet.auto_filter();
+  if (filter == nullptr && SheetSortStateXml(sheet) == nullptr) {
+    return;
+  }
+  std::vector<std::uint8_t> block;
+  EmitSheetFilterBlocks(block, sheet);
+  const std::vector<FramedRecord> recs = split_records(before_merges);
+  std::vector<std::uint8_t> out;
+  std::size_t insert_at = 0;
+  bool in_filter = false;
+  for (const FramedRecord& rec : recs) {
+    const bool retained_filter = filter != nullptr && (in_filter || rec.type == kBeginAFilter);
+    in_filter = retained_filter && rec.type != kBrtEndAFilter;
+    if (retained_filter) {
+      continue;
+    }
+    out.insert(out.end(), before_merges.begin() + static_cast<std::ptrdiff_t>(rec.begin),
+               before_merges.begin() + static_cast<std::ptrdiff_t>(rec.end));
+    if (rec.type == kBrtEndScenMan) {
+      insert_at = out.size();
+    }
+  }
+  out.insert(out.begin() + static_cast<std::ptrdiff_t>(insert_at), block.begin(), block.end());
+  before_merges = std::move(out);
 }
 
 }  // namespace xlsb

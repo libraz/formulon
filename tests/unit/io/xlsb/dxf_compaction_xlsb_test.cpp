@@ -355,7 +355,7 @@ TEST(DxfCompactionXlsb, AnIdentityPlanKeepsTheRawStylesPartAndRetainedPartBytes)
   EXPECT_EQ(Entry(saved, "xl/tables/table1.bin"), Entry(source, "xl/tables/table1.bin"));
 }
 
-TEST(DxfCompactionXlsb, ARetainedSheetAutoFilterIsRenumbered) {
+TEST(DxfCompactionXlsb, ASheetAutoFilterReadFromXlsbIsRenumbered) {
   Workbook wb = BookWithDxfs(3);
   AddRule(wb, 0, 1, 0U);
   AddRule(wb, 0, 2, 1U);
@@ -379,7 +379,11 @@ TEST(DxfCompactionXlsb, ARetainedSheetAutoFilterIsRenumbered) {
     }
   }
   Workbook loaded = Load(RepackWithEntries(package, {{path, patched}}));
-  ASSERT_EQ(SlotValues(loaded.sheet(0).xlsb_tail().before_merges, kBrtColorFilter), std::vector<std::uint32_t>{2U});
+  // The block reads into the sheet's filter, still naming saved index 2.
+  EXPECT_TRUE(SlotValues(loaded.sheet(0).xlsb_tail().before_merges, kBrtColorFilter).empty());
+  ASSERT_NE(loaded.sheet(0).auto_filter(), nullptr);
+  ASSERT_EQ(loaded.sheet(0).auto_filter()->columns.size(), 1U);
+  ASSERT_EQ(loaded.sheet(0).auto_filter()->columns[0].color.dxf_id, std::optional<std::uint32_t>{2U});
   loaded.sheet(0).mutable_conditional_formats().clear();
   const std::vector<std::uint8_t> saved = Save(loaded);
 

@@ -620,11 +620,20 @@ TEST(AutoFilterModel, ChangesDirtySubtotalDependents) {
   EXPECT_EQ(evaluated(), 1U) << "table remove";
 }
 
-TEST(AutoFilterModel, XlsbSaveReportsTheDeferredFilter) {
+TEST(AutoFilterModel, XlsbSaveWritesTheFilterAndReportsWhatItCannotHold) {
   Workbook wb = NewWorkbook();
   auto probe = io::parse_auto_filter_xml(kProbeFilter);
   ASSERT_TRUE(static_cast<bool>(wb.set_sheet_auto_filter(0, probe.value())));
   auto written = io::xlsb::write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
+  EXPECT_EQ(written.value().diagnostics.deferred_feature_count, 0U);
+
+  // A top-ten criterion Excel has not applied carries no threshold, which the record cannot leave out.
+  auto unapplied = io::parse_auto_filter_xml(
+      "<autoFilter ref=\"B2:F12\"><filterColumn colId=\"1\"><top10 val=\"5\"/></filterColumn></autoFilter>");
+  ASSERT_TRUE(static_cast<bool>(unapplied)) << unapplied.error().message;
+  ASSERT_TRUE(static_cast<bool>(wb.set_sheet_auto_filter(0, unapplied.value())));
+  written = io::xlsb::write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
   EXPECT_EQ(written.value().diagnostics.deferred_feature_count, 1U);
 }

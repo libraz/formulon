@@ -228,7 +228,8 @@ TEST(FormulonCApi, SaveWithDiagnosticsReportsTheXlsbCountersAndLeavesTheXlsxOnes
   hyperlink.target = "https://example.com";
   sheet.mutable_hyperlinks().push_back(std::move(hyperlink));
   sheet.mutable_validations().push_back(formulon::DataValidation{});
-  sheet.set_auto_filter(formulon::io::auto_filter_from_xml("<autoFilter ref=\"A1:B2\"/>"));
+  sheet.set_auto_filter(formulon::io::auto_filter_from_xml(
+      "<autoFilter ref=\"A1:B2\"><filterColumn colId=\"0\"><top10 val=\"5\"/></filterColumn></autoFilter>"));
 
   // The OOXML writer represents all of the above, so a clean XLSX save
   // reports nothing lost -- including on the two fields both writers own.
@@ -247,8 +248,9 @@ TEST(FormulonCApi, SaveWithDiagnosticsReportsTheXlsbCountersAndLeavesTheXlsxOnes
   ASSERT_EQ(fm_workbook_save_with_diagnostics(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &xlsb_buf.data, &xlsb_buf.len, &xlsb),
             0);
   EXPECT_EQ(xlsb.downgraded_formula_count, 1U);
-  // Auto-filter state remains deferred. Hyperlinks and validations are
-  // written from the model and are therefore not counted here.
+  // A top-ten criterion without its computed threshold stays unwritten.
+  // Hyperlinks and validations are written from the model and are therefore
+  // not counted here.
   EXPECT_EQ(xlsb.deferred_feature_count, 1U);
   // `renumbered_part_count` has no XLSB source: the binary writer never
   // reassigns a part id.

@@ -35,6 +35,10 @@ namespace formulon::io {
 /// represent.
 Expected<AutoFilter, Error> parse_auto_filter_xml(std::string_view xml);
 
+/// Parses one worksheet-level `<sortState>` element. Returns
+/// `kAutoFilterInvalid` when the model cannot represent it.
+Expected<SortState, Error> parse_sort_state_xml(std::string_view xml);
+
 /// Serializes `filter` as an `<autoFilter>` element. An opaque filter
 /// returns its retained bytes.
 std::string serialize_auto_filter(const AutoFilter& filter);

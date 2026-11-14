@@ -18,6 +18,7 @@
 #include "io/rich_value_errors.h"
 #include "io/sheet_phonetic.h"
 #include "io/sheet_reader.h"
+#include "io/xlsb/auto_filter_records.h"
 #include "io/xlsb/cf_records.h"
 #include "io/xlsb/dv_records.h"
 #include "io/xlsb/feature_formula.h"
@@ -117,7 +118,7 @@ bool DecodeDataTableRecord(ByteSpan p, DataTable* out) {
   return true;
 }
 
-/// Decodes the model-owned tail features -- sheet and range protection,
+/// Decodes the model-owned tail features -- sheet and range protection, the AutoFilter,
 /// the phonetic settings, conditional formatting blocks, the data-validation
 /// container and the sheet's closing revision uid -- which the writer
 /// re-emits from `Sheet`. `rec` has just been read from `cursor`; a block's
@@ -158,6 +159,29 @@ Expected<bool, Error> DecodeTailFeature(ByteSpan& cursor, const std::uint8_t* fr
     } else {
       RetainTailRecord(state, type, framed, static_cast<std::size_t>(cursor.data - framed));
     }
+    return true;
+  }
+  if (rec.type == kBeginAFilter) {
+    ByteSpan after = cursor;
+    auto filter = read_auto_filter_block(after, rec.payload);
+    std::vector<std::uint8_t> rewritten;
+    if (filter && emit_auto_filter_block(rewritten, filter.value()) == 0U) {
+      sheet.set_auto_filter(std::move(filter.value()));
+      cursor = after;
+      return true;
+    }
+    // A block the model would not write back whole is kept, through its BrtEndAFilter.
+    for (;;) {
+      auto next = read_record(cursor);
+      if (!next) {
+        return std::move(next.error());
+      }
+      if (next.value().type == kBrtEndAFilter) {
+        break;
+      }
+    }
+    StructuredLog("xlsb.feature.retained_raw").field("record_type", static_cast<std::int64_t>(rec.type)).warn();
+    RetainTailRecord(state, type, framed, static_cast<std::size_t>(cursor.data - framed));
     return true;
   }
   if (rec.type == kBrtPhoneticInfo) {

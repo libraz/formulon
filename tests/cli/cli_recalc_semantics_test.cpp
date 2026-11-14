@@ -125,7 +125,7 @@ TEST(FormulonCli, RecalcLossWarningsAreNonfatalAndNotSuppressedByQuiet) {
   EXPECT_TRUE(r.stdout_text.empty());
   EXPECT_NE(r.stderr_text.find("warning: XLSB write diagnostics"), std::string::npos);
   EXPECT_NE(r.stderr_text.find("downgraded_formula_count=1"), std::string::npos);
-  // Only the autoFilter is deferred; the data validation is written to .xlsb.
+  // Only the top-ten filter, which has no threshold, is deferred; the data validation is written to .xlsb.
   EXPECT_NE(r.stderr_text.find("deferred_feature_count=1"), std::string::npos);
 }
 

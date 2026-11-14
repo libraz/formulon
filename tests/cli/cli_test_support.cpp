@@ -477,7 +477,9 @@ bool write_lossy_xlsx_fixture(const std::string& path) {
   validation.formula1 = "$A$1:$A$2";
   const char* validation_id = nullptr;
   if (fm_sheet_add_validation(wb, 0, &validation, &validation_id) != 0 ||
-      fm_sheet_set_auto_filter_xml(wb, 0, "<autoFilter ref=\"A1:B2\"/>") != 0) {
+      fm_sheet_set_auto_filter_xml(
+          wb, 0,
+          "<autoFilter ref=\"A1:B2\"><filterColumn colId=\"0\"><top10 val=\"5\"/></filterColumn></autoFilter>") != 0) {
     fm_workbook_destroy(wb);
     return false;
   }

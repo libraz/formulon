@@ -11,6 +11,7 @@
 #include <utility>
 
 #include "io/sheet_phonetic.h"
+#include "io/xlsb/auto_filter_records.h"
 #include "io/xlsb/brt_color.h"
 #include "io/xlsb/frt_records.h"
 #include "io/xlsb/guid_text.h"
@@ -38,6 +39,8 @@ namespace {
 /// direction, filter mode, sync anchors) the model has no field for.
 constexpr std::uint16_t kDefaultWsPropFlags = 0x04C9U;
 constexpr std::uint8_t kDefaultWsPropFlags2 = 0x02U;
+// flags2 bit 0: the sheet AutoFilter has a criterion (`filterMode`).
+constexpr std::uint8_t kWsPropFilterMode = 0x01U;
 constexpr std::uint32_t kWsPropSyncUnused = 0xFFFFFFFFU;
 
 /// BrtWsProp flag bits the writer derives from `<outlinePr>` and `<pageSetUpPr>`.
@@ -49,7 +52,8 @@ constexpr std::uint16_t kWsPropShowOutlineSymbols = 0x0400U;
 bool IsWrittenSheetPrAttribute(std::string_view element, const pugi::xml_attribute& attr) {
   const std::string_view name = attr.name();
   if (element == "sheetPr") {
-    return name == "codeName";
+    // filterMode is derived from the AutoFilter rather than read from the attribute.
+    return name == "codeName" || name == "filterMode";
   }
   if (element == "outlinePr") {
     return name == "applyStyles" || name == "showOutlineSymbols" ||
@@ -107,6 +111,8 @@ void AppendTabColor(std::string& out, const ColorSpec& spec, std::uint32_t argb)
 struct WorksheetProperties {
   std::uint16_t flags = kDefaultWsPropFlags;
   std::string code_name;
+  /// `filterMode`, which only a sheet whose AutoFilter stays outside the model relies on.
+  bool filter_mode = false;
   std::uint8_t color_type = 0U;
   std::uint8_t color_index = 0x40U;
   std::int16_t color_tint = 0;
@@ -157,6 +163,7 @@ WorksheetProperties ParseSheetProperties(std::string_view raw) {
     return out;
   }
   out.code_name = sheet_pr.attribute("codeName").value();
+  out.filter_mode = sheet_pr.attribute("filterMode").as_bool();
   const pugi::xml_node outline = sheet_pr.child("outlinePr");
   if (outline.attribute("applyStyles").as_bool()) {
     out.flags |= kWsPropApplyStyles;
@@ -213,7 +220,7 @@ bool sheet_pr_writes_all(std::string_view raw) {
 /// because `<sheetPr>` is what `SheetPrintSettings` stores and what the
 /// introspection API hands back: routing the XLSB form through the same
 /// string makes a `.xlsb`-loaded sheet answer exactly as its `.xlsx` twin
-/// does. A sheet with neither a code name nor a tab colour produces no
+/// does. A sheet with no code name, filter mode or tab colour produces no
 /// fragment at all, which is also what the OOXML reader records for a
 /// worksheet with no `<sheetPr>` element.
 ///
@@ -259,10 +266,14 @@ Expected<bool, Error> decode_ws_prop(const XlsbRecord& rec, Sheet& sheet, std::s
   const std::string& code_name = code_name_or.value();
   std::string body;
   AppendTabColor(body, tab, argb);
-  if (!code_name.empty() || !body.empty()) {
+  const bool filter_mode = (flags2_or.value() & kWsPropFilterMode) != 0U;
+  if (!code_name.empty() || filter_mode || !body.empty()) {
     sheet_pr.append("<sheetPr");
     if (!code_name.empty()) {
       append_xml_attr(sheet_pr, "codeName", code_name);
+    }
+    if (filter_mode) {
+      sheet_pr.append(" filterMode=\"1\"");
     }
     if (body.empty()) {
       sheet_pr.append("/>");
@@ -282,7 +293,7 @@ Expected<bool, Error> decode_ws_prop(const XlsbRecord& rec, Sheet& sheet, std::s
     }
   }
 
-  return flags_or.value() == kDefaultWsPropFlags && flags2_or.value() == kDefaultWsPropFlags2 &&
+  return flags_or.value() == kDefaultWsPropFlags && (flags2_or.value() & ~kWsPropFilterMode) == kDefaultWsPropFlags2 &&
          rw_sync_or.value() == kWsPropSyncUnused && col_sync_or.value() == kWsPropSyncUnused;
 }
 
@@ -293,7 +304,11 @@ void emit_ws_prop(std::vector<std::uint8_t>& dst, const Sheet& sheet) {
   ApplyTabColor(sheet.print_settings().tab_color, properties_model);
   std::vector<std::uint8_t> properties;
   emit_u16(properties, properties_model.flags);  // page breaks, publish, outline and fit-to-page
-  emit_u8(properties, kDefaultWsPropFlags2);     // evaluate conditional formatting
+  // A modelled AutoFilter decides the filter mode; a retained one keeps what the source stated.
+  const AutoFilter* filter = sheet.auto_filter();
+  const bool filter_mode = filter != nullptr ? auto_filter_block_has_criteria(*filter) : properties_model.filter_mode;
+  // Evaluate conditional formatting, and the filter mode the AutoFilter implies.
+  emit_u8(properties, static_cast<std::uint8_t>(kDefaultWsPropFlags2 | (filter_mode ? kWsPropFilterMode : 0U)));
   // BrtColor. An automatic type with the automatic palette index is the
   // untinted tab; any other selector sets fValidRGB alongside it, matching
   // how the styles writer spells the same structure.

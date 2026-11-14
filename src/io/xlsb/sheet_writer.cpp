@@ -24,6 +24,7 @@
 #include "io/dynamic_array_formula.h"
 #include "io/ooxml_writer_cell.h"
 #include "io/protection_xml.h"
+#include "io/xlsb/auto_filter_records.h"
 #include "io/xlsb/cell_writer.h"
 #include "io/xlsb/cf_records.h"
 #include "io/xlsb/drawing_record.h"
@@ -622,6 +623,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   XlsbSheetTail tail = sheet.xlsb_tail();
   // Print options and margins come from the model ahead of the FRT splices below.
   splice_print_records(tail.after_hyperlinks, sheet.print_settings());
+  splice_auto_filter(tail.before_merges, sheet);
   std::unordered_set<std::string> x14_linked;
   for (std::vector<std::uint8_t>* slot :
        {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {

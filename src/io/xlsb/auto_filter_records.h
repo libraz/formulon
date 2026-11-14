@@ -27,6 +27,7 @@
 #include "utils/expected.h"
 
 namespace formulon {
+class Sheet;
 namespace io {
 namespace xlsb {
 
@@ -37,10 +38,25 @@ namespace xlsb {
 Expected<AutoFilter, Error> read_auto_filter_block(ByteSpan& cursor, ByteSpan begin);
 
 /// Appends the AUTOFILTER block for `filter` and returns how many of its
-/// settings the records cannot hold (an opaque filter, a calendar type,
-/// a colour filter without a dxf, XML-only extensions, a phonetic sort
-/// method).
+/// settings the records cannot hold (an opaque filter, a calendar type other
+/// than japan, a third custom criterion, column-level XML extensions). A column
+/// with date groups, or a top-ten or dynamic criterion without the bounds Excel
+/// computed for it, is left out and counted. A colour criterion without a
+/// format and the filter's own extLst are left out, as Excel leaves them out.
 std::uint32_t emit_auto_filter_block(std::vector<std::uint8_t>& out, const AutoFilter& filter);
+
+/// Whether the block for `filter` carries a criterion, which is when Excel
+/// sets the sheet's filter mode.
+bool auto_filter_block_has_criteria(const AutoFilter& filter) noexcept;
+
+/// Writes the sheet's AutoFilter, and a worksheet-level sort state kept from an
+/// `.xlsx` source, into `before_merges` after any scenario block, replacing a
+/// retained AutoFilter block.
+void splice_auto_filter(std::vector<std::uint8_t>& before_merges, const Sheet& sheet);
+
+/// How many of the sheet's AutoFilter and sort-state settings
+/// `splice_auto_filter` cannot write.
+std::uint32_t unwritten_auto_filter_settings(const Sheet& sheet);
 
 /// Decodes the SORTSTATE block whose BrtBeginSortState (payload `begin`) was
 /// just read from `cursor`, consuming through BrtEndSortState.
