@@ -2,23 +2,30 @@
 #include "io/xlsb/styles_writer.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <tuple>
 #include <utility>
 #include <vector>
 
 #include "cell_style_save_plan.h"
+#include "io/dxf_save_plan.h"
 #include "io/xlsb/brt_color.h"
 #include "io/xlsb/dxf_props.h"
 #include "io/xlsb/dxf_record_slots.h"
+#include "io/xlsb/frt_records.h"
+#include "io/xlsb/guid_text.h"
 #include "io/xlsb/record.h"
+#include "io/xlsb/record_ids.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/xf_flags.h"
+#include "utils/index_sort.h"
 
 namespace formulon {
 namespace io {
@@ -369,10 +376,98 @@ void EmitStyle(std::vector<std::uint8_t>& out, const CellStyleRecord& style) {
   emit_record(out, kBrtStyle, payload);
 }
 
+/// BrtACBegin payload of a custom table style's revision-uid wrapper.
+constexpr std::array<std::uint8_t, 6> kTableStyleUidBeginPayload = {0x01, 0x00, 0x01, 0x11, 0x00, 0x80};
+
+/// The 16-byte uid of a custom table style: its `xr9:uid`, else the one Excel assigns, u32s 0, 0x11, 0xFFFFFFFF and
+/// the style's position among those written.
+std::array<std::uint8_t, kGuidBytes> TableStyleUid(const CustomTableStyle& style, std::uint32_t position) {
+  std::array<std::uint8_t, kGuidBytes> guid{};
+  constexpr std::string_view kKey = " xr9:uid=\"";
+  const std::size_t at = style.extra_attrs.find(kKey);
+  const std::size_t start = at == std::string::npos ? at : at + kKey.size();
+  const std::size_t end = start == std::string::npos ? start : style.extra_attrs.find('"', start);
+  if (end != std::string::npos && ParseGuid(std::string_view(style.extra_attrs).substr(start, end - start), guid)) {
+    return guid;
+  }
+  guid = {};
+  guid[4] = 0x11U;
+  for (std::size_t b = 0; b < 4U; ++b) {
+    guid[8U + b] = 0xFFU;
+    guid[12U + b] = static_cast<std::uint8_t>((position >> (8U * b)) & 0xFFU);
+  }
+  return guid;
+}
+
+/// The custom table styles block, which Excel always writes: the defaults in effect, then each writable style behind
+/// its revision-uid wrapper with its elements in type order. An element's dxf is its saved index for the `nth`
+/// reference to that model dxf in the styles part, counted in model element order as the uses were registered.
+void EmitTableStyles(std::vector<std::uint8_t>& out, const StylesTable& table, const DxfSavePlan* plan) {
+  const TableStylesSection& section = table.table_styles;
+  std::vector<const CustomTableStyle*> written;
+  for (const CustomTableStyle& style : section.styles) {
+    if (table_style_is_written(style)) {
+      written.push_back(&style);
+    }
+  }
+  std::vector<std::uint8_t> payload;
+  emit_u32(payload, static_cast<std::uint32_t>(written.size()));
+  emit_xlwidestring(payload, section.effective_table_default());
+  emit_xlwidestring(payload, section.effective_pivot_default());
+  emit_record(out, kBrtBeginTableStyles, payload);
+  std::vector<std::uint32_t> nth(table.dxfs.size(), 0U);
+  const DxfPartKey styles_part{-1, DxfPartType::kStyles, 0U};
+  for (std::size_t i = 0; i < written.size(); ++i) {
+    const CustomTableStyle& style = *written[i];
+    const auto guid = TableStyleUid(style, static_cast<std::uint32_t>(i));
+    emit_record(out, kAcBegin, ByteSpan{kTableStyleUidBeginPayload.data(), kTableStyleUidBeginPayload.size()});
+    emit_record(out, kUid, ByteSpan{guid.data(), guid.size()});
+    emit_record(out, kAcEnd, ByteSpan{});
+    payload.clear();
+    emit_u16(payload, static_cast<std::uint16_t>((style.pivot ? kTableStyleIsPivot : 0U) |
+                                                 (style.table ? kTableStyleIsTable : 0U)));
+    emit_u32(payload, static_cast<std::uint32_t>(style.elements.size()));
+    emit_xlwidestring(payload, style.name);
+    emit_record(out, kBrtBeginTableStyle, payload);
+    // (type, size, saved dxf) per element, in model order, then written in type order.
+    std::vector<std::array<std::uint32_t, 3>> elements;
+    for (const TableStyleElement& element : style.elements) {
+      const std::uint32_t model = *element.dxf_id;
+      const std::uint32_t saved =
+          plan != nullptr && model < nth.size() ? plan->saved(styles_part, model, nth[model]++).value_or(model) : model;
+      elements.push_back({table_style_element_type(element.type), element.size, saved});
+    }
+    sort_by_index(elements, [](const auto& a, const auto& b) { return a[0] < b[0]; });
+    for (const auto& element : elements) {
+      payload.clear();
+      for (const std::uint32_t field : element) {
+        emit_u32(payload, field);
+      }
+      emit_record(out, kBrtTableStyleElement, payload);
+    }
+    emit_record(out, kBrtEndTableStyle, ByteSpan{});
+  }
+  emit_record(out, kBrtEndTableStyles, ByteSpan{});
+}
+
 }  // namespace
 
 void emit_font_record(std::vector<std::uint8_t>& out, const FontRecord& font) {
   EmitFont(out, font);
+}
+
+std::uint32_t table_style_element_type(std::string_view type) {
+  const auto found = std::find(kTableStyleElementTypes.begin(), kTableStyleElementTypes.end(), type);
+  return static_cast<std::uint32_t>(found - kTableStyleElementTypes.begin());
+}
+
+bool table_style_is_written(const CustomTableStyle& style) {
+  if (style.pivot == style.table) {
+    return false;
+  }
+  return std::all_of(style.elements.begin(), style.elements.end(), [](const TableStyleElement& element) {
+    return element.dxf_id.has_value() && table_style_element_type(element.type) < kTableStyleElementTypes.size();
+  });
 }
 
 std::vector<std::uint8_t> write_styles_bin(const StylesTable& table, const DxfSavePlan* plan,
@@ -475,15 +570,15 @@ std::vector<std::uint8_t> write_styles_bin(const StylesTable& table, const DxfSa
   emit_record(out, kBrtEndStyles, empty);
   const DxfSavePlan identity = plan == nullptr ? identity_dxf_plan(table.dxfs.size()) : DxfSavePlan();
   const std::vector<std::uint32_t>& order = plan == nullptr ? identity.order() : plan->order();
-  if (!order.empty()) {
-    std::vector<std::uint8_t> dxf_count;
-    emit_u32(dxf_count, static_cast<std::uint32_t>(order.size()));
-    emit_record(out, kBrtBeginDxfs, dxf_count);
-    for (const std::uint32_t index : order) {
-      EmitDxf(out, table.dxfs[index]);
-    }
-    emit_record(out, kBrtEndDxfs, empty);
+  // Excel writes the dxf list even when it is empty.
+  std::vector<std::uint8_t> dxf_count;
+  emit_u32(dxf_count, static_cast<std::uint32_t>(order.size()));
+  emit_record(out, kBrtBeginDxfs, dxf_count);
+  for (const std::uint32_t index : order) {
+    EmitDxf(out, table.dxfs[index]);
   }
+  emit_record(out, kBrtEndDxfs, empty);
+  EmitTableStyles(out, table, plan);
   emit_record(out, kBrtEndStyleSheet, empty);
   return out;
 }

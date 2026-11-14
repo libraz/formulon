@@ -12,6 +12,7 @@
 #ifndef FORMULON_STYLES_H_
 #define FORMULON_STYLES_H_
 
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -332,6 +333,36 @@ struct CellStyleRecord {
   bool hidden = false;
   bool custom_builtin = false;
 };
+
+/// `ST_TableStyleType` in schema order, which is also the xlsb element type value.
+inline constexpr std::array<std::string_view, 28> kTableStyleElementTypes = {"wholeTable",
+                                                                             "headerRow",
+                                                                             "totalRow",
+                                                                             "firstColumn",
+                                                                             "lastColumn",
+                                                                             "firstRowStripe",
+                                                                             "secondRowStripe",
+                                                                             "firstColumnStripe",
+                                                                             "secondColumnStripe",
+                                                                             "firstHeaderCell",
+                                                                             "lastHeaderCell",
+                                                                             "firstTotalCell",
+                                                                             "lastTotalCell",
+                                                                             "firstSubtotalColumn",
+                                                                             "secondSubtotalColumn",
+                                                                             "thirdSubtotalColumn",
+                                                                             "firstSubtotalRow",
+                                                                             "secondSubtotalRow",
+                                                                             "thirdSubtotalRow",
+                                                                             "blankRow",
+                                                                             "firstColumnSubheading",
+                                                                             "secondColumnSubheading",
+                                                                             "thirdColumnSubheading",
+                                                                             "firstRowSubheading",
+                                                                             "secondRowSubheading",
+                                                                             "thirdRowSubheading",
+                                                                             "pageFieldLabels",
+                                                                             "pageFieldValues"};
 
 /// One `<tableStyleElement>`: the differential format a custom table or
 /// PivotTable style applies to one region. `type` is the `ST_TableStyleType`

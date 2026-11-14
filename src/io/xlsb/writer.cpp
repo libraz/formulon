@@ -162,13 +162,14 @@ std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
     xml_slicers += is_xml_slicer_part(part.path) && strings::starts_with(part.path, "xl/slicers/") ? 1U : 0U;
   }
   ReportDeferred(&count, "slicers", xml_slicers, 0U);
-  // No binary form is written for custom table / PivotTable styles or for
-  // default style names other than Excel's own.
-  const TableStylesSection& table_styles = workbook.styles().table_styles;
-  const bool custom_defaults =
-      (!table_styles.default_table_style.empty() && table_styles.default_table_style != kBuiltinDefaultTableStyle) ||
-      (!table_styles.default_pivot_style.empty() && table_styles.default_pivot_style != kBuiltinDefaultPivotStyle);
-  ReportDeferred(&count, "table_styles", !table_styles.styles.empty() || custom_defaults ? 1U : 0U, 0U);
+  // A custom table style of a form not measured (usable by both tables and PivotTables, or with an element that
+  // names no dxf or an unknown type) is left out of styles.bin.
+  const std::vector<CustomTableStyle>& custom_styles = workbook.styles().table_styles.styles;
+  ReportDeferred(
+      &count, "table_styles",
+      static_cast<std::size_t>(std::count_if(custom_styles.begin(), custom_styles.end(),
+                                             [](const CustomTableStyle& s) { return !table_style_is_written(s); })),
+      0U);
   return count;
 }
 

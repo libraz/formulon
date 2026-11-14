@@ -90,6 +90,23 @@ DxfUseSet collect_xlsb_dxf_uses(const Workbook& wb, const XlsbEmission& emission
       out.blocked = true;
     }
   }
+  if (emission.raw_styles == nullptr) {
+    // A generated styles part names a dxf from each written table style element, registered in model order.
+    std::uint32_t position = 0;
+    for (const CustomTableStyle& style : wb.styles().table_styles.styles) {
+      if (!table_style_is_written(style)) {
+        continue;
+      }
+      for (const TableStyleElement& element : style.elements) {
+        DxfUse use;
+        use.model_index = *element.dxf_id;
+        use.kind = DxfUseKind::kTableStyleElement;
+        use.part = DxfPartKey{-1, DxfPartType::kStyles, 0U};
+        use.position = position++;
+        out.uses.push_back(use);
+      }
+    }
+  }
   if (emission.raw_styles != nullptr) {
     // The raw list is rewritten by model index, so it must be the model's.
     const std::optional<std::size_t> raw_count = styles_bin_dxf_count(*emission.raw_styles);

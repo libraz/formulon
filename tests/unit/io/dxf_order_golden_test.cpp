@@ -176,14 +176,35 @@ TEST(DxfOrderGolden, XlsxSaveWritesExcelsOrder) {
 }
 
 /// `golden` restricted to the records `saved` holds, keeping Excel's order.
-/// The xlsb writer does not write custom table styles, pivot tables or a
-/// sheet autoFilter from the model, so those users have no record there.
+/// The xlsb writer does not write pivot tables or a sheet autoFilter from the
+/// model, so those users have no record there. A model dxf several users name
+/// has a record per user, so the records are matched in order: the next saved
+/// record takes the first golden record at or after the last match that holds
+/// its fill, and any golden record skipped over is an unwritten user's. Where
+/// the saved records are not in golden order (an unordered tail), each fill
+/// takes its first golden record instead.
 Golden WrittenPart(const Golden& golden, const std::vector<std::string>& saved) {
+  Golden out{golden.file, {}, 0, golden.xlsb_unwritten};
+  std::size_t g = 0;
+  for (const std::string& fill : saved) {
+    while (g < golden.fills.size() && golden.fills[g] != fill) {
+      ++g;
+    }
+    if (g == golden.fills.size()) {
+      break;
+    }
+    out.fills.push_back(golden.fills[g]);
+    out.ordered += g < golden.ordered ? 1U : 0U;
+    ++g;
+  }
+  if (out.fills.size() == saved.size()) {
+    return out;
+  }
   std::map<std::string, std::size_t> left;
   for (const std::string& fill : saved) {
     ++left[fill];
   }
-  Golden out{golden.file, {}, 0, golden.xlsb_unwritten};
+  out = Golden{golden.file, {}, 0, golden.xlsb_unwritten};
   for (std::size_t i = 0; i < golden.fills.size(); ++i) {
     if (left[golden.fills[i]] > 0U) {
       --left[golden.fills[i]];

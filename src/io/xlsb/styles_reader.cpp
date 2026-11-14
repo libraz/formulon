@@ -48,6 +48,7 @@
 #include "io/xlsb/brt_color.h"
 #include "io/xlsb/dxf_props.h"
 #include "io/xlsb/record.h"
+#include "io/xlsb/record_ids.h"
 #include "io/xlsb/xf_flags.h"
 #include "io/xml_utils.h"
 #include "utils/resource_budget.h"
@@ -697,6 +698,44 @@ Expected<void, Error> DecodeDxf(ByteSpan payload, StylesTable& table) {
 
 }  // namespace
 
+namespace {
+
+/// Decodes the custom table styles block: BrtBeginTableStyles (count, default table and PivotTable style names),
+/// then per style BrtBeginTableStyle (u16 flags, u32 element count, name) and its BrtTableStyleElement records (u32
+/// type, u32 size, u32 dxf). An element of an unknown type is left out.
+Expected<void, Error> DecodeTableStyleRecord(const XlsbRecord& rec, StylesTable& table) {
+  ByteSpan p = rec.payload;
+  TableStylesSection& section = table.table_styles;
+  if (rec.type == kBrtBeginTableStyles) {
+    ASSIGN_OR_RETURN(const std::uint32_t count, read_u32(p));
+    (void)count;
+    ASSIGN_OR_RETURN(section.default_table_style, read_xlwidestring(p));
+    ASSIGN_OR_RETURN(section.default_pivot_style, read_xlwidestring(p));
+    section.present = true;
+  } else if (rec.type == kBrtBeginTableStyle) {
+    ASSIGN_OR_RETURN(const std::uint16_t flags, read_u16(p));
+    ASSIGN_OR_RETURN(const std::uint32_t count, read_u32(p));
+    (void)count;
+    CustomTableStyle& style = section.styles.emplace_back();
+    ASSIGN_OR_RETURN(style.name, read_xlwidestring(p));
+    style.pivot = (flags & kTableStyleIsPivot) != 0U;
+    style.table = (flags & kTableStyleIsTable) != 0U;
+  } else if (rec.type == kBrtTableStyleElement && !section.styles.empty()) {
+    ASSIGN_OR_RETURN(const std::uint32_t type, read_u32(p));
+    ASSIGN_OR_RETURN(const std::uint32_t size, read_u32(p));
+    ASSIGN_OR_RETURN(const std::uint32_t dxf, read_u32(p));
+    if (type < kTableStyleElementTypes.size()) {
+      TableStyleElement& element = section.styles.back().elements.emplace_back();
+      element.type = std::string(kTableStyleElementTypes[type]);
+      element.size = size;
+      element.dxf_id = dxf;
+    }
+  }
+  return Expected<void, Error>::Ok();
+}
+
+}  // namespace
+
 Expected<StylesTable, Error> read_styles_bin(ByteSpan bytes) {
   StylesTable table;
   XfTarget xf_target = XfTarget::kNone;
@@ -707,6 +746,10 @@ Expected<StylesTable, Error> read_styles_bin(ByteSpan bytes) {
       return std::move(rec_or.error());
     }
     const XlsbRecord& rec = rec_or.value();
+    if (rec.type == kBrtBeginTableStyles || rec.type == kBrtBeginTableStyle || rec.type == kBrtTableStyleElement) {
+      RETURN_IF_ERROR(DecodeTableStyleRecord(rec, table));
+      continue;
+    }
     if (rec.type == kBrtDxf) {
       if (auto r = DecodeDxf(rec.payload, table); !r) {
         return std::move(r.error());

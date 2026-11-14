@@ -47,6 +47,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and outline symbols, and fit-to-page. Other `<sheetPr>` settings
   and a printer-settings part are still reported as deferred print settings.
 
+- `.xlsb` saves write custom table and PivotTable styles and the default
+  table and PivotTable style names from the workbook, as Excel does, with the
+  differential formats their elements use, and `.xlsb` loads read them. A
+  style usable by both tables and PivotTables is left out and reported as
+  deferred.
+
 - `.xlsb` saves write each sheet's notes, their drawing and its threaded
   comments from the workbook, as Excel does, so notes and threads set in
   `.xlsx` or through the API are kept, and a note's formatted runs keep their

@@ -431,7 +431,8 @@ TEST(XlsbWorkbookFidelity, TruncatedBookViewIsSkipped) {
 }
 
 // Custom table / PivotTable styles have no binary form here and are reported.
-TEST(XlsbWorkbookFidelity, CustomTableStylesAreReportedDeferred) {
+TEST(XlsbWorkbookFidelity, UnmeasuredCustomTableStylesAreReportedDeferred) {
+  // A style usable by both tables and PivotTables is not a form Excel was measured writing.
   Workbook wb = Workbook::create();
   std::uint32_t baseline = 99U;
   ToXlsb(wb, &baseline);
@@ -444,16 +445,13 @@ TEST(XlsbWorkbookFidelity, CustomTableStylesAreReportedDeferred) {
   ToXlsb(wb, &deferred);
   EXPECT_EQ(deferred, baseline + 1U);
 
-  // Only default style names that differ from Excel's are a setting to lose.
+  // Default style names are written, Excel's own or not.
   Workbook defaults = Workbook::create();
   defaults.mutable_styles().table_styles.present = true;
-  defaults.mutable_styles().table_styles.default_table_style = "TableStyleMedium2";
+  defaults.mutable_styles().table_styles.default_table_style = "TableStyleLight1";
   defaults.mutable_styles().table_styles.default_pivot_style = "PivotStyleLight16";
   ToXlsb(defaults, &deferred);
   EXPECT_EQ(deferred, baseline);
-  defaults.mutable_styles().table_styles.default_table_style = "TableStyleLight1";
-  ToXlsb(defaults, &deferred);
-  EXPECT_EQ(deferred, baseline + 1U);
 }
 
 // A sheet view naming a window the workbook does not have is still reported.

@@ -122,6 +122,9 @@ inline constexpr std::uint16_t kBrtEndTableStyles = 509;
 inline constexpr std::uint16_t kBrtBeginTableStyle = 510;
 inline constexpr std::uint16_t kBrtEndTableStyle = 511;
 inline constexpr std::uint16_t kBrtTableStyleElement = 512;
+/// BrtBeginTableStyle flags: the style may be used by PivotTables, by tables.
+inline constexpr std::uint16_t kTableStyleIsPivot = 0x0002;
+inline constexpr std::uint16_t kTableStyleIsTable = 0x0004;
 
 // Page setup block.
 inline constexpr std::uint16_t kBrtMargins = 476;
