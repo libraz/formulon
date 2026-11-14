@@ -6,6 +6,7 @@
 
 #include "io/ooxml/sheet_xml_builder.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -358,7 +359,8 @@ std::string BuildSheetViewXml(const SheetView& view) {
 /// Emits the modelled subset of `<sheetFormatPr>`.  Unlike explicit `<col>`
 /// and `<row>` records, these metrics apply to every un-overridden track, so
 /// silently omitting them changes pagination and visible geometry across the
-/// whole worksheet.
+/// whole worksheet. The outline summaries stay at most 7: Excel opens a row or
+/// column at level 8 but refuses a file whose summary says 8.
 std::string BuildSheetFormatPrXml(const SheetFormatDefaults& defaults) {
   if (!defaults.has_default_col_width && !defaults.has_default_row_height && !defaults.custom_height &&
       !defaults.zero_height && !defaults.thick_top && !defaults.thick_bottom && defaults.outline_level_row == 0U &&
@@ -389,10 +391,10 @@ std::string BuildSheetFormatPrXml(const SheetFormatDefaults& defaults) {
     emit_xsd_bool_attr(out, "thickBottom", true);
   }
   if (defaults.outline_level_row != 0U) {
-    append_xml_attr_uint(out, "outlineLevelRow", defaults.outline_level_row);
+    append_xml_attr_uint(out, "outlineLevelRow", std::min(defaults.outline_level_row, kMaxOutlineLevel));
   }
   if (defaults.outline_level_col != 0U) {
-    append_xml_attr_uint(out, "outlineLevelCol", defaults.outline_level_col);
+    append_xml_attr_uint(out, "outlineLevelCol", std::min(defaults.outline_level_col, kMaxOutlineLevel));
   }
   out.append("/>");
   return out;

@@ -10,6 +10,7 @@
 
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
+#include "io/ooxml_writer.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/writer.h"
 #include "reader_test_helpers.h"
@@ -150,6 +151,22 @@ TEST(XlsbParityFormatDefaults, ExcelRefusedSourcesReadAsWritten) {
   const Workbook row8 = ReadXlsx("outline_row_8_src.xlsx");
   ASSERT_FALSE(row8.sheet(0).layout().row_overrides.empty());
   EXPECT_EQ(row8.sheet(0).layout().row_overrides.front().outline_level, 8U);
+}
+
+TEST(XlsbParityFormatDefaults, XlsxSaveKeepsOutlineSummaryAtSeven) {
+  for (const char* name : {"outline_row_8_src.xlsx", "outline_col_8_src.xlsx"}) {
+    auto written = write_ooxml(ReadXlsx(name));
+    ASSERT_TRUE(static_cast<bool>(written)) << name;
+    const std::optional<Bytes> part = test::ReadPart(written.value(), "xl/worksheets/sheet1.xml");
+    ASSERT_TRUE(part.has_value()) << name;
+    const std::string xml(part->begin(), part->end());
+    EXPECT_EQ(xml.find("outlineLevelRow=\"8\""), std::string::npos) << name;
+    EXPECT_EQ(xml.find("outlineLevelCol=\"8\""), std::string::npos) << name;
+    EXPECT_NE(xml.find("outlineLevel=\"8\""), std::string::npos) << name;
+    EXPECT_TRUE(xml.find("outlineLevelRow=\"7\"") != std::string::npos ||
+                xml.find("outlineLevelCol=\"7\"") != std::string::npos)
+        << name;
+  }
 }
 
 /// The error of an xlsb save of `workbook`; the save must fail.
