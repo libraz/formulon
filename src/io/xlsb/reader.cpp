@@ -51,6 +51,7 @@
 #include "io/xlsb/metadata_bin.h"
 #include "io/xlsb/package_loader.h"
 #include "io/xlsb/part_paths.h"
+#include "io/xlsb/pivot_cache_ids.h"
 #include "io/xlsb/pivot_reader.h"
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_reader.h"
@@ -796,6 +797,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   }
   // Slicer cache lists stay future records keyed by workbook relationship ids.
   wb.set_xlsb_book_frt(read_book_slicer_cache_ids(ByteSpan{wb_bytes.data(), wb_bytes.size()}));
+  wb.set_xlsb_pivot_cache_ids(read_book_pivot_cache_ids(ByteSpan{wb_bytes.data(), wb_bytes.size()}));
   // The Compatibility Version stamp: absent unless the part carries one.
   {
     std::optional<std::uint32_t> set_version;

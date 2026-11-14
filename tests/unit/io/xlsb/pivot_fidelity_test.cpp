@@ -5,9 +5,12 @@
 // pivot output, so the part itself stays passthrough and is checked fresh
 // against the decoded model on save.
 
+#include <algorithm>
 #include <cstdint>
+#include <filesystem>
 #include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "eval/function_registry.h"
@@ -236,6 +239,71 @@ TEST(XlsbPivotFidelity, FilterCountMismatchLeavesThePivotAlone) {
   }
   const Workbook wb = Load(RepackWithEntries(package, {{kPivotPart, patched}}));
   EXPECT_TRUE(wb.sheet(0).pivot_tables().empty());
+}
+
+/// (idSx, cache definition part) per BrtBeginPivotCacheID of `package`'s
+/// workbook part, resolving each relationship id through workbook.bin.rels.
+std::vector<std::pair<std::uint32_t, std::string>> PivotCacheIds(const std::vector<std::uint8_t>& package) {
+  const std::vector<std::uint8_t> rels_bytes = Entry(package, "xl/_rels/workbook.bin.rels");
+  const std::string rels(rels_bytes.begin(), rels_bytes.end());
+  const auto attr = [](const std::string& element, const std::string& name) {
+    const std::string key = " " + name + "=\"";
+    const std::size_t at = element.find(key);
+    if (at == std::string::npos) {
+      return std::string();
+    }
+    const std::size_t from = at + key.size();
+    return element.substr(from, element.find('"', from) - from);
+  };
+  const auto target_of = [&](const std::string& id) {
+    for (std::size_t at = rels.find("<Relationship "); at != std::string::npos;
+         at = rels.find("<Relationship ", at + 1U)) {
+      const std::string element = rels.substr(at, rels.find('>', at) - at);
+      if (attr(element, "Id") == id) {
+        return attr(element, "Target");
+      }
+    }
+    return std::string();
+  };
+  std::vector<std::pair<std::uint32_t, std::string>> out;
+  const std::vector<std::uint8_t> book = Entry(package, "xl/workbook.bin");
+  for (const FramedRecord& rec : split_records(book)) {
+    if (rec.type != 386U) {
+      continue;
+    }
+    ByteSpan cursor{rec.payload.data + 4, rec.payload.size - 4U};
+    auto id = read_xlwidestring(cursor);
+    EXPECT_TRUE(static_cast<bool>(id));
+    out.emplace_back(load_u32(rec.payload.data), id ? target_of(id.value()) : std::string());
+  }
+  return out;
+}
+
+TEST(XlsbPivotFidelity, SaveKeepsThePivotCacheListOfEveryTwin) {
+  std::vector<std::string> paths = {std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_pivot_base.xlsb"};
+  for (const auto& entry :
+       std::filesystem::directory_iterator(std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_pivot_twins")) {
+    if (entry.path().extension() == ".xlsb") {
+      paths.push_back(entry.path().string());
+    }
+  }
+  ASSERT_GT(paths.size(), 80U);
+  for (const std::string& path : paths) {
+    SCOPED_TRACE(path);
+    const std::vector<std::uint8_t> source = ReadFixtureFile(path);
+    const std::vector<std::pair<std::uint32_t, std::string>> expected = PivotCacheIds(source);
+    ASSERT_FALSE(expected.empty());
+    auto xlsb = write_xlsb(Load(source));
+    ASSERT_TRUE(static_cast<bool>(xlsb)) << xlsb.error().message;
+    EXPECT_EQ(PivotCacheIds(xlsb.value()), expected);
+    // The list sits ahead of BrtFileRecover, the future-record blocks and BrtEndBook, as Excel places it.
+    const std::vector<FramedRecord> recs = split_records(Entry(xlsb.value(), "xl/workbook.bin"));
+    const auto list_end = std::find_if(recs.begin(), recs.end(), [](const FramedRecord& r) { return r.type == 385U; });
+    const auto trailer = std::find_if(recs.begin(), recs.end(), [](const FramedRecord& r) {
+      return r.type == 155U || r.type == 35U || r.type == 132U;
+    });
+    EXPECT_LT(list_end, trailer);
+  }
 }
 
 }  // namespace

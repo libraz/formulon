@@ -48,6 +48,7 @@
 #include "io/xlsb/external_link_writer.h"
 #include "io/xlsb/metadata_bin.h"
 #include "io/xlsb/part_paths.h"
+#include "io/xlsb/pivot_cache_ids.h"
 #include "io/xlsb/print_records.h"
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_targets.h"
@@ -515,6 +516,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   // 4. xl/workbook.bin
   {
     ASSIGN_OR_RETURN(auto wb_bytes, BuildWorkbookBin(workbook, ordered_names, sheet_ranges, sheet_names, link_rel_ids));
+  splice_book_pivot_cache_ids(wb_bytes, workbook.xlsb_pivot_cache_ids(), workbook_rel_ids);
     splice_book_slicer_cache_ids(wb_bytes, workbook.xlsb_book_frt(), workbook_rel_ids);
     RETURN_IF_ERROR(AddPartBytes(writer.get(), kWorkbookBinPath, wb_bytes));
   }

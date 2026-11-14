@@ -1755,6 +1755,11 @@ class Workbook {
   /// workbook relationship ids; see `io/xlsb/slicer_records.h`.
   const std::vector<std::uint8_t>& xlsb_book_frt() const noexcept { return xlsb_book_frt_; }
   void set_xlsb_book_frt(std::vector<std::uint8_t> records) { xlsb_book_frt_ = std::move(records); }
+  /// The framed PIVOTCACHEIDS block of an `.xlsb` source's `xl/workbook.bin`,
+  /// naming the source workbook relationship ids of the retained pivot caches;
+  /// see `io/xlsb/pivot_cache_ids.h`.
+  const std::vector<std::uint8_t>& xlsb_pivot_cache_ids() const noexcept { return xlsb_pivot_cache_ids_; }
+  void set_xlsb_pivot_cache_ids(std::vector<std::uint8_t> records) { xlsb_pivot_cache_ids_ = std::move(records); }
 
   /// Extra namespace declarations (and `mc:Ignorable`) captured from the
   /// source `<workbook>` root element, serialised as ` name="value"`
@@ -2208,6 +2213,7 @@ class Workbook {
   std::string workbook_ext_lst_xml_;
   WorksheetRawExtensions raw_children_;
   std::vector<std::uint8_t> xlsb_book_frt_;
+  std::vector<std::uint8_t> xlsb_pivot_cache_ids_;
   // Extra `<workbook>` root namespace declarations (xmlns:mc / xmlns:xr* /
   // x15 + mc:Ignorable) captured for verbatim re-emission so namespaced
   // attributes in the raw captures above resolve. Empty by default.

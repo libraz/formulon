@@ -491,6 +491,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Excel refused to open an `.xlsb` that held PivotTables after it was opened and
+  saved again as `.xlsb`: the workbook part lost its list of pivot caches. The
+  list is now kept and written with the relationship ids of the saved package.
+
 - An array formula entered with Ctrl+Shift+Enter whose range sits under an operator inside a
   function, such as `{=SUM(A1:A3*2)}`, calculated a different result in Excel after the
   workbook was saved as `.xlsb`: Excel read the range as a single cell, so the example gave 2
