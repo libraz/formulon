@@ -886,6 +886,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   // regions are registered; a constant saved with a spill value waits for the pivots.
   RichValueSet rich_values;
   std::vector<DeferredSpillAnchor> deferred_spill_anchors;
+  std::vector<std::vector<CellAddress>> recalc_marked(sheet_part_paths.size());
   const bool rich_consumed = ConsumeRichValueParts(zip, &rich_values, consumed_parts, wb_rels_or.value().unknown_rels);
 
   for (std::size_t i = 0; i < sheet_part_paths.size(); ++i) {
@@ -905,6 +906,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     cells_read += state_or.value().cells_decoded;
     dropped_record_count += state_or.value().dropped_records;
     skipped_feature_count += state_or.value().skipped_features;
+    recalc_marked[i] = std::move(state_or.value().recalc_marked);
     std::unordered_set<std::uint64_t> dynamic_cells;
     for (const auto& [row, col, ifmd] : state_or.value().cell_metadata) {
       if (dynamic_array_ifmd != 0U && ifmd == dynamic_array_ifmd) {
@@ -1121,6 +1123,8 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   wb.apply_legacy_implicit_intersections();
   clamp_sheet_phonetic_fonts(wb);
   wb.request_pivot_refresh_on_load();
+  // Last, once nothing else dirties formulas: the stale set Excel opens with follows fAlwaysCalc.
+  wb.apply_loaded_recalc_marks(recalc_marked);
 
   XlsbReadResult result{std::move(wb),
                         cells_read,

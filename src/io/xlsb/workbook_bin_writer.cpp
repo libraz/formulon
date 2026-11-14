@@ -863,7 +863,9 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
   }
 
   // BrtCalcProp follows the BrtName table; omitted like a default `<calcPr>`.
-  const XlsbCalcProps calc_props{wb.calc_mode(), wb.iterative_options(), wb.calc_options()};
+  XlsbCalcProps calc_props{wb.calc_mode(), wb.iterative_options(), wb.calc_options()};
+  // Excel saves a book with a stale formula as not fully calculated (fSomeUncalced).
+  calc_props.options.calc_completed = calc_props.options.calc_completed && !wb.saves_stale_formulas();
   if (!calc_props_are_default(calc_props)) {
     emit_calc_prop(body, calc_props);
   }

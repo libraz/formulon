@@ -67,6 +67,9 @@ using detail::RecordDisposition;
 using detail::ResolveUnmodelledRecord;
 using detail::RetainTailRecord;
 
+/// BrtFmla* grbitFlags: fAlwaysCalc.
+constexpr std::uint16_t kFmlaAlwaysCalc = 0x0002U;
+
 /// Decodes a `BrtTable` payload ([MS-XLSB] 2.4.846, record 428): RfX, rwInput1 /
 /// colInput1, rwInput2 / colInput2 (u32 each), then fRw, fTbl2, fDeleted1,
 /// fDeleted2, fAlwaysCalc in the low bits of one byte. An input the flags
@@ -599,12 +602,16 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(const XlsbRecord& rec, Xl
         default:
           break;
       }
-      // grbitFlags (u16).
+      // grbitFlags (u16); fAlwaysCalc is the `ca="1"` of `.xlsx`.
       if (p.size < 2) {
         return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb formula flags truncated", kReadXlsbContext);
       }
+      const auto grbit = static_cast<std::uint16_t>(p.data[0] | (p.data[1] << 8U));
       p.data += 2;
       p.size -= 2;
+      if ((grbit & kFmlaAlwaysCalc) != 0U) {
+        state.recalc_marked.push_back(CellAddress{state.current_row, col.col});
+      }
       // CellParsedFormula: u32 cce (rgce byte length) + cce bytes of
       // Ptg stream + u32 cb + cb bytes of rgcb (the array-constant
       // extra-data area `PtgArray` consumes; empty for formulas with

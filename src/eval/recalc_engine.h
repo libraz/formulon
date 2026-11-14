@@ -201,6 +201,10 @@ class RecalcEngine {
     /// Marks the owner of every compact range dependency intersecting `range`
     /// dirty.
     void mark_range_dependents_dirty(const CellRangeDependency& range) const;
+    /// Empties the dirty set, leaving the graph and the volatile set as they
+    /// are. A reader that loaded cached values calls it before marking the
+    /// cells its file left uncomputed.
+    void clear_dirty() const;
     /// Drops the entire dependency graph, volatile set, and dirty set.
     /// Used by `Workbook`'s sheet-permutation entry points, which
     /// invalidate every `CellNodeId.sheet_id` at once and must re-register
@@ -372,9 +376,20 @@ class RecalcEngine {
   std::vector<CellNodeId> unresolved_cycle_cells(std::uint32_t sheet_id) const;
 
   /// True when `cell`'s value has not been computed since its inputs
-  /// changed: it is dirty, or a cell it reads, directly or through other
-  /// cells, is dirty. Reads state only; nothing is recalculated.
+  /// changed: it is a stale seed (`is_stale_seed_locked`), or a cell it
+  /// reads, directly or through other cells, is one. Reads state only;
+  /// nothing is recalculated.
   bool awaits_recalc(CellNodeId cell) const;
+
+  /// Every cell for which `awaits_recalc` holds, computed in one forward
+  /// walk from the stale seeds over the cells that read them. Virtual range
+  /// nodes are walked through but not reported. Reads state only.
+  std::unordered_set<CellNodeId, CellNodeIdHash> stale_cells() const;
+
+  /// Every volatile cell and every cell that reads one, directly or through
+  /// other cells, whatever is dirty. Excel stores these as recalculated on
+  /// open even in a fully calculated workbook. Reads state only.
+  std::unordered_set<CellNodeId, CellNodeIdHash> volatile_closure() const;
 
   /// Installs a progress callback for the iterative solver.
   ///
@@ -456,6 +471,18 @@ class RecalcEngine {
   /// when non-null), then propagates dirtiness through reverse edges. The
   /// caller holds `mutex_`.
   void seed_dirty_locked(std::uint32_t* volatile_cells);
+
+  /// The stale rule's seeds, which `awaits_recalc` and `stale_cells` walk
+  /// from: a dirty cell, and, while any cell is dirty, a volatile one, as
+  /// Excel flags every volatile after any pending edit. The caller holds
+  /// `mutex_`.
+  bool is_stale_seed_locked(CellNodeId cell) const;
+
+  /// The cells reachable over dependent edges from the dirty cells
+  /// (`from_dirty`) and the volatile ones (`from_volatiles`), seeds included
+  /// and virtual range nodes left out; the one walk behind `stale_cells` and
+  /// `volatile_closure`. The caller holds `mutex_`.
+  std::unordered_set<CellNodeId, CellNodeIdHash> dependent_closure_locked(bool from_dirty, bool from_volatiles) const;
 
   /// Replaces the learned dynamic-reference edges of every reader `log`
   /// saw (once per recalc call, tracked in `refreshed`) with edges to the

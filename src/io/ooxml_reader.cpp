@@ -1124,6 +1124,13 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   clamp_sheet_phonetic_fonts(wb);
   wb.request_pivot_refresh_on_load();
 
+  // Last, once nothing else dirties formulas: the stale set Excel opens with follows `ca="1"`.
+  std::vector<std::vector<CellAddress>> recalc_marked(sheet_contexts.size());
+  for (std::size_t i = 0; i < sheet_contexts.size(); ++i) {
+    recalc_marked[i] = std::move(sheet_contexts[i].recalc_marked);
+  }
+  wb.apply_loaded_recalc_marks(recalc_marked);
+
   OoxmlReadResult result{std::move(wb), pending_sst_count, diagnostics};
   return result;
 }

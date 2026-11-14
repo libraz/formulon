@@ -1020,6 +1020,7 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
       record->f_t = AttrOfDecoded(child, "t", &scratch->f_attr_t);
       record->f_si = AttrOfDecoded(child, "si", &scratch->f_attr_si);
       record->f_ref = AttrOfDecoded(child, "ref", &scratch->f_attr_ref);
+      record->f_ca = AttrOfDecoded(child, "ca", &scratch->f_attr_dt[6]);
       if (record->f_t == "dataTable") {
         record->f_r1 = AttrOfDecoded(child, "r1", &scratch->f_attr_dt[0]);
         record->f_r2 = AttrOfDecoded(child, "r2", &scratch->f_attr_dt[1]);
@@ -1027,7 +1028,6 @@ bool ScanCell(const char* begin, const char* end, const char** p, const TagHeade
         record->f_dtr = AttrOfDecoded(child, "dtr", &scratch->f_attr_dt[3]);
         record->f_del1 = AttrOfDecoded(child, "del1", &scratch->f_attr_dt[4]);
         record->f_del2 = AttrOfDecoded(child, "del2", &scratch->f_attr_dt[5]);
-        record->f_ca = AttrOfDecoded(child, "ca", &scratch->f_attr_dt[6]);
         record->f_aca = AttrOfDecoded(child, "aca", &scratch->f_attr_dt[7]);
       }
       if (child.self_closing) {

@@ -9462,8 +9462,10 @@ class Workbook(_NoCopy):
         Edits to cells, defined names, the profile or the file name, row /
         column inserts and deletes, and sheet removal make cells dirty;
         volatile functions do not, and neither does a freshly created
-        workbook. A loaded workbook with formulas is dirty until its first
-        full recalc; :meth:`Sheet.recalc_viewport` does not clean it, and a
+        workbook. Under manual calculation a loaded workbook holds dirty only
+        the formulas its file marks for recalculation and those without a
+        cached value; under automatic calculation, every formula until the
+        first recalc. :meth:`Sheet.recalc_viewport` does not clean it, and a
         failed recalc leaves it dirty. Under ``CalcMode.AUTO`` a value read
         calculates first, so this is mostly of use under ``CalcMode.MANUAL``.
         """

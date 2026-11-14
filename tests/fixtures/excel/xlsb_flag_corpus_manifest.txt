@@ -88,6 +88,8 @@ excel/sheet_view_selection.xlsb
 excel/sheet_view_split_edge.xlsb
 excel/spill_phantom_cells.xlsb
 excel/storage_prefix_probe.xlsb
+excel/stale/st_stale.xlsb
+excel/stale/st_stale_calc.xlsb
 excel/structural_ref_m6.xlsb
 excel/structural_ref_m6b.xlsb
 excel/structural_ref_m7.xlsb

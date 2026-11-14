@@ -74,6 +74,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the setting uses version 1, as Excel computes it on recalculation. `LEFT`
   and `RIGHT` count such a character as one position on every profile and
   version, as Excel does.
+- Stale formulas under manual calculation follow the file, as Excel opens
+  and saves them. A loaded `.xlsx` or `.xlsb` workbook reports the formulas
+  its file marks for recalculation (`ca`, fAlwaysCalc in `.xlsb`) as stale in
+  `Sheet.isCellStale` (Python `is_cell_stale()`, C `fm_sheet_is_cell_stale`);
+  the first `recalc` computes those, the formulas without a cached value and
+  what reads them, and keeps every other cached value, where before it
+  recomputed every formula. A save marks every stale formula and every
+  formula that reads a volatile one that way, as Excel keeps them after a
+  full calculation, and the workbook as not fully calculated
+  (`<calcPr calcCompleted="0">`, fSomeUncalced) while a stale one is left. A recalc
+  that leaves nothing stale clears that state.
 
 - `.xlsb` saves write each sheet's print options, page margins, page setup,
   header and footer, and manual page breaks from the workbook, as Excel does,

@@ -81,17 +81,33 @@ TEST(FormulonCApiCellStale, AnyEditLeavesVolatilesAndTheirDependentsStale) {
   EXPECT_FALSE(Stale(wb.handle, 1U, 2U));
 }
 
-// Every formula of a loaded manual-mode workbook is stale until its first recalc.
-TEST(FormulonCApiCellStale, ALoadedManualBookIsStaleUntilItsFirstRecalc) {
+// A loaded manual-mode workbook reports the formulas its file marks for recalculation (ca), which a save writes on
+// the stale ones, until its first recalc.
+TEST(FormulonCApiCellStale, ALoadedManualBookReportsTheFormulasItsFileMarks) {
+  WorkbookGuard wb;
+  ManualChain(wb);
+  ASSERT_EQ(fm_workbook_set_calc_on_save(wb.handle, 0), FM_STATUS_OK);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0U, 0U, 2.0), FM_STATUS_OK);
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), FM_STATUS_OK);
+  WorkbookGuard loaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), FM_STATUS_OK);
+  EXPECT_TRUE(Stale(loaded.handle, 0U, 1U));
+  EXPECT_TRUE(Stale(loaded.handle, 0U, 2U));
+  EXPECT_FALSE(Stale(loaded.handle, 0U, 3U));
+  ASSERT_EQ(fm_workbook_recalc(loaded.handle), FM_STATUS_OK);
+  EXPECT_FALSE(Stale(loaded.handle, 0U, 1U));
+  EXPECT_FALSE(Stale(loaded.handle, 0U, 2U));
+}
+
+// A workbook saved fully calculated opens with nothing stale.
+TEST(FormulonCApiCellStale, ALoadedCalculatedManualBookIsNotStale) {
   WorkbookGuard wb;
   ManualChain(wb);
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), FM_STATUS_OK);
   WorkbookGuard loaded;
   ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), FM_STATUS_OK);
-  EXPECT_TRUE(Stale(loaded.handle, 0U, 1U));
-  EXPECT_TRUE(Stale(loaded.handle, 0U, 3U));
-  ASSERT_EQ(fm_workbook_recalc(loaded.handle), FM_STATUS_OK);
   EXPECT_FALSE(Stale(loaded.handle, 0U, 1U));
   EXPECT_FALSE(Stale(loaded.handle, 0U, 3U));
 }

@@ -307,8 +307,8 @@ Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, std::vector<std:
 
 Expected<void, Error> emit_array_anchor(std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scratch,
                                         const Cell& cell, const Value& anchor_value, bool always_calculates,
-                                        std::uint32_t col, std::uint32_t xf_index, std::uint32_t anchor_row,
-                                        std::uint32_t last_row, std::uint32_t last_col,
+                                        bool recalc_marked, std::uint32_t col, std::uint32_t xf_index,
+                                        std::uint32_t anchor_row, std::uint32_t last_row, std::uint32_t last_col,
                                         const std::vector<std::string>& sheet_names,
                                         const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                         SstBuilder& sst, std::uint32_t* downgraded_formula_count,
@@ -333,7 +333,8 @@ Expected<void, Error> emit_array_anchor(std::vector<std::uint8_t>& dst, std::vec
   // The anchor's own cell record is a PtgExp shell typed by the spilled
   // value at the anchor; the real tokens go into the following BrtArrFmla.
   const EncodedFormula shell = MakePtgExpShell(anchor_row, col);
-  EmitFormulaCellRecord(dst, scratch, col, StyleWord(cell, xf_index), anchor_value, shell, always_calculates);
+  EmitFormulaCellRecord(dst, scratch, col, StyleWord(cell, xf_index), anchor_value, shell,
+                        always_calculates || recalc_marked);
   EmitArrayFormulaRecord(dst, scratch, anchor_row, last_row, col, last_col, formula_or.value(), always_calculates);
   return Expected<void, Error>::Ok();
 }

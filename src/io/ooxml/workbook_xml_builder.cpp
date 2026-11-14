@@ -665,7 +665,8 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
       if (!calc.full_precision) {
         emit_xsd_bool_attr(out, "fullPrecision", false);
       }
-      if (!calc.calc_completed) {
+      // Excel saves a book with a stale formula as not fully calculated.
+      if (!calc.calc_completed || plan.stale_formulas) {
         emit_xsd_bool_attr(out, "calcCompleted", false);
       }
       if (!calc.calc_on_save) {

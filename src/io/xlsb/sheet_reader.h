@@ -14,6 +14,7 @@
 #include <tuple>
 #include <vector>
 
+#include "cell.h"
 #include "io/array_anchor_budget.h"
 #include "io/rich_value_errors.h"
 #include "io/rich_values.h"
@@ -111,6 +112,9 @@ struct SheetDecodeState {
   std::uint32_t pending_value_meta = 0;
   /// Every cell a `BrtValueMeta` preceded, for the rich-error restore.
   std::vector<RichErrorCell> value_metadata;
+  /// Every formula cell whose record sets fAlwaysCalc, the `ca="1"` of
+  /// `.xlsx` (`Workbook::apply_loaded_recalc_marks`).
+  std::vector<CellAddress> recalc_marked;
 };
 
 /// Decodes one sheet binary part. Cells (literal + formula) flow into

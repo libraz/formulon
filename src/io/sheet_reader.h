@@ -61,6 +61,9 @@ struct SheetReadContext {
   /// Every cell carrying `vm=` (formula or constant), for the rich-value
   /// restore; a malformed value is recorded as 0, which names no value.
   std::vector<RichErrorCell> value_metadata;
+  /// Every formula cell whose `<f>` carries `ca="1"`, which Excel opens as
+  /// stale (`Workbook::apply_loaded_recalc_marks`).
+  std::vector<CellAddress> recalc_marked;
 };
 
 /// Registers each of `anchors` as a spill region on `sheet`, so the cached

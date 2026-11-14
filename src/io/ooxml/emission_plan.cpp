@@ -388,6 +388,8 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
   if (wb.location() && wb.location()->directory) {
     plan.book_directory = *wb.location()->directory;
   }
+  plan.stale_formulas = wb.saves_stale_formulas();
+  plan.recalc_marks = wb.saved_recalc_marks();
   plan.tables_by_sheet.assign(wb.sheet_count(), {});
   // A retained `xl/metadata.xml` keeps today's meaning and blocks generated
   // rich values (`rich_value_parts_kept_verbatim`); otherwise the writer

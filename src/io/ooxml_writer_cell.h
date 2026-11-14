@@ -14,9 +14,12 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <unordered_set>
 
+#include "cell.h"
 #include "io/rich_value_errors.h"
 #include "io/xlsb/ptg_writer.h"
+#include "row_cells.h"
 
 namespace formulon {
 class CellStyleSavePlan;
@@ -73,12 +76,14 @@ std::optional<SheetDimension> sheet_dimension(const Sheet& sheet);
 /// (null when the save writes none); it follows `cm=`. `style_plan` renumbers
 /// every written cell, row and phantom xf (`CellStyleSavePlan::cell_xf_index`);
 /// whether a cell or row is written is still decided on the model xf. Null
-/// writes model indices.
+/// writes model indices. `recalc_marks` (this sheet's
+/// `Workbook::saved_recalc_marks`, null for none) marks each formula it holds `ca="1"`.
 void AppendSheetDataXml(std::string& out, const Sheet& sheet, const SharedStrings* shared_strings = nullptr,
                         std::uint32_t dynamic_array_cm_index = 0U,
                         const xlsb::NameShapes& name_shapes = xlsb::NameShapes(),
                         const parser::ExternalBookIndexer* indexer = nullptr,
-                        const RichErrorVmMap* rich_error_vm = nullptr, const CellStyleSavePlan* style_plan = nullptr);
+                        const RichErrorVmMap* rich_error_vm = nullptr, const CellStyleSavePlan* style_plan = nullptr,
+                        const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks = nullptr);
 
 }  // namespace io
 }  // namespace formulon

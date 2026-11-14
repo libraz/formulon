@@ -105,6 +105,10 @@ void RecalcEngine::LockedMutator::mark_range_dependents_dirty(const CellRangeDep
   engine_.mark_range_dependents_dirty_locked(range);
 }
 
+void RecalcEngine::LockedMutator::clear_dirty() const {
+  engine_.dirty_.clear();
+}
+
 void RecalcEngine::LockedMutator::reset_graph() const {
   engine_.reset_graph_locked();
 }
@@ -460,14 +464,13 @@ void RecalcEngine::note_component_cycle_state_locked(const std::vector<CellNodeI
   }
 }
 
+bool RecalcEngine::is_stale_seed_locked(CellNodeId cell) const {
+  return dirty_.contains(cell) || (!dirty_.empty() && volatiles_.contains(cell));
+}
+
 bool RecalcEngine::awaits_recalc(CellNodeId cell) const {
   std::lock_guard<std::mutex> guard(mutex_);
-  if (dirty_.contains(cell)) {
-    return true;
-  }
-  // Any pending edit leaves every volatile and its dependents out of date too, as Excel flags them.
-  const bool edits_pending = dirty_.size() != 0U;
-  if (edits_pending && volatiles_.contains(cell)) {
+  if (is_stale_seed_locked(cell)) {
     return true;
   }
   // Dirtiness reaches dependents only at recalc time, so walk the cells this one reads.
@@ -478,13 +481,51 @@ bool RecalcEngine::awaits_recalc(CellNodeId cell) const {
       if (!seen.insert(precedent).second) {
         continue;
       }
-      if (dirty_.contains(precedent) || (edits_pending && volatiles_.contains(precedent))) {
+      if (is_stale_seed_locked(precedent)) {
         return true;
       }
       queue.push_back(precedent);
     }
   }
   return false;
+}
+
+std::unordered_set<CellNodeId, CellNodeIdHash> RecalcEngine::stale_cells() const {
+  std::lock_guard<std::mutex> guard(mutex_);
+  return dependent_closure_locked(true, !dirty_.empty());
+}
+
+std::unordered_set<CellNodeId, CellNodeIdHash> RecalcEngine::volatile_closure() const {
+  std::lock_guard<std::mutex> guard(mutex_);
+  return dependent_closure_locked(false, true);
+}
+
+std::unordered_set<CellNodeId, CellNodeIdHash> RecalcEngine::dependent_closure_locked(bool from_dirty,
+                                                                                      bool from_volatiles) const {
+  std::unordered_set<CellNodeId, CellNodeIdHash> seen;
+  std::vector<CellNodeId> queue;
+  const auto visit = [&](CellNodeId c) {
+    if (seen.insert(c).second) {
+      queue.push_back(c);
+    }
+  };
+  if (from_dirty) {
+    dirty_.for_each(visit);
+  }
+  if (from_volatiles) {
+    volatiles_.for_each(visit);
+  }
+  for (std::size_t head = 0; head < queue.size(); ++head) {
+    for (const CellNodeId dependent : graph_.dependents_of_ref(queue[head])) {
+      visit(dependent);
+    }
+  }
+  for (const CellNodeId c : queue) {
+    if (is_range_node(c)) {
+      seen.erase(c);
+    }
+  }
+  return seen;
 }
 
 std::vector<CellNodeId> RecalcEngine::unresolved_cycle_cells(std::uint32_t sheet_id) const {

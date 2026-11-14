@@ -408,6 +408,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   const std::string_view book_directory = workbook.location() && workbook.location()->directory
                                               ? std::string_view(*workbook.location()->directory)
                                               : std::string_view{};
+  // The formulas saved as recalculated on open (fAlwaysCalc) beyond what their formula says.
+  const std::vector<std::unordered_set<CellAddress, CellAddressHash>> recalc_marks = workbook.saved_recalc_marks();
   for (std::size_t i = 0; i < sheet_count; ++i) {
     const NameTable sheet_name_table = BuildNameTableForScope(workbook, ordered_names, static_cast<std::int32_t>(i));
     std::unordered_set<std::string> taken_rel_ids;
@@ -454,7 +456,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
         workbook.sheet(i), sst, sheet_names, sheet_ranges, sheet_name_table, sheet_hyperlink_rids[i],
         &downgraded_formula_count, metadata.ifmd, name_shapes(workbook, i), table_rel_ids, views, sheet_drawing_rids[i],
         sheet_owns_drawing[i], metadata.rich.empty() ? nullptr : &metadata.rich.vm_by_sheet[i], book_directory,
-        absent_phonetic, sheet_style_plan, comment_rids[i].vml);
+        absent_phonetic, sheet_style_plan, comment_rids[i].vml, &recalc_marks[i]);
     if (!sheet_body_or) {
       return std::move(sheet_body_or.error());
     }

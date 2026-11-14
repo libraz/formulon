@@ -435,6 +435,10 @@ Expected<eval::RecalcStats, Error> Workbook::recalc(const eval::FunctionRegistry
     }
     RETURN_IF_ERROR(recalc_data_tables_after_pass(true, registry));
   }
+  // A pass that leaves nothing to compute completes the book, as Excel's calculate does.
+  if (!has_dirty_cells()) {
+    calc_options_.calc_completed = true;
+  }
   return result;
 }
 
@@ -467,6 +471,9 @@ Expected<void, Error> Workbook::recalc_parallel(const eval::FunctionRegistry& re
     eval::SchedulerStats again;
     RETURN_IF_ERROR(eval::recalc_parallel(*this, registry, cfg, &again));
     RETURN_IF_ERROR(recalc_data_tables_after_pass(true, registry));
+  }
+  if (!has_dirty_cells()) {
+    calc_options_.calc_completed = true;
   }
   return Expected<void, Error>::Ok();
 }
@@ -591,6 +598,63 @@ void Workbook::mark_row_visibility_dependents_dirty() {
 void Workbook::mark_all_formulas_dirty() {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   mark_all_formulas_dirty_locked(sheets_, engine_->locked_mutator());
+}
+
+void Workbook::apply_loaded_recalc_marks(const std::vector<std::vector<CellAddress>>& marked) {
+  if (calc_mode_ != CalcMode::kManual) {
+    return;
+  }
+  std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
+  const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
+  mutator.clear_dirty();
+  for (std::size_t sheet_idx = 0; sheet_idx < sheets_.size(); ++sheet_idx) {
+    const Sheet& sheet = sheets_[sheet_idx];
+    for (const auto& [row, cells] : sheet.rows()) {
+      for (const auto& [col, cell] : cells) {
+        if (!cell.formula_text.empty() && cell.cached_value.is_blank()) {
+          mutator.mark_dirty(eval::CellNodeId{static_cast<std::uint16_t>(sheet_idx), row, col});
+        }
+      }
+    }
+    if (sheet_idx >= marked.size()) {
+      continue;
+    }
+    for (const CellAddress& at : marked[sheet_idx]) {
+      const Cell* cell = sheet.cell_at(at.row, at.col);
+      if (cell != nullptr && !cell->formula_text.empty()) {
+        mutator.mark_dirty(eval::CellNodeId{static_cast<std::uint16_t>(sheet_idx), at.row, at.col});
+      }
+    }
+  }
+}
+
+std::vector<std::unordered_set<CellAddress, CellAddressHash>> Workbook::saved_recalc_marks() const {
+  std::unordered_set<eval::CellNodeId, eval::CellNodeIdHash> marks = engine_->volatile_closure();
+  if (calc_mode_ != CalcMode::kAuto) {
+    const std::unordered_set<eval::CellNodeId, eval::CellNodeIdHash> stale = engine_->stale_cells();
+    marks.insert(stale.begin(), stale.end());
+  }
+  std::vector<std::unordered_set<CellAddress, CellAddressHash>> out(sheets_.size());
+  for (const eval::CellNodeId& node : marks) {
+    const Cell* cell = node.sheet_id < sheets_.size() ? sheets_[node.sheet_id].cell_at(node.row, node.col) : nullptr;
+    if (cell != nullptr && !cell->formula_text.empty()) {
+      out[node.sheet_id].insert(CellAddress{node.row, node.col});
+    }
+  }
+  return out;
+}
+
+bool Workbook::saves_stale_formulas() const {
+  if (calc_mode_ == CalcMode::kAuto) {
+    return false;
+  }
+  for (const eval::CellNodeId& node : engine_->stale_cells()) {
+    const Cell* cell = node.sheet_id < sheets_.size() ? sheets_[node.sheet_id].cell_at(node.row, node.col) : nullptr;
+    if (cell != nullptr && !cell->formula_text.empty()) {
+      return true;
+    }
+  }
+  return false;
 }
 
 Expected<void, Error> Workbook::set_cell_xf_index(std::size_t sheet_index, std::uint32_t row, std::uint32_t col,

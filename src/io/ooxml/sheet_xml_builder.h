@@ -19,11 +19,14 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <vector>
 
+#include "cell.h"
 #include "io/ooxml/emission_plan.h"
 #include "io/xlsb/ptg_writer.h"
 #include "phonetic.h"
+#include "row_cells.h"
 #include "styles.h"
 
 namespace formulon {
@@ -57,7 +60,7 @@ class SharedStrings;
 /// `display` attributes follow. `absent_phonetic` is the `<phoneticPr>` a sheet
 /// without its own is written with (`FontSavePlan::absent_sheet_phonetic`).
 /// `style_plan` renumbers the written cell, row and column xfs; null writes
-/// model indices.
+/// model indices. `recalc_marks` is this sheet's `EmissionPlan::recalc_marks` (null for none).
 std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
                               const std::vector<std::string>& table_rids,
                               const std::vector<std::string>& hyperlink_rids, std::string_view printer_settings_rid,
@@ -68,7 +71,8 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
                               const std::vector<std::string>* sheet_names = nullptr,
                               const RichErrorVmMap* rich_error_vm = nullptr, std::string_view book_directory = {},
                               const std::optional<PhoneticProperties>& absent_phonetic = std::nullopt,
-                              const CellStyleSavePlan* style_plan = nullptr);
+                              const CellStyleSavePlan* style_plan = nullptr,
+                              const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks = nullptr);
 
 /// Builds the `_rels` document for a single sheet, covering tables,
 /// pivot tables, hyperlinks, printer settings, comments / VML, and

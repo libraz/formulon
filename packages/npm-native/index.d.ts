@@ -6924,8 +6924,9 @@ export interface Workbook {
   /** `true` while any cell is dirty: a change (a cell, a defined name, the profile, the file name, a row or column
    *  insert / delete, a sheet removal) has left its value uncomputed, until a read under `CalcMode.Auto` or
    *  `recalc` / `recalcParallel` computes it. Volatile formulas do not count, and neither does a freshly created
-   *  workbook; a loaded workbook with formulas reads `true` until its first full recalc. `recalcViewport` does not
-   *  clear it, and a recalc that throws leaves it set. */
+   *  workbook. Under manual calculation a loaded workbook holds dirty only the formulas its file marks for
+   *  recalculation and those without a cached value; under automatic calculation, every formula until the first
+   *  recalc. `recalcViewport` does not clear it, and a recalc that throws leaves it set. */
   hasDirtyCells(): boolean;
 
   /** Updates the iterative-calculation settings; an omitted key keeps its value. When disabled (the default) cyclic
@@ -7521,8 +7522,8 @@ export interface Sheet {
    * under manual or automatic-except-tables calculation. Always `false` under automatic calculation. A cell
    * without a formula, an empty cell and a spill member read `false`; query the spill's anchor. While any edit
    * is pending, every volatile formula (`NOW`, `RAND`, `OFFSET`, `INDIRECT` and the like) and every formula that
-   * reads one is stale too, as Excel marks them. The read never recalculates. Hosts can use it to draw
-   * stale-value formatting.
+   * reads one is stale too, as Excel marks them. A loaded workbook reports the formulas its file marks for
+   * recalculation (ca) as stale. The read never recalculates. Hosts can use it to draw stale-value formatting.
    */
   isCellStale(row: number, col: number): boolean;
   /** `isCellStale` at the A1 address `a1`. */

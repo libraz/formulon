@@ -18,6 +18,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <vector>
 
 #include "calc_settings.h"
@@ -803,6 +804,26 @@ class Workbook {
   /// other host-dependent branches) is too broad to scope the way a
   /// defined-name or table edit can.
   void mark_all_formulas_dirty();
+
+  /// Applies Excel's open-time stale rule to a workbook a reader just built,
+  /// whose formulas registration left all dirty. Under manual calculation
+  /// only the formulas the file marked for recalculation (`marked`, per sheet
+  /// index: `ca="1"`, fAlwaysCalc) and those loaded without a cached value
+  /// stay dirty; the rest keep their cached values as computed. Other modes
+  /// keep every formula dirty, so the first automatic read computes them all.
+  void apply_loaded_recalc_marks(const std::vector<std::vector<CellAddress>>& marked);
+
+  /// The formula cells a save stores as recalculated on open (`ca="1"`,
+  /// fAlwaysCalc) for what the workbook holds rather than what the formula
+  /// says, per sheet index: every volatile formula and every formula reading
+  /// one, which Excel keeps marked after a full calculation too, and outside
+  /// automatic calculation every stale formula.
+  std::vector<std::unordered_set<CellAddress, CellAddressHash>> saved_recalc_marks() const;
+
+  /// True when a save stores the workbook as not fully calculated
+  /// (`calcCompleted="0"`, fSomeUncalced): outside automatic calculation, a
+  /// formula is stale.
+  bool saves_stale_formulas() const;
 
   // ---------------------------------------------------------------------------
   // Defined names and table metadata

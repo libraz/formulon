@@ -15,12 +15,15 @@
 #include <memory>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <vector>
 
+#include "cell.h"
 #include "io/ooxml/external_link_writer.h"
 #include "io/package_diagnostics.h"
 #include "io/rich_value_errors.h"
 #include "passthrough_part.h"
+#include "row_cells.h"
 
 namespace formulon {
 
@@ -126,6 +129,12 @@ struct EmissionPlan {
   // The canonical folder of `Workbook::location()`, or empty without one;
   // local hyperlink targets are written relative to it (`saved_hyperlink`).
   std::string book_directory;
+  // A stale formula is left, the reason `<calcPr calcCompleted="0">` is
+  // written (`Workbook::saves_stale_formulas`).
+  bool stale_formulas = false;
+  // Per sheet, the formula cells written `ca="1"` beyond what their formula
+  // says: the stale ones and the volatile chains (`Workbook::saved_recalc_marks`).
+  std::vector<std::unordered_set<CellAddress, CellAddressHash>> recalc_marks;
   // For each sheet (by 0-based index), the in-source TableMetadata
   // entries that target it, paired with the package-relative path the
   // writer assigned (`xl/tables/tableN.xml`). `(table_ref, path)` is

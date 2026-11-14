@@ -90,14 +90,18 @@ void emit_blank(std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scrat
 /// (`anchor_row`/`col` .. `last_row`/`last_col`). Every phantom cell in
 /// the footprint carries the same shell (see `emit_array_phantom`); the
 /// real tokens appear exactly once, here. `always_calculates` sets
-/// fAlwaysCalc on both records. Returns the encode error when
+/// fAlwaysCalc on both records; `recalc_marked` (`Workbook::saved_recalc_marks`)
+/// sets it on the cell record alone, as `.xlsx` adds `ca` without `aca`. Returns the encode error when
 /// `cell.formula_text` cannot be lowered to the supported Ptg set.
-Expected<void, Error> emit_array_anchor(
-    std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scratch, const Cell& cell, const Value& anchor_value,
-    bool always_calculates, std::uint32_t col, std::uint32_t xf_index, std::uint32_t anchor_row, std::uint32_t last_row,
-    std::uint32_t last_col, const std::vector<std::string>& sheet_names, const SheetRangeTable& sheet_ranges,
-    const NameTable& name_table, SstBuilder& sst, std::uint32_t* downgraded_formula_count = nullptr,
-    bool* downgraded_to_literal = nullptr, const NameShapes& name_shapes = NameShapes());
+Expected<void, Error> emit_array_anchor(std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scratch,
+                                        const Cell& cell, const Value& anchor_value, bool always_calculates,
+                                        bool recalc_marked, std::uint32_t col, std::uint32_t xf_index,
+                                        std::uint32_t anchor_row, std::uint32_t last_row, std::uint32_t last_col,
+                                        const std::vector<std::string>& sheet_names,
+                                        const SheetRangeTable& sheet_ranges, const NameTable& name_table,
+                                        SstBuilder& sst, std::uint32_t* downgraded_formula_count = nullptr,
+                                        bool* downgraded_to_literal = nullptr,
+                                        const NameShapes& name_shapes = NameShapes());
 
 /// Emits the anchor cell of a What-If data table: the `BrtTable` record
 /// (result range, input cells, flags) followed by the anchor's plain value

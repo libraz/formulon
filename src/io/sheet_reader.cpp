@@ -496,6 +496,9 @@ Expected<void, Error> read_sheet_data(const pugi::xml_document& sheet_doc, std::
       if (pugi::xml_node f = c.child("f"); f && std::string_view(f.attribute("t").value()) == "array") {
         RecordArrayAnchor(ctx, f.attribute("ref").value(), parsed.row, parsed.col);
       }
+      if (!formula_text.empty() && parse_xsd_bool(c.child("f").attribute("ca").value(), false)) {
+        ctx.recalc_marked.push_back(CellAddress{parsed.row, parsed.col});
+      }
       if (pugi::xml_node f = c.child("f"); f && std::string_view(f.attribute("t").value()) == "dataTable") {
         const DataTableAttrs attrs{f.attribute("ref").value(),  f.attribute("r1").value(),  f.attribute("r2").value(),
                                    f.attribute("dt2D").value(), f.attribute("dtr").value(), f.attribute("del1").value(),
@@ -635,6 +638,9 @@ Expected<void, Error> ApplyCellRecord(const CellRecord& rec, std::size_t sheet_i
   // back as blocking literals (see `RegisterArraySpills`).
   if (rec.f_t == "array" && !rec.f_ref.empty()) {
     RecordArrayAnchor(ctx, rec.f_ref, rec.row, rec.col);
+  }
+  if (!formula_text.empty() && parse_xsd_bool(rec.f_ca, false)) {
+    ctx.recalc_marked.push_back(CellAddress{rec.row, rec.col});
   }
   if (rec.f_t == "dataTable") {
     RegisterDataTable(workbook.sheet(sheet_index), rec.row, rec.col,

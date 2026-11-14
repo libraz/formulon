@@ -32,13 +32,16 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <vector>
 
+#include "cell.h"
 #include "cell_style_save_plan.h"
 #include "io/rich_value_errors.h"
 #include "io/xlsb/ptg_writer.h"
 #include "io/xlsb/sst_writer.h"
 #include "phonetic.h"
+#include "row_cells.h"
 #include "sheet.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -96,7 +99,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     std::uint32_t workbook_views = 1U, std::string_view drawing_rel_id = {}, bool owns_drawing = false,
     const RichErrorVmMap* rich_error_vm = nullptr, std::string_view book_directory = {},
     const std::optional<PhoneticProperties>& absent_phonetic = std::nullopt,
-    const CellStyleSavePlan* style_plan = nullptr, std::string_view legacy_drawing_rel_id = {});
+    const CellStyleSavePlan* style_plan = nullptr, std::string_view legacy_drawing_rel_id = {},
+    const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks = nullptr);
 
 }  // namespace xlsb
 }  // namespace io

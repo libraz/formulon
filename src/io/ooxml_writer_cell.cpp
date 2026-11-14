@@ -66,6 +66,12 @@ namespace formulon {
 namespace io {
 namespace {
 
+// Whether `marks` (null for none) holds the cell at (`row`, `col`).
+bool IsRecalcMarked(const std::unordered_set<CellAddress, CellAddressHash>* marks, std::uint32_t row,
+                    std::uint32_t col) {
+  return marks != nullptr && marks->count(CellAddress{row, col}) != 0U;
+}
+
 // ---------------------------------------------------------------------------
 // Cell emission
 // ---------------------------------------------------------------------------
@@ -350,11 +356,13 @@ SharedRoles CollectSharedRoles(const Sheet& sheet, const xlsb::NameShapes& name_
 // this function trusts the caller and never re-checks.
 //
 // `shared` is the cell's verified shared-formula role, or null. `vm` is the
-// cell's rich-error value metadata, 0 for none.
+// cell's rich-error value metadata, 0 for none. `recalc_marked` is true for a
+// formula in `Workbook::saved_recalc_marks`.
 bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std::uint32_t col, const Cell& cell,
                    const SharedStrings* shared_strings, std::uint32_t dynamic_array_cm_index,
                    const xlsb::NameShapes& name_shapes, const parser::ExternalBookIndexer* indexer,
-                   const SharedRole* shared, std::uint32_t vm, const CellStyleSavePlan* style_plan, bool merged) {
+                   const SharedRole* shared, std::uint32_t vm, const CellStyleSavePlan* style_plan, bool merged,
+                   bool recalc_marked) {
   const bool has_formula = !cell.formula_text.empty();
   const std::uint32_t xf = saved_cell_xf(style_plan, cell.xf_index, merged);
   if (!CellIsEmitted(sheet, row, col, cell)) {
@@ -438,10 +446,11 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
     // the region on open (a bare `t="array"` reads back as a legacy
     // single-cell CSE array). The formula text always begins with '=';
     // strip it before serialisation.
-    // Excel stores `ca="1"` on a formula it recalculates every time, and on a
-    // dynamic-array formula whose spill is blocked; the array form adds
-    // `aca="1"`.
+    // Excel stores `ca="1"` on a formula it recalculates every time, on a
+    // dynamic-array formula whose spill is blocked, on a stale formula and on
+    // one reading a volatile; the array form of the first two adds `aca="1"`.
     const bool always_calculates = formula_cell_always_calculates(sheet, row, col, cell, formula_root, name_shapes);
+    const bool calculate_on_open = always_calculates || recalc_marked;
     if (anchored != nullptr || dynamic || cse) {
       out.append(always_calculates ? "<f t=\"array\" aca=\"1\" ref=\"" : "<f t=\"array\" ref=\"");
       out.append(a1::encode_a1(row, col));
@@ -453,11 +462,14 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
         out.push_back(':');
         out.append(a1::encode_a1(last_row, last_col));
       }
-      out.append(always_calculates ? "\" ca=\"1\">" : "\">");
+      out.append(calculate_on_open ? "\" ca=\"1\">" : "\">");
     } else if (shared != nullptr && !shared->master) {
       // A member carries no text: a reader moves the master's to this cell.
       out.append("<f t=\"shared\"");
       append_xml_attr_uint(out, "si", shared->si);
+      if (calculate_on_open) {
+        emit_xsd_bool_attr(out, "ca", true);
+      }
       out.append("/>");
       AppendFormulaValue(out, cell.cached_value);
       out.append("</c>");
@@ -471,9 +483,12 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
       }
       out.push_back('"');
       append_xml_attr_uint(out, "si", shared->si);
+      if (calculate_on_open) {
+        emit_xsd_bool_attr(out, "ca", true);
+      }
       out.push_back('>');
     } else {
-      out.append(always_calculates ? "<f ca=\"1\">" : "<f>");
+      out.append(calculate_on_open ? "<f ca=\"1\">" : "<f>");
     }
     // Re-apply Excel's hidden storage prefixes (`_xlfn.` / `_xlfn._xlws.`
     // on the enumerated future functions, `_xlpm.` on LET / LAMBDA
@@ -576,6 +591,7 @@ void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout, const Cel
 // `override_attrs` is non-empty, an empty self-closing `<row r="N" .../>` is still emitted so the override survives the
 // round-trip. `keep_empty_row` forces that bare element even with no attributes, for a visible row under `zeroHeight`;
 // `implicit_hidden` adds `hidden="1"` to a written row that has no override under `zeroHeight`.
+// `recalc_marks` is this sheet's `Workbook::saved_recalc_marks`, null for none.
 bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const RowCells& row_cells,
                   const std::vector<EmittedRun>& runs, const std::vector<std::uint32_t>& phantom_cols,
                   std::string_view override_attrs, bool keep_empty_row, bool implicit_hidden,
@@ -583,7 +599,7 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
                   const xlsb::NameShapes& name_shapes, std::unordered_map<std::uint64_t, bool>& always_by_anchor,
                   const parser::ExternalBookIndexer* indexer, const SharedRoles& shared_roles,
                   const RichErrorVmMap* rich_error_vm, const CellStyleSavePlan* style_plan,
-                  MergedCellIndex& merged_cells) {
+                  MergedCellIndex& merged_cells, const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks) {
   // Write straight into `out`; a row that ends up with no content is truncated away.
   const std::size_t row_start = out.size();
   out.append("<row r=\"");
@@ -606,8 +622,11 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
     auto it = always_by_anchor.find(key);
     if (it == always_by_anchor.end()) {
       const Cell* anchor = sheet.cell_at(region->anchor_row, region->anchor_col);
-      const bool always = anchor != nullptr && formula_cell_always_calculates(sheet, region->anchor_row,
-                                                                              region->anchor_col, *anchor, name_shapes);
+      // A spilled cell is marked as its anchor's `<f>` is.
+      const bool always =
+          anchor != nullptr &&
+          (formula_cell_always_calculates(sheet, region->anchor_row, region->anchor_col, *anchor, name_shapes) ||
+           IsRecalcMarked(recalc_marks, region->anchor_row, region->anchor_col));
       it = always_by_anchor.emplace(key, always).first;
     }
     const std::size_t idx =
@@ -664,7 +683,7 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
     const auto role = shared_roles.find(CellKey(row, e.col));
     (void)AppendCellXml(out, sheet, row, e.col, e.cell, shared_strings, dynamic_array_cm_index, name_shapes, indexer,
                         role != shared_roles.end() ? &role->second : nullptr, VmAt(rich_error_vm, row, e.col),
-                        style_plan, merged_cells.covers(row, e.col));
+                        style_plan, merged_cells.covers(row, e.col), IsRecalcMarked(recalc_marks, row, e.col));
     ++entry;
   }
   if (out.size() == body_start) {
@@ -742,7 +761,8 @@ std::optional<SheetDimension> sheet_dimension(const Sheet& sheet) {
 void AppendSheetDataXml(std::string& out, const Sheet& sheet, const SharedStrings* shared_strings,
                         std::uint32_t dynamic_array_cm_index, const xlsb::NameShapes& name_shapes,
                         const parser::ExternalBookIndexer* indexer, const RichErrorVmMap* rich_error_vm,
-                        const CellStyleSavePlan* style_plan) {
+                        const CellStyleSavePlan* style_plan,
+                        const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks) {
   // Collect populated row indices and sort ascending so the output is
   // deterministic regardless of unordered_map iteration order.
   const auto& rows_map = sheet.rows();
@@ -820,7 +840,7 @@ void AppendSheetDataXml(std::string& out, const Sheet& sheet, const SharedString
     AppendRowXml(out, sheet, row, row_cells, plan.runs,
                  phantoms_it != phantom_cols.end() ? phantoms_it->second : kNoPhantoms, override_attrs, keep_empty_row,
                  implicit_hidden, shared_strings, dynamic_array_cm_index, name_shapes, always_by_anchor, indexer,
-                 shared_roles, rich_error_vm, style_plan, merged_cells);
+                 shared_roles, rich_error_vm, style_plan, merged_cells, recalc_marks);
   }
 
   if (out.size() == rows_start) {

@@ -335,8 +335,12 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     const std::vector<std::string>& table_part_rel_ids, std::uint32_t workbook_views, std::string_view drawing_rel_id,
     bool owns_drawing, const RichErrorVmMap* rich_error_vm, std::string_view book_directory,
     const std::optional<PhoneticProperties>& absent_phonetic, const CellStyleSavePlan* style_plan,
-    std::string_view legacy_drawing_rel_id) {
+    std::string_view legacy_drawing_rel_id, const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks) {
   std::vector<std::uint8_t> body;
+  // Whether the save marks the formula at (`row`, `col`) as recalculated on open.
+  const auto marked = [recalc_marks](std::uint32_t row, std::uint32_t col) {
+    return recalc_marks != nullptr && recalc_marks->count(CellAddress{row, col}) != 0U;
+  };
 
   // Frame: BrtBeginSheet | BrtBeginSheetData | ... | BrtEndSheetData |
   // BrtEndSheet.
@@ -384,7 +388,9 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
       if (region == nullptr || static_cast<std::uint64_t>(region->rows) * region->cols <= 1U) {
         continue;
       }
-      const bool always = formula_cell_always_calculates(sheet, anchor_row, col, cell, name_shapes);
+      // A spilled cell is marked as its anchor's cell record is.
+      const bool always =
+          formula_cell_always_calculates(sheet, anchor_row, col, cell, name_shapes) || marked(anchor_row, col);
       for (std::uint32_t r = 0; r < region->rows; ++r) {
         for (std::uint32_t c = 0; c < region->cols; ++c) {
           if (r == 0 && c == 0) {
@@ -567,6 +573,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
       if (cell != nullptr && !IsEmptySlot(sheet, row, col, *cell) && !(phantom && cell->formula_text.empty())) {
         const std::uint32_t xf = saved_cell_xf(style_plan, cell->xf_index, merged_cells.covers(row, col));
         const bool always = formula_cell_always_calculates(sheet, row, col, *cell, name_shapes);
+        const bool recalc_marked = marked(row, col);
         const SpillRegion* region = cell->formula_text.empty() ? nullptr : sheet.spill_region_at_anchor(row, col);
         // A dynamic-array formula keeps that form (its `BrtCellMeta` naming
         // the XLDAPR entry) even when it does not spill; a legacy CSE block
@@ -587,9 +594,9 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
             emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtCellMeta), cell_payload);
           }
           emit_value_meta(row, col, anchor_value);
-          if (auto r = emit_array_anchor(body, cell_payload, *cell, anchor_value, always, col, xf, row, last_row,
-                                         last_col, sheet_names, sheet_ranges, name_table, sst, downgraded_formula_count,
-                                         &downgraded_to_literal, name_shapes);
+          if (auto r = emit_array_anchor(body, cell_payload, *cell, anchor_value, always, recalc_marked, col, xf, row,
+                                         last_row, last_col, sheet_names, sheet_ranges, name_table, sst,
+                                         downgraded_formula_count, &downgraded_to_literal, name_shapes);
               !r) {
             return std::move(r.error());
           }
@@ -601,8 +608,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
           emit_data_table_anchor(body, cell_payload, *cell, col, xf, *table, sst);
         } else {
           emit_value_meta(row, col, cell->cached_value);
-          if (auto r = emit_cell(body, cell_payload, *cell, row, col, xf, always, sst, sheet_names, sheet_ranges,
-                                 name_table, downgraded_formula_count, name_shapes);
+          if (auto r = emit_cell(body, cell_payload, *cell, row, col, xf, always || recalc_marked, sst, sheet_names,
+                                 sheet_ranges, name_table, downgraded_formula_count, name_shapes);
               !r) {
             return std::move(r.error());
           }

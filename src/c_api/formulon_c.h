@@ -4226,9 +4226,10 @@ FM_API fm_status_t fm_workbook_recalc(fm_workbook_t* wb);
  * name change, or a profile change on a workbook with formulas; setting the
  * current profile or file name to its current value is not. Volatile cells (`NOW()`, `RAND()`) do not count: they
  * re-evaluate on every recalc, and a workbook holding only them reads `0`
- * after a recalc. A freshly created workbook reads `0`. A loaded workbook
- * that holds formulas reads `1` until its first full recalc: its cells carry
- * the file's cached results, and that recalc re-evaluates every formula.
+ * after a recalc. A freshly created workbook reads `0`. Under manual
+ * calculation a loaded workbook holds dirty only the formulas its file marks
+ * for recalculation and those without a cached value; under automatic
+ * calculation, every formula until the first recalc.
  * `fm_sheet_recalc_viewport` leaves the cells it skipped dirty, so the
  * answer stays `1` after it; a failed full recalc keeps every dirty cell.
  *
@@ -4288,8 +4289,9 @@ FM_API fm_status_t fm_sheet_get_circular_reference_at(const fm_workbook_t* wb, s
  * formula, an empty cell and a member of a spill reads `0`; query the spill's
  * anchor. A cell is out of date while it, or a cell it reads directly or
  * through other cells, carries a change no recalc has applied: an edit, a
- * row / column insert or delete, a defined-name edit, and every formula of a
- * loaded workbook until its first recalc. While any such change is pending,
+ * row / column insert or delete, a defined-name edit. A loaded workbook
+ * reports the formulas its file marks for recalculation (ca) as stale. While
+ * any such change is pending,
  * every volatile cell (NOW, RAND, OFFSET, INDIRECT and the like) and every
  * cell that reads one is out of date too, as Excel marks them. The read never
  * recalculates. Hosts can use it to draw stale-value formatting.
