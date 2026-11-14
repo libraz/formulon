@@ -153,6 +153,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   // Workbook-level calc policy / behaviour profile.
   Napi::Value CalcMode(const Napi::CallbackInfo& info);
   Napi::Value SetCalcMode(const Napi::CallbackInfo& info);
+  Napi::Value CompatibilityVersion(const Napi::CallbackInfo& info);
+  Napi::Value SetCompatibilityVersion(const Napi::CallbackInfo& info);
   Napi::Value FullPrecision(const Napi::CallbackInfo& info);
   Napi::Value SetFullPrecision(const Napi::CallbackInfo& info);
   Napi::Value CalcOnSave(const Napi::CallbackInfo& info);

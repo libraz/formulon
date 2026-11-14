@@ -98,6 +98,7 @@ __all__ = [
     "BorderSidePatch",
     "BorderStyle",
     "CalcMode",
+    "CompatibilityVersion",
     "canonicalize_formula",
     "canonicalize_function_name",
     "CellAddress",
@@ -1627,6 +1628,22 @@ class CalcMode(IntEnum):
     AUTO = 0
     MANUAL = 1
     AUTO_NO_TABLE = 2
+
+
+class CompatibilityVersion(IntEnum):
+    """Excel's Compatibility Version of a workbook.
+
+    - ``VERSION_1``: LEN, MID, FIND, SEARCH and REPLACE count UTF-16 units.
+    - ``VERSION_2``: those functions count code points (a supplementary-plane
+      character is one position).
+    - ``VERSION_3``: adds nested arrays, which Formulon does not implement.
+
+    The ordinals are the values stored in the file, so they start at 1.
+    """
+
+    VERSION_1 = 1
+    VERSION_2 = 2
+    VERSION_3 = 3
 
 
 class RefMode(IntEnum):
@@ -9835,6 +9852,32 @@ class Workbook(_NoCopy):
         """
         h = self._require()
         _check(LIB.fm_workbook_set_calc_mode(h, _sint(mode, "mode")))
+
+    def get_compatibility_version(self) -> CompatibilityVersion:
+        """Return the Compatibility Version the workbook evaluates under.
+
+        It is the workbook's stored value, or ``VERSION_2`` for a workbook whose
+        file carries none and for a new workbook. A stored ``VERSION_3`` reads
+        3 and evaluates as ``VERSION_2``.
+        """
+        h = self._require()
+        with _ArgScope() as scope:
+            out = scope.out_ptr()
+            _check(LIB.fm_workbook_get_compatibility_version(h, out))
+            return CompatibilityVersion(LIB.read_i32(out))
+
+    def set_compatibility_version(self, version: CompatibilityVersion) -> None:
+        """Set the Compatibility Version (see :class:`CompatibilityVersion`).
+
+        Setting the current value changes nothing. ``VERSION_3`` is stored and
+        written as given and evaluates as ``VERSION_2``. A change marks every
+        formula dirty only when it moves between ``VERSION_1`` and ``VERSION_2``
+        or ``VERSION_3``; a change between ``VERSION_2`` and ``VERSION_3`` marks
+        nothing. A value outside the enum raises :class:`InvalidArgumentError`
+        and leaves the workbook unchanged.
+        """
+        h = self._require()
+        _check(LIB.fm_workbook_set_compatibility_version(h, _sint(version, "version")))
 
     def _read_flag(self, fn) -> bool:
         h = self._require()

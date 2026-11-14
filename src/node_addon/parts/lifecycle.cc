@@ -89,6 +89,26 @@ Napi::Value Workbook::SetCalcMode(const Napi::CallbackInfo& info) {
   return ValueOrThrow(env, rc, env.Undefined());
 }
 
+Napi::Value Workbook::CompatibilityVersion(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  std::int32_t version = FM_COMPATIBILITY_VERSION_2;
+  const fm_status_t rc = fm_workbook_get_compatibility_version(handle_, &version);
+  return ValueOrThrow(env, rc, Napi::Number::New(env, version));
+}
+
+Napi::Value Workbook::SetCompatibilityVersion(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const std::int32_t version = ArgI32(info, 0);
+  const fm_status_t rc = fm_workbook_set_compatibility_version(handle_, version);
+  return ValueOrThrow(env, rc, env.Undefined());
+}
+
 namespace {
 
 /// Reads one boolean workbook flag.

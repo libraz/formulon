@@ -614,6 +614,20 @@ void JsWorkbook::setCalcMode(uint32_t mode) {
                                : kBindingInvalidHandle);
 }
 
+double JsWorkbook::compatibilityVersion() const {
+  std::int32_t version = FM_COMPATIBILITY_VERSION_2;
+  if (!succeeded(handle_ != nullptr ? fm_workbook_get_compatibility_version(handle_, &version)
+                                    : kBindingInvalidHandle)) {
+    return 0.0;
+  }
+  return static_cast<double>(version);
+}
+
+void JsWorkbook::setCompatibilityVersion(uint32_t version) {
+  succeeded(handle_ != nullptr ? fm_workbook_set_compatibility_version(handle_, static_cast<std::int32_t>(version))
+                               : kBindingInvalidHandle);
+}
+
 bool JsWorkbook::fullPrecision() const {
   std::int32_t value = 1;
   return succeeded(handle_ != nullptr ? fm_workbook_get_full_precision(handle_, &value) : kBindingInvalidHandle) &&

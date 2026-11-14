@@ -389,6 +389,7 @@ export const ErrorDisplayName = Object.freeze({
 });
 // <error-display-names:end>
 export const CalcMode = Object.freeze({ Auto: 0, Manual: 1, AutoNoTable: 2 });
+export const CompatibilityVersion = Object.freeze({ Version1: 1, Version2: 2, Version3: 3 });
 export const RefMode = Object.freeze({ A1: 0, R1C1: 1 });
 export const CollationStrength = Object.freeze({ Compare: 0, Dynamic: 1, ClassicExact: 2 });
 export const SheetVisibility = Object.freeze({ Visible: 0, Hidden: 1, VeryHidden: 2 });
@@ -877,6 +878,7 @@ export const FORMULON_MEMBERS = Object.freeze([
   'ErrorCode',
   'ErrorDisplayName',
   'CalcMode',
+  'CompatibilityVersion',
   'RefMode',
   'CollationStrength',
   'GeometryMode',
@@ -1233,6 +1235,7 @@ const WORKBOOK_METHODS = Object.freeze([
   'getCalcMode',
   'getCalcOnSave',
   'getCellStyle',
+  'getCompatibilityVersion',
   'getDate1904',
   'getDefaultFont',
   'getDefinedName',
@@ -1281,6 +1284,7 @@ const WORKBOOK_METHODS = Object.freeze([
   'setCalcMode',
   'setCalcOnSave',
   'setCellStyle',
+  'setCompatibilityVersion',
   'setDate1904',
   'setDefaultFont',
   'setDefinedName',
@@ -3743,6 +3747,7 @@ const METHOD_ARITY = Object.freeze({
   'Workbook.getCellStyle': 1,
   'Workbook.getCellStyleXf': 1,
   'Workbook.getCellXf': 1,
+  'Workbook.getCompatibilityVersion': 0,
   'Workbook.getDate1904': 0,
   'Workbook.getDefaultFont': 0,
   'Workbook.getDefinedName': 2,
@@ -3807,6 +3812,7 @@ const METHOD_ARITY = Object.freeze({
   'Workbook.setCellStyle': 1,
   'Workbook.setCellStyleXf': 2,
   'Workbook.setCellXf': 2,
+  'Workbook.setCompatibilityVersion': 1,
   'Workbook.setDate1904': 1,
   'Workbook.setDefaultFont': 1,
   'Workbook.setDefinedName': 1,
@@ -4434,6 +4440,7 @@ const PARAM_NAMES = Object.freeze({
   'Workbook.setCalcMode': ['mode'],
   'Workbook.setCalcOnSave': ['calcOnSave'],
   'Workbook.setCellStyle': ['record'],
+  'Workbook.setCompatibilityVersion': ['version'],
   'Workbook.setDate1904': ['date1904'],
   'Workbook.setDefaultFont': ['record'],
   'Workbook.setDefinedName': ['definedName'],

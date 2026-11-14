@@ -195,6 +195,8 @@ class JsWorkbook {
   emscripten::val getIterative() const;
   double calcMode() const;
   void setCalcMode(uint32_t mode);
+  double compatibilityVersion() const;
+  void setCompatibilityVersion(uint32_t version);
   bool fullPrecision() const;
   void setFullPrecision(bool fullPrecision);
   bool calcOnSave() const;

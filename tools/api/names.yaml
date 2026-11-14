@@ -398,6 +398,13 @@ entries:
     py: CalcMode
     surfaces: [c, wasm, native, py]
     was: { c: fm_calc_mode_t, js: CalcMode, py: CalcMode }
+  enum.compatibility_version:
+    kind: enum
+    c: fm_compatibility_version_t
+    js: CompatibilityVersion
+    py: CompatibilityVersion
+    surfaces: [c, wasm, native, py]
+    exception: "The ordinals start at 1 because they are the values stored in the file."
   enum.ref_mode:
     kind: enum
     c: fm_ref_mode_t
@@ -5450,6 +5457,24 @@ entries:
     params: { mode: "enum:calc_mode" }
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_set_calc_mode, js: setCalcMode, py: set_calc_mode }
+  compatibility_version.get:
+    kind: op
+    scope: workbook
+    noun: compatibility_version
+    c: fm_workbook_get_compatibility_version
+    js: getCompatibilityVersion
+    py: get_compatibility_version
+    returns: "enum:compatibility_version"
+    surfaces: [c, wasm, native, py]
+  compatibility_version.set:
+    kind: op
+    scope: workbook
+    noun: compatibility_version
+    c: fm_workbook_set_compatibility_version
+    js: setCompatibilityVersion
+    py: set_compatibility_version
+    params: { version: "enum:compatibility_version" }
+    surfaces: [c, wasm, native, py]
   full_precision.get:
     kind: op
     scope: workbook
@@ -10264,6 +10289,21 @@ entries:
     enum: enum.calc_mode
     surfaces: [c]
     was: { c: FM_CALC_MODE_AUTO_NO_TABLE }
+  constant.fm_compatibility_version_1:
+    kind: constant
+    c: FM_COMPATIBILITY_VERSION_1
+    enum: enum.compatibility_version
+    surfaces: [c]
+  constant.fm_compatibility_version_2:
+    kind: constant
+    c: FM_COMPATIBILITY_VERSION_2
+    enum: enum.compatibility_version
+    surfaces: [c]
+  constant.fm_compatibility_version_3:
+    kind: constant
+    c: FM_COMPATIBILITY_VERSION_3
+    enum: enum.compatibility_version
+    surfaces: [c]
   constant.fm_ref_mode_a1:
     kind: constant
     c: FM_REF_MODE_A1

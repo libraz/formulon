@@ -277,6 +277,7 @@ WORKBOOK_METHODS = (
     "get_calc_mode",
     "get_calc_on_save",
     "get_cell_style",
+    "get_compatibility_version",
     "get_date1904",
     "get_default_font",
     "get_defined_name",
@@ -323,6 +324,7 @@ WORKBOOK_METHODS = (
     "set_calc_mode",
     "set_calc_on_save",
     "set_cell_style",
+    "set_compatibility_version",
     "set_date1904",
     "set_default_font",
     "set_defined_name",
@@ -2857,7 +2859,8 @@ class Sheet(_NoCopy):
 
         The cells come in row-major order; a sheet with no unresolved cycle
         gives an empty list. Under automatic calculation the read recalculates
-        first; under iterative calculation no cell is listed.
+        first; under iterative calculation no cell is listed. Read it when the
+        list is shown, not on every render.
         """
         sheet = self._index()
         h = self._workbook._require()

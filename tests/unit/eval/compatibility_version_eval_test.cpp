@@ -162,15 +162,22 @@ TEST(CompatibilityVersionDivergence, AVersion1CutInsideAPairTakesTheWholeCharact
             "b\xF0\x9F\x98\x81");
 }
 
-TEST(CompatibilityVersionSetter, RefusesOutOfDomainAndVersion3WithoutChange) {
+TEST(CompatibilityVersionSetter, RefusesOutOfDomainWithoutChange) {
   Workbook wb = Workbook::create();
   EXPECT_EQ(wb.set_compatibility_version(0U).error().code, FormulonErrorCode::kInvalidArgument);
   EXPECT_EQ(wb.set_compatibility_version(4U).error().code, FormulonErrorCode::kInvalidArgument);
-  EXPECT_EQ(wb.set_compatibility_version(3U).error().code, FormulonErrorCode::kNotImplemented);
   EXPECT_EQ(wb.compatibility_version(), 2U);
-  // The domain check runs before the same-value check: a stored 3 still refuses 3.
-  wb.restore_compatibility_stamp(3U, std::nullopt);
-  EXPECT_EQ(wb.set_compatibility_version(3U).error().code, FormulonErrorCode::kNotImplemented);
+}
+
+// 3 is stored as given and evaluates as 2.
+TEST(CompatibilityVersionSetter, Version3IsStoredAndEvaluatesAs2) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_compatibility_version(3U)));
+  EXPECT_EQ(wb.compatibility_stamp(), std::optional<std::uint32_t>(3U));
+  ExpectCodePoints(Evaluate(wb));
+  ASSERT_TRUE(static_cast<bool>(wb.set_compatibility_version(1U)));
+  ASSERT_TRUE(static_cast<bool>(wb.set_compatibility_version(3U)));
+  EXPECT_EQ(wb.compatibility_stamp(), std::optional<std::uint32_t>(3U));
 }
 
 TEST(CompatibilityVersionSetter, ANewBookCarriesExcelsNewBookStamp) {

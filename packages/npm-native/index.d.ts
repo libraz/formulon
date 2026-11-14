@@ -1533,6 +1533,23 @@ export const CalcMode: Readonly<{
 /** Union of the {@link CalcMode} ordinals. */
 export type CalcMode = 0 | 1 | 2;
 
+/**
+ * Excel's Compatibility Version of a workbook.
+ *
+ * - `Version1` — LEN, MID, FIND, SEARCH and REPLACE count UTF-16 units.
+ * - `Version2` — those functions count code points (a supplementary-plane character is one position).
+ * - `Version3` — adds nested arrays, which Formulon does not implement.
+ *
+ * The ordinals are the values stored in the file, so they start at 1.
+ */
+export const CompatibilityVersion: Readonly<{
+  Version1: 1;
+  Version2: 2;
+  Version3: 3;
+}>;
+/** Union of the {@link CompatibilityVersion} ordinals. */
+export type CompatibilityVersion = 1 | 2 | 3;
+
 /** Reference notation formulas are shown in (`<calcPr refMode>`). */
 export const RefMode: Readonly<{
   A1: 0;
@@ -6905,6 +6922,19 @@ export interface Workbook {
   getCalcMode(): CalcMode;
   /** Sets the calc mode. Fails with `StatusCode.InvalidArgument` for a value outside `CalcMode`. */
   setCalcMode(mode: CalcMode): void;
+  /**
+   *  The Compatibility Version the workbook evaluates under: its stored value, or `Version2` for a workbook
+   *  whose file carries none and for a new workbook. A stored `Version3` reads 3 and evaluates as `Version2`.
+   */
+  getCompatibilityVersion(): CompatibilityVersion;
+  /**
+   *  Sets the Compatibility Version. Setting the current value changes nothing. `Version3` is stored and
+   *  written as given and evaluates as `Version2`. A change marks every formula dirty only when it moves
+   *  between `Version1` and `Version2` or `Version3`; a change between `Version2` and `Version3` marks
+   *  nothing. A value outside `CompatibilityVersion` fails with `StatusCode.InvalidArgument` and leaves the
+   *  workbook unchanged.
+   */
+  setCompatibilityVersion(version: CompatibilityVersion): void;
   /** `<calcPr fullPrecision>`; `false` is "set precision as displayed". Metadata only. */
   getFullPrecision(): boolean;
   setFullPrecision(fullPrecision: boolean): void;
@@ -7975,7 +8005,7 @@ export interface Sheet {
   listMerges(): readonly CellRect[];
   /** The cells on this sheet that sit in an unresolved circular reference, in row-major order; a sheet with no
    *  unresolved cycle gives an empty list. Under automatic calculation the read recalculates first; under iterative
-   *  calculation no cell is listed. */
+   *  calculation no cell is listed. Read it when the list is shown, not on every render. */
   listCircularReferences(): readonly CellAddress[];
   /** Returns the merge ranges on the sheet that intersect `range`, in storage order. */
   getMergesInRange(range: CellRect | string): readonly CellRect[];
@@ -9135,6 +9165,8 @@ export interface Formulon {
   ErrorDisplayName: typeof ErrorDisplayName;
   /** The `CalcMode` enum. */
   CalcMode: typeof CalcMode;
+  /** The `CompatibilityVersion` enum. */
+  CompatibilityVersion: typeof CompatibilityVersion;
   /** The `RefMode` enum. */
   RefMode: typeof RefMode;
   /** The `CollationStrength` enum. */

@@ -1794,10 +1794,9 @@ class Workbook {
   }
 
   /// Sets the Compatibility Version. A value other than 1, 2 or 3 is
-  /// `kInvalidArgument`; 3 is `kNotImplemented`, both checked before the
-  /// value is compared. Setting the current value changes nothing; another
-  /// value stamps the book and marks every formula dirty, as a profile change
-  /// does.
+  /// `kInvalidArgument`. 3 is stored and written as given and evaluates as 2.
+  /// Setting the current value changes nothing; another value stamps the book,
+  /// and marks every formula dirty only when `text_index_unit()` changes.
   Expected<void, Error> set_compatibility_version(std::uint32_t version);
 
   /// The stamp as read from or written to the file: `setVersion` and

@@ -58,6 +58,7 @@ export {
   ColorKind,
   ColorResolution,
   ComparisonOperator,
+  CompatibilityVersion,
   DatePeriod,
   DateTimeGrouping,
   DisplayStatus,

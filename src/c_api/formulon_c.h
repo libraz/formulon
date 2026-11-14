@@ -4231,7 +4231,7 @@ FM_API fm_status_t fm_workbook_has_dirty_cells(const fm_workbook_t* wb, int32_t*
  * members. While iterative calculation is enabled the count is 0, as Excel then
  * reports no circular reference. Under automatic calculation the read first
  * computes dirty cells, as value reads do; under manual calculation it reports
- * the last recalc.
+ * the last recalc. Read it when a host shows the list, not on every render.
  *
  * Excel's `Worksheet.CircularReference` names one member per sheet, and which
  * one is not determined by the workbook, so every member is reported.
@@ -4436,6 +4436,55 @@ FM_API fm_status_t fm_workbook_get_calc_mode(const fm_workbook_t* wb, int32_t* o
  *         `FM_STATUS_INVALID_ARGUMENT` (2) if `mode` is not a documented value.
  */
 FM_API fm_status_t fm_workbook_set_calc_mode(fm_workbook_t* wb, int32_t mode);
+
+/**
+ * @brief Excel's Compatibility Version of a workbook.
+ *
+ * Version 1 makes LEN, MID, FIND, SEARCH and REPLACE count UTF-16 units;
+ * version 2 counts code points (a supplementary-plane character is one
+ * position); version 3 adds nested arrays, which Formulon does not implement.
+ * The ordinals are the values stored in the file, so they start at 1.
+ */
+typedef enum {
+  FM_COMPATIBILITY_VERSION_1 = 1,
+  FM_COMPATIBILITY_VERSION_2 = 2,
+  FM_COMPATIBILITY_VERSION_3 = 3,
+} fm_compatibility_version_t;
+
+/**
+ * @brief Returns the Compatibility Version the workbook evaluates under.
+ *
+ * The workbook's stored value, or `FM_COMPATIBILITY_VERSION_2` for a workbook
+ * whose file carries none, as Excel computes it. A new workbook reads 2. A
+ * loaded workbook stored as 3 reads 3 and evaluates the five functions as 2;
+ * a stored value outside 1-3 reads 2, as it evaluates, and is still written
+ * back as read.
+ *
+ * Under version 1, Excel's MID and REPLACE can return a lone surrogate when a
+ * cut falls inside a supplementary-plane character; Formulon takes the whole
+ * character instead (text is UTF-8).
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_version` is NULL.
+ */
+FM_API fm_status_t fm_workbook_get_compatibility_version(const fm_workbook_t* wb, int32_t* out_version);
+
+/**
+ * @brief Sets the workbook's Compatibility Version.
+ *
+ * Setting the current value changes nothing. Another value is stored and
+ * written on save; 3 is stored and written as given and evaluates as 2. A
+ * change marks every formula cell dirty only when it moves between 1 and 2 or
+ * 3, which changes how the five functions count: in Auto mode the next read
+ * recomputes, in Manual mode `fm_workbook_recalc` does. A change between 2 and
+ * 3 marks nothing.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is NULL;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `version` is not 1, 2 or 3;
+ *         the workbook is left unchanged.
+ */
+FM_API fm_status_t fm_workbook_set_compatibility_version(fm_workbook_t* wb, int32_t version);
 
 /** @brief `<calcPr refMode>`: the reference notation the host shows formulas in. */
 typedef enum {

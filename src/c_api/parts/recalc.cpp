@@ -295,6 +295,29 @@ extern "C" fm_status_t fm_workbook_get_calc_mode(const fm_workbook_t* wb, std::i
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_get_compatibility_version(const fm_workbook_t* wb, std::int32_t* out_version) {
+  clear_last_error();
+  if (wb == nullptr || out_version == nullptr) {
+    return null_argument();
+  }
+  const std::uint32_t version = wb->workbook().compatibility_version();
+  // A value outside the enum (a later Excel's) evaluates as 2 and is kept in the file as read.
+  *out_version = version >= 1U && version <= 3U ? static_cast<std::int32_t>(version) : FM_COMPATIBILITY_VERSION_2;
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_set_compatibility_version(fm_workbook_t* wb, std::int32_t version) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return null_argument("wb");
+  }
+  if (version < FM_COMPATIBILITY_VERSION_1 || version > FM_COMPATIBILITY_VERSION_3) {
+    return invalid_argument(("version " + std::to_string(version) + " is not a CompatibilityVersion").c_str());
+  }
+  return formulon::c_api::parts::finish_status(
+      wb->workbook().set_compatibility_version(static_cast<std::uint32_t>(version)));
+}
+
 extern "C" fm_status_t fm_workbook_set_calc_mode(fm_workbook_t* wb, std::int32_t mode) {
   clear_last_error();
   if (wb == nullptr) {
