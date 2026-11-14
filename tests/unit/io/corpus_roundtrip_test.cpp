@@ -7,6 +7,10 @@
 // "root" shard), a large directory in numbered chunks. Failures are "<relpath> <stage> <detail>"; the ones the
 // committed manifest (fixtures/excel/corpus_roundtrip_manifest.txt) names are
 // expected, and an exact entry whose failure did not occur fails the shard.
+// Each unexpected failure also prints a "manifest-line: " candidate entry, so a
+// commit adding fixtures can collect its lines with
+//   formulon_unit_tests --gtest_filter='*CorpusRoundtrip*' | grep '^manifest-line: '
+// and fill in the kind's reason.
 
 #include <algorithm>
 #include <cstddef>
@@ -432,6 +436,17 @@ std::vector<Failure> RunFile(const std::string& rel) {
   return out;
 }
 
+/// The manifest line that would accept `f`, with the kind its stage implies; the reason is the author's to write.
+std::string SuggestedEntry(const Failure& f, bool source_refused) {
+  const char* kind = "known_gap";
+  if (f.stage.rfind("save_", 0) == 0) {
+    kind = "save_refused";
+  } else if (source_refused && f.stage.rfind("validate_", 0) == 0) {
+    kind = "mirrors_excel_refused_source";
+  }
+  return f.path + " " + f.stage + " " + f.detail + " " + kind + "  # <reason>";
+}
+
 class CorpusRoundtripShards : public ::testing::TestWithParam<Shard> {};
 
 TEST_P(CorpusRoundtripShards, KeepsModelAndPassesValidators) {
@@ -468,7 +483,8 @@ TEST_P(CorpusRoundtripShards, KeepsModelAndPassesValidators) {
         }
       }
       if (!expected) {
-        ADD_FAILURE() << f.path << " " << f.stage << " " << f.detail << ": " << f.message;
+        ADD_FAILURE() << f.path << " " << f.stage << " " << f.detail << ": " << f.message << "\n"
+                      << "manifest-line: " << SuggestedEntry(f, refused.count(rel) != 0);
       }
     }
   }
