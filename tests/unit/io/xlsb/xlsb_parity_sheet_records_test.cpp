@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -202,6 +203,95 @@ TEST(XlsbParitySheetRecords, ExcelXlsbRoundTrips) {
       EXPECT_EQ(uid(ours_xml), uid(excel_xml));
     }
   }
+}
+
+constexpr std::uint16_t kBrtRowHdr = 0;
+constexpr std::size_t kRowHdrMiyRw = 8;
+
+/// Each BrtRowHdr's (rw, miyRw) in the first worksheet of an xlsb package.
+std::vector<std::pair<std::uint32_t, std::uint16_t>> RowHeights(const Bytes& package) {
+  std::vector<std::pair<std::uint32_t, std::uint16_t>> out;
+  for (const Bytes& row : Payloads(Part(package, "xl/worksheets/sheet1.bin"), kBrtRowHdr)) {
+    if (row.size() >= kRowHdrMiyRw + 2U) {
+      std::uint32_t rw = 0;
+      for (std::size_t k = 0; k < 4U; ++k) {
+        rw |= static_cast<std::uint32_t>(row[k]) << (8U * k);
+      }
+      const auto miy = static_cast<std::uint16_t>(static_cast<std::uint32_t>(row[kRowHdrMiyRw]) |
+                                                  (static_cast<std::uint32_t>(row[kRowHdrMiyRw + 1U]) << 8U));
+      out.emplace_back(rw, miy);
+    }
+  }
+  return out;
+}
+
+std::string PhonFontFixture(const std::string& name) {
+  return std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_parity/phonfont/" + name;
+}
+
+constexpr std::uint16_t kBrtWsFmtInfo = 485;
+constexpr std::size_t kWsFmtInfoMiyDefRwHeight = 6;
+
+/// BrtWsFmtInfo's miyDefRwHeight in the first worksheet of an xlsb package.
+std::uint16_t DefaultRowTwips(const Bytes& package) {
+  const std::vector<Bytes> infos = Payloads(Part(package, "xl/worksheets/sheet1.bin"), kBrtWsFmtInfo);
+  if (infos.empty() || infos.front().size() < kWsFmtInfoMiyDefRwHeight + 2U) {
+    ADD_FAILURE() << "no BrtWsFmtInfo";
+    return 0;
+  }
+  const Bytes& info = infos.front();
+  return static_cast<std::uint16_t>(static_cast<std::uint32_t>(info[kWsFmtInfoMiyDefRwHeight]) |
+                                    (static_cast<std::uint32_t>(info[kWsFmtInfoMiyDefRwHeight + 1U]) << 8U));
+}
+
+// A row without its own height states the sheet default in miyRw, the value BrtWsFmtInfo carries, as Excel's saves
+// do (14, 15 and 17 pt defaults; a row Excel fitted to taller content differs and is left out). Where the source's
+// default is the one Excel keeps (15 pt, en), the written rows equal Excel's.
+TEST(XlsbParitySheetRecords, DefaultRowHeightMatchesExcel) {
+  for (const char* stem : {"pf_base_ja", "pf_base_en", "pf_major_ko"}) {
+    SCOPED_TRACE(stem);
+    const Bytes excel = ReadFile(PhonFontFixture(std::string(stem) + ".xlsb"));
+    const std::vector<std::pair<std::uint32_t, std::uint16_t>> theirs = RowHeights(excel);
+    ASSERT_FALSE(theirs.empty());
+    EXPECT_EQ(theirs.front().second, DefaultRowTwips(excel));
+
+    auto loaded = read_ooxml(SpanOf(ReadFile(PhonFontFixture(std::string(stem) + "_src.xlsx"))));
+    ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+    auto ours = write_xlsb_with_result(loaded.value().workbook);
+    ASSERT_TRUE(static_cast<bool>(ours)) << ours.error().message;
+    const std::uint16_t ours_default = DefaultRowTwips(ours.value().bytes);
+    ASSERT_NE(ours_default, 0U);
+    for (const auto& row : RowHeights(ours.value().bytes)) {
+      EXPECT_EQ(row.second, ours_default) << "row " << row.first;
+    }
+  }
+  const Bytes excel = ReadFile(PhonFontFixture("pf_base_en.xlsb"));
+  auto loaded = read_ooxml(SpanOf(ReadFile(PhonFontFixture("pf_base_en_src.xlsx"))));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  auto ours = write_xlsb_with_result(loaded.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(ours)) << ours.error().message;
+  EXPECT_EQ(RowHeights(ours.value().bytes), RowHeights(excel));
+}
+
+// The stated default is not a stored height: the row reads back without one, and an xlsx save writes no `ht`.
+TEST(XlsbParitySheetRecords, DefaultRowHeightIsNotAStoredHeight) {
+  auto loaded = read_ooxml(SpanOf(ReadFile(PhonFontFixture("pf_base_en_src.xlsx"))));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  auto first = write_xlsb_with_result(loaded.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(first)) << first.error().message;
+  auto reread = read_xlsb(SpanOf(first.value().bytes));
+  ASSERT_TRUE(static_cast<bool>(reread)) << reread.error().message;
+  auto second = write_xlsb_with_result(reread.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(second)) << second.error().message;
+  EXPECT_EQ(RowHeights(second.value().bytes), RowHeights(first.value().bytes));
+  auto reread_again = read_xlsb(SpanOf(second.value().bytes));
+  ASSERT_TRUE(static_cast<bool>(reread_again)) << reread_again.error().message;
+  auto xlsx = write_ooxml(reread_again.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
+  const std::string sheet = SheetXml(xlsx.value(), 1);
+  EXPECT_NE(sheet.find("<row "), std::string::npos);
+  EXPECT_EQ(sheet.find(" ht=\""), std::string::npos) << sheet;
+  EXPECT_EQ(sheet.find("customHeight"), std::string::npos) << sheet;
 }
 
 }  // namespace

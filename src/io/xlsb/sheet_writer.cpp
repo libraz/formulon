@@ -84,7 +84,10 @@ struct ColSpan {
 /// Emits a `BrtRowHdr` for `row`. [MS-XLSB] §2.4.770 layout:
 ///   * rw         : u32 (0-based row index)
 ///   * iStyleRef  : u32 (row style xf index, or 0)
-///   * miyRw      : u16 (custom row height in twips; 0 = use default)
+///   * miyRw      : u16 (row height in twips; a row without its own height
+///                  carries `default_twips`, the sheet default as BrtWsFmtInfo
+///                  stores it, as Excel writes it: Excel opens a file whose
+///                  leading rows say 0 scrolled past them)
 ///   * flags1     : u8
 ///   * flags2     : u8  (outline / hidden / customHeight / fGhostDirty bits)
 ///   * fPhShow    : u8  (phonetic-guide default)
@@ -96,18 +99,20 @@ struct ColSpan {
 /// following it with cells, even though our own permissive reader can decode
 /// it.  An empty layout-only row legitimately has no spans.
 void EmitRowHeader(std::vector<std::uint8_t>& dst, std::uint32_t row, const RowLayout* layout, bool default_hidden,
-                   const std::vector<ColSpan>& spans, const CellStyleSavePlan* style_plan) {
+                   std::uint16_t default_twips, const std::vector<ColSpan>& spans,
+                   const CellStyleSavePlan* style_plan) {
   std::vector<std::uint8_t> p;
   emit_u32(p, row);
   emit_u32(p, layout != nullptr && layout->has_style ? saved_cell_xf(style_plan, layout->style_xf) : 0U);  // iStyleRef
   const bool has_height = layout != nullptr && (layout->has_height || layout->height > 0.0);
-  const double twips = has_height ? std::round(layout->height * 20.0) : 0.0;
+  const bool hidden = layout != nullptr ? layout->hidden : default_hidden;
+  const double twips = has_height ? std::round(layout->height * 20.0) : (hidden ? 0.0 : default_twips);
   emit_u16(p, static_cast<std::uint16_t>(std::clamp(twips, 0.0, 65535.0)));  // miyRw
   emit_u8(p, 0);                                                             // flags1
   std::uint8_t flags2 =
       layout == nullptr ? 0U : static_cast<std::uint8_t>(layout->outline_level & kRowOutlineLevelMask);
   // Every header states visibility, so a row without an override carries the sheet default.
-  if (layout != nullptr ? layout->hidden : default_hidden) {
+  if (hidden) {
     flags2 |= kRowZeroHeight;
   }
   if (layout != nullptr && layout->collapsed) {
@@ -356,6 +361,9 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     format_defaults.default_row_height = ooxml_defaults::kStandardRowHeightPt;
     format_defaults.has_default_row_height = true;
   }
+  // A row without its own height states the default, truncated to twips as BrtWsFmtInfo stores it.
+  const auto default_row_twips =
+      static_cast<std::uint16_t>(std::clamp(std::floor(format_defaults.default_row_height * 20.0), 0.0, 65535.0));
   if (auto views = EmitWorksheetViewsAndFormatting(body, sheet.view(), format_defaults, workbook_views, own_index);
       !views) {
     return std::move(views.error());
@@ -524,7 +532,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
       }
     }
 
-    EmitRowHeader(body, row, row_layout, sheet.format_defaults().zero_height, spans, style_plan);
+    EmitRowHeader(body, row, row_layout, sheet.format_defaults().zero_height, default_row_twips, spans, style_plan);
     // Ascending three-way merge of stored entries, phantoms and run columns; a
     // column in both a stored entry and a phantom takes the entry path unless
     // it is style-only, a phantom wins over a run column, and a stored entry

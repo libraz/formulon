@@ -694,6 +694,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   module now asks the host for the local UTC offset at each read, so the
   `TZ` in effect and a daylight-saving change are followed. A pinned clock is
   unaffected, as are the npm package and the native builds.
+- Excel opened an `.xlsb` the engine wrote scrolled past its first rows: each
+  row record without its own height stated 0. It now states the sheet's
+  default row height, as Excel's saves do, without marking it as a set
+  height, so the row still fits its content and reads back without one.
 
 ## [0.19.0] - 2026-11-10
 
