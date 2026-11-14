@@ -331,7 +331,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([C ABI changes](docs/releases/upgrading-0.19.md#c-abi-changes)).
 - More engine ceilings return `SecurityResourceLimit` (6005, Python
   `SecurityError`), each with a `part=<name> requested=<n> limit=<n>` context:
-  adding or copying a sheet past 65,535 (part=sheets, was status 12, now
+  adding or copying a sheet past 65,535 (part=sheets, was status 5053, now
   retired), a page grid over 2^24 pages (part=print_pages, was status 9005,
   now retired), a pivot result over its cell limit (part=pivot_result_cells,
   was `FunctionOverflow`), an array formula or dynamic array past its cell
@@ -350,13 +350,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gradient stops in a fill, written or loaded from `.xlsx` or `.xlsb`
   (part=gradient_stops; a load fails instead of dropping stops, and the
   `.xlsb` writer writes every stop), `getValues` and `getTypedValues` over
-  2^22 cells (part=values_range, was `InvalidArgument`), and a thread count
+  2^22 cells (part=values_range), and a thread count
   above 8 (part=threads; a negative count stays `InvalidArgument`). Excel's
   own limits stay `InvalidArgument`: a slicer column count past 20,000, and
   now more than 1,026 manual page breaks on an axis (part=manual_breaks, was
   `PreconditionFailed`) and more than 1,048,576 items in a numeric pivot
   group (part=pivot_field_items; `PreconditionFailed` when a refresh
-  rebuilds the group, was `SecurityResourceLimit`). The same key shape now
+  rebuilds the group). The same key shape now
   leads the context of a chart series past an Excel column's rows
   (part=chart_points, `InvalidArgument`) and of the compression-ratio check
   (part=zip_entry_ratio, `IO_ZIP_BOMB`). Callers that matched the old
@@ -506,10 +506,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fm_sheet_get_cell_at` follow the blank-cell rule above; no signature or
   struct changes
   ([C ABI changes](docs/releases/upgrading-0.19.md#c-abi-changes)).
-- `remapRangeXfs` with a target XF past the cell-XF table fails with
-  `IndexOutOfRange` (C `FM_STATUS_INDEX_OUT_OF_RANGE`, Python
-  `IndexOutOfRangeError`) instead of `InvalidArgument`, like `setRangeXfIndex`;
-  a repeated source XF stays `InvalidArgument`.
 - `removeTableStyle` (Python `remove_table_style`, C
   `fm_workbook_remove_table_style`) re-points every table and PivotTable that
   used the style to the default table / PivotTable style of its own kind,
@@ -772,22 +768,23 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   ([C ABI changes](docs/releases/upgrading-0.19.md#c-abi-changes)).
 - C ABI: `fm_color_t` replaces `fm_cf_color_t` and the `*_argb` fields, and
   the shape fields `fill_rgb` / `line_rgb` are `fill` / `line`.
-- C ABI: `fm_compare_text` and `fm_get_collation_classes` take the strength
-  before the profile id, and a stale call still compiles.
+- C ABI: `fm_text_compare` and `fm_collation_classes` are `fm_compare_text`
+  and `fm_get_collation_classes`, with the strength before the profile id.
 - C ABI: `fm_workbook_save` takes the format (`fm_workbook_save_as` is gone),
-  `fm_sheet_set_pivot_field_date_group` takes a period mask,
-  `fm_sheet_update_chart_display` takes a patch, formula entry fails with
+  `fm_workbook_pivot_field_set_date_group` is
+  `fm_sheet_set_pivot_field_date_group` and takes a period mask,
+  `fm_sheet_set_chart_display` is `fm_sheet_update_chart_display` and takes a
+  patch, formula entry fails with
   parser statuses 1000 to 1014, and enum constants start with their type name
   ([C ABI callers](docs/releases/upgrading-0.19.md#c-abi-callers)).
-- C ABI: `fm_sheet_set_cell_phonetic_runs`, `fm_sheet_add_threaded_comment`
-  and `fm_sheet_update_threaded_comment` take an `fm_text_offset_unit_t`
-  before the record, and phonetic runs and mentions carry their span in UTF-16
-  units and in code points.
+- C ABI: `fm_workbook_set_cell_phonetic_runs` is
+  `fm_sheet_set_cell_phonetic_runs`, and it and `fm_sheet_add_threaded_comment`
+  take an `fm_text_offset_unit_t` before the record; phonetic runs and
+  mentions carry their span in UTF-16 units and in code points.
 - JavaScript and Python: one `list*` method replaces each count and index
   pair; `addChart` takes a `ChartPlotType`, pivot filters `value` /
   `valueHigh`, AutoFilter custom filters `conditions`, and `CfMatch` is a
-  union told apart by `kind`. A `Date` input is read through its local
-  getters, where `setValue(Date)` used UTC
+  union told apart by `kind`
   ([details](docs/releases/upgrading-0.19.md#javascript-and-python-callers)).
 - JavaScript: `createFormulon()` resolves to the `Formulon` object in both
   packages, `saveAs(format)` is `save(format)`, a value is a union on `kind`,
@@ -798,7 +795,7 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
 - Python: failures raise one `FormulonError` subclass per status range, and
   `FormulaSyntaxError` is no longer an `InvalidArgumentError`. Tuple results
   are frozen dataclasses, nine signatures take a record in place of keywords,
-  mention, phonetic-run and parse-error positions are code points, and Python
+  mention and phonetic-run positions are code points, and Python
   3.10 or later is required
   ([details](docs/releases/upgrading-0.19.md#python-callers)).
 - Command line: `dump` takes `--view`, `paginate` prints new keys, a usage
@@ -1004,8 +1001,9 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   instead of being dropped.
 - Number-format codes use the workbook profile's vocabulary (id 14 is
   `m/d/yy` under en-US).
-- `evaluateCfRange` without `today` uses the pinned clock or the local date
-  instead of disabling time-period rules.
+- `evaluateCfRange` takes an optional `today` in place of the required
+  `todaySerial`; without it, time-period rules use the pinned clock or the
+  local date.
 - `getFunctionMetadata` reports the argument counts entry accepts for every
   built-in.
 - A conditional formatting rule added without an id gets one in Excel's form.
@@ -1040,8 +1038,7 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   ranges when `ranges` is `NULL`, and formula text views stay valid until the
   next read through the handle's scratch buffer.
 - Python runs one WebAssembly instance per process, so calls are serialised.
-- `TEXTBEFORE` and `TEXTAFTER` return `#N/A` on a miss without
-  `if_not_found` (they returned `0`); `GROUPBY` / `PIVOTBY` with `total_depth`
+- `GROUPBY` / `PIVOTBY` with `total_depth`
   of 2 or more over one key column, and a union across sheets, are `#VALUE!`;
   a union holding a 3-D reference is `#NAME?`. A range-sourced list
   validation compares numbers exactly.

@@ -1822,7 +1822,9 @@ class Sheet(_NoCopy):
         A ``date``, naive ``datetime`` or naive ``time`` stores its serial
         under the workbook's date system (a ``time`` is the fraction of a
         day) and, when the cell's effective number format is General, gives
-        the cell the format ``m/d/yyyy``, ``m/d/yyyy h:mm`` or ``h:mm:ss``.
+        the cell a built-in format: the date format (id 14, shown ``m/d/yy``
+        under en-US and ``yyyy/m/d`` under ja-JP), id 22 with a time of day,
+        or ``h:mm:ss`` for a ``time``.
 
         Raises:
           TypeError: for any other type (a ``timedelta`` included), or a

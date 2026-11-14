@@ -7326,8 +7326,8 @@ export interface Sheet {
    *  (`'='` alone is a syntax error; `+`, `-`, `@` and the full-width `＝` do not start a formula), any other
    *  `string` through `setText`, a `boolean` through `setBool`, `null` through `setBlank` and an
    *  {@link ExcelError} through `setError`. A `Date` stores the serial of its local wall clock (see {@link DateInput}) and, when the cell's
-   *  effective number format is General, gives it a date format (`m/d/yyyy`, or `m/d/yyyy h:mm` with a time
-   *  of day). A {@link Value} is stored by its `kind`; a `TextValue` is always text. `undefined`, a `bigint`,
+   *  effective number format is General, gives it the built-in date format (id 14, shown `m/d/yy` under en-US and
+   *  `yyyy/m/d` under ja-JP), or id 22 with a time of day. A {@link Value} is stored by its `kind`; a `TextValue` is always text. `undefined`, a `bigint`,
    *  a symbol, an array, any other object, and an `ArrayValue` / `RefValue` / `LambdaValue` throw
    *  `TypeError`. Store untrusted text with `setText`, which never reads it as a formula.
    *
