@@ -254,6 +254,13 @@ inline std::uint32_t FirstOptionalRelId(std::size_t sheet_count, bool generated_
 /// counts and changes nothing else — the same rule the readers follow.
 EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings, WriteDiagnostics* diagnostics);
 
+/// Plans each sheet's comments part, VML drawing and threaded-comment part, as the xlsx and xlsb writers both name
+/// them; `comments_extension` is the comments part's (".xml" or ".bin"). `source_passthrough_index` is built over
+/// `source_passthrough` whenever a sheet carries a comment VML path.
+std::vector<EmissionPlan::CommentsPlan> plan_comment_parts(
+    const Workbook& wb, const std::vector<const PassthroughPart*>& source_passthrough,
+    const PassthroughPathIndex& source_passthrough_index, std::string_view comments_extension);
+
 /// Helper: composes a path of the form `<prefix><id><suffix>` (e.g.
 /// `("xl/tables/table", 3, ".xml")` -> `"xl/tables/table3.xml"`).
 std::string NumberedPartPath(std::string_view prefix, std::uint32_t id, std::string_view suffix);

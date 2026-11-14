@@ -316,6 +316,70 @@ void PlanExternalLinks(const Workbook& wb, const std::vector<const PassthroughPa
 
 }  // namespace
 
+// Comments / VML parts. One package-wide numeric counter; each sheet
+// with at least one note or thread gets a `comments<N>.xml` and a
+// matching `vmlDrawing<N>.vml` (a thread is also written as a legacy
+// stub note), plus `threadedComment<N>.xml` when it has threads. The
+// numeric id matches between them so the sheet rels file pairs them by
+// ordinal.
+//
+// A vmlDrawing target still named by some sheet's `unknown_relationships()`
+// (for example a `<legacyDrawingHF>` header/footer VML preserved
+// verbatim, see `sheet_aux_rels_reader.h`) already occupies a
+// `xl/drawings/vmlDrawing<N>.vml` path the counter would otherwise
+// assign. Skip any id that collides so the auto-numbered comment VML
+// never overwrites a part a live relationship still points at.
+//
+// This is deliberately narrower than "any passthrough part at that
+// path": an orphaned passthrough part left over from a since-removed
+// sheet's comment VML is not referenced by anything anymore, and
+// reusing its path for the next sheet's own renumbered comment VML is
+// the desired outcome, not a collision.
+std::vector<EmissionPlan::CommentsPlan> plan_comment_parts(
+    const Workbook& wb, const std::vector<const PassthroughPart*>& source_passthrough,
+    const PassthroughPathIndex& source_passthrough_index, std::string_view comments_extension) {
+  std::unordered_set<std::string> retained_paths;
+  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
+    for (const UnknownRelationship& rel : wb.sheet(s).unknown_relationships()) {
+      if (rel.type == kRelVmlDrawing && !rel.target_external) {
+        retained_paths.insert(rel.target);
+      }
+    }
+  }
+  std::vector<EmissionPlan::CommentsPlan> out(wb.sheet_count());
+  std::uint32_t next_comments_id = 1;
+  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
+    const Sheet& sheet = wb.sheet(s);
+    const bool has_notes = !sheet.comments().empty() || !sheet.threaded_comments().empty();
+    // A drawing of form controls alone still needs its VML part and link.
+    if (!has_notes && sheet.comment_vml_extra_xml().empty()) {
+      continue;
+    }
+    while (retained_paths.count(NumberedPartPath("xl/drawings/vmlDrawing", next_comments_id, ".vml")) != 0U) {
+      ++next_comments_id;
+    }
+    EmissionPlan::CommentsPlan entry;
+    entry.numeric_id = next_comments_id++;
+    if (has_notes) {
+      entry.comments_path = NumberedPartPath("xl/comments", entry.numeric_id, comments_extension);
+    }
+    entry.vml_path = NumberedPartPath("xl/drawings/vmlDrawing", entry.numeric_id, ".vml");
+    if (!sheet.threaded_comments().empty()) {
+      entry.threaded_path = NumberedPartPath("xl/threadedComments/threadedComment", entry.numeric_id, ".xml");
+    }
+    // Detect whether this sheet still carries its original VML bytes. Do
+    // not infer the source from a newly assigned output number: removing a
+    // preceding commented sheet renumbers output parts but must not discard
+    // the surviving sheet's shape geometry. Bytes whose shapes no longer
+    // match the comment anchors are regenerated instead.
+    if (!sheet.comment_vml_path().empty() && sheet.comment_vml_shapes() == sheet.comment_shapes()) {
+      entry.vml_source = source_passthrough_index.find(source_passthrough, sheet.comment_vml_path());
+    }
+    out[s] = std::move(entry);
+  }
+  return out;
+}
+
 EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings, WriteDiagnostics* diagnostics) {
   EmissionPlan plan;
   plan.generated_shared_strings = generated_shared_strings;
@@ -480,64 +544,7 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
     }
   }
 
-  // Comments / VML parts. One package-wide numeric counter; each sheet
-  // with at least one note or thread gets a `comments<N>.xml` and a
-  // matching `vmlDrawing<N>.vml` (a thread is also written as a legacy
-  // stub note), plus `threadedComment<N>.xml` when it has threads. The
-  // numeric id matches between them so the sheet rels file pairs them by
-  // ordinal.
-  //
-  // A vmlDrawing target still named by some sheet's `unknown_relationships()`
-  // (for example a `<legacyDrawingHF>` header/footer VML preserved
-  // verbatim, see `sheet_aux_rels_reader.h`) already occupies a
-  // `xl/drawings/vmlDrawing<N>.vml` path the counter would otherwise
-  // assign. Skip any id that collides so the auto-numbered comment VML
-  // never overwrites a part a live relationship still points at.
-  //
-  // This is deliberately narrower than "any passthrough part at that
-  // path": an orphaned passthrough part left over from a since-removed
-  // sheet's comment VML is not referenced by anything anymore, and
-  // reusing its path for the next sheet's own renumbered comment VML is
-  // the desired outcome, not a collision.
-  std::unordered_set<std::string> retained_paths;
-  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
-    for (const UnknownRelationship& rel : wb.sheet(s).unknown_relationships()) {
-      if (rel.type == kRelVmlDrawing && !rel.target_external) {
-        retained_paths.insert(rel.target);
-      }
-    }
-  }
-  plan.comments_by_sheet.assign(wb.sheet_count(), EmissionPlan::CommentsPlan{});
-  std::uint32_t next_comments_id = 1;
-  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
-    const Sheet& sheet = wb.sheet(s);
-    const bool has_notes = !sheet.comments().empty() || !sheet.threaded_comments().empty();
-    // A drawing of form controls alone still needs its VML part and link.
-    if (!has_notes && sheet.comment_vml_extra_xml().empty()) {
-      continue;
-    }
-    while (retained_paths.count(NumberedPartPath("xl/drawings/vmlDrawing", next_comments_id, ".vml")) != 0U) {
-      ++next_comments_id;
-    }
-    EmissionPlan::CommentsPlan entry;
-    entry.numeric_id = next_comments_id++;
-    if (has_notes) {
-      entry.comments_path = NumberedPartPath("xl/comments", entry.numeric_id, ".xml");
-    }
-    entry.vml_path = NumberedPartPath("xl/drawings/vmlDrawing", entry.numeric_id, ".vml");
-    if (!sheet.threaded_comments().empty()) {
-      entry.threaded_path = NumberedPartPath("xl/threadedComments/threadedComment", entry.numeric_id, ".xml");
-    }
-    // Detect whether this sheet still carries its original VML bytes. Do
-    // not infer the source from a newly assigned output number: removing a
-    // preceding commented sheet renumbers output parts but must not discard
-    // the surviving sheet's shape geometry. Bytes whose shapes no longer
-    // match the comment anchors are regenerated instead.
-    if (!sheet.comment_vml_path().empty() && sheet.comment_vml_shapes() == sheet.comment_shapes()) {
-      entry.vml_source = source_passthrough_index.find(source_passthrough, sheet.comment_vml_path());
-    }
-    plan.comments_by_sheet[s] = std::move(entry);
-  }
+  plan.comments_by_sheet = plan_comment_parts(wb, source_passthrough, source_passthrough_index, ".xml");
 
   // External link relationships. Assigned rIds follow the pivot caches
   // in the workbook-rels numbering scheme, mirroring how Excel emits
