@@ -523,6 +523,67 @@ inline std::vector<SubtotalFn> ordered_subtotal_fns(const PivotField& field) {
   return fns;
 }
 
+/// `pivotArea@type` (ST_PivotAreaType).
+enum class PivotAreaType : std::uint8_t {
+  None = 0,
+  Normal = 1,
+  Data = 2,
+  All = 3,
+  Origin = 4,
+  Button = 5,
+  TopEnd = 6,
+  TopRight = 7,
+};
+
+/// `<reference>` of a table-side `<pivotArea>`; `count` is derived from `items`.
+struct PivotTableAreaReference {
+  /// `field`; 4294967294 names the data pseudo-field.
+  std::optional<std::uint32_t> field;
+  /// `<x v>` item indices.
+  std::vector<std::uint32_t> items;
+  bool selected = true;  ///< `selected`
+};
+
+/// `<pivotArea>` of a table `<format>` or `<chartFormat>`. Members hold the
+/// schema defaults; an area carrying anything outside them stays raw XML.
+struct PivotTableArea {
+  std::optional<std::uint32_t> field;  ///< `field`
+  PivotAreaType type = PivotAreaType::Normal;
+  bool data_only = true;                        ///< `dataOnly`
+  bool label_only = false;                      ///< `labelOnly`
+  bool grand_row = false;                       ///< `grandRow`
+  bool grand_col = false;                       ///< `grandCol`
+  bool outline = true;                          ///< `outline`
+  bool collapsed_levels_are_subtotals = false;  ///< `collapsedLevelsAreSubtotals`
+  /// `axis`; nullopt when absent. `PivotAxis::Value` is `axisValues`.
+  std::optional<PivotAxis> axis;
+  std::optional<std::uint32_t> field_position;  ///< `fieldPosition`
+  std::vector<PivotTableAreaReference> references;
+};
+
+/// `format@action` (ST_FormatAction).
+enum class PivotFormatAction : std::uint8_t {
+  Blank = 0,
+  Formatting = 1,
+  Drill = 2,
+  Formula = 3,
+};
+
+/// One `<formats>/<format>`: a dxf applied to a pivot area.
+struct PivotFormat {
+  PivotFormatAction action = PivotFormatAction::Formatting;
+  std::optional<std::uint32_t> dxf_id;  ///< `dxfId`
+  PivotTableArea area;
+};
+
+/// One `<chartFormats>/<chartFormat>`: a pivot chart series format bound to a pivot area.
+struct PivotChartFormat {
+  std::uint32_t chart = 0;   ///< `chart`
+  std::uint32_t format = 0;  ///< `format`
+  bool series = false;       ///< `series`
+  PivotTableArea area;
+};
+
 }  // namespace formulon::pivot
 
 #endif  // FORMULON_PIVOT_PIVOT_TYPES_H_

@@ -392,7 +392,9 @@ TEST(DxfCompactionXlsx, PivotFormatInRawXmlIsRenumbered) {
     }
   }
   ASSERT_NE(saved, nullptr);
-  const std::optional<std::uint32_t> id = DxfAttr(saved->raw_passthrough_before_style_info(), "dxfId", false);
+  // The reload holds a fully representable format typed rather than raw.
+  ASSERT_EQ(saved->formats().size(), 1U);
+  const std::optional<std::uint32_t> id = saved->formats().front().dxf_id;
   ASSERT_TRUE(id.has_value());
   ASSERT_LT(*id, back.styles().dxfs.size());
   EXPECT_EQ(Body(back.styles().dxfs[*id]), used);

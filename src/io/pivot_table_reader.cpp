@@ -651,6 +651,286 @@ void ExtractAltText(pugi::xml_node extlst, pivot::PivotTable* table) {
   }
 }
 
+/// The x14 `hideValuesRow` of `extlst`; false when no x14 extension states it.
+bool ReadHideValuesRow(const pugi::xml_node& extlst) {
+  for (pugi::xml_node ext : extlst.children("ext")) {
+    if (pugi::xml_node x14 = child_local(ext, "pivotTableDefinition"); x14) {
+      return attr_bool(x14, "hideValuesRow", false);
+    }
+  }
+  return false;
+}
+
+/// An `xsd:boolean` spelled `1`/`0`/`true`/`false`; nullopt for anything else.
+std::optional<bool> StrictBool(const pugi::xml_attribute& attr) {
+  const std::string_view v = attr.value();
+  if (v == "1" || v == "true") {
+    return true;
+  }
+  if (v == "0" || v == "false") {
+    return false;
+  }
+  return std::nullopt;
+}
+
+/// A boolean attribute that departs from `fallback`; nullopt when malformed or
+/// spelled at its default, which the typed form could not reproduce.
+std::optional<bool> NonDefaultBool(const pugi::xml_attribute& attr, bool fallback) {
+  const std::optional<bool> v = StrictBool(attr);
+  if (!v || *v == fallback) {
+    return std::nullopt;
+  }
+  return v;
+}
+
+/// Element children of `node`, or nullopt when it holds text or a child not named `name`.
+std::optional<std::vector<pugi::xml_node>> OnlyChildren(const pugi::xml_node& node, std::string_view name) {
+  std::vector<pugi::xml_node> out;
+  for (pugi::xml_node child = node.first_child(); child; child = child.next_sibling()) {
+    if (child.type() != pugi::node_element || name != child.name()) {
+      return std::nullopt;
+    }
+    out.push_back(child);
+  }
+  return out;
+}
+
+/// The `count` attribute equals `n`.
+bool CountIs(const pugi::xml_node& node, std::size_t n) {
+  const std::optional<std::uint32_t> count = parse_xml_u32_attr_strict(node.attribute("count"));
+  return count && *count == n;
+}
+
+std::optional<pivot::PivotTableAreaReference> ReadAreaReference(const pugi::xml_node& node) {
+  const auto xs = OnlyChildren(node, "x");
+  if (!xs || !CountIs(node, xs->size())) {
+    return std::nullopt;
+  }
+  pivot::PivotTableAreaReference ref;
+  for (pugi::xml_attribute attr : node.attributes()) {
+    const std::string_view name = attr.name();
+    if (name == "field") {
+      ref.field = parse_xml_u32_attr_strict(attr);
+      if (!ref.field) {
+        return std::nullopt;
+      }
+    } else if (name == "selected") {
+      const std::optional<bool> v = NonDefaultBool(attr, true);
+      if (!v) {
+        return std::nullopt;
+      }
+      ref.selected = *v;
+    } else if (name != "count") {
+      return std::nullopt;
+    }
+  }
+  for (const pugi::xml_node& x : *xs) {
+    const pugi::xml_attribute v = x.attribute("v");
+    const std::optional<std::uint32_t> index = parse_xml_u32_attr_strict(v);
+    if (!index || v.next_attribute() || v.previous_attribute()) {
+      return std::nullopt;
+    }
+    ref.items.push_back(*index);
+  }
+  return ref;
+}
+
+/// `<pivotArea>` in the typed form, or nullopt when it carries an attribute,
+/// value or child the form does not hold.
+std::optional<pivot::PivotTableArea> ReadTableArea(const pugi::xml_node& node) {
+  static constexpr std::pair<std::string_view, pivot::PivotAreaType> kTypes[] = {
+      {"none", pivot::PivotAreaType::None},         {"data", pivot::PivotAreaType::Data},
+      {"all", pivot::PivotAreaType::All},           {"origin", pivot::PivotAreaType::Origin},
+      {"button", pivot::PivotAreaType::Button},     {"topEnd", pivot::PivotAreaType::TopEnd},
+      {"topRight", pivot::PivotAreaType::TopRight},
+  };
+  static constexpr std::pair<std::string_view, pivot::PivotAxis> kAxes[] = {
+      {"axisRow", pivot::PivotAxis::Row},
+      {"axisCol", pivot::PivotAxis::Col},
+      {"axisPage", pivot::PivotAxis::Page},
+      {"axisValues", pivot::PivotAxis::Value},
+  };
+  pivot::PivotTableArea area;
+  for (pugi::xml_attribute attr : node.attributes()) {
+    const std::string_view name = attr.name();
+    const std::string_view value = attr.value();
+    bool* flag = nullptr;
+    bool fallback = false;
+    if (name == "field" || name == "fieldPosition") {
+      std::optional<std::uint32_t>& slot = name == "field" ? area.field : area.field_position;
+      slot = parse_xml_u32_attr_strict(attr);
+      if (!slot) {
+        return std::nullopt;
+      }
+      continue;
+    }
+    if (name == "type") {
+      const auto* hit =
+          std::find_if(std::begin(kTypes), std::end(kTypes), [&](const auto& e) { return e.first == value; });
+      if (hit == std::end(kTypes)) {
+        return std::nullopt;
+      }
+      area.type = hit->second;
+      continue;
+    }
+    if (name == "axis") {
+      const auto* hit =
+          std::find_if(std::begin(kAxes), std::end(kAxes), [&](const auto& e) { return e.first == value; });
+      if (hit == std::end(kAxes)) {
+        return std::nullopt;
+      }
+      area.axis = hit->second;
+      continue;
+    }
+    if (name == "dataOnly") {
+      flag = &area.data_only;
+      fallback = true;
+    } else if (name == "labelOnly") {
+      flag = &area.label_only;
+    } else if (name == "grandRow") {
+      flag = &area.grand_row;
+    } else if (name == "grandCol") {
+      flag = &area.grand_col;
+    } else if (name == "outline") {
+      flag = &area.outline;
+      fallback = true;
+    } else if (name == "collapsedLevelsAreSubtotals") {
+      flag = &area.collapsed_levels_are_subtotals;
+    } else {
+      return std::nullopt;
+    }
+    const std::optional<bool> v = NonDefaultBool(attr, fallback);
+    if (!v) {
+      return std::nullopt;
+    }
+    *flag = *v;
+  }
+  const auto children = OnlyChildren(node, "references");
+  if (!children || children->size() > 1U) {
+    return std::nullopt;
+  }
+  if (!children->empty()) {
+    const pugi::xml_node refs = children->front();
+    const auto list = OnlyChildren(refs, "reference");
+    if (!list || list->empty() || !CountIs(refs, list->size()) || refs.first_attribute().next_attribute()) {
+      return std::nullopt;
+    }
+    for (const pugi::xml_node& ref_node : *list) {
+      std::optional<pivot::PivotTableAreaReference> ref = ReadAreaReference(ref_node);
+      if (!ref) {
+        return std::nullopt;
+      }
+      area.references.push_back(std::move(*ref));
+    }
+  }
+  return area;
+}
+
+/// The single `<pivotArea>` child of a `<format>` / `<chartFormat>`.
+std::optional<pivot::PivotTableArea> ReadOnlyArea(const pugi::xml_node& node) {
+  const auto children = OnlyChildren(node, "pivotArea");
+  if (!children || children->size() != 1U) {
+    return std::nullopt;
+  }
+  return ReadTableArea(children->front());
+}
+
+/// `<formats>` in the typed form; empty when any part of it is not held.
+std::vector<pivot::PivotFormat> ReadFormats(const pugi::xml_node& node) {
+  static constexpr std::pair<std::string_view, pivot::PivotFormatAction> kActions[] = {
+      {"blank", pivot::PivotFormatAction::Blank},
+      {"drill", pivot::PivotFormatAction::Drill},
+      {"formula", pivot::PivotFormatAction::Formula},
+  };
+  const auto list = OnlyChildren(node, "format");
+  if (!list || list->empty() || !CountIs(node, list->size()) || node.first_attribute().next_attribute()) {
+    return {};
+  }
+  std::vector<pivot::PivotFormat> out;
+  for (const pugi::xml_node& f : *list) {
+    pivot::PivotFormat format;
+    for (pugi::xml_attribute attr : f.attributes()) {
+      const std::string_view name = attr.name();
+      if (name == "dxfId") {
+        format.dxf_id = parse_xml_u32_attr_strict(attr);
+        if (!format.dxf_id) {
+          return {};
+        }
+      } else if (name == "action") {
+        const std::string_view value = attr.value();
+        const auto* hit =
+            std::find_if(std::begin(kActions), std::end(kActions), [&](const auto& e) { return e.first == value; });
+        if (hit == std::end(kActions)) {
+          return {};
+        }
+        format.action = hit->second;
+      } else {
+        return {};
+      }
+    }
+    std::optional<pivot::PivotTableArea> area = ReadOnlyArea(f);
+    if (!area) {
+      return {};
+    }
+    format.area = std::move(*area);
+    out.push_back(std::move(format));
+  }
+  return out;
+}
+
+/// `<chartFormats>` in the typed form; empty when any part of it is not held.
+std::vector<pivot::PivotChartFormat> ReadChartFormats(const pugi::xml_node& node) {
+  const auto list = OnlyChildren(node, "chartFormat");
+  if (!list || list->empty() || !CountIs(node, list->size()) || node.first_attribute().next_attribute()) {
+    return {};
+  }
+  std::vector<pivot::PivotChartFormat> out;
+  for (const pugi::xml_node& f : *list) {
+    pivot::PivotChartFormat format;
+    const std::optional<std::uint32_t> chart = parse_xml_u32_attr_strict(f.attribute("chart"));
+    const std::optional<std::uint32_t> index = parse_xml_u32_attr_strict(f.attribute("format"));
+    if (!chart || !index) {
+      return {};
+    }
+    format.chart = *chart;
+    format.format = *index;
+    for (pugi::xml_attribute attr : f.attributes()) {
+      const std::string_view name = attr.name();
+      if (name == "series") {
+        const std::optional<bool> v = NonDefaultBool(attr, false);
+        if (!v) {
+          return {};
+        }
+        format.series = *v;
+      } else if (name != "chart" && name != "format") {
+        return {};
+      }
+    }
+    std::optional<pivot::PivotTableArea> area = ReadOnlyArea(f);
+    if (!area) {
+      return {};
+    }
+    format.area = std::move(*area);
+    out.push_back(std::move(format));
+  }
+  return out;
+}
+
+/// The post-dataFields elements that go to `raw_passthrough_before_style_info`.
+bool IsBeforeStyleElement(std::string_view name) {
+  return name == "formats" || name == "conditionalFormats" || name == "chartFormats" || name == "pivotHierarchies";
+}
+
+/// True when a later sibling of `node` would land in the before-style bin.
+bool BeforeStyleElementFollows(pugi::xml_node node) {
+  for (node = node.next_sibling(); node; node = node.next_sibling()) {
+    if (node.type() == pugi::node_element && IsBeforeStyleElement(node.name())) {
+      return true;
+    }
+  }
+  return false;
+}
+
 }  // namespace
 
 bool read_pivot_filters_xml(std::string_view filters_xml, pivot::PivotTable* table) {
@@ -884,6 +1164,8 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
   // post-dataFields elements the schema places before the style go to their
   // own bin, the rest to the tail buffer. Relative order within each bin
   // follows document order.
+  // A read table states `hideValuesRow`: absent from the extension is `false`.
+  table.set_hide_values_row(false);
   static const std::string_view kRecognized[] = {"location",   "pivotFields", "rowFields", "colFields",
                                                  "pageFields", "dataFields",  "filters"};
   for (pugi::xml_node child = root.first_child(); child; child = child.next_sibling()) {
@@ -917,13 +1199,25 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
       bucket = &table.mutable_raw_passthrough_after_row_fields();
     } else if (name == "colItems") {
       bucket = &table.mutable_raw_col_items();
-    } else if (name == "formats" || name == "conditionalFormats" || name == "chartFormats" ||
-               name == "pivotHierarchies") {
+    } else if (IsBeforeStyleElement(name)) {
+      // Typed formats are written before the bin and typed chart formats after it.
+      if (name == "formats" && table.formats().empty() && table.raw_passthrough_before_style_info().empty()) {
+        table.mutable_formats() = ReadFormats(child);
+        if (!table.formats().empty()) {
+          continue;
+        }
+      } else if (name == "chartFormats" && table.chart_formats().empty() && !BeforeStyleElementFollows(child)) {
+        table.mutable_chart_formats() = ReadChartFormats(child);
+        if (!table.chart_formats().empty()) {
+          continue;
+        }
+      }
       bucket = &table.mutable_raw_passthrough_before_style_info();
     } else {
       bucket = &table.mutable_raw_passthrough_xml();
       if (name == "extLst") {
         ExtractAltText(child, &table);
+        table.set_hide_values_row(ReadHideValuesRow(child));
       }
     }
     append_raw_xml(*bucket, child);

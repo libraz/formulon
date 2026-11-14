@@ -1337,7 +1337,8 @@ bool WriteTable(const pivot::PivotTable& table, ExcelHost host, PivotTableDoc& d
     return false;
   }
   // `<formats>` and its siblings have no records here; the table extLst is the one SXView14 / SXView16 hold.
-  if (!table.raw_passthrough_before_style_info().empty() || table.raw_passthrough_xml() != kTableExtLst) {
+  if (!table.formats().empty() || !table.chart_formats().empty() ||
+      !table.raw_passthrough_before_style_info().empty() || table.raw_passthrough_xml() != kTableExtLst) {
     return false;
   }
   FormOverride form;

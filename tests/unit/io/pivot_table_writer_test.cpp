@@ -2666,5 +2666,209 @@ TEST(PivotTableWriter, BlockedAnchorWritesItsRichError) {
             "<rv s=\"0\"><v>3</v><v>8</v><v>8</v><v>3</v></rv>");
 }
 
+// ---------------------------------------------------------------------------
+// Typed `<formats>` / `<chartFormats>` and `hideValuesRow`
+//
+// The Excel-saved variants under tests/fixtures/excel/xlsb_parity/pivot.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+constexpr const char* kTypedFormatVariants[] = {"formats_areas", "formats_dxf_order", "chart_formats"};
+constexpr const char* kOtherFormatVariants[] = {"x14_fill_down", "x14_show_as", "hide_values_row", "unknown_ext"};
+
+/// `xl/pivotTables/pivotTable1.xml` of the parity variant `<variant>.xlsx`.
+std::string ParityTableXml(const std::string& variant) {
+  const std::string path = std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_parity/pivot/" + variant + ".xlsx";
+  const std::vector<std::uint8_t> bytes = ReadFixtureBytes(path);
+  EXPECT_FALSE(bytes.empty()) << "could not read " << path;
+  ZipReader zip;
+  if (!zip.open(ByteSpan{bytes.data(), bytes.size()})) {
+    ADD_FAILURE() << "not a package: " << path;
+    return {};
+  }
+  auto entry = zip.read_entry("xl/pivotTables/pivotTable1.xml");
+  if (!entry) {
+    ADD_FAILURE() << "no pivot table part in " << path;
+    return {};
+  }
+  return std::string(entry.value().begin(), entry.value().end());
+}
+
+/// The text of the first `<tag ...>...</tag>` element of `xml`; empty when absent.
+std::string ElementText(const std::string& xml, const std::string& tag) {
+  const std::size_t at = xml.find("<" + tag + " ");
+  if (at == std::string::npos) {
+    return {};
+  }
+  const std::string close = "</" + tag + ">";
+  const std::size_t end = xml.find(close, at);
+  return end == std::string::npos ? std::string() : xml.substr(at, end + close.size() - at);
+}
+
+std::string DescribeArea(const pivot::PivotTableArea& area) {
+  std::string out = "area";
+  out += " field=" + (area.field ? std::to_string(*area.field) : std::string("-"));
+  out += " type=" + std::to_string(static_cast<int>(area.type));
+  out += " flags=" + std::to_string(area.data_only) + std::to_string(area.label_only) + std::to_string(area.grand_row) +
+         std::to_string(area.grand_col) + std::to_string(area.outline) +
+         std::to_string(area.collapsed_levels_are_subtotals);
+  out += " axis=" + (area.axis ? std::to_string(static_cast<int>(*area.axis)) : std::string("-"));
+  out += " pos=" + (area.field_position ? std::to_string(*area.field_position) : std::string("-"));
+  for (const pivot::PivotTableAreaReference& ref : area.references) {
+    out += " ref(" + (ref.field ? std::to_string(*ref.field) : std::string("-")) +
+           " sel=" + std::to_string(ref.selected) + " x=";
+    for (const std::uint32_t item : ref.items) {
+      out += std::to_string(item) + ",";
+    }
+    out += ")";
+  }
+  return out;
+}
+
+/// One line per typed format and chart format of `table`.
+std::vector<std::string> DescribeFormats(const pivot::PivotTable& table) {
+  std::vector<std::string> out;
+  for (const pivot::PivotFormat& format : table.formats()) {
+    out.push_back("format action=" + std::to_string(static_cast<int>(format.action)) +
+                  " dxf=" + (format.dxf_id ? std::to_string(*format.dxf_id) : std::string("-")) + " " +
+                  DescribeArea(format.area));
+  }
+  for (const pivot::PivotChartFormat& format : table.chart_formats()) {
+    out.push_back("chart " + std::to_string(format.chart) + "/" + std::to_string(format.format) +
+                  " series=" + std::to_string(format.series) + " " + DescribeArea(format.area));
+  }
+  return out;
+}
+
+/// A minimal definition with `children` after `<dataFields>`.
+std::string DefinitionWith(const std::string& children) {
+  std::string xml(kXmlDecl);
+  xml.append("<pivotTableDefinition").append(kPivotNs).append(" name=\"P\" cacheId=\"0\">");
+  xml.append("<location ref=\"A1:B2\" firstHeaderRow=\"1\" firstDataRow=\"1\" firstDataCol=\"1\"/>");
+  xml.append("<pivotFields count=\"1\"><pivotField dataField=\"1\" showAll=\"0\"/></pivotFields>");
+  xml.append("<dataFields count=\"1\"><dataField name=\"Sum\" fld=\"0\"/></dataFields>");
+  xml.append(children);
+  xml.append("</pivotTableDefinition>");
+  return xml;
+}
+
+}  // namespace
+
+TEST(PivotTableTypedFormats, ExcelSavedFormatsReadTypedAndWriteExcelsText) {
+  for (const char* variant : kTypedFormatVariants) {
+    SCOPED_TRACE(variant);
+    const std::string excel = ParityTableXml(variant);
+    auto table = read_pivot_table_definition(Bytes(excel));
+    ASSERT_TRUE(static_cast<bool>(table)) << table.error().message;
+    EXPECT_TRUE(table.value().raw_passthrough_before_style_info().empty())
+        << table.value().raw_passthrough_before_style_info();
+    const std::vector<std::string> typed = DescribeFormats(table.value());
+    ASSERT_FALSE(typed.empty());
+
+    const std::string written = write_pivot_table_definition(table.value());
+    for (const char* tag : {"formats", "chartFormats"}) {
+      EXPECT_EQ(ElementText(written, tag), ElementText(excel, tag)) << tag;
+    }
+    auto again = read_pivot_table_definition(Bytes(written));
+    ASSERT_TRUE(static_cast<bool>(again)) << again.error().message;
+    EXPECT_EQ(DescribeFormats(again.value()), typed);
+    EXPECT_TRUE(again.value().raw_passthrough_before_style_info().empty());
+  }
+}
+
+TEST(PivotTableTypedFormats, ExcelSavedFormatsCarryTheirAttributes) {
+  auto areas = read_pivot_table_definition(Bytes(ParityTableXml("formats_areas")));
+  ASSERT_TRUE(static_cast<bool>(areas)) << areas.error().message;
+  const std::vector<pivot::PivotFormat>& formats = areas.value().formats();
+  ASSERT_EQ(formats.size(), 5U);
+  EXPECT_EQ(formats[0].dxf_id, std::optional<std::uint32_t>(4U));
+  EXPECT_EQ(formats[0].action, pivot::PivotFormatAction::Formatting);
+  EXPECT_FALSE(formats[0].area.outline);
+  EXPECT_EQ(formats[0].area.field_position, std::optional<std::uint32_t>(0U));
+  ASSERT_EQ(formats[0].area.references.size(), 1U);
+  EXPECT_FALSE(formats[0].area.references[0].selected);
+  EXPECT_EQ(formats[0].area.references[0].items, std::vector<std::uint32_t>({1U}));
+  EXPECT_TRUE(formats[1].area.label_only);
+  EXPECT_FALSE(formats[1].area.data_only);
+  EXPECT_EQ(formats[2].area.type, pivot::PivotAreaType::Button);
+  EXPECT_EQ(formats[2].area.axis, std::optional<pivot::PivotAxis>(pivot::PivotAxis::Row));
+  EXPECT_EQ(formats[2].area.field, std::optional<std::uint32_t>(0U));
+  EXPECT_TRUE(formats[3].area.grand_row);
+  EXPECT_TRUE(formats[4].area.grand_col);
+
+  auto charts = read_pivot_table_definition(Bytes(ParityTableXml("chart_formats")));
+  ASSERT_TRUE(static_cast<bool>(charts)) << charts.error().message;
+  const std::vector<pivot::PivotChartFormat>& chart = charts.value().chart_formats();
+  ASSERT_EQ(chart.size(), 2U);
+  EXPECT_EQ(chart[1].format, 1U);
+  EXPECT_TRUE(chart[1].series);
+  EXPECT_EQ(chart[1].area.type, pivot::PivotAreaType::Data);
+  ASSERT_EQ(chart[1].area.references.size(), 1U);
+  EXPECT_EQ(chart[1].area.references[0].field, std::optional<std::uint32_t>(4294967294U));
+}
+
+TEST(PivotTableTypedFormats, VariantsWithoutFormatsHoldNone) {
+  for (const char* variant : kOtherFormatVariants) {
+    SCOPED_TRACE(variant);
+    auto table = read_pivot_table_definition(Bytes(ParityTableXml(variant)));
+    ASSERT_TRUE(static_cast<bool>(table)) << table.error().message;
+    EXPECT_TRUE(table.value().formats().empty());
+    EXPECT_TRUE(table.value().chart_formats().empty());
+    EXPECT_TRUE(table.value().raw_passthrough_before_style_info().empty());
+  }
+}
+
+TEST(PivotTableTypedFormats, UnrepresentableFormatsStayRaw) {
+  const std::string offset =
+      "<formats count=\"1\"><format dxfId=\"0\"><pivotArea offset=\"A1\" outline=\"0\" fieldPosition=\"0\"/>"
+      "</format></formats>";
+  const std::string spelled_default =
+      "<formats count=\"1\"><format dxfId=\"0\"><pivotArea dataOnly=\"1\" outline=\"0\" fieldPosition=\"0\"/>"
+      "</format></formats>";
+  const std::string chart_before_hierarchies =
+      "<chartFormats count=\"1\"><chartFormat chart=\"0\" format=\"0\" series=\"1\"><pivotArea type=\"data\" "
+      "outline=\"0\" fieldPosition=\"0\"/></chartFormat></chartFormats><pivotHierarchies count=\"0\"/>";
+  for (const std::string& children : {offset, spelled_default, chart_before_hierarchies}) {
+    SCOPED_TRACE(children);
+    auto table = read_pivot_table_definition(Bytes(DefinitionWith(children)));
+    ASSERT_TRUE(static_cast<bool>(table)) << table.error().message;
+    EXPECT_TRUE(table.value().formats().empty());
+    EXPECT_TRUE(table.value().chart_formats().empty());
+    EXPECT_EQ(table.value().raw_passthrough_before_style_info(), children);
+    EXPECT_NE(write_pivot_table_definition(table.value()).find(children), std::string::npos);
+  }
+}
+
+TEST(PivotTableTypedFormats, ReadTableWithoutValuesRowExtensionSavesWithoutIt) {
+  // No extLst and no updatedVersion: Excel's form of hideValuesRow="0".
+  auto table = read_pivot_table_definition(Bytes(DefinitionWith("")));
+  ASSERT_TRUE(static_cast<bool>(table)) << table.error().message;
+  EXPECT_EQ(table.value().hide_values_row(), std::optional<bool>(false));
+  const std::string written = write_pivot_table_definition(table.value());
+  EXPECT_EQ(written.find("hideValuesRow"), std::string::npos) << written;
+
+  auto excel = read_pivot_table_definition(Bytes(ParityTableXml("hide_values_row")));
+  ASSERT_TRUE(static_cast<bool>(excel)) << excel.error().message;
+  EXPECT_EQ(excel.value().hide_values_row(), std::optional<bool>(false));
+  auto shown = read_pivot_table_definition(Bytes(ParityTableXml("unknown_ext")));
+  ASSERT_TRUE(static_cast<bool>(shown)) << shown.error().message;
+  EXPECT_EQ(shown.value().hide_values_row(), std::optional<bool>(true));
+}
+
+TEST(PivotTableTypedFormats, CreatedTableKeepsTheValuesRowRule) {
+  pivot::PivotTable created;
+  EXPECT_FALSE(created.hide_values_row().has_value());
+  EXPECT_NE(write_pivot_table_definition(created).find("hideValuesRow=\"1\""), std::string::npos);
+
+  pivot::PivotTable versioned;
+  versioned.mutable_passthrough_attrs().emplace_back("updatedVersion", "8");
+  EXPECT_EQ(write_pivot_table_definition(versioned).find("hideValuesRow"), std::string::npos);
+
+  pivot::PivotTable stated;
+  stated.set_hide_values_row(false);
+  EXPECT_EQ(write_pivot_table_definition(stated).find("hideValuesRow"), std::string::npos);
+}
+
 }  // namespace
 }  // namespace formulon::io

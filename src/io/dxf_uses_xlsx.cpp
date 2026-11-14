@@ -200,15 +200,16 @@ void CollectTable(Collector& c, const TableMetadata& table) {
   c.xml(table.ext_lst_xml, DxfUseKind::kTable);
 }
 
-using PivotRawField = const std::string& (pivot::PivotTable::*)() const;
-
-/// The raw fields `write_pivot_table_definition` re-emits, in document order.
-constexpr PivotRawField kPivotRawFields[] = {
-    &pivot::PivotTable::raw_passthrough_after_row_fields,
-    &pivot::PivotTable::raw_col_items,
-    &pivot::PivotTable::raw_passthrough_before_style_info,
-    &pivot::PivotTable::raw_passthrough_xml,
-};
+/// The uses `write_pivot_table_definition` writes for `table`, in its document order.
+void CollectPivotTable(Collector& c, const pivot::PivotTable& table) {
+  c.xml(table.raw_passthrough_after_row_fields(), DxfUseKind::kPivotFormat);
+  c.xml(table.raw_col_items(), DxfUseKind::kPivotFormat);
+  for (const pivot::PivotFormat& format : table.formats()) {
+    c.add(format.dxf_id, DxfUseKind::kPivotFormat);
+  }
+  c.xml(table.raw_passthrough_before_style_info(), DxfUseKind::kPivotFormat);
+  c.xml(table.raw_passthrough_xml(), DxfUseKind::kPivotFormat);
+}
 
 /// True when a slicer or timeline style element in the styles `<extLst>`
 /// names a `dxfId` while no extension dxf collection exists for it to index.
@@ -259,10 +260,7 @@ Expected<DxfUseSet, Error> collect_xlsx_dxf_uses(const Workbook& wb, const Emiss
     }
     for (std::size_t ti = 0; ti < plan.pivot_tables_by_sheet[si].size(); ++ti) {
       c.at(DxfPartKey{sheet_index, DxfPartType::kPivot, static_cast<std::uint32_t>(ti)});
-      const pivot::PivotTable& table = *plan.pivot_tables_by_sheet[si][ti].table;
-      for (const PivotRawField field : kPivotRawFields) {
-        c.xml((table.*field)(), DxfUseKind::kPivotFormat);
-      }
+      CollectPivotTable(c, *plan.pivot_tables_by_sheet[si][ti].table);
     }
     for (std::size_t ti = 0; ti < plan.tables_by_sheet[si].size(); ++ti) {
       c.at(DxfPartKey{sheet_index, DxfPartType::kTable, static_cast<std::uint32_t>(ti)});

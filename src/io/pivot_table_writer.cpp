@@ -314,6 +314,115 @@ struct LocationDefaults {
 };
 
 /// A report with no row, column, page or data field: Excel draws its empty frame instead of a report.
+void AppendU32Attr(std::string& out, std::string_view name, std::uint32_t value) {
+  out.push_back(' ');
+  out.append(name);
+  out.append("=\"");
+  out.append(std::to_string(value));
+  out.push_back('"');
+}
+
+void AppendFlagAttr(std::string& out, std::string_view name, bool value, bool fallback) {
+  if (value != fallback) {
+    out.push_back(' ');
+    out.append(name);
+    out.append(value ? "=\"1\"" : "=\"0\"");
+  }
+}
+
+/// `<pivotArea>` of a typed format, attributes in schema order and each only
+/// when it departs from its default.
+void AppendTableArea(std::string& out, const pivot::PivotTableArea& area) {
+  static constexpr std::string_view kTypes[] = {"none",   "normal", "data",   "all",
+                                                "origin", "button", "topEnd", "topRight"};
+  static constexpr std::string_view kAxes[] = {"axisRow", "axisCol", "axisValues", "axisPage"};
+  out.append("<pivotArea");
+  if (area.field) {
+    AppendU32Attr(out, "field", *area.field);
+  }
+  if (area.type != pivot::PivotAreaType::Normal) {
+    out.append(" type=\"");
+    out.append(kTypes[static_cast<std::size_t>(area.type)]);
+    out.push_back('"');
+  }
+  AppendFlagAttr(out, "dataOnly", area.data_only, true);
+  AppendFlagAttr(out, "labelOnly", area.label_only, false);
+  AppendFlagAttr(out, "grandRow", area.grand_row, false);
+  AppendFlagAttr(out, "grandCol", area.grand_col, false);
+  AppendFlagAttr(out, "outline", area.outline, true);
+  AppendFlagAttr(out, "collapsedLevelsAreSubtotals", area.collapsed_levels_are_subtotals, false);
+  if (area.axis && *area.axis != pivot::PivotAxis::None) {
+    out.append(" axis=\"");
+    out.append(kAxes[static_cast<std::size_t>(*area.axis)]);
+    out.push_back('"');
+  }
+  if (area.field_position) {
+    AppendU32Attr(out, "fieldPosition", *area.field_position);
+  }
+  if (area.references.empty()) {
+    out.append("/>");
+    return;
+  }
+  out.push_back('>');
+  out.append("<references");
+  AppendU32Attr(out, "count", static_cast<std::uint32_t>(area.references.size()));
+  out.push_back('>');
+  for (const pivot::PivotTableAreaReference& ref : area.references) {
+    out.append("<reference");
+    if (ref.field) {
+      AppendU32Attr(out, "field", *ref.field);
+    }
+    AppendU32Attr(out, "count", static_cast<std::uint32_t>(ref.items.size()));
+    AppendFlagAttr(out, "selected", ref.selected, true);
+    out.push_back('>');
+    for (const std::uint32_t item : ref.items) {
+      out.append("<x");
+      AppendU32Attr(out, "v", item);
+      out.append("/>");
+    }
+    out.append("</reference>");
+  }
+  out.append("</references></pivotArea>");
+}
+
+void AppendFormats(std::string& out, const std::vector<pivot::PivotFormat>& formats) {
+  static constexpr std::string_view kActions[] = {"blank", "formatting", "drill", "formula"};
+  out.append("<formats");
+  AppendU32Attr(out, "count", static_cast<std::uint32_t>(formats.size()));
+  out.push_back('>');
+  for (const pivot::PivotFormat& format : formats) {
+    out.append("<format");
+    if (format.action != pivot::PivotFormatAction::Formatting) {
+      out.append(" action=\"");
+      out.append(kActions[static_cast<std::size_t>(format.action)]);
+      out.push_back('"');
+    }
+    if (format.dxf_id) {
+      AppendU32Attr(out, "dxfId", *format.dxf_id);
+    }
+    out.push_back('>');
+    AppendTableArea(out, format.area);
+    out.append("</format>");
+  }
+  out.append("</formats>");
+}
+
+void AppendChartFormats(std::string& out, const std::vector<pivot::PivotChartFormat>& formats) {
+  out.append("<chartFormats");
+  AppendU32Attr(out, "count", static_cast<std::uint32_t>(formats.size()));
+  out.push_back('>');
+  for (const pivot::PivotChartFormat& format : formats) {
+    out.append("<chartFormat");
+    AppendU32Attr(out, "chart", format.chart);
+    AppendU32Attr(out, "format", format.format);
+    AppendFlagAttr(out, "series", format.series, false);
+    out.push_back('>');
+    AppendTableArea(out, format.area);
+    out.append("</chartFormat>");
+  }
+  out.append("</chartFormats>");
+}
+
 bool IsFieldless(const pivot::PivotTable& table) {
   return table.row_field_order().empty() && table.col_field_order().empty() && table.page_field_order().empty() &&
          table.data_fields().empty();
@@ -628,8 +737,14 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
   // `<extLst>`, ...). The bin bytes are owned by the table and re-appended
   // verbatim so a read -> write round trip preserves features this version
   // does not model structurally. Tables built from scratch leave every bin
-  // empty.
+  // empty. Typed `<formats>` precede the bin and typed `<chartFormats>` follow it.
+  if (!table.formats().empty()) {
+    AppendFormats(out, table.formats());
+  }
   out.append(table.raw_passthrough_before_style_info());
+  if (!table.chart_formats().empty()) {
+    AppendChartFormats(out, table.chart_formats());
+  }
   if (table.style_info().has_value()) {
     AppendStyleInfo(out, *table.style_info());
   }
@@ -638,7 +753,8 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
   // Without the hidden-row extension Excel adds a caption row above the pivot
   // on refresh. A table read from a file keeps its own `<extLst>`.
   if (table.raw_passthrough_xml().find("<extLst") == std::string::npos) {
-    const bool hide_values_row = !HasRawAttr(table.passthrough_attrs(), "updatedVersion");
+    const bool hide_values_row =
+        table.hide_values_row().value_or(!HasRawAttr(table.passthrough_attrs(), "updatedVersion"));
     if (hide_values_row || !table.alt_text().empty() || !table.alt_text_summary().empty()) {
       out.append("<extLst>");
       AppendTableExt(out, table, hide_values_row);

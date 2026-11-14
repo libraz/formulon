@@ -412,8 +412,8 @@ class PivotTable {
   // so the reader bins them by name into the two pre-dataFields slots
   // (rowItems after `<rowFields>`, colItems after `<colFields>`). `<pivotTableStyleInfo>` is modelled
   // (`style_info`) and splits the post-dataFields elements: formats,
-  // conditionalFormats, chartFormats and pivotHierarchies go to
-  // `raw_passthrough_before_style_info_`; everything else — hierarchy
+  // conditionalFormats, chartFormats and pivotHierarchies the model does not
+  // type (see `formats()`) go to `raw_passthrough_before_style_info_`; everything else — hierarchy
   // usage, extLst, ... — goes to the tail bin `raw_passthrough_xml_`, which
   // the writer flushes after the modelled `<filters>`. It flushes each bin at the matching
   // slot so schema order is preserved. Mutating the structured state does not invalidate these
@@ -570,6 +570,24 @@ class PivotTable {
   const std::string& alt_text_summary() const { return alt_text_summary_; }
   void set_alt_text_summary(std::string v) { alt_text_summary_ = std::move(v); }
 
+  /// x14 `hideValuesRow`: the caption row of the Values field is hidden. A read
+  /// table states it (an absent extension is `false`); nullopt for one built in
+  /// memory, which the xlsx writer gives Excel's new-pivot `true` unless it carries
+  /// `updatedVersion`. A read table's own `<extLst>` stays in `raw_passthrough_xml()`.
+  std::optional<bool> hide_values_row() const { return hide_values_row_; }
+  void set_hide_values_row(std::optional<bool> v) { hide_values_row_ = v; }
+
+  /// `<formats>`, in document order, when the model types every format in it;
+  /// otherwise empty and the element stays in `raw_passthrough_before_style_info()`.
+  const std::vector<PivotFormat>& formats() const { return formats_; }
+  std::vector<PivotFormat>& mutable_formats() { return formats_; }
+
+  /// `<chartFormats>`, in document order, typed under the same rule as `formats()`
+  /// and only when no `<pivotHierarchies>` follows: the writer places typed formats
+  /// before the raw bin and typed chart formats after it.
+  const std::vector<PivotChartFormat>& chart_formats() const { return chart_formats_; }
+  std::vector<PivotChartFormat>& mutable_chart_formats() { return chart_formats_; }
+
   /// Sets the options Excel gives a pivot it creates, which differ from the
   /// schema defaults a loaded definition falls back to.
   void apply_new_pivot_defaults() {
@@ -673,6 +691,9 @@ class PivotTable {
   bool custom_list_sort_ = true;
   std::string alt_text_;
   std::string alt_text_summary_;
+  std::optional<bool> hide_values_row_;
+  std::vector<PivotFormat> formats_;
+  std::vector<PivotChartFormat> chart_formats_;
   std::optional<PivotRect> projected_extent_;
   std::vector<PivotRect> projected_merges_;
   bool projection_pending_ = false;
