@@ -102,6 +102,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/future_functions_test.cpp
   unit/io/hyperlink_roundtrip_test.cpp
   unit/io/stale_roundtrip_test.cpp
+  unit/io/corpus_roundtrip_test.cpp
   unit/io/book_location_save_test.cpp
   unit/io/book_location_abspath_test.cpp
   unit/io/merge_roundtrip_test.cpp
