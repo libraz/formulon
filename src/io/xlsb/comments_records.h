@@ -54,10 +54,6 @@ class NoteRunFonts {
 std::vector<std::uint8_t> write_comments_bin(std::vector<CellComment> notes, std::size_t sheet_index,
                                              const NoteRunFonts& fonts);
 
-/// Whether the uid Excel gives a note without one is measured for the sheet at
-/// `sheet_index`: the first sheet, and the second when the first has notes.
-bool generated_note_uid_is_measured(std::size_t sheet_index, bool first_sheet_has_notes);
-
 }  // namespace xlsb
 }  // namespace io
 }  // namespace formulon

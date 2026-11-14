@@ -238,16 +238,33 @@ TEST(XlsbParityNotesEdit, RunsAndFontsReadFromExcelsSave) {
   EXPECT_EQ(note.uid, "{00000000-0006-0000-0000-000001000000}");
 }
 
-TEST(XlsbParityNotesEdit, AnUnmeasuredUidLeavesTheNoteOutAndReportsIt) {
-  // Excel's uid for a note without one is measured on the first two sheets; a third sheet's is not.
-  Workbook wb = LoadSource("notes/uid_two_sheets_src.xlsx");
-  wb.add_sheet("S3");
-  wb.sheet(2).mutable_comments().emplace_back(0U, 0U, "Alice", "third");
-  const DeferredRecords deferred;
-  auto saved = write_xlsb_with_result(wb);
-  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
-  EXPECT_NE(deferred.text().find("\"kind\":\"comments\",\"count\":1,\"sheet_index\":2"), std::string::npos)
-      << deferred.text();
+/// Each sheet's note uids in comment-list order, with the note's cell.
+std::vector<std::vector<std::string>> NoteUids(const Workbook& wb) {
+  std::vector<std::vector<std::string>> out(wb.sheet_count());
+  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
+    for (const CellComment& note : wb.sheet(s).comments()) {
+      out[s].push_back(std::to_string(note.row) + "," + std::to_string(note.col) + " " + note.uid);
+    }
+  }
+  return out;
+}
+
+TEST(XlsbParityNotesEdit, UidlessNotesTakeExcelsUidOnEverySheet) {
+  // Excel's uid for a note without one: the sheet's tab position and the note's 1-based ordinal, on any sheet,
+  // whether or not earlier sheets have notes; a note's own uid is kept and still takes its ordinal (u3).
+  for (const char* name : {"uid_u1", "uid_u2", "uid_u3", "uid_u4", "uid_u5"}) {
+    SCOPED_TRACE(name);
+    const Workbook wb = LoadSource((std::string("notes/") + name + "_src.xlsx").c_str());
+    const DeferredRecords deferred;
+    auto saved = write_xlsb_with_result(wb);
+    ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+    EXPECT_EQ(deferred.text().find("comments"), std::string::npos) << deferred.text();
+    auto ours = read_xlsb(SpanOf(saved.value().bytes));
+    ASSERT_TRUE(static_cast<bool>(ours)) << ours.error().message;
+    auto excel = read_xlsb(SpanOf(ReadFile(Fixture(std::string("notes/") + name + ".xlsb"))));
+    ASSERT_TRUE(static_cast<bool>(excel)) << excel.error().message;
+    EXPECT_EQ(NoteUids(ours.value().workbook), NoteUids(excel.value().workbook));
+  }
 }
 
 TEST(XlsbParityThreadsEdit, ThreadsAndPersonsReadFromExcelsSave) {

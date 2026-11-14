@@ -112,8 +112,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `.xlsb` saves write each sheet's notes, their drawing and its threaded
   comments from the workbook, as Excel does, so notes and threads set in
   `.xlsx` or through the API are kept, and a note's formatted runs keep their
-  fonts. A note without a revision id gets the one Excel assigns on the first
-  two sheets; on a later sheet it is left out and reported as deferred.
+  fonts. A note without a revision id gets the one Excel assigns, built from
+  the sheet's tab position and the note's place in the sheet.
   Loading an `.xlsb` reads its notes, threads and persons into the workbook.
 
 - A note's formatted runs, each with its own font, are kept through `.xlsx`

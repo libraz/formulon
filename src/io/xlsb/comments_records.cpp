@@ -33,10 +33,6 @@ namespace {
 /// BrtACBegin payload of a note's revision-uid wrapper.
 constexpr std::array<std::uint8_t, 6> kNoteUidBeginPayload = {0x01, 0x00, 0x02, 0x11, 0x00, 0x80};
 
-/// Sheets whose notes without a uid get Excel's `{00000000-0006-0000-SSSS-0000NN000000}`, `SSSS` the sheet's
-/// position and `NN` the note's; measured on the first two sheets.
-constexpr std::size_t kMeasuredUidSheets = 2;
-
 std::string FontKey(const FontRecord& font) {
   std::vector<std::uint8_t> bytes;
   emit_font_record(bytes, font);
@@ -179,10 +175,6 @@ std::vector<std::uint8_t> write_comments_bin(std::vector<CellComment> notes, std
   emit_record(out, kBrtEndCommentList, ByteSpan{});
   emit_record(out, kBrtEndComments, ByteSpan{});
   return out;
-}
-
-bool generated_note_uid_is_measured(std::size_t sheet_index, bool first_sheet_has_notes) {
-  return sheet_index == 0U || (sheet_index < kMeasuredUidSheets && first_sheet_has_notes);
 }
 
 }  // namespace xlsb

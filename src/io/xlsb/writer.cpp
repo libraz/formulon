@@ -440,17 +440,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
         *rid = FreshRelId(taken_rel_ids);
         taken_rel_ids.insert(*rid);
       }
-      // A note without a uid takes the one Excel assigns, measured on the first two sheets; elsewhere it is left out.
-      const bool measured_uid = generated_note_uid_is_measured(i, !comment_parts[0].comments_path.empty());
-      std::uint32_t uid_lost = 0;
-      for (CellComment& note : legacy_comments_with_stubs(workbook.sheet(i), workbook.excel_profile().locale)) {
-        if (note.uid.empty() && !measured_uid) {
-          ++uid_lost;
-        } else {
-          written_notes[i].push_back(std::move(note));
-        }
-      }
-      ReportDeferred(&diagnostics.deferred_feature_count, "comments", uid_lost, i);
+      written_notes[i] = legacy_comments_with_stubs(workbook.sheet(i), workbook.excel_profile().locale);
     }
     auto sheet_body_or = emit_sheet(
         workbook.sheet(i), sst, sheet_names, sheet_ranges, sheet_name_table, sheet_hyperlink_rids[i],

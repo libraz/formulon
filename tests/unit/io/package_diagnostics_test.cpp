@@ -306,21 +306,19 @@ TEST(XlsbWriteDiagnostics, CleanWorkbookReportsNothingLost) {
   EXPECT_EQ(d.renumbered_part_count, 0U);
 }
 
-TEST(XlsbWriteDiagnostics, ANoteWithoutAnAssignableUidCountsAsDeferred) {
-  // A note is written with the uid Excel assigns a note without one, which is
-  // measured on the first two sheets only; a third sheet's note is left out.
+TEST(XlsbWriteDiagnostics, ANoteWithoutAUidIsWrittenOnEverySheet) {
+  // A note without a uid takes the one Excel assigns on any sheet, so nothing is deferred.
   Workbook wb = OneSheetWorkbook();
-  wb.sheet(0).mutable_comments().push_back(CellComment{0, 0, "Author", "Note"});
-  auto written = xlsb::write_xlsb_with_result(wb);
-  ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
-  EXPECT_EQ(written.value().diagnostics.deferred_feature_count, 0U);
-
   wb.add_sheet("Second");
   wb.add_sheet("Third");
   wb.sheet(2).mutable_comments().push_back(CellComment{0, 0, "Author", "Note"});
   auto result = xlsb::write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
-  EXPECT_EQ(result.value().diagnostics.deferred_feature_count, 1U);
+  EXPECT_EQ(result.value().diagnostics.deferred_feature_count, 0U);
+  auto back = xlsb::read_xlsb(ByteSpan{result.value().bytes.data(), result.value().bytes.size()});
+  ASSERT_TRUE(static_cast<bool>(back)) << back.error().message;
+  ASSERT_EQ(back.value().workbook.sheet(2).comments().size(), 1U);
+  EXPECT_FALSE(back.value().workbook.sheet(2).comments()[0].uid.empty());
 }
 
 TEST(XlsbWriteDiagnostics, EnabledSheetProtectionIsWritten) {
