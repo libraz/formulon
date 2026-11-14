@@ -37,7 +37,7 @@ constexpr std::int64_t kNoFormat = -1;
 void MakeWorkbook(WorkbookGuard& wb) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   wb.handle->workbook().mutable_styles().cell_xfs.resize(10U);
-  // Distinct records, so a save keeps each at its own index.
+  // Distinct records, so no two collapse on save; an unused one is still dropped.
   for (std::uint16_t xf = 1U; xf < 10U; ++xf) {
     wb.handle->workbook().mutable_styles().cell_xfs[xf].num_fmt_id = static_cast<std::uint16_t>(xf + 1U);
   }
@@ -427,11 +427,12 @@ TEST(FormulonCApiRangeStyleIo, PhantomOverAnExplicitDefaultRunKeepsStyleZero) {
 
 // B-4: a run crossing 1,024-column segments 0, 1 and 2 is covered by one
 // BrtRowHdr span per segment, clipped to the segment; a run-only row is written.
+// The run takes xf 1 so the saved cell formats keep it at its own index.
 TEST(FormulonCApiRangeStyleIo, XlsbRowSpansCoverARunInEverySegmentItCrosses) {
   WorkbookGuard wb;
   MakeWorkbook(wb);
   const fm_cell_rect_t band{4U, 1000U, 4U, 2100U};
-  ASSERT_EQ(fm_sheet_set_range_xf_index(wb.handle, 0, &band, 2U), 0);
+  ASSERT_EQ(fm_sheet_set_range_xf_index(wb.handle, 0, &band, 1U), 0);
   const SheetBin bin = DecodeSheetBin(Save(wb, FM_WORKBOOK_FORMAT_XLSB));
   ASSERT_EQ(bin.spans.count(4U), 1U);
   EXPECT_EQ(bin.spans.at(4U),
@@ -443,7 +444,7 @@ TEST(FormulonCApiRangeStyleIo, XlsbRowSpansCoverARunInEverySegmentItCrosses) {
   WorkbookGuard reloaded;
   Load(Save(wb, FM_WORKBOOK_FORMAT_XLSB), reloaded);
   EXPECT_EQ(CellCount(reloaded), 1101U);
-  EXPECT_EQ(OwnXf(reloaded, 4U, 2100U), 2);
+  EXPECT_EQ(OwnXf(reloaded, 4U, 2100U), 1);
   EXPECT_EQ(SheetOf(reloaded).cell_at(4U, 1500U), nullptr);
 }
 
