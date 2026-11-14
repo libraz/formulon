@@ -109,8 +109,7 @@ void EmitRowHeader(std::vector<std::uint8_t>& dst, std::uint32_t row, const RowL
   const double twips = has_height ? std::round(layout->height * 20.0) : (hidden ? 0.0 : default_twips);
   emit_u16(p, static_cast<std::uint16_t>(std::clamp(twips, 0.0, 65535.0)));  // miyRw
   emit_u8(p, 0);                                                             // flags1
-  std::uint8_t flags2 =
-      layout == nullptr ? 0U : static_cast<std::uint8_t>(layout->outline_level & kRowOutlineLevelMask);
+  std::uint8_t flags2 = layout == nullptr ? 0U : std::min(layout->outline_level, kMaxOutlineLevel);
   // Every header states visibility, so a row without an override carries the sheet default.
   if (hidden) {
     flags2 |= kRowZeroHeight;
@@ -159,7 +158,7 @@ void EmitColumnInfos(std::vector<std::uint8_t>& dst, const SheetLayout& layout, 
     if (column.hidden) {
       flags |= kColHidden;
     }
-    flags |= static_cast<std::uint16_t>((column.outline_level & kColOutlineLevelMask) << kColOutlineShift);
+    flags |= static_cast<std::uint16_t>(std::min(column.outline_level, kMaxOutlineLevel) << kColOutlineShift);
     if (column.collapsed) {
       flags |= kColCollapsed;
     }

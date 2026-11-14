@@ -2,6 +2,7 @@
 // sources (tests/fixtures/excel/xlsb_parity/format), the xlsx reader's normalisation of what Excel normalises on
 // open, the encoder's stand-ins for what Excel does not hold, and the reader's skip of what it does not open.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -384,6 +385,52 @@ std::size_t ViewCount(const Bytes& package, std::size_t sheet) {
 // Sources whose xlsb save once succeeded: each saves again, writing a stand-in for a default Excel does not hold
 // (reported as format_defaults), outline level 8 as 7 (not reported), and leaving out an extra view of a window
 // the workbook lacks (reported as sheet_view); the package validates and reads back.
+/// The first worksheet's records of `type`, in stream order.
+std::vector<Bytes> RecordsOf(const Bytes& package, std::uint16_t type) {
+  std::vector<Bytes> out;
+  const std::optional<Bytes> part = test::ReadPart(package, "xl/worksheets/sheet1.bin");
+  EXPECT_TRUE(part.has_value());
+  if (part) {
+    for (const test::IndexedRecord& record : test::SplitPart(*part)) {
+      if (record.type == type) {
+        out.push_back(record.payload);
+      }
+    }
+  }
+  return out;
+}
+
+TEST(XlsbParityFormatDefaults, RowAndColumnOutlineLevelsAboveSevenWriteSeven) {
+  // BrtRowHdr: iOutLevel is the low three bits of the byte after flags1 (offset 11).
+  constexpr std::size_t kRowOutlineOffset = 11U;
+  // BrtColInfo: the level sits in bits 8-10 of the flags at offset 16.
+  constexpr std::size_t kColFlagsOffset = 16U;
+  const Bytes rows = WriteXlsb(ReadXlsx("outline_row_8_src.xlsx"));
+  bool row_seen = false;
+  for (const Bytes& header : RecordsOf(rows, static_cast<std::uint16_t>(XlsbRecordType::BrtRowHdr))) {
+    ASSERT_GT(header.size(), kRowOutlineOffset);
+    if (header[0] == 2U) {  // row 3
+      EXPECT_EQ(header[kRowOutlineOffset] & 0x07U, 7U);
+      row_seen = true;
+    }
+  }
+  EXPECT_TRUE(row_seen);
+  const XlsbReadResult row_back = ReadXlsb(rows);
+  const auto& overrides = row_back.workbook.sheet(0).layout().row_overrides;
+  const auto row3 = std::find_if(overrides.begin(), overrides.end(), [](const RowLayout& r) { return r.row == 2U; });
+  ASSERT_NE(row3, overrides.end());
+  EXPECT_EQ(row3->outline_level, 7U);
+
+  const Bytes cols = WriteXlsb(ReadXlsx("outline_col_8_src.xlsx"));
+  const std::vector<Bytes> infos = RecordsOf(cols, static_cast<std::uint16_t>(XlsbRecordType::BrtColInfo));
+  ASSERT_EQ(infos.size(), 1U);
+  ASSERT_GT(infos[0].size(), kColFlagsOffset + 1U);
+  EXPECT_EQ(infos[0][kColFlagsOffset + 1U] & 0x07U, 7U);
+  const XlsbReadResult col_back = ReadXlsb(cols);
+  ASSERT_EQ(col_back.workbook.sheet(0).layout().columns.size(), 1U);
+  EXPECT_EQ(col_back.workbook.sheet(0).layout().columns[0].outline_level, 7U);
+}
+
 TEST(XlsbSaveRestoredSources, TenSourcesSaveOpenValidateAndReload) {
   struct Case {
     const char* path;
