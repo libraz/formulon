@@ -429,6 +429,7 @@ SHEET_METHODS = (
     "insert_columns",
     "insert_hyperlink_at",
     "insert_rows",
+    "is_cell_stale",
     "iter_rows",
     "list_cells",
     "list_cf_rules",
@@ -702,6 +703,7 @@ CELL_ARGS = {
     "Sheet.get_spill": ((0, 1),),
     "Sheet.get_typed_value": ((0, 1),),
     "Sheet.get_value": ((0, 1),),
+    "Sheet.is_cell_stale": ((0, 1),),
     "Sheet.remove_data_table": ((0, 1),),
     "Sheet.reset_cell_xf_index": ((0, 1),),
     "Sheet.set_blank": ((0, 1),),
@@ -2059,6 +2061,33 @@ class Sheet(_NoCopy):
         return bool(
             _read_count(
                 LIB.fm_sheet_get_cell_show_phonetic,
+                h,
+                _uint(sheet, "sheet_index", role="sheet"),
+                _uint(row, "row", role="coordinate"),
+                _uint(col, "col", role="coordinate"),
+            )
+        )
+
+    @overload
+    @_coordinate_form
+    def is_cell_stale(self, row: int, col: int) -> bool: ...
+
+    @overload
+    def is_cell_stale(self, a1: str) -> bool: ...
+
+    def is_cell_stale(self, *args: Any, **kwargs: Any) -> bool:
+        """Whether the formula cell holds a value not computed since its inputs changed.
+
+        This applies under manual or automatic-except-tables calculation; under automatic calculation it is always
+        ``False``. A cell without a formula, an empty cell and a spill member read ``False``; query the spill's
+        anchor. The read never recalculates. Hosts can use it to draw stale-value formatting.
+        """
+        row, col = self._cell_args("is_cell_stale", args, kwargs, ())
+        sheet = self._index()
+        h = self._workbook._require()
+        return bool(
+            _read_count(
+                LIB.fm_sheet_is_cell_stale,
                 h,
                 _uint(sheet, "sheet_index", role="sheet"),
                 _uint(row, "row", role="coordinate"),

@@ -150,6 +150,7 @@ CELL_TABLE: Dict[str, Optional[Case]] = {
     "Sheet.get_cell_phonetic_properties": Case(),
     "Sheet.get_cell_phonetic_runs": Case(),
     "Sheet.get_cell_show_phonetic": Case(),
+    "Sheet.is_cell_stale": Case(),
     "Sheet.get_cell_xf_index": Case(),
     "Sheet.get_comment": Case(),
     "Sheet.get_comment_visible": Case(),

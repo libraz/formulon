@@ -108,6 +108,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   /// The cell's "Show Phonetic" display flag; value writes leave it alone.
   Napi::Value GetCellShowPhonetic(const Napi::CallbackInfo& info);
   Napi::Value SetCellShowPhonetic(const Napi::CallbackInfo& info);
+  /// Whether the formula cell holds a value its inputs have outdated; never recalculates.
+  Napi::Value IsCellStale(const Napi::CallbackInfo& info);
   Napi::Value SetFormula(const Napi::CallbackInfo& info);
 
   // Cell read.

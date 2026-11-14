@@ -143,6 +143,33 @@ extern "C" fm_status_t fm_sheet_get_circular_reference_at(const fm_workbook_t* w
   return 0;
 }
 
+extern "C" fm_status_t fm_sheet_is_cell_stale(const fm_workbook_t* wb, std::size_t sheet_index, std::uint32_t row,
+                                              std::uint32_t col, int32_t* out_stale) {
+  clear_last_error();
+  if (wb == nullptr || out_stale == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = formulon::c_api::parts::check_cell_coord(row, col); rc != 0) {
+    return rc;
+  }
+  if (formulon::eval::detail::g_in_recalc) {
+    return set_binding_error(formulon::FormulonErrorCode::kGraphRecalcReentrant,
+                             "stale cells cannot be read inside a recalc");
+  }
+  const formulon::Workbook& book = wb->workbook();
+  const formulon::Cell* cell = book.sheet(sheet_index).cell_at(row, col);
+  const bool formula = cell != nullptr && !cell->formula_text.empty();
+  *out_stale = formula && book.calc_mode() != formulon::CalcMode::kAuto &&
+                       book.recalc_engine().awaits_recalc(
+                           formulon::eval::CellNodeId{static_cast<std::uint16_t>(sheet_index), row, col})
+                   ? 1
+                   : 0;
+  return 0;
+}
+
 extern "C" fm_status_t fm_workbook_recalc_parallel(fm_workbook_t* wb, uint32_t thread_count,
                                                    fm_parallel_recalc_stats_info_t* out_stats) {
   clear_last_error();

@@ -4259,6 +4259,31 @@ FM_API fm_status_t fm_sheet_get_circular_reference_count(const fm_workbook_t* wb
 FM_API fm_status_t fm_sheet_get_circular_reference_at(const fm_workbook_t* wb, size_t sheet_index, size_t index,
                                                       fm_cell_address_t* out);
 
+/**
+ * @brief Writes `1` to `*out_stale` when the cell at (`row`, `col`) holds a
+ *        formula whose value has not been computed since its inputs changed,
+ *        under manual or automatic-except-tables calculation, else `0`.
+ *
+ * The cell's value is the one last computed; this reports only that it is out
+ * of date. Under automatic calculation it is always `0`. A cell without a
+ * formula, an empty cell and a member of a spill reads `0`; query the spill's
+ * anchor. A cell is out of date while it, or a cell it reads directly or
+ * through other cells, carries a change no recalc has applied: an edit, a
+ * row / column insert or delete, a defined-name edit, and every formula of a
+ * loaded workbook until its first recalc. Volatile cells are not out of date
+ * on their own. The read never recalculates. Hosts can use it to draw
+ * stale-value formatting.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `row` or `col` is outside the grid;
+ *         `FM_STATUS_GRAPH_RECALC_REENTRANT` (4005) when called from inside a recalc on
+ *         the same thread (an iterative-progress callback).
+ */
+FM_API fm_status_t fm_sheet_is_cell_stale(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                                          int32_t* out_stale);
+
 /** @brief Per-call telemetry returned by `fm_workbook_recalc_parallel`. */
 typedef struct {
   uint32_t struct_size;

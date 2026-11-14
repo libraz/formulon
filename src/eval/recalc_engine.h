@@ -371,6 +371,11 @@ class RecalcEngine {
   /// is enabled, as Excel then reports no circular reference.
   std::vector<CellNodeId> unresolved_cycle_cells(std::uint32_t sheet_id) const;
 
+  /// True when `cell`'s value has not been computed since its inputs
+  /// changed: it is dirty, or a cell it reads, directly or through other
+  /// cells, is dirty. Reads state only; nothing is recalculated.
+  bool awaits_recalc(CellNodeId cell) const;
+
   /// Installs a progress callback for the iterative solver.
   ///
   /// The callback is invoked once per Gauss-Seidel sweep with the

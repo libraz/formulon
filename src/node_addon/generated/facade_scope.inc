@@ -160,6 +160,7 @@ constexpr const char* kSheetMethods[] = {
     "insertRows",
     "insertTableColumns",
     "insertTableRows",
+    "isCellStale",
     "isPivotProjectionPending",
     "iterRows",
     "listCellXfIndices",

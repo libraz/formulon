@@ -460,6 +460,28 @@ void RecalcEngine::note_component_cycle_state_locked(const std::vector<CellNodeI
   }
 }
 
+bool RecalcEngine::awaits_recalc(CellNodeId cell) const {
+  std::lock_guard<std::mutex> guard(mutex_);
+  if (dirty_.contains(cell)) {
+    return true;
+  }
+  // Dirtiness reaches dependents only at recalc time, so walk the cells this one reads.
+  std::unordered_set<CellNodeId, CellNodeIdHash> seen{cell};
+  std::vector<CellNodeId> queue{cell};
+  for (std::size_t head = 0; head < queue.size(); ++head) {
+    for (const CellNodeId precedent : graph_.dependencies_of_ref(queue[head])) {
+      if (!seen.insert(precedent).second) {
+        continue;
+      }
+      if (dirty_.contains(precedent)) {
+        return true;
+      }
+      queue.push_back(precedent);
+    }
+  }
+  return false;
+}
+
 std::vector<CellNodeId> RecalcEngine::unresolved_cycle_cells(std::uint32_t sheet_id) const {
   std::lock_guard<std::mutex> guard(mutex_);
   std::vector<CellNodeId> out;

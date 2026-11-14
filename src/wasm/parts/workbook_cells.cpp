@@ -195,6 +195,15 @@ bool JsWorkbook::getCellShowPhonetic(uint32_t sheet, uint32_t row, uint32_t col)
   return show != 0;
 }
 
+bool JsWorkbook::isCellStale(uint32_t sheet, uint32_t row, uint32_t col) const {
+  int32_t stale = 0;
+  if (!succeeded(handle_ != nullptr ? fm_sheet_is_cell_stale(handle_, sheet, row, col, &stale)
+                                    : kBindingInvalidHandle)) {
+    return false;
+  }
+  return stale != 0;
+}
+
 void JsWorkbook::setCellShowPhonetic(uint32_t sheet, uint32_t row, uint32_t col, bool show) {
   succeeded(handle_ != nullptr ? fm_sheet_set_cell_show_phonetic(handle_, sheet, row, col, show ? 1 : 0)
                                : kBindingInvalidHandle);

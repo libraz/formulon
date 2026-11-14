@@ -664,6 +664,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_sheet_get_auto_filter_xml",
     "fm_sheet_get_circular_reference_at",
     "fm_sheet_get_circular_reference_count",
+    "fm_sheet_is_cell_stale",
     "fm_sheet_get_column_layout_at",
     "fm_sheet_get_column_layout_count",
     "fm_sheet_get_comment",

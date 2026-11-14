@@ -7449,6 +7449,15 @@ export interface Sheet {
   /** `getCellShowPhonetic` at the A1 address `a1`. */
   getCellShowPhonetic(a1: string): boolean;
   /**
+   * Whether the formula cell at (`row`, `col`) holds a value that has not been computed since its inputs changed,
+   * under manual or automatic-except-tables calculation. Always `false` under automatic calculation. A cell
+   * without a formula, an empty cell and a spill member read `false`; query the spill's anchor. The read never
+   * recalculates. Hosts can use it to draw stale-value formatting.
+   */
+  isCellStale(row: number, col: number): boolean;
+  /** `isCellStale` at the A1 address `a1`. */
+  isCellStale(a1: string): boolean;
+  /**
    * Lists, row-major (row, then column, ascending), every stored cell inside `range` whose "Show Phonetic" flag is
    * set, the flag `getCellShowPhonetic` reads. A blank cell carrying only the flag is listed. An omitted or `null`
    * `range` covers every stored cell of the sheet, so a flagged cell outside {@link Sheet.getUsedRange} is listed.

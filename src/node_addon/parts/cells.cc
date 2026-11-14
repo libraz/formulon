@@ -251,6 +251,17 @@ Napi::Value Workbook::GetCellShowPhonetic(const Napi::CallbackInfo& info) {
   return ValueOrThrow(env, rc, JsBool(env, show));
 }
 
+Napi::Value Workbook::IsCellStale(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const CellAddressArgs address = ReadCellAddress(info);
+  int32_t stale = 0;
+  const fm_status_t rc = fm_sheet_is_cell_stale(handle_, address.sheet, address.row, address.col, &stale);
+  return ValueOrThrow(env, rc, JsBool(env, stale));
+}
+
 Napi::Value Workbook::SetCellShowPhonetic(const Napi::CallbackInfo& info) {
   return StatusCall(info, [&](fm_workbook_t* handle) {
     const CellAddressArgs address = ReadCellAddress(info);

@@ -598,6 +598,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::GetCellPhoneticRun, 0xFULL>("getCellPhoneticRun"),
           GuardedInstanceMethod<&Workbook::GetCellPhoneticProperties, 0x7ULL>("getCellPhoneticProperties"),
           GuardedInstanceMethod<&Workbook::GetCellShowPhonetic, 0x7ULL>("getCellShowPhonetic"),
+          GuardedInstanceMethod<&Workbook::IsCellStale, 0x7ULL>("isCellStale"),
           GuardedInstanceMethod<&Workbook::GetComment, 0x7ULL>("getComment"),
           GuardedInstanceMethod<&Workbook::GetComments, 0x1ULL>("listComments"),
           GuardedInstanceMethod<&Workbook::GetCommentVisible, 0x7ULL>("getCommentVisible"),

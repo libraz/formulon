@@ -4480,6 +4480,16 @@ entries:
     cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_get_cell_show_phonetic, js: getCellShowPhonetic, py: get_show_phonetic }
+  cell_stale.is:
+    kind: op
+    scope: sheet
+    noun: cell_stale
+    c: fm_sheet_is_cell_stale
+    js: isCellStale
+    py: is_cell_stale
+    returns: bool
+    cell_args: [[0, 1]]
+    surfaces: [c, wasm, native, py]
   show_phonetic_cells.get:
     kind: op
     scope: sheet

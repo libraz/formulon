@@ -258,6 +258,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getCellPhoneticRun", &JsWorkbook::getCellPhoneticRun)
       .function("getCellPhoneticProperties", &JsWorkbook::getCellPhoneticProperties)
       .function("getCellShowPhonetic", &JsWorkbook::getCellShowPhonetic)
+      .function("isCellStale", &JsWorkbook::isCellStale)
       .function("getComment", &JsWorkbook::getComment)
       .function("listComments", &JsWorkbook::getComments)
       .function("getCommentVisible", &JsWorkbook::getCommentVisible)

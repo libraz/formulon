@@ -18,6 +18,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is listed on each sheet for that sheet's cells, and nothing is listed while
   iterative calculation is on, as Excel reports. Excel names one of the cells,
   and which one the workbook does not decide, so every cell is listed.
+- `Sheet.isCellStale(row, col)` (Python `is_cell_stale()`, C
+  `fm_sheet_is_cell_stale`) reports whether a formula cell holds a value not
+  computed since its inputs changed, under manual or
+  automatic-except-tables calculation; it is always false under automatic
+  calculation and never recalculates. A cell without a formula and a member of
+  a spill read false. Hosts can use it to draw stale-value formatting.
 
 ### Changed
 

@@ -155,6 +155,8 @@ class JsWorkbook {
   /// A cell with no annotation reports the all-zero triple.
   emscripten::val getCellPhoneticProperties(uint32_t sheet, uint32_t row, uint32_t col) const;
   bool getCellShowPhonetic(uint32_t sheet, uint32_t row, uint32_t col) const;
+  /// `fm_sheet_is_cell_stale`: whether the formula cell holds a value its inputs have outdated; never recalculates.
+  bool isCellStale(uint32_t sheet, uint32_t row, uint32_t col) const;
   emscripten::val getLambdaText(uint32_t sheet, uint32_t row, uint32_t col) const;
 
   /// Evaluates `formula` as if entered at `(sheet, row, col)` and returns the
