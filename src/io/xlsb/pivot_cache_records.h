@@ -1,10 +1,17 @@
 //
 // The pivot cache records part (xl/pivotCache/pivotCacheRecordsN.bin),
 // [MS-XLSB] PIVOTCACHERECORDS: BrtBeginPivotCacheRecords (193, u32 record
-// count), one BrtPCRRecord (33) per source row, BrtEndPivotCacheRecords (194).
+// count), one row per source row, BrtEndPivotCacheRecords (194).
 // A row is not self-describing: each database field of the cache definition
 // fixes its cell's layout, so decode and encode take the per-field kinds that
 // `cell_kinds_of_cache_definition` derives from the definition part.
+//
+// Two row forms, chosen by the row's content:
+//   * fixed: one BrtPCRRecord (33) holding every cell in field order;
+//   * dynamic, exactly when the row holds an inline error: BrtPCRRecordDt (34,
+//     empty) then one item record per field, BrtPCDIIndex (26, u32) for a
+//     shared-index field and BrtPCDIError (23, BErr byte) for the error.
+// Any other item record or field kind in a dynamic row is refused as unmeasured.
 
 #ifndef FORMULON_IO_XLSB_PIVOT_CACHE_RECORDS_H_
 #define FORMULON_IO_XLSB_PIVOT_CACHE_RECORDS_H_
@@ -29,6 +36,9 @@ enum class CellKind : std::uint8_t {
   kNumber,       ///< IEEE 754 double (`<n>`).
   kText,         ///< XLWideString (`<s>`).
   kDate,         ///< u16 year, u16 month, u8 day, u8 hour, u8 minute, u8 second (`<d>`).
+  /// Field layout only: a number field whose item table admits inline errors; its cells are kNumber or kError.
+  kNumberOrError,
+  kError,  ///< BErr byte (`<e>`), only in a kNumberOrError field; its row takes the dynamic form.
 };
 
 /// A date cell: calendar day and wall-clock time to the second.
@@ -48,6 +58,7 @@ struct RecordCell {
   double number = 0.0;
   std::string text;
   RecordDate date;
+  std::uint8_t error = 0;  ///< BErr code of a kError cell.
 };
 
 /// The whole part. The record count of the begin record is `rows.size()`.
@@ -58,21 +69,24 @@ struct PivotCacheRecordsDoc {
 }  // namespace cache_records
 
 /// Decodes a records part against `kinds` (one entry per database field).
-/// Fails on any record other than 193 / 33 / 194 in that order, a count that
-/// disagrees with the rows, a row whose width `kinds` does not explain
-/// exactly, or a date that is not a calendar day and time.
+/// Fails on any record other than 193, rows of 33 or 34 + items, 194 in that
+/// order, a count that disagrees with the rows, a row whose width `kinds` does
+/// not explain exactly, a dynamic row without an error cell, or a date that is
+/// not a calendar day and time.
 Expected<cache_records::PivotCacheRecordsDoc, Error> decode_pivot_cache_records(
     ByteSpan part, const std::vector<cache_records::CellKind>& kinds);
 
 /// Encodes `doc`; every row must hold exactly one cell of the matching kind
-/// per entry of `kinds`. Inverse of `decode_pivot_cache_records` byte for byte.
+/// per entry of `kinds` (kNumber or kError for kNumberOrError). Inverse of
+/// `decode_pivot_cache_records` byte for byte.
 Expected<std::vector<std::uint8_t>, Error> encode_pivot_cache_records(
     const cache_records::PivotCacheRecordsDoc& doc, const std::vector<cache_records::CellKind>& kinds);
 
 /// Derives the record cell kinds from a cache definition part: one entry per
 /// database field (BrtBeginPCDField byte 0 bit 0x04), in field order. A field
 /// whose BrtBeginPCDFAtbl declares shared items indexes them; otherwise its
-/// flags must name exactly one of date, text or number. Inline blank or
+/// flags must name exactly one of date, text or number, or be the measured
+/// mixed number-and-error shape (kNumberOrError). Inline blank and other
 /// mixed-type cells are refused.
 Expected<std::vector<cache_records::CellKind>, Error> cell_kinds_of_cache_definition(ByteSpan definition_part);
 

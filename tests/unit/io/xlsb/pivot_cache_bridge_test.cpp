@@ -323,6 +323,46 @@ TEST(XlsbPivotCacheBridge, SeventeenDigitRangeHintWritesItsValue) {
   EXPECT_EQ(max, 8.8);
 }
 
+TEST(XlsbPivotCacheBridge, InlineErrorRecordCellReadsWritesBackAndMatchesTheXlsxRecords) {
+  const std::string root = std::string(FORMULON_FIXTURES_DIR) + "/excel/pivot_show_as/";
+  for (const char* stem : {"S8e_pctdiffPrevR__sum", "S8e_runR__sum"}) {
+    const std::vector<CacheCase> cases = Cases(root + stem + ".xlsb");
+    ASSERT_EQ(cases.size(), 1U) << stem;
+    const CacheCase& c = cases.front();
+    auto cache = pivot_cache_from_xlsb(SpanOf(c.definition), SpanOf(c.records), c.date1904);
+    ASSERT_TRUE(cache.has_value()) << c.label << ": " << cache.error().message;
+    ASSERT_EQ(cache.value().records().size(), 13U) << c.label;
+    EXPECT_EQ(cache.value().records()[11].cells[2], Value::error(ErrorCode::NA)) << c.label;
+    // Amt's range is its data's own extremes, not a sentinel.
+    const pivot::SharedItemsHints& amt = cache.value().fields()[2].shared_items_hints;
+    EXPECT_EQ(amt.min_value, "-1E+16") << c.label;
+    EXPECT_EQ(amt.max_value, "1E+16") << c.label;
+
+    auto parts = pivot_cache_to_xlsb(cache.value(), c.date1904, RecordsRelId(c.definition));
+    ASSERT_TRUE(parts.has_value()) << c.label << ": " << parts.error().message;
+    EXPECT_EQ(parts.value().definition, c.definition) << c.label;
+    EXPECT_EQ(parts.value().records, c.records) << c.label;
+
+    auto twin = read_pivot_cache_definition(c.xlsx_definition, c.date1904);
+    ASSERT_TRUE(twin.has_value()) << c.label << ": " << twin.error().message;
+    ASSERT_TRUE(
+        read_pivot_cache_records(c.xlsx_records, twin.value(), kMaxPivotCacheRecordCells, c.date1904).has_value())
+        << c.label;
+    // The .xlsx is the earlier source save: its definition has another refreshedDate and lacks the xlsb's
+    // dataSourceClean extension, so only the records and the field ranges are held against it.
+    ASSERT_EQ(twin.value().records().size(), cache.value().records().size()) << c.label;
+    for (std::size_t r = 0; r < twin.value().records().size(); ++r) {
+      EXPECT_EQ(twin.value().records()[r].cells, cache.value().records()[r].cells) << c.label << " row " << r;
+    }
+    EXPECT_EQ(twin.value().fields()[2].shared_items_hints.min_value, amt.min_value) << c.label;
+    EXPECT_EQ(twin.value().fields()[2].shared_items_hints.max_value, amt.max_value) << c.label;
+
+    auto from_twin = pivot_cache_to_xlsb(twin.value(), c.date1904, RecordsRelId(c.definition));
+    ASSERT_TRUE(from_twin.has_value()) << c.label << ": " << from_twin.error().message;
+    EXPECT_EQ(from_twin.value().records, c.records) << c.label;
+  }
+}
+
 TEST(XlsbPivotCacheBridge, InlineDateRecordCellIsASerial) {
   const pivot::PivotCache cache = FirstCache("B01_base");
   ASSERT_FALSE(cache.records().empty());

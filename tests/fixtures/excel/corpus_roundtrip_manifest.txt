@@ -302,7 +302,9 @@ pivot_show_as/S8_pct_total__sum.xlsx model_xlsb pivot_count known_gap  # pending
 pivot_show_as/S8_pctdiffR1__sum.xlsx model_xlsb pivot_count known_gap  # pending: pivot-xlsb
 pivot_show_as/S8_pctofR1__sum.xlsx model_xlsb pivot_count known_gap  # pending: pivot-xlsb
 pivot_show_as/S8_runR__sum.xlsx model_xlsb pivot_count known_gap  # pending: pivot-xlsb
+pivot_show_as/S8e_pctdiffPrevR__sum.xlsb validate_xlsx rel_target_exists known_gap  # pending: pivot-xlsb
 pivot_show_as/S8e_pctdiffPrevR__sum.xlsx model_xlsb pivot_count known_gap  # pending: pivot-xlsb
+pivot_show_as/S8e_runR__sum.xlsb validate_xlsx rel_target_exists known_gap  # pending: pivot-xlsb
 pivot_show_as/S8e_runR__sum.xlsx model_xlsb pivot_count known_gap  # pending: pivot-xlsb
 pivot_show_as/S8g_index__sum.xlsx model_xlsb pivot_count known_gap  # pending: pivot-xlsb
 pivot_show_as/S8g_pctdiffR1__sum.xlsx model_xlsb pivot_count known_gap  # pending: pivot-xlsb

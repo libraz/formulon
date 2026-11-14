@@ -66,14 +66,14 @@ using pivot_records::kEndPNPair;
 using pivot_records::kEndPRFItem;
 using pivot_records::kPCDIAMissing;
 using pivot_records::kPCDIAString;
+using pivot_records::kPCDIError;
 using pivot_records::kPCDINumber;
 using pivot_records::kPCDIString;
 using pivot_records::RawRecord;
 
-/// Single shared-item records: bare missing, boolean, error, lone date.
+/// Single shared-item records: bare missing, boolean, lone date.
 constexpr std::uint16_t kPCDIMissing = 20;
 constexpr std::uint16_t kPCDIBoolean = 22;
-constexpr std::uint16_t kPCDIError = 23;
 constexpr std::uint16_t kPCDIDatetime = 25;
 
 /// BrtFRTBegin payloads Excel writes around BrtBeginPCD14 and the dataSourceClean record.

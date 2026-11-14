@@ -584,6 +584,25 @@ Expected<pivot::SharedItemsHints, Error> ReadHints(const pcd::ItemTable& table, 
   return h;
 }
 
+/// The error a BErr byte names, shared by error items and inline error record cells.
+Expected<ErrorCode, Error> ErrorOfCode(std::uint8_t code, const char* what) {
+  const ErrorCode error = error_from_ooxml_code(code);
+  if (ooxml_code(error) != code) {
+    return Unmeasured(what);
+  }
+  return error;
+}
+
+/// The BErr byte of `error`; false when its code does not fit one.
+bool CodeOfError(ErrorCode error, std::uint8_t* out) {
+  const std::int32_t code = ooxml_code(error);
+  if (code < 0 || code > 0xFF) {
+    return false;
+  }
+  *out = static_cast<std::uint8_t>(code);
+  return true;
+}
+
 void PushItem(pivot::PivotCacheField& field, Value value, bool is_date, std::uint8_t attributes) {
   field.shared_items.push_back(value);
   field.shared_item_is_date.push_back(is_date);
@@ -645,10 +664,7 @@ Expected<void, Error> ReadItems(const pcd::ItemTable& table, pivot::PivotCache& 
           PushItem(field, Value::boolean(item.boolean), false, 0U);
           break;
         case pcd::ItemType::kError: {
-          const ErrorCode code = error_from_ooxml_code(item.error);
-          if (ooxml_code(code) != item.error) {
-            return Unmeasured("shared error item code");
-          }
+          ASSIGN_OR_RETURN(const ErrorCode code, ErrorOfCode(item.error, "shared error item code"));
           PushItem(field, Value::error(code), false, 0U);
           break;
         }
@@ -927,6 +943,13 @@ Expected<void, Error> ReadRecords(const cache_records::PivotCacheRecordsDoc& doc
         case CellKind::kNumber:
           record.cells[pos] = Value::number(cell.number);
           break;
+        case CellKind::kError: {
+          ASSIGN_OR_RETURN(const ErrorCode code, ErrorOfCode(cell.error, "record error cell code"));
+          record.cells[pos] = Value::error(code);
+          break;
+        }
+        case CellKind::kNumberOrError:
+          return Corrupt("record cell carries a field-only kind");
         case CellKind::kText:
           record.cells[pos] = Value::text(StoreText(cache, cell.text));
           break;
@@ -1031,9 +1054,9 @@ bool ClassifyItem(const pivot::PivotCacheField& field, std::size_t i, ItemClass*
     return true;
   }
   if (v.is_error()) {
-    const std::int32_t code = ooxml_code(v.as_error());
+    std::uint8_t code = 0;
     *out = ItemClass::kError;
-    return code >= 0 && code <= 0xFF;
+    return CodeOfError(v.as_error(), &code);
   }
   return false;
 }
@@ -1423,6 +1446,19 @@ bool WriteRecordCell(const pivot::PivotCache& cache, const pivot::PivotCacheReco
       }
       out->number = v.as_number();
       return true;
+    case CellKind::kNumberOrError:
+      if (is_index || is_date) {
+        return false;
+      }
+      if (v.is_number()) {
+        out->kind = CellKind::kNumber;
+        out->number = v.as_number();
+        return true;
+      }
+      out->kind = CellKind::kError;
+      return v.is_error() && CodeOfError(v.as_error(), &out->error);
+    case CellKind::kError:
+      return false;
     case CellKind::kText:
       if (is_index || !v.is_text()) {
         return false;

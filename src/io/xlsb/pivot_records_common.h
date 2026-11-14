@@ -102,6 +102,7 @@ inline constexpr std::uint16_t kEndPCDSRange = 188;
 inline constexpr std::uint16_t kBeginPCDFAtbl = 189;
 inline constexpr std::uint16_t kEndPCDFAtbl = 190;
 inline constexpr std::uint16_t kPCDINumber = 21;
+inline constexpr std::uint16_t kPCDIError = 23;
 inline constexpr std::uint16_t kPCDIString = 24;
 inline constexpr std::uint16_t kPCDIAMissing = 27;
 inline constexpr std::uint16_t kPCDIAString = 31;
@@ -133,6 +134,10 @@ inline constexpr std::uint16_t kDataSourceClean = 5153;
 inline constexpr std::uint16_t kBeginPivotCacheRecords = 193;
 inline constexpr std::uint16_t kEndPivotCacheRecords = 194;
 inline constexpr std::uint16_t kPCRRecord = 33;
+/// BrtPCRRecordDt: opens a row spelt as one item record per database field.
+inline constexpr std::uint16_t kPCRRecordDt = 34;
+/// BrtPCDIIndex: a shared-item index inside a BrtPCRRecordDt row.
+inline constexpr std::uint16_t kPCDIIndex = 26;
 
 /// One record kept verbatim: a codec hands a block it does not own to the
 /// codec that does, and re-emits it unchanged until that codec decodes it.
