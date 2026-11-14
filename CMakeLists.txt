@@ -272,8 +272,15 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/ptg_reader.cpp
   src/io/xlsb/ptg_writer.cpp
   src/io/xlsb/ptg_whitespace.cpp
+  src/io/xlsb/pivot_area_records.cpp
+  src/io/xlsb/pivot_cache_definition_records.cpp
+  src/io/xlsb/pivot_cache_group_records.cpp
   src/io/xlsb/pivot_cache_ids.cpp
+  src/io/xlsb/pivot_cache_records.cpp
+  src/io/xlsb/pivot_calc_item_records.cpp
+  src/io/xlsb/pivot_line_item_records.cpp
   src/io/xlsb/pivot_reader.cpp
+  src/io/xlsb/pivot_table_records.cpp
   src/io/xlsb/print_records.cpp
   src/io/xlsb/protection_records.cpp
   src/io/xlsb/package_loader.cpp
