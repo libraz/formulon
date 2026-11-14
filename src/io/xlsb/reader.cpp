@@ -31,6 +31,7 @@
 #include "hyperlink_address.h"
 #include "io/cf_merge.h"
 #include "io/cf_reader.h"
+#include "io/comments_reader.h"
 #include "io/dynamic_array_formula.h"
 #include "io/future_functions.h"
 #include "io/ooxml/package_rels_reader.h"
@@ -42,6 +43,8 @@
 #include "io/pivot_table_reader.h"
 #include "io/rich_value_errors.h"
 #include "io/sheet_phonetic.h"
+#include "io/threaded_comments_io.h"
+#include "io/xlsb/comments_records.h"
 #include "io/xlsb/drawing_record.h"
 #include "io/xlsb/external_link_reader.h"
 #include "io/xlsb/metadata_bin.h"
@@ -548,6 +551,91 @@ void LiftSheetDrawing(Sheet& sheet, std::size_t sheet_index, const ContentTypesV
   sheet.set_unknown_relationships(std::move(rels));
 }
 
+/// Moves a sheet's notes, their VML drawing and its threads from the retained
+/// BrtLegacyDrawing record and relationships into the model, as the xlsx
+/// reader holds them. The VML part stays passthrough, as it does for xlsx. A
+/// sheet whose parts do not resolve one to one stays retained and is logged.
+Expected<void, Error> LiftSheetNotes(Sheet& sheet, std::size_t sheet_index, const ZipReader& zip,
+                                     const std::vector<FontRecord>& fonts,
+                                     std::unordered_set<std::string>& consumed_parts) {
+  const UnknownRelationship* comments = nullptr;
+  const UnknownRelationship* vml = nullptr;
+  const UnknownRelationship* threads = nullptr;
+  std::size_t counts[3] = {0, 0, 0};
+  for (const UnknownRelationship& rel : sheet.unknown_relationships()) {
+    const UnknownRelationship** slot = rel.type == kRelComments          ? &comments
+                                       : rel.type == kRelVmlDrawing      ? &vml
+                                       : rel.type == kRelThreadedComment ? &threads
+                                                                         : nullptr;
+    if (slot != nullptr && !rel.target_external) {
+      *slot = &rel;
+      ++counts[slot == &comments ? 0 : slot == &vml ? 1 : 2];
+    }
+  }
+  if (comments == nullptr && threads == nullptr) {
+    return {};
+  }
+  const DrawingRecordScan scan = scan_drawing_records(sheet.xlsb_tail().after_hyperlinks, kBrtLegacyDrawing);
+  if (counts[0] != 1U || counts[1] != 1U || counts[2] > 1U || scan.count != 1U || !scan.rel_id ||
+      *scan.rel_id != vml->id || !zip.has_entry(comments->target) || !zip.has_entry(vml->target) ||
+      (threads != nullptr && !zip.has_entry(threads->target))) {
+    StructuredLog("xlsb.reader.notes_retained").field("sheet_index", static_cast<std::int64_t>(sheet_index)).warn();
+    return {};
+  }
+  if (threads != nullptr) {
+    ASSIGN_OR_RETURN(auto thread_bytes, zip.read_entry(threads->target));
+    ASSIGN_OR_RETURN(sheet.mutable_threaded_comments(), read_threaded_comments(thread_bytes));
+    consumed_parts.insert(threads->target);
+  }
+  ASSIGN_OR_RETURN(auto vml_bytes, zip.read_entry(vml->target));
+  const std::string_view vml_text(reinterpret_cast<const char*>(vml_bytes.data()), vml_bytes.size());
+  sheet.set_comment_vml_extra_xml(vml_non_note_shapes(vml_text));
+  ASSIGN_OR_RETURN(auto comment_bytes, zip.read_entry(comments->target));
+  std::vector<std::string> authors;
+  ASSIGN_OR_RETURN(auto notes,
+                   read_comments_bin(ByteSpan{comment_bytes.data(), comment_bytes.size()}, fonts, &authors));
+  drop_thread_stubs(notes, sheet.threaded_comments());
+  apply_vml_note_shapes(vml_text, notes);
+  sheet.mutable_comments() = std::move(notes);
+  authors.erase(
+      std::remove_if(authors.begin(), authors.end(), [](const std::string& a) { return is_thread_stub_author(a); }),
+      authors.end());
+  sheet.set_comment_authors(std::move(authors));
+  sheet.set_comment_vml_path(vml->target);
+  sheet.set_comment_vml_shapes(sheet.comment_shapes());
+  consumed_parts.insert(comments->target);
+
+  XlsbSheetTail tail = sheet.xlsb_tail();
+  strip_drawing_records(tail.after_hyperlinks, kBrtLegacyDrawing);
+  sheet.set_xlsb_tail(std::move(tail));
+  const std::string ids[3] = {comments->id, vml->id, threads != nullptr ? threads->id : std::string()};
+  std::vector<UnknownRelationship> rels = sheet.unknown_relationships();
+  rels.erase(std::remove_if(rels.begin(), rels.end(),
+                            [&ids](const UnknownRelationship& rel) {
+                              return rel.id == ids[0] || rel.id == ids[1] || (!ids[2].empty() && rel.id == ids[2]);
+                            }),
+             rels.end());
+  sheet.set_unknown_relationships(std::move(rels));
+  return {};
+}
+
+/// Reads the person list the threads name; its relationship leaves the unknown list with it.
+Expected<void, Error> ConsumePersons(const ZipReader& zip, Workbook& wb,
+                                     std::unordered_set<std::string>& consumed_parts,
+                                     std::vector<UnknownRelationship>& unknown_rels) {
+  for (auto it = unknown_rels.begin(); it != unknown_rels.end(); ++it) {
+    if (it->type != kRelPerson || it->target_external || !zip.has_entry(it->target)) {
+      continue;
+    }
+    ASSIGN_OR_RETURN(auto bytes, zip.read_entry(it->target));
+    ASSIGN_OR_RETURN(wb.mutable_persons(), read_persons(bytes));
+    consumed_parts.insert(it->target);
+    unknown_rels.erase(it);
+    break;
+  }
+  return {};
+}
+
 }  // namespace
 
 Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
@@ -846,6 +934,12 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   // Drawings the sheets link through one BrtDrawing record and its relationship.
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     LiftSheetDrawing(wb.sheet(i), i, ct_view, zip);
+  }
+
+  // Notes and threads, through one BrtLegacyDrawing and the sheet's relationships, and the persons the threads name.
+  RETURN_IF_ERROR(ConsumePersons(zip, wb, consumed_parts, wb_rels_or.value().unknown_rels));
+  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    RETURN_IF_ERROR(LiftSheetNotes(wb.sheet(i), i, zip, wb.styles().fonts, consumed_parts));
   }
 
   // Pivot caches and tables, reached through the sheet relationships the

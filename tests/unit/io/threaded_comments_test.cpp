@@ -10,6 +10,7 @@
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/threaded_comments_io.h"
+#include "io/xlsb/reader.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
@@ -471,13 +472,18 @@ TEST(ThreadedComments, ThreadDeletedWithItsRow) {
   EXPECT_TRUE(wb.sheet(0).comments().empty());
 }
 
-TEST(ThreadedComments, XlsbSaveReportsDeferral) {
+TEST(ThreadedComments, XlsbSaveWritesTheThreadAndReadsItBack) {
   Workbook wb = WorkbookWithPersons();
   ASSERT_TRUE(static_cast<bool>(wb.add_threaded_comment(0, Comment(kThread, 0, 0, kAlice, "Q"))));
   ASSERT_TRUE(static_cast<bool>(wb.add_threaded_comment(0, Comment(kReply, 0, 0, kBob, "A", kThread))));
   auto result = io::xlsb::write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
-  EXPECT_EQ(result.value().diagnostics.deferred_feature_count, 2U);
+  EXPECT_EQ(result.value().diagnostics.deferred_feature_count, 0U);
+  auto back = io::xlsb::read_xlsb(io::ByteSpan{result.value().bytes.data(), result.value().bytes.size()});
+  ASSERT_TRUE(static_cast<bool>(back)) << back.error().message;
+  EXPECT_EQ(back.value().workbook.sheet(0).threaded_comments().size(), 2U);
+  EXPECT_TRUE(back.value().workbook.sheet(0).comments().empty());
+  EXPECT_EQ(back.value().workbook.persons().size(), wb.persons().size());
 }
 
 TEST(ThreadedComments, RefusesMalformedInputCollisionsAndUnknownIds) {

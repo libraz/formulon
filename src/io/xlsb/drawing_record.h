@@ -14,6 +14,8 @@
 #include <string_view>
 #include <vector>
 
+#include "io/xlsb/record_ids.h"
+
 namespace formulon {
 namespace io {
 namespace xlsb {
@@ -29,19 +31,24 @@ struct DrawingRecordScan {
   bool parsed = true;
 };
 
-/// Counts the BrtDrawing records of `after_hyperlinks` and reads the id of a
-/// single one.
-DrawingRecordScan scan_drawing_records(const std::vector<std::uint8_t>& after_hyperlinks);
+/// Counts the BrtDrawing records (or the records of `type`, BrtLegacyDrawing
+/// for the notes drawing) of `after_hyperlinks` and reads the id of a single one.
+DrawingRecordScan scan_drawing_records(const std::vector<std::uint8_t>& after_hyperlinks,
+                                       std::uint16_t type = kBrtDrawing);
 
-/// Removes every BrtDrawing record. A non-empty buffer that does not split
-/// into records is left untouched and yields false.
-bool strip_drawing_records(std::vector<std::uint8_t>& after_hyperlinks);
+/// Removes every BrtDrawing record, or every record of `type`. A non-empty
+/// buffer that does not split into records is left untouched and yields false.
+bool strip_drawing_records(std::vector<std::uint8_t>& after_hyperlinks, std::uint16_t type = kBrtDrawing);
 
 /// Replaces the BrtDrawing records with one naming `rel_id`, placed after the
 /// last record the grammar puts ahead of the drawing (page setup through
 /// smart tags), or first when there is none. A non-empty buffer that does
 /// not split into records is left untouched and yields false.
 bool splice_drawing(std::vector<std::uint8_t>& after_hyperlinks, std::string_view rel_id);
+
+/// Places one BrtLegacyDrawing naming `rel_id`, after BrtDrawing and the
+/// records ahead of it, as `splice_drawing` places BrtDrawing.
+bool splice_legacy_drawing(std::vector<std::uint8_t>& after_hyperlinks, std::string_view rel_id);
 
 /// True when `drawing_xml` parses and every `graphicData` in it, inside
 /// `mc:AlternateContent` included, names a chart. Pictures, shapes and

@@ -306,13 +306,18 @@ TEST(XlsbWriteDiagnostics, CleanWorkbookReportsNothingLost) {
   EXPECT_EQ(d.renumbered_part_count, 0U);
 }
 
-TEST(XlsbWriteDiagnostics, CommentsCountAsDeferred) {
-  // The XLSB writer has no comments output; a comment surviving into the
-  // model (necessarily from an .xlsx source, since the XLSB reader never
-  // decodes comments at all) is silently dropped on save.
+TEST(XlsbWriteDiagnostics, ANoteWithoutAnAssignableUidCountsAsDeferred) {
+  // A note is written with the uid Excel assigns a note without one, which is
+  // measured on the first two sheets only; a third sheet's note is left out.
   Workbook wb = OneSheetWorkbook();
   wb.sheet(0).mutable_comments().push_back(CellComment{0, 0, "Author", "Note"});
+  auto written = xlsb::write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
+  EXPECT_EQ(written.value().diagnostics.deferred_feature_count, 0U);
 
+  wb.add_sheet("Second");
+  wb.add_sheet("Third");
+  wb.sheet(2).mutable_comments().push_back(CellComment{0, 0, "Author", "Note"});
   auto result = xlsb::write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
   EXPECT_EQ(result.value().diagnostics.deferred_feature_count, 1U);

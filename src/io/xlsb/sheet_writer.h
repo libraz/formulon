@@ -90,6 +90,8 @@ std::size_t unwritten_protected_range_count(const Sheet& sheet);
 /// a sheet without its own is written with (`FontSavePlan::absent_sheet_phonetic`).
 /// `style_plan` renumbers every row, column and cell xf (`saved_cell_xf`); it is
 /// null when styles.bin passes through, which keeps every index as loaded.
+/// A non-empty `legacy_drawing_rel_id` replaces any retained BrtLegacyDrawing
+/// with one naming the sheet's generated notes drawing.
 Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     const Sheet& sheet, SstBuilder& sst, const std::vector<std::string>& sheet_names,
     const SheetRangeTable& sheet_ranges, const NameTable& name_table, const std::vector<std::string>& hyperlink_ids,
@@ -98,7 +100,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     std::uint32_t workbook_views = 1U, std::uint32_t* deferred_sparkline_groups = nullptr,
     std::string_view drawing_rel_id = {}, bool owns_drawing = false, const RichErrorVmMap* rich_error_vm = nullptr,
     std::string_view book_directory = {}, const std::optional<PhoneticProperties>& absent_phonetic = std::nullopt,
-    const CellStyleSavePlan* style_plan = nullptr);
+    const CellStyleSavePlan* style_plan = nullptr, std::string_view legacy_drawing_rel_id = {});
 
 }  // namespace xlsb
 }  // namespace io

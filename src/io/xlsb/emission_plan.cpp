@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -20,6 +21,7 @@
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/relationship_writer.h"
 #include "io/ooxml_defs.h"
+#include "io/xlsb/comments_records.h"
 #include "io/xlsb/external_link_writer.h"
 #include "io/xlsb/part_paths.h"
 #include "io/xlsb/record_writer.h"
@@ -58,6 +60,10 @@ constexpr std::string_view kCtSharedStringsXlsb = "application/vnd.ms-excel.shar
 constexpr std::string_view kCtStylesXlsb = "application/vnd.ms-excel.styles";
 constexpr std::string_view kCtSheetMetadataXlsb = "application/vnd.ms-excel.sheetMetadata";
 constexpr std::string_view kCtExternalLinkXlsb = "application/vnd.ms-excel.externalLink";
+constexpr std::string_view kCtCommentsXlsb = "application/vnd.ms-excel.comments";
+constexpr std::string_view kCtVmlDrawing = "application/vnd.openxmlformats-officedocument.vmlDrawing";
+constexpr std::string_view kCtThreadedComments = "application/vnd.ms-excel.threadedcomments+xml";
+constexpr std::string_view kCtPerson = "application/vnd.ms-excel.person+xml";
 
 }  // namespace
 
@@ -143,8 +149,19 @@ bool HasModelledStyles(const Workbook& wb) {
 
 std::unordered_set<std::string> BuildGeneratedPathSet(const Workbook& wb, bool emit_sst_part, bool emit_styles_part,
                                                       bool emit_metadata_part, bool emit_rich_value_parts,
-                                                      std::size_t external_link_count) {
+                                                      std::size_t external_link_count,
+                                                      const std::vector<io::EmissionPlan::CommentsPlan>& comments) {
   std::unordered_set<std::string> paths;
+  for (const io::EmissionPlan::CommentsPlan& c : comments) {
+    for (const std::string* path : {&c.comments_path, &c.vml_path, &c.threaded_path}) {
+      if (!path->empty()) {
+        paths.insert(*path);
+      }
+    }
+  }
+  if (!wb.persons().empty()) {
+    paths.insert(std::string(kPersonsPartPath));
+  }
   paths.insert("[Content_Types].xml");
   paths.insert("_rels/.rels");
   paths.insert(std::string(kWorkbookBinPath));
@@ -179,7 +196,15 @@ std::unordered_set<std::string> BuildGeneratedPathSet(const Workbook& wb, bool e
 bool xlsb_styles_regenerated(const Workbook& wb) {
   const PassthroughPart* raw_styles = FindRawStylesPart(wb);
   const bool raw_styles_fresh = raw_styles != nullptr && static_cast<bool>(CheckRetainedPartFreshness(wb, *raw_styles));
-  return !raw_styles_fresh && (raw_styles != nullptr || HasModelledStyles(wb));
+  if (raw_styles_fresh) {
+    // A note run in a font the stored table lacks needs the table written with that font appended.
+    std::vector<const std::vector<CellComment>*> notes;
+    for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+      notes.push_back(&wb.sheet(i).comments());
+    }
+    return !NoteRunFonts(wb.styles().fonts, notes).appended().empty();
+  }
+  return raw_styles != nullptr || HasModelledStyles(wb);
 }
 
 bool xlsb_dxf_references_changed(const Workbook& wb) {
@@ -189,8 +214,11 @@ bool xlsb_dxf_references_changed(const Workbook& wb) {
 
 Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_present, bool generate_metadata,
                                                 bool generate_rich_values, std::size_t external_link_count,
+                                                std::vector<io::EmissionPlan::CommentsPlan> comments_by_sheet,
                                                 WriteDiagnostics* diagnostics) {
   EmissionPlan plan;
+  plan.comments_by_sheet = std::move(comments_by_sheet);
+  plan.generated_persons = !wb.persons().empty();
   plan.has_text_cells = sst_present;
   // A retained styles.bin that still matches the model is emitted verbatim,
   // which keeps BrtXF fMergeCell/fSxButton and dxf properties the table does
@@ -206,7 +234,7 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
 
   const std::unordered_set<std::string> generated =
       BuildGeneratedPathSet(wb, sst_present, plan.has_generated_styles, plan.has_generated_metadata,
-                            plan.has_generated_rich_values, external_link_count);
+                            plan.has_generated_rich_values, external_link_count, plan.comments_by_sheet);
 
   // The reader rejects conflicting defaults, but Workbook is also a public
   // construction surface. Validate that hand-built workbooks cannot produce
@@ -315,11 +343,20 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   AppendDefault(out, "rels", rels_default);
   AppendDefault(out, "xml", xml_default);
   AppendDefault(out, "bin", bin_default);
+  bool vml_default = false;
   for (const DefaultContentType& def : plan.default_content_types) {
     if (def.extension == "rels" || def.extension == "xml" || def.extension == "bin") {
       continue;
     }
+    vml_default = vml_default || def.extension == "vml";
     AppendDefault(out, def.extension, def.content_type);
+  }
+  // A VML drawing is typed by extension, as in xlsx; the comments and thread parts by Override below.
+  const bool any_comment_parts =
+      std::any_of(plan.comments_by_sheet.begin(), plan.comments_by_sheet.end(),
+                  [](const io::EmissionPlan::CommentsPlan& c) { return c.numeric_id != 0U; });
+  if (any_comment_parts && !vml_default) {
+    AppendDefault(out, "vml", kCtVmlDrawing);
   }
   if (plan.workbook_bin_override) {
     AppendOverride(out, kWorkbookBinPath, kCtWorkbookXlsb);
@@ -388,6 +425,17 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   // Passthrough overrides: only for entries that carried an explicit
   // ContentType in the source archive. Default-typed parts (empty
   // content_type) must NOT appear as Overrides.
+  for (const io::EmissionPlan::CommentsPlan& c : plan.comments_by_sheet) {
+    if (!c.comments_path.empty()) {
+      AppendOverride(out, c.comments_path, kCtCommentsXlsb);
+    }
+    if (!c.threaded_path.empty()) {
+      AppendOverride(out, c.threaded_path, kCtThreadedComments);
+    }
+  }
+  if (plan.generated_persons) {
+    AppendOverride(out, kPersonsPartPath, kCtPerson);
+  }
   AppendPassthroughOverrides(out, plan.passthrough_kept);
   out.append("</Types>\n");
   return out;
@@ -404,10 +452,17 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
 // the drawing relationship named by `drawing_rid`, if any.
 std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan, const std::vector<XlsbTablePart>& tables,
                            const std::vector<std::string>& hyperlink_rids, bool owns_drawing,
-                           const std::string& drawing_rid, WriteDiagnostics* diagnostics) {
+                           const std::string& drawing_rid, WriteDiagnostics* diagnostics,
+                           const io::EmissionPlan::CommentsPlan* comments,
+                           const EmissionPlan::CommentRelIds* comment_rids) {
+  const bool owns_notes = comments != nullptr && comments->numeric_id != 0U;
   std::string entries;
   for (const UnknownRelationship& rel : sheet.unknown_relationships()) {
     if (owns_drawing && rel.type == kRelDrawing) {
+      continue;
+    }
+    // Generated notes replace any retained notes drawing and parts.
+    if (owns_notes && (rel.type == kRelComments || rel.type == kRelVmlDrawing || rel.type == kRelThreadedComment)) {
       continue;
     }
     if (!rel.target_external && !plan.passthrough_path_index.contains(plan.passthrough_kept, rel.target)) {
@@ -441,6 +496,17 @@ std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan, const s
   if (!drawing_rid.empty()) {
     AppendRelationship(entries, drawing_rid, kRelDrawing, TargetRelativeToWorksheet(sheet.drawing_rel_target()),
                        /*target_external=*/false, /*escape_target=*/true);
+  }
+  if (owns_notes && comment_rids != nullptr) {
+    for (const auto& [rid, type, path] :
+         {std::tuple{&comment_rids->comments, kRelComments, &comments->comments_path},
+          std::tuple{&comment_rids->vml, kRelVmlDrawing, &comments->vml_path},
+          std::tuple{&comment_rids->threaded, kRelThreadedComment, &comments->threaded_path}}) {
+      if (!rid->empty() && !path->empty()) {
+        AppendRelationship(entries, *rid, type, TargetRelativeToWorksheet(*path), /*target_external=*/false,
+                           /*escape_target=*/true);
+      }
+    }
   }
   if (entries.empty()) {
     return {};
@@ -492,6 +558,9 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
   if (plan.has_generated_metadata || plan.passthrough_path_index.contains(plan.passthrough_kept, kMetadataBinPath)) {
     AppendRelationship(out, next_rid++, kRelSheetMetadata, "metadata.bin", /*target_external=*/false,
                        /*escape_target=*/true);
+  }
+  if (plan.generated_persons) {
+    AppendRelationship(out, next_rid++, kRelPerson, TargetRelativeToWorkbook(kPersonsPartPath));
   }
   if (plan.has_generated_rich_values) {
     for (const auto& [type, path] : {std::pair{kRelRdRichValue, kRdRichValuePartPath},

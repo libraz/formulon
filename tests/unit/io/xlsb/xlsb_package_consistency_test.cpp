@@ -34,10 +34,7 @@ struct KnownFailure {
   const char* reason;
 };
 
-const KnownFailure kKnownFailures[] = {
-    {"excel/xlsb_parity/notes/base.xlsx", kSingleReference, "xl/drawings/vmlDrawing1.vml",
-     "notes are not written yet, and the VML part they used is kept with no relationship to it"},
-};
+const std::vector<KnownFailure> kKnownFailures = {};
 
 std::string Lower(std::string s) {
   std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });

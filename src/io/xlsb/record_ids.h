@@ -67,6 +67,18 @@ inline constexpr std::uint16_t kBrtCFVO = 471;
 inline constexpr std::uint16_t kBrtPhoneticInfo = 537;
 inline constexpr std::uint16_t kBrtColor = 564;  // conditional-formatting colour
 
+// Comments part (`xl/commentsN.bin`).
+inline constexpr std::uint16_t kBrtBeginComments = 628;
+inline constexpr std::uint16_t kBrtEndComments = 629;
+inline constexpr std::uint16_t kBrtBeginCommentAuthors = 630;
+inline constexpr std::uint16_t kBrtEndCommentAuthors = 631;
+inline constexpr std::uint16_t kBrtCommentAuthor = 632;
+inline constexpr std::uint16_t kBrtBeginCommentList = 633;
+inline constexpr std::uint16_t kBrtEndCommentList = 634;
+inline constexpr std::uint16_t kBrtBeginComment = 635;
+inline constexpr std::uint16_t kBrtEndComment = 636;
+inline constexpr std::uint16_t kBrtCommentText = 637;
+
 // Worksheet tail grammar slots after the hyperlinks.
 inline constexpr std::uint16_t kBrtDrawing = 550;
 inline constexpr std::uint16_t kBrtLegacyDrawing = 551;

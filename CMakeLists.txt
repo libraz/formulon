@@ -246,6 +246,7 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/auto_filter_records.cpp
   src/io/xlsb/cell_writer.cpp
   src/io/xlsb/cf_records.cpp
+  src/io/xlsb/comments_records.cpp
   src/io/xlsb/cf_x14_records.cpp
   src/io/xlsb/cf_x14_icon_set.cpp
   src/io/xlsb/dv_records.cpp

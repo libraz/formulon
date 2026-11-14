@@ -55,6 +55,18 @@ struct EmissionPlan {
   std::vector<std::string> sheet_drawing_rids;
   /// Sheets whose model drawing replaces retained drawing relationships.
   std::vector<bool> sheet_owns_drawing;
+  /// Each sheet's comments, VML drawing and threaded-comment parts
+  /// (`plan_comment_parts`); `numeric_id` is 0 for a sheet with none.
+  std::vector<io::EmissionPlan::CommentsPlan> comments_by_sheet;
+  /// The relationship ids naming each sheet's planned comment parts.
+  struct CommentRelIds {
+    std::string comments;
+    std::string vml;
+    std::string threaded;
+  };
+  std::vector<CommentRelIds> sheet_comment_rids;
+  /// The writer generates the persons part the threads name.
+  bool generated_persons = false;
   /// The canonical folder of `Workbook::location()`, or empty without one;
   /// local hyperlink targets are written relative to it (`saved_hyperlink`).
   /// Set by `write_xlsb` from the value its sheet bodies were written with.
@@ -85,15 +97,20 @@ bool xlsb_styles_regenerated(const Workbook& wb);
 /// of the part stays byte for byte; an equal set leaves the part untouched.
 bool xlsb_dxf_references_changed(const Workbook& wb);
 
+/// `comments_by_sheet` is the comment-parts plan the sheet bodies were written against; the plan takes it.
 Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_present, bool generate_metadata,
                                                 bool generate_rich_values, std::size_t external_link_count,
+                                                std::vector<io::EmissionPlan::CommentsPlan> comments_by_sheet,
                                                 WriteDiagnostics* diagnostics);
 
 std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan);
 
+/// `comments` and `comment_rids` (null: none) relate the sheet's generated notes, VML drawing and threads.
 std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan, const std::vector<XlsbTablePart>& tables,
                            const std::vector<std::string>& hyperlink_rids, bool owns_drawing,
-                           const std::string& drawing_rid, WriteDiagnostics* diagnostics);
+                           const std::string& drawing_rid, WriteDiagnostics* diagnostics,
+                           const io::EmissionPlan::CommentsPlan* comments = nullptr,
+                           const EmissionPlan::CommentRelIds* comment_rids = nullptr);
 
 std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const EmissionPlan& plan, const Workbook& wb,
                               const std::vector<std::string>& link_rel_ids, WriteDiagnostics* diagnostics,

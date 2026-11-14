@@ -336,7 +336,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     const std::vector<std::string>& table_part_rel_ids, std::uint32_t workbook_views,
     std::uint32_t* deferred_sparkline_groups, std::string_view drawing_rel_id, bool owns_drawing,
     const RichErrorVmMap* rich_error_vm, std::string_view book_directory,
-    const std::optional<PhoneticProperties>& absent_phonetic, const CellStyleSavePlan* style_plan) {
+    const std::optional<PhoneticProperties>& absent_phonetic, const CellStyleSavePlan* style_plan,
+    std::string_view legacy_drawing_rel_id) {
   std::vector<std::uint8_t> body;
 
   // Frame: BrtBeginSheet | BrtBeginSheetData | ... | BrtEndSheetData |
@@ -672,6 +673,10 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   }
   if (!drawing_rel_id.empty()) {
     splice_drawing(tail.after_hyperlinks, drawing_rel_id);
+  }
+  if (!legacy_drawing_rel_id.empty()) {
+    strip_drawing_records(tail.after_hyperlinks, kBrtLegacyDrawing);
+    splice_legacy_drawing(tail.after_hyperlinks, legacy_drawing_rel_id);
   }
   // Table parts are model-owned; their BrtListPart records join the tail.
   splice_list_parts(tail.after_hyperlinks, table_part_rel_ids);

@@ -25,13 +25,14 @@ namespace xlsb {
 namespace {
 
 /// Records the worksheet grammar places after the hyperlinks and before
-/// BrtDrawing.
-bool PrecedesDrawing(std::uint16_t type) {
+/// BrtDrawing, or before BrtLegacyDrawing when `placed` is that.
+bool PrecedesDrawing(std::uint16_t type, std::uint16_t placed) {
   if (!is_after_hyperlinks(type)) {
     return false;
   }
   switch (type) {
     case kBrtDrawing:
+      return placed == kBrtLegacyDrawing;
     case kBrtLegacyDrawing:
     case kBrtLegacyDrawingHF:
     case kBrtBkhim:
@@ -61,7 +62,7 @@ bool IsSplit(const std::vector<std::uint8_t>& buf, const std::vector<FramedRecor
 
 }  // namespace
 
-DrawingRecordScan scan_drawing_records(const std::vector<std::uint8_t>& after_hyperlinks) {
+DrawingRecordScan scan_drawing_records(const std::vector<std::uint8_t>& after_hyperlinks, std::uint16_t type) {
   DrawingRecordScan scan;
   const std::vector<FramedRecord> recs = split_records(after_hyperlinks);
   if (!IsSplit(after_hyperlinks, recs)) {
@@ -70,7 +71,7 @@ DrawingRecordScan scan_drawing_records(const std::vector<std::uint8_t>& after_hy
   }
   ByteSpan payload{};
   for (const FramedRecord& rec : recs) {
-    if (rec.type == kBrtDrawing) {
+    if (rec.type == type) {
       ++scan.count;
       payload = rec.payload;
     }
@@ -86,7 +87,7 @@ DrawingRecordScan scan_drawing_records(const std::vector<std::uint8_t>& after_hy
   return scan;
 }
 
-bool strip_drawing_records(std::vector<std::uint8_t>& after_hyperlinks) {
+bool strip_drawing_records(std::vector<std::uint8_t>& after_hyperlinks, std::uint16_t type) {
   const std::vector<FramedRecord> recs = split_records(after_hyperlinks);
   if (!IsSplit(after_hyperlinks, recs)) {
     return false;
@@ -94,7 +95,7 @@ bool strip_drawing_records(std::vector<std::uint8_t>& after_hyperlinks) {
   std::vector<std::uint8_t> kept;
   kept.reserve(after_hyperlinks.size());
   for (const FramedRecord& rec : recs) {
-    if (rec.type != kBrtDrawing) {
+    if (rec.type != type) {
       append_record(kept, after_hyperlinks, rec);
     }
   }
@@ -102,7 +103,9 @@ bool strip_drawing_records(std::vector<std::uint8_t>& after_hyperlinks) {
   return true;
 }
 
-bool splice_drawing(std::vector<std::uint8_t>& after_hyperlinks, std::string_view rel_id) {
+namespace {
+
+bool SpliceDrawingRecord(std::vector<std::uint8_t>& after_hyperlinks, std::string_view rel_id, std::uint16_t type) {
   const std::vector<FramedRecord> recs = split_records(after_hyperlinks);
   if (!IsSplit(after_hyperlinks, recs)) {
     return false;
@@ -110,10 +113,10 @@ bool splice_drawing(std::vector<std::uint8_t>& after_hyperlinks, std::string_vie
   std::vector<std::uint8_t> payload;
   emit_xlwidestring(payload, rel_id);
   std::vector<std::uint8_t> record;
-  emit_record(record, kBrtDrawing, payload);
+  emit_record(record, type, payload);
   std::size_t insert_at = 0;
   for (std::size_t i = 0; i < recs.size(); ++i) {
-    if (PrecedesDrawing(recs[i].type)) {
+    if (PrecedesDrawing(recs[i].type, type)) {
       insert_at = i + 1U;
     }
   }
@@ -123,7 +126,7 @@ bool splice_drawing(std::vector<std::uint8_t>& after_hyperlinks, std::string_vie
     if (i == insert_at) {
       out.insert(out.end(), record.begin(), record.end());
     }
-    if (recs[i].type != kBrtDrawing) {
+    if (recs[i].type != type) {
       append_record(out, after_hyperlinks, recs[i]);
     }
   }
@@ -132,6 +135,16 @@ bool splice_drawing(std::vector<std::uint8_t>& after_hyperlinks, std::string_vie
   }
   after_hyperlinks = std::move(out);
   return true;
+}
+
+}  // namespace
+
+bool splice_drawing(std::vector<std::uint8_t>& after_hyperlinks, std::string_view rel_id) {
+  return SpliceDrawingRecord(after_hyperlinks, rel_id, kBrtDrawing);
+}
+
+bool splice_legacy_drawing(std::vector<std::uint8_t>& after_hyperlinks, std::string_view rel_id) {
+  return SpliceDrawingRecord(after_hyperlinks, rel_id, kBrtLegacyDrawing);
 }
 
 bool drawing_frames_are_writable(std::string_view drawing_xml) {

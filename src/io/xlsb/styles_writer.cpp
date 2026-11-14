@@ -371,8 +371,13 @@ void EmitStyle(std::vector<std::uint8_t>& out, const CellStyleRecord& style) {
 
 }  // namespace
 
+void emit_font_record(std::vector<std::uint8_t>& out, const FontRecord& font) {
+  EmitFont(out, font);
+}
+
 std::vector<std::uint8_t> write_styles_bin(const StylesTable& table, const DxfSavePlan* plan,
-                                           const CellStyleSavePlan* style_plan, const FontSavePlan* font_plan) {
+                                           const CellStyleSavePlan* style_plan, const FontSavePlan* font_plan,
+                                           const std::vector<FontRecord>* appended_fonts) {
   std::vector<std::uint8_t> out;
   out.reserve(256U + table.fonts.size() * 40U + table.fills.size() * 64U + table.borders.size() * 56U +
               table.cell_xfs.size() * 20U);
@@ -397,9 +402,12 @@ std::vector<std::uint8_t> write_styles_bin(const StylesTable& table, const DxfSa
   std::vector<FontRecord> font_default;
   const std::vector<FontRecord>& fonts =
       Normalized(font_plan != nullptr ? font_plan->fonts() : table.fonts, font_default);
-  EmitCount(out, kBrtBeginFonts, fonts.size());
+  const std::size_t appended = appended_fonts != nullptr ? appended_fonts->size() : 0U;
+  EmitCount(out, kBrtBeginFonts, fonts.size() + appended);
   for (const FontRecord& font : fonts)
     EmitFont(out, font);
+  for (std::size_t i = 0; i < appended; ++i)
+    EmitFont(out, (*appended_fonts)[i]);
   emit_record(out, kBrtEndFonts, empty);
 
   std::vector<FillRecord> fill_default;

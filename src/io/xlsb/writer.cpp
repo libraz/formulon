@@ -26,6 +26,7 @@
 #include "cf/cf_types.h"
 #include "chart/chart_cache.h"
 #include "external_link.h"
+#include "io/comments_writer.h"
 #include "io/dxf_save_plan.h"
 #include "io/dynamic_array_formula.h"
 #include "io/future_functions.h"
@@ -37,8 +38,10 @@
 #include "io/ooxml_defs.h"
 #include "io/passthrough_part_index.h"
 #include "io/rich_value_errors.h"
+#include "io/threaded_comments_io.h"
 #include "io/writer_common.h"
 #include "io/xlsb/auto_filter_records.h"
+#include "io/xlsb/comments_records.h"
 #include "io/xlsb/drawing_record.h"
 #include "io/xlsb/dxf_uses_xlsb.h"
 #include "io/xlsb/emission_plan.h"
@@ -126,8 +129,6 @@ std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
   for (std::size_t i = 0; i < workbook.sheet_count(); ++i) {
     const Sheet& sheet = workbook.sheet(i);
     ReportDeferred(&count, "auto_filter", unwritten_auto_filter_settings(sheet), i);
-    ReportDeferred(&count, "comments", sheet.comments().size(), i);
-    ReportDeferred(&count, "threaded_comments", sheet.threaded_comments().size(), i);
     ReportDeferred(&count, "pivot_tables", pivots_survive_via_passthrough ? 0U : sheet.pivot_tables().size(), i);
     ReportDeferred(&count, "print_settings", has_deferred_print_settings(sheet.print_settings()) ? 1U : 0U, i);
     const SheetFormatDefaults& defaults = sheet.format_defaults();
@@ -374,6 +375,22 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
           ? build_cell_style_save_plan(workbook.styles(), collect_used_cell_xfs(workbook), workbook.excel_profile())
           : stored_cell_style_save_plan(workbook.styles(), workbook.excel_profile());
   const FontSavePlan font_plan = build_font_save_plan(workbook);
+  // Notes, their VML drawing and threads, planned as the xlsx writer plans them; their run fonts join the table.
+  std::vector<const PassthroughPart*> source_passthrough;
+  for (const PassthroughPart& part : workbook.passthrough_parts()) {
+    source_passthrough.push_back(&part);
+  }
+  io::PassthroughPathIndex source_passthrough_index;
+  source_passthrough_index.reset(source_passthrough);
+  std::vector<io::EmissionPlan::CommentsPlan> comment_parts =
+      plan_comment_parts(workbook, source_passthrough, source_passthrough_index, ".bin");
+  std::vector<const std::vector<CellComment>*> sheet_notes;
+  for (std::size_t i = 0; i < sheet_count; ++i) {
+    sheet_notes.push_back(&workbook.sheet(i).comments());
+  }
+  const NoteRunFonts note_fonts(styles_regenerated ? font_plan.fonts() : workbook.styles().fonts, sheet_notes);
+  std::vector<EmissionPlan::CommentRelIds> comment_rids(sheet_count);
+  std::vector<std::vector<CellComment>> written_notes(sheet_count);
   const CellStyleSavePlan* sheet_style_plan = styles_regenerated ? &style_plan : nullptr;
   const std::optional<PhoneticProperties> absent_phonetic =
       styles_regenerated ? font_plan.absent_sheet_phonetic() : std::nullopt;
@@ -412,12 +429,29 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     if (sheet_owns_drawing[i] && DrawingIsLinkable(workbook, workbook.sheet(i), i, &diagnostics)) {
       sheet_drawing_rids[i] = FreshRelId(taken_rel_ids);
     }
+    if (comment_parts[i].numeric_id != 0U) {
+      for (std::string* rid : {&comment_rids[i].vml, &comment_rids[i].comments, &comment_rids[i].threaded}) {
+        *rid = FreshRelId(taken_rel_ids);
+        taken_rel_ids.insert(*rid);
+      }
+      // A note without a uid takes the one Excel assigns, measured on the first two sheets; elsewhere it is left out.
+      const bool measured_uid = generated_note_uid_is_measured(i, !comment_parts[0].comments_path.empty());
+      std::uint32_t uid_lost = 0;
+      for (CellComment& note : legacy_comments_with_stubs(workbook.sheet(i), workbook.excel_profile().locale)) {
+        if (note.uid.empty() && !measured_uid) {
+          ++uid_lost;
+        } else {
+          written_notes[i].push_back(std::move(note));
+        }
+      }
+      ReportDeferred(&diagnostics.deferred_feature_count, "comments", uid_lost, i);
+    }
     std::uint32_t sparklines_lost = 0;
     auto sheet_body_or = emit_sheet(
         workbook.sheet(i), sst, sheet_names, sheet_ranges, sheet_name_table, sheet_hyperlink_rids[i],
         &downgraded_formula_count, metadata.ifmd, name_shapes(workbook, i), table_rel_ids, views, &sparklines_lost,
         sheet_drawing_rids[i], sheet_owns_drawing[i], metadata.rich.empty() ? nullptr : &metadata.rich.vm_by_sheet[i],
-        book_directory, absent_phonetic, sheet_style_plan);
+        book_directory, absent_phonetic, sheet_style_plan, comment_rids[i].vml);
     ReportDeferred(&diagnostics.deferred_feature_count, "sparklines", sparklines_lost, i);
     if (!sheet_body_or) {
       return std::move(sheet_body_or.error());
@@ -427,7 +461,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   const bool emit_sst_part = !sst.empty();
 
   auto plan_or = BuildEmissionPlan(workbook, emit_sst_part, metadata.generate_part, !metadata.rich.empty(),
-                                   sheet_ranges.links.size(), &diagnostics);
+                                   sheet_ranges.links.size(), std::move(comment_parts), &diagnostics);
   if (!plan_or) {
     return std::move(plan_or.error());
   }
@@ -435,6 +469,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   plan.sheet_tables = std::move(sheet_tables);
   plan.sheet_drawing_rids = std::move(sheet_drawing_rids);
   plan.sheet_owns_drawing = std::move(sheet_owns_drawing);
+  plan.sheet_comment_rids = std::move(comment_rids);
   plan.book_directory = std::string(book_directory);
   // Every stream above names dxfs by model index; the save keeps the dxfs
   // they name and renumbers every slot, unless a stream it cannot rewrite
@@ -487,7 +522,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   // in lockstep with this part.
   if (plan.has_generated_styles) {
     const std::vector<std::uint8_t> styles_bytes =
-        write_styles_bin(workbook.styles(), &dxf_plan, &style_plan, &font_plan);
+        write_styles_bin(workbook.styles(), &dxf_plan, &style_plan, &font_plan, &note_fonts.appended());
     RETURN_IF_ERROR(AddPartBytes(writer.get(), kStylesBinPath, styles_bytes));
   }
   // 4c. xl/metadata.bin for dynamic-array spill anchors and rich errors, with
@@ -511,12 +546,35 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     for (const XlsbTablePart& table : plan.sheet_tables[i]) {
       RETURN_IF_ERROR(AddPartBytes(writer.get(), table.path, table.bytes));
     }
-    const std::string sheet_rels =
-        BuildSheetRels(workbook.sheet(i), plan, plan.sheet_tables[i], sheet_hyperlink_rids[i],
-                       plan.sheet_owns_drawing[i], plan.sheet_drawing_rids[i], &diagnostics);
+    const std::string sheet_rels = BuildSheetRels(
+        workbook.sheet(i), plan, plan.sheet_tables[i], sheet_hyperlink_rids[i], plan.sheet_owns_drawing[i],
+        plan.sheet_drawing_rids[i], &diagnostics, &plan.comments_by_sheet[i], &plan.sheet_comment_rids[i]);
     if (!sheet_rels.empty()) {
       RETURN_IF_ERROR(AddPart(writer.get(), sheet_rels_part_path(i + 1U), sheet_rels));
     }
+    // The sheet's notes, their VML drawing (the source bytes while current) and its threads.
+    const io::EmissionPlan::CommentsPlan& notes = plan.comments_by_sheet[i];
+    if (notes.numeric_id == 0U) {
+      continue;
+    }
+    const Sheet& sheet = workbook.sheet(i);
+    if (!notes.comments_path.empty()) {
+      RETURN_IF_ERROR(AddPartBytes(writer.get(), notes.comments_path,
+                                   write_comments_bin(std::move(written_notes[i]), i, note_fonts)));
+    }
+    if (notes.vml_source != nullptr) {
+      RETURN_IF_ERROR(AddPartBytes(writer.get(), notes.vml_path, notes.vml_source->bytes));
+    } else {
+      RETURN_IF_ERROR(
+          AddPart(writer.get(), notes.vml_path,
+                  write_vml_drawing(sheet.comment_shapes(), notes.numeric_id, sheet.comment_vml_extra_xml())));
+    }
+    if (!notes.threaded_path.empty()) {
+      RETURN_IF_ERROR(AddPart(writer.get(), notes.threaded_path, write_threaded_comments(sheet.threaded_comments())));
+    }
+  }
+  if (plan.generated_persons) {
+    RETURN_IF_ERROR(AddPart(writer.get(), std::string(kPersonsPartPath), write_persons(workbook.persons())));
   }
   // 5b. xl/externalLinks/externalLink<N>.bin and its rels, one per link, in
   // the order `BrtSupBookSrc` lists them.

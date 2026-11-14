@@ -375,7 +375,7 @@ TEST(XlsbStylesFidelity, ARetainedStylesPartPassesThroughUnderAnyProfile) {
 
   // Under ja-JP a regenerated part would say 標準; the retained one says Normal.
   book.set_excel_profile(mac_365_ja_jp_profile());
-  auto kept = BuildEmissionPlan(book, false, false, false, 0U, nullptr);
+  auto kept = BuildEmissionPlan(book, false, false, false, 0U, {}, nullptr);
   ASSERT_TRUE(static_cast<bool>(kept)) << kept.error().message;
   EXPECT_FALSE(kept.value().has_generated_styles);
   auto second = write_xlsb(book);
