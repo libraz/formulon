@@ -6,6 +6,8 @@
 #include <filesystem>
 #include <functional>
 #include <map>
+#include <memory>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <string>
@@ -99,6 +101,23 @@ std::string FilterValue(const std::variant<std::monostate, int, double, std::str
   return out.str();
 }
 
+/// A typed pivot area on one line.
+std::string AreaLine(const pivot::PivotTableArea& area) {
+  std::string out = "area field " + Opt(area.field) + " type " + std::to_string(static_cast<int>(area.type)) +
+                    " flags " + std::to_string(area.data_only) + std::to_string(area.label_only) +
+                    std::to_string(area.grand_row) + std::to_string(area.grand_col) + std::to_string(area.outline) +
+                    std::to_string(area.collapsed_levels_are_subtotals) + " axis " +
+                    (area.axis ? std::to_string(static_cast<int>(*area.axis)) : std::string("-")) + " position " +
+                    Opt(area.field_position);
+  for (const pivot::PivotTableAreaReference& ref : area.references) {
+    out += " ref " + Opt(ref.field) + " selected " + std::to_string(ref.selected) + " x";
+    for (const std::uint32_t x : ref.items) {
+      out += " " + std::to_string(x);
+    }
+  }
+  return out;
+}
+
 /// The facts of xlsb_parity_pivot_table_test's PivotLines for one table, then the
 /// members the xlsx reader keeps verbatim.
 std::vector<std::string> TableLines(const pivot::PivotTable& table) {
@@ -128,6 +147,8 @@ std::vector<std::string> TableLines(const pivot::PivotTable& table) {
   lines.push_back(p + "captions error " + table.error_caption().value_or("-") + " missing " +
                   table.missing_caption().value_or("-"));
   lines.push_back(p + "alt text " + table.alt_text() + " | " + table.alt_text_summary());
+  lines.push_back(p + "hide values row " +
+                  (table.hide_values_row() ? std::to_string(*table.hide_values_row()) : std::string("-")));
   lines.push_back(p + "attrs" + Attrs(table.passthrough_attrs()));
   lines.push_back(p + "attrs in order" + Attrs(table.passthrough_attrs(), /*sorted=*/false));
   if (table.style_info()) {
@@ -199,6 +220,14 @@ std::vector<std::string> TableLines(const pivot::PivotTable& table) {
   for (const pivot::RetainedPivotFilter& retained : table.retained_filters()) {
     lines.push_back(p + "retained before " + std::to_string(retained.active_before) + " id " +
                     std::to_string(retained.id) + " " + retained.xml);
+  }
+  for (const pivot::PivotFormat& format : table.formats()) {
+    lines.push_back(p + "format action " + std::to_string(static_cast<int>(format.action)) + " dxf " +
+                    Opt(format.dxf_id) + " " + AreaLine(format.area));
+  }
+  for (const pivot::PivotChartFormat& format : table.chart_formats()) {
+    lines.push_back(p + "chart format " + std::to_string(format.chart) + "/" + std::to_string(format.format) +
+                    " series " + std::to_string(format.series) + " " + AreaLine(format.area));
   }
   lines.push_back(p + "row items " + table.raw_passthrough_after_row_fields());
   lines.push_back(p + "col items " + table.raw_col_items());
@@ -516,9 +545,10 @@ void ExpectReadRefused(const std::string& stem, const std::function<void(PivotTa
   EXPECT_EQ(read.error().code, code) << stem << ": " << read.error().message;
 }
 
-/// Writes `stem`'s table after `edit` changed the model; the write must be not writable.
-void ExpectWriteRefused(const std::string& stem, const std::function<void(pivot::PivotTable&)>& edit) {
-  auto read = pivot_table_from_xlsb(SpanOf(TablePart(stem)));
+/// Writes the table of `part` after `edit` changed the model; the write must be not writable.
+void ExpectPartWriteRefused(const std::vector<std::uint8_t>& part, const std::string& stem,
+                            const std::function<void(pivot::PivotTable&)>& edit) {
+  auto read = pivot_table_from_xlsb(SpanOf(part));
   ASSERT_TRUE(read.has_value()) << stem << ": " << read.error().message;
   pivot::PivotTable table = std::move(read.value());
   ASSERT_TRUE(pivot_table_to_xlsb(table, ExcelHost::kMac365, 0).has_value()) << stem;
@@ -527,6 +557,11 @@ void ExpectWriteRefused(const std::string& stem, const std::function<void(pivot:
   ASSERT_FALSE(written.has_value()) << stem;
   EXPECT_EQ(written.error().code, FormulonErrorCode::kIoFeatureNotWritable) << stem;
   EXPECT_NE(written.error().context.find("kind=pivot_table"), std::string::npos) << stem;
+}
+
+/// Writes `stem`'s table after `edit` changed the model; the write must be not writable.
+void ExpectWriteRefused(const std::string& stem, const std::function<void(pivot::PivotTable&)>& edit) {
+  ExpectPartWriteRefused(TablePart(stem), stem, edit);
 }
 
 constexpr FormulonErrorCode kCorrupt = FormulonErrorCode::kIoXlsbRecordCorrupt;
@@ -614,7 +649,18 @@ TEST(PivotTableBridge, WriteRefusesAPageFieldNameOrCaption) {
 }
 
 TEST(PivotTableBridge, WriteRefusesAFieldExtension) {
-  ExpectWriteRefused("B01_base", [](pivot::PivotTable& t) { t.mutable_fields()[0].fill_down_labels = true; });
+  ExpectWriteRefused("B01_base",
+                     [](pivot::PivotTable& t) { t.mutable_fields()[0].x14_attrs.emplace_back("ignore", "1"); });
+  // SXVD14 is measured only after the items of a field that has them.
+  ExpectWriteRefused("B01_base", [](pivot::PivotTable& t) {
+    for (pivot::PivotField& field : t.mutable_fields()) {
+      if (field.items.empty() && field.marker_items.empty()) {
+        field.fill_down_labels = true;
+        return;
+      }
+    }
+    ADD_FAILURE() << "no field without items";
+  });
   ExpectWriteRefused(
       "B01_base", [](pivot::PivotTable& t) { t.mutable_data_fields()[0].x14_attrs.emplace_back("sourceField", "1"); });
 }
@@ -631,6 +677,173 @@ TEST(PivotTableBridge, UnmeasuredHeaderBitIsRefusedOnRead) {
   auto read = pivot_table_from_xlsb(SpanOf(bytes.value()));
   ASSERT_FALSE(read.has_value());
   EXPECT_EQ(read.error().code, FormulonErrorCode::kIoXlsbUnknownRecord);
+}
+
+// ---------------------------------------------------------------------------
+// Formats, chart formats, x14 field and data-field records, hideValuesRow and
+// unknown table extensions: the M-pivot variants under
+// tests/fixtures/excel/xlsb_parity/pivot.
+// ---------------------------------------------------------------------------
+
+constexpr const char* kParityVariants[] = {"formats_areas", "formats_dxf_order", "chart_formats", "x14_fill_down",
+                                           "x14_show_as",   "hide_values_row",   "unknown_ext"};
+
+std::string ParityPath(const std::string& file) {
+  return std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_parity/pivot/" + file;
+}
+
+/// pivotTable1.bin of the parity fixture `file`.
+std::vector<std::uint8_t> ParityPart(const std::string& file) {
+  for (auto& part : pivot_twins::Parts(ParityPath(file), kTablePrefix)) {
+    if (part.first == "xl/pivotTables/pivotTable1.bin") {
+      return std::move(part.second);
+    }
+  }
+  ADD_FAILURE() << "no pivot table part in " << file;
+  return {};
+}
+
+/// The table of the parity variant's `.xlsx`, Excel's save beside its `.xlsb`.
+std::unique_ptr<pivot::PivotTable> ParityTwinTable(const std::string& variant, Workbook* wb) {
+  *wb = LoadXlsx(tc::ReadBytes(ParityPath(variant + ".xlsx")));
+  for (std::size_t s = 0; s < wb->sheet_count(); ++s) {
+    if (!wb->sheet(s).pivot_tables().empty()) {
+      return wb->sheet(s).pivot_tables().front()->clone();
+    }
+  }
+  ADD_FAILURE() << "no pivot table in " << variant << ".xlsx";
+  return nullptr;
+}
+
+TEST(PivotTableBridge, ParityVariantsReadThenWriteReproduceExcelsPart) {
+  for (const char* variant : kParityVariants) {
+    for (const std::string& file : {std::string(variant) + ".xlsb", std::string(variant) + ".2.xlsb"}) {
+      SCOPED_TRACE(file);
+      const std::vector<std::uint8_t> bytes = ParityPart(file);
+      auto read = pivot_table_from_xlsb(SpanOf(bytes));
+      ASSERT_TRUE(read.has_value()) << read.error().message;
+      auto ours = pivot_table_to_xlsb(read.value(), ExcelHost::kMac365, 0);
+      ASSERT_TRUE(ours.has_value()) << ours.error().message;
+      EXPECT_TRUE(RecordDiffs(ours.value(), bytes).empty()) << Join(RecordDiffs(ours.value(), bytes));
+    }
+  }
+}
+
+TEST(PivotTableBridge, ParityVariantsXlsxTwinWritesExcelsPart) {
+  for (const char* variant : kParityVariants) {
+    SCOPED_TRACE(variant);
+    const std::vector<std::uint8_t> excel = ParityPart(std::string(variant) + ".xlsb");
+    auto doc = decode_pivot_table(SpanOf(excel));
+    ASSERT_TRUE(doc.has_value()) << doc.error().message;
+    Workbook wb = Workbook::create_empty();
+    std::unique_ptr<pivot::PivotTable> table = ParityTwinTable(variant, &wb);
+    ASSERT_NE(table, nullptr);
+    // The cache id is numbered per save, and the two saves numbered it apart.
+    table->set_pivot_cache_id(doc.value().view.cache_id);
+    auto ours = pivot_table_to_xlsb(*table, ExcelHost::kMac365, 0);
+    ASSERT_TRUE(ours.has_value()) << ours.error().message;
+    EXPECT_TRUE(RecordDiffs(ours.value(), excel).empty()) << Join(RecordDiffs(ours.value(), excel));
+  }
+}
+
+TEST(PivotTableBridge, ParityVariantsReadMatchTheXlsxTwin) {
+  for (const char* variant : kParityVariants) {
+    SCOPED_TRACE(variant);
+    auto read = pivot_table_from_xlsb(SpanOf(ParityPart(std::string(variant) + ".xlsb")));
+    ASSERT_TRUE(read.has_value()) << read.error().message;
+    pivot::PivotTable table = std::move(read.value());
+    Workbook wb = Workbook::create_empty();
+    std::unique_ptr<pivot::PivotTable> twin = ParityTwinTable(variant, &wb);
+    ASSERT_NE(twin, nullptr);
+    if (const pivot::PivotCache* cache = wb.find_pivot_cache(twin->pivot_cache_id())) {
+      pivot::resolve_pivot_names(table, *cache);
+    }
+    std::vector<std::string> got = TableLines(table);
+    std::vector<std::string> want = TableLines(*twin);
+    // chart_formats.xlsx orders its root namespace declarations unlike the other
+    // saves, an order the xlsb part does not hold.
+    const auto drop_order = [](std::vector<std::string>& lines) {
+      lines.erase(std::remove_if(lines.begin(), lines.end(),
+                                 [](const std::string& l) { return l.find(": attrs in order") != std::string::npos; }),
+                  lines.end());
+    };
+    drop_order(got);
+    drop_order(want);
+    if (std::string(variant) == "unknown_ext") {
+      // Excel's xlsb save drops the unknown extension its xlsx save keeps.
+      const std::string& ours = table.raw_passthrough_xml();
+      const std::string kept = ours.substr(0, ours.size() - std::string("</extLst>").size());
+      EXPECT_EQ(twin->raw_passthrough_xml().compare(0, kept.size(), kept), 0) << twin->raw_passthrough_xml();
+      EXPECT_NE(twin->raw_passthrough_xml(), ours);
+      // The tail is the last line.
+      got.pop_back();
+      want.pop_back();
+    }
+    EXPECT_EQ(got, want) << LineDiff(got, want);
+  }
+}
+
+TEST(PivotTableBridge, HideValuesRowFollowsTheView14Block) {
+  auto off = pivot_table_from_xlsb(SpanOf(ParityPart("hide_values_row.xlsb")));
+  ASSERT_TRUE(off.has_value()) << off.error().message;
+  EXPECT_EQ(off.value().hide_values_row(), std::optional<bool>(false));
+  auto on = pivot_table_from_xlsb(SpanOf(ParityPart("unknown_ext.xlsb")));
+  ASSERT_TRUE(on.has_value()) << on.error().message;
+  EXPECT_EQ(on.value().hide_values_row(), std::optional<bool>(true));
+}
+
+TEST(PivotTableBridge, WriteRefusesUnmeasuredFormatStates) {
+  const std::vector<std::uint8_t> formats = ParityPart("formats_areas.xlsb");
+  const std::vector<std::uint8_t> charts = ParityPart("chart_formats.xlsb");
+  using Edit = std::function<void(pivot::PivotTable&)>;
+  const Edit format_edits[] = {
+      [](pivot::PivotTable& t) { t.mutable_formats()[0].area.outline = true; },
+      [](pivot::PivotTable& t) { t.mutable_formats()[0].area.field_position = 1U; },
+      [](pivot::PivotTable& t) { t.mutable_formats()[2].area.axis = pivot::PivotAxis::Col; },
+      [](pivot::PivotTable& t) { t.mutable_formats()[0].area.type = pivot::PivotAreaType::Origin; },
+      [](pivot::PivotTable& t) { t.mutable_formats()[0].action = pivot::PivotFormatAction::Drill; },
+      [](pivot::PivotTable& t) { t.mutable_formats()[0].dxf_id.reset(); },
+      [](pivot::PivotTable& t) { t.mutable_formats()[0].area.references[0].items.clear(); },
+      [](pivot::PivotTable& t) { t.mutable_formats()[0].area.references[0].field.reset(); },
+      [](pivot::PivotTable& t) { t.mutable_chart_formats().push_back(pivot::PivotChartFormat{}); },
+  };
+  for (const Edit& edit : format_edits) {
+    ExpectPartWriteRefused(formats, "formats_areas", edit);
+  }
+  ExpectPartWriteRefused(charts, "chart_formats",
+                         [](pivot::PivotTable& t) { t.mutable_chart_formats()[0].chart = 1U; });
+  ExpectPartWriteRefused(charts, "chart_formats",
+                         [](pivot::PivotTable& t) { t.mutable_chart_formats()[0].series = false; });
+  ExpectPartWriteRefused(ParityPart("x14_show_as.xlsb"), "x14_show_as", [](pivot::PivotTable& t) {
+    t.mutable_data_fields()[0].show_as = pivot::ShowValuesAs::PercentOfParentCol;
+  });
+}
+
+TEST(PivotTableBridge, TableExtensionsWriteAsExcelDropsThem) {
+  const std::vector<std::uint8_t> base = ParityPart("unknown_ext.xlsb");
+  auto read = pivot_table_from_xlsb(SpanOf(base));
+  ASSERT_TRUE(read.has_value()) << read.error().message;
+  pivot::PivotTable table = std::move(read.value());
+  const std::string tail = table.raw_passthrough_xml();
+  const std::string close = "</extLst>";
+  ASSERT_EQ(tail.substr(tail.size() - close.size()), close);
+  const auto with_ext = [&tail, &close](const std::string& uri) {
+    return tail.substr(0, tail.size() - close.size()) + "<ext uri=\"" + uri + "\" xmlns:p=\"urn:x\"><p:e/></ext>" +
+           close;
+  };
+  table.mutable_raw_passthrough_xml() = with_ext("{0F0E0D0C-0B0A-4909-8807-060504030201}");
+  auto dropped = pivot_table_to_xlsb(table, ExcelHost::kMac365, 0);
+  ASSERT_TRUE(dropped.has_value()) << dropped.error().message;
+  EXPECT_TRUE(RecordDiffs(dropped.value(), base).empty()) << Join(RecordDiffs(dropped.value(), base));
+
+  // An Office-defined extension with no records here, a hideValuesRow its extension
+  // contradicts, and an extLst without Excel's SXView16 extension.
+  ExpectPartWriteRefused(base, "unknown_ext", [&with_ext](pivot::PivotTable& t) {
+    t.mutable_raw_passthrough_xml() = with_ext("{E67621CE-5B39-4880-91FE-76760E9C1902}");
+  });
+  ExpectPartWriteRefused(base, "unknown_ext", [](pivot::PivotTable& t) { t.set_hide_values_row(false); });
+  ExpectPartWriteRefused(base, "unknown_ext",
+                         [](pivot::PivotTable& t) { t.mutable_raw_passthrough_xml() = "<extLst/>"; });
 }
 
 }  // namespace

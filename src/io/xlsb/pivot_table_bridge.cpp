@@ -102,20 +102,30 @@ constexpr std::uint16_t kStyleColHeaders = 0x0020;
 constexpr std::uint32_t kAreaFilterAlways = 0x000001U;
 
 /// The SXView14 / SXView16 blocks of every Excel-saved part, and the table
-/// extLst the xlsx twin carries for them.
+/// extLst `<ext>` elements the xlsx twin carries for them. Excel writes SXView14
+/// only for `hideValuesRow="1"`, and omits both it and its `<ext>` for `0`.
 constexpr std::array<std::uint8_t, 4> kView14Frt = {0x02, 0x0E, 0x00, 0x00};
 constexpr std::array<std::uint8_t, 21> kView14Payload = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
                                                          0x00, 0x00, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
                                                          0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 constexpr std::array<std::uint8_t, 4> kView16Frt = {0x03, 0x11, 0x00, 0x00};
 constexpr std::array<std::uint8_t, 3> kView16Payload = {0x01, 0x01, 0x00};
-constexpr std::string_view kTableExtLst =
-    "<extLst><ext uri=\"{962EF5D1-5CA2-4c93-8EF4-DBF5C05439D2}\" "
+constexpr std::string_view kView14Uri = "{962EF5D1-5CA2-4c93-8EF4-DBF5C05439D2}";
+constexpr std::string_view kView16Uri = "{747A6164-185A-40DC-8AA5-F01512510D54}";
+constexpr std::string_view kView14Ext =
+    "<ext uri=\"{962EF5D1-5CA2-4c93-8EF4-DBF5C05439D2}\" "
     "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\"><x14:pivotTableDefinition "
-    "hideValuesRow=\"1\" xmlns:xm=\"http://schemas.microsoft.com/office/excel/2006/main\"/></ext>"
+    "hideValuesRow=\"1\" xmlns:xm=\"http://schemas.microsoft.com/office/excel/2006/main\"/></ext>";
+constexpr std::string_view kView16Ext =
     "<ext uri=\"{747A6164-185A-40DC-8AA5-F01512510D54}\" "
     "xmlns:xpdl=\"http://schemas.microsoft.com/office/spreadsheetml/2016/pivotdefaultlayout\">"
-    "<xpdl:pivotTableDefinition16/></ext></extLst>";
+    "<xpdl:pivotTableDefinition16/></ext>";
+/// `pivotTableDefinition` extension URIs Office defines beyond the two above
+/// ([MS-XLSX] x15 pivotTableData and pivotTableUISettings). Their records are
+/// unmapped, so a table carrying one is refused; any other URI is one Excel's
+/// xlsb save drops.
+constexpr std::string_view kOfficeTableExtUris[] = {"{E67621CE-5B39-4880-91FE-76760E9C1902}",
+                                                    "{44433962-1CF7-4059-B4EE-95C3D5FFCF73}"};
 
 constexpr std::string_view kXrPrefix = "xr";
 
@@ -221,6 +231,18 @@ constexpr std::string_view kPivotFilterTypes[] = {
 constexpr std::string_view kFilterStringAttrs[] = {"name", "description", "stringValue1", "stringValue2"};
 constexpr std::uint32_t kNoFilterIndex = 0xFFFFFFFFU;
 
+/// BrtBeginPRule `type` codes and the model area types they spell.
+struct AreaTypeCode {
+  std::uint8_t code;
+  pivot::PivotAreaType type;
+};
+constexpr AreaTypeCode kAreaTypes[] = {
+    {pivot_area::kAreaTypeNormal, pivot::PivotAreaType::Normal},
+    {pivot_area::kAreaTypeData, pivot::PivotAreaType::Data},
+    {pivot_area::kAreaTypeAll, pivot::PivotAreaType::All},
+    {pivot_area::kAreaTypeButton, pivot::PivotAreaType::Button},
+};
+
 Error Corrupt(const std::string& message) {
   return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb pivot table: " + message, kContext);
 }
@@ -287,16 +309,16 @@ Expected<void, Error> CheckView(const PivotTableDoc& doc) {
   if (v.flags1 != kViewFlags1 || v.flags2 != kViewFlags2 || v.flags4 != kViewFlags4 || v.flags7 != kViewFlags7 ||
       (v.flags5 & ~kViewFlags5Named) != kViewFlags5Fixed || (v.flags6 & ~kViewFlags6Named) != kViewFlags6Fixed ||
       (v.flags8 & ~kViewFlags8Named) != 0U || (v.flags9 & ~kSxViewSingleFieldFilter) != 0U || v.flags10 != 0U ||
-      v.flags11 != 0U || v.flags13 != 0U || v.reserved20 != kViewReserved20 || v.reserved24 != 0U ||
-      !paired(kViewCompactPair) || !paired(kViewOutlinePair)) {
+      v.flags11 != 0U || v.flags13 != 0U || v.reserved20 != kViewReserved20 || !paired(kViewCompactPair) ||
+      !paired(kViewOutlinePair)) {
     return Unmeasured("view header bits");
   }
   if (v.data_position != kNoDataPosition || (v.data_axis != kDataOnRows && v.data_axis != kDataOnCols)) {
     return Unmeasured("data axis or position");
   }
-  if (!doc.view14 || !SameBytes(doc.view14->frt_payload, kView14Frt) ||
-      !SameBytes(doc.view14->payload, kView14Payload) || !SameBytes(doc.view16.frt_payload, kView16Frt) ||
-      !SameBytes(doc.view16.payload, kView16Payload)) {
+  if ((doc.view14 &&
+       (!SameBytes(doc.view14->frt_payload, kView14Frt) || !SameBytes(doc.view14->payload, kView14Payload))) ||
+      !SameBytes(doc.view16.frt_payload, kView16Frt) || !SameBytes(doc.view16.payload, kView16Payload)) {
     return Unmeasured("table future records");
   }
   return Expected<void, Error>::Ok();
@@ -439,6 +461,69 @@ Expected<void, Error> ReadAutoSortScope(const RawRecords& block, std::string& ou
   return Expected<void, Error>::Ok();
 }
 
+/// A format's pivot area as the xlsx reader types Excel's `<pivotArea>`. The
+/// codec has already refused every shape no Excel part shows.
+pivot::PivotTableArea ReadTableArea(const pivot_area::PivotArea& in) {
+  pivot::PivotTableArea area;
+  if (in.field != pivot_area::kNoField) {
+    area.field = in.field;
+  }
+  for (const AreaTypeCode& entry : kAreaTypes) {
+    if (entry.code == in.type) {
+      area.type = entry.type;
+    }
+  }
+  const auto has = [&in](std::uint32_t bit) { return (in.flags & bit) != 0U; };
+  area.data_only = has(pivot_area::kAreaDataOnly);
+  area.label_only = has(pivot_area::kAreaLabelOnly);
+  area.grand_row = has(pivot_area::kAreaGrandRow);
+  area.grand_col = has(pivot_area::kAreaGrandCol);
+  area.collapsed_levels_are_subtotals = has(pivot_area::kAreaCollapsedLevelsAreSubtotals);
+  if ((in.flags & pivot_area::kAreaAxisMask) == pivot_area::kAreaAxisRow) {
+    area.axis = pivot::PivotAxis::Row;
+  }
+  // Every Excel-saved area carries outline="0" fieldPosition="0" with no bit for either.
+  area.outline = false;
+  area.field_position = 0U;
+  if (in.filters) {
+    for (const pivot_area::PivotAreaFilter& filter : *in.filters) {
+      pivot::PivotTableAreaReference ref;
+      ref.field = filter.field;
+      ref.items = filter.items;
+      ref.selected = (filter.flags & pivot_area::kFilterSelected) != 0U;
+      area.references.push_back(std::move(ref));
+    }
+  }
+  return area;
+}
+
+void ReadFormats(const PivotTableDoc& doc, pivot::PivotTable& table) {
+  for (const SxFormat& in : doc.formats) {
+    pivot::PivotFormat format;
+    format.dxf_id = in.dxf_id;
+    format.area = ReadTableArea(in.area);
+    table.mutable_formats().push_back(std::move(format));
+  }
+  for (const SxChartFormat& in : doc.chart_formats) {
+    pivot::PivotChartFormat format;
+    format.format = in.format;
+    format.series = true;
+    format.area = ReadTableArea(in.area);
+    table.mutable_chart_formats().push_back(std::move(format));
+  }
+}
+
+/// The table extLst the xlsx reader keeps for Excel's part.
+std::string TableExtLst(bool hide_values_row) {
+  std::string out("<extLst>");
+  if (hide_values_row) {
+    out.append(kView14Ext);
+  }
+  out.append(kView16Ext);
+  out.append("</extLst>");
+  return out;
+}
+
 Expected<pivot::PivotField, Error> ReadField(const SxField& in) {
   constexpr std::uint8_t kAxes = kSxFieldAxisRow | kSxFieldAxisCol | kSxFieldAxisPage;
   const std::uint8_t axis = static_cast<std::uint8_t>(in.axis & kAxes);
@@ -490,6 +575,7 @@ Expected<pivot::PivotField, Error> ReadField(const SxField& in) {
     field.passthrough_attrs.emplace_back("measureFilter", "1");
   }
   RETURN_IF_ERROR(ReadAutoSortScope(in.auto_sort_scope, field.raw_children_xml));
+  field.fill_down_labels = in.fill_down_labels;
   return field;
 }
 
@@ -574,7 +660,8 @@ Expected<void, Error> ReadDataFields(const PivotTableDoc& doc, pivot::PivotTable
     if (in.num_fmt != 0U) {
       entry.number_format = std::to_string(in.num_fmt);
     }
-    entry.show_as = kShowDataAs[in.show_data_as];
+    // The codec admits SXDI14 only as `percentOfParentRow` beside a plain SXDI display mode.
+    entry.show_as = in.pivot_show_as ? pivot::ShowValuesAs::PercentOfParentRow : kShowDataAs[in.show_data_as];
     entry.show_as_base_field = in.base_field;
     entry.show_as_base_item = in.base_item;
     table.mutable_data_fields().push_back(std::move(entry));
@@ -792,6 +879,11 @@ bool WriteRootAttrs(const pivot::PivotTable& table, PivotTableDoc& doc, FormOver
       ok = ParseFlag(value, form.outline);
     } else if (name == "outlineData") {
       ok = ParseFlag(value, form.outline_data);
+    } else if (name == "chartFormat") {
+      // Excel omits `chartFormat` at 0.
+      const std::optional<std::uint32_t> id = ParseUnsigned(value, 0xFFFFFFFFU);
+      ok = doc.view.reserved24 == 0U && id.has_value() && *id != 0U;
+      doc.view.reserved24 = id.value_or(0U);
     } else {
       // `dataOnRows` restates the Values position; no Excel part carries a `dataPosition`.
       ok = name == "dataOnRows" && value == Flag(table.row_values_position().has_value());
@@ -999,11 +1091,104 @@ bool WriteAutoSortScope(std::string_view xml, RawRecords& out) {
   return true;
 }
 
+/// A typed pivot area in the one shape Excel's parts show; false for any other.
+bool WriteTableArea(const pivot::PivotTableArea& in, pivot_area::PivotArea& out) {
+  if (in.outline || in.field_position != std::optional<std::uint32_t>(0U) ||
+      (in.axis && *in.axis != pivot::PivotAxis::Row)) {
+    return false;
+  }
+  const auto* type = std::find_if(std::begin(kAreaTypes), std::end(kAreaTypes),
+                                  [&in](const AreaTypeCode& entry) { return entry.type == in.type; });
+  if (type == std::end(kAreaTypes)) {
+    return false;
+  }
+  out.field = in.field.value_or(pivot_area::kNoField);
+  out.type = type->code;
+  out.flags = (in.axis ? pivot_area::kAreaAxisRow : 0U) | (in.data_only ? pivot_area::kAreaDataOnly : 0U) |
+              (in.label_only ? pivot_area::kAreaLabelOnly : 0U) | (in.grand_row ? pivot_area::kAreaGrandRow : 0U) |
+              (in.grand_col ? pivot_area::kAreaGrandCol : 0U) |
+              (in.collapsed_levels_are_subtotals ? pivot_area::kAreaCollapsedLevelsAreSubtotals : 0U);
+  if (in.references.empty()) {
+    out.filters.reset();
+    return true;
+  }
+  std::vector<pivot_area::PivotAreaFilter> filters;
+  for (const pivot::PivotTableAreaReference& ref : in.references) {
+    if (!ref.field || ref.items.empty()) {
+      return false;
+    }
+    pivot_area::PivotAreaFilter filter;
+    filter.field = *ref.field;
+    filter.flags = kAreaFilterAlways | (ref.selected ? pivot_area::kFilterSelected : 0U);
+    filter.items = ref.items;
+    filters.push_back(std::move(filter));
+  }
+  out.filters = std::move(filters);
+  return true;
+}
+
+/// The typed formats and chart formats; a table holding both is unmeasured.
+bool WriteFormats(const pivot::PivotTable& table, PivotTableDoc& doc) {
+  if (!table.formats().empty() && !table.chart_formats().empty()) {
+    return false;
+  }
+  for (const pivot::PivotFormat& in : table.formats()) {
+    SxFormat out;
+    if (in.action != pivot::PivotFormatAction::Formatting || !in.dxf_id || !WriteTableArea(in.area, out.area)) {
+      return false;
+    }
+    out.dxf_id = *in.dxf_id;
+    doc.formats.push_back(std::move(out));
+  }
+  for (const pivot::PivotChartFormat& in : table.chart_formats()) {
+    SxChartFormat out;
+    if (in.chart != 0U || !in.series || !WriteTableArea(in.area, out.area)) {
+      return false;
+    }
+    out.format = in.format;
+    doc.chart_formats.push_back(std::move(out));
+  }
+  return true;
+}
+
+/// Reads the table extLst into whether SXView14 is written: Excel's two
+/// `<ext>` elements as the reader keeps them, the SXView14 one optional, plus
+/// any extension of a URI Office does not define, which Excel's xlsb save drops.
+bool WriteTableExtLst(std::string_view xml, bool& view14) {
+  pugi::xml_document doc;
+  const pugi::xml_node ext_lst = LoadOne(doc, xml, "extLst");
+  const std::optional<std::vector<pugi::xml_node>> exts = ext_lst ? Elements(ext_lst) : std::nullopt;
+  if (!exts || ext_lst.first_attribute()) {
+    return false;
+  }
+  view14 = false;
+  bool view16 = false;
+  for (const pugi::xml_node& ext : *exts) {
+    const std::string_view uri = ext.attribute("uri").as_string();
+    if (std::string_view(ext.name()) != "ext") {
+      return false;
+    }
+    if (uri == kView14Uri || uri == kView16Uri) {
+      // The SXView14 extension precedes the SXView16 one, each at most once.
+      const bool is14 = uri == kView14Uri;
+      if (view16 || (is14 && view14) || raw_xml(ext) != (is14 ? kView14Ext : kView16Ext)) {
+        return false;
+      }
+      (is14 ? view14 : view16) = true;
+      continue;
+    }
+    if (uri.empty() || std::find(std::begin(kOfficeTableExtUris), std::end(kOfficeTableExtUris), uri) !=
+                           std::end(kOfficeTableExtUris)) {
+      return false;
+    }
+  }
+  return view16;
+}
+
 bool WriteField(const pivot::PivotTable& table, std::size_t index, ExcelHost host, SxField& out) {
   const pivot::PivotField& field = table.fields()[index];
-  // The x14 field extension has no record here.
-  if (field.fill_down_labels || !field.x14_attrs.empty() || !field.x14_children_xml.empty() ||
-      !field.raw_ext_xml.empty()) {
+  // Of the x14 field extension only `fillDownLabels` has a record.
+  if (!field.x14_attrs.empty() || !field.x14_children_xml.empty() || !field.raw_ext_xml.empty()) {
     return false;
   }
   bool used_as_data = false;
@@ -1082,7 +1267,15 @@ bool WriteField(const pivot::PivotTable& table, std::size_t index, ExcelHost hos
   if (!field.custom_name.empty()) {
     out.display_name = field.custom_name;
   }
-  return WriteItems(field, out.items) && WriteAutoSortScope(field.raw_children_xml, out.auto_sort_scope);
+  if (!WriteItems(field, out.items) || !WriteAutoSortScope(field.raw_children_xml, out.auto_sort_scope)) {
+    return false;
+  }
+  // SXVD14 is measured after the items of a field without a sort scope.
+  if (field.fill_down_labels && (!out.items || !out.auto_sort_scope.empty())) {
+    return false;
+  }
+  out.fill_down_labels = field.fill_down_labels;
+  return true;
 }
 
 /// The axis list of `order` with the Values pseudo-field at `values_position`, as the xlsx writer spells it.
@@ -1172,8 +1365,12 @@ bool WritePages(const pivot::PivotTable& table, PivotTableDoc& doc) {
 bool WriteDataFields(const pivot::PivotTable& table, PivotTableDoc& doc) {
   for (const pivot::PivotDataField& in : table.data_fields()) {
     SxDataField out;
+    // `percentOfParentRow` is the one x14 display mode measured: SXDI14 beside a plain SXDI.
+    const bool parent_row = in.show_as == pivot::ShowValuesAs::PercentOfParentRow;
     const pivot::ShowValuesAs show_as =
-        in.show_as == pivot::ShowValuesAs::RunningTotalInCol ? pivot::ShowValuesAs::RunningTotalInRow : in.show_as;
+        parent_row ? pivot::ShowValuesAs::Normal
+                   : (in.show_as == pivot::ShowValuesAs::RunningTotalInCol ? pivot::ShowValuesAs::RunningTotalInRow
+                                                                           : in.show_as);
     const auto* code = std::find(std::begin(kShowDataAs), std::end(kShowDataAs), show_as);
     if (in.field_index >= table.fields().size() || in.name.empty() || code == std::end(kShowDataAs) ||
         !NumFmt(in.number_format, out.num_fmt) || !in.raw_ext_xml.empty() || !in.x14_attrs.empty() ||
@@ -1195,6 +1392,9 @@ bool WriteDataFields(const pivot::PivotTable& table, PivotTableDoc& doc) {
     out.base_field = in.show_as_base_field.value_or(0U);
     out.base_item = in.show_as_base_item.value_or(0U);
     out.name = in.name;
+    if (parent_row) {
+      out.pivot_show_as = kSxDataShowAsPercentOfParentRow;
+    }
     doc.data_fields.push_back(std::move(out));
   }
   return true;
@@ -1336,9 +1536,11 @@ bool WriteTable(const pivot::PivotTable& table, ExcelHost host, PivotTableDoc& d
           1) {
     return false;
   }
-  // `<formats>` and its siblings have no records here; the table extLst is the one SXView14 / SXView16 hold.
-  if (!table.formats().empty() || !table.chart_formats().empty() ||
-      !table.raw_passthrough_before_style_info().empty() || table.raw_passthrough_xml() != kTableExtLst) {
+  // Untyped `<formats>` and its siblings have no records here; the table
+  // extLst holds SXView14 / SXView16 and extensions Excel's xlsb save drops.
+  bool view14 = false;
+  if (!table.raw_passthrough_before_style_info().empty() || !WriteTableExtLst(table.raw_passthrough_xml(), view14) ||
+      table.hide_values_row().value_or(view14) != view14 || !WriteFormats(table, doc)) {
     return false;
   }
   FormOverride form;
@@ -1414,7 +1616,9 @@ bool WriteTable(const pivot::PivotTable& table, ExcelHost host, PivotTableDoc& d
   if (!style.name.empty()) {
     doc.style.name = style.name;
   }
-  doc.view14 = SxFrtBlock{{kView14Frt.begin(), kView14Frt.end()}, {kView14Payload.begin(), kView14Payload.end()}};
+  if (view14) {
+    doc.view14 = SxFrtBlock{{kView14Frt.begin(), kView14Frt.end()}, {kView14Payload.begin(), kView14Payload.end()}};
+  }
   doc.view16.frt_payload.assign(kView16Frt.begin(), kView16Frt.end());
   doc.view16.payload.assign(kView16Payload.begin(), kView16Payload.end());
   return true;
@@ -1471,6 +1675,9 @@ Expected<pivot::PivotTable, Error> pivot_table_from_xlsb(ByteSpan part) {
     return Unmeasured("row form or data axis disagreeing with the row fields");
   }
   CaptureForm(root_compact, root_outline, table.layout(), /*root=*/true, table.mutable_passthrough_attrs());
+  if (view.reserved24 != 0U) {
+    table.mutable_passthrough_attrs().emplace_back("chartFormat", std::to_string(view.reserved24));
+  }
   for (std::size_t i = 0; i < field_count; ++i) {
     CaptureForm((doc.fields[i].name_flags & kSxFieldCompact) != 0U, (doc.fields[i].flags & kSxFieldOutline) != 0U,
                 table.layout(), /*root=*/false, table.mutable_fields()[i].passthrough_attrs);
@@ -1496,13 +1703,15 @@ Expected<pivot::PivotTable, Error> pivot_table_from_xlsb(ByteSpan part) {
   RETURN_IF_ERROR(ReadDataFields(doc, table));
   RETURN_IF_ERROR(CheckAxes(doc, table));
   RETURN_IF_ERROR(ReadStyle(doc.style, table));
+  ReadFormats(doc, table);
   if (!doc.filters.empty()) {
     ASSIGN_OR_RETURN(const std::string filters, FiltersXml(doc.filters, field_count, doc.data_fields.size()));
     if (!read_pivot_filters_xml(filters, &table)) {
       return Corrupt("filters do not spell as OOXML");
     }
   }
-  table.mutable_raw_passthrough_xml() = std::string(kTableExtLst);
+  table.set_hide_values_row(doc.view14.has_value());
+  table.mutable_raw_passthrough_xml() = TableExtLst(doc.view14.has_value());
   return table;
 }
 

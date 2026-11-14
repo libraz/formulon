@@ -8,6 +8,7 @@
 #include "io/xlsb/dxf_props.h"
 #include "io/xlsb/dxf_record_slots.h"
 #include "io/xlsb/frt_records.h"
+#include "io/xlsb/pivot_records_common.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_ids.h"
 #include "io/xlsb/styles_writer.h"
@@ -28,6 +29,8 @@ DxfUseKind KindOf(std::uint16_t type) {
       return DxfUseKind::kSortCondition;
     case kBrtTableStyleElement:
       return DxfUseKind::kTableStyleElement;
+    case pivot_records::kBeginSXFormat:
+      return DxfUseKind::kPivotFormat;
     default:
       return DxfUseKind::kConditionalFormat;
   }
@@ -83,7 +86,7 @@ Expected<void, Error> MapSlots(const XlsbDxfStream& stream, const DxfSavePlan& p
 
 DxfUseSet collect_xlsb_dxf_uses(const Workbook& wb, const XlsbEmission& emission) {
   DxfUseSet out;
-  // No reader decodes a pivot table part's dxf records.
+  // A pivot table part kept verbatim is not among the streams, so its dxf slots cannot be renumbered.
   out.blocked = emission.retained_pivot;
   for (const XlsbDxfStream& stream : emission.streams) {
     if (!AddUses(SlotRange(stream), stream.part, out)) {

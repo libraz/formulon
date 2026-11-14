@@ -3,9 +3,11 @@
 // encoded with model dxf indices first; the collector reads the dxf slots of
 // exactly those bytes, so a dxf is used iff some written record names it, and
 // the plan built from the uses is then applied to the same bytes. A written
-// stream holding a dxf-bearing record no reader decodes (a retained pivot
-// table part), a slot that cannot be located, or a raw styles part whose dxf
-// list is not the model's keeps the dxf table as it is.
+// stream holding a dxf-bearing record no reader decodes, a pivot table part
+// kept verbatim rather than written as a stream, a slot that cannot be
+// located, or a raw styles part whose dxf list is not the model's keeps the
+// dxf table as it is. A pivot table part the bridge writes is a stream
+// (`DxfPartType::kPivot`); its BrtBeginSXFormat slots are pivot-format uses.
 
 #ifndef FORMULON_IO_XLSB_DXF_USES_XLSB_H_
 #define FORMULON_IO_XLSB_DXF_USES_XLSB_H_
@@ -34,7 +36,7 @@ struct XlsbEmission {
   std::vector<XlsbDxfStream> streams;
   /// The source styles.bin written in place of a generated one; null when generated.
   std::vector<std::uint8_t>* raw_styles = nullptr;
-  /// A retained pivot table part is written.
+  /// A pivot table part is written verbatim, outside `streams`.
   bool retained_pivot = false;
 };
 

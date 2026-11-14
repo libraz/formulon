@@ -9,6 +9,7 @@
 #include "io/xlsb/dxf_props.h"
 #include "io/xlsb/frt_formula.h"
 #include "io/xlsb/frt_records.h"
+#include "io/xlsb/pivot_records_common.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_ids.h"
 
@@ -118,6 +119,11 @@ bool BeginSortCond(ByteSpan payload, SlotOffsets* out) {
   return Fixed(payload, {18}, out);
 }
 
+/// A pivot format's action bytes, then its dxfId.
+bool BeginSXFormat(ByteSpan payload, SlotOffsets* out) {
+  return Fixed(payload, {2}, out);
+}
+
 struct SlotRow {
   std::uint16_t type;
   Locator locate;
@@ -131,6 +137,7 @@ constexpr SlotRow kSlotRows[] = {
     {kBrtColorFilter, ColorFilter},
     {kBrtBeginSortCond, BeginSortCond},
     {kBrtTableStyleElement, TableStyleElement},
+    {pivot_records::kBeginSXFormat, BeginSXFormat},
 };
 
 // Dxf-bearing records without a decoder.
