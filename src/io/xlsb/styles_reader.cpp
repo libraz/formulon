@@ -536,6 +536,7 @@ Expected<void, Error> ApplyDxfProp(std::uint16_t type, ByteSpan d, DifferentialF
       ASSIGN_OR_RETURN(const std::uint8_t pattern, read_u8(d));
       dxf.has_fill = true;
       fill.pattern = pattern <= 18U ? pattern : std::uint8_t{0};
+      fill.pattern_stated = true;
       break;
     }
     case kDxfPropFillFg:
@@ -676,8 +677,10 @@ Expected<void, Error> DecodeDxf(ByteSpan payload, StylesTable& table) {
   static_cast<void>(flags);
   static_cast<void>(reserved);
   DifferentialFormat dxf;
-  // A differential font without `<sz>` leaves the size unchanged.
+  // A differential font without `<sz>` leaves the size unchanged, and a fill
+  // without the pattern property leaves the pattern out.
   dxf.font.has_size = false;
+  dxf.fill.pattern_stated = false;
   for (std::uint16_t i = 0; i < count; ++i) {
     ASSIGN_OR_RETURN(const std::uint16_t type, read_u16(p));
     ASSIGN_OR_RETURN(const std::uint16_t size, read_u16(p));

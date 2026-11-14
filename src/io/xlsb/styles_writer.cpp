@@ -265,7 +265,10 @@ void EmitDxf(std::vector<std::uint8_t>& out, const DifferentialFormat& dxf) {
     }
   } else if (dxf.has_fill) {
     const FillRecord& fill = dxf.fill;
-    AppendProp(props, count, kDxfPropFillPattern, {static_cast<std::uint8_t>(fill.pattern <= 18U ? fill.pattern : 0U)});
+    if (fill.pattern_stated) {
+      AppendProp(props, count, kDxfPropFillPattern,
+                 {static_cast<std::uint8_t>(fill.pattern <= 18U ? fill.pattern : 0U)});
+    }
     if (fill.fg.kind != ColorSpec::Kind::kNone) {
       AppendProp(props, count, kDxfPropFillFg, ColorProp(fill.fg_argb, fill.fg));
     }

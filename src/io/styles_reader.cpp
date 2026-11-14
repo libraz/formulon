@@ -208,6 +208,7 @@ Expected<FillRecord, Error> ParseFillNode(const pugi::xml_node& fill) {
   pugi::xml_node pattern = fill.child("patternFill");
   if (pattern) {
     rec.pattern = ParseFillPattern(pattern.attribute("patternType").value());
+    rec.pattern_stated = static_cast<bool>(pattern.attribute("patternType"));
     rec.fg_argb = ParseColorArgb(pattern.child("fgColor"), 0U);
     rec.bg_argb = ParseColorArgb(pattern.child("bgColor"), 0U);
     rec.fg = read_color_spec(pattern.child("fgColor"));

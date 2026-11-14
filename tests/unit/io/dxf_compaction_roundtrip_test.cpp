@@ -23,6 +23,8 @@
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
 #include "io/styles_writer.h"
+#include "io/xlsb/reader.h"
+#include "io/xlsb/writer.h"
 #include "miniz.h"
 #include "pivot/pivot_table.h"
 #include "sheet.h"
@@ -539,6 +541,62 @@ TEST(DxfCompactionXlsx, UnreadableRawFragmentSavesTheTableAsHeld) {
   const std::string& sheet = parts.at("xl/worksheets/sheet1.xml");
   EXPECT_NE(sheet.find("dxfId=\"1\""), std::string::npos) << sheet;
   EXPECT_NE(sheet.find(unreadable), std::string::npos);
+}
+
+// Excel writes a dxf fill that sets only colours without a patternType; the
+// saved dxf keeps it that way, and a stated pattern stays stated.
+TEST(DxfFillPattern, AColourOnlyFillKeepsItsPatternUnstated) {
+  const std::string path = std::string(FORMULON_FIXTURES_DIR) + "/excel/tsdxf/d1.xlsx";
+  std::vector<std::uint8_t> bytes;
+  if (FILE* file = std::fopen(path.c_str(), "rb")) {
+    std::uint8_t buf[4096];
+    for (std::size_t n; (n = std::fread(buf, 1, sizeof(buf), file)) > 0;) {
+      bytes.insert(bytes.end(), buf, buf + n);
+    }
+    std::fclose(file);
+  }
+  ASSERT_FALSE(bytes.empty()) << path;
+  const std::string colour_only = "<fill><patternFill><bgColor rgb=\"FFFFFF00\"/></patternFill></fill>";
+  const Workbook loaded = Reload(bytes);
+  ASSERT_TRUE(HasBody(loaded, colour_only));
+  const std::string styles = Parts(Save(loaded))["xl/styles.xml"];
+  EXPECT_NE(styles.find(colour_only), std::string::npos) << styles;
+
+  DifferentialFormat solid;
+  solid.has_fill = true;
+  solid.fill.pattern = 1U;
+  EXPECT_NE(Body(solid).find("patternType=\"solid\""), std::string::npos) << Body(solid);
+}
+
+// Excel's .xlsb of the same book leaves the fill-pattern property out of that dxf; a load and save keep it out.
+TEST(DxfFillPattern, AnXlsbColourOnlyFillKeepsItsPatternUnstated) {
+  const std::string path = std::string(FORMULON_FIXTURES_DIR) + "/excel/tsdxf/d1_x1.xlsb";
+  std::vector<std::uint8_t> bytes;
+  if (FILE* file = std::fopen(path.c_str(), "rb")) {
+    std::uint8_t buf[4096];
+    for (std::size_t n; (n = std::fread(buf, 1, sizeof(buf), file)) > 0;) {
+      bytes.insert(bytes.end(), buf, buf + n);
+    }
+    std::fclose(file);
+  }
+  ASSERT_FALSE(bytes.empty()) << path;
+  const auto unstated = [](const Workbook& wb) {
+    for (const DifferentialFormat& dxf : wb.styles().dxfs) {
+      if (dxf.has_fill && !dxf.fill.pattern_stated) {
+        return true;
+      }
+    }
+    return false;
+  };
+  auto loaded = xlsb::read_xlsb(ByteSpan{bytes.data(), bytes.size()});
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  ASSERT_TRUE(unstated(loaded.value().workbook));
+  auto saved = xlsb::write_xlsb(loaded.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  auto back = xlsb::read_xlsb(ByteSpan{saved.value().data(), saved.value().size()});
+  ASSERT_TRUE(static_cast<bool>(back)) << back.error().message;
+  EXPECT_TRUE(unstated(back.value().workbook));
+  EXPECT_TRUE(HasBody(back.value().workbook, "<fill><patternFill><bgColor rgb=\"FFFFFF00\"/></patternFill></fill>"));
 }
 
 }  // namespace

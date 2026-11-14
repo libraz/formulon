@@ -518,6 +518,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A conditional-format or table-style dxf whose fill sets only colours keeps
+  its `<patternFill>` without a `patternType` through an `.xlsx` save, and its
+  `.xlsb` dxf without the fill-pattern property, as Excel writes both. Such a
+  fill was saved with an explicit pattern before.
+
 - `.xlsb` AutoFilters keep a value filter under any calendar type, not only
   `japan`, and a blank (`equal ""`) custom criterion through a load and a
   save. A lone blank criterion is saved as the blank value filter, as Excel

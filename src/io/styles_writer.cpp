@@ -634,7 +634,9 @@ void AppendFillFragment(std::string& out, const FillRecord& fill) {
     return;
   }
   out.append("<fill><patternFill");
-  append_xml_attr(out, "patternType", FillPatternName(fill.pattern));
+  if (fill.pattern_stated) {
+    append_xml_attr(out, "patternType", FillPatternName(fill.pattern));
+  }
   const bool has_fg = has_color(fill.fg, fill.fg_argb);
   const bool has_bg = has_color(fill.bg, fill.bg_argb);
   if (has_fg || has_bg) {

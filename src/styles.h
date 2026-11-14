@@ -140,6 +140,10 @@ inline constexpr std::size_t kMaxGradientStops = 1024U;
 /// `gradient`, and the pattern fields are unused.
 struct FillRecord {
   std::uint8_t pattern = 0;
+  /// False for a `<patternFill>` without `patternType`, the form Excel writes
+  /// for a dxf fill that sets only colours (in `.xlsb`, a dxf without the
+  /// fill-pattern property). The writers then leave the pattern out.
+  bool pattern_stated = true;
   std::uint32_t fg_argb = 0;
   std::uint32_t bg_argb = 0;
   /// Original `<fgColor>` / `<bgColor>` specifications, preserved for
