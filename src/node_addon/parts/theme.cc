@@ -169,6 +169,38 @@ Napi::Value Workbook::ResetTheme(const Napi::CallbackInfo& info) {
   return ValueOrThrow(env, fm_workbook_reset_theme(handle_), env.Undefined());
 }
 
+Napi::Value Workbook::ApplyTheme(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  Napi::Uint8Array u8;
+  if (!BytesArg(info, 0, &u8)) {
+    ThrowArgumentTypeError(env, "bytes", "must be a Uint8Array");
+    return env.Undefined();
+  }
+  // An empty array may have no backing store; a non-NULL pointer lets the
+  // C ABI report the empty input rather than a NULL argument.
+  static const uint8_t kEmptyInput = 0;
+  const std::size_t len = u8.ElementLength();
+  return ValueOrThrow(env, fm_workbook_apply_theme(handle_, len == 0 ? &kEmptyInput : u8.Data(), len), env.Undefined());
+}
+
+Napi::Value Workbook::SaveTheme(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  uint8_t* buf = nullptr;
+  std::size_t len = 0;
+  const fm_status_t rc = fm_workbook_save_theme(handle_, &buf, &len);
+  if (rc != 0) {
+    fm_buffer_destroy(buf);
+    return ThrowStatus(env, rc);
+  }
+  return TakeSavedBytes(env, buf, len);
+}
+
 Napi::Value Workbook::ResolveColor(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {

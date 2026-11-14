@@ -155,6 +155,8 @@ _FACADE_FILES = frozenset(
         "workbook_pivot_refresh.cpp",
         "workbook_row_col_edit.cpp",
         "workbook_tables.cpp",
+        "workbook_theme_package.h",
+        "workbook_theme_package.cpp",
         "workbook_table_insert.cpp",
         "workbook_table_header.cpp",
         "workbook_table_loss.h",

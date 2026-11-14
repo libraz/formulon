@@ -27,11 +27,13 @@ using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::copy_owned_bytes;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::publish_scratch;
+using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::TextStore;
 
@@ -232,6 +234,39 @@ extern "C" fm_status_t fm_workbook_reset_theme(fm_workbook_t* wb) {
     return null_argument();
   }
   return finish_status(wb->workbook().reset_theme());
+}
+
+extern "C" fm_status_t fm_workbook_apply_theme(fm_workbook_t* wb, const uint8_t* bytes, size_t len) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return null_argument("wb");
+  }
+  if (bytes == nullptr) {
+    return null_argument("bytes");
+  }
+  if (len == 0) {
+    return invalid_argument("bytes must not be empty", "len=0");
+  }
+  return finish_status(wb->workbook().apply_theme(bytes, len));
+}
+
+extern "C" fm_status_t fm_workbook_save_theme(const fm_workbook_t* wb, uint8_t** out_bytes, size_t* out_len) {
+  clear_last_error();
+  if (out_bytes != nullptr) {
+    *out_bytes = nullptr;
+  }
+  if (out_len != nullptr) {
+    *out_len = 0;
+  }
+  if (wb == nullptr || out_bytes == nullptr || out_len == nullptr) {
+    return null_argument();
+  }
+  auto result = wb->workbook().save_theme();
+  if (!result) {
+    return set_last_error(result.error());
+  }
+  copy_owned_bytes(result.value(), out_bytes, out_len);
+  return 0;
 }
 
 extern "C" fm_status_t fm_workbook_resolve_color(const fm_workbook_t* wb, const fm_color_t* spec, int32_t context,

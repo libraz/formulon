@@ -13393,6 +13393,53 @@ FM_API fm_status_t fm_workbook_set_theme_script_font(fm_workbook_t* wb, int32_t 
 FM_API fm_status_t fm_workbook_reset_theme(fm_workbook_t* wb);
 
 /**
+ * @brief Applies a theme file (`.thmx`) to the workbook, as Excel's Page Layout >
+ *        Themes > Browse does.
+ *
+ * The theme part is replaced in place (a workbook without one gets a theme part
+ * and its relationship), together with the images the theme uses; the previous
+ * theme's relationships and anything only they referenced are removed. A
+ * variant in the file is ignored: the file's default theme is applied. Fonts
+ * that follow the theme switch to the new theme's faces, and every formula is
+ * recalculated when the theme's font faces change (`CELL("width")` reads
+ * them). The call is atomic: on any failure the workbook is unchanged. Windows
+ * Excel's behaviour is unmeasured.
+ *
+ * @param wb     Workbook handle. Must be non-NULL.
+ * @param bytes  The `.thmx` package. Must be non-NULL.
+ * @param len    Length of `bytes`. Must be non-zero and the archive at most 64 MiB uncompressed.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `bytes` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `len == 0`;
+ *         `FM_STATUS_IO_ZIP_CORRUPT` (5003) when `bytes` is not a zip archive;
+ *         `FM_STATUS_IO_RELATIONSHIP_BROKEN` (5010) when the package has no office-document or theme
+ *         relationship, or its target is missing;
+ *         `FM_STATUS_IO_XML_PARSE` (5007) when the theme cannot be parsed;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the archive exceeds the size budget.
+ */
+FM_API fm_status_t fm_workbook_apply_theme(fm_workbook_t* wb, const uint8_t* bytes, size_t len);
+
+/**
+ * @brief Writes the workbook's current theme as a theme file (`.thmx`).
+ *
+ * The package carries the theme part (the default Office theme when the
+ * workbook has none) and the images it uses, and no thumbnail. The result
+ * round-trips through `fm_workbook_apply_theme`.
+ *
+ * Lifetime: owned (until fm_buffer_destroy).
+ *
+ * @param wb         Workbook handle. Must be non-NULL.
+ * @param out_bytes  Receives a pointer to the freshly allocated buffer, released with
+ *                   `fm_buffer_destroy` (NOT `free`).
+ * @param out_len    Receives the buffer length in bytes.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_IO_XML_PARSE` (5007) when the current theme part cannot be parsed.
+ *         On failure `*out_bytes` is `NULL` and `*out_len` is 0.
+ */
+FM_API fm_status_t fm_workbook_save_theme(const fm_workbook_t* wb, uint8_t** out_bytes, size_t* out_len);
+
+/**
  * @brief Resolves a colour specification to the 0xAARRGGBB Excel renders.
  *
  * Theme colours take `spec.tint`; indexed colours read the workbook's

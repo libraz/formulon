@@ -346,6 +346,8 @@ fm_workbook_get_theme_script_font_at
 fm_workbook_get_theme_script_font
 fm_workbook_set_theme_script_font
 fm_workbook_reset_theme
+fm_workbook_apply_theme
+fm_workbook_save_theme
 fm_workbook_resolve_color
 fm_sheet_get_effective_style
 

@@ -9012,6 +9012,22 @@ entries:
     py: reset_theme
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_reset_theme, js: resetTheme, py: reset_theme }
+  theme.apply:
+    kind: op
+    scope: workbook
+    noun: theme
+    c: fm_workbook_apply_theme
+    js: applyTheme
+    py: apply_theme
+    surfaces: [c, wasm, native, py]
+  theme.save:
+    kind: op
+    scope: workbook
+    noun: theme
+    c: fm_workbook_save_theme
+    js: saveTheme
+    py: save_theme
+    surfaces: [c, wasm, native, py]
   color.resolve:
     kind: op
     scope: workbook

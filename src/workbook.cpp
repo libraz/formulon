@@ -77,6 +77,7 @@
 #include "workbook_ref_rewrite.h"
 #include "workbook_sheet_mutation.h"
 #include "workbook_table_loss.h"
+#include "workbook_theme_package.h"
 
 namespace formulon {
 namespace {
@@ -206,6 +207,14 @@ Expected<void, Error> Workbook::set_theme_script_font(bool major, std::string_vi
 
 Expected<void, Error> Workbook::reset_theme() {
   return io::reset_theme(*this);
+}
+
+Expected<void, Error> Workbook::apply_theme(const std::uint8_t* data, std::size_t size) {
+  return io::apply_theme_package(*this, data, size);
+}
+
+Expected<std::vector<std::uint8_t>, Error> Workbook::save_theme() const {
+  return io::save_theme_package(*this);
 }
 
 namespace {

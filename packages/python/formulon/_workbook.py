@@ -10693,6 +10693,45 @@ class Workbook(_NoCopy):
         h = self._require()
         _check(LIB.fm_workbook_reset_theme(h))
 
+    def apply_theme(self, bytes: Union[bytes, bytearray, memoryview]) -> None:
+        """Apply a theme file (``.thmx``) as Excel's Page Layout > Themes > Browse does.
+
+        The theme part is replaced together with the images the theme uses; the
+        previous theme's images are dropped. A variant in the file is ignored
+        (the default theme is applied). Fonts that follow the theme switch to the
+        new theme's faces, and formulas are recalculated when the theme's font
+        faces change. The call is atomic: on failure the workbook is unchanged.
+        Windows Excel's behaviour is unmeasured.
+
+        Raises:
+          InvalidArgumentError: when ``bytes`` is empty.
+          InvalidFileError: when ``bytes`` is not a zip archive
+            (``StatusCode.IO_ZIP_CORRUPT``), has no theme or a missing target
+            (``IO_RELATIONSHIP_BROKEN``), or holds a theme that cannot be parsed
+            (``IO_XML_PARSE``).
+          SecurityError: when the archive exceeds 64 MiB.
+        """
+        h = self._require()
+        raw = builtins.bytes(bytes)
+        with _ArgScope() as scope:
+            # An empty input still passes a real pointer: the engine reports
+            # it as empty rather than as a missing buffer.
+            buf = scope.buffer(raw) if raw else scope.alloc(1)
+            _check(LIB.fm_workbook_apply_theme(h, buf, _uint(len(raw), "len")))
+
+    def save_theme(self) -> bytes:
+        """Write the current theme as a theme file (``.thmx``) that :meth:`apply_theme` accepts.
+
+        The package holds the theme part (the default Office theme when the
+        workbook has none) and the images it uses, without a thumbnail.
+
+        Raises:
+          InvalidFileError: when the workbook's theme part cannot be parsed
+            (``StatusCode.IO_XML_PARSE``).
+        """
+        h = self._require()
+        return _read_owned_buffer(LIB.fm_workbook_save_theme, h)
+
     def resolve_color(self, spec: Color, context: ColorContext) -> ResolvedColor:
         """Resolve ``spec`` to the ``0xAARRGGBB`` Excel renders.
 

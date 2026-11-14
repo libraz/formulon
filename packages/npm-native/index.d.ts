@@ -7155,6 +7155,19 @@ export interface Workbook {
   /** Restores the default Office theme by removing the theme part, so the workbook reports the default theme
    *  (`source` is `Default`). Excel adds a theme part again when it saves the file. */
   resetTheme(): void;
+  /** Applies a theme file (`.thmx`) as Excel's Page Layout > Themes > Browse does: the theme part is replaced
+   *  together with the images the theme uses, and the previous theme's images are dropped. A variant in the file
+   *  is ignored (the default theme is applied). Fonts that follow the theme switch to the new theme's faces, and
+   *  formulas are recalculated when the theme's font faces change. The call is atomic: on failure the workbook is
+   *  unchanged. Empty bytes fail with `StatusCode.InvalidArgument`, bytes that are not a zip archive with
+   *  `StatusCode.IoZipCorrupt`, a package without a theme with `StatusCode.IoRelationshipBroken`, an unparseable
+   *  theme with `StatusCode.IoXmlParse` and an archive over 64 MiB with `StatusCode.SecurityResourceLimit`.
+   *  Windows Excel's behaviour is unmeasured. */
+  applyTheme(bytes: BytesInput): void;
+  /** Writes the current theme as a theme file (`.thmx`) that `applyTheme` accepts: the theme part (the default
+   *  Office theme when the workbook has none) and the images it uses, without a thumbnail. Fails with
+   *  `StatusCode.IoXmlParse` when the workbook's theme part cannot be parsed. */
+  saveTheme(): Uint8Array;
   /** Resolves a colour specification to ARGB against the theme and the
    *  indexed palette; `context` decides what an automatic colour means. */
   resolveColor(spec: Color, context: ColorContext): ResolvedColor;

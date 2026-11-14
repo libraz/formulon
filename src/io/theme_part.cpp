@@ -20,7 +20,6 @@
 namespace formulon::io {
 namespace {
 
-constexpr const char* kThemeContentType = "application/vnd.openxmlformats-officedocument.theme+xml";
 constexpr const char* kDefaultThemePath = "xl/theme/theme1.xml";
 
 constexpr std::array<const char*, kThemeColorCount> kSchemeNames = {
@@ -137,8 +136,8 @@ std::optional<Theme> parse_theme(const pugi::xml_document& doc) {
   return out;
 }
 
-/// Package path of the theme part: the workbook relationship's target when it
-/// names one, otherwise the conventional path.
+}  // namespace
+
 std::string theme_part_path(const Workbook& wb) {
   for (const UnknownRelationship& rel : wb.unknown_workbook_rels()) {
     if (!rel.target_external && rel.type == kRelTheme) {
@@ -148,8 +147,6 @@ std::string theme_part_path(const Workbook& wb) {
   return kDefaultThemePath;
 }
 
-/// A minimal valid theme (colour scheme, font scheme, format scheme with three
-/// entries per list) carrying the default colours, fonts and script fonts.
 std::string build_default_theme_xml() {
   const Theme& def = default_theme();
   std::string xml = std::string(kXmlDecl) +
@@ -184,6 +181,8 @@ std::string build_default_theme_xml() {
   return xml;
 }
 
+namespace {
+
 /// Parses the workbook's theme part for editing, generating and registering a
 /// default one when absent. Yields the part path and the parsed document.
 Expected<std::string, Error> open_theme_for_edit(Workbook& wb, pugi::xml_document& doc) {
@@ -201,14 +200,22 @@ Expected<std::string, Error> open_theme_for_edit(Workbook& wb, pugi::xml_documen
   return path;
 }
 
-/// Sets the face of the `a:font` entry for `script`, appending the entry when absent.
-void set_script_face(pugi::xml_node font_node, std::string_view script, std::string_view typeface) {
+/// The `a:font` entry for `script`, or a null node.
+pugi::xml_node script_font_node(pugi::xml_node font_node, std::string_view script) {
   for (pugi::xml_node child : font_node.children()) {
     if (child.type() == pugi::node_element && local_name(child.name()) == "font" &&
         std::string_view(child.attribute("script").value()) == script) {
-      set_attr(child, "typeface", typeface);
-      return;
+      return child;
     }
+  }
+  return pugi::xml_node();
+}
+
+/// Sets the face of the `a:font` entry for `script`, appending the entry when absent.
+void set_script_face(pugi::xml_node font_node, std::string_view script, std::string_view typeface) {
+  if (pugi::xml_node existing = script_font_node(font_node, script)) {
+    set_attr(existing, "typeface", typeface);
+    return;
   }
   pugi::xml_node added = font_node.append_child((prefix_of(font_node.name()) + "font").c_str());
   set_attr(added, "script", script);
@@ -228,10 +235,37 @@ void patch_font(pugi::xml_node font_node, const std::string& latin, const std::s
     set_attr(ea_node, "typeface", east_asian);
     return;
   }
+  // An empty face with no Jpan entry is the part's current state; adding an empty entry would change it.
+  if (east_asian.empty() && !script_font_node(font_node, "Jpan")) {
+    return;
+  }
   set_script_face(font_node, "Jpan", east_asian);
 }
 
+bool same_scripts(const std::vector<ThemeScriptFont>& a, const std::vector<ThemeScriptFont>& b) {
+  return std::equal(a.begin(), a.end(), b.begin(), b.end(), [](const ThemeScriptFont& x, const ThemeScriptFont& y) {
+    return x.script == y.script && x.typeface == y.typeface;
+  });
+}
+
+bool same_fonts(const Theme& a, const Theme& b) {
+  return a.fonts.major_latin == b.fonts.major_latin && a.fonts.major_ea == b.fonts.major_ea &&
+         a.fonts.minor_latin == b.fonts.minor_latin && a.fonts.minor_ea == b.fonts.minor_ea &&
+         same_scripts(a.major_scripts, b.major_scripts) && same_scripts(a.minor_scripts, b.minor_scripts);
+}
+
 }  // namespace
+
+bool is_parseable_theme(const std::vector<std::uint8_t>& bytes) {
+  pugi::xml_document doc;
+  return load_xml_buffer(doc, bytes, "theme", "theme") && parse_theme(doc).has_value();
+}
+
+void mark_formulas_dirty_if_fonts_changed(Workbook& wb, const Theme& before) {
+  if (!same_fonts(before, load_theme(wb).theme)) {
+    wb.mark_all_formulas_dirty();
+  }
+}
 
 LoadedTheme load_theme(const Workbook& wb) {
   LoadedTheme out;
@@ -283,9 +317,12 @@ Expected<void, Error> set_theme_fonts(Workbook& wb, const ThemeFonts& fonts) {
     return make_error(FormulonErrorCode::kIoXmlParse, "theme: font scheme has no major/minor font",
                       "part=" + path_or.value());
   }
+  const Theme before = load_theme(wb).theme;
   patch_font(major, fonts.major_latin, fonts.major_ea);
   patch_font(minor, fonts.minor_latin, fonts.minor_ea);
-  return ooxml::store_part_dom(wb, path_or.value(), doc);
+  RETURN_IF_ERROR(ooxml::store_part_dom(wb, path_or.value(), doc));
+  mark_formulas_dirty_if_fonts_changed(wb, before);
+  return Expected<void, Error>();
 }
 
 Expected<void, Error> set_theme_script_font(Workbook& wb, bool major, std::string_view script,
@@ -309,8 +346,11 @@ Expected<void, Error> set_theme_script_font(Workbook& wb, bool major, std::strin
     return make_error(FormulonErrorCode::kIoXmlParse, "theme: font scheme has no major/minor font",
                       "part=" + path_or.value());
   }
+  const Theme before = load_theme(wb).theme;
   set_script_face(font_node, script, typeface);
-  return ooxml::store_part_dom(wb, path_or.value(), doc);
+  RETURN_IF_ERROR(ooxml::store_part_dom(wb, path_or.value(), doc));
+  mark_formulas_dirty_if_fonts_changed(wb, before);
+  return Expected<void, Error>();
 }
 
 Expected<void, Error> reset_theme(Workbook& wb) {
@@ -319,6 +359,7 @@ Expected<void, Error> reset_theme(Workbook& wb) {
   if (ooxml::find_passthrough_part(wb, path) == nullptr) {
     return Expected<void, Error>();
   }
+  const Theme before = load_theme(wb).theme;
   std::vector<UnknownRelationship> rels = wb.unknown_workbook_rels();
   rels.erase(std::remove_if(rels.begin(), rels.end(),
                             [&path](const UnknownRelationship& rel) {
@@ -328,6 +369,7 @@ Expected<void, Error> reset_theme(Workbook& wb) {
              rels.end());
   wb.set_unknown_workbook_rels(std::move(rels));
   ooxml::remove_orphans(wb, {path});
+  mark_formulas_dirty_if_fonts_changed(wb, before);
   return Expected<void, Error>();
 }
 

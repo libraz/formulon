@@ -993,6 +993,8 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_workbook_remove_sheet",
     "fm_workbook_rename_sheet",
     "fm_workbook_reset_theme",
+    "fm_workbook_apply_theme",
+    "fm_workbook_save_theme",
     "fm_workbook_resolve_color",
     "fm_workbook_save",
     "fm_workbook_save_with_diagnostics",

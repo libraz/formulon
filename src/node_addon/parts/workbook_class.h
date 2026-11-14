@@ -507,6 +507,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value SetThemeScriptFont(const Napi::CallbackInfo& info);
   Napi::Value GetThemeScriptFont(const Napi::CallbackInfo& info);
   Napi::Value ResetTheme(const Napi::CallbackInfo& info);
+  Napi::Value ApplyTheme(const Napi::CallbackInfo& info);
+  Napi::Value SaveTheme(const Napi::CallbackInfo& info);
   Napi::Value ResolveColor(const Napi::CallbackInfo& info);
   Napi::Value GetEffectiveStyle(const Napi::CallbackInfo& info);
 

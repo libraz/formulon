@@ -467,6 +467,8 @@ class JsWorkbook {
   void setThemeFonts(emscripten::val fonts);
   void setThemeScriptFont(int32_t scheme, const std::string& script, const std::string& typeface);
   void resetTheme();
+  void applyTheme(emscripten::val bytes);
+  emscripten::val saveTheme() const;
   /// `{ argb, resolution }` for a `ColorSpec` used in `context` (`ColorContext.*`).
   emscripten::val resolveColor(emscripten::val spec, int32_t context) const;
   /// `{ xfIndex, source, ..., font, borders, numFmtCode }`: the formatting a cell shows.

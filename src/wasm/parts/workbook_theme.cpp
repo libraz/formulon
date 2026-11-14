@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "c_api/formulon_c.h"
 #include "wasm/parts/embind_common.h"
@@ -146,6 +147,31 @@ void JsWorkbook::setThemeScriptFont(int32_t scheme, const std::string& script, c
 
 void JsWorkbook::resetTheme() {
   succeeded(handle_ != nullptr ? fm_workbook_reset_theme(handle_) : kBindingInvalidHandle);
+}
+
+void JsWorkbook::applyTheme(emscripten::val bytes) {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return;
+  }
+  std::vector<uint8_t> data;
+  if (!val_to_bytes_checked(bytes, &data)) {
+    return;
+  }
+  // An empty array still reaches C, which rejects it with its own diagnostic.
+  static const uint8_t kEmpty = 0;
+  succeeded(fm_workbook_apply_theme(handle_, data.empty() ? &kEmpty : data.data(), data.size()));
+}
+
+emscripten::val JsWorkbook::saveTheme() const {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return emscripten::val::undefined();
+  }
+  uint8_t* out = nullptr;
+  std::size_t len = 0;
+  const fm_status_t rc = fm_workbook_save_theme(handle_, &out, &len);
+  return snapshot_bytes(rc, out, len);
 }
 
 emscripten::val JsWorkbook::resolveColor(emscripten::val spec, int32_t context) const {

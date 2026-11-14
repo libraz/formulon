@@ -592,6 +592,8 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::SetThemeScriptFont, 0x0ULL, 0x1ULL, 0x0ULL, 0x0ULL, 0x6ULL>("setThemeScriptFont"),
           GuardedInstanceMethod<&Workbook::GetThemeScriptFont, 0x0ULL, 0x1ULL, 0x0ULL, 0x0ULL, 0x2ULL>("getThemeScriptFont"),
           GuardedInstanceMethod<&Workbook::ResetTheme>("resetTheme"),
+          GuardedInstanceMethod<&Workbook::ApplyTheme, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x1ULL>("applyTheme"),
+          GuardedInstanceMethod<&Workbook::SaveTheme>("saveTheme"),
           GuardedInstanceMethod<&Workbook::GetCellXf, 0x1ULL>("getCellXf"),
           GuardedInstanceMethod<&Workbook::GetCellXfIndex, 0x7ULL>("getCellXfIndex"),
           GuardedInstanceMethod<&Workbook::GetCellPhonetic, 0x7ULL>("getCellPhonetic"),

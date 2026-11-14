@@ -1228,6 +1228,7 @@ const WORKBOOK_METHODS = Object.freeze([
   'addPerson',
   'addPivotCache',
   'addSheet',
+  'applyTheme',
   'copySheet',
   'dispose',
   'disposed',
@@ -1280,6 +1281,7 @@ const WORKBOOK_METHODS = Object.freeze([
   'resetTheme',
   'resolveColor',
   'save',
+  'saveTheme',
   'saveWithDiagnostics',
   'setActiveSheet',
   'setCalcMode',
@@ -3735,6 +3737,7 @@ const METHOD_ARITY = Object.freeze({
   'Workbook.addPerson': 1,
   'Workbook.addPivotCache': 1,
   'Workbook.addSheet': 2,
+  'Workbook.applyTheme': 1,
   'Workbook.copySheet': 2,
   'Workbook.createDefault': 0,
   'Workbook.createEmpty': 0,
@@ -3805,6 +3808,7 @@ const METHOD_ARITY = Object.freeze({
   'Workbook.resetTheme': 0,
   'Workbook.resolveColor': 2,
   'Workbook.save': 1,
+  'Workbook.saveTheme': 0,
   'Workbook.saveWithDiagnostics': 1,
   'Workbook.setActiveSheet': 1,
   'Workbook.setBorder': 2,
@@ -4413,6 +4417,7 @@ const PARAM_NAMES = Object.freeze({
   'Workbook.addPerson': ['person'],
   'Workbook.addPivotCache': ['requestedId'],
   'Workbook.addSheet': ['name', 'options'],
+  'Workbook.applyTheme': ['bytes'],
   'Workbook.copySheet': ['source', 'options'],
   'Workbook.createForProfile': ['profileId'],
   'Workbook.formatReference': ['range', 'options'],
@@ -9405,6 +9410,7 @@ const ARG_TYPES = Object.freeze({
   'Sheet.addPicture': [[0, 'bytes']],
   'Sheet.restoreDrawing': [[0, 'bytes']],
   'Sheet.restoreRangeXfs': [[0, 'bytes']],
+  'Workbook.applyTheme': [[0, 'bytes']],
 });
 
 // Reads whose raw record names a key other than the public one, by `Class.method`: the result as the public record.

@@ -496,6 +496,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("setThemeScriptFont", &JsWorkbook::setThemeScriptFont)
       .function("setVisibility", &JsWorkbook::setVisibility)
       .function("resetTheme", &JsWorkbook::resetTheme)
+      .function("applyTheme", &JsWorkbook::applyTheme)
+      .function("saveTheme", &JsWorkbook::saveTheme)
       .function("resolveColor", &JsWorkbook::resolveColor)
       .function("getEffectiveStyle", &JsWorkbook::getEffectiveStyle)
       .function("setCellPhonetic", &JsWorkbook::setCellPhonetic)

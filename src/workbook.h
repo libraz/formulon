@@ -1268,6 +1268,16 @@ class Workbook {
   /// Excel adds a theme part again when the book is saved again in Excel.
   Expected<void, Error> reset_theme();
 
+  /// Applies a theme file (`.thmx` bytes) as Excel's Themes > Browse does:
+  /// replaces the theme part and its images, drops `defaultThemeVersion`, and
+  /// marks every formula dirty when the theme's fonts change. Atomic; see
+  /// `io::apply_theme_package` for the failures.
+  Expected<void, Error> apply_theme(const std::uint8_t* data, std::size_t size);
+
+  /// The current theme as a `.thmx` file (the default theme when the workbook
+  /// has none), as Excel's Save Current Theme writes it, without a thumbnail.
+  Expected<std::vector<std::uint8_t>, Error> save_theme() const;
+
   // ---------------------------------------------------------------------------
   // Threaded comments and persons
   // ---------------------------------------------------------------------------

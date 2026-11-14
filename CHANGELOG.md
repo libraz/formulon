@@ -40,6 +40,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stored. A change marks formulas for recalculation only when it switches
   between version 1 and version 2 or 3; setting the current value changes
   nothing, and a value outside 1-3 is rejected.
+- `Workbook.applyTheme(bytes)` / `saveTheme()` (Python `apply_theme()` /
+  `save_theme()`, C `fm_workbook_apply_theme` / `fm_workbook_save_theme`)
+  apply a theme file (`.thmx`) as Excel's Page Layout > Themes > Browse does and
+  save the current theme as one. The images a theme uses come along, a variant
+  in the file is ignored (the default theme is applied), and Windows behaviour
+  is unmeasured. Fonts that follow the theme switch to its faces, and formulas
+  recalculate when its fonts change. A file that is empty, not a zip archive, has
+  no theme or holds an unparseable one is refused with its own status and leaves
+  the workbook unchanged.
 
 ### Changed
 
