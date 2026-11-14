@@ -134,7 +134,7 @@ TEST(CompatibilityVersionIo, XlsxStampedBooksReadAndKeepTheirStamp) {
 TEST(CompatibilityVersionIo, XlsxUnstampedBookStaysUnstamped) {
   const Workbook wb = LoadXlsx(ReadFixture("excel/blankslot_authored.xlsx"));
   EXPECT_EQ(wb.compatibility_stamp(), Stamp());
-  EXPECT_EQ(wb.compatibility_version(), 2U);
+  EXPECT_EQ(wb.compatibility_version(), 1U);
   EXPECT_EQ(StampXml(SaveXlsx(wb)), "");
 }
 
@@ -167,6 +167,7 @@ TEST(CompatibilityVersionIo, XlsbStampedBooksReadAndKeepTheirStamp) {
 TEST(CompatibilityVersionIo, XlsbUnstampedBookStaysUnstamped) {
   const Workbook wb = LoadXlsb(ReadFixture("cellxfs_compaction/mg2_B14_merge_items_b.xlsb"));
   EXPECT_EQ(wb.compatibility_stamp(), Stamp());
+  EXPECT_EQ(wb.compatibility_version(), 1U);
   EXPECT_TRUE(ReadBook(SaveXlsb(wb)).stamp.empty());
 }
 
@@ -177,6 +178,20 @@ TEST(CompatibilityVersionIo, XlsbNewAndSetBooksAreStamped) {
   const Bytes set = SaveXlsb(wb);
   EXPECT_EQ(ReadBook(set).stamp, (std::vector<std::uint32_t>{0U, 2U, 1U}));
   EXPECT_EQ(LoadXlsb(set).compatibility_version(), 1U);
+}
+
+// A stamp a later Excel writes (Excel lists 4 as unsupported and computes it as 2) is read and written back as is.
+TEST(CompatibilityVersionIo, StampsAboveTheKnownVersionsAreKept) {
+  for (const std::uint32_t stamp : {4U, 4294967295U}) {
+    const Workbook wb = LoadXlsx(ReadFixture("excel/compat_version/stamp_" + std::to_string(stamp) + ".xlsx"));
+    EXPECT_EQ(wb.compatibility_stamp(), Stamp(stamp));
+    EXPECT_EQ(wb.compatibility_version(), stamp);
+    EXPECT_EQ(wb.text_index_unit(), TextIndexUnit::kCodePoints);
+    EXPECT_EQ(StampXml(SaveXlsx(wb)), "version setVersion=\"" + std::to_string(stamp) + "\"");
+    const Bytes xlsb = SaveXlsb(wb);
+    EXPECT_EQ(ReadBook(xlsb).stamp, (std::vector<std::uint32_t>{0U, 0U, stamp}));
+    EXPECT_EQ(LoadXlsb(xlsb).compatibility_stamp(), Stamp(stamp));
+  }
 }
 
 // A retained slicer-cache block is spliced in before the stamp block, in Excel's FRT order.

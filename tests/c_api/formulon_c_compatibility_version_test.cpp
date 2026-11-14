@@ -1,11 +1,17 @@
 //
 // fm_workbook_get/set_compatibility_version: the workbook's Compatibility
-// Version, 2 for a new workbook; 1, 2 and 3 are settable (3 evaluates as 2)
+// Version, 2 for a new workbook and 1 for a loaded one without a stamp; a later
+// Excel's stamp reads as stored and evaluates as 2; 1, 2 and 3 are settable (3 evaluates as 2)
 // and anything else is INVALID_ARGUMENT, leaving the value. A change between
 // 1 and 2 or 3 re-evaluates LEN, MID, FIND, SEARCH and REPLACE in the new unit;
 // a change between 2 and 3 leaves every formula computed.
 
 #include <cstdint>
+#include <fstream>
+#include <iterator>
+#include <limits>
+#include <string>
+#include <vector>
 
 #include "c_api/formulon_c.h"
 #include "gtest/gtest.h"
@@ -36,6 +42,17 @@ double Number(fm_workbook_t* wb, uint32_t row, uint32_t col) {
   fm_value_t value{};
   EXPECT_EQ(fm_sheet_get_value(wb, 0, row, col, &value), FM_STATUS_OK);
   return value.kind == FM_VALUE_KIND_NUMBER ? value.u.number : -1.0;
+}
+
+// Loads tests/fixtures/excel/compat_version/<name>: A1 "a😀b", B1 =LEN(A1), C1 =FIND("b",A1), no cached values.
+void LoadFixture(const std::string& name, WorkbookGuard* out) {
+  std::string dir = __FILE__;
+  dir = dir.substr(0, dir.find_last_of("/\\"));
+  std::ifstream in(dir + "/../fixtures/excel/compat_version/" + name, std::ios::binary);
+  ASSERT_TRUE(in.good()) << name;
+  const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &out->handle), FM_STATUS_OK);
+  ASSERT_EQ(fm_workbook_recalc(out->handle), FM_STATUS_OK);
 }
 
 }  // namespace
@@ -102,4 +119,29 @@ TEST(FormulonCApiCompatibilityVersion, Version3IsSettableAndDirtiesOnlyWhenTheUn
 
   ASSERT_EQ(fm_workbook_set_compatibility_version(wb.handle, FM_COMPATIBILITY_VERSION_2), FM_STATUS_OK);
   EXPECT_FALSE(Stale(wb.handle));
+}
+
+// Excel computes a book without a stamp as version 1: LEN("a😀b") is 4 and FIND("b") is 4.
+TEST(FormulonCApiCompatibilityVersion, ALoadedBookWithoutAStampIsVersion1) {
+  WorkbookGuard wb;
+  LoadFixture("stamp_none.xlsx", &wb);
+  EXPECT_EQ(Version(wb.handle), FM_COMPATIBILITY_VERSION_1);
+  EXPECT_EQ(Number(wb.handle, 0U, 1U), 4.0);
+  EXPECT_EQ(Number(wb.handle, 0U, 2U), 4.0);
+}
+
+// A later Excel's stamp reads as stored (saturating at INT32_MAX) and evaluates as version 2.
+TEST(FormulonCApiCompatibilityVersion, AStampAboveTheKnownVersionsReadsAsStored) {
+  WorkbookGuard four;
+  LoadFixture("stamp_4.xlsx", &four);
+  EXPECT_EQ(Version(four.handle), 4);
+  EXPECT_EQ(Number(four.handle, 0U, 1U), 3.0);
+  EXPECT_EQ(Number(four.handle, 0U, 2U), 3.0);
+  EXPECT_EQ(fm_workbook_set_compatibility_version(four.handle, 4), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(Version(four.handle), 4);
+
+  WorkbookGuard top;
+  LoadFixture("stamp_4294967295.xlsx", &top);
+  EXPECT_EQ(Version(top.handle), std::numeric_limits<int32_t>::max());
+  EXPECT_EQ(Number(top.handle, 0U, 1U), 3.0);
 }

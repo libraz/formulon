@@ -1638,12 +1638,24 @@ class CompatibilityVersion(IntEnum):
       character is one position).
     - ``VERSION_3``: adds nested arrays, which Formulon does not implement.
 
-    The ordinals are the values stored in the file, so they start at 1.
+    The ordinals are the values stored in the file, so they start at 1. Any
+    other stored number is also accepted as a value, but
+    :meth:`Workbook.set_compatibility_version` accepts only the three members.
     """
 
     VERSION_1 = 1
     VERSION_2 = 2
     VERSION_3 = 3
+
+    @classmethod
+    def _missing_(cls, value: object) -> Optional["CompatibilityVersion"]:
+        # A stamp a later Excel writes (4 and up) reads back as a pseudo-member with that number.
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            return None
+        member = int.__new__(cls, value)
+        member._name_ = f"VERSION_{value}"
+        member._value_ = value
+        return cls._value2member_map_.setdefault(value, member)
 
 
 class RefMode(IntEnum):
@@ -9860,9 +9872,12 @@ class Workbook(_NoCopy):
     def get_compatibility_version(self) -> CompatibilityVersion:
         """Return the Compatibility Version the workbook evaluates under.
 
-        It is the workbook's stored value, or ``VERSION_2`` for a workbook whose
-        file carries none and for a new workbook. A stored ``VERSION_3`` reads
-        3 and evaluates as ``VERSION_2``.
+        It is the workbook's stored value. A new workbook reads ``VERSION_2``;
+        a loaded workbook whose file carries none reads ``VERSION_1``, as Excel
+        computes it. A stored ``VERSION_3`` evaluates as ``VERSION_2``. Values
+        above 3, stamped by a later Excel, come back as a
+        ``CompatibilityVersion`` pseudo-member with that number; they evaluate
+        as ``VERSION_2`` and are written back unchanged.
         """
         h = self._require()
         with _ArgScope() as scope:
@@ -9877,8 +9892,9 @@ class Workbook(_NoCopy):
         written as given and evaluates as ``VERSION_2``. A change marks every
         formula dirty only when it moves between ``VERSION_1`` and ``VERSION_2``
         or ``VERSION_3``; a change between ``VERSION_2`` and ``VERSION_3`` marks
-        nothing. A value outside the enum raises :class:`InvalidArgumentError`
-        and leaves the workbook unchanged.
+        nothing. A value other than ``VERSION_1``, ``VERSION_2`` or
+        ``VERSION_3``, including one read back from a later Excel's stamp,
+        raises :class:`InvalidArgumentError` and leaves the workbook unchanged.
         """
         h = self._require()
         _check(LIB.fm_workbook_set_compatibility_version(h, _sint(version, "version")))

@@ -1786,12 +1786,14 @@ class Workbook {
   /// Sets the full formula-behaviour profile used by future recalc calls.
   void set_excel_profile(ExcelProfile profile);
 
-  /// The Compatibility Version the workbook evaluates under: its stamp, or 2
-  /// for a book without one, as Excel computes an unstamped book. Version 1
-  /// makes LEN, MID, FIND, SEARCH and REPLACE count UTF-16 units; every other
-  /// value counts code points (version 3, nested arrays, is not implemented
-  /// and evaluates as 2).
-  std::uint32_t compatibility_version() const noexcept { return compat_set_version_.value_or(2U); }
+  /// The Compatibility Version the workbook evaluates under: its stamp, or 1
+  /// for a loaded book without one, as Excel rebuilds an unstamped book (a new
+  /// book carries 2). Version 1 makes LEN, MID, FIND, SEARCH and REPLACE count
+  /// UTF-16 units; any higher stamp counts code points (3, nested arrays, is
+  /// not implemented, and a later Excel's value evaluates as 2 too). The
+  /// unstamped rule is Mac-measured and applied to every profile; Windows is
+  /// unmeasured for it.
+  std::uint32_t compatibility_version() const noexcept { return compat_set_version_.value_or(1U); }
 
   /// The position unit of LEN, MID, FIND, SEARCH and REPLACE under `compatibility_version()`.
   TextIndexUnit text_index_unit() const noexcept {

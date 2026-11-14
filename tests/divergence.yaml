@@ -1341,6 +1341,17 @@ entries:
     first_noted: 2026-11-14
     last_verified_excel_version: "16.115"
 
+  - id: compat_version_unstamped_open_time_calc
+    applies_to: [mac]
+    cause: accepted-divergence
+    mode: skip-oracle
+    scope: api-contract
+    evidence: [tests/unit/eval/compatibility_version_eval_test.cpp, tests/c_api/formulon_c_compatibility_version_test.cpp]
+    reason: "A workbook whose file carries no Compatibility Version is version 1 in Excel: the menu ticks Version 1, and a full rebuild or a newly entered formula counts UTF-16 units. Only the calculation Excel runs while opening such a book counts code points, as version 2 does (LEN(\"a😀b…\") 10 at open, 13 after a rebuild, on a book saved with empty cached values). Formulon does not recalculate at open, so cached values stay as written. A book saved without cached values is computed as version 1 on its first recalculation, matching Excel's rebuild rather than its open-time pass."
+    prefer: excel
+    first_noted: 2026-11-14
+    last_verified_excel_version: "16.115"
+
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a

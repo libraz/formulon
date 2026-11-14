@@ -6928,16 +6928,18 @@ export interface Workbook {
   /** Sets the calc mode. Fails with `StatusCode.InvalidArgument` for a value outside `CalcMode`. */
   setCalcMode(mode: CalcMode): void;
   /**
-   *  The Compatibility Version the workbook evaluates under: its stored value, or `Version2` for a workbook
-   *  whose file carries none and for a new workbook. A stored `Version3` reads 3 and evaluates as `Version2`.
+   *  The Compatibility Version the workbook evaluates under: its stored value. A new workbook reads
+   *  `Version2`; a loaded workbook whose file carries none reads `Version1`, as Excel computes it. A stored
+   *  `Version3` evaluates as `Version2`. A larger number, written by a later Excel, reads as stored,
+   *  evaluates as `Version2` and is written back unchanged.
    */
-  getCompatibilityVersion(): CompatibilityVersion;
+  getCompatibilityVersion(): CompatibilityVersion | number;
   /**
    *  Sets the Compatibility Version. Setting the current value changes nothing. `Version3` is stored and
    *  written as given and evaluates as `Version2`. A change marks every formula dirty only when it moves
    *  between `Version1` and `Version2` or `Version3`; a change between `Version2` and `Version3` marks
-   *  nothing. A value outside `CompatibilityVersion` fails with `StatusCode.InvalidArgument` and leaves the
-   *  workbook unchanged.
+   *  nothing. A value outside `CompatibilityVersion` (a number above 3 read from the getter included) fails
+   *  with `StatusCode.InvalidArgument` and leaves the workbook unchanged.
    */
   setCompatibilityVersion(version: CompatibilityVersion): void;
   /** `<calcPr fullPrecision>`; `false` is "set precision as displayed". Metadata only. */

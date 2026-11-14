@@ -103,11 +103,14 @@ TEST_P(CompatibilityVersionEval, ANewBookCountsCodePoints) {
   ExpectLeftRightCodePoints(r);
 }
 
-TEST_P(CompatibilityVersionEval, AnUnstampedBookCountsCodePoints) {
+// Excel ticks Version 1 for a book without a stamp and rebuilds it counting UTF-16 units.
+TEST_P(CompatibilityVersionEval, AnUnstampedBookCountsUtf16Units) {
   Workbook wb = Workbook::create_for_profile(GetParam());
   wb.restore_compatibility_stamp(std::nullopt, std::nullopt);
-  EXPECT_EQ(wb.compatibility_version(), 2U);
-  ExpectCodePoints(Evaluate(wb));
+  EXPECT_EQ(wb.compatibility_version(), 1U);
+  const Results r = Evaluate(wb);
+  ExpectUtf16Units(r);
+  ExpectLeftRightCodePoints(r);
 }
 
 TEST_P(CompatibilityVersionEval, AStampedVersion1BookCountsUtf16Units) {
@@ -132,6 +135,15 @@ TEST_P(CompatibilityVersionEval, AStampedVersion3BookEvaluatesAsVersion2) {
   Workbook wb = Workbook::create_for_profile(GetParam());
   wb.restore_compatibility_stamp(3U, 2U);
   EXPECT_EQ(wb.compatibility_version(), 3U);
+  ExpectCodePoints(Evaluate(wb));
+}
+
+// A stamp above every version Excel knows (Excel lists it as unsupported) evaluates as 2 and is kept.
+TEST_P(CompatibilityVersionEval, AStampAboveTheKnownVersionsEvaluatesAsVersion2) {
+  Workbook wb = Workbook::create_for_profile(GetParam());
+  wb.restore_compatibility_stamp(4U, 2U);
+  EXPECT_EQ(wb.compatibility_version(), 4U);
+  EXPECT_EQ(wb.compatibility_stamp(), std::optional<std::uint32_t>(4U));
   ExpectCodePoints(Evaluate(wb));
 }
 

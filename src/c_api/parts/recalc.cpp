@@ -2,6 +2,7 @@
 // C ABI - recalc / iterative / calc-mode / profile / partial-recalc.
 
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <string>
 #include <utility>
@@ -301,8 +302,9 @@ extern "C" fm_status_t fm_workbook_get_compatibility_version(const fm_workbook_t
     return null_argument();
   }
   const std::uint32_t version = wb->workbook().compatibility_version();
-  // A value outside the enum (a later Excel's) evaluates as 2 and is kept in the file as read.
-  *out_version = version >= 1U && version <= 3U ? static_cast<std::int32_t>(version) : FM_COMPATIBILITY_VERSION_2;
+  // A later Excel's stamp reads as stored; it evaluates as 2 and is kept in the file as read.
+  constexpr auto kMax = static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max());
+  *out_version = static_cast<std::int32_t>(version > kMax ? kMax : version);
   return 0;
 }
 

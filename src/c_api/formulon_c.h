@@ -4462,11 +4462,11 @@ typedef enum {
 /**
  * @brief Returns the Compatibility Version the workbook evaluates under.
  *
- * The workbook's stored value, or `FM_COMPATIBILITY_VERSION_2` for a workbook
- * whose file carries none, as Excel computes it. A new workbook reads 2. A
- * loaded workbook stored as 3 reads 3 and evaluates the five functions as 2;
- * a stored value outside 1-3 reads 2, as it evaluates, and is still written
- * back as read.
+ * The workbook's stored value. A new workbook reads 2, and a loaded workbook
+ * whose file carries none reads 1, as Excel computes it. 3 evaluates the five
+ * functions as 2. A stored value above 3, written by a later Excel, reads as
+ * stored (saturating at INT32_MAX), evaluates as `FM_COMPATIBILITY_VERSION_2`
+ * and is written back as read.
  *
  * Under version 1, Excel's MID and REPLACE can return a lone surrogate when a
  * cut falls inside a supplementary-plane character; Formulon takes the whole
@@ -4489,8 +4489,9 @@ FM_API fm_status_t fm_workbook_get_compatibility_version(const fm_workbook_t* wb
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is NULL;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `version` is not 1, 2 or 3;
- *         the workbook is left unchanged.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `version` is not 1, 2 or 3
+ *         (a larger value read back from the getter included); the workbook
+ *         is left unchanged.
  */
 FM_API fm_status_t fm_workbook_set_compatibility_version(fm_workbook_t* wb, int32_t version);
 

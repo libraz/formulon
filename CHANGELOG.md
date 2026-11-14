@@ -28,15 +28,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Workbook.getCompatibilityVersion()` / `setCompatibilityVersion()` (Python
   `get_compatibility_version()` / `set_compatibility_version()`, C
   `fm_workbook_get_compatibility_version` /
-  `fm_workbook_set_compatibility_version`) and the `CompatibilityVersion`
-  enum read and set Excel's Compatibility Version, which `.xlsx` and `.xlsb`
-  now read and write. Version 1 makes `LEN`, `MID`, `FIND`, `SEARCH` and
-  `REPLACE` count UTF-16 units; version 2, the value of a new workbook and of
-  one whose file carries none, counts characters. Version 3 (nested arrays) is
-  stored and written as given and evaluates as version 2. A change marks
-  formulas for recalculation only when it switches between version 1 and
-  version 2 or 3; setting the current value changes nothing, and a value
-  outside 1-3 is rejected.
+  `fm_workbook_set_compatibility_version`) and the `CompatibilityVersion` enum
+  read and set Excel's Compatibility Version, which `.xlsx` and `.xlsb` now
+  read and write. Version 1 makes `LEN`, `MID`, `FIND`, `SEARCH` and `REPLACE`
+  count UTF-16 units; version 2, the value of a new workbook, counts
+  characters. A loaded workbook whose file carries no version reads 1. Version
+  3 (nested arrays) is stored and written as given and evaluates as version 2,
+  as does a higher number a later Excel writes, which the getter reports as
+  stored. A change marks formulas for recalculation only when it switches
+  between version 1 and version 2 or 3; setting the current value changes
+  nothing, and a value outside 1-3 is rejected.
 
 ### Changed
 
@@ -45,9 +46,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the Basic Multilingual Plane (an emoji, a rare CJK ideograph) counts as one
   position, unless the workbook declares version 1, where it counts as two.
   Before, Windows profiles, including the default `win-365-en_US`, always
-  counted two. A workbook without the setting, and every new workbook, uses
-  version 2, as Excel does. `LEFT` and `RIGHT` count such a character as one
-  position on every profile and version, as Excel does.
+  counted two. Every new workbook uses version 2; a loaded workbook without
+  the setting uses version 1, as Excel computes it on recalculation. `LEFT`
+  and `RIGHT` count such a character as one position on every profile and
+  version, as Excel does.
 
 - `.xlsb` saves write each sheet's print options, page margins, page setup,
   header and footer, and manual page breaks from the workbook, as Excel does,
