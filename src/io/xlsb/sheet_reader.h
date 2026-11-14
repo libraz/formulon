@@ -16,6 +16,7 @@
 
 #include "io/array_anchor_budget.h"
 #include "io/rich_value_errors.h"
+#include "io/rich_values.h"
 #include "io/xlsb/ptg_reader.h"
 #include "phonetic.h"
 #include "protection.h"
@@ -115,7 +116,7 @@ struct SheetDecodeState {
 /// Decodes one sheet binary part. Cells (literal + formula) flow into
 /// `wb.sheet(sheet_index)`. SST indices are resolved against
 /// `sst_entries`; out-of-range indices are returned as
-/// `kIoXlsbCorrupt`. A non-null `rich_errors` restores the sheet's rich errors
+/// `kIoXlsbCorrupt`. A non-null `rich_values` restores the sheet's rich values
 /// before its spill regions are registered; a constant saved with a spill
 /// value is appended to `*deferred` for the pivot hook. Returns
 /// `kSecurityResourceLimit` once the sheet's load charges exceed
@@ -126,7 +127,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
     const std::vector<PhoneticProperties>& sst_phonetic_props, std::deque<std::string>& text_storage,
     const std::vector<std::string>& sheet_names, const std::vector<XlsbName>& name_table,
     const std::vector<XlsbSheetRange>& sheet_ranges, const XlsbExternalBooks& external_books,
-    std::uint32_t* undecoded_formula_count, const RichErrorSet* rich_errors = nullptr,
+    std::uint32_t* undecoded_formula_count, const RichValueSet* rich_values = nullptr,
     std::vector<DeferredSpillAnchor>* deferred = nullptr, std::uint64_t max_cell_bytes = kMaxSheetLoadCellBytes);
 
 /// True for a worksheet-tail record the grammar places after the hyperlinks

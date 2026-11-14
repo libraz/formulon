@@ -508,15 +508,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - In-cell pictures and the other rich values a workbook carries survive an
-  `.xlsx` save: each cell keeps its value, the rich-data parts are rewritten
+  `.xlsx` or `.xlsb` save: each cell keeps its value, the rich-data parts are rewritten
   with only the values still in use, and images no cell uses any more are
   dropped, as Excel drops them. Before, such a book kept its rich-data parts
   but lost every cell's link to them, so pictures in cells came back as
   `#VALUE!`. Writing or clearing such a cell removes its value, and a book
   holding them now also gets Formulon's own rich errors (`#SPILL!`,
   `#CALC!`). A rich-data layout the writer cannot carry is kept unchanged
-  and counted in `deferredFeatureCount`. `.xlsb` saves still write such
-  cells as `#VALUE!`.
+  and counted in `deferredFeatureCount`, in either format.
 
 - Excel refused to open an `.xlsb` that held PivotTables after it was opened and
   saved again as `.xlsb`: the workbook part lost its list of pivot caches. The

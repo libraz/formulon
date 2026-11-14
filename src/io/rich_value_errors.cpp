@@ -553,8 +553,8 @@ RichErrorTable build_rich_error_table(const Workbook& wb, PivotAnchorFilter pivo
   return BuildTable(wb, pivot_filter, /*with_opaque=*/false);
 }
 
-RichErrorTable build_rich_value_table(const Workbook& wb) {
-  return BuildTable(wb, nullptr, /*with_opaque=*/true);
+RichErrorTable build_rich_value_table(const Workbook& wb, PivotAnchorFilter pivot_filter) {
+  return BuildTable(wb, pivot_filter, /*with_opaque=*/true);
 }
 
 MetadataModel metadata_model(bool dynamic_arrays, std::size_t rich_values) {

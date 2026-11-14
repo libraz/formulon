@@ -1,8 +1,9 @@
-// Rich values the engine does not model survive an .xlsx load and save: the
-// in-cell pictures Excel wrote, an overwritten picture dropping its value and
-// its now-unreferenced media, a book the table cannot carry keeping its parts
-// verbatim with a save diagnostic, and an error-only book writing the same
-// rich-value parts as the error table alone.
+// Rich values the engine does not model survive an .xlsx or .xlsb load and
+// save: the in-cell pictures Excel wrote, an overwritten picture dropping its
+// value and its now-unreferenced media, a book the table cannot carry keeping
+// its parts verbatim with a save diagnostic, an error-only book writing the
+// same rich-value parts as the error table alone, and pictures crossing
+// between the two formats.
 
 #include <algorithm>
 #include <cstddef>
@@ -19,12 +20,18 @@
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
 #include "io/dynamic_array_formula.h"
+#include "io/ooxml_defs.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
 #include "io/rich_value_errors.h"
 #include "io/rich_values.h"
+#include "io/xlsb/metadata_bin.h"
+#include "io/xlsb/reader.h"
+#include "io/xlsb/record.h"
+#include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
+#include "passthrough_part.h"
 #include "pugixml.hpp"
 #include "sheet.h"
 #include "support/roundtrip_symmetry.h"
@@ -473,9 +480,9 @@ TEST(RichValuePreserve, ErrorOnlyBooksKeepExcelsBytes) {
 }
 
 // Every rich-error book, against the parts and `vm`s the error table builds
-// for the loaded model: that table and its serialisers are the .xlsb save's,
-// which the opaque values do not reach. A book the reader keeps verbatim
-// keeps the file's own parts.
+// for the loaded model: that table and its serialisers are the save's when no
+// cell holds an opaque value. A book the reader keeps verbatim keeps the
+// file's own parts.
 void ExpectErrorTableOutput(const std::string& relative) {
   SCOPED_TRACE(relative);
   const std::vector<std::uint8_t> excel = ReadFixture(relative);
@@ -536,6 +543,356 @@ TEST(RichValuePreserve, ErrorOnlyBooksWriteTheErrorTable) {
   books.push_back("excel/let_a1_names2.xlsx");
   for (const std::string& book : books) {
     ExpectErrorTableOutput(book);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// .xlsb: the same table over metadata.bin and the XML richData parts
+// ---------------------------------------------------------------------------
+
+constexpr std::string_view kMetadataBin = "xl/metadata.bin";
+constexpr std::string_view kSheetBin = "xl/worksheets/sheet1.bin";
+constexpr std::string_view kBookBinRels = "xl/_rels/workbook.bin.rels";
+
+std::vector<std::uint8_t> ReadXlsbPicture(std::string_view name) {
+  return ReadFixture("excel/cell_pictures/" + std::string(name) + ".xlsb");
+}
+
+Workbook LoadXlsb(const std::vector<std::uint8_t>& bytes) {
+  auto loaded = xlsb::read_xlsb(test::span_of(bytes));
+  EXPECT_TRUE(static_cast<bool>(loaded)) << (loaded ? "" : loaded.error().message);
+  return loaded ? std::move(loaded.value().workbook) : Workbook::create_empty();
+}
+
+xlsb::XlsbWriteResult SaveXlsb(const Workbook& wb) {
+  auto saved = xlsb::write_xlsb_with_result(wb);
+  EXPECT_TRUE(static_cast<bool>(saved)) << (saved ? "" : saved.error().message);
+  return saved ? std::move(saved.value()) : xlsb::XlsbWriteResult{};
+}
+
+using RecordList = std::vector<std::pair<std::uint16_t, std::vector<std::uint8_t>>>;
+
+RecordList RecordsOf(const std::vector<std::uint8_t>& bytes) {
+  RecordList out;
+  ByteSpan cursor = test::span_of(bytes);
+  while (cursor.size > 0U) {
+    auto record = xlsb::read_record(cursor);
+    if (!record) {
+      ADD_FAILURE() << "unreadable record";
+      break;
+    }
+    out.emplace_back(record.value().type,
+                     std::vector<std::uint8_t>(record.value().payload.data,
+                                               record.value().payload.data + record.value().payload.size));
+  }
+  return out;
+}
+
+RecordList PartRecords(const std::vector<std::uint8_t>& package, std::string_view part) {
+  const std::optional<std::string> text = Part(package, part);
+  EXPECT_TRUE(text.has_value()) << part;
+  const std::string bytes = text.value_or("");
+  return RecordsOf(std::vector<std::uint8_t>(bytes.begin(), bytes.end()));
+}
+
+std::uint32_t U32(const std::vector<std::uint8_t>& payload) {
+  return payload.size() < 4U
+             ? 0U
+             : static_cast<std::uint32_t>(payload[0]) | (static_cast<std::uint32_t>(payload[1]) << 8U) |
+                   (static_cast<std::uint32_t>(payload[2]) << 16U) | (static_cast<std::uint32_t>(payload[3]) << 24U);
+}
+
+/// The `BrtValueMeta` index ahead of every cell record in worksheet part `sheet_part`, by A1 reference.
+std::map<std::string, std::string> XlsbVmCells(const std::vector<std::uint8_t>& package, std::string_view sheet_part) {
+  std::map<std::string, std::string> out;
+  std::uint32_t row = 0;
+  std::uint32_t vm = 0;
+  for (const auto& [type, payload] : PartRecords(package, sheet_part)) {
+    if (type == static_cast<std::uint16_t>(xlsb::XlsbRecordType::BrtRowHdr)) {
+      row = U32(payload);
+      vm = 0;
+    } else if (type == static_cast<std::uint16_t>(xlsb::XlsbRecordType::BrtValueMeta)) {
+      vm = U32(payload);
+    } else if (type >= static_cast<std::uint16_t>(xlsb::XlsbRecordType::BrtCellBlank) &&
+               type <= static_cast<std::uint16_t>(xlsb::XlsbRecordType::BrtFmlaError)) {
+      if (vm != 0U) {
+        out[a1::encode_a1(row, U32(payload))] = std::to_string(vm);
+      }
+      vm = 0;
+    }
+  }
+  return out;
+}
+
+/// The parts a rich-value save regenerates, against `expected`'s.
+// The relationships of `part` as sorted (id, type, target) triples: the writer regenerates the part, so its order
+// and whitespace are its own, while each id must still name the same target.
+std::vector<std::vector<std::string>> RelationshipTargets(const std::vector<std::uint8_t>& package,
+                                                          std::string_view part) {
+  std::vector<std::vector<std::string>> out = Relationships(package, part);
+  std::sort(out.begin(), out.end());
+  return out;
+}
+
+void ExpectSameXlsbRichParts(const std::vector<std::uint8_t>& expected, const std::vector<std::uint8_t>& actual) {
+  for (const std::string_view part : {kValuesPart, kStructuresPart, kTypesPart, kRelPart}) {
+    ExpectSamePart(expected, actual, part);
+  }
+  EXPECT_EQ(RelationshipTargets(actual, kRelRelsPart), RelationshipTargets(expected, kRelRelsPart));
+  EXPECT_EQ(PartRecords(actual, kMetadataBin), PartRecords(expected, kMetadataBin));
+}
+
+TEST(RichValuePreserve, XlsbCellPicturesReadAsOpaqueValues) {
+  const Workbook wb = LoadXlsb(ReadXlsbPicture("cell_pictures"));
+  const Sheet& sheet = wb.sheet(0);
+  for (const char* cell : {"E2", "E4", "E6", "E8"}) {
+    EXPECT_TRUE(sheet.rich_value_at(Row(cell), Col(cell)).has_value()) << cell;
+  }
+  const std::optional<OpaqueRichValue> e2 = sheet.rich_value_at(Row("E2"), Col("E2"));
+  ASSERT_TRUE(e2.has_value());
+  EXPECT_EQ(e2->structure_type, "_localImage");
+  ASSERT_EQ(e2->keys.size(), 2U);
+  EXPECT_EQ(e2->keys[0].name, "_rvRel:LocalImageIdentifier");
+  EXPECT_EQ(e2->keys[0].rel_target, "xl/media/image1.png");
+  EXPECT_EQ(e2->keys[0].rel_type, kImageRel);
+  EXPECT_EQ(e2->keys[1].value, "5");
+  const std::optional<OpaqueRichValue> e8 = sheet.rich_value_at(Row("E8"), Col("E8"));
+  ASSERT_TRUE(e8.has_value());
+  ASSERT_EQ(e8->keys.size(), 3U);
+  EXPECT_EQ(e8->keys[0].rel_target, "xl/media/image2.png");
+  EXPECT_EQ(e8->keys[2].value, "Blue circle on a blue field");
+  EXPECT_EQ(sheet.cell_at(Row("E2"), Col("E2"))->cached_value.as_error(), ErrorCode::Value);
+  for (const PassthroughPart& part : wb.passthrough_parts()) {
+    EXPECT_NE(part.path, kMetadataBin);
+    EXPECT_NE(part.path, kValuesPart);
+  }
+}
+
+TEST(RichValuePreserve, XlsbCellPicturesRoundTrip) {
+  const std::vector<std::uint8_t> excel = ReadXlsbPicture("cell_pictures");
+  const xlsb::XlsbWriteResult saved = SaveXlsb(LoadXlsb(excel));
+  ASSERT_FALSE(saved.bytes.empty());
+
+  EXPECT_EQ(XlsbVmCells(saved.bytes, kSheetBin),
+            (std::map<std::string, std::string>{{"E2", "1"}, {"E4", "1"}, {"E6", "2"}, {"E8", "3"}}));
+  // The table numbers values, structures and richValueRel entries as Excel did.
+  ExpectSameXlsbRichParts(excel, saved.bytes);
+  EXPECT_EQ(Relationships(saved.bytes, kRelRelsPart),
+            (std::vector<std::vector<std::string>>{{"rId1", std::string(kImageRel), "../media/image1.png"},
+                                                   {"rId2", std::string(kImageRel), "../media/image2.png"}}));
+  EXPECT_EQ(MediaParts(saved.bytes), (std::vector<std::string>{"xl/media/image1.png", "xl/media/image2.png"}));
+  ExpectSamePart(excel, saved.bytes, "xl/media/image1.png");
+  ExpectSamePart(excel, saved.bytes, "xl/media/image2.png");
+
+  const std::string content_types = Part(saved.bytes, "[Content_Types].xml").value_or("");
+  for (const char* override_part : {"<Override PartName=\"/xl/richData/richValueRel.xml\" "
+                                    "ContentType=\"application/vnd.ms-excel.richvaluerel+xml\"/>",
+                                    "<Override PartName=\"/xl/richData/rdrichvalue.xml\" "
+                                    "ContentType=\"application/vnd.ms-excel.rdrichvalue+xml\"/>",
+                                    "<Default Extension=\"png\" ContentType=\"image/png\"/>"}) {
+    EXPECT_NE(content_types.find(override_part), std::string::npos) << override_part << "\n" << content_types;
+  }
+  bool rich_rel = false;
+  bool metadata_rel = false;
+  for (const std::vector<std::string>& rel : Relationships(saved.bytes, kBookBinRels)) {
+    rich_rel = rich_rel || (rel[1] == kRelRichValueRel && rel[2] == "richData/richValueRel.xml");
+    metadata_rel = metadata_rel || (rel[1] == kRelSheetMetadata && rel[2] == "metadata.bin");
+  }
+  EXPECT_TRUE(rich_rel);
+  EXPECT_TRUE(metadata_rel);
+
+  // A second cycle writes the same parts again.
+  const xlsb::XlsbWriteResult resaved = SaveXlsb(LoadXlsb(saved.bytes));
+  ExpectSameXlsbRichParts(saved.bytes, resaved.bytes);
+  EXPECT_EQ(XlsbVmCells(resaved.bytes, kSheetBin), XlsbVmCells(saved.bytes, kSheetBin));
+  EXPECT_EQ(resaved.diagnostics.deferred_feature_count, saved.diagnostics.deferred_feature_count);
+}
+
+TEST(RichValuePreserve, XlsbClearedPictureBookKeepsItsSingleMediaPart) {
+  const std::vector<std::uint8_t> excel = ReadXlsbPicture("picture_cleared_orphan_media");
+  const xlsb::XlsbWriteResult saved = SaveXlsb(LoadXlsb(excel));
+  ASSERT_FALSE(saved.bytes.empty());
+  EXPECT_EQ(MediaParts(saved.bytes), (std::vector<std::string>{"xl/media/image1.png"}));
+  ExpectSamePart(excel, saved.bytes, "xl/media/image1.png");
+  // G7 is the formula `=E8`, whose value is the picture with CalcOrigin 4.
+  EXPECT_EQ(XlsbVmCells(saved.bytes, kSheetBin),
+            (std::map<std::string, std::string>{{"E6", "1"}, {"E8", "3"}, {"G7", "2"}}));
+  ExpectSameXlsbRichParts(excel, saved.bytes);
+}
+
+TEST(RichValuePreserve, XlsbOverwritingAPictureDropsItsValueAndOrphanMedia) {
+  const std::vector<std::uint8_t> excel = ReadXlsbPicture("cell_pictures");
+  const WriteDiagnostics unedited = SaveXlsb(LoadXlsb(excel)).diagnostics;
+  Workbook wb = LoadXlsb(excel);
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, Row("E2"), Col("E2"), Value::number(1.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, Row("E4"), Col("E4"), Value::number(2.0))));
+  EXPECT_FALSE(wb.sheet(0).rich_value_at(Row("E2"), Col("E2")).has_value());
+  EXPECT_TRUE(wb.sheet(0).rich_value_at(Row("E6"), Col("E6")).has_value());
+
+  const xlsb::XlsbWriteResult saved = SaveXlsb(wb);
+  ASSERT_FALSE(saved.bytes.empty());
+  EXPECT_EQ(XlsbVmCells(saved.bytes, kSheetBin), (std::map<std::string, std::string>{{"E6", "1"}, {"E8", "2"}}));
+  const std::string values = Part(saved.bytes, kValuesPart).value_or("");
+  EXPECT_NE(values.find("count=\"2\"><rv s=\"0\"><v>0</v><v>5</v></rv>"
+                        "<rv s=\"1\"><v>0</v><v>5</v><v>Blue circle on a blue field</v></rv></rvData>"),
+            std::string::npos)
+      << values;
+  EXPECT_NE(Part(saved.bytes, kRelPart).value_or("").find("<rel r:id=\"rId1\"/></richValueRels>"), std::string::npos);
+  EXPECT_EQ(Relationships(saved.bytes, kRelRelsPart),
+            (std::vector<std::vector<std::string>>{{"rId1", std::string(kImageRel), "../media/image2.png"}}));
+  // image1.png was named only by the dropped value.
+  EXPECT_EQ(MediaParts(saved.bytes), (std::vector<std::string>{"xl/media/image2.png"}));
+  EXPECT_EQ(saved.diagnostics.dropped_part_count, unedited.dropped_part_count);
+  EXPECT_EQ(saved.diagnostics.dropped_relationship_count, unedited.dropped_relationship_count);
+  EXPECT_EQ(saved.diagnostics.deferred_feature_count, unedited.deferred_feature_count);
+}
+
+TEST(RichValuePreserve, XlsbClearingEveryPictureDropsTheRichParts) {
+  const std::vector<std::uint8_t> excel = ReadXlsbPicture("cell_pictures");
+  const WriteDiagnostics control = SaveXlsb(LoadXlsb(excel)).diagnostics;
+  Workbook wb = LoadXlsb(excel);
+  for (const char* cell : {"E2", "E4", "E6", "E8"}) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, Row(cell), Col(cell), Value::number(1.0)))) << cell;
+  }
+  const xlsb::XlsbWriteResult saved = SaveXlsb(wb);
+  ASSERT_FALSE(saved.bytes.empty());
+  for (const std::string& name : PartNames(saved.bytes)) {
+    EXPECT_NE(name.compare(0, 12, "xl/richData/"), 0) << name;
+  }
+  EXPECT_FALSE(Part(saved.bytes, kMetadataBin).has_value());
+  EXPECT_TRUE(MediaParts(saved.bytes).empty());
+  EXPECT_TRUE(XlsbVmCells(saved.bytes, kSheetBin).empty());
+  for (const std::vector<std::string>& rel : Relationships(saved.bytes, kBookBinRels)) {
+    EXPECT_NE(rel[1], kRelRichValueRel);
+    EXPECT_NE(rel[1], kRelSheetMetadata);
+  }
+  // The richValueRel link goes with its part on purpose; neither is a loss.
+  EXPECT_EQ(saved.diagnostics.dropped_relationship_count, control.dropped_relationship_count);
+  EXPECT_EQ(saved.diagnostics.dropped_part_count, control.dropped_part_count);
+}
+
+TEST(RichValuePreserve, XlsbAnExternalPictureTargetKeepsEveryPartVerbatim) {
+  const std::vector<std::uint8_t> excel = ReadXlsbPicture("cell_pictures");
+  const WriteDiagnostics control = SaveXlsb(LoadXlsb(excel)).diagnostics;
+  std::string rels = Part(excel, kRelRelsPart).value_or("");
+  const std::string target = "Target=\"../media/image1.png\"";
+  const std::size_t at = rels.find(target);
+  ASSERT_NE(at, std::string::npos);
+  rels.replace(at, target.size(), "Target=\"https://example.com/a.png\" TargetMode=\"External\"");
+  const std::vector<std::uint8_t> package = Repack(excel, {{std::string(kRelRelsPart), rels}});
+
+  const Workbook wb = LoadXlsb(package);
+  EXPECT_FALSE(wb.sheet(0).has_rich_values());
+  EXPECT_EQ(rich_value_fallback_reason(wb), kRichFallbackRelExternal);
+  const xlsb::XlsbWriteResult saved = SaveXlsb(wb);
+  ASSERT_FALSE(saved.bytes.empty());
+  EXPECT_EQ(saved.diagnostics.deferred_feature_count, control.deferred_feature_count + 1U);
+  EXPECT_TRUE(XlsbVmCells(saved.bytes, kSheetBin).empty());
+  ExpectSameXlsbRichParts(package, saved.bytes);
+  EXPECT_EQ(MediaParts(saved.bytes), (std::vector<std::string>{"xl/media/image1.png", "xl/media/image2.png"}));
+}
+
+TEST(RichValuePreserve, PicturesCrossBetweenXlsxAndXlsb) {
+  const std::vector<std::uint8_t> xlsx = ReadPicture("cell_pictures");
+  const std::vector<std::uint8_t> xlsb_excel = ReadXlsbPicture("cell_pictures");
+  const std::map<std::string, std::string> vm{{"E2", "1"}, {"E4", "1"}, {"E6", "2"}, {"E8", "3"}};
+
+  // .xlsx to .xlsb: the rich-value parts Excel wrote for the same book.
+  const xlsb::XlsbWriteResult to_xlsb = SaveXlsb(Load(xlsx));
+  ASSERT_FALSE(to_xlsb.bytes.empty());
+  EXPECT_EQ(XlsbVmCells(to_xlsb.bytes, kSheetBin), vm);
+  ExpectSameXlsbRichParts(xlsb_excel, to_xlsb.bytes);
+  EXPECT_EQ(MediaParts(to_xlsb.bytes), (std::vector<std::string>{"xl/media/image1.png", "xl/media/image2.png"}));
+  const Workbook reread = LoadXlsb(to_xlsb.bytes);
+  for (const char* cell : {"E2", "E4", "E6", "E8"}) {
+    EXPECT_TRUE(reread.sheet(0).rich_value_at(Row(cell), Col(cell)).has_value()) << cell;
+  }
+  EXPECT_FALSE(Part(to_xlsb.bytes, kMetadataPart).has_value());
+
+  // .xlsb to .xlsx.
+  const OoxmlWriteResult to_xlsx = Save(LoadXlsb(xlsb_excel));
+  ASSERT_FALSE(to_xlsx.bytes.empty());
+  EXPECT_EQ(VmCells(to_xlsx.bytes, "xl/worksheets/sheet1.xml"), vm);
+  for (const std::string_view part : {kMetadataPart, kValuesPart, kStructuresPart, kTypesPart, kRelPart}) {
+    ExpectSamePart(xlsx, to_xlsx.bytes, part);
+  }
+  EXPECT_EQ(RelationshipTargets(to_xlsx.bytes, kRelRelsPart), RelationshipTargets(xlsx, kRelRelsPart));
+  EXPECT_EQ(MediaParts(to_xlsx.bytes), (std::vector<std::string>{"xl/media/image1.png", "xl/media/image2.png"}));
+  EXPECT_FALSE(Part(to_xlsx.bytes, kMetadataBin).has_value());
+}
+
+// ---------------------------------------------------------------------------
+// .xlsb books holding only rich errors write what the error table alone writes.
+// ---------------------------------------------------------------------------
+
+// A blocked pivot's anchor keeps its rich value only when its pivot part is
+// written, as the .xlsb save decides.
+bool PivotPartKept(const Workbook& wb, std::size_t sheet, std::size_t pivot) {
+  for (const PassthroughPart& part : wb.passthrough_parts()) {
+    if (part.retained_origin == PassthroughPart::RetainedOrigin::kPivotTable && part.origin_sheet_index == sheet &&
+        part.origin_pivot_index == pivot) {
+      return true;
+    }
+  }
+  return false;
+}
+
+TEST(RichValuePreserve, XlsbErrorOnlyBooksWriteTheErrorTable) {
+  std::vector<std::string> books;
+  for (const auto& entry : std::filesystem::directory_iterator(FixturePath("excel/rich_errors_xlsb"))) {
+    if (entry.path().extension() == ".xlsb") {
+      books.push_back("excel/rich_errors_xlsb/" + entry.path().filename().string());
+    }
+  }
+  std::sort(books.begin(), books.end());
+  EXPECT_GE(books.size(), 30U);
+  for (const std::string& book : books) {
+    SCOPED_TRACE(book);
+    const std::vector<std::uint8_t> excel = ReadFixture(book);
+    const Workbook wb = LoadXlsb(excel);
+    const xlsb::XlsbWriteResult saved = SaveXlsb(wb);
+    ASSERT_FALSE(saved.bytes.empty());
+    bool retained_metadata = false;
+    for (const PassthroughPart& part : wb.passthrough_parts()) {
+      retained_metadata = retained_metadata || part.path == kMetadataBin;
+    }
+    if (retained_metadata) {
+      // The reader kept the file's numbering, so the save does too.
+      for (const std::string_view part : {kValuesPart, kStructuresPart, kTypesPart}) {
+        ExpectSamePart(excel, saved.bytes, part);
+      }
+      EXPECT_EQ(PartRecords(saved.bytes, kMetadataBin), PartRecords(excel, kMetadataBin));
+      continue;
+    }
+    const RichErrorTable errors = build_rich_error_table(wb, PivotPartKept);
+    const RichErrorTable table = build_rich_value_table(wb, PivotPartKept);
+    ASSERT_EQ(table.values.size(), errors.values.size());
+    EXPECT_TRUE(table.opaque.empty());
+    EXPECT_EQ(serialize_rdrichvalue(table), serialize_rdrichvalue(errors));
+    EXPECT_EQ(serialize_rdrichvaluestructure(table), serialize_rdrichvaluestructure(errors));
+    EXPECT_EQ(table.vm_by_sheet, errors.vm_by_sheet);
+
+    const bool dynamic = has_dynamic_array_formula(wb);
+    ASSERT_EQ(Part(saved.bytes, kMetadataBin).has_value(), dynamic || !errors.empty());
+    if (dynamic || !errors.empty()) {
+      EXPECT_EQ(PartRecords(saved.bytes, kMetadataBin),
+                RecordsOf(xlsb::build_metadata_bin(dynamic, errors.values.size())));
+    }
+    ASSERT_EQ(Part(saved.bytes, kValuesPart).has_value(), !errors.empty());
+    if (!errors.empty()) {
+      EXPECT_EQ(Part(saved.bytes, kValuesPart).value_or(""), serialize_rdrichvalue(errors));
+      EXPECT_EQ(Part(saved.bytes, kStructuresPart).value_or(""), serialize_rdrichvaluestructure(errors));
+      EXPECT_EQ(Part(saved.bytes, kTypesPart).value_or(""), rich_value_types_xml());
+    }
+    EXPECT_FALSE(Part(saved.bytes, kRelPart).has_value());
+    for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
+      const std::map<std::string, std::string> vm =
+          XlsbVmCells(saved.bytes, "xl/worksheets/sheet" + std::to_string(s + 1U) + ".bin");
+      for (const auto& [ref, value] : vm) {
+        EXPECT_EQ(value, std::to_string(rich_error_vm_at(errors.vm_by_sheet.at(s), Row(ref.c_str()), Col(ref.c_str()))))
+            << ref;
+      }
+    }
   }
 }
 

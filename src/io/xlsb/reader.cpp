@@ -42,6 +42,7 @@
 #include "io/ooxml_defs.h"
 #include "io/pivot_table_reader.h"
 #include "io/rich_value_errors.h"
+#include "io/rich_values.h"
 #include "io/sheet_phonetic.h"
 #include "io/threaded_comments_io.h"
 #include "io/xlsb/comments_records.h"
@@ -299,19 +300,21 @@ XlsbExternalBooks CollectExternalBookTables(const Workbook& wb) {
   return books;
 }
 
-/// Consumes `xl/metadata.bin` and the `xl/richData/` parts into `*set` when
-/// they hold nothing but standard dynamic-array metadata and measured rich
-/// errors; their workbook relationships go with them, and the writer
-/// regenerates the parts. Otherwise every part stays passthrough and false is
-/// returned. No sheet of a binary workbook is kept opaque, so that condition
-/// of the shared consumption rule always holds.
-bool ConsumeRichValueParts(const ZipReader& zip, RichErrorSet* set, std::unordered_set<std::string>& consumed_parts,
+/// Consumes `xl/metadata.bin` and the rich values into `*set` when every part
+/// reads (`read_rich_value_parts`) and no external link carries a
+/// `BrtValueMeta`; their workbook relationships go with them, and the writer
+/// regenerates the parts. `richValueRel` with its rels, the supporting-property
+/// bags and `richStyles` stay passthrough. Otherwise every part stays
+/// passthrough and false is returned. No sheet of a binary workbook is kept
+/// opaque, so that condition of the shared consumption rule always holds.
+bool ConsumeRichValueParts(const ZipReader& zip, RichValueSet* set, std::unordered_set<std::string>& consumed_parts,
                            std::vector<UnknownRelationship>& unknown_rels) {
   if (!zip.has_entry(kMetadataBinPath)) {
     return false;
   }
   constexpr std::string_view kExternalLinks = "xl/externalLinks/";
   std::vector<std::string> parts{std::string(kMetadataBinPath)};
+  RichValuePackage package;
   for (const std::string& name : zip.list_entries()) {
     // An external link's cached cells naming a value-metadata entry belong to a set this reader does not own.
     if (name.compare(0, kExternalLinks.size(), kExternalLinks) == 0 && name.size() > 4U &&
@@ -328,40 +331,41 @@ bool ConsumeRichValueParts(const ZipReader& zip, RichErrorSet* set, std::unorder
       }
     }
     if (name.compare(0, kRichDataDirPrefix.size(), kRichDataDirPrefix) == 0 && name.back() != '/') {
-      if (name != kRdRichValuePartPath && name != kRdRichValueStructurePartPath && name != kRdRichValueTypesPartPath) {
-        return false;
+      if (name == kRdRichValuePartPath || name == kRdRichValueStructurePartPath || name == kRdRichValueTypesPartPath) {
+        parts.push_back(name);
+      } else if (!is_retained_rich_data_part(name) && package.unknown_part.empty()) {
+        package.unknown_part = name;
       }
-      parts.push_back(name);
     }
   }
-  auto metadata = zip.read_entry(kMetadataBinPath);
-  if (!metadata) {
+  // The parts `package` points into.
+  std::vector<std::vector<std::uint8_t>> bytes;
+  bytes.reserve(5U);
+  const auto load = [&zip, &bytes](std::string_view path) -> const std::vector<std::uint8_t>* {
+    if (!zip.has_entry(path)) {
+      return nullptr;
+    }
+    auto read = zip.read_entry(path);
+    if (!read) {
+      return nullptr;
+    }
+    bytes.push_back(std::move(read.value()));
+    return &bytes.back();
+  };
+  const std::vector<std::uint8_t>* metadata = load(kMetadataBinPath);
+  if (metadata == nullptr) {
     return false;
   }
-  RichValueMetadata info = parse_metadata_bin(ByteSpan{metadata.value().data(), metadata.value().size()});
-  if (!info.consumable) {
+  package.values = load(kRdRichValuePartPath);
+  package.structures = load(kRdRichValueStructurePartPath);
+  package.rel = load(kRichValueRelPartPath);
+  package.rel_rels = load(kRichValueRelRelsPartPath);
+  package.rel_registered = rich_value_rel_registered(unknown_rels);
+  RichValueRead read = read_rich_value_parts(package, parse_metadata_bin(ByteSpan{metadata->data(), metadata->size()}));
+  if (!read.fallback_reason.empty()) {
     return false;
   }
-  if (zip.has_entry(kRdRichValuePartPath) || !info.vm_rv.empty()) {
-    auto values = zip.read_entry(kRdRichValuePartPath);
-    auto structures = zip.read_entry(kRdRichValueStructurePartPath);
-    if (!values || !structures) {
-      return false;
-    }
-    for (const std::optional<RichError>& v : parse_rich_errors(values.value(), structures.value())) {
-      if (!v.has_value()) {
-        return false;
-      }
-      set->values.push_back(*v);
-    }
-  }
-  for (const std::uint32_t rv : info.vm_rv) {
-    if (rv >= set->values.size()) {
-      set->values.clear();
-      return false;
-    }
-  }
-  set->vm_rv = std::move(info.vm_rv);
+  *set = std::move(read.set);
   for (const std::string& part : parts) {
     consumed_parts.insert(part);
   }
@@ -876,11 +880,11 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     }
   }
 
-  // Rich errors are restored while each sheet is decoded, before its spill
+  // Rich values are restored while each sheet is decoded, before its spill
   // regions are registered; a constant saved with a spill value waits for the pivots.
-  RichErrorSet rich_errors;
+  RichValueSet rich_values;
   std::vector<DeferredSpillAnchor> deferred_spill_anchors;
-  const bool rich_consumed = ConsumeRichValueParts(zip, &rich_errors, consumed_parts, wb_rels_or.value().unknown_rels);
+  const bool rich_consumed = ConsumeRichValueParts(zip, &rich_values, consumed_parts, wb_rels_or.value().unknown_rels);
 
   for (std::size_t i = 0; i < sheet_part_paths.size(); ++i) {
     const std::string& sheet_path = sheet_part_paths[i];
@@ -892,7 +896,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     ASSIGN_OR_RETURN(auto sheet_bytes, zip.read_entry(sheet_path));
     auto state_or = DecodeSheetBin(sheet_bytes, i, wb, sst_entries, sst_phonetic, sst_phonetic_props, text_storage,
                                    sheet_names, name_table, sheet_ranges, external_books, &undecoded_formula_count,
-                                   rich_consumed ? &rich_errors : nullptr, &deferred_spill_anchors);
+                                   rich_consumed ? &rich_values : nullptr, &deferred_spill_anchors);
     if (!state_or) {
       return std::move(state_or.error());
     }

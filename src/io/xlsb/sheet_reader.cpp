@@ -16,6 +16,7 @@
 #include "io/array_anchor_budget.h"
 #include "io/protection_xml.h"
 #include "io/rich_value_errors.h"
+#include "io/rich_values.h"
 #include "io/sheet_phonetic.h"
 #include "io/sheet_reader.h"
 #include "io/xlsb/auto_filter_records.h"
@@ -740,7 +741,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
     const std::vector<PhoneticProperties>& sst_phonetic_props, std::deque<std::string>& text_storage,
     const std::vector<std::string>& sheet_names, const std::vector<XlsbName>& name_table,
     const std::vector<XlsbSheetRange>& sheet_ranges, const XlsbExternalBooks& external_books,
-    std::uint32_t* undecoded_formula_count, const RichErrorSet* rich_errors, std::vector<DeferredSpillAnchor>* deferred,
+    std::uint32_t* undecoded_formula_count, const RichValueSet* rich_values, std::vector<DeferredSpillAnchor>* deferred,
     std::uint64_t max_cell_bytes) {
   SheetDecodeState state(max_cell_bytes);
   const FeatureFormulaReadContext feature_ctx{sheet_names, name_table, sheet_ranges, external_books, sheet_index};
@@ -797,8 +798,10 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
   if (!state.protected_ranges.empty()) {
     write_protected_ranges(wb.sheet(sheet_index).mutable_raw_extensions(), state.protected_ranges);
   }
-  if (rich_errors != nullptr && deferred != nullptr) {
-    restore_rich_error_cells(wb, sheet_index, state.value_metadata, state.array_anchors, *rich_errors, deferred);
+  if (rich_values != nullptr && deferred != nullptr) {
+    const std::vector<RichErrorCell> error_cells =
+        restore_opaque_rich_values(wb.sheet(sheet_index), state.value_metadata, *rich_values);
+    restore_rich_error_cells(wb, sheet_index, error_cells, state.array_anchors, rich_values->errors, deferred);
   }
   auto spills = RegisterArraySpills(wb, sheet_index, state.array_anchors);
   if (!spills) {

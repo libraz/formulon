@@ -22,8 +22,11 @@
 #include "io/ooxml/relationship_xml.h"
 #include "io/ooxml/rels_walker.h"
 #include "io/ooxml_defs.h"
+#include "io/xlsb/metadata_bin.h"
+#include "io/xlsb/part_paths.h"
 #include "io/xml_utils.h"
 #include "io/xsd_int.h"
+#include "io/zip_reader.h"
 #include "pugixml.hpp"
 #include "sheet.h"
 #include "utils/error.h"
@@ -239,14 +242,10 @@ std::string_view ReadValues(const RichValuePackage& p, RichValueSet* set) {
   return {};
 }
 
-std::string_view ReadInto(const RichValuePackage& p, RichValueSet* set) {
+std::string_view ReadInto(const RichValuePackage& p, RichValueMetadata info, RichValueSet* set) {
   if (!p.unknown_part.empty()) {
     return kRichFallbackRichDataPart;
   }
-  if (p.metadata == nullptr) {
-    return kRichFallbackMetadataMissing;
-  }
-  RichValueMetadata info = parse_metadata_xml(*p.metadata);
   if (!info.consumable) {
     return info.fallback_reason.empty() ? kRichFallbackMetadataBlock : info.fallback_reason;
   }
@@ -335,8 +334,18 @@ bool rich_value_rel_registered(const std::vector<UnknownRelationship>& rels) {
 }
 
 RichValueRead read_rich_value_parts(const RichValuePackage& package) {
+  RichValueMetadata info;
+  if (package.metadata == nullptr) {
+    info.fallback_reason = kRichFallbackMetadataMissing;
+  } else {
+    info = parse_metadata_xml(*package.metadata);
+  }
+  return read_rich_value_parts(package, std::move(info));
+}
+
+RichValueRead read_rich_value_parts(const RichValuePackage& package, RichValueMetadata metadata) {
   RichValueRead out;
-  out.fallback_reason = ReadInto(package, &out.set);
+  out.fallback_reason = ReadInto(package, std::move(metadata), &out.set);
   if (!out.fallback_reason.empty()) {
     out.set = RichValueSet{};
   }
@@ -363,9 +372,12 @@ std::vector<RichErrorCell> restore_opaque_rich_values(Sheet& sheet, const std::v
 
 std::string_view rich_value_fallback_reason(const Workbook& wb) {
   RichValuePackage p;
+  const std::vector<std::uint8_t>* metadata_bin = nullptr;
   for (const PassthroughPart& part : wb.passthrough_parts()) {
     if (part.path == "xl/metadata.xml") {
       p.metadata = &part.bytes;
+    } else if (part.path == xlsb::kMetadataBinPath) {
+      metadata_bin = &part.bytes;
     } else if (part.path == kRdRichValuePartPath) {
       p.values = &part.bytes;
     } else if (part.path == kRdRichValueStructurePartPath) {
@@ -383,8 +395,11 @@ std::string_view rich_value_fallback_reason(const Workbook& wb) {
     return {};
   }
   p.rel_registered = rich_value_rel_registered(wb.unknown_workbook_rels());
-  const std::string_view reason = read_rich_value_parts(p).fallback_reason;
-  return reason.empty() ? kRichFallbackPackage : reason;
+  const RichValueRead read =
+      metadata_bin != nullptr
+          ? read_rich_value_parts(p, xlsb::parse_metadata_bin(ByteSpan{metadata_bin->data(), metadata_bin->size()}))
+          : read_rich_value_parts(p);
+  return read.fallback_reason.empty() ? kRichFallbackPackage : read.fallback_reason;
 }
 
 RichValueRelPlan plan_rich_value_rels(const Workbook& wb, const RichErrorTable& table) {

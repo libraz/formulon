@@ -415,7 +415,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   std::vector<std::uint8_t> cell_payload;
   // Cells inside a merged range take the plan's merged entries.
   MergedCellIndex merged_cells(style_plan != nullptr ? sheet.merges() : std::vector<MergeRange>{});
-  // Writes the `BrtValueMeta` of an error cell saved with a rich error, ahead of its cell record.
+  // Writes the `BrtValueMeta` of an error cell saved with a rich value, ahead of its cell record.
   const auto emit_value_meta = [&](std::uint32_t row, std::uint32_t col, const Value& shown) {
     if (rich_error_vm == nullptr || !shown.is_error()) {
       return;

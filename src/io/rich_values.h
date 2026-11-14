@@ -1,5 +1,5 @@
 //
-// Rich values an .xlsx package carries beyond the modelled `_error` ones (an
+// Rich values an .xlsx or .xlsb package carries beyond the modelled `_error` ones (an
 // in-cell picture, a linked data type), read into `OpaqueRichValue`s kept on
 // their cells: structure type, ordered keys and text, and each `_rvRel:` key
 // resolved to the part it reaches through `richValueRel`. The save lists them
@@ -99,6 +99,10 @@ struct RichValueRead {
 /// `parse_rich_errors`; any other value is kept opaque when its layout is one
 /// the table writes back unchanged.
 RichValueRead read_rich_value_parts(const RichValuePackage& package);
+
+/// As above for a package whose metadata part is not `xl/metadata.xml`
+/// (`package.metadata` is unused): `metadata` is what that part says.
+RichValueRead read_rich_value_parts(const RichValuePackage& package, RichValueMetadata metadata);
 
 /// Records on `sheet` the opaque value of each of `cells` that caches an error
 /// and returns the cells whose `vm` names anything else.

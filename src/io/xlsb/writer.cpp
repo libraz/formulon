@@ -38,6 +38,7 @@
 #include "io/ooxml_defs.h"
 #include "io/passthrough_part_index.h"
 #include "io/rich_value_errors.h"
+#include "io/rich_values.h"
 #include "io/threaded_comments_io.h"
 #include "io/writer_common.h"
 #include "io/xlsb/auto_filter_records.h"
@@ -205,7 +206,7 @@ std::string FreshRelId(const std::unordered_set<std::string>& taken) {
 
 // The metadata part the package ships: whether it is generated, which
 // cell-metadata entry a spill anchor's `BrtCellMeta` record must name, and
-// the rich errors the cells' `BrtValueMeta` records name.
+// the rich values (errors and opaque ones) the cells' `BrtValueMeta` records name.
 //
 // `ifmd` is 1-based, and 0 means no anchor may emit a `BrtCellMeta` record at
 // all: either the workbook has no spill anchors, or the metadata part that
@@ -219,6 +220,10 @@ struct MetadataPlan {
   bool dynamic_arrays = false;
   std::uint32_t ifmd = 0;
   RichErrorTable rich;
+  /// The regenerated `richValueRel` pair and the read parts the save leaves out.
+  RichValueRelPlan rich_rels;
+  /// Workbook relationships to the read `richValueRel` that go with its part.
+  std::uint32_t rich_value_rels_retired = 0;
 };
 
 // True when the package carries the pivot table part that
@@ -247,7 +252,13 @@ MetadataPlan BuildMetadataPlan(const Workbook& wb) {
   }
   if (retained == nullptr) {
     // A blocked pivot's anchor is written plain unless its pivot part is: only a part kept from an XLSB source says so.
-    plan.rich = build_rich_error_table(wb, PivotPartIsWritten);
+    plan.rich = build_rich_value_table(wb, PivotPartIsWritten);
+    plan.rich_rels = plan_rich_value_rels(wb, plan.rich);
+    if (plan.rich_rels.parts.empty() && plan.rich_rels.skipped.count(std::string(kRichValueRelPartPath)) != 0U) {
+      for (const UnknownRelationship& r : wb.unknown_workbook_rels()) {
+        plan.rich_value_rels_retired += !r.target_external && r.target == kRichValueRelPartPath ? 1U : 0U;
+      }
+    }
     plan.generate_part = plan.dynamic_arrays || !plan.rich.empty();
     plan.ifmd = plan.dynamic_arrays ? 1U : 0U;  // The generated part's XLDAPR entry comes first.
     return plan;
@@ -356,6 +367,11 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   WriteDiagnostics diagnostics;
   std::uint32_t downgraded_formula_count = 0;
   diagnostics.deferred_feature_count = ReportDeferredSheetFeatures(workbook);
+  if (const std::string_view reason = rich_value_fallback_reason(workbook); !reason.empty()) {
+    // The rich values go out verbatim, but no cell refers to them any more.
+    StructuredLog("xlsb.writer.rich_values_kept_verbatim").field("reason", reason).warn();
+    ++diagnostics.deferred_feature_count;
+  }
   std::vector<std::vector<std::uint8_t>> sheet_bodies;
   sheet_bodies.reserve(sheet_count);
   // Table parts are generated from the model, numbered clear of every part
@@ -465,6 +481,20 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     return std::move(plan_or.error());
   }
   EmissionPlan plan = plan_or.take();
+  // A read `richValueRel` pair is superseded by the regenerated one, and a
+  // media part only rich values referenced goes when they no longer do.
+  if (!metadata.rich_rels.parts.empty() || !metadata.rich_rels.skipped.empty()) {
+    std::vector<const PassthroughPart*>& kept = plan.passthrough_kept;
+    kept.erase(std::remove_if(kept.begin(), kept.end(),
+                              [&metadata](const PassthroughPart* part) {
+                                return metadata.rich_rels.skipped.count(part->path) != 0U;
+                              }),
+               kept.end());
+    for (const PassthroughPart& part : metadata.rich_rels.parts) {
+      kept.push_back(&part);
+    }
+    plan.passthrough_path_index.reset(kept);
+  }
   plan.sheet_tables = std::move(sheet_tables);
   plan.sheet_drawing_rids = std::move(sheet_drawing_rids);
   plan.sheet_owns_drawing = std::move(sheet_owns_drawing);
@@ -510,6 +540,10 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   RETURN_IF_ERROR(AddPart(
       writer.get(), kWorkbookBinRelsPath,
       BuildWorkbookRels(sheet_count, emit_sst_part, plan, workbook, link_rel_ids, &diagnostics, &workbook_rel_ids)));
+  // A `richValueRel` link left with no part once every rich value naming it
+  // is gone is dropped on purpose, as Excel does, and is no loss.
+  diagnostics.dropped_relationship_count -=
+      std::min(diagnostics.dropped_relationship_count, metadata.rich_value_rels_retired);
   // 4. xl/workbook.bin
   {
     ASSIGN_OR_RETURN(auto wb_bytes, BuildWorkbookBin(workbook, ordered_names, sheet_ranges, sheet_names, link_rel_ids));
@@ -525,7 +559,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
         write_styles_bin(workbook.styles(), &dxf_plan, &style_plan, &font_plan, &note_fonts.appended());
     RETURN_IF_ERROR(AddPartBytes(writer.get(), kStylesBinPath, styles_bytes));
   }
-  // 4c. xl/metadata.bin for dynamic-array spill anchors and rich errors, with
+  // 4c. xl/metadata.bin for dynamic-array spill anchors and rich values, with
   // the rich values themselves. The worksheet BrtCellMeta / BrtValueMeta
   // records and workbook relationships are emitted in lockstep.
   if (plan.has_generated_metadata) {

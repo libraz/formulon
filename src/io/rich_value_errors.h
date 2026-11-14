@@ -8,8 +8,8 @@
 // One workbook-wide table numbers the values by first occurrence, sheets in
 // tab order and cells row-major; values are deduplicated by content and
 // structures by key set. Reading accepts only measured key sets and values,
-// so a book carrying anything else keeps its parts verbatim. An .xlsx save
-// also lists the cells' opaque rich values (`rich_values.h`) in that table.
+// so a book carrying anything else keeps its parts verbatim. A save also lists
+// the cells' opaque rich values (`rich_values.h`) in that table.
 
 #ifndef FORMULON_IO_RICH_VALUE_ERRORS_H_
 #define FORMULON_IO_RICH_VALUE_ERRORS_H_
@@ -83,7 +83,7 @@ struct RichErrorTable {
 };
 
 /// True when `parts` keeps a metadata or richData part the reader did not
-/// consume; the .xlsb writer then generates no rich errors for the book.
+/// consume; `build_rich_error_table` then lists nothing for the book.
 bool keeps_foreign_rich_data(const std::vector<PassthroughPart>& parts);
 
 /// The rich value a recorded detail is saved as, or nullopt when it is saved
@@ -101,11 +101,12 @@ using PivotAnchorFilter = bool (*)(const Workbook& wb, std::size_t sheet, std::s
 /// phantoms such a detail covers. Empty when the book keeps foreign rich data.
 RichErrorTable build_rich_error_table(const Workbook& wb, PivotAnchorFilter pivot_filter = nullptr);
 
-/// The .xlsx table: `build_rich_error_table`'s values with each error cell's
-/// opaque rich value in its row-major place (a cell's rich error wins), and
-/// the `_rvRel:` targets numbered in first-use order. Empty when the book
-/// keeps its rich-value parts verbatim (`rich_value_parts_kept_verbatim`).
-RichErrorTable build_rich_value_table(const Workbook& wb);
+/// The table a save writes, in either format: `build_rich_error_table`'s
+/// values with each error cell's opaque rich value in its row-major place (a
+/// cell's rich error wins), and the `_rvRel:` targets numbered in first-use
+/// order. Empty when the book keeps its rich-value parts verbatim
+/// (`rich_value_parts_kept_verbatim`).
+RichErrorTable build_rich_value_table(const Workbook& wb, PivotAnchorFilter pivot_filter = nullptr);
 
 /// `xl/metadata.xml` listing XLDAPR when `dynamic_arrays` and XLRICHVALUE
 /// with `rich_values` blocks when non-zero, as Excel writes it.
