@@ -644,7 +644,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
        {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
     reconcile_x14_data_bars(*slot, sheet.conditional_formats(), x14_linked);
   }
-  if (auto added = add_x14_data_bars(tail.after_hyperlinks, sheet.conditional_formats(), x14_linked); !added) {
+  if (auto added = add_x14_data_bars(tail.after_hyperlinks, sheet.conditional_formats(), x14_linked, own_index);
+      !added) {
     return std::move(added.error());
   }
   // Standalone x14 CF rules (custom icon sets, rules naming another sheet)

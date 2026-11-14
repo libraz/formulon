@@ -531,6 +531,31 @@ TEST(XlsbFeatureRecords, DataBarAxisFollowsTheX14Half) {
   EXPECT_EQ(rules[1].data_bar->axis_position, cf::DataBarAxisPosition::Automatic);
 }
 
+// An x14 data bar threshold that is a formula has no known record form, so the save names it as unwritable.
+TEST(XlsbFeatureRecords, X14DataBarWithAFormulaThresholdIsNotWritable) {
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Bars");
+  cf::CFRule rule;
+  rule.type = cf::RuleType::DataBar;
+  rule.priority = 1;
+  rule.id = "{FC000000-0000-0000-0000-000000000021}";
+  cf::DataBarSpec bar;
+  bar.min = {cf::CfvoType::Formula, "$B$1", true};
+  bar.max = {cf::CfvoType::Max, "", true};
+  bar.fill = cf::Color{0x63, 0xBE, 0x7B, 255};
+  bar.negative_fill = bar.fill;
+  bar.axis_position = cf::DataBarAxisPosition::Automatic;
+  rule.data_bar = bar;
+  cf::ConditionalFormat format;
+  format.sqref.push_back({{0, 0}, {4, 0}});
+  format.rules.push_back(std::move(rule));
+  wb.sheet(1).mutable_conditional_formats().push_back(std::move(format));
+  auto written = io::xlsb::write_xlsb(wb);
+  ASSERT_FALSE(static_cast<bool>(written));
+  EXPECT_EQ(written.error().code, FormulonErrorCode::kIoFeatureNotWritable);
+  EXPECT_EQ(written.error().context, "context=write_xlsb kind=data_bar sheet_index=1");
+}
+
 TEST(XlsbFeatureRecords, EditedX14DataBarsReachASavedXlsx) {
   Workbook wb = ReadXlsx("x14bars");
   cf::DataBarSpec& bar = *wb.sheet(0).mutable_conditional_formats()[0].rules[0].data_bar;

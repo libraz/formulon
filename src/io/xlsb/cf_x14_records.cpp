@@ -430,7 +430,7 @@ void reconcile_x14_data_bars(std::vector<std::uint8_t>& records, const std::vect
 
 Expected<void, Error> add_x14_data_bars(std::vector<std::uint8_t>& records,
                                         const std::vector<cf::ConditionalFormat>& formats,
-                                        std::unordered_set<std::string>& linked) {
+                                        std::unordered_set<std::string>& linked, std::size_t sheet_index) {
   std::vector<std::uint8_t> groups;
   for (const cf::ConditionalFormat& format : formats) {
     for (const cf::CFRule& rule : format.rules) {
@@ -454,7 +454,7 @@ Expected<void, Error> add_x14_data_bars(std::vector<std::uint8_t>& records,
       for (const cf::CfValueObject* v : {&bar.min, &bar.max}) {
         double num = 0;
         if (v->type == cf::CfvoType::Formula) {
-          return refuse_write("XLSB x14 data bar with a formula threshold has no known record form");
+          return not_writable("data_bar", sheet_index);
         }
         if (v->type == cf::CfvoType::Number || v->type == cf::CfvoType::Percent ||
             v->type == cf::CfvoType::Percentile) {

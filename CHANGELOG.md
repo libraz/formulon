@@ -663,6 +663,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   styles applied, outline symbols hidden), which were dropped on load and
   counted as unread; they now read back as the `<sheetPr>` an `.xlsx` twin
   carries and save again.
+- An `.xlsb` save of a data bar whose minimum or maximum is a formula fails
+  with `IoFeatureNotWritable` (Python `IO_FEATURE_NOT_WRITABLE`, C
+  `FM_STATUS_IO_FEATURE_NOT_WRITABLE`, 5028; kind=data_bar with the sheet's
+  `sheet_index=`), like the other features the writer cannot store, instead of
+  `InvalidArgument`.
 
 ## [0.19.0] - 2026-11-10
 
