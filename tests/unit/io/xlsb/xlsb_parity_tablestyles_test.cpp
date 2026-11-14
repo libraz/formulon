@@ -203,18 +203,85 @@ TEST(XlsbParityTableStyleEdit, StylesReadFromExcelsSave) {
   EXPECT_EQ(section.styles[2].elements[1].type, "headerRow");
 }
 
-TEST(XlsbParityTableStyleEdit, AStyleOfAnUnmeasuredFormIsLeftOutAndReported) {
-  // Usable by both tables and PivotTables: not a form Excel was measured writing.
+TEST(XlsbParityTableStyleEdit, AStyleUsableByNeitherIsLeftOutAndReported) {
+  // Usable by neither tables nor PivotTables: not a form Excel writes.
   auto loaded = read_ooxml(SpanOf(ReadFile(Fixture("custom_style_src.xlsx"))));
   ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
   Workbook& wb = loaded.value().workbook;
-  wb.mutable_styles().table_styles.styles[0].pivot = true;
+  wb.mutable_styles().table_styles.styles[0].pivot = false;
+  wb.mutable_styles().table_styles.styles[0].table = false;
   const DeferredRecords deferred;
   auto saved = write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
   EXPECT_NE(deferred.text().find("\"kind\":\"table_styles\",\"count\":1"), std::string::npos) << deferred.text();
   for (const std::string& line : TableStyleBlock(saved.value().bytes)) {
     EXPECT_NE(line.rfind("510:", 0), 0U) << line;
+  }
+}
+
+/// The BrtBeginTableStyle flags of each style in the styles part, in order.
+std::vector<std::string> StyleFlags(const Bytes& package) {
+  std::vector<std::string> out;
+  for (const std::string& line : TableStyleBlock(package)) {
+    if (line.rfind("510:", 0) == 0) {
+      out.push_back(line.substr(4U, 4U));
+    }
+  }
+  return out;
+}
+
+std::string TsdxfFixture(const std::string& name) {
+  return std::string(FORMULON_FIXTURES_DIR) + "/excel/tsdxf/" + name;
+}
+
+TEST(XlsbTableStyleDxfOrder, TableOnlyPivotOnlyAndBothFlagsRoundTrip) {
+  // PT (table only), PP (pivot only), PB (both): flags 0x0004, 0x0002, 0x0006 as little-endian u16.
+  const Bytes excel = ReadFile(TsdxfFixture("e2_x1.xlsb"));
+  EXPECT_EQ(StyleFlags(excel), (std::vector<std::string>{"0400", "0200", "0600"}));
+  auto fromXlsx = read_ooxml(SpanOf(ReadFile(TsdxfFixture("e2.xlsx"))));
+  ASSERT_TRUE(static_cast<bool>(fromXlsx)) << fromXlsx.error().message;
+  const DeferredRecords deferred;
+  auto saved = write_xlsb_with_result(fromXlsx.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  EXPECT_EQ(deferred.text().find("table_styles"), std::string::npos) << deferred.text();
+  EXPECT_EQ(TableStyleBlock(saved.value().bytes), TableStyleBlock(excel));
+  auto back = read_xlsb(SpanOf(saved.value().bytes));
+  ASSERT_TRUE(static_cast<bool>(back)) << back.error().message;
+  const auto& styles = back.value().workbook.styles().table_styles.styles;
+  ASSERT_EQ(styles.size(), 3U);
+  EXPECT_TRUE(styles[0].table);
+  EXPECT_FALSE(styles[0].pivot);
+  EXPECT_FALSE(styles[1].table);
+  EXPECT_TRUE(styles[1].pivot);
+  EXPECT_TRUE(styles[2].table);
+  EXPECT_TRUE(styles[2].pivot);
+}
+
+TEST(XlsbTableStyleDxfOrder, DxfListFollowsExcelFromXlsxOneStyleAndTwo) {
+  // The dxfs of every style's elements in style then element order, written reversed.
+  for (const char* name : {"d1", "e1", "e2"}) {
+    SCOPED_TRACE(name);
+    auto loaded = read_ooxml(SpanOf(ReadFile(TsdxfFixture(std::string(name) + ".xlsx"))));
+    ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+    auto saved = write_xlsb_with_result(loaded.value().workbook);
+    ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+    EXPECT_EQ(TableStyleBlock(saved.value().bytes),
+              TableStyleBlock(ReadFile(TsdxfFixture(std::string(name) + "_x1.xlsb"))));
+  }
+}
+
+TEST(XlsbTableStyleDxfOrder, XlsbResaveRenumbersLikeExcel) {
+  // A book loaded from Excel's xlsb holds its elements in type order, so a regenerated save reverses that order.
+  for (const char* name : {"d1", "e1", "e2"}) {
+    SCOPED_TRACE(name);
+    auto loaded = read_xlsb(SpanOf(ReadFile(TsdxfFixture(std::string(name) + "_x1.xlsb"))));
+    ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+    Workbook& wb = loaded.value().workbook;
+    wb.mutable_styles().fonts.push_back(FontRecord{});
+    auto saved = write_xlsb_with_result(wb);
+    ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+    EXPECT_EQ(TableStyleBlock(saved.value().bytes),
+              TableStyleBlock(ReadFile(TsdxfFixture(std::string(name) + "_x2.xlsb"))));
   }
 }
 

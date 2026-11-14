@@ -449,15 +449,17 @@ TEST(XlsbWorkbookFidelity, TruncatedBookViewIsSkipped) {
   EXPECT_TRUE(loaded.value().workbook.book_views_xml().empty());
 }
 
-// Custom table / PivotTable styles have no binary form here and are reported.
+// A custom style Excel has no binary form for is reported.
 TEST(XlsbWorkbookFidelity, UnmeasuredCustomTableStylesAreReportedDeferred) {
-  // A style usable by both tables and PivotTables is not a form Excel was measured writing.
+  // A style usable by neither tables nor PivotTables has no form Excel writes.
   Workbook wb = Workbook::create();
   std::uint32_t baseline = 99U;
   ToXlsb(wb, &baseline);
 
   CustomTableStyle style;
   style.name = "Mine";
+  style.table = false;
+  style.pivot = false;
   wb.mutable_styles().table_styles.present = true;
   wb.mutable_styles().table_styles.styles.push_back(style);
   std::uint32_t deferred = 0U;

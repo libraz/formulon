@@ -46,8 +46,8 @@ void emit_font_record(std::vector<std::uint8_t>& out, const FontRecord& font);
 /// The xlsb value of a table style element type, `kTableStyleElementTypes.size()` for an unknown one.
 std::uint32_t table_style_element_type(std::string_view type);
 
-/// Whether the styles part writes `style`: one usable by either tables or PivotTables (the forms measured), whose
-/// elements all name a known type and a dxf. Any other custom style is left out and reported.
+/// Whether the styles part writes `style`: one usable by tables, PivotTables or both, whose elements all name a known
+/// type and a dxf. Any other custom style is left out and reported.
 bool table_style_is_written(const CustomTableStyle& style);
 
 /// The BrtDXF count of a source styles part whose BrtDXF records form one list

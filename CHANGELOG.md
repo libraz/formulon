@@ -518,6 +518,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An `.xlsb` save writes a custom table style usable by both tables and
+  PivotTables, as Excel does, instead of leaving it out and reporting it in
+  `deferredFeatureCount`. Only a style usable by neither is still left out.
+
 - A conditional-format or table-style dxf whose fill sets only colours keeps
   its `<patternFill>` without a `patternType` through an `.xlsx` save, and its
   `.xlsb` dxf without the fill-pattern property, as Excel writes both. Such a

@@ -465,7 +465,7 @@ std::uint32_t table_style_element_type(std::string_view type) {
 }
 
 bool table_style_is_written(const CustomTableStyle& style) {
-  if (style.pivot == style.table) {
+  if (!style.pivot && !style.table) {
     return false;
   }
   return std::all_of(style.elements.begin(), style.elements.end(), [](const TableStyleElement& element) {
