@@ -95,6 +95,9 @@ struct SheetDecodeState {
   /// Source records this sheet could not carry whole (see
   /// `RecordDisposition::kAccounted`).
   std::uint32_t dropped_records = 0;
+  /// Feature instances not loaded because they could not be decoded; summed
+  /// into `XlsbReadResult::skipped_feature_count`.
+  std::uint32_t skipped_features = 0;
   /// Cell-metadata index of the `BrtCellMeta` just read, which applies to
   /// the next cell record; 0 when none is pending.
   std::uint32_t pending_cell_meta = 0;

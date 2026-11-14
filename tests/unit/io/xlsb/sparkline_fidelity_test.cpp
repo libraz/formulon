@@ -19,6 +19,7 @@
 #include "io/xlsb/record.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
+#include "utils/error.h"
 #include "value.h"
 #include "workbook.h"
 #include "writer_test_helpers.h"
@@ -222,22 +223,24 @@ TEST(XlsbSparklineFidelity, ModelGroupsAreWrittenAndReadBack) {
   ExpectAuthored(again[0]);
 }
 
-TEST(XlsbSparklineFidelity, UnencodableGroupIsSkippedAndCounted) {
+TEST(XlsbSparklineFidelity, UnencodableGroupFailsTheSave) {
   Workbook wb = AuthoredBook();
-  SparklineGroup bad;
-  bad.items = {{"#REF!", "H1"}};
+  SparklineGroup extra;
+  extra.items = {{"Data!A5:D5", "H1"}};
   std::string xml = wb.sheet(0).ext_lst_xml();
-  ASSERT_TRUE(static_cast<bool>(add_sparkline_group(xml, bad)));
+  ASSERT_TRUE(static_cast<bool>(add_sparkline_group(xml, extra)));
+  // A union source, as a leniently read xlsx can carry it.
+  const std::string source = "Data!A5:D5";
+  const std::size_t at = xml.find(source);
+  ASSERT_NE(at, std::string::npos);
+  xml.replace(at, source.size(), "(Data!A5:D5,Data!A6:D6)");
   wb.sheet(0).set_ext_lst_xml(xml);
   ASSERT_EQ(read_sparkline_groups(xml).size(), 2U);
 
   auto result = write_xlsb_with_result(wb);
-  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
-  EXPECT_EQ(result.value().diagnostics.deferred_feature_count, 1U);
-  const std::vector<SparklineGroup> groups =
-      read_sparkline_groups(LoadXlsb(result.value().bytes).sheet(0).ext_lst_xml());
-  ASSERT_EQ(groups.size(), 1U);
-  ExpectAuthored(groups[0]);
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoFeatureNotWritable);
+  EXPECT_EQ(result.error().context, "context=write_xlsb kind=sparklines sheet_index=0");
 }
 
 TEST(XlsbSparklineFidelity, XlsxGroupsSurviveConversionToXlsb) {

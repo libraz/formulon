@@ -6,6 +6,7 @@
 #ifndef FORMULON_PROTECTION_H_
 #define FORMULON_PROTECTION_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 
@@ -29,6 +30,15 @@ struct WorkbookProtection {
   std::string revisions_salt_value;
   std::uint32_t revisions_spin_count = 0;
 };
+
+/// The most UTF-16 units a protected range's name holds; Excel refuses a
+/// longer name on open.
+// @limit: excel
+inline constexpr std::size_t kMaxProtectedRangeNameUnits = 255U;
+/// The most rectangles one `<protectedRange>` holds; Excel moves a longer list
+/// to an x14 extension element the model does not hold.
+// @limit: excel
+inline constexpr std::size_t kMaxProtectedRangeRects = 8191U;
 
 /// One `<protectedRange>`: a named range users may edit without unlocking the
 /// sheet. `sqref` is the A1 range list as written.

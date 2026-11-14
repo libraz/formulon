@@ -14,8 +14,11 @@
 #include "io/ooxml_defs.h"
 #include "io/sqref_text.h"
 #include "io/xml_utils.h"
+#include "parser/ast.h"
+#include "parser/parser.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "utils/arena.h"
 #include "utils/number_text.h"
 #include "utils/resource_budget.h"
 #include "utils/runtime_id.h"
@@ -46,6 +49,60 @@ std::size_t child_rank(pugi::xml_node node) {
 
 Error invalid(const char* message) {
   return make_error(FormulonErrorCode::kInvalidArgument, message);
+}
+
+// A `#REF!` left by a deleted reference: bare, or the dead-sheet form stored as bare.
+bool is_deleted_reference(const parser::AstNode& node) {
+  if (node.kind() != parser::NodeKind::ErrorLiteral || node.as_error_literal() != ErrorCode::Ref ||
+      node.paren_depth() != 0U) {
+    return false;
+  }
+  const parser::RefErrorSite* site = node.as_ref_error_site();
+  return site == nullptr || site->form == parser::RefErrorSite::Form::kDeadSheet;
+}
+
+bool is_single_reference(const parser::AstNode& node) {
+  if (node.paren_depth() != 0U) {
+    return false;
+  }
+  switch (node.kind()) {
+    case parser::NodeKind::Ref:
+    case parser::NodeKind::Ref3D:
+    case parser::NodeKind::ExternalRef:
+    case parser::NodeKind::NameRef:
+      return true;
+    case parser::NodeKind::RangeOp: {
+      if (node.as_range_arity() != 2U) {
+        return false;
+      }
+      const parser::AstNode& first = node.as_range_operand(0);
+      const parser::AstNode& last = node.as_range_operand(1);
+      return first.kind() == parser::NodeKind::Ref && last.kind() == parser::NodeKind::Ref &&
+             first.paren_depth() == 0U && last.paren_depth() == 0U &&
+             (last.as_ref().sheet.empty() || last.as_ref().sheet == first.as_ref().sheet);
+    }
+    case parser::NodeKind::ErrorLiteral:
+      return is_deleted_reference(node);
+    default:
+      return false;
+  }
+}
+
+// Whether `text` parses cleanly and `test` holds for its root.
+template <typename Test>
+bool root_holds(std::string_view text, Test test) {
+  if (text.empty()) {
+    return false;
+  }
+  Arena arena;
+  parser::Parser parser(text, arena);
+  const parser::AstNode* root = parser.parse();
+  return root != nullptr && parser.errors().empty() && test(*root);
+}
+
+// Present and not deleted: the text an `xm:f` element carries.
+bool stored_reference(const std::string& text) {
+  return !text.empty() && !is_deleted_sparkline_source(text);
 }
 
 // `<x14:sparklineGroup>` nodes of `doc` in document order.
@@ -204,10 +261,22 @@ Expected<void, Error> validate_items(const std::vector<SparklineItem>& items) {
   }
   for (const SparklineItem& item : items) {
     std::vector<MergeRange> cells;
-    if (item.formula.empty() || !parse_sqref_text(item.location, cells) || cells.size() != 1U ||
+    if (!parse_sqref_text(item.location, cells) || cells.size() != 1U ||
         cells.front().first_row != cells.front().last_row || cells.front().first_col != cells.front().last_col) {
-      return invalid("items each need a formula and one location cell");
+      return invalid("items each need one location cell");
     }
+    if (!item.formula.empty() && !is_sparkline_source(item.formula)) {
+      return make_error(FormulonErrorCode::kInvalidArgument, "a sparkline formula must be one reference or name",
+                        "formula=" + item.formula);
+    }
+  }
+  return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> validate_date_axis(const std::string& ref) {
+  if (!ref.empty() && !is_sparkline_source(ref)) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "date_axis_ref must be one reference or name",
+                      "date_axis_ref=" + ref);
   }
   return Expected<void, Error>::Ok();
 }
@@ -281,7 +350,7 @@ void apply_group(pugi::xml_node node, const SparklineGroup& g) {
     set_color(node, px, color.name, *color.spec);
   }
   pugi::xml_node ref = child_local(node, "f");
-  if (g.date_axis_ref.empty()) {
+  if (!stored_reference(g.date_axis_ref)) {
     node.remove_child(ref);
   } else {
     (ref ? ref : insert_ranked(node, xm + "f")).text().set(g.date_axis_ref.c_str());
@@ -305,7 +374,9 @@ void apply_items(pugi::xml_node group, const std::vector<SparklineItem>& items) 
     std::vector<MergeRange> cells;
     parse_sqref_text(item.location, cells);
     pugi::xml_node node = list.append_child((px + "sparkline").c_str());
-    node.append_child((xm + "f").c_str()).text().set(item.formula.c_str());
+    if (stored_reference(item.formula)) {
+      node.append_child((xm + "f").c_str()).text().set(item.formula.c_str());
+    }
     node.append_child((xm + "sqref").c_str()).text().set(format_sqref_text(cells).c_str());
   }
 }
@@ -345,6 +416,14 @@ Expected<pugi::xml_node, Error> group_at(pugi::xml_document& doc, const std::str
 
 }  // namespace
 
+bool is_sparkline_source(std::string_view text) {
+  return root_holds(text, is_single_reference);
+}
+
+bool is_deleted_sparkline_source(std::string_view text) {
+  return root_holds(text, is_deleted_reference);
+}
+
 std::vector<SparklineGroup> read_sparkline_groups(std::string_view ext_lst_xml) {
   std::vector<SparklineGroup> out;
   pugi::xml_document doc;
@@ -359,6 +438,7 @@ std::vector<SparklineGroup> read_sparkline_groups(std::string_view ext_lst_xml) 
 
 Expected<void, Error> add_sparkline_group(std::string& ext_lst_xml, const SparklineGroup& group) {
   RETURN_IF_ERROR(validate_group(group));
+  RETURN_IF_ERROR(validate_date_axis(group.date_axis_ref));
   RETURN_IF_ERROR(validate_items(group.items));
   pugi::xml_document doc;
   if (!ext_lst_xml.empty() && !load(doc, ext_lst_xml)) {
@@ -381,6 +461,9 @@ Expected<void, Error> update_sparkline_group(std::string& ext_lst_xml, std::size
   RETURN_IF_ERROR(validate_group(group));
   pugi::xml_document doc;
   ASSIGN_OR_RETURN(pugi::xml_node node, group_at(doc, ext_lst_xml, index));
+  if (group.date_axis_ref != child_local(node, "f").text().get()) {
+    RETURN_IF_ERROR(validate_date_axis(group.date_axis_ref));
+  }
   apply_group(node, group);
   store_root_xml(ext_lst_xml, doc);
   return Expected<void, Error>::Ok();

@@ -14,8 +14,9 @@
 # `color: resolved` a record, field or op whose colours are rendered results. `namespace: ooxml`
 # publishes a `Workbook` / `Sheet` op under `.ooxml` instead of on the class. A `params` slot may be
 # `{ type, default }`: the binding may omit that trailing argument (`today`: the pinned clock, else
-# the current date). `a1_exempt` lists the JS `*Row` / `*Col` fields of an input record that stay
-# numbers instead of taking an A1 address.
+# the current date). `a1_exempt` lists the fields of an input record the bindings do not turn into
+# an A1 range record: `*Row` / `*Col` fields that stay numbers, or a reference whose text the engine
+# checks itself.
 # Engine error messages: one a call reports reads `<c_field> <constraint>` (or is a capitalised
 # sentence when no argument is at fault) and the bindings print it as `<Class.method> <public path>
 # <constraint>`; one that describes file content (kIo*, kSecurity*, out of memory) reads
@@ -1863,6 +1864,7 @@ entries:
     js: SparklineInput
     py: SparklineInput
     surfaces: [wasm, native, py]
+    a1_exempt: { fields: [source], reason: "3-D, cross-workbook, defined-name and #REF! sources are no one-sheet rectangle; the engine decides" }
   record.sparkline_group:
     kind: record
     role: result
@@ -3552,6 +3554,7 @@ entries:
     role: input
     js: SparklineGroupInput
     py: SparklineGroupInput
+    a1_exempt: { fields: [dateAxisRange], reason: "3-D, cross-workbook, defined-name and #REF! ranges are no one-sheet rectangle; the engine decides" }
     surfaces: [wasm, native, py]
     was: { js: SparklineGroupInput }
     read_only_keys: [id]

@@ -2405,8 +2405,8 @@ const RECORD_RANGE_FIELDS = Object.freeze({
   PivotWorksheetSourceInput: { range: 'SheetRect' },
   ProtectedRangeInput: { ranges: 'CellRect[]' },
   SheetSelectionInput: { active: 'CellAddress', ranges: 'CellRect[]' },
-  SparklineGroupInput: { dateAxisRange: 'SheetRect', sparklines: 'SparklineInput[]' },
-  SparklineInput: { source: 'SheetRect', location: 'CellAddress' },
+  SparklineGroupInput: { sparklines: 'SparklineInput[]' },
+  SparklineInput: { location: 'CellAddress' },
   TableInput: { range: 'CellRect' },
   ThreadedCommentInput: { cell: 'CellAddress' },
 });
@@ -4733,6 +4733,30 @@ function cellText(raw, { row, col }) {
 }
 
 /**
+ * The reference text of a sparkline source or date range: `sheetRectText`, except that text which is not one rectangle
+ * on a sheet of this workbook (a 3-D span, another workbook's range, a defined name, `#REF!`) goes to the engine as
+ * written, which accepts or refuses it.
+ */
+function sparklineRangeText(raw, value, sheet, label) {
+  if (typeof value === 'string') {
+    const text = value.startsWith('=') ? value.slice(1) : value;
+    let ref;
+    try {
+      ref = text === '' ? null : raw.parseReference(text);
+    } catch (e) {
+      if (e?.name === 'FormulonError') return value;
+      throw e;
+    }
+    if (ref === null) return value;
+    if (ref.sheetName !== null) {
+      const at = raw.getSheetIndex(ref.sheetName);
+      if (at === null || at === undefined) return value;
+    }
+  }
+  return sheetRectText(raw, value, sheet, label);
+}
+
+/**
  * The raw record of a sparkline group (or of the keys of a patch) given as a public `SparklineGroupInput`:
  * each sparkline's `source` and `location`, and `dateAxisRange`, become the reference text the raw layer takes.
  * `sheet` resolves an unqualified source.
@@ -4750,14 +4774,14 @@ function encodeSparklineGroup(raw, sheet, group, where) {
         }
       }
       const formula = present(item.source)
-        ? sheetRectText(raw, item.source, sheet, `${label}.source`)
+        ? sparklineRangeText(raw, item.source, sheet, `${label}.source`)
         : (item[STORED_SOURCE] ?? '');
       return { formula, location: cellText(raw, addressOf(raw, item.location, `${label}.location`)) };
     });
   }
   if (dateAxisRange !== undefined) {
     out.dateAxisRef =
-      dateAxisRange === null ? null : sheetRectText(raw, dateAxisRange, sheet, `${where} dateAxisRange`);
+      dateAxisRange === null ? null : sparklineRangeText(raw, dateAxisRange, sheet, `${where} dateAxisRange`);
   }
   return out;
 }

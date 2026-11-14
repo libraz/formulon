@@ -145,7 +145,6 @@ std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
     }
     ReportDeferred(&count, "sheet_format_defaults", invalid_defaults, i);
     ReportDeferred(&count, "sheet_views", unwritten_view_part_count(sheet.view(), views), i);
-    ReportDeferred(&count, "protected_ranges", unwritten_protected_range_count(sheet), i);
   }
   // Workbook globals the BrtBookProtection / BrtWbProp / BrtBookView records
   // cannot hold.
@@ -448,13 +447,11 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
       }
       ReportDeferred(&diagnostics.deferred_feature_count, "comments", uid_lost, i);
     }
-    std::uint32_t sparklines_lost = 0;
     auto sheet_body_or = emit_sheet(
         workbook.sheet(i), sst, sheet_names, sheet_ranges, sheet_name_table, sheet_hyperlink_rids[i],
-        &downgraded_formula_count, metadata.ifmd, name_shapes(workbook, i), table_rel_ids, views, &sparklines_lost,
-        sheet_drawing_rids[i], sheet_owns_drawing[i], metadata.rich.empty() ? nullptr : &metadata.rich.vm_by_sheet[i],
-        book_directory, absent_phonetic, sheet_style_plan, comment_rids[i].vml);
-    ReportDeferred(&diagnostics.deferred_feature_count, "sparklines", sparklines_lost, i);
+        &downgraded_formula_count, metadata.ifmd, name_shapes(workbook, i), table_rel_ids, views, sheet_drawing_rids[i],
+        sheet_owns_drawing[i], metadata.rich.empty() ? nullptr : &metadata.rich.vm_by_sheet[i], book_directory,
+        absent_phonetic, sheet_style_plan, comment_rids[i].vml);
     if (!sheet_body_or) {
       return std::move(sheet_body_or.error());
     }

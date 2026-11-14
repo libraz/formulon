@@ -855,6 +855,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   // 7. Each sheet binary.
   std::uint32_t cells_read = 0;
   std::uint32_t dropped_record_count = 0;
+  std::uint32_t skipped_feature_count = 0;
   std::unordered_set<std::string> consumed_parts;
   consumed_parts.insert("[Content_Types].xml");
   consumed_parts.insert("_rels/.rels");
@@ -897,6 +898,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     }
     cells_read += state_or.value().cells_decoded;
     dropped_record_count += state_or.value().dropped_records;
+    skipped_feature_count += state_or.value().skipped_features;
     std::unordered_set<std::uint64_t> dynamic_cells;
     for (const auto& [row, col, ifmd] : state_or.value().cell_metadata) {
       if (dynamic_array_ifmd != 0U && ifmd == dynamic_array_ifmd) {
@@ -1120,7 +1122,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
                         undecoded_defined_name_count,
                         dropped_part_count,
                         dropped_record_count,
-                        table_diagnostics.skipped_feature_count};
+                        table_diagnostics.skipped_feature_count + skipped_feature_count};
   return result;
 }
 

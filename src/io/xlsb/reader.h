@@ -102,7 +102,8 @@ struct XlsbReadResult {
   /// slot in the emitted sheet prefix.
   std::uint32_t dropped_record_count = 0;
   /// Content dropped on load in the sense of `ReadDiagnostics::skipped_feature_count`:
-  /// one per table column whose header dxf or header cell style was dropped.
+  /// one per table column whose header dxf or header cell style was dropped,
+  /// one per sparkline group and one per protected range that did not decode.
   std::uint32_t skipped_feature_count = 0;
 };
 

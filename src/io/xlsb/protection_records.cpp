@@ -4,6 +4,7 @@
 
 #include <array>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <utility>
 
@@ -16,6 +17,7 @@
 #include "pugixml.hpp"
 #include "utils/number_text.h"
 #include "utils/strings.h"
+#include "utils/utf8_length.h"
 
 namespace formulon {
 namespace io {
@@ -372,16 +374,9 @@ Expected<bool, Error> emit_book_protection(std::vector<std::uint8_t>& dst, const
 
 namespace {
 
-// UncheckedSqRfX of BrtRangeProtection: below 8192 ranges, the rest need the
-// BrtRangeProtection14 future record.
-// @limit: format
-constexpr std::uint32_t kMaxRangeProtectionRfx = 8191U;
-// @limit: format
-constexpr std::size_t kMaxRangeTitleChars = 255U;
-
 bool ReadSqRfx(ByteSpan& p, std::vector<MergeRange>& out) {
   auto count = read_u32(p);
-  if (!count || count.value() == 0U || count.value() > kMaxRangeProtectionRfx || p.size / 16U < count.value()) {
+  if (!count || count.value() == 0U || count.value() > kMaxProtectedRangeRects || p.size / 16U < count.value()) {
     return false;
   }
   for (std::uint32_t i = 0; i < count.value(); ++i) {
@@ -398,17 +393,22 @@ bool ReadSqRfx(ByteSpan& p, std::vector<MergeRange>& out) {
   return true;
 }
 
-/// Reads sqRfX and RangeProtectionTitleSDRel; false when a security
-/// descriptor is present.
-bool ReadRangeAndTitle(ByteSpan& p, std::vector<MergeRange>& ranges, std::string& title) {
+/// Reads sqRfX and RangeProtectionTitleSDRel, skipping the descriptor bytes;
+/// `descriptor_size` receives dwsdRel.
+bool ReadRangeAndTitle(ByteSpan& p, std::vector<MergeRange>& ranges, std::string& title,
+                       std::uint32_t& descriptor_size) {
   if (!ReadSqRfx(p, ranges)) {
     return false;
   }
   auto name = read_xlwidestring(p);
   auto sd_size = read_u32(p);
-  if (!name || name.value().empty() || !sd_size || sd_size.value() != 0U) {
+  if (!name || name.value().empty() || utf16_units_in(name.value()) > kMaxProtectedRangeNameUnits || !sd_size ||
+      sd_size.value() > p.size) {
     return false;
   }
+  descriptor_size = sd_size.value();
+  p.data += descriptor_size;
+  p.size -= descriptor_size;
   title = std::move(name).value();
   return true;
 }
@@ -423,27 +423,20 @@ void EmitRangeAndTitle(std::vector<std::uint8_t>& dst, const std::vector<MergeRa
   emit_u32(dst, 0U);  // dwsdRel: no security descriptor
 }
 
-/// UTF-16 code units of UTF-8 `text`: a four-byte sequence is a surrogate pair.
-std::size_t Utf16UnitCount(const std::string& text) {
-  std::size_t count = 0;
-  for (const char c : text) {
-    const auto byte = static_cast<unsigned char>(c);
-    if ((byte & 0xC0U) != 0x80U) {
-      count += byte >= 0xF0U ? 2U : 1U;
-    }
-  }
-  return count;
+Error RangeNotWritable(const char* kind, std::size_t sheet_index) {
+  return not_writable(kind, sheet_index);
 }
 
 }  // namespace
 
-bool decode_range_protection(ByteSpan payload, ByteSpan iso, ProtectedRange& out) {
+RangeProtectionRead decode_range_protection(ByteSpan payload, ByteSpan iso, ProtectedRange& out) {
   ByteSpan p = payload;
   auto pwd = read_u16(p);
   std::vector<MergeRange> ranges;
   std::string title;
-  if (!pwd || !ReadRangeAndTitle(p, ranges, title) || p.size != 0U) {
-    return false;
+  std::uint32_t descriptor = 0;
+  if (!pwd || !ReadRangeAndTitle(p, ranges, title, descriptor) || p.size != 0U) {
+    return RangeProtectionRead::kUndecodable;
   }
   ProtectedRange range;
   if (iso.size != 0U) {
@@ -451,16 +444,18 @@ bool decode_range_protection(ByteSpan payload, ByteSpan iso, ProtectedRange& out
     auto spin = read_u32(q);
     std::vector<MergeRange> iso_ranges;
     std::string iso_title;
+    std::uint32_t iso_descriptor = 0;
     std::vector<std::uint8_t> hash;
     std::vector<std::uint8_t> salt;
-    if (pwd.value() != 0U || !spin || !ReadRangeAndTitle(q, iso_ranges, iso_title) || iso_ranges != ranges ||
-        iso_title != title || !ReadBlob(q, hash) || hash.empty() || !ReadBlob(q, salt)) {
-      return false;
+    if (pwd.value() != 0U || !spin || !ReadRangeAndTitle(q, iso_ranges, iso_title, iso_descriptor) ||
+        iso_ranges != ranges || iso_title != title || !ReadBlob(q, hash) || hash.empty() || !ReadBlob(q, salt)) {
+      return RangeProtectionRead::kUndecodable;
     }
     auto algorithm = read_xlnullablewidestring(q);
     if (!algorithm || q.size != 0U) {
-      return false;
+      return RangeProtectionRead::kUndecodable;
     }
+    descriptor |= iso_descriptor;
     range.spin_count = spin.value();
     range.hash_value = base64_encode(hash.data(), hash.size());
     range.salt_value = base64_encode(salt.data(), salt.size());
@@ -468,27 +463,34 @@ bool decode_range_protection(ByteSpan payload, ByteSpan iso, ProtectedRange& out
   } else if (pwd.value() != 0U) {
     range.password = LegacyHex(pwd.value());
   }
+  if (descriptor != 0U) {
+    return RangeProtectionRead::kSecurityDescriptor;
+  }
   range.name = std::move(title);
   range.sqref = format_sqref_text(ranges);
   out = std::move(range);
-  return true;
+  return RangeProtectionRead::kDecoded;
 }
 
-bool range_protection_writable(const ProtectedRange& range) {
-  std::vector<MergeRange> ranges;
-  const std::size_t chars = Utf16UnitCount(range.name);
-  return range.security_descriptor.empty() && chars != 0U && chars <= kMaxRangeTitleChars &&
-         parse_sqref_text(range.sqref, ranges) && ranges.size() <= kMaxRangeProtectionRfx;
-}
-
-Expected<void, Error> emit_range_protections(std::vector<std::uint8_t>& dst,
-                                             const std::vector<ProtectedRange>& ranges) {
+Expected<void, Error> emit_range_protections(std::vector<std::uint8_t>& dst, const std::vector<ProtectedRange>& ranges,
+                                             std::size_t sheet_index) {
   for (const ProtectedRange& range : ranges) {
-    if (!range_protection_writable(range)) {
-      continue;
+    // SDDL text has no encoder to the binary descriptor the record carries.
+    if (!range.security_descriptor.empty()) {
+      return RangeNotWritable("protected_range_descriptor", sheet_index);
+    }
+    const std::size_t units = utf16_units_in(range.name);
+    if (units == 0U || units > kMaxProtectedRangeNameUnits) {
+      return RangeNotWritable("protected_range_title", sheet_index);
     }
     std::vector<MergeRange> rfx;
-    (void)parse_sqref_text(range.sqref, rfx);
+    if (!parse_sqref_text(range.sqref, rfx) || rfx.empty()) {
+      return RangeNotWritable("protected_range_sqref", sheet_index);
+    }
+    // Excel stores a longer list in BrtRangeProtection14, which is not written.
+    if (rfx.size() > kMaxProtectedRangeRects) {
+      return RangeNotWritable("protected_range_rects", sheet_index);
+    }
     std::uint16_t pwd = 0;
     if (!range.password.empty() && !ParseLegacyHex(range.password, pwd)) {
       return make_error(FormulonErrorCode::kInvalidArgument, "Protected range password is not a 16-bit hex hash",

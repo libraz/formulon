@@ -18,6 +18,7 @@
 #include "io/xlsb/record_writer.h"
 #include "io/xml_utils.h"
 #include "parser/ast_format.h"
+#include "utils/structured_log.h"
 
 namespace formulon {
 namespace io {
@@ -47,8 +48,15 @@ constexpr std::uint16_t kRightToLeft = 0x8000;
 constexpr std::size_t kGroupFixedBytes = 2U + 8U * 8U + 3U * 8U + 4U;
 // @limit: excel
 constexpr double kMaxLineWeight = 1584.0;
+// The BrtColor Excel writes for an absent group colour: automatic, index 0, all channels 0.
+constexpr std::array<std::uint8_t, 8> kAbsentColor = {0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+// The source Excel stores as an absent formula.
+constexpr const char* kDeletedSource = "#REF!";
 
 std::optional<ColorSpec> DecodeSpec(const std::uint8_t* p) {
+  if (std::equal(kAbsentColor.begin(), kAbsentColor.end(), p)) {
+    return ColorSpec{};
+  }
   const std::optional<cf::Color> c = DecodeColor(ByteSpan{p, 8U});
   if (!c) {
     return std::nullopt;
@@ -145,16 +153,22 @@ bool DecodeGroupHead(ByteSpan p, const FeatureFormulaReadContext& ctx, Sparkline
   return true;
 }
 
-/// BrtSparkline: FRTHeader with one single-cell FRTSqref and one FRTFormula.
+/// BrtSparkline: FRTHeader with one single-cell FRTSqref and one FRTFormula,
+/// or no formula for a deleted source.
 bool DecodeSparkline(ByteSpan p, const FeatureFormulaReadContext& ctx, SparklineItem& item) {
   auto flags = read_u32(p);
   auto count = read_u32(p);
   auto sqref_flags = read_u32(p);
   std::vector<MergeRange> cells;
-  if (!flags || flags.value() != (kFrtHeaderSqrefs | kFrtHeaderFormulas) || !count || count.value() != 1U ||
-      !sqref_flags || !read_sqref(p, cells) || cells.size() != 1U || cells[0].first_row != cells[0].last_row ||
-      cells[0].first_col != cells[0].last_col) {
+  if (!flags || (flags.value() != (kFrtHeaderSqrefs | kFrtHeaderFormulas) && flags.value() != kFrtHeaderSqrefs) ||
+      !count || count.value() != 1U || !sqref_flags || !read_sqref(p, cells) || cells.size() != 1U ||
+      cells[0].first_row != cells[0].last_row || cells[0].first_col != cells[0].last_col) {
     return false;
+  }
+  item.location = format_sqref_text(cells);
+  if (flags.value() == kFrtHeaderSqrefs) {
+    item.formula = kDeletedSource;
+    return p.size == 0U;
   }
   auto formulas = read_u32(p);
   if (!formulas || formulas.value() != 1U) {
@@ -165,7 +179,6 @@ bool DecodeSparkline(ByteSpan p, const FeatureFormulaReadContext& ctx, Sparkline
     return false;
   }
   item.formula = std::move(text).value();
-  item.location = format_sqref_text(cells);
   return true;
 }
 
@@ -222,7 +235,8 @@ std::size_t ContainerEnd(const std::vector<FramedRecord>& recs, std::size_t i) {
   return recs.size();
 }
 
-void TakeSlot(std::vector<std::uint8_t>& buf, const FeatureFormulaReadContext& ctx, std::string& ext_lst_xml) {
+void TakeSlot(std::vector<std::uint8_t>& buf, const FeatureFormulaReadContext& ctx, std::string& ext_lst_xml,
+              std::uint32_t& skipped) {
   const std::vector<FramedRecord> recs = split_records(buf);
   std::vector<std::uint8_t> out;
   bool changed = false;
@@ -233,31 +247,25 @@ void TakeSlot(std::vector<std::uint8_t>& buf, const FeatureFormulaReadContext& c
       ++i;
       continue;
     }
-    std::vector<std::uint8_t> kept;
+    changed = true;
     for (std::size_t k = i + 2U; k < close;) {
       std::size_t last = k;
       std::optional<SparklineGroup> group = DecodeGroup(recs, k, close, ctx, last);
       if (group && add_sparkline_group(ext_lst_xml, *group)) {
-        changed = true;
         k = last + 1U;
         continue;
       }
-      // Keep an undecodable group whole: up to its BrtEndSparklineGroup.
+      // A group that does not decode is not loaded: skip to its BrtEndSparklineGroup.
+      ++skipped;
+      StructuredLog("xlsb.reader.skipped")
+          .field("kind", std::string_view("sparklines"))
+          .field("sheet", static_cast<std::int64_t>(ctx.sheet_index))
+          .warn();
       std::size_t end = k;
       while (end + 1U < close && recs[end].type != kEndSparklineGroup) {
         ++end;
       }
-      for (std::size_t m = k; m <= end; ++m) {
-        append_record(kept, buf, recs[m]);
-      }
       k = end + 1U;
-    }
-    if (!kept.empty()) {
-      append_record(out, buf, recs[i]);
-      append_record(out, buf, recs[i + 1U]);
-      out.insert(out.end(), kept.begin(), kept.end());
-      append_record(out, buf, recs[close]);
-      append_record(out, buf, recs[close + 1U]);
     }
     i = close + 2U;
   }
@@ -310,7 +318,7 @@ Expected<void, Error> EmitGroup(std::vector<std::uint8_t>& dst, const SparklineG
     emit_record(dst, kAcEnd, ByteSpan{});
   }
   std::vector<std::uint8_t> p;
-  if (!g.date_axis_ref.empty()) {
+  if (!g.date_axis_ref.empty() && !is_deleted_sparkline_source(g.date_axis_ref)) {
     auto ref = EncodeReference(g.date_axis_ref, ctx, sheet_name);
     if (!ref) {
       return std::move(ref.error());
@@ -345,9 +353,7 @@ Expected<void, Error> EmitGroup(std::vector<std::uint8_t>& dst, const SparklineG
   }
   emit_u16(p, bits);
   for (const ColorSpec* spec : Colors(g)) {
-    // An absent colour has no record form; it is written as opaque black.
-    const std::uint32_t argb = spec->kind == ColorSpec::Kind::kNone ? 0xFF000000U : spec->rgb;
-    const auto bytes = encode_brt_color(argb, *spec);
+    const auto bytes = spec->kind == ColorSpec::Kind::kNone ? kAbsentColor : encode_brt_color(spec->rgb, *spec);
     p.insert(p.end(), bytes.begin(), bytes.end());
   }
   const bool custom_max = g.max_axis_type == SparklineAxisType::kCustom && g.has_manual_max;
@@ -360,21 +366,26 @@ Expected<void, Error> EmitGroup(std::vector<std::uint8_t>& dst, const SparklineG
   emit_record(dst, kBeginSparklines, ByteSpan{});
   for (const SparklineItem& item : g.items) {
     std::vector<MergeRange> cells;
-    if (!parse_sqref_text(item.location, cells) || cells.size() != 1U || cells[0].first_row != cells[0].last_row ||
-        cells[0].first_col != cells[0].last_col) {
-      return refuse_write("XLSB sparkline location is not one cell: " + item.location);
+    if (!parse_sqref_text(item.location, cells) || cells.size() != 1U) {
+      return refuse_write("XLSB sparkline location is not one range: " + item.location);
     }
-    auto formula = EncodeReference(item.formula, ctx, sheet_name);
-    if (!formula) {
-      return std::move(formula.error());
-    }
+    // A rectangle is stored as its top-left cell, as Excel saves it.
+    cells[0].last_row = cells[0].first_row;
+    cells[0].last_col = cells[0].first_col;
+    const bool deleted = item.formula.empty() || is_deleted_sparkline_source(item.formula);
     std::vector<std::uint8_t> s;
-    emit_u32(s, kFrtHeaderSqrefs | kFrtHeaderFormulas);
+    emit_u32(s, deleted ? kFrtHeaderSqrefs : kFrtHeaderSqrefs | kFrtHeaderFormulas);
     emit_u32(s, 1U);
     emit_u32(s, kFrtItemFlags);
     emit_sqref(s, cells);
-    emit_u32(s, 1U);
-    emit_frt_formula(s, formula.value());
+    if (!deleted) {
+      auto formula = EncodeReference(item.formula, ctx, sheet_name);
+      if (!formula) {
+        return std::move(formula.error());
+      }
+      emit_u32(s, 1U);
+      emit_frt_formula(s, formula.value());
+    }
     emit_record(dst, kSparkline, s);
   }
   emit_record(dst, kEndSparklines, ByteSpan{});
@@ -407,24 +418,26 @@ std::size_t InsertionPoint(const std::vector<FramedRecord>& recs, std::size_t si
 
 }  // namespace
 
-void take_sparkline_groups(XlsbSheetTail& tail, const FeatureFormulaReadContext& ctx, std::string& ext_lst_xml) {
+void take_sparkline_groups(XlsbSheetTail& tail, const FeatureFormulaReadContext& ctx, std::string& ext_lst_xml,
+                           std::uint32_t* skipped) {
+  std::uint32_t count = 0;
   for (std::vector<std::uint8_t>* slot :
        {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
-    TakeSlot(*slot, ctx, ext_lst_xml);
+    TakeSlot(*slot, ctx, ext_lst_xml, count);
+  }
+  if (skipped != nullptr) {
+    *skipped += count;
   }
 }
 
 Expected<void, Error> add_sparkline_groups(std::vector<std::uint8_t>& records, std::string_view ext_lst_xml,
                                            const FeatureFormulaWriteContext& ctx, std::string_view sheet_name,
-                                           std::uint32_t* skipped) {
+                                           std::size_t sheet_index) {
   const std::vector<SparklineGroup> groups = read_sparkline_groups(ext_lst_xml);
   std::vector<std::uint8_t> body;
   for (const SparklineGroup& g : groups) {
-    std::vector<std::uint8_t> encoded;
-    if (EmitGroup(encoded, g, ctx, sheet_name)) {
-      body.insert(body.end(), encoded.begin(), encoded.end());
-    } else if (skipped != nullptr) {
-      ++*skipped;
+    if (auto emitted = EmitGroup(body, g, ctx, sheet_name); !emitted) {
+      return not_writable("sparklines", sheet_index);
     }
   }
   if (body.empty()) {

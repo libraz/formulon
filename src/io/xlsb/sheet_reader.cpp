@@ -154,10 +154,19 @@ Expected<bool, Error> DecodeTailFeature(ByteSpan& cursor, const std::uint8_t* fr
       }
     }
     ProtectedRange range;
-    if (paired && decode_range_protection(payload, iso, range)) {
+    const RangeProtectionRead read =
+        paired ? decode_range_protection(payload, iso, range) : RangeProtectionRead::kUndecodable;
+    if (read == RangeProtectionRead::kDecoded) {
       state.protected_ranges.push_back(std::move(range));
-    } else {
+    } else if (read == RangeProtectionRead::kSecurityDescriptor) {
+      // The binary descriptor has no model field; the records go back out as read.
       RetainTailRecord(state, type, framed, static_cast<std::size_t>(cursor.data - framed));
+    } else {
+      ++state.skipped_features;
+      StructuredLog("xlsb.reader.skipped")
+          .field("kind", std::string_view("protected_range"))
+          .field("sheet", static_cast<std::int64_t>(ctx.sheet_index))
+          .warn();
     }
     return true;
   }
@@ -805,7 +814,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
     }
     // Sparkline groups the records describe move into the sheet's extension XML.
     std::string ext_lst = wb.sheet(sheet_index).ext_lst_xml();
-    take_sparkline_groups(state.tail, feature_ctx, ext_lst);
+    take_sparkline_groups(state.tail, feature_ctx, ext_lst, &state.skipped_features);
     wb.sheet(sheet_index).set_ext_lst_xml(std::move(ext_lst));
     for (const XlsbSheetRange& range : sheet_ranges) {
       XlsbExternSheetEntry entry;

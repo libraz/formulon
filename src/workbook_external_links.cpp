@@ -3,6 +3,7 @@
 // binding of external-book references in formulas, formula ingestion and the
 // self-book-name spelling.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
@@ -148,8 +149,25 @@ std::size_t FindLinkPosition(const std::vector<ExternalLinkRecord>& links, std::
 }
 
 std::uint32_t IndexForBook(const void* ctx, std::string_view path, std::string_view book) {
-  const ExternalLinkRecord* rec = static_cast<const Workbook*>(ctx)->find_external_link(path, book);
-  return rec == nullptr ? 0U : rec->index;
+  const auto* wb = static_cast<const Workbook*>(ctx);
+  if (const ExternalLinkRecord* rec = wb->find_external_link(path, book); rec != nullptr) {
+    return rec->index;
+  }
+  // Formula text kept as stored in a part (a sparkline or x14 rule source) names its book by link index, `[n]`.
+  std::uint32_t index = 0U;
+  if (!path.empty() || book.empty() || book.size() > 9U ||
+      !std::all_of(book.begin(), book.end(), [](char c) { return c >= '0' && c <= '9'; })) {
+    return 0U;
+  }
+  for (const char c : book) {
+    index = index * 10U + static_cast<std::uint32_t>(c - '0');
+  }
+  for (const ExternalLinkRecord& rec : wb->external_links()) {
+    if (rec.index == index) {
+      return index;
+    }
+  }
+  return 0U;
 }
 
 std::uint32_t IndexForSheetQualifier(const void* ctx, std::string_view qualifier) {

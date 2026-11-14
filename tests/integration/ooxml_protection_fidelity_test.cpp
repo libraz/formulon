@@ -267,7 +267,8 @@ TEST(ProtectedRangesFidelity, WriteReplacesAndEmptyListRemoves) {
   EXPECT_FALSE(Has(ReadPart(SaveOrDie(wb), "xl/worksheets/sheet1.xml"), "protectedRange"));
 }
 
-TEST(ProtectedRangesFidelity, ChildElementsSurviveAnEdit) {
+// Excel reads the child as the descriptor and re-saves it as the attribute.
+TEST(ProtectedRangesFidelity, DescriptorChildIsReadAndRewrittenAsTheAttribute) {
   Workbook wb = LoadOrDie(BuildPackage(
       "<sheetData/><sheetProtection sheet=\"1\"/><protectedRanges>"
       "<protectedRange sqref=\"A1\" name=\"Inputs\"><securityDescriptor>O:WD</securityDescriptor></protectedRange>"
@@ -275,10 +276,12 @@ TEST(ProtectedRangesFidelity, ChildElementsSurviveAnEdit) {
   WorksheetRawExtensions& raw = wb.sheet(0).mutable_raw_extensions();
   auto ranges = io::read_protected_ranges(raw);
   ASSERT_EQ(ranges.size(), 2U);
+  EXPECT_EQ(ranges[0].security_descriptor, "O:WD");
   ranges[0].sqref = "A2";
   io::write_protected_ranges(raw, ranges);
   const std::string xml = ReadPart(SaveOrDie(wb), "xl/worksheets/sheet1.xml");
-  EXPECT_TRUE(Has(xml, "<securityDescriptor>O:WD</securityDescriptor>")) << xml;
+  EXPECT_TRUE(Has(xml, "securityDescriptor=\"O:WD\"")) << xml;
+  EXPECT_FALSE(Has(xml, "<securityDescriptor>")) << xml;
   EXPECT_TRUE(Has(xml, "sqref=\"A2\"")) << xml;
 }
 

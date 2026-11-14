@@ -53,10 +53,6 @@ namespace xlsb {
 /// relationships; fresh ids avoid every retained id.
 std::vector<std::string> hyperlink_relationship_ids(const Sheet& sheet);
 
-/// Protected ranges of `sheet` the range-protection records cannot carry
-/// (`range_protection_writable`).
-std::size_t unwritten_protected_range_count(const Sheet& sheet);
-
 /// Serialises `sheet` as the body of an `xl/worksheets/sheet<N>.bin`
 /// part. `sst` is updated as text cells are interned (the same builder
 /// is shared across every sheet of the workbook so all text cells
@@ -76,8 +72,8 @@ std::size_t unwritten_protected_range_count(const Sheet& sheet);
 /// `name_shapes` feeds a legacy formula's `legacy_intersections`.
 /// `table_part_rel_ids` names the generated table parts, one BrtListPart each.
 /// `workbook_views` is the BrtBookView count of the workbook part; a sheet
-/// view naming a later window is not written. Sparkline groups that cannot be
-/// encoded are left out and added to `*deferred_sparkline_groups`.
+/// view naming a later window is not written. A sparkline group the records
+/// cannot hold fails the save with `kIoFeatureNotWritable`.
 /// `hyperlink_ids` is `hyperlink_relationship_ids(sheet)`, which the caller
 /// also needs for the sheet's relationships part.
 /// `owns_drawing` drops every retained BrtDrawing record; a non-empty
@@ -97,9 +93,9 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     const SheetRangeTable& sheet_ranges, const NameTable& name_table, const std::vector<std::string>& hyperlink_ids,
     std::uint32_t* downgraded_formula_count = nullptr, std::uint32_t dynamic_array_ifmd = 0,
     const NameShapes& name_shapes = NameShapes(), const std::vector<std::string>& table_part_rel_ids = {},
-    std::uint32_t workbook_views = 1U, std::uint32_t* deferred_sparkline_groups = nullptr,
-    std::string_view drawing_rel_id = {}, bool owns_drawing = false, const RichErrorVmMap* rich_error_vm = nullptr,
-    std::string_view book_directory = {}, const std::optional<PhoneticProperties>& absent_phonetic = std::nullopt,
+    std::uint32_t workbook_views = 1U, std::string_view drawing_rel_id = {}, bool owns_drawing = false,
+    const RichErrorVmMap* rich_error_vm = nullptr, std::string_view book_directory = {},
+    const std::optional<PhoneticProperties>& absent_phonetic = std::nullopt,
     const CellStyleSavePlan* style_plan = nullptr, std::string_view legacy_drawing_rel_id = {});
 
 }  // namespace xlsb

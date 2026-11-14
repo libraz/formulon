@@ -26,6 +26,7 @@
 #ifndef FORMULON_IO_XLSB_PROTECTION_RECORDS_H_
 #define FORMULON_IO_XLSB_PROTECTION_RECORDS_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -84,29 +85,40 @@ std::string base64_encode(const std::uint8_t* data, std::size_t size);
 /// padded base64.
 bool base64_decode(const std::string& text, std::vector<std::uint8_t>& out);
 
-// Range protection, [MS-XLSB] spec layouts:
+// Range protection, as Excel 365 (macOS) writes it:
 //   * BrtRangeProtection (536): protPwd u16, UncheckedSqRfX (i32 count, then
 //     four-u32 ranges), RangeProtectionTitleSDRel (XLWideString title, u32
-//     dwsdRel, that many bytes of relative SECURITY_DESCRIPTOR).
+//     dwsdRel, that many bytes of self-relative SECURITY_DESCRIPTOR, which
+//     Excel encodes from the OOXML SDDL text).
 //   * BrtRangeProtectionIso (680, precedes a 536 with protPwd 0 and the same
 //     ranges and title): dwSpinCount u32, UncheckedSqRfX,
 //     RangeProtectionTitleSDRel, then IsoPasswordData (hash and salt as
 //     u32-length blobs, algorithm as an XLNullableWideString).
 
+/// How a BrtRangeProtection record (with its Iso record) decoded.
+enum class RangeProtectionRead : std::uint8_t {
+  kDecoded,
+  /// Well-formed, but carries a binary security descriptor the model does
+  /// not hold; the records are kept verbatim.
+  kSecurityDescriptor,
+  /// Malformed, a mismatched pair, an empty or over-long title, or a range
+  /// count outside 1..`kMaxProtectedRangeRects`.
+  kUndecodable,
+};
+
 /// Decodes a BrtRangeProtection `payload` and the BrtRangeProtectionIso `iso`
-/// before it (empty when none). False for a malformed record, a mismatched
-/// pair, or a security descriptor, which `ProtectedRange` keeps only as the
-/// OOXML SDDL text.
-bool decode_range_protection(ByteSpan payload, ByteSpan iso, ProtectedRange& out);
+/// before it (empty when none). `out` is set only for `kDecoded`.
+RangeProtectionRead decode_range_protection(ByteSpan payload, ByteSpan iso, ProtectedRange& out);
 
-/// Whether `range` can be written: a parseable sqref of 1..8191 ranges, a
-/// 1..255 character name, no security descriptor.
-bool range_protection_writable(const ProtectedRange& range);
-
-/// Emits ([BrtRangeProtectionIso] BrtRangeProtection) for each writable
-/// range, the Iso record when a modern hash is set. Fails on a hash, salt or
-/// legacy password the records cannot carry.
-Expected<void, Error> emit_range_protections(std::vector<std::uint8_t>& dst, const std::vector<ProtectedRange>& ranges);
+/// Emits ([BrtRangeProtectionIso] BrtRangeProtection) for each range, the Iso
+/// record when a modern hash is set. Fails with `kIoFeatureNotWritable`
+/// (context `kind=` and `sheet_index=`) on a range the records cannot carry:
+/// SDDL text, a name outside 1..`kMaxProtectedRangeNameUnits` UTF-16 units,
+/// or an sqref that does not parse to 1..`kMaxProtectedRangeRects` ranges.
+/// Fails with `kInvalidArgument` on a hash, salt or legacy password the
+/// records cannot carry.
+Expected<void, Error> emit_range_protections(std::vector<std::uint8_t>& dst, const std::vector<ProtectedRange>& ranges,
+                                             std::size_t sheet_index);
 
 }  // namespace xlsb
 }  // namespace io

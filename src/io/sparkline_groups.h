@@ -31,6 +31,7 @@ namespace formulon::io {
 
 /// One sparkline: the data `formula` (`xm:f`, sheet-qualified range text
 /// without `=`) and the single cell `location` (`xm:sqref`) that shows it.
+/// An empty `formula` is an absent `xm:f`: the source was deleted.
 struct SparklineItem {
   std::string formula;
   std::string location;
@@ -81,14 +82,27 @@ struct SparklineGroup {
 /// unparseable extension.
 std::vector<SparklineGroup> read_sparkline_groups(std::string_view ext_lst_xml);
 
-/// Appends `group` with its `items`. Fails with `kInvalidArgument` for no
-/// items, an item whose location is not one cell or whose formula is empty, a
-/// non-finite number, or an out-of-range enumeration.
+/// Whether Excel stores `text` as a sparkline source or date-axis reference:
+/// one cell or rectangle on any sheet, a 3-D span or another workbook, a
+/// defined name, or `#REF!`. Unions, structured references, expressions and a
+/// sheet-qualified `#REF!` are not.
+bool is_sparkline_source(std::string_view text);
+
+/// Whether `text` is a deleted reference (`#REF!`), which is stored as an
+/// absent `xm:f`.
+bool is_deleted_sparkline_source(std::string_view text);
+
+/// Appends `group` with its `items`; a `#REF!` source or date-axis reference
+/// is stored absent. Fails with `kInvalidArgument` for no items, an item whose
+/// location is not one cell or whose formula is empty, a formula or date-axis
+/// reference `is_sparkline_source` refuses, a non-finite number, or an
+/// out-of-range enumeration.
 Expected<void, Error> add_sparkline_group(std::string& ext_lst_xml, const SparklineGroup& group);
 
 /// Rewrites the modelled attributes, colours and date-axis reference of group
 /// `index` from `group` (its `items` are ignored). Fails like
-/// `add_sparkline_group`, and for an `index` past the last group.
+/// `add_sparkline_group`, and for an `index` past the last group; a date-axis
+/// reference equal to the stored one is not checked again.
 Expected<void, Error> update_sparkline_group(std::string& ext_lst_xml, std::size_t index, const SparklineGroup& group);
 
 /// Replaces the sparklines of group `index`. Fails like `update_sparkline_group`.

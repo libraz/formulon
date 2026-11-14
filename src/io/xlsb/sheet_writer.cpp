@@ -274,12 +274,6 @@ Expected<void, Error> EmitFormattingAndValidation(std::vector<std::uint8_t>& bod
 
 }  // namespace
 
-std::size_t unwritten_protected_range_count(const Sheet& sheet) {
-  const std::vector<ProtectedRange> ranges = read_protected_ranges(sheet.raw_extensions());
-  return static_cast<std::size_t>(std::count_if(ranges.begin(), ranges.end(),
-                                                [](const ProtectedRange& r) { return !range_protection_writable(r); }));
-}
-
 std::vector<std::string> hyperlink_relationship_ids(const Sheet& sheet) {
   std::unordered_set<std::string> used;
   std::unordered_map<std::string, std::string> assigned_targets;
@@ -333,9 +327,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     const Sheet& sheet, SstBuilder& sst, const std::vector<std::string>& sheet_names,
     const SheetRangeTable& sheet_ranges, const NameTable& name_table, const std::vector<std::string>& hyperlink_ids,
     std::uint32_t* downgraded_formula_count, std::uint32_t dynamic_array_ifmd, const NameShapes& name_shapes,
-    const std::vector<std::string>& table_part_rel_ids, std::uint32_t workbook_views,
-    std::uint32_t* deferred_sparkline_groups, std::string_view drawing_rel_id, bool owns_drawing,
-    const RichErrorVmMap* rich_error_vm, std::string_view book_directory,
+    const std::vector<std::string>& table_part_rel_ids, std::uint32_t workbook_views, std::string_view drawing_rel_id,
+    bool owns_drawing, const RichErrorVmMap* rich_error_vm, std::string_view book_directory,
     const std::optional<PhoneticProperties>& absent_phonetic, const CellStyleSavePlan* style_plan,
     std::string_view legacy_drawing_rel_id) {
   std::vector<std::uint8_t> body;
@@ -662,8 +655,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   if (auto dvals14 = place_x14_validations(tail, sheet.validations(), frt_ctx, sheet.name()); !dvals14) {
     return std::move(dvals14.error());
   }
-  if (auto sparklines = add_sparkline_groups(tail.after_hyperlinks, sheet.ext_lst_xml(), frt_ctx, sheet.name(),
-                                             deferred_sparkline_groups);
+  if (auto sparklines =
+          add_sparkline_groups(tail.after_hyperlinks, sheet.ext_lst_xml(), frt_ctx, sheet.name(), own_index);
       !sparklines) {
     return std::move(sparklines.error());
   }
@@ -686,7 +679,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   if (auto protection = emit_sheet_protection(body, sheet.protection()); !protection) {
     return std::move(protection.error());
   }
-  if (auto ranges = emit_range_protections(body, read_protected_ranges(sheet.raw_extensions())); !ranges) {
+  if (auto ranges = emit_range_protections(body, read_protected_ranges(sheet.raw_extensions()), own_index); !ranges) {
     return std::move(ranges.error());
   }
   body.insert(body.end(), tail.before_merges.begin(), tail.before_merges.end());

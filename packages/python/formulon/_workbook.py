@@ -7488,6 +7488,22 @@ def _qualified_range_text(
     return workbook.format_reference(resolved.rect, sheet_name=workbook._sheet_name(resolved.sheet))
 
 
+def _sparkline_range_text(
+    workbook: Workbook, value: Union[SheetRect, str, None], sheet: int, label: str, stored: Optional[str] = None
+) -> Optional[str]:
+    """``_qualified_range_text`` for a sparkline source or date range, except that text which is not one rectangle on
+    a sheet of this workbook (a 3-D span, another workbook's range, a defined name, ``#REF!``) goes to the engine as
+    written; the engine accepts or refuses it."""
+    if isinstance(value, str):
+        try:
+            ref = workbook.parse_reference(value.lstrip("="))
+        except FormulonError:
+            return value
+        if ref.sheet_name is not None and workbook._find_sheet(ref.sheet_name) is None:
+            return value
+    return _qualified_range_text(workbook, value, sheet, label, stored)
+
+
 def _parse_qualified_range(workbook: Workbook, text: str, sheet: int) -> Optional[SheetRect]:
     """The :class:`SheetRect` a stored range text names (unqualified: on ``sheet``); ``None`` if it does not resolve."""
     try:
@@ -7560,7 +7576,7 @@ def _pack_sparkline_group(
     )
     for key in _SPARKLINE_COLORS:
         _pack_optional_color(ptr + S.SPARKLINE_GROUP.offsets[key][1], getattr(group, key), f"SparklineGroup.{key}")
-    date_axis = _qualified_range_text(
+    date_axis = _sparkline_range_text(
         workbook,
         group.date_axis_range,
         sheet,
@@ -7583,11 +7599,12 @@ def _pack_sparklines(
     ptr = scope.struct_array(S.SPARKLINE, max(len(sparklines), 1))
     for i, item in enumerate(sparklines):
         base = ptr + i * S.SPARKLINE.size
-        source = _qualified_range_text(
+        source = _sparkline_range_text(
             workbook, item.source, sheet, "Sparkline.source", getattr(item, "_stored_source", None)
         )
         if source is None:
-            raise FormulonError(StatusCode.INVALID_ARGUMENT, "a sparkline needs a source range", "")
+            # No source is a sparkline whose source was deleted, stored as `#REF!` is.
+            source = ""
         location = _cell_address(workbook, item.location, "Sparkline.location")
         location_text = workbook.format_reference(CellRect(location.row, location.col, location.row, location.col))
         S.write_str_field(LIB, base, S.SPARKLINE, "formula", source, scope)

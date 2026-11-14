@@ -17,6 +17,7 @@ namespace {
 
 constexpr std::string_view kWorkbookProtection = "workbookProtection";
 constexpr std::string_view kProtectedRanges = "protectedRanges";
+constexpr std::string_view kSecurityDescriptor = "securityDescriptor";
 
 void SetBoolAttr(pugi::xml_node node, const char* name, bool value) {
   node.remove_attribute(name);
@@ -115,6 +116,10 @@ std::vector<ProtectedRange> read_protected_ranges(const WorksheetRawExtensions& 
       range.salt_value = attr_str(node, "saltValue");
       range.spin_count = attr_u32(node, "spinCount", 0U);
       range.security_descriptor = attr_str(node, "securityDescriptor");
+      // Excel reads the child form as the same field and re-saves it as the attribute.
+      if (range.security_descriptor.empty()) {
+        range.security_descriptor = node.child(kSecurityDescriptor.data()).text().get();
+      }
       out.push_back(std::move(range));
     }
   }
@@ -138,7 +143,8 @@ void append_password_hash_attrs(std::string& out, const std::string& algorithm_n
 }
 
 void write_protected_ranges(WorksheetRawExtensions& children, const std::vector<ProtectedRange>& ranges) {
-  // Child elements of the existing ranges, by range name, re-emitted with the range.
+  // Child elements of the existing ranges, by range name, re-emitted with the range; a
+  // `<securityDescriptor>` child is carried by the field instead.
   std::unordered_map<std::string, std::string> kept_children;
   for (const WorksheetRawChild& child : children) {
     pugi::xml_document doc;
@@ -148,7 +154,9 @@ void write_protected_ranges(WorksheetRawExtensions& children, const std::vector<
     for (pugi::xml_node node : doc.child(kProtectedRanges.data()).children("protectedRange")) {
       std::string inner;
       for (pugi::xml_node element : node.children()) {
-        append_raw_xml(inner, element);
+        if (kSecurityDescriptor != element.name()) {
+          append_raw_xml(inner, element);
+        }
       }
       if (!inner.empty()) {
         kept_children.emplace(std::string(attr_str(node, "name")), std::move(inner));

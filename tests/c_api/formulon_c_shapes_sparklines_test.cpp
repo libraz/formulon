@@ -971,7 +971,9 @@ TEST(FormulonCApiSparklines, Validation) {
   const fm_sparkline_t range_location[] = {{"Sheet1!A1:D1", "F1:F2"}};
   EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, range_location, 1, ignored_id()), kInvalidArgument);
   const fm_sparkline_t no_formula[] = {{"", "F1"}};
-  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, no_formula, 1, ignored_id()), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, no_formula, 1, ignored_id()), 0)
+      << fm_get_last_error_message();
+  // An empty source is stored as a deleted one, the form the getter reads back as `#REF!`.
   fm_sparkline_group_t bad = g;
   bad.type = 7;
   EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &bad, good, 1, ignored_id()), kInvalidArgument);
@@ -986,7 +988,7 @@ TEST(FormulonCApiSparklines, Validation) {
   EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &bad, good, 1, ignored_id()), kInvalidArgument);
   size_t count = 5;
   ASSERT_EQ(fm_sheet_get_sparkline_group_count(wb.handle, 0, &count), 0);
-  EXPECT_EQ(count, 0U);
+  EXPECT_EQ(count, 1U);
   const fm_sparkline_group_patch_t keep = FM_STRUCT_INIT(fm_sparkline_group_patch_t);
   EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, "7", &keep), FM_STATUS_NOT_FOUND);
   EXPECT_EQ(fm_sheet_update_sparkline_group(wb.handle, 0, "7", nullptr), kBindingNullPointer);
@@ -1003,8 +1005,8 @@ TEST(FormulonCApiSparklines, Validation) {
   EXPECT_EQ(fm_sheet_get_sparkline_group(wb.handle, 0, "7", &present, nullptr), kBindingNullPointer);
   EXPECT_EQ(fm_sheet_get_sparkline_group(wb.handle, 4, "7", &present, &out), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   EXPECT_EQ(fm_sheet_get_sparkline_group(wb.handle, 0, "\xC3", &present, &out), FM_STATUS_BINDING_UTF8ENCODING_ERROR);
-  EXPECT_EQ(fm_sheet_get_sparkline_group_at(wb.handle, 0, 0, &out), FM_STATUS_INDEX_OUT_OF_RANGE);
-  EXPECT_EQ(fm_sheet_get_sparkline_group_at(wb.handle, 0, 0, nullptr), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_get_sparkline_group_at(wb.handle, 0, 1, &out), FM_STATUS_INDEX_OUT_OF_RANGE);
+  EXPECT_EQ(fm_sheet_get_sparkline_group_at(wb.handle, 0, 1, nullptr), kBindingNullPointer);
 }
 
 TEST(FormulonCApiSparklines, MoreThan65536ItemsIsAResourceLimit) {

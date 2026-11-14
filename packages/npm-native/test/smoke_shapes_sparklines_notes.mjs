@@ -285,7 +285,6 @@ test('sparkline group arguments are validated', async () => {
     () => wb.sheet(0).addSparklineGroup({ sparklines: [{ source: 'Sheet1!A1:D1', location: 'F1:F2' }] }),
     isFormulonError,
   );
-  assert.throws(() => wb.sheet(0).addSparklineGroup({ sparklines: [{ source: '', location: 'F1' }] }), isFormulonError);
   assert.throws(() => wb.sheet(0).addSparklineGroup({ type: 7, sparklines: good }), isFormulonError);
   assert.throws(() => wb.sheet(0).addSparklineGroup({ lineWidthPt: -1, sparklines: good }), isFormulonError);
   assert.throws(() => wb.sheet(4).addSparklineGroup({ sparklines: good }), isFormulonError);

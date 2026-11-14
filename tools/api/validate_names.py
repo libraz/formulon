@@ -27,7 +27,7 @@ class), a raw name per scope.
 reads; `resolved: true` a read whose XF-family indices are resolved output;
 `color: resolved` a record, field or op whose colours are rendered results;
 `namespace: ooxml` a `Workbook` / `Sheet` op published under `.ooxml`;
-`a1_exempt` the `*Row` / `*Col` fields of an input record that stay numeric. A
+`a1_exempt` the fields of an input record the bindings leave out of A1 normalisation. A
 `params` slot is a type, or `{type, default}` for a trailing argument the
 binding may omit; a default given there names a parameter of the C signature.
 

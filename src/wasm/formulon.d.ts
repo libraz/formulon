@@ -2539,7 +2539,9 @@ export interface WorkbookProtectionInput {
 }
 
 /** One `<protectedRange>`: a named range users may edit on a protected sheet,
- *  covering the rectangles of `ranges`. */
+ *  covering the rectangles of `ranges`. A range loaded from a file can carry a name longer than 255 UTF-16 units or
+ *  more than 8191 rectangles; it reads back as stored, the add and update setters refuse those values, and an `.xlsb`
+ *  save of it fails with `StatusCode.IoFeatureNotWritable`. */
 export interface ProtectedRange {
   /** The range's name, unique among the sheet's protected ranges. */
   readonly name: string;
@@ -2562,7 +2564,7 @@ export interface ProtectedRange {
 /** Argument of `Sheet.addProtectedRange`: `name` and `ranges` are required, every other key is optional. The
  *  {@link ProtectedRange} a read returns passes as is. */
 export interface ProtectedRangeInput {
-  /** The range's name; it must be non-empty and unused by the sheet's other protected ranges. */
+  /** The range's name, 1..255 UTF-16 units (an astral character counts 2), unused by the sheet's other protected ranges. */
   name: string;
   /** The rectangles the range covers: a list of `CellRect`s and A1 ranges, or one A1 string; at least one is required. */
   ranges: readonly (CellRect | string)[] | string;
@@ -2576,7 +2578,8 @@ export interface ProtectedRangeInput {
   saltValue?: string | null;
   /** The number of hash iterations; omitted is 0, which is absent. */
   spinCount?: number;
-  /** The security descriptor (SDDL text) naming who may edit the range without a password; omitted or `null` is absent. */
+  /** The security descriptor (SDDL text) naming who may edit the range without a password; omitted or `null` is absent.
+   *  An `.xlsb` save of a range with a security descriptor fails with `StatusCode.IoFeatureNotWritable`. */
   securityDescriptor?: string | null;
 }
 
@@ -5452,7 +5455,10 @@ export interface Sparkline {
 
 /** One sparkline of an input. The {@link Sparkline} a read returns passes as is. */
 export interface SparklineInput {
-  /** The data range, as a range record or sheet-qualified A1 text; unqualified text resolves on the receiving sheet. */
+  /** The data range, as a range record or sheet-qualified A1 text; unqualified text resolves on the receiving sheet.
+   *  Text may also be a 3-D span, another workbook's range, a defined name or `#REF!`; a union, structured
+   *  reference or expression fails with `StatusCode.InvalidArgument`. `null` or empty text stores a sparkline
+   *  whose source was deleted, as `#REF!` does. */
   source: SheetRect | string | null;
   /** The cell that shows the sparkline, as an address record or A1 text. */
   location: CellAddress | string;
@@ -7737,7 +7743,8 @@ export interface Sheet {
   /** `removeDataTable` at the A1 address `a1`. */
   removeDataTable(a1: string): void;
   /** Appends a group and returns its id; `spec.sparklines` must hold at least one sparkline, and more than 65536
-   *  fail with `StatusCode.SecurityResourceLimit`. */
+   *  fail with `StatusCode.SecurityResourceLimit`. A source or `dateAxisRange` that is not one reference or name, or
+   *  a location that is not one cell, fails with `StatusCode.InvalidArgument`. */
   addSparklineGroup(spec: SparklineGroupInput): SparklineGroupId;
   /** Lists the sheet's sparkline groups; a group's place in this list is its position, its `id` the stable key. */
   listSparklineGroups(): readonly SparklineGroup[];
@@ -8065,11 +8072,13 @@ export interface Sheet {
   listProtectedRanges(): readonly ProtectedRange[];
   /** Reads the protected range `protectedRange`; `null` when the sheet has none. */
   getProtectedRange(protectedRange: ProtectedRangeRef): ProtectedRange | null;
-  /** Appends a protected range and returns its name. `name` must be non-empty (`StatusCode.InvalidArgument`) and unique
-   *  on the sheet (`StatusCode.AlreadyExists`); `ranges` must hold at least one rectangle. More than 16384 ranges fail with `StatusCode.SecurityResourceLimit`. */
+  /** Appends a protected range and returns its name. `name` must be 1..255 UTF-16 units (`StatusCode.InvalidArgument`) and unique
+   *  on the sheet (`StatusCode.AlreadyExists`); `ranges` must hold at least one rectangle. More than 8191 ranges fail with
+   *  `StatusCode.InvalidArgument`; above 16384 the call fails with `StatusCode.SecurityResourceLimit`. */
   addProtectedRange(input: ProtectedRangeInput): string;
   /** Updates the protected range `protectedRange` with the keys `patch` names; the others keep their value.
-   *  Leaving `ranges` out keeps the stored ranges. See {@link ProtectedRangePatch}. More than 16384 ranges fail with `StatusCode.SecurityResourceLimit`. */
+   *  Leaving `ranges` out keeps the stored ranges. See {@link ProtectedRangePatch}. A `name` outside 1..255 UTF-16 units or more than 8191 ranges fail with
+   *  `StatusCode.InvalidArgument`; above 16384 ranges the call fails with `StatusCode.SecurityResourceLimit`. */
   updateProtectedRange(protectedRange: ProtectedRangeRef, patch: ProtectedRangePatch): void;
   /** Removes the protected range `protectedRange`. */
   removeProtectedRange(protectedRange: ProtectedRangeRef): void;

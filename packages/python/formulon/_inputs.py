@@ -56,8 +56,8 @@ RECORD_RANGE_FIELDS = {
     "PivotWorksheetSourceInput": {"range": "SheetRect"},
     "ProtectedRangeInput": {"ranges": "CellRect[]"},
     "SheetSelectionInput": {"active": "CellAddress", "ranges": "CellRect[]"},
-    "SparklineGroupInput": {"date_axis_range": "SheetRect", "sparklines": "SparklineInput[]"},
-    "SparklineInput": {"source": "SheetRect", "location": "CellAddress"},
+    "SparklineGroupInput": {"sparklines": "SparklineInput[]"},
+    "SparklineInput": {"location": "CellAddress"},
     "TableInput": {"range": "CellRect"},
     "ThreadedCommentInput": {"cell": "CellAddress"},
 }

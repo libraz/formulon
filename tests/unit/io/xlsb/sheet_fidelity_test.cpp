@@ -24,6 +24,7 @@
 #include "protection.h"
 #include "pugixml.hpp"
 #include "sheet.h"
+#include "utils/error.h"
 #include "workbook.h"
 #include "writer_test_helpers.h"
 
@@ -238,17 +239,17 @@ TEST(XlsbSheetFidelity, ProtectedRangesSurviveXlsbAndXlsbToXlsb) {
   ExpectSameRanges(read_protected_ranges(twice.sheet(0).raw_extensions()), SampleRanges());
 }
 
-TEST(XlsbSheetFidelity, ProtectedRangeWithSecurityDescriptorIsSkippedAndReported) {
+TEST(XlsbSheetFidelity, ProtectedRangeWithSddlTextIsNotWritable) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Ranges");
-  const std::uint32_t baseline = DeferredCount(wb);
   std::vector<ProtectedRange> ranges = SampleRanges();
   ranges[0].security_descriptor = "O:WDG:WDD:(A;;CC;;;WD)";
   write_protected_ranges(wb.sheet(0).mutable_raw_extensions(), ranges);
-  std::uint32_t deferred = 0;
-  const Workbook back = RoundTrip(wb, &deferred);
-  EXPECT_EQ(deferred, baseline + 1U);
-  ExpectSameRanges(read_protected_ranges(back.sheet(0).raw_extensions()), {SampleRanges()[1], SampleRanges()[2]});
+  auto written = write_xlsb_with_result(wb);
+  ASSERT_FALSE(static_cast<bool>(written));
+  EXPECT_EQ(written.error().code, FormulonErrorCode::kIoFeatureNotWritable);
+  EXPECT_NE(written.error().context.find("kind=protected_range_descriptor"), std::string::npos)
+      << written.error().context;
 }
 
 std::vector<std::uint8_t> RangeProtectionWithDescriptor() {
@@ -306,11 +307,11 @@ TEST(XlsbSheetFidelity, RangeProtectionWithDescriptorIsRetainedVerbatim) {
   EXPECT_EQ(CountOf(RecordTypes(out), kBrtRangeProtection), 2U);
 }
 
-TEST(XlsbSheetFidelity, IsoRangeProtectionWithoutItsCompanionIsRetained) {
+TEST(XlsbSheetFidelity, IsoRangeProtectionWithoutItsCompanionIsSkipped) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Ranges");
   std::vector<std::uint8_t> records;
-  ASSERT_TRUE(static_cast<bool>(emit_range_protections(records, {SampleRanges()[1]})));
+  ASSERT_TRUE(static_cast<bool>(emit_range_protections(records, {SampleRanges()[1]}, 0U)));
   // Keep the Iso record alone.
   ByteSpan cursor{records.data(), records.size()};
   ASSERT_TRUE(static_cast<bool>(read_record(cursor)));
@@ -323,7 +324,12 @@ TEST(XlsbSheetFidelity, IsoRangeProtectionWithoutItsCompanionIsRetained) {
   const SheetDecodeState state = DecodeBody(body, loaded);
   EXPECT_EQ(state.dropped_records, 0U);
   EXPECT_TRUE(read_protected_ranges(loaded.sheet(0).raw_extensions()).empty());
-  EXPECT_FALSE(loaded.sheet(0).xlsb_tail().empty());
+  const XlsbSheetTail& tail = loaded.sheet(0).xlsb_tail();
+  for (const std::vector<std::uint8_t>* slot :
+       {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
+    EXPECT_EQ(CountOf(RecordTypes(*slot), kBrtRangeProtectionIso), 0U);
+  }
+  EXPECT_EQ(state.skipped_features, 1U);
 }
 
 // A repeated ref and overlapping refs are kept as the list holds them: the

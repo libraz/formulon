@@ -18,6 +18,8 @@
 #include "sheet.h"
 #include "sheet_name.h"
 #include "utils/error.h"
+#include "utils/resource_budget.h"
+#include "utils/utf8_length.h"
 #include "workbook.h"
 
 using formulon::c_api::parts::check_index;
@@ -59,15 +61,38 @@ formulon::ProtectedRange ToModel(const fm_protected_range_t& range) {
   return out;
 }
 
-// Every text is UTF-8 and a name is non-empty and collides with no other on the sheet (`sheet_names::write_collides`).
+// A name holds 1..`kMaxProtectedRangeNameUnits` UTF-16 units.
+fm_status_t CheckRangeName(const char* name) {
+  if (name[0] == '\0') {
+    return invalid_argument("name must not be empty");
+  }
+  if (const std::uint32_t units = formulon::utf16_units_in(name); units > formulon::kMaxProtectedRangeNameUnits) {
+    return invalid_argument("name is too long",
+                            formulon::limit_context("name", units, formulon::kMaxProtectedRangeNameUnits));
+  }
+  return 0;
+}
+
+// A range holds at most `kMaxProtectedRangeRects` rectangles; checked after `check_rect_list`, whose per-call cap
+// keeps its own status.
+fm_status_t CheckRangeCount(std::size_t range_count) {
+  if (range_count > formulon::kMaxProtectedRangeRects) {
+    return invalid_argument("range_count is past the protected-range limit",
+                            formulon::limit_context("ranges", range_count, formulon::kMaxProtectedRangeRects));
+  }
+  return 0;
+}
+
+// Every text is UTF-8 and a name is valid (`CheckRangeName`) and collides with no other on the sheet
+// (`sheet_names::write_collides`).
 fm_status_t CheckRange(const std::vector<formulon::ProtectedRange>& ranges, const formulon::ProtectedRange& range) {
   if (auto rc = check_utf8({range.name.c_str(), range.password.c_str(), range.algorithm_name.c_str(),
                             range.hash_value.c_str(), range.salt_value.c_str(), range.security_descriptor.c_str()});
       rc != 0) {
     return rc;
   }
-  if (range.name.empty()) {
-    return invalid_argument("name must not be empty");
+  if (auto rc = CheckRangeName(range.name.c_str()); rc != 0) {
+    return rc;
   }
   for (std::size_t i = 0; i < ranges.size(); ++i) {
     if (formulon::sheet_names::write_collides(ranges[i].name, range.name)) {
@@ -280,6 +305,9 @@ extern "C" fm_status_t fm_sheet_add_protected_range(fm_workbook_t* wb, size_t sh
   if (auto rc = check_rect_list(range->ranges, range->range_count); rc != 0) {
     return rc;
   }
+  if (auto rc = CheckRangeCount(range->range_count); rc != 0) {
+    return rc;
+  }
   formulon::WorksheetRawExtensions& raw = wb->workbook().sheet(sheet_index).mutable_raw_extensions();
   auto ranges = formulon::io::read_protected_ranges(raw);
   formulon::ProtectedRange added = ToModel(*range);
@@ -330,14 +358,19 @@ extern "C" fm_status_t fm_sheet_update_protected_range(fm_workbook_t* wb, size_t
       }
     }
   }
-  if (patch->name_op == FM_PATCH_OP_SET && patch->name[0] == '\0') {
-    return invalid_argument("name must not be empty");
+  if (patch->name_op == FM_PATCH_OP_SET) {
+    if (auto rc = CheckRangeName(patch->name); rc != 0) {
+      return rc;
+    }
   }
   if (!patch_op_ok_without_clear(patch->spin_count_op) || !patch_op_ok_without_clear(patch->ranges_op)) {
     return invalid_argument("op is not a patch op");
   }
   if (patch->ranges_op == FM_PATCH_OP_SET) {
     if (auto rc = check_rect_list(patch->ranges, patch->range_count); rc != 0) {
+      return rc;
+    }
+    if (auto rc = CheckRangeCount(patch->range_count); rc != 0) {
       return rc;
     }
   }

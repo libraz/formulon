@@ -264,7 +264,6 @@ test('sparkline group arguments are validated', async () => {
   expectFailure(() => wb.sheet(0).addSparklineGroup({}));
   expectFailure(() => wb.sheet(0).addSparklineGroup({ sparklines: [] }));
   expectFailure(() => wb.sheet(0).addSparklineGroup({ sparklines: [{ source: 'Sheet1!A1:D1', location: 'F1:F2' }] }));
-  expectFailure(() => wb.sheet(0).addSparklineGroup({ sparklines: [{ source: '', location: 'F1' }] }));
   expectFailure(() => wb.sheet(0).addSparklineGroup({ type: 7, sparklines: good }));
   expectFailure(() => wb.sheet(0).addSparklineGroup({ lineWidthPt: -1, sparklines: good }));
   expectFailure(() => wb.sheet(4).addSparklineGroup({ sparklines: good }));

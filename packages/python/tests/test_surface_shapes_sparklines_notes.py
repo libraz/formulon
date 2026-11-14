@@ -294,7 +294,6 @@ class SparklineGroupTests(unittest.TestCase):
             for bad in (
                 SparklineGroupInput(),
                 SparklineGroupInput(sparklines=[SparklineInput("Sheet1!A1:D1", "F1:F2")]),
-                SparklineGroupInput(sparklines=[SparklineInput("", "F1")]),
                 SparklineGroupInput(type=7, sparklines=good),
                 SparklineGroupInput(line_width_pt=-1.0, sparklines=good),
             ):

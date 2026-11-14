@@ -3392,7 +3392,7 @@ typedef struct {
   uint32_t struct_size;
   /** The number of hash iterations; 0 when absent. */
   uint32_t spin_count;
-  /** The range's name, unique among the sheet's protected ranges. */
+  /** The range's name, 1..255 UTF-16 units, unique among the sheet's protected ranges. */
   const char* name;
   /** The rectangles the protected range covers; a stored range that does not parse is left out. */
   const fm_cell_rect_t* ranges;
@@ -3406,7 +3406,11 @@ typedef struct {
   const char* hash_value;
   /** The salt the password hash was computed with, stored as given; `NULL` when absent. */
   const char* salt_value;
-  /** The security descriptor (SDDL text) naming who may edit the range without a password; `NULL` when absent. */
+  /**
+   * The security descriptor (SDDL text) naming who may edit the range without a password; `NULL` when absent.
+   * An `.xlsb` save of a range holding one fails with `FM_STATUS_IO_FEATURE_NOT_WRITABLE` (5028, context
+   * `kind=protected_range_descriptor`).
+   */
   const char* security_descriptor;
 } fm_protected_range_t;
 
@@ -3427,7 +3431,7 @@ typedef struct {
   uint32_t spin_count;
   /** The operation applied to `name`: keep it, set it; it cannot be cleared. */
   fm_patch_op_t name_op;
-  /** The new name; it must be non-empty and unused by the sheet's other protected ranges. */
+  /** The new name: 1..255 UTF-16 units, unused by the sheet's other protected ranges. */
   const char* name;
   /** The operation applied to `ranges`: keep it, set it; it cannot be cleared. */
   fm_patch_op_t ranges_op;
@@ -3469,6 +3473,10 @@ FM_API fm_status_t fm_sheet_get_protected_range_count(const fm_workbook_t* wb, s
 
 /**
  * @brief Reads protected range `protected_range_index` in file order.
+ *
+ * A range loaded from a file can carry a name longer than 255 UTF-16 units or more than 8191 rectangles; it reads
+ * back as stored, `fm_sheet_add_protected_range` and `fm_sheet_update_protected_range` refuse those values, and an
+ * `.xlsb` save of it fails with `FM_STATUS_IO_FEATURE_NOT_WRITABLE` (5028).
  *
  * Lifetime: transient.
  *
@@ -3512,8 +3520,10 @@ FM_API fm_status_t fm_sheet_get_protected_range(const fm_workbook_t* wb, size_t 
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `range` is `NULL`, or
  *           `range.ranges` is `NULL` while `range.range_count > 0`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `name` is empty, or when
- *         `range.range_count` is 0, or a rectangle is inverted or outside the grid;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `name` is empty or longer than 255 UTF-16 units (context
+ *         `part=name requested=<n> limit=255`), or when `range.range_count` is 0 or past 8,191 (context
+ *         `part=ranges requested=<n> limit=8191`; up to the per-call cap below), or a rectangle is inverted
+ *         or outside the grid;
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when `range.range_count` is past
  *         the per-call range cap of 16,384 (context `part=ranges requested=<n> limit=16384`);
  *         `FM_STATUS_ALREADY_EXISTS` (7) when `name` already names another range
@@ -3532,8 +3542,10 @@ FM_API fm_status_t fm_sheet_add_protected_range(fm_workbook_t* wb, size_t sheet_
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is outside 0..2, `CLEAR` hits a
  *           field other than `legacy_password_hash`, `SET` carries a `NULL` string or
- *           an empty name, or a `SET` `ranges` is empty or holds an inverted or
- *           out-of-grid rectangle;
+ *           a name that is empty or longer than 255 UTF-16 units (context
+ *           `part=name requested=<n> limit=255`), or a `SET` `ranges` is empty,
+ *           past 8,191 rectangles (context `part=ranges requested=<n> limit=8191`; up to the
+ *           per-call cap below), or holds an inverted or out-of-grid rectangle;
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when a `SET` `ranges` is past the
  *           per-call range cap of 16,384 (context `part=ranges requested=<n> limit=16384`);
  *         `FM_STATUS_NOT_FOUND` (6) when no range of the sheet has `name`;
@@ -14861,7 +14873,10 @@ FM_API fm_status_t fm_sheet_get_sparkline_at(const fm_workbook_t* wb, size_t she
  *        next scratch-backed read. `group->id` is ignored.
  *
  * Attributes and children outside the model are not written. A sheet without
- * a worksheet extension list gets one; other extensions are kept.
+ * a worksheet extension list gets one; other extensions are kept. A sparkline
+ * formula or `date_axis_ref` names one cell or rectangle (on any sheet, a 3-D
+ * span or another workbook) or a defined name; `#REF!` is stored without a
+ * formula and reads back empty.
  *
  * Lifetime: transient.
  *
@@ -14869,9 +14884,12 @@ FM_API fm_status_t fm_sheet_get_sparkline_at(const fm_workbook_t* wb, size_t she
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `group`, `items` or `out_group_id` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) for `count == 0`, a sparkline whose
- *         location is not one A1 cell or whose formula is empty, a
- *         non-finite number, a negative line weight, or an enumeration out of
- *         range;
+ *         location is not one A1 cell, a formula or
+ *         `date_axis_ref` that is not one reference or defined name (a union,
+ *         a structured reference, an expression, a sheet-qualified `#REF!`;
+ *         context `formula=<text>` or `date_axis_ref=<text>`), a non-finite
+ *         number, a negative line weight, or an enumeration out of range. An empty (or `NULL`) formula is not
+ *         refused: it is stored as a deleted (`#REF!`) source;
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when `count` is above 65536
  *         (context `part=sparkline_items requested=<n> limit=65536`).
  */

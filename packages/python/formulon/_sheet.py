@@ -3290,6 +3290,10 @@ class Sheet(_NoCopy):
     def get_protected_range(self, protected_range: ProtectedRangeRef) -> Optional[ProtectedRange]:
         """Return ``protected_range`` (a name or a position in :meth:`list_protected_ranges`), or ``None`` when absent.
 
+        A range loaded from a file can carry a name longer than 255 UTF-16 units or more than 8191 rectangles; it
+        reads back as stored, the add and update setters refuse those values, and an ``.xlsb`` save of it fails
+        with ``StatusCode.IO_FEATURE_NOT_WRITABLE``.
+
         Raises:
           IndexOutOfRangeError: when ``protected_range`` is a position past the last range.
         """
@@ -3358,6 +3362,7 @@ class Sheet(_NoCopy):
 
         Raises:
           TypeError: when ``input`` is not one of the two record types.
+          InvalidArgumentError: when name is empty or longer than 255 UTF-16 units, or more than 8191 ranges are given.
           SecurityError: when more than 16384 ranges are given.
         """
         if not isinstance(input, (ProtectedRangeInput, ProtectedRange)):
@@ -3400,7 +3405,8 @@ class Sheet(_NoCopy):
           TypeError: for ``None`` on ``name``, ``ranges`` or ``spin_count``.
           NotFoundError: when no protected range has the name ``protected_range``.
           IndexOutOfRangeError: when ``protected_range`` is an index past the last one.
-          InvalidArgumentError: when ``ranges`` is empty.
+          InvalidArgumentError: when ``ranges`` is empty, ``name`` is empty or longer than 255 UTF-16 units, or more
+            than 8191 ranges are given.
           SecurityError: when more than 16384 ranges are given.
         """
         given = {
@@ -4949,7 +4955,10 @@ class Sheet(_NoCopy):
 
         Raises:
           TypeError: when ``spec`` is not one of the two record types.
-          InvalidArgumentError: when ``spec.sparklines`` is empty.
+          InvalidArgumentError: when ``spec.sparklines`` is empty, a ``location``
+            is not one cell, or a ``source`` or ``date_axis_range`` is not one
+            reference or defined name (a union, a structured reference, an
+            expression). ``#REF!``, an empty ``source`` or ``None`` is accepted and stored without a source.
           SecurityError: when ``spec.sparklines`` holds more than 65536 sparklines.
         """
         if not isinstance(spec, (SparklineGroupInput, SparklineGroup)):
@@ -5026,7 +5035,8 @@ class Sheet(_NoCopy):
           NotFoundError: when no group has the id ``sparkline_group``.
           IndexOutOfRangeError: when ``sparkline_group`` is a position past the last group.
           InvalidArgumentError: when ``sparklines`` is empty (a group holds at
-            least one sparkline; remove the group instead).
+            least one sparkline; remove the group instead), or a value fails a
+            rule of :meth:`add_sparkline_group`.
           SecurityError: when ``sparklines`` holds more than 65536 sparklines.
         """
         given = {
