@@ -126,6 +126,8 @@ inline const char* status_name(std::int32_t status) {
       return "IO_CHART_INVALID_REFERENCE";
     case FM_STATUS_IO_CHART_UNSUPPORTED_KIND:
       return "IO_CHART_UNSUPPORTED_KIND";
+    case FM_STATUS_IO_FEATURE_NOT_WRITABLE:
+      return "IO_FEATURE_NOT_WRITABLE";
     case FM_STATUS_SECURITY_RESOURCE_LIMIT:
       return "SECURITY_RESOURCE_LIMIT";
     case FM_STATUS_BINDING_INVALID_HANDLE:

@@ -691,6 +691,7 @@ export const StatusCode = Object.freeze({
   IoChartUnparseable: 5025,
   IoChartInvalidReference: 5026,
   IoChartUnsupportedKind: 5027,
+  IoFeatureNotWritable: 5028,
   SecurityResourceLimit: 6005,
   BindingInvalidHandle: 7000,
   BindingNullPointer: 7001,

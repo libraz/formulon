@@ -72,6 +72,7 @@ export const StatusCode: Readonly<{
   IoChartUnparseable: 5025;
   IoChartInvalidReference: 5026;
   IoChartUnsupportedKind: 5027;
+  IoFeatureNotWritable: 5028;
   SecurityResourceLimit: 6005;
   BindingInvalidHandle: 7000;
   BindingNullPointer: 7001;
@@ -131,6 +132,7 @@ export type StatusCode =
   | 5025
   | 5026
   | 5027
+  | 5028
   | 6005
   | 7000
   | 7001
@@ -6795,7 +6797,10 @@ export interface Workbook {
    *  cells are computed first unless the mode is `CalcMode.Manual` with `calcOnSave` off, which writes the
    *  cached values. An archive or writer failure throws with one of the `StatusCode.Io*` codes; an unknown `format`
    *  value with `StatusCode.InvalidArgument`. Saving fails with `StatusCode.IoWriteFailed` while a pivot uses a
-   *  cache without a worksheet source (see `addPivotCache`); a cache no pivot or slicer uses is not written.
+   *  cache without a worksheet source (see `addPivotCache`); a cache no pivot or slicer uses is not written. An
+   *  `.xlsb` save of a workbook holding a feature this writer cannot write to xlsb fails with
+   *  `StatusCode.IoFeatureNotWritable` and writes nothing; the error context's `kind=` names the feature and, for a
+   *  sheet-scoped one, `sheet_index=` the sheet.
    *
    *  @example
    *  ```ts

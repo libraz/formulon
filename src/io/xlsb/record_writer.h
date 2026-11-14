@@ -42,6 +42,11 @@ inline constexpr const char* kWriteXlsbContext = "context=write_xlsb";
 /// Builds a `kInvalidArgument` error with the XLSB writer context.
 Error refuse_write(const std::string& what);
 
+/// Builds the `kIoFeatureNotWritable` error of a save that meets a feature
+/// the XLSB records cannot hold; the context names it as `kind=<kind>` and
+/// the sheet as `sheet_index=<sheet_index>`.
+Error not_writable(std::string_view kind, std::size_t sheet_index);
+
 /// Appends a single 8-bit unsigned integer to `dst`.
 void emit_u8(std::vector<std::uint8_t>& dst, std::uint8_t value);
 

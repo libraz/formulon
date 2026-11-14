@@ -675,7 +675,11 @@ typedef enum {
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) if `format` is outside `fm_workbook_format_t`;
- *         a `kIo*` code on archive / writer failure.
+ *         `FM_STATUS_IO_FEATURE_NOT_WRITABLE` (5028) when the workbook holds a
+ *         feature this writer cannot write to xlsb, with nothing written: the
+ *         error context's `kind=` names the feature and, for a sheet-scoped
+ *         one, `sheet_index=` the sheet;
+ *         another `FM_STATUS_IO_*` code on archive / writer failure.
  */
 FM_API fm_status_t fm_workbook_save(const fm_workbook_t* wb, int32_t format, uint8_t** out_bytes, size_t* out_len);
 
@@ -723,7 +727,11 @@ typedef struct {
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) if `format` is outside `fm_workbook_format_t`;
- *         a `kIo*` code on archive / writer failure.
+ *         `FM_STATUS_IO_FEATURE_NOT_WRITABLE` (5028) when the workbook holds a
+ *         feature this writer cannot write to xlsb, with nothing written: the
+ *         error context's `kind=` names the feature and, for a sheet-scoped
+ *         one, `sheet_index=` the sheet;
+ *         another `FM_STATUS_IO_*` code on archive / writer failure.
  */
 FM_API fm_status_t fm_workbook_save_with_diagnostics(const fm_workbook_t* wb, int32_t format, uint8_t** out_bytes,
                                                      size_t* out_len, fm_save_diagnostics_info_t* out_diagnostics);

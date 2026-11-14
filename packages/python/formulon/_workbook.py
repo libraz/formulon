@@ -9501,7 +9501,11 @@ class Workbook(_NoCopy):
           InvalidArgumentError: for a ``format`` that contradicts a ``.xlsx`` / ``.xlsb`` extension of ``dest``.
           IoError: when the write fails, including while a pivot uses a cache
             without a worksheet source (see :meth:`add_pivot_cache`); a cache
-            no pivot or slicer uses is not written.
+            no pivot or slicer uses is not written. An ``.xlsb`` save of a
+            workbook holding a feature this writer cannot write to xlsb raises
+            it with code ``StatusCode.IO_FEATURE_NOT_WRITABLE`` and writes
+            nothing; the error's ``context`` names the feature as ``kind=`` and,
+            for a sheet-scoped one, the sheet as ``sheet_index=``.
           TypeError: when ``dest`` is none of the above.
           OSError: when writing ``dest`` fails.
 

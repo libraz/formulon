@@ -9,7 +9,9 @@
 #include <cstdint>
 #include <cstring>
 #include <optional>
+#include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "io/xlsb/record.h"
@@ -114,6 +116,13 @@ std::uint32_t DecodeUtf8(std::string_view text, std::size_t& i) {
 
 Error refuse_write(const std::string& what) {
   return make_error(FormulonErrorCode::kInvalidArgument, what, kWriteXlsbContext);
+}
+
+Error not_writable(std::string_view kind, std::size_t sheet_index) {
+  std::string context(kWriteXlsbContext);
+  context.append(" kind=").append(kind).append(" sheet_index=").append(std::to_string(sheet_index));
+  return make_error(FormulonErrorCode::kIoFeatureNotWritable,
+                    "the workbook holds a feature this writer cannot write to xlsb", std::move(context));
 }
 
 void emit_u8(std::vector<std::uint8_t>& dst, std::uint8_t value) {

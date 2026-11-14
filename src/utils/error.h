@@ -110,6 +110,10 @@ enum class FormulonErrorCode : int32_t {
   /// The chart's kind or shape does not support the requested edit (chartex,
   /// shared axes, pivot-chart series edits).
   kIoChartUnsupportedKind = 5027,
+  /// The workbook holds a feature this writer cannot write to xlsb; nothing
+  /// is written. The error context's `kind=` names the feature and, for a
+  /// sheet-scoped one, `sheet_index=` the sheet.
+  kIoFeatureNotWritable = 5028,
 
   // ===== 6000-6999: Crypto / Security =====
   kSecurityResourceLimit = 6005,
@@ -278,6 +282,8 @@ inline const char* to_cstring(FormulonErrorCode code) {
       return "kIoChartInvalidReference";
     case FormulonErrorCode::kIoChartUnsupportedKind:
       return "kIoChartUnsupportedKind";
+    case FormulonErrorCode::kIoFeatureNotWritable:
+      return "kIoFeatureNotWritable";
 
     // Crypto / Security
     case FormulonErrorCode::kSecurityResourceLimit:

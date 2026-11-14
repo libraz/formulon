@@ -13330,6 +13330,11 @@ entries:
     c: FM_STATUS_IO_CHART_UNSUPPORTED_KIND
     enum: enum.status_code
     surfaces: [c]
+  constant.fm_status_io_feature_not_writable:
+    kind: constant
+    c: FM_STATUS_IO_FEATURE_NOT_WRITABLE
+    enum: enum.status_code
+    surfaces: [c]
   constant.fm_status_crypto_agile_not_supported:
     kind: constant
     c: FM_STATUS_CRYPTO_AGILE_NOT_SUPPORTED
