@@ -142,9 +142,26 @@ void apply_workbook_part_settings(const pugi::xml_node& wb_root, Workbook& wb) {
   if (pugi::xml_node book_views = wb_root.child("bookViews"); book_views) {
     wb.set_book_views_xml(raw_xml(book_views));
   }
+  // The Compatibility Version stamp, kept as read (absent unless the part carries one); the raw <extLst> keeps it too
+  // and the writer regenerates only that ext from the model.
+  std::optional<std::uint32_t> compat_set_version;
+  std::optional<std::uint32_t> compat_warn_below;
   if (pugi::xml_node ext_lst = wb_root.child("extLst"); ext_lst) {
     wb.set_workbook_ext_lst_xml(raw_xml(ext_lst));
+    for (pugi::xml_node ext : ext_lst.children()) {
+      if (std::string_view(ext.attribute("uri").value()) != kCompatibilityVersionExtUri) {
+        continue;
+      }
+      for (pugi::xml_node version : ext.children()) {
+        if (local_name(version) != "version") {
+          continue;
+        }
+        compat_set_version = parse_xml_u32_attr_strict(version.attribute("setVersion"));
+        compat_warn_below = parse_xml_u32_attr_strict(version.attribute("warnBelowVersion"));
+      }
+    }
   }
+  wb.restore_compatibility_stamp(compat_set_version, compat_warn_below);
 
   // Everything else is retained by exclusion, so an element no release has
   // modelled survives too. A name outside the sequence (`mc:AlternateContent`)

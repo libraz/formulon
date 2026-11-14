@@ -868,6 +868,18 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
     emit_calc_prop(body, calc_props);
   }
 
+  // The Compatibility Version stamp in its own FRT block, last before BrtEndBook, as Excel writes it.
+  if (const std::optional<std::uint32_t> version = wb.compatibility_stamp(); version.has_value()) {
+    std::vector<std::uint8_t> payload;
+    emit_u32(payload, kWorkbookCompatibilityVersionFrt);
+    emit_record(body, kFrtBegin, payload);
+    payload.clear();
+    emit_u32(payload, 0U);
+    emit_u32(payload, wb.compatibility_warn_below().value_or(0U));
+    emit_u32(payload, *version);
+    emit_record(body, kWorkbookCompatibilityVersion, payload);
+    emit_record(body, kFrtEnd, ByteSpan{});
+  }
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtEndBook), ByteSpan{});
   return body;
 }

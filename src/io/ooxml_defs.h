@@ -35,6 +35,10 @@ inline constexpr std::string_view kNsMarkupCompat = "http://schemas.openxmlforma
 inline constexpr std::string_view kNsX14 = "http://schemas.microsoft.com/office/spreadsheetml/2009/9/main";
 inline constexpr std::string_view kNsX15 = "http://schemas.microsoft.com/office/spreadsheetml/2010/11/main";
 inline constexpr std::string_view kNsX15ac = "http://schemas.microsoft.com/office/spreadsheetml/2010/11/ac";
+// The workbook <extLst> ext carrying the Compatibility Version stamp.
+inline constexpr std::string_view kNsWorkbookCompatibilityVersion =
+    "http://schemas.microsoft.com/office/spreadsheetml/2024/workbookCompatibilityVersion";
+inline constexpr std::string_view kCompatibilityVersionExtUri = "{D14903EA-33C4-47F7-8F05-3474C54BE107}";
 inline constexpr std::string_view kNsExcelMain = "http://schemas.microsoft.com/office/excel/2006/main";
 inline constexpr std::string_view kNsContentTypes = "http://schemas.openxmlformats.org/package/2006/content-types";
 inline constexpr std::string_view kNsXr = "http://schemas.microsoft.com/office/spreadsheetml/2014/revision";

@@ -262,7 +262,7 @@ TEST(FormulonCApiSlicers, RemovingTheTableRemovesItsSlicers) {
   EXPECT_FALSE(HasEntry(saved, "xl/slicerCaches/slicerCache2.xml"));
   const std::string book = ExtractZipEntry(saved, "xl/workbook.xml");
   EXPECT_FALSE(Has(book, "Slicer_")) << book;
-  EXPECT_FALSE(Has(book, "extLst")) << book;
+  EXPECT_FALSE(Has(book, "slicerCache")) << book;
   const std::string types = ExtractZipEntry(saved, "[Content_Types].xml");
   EXPECT_FALSE(Has(types, "slicer")) << types;
 }

@@ -25,8 +25,9 @@ constexpr std::uint16_t kTableSlicerCacheId = 2076;
 constexpr std::uint32_t kFrtRelId = 0x08U;
 
 // FRTWORKBOOK blocks in grammar order, by the record that opens each.
-constexpr std::array<std::uint16_t, 14> kBookFrtOrder = {
-    1036, 1113, kBeginSlicerCacheIds, 1117, 2048, 2051, 2080, 2083, kTableSlicerCacheIds, 2091, 2121, 5095, 5099, 5117};
+constexpr std::array<std::uint16_t, 15> kBookFrtOrder = {1036, 1113, kBeginSlicerCacheIds,         1117, 2048, 2051,
+                                                         2080, 2083, kTableSlicerCacheIds,         2091, 2121, 5095,
+                                                         5099, 5117, kWorkbookCompatibilityVersion};
 
 std::size_t Rank(std::uint16_t first) {
   return static_cast<std::size_t>(std::find(kBookFrtOrder.begin(), kBookFrtOrder.end(), first) - kBookFrtOrder.begin());

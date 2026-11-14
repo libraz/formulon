@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_set>
@@ -47,6 +48,82 @@
 namespace formulon {
 namespace io {
 namespace {
+
+// The qualified name of the tag opening at `open` (just past '<'), and the offset where its name ends.
+std::string_view TagName(std::string_view xml, std::size_t open, std::size_t* name_end) {
+  std::size_t end = open;
+  while (end < xml.size() && xml[end] != ' ' && xml[end] != '\t' && xml[end] != '\n' && xml[end] != '\r' &&
+         xml[end] != '>' && xml[end] != '/') {
+    ++end;
+  }
+  *name_end = end;
+  return xml.substr(open, end - open);
+}
+
+std::string_view LocalPart(std::string_view qname) {
+  const std::size_t colon = qname.find(':');
+  return colon == std::string_view::npos ? qname : qname.substr(colon + 1U);
+}
+
+// `ext_lst` (a raw <extLst>, possibly empty) with every Compatibility Version
+// ext removed and, when the workbook carries a stamp, one built from it
+// appended last, as Excel writes it.
+std::string WithCompatibilityVersionExt(std::string ext_lst, const Workbook& wb) {
+  std::size_t pos = 0;
+  while ((pos = ext_lst.find('<', pos)) != std::string::npos) {
+    std::size_t name_end = 0;
+    const std::string_view name = TagName(ext_lst, pos + 1U, &name_end);
+    const std::size_t tag_end = ext_lst.find('>', name_end);
+    if (tag_end == std::string::npos) {
+      break;
+    }
+    const std::string_view tag(ext_lst.data() + pos, tag_end + 1U - pos);
+    if (LocalPart(name) != "ext" || tag.find(kCompatibilityVersionExtUri) == std::string_view::npos) {
+      pos = tag_end + 1U;
+      continue;
+    }
+    std::size_t erase_end = tag_end + 1U;
+    if (ext_lst[tag_end - 1U] != '/') {
+      const std::string close = "</" + std::string(name) + ">";
+      const std::size_t close_at = ext_lst.find(close, tag_end);
+      if (close_at == std::string::npos) {
+        break;
+      }
+      erase_end = close_at + close.size();
+    }
+    ext_lst.erase(pos, erase_end - pos);
+  }
+  const std::optional<std::uint32_t> version = wb.compatibility_stamp();
+  if (!version.has_value()) {
+    return ext_lst;
+  }
+  std::string prefix;
+  std::size_t root_name_end = 0;
+  const std::size_t root_open = ext_lst.find('<');
+  if (root_open != std::string::npos) {
+    const std::string_view root = TagName(ext_lst, root_open + 1U, &root_name_end);
+    const std::size_t colon = root.find(':');
+    if (colon != std::string_view::npos) {
+      prefix = std::string(root.substr(0, colon + 1U));
+    }
+  }
+  std::string ext = "<" + prefix + "ext uri=\"" + std::string(kCompatibilityVersionExtUri) + "\" xmlns:xlwcv=\"" +
+                    std::string(kNsWorkbookCompatibilityVersion) + "\"><xlwcv:version";
+  if (const std::optional<std::uint32_t> warn = wb.compatibility_warn_below(); warn.has_value()) {
+    ext += " warnBelowVersion=\"" + std::to_string(*warn) + "\"";
+  }
+  ext += " setVersion=\"" + std::to_string(*version) + "\"/></" + prefix + "ext>";
+  if (ext_lst.empty()) {
+    return "<extLst>" + ext + "</extLst>";
+  }
+  const std::string close = "</" + prefix + "extLst>";
+  const std::size_t close_at = ext_lst.rfind(close);
+  if (close_at == std::string::npos) {
+    return ext_lst;
+  }
+  ext_lst.insert(close_at, ext);
+  return ext_lst;
+}
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -620,7 +697,9 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
     out.append("  </pivotCaches>\n");
   }
   flush_raw_before("extLst");
-  if (const std::string ext_lst = RemapRelationshipIds(wb, plan, wb.workbook_ext_lst_xml()); !ext_lst.empty()) {
+  if (const std::string ext_lst =
+          WithCompatibilityVersionExt(RemapRelationshipIds(wb, plan, wb.workbook_ext_lst_xml()), wb);
+      !ext_lst.empty()) {
     out.append("  ");
     out.append(ext_lst);
     out.push_back('\n');

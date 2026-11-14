@@ -15,6 +15,11 @@ namespace xlsb {
 
 inline constexpr std::uint16_t kFrtBegin = 35;
 inline constexpr std::uint16_t kFrtEnd = 36;
+/// The workbook's Compatibility Version stamp, in its own FRT block before
+/// BrtEndBook: u32 reserved (0), u32 warnBelowVersion (0 = none), u32 setVersion.
+inline constexpr std::uint16_t kWorkbookCompatibilityVersion = 5135;
+/// The FRT-begin payload Excel writes around it.
+inline constexpr std::uint32_t kWorkbookCompatibilityVersionFrt = 0x0002004DU;
 inline constexpr std::uint16_t kAcBegin = 37;
 inline constexpr std::uint16_t kAcEnd = 38;
 

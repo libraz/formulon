@@ -278,6 +278,10 @@ constexpr Field kFields[] = {
     DataOnly(662, "BrtEndListParts"),
     DataOnly(2071, "BrtAbsPath15: string"),
     DataOnly(3072, "BrtUid: GUID"),
+    // Compatibility Version stamp: reserved, warnBelowVersion (0 = none), setVersion.
+    {5135, 0, 4, kR, "workbook Compatibility Version reserved"},
+    {5135, 4, 4, kE, "workbook Compatibility Version warnBelowVersion"},
+    {5135, 8, 4, kE, "workbook Compatibility Version setVersion"},
 };
 
 // Record types our outputs carry that no row classifies yet. Each leaves this list when its rows are added, and

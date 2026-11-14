@@ -120,6 +120,8 @@ TEST(XlsbSlicerFidelity, CacheListWithoutItsPartIsDropped) {
   EXPECT_TRUE(back.xlsb_book_frt().empty());
 }
 
+// The cache list is the last FRT block before BrtEndBook but for the
+// Compatibility Version stamp block (35, 5135, 36), which ranks after it.
 TEST(XlsbSlicerFidelity, CacheListSitsBeforeEndBook) {
   const std::vector<std::uint8_t> bytes = SaveXlsb(BookWithRetainedCache());
   ZipReader zip;
@@ -127,11 +129,14 @@ TEST(XlsbSlicerFidelity, CacheListSitsBeforeEndBook) {
   auto body = zip.read_entry("xl/workbook.bin");
   ASSERT_TRUE(static_cast<bool>(body));
   const std::vector<FramedRecord> recs = split_records(body.value());
-  ASSERT_GE(recs.size(), 5U);
+  ASSERT_GE(recs.size(), 8U);
   EXPECT_EQ(recs.back().type, 132U);
   EXPECT_EQ(recs[recs.size() - 2U].type, 36U);
-  EXPECT_EQ(recs[recs.size() - 3U].type, 2076U);
-  EXPECT_EQ(recs[recs.size() - 4U].type, 2075U);
+  EXPECT_EQ(recs[recs.size() - 3U].type, 5135U);
+  EXPECT_EQ(recs[recs.size() - 4U].type, 35U);
+  EXPECT_EQ(recs[recs.size() - 5U].type, 36U);
+  EXPECT_EQ(recs[recs.size() - 6U].type, 2076U);
+  EXPECT_EQ(recs[recs.size() - 7U].type, 2075U);
 }
 
 Workbook BookWithXmlSlicer(bool slicer) {

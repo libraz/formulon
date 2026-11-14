@@ -47,6 +47,7 @@
 #include "io/xlsb/comments_records.h"
 #include "io/xlsb/drawing_record.h"
 #include "io/xlsb/external_link_reader.h"
+#include "io/xlsb/frt_records.h"
 #include "io/xlsb/metadata_bin.h"
 #include "io/xlsb/package_loader.h"
 #include "io/xlsb/part_paths.h"
@@ -795,6 +796,19 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   }
   // Slicer cache lists stay future records keyed by workbook relationship ids.
   wb.set_xlsb_book_frt(read_book_slicer_cache_ids(ByteSpan{wb_bytes.data(), wb_bytes.size()}));
+  // The Compatibility Version stamp: absent unless the part carries one.
+  {
+    std::optional<std::uint32_t> set_version;
+    std::optional<std::uint32_t> warn_below;
+    for (const FramedRecord& rec : split_records(wb_bytes)) {
+      if (rec.type == kWorkbookCompatibilityVersion && rec.payload.size == 12U) {
+        warn_below = load_u32(rec.payload.data + 4) != 0U ? std::optional<std::uint32_t>(load_u32(rec.payload.data + 4))
+                                                          : std::nullopt;
+        set_version = load_u32(rec.payload.data + 8);
+      }
+    }
+    wb.restore_compatibility_stamp(set_version, warn_below);
+  }
 
   // 6. xl/sharedStrings.bin — load before the per-sheet decode loop so
   // BrtCellIsst can resolve indices in-pipeline. The text deque is
