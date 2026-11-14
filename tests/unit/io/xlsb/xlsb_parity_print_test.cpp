@@ -13,6 +13,7 @@
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/xlsb/print_records.h"
+#include "io/xlsb/reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_ids.h"
 #include "io/xlsb/writer.h"
@@ -172,6 +173,60 @@ TEST(XlsbParityPrint, UnwrittenSheetPropertiesStayDeferred) {
   ASSERT_EQ(wb.sheet_count(), 4U);
   for (std::size_t i = 1; i < wb.sheet_count(); ++i) {
     EXPECT_TRUE(has_deferred_print_settings(wb.sheet(i).print_settings())) << i;
+  }
+}
+
+TEST(XlsbParityPrint, ExcelXlsbLoadsTheTwinsPageSetupAndMarginsAndResavesExcelsRecords) {
+  for (const char* name : {"base",
+                           "defaults_only",
+                           "margins_fine",
+                           "margins_zero",
+                           "paper_custom",
+                           "ps_bw",
+                           "ps_comments_atend",
+                           "ps_comments_displayed",
+                           "ps_copies",
+                           "ps_dpi",
+                           "ps_draft",
+                           "ps_errors_blank",
+                           "ps_errors_dash",
+                           "ps_errors_na",
+                           "ps_firstpage_unused",
+                           "ps_orient_portrait",
+                           "ps_pageorder",
+                           "ps_paper_b5",
+                           "ps_paper_letter",
+                           "ps_printerdefaults0",
+                           "scale_edges",
+                           "hf_codes",
+                           "breaks_many",
+                           "wsprop_bits"}) {
+    SCOPED_TRACE(name);
+    const Bytes excel = ReadFile(Fixture(std::string(name) + ".xlsb"));
+    auto twin = read_ooxml(SpanOf(ReadFile(Fixture(std::string(name) + ".xlsx"))));
+    ASSERT_TRUE(static_cast<bool>(twin)) << twin.error().message;
+    auto loaded = read_xlsb(SpanOf(excel));
+    ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+    const SheetPrintSettings& want = twin.value().workbook.sheet(0).print_settings();
+    const SheetPrintSettings& got = loaded.value().workbook.sheet(0).print_settings();
+    EXPECT_EQ(got.page_setup_xml, want.page_setup_xml);
+    EXPECT_EQ(got.page_setup.orientation, want.page_setup.orientation);
+    EXPECT_EQ(got.page_setup.paper_size, want.page_setup.paper_size);
+    EXPECT_EQ(got.page_setup.scale, want.page_setup.scale);
+    EXPECT_EQ(got.page_setup.fit_to_width, want.page_setup.fit_to_width);
+    EXPECT_EQ(got.page_setup.fit_to_height, want.page_setup.fit_to_height);
+    EXPECT_EQ(got.page_setup.fit_to_page, want.page_setup.fit_to_page);
+    EXPECT_EQ(got.page_setup.page_order, want.page_setup.page_order);
+    EXPECT_EQ(got.page_margins.left, want.page_margins.left);
+    EXPECT_EQ(got.page_margins.right, want.page_margins.right);
+    EXPECT_EQ(got.page_margins.top, want.page_margins.top);
+    EXPECT_EQ(got.page_margins.bottom, want.page_margins.bottom);
+    EXPECT_EQ(got.page_margins.header, want.page_margins.header);
+    EXPECT_EQ(got.page_margins.footer, want.page_margins.footer);
+
+    auto saved = write_xlsb_with_result(loaded.value().workbook);
+    ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+    EXPECT_EQ(PrintRecords(saved.value().bytes), PrintRecords(excel));
   }
 }
 

@@ -4,18 +4,22 @@
 #include "io/xlsb/print_records.h"
 
 #include <array>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
 
+#include "io/ooxml/print_settings_parse.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_ids.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/sheet_properties_records.h"
+#include "io/xml_utils.h"
 #include "pugixml.hpp"
 
 namespace formulon {
@@ -140,6 +144,86 @@ void EmitPageSetup(std::vector<std::uint8_t>& dst, const std::string& xml) {
   emit_u16(payload, static_cast<std::uint16_t>(flags));
   emit_xlnullablewidestring(payload, std::nullopt);
   emit_record(dst, kBrtPageSetup, payload);
+}
+
+/// The BrtPageSetup bits the reader states in `<pageSetup>`; a record carrying another bit is left retained.
+constexpr std::uint32_t kDecodedPageSetupFlags = kOverThenDown | kLandscape | kBlackAndWhite | kDraft | kCellComments |
+                                                 kUseFirstPageNumber | kCommentsAtEnd | (3U << kErrorsShift);
+/// Eight u32 fields and the u16 flags, then a null `szRelID` (no printer settings part).
+constexpr std::size_t kPageSetupFieldsSize = 34U;
+constexpr std::size_t kPageSetupSize = kPageSetupFieldsSize + 4U;
+constexpr std::uint32_t kNullStringLength = 0xFFFFFFFFU;
+
+std::uint32_t U32At(const std::uint8_t* p) {
+  return static_cast<std::uint32_t>(p[0]) | (static_cast<std::uint32_t>(p[1]) << 8U) |
+         (static_cast<std::uint32_t>(p[2]) << 16U) | (static_cast<std::uint32_t>(p[3]) << 24U);
+}
+
+/// The `<pageSetup>` Excel writes in `.xlsx` for a BrtPageSetup, attributes in schema order: values equal to the
+/// record's defaults are left out and `orientation` is always stated. Empty for a record with a printer-settings
+/// relationship, an unmeasured flag bit, or comments at the end without the comments bit.
+std::string DecodePageSetup(ByteSpan payload) {
+  if (payload.size != kPageSetupSize || U32At(payload.data + kPageSetupFieldsSize) != kNullStringLength) {
+    return std::string();
+  }
+  const std::uint8_t* p = payload.data;
+  const std::uint32_t flags = static_cast<std::uint32_t>(p[32]) | (static_cast<std::uint32_t>(p[33]) << 8U);
+  if ((flags & ~kDecodedPageSetupFlags) != 0U || ((flags & kCommentsAtEnd) != 0U && (flags & kCellComments) == 0U)) {
+    return std::string();
+  }
+  std::string xml = "<pageSetup";
+  append_xml_attr_uint_if(xml, "paperSize", U32At(p), kDefaultPaperSize);
+  append_xml_attr_uint_if(xml, "scale", U32At(p + 4U), kDefaultScale);
+  append_xml_attr_uint_if(xml, "firstPageNumber", U32At(p + 20U), 1U);
+  append_xml_attr_uint_if(xml, "fitToWidth", U32At(p + 24U), 1U);
+  append_xml_attr_uint_if(xml, "fitToHeight", U32At(p + 28U), 1U);
+  if ((flags & kOverThenDown) != 0U) {
+    xml.append(" pageOrder=\"overThenDown\"");
+  }
+  xml.append((flags & kLandscape) != 0U ? " orientation=\"landscape\"" : " orientation=\"portrait\"");
+  if ((flags & kBlackAndWhite) != 0U) {
+    xml.append(" blackAndWhite=\"1\"");
+  }
+  if ((flags & kDraft) != 0U) {
+    xml.append(" draft=\"1\"");
+  }
+  if ((flags & kCellComments) != 0U) {
+    xml.append((flags & kCommentsAtEnd) != 0U ? " cellComments=\"atEnd\"" : " cellComments=\"asDisplayed\"");
+  }
+  if ((flags & kUseFirstPageNumber) != 0U) {
+    xml.append(" useFirstPageNumber=\"1\"");
+  }
+  static constexpr std::array<const char*, 4> kErrors = {nullptr, "blank", "dash", "NA"};
+  if (const char* errors = kErrors[(flags >> kErrorsShift) & 3U]; errors != nullptr) {
+    append_xml_attr(xml, "errors", errors);
+  }
+  append_xml_attr_uint_if(xml, "horizontalDpi", U32At(p + 8U), kDefaultDpi);
+  append_xml_attr_uint_if(xml, "verticalDpi", U32At(p + 12U), kDefaultDpi);
+  append_xml_attr_uint_if(xml, "copies", U32At(p + 16U), 1U);
+  xml.append("/>");
+  return xml;
+}
+
+/// BrtMargins: six doubles, left, right, top, bottom, header, footer.
+constexpr std::size_t kMarginsSize = 48U;
+
+/// The `<pageMargins>` for a BrtMargins, every side stated as Excel does; empty for a non-finite or negative side.
+std::string DecodeMargins(ByteSpan payload) {
+  if (payload.size != kMarginsSize) {
+    return std::string();
+  }
+  std::string xml = "<pageMargins";
+  for (const char* side : {"left", "right", "top", "bottom", "header", "footer"}) {
+    double value = 0.0;
+    std::memcpy(&value, payload.data, sizeof(value));
+    payload.data += sizeof(value);
+    if (!std::isfinite(value) || value < 0.0) {
+      return std::string();
+    }
+    append_xml_attr_number(xml, side, value);
+  }
+  xml.append("/>");
+  return xml;
 }
 
 /// BrtBeginHeaderFooter (flags, then the six strings, an empty one written as null) and its end record.
@@ -283,6 +367,22 @@ bool model_owns_print_records(const SheetPrintSettings& print) {
     }
   }
   return false;
+}
+
+void decode_print_records(const std::vector<std::uint8_t>& after_hyperlinks, SheetPrintSettings& print) {
+  for (const FramedRecord& rec : split_records(after_hyperlinks)) {
+    if (rec.type == kBrtPageSetup && print.page_setup_xml.empty()) {
+      if (std::string xml = DecodePageSetup(rec.payload); !xml.empty()) {
+        print.page_setup_xml = std::move(xml);
+        ooxml::refresh_structured_views("pageSetup", print.page_setup_xml, print);
+      }
+    } else if (rec.type == kBrtMargins && print.page_margins_xml.empty()) {
+      if (std::string xml = DecodeMargins(rec.payload); !xml.empty()) {
+        print.page_margins_xml = std::move(xml);
+        ooxml::refresh_structured_views("pageMargins", print.page_margins_xml, print);
+      }
+    }
+  }
 }
 
 bool has_deferred_print_settings(const SheetPrintSettings& print) {

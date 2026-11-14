@@ -316,6 +316,7 @@ Expected<bool, Error> decode_ws_prop(const XlsbRecord& rec, Sheet& sheet, std::s
   if (!sheet_pr.empty()) {
     SheetPrintSettings& print = sheet.mutable_print_settings();
     print.sheet_pr_xml = std::move(sheet_pr);
+    print.page_setup.fit_to_page = (flags & kWsPropFitToPage) != 0U;
     // The automatic tab emits no `<tabColor>`, so the typed field is absent too.
     print.tab_color = has_tab_color ? tab : ColorSpec{};
     if (print.tab_color.kind == ColorSpec::Kind::kRgb) {

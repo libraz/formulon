@@ -662,7 +662,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A loaded `.xlsb` sheet keeps Fit to page and its outline settings (summary
   styles applied, outline symbols hidden), which were dropped on load and
   counted as unread; they now read back as the `<sheetPr>` an `.xlsx` twin
-  carries and save again.
+  carries and save again. Its page setup and margins read back as the twin's
+  `<pageSetup>` and `<pageMargins>` as well, so the page setup API reports
+  them instead of the defaults and an `.xlsx` save keeps them.
 - An `.xlsb` save of a data bar whose minimum or maximum is a formula fails
   with `IoFeatureNotWritable` (Python `IO_FEATURE_NOT_WRITABLE`, C
   `FM_STATUS_IO_FEATURE_NOT_WRITABLE`, 5028; kind=data_bar with the sheet's
