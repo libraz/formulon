@@ -21,6 +21,7 @@
 #include "io/xlsb/user_book_views.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
+#include "support/xlsb_package_validator.h"
 #include "workbook.h"
 #include "writer_test_helpers.h"
 #include "zip_repack_helpers.h"
@@ -146,21 +147,15 @@ std::set<Guid> GuidsOf(const std::vector<std::uint8_t>& body, std::uint16_t type
   return out;
 }
 
-/// Saves `wb` and checks that every written workbook view has a sheet view
-/// naming it and every sheet view a workbook view: Excel refuses the one
-/// unpaired form and crashes on the other.
+/// Saves `wb` and checks that the package passes the structural validator,
+/// which pairs every workbook view with a sheet view naming it, and that
+/// `expected_views` workbook views are written.
 void ExpectPairedViews(const Workbook& wb, std::size_t expected_views) {
   auto written = write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
-  const std::set<Guid> book = GuidsOf(Entry(written.value().bytes, kWorkbookBin), kBrtUserBookView, 24U);
-  std::set<Guid> sheets;
-  for (std::size_t i = 1; i <= wb.sheet_count(); ++i) {
-    const std::set<Guid> one = GuidsOf(Entry(written.value().bytes, "xl/worksheets/sheet" + std::to_string(i) + ".bin"),
-                                       kBrtBeginUserShView, 0U);
-    sheets.insert(one.begin(), one.end());
-  }
-  EXPECT_EQ(book, sheets);
-  EXPECT_EQ(book.size(), expected_views);
+  const std::vector<std::uint8_t>& bytes = written.value().bytes;
+  EXPECT_EQ(::formulon::test::ValidateXlsbPackage(SpanOf(bytes)), std::vector<std::string>{});
+  EXPECT_EQ(GuidsOf(Entry(bytes, kWorkbookBin), kBrtUserBookView, 24U).size(), expected_views);
 }
 
 Workbook ReadChildren(const char* name) {

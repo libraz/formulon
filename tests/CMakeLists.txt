@@ -186,6 +186,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/ptg_list_flags_test.cpp
   unit/io/xlsb/xlsb_twin_compare.cpp
   unit/io/xlsb/xlsb_twin_compare_test.cpp
+  unit/io/xlsb/xlsb_package_validator_test.cpp
   unit/io/xlsb/xlsb_flag_corpus_test.cpp
   unit/io/xlsb/xlsb_styles_passthrough_test.cpp
   unit/io/xlsb/xlsb_package_consistency_test.cpp
