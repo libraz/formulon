@@ -26,6 +26,7 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
+#include "utils/index_sort.h"
 #include "utils/resource_budget.h"
 #include "utils/status_macros.h"
 #include "value.h"
@@ -217,6 +218,7 @@ Expected<void, Error> RecalcEngine::evaluate_dirty_components_locked(
     if (!any_dirty) {
       continue;
     }
+    note_component_cycle_state_locked(component, false);
 
     if (is_cyclic_component(component, graph_)) {
       // A cycle the walk reaches is always surfaced as a cycle. Members are recorded as visited on every resolution
@@ -244,6 +246,7 @@ void RecalcEngine::commit_unresolved_cycle_locked(const SerialEvalPass& pass,
   const bool dynamic_cycle = closes_through_dynamic_edge(component, graph_);
   const Value unresolved = unresolved_cycle_value(component);
   const std::uint64_t ordinal = pass.dynamic.next_ordinal();
+  note_component_cycle_state_locked(component, true);
   if (dynamic_cycle) {
     pass.dynamic.log().restore_prior_values(pass.workbook, component);
   }
@@ -444,6 +447,32 @@ void RecalcEngine::unregister_formula_locked(CellNodeId cell) {
   forget_referenced_cells_locked(cell);
   graph_.remove_node(cell);
   drop_cell_registrations_locked(cell);
+  unresolved_cycle_cells_.erase(cell);
+}
+
+void RecalcEngine::note_component_cycle_state_locked(const std::vector<CellNodeId>& component, bool unresolved) {
+  for (const CellNodeId c : component) {
+    if (unresolved) {
+      unresolved_cycle_cells_.insert(c);
+    } else {
+      unresolved_cycle_cells_.erase(c);
+    }
+  }
+}
+
+std::vector<CellNodeId> RecalcEngine::unresolved_cycle_cells(std::uint32_t sheet_id) const {
+  std::lock_guard<std::mutex> guard(mutex_);
+  std::vector<CellNodeId> out;
+  if (iterative_.enabled) {
+    return out;
+  }
+  for (const CellNodeId c : unresolved_cycle_cells_) {
+    if (c.sheet_id == sheet_id) {
+      out.push_back(c);
+    }
+  }
+  sort_by_index(out, CellNodeIdOrder{});
+  return out;
 }
 
 void RecalcEngine::clear_cell_dependencies(CellNodeId cell) {
@@ -496,6 +525,7 @@ void RecalcEngine::reset_graph_locked() {
   potential_spill_producers_.clear();
   volatiles_.clear();
   dirty_.clear();
+  unresolved_cycle_cells_.clear();
 }
 
 Expected<RecalcStats, Error> RecalcEngine::recalc(Workbook& workbook, const FunctionRegistry& registry) {

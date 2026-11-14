@@ -616,6 +616,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::GetIterative>("getIterative"),
           GuardedInstanceMethod<&Workbook::GetLambdaText, 0x7ULL>("getLambdaText"),
           GuardedInstanceMethod<&Workbook::GetMerges, 0x1ULL>("listMerges"),
+          GuardedInstanceMethod<&Workbook::GetCircularReferences, 0x1ULL>("listCircularReferences"),
           GuardedInstanceMethod<&Workbook::GetNumFmt, 0x1ULL>("getNumberFormat"),
           GuardedInstanceMethod<&Workbook::ListNumberFormats>("listNumberFormats"),
           GuardedInstanceMethod<&Workbook::GetSheetColumns, 0x1ULL>("listColumnOverrides"),

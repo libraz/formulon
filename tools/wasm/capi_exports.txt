@@ -117,6 +117,8 @@ fm_workbook_has_passthrough
 # -- Recalc / calc policy / profile ----------------------------------------------
 fm_workbook_recalc
 fm_workbook_has_dirty_cells
+fm_sheet_get_circular_reference_count
+fm_sheet_get_circular_reference_at
 fm_workbook_update_iterative
 fm_workbook_get_iterative
 fm_sheet_recalc_viewport

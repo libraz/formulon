@@ -512,6 +512,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value RemoveMergeAt(const Napi::CallbackInfo& info);
   Napi::Value ClearMerges(const Napi::CallbackInfo& info);
   Napi::Value GetMerges(const Napi::CallbackInfo& info);
+  Napi::Value GetCircularReferences(const Napi::CallbackInfo& info);
   Napi::Value GetMergesInRange(const Napi::CallbackInfo& info);
   Napi::Value GetComment(const Napi::CallbackInfo& info);
   Napi::Value GetComments(const Napi::CallbackInfo& info);

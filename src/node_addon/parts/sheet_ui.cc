@@ -15,6 +15,13 @@ namespace formulon_node {
 
 namespace {
 
+Napi::Object CellAddressToJs(Napi::Env env, const fm_cell_address_t& cell) {
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("row", Napi::Number::New(env, cell.row));
+  out.Set("col", Napi::Number::New(env, cell.col));
+  return out;
+}
+
 // Enumerates a per-sheet list through its count / at-index pair into a
 // array, stopping at the first failed element read.
 template <typename T>
@@ -99,6 +106,11 @@ Napi::Value Workbook::ClearMerges(const Napi::CallbackInfo& info) {
 
 Napi::Value Workbook::GetMerges(const Napi::CallbackInfo& info) {
   return SheetListResult(info, handle_, &fm_sheet_get_merge_count, &fm_sheet_get_merge_at, &RangeToJs);
+}
+
+Napi::Value Workbook::GetCircularReferences(const Napi::CallbackInfo& info) {
+  return SheetListResult(info, handle_, &fm_sheet_get_circular_reference_count, &fm_sheet_get_circular_reference_at,
+                         &CellAddressToJs);
 }
 
 Napi::Value Workbook::GetMergesInRange(const Napi::CallbackInfo& info) {

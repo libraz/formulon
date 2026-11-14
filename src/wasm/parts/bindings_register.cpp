@@ -277,6 +277,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("getIterative", &JsWorkbook::getIterative)
       .function("getLambdaText", &JsWorkbook::getLambdaText)
       .function("listMerges", &JsWorkbook::getMerges)
+      .function("listCircularReferences", &JsWorkbook::getCircularReferences)
       .function("getMergesInRange", &JsWorkbook::getMergesInRange)
       .function("getNumberFormat", &JsWorkbook::getNumFmt)
       .function("listNumberFormats", &JsWorkbook::listNumberFormats)

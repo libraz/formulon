@@ -5,6 +5,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
@@ -82,6 +83,63 @@ extern "C" fm_status_t fm_workbook_has_dirty_cells(const fm_workbook_t* wb, int3
                              "dirty cells cannot be read inside a recalc");
   }
   *out_has_dirty = wb->workbook().recalc_engine().dirty().size() != 0U ? 1 : 0;
+  return 0;
+}
+
+namespace {
+
+// Checks a circular-reference read of `sheet_index`: a sheet that exists, outside a recalc on this thread.
+fm_status_t check_circular_reference_read(const fm_workbook_t* wb, std::size_t sheet_index) {
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (formulon::eval::detail::g_in_recalc) {
+    return set_binding_error(formulon::FormulonErrorCode::kGraphRecalcReentrant,
+                             "circular references cannot be read inside a recalc");
+  }
+  return 0;
+}
+
+std::vector<formulon::eval::CellNodeId> circular_reference_cells(const fm_workbook_t* wb, std::size_t sheet_index) {
+  return wb->workbook().recalc_engine().unresolved_cycle_cells(static_cast<std::uint32_t>(sheet_index));
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_sheet_get_circular_reference_count(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                             std::size_t* out_count) {
+  clear_last_error();
+  if (wb == nullptr || out_count == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_circular_reference_read(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = formulon::c_api::parts::ensure_calculated(wb); rc != 0) {
+    return rc;
+  }
+  *out_count = circular_reference_cells(wb, sheet_index).size();
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_get_circular_reference_at(const fm_workbook_t* wb, std::size_t sheet_index,
+                                                          std::size_t index, fm_cell_address_t* out) {
+  clear_last_error();
+  if (wb == nullptr || out == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_circular_reference_read(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = formulon::c_api::parts::ensure_calculated(wb); rc != 0) {
+    return rc;
+  }
+  const std::vector<formulon::eval::CellNodeId> cells = circular_reference_cells(wb, sheet_index);
+  if (auto rc = formulon::c_api::parts::check_index(index, cells.size(), "index"); rc != 0) {
+    return rc;
+  }
+  out->row = cells[index].row;
+  out->col = cells[index].col;
   return 0;
 }
 

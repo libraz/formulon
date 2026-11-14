@@ -7964,6 +7964,10 @@ export interface Sheet {
   clearMerges(): void;
   /** Returns every merge range on the sheet as a JS array. */
   listMerges(): readonly CellRect[];
+  /** The cells on this sheet that sit in an unresolved circular reference, in row-major order; a sheet with no
+   *  unresolved cycle gives an empty list. Under automatic calculation the read recalculates first; under iterative
+   *  calculation no cell is listed. */
+  listCircularReferences(): readonly CellAddress[];
   /** Returns the merge ranges on the sheet that intersect `range`, in storage order. */
   getMergesInRange(range: CellRect | string): readonly CellRect[];
 

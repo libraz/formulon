@@ -4220,6 +4220,45 @@ FM_API fm_status_t fm_workbook_recalc(fm_workbook_t* wb);
  */
 FM_API fm_status_t fm_workbook_has_dirty_cells(const fm_workbook_t* wb, int32_t* out_has_dirty);
 
+/**
+ * @brief Returns the number of cells on `sheet_index` that sit in an unresolved
+ *        circular reference, the positions `fm_sheet_get_circular_reference_at`
+ *        enumerates.
+ *
+ * A cell counts when it is a member of a cycle that reads back into itself and
+ * that the last evaluation of the cycle left unresolved; a cell that only reads
+ * a cycle does not. A cycle across sheets counts on each sheet for that sheet's
+ * members. While iterative calculation is enabled the count is 0, as Excel then
+ * reports no circular reference. Under automatic calculation the read first
+ * computes dirty cells, as value reads do; under manual calculation it reports
+ * the last recalc.
+ *
+ * Excel's `Worksheet.CircularReference` names one member per sheet, and which
+ * one is not determined by the workbook, so every member is reported.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_GRAPH_RECALC_REENTRANT` (4005) when called from inside a recalc on
+ *         the same thread (an iterative-progress callback).
+ */
+FM_API fm_status_t fm_sheet_get_circular_reference_count(const fm_workbook_t* wb, size_t sheet_index,
+                                                         size_t* out_count);
+
+/**
+ * @brief Reads the `index`-th cell of `fm_sheet_get_circular_reference_count`,
+ *        in row-major order (row, then column).
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `index` is out of range;
+ *         `FM_STATUS_GRAPH_RECALC_REENTRANT` (4005) when called from inside a recalc on
+ *         the same thread (an iterative-progress callback).
+ */
+FM_API fm_status_t fm_sheet_get_circular_reference_at(const fm_workbook_t* wb, size_t sheet_index, size_t index,
+                                                      fm_cell_address_t* out);
+
 /** @brief Per-call telemetry returned by `fm_workbook_recalc_parallel`. */
 typedef struct {
   uint32_t struct_size;

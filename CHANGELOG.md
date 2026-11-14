@@ -11,6 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `PivotCache.getWorksheetSourceRange()` (Python `get_worksheet_source_range()`, C `fm_workbook_get_pivot_cache_worksheet_source_range`) reports the sheet and rectangle a cache's worksheet source resolves to now: a table's header row through its last data row, a defined name's current range, or the range as written. It is `null` / `None` / `out_present == 0` when the source does not resolve, for example after its table or name is deleted.
 - `SparklineGroup`, `SparklineGroupInput` and `SparklineGroupPatch` carry `rightToLeft` (Python `right_to_left`, C `fm_sparkline_group_t::right_to_left` and `fm_sparkline_group_patch_t::right_to_left_op` / `right_to_left`), read from and written to `.xlsx` and `.xlsb`.
+- `Sheet.listCircularReferences()` (Python `list_circular_references()`, C
+  `fm_sheet_get_circular_reference_count` / `fm_sheet_get_circular_reference_at`)
+  lists the cells of a sheet that sit in an unresolved circular reference, row
+  by row. A cell that only reads a cycle is not listed, a cycle across sheets
+  is listed on each sheet for that sheet's cells, and nothing is listed while
+  iterative calculation is on, as Excel reports. Excel names one of the cells,
+  and which one the workbook does not decide, so every cell is listed.
 
 ### Changed
 

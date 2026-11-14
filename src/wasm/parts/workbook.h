@@ -510,6 +510,8 @@ class JsWorkbook {
   emscripten::val getHyperlinks(uint32_t sheet) const;
   emscripten::val getHyperlink(uint32_t sheet, uint32_t row, uint32_t col) const;
   emscripten::val getMerges(uint32_t sheet) const;
+  /// The cells of `sheet` in an unresolved circular reference, row-major.
+  emscripten::val getCircularReferences(uint32_t sheet) const;
   /// The merges intersecting `range`, in storage order.
   emscripten::val getMergesInRange(uint32_t sheet, emscripten::val range) const;
 

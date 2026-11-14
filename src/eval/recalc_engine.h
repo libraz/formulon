@@ -366,6 +366,11 @@ class RecalcEngine {
   /// Returns the active iterative-calc options.
   const IterativeOptions& iterative_options() const noexcept { return iterative_; }
 
+  /// The cells of sheet `sheet_id` in a cycle the last evaluation of their
+  /// component left unresolved, row-major. Empty while iterative calculation
+  /// is enabled, as Excel then reports no circular reference.
+  std::vector<CellNodeId> unresolved_cycle_cells(std::uint32_t sheet_id) const;
+
   /// Installs a progress callback for the iterative solver.
   ///
   /// The callback is invoked once per Gauss-Seidel sweep with the
@@ -579,6 +584,9 @@ class RecalcEngine {
   /// leaves a circular cell at its last value. Counts the members in
   /// `pass.stats.cycle_cells`.
   void commit_unresolved_cycle_locked(const SerialEvalPass& pass, const std::vector<CellNodeId>& component);
+  /// Records how `component`'s evaluation left it: its members leave
+  /// `unresolved_cycle_cells_`, and rejoin it when `unresolved`.
+  void note_component_cycle_state_locked(const std::vector<CellNodeId>& component, bool unresolved);
 
   // Serialises every mutating access to `graph_`, `volatiles_`, `dirty_`,
   // and `arena_`. Held for the full duration of each public entry; the
@@ -660,6 +668,8 @@ class RecalcEngine {
   IterativeOptions iterative_;
   // See `disabled_cycle_refs_pending()`.
   bool disabled_cycle_refs_pending_ = false;
+  // Members of components whose last evaluation left the cycle unresolved.
+  std::unordered_set<CellNodeId, CellNodeIdHash> unresolved_cycle_cells_;
   // Optional progress callback for the iterative solver. `nullptr`
   // disables it (the legacy contract). `progress_user_data_` is
   // forwarded verbatim to every invocation; the engine does not own it.

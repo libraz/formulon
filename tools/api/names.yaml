@@ -60,6 +60,7 @@ collections:
   hyperlink: { key: natural, by: rect, plural: hyperlinks, ops: [hyperlink.set, hyperlink.get, hyperlink.get_at, hyperlink.get_count, hyperlink.insert_at, hyperlink.remove, hyperlink.remove_at] }
   auto_filter_column: { key: natural, by: column_offset, plural: auto_filter_columns, ops: [auto_filter.clear], no_getter: "the columns are read and written as the AutoFilter record's columns; clearing every criterion is the one call of its own" }
   table_auto_filter_column: { key: natural, by: column_offset, plural: table_auto_filter_columns, ops: [table_auto_filter.clear], no_getter: "the columns are read and written as the table AutoFilter record's columns; clearing every criterion is the one call of its own" }
+  circular_reference: { key: natural, by: cell, plural: circular_references, ops: [circular_reference.get_at, circular_reference.get_count], no_getter: "the element is its cell address; a lookup by key returns nothing more" }
   merge: { key: natural, by: rect, plural: merges, ops: [merge.add, merge.get_at, merge.get_count, merge.remove, merge.remove_at], no_getter: "the element is its rectangle; a lookup by key returns nothing more" }
   defined_name: { key: natural, by: name, plural: defined_names, ops: [defined_name.get, defined_name.get_at, defined_name.get_count, defined_name.remove, defined_name.set, defined_name_attrs.get_at] }
   data_table: { key: natural, by: cell, plural: data_tables, ops: [data_table.add, data_table.get, data_table.remove] }
@@ -5047,6 +5048,22 @@ entries:
     surfaces: [c]
     was: { c: fm_sheet_get_hyperlink_count, py: hyperlink_count }
     drop: { py: hyperlink_count, closes: R5.list }
+  circular_reference.get_at:
+    kind: op
+    scope: sheet
+    noun: circular_reference
+    c: fm_sheet_get_circular_reference_at
+    surfaces: [c]
+    reads_values: true
+    exception: "C-only count/at pair covered by circular_references.list; every member is listed because Excel names one member per sheet and which one is not determined by the workbook"
+  circular_reference.get_count:
+    kind: op
+    scope: sheet
+    noun: circular_reference
+    c: fm_sheet_get_circular_reference_count
+    surfaces: [c]
+    reads_values: true
+    exception: "C-only count/at pair covered by circular_references.list; every member is listed because Excel names one member per sheet and which one is not determined by the workbook"
   merge.get_at:
     kind: op
     scope: sheet
@@ -9931,6 +9948,13 @@ entries:
     py: list_hyperlinks
     surfaces: [wasm, native, py]
     was: { js: getHyperlinks, py: get_hyperlinks }
+  circular_references.list:
+    kind: list
+    scope: sheet
+    from: [circular_reference.get_count, circular_reference.get_at]
+    js: listCircularReferences
+    py: list_circular_references
+    surfaces: [wasm, native, py]
   merges.list:
     kind: list
     scope: sheet

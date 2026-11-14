@@ -307,6 +307,7 @@ SccOutcome process_scc(const std::vector<CellNodeId>& component, Workbook& wb, c
         std::lock_guard<std::mutex> guard(write_mutex);
         obs.log->restore_prior_values(wb, component);
       }
+      out.unresolved_cycle = true;
       const Value unresolved = unresolved_cycle_value(component);
       for (CellNodeId c : component) {
         if (c.sheet_id >= sheet_count) {
@@ -549,6 +550,7 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
           if (o.arena_exhausted) {
             return false;
           }
+          engine.note_component_cycle_state_locked(idx.components[sccs[position]], o.unresolved_cycle);
           cells_evaluated += o.cells_evaluated;
           cycle_recoveries += o.cycle_recoveries;
         }
@@ -601,10 +603,12 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
       work.worker_used = worker_pool->used_flags();
       worker_pool->run(work);
 
-      for (const SccOutcome& o : outcomes) {
+      for (std::size_t i = 0U; i < outcomes.size(); ++i) {
+        const SccOutcome& o = outcomes[i];
         if (o.arena_exhausted) {
           return make_error(FormulonErrorCode::kOutOfMemory, kArenaExhaustedParallel);
         }
+        engine.note_component_cycle_state_locked(idx.components[pooled[i]], o.unresolved_cycle);
         cells_evaluated += o.cells_evaluated;
         cycle_recoveries += o.cycle_recoveries;
       }

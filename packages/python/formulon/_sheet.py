@@ -433,6 +433,7 @@ SHEET_METHODS = (
     "list_cells",
     "list_cf_rules",
     "list_charts",
+    "list_circular_references",
     "list_column_breaks",
     "list_column_overrides",
     "list_comments",
@@ -2820,6 +2821,30 @@ class Sheet(_NoCopy):
                     )
                 )
                 out.append(_decode_cell_rect_at(ptr))
+        return out
+
+    def list_circular_references(self) -> List[CellAddress]:
+        """Return the cells on the sheet that sit in an unresolved circular reference.
+
+        The cells come in row-major order; a sheet with no unresolved cycle
+        gives an empty list. Under automatic calculation the read recalculates
+        first; under iterative calculation no cell is listed.
+        """
+        sheet = self._index()
+        h = self._workbook._require()
+        n = _read_count(LIB.fm_sheet_get_circular_reference_count, h, _uint(sheet, "sheet", role="sheet"))
+        out: List[CellAddress] = []
+        with _ArgScope() as scope:
+            ptr = scope.struct(S.CELL_ADDRESS)
+            for i in range(n):
+                S.zero_struct(LIB, S.CELL_ADDRESS, ptr)
+                _check(
+                    LIB.fm_sheet_get_circular_reference_at(
+                        h, _uint(sheet, "sheet", role="sheet"), _uint(i, "index", role="position"), ptr
+                    )
+                )
+                d = S.CELL_ADDRESS.unpack(LIB, ptr)
+                out.append(CellAddress(row=d["row"], col=d["col"]))
         return out
 
     # -- Hyperlinks --------------------------------------------------------

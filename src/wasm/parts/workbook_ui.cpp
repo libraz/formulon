@@ -110,10 +110,27 @@ fm_status_t merge_item(const fm_workbook_t* wb, uint32_t sheet, std::size_t inde
   return 0;
 }
 
+fm_status_t circular_reference_item(const fm_workbook_t* wb, uint32_t sheet, std::size_t index, emscripten::val* out) {
+  fm_cell_address_t cell{};
+  const fm_status_t rc = fm_sheet_get_circular_reference_at(wb, sheet, index, &cell);
+  if (rc != 0) {
+    return rc;
+  }
+  emscripten::val item = emscripten::val::object();
+  item.set("row", cell.row);
+  item.set("col", cell.col);
+  *out = item;
+  return 0;
+}
+
 }  // namespace
 
 emscripten::val JsWorkbook::getMerges(uint32_t sheet) const {
   return sheet_list(handle_, sheet, &fm_sheet_get_merge_count, &merge_item);
+}
+
+emscripten::val JsWorkbook::getCircularReferences(uint32_t sheet) const {
+  return sheet_list(handle_, sheet, &fm_sheet_get_circular_reference_count, &circular_reference_item);
 }
 
 emscripten::val JsWorkbook::getMergesInRange(uint32_t sheet, emscripten::val range) const {

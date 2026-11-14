@@ -52,6 +52,8 @@ struct SccOutcome {
   /// than report success — the same contract the serial engine applies at
   /// each of its evaluation sites.
   bool arena_exhausted = false;
+  /// Set when the component is a cycle its evaluation left unresolved.
+  bool unresolved_cycle = false;
 };
 
 // How a component's OFFSET / INDIRECT reads are observed. Only components
