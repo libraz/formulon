@@ -34,6 +34,7 @@
 #include <string_view>
 #include <vector>
 
+#include "cell_style_save_plan.h"
 #include "io/rich_value_errors.h"
 #include "io/xlsb/ptg_writer.h"
 #include "io/xlsb/sst_writer.h"
@@ -87,6 +88,8 @@ std::size_t unwritten_protected_range_count(const Sheet& sheet);
 /// the workbook's location (empty without one), which the hyperlink display
 /// texts follow (`saved_hyperlink`). `absent_phonetic` is the phonetic setting
 /// a sheet without its own is written with (`FontSavePlan::absent_sheet_phonetic`).
+/// `style_plan` renumbers every row, column and cell xf (`saved_cell_xf`); it is
+/// null when styles.bin passes through, which keeps every index as loaded.
 Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     const Sheet& sheet, SstBuilder& sst, const std::vector<std::string>& sheet_names,
     const SheetRangeTable& sheet_ranges, const NameTable& name_table, const std::vector<std::string>& hyperlink_ids,
@@ -94,7 +97,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     const NameShapes& name_shapes = NameShapes(), const std::vector<std::string>& table_part_rel_ids = {},
     std::uint32_t workbook_views = 1U, std::uint32_t* deferred_sparkline_groups = nullptr,
     std::string_view drawing_rel_id = {}, bool owns_drawing = false, const RichErrorVmMap* rich_error_vm = nullptr,
-    std::string_view book_directory = {}, const std::optional<PhoneticProperties>& absent_phonetic = std::nullopt);
+    std::string_view book_directory = {}, const std::optional<PhoneticProperties>& absent_phonetic = std::nullopt,
+    const CellStyleSavePlan* style_plan = nullptr);
 
 }  // namespace xlsb
 }  // namespace io

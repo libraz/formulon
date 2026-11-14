@@ -432,9 +432,15 @@ std::vector<std::uint8_t> write_styles_bin(const StylesTable& table, const DxfSa
 
   std::vector<CellXf> cell_default;
   const std::vector<CellXf>& cell_xfs = Normalized(table.cell_xfs, cell_default);
-  EmitCount(out, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginCellXFs), cell_xfs.size());
-  for (const CellXf& xf : cell_xfs)
-    EmitXf(out, xf, style_plan != nullptr ? style_plan->cell_xf_parent(xf.xf_id) : xf.xf_id);
+  if (style_plan != nullptr && !table.cell_xfs.empty()) {
+    EmitCount(out, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginCellXFs), style_plan->cell_xf_order().size());
+    for (const std::uint32_t c : style_plan->cell_xf_order())
+      EmitXf(out, cell_xfs[c], style_plan->cell_xf_parent(cell_xfs[c].xf_id));
+  } else {
+    EmitCount(out, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginCellXFs), cell_xfs.size());
+    for (const CellXf& xf : cell_xfs)
+      EmitXf(out, xf, style_plan != nullptr ? style_plan->cell_xf_parent(xf.xf_id) : xf.xf_id);
+  }
   emit_record(out, static_cast<std::uint16_t>(XlsbRecordType::BrtEndCellXFs), empty);
 
   // The collection is mandatory. A plan always holds Normal; without one, a

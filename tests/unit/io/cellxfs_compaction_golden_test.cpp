@@ -15,6 +15,8 @@
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
 #include "io/styles_writer.h"
+#include "io/xlsb/reader.h"
+#include "io/xlsb/record.h"
 #include "io/xlsb/writer.h"
 #include "pugixml.hpp"
 #include "support/roundtrip_symmetry.h"
@@ -165,6 +167,89 @@ Lines SheetRefLines(const Bytes& pkg) {
   return out;
 }
 
+// Record types read from styles.bin and the sheet parts.
+constexpr std::uint16_t kRowHdr = 0;
+constexpr std::uint16_t kXf = 47;
+constexpr std::uint16_t kColInfo = 60;
+constexpr std::uint16_t kCellRString = 62;
+constexpr std::uint16_t kBeginCellXfs = 617;
+constexpr std::uint16_t kEndCellXfs = 618;
+
+template <typename Fn>
+void ForEachRecord(const std::string& part, Fn&& fn) {
+  ByteSpan cursor{reinterpret_cast<const std::uint8_t*>(part.data()), part.size()};
+  while (cursor.size > 0U) {
+    auto rec = xlsb::read_record(cursor);
+    if (!rec) {
+      ADD_FAILURE() << "record: " << rec.error().message;
+      return;
+    }
+    fn(rec.value().type, rec.value().payload);
+  }
+}
+
+/// Each BrtXF of the cell table as "numFmt=N parent=P".
+Lines XlsbCellXfLines(const Bytes& pkg) {
+  Lines out;
+  bool in_cell_xfs = false;
+  ForEachRecord(PartText(pkg, "xl/styles.bin"), [&](std::uint16_t type, ByteSpan payload) {
+    if (type == kBeginCellXfs || type == kEndCellXfs) {
+      in_cell_xfs = type == kBeginCellXfs;
+    } else if (type == kXf && in_cell_xfs && payload.size >= 4U) {
+      out.push_back("numFmt=" + std::to_string(payload.data[2] | (payload.data[3] << 8)) +
+                    " parent=" + std::to_string(payload.data[0] | (payload.data[1] << 8)));
+    }
+  });
+  return out;
+}
+
+/// Every ixfe the sheet parts write: custom-format rows, cells and column infos.
+Lines XlsbSheetRefLines(const Bytes& pkg) {
+  Lines out;
+  for (const char* part : {"xl/worksheets/sheet1.bin", "xl/worksheets/sheet2.bin"}) {
+    const std::string p = std::string(part).substr(14);
+    std::uint32_t row = 0;
+    ForEachRecord(PartText(pkg, part), [&](std::uint16_t type, ByteSpan payload) {
+      if (type == kRowHdr && payload.size >= 12U) {
+        row = xlsb::load_u32(payload.data);
+        if ((payload.data[11] & 0x40U) != 0U) {
+          out.push_back(p + " row " + std::to_string(row + 1U) +
+                        " ixfe=" + std::to_string(xlsb::load_u32(payload.data + 4)));
+        }
+      } else if (((type >= 1U && type <= 11U) || type == kCellRString) && payload.size >= 8U) {
+        out.push_back(p + " cell r" + std::to_string(row + 1U) + " c" + std::to_string(xlsb::load_u32(payload.data)) +
+                      " ixfe=" + std::to_string(xlsb::load_u32(payload.data + 4) & 0xFFFFFFU));
+      } else if (type == kColInfo && payload.size >= 16U) {
+        out.push_back(p + " col " + std::to_string(xlsb::load_u32(payload.data)) + "-" +
+                      std::to_string(xlsb::load_u32(payload.data + 4)) +
+                      " ixfe=" + std::to_string(xlsb::load_u32(payload.data + 12)));
+      }
+    });
+  }
+  return out;
+}
+
+bool SaveXlsb(const Workbook& wb, Bytes* out) {
+  auto saved = xlsb::write_xlsb(wb);
+  if (!saved) {
+    ADD_FAILURE() << "write_xlsb: " << saved.error().message;
+    return false;
+  }
+  *out = std::move(saved.value());
+  return true;
+}
+
+std::unique_ptr<Workbook> LoadXlsbBytes(const Bytes& bytes, const std::string& what) {
+  auto read = xlsb::read_xlsb(ByteSpan{bytes.data(), bytes.size()});
+  if (!read) {
+    ADD_FAILURE() << "read_xlsb " << what << ": " << read.error().message;
+    return nullptr;
+  }
+  auto wb = std::make_unique<Workbook>(std::move(read.value().workbook));
+  wb->set_excel_profile(mac_365_ja_jp_profile());
+  return wb;
+}
+
 class CellXfsCompactionGolden : public ::testing::TestWithParam<Case> {
  protected:
   std::string Msg() const { return std::string("case ") + GetParam().id + " (left: Excel, right: Formulon)"; }
@@ -216,6 +301,30 @@ TEST_P(CellXfsCompactionGolden, SaveLeavesTheModelUnchanged) {
   EXPECT_EQ(write_styles(wb->styles()), before) << Msg() << " after xlsb save";
 }
 
+// An .xlsx book saved as .xlsb writes styles.bin from the model, so its cell
+// formats compact as in the .xlsx save; Excel's .xlsb of the same book is the
+// expectation.
+TEST_P(CellXfsCompactionGolden, XlsbFromXlsxMatchesExcel) {
+  const auto wb = LoadAuthored(GetParam());
+  ASSERT_TRUE(wb);
+  Bytes ours;
+  ASSERT_TRUE(SaveXlsb(*wb, &ours));
+  const Bytes excel = test::read_file_bytes(FixturePath(GetParam(), "_resaved.xlsb"));
+  EXPECT_EQ(XlsbCellXfLines(excel), XlsbCellXfLines(ours)) << Msg();
+  EXPECT_EQ(XlsbSheetRefLines(excel), XlsbSheetRefLines(ours)) << Msg();
+}
+
+// Excel's own .xlsb saved unedited keeps its styles.bin and every ixfe as loaded.
+TEST_P(CellXfsCompactionGolden, UneditedXlsbKeepsItsStylesPart) {
+  const Bytes excel = test::read_file_bytes(FixturePath(GetParam(), "_resaved.xlsb"));
+  const auto wb = LoadXlsbBytes(excel, GetParam().id);
+  ASSERT_TRUE(wb);
+  Bytes ours;
+  ASSERT_TRUE(SaveXlsb(*wb, &ours));
+  EXPECT_EQ(PartText(excel, "xl/styles.bin"), PartText(ours, "xl/styles.bin")) << Msg();
+  EXPECT_EQ(XlsbSheetRefLines(excel), XlsbSheetRefLines(ours)) << Msg();
+}
+
 INSTANTIATE_TEST_SUITE_P(Cases, CellXfsCompactionGolden, ::testing::ValuesIn(MatchingCases()), CaseName);
 
 // Excel recomputes the apply flags on save, so two cell xfs that differ only in
@@ -240,6 +349,35 @@ TEST(CellXfsCompactionGoldenApplyFlags, CellXfsDifferingOnlyInApplyFlagsStayApar
     }
     EXPECT_EQ(row20, (Lines{"sheet1.xml cell A20 s=1", "sheet1.xml cell B20 s=2"})) << id;
   }
+}
+
+// Excel's .xlsb of a pivot table with merged item labels, renumbered by Excel
+// itself on resave, still passes through unedited: its styles.bin is kept.
+TEST(CellXfsCompactionGoldenXlsb, UneditedExcelXlsbWithMergedEntriesKeepsItsStylesPart) {
+  const Bytes excel = test::read_file_bytes(FixturePath({"cellxfs_compaction", "mg2_B14_merge_items_b"}, ".xlsb"));
+  const auto wb = LoadXlsbBytes(excel, "B14");
+  ASSERT_TRUE(wb);
+  Bytes ours;
+  ASSERT_TRUE(SaveXlsb(*wb, &ours));
+  EXPECT_EQ(PartText(excel, "xl/styles.bin"), PartText(ours, "xl/styles.bin"));
+  EXPECT_EQ(XlsbSheetRefLines(excel), XlsbSheetRefLines(ours));
+}
+
+// A loaded .xlsb whose styles changed writes styles.bin from the model and
+// compacts: a cell xf added and never used is dropped again.
+TEST(CellXfsCompactionGoldenXlsb, EditedXlsbStylesCompact) {
+  const Case c{"cellxfs_compaction", "cx1_D3_order"};
+  const Bytes excel = test::read_file_bytes(FixturePath(c, "_resaved.xlsb"));
+  const auto wb = LoadXlsbBytes(excel, c.id);
+  ASSERT_TRUE(wb);
+  CellXf unused;
+  unused.num_fmt_id = 10U;
+  unused.apply_number_format = true;
+  wb->mutable_styles().cell_xfs.push_back(unused);
+  Bytes ours;
+  ASSERT_TRUE(SaveXlsb(*wb, &ours));
+  EXPECT_EQ(XlsbCellXfLines(excel), XlsbCellXfLines(ours));
+  EXPECT_EQ(XlsbSheetRefLines(excel), XlsbSheetRefLines(ours));
 }
 
 // A merge over xf-0 cells takes its own entry. The model keeps no blank xf-0

@@ -183,6 +183,15 @@ class FontSavePlan {
   bool identity_ = true;
 };
 
+/// The saved index of model cell xf `xf_index`, for a cell inside a merged
+/// range when `merged`; unchanged without a plan.
+inline std::uint32_t saved_cell_xf(const CellStyleSavePlan* style_plan, std::uint32_t xf_index, bool merged = false) {
+  if (style_plan == nullptr) {
+    return xf_index;
+  }
+  return merged ? style_plan->merged_cell_xf_index(xf_index) : style_plan->cell_xf_index(xf_index);
+}
+
 /// Plans the fonts of `wb` for a save under its profile, with its theme (the
 /// default theme when the book has no theme part).
 FontSavePlan build_font_save_plan(const Workbook& wb);

@@ -34,12 +34,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   it out. A sheet filter read from `.xlsb` that cannot be written back whole
   is kept as stored.
 
-- `.xlsx` saves compact the cell formats (`<cellXfs>`) as Excel does: entries
-  that write identically collapse into the first one, entries no cell, row or
-  column uses are dropped (the default entry stays), and the rest keep their
-  order. Cells inside a merged range take an entry of their own after the
-  others, as Excel writes them. Every cell, row and column style index in the saved file is
-  renumbered to match, so a book saved and reopened can report different
+- `.xlsx` and `.xlsb` saves compact the cell formats (`<cellXfs>`, and the
+  `BrtXF` list in `styles.bin`) as Excel does: entries that write identically
+  collapse into the first one, entries no cell, row or column uses are dropped
+  (the default entry stays), and the rest keep their order. Cells inside a
+  merged range take an entry of their own after the others, as Excel writes
+  them. An `.xlsb` whose loaded `styles.bin` is written back unchanged keeps
+  its cell formats as stored. Every cell, row and column style index in the
+  saved file is renumbered to match, so a book saved and reopened can report different
   style indices for the same cells; the formats and cell style names they
   resolve to are unchanged, and the workbook in memory is not modified. A
   book that keeps a macro sheet, dialog sheet or shared-workbook revision log

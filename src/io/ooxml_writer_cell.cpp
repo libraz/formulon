@@ -91,15 +91,6 @@ bool PhantomForcesDefaultStyle(const Sheet& sheet, std::uint32_t row, std::uint3
 // Emits an `s="N"` attribute when `xf_index` is non-zero. The default
 // xf (index 0) is omitted for byte parity with Excel's writer unless `force`
 // is set (see `PhantomForcesDefaultStyle`).
-// The saved index of model cell xf `xf_index`, for a cell inside a merged range when `merged`; unchanged without a
-// plan.
-std::uint32_t SavedXf(const CellStyleSavePlan* style_plan, std::uint32_t xf_index, bool merged = false) {
-  if (style_plan == nullptr) {
-    return xf_index;
-  }
-  return merged ? style_plan->merged_cell_xf_index(xf_index) : style_plan->cell_xf_index(xf_index);
-}
-
 void AppendStyleAttr(std::string& out, std::uint32_t xf_index, bool force, bool show_phonetic = false) {
   if (xf_index != 0U || force) {
     append_xml_attr_uint(out, "s", xf_index);
@@ -365,7 +356,7 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
                    const xlsb::NameShapes& name_shapes, const parser::ExternalBookIndexer* indexer,
                    const SharedRole* shared, std::uint32_t vm, const CellStyleSavePlan* style_plan, bool merged) {
   const bool has_formula = !cell.formula_text.empty();
-  const std::uint32_t xf = SavedXf(style_plan, cell.xf_index, merged);
+  const std::uint32_t xf = saved_cell_xf(style_plan, cell.xf_index, merged);
   if (!CellIsEmitted(sheet, row, col, cell)) {
     return false;
   }
@@ -567,7 +558,7 @@ void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout, const Cel
   if (layout.has_style) {
     // OOXML row style is effective only with customFormat=1, which alone
     // reads as xf 0; Excel omits `s` for xf 0.
-    const std::uint32_t xf = SavedXf(style_plan, layout.style_xf);
+    const std::uint32_t xf = saved_cell_xf(style_plan, layout.style_xf);
     if (xf != 0U) {
       append_xml_attr_uint(out, "s", xf);
     }
@@ -623,8 +614,8 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
         static_cast<std::size_t>(row - region->anchor_row) * region->cols + (col - region->anchor_col);
     const Value value = idx < region->cells.size() ? region->cells[idx] : Value::blank();
     const bool force_style = PhantomForcesDefaultStyle(sheet, row, col, stored);
-    AppendPhantomCellXml(out, row, col, SavedXf(style_plan, select_effective_xf(sheet, row, col).xf_index), force_style,
-                         value, it->second, VmAt(rich_error_vm, row, col));
+    AppendPhantomCellXml(out, row, col, saved_cell_xf(style_plan, select_effective_xf(sheet, row, col).xf_index),
+                         force_style, value, it->second, VmAt(rich_error_vm, row, col));
   };
   // Blank formatted columns, written as `<c r="..." s="N"/>` (bare for xf 0).
   auto run = runs.begin();
@@ -653,8 +644,8 @@ bool AppendRowXml(std::string& out, const Sheet& sheet, std::uint32_t row, const
         out.append("<c r=\"");
         AppendCellRefForRef(out, row, static_cast<std::uint32_t>(col));
         out.push_back('"');
-        AppendStyleAttr(out, SavedXf(style_plan, run->xf, merged_cells.covers(row, static_cast<std::uint32_t>(col))),
-                        false);
+        AppendStyleAttr(
+            out, saved_cell_xf(style_plan, run->xf, merged_cells.covers(row, static_cast<std::uint32_t>(col))), false);
         out.append("/>");
       }
       advance_run_past(stop - 1U);

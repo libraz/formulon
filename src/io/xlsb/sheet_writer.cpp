@@ -96,10 +96,10 @@ struct ColSpan {
 /// following it with cells, even though our own permissive reader can decode
 /// it.  An empty layout-only row legitimately has no spans.
 void EmitRowHeader(std::vector<std::uint8_t>& dst, std::uint32_t row, const RowLayout* layout, bool default_hidden,
-                   const std::vector<ColSpan>& spans) {
+                   const std::vector<ColSpan>& spans, const CellStyleSavePlan* style_plan) {
   std::vector<std::uint8_t> p;
   emit_u32(p, row);
-  emit_u32(p, layout != nullptr && layout->has_style ? layout->style_xf : 0U);  // iStyleRef
+  emit_u32(p, layout != nullptr && layout->has_style ? saved_cell_xf(style_plan, layout->style_xf) : 0U);  // iStyleRef
   const bool has_height = layout != nullptr && (layout->has_height || layout->height > 0.0);
   const double twips = has_height ? std::round(layout->height * 20.0) : 0.0;
   emit_u16(p, static_cast<std::uint16_t>(std::clamp(twips, 0.0, 65535.0)));  // miyRw
@@ -131,7 +131,7 @@ void EmitRowHeader(std::vector<std::uint8_t>& dst, std::uint32_t row, const RowL
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtRowHdr), p);
 }
 
-void EmitColumnInfos(std::vector<std::uint8_t>& dst, const SheetLayout& layout) {
+void EmitColumnInfos(std::vector<std::uint8_t>& dst, const SheetLayout& layout, const CellStyleSavePlan* style_plan) {
   if (layout.columns.empty()) {
     return;
   }
@@ -149,7 +149,7 @@ void EmitColumnInfos(std::vector<std::uint8_t>& dst, const SheetLayout& layout) 
     emit_u32(p, static_cast<std::uint32_t>(std::clamp(width256, 0.0, 65535.0)));
     // BrtColInfo has no style-presence bit; ixfe is mandatory. OOXML spans
     // without a style therefore canonicalize to style 0 on an XLSB reload.
-    emit_u32(p, column.has_style ? column.style_xf : 0U);  // ixfe
+    emit_u32(p, column.has_style ? saved_cell_xf(style_plan, column.style_xf) : 0U);  // ixfe
     std::uint16_t flags = has_width ? kColUserSet : 0U;
     if (column.hidden) {
       flags |= kColHidden;
@@ -336,7 +336,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     const std::vector<std::string>& table_part_rel_ids, std::uint32_t workbook_views,
     std::uint32_t* deferred_sparkline_groups, std::string_view drawing_rel_id, bool owns_drawing,
     const RichErrorVmMap* rich_error_vm, std::string_view book_directory,
-    const std::optional<PhoneticProperties>& absent_phonetic) {
+    const std::optional<PhoneticProperties>& absent_phonetic, const CellStyleSavePlan* style_plan) {
   std::vector<std::uint8_t> body;
 
   // Frame: BrtBeginSheet | BrtBeginSheetData | ... | BrtEndSheetData |
@@ -352,7 +352,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     format_defaults.has_default_row_height = true;
   }
   EmitWorksheetViewsAndFormatting(body, sheet.view(), format_defaults, workbook_views);
-  EmitColumnInfos(body, sheet.layout());
+  EmitColumnInfos(body, sheet.layout(), style_plan);
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginSheetData), ByteSpan{});
 
   // Spilled dynamic-array formulas need special treatment: Excel stores
@@ -419,6 +419,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
 
   std::vector<ColSpan> spans;
   std::vector<std::uint8_t> cell_payload;
+  // Cells inside a merged range take the plan's merged entries.
+  MergedCellIndex merged_cells(style_plan != nullptr ? sheet.merges() : std::vector<MergeRange>{});
   // Writes the `BrtValueMeta` of an error cell saved with a rich error, ahead of its cell record.
   const auto emit_value_meta = [&](std::uint32_t row, std::uint32_t col, const Value& shown) {
     if (rich_error_vm == nullptr || !shown.is_error()) {
@@ -512,7 +514,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
       }
     }
 
-    EmitRowHeader(body, row, row_layout, sheet.format_defaults().zero_height, spans);
+    EmitRowHeader(body, row, row_layout, sheet.format_defaults().zero_height, spans, style_plan);
     // Ascending three-way merge of stored entries, phantoms and run columns; a
     // column in both a stored entry and a phantom takes the entry path unless
     // it is style-only, a phantom wins over a run column, and a stored entry
@@ -539,7 +541,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
       if (run_col < entry_col && run_col < phantom_col) {
         const std::uint64_t stop = std::min<std::uint64_t>({run->end, entry_col, phantom_col});
         for (std::uint64_t run_at = run_col; run_at < stop; ++run_at) {
-          emit_blank(body, cell_payload, static_cast<std::uint32_t>(run_at), run->xf);
+          const auto at = static_cast<std::uint32_t>(run_at);
+          emit_blank(body, cell_payload, at, saved_cell_xf(style_plan, run->xf, merged_cells.covers(row, at)));
         }
         advance_run_past(stop - 1U);
         continue;
@@ -558,6 +561,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
       }
       // A spilled cell carrying only its own style is still the spill's.
       if (cell != nullptr && !IsEmptySlot(sheet, row, col, *cell) && !(phantom && cell->formula_text.empty())) {
+        const std::uint32_t xf = saved_cell_xf(style_plan, cell->xf_index, merged_cells.covers(row, col));
         const bool always = formula_cell_always_calculates(sheet, row, col, *cell, name_shapes);
         const SpillRegion* region = cell->formula_text.empty() ? nullptr : sheet.spill_region_at_anchor(row, col);
         // A dynamic-array formula keeps that form (its `BrtCellMeta` naming
@@ -579,8 +583,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
             emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtCellMeta), cell_payload);
           }
           emit_value_meta(row, col, anchor_value);
-          if (auto r = emit_array_anchor(body, cell_payload, *cell, anchor_value, always, col, row, last_row, last_col,
-                                         sheet_names, sheet_ranges, name_table, sst, downgraded_formula_count,
+          if (auto r = emit_array_anchor(body, cell_payload, *cell, anchor_value, always, col, xf, row, last_row,
+                                         last_col, sheet_names, sheet_ranges, name_table, sst, downgraded_formula_count,
                                          &downgraded_to_literal, name_shapes);
               !r) {
             return std::move(r.error());
@@ -590,10 +594,10 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
           }
         } else if (const DataTable* table = sheet.data_table_anchored_at(row, col);
                    table != nullptr && cell->formula_text.empty()) {
-          emit_data_table_anchor(body, cell_payload, *cell, col, *table, sst);
+          emit_data_table_anchor(body, cell_payload, *cell, col, xf, *table, sst);
         } else {
           emit_value_meta(row, col, cell->cached_value);
-          if (auto r = emit_cell(body, cell_payload, *cell, row, col, always, sst, sheet_names, sheet_ranges,
+          if (auto r = emit_cell(body, cell_payload, *cell, row, col, xf, always, sst, sheet_names, sheet_ranges,
                                  name_table, downgraded_formula_count, name_shapes);
               !r) {
             return std::move(r.error());
@@ -605,7 +609,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
         if (downgraded_array_anchors.count(anchor_key(cur_ph->second.anchor_row, cur_ph->second.anchor_col)) != 0U) {
           continue;
         }
-        const std::uint32_t xf_index = select_effective_xf(sheet, row, col).xf_index;
+        const std::uint32_t xf_index = saved_cell_xf(style_plan, select_effective_xf(sheet, row, col).xf_index);
         emit_value_meta(row, col, *cur_ph->second.value);
         emit_array_phantom(body, cell_payload, col, xf_index, *cur_ph->second.value, cur_ph->second.anchor_row,
                            cur_ph->second.anchor_col, cur_ph->second.always_calculates);

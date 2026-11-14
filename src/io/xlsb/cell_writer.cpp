@@ -35,10 +35,10 @@ namespace {
 /// above the 24-bit style index.
 constexpr std::uint32_t kShowPhoneticShift = 24U;
 
-std::uint32_t StyleWord(const Cell& cell) {
+std::uint32_t StyleWord(const Cell& cell, std::uint32_t xf_index) {
   // Excel keeps fPhShow on constants and blanks only.
   const bool show_phonetic = cell.show_phonetic && cell.formula_text.empty();
-  return (cell.xf_index & 0xFFFFFFU) | (show_phonetic ? (1U << kShowPhoneticShift) : 0U);
+  return (xf_index & 0xFFFFFFU) | (show_phonetic ? (1U << kShowPhoneticShift) : 0U);
 }
 
 /// Mask of the style word `EmitCellHeader` writes: the 24-bit style index and
@@ -274,10 +274,10 @@ void emit_blank(std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scrat
 }
 
 Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scratch, const Cell& cell,
-                                std::uint32_t row, std::uint32_t col, bool always_calculates, SstBuilder& sst,
-                                const std::vector<std::string>& sheet_names, const SheetRangeTable& sheet_ranges,
-                                const NameTable& name_table, std::uint32_t* downgraded_formula_count,
-                                const NameShapes& name_shapes) {
+                                std::uint32_t row, std::uint32_t col, std::uint32_t xf_index, bool always_calculates,
+                                SstBuilder& sst, const std::vector<std::string>& sheet_names,
+                                const SheetRangeTable& sheet_ranges, const NameTable& name_table,
+                                std::uint32_t* downgraded_formula_count, const NameShapes& name_shapes) {
   // Formula cells take precedence: even if the cached_value is blank, we
   // still emit a BrtFmla* record so the formula round-trips.
   if (!cell.formula_text.empty()) {
@@ -291,23 +291,25 @@ Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, std::vector<std:
       if (downgraded_formula_count != nullptr) {
         ++*downgraded_formula_count;
       }
-      EmitLiteralCellRecord(dst, scratch, col, StyleWord(cell), cell.cached_value, cell.phonetic_runs,
+      EmitLiteralCellRecord(dst, scratch, col, StyleWord(cell, xf_index), cell.cached_value, cell.phonetic_runs,
                             cell.phonetic_props, sst);
       return Expected<void, Error>::Ok();
     }
-    EmitFormulaCellRecord(dst, scratch, col, StyleWord(cell), cell.cached_value, formula_or.value(), always_calculates);
+    EmitFormulaCellRecord(dst, scratch, col, StyleWord(cell, xf_index), cell.cached_value, formula_or.value(),
+                          always_calculates);
     return Expected<void, Error>::Ok();
   }
 
-  EmitLiteralCellRecord(dst, scratch, col, StyleWord(cell), cell.cached_value, cell.phonetic_runs, cell.phonetic_props,
-                        sst);
+  EmitLiteralCellRecord(dst, scratch, col, StyleWord(cell, xf_index), cell.cached_value, cell.phonetic_runs,
+                        cell.phonetic_props, sst);
   return Expected<void, Error>::Ok();
 }
 
 Expected<void, Error> emit_array_anchor(std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scratch,
                                         const Cell& cell, const Value& anchor_value, bool always_calculates,
-                                        std::uint32_t col, std::uint32_t anchor_row, std::uint32_t last_row,
-                                        std::uint32_t last_col, const std::vector<std::string>& sheet_names,
+                                        std::uint32_t col, std::uint32_t xf_index, std::uint32_t anchor_row,
+                                        std::uint32_t last_row, std::uint32_t last_col,
+                                        const std::vector<std::string>& sheet_names,
                                         const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                         SstBuilder& sst, std::uint32_t* downgraded_formula_count,
                                         bool* downgraded_to_literal, const NameShapes& name_shapes) {
@@ -324,20 +326,20 @@ Expected<void, Error> emit_array_anchor(std::vector<std::uint8_t>& dst, std::vec
     if (downgraded_to_literal != nullptr) {
       *downgraded_to_literal = true;
     }
-    EmitLiteralCellRecord(dst, scratch, col, StyleWord(cell), anchor_value, cell.phonetic_runs, cell.phonetic_props,
-                          sst);
+    EmitLiteralCellRecord(dst, scratch, col, StyleWord(cell, xf_index), anchor_value, cell.phonetic_runs,
+                          cell.phonetic_props, sst);
     return Expected<void, Error>::Ok();
   }
   // The anchor's own cell record is a PtgExp shell typed by the spilled
   // value at the anchor; the real tokens go into the following BrtArrFmla.
   const EncodedFormula shell = MakePtgExpShell(anchor_row, col);
-  EmitFormulaCellRecord(dst, scratch, col, StyleWord(cell), anchor_value, shell, always_calculates);
+  EmitFormulaCellRecord(dst, scratch, col, StyleWord(cell, xf_index), anchor_value, shell, always_calculates);
   EmitArrayFormulaRecord(dst, scratch, anchor_row, last_row, col, last_col, formula_or.value(), always_calculates);
   return Expected<void, Error>::Ok();
 }
 
 void emit_data_table_anchor(std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scratch, const Cell& cell,
-                            std::uint32_t col, const DataTable& table, SstBuilder& sst) {
+                            std::uint32_t col, std::uint32_t xf_index, const DataTable& table, SstBuilder& sst) {
   // TABLECELL = BrtTable CELLMETA (BrtCellRk / BrtCellError / BrtCellBool / BrtCellReal / BrtCellSt).
   scratch.clear();
   std::vector<std::uint8_t>& p = scratch;
@@ -355,14 +357,15 @@ void emit_data_table_anchor(std::vector<std::uint8_t>& dst, std::vector<std::uin
   const Value& v = cell.cached_value;
   if (v.is_text()) {
     p.clear();
-    EmitCellHeader(p, col, StyleWord(cell));
+    EmitCellHeader(p, col, StyleWord(cell, xf_index));
     emit_xlwidestring(p, v.as_text());
     emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtCellSt), p);
     return;
   }
   // A blank result reads as 0 in a data table, and the grammar has no blank anchor.
   const Value scalar = v.is_number() || v.is_boolean() || v.is_error() ? v : Value::number(0.0);
-  EmitLiteralCellRecord(dst, scratch, col, StyleWord(cell), scalar, cell.phonetic_runs, cell.phonetic_props, sst);
+  EmitLiteralCellRecord(dst, scratch, col, StyleWord(cell, xf_index), scalar, cell.phonetic_runs, cell.phonetic_props,
+                        sst);
 }
 
 void emit_array_phantom(std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scratch, std::uint32_t col,

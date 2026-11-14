@@ -71,9 +71,14 @@ std::string sheet_part_path(std::size_t position);
 std::string sheet_rels_part_path(std::size_t position);
 std::string ExternalLinkRelsPath(std::size_t position);
 
-/// `style_plan_identity` is true when the save's `CellStyleSavePlan` and
-/// `FontSavePlan` are both identity; a plan that rewrites the named styles or
-/// the fonts regenerates a retained styles.bin.
+/// True when the save writes styles.bin from the model rather than passing a
+/// retained one through: no retained part, a part stale since load, or a
+/// `CellStyleSavePlan` / `FontSavePlan` that is not identity
+/// (`style_plan_identity` false). Only a regenerated styles.bin has its cell
+/// formats compacted; a retained one keeps every cell xf index as loaded.
+bool xlsb_styles_regenerated(const Workbook& wb, bool style_plan_identity);
+
+/// `style_plan_identity` is as for `xlsb_styles_regenerated`.
 Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_present, bool generate_metadata,
                                                 bool generate_rich_values, std::size_t external_link_count,
                                                 bool style_plan_identity, WriteDiagnostics* diagnostics);

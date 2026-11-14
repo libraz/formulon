@@ -65,12 +65,15 @@ namespace xlsb {
 ///
 /// `row` is used only for diagnostic logs; it does not appear in the
 /// cell payload (the enclosing `BrtRowHdr` carries the row index).
+/// `xf_index` is the saved cell xf, which replaces `cell.xf_index` in the
+/// record; the same holds for the anchors below.
 /// `always_calculates` sets a formula record's fAlwaysCalc
 /// (`io::formula_cell_always_calculates`).
 Expected<void, Error> emit_cell(std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scratch, const Cell& cell,
-                                std::uint32_t row, std::uint32_t col, bool always_calculates, SstBuilder& sst,
-                                const std::vector<std::string>& sheet_names, const SheetRangeTable& sheet_ranges,
-                                const NameTable& name_table, std::uint32_t* downgraded_formula_count = nullptr,
+                                std::uint32_t row, std::uint32_t col, std::uint32_t xf_index, bool always_calculates,
+                                SstBuilder& sst, const std::vector<std::string>& sheet_names,
+                                const SheetRangeTable& sheet_ranges, const NameTable& name_table,
+                                std::uint32_t* downgraded_formula_count = nullptr,
                                 const NameShapes& name_shapes = NameShapes());
 
 /// Emits a `BrtCellBlank` for column `col` with style `xf_index`: a blank
@@ -89,21 +92,19 @@ void emit_blank(std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scrat
 /// real tokens appear exactly once, here. `always_calculates` sets
 /// fAlwaysCalc on both records. Returns the encode error when
 /// `cell.formula_text` cannot be lowered to the supported Ptg set.
-Expected<void, Error> emit_array_anchor(std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scratch,
-                                        const Cell& cell, const Value& anchor_value, bool always_calculates,
-                                        std::uint32_t col, std::uint32_t anchor_row, std::uint32_t last_row,
-                                        std::uint32_t last_col, const std::vector<std::string>& sheet_names,
-                                        const SheetRangeTable& sheet_ranges, const NameTable& name_table,
-                                        SstBuilder& sst, std::uint32_t* downgraded_formula_count = nullptr,
-                                        bool* downgraded_to_literal = nullptr,
-                                        const NameShapes& name_shapes = NameShapes());
+Expected<void, Error> emit_array_anchor(
+    std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scratch, const Cell& cell, const Value& anchor_value,
+    bool always_calculates, std::uint32_t col, std::uint32_t xf_index, std::uint32_t anchor_row, std::uint32_t last_row,
+    std::uint32_t last_col, const std::vector<std::string>& sheet_names, const SheetRangeTable& sheet_ranges,
+    const NameTable& name_table, SstBuilder& sst, std::uint32_t* downgraded_formula_count = nullptr,
+    bool* downgraded_to_literal = nullptr, const NameShapes& name_shapes = NameShapes());
 
 /// Emits the anchor cell of a What-If data table: the `BrtTable` record
 /// (result range, input cells, flags) followed by the anchor's plain value
 /// record, as [MS-XLSB] TABLECELL orders them. The result cells carry no
 /// formula in XLSB.
 void emit_data_table_anchor(std::vector<std::uint8_t>& dst, std::vector<std::uint8_t>& scratch, const Cell& cell,
-                            std::uint32_t col, const DataTable& table, SstBuilder& sst);
+                            std::uint32_t col, std::uint32_t xf_index, const DataTable& table, SstBuilder& sst);
 
 /// Emits a phantom cell of a spilled dynamic-array formula: a `BrtFmla*`
 /// "shell" record (typed by `cached`, the spilled value at this position)
