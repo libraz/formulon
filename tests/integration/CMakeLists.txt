@@ -43,6 +43,7 @@ set(FORMULON_INTEGRATION_TEST_SOURCES
   pivot_line_items_corpus_test.cpp
   pivot_options_fixture_test.cpp
   pivot_projection_fixture_test.cpp
+  pivot_refresh_roundtrip_test.cpp
   pivot_recurring_period_filter_fixture_test.cpp
   pivot_show_as_fixture_test.cpp
   pivot_show_details_fixture_test.cpp
