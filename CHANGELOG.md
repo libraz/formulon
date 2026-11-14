@@ -668,6 +668,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `FM_STATUS_IO_FEATURE_NOT_WRITABLE`, 5028; kind=data_bar with the sheet's
   `sheet_index=`), like the other features the writer cannot store, instead of
   `InvalidArgument`.
+- A literal font (one not linked to the theme) that names a face but carries
+  neither a family nor a charset is saved with the ones Excel fills in for
+  that face, in `.xlsx` and `.xlsb` alike: Arial, Calibri, Helvetica and
+  Tahoma get family 2, Times New Roman and Courier New 1, Comic Sans MS 4;
+  Wingdings and Symbol charset 2, SimSun charset 134; メイリオ and
+  ヒラギノ角ゴシック family 2 with charset 128, Malgun Gothic family 2 with
+  charset 129; MS Pゴシック is written as ＭＳ Ｐゴシック, family 2 with
+  charset 128. Any other face is written as stored, and the workbook in
+  memory keeps what was loaded.
 
 ## [0.19.0] - 2026-11-10
 

@@ -11,6 +11,7 @@
 
 #include "builtin_style_names.h"
 #include "eval/collation.h"
+#include "font_completion.h"
 #include "new_workbook_defaults.h"
 #include "row_cells.h"
 #include "sheet.h"
@@ -577,6 +578,22 @@ FontSavePlan build_font_save_plan(const Workbook& wb) {
   const LoadedTheme loaded = wb.load_theme();
   const char* script = theme_font_script(locale);
   for (FontRecord& font : plan.fonts_) {
+    if (font.scheme == 0U) {
+      // Excel completes a literal face's family and charset only when it carries neither.
+      const FontCompletion* completion =
+          font.has_family || font.has_charset ? nullptr : find_font_completion(font.name);
+      if (completion != nullptr) {
+        font.has_family = completion->family != 0U;
+        font.family = completion->family;
+        font.has_charset = completion->charset != 0U;
+        font.charset = completion->charset;
+        if (!completion->rename.empty()) {
+          font.name = std::string(completion->rename);
+        }
+        plan.identity_ = false;
+      }
+      continue;
+    }
     if (font.scheme != kSchemeMajor && font.scheme != kSchemeMinor) {
       continue;
     }
