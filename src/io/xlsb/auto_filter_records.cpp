@@ -24,14 +24,28 @@ namespace {
 // BrtCustomFilter vts values.
 constexpr std::uint8_t kVtsNumber = 0x04;
 constexpr std::uint8_t kVtsString = 0x06;
+// The blank criterion: `equal ""`, kept as a custom filter only as the second of a pair.
+constexpr std::uint8_t kVtsBlank = 0x0C;
 // The non-blank criterion, which Excel's `.xlsx` spells as notEqual to a single space.
 constexpr std::uint8_t kVtsNonBlank = 0x0E;
 constexpr std::string_view kNonBlankText = " ";
 
 constexpr std::uint32_t kKpiNil = 0xFFFFFFFFU;
-// BrtBeginFilters calendarType: Excel writes 3 for `japan`; no other calendar is measured.
-constexpr std::uint32_t kCalendarJapan = 3U;
-constexpr std::string_view kCalendarJapanName = "japan";
+// BrtBeginFilters calendarType: the ST_CalendarType values in schema order; index 0 is `none`.
+constexpr std::string_view kCalendarNames[] = {"",
+                                               "gregorian",
+                                               "gregorianUs",
+                                               "japan",
+                                               "taiwan",
+                                               "korea",
+                                               "hijri",
+                                               "thai",
+                                               "hebrew",
+                                               "gregorianMeFrench",
+                                               "gregorianArabic",
+                                               "gregorianXlitEnglish",
+                                               "gregorianXlitFrench"};
+constexpr std::uint32_t kCalendarCount = sizeof(kCalendarNames) / sizeof(kCalendarNames[0]);
 // BrtBeginSortState fAltMethod: Excel sets it for either alternate method and reads it back as stroke.
 constexpr std::uint16_t kSortAltMethod = 0x0004U;
 // BrtDynamicFilter cft: CFTNIL..CFTBELOWAVERAGE are 0..2, CFTTOMORROW.. start at 8.
@@ -66,6 +80,19 @@ std::optional<FilterOperator> OperatorFromSgn(std::uint8_t sgn) {
     default:
       return std::nullopt;
   }
+}
+
+/// The calendarType code for its schema name; nullopt for a name outside ST_CalendarType.
+std::optional<std::uint32_t> CalendarCode(std::string_view name) {
+  if (name == "none") {
+    return 0U;
+  }
+  for (std::uint32_t i = 0; i < kCalendarCount; ++i) {
+    if (kCalendarNames[i] == name) {
+      return i;
+    }
+  }
+  return std::nullopt;
 }
 
 std::uint8_t SgnFromOperator(FilterOperator op) {
@@ -109,15 +136,18 @@ Expected<void, Error> ReadCustomFilter(ByteSpan payload, CustomFilter* out) {
       out->val = std::move(text);
       return Expected<void, Error>::Ok();
     }
-    case kVtsNonBlank:
-      if (*op != FilterOperator::kNotEqual) {
+    case kVtsBlank:
+    case kVtsNonBlank: {
+      // The union tail after the operator holds no value and is ignored.
+      const bool blank = vts == kVtsBlank;
+      if (*op != (blank ? FilterOperator::kEqual : FilterOperator::kNotEqual)) {
         return Unsupported(kBrtCustomFilter);
       }
-      out->val = std::string(kNonBlankText);
+      out->val = blank ? std::string() : std::string(kNonBlankText);
       return Expected<void, Error>::Ok();
+    }
     default:
-      // Booleans (0x08) and the blank form (0x0C) have no
-      // OOXML spelling the model keeps apart from a string criterion.
+      // Booleans (0x08) have no OOXML spelling the model keeps apart from a string criterion.
       return Unsupported(kBrtCustomFilter);
   }
 }
@@ -212,12 +242,12 @@ Expected<FilterColumn, Error> ReadFilterColumn(ByteSpan& cursor, ByteSpan begin)
         ByteSpan payload = rec.payload;
         ASSIGN_OR_RETURN(const std::uint32_t blank, read_u32(payload));
         ASSIGN_OR_RETURN(const std::uint32_t calendar, read_u32(payload));
-        if (calendar != 0U && calendar != kCalendarJapan) {
+        if (calendar >= kCalendarCount) {
           return Unsupported(kBrtBeginFilters);
         }
         col.kind = FilterKind::kValues;
         col.values.blank = blank != 0U;
-        col.values.calendar_type = calendar == kCalendarJapan ? std::string(kCalendarJapanName) : std::string();
+        col.values.calendar_type = std::string(kCalendarNames[calendar]);
         in_filters = true;
         break;
       }
@@ -318,11 +348,13 @@ Expected<FilterColumn, Error> ReadFilterColumn(ByteSpan& cursor, ByteSpan begin)
 void EmitCustomFilter(std::vector<std::uint8_t>& out, const CustomFilter& filter) {
   std::vector<std::uint8_t> payload;
   const bool non_blank = filter.op == FilterOperator::kNotEqual && filter.val == kNonBlankText;
+  const bool blank = filter.op == FilterOperator::kEqual && filter.val.empty();
   const std::optional<double> number = parse_full_double(filter.val);
-  emit_u8(payload, non_blank ? kVtsNonBlank : number ? kVtsNumber : kVtsString);
+  emit_u8(payload, blank ? kVtsBlank : non_blank ? kVtsNonBlank : number ? kVtsNumber : kVtsString);
   emit_u8(payload, SgnFromOperator(filter.op));
+  // Excel's bytes after a blank or non-blank operator look like unset memory; zero is our choice.
   emit_double(payload, number.value_or(0.0));
-  if (!number && !non_blank) {
+  if (!number && !non_blank && !blank) {
     emit_xlwidestring(payload, filter.val);
   }
   emit_record(out, kBrtCustomFilter, payload);
@@ -387,9 +419,9 @@ std::uint32_t EmitCriterion(std::vector<std::uint8_t>& out, const FilterColumn& 
     case FilterKind::kNone:
       return 0U;
     case FilterKind::kValues: {
-      const bool japan = col.values.calendar_type == kCalendarJapanName;
+      const std::optional<std::uint32_t> calendar = CalendarCode(col.values.calendar_type);
       emit_u32(payload, col.values.blank ? 1U : 0U);
-      emit_u32(payload, japan ? kCalendarJapan : 0U);
+      emit_u32(payload, calendar.value_or(0U));
       emit_record(out, kBrtBeginFilters, payload);
       for (const std::string& value : col.values.values) {
         payload.clear();
@@ -400,9 +432,18 @@ std::uint32_t EmitCriterion(std::vector<std::uint8_t>& out, const FilterColumn& 
         EmitDateGroup(out, item);
       }
       emit_record(out, kBrtEndFilters, ByteSpan{});
-      return col.values.calendar_type.empty() || japan ? 0U : 1U;
+      return col.values.calendar_type.empty() || calendar ? 0U : 1U;
     }
     case FilterKind::kCustom:
+      if (col.custom.filters.size() == 1U && col.custom.filters[0].op == FilterOperator::kEqual &&
+          col.custom.filters[0].val.empty()) {
+        // Excel converts a lone `equal ""` into the blank value filter.
+        emit_u32(payload, 1U);
+        emit_u32(payload, 0U);
+        emit_record(out, kBrtBeginFilters, payload);
+        emit_record(out, kBrtEndFilters, ByteSpan{});
+        return 0U;
+      }
       emit_u32(payload, col.custom.and_join ? 1U : 0U);
       emit_record(out, kBrtBeginCustomFilters, payload);
       for (std::size_t i = 0; i < col.custom.filters.size() && i < 2U; ++i) {

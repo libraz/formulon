@@ -518,6 +518,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `.xlsb` AutoFilters keep a value filter under any calendar type, not only
+  `japan`, and a blank (`equal ""`) custom criterion through a load and a
+  save. A lone blank criterion is saved as the blank value filter, as Excel
+  saves it.
+
 - Excel refused to open an `.xlsb` that held a custom workbook view (View > Custom Views) after it was opened and saved again as `.xlsb`: the workbook part lost the view while the sheets kept theirs. The workbook's views are now kept and written where Excel writes them. Custom views read from an `.xlsx` are still left out of an `.xlsb` save, on the workbook and the sheets alike, and are now counted in `deferredFeatureCount`.
 
 - Saving `.xlsb` writes the default row height in whole twips, truncated, as Excel does. A default width, base width or row height the format cannot hold, or an outline level of 8 or more, is no longer written as a stand-in value or wrapped to 0-7: such a workbook, which can only come from an `.xlsx` Excel itself refuses to open, fails the save with `IoFeatureNotWritable` (Python `IO_FEATURE_NOT_WRITABLE`, C `FM_STATUS_IO_FEATURE_NOT_WRITABLE`; kind=format_defaults or kind=outline_level), as does a sheet view with an unknown view mode or of a window the workbook does not have (kind=sheet_view). A sheet view's `<extLst>` is left out of `.xlsb`, as Excel leaves it, and is no longer reported as deferred.

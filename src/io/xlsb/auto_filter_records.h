@@ -38,8 +38,8 @@ namespace xlsb {
 Expected<AutoFilter, Error> read_auto_filter_block(ByteSpan& cursor, ByteSpan begin);
 
 /// Appends the AUTOFILTER block for `filter` and returns how many of its
-/// settings the records cannot hold (an opaque filter, a calendar type other
-/// than japan, a third custom criterion, column-level XML extensions). A column
+/// settings the records cannot hold (an opaque filter, a calendar type outside
+/// ST_CalendarType, a third custom criterion, column-level XML extensions). A column
 /// with date groups in the rich-data form, or a top-ten or dynamic criterion
 /// without the bounds Excel computed for it, is left out and counted. A colour criterion without a
 /// format and the filter's own extLst are left out, as Excel leaves them out.
