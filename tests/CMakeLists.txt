@@ -244,6 +244,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/pivot_cache_records_test.cpp
   unit/io/xlsb/pivot_cache_bridge_test.cpp
   unit/io/xlsb/pivot_table_records_test.cpp
+  unit/io/xlsb/pivot_table_bridge_test.cpp
   unit/io/xlsb/pivot_line_item_records_test.cpp
   unit/io/xlsb/slicer_fidelity_test.cpp
   unit/io/xlsb/drawing_record_test.cpp
