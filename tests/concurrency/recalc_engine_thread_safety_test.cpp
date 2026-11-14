@@ -457,9 +457,12 @@ TEST(RecalcEngineThreadSafety, ParallelRecalcSerialisesAgainstRemoveSheetTransac
   EXPECT_EQ(wb.sheet(0U).name(), "Survivor");
   ASSERT_EQ(wb.tables().size(), kMetadataCopies);
   EXPECT_EQ(wb.tables()[0].sheet_index, 0U);
-  ASSERT_EQ(wb.pivot_caches().size(), kMetadataCopies);
-  ASSERT_EQ(wb.sheet(0U).pivot_tables().size(), 1U);
-  EXPECT_EQ(wb.sheet(0U).pivot_tables()[0]->pivot_cache_id(), 1000U);
+  // Deleting a cache's source sheet keeps the cache and the pivots on it, as Excel does.
+  ASSERT_EQ(wb.pivot_caches().size(), kMetadataCopies + 1U);
+  EXPECT_NE(wb.find_pivot_cache(21U), nullptr);
+  ASSERT_EQ(wb.sheet(0U).pivot_tables().size(), 2U);
+  EXPECT_EQ(wb.sheet(0U).pivot_tables()[0]->pivot_cache_id(), 21U);
+  EXPECT_EQ(wb.sheet(0U).pivot_tables()[1]->pivot_cache_id(), 1000U);
   ASSERT_EQ(wb.defined_names().size(), kMetadataCopies);
   EXPECT_EQ(wb.defined_names()[0].formula, "#REF!A1");
   ASSERT_TRUE(static_cast<bool>(wb.recalc_parallel(default_registry(), cfg, nullptr)));
