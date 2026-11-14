@@ -475,6 +475,25 @@ CellStyleSavePlan build_cell_style_save_plan(const StylesTable& styles, const Us
   return plan;
 }
 
+CellStyleSavePlan stored_cell_style_save_plan(const StylesTable& styles, ExcelProfile profile) {
+  CellStyleSavePlan plan;
+  plan.profile_ = profile;
+  plan.cell_styles_ = styles.cell_styles;
+  const std::size_t xf_count = styles.cell_style_xfs.empty() ? 1U : styles.cell_style_xfs.size();
+  for (std::uint32_t x = 0; x < xf_count; ++x) {
+    plan.style_xf_order_.push_back(x);
+    plan.parent_of_.push_back(x);
+  }
+  for (const CellStyleRecord& record : styles.cell_styles) {
+    plan.planned_names_.push_back(record.name);
+  }
+  for (std::uint32_t c = 0; c < styles.cell_xfs.size(); ++c) {
+    plan.cell_xf_order_.push_back(c);
+  }
+  plan.identity_ = true;
+  return plan;
+}
+
 bool saved_file_names_cell_style(const CellStyleSavePlan& plan, std::string_view name) {
   const eval::CollateQuery query(name, plan.profile(), eval::CollationStrength::kCompare);
   for (const std::string& planned : plan.planned_names_) {

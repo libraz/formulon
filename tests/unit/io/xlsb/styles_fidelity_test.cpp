@@ -362,9 +362,9 @@ TEST(XlsbStylesFidelity, JaProfileSaveDropsAnUnusedBuiltinAndLocalizesAUsedOne) 
   EXPECT_EQ(wb.styles().cell_styles.size(), 3U);
 }
 
-// A retained styles.bin still matching the model is regenerated when the save
-// would rename, drop or reorder its named styles.
-TEST(XlsbStylesFidelity, ARetainedStylesPartIsRegeneratedWhenTheStylePlanIsNotIdentity) {
+// A retained styles.bin still matching the model passes through byte for byte
+// under any profile, keeping the names it stores; a style edit regenerates it.
+TEST(XlsbStylesFidelity, ARetainedStylesPartPassesThroughUnderAnyProfile) {
   Workbook wb = Workbook::create();
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(1.0))));
   auto first = write_xlsb(wb);
@@ -373,22 +373,18 @@ TEST(XlsbStylesFidelity, ARetainedStylesPartIsRegeneratedWhenTheStylePlanIsNotId
   ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
   Workbook& book = loaded.value().workbook;
 
-  auto kept = BuildEmissionPlan(book, false, false, false, 0U, /*style_plan_identity=*/true, nullptr);
+  // Under ja-JP a regenerated part would say 標準; the retained one says Normal.
+  book.set_excel_profile(mac_365_ja_jp_profile());
+  auto kept = BuildEmissionPlan(book, false, false, false, 0U, nullptr);
   ASSERT_TRUE(static_cast<bool>(kept)) << kept.error().message;
   EXPECT_FALSE(kept.value().has_generated_styles);
-  auto regenerated = BuildEmissionPlan(book, false, false, false, 0U, /*style_plan_identity=*/false, nullptr);
-  ASSERT_TRUE(static_cast<bool>(regenerated)) << regenerated.error().message;
-  EXPECT_TRUE(regenerated.value().has_generated_styles);
-
-  // Under ja-JP the retained part would still say "Normal"; the save writes 標準.
-  book.set_excel_profile(mac_365_ja_jp_profile());
   auto second = write_xlsb(book);
   ASSERT_TRUE(static_cast<bool>(second)) << second.error().message;
   auto reloaded = read_xlsb(SpanOf(second.value()));
   ASSERT_TRUE(static_cast<bool>(reloaded)) << reloaded.error().message;
   const auto& names = reloaded.value().workbook.styles().cell_styles;
   ASSERT_EQ(names.size(), 1U);
-  EXPECT_EQ(names[0].name, "標準");
+  EXPECT_EQ(names[0].name, "Normal");
   EXPECT_EQ(names[0].builtin_id, 0U);
 }
 

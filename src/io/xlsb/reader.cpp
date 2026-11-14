@@ -875,6 +875,9 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
     part.origin_pivot_index = tag.pivot_index;
     part.origin_cache_id = tag.cache_id;
     part.model_fingerprint = current_retained_part_fingerprint(wb, part);
+    if (tag.origin == PassthroughPart::RetainedOrigin::kStyles) {
+      part.dxf_reference_fingerprint = current_dxf_reference_fingerprint(wb);
+    }
   };
 
   // A retained table part carries the bytes `load_xlsb_tables` cleared, not the archive's.

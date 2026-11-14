@@ -366,13 +366,17 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   }
   XlsbTableAllocator table_allocator(std::move(taken_paths));
   // The named cell styles styles.bin writes and the names table parts may keep.
+  // A retained styles.bin that passes through is the only style table in the file, so every part written beside it
+  // takes its stored names, indices and phonetic settings; only a regenerated one takes the save plans.
+  const bool styles_regenerated = xlsb_styles_regenerated(workbook);
   const CellStyleSavePlan style_plan =
-      build_cell_style_save_plan(workbook.styles(), collect_used_cell_xfs(workbook), workbook.excel_profile());
+      styles_regenerated
+          ? build_cell_style_save_plan(workbook.styles(), collect_used_cell_xfs(workbook), workbook.excel_profile())
+          : stored_cell_style_save_plan(workbook.styles(), workbook.excel_profile());
   const FontSavePlan font_plan = build_font_save_plan(workbook);
-  // A retained styles.bin passes through with every cell xf index as loaded; a regenerated one is compacted.
-  const bool styles_identity = style_plan.is_identity() && font_plan.is_identity();
-  const CellStyleSavePlan* sheet_style_plan =
-      xlsb_styles_regenerated(workbook, styles_identity) ? &style_plan : nullptr;
+  const CellStyleSavePlan* sheet_style_plan = styles_regenerated ? &style_plan : nullptr;
+  const std::optional<PhoneticProperties> absent_phonetic =
+      styles_regenerated ? font_plan.absent_sheet_phonetic() : std::nullopt;
   std::vector<std::vector<XlsbTablePart>> sheet_tables(sheet_count);
   std::vector<std::vector<std::string>> sheet_hyperlink_rids;
   sheet_hyperlink_rids.reserve(sheet_count);
@@ -413,7 +417,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
         workbook.sheet(i), sst, sheet_names, sheet_ranges, sheet_name_table, sheet_hyperlink_rids[i],
         &downgraded_formula_count, metadata.ifmd, name_shapes(workbook, i), table_rel_ids, views, &sparklines_lost,
         sheet_drawing_rids[i], sheet_owns_drawing[i], metadata.rich.empty() ? nullptr : &metadata.rich.vm_by_sheet[i],
-        book_directory, font_plan.absent_sheet_phonetic(), sheet_style_plan);
+        book_directory, absent_phonetic, sheet_style_plan);
     ReportDeferred(&diagnostics.deferred_feature_count, "sparklines", sparklines_lost, i);
     if (!sheet_body_or) {
       return std::move(sheet_body_or.error());
@@ -423,7 +427,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   const bool emit_sst_part = !sst.empty();
 
   auto plan_or = BuildEmissionPlan(workbook, emit_sst_part, metadata.generate_part, !metadata.rich.empty(),
-                                   sheet_ranges.links.size(), styles_identity, &diagnostics);
+                                   sheet_ranges.links.size(), &diagnostics);
   if (!plan_or) {
     return std::move(plan_or.error());
   }
@@ -440,7 +444,9 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   const DxfUseSet dxf_uses = collect_xlsb_dxf_uses(workbook, dxf_emission);
   const DxfSavePlan dxf_plan = build_dxf_save_plan(workbook.styles().dxfs.size(), dxf_uses.uses, dxf_uses.blocked,
                                                    static_cast<std::int32_t>(workbook.active_sheet()));
-  if (!dxf_uses.blocked) {
+  // A pass-through styles.bin keeps its dxfs as stored unless the dxf references changed since load; then its dxf
+  // list is renumbered in place with every stream, and the rest of the part stays as stored.
+  if (!dxf_uses.blocked && (styles_regenerated || xlsb_dxf_references_changed(workbook))) {
     RETURN_IF_ERROR(apply_xlsb_dxf_plan(dxf_emission, dxf_plan));
   }
   const std::vector<const ExternalLinkRecord*> links = written_external_links(workbook);

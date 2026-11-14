@@ -72,16 +72,22 @@ std::string sheet_rels_part_path(std::size_t position);
 std::string ExternalLinkRelsPath(std::size_t position);
 
 /// True when the save writes styles.bin from the model rather than passing a
-/// retained one through: no retained part, a part stale since load, or a
-/// `CellStyleSavePlan` / `FontSavePlan` that is not identity
-/// (`style_plan_identity` false). Only a regenerated styles.bin has its cell
-/// formats compacted; a retained one keeps every cell xf index as loaded.
-bool xlsb_styles_regenerated(const Workbook& wb, bool style_plan_identity);
+/// retained one through: there is no retained part, or it is stale since load.
+/// A retained part that still matches the model passes through byte for byte
+/// whatever the profile, and the parts written beside it follow its stored
+/// names and indices (`stored_cell_style_save_plan`). Only a regenerated
+/// styles.bin takes the save plans' names, faces and compacted cell formats.
+bool xlsb_styles_regenerated(const Workbook& wb);
 
-/// `style_plan_identity` is as for `xlsb_styles_regenerated`.
+/// True when a retained styles.bin that passes through must have its dxf list
+/// renumbered in place: the model's dxf references
+/// (`current_dxf_reference_fingerprint`) differ from those at load. The rest
+/// of the part stays byte for byte; an equal set leaves the part untouched.
+bool xlsb_dxf_references_changed(const Workbook& wb);
+
 Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_present, bool generate_metadata,
                                                 bool generate_rich_values, std::size_t external_link_count,
-                                                bool style_plan_identity, WriteDiagnostics* diagnostics);
+                                                WriteDiagnostics* diagnostics);
 
 std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan);
 

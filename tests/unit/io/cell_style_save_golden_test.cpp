@@ -684,10 +684,17 @@ TEST(CellStyleSaveGoldenXlsbFreshness, ClearingTheOnlyUserOfAStyleRewritesStyles
       << "styles.bin was passed through from the retained part";
 }
 
-TEST(CellStyleSaveGoldenXlsbFreshness, SavingUnderAnotherProfileRewritesNamesInThatLocale) {
+// The stored part is kept under another profile; a style edit regenerates it
+// with the names of that profile's locale.
+TEST(CellStyleSaveGoldenXlsbFreshness, SavingUnderAnotherProfileKeepsTheStoredNamesUntilAStyleEdit) {
   const Bytes retained = ReadFixture("cs1_C3_partial_resaved.xlsb");
-  const auto wb = LoadXlsbBytes(retained, "cs1_C3_partial_resaved.xlsb", mac_365_en_us_profile());
+  auto wb = LoadXlsbBytes(retained, "cs1_C3_partial_resaved.xlsb", mac_365_en_us_profile());
   ASSERT_TRUE(wb);
+  Bytes kept;
+  ASSERT_TRUE(SaveXlsb(*wb, &kept));
+  EXPECT_EQ(PartBytes(kept, "xl/styles.bin"), PartBytes(retained, "xl/styles.bin"));
+
+  wb->mutable_styles().fonts.push_back(wb->styles().fonts.front());
   Bytes saved;
   ASSERT_TRUE(SaveXlsb(*wb, &saved));
   const Lines styles = BrtStyleLines(PartBytes(saved, "xl/styles.bin"));
@@ -695,8 +702,6 @@ TEST(CellStyleSaveGoldenXlsbFreshness, SavingUnderAnotherProfileRewritesNamesInT
     EXPECT_TRUE(HasName(styles, english)) << english << " missing from BrtStyle list";
   }
   EXPECT_FALSE(HasName(styles, kJaHeading1));
-  EXPECT_NE(PartBytes(saved, "xl/styles.bin"), PartBytes(retained, "xl/styles.bin"))
-      << "styles.bin was passed through from the retained part";
 }
 
 }  // namespace

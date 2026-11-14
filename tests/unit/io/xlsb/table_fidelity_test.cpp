@@ -648,16 +648,20 @@ std::vector<std::uint8_t> WithUnknownFutureRecord(const std::vector<std::uint8_t
 }
 
 // A part kept verbatim whose cell-style name the saved file does not name is
-// re-encoded without it; every other record stays byte-equal.
+// re-encoded without it; every other record stays byte-equal. Beside a stored
+// styles.bin, which still holds "Normal", the part is kept as it is.
 TEST(XlsbTableFidelity, ARetainedPartNamingAnEnglishBuiltinIsReencodedWithoutIt) {
   const std::vector<std::uint8_t> package = SaveXlsb(AuthoredBook());
   const std::vector<std::uint8_t> patched = WithUnknownFutureRecord(Entry(package, "xl/tables/table3.bin"));
   Workbook wb = LoadXlsb(RepackWithEntries(package, {{"xl/tables/table3.bin", patched}}));
   ASSERT_TRUE(wb.tables().empty());
   EXPECT_EQ(Entry(SaveXlsb(wb), "xl/tables/table3.bin"), patched);
-
-  // Under ja-JP the builtin 0 record is written as 標準, so "Normal" names nothing.
   wb.set_excel_profile(mac_365_ja_jp_profile());
+  EXPECT_EQ(Entry(SaveXlsb(wb), "xl/tables/table3.bin"), patched);
+
+  // A style edit regenerates styles.bin; under ja-JP its builtin 0 record is
+  // written as 標準, so "Normal" names nothing.
+  wb.mutable_styles().fonts.push_back(wb.styles().fonts.front());
   const std::vector<std::uint8_t> resaved = Entry(SaveXlsb(wb), "xl/tables/table3.bin");
   EXPECT_EQ(ListCellStyleNames(patched), (std::vector<std::string>{"Heading 1", "Normal", "Total"}));
   EXPECT_EQ(ListCellStyleNames(resaved), (std::vector<std::string>{"Heading 1", "", "Total"}));

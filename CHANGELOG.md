@@ -525,6 +525,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Excel's open rule: a hidden active sheet is unhidden (only that sheet), a very
   hidden one passes activation to the first visible sheet, and an active sheet
   that is not selected becomes the only selected tab.
+- An `.xlsb` saved without a style edit writes its styles part back byte for
+  byte again, whatever the workbook profile. A book written by Excel in
+  another language no longer has its theme fonts and built-in style names
+  rewritten, or lose style content the engine does not model, just because it
+  was loaded under a different profile. The styles part is rebuilt only when
+  the styles or the cell formats in use change; a conditional format, table or
+  filter edit only renumbers its differential formats.
 
 ## [0.19.0] - 2026-11-10
 

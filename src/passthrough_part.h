@@ -80,6 +80,10 @@ struct PassthroughPart {
   /// as it stood right after load. `nullopt` when `retained_origin` is
   /// `kNone`.
   std::optional<std::uint64_t> model_fingerprint;
+  /// For a retained styles part only: `current_dxf_reference_fingerprint` right
+  /// after load. A save whose dxf references differ renumbers the part's dxf
+  /// list in place; an equal one leaves the part untouched.
+  std::optional<std::uint64_t> dxf_reference_fingerprint;
 };
 
 /// Orders captured parts by package path, giving both readers a stable

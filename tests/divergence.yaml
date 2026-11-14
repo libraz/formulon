@@ -1319,6 +1319,17 @@ entries:
     first_noted: 2026-11-14
     last_verified_excel_version: "16.115"
 
+  - id: xlsb_untouched_resave_keeps_stored_fonts_and_style_names
+    applies_to: [mac]
+    cause: accepted-divergence
+    mode: skip-oracle
+    scope: api-contract
+    evidence: [tests/unit/io/xlsb/xlsb_styles_passthrough_test.cpp, tests/unit/io/xlsb/xlsb_parity_font_plan_test.cpp]
+    reason: "On an untouched open and save, Excel writes theme-linked fonts with the theme face of its UI locale, writes built-in cell styles under that locale's names, and appends the locale phonetic font (measured: a Calibri minor-font source opened and saved by ja-UI Excel comes back as ＭＳ Ｐゴシック plus a size-6 phonetic font, xlsb_parity/phonfont pf_base_ja). An Excel-written book opened under another UI language was not measured. Formulon applies those rules only when it rebuilds styles.bin. An .xlsb whose styles and cell formats in use are unchanged since load keeps its stored styles part byte for byte under any profile, because rebuilding it drops content the engine does not model (the pivot-button flag, table, slicer and timeline style blocks, future records), and the profile is often a default rather than the book's language."
+    prefer: formulon
+    first_noted: 2026-11-14
+    last_verified_excel_version: "16.115"
+
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a

@@ -15,7 +15,10 @@
 // writer already produces for that model type (`write_pivot_table_definition`,
 // `write_pivot_cache_definition` / `write_pivot_cache_records`,
 // `write_styles`): a model field this fingerprint would miss is also a
-// field the OOXML round trip already fails to preserve.
+// field the OOXML round trip already fails to preserve. The styles
+// fingerprint also covers the cell formats in use (`collect_used_cell_xfs`:
+// cells, runs, row and column styles, merged references), so a styles part
+// passes through only while both are unchanged since load.
 
 #ifndef FORMULON_IO_XLSB_RETAINED_PART_FINGERPRINT_H_
 #define FORMULON_IO_XLSB_RETAINED_PART_FINGERPRINT_H_
@@ -37,6 +40,12 @@ namespace xlsb {
 /// index, or a cache id `wb.find_pivot_cache` cannot resolve) — both cases
 /// a caller should treat as "not fresh".
 std::optional<std::uint64_t> current_retained_part_fingerprint(const Workbook& wb, const PassthroughPart& part);
+
+/// The model's dxf references: every CF rule's dxf and priority in block
+/// order, and every sheet and table AutoFilter, sort state and table dxf
+/// attribute. Broader than the dxf ids alone, which only costs an in-place
+/// renumbering of a retained styles part that would have kept its order.
+std::uint64_t current_dxf_reference_fingerprint(const Workbook& wb);
 
 }  // namespace xlsb
 }  // namespace io

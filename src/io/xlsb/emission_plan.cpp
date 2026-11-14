@@ -176,25 +176,28 @@ std::unordered_set<std::string> BuildGeneratedPathSet(const Workbook& wb, bool e
 
 }  // namespace
 
-bool xlsb_styles_regenerated(const Workbook& wb, bool style_plan_identity) {
+bool xlsb_styles_regenerated(const Workbook& wb) {
   const PassthroughPart* raw_styles = FindRawStylesPart(wb);
   const bool raw_styles_fresh = raw_styles != nullptr && static_cast<bool>(CheckRetainedPartFreshness(wb, *raw_styles));
-  return (!raw_styles_fresh || !style_plan_identity) && (raw_styles != nullptr || HasModelledStyles(wb));
+  return !raw_styles_fresh && (raw_styles != nullptr || HasModelledStyles(wb));
+}
+
+bool xlsb_dxf_references_changed(const Workbook& wb) {
+  const PassthroughPart* raw_styles = FindRawStylesPart(wb);
+  return raw_styles != nullptr && raw_styles->dxf_reference_fingerprint != current_dxf_reference_fingerprint(wb);
 }
 
 Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_present, bool generate_metadata,
                                                 bool generate_rich_values, std::size_t external_link_count,
-                                                bool style_plan_identity, WriteDiagnostics* diagnostics) {
+                                                WriteDiagnostics* diagnostics) {
   EmissionPlan plan;
   plan.has_text_cells = sst_present;
   // A retained styles.bin that still matches the model is emitted verbatim,
   // which keeps BrtXF fMergeCell/fSxButton and dxf properties the table does
   // not represent.  Without a raw part (XLSX/native source) or once the model
   // styles changed since load, styles.bin is generated from the model and the
-  // stale raw part is dropped as a generated-path collision. A save that
-  // renames, merges, drops or reorders named styles, or writes a font under
-  // another face, also regenerates it.
-  plan.has_generated_styles = xlsb_styles_regenerated(wb, style_plan_identity);
+  // stale raw part is dropped as a generated-path collision.
+  plan.has_generated_styles = xlsb_styles_regenerated(wb);
   // Decided by `BuildMetadataPlan`, which the sheet bodies were already
   // emitted against.
   plan.has_generated_metadata = generate_metadata;

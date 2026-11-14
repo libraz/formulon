@@ -124,6 +124,7 @@ class CellStyleSavePlan {
  private:
   friend CellStyleSavePlan build_cell_style_save_plan(const StylesTable& styles, const UsedCellXfs& used,
                                                       ExcelProfile profile);
+  friend CellStyleSavePlan stored_cell_style_save_plan(const StylesTable& styles, ExcelProfile profile);
 
   std::vector<CellStyleRecord> cell_styles_;
   std::vector<std::uint32_t> style_xf_order_;
@@ -143,6 +144,11 @@ class CellStyleSavePlan {
 /// without a builtin 0 record gains Normal (locale name, style xf 0) as its
 /// first style; an empty `cell_style_xfs` is planned as one default xf.
 CellStyleSavePlan build_cell_style_save_plan(const StylesTable& styles, const UsedCellXfs& used, ExcelProfile profile);
+
+/// The plan of a save that keeps the stored styles part: every record, name
+/// and index as loaded. A retained xlsb styles.bin that passes through is the
+/// only style table in the file, so the parts written beside it follow this.
+CellStyleSavePlan stored_cell_style_save_plan(const StylesTable& styles, ExcelProfile profile);
 
 /// Whether a table cell-style attribute naming `name` is kept on save: `name`
 /// equals, under the profile's compare collation, the saved name of a planned
