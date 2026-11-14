@@ -48,6 +48,7 @@ namespace formulon {
 // references an enumerator.
 enum class WorkbookKind : std::uint8_t;
 enum class WorkbookFormat : std::uint8_t;
+enum class ImageFormat : std::int32_t;  // drawing/image_header.h
 
 namespace eval {
 class FunctionRegistry;
@@ -73,6 +74,16 @@ struct ExternalBookIndexer;
 namespace detail {
 struct PivotReportPlan;
 }  // namespace detail
+
+/// A picture placed in a cell: the image file as stored (PNG or JPEG), its
+/// alt text when it has one, and the format and pixel size read from the bytes.
+struct CellPicture {
+  std::vector<std::uint8_t> bytes;
+  std::optional<std::string> alt_text;
+  ImageFormat format{};
+  std::uint32_t width = 0;
+  std::uint32_t height = 0;
+};
 
 /// The shape a table pre-check takes a table to have: its range and which
 /// of its header and totals rows it shows.
@@ -1279,6 +1290,31 @@ class Workbook {
   Expected<std::vector<std::uint8_t>, Error> save_theme() const;
 
   // ---------------------------------------------------------------------------
+  // Pictures in cells
+  // ---------------------------------------------------------------------------
+
+  /// The picture the cell at (`row`, `col`) of `sheet` holds, or nullopt when
+  /// it holds none (or the address is out of range). A picture a formula
+  /// produced is reported too. In formulas the cell evaluates as `#VALUE!`.
+  std::optional<CellPicture> cell_picture(std::size_t sheet, std::uint32_t row, std::uint32_t col) const;
+
+  /// Places the PNG or JPEG image `bytes[0..len)` in the cell as a write of
+  /// `#VALUE!` (the array-block and data-table refusals and the spill and
+  /// dependent handling of `set_cell_value` apply), then records the picture.
+  /// `alt_text`, when given, must not be empty. Atomic.
+  ///
+  /// `kBindingNullPointer` for NULL `bytes`; `kIoImageUnsupported` for empty
+  /// data or any other format; `kSecurityResourceLimit` above 32 MiB;
+  /// `kInvalidArgument` for empty alt text or a bad sheet or address.
+  Expected<void, Error> set_cell_picture(std::size_t sheet, std::uint32_t row, std::uint32_t col,
+                                         const std::uint8_t* bytes, std::size_t len,
+                                         std::optional<std::string_view> alt_text);
+
+  /// Removes the cell's picture and empties the cell. A cell without a
+  /// picture is left as it is.
+  Expected<void, Error> clear_cell_picture(std::size_t sheet, std::uint32_t row, std::uint32_t col);
+
+  // ---------------------------------------------------------------------------
   // Threaded comments and persons
   // ---------------------------------------------------------------------------
 
@@ -1770,6 +1806,11 @@ class Workbook {
   /// see `io/xlsb/pivot_cache_ids.h`.
   const std::vector<std::uint8_t>& xlsb_pivot_cache_ids() const noexcept { return xlsb_pivot_cache_ids_; }
   void set_xlsb_pivot_cache_ids(std::vector<std::uint8_t> records) { xlsb_pivot_cache_ids_ = std::move(records); }
+  /// The framed BrtUserBookView records (custom workbook views) of an `.xlsb`
+  /// source's `xl/workbook.bin`, in source order; see
+  /// `io/xlsb/user_book_views.h`.
+  const std::vector<std::uint8_t>& xlsb_user_book_views() const noexcept { return xlsb_user_book_views_; }
+  void set_xlsb_user_book_views(std::vector<std::uint8_t> records) { xlsb_user_book_views_ = std::move(records); }
 
   /// Extra namespace declarations (and `mc:Ignorable`) captured from the
   /// source `<workbook>` root element, serialised as ` name="value"`
@@ -2226,6 +2267,7 @@ class Workbook {
   WorksheetRawExtensions raw_children_;
   std::vector<std::uint8_t> xlsb_book_frt_;
   std::vector<std::uint8_t> xlsb_pivot_cache_ids_;
+  std::vector<std::uint8_t> xlsb_user_book_views_;
   // Extra `<workbook>` root namespace declarations (xmlns:mc / xmlns:xr* /
   // x15 + mc:Ignorable) captured for verbatim re-emission so namespaced
   // attributes in the raw captures above resolve. Empty by default.

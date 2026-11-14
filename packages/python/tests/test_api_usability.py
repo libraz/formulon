@@ -134,6 +134,11 @@ def _runs() -> Tuple[Any, ...]:
     return ([formulon.PhoneticRun(0, 1, "kana")],)
 
 
+def _cell_picture() -> Tuple[Any, ...]:
+    png = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x03\x00\x00\x00\x02\x08\x02\x00\x00\x00"
+    return (formulon.CellPictureInput(png),)
+
+
 # Methods that no longer take a coordinate pair or whose pair moved into a record are listed as ``None``: the
 # conformance loop skips them and ``test_non_coordinate_methods`` pins their new shape instead.
 CELL_TABLE: Dict[str, Optional[Case]] = {
@@ -147,6 +152,7 @@ CELL_TABLE: Dict[str, Optional[Case]] = {
     "Sheet.get_array_formula": Case(),
     "Sheet.get_cell_format": Case(),
     "Sheet.get_cell_phonetic": Case(),
+    "Sheet.get_cell_picture": Case(),
     "Sheet.get_cell_phonetic_properties": Case(),
     "Sheet.get_cell_phonetic_runs": Case(),
     "Sheet.get_cell_show_phonetic": Case(),
@@ -175,6 +181,7 @@ CELL_TABLE: Dict[str, Optional[Case]] = {
         tail=lambda: (formulon.PhoneticProperties(font_index=0, type=1, alignment=1),)
     ),
     "Sheet.set_cell_phonetic_runs": Case(tail=_runs),
+    "Sheet.set_cell_picture": Case(tail=_cell_picture),
     "Sheet.set_cell_show_phonetic": Case(tail=lambda: (True,)),
     "Sheet.set_cell_xf_index": Case(tail=lambda: (0,)),
     "Sheet.set_comment": Case(tail=lambda: (formulon.Comment("note", author="Ada"),)),

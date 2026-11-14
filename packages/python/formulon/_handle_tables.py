@@ -170,6 +170,7 @@ READ_ONLY_KEYS = {
     "Sheet.add_sparkline_group": ("id",),
     "Sheet.add_validation": ("id",),
     "Sheet.set_cell_phonetic_properties": ("stated",),
+    "Sheet.set_cell_picture": ("format", "height_px", "width_px"),
     "Sheet.set_column_break": ("col", "row"),
     "Sheet.set_row_break": ("col", "row"),
     "Sheet.update_cell_format": ("source",),

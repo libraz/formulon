@@ -582,6 +582,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetDrawingObject(const Napi::CallbackInfo& info);
   Napi::Value GetImage(const Napi::CallbackInfo& info);
   Napi::Value InsertImage(const Napi::CallbackInfo& info);
+  Napi::Value GetCellPicture(const Napi::CallbackInfo& info);
+  Napi::Value SetCellPicture(const Napi::CallbackInfo& info);
   Napi::Value RemoveDrawing(const Napi::CallbackInfo& info);
   Napi::Value UpdateDrawing(const Napi::CallbackInfo& info);
   Napi::Value SetDrawingZOrder(const Napi::CallbackInfo& info);

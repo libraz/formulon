@@ -597,6 +597,10 @@ struct fm_workbook {
   // (`release_text`); empty otherwise.
   formulon::c_api::parts::TextStore read_scratch_retired;
 
+  // The picture behind the `bytes` and `alt_text` views `fm_sheet_get_cell_picture` returns; each call that finds
+  // a picture replaces it.
+  mutable std::optional<formulon::CellPicture> cell_picture_scratch;
+
   // Per-row running counts for the `cell_count` / `cell_at` iteration pair
   // (`Sheet::cell_enumeration_rows`), so memory follows rows rather than
   // coordinates. Slot zero is the most recently used entry; keeping two

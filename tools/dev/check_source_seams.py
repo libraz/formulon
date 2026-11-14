@@ -169,6 +169,7 @@ _FACADE_FILES = frozenset(
         "workbook_sheets.cpp",
         "workbook_auto_filter.cpp",
         "workbook_cell_edit.cpp",
+        "workbook_cell_picture.cpp",
     }
 )
 

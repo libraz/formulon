@@ -31,6 +31,7 @@ PTR = ("ptr", 4, 4)
 U32 = ("u32", 4, 4)
 I32 = ("i32", 4, 4)
 I64 = ("i64", 8, 8)
+U64 = ("u64", 8, 8)
 U16 = ("u16", 2, 2)
 U8 = ("u8", 1, 1)
 F64 = ("f64", 8, 8)
@@ -52,6 +53,7 @@ _FMT = {
     "u32": "<I",
     "i32": "<i",
     "i64": "<q",
+    "u64": "<Q",
     "u16": "<H",
     "u8": "<B",
     "f64": "<d",
@@ -68,6 +70,7 @@ RECORD_NAMES = frozenset(
         "fm_array_formula_info_t",
         "fm_auto_filter_t",
         "fm_cell_node_info_t",
+        "fm_cell_picture_t",
         "fm_cf_match_info_t",
         "fm_cf_range_evaluation_spec_t",
         "fm_cf_rule_patch_t",
@@ -1754,6 +1757,11 @@ PERSON = Struct(
 IMAGE_INFO = Struct(
     "fm_image_info_t",
     [("format", I32), ("width_px", U32), ("height_px", U32)],
+)
+
+CELL_PICTURE = Struct(
+    "fm_cell_picture_t",
+    [("bytes", PTR), ("len", U64), ("alt_text", PTR), ("format", I32), ("width_px", U32), ("height_px", U32)],
 )
 
 DRAWING_ANCHOR = Struct(

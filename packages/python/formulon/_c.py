@@ -677,6 +677,8 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_sheet_get_hyperlink",
     "fm_sheet_get_hyperlink_count",
     "fm_sheet_get_picture",
+    "fm_sheet_get_cell_picture",
+    "fm_sheet_set_cell_picture",
     "fm_sheet_get_merge_at",
     "fm_sheet_get_merge_count",
     "fm_sheet_get_page_margins",

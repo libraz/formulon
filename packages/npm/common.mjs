@@ -1349,6 +1349,7 @@ const SHEET_METHODS = Object.freeze([
   'getCellPhonetic',
   'getCellPhoneticProperties',
   'getCellPhoneticRuns',
+  'getCellPicture',
   'getCellRectPt',
   'getCellShowPhonetic',
   'getCellsInRange',
@@ -1445,6 +1446,7 @@ const SHEET_METHODS = Object.freeze([
   'setCellPhonetic',
   'setCellPhoneticProperties',
   'setCellPhoneticRuns',
+  'setCellPicture',
   'setCellShowPhonetic',
   'setColumnBreak',
   'setColumnCollapsed',
@@ -1630,6 +1632,7 @@ const HANDWRITTEN = Object.freeze([
   'removeSheet',
   'setActiveSheet',
   'setArrayFormula',
+  'setCellPicture',
   'setComment',
   'setFormula',
   'setHyperlink',
@@ -1789,6 +1792,7 @@ const CELL_ARGS = Object.freeze({
   'Sheet.getCellPhonetic': [[0, 1]],
   'Sheet.getCellPhoneticProperties': [[0, 1]],
   'Sheet.getCellPhoneticRuns': [[0, 1]],
+  'Sheet.getCellPicture': [[0, 1]],
   'Sheet.getCellShowPhonetic': [[0, 1]],
   'Sheet.getCellXfIndex': [[0, 1]],
   'Sheet.getComment': [[0, 1]],
@@ -1814,6 +1818,7 @@ const CELL_ARGS = Object.freeze({
   'Sheet.setCellPhonetic': [[0, 1]],
   'Sheet.setCellPhoneticProperties': [[0, 1]],
   'Sheet.setCellPhoneticRuns': [[0, 1]],
+  'Sheet.setCellPicture': [[0, 1]],
   'Sheet.setCellShowPhonetic': [[0, 1]],
   'Sheet.setCellXfIndex': [[0, 1]],
   'Sheet.setComment': [[0, 1]],
@@ -2632,6 +2637,7 @@ const INPUT_KEYS = Object.freeze({
   'Sheet.setArrayFormula': [0, ['formula', 'range']],
   'Sheet.setAutoFilter': [0, ['columns', 'range', 'sort']],
   'Sheet.setCellPhoneticProperties': [2, ['alignment', 'fontIndex', 'stated', 'type']],
+  'Sheet.setCellPicture': [2, ['altText', 'bytes', 'format', 'heightPx', 'widthPx']],
   'Sheet.setColumnBreak': [1, ['col', 'first', 'last', 'manual', 'row']],
   'Sheet.setComment': [2, ['author', 'text']],
   'Sheet.setHyperlink': [0, ['display', 'location', 'range', 'target', 'tooltip']],
@@ -3243,6 +3249,7 @@ const READ_ONLY_KEYS = Object.freeze({
   'Sheet.addSparklineGroup': ['id'],
   'Sheet.addValidation': ['id'],
   'Sheet.setCellPhoneticProperties': ['stated'],
+  'Sheet.setCellPicture': ['format', 'heightPx', 'widthPx'],
   'Sheet.setColumnBreak': ['col', 'row'],
   'Sheet.setRowBreak': ['col', 'row'],
   'Sheet.updateCellFormat': ['source'],
@@ -3537,6 +3544,7 @@ const METHOD_ARITY = Object.freeze({
   'Sheet.getCellPhonetic': 2,
   'Sheet.getCellPhoneticProperties': 2,
   'Sheet.getCellPhoneticRuns': 2,
+  'Sheet.getCellPicture': 2,
   'Sheet.getCellRectPt': 2,
   'Sheet.getCellShowPhonetic': 2,
   'Sheet.getCellXfIndex': 2,
@@ -3653,6 +3661,7 @@ const METHOD_ARITY = Object.freeze({
   'Sheet.setCellPhonetic': 3,
   'Sheet.setCellPhoneticProperties': 3,
   'Sheet.setCellPhoneticRuns': 3,
+  'Sheet.setCellPicture': 3,
   'Sheet.setCellShowPhonetic': 3,
   'Sheet.setCellXfIndex': 3,
   'Sheet.setColumnBreak': 2,
@@ -3941,6 +3950,10 @@ const ARG_ROLES = Object.freeze({
     [1, 'coordinate'],
   ],
   'Sheet.getCellPhoneticProperties': [
+    [0, 'coordinate'],
+    [1, 'coordinate'],
+  ],
+  'Sheet.getCellPicture': [
     [0, 'coordinate'],
     [1, 'coordinate'],
   ],
@@ -4274,6 +4287,7 @@ const PARAM_NAMES = Object.freeze({
   'Sheet.getCellPhonetic': ['row', 'col'],
   'Sheet.getCellPhoneticProperties': ['row', 'col'],
   'Sheet.getCellPhoneticRuns': ['row', 'col'],
+  'Sheet.getCellPicture': ['row', 'col'],
   'Sheet.getCellRectPt': ['range', 'mode'],
   'Sheet.getCellShowPhonetic': ['row', 'col'],
   'Sheet.getCellsInRange': ['range', 'options'],
@@ -4338,6 +4352,7 @@ const PARAM_NAMES = Object.freeze({
   'Sheet.setCellPhonetic': ['row', 'col', 'phonetic'],
   'Sheet.setCellPhoneticProperties': ['row', 'col', 'properties'],
   'Sheet.setCellPhoneticRuns': ['row', 'col', 'runs'],
+  'Sheet.setCellPicture': ['row', 'col', 'picture'],
   'Sheet.setCellShowPhonetic': ['row', 'col', 'show'],
   'Sheet.setColumnBreak': ['col', 'input'],
   'Sheet.setColumnCollapsed': ['first', 'last', 'collapsed'],
@@ -8202,6 +8217,19 @@ function makeFacade(Raw, registry, runtime) {
       const author = comment.author == null ? '' : requireString(comment.author, `${label}.author`);
       const text = requireString(comment.text, `${label}.text`);
       raw.setComment(sheet, row, col, { author, text });
+    }
+
+    // `null` removes the picture and does nothing when there is none; an omitted or `null` `altText` means none.
+    setCellPicture(row, col, picture) {
+      const where = 'Sheet.setCellPicture';
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      if (picture === null) return raw.setCellPicture(sheet, row, col, null);
+      const label = argLabel(where, 2);
+      requireObject(picture, label);
+      const bytes = requireBytes(picture.bytes, where, argumentPath(where, 2, 'bytes'));
+      const altText = picture.altText == null ? null : requireString(picture.altText, `${label}.altText`);
+      raw.setCellPicture(sheet, row, col, { bytes, altText });
     }
 
     setHyperlink(link) {

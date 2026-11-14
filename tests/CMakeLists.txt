@@ -105,6 +105,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/book_location_abspath_test.cpp
   unit/io/merge_roundtrip_test.cpp
   unit/io/theme_package_test.cpp
+  unit/io/cell_picture_test.cpp
   unit/io/ooxml_feature_defaults_test.cpp
   unit/io/ooxml_reader_test.cpp
   unit/io/ooxml_unknown_kind_test.cpp

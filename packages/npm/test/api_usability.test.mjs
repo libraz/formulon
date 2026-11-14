@@ -67,6 +67,11 @@ const ADDRESS = JSON.parse(readFileSync(path.join(repoRoot, 'tools/api/address_a
 // Cell B3 is (2, 1); the second pair of two-cell methods is A1 (0, 0).
 const CELL_ROW = 2;
 const CELL_COL = 1;
+// A PNG header that probes as 3 x 2.
+const PNG = new Uint8Array([
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52, 0, 0, 0, 3, 0, 0, 0, 2, 8, 2, 0,
+  0, 0,
+]);
 
 function pivotWorkbook(wb, formulon) {
   const ws = wb.sheet(0);
@@ -109,6 +114,7 @@ const CELL_METHODS = {
   'Sheet.getCellPhonetic': { args: () => [CELL_ROW, CELL_COL] },
   'Sheet.getCellPhoneticProperties': { args: () => [CELL_ROW, CELL_COL] },
   'Sheet.getCellPhoneticRuns': { args: () => [CELL_ROW, CELL_COL] },
+  'Sheet.getCellPicture': { args: () => [CELL_ROW, CELL_COL] },
   'Sheet.getCellShowPhonetic': { args: () => [CELL_ROW, CELL_COL] },
   'Sheet.isCellStale': { args: () => [CELL_ROW, CELL_COL] },
   'Sheet.getCellXfIndex': { args: () => [CELL_ROW, CELL_COL] },
@@ -137,6 +143,7 @@ const CELL_METHODS = {
   'Sheet.setCellPhonetic': { args: () => [CELL_ROW, CELL_COL, 'kana'], mutates: true },
   'Sheet.setCellPhoneticProperties': { args: () => [CELL_ROW, CELL_COL, { fontIndex: 0, type: 2, alignment: 1 }] },
   'Sheet.setCellPhoneticRuns': { args: () => [CELL_ROW, CELL_COL, [{ start: 0, end: 1, text: 'x' }]] },
+  'Sheet.setCellPicture': { args: () => [CELL_ROW, CELL_COL, { bytes: PNG }], mutates: true },
   'Sheet.setCellShowPhonetic': { args: () => [CELL_ROW, CELL_COL, true] },
   'Sheet.setCellXfIndex': { args: () => [CELL_ROW, CELL_COL, 0] },
   'Sheet.setComment': { args: () => [CELL_ROW, CELL_COL, { author: 'A', text: 'note' }], mutates: true },

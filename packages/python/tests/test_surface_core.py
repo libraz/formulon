@@ -111,6 +111,7 @@ class StructLayoutTests(unittest.TestCase):
         "THREADED_COMMENT": 44,
         "PERSON": 20,
         "IMAGE_INFO": 16,
+        "CELL_PICTURE": 32,
         "DRAWING_OBJECT": 104,
         "DRAWING_PLACEMENT_SPEC": 88,
         "DRAWING_ANCHOR_PATCH": 144,

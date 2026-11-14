@@ -104,6 +104,8 @@ __all__ = [
     "CellAddress",
     "CellFormat",
     "CellNode",
+    "CellPicture",
+    "CellPictureInput",
     "CellProtection",
     "CellProtectionPatch",
     "CellRect",
@@ -2670,6 +2672,29 @@ class PictureProperties(ImageInfo):
 
     #: A copy of the picture's media bytes.
     bytes: bytes
+
+
+@dataclass(frozen=True)
+class CellPicture(PictureProperties):
+    """A picture placed in a cell (:meth:`Sheet.get_cell_picture`): the image file as stored (PNG or JPEG), its
+    format and pixel size, and its alt text."""
+
+    #: The picture's alt text; ``None`` when it has none.
+    alt_text: Optional[str]
+
+
+@dataclass
+class CellPictureInput:
+    """The picture :meth:`Sheet.set_cell_picture` places in a cell.
+
+    A :class:`CellPicture` read back is accepted in its place; its ``format``, ``width_px`` and ``height_px`` are
+    ignored, as they are read from ``bytes``.
+    """
+
+    #: The image file, PNG or JPEG; it is stored as given.
+    bytes: Union[bytes, bytearray, memoryview]
+    #: The picture's alt text; omitted or ``None`` means none, ``""`` is an ``InvalidArgumentError``.
+    alt_text: Optional[str] = None
 
 
 @dataclass(frozen=True)

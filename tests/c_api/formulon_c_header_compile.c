@@ -178,6 +178,7 @@ int main(void) {
                  "fm_threaded_comment_t ABI layout changed");
   _Static_assert(sizeof(fm_person_t) == 5 * sizeof(void*), "fm_person_t ABI layout changed");
   _Static_assert(sizeof(fm_image_info_t) == 16, "fm_image_info_t ABI layout changed");
+  _Static_assert(sizeof(fm_cell_picture_t) == (sizeof(void*) == 4 ? 32 : 48), "fm_cell_picture_t ABI layout changed");
   _Static_assert(sizeof(fm_drawing_object_info_t) == (sizeof(void*) == 4 ? 104 : 112),
                  "fm_drawing_object_info_t ABI layout changed");
   _Static_assert(sizeof(fm_drawing_placement_spec_t) == (sizeof(void*) == 4 ? 88 : 104),

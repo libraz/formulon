@@ -74,6 +74,8 @@ from ._workbook import (
     CellAddress,
     CellFormat,
     CellNode,
+    CellPicture,
+    CellPictureInput,
     CellProtection,
     CellProtectionPatch,
     CellRect,
@@ -136,6 +138,7 @@ from ._workbook import (
     HorizontalAlign,
     Hyperlink,
     HyperlinkInput,
+    ImageFormat,
     Mention,
     MentionInput,
     NativeValue,
@@ -386,6 +389,7 @@ SHEET_METHODS = (
     "get_cell_phonetic",
     "get_cell_phonetic_properties",
     "get_cell_phonetic_runs",
+    "get_cell_picture",
     "get_cell_rect_pt",
     "get_cell_show_phonetic",
     "get_cells_in_range",
@@ -482,6 +486,7 @@ SHEET_METHODS = (
     "set_cell_phonetic",
     "set_cell_phonetic_properties",
     "set_cell_phonetic_runs",
+    "set_cell_picture",
     "set_cell_show_phonetic",
     "set_column_break",
     "set_column_collapsed",
@@ -660,6 +665,7 @@ HANDWRITTEN = (
     "remove_sheet",
     "set_active_sheet",
     "set_array_formula",
+    "set_cell_picture",
     "set_comment",
     "set_formula",
     "set_hyperlink",
@@ -690,6 +696,7 @@ CELL_ARGS = {
     "Sheet.get_cell_phonetic": ((0, 1),),
     "Sheet.get_cell_phonetic_properties": ((0, 1),),
     "Sheet.get_cell_phonetic_runs": ((0, 1),),
+    "Sheet.get_cell_picture": ((0, 1),),
     "Sheet.get_cell_show_phonetic": ((0, 1),),
     "Sheet.get_cell_xf_index": ((0, 1),),
     "Sheet.get_comment": ((0, 1),),
@@ -715,6 +722,7 @@ CELL_ARGS = {
     "Sheet.set_cell_phonetic": ((0, 1),),
     "Sheet.set_cell_phonetic_properties": ((0, 1),),
     "Sheet.set_cell_phonetic_runs": ((0, 1),),
+    "Sheet.set_cell_picture": ((0, 1),),
     "Sheet.set_cell_show_phonetic": ((0, 1),),
     "Sheet.set_cell_xf_index": ((0, 1),),
     "Sheet.set_comment": ((0, 1),),
@@ -3162,6 +3170,93 @@ class Sheet(_NoCopy):
                 S.write_str_field(LIB, ptr, S.COMMENT, "text", comment.text, scope)
             _check(
                 LIB.fm_sheet_set_comment(
+                    h,
+                    _uint(sheet, "sheet", role="sheet"),
+                    _uint(row, "row", role="coordinate"),
+                    _uint(col, "col", role="coordinate"),
+                    ptr,
+                )
+            )
+
+    # -- Cell pictures -----------------------------------------------------
+    @overload
+    @_coordinate_form
+    def get_cell_picture(self, row: int, col: int) -> Optional[CellPicture]: ...
+
+    @overload
+    def get_cell_picture(self, a1: str) -> Optional[CellPicture]: ...
+
+    def get_cell_picture(self, *args: Any, **kwargs: Any) -> Optional[CellPicture]:
+        """Return the picture the cell at ``(row, col)`` holds (Excel's Place in Cell), or ``None`` when it holds none.
+
+        A picture a formula produced is returned too. ``bytes`` is a copy of the image file as stored.
+        """
+        row, col = self._cell_args("get_cell_picture", args, kwargs, ())
+        sheet = self._index()
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            present = scope.out_ptr()
+            ptr = scope.struct(S.CELL_PICTURE)
+            _check(
+                LIB.fm_sheet_get_cell_picture(
+                    h,
+                    _uint(sheet, "sheet", role="sheet"),
+                    _uint(row, "row", role="coordinate"),
+                    _uint(col, "col", role="coordinate"),
+                    present,
+                    ptr,
+                )
+            )
+            if not LIB.read_u32(present):
+                return None
+            d = S.CELL_PICTURE.unpack(LIB, ptr)
+            return CellPicture(
+                format=_enum(ImageFormat, d["format"]),
+                width_px=d["width_px"],
+                height_px=d["height_px"],
+                bytes=LIB.read_bytes(d["bytes"], d["len"]),
+                alt_text=LIB.read_optional_cstr(d["alt_text"]),
+            )
+
+    @overload
+    @_coordinate_form
+    def set_cell_picture(self, row: int, col: int, picture: Union[CellPictureInput, CellPicture, None]) -> None: ...
+
+    @overload
+    def set_cell_picture(self, a1: str, picture: Union[CellPictureInput, CellPicture, None]) -> None: ...
+
+    def set_cell_picture(self, *args: Any, **kwargs: Any) -> None:
+        """Place ``picture`` in the cell at ``(row, col)`` as a write of ``#VALUE!``; ``None`` removes it.
+
+        A formula in the cell is replaced. PNG and JPEG are stored as given. Removing a picture from a cell that
+        has none does nothing; removing one empties the cell. A picture cell evaluates as ``#VALUE!`` in formulas.
+
+        Raises:
+          TypeError: when ``picture`` is not a :class:`CellPictureInput`, a :class:`CellPicture` or ``None``, its
+            ``bytes`` is not bytes-like or its ``alt_text`` is neither a ``str`` nor ``None``.
+          InvalidArgumentError: when ``alt_text`` is ``""``.
+          IoError: with ``StatusCode.IO_IMAGE_UNSUPPORTED`` when ``bytes`` is empty or not a PNG or JPEG image.
+          SecurityError: when ``bytes`` is longer than 32 MiB.
+        """
+        row, col, picture = self._cell_args("set_cell_picture", args, kwargs, ("picture",))
+        if picture is not None:
+            if not isinstance(picture, (CellPictureInput, CellPicture)):
+                raise TypeError(_argument_message("picture", "must be a CellPictureInput, a CellPicture or None"))
+            if not isinstance(picture.bytes, (builtins.bytes, bytearray, memoryview)):
+                raise TypeError(_argument_message("picture.bytes", "must be bytes-like"))
+            if picture.alt_text is not None and not isinstance(picture.alt_text, str):
+                raise TypeError(_argument_message("picture.alt_text", "must be a str or None"))
+        sheet = self._index()
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            ptr = 0
+            if picture is not None:
+                raw = builtins.bytes(picture.bytes)
+                ptr = scope.struct(S.CELL_PICTURE)
+                S.CELL_PICTURE.pack(LIB, ptr, {"bytes": scope.buffer(raw), "len": _uint(len(raw), "len")})
+                S.write_str_field(LIB, ptr, S.CELL_PICTURE, "alt_text", picture.alt_text, scope, allow_empty=True)
+            _check(
+                LIB.fm_sheet_set_cell_picture(
                     h,
                     _uint(sheet, "sheet", role="sheet"),
                     _uint(row, "row", role="coordinate"),

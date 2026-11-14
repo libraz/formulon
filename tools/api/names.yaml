@@ -276,6 +276,21 @@ entries:
     js: CommentInput
     py: CommentInput
     surfaces: [wasm, native, py]
+  record.cell_picture:
+    kind: record
+    role: both
+    c: fm_cell_picture_t
+    js: CellPicture
+    py: CellPicture
+    surfaces: [c, wasm, native, py]
+    exception: "the picture a cell holds reads back as a PictureProperties plus its alt text; C reads and writes the one record, the bindings take CellPictureInput"
+  record.cell_picture_input:
+    kind: record
+    role: input
+    js: CellPictureInput
+    py: CellPictureInput
+    surfaces: [wasm, native, py]
+    read_only_keys: [format, width_px, height_px]
   record.workbook_protection:
     kind: record
     role: result
@@ -5120,6 +5135,16 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_set_comment, js: setComment, py: set_comment }
     facade: handwritten
+  cell_picture.set:
+    kind: op
+    scope: sheet
+    noun: cell_picture
+    c: fm_sheet_set_cell_picture
+    js: setCellPicture
+    py: set_cell_picture
+    cell_args: [[0, 1]]
+    surfaces: [c, wasm, native, py]
+    facade: handwritten
   comment_visible.get:
     kind: op
     scope: sheet
@@ -9865,6 +9890,16 @@ entries:
     c: fm_sheet_get_hyperlink
     js: getHyperlink
     py: get_hyperlink
+    cell_args: [[0, 1]]
+    surfaces: [c, wasm, native, py]
+    missing: null
+  cell_picture.get:
+    kind: op
+    scope: sheet
+    noun: cell_picture
+    c: fm_sheet_get_cell_picture
+    js: getCellPicture
+    py: get_cell_picture
     cell_args: [[0, 1]]
     surfaces: [c, wasm, native, py]
     missing: null

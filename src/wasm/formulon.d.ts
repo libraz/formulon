@@ -2477,6 +2477,22 @@ export interface CommentInput {
   author?: string | null;
 }
 
+/** A picture placed in a cell, as `Sheet.getCellPicture(row, col)` reads it: the image file as stored (PNG or JPEG),
+ *  its format and pixel size, and its alt text. */
+export interface CellPicture extends PictureProperties {
+  /** The picture's alt text; `null` when it has none. */
+  readonly altText: string | null;
+}
+
+/** Argument of `Sheet.setCellPicture`. The {@link CellPicture} a read returns passes as is; its `format`, `widthPx`
+ *  and `heightPx` are ignored, as they are read from `bytes`. */
+export interface CellPictureInput {
+  /** The image file, PNG or JPEG; it is stored as given. */
+  bytes: BytesInput;
+  /** The picture's alt text; omitted or `null` means none, `''` is `StatusCode.InvalidArgument`. */
+  altText?: string | null;
+}
+
 /** Workbook-level protection (`<workbookProtection>`). The host computes the hash fields. */
 export interface WorkbookProtection {
   /** `true` when the workbook structure is locked, so sheets cannot be added, deleted, renamed, moved or hidden. */
@@ -8067,6 +8083,20 @@ export interface Sheet {
   setCommentVisible(row: number, col: number, visible: boolean): void;
   /** `setCommentVisible` at the A1 address `a1`. */
   setCommentVisible(a1: string, visible: boolean): void;
+
+  /** Returns the picture the cell at `(row, col)` holds (Excel's Place in Cell), or `null` when it holds none. A
+   *  picture a formula produced is returned too. */
+  getCellPicture(row: number, col: number): CellPicture | null;
+  /** `getCellPicture` at the A1 address `a1`. */
+  getCellPicture(a1: string): CellPicture | null;
+  /** Places `picture` in the cell as a write of `#VALUE!` (a formula in the cell is replaced), or with `null` removes
+   *  the cell's picture and empties the cell (doing nothing when it holds none). PNG and JPEG are stored as given;
+   *  fails with `StatusCode.IoImageUnsupported` for empty or any other image data, `StatusCode.SecurityResourceLimit`
+   *  when `bytes` is longer than 32 MiB and `StatusCode.InvalidArgument` for an empty `altText`. A picture cell
+   *  evaluates as `#VALUE!` in formulas. */
+  setCellPicture(row: number, col: number, picture: CellPictureInput | null): void;
+  /** `setCellPicture` at the A1 address `a1`. */
+  setCellPicture(a1: string, picture: CellPictureInput | null): void;
   /** Lists the sheet's protected ranges; a range's position, or its name, is the `protectedRange` argument of the other
    *  protected-range methods. */
   listProtectedRanges(): readonly ProtectedRange[];

@@ -194,6 +194,53 @@ emscripten::val JsWorkbook::getImage(uint32_t sheet, uint32_t objectId) const {
   return optional_or_null(rc, present, image);
 }
 
+emscripten::val JsWorkbook::getCellPicture(uint32_t sheet, uint32_t row, uint32_t col) const {
+  int32_t present = 0;
+  fm_cell_picture_t picture = FM_STRUCT_INIT(fm_cell_picture_t);
+  const fm_status_t rc = handle_ != nullptr ? fm_sheet_get_cell_picture(handle_, sheet, row, col, &present, &picture)
+                                            : kBindingInvalidHandle;
+  if (rc != 0 || present == 0) {
+    return optional_or_null(rc, present, emscripten::val::null());
+  }
+  emscripten::val out = emscripten::val::object();
+  out.set("format", picture.format);
+  out.set("widthPx", picture.width_px);
+  out.set("heightPx", picture.height_px);
+  out.set("bytes", bytes_to_val(picture.bytes, static_cast<std::size_t>(picture.len)));
+  js_set_cstr_or_null(out, "altText", picture.alt_text);
+  return optional_or_null(rc, present, out);
+}
+
+void JsWorkbook::setCellPicture(uint32_t sheet, uint32_t row, uint32_t col, emscripten::val picture) {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return;
+  }
+  if (picture.isNull()) {
+    succeeded(fm_sheet_set_cell_picture(handle_, sheet, row, col, nullptr));
+    return;
+  }
+  JsNarrowNumericReader reader("Sheet.setCellPicture");
+  if (!reader.require_object(picture, "picture")) {
+    return;
+  }
+  std::vector<uint8_t> data;
+  if (!val_to_bytes_checked(picture["bytes"], &data)) {
+    return;
+  }
+  std::string alt_store;
+  fm_cell_picture_t input = FM_STRUCT_INIT(fm_cell_picture_t);
+  input.alt_text = reader.optional_string(picture, "altText", alt_store, "picture.altText");
+  if (!reader.ok()) {
+    return;
+  }
+  // An empty vector has no data pointer; the engine refuses empty data, not a NULL pointer.
+  static const uint8_t kEmpty = 0;
+  input.bytes = data.empty() ? &kEmpty : data.data();
+  input.len = data.size();
+  succeeded(fm_sheet_set_cell_picture(handle_, sheet, row, col, &input));
+}
+
 uint32_t JsWorkbook::insertImage(uint32_t sheet, emscripten::val bytes, emscripten::val input) {
   if (handle_ == nullptr) {
     record_invalid_handle();

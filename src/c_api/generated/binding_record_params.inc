@@ -60,6 +60,7 @@ constexpr RecordParam kRecordParams[] = {
     {"Sheet.setArrayFormula", "arrayFormula"},
     {"Sheet.setAutoFilter", "filter"},
     {"Sheet.setCellPhoneticProperties", "properties"},
+    {"Sheet.setCellPicture", "picture"},
     {"Sheet.setColumnBreak", "input"},
     {"Sheet.setComment", "comment"},
     {"Sheet.setHyperlink", "link"},

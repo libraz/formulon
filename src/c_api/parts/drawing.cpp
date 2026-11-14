@@ -6,7 +6,11 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <limits>
+#include <optional>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 #include "c_api/formulon_c.h"
@@ -27,6 +31,7 @@
 
 using formulon::c_api::parts::anchor_kind_from_c;
 using formulon::c_api::parts::AnchorPlan;
+using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_record_size;
@@ -437,6 +442,82 @@ extern "C" fm_status_t fm_sheet_get_picture(const fm_workbook_t* wb, size_t shee
     return 0;
   }
   return 0;
+}
+
+extern "C" fm_status_t fm_sheet_get_cell_picture(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,
+                                                 uint32_t col, int32_t* out_present, fm_cell_picture_t* out) {
+  clear_last_error();
+  if (wb == nullptr || out_present == nullptr || out == nullptr) {
+    return set_binding_error(formulon::FormulonErrorCode::kBindingNullPointer,
+                             "wb, out_present and out must not be NULL");
+  }
+  *out_present = 0;
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
+  {
+    const std::uint32_t struct_size = out->struct_size;
+    *out = fm_cell_picture_t{};
+    out->struct_size = struct_size;
+  }
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
+    return rc;
+  }
+  std::optional<formulon::CellPicture> found = wb->workbook().cell_picture(sheet_index, row, col);
+  if (!found) {
+    return 0;
+  }
+  wb->cell_picture_scratch = std::move(found);
+  const formulon::CellPicture& picture = *wb->cell_picture_scratch;
+  out->bytes = picture.bytes.data();
+  out->len = static_cast<std::uint64_t>(picture.bytes.size());
+  out->alt_text = picture.alt_text ? picture.alt_text->c_str() : nullptr;
+  out->format = static_cast<int32_t>(picture.format);
+  out->width_px = picture.width;
+  out->height_px = picture.height;
+  *out_present = 1;
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_set_cell_picture(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                                                 const fm_cell_picture_t* picture) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return null_argument("wb");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (picture != nullptr) {
+    if (auto rc = check_record_size(*picture); rc != 0) {
+      return rc;
+    }
+  }
+  if (auto rc = check_cell_coord(row, col); rc != 0) {
+    return rc;
+  }
+  if (picture == nullptr) {
+    return finish_status(wb->workbook().clear_cell_picture(sheet_index, row, col));
+  }
+  if (picture->bytes == nullptr) {
+    return null_argument("picture->bytes");
+  }
+  // A length past the address space is over the engine's ceiling whatever the platform's `size_t` holds.
+  if (picture->len > std::numeric_limits<std::size_t>::max()) {
+    return set_binding_error(formulon::FormulonErrorCode::kSecurityResourceLimit, "picture->len is too large");
+  }
+  if (auto rc = check_utf8({picture->alt_text}); rc != 0) {
+    return rc;
+  }
+  std::optional<std::string_view> alt_text;
+  if (picture->alt_text != nullptr) {
+    alt_text = std::string_view(picture->alt_text);
+  }
+  return finish_status(wb->workbook().set_cell_picture(sheet_index, row, col, picture->bytes,
+                                                       static_cast<std::size_t>(picture->len), alt_text));
 }
 
 extern "C" fm_status_t fm_sheet_add_picture(fm_workbook_t* wb, size_t sheet_index, const uint8_t* bytes, size_t len,

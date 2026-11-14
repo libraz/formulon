@@ -49,6 +49,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recalculate when its fonts change. A file that is empty, not a zip archive, has
   no theme or holds an unparseable one is refused with its own status and leaves
   the workbook unchanged.
+- `Sheet.getCellPicture` / `Sheet.setCellPicture` (Python `get_cell_picture` /
+  `set_cell_picture`, C `fm_sheet_get_cell_picture` / `fm_sheet_set_cell_picture`)
+  with `CellPicture` and `CellPictureInput` (C `fm_cell_picture_t`) read and set a
+  picture placed in a cell (Excel's Place in Cell). PNG and JPEG are stored as
+  given, with optional alt text; `null` removes the picture and empties the
+  cell. A picture cell evaluates as `#VALUE!` in formulas, where Excel treats the
+  picture as a value (listed in `tests/divergence.yaml`). `.xlsx` and `.xlsb`
+  keep them.
 
 ### Changed
 

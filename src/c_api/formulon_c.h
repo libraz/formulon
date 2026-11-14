@@ -13930,6 +13930,73 @@ FM_API fm_status_t fm_sheet_get_picture(const fm_workbook_t* wb, size_t sheet_in
                                         fm_image_info_t* out_info);
 
 /**
+ * @brief A picture placed in a cell (Excel's Place in Cell): the image file as stored and its alt text.
+ *
+ * On a read, `bytes`, `len` and `alt_text` are transient views (see `fm_sheet_get_cell_picture`) and `format`,
+ * `width_px` and `height_px` describe the image. On input only `bytes`, `len` and `alt_text` are read; `format`,
+ * `width_px` and `height_px` are ignored.
+ */
+typedef struct {
+  uint32_t struct_size;
+  /** The image file as stored, PNG or JPEG; not NUL-terminated. */
+  const uint8_t* bytes;
+  /** The length of `bytes` in bytes. */
+  uint64_t len;
+  /** The picture's alt text as NUL-terminated UTF-8; `NULL` when it has none. On input `NULL` is none and `""` is
+   *  `FM_STATUS_INVALID_ARGUMENT`. */
+  const char* alt_text;
+  /** The image's file format, an `fm_image_format_t`; read-only. */
+  int32_t format;
+  /** Image width in pixels; read-only. */
+  uint32_t width_px;
+  /** Image height in pixels; read-only. */
+  uint32_t height_px;
+} fm_cell_picture_t;
+
+/**
+ * @brief Reads the picture the cell at `(row, col)` of `sheet_index` holds. `*out_present` is `1` and `*out` filled
+ *        when the cell holds one, else `0` and `*out` zeroed (still `FM_STATUS_OK` (0)). A picture a formula produced
+ *        is reported too.
+ *
+ * `out->bytes` and `out->alt_text` point into storage the handle keeps for this call: they stay valid until the next
+ * call of this function that finds a picture, the next call that mutates the workbook, or until the handle is
+ * destroyed; unrelated reads do not invalidate them. Copy them to keep them longer. A picture cell evaluates as
+ * `#VALUE!` in formulas.
+ *
+ * Lifetime: transient.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `struct_size` is below the v1 size or `(row, col)` is outside the
+ *         grid.
+ */
+FM_API fm_status_t fm_sheet_get_cell_picture(const fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                                             int32_t* out_present, fm_cell_picture_t* out);
+
+/**
+ * @brief Places the PNG or JPEG image `picture->bytes[0..len)` in the cell at `(row, col)` of `sheet_index`, with
+ *        `picture->alt_text` when given. `NULL` for `picture` removes the cell's picture and empties the cell; a cell
+ *        without one is left as it is.
+ *
+ * The image is stored as given. Placing is a write of `#VALUE!` to the cell: it replaces a formula, is refused on an
+ * array-formula block or data table as a value write is, blocks a spill, and recalculates dependents. A picture cell
+ * evaluates as `#VALUE!` in formulas. Nothing changes on failure.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`, or `picture->bytes` is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `struct_size` is below the v1 size, `(row, col)` is outside the grid,
+ *         or `alt_text` is `""`;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `alt_text` is not well-formed UTF-8;
+ *         `FM_STATUS_IO_IMAGE_UNSUPPORTED` (5023) when `len` is 0 or the bytes are not a PNG or JPEG image;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when `len` is over 32 MiB (the engine's own ceiling, not an
+ *         Excel limit); plus the refusals of a cell value write.
+ */
+FM_API fm_status_t fm_sheet_set_cell_picture(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col,
+                                             const fm_cell_picture_t* picture);
+
+/**
  * @brief Inserts `bytes` as a picture and returns its object id, unique
  *        within the sheet's drawing.
  *

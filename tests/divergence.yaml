@@ -1352,6 +1352,17 @@ entries:
     first_noted: 2026-11-14
     last_verified_excel_version: "16.115"
 
+  - id: cell_picture_formula_value
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    scope: api-contract
+    evidence: [tests/fixtures/excel/cell_pictures/picture_formula_refs.xlsx, tests/c_api/formulon_c_cell_picture_test.cpp]
+    reason: "Excel treats an in-cell picture as a formula value (=E2 returns the picture, TYPE 128, ISTEXT and ISERROR FALSE, ISNONTEXT TRUE, ERROR.TYPE #N/A, COUNTA counts it, E2=E4 TRUE). Formulon evaluates the cell as its cached #VALUE!."
+    prefer: excel
+    first_noted: 2026-11-14
+    last_verified_excel_version: "16.115"
+
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a

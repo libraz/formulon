@@ -17,6 +17,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_circular_reference_test.cpp
   formulon_c_compatibility_version_test.cpp
   formulon_c_theme_package_test.cpp
+  formulon_c_cell_picture_test.cpp
   formulon_c_cell_geometry_test.cpp
   formulon_c_cf_authoring_test.cpp
   formulon_c_cf_evaluation_test.cpp

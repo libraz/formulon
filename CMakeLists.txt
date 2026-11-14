@@ -159,6 +159,7 @@ set(FORMULON_CORE_SOURCES
   src/workbook_pivot_refresh.cpp
   src/workbook_tables.cpp
   src/workbook_theme_package.cpp
+  src/workbook_cell_picture.cpp
   src/workbook_table_insert.cpp
   src/workbook_table_header.cpp
   src/table_calc_column.cpp

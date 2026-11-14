@@ -179,6 +179,63 @@ Napi::Value Workbook::GetImage(const Napi::CallbackInfo& info) {
   return OptionalOrNull(env, rc, present, image);
 }
 
+Napi::Value Workbook::GetCellPicture(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  int32_t present = 0;
+  fm_cell_picture_t picture = FM_STRUCT_INIT(fm_cell_picture_t);
+  const fm_status_t rc =
+      fm_sheet_get_cell_picture(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2), &present, &picture);
+  if (rc != 0 || present == 0) {
+    return OptionalOrNull(env, rc, present, env.Null());
+  }
+  Napi::Object out = Napi::Object::New(env);
+  out.Set("format", JsNumber(env, picture.format));
+  out.Set("widthPx", JsNumber(env, picture.width_px));
+  out.Set("heightPx", JsNumber(env, picture.height_px));
+  // The C pointers die on the next mutation, so the bytes are copied out.
+  out.Set("bytes", CopyBytes(env, picture.bytes, static_cast<std::size_t>(picture.len)));
+  out.Set("altText", JsStringOrNull(env, picture.alt_text));
+  return OptionalOrNull(env, rc, present, out);
+}
+
+Napi::Value Workbook::SetCellPicture(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  // `null` removes the picture and does nothing when there is none; an omitted `altText` is none.
+  CheckedSpecReader reader(env);
+  Napi::Object in;
+  const bool present = reader.Object(info[3], "", &in);
+  fm_cell_picture_t picture = FM_STRUCT_INIT(fm_cell_picture_t);
+  std::string alt_text;
+  if (present) {
+    const Napi::Value bytes = reader.Get(in, "bytes");
+    if (!reader.ok()) {
+      return env.Undefined();
+    }
+    if (!bytes.IsTypedArray() || bytes.As<Napi::TypedArray>().TypedArrayType() != napi_uint8_array) {
+      ThrowArgumentTypeError(env, "picture.bytes", "must be a Uint8Array");
+      return env.Undefined();
+    }
+    const Napi::Uint8Array u8 = bytes.As<Napi::Uint8Array>();
+    // An empty array may have no backing store; a non-NULL pointer lets the C ABI report the empty image.
+    static const uint8_t kEmptyInput = 0;
+    picture.len = u8.ElementLength();
+    picture.bytes = picture.len == 0 ? &kEmptyInput : u8.Data();
+    picture.alt_text = reader.String(in, "altText", &alt_text) ? alt_text.c_str() : nullptr;
+  }
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  const fm_status_t rc = fm_sheet_set_cell_picture(handle_, ArgU32(info, 0), ArgU32(info, 1), ArgU32(info, 2),
+                                                   present ? &picture : nullptr);
+  return ValueOrThrow(env, rc, env.Undefined());
+}
+
 Napi::Value Workbook::InsertImage(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
