@@ -969,8 +969,7 @@ bool WriteHints(const pivot::SharedItemsHints& h, bool date1904, pcd::ItemTable*
   const std::uint16_t shape = f & (pcd::kAtblDate | pcd::kAtblNumber);
   if (values) {
     if (dates || !h.has_min_value || !h.has_max_value || shape != pcd::kAtblNumber ||
-        !parse_xsd_double(h.min_value, &table->min) || !parse_xsd_double(h.max_value, &table->max) ||
-        NumberText(table->min) != h.min_value || NumberText(table->max) != h.max_value) {
+        !parse_xsd_double(h.min_value, &table->min) || !parse_xsd_double(h.max_value, &table->max)) {
       return false;
     }
     f |= pcd::kAtblMinMax;

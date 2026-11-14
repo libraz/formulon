@@ -12,6 +12,7 @@
 #include "io/pivot_cache_reader.h"
 #include "io/xlsb/pivot_cache_definition_records.h"
 #include "io/xlsb/pivot_calc_item_records.h"
+#include "io/xsd_double.h"
 #include "io/zip_reader.h"
 #include "pivot/field_grouping.h"
 #include "pivot/pivot_cache.h"
@@ -303,6 +304,23 @@ TEST(XlsbPivotCacheBridge, MaterialisedGroupFieldsWriteBackExcelsRecords) {
     }
   }
   EXPECT_GT(grouped, 0U);
+}
+
+TEST(XlsbPivotCacheBridge, SeventeenDigitRangeHintWritesItsValue) {
+  // Excel's .xlsx spells this cache's maxValue 8.8000000000000007, the double 8.8.
+  const std::vector<std::uint8_t> xlsx =
+      ReadFixtureFile(std::string(FORMULON_FIXTURES_DIR) + "/excel/pivot_show_as/S8_runR__sum.xlsx");
+  auto cache = read_pivot_cache_definition(ZipEntry(xlsx, "xl/pivotCache/pivotCacheDefinition1.xml"));
+  ASSERT_TRUE(cache.has_value()) << cache.error().message;
+  ASSERT_TRUE(read_pivot_cache_records(ZipEntry(xlsx, "xl/pivotCache/pivotCacheRecords1.xml"), cache.value()));
+  ASSERT_EQ(cache.value().fields()[2].shared_items_hints.max_value, "8.8000000000000007");
+  auto parts = pivot_cache_to_xlsb(cache.value(), false, "rId1");
+  ASSERT_TRUE(parts.has_value()) << parts.error().message;
+  auto back = pivot_cache_from_xlsb(SpanOf(parts.value().definition), SpanOf(parts.value().records), false);
+  ASSERT_TRUE(back.has_value()) << back.error().message;
+  double max = 0.0;
+  ASSERT_TRUE(parse_xsd_double(back.value().fields()[2].shared_items_hints.max_value, &max));
+  EXPECT_EQ(max, 8.8);
 }
 
 TEST(XlsbPivotCacheBridge, InlineDateRecordCellIsASerial) {
