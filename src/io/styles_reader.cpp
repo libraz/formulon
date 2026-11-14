@@ -94,9 +94,15 @@ std::uint8_t ParseFillPattern(std::string_view s) {
   return FindStyleToken(kFillPatternNames, kFillPatternCount, s, 0);
 }
 
-FontRecord ParseFontNode(const pugi::xml_node& f) {
+}  // namespace
+
+FontRecord read_font(const pugi::xml_node& f) {
   FontRecord rec;
+  // A rich-text run's `<rPr>` names its font `<rFont>`.
   pugi::xml_node name = f.child("name");
+  if (!name) {
+    name = f.child("rFont");
+  }
   if (name) {
     rec.name = name.attribute("val").value();
   }
@@ -162,6 +168,8 @@ FontRecord ParseFontNode(const pugi::xml_node& f) {
   rec.color = read_color_spec(f.child("color"));
   return rec;
 }
+
+namespace {
 
 /// Fills `out` from a `<gradientFill>`; one holding more than
 /// `kMaxGradientStops` stops fails the load rather than losing the excess.
@@ -644,7 +652,7 @@ Expected<DifferentialFormat, Error> read_dxf(const pugi::xml_node& dxf) {
   DifferentialFormat rec;
   if (pugi::xml_node font = dxf.child("font")) {
     rec.has_font = true;
-    rec.font = ParseFontNode(font);
+    rec.font = read_font(font);
   }
   if (pugi::xml_node fill = dxf.child("fill")) {
     rec.has_fill = true;
@@ -717,7 +725,7 @@ Expected<StylesTable, Error> read_styles(const std::vector<std::uint8_t>& styles
 
   StylesTable table;
   ReadNumFmts(root, table);
-  ReadRecordList(root, "fonts", "font", table.fonts, ParseFontNode);
+  ReadRecordList(root, "fonts", "font", table.fonts, read_font);
   RETURN_IF_ERROR(ReadFills(root, table.fills));
   ReadRecordList(root, "borders", "border", table.borders, ParseBorderNode);
   RETURN_IF_ERROR(ReadCellStyleXfs(root, table));

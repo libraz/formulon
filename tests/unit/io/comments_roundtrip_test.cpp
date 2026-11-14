@@ -7,10 +7,16 @@
 #include <string>
 #include <vector>
 
+#include "c_api/formulon_c.h"
 #include "gtest/gtest.h"
 #include "io/comments_reader.h"
 #include "io/comments_writer.h"
 #include "sheet.h"
+#include "support/roundtrip_symmetry.h"
+
+#ifndef FORMULON_FIXTURES_DIR
+#error "FORMULON_FIXTURES_DIR must be defined by the build"
+#endif
 
 namespace formulon {
 namespace io {
@@ -251,6 +257,73 @@ TEST(CommentsRoundTrip, FormControlsSurviveARegeneratedDrawing) {
   EXPECT_NE(same_block.find("<o:idmap v:ext=\"edit\" data=\"1\"/>"), std::string::npos) << same_block;
   EXPECT_NE(same_block.find("<v:shape id=\"_x0000_s1025\""), std::string::npos) << same_block;
   EXPECT_EQ(same_block.find("_x0000_s1026"), same_block.rfind("_x0000_s1026")) << same_block;
+}
+
+const char kRunsFontsXlsx[] = FORMULON_FIXTURES_DIR "/excel/xlsb_parity/notes/runs_fonts.xlsx";
+
+/// The notes of Excel's save of a note whose two runs carry their own fonts.
+std::string RunsFontsCommentsXml() {
+  std::string xml;
+  EXPECT_TRUE(test::extract_part(test::span_of(test::read_file_bytes(kRunsFontsXlsx)), "xl/comments1.xml", &xml));
+  return xml;
+}
+
+constexpr char kTahomaBold[] =
+    "<rPr><b/><sz val=\"10\"/><color rgb=\"FF000000\"/><rFont val=\"Tahoma\"/><family val=\"2\"/></rPr>";
+constexpr char kArialItalicRed[] =
+    "<rPr><i/><sz val=\"12\"/><color rgb=\"FFFF0000\"/><rFont val=\"Arial\"/><family val=\"2\"/></rPr>";
+
+TEST(CommentRuns, EachRunReadsWithItsFont) {
+  auto read = read_comments(AsBytes(RunsFontsCommentsXml()));
+  ASSERT_TRUE(static_cast<bool>(read)) << read.error().message;
+  ASSERT_EQ(read.value().size(), 3U);
+  const CellComment& note = read.value()[0];
+  EXPECT_EQ(note.text, "Alice: red italic note");
+  ASSERT_EQ(note.runs.size(), 2U);
+  EXPECT_EQ(note.runs[0].text, "Alice:");
+  ASSERT_TRUE(note.runs[0].font.has_value());
+  EXPECT_EQ(note.runs[0].font->name, "Tahoma");
+  EXPECT_TRUE(note.runs[0].font->bold);
+  EXPECT_EQ(note.runs[0].font->size, 10.0);
+  EXPECT_EQ(note.runs[1].text, " red italic note");
+  ASSERT_TRUE(note.runs[1].font.has_value());
+  EXPECT_EQ(note.runs[1].font->name, "Arial");
+  EXPECT_TRUE(note.runs[1].font->italic);
+  EXPECT_EQ(note.runs[1].font->color_argb, 0xFFFF0000U);
+}
+
+TEST(CommentRuns, RunsWriteBackWithExcelsRunProperties) {
+  auto read = read_comments(AsBytes(RunsFontsCommentsXml()));
+  ASSERT_TRUE(static_cast<bool>(read)) << read.error().message;
+  const std::string xml = write_comments(read.value());
+  EXPECT_NE(xml.find(std::string("<r>") + kTahomaBold + "<t xml:space=\"preserve\">Alice:</t></r>"), std::string::npos)
+      << xml;
+  EXPECT_NE(xml.find(std::string("<r>") + kArialItalicRed + "<t xml:space=\"preserve\"> red italic note</t></r>"),
+            std::string::npos)
+      << xml;
+  auto back = read_comments(AsBytes(xml));
+  ASSERT_TRUE(static_cast<bool>(back)) << back.error().message;
+  EXPECT_EQ(write_comments(back.value()), xml);
+}
+
+TEST(CommentRuns, SettingTheTextThroughTheApiClearsTheRuns) {
+  const std::vector<std::uint8_t> source = test::read_file_bytes(kRunsFontsXlsx);
+  fm_workbook_t* wb = nullptr;
+  ASSERT_EQ(fm_workbook_load(source.data(), source.size(), &wb), 0);
+  fm_comment_t note = FM_STRUCT_INIT(fm_comment_t);
+  note.author = "Alice";
+  note.text = "plain";
+  ASSERT_EQ(fm_sheet_set_comment(wb, 0, 0, 0, &note), 0);
+  std::uint8_t* bytes = nullptr;
+  std::size_t len = 0;
+  ASSERT_EQ(fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0);
+  const std::vector<std::uint8_t> package(bytes, bytes + len);
+  fm_buffer_destroy(bytes);
+  fm_workbook_destroy(wb);
+  std::string xml;
+  ASSERT_TRUE(test::extract_part(test::span_of(package), "xl/comments1.xml", &xml));
+  EXPECT_EQ(xml.find("Tahoma"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<r><t xml:space=\"preserve\">plain</t></r>"), std::string::npos) << xml;
 }
 
 }  // namespace

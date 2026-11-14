@@ -25,6 +25,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and outline symbols, and fit-to-page. Other `<sheetPr>` settings
   and a printer-settings part are still reported as deferred print settings.
 
+- A note's formatted runs, each with its own font, are kept through `.xlsx`
+  load and save. Before, a note was saved as one run without formatting.
+  Setting a note's text through the API replaces its runs with plain text.
+
 - `.xlsb` saves write each sheet's AutoFilter and sort state from the
   workbook, as Excel does, so a filter set in `.xlsx` or through the API is
   kept, and the sheet's filter mode follows its criteria. A date-group

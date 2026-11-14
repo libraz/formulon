@@ -27,6 +27,10 @@ namespace io {
 /// `kMaxGradientStops`.
 Expected<DifferentialFormat, Error> read_dxf(const pugi::xml_node& dxf);
 
+/// Decodes one `CT_Font` element, or the `CT_RPrElt` run properties of a rich
+/// text run, which name the font `<rFont>`.
+FontRecord read_font(const pugi::xml_node& font);
+
 /// Parses an OOXML styles part.
 ///
 /// Behaviour:

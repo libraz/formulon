@@ -1,3 +1,4 @@
+// @size-budget: 2 KB
 //
 // Implementation of the comments-part reader. See comments_reader.h
 // for the contract; the format is a small fragment of OOXML so the
@@ -16,6 +17,7 @@
 #include <vector>
 
 #include "io/cell_parser.h"
+#include "io/styles_reader.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
@@ -81,6 +83,13 @@ Expected<std::vector<CellComment>, Error> read_comments(const std::vector<std::u
       // guides only attach to shared-string entries), so the unified
       // walker's rPh-skip is a no-op for this path.
       (void)append_rich_text(text, cc.text);
+      for (pugi::xml_node r = text.child("r"); r; r = r.next_sibling("r")) {
+        TextRun& run = cc.runs.emplace_back();
+        (void)append_rich_text(r, run.text);
+        if (const pugi::xml_node props = r.child("rPr")) {
+          run.font = read_font(props);
+        }
+      }
     }
     out.push_back(std::move(cc));
   }

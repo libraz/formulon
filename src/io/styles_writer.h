@@ -87,6 +87,8 @@ std::string write_styles(const StylesTable& table, const DxfSavePlan* dxf_plan =
 /// direction for a dedup key: it never merges records the writer keeps
 /// apart.
 std::string font_fragment(const FontRecord& font);
+/// Appends `font` as the `<rPr>` of a rich-text run, in the order `font_fragment` writes.
+void append_run_properties(std::string& out, const FontRecord& font);
 std::string fill_fragment(const FillRecord& fill);
 std::string border_fragment(const BorderRecord& border);
 

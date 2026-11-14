@@ -555,8 +555,12 @@ void AppendColors(std::string& out, const StylesTable& table) {
   out.append("</colors>\n");
 }
 
-void AppendFontFragment(std::string& out, const FontRecord& f) {
-  out.append("<font>");
+/// Appends `f` as a `<font>`, or with `tag` and `name_tag` as a rich-text run's `<rPr>` / `<rFont>`.
+void AppendFontFragment(std::string& out, const FontRecord& f, std::string_view tag = "font",
+                        std::string_view name_tag = "name") {
+  out.push_back('<');
+  out.append(tag);
+  out.push_back('>');
   AppendFontToggle(out, "b", f.has_bold, f.bold);
   AppendFontToggle(out, "i", f.has_italic, f.italic);
   AppendFontToggle(out, "strike", f.has_strike, f.strike);
@@ -576,12 +580,15 @@ void AppendFontFragment(std::string& out, const FontRecord& f) {
     AppendColor(out, "color", f.color, f.color_argb);
   }
   if (!f.name.empty()) {
-    out.append("<name");
+    out.push_back('<');
+    out.append(name_tag);
     append_xml_attr(out, "val", f.name);
     out.append("/>");
   }
   AppendFontFamilyCharsetScheme(out, f);
-  out.append("</font>");
+  out.append("</");
+  out.append(tag);
+  out.push_back('>');
 }
 
 void AppendGradientFill(std::string& out, const GradientFill& gradient) {
@@ -718,6 +725,10 @@ std::string font_fragment(const FontRecord& font) {
   std::string out;
   AppendFontFragment(out, font);
   return out;
+}
+
+void append_run_properties(std::string& out, const FontRecord& font) {
+  AppendFontFragment(out, font, "rPr", "rFont");
 }
 
 std::string fill_fragment(const FillRecord& fill) {

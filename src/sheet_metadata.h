@@ -15,6 +15,7 @@
 #include "auto_filter.h"
 #include "data_table.h"
 #include "merge_range.h"
+#include "text_run.h"
 #include "utils/band.h"
 #include "utils/runtime_id.h"
 #include "value.h"
@@ -201,6 +202,9 @@ struct CellComment {
   std::uint32_t col = 0;
   std::string author;
   std::string text;
+  /// The text's formatted runs, whose texts concatenate to `text`; empty for a
+  /// note in one default font. A note set through the API has none.
+  std::vector<TextRun> runs;
   std::string uid;
   /// The note box is shown without hovering (`visibility:visible` in the VML).
   bool visible = false;

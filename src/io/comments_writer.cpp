@@ -1,3 +1,4 @@
+// @size-budget: 2 KB
 //
 // Implementation of `comments_writer.h`. Format details live in the
 // header; this TU is self-contained so the writer side has minimal
@@ -20,6 +21,7 @@
 
 #include "io/ooxml/cell_ref_writer.h"
 #include "io/ooxml_defs.h"
+#include "io/styles_writer.h"
 #include "io/threaded_comments_io.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
@@ -85,10 +87,22 @@ std::string write_comments(const std::vector<CellComment>& comments, const std::
       out.append("      <text><t>");
       AppendXmlEscapedCrlf(out, c.text);
       out.append("</t></text>\n");
-    } else {
+    } else if (c.runs.empty()) {
       out.append("      <text><r><t xml:space=\"preserve\">");
       AppendXmlEscaped(out, c.text);
       out.append("</t></r></text>\n");
+    } else {
+      out.append("      <text>");
+      for (const TextRun& run : c.runs) {
+        out.append("<r>");
+        if (run.font) {
+          append_run_properties(out, *run.font);
+        }
+        out.append("<t xml:space=\"preserve\">");
+        AppendXmlEscaped(out, run.text);
+        out.append("</t></r>");
+      }
+      out.append("</text>\n");
     }
     out.append("    </comment>\n");
   }
