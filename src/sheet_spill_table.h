@@ -168,6 +168,25 @@ bool RectIntersectsSpan(const Rect& rect, std::uint64_t row_begin, std::uint64_t
                         static_cast<std::uint64_t>(rect.anchor_col) + rect.cols);
 }
 
+/// `RectsIntersect` for a merged range, whose ends are inclusive.
+inline bool RectIntersectsMerge(std::uint64_t row_begin, std::uint64_t row_end, std::uint64_t col_begin,
+                                std::uint64_t col_end, const MergeRange& merge) noexcept {
+  return RectsIntersect(row_begin, row_end, col_begin, col_end, merge.first_row,
+                        static_cast<std::uint64_t>(merge.last_row) + 1U, merge.first_col,
+                        static_cast<std::uint64_t>(merge.last_col) + 1U);
+}
+
+/// Index into `region.cells` of `(row, col)`, which must lie inside the region.
+inline std::size_t SpillCellIndex(const SpillRegion& region, std::uint32_t row, std::uint32_t col) noexcept {
+  return static_cast<std::size_t>(row - region.anchor_row) * region.cols +
+         static_cast<std::size_t>(col - region.anchor_col);
+}
+
+/// A stored cell is content when it has a formula or a non-blank value.
+inline bool has_cell_content(const Cell& cell) noexcept {
+  return !cell.formula_text.empty() || !cell.cached_value.is_blank();
+}
+
 /// Returns the committed region whose rectangle contains `(row, col)`, anchor
 /// included, or null. Callers hold the spill mutex.
 inline const SpillRegion* find_region_covering(const SpillTable& table, std::uint32_t row, std::uint32_t col) {

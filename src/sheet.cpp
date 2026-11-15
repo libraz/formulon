@@ -9,7 +9,6 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <iterator>
 #include <memory>
 #include <mutex>
@@ -517,29 +516,12 @@ void Sheet::set_cell_show_phonetic(std::uint32_t row, std::uint32_t col, bool sh
 }
 
 XfMap Sheet::constant_xf_map(std::uint32_t xf) noexcept {
-  XfMap map;
-  map.constant = xf;
-  map.is_constant = true;
-  return map;
+  return XfMap::all_to(xf);
 }
 
 void Sheet::set_cell_xf_index(std::uint32_t row, std::uint32_t col, std::uint32_t xf_index) {
-  assert(row < kMaxRows && col < kMaxCols);
-  // Formatting is orthogonal to a dynamic-array spill. In particular, a
-  // style write into a spill phantom must not clear the region as a literal
-  // write would. It can still grow `rows_`, so share the sheet mutation lock
-  // used by the spill and cached-value paths.
-  const std::lock_guard<std::mutex> guard(*spill_mutex_);
-  if (const auto it = rows_.find(row); it != rows_.end()) {
-    if (Cell* slot = it->second.find(col); slot != nullptr) {
-      slot->xf_index = xf_index;
-      slot->has_explicit_xf = true;
-      cell_enumeration_revision_.bump();
-      demote_locked(row, col);
-      return;
-    }
-  }
-  apply_style_runs_locked(row, col, static_cast<std::uint64_t>(col) + 1U, constant_xf_map(xf_index));
+  // A style write into a spill phantom must not clear the region.
+  restore_cell_style(row, col, xf_index, true);
 }
 
 void Sheet::clear_cell_xf_index(std::uint32_t row, std::uint32_t col) {
@@ -1182,9 +1164,7 @@ void Sheet::read_formula_cell(std::uint32_t row, std::uint32_t col, CellRead& ou
     out.array_block_cols_ = cell->array_block_cols;
     value = cell->cached_value;
   } else if (const SpillRegion* covering = spill_region_covering_locked(row, col); covering != nullptr) {
-    const std::size_t index = static_cast<std::size_t>(row - covering->anchor_row) * covering->cols +
-                              static_cast<std::size_t>(col - covering->anchor_col);
-    value = covering->cells[index];
+    value = covering->cells[SpillCellIndex(*covering, row, col)];
   } else if (cell != nullptr) {
     value = cell->cached_value;
   }

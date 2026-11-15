@@ -62,6 +62,10 @@ bool cell_less(const StyleCell& a, const StyleCell& b) {
   return a.row != b.row ? a.row < b.row : a.col < b.col;
 }
 
+std::uint64_t rect_col_end(const StyleRect& rect) {
+  return static_cast<std::uint64_t>(rect.last_col) + 1U;
+}
+
 bool covers_all_rows(const StyleRect& rect) {
   return rect.first_row == 0U && rect.last_row == Sheet::kMaxRows - 1U;
 }
@@ -113,7 +117,7 @@ std::vector<CapturedCell> stored_cells(const Sheet& sheet, const StyleRect& rect
     if (row < rect.first_row || row > rect.last_row || !cells.has_any()) {
       continue;
     }
-    for (const auto& [col, cell] : cells.entries_in(rect.first_col, static_cast<std::uint64_t>(rect.last_col) + 1U)) {
+    for (const auto& [col, cell] : cells.entries_in(rect.first_col, rect_col_end(rect))) {
       out.push_back({row, col, cell.xf_index, cell_owns_style(cell)});
     }
   }
@@ -124,8 +128,7 @@ std::vector<CapturedCell> stored_cells(const Sheet& sheet, const StyleRect& rect
 std::vector<std::uint32_t> rows_holding_styles(const Sheet& sheet, const StyleRect& rect) {
   std::vector<std::uint32_t> out;
   for (const auto& [row, cells] : sheet.rows()) {
-    if (row >= rect.first_row && row <= rect.last_row &&
-        cells.any_in(rect.first_col, static_cast<std::uint64_t>(rect.last_col) + 1U)) {
+    if (row >= rect.first_row && row <= rect.last_row && cells.any_in(rect.first_col, rect_col_end(rect))) {
       out.push_back(row);
     }
   }
@@ -136,7 +139,7 @@ std::vector<std::uint32_t> rows_holding_styles(const Sheet& sheet, const StyleRe
 // The runs of `cells` inside `rect`'s columns, clipped to them.
 template <typename Fn>
 void for_each_clipped_run(const RowCells& cells, const StyleRect& rect, Fn&& fn) {
-  const auto [lo, hi] = cells.runs_in(rect.first_col, static_cast<std::uint64_t>(rect.last_col) + 1U);
+  const auto [lo, hi] = cells.runs_in(rect.first_col, rect_col_end(rect));
   for (const StyleRun* run = lo; run != hi; ++run) {
     fn(std::max<std::uint32_t>(run->first, rect.first_col), std::min<std::uint32_t>(run->last, rect.last_col), run->xf);
   }
@@ -331,7 +334,7 @@ std::size_t count_cell_xf_indices(const Sheet& sheet, const StyleRect& rect) {
     if (row < rect.first_row || row > rect.last_row || !cells.has_any()) {
       continue;
     }
-    for (const auto& [col, cell] : cells.entries_in(rect.first_col, static_cast<std::uint64_t>(rect.last_col) + 1U)) {
+    for (const auto& [col, cell] : cells.entries_in(rect.first_col, rect_col_end(rect))) {
       (void)col;
       total += cell.xf_index != 0U ? 1U : 0U;
     }
@@ -349,9 +352,8 @@ std::size_t copy_cell_xf_indices(const Sheet& sheet, const StyleRect& rect, Styl
       break;
     }
     const RowCells& cells = sheet.rows().find(row)->second;
-    const RowCells::EntryRange entries =
-        cells.entries_in(rect.first_col, static_cast<std::uint64_t>(rect.last_col) + 1U);
-    const auto [run_lo, run_hi] = cells.runs_in(rect.first_col, static_cast<std::uint64_t>(rect.last_col) + 1U);
+    const RowCells::EntryRange entries = cells.entries_in(rect.first_col, rect_col_end(rect));
+    const auto [run_lo, run_hi] = cells.runs_in(rect.first_col, rect_col_end(rect));
     auto entry = entries.begin();
     const StyleRun* run = run_lo;
     // Stored cells and runs are disjoint, so one merge walk gives column order.
@@ -382,14 +384,13 @@ std::vector<StyleCell> show_phonetic_cells(const Sheet& sheet, const StyleRect& 
     if (row < rect.first_row || row > rect.last_row || !cells.has_any()) {
       continue;
     }
-    for (const auto& [col, cell] : cells.entries_in(rect.first_col, static_cast<std::uint64_t>(rect.last_col) + 1U)) {
+    for (const auto& [col, cell] : cells.entries_in(rect.first_col, rect_col_end(rect))) {
       if (cell.show_phonetic) {
         out.push_back({row, col});
       }
     }
   }
-  sort_by_index(out,
-                [](const StyleCell& a, const StyleCell& b) { return a.row != b.row ? a.row < b.row : a.col < b.col; });
+  sort_by_index(out, cell_less);
   return out;
 }
 
@@ -498,7 +499,7 @@ Expected<void, Error> remap_range_style(Sheet& sheet, const StyleRect& rect, con
   RETURN_IF_ERROR(check_styled_range_area(rect));
   const bool all_rows = covers_all_rows(rect);
   const bool all_cols = covers_all_cols(rect);
-  const std::uint64_t col_end = static_cast<std::uint64_t>(rect.last_col) + 1U;
+  const std::uint64_t col_end = rect_col_end(rect);
   std::vector<CapturedCell> owned = stored_cells(sheet, rect);
   owned.erase(std::remove_if(owned.begin(), owned.end(), [](const CapturedCell& cell) { return !cell.explicit_xf; }),
               owned.end());
@@ -635,10 +636,7 @@ Expected<void, Error> remap_range_style(Sheet& sheet, const StyleRect& rect, con
 }
 
 Expected<void, Error> set_range_xf_index(Sheet& sheet, const StyleRect& rect, std::uint32_t xf_index) {
-  XfMap map;
-  map.constant = xf_index;
-  map.is_constant = true;
-  return remap_range_style(sheet, rect, map);
+  return remap_range_style(sheet, rect, XfMap::all_to(xf_index));
 }
 
 std::vector<std::uint8_t> snapshot_range_style(const Sheet& sheet, const StyleRect& rect) {
@@ -683,9 +681,8 @@ std::vector<std::uint8_t> snapshot_range_style(const Sheet& sheet, const StyleRe
     append_u32(out, row);
     append_u32(out, 0U);
     std::uint32_t entries = 0U;
-    const RowCells::EntryRange stored =
-        cells.entries_in(rect.first_col, static_cast<std::uint64_t>(rect.last_col) + 1U);
-    const auto [run_lo, run_hi] = cells.runs_in(rect.first_col, static_cast<std::uint64_t>(rect.last_col) + 1U);
+    const RowCells::EntryRange stored = cells.entries_in(rect.first_col, rect_col_end(rect));
+    const auto [run_lo, run_hi] = cells.runs_in(rect.first_col, rect_col_end(rect));
     auto entry = stored.begin();
     const StyleRun* run = run_lo;
     while (entry != stored.end() || run != run_hi) {
@@ -876,7 +873,7 @@ Expected<void, Error> restore_range_style(Sheet& sheet, const std::uint8_t* byte
         &ctx, &rows);
   }
   // Clear every run and stored cell's own format, then put the captured ones back.
-  const std::uint64_t col_end = static_cast<std::uint64_t>(rect.last_col) + 1U;
+  const std::uint64_t col_end = rect_col_end(rect);
   for (const std::uint32_t row : rows_holding_styles(sheet, rect)) {
     sheet.clear_style_runs(row, rect.first_col, col_end);
   }

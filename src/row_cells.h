@@ -65,6 +65,14 @@ struct XfMap {
   bool is_constant = false;
 
   std::uint32_t operator()(std::uint32_t xf) const noexcept;
+
+  /// The constant-form map sending every xf to `xf`.
+  static XfMap all_to(std::uint32_t xf) noexcept {
+    XfMap map;
+    map.constant = xf;
+    map.is_constant = true;
+    return map;
+  }
 };
 
 /// One populated row's cells: a sorted array of column keys and a parallel

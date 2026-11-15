@@ -22,11 +22,6 @@ namespace formulon {
 
 namespace {
 
-/// A stored cell is content when it has a formula or a non-blank value.
-bool has_cell_content(const Cell& cell) noexcept {
-  return !cell.formula_text.empty() || !cell.cached_value.is_blank();
-}
-
 // Calls `fn(row, cells)` for each stored row in [row_begin, row_end), walking
 // whichever of the stored rows and the rectangle's rows is the smaller set.
 template <typename Rows, typename Fn>
@@ -299,8 +294,7 @@ std::uint64_t Sheet::cells_in_range(std::uint32_t first_row, std::uint32_t first
         out.formula_text = cell->formula_text;
         out.value = cell->cached_value;
       } else if (const SpillRegion* covering = spill_region_covering_locked(row, col); covering != nullptr) {
-        out.value = covering->cells[static_cast<std::size_t>(row - covering->anchor_row) * covering->cols +
-                                    (col - covering->anchor_col)];
+        out.value = covering->cells[SpillCellIndex(*covering, row, col)];
       } else if (cell != nullptr) {
         out.value = cell->cached_value;
       }
@@ -383,9 +377,7 @@ void Sheet::read_range(std::uint32_t first_row, std::uint32_t last_row, std::uin
         continue;
       }
       if (const SpillRegion* region = covering(row, col); region != nullptr) {
-        const std::size_t index = static_cast<std::size_t>(row - region->anchor_row) * region->cols +
-                                  static_cast<std::size_t>(col - region->anchor_col);
-        out.push_back(adopt_text_into(text_arena, region->cells[index]));
+        out.push_back(adopt_text_into(text_arena, region->cells[SpillCellIndex(*region, row, col)]));
         continue;
       }
       out.push_back(cell != nullptr ? adopt_text_into(text_arena, cell->cached_value) : Value::blank());

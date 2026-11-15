@@ -49,20 +49,11 @@ std::vector<CellAddress> collect_anchors_intersecting(const AnchorMap* table, st
   return out;
 }
 
-// Returns true when `c` is "occupied" for the purposes of a spill collision
-// check: a non-default cell (literal value or formula) lives there. The
-// anchor cell of the would-be spill is excluded from this check by the
-// caller. The caller resolves the cell pointer via `cell_at_locked` (while
-// holding `spill_mutex_`) and passes it in, so this helper does not reach
-// back into `Sheet` and cannot self-deadlock.
-bool IsCellOccupied(const Cell* c) noexcept {
-  if (c == nullptr) {
-    return false;
+// Allocates the spill table on first use.
+void EnsureSpillTable(std::unique_ptr<SpillTable>& table) {
+  if (table == nullptr) {
+    table = std::make_unique<SpillTable>();
   }
-  if (!c->formula_text.empty()) {
-    return true;
-  }
-  return !c->cached_value.is_blank();
 }
 
 // Deep-copies `cells` into `region`, interning every Text payload's bytes
@@ -236,9 +227,7 @@ void Sheet::restore_blocked_spill_footprints(std::vector<BlockedSpillFootprint> 
     if (footprint.rows == 0U || footprint.cols == 0U || !coord_in_grid(footprint.anchor_row, footprint.anchor_col)) {
       continue;
     }
-    if (spill_table_ == nullptr) {
-      spill_table_ = std::make_unique<SpillTable>();
-    }
+    EnsureSpillTable(spill_table_);
     spill_table_->blocked_by_anchor[CellAddress{footprint.anchor_row, footprint.anchor_col}] = footprint;
   }
 }
@@ -301,7 +290,7 @@ bool Sheet::footprint_holds_occupied_cell_locked(std::uint32_t anchor_row, std::
         continue;
       }
       count_step();
-      if (IsCellOccupied(&cell)) {
+      if (has_cell_content(cell)) {
         return true;
       }
     }
@@ -384,17 +373,13 @@ SpillCause Sheet::first_blocker_cause_locked(std::uint32_t anchor_row, std::uint
     });
   }
   for (const MergeRange& merge : merges_) {
-    if (well_formed(merge) && RectsIntersect(anchor_row, row_end, anchor_col, col_end, merge.first_row,
-                                             static_cast<std::uint64_t>(merge.last_row) + 1U, merge.first_col,
-                                             static_cast<std::uint64_t>(merge.last_col) + 1U)) {
+    if (well_formed(merge) && RectIntersectsMerge(anchor_row, row_end, anchor_col, col_end, merge)) {
       consider_rect(merge.first_row, merge.first_col);
     }
   }
   if (static_cast<std::uint64_t>(rows) * cols > 1U) {
     for (const MergeRange& table : table_spill_barriers_) {
-      if (RectsIntersect(anchor_row, row_end, anchor_col, col_end, table.first_row,
-                         static_cast<std::uint64_t>(table.last_row) + 1U, table.first_col,
-                         static_cast<std::uint64_t>(table.last_col) + 1U)) {
+      if (RectIntersectsMerge(anchor_row, row_end, anchor_col, col_end, table)) {
         consider_rect(table.first_row, table.first_col);
       }
     }
@@ -402,7 +387,7 @@ SpillCause Sheet::first_blocker_cause_locked(std::uint32_t anchor_row, std::uint
   // The first occupied stored cell of one row, the anchor excepted; entries are in column order.
   const auto consider_row = [&](std::uint32_t row, const RowCells& cells) noexcept {
     for (const auto& [col, cell] : cells.entries_in(anchor_col, col_end)) {
-      if ((row != anchor_row || col != anchor_col) && IsCellOccupied(&cell)) {
+      if ((row != anchor_row || col != anchor_col) && has_cell_content(cell)) {
         consider(row, col);
         return;
       }
@@ -472,18 +457,14 @@ Sheet::SpillAdmission Sheet::probe_spill_footprint_locked(std::uint32_t anchor_r
     if (merge.first_row > merge.last_row || merge.first_col > merge.last_col) {
       continue;
     }
-    if (RectsIntersect(anchor_row, row_end, anchor_col, col_end, merge.first_row,
-                       static_cast<std::uint64_t>(merge.last_row) + 1U, merge.first_col,
-                       static_cast<std::uint64_t>(merge.last_col) + 1U)) {
+    if (RectIntersectsMerge(anchor_row, row_end, anchor_col, col_end, merge)) {
       return SpillAdmission::kBlocked;
     }
   }
   // A table refuses any spill of more than one cell, its anchor included.
   if (static_cast<std::uint64_t>(rows) * cols > 1U) {
     for (const MergeRange& table : table_spill_barriers_) {
-      if (RectsIntersect(anchor_row, row_end, anchor_col, col_end, table.first_row,
-                         static_cast<std::uint64_t>(table.last_row) + 1U, table.first_col,
-                         static_cast<std::uint64_t>(table.last_col) + 1U)) {
+      if (RectIntersectsMerge(anchor_row, row_end, anchor_col, col_end, table)) {
         return SpillAdmission::kBlocked;
       }
     }
@@ -516,9 +497,7 @@ void Sheet::reject_spill_footprint_locked(std::uint32_t anchor_row, std::uint32_
   RowCells& row_cells = rows_[anchor_row];
   Cell& anchor_slot = row_cells.ensure(anchor_col);
   anchor_slot.cached_value = Value::error(ErrorCode::Spill);
-  if (spill_table_ == nullptr) {
-    spill_table_ = std::make_unique<SpillTable>();
-  }
+  EnsureSpillTable(spill_table_);
   // Remembering the rectangle is what lets the release machinery retry this
   // anchor once the blocker goes away; dropping it strands the #SPILL!.
   spill_table_->blocked_by_anchor[CellAddress{anchor_row, anchor_col}] =
@@ -594,9 +573,7 @@ bool Sheet::commit_spill(std::uint32_t anchor_row, std::uint32_t anchor_col, std
   }
 
   // Materialise the spill table on first use.
-  if (spill_table_ == nullptr) {
-    spill_table_ = std::make_unique<SpillTable>();
-  }
+  EnsureSpillTable(spill_table_);
 
   // Build the region with deep-copied Text payloads.
   SpillRegion region;

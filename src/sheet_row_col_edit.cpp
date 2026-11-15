@@ -60,11 +60,6 @@ void ShiftAnchored(std::vector<Anchor>& items, std::uint32_t Anchor::*field, std
   items = std::move(retained);
 }
 
-template <typename Anchor>
-void ShiftRowAnchored(std::vector<Anchor>& items, std::uint32_t row, std::uint32_t count, bool is_delete) {
-  ShiftAnchored(items, &Anchor::row, row, count, is_delete, Sheet::kMaxRows);
-}
-
 // A note or threaded comment moves with its cell.
 template <typename Anchor>
 void ShiftCellAnchored(std::vector<Anchor>& items, const StructuralEdit& edit) {
@@ -300,6 +295,12 @@ void ShiftHyperlinkList(std::vector<Hyperlink>& hyperlinks, const StructuralEdit
   hyperlinks.erase(hyperlinks.begin() + static_cast<std::ptrdiff_t>(kept), hyperlinks.end());
 }
 
+// The smallest rectangle covering both `a` and `b`.
+MergeRange BoundingBox(const MergeRange& a, const MergeRange& b) {
+  return MergeRange{std::min(a.first_row, b.first_row), std::min(a.first_col, b.first_col),
+                    std::max(a.last_row, b.last_row), std::max(a.last_col, b.last_col)};
+}
+
 // Whether `ranges` (two or more) tile exactly one rectangle.
 bool TilesOneRectangle(const std::vector<MergeRange>& ranges) {
   if (ranges.size() < 2U) {
@@ -309,8 +310,7 @@ bool TilesOneRectangle(const std::vector<MergeRange>& ranges) {
   std::uint64_t area = 0;
   for (std::size_t i = 0; i < ranges.size(); ++i) {
     const MergeRange& r = ranges[i];
-    bounds = MergeRange{std::min(bounds.first_row, r.first_row), std::min(bounds.first_col, r.first_col),
-                        std::max(bounds.last_row, r.last_row), std::max(bounds.last_col, r.last_col)};
+    bounds = BoundingBox(bounds, r);
     area += (static_cast<std::uint64_t>(r.last_row) - r.first_row + 1U) * (r.last_col - r.first_col + 1U);
     for (std::size_t j = 0; j < i; ++j) {
       const MergeRange& o = ranges[j];
@@ -599,8 +599,7 @@ void EditSqrefRanges(std::vector<MergeRange>& ranges, const StructuralEdit& edit
   }
   MergeRange joined = ranges.front();
   for (const MergeRange& r : ranges) {
-    joined = MergeRange{std::min(joined.first_row, r.first_row), std::min(joined.first_col, r.first_col),
-                        std::max(joined.last_row, r.last_row), std::max(joined.last_col, r.last_col)};
+    joined = BoundingBox(joined, r);
   }
   ranges.assign(1U, joined);
 }
@@ -741,7 +740,7 @@ void Sheet::shift_sheet_metadata(const StructuralEdit& edit) {
                      validations_.end());
   ShiftConditionalFormats(conditional_formats_, edit);
   if (!edit.band.has_value() && row_axis) {
-    ShiftRowAnchored(layout_.row_overrides, index, count, is_delete);
+    ShiftAnchored(layout_.row_overrides, &RowLayout::row, index, count, is_delete, Sheet::kMaxRows);
     ShiftAnchored(print_settings_.manual_row_breaks, &ManualBreak::id, index, count, is_delete, Sheet::kMaxRows);
   } else if (!edit.band.has_value()) {
     ShiftColumnLayouts(layout_.columns, index, count, is_delete);
