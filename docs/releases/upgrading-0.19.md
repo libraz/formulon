@@ -1796,6 +1796,12 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
   of a PivotTable read into the model; they list only the parts the reader keeps
   as stored without modelling them. A PivotTable part still listed is one the
   workbook does not model, so `listPivots()` does not return it.
+- Saving a workbook read from `.xlsb` no longer counts `xl/styles.bin` or the
+  `.bin` parts of a PivotTable read into the model in `droppedPartCount`
+  (Python `dropped_part_count`, C `fm_save_diagnostics_info_t.dropped_part_count`):
+  an `.xlsb` save that rewrites them from the model, and an `.xlsx` save that
+  writes them as XML, lose nothing. A refreshed PivotTable keeps its part names
+  in an `.xlsb` save.
 
 ## Reference tables
 

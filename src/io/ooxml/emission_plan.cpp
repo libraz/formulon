@@ -644,14 +644,17 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
     // `passthrough_kept` — the `<Override>` list, workbook rels and
     // sheet rels — drops with them, so the output matches what saving
     // the same model from an `.xlsx` source produces.
+    // A retained original of modelled state (styles, a lifted PivotTable group) is superseded, not lost.
     if (IsXlsbBinaryContentType(EffectiveContentType(wb, part))) {
-      StructuredLog("ooxml_writer.passthrough_dropped")
-          .field("path", part.path)
-          .field("content_type", part.content_type)
-          .field("reason", std::string_view("xlsb_binary_part"))
-          .warn();
-      if (diagnostics != nullptr) {
-        ++diagnostics->dropped_part_count;
+      if (part.is_unmodelled()) {
+        StructuredLog("ooxml_writer.passthrough_dropped")
+            .field("path", part.path)
+            .field("content_type", part.content_type)
+            .field("reason", std::string_view("xlsb_binary_part"))
+            .warn();
+        if (diagnostics != nullptr) {
+          ++diagnostics->dropped_part_count;
+        }
       }
       continue;
     }

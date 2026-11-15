@@ -193,6 +193,21 @@ PivotPartLoss plan_pivot_parts(const Workbook& wb, const std::unordered_set<std:
   };
   std::vector<std::vector<Planned>> planned(wb.sheet_count());
   const std::unordered_set<std::uint32_t> passthrough_ids = PassthroughCacheIds(wb);
+  // A retained original no group reuses is not written, so its path is free for the group regenerated in its place.
+  std::unordered_set<std::string> reused;
+  for (const auto& cache : wb.pivot_caches()) {
+    if (cache != nullptr && passthrough_ids.count(cache->cache_id()) == 0U) {
+      for (const PassthroughPart* part : KeptParts(wb, cache->cache_id(), GroupOf(wb, cache->cache_id()))) {
+        reused.insert(part->path);
+      }
+    }
+  }
+  std::unordered_set<std::string> occupied = taken;
+  for (const PassthroughPart& part : wb.passthrough_parts()) {
+    if (is_retained_pivot_part(wb, part) && reused.count(part.path) == 0U) {
+      occupied.erase(part.path);
+    }
+  }
   for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
     for (const auto& table : wb.sheet(s).pivot_tables()) {
       lost[s] += table != nullptr && wb.find_pivot_cache(table->pivot_cache_id()) == nullptr ? 1U : 0U;
@@ -252,7 +267,7 @@ PivotPartLoss plan_pivot_parts(const Workbook& wb, const std::unordered_set<std:
         loss.caches += group.empty() ? 1U : 0U;
         continue;
       }
-      const std::size_t k = FreePartNumber(next_cache, taken, [](std::size_t n) {
+      const std::size_t k = FreePartNumber(next_cache, occupied, [](std::size_t n) {
         const std::string id = std::to_string(n);
         return std::array<std::string, 3>{"xl/pivotCache/pivotCacheDefinition" + id + ".bin",
                                           "xl/pivotCache/_rels/pivotCacheDefinition" + id + ".bin.rels",
@@ -282,7 +297,7 @@ PivotPartLoss plan_pivot_parts(const Workbook& wb, const std::unordered_set<std:
     sort_by_index(planned[s], [](const Planned& a, const Planned& b) { return a.creation_order > b.creation_order; });
     for (Planned& entry : planned[s]) {
       if (entry.part.path.empty()) {
-        const std::size_t k = FreePartNumber(next_table, taken, [](std::size_t n) {
+        const std::size_t k = FreePartNumber(next_table, occupied, [](std::size_t n) {
           const std::string id = std::to_string(n);
           return std::array<std::string, 2>{"xl/pivotTables/pivotTable" + id + ".bin",
                                             "xl/pivotTables/_rels/pivotTable" + id + ".bin.rels"};

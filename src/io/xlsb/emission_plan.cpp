@@ -267,8 +267,16 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
       return make_error(FormulonErrorCode::kIoZipSlip, "passthrough part name escapes package root; refusing to write",
                         std::string(kWriteXlsbContext) + " part=" + part.path);
     }
+    // A modelled pivot group's retained parts are written, or not, by the pivot plan; a group regenerated under
+    // the path of its own retained original replaces it rather than colliding with it.
+    if (is_retained_pivot_part(wb, part)) {
+      continue;
+    }
+    // A retained original of modelled state (the styles part) is superseded, not lost, when the model is written.
     if (generated.count(part.path) != 0U) {
-      RecordDroppedPart("xlsb.writer.passthrough_collision", part.path, "generated_path_wins", diagnostics);
+      if (part.is_unmodelled()) {
+        RecordDroppedPart("xlsb.writer.passthrough_collision", part.path, "generated_path_wins", diagnostics);
+      }
       continue;
     }
     // Drop parts that would be stale or orphaned after we regenerate the
@@ -283,9 +291,8 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
     // `.xml` one, or a number past the model's links) would be an orphan.
     // An xlsx metadata part is replaced by the generated metadata.bin; Excel keeps only the types the model holds
     // (a further type such as XLMDX is dropped from its own xlsb save as well).
-    // A modelled pivot group's retained parts are written, or not, by the pivot plan.
     if (IsBinaryIndexPart(part.path) || part.path == "xl/calcChain.bin" || IsXlsxOnlyMetadataPart(part.path) ||
-        is_xml_slicer_part(part.path) || IsExternalLinkPart(part.path) || is_retained_pivot_part(wb, part)) {
+        is_xml_slicer_part(part.path) || IsExternalLinkPart(part.path)) {
       continue;
     }
     if (!kept_paths.insert(part.path).second) {

@@ -569,6 +569,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   part and the parts of every PivotTable read into the model too, which the
   workbook holds in its model and writes from it once edited.
 
+- Saving a workbook read from `.xlsb` no longer counts the styles part or
+  the parts of a PivotTable read into the model in `droppedPartCount` (Python
+  `dropped_part_count`, C `fm_save_diagnostics_info_t.dropped_part_count`)
+  when an `.xlsb` save rewrites them from the model or an `.xlsx` save writes
+  them as XML; nothing in them was lost. A refreshed PivotTable keeps its part
+  names in an `.xlsb` save instead of moving to the next free number.
+
 - A PivotTable page field that shows one item because every other item is
   hidden reads "(Multiple Items)", as Excel shows it, unless the field allows
   multiple selection (Excel's Select Multiple Items), in which case it shows
