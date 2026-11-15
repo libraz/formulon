@@ -1523,11 +1523,11 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
   `InvalidArgument`: a display name outside Excel's name syntax (a cell
   address such as `T1`, a name opening with an R1C1 reference such as
   `R2D2`, `TRUE`, a leading digit, a space), a name a defined name of any
-  scope already uses, and a range overlapping another table on the sheet.
-  Creating a table also refuses a range overlapping a PivotTable, a data
-  table or a multi-cell array formula, or one that cuts through merged
-  cells, and unmerges the merges the range covers, as Excel does. Where
-  Excel widens the range to take in a merge it cuts through, the table is
+  scope already uses. A range overlapping another table, a PivotTable, a
+  data table or a multi-cell array formula, or one that cuts through merged
+  cells, is refused with `PreconditionFailed`; 0.18.0 created a table over
+  another table or a PivotTable. Creating a table unmerges the merges its
+  range covers, as Excel does. Where Excel widens the range to take in a merge it cuts through, the table is
   refused instead, because its columns are given by the caller. Resizing
   refuses the same overlaps, any merged cell in the new range, a move of
   the first row, and a range left with no data row under a header row.
@@ -1753,7 +1753,6 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 - Writing a text value into a table's header cell renames the column; the
   column name used to stay unchanged.
 - **JavaScript:** `DrawingObject.mediaPath` is removed.
-- **Python:** every `Workbook` in a process shares one WASM module instance.
 - A conditional formatting `dxfIndex` past the differential-format table is
   `IndexOutOfRange`; it was `InvalidArgument`.
 - A new workbook's first sheet has `tabSelected` set; it was not. This replaces
