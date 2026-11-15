@@ -28,6 +28,7 @@ namespace xlsb {
 std::optional<std::uint64_t> current_retained_part_fingerprint(const Workbook& wb, const PassthroughPart& part) {
   switch (part.retained_origin) {
     case PassthroughPart::RetainedOrigin::kNone:
+    case PassthroughPart::RetainedOrigin::kDerivedFromModel:
       return std::nullopt;
 
     case PassthroughPart::RetainedOrigin::kPivotTable: {

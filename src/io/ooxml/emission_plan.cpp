@@ -609,6 +609,9 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
     }
   }
   for (const PassthroughPart& part : wb.passthrough_parts()) {
+    if (part.retained_origin == PassthroughPart::RetainedOrigin::kDerivedFromModel) {
+      plan.derived_part_paths.insert(part.path);
+    }
     // The relationships of a binary part that is not written would dangle.
     if (const std::string owner = RelsOwner(part.path); !owner.empty() && binary_parts.count(owner) != 0U) {
       continue;
@@ -623,8 +626,11 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
     if (rich_value_rels.skipped.count(part.path) != 0U) {
       continue;
     }
+    // A retained original of modelled state (a sheet's note drawing) is superseded, not lost.
     if (generated.count(part.path) != 0U) {
-      RecordDroppedPart("ooxml_writer.passthrough_collision", part.path, "generated_path_wins", diagnostics);
+      if (part.is_unmodelled()) {
+        RecordDroppedPart("ooxml_writer.passthrough_collision", part.path, "generated_path_wins", diagnostics);
+      }
       continue;
     }
     // A workbook read from `.xlsb` still carries that package's binary

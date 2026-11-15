@@ -58,8 +58,7 @@ TEST(XlsbRetainedOriginal, ARefreshedGroupAndItsStylesReplaceTheirOriginals) {
   EXPECT_EQ(PivotAndStyleParts(saved.value().bytes), PivotAndStyleParts(source));
 }
 
-// The .xlsx save writes styles and pivots as XML, so the .bin originals are left out without counting; only the two
-// worksheet binary indexes, which have no .xlsx form, are counted.
+// The .xlsx save writes styles and pivots as XML, so the .bin originals are left out without counting.
 TEST(XlsbRetainedOriginal, AnXlsxSaveDoesNotCountTheRetainedOriginals) {
   const tc::Bytes source = tc::ReadBytes(std::string(FORMULON_FIXTURES_DIR) + kBook);
   auto read = read_xlsb(SpanOf(source));
@@ -67,7 +66,7 @@ TEST(XlsbRetainedOriginal, AnXlsxSaveDoesNotCountTheRetainedOriginals) {
   auto saved = write_ooxml_with_result(read.value().workbook);
   ASSERT_TRUE(saved.has_value()) << saved.error().message;
   EXPECT_EQ(saved.value().diagnostics.deferred_feature_count, 0U);
-  EXPECT_EQ(saved.value().diagnostics.dropped_part_count, 2U);
+  EXPECT_EQ(saved.value().diagnostics.dropped_part_count, 0U);
 }
 
 // A part the reader kept without modelling it is lost when a generated part takes its path, and counted.

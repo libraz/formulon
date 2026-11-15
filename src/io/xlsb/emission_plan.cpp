@@ -73,10 +73,13 @@ std::string pivot_cache_rel_key(std::size_t k) {
 
 /// Fails a retained part (pivot table, pivot cache, styles) whose model
 /// state changed since load, including the model object having gone.
-/// Untracked passthrough parts always pass.  A stale styles part is not
-/// written through this check: the plan regenerates it from the model.
+/// Untracked passthrough parts always pass, as does a part derived from
+/// modelled sheet content, which the writer regenerates or leaves out.  A stale
+/// styles part is not written through this check: the plan regenerates it
+/// from the model.
 Expected<void, Error> CheckRetainedPartFreshness(const Workbook& workbook, const PassthroughPart& part) {
-  if (part.retained_origin == PassthroughPart::RetainedOrigin::kNone) {
+  if (part.retained_origin == PassthroughPart::RetainedOrigin::kNone ||
+      part.retained_origin == PassthroughPart::RetainedOrigin::kDerivedFromModel) {
     return Expected<void, Error>::Ok();
   }
   const std::optional<std::uint64_t> current = current_retained_part_fingerprint(workbook, part);
@@ -260,6 +263,9 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
 
   std::unordered_set<std::string> kept_paths;
   for (const PassthroughPart& part : wb.passthrough_parts()) {
+    if (part.retained_origin == PassthroughPart::RetainedOrigin::kDerivedFromModel) {
+      plan.derived_part_paths.insert(part.path);
+    }
     if (!ooxml::is_safe_part_name(part.path)) {
       return make_error(FormulonErrorCode::kIoZipSlip, "passthrough part name escapes package root; refusing to write",
                         std::string(kWriteXlsbContext) + " part=" + part.path);
@@ -496,6 +502,9 @@ std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan, const s
       // Counted alongside the package- and workbook-scope drops: a dropped
       // sheet relationship is a dropped relationship, and OOXML having no
       // sheet-scope equivalent must not make it invisible.
+      if (plan.derived_part_paths.count(rel.target) != 0U) {
+        continue;
+      }
       RecordDroppedRelationship("xlsb.writer.sheet_rel_skipped", rel.type, rel.target, diagnostics);
       continue;
     }

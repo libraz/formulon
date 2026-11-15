@@ -838,7 +838,9 @@ SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPla
     }
     if (!relationship.target_external &&
         (relationship.target.empty() || !HasPassthroughPart(plan, relationship.target))) {
-      drop_rel(relationship.type, relationship.target);
+      if (plan.derived_part_paths.count(relationship.target) == 0U) {
+        drop_rel(relationship.type, relationship.target);
+      }
       continue;
     }
     const std::string target =

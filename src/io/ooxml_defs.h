@@ -90,6 +90,8 @@ inline constexpr std::string_view kRelDdeLink =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/ddeLink";
 inline constexpr std::string_view kRelThreadedComment =
     "http://schemas.microsoft.com/office/2017/10/relationships/threadedComment";
+inline constexpr std::string_view kRelBinaryIndex =
+    "http://schemas.microsoft.com/office/2006/relationships/xlBinaryIndex";
 inline constexpr std::string_view kRelPerson = "http://schemas.microsoft.com/office/2017/10/relationships/person";
 inline constexpr std::string_view kRelTheme =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";

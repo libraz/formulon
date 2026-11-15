@@ -1064,6 +1064,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
 
   // Stable order so callers / tests can compare deterministically.
   sort_passthrough_parts(unknown_parts);
+  mark_model_derived_parts(wb, unknown_parts);
 
   // The workbook is the sole owner of the passthrough payload; the read
   // result does not mirror it. Handing it over by move keeps a package

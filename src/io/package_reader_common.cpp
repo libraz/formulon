@@ -1,9 +1,11 @@
 #include "io/package_reader_common.h"
 
+#include <string_view>
 #include <unordered_set>
 #include <utility>
 
 #include "io/dynamic_array_formula.h"
+#include "io/ooxml_defs.h"
 #include "io/sheet_phonetic.h"
 
 namespace formulon {
@@ -19,6 +21,26 @@ void mark_sheet_dynamic_arrays(
     }
   }
   apply_loaded_dynamic_array_marks(sheet, marked);
+}
+
+void mark_model_derived_parts(const Workbook& wb, std::vector<PassthroughPart>& parts) {
+  std::unordered_set<std::string_view> derived;
+  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
+    const Sheet& sheet = wb.sheet(s);
+    if (!sheet.comment_vml_path().empty()) {
+      derived.insert(sheet.comment_vml_path());
+    }
+    for (const UnknownRelationship& rel : sheet.unknown_relationships()) {
+      if (rel.type == kRelBinaryIndex && !rel.target_external) {
+        derived.insert(rel.target);
+      }
+    }
+  }
+  for (PassthroughPart& part : parts) {
+    if (derived.count(part.path) != 0U) {
+      part.retained_origin = PassthroughPart::RetainedOrigin::kDerivedFromModel;
+    }
+  }
 }
 
 Error sheet_add_error(Error error, std::string_view message, std::string context) {

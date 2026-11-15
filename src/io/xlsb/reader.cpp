@@ -1131,6 +1131,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
   }
 
   sort_passthrough_parts(unknown_parts);
+  mark_model_derived_parts(wb, unknown_parts);
 
   if (dropped_part_count != 0U) {
     StructuredLog("xlsb.package.parts_dropped")

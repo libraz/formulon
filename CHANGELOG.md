@@ -572,14 +572,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   command line's `passthroughParts`) list only the parts the reader keeps as
   stored without modelling them. On an `.xlsb` they used to list the styles
   part and the parts of every PivotTable read into the model too, which the
-  workbook holds in its model and writes from it once edited.
+  workbook holds in its model and writes from it once edited, on either
+  format the VML drawing of a sheet's notes, and on an `.xlsb` the binary
+  index of each sheet.
 
 - Saving a workbook read from `.xlsb` no longer counts the styles part or
   the parts of a PivotTable read into the model in `droppedPartCount` (Python
   `dropped_part_count`, C `fm_save_diagnostics_info_t.dropped_part_count`)
   when an `.xlsb` save rewrites them from the model or an `.xlsx` save writes
-  them as XML; nothing in them was lost. A refreshed PivotTable keeps its part
-  names in an `.xlsb` save instead of moving to the next free number.
+  them as XML; nothing in them was lost. Nor does any save of a workbook with
+  notes count the VML drawing of those notes, which it writes from the
+  sheet. Nor does a save of a desktop-written `.xlsb` count each sheet's
+  binary index (`xl/worksheets/binaryIndexN.bin`), or its sheet relationship
+  in `droppedRelationshipCount` (Python `dropped_relationship_count`): the
+  index only locates the sheet's cells, Excel rebuilds it, and `.xlsx` has no
+  such part. A refreshed PivotTable keeps its part names in an `.xlsb` save
+  instead of moving to the next free number.
 
 - A PivotTable page field that shows one item because every other item is
   hidden reads "(Multiple Items)", as Excel shows it, unless the field allows

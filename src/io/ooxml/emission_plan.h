@@ -222,6 +222,8 @@ struct EmissionPlan {
   // points into `passthrough_kept`; the vector and pointed-to parts stay
   // immutable after this plan is built.
   PassthroughPathIndex passthrough_path_index;
+  // Parts the reader derived from modelled sheet content. A relationship to one the save leaves out is not lost.
+  std::unordered_set<std::string_view> derived_part_paths;
   // Per-sheet rels build, indexed by sheet index (opaque sheets carry a
   // default-constructed, unused entry). Built once after passthrough
   // collision filtering so internal unknown relationships only survive when

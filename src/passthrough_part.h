@@ -16,11 +16,11 @@
 // empty `content_type` and rely on the round-tripped `<Default>`
 // registration (see `DefaultContentType`).
 //
-// `retained_origin` / `model_fingerprint` are XLSB-only: the XLSB writer
-// re-emits pivot and styles parts verbatim, so each carries a fingerprint
-// of its model state at load and `write_xlsb` refuses a stale one (see
-// `io/xlsb/retained_part_fingerprint.h`). Every other part leaves them at
-// their defaults.
+// `retained_origin` marks a part as the writer's own copy of modelled
+// state rather than a passthrough. `model_fingerprint` is XLSB-only: the
+// XLSB writer re-emits pivot and styles parts verbatim, so each carries a
+// fingerprint of its model state at load and `write_xlsb` refuses a stale
+// one (see `io/xlsb/retained_part_fingerprint.h`).
 
 #ifndef FORMULON_PASSTHROUGH_PART_H_
 #define FORMULON_PASSTHROUGH_PART_H_
@@ -66,6 +66,11 @@ struct PassthroughPart {
     kPivotCacheDefinition,
     kPivotCacheRecords,
     kStyles,
+    /// A part derived from sheet content the reader modelled: the legacy
+    /// drawing of its notes and form controls, or the binary index over its
+    /// cell records. The writer regenerates it or leaves it out; neither
+    /// loses anything.
+    kDerivedFromModel,
   };
   RetainedOrigin retained_origin = RetainedOrigin::kNone;
   /// Sheet index of the owning pivot table. Valid only for `kPivotTable`.

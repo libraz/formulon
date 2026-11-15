@@ -251,6 +251,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/xlsb_pivot_wiring_test.cpp
   unit/io/xlsb/xlsb_passthrough_listing_test.cpp
   unit/io/xlsb/xlsb_retained_original_test.cpp
+  unit/io/xlsb/model_derived_part_test.cpp
   unit/io/xlsb/pivot_line_item_records_test.cpp
   unit/io/xlsb/slicer_fidelity_test.cpp
   unit/io/xlsb/drawing_record_test.cpp

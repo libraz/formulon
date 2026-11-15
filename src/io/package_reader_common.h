@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "io/read_options.h"
+#include "passthrough_part.h"
 #include "utils/error.h"
 #include "workbook.h"
 
@@ -23,6 +24,10 @@ void mark_sheet_dynamic_arrays(
 /// The error a failed `Workbook::add_sheet_validated` surfaces: an invalid or colliding name becomes
 /// `kIoSheetCorrupt` with `message` and `context`, any other error passes through.
 Error sheet_add_error(Error error, std::string_view message, std::string context);
+
+/// Tags the parts derived from modelled sheet content: the legacy drawing a sheet's `comment_vml_path()` names and
+/// the binary index a sheet relationship names.
+void mark_model_derived_parts(const Workbook& wb, std::vector<PassthroughPart>& parts);
 
 /// Final steps of a package read, once every part is in the workbook: legacy implicit intersections,
 /// phonetic fonts, pivot refresh, the requested profile, then the recalc marks.
