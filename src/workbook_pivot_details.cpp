@@ -393,4 +393,31 @@ Expected<void, Error> Workbook::rename_pivot(std::size_t sheet, std::size_t pivo
   return Expected<void, Error>::Ok();
 }
 
+Expected<void, Error> Workbook::remove_pivot(std::size_t sheet, std::size_t pivot) {
+  if (sheet >= sheet_count()) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "sheet_index is out of range",
+                      "sheet=" + std::to_string(sheet));
+  }
+  auto& pivots = this->sheet(sheet).mutable_pivot_tables();
+  if (pivot >= pivots.size()) {
+    return make_error(FormulonErrorCode::kIndexOutOfRange, "pivot_index is out of range",
+                      "pivot=" + std::to_string(pivot));
+  }
+  RETURN_IF_ERROR(clear_pivot_projection(sheet, pivot));
+  // The removed table's part points past the end afterwards, so it reads as stale.
+  const std::size_t past_end = pivots.size();
+  for (PassthroughPart& part : passthrough_parts_) {
+    if (part.retained_origin != PassthroughPart::RetainedOrigin::kPivotTable || part.origin_sheet_index != sheet) {
+      continue;
+    }
+    if (part.origin_pivot_index == pivot) {
+      part.origin_pivot_index = past_end;
+    } else if (part.origin_pivot_index > pivot && part.origin_pivot_index < past_end) {
+      --part.origin_pivot_index;
+    }
+  }
+  pivots.erase(pivots.begin() + static_cast<std::ptrdiff_t>(pivot));
+  return Expected<void, Error>::Ok();
+}
+
 }  // namespace formulon

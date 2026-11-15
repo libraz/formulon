@@ -1512,6 +1512,13 @@ class Workbook {
   /// under the name identity rule.
   Expected<void, Error> rename_pivot(std::size_t sheet, std::size_t pivot, std::string_view name);
 
+  /// Removes pivot `pivot` from sheet `sheet`, clearing the cells and merges
+  /// its report wrote. Retained `.xlsb` parts of the later pivots on the sheet
+  /// follow their tables; the removed table's part no longer matches one.
+  /// Fails with `kInvalidArgument` for a bad sheet and `kIndexOutOfRange` for
+  /// a pivot index past the sheet's pivots.
+  Expected<void, Error> remove_pivot(std::size_t sheet, std::size_t pivot);
+
   /// Runs Excel's Show Details on the value cell at absolute (`row`, `col`)
   /// of pivot `pivot` on sheet `sheet`, and returns the new sheet's index.
   ///

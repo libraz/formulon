@@ -198,11 +198,9 @@ extern "C" fm_status_t fm_sheet_remove_pivot(fm_workbook_t* wb, std::size_t shee
   if (auto rc = check_index(pivot_index, pivots.size(), "pivot_index"); rc != 0) {
     return rc;
   }
-  // Deleting a report clears the cells and merges it wrote.
-  if (auto cleared = wb->workbook().clear_pivot_projection(sheet_index, pivot_index); !cleared) {
-    return set_last_error(cleared.error());
+  if (auto removed = wb->workbook().remove_pivot(sheet_index, pivot_index); !removed) {
+    return set_last_error(removed.error());
   }
-  pivots.erase(pivots.begin() + static_cast<std::ptrdiff_t>(pivot_index));
   wb->workbook().mark_all_formulas_dirty();
   return 0;
 }

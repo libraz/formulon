@@ -20,6 +20,7 @@
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
+#include "io/xlsb/pivot_part_plan.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/writer.h"
 #include "pivot/pivot_cache.h"
@@ -471,6 +472,50 @@ TEST(XlsbPivotWiring, ACacheRecordsRelatedUnderAnotherIdStaysPassthrough) {
     EXPECT_EQ(tc::ReadPart(saved.value().bytes, name), bytes) << name;
   }
   EXPECT_EQ(tc::ReadPart(saved.value().bytes, rels_name), tc::Bytes(rels.begin(), rels.end()));
+}
+
+// Removing a pivot moves the retained parts of the later pivots on its sheet with them, so the table left
+// behind is still written from its retained part.
+TEST(XlsbPivotWiring, RemovingAPivotKeepsTheLaterPivotsRetainedParts) {
+  Workbook source = LoadXlsx("xlsb_pivot_twins/B01_base.xlsx");
+  std::size_t sheet = source.sheet_count();
+  for (std::size_t s = 0; s < source.sheet_count() && sheet == source.sheet_count(); ++s) {
+    if (!source.sheet(s).pivot_tables().empty()) {
+      sheet = s;
+    }
+  }
+  ASSERT_LT(sheet, source.sheet_count());
+  const pivot::PivotTable& first = *source.sheet(sheet).pivot_tables().front();
+  std::unique_ptr<pivot::PivotTable> copy = first.clone();
+  copy->set_name("PivotTableCopy");
+  copy->set_anchor(first.anchor_row(), first.anchor_col() + 20U, first.span_rows(), first.span_cols());
+  source.sheet(sheet).add_pivot_table(std::move(copy));
+  auto first_save = write_xlsb_with_result(source);
+  ASSERT_TRUE(first_save.has_value()) << first_save.error().message;
+  ASSERT_EQ(first_save.value().diagnostics.deferred_feature_count, 0U);
+
+  Workbook wb = LoadXlsb(first_save.value().bytes);
+  ASSERT_EQ(wb.sheet(sheet).pivot_tables().size(), 2U);
+  const std::string kept_name = wb.sheet(sheet).pivot_tables()[1]->name();
+  const std::map<std::string, tc::Bytes> before = Parts(first_save.value().bytes, "xl/pivotTables/");
+  ASSERT_TRUE(wb.remove_pivot(sheet, 0).has_value());
+  ASSERT_EQ(wb.sheet(sheet).pivot_tables().size(), 1U);
+  EXPECT_TRUE(pivot_table_kept_verbatim(wb, sheet, 0));
+
+  auto saved = write_xlsb_with_result(wb);
+  ASSERT_TRUE(saved.has_value()) << saved.error().message;
+  EXPECT_EQ(saved.value().diagnostics.deferred_feature_count, 0U);
+  const std::map<std::string, tc::Bytes> after = Parts(saved.value().bytes, "xl/pivotTables/");
+  ASSERT_EQ(after.size(), 1U);
+  bool found = false;
+  for (const auto& [name, bytes] : before) {
+    found = found || bytes == after.begin()->second;
+  }
+  EXPECT_TRUE(found) << "the remaining table is not written from its retained part";
+  ExpectValidXlsb(saved.value().bytes);
+  const Workbook reread = LoadXlsb(saved.value().bytes);
+  ASSERT_EQ(reread.sheet(sheet).pivot_tables().size(), 1U);
+  EXPECT_EQ(reread.sheet(sheet).pivot_tables().front()->name(), kept_name);
 }
 
 TEST(XlsbPivotWiring, TablesOnOneCacheAcrossSheetsAreWrittenAsOneGroup) {
