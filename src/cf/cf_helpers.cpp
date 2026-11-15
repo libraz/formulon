@@ -30,6 +30,7 @@
 #include "sheet.h"
 #include "utils/date_time.h"
 #include "utils/double_parse.h"
+#include "utils/index_sort.h"
 #include "utils/rect_iterator.h"
 #include "utils/strings.h"
 #include "value.h"
@@ -76,9 +77,7 @@ std::optional<LiteralOperand> parse_literal(const std::string& source) {
 
   // Quoted text literal with `""` -> `"` unescape.
   if (source.size() >= 2 && source.front() == '"' && source.back() == '"') {
-    LiteralOperand operand;
-    operand.kind = LiteralOperand::Kind::Text;
-    std::string& out = operand.text_value;
+    std::string out;
     out.reserve(source.size() - 2);
     for (std::size_t i = 1; i + 1 < source.size(); ++i) {
       if (source[i] == '"' && i + 2 < source.size() && source[i + 1] == '"') {
@@ -88,29 +87,20 @@ std::optional<LiteralOperand> parse_literal(const std::string& source) {
         out.push_back(source[i]);
       }
     }
-    return operand;
+    return LiteralOperand::text(std::move(out));
   }
 
   // Boolean keywords (case-insensitive, matching Excel's tolerance).
   if (strings::case_insensitive_eq(source, "TRUE")) {
-    LiteralOperand operand;
-    operand.kind = LiteralOperand::Kind::Bool;
-    operand.bool_value = true;
-    return operand;
+    return LiteralOperand::boolean(true);
   }
   if (strings::case_insensitive_eq(source, "FALSE")) {
-    LiteralOperand operand;
-    operand.kind = LiteralOperand::Kind::Bool;
-    operand.bool_value = false;
-    return operand;
+    return LiteralOperand::boolean(false);
   }
 
   // Numeric literal, consumed in full or rejected.
   if (const std::optional<double> parsed = parse_double(source)) {
-    LiteralOperand operand;
-    operand.kind = LiteralOperand::Kind::Number;
-    operand.number_value = *parsed;
-    return operand;
+    return LiteralOperand::number(*parsed);
   }
   return std::nullopt;
 }
@@ -143,22 +133,13 @@ std::optional<int> compare_cell_to_literal(const Value& cell, const LiteralOpera
 
 std::optional<LiteralOperand> value_to_operand(const Value& evaluated) {
   if (evaluated.is_number()) {
-    LiteralOperand operand;
-    operand.kind = LiteralOperand::Kind::Number;
-    operand.number_value = evaluated.as_number();
-    return operand;
+    return LiteralOperand::number(evaluated.as_number());
   }
   if (evaluated.is_boolean()) {
-    LiteralOperand operand;
-    operand.kind = LiteralOperand::Kind::Bool;
-    operand.bool_value = evaluated.as_boolean();
-    return operand;
+    return LiteralOperand::boolean(evaluated.as_boolean());
   }
   if (evaluated.is_text()) {
-    LiteralOperand operand;
-    operand.kind = LiteralOperand::Kind::Text;
-    operand.text_value = std::string(evaluated.as_text());
-    return operand;
+    return LiteralOperand::text(std::string(evaluated.as_text()));
   }
   return std::nullopt;
 }
@@ -362,7 +343,9 @@ double sample_stddev(const std::vector<double>& values, double mean) {
 
 ColorScalePopulation gather_population(const std::vector<CFCellRange>& sqref, const Sheet& sheet) {
   std::vector<double> values = collect_numeric_values(sqref, sheet);
-  std::sort(values.begin(), values.end());
+  std::vector<std::uint32_t> order;
+  sorted_index_order_ascending(order, values);
+  apply_index_order(values, order);
   ColorScalePopulation pop;
   if (!values.empty()) {
     pop.min = values.front();

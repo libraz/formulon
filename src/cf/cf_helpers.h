@@ -18,6 +18,7 @@
 #include <string>
 #include <string_view>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "cf/cf_evaluator.h"
@@ -99,6 +100,25 @@ struct LiteralOperand {
   double number_value = 0.0;
   bool bool_value = false;
   std::string text_value;
+
+  static LiteralOperand number(double value) {
+    LiteralOperand operand;
+    operand.kind = Kind::Number;
+    operand.number_value = value;
+    return operand;
+  }
+  static LiteralOperand boolean(bool value) {
+    LiteralOperand operand;
+    operand.kind = Kind::Bool;
+    operand.bool_value = value;
+    return operand;
+  }
+  static LiteralOperand text(std::string value) {
+    LiteralOperand operand;
+    operand.kind = Kind::Text;
+    operand.text_value = std::move(value);
+    return operand;
+  }
 };
 
 /// Parses a `cellIs` formula source as a literal. Excel emits cellIs

@@ -34,10 +34,12 @@ namespace {
 // CellIs — literal-only fast path (value-only overload).
 // ---------------------------------------------------------------------------
 
-// Shared cellIs comparison; `resolve_operand` turns formula1 / formula2 text
-// into a comparison operand.
-template <typename ResolveOperand>
-bool match_cell_is_with(const CFRule& rule, const Value& cell_value, ResolveOperand resolve_operand) {
+// Shared cellIs comparison; formula1 / formula2 text resolves through the
+// evaluator when `ctx` is given, otherwise as a literal.
+bool match_cell_is_with(const CFRule& rule, const Value& cell_value, const CFEvalContext* ctx) {
+  const auto resolve_operand = [ctx](const std::string& source) {
+    return ctx != nullptr ? helpers::cell_is_operand(source, *ctx) : helpers::parse_literal(source);
+  };
   if (!rule.op.has_value() || !rule.formula1.has_value()) {
     return false;
   }
@@ -91,7 +93,7 @@ bool match_cell_is_with(const CFRule& rule, const Value& cell_value, ResolveOper
 }
 
 bool match_cell_is(const CFRule& rule, const Value& cell_value) {
-  return match_cell_is_with(rule, cell_value, [](const std::string& source) { return helpers::parse_literal(source); });
+  return match_cell_is_with(rule, cell_value, nullptr);
 }
 
 // ---------------------------------------------------------------------------
@@ -188,8 +190,7 @@ bool match_text_rule(const CFRule& rule, const Value& cell_value) {
 // formula2 through the formula evaluator so cellIs rules with
 // references or arithmetic operands work end-to-end.
 bool match_cell_is_via_evaluator(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
-  return match_cell_is_with(rule, cell_value,
-                            [&ctx](const std::string& source) { return helpers::cell_is_operand(source, ctx); });
+  return match_cell_is_with(rule, cell_value, &ctx);
 }
 
 // ---------------------------------------------------------------------------
@@ -311,8 +312,7 @@ bool match_duplicate_or_unique(const CFRule& rule, const Value& cell_value, cons
 //
 // Both rules collect the numeric population from `ctx.sqref` (booleans
 // and text are excluded — Excel folds them into the rule via SUMPRODUCT
-// in the generated formula, but the closure harness will refine the
-// stance when oracle data lands). Errors and blanks never participate.
+// in the generated formula). Errors and blanks never participate.
 // ---------------------------------------------------------------------------
 
 constexpr std::int32_t kDefaultTop10Rank = 10;
@@ -407,10 +407,8 @@ bool match_rule(const CFRule& rule, const Value& cell_value) {
     case RuleType::BeginsWith:
     case RuleType::EndsWith:
       return match_text_rule(rule, cell_value);
-    // Rule types whose evaluator lands in subsequent PRs return false
-    // here so a caller that walks the full rule list does not mis-fire
-    // on a partially-implemented engine. The UI is expected to gate on
-    // the engine version it links against.
+    // Rule types that need a context-aware evaluation never match in the
+    // value-only overload.
     case RuleType::Expression:
     case RuleType::ColorScale:
     case RuleType::DataBar:
@@ -441,11 +439,11 @@ bool match_rule(const CFRule& rule, const Value& cell_value, const CFEvalContext
     case RuleType::Top10:
       return match_top10(rule, cell_value, ctx);
     case RuleType::ColorScale:
-      return scales::match_color_scale(rule, cell_value, ctx);
+      return scales::resolve_color_scale(rule, cell_value, ctx).has_value();
     case RuleType::DataBar:
-      return scales::match_data_bar(rule, cell_value, ctx);
+      return scales::resolve_data_bar(rule, cell_value, ctx).has_value();
     case RuleType::IconSet:
-      return scales::match_icon_set(rule, cell_value, ctx);
+      return scales::resolve_icon_set(rule, cell_value, ctx).has_value();
     case RuleType::ContainsBlanks:
     case RuleType::NotContainsBlanks:
     case RuleType::ContainsErrors:

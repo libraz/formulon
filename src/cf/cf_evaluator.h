@@ -160,10 +160,8 @@ struct PreparedCfFormulaCache;
 ///                            on a numeric / blank cell whose rendering
 ///                            lacks the needle. Error cells never match.
 ///
-/// All other rule types currently return `false` (their evaluation
-/// logic lands in subsequent staging steps). Callers that want to opt
-/// out of pre-implementation false-negatives should gate on the
-/// rule's `type` and skip rules that aren't yet supported.
+/// All other rule types return `false`; a caller that must tell them apart
+/// from a real non-match gates on the rule's `type`.
 bool match_rule(const CFRule& rule, const Value& cell_value);
 
 /// Returns the `CFMatch` payload for a rule that has been determined

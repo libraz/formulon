@@ -140,15 +140,9 @@ void append_elapsed_int_dbnum(std::string& out, long long value, std::size_t wid
 // @limit: internal
 constexpr std::size_t kMaxMeaningfulFractionDigits = 15;
 
-// Japanese era classification. The boundary table and classifier live in
-// `eval/japanese_era.{h,cpp}` so the pivot date-grouping path can share
-// the same anchors. We re-export the type as a local alias so the rest
-// of this TU keeps its idiomatic name.
+// Japanese era classification lives in `utils/japanese_era.{h,cpp}`, shared
+// with the pivot date-grouping path.
 using EraInfo = formulon::japanese_era::EraInfo;
-
-const EraInfo& classify_era(int year, unsigned month, unsigned day) noexcept {
-  return formulon::japanese_era::classify_era(year, month, day);
-}
 
 }  // namespace
 
@@ -205,7 +199,7 @@ FormatStatus render_date(const Section& section, std::string_view fmt, double se
   // language; any other tag language or calendar turns them into the year.
   const bool tag_era = tag.language_set ? tag.language != nullptr && tag.language->japanese_era : facts.japanese_era;
   const bool era_on = tag.calendar == kCalendarJapanese || (tag.calendar == kCalendarDefault && tag_era);
-  const EraInfo& era = classify_era(ymd.y, ymd.m, ymd.d);
+  const EraInfo& era = formulon::japanese_era::classify_era(ymd.y, ymd.m, ymd.d);
   const int era_year = ymd.y - era.year_anchor + 1;
   int calendar_year = ymd.y;
   if (tag.calendar == kCalendarKorean) {

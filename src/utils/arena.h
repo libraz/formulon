@@ -57,38 +57,14 @@ class Arena {
   Arena& operator=(const Arena&) = delete;
 
   /// Transfers ownership of every chunk from `other`, leaving it empty.
-  Arena(Arena&& other) noexcept
-      : head_(other.head_),
-        initial_chunk_bytes_(other.initial_chunk_bytes_),
-        next_chunk_bytes_(other.next_chunk_bytes_),
-        chunk_count_(other.chunk_count_),
-        bytes_allocated_(other.bytes_allocated_),
-        max_bytes_(other.max_bytes_),
-        exhausted_(other.exhausted_) {
-    other.head_ = nullptr;
-    other.chunk_count_ = 0;
-    other.bytes_allocated_ = 0;
-    other.next_chunk_bytes_ = other.initial_chunk_bytes_;
-    other.exhausted_ = false;
-  }
+  Arena(Arena&& other) noexcept { take(other); }
 
   /// Transfers ownership of every chunk from `other`, releasing whatever this
   /// arena previously owned.
   Arena& operator=(Arena&& other) noexcept {
     if (this != &other) {
       release_all();
-      head_ = other.head_;
-      initial_chunk_bytes_ = other.initial_chunk_bytes_;
-      next_chunk_bytes_ = other.next_chunk_bytes_;
-      chunk_count_ = other.chunk_count_;
-      bytes_allocated_ = other.bytes_allocated_;
-      max_bytes_ = other.max_bytes_;
-      exhausted_ = other.exhausted_;
-      other.head_ = nullptr;
-      other.chunk_count_ = 0;
-      other.bytes_allocated_ = 0;
-      other.next_chunk_bytes_ = other.initial_chunk_bytes_;
-      other.exhausted_ = false;
+      take(other);
     }
     return *this;
   }
@@ -305,6 +281,22 @@ class Arena {
   }
 
   static void free_chunk(Chunk* c) noexcept { std::free(c); }
+
+  /// Steals `other`'s state and leaves it empty. This arena must own nothing.
+  void take(Arena& other) noexcept {
+    head_ = other.head_;
+    initial_chunk_bytes_ = other.initial_chunk_bytes_;
+    next_chunk_bytes_ = other.next_chunk_bytes_;
+    chunk_count_ = other.chunk_count_;
+    bytes_allocated_ = other.bytes_allocated_;
+    max_bytes_ = other.max_bytes_;
+    exhausted_ = other.exhausted_;
+    other.head_ = nullptr;
+    other.chunk_count_ = 0;
+    other.bytes_allocated_ = 0;
+    other.next_chunk_bytes_ = other.initial_chunk_bytes_;
+    other.exhausted_ = false;
+  }
 
   void release_all() noexcept {
     Chunk* c = head_;

@@ -60,6 +60,10 @@ bool sqref_contains(const std::vector<CFCellRange>& sqref, CellAddress target) {
   return false;
 }
 
+bool host_complete(const CFHost& host) {
+  return host.arena != nullptr && host.registry != nullptr && host.eval_ctx != nullptr;
+}
+
 }  // namespace
 
 CFMatch make_match(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
@@ -81,11 +85,8 @@ CFMatch make_match(const CFRule& rule, const Value& cell_value, const CFEvalCont
     match.icon_render = scales::resolve_icon_set(rule, cell_value, ctx);
     return match;
   }
-  // Every other kind is dxf-driven; the context-aware overload behaves
-  // identically to the value-only one for those.
-  match.kind = CFMatchKind::DifferentialFormat;
-  match.dxf_id = rule.dxf_id;
-  return match;
+  // Every other kind is dxf-driven.
+  return make_match(rule);
 }
 
 namespace {
@@ -166,7 +167,7 @@ struct PreparedCfEvaluator::Impl {
   PreparedCfFormulaCache formula_cache;
 
   Impl(const Sheet& source, const CFHost& source_host) : sheet(source), host(source_host) {
-    if (host.arena == nullptr || host.registry == nullptr || host.eval_ctx == nullptr) {
+    if (!host_complete(host)) {
       return;
     }
     formula_cache.initialize(*host.arena);
@@ -195,7 +196,7 @@ struct PreparedCfEvaluator::Impl {
 
   Expected<std::vector<CFMatch>, Error> evaluate(CellAddress target) {
     std::vector<CFMatch> matches;
-    if (host.arena == nullptr || host.registry == nullptr || host.eval_ctx == nullptr) {
+    if (!host_complete(host)) {
       return matches;
     }
     if (formula_cache.resource_failure) {
@@ -235,7 +236,18 @@ struct PreparedCfEvaluator::Impl {
         ctx.cached_duplicates = &*slot;
       }
 
-      const bool matched = match_rule(rule, cell_value, ctx);
+      // Visual rules resolve once: a present payload is the match.
+      const bool visual =
+          rule.type == RuleType::ColorScale || rule.type == RuleType::DataBar || rule.type == RuleType::IconSet;
+      CFMatch match;
+      bool matched = false;
+      if (visual) {
+        match = make_match(rule, cell_value, ctx);
+        matched =
+            match.resolved_fill_color.has_value() || match.data_bar_render.has_value() || match.icon_render.has_value();
+      } else {
+        matched = match_rule(rule, cell_value, ctx);
+      }
       formula_cache.capture_resource_failure();
       if (formula_cache.resource_failure) {
         return resource_error(target);
@@ -246,10 +258,12 @@ struct PreparedCfEvaluator::Impl {
         }
         continue;
       }
-      CFMatch match = make_match(rule, cell_value, ctx);
-      formula_cache.capture_resource_failure();
-      if (formula_cache.resource_failure) {
-        return resource_error(target);
+      if (!visual) {
+        match = make_match(rule, cell_value, ctx);
+        formula_cache.capture_resource_failure();
+        if (formula_cache.resource_failure) {
+          return resource_error(target);
+        }
       }
       matches.push_back(std::move(match));
       if (formula_cache.scratch_arena.has_value()) {
@@ -302,7 +316,7 @@ Expected<std::vector<CFRangeCellMatches>, Error> evaluate_cf_for_range(const She
   }
 
   std::vector<CFRangeCellMatches> results;
-  if (host.arena == nullptr || host.registry == nullptr || host.eval_ctx == nullptr) {
+  if (!host_complete(host)) {
     return results;
   }
 

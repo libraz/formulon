@@ -4,7 +4,6 @@
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
-#include <functional>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -122,7 +121,9 @@ bool match_date_group(const DateGroupItem& g, double serial, bool date1904) {
   return g.grouping < DateTimeGrouping::kSecond || hms.s == g.second;
 }
 
-bool match_values(const ValueFilters& f, const Run& run, std::uint32_t row, std::uint32_t col, const Value& v) {
+/// `wanted` holds the space-trimmed `f.values`, prepared once per column.
+bool match_values(const ValueFilters& f, const std::vector<std::string_view>& wanted, const Run& run, std::uint32_t row,
+                  std::uint32_t col, const Value& v) {
   const text_format::DisplayText shown = text_format::format_cell_for_display(run.wb, run.sheet, row, col);
   if (shown.status == text_format::DisplayStatus::kOverflow) {
     return false;
@@ -131,8 +132,8 @@ bool match_values(const ValueFilters& f, const Run& run, std::uint32_t row, std:
     return f.blank;
   }
   const std::string_view shown_text = strings::trim_spaces(shown.text);
-  for (const std::string& want : f.values) {
-    if (collate(strings::trim_spaces(want), shown_text) == 0) {
+  for (const std::string_view want : wanted) {
+    if (collate(want, shown_text) == 0) {
       return true;
     }
   }
@@ -296,7 +297,9 @@ std::optional<Period> relative_period(DynamicFilterType type, double today, bool
   }
 }
 
-bool match_dynamic(const DynamicFilter& f, const Value& v, const Run& run, std::optional<double> average) {
+/// `period` is the filter's relative period for `run.today`, prepared once per column.
+bool match_dynamic(const DynamicFilter& f, const Value& v, const Run& run, std::optional<double> average,
+                   const std::optional<Period>& period) {
   if (f.type == DynamicFilterType::kNull) {
     return true;
   }
@@ -328,8 +331,7 @@ bool match_dynamic(const DynamicFilter& f, const Value& v, const Run& run, std::
     const unsigned want = static_cast<unsigned>(f.type) - static_cast<unsigned>(DynamicFilterType::kM1) + 1U;
     return date_time::ymd_from_serial(std::floor(x), date1904).m == want;
   }
-  const std::optional<Period> p = relative_period(f.type, run.today, date1904);
-  return p.has_value() && x >= p->lo && x < p->hi;
+  return period.has_value() && x >= period->lo && x < period->hi;
 }
 
 // --- Colour and icon filters ------------------------------------------------
@@ -478,6 +480,17 @@ Expected<void, Error> apply_column(const FilterColumn& column, const Run& run, s
     }
     average = sum / static_cast<double>(numbers.size());
   }
+  std::optional<Period> period;
+  if (column.kind == FilterKind::kDynamic) {
+    period = relative_period(column.dynamic.type, run.today, run.wb.date1904());
+  }
+  std::vector<std::string_view> wanted;
+  if (column.kind == FilterKind::kValues) {
+    wanted.reserve(column.values.values.size());
+    for (const std::string& want : column.values.values) {
+      wanted.push_back(strings::trim_spaces(want));
+    }
+  }
   for (std::uint32_t i = 0; i < run.body_rows; ++i) {
     if (!visible[i]) {
       continue;
@@ -487,7 +500,7 @@ Expected<void, Error> apply_column(const FilterColumn& column, const Run& run, s
     bool match = true;
     switch (column.kind) {
       case FilterKind::kValues:
-        match = match_values(column.values, run, row, col, *value);
+        match = match_values(column.values, wanted, run, row, col, *value);
         break;
       case FilterKind::kCustom:
         match = match_custom(column.custom, custom_conditions, *value, run, row, col);
@@ -497,7 +510,7 @@ Expected<void, Error> apply_column(const FilterColumn& column, const Run& run, s
                 (column.top10.top ? value->as_number() >= *threshold : value->as_number() <= *threshold);
         break;
       case FilterKind::kDynamic:
-        match = match_dynamic(column.dynamic, *value, run, average);
+        match = match_dynamic(column.dynamic, *value, run, average, period);
         break;
       case FilterKind::kColor:
         if (auto color_match = match_color(column.color, run, row, col); !color_match) {

@@ -24,22 +24,15 @@ namespace formulon::cf::scales {
 /// thresholds, or non-numeric cells.
 std::optional<Color> resolve_color_scale(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx);
 
-/// Boolean "rule applies" check: identical to "the colour resolves".
-bool match_color_scale(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx);
-
 /// Computes the bar length, axis position, and fill / border for a
 /// `dataBar` rule applied to `cell_value`. Returns `nullopt` when the
 /// thresholds collapse or are unresolvable.
 std::optional<DataBarRender> resolve_data_bar(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx);
 
-bool match_data_bar(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx);
-
 /// Computes the icon index for an `iconSet` rule applied to
 /// `cell_value`, honouring `gte` boundaries and the spec's `reverse`
 /// flag.
 std::optional<IconRender> resolve_icon_set(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx);
-
-bool match_icon_set(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx);
 
 }  // namespace formulon::cf::scales
 

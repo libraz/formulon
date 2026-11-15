@@ -42,6 +42,10 @@ constexpr std::int64_t kExcel1904Base = kExcelBaseAfterGhost - static_cast<std::
 // base.
 constexpr std::int64_t kCivilDays1900Feb28 = -25509;
 
+constexpr bool is_leap_year(int y) noexcept {
+  return (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
+}
+
 }  // namespace
 
 std::int64_t days_from_civil(int y, unsigned m, unsigned d) noexcept {
@@ -164,8 +168,7 @@ double yearfrac_us30_360(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, 
     if (m != 2u) {
       return false;
     }
-    const bool leap = (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
-    return d == (leap ? 29u : 28u);
+    return d == (is_leap_year(y) ? 29u : 28u);
   };
   const bool d1_last_feb = last_day_of_feb(y1, m1, d1);
   const bool d2_last_feb = last_day_of_feb(y2, m2, d2);
@@ -201,7 +204,6 @@ double yearfrac_eu30_360(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, 
 double actual_actual_year_length(int y1, unsigned m1, unsigned d1, int y2, unsigned m2, unsigned d2) noexcept {
   const std::int64_t days1 = days_from_civil(y1, m1, d1);
   const std::int64_t days2 = days_from_civil(y2, m2, d2);
-  auto is_leap_year = [](int y) { return (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0); };
   // Excel's basis=1 (actual/actual): the denominator depends on whether the
   // span is contained in a single calendar year.
   //
@@ -279,8 +281,7 @@ unsigned days_in_month(int y, unsigned m) noexcept {
     return 31u;
   }
   if (m == 2u) {
-    const bool leap = (y % 4 == 0 && y % 100 != 0) || (y % 400 == 0);
-    return leap ? 29u : 28u;
+    return is_leap_year(y) ? 29u : 28u;
   }
   return kTable[m - 1u];
 }
@@ -383,14 +384,7 @@ CivilTime host_civil_time() noexcept {
 #else
   localtime_r(&stamp, &local);
 #endif
-  CivilTime out{};
-  out.date.y = local.tm_year + 1900;
-  out.date.m = static_cast<unsigned>(local.tm_mon + 1);
-  out.date.d = static_cast<unsigned>(local.tm_mday);
-  out.time.h = static_cast<unsigned>(local.tm_hour);
-  out.time.m = static_cast<unsigned>(local.tm_min);
-  out.time.s = static_cast<unsigned>(local.tm_sec);
-  return out;
+  return CivilFromTm(local);
 }
 
 }  // namespace date_time

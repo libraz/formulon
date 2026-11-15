@@ -251,13 +251,6 @@ std::optional<Color> resolve_color_scale(const CFRule& rule, const Value& cell_v
   return effective_color(spec.colors.back(), ctx, ColorContext::kFillForeground);
 }
 
-bool match_color_scale(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
-  // ColorScale "matches" any cell for which a fill colour can be
-  // computed. Non-numeric cells, empty populations, and malformed
-  // specs short-circuit upstream and return nullopt.
-  return resolve_color_scale(rule, cell_value, ctx).has_value();
-}
-
 std::optional<DataBarRender> resolve_data_bar(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
   if (!rule.data_bar.has_value()) {
     return std::nullopt;
@@ -313,10 +306,6 @@ std::optional<DataBarRender> resolve_data_bar(const CFRule& rule, const Value& c
 
   return make_data_bar_render(spec, min_len + clamped_fraction * (max_len - min_len), cell, *threshold_min,
                               *threshold_max, ctx);
-}
-
-bool match_data_bar(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
-  return resolve_data_bar(rule, cell_value, ctx).has_value();
 }
 
 // ---------------------------------------------------------------------------
@@ -378,10 +367,6 @@ std::optional<IconRender> resolve_icon_set(const CFRule& rule, const Value& cell
   render.set_name = spec.name;
   render.icon_index = icon_index;
   return render;
-}
-
-bool match_icon_set(const CFRule& rule, const Value& cell_value, const CFEvalContext& ctx) {
-  return resolve_icon_set(rule, cell_value, ctx).has_value();
 }
 
 }  // namespace formulon::cf::scales
