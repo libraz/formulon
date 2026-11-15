@@ -227,7 +227,7 @@ bool LoadXlsx(const Bytes& bytes, Workbook* out, std::string* error) {
   return true;
 }
 
-/// BrtCustomFilter with a string operand: Excel leaves bytes 2-9 uninitialised and the writer emits zeros there.
+/// BrtCustomFilter with a string operand: Excel leaves bytes 4-9 uninitialised and the writer emits zeros there.
 bool SamePayload(std::uint16_t type, const Bytes& excel, const Bytes& ours) {
   constexpr std::uint16_t kBrtCustomFilter = 174;
   constexpr std::uint8_t kVtsString = 0x06;
@@ -235,7 +235,7 @@ bool SamePayload(std::uint16_t type, const Bytes& excel, const Bytes& ours) {
     return false;
   }
   for (std::size_t k = 0; k < excel.size(); ++k) {
-    const bool uninitialised = type == kBrtCustomFilter && excel[0] == kVtsString && k >= 2U && k < 10U;
+    const bool uninitialised = type == kBrtCustomFilter && excel[0] == kVtsString && k >= 4U && k < 10U;
     if (excel[k] != ours[k] && !uninitialised) {
       return false;
     }

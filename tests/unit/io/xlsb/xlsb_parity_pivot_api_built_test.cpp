@@ -272,18 +272,18 @@ std::set<std::uint16_t> PivotTypesButUid(const tc::Bytes& excel) {
   return types;
 }
 
-/// What a comparison ignores: the union Excel leaves unset before a string filter operand, and the ids Excel
+/// What a comparison ignores: the union bytes Excel leaves unset before a string filter operand, and the ids Excel
 /// renumbers on load, the table's idCache (BrtBeginSXView bytes 28-31) and a custom number format's id
 /// (BrtBeginPCDField bytes 2-3).
 tc::ByteMask Unmatched(const tc::Bytes& excel) {
   constexpr std::uint16_t kFirstCustomNumFmt = 164;
   constexpr std::uint8_t kVtsString = 0x06;
   tc::ByteMask mask;
-  // The union before a string operand is unset memory in Excel's save.
+  // Past its first two bytes, the union before a string operand is unset memory in Excel's save.
   for (const auto& [part, records] : tc::ExtractRecords(excel, {kBrtCustomFilter})) {
     for (const tc::IndexedRecord& rec : records) {
       if (!rec.payload.empty() && rec.payload[0] == kVtsString) {
-        for (std::size_t offset = 2; offset < 10U; ++offset) {
+        for (std::size_t offset = 4; offset < 10U; ++offset) {
           mask.bytes[part][rec.index].insert(offset);
         }
       }

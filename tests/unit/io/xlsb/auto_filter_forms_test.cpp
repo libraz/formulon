@@ -299,6 +299,93 @@ TEST(XlsbAutoFilterForms, ThreeCustomCriteriaSaveAsTheLastValue) {
   EXPECT_EQ(Written(read), excel);
 }
 
+/// The custom filter record of `flag/<name>.xlsb`'s sheet AutoFilter, and its block read back.
+Records FlagBlock(const std::string& name) {
+  const Bytes package = ReadFile("flag/" + name + ".xlsb");
+  ZipReader zip;
+  EXPECT_TRUE(static_cast<bool>(zip.open(SpanOf(package))));
+  auto part = zip.read_entry("xl/worksheets/sheet1.bin");
+  Records block;
+  if (!part) {
+    ADD_FAILURE() << name;
+    return block;
+  }
+  for (auto& rec : AsRecords(part.value())) {
+    if (rec.first == kBeginAFilter || !block.empty()) {
+      block.push_back(std::move(rec));
+      if (block.back().first == kBrtEndAFilter) {
+        break;
+      }
+    }
+  }
+  return block;
+}
+
+// A string criterion's union starts with 1 under an ordering operator on an operand without `*` or `?` and 0 for a
+// pattern, an escaped `~*` or `~?` included; a lone `~` does not clear it. The rest is unset in Excel's save and zero
+// in ours. Each Excel save reads and writes back to its record outside those unset bytes.
+TEST(XlsbAutoFilterForms, StringCriterionFlagFollowsExcel) {
+  const struct {
+    const char* name;
+    FilterOperator op;
+    const char* operand;
+    std::uint8_t flag;
+  } kCases[] = {
+      {"A_gt_B", FilterOperator::kGreaterThan, "B", 1},
+      {"A_gt_Bq", FilterOperator::kGreaterThan, "B?", 0},
+      {"A_gt_Bescq", FilterOperator::kGreaterThan, "B~?", 0},
+      {"A_gt_Bescstar", FilterOperator::kGreaterThan, "B~*", 0},
+      {"A_gt_BstarC", FilterOperator::kGreaterThan, "B*C", 0},
+      {"A_gt_esctildeB", FilterOperator::kGreaterThan, "~~B", 1},
+      {"A_gt_star", FilterOperator::kGreaterThan, "*", 0},
+      {"A_le_B", FilterOperator::kLessThanOrEqual, "B", 1},
+      {"A_le_Bq", FilterOperator::kLessThanOrEqual, "B?", 0},
+      {"A_le_Bescq", FilterOperator::kLessThanOrEqual, "B~?", 0},
+      {"A_le_Bescstar", FilterOperator::kLessThanOrEqual, "B~*", 0},
+      {"A_le_BstarC", FilterOperator::kLessThanOrEqual, "B*C", 0},
+      {"A_le_esctildeB", FilterOperator::kLessThanOrEqual, "~~B", 1},
+      {"A_le_star", FilterOperator::kLessThanOrEqual, "*", 0},
+  };
+  for (const auto& c : kCases) {
+    SCOPED_TRACE(c.name);
+    const Records block = FlagBlock(c.name);
+    const Bytes* excel = FindRecord(block, kBrtCustomFilter);
+    ASSERT_NE(excel, nullptr);
+    ASSERT_GE(excel->size(), 10U);
+    EXPECT_EQ((*excel)[2], c.flag);
+    const AutoFilter filter = ReadBlock(Stream(block));
+    ASSERT_EQ(filter.columns[0].custom.filters.size(), 1U);
+    EXPECT_EQ(filter.columns[0].custom.filters[0].op, c.op);
+    EXPECT_EQ(filter.columns[0].custom.filters[0].val, c.operand);
+    const Records written = Written(filter);
+    const Bytes* ours = FindRecord(written, kBrtCustomFilter);
+    ASSERT_NE(ours, nullptr);
+    ASSERT_EQ(ours->size(), excel->size());
+    EXPECT_EQ(Bytes(ours->begin(), ours->begin() + 4), Bytes(excel->begin(), excel->begin() + 4));
+    EXPECT_EQ(Bytes(ours->begin() + 10, ours->end()), Bytes(excel->begin() + 10, excel->end()));
+    for (std::size_t i = 4; i < 10U; ++i) {
+      EXPECT_EQ((*ours)[i], 0U) << i;
+    }
+  }
+}
+
+// = and <> leave the flag clear on any operand; < and >= set it on a plain one, as Excel's ft_l18 / ft_l19 saves do.
+TEST(XlsbAutoFilterForms, StringCriterionFlagUnderEveryOperator) {
+  Records block = FlagBlock("A_gt_B");
+  AutoFilter filter = ReadBlock(Stream(block));
+  ASSERT_EQ(filter.columns[0].custom.filters.size(), 1U);
+  for (const FilterOperator op :
+       {FilterOperator::kLessThan, FilterOperator::kEqual, FilterOperator::kLessThanOrEqual,
+        FilterOperator::kGreaterThan, FilterOperator::kNotEqual, FilterOperator::kGreaterThanOrEqual}) {
+    filter.columns[0].custom.filters[0].op = op;
+    const Records written = Written(filter);
+    const Bytes* rec = FindRecord(written, kBrtCustomFilter);
+    ASSERT_NE(rec, nullptr);
+    const bool ordering = op != FilterOperator::kEqual && op != FilterOperator::kNotEqual;
+    EXPECT_EQ((*rec)[2], ordering ? 1U : 0U) << static_cast<int>(op);
+  }
+}
+
 }  // namespace
 }  // namespace xlsb
 }  // namespace io

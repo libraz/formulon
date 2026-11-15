@@ -345,6 +345,13 @@ Expected<FilterColumn, Error> ReadFilterColumn(ByteSpan& cursor, ByteSpan begin)
   }
 }
 
+/// The flag that starts a string criterion's union: set for <, <=, > and >= on an operand without `*` or `?`, an
+/// escaped `~*` or `~?` included; clear for = and <> and for a pattern.
+bool StringCriterionFlag(const CustomFilter& filter) {
+  const bool ordering = filter.op != FilterOperator::kEqual && filter.op != FilterOperator::kNotEqual;
+  return ordering && filter.val.find_first_of("*?") == std::string::npos;
+}
+
 void EmitCustomFilter(std::vector<std::uint8_t>& out, const CustomFilter& filter) {
   std::vector<std::uint8_t> payload;
   const bool non_blank = filter.op == FilterOperator::kNotEqual && filter.val == kNonBlankText;
@@ -352,10 +359,16 @@ void EmitCustomFilter(std::vector<std::uint8_t>& out, const CustomFilter& filter
   const std::optional<double> number = parse_full_double(filter.val);
   emit_u8(payload, blank ? kVtsBlank : non_blank ? kVtsNonBlank : number ? kVtsNumber : kVtsString);
   emit_u8(payload, SgnFromOperator(filter.op));
-  // Excel's bytes after a blank or non-blank operator look like unset memory; zero is our choice.
-  emit_double(payload, number.value_or(0.0));
   if (!number && !non_blank && !blank) {
+    // Excel leaves the rest of a string operand's union unset; zero here.
+    emit_u8(payload, StringCriterionFlag(filter) ? 1U : 0U);
+    for (int i = 0; i < 7; ++i) {
+      emit_u8(payload, 0U);
+    }
     emit_xlwidestring(payload, filter.val);
+  } else {
+    // Excel's bytes after a blank or non-blank operator look like unset memory; zero is our choice.
+    emit_double(payload, number.value_or(0.0));
   }
   emit_record(out, kBrtCustomFilter, payload);
 }

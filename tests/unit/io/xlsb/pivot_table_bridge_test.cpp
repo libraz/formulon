@@ -36,7 +36,7 @@ namespace {
 namespace tc = test;
 
 constexpr const char* kTablePrefix = "xl/pivotTables/pivotTable";
-/// BrtCustomFilter with a string operand: Excel leaves bytes 2-9 uninitialised; the writer emits zeros there.
+/// BrtCustomFilter with a string operand: Excel leaves bytes 4-9 uninitialised; the writer emits zeros there.
 constexpr std::uint16_t kBrtCustomFilter = 174;
 constexpr std::uint8_t kVtsString = 0x06;
 
@@ -322,7 +322,7 @@ std::vector<std::string> RecordDiffs(const tc::Bytes& ours, const tc::Bytes& exc
     const tc::IndexedRecord& b = excel_records[i];
     bool same = a.type == b.type && a.payload.size() == b.payload.size();
     for (std::size_t k = 0; same && k < a.payload.size(); ++k) {
-      const bool uninitialised = b.type == kBrtCustomFilter && b.payload[0] == kVtsString && k >= 2U && k < 10U;
+      const bool uninitialised = b.type == kBrtCustomFilter && b.payload[0] == kVtsString && k >= 4U && k < 10U;
       same = a.payload[k] == b.payload[k] || uninitialised;
     }
     if (!same) {
@@ -800,6 +800,48 @@ TEST(PivotTableBridge, ParityVariantsReadMatchTheXlsxTwin) {
       want.pop_back();
     }
     EXPECT_EQ(got, want) << LineDiff(got, want);
+  }
+}
+
+/// The filter block records (SXFilters through its custom filters) of a package's first pivot table part.
+std::vector<tc::IndexedRecord> FilterRecords(const tc::Bytes& package) {
+  const std::set<std::uint16_t> types = {pivot_records::kBeginSXFilters, pivot_records::kBeginSXFilter,
+                                         pivot_records::kEndSXFilter, pivot_records::kEndSXFilters, kBrtCustomFilter};
+  const tc::RecordSet records = tc::ExtractRecords(package, types);
+  const auto part = records.find(std::string(kTablePrefix) + "1.bin");
+  return part == records.end() ? std::vector<tc::IndexedRecord>{} : part->second;
+}
+
+// A caption filter's string criteria, written from the xlsx Excel saved, are the records of Excel's own xlsb save:
+// an ordering operator sets the first union byte, which Excel's refresh reads, unless the operand has `*` or `?`
+// (escaped or not). The caption_flag cases cover B, B?, B~?, B~*, B*C and * under > and <=.
+TEST(PivotTableBridge, CaptionFilterCriteriaWriteExcelsRecords) {
+  const std::string root = FORMULON_FIXTURES_DIR;
+  for (const char* variant :
+       {"caption_less_than", "caption_not_between", "caption_greater_than_wildcard", "caption_flag/P_gt_B",
+        "caption_flag/P_gt_Bq", "caption_flag/P_gt_Bescq", "caption_flag/P_gt_Bescstar", "caption_flag/P_gt_BstarC",
+        "caption_flag/P_gt_star", "caption_flag/P_le_B", "caption_flag/P_le_Bq", "caption_flag/P_le_Bescq",
+        "caption_flag/P_le_Bescstar", "caption_flag/P_le_BstarC", "caption_flag/P_le_star"}) {
+    SCOPED_TRACE(variant);
+    const std::string dir = "excel/xlsb_parity/pivot/";
+    const tc::Bytes excel = tc::ReadBytes(root + "/" + dir + variant + ".xlsb");
+    ASSERT_FALSE(excel.empty());
+    const tc::Converted ours = tc::ConvertToXlsb(root, dir + variant + ".xlsx");
+    ASSERT_TRUE(ours.error.empty()) << ours.error;
+    const std::vector<tc::IndexedRecord> a = FilterRecords(ours.bytes);
+    const std::vector<tc::IndexedRecord> b = FilterRecords(excel);
+    ASSERT_EQ(a.size(), b.size());
+    ASSERT_FALSE(b.empty());
+    for (std::size_t i = 0; i < b.size(); ++i) {
+      ASSERT_EQ(a[i].type, b[i].type) << "record " << i;
+      ASSERT_EQ(a[i].payload.size(), b[i].payload.size()) << "record " << i;
+      for (std::size_t k = 0; k < b[i].payload.size(); ++k) {
+        const bool uninitialised = b[i].type == kBrtCustomFilter && b[i].payload[0] == kVtsString && k >= 4U && k < 10U;
+        if (!uninitialised) {
+          EXPECT_EQ(a[i].payload[k], b[i].payload[k]) << "record " << i << " type " << b[i].type << " byte " << k;
+        }
+      }
+    }
   }
 }
 
