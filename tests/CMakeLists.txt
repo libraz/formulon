@@ -767,6 +767,13 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
   set_tests_properties(ApiUpgradeGuideAbi PROPERTIES LABELS "Api")
+  # The released C ABI baseline is the newest published release.
+  add_test(
+    NAME ApiAbiBaselineRelease
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/api/check_abi_baseline_release_test.py
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  set_tests_properties(ApiAbiBaselineRelease PROPERTIES LABELS "Api")
   # The propagated rich-value table and its test rows are what the measured sweep generates.
   add_test(
     NAME RichValueErrorIftabDrift

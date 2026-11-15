@@ -112,7 +112,7 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   32 bits is `RangeError` (Python `ValueError`); an index past the end is
   `IndexOutOfRange`.
 - **Behaviour:** a conditional formatting rule whose id is already in use gets
-  a fresh id instead of being refused. A JavaScript `Date` written to a
+  a fresh id instead of keeping the duplicate id on both rules. A JavaScript `Date` written to a
   General cell gets the built-in date format id 14 at local midnight and id 22
   otherwise; a Python `date` takes 14, a `datetime` 22 and a `time` `h:mm:ss`
   (21). Id 14 displays `m/d/yy` under en-US (`1/2/26`) and `yyyy/m/d` under
@@ -143,8 +143,7 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   patches are keyword-only arguments that default to `UNCHANGED`.
 - **C ABI, JavaScript, Python:** a record that exists once (sheet protection,
   an AutoFilter, a table AutoFilter, a chart title, a chart legend, a chart
-  point override, the pinned time, the theme, a row or column break, a
-  hyperlink) is removed with `set<X>(null)` (C: `NULL`), and its separate
+  point override, the pinned time, the theme, a row or column break) is removed with `set<X>(null)` (C: `NULL`), and its separate
   `remove*` / `clear*` method is gone. `remove*` of a keyed record that is
   missing fails with `NotFound`; `clear*` does nothing when there is nothing
   to clear. `reset<X>` restores a default and replaces the former `clear`
@@ -360,6 +359,9 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   `_set_row_outline`, `_set_row_collapsed`, `fm_sheet_reset_row_height`) take an
   inclusive `(sheet_index, first, last, ...)` span like the column functions;
   `last < first` returns `FM_STATUS_INVALID_ARGUMENT`.
+  `fm_sheet_set_row_outline(wb, sheet, row, uint8_t level)` is
+  `fm_sheet_set_row_outline(wb, sheet_index, first, last, uint32_t level)`, and
+  a `level` above 7 returns `FM_STATUS_INVALID_ARGUMENT`.
 - **C ABI:** an index past the end of a collection other than sheets returns
   `FM_STATUS_INDEX_OUT_OF_RANGE`, and removing a record by a natural key that
   does not exist returns `FM_STATUS_NOT_FOUND`. Error message text no longer
@@ -1451,8 +1453,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
   pivot-cache lookup by `cacheId`, which makes a missing id `NotFound` on
   every function.
 - A cell coordinate, row index or column index outside the sheet grid is
-  `InvalidArgument` on every function that takes one. The cell setters,
-  the phonetic, lambda-text, spill, hyperlink, comment, data-table, style
+  `InvalidArgument` on every function that takes one. The phonetic, lambda-text, spill, hyperlink, comment, data-table, style
   and trace getters, `validateValue` and `Pivot.showDetails` used to accept
   one, and either reported nothing found or failed further in. Removing a
   page break outside the grid was `NotFound`.
@@ -1500,12 +1501,6 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 - `Sheet.move(insertBefore)` takes the position in the list before the move
   (`null` appends; a move before itself or before the next sheet changes
   nothing), as `addSheet` and `copySheet` do.
-- `getPrintArea` returns `null` (Python `None`) when no print area is set,
-  where JavaScript returned `[]`.
-- `convertColumnCharsToPt`, `convertColumnPtToChars` and `getColumnWidthPt`
-  take `mode` as the last argument. A call with the old order throws
-  `RangeError`, except that a `mode` of 0 or 1 in the first position can be
-  misread.
 - Python pivot options read an unset string as `None` instead of `""`.
 - An unknown error code has no display name: `ErrorDisplayName[code]` is
   `undefined` in JavaScript and `ErrorCode(code)` raises `ValueError` in
@@ -1744,6 +1739,21 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
   `setTableStyle` also refuses a slicer-style name, and a loaded custom style
   named like any built-in style is dropped; tables and PivotTables naming it
   keep the name.
+- `LEN`, `MID`, `FIND`, `SEARCH` and `REPLACE` count characters the way the
+  workbook's Compatibility Version says, on every profile: a character outside
+  the Basic Multilingual Plane (an emoji, a rare CJK ideograph) counts as one
+  position, unless the workbook declares version 1, where it counts as two.
+  Windows profiles, including the default `win-365-en_US`, always counted two.
+  A new workbook uses version 2; a loaded workbook without the setting uses
+  version 1.
+- A `.xlsx` or `.xlsb` save renumbers the cell format indices: entries that
+  write identically collapse into the first, entries no cell, row or column
+  uses are dropped, and the rest keep their order. An index read before a save
+  can differ after it.
+- Writing a text value into a table's header cell renames the column; the
+  column name used to stay unchanged.
+- **JavaScript:** `DrawingObject.mediaPath` is removed.
+- **Python:** every `Workbook` in a process shares one WASM module instance.
 - A conditional formatting `dxfIndex` past the differential-format table is
   `IndexOutOfRange`; it was `InvalidArgument`.
 - A new workbook's first sheet has `tabSelected` set; it was not. This replaces
@@ -3715,6 +3725,14 @@ A caller compiled against an earlier header must be recompiled.
 | `fm_sheet_validate_value`, `fm_sheet_get_effective_style` and `fm_sheet_get_format_defaults` filling `fm_validation_outcome`, `fm_effective_style` and `fm_sheet_format_defaults` | fill `fm_validation_outcome_info_t`, `fm_effective_style_info_t` and `fm_sheet_format_defaults_t` |
 | `fm_workbook_get_theme_colors`, `fm_workbook_set_theme_colors`, `fm_workbook_get_theme_fonts`, `fm_workbook_set_theme_fonts` taking `fm_theme_colors` and `fm_theme_fonts` | take `fm_theme_colors_t` and `fm_theme_fonts_t` |
 | `fm_workbook_resolve_color(wb, fm_color_spec spec, context, ...)` | `fm_workbook_resolve_color(wb, const fm_color_t* spec, context, ...)` |
+| `fm_workbook_get_active_sheet(wb, uint32_t* out)`, `fm_workbook_set_active_sheet(wb, uint32_t index)` | `size_t* out` and `size_t index` |
+| `fm_sheet_add_chart_series(…, const fm_chart_series_patch*, uint32_t* out)` | takes `const fm_chart_series_patch_t*`; the argument list is unchanged |
+| `fm_sheet_add_data_table(wb, size_t sheet_index, const fm_data_table*)` | `(wb, sheet_index, const fm_data_table_t*, fm_cell_address_t* out_cell)` returns the anchor of the new table |
+| `fm_sheet_add_protected_range(wb, uint32_t sheet, const fm_protected_range_t*)` | `(wb, size_t sheet_index, const fm_protected_range_t*, const char** out_name)` returns the stored name |
+| `fm_sheet_get_selection(…, fm_merge_range* out, …)`, `fm_sheet_set_selection(…, const fm_merge_range*, …)` | take `fm_cell_rect_t`; the argument list is unchanged |
+| `fm_sheet_set_comment_visible(wb, uint32_t sheet, row, col, visible)` | `size_t sheet_index` in place of `uint32_t sheet` |
+| `fm_sheet_set_drawing_z_order(wb, sheet_index, object_id, uint32_t index)` | `(wb, sheet_index, object_id, size_t z_order_index)`; it reorders charts, shapes and slicers as well as pictures |
+| `fm_sheet_set_row_collapsed(wb, sheet_index, row, collapsed)` | `(wb, sheet_index, first, last, collapsed)` over an inclusive row span |
 | `fm_workbook_defined_name_at` (two strings and a scope), `fm_workbook_defined_name_attrs_at` | `fm_workbook_get_defined_name_at(wb, index, fm_defined_name_t*)` |
 | `fm_workbook_set_iterative(wb, enabled, max_iterations, max_change)`, `fm_workbook_set_iterative_enabled` | `fm_workbook_update_iterative(wb, const fm_iterative_settings_patch_t*)`; a negative field keeps the stored value |
 | `fm_sheet_set_print_titles(wb, sheet_index, repeat_rows, repeat_cols)`, `fm_sheet_get_print_titles` (A1 text) | take and fill an `fm_print_titles_t` (per-axis `has_*` flag and 0-based span); `NULL` clears |
@@ -3753,6 +3771,7 @@ A caller compiled against an earlier header must be recompiled.
 | `fm_sheet_get_comment_count(wb, sheet_index, out)` | `size_t sheet_index`, the count through `size_t* out_count`, a `const` handle |
 | `fm_sheet_set_comment(wb, sheet, row, col, author, text)` (empty text removed the note) | `size_t sheet_index` and a `const fm_comment_t*`; `NULL` removes the note and is a no-op when there is none |
 | `fm_sheet_set_range_xf_index` | `size_t sheet_index` and `xf_index`, the rectangle as `const fm_cell_rect_t*` |
+| `fm_sheet_set_row_outline(wb, sheet, row, uint8_t level)` | `(wb, sheet_index, first, last, uint32_t level)`; a `level` above 7 is `FM_STATUS_INVALID_ARGUMENT` |
 | `fm_sheet_set_row_hidden`, `fm_sheet_set_row_outline` | take the inclusive row span `(first, last)`, like `fm_sheet_set_column_hidden` and `fm_sheet_set_column_outline` |
 | `fm_sheet_set_column_style`, `fm_sheet_set_row_style` | `fm_sheet_set_column_xf_index`, `fm_sheet_set_row_xf_index`, with `xf_index` as `size_t` |
 | `fm_sheet_remap_range_style`, `fm_sheet_snapshot_range_style`, `fm_sheet_restore_range_style` | `fm_sheet_remap_range_xfs`, `fm_sheet_snapshot_range_xfs`, `fm_sheet_restore_range_xfs`; the rectangle is a `const fm_cell_rect_t*` |

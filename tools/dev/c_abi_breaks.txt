@@ -29,11 +29,6 @@
 # release that shipped them -- at that point the new surface *is* what a
 # consumer compiled against, so there is nothing left to excuse.
 
-removed fm_sheet_remove_image :: renamed fm_sheet_remove_drawing; it removes every drawing object kind, charts, shapes and slicers as well as pictures
-removed fm_sheet_set_image_anchor :: replaced by fm_sheet_update_drawing, whose fm_drawing_patch_t embeds an fm_drawing_anchor_patch_t that merges into the current anchor
-removed fm_sheet_set_image_z_order :: renamed fm_sheet_set_drawing_z_order; it reorders charts as well as pictures
-removed fm_sheet_snapshot_image :: renamed fm_sheet_snapshot_drawing; it captures charts as well as pictures
-removed fm_sheet_restore_image :: renamed fm_sheet_restore_drawing, with flag FM_DRAWING_RESTORE_NEW_ID (was FM_IMAGE_RESTORE_NEW_ID)
 removed fm_workbook_pivot_field_set_date_group :: renamed to fm_sheet_set_pivot_field_date_group, which groups by a FM_PIVOT_PERIOD_* mask into cache group fields with locale labels; it takes const fm_pivot_date_group_t* (the granularity, year and -1 serial arguments are gone; auto_start / auto_end TRUE take the field's first / last value)
 removed fm_buffer_free :: renamed to fm_buffer_destroy
 removed fm_cell_clear_xf_index :: renamed to fm_sheet_reset_cell_xf_index; it resets the cell to the default XF
@@ -354,3 +349,104 @@ removed fm_sheet_set_right_to_left :: set right_to_left through fm_sheet_update_
 removed fm_sheet_set_tab_selected :: set tab_selected through fm_sheet_update_view
 signature fm_workbook_save :: takes an int32_t format (fm_workbook_format_t: FM_WORKBOOK_FORMAT_XLSX 0, FM_WORKBOOK_FORMAT_XLSB 1) before out_bytes
 removed fm_workbook_save_as :: fm_workbook_save takes the format
+removed fm_chart_axis_at :: renamed fm_chart_get_axis_at
+removed fm_chart_data_axis_title_at :: renamed fm_chart_data_get_axis_title_at
+removed fm_chart_data_category_at :: renamed fm_chart_data_get_category_at
+removed fm_chart_data_category_level_at :: renamed fm_chart_data_get_category_level_at
+removed fm_chart_data_category_level_size :: renamed fm_chart_data_get_category_level_count
+removed fm_chart_data_info :: renamed fm_chart_data_get_info
+removed fm_chart_data_range_at :: renamed fm_chart_data_get_range_at
+removed fm_chart_data_series_at :: renamed fm_chart_data_get_series_at
+removed fm_chart_data_series_points :: renamed fm_chart_data_get_series_points
+removed fm_chart_data_unresolved_at :: renamed fm_chart_data_get_unresolved_at
+removed fm_chart_hidden_category_at :: renamed fm_chart_get_hidden_category_at
+removed fm_chart_info :: renamed fm_chart_get_info
+removed fm_chart_legend_hidden_at :: renamed fm_chart_get_legend_hidden_at
+removed fm_chart_plot_at :: renamed fm_chart_get_plot_at
+removed fm_chart_plot_axis_id_at :: renamed fm_chart_get_plot_axis_id_at
+removed fm_chart_series_at :: renamed fm_chart_get_series_at
+removed fm_chart_series_literal_at :: renamed fm_chart_get_series_literal_at
+removed fm_chart_series_point_at :: renamed fm_chart_get_series_point_at
+retyped fm_sheet_add_chart_series :: parameter type renamed (fm_chart_series_patch -> fm_chart_series_patch_t)
+signature fm_sheet_add_data_table :: parameter type renamed (fm_data_table -> fm_data_table_t); the anchor of the new table comes back through fm_cell_address_t*
+signature fm_sheet_add_protected_range :: sheet index widened to size_t sheet_index; the stored name comes back through const char** out_name
+signature fm_sheet_add_slicer :: takes a size_t table_sheet_index after sheet_index, and an fm_slicer_spec_t in place of an fm_slicer
+signature fm_sheet_add_sparkline_group :: parameter types renamed (fm_sparkline_group -> fm_sparkline_group_t, fm_sparkline -> fm_sparkline_t); the group id comes back through const char** out
+removed fm_sheet_chart_data_open :: renamed fm_sheet_get_chart_data
+removed fm_sheet_chart_open :: renamed fm_sheet_get_chart
+removed fm_sheet_chart_preview_open :: renamed fm_sheet_get_chart_preview
+removed fm_sheet_data_table_at :: renamed fm_sheet_get_data_table
+signature fm_sheet_get_comment_visible :: handle is const, sheet index widened to size_t sheet_index; presence is reported through int32_t* out_present before the flag
+signature fm_sheet_get_protected_range :: reads by name (const char*) with int32_t* out_present; the positional read is fm_sheet_get_protected_range_at
+retyped fm_sheet_get_selection :: parameter type renamed (fm_merge_range -> fm_cell_rect_t)
+removed fm_sheet_insert_chart :: renamed fm_sheet_add_chart
+removed fm_sheet_insert_shape :: renamed fm_sheet_add_shape
+removed fm_sheet_protected_range_count :: renamed fm_sheet_get_protected_range_count
+signature fm_sheet_remove_protected_range :: takes the range name (const char*) in place of a position; sheet index widened to size_t sheet_index
+removed fm_sheet_remove_shape :: replaced by fm_sheet_remove_drawing, which removes a picture, chart, shape, connector, group or slicer
+removed fm_sheet_remove_slicer :: replaced by fm_sheet_remove_drawing, which removes a picture, chart, shape, connector, group or slicer
+signature fm_sheet_remove_sparkline_group :: takes the group id (const char*) in place of a position
+removed fm_sheet_set_chart_axis :: renamed fm_sheet_update_chart_axis
+removed fm_sheet_set_chart_display :: renamed fm_sheet_update_chart_display
+signature fm_sheet_set_chart_legend :: takes const fm_chart_legend_t* (NULL removes the legend) in place of an fm_chart_legend_patch; fm_sheet_update_chart_legend merges a patch
+removed fm_sheet_set_chart_plot :: renamed fm_sheet_update_chart_plot
+removed fm_sheet_set_chart_point :: replaced by fm_sheet_update_chart_point, whose patch keeps, clears or sets each point field
+removed fm_sheet_set_chart_series :: renamed fm_sheet_update_chart_series
+signature fm_sheet_set_chart_type :: takes an int32_t bar_direction after the plot type
+signature fm_sheet_set_comment_visible :: sheet index widened to size_t sheet_index
+removed fm_sheet_set_drawing_anchor :: replaced by fm_sheet_update_drawing, whose fm_drawing_patch_t embeds an fm_drawing_anchor_patch_t that merges into the current anchor
+signature fm_sheet_set_drawing_z_order :: the position argument is widened to size_t, and charts, shapes and slicers are accepted as well as pictures
+removed fm_sheet_set_pane_top_left :: replaced by fm_sheet_update_view, whose fm_sheet_view_patch_t sets pane_top_left_row and pane_top_left_col
+signature fm_sheet_set_row_collapsed :: takes an inclusive (first, last) row span in place of one row
+retyped fm_sheet_set_selection :: parameter type renamed (fm_merge_range -> fm_cell_rect_t)
+removed fm_sheet_set_show_formulas :: replaced by fm_sheet_update_view, whose fm_sheet_view_patch_t sets show_formulas
+removed fm_sheet_set_show_outline_symbols :: replaced by fm_sheet_update_view, whose fm_sheet_view_patch_t sets show_outline_symbols
+removed fm_sheet_set_sparkline_group_sparklines :: replaced by fm_sheet_update_sparkline_group, whose patch replaces the sparklines when items_op is SET
+removed fm_sheet_set_split :: replaced by fm_sheet_update_view, whose fm_sheet_view_patch_t sets split_x_twips and split_y_twips
+removed fm_sheet_set_top_left :: replaced by fm_sheet_update_view, whose fm_sheet_view_patch_t sets top_left_row and top_left_col
+removed fm_sheet_shape_at :: replaced by fm_sheet_get_drawing_object_at, which enumerates every drawing object kind
+removed fm_sheet_shape_count :: replaced by fm_sheet_get_drawing_object_count, which counts every drawing object kind
+removed fm_sheet_slicer_at :: replaced by fm_sheet_get_drawing_object_at, which enumerates every drawing object kind
+removed fm_sheet_slicer_count :: replaced by fm_sheet_get_drawing_object_count, which counts every drawing object kind
+removed fm_sheet_sparkline_at :: renamed fm_sheet_get_sparkline_at
+removed fm_sheet_sparkline_group_at :: renamed fm_sheet_get_sparkline_group_at
+removed fm_sheet_sparkline_group_count :: renamed fm_sheet_get_sparkline_group_count
+signature fm_sheet_update_protected_range :: takes the range name (const char*) and an fm_protected_range_patch_t in place of a position and a full record; sheet index widened to size_t sheet_index
+signature fm_sheet_update_shape :: takes an fm_drawing_patch_t for the common fields and an fm_shape_patch_t for the shape fields in place of an fm_shape
+signature fm_sheet_update_slicer :: takes an fm_drawing_patch_t and an fm_slicer_patch_t addressed by a uint32_t object id in place of an fm_slicer addressed by position
+signature fm_sheet_update_sparkline_group :: takes the group id (const char*) and an fm_sparkline_group_patch_t in place of a position and a full fm_sparkline_group
+removed fm_styles_get_table_style :: renamed fm_workbook_get_table_style_at
+removed fm_styles_get_table_style_count :: renamed fm_workbook_get_table_style_count
+removed fm_styles_get_table_style_defaults :: renamed fm_workbook_get_table_style_defaults
+removed fm_styles_remove_table_style :: renamed fm_workbook_remove_table_style
+removed fm_styles_set_table_style :: renamed fm_workbook_set_table_style
+removed fm_styles_set_table_style_defaults :: renamed fm_workbook_update_table_style_defaults
+removed fm_workbook_calc_on_save :: renamed fm_workbook_get_calc_on_save
+removed fm_workbook_date1904 :: renamed fm_workbook_get_date1904
+removed fm_workbook_defined_name_attrs_at :: replaced by fm_workbook_get_defined_name_at, which fills an fm_defined_name_t carrying the attributes
+removed fm_workbook_full_precision :: renamed fm_workbook_get_full_precision
+signature fm_workbook_get_active_sheet :: the index is written through size_t* in place of uint32_t*
+removed fm_workbook_get_cell_show_phonetic :: renamed fm_sheet_get_cell_show_phonetic
+removed fm_workbook_get_protection :: renamed fm_workbook_get_workbook_protection
+removed fm_workbook_has_cell_phonetic_properties :: replaced by fm_sheet_get_cell_phonetic_properties, which reports presence through out_present
+removed fm_workbook_pivot_data_field_at :: renamed fm_sheet_get_pivot_data_field_at
+removed fm_workbook_pivot_field_at :: renamed fm_sheet_get_pivot_field_at
+removed fm_workbook_pivot_field_item_at :: renamed fm_sheet_get_pivot_field_item_at
+removed fm_workbook_pivot_field_item_count :: renamed fm_sheet_get_pivot_field_item_count
+removed fm_workbook_pivot_get_cache_id :: renamed fm_sheet_get_pivot_cache_id
+removed fm_workbook_pivot_get_col_field_order :: renamed fm_sheet_get_pivot_column_field_order
+removed fm_workbook_pivot_get_grand_totals :: renamed fm_sheet_get_pivot_grand_totals
+removed fm_workbook_pivot_get_name :: renamed fm_sheet_get_pivot_name
+removed fm_workbook_pivot_get_row_field_order :: renamed fm_sheet_get_pivot_row_field_order
+removed fm_workbook_pivot_get_style_info :: renamed fm_sheet_get_pivot_style_options
+removed fm_workbook_pivot_set_style_info :: renamed fm_sheet_update_pivot_style_options
+removed fm_workbook_ref_mode :: renamed fm_workbook_get_ref_mode
+signature fm_workbook_set_active_sheet :: the index is size_t in place of uint32_t
+removed fm_workbook_set_cell_show_phonetic :: renamed fm_sheet_set_cell_show_phonetic
+removed fm_workbook_set_defined_name_attrs :: replaced by fm_workbook_set_defined_name, whose fm_defined_name_t carries comment and hidden
+removed fm_workbook_set_protection :: renamed fm_workbook_set_workbook_protection
+removed fm_workbook_table_get_column :: renamed fm_sheet_get_table_column_at
+removed fm_workbook_table_get_info :: replaced by fm_sheet_get_table_at, which fills an fm_table_info_t carrying the name and range
+removed fm_workbook_table_rename :: renamed fm_sheet_rename_table
+removed fm_workbook_table_set_column_totals :: replaced by fm_sheet_update_table, whose patch carries the column totals
+removed fm_workbook_table_set_style_info :: renamed fm_sheet_update_table_style_options
