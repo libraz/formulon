@@ -38,6 +38,9 @@ namespace tc = test;
 constexpr const char* kTablePrefix = "xl/pivotTables/pivotTable";
 /// BrtCustomFilter with a string operand: Excel leaves bytes 4-9 uninitialised; the writer emits zeros there.
 constexpr std::uint16_t kBrtCustomFilter = 174;
+constexpr std::uint16_t kBrtBeginFilters = 165;
+constexpr std::uint16_t kBrtEndFilters = 166;
+constexpr std::uint16_t kBrtFilter = 167;
 constexpr std::uint8_t kVtsString = 0x06;
 
 /// (xlsb, xlsx) paths of every Excel-saved pivot pair.
@@ -805,8 +808,14 @@ TEST(PivotTableBridge, ParityVariantsReadMatchTheXlsxTwin) {
 
 /// The filter block records (SXFilters through its custom filters) of a package's first pivot table part.
 std::vector<tc::IndexedRecord> FilterRecords(const tc::Bytes& package) {
-  const std::set<std::uint16_t> types = {pivot_records::kBeginSXFilters, pivot_records::kBeginSXFilter,
-                                         pivot_records::kEndSXFilter, pivot_records::kEndSXFilters, kBrtCustomFilter};
+  const std::set<std::uint16_t> types = {pivot_records::kBeginSXFilters,
+                                         pivot_records::kBeginSXFilter,
+                                         pivot_records::kEndSXFilter,
+                                         pivot_records::kEndSXFilters,
+                                         kBrtCustomFilter,
+                                         kBrtBeginFilters,
+                                         kBrtFilter,
+                                         kBrtEndFilters};
   const tc::RecordSet records = tc::ExtractRecords(package, types);
   const auto part = records.find(std::string(kTablePrefix) + "1.bin");
   return part == records.end() ? std::vector<tc::IndexedRecord>{} : part->second;
@@ -815,14 +824,21 @@ std::vector<tc::IndexedRecord> FilterRecords(const tc::Bytes& package) {
 // A caption filter's string criteria, written from the xlsx Excel saved, are the records of Excel's own xlsb save:
 // an ordering operator sets the first union byte, which Excel's refresh reads, unless the operand has `*` or `?`
 // (escaped or not). The caption_flag cases cover B, B?, B~?, B~*, B*C, ~~B and * under > and <=.
+// The caption_equal cases: B, B*, B~*, B~?, ~B and ~~B under = (a value list unless the operand is a pattern) and
+// <> (always a pattern).
 TEST(PivotTableBridge, CaptionFilterCriteriaWriteExcelsRecords) {
   const std::string root = FORMULON_FIXTURES_DIR;
   for (const char* variant :
-       {"caption_less_than", "caption_not_between", "caption_greater_than_wildcard", "caption_flag/P_gt_B",
-        "caption_flag/P_gt_Bq", "caption_flag/P_gt_Bescq", "caption_flag/P_gt_Bescstar", "caption_flag/P_gt_BstarC",
-        "caption_flag/P_gt_esctildeB", "caption_flag/P_gt_star", "caption_flag/P_le_B", "caption_flag/P_le_Bq",
-        "caption_flag/P_le_Bescq", "caption_flag/P_le_Bescstar", "caption_flag/P_le_BstarC",
-        "caption_flag/P_le_esctildeB", "caption_flag/P_le_star"}) {
+       {"caption_less_than",           "caption_not_between",          "caption_greater_than_wildcard",
+        "caption_flag/P_gt_B",         "caption_flag/P_gt_Bq",         "caption_flag/P_gt_Bescq",
+        "caption_flag/P_gt_Bescstar",  "caption_flag/P_gt_BstarC",     "caption_flag/P_gt_esctildeB",
+        "caption_flag/P_gt_star",      "caption_flag/P_le_B",          "caption_flag/P_le_Bq",
+        "caption_flag/P_le_Bescq",     "caption_flag/P_le_Bescstar",   "caption_flag/P_le_BstarC",
+        "caption_flag/P_le_esctildeB", "caption_flag/P_le_star",       "caption_equal/P_eq_B",
+        "caption_equal/P_eq_Bstar",    "caption_equal/P_eq_Bescstar",  "caption_equal/P_eq_Bescq",
+        "caption_equal/P_eq_tildeB",   "caption_equal/P_eq_esctildeB", "caption_equal/P_ne_B",
+        "caption_equal/P_ne_Bstar",    "caption_equal/P_ne_Bescstar",  "caption_equal/P_ne_Bescq",
+        "caption_equal/P_ne_tildeB",   "caption_equal/P_ne_esctildeB"}) {
     SCOPED_TRACE(variant);
     const std::string dir = "excel/xlsb_parity/pivot/";
     const tc::Bytes excel = tc::ReadBytes(root + "/" + dir + variant + ".xlsb");

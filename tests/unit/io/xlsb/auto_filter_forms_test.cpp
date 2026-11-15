@@ -299,9 +299,9 @@ TEST(XlsbAutoFilterForms, ThreeCustomCriteriaSaveAsTheLastValue) {
   EXPECT_EQ(Written(read), excel);
 }
 
-/// The custom filter record of `flag/<name>.xlsb`'s sheet AutoFilter, and its block read back.
+/// The AUTOFILTER block of `<name>.xlsb`'s first sheet.
 Records FlagBlock(const std::string& name) {
-  const Bytes package = ReadFile("flag/" + name + ".xlsb");
+  const Bytes package = ReadFile(name + ".xlsb");
   ZipReader zip;
   EXPECT_TRUE(static_cast<bool>(zip.open(SpanOf(package))));
   auto part = zip.read_entry("xl/worksheets/sheet1.bin");
@@ -348,7 +348,7 @@ TEST(XlsbAutoFilterForms, StringCriterionFlagFollowsExcel) {
   };
   for (const auto& c : kCases) {
     SCOPED_TRACE(c.name);
-    const Records block = FlagBlock(c.name);
+    const Records block = FlagBlock(std::string("flag/") + c.name);
     const Bytes* excel = FindRecord(block, kBrtCustomFilter);
     ASSERT_NE(excel, nullptr);
     ASSERT_GE(excel->size(), 10U);
@@ -369,20 +369,52 @@ TEST(XlsbAutoFilterForms, StringCriterionFlagFollowsExcel) {
   }
 }
 
-// = and <> leave the flag clear on any operand; < and >= set it on a plain one, as Excel's ft_l18 / ft_l19 saves do.
+// On a sheet only = leaves the flag clear on a plain operand; <, >=, and <> set it, as Excel's ft_l18 / ft_l19 and
+// afilter/equal saves do. In a PivotTable caption filter <> matches as a pattern and leaves it clear too.
 TEST(XlsbAutoFilterForms, StringCriterionFlagUnderEveryOperator) {
-  Records block = FlagBlock("A_gt_B");
+  Records block = FlagBlock("flag/A_gt_B");
   AutoFilter filter = ReadBlock(Stream(block));
   ASSERT_EQ(filter.columns[0].custom.filters.size(), 1U);
-  for (const FilterOperator op :
-       {FilterOperator::kLessThan, FilterOperator::kEqual, FilterOperator::kLessThanOrEqual,
-        FilterOperator::kGreaterThan, FilterOperator::kNotEqual, FilterOperator::kGreaterThanOrEqual}) {
-    filter.columns[0].custom.filters[0].op = op;
-    const Records written = Written(filter);
-    const Bytes* rec = FindRecord(written, kBrtCustomFilter);
-    ASSERT_NE(rec, nullptr);
-    const bool ordering = op != FilterOperator::kEqual && op != FilterOperator::kNotEqual;
-    EXPECT_EQ((*rec)[2], ordering ? 1U : 0U) << static_cast<int>(op);
+  for (const AutoFilterHost host : {AutoFilterHost::kSheet, AutoFilterHost::kPivotCaption}) {
+    for (const FilterOperator op :
+         {FilterOperator::kLessThan, FilterOperator::kEqual, FilterOperator::kLessThanOrEqual,
+          FilterOperator::kGreaterThan, FilterOperator::kNotEqual, FilterOperator::kGreaterThanOrEqual}) {
+      filter.columns[0].custom.filters[0].op = op;
+      Bytes out;
+      EXPECT_EQ(emit_auto_filter_block(out, filter, host), 0U);
+      const Records written = AsRecords(out);
+      const Bytes* rec = FindRecord(written, kBrtCustomFilter);
+      ASSERT_NE(rec, nullptr);
+      const bool literal =
+          op != FilterOperator::kEqual && (op != FilterOperator::kNotEqual || host == AutoFilterHost::kSheet);
+      EXPECT_EQ((*rec)[2], literal ? 1U : 0U) << static_cast<int>(op);
+    }
+  }
+}
+
+// = and <> on a sheet (afilter/equal): an = against B, B~*, B~? or ~B is a value list with ~* and ~? unescaped, and
+// = B* a custom filter with a clear flag; <> is a custom filter whose flag is set unless the operand has `*` or `?`.
+// Each block reads and writes back to Excel's records outside the unset union bytes.
+TEST(XlsbAutoFilterForms, EqualityCriteriaWriteBackExcelsBlock) {
+  for (const char* name : {"A_eq_B", "A_eq_Bstar", "A_eq_Bescstar", "A_eq_Bescq", "A_eq_tildeB", "A_eq_esctildeB",
+                           "A_ne_B", "A_ne_Bstar", "A_ne_Bescstar", "A_ne_Bescq", "A_ne_tildeB", "A_ne_esctildeB"}) {
+    SCOPED_TRACE(name);
+    const Records excel = FlagBlock(std::string("equal/") + name);
+    ASSERT_FALSE(excel.empty());
+    const Records ours = Written(ReadBlock(Stream(excel)));
+    ASSERT_EQ(ours.size(), excel.size());
+    for (std::size_t i = 0; i < excel.size(); ++i) {
+      ASSERT_EQ(ours[i].first, excel[i].first) << i;
+      Bytes a = ours[i].second;
+      Bytes b = excel[i].second;
+      if (b.size() >= 10U && excel[i].first == kBrtCustomFilter && b[0] == 0x06) {
+        for (std::size_t k = 4; k < 10U && k < a.size(); ++k) {
+          a[k] = 0;
+          b[k] = 0;
+        }
+      }
+      EXPECT_EQ(a, b) << "record " << i << " type " << excel[i].first;
+    }
   }
 }
 

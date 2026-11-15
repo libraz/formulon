@@ -103,15 +103,20 @@ TEST(AutoFilterEval, ProbeTable) {
   EXPECT_EQ(evaluated, 60U);
 }
 
-// Excel's saves of one ordering criterion per operand kind (afilter/flag): <= keeps the texts a pattern matches and >
-// the rest, `~*` and `~?` match the literal character, and an operand without `*` or `?` (~~B included) orders as
-// literal text. The saved row-hidden state is the visible set Mac Excel computed.
+// Excel's saves of one criterion per operand kind under >, <= (afilter/flag), = and <> (afilter/equal): <= keeps the
+// texts a pattern matches and > the rest, `~*` and `~?` match the literal character, and an operand without `*` or
+// `?` (~~B included) compares as literal text. The saved row-hidden state is the visible set Mac Excel computed.
 TEST(AutoFilterEval, OrderingCriteriaAgainstPatternsMatchExcelsRows) {
-  for (const char* name :
-       {"A_gt_B", "A_gt_Bq", "A_gt_Bescq", "A_gt_Bescstar", "A_gt_BstarC", "A_gt_esctildeB", "A_gt_star", "A_le_B",
-        "A_le_Bq", "A_le_Bescq", "A_le_Bescstar", "A_le_BstarC", "A_le_esctildeB", "A_le_star"}) {
+  for (const char* name : {
+           "flag/A_gt_B",         "flag/A_gt_Bq",        "flag/A_gt_Bescq",     "flag/A_gt_Bescstar",
+           "flag/A_gt_BstarC",    "flag/A_gt_esctildeB", "flag/A_gt_star",      "flag/A_le_B",
+           "flag/A_le_Bq",        "flag/A_le_Bescq",     "flag/A_le_Bescstar",  "flag/A_le_BstarC",
+           "flag/A_le_esctildeB", "flag/A_le_star",      "equal/A_eq_B",        "equal/A_eq_Bstar",
+           "equal/A_eq_Bescstar", "equal/A_eq_Bescq",    "equal/A_eq_tildeB",   "equal/A_eq_esctildeB",
+           "equal/A_ne_B",        "equal/A_ne_Bstar",    "equal/A_ne_Bescstar", "equal/A_ne_Bescq",
+       }) {
     SCOPED_TRACE(name);
-    const std::vector<std::uint8_t> bytes = ReadFile((std::string("afilter/flag/") + name + ".xlsb").c_str());
+    const std::vector<std::uint8_t> bytes = ReadFile((std::string("afilter/") + name + ".xlsb").c_str());
     auto read = io::xlsb::read_xlsb(io::ByteSpan{bytes.data(), bytes.size()});
     ASSERT_TRUE(static_cast<bool>(read)) << read.error().message;
     Workbook& wb = read.value().workbook;
@@ -121,7 +126,7 @@ TEST(AutoFilterEval, OrderingCriteriaAgainstPatternsMatchExcelsRows) {
     ASSERT_NE(filter, nullptr);
     auto visible = evaluate_auto_filter(wb, sheet, *filter);
     ASSERT_TRUE(static_cast<bool>(visible));
-    ASSERT_EQ(visible.value().size(), 12U);
+    ASSERT_EQ(visible.value().size(), filter->range.last_row - filter->range.first_row);
     std::string mismatched;
     for (std::uint32_t k = 0; k < visible.value().size(); ++k) {
       const std::uint32_t row = filter->range.first_row + 1U + k;

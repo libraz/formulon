@@ -1475,7 +1475,7 @@ bool WriteFilter(const pugi::xml_node& node, RawRecords& out) {
     return false;
   }
   std::vector<std::uint8_t> afilter;
-  if (emit_auto_filter_block(afilter, criteria.value()) != 0U) {
+  if (emit_auto_filter_block(afilter, criteria.value(), AutoFilterHost::kPivotCaption) != 0U) {
     return false;
   }
   out.push_back(ids::RawRecord{ids::kBeginSXFilter, std::move(p)});

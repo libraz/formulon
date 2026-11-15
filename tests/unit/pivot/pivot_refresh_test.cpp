@@ -2070,6 +2070,52 @@ TEST(PivotRefresh, ClearingAGroupSharesTheBaseItPutsOnAnAxis) {
   EXPECT_EQ(CacheOf(wb).fields()[kAmt].shared_items.size(), 5U);
 }
 
+/// The items of `all` the first pivot of xlsb_parity/pivot/<name>.xlsx shows in column A once the engine has
+/// refreshed it over a cleared report.
+std::set<std::string> RefreshedCaptionItems(const std::string& name, const std::set<std::string>& all) {
+  const std::string path = std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_parity/pivot/" + name + ".xlsx";
+  std::vector<std::uint8_t> bytes;
+  if (FILE* handle = std::fopen(path.c_str(), "rb"); handle != nullptr) {
+    for (int ch = std::fgetc(handle); ch != EOF; ch = std::fgetc(handle)) {
+      bytes.push_back(static_cast<std::uint8_t>(ch));
+    }
+    std::fclose(handle);
+  }
+  std::set<std::string> shown;
+  if (bytes.empty()) {
+    ADD_FAILURE() << path;
+    return shown;
+  }
+  io::ReadOptions options;
+  options.profile = mac_365_ja_jp_profile();
+  auto read = io::read_ooxml(io::ByteSpan{bytes.data(), bytes.size()}, options);
+  if (!read) {
+    ADD_FAILURE() << read.error().message;
+    return shown;
+  }
+  Workbook wb = std::move(read.value().workbook);
+  Sheet& sheet = wb.sheet(0);
+  if (sheet.pivot_tables().size() != 1U) {
+    ADD_FAILURE() << "expected one pivot";
+    return shown;
+  }
+  // Clear the report Excel saved so only the engine's refresh can fill it.
+  for (std::uint32_t r = 0; r < 20U; ++r) {
+    EXPECT_TRUE(static_cast<bool>(wb.set_cell_value(0, r, 0U, Value::blank())));
+  }
+  const Expected<void, Error> refreshed =
+      wb.refresh_pivot_cache(sheet.pivot_tables().front()->pivot_cache_id(), eval::default_registry());
+  EXPECT_TRUE(static_cast<bool>(refreshed)) << (refreshed ? "" : refreshed.error().message);
+  EXPECT_TRUE(static_cast<bool>(wb.ensure_calculated(eval::default_registry())));
+  for (std::uint32_t r = 0; r < 20U; ++r) {
+    const Value v = sheet.resolve_cell_value(r, 0U);
+    if (v.is_text() && all.count(std::string(v.as_text())) != 0U) {
+      shown.insert(std::string(v.as_text()));
+    }
+  }
+  return shown;
+}
+
 // Excel's refresh of a caption filter with an ordering operator, one save per operand kind
 // (xlsb_parity/pivot/caption_flag): <= keeps the items a pattern matches and > the rest, `~*` and `~?` match the
 // literal character, and an operand without `*` or `?` (~~B included) orders as literal text.
@@ -2097,39 +2143,32 @@ TEST(PivotRefresh, CaptionOrderingAgainstPatternsMatchesExcel) {
   };
   for (const auto& c : kCases) {
     SCOPED_TRACE(c.name);
-    const std::string path =
-        std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_parity/pivot/caption_flag/" + c.name + ".xlsx";
-    std::vector<std::uint8_t> bytes;
-    if (FILE* handle = std::fopen(path.c_str(), "rb"); handle != nullptr) {
-      for (int ch = std::fgetc(handle); ch != EOF; ch = std::fgetc(handle)) {
-        bytes.push_back(static_cast<std::uint8_t>(ch));
-      }
-      std::fclose(handle);
-    }
-    ASSERT_FALSE(bytes.empty()) << path;
-    io::ReadOptions options;
-    options.profile = mac_365_ja_jp_profile();
-    auto read = io::read_ooxml(io::ByteSpan{bytes.data(), bytes.size()}, options);
-    ASSERT_TRUE(static_cast<bool>(read)) << read.error().message;
-    Workbook wb = std::move(read.value().workbook);
-    Sheet& sheet = wb.sheet(0);
-    ASSERT_EQ(sheet.pivot_tables().size(), 1U);
-    // Clear the report Excel saved so only the engine's refresh can fill it.
-    for (std::uint32_t r = 0; r < 20U; ++r) {
-      ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, r, 0U, Value::blank())));
-    }
-    const Expected<void, Error> refreshed =
-        wb.refresh_pivot_cache(sheet.pivot_tables().front()->pivot_cache_id(), eval::default_registry());
-    ASSERT_TRUE(static_cast<bool>(refreshed)) << refreshed.error().message;
-    ASSERT_TRUE(static_cast<bool>(wb.ensure_calculated(eval::default_registry())));
-    std::set<std::string> shown;
-    for (std::uint32_t r = 0; r < 20U; ++r) {
-      const Value v = sheet.resolve_cell_value(r, 0U);
-      if (v.is_text() && all.count(std::string(v.as_text())) != 0U) {
-        shown.insert(std::string(v.as_text()));
-      }
-    }
-    EXPECT_EQ(shown, c.visible);
+    EXPECT_EQ(RefreshedCaptionItems(std::string("caption_flag/") + c.name, all), c.visible);
+  }
+}
+
+// Excel's refresh of a reopened caption filter under = and <>, one save per operand kind
+// (xlsb_parity/pivot/caption_equal): a <> operand matches as a pattern, so <>~B keeps B out and <>~~B keeps ~B out.
+TEST(PivotRefresh, CaptionEqualityMatchesAsAPattern) {
+  const std::set<std::string> all = {"B", "~B", "~~B", "B*", "B?", "Bx", "*star"};
+  const struct {
+    const char* name;
+    std::set<std::string> visible;
+  } kCases[] = {
+      {"P_eq_B", {"B"}},
+      {"P_eq_Bstar", {"B", "B*", "B?", "Bx"}},
+      {"P_eq_Bescstar", {"B*"}},
+      {"P_eq_Bescq", {"B?"}},
+      {"P_ne_B", {"*star", "B*", "B?", "Bx", "~B", "~~B"}},
+      {"P_ne_Bstar", {"*star", "~B", "~~B"}},
+      {"P_ne_Bescstar", {"*star", "B", "B?", "Bx", "~B", "~~B"}},
+      {"P_ne_Bescq", {"*star", "B", "B*", "Bx", "~B", "~~B"}},
+      {"P_ne_tildeB", {"*star", "B*", "B?", "Bx", "~B", "~~B"}},
+      {"P_ne_esctildeB", {"*star", "B", "B*", "B?", "Bx", "~~B"}},
+  };
+  for (const auto& c : kCases) {
+    SCOPED_TRACE(c.name);
+    EXPECT_EQ(RefreshedCaptionItems(std::string("caption_equal/") + c.name, all), c.visible);
   }
 }
 
