@@ -132,6 +132,7 @@ set(FORMULON_CORE_SOURCES
   src/num_fmt_locale.cpp
   src/threaded_comment.cpp
   src/style_region.cpp
+  src/sheet_layout_edit.cpp
   src/style_resolve.cpp
   src/theme.cpp
   src/builtin_style_names.cpp

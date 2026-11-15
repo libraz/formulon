@@ -289,10 +289,14 @@ struct RestoreRows {
 
 void set_column_style_span(SheetLayout& layout, std::uint32_t first, std::uint32_t last, bool styled,
                            std::uint32_t xf_index) {
-  overlay_column_span(layout, first, last, [styled, xf_index](ColumnLayout& entry) {
-    entry.has_style = styled;
-    entry.style_xf = styled ? xf_index : 0U;
-  });
+  // A null context resets the style; otherwise it points at the xf index.
+  overlay_column_span(
+      layout, first, last,
+      [](ColumnLayout& entry, const void* ctx) {
+        entry.has_style = ctx != nullptr;
+        entry.style_xf = ctx != nullptr ? *static_cast<const std::uint32_t*>(ctx) : 0U;
+      },
+      styled ? &xf_index : nullptr);
   if (!styled) {
     drop_stateless_columns(layout);
   }

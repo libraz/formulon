@@ -176,11 +176,13 @@ extern "C" fm_status_t fm_sheet_set_column_width(fm_workbook_t* wb, size_t sheet
   if (auto rc = check_bounded(width, kMaxColumnWidthChars, "width_chars"); rc != 0) {
     return rc;
   }
-  overlay_column_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last,
-                      [width](formulon::ColumnLayout& entry) {
-                        entry.width = width;
-                        entry.has_width = true;
-                      });
+  overlay_column_span(
+      wb->workbook().sheet(sheet_index).mutable_layout(), first, last,
+      [](formulon::ColumnLayout& entry, const void* ctx) {
+        entry.width = *static_cast<const double*>(ctx);
+        entry.has_width = true;
+      },
+      &width);
   return 0;
 }
 
@@ -191,10 +193,13 @@ extern "C" fm_status_t fm_sheet_reset_column_width(fm_workbook_t* wb, size_t she
     return rc;
   }
   formulon::SheetLayout& layout = wb->workbook().sheet(sheet_index).mutable_layout();
-  overlay_column_span(layout, first, last, [](formulon::ColumnLayout& entry) {
-    entry.width = 0.0;
-    entry.has_width = false;
-  });
+  overlay_column_span(
+      layout, first, last,
+      [](formulon::ColumnLayout& entry, const void*) {
+        entry.width = 0.0;
+        entry.has_width = false;
+      },
+      nullptr);
   drop_stateless_columns(layout);
   return 0;
 }
@@ -205,8 +210,10 @@ extern "C" fm_status_t fm_sheet_set_column_hidden(fm_workbook_t* wb, size_t shee
   if (auto rc = check_sheet_column_span(wb, sheet_index, first, last); rc != 0) {
     return rc;
   }
-  overlay_column_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last,
-                      [hidden](formulon::ColumnLayout& entry) { entry.hidden = (hidden != 0); });
+  overlay_column_span(
+      wb->workbook().sheet(sheet_index).mutable_layout(), first, last,
+      [](formulon::ColumnLayout& entry, const void* ctx) { entry.hidden = (*static_cast<const int32_t*>(ctx) != 0); },
+      &hidden);
   return 0;
 }
 
@@ -220,8 +227,12 @@ extern "C" fm_status_t fm_sheet_set_column_outline(fm_workbook_t* wb, size_t she
     return rc;
   }
   const auto outline_level = static_cast<std::uint8_t>(level);
-  overlay_column_span(wb->workbook().sheet(sheet_index).mutable_layout(), first, last,
-                      [outline_level](formulon::ColumnLayout& entry) { entry.outline_level = outline_level; });
+  overlay_column_span(
+      wb->workbook().sheet(sheet_index).mutable_layout(), first, last,
+      [](formulon::ColumnLayout& entry, const void* ctx) {
+        entry.outline_level = *static_cast<const std::uint8_t*>(ctx);
+      },
+      &outline_level);
   return 0;
 }
 
@@ -232,8 +243,12 @@ extern "C" fm_status_t fm_sheet_set_column_collapsed(fm_workbook_t* wb, size_t s
     return rc;
   }
   formulon::SheetLayout& layout = wb->workbook().sheet(sheet_index).mutable_layout();
-  overlay_column_span(layout, first, last,
-                      [collapsed](formulon::ColumnLayout& entry) { entry.collapsed = (collapsed != 0); });
+  overlay_column_span(
+      layout, first, last,
+      [](formulon::ColumnLayout& entry, const void* ctx) {
+        entry.collapsed = (*static_cast<const int32_t*>(ctx) != 0);
+      },
+      &collapsed);
   if (collapsed == 0) {
     drop_stateless_columns(layout);
   }

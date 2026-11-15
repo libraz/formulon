@@ -766,7 +766,7 @@ Expected<void, Error> apply_visibility(Workbook& wb, const JsonValue& spec) {
     if (const JsonValue* cols = member(sh, "hidden_cols"); cols != nullptr) {
       for (const JsonValue& c : cols->as_array()) {
         ASSIGN_OR_RETURN(const std::uint32_t col, column_index(c.as_string()));
-        overlay_column_span(layout, col, col, [](ColumnLayout& e) { e.hidden = true; });
+        overlay_column_span(layout, col, col, [](ColumnLayout& e, const void*) { e.hidden = true; }, nullptr);
       }
     }
     if (bool_or(sh, "hidden", false)) {
