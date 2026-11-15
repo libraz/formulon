@@ -36,8 +36,8 @@ inline constexpr std::uint8_t kPtgInt = 0x1EU;
 
 /// One (field, item) pair of a name (BrtBeginPNPair .. BrtEndPNPair).
 struct PNPair {
+  std::uint8_t flags = 0;  ///< Byte 0, carried as is.
   std::uint32_t field = 0;
-  std::uint8_t flags = 0;  ///< Byte 4, carried as is.
   std::uint32_t item = 0;
 };
 

@@ -1289,7 +1289,7 @@ bool WriteCalcItem(const pivot::PivotCalculatedItem& in, const pivot::PivotCache
     pivot_calc::PName name;
     name.field = pivot_calc::kNoField;
     name.flags = kPNameFlags;
-    name.pairs.push_back(pivot_calc::PNPair{field, kPNPairFlags, item});
+    name.pairs.push_back(pivot_calc::PNPair{kPNPairFlags, field, item});
     names.push_back(std::move(name));
     std::string text = cache.fields()[field].name;
     text.append("[").append(cache.fields()[field].shared_items[item].as_text()).append("]");

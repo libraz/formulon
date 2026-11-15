@@ -65,7 +65,8 @@ std::vector<std::string> ItemKindPaths() {
       paths.push_back(root + stem + save);
     }
   }
-  for (const char* stem : {"calc_items", "calc_items2", "d1904_inline", "d1904_items", "run_threshold"}) {
+  for (const char* stem :
+       {"calc_items", "calc_items2", "calc_items_column", "d1904_inline", "d1904_items", "run_threshold"}) {
     paths.push_back(root + stem + ".xlsb");
   }
   return paths;
@@ -452,6 +453,16 @@ TEST(XlsbPivotCacheBridge, CalculatedItemAndItsFlaggedSharedItem) {
   ASSERT_EQ(item.area.references.size(), 1U);
   EXPECT_EQ(item.area.references[0].field, std::optional<std::uint32_t>(0U));
   EXPECT_EQ(item.area.references[0].items, std::vector<std::uint32_t>{3U});
+}
+
+// A name pair is the flags byte, then the field and the item: the second item names the second field's first item.
+TEST(XlsbPivotCacheBridge, CalculatedItemOverTheSecondField) {
+  const pivot::PivotCache cache = FirstCache("calc_items_column");
+  ASSERT_EQ(cache.calculated_items().size(), 2U);
+  EXPECT_EQ(cache.calculated_items()[0].formula, "Region[North]+Region[South]");
+  EXPECT_EQ(cache.calculated_items()[0].cache_field_index, 0U);
+  EXPECT_EQ(cache.calculated_items()[1].formula, "Product[A]*2");
+  EXPECT_EQ(cache.calculated_items()[1].cache_field_index, 1U);
 }
 
 TEST(XlsbPivotCacheBridge, BareMissingItem) {

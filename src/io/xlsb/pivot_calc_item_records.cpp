@@ -22,7 +22,7 @@ constexpr pivot_records::BlockNames kBlock{"xlsb_pivot_calc_item", "pivot calcul
 constexpr std::size_t kCountSize = 4U;
 // BrtBeginPName: field u32, flags u16.
 constexpr std::size_t kNameSize = 6U;
-// BrtBeginPNPair: field u32, flags u8, item u32.
+// BrtBeginPNPair: flags u8, field u32, item u32.
 constexpr std::size_t kPairSize = 9U;
 // Payload-free operator ptgs: PtgAdd (0x03) through PtgParen (0x15).
 constexpr std::uint8_t kFirstOperatorPtg = 0x03U;
@@ -78,8 +78,8 @@ Expected<PName, Error> DecodeName(const std::vector<RawRecord>& records, std::si
       return Corrupt("xlsb pivot calculated item name pair has an unexpected size");
     }
     PNPair pair;
-    pair.field = load_u32(rec.payload.data());
-    pair.flags = rec.payload[4];
+    pair.flags = rec.payload[0];
+    pair.field = load_u32(rec.payload.data() + 1);
     pair.item = load_u32(rec.payload.data() + 5);
     name.pairs.push_back(pair);
     RETURN_IF_ERROR(pivot_records::take_end(kBlock, records, pos, pivot_records::kEndPNPair));
@@ -165,8 +165,8 @@ void encode_calc_items(const std::vector<CalcItem>& items, std::vector<RawRecord
         PushCount(out, pivot_records::kBeginPNPairs, name.pairs.size());
         for (const PNPair& pair : name.pairs) {
           std::vector<std::uint8_t> payload;
-          emit_u32(payload, pair.field);
           emit_u8(payload, pair.flags);
+          emit_u32(payload, pair.field);
           emit_u32(payload, pair.item);
           pivot_records::push(out, pivot_records::kBeginPNPair, std::move(payload));
           pivot_records::push(out, pivot_records::kEndPNPair);
