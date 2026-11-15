@@ -282,6 +282,7 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/pivot_calc_item_records.cpp
   src/io/xlsb/pivot_line_item_records.cpp
   src/io/xlsb/pivot_part_plan.cpp
+  src/io/xlsb/pivot_record_cursor.cpp
   src/io/xlsb/pivot_table_bridge.cpp
   src/io/xlsb/pivot_table_records.cpp
   src/io/xlsb/print_records.cpp
