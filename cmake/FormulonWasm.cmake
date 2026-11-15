@@ -185,50 +185,121 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
   set(_FM_WASM_GLUE_OPT_FLAGS "-O0;-g")
   set(_FM_WASM_LINK_OPT_FLAGS "-O0;-g;-sASSERTIONS=2")
 else()
-  # -O3 outperforms -Oz on this codebase (measured 2026-05): -Oz with
-  # thinLTO grew the artifact by ~270 KiB because the engine's hot lazy
-  # dispatch tables benefit materially from -O3's inlining heuristics.
-  # The size win comes instead from the wasm-opt post-link pass below.
-  #
-  # Full LTO (`-flto=full`) was retried 2026-05-09 with `-O3` + post-link
-  # `wasm-opt -Oz` to address the 2026-05 thinLTO regression. Empirical
-  # delta: +345 KiB (1.75 MiB -> 2.08 MiB). Same root cause: cross-TU
-  # inlining over the lazy dispatch tables expands more code than ICF
-  # reclaims. Both LTO modes are therefore confirmed off-limits for this
-  # codebase under current heuristics.
+  # Full LTO grew the artifact in both link modes (-O3: raw +90 KB, Brotli +2 KB; -Oz: raw
+  # +71 KB, Brotli -4 KB with the evaluator at -Oz) and took 3.5x the link time (measured
+  # 2026-11-15); thinLTO grew it too, so LTO stays off.
   set(_FM_WASM_OPT_FLAGS "-O3")
   # The binding glue (formulon_wasm's own TUs) only marshals JS values, so it
-  # is built -Oz while formulon_core keeps -O3: raw -73 KB, Brotli -5 KB, bulk
+  # is built -Oz while the hot core keeps -O3: raw -73 KB, Brotli -5 KB, bulk
   # cell I/O timings unchanged (measured 2026-10-21).
   set(_FM_WASM_GLUE_OPT_FLAGS "-Oz")
-  # Load/save/edit TUs (io, c_api, chart, drawing, pivot) are built -Oz per
-  # object (no LTO); eval/parser/recalc/sheet stay -O3: raw -600 KB, Brotli
-  # -111 KB, recalc unchanged, save/load ~5-9% slower (measured 2026-10-22).
-  # The hot load readers below stay -O3: Brotli -107 KB, load back to ~1%.
-  # Cold eval families (special functions, financial, ETS, format parsing,
-  # GROUPBY/PIVOTBY) join them, with PCRE2: Brotli -26 KB, results
-  # bit-identical, per-call time within noise (measured 2026-10-25).
-  # Workbook/sheet structural-edit, copy, table, pivot-detail and print-area
-  # TUs join them: raw -55 KB, Brotli -12 KB; load, row edits, copySheet and
-  # structured-reference entry within noise (measured 2026-11-06).
-  # Formula formatting / reference-shift parser TUs, pagination, CF authoring,
-  # data tables and external links join them: raw -40 KB, Brotli -7 KB; entry,
-  # recalc, save and load within noise, row edits ~1.5% slower (measured 2026-11-07).
-  string(CONCAT _FM_WASM_COLD_SOURCE_REGEX
-    "^src/(io|c_api|chart|drawing|pivot)/|"
-    "^src/(parser/(ast_dump|ast_format|ast_format_names|ast_format_parens|ast_format_r1c1|ast_shift|external_book_spelling|formula_prefix|literal_spelling|parse_error|ref_transforms|structured_ref_spelling)|print/(pagination|sheet_geometry)|cf/(cf_authoring|cf_x14_id)|workbook_(data_table|external_links))\\.cpp$|"
-    "^src/(workbook_(copy_sheet|pivot_details|pivot_projection|tables|ref_rewrite|row_col_edit|table_loss|defined_names|merges_arrays|sheets|auto_filter)|sheet_(row_col_edit|copy_names)|threaded_comment|new_workbook_defaults|print/(page_setup|print_area))\\.cpp$|"
-    "^src/eval/(stats/|builtins/(financial|engineering|complex_num|distributions|cube|web)|builtins/stats/stats_distributions|builtins/(math_combinatorics|text_dbcs|text_width)|text_format/|groupby_pivotby/)|"
-    "^src/eval/(ets_series|ets_detect|ets_calendar|ets_grid|date_text_parse|regex_lazy|regex_program|regex_replacement|locale_function_names|holt_winters|forecast_ets_lazy|financial_lazy|formula_entry_r1c1|coupon_schedule|database_lazy|getpivotdata_lazy|hypothesis_lazy|linest_lazy|regression_lazy)\\.cpp$")
-  set(_FM_WASM_HOT_LOAD_REGEX
-    "^src/io/(cell_parser|sheet_reader|sst_reader|styles_reader|sax_xml_reader|xml_utils|xsd_double)\\.cpp$")
+  # Core TUs, new ones included, are -Oz unless a hot pattern and no except pattern names them:
+  # raw -61 KB, Brotli -19 KB (threads -14 KB); entry, recalc, load, save, row edits and
+  # copySheet within noise (measured 2026-11-15). A pattern matching no source fails configure.
+  set(_FM_WASM_HOT_PATTERNS
+    "^src/eval/"
+    "^src/parser/"
+    "^src/utils/"
+    "^src/cf/"
+    "^src/io/cell_parser\\.cpp$"
+    "^src/io/sheet_reader\\.cpp$"
+    "^src/io/sst_reader\\.cpp$"
+    "^src/io/styles_reader\\.cpp$"
+    "^src/io/sax_xml_reader\\.cpp$"
+    "^src/io/xml_utils\\.cpp$"
+    "^src/io/xsd_double\\.cpp$"
+    "^src/value\\.cpp$"
+    "^src/sheet\\.cpp$"
+    "^src/row_cells\\.cpp$"
+    "^src/sheet_range_scan\\.cpp$"
+    "^src/sheet_spill\\.cpp$"
+    "^src/sheet_name\\.cpp$"
+    "^src/sheet_name_casefold_data\\.cpp$"
+    "^src/numeric_aggregate_kernels\\.cpp$"
+    "^src/workbook\\.cpp$"
+    "^src/workbook_formula_index\\.cpp$"
+    "^src/workbook_cell_edit\\.cpp$"
+    "^src/workbook_error_detail\\.cpp$"
+    "^src/style_resolve\\.cpp$"
+    "^src/style_region\\.cpp$"
+    "^src/styles\\.cpp$"
+    "^src/color_resolve\\.cpp$"
+    "^src/excel_locale\\.cpp$"
+    "^src/sbcs_codepage\\.cpp$"
+    "^src/num_fmt_locale\\.cpp$"
+    "^src/external_book\\.cpp$"
+  )
+  set(_FM_WASM_HOT_EXCEPT_PATTERNS
+    "^src/parser/ast_dump\\.cpp$"
+    "^src/parser/ast_format\\.cpp$"
+    "^src/parser/ast_format_names\\.cpp$"
+    "^src/parser/ast_format_parens\\.cpp$"
+    "^src/parser/ast_format_r1c1\\.cpp$"
+    "^src/parser/ast_shift\\.cpp$"
+    "^src/parser/external_book_spelling\\.cpp$"
+    "^src/parser/formula_prefix\\.cpp$"
+    "^src/parser/literal_spelling\\.cpp$"
+    "^src/parser/parse_error\\.cpp$"
+    "^src/parser/ref_transforms\\.cpp$"
+    "^src/parser/structured_ref_spelling\\.cpp$"
+    "^src/cf/cf_authoring\\.cpp$"
+    "^src/cf/cf_x14_id\\.cpp$"
+    "^src/eval/pivot_formula\\.cpp$"
+    "^src/eval/formula_localize\\.cpp$"
+    "^src/eval/ets_series\\.cpp$"
+    "^src/eval/ets_detect\\.cpp$"
+    "^src/eval/ets_calendar\\.cpp$"
+    "^src/eval/ets_grid\\.cpp$"
+    "^src/eval/date_text_parse\\.cpp$"
+    "^src/eval/regex_lazy\\.cpp$"
+    "^src/eval/regex_program\\.cpp$"
+    "^src/eval/regex_replacement\\.cpp$"
+    "^src/eval/locale_function_names\\.cpp$"
+    "^src/eval/holt_winters\\.cpp$"
+    "^src/eval/forecast_ets_lazy\\.cpp$"
+    "^src/eval/financial_lazy\\.cpp$"
+    "^src/eval/formula_entry_r1c1\\.cpp$"
+    "^src/eval/coupon_schedule\\.cpp$"
+    "^src/eval/database_lazy\\.cpp$"
+    "^src/eval/getpivotdata_lazy\\.cpp$"
+    "^src/eval/hypothesis_lazy\\.cpp$"
+    "^src/eval/linest_lazy\\.cpp$"
+    "^src/eval/regression_lazy\\.cpp$"
+    "^src/eval/stats/"
+    "^src/eval/builtins/financial"
+    "^src/eval/builtins/engineering"
+    "^src/eval/builtins/complex_num"
+    "^src/eval/builtins/distributions"
+    "^src/eval/builtins/cube"
+    "^src/eval/builtins/web"
+    "^src/eval/builtins/stats/stats_distributions"
+    "^src/eval/builtins/math_combinatorics"
+    "^src/eval/builtins/text_dbcs"
+    "^src/eval/builtins/text_width"
+    "^src/eval/text_format/"
+    "^src/eval/groupby_pivotby/"
+  )
   set(_FM_WASM_LINK_OPT_FLAGS "-O3;-sASSERTIONS=0")
 endif()
 
-if(_FM_WASM_COLD_SOURCE_REGEX)
+if(_FM_WASM_HOT_PATTERNS)
+  foreach(_fm_pattern IN LISTS _FM_WASM_HOT_PATTERNS _FM_WASM_HOT_EXCEPT_PATTERNS)
+    set(_fm_matched ${FORMULON_CORE_SOURCES})
+    list(FILTER _fm_matched INCLUDE REGEX "${_fm_pattern}")
+    if(NOT _fm_matched)
+      message(FATAL_ERROR "WASM hot-list pattern '${_fm_pattern}' matches no core source")
+    endif()
+  endforeach()
+  list(JOIN _FM_WASM_HOT_PATTERNS "|" _fm_hot_regex)
+  list(JOIN _FM_WASM_HOT_EXCEPT_PATTERNS "|" _fm_except_regex)
+  set(_FM_WASM_HOT_SOURCES ${FORMULON_CORE_SOURCES})
+  list(FILTER _FM_WASM_HOT_SOURCES INCLUDE REGEX "${_fm_hot_regex}")
+  list(FILTER _FM_WASM_HOT_SOURCES EXCLUDE REGEX "${_fm_except_regex}")
   set(_FM_WASM_COLD_SOURCES ${FORMULON_CORE_SOURCES})
-  list(FILTER _FM_WASM_COLD_SOURCES INCLUDE REGEX "${_FM_WASM_COLD_SOURCE_REGEX}")
-  list(FILTER _FM_WASM_COLD_SOURCES EXCLUDE REGEX "${_FM_WASM_HOT_LOAD_REGEX}")
+  list(REMOVE_ITEM _FM_WASM_COLD_SOURCES ${_FM_WASM_HOT_SOURCES})
+  list(LENGTH _FM_WASM_HOT_SOURCES _fm_hot_count)
+  list(LENGTH FORMULON_CORE_SOURCES _fm_core_count)
+  message(STATUS "WASM core TUs at -O3: ${_fm_hot_count} of ${_fm_core_count}; the rest -Oz")
   set_source_files_properties(${_FM_WASM_COLD_SOURCES} PROPERTIES COMPILE_OPTIONS "-Oz")
 endif()
 
