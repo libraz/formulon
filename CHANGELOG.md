@@ -555,6 +555,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- PivotTable cell formats and pivot chart formats follow the items and value
+  fields they name, as Excel does. After a refresh a format moves with its
+  item to the item's new position; a format naming an item the refresh
+  removes (`missingItemsLimit` 0), or a field whose source column is gone, is
+  removed, and one on an item kept as missing stays. Removing a value field,
+  by refresh, by deleting a calculated field or by taking it out of the
+  values area, removes the formats on it and moves the formats of later value
+  fields down. Ungrouping removes the formats on the group fields, and on the
+  field itself for a numeric range group; Clear All removes every format.
+  Pivot chart format ids are not renumbered. Formats used to keep their old
+  positions and land on other items.
+
 - An `.xlsb` save writes a custom table style usable by both tables and
   PivotTables, as Excel does, instead of leaving it out and reporting it in
   `deferredFeatureCount`. Only a style usable by neither is still left out.

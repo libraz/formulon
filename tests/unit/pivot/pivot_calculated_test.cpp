@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 #include <variant>
@@ -291,6 +292,32 @@ TEST_F(PivotCalculated, RemovingAFieldRenumbersTheFieldsAfterIt) {
   EXPECT_EQ(table.data_fields()[2].name, "合計 / Double");
   EXPECT_EQ(table.data_fields()[2].field_index, 4U);
   ExpectNumbers(Column(Evaluate(table, cache_), 2), {140, 420, 700, 1260});
+}
+
+TEST_F(PivotCalculated, RemovingAFieldRemovesTheFormatsOnItsDataField) {
+  PivotTable table = BuildTable();
+  ASSERT_TRUE(static_cast<bool>(add_calculated_field(cache_, {&table}, "Price", "Amt/Qty", host_)));
+  ASSERT_TRUE(static_cast<bool>(add_calculated_field(cache_, {&table}, "Double", "Amt*2", host_)));
+  table.mutable_data_fields().push_back(DataField("合計 / Price", 4));
+  table.mutable_data_fields().push_back(DataField("合計 / Double", 5));
+  const auto price = static_cast<std::uint32_t>(table.data_fields().size() - 2U);
+  const auto on_data_field = [](std::uint32_t dxf, std::uint32_t data_field) {
+    pivot::PivotFormat format;
+    format.dxf_id = dxf;
+    pivot::PivotTableAreaReference reference;
+    reference.field = static_cast<std::uint32_t>(pivot::kValuesFieldPosition);
+    reference.items.assign(1U, data_field);
+    format.area.references = {reference};
+    return format;
+  };
+  table.mutable_formats() = {on_data_field(1U, price), on_data_field(0U, price + 1U)};
+
+  ASSERT_TRUE(static_cast<bool>(remove_calculated_field(cache_, {&table}, 4, host_)));
+  // A deleted field's formats go, and a later data field's format shifts down.
+  ASSERT_EQ(table.formats().size(), 1U);
+  EXPECT_EQ(table.formats()[0].dxf_id, std::optional<std::uint32_t>(0U));
+  ASSERT_EQ(table.formats()[0].area.references[0].items.size(), 1U);
+  EXPECT_EQ(table.formats()[0].area.references[0].items[0], price);
 }
 
 TEST_F(PivotCalculated, AFieldAnotherFormulaNamesCannotBeRemoved) {

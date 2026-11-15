@@ -4,7 +4,7 @@
 //
 // Index-keyed state follows the field and item maps: the field list, the axis
 // orders, page fields and their selected item, data fields and their show-as
-// base, filters, pivot items. Name-keyed state (`source_name`, a sort's
+// base, filters, pivot items, format and chart-format areas. Name-keyed state (`source_name`, a sort's
 // `by_field`, a filter's `field_name`) follows a field's new spelling. State
 // on a dropped field goes with it.
 
@@ -48,8 +48,16 @@ struct FieldRemap {
 /// ascending or descending is re-sorted, missing items included. Positions
 /// into a field's items (a page field's item, a show-as base item) follow.
 ///
+/// A format or chart format's area follows too: its `<x v>` positions into a
+/// field's items, and into the data fields for the data pseudo-field. One whose
+/// field, item or data field is gone is removed; chart format ids are kept.
+///
 /// Sorting collates under the caller's `eval::ScopedEvalProfile`.
 void remap_table(PivotTable& table, const PivotCache& cache, const FieldRemap& remap);
+
+/// Removes the format and chart-format areas of `table` naming a pivot field
+/// `gone` marks; the field list itself is left as it is.
+void drop_formats_on_fields(PivotTable& table, const std::vector<bool>& gone);
 
 /// Removes the date filters of `table` on a cache field that does not hold nothing but dates (a mixed or
 /// numeric field, whose filter Excel drops at refresh). Filters on group fields stay.

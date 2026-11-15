@@ -1,11 +1,17 @@
 // Stable C ABI PivotTable lifecycle, number-format and runtime-id tests.
 
+#include <cstdint>
 #include <limits>
+#include <optional>
 #include <string>
 
+#include "c_api/parts/common.h"
 #include "formulon_c_out_index.h"
 #include "formulon_c_pivot_test_helpers.h"
 #include "formulon_c_record_arg.h"
+#include "pivot/pivot_table.h"
+#include "pivot/pivot_types.h"
+#include "workbook.h"
 
 TEST(FormulonCApiPivot, RemovePivotAndCache) {
   WorkbookGuard wb;
@@ -328,6 +334,61 @@ TEST(FormulonCApiPivot, MutationAndClearExportsCompleteTheirLifecycles) {
   ASSERT_EQ(fm_workbook_clear_pivot_cache_fields(wb.handle, cache_id), 0);
   ASSERT_EQ(fm_workbook_get_pivot_cache_field_count(wb.handle, cache_id, &field_count), 0);
   EXPECT_EQ(field_count, 0U);
+}
+
+namespace {
+
+// A format on Region's first item label, one on the first data field, and a chart format on that data field.
+formulon::pivot::PivotTable& FormattedScratchPivot(fm_workbook_t* wb, std::size_t* pivot_index) {
+  std::uint32_t cache_id = 0;
+  EXPECT_EQ(BuildScratchPivot(wb, &cache_id, pivot_index), 0) << fm_get_last_error_message();
+  formulon::pivot::PivotTable& table = *wb->workbook().sheet(0).mutable_pivot_tables()[*pivot_index];
+  const auto area = [](std::uint32_t field, std::uint32_t item) {
+    formulon::pivot::PivotTableAreaReference reference;
+    reference.field = field;
+    reference.items.assign(1U, item);
+    formulon::pivot::PivotTableArea out;
+    out.references = {reference};
+    return out;
+  };
+  constexpr auto kValues = static_cast<std::uint32_t>(formulon::pivot::kValuesFieldPosition);
+  formulon::pivot::PivotFormat label;
+  label.dxf_id = 1U;
+  label.area = area(0U, 0U);
+  formulon::pivot::PivotFormat data;
+  data.dxf_id = 0U;
+  data.area = area(kValues, 0U);
+  table.mutable_formats() = {label, data};
+  formulon::pivot::PivotChartFormat series;
+  series.series = true;
+  series.area = area(kValues, 0U);
+  table.mutable_chart_formats() = {series};
+  return table;
+}
+
+}  // namespace
+
+// Emptying the values area removes the data field formats, as removing each data field does; label formats stay.
+TEST(FormulonCApiPivot, ClearingDataFieldsRemovesTheirFormats) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::size_t pivot_index = 0;
+  const formulon::pivot::PivotTable& table = FormattedScratchPivot(wb.handle, &pivot_index);
+  ASSERT_EQ(fm_sheet_clear_pivot_data_fields(wb.handle, 0, pivot_index), 0);
+  ASSERT_EQ(table.formats().size(), 1U);
+  EXPECT_EQ(table.formats()[0].dxf_id, std::optional<std::uint32_t>(1U));
+  EXPECT_TRUE(table.chart_formats().empty());
+}
+
+// Clear All removes every format, label formats included; chart formats are left as they are.
+TEST(FormulonCApiPivot, ClearAllRemovesEveryFormat) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::size_t pivot_index = 0;
+  const formulon::pivot::PivotTable& table = FormattedScratchPivot(wb.handle, &pivot_index);
+  ASSERT_EQ(fm_sheet_clear_pivot_fields(wb.handle, 0, pivot_index), 0);
+  EXPECT_TRUE(table.formats().empty());
+  EXPECT_EQ(table.chart_formats().size(), 1U);
 }
 
 namespace {

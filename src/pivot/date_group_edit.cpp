@@ -13,6 +13,8 @@
 
 #include "pivot/field_grouping.h"
 #include "pivot/field_grouping_internal.h"
+#include "pivot/field_remap.h"
+#include "pivot/filter_engine.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_index.h"
 #include "pivot/pivot_refresh.h"
@@ -141,10 +143,12 @@ void remove_group_pivot_fields(PivotTable& table, std::size_t base, std::size_t 
   pages.erase(std::remove_if(pages.begin(), pages.end(),
                              [first](const PivotPageField& page) { return page.field_index >= first; }),
               pages.end());
-  std::vector<PivotDataField>& data = table.mutable_data_fields();
-  data.erase(
-      std::remove_if(data.begin(), data.end(), [first](const PivotDataField& df) { return df.field_index >= first; }),
-      data.end());
+  for (std::size_t f = fields.size(); f > first; --f) {
+    drop_field_aggregates(table, f - 1U);
+  }
+  std::vector<bool> gone(fields.size(), false);
+  std::fill(gone.begin() + static_cast<std::ptrdiff_t>(first), gone.end(), true);
+  drop_formats_on_fields(table, gone);
   table.erase_active_filters_if(
       [first](const PivotFilter& filter) { return filter.source.has_value() && filter.source->field_index >= first; });
   fields.resize(first);
@@ -294,6 +298,14 @@ Expected<void, Error> clear_numeric_group(Workbook& wb, std::size_t sheet, std::
     return Expected<void, Error>::Ok();
   }
   ASSIGN_OR_RETURN(GroupRun run, group_run(cache, target.base));
+  // A range group sits on its field, so the field's own formats go with the grouping.
+  for_each_cache_table(wb, cache.cache_id(), [&](PivotTable& table) {
+    std::vector<bool> gone(table.fields().size(), false);
+    if (target.base < gone.size()) {
+      gone[target.base] = true;
+    }
+    drop_formats_on_fields(table, gone);
+  });
   remove_group(wb, cache, target.base, run);
   share_cache_axis_fields(wb, cache);
   invalidate_tables(wb, cache.cache_id());

@@ -1116,6 +1116,28 @@ TEST(FieldGrouping, ClearDateGroupRestoresTheBaseWhereItsGroupsWere) {
   EXPECT_FALSE(static_cast<bool>(clear_date_group(wb, 0U, 1U, 9U)));
 }
 
+TEST(FieldGrouping, ClearDateGroupRemovesTheFormatsOnItsGroupFields) {
+  Workbook wb = DateWorkbook(1U);
+  ASSERT_TRUE(static_cast<bool>(set_date_group(wb, 0U, 0U, kDateField, kMonths | kYears, CalendarSystem::Gregorian, 1U,
+                                               std::nullopt, std::nullopt)));
+  PivotTable& table = *wb.sheet(0).mutable_pivot_tables()[0];
+  const auto on = [](std::uint32_t dxf, std::uint32_t field, std::uint32_t item) {
+    pivot::PivotFormat format;
+    format.dxf_id = dxf;
+    pivot::PivotTableAreaReference reference;
+    reference.field = field;
+    reference.items.assign(1U, item);
+    format.area.references = {reference};
+    return format;
+  };
+  table.mutable_formats() = {on(2U, 5U, 1U), on(1U, 4U, 0U), on(0U, 0U, 0U)};
+  ASSERT_TRUE(static_cast<bool>(clear_date_group(wb, 0U, 0U, 5U)));
+  // A dropped group field takes its formats with it; one on an unrelated field stays.
+  ASSERT_EQ(table.formats().size(), 1U);
+  EXPECT_EQ(table.formats()[0].dxf_id, std::optional<std::uint32_t>(0U));
+  EXPECT_EQ(table.formats()[0].area.references[0].field, std::optional<std::uint32_t>(0U));
+}
+
 TEST(FieldGrouping, RegroupingReplacesTheGroupFields) {
   Workbook wb = DateWorkbook(1U);
   ASSERT_TRUE(static_cast<bool>(set_date_group(wb, 0U, 0U, kDateField, kMonths | kYears, CalendarSystem::Gregorian, 1U,

@@ -170,6 +170,46 @@ bool placed_on_axis(const PivotTable& table, const PivotCache& cache, std::size_
 
 }  // namespace
 
+namespace {
+
+// Moves the data pseudo-field references of every entry's area to `new_index[old]`, and removes an entry naming a
+// data field mapped to `gone`. A reference past the old data fields is left as it is.
+template <typename Entry>
+void remap_data_field_areas(std::vector<Entry>& entries, const std::vector<std::size_t>& new_index, std::size_t gone) {
+  constexpr auto kValuesField = static_cast<std::uint32_t>(kValuesFieldPosition);
+  entries.erase(std::remove_if(entries.begin(), entries.end(),
+                               [&](Entry& entry) {
+                                 for (PivotTableAreaReference& reference : entry.area.references) {
+                                   if (reference.field != kValuesField) {
+                                     continue;
+                                   }
+                                   for (std::uint32_t& item : reference.items) {
+                                     if (item < new_index.size()) {
+                                       if (new_index[item] == gone) {
+                                         return true;
+                                       }
+                                       item = static_cast<std::uint32_t>(new_index[item]);
+                                     }
+                                   }
+                                 }
+                                 return false;
+                               }),
+                entries.end());
+}
+
+void remap_data_field_formats(PivotTable& table, const std::vector<std::size_t>& new_index, std::size_t gone) {
+  remap_data_field_areas(table.mutable_formats(), new_index, gone);
+  remap_data_field_areas(table.mutable_chart_formats(), new_index, gone);
+}
+
+}  // namespace
+
+void clear_data_fields(PivotTable& table) {
+  const std::size_t count = table.data_fields().size();
+  remap_data_field_formats(table, std::vector<std::size_t>(count, count), count);
+  table.mutable_data_fields().clear();
+}
+
 void drop_field_aggregates(PivotTable& table, std::size_t field_index) {
   std::vector<PivotDataField>& data_fields = table.mutable_data_fields();
   std::vector<std::size_t> new_index(data_fields.size());
@@ -177,6 +217,7 @@ void drop_field_aggregates(PivotTable& table, std::size_t field_index) {
   for (std::size_t i = 0; i < data_fields.size(); ++i) {
     new_index[i] = data_fields[i].field_index == field_index ? data_fields.size() : kept++;
   }
+  remap_data_field_formats(table, new_index, data_fields.size());
   const PivotField& field = table.fields()[field_index];
   table.erase_active_filters_if([&](PivotFilter& filter) {
     if (pivot_field_has_name(field, filter.field_name)) {

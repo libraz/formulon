@@ -217,7 +217,9 @@ extern "C" fm_status_t fm_sheet_clear_pivot_fields(fm_workbook_t* wb, std::size_
   for (std::uint32_t i = 0; i < table->fields().size(); ++i) {
     table->set_field_axis(i, formulon::pivot::PivotAxis::None);
   }
+  // Clear All removes every format with the fields; chart formats are left as they are.
   table->mutable_data_fields().clear();
+  table->mutable_formats().clear();
   table->erase_active_filters_if([](const formulon::pivot::PivotFilter&) { return true; });
   table->mutable_row_field_order().clear();
   table->mutable_col_field_order().clear();

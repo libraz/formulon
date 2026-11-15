@@ -168,6 +168,51 @@ std::optional<std::size_t> remap_order(std::vector<std::uint32_t>& order, const 
   return moved_marker;
 }
 
+constexpr std::uint32_t kValuesField = static_cast<std::uint32_t>(kValuesFieldPosition);
+
+// Moves a format's area onto the new fields and item positions; false when a
+// field or item it names is gone. Data pseudo-field references moved with
+// their data fields (`drop_field_aggregates`).
+bool remap_area(PivotTableArea& area, const IndexMap& fields, const FieldRemap& remap,
+                const std::vector<PositionMap>& positions) {
+  if (area.field.has_value() && *area.field != kValuesField) {
+    area.field = mapped(fields, *area.field);
+    if (!area.field.has_value()) {
+      return false;
+    }
+  }
+  for (PivotTableAreaReference& reference : area.references) {
+    if (!reference.field.has_value()) {
+      continue;
+    }
+    const std::uint32_t old = *reference.field;
+    if (old == kValuesField) {
+      continue;
+    }
+    reference.field = mapped(fields, old);
+    if (!reference.field.has_value()) {
+      return false;
+    }
+    for (std::uint32_t& item : reference.items) {
+      const std::optional<std::uint32_t> moved = remap_item_position(remap, positions, old, item);
+      if (!moved.has_value()) {
+        return false;
+      }
+      item = *moved;
+    }
+  }
+  return true;
+}
+
+// Remaps every entry's area, dropping the entries whose area names something gone.
+template <typename Entry>
+void remap_areas(std::vector<Entry>& entries, const IndexMap& fields, const FieldRemap& remap,
+                 const std::vector<PositionMap>& positions) {
+  entries.erase(std::remove_if(entries.begin(), entries.end(),
+                               [&](Entry& entry) { return !remap_area(entry.area, fields, remap, positions); }),
+                entries.end());
+}
+
 }  // namespace
 
 void remap_table(PivotTable& table, const PivotCache& cache, const FieldRemap& remap) {
@@ -275,6 +320,22 @@ void remap_table(PivotTable& table, const PivotCache& cache, const FieldRemap& r
     pages.push_back(std::move(page));
   }
   table.mutable_page_fields() = std::move(pages);
+
+  remap_areas(table.mutable_formats(), fields, remap, positions);
+  remap_areas(table.mutable_chart_formats(), fields, remap, positions);
+}
+
+void drop_formats_on_fields(PivotTable& table, const std::vector<bool>& gone) {
+  IndexMap fields(table.fields().size());
+  for (std::size_t i = 0; i < fields.size(); ++i) {
+    if (i >= gone.size() || !gone[i]) {
+      fields[i] = static_cast<std::uint32_t>(i);
+    }
+  }
+  const FieldRemap keep_items;
+  const std::vector<PositionMap> positions;
+  remap_areas(table.mutable_formats(), fields, keep_items, positions);
+  remap_areas(table.mutable_chart_formats(), fields, keep_items, positions);
 }
 
 void discard_date_filters_on_non_date_fields(PivotTable& table, const PivotCache& cache) {

@@ -232,6 +232,27 @@ TEST(NumericGroup, ClearRestoresTheBaseWhereItsGroupWas) {
   EXPECT_FALSE(static_cast<bool>(clear_numeric_group(wb, 0U, 0U, 9U)));
 }
 
+TEST(NumericGroup, ClearRemovesEveryFormatOnTheUngroupedField) {
+  const eval::ScopedEvalProfile scope(mac_365_ja_jp_profile());
+  Workbook wb = AmountWorkbook(Numbers({20, 300}), 1U);
+  ASSERT_TRUE(static_cast<bool>(set_numeric_group(wb, 0U, 0U, kAmt, std::nullopt, std::nullopt, 100.0)));
+  PivotTable& table = *wb.sheet(0).mutable_pivot_tables()[0];
+  const auto on = [](std::uint32_t dxf, std::size_t field) {
+    pivot::PivotFormat format;
+    format.dxf_id = dxf;
+    pivot::PivotTableAreaReference reference;
+    reference.field = static_cast<std::uint32_t>(field);
+    reference.items.assign(1U, 0U);
+    format.area.references = {reference};
+    return format;
+  };
+  table.mutable_formats() = {on(2U, kGroup), on(1U, kAmt), on(0U, kRegion)};
+  ASSERT_TRUE(static_cast<bool>(clear_numeric_group(wb, 0U, 0U, kGroup)));
+  // The grouped field keeps its place but loses its formats, as the group field does; Region's stays.
+  ASSERT_EQ(table.formats().size(), 1U);
+  EXPECT_EQ(table.formats()[0].dxf_id, std::optional<std::uint32_t>(0U));
+}
+
 // Mac Excel measurements over base A (0.3 .. 3.6 by 0.3), base B (-2.5 .. 2.5
 // by 0.5) and base A scaled by 1e-5 and by 1e15.
 const std::vector<double> kBaseA = {0.3, 0.6, 0.9, 1.2, 1.5, 1.8, 2.1, 2.4, 2.7, 3.0, 3.3, 3.6};

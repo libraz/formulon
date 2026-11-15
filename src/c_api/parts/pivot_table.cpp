@@ -22,6 +22,7 @@
 #include "c_api/parts/table_style_defaults.h"
 #include "pivot/calculated.h"
 #include "pivot/field_lookup.h"
+#include "pivot/filter_engine.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_index.h"
 #include "pivot/pivot_locale.h"
@@ -691,7 +692,7 @@ extern "C" fm_status_t fm_sheet_clear_pivot_data_fields(fm_workbook_t* wb, std::
     return rc;
   }
   PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
-  table->mutable_data_fields().clear();
+  formulon::pivot::clear_data_fields(*table);
   return edit.commit();
 }
 

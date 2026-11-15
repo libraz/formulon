@@ -68,8 +68,14 @@ inline bool is_value_filter_type(FilterType type) {
 
 /// Removes the data fields aggregating `field_index` from `table`. Value
 /// filters scoring a removed data field go, as do filters naming the field
-/// itself; the rest follow their data field's new position.
+/// itself; the rest follow their data field's new position. So do format and
+/// chart-format areas on the data pseudo-field: one naming a removed data
+/// field is removed whole.
 void drop_field_aggregates(PivotTable& table, std::size_t field_index);
+
+/// Empties the values area of `table`, removing every format and chart format
+/// whose area names a data field.
+void clear_data_fields(PivotTable& table);
 
 /// True for the caption types, matched against an item's label.
 inline bool is_caption_filter_type(FilterType type) {
