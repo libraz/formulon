@@ -30,13 +30,28 @@ Error Corrupt(const char* message) {
   return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, message, "context=xlsb_pivot_group");
 }
 
-// The BrtBeginPCDFGItems list: a count, then one string run of that length.
+// The BrtBeginPCDFGItems list: a count, then that many strings, as one string run from
+// pivot_records::kMinItemRunLength items and as single BrtPCDIString records below it.
 Expected<std::vector<std::string>, Error> DecodeItems(const std::vector<RawRecord>& records, std::size_t* pos) {
   ASSIGN_OR_RETURN(const RawRecord* list, pivot_records::take(kBlock, records, pos, pivot_records::kBeginPCDFGItems));
   if (list->payload.size() != kCountSize) {
     return Corrupt("xlsb pivot group item list has an unexpected size");
   }
   const std::uint32_t count = load_u32(list->payload.data());
+  std::vector<std::string> items;
+  if (count < pivot_records::kMinItemRunLength) {
+    for (std::uint32_t i = 0; i < count; ++i) {
+      ASSIGN_OR_RETURN(const RawRecord* single, pivot_records::take(kBlock, records, pos, pivot_records::kPCDIString));
+      ByteSpan cursor{single->payload.data(), single->payload.size()};
+      ASSIGN_OR_RETURN(std::string text, read_xlwidestring(cursor));
+      if (cursor.size != 0U) {
+        return Corrupt("xlsb pivot group item has trailing bytes");
+      }
+      items.push_back(std::move(text));
+    }
+    RETURN_IF_ERROR(pivot_records::take_end(kBlock, records, pos, pivot_records::kEndPCDFGItems));
+    return items;
+  }
   ASSIGN_OR_RETURN(const RawRecord* run, pivot_records::take(kBlock, records, pos, pivot_records::kBeginPCDIRun));
   ByteSpan cursor{run->payload.data(), run->payload.size()};
   ASSIGN_OR_RETURN(const std::uint16_t kind, read_u16(cursor));
@@ -49,7 +64,6 @@ Expected<std::vector<std::string>, Error> DecodeItems(const std::vector<RawRecor
   if (run_count != count) {
     return Corrupt("xlsb pivot group item run length does not match its list count");
   }
-  std::vector<std::string> items;
   items.reserve(run_count);
   for (std::uint32_t i = 0; i < run_count; ++i) {
     ASSIGN_OR_RETURN(std::string text, read_xlwidestring(cursor));
@@ -115,14 +129,22 @@ void encode_field_group(const FieldGroup& group, std::vector<RawRecord>* out) {
     std::vector<std::uint8_t> list;
     emit_u32(list, count);
     pivot_records::push(out, pivot_records::kBeginPCDFGItems, std::move(list));
-    std::vector<std::uint8_t> run;
-    emit_u16(run, kRunStrings);
-    emit_u32(run, count);
-    for (const std::string& text : *group.items) {
-      emit_xlwidestring(run, text);
+    if (count < pivot_records::kMinItemRunLength) {
+      for (const std::string& text : *group.items) {
+        std::vector<std::uint8_t> single;
+        emit_xlwidestring(single, text);
+        pivot_records::push(out, pivot_records::kPCDIString, std::move(single));
+      }
+    } else {
+      std::vector<std::uint8_t> run;
+      emit_u16(run, kRunStrings);
+      emit_u32(run, count);
+      for (const std::string& text : *group.items) {
+        emit_xlwidestring(run, text);
+      }
+      pivot_records::push(out, pivot_records::kBeginPCDIRun, std::move(run));
+      pivot_records::push(out, pivot_records::kEndPCDIRun);
     }
-    pivot_records::push(out, pivot_records::kBeginPCDIRun, std::move(run));
-    pivot_records::push(out, pivot_records::kEndPCDIRun);
     pivot_records::push(out, pivot_records::kEndPCDFGItems);
   }
   pivot_records::push(out, pivot_records::kEndPCDFGroup);

@@ -335,6 +335,24 @@ INSTANTIATE_TEST_SUITE_P(Cases, XlsbParityPivotApiBuilt,
 
 // The date group's cache refreshes on load, so Excel's save is a refreshed state with its own group labels; the
 // group and range records still hold the base field, the parent field and the months and years periods as Excel's.
+/// The record types of every field group block in the package's first cache definition, in stream order.
+std::vector<std::uint16_t> GroupBlockTypes(const tc::Bytes& package) {
+  std::vector<std::uint16_t> types;
+  const auto part = tc::ReadPart(package, "xl/pivotCache/pivotCacheDefinition1.bin");
+  if (!part) {
+    return types;
+  }
+  bool in_group = false;
+  for (const tc::IndexedRecord& rec : tc::SplitPart(*part)) {
+    in_group = in_group || rec.type == pivot_records::kBeginPCDFGroup;
+    if (in_group) {
+      types.push_back(rec.type);
+    }
+    in_group = in_group && rec.type != pivot_records::kEndPCDFGroup;
+  }
+  return types;
+}
+
 TEST(XlsbParityPivotApiBuiltGroups, WritesExcelsDateGroupRecords) {
   const Saved saved = SaveCase("c_date_group");
   ASSERT_FALSE(saved.bytes.empty());
@@ -356,6 +374,11 @@ TEST(XlsbParityPivotApiBuiltGroups, WritesExcelsDateGroupRecords) {
   const tc::RecordSet ours = tc::ExtractRecords(saved.bytes, types);
   ASSERT_EQ(ours.count("xl/pivotCache/pivotCacheDefinition1.bin"), 1U);
   EXPECT_EQ(ours.at("xl/pivotCache/pivotCacheDefinition1.bin").size(), 5U);
+  // The item texts follow the locale Excel refreshed under; the item lists' records do not: the 14 months as one
+  // run, and the one-year years group's 3 items as single string records.
+  const std::vector<std::uint16_t> excel_types = GroupBlockTypes(excel);
+  ASSERT_FALSE(excel_types.empty());
+  EXPECT_EQ(GroupBlockTypes(saved.bytes), excel_types);
 }
 
 // A calculated cache field has no record layout here, so its cache group is left out whole and counted.

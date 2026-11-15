@@ -397,7 +397,8 @@ Expected<pcd::ItemTable, Error> DecodeItemTable(Records& recs) {
 }
 
 bool IsGroupingRecord(std::uint16_t type) {
-  return (type >= kBeginPCDFGroup && type <= kEndPCDFGRange) || type == kBeginPCDIRun || type == kEndPCDIRun;
+  return (type >= kBeginPCDFGroup && type <= kEndPCDFGRange) || type == kBeginPCDIRun || type == kEndPCDIRun ||
+         type == kPCDIString;
 }
 
 bool IsCalcItemRecord(std::uint16_t type) {

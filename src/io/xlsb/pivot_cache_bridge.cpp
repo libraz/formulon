@@ -48,10 +48,6 @@ constexpr const char* kNotWritableKind = "pivot_cache";
 constexpr std::uint16_t kAtblSemiMixed = 0x0001U;
 constexpr std::uint16_t kAtblString = 0x0008U;
 
-/// Excel writes 4 or more numbers, strings or dates in a row as one BrtBeginPCDIRun and fewer as single records
-/// (3 numbers were 3 records; 4 strings, 4 dates and 12 dates one run each); booleans and errors always single.
-constexpr std::size_t kMinRunLength = 4;
-
 /// Attribute values Excel writes on the root of an xlsx cache definition that carries `xr:uid`.
 constexpr std::string_view kXrPrefix = "xr";
 
@@ -634,7 +630,8 @@ Expected<void, Error> ReadItems(const pcd::ItemTable& table, pivot::PivotCache& 
     const std::size_t count = entry.is_run ? entry.run.size() : 1U;
     last_count = kind != Plain::kNone && kind == last ? last_count + count : count;
     last = kind;
-    if (kind != Plain::kNone && last_count >= kMinRunLength && (!entry.is_run || last_count != count)) {
+    if (kind != Plain::kNone && last_count >= pivot_records::kMinItemRunLength &&
+        (!entry.is_run || last_count != count)) {
       return Unmeasured("shared items grouped other than Excel groups them");
     }
     if (!entry.is_run) {
@@ -678,7 +675,7 @@ Expected<void, Error> ReadItems(const pcd::ItemTable& table, pivot::PivotCache& 
       continue;
     }
     const pcd::ItemRun& run = entry.run;
-    if (run.size() < kMinRunLength) {
+    if (run.size() < pivot_records::kMinItemRunLength) {
       return Unmeasured("shared item run shorter than any Excel writes");
     }
     switch (run.type) {
@@ -1127,7 +1124,7 @@ bool WriteItems(const pivot::PivotCacheField& field, bool date1904, pcd::ItemTab
       }
       ++end;
     }
-    if (end - i >= kMinRunLength) {
+    if (end - i >= pivot_records::kMinItemRunLength) {
       pcd::ItemEntry entry;
       entry.is_run = true;
       for (std::size_t k = i; k < end; ++k) {

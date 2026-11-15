@@ -262,11 +262,52 @@ TEST(XlsbPivotCacheGroupRecords, GroupRefusesUnknownChild) {
 TEST(XlsbPivotCacheGroupRecords, GroupRefusesNonStringItemRun) {
   std::vector<RawRecord> records;
   pivot_group::FieldGroup group;
-  group.items = std::vector<std::string>{"a"};
+  group.items = std::vector<std::string>{"a", "b", "c", "d"};
   pivot_group::encode_field_group(group, &records);
+  ASSERT_EQ(records[2].type, pivot_records::kBeginPCDIRun);
   records[2].payload[0] = 0x01;  // a number run
   std::size_t pos = 0;
   EXPECT_FALSE(pivot_group::decode_field_group(records, &pos));
+}
+
+// Excel writes a group of fewer than four items as single string records: a years group over one year.
+TEST(XlsbPivotCacheGroupRecords, ShortItemListIsSingleStringRecords) {
+  std::string entry;
+  const Stream s = OnlyPart(Fixture("xlsb_pivot_source_sheet.xlsb"), kCachePrefix, &entry);
+  std::size_t first = s.raw.size();
+  for (std::size_t i = 0; i + 1U < s.raw.size(); ++i) {
+    if (s.raw[i].type == pivot_records::kBeginPCDFGroup && s.raw[i + 1U].type == pivot_records::kBeginPCDFGRange) {
+      first = i;
+      break;
+    }
+  }
+  ASSERT_LT(first, s.raw.size());
+  std::size_t pos = first;
+  auto group = pivot_group::decode_field_group(s.raw, &pos);
+  ASSERT_TRUE(group) << ErrorText(group.error());
+  ASSERT_TRUE(group.value().items.has_value());
+  ASSERT_EQ(group.value().items->size(), 3U);
+  EXPECT_EQ(group.value().items->front(), "<2024/1/15");
+  EXPECT_EQ(group.value().items->back(), ">2024/7/23");
+  std::vector<RawRecord> out;
+  pivot_group::encode_field_group(group.value(), &out);
+  EXPECT_EQ(Frame(out), Slice(s, first, pos));
+}
+
+TEST(XlsbPivotCacheGroupRecords, ItemListTakesARunFromFourItems) {
+  for (std::size_t n : {std::size_t{3}, std::size_t{4}}) {
+    pivot_group::FieldGroup group;
+    group.items = std::vector<std::string>(n, "x");
+    std::vector<RawRecord> records;
+    pivot_group::encode_field_group(group, &records);
+    const std::uint16_t expected = n < 4U ? pivot_records::kPCDIString : pivot_records::kBeginPCDIRun;
+    EXPECT_EQ(records[2].type, expected) << n;
+    std::size_t pos = 0;
+    auto decoded = pivot_group::decode_field_group(records, &pos);
+    ASSERT_TRUE(decoded) << n;
+    EXPECT_EQ(decoded.value().items, group.items) << n;
+    EXPECT_EQ(pos, records.size()) << n;
+  }
 }
 
 // ---- Calculated items -------------------------------------------------------

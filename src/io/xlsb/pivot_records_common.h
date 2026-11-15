@@ -7,6 +7,7 @@
 #ifndef FORMULON_IO_XLSB_PIVOT_RECORDS_COMMON_H_
 #define FORMULON_IO_XLSB_PIVOT_RECORDS_COMMON_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 
@@ -114,6 +115,12 @@ inline constexpr std::uint16_t kBeginPCDFGItems = 221;
 inline constexpr std::uint16_t kEndPCDFGItems = 222;
 inline constexpr std::uint16_t kBeginPCDFGRange = 223;
 inline constexpr std::uint16_t kEndPCDFGRange = 224;
+
+/// Excel writes 4 or more numbers, strings or dates in a row as one BrtBeginPCDIRun and fewer as single records
+/// (3 numbers and 3 group items were single records; 4 strings, 4 dates and 12 dates one run each); booleans and
+/// errors always single.
+inline constexpr std::size_t kMinItemRunLength = 4;
+
 inline constexpr std::uint16_t kBeginPCDCalcItems = 243;
 inline constexpr std::uint16_t kEndPCDCalcItems = 244;
 inline constexpr std::uint16_t kBeginPCDCalcItem = 245;
