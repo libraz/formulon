@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <utility>
 
 #include "io/xlsb/frt_records.h"
 #include "io/xlsb/record.h"
@@ -11,22 +12,37 @@
 namespace formulon {
 namespace io {
 namespace xlsb {
-namespace {
-
-constexpr std::uint16_t kBeginPivotCacheIds = 384;
-constexpr std::uint16_t kEndPivotCacheIds = 385;
-constexpr std::uint16_t kBeginPivotCacheId = 386;
-constexpr std::uint16_t kEndPivotCacheId = 387;
-constexpr std::uint16_t kBrtFileRecover = 155;
-
-}  // namespace
+BookPivotCacheIds list_book_pivot_cache_ids(const std::vector<std::uint8_t>& block) {
+  BookPivotCacheIds out;
+  ByteSpan cursor{block.data(), block.size()};
+  while (cursor.size > 0U) {
+    auto rec = read_record(cursor);
+    if (!rec) {
+      out.complete = false;
+      break;
+    }
+    if (rec.value().type != kBrtBeginPivotCacheId) {
+      continue;
+    }
+    ByteSpan payload = rec.value().payload;
+    auto id = read_u32(payload);
+    auto rel_id = id ? read_xlwidestring(payload) : Expected<std::string, Error>(id.error());
+    if (!rel_id) {
+      out.complete = false;
+      break;
+    }
+    out.entries.push_back(BookPivotCacheId{id.value(), std::move(rel_id.value())});
+  }
+  return out;
+}
 
 std::vector<std::uint8_t> read_book_pivot_cache_ids(ByteSpan workbook_bin) {
   const std::vector<std::uint8_t> body(workbook_bin.data, workbook_bin.data + workbook_bin.size);
   const std::vector<FramedRecord> recs = split_records(body);
   const auto begin =
-      std::find_if(recs.begin(), recs.end(), [](const FramedRecord& r) { return r.type == kBeginPivotCacheIds; });
-  const auto end = std::find_if(begin, recs.end(), [](const FramedRecord& r) { return r.type == kEndPivotCacheIds; });
+      std::find_if(recs.begin(), recs.end(), [](const FramedRecord& r) { return r.type == kBrtBeginPivotCacheIds; });
+  const auto end =
+      std::find_if(begin, recs.end(), [](const FramedRecord& r) { return r.type == kBrtEndPivotCacheIds; });
   if (end == recs.end()) {
     return {};
   }
@@ -39,8 +55,8 @@ void splice_book_pivot_cache_ids(std::vector<std::uint8_t>& workbook_bin, const 
   std::vector<std::uint8_t> block;
   std::size_t ids = 0;
   for (const FramedRecord& rec : split_records(retained)) {
-    if (rec.type != kBeginPivotCacheId) {
-      if (rec.type != kEndPivotCacheId) {
+    if (rec.type != kBrtBeginPivotCacheId) {
+      if (rec.type != kBrtEndPivotCacheId) {
         append_record(block, retained, rec);
       }
       continue;
@@ -59,8 +75,8 @@ void splice_book_pivot_cache_ids(std::vector<std::uint8_t>& workbook_bin, const 
     std::vector<std::uint8_t> payload(rec.payload.data, rec.payload.data + 4);
     emit_xlwidestring(payload, hit->second);
     payload.insert(payload.end(), cursor.data, cursor.data + cursor.size);
-    emit_record(block, kBeginPivotCacheId, payload);
-    emit_record(block, kEndPivotCacheId, ByteSpan{});
+    emit_record(block, kBrtBeginPivotCacheId, payload);
+    emit_record(block, kBrtEndPivotCacheId, ByteSpan{});
     ++ids;
   }
   if (ids == 0U) {

@@ -14,8 +14,10 @@
 #include "io/ooxml_defs.h"
 #include "io/pivot_projection.h"
 #include "io/xlsb/pivot_cache_bridge.h"
+#include "io/xlsb/pivot_cache_ids.h"
 #include "io/xlsb/pivot_table_bridge.h"
 #include "io/xlsb/record.h"
+#include "io/xlsb/record_ids.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xml_utils.h"
 #include "pivot/pivot_cache.h"
@@ -30,12 +32,6 @@ namespace formulon {
 namespace io {
 namespace xlsb {
 namespace {
-
-/// BrtBeginPivotCacheIDs / BrtEndPivotCacheIDs and the pair around each cache.
-constexpr std::uint16_t kBrtBeginPivotCacheIds = 384;
-constexpr std::uint16_t kBrtEndPivotCacheIds = 385;
-constexpr std::uint16_t kBrtBeginPivotCacheId = 386;
-constexpr std::uint16_t kBrtEndPivotCacheId = 387;
 
 /// A table of the group: its sheet, its index on the sheet, and the table.
 struct Member {
@@ -129,25 +125,10 @@ bool PassthroughOnlyGroup(const Workbook& wb, std::uint32_t cache_id, const std:
 /// The ids of the retained PIVOTCACHEIDS entries whose cache is still a passthrough part.
 std::unordered_set<std::uint32_t> PassthroughCacheIds(const Workbook& wb) {
   std::unordered_set<std::uint32_t> out;
-  const std::vector<std::uint8_t>& block = wb.xlsb_pivot_cache_ids();
-  ByteSpan cursor{block.data(), block.size()};
-  while (cursor.size > 0U) {
-    auto rec = read_record(cursor);
-    if (!rec) {
-      break;
-    }
-    ByteSpan payload = rec.value().payload;
-    if (rec.value().type != kBrtBeginPivotCacheId) {
-      continue;
-    }
-    auto id = read_u32(payload);
-    auto rel_id = id ? read_xlwidestring(payload) : Expected<std::string, Error>(id.error());
-    if (!rel_id) {
-      break;
-    }
+  for (const BookPivotCacheId& entry : list_book_pivot_cache_ids(wb.xlsb_pivot_cache_ids()).entries) {
     for (const UnknownRelationship& rel : wb.unknown_workbook_rels()) {
-      if (rel.id == rel_id.value() && rel.type == kRelPivotCacheDefinition) {
-        out.insert(id.value());
+      if (rel.id == entry.rel_id && rel.type == kRelPivotCacheDefinition) {
+        out.insert(entry.id);
       }
     }
   }

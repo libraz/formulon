@@ -31,6 +31,13 @@ inline constexpr std::uint16_t kBrtEndCustomFilters = 173;
 inline constexpr std::uint16_t kBrtCustomFilter = 174;
 inline constexpr std::uint16_t kBrtAFilterDateGroupItem = 175;
 
+// The workbook's PIVOTCACHEIDS block, and the record ahead of which it is spliced.
+inline constexpr std::uint16_t kBrtFileRecover = 155;
+inline constexpr std::uint16_t kBrtBeginPivotCacheIds = 384;
+inline constexpr std::uint16_t kBrtEndPivotCacheIds = 385;
+inline constexpr std::uint16_t kBrtBeginPivotCacheId = 386;  // u32 idSx, XLWideString relationship id
+inline constexpr std::uint16_t kBrtEndPivotCacheId = 387;
+
 // Row and column page breaks.
 inline constexpr std::uint16_t kBrtBeginRwBrk = 392;  // u32 count, u32 manual count
 inline constexpr std::uint16_t kBrtEndRwBrk = 393;

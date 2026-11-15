@@ -21,6 +21,21 @@ namespace formulon {
 namespace io {
 namespace xlsb {
 
+/// One cache a PIVOTCACHEIDS block lists: its idSx and the workbook
+/// relationship id of its definition.
+struct BookPivotCacheId {
+  std::uint32_t id = 0;
+  std::string rel_id;
+};
+
+/// The caches `block` lists, in order, up to the first record that does not
+/// frame or decode; `complete` is false when one did not.
+struct BookPivotCacheIds {
+  std::vector<BookPivotCacheId> entries;
+  bool complete = true;
+};
+BookPivotCacheIds list_book_pivot_cache_ids(const std::vector<std::uint8_t>& block);
+
 /// The framed PIVOTCACHEIDS block of a `xl/workbook.bin` body; empty when the
 /// body has none.
 std::vector<std::uint8_t> read_book_pivot_cache_ids(ByteSpan workbook_bin);

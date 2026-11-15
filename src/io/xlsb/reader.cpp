@@ -60,6 +60,7 @@
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_reader.h"
 #include "io/xlsb/record.h"
+#include "io/xlsb/record_ids.h"
 #include "io/xlsb/retained_part_fingerprint.h"
 #include "io/xlsb/sheet_reader.h"
 #include "io/xlsb/slicer_records.h"
@@ -137,9 +138,6 @@ struct RetainedPartOrigins {
   }
 };
 
-/// BrtBeginPivotCacheID: u32 idSx, then the workbook relationship id of the cache definition.
-constexpr std::uint16_t kBrtBeginPivotCacheId = 386;
-
 /// One cache the workbook's PIVOTCACHEIDS block lists: its id and definition part.
 struct BookPivotCache {
   std::uint32_t id = 0;
@@ -150,25 +148,15 @@ struct BookPivotCache {
 /// block does not frame.
 std::vector<BookPivotCache> BookPivotCaches(const std::vector<std::uint8_t>& block,
                                             const std::vector<UnknownRelationship>& book_rels) {
+  const BookPivotCacheIds listed = list_book_pivot_cache_ids(block);
   std::vector<BookPivotCache> out;
-  ByteSpan cursor{block.data(), block.size()};
-  while (cursor.size > 0U) {
-    auto rec = read_record(cursor);
-    if (!rec) {
-      return {};
-    }
-    if (rec.value().type != kBrtBeginPivotCacheId) {
-      continue;
-    }
-    ByteSpan payload = rec.value().payload;
-    auto id = read_u32(payload);
-    auto rel_id = id ? read_xlwidestring(payload) : Expected<std::string, Error>(id.error());
-    if (!rel_id) {
-      return {};
-    }
+  if (!listed.complete) {
+    return out;
+  }
+  for (const BookPivotCacheId& entry : listed.entries) {
     for (const UnknownRelationship& rel : book_rels) {
-      if (!rel.target_external && rel.type == kRelPivotCacheDefinition && rel.id == rel_id.value()) {
-        out.push_back(BookPivotCache{id.value(), rel.target});
+      if (!rel.target_external && rel.type == kRelPivotCacheDefinition && rel.id == entry.rel_id) {
+        out.push_back(BookPivotCache{entry.id, rel.target});
       }
     }
   }

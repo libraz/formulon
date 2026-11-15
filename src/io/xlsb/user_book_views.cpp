@@ -22,7 +22,6 @@ namespace {
 
 constexpr std::uint16_t kBrtUserBookView = 397;
 constexpr std::uint16_t kBrtBeginUserShView = 423;
-constexpr std::uint16_t kBrtFileRecover = 155;
 constexpr std::size_t kBookViewGuidOffset = 24;
 constexpr std::size_t kGuidSize = 16;
 
