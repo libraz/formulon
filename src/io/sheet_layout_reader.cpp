@@ -38,8 +38,9 @@ namespace io {
 namespace {
 
 /// Parses the first window's `<sheetView>` into `view` and keeps the other
-/// windows' verbatim. Of two views naming one window Excel keeps the later,
-/// at the earlier one's place.
+/// windows' read and rebuilt the same way, so each loses what the first does.
+/// Of two views naming one window Excel keeps the later, at the earlier one's
+/// place.
 void ApplySheetView(const pugi::xml_node& worksheet, SheetView& view) {
   std::vector<pugi::xml_node> windows;
   for (pugi::xml_node node = worksheet.child("sheetViews").child("sheetView"); node;
@@ -59,7 +60,9 @@ void ApplySheetView(const pugi::xml_node& worksheet, SheetView& view) {
   }
   read_sheet_view_element(windows.front(), view);
   for (std::size_t i = 1; i < windows.size(); ++i) {
-    append_raw_xml(view.extra_views_xml, windows[i]);
+    SheetView extra;
+    read_sheet_view_element(windows[i], extra);
+    view.extra_views_xml.append(build_sheet_view_element_xml(extra, attr_u32(windows[i], "workbookViewId", 0U)));
   }
 }
 

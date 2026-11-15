@@ -561,6 +561,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- An `.xlsx` save no longer writes the `<pivotSelection>` of a sheet's view of a second workbook window, which made Excel refuse to open the file. Every sheet view is now read the way the first one is, so the views of the other windows lose what it loses (`<pivotSelection>`, an unknown `view` mode, an out-of-range zoom) and keep the rest.
 - A sheet AutoFilter text criterion is saved to .xlsb with the flag that has
   Excel compare the text literally rather than as a pattern. A criterion
   entered on text with no * or ? under <, <=, >, >= or <> carries it, one read

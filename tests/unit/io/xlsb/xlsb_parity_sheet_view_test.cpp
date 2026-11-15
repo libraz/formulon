@@ -12,6 +12,7 @@
 
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
+#include "io/ooxml_writer.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/writer.h"
 #include "reader_test_helpers.h"
@@ -170,6 +171,39 @@ TEST(XlsbParitySheetView, NormalisePivotSelectionIsNotRead) {
   }
   const Workbook src = ReadXlsx("pivot_selection_min_rid_src.xlsx");
   ExpectSameView(src.sheet(0).view(), ReadXlsx("pivot_selection_min_rid.xlsx").sheet(0).view());
+}
+
+// A second window's view loses its pivotSelection as the first's does, and keeps the rest: Excel refuses an .xlsx
+// whose extra view still carries one.
+TEST(XlsbParitySheetView, NormaliseExtraViewPivotSelectionIsNotRead) {
+  const char kSecondView[] =
+      "<sheetView tabSelected=\"1\" workbookViewId=\"1\" zoomScale=\"80\" zoomScaleNormal=\"80\"><pane ySplit=\"1\" "
+      "topLeftCell=\"A2\" activePane=\"bottomLeft\" state=\"frozen\"/><selection pane=\"bottomLeft\" "
+      "activeCell=\"B4\" sqref=\"B4\"/></sheetView>";
+  const Workbook book = ReadXlsx("extra_view_children_src.xlsx");
+  auto saved = write_ooxml(book);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  std::string views;
+  for (std::size_t i = 1;; ++i) {
+    const std::optional<Bytes> part = test::ReadPart(saved.value(), "xl/worksheets/sheet" + std::to_string(i) + ".xml");
+    if (!part.has_value()) {
+      break;
+    }
+    const std::string xml(part->begin(), part->end());
+    const std::size_t begin = xml.find("<sheetViews>");
+    const std::size_t end = xml.find("</sheetViews>");
+    ASSERT_NE(begin, std::string::npos);
+    ASSERT_NE(end, std::string::npos);
+    views.append(xml, begin, end - begin);
+  }
+  EXPECT_EQ(views.find("pivotSelection"), std::string::npos) << views;
+  EXPECT_NE(views.find(kSecondView), std::string::npos) << views;
+  // The .xlsb save writes the same second view.
+  const XlsbReadResult back = ReadXlsb(WriteXlsb(book));
+  ASSERT_EQ(back.workbook.sheet_count(), book.sheet_count());
+  for (std::size_t i = 0; i < book.sheet_count(); ++i) {
+    EXPECT_EQ(back.workbook.sheet(i).view().extra_views_xml, book.sheet(i).view().extra_views_xml);
+  }
 }
 
 TEST(XlsbParitySheetView, NormaliseViewExtensionIsLeftOutOfXlsb) {
