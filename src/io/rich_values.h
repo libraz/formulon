@@ -30,6 +30,7 @@
 namespace formulon {
 class Workbook;
 namespace io {
+class ZipReader;
 
 inline constexpr std::string_view kRichValueRelPartPath = "xl/richData/richValueRel.xml";
 inline constexpr std::string_view kRichValueRelRelsPartPath = "xl/richData/_rels/richValueRel.xml.rels";
@@ -82,6 +83,19 @@ struct RichValuePackage {
 /// True when `rels` holds the internal workbook relationship to `richValueRel`.
 bool rich_value_rel_registered(const std::vector<UnknownRelationship>& rels);
 
+/// The rich-value parts one consume reads, owning the bytes `package` points into.
+struct RichValueSource {
+  /// Metadata and every value, structure and type part to mark consumed.
+  std::vector<std::string> parts;
+  std::vector<std::vector<std::uint8_t>> bytes;
+  RichValuePackage package;
+};
+
+/// Scans `xl/richData/` and loads the metadata part at `metadata_path` with the value, structure and
+/// `richValueRel` parts into `*source`. `source` must not be moved afterwards.
+void load_rich_value_source(const ZipReader& zip, std::string_view metadata_path,
+                            const std::vector<UnknownRelationship>& rels, RichValueSource* source);
+
 /// A read set: the errors as `restore_rich_error_cells` takes them (an opaque
 /// value's slot there is unused) and, per rich value, its opaque value.
 struct RichValueSet {
@@ -103,6 +117,11 @@ RichValueRead read_rich_value_parts(const RichValuePackage& package);
 /// As above for a package whose metadata part is not `xl/metadata.xml`
 /// (`package.metadata` is unused): `metadata` is what that part says.
 RichValueRead read_rich_value_parts(const RichValuePackage& package, RichValueMetadata metadata);
+
+/// When `read` understood every part, moves its set into `*set`, marks `parts` consumed and drops their
+/// workbook relationships from `rels`; returns false (touching nothing) otherwise.
+bool commit_rich_value_read(RichValueRead& read, const std::vector<std::string>& parts, RichValueSet* set,
+                            std::unordered_set<std::string>& consumed_parts, std::vector<UnknownRelationship>& rels);
 
 /// Records on `sheet` the opaque value of each of `cells` that caches an error
 /// and returns the cells whose `vm` names anything else.

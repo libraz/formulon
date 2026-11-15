@@ -221,6 +221,7 @@ set(FORMULON_CORE_SOURCES
   src/io/ooxml/sheet_xml_builder.cpp
   src/io/ooxml/workbook_xml_builder.cpp
   src/io/ooxml/zip_part_writer.cpp
+  src/io/package_reader_common.cpp
   src/io/pivot_cache_reader.cpp
   src/io/pivot_cache_writer.cpp
   src/io/pivot_table_reader.cpp

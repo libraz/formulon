@@ -40,6 +40,7 @@
 #include "io/ooxml/relationship_xml.h"
 #include "io/ooxml/rels_walker.h"
 #include "io/ooxml_defs.h"
+#include "io/package_reader_common.h"
 #include "io/pivot_table_reader.h"
 #include "io/rich_value_errors.h"
 #include "io/rich_values.h"
@@ -310,8 +311,6 @@ bool ConsumeRichValueParts(const ZipReader& zip, RichValueSet* set, std::unorder
     return false;
   }
   constexpr std::string_view kExternalLinks = "xl/externalLinks/";
-  std::vector<std::string> parts{std::string(kMetadataBinPath)};
-  RichValuePackage package;
   for (const std::string& name : zip.list_entries()) {
     // An external link's cached cells naming a value-metadata entry belong to a set this reader does not own.
     if (name.compare(0, kExternalLinks.size(), kExternalLinks) == 0 && name.size() > 4U &&
@@ -327,52 +326,15 @@ bool ConsumeRichValueParts(const ZipReader& zip, RichValueSet* set, std::unorder
         }
       }
     }
-    if (name.compare(0, kRichDataDirPrefix.size(), kRichDataDirPrefix) == 0 && name.back() != '/') {
-      if (name == kRdRichValuePartPath || name == kRdRichValueStructurePartPath || name == kRdRichValueTypesPartPath) {
-        parts.push_back(name);
-      } else if (!is_retained_rich_data_part(name) && package.unknown_part.empty()) {
-        package.unknown_part = name;
-      }
-    }
   }
-  // The parts `package` points into.
-  std::vector<std::vector<std::uint8_t>> bytes;
-  bytes.reserve(5U);
-  const auto load = [&zip, &bytes](std::string_view path) -> const std::vector<std::uint8_t>* {
-    if (!zip.has_entry(path)) {
-      return nullptr;
-    }
-    auto read = zip.read_entry(path);
-    if (!read) {
-      return nullptr;
-    }
-    bytes.push_back(std::move(read.value()));
-    return &bytes.back();
-  };
-  const std::vector<std::uint8_t>* metadata = load(kMetadataBinPath);
-  if (metadata == nullptr) {
+  RichValueSource source;
+  load_rich_value_source(zip, kMetadataBinPath, unknown_rels, &source);
+  if (source.package.metadata == nullptr) {
     return false;
   }
-  package.values = load(kRdRichValuePartPath);
-  package.structures = load(kRdRichValueStructurePartPath);
-  package.rel = load(kRichValueRelPartPath);
-  package.rel_rels = load(kRichValueRelRelsPartPath);
-  package.rel_registered = rich_value_rel_registered(unknown_rels);
-  RichValueRead read = read_rich_value_parts(package, parse_metadata_bin(ByteSpan{metadata->data(), metadata->size()}));
-  if (!read.fallback_reason.empty()) {
-    return false;
-  }
-  *set = std::move(read.set);
-  for (const std::string& part : parts) {
-    consumed_parts.insert(part);
-  }
-  unknown_rels.erase(std::remove_if(unknown_rels.begin(), unknown_rels.end(),
-                                    [&parts](const UnknownRelationship& r) {
-                                      return !r.target_external &&
-                                             std::find(parts.begin(), parts.end(), r.target) != parts.end();
-                                    }),
-                     unknown_rels.end());
-  return true;
+  RichValueRead read = read_rich_value_parts(
+      source.package, parse_metadata_bin(ByteSpan{source.package.metadata->data(), source.package.metadata->size()}));
+  return commit_rich_value_read(read, source.parts, set, consumed_parts, unknown_rels);
 }
 
 /// Decodes every pivot cache and table into the model, a cache with every
@@ -831,13 +793,9 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
     // format to recognise that condition.
     auto added = wb.add_sheet_validated(b.name);
     if (!added) {
-      if (added.error().code != FormulonErrorCode::kInvalidSheetName &&
-          added.error().code != FormulonErrorCode::kAlreadyExists) {
-        return std::move(added.error());
-      }
-      return make_error(FormulonErrorCode::kIoSheetCorrupt,
-                        "workbook.bin: BrtBundleSh name is invalid or collides with an earlier sheet",
-                        "context=xlsb_reader sheet=\"" + b.name + "\"");
+      return sheet_add_error(std::move(added.error()),
+                             "workbook.bin: BrtBundleSh name is invalid or collides with an earlier sheet",
+                             "context=xlsb_reader sheet=\"" + b.name + "\"");
     }
     wb.sheet(wb.sheet_count() - 1U).set_source_sheet_id(b.tab_id);
     if (b.visibility != SheetVisibility::kVisible) {
@@ -997,13 +955,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
     dropped_record_count += state_or.value().dropped_records;
     skipped_feature_count += state_or.value().skipped_features;
     recalc_marked[i] = std::move(state_or.value().recalc_marked);
-    std::unordered_set<std::uint64_t> dynamic_cells;
-    for (const auto& [row, col, ifmd] : state_or.value().cell_metadata) {
-      if (dynamic_array_ifmd != 0U && ifmd == dynamic_array_ifmd) {
-        dynamic_cells.insert(dynamic_array_cell_key(row, col));
-      }
-    }
-    apply_loaded_dynamic_array_marks(wb.sheet(i), dynamic_cells);
+    mark_sheet_dynamic_arrays(wb.sheet(i), dynamic_array_ifmd, state_or.value().cell_metadata);
     consumed_parts.insert(sheet_path);
 
     // The sheet's own rels file resolves the relationship ids carried by the
@@ -1211,14 +1163,8 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
   }
   ooxml::remove_orphans(wb, std::move(orphaned));
 
-  wb.apply_legacy_implicit_intersections();
-  clamp_sheet_phonetic_fonts(wb);
-  wb.request_pivot_refresh_on_load();
   // Last, once nothing else dirties formulas: the stale set Excel opens with follows fAlwaysCalc.
-  if (options.profile.has_value()) {
-    wb.assign_loaded_profile(*options.profile);
-  }
-  wb.apply_loaded_recalc_marks(recalc_marked);
+  finish_loaded_workbook(wb, options, recalc_marked);
 
   XlsbReadResult result{std::move(wb),
                         cells_read,

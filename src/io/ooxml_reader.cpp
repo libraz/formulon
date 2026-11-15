@@ -50,6 +50,7 @@
 #include "io/ooxml/workbook_rels_reader.h"
 #include "io/ooxml/worksheet_metadata_reader.h"
 #include "io/ooxml_defs.h"
+#include "io/package_reader_common.h"
 #include "io/pivot_cache_reader.h"
 #include "io/pivot_table_reader.h"
 #include "io/rich_value_errors.h"
@@ -198,15 +199,11 @@ static Expected<std::vector<std::string>, Error> ReadSheetList(const pugi::xml_n
     // would be a worse repair than refusing the load.
     auto added = wb.add_sheet_validated(name);
     if (!added) {
-      if (added.error().code != FormulonErrorCode::kInvalidSheetName &&
-          added.error().code != FormulonErrorCode::kAlreadyExists) {
-        return std::move(added.error());
-      }
       std::string ctx("context=ooxml_reader part=");
       ctx.append(workbook_path);
       ctx.append(" sheet=\"").append(name).append("\"");
-      return make_error(FormulonErrorCode::kIoSheetCorrupt,
-                        "workbook.xml: <sheet> name is invalid or collides with an earlier sheet", std::move(ctx));
+      return sheet_add_error(std::move(added.error()),
+                             "workbook.xml: <sheet> name is invalid or collides with an earlier sheet", std::move(ctx));
     }
     if (workbook_visibility != SheetVisibility::kVisible) {
       wb.sheet(wb.sheet_count() - 1U).mutable_view().set_visibility(workbook_visibility);
@@ -658,6 +655,7 @@ static Expected<void, Error> ResolveSharedStrings(Workbook& wb, const std::vecto
                         "sheet references SST but package has no sharedStrings part",
                         SstCellContext(i, std::get<0>(first), std::get<1>(first), std::get<2>(first)));
     }
+    Sheet& sheet = wb.sheet(i);
     for (const auto& triple : sctx.pending_sst_cells) {
       const std::uint32_t row = std::get<0>(triple);
       const std::uint32_t col = std::get<1>(triple);
@@ -667,7 +665,7 @@ static Expected<void, Error> ResolveSharedStrings(Workbook& wb, const std::vecto
         ctx.append(" sst_size=").append(std::to_string(sst.entries.size()));
         return make_error(FormulonErrorCode::kIoSheetCorrupt, "shared-string index out of range", std::move(ctx));
       }
-      wb.sheet(i).set_cell_cached_value_borrowed(row, col, Value::text(sst.entries[idx]));
+      sheet.set_cell_cached_value_borrowed(row, col, Value::text(sst.entries[idx]));
       // Propagate any <rPh> annotation from the SST entry onto the cell
       // so PHONETIC() can surface the kana over the characters it
       // covers. The SST reader keeps `phonetic_for_entries` parallel to
@@ -676,10 +674,10 @@ static Expected<void, Error> ResolveSharedStrings(Workbook& wb, const std::vecto
       // the common unannotated case. Several cells may share one `<si>`,
       // so the runs are copied rather than moved out.
       if (idx < sst.phonetic_for_entries.size() && !sst.phonetic_for_entries[idx].empty()) {
-        wb.sheet(i).set_cell_phonetic_runs(row, col, sst.phonetic_for_entries[idx]);
+        sheet.set_cell_phonetic_runs(row, col, sst.phonetic_for_entries[idx]);
         if (idx < sst.phonetic_props_for_entries.size()) {
-          wb.sheet(i).set_cell_phonetic_props(row, col, sst.phonetic_props_for_entries[idx],
-                                              sst.phonetic_pr_present_for_entries[idx]);
+          sheet.set_cell_phonetic_props(row, col, sst.phonetic_props_for_entries[idx],
+                                        sst.phonetic_pr_present_for_entries[idx]);
         }
       }
       ++*resolved;
@@ -707,8 +705,6 @@ static bool ConsumeRichValueParts(ZipReader& zip, const Workbook& wb, RichValueS
       return false;
     }
   }
-  std::vector<std::string> parts{std::string(kMetadata)};
-  RichValuePackage package;
   for (const std::string& name : zip.list_entries()) {
     if (name.compare(0, kExternalLinks.size(), kExternalLinks) == 0) {
       auto bytes = zip.read_entry(name);
@@ -718,49 +714,11 @@ static bool ConsumeRichValueParts(ZipReader& zip, const Workbook& wb, RichValueS
         return false;
       }
     }
-    if (name.compare(0, kRichDataDirPrefix.size(), kRichDataDirPrefix) == 0 && name.back() != '/') {
-      if (name == kRdRichValuePartPath || name == kRdRichValueStructurePartPath || name == kRdRichValueTypesPartPath) {
-        parts.push_back(name);
-      } else if (!is_retained_rich_data_part(name) && package.unknown_part.empty()) {
-        package.unknown_part = name;
-      }
-    }
   }
-  // The parts `package` points into.
-  std::vector<std::vector<std::uint8_t>> bytes;
-  bytes.reserve(5U);
-  const auto load = [&zip, &bytes](std::string_view path) -> const std::vector<std::uint8_t>* {
-    if (!zip.has_entry(path)) {
-      return nullptr;
-    }
-    auto read = zip.read_entry(path);
-    if (!read) {
-      return nullptr;
-    }
-    bytes.push_back(std::move(read.value()));
-    return &bytes.back();
-  };
-  package.metadata = load(kMetadata);
-  package.values = load(kRdRichValuePartPath);
-  package.structures = load(kRdRichValueStructurePartPath);
-  package.rel = load(kRichValueRelPartPath);
-  package.rel_rels = load(kRichValueRelRelsPartPath);
-  package.rel_registered = rich_value_rel_registered(unknown_rels);
-  RichValueRead read = read_rich_value_parts(package);
-  if (!read.fallback_reason.empty()) {
-    return false;
-  }
-  *set = std::move(read.set);
-  for (const std::string& part : parts) {
-    consumed_parts.insert(part);
-  }
-  unknown_rels.erase(std::remove_if(unknown_rels.begin(), unknown_rels.end(),
-                                    [&parts](const UnknownRelationship& r) {
-                                      return !r.target_external &&
-                                             std::find(parts.begin(), parts.end(), r.target) != parts.end();
-                                    }),
-                     unknown_rels.end());
-  return true;
+  RichValueSource source;
+  load_rich_value_source(zip, kMetadata, unknown_rels, &source);
+  RichValueRead read = read_rich_value_parts(source.package);
+  return commit_rich_value_read(read, source.parts, set, consumed_parts, unknown_rels);
 }
 
 /// A formula is a dynamic-array formula exactly when its `cm=` names the
@@ -774,13 +732,7 @@ static void MarkLoadedDynamicArrays(ZipReader& zip, Workbook& wb, const std::vec
     }
   }
   for (std::size_t i = 0; i < sheet_contexts.size(); ++i) {
-    std::unordered_set<std::uint64_t> marked;
-    for (const auto& [row, col, cm] : sheet_contexts[i].cell_metadata) {
-      if (xldapr != 0U && cm == xldapr) {
-        marked.insert(dynamic_array_cell_key(row, col));
-      }
-    }
-    apply_loaded_dynamic_array_marks(wb.sheet(i), marked);
+    mark_sheet_dynamic_arrays(wb.sheet(i), xldapr, sheet_contexts[i].cell_metadata);
   }
 }
 
@@ -1121,19 +1073,12 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   wb.set_unknown_package_rels(std::move(package_rels));
   wb.set_default_content_types(std::move(default_content_types));
 
-  wb.apply_legacy_implicit_intersections();
-  clamp_sheet_phonetic_fonts(wb);
-  wb.request_pivot_refresh_on_load();
-
   // Last, once nothing else dirties formulas: the stale set Excel opens with follows `ca="1"`.
   std::vector<std::vector<CellAddress>> recalc_marked(sheet_contexts.size());
   for (std::size_t i = 0; i < sheet_contexts.size(); ++i) {
     recalc_marked[i] = std::move(sheet_contexts[i].recalc_marked);
   }
-  if (options.profile.has_value()) {
-    wb.assign_loaded_profile(*options.profile);
-  }
-  wb.apply_loaded_recalc_marks(recalc_marked);
+  finish_loaded_workbook(wb, options, recalc_marked);
 
   OoxmlReadResult result{std::move(wb), pending_sst_count, diagnostics};
   return result;

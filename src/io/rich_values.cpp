@@ -5,6 +5,7 @@
 
 #include "io/rich_values.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
@@ -331,6 +332,58 @@ bool rich_value_rel_registered(const std::vector<UnknownRelationship>& rels) {
     }
   }
   return false;
+}
+
+void load_rich_value_source(const ZipReader& zip, std::string_view metadata_path,
+                            const std::vector<UnknownRelationship>& rels, RichValueSource* source) {
+  source->parts.emplace_back(metadata_path);
+  for (const std::string& name : zip.list_entries()) {
+    if (name.compare(0, kRichDataDirPrefix.size(), kRichDataDirPrefix) == 0 && name.back() != '/') {
+      if (name == kRdRichValuePartPath || name == kRdRichValueStructurePartPath || name == kRdRichValueTypesPartPath) {
+        source->parts.push_back(name);
+      } else if (!is_retained_rich_data_part(name) && source->package.unknown_part.empty()) {
+        source->package.unknown_part = name;
+      }
+    }
+  }
+  std::vector<std::vector<std::uint8_t>>& bytes = source->bytes;
+  bytes.reserve(5U);
+  const auto load = [&zip, &bytes](std::string_view path) -> const std::vector<std::uint8_t>* {
+    if (!zip.has_entry(path)) {
+      return nullptr;
+    }
+    auto read = zip.read_entry(path);
+    if (!read) {
+      return nullptr;
+    }
+    bytes.push_back(std::move(read.value()));
+    return &bytes.back();
+  };
+  RichValuePackage& package = source->package;
+  package.metadata = load(metadata_path);
+  package.values = load(kRdRichValuePartPath);
+  package.structures = load(kRdRichValueStructurePartPath);
+  package.rel = load(kRichValueRelPartPath);
+  package.rel_rels = load(kRichValueRelRelsPartPath);
+  package.rel_registered = rich_value_rel_registered(rels);
+}
+
+bool commit_rich_value_read(RichValueRead& read, const std::vector<std::string>& parts, RichValueSet* set,
+                            std::unordered_set<std::string>& consumed_parts, std::vector<UnknownRelationship>& rels) {
+  if (!read.fallback_reason.empty()) {
+    return false;
+  }
+  *set = std::move(read.set);
+  for (const std::string& part : parts) {
+    consumed_parts.insert(part);
+  }
+  rels.erase(std::remove_if(rels.begin(), rels.end(),
+                            [&parts](const UnknownRelationship& r) {
+                              return !r.target_external &&
+                                     std::find(parts.begin(), parts.end(), r.target) != parts.end();
+                            }),
+             rels.end());
+  return true;
 }
 
 RichValueRead read_rich_value_parts(const RichValuePackage& package) {
