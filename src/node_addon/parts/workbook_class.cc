@@ -421,6 +421,21 @@ Napi::Value Workbook::LoadBytes(const Napi::CallbackInfo& info) {
     Napi::TypeError::New(env, "Workbook.load bytes must be a Uint8Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  // `{ profileId? }`: absent, `undefined` and `null` options or profile keep the load's profile.
+  static const GuardedMethodData load_label{PositionalArgSpec{}, "load", "Workbook", false, nullptr};
+  const ScopedReaderLabel label(&PublicMethodLabel, &PublicArgumentName, &load_label);
+  Napi::Object options;
+  if (!OptionsArg(info, 1, &options)) {
+    return env.Undefined();
+  }
+  CheckedSpecReader reader(env);
+  std::string profile_id;
+  const bool has_profile = reader.String(options, "profileId", &profile_id);
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  fm_load_options_spec_t spec = FM_STRUCT_INIT(fm_load_options_spec_t);
+  spec.profile_id = has_profile ? profile_id.c_str() : nullptr;
   Napi::Object jsobj = GetClass(env).New({});
   Workbook* wb = Napi::ObjectWrap<Workbook>::Unwrap(jsobj);
   // An empty array may have no backing store; a non-NULL pointer lets the
@@ -428,7 +443,7 @@ Napi::Value Workbook::LoadBytes(const Napi::CallbackInfo& info) {
   static const uint8_t kEmptyInput = 0;
   const std::size_t len = u8.ElementLength();
   const uint8_t* data = len == 0 ? &kEmptyInput : u8.Data();
-  return FactoryResult(env, jsobj, wb, fm_workbook_load(data, len, &wb->handle_));
+  return FactoryResult(env, jsobj, wb, fm_workbook_load(data, len, &spec, &wb->handle_));
 }
 
 // ---- Class registration ---------------------------------------------

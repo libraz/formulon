@@ -176,7 +176,7 @@ TEST(FormulonCApiPivot, ReadBackSurvivesSaveAndReload) {
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
       << fm_get_last_error_message();
   WorkbookGuard reloaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0) << fm_get_last_error_message();
 
   std::uint32_t read_cache = 99;
   ASSERT_EQ(fm_sheet_get_pivot_cache_id(reloaded.handle, 0, 0, &read_cache), 0) << fm_get_last_error_message();
@@ -517,7 +517,7 @@ void LoadWithPivotTail(fm_workbook_t* wb, const std::string& tail, WorkbookGuard
   xml.resize(cut + std::string_view("</dataFields>").size());
   xml.append(tail).append("</pivotTableDefinition>");
   const std::vector<std::uint8_t> patched = WithPivotTablePart(archive, xml);
-  ASSERT_EQ(fm_workbook_load(patched.data(), patched.size(), &out->handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(patched.data(), patched.size(), nullptr, &out->handle), 0) << fm_get_last_error_message();
 }
 
 /// The style record together with the `out_present` flag of the getter.
@@ -580,7 +580,7 @@ TEST(FormulonCApiPivot, StyleOptionsRoundTripsThroughSetSaveAndLoad) {
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
       << fm_get_last_error_message();
   WorkbookGuard reloaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0) << fm_get_last_error_message();
   style = ReadStyleOptions(reloaded.handle);
   EXPECT_EQ(style.present, 1);
   EXPECT_STREQ(style.style_name, "PivotStyleMedium9");

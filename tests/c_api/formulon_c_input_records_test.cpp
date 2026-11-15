@@ -200,7 +200,8 @@ TEST(FormulonCApiInputRecords, TableSpecWritesAllFourStyleTogglesInOneCall) {
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), FM_STATUS_OK)
       << fm_get_last_error_message();
   WorkbookGuard reloaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), FM_STATUS_OK) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), FM_STATUS_OK)
+      << fm_get_last_error_message();
   const fm_table_style_options_t again = TableStyle(reloaded.handle);
   EXPECT_EQ(again.show_first_column, 1);
   EXPECT_EQ(again.show_last_column, 1);

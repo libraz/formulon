@@ -70,7 +70,7 @@ double Stored(const fm_sheet_format_defaults_t& defaults, Field field) {
 void SaveAndReload(const WorkbookGuard& wb, std::int32_t format, WorkbookGuard* reloaded) {
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, format, &saved.data, &saved.len), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded->handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded->handle), 0) << fm_get_last_error_message();
 }
 
 std::vector<std::uint8_t> Fixture(const std::string& name) {
@@ -94,7 +94,7 @@ std::vector<std::uint8_t> Fixture(const std::string& name) {
 
 void Load(const std::string& fixture, WorkbookGuard* wb) {
   const std::vector<std::uint8_t> bytes = Fixture(fixture);
-  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb->handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &wb->handle), 0) << fm_get_last_error_message();
 }
 
 fm_status_t SaveStatus(const WorkbookGuard& wb, std::int32_t format) {
@@ -186,7 +186,7 @@ std::uint32_t SaveXlsbDeferred(const WorkbookGuard& wb, WorkbookGuard* reloaded)
   EXPECT_EQ(
       fm_workbook_save_with_diagnostics(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &saved.data, &saved.len, &diagnostics), 0)
       << fm_get_last_error_message() << " | " << fm_get_last_error_context();
-  EXPECT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded->handle), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded->handle), 0) << fm_get_last_error_message();
   return diagnostics.deferred_feature_count;
 }
 

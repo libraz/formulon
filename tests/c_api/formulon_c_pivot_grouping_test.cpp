@@ -578,7 +578,7 @@ TEST(FormulonCApiPivot, AFieldJoiningRowsAfterARefreshGetsSharedItems) {
   ASSERT_EQ(fm_workbook_save(f.wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
       << fm_get_last_error_message();
   WorkbookGuard reloaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0) << fm_get_last_error_message();
   std::uint32_t cache_id = 0;
   ASSERT_EQ(fm_sheet_get_pivot_cache_id(reloaded.handle, 0U, f.pivot, &cache_id), 0);
   ASSERT_EQ(f.SharedCount(reloaded.handle, cache_id), 3U);

@@ -39,6 +39,7 @@
 #include <vector>
 
 #include "io/package_diagnostics.h"
+#include "io/read_options.h"
 #include "io/zip_reader.h"
 #include "passthrough_part.h"
 #include "utils/error.h"
@@ -126,7 +127,10 @@ struct OoxmlReadResult {
 /// relationships or content types are missing. `kIoSheetCorrupt` surfaces
 /// for an empty sheet list, a malformed `<c>` element, or an unresolved
 /// shared-formula reference.
-Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes);
+///
+/// `options.profile`, when set, is assigned to the workbook after parsing and
+/// dirties nothing; sheet names are validated under the load's default host.
+Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes, const ReadOptions& options = {});
 
 namespace internal {
 

@@ -1858,6 +1858,11 @@ class Workbook {
   /// Sets the full formula-behaviour profile used by future recalc calls.
   void set_excel_profile(ExcelProfile profile);
 
+  /// Assigns the profile of a workbook a reader just built, without dirtying
+  /// any formula. For readers only, applied after parsing, so sheet-name
+  /// validation during load uses the default host.
+  void assign_loaded_profile(ExcelProfile profile) noexcept { excel_profile_ = profile; }
+
   /// The Compatibility Version the workbook evaluates under: its stamp, or 1
   /// for a loaded book without one, as Excel rebuilds an unstamped book (a new
   /// book carries 2). Version 1 makes LEN, MID, FIND, SEARCH and REPLACE count

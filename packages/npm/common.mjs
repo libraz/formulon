@@ -3802,7 +3802,7 @@ const METHOD_ARITY = Object.freeze({
   'Workbook.listSheets': 0,
   'Workbook.listTableStyles': 0,
   'Workbook.listThemeScriptFonts': 1,
-  'Workbook.load': 1,
+  'Workbook.load': 2,
   'Workbook.parseReference': 2,
   'Workbook.pivotCache': 1,
   'Workbook.recalc': 0,
@@ -4444,7 +4444,7 @@ const PARAM_NAMES = Object.freeze({
   'Workbook.getThemeScriptFont': ['key'],
   'Workbook.hasSheet': ['ref'],
   'Workbook.listThemeScriptFonts': ['scheme'],
-  'Workbook.load': ['bytes'],
+  'Workbook.load': ['bytes', 'options'],
   'Workbook.parseReference': ['text', 'options'],
   'Workbook.pivotCache': ['cacheId'],
   'Workbook.recalcParallel': ['threadCount'],
@@ -8530,8 +8530,11 @@ function makeFacade(Raw, registry, runtime) {
       pivotCacheOf = (workbook, cacheId) => workbook.#cacheHandle(cacheId);
     }
 
-    static load(bytes) {
-      return new Workbook(token, Raw.load(requireBytes(bytes, 'Workbook.load', 'bytes')));
+    static load(bytes, options) {
+      const data = requireBytes(bytes, 'Workbook.load', 'bytes');
+      if (Array.isArray(options)) throw new TypeError(argumentMessage('Workbook.load', 'options', 'must be an object'));
+      if (isObject(options)) refuseOtherKeys(argLabel('Workbook.load', 1), options, ['profileId']);
+      return new Workbook(token, Raw.load(data, options));
     }
 
     static createDefault() {

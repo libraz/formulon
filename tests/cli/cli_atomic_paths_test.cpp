@@ -37,7 +37,7 @@ TEST(FormulonCli, RecalcInPlaceOverwritesSamePathAndLeavesNoTemp) {
   ASSERT_TRUE(f);
 
   fm_workbook_t* wb = nullptr;
-  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb), 0);
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &wb), 0);
   ASSERT_EQ(fm_workbook_recalc(wb), 0);
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(wb, 0, 0, 1, &v), 0);
@@ -275,7 +275,7 @@ TEST(FormulonCli, RecalcOptionTerminatorAcceptsDashLeadingRelativePaths) {
   const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(saved)), std::istreambuf_iterator<char>());
   ASSERT_FALSE(bytes.empty());
   fm_workbook_t* wb = nullptr;
-  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb), 0);
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &wb), 0);
   ASSERT_EQ(fm_workbook_recalc(wb), 0);
   fm_value_t value{};
   ASSERT_EQ(fm_sheet_get_value(wb, 0U, 0U, 1U, &value), 0);
@@ -314,7 +314,7 @@ TEST(FormulonCli, RecalcAcceptsDoubleDashAsOutputPathValue) {
   const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(saved)), std::istreambuf_iterator<char>());
   ASSERT_FALSE(bytes.empty());
   fm_workbook_t* wb = nullptr;
-  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb), 0);
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &wb), 0);
   ASSERT_EQ(fm_workbook_recalc(wb), 0);
   fm_value_t value{};
   ASSERT_EQ(fm_sheet_get_value(wb, 0U, 0U, 1U, &value), 0);

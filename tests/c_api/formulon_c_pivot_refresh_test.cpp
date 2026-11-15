@@ -183,7 +183,7 @@ std::vector<std::uint8_t> SaveAs(fm_workbook_t* wb, fm_workbook_format_t format)
 }
 
 void Load(const std::vector<std::uint8_t>& bytes, WorkbookGuard& out) {
-  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &out.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &out.handle), 0) << fm_get_last_error_message();
 }
 
 double RecordNumber(const fm_workbook_t* wb, std::uint32_t cache_id, std::size_t record, std::size_t field) {

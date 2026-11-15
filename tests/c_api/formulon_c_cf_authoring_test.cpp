@@ -412,7 +412,7 @@ TEST(FormulonCApiCfMutate, AddsVisualRuleTypesAndPreservesThroughSaveLoad) {
   ASSERT_GT(saved.len, 0U);
 
   WorkbookGuard reloaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0);
   const auto& reloaded_blocks = reloaded.handle->workbook().sheet(0).conditional_formats();
   ASSERT_EQ(reloaded_blocks.size(), 3U);
   ASSERT_EQ(reloaded_blocks[0].rules.size(), 1U);
@@ -468,7 +468,7 @@ TEST(FormulonCApiCfMutate, AddRuleStoresFormulasWithoutTheLeadingEquals) {
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard reloaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0);
   ASSERT_EQ(fm_sheet_get_cf_rule_at(reloaded.handle, 0, 0, &out), 0);
   EXPECT_STREQ(out.formula1, "=$B1>100");
   EXPECT_STREQ(out.formula2, "=SUM($C$1:$C$2)");
@@ -509,7 +509,7 @@ TEST(FormulonCApiCfMutate, FormulaThresholdsReadWithALeadingEquals) {
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard reloaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0);
   for (fm_workbook_t* book : {wb.handle, reloaded.handle}) {
     fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
     ASSERT_EQ(fm_sheet_get_cf_rule_at(book, 0, 0, &out), 0);
@@ -683,7 +683,7 @@ TEST(FormulonCApiCfMutate, AddRuleDerivesExcelsFormulaForSideFieldRules) {
     ASSERT_EQ(fm_workbook_save(wb.handle, format, &saved.data, &saved.len), 0)
         << "format=" << format << ": " << fm_get_last_error_message();
     WorkbookGuard reloaded;
-    ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+    ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0);
     std::size_t count = 0;
     ASSERT_EQ(fm_sheet_get_cf_rule_count(reloaded.handle, 0, &count), 0);
     ASSERT_EQ(count, std::size(cases));

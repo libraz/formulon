@@ -4072,6 +4072,7 @@ entries:
     c: fm_workbook_load
     js: Workbook.load
     py: Workbook.load
+    params: { spec: { default: null } }
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_load, js: Workbook.loadBytes, py: Workbook.load }
   diagnostics.get:
@@ -14094,6 +14095,13 @@ entries:
     js: ReferenceNotationOptions
     a1_exempt: { fields: [baseRow, baseCol], reason: "the base cell R1C1 relative axes are measured from" }
     exception: "the JavaScript name says Options like every options group; the C record is a spec because it is input only; Python takes the fields as keyword arguments, so it has no type"
+    surfaces: [c, wasm, native]
+  record.load_options_spec:
+    kind: record
+    role: input
+    c: fm_load_options_spec_t
+    js: LoadOptions
+    exception: "the JavaScript name says Options like every options group; the C record is a spec because it is input only; Python takes the one field, profile_id, as a keyword-only argument of Workbook.load, so it has no type"
     surfaces: [c, wasm, native]
   record.pivot_summary:
     kind: record

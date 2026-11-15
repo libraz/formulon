@@ -32,7 +32,7 @@ TEST(FormulonCApiStyles, FullLifecycleSurvivesSaveLoad) {
   ASSERT_GT(saved.len, 0U);
 
   WorkbookGuard wb2;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &wb2.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &wb2.handle), 0);
   std::uint32_t reread_xf = 0;
   EXPECT_EQ(GetCellXfIndex(wb2.handle, 0, 0, 0, &reread_xf), 0);
   fm_cell_xf_t reloaded{};
@@ -79,7 +79,7 @@ TEST(FormulonCApiStyles, AddXfWithNonDefaultFontFillNumFmtRoundTripsThroughSaveL
   ASSERT_GT(saved.len, 0U);
 
   WorkbookGuard wb2;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &wb2.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &wb2.handle), 0);
 
   std::uint32_t reread_xf = 0;
   ASSERT_EQ(GetCellXfIndex(wb2.handle, 0, 1, 1, &reread_xf), 0);
@@ -133,7 +133,7 @@ TEST(FormulonCApiStyles, JustifyLastLineRoundTripsThroughSaveLoad) {
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
 
   WorkbookGuard reloaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0);
   std::uint32_t reread_index = 0;
   ASSERT_EQ(GetCellXfIndex(reloaded.handle, 0, 0, 0, &reread_index), 0);
   fm_cell_xf_t reread{};
@@ -170,7 +170,7 @@ TEST(FormulonCApiStyles, NamedCellStyleRoundTripsThroughSaveLoad) {
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &loaded.handle), 0);
   std::size_t style_count = 0;
   ASSERT_EQ(fm_workbook_get_cell_style_count(loaded.handle, &style_count), 0);
   // A save writes the styles sorted by name, as Excel does: `Highlight` precedes `Normal`.

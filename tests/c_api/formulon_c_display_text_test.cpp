@@ -60,7 +60,7 @@ Bytes SavePackage(fm_workbook_t* wb) {
 }
 
 void LoadPackage(const Bytes& bytes, WorkbookGuard* out) {
-  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &out->handle), 0);
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &out->handle), 0);
 }
 
 /// Rewrites a package entry while preserving every unrelated OOXML part.

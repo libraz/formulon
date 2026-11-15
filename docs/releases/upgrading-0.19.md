@@ -373,6 +373,11 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
 - **C ABI:** `fm_workbook_save` takes the `int32_t format` that
   `fm_workbook_save_as` took, and `fm_workbook_save_as` is removed:
   `fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len)`.
+- **C ABI:** `fm_workbook_load` takes a `const fm_load_options_spec_t*` before
+  its out-parameter; pass NULL for the defaults:
+  `fm_workbook_load(bytes, len, NULL, &wb)`. Its `profile_id` loads the
+  workbook under that profile without making any formula stale, where a
+  `fm_workbook_set_profile_id` after the load makes every formula stale.
 - **C ABI:** the message of an argument error leads with the C parameter or
   field (`max_iterations must be in 1..32767`), without a function name. A NULL
   top-level pointer returns `FM_STATUS_BINDING_NULL_POINTER`; a NULL pointer or
@@ -1090,6 +1095,10 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   `{"format":1,"status":"ok","output":PATH,"bytes":N,"warnings":[{"kind":...,"count":N}]}`
   on stdout and puts the loss warnings in `warnings` instead of stderr; it is
   refused with status 64 together with `-o -`.
+- **Command line:** `--profile` applies when the workbook is loaded, so
+  `recalc --profile` on a manual-calculation workbook computes what the file
+  left stale and nothing else, as without `--profile`; it no longer recomputes
+  every formula.
 
 ## Topics
 

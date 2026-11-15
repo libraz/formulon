@@ -19,12 +19,13 @@ constexpr std::array<ProfileCase, 4> kProfiles = {{
     {"mac-365-en_US", "$1,234.50"},
 }};
 
-bool write_formula_fixture(const std::string& path, const char* formula) {
+bool write_formula_fixture(const std::string& path, const char* formula, bool manual = false) {
   fm_workbook_t* workbook = nullptr;
   if (fm_workbook_create_default(&workbook) != 0) {
     return false;
   }
-  const bool formula_set = fm_sheet_set_formula(workbook, 0, 0, 0, formula) == 0;
+  const bool formula_set = (!manual || fm_workbook_set_calc_mode(workbook, FM_CALC_MODE_MANUAL) == 0) &&
+                           fm_sheet_set_formula(workbook, 0, 0, 0, formula) == 0;
   std::uint8_t* bytes = nullptr;
   std::size_t length = 0;
   const bool saved = formula_set && fm_workbook_save(workbook, FM_WORKBOOK_FORMAT_XLSX, &bytes, &length) == 0;
@@ -48,7 +49,7 @@ std::string first_cell_text(const std::string& path) {
   }
   const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(input)), std::istreambuf_iterator<char>());
   fm_workbook_t* workbook = nullptr;
-  if (fm_workbook_load(bytes.data(), bytes.size(), &workbook) != 0) {
+  if (fm_workbook_load(bytes.data(), bytes.size(), nullptr, &workbook) != 0) {
     return {};
   }
   // Stored values only: an automatic read would recalculate under the default profile and clock.
@@ -97,6 +98,26 @@ TEST(FormulonCli, ProfileFlagAppliesAfterRecalcLoad) {
     const CliRun result = run_cli({"recalc", "--profile", profile.id, input, "-o", output, "--quiet"});
     ASSERT_EQ(result.exit_code, 0) << profile.id << " stderr=" << result.stderr_text;
     EXPECT_EQ(first_cell_text(output), profile.expected) << profile.id;
+  }
+}
+
+// --profile is applied at load, so a manual-calculation book keeps the file's cached values: its formula is not
+// stale, and recalculating computes nothing.
+TEST(FormulonCli, ProfileFlagKeepsAManualBookCached) {
+  const std::string input = temp_path("profile_manual_input.xlsx");
+  PathGuard input_guard(input);
+  ASSERT_TRUE(write_formula_fixture(input, "=DOLLAR(1234.5)", /*manual=*/true));
+  const std::string baseline = temp_path("profile_manual_output_default.xlsx");
+  PathGuard baseline_guard(baseline);
+  const CliRun plain = run_cli({"recalc", input, "-o", baseline, "--quiet"});
+  ASSERT_EQ(plain.exit_code, 0) << plain.stderr_text;
+
+  for (const ProfileCase& profile : kProfiles) {
+    const std::string output = temp_path(std::string("profile_manual_output_") + profile.id + ".xlsx");
+    PathGuard output_guard(output);
+    const CliRun result = run_cli({"recalc", "--profile", profile.id, input, "-o", output, "--quiet"});
+    ASSERT_EQ(result.exit_code, 0) << profile.id << " stderr=" << result.stderr_text;
+    EXPECT_EQ(first_cell_text(output), first_cell_text(baseline)) << profile.id;
   }
 }
 

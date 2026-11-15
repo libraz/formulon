@@ -91,7 +91,7 @@ void Grow(fm_workbook_t* wb, std::uint32_t cache_id) {
 void SaveAndLoad(fm_workbook_t* wb, WorkbookGuard& loaded) {
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &loaded.handle), 0) << fm_get_last_error_message();
 }
 
 bool IsSpillError(const fm_workbook_t* wb, std::uint32_t row, std::uint32_t col) {

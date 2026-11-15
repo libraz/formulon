@@ -9034,11 +9034,23 @@ class Workbook(_NoCopy):
         return wb
 
     @classmethod
-    def load(cls, source: Union[bytes, bytearray, memoryview, str, "os.PathLike[str]", BinaryIO]) -> "Workbook":
+    def load(
+        cls,
+        source: Union[bytes, bytearray, memoryview, str, "os.PathLike[str]", BinaryIO],
+        *,
+        profile_id: Optional[ProfileId] = None,
+    ) -> "Workbook":
         """Load a workbook from bytes, a file path or a binary stream.
 
         Auto-detects ``.xlsx`` vs ``.xlsb`` from the package contents; a
         path's extension is not consulted.
+
+        ``profile_id`` gives the loaded workbook that Excel profile (see
+        :meth:`set_profile_id`) as part of the load. Under manual calculation the workbook then
+        holds dirty exactly the formulas it holds under the default profile, whereas
+        :meth:`set_profile_id` after the load dirties every formula. The profile applies once the file
+        is read, so sheet names are validated under the load's default host. ``None`` keeps the
+        profile the load assigns.
 
         Names in the loaded file resolve as the workbook's identity fold does: an exact match, then a
         case-only match, then a unique wide fold match. Two names of a collection that collide only under the
@@ -9051,13 +9063,14 @@ class Workbook(_NoCopy):
             a ``str`` or :class:`os.PathLike` naming a file; or an object
             with a ``read`` method returning bytes (a file opened in
             ``"rb"`` mode, :class:`io.BytesIO`).
+          profile_id: the Excel profile id to assign, or ``None``.
 
         Raises:
-          TypeError: when ``source`` is none of the above, or a stream's
-            ``read`` does not return bytes.
+          TypeError: when ``source`` is none of the above, a stream's
+            ``read`` does not return bytes, or ``profile_id`` is not a string.
           OSError: when the file cannot be opened or read
             (``FileNotFoundError`` for a missing path).
-          InvalidArgumentError: when the input is empty.
+          InvalidArgumentError: when the input is empty, or ``profile_id`` is not a documented profile id.
           InvalidFileError: when the input cannot be parsed as a valid
             OOXML or XLSB archive.
           SecurityError: when the file exceeds an engine ceiling; the error
@@ -9068,6 +9081,8 @@ class Workbook(_NoCopy):
             with Workbook.load("book.xlsx") as wb:
                 print(wb[0].get_value("A1"))
         """
+        if profile_id is not None and not isinstance(profile_id, str):
+            raise TypeError(_argument_message("profile_id", "must be a string"))
         if isinstance(source, (bytes, bytearray, memoryview)):
             buf = bytes(source)
         elif isinstance(source, (str, os.PathLike)):
@@ -9085,8 +9100,10 @@ class Workbook(_NoCopy):
             # An empty input still passes a real pointer: the engine reports
             # it as empty rather than as a missing buffer.
             data_ptr = scope.buffer(buf) if buf else scope.alloc(1)
+            spec = scope.struct(S.LOAD_OPTIONS_SPEC)
+            S.LOAD_OPTIONS_SPEC.pack(LIB, spec, {"profile_id": scope.opt_cstr(profile_id)})
             out_ptr = scope.out_ptr()
-            status = LIB.fm_workbook_load(data_ptr, _uint(len(buf), "len"), out_ptr)
+            status = LIB.fm_workbook_load(data_ptr, _uint(len(buf), "len"), spec, out_ptr)
             _check(status)
             wb._handle = LIB.read_u32(out_ptr)
         return wb

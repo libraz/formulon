@@ -95,6 +95,7 @@ constexpr RecordParam kRecordParams[] = {
     {"Workbook.addSheet", "options"},
     {"Workbook.copySheet", "options"},
     {"Workbook.formatReference", "options"},
+    {"Workbook.load", "options"},
     {"Workbook.parseReference", "options"},
     {"Workbook.resolveColor", "spec"},
     {"Workbook.setBorder", "record"},

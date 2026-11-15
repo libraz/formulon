@@ -46,7 +46,7 @@ void SaveAndReload(fm_workbook_t* wb, WorkbookGuard* out) {
   std::uint8_t* bytes = nullptr;
   std::size_t len = 0;
   ASSERT_EQ(fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0) << fm_get_last_error_message();
-  const fm_status_t rc = fm_workbook_load(bytes, len, &out->handle);
+  const fm_status_t rc = fm_workbook_load(bytes, len, nullptr, &out->handle);
   fm_buffer_destroy(bytes);
   ASSERT_EQ(rc, 0) << fm_get_last_error_message();
 }

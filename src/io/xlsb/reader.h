@@ -45,6 +45,7 @@
 #include <cstdint>
 #include <vector>
 
+#include "io/read_options.h"
 #include "io/zip_reader.h"
 #include "passthrough_part.h"
 #include "utils/error.h"
@@ -121,7 +122,10 @@ struct XlsbReadResult {
 ///   * `kIoContentTypeInvalid` — required content type missing.
 ///   * `kIoXlsbRecordTruncated`/`kIoXlsbCorrupt` — record-stream
 ///                                                    decoding failure.
-Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes);
+///
+/// `options.profile`, when set, is assigned to the workbook after parsing and
+/// dirties nothing; sheet names are validated under the load's default host.
+Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& options = {});
 
 }  // namespace xlsb
 }  // namespace io

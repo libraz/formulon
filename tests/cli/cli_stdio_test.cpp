@@ -14,7 +14,8 @@ std::string slurp_file(const std::string& path) {
 
 bool loads_as_workbook(const std::string& bytes) {
   fm_workbook_t* wb = nullptr;
-  const fm_status_t rc = fm_workbook_load(reinterpret_cast<const std::uint8_t*>(bytes.data()), bytes.size(), &wb);
+  const fm_status_t rc =
+      fm_workbook_load(reinterpret_cast<const std::uint8_t*>(bytes.data()), bytes.size(), nullptr, &wb);
   fm_workbook_destroy(wb);
   return rc == 0;
 }

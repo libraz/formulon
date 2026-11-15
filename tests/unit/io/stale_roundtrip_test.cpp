@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_set>
@@ -20,6 +21,7 @@
 #include "eval/dep_graph.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "io/ooxml/zip_part_writer.h"
 #include "io/ooxml_reader.h"
@@ -59,9 +61,12 @@ std::vector<std::uint8_t> ReadFixture(const std::string& name) {
   return out;
 }
 
-Workbook Load(const std::vector<std::uint8_t>& bytes, bool sax = false) {
+Workbook Load(const std::vector<std::uint8_t>& bytes, bool sax = false,
+              std::optional<ExcelProfile> profile = std::nullopt) {
   const io::ByteSpan span{bytes.data(), bytes.size()};
-  auto result = sax ? io::internal::ReadOoxmlWithSaxThresholdForTesting(span, 0U) : io::read_ooxml(span);
+  io::ReadOptions options;
+  options.profile = profile;
+  auto result = sax ? io::internal::ReadOoxmlWithSaxThresholdForTesting(span, 0U) : io::read_ooxml(span, options);
   EXPECT_TRUE(static_cast<bool>(result)) << (result ? "" : result.error().message);
   return result ? std::move(result.value().workbook) : Workbook::create_empty();
 }
@@ -72,8 +77,10 @@ std::vector<std::uint8_t> Save(const Workbook& wb) {
   return saved ? std::move(saved.value()) : std::vector<std::uint8_t>{};
 }
 
-Workbook LoadXlsb(const std::vector<std::uint8_t>& bytes) {
-  auto result = io::xlsb::read_xlsb(io::ByteSpan{bytes.data(), bytes.size()});
+Workbook LoadXlsb(const std::vector<std::uint8_t>& bytes, std::optional<ExcelProfile> profile = std::nullopt) {
+  io::ReadOptions options;
+  options.profile = profile;
+  auto result = io::xlsb::read_xlsb(io::ByteSpan{bytes.data(), bytes.size()}, options);
   EXPECT_TRUE(static_cast<bool>(result)) << (result ? "" : result.error().message);
   return result ? std::move(result.value().workbook) : Workbook::create_empty();
 }
@@ -153,7 +160,8 @@ Workbook ManualChain() {
 }
 
 // A one-sheet package with `<calcPr calc_pr/>` (none when empty) and `sheet_data` as its cells.
-std::vector<std::uint8_t> Package(std::string_view calc_pr, std::string_view sheet_data) {
+std::vector<std::uint8_t> Package(std::string_view calc_pr, std::string_view sheet_data,
+                                  std::string_view sheet_name = "Sheet1") {
   const std::string decl = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
   const std::string rels_ns = "http://schemas.openxmlformats.org/package/2006/relationships";
   const std::string doc_rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -176,7 +184,8 @@ std::vector<std::uint8_t> Package(std::string_view calc_pr, std::string_view she
   add("xl/workbook.xml", decl +
                              "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
                              "xmlns:r=\"" +
-                             doc_rel + "\"><sheets><sheet name=\"Sheet1\" sheetId=\"1\" r:id=\"rId1\"/></sheets>" +
+                             doc_rel + "\"><sheets><sheet name=\"" + std::string(sheet_name) +
+                             "\" sheetId=\"1\" r:id=\"rId1\"/></sheets>" +
                              (calc_pr.empty() ? std::string() : "<calcPr " + std::string(calc_pr) + "/>") +
                              "</workbook>");
   add("xl/_rels/workbook.xml.rels", decl + "<Relationships xmlns=\"" + rels_ns +
@@ -194,6 +203,30 @@ std::vector<std::uint8_t> Package(std::string_view calc_pr, std::string_view she
 // A1 = 2; B1 = A1*10 cached 7 (clean); C1 = A1+1 with no cached value; D1 = A1*2 cached 0, marked ca.
 constexpr std::string_view kCachedRow =
     "<row r=\"1\"><c r=\"A1\"><v>2</v></c><c r=\"B1\"><f>A1*10</f><v>7</v></c><c r=\"C1\"><f>A1+1</f></c>"
+    "<c r=\"D1\"><f ca=\"1\">A1*2</f><v>0</v></c></row>";
+
+// The cached value of every formula cell of the first sheet, row-major, as text; a blank cache reads `blank`.
+std::vector<std::string> CachedFormulaValues(const Workbook& wb) {
+  std::vector<std::string> out;
+  for (const auto& [row, cells] : wb.sheet(0).rows()) {
+    for (const auto& [col, cell] : cells) {
+      if (cell.formula_text.empty()) {
+        continue;
+      }
+      out.push_back(std::to_string(row) + "," + std::to_string(col) + "=" +
+                    (cell.cached_value.is_number() ? std::to_string(cell.cached_value.as_number()) : "blank"));
+    }
+  }
+  return out;
+}
+
+bool SameProfile(ExcelProfile a, ExcelProfile b) {
+  return a.host == b.host && a.locale == b.locale;
+}
+
+// A1 = 2; B1 = A1*10 cached 7 and C1 = A1+1 cached 3, both clean; D1 = A1*2 cached 0, marked ca.
+constexpr std::string_view kOneCaRow =
+    "<row r=\"1\"><c r=\"A1\"><v>2</v></c><c r=\"B1\"><f>A1*10</f><v>7</v></c><c r=\"C1\"><f>A1+1</f><v>3</v></c>"
     "<c r=\"D1\"><f ca=\"1\">A1*2</f><v>0</v></c></row>";
 
 }  // namespace
@@ -413,6 +446,122 @@ TEST(StaleRoundtrip, XlsbRecalculatedMatchesExcelsRecalculatedSave) {
   Workbook loaded = LoadXlsb(SaveXlsb(wb));
   EXPECT_TRUE(loaded.calc_options().calc_completed);
   EXPECT_EQ(StaleFormulas(loaded), volatile_chain);
+}
+
+// A profile given at load leaves the stale set and the cached values exactly as the default profile has them.
+TEST(StaleRoundtrip, ProfileAtLoadKeepsTheManualStaleSetXlsx) {
+  const std::vector<std::vector<std::uint8_t>> books = {Package("calcMode=\"manual\"", kCachedRow),
+                                                        ReadFixture("st_stale.xlsx")};
+  for (const std::vector<std::uint8_t>& bytes : books) {
+    Workbook plain = Load(bytes);
+    Workbook profiled = Load(bytes, false, mac_365_ja_jp_profile());
+    ASSERT_EQ(profiled.calc_mode(), CalcMode::kManual);
+    EXPECT_TRUE(SameProfile(profiled.excel_profile(), mac_365_ja_jp_profile()));
+    EXPECT_FALSE(StaleFormulas(plain).empty());
+    EXPECT_EQ(StaleFormulas(profiled), StaleFormulas(plain));
+    EXPECT_EQ(CachedFormulaValues(profiled), CachedFormulaValues(plain));
+  }
+}
+
+// The same holds for a package an .xlsb save wrote.
+TEST(StaleRoundtrip, ProfileAtLoadKeepsTheManualStaleSetXlsb) {
+  Workbook wb = ManualChain();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 0, 0, Value::number(2.0))));
+  const std::vector<std::uint8_t> bytes = SaveXlsb(wb);
+  Workbook plain = LoadXlsb(bytes);
+  Workbook profiled = LoadXlsb(bytes, mac_365_ja_jp_profile());
+  EXPECT_TRUE(SameProfile(profiled.excel_profile(), mac_365_ja_jp_profile()));
+  EXPECT_FALSE(StaleFormulas(plain).empty());
+  EXPECT_EQ(StaleFormulas(profiled), StaleFormulas(plain));
+  EXPECT_EQ(CachedFormulaValues(profiled), CachedFormulaValues(plain));
+}
+
+// One loaded-stale (ca) formula among clean ones stays the only stale one under the profile.
+TEST(StaleRoundtrip, ProfileAtLoadKeepsExactlyTheCaFormulaStale) {
+  Workbook wb = Load(Package("calcMode=\"manual\"", kOneCaRow), false, mac_365_ja_jp_profile());
+  const CellSet expected = {Node(0, 0, 3)};
+  EXPECT_EQ(StaleFormulas(wb), expected);
+  EXPECT_EQ(Number(wb, 0, 0, 1), 7.0);
+  EXPECT_EQ(Number(wb, 0, 0, 2), 3.0);
+}
+
+// Under automatic calculation a workbook loaded with a profile still computes every formula.
+TEST(StaleRoundtrip, ProfileAtLoadStillComputesUnderAutomaticCalculation) {
+  Workbook wb = Load(Package("", kCachedRow), false, mac_365_ja_jp_profile());
+  ASSERT_EQ(wb.calc_mode(), CalcMode::kAuto);
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(Number(wb, 0, 0, 1), 20.0);
+  EXPECT_EQ(Number(wb, 0, 0, 2), 3.0);
+  EXPECT_EQ(Number(wb, 0, 0, 3), 4.0);
+}
+
+// Sheet names are validated under the load's default host, so a name only Windows Excel refuses on entry loads
+// the same under either profile; the assigned profile then governs later entries.
+TEST(StaleRoundtrip, SheetNameOnlyOneHostRefusesLoadsUnderEitherProfile) {
+  const std::vector<std::uint8_t> bytes = Package("calcMode=\"manual\"", kCachedRow, "History");
+  Workbook plain = Load(bytes);
+  Workbook mac = Load(bytes, false, mac_365_ja_jp_profile());
+  Workbook win = Load(bytes, false, win_365_ja_jp_profile());
+  for (const Workbook* wb : {&plain, &mac, &win}) {
+    ASSERT_EQ(wb->sheet_count(), 1U);
+    EXPECT_EQ(wb->sheet(0).name(), "History");
+  }
+  EXPECT_EQ(StaleFormulas(mac), StaleFormulas(plain));
+  EXPECT_EQ(StaleFormulas(win), StaleFormulas(plain));
+
+  const std::vector<std::uint8_t> other = Package("calcMode=\"manual\"", kCachedRow);
+  Workbook win_loaded = Load(other);
+  Workbook mac_loaded = Load(other, false, mac_365_ja_jp_profile());
+  EXPECT_FALSE(static_cast<bool>(win_loaded.add_sheet_entered("History")));
+  EXPECT_TRUE(static_cast<bool>(mac_loaded.add_sheet_entered("History")));
+}
+
+// `set_excel_profile` after a load still dirties every formula, unlike a profile given at load.
+TEST(StaleRoundtrip, ProfileSetAfterLoadStillDirtiesEveryFormula) {
+  Workbook wb = Load(Package("calcMode=\"manual\"", kOneCaRow));
+  ASSERT_EQ(StaleFormulas(wb).size(), 1U);
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  const CellSet expected = {Node(0, 0, 1), Node(0, 0, 2), Node(0, 0, 3)};
+  EXPECT_EQ(StaleFormulas(wb), expected);
+}
+
+// How many cells across the workbook show `text`.
+static std::size_t CountText(const Workbook& wb, std::string_view text) {
+  std::size_t n = 0;
+  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
+    for (const auto& [row, cells] : wb.sheet(s).rows()) {
+      for (const auto& [col, cell] : cells) {
+        if (cell.cached_value.is_text() && cell.cached_value.as_text() == text) {
+          ++n;
+        }
+      }
+    }
+  }
+  return n;
+}
+
+// A PivotTable refreshed on load is refreshed at the first settle under the profile the load gave: its captions are
+// the profile's.
+TEST(StaleRoundtrip, RefreshOnLoadPivotUsesTheLoadProfile) {
+  std::vector<std::uint8_t> bytes;
+  {
+    const std::string path = std::string(FORMULON_FIXTURES_DIR) + "/excel/pivot_options/op_showall_only.xlsx";
+    FILE* file = std::fopen(path.c_str(), "rb");
+    ASSERT_NE(file, nullptr) << path;
+    std::fseek(file, 0, SEEK_END);
+    bytes.resize(static_cast<std::size_t>(std::ftell(file)));
+    std::fseek(file, 0, SEEK_SET);
+    ASSERT_EQ(std::fread(bytes.data(), 1, bytes.size(), file), bytes.size());
+    std::fclose(file);
+  }
+  Workbook en = Load(bytes, false, win_365_en_us_profile());
+  ASSERT_TRUE(static_cast<bool>(en.recalc(eval::default_registry())));
+  Workbook ja = Load(bytes, false, mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(ja.recalc(eval::default_registry())));
+  EXPECT_GT(CountText(en, "Grand Total"), 0U);
+  EXPECT_EQ(CountText(en, "\xE7\xB7\x8F\xE8\xA8\x88"), 0U);
+  EXPECT_GT(CountText(ja, "\xE7\xB7\x8F\xE8\xA8\x88"), 0U);  // 総計
+  EXPECT_EQ(CountText(ja, "Grand Total"), 0U);
 }
 
 }  // namespace formulon

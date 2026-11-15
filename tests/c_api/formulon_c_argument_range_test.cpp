@@ -66,7 +66,7 @@ fm_status_t SetTopLeft(const WorkbookGuard& wb, std::uint32_t row, std::uint32_t
 void SaveAndReload(const WorkbookGuard& wb, std::int32_t format, WorkbookGuard* reloaded) {
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, format, &saved.data, &saved.len), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded->handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded->handle), 0) << fm_get_last_error_message();
 }
 
 }  // namespace

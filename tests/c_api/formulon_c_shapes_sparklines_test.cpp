@@ -33,7 +33,7 @@ constexpr fm_status_t kBindingNullPointer = static_cast<fm_status_t>(formulon::F
 void SaveAndReload(fm_workbook_t* wb, WorkbookGuard* out) {
   BufferGuard buf;
   ASSERT_EQ(fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &buf.data, &buf.len), 0) << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_load(buf.data, buf.len, &out->handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(buf.data, buf.len, nullptr, &out->handle), 0) << fm_get_last_error_message();
 }
 
 template <typename T, typename V>
@@ -952,7 +952,7 @@ TEST(FormulonCApiSparklines, RightToLeftPatchAndRoundTrip) {
     BufferGuard buf;
     ASSERT_EQ(fm_workbook_save(wb.handle, format, &buf.data, &buf.len), 0) << fm_get_last_error_message();
     WorkbookGuard again;
-    ASSERT_EQ(fm_workbook_load(buf.data, buf.len, &again.handle), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_workbook_load(buf.data, buf.len, nullptr, &again.handle), 0) << fm_get_last_error_message();
     fm_sparkline_group_t reloaded = FM_STRUCT_INIT(fm_sparkline_group_t);
     ASSERT_EQ(fm_sheet_get_sparkline_group_at(again.handle, 0, 0, &reloaded), 0);
     EXPECT_EQ(reloaded.right_to_left, 1) << "format " << format;
@@ -1139,7 +1139,8 @@ TEST(FormulonCApiSparklines, EmptyCellsAsMapsEachTokenToTheSharedBlanksMember) {
     const std::vector<std::uint8_t> package = formulon::test::BuildOoxmlPackage(
         formulon::test::OoxmlContentTypes(formulon::test::kXlsxWorkbookContentType), SparklineSheetXml(c.token));
     WorkbookGuard loaded;
-    ASSERT_EQ(fm_workbook_load(package.data(), package.size(), &loaded.handle), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_workbook_load(package.data(), package.size(), nullptr, &loaded.handle), 0)
+        << fm_get_last_error_message();
     fm_sparkline_group_t read = FM_STRUCT_INIT(fm_sparkline_group_t);
     ASSERT_EQ(fm_sheet_get_sparkline_group_at(loaded.handle, 0, 0, &read), 0) << c.token;
     EXPECT_EQ(read.empty_cells_as, c.blanks_as) << c.token;

@@ -201,7 +201,7 @@ TEST(FormulonCApiPivotFilterPersistence, EachFilterTypeSurvivesSaveAndReload) {
   for (const FilterCase& c : cases) {
     SCOPED_TRACE(c.label);
     WorkbookGuard wb;
-    ASSERT_EQ(fm_workbook_load(package.data(), package.size(), &wb.handle), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_workbook_load(package.data(), package.size(), nullptr, &wb.handle), 0) << fm_get_last_error_message();
     if (c.spec.field_index == 1U) {
       // The date field sits on no axis in the fixture; a filter takes its field's axis.
       ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb.handle, 0, 0, 1, FM_PIVOT_AXIS_PAGE), 0)
@@ -215,7 +215,7 @@ TEST(FormulonCApiPivotFilterPersistence, EachFilterTypeSurvivesSaveAndReload) {
     EXPECT_NE(saved_xml.find("<filters count=\"1\">"), std::string::npos) << saved_xml;
 
     WorkbookGuard back;
-    ASSERT_EQ(fm_workbook_load(saved.data(), saved.size(), &back.handle), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_workbook_load(saved.data(), saved.size(), nullptr, &back.handle), 0) << fm_get_last_error_message();
     std::size_t count = 0;
     ASSERT_EQ(fm_sheet_get_pivot_filter_count(back.handle, 0, 0, &count), 0);
     ASSERT_EQ(count, 1U);
@@ -253,7 +253,7 @@ TEST(FormulonCApiPivotFilterPersistence, ScratchPivotFilterSurvivesSaveAndReload
   const std::vector<std::uint8_t> saved = Save(wb.handle);
 
   WorkbookGuard back;
-  ASSERT_EQ(fm_workbook_load(saved.data(), saved.size(), &back.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data(), saved.size(), nullptr, &back.handle), 0) << fm_get_last_error_message();
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_pivot_filter_count(back.handle, 0, 0, &count), 0);
   EXPECT_EQ(count, 1U);
@@ -284,7 +284,7 @@ constexpr std::string_view kMixedFilters =
 TEST(FormulonCApiPivotFilterPersistence, LoadedUnsupportedFiltersAreKeptVerbatim) {
   const std::vector<std::uint8_t> package = BuildFilterPackage("", kMixedFilters);
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_load(package.data(), package.size(), &wb.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(package.data(), package.size(), nullptr, &wb.handle), 0) << fm_get_last_error_message();
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_pivot_filter_count(wb.handle, 0, 0, &count), 0);
   ASSERT_EQ(count, 3U);
@@ -307,7 +307,7 @@ TEST(FormulonCApiPivotFilterPersistence, LoadedUnsupportedFiltersAreKeptVerbatim
   const std::vector<std::uint8_t> saved = Save(wb.handle);
   EXPECT_EQ(FiltersBlock(ExtractZipEntry(saved, "xl/pivotTables/pivotTable1.xml")), std::string(kMixedFilters));
   WorkbookGuard back;
-  ASSERT_EQ(fm_workbook_load(saved.data(), saved.size(), &back.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data(), saved.size(), nullptr, &back.handle), 0) << fm_get_last_error_message();
   EXPECT_EQ(RowLabels(back.handle), kept);
 
   ASSERT_EQ(fm_sheet_remove_pivot_filter(back.handle, 0, 0, 1), 0) << fm_get_last_error_message();
@@ -346,7 +346,7 @@ TEST(FormulonCApiPivotFilterPersistence, SubtotalFunctionsReadBack) {
 
   const std::vector<std::uint8_t> saved = Save(wb.handle);
   WorkbookGuard back;
-  ASSERT_EQ(fm_workbook_load(saved.data(), saved.size(), &back.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data(), saved.size(), nullptr, &back.handle), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_get_pivot_field_at(back.handle, 0, 0, 0, &info), 0);
   EXPECT_EQ(info.default_subtotal, 0);
   EXPECT_EQ(info.subtotal_functions, sum_count);
@@ -363,7 +363,8 @@ TEST(FormulonCApiPivotFilterPersistence, SubtotalFunctionsReadBack) {
     SCOPED_TRACE(std::string(attrs));
     const std::vector<std::uint8_t> package = BuildFilterPackage(attrs, "");
     WorkbookGuard loaded;
-    ASSERT_EQ(fm_workbook_load(package.data(), package.size(), &loaded.handle), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_workbook_load(package.data(), package.size(), nullptr, &loaded.handle), 0)
+        << fm_get_last_error_message();
     ASSERT_EQ(fm_sheet_get_pivot_field_at(loaded.handle, 0, 0, 0, &info), 0);
     EXPECT_EQ(info.default_subtotal, want_default);
     EXPECT_EQ(info.subtotal_functions, want_fns);

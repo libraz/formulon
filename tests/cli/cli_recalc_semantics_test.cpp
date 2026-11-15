@@ -28,7 +28,7 @@ TEST(FormulonCli, RecalcRoundTripsFormulae) {
   ASSERT_TRUE(f);
 
   fm_workbook_t* wb = nullptr;
-  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb), 0);
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &wb), 0);
   ASSERT_EQ(fm_workbook_recalc(wb), 0);
 
   fm_value_t v{};
@@ -74,7 +74,7 @@ TEST(FormulonCli, RecalcThreadsUsesParallelSchedulerAndSavesWideDag) {
   const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
   ASSERT_FALSE(bytes.empty());
   fm_workbook_t* wb = nullptr;
-  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb), 0);
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &wb), 0);
   fm_value_t value{};
   ASSERT_EQ(fm_sheet_get_value(wb, 0U, 47U, 1U, &value), 0);
   EXPECT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
@@ -181,7 +181,7 @@ TEST(FormulonCli, RecalcIterativePreservesExistingIterationSettings) {
   ASSERT_TRUE(f.read(reinterpret_cast<char*>(bytes.data()), size));
 
   fm_workbook_t* wb = nullptr;
-  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb), 0);
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &wb), 0);
   fm_iterative_settings_info_t settings = FM_STRUCT_INIT(fm_iterative_settings_info_t);
   ASSERT_EQ(fm_workbook_get_iterative(wb, &settings), 0);
   EXPECT_EQ(settings.enabled, 1);
@@ -218,7 +218,7 @@ TEST(FormulonCli, RecalcXlsbOutputExtensionWritesXlsbContainer) {
   EXPECT_EQ(formulon::io::detect_workbook_format(span), formulon::WorkbookFormat::Xlsb);
 
   fm_workbook_t* wb = nullptr;
-  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb), 0);
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &wb), 0);
   ASSERT_EQ(fm_workbook_recalc(wb), 0);
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(wb, 0, 0, 1, &v), 0);

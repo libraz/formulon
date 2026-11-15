@@ -506,7 +506,7 @@ TEST(FormulonCApiPrintSettings, LoadedBreaksAreNormalisedBeforeTheAbiObservesThe
   ASSERT_TRUE(bytes.has_value());
 
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_load(bytes.value().data(), bytes.value().size(), &wb.handle), 0);
+  ASSERT_EQ(fm_workbook_load(bytes.value().data(), bytes.value().size(), nullptr, &wb.handle), 0);
 
   // The duplicate is gone and what remains is strictly increasing.
   ASSERT_EQ(count_of(fm_sheet_get_column_break_count, wb.handle, 0), 3U);
@@ -549,7 +549,7 @@ TEST(FormulonCApiPrintSettings, LoadedBreakCountStaysWithinTheAuthoringCap) {
   ASSERT_TRUE(bytes.has_value());
 
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_load(bytes.value().data(), bytes.value().size(), &wb.handle), 0);
+  ASSERT_EQ(fm_workbook_load(bytes.value().data(), bytes.value().size(), nullptr, &wb.handle), 0);
   EXPECT_EQ(count_of(fm_sheet_get_row_break_count, wb.handle, 0), formulon::kMaxManualBreaksPerAxis);
 
   // An index already present is an in-place replacement, so it is

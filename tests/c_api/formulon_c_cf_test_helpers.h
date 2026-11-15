@@ -75,7 +75,7 @@ template <typename MutateFn>
     return guard;
   }
   const auto& src = bytes.value();
-  EXPECT_EQ(fm_workbook_load(src.data(), src.size(), &guard.handle), 0)
+  EXPECT_EQ(fm_workbook_load(src.data(), src.size(), nullptr, &guard.handle), 0)
       << "fm_workbook_load: " << fm_get_last_error_message();
   return guard;
 }

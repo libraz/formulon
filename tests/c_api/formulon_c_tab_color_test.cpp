@@ -141,7 +141,7 @@ TEST(FormulonCApiTabColor, SurvivesSaveLoadInBothContainersAndCopySheet) {
     size_t len = 0;
     ASSERT_EQ(fm_workbook_save(wb.handle, format, &bytes, &len), 0);
     WorkbookGuard loaded;
-    ASSERT_EQ(fm_workbook_load(bytes, len, &loaded.handle), 0);
+    ASSERT_EQ(fm_workbook_load(bytes, len, nullptr, &loaded.handle), 0);
     fm_buffer_destroy(bytes);
     const fm_color_t got = GetColor(loaded.handle);
     EXPECT_EQ(got.kind, FM_COLOR_KIND_RGB);

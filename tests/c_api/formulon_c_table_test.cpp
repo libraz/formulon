@@ -69,7 +69,7 @@ std::string ReplaceOnce(std::string text, std::string_view from, std::string_vie
 }
 
 void Load(const std::vector<std::uint8_t>& bytes, WorkbookGuard& out) {
-  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &out.handle), 0);
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &out.handle), 0);
 }
 
 /// Sheet1 with Product/Amount headers, two data rows and table `Sales` over

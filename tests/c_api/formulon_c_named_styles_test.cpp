@@ -149,7 +149,7 @@ TEST(FormulonCApiNamedStyles, RoundTripPreservesSeededNamedStyles) {
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved_data, &saved_len), 0);
 
   WorkbookGuard wb2;
-  ASSERT_EQ(fm_workbook_load(saved_data, saved_len, &wb2.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved_data, saved_len, nullptr, &wb2.handle), 0);
   fm_buffer_destroy(saved_data);
 
   std::size_t cs_count = 99;
@@ -194,7 +194,7 @@ TEST(FormulonCApiNamedStyles, BuiltinId53RoundTrips) {
   size_t saved_len = 0;
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved_data, &saved_len), 0);
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(saved_data, saved_len, &loaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved_data, saved_len, nullptr, &loaded.handle), 0);
   fm_buffer_destroy(saved_data);
 
   fm_cell_style_t reread{};
@@ -217,7 +217,7 @@ TEST(FormulonCApiNamedStyles, SetCellStyleCarriesEveryFieldAndReplacesByName) {
   size_t saved_len = 0;
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved_data, &saved_len), 0);
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(saved_data, saved_len, &loaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved_data, saved_len, nullptr, &loaded.handle), 0);
   fm_buffer_destroy(saved_data);
   fm_cell_style_t reread{};
   ASSERT_NE(FindStyle(loaded.handle, "RowLevel_4", &reread), UINT32_MAX);

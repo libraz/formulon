@@ -45,7 +45,7 @@ void RoundTrip(const WorkbookGuard& wb, WorkbookGuard* out) {
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
       << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &out->handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &out->handle), 0) << fm_get_last_error_message();
 }
 
 fm_protected_range_t Range(const char* name, const fm_cell_rect_t* ranges, size_t range_count) {

@@ -131,7 +131,7 @@ TEST(FormulonCApiZipBudget, XlsbLoadReturnsStableResourceLimit) {
   EXPECT_TRUE(zip.has_entry("xl/workbook.bin"));
 
   fm_workbook_t* workbook = reinterpret_cast<fm_workbook_t*>(static_cast<std::uintptr_t>(1U));
-  const fm_status_t status = fm_workbook_load(package.data(), package.size(), &workbook);
+  const fm_status_t status = fm_workbook_load(package.data(), package.size(), nullptr, &workbook);
   const std::string context = fm_get_last_error_context();
   const std::string message = fm_get_last_error_message();
 

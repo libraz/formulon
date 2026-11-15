@@ -789,7 +789,8 @@ static void MarkLoadedDynamicArrays(ZipReader& zip, Workbook& wb, const std::vec
 // which a sheet routes through the streaming SAX scanner instead of the
 // pugixml DOM; production passes `kSaxThresholdBytes`, tests pass a tiny
 // value to force the SAX branch on ordinary-size sheets.
-static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, std::size_t sax_threshold) {
+static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, std::size_t sax_threshold,
+                                                               const ReadOptions& options) {
   ReadDiagnostics diagnostics;
   // Surface a precise "encrypted" diagnostic before the ZIP layer reports the
   // CDFV2 container as a corrupt archive.
@@ -1129,20 +1130,23 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   for (std::size_t i = 0; i < sheet_contexts.size(); ++i) {
     recalc_marked[i] = std::move(sheet_contexts[i].recalc_marked);
   }
+  if (options.profile.has_value()) {
+    wb.assign_loaded_profile(*options.profile);
+  }
   wb.apply_loaded_recalc_marks(recalc_marked);
 
   OoxmlReadResult result{std::move(wb), pending_sst_count, diagnostics};
   return result;
 }
 
-Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes) {
-  return ReadOoxmlWithThreshold(bytes, kSaxThresholdBytes);
+Expected<OoxmlReadResult, Error> read_ooxml(ByteSpan bytes, const ReadOptions& options) {
+  return ReadOoxmlWithThreshold(bytes, kSaxThresholdBytes, options);
 }
 
 namespace internal {
 
 Expected<OoxmlReadResult, Error> ReadOoxmlWithSaxThresholdForTesting(ByteSpan bytes, std::size_t sax_threshold) {
-  return ReadOoxmlWithThreshold(bytes, sax_threshold);
+  return ReadOoxmlWithThreshold(bytes, sax_threshold, ReadOptions{});
 }
 
 }  // namespace internal

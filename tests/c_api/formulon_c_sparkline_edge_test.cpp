@@ -131,7 +131,7 @@ TEST(ApiEdge, SparklineDeletedSourceIsStoredAbsent) {
     BufferGuard buf;
     ASSERT_EQ(fm_workbook_save(wb.handle, format, &buf.data, &buf.len), 0) << fm_get_last_error_message();
     WorkbookGuard again;
-    ASSERT_EQ(fm_workbook_load(buf.data, buf.len, &again.handle), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_workbook_load(buf.data, buf.len, nullptr, &again.handle), 0) << fm_get_last_error_message();
     ASSERT_EQ(GroupCount(again.handle), 1U);
     EXPECT_EQ(FormulaAt(again.handle, 0, 0), before);
   }

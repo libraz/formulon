@@ -146,7 +146,7 @@ TEST(FormulonCApiStyles, SelectorColoursRemainAuthoritativeAcrossGetAddAndSaveLo
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   ASSERT_GT(saved.len, 0U);
   WorkbookGuard reloaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0);
 
   fm_font_t reloaded_font{};
   ASSERT_EQ(fm_workbook_get_font_at(reloaded.handle, font_index, &reloaded_font), 0);

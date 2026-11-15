@@ -141,7 +141,7 @@ TEST(FormulonCApiStyles, SetThenSaveLoadPreservesXfIndex) {
   ASSERT_GT(saved.len, 0U);
 
   WorkbookGuard wb2;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &wb2.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &wb2.handle), 0);
   std::uint32_t xf = 0;
   EXPECT_EQ(GetCellXfIndex(wb2.handle, 0, 0, 0, &xf), 0);
   EXPECT_EQ(xf, 7U);
@@ -418,7 +418,7 @@ TEST(FormulonCApiStyles, XfApplyFlagsRoundTrip) {
   EXPECT_NE(styles_xml.find("<protection locked=\"0\" hidden=\"1\"/>"), std::string::npos) << styles_xml;
 
   WorkbookGuard reloaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0);
   std::uint32_t reloaded_index = 0;
   ASSERT_EQ(GetCellXfIndex(reloaded.handle, 0, 0, 0, &reloaded_index), 0);
   fm_cell_xf_t after{};
@@ -566,7 +566,7 @@ TEST(FormulonCApiStyles, ResetCellKeepsInheritanceAcrossSaveLoad) {
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard reloaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0);
   fm_effective_style_info_t style = FM_STRUCT_INIT(fm_effective_style_info_t);
   ASSERT_EQ(fm_sheet_get_effective_style(reloaded.handle, 0, 0, 0, &style), 0);
   EXPECT_EQ(style.source, 2);

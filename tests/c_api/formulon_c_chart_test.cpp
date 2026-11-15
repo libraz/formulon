@@ -209,7 +209,7 @@ void LoadFixture(const std::string& name, WorkbookGuard* out) {
   std::ifstream in(dir + "/../fixtures/excel/" + name, std::ios::binary);
   ASSERT_TRUE(in.good()) << name;
   const Bytes bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &out->handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &out->handle), 0) << fm_get_last_error_message();
 }
 
 struct Located {
@@ -1098,7 +1098,7 @@ TEST(FormulonCApiChart, ThemeColorsRoundTripAndAreValidated) {
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
       << fm_get_last_error_message();
   WorkbookGuard reloaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0) << fm_get_last_error_message();
   ChartGuard chart;
   Open(reloaded.handle, id, &chart);
   const fm_chart_series_info_t s = Series(chart, 0, 0);
@@ -1278,7 +1278,7 @@ TEST(FormulonCApiChart, CaptureRestoreAndRemoveThroughDrawingOperations) {
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
       << fm_get_last_error_message();
   WorkbookGuard reloaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0) << fm_get_last_error_message();
   ChartGuard again;
   Open(reloaded.handle, id, &again);
   EXPECT_STREQ(Info(again).title.text, "Before");
@@ -1559,7 +1559,7 @@ TEST(FormulonCApiChart, NaAsBlankReadsFromTemplatesAndExcelFiles) {
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
       << fm_get_last_error_message();
   WorkbookGuard reloaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0) << fm_get_last_error_message();
   EXPECT_EQ(NaAsBlank(reloaded.handle, id), FM_TRISTATE_DEFAULT);
 
   // `val="0"`, which Excel never writes, reads FALSE.
@@ -1604,7 +1604,7 @@ TEST(FormulonCApiChart, BlanksAsWritesItsSchemaTokenAndRoundTrips) {
     ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
         << fm_get_last_error_message();
     WorkbookGuard reloaded;
-    ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0) << fm_get_last_error_message();
     ChartGuard chart;
     Open(reloaded.handle, id, &chart);
     EXPECT_EQ(Info(chart).blanks_as, c.blanks_as) << c.token;
@@ -1813,7 +1813,7 @@ TEST(FormulonCApiChart, LegendPositionWritesItsSchemaTokenAndRoundTrips) {
     ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
         << fm_get_last_error_message();
     WorkbookGuard reloaded;
-    ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0) << fm_get_last_error_message();
     ChartGuard chart;
     Open(reloaded.handle, id, &chart);
     EXPECT_EQ(Info(chart).legend_position, c.position) << c.token;

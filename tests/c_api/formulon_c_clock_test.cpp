@@ -168,7 +168,7 @@ TEST(FormulonCApiClock, ASaveDoesNotCarryThePin) {
   ASSERT_EQ(fm_workbook_save(source.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
 
   WorkbookGuard reloaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0);
   fm_civil_time_t now{};
   int32_t pinned = 1;
   ASSERT_EQ(fm_workbook_get_pinned_now(reloaded.handle, &pinned, &now), 0);

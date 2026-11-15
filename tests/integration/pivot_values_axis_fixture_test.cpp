@@ -104,7 +104,7 @@ class PivotValuesAxisFixture : public ::testing::TestWithParam<Case> {
     const std::string path = std::string(FORMULON_FIXTURES_DIR) + "/excel/pivot_options/" + GetParam().file;
     const std::vector<std::uint8_t> bytes = ReadFileBytes(path);
     ASSERT_FALSE(bytes.empty()) << "could not read " << path;
-    ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb_.handle), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &wb_.handle), 0) << fm_get_last_error_message();
   }
 
   WorkbookHandle wb_;

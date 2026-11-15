@@ -457,7 +457,7 @@ TEST(FormulonCApiCf, ThemeColorSurvivesXlsbSaveAndLoad) {
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSB, &xlsb.data, &xlsb.len), 0)
       << fm_get_last_error_message();
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(xlsb.data, xlsb.len, &loaded.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(xlsb.data, xlsb.len, nullptr, &loaded.handle), 0) << fm_get_last_error_message();
 
   const auto& blocks = loaded.handle->workbook().sheet(0).conditional_formats();
   ASSERT_EQ(blocks.size(), 2U);

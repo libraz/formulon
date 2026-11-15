@@ -86,7 +86,7 @@ TEST_P(FormulonCApiRangeStyleScale, HyperlinkOverA1ToZ100000SurvivesSaveAndLoad)
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, GetParam(), &saved.data, &saved.len), 0);
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &loaded.handle), 0);
   EXPECT_LT(PeakRssBytes() - rss_before, kGiB);
 
   EXPECT_EQ(CellCount(loaded.handle), 2600000U);

@@ -127,13 +127,13 @@ std::vector<std::uint8_t> AppendEmptyZipEntry(const std::vector<std::uint8_t>& b
 TEST(FormulonCApi, LoadMapsCorruptAndEncryptedContainersToIoErrors) {
   fm_workbook_t* loaded = reinterpret_cast<fm_workbook_t*>(0x1);
   const std::vector<std::uint8_t> garbage = {0x01U, 0x02U, 0x03U, 0x04U};
-  EXPECT_EQ(fm_workbook_load(garbage.data(), garbage.size(), &loaded),
+  EXPECT_EQ(fm_workbook_load(garbage.data(), garbage.size(), nullptr, &loaded),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kIoZipCorrupt));
   EXPECT_EQ(loaded, nullptr);
 
   loaded = reinterpret_cast<fm_workbook_t*>(0x1);
   const std::vector<std::uint8_t> cdfv2 = {0xD0U, 0xCFU, 0x11U, 0xE0U, 0xA1U, 0xB1U, 0x1AU, 0xE1U};
-  EXPECT_EQ(fm_workbook_load(cdfv2.data(), cdfv2.size(), &loaded),
+  EXPECT_EQ(fm_workbook_load(cdfv2.data(), cdfv2.size(), nullptr, &loaded),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kIoZipEncrypted));
   EXPECT_EQ(loaded, nullptr);
 
@@ -143,7 +143,7 @@ TEST(FormulonCApi, LoadMapsCorruptAndEncryptedContainersToIoErrors) {
   std::vector<std::uint8_t> encrypted = saved.value();
   MarkZipEntriesEncrypted(encrypted);
   loaded = reinterpret_cast<fm_workbook_t*>(0x1);
-  EXPECT_EQ(fm_workbook_load(encrypted.data(), encrypted.size(), &loaded),
+  EXPECT_EQ(fm_workbook_load(encrypted.data(), encrypted.size(), nullptr, &loaded),
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kIoZipEncrypted));
   EXPECT_EQ(loaded, nullptr);
 }
@@ -161,7 +161,7 @@ TEST(FormulonCApi, SaveLoadRoundTrip) {
   EXPECT_GT(buf.len, 0U);
 
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(buf.data, buf.len, &loaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(buf.data, buf.len, nullptr, &loaded.handle), 0);
   EXPECT_EQ(count_of(fm_workbook_get_sheet_count, loaded.handle), 2U);
 
   const char* sheet0 = nullptr;
@@ -211,7 +211,7 @@ TEST(FormulonCApi, SaveExXlsbProducesLoadableXlsbContainer) {
   EXPECT_EQ(formulon::io::detect_workbook_format(xlsb_span), formulon::WorkbookFormat::Xlsb);
 
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(xlsb_buf.data, xlsb_buf.len, &loaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(xlsb_buf.data, xlsb_buf.len, nullptr, &loaded.handle), 0);
   ASSERT_EQ(fm_workbook_recalc(loaded.handle), 0);
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(loaded.handle, 0, 0, 0, &v), 0);
@@ -297,7 +297,7 @@ TEST(FormulonCApi, ReadDiagnosticsAreZeroForCleanRoundTrip) {
     BufferGuard bytes;
     ASSERT_EQ(fm_workbook_save(wb.handle, format, &bytes.data, &bytes.len), 0);
     WorkbookGuard loaded;
-    ASSERT_EQ(fm_workbook_load(bytes.data, bytes.len, &loaded.handle), 0);
+    ASSERT_EQ(fm_workbook_load(bytes.data, bytes.len, nullptr, &loaded.handle), 0);
 
     fm_read_diagnostics_info_t d{sizeof(fm_read_diagnostics_info_t), 99U, 99U, 99U, 99U, 99U};
     ASSERT_EQ(fm_workbook_get_diagnostics(loaded.handle, &d), 0);
@@ -348,7 +348,7 @@ TEST(FormulonCApi, ReadDiagnosticsPreservesUnknownPartFromDeterministicFixture) 
       AppendEmptyZipEntry(std::vector<std::uint8_t>(bytes.data, bytes.data + bytes.len), "xl/dropped.bin");
   ASSERT_FALSE(fixture.empty());
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(fixture.data(), fixture.size(), &loaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(fixture.data(), fixture.size(), nullptr, &loaded.handle), 0);
   fm_read_diagnostics_info_t d = FM_STRUCT_INIT(fm_read_diagnostics_info_t);
   ASSERT_EQ(fm_workbook_get_diagnostics(loaded.handle, &d), 0);
   EXPECT_EQ(d.undecoded_formula_count, 0U);
@@ -516,7 +516,7 @@ TEST(FormulonCApi, LoadRoutesXlsbBytesToXlsbReader) {
   const std::vector<std::uint8_t>& xlsb = xlsb_or.value();
 
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(xlsb.data(), xlsb.size(), &loaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(xlsb.data(), xlsb.size(), nullptr, &loaded.handle), 0);
   EXPECT_EQ(count_of(fm_workbook_get_sheet_count, loaded.handle), 1U);
 
   fm_value_t v{};
@@ -536,7 +536,7 @@ TEST(FormulonCApi, SaveLoadFormulaTextResult) {
   EXPECT_GT(buf.len, 0U);
 
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(buf.data, buf.len, &loaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(buf.data, buf.len, nullptr, &loaded.handle), 0);
   ASSERT_EQ(fm_workbook_recalc(loaded.handle), 0);
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(loaded.handle, 0, 1, 0, &v), 0);
@@ -556,7 +556,7 @@ TEST(FormulonCApi, SaveLoadFormulaBoolResult) {
   EXPECT_GT(buf.len, 0U);
 
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(buf.data, buf.len, &loaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(buf.data, buf.len, nullptr, &loaded.handle), 0);
   ASSERT_EQ(fm_workbook_recalc(loaded.handle), 0);
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(loaded.handle, 0, 2, 0, &v), 0);
@@ -575,7 +575,7 @@ TEST(FormulonCApi, SaveLoadFormulaErrorResult) {
   EXPECT_GT(buf.len, 0U);
 
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(buf.data, buf.len, &loaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(buf.data, buf.len, nullptr, &loaded.handle), 0);
   ASSERT_EQ(fm_workbook_recalc(loaded.handle), 0);
   fm_value_t v{};
   ASSERT_EQ(fm_sheet_get_value(loaded.handle, 0, 3, 0, &v), 0);

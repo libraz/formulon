@@ -73,7 +73,7 @@ std::vector<std::uint8_t> Save(fm_workbook_t* wb, fm_workbook_format_t format = 
 }
 
 void Load(const std::vector<std::uint8_t>& bytes, WorkbookGuard& out) {
-  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &out.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &out.handle), 0) << fm_get_last_error_message();
 }
 
 std::uint32_t ActiveSheet(const fm_workbook_t* wb) {

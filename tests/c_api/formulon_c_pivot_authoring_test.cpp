@@ -258,7 +258,7 @@ TEST(FormulonCApiPivot, LoadedPivotCacheMutationReprojectsAuthoredLocation) {
       << fm_get_last_error_message();
 
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &loaded.handle), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_workbook_set_profile_id(loaded.handle, "win-365-ja_JP"), 0);
   EXPECT_NE(SavedPivotXml(loaded.handle).find("<location ref=\"D1:E4\""), std::string::npos);
 
@@ -570,7 +570,7 @@ TEST(FormulonCApiPivot, ManualSortKeepsItemOrderThroughSaveAndReload) {
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
       << fm_get_last_error_message();
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &loaded.handle), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_workbook_set_profile_id(loaded.handle, "win-365-ja_JP"), 0);
   EXPECT_EQ(RowLabels(loaded.handle, 0), (std::vector<std::string>{"South", "North"}));
 

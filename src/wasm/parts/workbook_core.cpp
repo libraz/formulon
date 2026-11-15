@@ -204,15 +204,28 @@ emscripten::val JsWorkbook::createForProfile(const std::string& profileId) {
   return factory_result(rc, std::move(wb));
 }
 
-emscripten::val JsWorkbook::loadBytes(emscripten::val bytes) {
+emscripten::val JsWorkbook::loadBytes(emscripten::val bytes, emscripten::val options) {
   std::vector<uint8_t> data;
   if (!val_to_bytes_checked(bytes, &data)) {
     return emscripten::val::undefined();
   }
+  // `{ profileId? }`: absent, `undefined` and `null` options or profile keep the load's profile.
+  emscripten::val opts = emscripten::val::undefined();
+  if (!options_object(options, "Workbook.load", &opts)) {
+    return emscripten::val::undefined();
+  }
+  JsNarrowNumericReader reader("Workbook.load");
+  std::string profile_storage;
+  const char* profile_id = reader.optional_string(opts, "profileId", profile_storage, "profileId");
+  if (!reader.ok()) {
+    return emscripten::val::undefined();
+  }
+  fm_load_options_spec_t spec = FM_STRUCT_INIT(fm_load_options_spec_t);
+  spec.profile_id = profile_id;
   auto wb = std::unique_ptr<JsWorkbook>(new JsWorkbook());
   // An empty array still reaches C, which rejects it with its own diagnostic.
   static const uint8_t kEmpty = 0;
-  const fm_status_t rc = fm_workbook_load(data.empty() ? &kEmpty : data.data(), data.size(), &wb->handle_);
+  const fm_status_t rc = fm_workbook_load(data.empty() ? &kEmpty : data.data(), data.size(), &spec, &wb->handle_);
   return factory_result(rc, std::move(wb));
 }
 

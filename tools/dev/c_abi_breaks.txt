@@ -347,6 +347,7 @@ removed fm_sheet_set_show_grid_lines :: set show_grid_lines through fm_sheet_upd
 removed fm_sheet_set_show_zeros :: set show_zeros through fm_sheet_update_view
 removed fm_sheet_set_right_to_left :: set right_to_left through fm_sheet_update_view
 removed fm_sheet_set_tab_selected :: set tab_selected through fm_sheet_update_view
+signature fm_workbook_load :: takes a const fm_load_options_spec_t* before out (NULL keeps the defaults); the spec's profile_id assigns the loaded workbook's profile without dirtying any formula
 signature fm_workbook_save :: takes an int32_t format (fm_workbook_format_t: FM_WORKBOOK_FORMAT_XLSX 0, FM_WORKBOOK_FORMAT_XLSB 1) before out_bytes
 removed fm_workbook_save_as :: fm_workbook_save takes the format
 removed fm_chart_axis_at :: renamed fm_chart_get_axis_at

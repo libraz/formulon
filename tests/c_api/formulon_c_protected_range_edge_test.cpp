@@ -170,7 +170,7 @@ TEST(ApiEdge, ProtectedRangeUpdateRectsPastCapRefused) {
 TEST(ApiEdge, ProtectedRangeUpdateUnrelatedFieldOnLongNameStillOk) {
   const std::vector<std::uint8_t> source = ReadFixture("title_256_src.xlsx");
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_load(source.data(), source.size(), &wb.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(source.data(), source.size(), nullptr, &wb.handle), 0) << fm_get_last_error_message();
   const std::string name = NameAt(wb, 0);
   ASSERT_EQ(name.size(), 256U);
   fm_protected_range_patch_t patch = FM_STRUCT_INIT(fm_protected_range_patch_t);

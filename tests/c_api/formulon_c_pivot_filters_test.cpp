@@ -542,7 +542,7 @@ TEST(FormulonCApiPivot, EveryFilterTypeRoundTripsThroughSaveAndLoad) {
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
       << fm_get_last_error_message();
   WorkbookGuard back;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &back.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &back.handle), 0) << fm_get_last_error_message();
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_pivot_filter_count(back.handle, 0, 0, &count), 0);
   ASSERT_EQ(count, static_cast<std::size_t>(FM_PIVOT_FILTER_KIND_M12) + 1U);

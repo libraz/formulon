@@ -303,7 +303,7 @@ int main(int argc, char** argv) {
     return 4;
   }
   Target target;
-  if (fm_workbook_load(input.data(), input.size(), &target.wb) != FM_STATUS_OK) {
+  if (fm_workbook_load(input.data(), input.size(), nullptr, &target.wb) != FM_STATUS_OK) {
     std::fprintf(stderr, "load failed: %s\n", argv[1]);
     return 4;
   }

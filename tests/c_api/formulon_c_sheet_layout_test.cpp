@@ -248,7 +248,7 @@ TEST(FormulonCApiSheetLayout, AutoFilterXmlSurvivesXlsxSaveLoad) {
   ASSERT_GT(saved.len, 0U);
 
   WorkbookGuard reloaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0);
   const char* actual = nullptr;
   ASSERT_EQ(fm_sheet_get_auto_filter_xml(reloaded.handle, 0, &actual), 0);
   ASSERT_NE(actual, nullptr);
@@ -367,7 +367,7 @@ TEST(FormulonCApiSheetLayout, WidthOverlayPreservesAdjacentStylesAcrossSaveLoad)
   ASSERT_TRUE(static_cast<bool>(source_bytes)) << source_bytes.error().message;
 
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_load(source_bytes.value().data(), source_bytes.value().size(), &wb.handle), 0);
+  ASSERT_EQ(fm_workbook_load(source_bytes.value().data(), source_bytes.value().size(), nullptr, &wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_column_width(wb.handle, 0, 0U, 1U, 12.5), 0);
 
   size_t count = 0;
@@ -408,7 +408,7 @@ TEST(FormulonCApiSheetLayout, WidthOverlayPreservesAdjacentStylesAcrossSaveLoad)
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard reloaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0);
   ASSERT_EQ(fm_sheet_get_column_layout_at(reloaded.handle, 0, 0U, &col0), 0);
   ASSERT_EQ(fm_sheet_get_column_layout_at(reloaded.handle, 0, 1U, &col1), 0);
   EXPECT_EQ(col0.has_xf_index, 1);
@@ -440,7 +440,7 @@ TEST(FormulonCApiSheetLayout, WidthOverlayDoesNotSmearAttributesIntoTargetGaps) 
   ASSERT_TRUE(static_cast<bool>(source_bytes)) << source_bytes.error().message;
 
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_load(source_bytes.value().data(), source_bytes.value().size(), &wb.handle), 0);
+  ASSERT_EQ(fm_workbook_load(source_bytes.value().data(), source_bytes.value().size(), nullptr, &wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_column_width(wb.handle, 0, 0U, 3U, 9.0), 0);
 
   size_t count = 0;
@@ -483,7 +483,7 @@ TEST(FormulonCApiSheetLayout, GetterNormalizesLegacyNonZeroWidthPresence) {
   ASSERT_TRUE(static_cast<bool>(source_bytes)) << source_bytes.error().message;
 
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_load(source_bytes.value().data(), source_bytes.value().size(), &wb.handle), 0);
+  ASSERT_EQ(fm_workbook_load(source_bytes.value().data(), source_bytes.value().size(), nullptr, &wb.handle), 0);
   fm_column_layout_info_t column = FM_STRUCT_INIT(fm_column_layout_info_t);
   ASSERT_EQ(fm_sheet_get_column_layout_at(wb.handle, 0, 0U, &column), 0);
   EXPECT_EQ(column.first, 4U);
@@ -868,7 +868,7 @@ TEST(FormulonCApiSheetLayout, RowOverrideReportsHeightPresenceAndCustomFlag) {
   auto source_bytes = source.save();
   ASSERT_TRUE(static_cast<bool>(source_bytes)) << source_bytes.error().message;
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_load(source_bytes.value().data(), source_bytes.value().size(), &wb.handle), 0);
+  ASSERT_EQ(fm_workbook_load(source_bytes.value().data(), source_bytes.value().size(), nullptr, &wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_row_height(wb.handle, 0, 5U, 5U, 30.0), 0);
 
   size_t count = 0;
@@ -888,7 +888,7 @@ fm_row_layout_info_t ReloadedRowOverride(const WorkbookGuard& wb, std::uint32_t 
   BufferGuard saved;
   EXPECT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard reloaded;
-  EXPECT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  EXPECT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0);
   return RowOverride(reloaded, row);
 }
 
@@ -904,7 +904,7 @@ TEST(FormulonCApiSheetLayout, AutoRowHeightRefreshesTheCacheAndStaysAutomatic) {
   auto source_bytes = source.save();
   ASSERT_TRUE(static_cast<bool>(source_bytes)) << source_bytes.error().message;
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_load(source_bytes.value().data(), source_bytes.value().size(), &wb.handle), 0);
+  ASSERT_EQ(fm_workbook_load(source_bytes.value().data(), source_bytes.value().size(), nullptr, &wb.handle), 0);
   wb.handle->workbook().mutable_styles().cell_xfs.resize(2U);
   wb.handle->workbook().mutable_styles().cell_xfs[1].num_fmt_id = 2U;  // distinct from xf 0, so a save keeps it
 
@@ -1036,7 +1036,7 @@ TEST(FormulonCApiSheetLayout, ClearColumnWidthKeepsColumnStyle) {
   ASSERT_TRUE(static_cast<bool>(bytes)) << bytes.error().message;
 
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_load(bytes.value().data(), bytes.value().size(), &wb.handle), 0);
+  ASSERT_EQ(fm_workbook_load(bytes.value().data(), bytes.value().size(), nullptr, &wb.handle), 0);
   ASSERT_EQ(fm_sheet_reset_column_width(wb.handle, 0, 0U, 0U), 0);
 
   const auto columns = ReadColumns(wb.handle);
@@ -1142,7 +1142,7 @@ TEST(FormulonCApiSheetLayout, StyleOverridesSurviveSaveLoad) {
     BufferGuard saved;
     ASSERT_EQ(fm_workbook_save(wb.handle, format, &saved.data, &saved.len), 0) << "format=" << format;
     WorkbookGuard reloaded;
-    ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << "format=" << format;
+    ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0) << "format=" << format;
 
     const auto columns = ReadColumns(reloaded.handle);
     ASSERT_EQ(columns.size(), 1U) << "format=" << format;
@@ -1270,7 +1270,7 @@ TEST(FormulonCApiSheetLayout, ClearColumnWidthSurvivesXlsxAndXlsbSaveLoad) {
     BufferGuard saved;
     ASSERT_EQ(fm_workbook_save(wb.handle, format, &saved.data, &saved.len), 0) << "format=" << format;
     WorkbookGuard reloaded;
-    ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << "format=" << format;
+    ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0) << "format=" << format;
     const auto columns = ReadColumns(reloaded.handle);
     ASSERT_EQ(columns.size(), 3U) << "format=" << format;
     EXPECT_EQ(columns[0].first, 0U);
@@ -1339,7 +1339,7 @@ TEST(FormulonCApiSheetLayout, FormatDefaultsRoundTripThroughSave) {
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard reloaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0);
   fm_sheet_format_defaults_t got = FM_STRUCT_INIT(fm_sheet_format_defaults_t);
   ASSERT_EQ(fm_sheet_get_format_defaults(reloaded.handle, 0, &got), 0);
   EXPECT_EQ(got.default_column_width_chars, 12.5);

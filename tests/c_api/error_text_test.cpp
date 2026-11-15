@@ -94,9 +94,9 @@ TEST(FormulonCApiErrorText, NullArgumentMessagesNameTheArgument) {
 
   fm_workbook_t* loaded = nullptr;
   const uint8_t byte = 0;
-  EXPECT_EQ(fm_workbook_load(nullptr, 4, &loaded), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_workbook_load(nullptr, 4, nullptr, &loaded), FM_STATUS_BINDING_NULL_POINTER);
   EXPECT_EQ(Message(), "bytes must not be NULL");
-  EXPECT_EQ(fm_workbook_load(&byte, 1, nullptr), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_workbook_load(&byte, 1, nullptr, nullptr), FM_STATUS_BINDING_NULL_POINTER);
   EXPECT_EQ(Message(), "out must not be NULL");
 }
 
@@ -114,7 +114,7 @@ TEST(FormulonCApiErrorText, CorruptArchiveReportsTheZipCodeWithoutInternalNames)
   bytes.insert(bytes.end(), 12, 0);
   ASSERT_EQ(bytes.size(), 16U);
   fm_workbook_t* wb = nullptr;
-  EXPECT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb), FM_STATUS_IO_ZIP_CORRUPT);
+  EXPECT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &wb), FM_STATUS_IO_ZIP_CORRUPT);
   EXPECT_EQ(wb, nullptr);
   ExpectNoInternalNames(Message());
   ExpectNoInternalNames(Context());

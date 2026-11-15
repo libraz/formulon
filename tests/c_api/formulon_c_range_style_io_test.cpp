@@ -66,7 +66,7 @@ Bytes Save(WorkbookGuard& wb, fm_workbook_format_t format) {
 }
 
 void Load(const Bytes& bytes, WorkbookGuard& out) {
-  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &out.handle), 0);
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &out.handle), 0);
 }
 
 Bytes ReadFixture(const char* name) {

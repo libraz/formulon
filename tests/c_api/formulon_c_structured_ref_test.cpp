@@ -365,7 +365,7 @@ TEST(FormulonCApiStructuredRef, RenamedColumnSavesInExcelsStoredForm) {
   for (const int32_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
     const std::vector<std::uint8_t> bytes = SaveAs(wb, format);
     WorkbookGuard reloaded;
-    ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &reloaded.handle), 0) << "format=" << format;
+    ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &reloaded.handle), 0) << "format=" << format;
     EXPECT_EQ(ColumnName(reloaded, 0), "Amount") << "format=" << format;
     EXPECT_EQ(Stored(reloaded, 0, kInsideRow, kInsideCol), "=tblSales[[#This Row],[Amount]]") << "format=" << format;
     EXPECT_EQ(Formula(reloaded, 0, kInsideRow, kInsideCol), "=[@Amount]") << "format=" << format;

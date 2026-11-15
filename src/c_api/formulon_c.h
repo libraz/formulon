@@ -496,6 +496,16 @@ FM_API fm_status_t fm_workbook_create_for_profile(const char* profile_id, fm_wor
 FM_API fm_status_t fm_workbook_create_empty(fm_workbook_t** out);
 
 /**
+ * @brief The options of `fm_workbook_load`.
+ */
+typedef struct {
+  uint32_t struct_size;
+  /** An id from `fm_workbook_set_profile_id`, e.g. `"mac-365-ja_JP"`, assigned to the loaded workbook. `NULL` keeps
+   *  the profile the load assigns. */
+  const char* profile_id;
+} fm_load_options_spec_t;
+
+/**
  * @brief Loads a workbook from an in-memory `.xlsx` or `.xlsb` buffer.
  *
  * The handle takes ownership of the parsed read result, including
@@ -513,20 +523,30 @@ FM_API fm_status_t fm_workbook_create_empty(fm_workbook_t** out);
  * is dropped, and a numeric offset or any other malformed stamp reads as no
  * `created` (the attribute is omitted again on save).
  *
+ * `spec->profile_id` assigns the workbook's Excel profile as part of the
+ * load, so a manual-calculation workbook holds dirty exactly the formulas it
+ * holds under the default profile (see `fm_workbook_has_dirty_cells`); calling
+ * `fm_workbook_set_profile_id` after the load would dirty every formula
+ * instead. The profile applies once the file is read, so sheet names are
+ * validated under the load's default host. `spec == NULL` is the defaults.
+ *
  * Lifetime: owned (until fm_workbook_destroy).
  *
  * @param bytes  Pointer to the first byte of the OOXML or MS-XLSB archive.
  * @param len    Length of the buffer in bytes.
+ * @param spec   The load options, or `NULL` for the defaults.
  * @param out    On success receives the freshly allocated handle.
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `bytes` or `out` is `NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) if `len == 0`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if `len == 0`, `spec->struct_size` is below the first layout, or
+ *         `spec->profile_id` is not a documented profile id (an empty string included);
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the file exceeds an engine
  *         ceiling (the context's `part=` names it, e.g. part=zip_parts,
  *         part=gradient_stops or part=array_elements);
  *         another `FM_STATUS_IO_*` code on parse / archive failure.
  */
-FM_API fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, fm_workbook_t** out);
+FM_API fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, const fm_load_options_spec_t* spec,
+                                    fm_workbook_t** out);
 
 /*
  * Contract shared by `fm_read_diagnostics_info_t` and `fm_save_diagnostics_info_t`:

@@ -1353,7 +1353,7 @@ TEST_F(FormulonCApiSheetFeatures, ValidationStoresFormulasWithoutTheLeadingEqual
   std::size_t saved_len = 0U;
   ASSERT_EQ(fm_workbook_save(wb_, FM_WORKBOOK_FORMAT_XLSX, &saved, &saved_len), 0);
   fm_workbook_t* reloaded = nullptr;
-  const fm_status_t loaded = fm_workbook_load(saved, saved_len, &reloaded);
+  const fm_status_t loaded = fm_workbook_load(saved, saved_len, nullptr, &reloaded);
   fm_buffer_destroy(saved);
   ASSERT_EQ(loaded, 0);
   ASSERT_EQ(fm_sheet_get_validation_at(reloaded, 0, 0, &got), 0);

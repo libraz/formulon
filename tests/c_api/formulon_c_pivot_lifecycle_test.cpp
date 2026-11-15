@@ -467,7 +467,7 @@ TEST(FormulonCApiPivot, ProfileRenderedBuiltinCodeKeepsItsId) {
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
       << fm_get_last_error_message();
   WorkbookGuard reloaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_workbook_set_profile_id(reloaded.handle, "mac-365-ja_JP"), 0);
   const std::string read_back = FieldNumberFormat(reloaded.handle, 0, 1);
   EXPECT_EQ(read_back, code);

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import unittest
 
-from formulon import CalcMode, Workbook
+from formulon import CalcMode, InvalidArgumentError, Workbook
 
 
 class IsCellStaleTests(unittest.TestCase):
@@ -76,3 +76,60 @@ class IsCellStaleTests(unittest.TestCase):
         with Workbook.load(data) as loaded:
             self.assertTrue(loaded.sheet(0).is_cell_stale("B1"))
             self.assertEqual(loaded.sheet(0).get_value("B1"), 10)
+
+
+class LoadProfileTests(unittest.TestCase):
+    """A profile given at load leaves the stale set of the default load; set_profile_id afterwards dirties it all."""
+
+    def setUp(self) -> None:
+        with Workbook.create_default() as wb:
+            ws = wb.sheet(0)
+            wb.set_calc_mode(CalcMode.MANUAL)
+            ws.set_value("A1", 1)
+            ws.set_formula("B1", "=A1*2")
+            ws.set_formula("C1", "=B1+1")
+            ws.set_formula("D1", "=1+1")
+            wb.recalc()
+            ws.set_value("A1", 2)
+            wb.set_calc_on_save(False)
+            self.data = wb.save()
+
+    @staticmethod
+    def _stale(wb: Workbook) -> list:
+        ws = wb.sheet(0)
+        return [(ref, ws.is_cell_stale(ref), ws.get_value(ref)) for ref in ("A1", "B1", "C1", "D1")]
+
+    def test_keeps_the_stale_set_and_the_cached_values_of_the_default_load(self) -> None:
+        with Workbook.load(self.data) as plain, Workbook.load(self.data, profile_id="mac-365-ja_JP") as profiled:
+            self.assertEqual(plain.get_profile_id(), "win-365-en_US")
+            self.assertEqual(profiled.get_profile_id(), "mac-365-ja_JP")
+            self.assertEqual(self._stale(profiled), self._stale(plain))
+            self.assertTrue(profiled.sheet(0).is_cell_stale("B1"))
+            self.assertFalse(profiled.sheet(0).is_cell_stale("D1"))
+
+    def test_none_keeps_the_load_profile(self) -> None:
+        with Workbook.load(self.data, profile_id=None) as wb:
+            self.assertEqual(wb.get_profile_id(), "win-365-en_US")
+
+    def test_refuses_an_unknown_or_empty_profile_id(self) -> None:
+        with self.assertRaises(InvalidArgumentError):
+            Workbook.load(self.data, profile_id="not-a-profile")
+        with self.assertRaises(InvalidArgumentError):
+            Workbook.load(self.data, profile_id="")
+
+    def test_refuses_a_profile_id_that_is_not_a_string(self) -> None:
+        for bad in (5, True, b"mac-365-ja_JP"):
+            with self.assertRaises(TypeError) as caught:
+                Workbook.load(self.data, profile_id=bad)  # type: ignore[arg-type]
+            self.assertIn("Workbook.load", str(caught.exception))
+
+    def test_the_profile_is_keyword_only(self) -> None:
+        with self.assertRaises(TypeError):
+            Workbook.load(self.data, "mac-365-ja_JP")  # type: ignore[misc]
+
+    def test_set_profile_id_after_a_load_still_makes_every_formula_stale(self) -> None:
+        with Workbook.load(self.data) as wb:
+            self.assertFalse(wb.sheet(0).is_cell_stale("D1"))
+            wb.set_profile_id("mac-365-ja_JP")
+            for ref in ("B1", "C1", "D1"):
+                self.assertTrue(wb.sheet(0).is_cell_stale(ref), ref)

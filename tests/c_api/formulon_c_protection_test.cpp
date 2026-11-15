@@ -321,7 +321,7 @@ TEST(FormulonCApiProtection, ProtectedSheetRoundTripsThroughOoxml) {
   ASSERT_GT(saved.len, 0U);
 
   WorkbookGuard wb2;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &wb2.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &wb2.handle), 0);
 
   int32_t present = 0;
   fm_sheet_protection_t out = FM_STRUCT_INIT(fm_sheet_protection_t);
@@ -352,7 +352,7 @@ TEST(FormulonCApiProtection, UnprotectedSheetWritesNoProtectionElement) {
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
 
   WorkbookGuard wb2;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &wb2.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &wb2.handle), 0);
   EXPECT_EQ(IsProtected(wb2.handle), 0);
 }
 
@@ -368,7 +368,7 @@ TEST(FormulonCApiProtection, LegacyPasswordHashRoundTrips) {
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
 
   WorkbookGuard wb2;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &wb2.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &wb2.handle), 0);
   int32_t present = 0;
   fm_sheet_protection_t out = FM_STRUCT_INIT(fm_sheet_protection_t);
   ASSERT_EQ(fm_sheet_get_sheet_protection(wb2.handle, 0, &present, &out), 0);

@@ -120,7 +120,7 @@ TEST(FormulonCApiExternalLinks, RoundTripPreservesZeroCount) {
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved_data, &saved_len), 0);
 
   WorkbookGuard wb2;
-  ASSERT_EQ(fm_workbook_load(saved_data, saved_len, &wb2.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved_data, saved_len, nullptr, &wb2.handle), 0);
   fm_buffer_destroy(saved_data);
 
   std::size_t count = 99;

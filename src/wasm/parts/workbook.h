@@ -49,7 +49,7 @@ class JsWorkbook {
   static emscripten::val createDefault();
   static emscripten::val createEmpty();
   static emscripten::val createForProfile(const std::string& profileId);
-  static emscripten::val loadBytes(emscripten::val bytes);
+  static emscripten::val loadBytes(emscripten::val bytes, emscripten::val options);
 
   /// True once `dispose` has released the native handle.
   bool disposed() const { return handle_ == nullptr; }

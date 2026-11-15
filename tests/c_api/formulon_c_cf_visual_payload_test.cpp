@@ -285,7 +285,7 @@ TEST(FormulonCApiCfMutate, ThresholdStringsStayLiveWhileLaterPayloadsArePulled) 
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   ASSERT_GT(saved.len, 0U);
   WorkbookGuard reloaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0);
   const auto& reloaded_blocks = reloaded.handle->workbook().sheet(0).conditional_formats();
   ASSERT_EQ(reloaded_blocks.size(), 1U);
   ASSERT_TRUE(reloaded_blocks[0].rules[0].color_scale.has_value());

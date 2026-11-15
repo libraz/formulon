@@ -79,7 +79,7 @@ Output ReadOutput(const std::string& path) {
   const std::vector<std::uint8_t> bytes = ReadAll(path);
   EXPECT_FALSE(bytes.empty());
   fm_workbook_t* wb = nullptr;
-  EXPECT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb), 0);
+  EXPECT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &wb), 0);
   if (wb == nullptr) {
     return out;
   }

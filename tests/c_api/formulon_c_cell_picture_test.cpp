@@ -317,7 +317,7 @@ TEST_F(FormulonCCellPicture, SurvivesASaveAndLoadInBothFormats) {
     BufferGuard saved;
     ASSERT_EQ(fm_workbook_save(wb(), format, &saved.data, &saved.len), 0) << fm_get_last_error_message();
     WorkbookGuard loaded;
-    ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0) << fm_get_last_error_message();
+    ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &loaded.handle), 0) << fm_get_last_error_message();
 
     std::int32_t present = 0;
     fm_cell_picture_t out = FM_STRUCT_INIT(fm_cell_picture_t);

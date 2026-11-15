@@ -55,7 +55,7 @@ void RoundTrip(const WorkbookGuard& wb, WorkbookGuard* out, std::string* part_xm
     ASSERT_TRUE(static_cast<bool>(entry));
     part_xml->assign(reinterpret_cast<const char*>(entry.value().data()), entry.value().size());
   }
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &out->handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &out->handle), 0) << fm_get_last_error_message();
 }
 
 bool Has(const std::string& text, const char* needle) {

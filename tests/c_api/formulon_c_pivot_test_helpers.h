@@ -292,7 +292,7 @@ template <typename Enum>
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(built.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
       << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &out.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &out.handle), 0) << fm_get_last_error_message();
 }
 
 }  // namespace

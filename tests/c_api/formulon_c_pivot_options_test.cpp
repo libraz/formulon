@@ -586,7 +586,7 @@ TEST(FormulonCApiPivotOptions, ValuesFieldOrderMarksLayoutDirty) {
   ASSERT_EQ(fm_workbook_save(built.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
       << fm_get_last_error_message();
   WorkbookGuard clean;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &clean.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &clean.handle), 0) << fm_get_last_error_message();
   ASSERT_FALSE(Table(clean).layout_dirty());
   ASSERT_EQ(SetOrder(clean.handle, true, {0U, FM_PIVOT_VALUES_FIELD}), 0) << fm_get_last_error_message();
   EXPECT_TRUE(Table(clean).layout_dirty());
@@ -917,7 +917,8 @@ TEST(FormulonCApiPivotOptions, OptionsRoundTripThroughSaveInExcelsSpelling) {
   }
 
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(package.data(), package.size(), &loaded.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(package.data(), package.size(), nullptr, &loaded.handle), 0)
+      << fm_get_last_error_message();
   ExpectSameOptions(GetOptions(loaded.handle), changed);
 }
 
@@ -1109,7 +1110,8 @@ TEST(FormulonCApiPivotOptions, CacheOptionsRoundTripThroughSave) {
   }
 
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(package.data(), package.size(), &loaded.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(package.data(), package.size(), nullptr, &loaded.handle), 0)
+      << fm_get_last_error_message();
   fm_pivot_cache_options_t read = FM_STRUCT_INIT(fm_pivot_cache_options_t);
   ASSERT_EQ(fm_workbook_get_pivot_cache_options(loaded.handle, cache_id, &read), 0);
   EXPECT_EQ(read.save_data, 0);
@@ -1259,7 +1261,8 @@ TEST(FormulonCApiPivotOptions, ShowAllListsItemsWithoutData) {
   EXPECT_EQ(FieldTag(ExtractZipEntry(package, "xl/pivotTables/pivotTable1.xml"), "axisRow").find("showAll"),
             std::string::npos);
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(package.data(), package.size(), &loaded.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(package.data(), package.size(), nullptr, &loaded.handle), 0)
+      << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_get_pivot_field_at(loaded.handle, 0U, kPivot, kRegionField, &info), 0);
   EXPECT_EQ(info.show_all, 1);
   ASSERT_EQ(SetPivotFieldShowAll(loaded.handle, 0U, kPivot, kRegionField, 0), 0);

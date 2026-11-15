@@ -106,7 +106,7 @@ TEST(FormulonCApiStyles, DxfNumberFormatSurvivesSaveAndReload) {
   UseEveryDxf(wb.handle);
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard reloaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0);
   fm_dxf_t out{};
   ASSERT_EQ(fm_workbook_get_dxf_at(reloaded.handle, index, &out), 0);
   ASSERT_NE(out.number_format, nullptr);
@@ -189,7 +189,7 @@ TEST(FormulonCApiStyles, DxfAlignmentAndProtectionPreserveIdentityThroughOoxml) 
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   ASSERT_GT(saved.len, 0U);
   WorkbookGuard reloaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0);
 
   fm_dxf_t reloaded_alignment{};
   fm_dxf_t reloaded_protection{};

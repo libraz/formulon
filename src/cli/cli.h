@@ -136,7 +136,16 @@ bool parse_unsigned(std::string_view text, T* out) {
   return true;
 }
 
-/// Applies the shared options to a freshly created or loaded workbook.
+/// Applies the shared clock option (`--now`) to a workbook.
+inline fm_status_t apply_shared_clock(fm_workbook_t* workbook, const SharedOptions& options) {
+  if (options.now.has_value()) {
+    return fm_workbook_set_pinned_now(workbook, &*options.now);
+  }
+  return 0;
+}
+
+/// Applies the shared options to a freshly created workbook. A load takes the profile through its load options
+/// instead, so no formula is dirtied by it.
 inline fm_status_t apply_shared_options(fm_workbook_t* workbook, const SharedOptions& options) {
   if (options.profile_id.has_value()) {
     const std::string id(*options.profile_id);
@@ -144,10 +153,7 @@ inline fm_status_t apply_shared_options(fm_workbook_t* workbook, const SharedOpt
       return rc;
     }
   }
-  if (options.now.has_value()) {
-    return fm_workbook_set_pinned_now(workbook, &*options.now);
-  }
-  return 0;
+  return apply_shared_clock(workbook, options);
 }
 
 /// Flushes a command's primary output and turns a stream failure into

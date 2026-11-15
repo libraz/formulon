@@ -2969,6 +2969,15 @@ export interface ReferenceNotationOptions {
   baseCol?: number;
 }
 
+/** Options for `Workbook.load`. */
+export interface LoadOptions {
+  /** The Excel profile the loaded workbook is given, as `setProfileId` would after the load, but without making any
+   *  formula dirty: under `CalcMode.Manual` the workbook holds dirty exactly the formulas it holds under the default
+   *  profile. Sheet names are validated under the load's default host. Omitted (or `null`) keeps the profile the load
+   *  assigns; an unknown or empty id fails with `StatusCode.InvalidArgument`. */
+  profileId?: ProfileId;
+}
+
 /** Options for `formatReference`. */
 export interface FormatReferenceOptions {
   /** The qualifier to write; it overrides the sheet name of a parsed reference. Omitted, `null` or an empty string
@@ -9140,6 +9149,12 @@ export interface WorkbookCtor {
    *  save recomputes the workbook; to read the cached values the file carries, call
    *  `setCalcMode(CalcMode.Manual)` first (and `setCalcOnSave(false)` to save them unchanged).
    *
+   *  `options.profileId` gives the workbook an Excel profile as part of the load. Calling `setProfileId` after the
+   *  load would make every formula dirty, whereas the profile of the load leaves the dirty set of a
+   *  manual-calculation workbook as it is under the default profile. It applies once the file is read, so sheet
+   *  names are validated under the load's default host. An `options` that is not an object, an unknown key and a
+   *  `profileId` that is not a string throw `TypeError`.
+   *
    *  Names that collide only under the full comparison of name identity (see {@link Workbook}) load and stay as
    *  they are; only letter case makes a loaded sheet name a duplicate. A threaded-comment stamp is normalised on
    *  load: a trailing `Z` is dropped, and a stamp with a numeric UTC offset or any other shape reads as no stamp
@@ -9152,7 +9167,7 @@ export interface WorkbookCtor {
    *  console.log(wb.sheet(0).getDisplayText('A1').text);
    *  wb.dispose();
    *  ``` */
-  load(bytes: BytesInput): Workbook;
+  load(bytes: BytesInput, options?: LoadOptions): Workbook;
 }
 
 /** Options for {@link createFormulon}. Any other key, or a key of the wrong type, rejects with a `TypeError`; a

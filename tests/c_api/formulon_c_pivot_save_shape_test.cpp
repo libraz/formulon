@@ -178,7 +178,7 @@ TEST(FormulonCApiPivotSaveShape, HostBuiltPivotSavesWithItemsAndSharedItems) {
 
   // Reloading evaluates to the report the host saw.
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &loaded.handle), 0) << fm_get_last_error_message();
   EXPECT_EQ(ProjectedCells(loaded.handle), before);
 }
 
@@ -268,7 +268,7 @@ TEST(FormulonCApiPivotSaveShape, ApiPivotReportIsInTheCellsAndFormulasReadIt) {
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0)
       << fm_get_last_error_message();
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &loaded.handle), 0) << fm_get_last_error_message();
   ExpectSheetText(loaded.handle, 1U, kLabelCol, "North");
   ExpectSheetNumber(loaded.handle, 1U, kValueCol, 400.0);
   ExpectSheetNumber(loaded.handle, 2U, kValueCol, 400.0);
@@ -457,7 +457,7 @@ TEST(FormulonCApiPivotSaveShape, ProjectingAPivotWithoutRecordsWritesNothing) {
       << fm_get_last_error_message();
 
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &loaded.handle), 0) << fm_get_last_error_message();
   // The cells read with the file are the report.
   ExpectSheetNumber(loaded.handle, 1U, kValueCol, 400.0);
   ASSERT_EQ(fm_sheet_set_text(loaded.handle, 0U, 1U, kValueCol, "kept"), 0);
@@ -472,7 +472,7 @@ TEST(FormulonCApiPivotSaveShape, SavingDoesNotMemoiseAReportWithoutItsCalculated
   std::ifstream in(dir + "/../fixtures/excel/pivot_calc/cf1_price_amt_per_qty.xlsx", std::ios::binary);
   ASSERT_TRUE(in.good());
   const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &wb.handle), 0) << fm_get_last_error_message();
   // The save evaluates the report for its span without the formula host.
   Save(wb.handle);
   // The layout API still shows the calculated field: 630 / 20 at the grand total.

@@ -166,6 +166,7 @@ class StructLayoutTests(unittest.TestCase):
         "PIVOT_DATE_GROUP": 48,
         "PIVOT_NUMERIC_GROUP": 40,
         "REFERENCE_NOTATION_SPEC": 20,
+        "LOAD_OPTIONS_SPEC": 8,
         "FILTER_CONDITION": 8,
         "CHART_DATA_SOURCE_SPEC": 16,
         "THREADED_COMMENT_PATCH": 32,

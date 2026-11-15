@@ -178,7 +178,7 @@ TEST(SheetVisibility, VeryHiddenCrossesFromXlsbToOoxml) {
 /// returns the resulting `<sheet state>` value.
 std::string StateAfterSettingVisibility(const std::vector<std::uint8_t>& bytes, int32_t visibility) {
   fm_workbook_t* handle = nullptr;
-  EXPECT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &handle), 0);
+  EXPECT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &handle), 0);
   if (handle == nullptr) {
     return std::string();
   }

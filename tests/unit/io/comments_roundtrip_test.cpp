@@ -309,7 +309,7 @@ TEST(CommentRuns, RunsWriteBackWithExcelsRunProperties) {
 TEST(CommentRuns, SettingTheTextThroughTheApiClearsTheRuns) {
   const std::vector<std::uint8_t> source = test::read_file_bytes(kRunsFontsXlsx);
   fm_workbook_t* wb = nullptr;
-  ASSERT_EQ(fm_workbook_load(source.data(), source.size(), &wb), 0);
+  ASSERT_EQ(fm_workbook_load(source.data(), source.size(), nullptr, &wb), 0);
   fm_comment_t note = FM_STRUCT_INIT(fm_comment_t);
   note.author = "Alice";
   note.text = "plain";

@@ -107,7 +107,7 @@ TEST(FormulonCApiCfMutate, RemovedRuleDoesNotResurfaceThroughSaveLoad) {
   ASSERT_GT(saved.len, 0U);
 
   WorkbookGuard reloaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0);
   const auto& sheet = reloaded.handle->workbook().sheet(0);
   ASSERT_EQ(sheet.conditional_formats().size(), 1U);
   ASSERT_EQ(sheet.conditional_formats()[0].rules.size(), 1U);
@@ -141,7 +141,7 @@ TEST(FormulonCApiCfMutate, DataBarExtensionFieldsSurviveSaveAndLoad) {
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard reloaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0);
 
   fm_cf_rule_t back = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule_at(reloaded.handle, 0, 0, &back), 0) << fm_get_last_error_message();
@@ -189,7 +189,7 @@ TEST(FormulonCApiCfMutate, IconSetFloorSurvivesSaveAndLoad) {
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard reloaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0);
   fm_cf_rule_t back = FM_STRUCT_INIT(fm_cf_rule_t);
   ASSERT_EQ(fm_sheet_get_cf_rule_at(reloaded.handle, 0, 0, &back), 0) << fm_get_last_error_message();
   EXPECT_EQ(back.has_icon_set_floor, 1);

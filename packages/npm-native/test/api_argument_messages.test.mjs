@@ -403,11 +403,7 @@ test('static factories and module functions refuse extra arguments', async () =>
     TypeError,
     'Workbook.createForProfile takes at most 1 argument',
   );
-  refusesWith(
-    () => f.Workbook.load(new Uint8Array(0), { profile: 'win-365-en_US' }),
-    TypeError,
-    'Workbook.load takes at most 1 argument',
-  );
+  refusesWith(() => f.Workbook.load(new Uint8Array(0), {}, 'x'), TypeError, 'Workbook.load takes at most 2 arguments');
   refusesWith(() => f.getVersion(1), TypeError, 'Formulon.getVersion takes at most 0 arguments');
   refusesWith(() => f.evaluateFormula('=1', 2), TypeError, 'Formulon.evaluateFormula takes at most 1 argument');
 });

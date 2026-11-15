@@ -223,7 +223,7 @@ TEST(FormulonCApiCalcMode, ManualModeRoundTripsThroughOoxml) {
   ASSERT_GT(saved.len, 0U);
 
   WorkbookGuard wb2;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &wb2.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &wb2.handle), 0);
   int32_t mode = FM_CALC_MODE_AUTO;
   ASSERT_EQ(fm_workbook_get_calc_mode(wb2.handle, &mode), 0);
   EXPECT_EQ(mode, FM_CALC_MODE_MANUAL);
@@ -238,7 +238,7 @@ TEST(FormulonCApiCalcMode, AutoNoTableModeRoundTripsThroughOoxml) {
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
 
   WorkbookGuard wb2;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &wb2.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &wb2.handle), 0);
   int32_t mode = FM_CALC_MODE_AUTO;
   ASSERT_EQ(fm_workbook_get_calc_mode(wb2.handle, &mode), 0);
   EXPECT_EQ(mode, FM_CALC_MODE_AUTO_NO_TABLE);
@@ -262,7 +262,7 @@ TEST(FormulonCApiCalcMode, IterativeOptionsRoundTripThroughCalcPr) {
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
 
   WorkbookGuard wb2;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &wb2.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &wb2.handle), 0);
   int32_t mode = FM_CALC_MODE_AUTO;
   ASSERT_EQ(fm_workbook_get_calc_mode(wb2.handle, &mode), 0);
   EXPECT_EQ(mode, FM_CALC_MODE_MANUAL);
@@ -290,7 +290,7 @@ TEST(FormulonCApiCalcMode, AutoModeOmitsCalcPrFromOoxml) {
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
 
   WorkbookGuard wb2;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &wb2.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &wb2.handle), 0);
   int32_t mode = FM_CALC_MODE_MANUAL;  // poison
   ASSERT_EQ(fm_workbook_get_calc_mode(wb2.handle, &mode), 0);
   EXPECT_EQ(mode, FM_CALC_MODE_AUTO);

@@ -407,7 +407,7 @@ TEST(FormulonCApiRangeStyle, ResultSurvivesSaveLoad) {
     BufferGuard saved;
     ASSERT_EQ(fm_workbook_save(wb.handle, format, &saved.data, &saved.len), 0);
     WorkbookGuard reloaded;
-    ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+    ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0);
     EXPECT_EQ(Effective(reloaded, 2U, 1U), Eff(kSourceCell, 6U)) << format;
     EXPECT_EQ(Effective(reloaded, 2U, 2U), Eff(kSourceRow, 1U)) << format;
     EXPECT_EQ(Effective(reloaded, 700U, 1U), Eff(kSourceColumn, 5U)) << format;
@@ -700,7 +700,7 @@ TEST(FormulonCApiRangeXfRecords, SurvivesSaveLoad) {
     BufferGuard saved;
     ASSERT_EQ(fm_workbook_save(wb.handle, format, &saved.data, &saved.len), 0);
     WorkbookGuard reloaded;
-    ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+    ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0);
     EXPECT_EQ(ListXfCells(reloaded, &kWholeGrid), (std::vector<XfCell>{{2U, 7U, 3U}, {5U, 3U, 2U}, {1000U, 20U, 1U}}))
         << format;
   }

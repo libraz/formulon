@@ -51,7 +51,7 @@ void LoadFixture(const std::string& name, WorkbookGuard* out) {
   std::ifstream in(dir + "/../fixtures/excel/compat_version/" + name, std::ios::binary);
   ASSERT_TRUE(in.good()) << name;
   const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &out->handle), FM_STATUS_OK);
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &out->handle), FM_STATUS_OK);
   ASSERT_EQ(fm_workbook_recalc(out->handle), FM_STATUS_OK);
 }
 

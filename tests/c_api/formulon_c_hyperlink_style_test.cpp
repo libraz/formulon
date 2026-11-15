@@ -185,7 +185,7 @@ TEST_F(HyperlinkStyle, ASaveDropsTheHyperlinkStyleOnceNoCellUsesIt) {
     BufferGuard bytes;
     EXPECT_EQ(fm_workbook_save(book, FM_WORKBOOK_FORMAT_XLSX, &bytes.data, &bytes.len), 0);
     WorkbookGuard loaded;
-    EXPECT_EQ(fm_workbook_load(bytes.data, bytes.len, &loaded.handle), 0);
+    EXPECT_EQ(fm_workbook_load(bytes.data, bytes.len, nullptr, &loaded.handle), 0);
     std::size_t count = 0;
     if (loaded.handle != nullptr) {
       for (const auto& record : loaded.handle->workbook().styles().cell_styles) {
@@ -393,7 +393,7 @@ TEST_F(HyperlinkStyle, RemoveAtThenInsertAtOfALoadedUnnormalisedLinkChangesNothi
   BufferGuard first;
   save(wb(), first);
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(first.data, first.len, &loaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(first.data, first.len, nullptr, &loaded.handle), 0);
 
   fm_hyperlink_t got = FM_STRUCT_INIT(fm_hyperlink_t);
   ASSERT_EQ(fm_sheet_get_hyperlink_at(loaded.handle, 0, 0, &got), 0);
@@ -420,7 +420,7 @@ TEST_F(HyperlinkStyle, RemoveAtThenInsertAtOfALoadedUnnormalisedLinkChangesNothi
   BufferGuard second;
   save(loaded.handle, second);
   WorkbookGuard reloaded;
-  ASSERT_EQ(fm_workbook_load(second.data, second.len, &reloaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(second.data, second.len, nullptr, &reloaded.handle), 0);
   fm_hyperlink_t final_link = FM_STRUCT_INIT(fm_hyperlink_t);
   ASSERT_EQ(fm_sheet_get_hyperlink_at(reloaded.handle, 0, 0, &final_link), 0);
   EXPECT_STREQ(final_link.target, target.c_str());

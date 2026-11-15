@@ -206,7 +206,7 @@ TEST(OoxmlPrintAuthoring, EmptyWorkbookToFullyConfiguredReport) {
 
   // --- Reloading it -------------------------------------------------
   WorkbookGuard reloaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0);
 
   fm_page_setup_t read_setup = FM_STRUCT_INIT(fm_page_setup_t);
   ASSERT_EQ(fm_sheet_get_page_setup(reloaded.handle, 0, &read_setup), 0);
@@ -336,7 +336,7 @@ std::vector<std::uint8_t> BuildTemplatePackage() {
 TEST(OoxmlPrintAuthoring, TypedPatchOnATemplateKeepsEverythingItDoesNotState) {
   const std::vector<std::uint8_t> source = BuildTemplatePackage();
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_load(source.data(), source.size(), &wb.handle), 0);
+  ASSERT_EQ(fm_workbook_load(source.data(), source.size(), nullptr, &wb.handle), 0);
 
   // Change exactly one attribute.
   fm_page_setup_patch_t patch = FM_STRUCT_INIT(fm_page_setup_patch_t);
@@ -388,7 +388,7 @@ TEST(OoxmlPrintAuthoring, TypedPatchOnATemplateKeepsEverythingItDoesNotState) {
 TEST(OoxmlPrintAuthoring, FitToPageOnATemplateKeepsTabColorAndCodeName) {
   const std::vector<std::uint8_t> source = BuildTemplatePackage();
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_load(source.data(), source.size(), &wb.handle), 0);
+  ASSERT_EQ(fm_workbook_load(source.data(), source.size(), nullptr, &wb.handle), 0);
   fm_page_setup_patch_t fit = FM_STRUCT_INIT(fm_page_setup_patch_t);
   fit.fit_to_page_op = FM_PATCH_OP_SET;
   fit.fit_to_page = 1;

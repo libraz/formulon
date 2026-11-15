@@ -356,7 +356,7 @@ TEST(FormulonCApiFormulaEntry, LoadedDefinedNameOpeningWithLocaleR1C1TokenIsKept
   std::size_t len = 0;
   ASSERT_EQ(fm_workbook_save(source.handle, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0) << fm_get_last_error_message();
   WorkbookGuard loaded;
-  const fm_status_t rc = fm_workbook_load(bytes, len, &loaded.handle);
+  const fm_status_t rc = fm_workbook_load(bytes, len, nullptr, &loaded.handle);
   fm_buffer_destroy(bytes);
   ASSERT_EQ(rc, 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_workbook_set_profile_id(loaded.handle, "win-365-de_DE"), 0) << fm_get_last_error_message();
@@ -436,7 +436,7 @@ TEST(FormulonCApiFormulaEntry, LoadedFormulaReferencingTableNamedLikeLocaleR1C1T
   std::size_t len = 0;
   ASSERT_EQ(fm_workbook_save(source.handle, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0) << fm_get_last_error_message();
   WorkbookGuard loaded;
-  const fm_status_t rc = fm_workbook_load(bytes, len, &loaded.handle);
+  const fm_status_t rc = fm_workbook_load(bytes, len, nullptr, &loaded.handle);
   fm_buffer_destroy(bytes);
   ASSERT_EQ(rc, 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_workbook_recalc(loaded.handle), 0);
@@ -643,7 +643,7 @@ TEST(FormulonCApiFormulaEntry, LoadedUnparseableFormulaIsKeptVerbatim) {
   std::size_t len = 0;
   ASSERT_EQ(fm_workbook_save(source.handle, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0) << fm_get_last_error_message();
   WorkbookGuard loaded;
-  const fm_status_t rc = fm_workbook_load(bytes, len, &loaded.handle);
+  const fm_status_t rc = fm_workbook_load(bytes, len, nullptr, &loaded.handle);
   fm_buffer_destroy(bytes);
   ASSERT_EQ(rc, 0) << fm_get_last_error_message();
 
@@ -670,7 +670,7 @@ TEST(FormulonCApiFormulaEntry, LoadedWrongArityFormulaKeepsEvaluatingButIsRefuse
   std::size_t len = 0;
   ASSERT_EQ(fm_workbook_save(source.handle, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0) << fm_get_last_error_message();
   WorkbookGuard loaded;
-  const fm_status_t rc = fm_workbook_load(bytes, len, &loaded.handle);
+  const fm_status_t rc = fm_workbook_load(bytes, len, nullptr, &loaded.handle);
   fm_buffer_destroy(bytes);
   ASSERT_EQ(rc, 0) << fm_get_last_error_message();
 
@@ -698,7 +698,7 @@ TEST(FormulonCApiFormulaEntry, NewerErrorLiteralsAreRefusedOnEntryButLoadAndStor
   std::size_t len = 0;
   ASSERT_EQ(fm_workbook_save(source.handle, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0) << fm_get_last_error_message();
   WorkbookGuard loaded;
-  const fm_status_t rc = fm_workbook_load(bytes, len, &loaded.handle);
+  const fm_status_t rc = fm_workbook_load(bytes, len, nullptr, &loaded.handle);
   fm_buffer_destroy(bytes);
   ASSERT_EQ(rc, 0) << fm_get_last_error_message();
 

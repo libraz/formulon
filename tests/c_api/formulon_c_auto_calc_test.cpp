@@ -229,7 +229,7 @@ TEST(FormulonCApiAutoCalc, SaveFollowsCalcOnSaveInManualMode) {
 
     // The file carries the value the save computed, or the blank cache.
     WorkbookGuard loaded;
-    ASSERT_EQ(fm_workbook_load(bytes, len, &loaded.handle), 0);
+    ASSERT_EQ(fm_workbook_load(bytes, len, nullptr, &loaded.handle), 0);
     fm_buffer_destroy(bytes);
     ASSERT_EQ(fm_workbook_set_calc_mode(loaded.handle, FM_CALC_MODE_MANUAL), 0);
     const fm_value_t v = ValueAt(loaded.handle, 1, 0);
@@ -269,13 +269,13 @@ TEST(FormulonCApiAutoCalc, LoadedWorkbookKeepsItsCacheInManualMode) {
   ASSERT_EQ(fm_workbook_save(source.handle, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0);
 
   WorkbookGuard automatic;
-  ASSERT_EQ(fm_workbook_load(bytes, len, &automatic.handle), 0);
+  ASSERT_EQ(fm_workbook_load(bytes, len, nullptr, &automatic.handle), 0);
   ASSERT_EQ(fm_sheet_set_number(automatic.handle, 0, 0, 0, 5.0), 0);
   EXPECT_EQ(ValueAt(automatic.handle, 1, 0).u.number, 50.0);
 
   // Manual right after load reads the file's cached values, edits or not.
   WorkbookGuard manual;
-  ASSERT_EQ(fm_workbook_load(bytes, len, &manual.handle), 0);
+  ASSERT_EQ(fm_workbook_load(bytes, len, nullptr, &manual.handle), 0);
   fm_buffer_destroy(bytes);
   ASSERT_EQ(fm_workbook_set_calc_mode(manual.handle, FM_CALC_MODE_MANUAL), 0);
   ASSERT_EQ(fm_sheet_set_number(manual.handle, 0, 0, 0, 5.0), 0);

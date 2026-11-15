@@ -6,6 +6,8 @@
 // dependents; a full recalc clears them all.
 
 #include <cstdint>
+#include <cstring>
+#include <string>
 
 #include "c_api/formulon_c.h"
 #include "gtest/gtest.h"
@@ -44,6 +46,21 @@ void ManualChain(WorkbookGuard& wb) {
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0U, 2U, "=B1"), FM_STATUS_OK);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0U, 3U, "=1+1"), FM_STATUS_OK);
   ASSERT_EQ(fm_workbook_recalc(wb.handle), FM_STATUS_OK);
+}
+
+// The bytes of the ManualChain workbook after an edit of A1: B1 and C1 stale, D1 clean.
+void SaveStaleChain(BufferGuard& saved) {
+  WorkbookGuard wb;
+  ManualChain(wb);
+  ASSERT_EQ(fm_workbook_set_calc_on_save(wb.handle, 0), FM_STATUS_OK);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0U, 0U, 2.0), FM_STATUS_OK);
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), FM_STATUS_OK);
+}
+
+std::string ProfileOf(const fm_workbook_t* wb) {
+  const char* id = nullptr;
+  EXPECT_EQ(fm_workbook_get_profile_id(wb, &id), FM_STATUS_OK);
+  return id != nullptr ? id : "";
 }
 
 }  // namespace
@@ -91,7 +108,7 @@ TEST(FormulonCApiCellStale, ALoadedManualBookReportsTheFormulasItsFileMarks) {
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), FM_STATUS_OK);
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), FM_STATUS_OK);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &loaded.handle), FM_STATUS_OK);
   EXPECT_TRUE(Stale(loaded.handle, 0U, 1U));
   EXPECT_TRUE(Stale(loaded.handle, 0U, 2U));
   EXPECT_FALSE(Stale(loaded.handle, 0U, 3U));
@@ -107,7 +124,7 @@ TEST(FormulonCApiCellStale, ALoadedCalculatedManualBookIsNotStale) {
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), FM_STATUS_OK);
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), FM_STATUS_OK);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &loaded.handle), FM_STATUS_OK);
   EXPECT_FALSE(Stale(loaded.handle, 0U, 1U));
   EXPECT_FALSE(Stale(loaded.handle, 0U, 3U));
 }
@@ -169,4 +186,77 @@ TEST(FormulonCApiCellStale, BoundaryArguments) {
   EXPECT_EQ(fm_sheet_is_cell_stale(wb.handle, 0, 0U, 16384U, &stale), FM_STATUS_INVALID_ARGUMENT);
   ASSERT_EQ(fm_sheet_is_cell_stale(wb.handle, 0, 7U, 7U, &stale), FM_STATUS_OK);
   EXPECT_EQ(stale, 0);  // an empty cell
+}
+
+// A profile given at load is assigned without dirtying anything: the stale set is the one the default load has.
+TEST(FormulonCApiCellStale, ALoadProfileKeepsTheStaleSetAndIsAssigned) {
+  BufferGuard saved;
+  SaveStaleChain(saved);
+  WorkbookGuard plain;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &plain.handle), FM_STATUS_OK);
+  EXPECT_EQ(ProfileOf(plain.handle), "win-365-en_US");
+
+  fm_load_options_spec_t spec = FM_STRUCT_INIT(fm_load_options_spec_t);
+  spec.profile_id = "mac-365-ja_JP";
+  WorkbookGuard profiled;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &spec, &profiled.handle), FM_STATUS_OK);
+  EXPECT_EQ(ProfileOf(profiled.handle), "mac-365-ja_JP");
+  for (const std::uint32_t col : {0U, 1U, 2U, 3U}) {
+    EXPECT_EQ(Stale(profiled.handle, 0U, col), Stale(plain.handle, 0U, col)) << col;
+  }
+  EXPECT_TRUE(Stale(profiled.handle, 0U, 1U));
+  EXPECT_TRUE(Stale(profiled.handle, 0U, 2U));
+  EXPECT_FALSE(Stale(profiled.handle, 0U, 3U));
+}
+
+// A NULL profile_id keeps the profile the load assigns, as a NULL spec does.
+TEST(FormulonCApiCellStale, ALoadWithoutAProfileKeepsTheLoadDefault) {
+  BufferGuard saved;
+  SaveStaleChain(saved);
+  fm_load_options_spec_t spec = FM_STRUCT_INIT(fm_load_options_spec_t);
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &spec, &wb.handle), FM_STATUS_OK);
+  EXPECT_EQ(ProfileOf(wb.handle), "win-365-en_US");
+}
+
+// A set profile after the load still dirties every formula.
+TEST(FormulonCApiCellStale, AProfileSetAfterALoadStillDirtiesEveryFormula) {
+  BufferGuard saved;
+  SaveStaleChain(saved);
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &wb.handle), FM_STATUS_OK);
+  EXPECT_FALSE(Stale(wb.handle, 0U, 3U));
+  ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "mac-365-ja_JP"), FM_STATUS_OK);
+  EXPECT_TRUE(Stale(wb.handle, 0U, 1U));
+  EXPECT_TRUE(Stale(wb.handle, 0U, 2U));
+  EXPECT_TRUE(Stale(wb.handle, 0U, 3U));
+}
+
+// The load options are validated: size, then the profile id; a refused load leaves `*out` NULL.
+TEST(FormulonCApiCellStale, LoadOptionsAreValidated) {
+  BufferGuard saved;
+  SaveStaleChain(saved);
+  fm_workbook_t* out = nullptr;
+
+  fm_load_options_spec_t unknown = FM_STRUCT_INIT(fm_load_options_spec_t);
+  unknown.profile_id = "not-a-profile";
+  EXPECT_EQ(fm_workbook_load(saved.data, saved.len, &unknown, &out), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(out, nullptr);
+  EXPECT_NE(std::strlen(fm_get_last_error_message()), 0U);
+
+  fm_load_options_spec_t empty = FM_STRUCT_INIT(fm_load_options_spec_t);
+  empty.profile_id = "";
+  EXPECT_EQ(fm_workbook_load(saved.data, saved.len, &empty, &out), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(out, nullptr);
+
+  fm_load_options_spec_t small = FM_STRUCT_INIT(fm_load_options_spec_t);
+  small.struct_size = 4U;
+  small.profile_id = "mac-365-ja_JP";
+  EXPECT_EQ(fm_workbook_load(saved.data, saved.len, &small, &out), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(out, nullptr);
+
+  fm_load_options_spec_t valid = FM_STRUCT_INIT(fm_load_options_spec_t);
+  EXPECT_EQ(fm_workbook_load(saved.data, saved.len, &valid, nullptr), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_workbook_load(nullptr, saved.len, &valid, &out), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_workbook_load(saved.data, 0, &valid, &out), FM_STATUS_INVALID_ARGUMENT);
 }

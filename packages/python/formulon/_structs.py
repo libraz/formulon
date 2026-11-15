@@ -114,6 +114,7 @@ RECORD_NAMES = frozenset(
         "fm_image_info_t",
         "fm_iterative_settings_info_t",
         "fm_iterative_settings_patch_t",
+        "fm_load_options_spec_t",
         "fm_locale_facts_info_t",
         "fm_margins_pt_info_t",
         "fm_number_format_info_t",
@@ -1069,6 +1070,8 @@ REFERENCE_NOTATION_SPEC = Struct(
     "fm_reference_notation_spec_t",
     [("r1c1", I32), ("has_base", I32), ("base_row", U32), ("base_col", U32)],
 )
+
+LOAD_OPTIONS_SPEC = Struct("fm_load_options_spec_t", [("profile_id", PTR)])
 
 REFERENCE = Struct(
     "fm_parsed_reference_info_t",

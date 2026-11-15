@@ -85,7 +85,7 @@ void ExpectOpaqueAutoFilterRefUpdate(std::string raw_xml, std::string expected_x
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &loaded.handle), 0);
   const auto& reloaded = loaded.handle->wb->tables()[index];
   EXPECT_EQ(reloaded.ref, "A1:B4");
   EXPECT_TRUE(reloaded.auto_filter_xml.get()->is_opaque());
@@ -150,7 +150,7 @@ TEST(FormulonCApi, TableCreateUpdateRemoveRoundTripsThroughOoxml) {
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &loaded.handle), 0);
   ASSERT_EQ(fm_sheet_get_table_at(loaded.handle, 0, 0, &info), 0);
   EXPECT_EQ(info.range.last_row, 3U);
   EXPECT_EQ(info.totals_row_count, 1U);
@@ -289,7 +289,7 @@ TEST(FormulonCApi, TableWithUniqueNamesRoundTrips) {
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &loaded.handle), 0);
   ASSERT_EQ(loaded.handle->wb->tables().size(), 1U);
   const auto& columns = loaded.handle->wb->tables()[0].columns;
   ASSERT_EQ(columns.size(), 3U);
@@ -356,7 +356,7 @@ TEST(FormulonCApi, TableUpdatePreservesRawMetadataAcrossSaveLoad) {
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &loaded.handle), 0);
   const auto& reloaded = loaded.handle->wb->tables()[0];
   EXPECT_EQ(reloaded.ref, "A1:B4");
   EXPECT_TRUE(reloaded.header_row);

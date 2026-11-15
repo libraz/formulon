@@ -58,8 +58,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   picture as a value (listed in `tests/divergence.yaml`). `.xlsx` and `.xlsb`
   keep them.
 
+- `Workbook.load(bytes, { profileId })` (Python `Workbook.load(source, *,
+  profile_id=...)`, C `fm_workbook_load` with an `fm_load_options_spec_t`
+  whose `profile_id` is set) loads a workbook under the given profile without
+  making any formula stale, so a manual-calculation workbook keeps exactly the
+  stale formulas and cached values it has under the default profile, where
+  `setProfileId` after the load makes every formula stale. Omitting it keeps
+  the profile the load assigns; an unknown or empty id is `InvalidArgument`.
+  Sheet names are checked under the default host while the file is read.
+
 ### Changed
 
+- `fm_workbook_load` takes a `const fm_load_options_spec_t*` before its
+  out-parameter; pass NULL for the defaults.
+- The CLI applies `--profile` when it loads a workbook, so `recalc --profile`
+  on a manual-calculation workbook computes what the file left stale and
+  nothing else, as without `--profile`, instead of every formula.
 - `fm_sheet_update_format_defaults` (`Sheet.updateFormatDefaults`, Python `update_format_defaults`) refuses a default column width above 255, a default row height above 409.6 and a base column width that is fractional or above 255 with `FM_STATUS_INVALID_ARGUMENT`. Excel refuses to open a workbook holding a larger width or base.
 - Reading `.xlsx`: a default row height is truncated to whole twips and capped at 409.6 points, a custom default height of 0 hides rows by default, and a fractional base column width reads as its whole part, as Excel opens them. Of two sheet views naming one workbook window the later is kept, a `view` other than `pageBreakPreview` or `pageLayout` reads as normal, and `<pivotSelection>` is no longer read or written; Excel keeps it in neither format.
 - Reading `.xlsb`: a default row height above 409.5 points reads as 409.5, as Excel opens it; a sheet view with an unknown view mode reads as normal, and a sheet view of a window the workbook does not have, or a default-format record with a width, base or outline level Excel does not open, is left out and counted in `skippedFeatureCount`.

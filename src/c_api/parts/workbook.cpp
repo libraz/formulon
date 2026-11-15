@@ -26,6 +26,7 @@
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
 #include "io/package_diagnostics.h"
+#include "io/read_options.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/writer.h"
 #include "sheet.h"
@@ -229,7 +230,8 @@ extern "C" fm_status_t fm_workbook_create_empty(fm_workbook_t** out) {
   return create_handle(out, &formulon::Workbook::create_empty);
 }
 
-extern "C" fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, fm_workbook_t** out) {
+extern "C" fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, const fm_load_options_spec_t* spec,
+                                        fm_workbook_t** out) {
   clear_last_error();
   if (out == nullptr) {
     return null_argument("out");
@@ -240,6 +242,19 @@ extern "C" fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, fm_wor
   }
   if (len == 0) {
     return invalid_argument("bytes must not be empty", "len=0");
+  }
+  formulon::io::ReadOptions options;
+  if (spec != nullptr) {
+    if (auto rc = check_record_size(*spec); rc != 0) {
+      return rc;
+    }
+    if (spec->profile_id != nullptr) {
+      formulon::ExcelProfile profile;
+      if (auto rc = check_profile_id(spec->profile_id, &profile); rc != 0) {
+        return rc;
+      }
+      options.profile = profile;
+    }
   }
   formulon::io::ByteSpan span;
   span.data = bytes;
@@ -252,7 +267,7 @@ extern "C" fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, fm_wor
   // encryption / corruption diagnostics.
   auto handle = std::unique_ptr<fm_workbook_t>(new fm_workbook_t{});
   if (formulon::io::detect_workbook_format(span) == formulon::WorkbookFormat::Xlsb) {
-    auto result = formulon::io::xlsb::read_xlsb(span);
+    auto result = formulon::io::xlsb::read_xlsb(span, options);
     if (!result) {
       return set_last_error(result.error());
     }
@@ -263,7 +278,7 @@ extern "C" fm_status_t fm_workbook_load(const uint8_t* bytes, size_t len, fm_wor
     handle->read_diagnostics.skipped_feature_count = read_result.skipped_feature_count;
     handle->wb.emplace(std::move(read_result.workbook));
   } else {
-    auto result = formulon::io::read_ooxml(span);
+    auto result = formulon::io::read_ooxml(span, options);
     if (!result) {
       return set_last_error(result.error());
     }

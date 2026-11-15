@@ -150,7 +150,7 @@ const fm_pivot_cell_info_t* FindCell(const std::vector<fm_pivot_cell_info_t>& ce
 TEST(FormulonCApiPivot, CountAndLayoutLoadedPivot) {
   const std::vector<std::uint8_t> bytes = BuildPivotWorkbookBytes();
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &wb.handle), 0) << fm_get_last_error_message();
   ASSERT_NE(wb.handle, nullptr);
   ASSERT_EQ(fm_workbook_set_profile_id(wb.handle, "win-365-ja_JP"), 0);
 
@@ -237,7 +237,7 @@ TEST(FormulonCApiPivot, AddingAFieldAfterLoadReprojectsTheLocationRef) {
   // loading rather than by building.
   WorkbookGuard wb;
   const std::vector<std::uint8_t> package = BuildPivotWorkbookBytes();
-  ASSERT_EQ(fm_workbook_load(package.data(), package.size(), &wb.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(package.data(), package.size(), nullptr, &wb.handle), 0) << fm_get_last_error_message();
 
   // Region is pivot field 0, the cache field it mirrors.
   const std::size_t added = 0;
@@ -269,7 +269,7 @@ TEST(FormulonCApiPivot, AddingAFieldAfterLoadReprojectsTheLocationRef) {
 TEST(FormulonCApiPivot, ReadBackDefinitionOfLoadedPivot) {
   const std::vector<std::uint8_t> bytes = BuildPivotWorkbookBytes();
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &wb.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &wb.handle), 0) << fm_get_last_error_message();
 
   std::uint32_t cache_id = 99;
   ASSERT_EQ(fm_sheet_get_pivot_cache_id(wb.handle, 1, 0, &cache_id), 0) << fm_get_last_error_message();

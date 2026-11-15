@@ -1941,6 +1941,7 @@ import {
   type CfRangeEvaluationOptions,
   type DisplayText,
   type FormatReferenceOptions,
+  type LoadOptions,
   type LogLevel,
   type LogEvent,
   type PageOptions,
@@ -2079,6 +2080,12 @@ export function inputsAndOptions(): void {
 
   const cfOptions: CfRangeEvaluationOptions = { timePeriodRules: false };
   sheet.evaluateCfRange('A1', cfOptions);
+
+  const loadOptions: LoadOptions = { profileId: 'mac-365-ja_JP' };
+  formulon.Workbook.load(new Uint8Array(0), loadOptions);
+  formulon.Workbook.load(new Uint8Array(0));
+  // @ts-expect-error profileId is a ProfileId
+  formulon.Workbook.load(new Uint8Array(0), { profileId: 'not-a-profile' });
 
   const formatOptions: FormatReferenceOptions = { sheetName: 'Data', absolute: true };
   wb.formatReference('A1:B2', formatOptions);

@@ -645,7 +645,7 @@ Expected<void, Error> ConsumePersons(const ZipReader& zip, Workbook& wb,
 
 }  // namespace
 
-Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
+Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& options) {
   ZipReader zip;
   if (auto open_result = zip.open(bytes); !open_result) {
     return std::move(open_result.error());
@@ -1124,6 +1124,9 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes) {
   clamp_sheet_phonetic_fonts(wb);
   wb.request_pivot_refresh_on_load();
   // Last, once nothing else dirties formulas: the stale set Excel opens with follows fAlwaysCalc.
+  if (options.profile.has_value()) {
+    wb.assign_loaded_profile(*options.profile);
+  }
   wb.apply_loaded_recalc_marks(recalc_marked);
 
   XlsbReadResult result{std::move(wb),

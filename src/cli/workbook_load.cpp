@@ -3,6 +3,8 @@
 #include <cerrno>
 #include <cstdint>
 #include <cstring>
+#include <string>
+#include <string_view>
 #include <vector>
 
 #include "cli/diagnostics.h"
@@ -24,13 +26,16 @@ fm_status_t load_workbook_file(const std::string& path, const SharedOptions& sha
     }
     return rc;
   }
-  if (auto rc = fm_workbook_load(bytes.data(), bytes.size(), &wb.handle); rc != 0) {
+  const std::string profile_id(shared.profile_id.value_or(std::string_view()));
+  fm_load_options_spec_t spec = FM_STRUCT_INIT(fm_load_options_spec_t);
+  spec.profile_id = shared.profile_id.has_value() ? profile_id.c_str() : nullptr;
+  if (auto rc = fm_workbook_load(bytes.data(), bytes.size(), &spec, &wb.handle); rc != 0) {
     return fail_with_last_error(err, subcommand, rc);
   }
   if (!from_stdin) {
     set_location_from_path(wb.handle, path);
   }
-  if (auto rc = apply_shared_options(wb.handle, shared); rc != 0) {
+  if (auto rc = apply_shared_clock(wb.handle, shared); rc != 0) {
     return fail_with_last_error(err, subcommand, rc);
   }
   // Load losses are reported before any output is produced from the workbook.

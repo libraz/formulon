@@ -194,7 +194,7 @@ std::vector<SavedLink> SaveAndReadLinks(fm_workbook_t* wb, std::int32_t format) 
   BufferGuard saved;
   EXPECT_EQ(fm_workbook_save(wb, format, &saved.data, &saved.len), 0) << fm_get_last_error_message();
   WorkbookGuard reloaded;
-  EXPECT_EQ(fm_workbook_load(saved.data, saved.len, &reloaded.handle), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0) << fm_get_last_error_message();
   std::vector<SavedLink> out;
   std::size_t count = 0;
   EXPECT_EQ(fm_sheet_get_hyperlink_count(reloaded.handle, 0, &count), 0);

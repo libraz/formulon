@@ -184,7 +184,7 @@ TEST(FormulonCApiDataTable, SurvivesSaveAndLoad) {
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
 
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0);
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &loaded.handle), 0);
   int32_t present = 0;
   fm_data_table_t info = FM_STRUCT_INIT(fm_data_table_t);
   ASSERT_EQ(fm_sheet_get_data_table(loaded.handle, 0, 3, 1, &present, &info), 0);

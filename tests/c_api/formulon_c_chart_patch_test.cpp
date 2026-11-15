@@ -110,7 +110,8 @@ void SaveAndReload(const WorkbookGuard& source, WorkbookGuard* out) {
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(source.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), FM_STATUS_OK)
       << fm_get_last_error_message();
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &out->handle), FM_STATUS_OK) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &out->handle), FM_STATUS_OK)
+      << fm_get_last_error_message();
 }
 
 fm_chart_data_source_spec_t Ref(const char* formula) {

@@ -147,7 +147,7 @@ void LoadFixture(const std::string& name, WorkbookGuard* out) {
   std::ifstream in(dir + "/../fixtures/excel/" + name, std::ios::binary);
   ASSERT_TRUE(in.good()) << name;
   const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), &out->handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &out->handle), 0) << fm_get_last_error_message();
   // The files were saved by a ja-JP Excel; the profile is not stored in them.
   ASSERT_EQ(fm_workbook_set_profile_id(out->handle, "win-365-ja_JP"), 0);
 }
@@ -329,7 +329,7 @@ TEST(FormulonCApiPivotCalc, CalculatedFieldSavesExcelStrings) {
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   WorkbookGuard loaded;
-  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &loaded.handle), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &loaded.handle), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_workbook_set_profile_id(loaded.handle, "win-365-ja_JP"), 0);
   ExpectNumber(loaded.handle, kGrandTotal, SumOf("Price"), 31.5);
 }
