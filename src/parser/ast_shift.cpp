@@ -91,14 +91,13 @@ const AstNode* TransformNode(const AstNode& node, Arena& arena, const RefTransfo
 // original node and each later transformed child is appended exactly once.
 // This keeps identity walks allocation-free without losing preceding siblings
 // when a change appears in the middle of a variadic node.
-template <typename ChildAt>
-bool TransformChildList(std::uint32_t count, Arena& arena, const RefTransform& transform, ChildAt child_at,
-                        std::vector<const AstNode*>* out, bool* changed) {
+bool TransformChildList(const AstNode& node, std::uint32_t first, std::uint32_t count, Arena& arena,
+                        const RefTransform& transform, std::vector<const AstNode*>* out, bool* changed) {
   if (*changed) {
     out->reserve(count);
   }
   for (std::uint32_t i = 0; i < count; ++i) {
-    const AstNode& child = child_at(i);
+    const AstNode& child = detail::ast_child_at(node, first + i);
     const AstNode* updated = TransformNode(child, arena, transform);
     if (updated == nullptr) {
       return false;
@@ -110,7 +109,7 @@ bool TransformChildList(std::uint32_t count, Arena& arena, const RefTransform& t
       *changed = true;
       out->reserve(count);
       for (std::uint32_t prefix = 0; prefix < i; ++prefix) {
-        out->push_back(&child_at(prefix));
+        out->push_back(&detail::ast_child_at(node, first + prefix));
       }
     }
     out->push_back(updated);
@@ -287,9 +286,7 @@ const AstNode* TransformBinary(const AstNode& node, Arena& arena, const RefTrans
   const std::uint32_t n = node.as_binary_arity();
   std::vector<const AstNode*> operands;
   bool changed = false;
-  if (!TransformChildList(
-          n, arena, transform, [&](std::uint32_t i) -> const AstNode& { return node.as_binary_operand(i); }, &operands,
-          &changed)) {
+  if (!TransformChildList(node, 0, n, arena, transform, &operands, &changed)) {
     return nullptr;
   }
   if (!changed) {
@@ -484,9 +481,7 @@ const AstNode* TransformUnion(const AstNode& node, Arena& arena, const RefTransf
   const std::uint32_t n = node.as_union_arity();
   std::vector<const AstNode*> kids;
   bool changed = false;
-  if (!TransformChildList(
-          n, arena, transform, [&](std::uint32_t i) -> const AstNode& { return node.as_union_child(i); }, &kids,
-          &changed)) {
+  if (!TransformChildList(node, 0, n, arena, transform, &kids, &changed)) {
     return nullptr;
   }
   if (!changed) {
@@ -499,9 +494,7 @@ const AstNode* TransformCall(const AstNode& node, Arena& arena, const RefTransfo
   const std::uint32_t n = node.as_call_arity();
   std::vector<const AstNode*> args;
   bool changed = false;
-  if (!TransformChildList(
-          n, arena, transform, [&](std::uint32_t i) -> const AstNode& { return node.as_call_arg(i); }, &args,
-          &changed)) {
+  if (!TransformChildList(node, 0, n, arena, transform, &args, &changed)) {
     return nullptr;
   }
   if (!changed) {
@@ -516,10 +509,7 @@ const AstNode* TransformArrayLiteral(const AstNode& node, Arena& arena, const Re
   const std::uint32_t total = rows * cols;
   std::vector<const AstNode*> elems;
   bool changed = false;
-  if (!TransformChildList(
-          total, arena, transform,
-          [&](std::uint32_t i) -> const AstNode& { return node.as_array_element(i / cols, i % cols); }, &elems,
-          &changed)) {
+  if (!TransformChildList(node, 0, total, arena, transform, &elems, &changed)) {
     return nullptr;
   }
   if (!changed) {
@@ -552,9 +542,7 @@ const AstNode* TransformLet(const AstNode& node, Arena& arena, const RefTransfor
   const std::uint32_t n = node.as_let_binding_count();
   std::vector<const AstNode*> exprs;
   bool changed = false;
-  if (!TransformChildList(
-          n, arena, transform, [&](std::uint32_t i) -> const AstNode& { return node.as_let_binding_expr(i); }, &exprs,
-          &changed)) {
+  if (!TransformChildList(node, 0, n, arena, transform, &exprs, &changed)) {
     return nullptr;
   }
   const AstNode* body = TransformNode(node.as_let_body(), arena, transform);
@@ -591,9 +579,7 @@ const AstNode* TransformLambdaCall(const AstNode& node, Arena& arena, const RefT
   const std::uint32_t n = node.as_lambda_call_arity();
   std::vector<const AstNode*> args;
   bool changed = (callee != &node.as_lambda_call_callee());
-  if (!TransformChildList(
-          n, arena, transform, [&](std::uint32_t i) -> const AstNode& { return node.as_lambda_call_arg(i); }, &args,
-          &changed)) {
+  if (!TransformChildList(node, 1, n, arena, transform, &args, &changed)) {
     return nullptr;
   }
   if (!changed) {

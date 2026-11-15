@@ -598,7 +598,7 @@ Expected<MappedFormulaText, parser::ParseFailure> rewrite_r1c1_text(std::string_
 
 void respell_unbound_cell_names(const AstNode& root, std::string& text) {
   const std::string_view body = strip_formula_prefix(text);
-  const std::size_t body_at = text.size() - body.size();
+  const std::size_t body_at = formula_prefix_len(text);
   struct Sites {
     std::string_view body;
     std::vector<std::size_t> at;

@@ -33,6 +33,7 @@ namespace {
 
 using detail::AppendBindingName;
 using detail::AppendCellShapedCallName;
+using detail::AppendLambdaParams;
 using detail::AppendNameRef;
 using detail::AppendParamName;
 using detail::CollectParens;
@@ -484,26 +485,8 @@ void FormatArrayLiteral(const AstNode& node, std::string& out, const Layout& lay
 
 void FormatLambda(const AstNode& node, std::string& out, const Layout& layout) {
   out.append("LAMBDA(");
-  const std::uint32_t n = node.as_lambda_param_count();
-  const std::uint32_t opt = node.as_lambda_optional_count();
-  const std::uint32_t first_optional = n - opt;
   const std::size_t base = layout.scope->size();
-  for (std::uint32_t i = 0; i < n; ++i) {
-    if (i > 0) {
-      out.push_back(',');
-    }
-    if (i >= first_optional) {
-      out.push_back('[');
-      AppendBindingName(node.as_lambda_param(i), /*storage=*/false, out);
-      out.push_back(']');
-    } else {
-      AppendBindingName(node.as_lambda_param(i), /*storage=*/false, out);
-    }
-    layout.scope->push_back(cell_shaped_name_bare(node.as_lambda_param(i)));
-  }
-  if (n > 0) {
-    out.push_back(',');
-  }
+  AppendLambdaParams(node, /*storage=*/false, *layout.scope, out);
   FormatNode(node.as_lambda_body(), out, layout);
   out.push_back(')');
   layout.scope->resize(base);
@@ -803,27 +786,8 @@ struct StorageEmitter {
   void emit_lambda(const AstNode& node, std::string& out) {
     append_function_name(out, "LAMBDA");
     out.push_back('(');
-    const std::uint32_t n = node.as_lambda_param_count();
-    const std::uint32_t opt = node.as_lambda_optional_count();
-    const std::uint32_t first_optional = n - opt;
     const std::size_t base = scope.size();
-    for (std::uint32_t i = 0; i < n; ++i) {
-      if (i > 0) {
-        out.push_back(',');
-      }
-      const std::string_view param = node.as_lambda_param(i);
-      if (i >= first_optional) {
-        out.push_back('[');
-        AppendBindingName(param, /*storage=*/true, out);
-        out.push_back(']');
-      } else {
-        AppendBindingName(param, /*storage=*/true, out);
-      }
-      scope.push_back(cell_shaped_name_bare(param));
-    }
-    if (n > 0) {
-      out.push_back(',');
-    }
+    AppendLambdaParams(node, /*storage=*/true, scope, out);
     emit(node.as_lambda_body(), out);
     out.push_back(')');
     scope.resize(base);

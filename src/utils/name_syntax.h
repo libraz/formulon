@@ -13,9 +13,14 @@
 #ifndef FORMULON_UTILS_NAME_SYNTAX_H_
 #define FORMULON_UTILS_NAME_SYNTAX_H_
 
+#include <cstdint>
 #include <string_view>
 
 namespace formulon {
+
+/// Longest defined or table name, in UTF-16 units.
+// @limit: excel
+inline constexpr std::uint32_t kMaxDefinedNameUnits = 255U;
 
 /// True when `name` is a valid table display name.
 bool is_valid_table_name(std::string_view name);

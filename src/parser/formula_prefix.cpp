@@ -145,7 +145,7 @@ class OperatorRespeller {
 
 std::string spell_storage_operators(std::string_view formula) {
   const std::string_view body = strip_formula_prefix(formula);
-  const std::size_t body_at = formula.size() - body.size();
+  const std::size_t body_at = formula_prefix_len(formula);
   if (!strings::case_insensitive_contains(body, "SINGLE(") &&
       !strings::case_insensitive_contains(body, "ANCHORARRAY(") && !strings::case_insensitive_contains(body, "_TRO_")) {
     return std::string(formula);

@@ -519,6 +519,14 @@ Tokenizer::CodepointInfo Tokenizer::peek_codepoint(std::size_t i) const noexcept
   if (i >= source_.size()) {
     return info;
   }
+  const auto lead = static_cast<unsigned char>(source_[i]);
+  if (lead < 0x80U) {
+    info.codepoint = lead;
+    info.byte_len = 1;
+    info.utf16_units = 1;
+    info.valid = true;
+    return info;
+  }
   const Utf8DecodeResult decoded = decode_first_utf8_codepoint(source_.substr(i));
   if (!decoded.valid) {
     info.byte_len = 1;  // skip one malformed byte
@@ -544,7 +552,7 @@ std::size_t Tokenizer::length_capped_end(std::size_t start) const noexcept {
       return pos;
     }
     const CodepointInfo info = peek_codepoint(pos);
-    pos += info.byte_len == 0 ? 1 : info.byte_len;
+    pos += info.byte_len;
     units += info.utf16_units;
   }
   return source_.size();
@@ -577,7 +585,7 @@ void Tokenizer::advance_one() {
   } else {
     column_ += info.utf16_units;
   }
-  byte_pos_ += info.byte_len == 0 ? 1 : info.byte_len;
+  byte_pos_ += info.byte_len;
   utf16_pos_ += info.utf16_units;
 }
 

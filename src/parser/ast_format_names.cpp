@@ -84,6 +84,29 @@ void AppendBindingName(std::string_view raw, bool storage, std::string& out) {
   out.append(raw);
 }
 
+void AppendLambdaParams(const AstNode& node, bool storage, NameScope& scope, std::string& out) {
+  const std::uint32_t n = node.as_lambda_param_count();
+  const std::uint32_t first_optional = n - node.as_lambda_optional_count();
+  for (std::uint32_t i = 0; i < n; ++i) {
+    if (i > 0) {
+      out.push_back(',');
+    }
+    const std::string_view param = node.as_lambda_param(i);
+    const bool optional = i >= first_optional;
+    if (optional) {
+      out.push_back('[');
+    }
+    AppendBindingName(param, storage, out);
+    if (optional) {
+      out.push_back(']');
+    }
+    scope.push_back(cell_shaped_name_bare(param));
+  }
+  if (n > 0) {
+    out.push_back(',');
+  }
+}
+
 namespace {
 
 // Appends the unqualified name `raw` when it is cell-shaped: `_xlpm.` for a

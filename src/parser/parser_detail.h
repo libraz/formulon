@@ -16,7 +16,13 @@
 
 namespace formulon {
 namespace parser {
+class AstNode;
+
 namespace detail {
+
+/// The `index`-th child of `node` in the order the AST walkers visit them
+/// (the same order `ChildCount` in ast.cpp counts); `node` must have one.
+const AstNode& ast_child_at(const AstNode& node, std::uint32_t index);
 
 // Binding-power constants. See parser.cpp header comment for the precedence
 // table.
@@ -63,14 +69,11 @@ inline constexpr std::uint32_t kMaxColumn = a1::kMaxCols;
 // @limit: excel
 inline constexpr std::uint32_t kMaxRow = a1::kMaxRows;
 
-// Longest column-letter run (`XFD`), longest row digit run (`1048576`) and the
-// UTF-16 unit cap on a defined or LET binding name.
+// Longest column-letter run (`XFD`) and longest row digit run (`1048576`).
 // @limit: excel
 inline constexpr std::size_t kMaxColumnLetters = a1::kMaxColumnLetters;
 // @limit: excel
 inline constexpr std::size_t kMaxRowDigits = 7;
-// @limit: excel
-inline constexpr std::size_t kMaxDefinedNameUnits = 255;
 
 // UTF-8 spellings of U+3000 (ideographic space) and U+FEFF (byte-order mark).
 inline constexpr std::string_view kIdeographicSpace = "\xE3\x80\x80";

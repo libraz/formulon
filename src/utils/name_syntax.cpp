@@ -13,9 +13,6 @@
 namespace formulon {
 namespace {
 
-// @limit: excel
-constexpr std::uint32_t kMaxNameUnits = 255U;
-
 /// Full-width ASCII and U+3000 as the ASCII they stand for, upper-cased;
 /// other code points stay as UTF-8.
 std::string FoldName(std::string_view name) {
@@ -87,7 +84,7 @@ bool OpensWithR1C1(std::string_view name, char row, char col) {
 }  // namespace
 
 bool is_valid_table_name(std::string_view name) {
-  if (name.empty() || utf16_units_in(name) > kMaxNameUnits) {
+  if (name.empty() || utf16_units_in(name) > kMaxDefinedNameUnits) {
     return false;
   }
   const std::string folded = FoldName(name);

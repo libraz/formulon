@@ -698,7 +698,7 @@ Expected<std::vector<ReferenceRewrite>, parser::ParseFailure> collect_rewrites(s
     return std::vector<ReferenceRewrite>{};
   }
   const std::string_view body = strip_formula_prefix(formula);
-  const std::size_t body_at = formula.size() - body.size();
+  const std::size_t body_at = formula_prefix_len(formula);
   Arena arena;
   parser::ParseFailure failure;
   const parser::AstNode* root = parse_formula_entry_with_diagnostics(body, arena, &failure);

@@ -49,7 +49,7 @@ Edit NodeSpan(const AstNode& node, std::string_view body) {
 }
 
 std::size_t BodyOffset(std::string_view text) noexcept {
-  return text.size() - strip_formula_prefix(text).size();
+  return formula_prefix_len(text);
 }
 
 // Leaves are visited in source order, so the edits are ascending; applying

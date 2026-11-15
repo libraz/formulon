@@ -14,6 +14,7 @@
 #include "parser/parser_detail.h"
 #include "parser/reference.h"
 #include "parser/token.h"
+#include "utils/name_syntax.h"
 #include "utils/strings.h"
 #include "utils/utf8_length.h"
 #include "value.h"
@@ -34,7 +35,7 @@ namespace {
 // other locale-specific scripts. The shape is still stricter than the
 // tokenizer's Ident rule because it forbids a leading ASCII digit.
 bool IsLetNameShape(std::string_view name) noexcept {
-  if (name.empty() || utf16_units_in(name) > detail::kMaxDefinedNameUnits) {
+  if (name.empty() || utf16_units_in(name) > kMaxDefinedNameUnits) {
     return false;
   }
   const auto first = static_cast<unsigned char>(name[0]);

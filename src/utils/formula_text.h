@@ -8,6 +8,7 @@
 #ifndef FORMULON_UTILS_FORMULA_TEXT_H_
 #define FORMULON_UTILS_FORMULA_TEXT_H_
 
+#include <cstddef>
 #include <string_view>
 
 namespace formulon {
@@ -22,6 +23,11 @@ inline std::string_view strip_formula_prefix(std::string_view s) noexcept {
     s.remove_prefix(1);
   }
   return s;
+}
+
+/// Number of leading bytes `strip_formula_prefix` removes (0 or 1).
+inline std::size_t formula_prefix_len(std::string_view s) noexcept {
+  return s.size() - strip_formula_prefix(s).size();
 }
 
 }  // namespace formulon

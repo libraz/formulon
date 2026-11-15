@@ -26,6 +26,9 @@ using NameScope = std::vector<std::string_view>;
 bool HasParamPrefix(std::string_view name) noexcept;
 void AppendParamName(std::string_view raw, std::string& out);
 void AppendBindingName(std::string_view raw, bool storage, std::string& out);
+// Appends a LAMBDA's parameter list (optional ones bracketed, a trailing comma
+// when non-empty) and pushes each parameter onto `scope`.
+void AppendLambdaParams(const AstNode& node, bool storage, NameScope& scope, std::string& out);
 bool AppendCellShapedCallName(std::string_view raw, const NameScope& scope, std::string& out);
 void AppendNameRef(const AstNode& node, const NameScope& scope, std::string& out);
 

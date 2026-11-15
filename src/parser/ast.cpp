@@ -203,6 +203,14 @@ bool DepthWithinLimit(Stack& stack, const AstNode& root, std::uint32_t max_depth
 
 }  // namespace
 
+namespace detail {
+
+const AstNode& ast_child_at(const AstNode& node, std::uint32_t index) {
+  return ChildAt(node, index);
+}
+
+}  // namespace detail
+
 bool ast_depth_within_limit(const AstNode& root, std::uint32_t max_depth) {
   if (max_depth == 0) {
     return false;
