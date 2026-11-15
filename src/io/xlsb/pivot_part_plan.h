@@ -53,6 +53,9 @@ std::vector<std::uint8_t> book_pivot_cache_ids(const std::vector<std::uint8_t>& 
 /// The relationship target naming package part `to` from the rels of part `from`.
 std::string relative_part_target(std::string_view from, std::string_view to);
 
+/// The id a written cache definition names its records relationship by.
+inline constexpr std::string_view kPivotCacheRecordsRelId = "rId1";
+
 /// A `.rels` part relating its source to `target` by `rId1`.
 std::string single_relationship_part(std::string_view type, std::string_view target);
 

@@ -53,7 +53,9 @@
 #include "io/xlsb/package_loader.h"
 #include "io/xlsb/part_paths.h"
 #include "io/xlsb/pivot_cache_bridge.h"
+#include "io/xlsb/pivot_cache_definition_records.h"
 #include "io/xlsb/pivot_cache_ids.h"
+#include "io/xlsb/pivot_part_plan.h"
 #include "io/xlsb/pivot_table_bridge.h"
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_reader.h"
@@ -462,6 +464,15 @@ void LoadPivotParts(const ZipReader& zip, Workbook& wb, std::vector<UnknownRelat
     const std::optional<std::vector<std::uint8_t>> definition_bytes = ReadPart(zip, definition);
     const std::optional<std::vector<std::uint8_t>> records_bytes = ReadPart(zip, records_path);
     if (!definition_bytes || !records_bytes) {
+      continue;
+    }
+    // A kept definition names its records by the id the writer relates them under.
+    const auto header = decode_pivot_cache_definition(ByteSpan{definition_bytes->data(), definition_bytes->size()});
+    if (header && header.value().records_rel_id != kPivotCacheRecordsRelId) {
+      StructuredLog("xlsb.pivot.skipped")
+          .field("part", definition)
+          .field("reason", std::string_view("records relationship id differs from rId1"))
+          .warn();
       continue;
     }
     auto cache = pivot_cache_from_xlsb(ByteSpan{definition_bytes->data(), definition_bytes->size()},

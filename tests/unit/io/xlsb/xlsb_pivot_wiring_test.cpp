@@ -441,6 +441,38 @@ TEST(XlsbPivotWiring, ATablePartRelatedTwiceStaysPassthrough) {
             tc::ReadPart(source, "xl/pivotTables/pivotTable1.bin"));
 }
 
+// A cache definition naming its records by an id other than the one the writer relates them under is
+// not modelled; the save keeps its group and rels as read.
+TEST(XlsbPivotWiring, ACacheRecordsRelatedUnderAnotherIdStaysPassthrough) {
+  const tc::Bytes source = tc::ReadBytes(Fixture("xlsb_pivot_twins/B01_base.xlsb"));
+  const std::string definition_name = "xl/pivotCache/pivotCacheDefinition1.bin";
+  const std::string rels_name = "xl/pivotCache/_rels/pivotCacheDefinition1.bin.rels";
+  const std::optional<tc::Bytes> definition = tc::ReadPart(source, definition_name);
+  const std::optional<tc::Bytes> rels_bytes = tc::ReadPart(source, rels_name);
+  ASSERT_TRUE(definition.has_value() && rels_bytes.has_value());
+  // The definition's XLWideString "rId1" (UTF-16LE) and the rels Id both become rId2.
+  const tc::Bytes wide1{'r', 0, 'I', 0, 'd', 0, '1', 0};
+  tc::Bytes renamed_definition = *definition;
+  const auto at = std::search(renamed_definition.begin(), renamed_definition.end(), wide1.begin(), wide1.end());
+  ASSERT_NE(at, renamed_definition.end());
+  *(at + 6) = '2';
+  std::string rels(rels_bytes->begin(), rels_bytes->end());
+  const std::size_t id = rels.find("Id=\"rId1\"");
+  ASSERT_NE(id, std::string::npos);
+  rels.replace(id, 10U, "Id=\"rId2\"");
+  const tc::Bytes renamed = RepackWithEntries(
+      source, {{definition_name, renamed_definition}, {rels_name, tc::Bytes(rels.begin(), rels.end())}});
+  const Workbook wb = LoadXlsb(renamed);
+  EXPECT_EQ(PivotCount(wb), 0U);
+  auto saved = write_xlsb_with_result(wb);
+  ASSERT_TRUE(saved.has_value()) << saved.error().message;
+  EXPECT_EQ(saved.value().diagnostics.deferred_feature_count, 0U);
+  for (const auto& [name, bytes] : Parts(renamed, "xl/pivot")) {
+    EXPECT_EQ(tc::ReadPart(saved.value().bytes, name), bytes) << name;
+  }
+  EXPECT_EQ(tc::ReadPart(saved.value().bytes, rels_name), tc::Bytes(rels.begin(), rels.end()));
+}
+
 TEST(XlsbPivotWiring, TablesOnOneCacheAcrossSheetsAreWrittenAsOneGroup) {
   const Workbook wb = TwoTablesOnOneCache();
   auto saved = write_xlsb_with_result(wb);

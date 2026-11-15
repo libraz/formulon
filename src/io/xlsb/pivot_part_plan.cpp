@@ -244,7 +244,7 @@ PivotPartLoss plan_pivot_parts(const Workbook& wb, const std::unordered_set<std:
         table_paths.push_back(kept[2U + m]->path);
       }
     } else {
-      auto parts = id_free ? pivot_cache_to_xlsb(*cache, wb.date1904(), "rId1")
+      auto parts = id_free ? pivot_cache_to_xlsb(*cache, wb.date1904(), kPivotCacheRecordsRelId)
                            : Expected<XlsbPivotCacheParts, Error>(not_writable("pivot_cache", 0));
       for (std::size_t m = 0; parts && m < group.size(); ++m) {
         // Each field's items are saved as modelled, so the lines address them without a write plan.
