@@ -13,6 +13,7 @@
 #include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
+#include "io/xlsb/reader.h"
 #include "sheet.h"
 #include "sheet_layout_edit.h"
 #include "util/test_eval_helpers.h"
@@ -100,6 +101,36 @@ TEST(AutoFilterEval, ProbeTable) {
     ++evaluated;
   }
   EXPECT_EQ(evaluated, 60U);
+}
+
+// Excel's saves of one ordering criterion per operand kind (afilter/flag): <= keeps the texts a pattern matches and >
+// the rest, `~*` and `~?` match the literal character, and an operand without `*` or `?` (~~B included) orders as
+// literal text. The saved row-hidden state is the visible set Mac Excel computed.
+TEST(AutoFilterEval, OrderingCriteriaAgainstPatternsMatchExcelsRows) {
+  for (const char* name :
+       {"A_gt_B", "A_gt_Bq", "A_gt_Bescq", "A_gt_Bescstar", "A_gt_BstarC", "A_gt_esctildeB", "A_gt_star", "A_le_B",
+        "A_le_Bq", "A_le_Bescq", "A_le_Bescstar", "A_le_BstarC", "A_le_esctildeB", "A_le_star"}) {
+    SCOPED_TRACE(name);
+    const std::vector<std::uint8_t> bytes = ReadFile((std::string("afilter/flag/") + name + ".xlsb").c_str());
+    auto read = io::xlsb::read_xlsb(io::ByteSpan{bytes.data(), bytes.size()});
+    ASSERT_TRUE(static_cast<bool>(read)) << read.error().message;
+    Workbook& wb = read.value().workbook;
+    wb.set_excel_profile(mac_365_ja_jp_profile());
+    const Sheet& sheet = wb.sheet(0);
+    const AutoFilter* filter = sheet.auto_filter();
+    ASSERT_NE(filter, nullptr);
+    auto visible = evaluate_auto_filter(wb, sheet, *filter);
+    ASSERT_TRUE(static_cast<bool>(visible));
+    ASSERT_EQ(visible.value().size(), 12U);
+    std::string mismatched;
+    for (std::uint32_t k = 0; k < visible.value().size(); ++k) {
+      const std::uint32_t row = filter->range.first_row + 1U + k;
+      if (visible.value()[k] == RowHidden(sheet, row)) {
+        mismatched += " " + std::to_string(row + 1U);
+      }
+    }
+    EXPECT_TRUE(mismatched.empty()) << "differs on rows" << mismatched;
+  }
 }
 
 TEST(AutoFilterEval, IconFilterMatchesConditionalFormatIconsAcrossVisibleRows) {

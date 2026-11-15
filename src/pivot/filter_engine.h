@@ -229,10 +229,13 @@ class PreparedRecordFilter {
     /// The caption operands read as numbers, compared with a numeric label.
     std::optional<double> low_number;
     std::optional<double> high_number;
-    /// Whether a caption operand carries `*`, `?` or `~` and so matches as a
-    /// pattern.
+    /// Whether a caption operand carries `*` or `?`, so that an ordering
+    /// operator tests the match.
     bool low_pattern = false;
     bool high_pattern = false;
+    /// Whether the low operand carries `*`, `?` or `~`, so that = and <> match
+    /// it as a pattern.
+    bool low_equal_pattern = false;
     /// Date bounds: the operands of a comparison, the inclusive window of a
     /// range or relative period, or the inclusive month range of a calendar
     /// position.

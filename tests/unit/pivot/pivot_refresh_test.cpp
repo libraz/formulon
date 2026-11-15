@@ -6,6 +6,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -20,6 +21,7 @@
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
+#include "io/read_options.h"
 #include "io/xlsb/reader.h"
 #include "merge_range.h"
 #include "miniz.h"
@@ -2066,6 +2068,69 @@ TEST(PivotRefresh, ClearingAGroupSharesTheBaseItPutsOnAnAxis) {
   ASSERT_TRUE(static_cast<bool>(pivot::clear_numeric_group(wb, kPivotSheet, 0U, kAmtGroup)));
   EXPECT_EQ(PivotAt(wb).fields()[kAmt].axis, PivotAxis::Row);
   EXPECT_EQ(CacheOf(wb).fields()[kAmt].shared_items.size(), 5U);
+}
+
+// Excel's refresh of a caption filter with an ordering operator, one save per operand kind
+// (xlsb_parity/pivot/caption_flag): <= keeps the items a pattern matches and > the rest, `~*` and `~?` match the
+// literal character, and an operand without `*` or `?` (~~B included) orders as literal text.
+TEST(PivotRefresh, CaptionOrderingAgainstPatternsMatchesExcel) {
+  const std::set<std::string> all = {"Apple", "B",   "B*", "B?",     "BX",    "B~",
+                                     "BC",    "BxC", "~B", "Banana", "*star", "Cherry"};
+  const struct {
+    const char* name;
+    std::set<std::string> visible;
+  } kCases[] = {
+      {"P_gt_B", {"B*", "B?", "BC", "BX", "Banana", "BxC", "B~", "Cherry"}},
+      {"P_gt_Bq", {"*star", "Apple", "B", "Banana", "BxC", "Cherry", "~B"}},
+      {"P_gt_Bescq", {"*star", "Apple", "B", "B*", "BC", "BX", "Banana", "BxC", "B~", "Cherry", "~B"}},
+      {"P_gt_Bescstar", {"*star", "Apple", "B", "B?", "BC", "BX", "Banana", "BxC", "B~", "Cherry", "~B"}},
+      {"P_gt_BstarC", {"*star", "Apple", "B", "B*", "B?", "BX", "Banana", "B~", "Cherry", "~B"}},
+      {"P_gt_esctildeB", {"Apple", "B", "B*", "B?", "BC", "BX", "Banana", "BxC", "B~", "Cherry", "~B"}},
+      {"P_gt_star", {}},
+      {"P_le_B", {"*star", "Apple", "B", "~B"}},
+      {"P_le_Bq", {"B*", "B?", "BC", "BX", "B~"}},
+      {"P_le_Bescq", {"B?"}},
+      {"P_le_Bescstar", {"B*"}},
+      {"P_le_BstarC", {"BC", "BxC"}},
+      {"P_le_esctildeB", {"*star"}},
+      {"P_le_star", {"*star", "Apple", "B", "B*", "B?", "BC", "BX", "Banana", "BxC", "B~", "Cherry", "~B"}},
+  };
+  for (const auto& c : kCases) {
+    SCOPED_TRACE(c.name);
+    const std::string path =
+        std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_parity/pivot/caption_flag/" + c.name + ".xlsx";
+    std::vector<std::uint8_t> bytes;
+    if (FILE* handle = std::fopen(path.c_str(), "rb"); handle != nullptr) {
+      for (int ch = std::fgetc(handle); ch != EOF; ch = std::fgetc(handle)) {
+        bytes.push_back(static_cast<std::uint8_t>(ch));
+      }
+      std::fclose(handle);
+    }
+    ASSERT_FALSE(bytes.empty()) << path;
+    io::ReadOptions options;
+    options.profile = mac_365_ja_jp_profile();
+    auto read = io::read_ooxml(io::ByteSpan{bytes.data(), bytes.size()}, options);
+    ASSERT_TRUE(static_cast<bool>(read)) << read.error().message;
+    Workbook wb = std::move(read.value().workbook);
+    Sheet& sheet = wb.sheet(0);
+    ASSERT_EQ(sheet.pivot_tables().size(), 1U);
+    // Clear the report Excel saved so only the engine's refresh can fill it.
+    for (std::uint32_t r = 0; r < 20U; ++r) {
+      ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, r, 0U, Value::blank())));
+    }
+    const Expected<void, Error> refreshed =
+        wb.refresh_pivot_cache(sheet.pivot_tables().front()->pivot_cache_id(), eval::default_registry());
+    ASSERT_TRUE(static_cast<bool>(refreshed)) << refreshed.error().message;
+    ASSERT_TRUE(static_cast<bool>(wb.ensure_calculated(eval::default_registry())));
+    std::set<std::string> shown;
+    for (std::uint32_t r = 0; r < 20U; ++r) {
+      const Value v = sheet.resolve_cell_value(r, 0U);
+      if (v.is_text() && all.count(std::string(v.as_text())) != 0U) {
+        shown.insert(std::string(v.as_text()));
+      }
+    }
+    EXPECT_EQ(shown, c.visible);
+  }
 }
 
 }  // namespace

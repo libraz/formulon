@@ -85,9 +85,15 @@ int caption_collate(std::string_view lhs, std::string_view rhs) {
   return eval::collate(lhs, rhs, eval::current_eval_profile(), eval::CollationStrength::kDynamic);
 }
 
-// An operand carrying a wildcard or an escape matches as a pattern.
+// An operand carrying a wildcard or an escape matches as a pattern under = and <>.
 bool is_caption_pattern(std::string_view operand) {
   return operand.find_first_of("*?~") != std::string_view::npos;
+}
+
+// An ordering operator tests the match only when the operand has `*` or `?`, escaped or not; an operand whose only
+// special character is `~` orders as literal text.
+bool is_caption_order_pattern(std::string_view operand) {
+  return operand.find_first_of("*?") != std::string_view::npos;
 }
 
 // The caption operand as a number, for comparison with a numeric label.
@@ -340,7 +346,8 @@ PreparedRecordFilter::PreparedRecordFilter(const PivotTable& table, const PivotC
         resolved.low = std::move(*pattern);
       } else {
         resolved.low.assign(low);
-        resolved.low_pattern = is_caption_pattern(low);
+        resolved.low_pattern = is_caption_order_pattern(low);
+        resolved.low_equal_pattern = is_caption_pattern(low);
         resolved.low_number = caption_number(low);
       }
       if (is_range_filter_type(f.type)) {
@@ -349,7 +356,7 @@ PreparedRecordFilter::PreparedRecordFilter(const PivotTable& table, const PivotC
         }
         const std::string_view high = payload_text(f.value_high);
         resolved.high.assign(high);
-        resolved.high_pattern = is_caption_pattern(high);
+        resolved.high_pattern = is_caption_order_pattern(high);
         resolved.high_number = caption_number(high);
       }
       filters_.push_back(std::move(resolved));
@@ -414,7 +421,7 @@ bool PreparedRecordFilter::caption_passes(const ResolvedFilter& f, const Value& 
   // "Between" with a bound the label cannot order against matches nothing.
   const auto in_between = [&]() { return !low_unordered && !high_unordered && order_low() >= 0 && order_high() <= 0; };
   const auto equal = [&]() {
-    return f.low_pattern ? caption_wildcard_matches(f.matcher, f.low, label) : caption_collate(label, f.low) == 0;
+    return f.low_equal_pattern ? caption_wildcard_matches(f.matcher, f.low, label) : caption_collate(label, f.low) == 0;
   };
   switch (f.type) {
     case FilterType::LabelEqual:

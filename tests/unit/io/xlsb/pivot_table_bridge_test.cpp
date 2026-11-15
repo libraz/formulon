@@ -814,14 +814,15 @@ std::vector<tc::IndexedRecord> FilterRecords(const tc::Bytes& package) {
 
 // A caption filter's string criteria, written from the xlsx Excel saved, are the records of Excel's own xlsb save:
 // an ordering operator sets the first union byte, which Excel's refresh reads, unless the operand has `*` or `?`
-// (escaped or not). The caption_flag cases cover B, B?, B~?, B~*, B*C and * under > and <=.
+// (escaped or not). The caption_flag cases cover B, B?, B~?, B~*, B*C, ~~B and * under > and <=.
 TEST(PivotTableBridge, CaptionFilterCriteriaWriteExcelsRecords) {
   const std::string root = FORMULON_FIXTURES_DIR;
   for (const char* variant :
        {"caption_less_than", "caption_not_between", "caption_greater_than_wildcard", "caption_flag/P_gt_B",
         "caption_flag/P_gt_Bq", "caption_flag/P_gt_Bescq", "caption_flag/P_gt_Bescstar", "caption_flag/P_gt_BstarC",
-        "caption_flag/P_gt_star", "caption_flag/P_le_B", "caption_flag/P_le_Bq", "caption_flag/P_le_Bescq",
-        "caption_flag/P_le_Bescstar", "caption_flag/P_le_BstarC", "caption_flag/P_le_star"}) {
+        "caption_flag/P_gt_esctildeB", "caption_flag/P_gt_star", "caption_flag/P_le_B", "caption_flag/P_le_Bq",
+        "caption_flag/P_le_Bescq", "caption_flag/P_le_Bescstar", "caption_flag/P_le_BstarC",
+        "caption_flag/P_le_esctildeB", "caption_flag/P_le_star"}) {
     SCOPED_TRACE(variant);
     const std::string dir = "excel/xlsb_parity/pivot/";
     const tc::Bytes excel = tc::ReadBytes(root + "/" + dir + variant + ".xlsb");
