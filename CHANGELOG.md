@@ -557,6 +557,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A PivotTable page field that shows one item because every other item is
+  hidden reads "(Multiple Items)", as Excel shows it, unless the field allows
+  multiple selection (Excel's Select Multiple Items), in which case it shows
+  the item's name. It showed the item's name in both cases before. The values
+  follow the visible items either way. The C API has no way to set the
+  multiple-selection attribute; a field keeps it from the file it was read
+  from.
+
 - PivotTable cell formats and pivot chart formats follow the items and value
   fields they name, as Excel does. After a refresh a format moves with its
   item to the item's new position; a format naming an item the refresh
