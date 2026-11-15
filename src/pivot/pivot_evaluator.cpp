@@ -86,6 +86,16 @@ std::optional<ValueSortSpec> resolve_value_sort(const PivotTable& table, std::ui
   return std::nullopt;
 }
 
+/// Whether the field carries `multipleItemSelectionAllowed="1"` (Excel's "Select Multiple Items").
+bool allows_multiple_item_selection(const PivotField& field) {
+  for (const auto& attr : field.passthrough_attrs) {
+    if (attr.first == "multipleItemSelectionAllowed") {
+      return attr.second == "1" || attr.second == "true";
+    }
+  }
+  return false;
+}
+
 /// Names what a page (report filter) field is currently showing.
 ///
 /// Settled here rather than in the projection for the same reason a blank
@@ -95,7 +105,8 @@ std::optional<ValueSortSpec> resolve_value_sort(const PivotTable& table, std::ui
 ///
 /// Excel records the selection two different ways and both are honoured:
 /// a single chosen item as `<pageField item="N">`, and any wider selection
-/// as visibility flags on the field's own items. A field that hides
+/// as visibility flags on the field's own items, where one visible item
+/// still reads as several unless the field allows multiple selection. A field that hides
 /// nothing is unfiltered, which is also what an empty item list means — a
 /// table assembled in memory lists items only once something filters them.
 std::string page_item_label(const PivotCache& cache, std::size_t field_index, const PivotField& field,
@@ -124,7 +135,8 @@ std::string page_item_label(const PivotCache& cache, std::size_t field_index, co
   if (visible_count == field.items.size() || subtotal_hidden_items) {
     return options.all_pages_label;
   }
-  if (visible_count == 1U && only_visible != nullptr) {
+  // One visible item names itself only under multipleItemSelectionAllowed; otherwise Excel reads it as multiple.
+  if (visible_count == 1U && only_visible != nullptr && allows_multiple_item_selection(field)) {
     return label_of(*only_visible);
   }
   return options.multiple_items_label;

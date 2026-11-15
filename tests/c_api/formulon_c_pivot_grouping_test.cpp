@@ -453,7 +453,8 @@ TEST(FormulonCApiPivot, AddItemAtHidesANonBlankItemBeforeAnyReload) {
   EXPECT_DOUBLE_EQ(SumDataCells(projected.handle), 400.0);
 }
 
-TEST(FormulonCApiPivot, SoleVisiblePageItemAddedByCacheIndexNamesItsValue) {
+// Without multipleItemSelectionAllowed, one item visible by hidden flags still reads as a multiple selection.
+TEST(FormulonCApiPivot, SoleVisiblePageItemAddedByCacheIndexReadsAsMultipleItems) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::uint32_t cache_id = 0;
@@ -468,7 +469,8 @@ TEST(FormulonCApiPivot, SoleVisiblePageItemAddedByCacheIndexNamesItsValue) {
   ASSERT_EQ(fm_sheet_add_pivot_field_item_by_cache_index(wb.handle, 0, pivot_index, 0, /*cache_index=*/1U,
                                                          /*visible=*/1, ignored_index()),
             0);
-  EXPECT_TRUE(LayoutHasText(wb.handle, pivot_index, "South"));
+  EXPECT_TRUE(LayoutHasText(wb.handle, pivot_index, "(Multiple Items)"));
+  EXPECT_FALSE(LayoutHasText(wb.handle, pivot_index, "South"));
 }
 
 namespace {

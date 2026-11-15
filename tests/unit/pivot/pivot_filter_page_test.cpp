@@ -71,7 +71,12 @@ TEST(PivotPageSelection, AnItemListThatHidesNothingIsStillUnfiltered) {
   EXPECT_EQ(r_or.value().page_selections[0].item_label, "(All)");
 }
 
-TEST(PivotPageSelection, SoleVisibleItemNamesItself) {
+/// Excel's "Select Multiple Items" on the field's own record.
+void allow_multiple_items(PivotTable& table) {
+  table.mutable_fields()[0].passthrough_attrs.emplace_back("multipleItemSelectionAllowed", "1");
+}
+
+TEST(PivotPageSelection, SoleVisibleItemByHiddenFlagsIsAMultipleSelection) {
   PivotCache cache = build_basic_cache();
   PivotTable table = build_page_axis_table();
   set_region_items(table, /*hidden=*/{"South"});
@@ -79,12 +84,54 @@ TEST(PivotPageSelection, SoleVisibleItemNamesItself) {
   auto r_or = evaluate(table, cache);
   ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
   ASSERT_EQ(r_or.value().page_selections.size(), 1U);
-  EXPECT_EQ(r_or.value().page_selections[0].item_label, "North");
+  EXPECT_EQ(r_or.value().page_selections[0].item_label, "(Multiple Items)");
 
   // The hidden item also prunes records, which is the pre-existing manual
   // filter path rather than anything the selection label drives.
   ASSERT_TRUE(r_or.value().grand_total.is_number());
   EXPECT_DOUBLE_EQ(r_or.value().grand_total.as_number(), 175.0);
+}
+
+TEST(PivotPageSelection, SoleVisibleItemNamesItselfUnderMultipleSelection) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_page_axis_table();
+  set_region_items(table, /*hidden=*/{"South"});
+  allow_multiple_items(table);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  ASSERT_EQ(r_or.value().page_selections.size(), 1U);
+  EXPECT_EQ(r_or.value().page_selections[0].item_label, "North");
+}
+
+TEST(PivotPageSelection, SoleVisibleBlankItemByHiddenFlagsIsAMultipleSelection) {
+  PivotCache cache = build_shared_north_south_cache();
+  cache.mutable_fields()[0].shared_items.push_back(Value::blank());
+  PivotTable table = build_page_axis_table();
+  for (std::uint32_t index : {0U, 1U, 2U}) {
+    PivotItem item;
+    item.visible = index == 2U;
+    item.has_cache_index = true;
+    item.cache_index = index;
+    table.mutable_fields()[0].items.push_back(item);
+  }
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  ASSERT_EQ(r_or.value().page_selections.size(), 1U);
+  EXPECT_EQ(r_or.value().page_selections[0].item_label, "(Multiple Items)");
+}
+
+TEST(PivotPageSelection, EveryItemVisibleUnderMultipleSelectionIsUnfiltered) {
+  PivotCache cache = build_basic_cache();
+  PivotTable table = build_page_axis_table();
+  set_region_items(table, /*hidden=*/{});
+  allow_multiple_items(table);
+
+  auto r_or = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
+  ASSERT_EQ(r_or.value().page_selections.size(), 1U);
+  EXPECT_EQ(r_or.value().page_selections[0].item_label, "(All)");
 }
 
 TEST(PivotPageSelection, SoleVisibleUnnamedItemIsLabelledFromItsBinding) {
@@ -97,6 +144,8 @@ TEST(PivotPageSelection, SoleVisibleUnnamedItemIsLabelledFromItsBinding) {
     item.cache_index = index;
     table.mutable_fields()[0].items.push_back(item);
   }
+
+  allow_multiple_items(table);
 
   auto r_or = evaluate(table, cache);
   ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
@@ -122,6 +171,11 @@ TEST(PivotPageSelection, SeveralVisibleItemsUseTheMultiplePlaceholder) {
   ASSERT_TRUE(static_cast<bool>(r_or)) << r_or.error().message;
   ASSERT_EQ(r_or.value().page_selections.size(), 1U);
   EXPECT_EQ(r_or.value().page_selections[0].item_label, "(Multiple Items)");
+
+  allow_multiple_items(table);
+  auto with_multiple = evaluate(table, cache);
+  ASSERT_TRUE(static_cast<bool>(with_multiple)) << with_multiple.error().message;
+  EXPECT_EQ(with_multiple.value().page_selections[0].item_label, "(Multiple Items)");
 }
 
 TEST(PivotPageSelection, ExplicitPageFieldItemWinsOverVisibility) {

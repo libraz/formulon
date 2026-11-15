@@ -745,11 +745,10 @@ entries:
   # `<pageFields>` follows the `<filters>` split -- decoded for rendering,
   # re-emitted from the passthrough bin -- so the round trip is unchanged;
   # the writer only synthesises the element for a table that never carried
-  # one. What stays unobserved is the several-items selection: no capture
-  # picks more than one page item, so `multiple_items_label` reproduces
-  # Excel's UI wording with no Excel-rendered reference. That is a label
-  # default, not a divergence, and it is documented where it is declared
-  # (`pivot::PivotLayoutOptions`) rather than tracked here.
+  # one. The page caption follows Excel's refresh on Mac 16.115 (en, ja):
+  # one item left visible by hidden flags reads `multiple_items_label`
+  # unless the field allows multiple selection, two or more always do, and
+  # `<pageField item>` names its item -- reproduced, not a divergence.
 
   # AREAS recurses into CHOOSE / IF reference branches, so a branch that is
   # itself a union reports its real area count.
