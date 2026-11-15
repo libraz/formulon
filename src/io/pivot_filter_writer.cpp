@@ -88,20 +88,6 @@ void AppendCustomFilter(std::string& out, std::string_view op, double number) {
   out.append("/>");
 }
 
-/// `text` with its `~*` and `~?` escapes removed, the value a plain `<filters>`
-/// list spells; Excel keeps any other `~` (`~~B`, `~B`) as typed.
-std::string UnescapeWildcards(std::string_view text) {
-  std::string out;
-  out.reserve(text.size());
-  for (std::size_t i = 0; i < text.size(); ++i) {
-    if (text[i] == '~' && i + 1U < text.size() && (text[i + 1U] == '*' || text[i + 1U] == '?')) {
-      ++i;
-    }
-    out.push_back(text[i]);
-  }
-  return out;
-}
-
 /// True when `text` holds a `*` or `?` that is not escaped by `~`.
 bool HasLiveWildcard(std::string_view text) {
   for (std::size_t i = 0; i < text.size(); ++i) {
@@ -217,7 +203,7 @@ bool AppendGeneratedFilter(std::string& out, const pivot::PivotFilter& filter, s
       // removed; a pattern or a number as a criterion.
       if (double number = 0.0; !HasLiveWildcard(*low_text) && !parse_xsd_double(*low_text, &number)) {
         out.append("<filters><filter");
-        append_xml_attr(out, "val", UnescapeWildcards(*low_text));
+        append_xml_attr(out, "val", pivot::caption_value_list_text(*low_text));
         out.append("/></filters>");
         break;
       }

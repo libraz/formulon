@@ -477,6 +477,7 @@ bool DecodeCaptionOperands(const pugi::xml_node& node, pivot::PivotFilter& out) 
   const pugi::xml_attribute direct_high = node.attribute("stringValue2");
   bool plain = false;
   const std::vector<std::string_view> criteria = CollectFilterCriteria(node, &plain);
+  out.literal = out.type == pivot::FilterType::LabelEqual && plain && !criteria.empty();
   if (pivot::caption_wildcard_pattern(out.type, "").has_value()) {
     if (!criteria.empty()) {
       std::optional<std::string> operand =

@@ -147,6 +147,10 @@ DateWindow resolve_relative_period(FilterType type, const date_time::CivilTime& 
 /// do not match by an affixed pattern.
 std::optional<std::string> caption_wildcard_pattern(FilterType type, std::string_view value);
 
+/// `operand` with its `~*` and `~?` escapes removed: the text a caption =
+/// value list spells for it. Any other `~` (`~~B`, `~B`) stays as typed.
+std::string caption_value_list_text(std::string_view operand);
+
 /// The numeric payload of a filter operand slot; empty when unset, text, or
 /// not finite, which no file can spell.
 std::optional<double> payload_number(const std::variant<std::monostate, int, double, std::string>& slot);

@@ -2072,7 +2072,10 @@ TEST(PivotRefresh, ClearingAGroupSharesTheBaseItPutsOnAnAxis) {
 
 /// The items of `all` the first pivot of xlsb_parity/pivot/<name>.xlsx shows in column A once the engine has
 /// refreshed it over a cleared report.
-std::set<std::string> RefreshedCaptionItems(const std::string& name, const std::set<std::string>& all) {
+/// The items of `all` the engine's refresh of `name`'s pivot shows; with `entered`, its filters as if entered in the
+/// session rather than read.
+std::set<std::string> RefreshedCaptionItems(const std::string& name, const std::set<std::string>& all,
+                                            bool entered = false) {
   const std::string path = std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_parity/pivot/" + name + ".xlsx";
   std::vector<std::uint8_t> bytes;
   if (FILE* handle = std::fopen(path.c_str(), "rb"); handle != nullptr) {
@@ -2098,6 +2101,11 @@ std::set<std::string> RefreshedCaptionItems(const std::string& name, const std::
   if (sheet.pivot_tables().size() != 1U) {
     ADD_FAILURE() << "expected one pivot";
     return shown;
+  }
+  if (entered) {
+    for (pivot::PivotFilter& filter : sheet.mutable_pivot_tables().front()->mutable_active_filters()) {
+      filter.literal = false;
+    }
   }
   // Clear the report Excel saved so only the engine's refresh can fill it.
   for (std::uint32_t r = 0; r < 20U; ++r) {
@@ -2148,8 +2156,9 @@ TEST(PivotRefresh, CaptionOrderingAgainstPatternsMatchesExcel) {
 }
 
 // Excel's refresh of a reopened caption filter under = and <>, one save per operand kind
-// (xlsb_parity/pivot/caption_equal): a <> operand matches as a pattern, so <>~B keeps B out and <>~~B keeps ~B out.
-TEST(PivotRefresh, CaptionEqualityMatchesAsAPattern) {
+// (xlsb_parity/pivot/caption_equal): an = saved as a value list matches that list's text literally (=~~B shows ~~B),
+// and a pattern = and every <> match as a pattern, so <>~B keeps B out and <>~~B keeps ~B out.
+TEST(PivotRefresh, ReopenedCaptionEqualityMatchesExcelsRefresh) {
   const std::set<std::string> all = {"B", "~B", "~~B", "B*", "B?", "Bx", "*star"};
   const struct {
     const char* name;
@@ -2159,6 +2168,8 @@ TEST(PivotRefresh, CaptionEqualityMatchesAsAPattern) {
       {"P_eq_Bstar", {"B", "B*", "B?", "Bx"}},
       {"P_eq_Bescstar", {"B*"}},
       {"P_eq_Bescq", {"B?"}},
+      {"P_eq_tildeB", {"~B"}},
+      {"P_eq_esctildeB", {"~~B"}},
       {"P_ne_B", {"*star", "B*", "B?", "Bx", "~B", "~~B"}},
       {"P_ne_Bstar", {"*star", "~B", "~~B"}},
       {"P_ne_Bescstar", {"*star", "B", "B?", "Bx", "~B", "~~B"}},
@@ -2169,6 +2180,23 @@ TEST(PivotRefresh, CaptionEqualityMatchesAsAPattern) {
   for (const auto& c : kCases) {
     SCOPED_TRACE(c.name);
     EXPECT_EQ(RefreshedCaptionItems(std::string("caption_equal/") + c.name, all), c.visible);
+  }
+}
+
+// The same = filters as entered in the session, before a save turns the literal ones into a value list: the operand
+// matches as a pattern, so =~B shows B and =~~B shows ~B, as Excel's dialog shows them.
+TEST(PivotRefresh, EnteredCaptionEqualityMatchesAsAPattern) {
+  const std::set<std::string> all = {"B", "~B", "~~B", "B*", "B?", "Bx", "*star"};
+  const struct {
+    const char* name;
+    std::set<std::string> visible;
+  } kCases[] = {
+      {"P_eq_B", {"B"}},      {"P_eq_Bescstar", {"B*"}},  {"P_eq_Bescq", {"B?"}},
+      {"P_eq_tildeB", {"B"}}, {"P_eq_esctildeB", {"~B"}},
+  };
+  for (const auto& c : kCases) {
+    SCOPED_TRACE(c.name);
+    EXPECT_EQ(RefreshedCaptionItems(std::string("caption_equal/") + c.name, all, /*entered=*/true), c.visible);
   }
 }
 

@@ -344,6 +344,9 @@ PreparedRecordFilter::PreparedRecordFilter(const PivotTable& table, const PivotC
       const std::string_view low = payload_text(f.value);
       if (std::optional<std::string> pattern = caption_wildcard_pattern(f.type, low)) {
         resolved.low = std::move(*pattern);
+      } else if (f.literal) {
+        resolved.low = caption_value_list_text(low);
+        resolved.low_number = caption_number(resolved.low);
       } else {
         resolved.low.assign(low);
         resolved.low_pattern = is_caption_order_pattern(low);
@@ -538,6 +541,18 @@ bool PreparedRecordFilter::passes(const PivotCacheRecord& record) const {
 std::optional<double> payload_number(const std::variant<std::monostate, int, double, std::string>& slot) {
   const std::optional<double> number = raw_payload_number(slot);
   return number.has_value() && !std::isfinite(*number) ? std::nullopt : number;
+}
+
+std::string caption_value_list_text(std::string_view operand) {
+  std::string out;
+  out.reserve(operand.size());
+  for (std::size_t i = 0; i < operand.size(); ++i) {
+    if (operand[i] == '~' && i + 1U < operand.size() && (operand[i + 1U] == '*' || operand[i + 1U] == '?')) {
+      ++i;
+    }
+    out.push_back(operand[i]);
+  }
+  return out;
 }
 
 std::optional<std::string> caption_wildcard_pattern(FilterType type, std::string_view value) {

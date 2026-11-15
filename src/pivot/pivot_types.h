@@ -294,6 +294,10 @@ struct PivotFilter {
   /// Set for an entry decoded from a file's `<filters>`; empty for one added
   /// through the API.
   std::optional<PivotFilterSource> source{};
+  /// Matches a caption = operand as the literal text of its value list rather
+  /// than as a pattern: set for a filter read with that list, which Excel
+  /// refreshes literally; an entered one matches as a pattern.
+  bool literal = false;
 };
 
 /// A loaded `<filter>` the `PivotFilter` model cannot express: an unknown
