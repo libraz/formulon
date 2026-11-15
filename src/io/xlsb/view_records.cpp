@@ -57,10 +57,7 @@ void emit_selection(std::vector<std::uint8_t>& dst, const ResolvedSelection& sel
   emit_u32(payload, selection.active_cell_id);  // dwRfxAct
   emit_u32(payload, static_cast<std::uint32_t>(selection.ranges.size()));
   for (const MergeRange& range : selection.ranges) {
-    emit_u32(payload, range.first_row);
-    emit_u32(payload, range.last_row);
-    emit_u32(payload, range.first_col);
-    emit_u32(payload, range.last_col);
+    emit_rfx(payload, range);
   }
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtSel), payload);
 }

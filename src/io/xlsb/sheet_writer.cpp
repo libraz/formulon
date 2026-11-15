@@ -48,6 +48,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/index_sort.h"
+#include "utils/status_macros.h"
 #include "value.h"
 
 namespace formulon {
@@ -177,12 +178,8 @@ Expected<void, Error> EmitWorksheetViewsAndFormatting(std::vector<std::uint8_t>&
                                                       const SheetFormatDefaults& defaults, std::uint32_t workbook_views,
                                                       std::size_t sheet_index) {
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginWsViews), ByteSpan{});
-  if (auto main = emit_ws_view(dst, sheet_view, 0U, sheet_index); !main) {
-    return std::move(main.error());
-  }
-  if (auto extras = emit_extra_ws_views(dst, sheet_view, workbook_views, sheet_index); !extras) {
-    return std::move(extras.error());
-  }
+  RETURN_IF_ERROR(emit_ws_view(dst, sheet_view, 0U, sheet_index));
+  RETURN_IF_ERROR(emit_extra_ws_views(dst, sheet_view, workbook_views, sheet_index));
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtEndWsViews), ByteSpan{});
 
   return emit_ws_fmt_info(dst, defaults, sheet_index);
@@ -363,10 +360,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   // A row without its own height states the default, truncated to twips as BrtWsFmtInfo stores it.
   const auto default_row_twips =
       static_cast<std::uint16_t>(std::clamp(std::floor(format_defaults.default_row_height * 20.0), 0.0, 65535.0));
-  if (auto views = EmitWorksheetViewsAndFormatting(body, sheet.view(), format_defaults, workbook_views, own_index);
-      !views) {
-    return std::move(views.error());
-  }
+  RETURN_IF_ERROR(EmitWorksheetViewsAndFormatting(body, sheet.view(), format_defaults, workbook_views, own_index));
   EmitColumnInfos(body, sheet.layout(), style_plan);
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginSheetData), ByteSpan{});
 
@@ -601,12 +595,9 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
             emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtCellMeta), cell_payload);
           }
           emit_value_meta(row, col, anchor_value);
-          if (auto r = emit_array_anchor(body, cell_payload, *cell, anchor_value, always, recalc_marked, col, xf, row,
-                                         last_row, last_col, sheet_names, sheet_ranges, name_table, sst,
-                                         downgraded_formula_count, &downgraded_to_literal, name_shapes);
-              !r) {
-            return std::move(r.error());
-          }
+          RETURN_IF_ERROR(emit_array_anchor(body, cell_payload, *cell, anchor_value, always, recalc_marked, col, xf,
+                                            row, last_row, last_col, sheet_names, sheet_ranges, name_table, sst,
+                                            downgraded_formula_count, &downgraded_to_literal, name_shapes));
           if (downgraded_to_literal) {
             downgraded_array_anchors.insert(anchor_key(row, col));
           }
@@ -615,11 +606,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
           emit_data_table_anchor(body, cell_payload, *cell, col, xf, *table, sst);
         } else {
           emit_value_meta(row, col, cell->cached_value);
-          if (auto r = emit_cell(body, cell_payload, *cell, row, col, xf, always || recalc_marked, sst, sheet_names,
-                                 sheet_ranges, name_table, downgraded_formula_count, name_shapes);
-              !r) {
-            return std::move(r.error());
-          }
+          RETURN_IF_ERROR(emit_cell(body, cell_payload, *cell, row, col, xf, always || recalc_marked, sst, sheet_names,
+                                    sheet_ranges, name_table, downgraded_formula_count, name_shapes));
         }
         continue;
       }
@@ -651,10 +639,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
        {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
     reconcile_x14_data_bars(*slot, sheet.conditional_formats(), x14_linked);
   }
-  if (auto added = add_x14_data_bars(tail.after_hyperlinks, sheet.conditional_formats(), x14_linked, own_index);
-      !added) {
-    return std::move(added.error());
-  }
+  RETURN_IF_ERROR(add_x14_data_bars(tail.after_hyperlinks, sheet.conditional_formats(), x14_linked, own_index));
   // Standalone x14 CF rules (custom icon sets, rules naming another sheet)
   // and sparkline groups are model-owned future records; retained rules are
   // rewritten in place, missing ones are added.
@@ -662,27 +647,15 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   std::unordered_set<std::string> rules14_linked;
   for (std::vector<std::uint8_t>* slot :
        {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
-    if (auto s = reconcile_x14_rules(*slot, sheet.conditional_formats(), frt_ctx, sheet.name(), tail.extern_sheets,
-                                     rules14_linked);
-        !s) {
-      return std::move(s.error());
-    }
+    RETURN_IF_ERROR(reconcile_x14_rules(*slot, sheet.conditional_formats(), frt_ctx, sheet.name(), tail.extern_sheets,
+                                        rules14_linked));
   }
-  if (auto rules14 = add_x14_rules(tail.after_hyperlinks, sheet.conditional_formats(), frt_ctx, sheet.name(), own_index,
-                                   rules14_linked);
-      !rules14) {
-    return std::move(rules14.error());
-  }
+  RETURN_IF_ERROR(add_x14_rules(tail.after_hyperlinks, sheet.conditional_formats(), frt_ctx, sheet.name(), own_index,
+                                rules14_linked));
   // Validations naming another sheet are model-owned BrtDVal14 records,
   // rewritten in place like the x14 CF rules.
-  if (auto dvals14 = place_x14_validations(tail, sheet.validations(), frt_ctx, sheet.name()); !dvals14) {
-    return std::move(dvals14.error());
-  }
-  if (auto sparklines =
-          add_sparkline_groups(tail.after_hyperlinks, sheet.ext_lst_xml(), frt_ctx, sheet.name(), own_index);
-      !sparklines) {
-    return std::move(sparklines.error());
-  }
+  RETURN_IF_ERROR(place_x14_validations(tail, sheet.validations(), frt_ctx, sheet.name()));
+  RETURN_IF_ERROR(add_sparkline_groups(tail.after_hyperlinks, sheet.ext_lst_xml(), frt_ctx, sheet.name(), own_index));
   // A model-owned drawing replaces any retained BrtDrawing record.
   if (owns_drawing) {
     strip_drawing_records(tail.after_hyperlinks);
@@ -699,22 +672,13 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   // Sheet and range protection, conditional formatting and data validation
   // are emitted from the model. Protection leads the tail: the one record the grammar
   // puts ahead of it (BrtSheetCalcProp) is one Excel does not persist.
-  if (auto protection = emit_sheet_protection(body, sheet.protection()); !protection) {
-    return std::move(protection.error());
-  }
-  if (auto ranges = emit_range_protections(body, read_protected_ranges(sheet.raw_extensions()), own_index); !ranges) {
-    return std::move(ranges.error());
-  }
+  RETURN_IF_ERROR(emit_sheet_protection(body, sheet.protection()));
+  RETURN_IF_ERROR(emit_range_protections(body, read_protected_ranges(sheet.raw_extensions()), own_index));
   body.insert(body.end(), tail.before_merges.begin(), tail.before_merges.end());
   EmitMerges(body, sheet);
-  if (auto features = EmitFormattingAndValidation(body, sheet, tail.after_merges_before_hyperlinks, frt_ctx, x14_linked,
-                                                  absent_phonetic);
-      !features) {
-    return std::move(features.error());
-  }
-  if (auto hyperlinks = EmitHyperlinks(body, sheet, hyperlink_ids, book_directory); !hyperlinks) {
-    return std::move(hyperlinks.error());
-  }
+  RETURN_IF_ERROR(EmitFormattingAndValidation(body, sheet, tail.after_merges_before_hyperlinks, frt_ctx, x14_linked,
+                                              absent_phonetic));
+  RETURN_IF_ERROR(EmitHyperlinks(body, sheet, hyperlink_ids, book_directory));
   body.insert(body.end(), tail.after_hyperlinks.begin(), tail.after_hyperlinks.end());
   emit_sheet_uid(body, sheet, own_index);
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtEndSheet), ByteSpan{});

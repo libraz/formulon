@@ -199,9 +199,7 @@ Expected<void, Error> DecodeFont(ByteSpan payload, StylesTable& table) {
   rec.family = family_or.value();
   rec.has_charset = charset_or.value() != 0U;
   rec.charset = charset_or.value();
-  if (auto color = DecodeColor(p, /*unset_argb=*/rec.color_argb, rec.color_argb, rec.color); !color) {
-    return std::move(color.error());
-  }
+  RETURN_IF_ERROR(DecodeColor(p, /*unset_argb=*/rec.color_argb, rec.color_argb, rec.color));
   auto scheme_or = read_u8(p);
   if (!scheme_or) {
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtFont scheme truncated",
@@ -222,9 +220,7 @@ Expected<void, Error> DecodeFont(ByteSpan payload, StylesTable& table) {
 /// colour rather than the absent-element idiom.
 Expected<void, Error> DecodeStatedColor(ByteSpan& p, std::uint32_t unset_argb, std::uint32_t& argb, ColorSpec& spec) {
   const bool automatic = p.size > 0U && (p.data[0] >> 1U) == 0U;
-  if (auto color = DecodeColor(p, unset_argb, argb, spec); !color) {
-    return std::move(color.error());
-  }
+  RETURN_IF_ERROR(DecodeColor(p, unset_argb, argb, spec));
   if (automatic && spec.kind == ColorSpec::Kind::kNone) {
     spec.kind = ColorSpec::Kind::kAuto;
   }
@@ -265,23 +261,17 @@ Expected<void, Error> DecodeGradientFill(ByteSpan& p, FillRecord& rec) {
   std::uint32_t ignored_argb = 0;
   ColorSpec ignored;
   for (int i = 0; i < 2; ++i) {
-    if (auto color = DecodeColor(p, /*unset_argb=*/0U, ignored_argb, ignored); !color) {
-      return std::move(color.error());
-    }
+    RETURN_IF_ERROR(DecodeColor(p, /*unset_argb=*/0U, ignored_argb, ignored));
   }
   rec.has_gradient = true;
-  if (auto geometry = DecodeGradientGeometry(p, rec.gradient); !geometry) {
-    return std::move(geometry.error());
-  }
+  RETURN_IF_ERROR(DecodeGradientGeometry(p, rec.gradient));
   ASSIGN_OR_RETURN(const std::uint32_t stops, read_u32(p));
   if (stops > kMaxGradientStops) {
     return GradientStopLimit(stops);
   }
   for (std::uint32_t i = 0; i < stops; ++i) {
     GradientStop stop;
-    if (auto color = DecodeStatedColor(p, /*unset_argb=*/0U, stop.argb, stop.color); !color) {
-      return std::move(color.error());
-    }
+    RETURN_IF_ERROR(DecodeStatedColor(p, /*unset_argb=*/0U, stop.argb, stop.color));
     ASSIGN_OR_RETURN(stop.position, read_double(p));
     rec.gradient.stops.push_back(stop);
   }
@@ -297,9 +287,7 @@ Expected<void, Error> DecodeFill(ByteSpan payload, StylesTable& table) {
   }
   FillRecord rec;
   if (pattern_or.value() == kBrtFillGradient) {
-    if (auto r = DecodeGradientFill(p, rec); !r) {
-      return std::move(r.error());
-    }
+    RETURN_IF_ERROR(DecodeGradientFill(p, rec));
     table.fills.push_back(std::move(rec));
     return Expected<void, Error>::Ok();
   }
@@ -310,12 +298,8 @@ Expected<void, Error> DecodeFill(ByteSpan payload, StylesTable& table) {
   // but no `<fgColor>` / `<bgColor>` in OOXML. Leaving the colours unset
   // keeps the converted `<fill>` identical to the one Excel writes.
   if (rec.pattern != 0U) {
-    if (auto fg = DecodeColor(p, /*unset_argb=*/0U, rec.fg_argb, rec.fg); !fg) {
-      return std::move(fg.error());
-    }
-    if (auto bg = DecodeColor(p, /*unset_argb=*/0U, rec.bg_argb, rec.bg); !bg) {
-      return std::move(bg.error());
-    }
+    RETURN_IF_ERROR(DecodeColor(p, /*unset_argb=*/0U, rec.fg_argb, rec.fg));
+    RETURN_IF_ERROR(DecodeColor(p, /*unset_argb=*/0U, rec.bg_argb, rec.bg));
     // The system-foreground / system-background palette pair is how a
     // patterned fill says it chose neither colour; Excel writes no
     // `<fgColor>` / `<bgColor>` for it. A fill the user did colour keeps
@@ -344,9 +328,7 @@ Expected<void, Error> DecodeBorderSide(ByteSpan& p, BorderSide& side) {
   side.style = style_or.value() <= 13U ? style_or.value() : std::uint8_t{0};
   std::uint32_t argb = 0;
   ColorSpec spec;
-  if (auto color = DecodeColor(p, /*unset_argb=*/0U, argb, spec); !color) {
-    return std::move(color.error());
-  }
+  RETURN_IF_ERROR(DecodeColor(p, /*unset_argb=*/0U, argb, spec));
   // A `none` side has no `<color>` child in OOXML; the wire always carries
   // one, so drop it rather than emit a colour Excel never wrote.
   if (side.style != 0U) {
@@ -367,9 +349,7 @@ Expected<void, Error> DecodeBorder(ByteSpan payload, StylesTable& table) {
   rec.diagonal_down = (flags_or.value() & 0x01U) != 0U;
   rec.diagonal_up = (flags_or.value() & 0x02U) != 0U;
   for (BorderSide* side : {&rec.top, &rec.bottom, &rec.left, &rec.right, &rec.diagonal}) {
-    if (auto decoded = DecodeBorderSide(p, *side); !decoded) {
-      return std::move(decoded.error());
-    }
+    RETURN_IF_ERROR(DecodeBorderSide(p, *side));
   }
   table.borders.push_back(rec);
   return Expected<void, Error>::Ok();
@@ -494,9 +474,7 @@ std::uint8_t UnderlineOrdinal(std::uint16_t wire) {
 Expected<void, Error> DecodeDxfBorderSide(ByteSpan& d, BorderSide& side) {
   std::uint32_t argb = 0;
   ColorSpec spec;
-  if (auto color = DecodeStatedColor(d, /*unset_argb=*/0U, argb, spec); !color) {
-    return std::move(color.error());
-  }
+  RETURN_IF_ERROR(DecodeStatedColor(d, /*unset_argb=*/0U, argb, spec));
   auto style_or = read_u16(d);
   if (!style_or) {
     return std::move(style_or.error());
@@ -554,9 +532,7 @@ Expected<void, Error> ApplyDxfProp(std::uint16_t type, ByteSpan d, DifferentialF
       static_cast<void>(unused);
       GradientStop stop;
       ASSIGN_OR_RETURN(stop.position, read_double(d));
-      if (auto color = DecodeStatedColor(d, /*unset_argb=*/0U, stop.argb, stop.color); !color) {
-        return std::move(color.error());
-      }
+      RETURN_IF_ERROR(DecodeStatedColor(d, /*unset_argb=*/0U, stop.argb, stop.color));
       dxf.has_fill = true;
       fill.has_gradient = true;
       if (fill.gradient.stops.size() >= kMaxGradientStops) {
@@ -691,9 +667,7 @@ Expected<void, Error> DecodeDxf(ByteSpan payload, StylesTable& table) {
     const ByteSpan data{p.data, static_cast<std::size_t>(size) - 4U};
     p.data += data.size;
     p.size -= data.size;
-    if (auto r = ApplyDxfProp(type, data, dxf); !r) {
-      return std::move(r.error());
-    }
+    RETURN_IF_ERROR(ApplyDxfProp(type, data, dxf));
   }
   table.dxfs.push_back(std::move(dxf));
   return Expected<void, Error>::Ok();
@@ -754,40 +728,28 @@ Expected<StylesTable, Error> read_styles_bin(ByteSpan bytes) {
       continue;
     }
     if (rec.type == kBrtDxf) {
-      if (auto r = DecodeDxf(rec.payload, table); !r) {
-        return std::move(r.error());
-      }
+      RETURN_IF_ERROR(DecodeDxf(rec.payload, table));
       continue;
     }
     if (rec.type == kBrtStyle) {
-      if (auto r = DecodeStyle(rec.payload, table); !r) {
-        return std::move(r.error());
-      }
+      RETURN_IF_ERROR(DecodeStyle(rec.payload, table));
       continue;
     }
     switch (static_cast<XlsbRecordType>(rec.type)) {
       case XlsbRecordType::BrtFmt: {
-        if (auto r = DecodeFmt(rec.payload, table); !r) {
-          return std::move(r.error());
-        }
+        RETURN_IF_ERROR(DecodeFmt(rec.payload, table));
         break;
       }
       case XlsbRecordType::BrtFont: {
-        if (auto r = DecodeFont(rec.payload, table); !r) {
-          return std::move(r.error());
-        }
+        RETURN_IF_ERROR(DecodeFont(rec.payload, table));
         break;
       }
       case XlsbRecordType::BrtFill: {
-        if (auto r = DecodeFill(rec.payload, table); !r) {
-          return std::move(r.error());
-        }
+        RETURN_IF_ERROR(DecodeFill(rec.payload, table));
         break;
       }
       case XlsbRecordType::BrtBorder: {
-        if (auto r = DecodeBorder(rec.payload, table); !r) {
-          return std::move(r.error());
-        }
+        RETURN_IF_ERROR(DecodeBorder(rec.payload, table));
         break;
       }
       case XlsbRecordType::BrtBeginCellStyleXFs:
@@ -803,9 +765,7 @@ Expected<StylesTable, Error> read_styles_bin(ByteSpan bytes) {
         xf_target = XfTarget::kNone;
         break;
       case XlsbRecordType::BrtXF: {
-        if (auto r = DecodeXf(rec.payload, xf_target, table); !r) {
-          return std::move(r.error());
-        }
+        RETURN_IF_ERROR(DecodeXf(rec.payload, xf_target, table));
         break;
       }
       default:

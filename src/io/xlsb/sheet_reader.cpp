@@ -520,10 +520,7 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(const XlsbRecord& rec, Xl
       return RecordDisposition::kModelled;
     }
     case XlsbRecordType::BrtHLink: {
-      auto link_status = decode_hyperlink(rec, wb.sheet(sheet_index));
-      if (!link_status) {
-        return std::move(link_status.error());
-      }
+      RETURN_IF_ERROR(decode_hyperlink(rec, wb.sheet(sheet_index)));
       return RecordDisposition::kModelled;
     }
     case XlsbRecordType::BrtCellBlank:
@@ -630,12 +627,9 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(const XlsbRecord& rec, Xl
         // Register the real formula via the workbook-level entry so the
         // dep graph tracks it (matching the OOXML reader). The cached
         // value is preserved separately below.
-        auto wf = wb.set_cell_formula(sheet_index, state.current_row, col.col,
-                                      wb.ingest_stored_formula(formula_text, Workbook::FormulaSource::kRendered),
-                                      Workbook::FormulaSource::kRendered);
-        if (!wf) {
-          return std::move(wf.error());
-        }
+        RETURN_IF_ERROR(wb.set_cell_formula(sheet_index, state.current_row, col.col,
+                                            wb.ingest_stored_formula(formula_text, Workbook::FormulaSource::kRendered),
+                                            Workbook::FormulaSource::kRendered));
       }
       // Always preserve the cached value (for undecodable formulas this
       // is the only correct datum the cell carries; for decoded ones it
@@ -717,12 +711,9 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(const XlsbRecord& rec, Xl
       const Cell* shell = wb.sheet(sheet_index).cell_at(rw_first, col_first);
       Value cached = shell != nullptr ? shell->cached_value : Value::blank();
       const std::string cached_text = cached.is_text() ? std::string(cached.as_text()) : std::string();
-      auto wf = wb.set_cell_formula(sheet_index, rw_first, col_first,
-                                    wb.ingest_stored_formula(formula_text, Workbook::FormulaSource::kRendered),
-                                    Workbook::FormulaSource::kRendered);
-      if (!wf) {
-        return std::move(wf.error());
-      }
+      RETURN_IF_ERROR(wb.set_cell_formula(sheet_index, rw_first, col_first,
+                                          wb.ingest_stored_formula(formula_text, Workbook::FormulaSource::kRendered),
+                                          Workbook::FormulaSource::kRendered));
       if (cached.is_text()) {
         cached = Value::text(cached_text);  // the cell's own copy went with the shell
       }
@@ -828,10 +819,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
         restore_opaque_rich_values(wb.sheet(sheet_index), state.value_metadata, *rich_values);
     restore_rich_error_cells(wb, sheet_index, error_cells, state.array_anchors, rich_values->errors, deferred);
   }
-  auto spills = RegisterArraySpills(wb, sheet_index, state.array_anchors);
-  if (!spills) {
-    return std::move(spills.error());
-  }
+  RETURN_IF_ERROR(RegisterArraySpills(wb, sheet_index, state.array_anchors));
   if (!state.tail.empty()) {
     std::vector<cf::ConditionalFormat>& formats = wb.sheet(sheet_index).mutable_conditional_formats();
     for (std::vector<std::uint8_t>* slot :

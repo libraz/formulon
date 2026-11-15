@@ -104,14 +104,11 @@ Expected<WorkbookBinInfo, Error> DecodeWorkbookBin(const std::vector<std::uint8_
     ASSIGN_OR_RETURN(auto hs_state, read_u32(p));
     ASSIGN_OR_RETURN(auto tab_id, read_u32(p));
     ASSIGN_OR_RETURN(auto rid, read_xlnullablewidestring(p));
-    auto name_or = read_xlwidestring(p);
-    if (!name_or) {
-      return std::move(name_or.error());
-    }
+    ASSIGN_OR_RETURN(auto name, read_xlwidestring(p));
     SheetBundleEntry entry;
     entry.rid = std::move(rid);
     entry.tab_id = tab_id;
-    entry.name = std::move(name_or.value());
+    entry.name = std::move(name);
     // An hsState outside the three defined values is not a visibility this
     // model can name; treat anything non-zero it cannot place as plain
     // hidden, which is the conservative direction (the sheet stays out of

@@ -120,16 +120,8 @@ void DecodePhoneticProperties(ByteSpan& cursor, PhoneticProperties& out) {
 
 Expected<void, Error> DecodePhoneticTail(ByteSpan& cursor, std::string_view surface, std::vector<PhoneticRun>& out,
                                          PhoneticProperties& out_props) {
-  auto phonetic_or = read_xlwidestring(cursor);
-  if (!phonetic_or) {
-    return std::move(phonetic_or.error());
-  }
-  const std::string phonetic = std::move(phonetic_or.value());
-  auto count_or = read_u32(cursor);
-  if (!count_or) {
-    return std::move(count_or.error());
-  }
-  const std::uint32_t run_count = count_or.value();
+  ASSIGN_OR_RETURN(const std::string phonetic, read_xlwidestring(cursor));
+  ASSIGN_OR_RETURN(const std::uint32_t run_count, read_u32(cursor));
   if (run_count == 0U) {
     if (!phonetic.empty()) {
       out.push_back(PhoneticRun{0U, utf16_units_in(surface), phonetic});
@@ -153,11 +145,7 @@ Expected<void, Error> DecodePhoneticTail(ByteSpan& cursor, std::string_view surf
   for (std::uint32_t i = 0; i < run_count; ++i) {
     std::array<std::uint16_t, 3> fields{};
     for (std::uint16_t& field : fields) {
-      auto field_or = read_u16(cursor);
-      if (!field_or) {
-        return std::move(field_or.error());
-      }
-      field = field_or.value();
+      ASSIGN_OR_RETURN(field, read_u16(cursor));
     }
     runs.push_back(fields);
   }

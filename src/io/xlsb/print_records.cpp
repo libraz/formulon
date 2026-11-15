@@ -154,16 +154,11 @@ constexpr std::size_t kPageSetupFieldsSize = 34U;
 constexpr std::size_t kPageSetupSize = kPageSetupFieldsSize + 4U;
 constexpr std::uint32_t kNullStringLength = 0xFFFFFFFFU;
 
-std::uint32_t U32At(const std::uint8_t* p) {
-  return static_cast<std::uint32_t>(p[0]) | (static_cast<std::uint32_t>(p[1]) << 8U) |
-         (static_cast<std::uint32_t>(p[2]) << 16U) | (static_cast<std::uint32_t>(p[3]) << 24U);
-}
-
 /// The `<pageSetup>` Excel writes in `.xlsx` for a BrtPageSetup, attributes in schema order: values equal to the
 /// record's defaults are left out and `orientation` is always stated. Empty for a record with a printer-settings
 /// relationship, an unmeasured flag bit, or comments at the end without the comments bit.
 std::string DecodePageSetup(ByteSpan payload) {
-  if (payload.size != kPageSetupSize || U32At(payload.data + kPageSetupFieldsSize) != kNullStringLength) {
+  if (payload.size != kPageSetupSize || load_u32(payload.data + kPageSetupFieldsSize) != kNullStringLength) {
     return std::string();
   }
   const std::uint8_t* p = payload.data;
@@ -172,11 +167,11 @@ std::string DecodePageSetup(ByteSpan payload) {
     return std::string();
   }
   std::string xml = "<pageSetup";
-  append_xml_attr_uint_if(xml, "paperSize", U32At(p), kDefaultPaperSize);
-  append_xml_attr_uint_if(xml, "scale", U32At(p + 4U), kDefaultScale);
-  append_xml_attr_uint_if(xml, "firstPageNumber", U32At(p + 20U), 1U);
-  append_xml_attr_uint_if(xml, "fitToWidth", U32At(p + 24U), 1U);
-  append_xml_attr_uint_if(xml, "fitToHeight", U32At(p + 28U), 1U);
+  append_xml_attr_uint_if(xml, "paperSize", load_u32(p), kDefaultPaperSize);
+  append_xml_attr_uint_if(xml, "scale", load_u32(p + 4U), kDefaultScale);
+  append_xml_attr_uint_if(xml, "firstPageNumber", load_u32(p + 20U), 1U);
+  append_xml_attr_uint_if(xml, "fitToWidth", load_u32(p + 24U), 1U);
+  append_xml_attr_uint_if(xml, "fitToHeight", load_u32(p + 28U), 1U);
   if ((flags & kOverThenDown) != 0U) {
     xml.append(" pageOrder=\"overThenDown\"");
   }
@@ -197,9 +192,9 @@ std::string DecodePageSetup(ByteSpan payload) {
   if (const char* errors = kErrors[(flags >> kErrorsShift) & 3U]; errors != nullptr) {
     append_xml_attr(xml, "errors", errors);
   }
-  append_xml_attr_uint_if(xml, "horizontalDpi", U32At(p + 8U), kDefaultDpi);
-  append_xml_attr_uint_if(xml, "verticalDpi", U32At(p + 12U), kDefaultDpi);
-  append_xml_attr_uint_if(xml, "copies", U32At(p + 16U), 1U);
+  append_xml_attr_uint_if(xml, "horizontalDpi", load_u32(p + 8U), kDefaultDpi);
+  append_xml_attr_uint_if(xml, "verticalDpi", load_u32(p + 12U), kDefaultDpi);
+  append_xml_attr_uint_if(xml, "copies", load_u32(p + 16U), 1U);
   xml.append("/>");
   return xml;
 }

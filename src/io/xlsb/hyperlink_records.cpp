@@ -91,18 +91,9 @@ Expected<void, Error> decode_hyperlink(const XlsbRecord& rec, Sheet& sheet) {
                       "context=xlsb_reader cch=" + std::to_string(rel_len));
   }
   ASSIGN_OR_RETURN(auto rid, read_xlnullablewidestring(p));
-  auto location_or = ReadHyperlinkWideString(p, "location", kMaxHyperlinkLocationUnits);
-  if (!location_or) {
-    return std::move(location_or.error());
-  }
-  auto tooltip_or = ReadHyperlinkWideString(p, "tooltip", kMaxHyperlinkTooltipUnits);
-  if (!tooltip_or) {
-    return std::move(tooltip_or.error());
-  }
-  auto display_or = ReadHyperlinkWideString(p, "display", kMaxHyperlinkDisplayUnits);
-  if (!display_or) {
-    return std::move(display_or.error());
-  }
+  ASSIGN_OR_RETURN(auto location, ReadHyperlinkWideString(p, "location", kMaxHyperlinkLocationUnits));
+  ASSIGN_OR_RETURN(auto tooltip, ReadHyperlinkWideString(p, "tooltip", kMaxHyperlinkTooltipUnits));
+  ASSIGN_OR_RETURN(auto display, ReadHyperlinkWideString(p, "display", kMaxHyperlinkDisplayUnits));
   if (p.size != 0U) {
     return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb BrtHLink has trailing bytes",
                       "context=xlsb_reader trailing=" + std::to_string(p.size));
@@ -113,9 +104,9 @@ Expected<void, Error> decode_hyperlink(const XlsbRecord& rec, Sheet& sheet) {
   hyperlink.last_row = rfx.last_row;
   hyperlink.last_col = rfx.last_col;
   hyperlink.rid = std::move(rid);
-  hyperlink.location = std::move(location_or.value());
-  hyperlink.tooltip = std::move(tooltip_or.value());
-  hyperlink.display = std::move(display_or.value());
+  hyperlink.location = std::move(location);
+  hyperlink.tooltip = std::move(tooltip);
+  hyperlink.display = std::move(display);
   sheet.mutable_hyperlinks().push_back(std::move(hyperlink));
   return Expected<void, Error>::Ok();
 }
