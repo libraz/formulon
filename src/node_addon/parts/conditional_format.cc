@@ -125,7 +125,7 @@ Napi::Object CfRuleToJs(Napi::Env env, const fm_cf_rule_t& rule) {
   item.Set("percent", JsBoolOrNull(env, rule.has_rank, rule.percent));
   item.Set("bottom", JsBoolOrNull(env, rule.has_rank, rule.bottom));
   // The average flags are meaningful only for the AboveAverage rule type.
-  const bool above_average_rule = rule.type == 6 /* AboveAverage */;
+  const bool above_average_rule = rule.type == FM_CF_RULE_TYPE_ABOVE_AVERAGE;
   item.Set("aboveAverage", JsBoolOrNull(env, above_average_rule ? 1 : 0, rule.above_average));
   item.Set("equalAverage", JsBoolOrNull(env, above_average_rule ? 1 : 0, rule.equal_average));
   item.Set("stdDev", JsNumberOrNull(env, above_average_rule ? rule.has_std_dev : 0, rule.std_dev));

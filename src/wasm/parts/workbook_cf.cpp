@@ -131,7 +131,7 @@ emscripten::val cf_rule_to_val(const fm_cf_rule_t& rule) {
   item.set("percent", rule.has_rank != 0 ? emscripten::val(rule.percent != 0) : null);
   item.set("bottom", rule.has_rank != 0 ? emscripten::val(rule.bottom != 0) : null);
   // The average flags belong to the AboveAverage rule type only.
-  const bool above_average_rule = rule.type == 6 /* AboveAverage */;
+  const bool above_average_rule = rule.type == FM_CF_RULE_TYPE_ABOVE_AVERAGE;
   item.set("aboveAverage", above_average_rule ? emscripten::val(rule.above_average != 0) : null);
   item.set("equalAverage", above_average_rule ? emscripten::val(rule.equal_average != 0) : null);
   js_set_present_or_null(item, "stdDev", above_average_rule ? rule.has_std_dev : 0, rule.std_dev);
