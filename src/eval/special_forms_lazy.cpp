@@ -504,29 +504,6 @@ Value eval_count_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   return Value::number(total);
 }
 
-// IFS(cond1, val1, ...) - Excel's multi-branch short-circuit: the first
-// TRUE condition wins and its paired value is evaluated and returned; all
-// remaining branches (both conditions AND values) are skipped. Errors in
-// an evaluated condition propagate. When no condition matches (including
-// the degenerate odd-arity case) the result is #N/A, matching Excel's
-// documented "if none match" behaviour.
-//
-// Conditions use the *strict* logical coercion shared with AND / OR / XOR
-// (`eval/logical_coerce.h`), NOT the generic `coerce_to_bool` used by IF:
-//
-//   * Bool / finite Number / "TRUE" / "FALSE" text (case-insensitive,
-//     trimmed) carry a bool value.
-//   * Numeric-text like "0" / "1" surfaces `#VALUE!` — this is the Mac
-//     Excel 365 rule that distinguishes IFS from IF.
-//   * Blank is treated as FALSE (IFS walks past blank conditions rather
-//     than rejecting them).
-//   * Empty text is also treated as FALSE, matching the AND-family "Skip"
-//     path (IFS collapses Skip to the false branch so `IFS("", 1, TRUE, 2)`
-//     hits the catchall instead of erroring).
-//
-// The coercion uses the host-aware `logical_coerce_for_host`, the same seam
-// AND / OR route through, so a text condition is judged consistently with
-// the rest of the logical family under the active Excel profile.
 // IFS from the first array condition onward. `first` is the argument index
 // of that condition and `first_cond` its already-evaluated value; every
 // earlier condition was a scalar that tested false, so none of them can win
@@ -604,6 +581,29 @@ Value eval_ifs_array_cond(const parser::AstNode& call, std::uint32_t first, cons
   return Value::array(out);
 }
 
+// IFS(cond1, val1, ...) - Excel's multi-branch short-circuit: the first
+// TRUE condition wins and its paired value is evaluated and returned; all
+// remaining branches (both conditions AND values) are skipped. Errors in
+// an evaluated condition propagate. When no condition matches (including
+// the degenerate odd-arity case) the result is #N/A, matching Excel's
+// documented "if none match" behaviour.
+//
+// Conditions use the *strict* logical coercion shared with AND / OR / XOR
+// (`eval/logical_coerce.h`), NOT the generic `coerce_to_bool` used by IF:
+//
+//   * Bool / finite Number / "TRUE" / "FALSE" text (case-insensitive,
+//     trimmed) carry a bool value.
+//   * Numeric-text like "0" / "1" surfaces `#VALUE!` — this is the Mac
+//     Excel 365 rule that distinguishes IFS from IF.
+//   * Blank is treated as FALSE (IFS walks past blank conditions rather
+//     than rejecting them).
+//   * Empty text is also treated as FALSE, matching the AND-family "Skip"
+//     path (IFS collapses Skip to the false branch so `IFS("", 1, TRUE, 2)`
+//     hits the catchall instead of erroring).
+//
+// The coercion uses the host-aware `logical_coerce_for_host`, the same seam
+// AND / OR route through, so a text condition is judged consistently with
+// the rest of the logical family under the active Excel profile.
 SelectedBranch select_ifs_branch(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                                  const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();

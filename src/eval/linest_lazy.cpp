@@ -37,8 +37,8 @@ namespace {
 /// Evaluates an optional scalar Boolean argument. Numbers coerce
 /// to false (zero) / true (non-zero); Booleans pass through; errors
 /// propagate via `*out_err` (returning `false`); other types -> `#VALUE!`.
-bool eval_bool_arg(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
-                   bool default_value, bool* out, Value* out_err) {
+bool eval_optional_flag_arg(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
+                            const EvalContext& ctx, bool default_value, bool* out, Value* out_err) {
   const Value v = eval_node(arg, arena, registry, ctx);
   if (v.is_error()) {
     *out_err = v;
@@ -615,14 +615,14 @@ Value eval_fit(const parser::AstNode& call, Arena& arena, const FunctionRegistry
 
   bool with_const = true;
   if (arity >= 3U) {
-    if (!eval_bool_arg(call.as_call_arg(2), arena, registry, ctx, true, &with_const, &err)) {
+    if (!eval_optional_flag_arg(call.as_call_arg(2), arena, registry, ctx, true, &with_const, &err)) {
       return err;
     }
   }
 
   bool want_stats = false;
   if (arity >= 4U) {
-    if (!eval_bool_arg(call.as_call_arg(3), arena, registry, ctx, false, &want_stats, &err)) {
+    if (!eval_optional_flag_arg(call.as_call_arg(3), arena, registry, ctx, false, &want_stats, &err)) {
       return err;
     }
   }
@@ -746,7 +746,7 @@ Value eval_prediction(const parser::AstNode& call, Arena& arena, const FunctionR
   }
   bool with_const = true;
   if (arity >= 4U) {
-    if (!eval_bool_arg(call.as_call_arg(3), arena, registry, ctx, true, &with_const, &err)) {
+    if (!eval_optional_flag_arg(call.as_call_arg(3), arena, registry, ctx, true, &with_const, &err)) {
       return err;
     }
   }

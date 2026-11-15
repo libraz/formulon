@@ -13,7 +13,6 @@
 #include "eval/collated_wildcard.h"
 #include "eval/dbcs_table.h"
 #include "eval/eval_profile_scope.h"
-#include "eval/text_index_unit.h"
 #include "eval/wildcard.h"
 #include "excel_locale.h"
 #include "utils/text_ops.h"
@@ -113,7 +112,8 @@ bool read_search_args(const Value* args, std::uint32_t arity, SearchUnit unit, S
     return false;
   }
   const int start = parsed.value();
-  const TextIndexUnit index_unit = unit == SearchUnit::Positions ? text_index_unit() : TextIndexUnit::kUtf16Units;
+  const TextIndexUnit index_unit =
+      unit == SearchUnit::Positions ? current_text_index_unit() : TextIndexUnit::kUtf16Units;
   const std::uint64_t total = (unit == SearchUnit::DbcsByte)
                                   ? dbcs_bytes_in(haystack.value(), locale_facts(current_eval_profile()).dbcs_codepage)
                                   : static_cast<std::uint64_t>(text_index_length(haystack.value(), index_unit));

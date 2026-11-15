@@ -134,7 +134,7 @@ struct DbcsCharRec {
 // Walks `src` once and builds the per-character map. O(n) time, one pass.
 std::vector<DbcsCharRec> build_dbcs_char_map(std::string_view src, DbcsCodepage codepage);
 
-// MID / REPLACE counted in `text_index_unit()` positions. Defined in `text.cpp`.
+// MID / REPLACE counted in `current_text_index_unit()` positions. Defined in `text.cpp`.
 Value Mid(const Value* args, std::uint32_t arity, Arena& arena);
 Value Replace_(const Value* args, std::uint32_t arity, Arena& arena);
 // The same slices counted in UTF-16 units, for MIDB / REPLACEB outside a DBCS profile.

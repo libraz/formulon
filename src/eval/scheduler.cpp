@@ -488,6 +488,7 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
     const IterativeProgressCb progress_cb = engine.progress_cb_;
     void* const progress_user_data = engine.progress_user_data_;
 
+    std::vector<std::vector<LayerProducer>> producers_by_sheet(wb.sheet_count());
     for (std::size_t layer_index = 0U; layer_index < layers.size(); ++layer_index) {
       const std::vector<std::size_t>& layer = layers[layer_index];
       sccs_processed += layer.size();
@@ -633,7 +634,9 @@ Expected<void, Error> recalc_parallel_impl(Workbook& wb, const FunctionRegistry&
       // they share. Where the race went against the serial walk's ascending
       // order, release the sheet's producers of this layer and run them again
       // in that order on the caller, so the winner never depends on timing.
-      std::vector<std::vector<LayerProducer>> producers_by_sheet(wb.sheet_count());
+      for (std::vector<LayerProducer>& producers : producers_by_sheet) {
+        producers.clear();
+      }
       for (const std::size_t scc_id : layer) {
         for (const CellNodeId member : idx.components[scc_id]) {
           if (member.sheet_id < wb.sheet_count() && engine.potential_spill_producers_.find(member) != nullptr) {

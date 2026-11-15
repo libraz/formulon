@@ -49,13 +49,14 @@ Error invalid(const char* reason, std::string_view context = {}) {
 // Bytes that extend an identifier run; a superset of the tokenizer's name bytes
 // so a run never stops inside a cell reference or number.
 bool is_run_byte(unsigned char c) {
-  return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '.' ||
-         c == '\\' || c == '?' || c == '$' || c >= 0x80;
+  const char ch = static_cast<char>(c);
+  return strings::is_ascii_alpha(ch) || strings::is_ascii_digit(ch) || c == '_' || c == '.' || c == '\\' || c == '?' ||
+         c == '$' || c >= 0x80;
 }
 
 bool is_error_literal_byte(unsigned char c) {
-  return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '/' ||
-         c == '!' || c == '?';
+  const char ch = static_cast<char>(c);
+  return strings::is_ascii_alpha(ch) || strings::is_ascii_digit(ch) || c == '_' || c == '/' || c == '!' || c == '?';
 }
 
 bool is_reserved_name(std::string_view name) {

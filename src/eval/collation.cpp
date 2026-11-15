@@ -1071,10 +1071,11 @@ CollateQuery::CollateQuery(std::string_view query, ExcelProfile profile, Collati
 }
 
 int CollateQuery::compare(std::string_view cell) const {
-  if (ascii_) {
-    return collate(cell, query_, profile_, strength_);
+  if (ascii_ && ascii_fast(locale_data(profile_), cell)) {
+    return ascii_compare(locale_data(profile_), cell, query_);
   }
-  return collate_key_compare(collation_key(cell, profile_, strength_), key_);
+  return collate_key_compare(collation_key(cell, profile_, strength_),
+                             ascii_ ? collation_key(query_, profile_, strength_) : key_);
 }
 
 int collate_key_compare(std::string_view key_a, std::string_view key_b) noexcept {

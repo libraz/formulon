@@ -469,9 +469,7 @@ std::vector<double> to_numbers(const std::vector<Value>& cells) {
   std::vector<double> out;
   out.reserve(cells.size());
   for (const Value& v : cells) {
-    if (v.is_number()) {
-      out.push_back(v.as_number());
-    }
+    out.push_back(v.as_number());
   }
   return out;
 }
@@ -485,15 +483,8 @@ std::vector<double> to_numbers(const std::vector<Value>& cells) {
 // COUNT/COUNTA -> 0, MODE.SNGL -> #N/A.
 
 Value run_count(const std::vector<Value>& cells) {
-  // After `apply_filters`, numeric branches retain only Numbers; this gives
-  // the same answer as iterating the post-filter `cells` directly.
-  std::uint32_t n = 0;
-  for (const Value& v : cells) {
-    if (v.is_number()) {
-      ++n;
-    }
-  }
-  return Value::number(static_cast<double>(n));
+  // After `apply_filters`, the COUNT branch retains only Numbers.
+  return Value::number(static_cast<double>(cells.size()));
 }
 
 Value run_counta(const std::vector<Value>& cells) {

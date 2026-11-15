@@ -446,6 +446,20 @@ bool matches_text(const Value& cell, const ParsedCriterion& c, ExcelProfile prof
   // Project the cell to its text rendering. Text is viewed in place;
   // `coerce_to_text` yields the Excel-visible spelling for numbers / bools; a
   // failure (unsupported kind) falls back to non-match. Blank becomes "".
+  // Wildcard equality and ordering only ever match Text cells; decide that before formatting.
+  const bool text_only = c.op == CriteriaOp::Lt || c.op == CriteriaOp::LtEq || c.op == CriteriaOp::Gt ||
+                         c.op == CriteriaOp::GtEq ||
+                         (c.has_wildcard && (c.op == CriteriaOp::Eq || c.op == CriteriaOp::NotEq));
+  if (text_only && cell.kind() != ValueKind::Text) {
+    switch (cell.kind()) {
+      case ValueKind::Number:
+      case ValueKind::Bool:
+      case ValueKind::Blank:
+        return c.op == CriteriaOp::NotEq;
+      default:
+        return false;
+    }
+  }
   std::string coerced_text;
   std::string_view cell_text;
   if (cell.kind() == ValueKind::Text) {
@@ -463,7 +477,15 @@ bool matches_text(const Value& cell, const ParsedCriterion& c, ExcelProfile prof
   // keeps the byte-level fold. Wildcard detection on the criterion happened
   // earlier on the original raw RHS, so a full-width ＊ stays un-flagged and
   // compares as a literal rather than gaining wildcard semantics.
-  const auto wildcard_cell_folded = [&]() { return fold_criteria_text_for_profile(cell_text, profile); };
+  // Folding leaves ASCII text unchanged under every profile.
+  std::string wildcard_storage;
+  const auto wildcard_cell_folded = [&]() -> std::string_view {
+    if (is_all_ascii(cell_text)) {
+      return cell_text;
+    }
+    wildcard_storage = fold_criteria_text_for_profile(cell_text, profile);
+    return wildcard_storage;
+  };
   // Pre-folding leaves ASCII text unchanged, so such a cell is viewed in place.
   std::string prefolded_storage;
   const auto prefolded_cell = [&]() -> std::string_view {
@@ -496,9 +518,6 @@ bool matches_text(const Value& cell, const ParsedCriterion& c, ExcelProfile prof
         // tests/oracle/cases/countif.yaml case
         // `countif_wildcard_star_alone_text_only` (Mac=3 over `[apple, "",
         // 10, banana]`).
-        if (cell.kind() != ValueKind::Text) {
-          return false;
-        }
         const std::string& rhs_folded = c.cached_folded_rhs(profile, /*unescape_first=*/false);
         return wildcard_match(rhs_folded, wildcard_cell_folded());
       }
@@ -511,9 +530,6 @@ bool matches_text(const Value& cell, const ParsedCriterion& c, ExcelProfile prof
         // Mirror of the Eq branch: a non-text cell is never "equal" to a
         // wildcard text pattern, so `<>12*` against a Number cell is
         // trivially true.
-        if (cell.kind() != ValueKind::Text) {
-          return true;
-        }
         const std::string& rhs_folded = c.cached_folded_rhs(profile, /*unescape_first=*/false);
         return !wildcard_match(rhs_folded, wildcard_cell_folded());
       }
@@ -530,9 +546,6 @@ bool matches_text(const Value& cell, const ParsedCriterion& c, ExcelProfile prof
       // entirely (Mac Excel 365 returns 1 and 0 respectively over
       // {6, "5y", TRUE}). Text cells compare by collation; wildcards are
       // literal for ordering ops.
-      if (cell.kind() != ValueKind::Text) {
-        return false;
-      }
       return apply_ordering(c.op, collated_cmp(false));
     }
   }

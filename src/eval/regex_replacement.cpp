@@ -42,7 +42,7 @@ namespace formulon::eval::detail {
 namespace {
 
 bool is_name_byte(char c) noexcept {
-  return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_';
+  return strings::is_ascii_digit(c) || strings::is_ascii_alpha(c) || c == '_';
 }
 
 bool is_octal_byte(char c) noexcept {
@@ -52,9 +52,9 @@ bool is_octal_byte(char c) noexcept {
 // Appends the UTF-8 encoding of `cp`; false for a surrogate or a value past
 // U+10FFFF.
 bool append_code_point(std::string& out, std::uint32_t cp) {
-  const std::string encoded = encode_utf8_codepoint(cp);
-  out += encoded;
-  return !encoded.empty();
+  const std::size_t before = out.size();
+  append_utf8_codepoint(out, cp);
+  return out.size() != before;
 }
 
 // Reads `[0-9]{1,max_digits}` at `i`, advancing it.
@@ -134,7 +134,7 @@ ReplToken parse_dollar(std::string_view r, std::size_t& i) {
     tok.kind = ReplTokenKind::kSubject;
     return tok;
   }
-  if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || c == '_') {
+  if (strings::is_ascii_alpha(c) || c == '_') {
     std::size_t end = i;
     while (end < r.size() && is_name_byte(r[end])) {
       ++end;

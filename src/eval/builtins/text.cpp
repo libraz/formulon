@@ -25,7 +25,6 @@
 #include "eval/dbcs_table.h"
 #include "eval/eval_profile_scope.h"
 #include "eval/function_registry.h"
-#include "eval/text_index_unit.h"
 #include "excel_locale.h"
 #include "sbcs_codepage.h"
 #include "utils/arena.h"
@@ -601,7 +600,7 @@ static Value replace_in(const Value* args, std::uint32_t arity, Arena& arena, Te
 }
 
 Value Mid(const Value* args, std::uint32_t arity, Arena& arena) {
-  return mid_in(args, arity, arena, text_index_unit());
+  return mid_in(args, arity, arena, current_text_index_unit());
 }
 
 Value MidUtf16(const Value* args, std::uint32_t arity, Arena& arena) {
@@ -609,7 +608,7 @@ Value MidUtf16(const Value* args, std::uint32_t arity, Arena& arena) {
 }
 
 Value Replace_(const Value* args, std::uint32_t arity, Arena& arena) {
-  return replace_in(args, arity, arena, text_index_unit());
+  return replace_in(args, arity, arena, current_text_index_unit());
 }
 
 Value ReplaceUtf16(const Value* args, std::uint32_t arity, Arena& arena) {
