@@ -26,6 +26,7 @@
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/xf_flags.h"
 #include "utils/index_sort.h"
+#include "utils/status_macros.h"
 
 namespace formulon {
 namespace io {
@@ -379,9 +380,6 @@ void EmitStyle(std::vector<std::uint8_t>& out, const CellStyleRecord& style) {
   emit_record(out, kBrtStyle, payload);
 }
 
-/// BrtACBegin payload of a custom table style's revision-uid wrapper.
-constexpr std::array<std::uint8_t, 6> kTableStyleUidBeginPayload = {0x01, 0x00, 0x01, 0x11, 0x00, 0x80};
-
 /// The 16-byte uid of a custom table style: its `xr9:uid`, else the one Excel assigns, u32s 0, 0x11, 0xFFFFFFFF and
 /// the style's position among those written.
 std::array<std::uint8_t, kGuidBytes> TableStyleUid(const CustomTableStyle& style, std::uint32_t position) {
@@ -423,9 +421,7 @@ void EmitTableStyles(std::vector<std::uint8_t>& out, const StylesTable& table, c
   for (std::size_t i = 0; i < written.size(); ++i) {
     const CustomTableStyle& style = *written[i];
     const auto guid = TableStyleUid(style, static_cast<std::uint32_t>(i));
-    emit_record(out, kAcBegin, ByteSpan{kTableStyleUidBeginPayload.data(), kTableStyleUidBeginPayload.size()});
-    emit_record(out, kUid, ByteSpan{guid.data(), guid.size()});
-    emit_record(out, kAcEnd, ByteSpan{});
+    emit_acuid(out, kTableStyleUidBeginPayload, guid);
     payload.clear();
     emit_u16(payload, static_cast<std::uint16_t>((style.pivot ? kTableStyleIsPivot : 0U) |
                                                  (style.table ? kTableStyleIsTable : 0U)));
@@ -615,11 +611,7 @@ Expected<std::vector<std::uint8_t>, Error> compact_styles_bin(const std::vector<
     return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb styles part's dxf list is not one block",
                       "context=xlsb_styles_dxfs");
   }
-  auto mapped = rewrite_dxf_slots(raw, plan, DxfPartKey{-1, DxfPartType::kStyles, 0U});
-  if (!mapped) {
-    return std::move(mapped.error());
-  }
-  const std::vector<std::uint8_t>& src = mapped.value();
+  ASSIGN_OR_RETURN(const auto src, rewrite_dxf_slots(raw, plan, DxfPartKey{-1, DxfPartType::kStyles, 0U}));
   const std::vector<FramedRecord> recs = split_records(src);
   std::vector<const FramedRecord*> dxfs;
   for (const FramedRecord& rec : recs) {

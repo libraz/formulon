@@ -15,6 +15,7 @@
 #include "parser/parser.h"
 #include "utils/arena.h"
 #include "utils/resource_budget.h"
+#include "utils/status_macros.h"
 
 namespace formulon {
 namespace io {
@@ -84,39 +85,31 @@ MergeRange sqref_base(const std::vector<MergeRange>& ranges) {
 
 Expected<std::string, Error> read_feature_formula(ByteSpan& cursor, std::uint32_t base_row, std::uint32_t base_col,
                                                   const FeatureFormulaReadContext& ctx) {
-  auto cce = read_u32(cursor);
-  if (!cce) {
-    return std::move(cce.error());
-  }
-  if (cce.value() > cursor.size) {
+  ASSIGN_OR_RETURN(const std::uint32_t cce, read_u32(cursor));
+  if (cce > cursor.size) {
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "feature formula rgce truncated",
                       "context=xlsb_feature_formula");
   }
-  std::vector<std::uint8_t> rgce(cursor.data, cursor.data + cce.value());
-  cursor.data += cce.value();
-  cursor.size -= cce.value();
-  auto cb = read_u32(cursor);
-  if (!cb) {
-    return std::move(cb.error());
-  }
-  if (cb.value() > cursor.size) {
+  std::vector<std::uint8_t> rgce(cursor.data, cursor.data + cce);
+  cursor.data += cce;
+  cursor.size -= cce;
+  ASSIGN_OR_RETURN(const std::uint32_t cb, read_u32(cursor));
+  if (cb > cursor.size) {
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "feature formula rgcb truncated",
                       "context=xlsb_feature_formula");
   }
-  const ByteSpan rgcb{cursor.data, cb.value()};
-  cursor.data += cb.value();
-  cursor.size -= cb.value();
+  const ByteSpan rgcb{cursor.data, cb};
+  cursor.data += cb;
+  cursor.size -= cb;
   if (rgce.empty()) {
     return std::string();
   }
   Arena arena(kDefaultArenaChunkBytes, kMaxLoadArenaBytes);
-  auto ast =
+  ASSIGN_OR_RETURN(
+      const auto ast,
       decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, rgcb, arena, ctx.sheet_names, ctx.name_table, ctx.sheet_ranges,
-                  ctx.external_books, static_cast<std::int32_t>(ctx.sheet_index), PtgBaseCell{base_row, base_col});
-  if (!ast) {
-    return std::move(ast.error());
-  }
-  return canonical_feature_formula(parser::format_formula(*ast.value()));
+                  ctx.external_books, static_cast<std::int32_t>(ctx.sheet_index), PtgBaseCell{base_row, base_col}));
+  return canonical_feature_formula(parser::format_formula(*ast));
 }
 
 Expected<EncodedFeatureFormula, Error> encode_feature_formula(std::string_view text, std::uint32_t base_row,
@@ -136,20 +129,23 @@ Expected<EncodedFeatureFormula, Error> encode_feature_formula(std::string_view t
     return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg, "feature formula failed to parse",
                       "context=xlsb_feature_formula formula=" + std::string(text));
   }
-  auto encoded = encode_ptgs(*root, ctx.sheet_names, ctx.sheet_ranges, ctx.name_table, root_class,
-                             PtgBaseCell{base_row, base_col}, evaluation);
-  if (!encoded) {
-    return std::move(encoded.error());
-  }
-  const std::vector<std::uint8_t>& rgce = encoded.value().rgce;
+  ASSIGN_OR_RETURN(const auto encoded, encode_ptgs(*root, ctx.sheet_names, ctx.sheet_ranges, ctx.name_table, root_class,
+                                                   PtgBaseCell{base_row, base_col}, evaluation));
+  const std::vector<std::uint8_t>& rgce = encoded.rgce;
   out.cb_fmla =
       legacy_cf_formula_size_field(rgce.data(), rgce.size()).value_or(static_cast<std::uint32_t>(rgce.size()));
-  const std::vector<std::uint8_t>& rgcb = encoded.value().rgcb;
+  const std::vector<std::uint8_t>& rgcb = encoded.rgcb;
   emit_u32(out.bytes, static_cast<std::uint32_t>(rgce.size()));
   out.bytes.insert(out.bytes.end(), rgce.begin(), rgce.end());
   emit_u32(out.bytes, static_cast<std::uint32_t>(rgcb.size()));
   out.bytes.insert(out.bytes.end(), rgcb.begin(), rgcb.end());
   return out;
+}
+
+Expected<EncodedFeatureFormula, Error> encode_cf_formula(std::string_view text, const MergeRange& base,
+                                                         const FeatureFormulaWriteContext& ctx) {
+  return encode_feature_formula(text, base.first_row, base.first_col, PtgRootClass::kValue, ctx,
+                                PtgEvaluation::kConditionalFormat);
 }
 
 }  // namespace xlsb

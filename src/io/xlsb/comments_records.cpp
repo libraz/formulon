@@ -30,9 +30,6 @@ namespace io {
 namespace xlsb {
 namespace {
 
-/// BrtACBegin payload of a note's revision-uid wrapper.
-constexpr std::array<std::uint8_t, 6> kNoteUidBeginPayload = {0x01, 0x00, 0x02, 0x11, 0x00, 0x80};
-
 std::string FontKey(const FontRecord& font) {
   std::vector<std::uint8_t> bytes;
   emit_font_record(bytes, font);
@@ -147,9 +144,7 @@ std::vector<std::uint8_t> write_comments_bin(std::vector<CellComment> notes, std
         guid[12U + b] = static_cast<std::uint8_t>(((i + 1U) >> (8U * b)) & 0xFFU);
       }
     }
-    emit_record(out, kAcBegin, ByteSpan{kNoteUidBeginPayload.data(), kNoteUidBeginPayload.size()});
-    emit_record(out, kUid, ByteSpan{guid.data(), guid.size()});
-    emit_record(out, kAcEnd, ByteSpan{});
+    emit_acuid(out, kNoteUidBeginPayload, guid);
     payload.clear();
     emit_u32(payload, author_index[note.author]);
     emit_rfx(payload, MergeRange{note.row, note.col, note.row, note.col});

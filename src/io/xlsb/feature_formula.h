@@ -96,6 +96,10 @@ Expected<EncodedFeatureFormula, Error> encode_feature_formula(std::string_view t
                                                               const FeatureFormulaWriteContext& ctx,
                                                               PtgEvaluation evaluation = PtgEvaluation::kDynamicArray);
 
+/// `encode_feature_formula` of a conditional-format formula relative to `base`.
+Expected<EncodedFeatureFormula, Error> encode_cf_formula(std::string_view text, const MergeRange& base,
+                                                         const FeatureFormulaWriteContext& ctx);
+
 }  // namespace xlsb
 }  // namespace io
 }  // namespace formulon

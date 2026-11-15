@@ -248,9 +248,7 @@ void EmitAcuid(std::vector<std::uint8_t>& out, const std::string* guid) {
   if (!ParseGuid(*guid, bytes)) {
     return;
   }
-  emit_record(out, kAcBegin, ByteSpan{kAcUidBeginPayload.data(), kAcUidBeginPayload.size()});
-  emit_record(out, kUid, ByteSpan{bytes.data(), bytes.size()});
-  emit_record(out, kAcEnd, ByteSpan{});
+  emit_acuid(out, kAcUidBeginPayload, bytes);
 }
 
 /// With `identity_only`, stops after the id and names: the checks that make a
@@ -864,7 +862,7 @@ std::vector<std::uint8_t> write_table_bin(const TableMetadata& table, std::uint3
   EmitStyleClient(out, table.style_info);
   if (!table.ext_lst_xml.empty()) {
     if (auto alt = AltTextFromExtLst(table.ext_lst_xml)) {
-      emit_record(out, kFrtBegin, ByteSpan{kFrtVersion.data(), kFrtVersion.size()});
+      emit_frt_begin(out, kFrtVersionWord);
       payload.clear();
       emit_u32(payload, 0U);
       emit_xlnullablewidestring(payload, std::string_view(alt->first));

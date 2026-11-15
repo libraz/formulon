@@ -18,16 +18,13 @@
 #include "io/xlsb/record_writer.h"
 #include "io/xml_utils.h"
 #include "parser/ast_format.h"
+#include "utils/status_macros.h"
 #include "utils/structured_log.h"
 
 namespace formulon {
 namespace io {
 namespace xlsb {
 namespace {
-
-// The BrtACBegin Excel writes around a sparkline group's BrtUid: one
-// ACProductVersion, version 0x1002, fileExtension set.
-constexpr std::array<std::uint8_t, 6> kGroupUidVersion = {0x01, 0x00, 0x02, 0x10, 0x00, 0x80};
 
 // BrtBeginSparklineGroup flag bits ([MS-XLSB] 2.4.228); bits 1-2 are
 // fShowEmptyCellAsZero (0 zero, 1 gap, 2 interpolated).
@@ -313,19 +310,14 @@ Expected<void, Error> EmitGroup(std::vector<std::uint8_t>& dst, const SparklineG
                                 const FeatureFormulaWriteContext& ctx, std::string_view sheet_name) {
   std::array<std::uint8_t, kGuidBytes> guid{};
   if (!g.uid.empty() && ParseGuid(g.uid, guid)) {
-    emit_record(dst, kAcBegin, ByteSpan{kGroupUidVersion.data(), kGroupUidVersion.size()});
-    emit_record(dst, kUid, ByteSpan{guid.data(), guid.size()});
-    emit_record(dst, kAcEnd, ByteSpan{});
+    emit_acuid(dst, kGroupUidBeginPayload, guid);
   }
   std::vector<std::uint8_t> p;
   if (!g.date_axis_ref.empty() && !is_deleted_sparkline_source(g.date_axis_ref)) {
-    auto ref = EncodeReference(g.date_axis_ref, ctx, sheet_name);
-    if (!ref) {
-      return std::move(ref.error());
-    }
+    ASSIGN_OR_RETURN(const auto ref, EncodeReference(g.date_axis_ref, ctx, sheet_name));
     emit_u32(p, kFrtHeaderFormulas);
     emit_u32(p, 1U);
-    emit_frt_formula(p, ref.value());
+    emit_frt_formula(p, ref);
   } else {
     emit_u32(p, 0U);
   }
@@ -379,12 +371,9 @@ Expected<void, Error> EmitGroup(std::vector<std::uint8_t>& dst, const SparklineG
     emit_u32(s, kFrtItemFlags);
     emit_sqref(s, cells);
     if (!deleted) {
-      auto formula = EncodeReference(item.formula, ctx, sheet_name);
-      if (!formula) {
-        return std::move(formula.error());
-      }
+      ASSIGN_OR_RETURN(const auto formula, EncodeReference(item.formula, ctx, sheet_name));
       emit_u32(s, 1U);
-      emit_frt_formula(s, formula.value());
+      emit_frt_formula(s, formula);
     }
     emit_record(dst, kSparkline, s);
   }

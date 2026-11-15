@@ -391,7 +391,7 @@ std::vector<std::uint8_t> frt_container_block(const std::vector<FramedRecord>& r
     const std::array<std::uint8_t, 2> default_print_options = {0x10, 0x00};
     emit_record(block, kBrtPrintOptions, ByteSpan{default_print_options.data(), default_print_options.size()});
   }
-  emit_record(block, kFrtBegin, ByteSpan{kFrtVersion.data(), kFrtVersion.size()});
+  emit_frt_begin(block, kFrtVersionWord);
   emit_record(block, open, ByteSpan{});
   block.insert(block.end(), body.begin(), body.end());
   emit_record(block, close, ByteSpan{});
@@ -650,16 +650,12 @@ Expected<void, Error> EmitFormulaRule14(std::vector<std::uint8_t>& dst, const cf
       if (!sources[i]->has_value() || (*sources[i])->empty()) {
         continue;
       }
-      auto f = encode_feature_formula(**sources[i], base.first_row, base.first_col, PtgRootClass::kValue, ctx,
-                                      PtgEvaluation::kConditionalFormat);
-      if (!f) {
-        return std::move(f.error());
-      }
-      emit_frt_formula(list, f.value());
-      const std::vector<std::uint8_t>& bytes = f.value().bytes;
+      ASSIGN_OR_RETURN(const EncodedFeatureFormula f, encode_cf_formula(**sources[i], base, ctx));
+      emit_frt_formula(list, f);
+      const std::vector<std::uint8_t>& bytes = f.bytes;
       const std::optional<std::uint32_t> size =
           bytes.size() >= 4U ? frt_formula_size_field(bytes.data() + 4, load_u32(bytes.data())) : std::nullopt;
-      cb[i] = size.value_or(f.value().cb_fmla);
+      cb[i] = size.value_or(f.cb_fmla);
       ++count;
     }
   }

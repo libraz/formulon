@@ -54,6 +54,12 @@ inline constexpr std::uint16_t kUid = 3072;
 
 /// BrtACBegin payload of a revision-uid wrapper (BrtACBegin, BrtUid, BrtACEnd).
 inline constexpr std::array<std::uint8_t, 6> kAcUidBeginPayload = {0x01, 0x00, 0x00, 0x10, 0x00, 0x80};
+/// BrtACBegin payload of a sparkline group's revision-uid wrapper.
+inline constexpr std::array<std::uint8_t, 6> kGroupUidBeginPayload = {0x01, 0x00, 0x02, 0x10, 0x00, 0x80};
+/// BrtACBegin payload of a note's revision-uid wrapper.
+inline constexpr std::array<std::uint8_t, 6> kNoteUidBeginPayload = {0x01, 0x00, 0x02, 0x11, 0x00, 0x80};
+/// BrtACBegin payload of a custom table style's revision-uid wrapper.
+inline constexpr std::array<std::uint8_t, 6> kTableStyleUidBeginPayload = {0x01, 0x00, 0x01, 0x11, 0x00, 0x80};
 
 }  // namespace xlsb
 }  // namespace io

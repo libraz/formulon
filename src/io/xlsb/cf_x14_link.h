@@ -27,6 +27,7 @@ namespace xlsb {
 // BrtFRTBegin payload Excel writes around the x14 link, and the
 // BrtCFRuleExt layout: a zero u32, then the GUID in Windows byte order.
 inline constexpr std::array<std::uint8_t, 4> kFrtVersion = {0x02, 0x0E, 0x00, 0x00};
+inline constexpr std::uint32_t kFrtVersionWord = 0x00000E02U;
 
 /// A future-record container `open` .. `close` around `body`, wrapped in
 /// BrtFRTBegin / BrtFRTEnd. Excel refuses an x14 container that directly

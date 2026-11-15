@@ -21,6 +21,7 @@
 #ifndef FORMULON_IO_XLSB_RECORD_WRITER_H_
 #define FORMULON_IO_XLSB_RECORD_WRITER_H_
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -144,6 +145,13 @@ void emit_record(std::vector<std::uint8_t>& dst, std::uint16_t type, ByteSpan pa
 /// build their bodies into). Avoids forcing every caller to construct
 /// a `ByteSpan` at the call site.
 void emit_record(std::vector<std::uint8_t>& dst, std::uint16_t type, const std::vector<std::uint8_t>& payload);
+
+/// Appends BrtACBegin (`begin_payload`), BrtUid (`guid`) and BrtACEnd.
+void emit_acuid(std::vector<std::uint8_t>& dst, const std::array<std::uint8_t, 6>& begin_payload,
+                const std::array<std::uint8_t, 16>& guid);
+
+/// Appends BrtFRTBegin carrying the u32 `version`.
+void emit_frt_begin(std::vector<std::uint8_t>& dst, std::uint32_t version);
 
 }  // namespace xlsb
 }  // namespace io

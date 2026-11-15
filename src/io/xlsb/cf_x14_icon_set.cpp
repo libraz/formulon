@@ -249,15 +249,11 @@ Expected<void, Error> EmitIconCfvo14(std::vector<std::uint8_t>& dst, const cf::C
   double num = 0;
   std::uint32_t cb_fmla = 0;
   if (v.type == cf::CfvoType::Formula) {
-    auto f = encode_feature_formula(v.value, base.first_row, base.first_col, PtgRootClass::kValue, ctx,
-                                    PtgEvaluation::kConditionalFormat);
-    if (!f) {
-      return std::move(f.error());
-    }
+    ASSIGN_OR_RETURN(const EncodedFeatureFormula f, encode_cf_formula(v.value, base, ctx));
     emit_u32(p, kFrtHeaderFormulas);
     emit_u32(p, 1U);
-    emit_frt_formula(p, f.value());
-    cb_fmla = f.value().cb_fmla;
+    emit_frt_formula(p, f);
+    cb_fmla = f.cb_fmla;
   } else if (v.type == cf::CfvoType::Number || v.type == cf::CfvoType::Percent || v.type == cf::CfvoType::Percentile) {
     ASSIGN_OR_RETURN(num, parse_threshold_number(v.value));
     emit_u32(p, 0U);

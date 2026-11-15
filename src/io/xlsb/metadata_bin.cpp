@@ -192,9 +192,7 @@ std::vector<std::uint8_t> build_metadata_bin(bool dynamic_arrays, std::size_t ri
   };
   const auto begin_block = [&](std::uint32_t frt_version) {
     emit_record(out, kBrtBeginExt, ByteSpan{});
-    payload.clear();
-    emit_u32(payload, frt_version);
-    emit_record(out, kFrtBegin, payload);
+    emit_frt_begin(out, frt_version);
   };
   const auto end_block = [&]() {
     emit_record(out, kFrtEnd, ByteSpan{});

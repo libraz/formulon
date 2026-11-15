@@ -26,6 +26,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/number_text.h"
+#include "utils/status_macros.h"
 
 namespace formulon {
 namespace io {
@@ -259,10 +260,7 @@ Expected<bool, Error> decode_ws_prop(const XlsbRecord& rec, Sheet& sheet, std::s
     return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "xlsb BrtWsProp fields truncated",
                       "context=xlsb_reader sheet_index=" + std::to_string(sheet_index));
   }
-  auto code_name_or = read_xlwidestring(p);
-  if (!code_name_or) {
-    return std::move(code_name_or.error());
-  }
+  ASSIGN_OR_RETURN(const std::string code_name, read_xlwidestring(p));
 
   const std::uint32_t argb = pack_argb(alpha_or.value(), red_or.value(), green_or.value(), blue_or.value());
   ColorSpec tab;
@@ -278,7 +276,6 @@ Expected<bool, Error> decode_ws_prop(const XlsbRecord& rec, Sheet& sheet, std::s
   }
 
   std::string sheet_pr;
-  const std::string& code_name = code_name_or.value();
   std::string body;
   AppendTabColor(body, tab, argb);
   const bool has_tab_color = !body.empty();
@@ -513,9 +510,7 @@ void emit_sheet_uid(std::vector<std::uint8_t>& dst, const Sheet& sheet, std::siz
       guid[8U + i] = static_cast<std::uint8_t>((sheet_index >> (8U * i)) & 0xFFU);
     }
   }
-  emit_record(dst, kAcBegin, ByteSpan{kAcUidBeginPayload.data(), kAcUidBeginPayload.size()});
-  emit_record(dst, kUid, ByteSpan{guid.data(), guid.size()});
-  emit_record(dst, kAcEnd, ByteSpan{});
+  emit_acuid(dst, kAcUidBeginPayload, guid);
 }
 
 }  // namespace xlsb

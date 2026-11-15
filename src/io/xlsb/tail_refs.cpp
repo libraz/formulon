@@ -372,32 +372,56 @@ bool RemapRefToken(std::uint8_t* tag, const RefContext& ctx) {
 
 }  // namespace
 
+namespace {
+
+/// Steps over the tokens of an rgce: `Load` sizes the token at `i`, `Advance` moves past it.
+struct RgceCursor {
+  const std::uint8_t* rgce;
+  std::size_t cce;
+  std::size_t i = 0;
+  std::size_t size = 0;
+
+  bool Done() const { return i >= cce; }
+  std::uint8_t Op() const { return rgce[i]; }
+  std::uint8_t Kind() const { return rgce[i] & 0x1FU; }
+  void Advance() { i += 1U + size; }
+  /// False when the token at `i` cannot be stepped over.
+  bool Load();
+};
+
+bool RgceCursor::Load() {
+  const std::optional<std::size_t> token = TokenSize(rgce + i, cce - i);
+  if (!token || *token > cce - i - 1U) {
+    return false;
+  }
+  size = *token;
+  return true;
+}
+
+}  // namespace
+
 std::optional<std::uint32_t> frt_formula_size_field(const std::uint8_t* rgce, std::size_t cce) {
   std::size_t relative = 0;
-  for (std::size_t i = 0; i < cce;) {
-    const std::optional<std::size_t> size = TokenSize(rgce + i, cce - i);
-    if (!size || *size > cce - i - 1U) {
+  for (RgceCursor cur{rgce, cce}; !cur.Done(); cur.Advance()) {
+    if (!cur.Load()) {
       return std::nullopt;
     }
-    const std::uint8_t kind = rgce[i] & 0x1FU;
-    relative += rgce[i] >= 0x20U && (kind == 0x0CU || kind == 0x0DU) ? 1U : 0U;
-    i += 1U + *size;
+    const std::uint8_t kind = cur.Kind();
+    relative += cur.Op() >= 0x20U && (kind == 0x0CU || kind == 0x0DU) ? 1U : 0U;
   }
   return static_cast<std::uint32_t>(cce + 2U * relative);
 }
 
 std::optional<std::uint32_t> legacy_cf_formula_size_field(const std::uint8_t* rgce, std::size_t cce) {
   std::size_t extra = 0;
-  for (std::size_t i = 0; i < cce;) {
-    const std::optional<std::size_t> size = TokenSize(rgce + i, cce - i);
-    if (!size || *size > cce - i - 1U) {
+  for (RgceCursor cur{rgce, cce}; !cur.Done(); cur.Advance()) {
+    if (!cur.Load()) {
       return std::nullopt;
     }
-    const std::uint8_t kind = rgce[i] & 0x1FU;
-    if (rgce[i] >= 0x20U) {
+    const std::uint8_t kind = cur.Kind();
+    if (cur.Op() >= 0x20U) {
       extra += kind == 0x04U || kind == 0x05U || kind == 0x0CU || kind == 0x0DU ? 2U : kind == 0x03U ? 4U : 0U;
     }
-    i += 1U + *size;
   }
   return static_cast<std::uint32_t>(cce + extra);
 }
@@ -407,18 +431,16 @@ namespace {
 /// Rewrites every reference in `rgce[0, cce)` in place. False when a token
 /// cannot be stepped over or resolved; the caller then keeps the record.
 bool RemapRgce(std::uint8_t* rgce, std::size_t cce, const RefContext& ctx) {
-  for (std::size_t i = 0; i < cce;) {
-    const std::optional<std::size_t> size = TokenSize(rgce + i, cce - i);
-    if (!size || *size > cce - i - 1U) {
+  for (RgceCursor cur{rgce, cce}; !cur.Done(); cur.Advance()) {
+    if (!cur.Load()) {
       return false;
     }
-    const std::uint8_t kind = rgce[i] & 0x1FU;
-    const bool ref = rgce[i] >= 0x20U && (kind == 0x04U || kind == 0x05U || kind == 0x0CU || kind == 0x0DU ||
-                                          kind == 0x1AU || kind == 0x1BU);
-    if (ref && !RemapRefToken(rgce + i, ctx)) {
+    const std::uint8_t kind = cur.Kind();
+    const bool ref = cur.Op() >= 0x20U && (kind == 0x04U || kind == 0x05U || kind == 0x0CU || kind == 0x0DU ||
+                                           kind == 0x1AU || kind == 0x1BU);
+    if (ref && !RemapRefToken(rgce + cur.i, ctx)) {
       return false;
     }
-    i += 1U + *size;
   }
   return true;
 }

@@ -41,6 +41,7 @@
 #include "utils/expected.h"
 #include "utils/formula_text.h"
 #include "utils/index_sort.h"
+#include "utils/status_macros.h"
 #include "utils/strings.h"
 #include "workbook.h"
 
@@ -698,11 +699,8 @@ Expected<void, Error> EmitName(std::vector<std::uint8_t>& body, const std::strin
       p[0] |= 0x10U;  // fCalcExp (grbit bit 4)
     }
     // A defined-name body's root reference stays reference class.
-    auto encoded_or = encode_ptgs(*root, sheet_names, sheet_ranges, name_table, PtgRootClass::kReference);
-    if (!encoded_or) {
-      return std::move(encoded_or.error());
-    }
-    const EncodedFormula& encoded = encoded_or.value();
+    ASSIGN_OR_RETURN(const EncodedFormula encoded,
+                     encode_ptgs(*root, sheet_names, sheet_ranges, name_table, PtgRootClass::kReference));
     emit_u32(p, static_cast<std::uint32_t>(encoded.rgce.size()));
     p.insert(p.end(), encoded.rgce.begin(), encoded.rgce.end());
     emit_u32(p, static_cast<std::uint32_t>(encoded.rgcb.size()));
@@ -759,9 +757,7 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
   emit_wb_prop(body, wb.workbook_pr_xml(), wb.date1904());
   emit_abs_path(body, wb);
   // Excel places the protection records between BrtWbProp and the views.
-  if (auto protection = emit_book_protection(body, wb.workbook_protection_xml()); !protection) {
-    return std::move(protection.error());
-  }
+  RETURN_IF_ERROR(emit_book_protection(body, wb.workbook_protection_xml()));
   // The first window's itabCur is the active sheet, which must be a
   // tab-selected one; a mismatch made Excel show every tab selected.
   emit_book_views(body, wb.book_views_xml(), wb.active_sheet(), wb.sheet_count());
@@ -844,21 +840,15 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
   for (std::size_t i = 0; i < ordered_names.size(); ++i) {
     if (i < defined_count) {
       const DefinedName& dn = wb.defined_names()[i];
-      if (auto r = EmitName(body, dn.name, dn.formula, dn.local_sheet_id, dn.hidden, shapes[i].calc_exp, dn.comment,
-                            sheet_names, sheet_ranges, table_for_scope(dn.local_sheet_id));
-          !r) {
-        return std::move(r.error());
-      }
+      RETURN_IF_ERROR(EmitName(body, dn.name, dn.formula, dn.local_sheet_id, dn.hidden, shapes[i].calc_exp, dn.comment,
+                               sheet_names, sheet_ranges, table_for_scope(dn.local_sheet_id)));
     } else {
       // Placeholders carry no formula body, so the table they are handed is
       // never consulted; the workbook-scope one keeps the call uniform. A
       // stub for an undefined name is not hidden, as Excel saves it.
       const OrderedName& slot = ordered_names[i];
-      if (auto r = EmitName(body, slot.name, /*formula=*/{}, slot.itab, /*hidden=*/false, /*calc_exp=*/false,
-                            /*comment=*/{}, sheet_names, sheet_ranges, table_for_scope(-1));
-          !r) {
-        return std::move(r.error());
-      }
+      RETURN_IF_ERROR(EmitName(body, slot.name, /*formula=*/{}, slot.itab, /*hidden=*/false, /*calc_exp=*/false,
+                               /*comment=*/{}, sheet_names, sheet_ranges, table_for_scope(-1)));
     }
   }
 
@@ -872,10 +862,8 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
 
   // The Compatibility Version stamp in its own FRT block, last before BrtEndBook, as Excel writes it.
   if (const std::optional<std::uint32_t> version = wb.compatibility_stamp(); version.has_value()) {
+    emit_frt_begin(body, kWorkbookCompatibilityVersionFrt);
     std::vector<std::uint8_t> payload;
-    emit_u32(payload, kWorkbookCompatibilityVersionFrt);
-    emit_record(body, kFrtBegin, payload);
-    payload.clear();
     emit_u32(payload, 0U);
     emit_u32(payload, wb.compatibility_warn_below().value_or(0U));
     emit_u32(payload, *version);

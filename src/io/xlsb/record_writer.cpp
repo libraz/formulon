@@ -14,6 +14,7 @@
 #include <utility>
 #include <vector>
 
+#include "io/xlsb/frt_records.h"
 #include "io/xlsb/record.h"
 #include "io/zip_reader.h"
 #include "utils/text_ops.h"
@@ -240,6 +241,19 @@ void emit_record(std::vector<std::uint8_t>& dst, std::uint16_t type, ByteSpan pa
 
 void emit_record(std::vector<std::uint8_t>& dst, std::uint16_t type, const std::vector<std::uint8_t>& payload) {
   emit_record(dst, type, ByteSpan{payload.data(), payload.size()});
+}
+
+void emit_acuid(std::vector<std::uint8_t>& dst, const std::array<std::uint8_t, 6>& begin_payload,
+                const std::array<std::uint8_t, 16>& guid) {
+  emit_record(dst, kAcBegin, ByteSpan{begin_payload.data(), begin_payload.size()});
+  emit_record(dst, kUid, ByteSpan{guid.data(), guid.size()});
+  emit_record(dst, kAcEnd, ByteSpan{});
+}
+
+void emit_frt_begin(std::vector<std::uint8_t>& dst, std::uint32_t version) {
+  std::vector<std::uint8_t> payload;
+  emit_u32(payload, version);
+  emit_record(dst, kFrtBegin, payload);
 }
 
 }  // namespace xlsb

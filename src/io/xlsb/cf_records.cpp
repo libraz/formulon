@@ -459,12 +459,7 @@ Expected<void, Error> EmitCfvo(std::vector<std::uint8_t>& dst, const cf::CfValue
   double num = 0;
   EncodedFeatureFormula formula;
   if (v.type == cf::CfvoType::Formula) {
-    auto f = encode_feature_formula(v.value, base.first_row, base.first_col, PtgRootClass::kValue, ctx,
-                                    PtgEvaluation::kConditionalFormat);
-    if (!f) {
-      return std::move(f.error());
-    }
-    formula = std::move(f).value();
+    ASSIGN_OR_RETURN(formula, encode_cf_formula(v.value, base, ctx));
   } else if (v.type != cf::CfvoType::Min && v.type != cf::CfvoType::Max) {
     ASSIGN_OR_RETURN(num, parse_threshold_number(v.value));
   }
@@ -505,10 +500,7 @@ std::optional<EncodedFeatureFormula> TimePeriodFormula(const cf::CFRule& rule, c
 
 Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule& rule, const MergeRange& base,
                                const FeatureFormulaWriteContext& ctx, bool linked) {
-  auto fields = encode_cf_rule_fields(rule);
-  if (!fields) {
-    return std::move(fields.error());
-  }
+  ASSIGN_OR_RETURN(const auto fields, encode_cf_rule_fields(rule));
   std::array<std::uint8_t, kGuidBytes> guid{};
   if (!rule.id.empty() && !ParseGuid(rule.id, guid)) {
     return refuse_write("XLSB conditional format x14 link id is not a GUID: " + rule.id);
@@ -526,23 +518,18 @@ Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule&
           continue;
         }
       }
-      auto f = encode_feature_formula(**sources[i], base.first_row, base.first_col, PtgRootClass::kValue, ctx,
-                                      PtgEvaluation::kConditionalFormat);
-      if (!f) {
-        return std::move(f.error());
-      }
-      formulas[i] = std::move(f).value();
+      ASSIGN_OR_RETURN(formulas[i], encode_cf_formula(**sources[i], base, ctx));
     }
   }
   std::vector<std::uint8_t> p;
-  emit_u32(p, fields.value().itype);
-  emit_u32(p, fields.value().tmpl);
+  emit_u32(p, fields.itype);
+  emit_u32(p, fields.tmpl);
   emit_u32(p, rule.dxf_id.value_or(kNoDxf));
   emit_u32(p, static_cast<std::uint32_t>(rule.priority));
-  emit_u32(p, fields.value().param);
+  emit_u32(p, fields.param);
   emit_u32(p, 0U);
   emit_u32(p, 0U);
-  emit_u16(p, fields.value().flags);
+  emit_u16(p, fields.flags);
   emit_u32(p, formulas[0].cb_fmla);
   emit_u32(p, formulas[1].cb_fmla);
   emit_u32(p, 0U);
@@ -615,7 +602,7 @@ Expected<void, Error> EmitRule(std::vector<std::uint8_t>& dst, const cf::CFRule&
     emit_record(dst, kBrtEndIconSet, ByteSpan{});
   }
   if (!rule.id.empty()) {
-    emit_record(dst, kFrtBegin, ByteSpan{kFrtVersion.data(), kFrtVersion.size()});
+    emit_frt_begin(dst, kFrtVersionWord);
     std::vector<std::uint8_t> ext(4U, 0U);
     ext.insert(ext.end(), guid.begin(), guid.end());
     emit_record(dst, kCfRuleExt, ext);
