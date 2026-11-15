@@ -347,7 +347,7 @@ std::vector<std::string> GateBases(const std::string& gate_list_path) {
   return out;
 }
 
-Converted ConvertToXlsb(const std::string& fixtures_root, const std::string& relative) {
+Converted ConvertToXlsb(const std::string& fixtures_root, const std::string& relative, const ReadOptions& options) {
   Converted out;
   const Bytes source = ReadBytes(fixtures_root + "/" + relative);
   if (source.empty()) {
@@ -363,14 +363,14 @@ Converted ConvertToXlsb(const std::string& fixtures_root, const std::string& rel
     out.bytes = std::move(written.value().bytes);
   };
   if (EndsWith(relative, ".xlsb")) {
-    auto loaded = read_xlsb(SpanOfBytes(source));
+    auto loaded = read_xlsb(SpanOfBytes(source), options);
     if (!loaded) {
       out.error = relative + ": " + loaded.error().message;
       return out;
     }
     write(loaded.value().workbook);
   } else {
-    auto loaded = read_ooxml(SpanOfBytes(source));
+    auto loaded = read_ooxml(SpanOfBytes(source), options);
     if (!loaded) {
       out.error = relative + ": " + loaded.error().message;
       return out;

@@ -23,6 +23,8 @@
 #include <utility>
 #include <vector>
 
+#include "io/read_options.h"
+
 namespace formulon::io::xlsb::test {
 
 using Bytes = std::vector<std::uint8_t>;
@@ -97,11 +99,12 @@ std::vector<std::string> CompareRecordSets(const Bytes& ours, const Bytes& excel
 /// skipped.
 std::vector<std::string> GateBases(const std::string& gate_list_path);
 
-/// `relative` (under `fixtures_root`) loaded as `.xlsx` or `.xlsb` and written as `.xlsb`.
+/// `relative` (under `fixtures_root`) loaded as `.xlsx` or `.xlsb`, under `options.profile` when set, and written as
+/// `.xlsb`.
 struct Converted {
   Bytes bytes;
   std::string error;  ///< Empty on success.
 };
-Converted ConvertToXlsb(const std::string& fixtures_root, const std::string& relative);
+Converted ConvertToXlsb(const std::string& fixtures_root, const std::string& relative, const ReadOptions& options = {});
 
 }  // namespace formulon::io::xlsb::test
