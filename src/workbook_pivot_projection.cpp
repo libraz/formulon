@@ -277,6 +277,21 @@ std::vector<ProjectedCell> project_cells(const pivot::PivotTable& table, const p
   return out;
 }
 
+// Removes the merges on the sheet that sit wholly inside `extent`.
+Expected<void, Error> remove_merges_within(Workbook& wb, std::size_t sheet_index, const MergeRange& extent) {
+  std::vector<MergeRange> inside;
+  for (const MergeRange& merge : wb.sheet(sheet_index).merges()) {
+    const MergeRange m = normalized(merge);
+    if (contains(extent, m)) {
+      inside.push_back(m);
+    }
+  }
+  for (const MergeRange& merge : inside) {
+    RETURN_IF_ERROR(wb.remove_merges_intersecting(sheet_index, merge));
+  }
+  return Expected<void, Error>::Ok();
+}
+
 // Refuses a (sheet, pivot) pair that names no pivot table.
 Expected<void, Error> check_pivot_slot(const Workbook& wb, std::size_t sheet_index, std::size_t pivot_index) {
   if (sheet_index >= wb.sheet_count() || pivot_index >= wb.sheet(sheet_index).pivot_tables().size() ||
@@ -431,16 +446,7 @@ Expected<void, Error> Workbook::project_pivot(std::size_t sheet_index, std::size
   std::vector<ProjectedCell> projected = project_cells(table, *cache, cells);
 
   // The previous report goes first: its merges, then its cells and the new range's.
-  std::vector<MergeRange> stale_merges;
-  for (const MergeRange& merge : sheets_[sheet_index].merges()) {
-    const MergeRange m = normalized(merge);
-    if (contains(old_extent, m)) {
-      stale_merges.push_back(m);
-    }
-  }
-  for (const MergeRange& merge : stale_merges) {
-    RETURN_IF_ERROR(remove_merges_intersecting(sheet_index, merge));
-  }
+  RETURN_IF_ERROR(remove_merges_within(*this, sheet_index, old_extent));
   erase_cells_in(sheet_index, old_extent);
   if (new_extent.has_value()) {
     erase_cells_in(sheet_index, *new_extent);
@@ -509,16 +515,7 @@ Expected<void, Error> Workbook::withhold_pivot_report(std::size_t sheet_index, s
                                : detail::report_blocker_cause(*this, sheet_index, pivot_index, *plan.extent, own);
   const std::optional<StyleSlot> anchor_style = sheets_[sheet_index].cell_style_at(anchor_row, anchor_col);
   const std::uint32_t anchor_xf = anchor_style.has_value() ? anchor_style->xf : 0U;
-  std::vector<MergeRange> own_merges;
-  for (const MergeRange& merge : sheets_[sheet_index].merges()) {
-    const MergeRange m = normalized(merge);
-    if (contains(own, m)) {
-      own_merges.push_back(m);
-    }
-  }
-  for (const MergeRange& merge : own_merges) {
-    RETURN_IF_ERROR(remove_merges_intersecting(sheet_index, merge));
-  }
+  RETURN_IF_ERROR(remove_merges_within(*this, sheet_index, own));
   // Nothing below fails: the old report's cells go, the anchor keeps its format and shows the error.
   erase_cells_in(sheet_index, own);
   put_cell_value(sheet_index, anchor_row, anchor_col, Value::error(ErrorCode::Spill));

@@ -72,12 +72,11 @@ std::optional<Occupant> data_table_in(const Sheet& sheet, const MergeRange& targ
 
 std::optional<Occupant> array_in(const Sheet& sheet, const MergeRange& target) {
   for (const CellAddress address : sheet.formula_cells_in(0U, 0U, target.last_row, target.last_col)) {
-    const Cell* cell = sheet.cell_at(address.row, address.col);
-    if (cell == nullptr || cell->array_block_rows == 0U) {
+    const std::optional<MergeRange> found = detail::array_block_rect(sheet, address);
+    if (!found.has_value()) {
       continue;
     }
-    const MergeRange block{address.row, address.col, address.row + cell->array_block_rows - 1U,
-                           address.col + cell->array_block_cols - 1U};
+    const MergeRange& block = *found;
     if (intersects(block, target)) {
       return occupant_at(Occupant::Kind::kArray, block, target);
     }
@@ -193,10 +192,8 @@ SpillCause detail::report_blocker_cause(const Workbook& wb, std::size_t sheet_in
     consider_rect(normalized(table.ref));
   }
   for (const CellAddress address : sheet.formula_cells_in(0U, 0U, target.last_row, target.last_col)) {
-    const Cell* cell = sheet.cell_at(address.row, address.col);
-    if (cell != nullptr && cell->array_block_rows != 0U) {
-      consider_rect(MergeRange{address.row, address.col, address.row + cell->array_block_rows - 1U,
-                               address.col + cell->array_block_cols - 1U});
+    if (const std::optional<MergeRange> block = detail::array_block_rect(sheet, address); block.has_value()) {
+      consider_rect(*block);
     }
   }
   for (const MergeRange& merge : sheet.merges()) {
@@ -341,12 +338,11 @@ Expected<void, Error> Workbook::move_pivot(std::size_t sheet_index, std::size_t 
   }
   // An array block or data table wholly inside is pasted over; one crossing the destination's edge refuses.
   for (const CellAddress address : sheet.formula_cells_in(0U, 0U, dest.last_row, dest.last_col)) {
-    const Cell* cell = sheet.cell_at(address.row, address.col);
-    if (cell == nullptr || cell->array_block_rows == 0U) {
+    const std::optional<MergeRange> found = detail::array_block_rect(sheet, address);
+    if (!found.has_value()) {
       continue;
     }
-    const MergeRange block{address.row, address.col, address.row + cell->array_block_rows - 1U,
-                           address.col + cell->array_block_cols - 1U};
+    const MergeRange& block = *found;
     if (intersects(block, dest) && !contains(dest, block)) {
       return refuse("The report would overlap an array formula");
     }

@@ -118,7 +118,7 @@ std::vector<TableLoss> table_losses(const std::vector<TableMetadata>& tables, st
   if (!edit.is_delete) {
     return losses;
   }
-  const std::uint64_t end = static_cast<std::uint64_t>(edit.index) + edit.count;  // exclusive
+  const std::uint64_t end = edit.end();
   for (const TableMetadata& table : tables) {
     const std::optional<MergeRange> ref = detail::table_rect_on_sheet(table, sheet_index);
     // A band edit reaches only a table its band covers.
@@ -382,7 +382,7 @@ std::vector<std::pair<CellAddress, CellErrorDetail>> remap_error_details(
 void update_table_columns(TableMetadata& table, const MergeRange& before, const MergeRange& after, Sheet& sheet,
                           std::size_t sheet_index, const eval::RecalcEngine::LockedMutator& mutator,
                           const StructuralEdit& edit, std::string_view column_word) {
-  const std::uint64_t edit_end = static_cast<std::uint64_t>(edit.index) + edit.count;  // exclusive
+  const std::uint64_t edit_end = edit.end();
   if (edit.is_delete) {
     // The deleted columns inside the table, as offsets from its first column.
     const std::uint64_t lo = std::max<std::uint64_t>(edit.index, before.first_col);
@@ -630,12 +630,11 @@ Expected<void, Error> check_structure_edit(const Workbook& wb, std::size_t sheet
     }
   }
   for (const CellAddress address : sheet.all_formula_cells()) {
-    const Cell* cell = sheet.cell_at(address.row, address.col);
-    if (cell == nullptr || cell->array_block_rows == 0U) {
+    const std::optional<MergeRange> found = detail::array_block_rect(sheet, address);
+    if (!found.has_value()) {
       continue;
     }
-    const MergeRange block{address.row, address.col, address.row + cell->array_block_rows - 1U,
-                           address.col + cell->array_block_cols - 1U};
+    const MergeRange& block = *found;
     const BandFit fit = fit_of(block);
     if (fit == BandFit::kStraddles) {
       return refuse(StructureEditCut::kSplits, "an array");
@@ -694,7 +693,7 @@ Expected<void, Error> check_structure_edit(const Workbook& wb, std::size_t sheet
          edit.band->last != (edit.row_axis ? ref->last_col : ref->last_row))) {
       return refuse(cut, "a table");
     }
-    const std::uint64_t end = static_cast<std::uint64_t>(edit.index) + edit.count;  // exclusive
+    const std::uint64_t end = edit.end();
     if (edit.is_delete && edit.row_axis && table.header_row && fit == BandFit::kInside &&
         edit.index <= ref->first_row && ref->first_row < end && end <= ref->last_row) {
       return make_error(FormulonErrorCode::kPreconditionFailed,
@@ -734,7 +733,7 @@ Expected<void, Error> check_edit_arguments(const Workbook& wb, std::size_t sheet
   return Expected<void, Error>::Ok();
 }
 
-Expected<void, Error> apply_row_col_edit(Workbook& wb, std::size_t sheet_index, const StructuralEdit& edit) {
+Expected<void, Error> apply_row_col_edit(const Workbook& wb, std::size_t sheet_index, const StructuralEdit& edit) {
   RETURN_IF_ERROR(check_edit_arguments(wb, sheet_index, edit));
   return detail::check_structure_edit(wb, sheet_index, edit);
 }
@@ -993,7 +992,7 @@ Expected<std::vector<std::uint32_t>, Error> tables_emptied_by(const Workbook& wb
   if (!edit.is_delete || !edit.row_axis) {
     return emptied;
   }
-  const std::uint64_t end = static_cast<std::uint64_t>(edit.index) + edit.count;  // exclusive
+  const std::uint64_t end = edit.end();
   const auto reached = [&edit](const MergeRange& rect) {
     return !edit.band.has_value() || band_fit(rect, edit) != BandFit::kOutside;
   };
@@ -1042,7 +1041,7 @@ std::optional<MergeRange> rect_after_edit(const MergeRange& rect, const Structur
   std::uint32_t& first = edit.row_axis ? moved.first_row : moved.first_col;
   std::uint32_t& last = edit.row_axis ? moved.last_row : moved.last_col;
   const std::uint64_t bound = a1::axis_extent(edit.row_axis);
-  const std::uint64_t end = static_cast<std::uint64_t>(edit.index) + edit.count;  // exclusive
+  const std::uint64_t end = edit.end();
   if (!edit.is_delete) {
     const std::uint64_t new_first = first >= edit.index ? first + static_cast<std::uint64_t>(edit.count) : first;
     const std::uint64_t new_last = last >= edit.index ? last + static_cast<std::uint64_t>(edit.count) : last;
@@ -1140,8 +1139,7 @@ Expected<void, Error> check_band_edit_after(const Workbook& wb, std::size_t shee
   const std::uint32_t bound = a1::axis_extent(edit.row_axis);
   edit.index = std::min(edit.index, bound - 1U);
   edit.count = static_cast<std::uint32_t>(std::min<std::uint64_t>(pushed, bound));
-  RETURN_IF_ERROR(check_edit_arguments(wb, sheet_index, edit));
-  return check_structure_edit(wb, sheet_index, edit);
+  return apply_row_col_edit(wb, sheet_index, edit);
 }
 
 }  // namespace detail

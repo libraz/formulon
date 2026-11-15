@@ -45,6 +45,7 @@
 #include "utils/status_macros.h"
 #include "value.h"
 #include "workbook.h"
+#include "workbook_internal.h"
 
 namespace formulon {
 namespace {
@@ -290,11 +291,8 @@ std::vector<pivot::PivotTable*> Workbook::pivots_of_cache(std::uint32_t cache_id
 
 void Workbook::invalidate_pivot_results(std::uint32_t cache_id) {
   // Group fields follow their base, so an edited cache re-derives them.
-  for (std::unique_ptr<pivot::PivotCache>& cache : pivot_caches_) {
-    if (cache != nullptr && cache->cache_id() == cache_id) {
-      pivot::materialize_group_fields(*cache, date1904_);
-      break;
-    }
+  if (pivot::PivotCache* cache = detail::find_mutable_pivot_cache(*this, cache_id); cache != nullptr) {
+    pivot::materialize_group_fields(*cache, date1904_);
   }
   const std::vector<pivot::PivotTable*> tables = pivots_of_cache(cache_id);
   for (pivot::PivotTable* table : tables) {
@@ -306,12 +304,28 @@ void Workbook::invalidate_pivot_results(std::uint32_t cache_id) {
   }
 }
 
-namespace {
+std::size_t detail::pivot_cache_slot(const std::vector<std::unique_ptr<pivot::PivotCache>>& caches,
+                                     std::uint32_t cache_id) {
+  for (std::size_t i = 0; i < caches.size(); ++i) {
+    if (caches[i] != nullptr && caches[i]->cache_id() == cache_id) {
+      return i;
+    }
+  }
+  return caches.size();
+}
 
-Error unknown_cache(std::uint32_t cache_id) {
+pivot::PivotCache* detail::find_mutable_pivot_cache(Workbook& wb, std::uint32_t cache_id) {
+  std::vector<std::unique_ptr<pivot::PivotCache>>& caches = wb.mutable_pivot_caches();
+  const std::size_t slot = pivot_cache_slot(caches, cache_id);
+  return slot == caches.size() ? nullptr : caches[slot].get();
+}
+
+Error detail::unknown_pivot_cache(std::uint32_t cache_id) {
   return make_error(FormulonErrorCode::kNotFound, "cache_id does not name a pivot cache",
                     "cache_id=" + std::to_string(cache_id));
 }
+
+namespace {
 
 // Refuses an empty pivot name or one another pivot on `sheet` holds.
 Expected<void, Error> check_pivot_name(const Sheet& sheet, std::string_view name, std::size_t self) {
@@ -328,15 +342,9 @@ Expected<void, Error> check_pivot_name(const Sheet& sheet, std::string_view name
 }  // namespace
 
 Expected<std::size_t, Error> Workbook::add_pivot_cache_field(std::uint32_t cache_id, pivot::PivotCacheField field) {
-  pivot::PivotCache* cache = nullptr;
-  for (std::unique_ptr<pivot::PivotCache>& c : pivot_caches_) {
-    if (c != nullptr && c->cache_id() == cache_id) {
-      cache = c.get();
-      break;
-    }
-  }
+  pivot::PivotCache* cache = detail::find_mutable_pivot_cache(*this, cache_id);
   if (cache == nullptr) {
-    return unknown_cache(cache_id);
+    return detail::unknown_pivot_cache(cache_id);
   }
   cache->mutable_fields().push_back(std::move(field));
   pivot::sync_table_fields(*cache, pivots_of_cache(cache_id));
@@ -350,15 +358,9 @@ Expected<std::size_t, Error> Workbook::add_pivot(std::size_t sheet, std::unique_
   }
   Sheet& target = this->sheet(sheet);
   RETURN_IF_ERROR(check_pivot_name(target, table->name(), target.pivot_tables().size()));
-  pivot::PivotCache* cache = nullptr;
-  for (std::unique_ptr<pivot::PivotCache>& c : pivot_caches_) {
-    if (c != nullptr && c->cache_id() == table->pivot_cache_id()) {
-      cache = c.get();
-      break;
-    }
-  }
+  pivot::PivotCache* cache = detail::find_mutable_pivot_cache(*this, table->pivot_cache_id());
   if (cache == nullptr) {
-    return unknown_cache(table->pivot_cache_id());
+    return detail::unknown_pivot_cache(table->pivot_cache_id());
   }
   pivot::sync_table_fields(*cache, {table.get()});
   pivot::share_axis_fields(*cache, *table);

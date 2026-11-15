@@ -189,16 +189,9 @@ void Workbook::refresh_pivot_caches_pending_on_load(const eval::FunctionRegistry
 }
 
 Expected<void, Error> Workbook::refresh_pivot_cache(std::uint32_t cache_id, const eval::FunctionRegistry& registry) {
-  std::size_t slot = pivot_caches_.size();
-  for (std::size_t i = 0; i < pivot_caches_.size(); ++i) {
-    if (pivot_caches_[i] != nullptr && pivot_caches_[i]->cache_id() == cache_id) {
-      slot = i;
-      break;
-    }
-  }
+  const std::size_t slot = detail::pivot_cache_slot(pivot_caches_, cache_id);
   if (slot == pivot_caches_.size()) {
-    return make_error(FormulonErrorCode::kNotFound, "cache_id does not name a pivot cache",
-                      "cache_id=" + std::to_string(cache_id));
+    return detail::unknown_pivot_cache(cache_id);
   }
   RETURN_IF_ERROR(ensure_calculated(registry));
   const pivot::PivotCache& old = *pivot_caches_[slot];

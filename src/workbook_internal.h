@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -87,6 +88,14 @@ inline sheet_names::NameList sheet_name_list(const std::vector<Sheet>& sheets) {
   return sheet_names::NameList(std::move(names));
 }
 
+// Refuses a table `index` at or past `table_count`.
+inline Expected<void, Error> check_table_index(std::size_t index, std::size_t table_count) {
+  if (index >= table_count) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "index out of range", "index=" + std::to_string(index));
+  }
+  return Expected<void, Error>::Ok();
+}
+
 // Sheet index range check whose detail names the sheet count.
 inline Expected<void, Error> check_sheet_in_range(std::size_t sheet_index, std::size_t sheet_count) {
   if (sheet_index >= sheet_count) {
@@ -142,6 +151,25 @@ inline bool has_book_namesake(const std::vector<DefinedName>& names, std::string
 inline std::optional<MergeRange> table_rect_on_sheet(const TableMetadata& table, std::size_t sheet_index) {
   return table.sheet_index == sheet_index ? parse_a1_rectangle(table.ref) : std::nullopt;
 }
+
+/// The rectangle of the legacy array block anchored at `address`, else nullopt.
+inline std::optional<MergeRange> array_block_rect(const Sheet& sheet, const CellAddress& address) {
+  const Cell* cell = sheet.cell_at(address.row, address.col);
+  if (cell == nullptr || cell->array_block_rows == 0U) {
+    return std::nullopt;
+  }
+  return MergeRange{address.row, address.col, address.row + cell->array_block_rows - 1U,
+                    address.col + cell->array_block_cols - 1U};
+}
+
+/// Index of the cache with `cache_id` in `caches`, or `caches.size()` when none has it.
+std::size_t pivot_cache_slot(const std::vector<std::unique_ptr<pivot::PivotCache>>& caches, std::uint32_t cache_id);
+
+/// The cache `wb` holds under `cache_id`, or nullptr.
+pivot::PivotCache* find_mutable_pivot_cache(Workbook& wb, std::uint32_t cache_id);
+
+/// kNotFound for a `cache_id` that names no pivot cache.
+Error unknown_pivot_cache(std::uint32_t cache_id);
 
 /// The rectangle a pivot occupies: its last projection, else its location
 /// with the page fields and their gap row above it. A blocked report holds

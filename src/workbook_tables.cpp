@@ -186,14 +186,11 @@ Expected<void, Error> check_table_range_free(const Workbook& wb, std::size_t she
   const std::vector<CellAddress> formulas =
       pending.empty() ? sheet.formula_cells_in(0U, 0U, rect.last_row, rect.last_col) : sheet.all_formula_cells();
   for (const CellAddress address : formulas) {
-    const Cell* cell = sheet.cell_at(address.row, address.col);
-    if (cell == nullptr || cell->array_block_rows == 0U ||
-        (cell->array_block_rows == 1U && cell->array_block_cols == 1U)) {
+    const std::optional<MergeRange> block = detail::array_block_rect(sheet, address);
+    if (!block.has_value() || (block->last_row == block->first_row && block->last_col == block->first_col)) {
       continue;
     }
-    const MergeRange block{address.row, address.col, address.row + cell->array_block_rows - 1U,
-                           address.col + cell->array_block_cols - 1U};
-    if (meets(block)) {
+    if (meets(*block)) {
       return refuse("range must not hold a multi-cell array formula");
     }
   }
@@ -364,18 +361,14 @@ Expected<void, Error> check_resize(const Workbook& wb, std::size_t index, const 
 }  // namespace
 
 Expected<void, Error> Workbook::check_table_resize(std::size_t index, const MergeRange& rect) const {
-  if (index >= tables_.size()) {
-    return invalid_table("index out of range", "index=" + std::to_string(index));
-  }
+  RETURN_IF_ERROR(detail::check_table_index(index, tables_.size()));
   const std::optional<MergeRange> current = parse_a1_rectangle(tables_[index].ref);
   return check_resize(*this, index, rect, current ? &*current : nullptr, tables_[index].header_row, {});
 }
 
 Expected<void, Error> Workbook::check_table_resize(std::size_t index, const MergeRange& rect, const TableShape& assumed,
                                                    const std::vector<PendingShift>& pending) const {
-  if (index >= tables_.size()) {
-    return invalid_table("index out of range", "index=" + std::to_string(index));
-  }
+  RETURN_IF_ERROR(detail::check_table_index(index, tables_.size()));
   return check_resize(*this, index, rect, &assumed.rect, assumed.header_row, pending);
 }
 
@@ -402,6 +395,13 @@ int subtotal_code_of(std::string_view token) {
     }
   }
   return 0;
+}
+
+// The parsed calculated-column formula of `column` in `arena`, or nullptr when it does not parse.
+const parser::AstNode* parse_calculated_column(const TableColumn& column, Arena& arena) {
+  const std::string text =
+      Workbook::normalize_formula_text("=" + column.calculated_column_formula, Workbook::FormulaSource::kRendered);
+  return parse_stored_formula(text, arena);
 }
 
 }  // namespace
@@ -467,11 +467,8 @@ bool band_meets_straddler(const Workbook& wb, std::size_t sheet_index, const Str
     }
   }
   for (const CellAddress address : sheet.all_formula_cells()) {
-    const Cell* cell = sheet.cell_at(address.row, address.col);
-    if (cell != nullptr && cell->array_block_rows != 0U &&
-        straddles(MergeRange{address.row, address.col, address.row + cell->array_block_rows - 1U,
-                             address.col + cell->array_block_cols - 1U},
-                  false)) {
+    const std::optional<MergeRange> block = array_block_rect(sheet, address);
+    if (block.has_value() && straddles(*block, false)) {
       return true;
     }
   }
@@ -581,9 +578,7 @@ bool totals_row_referenced(const std::vector<Sheet>& sheets, const std::vector<T
 
 Expected<std::optional<PendingShift>, Error> Workbook::check_table_totals_row(
     std::size_t index, bool shown, const TableShape& assumed, const std::vector<PendingShift>& pending) const {
-  if (index >= tables_.size()) {
-    return invalid_table("index out of range", "index=" + std::to_string(index));
-  }
+  RETURN_IF_ERROR(detail::check_table_index(index, tables_.size()));
   if (shown == assumed.totals_row) {
     return std::optional<PendingShift>();
   }
@@ -645,9 +640,7 @@ Expected<std::optional<PendingShift>, Error> Workbook::check_table_totals_row(
 }
 
 Expected<void, Error> Workbook::set_table_totals_row(std::size_t index, bool shown) {
-  if (index >= tables_.size()) {
-    return invalid_table("index out of range", "index=" + std::to_string(index));
-  }
+  RETURN_IF_ERROR(detail::check_table_index(index, tables_.size()));
   const std::optional<MergeRange> rect = parse_a1_rectangle(tables_[index].ref);
   if (!rect) {
     return invalid_table("table ref is not a range", "ref=" + tables_[index].ref);
@@ -1122,9 +1115,7 @@ void fill_calculated_columns_locked(const Workbook& wb, Sheet& sheet, const eval
     if (column.calculated_column_formula.empty()) {
       continue;
     }
-    const std::string text =
-        Workbook::normalize_formula_text("=" + column.calculated_column_formula, Workbook::FormulaSource::kRendered);
-    const parser::AstNode* root = parse_stored_formula(text, formula_arena);
+    const parser::AstNode* root = parse_calculated_column(column, formula_arena);
     if (root == nullptr) {
       continue;
     }
@@ -1154,9 +1145,7 @@ void shift_calculated_column_anchor(TableMetadata& table, std::int32_t row_delta
     if (column.calculated_column_formula.empty()) {
       continue;
     }
-    const std::string text =
-        Workbook::normalize_formula_text("=" + column.calculated_column_formula, Workbook::FormulaSource::kRendered);
-    const parser::AstNode* root = parse_stored_formula(text, formula_arena);
+    const parser::AstNode* root = parse_calculated_column(column, formula_arena);
     if (root == nullptr) {
       continue;
     }

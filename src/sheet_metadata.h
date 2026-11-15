@@ -52,6 +52,9 @@ struct StructuralEdit {
   /// Perpendicular extent the edit is confined to (Insert / Delete Cells);
   /// absent for a whole row/column edit.
   std::optional<Band> band{};
+
+  /// Exclusive end of the edited run, widened so `index + count` cannot wrap.
+  constexpr std::uint64_t end() const noexcept { return static_cast<std::uint64_t>(index) + count; }
 };
 
 /// How a row/column edit meets a structure that moves whole or goes whole (a

@@ -46,12 +46,11 @@ Expected<void, Error> check_array_target_free(const Workbook& wb, std::size_t sh
                       "row=" + std::to_string(target.first_row) + " col=" + std::to_string(target.first_col));
   };
   for (const CellAddress address : sheet.all_formula_cells()) {
-    const Cell* cell = sheet.cell_at(address.row, address.col);
-    if (cell == nullptr || cell->array_block_rows == 0U) {
+    const std::optional<MergeRange> found = detail::array_block_rect(sheet, address);
+    if (!found.has_value()) {
       continue;
     }
-    const MergeRange block{address.row, address.col, address.row + cell->array_block_rows - 1U,
-                           address.col + cell->array_block_cols - 1U};
+    const MergeRange& block = *found;
     if (intersects(block, target) && !contains(target, block)) {
       return refuse("range overlaps part of an array formula");
     }
@@ -123,12 +122,11 @@ Expected<void, Error> check_merge_target_free(const Workbook& wb, std::size_t sh
     }
   }
   for (const CellAddress address : sheet.formula_cells_in(0U, 0U, merge.last_row, merge.last_col)) {
-    const Cell* cell = sheet.cell_at(address.row, address.col);
-    if (cell == nullptr || cell->array_block_rows == 0U) {
+    const std::optional<MergeRange> found = detail::array_block_rect(sheet, address);
+    if (!found.has_value()) {
       continue;
     }
-    const MergeRange block{address.row, address.col, address.row + cell->array_block_rows - 1U,
-                           address.col + cell->array_block_cols - 1U};
+    const MergeRange& block = *found;
     if (intersects(block, merge)) {
       return refuse("array formulas are not valid in merged cells");
     }

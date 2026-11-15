@@ -26,6 +26,24 @@ namespace formulon {
 using parser::FormulaRewriteResult;
 using parser::rewrite_formula;
 
+/// Rewrites `text` under `transform`. Returns whether it changed; `text` is
+/// left untouched otherwise.
+bool rewrite_formula_in_place(std::string& text, const parser::RefTransform& transform);
+
+/// A formula cell whose text changes under a transform.
+struct FormulaCellUpdate {
+  std::uint32_t row = 0;
+  std::uint32_t col = 0;
+  std::string formula;
+};
+
+/// The formula cells of `sheet` that `transform` rewrites, in row-major order,
+/// with their rewritten text. Nothing is written to the sheet.
+std::vector<FormulaCellUpdate> rewritten_formula_cells(const Sheet& sheet, const parser::RefTransform& transform);
+
+/// The names of `sheets` in order, as views into the sheets.
+std::vector<std::string_view> sheet_name_views(const std::vector<Sheet>& sheets);
+
 // Applies a per-sheet AST transform to every non-cell formula holder:
 // conditional-format rules and their formula thresholds, data validations,
 // table refs and calculated columns, and pivot-cache worksheet sources.

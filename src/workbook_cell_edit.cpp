@@ -105,11 +105,6 @@ void mark_blocked_spill_anchors_intersecting(const eval::RecalcEngine::LockedMut
   }
 }
 
-void mark_blocked_spill_anchors_intersecting(const eval::RecalcEngine::LockedMutator& mutator, std::size_t sheet_index,
-                                             const std::vector<Sheet>& sheets, std::uint32_t row, std::uint32_t col) {
-  mark_blocked_spill_anchors_intersecting(mutator, sheet_index, sheets, SpillFootprint{row, col, 1U, 1U});
-}
-
 void mark_blocked_spill_anchors_released_by_cell(const eval::RecalcEngine::LockedMutator& mutator,
                                                  std::size_t sheet_index, const std::vector<Sheet>& sheets,
                                                  std::uint32_t row, std::uint32_t col) {
@@ -119,7 +114,7 @@ void mark_blocked_spill_anchors_released_by_cell(const eval::RecalcEngine::Locke
   if (const auto rectangle = sheets[sheet_index].committed_spill_footprint_covering(row, col); rectangle.has_value()) {
     mark_blocked_spill_anchors_intersecting(mutator, sheet_index, sheets, *rectangle);
   }
-  mark_blocked_spill_anchors_intersecting(mutator, sheet_index, sheets, row, col);
+  mark_blocked_spill_anchors_intersecting(mutator, sheet_index, sheets, SpillFootprint{row, col, 1U, 1U});
 }
 
 // Dirties the cell, its dependents and every spill anchor the write wakes,

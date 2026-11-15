@@ -49,9 +49,9 @@ bool is_binary_index(const UnknownRelationship& rel) {
   return !rel.target_external && rel.target.size() > kPrefix.size() && strings::starts_with(rel.target, kPrefix);
 }
 
-std::string rewritten(const std::string& formula, const parser::RefTransform& transform) {
-  FormulaRewriteResult result = rewrite_formula(formula, transform);
-  return result.changed ? std::move(result.text) : formula;
+std::string rewritten(std::string formula, const parser::RefTransform& transform) {
+  rewrite_formula_in_place(formula, transform);
+  return formula;
 }
 
 }  // namespace
@@ -86,12 +86,7 @@ Expected<std::size_t, Error> Workbook::copy_sheet(std::size_t source, std::size_
     RETURN_IF_ERROR(check_entered_new_sheet_name(*new_name));
     copy_name = std::move(*new_name);
   } else {
-    std::vector<std::string_view> existing;
-    existing.reserve(sheets_.size());
-    for (const Sheet& sheet : sheets_) {
-      existing.push_back(sheet.name());
-    }
-    copy_name = copy_sheet_default_name(src.name(), existing);
+    copy_name = copy_sheet_default_name(src.name(), sheet_name_views(sheets_));
   }
   const std::string source_name = src.name();
   const std::size_t n = sheets_.size();
@@ -188,24 +183,7 @@ Expected<std::size_t, Error> Workbook::copy_sheet(std::size_t source, std::size_
     tables_.push_back(std::move(table));
   }
 
-  struct CellUpdate {
-    std::uint32_t row = 0;
-    std::uint32_t col = 0;
-    std::string formula;
-  };
-  std::vector<CellUpdate> cell_updates;
-  for (const auto& [row, cells] : sheets_[n].rows()) {
-    for (const auto& [col, cell] : cells) {
-      if (cell.formula_text.empty()) {
-        continue;
-      }
-      FormulaRewriteResult result = rewrite_formula(cell.formula_text, transform);
-      if (result.changed) {
-        cell_updates.push_back(CellUpdate{row, col, std::move(result.text)});
-      }
-    }
-  }
-  for (CellUpdate& update : cell_updates) {
+  for (FormulaCellUpdate& update : rewritten_formula_cells(sheets_[n], transform)) {
     sheets_[n].set_cell_formula(update.row, update.col, std::move(update.formula));
   }
 

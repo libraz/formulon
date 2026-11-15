@@ -29,9 +29,7 @@ namespace formulon {
 // @size-budget: 4 KB
 Expected<std::optional<PendingShift>, Error> Workbook::check_table_header_row(
     std::size_t index, bool shown, const TableShape& assumed, const std::vector<PendingShift>& pending) const {
-  if (index >= tables_.size()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "index out of range", "index=" + std::to_string(index));
-  }
+  RETURN_IF_ERROR(detail::check_table_index(index, tables_.size()));
   if (shown == assumed.header_row) {
     return std::optional<PendingShift>();
   }
@@ -68,9 +66,7 @@ Expected<std::optional<PendingShift>, Error> Workbook::check_table_header_row(
 }
 
 Expected<void, Error> Workbook::set_table_header_row(std::size_t index, bool shown) {
-  if (index >= tables_.size()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "index out of range", "index=" + std::to_string(index));
-  }
+  RETURN_IF_ERROR(detail::check_table_index(index, tables_.size()));
   const std::optional<MergeRange> rect = parse_a1_rectangle(tables_[index].ref);
   if (!rect) {
     return make_error(FormulonErrorCode::kInvalidArgument, "table ref is not a range", "ref=" + tables_[index].ref);

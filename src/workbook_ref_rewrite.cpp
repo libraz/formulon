@@ -109,6 +109,40 @@ std::optional<std::string> rewritten_formula(std::string_view text, const parser
 
 }  // namespace
 
+bool rewrite_formula_in_place(std::string& text, const parser::RefTransform& transform) {
+  FormulaRewriteResult result = rewrite_formula(text, transform);
+  if (!result.changed) {
+    return false;
+  }
+  text = std::move(result.text);
+  return true;
+}
+
+std::vector<FormulaCellUpdate> rewritten_formula_cells(const Sheet& sheet, const parser::RefTransform& transform) {
+  std::vector<FormulaCellUpdate> updates;
+  for (const auto& [row, cells] : sheet.rows()) {
+    for (const auto& [col, cell] : cells) {
+      if (cell.formula_text.empty()) {
+        continue;
+      }
+      FormulaRewriteResult result = rewrite_formula(cell.formula_text, transform);
+      if (result.changed) {
+        updates.push_back(FormulaCellUpdate{row, col, std::move(result.text)});
+      }
+    }
+  }
+  return updates;
+}
+
+std::vector<std::string_view> sheet_name_views(const std::vector<Sheet>& sheets) {
+  std::vector<std::string_view> names;
+  names.reserve(sheets.size());
+  for (const Sheet& sheet : sheets) {
+    names.push_back(sheet.name());
+  }
+  return names;
+}
+
 std::uint32_t book_views_active_tab(const std::string& book_views_xml) {
   pugi::xml_document document;
   if (book_views_xml.empty() ||
@@ -160,14 +194,6 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
     return;
   }
 
-  const auto rewrite_field = [](std::string& field, const parser::RefTransform& transform) {
-    FormulaRewriteResult result = rewrite_formula(field, transform);
-    if (!result.changed) {
-      return false;
-    }
-    field = std::move(result.text);
-    return true;
-  };
   // A short `per_sheet` degrades to its first slot.
   const auto transform_for = [&per_sheet](std::size_t i) -> const parser::RefTransform& {
     return *per_sheet[i < per_sheet.size() ? i : 0U];
@@ -179,14 +205,14 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
     for (cf::ConditionalFormat& conditional_format : sheet.mutable_conditional_formats()) {
       for (cf::CFRule& rule : conditional_format.rules) {
         if (rule.formula1.has_value()) {
-          rewrite_field(*rule.formula1, transform);
+          rewrite_formula_in_place(*rule.formula1, transform);
         }
         if (rule.formula2.has_value()) {
-          rewrite_field(*rule.formula2, transform);
+          rewrite_formula_in_place(*rule.formula2, transform);
         }
-        const auto rewrite_cfvo = [&rewrite_field, &transform](cf::CfValueObject& value) {
+        const auto rewrite_cfvo = [&transform](cf::CfValueObject& value) {
           if (value.type == cf::CfvoType::Formula) {
-            rewrite_field(value.value, transform);
+            rewrite_formula_in_place(value.value, transform);
           }
         };
         if (rule.color_scale.has_value()) {
@@ -209,8 +235,8 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
 
     // Internal hyperlink locations are left alone: Excel keeps their text through every edit and rename.
     for (DataValidation& validation : sheet.mutable_validations()) {
-      rewrite_field(validation.formula1, transform);
-      rewrite_field(validation.formula2, transform);
+      rewrite_formula_in_place(validation.formula1, transform);
+      rewrite_formula_in_place(validation.formula2, transform);
     }
 
     // Formulas inside retained extensions: sparkline sources, x14 rule and
@@ -230,10 +256,10 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
   for (TableMetadata& table : tables) {
     const parser::RefTransform& transform =
         table.sheet_index < sheets.size() ? transform_for(table.sheet_index) : unowned_transform;
-    rewrite_field(table.ref, transform);
+    rewrite_formula_in_place(table.ref, transform);
     for (TableColumn& column : table.columns) {
-      rewrite_field(column.calculated_column_formula, transform);
-      rewrite_field(column.totals_row_formula, transform);
+      rewrite_formula_in_place(column.calculated_column_formula, transform);
+      rewrite_formula_in_place(column.totals_row_formula, transform);
     }
   }
 
@@ -250,10 +276,7 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
     const std::size_t owner_sheet = detail::find_sheet_index(sheets, source.sheet);
     const parser::RefTransform& transform =
         owner_sheet != Workbook::kNoSheet ? transform_for(owner_sheet) : unowned_transform;
-    FormulaRewriteResult ref_result = rewrite_formula(source.ref, transform);
-    if (ref_result.changed) {
-      source.ref = std::move(ref_result.text);
-    }
+    rewrite_formula_in_place(source.ref, transform);
   }
 }
 
@@ -266,38 +289,23 @@ void rewrite_workbook_references(std::vector<Sheet>& sheets, std::vector<Defined
                                  bool& defined_names_changed) {
   defined_names_changed = false;
 
-  struct CellUpdate {
-    std::size_t sheet_index = 0;
-    std::uint32_t row = 0;
-    std::uint32_t col = 0;
-    std::string formula;
-  };
-  std::vector<CellUpdate> cell_updates;
+  std::vector<std::vector<FormulaCellUpdate>> cell_updates(sheets.size());
 
   // Collect first so replacing a formula cannot invalidate the row/cell
   // references used by the scan. The cell store's physical coordinates do
   // not move during a sheet rename/removal transform.
   for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
-    const Sheet& sheet = sheets[sheet_idx];
-    for (const auto& [row, cells] : sheet.rows()) {
-      for (const auto& [col, cell] : cells) {
-        if (cell.formula_text.empty()) {
-          continue;
-        }
-        const FormulaRewriteResult result = rewrite_formula(cell.formula_text, transform);
-        if (result.changed) {
-          cell_updates.push_back(CellUpdate{sheet_idx, row, col, result.text});
-        }
-      }
-    }
+    cell_updates[sheet_idx] = rewritten_formula_cells(sheets[sheet_idx], transform);
   }
-  for (CellUpdate& update : cell_updates) {
-    sheets[update.sheet_index].set_cell_formula(update.row, update.col, std::move(update.formula));
-    // A rename preserves workbook-relative sheet ids and therefore keeps the
-    // existing dependency edges valid. Dirtying the changed owner is enough
-    // to propagate through those edges; removal performs one final full
-    // reindex after the sheet vector and metadata reach their final shape.
-    mutator.mark_dirty(make_node(update.sheet_index, update.row, update.col));
+  for (std::size_t sheet_idx = 0; sheet_idx < sheets.size(); ++sheet_idx) {
+    for (FormulaCellUpdate& update : cell_updates[sheet_idx]) {
+      sheets[sheet_idx].set_cell_formula(update.row, update.col, std::move(update.formula));
+      // A rename preserves workbook-relative sheet ids and therefore keeps the
+      // existing dependency edges valid. Dirtying the changed owner is enough
+      // to propagate through those edges; removal performs one final full
+      // reindex after the sheet vector and metadata reach their final shape.
+      mutator.mark_dirty(make_node(sheet_idx, update.row, update.col));
+    }
   }
 
   // A sheet mutation applies the same policy everywhere, so every slot of the
@@ -319,11 +327,7 @@ bool rewrite_defined_names(std::vector<DefinedName>& names, const std::vector<co
         transform = per_sheet[owner];
       }
     }
-    FormulaRewriteResult result = rewrite_formula(entry.formula, *transform);
-    if (result.changed) {
-      entry.formula = std::move(result.text);
-      any_changed = true;
-    }
+    any_changed |= rewrite_formula_in_place(entry.formula, *transform);
   }
   return any_changed;
 }

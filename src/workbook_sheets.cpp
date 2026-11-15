@@ -393,11 +393,7 @@ Expected<void, Error> Workbook::remove_sheet_locked(std::uint32_t index) {
   remap_book_views_xml(book_views_xml_, old_to_new);
 
   const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
-  std::vector<std::string_view> pre_removal_sheet_order;
-  pre_removal_sheet_order.reserve(sheets_.size());
-  for (const Sheet& sheet : sheets_) {
-    pre_removal_sheet_order.push_back(sheet.name());
-  }
+  const std::vector<std::string_view> pre_removal_sheet_order = sheet_name_views(sheets_);
 
   // Resolved before the sheet leaves: its drawing and the parts its unrecognised
   // relationships name are dropped after the erase unless something else still links them.
@@ -490,11 +486,7 @@ Expected<void, Error> Workbook::move_sheet(std::uint32_t from_index, std::uint32
   }
   if (from_index != to_index) {
     // Spans resolve against the pre-move order, so the rewrite runs before the reorder.
-    std::vector<std::string_view> pre_move_sheet_order;
-    pre_move_sheet_order.reserve(sheets_.size());
-    for (const Sheet& sheet : sheets_) {
-      pre_move_sheet_order.push_back(sheet.name());
-    }
+    const std::vector<std::string_view> pre_move_sheet_order = sheet_name_views(sheets_);
     const parser::SheetMoveTransform transform(pre_move_sheet_order, from_index, to_index);
     const eval::RecalcEngine::LockedMutator mutator = engine_->locked_mutator();
     bool defined_names_changed = false;
