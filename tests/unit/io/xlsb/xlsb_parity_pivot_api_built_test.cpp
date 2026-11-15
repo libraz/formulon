@@ -1,8 +1,9 @@
 // PivotTables built through the C API and saved as `.xlsb`: the cases of tests/fixtures/excel/xlsb_parity/pivot/
 // api_built, each built as the workbook Excel 16.115 opened from the engine's `.xlsx` save and re-saved as `.xlsb`
 // (`<case>.xlsb`). The save keeps every pivot part, passes the package validator, reads back to the same tables, and
-// its pivot records match Excel's but for the revision uid Excel adds. A calculated field has no record layout yet,
-// so that case is left out and counted.
+// its pivot records match Excel's but for the revision uid Excel adds. A pivot whose state has no measured layout
+// (a calculated field, a quarter or numeric range group, a rank or percent-of-running-total display) is left out
+// and counted.
 
 #include <cstddef>
 #include <cstdint>
@@ -165,6 +166,41 @@ void BuildCase(const std::string& name, fm_workbook_t* wb) {
     Axis(wb, p2, 1U, FM_PIVOT_AXIS_ROW);
     SumOf(wb, p2, 4U);
     Project(wb, p2);
+  } else if (name == "f_quarter_group") {
+    const Placed p = AddPivot(wb, "PF", cache, "PivotF");
+    Axis(wb, p, 2U, FM_PIVOT_AXIS_ROW);
+    fm_pivot_date_group_t group{};
+    group.struct_size = sizeof(group);
+    group.periods = FM_PIVOT_PERIOD_YEARS | FM_PIVOT_PERIOD_QUARTERS;
+    group.calendar = FM_PIVOT_CALENDAR_GREGORIAN;
+    group.interval_days = 1U;
+    EXPECT_EQ(fm_sheet_set_pivot_field_date_group(wb, p.sheet, p.pivot, 2U, &group), 0) << fm_get_last_error_message();
+    SumOf(wb, p, 3U);
+    Project(wb, p);
+  } else if (name == "g_numeric_group") {
+    const Placed p = AddPivot(wb, "PG", cache, "PivotG");
+    Axis(wb, p, 3U, FM_PIVOT_AXIS_ROW);
+    fm_pivot_numeric_group_t group{};
+    group.struct_size = sizeof(group);
+    group.interval = 50.0;
+    EXPECT_EQ(fm_sheet_set_pivot_field_numeric_group(wb, p.sheet, p.pivot, 3U, &group), 0)
+        << fm_get_last_error_message();
+    SumOf(wb, p, 4U);
+    Project(wb, p);
+  } else if (name == "h_rank" || name == "i_running_percent") {
+    const Placed p = AddPivot(wb, name == "h_rank" ? "PH" : "PI", cache, name == "h_rank" ? "PivotH" : "PivotI");
+    Axis(wb, p, 0U, FM_PIVOT_AXIS_ROW);
+    fm_pivot_data_field_t data{};
+    data.struct_size = sizeof(data);
+    data.field_index = 3U;
+    data.aggregation = FM_PIVOT_AGGREGATION_SUM;
+    data.show_as =
+        name == "h_rank" ? FM_PIVOT_SHOW_VALUES_AS_RANK_DESCENDING : FM_PIVOT_SHOW_VALUES_AS_PERCENT_OF_RUNNING_TOTAL;
+    data.has_show_as_base_field = 1;
+    data.show_as_base_field = 0U;
+    std::size_t index = 0;
+    EXPECT_EQ(fm_sheet_add_pivot_data_field(wb, p.sheet, p.pivot, &data, &index), 0) << fm_get_last_error_message();
+    Project(wb, p);
   } else {
     ADD_FAILURE() << "unknown case " << name;
   }
@@ -381,14 +417,39 @@ TEST(XlsbParityPivotApiBuiltGroups, WritesExcelsDateGroupRecords) {
   EXPECT_EQ(GroupBlockTypes(saved.bytes), excel_types);
 }
 
-// A calculated cache field has no record layout here, so its cache group is left out whole and counted.
-TEST(XlsbParityPivotApiBuiltDeferred, CalculatedFieldLeavesItsGroupOut) {
-  const Saved saved = SaveCase("d_calc_field");
+/// The pivot table parts of a saved package.
+std::size_t PivotTableParts(const std::vector<std::uint8_t>& bytes) {
+  std::size_t out = 0;
+  for (const std::string& part : tc::ListParts(bytes)) {
+    out += part.rfind("xl/pivotTables/pivotTable", 0) == 0U ? 1U : 0U;
+  }
+  return out;
+}
+
+// A pivot whose state has no measured record layout is left out with its cache group, and counted.
+class XlsbParityPivotApiBuiltDeferred : public ::testing::TestWithParam<const char*> {};
+
+TEST_P(XlsbParityPivotApiBuiltDeferred, LeavesItsGroupOutAndCountsIt) {
+  const Saved saved = SaveCase(GetParam());
   ASSERT_FALSE(saved.bytes.empty());
   EXPECT_EQ(saved.deferred, 1U);
   ExpectValid(saved.bytes);
   for (const std::string& part : tc::ListParts(saved.bytes)) {
     EXPECT_EQ(part.find("xl/pivot"), std::string::npos) << part;
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(Causes, XlsbParityPivotApiBuiltDeferred,
+                         ::testing::Values("d_calc_field", "f_quarter_group", "g_numeric_group", "h_rank",
+                                           "i_running_percent"));
+
+// Every pivot the model holds is either written or counted as left out.
+TEST(XlsbParityPivotApiBuiltCount, EveryPivotIsWrittenOrCounted) {
+  for (const char* name : {"a_plain", "b_page_filter", "c_date_group", "d_calc_field", "e_shared_cache",
+                           "f_quarter_group", "g_numeric_group", "h_rank", "i_running_percent"}) {
+    const Saved saved = SaveCase(name);
+    ASSERT_FALSE(saved.bytes.empty()) << name;
+    EXPECT_EQ(PivotTableParts(saved.bytes) + saved.deferred, PivotNames(saved.report).size()) << name;
   }
 }
 
