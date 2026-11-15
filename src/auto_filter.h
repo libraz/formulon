@@ -81,6 +81,9 @@ enum class FilterOperator : std::uint8_t {
 struct CustomFilter {
   FilterOperator op = FilterOperator::kEqual;
   std::string val;
+  /// Compares `val` as literal text, `~` included, rather than as a pattern.
+  /// Stored comparison state: set at entry, kept by xlsb, rebuilt by the xlsx load rule.
+  bool literal = false;
 };
 
 /// `<customFilters>`: one or two conditions joined by and/or.
@@ -237,6 +240,15 @@ bool append_a1_rectangle(std::string& out, const MergeRange& rect);
 /// the range and strictly ascending, one or two custom conditions, and date
 /// groups whose fields fit their grouping. Returns `kAutoFilterInvalid`.
 Expected<void, Error> validate_auto_filter(const AutoFilter& filter);
+
+/// Excel's entry rule for `CustomFilter::literal`: an operand with no `*` or
+/// `?`, escaped or not, under any operator but `=` (a literal `=` is a value
+/// list, so a custom `=` stays a pattern).
+bool custom_filter_entry_literal(FilterOperator op, std::string_view val) noexcept;
+
+/// Excel's xlsx load rule for `CustomFilter::literal`, which xlsx does not
+/// store: the entry rule under an ordering operator, a pattern under `<>` too.
+bool custom_filter_xlsx_literal(FilterOperator op, std::string_view val) noexcept;
 
 /// True when the sheet AutoFilter, or the AutoFilter of a table on the
 /// sheet, carries at least one criterion. Excel then treats every hidden row

@@ -666,6 +666,85 @@ TEST(FormulonCApiAutoFilter, GetThenSetKeepsUnmodelledContent) {
 
 }  // namespace
 
+TEST(FormulonCApiAutoFilter, EnteredCriterionComparesLiterallyWithoutAWildcard) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(
+      fm_sheet_set_auto_filter_xml(wb.handle, 0,
+                                   "<autoFilter ref=\"A1:D5\">"
+                                   "<filterColumn colId=\"0\"><customFilters>"
+                                   "<customFilter operator=\"notEqual\" val=\"x\"/></customFilters></filterColumn>"
+                                   "<filterColumn colId=\"1\"><customFilters>"
+                                   "<customFilter operator=\"notEqual\" val=\"x\"/></customFilters></filterColumn>"
+                                   "<filterColumn colId=\"2\"><customFilters>"
+                                   "<customFilter operator=\"notEqual\" val=\"x\"/></customFilters></filterColumn>"
+                                   "<filterColumn colId=\"3\"><customFilters>"
+                                   "<customFilter operator=\"notEqual\" val=\"x\"/></customFilters></filterColumn>"
+                                   "</autoFilter>"),
+      0)
+      << fm_get_last_error_message();
+  FilterCopy copy = GetSheetFilter(wb.handle);
+  const struct {
+    int32_t op;
+    const char* val;
+    bool literal;
+  } kCases[] = {
+      {FM_COMPARISON_OPERATOR_NOT_EQUAL, "~B", true},
+      {FM_COMPARISON_OPERATOR_EQUAL, "~B", false},
+      {FM_COMPARISON_OPERATOR_NOT_EQUAL, "B~*", false},
+      {FM_COMPARISON_OPERATOR_GREATER_THAN, "~~B", true},
+  };
+  for (std::size_t i = 0; i < 4; ++i) {
+    copy.columns[i].conditions[0].op = kCases[i].op;
+    copy.columns[i].condition_values[0] = kCases[i].val;
+  }
+  const OwnedRecord record(copy);
+  ASSERT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, record.get()), 0) << fm_get_last_error_message();
+  for (std::size_t i = 0; i < 4; ++i) {
+    SCOPED_TRACE(kCases[i].val);
+    EXPECT_EQ(wb.handle->workbook().sheet(0).auto_filter()->columns[i].custom.filters[0].literal, kCases[i].literal);
+  }
+}
+
+TEST(FormulonCApiAutoFilter, SetKeepsTheStoredComparisonOfAnUnchangedCriterion) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(
+      fm_sheet_set_auto_filter_xml(wb.handle, 0,
+                                   "<autoFilter ref=\"A1:C5\">"
+                                   "<filterColumn colId=\"0\"><customFilters>"
+                                   "<customFilter operator=\"notEqual\" val=\"~B\"/></customFilters></filterColumn>"
+                                   "<filterColumn colId=\"1\"><customFilters>"
+                                   "<customFilter operator=\"notEqual\" val=\"x\"/></customFilters></filterColumn>"
+                                   "<filterColumn colId=\"2\"><customFilters>"
+                                   "<customFilter operator=\"greaterThan\" val=\"~B\"/></customFilters></filterColumn>"
+                                   "</autoFilter>"),
+      0)
+      << fm_get_last_error_message();
+  const auto literal = [&](std::size_t column) {
+    return wb.handle->workbook().sheet(0).auto_filter()->columns[column].custom.filters[0].literal;
+  };
+  // xlsx stores no flag: Excel loads <> as a pattern and an ordering operator as literal.
+  EXPECT_FALSE(literal(0));
+  EXPECT_TRUE(literal(2));
+  FilterCopy copy = GetSheetFilter(wb.handle);
+  const auto set = [&]() {
+    const OwnedRecord record(copy);
+    ASSERT_EQ(fm_sheet_set_auto_filter(wb.handle, 0, record.get()), 0) << fm_get_last_error_message();
+  };
+  copy.columns[1].condition_values[0] = "y";
+  set();
+  EXPECT_FALSE(literal(0));
+  EXPECT_TRUE(literal(1));
+  // Changing the operand and changing it back re-enters the criterion.
+  copy.columns[0].condition_values[0] = "~C";
+  set();
+  EXPECT_TRUE(literal(0));
+  copy.columns[0].condition_values[0] = "~B";
+  set();
+  EXPECT_TRUE(literal(0));
+}
+
 TEST(FormulonCApiAutoFilter, SettingNullRemovesTheFilterAndItsHiddenName) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);

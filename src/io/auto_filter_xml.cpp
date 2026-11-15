@@ -406,6 +406,7 @@ void read_filter_column(Reader& r, const pugi::xml_node& node, FilterColumn& col
         }
         CustomFilter& filter = col.custom.filters.emplace_back();
         r.attrs(item, kCustomFilterAttrs, {&filter.op, &filter.val});
+        filter.literal = custom_filter_xlsx_literal(filter.op, filter.val);
       }
       if (col.custom.filters.empty() || col.custom.filters.size() > 2U) {
         r.fail();

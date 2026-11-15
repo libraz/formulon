@@ -92,6 +92,14 @@ Expected<void, Error> validate_auto_filter(const AutoFilter& filter) {
   return Expected<void, Error>::Ok();
 }
 
+bool custom_filter_entry_literal(FilterOperator op, std::string_view val) noexcept {
+  return op != FilterOperator::kEqual && val.find_first_of("*?") == std::string_view::npos;
+}
+
+bool custom_filter_xlsx_literal(FilterOperator op, std::string_view val) noexcept {
+  return op != FilterOperator::kNotEqual && custom_filter_entry_literal(op, val);
+}
+
 bool sheet_has_filter_criteria(const Workbook* wb, const Sheet& sheet) noexcept {
   if (const AutoFilter* own = sheet.auto_filter(); own != nullptr && own->has_criteria()) {
     return true;

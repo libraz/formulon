@@ -287,8 +287,11 @@ fm_status_t column_from_fm(const fm_filter_column_t& in, std::size_t dxf_count, 
         if (auto rc = check_enum_domain(in.conditions[i].op, kFirstOp, kLastOp, "conditions.op"); rc != 0) {
           return rc;
         }
-        out->custom.filters.push_back(
-            formulon::CustomFilter{filter_operator_from_c(in.conditions[i].op), text_or_empty(in.conditions[i].value)});
+        formulon::CustomFilter& filter = out->custom.filters.emplace_back();
+        filter.op = filter_operator_from_c(in.conditions[i].op);
+        filter.val = text_or_empty(in.conditions[i].value);
+        // An entered criterion compares as Excel's dialog does; an xlsx reopen re-applies it as a pattern.
+        filter.literal = formulon::custom_filter_entry_literal(filter.op, filter.val);
       }
       return 0;
     }
@@ -418,7 +421,9 @@ fm_status_t filter_from_fm(const fm_auto_filter_t& in, std::size_t dxf_count, fo
 
 // Copies from `existing` what the C records have no slot for: unmodelled
 // attributes and extensions of the filter, its sort state and each column
-// (matched by `col_id`), and a values filter's `calendarType`.
+// (matched by `col_id`), a values filter's `calendarType`, and the literal
+// bit of a custom column set back unchanged: only a re-entered criterion
+// takes the entry rule.
 void carry_unmodelled(const formulon::AutoFilter& existing, formulon::AutoFilter* model) {
   model->extra_attrs = existing.extra_attrs;
   model->ext_lst_xml = existing.ext_lst_xml;
@@ -435,6 +440,16 @@ void carry_unmodelled(const formulon::AutoFilter& existing, formulon::AutoFilter
       column.extra_xml = old.extra_xml;
       column.ext_xml = old.ext_xml;
       column.values.calendar_type = old.values.calendar_type;
+      if (column.kind == formulon::FilterKind::kCustom && old.kind == formulon::FilterKind::kCustom &&
+          column.custom.and_join == old.custom.and_join && column.custom.filters.size() == old.custom.filters.size()) {
+        for (std::size_t i = 0; i < column.custom.filters.size(); ++i) {
+          formulon::CustomFilter& now = column.custom.filters[i];
+          const formulon::CustomFilter& was = old.custom.filters[i];
+          if (now.op == was.op && now.val == was.val) {
+            now.literal = was.literal;
+          }
+        }
+      }
       break;
     }
   }
