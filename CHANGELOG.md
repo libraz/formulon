@@ -557,6 +557,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `listPassthroughs()` and `hasPassthrough()` (Python `list_passthroughs` /
+  `has_passthrough`, C `fm_workbook_get_passthrough_count` /
+  `fm_workbook_get_passthrough_at` / `fm_workbook_has_passthrough`, and the
+  command line's `passthroughParts`) list only the parts the reader keeps as
+  stored without modelling them. On an `.xlsb` they used to list the styles
+  part and the parts of every PivotTable read into the model too, which the
+  workbook holds in its model and writes from it once edited.
+
 - A PivotTable page field that shows one item because every other item is
   hidden reads "(Multiple Items)", as Excel shows it, unless the field allows
   multiple selection (Excel's Select Multiple Items), in which case it shows

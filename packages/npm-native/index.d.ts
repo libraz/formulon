@@ -8355,9 +8355,10 @@ export interface WorkbookOoxml {
    *  past the end fails with `StatusCode.IndexOutOfRange`, an invalid record with `StatusCode.InvalidArgument`. */
   setCellStyleXf(cellStyleXfIndex: number, record: CellXfInput): void;
 
-  /** Lists the paths of the OOXML parts the reader carried through unchanged. */
+  /** Lists the paths of the parts the reader keeps as stored without modelling them. The original of a modelled
+   *  part (an `.xlsb` styles part, or the parts of a PivotTable read into the model) is not listed. */
   listPassthroughs(): readonly string[];
-  /** Reports whether a passthrough part sits at `path` (no leading `/`). */
+  /** Reports whether an unmodelled part sits at `path` (no leading `/`), as `listPassthroughs()` lists it. */
   hasPassthrough(path: string): boolean;
 }
 

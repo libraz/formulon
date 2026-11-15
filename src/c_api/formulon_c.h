@@ -2900,8 +2900,10 @@ FM_API fm_status_t fm_sheet_insert_table_columns(fm_workbook_t* wb, size_t sheet
                                                  uint32_t first, uint32_t last);
 
 /**
- * @brief Writes the number of passthrough OOXML parts the reader carried
- *        through unchanged to `*out_count`.
+ * @brief Writes the number of passthrough parts, the parts the reader keeps
+ *        as stored without modelling them, to `*out_count`. The original of a
+ *        modelled part (an `.xlsb` styles part, or the parts of a PivotTable
+ *        read into the model) is not counted.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_count` is NULL.
@@ -2909,12 +2911,14 @@ FM_API fm_status_t fm_sheet_insert_table_columns(fm_workbook_t* wb, size_t sheet
 FM_API fm_status_t fm_workbook_get_passthrough_count(const fm_workbook_t* wb, size_t* out_count);
 
 /**
- * @brief Reads the `index`-th passthrough part's path.
+ * @brief Reads the `index`-th passthrough part's path, counting only the
+ *        parts `fm_workbook_get_passthrough_count` counts.
  *
  * On success `*out_path` is a model-backed view into the workbook's
  * passthrough-part list. It remains valid until the passthrough list is
  * replaced by a reader/writer round-trip, another invalidating workbook
- * mutation, or handle destruction. Reads do not invalidate it.
+ * mutation, or handle destruction. Reads do not invalidate it. An index is
+ * valid only while the list is unchanged.
  *
  * Lifetime: transient.
  *
@@ -2925,7 +2929,8 @@ FM_API fm_status_t fm_workbook_get_passthrough_count(const fm_workbook_t* wb, si
 FM_API fm_status_t fm_workbook_get_passthrough_at(const fm_workbook_t* wb, size_t index, const char** out_path);
 
 /**
- * @brief Reports whether the reader carried a passthrough part at `path`
+ * @brief Reports whether a passthrough part, as
+ *        `fm_workbook_get_passthrough_count` counts them, sits at `path`
  *        (matched exactly, without a leading `/`). `*out_present` is `1` when
  *        there is one, else `0` (still `FM_STATUS_OK` (0)).
  *

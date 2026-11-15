@@ -11110,7 +11110,11 @@ class WorkbookOoxml(_NoCopy):
         return f"{self._workbook!r}.ooxml"
 
     def list_passthroughs(self) -> List[str]:
-        """Return the passthrough OOXML part paths."""
+        """Return the paths of the parts the reader keeps as stored without modelling them.
+
+        The original of a modelled part (an ``.xlsb`` styles part, or the parts of a PivotTable read
+        into the model) is not listed.
+        """
         h = self._workbook._require()
         n = _read_count(LIB.fm_workbook_get_passthrough_count, h)
         # Scratch hoisted out of the loop; see list_defined_names.
@@ -11124,7 +11128,7 @@ class WorkbookOoxml(_NoCopy):
         return out
 
     def has_passthrough(self, path: str) -> bool:
-        """Whether a passthrough part sits at ``path`` (no leading ``/``)."""
+        """Whether an unmodelled part sits at ``path`` (no leading ``/``), as :meth:`list_passthroughs` lists it."""
         h = self._workbook._require()
         with _ArgScope() as scope:
             path_ptr = scope.cstr(path)

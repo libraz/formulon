@@ -29,6 +29,7 @@
 #include "io/read_options.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/writer.h"
+#include "passthrough_part.h"
 #include "sheet.h"
 #include "sheet_name.h"
 #include "utils/error.h"
@@ -789,7 +790,9 @@ extern "C" fm_status_t fm_workbook_get_passthrough_count(const fm_workbook_t* wb
   if (wb == nullptr || out_count == nullptr) {
     return null_argument();
   }
-  *out_count = wb->workbook().passthrough_parts().size();
+  const auto& parts = wb->workbook().passthrough_parts();
+  *out_count = static_cast<std::size_t>(std::count_if(
+      parts.begin(), parts.end(), [](const formulon::PassthroughPart& part) { return part.is_unmodelled(); }));
   return 0;
 }
 
@@ -799,11 +802,18 @@ extern "C" fm_status_t fm_workbook_get_passthrough_at(const fm_workbook_t* wb, s
     return null_argument();
   }
   const auto& parts = wb->workbook().passthrough_parts();
-  if (auto rc = check_index(idx, parts.size(), "index"); rc != 0) {
-    return rc;
+  std::size_t listed = 0;
+  for (const formulon::PassthroughPart& part : parts) {
+    if (!part.is_unmodelled()) {
+      continue;
+    }
+    if (listed == idx) {
+      *out_path = part.path.c_str();
+      return 0;
+    }
+    ++listed;
   }
-  *out_path = parts[idx].path.c_str();
-  return 0;
+  return check_index(idx, listed, "index");
 }
 
 extern "C" fm_status_t fm_workbook_has_passthrough(const fm_workbook_t* wb, const char* path, int32_t* out_present) {
@@ -816,7 +826,7 @@ extern "C" fm_status_t fm_workbook_has_passthrough(const fm_workbook_t* wb, cons
   }
   *out_present = 0;
   for (const auto& part : wb->workbook().passthrough_parts()) {
-    if (part.path == path) {
+    if (part.is_unmodelled() && part.path == path) {
       *out_present = 1;
       break;
     }

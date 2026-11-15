@@ -84,6 +84,11 @@ struct PassthroughPart {
   /// after load. A save whose dxf references differ renumbers the part's dxf
   /// list in place; an equal one leaves the part untouched.
   std::optional<std::uint64_t> dxf_reference_fingerprint;
+
+  /// Whether the part is published as a passthrough: one the reader kept
+  /// without modelling it. A retained original of modelled state is the
+  /// writer's own copy and is not.
+  bool is_unmodelled() const { return retained_origin == RetainedOrigin::kNone; }
 };
 
 /// Orders captured parts by package path, giving both readers a stable

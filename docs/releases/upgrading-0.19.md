@@ -1789,6 +1789,13 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
   returns `#NAME?`; it returned 0.
 - Inserting rows or columns that would push a value off the sheet is
   `PreconditionFailed` and changes nothing; the value used to be dropped.
+- On an `.xlsb`, `listPassthroughs()` / `hasPassthrough()` (Python
+  `list_passthroughs` / `has_passthrough`, C `fm_workbook_get_passthrough_count`
+  / `fm_workbook_get_passthrough_at` / `fm_workbook_has_passthrough`, and the
+  command line's `passthroughParts`) no longer list `xl/styles.bin` or the parts
+  of a PivotTable read into the model; they list only the parts the reader keeps
+  as stored without modelling them. A PivotTable part still listed is one the
+  workbook does not model, so `listPivots()` does not return it.
 
 ## Reference tables
 
