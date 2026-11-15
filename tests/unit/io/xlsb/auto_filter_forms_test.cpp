@@ -369,26 +369,46 @@ TEST(XlsbAutoFilterForms, StringCriterionFlagFollowsExcel) {
   }
 }
 
-// On a sheet only = leaves the flag clear on a plain operand; <, >=, and <> set it, as Excel's ft_l18 / ft_l19 and
-// afilter/equal saves do. In a PivotTable caption filter <> matches as a pattern and leaves it clear too.
-TEST(XlsbAutoFilterForms, StringCriterionFlagUnderEveryOperator) {
+// A string criterion's union starts with its stored literal-comparison bit under every operator.
+TEST(XlsbAutoFilterForms, StringCriterionFlagIsTheStoredBit) {
   Records block = FlagBlock("flag/A_gt_B");
   AutoFilter filter = ReadBlock(Stream(block));
   ASSERT_EQ(filter.columns[0].custom.filters.size(), 1U);
-  for (const AutoFilterHost host : {AutoFilterHost::kSheet, AutoFilterHost::kPivotCaption}) {
+  for (const bool literal : {false, true}) {
     for (const FilterOperator op :
          {FilterOperator::kLessThan, FilterOperator::kEqual, FilterOperator::kLessThanOrEqual,
           FilterOperator::kGreaterThan, FilterOperator::kNotEqual, FilterOperator::kGreaterThanOrEqual}) {
       filter.columns[0].custom.filters[0].op = op;
-      Bytes out;
-      EXPECT_EQ(emit_auto_filter_block(out, filter, host), 0U);
-      const Records written = AsRecords(out);
+      filter.columns[0].custom.filters[0].literal = literal;
+      const Records written = Written(filter);
       const Bytes* rec = FindRecord(written, kBrtCustomFilter);
       ASSERT_NE(rec, nullptr);
-      const bool literal =
-          op != FilterOperator::kEqual && (op != FilterOperator::kNotEqual || host == AutoFilterHost::kSheet);
       EXPECT_EQ((*rec)[2], literal ? 1U : 0U) << static_cast<int>(op);
+      EXPECT_EQ(ReadBlock(Stream(written)).columns[0].custom.filters[0].literal, literal) << static_cast<int>(op);
     }
+  }
+}
+
+// Excel's xlsb save of an xlsx it loaded (afilter/carry): the flag is the state the xlsx load gave the criterion, so
+// <>~B saves clear where Excel's own entry of it sets the flag, and ordering criteria keep it set.
+TEST(XlsbAutoFilterForms, XlsxLoadedCriterionSavesExcelsFlag) {
+  for (const char* name : {"A_ne_tildeB", "A_lt_tildeB", "A_gt_B"}) {
+    SCOPED_TRACE(name);
+    const std::string stem = std::string("carry/") + name;
+    const Records block = FlagBlock(stem + "_asloaded");
+    const Bytes* excel = FindRecord(block, kBrtCustomFilter);
+    ASSERT_NE(excel, nullptr);
+    ASSERT_GE(excel->size(), 10U);
+    auto loaded = read_ooxml(SpanOf(ReadFile(stem + ".xlsx")));
+    ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+    const AutoFilter* filter = loaded.value().workbook.sheet(0).auto_filter();
+    ASSERT_NE(filter, nullptr);
+    const Records written = Written(*filter);
+    const Bytes* ours = FindRecord(written, kBrtCustomFilter);
+    ASSERT_NE(ours, nullptr);
+    ASSERT_EQ(ours->size(), excel->size());
+    EXPECT_EQ(Bytes(ours->begin(), ours->begin() + 4), Bytes(excel->begin(), excel->begin() + 4));
+    EXPECT_EQ(Bytes(ours->begin() + 10, ours->end()), Bytes(excel->begin() + 10, excel->end()));
   }
 }
 

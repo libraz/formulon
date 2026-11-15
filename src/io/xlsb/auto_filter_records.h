@@ -43,12 +43,7 @@ Expected<AutoFilter, Error> read_auto_filter_block(ByteSpan& cursor, ByteSpan be
 /// with date groups in the rich-data form, or a top-ten or dynamic criterion
 /// without the bounds Excel computed for it, is left out and counted. A colour criterion without a
 /// format and the filter's own extLst are left out, as Excel leaves them out.
-/// Where an AUTOFILTER block sits: a sheet or table filter compares a text operand without `*` or `?` literally, a
-/// PivotTable caption filter's = and <> always match it as a pattern.
-enum class AutoFilterHost : std::uint8_t { kSheet, kPivotCaption };
-
-std::uint32_t emit_auto_filter_block(std::vector<std::uint8_t>& out, const AutoFilter& filter,
-                                     AutoFilterHost host = AutoFilterHost::kSheet);
+std::uint32_t emit_auto_filter_block(std::vector<std::uint8_t>& out, const AutoFilter& filter);
 
 /// Whether the block for `filter` carries a criterion, which is when Excel
 /// sets the sheet's filter mode.

@@ -561,9 +561,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- A sheet AutoFilter text criterion compared with <, <=, >, >= or <> is saved
-  to .xlsb with the flag Excel sets when the text is not a pattern (has no *
-  or ?). It was saved without it.
+- A sheet AutoFilter text criterion is saved to .xlsb with the flag that has
+  Excel compare the text literally rather than as a pattern. A criterion
+  entered on text with no * or ? under <, <=, >, >= or <> carries it, one read
+  from .xlsb keeps it as saved, and one read from .xlsx carries it under the
+  ordering operators only, as in Excel. It was saved without it.
 - `listPassthroughs()` and `hasPassthrough()` (Python `list_passthroughs` /
   `has_passthrough`, C `fm_workbook_get_passthrough_count` /
   `fm_workbook_get_passthrough_at` / `fm_workbook_has_passthrough`, and the

@@ -1470,12 +1470,13 @@ bool WriteFilter(const pugi::xml_node& node, RawRecords& out) {
       emit_xlwidestring(p, attr.value());
     }
   }
+  // The xlsx load rule's comparison state is a caption filter's: = and <> match as a pattern, ordering is literal.
   auto criteria = parse_auto_filter_xml(raw_xml(children->front()));
   if (!criteria) {
     return false;
   }
   std::vector<std::uint8_t> afilter;
-  if (emit_auto_filter_block(afilter, criteria.value(), AutoFilterHost::kPivotCaption) != 0U) {
+  if (emit_auto_filter_block(afilter, criteria.value()) != 0U) {
     return false;
   }
   out.push_back(ids::RawRecord{ids::kBeginSXFilter, std::move(p)});

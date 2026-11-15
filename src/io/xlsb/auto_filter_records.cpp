@@ -132,8 +132,10 @@ Expected<void, Error> ReadCustomFilter(ByteSpan payload, CustomFilter* out) {
       return Expected<void, Error>::Ok();
     }
     case kVtsString: {
+      ASSIGN_OR_RETURN(const std::uint8_t literal, read_u8(value));
       ASSIGN_OR_RETURN(auto text, read_xlwidestring(payload));
       out->val = std::move(text);
+      out->literal = literal != 0U;
       return Expected<void, Error>::Ok();
     }
     case kVtsBlank:
@@ -345,18 +347,7 @@ Expected<FilterColumn, Error> ReadFilterColumn(ByteSpan& cursor, ByteSpan begin)
   }
 }
 
-/// The flag that starts a string criterion's union: set when the operand is compared as literal text, which is when
-/// it has no `*` or `?` (an escaped `~*` or `~?` included) under <, <=, > and >=, and under <> outside a PivotTable
-/// caption filter. = keeps the clear flag of a pattern: Excel writes a literal = as a value list instead.
-bool StringCriterionFlag(const CustomFilter& filter, AutoFilterHost host) {
-  if (filter.op == FilterOperator::kEqual ||
-      (filter.op == FilterOperator::kNotEqual && host == AutoFilterHost::kPivotCaption)) {
-    return false;
-  }
-  return filter.val.find_first_of("*?") == std::string::npos;
-}
-
-void EmitCustomFilter(std::vector<std::uint8_t>& out, const CustomFilter& filter, AutoFilterHost host) {
+void EmitCustomFilter(std::vector<std::uint8_t>& out, const CustomFilter& filter) {
   std::vector<std::uint8_t> payload;
   const bool non_blank = filter.op == FilterOperator::kNotEqual && filter.val == kNonBlankText;
   const bool blank = filter.op == FilterOperator::kEqual && filter.val.empty();
@@ -364,8 +355,8 @@ void EmitCustomFilter(std::vector<std::uint8_t>& out, const CustomFilter& filter
   emit_u8(payload, blank ? kVtsBlank : non_blank ? kVtsNonBlank : number ? kVtsNumber : kVtsString);
   emit_u8(payload, SgnFromOperator(filter.op));
   if (!number && !non_blank && !blank) {
-    // Excel leaves the rest of a string operand's union unset; zero here.
-    emit_u8(payload, StringCriterionFlag(filter, host) ? 1U : 0U);
+    // The union starts with the literal-comparison state; Excel leaves the rest unset, zero here.
+    emit_u8(payload, filter.literal ? 1U : 0U);
     for (int i = 0; i < 7; ++i) {
       emit_u8(payload, 0U);
     }
@@ -430,7 +421,7 @@ ColumnFate FateOf(const FilterColumn& col) {
 }
 
 /// Emits one column's criterion; returns the settings it could not hold.
-std::uint32_t EmitCriterion(std::vector<std::uint8_t>& out, const FilterColumn& col, AutoFilterHost host) {
+std::uint32_t EmitCriterion(std::vector<std::uint8_t>& out, const FilterColumn& col) {
   std::vector<std::uint8_t> payload;
   switch (col.kind) {
     case FilterKind::kNone:
@@ -464,7 +455,7 @@ std::uint32_t EmitCriterion(std::vector<std::uint8_t>& out, const FilterColumn& 
       emit_u32(payload, col.custom.and_join ? 1U : 0U);
       emit_record(out, kBrtBeginCustomFilters, payload);
       for (std::size_t i = 0; i < col.custom.filters.size() && i < 2U; ++i) {
-        EmitCustomFilter(out, col.custom.filters[i], host);
+        EmitCustomFilter(out, col.custom.filters[i]);
       }
       emit_record(out, kBrtEndCustomFilters, ByteSpan{});
       return col.custom.filters.size() > 2U ? 1U : 0U;
@@ -633,7 +624,7 @@ bool auto_filter_block_has_criteria(const AutoFilter& filter) noexcept {
   return false;
 }
 
-std::uint32_t emit_auto_filter_block(std::vector<std::uint8_t>& out, const AutoFilter& filter, AutoFilterHost host) {
+std::uint32_t emit_auto_filter_block(std::vector<std::uint8_t>& out, const AutoFilter& filter) {
   if (filter.is_opaque()) {
     return 1U;
   }
@@ -654,7 +645,7 @@ std::uint32_t emit_auto_filter_block(std::vector<std::uint8_t>& out, const AutoF
     flags |= col.show_button ? 0U : 0x0002U;
     emit_u16(payload, flags);
     emit_record(out, kBrtBeginFilterColumn, payload);
-    lost += EmitCriterion(out, col, host);
+    lost += EmitCriterion(out, col);
     lost += (col.extra_xml.empty() ? 0U : 1U) + (col.ext_xml.empty() ? 0U : 1U);
     emit_record(out, kBrtEndFilterColumn, ByteSpan{});
   }
