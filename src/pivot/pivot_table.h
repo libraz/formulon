@@ -294,8 +294,8 @@ class PivotTable {
   void mark_layout_dirty() { layout_dirty_ = true; }
 
   /// The reader that produced this definition, or `kBuilt` for one assembled
-  /// in memory. An .xlsb definition is read only in part, so items are never
-  /// generated for it.
+  /// in memory. An .xlsb definition is read whole through the pivot bridges;
+  /// a group holding a state no Excel-saved part shows stays unread passthrough.
   PivotDefinitionSource definition_source() const { return definition_source_; }
   void set_definition_source(PivotDefinitionSource source) { definition_source_ = source; }
 

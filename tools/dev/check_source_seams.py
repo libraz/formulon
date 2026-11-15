@@ -216,6 +216,10 @@ LAYER_BASELINE: dict[tuple[str, str], str] = {
         "A worksheet source ref is A1 text read with the grammar INDIRECT and names use."
     ),
     ("io/ooxml_writer.cpp", "eval/eval_profile_scope.h"): "Pivot write plans collate shared items like evaluation.",
+    (
+        "io/xlsb/pivot_part_plan.cpp",
+        "eval/eval_profile_scope.h",
+    ): "Pivot write plans collate shared items like evaluation.",
     ("sheet_name.cpp", "eval/collation.h"): "Name identity is the measured Mac '=' text collation equality.",
     ("cell_style_save_plan.cpp", "eval/collation.h"): "Saved cell styles merge and sort under the profile collation.",
 }

@@ -54,7 +54,7 @@
 #include "io/ooxml_defs.h"
 #include "io/passthrough_part_index.h"
 #include "io/pivot_cache_writer.h"
-#include "io/pivot_line_items_writer.h"
+#include "io/pivot_projection.h"
 #include "io/pivot_table_writer.h"
 #include "io/rich_value_errors.h"
 #include "io/styles_writer.h"
@@ -65,9 +65,6 @@
 #include "miniz.h"
 #include "passthrough_part.h"
 #include "pivot/pivot_cache.h"
-#include "pivot/pivot_evaluator.h"
-#include "pivot/pivot_layout.h"
-#include "pivot/pivot_locale.h"
 #include "pivot/pivot_table.h"
 #include "pugixml.hpp"
 #include "sheet.h"
@@ -93,80 +90,6 @@ std::string BuildSingleRelationshipRels(std::string_view type, std::string_view 
   BeginRelationships(out);
   AppendRelationship(out, 1, type, target);
   EndRelationships(out);
-  return out;
-}
-
-/// What the save writes for one pivot table from its projected report.
-struct ProjectedPivot {
-  /// The grid the report occupies; nullopt when it cannot be established.
-  std::optional<PivotRenderedSpan> span;
-  /// `<rowItems>` / `<colItems>` generated for an edited table.
-  std::optional<PivotItemsXml> items;
-  /// The table was built in memory or edited, so no items read with it describe it.
-  bool needs_items = false;
-};
-
-/// Projects `table`: the grid it will occupy, for `<location ref>`, and for an
-/// edited table the `<rowItems>` / `<colItems>` of that report.
-///
-/// The saved `ref` has to describe the report Excel draws, and only the
-/// layout layer knows how many rows and columns that is. This is the one
-/// place the writer reaches past the pivot model into evaluation; keeping
-/// it here rather than inside `write_pivot_table_definition` leaves that
-/// writer a pure model-to-XML function.
-///
-/// The layout options bear on the *extent*, not merely on label text:
-/// `pivot::layout` selects Excel's compact shape only when the profile
-/// supplies axis-label captions, and the compact and legacy shapes differ
-/// in header-row and grand-total-strip counts. Projecting under the
-/// workbook's own profile is what makes the emitted `ref` agree with the
-/// grid Excel renders.
-///
-/// Lines are generated only for a built or edited table whose definition was not read
-/// from .xlsb (that reader decodes it in part) and whose projection is not
-/// pending, from the same projection while its result is alive; a refused
-/// shape or an item the written `<items>` lack leaves them out. `plan` is the
-/// write plan of the table's cache, whose `<items>` the lines address, and the
-/// caller holds the workbook's `ScopedEvalProfile`.
-///
-/// A failed evaluation or projection leaves the span and the lines unset:
-/// saving then falls back to the table's own span, and a workbook must not
-/// fail to save because one pivot could not be evaluated.
-ProjectedPivot ProjectPivot(const Workbook& wb, const pivot::PivotTable& table, const PivotCacheWritePlan* plan) {
-  ProjectedPivot out;
-  // A table built in memory has no items read with it; an edited one has stale ones.
-  out.needs_items = table.layout_dirty() || table.definition_source() == pivot::PivotDefinitionSource::kBuilt;
-  const pivot::PivotLayoutOptions options = pivot::pivot_layout_options_for(wb.excel_profile());
-  const pivot::PivotCache* cache = wb.find_pivot_cache(table.pivot_cache_id());
-  // Reuse the result a host evaluation left behind; otherwise evaluate
-  // without memoising, since this path has no formula host.
-  std::shared_ptr<const pivot::PivotResult> result = table.last_result();
-  if (!result) {
-    if (cache == nullptr) {
-      return out;
-    }
-    auto eval_or =
-        pivot::evaluate(table, *cache, options, pivot::PivotFilterEnv{wb.pinned_now(), wb.date1904(), &wb.styles()});
-    if (!eval_or) {
-      return out;
-    }
-    result = std::make_shared<const pivot::PivotResult>(std::move(eval_or.value()));
-  }
-  const bool generate = out.needs_items && cache != nullptr &&
-                        table.definition_source() != pivot::PivotDefinitionSource::kXlsb && !table.projection_pending();
-  pivot::PivotLineItems lines;
-  auto layout_or = pivot::layout(table, *result, options, generate ? &lines : nullptr);
-  if (!layout_or) {
-    return out;
-  }
-  const pivot::PivotCells& cells = layout_or.value();
-  // A withheld report is saved as its anchor alone.
-  if (!table.blocked().has_value()) {
-    out.span = PivotRenderedSpan{cells.body_rows, cells.body_cols, cells.body_top};
-  }
-  if (generate) {
-    out.items = write_pivot_line_items(table, *cache, plan, lines);
-  }
   return out;
 }
 
@@ -558,7 +481,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     }
     for (std::size_t si = 0; si < plan.pivot_tables_by_sheet.size(); ++si) {
       for (const EmissionPlan::PivotTablePlan& t : plan.pivot_tables_by_sheet[si]) {
-        projected[si].push_back(ProjectPivot(wb, *t.table, plan_for(t.table->pivot_cache_id())));
+        projected[si].push_back(project_pivot(wb, *t.table, plan_for(t.table->pivot_cache_id())));
       }
     }
   }

@@ -187,24 +187,21 @@ TEST(PivotSaveItems, RefusedShapeSavesNoItemsAndRefreshesOnLoad) {
   EXPECT_TRUE(Contains(saved.cache, " refreshOnLoad=\"1\"")) << saved.cache;
 }
 
-TEST(PivotSaveItems, XlsbReadTableSavedAsXlsxGetsNoItemsAndRefreshesOnLoad) {
+// The .xlsb reader decodes a definition whole, so an edited table read from .xlsb saves its projected lines as
+// one read from .xlsx does.
+TEST(PivotSaveItems, EditedXlsbReadTableSavesItsProjectedItemsWithoutRefreshOnLoad) {
   Workbook wb = LoadXlsb("xlsb_pivot_base.xlsb");
   pivot::PivotTable* table = FirstPivot(wb);
   ASSERT_NE(table, nullptr);
-  EXPECT_EQ(table->definition_source(), pivot::PivotDefinitionSource::kXlsb);
-  // The .xlsb reader decodes no cache source, which an .xlsx save requires.
-  ASSERT_EQ(wb.mutable_pivot_caches().size(), 1U);
-  pivot::WorksheetSource& source = wb.mutable_pivot_caches().front()->mutable_worksheet_source();
-  if (!source.present) {
-    source.present = true;
-    source.sheet = wb.sheet(0).name();
-    source.ref = "A1:C4";
-  }
+  ASSERT_EQ(table->definition_source(), pivot::PivotDefinitionSource::kXlsb);
+  const std::string row_items = table->raw_passthrough_after_row_fields();
+  const std::string col_items = table->raw_col_items();
+  ASSERT_TRUE(Contains(row_items, "<rowItems")) << row_items;
   table->mark_layout_dirty();
   const SavedPivot saved = SaveXlsx(wb);
-  EXPECT_FALSE(Contains(saved.table, "<rowItems")) << saved.table;
-  EXPECT_FALSE(Contains(saved.table, "<colItems")) << saved.table;
-  EXPECT_TRUE(Contains(saved.cache, " refreshOnLoad=\"1\"")) << saved.cache;
+  EXPECT_TRUE(Contains(saved.table, "</rowFields>" + row_items)) << saved.table;
+  EXPECT_TRUE(Contains(saved.table, col_items)) << saved.table;
+  EXPECT_FALSE(Contains(saved.cache, "refreshOnLoad=\"1\"")) << saved.cache;
 }
 
 TEST(PivotSaveItems, UneditedXlsxTableSavesTheItemsItWasReadWith) {

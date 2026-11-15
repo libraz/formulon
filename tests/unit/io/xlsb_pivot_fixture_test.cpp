@@ -11,7 +11,7 @@
 // The record layouts the reader relies on were established by
 // differential decode — the same workbook re-saved by Excel as `.xlsx`
 // and read with the OOXML pivot reader — rather than from a
-// specification. See `src/io/xlsb/pivot_reader.h`.
+// specification. See `src/io/xlsb/pivot_table_bridge.h`.
 //
 // Fixture layout (`Sheet1`):
 //   A1:C7  source table, headers Region / Qtr / Amt
@@ -39,7 +39,8 @@
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
-#include "io/xlsb/pivot_reader.h"
+#include "io/xlsb/pivot_table_bridge.h"
+#include "io/xlsb/pivot_table_records.h"
 #include "io/xlsb/reader.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
@@ -254,225 +255,71 @@ TEST(XlsbPivotFixture, TheMeasureResolvesByDisplayNameAndBySourceColumn) {
 }
 
 // ---------------------------------------------------------------------------
-// (d) `BrtPivotTableLocation` is rejected, not clamped, when its rectangle
-//     falls outside the sheet grid.
+// (d) The fixture's table part, read through the bridge after one decoded field
+//     was changed: what the reader refuses rather than clamps or guesses.
 // ---------------------------------------------------------------------------
 
-// Frames one `BrtPivotTableLocation` record: a 2-byte record-type varint
-// (314 needs both continuation bytes), a 1-byte payload-size varint, and
-// the six-`u32` payload `read_pivot_table_bin` expects.
-std::vector<std::uint8_t> EncodeLocationRecord(std::uint32_t first_row, std::uint32_t last_row, std::uint32_t first_col,
-                                               std::uint32_t last_col) {
-  constexpr std::uint16_t kPivotTableLocation = 314;
-  std::vector<std::uint8_t> out;
-  out.push_back(static_cast<std::uint8_t>((kPivotTableLocation & 0x7F) | 0x80));
-  out.push_back(static_cast<std::uint8_t>(kPivotTableLocation >> 7));
-  const std::array<std::uint32_t, 6> fields = {first_row, last_row, first_col, last_col, 0U, 0U};
-  out.push_back(static_cast<std::uint8_t>(fields.size() * sizeof(std::uint32_t)));
-  for (std::uint32_t field : fields) {
-    for (int shift = 0; shift < 32; shift += 8) {
-      out.push_back(static_cast<std::uint8_t>((field >> shift) & 0xFFU));
-    }
-  }
-  return out;
+/// The fixture's pivot table part, decoded.
+io::xlsb::PivotTableDoc FixtureTableDoc() {
+  const std::vector<std::uint8_t> package = ReadFileBytes(FixturePath());
+  io::ZipReader zip;
+  EXPECT_TRUE(zip.open(io::ByteSpan{package.data(), package.size()}));
+  auto part = zip.read_entry("xl/pivotTables/pivotTable1.bin");
+  EXPECT_TRUE(static_cast<bool>(part));
+  const std::vector<std::uint8_t> bytes = part ? std::move(part.value()) : std::vector<std::uint8_t>{};
+  auto doc = io::xlsb::decode_pivot_table(io::ByteSpan{bytes.data(), bytes.size()});
+  EXPECT_TRUE(static_cast<bool>(doc)) << (doc ? "" : doc.error().message);
+  return doc ? std::move(doc.value()) : io::xlsb::PivotTableDoc{};
+}
+
+Expected<pivot::PivotTable, Error> ReadDoc(const io::xlsb::PivotTableDoc& doc) {
+  auto bytes = io::xlsb::encode_pivot_table(doc);
+  EXPECT_TRUE(static_cast<bool>(bytes));
+  const std::vector<std::uint8_t> part = bytes ? std::move(bytes.value()) : std::vector<std::uint8_t>{};
+  return io::xlsb::pivot_table_from_xlsb(io::ByteSpan{part.data(), part.size()});
 }
 
 TEST(XlsbPivotFixture, LocationRecordRejectsARectangleBeyondTheRowGrid) {
-  const std::vector<std::uint8_t> bytes =
-      EncodeLocationRecord(/*first_row=*/0U, /*last_row=*/Sheet::kMaxRows, /*first_col=*/0U, /*last_col=*/0U);
-  auto table_or = io::xlsb::read_pivot_table_bin(io::ByteSpan{bytes.data(), bytes.size()});
+  io::xlsb::PivotTableDoc doc = FixtureTableDoc();
+  doc.location.last_row = Sheet::kMaxRows;
+  auto table_or = ReadDoc(doc);
   ASSERT_FALSE(static_cast<bool>(table_or));
   EXPECT_EQ(table_or.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
 }
 
 TEST(XlsbPivotFixture, LocationRecordRejectsARectangleBeyondTheColumnGrid) {
-  const std::vector<std::uint8_t> bytes =
-      EncodeLocationRecord(/*first_row=*/0U, /*last_row=*/0U, /*first_col=*/0U, /*last_col=*/Sheet::kMaxCols);
-  auto table_or = io::xlsb::read_pivot_table_bin(io::ByteSpan{bytes.data(), bytes.size()});
+  io::xlsb::PivotTableDoc doc = FixtureTableDoc();
+  doc.location.last_col = Sheet::kMaxCols;
+  auto table_or = ReadDoc(doc);
   ASSERT_FALSE(static_cast<bool>(table_or));
   EXPECT_EQ(table_or.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
 }
 
-// A rectangle that just reaches the grid edge must clear the bounds check;
-// the record alone still fails to decode because a pivot table with no
-// data field is rejected further down, which is the unrelated failure
-// this test distinguishes from a wrongly-tightened bounds check.
+// A rectangle that just reaches the grid edge clears the bounds check.
 TEST(XlsbPivotFixture, LocationRecordAtTheGridEdgeClearsTheBoundsCheck) {
-  const std::vector<std::uint8_t> bytes = EncodeLocationRecord(
-      /*first_row=*/0U, /*last_row=*/Sheet::kMaxRows - 1U, /*first_col=*/0U, /*last_col=*/Sheet::kMaxCols - 1U);
-  auto table_or = io::xlsb::read_pivot_table_bin(io::ByteSpan{bytes.data(), bytes.size()});
-  ASSERT_FALSE(static_cast<bool>(table_or));
-  EXPECT_EQ(table_or.error().message, "xlsb pivot table declares no data field");
-}
-
-// ---------------------------------------------------------------------------
-// (e) Corrupt-input paths through `read_pivot_table_bin` / `read_pivot_cache_bin`
-//     directly, exercising the "callers treat this as skip the pivot"
-//     contract `pivot_reader.h` documents without needing a whole package.
-// ---------------------------------------------------------------------------
-
-// Record ids mirrored from the private enum in `src/io/xlsb/pivot_reader.cpp`
-// (not exposed via the header, so the numeric values are duplicated here,
-// the same way `EncodeLocationRecord` above already duplicates 314).
-constexpr std::uint16_t kBeginPCDField = 183;
-constexpr std::uint16_t kBeginPivotFields = 287;
-constexpr std::uint16_t kBeginPivotField = 285;
-constexpr std::uint16_t kBeginPivotFieldItem = 282;
-constexpr std::uint16_t kPivotRowFields = 309;
-constexpr std::uint16_t kBeginPivotDataField = 293;
-
-void AppendU32(std::vector<std::uint8_t>& out, std::uint32_t v) {
-  for (int shift = 0; shift < 32; shift += 8) {
-    out.push_back(static_cast<std::uint8_t>((v >> shift) & 0xFFU));
-  }
-}
-
-// General single-record encoder: every id used below needs both varint
-// continuation bytes (all are > 127), so the type is always framed as two
-// bytes; `EncodeLocationRecord` above predates this and stays specialised
-// to its own fixed payload shape.
-std::vector<std::uint8_t> EncodeRecord(std::uint16_t type, const std::vector<std::uint8_t>& payload) {
-  std::vector<std::uint8_t> out;
-  out.push_back(static_cast<std::uint8_t>((type & 0x7F) | 0x80));
-  out.push_back(static_cast<std::uint8_t>(type >> 7));
-  out.push_back(static_cast<std::uint8_t>(payload.size()));
-  out.insert(out.end(), payload.begin(), payload.end());
-  return out;
-}
-
-TEST(XlsbPivotFixture, CacheFieldOutsideDefinitionIsRejected) {
-  const std::vector<std::uint8_t> bytes = EncodeRecord(kBeginPCDField, {});
-  auto cache_or = io::xlsb::read_pivot_cache_bin(io::ByteSpan{bytes.data(), bytes.size()}, io::ByteSpan{}, false);
-  ASSERT_FALSE(static_cast<bool>(cache_or));
-  EXPECT_EQ(cache_or.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
-  EXPECT_EQ(cache_or.error().message, "xlsb pivot cache field outside a cache definition");
-}
-
-// A cache definition holding one field named "F" whose body is `inner`.
-std::vector<std::uint8_t> OneFieldCacheDefinition(const std::vector<std::vector<std::uint8_t>>& inner) {
-  constexpr std::uint16_t kBeginPCDefinition = 179;
-  constexpr std::uint16_t kEndPCDefinition = 180;
-  constexpr std::uint16_t kEndPCDField = 184;
-  std::vector<std::uint8_t> field_header(20, 0U);  // bytes preceding the name
-  AppendU32(field_header, 1U);
-  field_header.push_back(static_cast<std::uint8_t>('F'));
-  field_header.push_back(0U);
-  std::vector<std::uint8_t> bytes;
-  for (const auto& rec : {EncodeRecord(kBeginPCDefinition, {}), EncodeRecord(kBeginPCDField, field_header)}) {
-    bytes.insert(bytes.end(), rec.begin(), rec.end());
-  }
-  for (const auto& rec : inner) {
-    bytes.insert(bytes.end(), rec.begin(), rec.end());
-  }
-  for (const auto& rec : {EncodeRecord(kEndPCDField, {}), EncodeRecord(kEndPCDefinition, {})}) {
-    bytes.insert(bytes.end(), rec.begin(), rec.end());
-  }
-  return bytes;
-}
-
-TEST(XlsbPivotFixture, CacheFieldWithOnlyCharacterisedRecordsDecodes) {
-  constexpr std::uint16_t kBeginPCDFAtbl = 189;
-  constexpr std::uint16_t kEndPCDFAtbl = 190;
-  // The BrtBeginPCDFAtbl payload Excel writes for a numeric field with no shared items (flags, item count 0,
-  // minimum 10, maximum 120).
-  const std::vector<std::uint8_t> numeric_atbl = {0xC2, 0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                                                  0x00, 0x24, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x5E, 0x40};
-  const std::vector<std::uint8_t> bytes =
-      OneFieldCacheDefinition({EncodeRecord(kBeginPCDFAtbl, numeric_atbl), EncodeRecord(kEndPCDFAtbl, {})});
-  auto cache_or = io::xlsb::read_pivot_cache_bin(io::ByteSpan{bytes.data(), bytes.size()}, io::ByteSpan{}, false);
-  ASSERT_TRUE(static_cast<bool>(cache_or)) << cache_or.error().message;
-  ASSERT_EQ(cache_or.value().fields().size(), 1U);
-  EXPECT_EQ(cache_or.value().fields()[0].name, "F");
-}
-
-TEST(XlsbPivotFixture, CacheFieldWithAnUncharacterisedRecordIsRejected) {
-  // An id the fixture never carries inside a field, standing in for
-  // a grouping block whose layout has not been decoded.
-  constexpr std::uint16_t kUncharacterised = 373;
-  const std::vector<std::uint8_t> bytes = OneFieldCacheDefinition({EncodeRecord(kUncharacterised, {0U, 0U})});
-  auto cache_or = io::xlsb::read_pivot_cache_bin(io::ByteSpan{bytes.data(), bytes.size()}, io::ByteSpan{}, false);
-  ASSERT_FALSE(static_cast<bool>(cache_or));
-  EXPECT_EQ(cache_or.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
-  EXPECT_EQ(cache_or.error().message, "xlsb pivot cache field carries an uncharacterised record (grouping?)");
-}
-
-TEST(XlsbPivotFixture, FieldCountMismatchIsRejected) {
-  std::vector<std::uint8_t> bytes;
-  std::vector<std::uint8_t> count_payload;
-  AppendU32(count_payload, 2U);  // declares two fields
-  const std::vector<std::uint8_t> fields_rec = EncodeRecord(kBeginPivotFields, count_payload);
-  bytes.insert(bytes.end(), fields_rec.begin(), fields_rec.end());
-  // ...but only one `kBeginPivotField` block actually follows.
-  const std::vector<std::uint8_t> field_rec = EncodeRecord(kBeginPivotField, {});
-  bytes.insert(bytes.end(), field_rec.begin(), field_rec.end());
-
-  auto table_or = io::xlsb::read_pivot_table_bin(io::ByteSpan{bytes.data(), bytes.size()});
-  ASSERT_FALSE(static_cast<bool>(table_or));
-  EXPECT_EQ(table_or.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
-  EXPECT_EQ(table_or.error().message, "xlsb pivot table field count does not match the fields decoded");
-}
-
-TEST(XlsbPivotFixture, FieldItemOutsideAnItemListIsRejected) {
-  const std::vector<std::uint8_t> bytes = EncodeRecord(kBeginPivotFieldItem, {});
-  auto table_or = io::xlsb::read_pivot_table_bin(io::ByteSpan{bytes.data(), bytes.size()});
-  ASSERT_FALSE(static_cast<bool>(table_or));
-  EXPECT_EQ(table_or.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
-  EXPECT_EQ(table_or.error().message, "xlsb pivot field item outside a field's item list");
+  io::xlsb::PivotTableDoc doc = FixtureTableDoc();
+  doc.location.last_row = Sheet::kMaxRows - 1U;
+  doc.location.last_col = Sheet::kMaxCols - 1U;
+  auto table_or = ReadDoc(doc);
+  ASSERT_TRUE(static_cast<bool>(table_or)) << table_or.error().message;
+  EXPECT_EQ(table_or.value().anchor_row() + table_or.value().span_rows(), Sheet::kMaxRows);
 }
 
 TEST(XlsbPivotFixture, RowAxisIndexOutOfRangeIsRejected) {
-  std::vector<std::uint8_t> bytes;
-  auto append = [&](const std::vector<std::uint8_t>& rec) { bytes.insert(bytes.end(), rec.begin(), rec.end()); };
-
-  std::vector<std::uint8_t> field_count_payload;
-  AppendU32(field_count_payload, 1U);
-  append(EncodeRecord(kBeginPivotFields, field_count_payload));
-  append(EncodeRecord(kBeginPivotField, {}));
-
-  // A minimal but valid `BrtBeginPivotDataField`: field 0, Sum, empty name --
-  // needed so the table clears the "no data field" check before the row-axis
-  // check under test ever runs.
-  std::vector<std::uint8_t> data_field_payload;
-  AppendU32(data_field_payload, 0U);                             // field_index
-  AppendU32(data_field_payload, 0U);                             // selector: Sum
-  data_field_payload.insert(data_field_payload.end(), 17U, 0U);  // header gap
-  AppendU32(data_field_payload, 0U);                             // name cch=0
-  append(EncodeRecord(kBeginPivotDataField, data_field_payload));
-
-  std::vector<std::uint8_t> row_fields_payload;
-  AppendU32(row_fields_payload, 1U);  // one row field...
-  AppendU32(row_fields_payload, 5U);  // ...naming field 5, which the table does not have
-  append(EncodeRecord(kPivotRowFields, row_fields_payload));
-
-  auto table_or = io::xlsb::read_pivot_table_bin(io::ByteSpan{bytes.data(), bytes.size()});
+  io::xlsb::PivotTableDoc doc = FixtureTableDoc();
+  doc.row_fields = std::vector<std::uint32_t>{5U};
+  auto table_or = ReadDoc(doc);
   ASSERT_FALSE(static_cast<bool>(table_or));
   EXPECT_EQ(table_or.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
-  EXPECT_EQ(table_or.error().message, "xlsb pivot row axis names a field the table does not have");
 }
 
 TEST(XlsbPivotFixture, UnknownAggregationSelectorIsRejected) {
-  std::vector<std::uint8_t> payload;
-  AppendU32(payload, 0U);    // field_index
-  AppendU32(payload, 999U);  // no selector this reader recognises
-  const std::vector<std::uint8_t> bytes = EncodeRecord(kBeginPivotDataField, payload);
-
-  auto table_or = io::xlsb::read_pivot_table_bin(io::ByteSpan{bytes.data(), bytes.size()});
+  io::xlsb::PivotTableDoc doc = FixtureTableDoc();
+  ASSERT_FALSE(doc.data_fields.empty());
+  doc.data_fields[0].subtotal = 999U;
+  auto table_or = ReadDoc(doc);
   ASSERT_FALSE(static_cast<bool>(table_or));
-  EXPECT_EQ(table_or.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
-  EXPECT_EQ(table_or.error().message, "xlsb pivot data field uses an unknown aggregation selector");
-}
-
-TEST(XlsbPivotFixture, DataFieldHeaderTruncationIsRejected) {
-  std::vector<std::uint8_t> payload;
-  AppendU32(payload, 0U);                 // field_index
-  AppendU32(payload, 0U);                 // selector: Sum (valid)
-  payload.insert(payload.end(), 5U, 0U);  // short of the 17-byte header gap
-  const std::vector<std::uint8_t> bytes = EncodeRecord(kBeginPivotDataField, payload);
-
-  auto table_or = io::xlsb::read_pivot_table_bin(io::ByteSpan{bytes.data(), bytes.size()});
-  ASSERT_FALSE(static_cast<bool>(table_or));
-  EXPECT_EQ(table_or.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
-  EXPECT_EQ(table_or.error().message, "xlsb pivot data field header truncated");
+  EXPECT_EQ(table_or.error().code, FormulonErrorCode::kIoXlsbUnknownRecord);
 }
 
 // ---------------------------------------------------------------------------

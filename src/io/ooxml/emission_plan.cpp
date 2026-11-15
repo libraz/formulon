@@ -264,6 +264,24 @@ std::string_view EffectiveContentType(const Workbook& wb, const PassthroughPart&
   return {};
 }
 
+/// The part `rels_path` (`dir/_rels/name.rels`) relates from, `dir/name`; empty
+/// for any other path.
+std::string RelsOwner(std::string_view rels_path) {
+  constexpr std::string_view kRelsDir = "_rels/";
+  constexpr std::string_view kRelsExt = ".rels";
+  const std::size_t slash = rels_path.rfind('/');
+  const std::size_t dir_start = slash == std::string_view::npos ? 0U : slash + 1U;
+  const std::size_t rels_dir = dir_start >= kRelsDir.size() ? dir_start - kRelsDir.size() : std::string_view::npos;
+  if (rels_dir == std::string_view::npos || rels_path.substr(rels_dir, kRelsDir.size()) != kRelsDir ||
+      rels_path.size() <= dir_start + kRelsExt.size() ||
+      rels_path.substr(rels_path.size() - kRelsExt.size()) != kRelsExt) {
+    return {};
+  }
+  std::string owner(rels_path.substr(0, rels_dir));
+  owner.append(rels_path.substr(dir_start, rels_path.size() - kRelsExt.size() - dir_start));
+  return owner;
+}
+
 /// True when `path` names a loaded part this package can carry verbatim.
 bool HasRetainedPart(const Workbook& wb, const std::vector<const PassthroughPart*>& source_parts,
                      const PassthroughPathIndex& source_index, std::string_view path) {
@@ -583,7 +601,27 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
       wb, flat_tables, plan.pivot_caches, plan.pivot_tables_by_sheet, plan.comments_by_sheet, plan.external_links,
       generated_shared_strings, plan.generated_metadata, !plan.rich_errors.empty());
 
+  // An `.xlsb` source's binary parts cannot be written here; a pivot table the
+  // reader could not model goes with them, its cache and every relationship
+  // to either included, and is counted as a pivot left out.
+  std::unordered_set<std::string> binary_parts;
   for (const PassthroughPart& part : wb.passthrough_parts()) {
+    if (IsXlsbBinaryContentType(EffectiveContentType(wb, part))) {
+      binary_parts.insert(part.path);
+    }
+  }
+  for (std::size_t si = 0; si < wb.sheet_count() && diagnostics != nullptr; ++si) {
+    for (const UnknownRelationship& rel : wb.sheet(si).unknown_relationships()) {
+      if (rel.type == kRelPivotTable && !rel.target_external && binary_parts.count(rel.target) != 0U) {
+        ++diagnostics->deferred_feature_count;
+      }
+    }
+  }
+  for (const PassthroughPart& part : wb.passthrough_parts()) {
+    // The relationships of a binary part that is not written would dangle.
+    if (const std::string owner = RelsOwner(part.path); !owner.empty() && binary_parts.count(owner) != 0U) {
+      continue;
+    }
     // A stale external-link body is superseded by the one generated from
     // the model, which carries everything it did; nothing is lost.
     if (regenerated_link_bodies.count(part.path) != 0U) {

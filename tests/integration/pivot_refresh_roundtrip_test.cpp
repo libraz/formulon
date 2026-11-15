@@ -1,13 +1,11 @@
 //
-// A pivot cache refreshed from an edited source survives a save: the .xlsx
-// written after the refresh reads back to the refreshed cache and the pivot
-// definitions remapped onto it. An .xlsb pivot is kept as loaded parts, which
-// a refresh does not reach.
+// A pivot cache refreshed from an edited source survives a save: an .xlsx or
+// .xlsb written after the refresh reads back to the refreshed cache and the
+// pivot definitions remapped onto it.
 
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
-#include <map>
 #include <sstream>
 #include <string>
 #include <utility>
@@ -19,7 +17,6 @@
 #include "io/ooxml_writer.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/writer.h"
-#include "passthrough_part.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
 #include "sheet.h"
@@ -156,37 +153,22 @@ TEST(PivotRefreshRoundTrip, XlsxSaveReadsBackTheRefreshedCache) {
   EXPECT_FALSE(reread.value().workbook.pivot_caches().front()->refresh_on_load());
 }
 
-// An .xlsb pivot is not modelled: its cache and table parts are kept as
-// loaded, so a refresh has nothing to rebuild and the save writes those parts
-// unchanged next to the edited source.
-TEST(PivotRefreshRoundTrip, XlsbPivotPartsPassThroughARefreshUnchanged) {
-  const std::vector<std::uint8_t> bytes = ReadFixture("B01_base.xlsb");
-  auto loaded = io::xlsb::read_xlsb(io::ByteSpan{bytes.data(), bytes.size()});
-  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
-  std::map<std::string, std::vector<std::uint8_t>> pivot_parts;
-  for (const PassthroughPart& part : loaded.value().workbook.passthrough_parts()) {
-    if (part.path.rfind("xl/pivot", 0) == 0) {
-      pivot_parts[part.path] = part.bytes;
-    }
-  }
-  ASSERT_FALSE(pivot_parts.empty());
-
-  Workbook wb = LoadEditAndRefresh("B01_base.xlsb", [](const std::vector<std::uint8_t>& in) {
-    return io::xlsb::read_xlsb(io::ByteSpan{in.data(), in.size()});
+TEST(PivotRefreshRoundTrip, XlsbSaveReadsBackTheRefreshedCache) {
+  Workbook wb = LoadEditAndRefresh("B01_base.xlsb", [](const std::vector<std::uint8_t>& bytes) {
+    return io::xlsb::read_xlsb(io::ByteSpan{bytes.data(), bytes.size()});
   });
-  EXPECT_TRUE(wb.pivot_caches().empty());
+  const std::vector<std::string> refreshed = CacheAndPivotLines(wb);
+  bool saw_west = false;
+  for (const std::string& line : refreshed) {
+    saw_west = saw_west || line.find("s:West") != std::string::npos;
+  }
+  ASSERT_TRUE(saw_west) << "the refresh did not pick up the edited source";
+
   auto saved = io::xlsb::write_xlsb(wb);
   ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
   auto reread = io::xlsb::read_xlsb(io::ByteSpan{saved.value().data(), saved.value().size()});
   ASSERT_TRUE(static_cast<bool>(reread)) << reread.error().message;
-
-  std::map<std::string, std::vector<std::uint8_t>> saved_parts;
-  for (const PassthroughPart& part : reread.value().workbook.passthrough_parts()) {
-    if (part.path.rfind("xl/pivot", 0) == 0) {
-      saved_parts[part.path] = part.bytes;
-    }
-  }
-  EXPECT_EQ(saved_parts, pivot_parts);
+  EXPECT_EQ(CacheAndPivotLines(reread.value().workbook), refreshed);
   const Value edited = reread.value().workbook.sheet(kSourceSheet).resolve_cell_value(1U, kRegionCol);
   ASSERT_TRUE(edited.is_text());
   EXPECT_EQ(edited.as_text(), "West");

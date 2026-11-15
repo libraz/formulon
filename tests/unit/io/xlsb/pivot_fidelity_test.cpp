@@ -82,6 +82,10 @@ std::vector<std::uint8_t> SxFilter(std::uint32_t type, std::uint32_t id, std::ui
     emit_xlwidestring(payload, value1);
   }
   emit_record(out, 601, payload);
+  // Excel writes a null uid (BrtBeginACUID 01 00 00 10 00 80, BrtUid, BrtEndACUID) ahead of every filter's AutoFilter.
+  emit_record(out, 37, std::vector<std::uint8_t>{0x01, 0x00, 0x00, 0x10, 0x00, 0x80});
+  emit_record(out, 3072, std::vector<std::uint8_t>(16, 0x00));
+  emit_record(out, 38, ByteSpan{});
   payload.clear();
   emit_rfx(payload, MergeRange{0, 0, 0, 0});
   emit_record(out, 161, payload);

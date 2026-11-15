@@ -24,6 +24,7 @@
 #include "io/xlsb/comments_records.h"
 #include "io/xlsb/external_link_writer.h"
 #include "io/xlsb/part_paths.h"
+#include "io/xlsb/pivot_part_plan.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xlsb/retained_part_fingerprint.h"
 #include "io/xlsb/slicer_records.h"
@@ -63,8 +64,15 @@ constexpr std::string_view kCtCommentsXlsb = "application/vnd.ms-excel.comments"
 constexpr std::string_view kCtVmlDrawing = "application/vnd.openxmlformats-officedocument.vmlDrawing";
 constexpr std::string_view kCtThreadedComments = "application/vnd.ms-excel.threadedcomments+xml";
 constexpr std::string_view kCtPerson = "application/vnd.ms-excel.person+xml";
+constexpr std::string_view kCtPivotTableXlsb = "application/vnd.ms-excel.pivotTable";
+constexpr std::string_view kCtPivotCacheDefinitionXlsb = "application/vnd.ms-excel.pivotCacheDefinition";
+constexpr std::string_view kCtPivotCacheRecordsXlsb = "application/vnd.ms-excel.pivotCacheRecords";
 
 }  // namespace
+
+std::string pivot_cache_rel_key(std::size_t k) {
+  return "\x01pivotCache" + std::to_string(k);
+}
 
 /// Fails a retained part (pivot table, pivot cache, styles) whose model
 /// state changed since load, including the model object having gone.
@@ -275,8 +283,9 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
     // `.xml` one, or a number past the model's links) would be an orphan.
     // An xlsx metadata part is replaced by the generated metadata.bin; Excel keeps only the types the model holds
     // (a further type such as XLMDX is dropped from its own xlsb save as well).
+    // A modelled pivot group's retained parts are written, or not, by the pivot plan.
     if (IsBinaryIndexPart(part.path) || part.path == "xl/calcChain.bin" || IsXlsxOnlyMetadataPart(part.path) ||
-        is_xml_slicer_part(part.path) || IsExternalLinkPart(part.path)) {
+        is_xml_slicer_part(part.path) || IsExternalLinkPart(part.path) || is_retained_pivot_part(wb, part)) {
       continue;
     }
     if (!kept_paths.insert(part.path).second) {
@@ -369,8 +378,17 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
     for (std::size_t i = 1; i <= plan.external_link_count; ++i) {
       AppendOverride(out, ExternalLinkRelsPath(i), kCtPackageRels);
     }
+    for (const EmissionPlan::PivotCachePart& cache : plan.pivot_caches) {
+      AppendOverride(out, ooxml::rels_path_for_part(cache.definition_path), kCtPackageRels);
+    }
+    for (const std::vector<EmissionPlan::PivotTablePart>& pivots : plan.sheet_pivots) {
+      for (const EmissionPlan::PivotTablePart& pivot : pivots) {
+        AppendOverride(out, ooxml::rels_path_for_part(pivot.path), kCtPackageRels);
+      }
+    }
     for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
       bool has_emitted_sheet_rels = (i < plan.sheet_tables.size() && !plan.sheet_tables[i].empty()) ||
+                                    (i < plan.sheet_pivots.size() && !plan.sheet_pivots[i].empty()) ||
                                     !plan.sheet_drawing_rids[i].empty() ||
                                     std::any_of(wb.sheet(i).hyperlinks().begin(), wb.sheet(i).hyperlinks().end(),
                                                 [](const Hyperlink& hyperlink) { return !hyperlink.target.empty(); });
@@ -417,6 +435,15 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
       AppendOverride(out, table.path, kCtTableXlsb);
     }
   }
+  for (const EmissionPlan::PivotCachePart& cache : plan.pivot_caches) {
+    AppendOverride(out, cache.definition_path, kCtPivotCacheDefinitionXlsb);
+    AppendOverride(out, cache.records_path, kCtPivotCacheRecordsXlsb);
+  }
+  for (const std::vector<EmissionPlan::PivotTablePart>& pivots : plan.sheet_pivots) {
+    for (const EmissionPlan::PivotTablePart& pivot : pivots) {
+      AppendOverride(out, pivot.path, kCtPivotTableXlsb);
+    }
+  }
   // Passthrough overrides: only for entries that carried an explicit
   // ContentType in the source archive. Default-typed parts (empty
   // content_type) must NOT appear as Overrides.
@@ -449,7 +476,8 @@ std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan, const s
                            const std::vector<std::string>& hyperlink_rids, bool owns_drawing,
                            const std::string& drawing_rid, WriteDiagnostics* diagnostics,
                            const io::EmissionPlan::CommentsPlan* comments,
-                           const EmissionPlan::CommentRelIds* comment_rids) {
+                           const EmissionPlan::CommentRelIds* comment_rids,
+                           const std::vector<EmissionPlan::PivotTablePart>* pivots) {
   const bool owns_notes = comments != nullptr && comments->numeric_id != 0U;
   std::string entries;
   for (const UnknownRelationship& rel : sheet.unknown_relationships()) {
@@ -487,6 +515,12 @@ std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan, const s
   for (const XlsbTablePart& table : tables) {
     AppendRelationship(entries, table.rel_id, kRelTable, TargetRelativeToWorksheet(table.path),
                        /*target_external=*/false, /*escape_target=*/true);
+  }
+  if (pivots != nullptr) {
+    for (const EmissionPlan::PivotTablePart& pivot : *pivots) {
+      AppendRelationship(entries, pivot.rel_id, kRelPivotTable, TargetRelativeToWorksheet(pivot.path),
+                         /*target_external=*/false, /*escape_target=*/true);
+    }
   }
   if (!drawing_rid.empty()) {
     AppendRelationship(entries, drawing_rid, kRelDrawing, TargetRelativeToWorksheet(sheet.drawing_rel_target()),
@@ -556,6 +590,13 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
   }
   if (plan.generated_persons) {
     AppendRelationship(out, next_rid++, kRelPerson, TargetRelativeToWorkbook(kPersonsPartPath));
+  }
+  for (std::size_t k = 0; k < plan.pivot_caches.size(); ++k) {
+    if (id_map != nullptr) {
+      id_map->emplace_back(pivot_cache_rel_key(k), "rId" + std::to_string(next_rid));
+    }
+    AppendRelationship(out, next_rid++, kRelPivotCacheDefinition,
+                       TargetRelativeToWorkbook(plan.pivot_caches[k].definition_path));
   }
   if (plan.has_generated_rich_values) {
     for (const auto& [type, path] : {std::pair{kRelRdRichValue, kRdRichValuePartPath},

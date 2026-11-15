@@ -204,6 +204,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/auto_filter_forms_test.cpp
   unit/io/xlsb/xlsb_parity_notes_test.cpp
   unit/io/xlsb/xlsb_parity_tablestyles_test.cpp
+  unit/io/xlsb/xlsb_parity_pivot_table_test.cpp
   unit/io/xlsb/xlsb_parity_protected_range_test.cpp
   unit/io/xlsb/xlsb_parity_sparkline_test.cpp
   unit/io/xlsb/xlsb_parity_format_test.cpp
@@ -245,6 +246,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/pivot_cache_bridge_test.cpp
   unit/io/xlsb/pivot_table_records_test.cpp
   unit/io/xlsb/pivot_table_bridge_test.cpp
+  unit/io/xlsb/xlsb_pivot_wiring_test.cpp
   unit/io/xlsb/pivot_line_item_records_test.cpp
   unit/io/xlsb/slicer_fidelity_test.cpp
   unit/io/xlsb/drawing_record_test.cpp

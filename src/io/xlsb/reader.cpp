@@ -52,8 +52,9 @@
 #include "io/xlsb/metadata_bin.h"
 #include "io/xlsb/package_loader.h"
 #include "io/xlsb/part_paths.h"
+#include "io/xlsb/pivot_cache_bridge.h"
 #include "io/xlsb/pivot_cache_ids.h"
-#include "io/xlsb/pivot_reader.h"
+#include "io/xlsb/pivot_table_bridge.h"
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_reader.h"
 #include "io/xlsb/record.h"
@@ -134,58 +135,63 @@ struct RetainedPartOrigins {
   }
 };
 
-/// Decodes the cache a pivot-table part binds to, returning the model id
-/// it was registered under. Caches already loaded are reused so two
-/// tables over one cache share it, as they do in the file.
-///
-/// The id is ours to assign: the workbook's own cache-id table is not
-/// decoded, and nothing outside the model consults these ids -- the parts
-/// round-trip through passthrough rather than being rewritten from the
-/// model.
-std::optional<std::uint32_t> LoadPivotCacheFor(const ZipReader& zip, Workbook& wb, std::string_view pivot_table_path,
-                                               std::unordered_map<std::string, std::uint32_t>& loaded,
-                                               RetainedPartOrigins& origins) {
-  auto def_path_or = FindRelationship(zip, pivot_table_path, "Type", kRelPivotCacheDefinition, "pivot rels");
-  if (!def_path_or || def_path_or.value().empty()) {
+/// BrtBeginPivotCacheID: u32 idSx, then the workbook relationship id of the cache definition.
+constexpr std::uint16_t kBrtBeginPivotCacheId = 386;
+
+/// One cache the workbook's PIVOTCACHEIDS block lists: its id and definition part.
+struct BookPivotCache {
+  std::uint32_t id = 0;
+  std::string definition_path;
+};
+
+/// The caches `block` lists, in order, with each relationship id resolved through `book_rels`; empty when the
+/// block does not frame.
+std::vector<BookPivotCache> BookPivotCaches(const std::vector<std::uint8_t>& block,
+                                            const std::vector<UnknownRelationship>& book_rels) {
+  std::vector<BookPivotCache> out;
+  ByteSpan cursor{block.data(), block.size()};
+  while (cursor.size > 0U) {
+    auto rec = read_record(cursor);
+    if (!rec) {
+      return {};
+    }
+    if (rec.value().type != kBrtBeginPivotCacheId) {
+      continue;
+    }
+    ByteSpan payload = rec.value().payload;
+    auto id = read_u32(payload);
+    auto rel_id = id ? read_xlwidestring(payload) : Expected<std::string, Error>(id.error());
+    if (!rel_id) {
+      return {};
+    }
+    for (const UnknownRelationship& rel : book_rels) {
+      if (!rel.target_external && rel.type == kRelPivotCacheDefinition && rel.id == rel_id.value()) {
+        out.push_back(BookPivotCache{id.value(), rel.target});
+      }
+    }
+  }
+  return out;
+}
+
+/// The bytes of `path`, or nullopt when the package lacks it.
+std::optional<std::vector<std::uint8_t>> ReadPart(const ZipReader& zip, const std::string& path) {
+  if (path.empty() || !zip.has_entry(path)) {
     return std::nullopt;
   }
-  const std::string def_path = std::move(def_path_or).value();
-  const auto seen = loaded.find(def_path);
-  if (seen != loaded.end()) {
-    return seen->second;
-  }
-  auto rec_path_or = FindRelationship(zip, def_path, "Type", kRelPivotCacheRecords, "pivot rels");
-  if (!rec_path_or || rec_path_or.value().empty()) {
-    return std::nullopt;
-  }
-  const std::string rec_path = std::move(rec_path_or).value();
-  if (!zip.has_entry(def_path) || !zip.has_entry(rec_path)) {
-    return std::nullopt;
-  }
-  auto def_bytes_or = zip.read_entry(def_path);
-  if (!def_bytes_or) {
-    return std::nullopt;
-  }
-  auto rec_bytes_or = zip.read_entry(rec_path);
-  if (!rec_bytes_or) {
-    return std::nullopt;
-  }
-  const std::vector<std::uint8_t>& def_bytes = def_bytes_or.value();
-  const std::vector<std::uint8_t>& rec_bytes = rec_bytes_or.value();
-  auto cache_or = read_pivot_cache_bin(ByteSpan{def_bytes.data(), def_bytes.size()},
-                                       ByteSpan{rec_bytes.data(), rec_bytes.size()}, wb.date1904());
-  if (!cache_or) {
-    StructuredLog("xlsb.pivot.skipped").field("part", def_path).field("reason", cache_or.error().message).warn();
-    return std::nullopt;
-  }
-  const auto cache_id = static_cast<std::uint32_t>(wb.pivot_caches().size());
-  pivot::PivotCache cache = std::move(cache_or.value());
-  cache.set_cache_id(cache_id);
-  origins.set(def_path, RetainedPartOriginTag{PassthroughPart::RetainedOrigin::kPivotCacheDefinition, 0, 0, cache_id});
-  origins.set(rec_path, RetainedPartOriginTag{PassthroughPart::RetainedOrigin::kPivotCacheRecords, 0, 0, cache_id});
-  wb.add_pivot_cache(std::make_unique<pivot::PivotCache>(std::move(cache)));
-  loaded.emplace(def_path, cache_id);
-  return cache_id;
+  auto bytes = zip.read_entry(path);
+  return bytes ? std::optional<std::vector<std::uint8_t>>(std::move(bytes.value())) : std::nullopt;
+}
+
+/// True when `path` is a `.bin` part directly inside `dir` (which ends in '/').
+bool DirectBinPart(std::string_view path, std::string_view dir) {
+  return strings::starts_with(path, dir) && strings::ends_with(path, ".bin") &&
+         path.find('/', dir.size()) == std::string_view::npos;
+}
+
+/// The internal target of `part_path`'s first relationship of `type`; empty when it has none.
+std::string RelatedPart(const ZipReader& zip, const std::string& part_path, std::string_view type) {
+  auto target = FindRelationship(zip, part_path, "Type", type, "pivot rels");
+  return target ? std::move(target.value()) : std::string();
 }
 
 /// Reads the remote workbook URLs recorded in an external link part's own
@@ -379,50 +385,135 @@ bool ConsumeRichValueParts(const ZipReader& zip, RichValueSet* set, std::unorder
   return true;
 }
 
-/// Decodes every pivot table reachable from a sheet's relationships.
+/// Decodes every pivot cache and table into the model, a cache with every
+/// table drawing from it or not at all.
 ///
-/// A pivot this reader cannot account for is skipped, not failed. Before
-/// this existed no XLSB pivot was decoded at all, so refusing one leaves
-/// that workbook loading exactly as it used to, whereas propagating the
-/// error would turn a working open into a failure. Skipping is also why
-/// the parts are left out of `consumed_parts`: the XLSB writer has no
-/// pivot output, so a decoded-but-not-consumed part still round-trips
-/// verbatim, and a skipped one is indistinguishable from before.
-void LoadPivotParts(const ZipReader& zip, Workbook& wb, RetainedPartOrigins& origins,
+/// A group the bridges cannot read is skipped, not failed: its parts stay
+/// passthrough with their relationships, as every pivot part did before the
+/// model could write them. A modelled group's part bytes are retained, tagged
+/// with the model object each fingerprints against, for the writer to keep
+/// while the group is unchanged; its relationships are consumed, since the
+/// writer relates whichever parts it writes.
+void LoadPivotParts(const ZipReader& zip, Workbook& wb, std::vector<UnknownRelationship>& book_rels,
+                    std::unordered_set<std::string>& consumed_parts, RetainedPartOrigins& origins,
                     const std::vector<DeferredSpillAnchor>& deferred_spill_anchors) {
-  std::unordered_map<std::string, std::uint32_t> loaded_caches;
+  struct TableRead {
+    std::size_t sheet = 0;
+    std::string rel_id;
+    std::string path;
+    std::string definition_path;
+    pivot::PivotTable table;
+  };
+  std::vector<TableRead> tables;
+  // Definition parts a table drawing from them, or the cache itself, could not be read for.
+  std::unordered_set<std::string> refused;
+  // A table part related more than once, from one sheet or several, is not modelled.
+  std::unordered_map<std::string, std::size_t> table_rels;
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
-    const std::size_t first_new_pivot = wb.sheet(i).pivot_tables().size();
-    std::vector<std::string> pivot_table_paths;
     for (const UnknownRelationship& rel : wb.sheet(i).unknown_relationships()) {
-      if (rel.type == kRelPivotTable && !rel.target_external && !rel.target.empty()) {
-        pivot_table_paths.push_back(rel.target);
+      if (rel.type == kRelPivotTable && !rel.target_external) {
+        ++table_rels[rel.target];
       }
     }
-    for (const std::string& path : pivot_table_paths) {
-      if (!zip.has_entry(path)) {
+  }
+  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    for (const UnknownRelationship& rel : wb.sheet(i).unknown_relationships()) {
+      if (rel.type != kRelPivotTable || rel.target_external || rel.target.empty()) {
         continue;
       }
-      auto bytes_or = zip.read_entry(path);
-      if (!bytes_or) {
+      const std::string definition = RelatedPart(zip, rel.target, kRelPivotCacheDefinition);
+      // The writer relates a modelled group's parts from where Excel keeps them.
+      if (table_rels[rel.target] != 1U || !DirectBinPart(rel.target, "xl/pivotTables/") ||
+          !DirectBinPart(definition, "xl/pivotCache/")) {
+        StructuredLog("xlsb.pivot.skipped")
+            .field("part", rel.target)
+            .field("reason", std::string_view("table part related twice or outside the pivot folders"))
+            .warn();
+        refused.insert(definition);
         continue;
       }
-      const std::vector<std::uint8_t>& bytes = bytes_or.value();
-      auto table_or = read_pivot_table_bin(ByteSpan{bytes.data(), bytes.size()});
-      if (!table_or) {
-        // Not modelled: the part stays passthrough and the report is not a model pivot.
-        StructuredLog("xlsb.pivot.skipped").field("part", path).field("reason", table_or.error().message).warn();
+      const std::optional<std::vector<std::uint8_t>> bytes = ReadPart(zip, rel.target);
+      auto table =
+          bytes ? pivot_table_from_xlsb(ByteSpan{bytes->data(), bytes->size()})
+                : Expected<pivot::PivotTable, Error>(make_error(FormulonErrorCode::kIoRelationshipBroken,
+                                                                "pivot table part missing", "context=xlsb_reader"));
+      if (!table || definition.empty()) {
+        StructuredLog("xlsb.pivot.skipped")
+            .field("part", rel.target)
+            .field("reason", table ? std::string("no cache definition") : table.error().message)
+            .warn();
+        refused.insert(definition);
         continue;
       }
-      const std::optional<std::uint32_t> cache_id = LoadPivotCacheFor(zip, wb, path, loaded_caches, origins);
-      if (!cache_id) {
+      tables.push_back(TableRead{i, rel.id, rel.target, definition, std::move(table.value())});
+    }
+  }
+  std::unordered_map<std::string, std::uint32_t> modelled;
+  for (const BookPivotCache& entry : BookPivotCaches(wb.xlsb_pivot_cache_ids(), book_rels)) {
+    const std::string& definition = entry.definition_path;
+    if (refused.count(definition) != 0U || modelled.count(definition) != 0U ||
+        wb.find_pivot_cache(entry.id) != nullptr) {
+      continue;
+    }
+    const std::string records_path = RelatedPart(zip, definition, kRelPivotCacheRecords);
+    if (!DirectBinPart(definition, "xl/pivotCache/") || !DirectBinPart(records_path, "xl/pivotCache/")) {
+      continue;
+    }
+    const std::optional<std::vector<std::uint8_t>> definition_bytes = ReadPart(zip, definition);
+    const std::optional<std::vector<std::uint8_t>> records_bytes = ReadPart(zip, records_path);
+    if (!definition_bytes || !records_bytes) {
+      continue;
+    }
+    auto cache = pivot_cache_from_xlsb(ByteSpan{definition_bytes->data(), definition_bytes->size()},
+                                       ByteSpan{records_bytes->data(), records_bytes->size()}, wb.date1904());
+    if (!cache) {
+      StructuredLog("xlsb.pivot.skipped").field("part", definition).field("reason", cache.error().message).warn();
+      continue;
+    }
+    cache.value().set_cache_id(entry.id);
+    wb.add_pivot_cache(std::make_unique<pivot::PivotCache>(std::move(cache.value())));
+    modelled.emplace(definition, entry.id);
+    consumed_parts.insert(ooxml::rels_path_for_part(definition));
+    origins.set(definition,
+                RetainedPartOriginTag{PassthroughPart::RetainedOrigin::kPivotCacheDefinition, 0, 0, entry.id});
+    origins.set(records_path,
+                RetainedPartOriginTag{PassthroughPart::RetainedOrigin::kPivotCacheRecords, 0, 0, entry.id});
+    book_rels.erase(std::remove_if(book_rels.begin(), book_rels.end(),
+                                   [&definition](const UnknownRelationship& rel) {
+                                     return !rel.target_external && rel.target == definition;
+                                   }),
+                    book_rels.end());
+  }
+  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    const std::size_t first_new_pivot = wb.sheet(i).pivot_tables().size();
+    std::unordered_set<std::string> consumed_rel_ids;
+    for (TableRead& read : tables) {
+      if (read.sheet != i) {
         continue;
       }
-      pivot::PivotTable table = std::move(table_or.value());
-      table.set_pivot_cache_id(*cache_id);
-      origins.set(path, RetainedPartOriginTag{PassthroughPart::RetainedOrigin::kPivotTable, i,
-                                              wb.sheet(i).pivot_tables().size(), 0});
-      wb.sheet(i).add_pivot_table(std::make_unique<pivot::PivotTable>(std::move(table)));
+      const auto cache = modelled.find(read.definition_path);
+      if (cache == modelled.end()) {
+        StructuredLog("xlsb.pivot.skipped")
+            .field("part", read.path)
+            .field("reason", std::string_view("cache not modelled"))
+            .warn();
+        continue;
+      }
+      read.table.set_pivot_cache_id(cache->second);
+      consumed_parts.insert(ooxml::rels_path_for_part(read.path));
+      origins.set(read.path, RetainedPartOriginTag{PassthroughPart::RetainedOrigin::kPivotTable, i,
+                                                   wb.sheet(i).pivot_tables().size(), 0});
+      consumed_rel_ids.insert(read.rel_id);
+      wb.sheet(i).add_pivot_table(std::make_unique<pivot::PivotTable>(std::move(read.table)));
+    }
+    if (!consumed_rel_ids.empty()) {
+      std::vector<UnknownRelationship> rels = wb.sheet(i).unknown_relationships();
+      rels.erase(std::remove_if(rels.begin(), rels.end(),
+                                [&consumed_rel_ids](const UnknownRelationship& rel) {
+                                  return consumed_rel_ids.count(rel.id) != 0U;
+                                }),
+                 rels.end());
+      wb.sheet(i).set_unknown_relationships(std::move(rels));
     }
     assign_read_creation_orders(wb, i, first_new_pivot);
   }
@@ -971,7 +1062,8 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
   // Pivot caches and tables, reached through the sheet relationships the
   // loop above stored. Runs after every sheet is decoded because a table
   // is attached to its sheet and its cache is workbook-level.
-  LoadPivotParts(zip, wb, retained_part_origins, deferred_spill_anchors);
+  LoadPivotParts(zip, wb, wb_rels_or.value().unknown_rels, consumed_parts, retained_part_origins,
+                 deferred_spill_anchors);
 
   // 8. Passthrough parts. First capture every Override-listed part the
   // reader did not consume, retaining its explicit content type. A second

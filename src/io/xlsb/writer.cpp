@@ -50,6 +50,7 @@
 #include "io/xlsb/metadata_bin.h"
 #include "io/xlsb/part_paths.h"
 #include "io/xlsb/pivot_cache_ids.h"
+#include "io/xlsb/pivot_part_plan.h"
 #include "io/xlsb/print_records.h"
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/ptg_targets.h"
@@ -66,6 +67,7 @@
 #include "io/xlsb/view_records.h"
 #include "io/xlsb/workbook_bin_writer.h"
 #include "io/xlsb/workbook_props_records.h"
+#include "io/xml_utils.h"
 #include "miniz.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -96,43 +98,12 @@ void ReportDeferred(std::uint32_t* count, std::string_view kind, std::size_t ite
       .warn();
 }
 
-/// True when `workbook`'s passthrough set already carries at least one
-/// XLSB-native pivot table part (`xl/pivotTables/*.bin`) that is still
-/// fresh against the current model.
-///
-/// Unlike every other feature `ReportDeferredSheetFeatures` checks, a
-/// pivot table's *source* part can survive a save untouched: the XLSB
-/// pivot reader deliberately never marks a decoded-or-skipped pivot part
-/// as consumed (see `LoadPivotParts` in xlsb/reader.cpp), specifically so
-/// it keeps round-tripping through passthrough even though this writer
-/// has no pivot output of its own. `sheet.pivot_tables()` is non-empty
-/// whenever the source was `.xlsb` with intact pivots, which is exactly
-/// the case where nothing is actually lost -- so the deferred count below
-/// only fires when there is no such surviving, fresh part (the source was
-/// `.xlsx`, whose pivot parts are plain XML with no `.bin` counterpart for
-/// this passthrough set to carry, or the retained part is stale, in which
-/// case the save fails closed before this diagnostic ever reaches a
-/// caller).
-bool HasPivotPassthroughPart(const Workbook& workbook) {
-  for (const PassthroughPart& part : workbook.passthrough_parts()) {
-    if (part.retained_origin != PassthroughPart::RetainedOrigin::kPivotTable) {
-      continue;
-    }
-    if (CheckRetainedPartFreshness(workbook, part)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
   std::uint32_t count = 0U;
-  const bool pivots_survive_via_passthrough = HasPivotPassthroughPart(workbook);
   const std::uint32_t views = workbook_view_count(workbook.book_views_xml());
   for (std::size_t i = 0; i < workbook.sheet_count(); ++i) {
     const Sheet& sheet = workbook.sheet(i);
     ReportDeferred(&count, "auto_filter", unwritten_auto_filter_settings(sheet), i);
-    ReportDeferred(&count, "pivot_tables", pivots_survive_via_passthrough ? 0U : sheet.pivot_tables().size(), i);
     ReportDeferred(&count, "print_settings", has_deferred_print_settings(sheet.print_settings()) ? 1U : 0U, i);
     ReportDeferred(&count, "custom_sheet_views", unwritten_xml_sheet_views(sheet), i);
     ReportDeferred(&count, "format_defaults", unwritable_format_default_count(sheet.format_defaults()), i);
@@ -218,18 +189,6 @@ struct MetadataPlan {
   std::uint32_t rich_value_rels_retired = 0;
 };
 
-// True when the package carries the pivot table part that
-// `sheet.pivot_tables()[index]` was loaded from.
-bool PivotPartIsWritten(const Workbook& wb, std::size_t sheet, std::size_t index) {
-  for (const PassthroughPart& part : wb.passthrough_parts()) {
-    if (part.retained_origin == PassthroughPart::RetainedOrigin::kPivotTable && part.origin_sheet_index == sheet &&
-        part.origin_pivot_index == index) {
-      return true;
-    }
-  }
-  return false;
-}
-
 MetadataPlan BuildMetadataPlan(const Workbook& wb) {
   MetadataPlan plan;
   plan.dynamic_arrays = has_dynamic_array_formula(wb);
@@ -244,7 +203,7 @@ MetadataPlan BuildMetadataPlan(const Workbook& wb) {
   }
   if (retained == nullptr) {
     // A blocked pivot's anchor is written plain unless its pivot part is: only a part kept from an XLSB source says so.
-    plan.rich = build_rich_value_table(wb, PivotPartIsWritten);
+    plan.rich = build_rich_value_table(wb, pivot_table_kept_verbatim);
     plan.rich_rels = plan_rich_value_rels(wb, plan.rich);
     if (plan.rich_rels.parts.empty() && plan.rich_rels.skipped.count(std::string(kRichValueRelPartPath)) != 0U) {
       for (const UnknownRelationship& r : wb.unknown_workbook_rels()) {
@@ -285,8 +244,21 @@ XlsbEmission DxfStreams(const Workbook& wb, std::vector<std::vector<std::uint8_t
           &table.bytes, 0U, DxfPartKey{static_cast<std::int32_t>(i), DxfPartType::kTable, table_parts[i]++}});
     }
   }
+  // A table the bridge wrote names model dxfs and is renumbered with the rest; one kept verbatim pins the list.
+  for (std::size_t i = 0; i < plan.sheet_pivots.size(); ++i) {
+    for (EmissionPlan::PivotTablePart& pivot : plan.sheet_pivots[i]) {
+      if (pivot.verbatim) {
+        emission.retained_pivot = true;
+      } else {
+        emission.streams.push_back(XlsbDxfStream{
+            &pivot.bytes, 0U,
+            DxfPartKey{static_cast<std::int32_t>(i), DxfPartType::kPivot, static_cast<std::uint32_t>(pivot.index)}});
+      }
+    }
+  }
   for (const PassthroughPart* part : plan.passthrough_kept) {
-    if (part->retained_origin == PassthroughPart::RetainedOrigin::kPivotTable) {
+    if (part->retained_origin == PassthroughPart::RetainedOrigin::kPivotTable ||
+        (strings::starts_with(part->path, "xl/pivotTables/") && strings::ends_with(part->path, ".bin"))) {
       emission.retained_pivot = true;
     } else if (part->path == kStylesBinPath) {
       emission.raw_styles = &(copies[part->path] = part->bytes);
@@ -374,6 +346,12 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   for (const PassthroughPart& part : workbook.passthrough_parts()) {
     taken_paths.insert(part.path);
   }
+  EmissionPlan pivots;
+  const PivotPartLoss pivots_lost = plan_pivot_parts(workbook, taken_paths, pivots);
+  for (std::size_t i = 0; i < pivots_lost.tables.size(); ++i) {
+    ReportDeferred(&diagnostics.deferred_feature_count, "pivot_tables", pivots_lost.tables[i], i);
+  }
+  ReportDeferred(&diagnostics.deferred_feature_count, "pivot_caches", pivots_lost.caches, 0U);
   XlsbTableAllocator table_allocator(std::move(taken_paths));
   // The named cell styles styles.bin writes and the names table parts may keep.
   // A retained styles.bin that passes through is the only style table in the file, so every part written beside it
@@ -435,6 +413,10 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
       table_rel_ids.push_back(table.rel_id);
       taken_rel_ids.insert(table.rel_id);
     }
+    for (EmissionPlan::PivotTablePart& pivot : pivots.sheet_pivots[i]) {
+      pivot.rel_id = FreshRelId(taken_rel_ids);
+      taken_rel_ids.insert(pivot.rel_id);
+    }
     // The drawing id avoids retained ids, a suppressed drawing's included.
     sheet_owns_drawing[i] = !workbook.sheet(i).drawing_rel_target().empty();
     if (sheet_owns_drawing[i] && DrawingIsLinkable(workbook, workbook.sheet(i), i, &diagnostics)) {
@@ -480,6 +462,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     plan.passthrough_path_index.reset(kept);
   }
   plan.sheet_tables = std::move(sheet_tables);
+  plan.pivot_caches = std::move(pivots.pivot_caches);
+  plan.sheet_pivots = std::move(pivots.sheet_pivots);
   plan.sheet_drawing_rids = std::move(sheet_drawing_rids);
   plan.sheet_owns_drawing = std::move(sheet_owns_drawing);
   plan.sheet_comment_rids = std::move(comment_rids);
@@ -533,7 +517,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     ASSIGN_OR_RETURN(auto wb_bytes, BuildWorkbookBin(workbook, ordered_names, sheet_ranges, sheet_names, link_rel_ids));
     ReportDeferred(&diagnostics.deferred_feature_count, "custom_workbook_views",
                    splice_book_user_views(wb_bytes, workbook), 0U);
-    splice_book_pivot_cache_ids(wb_bytes, workbook.xlsb_pivot_cache_ids(), workbook_rel_ids);
+    splice_book_pivot_cache_ids(wb_bytes, book_pivot_cache_ids(workbook.xlsb_pivot_cache_ids(), plan),
+                                workbook_rel_ids);
     splice_book_slicer_cache_ids(wb_bytes, workbook.xlsb_book_frt(), workbook_rel_ids);
     RETURN_IF_ERROR(AddPartBytes(writer.get(), kWorkbookBinPath, wb_bytes));
   }
@@ -566,9 +551,17 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     for (const XlsbTablePart& table : plan.sheet_tables[i]) {
       RETURN_IF_ERROR(AddPartBytes(writer.get(), table.path, table.bytes));
     }
-    const std::string sheet_rels = BuildSheetRels(
-        workbook.sheet(i), plan, plan.sheet_tables[i], sheet_hyperlink_rids[i], plan.sheet_owns_drawing[i],
-        plan.sheet_drawing_rids[i], &diagnostics, &plan.comments_by_sheet[i], &plan.sheet_comment_rids[i]);
+    for (const EmissionPlan::PivotTablePart& pivot : plan.sheet_pivots[i]) {
+      RETURN_IF_ERROR(AddPartBytes(writer.get(), pivot.path, pivot.bytes));
+      const std::string& definition = plan.pivot_caches[pivot.cache].definition_path;
+      RETURN_IF_ERROR(
+          AddPart(writer.get(), ooxml::rels_path_for_part(pivot.path),
+                  single_relationship_part(kRelPivotCacheDefinition, relative_part_target(pivot.path, definition))));
+    }
+    const std::string sheet_rels =
+        BuildSheetRels(workbook.sheet(i), plan, plan.sheet_tables[i], sheet_hyperlink_rids[i],
+                       plan.sheet_owns_drawing[i], plan.sheet_drawing_rids[i], &diagnostics, &plan.comments_by_sheet[i],
+                       &plan.sheet_comment_rids[i], &plan.sheet_pivots[i]);
     if (!sheet_rels.empty()) {
       RETURN_IF_ERROR(AddPart(writer.get(), sheet_rels_part_path(i + 1U), sheet_rels));
     }
@@ -595,6 +588,14 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   }
   if (plan.generated_persons) {
     RETURN_IF_ERROR(AddPart(writer.get(), std::string(kPersonsPartPath), write_persons(workbook.persons())));
+  }
+  // 5a. The pivot caches the tables above draw from, each definition related to its records.
+  for (const EmissionPlan::PivotCachePart& cache : plan.pivot_caches) {
+    RETURN_IF_ERROR(AddPartBytes(writer.get(), cache.definition_path, cache.definition));
+    RETURN_IF_ERROR(AddPart(writer.get(), ooxml::rels_path_for_part(cache.definition_path),
+                            single_relationship_part(kRelPivotCacheRecords,
+                                                     relative_part_target(cache.definition_path, cache.records_path))));
+    RETURN_IF_ERROR(AddPartBytes(writer.get(), cache.records_path, cache.records));
   }
   // 5b. xl/externalLinks/externalLink<N>.bin and its rels, one per link, in
   // the order `BrtSupBookSrc` lists them.

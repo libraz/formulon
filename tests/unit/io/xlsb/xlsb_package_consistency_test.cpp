@@ -104,6 +104,8 @@ std::set<std::pair<std::string, std::string>> Violations(const Bytes& package) {
   }
 
   std::map<std::string, int> references;
+  // A pivot cache definition is also related from each table drawing from it, as Excel relates it.
+  std::map<std::string, int> table_references;
   for (const std::string& name : parts) {
     if (!IsRelsPart(name)) {
       continue;
@@ -119,7 +121,10 @@ std::set<std::pair<std::string, std::string>> Violations(const Bytes& package) {
         continue;
       }
       const std::string target = ResolveTarget(name, rel.attribute("Target").value());
-      ++references[target];
+      const bool from_table =
+          StartsWith(name, "xl/pivotTables/_rels/") &&
+          std::string(rel.attribute("Type").value()).find("/pivotCacheDefinition") != std::string::npos;
+      ++(from_table ? table_references : references)[target];
       if (present.count(target) == 0U) {
         out.emplace(kDanglingTarget, target);
       }
@@ -138,7 +143,8 @@ std::set<std::pair<std::string, std::string>> Violations(const Bytes& package) {
     if (IsRelsPart(name) || StartsWith(name, "docProps/")) {
       continue;
     }
-    if (references[name] != 1) {
+    const bool misplaced = table_references[name] != 0 && !StartsWith(name, "xl/pivotCache/pivotCacheDefinition");
+    if (references[name] != 1 || misplaced) {
       out.emplace(kSingleReference, name);
     }
   }

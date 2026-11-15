@@ -1,7 +1,8 @@
 //
 // Internal seam between the pivot-table-definition writer and its
 // `<filters>` emission (`pivot_filter_writer.cpp`) and `<pivotField>` emission
-// (`pivot_field_writer.cpp`). Not part of the public API.
+// (`pivot_field_writer.cpp`), and the location rules the .xlsb pivot bridge
+// shares with it. Not part of the public API.
 
 #ifndef FORMULON_IO_PIVOT_TABLE_WRITER_INTERNAL_H_
 #define FORMULON_IO_PIVOT_TABLE_WRITER_INTERNAL_H_
@@ -71,6 +72,28 @@ bool ReEmitsSource(const pivot::PivotTable& table, const pivot::PivotFilter& fil
 
 /// Emits `<filters>` (see the definition).
 void AppendFilters(std::string& out, const pivot::PivotTable& table);
+
+/// Location attributes Excel derives from the report shape, used when the
+/// model carries no authored value.
+struct LocationDefaults {
+  std::uint32_t first_header_row = 1;
+  std::uint32_t first_data_row = 1;
+  std::uint32_t first_data_col = 1;
+  std::optional<std::uint32_t> row_page_count;
+  std::optional<std::uint32_t> col_page_count;
+};
+
+/// The Values position a table is saved with. Excel refuses a definition with
+/// two or more data fields unless the Values pseudo-field sits on an axis, so
+/// one with no recorded position goes to the end of the column axis.
+std::optional<std::size_t> SavedColValuesPosition(const pivot::PivotTable& table);
+
+/// A report with no row, column, page or data field: Excel draws its empty frame instead of a report.
+bool IsFieldless(const pivot::PivotTable& table);
+
+/// The location attributes of `table`'s report shape, counting the real
+/// fields plus the Values marker on each axis.
+LocationDefaults ComputeLocationDefaults(const pivot::PivotTable& table);
 
 /// Emits one `<pivotField>` (see the definition).
 void AppendPivotField(std::string& out, const pivot::PivotField& field, const std::vector<pivot::PivotItem>& items,

@@ -37,10 +37,14 @@ using detail::AppendFilters;
 using detail::AppendPivotField;
 using detail::AttrList;
 using detail::BoundItems;
+using detail::ComputeLocationDefaults;
 using detail::FilterFieldIndex;
 using detail::HasFormOverride;
 using detail::HasRawAttr;
+using detail::IsFieldless;
+using detail::LocationDefaults;
 using detail::ReEmitsSource;
+using detail::SavedColValuesPosition;
 
 /// Emits an A1 range string `"<topLeft>:<bottomRight>"` for the pivot's
 /// rectangular anchor. The reader accepts both single-cell and range
@@ -302,18 +306,6 @@ void AppendDataFields(std::string& out, const std::vector<pivot::PivotDataField>
   out.append("</dataFields>");
 }
 
-/// Location attributes Excel derives from the report shape, used when the
-/// model carries no authored value. `col_entries` / `row_entries` count the
-/// real fields plus the Values marker on that axis.
-struct LocationDefaults {
-  std::uint32_t first_header_row = 1;
-  std::uint32_t first_data_row = 1;
-  std::uint32_t first_data_col = 1;
-  std::optional<std::uint32_t> row_page_count;
-  std::optional<std::uint32_t> col_page_count;
-};
-
-/// A report with no row, column, page or data field: Excel draws its empty frame instead of a report.
 void AppendU32Attr(std::string& out, std::string_view name, std::uint32_t value) {
   out.push_back(' ');
   out.append(name);
@@ -423,13 +415,28 @@ void AppendChartFormats(std::string& out, const std::vector<pivot::PivotChartFor
   out.append("</chartFormats>");
 }
 
+}  // namespace
+
+namespace detail {
+
 bool IsFieldless(const pivot::PivotTable& table) {
   return table.row_field_order().empty() && table.col_field_order().empty() && table.page_field_order().empty() &&
          table.data_fields().empty();
 }
 
-LocationDefaults ComputeLocationDefaults(const pivot::PivotTable& table, std::size_t row_entries,
-                                         std::size_t col_entries, bool col_values_only) {
+std::optional<std::size_t> SavedColValuesPosition(const pivot::PivotTable& table) {
+  std::optional<std::size_t> position = table.col_values_position();
+  if (table.data_fields().size() >= 2U && !table.row_values_position().has_value() && !position.has_value()) {
+    position = table.col_field_order().size();
+  }
+  return position;
+}
+
+LocationDefaults ComputeLocationDefaults(const pivot::PivotTable& table) {
+  const std::optional<std::size_t> col_values_position = SavedColValuesPosition(table);
+  const std::size_t row_entries = table.row_field_order().size() + (table.row_values_position().has_value() ? 1U : 0U);
+  const std::size_t col_entries = table.col_field_order().size() + (col_values_position.has_value() ? 1U : 0U);
+  const bool col_values_only = col_values_position.has_value() && table.col_field_order().empty();
   LocationDefaults d;
   if (IsFieldless(table)) {
     d.first_data_col = 0;
@@ -476,7 +483,7 @@ LocationDefaults ComputeLocationDefaults(const pivot::PivotTable& table, std::si
   return d;
 }
 
-}  // namespace
+}  // namespace detail
 
 std::string write_pivot_table_definition(const pivot::PivotTable& table, std::optional<PivotRenderedSpan> rendered_span,
                                          const PivotCacheWritePlan* plan, const PivotItemsXml* items) {
@@ -574,18 +581,8 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
   AppendAttrsInOrder(out, attrs, kPivotTableAttrOrder);
   out.append(">");
 
-  // Excel refuses a definition with two or more data fields unless the
-  // Values pseudo-field sits on an axis; default it to the end of the
-  // column axis when the model records no position.
-  std::optional<std::size_t> col_values_position = table.col_values_position();
-  if (table.data_fields().size() >= 2U && !table.row_values_position().has_value() &&
-      !col_values_position.has_value()) {
-    col_values_position = table.col_field_order().size();
-  }
-  const std::size_t row_entries = table.row_field_order().size() + (table.row_values_position().has_value() ? 1U : 0U);
-  const std::size_t col_entries = table.col_field_order().size() + (col_values_position.has_value() ? 1U : 0U);
-  const LocationDefaults loc_defaults = ComputeLocationDefaults(
-      table, row_entries, col_entries, col_values_position.has_value() && table.col_field_order().empty());
+  const std::optional<std::size_t> col_values_position = SavedColValuesPosition(table);
+  const LocationDefaults loc_defaults = ComputeLocationDefaults(table);
 
   out.append("<location ref=\"");
   // Anchor is unconditionally emitted as a range; an empty table

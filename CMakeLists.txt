@@ -229,6 +229,7 @@ set(FORMULON_CORE_SOURCES
   src/io/pivot_filter_writer.cpp
   src/io/pivot_items_binding.cpp
   src/io/pivot_line_items_writer.cpp
+  src/io/pivot_projection.cpp
   src/io/rich_value_errors.cpp
   src/io/rich_values.cpp
   src/io/format_detect.cpp
@@ -280,7 +281,7 @@ set(FORMULON_CORE_SOURCES
   src/io/xlsb/pivot_cache_bridge.cpp
   src/io/xlsb/pivot_calc_item_records.cpp
   src/io/xlsb/pivot_line_item_records.cpp
-  src/io/xlsb/pivot_reader.cpp
+  src/io/xlsb/pivot_part_plan.cpp
   src/io/xlsb/pivot_table_bridge.cpp
   src/io/xlsb/pivot_table_records.cpp
   src/io/xlsb/print_records.cpp

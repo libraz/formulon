@@ -539,6 +539,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `setTableStyle` also refuses a name that is a built-in table, PivotTable or
   slicer style, and loading drops a custom style with such a name, as the
   desktop application does; tables and PivotTables naming it keep the name.
+- PivotTables and their caches in an `.xlsb` are read into the workbook
+  model like those of an `.xlsx`, so they can be inspected and edited, and an
+  `.xlsb` opened and saved as `.xlsx` keeps them; before, such a save failed
+  with `IoWriteFailed` (Python `IO_WRITE_FAILED`, C
+  `FM_STATUS_IO_WRITE_FAILED`, 5016) or left the pivot parts behind. An `.xlsb`
+  save writes an unchanged PivotTable as Excel saved it and an edited or
+  refreshed one from the model, with Excel's Windows or Mac records for the
+  workbook's profile. A PivotTable the `.xlsb` records cannot yet hold (for
+  example a calculated field or a month, quarter or year grouping) and a
+  PivotTable built through the API are left out of an `.xlsb` save together
+  with their cache and the other PivotTables on that cache, and counted in
+  `deferredFeatureCount`, as is an `.xlsb` PivotTable an `.xlsx` save cannot
+  carry. A PivotTable built through the API still saves to `.xlsx`.
 
 ### Fixed
 

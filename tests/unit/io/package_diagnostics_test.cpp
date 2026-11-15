@@ -420,10 +420,11 @@ TEST(XlsbWriteDiagnostics, PivotTableWithASurvivingPassthroughPartIsNotCountedAs
   EXPECT_EQ(result.value().diagnostics.deferred_feature_count, 0U);
 }
 
-TEST(XlsbWriteDiagnostics, StalePivotTablePassthroughPartFailsTheSaveInstead) {
+TEST(XlsbWriteDiagnostics, AStalePivotTablePassthroughPartIsNeverWritten) {
   // The counterpart of the test above: a retained pivot part whose
-  // fingerprint predates a mutation to the pivot table it names must fail
-  // the save closed rather than silently write the stale bytes.
+  // fingerprint predates a mutation to the pivot table it names is never
+  // written. The group is encoded from the model instead; this hand-built one
+  // has no cache the bridges can write, so it is left out and counted.
   Workbook wb = OneSheetWorkbook();
   auto cache = std::make_unique<pivot::PivotCache>();
   cache->set_cache_id(0U);
@@ -443,8 +444,11 @@ TEST(XlsbWriteDiagnostics, StalePivotTablePassthroughPartFailsTheSaveInstead) {
   wb.set_passthrough_parts({std::move(pivot_bin)});
 
   auto result = xlsb::write_xlsb_with_result(wb);
-  ASSERT_FALSE(static_cast<bool>(result));
-  EXPECT_EQ(result.error().code, FormulonErrorCode::kIoXlsbRetainedPartStale);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  EXPECT_EQ(result.value().diagnostics.deferred_feature_count, 1U);
+  ZipReader zip;
+  ASSERT_TRUE(zip.open(ByteSpan{result.value().bytes.data(), result.value().bytes.size()}));
+  EXPECT_FALSE(zip.has_entry("xl/pivotTables/pivotTable1.bin"));
 }
 
 TEST(XlsbWriteDiagnostics, PassthroughPartCollidingWithAGeneratedPathIsCounted) {

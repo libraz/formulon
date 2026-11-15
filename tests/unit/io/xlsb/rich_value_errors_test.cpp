@@ -25,7 +25,8 @@
 #include "io/ooxml_defs.h"
 #include "io/ooxml_reader.h"
 #include "io/xlsb/metadata_bin.h"
-#include "io/xlsb/pivot_reader.h"
+#include "io/xlsb/pivot_cache_bridge.h"
+#include "io/xlsb/pivot_table_bridge.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/writer.h"
@@ -1016,7 +1017,7 @@ void PatchAfter(std::vector<std::uint8_t>& bytes, const std::vector<std::uint8_t
 }
 
 Expected<pivot::PivotCache, Error> ReadCache(const PivotParts& p) {
-  return read_pivot_cache_bin(SpanOf(p.definition), SpanOf(p.records), false);
+  return pivot_cache_from_xlsb(SpanOf(p.definition), SpanOf(p.records), false);
 }
 
 TEST(XlsbPivotSamples, ANumericSharedItemArrayDecodesLikeTheTwinsNumberItems) {
@@ -1054,7 +1055,7 @@ TEST(XlsbPivotSamples, AStringArrayAndUnusedItemsDecodeLikeTheTwinsSharedItems) 
 TEST(XlsbPivotSamples, AMissingItemFlagBecomesTheTwinsMissingAttribute) {
   // pivot_blocked.xlsx: `<item m="1" x="7"/><item m="1" x="5"/><item m="1" x="6"/><item x="0"/> ...`.
   const PivotParts parts = PivotPartsOf("pivot_blocked");
-  auto table = read_pivot_table_bin(SpanOf(parts.table));
+  auto table = pivot_table_from_xlsb(SpanOf(parts.table));
   ASSERT_TRUE(static_cast<bool>(table)) << table.error().message;
   const std::vector<pivot::PivotItem>& items = table.value().fields().at(0).items;
   ASSERT_EQ(items.size(), 8U);
@@ -1073,7 +1074,7 @@ TEST(XlsbPivotSamples, AMissingItemFlagBecomesTheTwinsMissingAttribute) {
 TEST(XlsbPivotSamples, TheValuesPseudoFieldIsKeptOutOfTheColumnOrder) {
   // pivot_blocked.xlsx: `<colFields count="2"><field x="-2"/><field x="1"/></colFields>`.
   const PivotParts parts = PivotPartsOf("pivot_blocked");
-  auto table = read_pivot_table_bin(SpanOf(parts.table));
+  auto table = pivot_table_from_xlsb(SpanOf(parts.table));
   ASSERT_TRUE(static_cast<bool>(table)) << table.error().message;
   EXPECT_EQ(table.value().col_field_order(), std::vector<std::uint32_t>{1U});
   ASSERT_TRUE(table.value().col_values_position().has_value());
@@ -1085,7 +1086,7 @@ TEST(XlsbPivotSamples, LocationOffsetsAreRelativeToTheAnchorLikeTheTwins) {
   // The twins' `<location ref="A3" firstHeaderRow="0" firstDataRow="0" firstDataCol="0"/>`.
   for (const char* sample : {"pivot_blocked", "pvpage_blocked"}) {
     const PivotParts parts = PivotPartsOf(sample);
-    auto table = read_pivot_table_bin(SpanOf(parts.table));
+    auto table = pivot_table_from_xlsb(SpanOf(parts.table));
     ASSERT_TRUE(static_cast<bool>(table)) << sample << ": " << table.error().message;
     EXPECT_EQ(table.value().anchor_row(), 2U) << sample;
     EXPECT_EQ(table.value().anchor_col(), 0U) << sample;
@@ -1097,13 +1098,6 @@ TEST(XlsbPivotSamples, LocationOffsetsAreRelativeToTheAnchorLikeTheTwins) {
 
 TEST(XlsbPivotSamples, WhatTheTwinDoesNotPinIsRefused) {
   PivotParts parts = PivotPartsOf("pivot_blocked");
-  // A shared-string attribute block other than `u="1"`.
-  {
-    PivotParts changed = parts;
-    const std::vector<std::uint8_t> north = {'N', 0, 'o', 0, 'r', 0, 't', 0, 'h', 0};
-    PatchAfter(changed.definition, north, north.size(), 2U);
-    EXPECT_FALSE(static_cast<bool>(ReadCache(changed)));
-  }
   // A shared-item array of an element type that is neither doubles nor strings.
   {
     PivotParts changed = parts;
@@ -1114,7 +1108,7 @@ TEST(XlsbPivotSamples, WhatTheTwinDoesNotPinIsRefused) {
   {
     PivotParts changed = parts;
     PatchAfter(changed.table, {0x9A, 0x02, 0x07, 0x00, 0x08, 0x00, 0x07}, 4U, 0x18U);
-    EXPECT_FALSE(static_cast<bool>(read_pivot_table_bin(SpanOf(changed.table))));
+    EXPECT_FALSE(static_cast<bool>(pivot_table_from_xlsb(SpanOf(changed.table))));
   }
 }
 

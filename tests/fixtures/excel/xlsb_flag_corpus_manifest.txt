@@ -163,6 +163,7 @@ excel/xlsb_parity/autofilter/custom_two.2.xlsb
 excel/xlsb_parity/autofilter/custom_two.xlsb
 excel/xlsb_parity/autofilter/dynamic.2.xlsb
 excel/xlsb_parity/autofilter/dynamic.xlsb
+excel/xlsb_parity/autofilter/dynamic_m2.xlsb
 excel/xlsb_parity/autofilter/filtered_rows_hidden.2.xlsb
 excel/xlsb_parity/autofilter/filtered_rows_hidden.xlsb
 excel/xlsb_parity/autofilter/icon.2.xlsb

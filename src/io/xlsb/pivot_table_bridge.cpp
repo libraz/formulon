@@ -1503,34 +1503,52 @@ bool WriteFilters(const pivot::PivotTable& table, RawRecords& out) {
   return true;
 }
 
-bool WriteLocation(const pivot::PivotTable& table, SxLocation& loc) {
-  const std::optional<std::uint32_t> header = table.location_first_header_row();
-  const std::optional<std::uint32_t> data_row = table.location_first_data_row();
-  const std::optional<std::uint32_t> data_col = table.location_first_data_col();
-  const std::optional<std::uint32_t> row_pages = table.location_row_page_count();
-  const std::optional<std::uint32_t> col_pages = table.location_col_page_count();
-  if (!table.has_authored_span() || table.blocked() || !header || !data_row || !data_col || table.span_rows() == 0U ||
-      table.span_cols() == 0U || table.anchor_row() >= a1::kMaxRows || table.anchor_col() >= a1::kMaxCols ||
-      table.span_rows() > a1::kMaxRows - table.anchor_row() || table.span_cols() > a1::kMaxCols - table.anchor_col() ||
-      *header >= a1::kMaxRows || *data_row >= a1::kMaxRows || *data_col >= a1::kMaxCols || row_pages == 0U ||
-      col_pages == 0U) {
+bool WriteLocation(const pivot::PivotTable& table, std::optional<PivotRenderedSpan> rendered_span, SxLocation& loc) {
+  // An offset the model does not carry is derived from the report shape, as the .xlsx writer derives it.
+  const detail::LocationDefaults derived = detail::ComputeLocationDefaults(table);
+  const std::uint32_t header = table.location_first_header_row().value_or(derived.first_header_row);
+  const std::uint32_t data_row = table.location_first_data_row().value_or(derived.first_data_row);
+  const std::uint32_t data_col = table.location_first_data_col().value_or(derived.first_data_col);
+  const std::optional<std::uint32_t> row_pages =
+      table.location_row_page_count() ? table.location_row_page_count() : derived.row_page_count;
+  const std::optional<std::uint32_t> col_pages =
+      table.location_col_page_count() ? table.location_col_page_count() : derived.col_page_count;
+  // The span rule of `write_pivot_table_definition`: a stale read span is
+  // replaced by the projection, a caller's span is a floor under it.
+  std::uint32_t span_rows = table.span_rows();
+  std::uint32_t span_cols = table.span_cols();
+  std::uint32_t top = table.anchor_row();
+  if (!table.has_authored_span()) {
+    if (!rendered_span) {
+      return false;
+    }
+    const bool stale = table.span_read();
+    span_rows = !stale && span_rows > rendered_span->rows ? span_rows : rendered_span->rows;
+    span_cols = !stale && span_cols > rendered_span->cols ? span_cols : rendered_span->cols;
+    top = top > rendered_span->top ? top : rendered_span->top;
+  }
+  if (table.blocked() || span_rows == 0U || span_cols == 0U || top >= a1::kMaxRows ||
+      table.anchor_col() >= a1::kMaxCols || span_rows > a1::kMaxRows - top ||
+      span_cols > a1::kMaxCols - table.anchor_col() || header >= a1::kMaxRows || data_row >= a1::kMaxRows ||
+      data_col >= a1::kMaxCols || row_pages == 0U || col_pages == 0U) {
     return false;
   }
-  loc.first_row = table.anchor_row();
-  loc.last_row = table.anchor_row() + table.span_rows() - 1U;
+  loc.first_row = top;
+  loc.last_row = top + span_rows - 1U;
   loc.first_col = table.anchor_col();
-  loc.last_col = table.anchor_col() + table.span_cols() - 1U;
-  loc.first_header_row = table.anchor_row() + *header;
-  loc.first_data_row = table.anchor_row() + *data_row;
-  loc.first_data_col = table.anchor_col() + *data_col;
+  loc.last_col = table.anchor_col() + span_cols - 1U;
+  loc.first_header_row = top + header;
+  loc.first_data_row = top + data_row;
+  loc.first_data_col = table.anchor_col() + data_col;
   loc.row_page_count = row_pages.value_or(0U);
   loc.col_page_count = col_pages.value_or(0U);
   return true;
 }
 
 /// Fills `doc` from `table`; false for a state the records cannot hold or no Excel part shows.
-bool WriteTable(const pivot::PivotTable& table, ExcelHost host, PivotTableDoc& doc) {
-  if (table.layout_dirty() || !HasExcelDefaults(table) || !table.style_info() ||
+bool WriteTable(const pivot::PivotTable& table, ExcelHost host, std::optional<PivotRenderedSpan> rendered_span,
+                const PivotItemsXml* items, PivotTableDoc& doc) {
+  if ((table.layout_dirty() && items == nullptr) || !HasExcelDefaults(table) || !table.style_info() ||
       static_cast<int>(table.grand_total_caption().has_value()) + static_cast<int>(table.error_caption().has_value()) +
               static_cast<int>(table.missing_caption().has_value()) >
           1) {
@@ -1591,7 +1609,7 @@ bool WriteTable(const pivot::PivotTable& table, ExcelHost host, PivotTableDoc& d
   v.error_caption = table.error_caption();
   v.missing_caption = table.missing_caption();
 
-  if (!WriteLocation(table, doc.location)) {
+  if (!WriteLocation(table, rendered_span, doc.location)) {
     return false;
   }
   doc.fields.resize(table.fields().size());
@@ -1603,9 +1621,10 @@ bool WriteTable(const pivot::PivotTable& table, ExcelHost host, PivotTableDoc& d
   const std::size_t field_count = table.fields().size();
   if (!WriteFieldOrder(table.row_field_order(), table.row_values_position(), field_count, doc.row_fields) ||
       !WriteFieldOrder(table.col_field_order(), table.col_values_position(), field_count, doc.col_fields) ||
-      !WriteLineItems(table.raw_passthrough_after_row_fields(), "rowItems", doc.row_items) ||
-      !WriteLineItems(table.raw_col_items(), "colItems", doc.col_items) || !WritePages(table, doc) ||
-      !WriteDataFields(table, doc) || !WriteFilters(table, doc.filters)) {
+      !WriteLineItems(items != nullptr ? items->row_items : table.raw_passthrough_after_row_fields(), "rowItems",
+                      doc.row_items) ||
+      !WriteLineItems(items != nullptr ? items->col_items : table.raw_col_items(), "colItems", doc.col_items) ||
+      !WritePages(table, doc) || !WriteDataFields(table, doc) || !WriteFilters(table, doc.filters)) {
     return false;
   }
   const pivot::PivotStyleInfo& style = *table.style_info();
@@ -1716,7 +1735,9 @@ Expected<pivot::PivotTable, Error> pivot_table_from_xlsb(ByteSpan part) {
 }
 
 Expected<std::vector<std::uint8_t>, Error> pivot_table_to_xlsb(const pivot::PivotTable& table, ExcelHost host,
-                                                               std::size_t sheet_index) {
+                                                               std::size_t sheet_index,
+                                                               std::optional<PivotRenderedSpan> rendered_span,
+                                                               const PivotItemsXml* items) {
   // No Windows-saved part shows a descending field, so its ascending bit is unmeasured there.
   if (host == ExcelHost::kWin365 && std::any_of(table.fields().begin(), table.fields().end(),
                                                 [](const pivot::PivotField& field) { return !field.sort.ascending; })) {
@@ -1725,7 +1746,7 @@ Expected<std::vector<std::uint8_t>, Error> pivot_table_to_xlsb(const pivot::Pivo
     return error;
   }
   PivotTableDoc doc;
-  if (!WriteTable(table, host, doc)) {
+  if (!WriteTable(table, host, rendered_span, items, doc)) {
     return not_writable(kNotWritableKind, sheet_index);
   }
   return encode_pivot_table(doc);

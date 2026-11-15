@@ -482,6 +482,26 @@ TEST(PivotTableBridge, EditedTableIsNotWritable) {
   EXPECT_NE(written.error().context.find("sheet_index=3"), std::string::npos);
 }
 
+// The projected lines an edited table needs make it writable again; given the lines it was read with, the part
+// encodes back as read.
+TEST(PivotTableBridge, EditedTableIsWritableWithItsProjectedLines) {
+  const std::string path = pivot_twins::CorpusPaths().front();
+  const auto parts = pivot_twins::Parts(path, kTablePrefix);
+  ASSERT_FALSE(parts.empty());
+  auto read = pivot_table_from_xlsb(SpanOf(parts.front().second));
+  ASSERT_TRUE(read.has_value()) << read.error().message;
+  pivot::PivotTable table = std::move(read.value());
+  const PivotItemsXml items{table.raw_passthrough_after_row_fields(), table.raw_col_items()};
+  table.mark_layout_dirty();
+  auto written = pivot_table_to_xlsb(table, ExcelHost::kMac365, 3, std::nullopt, &items);
+  ASSERT_TRUE(written.has_value()) << written.error().message;
+  auto clean = pivot_table_from_xlsb(SpanOf(parts.front().second));
+  ASSERT_TRUE(clean.has_value()) << clean.error().message;
+  auto unedited = pivot_table_to_xlsb(clean.value(), ExcelHost::kMac365, 3);
+  ASSERT_TRUE(unedited.has_value()) << unedited.error().message;
+  EXPECT_EQ(written.value(), unedited.value());
+}
+
 TEST(PivotTableBridge, FormatsEntryIsNotWritable) {
   const std::string path = pivot_twins::CorpusPaths().front();
   const auto parts = pivot_twins::Parts(path, kTablePrefix);

@@ -6,6 +6,7 @@
 #define FORMULON_IO_XLSB_EMISSION_PLAN_H_
 
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <utility>
 #include <vector>
@@ -51,6 +52,30 @@ struct EmissionPlan {
   std::size_t external_link_count = 0;
   /// Table parts generated from the model, per sheet.
   std::vector<std::vector<XlsbTablePart>> sheet_tables;
+  /// A pivot cache the save writes, retained or generated from the model: its id, its two parts and their bytes.
+  struct PivotCachePart {
+    std::uint32_t cache_id = 0;
+    std::string definition_path;
+    std::string records_path;
+    std::vector<std::uint8_t> definition;
+    std::vector<std::uint8_t> records;
+  };
+  /// A pivot table the save writes, related from its sheet by `rel_id` and drawing from `pivot_caches[cache]`.
+  struct PivotTablePart {
+    std::string path;
+    std::string rel_id;
+    std::size_t cache = 0;
+    /// The table's index among its sheet's pivot tables.
+    std::size_t index = 0;
+    std::vector<std::uint8_t> bytes;
+    /// The bytes are the part as read, which may name dxfs the save does not renumber.
+    bool verbatim = false;
+  };
+  /// Pivot caches in written order; the workbook relationship of the `k`-th is keyed in `BuildWorkbookRels`'s id
+  /// map by `pivot_cache_rel_key(k)`.
+  std::vector<PivotCachePart> pivot_caches;
+  /// Pivot table parts the save writes, per sheet (`plan_pivot_parts`).
+  std::vector<std::vector<PivotTablePart>> sheet_pivots;
   /// Relationship id of each sheet's linked drawing; empty when not linked.
   std::vector<std::string> sheet_drawing_rids;
   /// Sheets whose model drawing replaces retained drawing relationships.
@@ -72,6 +97,10 @@ struct EmissionPlan {
   /// Set by `write_xlsb` from the value its sheet bodies were written with.
   std::string book_directory;
 };
+
+/// The id `BuildWorkbookRels` maps to the written relationship of generated pivot cache `k`; no source id is
+/// spelled so.
+std::string pivot_cache_rel_key(std::size_t k);
 
 /// Fails a retained part (pivot table, pivot cache, styles) whose model state
 /// changed since load. Untracked passthrough parts always pass.
@@ -110,7 +139,8 @@ std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan, const s
                            const std::vector<std::string>& hyperlink_rids, bool owns_drawing,
                            const std::string& drawing_rid, WriteDiagnostics* diagnostics,
                            const io::EmissionPlan::CommentsPlan* comments = nullptr,
-                           const EmissionPlan::CommentRelIds* comment_rids = nullptr);
+                           const EmissionPlan::CommentRelIds* comment_rids = nullptr,
+                           const std::vector<EmissionPlan::PivotTablePart>* pivots = nullptr);
 
 std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const EmissionPlan& plan, const Workbook& wb,
                               const std::vector<std::string>& link_rel_ids, WriteDiagnostics* diagnostics,
