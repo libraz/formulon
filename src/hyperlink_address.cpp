@@ -7,38 +7,11 @@
 #include <utility>
 #include <vector>
 
+#include "utils/strings.h"
+
 namespace formulon {
 
 namespace {
-
-char ascii_lower(char c) {
-  return (c >= 'A' && c <= 'Z') ? static_cast<char>(c - 'A' + 'a') : c;
-}
-
-bool starts_with_ignore_case(std::string_view text, std::string_view prefix) {
-  if (text.size() < prefix.size()) {
-    return false;
-  }
-  for (std::size_t i = 0; i < prefix.size(); ++i) {
-    if (ascii_lower(text[i]) != prefix[i]) {
-      return false;
-    }
-  }
-  return true;
-}
-
-int hex_value(char c) {
-  if (c >= '0' && c <= '9') {
-    return c - '0';
-  }
-  if (c >= 'a' && c <= 'f') {
-    return c - 'a' + 10;
-  }
-  if (c >= 'A' && c <= 'F') {
-    return c - 'A' + 10;
-  }
-  return -1;
-}
 
 bool is_unreserved(char c) {
   return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '-' || c == '.' ||
@@ -50,7 +23,8 @@ std::string escape_stray_percent(std::string_view text) {
   std::string out;
   out.reserve(text.size());
   for (std::size_t i = 0; i < text.size(); ++i) {
-    const bool starts_escape = i + 2 < text.size() && hex_value(text[i + 1]) >= 0 && hex_value(text[i + 2]) >= 0;
+    const bool starts_escape =
+        i + 2 < text.size() && strings::hex_digit_value(text[i + 1]) >= 0 && strings::hex_digit_value(text[i + 2]) >= 0;
     if (text[i] == '%' && !starts_escape) {
       out += "%25";
     } else {
@@ -66,8 +40,8 @@ std::string decode_unreserved(std::string_view text) {
   out.reserve(text.size());
   for (std::size_t i = 0; i < text.size(); ++i) {
     if (text[i] == '%' && i + 2 < text.size()) {
-      const int hi = hex_value(text[i + 1]);
-      const int lo = hex_value(text[i + 2]);
+      const int hi = strings::hex_digit_value(text[i + 1]);
+      const int lo = strings::hex_digit_value(text[i + 2]);
       if (hi >= 0 && lo >= 0) {
         const char decoded = static_cast<char>(hi * 16 + lo);
         if (is_unreserved(decoded)) {
@@ -86,15 +60,11 @@ std::string decode_unreserved(std::string_view text) {
 std::size_t hierarchical_scheme_length(std::string_view text) {
   for (const std::string_view scheme :
        {std::string_view("http://"), std::string_view("https://"), std::string_view("ftp://")}) {
-    if (starts_with_ignore_case(text, scheme)) {
+    if (strings::case_insensitive_starts_with(text, scheme)) {
       return scheme.size();
     }
   }
   return 0U;
-}
-
-bool is_ascii_alpha(char c) {
-  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z');
 }
 
 bool is_separator(char c) {
@@ -108,13 +78,13 @@ bool is_plain_posix_path(std::string_view text) {
 }
 
 bool is_drive_path(std::string_view text) {
-  return text.size() >= 3U && is_ascii_alpha(text[0]) && text[1] == ':' && is_separator(text[2]);
+  return text.size() >= 3U && strings::is_ascii_alpha(text[0]) && text[1] == ':' && is_separator(text[2]);
 }
 
 /// Whether `text` opens with a URL scheme of two or more characters; a
 /// single letter before `:` is a drive.
 bool has_scheme(std::string_view text) {
-  if (text.empty() || !is_ascii_alpha(text[0])) {
+  if (text.empty() || !strings::is_ascii_alpha(text[0])) {
     return false;
   }
   for (std::size_t i = 1; i < text.size(); ++i) {
@@ -122,7 +92,7 @@ bool has_scheme(std::string_view text) {
     if (c == ':') {
       return i >= 2U;
     }
-    if (!is_ascii_alpha(c) && !(c >= '0' && c <= '9') && c != '+' && c != '-' && c != '.') {
+    if (!strings::is_ascii_alpha(c) && !strings::is_ascii_digit(c) && c != '+' && c != '-' && c != '.') {
       return false;
     }
   }
@@ -141,18 +111,6 @@ std::string decode_spaces(std::string_view text) {
     out.push_back(text[i]);
   }
   return out;
-}
-
-bool same_ignore_case(std::string_view a, std::string_view b) {
-  if (a.size() != b.size()) {
-    return false;
-  }
-  for (std::size_t i = 0; i < a.size(); ++i) {
-    if (ascii_lower(a[i]) != ascii_lower(b[i])) {
-      return false;
-    }
-  }
-  return true;
 }
 
 enum class RootKind { kPosix, kDrive, kUnc };
@@ -211,7 +169,7 @@ std::optional<LocalPath> parse_plain_path(std::string_view path) {
 /// `file:///C:/a`, `file:////server/share/a`), whose `%20` reads as a space,
 /// or a plain absolute path, whose `%` is literal.
 std::optional<LocalPath> parse_local_absolute(std::string_view target) {
-  if (!starts_with_ignore_case(target, "file:")) {
+  if (!strings::case_insensitive_starts_with(target, "file:")) {
     return has_scheme(target) ? std::nullopt : parse_plain_path(target);
   }
   const std::string path = decode_spaces(target.substr(5));
@@ -256,7 +214,7 @@ bool is_relative_local(std::string_view target) {
   if (target.empty() || is_separator(target[0]) || target[0] == '#') {
     return false;
   }
-  if (target.size() >= 2U && is_ascii_alpha(target[0]) && target[1] == ':') {
+  if (target.size() >= 2U && strings::is_ascii_alpha(target[0]) && target[1] == ':') {
     return false;
   }
   return !has_scheme(target);
@@ -307,7 +265,7 @@ NormalizedHyperlinkTarget normalize_hyperlink_target(std::string_view input) {
     }
     std::string scheme(input.substr(0, scheme_len));
     for (char& c : scheme) {
-      c = ascii_lower(c);
+      c = strings::ascii_to_lower(c);
     }
     std::string_view tail = authority_end == std::string_view::npos ? std::string_view{} : rest.substr(authority_end);
     const std::size_t hash = tail.find('#');
@@ -317,7 +275,7 @@ NormalizedHyperlinkTarget normalize_hyperlink_target(std::string_view input) {
     }
     out.target = std::move(scheme);
     for (const char c : authority) {
-      out.target.push_back(ascii_lower(c));
+      out.target.push_back(strings::ascii_to_lower(c));
     }
     if (tail.empty() || tail.front() == '?') {
       out.target.push_back('/');
@@ -325,7 +283,7 @@ NormalizedHyperlinkTarget normalize_hyperlink_target(std::string_view input) {
     out.target += decode_unreserved(tail);
     return out;
   }
-  if (starts_with_ignore_case(input, "mailto:")) {
+  if (strings::case_insensitive_starts_with(input, "mailto:")) {
     out.target = "mailto:" + std::string(input.substr(7));
     return out;
   }
@@ -352,7 +310,7 @@ std::optional<std::string> book_relative_target(std::string_view abs_target, std
   }
   const std::optional<LocalPath> dir = parse_plain_path(directory);
   const std::optional<LocalPath> target = parse_local_absolute(abs_target);
-  if (!dir || !target || dir->kind != target->kind || !same_ignore_case(dir->root, target->root) ||
+  if (!dir || !target || dir->kind != target->kind || !strings::case_insensitive_eq(dir->root, target->root) ||
       target->segments.empty()) {
     return std::nullopt;
   }
@@ -365,7 +323,7 @@ std::optional<std::string> book_relative_target(std::string_view abs_target, std
     return std::nullopt;
   }
   // A plain path's stray `%` is literal, so the saved form escapes it.
-  const bool plain = !starts_with_ignore_case(abs_target, "file:");
+  const bool plain = !strings::case_insensitive_starts_with(abs_target, "file:");
   std::string out;
   for (std::size_t i = shared; i < dir->segments.size(); ++i) {
     out += "../";

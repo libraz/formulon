@@ -60,8 +60,6 @@ constexpr NewWorkbookDefaults kDefaults[] = {
 static_assert(sizeof(kDefaults) / sizeof(kDefaults[0]) == static_cast<std::size_t>(ExcelLocale::kNlNL) + 1U,
               "one row per ExcelLocale");
 
-/// `<scheme val="minor"/>`, as `FontRecord::scheme` stores it.
-constexpr std::uint8_t kSchemeMinor = 2U;
 /// `CellXf::vertical_align` ordinal of `center`.
 constexpr std::uint8_t kVerticalCenter = 1U;
 
@@ -86,7 +84,7 @@ void apply_new_workbook_defaults(ExcelProfile profile, StylesTable& styles, Shee
   body.name = row.font_name;
   body.has_charset = row.charset != 0U;
   body.charset = row.charset;
-  body.scheme = kSchemeMinor;
+  body.scheme = kFontSchemeMinor;
 
   if (row.phonetic_size != 0U) {
     // The phonetic font is the body face without a colour, at its own size.

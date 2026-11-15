@@ -22,6 +22,13 @@ struct Theme;
 /// `FontRecord::scheme` value of a font linked to the theme's minor font.
 inline constexpr std::uint8_t kFontSchemeMinor = 2;
 
+/// `FontRecord::scheme` value of a font linked to the theme's major font.
+inline constexpr std::uint8_t kFontSchemeMajor = 1;
+
+/// ISO 15924 script of the theme font entry a locale reads (Mac 16.115; Windows reuses the Mac rows); empty for
+/// `a:latin`.
+const char* theme_font_script(ExcelLocale locale);
+
 /// The dimensions of one Normal font on one host.
 struct NormalFontMetrics {
   ExcelHost host = ExcelHost::kWin365;

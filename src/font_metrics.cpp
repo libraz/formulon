@@ -14,6 +14,24 @@
 // @size-budget: 5 KB
 
 namespace formulon {
+
+const char* theme_font_script(ExcelLocale locale) {
+  switch (locale) {
+    case ExcelLocale::kJaJP:
+      return "Jpan";
+    case ExcelLocale::kZhCN:
+      return "Hans";
+    case ExcelLocale::kZhTW:
+      return "Hant";
+    case ExcelLocale::kKoKR:
+      return "Hang";
+    case ExcelLocale::kThTH:
+      return "Thai";
+    default:
+      return "";
+  }
+}
+
 namespace {
 
 struct FontMetricsRow {
@@ -109,27 +127,9 @@ const FontMetricsRow* find_mac_row(std::string_view family, double size) {
   return nullptr;
 }
 
-/// ISO 15924 script of the minor-font entry a locale reads; empty for `a:latin`.
-const char* minor_script_for(ExcelLocale locale) {
-  switch (locale) {
-    case ExcelLocale::kJaJP:
-      return "Jpan";
-    case ExcelLocale::kZhCN:
-      return "Hans";
-    case ExcelLocale::kZhTW:
-      return "Hant";
-    case ExcelLocale::kKoKR:
-      return "Hang";
-    case ExcelLocale::kThTH:
-      return "Thai";
-    default:
-      return "";
-  }
-}
-
 /// The face a Mac Normal font linked to the theme's minor font is drawn with.
 std::string resolve_minor_face(const Theme& theme, ExcelLocale locale) {
-  const std::string_view script = minor_script_for(locale);
+  const std::string_view script = theme_font_script(locale);
   if (script.empty()) {
     if (!theme.fonts.minor_latin.empty()) {
       return theme.fonts.minor_latin;

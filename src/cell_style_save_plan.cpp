@@ -12,6 +12,7 @@
 #include "builtin_style_names.h"
 #include "eval/collation.h"
 #include "font_completion.h"
+#include "font_metrics.h"
 #include "new_workbook_defaults.h"
 #include "row_cells.h"
 #include "sheet.h"
@@ -19,6 +20,7 @@
 #include "sheet_passthrough.h"
 #include "theme.h"
 #include "utils/index_sort.h"
+#include "utils/strings.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -53,14 +55,10 @@ struct Group {
 // Parts written back unread whose records name cell xfs.
 constexpr std::string_view kCellXfPartPrefixes[] = {"xl/revisions/", "xl/macrosheets/", "xl/dialogsheets/"};
 
-bool ends_with(std::string_view text, std::string_view suffix) {
-  return text.size() >= suffix.size() && text.substr(text.size() - suffix.size()) == suffix;
-}
-
 bool retains_cell_xf_part(const Workbook& wb) {
   for (const PassthroughPart& part : wb.passthrough_parts()) {
     for (const std::string_view prefix : kCellXfPartPrefixes) {
-      if (std::string_view(part.path).substr(0, prefix.size()) == prefix) {
+      if (strings::starts_with(part.path, prefix)) {
         return true;
       }
     }
@@ -214,7 +212,7 @@ UsedCellXfs collect_used_cell_xfs(const Workbook& wb) {
     const Sheet& sheet = wb.sheet(si);
     if (sheet.is_opaque_ooxml_sheet()) {
       // A chartsheet holds no cells.
-      out.all_used = out.all_used || !ends_with(sheet.opaque_ooxml_relationship_type(), "/chartsheet");
+      out.all_used = out.all_used || !strings::ends_with(sheet.opaque_ooxml_relationship_type(), "/chartsheet");
       continue;
     }
     MergedCellIndex merges(sheet.merges());
@@ -507,28 +505,6 @@ bool saved_file_names_cell_style(const CellStyleSavePlan& plan, std::string_view
 
 namespace {
 
-constexpr std::uint8_t kSchemeMajor = 1U;
-constexpr std::uint8_t kSchemeMinor = 2U;
-
-// The theme script whose face Excel writes for a theme-linked font, by UI
-// locale; "" for the Latin face. Mac 16.115; Windows reuses the Mac rows.
-const char* theme_font_script(ExcelLocale locale) {
-  switch (locale) {
-    case ExcelLocale::kJaJP:
-      return "Jpan";
-    case ExcelLocale::kZhCN:
-      return "Hans";
-    case ExcelLocale::kZhTW:
-      return "Hant";
-    case ExcelLocale::kKoKR:
-      return "Hang";
-    case ExcelLocale::kThTH:
-      return "Thai";
-    default:
-      return "";
-  }
-}
-
 // `<phoneticPr>` ordinals (`PhoneticProperties`) and the phonetic font's `<family>`.
 constexpr std::uint8_t kPhoneticFullwidthKatakana = 1U;
 constexpr std::uint8_t kPhoneticNoConversion = 3U;
@@ -594,10 +570,10 @@ FontSavePlan build_font_save_plan(const Workbook& wb) {
       }
       continue;
     }
-    if (font.scheme != kSchemeMajor && font.scheme != kSchemeMinor) {
+    if (font.scheme != kFontSchemeMajor && font.scheme != kFontSchemeMinor) {
       continue;
     }
-    const std::string* face = theme_face(loaded.theme, font.scheme == kSchemeMajor, script);
+    const std::string* face = theme_face(loaded.theme, font.scheme == kFontSchemeMajor, script);
     if (face != nullptr && !face->empty() && *face != font.name) {
       font.name = *face;
       plan.identity_ = false;
