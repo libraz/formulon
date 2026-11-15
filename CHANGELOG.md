@@ -546,12 +546,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `FM_STATUS_IO_WRITE_FAILED`, 5016) or left the pivot parts behind. An `.xlsb`
   save writes an unchanged PivotTable as Excel saved it and an edited or
   refreshed one from the model, with Excel's Windows or Mac records for the
-  workbook's profile. A PivotTable the `.xlsb` records cannot yet hold (for
-  example a calculated field or a month, quarter or year grouping) and a
-  PivotTable built through the API are left out of an `.xlsb` save together
-  with their cache and the other PivotTables on that cache, and counted in
-  `deferredFeatureCount`, as is an `.xlsb` PivotTable an `.xlsx` save cannot
-  carry. A PivotTable built through the API still saves to `.xlsx`.
+  workbook's profile. A PivotTable built through the API is written to
+  `.xlsb` as Excel saves it after opening the `.xlsx` save: cache versions
+  8/8/3, no refresh date or user, and the same table records; day, month and
+  year date groupings are read and written. A PivotTable the `.xlsb` records
+  cannot yet hold (for example a calculated field or a quarter grouping) is
+  left out of an `.xlsb` save together with its cache and the other
+  PivotTables on that cache, and counted in `deferredFeatureCount`, as is an
+  `.xlsb` PivotTable an `.xlsx` save cannot carry; it still saves to `.xlsx`.
 
 ### Fixed
 

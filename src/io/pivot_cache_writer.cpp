@@ -17,6 +17,7 @@
 
 #include "io/ooxml_defs.h"
 #include "io/pivot_attr_names.h"
+#include "io/pivot_built_defaults.h"
 #include "io/xml_utils.h"
 #include "io/xsd_bool.h"
 #include "pivot/date_serial.h"
@@ -380,7 +381,7 @@ PivotCacheWritePlan build_pivot_cache_write_plan(const pivot::PivotCache& cache,
   plan.date1904 = date1904;
   // Records filled by hand miss what a refresh reads from the source (number
   // formats among them), so Excel rebuilds such a cache on open.
-  plan.refresh_on_load = cache.passthrough_attrs().empty() && !cache.records_from_source();
+  plan.refresh_on_load = built_cache_refreshes_on_load(cache);
   plan.fields.resize(cache.fields().size());
   for (std::size_t fi = 0; fi < cache.fields().size(); ++fi) {
     const pivot::PivotCacheField& field = cache.fields()[fi];
@@ -477,8 +478,7 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache, const P
   // rebuild the report on open, as does a plan whose caller found a table it
   // could not write lines for. Otherwise the captured attributes stand.
   const bool refresh_on_load =
-      (plan != nullptr ? plan->refresh_on_load : cache.passthrough_attrs().empty() && !cache.records_from_source()) ||
-      cache.refresh_on_load();
+      (plan != nullptr ? plan->refresh_on_load : built_cache_refreshes_on_load(cache)) || cache.refresh_on_load();
   if (refresh_on_load) {
     append_xml_attr(out, "refreshOnLoad", "1");
   } else if (cache.refresh_on_load_attr().has_value()) {
@@ -491,10 +491,10 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache, const P
     append_xml_attr_uint(out, "missingItemsLimit", *cache.missing_items_limit());
   }
   // A cache built in memory carries the version triple every Excel-saved cache has.
-  if (cache.passthrough_attrs().empty()) {
-    append_xml_attr(out, "createdVersion", "8");
-    append_xml_attr(out, "refreshedVersion", "8");
-    append_xml_attr(out, "minRefreshableVersion", "3");
+  if (cache_built_in_memory(cache)) {
+    append_xml_attr_uint(out, "createdVersion", kBuiltCacheCreatedVersion);
+    append_xml_attr_uint(out, "refreshedVersion", kBuiltCacheRefreshedVersion);
+    append_xml_attr_uint(out, "minRefreshableVersion", kBuiltCacheMinRefreshableVersion);
   }
   // Re-emit any unmodelled root attributes captured on read (refreshedBy,
   // refreshedDate, createdVersion, ...).

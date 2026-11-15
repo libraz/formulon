@@ -1,6 +1,7 @@
 #include "io/xlsb/pivot_cache_definition_records.h"
 
 #include <algorithm>
+#include <iterator>
 #include <string>
 #include <utility>
 
@@ -82,8 +83,11 @@ constexpr std::uint8_t kDataSourceCleanFrtVersion[] = {0x54, 0x00, 0x02, 0x00};
 /// BrtBeginPCD14 payload of an `x14:pivotCacheDefinition` with no attributes.
 constexpr std::size_t kPcd14Bytes = 9;
 
-/// BrtBeginPivotCacheDef byte 16: refreshedBy and the records relationship id both follow.
-constexpr std::uint8_t kCacheStringsPresent = 0x03U;
+/// BrtBeginPivotCacheDef byte 16: the records relationship id follows, preceded by refreshedBy when that bit is set.
+constexpr std::uint8_t kCacheRecordsRelPresent = 0x02U;
+constexpr std::uint8_t kCacheRefreshedByPresent = 0x01U;
+/// The four bytes Excel writes after the relationship id when refreshedBy is absent.
+constexpr std::uint8_t kNoRefreshedByTail[] = {0x6D, 0x00, 0x20, 0x00};
 constexpr std::uint8_t kCacheKnownFlags = pcd::kCacheSaveDataEnableRefresh | pcd::kCacheRefreshOnLoad;
 
 /// BrtBeginPCDSource iSrcType of a worksheet source.
@@ -213,12 +217,21 @@ Expected<void, Error> DecodeHeader(ByteSpan p, pcd::Document* doc) {
   ASSIGN_OR_RETURN(doc->missing_items_limit, read_u32(p));
   ASSIGN_OR_RETURN(doc->refreshed_date, read_double(p));
   ASSIGN_OR_RETURN(const std::uint8_t presence, read_u8(p));
-  if (presence != kCacheStringsPresent) {
-    return Unmeasured("cache definition without refreshedBy or records relationship", kBeginPivotCacheDef);
+  if ((presence & ~kCacheRefreshedByPresent) != kCacheRecordsRelPresent) {
+    return Unmeasured("cache definition without a records relationship", kBeginPivotCacheDef);
   }
   ASSIGN_OR_RETURN(doc->record_count, read_u32(p));
-  ASSIGN_OR_RETURN(doc->refreshed_by, read_xlwidestring(p));
+  if ((presence & kCacheRefreshedByPresent) != 0U) {
+    ASSIGN_OR_RETURN(std::string by, read_xlwidestring(p));
+    doc->refreshed_by = std::move(by);
+  }
   ASSIGN_OR_RETURN(doc->records_rel_id, read_xlwidestring(p));
+  if (!doc->refreshed_by) {
+    if (p.size != sizeof(kNoRefreshedByTail)) {
+      return Unmeasured("cache definition tail without refreshedBy", kBeginPivotCacheDef);
+    }
+    p.size = 0;
+  }
   return ExpectConsumed(p, kBeginPivotCacheDef);
 }
 
@@ -651,10 +664,16 @@ std::vector<std::uint8_t> encode_pivot_cache_definition(const pivot_cache_defini
   emit_u8(p, doc.flags);
   emit_u32(p, doc.missing_items_limit);
   emit_double(p, doc.refreshed_date);
-  emit_u8(p, kCacheStringsPresent);
+  emit_u8(p, static_cast<std::uint8_t>(kCacheRecordsRelPresent |
+                                       (doc.refreshed_by.has_value() ? kCacheRefreshedByPresent : 0U)));
   emit_u32(p, doc.record_count);
-  emit_xlwidestring(p, doc.refreshed_by);
+  if (doc.refreshed_by.has_value()) {
+    emit_xlwidestring(p, *doc.refreshed_by);
+  }
   emit_xlwidestring(p, doc.records_rel_id);
+  if (!doc.refreshed_by) {
+    p.insert(p.end(), std::begin(kNoRefreshedByTail), std::end(kNoRefreshedByTail));
+  }
   emit_record(out, kBeginPivotCacheDef, p);
 
   p.clear();

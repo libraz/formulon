@@ -278,9 +278,9 @@ TEST(XlsbPivotWiring, ARefreshedXlsbPivotIsWrittenFromTheModel) {
   EXPECT_EQ(PivotLines(LoadXlsb(saved.value().bytes)), refreshed);
 }
 
-// A cache and table built through the API carry none of the header metadata Excel saves with them (the cache's
-// refresh stamps and versions, the table's SXView16 extension and version attributes), so the group is left out.
-TEST(XlsbPivotWiring, AnApiBuiltPivotIsLeftOutOfXlsbAndCounted) {
+// A cache and table built through the API take the header metadata Excel gives them when it re-saves the .xlsx
+// save, so the group is written and read back.
+TEST(XlsbPivotWiring, AnApiBuiltPivotIsWrittenAndReadBack) {
   fm_workbook_t* handle = nullptr;
   ASSERT_EQ(fm_workbook_create_default(&handle), 0);
   const char* const regions[] = {"North", "South", "North", "South"};
@@ -315,10 +315,10 @@ TEST(XlsbPivotWiring, AnApiBuiltPivotIsLeftOutOfXlsbAndCounted) {
   ASSERT_EQ(status, 0) << fm_get_last_error_message();
   const std::vector<std::uint8_t> saved(bytes, bytes + len);
   fm_buffer_destroy(bytes);
-  EXPECT_EQ(info.deferred_feature_count, 1U);
-  EXPECT_TRUE(Parts(saved, "xl/pivot").empty());
+  EXPECT_EQ(info.deferred_feature_count, 0U);
+  EXPECT_FALSE(Parts(saved, "xl/pivot").empty());
   ExpectValidXlsb(saved);
-  EXPECT_EQ(PivotCount(LoadXlsb(saved)), 0U);
+  EXPECT_EQ(PivotCount(LoadXlsb(saved)), 1U);
 }
 
 // A refresh keeps the items the source lost in place, so a format area naming an item by position still selects

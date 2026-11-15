@@ -206,6 +206,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/xlsb_parity_tablestyles_test.cpp
   unit/io/xlsb/xlsb_parity_pivot_table_test.cpp
   unit/io/xlsb/xlsb_parity_pivot_formats_test.cpp
+  unit/io/xlsb/xlsb_parity_pivot_api_built_test.cpp
   unit/io/xlsb/xlsb_parity_protected_range_test.cpp
   unit/io/xlsb/xlsb_parity_sparkline_test.cpp
   unit/io/xlsb/xlsb_parity_format_test.cpp

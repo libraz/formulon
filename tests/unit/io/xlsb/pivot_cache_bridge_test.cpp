@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <iterator>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -668,9 +669,60 @@ TEST(XlsbPivotCacheBridge, RefusesRootAttributesThatWouldNotReadBack) {
   ExpectNotWritable(short_date);
 }
 
-TEST(XlsbPivotCacheBridge, RefusesACacheWithoutRefreshMetadata) {
+// A cache built in memory carries what Excel's re-save of the xlsx writer's part holds: versions 8/8/3, a
+// refreshedDate of 0, no refreshedBy, and the x14 and dataSourceClean extensions.
+TEST(XlsbPivotCacheBridge, WritesACacheBuiltInMemoryWithExcelsDefaults) {
   pivot::PivotCache cache = FirstCache("B01_base");
   cache.mutable_passthrough_attrs().clear();
+  cache.mutable_trailing_children_after_calculated_xml().clear();
+  cache.mark_records_from_source();
+  auto parts = pivot_cache_to_xlsb(cache, false, "rId1");
+  ASSERT_TRUE(parts.has_value()) << parts.error().message;
+  auto doc = decode_pivot_cache_definition(SpanOf(parts.value().definition));
+  ASSERT_TRUE(doc.has_value()) << doc.error().message;
+  EXPECT_EQ(doc.value().created_version, 8U);
+  EXPECT_EQ(doc.value().refreshed_version, 8U);
+  EXPECT_EQ(doc.value().min_refreshable_version, 3U);
+  EXPECT_EQ(doc.value().refreshed_date, 0.0);
+  EXPECT_FALSE(doc.value().refreshed_by.has_value());
+  EXPECT_EQ(doc.value().flags, pivot_cache_definition::kCacheSaveDataEnableRefresh);
+  EXPECT_TRUE(doc.value().has_pcd14);
+  EXPECT_EQ(doc.value().data_source_clean, std::optional<std::uint8_t>(1U));
+
+  // Records filled by hand ask Excel to rebuild the cache on open, as the xlsx save does.
+  pivot::PivotCache by_hand = FirstCache("B01_base");
+  by_hand.mutable_passthrough_attrs().clear();
+  by_hand.mutable_trailing_children_after_calculated_xml().clear();
+  by_hand.mutable_records();
+  auto hand_parts = pivot_cache_to_xlsb(by_hand, false, "rId1");
+  ASSERT_TRUE(hand_parts.has_value()) << hand_parts.error().message;
+  auto hand_doc = decode_pivot_cache_definition(SpanOf(hand_parts.value().definition));
+  ASSERT_TRUE(hand_doc.has_value());
+  EXPECT_EQ(hand_doc.value().flags,
+            pivot_cache_definition::kCacheSaveDataEnableRefresh | pivot_cache_definition::kCacheRefreshOnLoad);
+}
+
+// A cache Excel saved without refreshing names no refreshedBy; it is written and read back without one.
+TEST(XlsbPivotCacheBridge, KeepsACacheWithoutRefreshedBy) {
+  pivot::PivotCache cache = FirstCache("B01_base");
+  auto& attrs = cache.mutable_passthrough_attrs();
+  attrs.erase(std::remove_if(attrs.begin(), attrs.end(), [](const auto& a) { return a.first == "refreshedBy"; }),
+              attrs.end());
+  auto parts = pivot_cache_to_xlsb(cache, false, "rId1");
+  ASSERT_TRUE(parts.has_value()) << parts.error().message;
+  auto doc = decode_pivot_cache_definition(SpanOf(parts.value().definition));
+  ASSERT_TRUE(doc.has_value()) << doc.error().message;
+  EXPECT_FALSE(doc.value().refreshed_by.has_value());
+  auto back = pivot_cache_from_xlsb(SpanOf(parts.value().definition), SpanOf(parts.value().records), false);
+  ASSERT_TRUE(back.has_value()) << back.error().message;
+  EXPECT_EQ(back.value().passthrough_attrs(), cache.passthrough_attrs());
+}
+
+TEST(XlsbPivotCacheBridge, RefusesACacheReadWithoutARefreshedDate) {
+  pivot::PivotCache cache = FirstCache("B01_base");
+  auto& attrs = cache.mutable_passthrough_attrs();
+  attrs.erase(std::remove_if(attrs.begin(), attrs.end(), [](const auto& a) { return a.first == "refreshedDate"; }),
+              attrs.end());
   ExpectNotWritable(cache);
 }
 

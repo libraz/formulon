@@ -17,6 +17,7 @@
 
 #include "io/ooxml_defs.h"
 #include "io/pivot_attr_names.h"
+#include "io/pivot_built_defaults.h"
 #include "io/pivot_items_binding.h"
 #include "io/pivot_table_writer_internal.h"
 #include "io/xml_escape.h"
@@ -572,7 +573,9 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
   flag(!table.custom_list_sort(), "customListSort", "0");
   // Without `updatedVersion` Excel adds a stray caption row above the
   // pivot on refresh; a captured value is re-emitted with the rest.
-  flag(!HasRawAttr(table.passthrough_attrs(), "updatedVersion"), "updatedVersion", "8");
+  if (!HasRawAttr(table.passthrough_attrs(), "updatedVersion")) {
+    attrs.emplace_back("updatedVersion", std::to_string(kBuiltTableUpdatedVersion));
+  }
   for (const auto& attr : table.passthrough_attrs()) {
     if (attr.first != "dataOnRows" && attr.first != "dataPosition") {
       attrs.push_back(attr);
@@ -750,8 +753,7 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
   // Without the hidden-row extension Excel adds a caption row above the pivot
   // on refresh. A table read from a file keeps its own `<extLst>`.
   if (table.raw_passthrough_xml().find("<extLst") == std::string::npos) {
-    const bool hide_values_row =
-        table.hide_values_row().value_or(!HasRawAttr(table.passthrough_attrs(), "updatedVersion"));
+    const bool hide_values_row = table_hides_values_row(table);
     if (hide_values_row || !table.alt_text().empty() || !table.alt_text_summary().empty()) {
       out.append("<extLst>");
       AppendTableExt(out, table, hide_values_row);

@@ -149,7 +149,7 @@ struct Document {
   std::uint32_t missing_items_limit = 0xFFFFFFFFU;  ///< 0xFFFFFFFF when absent.
   double refreshed_date = 0.0;
   std::uint32_t record_count = 0;
-  std::string refreshed_by;
+  std::optional<std::string> refreshed_by;  ///< absent on a cache no one has refreshed by name.
   std::string records_rel_id;
   WorksheetSource source;
   std::vector<Field> fields;

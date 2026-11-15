@@ -9,6 +9,7 @@
 
 #include "io/cell_parser.h"
 #include "io/ooxml_defs.h"
+#include "io/pivot_built_defaults.h"
 #include "io/sqref_text.h"
 #include "io/xlsb/guid_text.h"
 #include "io/xlsb/pivot_area_records.h"
@@ -702,6 +703,23 @@ Expected<void, Error> ReadItems(const pcd::ItemTable& table, pivot::PivotCache& 
   return Expected<void, Error>::Ok();
 }
 
+/// The model period of a BrtBeginPCDFGRange `groupBy` an Excel save has shown, or nullopt.
+std::optional<pivot::GroupBy> MeasuredGroupBy(std::uint8_t code) {
+  switch (code) {
+    case pivot_group::kGroupByDays:
+      return pivot::GroupBy::Days;
+    case pivot_group::kGroupByMonths:
+      return pivot::GroupBy::Months;
+    case pivot_group::kGroupByYears:
+      return pivot::GroupBy::Years;
+    default:
+      return std::nullopt;
+  }
+}
+static_assert(static_cast<std::uint8_t>(pivot::GroupBy::Days) == pivot_group::kGroupByDays &&
+              static_cast<std::uint8_t>(pivot::GroupBy::Months) == pivot_group::kGroupByMonths &&
+              static_cast<std::uint8_t>(pivot::GroupBy::Years) == pivot_group::kGroupByYears);
+
 Expected<pivot::FieldGroup, Error> ReadGroup(const std::vector<pivot_records::RawRecord>& records,
                                              pivot::PivotCache& cache, bool date1904) {
   std::size_t pos = 0;
@@ -720,12 +738,12 @@ Expected<pivot::FieldGroup, Error> ReadGroup(const std::vector<pivot_records::Ra
     const pivot_group::RangeGroup& r = *group.range;
     constexpr std::uint8_t kKnown =
         pivot_group::kRangeAutoStart | pivot_group::kRangeAutoEnd | pivot_group::kRangeDates;
-    if (r.group_by != pivot_group::kGroupByDays || (r.flags & ~kKnown) != 0U ||
-        (r.flags & pivot_group::kRangeDates) == 0U) {
-      return Unmeasured("range group other than a days group over dates");
+    const std::optional<pivot::GroupBy> by = MeasuredGroupBy(r.group_by);
+    if (!by || (r.flags & ~kKnown) != 0U || (r.flags & pivot_group::kRangeDates) == 0U) {
+      return Unmeasured("range group other than a days, months or years group over dates");
     }
     out.kind = pivot::GroupKind::Range;
-    out.range.by = pivot::GroupBy::Days;
+    out.range.by = *by;
     out.range.is_date = true;
     ASSIGN_OR_RETURN(out.range.start_date, DateIso(r.start, date1904));
     ASSIGN_OR_RETURN(out.range.end_date, DateIso(r.end, date1904));
@@ -866,7 +884,9 @@ void ReadRoot(const pcd::Document& doc, pivot::PivotCache& cache) {
     attrs.emplace_back("xmlns:xr", std::string(kNsXr));
     attrs.emplace_back("mc:Ignorable", std::string(kXrPrefix));
   }
-  attrs.emplace_back("refreshedBy", doc.refreshed_by);
+  if (doc.refreshed_by) {
+    attrs.emplace_back("refreshedBy", *doc.refreshed_by);
+  }
   attrs.emplace_back("refreshedDate", RefreshedDateText(doc.refreshed_date));
   attrs.emplace_back("createdVersion", std::to_string(doc.created_version));
   attrs.emplace_back("refreshedVersion", std::to_string(doc.refreshed_version));
@@ -1162,7 +1182,7 @@ bool WriteGroup(const pivot::FieldGroup& in, bool date1904, std::vector<pivot_re
   group.base = in.base.value_or(pivot_group::kNoField);
   if (in.kind == pivot::GroupKind::Range) {
     const pivot::RangeGroup& r = in.range;
-    if (r.by != pivot::GroupBy::Days || !r.is_date) {
+    if (!MeasuredGroupBy(static_cast<std::uint8_t>(r.by)) || !r.is_date) {
       return false;
     }
     const std::optional<double> start = IsoSerial(r.start_date, date1904);
@@ -1171,7 +1191,7 @@ bool WriteGroup(const pivot::FieldGroup& in, bool date1904, std::vector<pivot_re
       return false;
     }
     pivot_group::RangeGroup range;
-    range.group_by = pivot_group::kGroupByDays;
+    range.group_by = static_cast<std::uint8_t>(r.by);
     range.flags =
         static_cast<std::uint8_t>(pivot_group::kRangeDates | (r.auto_start ? pivot_group::kRangeAutoStart : 0U) |
                                   (r.auto_end ? pivot_group::kRangeAutoEnd : 0U));
@@ -1309,13 +1329,20 @@ bool WriteRoot(const pivot::PivotCache& cache, pcd::Document* doc) {
     kCreated = 4U,
     kRefreshed = 8U,
     kMinRefreshable = 16U,
-    kRequired = 31U,
+    kRequired = kDate | kCreated | kRefreshed | kMinRefreshable,
     kNsMc = 32U,
     kNsXrDecl = 64U,
     kIgnorable = 128U,
     kUidBookkeeping = 224U,
   };
   unsigned seen = 0;
+  if (cache_built_in_memory(cache)) {
+    // What Excel's re-save of the xlsx writer's part holds: refreshedDate 0 and no refreshedBy.
+    doc->created_version = kBuiltCacheCreatedVersion;
+    doc->refreshed_version = kBuiltCacheRefreshedVersion;
+    doc->min_refreshable_version = kBuiltCacheMinRefreshableVersion;
+    seen = kRequired;
+  }
   const auto take = [&seen](unsigned bit) {
     if ((seen & bit) != 0U) {
       return false;
@@ -1364,8 +1391,9 @@ bool WriteRoot(const pivot::PivotCache& cache, pcd::Document* doc) {
   if ((seen & kRequired) != kRequired || bookkeeping != (doc->uid ? kUidBookkeeping : 0U) || !cache.save_data()) {
     return false;
   }
-  doc->flags = static_cast<std::uint8_t>(pcd::kCacheSaveDataEnableRefresh |
-                                         (cache.refresh_on_load() ? pcd::kCacheRefreshOnLoad : 0U));
+  const bool refresh_on_load = cache.refresh_on_load() || built_cache_refreshes_on_load(cache);
+  doc->flags =
+      static_cast<std::uint8_t>(pcd::kCacheSaveDataEnableRefresh | (refresh_on_load ? pcd::kCacheRefreshOnLoad : 0U));
   if (const std::optional<std::uint32_t> limit = cache.missing_items_limit(); limit) {
     if (*limit == 0xFFFFFFFFU) {
       return false;
@@ -1402,6 +1430,11 @@ bool WriteExtLst(const pivot::PivotCache& cache, pcd::Document* doc) {
   }
   std::string_view xml = cache.trailing_children_after_calculated_xml();
   if (xml.empty()) {
+    // Excel's re-save of a cache built in memory adds both extensions.
+    if (cache_built_in_memory(cache)) {
+      doc->has_pcd14 = true;
+      doc->data_source_clean = kDataSourceCleanTrue;
+    }
     return true;
   }
   const auto consume = [&xml](std::string_view part) {

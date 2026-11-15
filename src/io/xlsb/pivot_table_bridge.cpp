@@ -16,6 +16,7 @@
 #include "io/auto_filter_xml.h"
 #include "io/ooxml_defs.h"
 #include "io/pivot_attr_names.h"
+#include "io/pivot_built_defaults.h"
 #include "io/pivot_table_reader.h"
 #include "io/pivot_table_writer_internal.h"
 #include "io/xlsb/auto_filter_records.h"
@@ -51,7 +52,8 @@ constexpr const char* kNotWritableKind = "pivot_table";
 constexpr std::uint8_t kViewFlags1 = 0x41;
 constexpr std::uint8_t kViewFlags2 = 0x40;
 constexpr std::uint8_t kViewFlags4 = 0xF0;
-constexpr std::uint8_t kViewFlags7 = 0x20;
+/// Byte 7: `applyWidthHeightFormats`; every other bit is clear.
+constexpr std::uint8_t kViewApplyWidthHeight = 0x20;
 constexpr std::uint8_t kViewFlags5Named = kSxViewAutoFormat | kSxViewShowError | kSxViewRowGrand | kSxViewColGrand;
 constexpr std::uint8_t kViewFlags5Fixed = 0x04;
 /// Byte 6 bit 0: the first row field is in outline form; clear without row fields.
@@ -129,15 +131,12 @@ constexpr std::string_view kOfficeTableExtUris[] = {"{E67621CE-5B39-4880-91FE-76
 
 constexpr std::string_view kXrPrefix = "xr";
 
-/// Root attributes Excel writes with these values on every pivot table.
-struct FixedAttr {
-  std::string_view name;
-  std::string_view value;
-};
-constexpr FixedAttr kApplyFormats[] = {
-    {"applyNumberFormats", "0"},  {"applyBorderFormats", "0"},    {"applyFontFormats", "0"},
-    {"applyPatternFormats", "0"}, {"applyAlignmentFormats", "0"}, {"applyWidthHeightFormats", "1"},
-};
+/// Root attributes Excel writes on every pivot table, `0` but for `applyWidthHeightFormats`
+/// (SXView byte 7); an absent one reads as `0`.
+constexpr std::string_view kApplyFormats[] = {"applyNumberFormats",    "applyBorderFormats",
+                                              "applyFontFormats",      "applyPatternFormats",
+                                              "applyAlignmentFormats", "applyWidthHeightFormats"};
+constexpr std::size_t kApplyWidthHeight = std::size(kApplyFormats) - 1U;
 
 /// `<i t>` spellings by BrtBeginSXLI `t`.
 constexpr std::string_view kLineItemTypes[] = {"data",    "default", "sum",     "countA", "avg",
@@ -306,11 +305,11 @@ Expected<void, Error> CheckView(const PivotTableDoc& doc) {
     const std::uint8_t bits = static_cast<std::uint8_t>(v.flags8 & pair);
     return bits == 0U || bits == pair;
   };
-  if (v.flags1 != kViewFlags1 || v.flags2 != kViewFlags2 || v.flags4 != kViewFlags4 || v.flags7 != kViewFlags7 ||
-      (v.flags5 & ~kViewFlags5Named) != kViewFlags5Fixed || (v.flags6 & ~kViewFlags6Named) != kViewFlags6Fixed ||
-      (v.flags8 & ~kViewFlags8Named) != 0U || (v.flags9 & ~kSxViewSingleFieldFilter) != 0U || v.flags10 != 0U ||
-      v.flags11 != 0U || v.flags13 != 0U || v.reserved20 != kViewReserved20 || !paired(kViewCompactPair) ||
-      !paired(kViewOutlinePair)) {
+  if (v.flags1 != kViewFlags1 || v.flags2 != kViewFlags2 || v.flags4 != kViewFlags4 ||
+      (v.flags7 & ~kViewApplyWidthHeight) != 0U || (v.flags5 & ~kViewFlags5Named) != kViewFlags5Fixed ||
+      (v.flags6 & ~kViewFlags6Named) != kViewFlags6Fixed || (v.flags8 & ~kViewFlags8Named) != 0U ||
+      (v.flags9 & ~kSxViewSingleFieldFilter) != 0U || v.flags10 != 0U || v.flags11 != 0U || v.flags13 != 0U ||
+      v.reserved20 != kViewReserved20 || !paired(kViewCompactPair) || !paired(kViewOutlinePair)) {
     return Unmeasured("view header bits");
   }
   if (v.data_position != kNoDataPosition || (v.data_axis != kDataOnRows && v.data_axis != kDataOnCols)) {
@@ -333,12 +332,18 @@ void ReadRootAttrs(const PivotTableDoc& doc, AttrList& attrs) {
     attrs.emplace_back("mc:Ignorable", std::string(kXrPrefix));
     attrs.emplace_back("xr:uid", FormatGuid(doc.uid->data()));
   }
-  for (const FixedAttr& attr : kApplyFormats) {
-    attrs.emplace_back(std::string(attr.name), std::string(attr.value));
+  for (std::size_t i = 0; i < std::size(kApplyFormats); ++i) {
+    const bool on = i == kApplyWidthHeight && (doc.view.flags7 & kViewApplyWidthHeight) != 0U;
+    attrs.emplace_back(std::string(kApplyFormats[i]), Flag(on));
   }
   attrs.emplace_back("updatedVersion", std::to_string(doc.view.updated_version));
-  attrs.emplace_back("minRefreshableVersion", std::to_string(doc.view.min_refreshable_version));
-  attrs.emplace_back("createdVersion", std::to_string(doc.view.created_version));
+  // Excel leaves out a version of 0, the schema default.
+  if (doc.view.min_refreshable_version != 0U) {
+    attrs.emplace_back("minRefreshableVersion", std::to_string(doc.view.min_refreshable_version));
+  }
+  if (doc.view.created_version != 0U) {
+    attrs.emplace_back("createdVersion", std::to_string(doc.view.created_version));
+  }
 }
 
 /// Appends the form attributes that depart from `layout`, as the xlsx reader keeps them.
@@ -830,11 +835,15 @@ bool WriteRootAttrs(const pivot::PivotTable& table, PivotTableDoc& doc, FormOver
     kNsXrDecl = 1U << 10U,
     kIgnorable = 1U << 11U,
     kUidSeen = 1U << 12U,
-    kApplyAll = (1U << 6U) - 1U,
-    kRequired = kApplyAll | kCreated | kUpdated | kMinRefreshable,
     kUidBookkeeping = kNsMc | kNsXrDecl | kIgnorable | kUidSeen,
   };
   unsigned seen = 0;
+  // Each attribute absent from the part is its schema default, but `updatedVersion`
+  // is the xlsx writer's own.
+  doc.view.flags7 = 0;
+  doc.view.created_version = 0;
+  doc.view.min_refreshable_version = 0;
+  doc.view.updated_version = kBuiltTableUpdatedVersion;
   const auto take = [&seen](unsigned bit) {
     if ((seen & bit) != 0U) {
       return false;
@@ -850,11 +859,14 @@ bool WriteRootAttrs(const pivot::PivotTable& table, PivotTableDoc& doc, FormOver
   for (const auto& [name, value] : table.passthrough_attrs()) {
     bool ok = false;
     std::size_t apply = 0;
-    while (apply < std::size(kApplyFormats) && name != kApplyFormats[apply].name) {
+    while (apply < std::size(kApplyFormats) && name != kApplyFormats[apply]) {
       ++apply;
     }
     if (apply < std::size(kApplyFormats)) {
-      ok = take(1U << apply) && value == kApplyFormats[apply].value;
+      ok = take(1U << apply) && (value == "0" || (apply == kApplyWidthHeight && value == "1"));
+      if (ok && value == "1") {
+        doc.view.flags7 = kViewApplyWidthHeight;
+      }
     } else if (name == "xmlns:mc") {
       ok = take(kNsMc) && value == kNsMarkupCompat;
     } else if (name == "xmlns:xr") {
@@ -893,7 +905,7 @@ bool WriteRootAttrs(const pivot::PivotTable& table, PivotTableDoc& doc, FormOver
     }
   }
   const unsigned bookkeeping = seen & kUidBookkeeping;
-  return (seen & kRequired) == kRequired && bookkeeping == (doc.uid ? kUidBookkeeping : 0U);
+  return bookkeeping == (doc.uid ? kUidBookkeeping : 0U);
 }
 
 /// The Excel defaults the header bytes this bridge does not name stand for.
@@ -1556,9 +1568,12 @@ bool WriteTable(const pivot::PivotTable& table, ExcelHost host, std::optional<Pi
   }
   // Untyped `<formats>` and its siblings have no records here; the table
   // extLst holds SXView14 / SXView16 and extensions Excel's xlsb save drops.
-  bool view14 = false;
-  if (!table.raw_passthrough_before_style_info().empty() || !WriteTableExtLst(table.raw_passthrough_xml(), view14) ||
-      table.hide_values_row().value_or(view14) != view14 || !WriteFormats(table, doc)) {
+  // A table with no captured extLst takes the xlsx writer's; Excel adds SXView16 to it.
+  bool view14 = table_hides_values_row(table);
+  if (!table.raw_passthrough_before_style_info().empty() ||
+      (!table.raw_passthrough_xml().empty() && (!WriteTableExtLst(table.raw_passthrough_xml(), view14) ||
+                                                table.hide_values_row().value_or(view14) != view14)) ||
+      !WriteFormats(table, doc)) {
     return false;
   }
   FormOverride form;
@@ -1595,7 +1610,6 @@ bool WriteTable(const pivot::PivotTable& table, ExcelHost host, std::optional<Pi
                                        (table.grand_totals_rows() ? kSxViewColGrand : 0U));
   v.flags6 = static_cast<std::uint8_t>(kViewFlags6Fixed | (table.merge_item() ? kSxViewMergeItem : 0U) |
                                        (row_outline ? kViewRowOutline : 0U));
-  v.flags7 = kViewFlags7;
   v.flags8 = static_cast<std::uint8_t>((compact ? kViewCompactPair : 0U) | (outline ? kViewOutlinePair : 0U) |
                                        (table.grid_drop_zones() ? 0U : kSxViewNoDropZones));
   v.flags9 = static_cast<std::uint8_t>(table.multiple_field_filters() ? 0U : kSxViewSingleFieldFilter);
