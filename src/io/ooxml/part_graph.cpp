@@ -146,12 +146,6 @@ void remove_orphans(Workbook& wb, std::vector<std::string> candidates) {
       }
     }
   };
-  const auto tombstone = [&tombstones](std::size_t index) {
-    if (tombstones[index] != 0U) {
-      return;
-    }
-    tombstones[index] = 1U;
-  };
 
   bool removed_primary = false;
   while (!candidates.empty()) {
@@ -167,7 +161,7 @@ void remove_orphans(Workbook& wb, std::vector<std::string> candidates) {
     }
 
     removed_primary = true;
-    tombstone(primary);
+    tombstones[primary] = 1U;
     if (strings::ends_with(path, ".rels")) {
       decrement_outgoing(outgoing[primary]);
     }
@@ -178,7 +172,7 @@ void remove_orphans(Workbook& wb, std::vector<std::string> candidates) {
       for (const std::string& target : outgoing[rels_index]) {
         candidates.push_back(target);
       }
-      tombstone(rels_index);
+      tombstones[rels_index] = 1U;
       decrement_outgoing(outgoing[rels_index]);
     }
   }

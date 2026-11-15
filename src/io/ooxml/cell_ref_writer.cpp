@@ -7,19 +7,14 @@
 #include <string>
 
 #include "sheet.h"  // for MergeRange
-#include "utils/a1_column.h"
+#include "utils/a1_ref.h"
 #include "utils/expected.h"
 
 namespace formulon {
 namespace io {
 
-void AppendColumnLettersForRef(std::string& out, std::uint32_t col) {
-  FM_CHECK(a1::append_column_letters(out, col), "column is outside Excel's grid");
-}
-
 void AppendCellRefForRef(std::string& out, std::uint32_t row, std::uint32_t col) {
-  AppendColumnLettersForRef(out, col);
-  out.append(std::to_string(row + 1));
+  FM_CHECK(a1::append_a1(out, row, col), "column is outside Excel's grid");
 }
 
 void AppendRangeRef(std::string& out, std::uint32_t first_row, std::uint32_t first_col, std::uint32_t last_row,

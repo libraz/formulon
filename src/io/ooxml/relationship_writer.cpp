@@ -12,14 +12,19 @@
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "passthrough_part.h"
+#include "utils/strings.h"
 #include "utils/structured_log.h"
 
 namespace formulon {
 namespace io {
+namespace {
+
+constexpr std::string_view kXlPrefix = "xl/";
+
+}  // namespace
 
 std::string TargetRelativeToWorkbook(std::string_view path) {
-  constexpr std::string_view kXlPrefix = "xl/";
-  if (path.size() >= kXlPrefix.size() && path.substr(0, kXlPrefix.size()) == kXlPrefix) {
+  if (strings::starts_with(path, kXlPrefix)) {
     return std::string(path.substr(kXlPrefix.size()));
   }
   std::string out("../");
@@ -28,9 +33,8 @@ std::string TargetRelativeToWorkbook(std::string_view path) {
 }
 
 std::string TargetRelativeToWorksheet(std::string_view package_path) {
-  constexpr std::string_view kXlPrefix = "xl/";
   std::string out;
-  if (package_path.size() >= kXlPrefix.size() && package_path.substr(0, kXlPrefix.size()) == kXlPrefix) {
+  if (strings::starts_with(package_path, kXlPrefix)) {
     out.assign("../");
     out.append(package_path.substr(kXlPrefix.size()));
     return out;

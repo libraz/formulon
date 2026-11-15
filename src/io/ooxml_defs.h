@@ -136,6 +136,12 @@ inline constexpr std::string_view kCtRdRichValueTypes = "application/vnd.ms-exce
 // Worksheet drawing part content type; an XML part in both package formats.
 inline constexpr std::string_view kCtDrawing = "application/vnd.openxmlformats-officedocument.drawing+xml";
 
+// Legacy-comment and threaded-comment part content types; XML parts in both
+// package formats.
+inline constexpr std::string_view kCtVmlDrawing = "application/vnd.openxmlformats-officedocument.vmlDrawing";
+inline constexpr std::string_view kCtThreadedComments = "application/vnd.ms-excel.threadedcomments+xml";
+inline constexpr std::string_view kCtPerson = "application/vnd.ms-excel.person+xml";
+
 // Chart part content type.
 inline constexpr std::string_view kCtChart = "application/vnd.openxmlformats-officedocument.drawingml.chart+xml";
 

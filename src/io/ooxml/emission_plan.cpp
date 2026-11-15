@@ -6,7 +6,6 @@
 
 #include "io/ooxml/emission_plan.h"
 
-#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -135,19 +134,11 @@ bool PassthroughPathIndex::contains(const std::vector<const PassthroughPart*>& p
   return find(parts, path) != nullptr;
 }
 
-bool HasPassthroughPart(const std::vector<const PassthroughPart*>& passthrough_kept, std::string_view path) {
-  return FindPassthroughPartLinear(passthrough_kept, path) != nullptr;
-}
-
 bool IsXlsbBinaryContentType(std::string_view content_type) {
   constexpr std::string_view kVendorPrefix = "application/vnd.ms-excel.";
   constexpr std::string_view kXmlSuffix = "+xml";
-  if (content_type.size() <= kVendorPrefix.size() ||
-      content_type.compare(0, kVendorPrefix.size(), kVendorPrefix) != 0) {
-    return false;
-  }
-  return content_type.size() < kXmlSuffix.size() ||
-         content_type.compare(content_type.size() - kXmlSuffix.size(), kXmlSuffix.size(), kXmlSuffix) != 0;
+  return content_type.size() > kVendorPrefix.size() && strings::starts_with(content_type, kVendorPrefix) &&
+         !strings::ends_with(content_type, kXmlSuffix);
 }
 
 namespace {

@@ -44,8 +44,7 @@ struct OverrideEntry {
 /// The complete declaration table from `[Content_Types].xml`.
 ///
 /// A reader normally needs all three pieces at once. Keeping them in one
-/// result lets it parse the XML document once while retaining the standalone
-/// validators below for callers that only need one view of the table.
+/// result lets it parse the XML document once.
 struct ContentTypesInfo {
   WorkbookKind workbook_kind = WorkbookKind::kXlsx;
   std::vector<OverrideEntry> overrides;
@@ -53,23 +52,17 @@ struct ContentTypesInfo {
 };
 
 /// Parses `[Content_Types].xml` once and returns its workbook kind, Override
-/// entries, and Default entries. The same workbook-kind fallback and
-/// diagnostics contract as `verify_content_types` applies.
-Expected<ContentTypesInfo, Error> parse_content_types(const std::vector<std::uint8_t>& ct_bytes,
-                                                      ReadDiagnostics* diagnostics = nullptr);
-
-/// Verifies that `[Content_Types].xml` references a workbook content
-/// type at least once and returns the corresponding `WorkbookKind`.
+/// entries, and Default entries.
 ///
-/// Accepts the four canonical Excel workbook content types
+/// The workbook kind accepts the four canonical Excel workbook content types
 /// (xlsx / xlsm / xltx / xltm). When the package declares a
 /// workbook-shaped override (PartName=`/xl/workbook.xml`) whose
 /// ContentType is not recognised, surfaces a structured-log warning,
 /// bumps `diagnostics->unknown_content_type_count` when `diagnostics` is
 /// non-NULL, and falls back to `WorkbookKind::kXlsx` rather than failing
 /// the read (Excel-compatibility-first behaviour).
-Expected<WorkbookKind, Error> verify_content_types(const std::vector<std::uint8_t>& ct_bytes,
-                                                   ReadDiagnostics* diagnostics = nullptr);
+Expected<ContentTypesInfo, Error> parse_content_types(const std::vector<std::uint8_t>& ct_bytes,
+                                                      ReadDiagnostics* diagnostics = nullptr);
 
 /// Every `<Override>` part name (leading slash stripped) with its content type,
 /// and every `<Default>` extension (lower-cased, so comparison against archive

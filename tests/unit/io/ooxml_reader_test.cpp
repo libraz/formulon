@@ -95,15 +95,12 @@ TEST(OoxmlContentTypes, CombinedParseMatchesStandaloneViewsForEveryWorkbookKind)
 
     auto combined = ooxml::parse_content_types(bytes);
     ASSERT_TRUE(static_cast<bool>(combined)) << c.content_type;
-    auto kind = ooxml::verify_content_types(bytes);
     auto declared = ooxml::list_content_type_declarations(bytes);
-    ASSERT_TRUE(static_cast<bool>(kind));
     ASSERT_TRUE(static_cast<bool>(declared));
     const auto& overrides = declared.value().overrides;
     const auto& defaults = declared.value().defaults;
 
     EXPECT_EQ(combined.value().workbook_kind, c.kind);
-    EXPECT_EQ(combined.value().workbook_kind, kind.value());
     ASSERT_EQ(combined.value().overrides.size(), overrides.size());
     ASSERT_EQ(combined.value().defaults.size(), defaults.size());
     for (std::size_t i = 0; i < overrides.size(); ++i) {

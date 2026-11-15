@@ -15,6 +15,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/status_macros.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace io {
@@ -42,8 +43,7 @@ Expected<WorkbookRels, Error> load_workbook_rels(const ZipReader& zip, std::stri
         // in-package relationship whose type ends in "sheet" is retained
         // here; the orchestrator parses worksheets and preserves all other
         // types as opaque sheet entries instead of rejecting the workbook.
-        const bool is_sheet_type =
-            type == kRelWorksheet || (type.size() >= 5U && type.substr(type.size() - 5U) == "sheet");
+        const bool is_sheet_type = type == kRelWorksheet || strings::ends_with(type, "sheet");
         if (is_sheet_type) {
           const std::string id(attr_str(rel, "Id"));
           if (id.empty()) {

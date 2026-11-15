@@ -46,11 +46,16 @@ DetectedKind DetectWorkbookKind(std::string_view content_type) {
   return {WorkbookKind::kXlsx, false};
 }
 
-/// Returns true if `content_type` references one of the four known
-/// workbook variants. Used to gate "looks like a spreadsheet package"
-/// without committing to the kind discriminator yet.
-bool IsKnownWorkbookContentType(std::string_view content_type) {
-  return DetectWorkbookKind(content_type).recognised;
+constexpr const char kContentTypesContext[] = "context=ooxml_reader part=[Content_Types].xml";
+constexpr const char kPackageRelsContext[] = "context=ooxml_reader part=_rels/.rels";
+
+/// Diagnostic context naming the base directory and target of a rels resolution.
+std::string RelsTargetContext(std::string_view base_dir, std::string_view target) {
+  std::string ctx("context=ooxml_reader base_dir=");
+  ctx.append(base_dir);
+  ctx.append(" target=");
+  ctx.append(target);
+  return ctx;
 }
 
 /// Parses `[Content_Types].xml` into `doc` and returns its `<Types>` root.
@@ -59,7 +64,7 @@ Expected<pugi::xml_node, Error> LoadTypesRoot(pugi::xml_document& doc, const std
   pugi::xml_node root = doc.child("Types");
   if (!root) {
     return make_error(FormulonErrorCode::kIoContentTypeInvalid, "[Content_Types].xml: missing <Types> root",
-                      "context=ooxml_reader part=[Content_Types].xml");
+                      kContentTypesContext);
   }
   return root;
 }
@@ -79,8 +84,8 @@ Expected<WorkbookKind, Error> VerifyContentTypesRoot(const pugi::xml_node& root,
       continue;
     }
     const std::string_view ct = attr_str(node, "ContentType");
-    if (IsKnownWorkbookContentType(ct)) {
-      return DetectWorkbookKind(ct).kind;
+    if (const DetectedKind detected = DetectWorkbookKind(ct); detected.recognised) {
+      return detected.kind;
     }
     // Preserve the legacy empty-content-type behavior: an empty first
     // candidate leaves the content-type string empty, so a later non-empty
@@ -105,7 +110,7 @@ Expected<WorkbookKind, Error> VerifyContentTypesRoot(const pugi::xml_node& root,
     return WorkbookKind::kXlsx;
   }
   return make_error(FormulonErrorCode::kIoContentTypeInvalid, "[Content_Types].xml: no workbook content-type override",
-                    "context=ooxml_reader part=[Content_Types].xml");
+                    kContentTypesContext);
 }
 
 std::vector<OverrideEntry> ListOverridePartEntriesFromRoot(const pugi::xml_node& root) {
@@ -152,7 +157,7 @@ Expected<std::string, Error> resolve_office_document_path(const std::vector<std:
   pugi::xml_node root = relationship_root(doc);
   if (!root) {
     return make_error(FormulonErrorCode::kIoRelationshipBroken, "package-level rels: missing <Relationships>",
-                      "context=ooxml_reader part=_rels/.rels");
+                      kPackageRelsContext);
   }
   for (const pugi::xml_node rel : root.children()) {
     if (!is_relationship_element(rel, root)) {
@@ -163,8 +168,7 @@ Expected<std::string, Error> resolve_office_document_path(const std::vector<std:
       std::string target(attr_str(rel, "Target"));
       if (target.empty()) {
         return make_error(FormulonErrorCode::kIoRelationshipBroken,
-                          "package-level rels: empty Target for OfficeDocument",
-                          "context=ooxml_reader part=_rels/.rels");
+                          "package-level rels: empty Target for OfficeDocument", kPackageRelsContext);
       }
       // Normalise: relationship targets may be absolute (`/xl/...`) or
       // relative (`xl/...`). The ZIP catalogue stores names relative to
@@ -184,8 +188,7 @@ Expected<std::string, Error> resolve_office_document_path(const std::vector<std:
     }
   }
   return make_error(FormulonErrorCode::kIoRelationshipBroken,
-                    "package-level rels: no OfficeDocument relationship found",
-                    "context=ooxml_reader part=_rels/.rels");
+                    "package-level rels: no OfficeDocument relationship found", kPackageRelsContext);
 }
 
 Expected<ContentTypesInfo, Error> parse_content_types(const std::vector<std::uint8_t>& ct_bytes,
@@ -197,13 +200,6 @@ Expected<ContentTypesInfo, Error> parse_content_types(const std::vector<std::uin
   out.overrides = ListOverridePartEntriesFromRoot(root);
   out.defaults = ListDefaultContentTypesFromRoot(root);
   return out;
-}
-
-Expected<WorkbookKind, Error> verify_content_types(const std::vector<std::uint8_t>& ct_bytes,
-                                                   ReadDiagnostics* diagnostics) {
-  pugi::xml_document doc;
-  ASSIGN_OR_RETURN(auto root, LoadTypesRoot(doc, ct_bytes));
-  return VerifyContentTypesRoot(root, diagnostics);
 }
 
 Expected<ContentTypeDeclarations, Error> list_content_type_declarations(const std::vector<std::uint8_t>& ct_bytes) {
@@ -247,12 +243,8 @@ Expected<std::string, Error> resolve_relative_path(std::string_view base_dir, st
           // skip
         } else if (seg == "..") {
           if (stack.empty()) {
-            std::string ctx("context=ooxml_reader base_dir=");
-            ctx.append(base_dir);
-            ctx.append(" target=");
-            ctx.append(target);
             return make_error(FormulonErrorCode::kIoZipSlip, "rels target escapes package root via '..' traversal",
-                              std::move(ctx));
+                              RelsTargetContext(base_dir, target));
           }
           stack.pop_back();
         } else {
@@ -270,11 +262,8 @@ Expected<std::string, Error> resolve_relative_path(std::string_view base_dir, st
     out.append(stack[i]);
   }
   if (out.empty()) {
-    std::string ctx("context=ooxml_reader base_dir=");
-    ctx.append(base_dir);
-    ctx.append(" target=");
-    ctx.append(target);
-    return make_error(FormulonErrorCode::kIoZipSlip, "rels target resolves to empty path", std::move(ctx));
+    return make_error(FormulonErrorCode::kIoZipSlip, "rels target resolves to empty path",
+                      RelsTargetContext(base_dir, target));
   }
   return out;
 }

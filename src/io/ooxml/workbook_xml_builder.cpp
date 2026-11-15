@@ -52,8 +52,7 @@ namespace {
 // The qualified name of the tag opening at `open` (just past '<'), and the offset where its name ends.
 std::string_view TagName(std::string_view xml, std::size_t open, std::size_t* name_end) {
   std::size_t end = open;
-  while (end < xml.size() && xml[end] != ' ' && xml[end] != '\t' && xml[end] != '\n' && xml[end] != '\r' &&
-         xml[end] != '>' && xml[end] != '/') {
+  while (end < xml.size() && !is_xml_space(xml[end]) && xml[end] != '>' && xml[end] != '/') {
     ++end;
   }
   *name_end = end;
@@ -102,10 +101,7 @@ std::string WithCompatibilityVersionExt(std::string ext_lst, const Workbook& wb)
   const std::size_t root_open = ext_lst.find('<');
   if (root_open != std::string::npos) {
     const std::string_view root = TagName(ext_lst, root_open + 1U, &root_name_end);
-    const std::size_t colon = root.find(':');
-    if (colon != std::string_view::npos) {
-      prefix = std::string(root.substr(0, colon + 1U));
-    }
+    prefix = std::string(qname_prefix_colon(root));
   }
   std::string ext = "<" + prefix + "ext uri=\"" + std::string(kCompatibilityVersionExtUri) + "\" xmlns:xlwcv=\"" +
                     std::string(kNsWorkbookCompatibilityVersion) + "\"><xlwcv:version";
@@ -146,9 +142,6 @@ constexpr std::string_view kCtPivotCacheRecords =
     "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotCacheRecords+xml";
 constexpr std::string_view kCtPivotTable = "application/vnd.openxmlformats-officedocument.spreadsheetml.pivotTable+xml";
 constexpr std::string_view kCtComments = "application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml";
-constexpr std::string_view kCtVmlDrawing = "application/vnd.openxmlformats-officedocument.vmlDrawing";
-constexpr std::string_view kCtThreadedComments = "application/vnd.ms-excel.threadedcomments+xml";
-constexpr std::string_view kCtPerson = "application/vnd.ms-excel.person+xml";
 constexpr std::string_view kCtExternalLink =
     "application/vnd.openxmlformats-officedocument.spreadsheetml.externalLink+xml";
 
@@ -514,12 +507,15 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
   // follows theirs; the list is sorted by slot, so one cursor suffices.
   const WorksheetRawExtensions& raw_children = wb.raw_children();
   std::size_t raw_cursor = 0;
+  const auto emit_line = [&](std::string_view xml) {
+    out.append("  ");
+    out.append(xml);
+    out.push_back('\n');
+  };
   const auto flush_raw_before = [&](std::string_view element) {
     const std::size_t slot = ooxml::workbook_child::slot_of(element);
     while (raw_cursor < raw_children.size() && raw_children[raw_cursor].slot < slot) {
-      out.append("  ");
-      out.append(raw_children[raw_cursor++].xml);
-      out.push_back('\n');
+      emit_line(raw_children[raw_cursor++].xml);
     }
   };
   // Workbook-level elements that precede <sheets> in ECMA-376 order
@@ -530,40 +526,28 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
   // flag was set programmatically, synthesise a minimal element so the
   // attribute is not lost.
   if (!wb.file_version_xml().empty()) {
-    out.append("  ");
-    out.append(wb.file_version_xml());
-    out.push_back('\n');
+    emit_line(wb.file_version_xml());
   }
   flush_raw_before("fileSharing");
   if (!wb.file_sharing_xml().empty()) {
-    out.append("  ");
-    out.append(wb.file_sharing_xml());
-    out.push_back('\n');
+    emit_line(wb.file_sharing_xml());
   }
   flush_raw_before("workbookPr");
   const std::string workbook_pr_xml = SynchronizedWorkbookPr(wb);
   if (!workbook_pr_xml.empty()) {
-    out.append("  ");
-    out.append(workbook_pr_xml);
-    out.push_back('\n');
+    emit_line(workbook_pr_xml);
   }
   // Regenerated from the location; the reader drops the captured one.
   if (const std::string abs_path = BuildAbsPath(wb); !abs_path.empty()) {
-    out.append("  ");
-    out.append(abs_path);
-    out.push_back('\n');
+    emit_line(abs_path);
   }
   flush_raw_before("workbookProtection");
   if (!wb.workbook_protection_xml().empty()) {
-    out.append("  ");
-    out.append(wb.workbook_protection_xml());
-    out.push_back('\n');
+    emit_line(wb.workbook_protection_xml());
   }
   flush_raw_before("bookViews");
   if (!wb.book_views_xml().empty()) {
-    out.append("  ");
-    out.append(wb.book_views_xml());
-    out.push_back('\n');
+    emit_line(wb.book_views_xml());
   }
   flush_raw_before("sheets");
   out.append("  <sheets>\n");
@@ -701,9 +685,7 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
   if (const std::string ext_lst =
           WithCompatibilityVersionExt(RemapRelationshipIds(wb, plan, wb.workbook_ext_lst_xml()), wb);
       !ext_lst.empty()) {
-    out.append("  ");
-    out.append(ext_lst);
-    out.push_back('\n');
+    emit_line(ext_lst);
   }
   flush_raw_before({});
   out.append("</workbook>\n");

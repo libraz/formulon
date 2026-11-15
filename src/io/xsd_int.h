@@ -16,7 +16,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <string_view>
 
 namespace formulon {
@@ -54,32 +53,10 @@ inline bool parse_xsd_nonneg_int(std::string_view text, std::uint32_t* out) noex
   return true;
 }
 
-/// Saturating cast from a possibly-signed C string to `std::uint8_t`.
-/// Used for `outlineLevel`; OOXML caps the value at 7 but we accept up
-/// to 255 defensively and clamp negatives to 0.
-inline std::uint8_t parse_outline_level(const char* text) noexcept {
-  if (text == nullptr || *text == '\0') {
-    return 0U;
-  }
-  // strtol is locale-independent for ASCII digits and doesn't pull in
-  // <iostream>. The result is clamped to [0, 255] so callers see a
-  // valid `uint8_t` even on garbage input.
-  char* end = nullptr;
-  const long n = std::strtol(text, &end, 10);
-  if (end == text) {
-    return 0U;
-  }
-  if (n <= 0) {
-    return 0U;
-  }
-  if (n >= 255) {
-    return 255U;
-  }
-  return static_cast<std::uint8_t>(n);
-}
-
-/// `string_view` form of `parse_outline_level(const char*)` with the same
-/// result for every input: optional leading whitespace and sign, then digits.
+/// Saturating cast from a possibly-signed string to `std::uint8_t`: optional
+/// leading whitespace and sign, then digits. Used for `outlineLevel`; OOXML
+/// caps the value at 7 but we accept up to 255 defensively and clamp
+/// negatives and garbage to 0.
 inline std::uint8_t parse_outline_level(std::string_view text) noexcept {
   std::size_t i = 0;
   while (i < text.size() && (text[i] == ' ' || (text[i] >= '\t' && text[i] <= '\r'))) {
@@ -100,6 +77,11 @@ inline std::uint8_t parse_outline_level(std::string_view text) noexcept {
     return 0U;
   }
   return n >= 255U ? 255U : static_cast<std::uint8_t>(n);
+}
+
+/// C string form of `parse_outline_level(std::string_view)`; null reads as 0.
+inline std::uint8_t parse_outline_level(const char* text) noexcept {
+  return text == nullptr ? 0U : parse_outline_level(std::string_view(text));
 }
 
 }  // namespace io
