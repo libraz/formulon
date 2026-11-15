@@ -7791,7 +7791,8 @@ export interface Sheet {
   addChart(input: ChartInput): Chart;
 
   /** Lists the handles of the PivotTables anchored on the sheet; a pivot's position is its index. A new array on
-   *  each call. */
+   *  each call. An `.xlsb` PivotTable the reader keeps as stored is not listed; its parts are in
+   *  `wb.ooxml.listPassthroughs()`. */
   listPivots(): readonly Pivot[];
   /** The handle of the pivot table `pivot`. A name no pivot has fails with `StatusCode.NotFound`, an index past
    *  the last pivot with `StatusCode.IndexOutOfRange`. */

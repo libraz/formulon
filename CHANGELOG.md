@@ -543,7 +543,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   model like those of an `.xlsx`, so they can be inspected and edited, and an
   `.xlsb` opened and saved as `.xlsx` keeps them; before, such a save failed
   with `IoWriteFailed` (Python `IO_WRITE_FAILED`, C
-  `FM_STATUS_IO_WRITE_FAILED`, 5016) or left the pivot parts behind. An `.xlsb`
+  `FM_STATUS_IO_WRITE_FAILED`, 5016) or left the pivot parts behind. A
+  PivotTable whose `.xlsb` records the reader cannot read is kept as stored:
+  `listPivots()` (Python `list_pivots`, C `fm_sheet_get_pivot_count`) leaves it
+  out and `listPassthroughs()` (C `fm_workbook_get_passthrough_count` /
+  `fm_workbook_get_passthrough_at`) lists its parts. An `.xlsb`
   save writes an unchanged PivotTable as Excel saved it and an edited or
   refreshed one from the model, with Excel's Windows or Mac records for the
   workbook's profile. A PivotTable built through the API is written to

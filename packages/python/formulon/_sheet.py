@@ -7156,7 +7156,11 @@ class Sheet(_NoCopy):
         return pivot
 
     def list_pivots(self) -> List[Pivot]:
-        """Return the handles of the pivot tables anchored on the sheet, in index order."""
+        """Return the handles of the pivot tables anchored on the sheet, in index order.
+
+        An ``.xlsb`` PivotTable the reader keeps as stored is not listed; its parts are in
+        ``workbook.ooxml.list_passthroughs()``.
+        """
         return [self._pivot_at(i) for i in range(self._pivot_count())]
 
     def pivot(self, pivot: PivotRef) -> Pivot:

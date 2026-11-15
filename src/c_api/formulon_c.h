@@ -7170,6 +7170,9 @@ typedef struct fm_pivot_cells fm_pivot_report_t;
 /**
  * @brief Returns the number of pivot tables anchored on `sheet_index`.
  *
+ * An `.xlsb` PivotTable the reader keeps as stored is not counted; its parts
+ * are listed by `fm_workbook_get_passthrough_count` / `fm_workbook_get_passthrough_at`.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb` or `out_count` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range.
