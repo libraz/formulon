@@ -191,6 +191,10 @@ Checks:
                   its status mapping in src/parser/parse_status.h. Reports
                   "SKIPPED" until tools/dev/binding_drift/parse_error_codes.py
                   exists.
+  test-imports    Every relative named import in packages/npm/test,
+                  packages/npm-native/test and tests/wasm names an export
+                  of its target module, so a test shared verbatim between
+                  the packages cannot die at import in one of them.
   all             Run every check above (default).
 
 Stdlib only; no build artifacts or network access required.
@@ -229,6 +233,7 @@ from binding_drift.readme_checks import check_readme_facts
 from binding_drift.readme_identifiers import check_readme_identifiers
 from binding_drift.shape_checks import check_dts_shared_shapes, check_style_record_fields
 from binding_drift.surface_files import _SKIPPED
+from binding_drift.test_imports import check_test_imports
 from binding_drift.tristate_reads import check_tristate_reads
 
 
@@ -263,6 +268,7 @@ CHECKS = {
     "header-error-codes": check_header_error_codes,
     "api-conventions": api_conventions.check_api_conventions,
     "parse-error-codes": check_parse_error_codes,
+    "test-imports": check_test_imports,
 }
 
 

@@ -738,6 +738,9 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   # Parse-error codes: every ParseErrorCode maps to one status code, and the
   # tables each binding carries agree with src/parser/parse_status.h.
   formulon_add_binding_drift_test(binding_drift_parse_error_codes parse-error-codes)
+  # The JS test modules import only names their support modules export; the
+  # npm suites run outside the per-commit gate, so this stands in for them.
+  formulon_add_binding_drift_test(binding_drift_test_imports test-imports)
   # The name ledger is well-formed: unique names, known surfaces, `was` chains.
   add_test(
     NAME ApiNamesValidate

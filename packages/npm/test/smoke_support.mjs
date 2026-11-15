@@ -94,12 +94,18 @@ function expectFailure(fn, code) {
   });
 }
 
+// Predicate for `assert.throws`: a host failure, optionally with a given code.
+function isFormulonError(error, code) {
+  return error?.name === 'FormulonError' && (code === undefined || error.code === code);
+}
+
 export {
   assert,
   emitXlsbWarning,
   entry,
   expectFailure,
   getModule,
+  isFormulonError,
   loadStagedFactory,
   loadStagedModule,
   makeIterativeWorkbook,
