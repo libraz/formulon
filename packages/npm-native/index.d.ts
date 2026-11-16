@@ -3944,9 +3944,11 @@ export type ColorInput = string | Color;
 
 /** The font keys of a {@link CellFormatPatch}; an omitted key keeps its value. */
 export interface FontPatch {
-  /** The typeface name; omitted keeps it, `null` resets it to the Normal style's font name. A different name with
-   *  `scheme` omitted also sets `scheme` to `None`, as Excel unlinks a font from the theme when its name changes:
-   *  a theme-linked font is drawn with the theme's face whatever name it stores. */
+  /** The typeface name; omitted keeps it, `null` resets it to the Normal style's font name. A stated name, even
+   *  the current one, with `scheme` omitted also sets `scheme` to `None`, as Excel unlinks a font from the theme
+   *  when its name is entered: a theme-linked font is drawn with the theme's face whatever name it stores. A
+   *  different name with `family` and `charset` both omitted also gives the font the family and charset Excel uses
+   *  for the new face (those of the Normal font when the face is the Normal font's); a same-face rename keeps them. */
   readonly name?: string | null;
   /** The font size in points, 1 to 409; omitted keeps it, `null` resets it to the Normal style's font size. */
   readonly sizePt?: number | null;
@@ -3968,10 +3970,11 @@ export interface FontPatch {
   readonly underline?: UnderlineStyle;
   /** The vertical alignment of the text run (baseline, superscript or subscript); omitted keeps it. */
   readonly vertAlign?: FontVerticalAlign;
-  /** The font-family class; omitted keeps it, `null` removes the `<family>` element. */
+  /** The font-family class; omitted keeps it, `null` removes the `<family>` element. A different name resets it;
+   *  state it to keep a value. */
   readonly family?: FontFamily | null;
-  /** The charset codepage id; omitted keeps it, `null` removes the `<charset>` element. A name change keeps it:
-   *  Excel derives it from the new face, so a caller that knows the face's charset states it. */
+  /** The charset codepage id; omitted keeps it, `null` removes the `<charset>` element. A different name resets
+   *  it; state it to keep a value. */
   readonly charset?: number | null;
   /** The theme font set the font links to; omitted keeps it. */
   readonly scheme?: FontScheme;
@@ -4054,7 +4057,7 @@ export interface CellProtectionPatch {
  *  (`Font.sizePt`, `Font.bold`, `Font.family`, ...), which then reads back `null`; on any other key it throws
  *  `TypeError`. A group also takes the matching record `getCellFormat` returns, so
  *  `updateCellFormat(range, ws.getCellFormat(cell))` copies a format (`source` is ignored); any
- *  other key throws `TypeError`. */
+ *  other key throws `TypeError`. A group whose keys are all omitted (`font: {}`) changes nothing. */
 export interface CellFormatPatch {
   /** A number format code; `General` resets it. */
   readonly numberFormat?: string;

@@ -864,6 +864,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::ListShowPhoneticCells, 0x1ULL>("listShowPhoneticCells"),
           GuardedInstanceMethod<&Workbook::RangeStyleBasesExcluding, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0xEULL>("getRangeXfBasesExcluding"),
           GuardedInstanceMethod<&Workbook::RemapRangeStyle, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0xEULL>("remapRangeXfs"),
+          GuardedInstanceMethod<&Workbook::UpdateCellFormat, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x6ULL>("updateCellFormat"),
           GuardedInstanceMethod<&Workbook::SnapshotRangeStyle, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("snapshotRangeXfs"),
           GuardedInstanceMethod<&Workbook::RestoreRangeStyle, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("restoreRangeXfs"),
           GuardedInstanceMethod<&Workbook::SetSheetProtection, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("setSheetProtection"),

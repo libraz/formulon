@@ -482,6 +482,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("setCellXfIndex", &JsWorkbook::setCellXfIndex)
       .function("resetCellXfIndex", &JsWorkbook::clearCellXfIndex)
       .function("setRangeXfIndex", &JsWorkbook::setRangeXfIndex)
+      .function("updateCellFormat", &JsWorkbook::updateCellFormat)
       .function("clearBreaks", &JsWorkbook::clearSheetBreaks)
       .function("setCellStyle", &JsWorkbook::setCellStyle)
       .function("removeCellStyle", &JsWorkbook::removeCellStyle)

@@ -69,6 +69,7 @@ RECORD_NAMES = frozenset(
     (
         "fm_array_formula_info_t",
         "fm_auto_filter_t",
+        "fm_cell_format_patch_t",
         "fm_cell_node_info_t",
         "fm_cell_picture_t",
         "fm_cf_match_info_t",
@@ -1406,6 +1407,121 @@ BORDER_RECORD = Struct(
 FONT_RECORD_BLOB = ("blob_font_record", FONT_RECORD.size, 8)
 FILL_RECORD_BLOB = ("blob_fill_record", FILL_RECORD.size, 8)
 BORDER_RECORD_BLOB = ("blob_border_record", BORDER_RECORD.size, 8)
+
+# ``fm_sheet_update_cell_format``: every value field has an ``fm_patch_op_t``
+# before it (0 keep, 1 clear, 2 set). The sub-patches are frozen value types
+# embedded by value in ``fm_cell_format_patch_t``.
+FONT_PATCH = Struct(
+    "fm_font_patch_t",
+    [
+        ("name_op", I32),
+        ("name", PTR),
+        ("size_pt_op", I32),
+        ("size_pt", F64),
+        ("bold_op", I32),
+        ("bold", I32),
+        ("italic_op", I32),
+        ("italic", I32),
+        ("strike_op", I32),
+        ("strike", I32),
+        ("outline_op", I32),
+        ("outline", I32),
+        ("shadow_op", I32),
+        ("shadow", I32),
+        ("condense_op", I32),
+        ("condense", I32),
+        ("extend_op", I32),
+        ("extend", I32),
+        ("underline_op", I32),
+        ("underline", I32),
+        ("vert_align_op", I32),
+        ("vert_align", I32),
+        ("family_op", I32),
+        ("family", I32),
+        ("charset_op", I32),
+        ("charset", I32),
+        ("scheme_op", I32),
+        ("scheme", I32),
+        ("color_op", I32),
+        ("color", COLOR_SPEC_BLOB),
+    ],
+)
+
+FILL_PATCH = Struct(
+    "fm_fill_patch_t",
+    [
+        ("pattern_op", I32),
+        ("pattern", I32),
+        ("foreground_op", I32),
+        ("foreground", COLOR_SPEC_BLOB),
+        ("background_op", I32),
+        ("background", COLOR_SPEC_BLOB),
+        ("gradient_op", I32),
+        ("gradient", PTR),
+    ],
+)
+
+BORDER_SIDE_PATCH = Struct(
+    "fm_border_side_patch_t",
+    [("style_op", I32), ("style", I32), ("color_op", I32), ("color", COLOR_SPEC_BLOB)],
+)
+
+BORDER_PATCH = Struct(
+    "fm_border_patch_t",
+    [
+        ("left", nested(BORDER_SIDE_PATCH)),
+        ("right", nested(BORDER_SIDE_PATCH)),
+        ("top", nested(BORDER_SIDE_PATCH)),
+        ("bottom", nested(BORDER_SIDE_PATCH)),
+        ("diagonal", nested(BORDER_SIDE_PATCH)),
+        ("diagonal_up_op", I32),
+        ("diagonal_up", I32),
+        ("diagonal_down_op", I32),
+        ("diagonal_down", I32),
+    ],
+)
+
+ALIGNMENT_PATCH = Struct(
+    "fm_alignment_patch_t",
+    [
+        ("horizontal_op", I32),
+        ("horizontal", I32),
+        ("vertical_op", I32),
+        ("vertical", I32),
+        ("wrap_text_op", I32),
+        ("wrap_text", I32),
+        ("shrink_to_fit_op", I32),
+        ("shrink_to_fit", I32),
+        ("indent_op", I32),
+        ("indent", U32),
+        ("text_rotation_op", I32),
+        ("text_rotation", U32),
+        ("reading_order_op", I32),
+        ("reading_order", I32),
+        ("justify_last_line_op", I32),
+        ("justify_last_line", I32),
+        ("relative_indent_op", I32),
+        ("relative_indent", I32),
+    ],
+)
+
+CELL_PROTECTION_PATCH = Struct(
+    "fm_cell_protection_patch_t",
+    [("locked_op", I32), ("locked", I32), ("hidden_op", I32), ("hidden", I32)],
+)
+
+CELL_FORMAT_PATCH = Struct(
+    "fm_cell_format_patch_t",
+    [
+        ("number_format_op", I32),
+        ("number_format", PTR),
+        ("font", nested(FONT_PATCH)),
+        ("fill", nested(FILL_PATCH)),
+        ("border", nested(BORDER_PATCH)),
+        ("alignment", nested(ALIGNMENT_PATCH)),
+        ("protection", nested(CELL_PROTECTION_PATCH)),
+    ],
+)
 
 DXF_RECORD = Struct(
     "fm_dxf_t",

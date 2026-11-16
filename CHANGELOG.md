@@ -255,14 +255,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   at font 0 when the book is opened (`.xlsx` and `.xlsb`), keeping its type and
   alignment, which is how Excel reads it.
 
-- A font patch that names a different face (`updateCellFormat` / Python `update_cell_format`,
-  `font.name`) without stating `scheme` now also sets `scheme` to `None`, as Excel does when the
-  font name changes. A font linked to the theme is drawn with the theme's face whatever name it
-  stores, so the renamed font kept the old face under a Mac profile. A size-only or same-name
-  patch keeps the link, and a stated `scheme` wins. `charset` is kept unless stated: Excel
-  derives it from the new face. The record setters (`setDefaultFont`, `ooxml.setFont`,
-  `ooxml.addFont` and their C and Python equivalents) are unchanged and write exactly the record
-  they are given.
+- A cell-format patch is applied by the C core (`fm_sheet_update_cell_format`, new), so
+  `updateCellFormat` / Python `update_cell_format` merge it the same way in every binding. A
+  stated `font.name` sets `scheme` to `None` unless the patch states a `scheme`, even when the
+  name is unchanged, as Excel does. A different face takes the family and charset Excel holds for
+  it (the Normal font's when it is the Normal face; `游明朝` is family 1 and charset 128), a
+  same-face rename keeps them, and a stated `family` or `charset` wins. A group whose keys are all
+  omitted, such as `font: {}`, changes nothing.
+
+- Opening `.xlsx` and `.xlsb` completes a font that states no family, charset or scheme with the
+  family and charset Excel holds for its face, as Excel does on load: a family-less `游ゴシック`
+  is family 3 and charset 128, and a face the engine has not measured gets neither. A font given
+  to `setDefaultFont`, `ooxml.setFont` or `ooxml.addFont` (and their C and Python equivalents)
+  without them is completed the same way. `getFont` / `get_font` after a load report the completed
+  values, and saving no longer completes fonts.
 
 - Opening `.xlsx` and `.xlsb` merges conditional-format rules the way Excel does
   on open. Two rules combine into one when they match in type, operator,

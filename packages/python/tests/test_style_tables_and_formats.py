@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import datetime
 import unittest
 
 import formulon
@@ -138,7 +139,7 @@ class TableStyleDefaultsTests(_Base):
 
 
 class FontPatchSchemeTests(_Base):
-    """A patch naming a different face unlinks the font from the theme; size-only and same-name patches keep the link."""
+    """A patch stating a font name unlinks the font from the theme, even the current name; size-only patches keep the link."""
 
     def _cell_font(self):
         return self.ws.get_cell_format("B2").font
@@ -150,17 +151,67 @@ class FontPatchSchemeTests(_Base):
         ws.update_cell_format("B2", font={"size_pt": 14.0})
         self.assertEqual(ws.get_cell_format("B2").font.scheme, formulon.FontScheme.MINOR)
         ws.update_cell_format("B2", font={"name": ws.get_cell_format("B2").font.name})
-        self.assertEqual(ws.get_cell_format("B2").font.scheme, formulon.FontScheme.MINOR)
+        self.assertEqual(ws.get_cell_format("B2").font.scheme, formulon.FontScheme.NONE)
         ws.update_cell_format("B2", font={"name": "Arial"})
         font = ws.get_cell_format("B2").font
         self.assertEqual((font.name, font.scheme), ("Arial", formulon.FontScheme.NONE))
-        self.assertEqual(font.charset, 128)
+        self.assertEqual((font.family, font.charset), (formulon.FontFamily.SWISS, None))
 
     def test_a_stated_scheme_wins(self) -> None:
         wb = formulon.Workbook.create_for_profile("mac-365-ja_JP")
         ws = wb.sheet(0)
         ws.update_cell_format("B2", font={"name": "Arial", "scheme": formulon.FontScheme.MAJOR})
         self.assertEqual(ws.get_cell_format("B2").font.scheme, formulon.FontScheme.MAJOR)
+
+
+class CellRenameFaceTableTests(unittest.TestCase):
+    """Renaming a cell font with only a name gives the family and charset Excel holds for the new face."""
+
+    def _renamed(self, profile: str, name: str):
+        wb = formulon.Workbook.create_for_profile(profile)
+        self.addCleanup(wb.close)
+        ws = wb.sheet(0)
+        ws.update_cell_format("B2", font={"name": name})
+        reloaded = formulon.Workbook.load(wb.save())
+        self.addCleanup(reloaded.close)
+        return reloaded.sheet(0).get_cell_format("B2").font
+
+    def test_face_table(self) -> None:
+        family = formulon.FontFamily
+        cases = (
+            ("mac-365-ja_JP", "游ゴシック", family.SWISS, 128),
+            ("mac-365-ja_JP", "Aptos Narrow", None, None),
+            ("mac-365-ja_JP", "游明朝", family.ROMAN, 128),
+            ("mac-365-ja_JP", "Calibri", family.SWISS, None),
+            ("mac-365-en_US", "游ゴシック", None, 128),
+            ("mac-365-en_US", "Aptos Narrow", family.SWISS, None),
+        )
+        for profile, name, expected_family, expected_charset in cases:
+            with self.subTest(profile=profile, name=name):
+                font = self._renamed(profile, name)
+                self.assertEqual(
+                    (font.name, font.family, font.charset, font.scheme),
+                    (name, expected_family, expected_charset, formulon.FontScheme.NONE),
+                )
+
+    def test_an_all_unchanged_font_patch_changes_nothing(self) -> None:
+        with formulon.Workbook.create_for_profile("mac-365-ja_JP") as wb:
+            ws = wb.sheet(0)
+            before = ws.get_cell_format("B2")
+            xfs = len(wb.ooxml.list_cell_xfs())
+            ws.update_cell_format("B2", font={})
+            self.assertEqual(ws.get_cell_format("B2"), before)
+            self.assertEqual(len(wb.ooxml.list_cell_xfs()), xfs)
+
+
+class DateEntryNumberFormatTests(unittest.TestCase):
+    def test_a_date_in_a_general_cell_takes_the_builtin_id_under_ja(self) -> None:
+        with formulon.Workbook.create_for_profile("mac-365-ja_JP") as wb:
+            ws = wb.sheet(0)
+            ws.set_value("B2", datetime.date(2024, 1, 31))
+            xf = wb.ooxml.get_cell_xf(ws.ooxml.get_cell_xf_index("B2"))
+            self.assertEqual(xf.num_fmt_id, 14)
+            self.assertTrue(xf.apply_number_format)
 
 
 class NormalFontInheritanceTests(_Base):

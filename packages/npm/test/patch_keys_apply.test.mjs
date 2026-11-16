@@ -166,6 +166,22 @@ const CHART_MARKER = {
       cleared: 5,
       patch: (v) => ({ symbol: f.ChartMarkerSymbol.Circle, sizePt: v }),
     }),
+    fill: k(
+      { color: '#FF0000' },
+      {
+        get: (r) => argb(r?.fill?.color),
+        want: 0xffff0000,
+        patch: (v) => ({ symbol: f.ChartMarkerSymbol.Circle, fill: v }),
+      },
+    ),
+    line: k(
+      { color: '#00FF00' },
+      {
+        get: (r) => argb(r?.line?.color),
+        want: 0xff00ff00,
+        patch: (v) => ({ symbol: f.ChartMarkerSymbol.Circle, line: v }),
+      },
+    ),
   },
 };
 
@@ -225,6 +241,11 @@ const CHART_SERIES = {
       { get: (r) => r.marker?.symbol, want: f.ChartMarkerSymbol.Diamond, clear: true },
     ),
     smooth: k(FLIP, { get: (r) => r.smooth ?? false }),
+    fill: k(
+      { color: '#FF0000' },
+      { get: (r) => argb(r.fill?.color), want: 0xffff0000, make: (ws) => ({ chart: addChart(ws) }) },
+    ),
+    line: k({ color: '#00FF00' }, { get: (r) => argb(r.line?.color), want: 0xff00ff00 }),
     labels: k(
       { showValue: true },
       { get: (r) => r.labels?.showValue ?? false, want: true, clear: true, cleared: false },
@@ -241,6 +262,11 @@ const CHART_POINT = {
       { symbol: f.ChartMarkerSymbol.Star },
       { get: (r) => r?.marker?.symbol, want: f.ChartMarkerSymbol.Star, clear: true },
     ),
+    fill: k(
+      { color: '#FF0000' },
+      { get: (r) => argb(r?.fill?.color), want: 0xffff0000, make: (ws) => ({ chart: addChart(ws) }) },
+    ),
+    line: k({ color: '#00FF00' }, { get: (r) => argb(r?.line?.color), want: 0xff00ff00 }),
   },
 };
 
@@ -842,6 +868,7 @@ const DRAWING = {
     name: k('Renamed'),
     description: k('Alt text', { clear: true }),
     hidden: k(FLIP),
+    anchor: k({ fromRow: 2 }, { get: (r) => r.anchor.fromRow, want: 2 }),
   },
 };
 
@@ -875,6 +902,8 @@ const SHAPE = {
     textBox: k(FLIP),
     presetGeometry: k('ellipse'),
     text: k('Hello'),
+    fill: k({ color: '#FF0000' }, { get: (r) => argb(r.fill?.color), want: 0xffff0000 }),
+    line: k({ color: '#00FF00' }, { get: (r) => argb(r.line?.color), want: 0xff00ff00 }),
   },
 };
 
@@ -1107,12 +1136,14 @@ function interfaceKeys(dts, name) {
   return m ? [...m[1].matchAll(/^ {2}(?:readonly )?(\w+)\??:/gm)].map((x) => x[1]) : [];
 }
 
-/** The fields of a C patch struct that carry a sibling `<field>_op`. */
+/** The keys of a C patch struct: fields that carry a sibling `<field>_op`, and nested sub-patches. */
 function structKeys(header, cName) {
   const end = header.indexOf(`} ${cName};`);
   assert.ok(end > 0, `${cName} is not declared in formulon_c.h`);
   const body = header.slice(header.lastIndexOf('typedef struct', end), end);
-  return [...body.matchAll(/\b(\w+)_op;/g)].map((x) => x[1]);
+  const ops = [...body.matchAll(/\b(\w+)_op;/g)].map((x) => x[1]);
+  const nested = [...body.matchAll(/\bfm_\w+_patch_t\s+(\w+);/g)].map((x) => x[1]);
+  return [...ops, ...nested];
 }
 
 describe('every key of every patch record has a case', async () => {

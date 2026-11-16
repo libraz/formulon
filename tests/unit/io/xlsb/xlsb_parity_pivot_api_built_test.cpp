@@ -443,10 +443,9 @@ std::vector<std::string> ValueMetaCells(const tc::Bytes& package) {
   constexpr std::uint16_t kFormulaError = 11;
   constexpr std::uint16_t kValueMeta = 50;
   const auto u32 = [](const tc::Bytes& b, std::size_t at) {
-    return b.size() < at + 4U
-               ? 0U
-               : static_cast<std::uint32_t>(b[at]) | (static_cast<std::uint32_t>(b[at + 1U]) << 8U) |
-                     (static_cast<std::uint32_t>(b[at + 2U]) << 16U) | (static_cast<std::uint32_t>(b[at + 3U]) << 24U);
+    return b.size() < at + 4U ? 0U
+                              : static_cast<std::uint32_t>(b[at] | b[at + 1U] << 8U | b[at + 2U] << 16U |
+                                                           static_cast<std::uint32_t>(b[at + 3U]) << 24U);
   };
   std::vector<std::string> out;
   for (const auto& [part, records] : tc::ExtractRecords(package, {})) {

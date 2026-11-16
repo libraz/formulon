@@ -805,4 +805,45 @@ export function registerStyles(Module, test) {
       wb.delete();
     }
   });
+
+  // The family and charset Excel gives a renamed cell font, per profile; the raw call takes a rect and the patch.
+  const renameFaces = [
+    ['mac-365-ja_JP', '\u6e38\u30b4\u30b7\u30c3\u30af', 2, 128],
+    ['mac-365-ja_JP', 'Aptos Narrow', null, null],
+    ['mac-365-ja_JP', '\u6e38\u660e\u671d', 1, 128],
+    ['mac-365-ja_JP', 'Calibri', 2, null],
+    ['mac-365-en_US', '\u6e38\u30b4\u30b7\u30c3\u30af', null, 128],
+    ['mac-365-en_US', 'Aptos Narrow', 2, null],
+  ];
+  for (const [profile, face, family, charset] of renameFaces) {
+    test(`updateCellFormat renames a cell font to ${face} in ${profile} with family ${family} and charset ${charset}`, () => {
+      const wb = Module.Workbook.createForProfile(profile);
+      try {
+        const rect = { firstRow: 1, firstCol: 1, lastRow: 1, lastCol: 1 };
+        wb.updateCellFormat(0, rect, { font: { name: face } });
+        wb.save();
+        const font = wb.getFont(wb.getCellXf(wb.getEffectiveStyle(0, 1, 1).xfIndex).fontIndex);
+        assert.equal(font.name, face);
+        assert.equal(font.scheme, 0);
+        assert.equal(font.family, family);
+        assert.equal(font.charset, charset);
+      } finally {
+        wb.delete();
+      }
+    });
+  }
+
+  test('updateCellFormat: a null on a key that cannot be cleared throws, and all-omitted groups change nothing', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const rect = { firstRow: 1, firstCol: 1, lastRow: 1, lastCol: 1 };
+      const before = wb.getCellXf(wb.getEffectiveStyle(0, 1, 1).xfIndex);
+      wb.updateCellFormat(0, rect, { font: {}, fill: {}, border: {}, alignment: {}, protection: {} });
+      assert.deepEqual(wb.getCellXf(wb.getEffectiveStyle(0, 1, 1).xfIndex), before);
+      assert.throws(() => wb.updateCellFormat(0, rect, { font: { underline: null } }), TypeError);
+      assert.throws(() => wb.updateCellFormat(0, rect, { alignment: { indent: null } }), TypeError);
+    } finally {
+      wb.delete();
+    }
+  });
 }

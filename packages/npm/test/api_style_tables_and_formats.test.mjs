@@ -155,7 +155,7 @@ test('a cell font cleared of its size or name takes the Normal font, and of its 
   });
 });
 
-test('a font patch naming a different face unlinks it from the theme; size-only and same-name keep the link', async () => {
+test('a font patch stating a name unlinks it from the theme; a size-only patch keeps the link', async () => {
   await withWorkbook((wb0, f) => {
     const wb = f.Workbook.createForProfile('mac-365-ja_JP');
     try {
@@ -164,16 +164,58 @@ test('a font patch naming a different face unlinks it from the theme; size-only 
       ws.updateCellFormat('B2', { font: { sizePt: 14 } });
       assert.equal(ws.getCellFormat('B2').font.scheme, f.FontScheme.Minor);
       ws.updateCellFormat('B2', { font: { name: ws.getCellFormat('B2').font.name } });
-      assert.equal(ws.getCellFormat('B2').font.scheme, f.FontScheme.Minor);
+      assert.equal(ws.getCellFormat('B2').font.scheme, f.FontScheme.None);
       ws.updateCellFormat('B2', { font: { name: 'Arial' } });
       const font = ws.getCellFormat('B2').font;
       assert.equal(font.name, 'Arial');
       assert.equal(font.scheme, f.FontScheme.None);
-      assert.equal(font.charset, 128);
+      assert.equal(font.family, f.FontFamily.Swiss);
+      assert.equal(font.charset, null);
       ws.updateCellFormat('C3', { font: { name: 'Arial', scheme: f.FontScheme.Major } });
       assert.equal(ws.getCellFormat('C3').font.scheme, f.FontScheme.Major);
     } finally {
       wb.dispose();
     }
+  });
+});
+
+// The family and charset Excel gives a renamed cell font, per profile; none of the renamed fonts keeps a scheme.
+const RENAME_FACES = [
+  ['mac-365-ja_JP', '\u6e38\u30b4\u30b7\u30c3\u30af', 2, 128],
+  ['mac-365-ja_JP', 'Aptos Narrow', null, null],
+  ['mac-365-ja_JP', '\u6e38\u660e\u671d', 1, 128],
+  ['mac-365-ja_JP', 'Calibri', 2, null],
+  ['mac-365-en_US', '\u6e38\u30b4\u30b7\u30c3\u30af', null, 128],
+  ['mac-365-en_US', 'Aptos Narrow', 2, null],
+];
+
+for (const [profile, face, family, charset] of RENAME_FACES) {
+  test(`renaming a cell font to ${face} in ${profile} states family ${family} and charset ${charset}`, async () => {
+    await withWorkbook((wb0, f) => {
+      const wb = f.Workbook.createForProfile(profile);
+      try {
+        const ws = wb.sheet(0);
+        ws.updateCellFormat('B2', { font: { name: face } });
+        wb.save();
+        const font = ws.getCellFormat('B2').font;
+        assert.equal(font.name, face);
+        assert.equal(font.scheme, f.FontScheme.None);
+        assert.equal(font.family, family);
+        assert.equal(font.charset, charset);
+      } finally {
+        wb.dispose();
+      }
+    });
+  });
+}
+
+test('a format patch whose groups state nothing changes nothing', async () => {
+  await withWorkbook((wb) => {
+    const ws = wb.sheet(0);
+    const before = ws.getCellFormat('B2');
+    const xf = wb.ooxml.getCellXf(ws.ooxml.getEffectiveStyle('B2').xfIndex);
+    ws.updateCellFormat('B2', { font: {}, fill: {}, border: {}, alignment: {}, protection: {} });
+    assert.deepEqual(ws.getCellFormat('B2'), before);
+    assert.deepEqual(wb.ooxml.getCellXf(ws.ooxml.getEffectiveStyle('B2').xfIndex), xf);
   });
 });

@@ -6266,14 +6266,6 @@ const FORMAT_FIELDS = Object.freeze({
 });
 
 const OPTIONAL_XF_FIELDS = Object.freeze(['textRotation', 'indent', 'shrinkToFit', 'readingOrder', 'relativeIndent']);
-const APPLY_FLAGS = Object.freeze({
-  numberFormat: 'applyNumberFormat',
-  font: 'applyFont',
-  fill: 'applyFill',
-  border: 'applyBorder',
-  alignment: 'applyAlignment',
-  protection: 'applyProtection',
-});
 const COLOR_TEXT = /^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/;
 const INT32_MAX = 0x7fffffff;
 
@@ -6375,36 +6367,6 @@ function checkCellFormatPatch(patch) {
   return out;
 }
 
-// Naming a different face without stating `scheme` unlinks the font from the theme, as Excel does when the font name
-// changes: a theme-linked font is drawn with the theme's face whatever name it stores. Charset is kept unless stated.
-function mergeFont(current, patch) {
-  const out = { ...current, ...patch };
-  if (typeof patch.name === 'string' && patch.name !== current.name && patch.scheme === undefined) {
-    out.scheme = FontScheme.None;
-  }
-  return out;
-}
-
-// Setting a colour on a fill without a pattern makes it solid, Excel's "fill
-// colour"; any fill key drops a gradient unless the patch names one, and a `null` gradient drops it.
-function mergeFill(current, patch) {
-  const out = { ...current };
-  if (patch.gradient == null) delete out.gradient;
-  else out.gradient = patch.gradient;
-  for (const key of ['pattern', 'foreground', 'background']) if (patch[key] !== undefined) out[key] = patch[key];
-  const colored = patch.foreground !== undefined || patch.background !== undefined;
-  if (colored && patch.pattern === undefined && out.pattern === FillPattern.None) out.pattern = FillPattern.Solid;
-  return out;
-}
-
-function mergeBorder(current, patch) {
-  const out = { ...current };
-  for (const [key, value] of Object.entries(patch)) {
-    out[key] = key === 'diagonalUp' || key === 'diagonalDown' ? value : { ...current[key], ...value };
-  }
-  return out;
-}
-
 const present = (value) => value !== null && value !== undefined;
 
 /**
@@ -6433,22 +6395,9 @@ function cellXfInput(xf) {
   return input;
 }
 
-/** `xf` with `patch` merged in, as the `CellXfInput` of the new record. */
-function patchedXf(raw, xf, patch, numFmtId) {
-  const input = cellXfInput(xf);
-  for (const group of Object.keys(patch)) input[APPLY_FLAGS[group]] = true;
-  if (numFmtId !== undefined) input.numFmtId = numFmtId;
-  if (patch.font !== undefined) input.fontIndex = raw.addFont(mergeFont(raw.getFont(xf.fontIndex), patch.font));
-  if (patch.fill !== undefined) input.fillIndex = raw.addFill(mergeFill(raw.getFill(xf.fillIndex), patch.fill));
-  if (patch.border !== undefined) {
-    input.borderIndex = raw.addBorder(mergeBorder(raw.getBorder(xf.borderIndex), patch.border));
-  }
-  if (patch.alignment !== undefined) Object.assign(input, patch.alignment);
-  if (patch.protection !== undefined) {
-    input.locked = patch.protection.locked ?? input.locked ?? true;
-    input.hidden = patch.protection.hidden ?? input.hidden ?? false;
-  }
-  return input;
+/** `xf` with the number format `numFmtId`, as the `CellXfInput` of the new record. */
+function numFmtXf(xf, numFmtId) {
+  return { ...cellXfInput(xf), applyNumberFormat: true, numFmtId };
 }
 
 /** The `CellFormat` of the cell XF record `xf`, the effective XF read from layer `source`. */
@@ -7536,18 +7485,10 @@ function makeFacade(Raw, registry, runtime) {
       return cellFormatOf(raw, raw.getCellXf(xfIndex), source);
     }
 
-    // Every argument is checked first; the sheet changes only in the final remap.
+    // One raw call: the C layer merges the patch with each XF of the range and refuses the whole patch together.
     updateCellFormat(range, patch) {
       const checked = checkCellFormatPatch(patch);
-      const raw = rawOf(this.#workbook);
-      const sheet = this.#current();
-      const bases = raw.getRangeXfBases(sheet, range);
-      if (Object.keys(checked).length === 0) return;
-      let numFmtId;
-      if (checked.numberFormat === 'General') numFmtId = 0;
-      else if (checked.numberFormat !== undefined) numFmtId = raw.addNumberFormat(checked.numberFormat);
-      const xfs = bases.map((base) => raw.addCellXf(patchedXf(raw, raw.getCellXf(base), checked, numFmtId)));
-      raw.remapRangeXfs(sheet, range, bases, xfs);
+      rawOf(this.#workbook).updateCellFormat(this.#current(), range, checked);
     }
 
     // The handle of the table at sheet-local `index` on the sheet `sheet` is.
@@ -8220,11 +8161,9 @@ function makeFacade(Raw, registry, runtime) {
       const { xfIndex } = raw.getEffectiveStyle(sheet, row, col);
       if (raw.getCellXf(xfIndex).numFmtId !== 0) return;
       const rect = { firstRow: row, firstCol: col, lastRow: row, lastCol: col };
-      const patch = { numberFormat: timed ? DATE_TIME_FORMAT : DATE_FORMAT };
+      const numFmtId = BUILTIN_NUM_FMT_IDS[timed ? DATE_TIME_FORMAT : DATE_FORMAT];
       const bases = raw.getRangeXfBases(sheet, rect);
-      const xfs = bases.map((base) =>
-        raw.addCellXf(patchedXf(raw, raw.getCellXf(base), patch, BUILTIN_NUM_FMT_IDS[patch.numberFormat])),
-      );
+      const xfs = bases.map((base) => raw.addCellXf(numFmtXf(raw.getCellXf(base), numFmtId)));
       raw.remapRangeXfs(sheet, rect, bases, xfs);
     }
 

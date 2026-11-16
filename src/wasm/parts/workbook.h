@@ -404,6 +404,8 @@ class JsWorkbook {
   /// Applies one xf across an inclusive rectangle, materialising blank
   /// cells so an empty ruled box renders. Saves one ABI crossing per cell.
   void setRangeXfIndex(uint32_t sheet, emscripten::val range, uint32_t xf_index);
+  /// Merges a `CellFormatPatch` into the format of every cell of `range` (a rect); see `fm_sheet_update_cell_format`.
+  void updateCellFormat(uint32_t sheet, emscripten::val range, emscripten::val patch);
   emscripten::val getCellXf(uint32_t xf_index) const;
   emscripten::val getFont(uint32_t font_index) const;
   /// The workbook default font, font record 0.

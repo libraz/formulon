@@ -210,6 +210,7 @@ from ._workbook import (
     _cell_rect_from,
     _cf_match_from,
     _check,
+    _color_fields,
     _decode_auto_filter,
     _decode_cell_rect_array,
     _decode_cell_rect_at,
@@ -226,6 +227,7 @@ from ._workbook import (
     _pack_cell_rect_array,
     _pack_cell_rect_at,
     _pack_color,
+    _pack_fill,
     _pack_mentions,
     _pack_optional_color,
     _pack_phonetic_run_array,
@@ -798,7 +800,6 @@ _LAST_COL = 16383
 # ``fm_text_offset_unit_t``: text offsets cross to the engine in code points, as Python counts them.
 _TEXT_OFFSET_UNIT_CODE_POINT = 1
 # The built-in number format each en-US date code a date write gives a General cell names.
-_BUILTIN_DATE_NUM_FMT_IDS = {"m/d/yyyy": 14, "m/d/yyyy h:mm": 22, "h:mm:ss": 21}
 # Largest rectangle :meth:`Sheet.get_values` reads.
 # @limit: engine
 _GET_VALUES_CELL_CAP = 1 << 22
@@ -1107,14 +1108,6 @@ _FORMAT_FIELDS: Dict[str, Dict[str, Tuple[str, bool, Any]]] = {
     "protection": {"locked": _FORMAT_BOOLEAN, "hidden": _FORMAT_BOOLEAN},
 }
 
-_APPLY_FLAGS = {
-    "number_format": "apply_number_format",
-    "font": "apply_font",
-    "fill": "apply_fill",
-    "border": "apply_border",
-    "alignment": "apply_alignment",
-    "protection": "apply_protection",
-}
 _INT32_MAX = 0x7FFFFFFF
 
 
@@ -1229,70 +1222,106 @@ def _check_cell_format_patch(given: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
-def _merge_font(current: Font, patch: Dict[str, Any]) -> Font:
-    """Naming a different face without stating ``scheme`` unlinks the font from the theme, as Excel does when the font
-    name changes; charset is kept unless stated."""
-    changes = dict(patch)
-    name = patch.get("name")
-    if isinstance(name, str) and name != current.name and "scheme" not in patch:
-        changes["scheme"] = FontScheme.NONE
-    return dataclasses.replace(current, **changes)
+def _op_value(values: Dict[str, object], key: str, value: Any, pack: Any) -> None:
+    """Set ``<key>_op`` and ``<key>`` of a patch struct: ``None`` clears, anything else sets ``pack(value)``."""
+    if value is None:
+        values[key + "_op"] = _PATCH_CLEAR
+    else:
+        values[key + "_op"] = _PATCH_SET
+        values[key] = pack(value)
 
 
-def _merge_fill(current: Fill, patch: Dict[str, Any]) -> Fill:
-    """Setting a colour without a pattern makes the fill solid (Excel's fill colour); a fill patch drops a
-    gradient unless it names one."""
-    changes: Dict[str, Any] = {"gradient": patch.get("gradient")}
-    if "pattern" in patch:
-        changes["pattern"] = patch["pattern"]
-    for key in ("foreground", "background"):
-        if key in patch:
-            changes[key] = patch[key]
-    colored = "foreground" in patch or "background" in patch
-    if colored and "pattern" not in patch and current.pattern == FillPattern.NONE:
-        changes["pattern"] = FillPattern.SOLID
-    return dataclasses.replace(current, **changes)
+def _font_patch_values(font: Dict[str, Any], scope: _ArgScope) -> Dict[str, object]:
+    """The ``fm_font_patch_t`` fields of a checked font patch."""
+    values: Dict[str, object] = {}
+    for key, value in font.items():
+        if key == "name":
+            _op_value(values, key, value, scope.cstr)
+        elif key == "size_pt":
+            _op_value(values, key, value, float)
+        elif key in ("family", "charset"):
+            _op_value(values, key, value, int)
+        elif key == "color":
+            _op_value(values, key, value, _color_fields)
+        elif key in ("underline", "vert_align", "scheme"):
+            values[key + "_op"] = _PATCH_SET
+            values[key] = int(value)
+        else:
+            _op_value(values, key, value, int)
+    return values
 
 
-def _merge_border(current: Border, patch: Dict[str, Any]) -> Border:
-    changes: Dict[str, Any] = {}
-    for key, value in patch.items():
+def _fill_patch_values(fill: Dict[str, Any], scope: _ArgScope) -> Dict[str, object]:
+    """The ``fm_fill_patch_t`` fields of a checked fill patch."""
+    values: Dict[str, object] = {}
+    for key, value in fill.items():
+        if key == "gradient":
+
+            def pack_gradient(gradient: GradientFill) -> int:
+                ptr = scope.struct(S.FILL_RECORD)
+                _pack_fill(ptr, Fill(gradient=gradient), scope)
+                return ptr
+
+            _op_value(values, key, value, pack_gradient)
+        elif key == "pattern":
+            values["pattern_op"] = _PATCH_SET
+            values["pattern"] = int(value)
+        else:
+            values[key + "_op"] = _PATCH_SET
+            values[key] = _color_fields(value)
+    return values
+
+
+def _border_patch_values(border: Dict[str, Any]) -> Dict[str, object]:
+    """The ``fm_border_patch_t`` fields of a checked border patch."""
+    values: Dict[str, object] = {}
+    for key, value in border.items():
         if key in ("diagonal_up", "diagonal_down"):
-            changes[key] = value
+            values[key + "_op"] = _PATCH_SET
+            values[key] = int(value)
             continue
-        changes[key] = dataclasses.replace(getattr(current, key), **value)
-    return dataclasses.replace(current, **changes)
+        side: Dict[str, object] = {}
+        for name, item in value.items():
+            side[name + "_op"] = _PATCH_SET
+            side[name] = int(item) if name == "style" else _color_fields(item)
+        values[key] = side
+    return values
 
 
-def _cell_xf_input(xf: CellXf) -> Dict[str, Any]:
-    """The :class:`CellXfInput` fields that rebuild ``xf`` as ``add_cell_xf`` reads them."""
-    return {f.name: getattr(xf, f.name) for f in dataclasses.fields(CellXfInput)}
+def _set_ops(values: Dict[str, object], group: Dict[str, Any]) -> Dict[str, object]:
+    """The ``_op`` / value fields of a checked group whose keys are all settable and integral."""
+    for key, value in group.items():
+        values[key + "_op"] = _PATCH_SET
+        values[key] = int(value)
+    return values
 
 
-def _patched_xf(workbook: Workbook, xf: CellXf, patch: Dict[str, Any], num_fmt_id: Optional[int]) -> CellXfInput:
-    """``xf`` with ``patch`` merged in, as the :class:`CellXfInput` of the new record."""
-    fields = _cell_xf_input(xf)
-    for group in patch:
-        fields[_APPLY_FLAGS[group]] = True
-    if num_fmt_id is not None:
-        fields["num_fmt_id"] = num_fmt_id
+def _cell_format_patch_values(patch: Dict[str, Any], scope: _ArgScope) -> Dict[str, object]:
+    """The ``fm_cell_format_patch_t`` fields of a checked cell-format patch: a value sets, ``None`` clears."""
+    values: Dict[str, object] = {}
+    if "number_format" in patch:
+        values["number_format_op"] = _PATCH_SET
+        values["number_format"] = scope.cstr(patch["number_format"])
     if "font" in patch:
-        fields["font_index"] = workbook.ooxml.add_font(
-            _merge_font(workbook.ooxml.get_font(xf.font_index), patch["font"])
-        )
+        values["font"] = _font_patch_values(patch["font"], scope)
     if "fill" in patch:
-        fields["fill_index"] = workbook.ooxml.add_fill(
-            _merge_fill(workbook.ooxml.get_fill(xf.fill_index), patch["fill"])
-        )
+        values["fill"] = _fill_patch_values(patch["fill"], scope)
     if "border" in patch:
-        fields["border_index"] = workbook.ooxml.add_border(
-            _merge_border(workbook.ooxml.get_border(xf.border_index), patch["border"])
-        )
+        values["border"] = _border_patch_values(patch["border"])
     if "alignment" in patch:
-        fields.update(patch["alignment"])
+        values["alignment"] = _set_ops({}, patch["alignment"])
     if "protection" in patch:
-        fields["locked"] = patch["protection"].get("locked", True if fields["locked"] is None else fields["locked"])
-        fields["hidden"] = patch["protection"].get("hidden", False if fields["hidden"] is None else fields["hidden"])
+        values["protection"] = _set_ops({}, patch["protection"])
+    return values
+
+
+_BUILTIN_DATE_NUM_FMT_IDS = {"m/d/yyyy": 14, "m/d/yyyy h:mm": 22, "h:mm:ss": 21}
+
+
+def _num_fmt_xf(xf: CellXf, num_fmt_id: int) -> CellXfInput:
+    """``xf`` with the number format ``num_fmt_id`` (apply flag set), as the :class:`CellXfInput` of the new record."""
+    fields = {f.name: getattr(xf, f.name) for f in dataclasses.fields(CellXfInput)}
+    fields.update(num_fmt_id=num_fmt_id, apply_number_format=True)
     return CellXfInput(**fields)
 
 
@@ -1855,10 +1884,9 @@ class Sheet(_NoCopy):
         if ooxml.get_cell_xf(self.ooxml.get_effective_style(row, col).xf_index).num_fmt_id != 0:
             return
         rect = CellRect(first_row=row, first_col=col, last_row=row, last_col=col)
-        patch: Dict[str, Any] = {"number_format": code}
         bases = self.ooxml.get_range_xf_bases(rect)
         num_fmt_id = _BUILTIN_DATE_NUM_FMT_IDS[code]
-        xfs = [ooxml.add_cell_xf(_patched_xf(workbook, ooxml.get_cell_xf(base), patch, num_fmt_id)) for base in bases]
+        xfs = [ooxml.add_cell_xf(_num_fmt_xf(ooxml.get_cell_xf(base), num_fmt_id)) for base in bases]
         self.ooxml.remap_range_xfs(rect, dict(zip(bases, xfs)))
 
     @overload
@@ -7106,9 +7134,11 @@ class Sheet(_NoCopy):
         entered there later take the format too. Equal formats share one
         style record.
 
-        Every argument is checked before anything is written and the sheet
-        changes in one step at the end, but an engine failure on the way can
-        leave unused style records behind (:meth:`WorkbookOoxml.list_cell_xfs`).
+        Every argument is checked before anything is written, and the engine
+        applies the whole patch in one step; a group whose keys are all
+        omitted changes nothing. Naming a font face (``name``) unlinks the
+        font from the theme unless ``scheme`` is given, and a different face
+        takes the family and charset Excel gives it unless they are stated.
 
         Raises:
           TypeError: for an unknown key, a value of the wrong type, or
@@ -7136,18 +7166,18 @@ class Sheet(_NoCopy):
                 "protection": protection,
             }
         )
-        rect = self._rect(range)
-        bases = self.ooxml.get_range_xf_bases(rect)
-        if not patch:
-            return
-        workbook = self._workbook
-        num_fmt_id: Optional[int] = None
-        if "number_format" in patch:
-            code = patch["number_format"]
-            num_fmt_id = 0 if code == "General" else workbook.ooxml.add_number_format(code)
-        ooxml = workbook.ooxml
-        xfs = [ooxml.add_cell_xf(_patched_xf(workbook, ooxml.get_cell_xf(base), patch, num_fmt_id)) for base in bases]
-        self.ooxml.remap_range_xfs(rect, dict(zip(bases, xfs)))
+        self._apply_cell_format(self._rect(range), patch)
+
+    def _apply_cell_format(self, rect: CellRect, patch: Dict[str, Any]) -> None:
+        """Merge the checked ``patch`` into the format of every cell of ``rect`` in one engine call."""
+        sheet = self._index()
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            rp = scope.struct(S.CELL_RECT)
+            _pack_cell_rect_at(rp, rect)
+            ptr = scope.struct(S.CELL_FORMAT_PATCH)
+            S.CELL_FORMAT_PATCH.pack(LIB, ptr, _cell_format_patch_values(patch, scope))
+            _check(LIB.fm_sheet_update_cell_format(h, _uint(sheet, "sheet_index", role="sheet"), rp, ptr))
 
     # -- Pivot tables ------------------------------------------------------
     def _pivot_count(self) -> int:

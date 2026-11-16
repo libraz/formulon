@@ -5670,11 +5670,16 @@ ColorInput = Union[str, Color]
 
 
 class FontPatch(TypedDict, total=False):
-    """The font keys of :meth:`Sheet.update_cell_format`; an omitted key keeps its value."""
+    """The font keys of :meth:`Sheet.update_cell_format`; an omitted key keeps its value.
 
-    #: The typeface name; omitted keeps it, ``None`` resets it to the Normal style's font name. A different name with
-    #: ``scheme`` omitted also sets ``scheme`` to ``FontScheme.NONE``, as Excel unlinks a font from the theme when its
-    #: name changes: a theme-linked font is drawn with the theme's face whatever name it stores.
+    A group whose keys are all omitted changes nothing.
+    """
+
+    #: The typeface name; omitted keeps it, ``None`` resets it to the Normal style's font name. A stated name, even the
+    #: current one, with ``scheme`` omitted also sets ``scheme`` to ``FontScheme.NONE``, as Excel unlinks a font from
+    #: the theme when its name is stated: a theme-linked font is drawn with the theme's face whatever name it stores.
+    #: A different name resets ``family`` and ``charset`` to the values Excel uses for the new face (the Normal font's
+    #: when the face is the Normal font's); a same-face rename keeps them.
     name: Optional[str]
     #: The font size in points, 1 to 409; omitted keeps it, ``None`` resets it to the Normal style's font size.
     size_pt: Optional[float]
@@ -5696,10 +5701,11 @@ class FontPatch(TypedDict, total=False):
     underline: UnderlineStyle
     #: The vertical alignment of the text run (baseline, superscript or subscript); omitted keeps it.
     vert_align: FontVerticalAlign
-    #: The font-family class; omitted keeps it, ``None`` removes the ``<family>`` element.
+    #: The font-family class; omitted keeps it, ``None`` removes the ``<family>`` element. A different ``name`` resets
+    #: it; state it to keep a value.
     family: Optional[FontFamily]
-    #: The charset codepage id; omitted keeps it, ``None`` removes the ``<charset>`` element. A name change keeps it:
-    #: Excel derives it from the new face, so a caller that knows the face's charset states it.
+    #: The charset codepage id; omitted keeps it, ``None`` removes the ``<charset>`` element. A different ``name``
+    #: resets it; state it to keep a value.
     charset: Optional[int]
     #: The theme font set the font links to; omitted keeps it.
     scheme: FontScheme

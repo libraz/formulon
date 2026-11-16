@@ -1087,6 +1087,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_sheet_set_pivot_field_subtotal_functions",
     "fm_sheet_set_value",
     "fm_sheet_set_visibility",
+    "fm_sheet_update_cell_format",
     "fm_sheet_update_cf_rule",
     "fm_sheet_update_drawing",
     "fm_sheet_update_validation",

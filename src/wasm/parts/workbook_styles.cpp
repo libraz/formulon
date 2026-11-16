@@ -822,6 +822,156 @@ uint32_t JsWorkbook::addCellStyleXf(emscripten::val record) {
       });
 }
 
+namespace {
+
+// ---- Cell-format patch --------------------------------------------------
+//
+// Each reader below turns one key of a `CellFormatPatch` group into its `_op` / value pair: an omitted key is
+// KEEP, `null` is CLEAR where the field is clearable (else a type error), any other value is SET.
+
+using PatchReader = JsNarrowNumericReader;
+
+void format_flag(PatchReader& reader, const emscripten::val& owner, std::string_view group, const char* key,
+                 bool nullable, fm_patch_op_t* op, int32_t* value) {
+  const std::string field = binding::field_path(group, key);
+  js_patch_value(reader, owner, key, field.c_str(), nullable, op, value,
+                 [&](const emscripten::val& v) { return reader.boolean_value(v, false, field.c_str()) ? 1 : 0; });
+}
+
+void format_enum(PatchReader& reader, const emscripten::val& owner, std::string_view group, const char* key,
+                 bool nullable, fm_patch_op_t* op, int32_t* value) {
+  const std::string field = binding::field_path(group, key);
+  js_patch_value(reader, owner, key, field.c_str(), nullable, op, value,
+                 [&](const emscripten::val& v) { return static_cast<int32_t>(reader.u8_value(v, 0U, field.c_str())); });
+}
+
+void format_color(PatchReader& reader, const emscripten::val& owner, std::string_view group, const char* key,
+                  bool nullable, fm_patch_op_t* op, fm_color_t* value) {
+  const std::string field = binding::field_path(group, key);
+  js_patch_value(reader, owner, key, field.c_str(), nullable, op, value,
+                 [&](const emscripten::val& v) { return js_pull_color_spec_value(v, field.c_str(), &reader); });
+}
+
+/// The object under `owner[key]` when the patch gives one; false for an omitted key, and `null` is a type error.
+bool format_group(PatchReader& reader, const emscripten::val& owner, std::string_view parent, const char* key,
+                  emscripten::val* group) {
+  const std::string field = binding::field_path(parent, key);
+  const emscripten::val v = reader.value(owner, key, field.c_str());
+  if (js_patch_key(reader, v, field.c_str(), false) != JsPatchKey::kSet || !reader.require_object(v, field.c_str())) {
+    return false;
+  }
+  *group = v;
+  return true;
+}
+
+void format_font(PatchReader& reader, const emscripten::val& font, std::string& name, fm_font_patch_t* p) {
+  const std::string_view g = "font";
+  js_patch_string(reader, font, "name", "font.name", true, name, &p->name_op, &p->name);
+  js_patch_number(reader, font, "sizePt", "font.sizePt", true, &p->size_pt_op, &p->size_pt);
+  format_flag(reader, font, g, "bold", true, &p->bold_op, &p->bold);
+  format_flag(reader, font, g, "italic", true, &p->italic_op, &p->italic);
+  format_flag(reader, font, g, "strike", true, &p->strike_op, &p->strike);
+  format_flag(reader, font, g, "outline", true, &p->outline_op, &p->outline);
+  format_flag(reader, font, g, "shadow", true, &p->shadow_op, &p->shadow);
+  format_flag(reader, font, g, "condense", true, &p->condense_op, &p->condense);
+  format_flag(reader, font, g, "extend", true, &p->extend_op, &p->extend);
+  format_enum(reader, font, g, "underline", false, &p->underline_op, &p->underline);
+  format_enum(reader, font, g, "vertAlign", false, &p->vert_align_op, &p->vert_align);
+  format_enum(reader, font, g, "family", true, &p->family_op, &p->family);
+  format_enum(reader, font, g, "charset", true, &p->charset_op, &p->charset);
+  format_enum(reader, font, g, "scheme", false, &p->scheme_op, &p->scheme);
+  format_color(reader, font, g, "color", true, &p->color_op, &p->color);
+}
+
+/// `stops` and `gradient` own what a SET gradient borrows for the call.
+void format_fill(PatchReader& reader, const emscripten::val& fill, std::vector<fm_gradient_stop_t>* stops,
+                 fm_fill_t* gradient, fm_fill_patch_t* p) {
+  const std::string_view g = "fill";
+  format_enum(reader, fill, g, "pattern", false, &p->pattern_op, &p->pattern);
+  format_color(reader, fill, g, "foreground", false, &p->foreground_op, &p->foreground);
+  format_color(reader, fill, g, "background", false, &p->background_op, &p->background);
+  emscripten::val value;
+  if (js_patch_begin(reader, fill, "gradient", "fill.gradient", true, &p->gradient_op, &value) && reader.ok()) {
+    *gradient = js_pull_fill_record(fill, stops, reader, g);
+    p->gradient = gradient;
+  }
+}
+
+void format_border(PatchReader& reader, const emscripten::val& border, fm_border_patch_t* p) {
+  const std::string_view g = "border";
+  const auto side = [&](const char* key, fm_border_side_patch_t* out) {
+    emscripten::val group;
+    if (format_group(reader, border, g, key, &group)) {
+      const std::string path = binding::field_path(g, key);
+      format_enum(reader, group, path, "style", false, &out->style_op, &out->style);
+      format_color(reader, group, path, "color", false, &out->color_op, &out->color);
+    }
+  };
+  side("left", &p->left);
+  side("right", &p->right);
+  side("top", &p->top);
+  side("bottom", &p->bottom);
+  side("diagonal", &p->diagonal);
+  format_flag(reader, border, g, "diagonalUp", false, &p->diagonal_up_op, &p->diagonal_up);
+  format_flag(reader, border, g, "diagonalDown", false, &p->diagonal_down_op, &p->diagonal_down);
+}
+
+void format_alignment(PatchReader& reader, const emscripten::val& alignment, fm_alignment_patch_t* p) {
+  const std::string_view g = "alignment";
+  format_enum(reader, alignment, g, "horizontal", false, &p->horizontal_op, &p->horizontal);
+  format_enum(reader, alignment, g, "vertical", false, &p->vertical_op, &p->vertical);
+  format_flag(reader, alignment, g, "wrapText", false, &p->wrap_text_op, &p->wrap_text);
+  format_flag(reader, alignment, g, "shrinkToFit", false, &p->shrink_to_fit_op, &p->shrink_to_fit);
+  js_patch_u32(reader, alignment, "indent", "alignment.indent", false, &p->indent_op, &p->indent);
+  js_patch_u32(reader, alignment, "textRotation", "alignment.textRotation", false, &p->text_rotation_op,
+               &p->text_rotation);
+  format_enum(reader, alignment, g, "readingOrder", false, &p->reading_order_op, &p->reading_order);
+  format_flag(reader, alignment, g, "justifyLastLine", false, &p->justify_last_line_op, &p->justify_last_line);
+  js_patch_int(reader, alignment, "relativeIndent", "alignment.relativeIndent", false, &p->relative_indent_op,
+               &p->relative_indent);
+}
+
+}  // namespace
+
+void JsWorkbook::updateCellFormat(uint32_t sheet, emscripten::val range, emscripten::val patch) {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return;
+  }
+  JsNarrowNumericReader reader("Sheet.updateCellFormat");
+  const fm_cell_rect_t rect = js_pull_range(range, &reader);
+  fm_cell_format_patch_t p = FM_STRUCT_INIT(fm_cell_format_patch_t);
+  std::string number_format;
+  std::string font_name;
+  std::vector<fm_gradient_stop_t> stops;
+  fm_fill_t gradient{};
+  if (reader.ok() && reader.require_object(patch, "patch")) {
+    js_patch_string(reader, patch, "numberFormat", "numberFormat", false, number_format, &p.number_format_op,
+                    &p.number_format);
+    emscripten::val group;
+    if (format_group(reader, patch, {}, "font", &group)) {
+      format_font(reader, group, font_name, &p.font);
+    }
+    if (format_group(reader, patch, {}, "fill", &group)) {
+      format_fill(reader, group, &stops, &gradient, &p.fill);
+    }
+    if (format_group(reader, patch, {}, "border", &group)) {
+      format_border(reader, group, &p.border);
+    }
+    if (format_group(reader, patch, {}, "alignment", &group)) {
+      format_alignment(reader, group, &p.alignment);
+    }
+    if (format_group(reader, patch, {}, "protection", &group)) {
+      format_flag(reader, group, "protection", "locked", false, &p.protection.locked_op, &p.protection.locked);
+      format_flag(reader, group, "protection", "hidden", false, &p.protection.hidden_op, &p.protection.hidden);
+    }
+  }
+  if (!reader.ok()) {
+    return;
+  }
+  succeeded(fm_sheet_update_cell_format(handle_, sheet, &rect, &p));
+}
+
 }  // namespace parts
 }  // namespace wasm
 }  // namespace formulon

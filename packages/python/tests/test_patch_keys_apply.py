@@ -171,6 +171,18 @@ CHART_MARKER = PatchType(
             clear=True,
             cleared=5,
         ),
+        "fill": Case(
+            {"color": "#FF0000"},
+            get=lambda r: _argb(r and r.fill and r.fill.color),
+            want=0xFFFF0000,
+            patch=lambda v: {"symbol": ChartMarkerSymbol.CIRCLE, "fill": v},
+        ),
+        "line": Case(
+            {"color": "#00FF00"},
+            get=lambda r: _argb(r and r.line and r.line.color),
+            want=0xFF00FF00,
+            patch=lambda v: {"symbol": ChartMarkerSymbol.CIRCLE, "line": v},
+        ),
     },
 )
 
@@ -223,6 +235,13 @@ CHART_SERIES = PatchType(
             clear=True,
         ),
         "smooth": Case(FLIP, get=lambda r: bool(r.smooth)),
+        "fill": Case(
+            {"color": "#FF0000"},
+            get=lambda r: _argb(r.fill and r.fill.color),
+            want=0xFFFF0000,
+            make=lambda ws, wb: _chart(ws),
+        ),
+        "line": Case({"color": "#00FF00"}, get=lambda r: _argb(r.line and r.line.color), want=0xFF00FF00),
         "labels": Case(
             {"show_value": True},
             get=lambda r: bool(r.labels and r.labels.show_value),
@@ -244,6 +263,13 @@ CHART_POINT = PatchType(
             want=ChartMarkerSymbol.STAR,
             clear=True,
         ),
+        "fill": Case(
+            {"color": "#FF0000"},
+            get=lambda r: _argb(r and r.fill and r.fill.color),
+            want=0xFFFF0000,
+            make=lambda ws, wb: _chart(ws),
+        ),
+        "line": Case({"color": "#00FF00"}, get=lambda r: _argb(r and r.line and r.line.color), want=0xFF00FF00),
     },
 )
 
@@ -530,10 +556,10 @@ def _ledger_patches() -> List[Dict[str, Optional[str]]]:
 
 
 def _struct_keys(header: str, c_name: str) -> List[str]:
-    """The fields of a C patch struct that carry a sibling ``<field>_op``."""
+    """The keys of a C patch struct: fields that carry a sibling ``<field>_op``, and nested sub-patches."""
     end = header.index(f"}} {c_name};")
     body = header[header.rindex("typedef struct", 0, end) : end]
-    return re.findall(r"\b(\w+)_op;", body)
+    return re.findall(r"\b(\w+)_op;", body) + re.findall(r"\bfm_\w+_patch_t\s+(\w+);", body)
 
 
 class PatchKeyCoverageTests(unittest.TestCase):

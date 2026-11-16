@@ -256,6 +256,37 @@ class ArgumentMessageTests(_MessageCase):
                     self.assertEqual(message, f"{label} must be a CellRect or an A1 string")
                     self.assert_public_words(message)
 
+    def test_cell_format_patch_shape(self) -> None:
+        with Workbook.create_default() as wb:
+            ws = wb.sheet(0)
+            cases = (
+                (
+                    TypeError,
+                    lambda: ws.update_cell_format("A1", font={"bold": 1}),
+                    "Sheet.update_cell_format font.bold must be a boolean",
+                ),
+                (
+                    TypeError,
+                    lambda: ws.update_cell_format("A1", font={"flavour": 1}),
+                    "Sheet.update_cell_format font has no field flavour",
+                ),
+                (
+                    TypeError,
+                    lambda: ws.update_cell_format("A1", fill={"pattern": None}),
+                    "Sheet.update_cell_format fill.pattern must not be None",
+                ),
+                (
+                    TypeError,
+                    lambda: ws.update_cell_format("A1", border={"left": 5}),
+                    "Sheet.update_cell_format border.left must be an object",
+                ),
+            )
+            for expected_class, call, expected in cases:
+                with self.subTest(expected=expected):
+                    message = _raised(expected_class, call)
+                    self.assertEqual(message, expected)
+                    self.assert_public_words(message)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -451,6 +451,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value ListShowPhoneticCells(const Napi::CallbackInfo& info);
   Napi::Value RangeStyleBasesExcluding(const Napi::CallbackInfo& info);
   Napi::Value RemapRangeStyle(const Napi::CallbackInfo& info);
+  /// Applies a `CellFormatPatch` to a range: `(sheet, range, patch)`.
+  Napi::Value UpdateCellFormat(const Napi::CallbackInfo& info);
   Napi::Value SnapshotRangeStyle(const Napi::CallbackInfo& info);
   Napi::Value RestoreRangeStyle(const Napi::CallbackInfo& info);
 

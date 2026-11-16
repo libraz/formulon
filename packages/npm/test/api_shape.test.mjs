@@ -929,7 +929,8 @@ test('A1: a value the workbook does not hold reads as null', async () => {
     ws.addSparklineGroup({ sparklines: [{ source: 'Sheet1!A1:D1', location: 'F1' }] });
     assert.equal(ws.listSparklineGroups()[0].dateAxisRange, null);
 
-    const font = wb.ooxml.getFont(wb.ooxml.addFont({ name: 'Arial', sizePt: 10 }));
+    // A face without a measured family or charset, so neither is completed.
+    const font = wb.ooxml.getFont(wb.ooxml.addFont({ name: 'Unlisted Face', sizePt: 10 }));
     assert.deepEqual([font.bold, font.italic, font.family, font.charset], [null, null, null, null]);
     const xf = wb.ooxml.getCellXf(wb.ooxml.addCellXf({ fontIndex: 0, fillIndex: 0, borderIndex: 0, numFmtId: 0 }));
     assert.deepEqual([xf.horizontal, xf.wrapText, xf.locked, xf.hidden], [null, null, null, null]);

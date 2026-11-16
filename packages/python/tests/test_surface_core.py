@@ -196,6 +196,13 @@ class StructLayoutTests(unittest.TestCase):
         "CHART_SPEC": 144,
         "PIVOT_GRAND_TOTALS": 12,
         "TABLE_STYLE_DEFAULTS": 12,
+        "FONT_PATCH": 152,
+        "FILL_PATCH": 80,
+        "BORDER_SIDE_PATCH": 40,
+        "BORDER_PATCH": 216,
+        "ALIGNMENT_PATCH": 72,
+        "CELL_PROTECTION_PATCH": 16,
+        "CELL_FORMAT_PATCH": 552,
     }
 
     def test_struct_sizes(self) -> None:

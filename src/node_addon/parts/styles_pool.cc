@@ -238,6 +238,40 @@ Napi::Object FillRecordToJs(Napi::Env env, const fm_fill_t& f) {
   return out;
 }
 
+/// Reads a gradient out of a JS object into the `gradient_*` fields of `out`. `stops` owns the gradient stops
+/// for the duration of the C ABI call, which borrows the pointer.
+void PullGradient(CheckedSpecReader& reader, const Napi::Object& gradient, std::vector<fm_gradient_stop_t>* stops,
+                  fm_fill_t* out) {
+  out->has_gradient = 1;
+  out->gradient_type = static_cast<int32_t>(reader.U32(gradient, "type", 0U));
+  out->gradient_angle_deg = reader.Double(gradient, "angleDeg", 0.0);
+  out->gradient_left = reader.Double(gradient, "left", 0.0);
+  out->gradient_right = reader.Double(gradient, "right", 0.0);
+  out->gradient_top = reader.Double(gradient, "top", 0.0);
+  out->gradient_bottom = reader.Double(gradient, "bottom", 0.0);
+  Napi::Array list;
+  if (reader.Array(gradient, "stops", &list)) {
+    const uint32_t n = list.Length();
+    stops->reserve(n);
+    for (uint32_t i = 0; i < n; ++i) {
+      Napi::Value element;
+      if (!reader.ArrayElement(list, i, &element)) {
+        continue;
+      }
+      Napi::Object item;
+      if (!reader.Object(element, "stops[]", &item)) {
+        continue;
+      }
+      fm_gradient_stop_t stop{};
+      stop.position = reader.Double(item, "position", 0.0);
+      stop.color = PullColorSpec(reader, item, "color");
+      stops->push_back(stop);
+    }
+  }
+  out->gradient_stops = stops->empty() ? nullptr : stops->data();
+  out->gradient_stop_count = stops->size();
+}
+
 /// Reads a fill record out of a JS object. `stops` owns the gradient stops
 /// for the duration of the C ABI call, which borrows the pointer.
 fm_fill_t PullFillRecord(CheckedSpecReader& reader, const Napi::Object& record,
@@ -248,34 +282,7 @@ fm_fill_t PullFillRecord(CheckedSpecReader& reader, const Napi::Object& record,
   out.background = PullColorSpec(reader, record, "background");
   Napi::Object gradient;
   if (reader.Object(record, "gradient", &gradient)) {
-    out.has_gradient = 1;
-    out.gradient_type = static_cast<int32_t>(reader.U32(gradient, "type", 0U));
-    out.gradient_angle_deg = reader.Double(gradient, "angleDeg", 0.0);
-    out.gradient_left = reader.Double(gradient, "left", 0.0);
-    out.gradient_right = reader.Double(gradient, "right", 0.0);
-    out.gradient_top = reader.Double(gradient, "top", 0.0);
-    out.gradient_bottom = reader.Double(gradient, "bottom", 0.0);
-    Napi::Array list;
-    if (reader.Array(gradient, "stops", &list)) {
-      const uint32_t n = list.Length();
-      stops->reserve(n);
-      for (uint32_t i = 0; i < n; ++i) {
-        Napi::Value element;
-        if (!reader.ArrayElement(list, i, &element)) {
-          continue;
-        }
-        Napi::Object item;
-        if (!reader.Object(element, "stops[]", &item)) {
-          continue;
-        }
-        fm_gradient_stop_t stop{};
-        stop.position = reader.Double(item, "position", 0.0);
-        stop.color = PullColorSpec(reader, item, "color");
-        stops->push_back(stop);
-      }
-    }
-    out.gradient_stops = stops->empty() ? nullptr : stops->data();
-    out.gradient_stop_count = stops->size();
+    PullGradient(reader, gradient, stops, &out);
   }
   return out;
 }
@@ -460,6 +467,100 @@ void PullDxfRecord(CheckedSpecReader& reader, const Napi::Object& record, DxfSto
   dxf.protection_xml = storage->protection_xml.c_str();
 }
 
+// ---- Cell-format patch ------------------------------------------------
+//
+// Each group of a `CellFormatPatch` maps an omitted key to KEEP, `null` to CLEAR on a clearable key (a TypeError on
+// any other) and a value to SET. The C layer checks ranges and enums.
+
+/// Owns what the pointer fields of an `fm_cell_format_patch_t` borrow for the C call.
+struct CellFormatPatchStore {
+  std::string number_format;
+  std::string font_name;
+  std::vector<fm_gradient_stop_t> gradient_stops;
+  fm_fill_t gradient{};
+};
+
+/// `PatchBool` for a key `null` clears.
+fm_patch_op_t PatchNullableBool(CheckedSpecReader& reader, const Napi::Object& spec, const char* key, int32_t* out) {
+  const Napi::Value value = reader.Get(spec, key);
+  const PatchKey state = ClassifyPatchKey(reader, value, key, true);
+  if (state == PatchKey::kSet) {
+    *out = reader.Bool(value, key, false) ? 1 : 0;
+  }
+  return static_cast<fm_patch_op_t>(state);
+}
+
+void PullFontPatch(CheckedSpecReader& reader, const Napi::Object& spec, CellFormatPatchStore* store,
+                   fm_font_patch_t* out) {
+  out->name_op = PatchString(reader, spec, "name", true, &store->font_name, &out->name);
+  out->size_pt_op = PatchNullableDouble(reader, spec, "sizePt", &out->size_pt);
+  out->bold_op = PatchNullableBool(reader, spec, "bold", &out->bold);
+  out->italic_op = PatchNullableBool(reader, spec, "italic", &out->italic);
+  out->strike_op = PatchNullableBool(reader, spec, "strike", &out->strike);
+  out->outline_op = PatchNullableBool(reader, spec, "outline", &out->outline);
+  out->shadow_op = PatchNullableBool(reader, spec, "shadow", &out->shadow);
+  out->condense_op = PatchNullableBool(reader, spec, "condense", &out->condense);
+  out->extend_op = PatchNullableBool(reader, spec, "extend", &out->extend);
+  out->underline_op = PatchI32(reader, spec, "underline", &out->underline);
+  out->vert_align_op = PatchI32(reader, spec, "vertAlign", &out->vert_align);
+  out->family_op = PatchNullableI32(reader, spec, "family", &out->family);
+  out->charset_op = PatchNullableI32(reader, spec, "charset", &out->charset);
+  out->scheme_op = PatchI32(reader, spec, "scheme", &out->scheme);
+  out->color_op = PatchColor(reader, spec, "color", true, &out->color);
+}
+
+void PullFillPatch(CheckedSpecReader& reader, const Napi::Object& spec, CellFormatPatchStore* store,
+                   fm_fill_patch_t* out) {
+  out->pattern_op = PatchI32(reader, spec, "pattern", &out->pattern);
+  out->foreground_op = PatchColor(reader, spec, "foreground", false, &out->foreground);
+  out->background_op = PatchColor(reader, spec, "background", false, &out->background);
+  const Napi::Value value = reader.Get(spec, "gradient");
+  const PatchKey state = ClassifyPatchKey(reader, value, "gradient", true);
+  out->gradient_op = static_cast<fm_patch_op_t>(state);
+  Napi::Object gradient;
+  if (state == PatchKey::kSet && reader.Object(spec, "gradient", &gradient)) {
+    PullGradient(reader, gradient, &store->gradient_stops, &store->gradient);
+    out->gradient = &store->gradient;
+  }
+}
+
+void PullBorderSidePatch(CheckedSpecReader& reader, const Napi::Object& owner, const char* key,
+                         fm_border_side_patch_t* out) {
+  Napi::Object side;
+  if (!reader.Object(owner, key, &side)) {
+    return;
+  }
+  out->style_op = PatchI32(reader, side, "style", &out->style);
+  out->color_op = PatchColor(reader, side, "color", false, &out->color);
+}
+
+void PullBorderPatch(CheckedSpecReader& reader, const Napi::Object& spec, fm_border_patch_t* out) {
+  PullBorderSidePatch(reader, spec, "left", &out->left);
+  PullBorderSidePatch(reader, spec, "right", &out->right);
+  PullBorderSidePatch(reader, spec, "top", &out->top);
+  PullBorderSidePatch(reader, spec, "bottom", &out->bottom);
+  PullBorderSidePatch(reader, spec, "diagonal", &out->diagonal);
+  out->diagonal_up_op = PatchBool(reader, spec, "diagonalUp", &out->diagonal_up);
+  out->diagonal_down_op = PatchBool(reader, spec, "diagonalDown", &out->diagonal_down);
+}
+
+void PullAlignmentPatch(CheckedSpecReader& reader, const Napi::Object& spec, fm_alignment_patch_t* out) {
+  out->horizontal_op = PatchI32(reader, spec, "horizontal", &out->horizontal);
+  out->vertical_op = PatchI32(reader, spec, "vertical", &out->vertical);
+  out->wrap_text_op = PatchBool(reader, spec, "wrapText", &out->wrap_text);
+  out->shrink_to_fit_op = PatchBool(reader, spec, "shrinkToFit", &out->shrink_to_fit);
+  out->indent_op = PatchU32(reader, spec, "indent", &out->indent);
+  out->text_rotation_op = PatchU32(reader, spec, "textRotation", &out->text_rotation);
+  out->reading_order_op = PatchI32(reader, spec, "readingOrder", &out->reading_order);
+  out->justify_last_line_op = PatchBool(reader, spec, "justifyLastLine", &out->justify_last_line);
+  out->relative_indent_op = PatchI32(reader, spec, "relativeIndent", &out->relative_indent);
+}
+
+void PullProtectionPatch(CheckedSpecReader& reader, const Napi::Object& spec, fm_cell_protection_patch_t* out) {
+  out->locked_op = PatchBool(reader, spec, "locked", &out->locked);
+  out->hidden_op = PatchBool(reader, spec, "hidden", &out->hidden);
+}
+
 }  // namespace
 
 namespace detail {
@@ -522,6 +623,41 @@ Napi::Value Workbook::SetRangeXfIndex(const Napi::CallbackInfo& info) {
 }
 
 // ---- Style getters --------------------------------------------------
+
+Napi::Value Workbook::UpdateCellFormat(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  CheckedSpecReader reader(env);
+  fm_cell_rect_t rect{};
+  if (!ReadCellRectArg(reader, info, 1, &rect)) {
+    return env.Undefined();
+  }
+  Napi::Object spec;
+  if (!ObjectArg(info, 2, &spec)) {
+    ThrowArgumentTypeError(env, "", "must be an object");
+    return env.Undefined();
+  }
+  fm_cell_format_patch_t patch = FM_STRUCT_INIT(fm_cell_format_patch_t);
+  CellFormatPatchStore store;
+  patch.number_format_op = PatchString(reader, spec, "numberFormat", false, &store.number_format, &patch.number_format);
+  const auto group = [&](const char* key, auto&& pull) {
+    Napi::Object object;
+    if (reader.Object(spec, key, &object)) {
+      pull(object);
+    }
+  };
+  group("font", [&](const Napi::Object& o) { PullFontPatch(reader, o, &store, &patch.font); });
+  group("fill", [&](const Napi::Object& o) { PullFillPatch(reader, o, &store, &patch.fill); });
+  group("border", [&](const Napi::Object& o) { PullBorderPatch(reader, o, &patch.border); });
+  group("alignment", [&](const Napi::Object& o) { PullAlignmentPatch(reader, o, &patch.alignment); });
+  group("protection", [&](const Napi::Object& o) { PullProtectionPatch(reader, o, &patch.protection); });
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  return ValueOrThrow(env, fm_sheet_update_cell_format(handle_, ArgU32(info, 0), &rect, &patch), env.Undefined());
+}
 
 Napi::Value Workbook::GetCellXf(const Napi::CallbackInfo& info) {
   return RecordGetter<fm_cell_xf_t>(
