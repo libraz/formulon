@@ -208,7 +208,11 @@ TEST_F(WholeAxisShape, AggregatesOverDerivedColumns) {
   EXPECT_EQ(Adhoc("=COUNT(L!B:B+0)").as_number(), static_cast<double>(Sheet::kMaxRows));
   EXPECT_EQ(Adhoc("=AVERAGE(IF(L!B:B>15,L!B:B))").as_number(), 35.0);
   EXPECT_EQ(Adhoc("=SUM(L!B:B*0+1)").as_number(), static_cast<double>(Sheet::kMaxRows));
-  EXPECT_EQ(Adhoc("=INDEX(L!B:B+0,3)").as_number(), 30.0);
+  // A row number alone over the derived column picks a 1x1 array.
+  const Value picked = Adhoc("=INDEX(L!B:B+0,3)");
+  ASSERT_TRUE(picked.is_array()) << picked.debug_to_string();
+  EXPECT_EQ(picked.as_array_cells()[0].as_number(), 30.0);
+  EXPECT_EQ(Adhoc("=INDEX(L!B:B+0,3,1)").as_number(), 30.0);
 }
 
 TEST_F(WholeAxisShape, EditingACellBelowTheDataRecalculatesDerivedColumns) {

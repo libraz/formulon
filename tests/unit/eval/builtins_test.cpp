@@ -384,9 +384,11 @@ TEST(BuiltinsIf, ArrayConditionReachesLazyRangeConsumers) {
   ASSERT_TRUE(paired.is_number()) << "kind=" << static_cast<int>(paired.kind());
   EXPECT_EQ(paired.as_number(), 6.0) << "1*1 + 1*2 + 1*3, the rest multiplied by the zero mask";
 
+  // A row number alone over the masked column array picks a 1x1 array.
   const Value indexed = EvalSourceIn("=INDEX(IF(A1:A5<=3,A1:A5,0),2)", wb, wb.sheet(0));
-  ASSERT_TRUE(indexed.is_number()) << "kind=" << static_cast<int>(indexed.kind());
-  EXPECT_EQ(indexed.as_number(), 2.0);
+  ASSERT_TRUE(indexed.is_array()) << "kind=" << static_cast<int>(indexed.kind());
+  ASSERT_EQ(indexed.as_array_rows() * indexed.as_array_cols(), 1U);
+  EXPECT_EQ(indexed.as_array_cells()[0].as_number(), 2.0);
 
   // The masked array is a range argument like any other, so the criteria
   // and lookup families read it too.

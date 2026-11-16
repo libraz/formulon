@@ -970,7 +970,18 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     case IndexPickKind::kCell:
       break;
   }
-  return source->cell(pick.value().row, pick.value().col, arena, registry, ctx);
+  const Value cell = source->cell(pick.value().row, pick.value().col, arena, registry, ctx);
+  // A row number alone over a multi-row column array (not a reference) picks a 1x1 array.
+  if (!col_explicit && cols == 1U && rows > 1U && !(by_reference && by_reference.value())) {
+    Value* buf = nullptr;
+    ArrayValue* one = allocate_derived_array_value(1U, 1U, arena, buf);
+    if (one == nullptr) {
+      return Value::error(ErrorCode::Num);
+    }
+    buf[0] = cell;
+    return Value::array(one);
+  }
+  return cell;
 }
 
 bool resolve_index_reference(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

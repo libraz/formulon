@@ -490,13 +490,42 @@ TEST(BuiltinsIndex, WholeColumnPicksMatchTheBoundedReference) {
   EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 3.0);
 }
 
+// A row number alone over a column array that is not a reference picks a 1x1 array (TYPE 64); a row
+// vector, an explicit column or a range source picks a cell.
+TEST(BuiltinsIndex, RowAloneOverAColumnArrayIsAOneCellArray) {
+  Workbook wb = Workbook::create();
+  for (std::uint32_t r = 0; r < 3; ++r) {
+    wb.sheet(0).set_cell_value(r, 0, Value::number(static_cast<double>(r + 1)));
+  }
+  const struct {
+    const char* source;
+    double type;
+  } cases[] = {
+      {"=TYPE(INDEX({1;2;3},2))", 64.0},       {"=TYPE(INDEX(SEQUENCE(3),2))", 64.0},
+      {"=TYPE(INDEX(UNIQUE(A1:A3),2))", 64.0}, {"=TYPE(INDEX({1;2;3},2,1))", 1.0},
+      {"=TYPE(INDEX(SEQUENCE(1,3),2))", 1.0},  {"=TYPE(INDEX(A1:A3,2))", 1.0},
+      {"=ROWS(INDEX(SEQUENCE(3),2))", 1.0},
+  };
+  for (const auto& c : cases) {
+    const Value v = EvalSourceIn(c.source, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_number()) << c.source << ": " << v.debug_to_string();
+    EXPECT_DOUBLE_EQ(v.as_number(), c.type) << c.source;
+  }
+  const Value ref = EvalSourceIn("=ISREF(INDEX(SEQUENCE(3),2))", wb, wb.sheet(0));
+  ASSERT_TRUE(ref.is_boolean());
+  EXPECT_FALSE(ref.as_boolean());
+  const Value picked = EvalSourceIn("=INDEX({1;2;3},2)", wb, wb.sheet(0));
+  ExpectArrayShape(picked, 1U, 1U);
+  EXPECT_DOUBLE_EQ(picked.as_array_cells()[0].as_number(), 2.0);
+}
+
 TEST(BuiltinsIndex, ColumnSnapsNearIntegerUp) {
   const Workbook wb = SnapWorkbook();
   EXPECT_DOUBLE_EQ(EvalNumber("=INDEX(A1:C1,1,1.9999999)", wb), 20.0);
   EXPECT_DOUBLE_EQ(EvalNumber("=INDEX(A1:C1,1,1.99999977)", wb), 20.0);
   EXPECT_DOUBLE_EQ(EvalNumber("=INDEX(A1:C1,1,1.999999761)", wb), 10.0);
   EXPECT_DOUBLE_EQ(EvalNumber("=INDEX(A1:C1,1,1.5)", wb), 10.0);
-  EXPECT_DOUBLE_EQ(EvalNumber("=INDEX({1;2;3},1.9999999)", wb), 2.0);
+  EXPECT_DOUBLE_EQ(EvalNumber("=INDEX({1;2;3},1.9999999,1)", wb), 2.0);
 }
 
 TEST(BuiltinsIndex, TinyColumnSelectsWholeRow) {
