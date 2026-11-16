@@ -352,6 +352,40 @@ TEST(XlsbParityFontPlan, LiteralFamilyCompletionNeedsBothAbsent) {
   EXPECT_FALSE(themed_plan.fonts()[first + 3].has_charset);
 }
 
+// A face Excel completes with a family and charset gets them on a literal Normal font that states neither, in both
+// package formats.
+TEST(XlsbParityFontPlan, LiteralNormalFontOfAMeasuredFaceIsCompleted) {
+  constexpr std::size_t kFamilyOffset = 9;
+  constexpr std::size_t kCharsetOffset = 10;
+  Workbook wb = Workbook::create();
+  FontRecord& normal = wb.mutable_styles().fonts[0];
+  normal.name = "\xE6\xB8\xB8\xE6\x98\x8E\xE6\x9C\x9D";  // 游明朝
+  normal.has_family = false;
+  normal.has_charset = false;
+  normal.scheme = 0;
+
+  const FontSavePlan plan = build_font_save_plan(wb);
+  EXPECT_FALSE(plan.is_identity());
+  EXPECT_TRUE(plan.fonts()[0].has_family);
+  EXPECT_EQ(plan.fonts()[0].family, 1U);
+  EXPECT_TRUE(plan.fonts()[0].has_charset);
+  EXPECT_EQ(plan.fonts()[0].charset, 128U);
+
+  auto xlsx = write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
+  const std::vector<std::string> fonts = XlsxAllFonts(xlsx.value());
+  ASSERT_FALSE(fonts.empty());
+  EXPECT_NE(fonts[0].find("<family val=\"1\"/><charset val=\"128\"/>"), std::string::npos) << fonts[0];
+
+  auto xlsb = write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(xlsb)) << xlsb.error().message;
+  const std::vector<Bytes> bin_fonts = XlsbLiteralFonts(xlsb.value().bytes);
+  ASSERT_FALSE(bin_fonts.empty());
+  ASSERT_GT(bin_fonts[0].size(), kCharsetOffset);
+  EXPECT_EQ(bin_fonts[0][kFamilyOffset], 1U);
+  EXPECT_EQ(bin_fonts[0][kCharsetOffset], 128U);
+}
+
 }  // namespace
 }  // namespace xlsb
 }  // namespace io

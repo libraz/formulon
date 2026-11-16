@@ -420,3 +420,127 @@ TEST(FormulonCApiStyles, CellFontWithNoColourReadsBackWithoutOne) {
   ASSERT_EQ(fm_workbook_get_font_at(wb.handle, index, &read), 0);
   EXPECT_EQ(read.color.kind, FM_COLOR_KIND_NONE);
 }
+
+namespace {
+
+struct SavedFace {
+  const char* face;
+  int family;   // 0: no <family>
+  int charset;  // 0: no <charset>
+};
+
+// Mac Excel 16.115, a bare rename of the Normal font from the ja-JP default (nf_ja_default.json).
+constexpr std::array<SavedFace, 21> kRenamedFaces = {{
+    {"Calibri", 2, 0},         {"Aptos", 0, 0},           {"Aptos Narrow", 0, 0},
+    {"游明朝", 1, 128},        {"等线", 4, 134},          {"맑은 고딕", 2, 129},
+    {"新細明體", 1, 136},      {"Tahoma", 2, 0},          {"ＭＳ Ｐゴシック", 2, 128},
+    {"ＭＳ ゴシック", 2, 128}, {"ＭＳ 明朝", 1, 128},     {"Meiryo", 2, 128},
+    {"Meiryo UI", 2, 128},     {"メイリオ", 2, 128},      {"Arial", 2, 0},
+    {"Cambria", 1, 0},         {"Times New Roman", 1, 0}, {"Verdana", 2, 0},
+    {"Helvetica", 2, 0},       {"Helvetica Neue", 2, 0},  {"Courier New", 1, 0},
+}};
+
+/// The first `<font>` of a saved package's `<fonts>` list.
+std::string SavedNormalFont(fm_workbook_t* wb) {
+  BufferGuard saved;
+  EXPECT_EQ(fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+  const std::string xml = ExtractStylesXml(saved);
+  const std::size_t fonts = xml.find("<fonts");
+  const std::size_t begin = xml.find("<font>", fonts);
+  const std::size_t end = xml.find("</font>", begin);
+  if (fonts == std::string::npos || begin == std::string::npos || end == std::string::npos) {
+    ADD_FAILURE() << "no font in " << xml;
+    return {};
+  }
+  return xml.substr(begin, end - begin);
+}
+
+std::string Element(const char* tag, int value) {
+  return "<" + std::string(tag) + " val=\"" + std::to_string(value) + "\"/>";
+}
+
+void ExpectNormalFont(fm_workbook_t* wb, const std::string& face, int family, int charset) {
+  const std::string font = SavedNormalFont(wb);
+  EXPECT_NE(font.find("<name val=\"" + face + "\"/>"), std::string::npos) << font;
+  EXPECT_EQ(font.find("<family") != std::string::npos, family != 0) << font;
+  EXPECT_EQ(font.find("<charset") != std::string::npos, charset != 0) << font;
+  if (family != 0) {
+    EXPECT_NE(font.find(Element("family", family)), std::string::npos) << font;
+  }
+  if (charset != 0) {
+    EXPECT_NE(font.find(Element("charset", charset)), std::string::npos) << font;
+  }
+  EXPECT_EQ(font.find("<scheme"), std::string::npos) << font;
+}
+
+fm_status_t RenameDefaultFont(fm_workbook_t* wb, const char* face) {
+  fm_font_t record{};
+  record.name = face;
+  return fm_workbook_set_default_font(wb, &record);
+}
+
+}  // namespace
+
+TEST(FormulonCApiStyles, BareRenameOfTheDefaultFontSavesWhatExcelCompletes) {
+  for (const SavedFace& row : kRenamedFaces) {
+    SCOPED_TRACE(row.face);
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create_for_profile("mac-365-ja_JP", &wb.handle), 0);
+    ASSERT_EQ(RenameDefaultFont(wb.handle, row.face), 0) << fm_get_last_error_message();
+    ExpectNormalFont(wb.handle, row.face, row.family, row.charset);
+  }
+}
+
+TEST(FormulonCApiStyles, BareRenameToYuGothicIsFamilyThreeButTheStockDefaultKeepsItsOwn) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_for_profile("mac-365-ja_JP", &wb.handle), 0);
+  ASSERT_EQ(RenameDefaultFont(wb.handle, "Arial"), 0);
+  ASSERT_EQ(RenameDefaultFont(wb.handle, "游ゴシック"), 0) << fm_get_last_error_message();
+  ExpectNormalFont(wb.handle, "游ゴシック", 3, 128);
+
+  WorkbookGuard stock;
+  ASSERT_EQ(fm_workbook_create_for_profile("mac-365-ja_JP", &stock.handle), 0);
+  const std::string font = SavedNormalFont(stock.handle);
+  EXPECT_NE(font.find("<name val=\"游ゴシック\"/>"), std::string::npos) << font;
+  EXPECT_NE(font.find(Element("family", 2)), std::string::npos) << font;
+  EXPECT_NE(font.find(Element("charset", 128)), std::string::npos) << font;
+  EXPECT_NE(font.find("<scheme val=\"minor\"/>"), std::string::npos) << font;
+}
+
+TEST(FormulonCApiStyles, StatedCharsetOrFamilyOnTheDefaultFontIsNotCompleted) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_for_profile("mac-365-ja_JP", &wb.handle), 0);
+  fm_font_t record{};
+  record.name = "Courier New";
+  record.has_charset = 1;
+  record.charset = 128;
+  ASSERT_EQ(fm_workbook_set_default_font(wb.handle, &record), 0);
+  ExpectNormalFont(wb.handle, "Courier New", 0, 128);
+
+  record = fm_font_t{};
+  record.name = "Arial";
+  record.has_family = 1;
+  record.family = 1;
+  ASSERT_EQ(fm_workbook_set_default_font(wb.handle, &record), 0);
+  ExpectNormalFont(wb.handle, "Arial", 1, 0);
+}
+
+TEST(FormulonCApiStyles, FaceOutsideTheCompletionTableIsSavedWithNeither) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_for_profile("mac-365-ja_JP", &wb.handle), 0);
+  ASSERT_EQ(RenameDefaultFont(wb.handle, "NoSuchFontXyz"), 0);
+  ExpectNormalFont(wb.handle, "NoSuchFontXyz", 0, 0);
+}
+
+TEST(FormulonCApiStyles, ReadingTheDefaultFontBackAndRenamingItKeepsTheStatedCharset) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_for_profile("mac-365-ja_JP", &wb.handle), 0);
+  fm_font_t read{};
+  ASSERT_EQ(fm_workbook_get_font_at(wb.handle, 0, &read), 0);
+  ASSERT_NE(read.has_charset, 0);
+  read.name = "Tahoma";
+  read.scheme = 0;
+  ASSERT_EQ(fm_workbook_set_default_font(wb.handle, &read), 0);
+  ExpectNormalFont(wb.handle, "Tahoma", read.has_family != 0 ? static_cast<int>(read.family) : 0,
+                   static_cast<int>(read.charset));
+}

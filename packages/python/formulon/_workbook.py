@@ -10468,7 +10468,9 @@ class Workbook(_NoCopy):
         the cells it never styles explicitly. Read it back with
         :meth:`get_default_font`.
 
-        A ``None`` size or name keeps the current one.
+        A ``None`` size or name keeps the current one. To get Excel's rename
+        result, pass the name without ``charset`` and ``family``; a record that
+        names the current face still replaces the whole record.
         """
         h = self._require()
         with _ArgScope() as scope:

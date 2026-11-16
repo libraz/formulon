@@ -7148,7 +7148,9 @@ export interface Workbook {
   /** Declares the workbook's default font: font 0, the record an unstyled
    *  cell resolves to. A new workbook seeds it with Excel's Calibri 11 and
    *  `addFont` can only append beside it, so this is the way to change what
-   *  a never-styled cell is saved as. Read it back with `getDefaultFont()`. */
+   *  a never-styled cell is saved as. Read it back with `getDefaultFont()`.
+   *  To get Excel's rename result, pass the name without `charset` and `family`; a record that names the current
+   *  face still replaces the whole record. */
   setDefaultFont(record: FontInput): void;
   /** Reads the workbook's default font (font 0), the record an unstyled cell resolves to. */
   getDefaultFont(): Font;

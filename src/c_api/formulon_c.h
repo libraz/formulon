@@ -13026,7 +13026,9 @@ FM_API fm_status_t fm_workbook_set_font(fm_workbook_t* wb, uint32_t font_index, 
  *
  * Every field but a NULL `name` and an unset `size_pt` is written as the
  * record states; `scheme` and `charset` are never carried over from the
- * font being replaced.
+ * font being replaced. To get Excel's rename result, pass the name without
+ * charset and family; a record that names the current face still replaces
+ * the whole record.
  *
  * The record is a font, not a theme. A workbook without a theme part is
  * treated by Excel as having the Office theme, and Excel's own new-workbook
