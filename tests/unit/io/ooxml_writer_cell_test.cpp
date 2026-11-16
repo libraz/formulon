@@ -325,6 +325,16 @@ TEST(BuildSheetDataXml, WrittenParenthesesAreStoredAsWritten) {
   EXPECT_NE(xml.find("<f>(_xlfn.SEQUENCE(2))+1</f>"), std::string::npos) << xml;
 }
 
+TEST(BuildSheetDataXml, PrefixedFormulaKeepsItsWhitespace) {
+  // Excel keeps a formula's spaces and line breaks; storage adds only the prefixes.
+  Sheet s("Sheet1");
+  s.set_cell_formula(0U, 0U, "=MINIFS(A2:A3, A2:A3,\n1)");
+  s.set_cell_formula(1U, 0U, "=LET(x, 1,\tx + 1)");
+  const std::string xml = SheetDataXml(s);
+  EXPECT_NE(xml.find("<f>_xlfn.MINIFS(A2:A3, A2:A3,\n1)</f>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("<f>_xlfn.LET(_xlpm.x, 1,\t_xlpm.x + 1)</f>"), std::string::npos) << xml;
+}
+
 TEST(BuildSheetDataXml, FormulaCellLetParameterPrefixedCaseInsensitively) {
   // LET/LAMBDA parameters resolve case-insensitively at eval time, so a
   // reference spelled in a different case than its binding must still get

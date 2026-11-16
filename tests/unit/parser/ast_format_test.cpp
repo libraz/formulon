@@ -768,6 +768,101 @@ TEST(AstFormat, LambdaStorageFormMatchesParameterCaseInsensitively) {
   EXPECT_EQ(format_formula_storage(*root, &SpellVerbatim), "LAMBDA(_xlpm.x,_xlpm.X+1)");
 }
 
+// ---------------------------------------------------------------------------
+// respell_storage_over_source
+// ---------------------------------------------------------------------------
+
+// Prefixes the future functions the cases below use, as the OOXML writer's
+// speller does.
+std::string SpellPrefixed(std::string_view name) {
+  for (const std::string_view fn : {"MINIFS", "XLOOKUP", "CONCAT", "LET", "LAMBDA", "SINGLE", "ANCHORARRAY"}) {
+    if (name == fn) {
+      return std::string(kFnPrefix) + std::string(name);
+    }
+  }
+  if (name == "SORT") {
+    return "_xlfn._xlws." + std::string(name);
+  }
+  return std::string(name);
+}
+
+// `text` without whitespace outside string literals and quoted sheet names.
+std::string StripUnquotedWhitespace(std::string_view text) {
+  std::string out;
+  char quote = '\0';
+  for (const char c : text) {
+    if (quote != '\0') {
+      quote = c == quote ? '\0' : quote;
+    } else if (c == '"' || c == '\'') {
+      quote = c;
+    } else if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
+      continue;
+    }
+    out.push_back(c);
+  }
+  return out;
+}
+
+void CollectImplicitIntersections(const AstNode& node, std::vector<const AstNode*>& out) {
+  if (node.kind() == NodeKind::ImplicitIntersection) {
+    out.push_back(&node);
+  }
+  any_child_node(node, [&out](const AstNode& child) {
+    CollectImplicitIntersections(child, out);
+    return false;
+  });
+}
+
+TEST(AstFormat, RespelledStorageKeepsSourceWhitespace) {
+  struct Case {
+    const char* src;
+    bool omit_at;          // every `@` is a legacy formula's implied one
+    const char* expected;  // null: falls back to the storage form
+  };
+  const Case kCases[] = {
+      {"MINIFS(A1:A2, A1:A2, \">0\")", false, "_xlfn.MINIFS(A1:A2, A1:A2, \">0\")"},
+      {"XLOOKUP(1, A1:A3,\tB1:B3)", false, "_xlfn.XLOOKUP(1, A1:A3,\tB1:B3)"},
+      {"CONCAT(\"a b\", \" @x \")", false, "_xlfn.CONCAT(\"a b\", \" @x \")"},
+      {"IF(A1=1,\nMINIFS(A1:A2,A1:A2,1))", false, "IF(A1=1,\n_xlfn.MINIFS(A1:A2,A1:A2,1))"},
+      {"SUM(\r\n  CONCAT(A1, XLOOKUP(1,A1:A2,B1:B2)))", false,
+       "SUM(\r\n  _xlfn.CONCAT(A1, _xlfn.XLOOKUP(1,A1:A2,B1:B2)))"},
+      {"SORT(A1:A3, 1, -1)", false, "_xlfn._xlws.SORT(A1:A3, 1, -1)"},
+      {"MINIFS('My Sheet'!A1:A2, 'My Sheet'!A1:A2, 1)", false, "_xlfn.MINIFS('My Sheet'!A1:A2, 'My Sheet'!A1:A2, 1)"},
+      {"MINIFS(A1:B2 B1:C3, A1:A2, 1)", false, "_xlfn.MINIFS(A1:B2 B1:C3, A1:A2, 1)"},
+      {"LET(x, 1, x + 1)", false, "_xlfn.LET(_xlpm.x, 1, _xlpm.x + 1)"},
+      {"LAMBDA(a, b,\n  a * b)(2, 3)", false, "_xlfn.LAMBDA(_xlpm.a, _xlpm.b,\n  _xlpm.a * _xlpm.b)(2, 3)"},
+      {"@INDEX(A1:A2, MATCH(1,A1:A2,0))", true, "INDEX(A1:A2, MATCH(1,A1:A2,0))"},
+      {"IF(A1, @A1:A2,\n MINIFS(A1:A2, A1:A2, 1))", true, "IF(A1, A1:A2,\n _xlfn.MINIFS(A1:A2, A1:A2, 1))"},
+      {"SUM(A1, A2)", false, "SUM(A1, A2)"},
+      // `_xlfn.SINGLE(...)` and `_xlfn.ANCHORARRAY(...)` are no in-place edits.
+      {"@A1:A2 + 1", false, nullptr},
+      {"SUM( A1# )", false, nullptr},
+  };
+  for (const Case& c : kCases) {
+    Arena arena;
+    Parser parser(c.src, arena);
+    AstNode* root = parser.parse();
+    ASSERT_NE(root, nullptr) << c.src;
+    ASSERT_TRUE(parser.errors().empty()) << c.src;
+    std::vector<const AstNode*> omitted;
+    if (c.omit_at) {
+      CollectImplicitIntersections(*root, omitted);
+    }
+    const std::string storage = format_formula_storage(*root, &SpellPrefixed, &omitted);
+    const std::string respelled = respell_storage_over_source(c.src, storage);
+    EXPECT_EQ(StripUnquotedWhitespace(respelled), StripUnquotedWhitespace(storage)) << c.src;
+    EXPECT_EQ(respelled, c.expected != nullptr ? std::string(c.expected) : storage) << c.src;
+  }
+}
+
+TEST(AstFormat, RespelledStorageFallsBackOnTokenMismatch) {
+  // A respelled literal or a lexer failure is no prefix edit.
+  EXPECT_EQ(respell_storage_over_source("MINIFS(A1, 1.50)", "_xlfn.MINIFS(A1,1.5)"), "_xlfn.MINIFS(A1,1.5)");
+  EXPECT_EQ(respell_storage_over_source("MINIFS(\"a", "_xlfn.MINIFS(A1)"), "_xlfn.MINIFS(A1)");
+  // A storage space is an intersection the source must carry too.
+  EXPECT_EQ(respell_storage_over_source("MINIFS(A1:B2,B1)", "_xlfn.MINIFS(A1:B2 B1)"), "_xlfn.MINIFS(A1:B2 B1)");
+}
+
 // Excel's on-disk spelling of the postfix `#` operator is a call to the
 // hidden `_xlfn.ANCHORARRAY` name, not the bare `<ref>#` the formula bar
 // shows. `format_formula` (the canonical/formula-bar form) must keep the

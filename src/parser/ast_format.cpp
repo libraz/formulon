@@ -9,7 +9,9 @@
 #include "parser/ast_format.h"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -21,6 +23,7 @@
 #include "parser/parser_detail.h"
 #include "parser/reference.h"
 #include "parser/structured_ref_payload.h"
+#include "parser/tokenizer.h"
 #include "utils/arena.h"
 #include "utils/double_format.h"
 #include "utils/expected.h"  // FM_CHECK
@@ -909,6 +912,85 @@ std::string format_formula_storage(const AstNode& node, StorageFunctionNameSpell
   out.reserve(64);
   emitter.emit(node, out);
   return out;
+}
+
+namespace {
+
+// True when `stored` is `written` behind one or more storage prefixes; the
+// name itself may differ in case (`_xleta.` upper-cases it).
+bool IsPrefixedSpelling(std::string_view written, std::string_view stored) {
+  static constexpr std::array<std::string_view, 5> kPrefixes = {kFnPrefix, "_xlws.", kParamPrefix, kNamePrefix,
+                                                                kEtaPrefix};
+  if (stored.size() <= written.size() ||
+      !strings::case_insensitive_eq(stored.substr(stored.size() - written.size()), written)) {
+    return false;
+  }
+  std::string_view head = stored.substr(0, stored.size() - written.size());
+  while (!head.empty()) {
+    const auto it = std::find_if(kPrefixes.begin(), kPrefixes.end(),
+                                 [head](std::string_view prefix) { return strings::starts_with(head, prefix); });
+    if (it == kPrefixes.end()) {
+      return false;
+    }
+    head.remove_prefix(it->size());
+  }
+  return true;
+}
+
+}  // namespace
+
+std::string respell_storage_over_source(std::string_view source, std::string_view storage) {
+  TokenizerOptions options;
+  options.max_formula_length_utf16 = std::numeric_limits<std::uint32_t>::max();
+  Tokenizer source_lexer(source, options);
+  Tokenizer storage_lexer(storage, options);
+  const std::vector<Token>& written = source_lexer.tokens();
+  const std::vector<Token>& stored = storage_lexer.tokens();
+  if (!source_lexer.errors().empty() || !storage_lexer.errors().empty()) {
+    return std::string(storage);
+  }
+  std::string out;
+  out.reserve(source.size() + storage.size());
+  std::size_t j = 0;
+  bool stored_space = false;
+  const auto skip_stored_space = [&] {
+    stored_space = false;
+    while (stored[j].kind == TokenKind::Whitespace) {
+      stored_space = true;
+      ++j;
+    }
+  };
+  skip_stored_space();
+  bool written_space = false;
+  for (const Token& token : written) {
+    if (token.kind == TokenKind::Whitespace) {
+      out.append(token.lexeme);
+      written_space = true;
+      continue;
+    }
+    if (token.kind == TokenKind::Eof) {
+      break;
+    }
+    const Token& counterpart = stored[j];
+    // A stored space is the intersection operator; the source must have one there.
+    if (stored_space && !written_space) {
+      return std::string(storage);
+    }
+    if (token.kind == TokenKind::At && counterpart.kind != TokenKind::At) {
+      continue;
+    }
+    if (token.kind == counterpart.kind && token.lexeme == counterpart.lexeme) {
+      out.append(token.lexeme);
+    } else if (counterpart.kind == TokenKind::Ident && IsPrefixedSpelling(token.lexeme, counterpart.lexeme)) {
+      out.append(counterpart.lexeme);
+    } else {
+      return std::string(storage);
+    }
+    written_space = false;
+    ++j;
+    skip_stored_space();
+  }
+  return stored[j].kind == TokenKind::Eof ? out : std::string(storage);
 }
 
 bool formula_needs_storage_requote(const AstNode& root) {

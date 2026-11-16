@@ -175,6 +175,15 @@ std::string format_formula_storage(const AstNode& node, StorageFunctionNameSpell
                                    const ExternalBookIndexer* indexer = nullptr,
                                    const std::vector<const AstNode*>* function_values = nullptr);
 
+/// `storage` (the `format_formula_storage` form of `source`'s AST) written
+/// over `source`'s own text: every byte of `source` stays as written —
+/// whitespace and line breaks included — except that a token `storage`
+/// spells with storage prefixes (`_xlfn.`, `_xlws.`, `_xlpm.`, `_xlnm.`,
+/// `_xleta.`) takes that spelling and an `@` `storage` does not carry is
+/// dropped. Returns `storage` unchanged when the two token streams differ
+/// in any other way, or either fails to tokenize.
+std::string respell_storage_over_source(std::string_view source, std::string_view storage);
+
 /// True when `root` holds a local sheet qualifier written bare that A1
 /// notation requires quoted (`S2!A1`, `2024!A1`, `Data:S2!A1`): stored
 /// verbatim, that text would not read back in a file, so the writer emits

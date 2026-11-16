@@ -251,11 +251,11 @@ void AppendDefinedNamesBlock(std::string& out, const std::vector<DefinedName>& n
       const std::vector<const parser::AstNode*> function_values = xlsb::function_value_refs(*formula_root, defined);
       const std::string storage = parser::format_formula_storage(*formula_root, &storage_call_name,
                                                                  /*omitted_at=*/nullptr, &indexer, &function_values);
-      // Only re-serialise when the storage form differs in substance; a
-      // classic formula is emitted verbatim below to preserve its exact
-      // spelling.
+      // Only re-spell when the storage form differs in substance, keeping
+      // the text's own whitespace; a classic formula is emitted verbatim
+      // below to preserve its exact spelling.
       if (NeedsStorageSpelling(*formula_root, storage)) {
-        AppendXmlEscaped(out, storage);
+        AppendXmlEscaped(out, parser::respell_storage_over_source(n.formula, storage));
         storage_emitted = true;
       }
     }

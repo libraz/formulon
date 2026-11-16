@@ -29,6 +29,7 @@
 #include "io/xlsb/reader.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
+#include "pugixml.hpp"
 #include "sheet.h"
 #include "value.h"
 #include "workbook.h"
@@ -606,6 +607,30 @@ TEST(StaleRoundtrip, ArrayBlockReferencingANameKeepsItsMembersOnLoad) {
     EXPECT_TRUE(StaleFormulas(manual).empty());
     expect_block(Load(Save(manual)));
   }
+}
+
+// Each cell's `<f>` text in `sheet_xml`, keyed by cell reference.
+std::vector<std::pair<std::string, std::string>> FormulaTexts(const std::string& sheet_xml) {
+  pugi::xml_document doc;
+  EXPECT_TRUE(static_cast<bool>(doc.load_buffer(sheet_xml.data(), sheet_xml.size())));
+  std::vector<std::pair<std::string, std::string>> out;
+  for (const pugi::xml_node row : doc.child("worksheet").child("sheetData").children("row")) {
+    for (const pugi::xml_node cell : row.children("c")) {
+      if (const pugi::xml_node f = cell.child("f")) {
+        out.emplace_back(cell.attribute("r").value(), f.text().get());
+      }
+    }
+  }
+  return out;
+}
+
+// A formula re-spelled for storage keeps its spaces and line breaks, as Excel wrote them.
+TEST(StaleRoundtrip, RespelledFormulasKeepTheirWhitespace) {
+  const std::vector<std::uint8_t> excel = ReadFixture("../load_save/formula_whitespace_restorage.xlsx");
+  const auto written = FormulaTexts(Part(excel, "xl/worksheets/sheet1.xml"));
+  ASSERT_EQ(written.size(), 4U);
+  const auto saved = FormulaTexts(Part(Save(Load(excel)), "xl/worksheets/sheet1.xml"));
+  EXPECT_EQ(saved, written);
 }
 
 // Retargeting the name after load is an edit: the dependent blocks lose their spill and go stale until recalculated.

@@ -703,7 +703,8 @@ std::string storage_feature_formula(std::string_view formula, const parser::Exte
   std::string storage =
       parser::format_formula_storage(*root, &storage_call_name, /*omitted_at=*/nullptr, indexer, &function_values);
   // A classic formula is written verbatim, keeping its exact spelling.
-  return NeedsStorageSpelling(*root, storage) ? storage : std::string(formula);
+  return NeedsStorageSpelling(*root, storage) ? parser::respell_storage_over_source(formula, storage)
+                                              : std::string(formula);
 }
 
 bool data_bar_needs_x14(const cf::DataBarSpec& bar) {
