@@ -97,7 +97,7 @@ class ItemCaptionTests(unittest.TestCase):
             self.assertEqual(pivot.get_field_item("Region", 1).caption, "")
 
     def test_empty_label_survives_a_save_and_reload(self) -> None:
-        for fmt in (WorkbookFormat.XLSX,):
+        for fmt in (WorkbookFormat.XLSX, WorkbookFormat.XLSB):
             with self.subTest(format=fmt), Workbook.create_default() as wb:
                 pivot, _ = _build(wb)
                 pivot.update_field_item("Region", 0, caption="")
@@ -128,7 +128,7 @@ class DataFieldTests(unittest.TestCase):
             self.assertEqual(pivot.get_data_field(added).name, "")
 
     def test_empty_name_survives_a_save_and_reload(self) -> None:
-        for fmt in (WorkbookFormat.XLSX,):
+        for fmt in (WorkbookFormat.XLSX, WorkbookFormat.XLSB):
             with self.subTest(format=fmt), Workbook.create_default() as wb:
                 pivot, _ = _build(wb)
                 pivot.set_data_field(0, PivotDataFieldInput(name="", field_index="Amount"))

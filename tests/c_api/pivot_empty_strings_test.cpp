@@ -239,7 +239,8 @@ TEST_P(PivotEmptyStringsFormat, DataFieldEmptyNameSurvivesSaveAndReload) {
   EXPECT_STREQ(DataField(reloaded.handle).name, "");
 }
 
-INSTANTIATE_TEST_SUITE_P(Formats, PivotEmptyStringsFormat, ::testing::Values(FM_WORKBOOK_FORMAT_XLSX));
+INSTANTIATE_TEST_SUITE_P(Formats, PivotEmptyStringsFormat,
+                         ::testing::Values(FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB));
 
 TEST(PivotEmptyStrings, DataFieldNumberFormatEmptyMeansNone) {
   WorkbookGuard wb;

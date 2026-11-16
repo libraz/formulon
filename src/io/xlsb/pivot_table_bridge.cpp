@@ -416,13 +416,11 @@ Expected<void, Error> ReadItems(const SxField& in, pivot::PivotField& field) {
     return Unmeasured("empty field item list");
   }
   for (const SxItem& item : *in.items) {
-    if (item.caption && item.caption->empty()) {
-      return Unmeasured("empty item caption");
-    }
     if (item.kind == kItemData) {
       pivot::PivotItem entry;
       entry.visible = (item.flags & kSxItemHidden) == 0U;
       entry.caption = item.caption.value_or(std::string());
+      entry.blank_caption = item.caption && item.caption->empty();
       entry.show_detail = (item.flags & kSxItemCollapsed) == 0U;
       entry.calculated = (item.flags & kSxItemCalculated) != 0U;
       if ((item.flags & kSxItemMissing) != 0U) {
@@ -686,8 +684,8 @@ Expected<void, Error> ReadDataFields(const PivotTableDoc& doc, pivot::PivotTable
     if (in.field >= doc.fields.size()) {
       return Corrupt("data field names a field the table does not have");
     }
-    if (in.subtotal >= kPivotAggregationNames.size() || in.show_data_as >= std::size(kShowDataAs) || in.name.empty()) {
-      return Unmeasured("data field function, display mode or empty name");
+    if (in.subtotal >= kPivotAggregationNames.size() || in.show_data_as >= std::size(kShowDataAs)) {
+      return Unmeasured("data field function or display mode");
     }
     pivot::PivotDataField entry;
     entry.name = in.name;
@@ -1002,7 +1000,7 @@ bool WriteItems(const pivot::PivotField& field, std::optional<std::vector<SxItem
       }
       rec.flags = static_cast<std::uint16_t>(rec.flags | kSxItemMissing);
     }
-    if (!item.caption.empty()) {
+    if (!item.caption.empty() || item.blank_caption) {
       rec.caption = item.caption;
     }
     items.push_back(std::move(rec));
@@ -1441,7 +1439,7 @@ bool WriteDataFields(const pivot::PivotTable& table, PivotTableDoc& doc) {
                : (in.show_as == pivot::ShowValuesAs::RunningTotalInCol ? pivot::ShowValuesAs::RunningTotalInRow
                                                                        : in.show_as);
     const auto* code = std::find(std::begin(kShowDataAs), std::end(kShowDataAs), show_as);
-    if (in.field_index >= table.fields().size() || in.name.empty() || code == std::end(kShowDataAs) ||
+    if (in.field_index >= table.fields().size() || code == std::end(kShowDataAs) ||
         !NumFmt(in.number_format, out.num_fmt) || !in.raw_ext_xml.empty() || !in.x14_attrs.empty() ||
         !in.x14_children_xml.empty()) {
       return false;

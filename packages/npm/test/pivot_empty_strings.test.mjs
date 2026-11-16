@@ -117,6 +117,7 @@ describe('item caption: "" is an empty label, null un-renames', () => {
 
   for (const [label, format] of [
     ['xlsx', WorkbookFormat.Xlsx],
+    ['xlsb', WorkbookFormat.Xlsb],
   ]) {
     it(`the empty label survives an ${label} save and reload`, () => {
       withPivot((wb, pivot) => {
@@ -151,6 +152,7 @@ describe('data field name: "" is an empty caption, null derives', () => {
 
   for (const [label, format] of [
     ['xlsx', WorkbookFormat.Xlsx],
+    ['xlsb', WorkbookFormat.Xlsb],
   ]) {
     it(`the empty caption survives an ${label} save and reload`, () => {
       withPivot((wb, pivot) => {

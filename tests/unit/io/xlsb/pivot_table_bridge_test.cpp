@@ -703,6 +703,110 @@ TEST(PivotTableBridge, BlockedTableWritesExcelsPart) {
   }
 }
 
+// An item caption and a data-field name are written as the measured Mac Excel records: the caption flag is 0x0010
+// with a zero-length string for an empty caption, and the data-field name always follows byte 24.
+TEST(PivotTableBridge, EmptyItemCaptionAndDataFieldNameWriteMeasuredRecords) {
+  const tc::Bytes kNoCaption = {0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+  const tc::Bytes kEmptyCaption = {0x00, 0x10, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+  const tc::Bytes kXCaption = {0x00, 0x10, 0x00, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x58, 0x00};
+  tc::Bytes empty_name(29U, 0U);
+  empty_name[0] = 0x02;
+  empty_name[24] = 0x01;
+  tc::Bytes y_name(31U, 0U);
+  y_name[0] = 0x02;
+  y_name[24] = 0x01;
+  y_name[25] = 0x01;
+  y_name[29] = 0x59;
+
+  std::optional<pivot::PivotTable> table;
+  std::size_t field_index = 0;
+  for (const std::string& path : pivot_twins::CorpusPaths()) {
+    for (auto& [part, bytes] : pivot_twins::Parts(path, kTablePrefix)) {
+      auto read = pivot_table_from_xlsb(SpanOf(bytes));
+      if (!read || read.value().data_fields().empty() || read.value().fields().size() < 3U) {
+        continue;
+      }
+      for (std::size_t f = 0; f < read.value().fields().size() && !table; ++f) {
+        std::size_t data_items = 0;
+        for (const pivot::PivotItem& item : read.value().fields()[f].items) {
+          data_items += item.caption.empty() ? 1U : 0U;
+        }
+        if (data_items >= 3U) {
+          field_index = f;
+          table = std::move(read.value());
+        }
+      }
+    }
+    if (table) {
+      break;
+    }
+  }
+  ASSERT_TRUE(table.has_value());
+
+  auto& items = table->mutable_fields()[field_index].items;
+  items.resize(3U);
+  for (pivot::PivotItem& item : items) {
+    item = pivot::PivotItem{};
+    item.has_cache_index = true;
+  }
+  items[0].cache_index = 0;
+  items[1].cache_index = 2;
+  items[1].blank_caption = true;
+  items[2].cache_index = 2;
+  items[2].caption = "X";
+  pivot::PivotDataField first = table->data_fields().front();
+  first.field_index = 2;
+  first.aggregation = pivot::Aggregation::Sum;
+  first.number_format.clear();
+  first.show_as = pivot::ShowValuesAs::Normal;
+  first.show_as_base_field.reset();
+  first.show_as_base_item.reset();
+  first.name = "";
+  pivot::PivotDataField second = first;
+  second.name = "Y";
+  table->mutable_data_fields() = {first, second};
+
+  auto written = pivot_table_to_xlsb(*table, ExcelHost::kMac365, 0);
+  ASSERT_TRUE(written.has_value()) << written.error().message;
+
+  std::vector<tc::Bytes> item_records;
+  std::vector<tc::Bytes> data_records;
+  std::size_t field = 0;
+  bool seen_field = false;
+  for (const tc::IndexedRecord& rec : tc::SplitPart(written.value())) {
+    if (rec.type == pivot_records::kBeginSXVD) {
+      field = seen_field ? field + 1U : 0U;
+      seen_field = true;
+    } else if (rec.type == pivot_records::kBeginSXVI && field == field_index && item_records.size() < 3U) {
+      item_records.push_back(rec.payload);
+    } else if (rec.type == pivot_records::kBeginSXDI) {
+      data_records.push_back(rec.payload);
+    }
+  }
+  ASSERT_EQ(item_records.size(), 3U);
+  EXPECT_EQ(item_records[0], kNoCaption);
+  EXPECT_EQ(item_records[1], kEmptyCaption);
+  EXPECT_EQ(item_records[2], kXCaption);
+  ASSERT_EQ(data_records.size(), 2U);
+  EXPECT_EQ(data_records[0], empty_name);
+  EXPECT_EQ(data_records[1], y_name);
+
+  // The records just pinned read back as no caption, a blank caption, "X", and the two names.
+  auto back = pivot_table_from_xlsb(SpanOf(written.value()));
+  ASSERT_TRUE(back.has_value()) << back.error().message;
+  const auto& read_items = back.value().fields()[field_index].items;
+  ASSERT_GE(read_items.size(), 3U);
+  EXPECT_TRUE(read_items[0].caption.empty());
+  EXPECT_FALSE(read_items[0].blank_caption);
+  EXPECT_TRUE(read_items[1].caption.empty());
+  EXPECT_TRUE(read_items[1].blank_caption);
+  EXPECT_EQ(read_items[2].caption, "X");
+  EXPECT_FALSE(read_items[2].blank_caption);
+  ASSERT_EQ(back.value().data_fields().size(), 2U);
+  EXPECT_EQ(back.value().data_fields()[0].name, "");
+  EXPECT_EQ(back.value().data_fields()[1].name, "Y");
+}
+
 TEST(PivotTableBridge, BlockedTableWritesItsAnchorCellAlone) {
   auto read = pivot_table_from_xlsb(SpanOf(TablePart("B17_page_field")));
   ASSERT_TRUE(read.has_value()) << read.error().message;
