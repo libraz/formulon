@@ -108,12 +108,13 @@ TEST(AutoFilterEval, ProbeTable) {
 // `?` (~~B included) compares as literal text. The saved row-hidden state is the visible set Mac Excel computed.
 TEST(AutoFilterEval, OrderingCriteriaAgainstPatternsMatchExcelsRows) {
   for (const char* name : {
-           "flag/A_gt_B",         "flag/A_gt_Bq",        "flag/A_gt_Bescq",     "flag/A_gt_Bescstar",
-           "flag/A_gt_BstarC",    "flag/A_gt_esctildeB", "flag/A_gt_star",      "flag/A_le_B",
-           "flag/A_le_Bq",        "flag/A_le_Bescq",     "flag/A_le_Bescstar",  "flag/A_le_BstarC",
-           "flag/A_le_esctildeB", "flag/A_le_star",      "equal/A_eq_B",        "equal/A_eq_Bstar",
-           "equal/A_eq_Bescstar", "equal/A_eq_Bescq",    "equal/A_eq_tildeB",   "equal/A_eq_esctildeB",
-           "equal/A_ne_B",        "equal/A_ne_Bstar",    "equal/A_ne_Bescstar", "equal/A_ne_Bescq",
+           "flag/A_gt_B",         "flag/A_gt_Bq",         "flag/A_gt_Bescq",     "flag/A_gt_Bescstar",
+           "flag/A_gt_BstarC",    "flag/A_gt_esctildeB",  "flag/A_gt_star",      "flag/A_le_B",
+           "flag/A_le_Bq",        "flag/A_le_Bescq",      "flag/A_le_Bescstar",  "flag/A_le_BstarC",
+           "flag/A_le_esctildeB", "flag/A_le_star",       "equal/A_eq_B",        "equal/A_eq_Bstar",
+           "equal/A_eq_Bescstar", "equal/A_eq_Bescq",     "equal/A_eq_tildeB",   "equal/A_eq_esctildeB",
+           "equal/A_ne_B",        "equal/A_ne_Bstar",     "equal/A_ne_Bescstar", "equal/A_ne_Bescq",
+           "equal/A_ne_tildeB",   "equal/A_ne_esctildeB",
        }) {
     SCOPED_TRACE(name);
     const std::vector<std::uint8_t> bytes = ReadFile((std::string("afilter/") + name + ".xlsb").c_str());

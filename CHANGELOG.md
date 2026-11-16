@@ -567,6 +567,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   entered on text with no * or ? under <, <=, >, >= or <> carries it, one read
   from .xlsb keeps it as saved, and one read from .xlsx carries it under the
   ordering operators only, as in Excel. It was saved without it.
+- A sheet AutoFilter text criterion under `=` or `<>` that carries Excel's
+  literal-comparison flag (one entered under `<>` on text with no * or ?, or
+  one read with the flag from .xlsb) compares its text as written, `~`
+  included, as Excel does: `<>~B` hides the rows holding `~B` and keeps the
+  rows holding `B`. It was matched as a wildcard pattern.
 - `listPassthroughs()` and `hasPassthrough()` (Python `list_passthroughs` /
   `has_passthrough`, C `fm_workbook_get_passthrough_count` /
   `fm_workbook_get_passthrough_at` / `fm_workbook_has_passthrough`, and the

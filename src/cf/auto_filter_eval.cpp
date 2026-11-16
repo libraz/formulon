@@ -147,12 +147,16 @@ bool match_values(const ValueFilters& f, const std::vector<std::string_view>& wa
   return false;
 }
 
-/// Wildcard patterns match as before; a wildcard-free criterion collates.
-bool text_equals(std::string_view criterion, std::string_view text, bool has_wildcard) {
-  if (has_wildcard) {
-    return eval::wildcard_match(criterion, text);
+/// A literal criterion collates verbatim, `~` included; otherwise wildcard
+/// patterns match and a wildcard-free criterion collates without its escapes.
+bool text_equals(const CustomFilter& criterion, std::string_view text, bool has_wildcard) {
+  if (criterion.literal) {
+    return collate(criterion.val, text) == 0;
   }
-  return collate(eval::unescape_wildcard_literal(criterion), text) == 0;
+  if (has_wildcard) {
+    return eval::wildcard_match(criterion.val, text);
+  }
+  return collate(eval::unescape_wildcard_literal(criterion.val), text) == 0;
 }
 
 /// Equality of one custom condition: a single space (or nothing) names the
@@ -171,10 +175,10 @@ bool custom_equals(const PreparedCustomCondition& prepared, const Value& v, cons
     return prepared.numeric.has_value() && !prepared.has_wildcard && *prepared.numeric == v.as_number();
   }
   if (v.is_text()) {
-    return text_equals(c.val, v.as_text(), prepared.has_wildcard);
+    return text_equals(c, v.as_text(), prepared.has_wildcard);
   }
   const text_format::DisplayText shown = text_format::format_cell_for_display(run.wb, run.sheet, row, col);
-  return text_equals(c.val, shown.text, prepared.has_wildcard);
+  return text_equals(c, shown.text, prepared.has_wildcard);
 }
 
 bool match_custom_one(const PreparedCustomCondition& prepared, const Value& v, const Run& run, std::uint32_t row,
