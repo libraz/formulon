@@ -39,6 +39,7 @@
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
+#include "utils/index_sort.h"
 #include "utils/subnormal_flush.h"
 #include "value.h"
 
@@ -392,10 +393,8 @@ Value eval_frequency_lazy(const parser::AstNode& call, Arena& arena, const Funct
     return Value::error(ErrorCode::NA);
   }
 
-  // Distil bins_array into a flat numeric vector.
-  // Non-numeric cells (including Bool) drop out; Excel does not coerce
-  // here. Excel buckets against numeric bins in ascending order, even
-  // when the source bins_array is unsorted.
+  // Distil bins_array into a flat numeric vector, kept in its given order.
+  // Non-numeric cells (including Bool) drop out; Excel does not coerce here.
   std::vector<double> bins;
   bins.reserve(bins_arr.cells.size());
   for (const Value& v : bins_arr.cells) {
@@ -403,8 +402,11 @@ Value eval_frequency_lazy(const parser::AstNode& call, Arena& arena, const Funct
       bins.push_back(v.as_number());
     }
   }
-  std::sort(bins.begin(), bins.end());
   const std::size_t n_bins = bins.size();
+  // Bin positions by ascending value; equal bins keep their given order.
+  std::vector<std::uint32_t> by_value;
+  const auto bin_less = [&bins](std::uint32_t lhs, std::uint32_t rhs) { return bins[lhs] < bins[rhs]; };
+  sorted_index_order(by_value, static_cast<std::uint32_t>(n_bins), make_index_less(bin_less));
 
   // A bins_array cell holding an error leaves an empty first slot
   // ahead of the total.
@@ -433,18 +435,18 @@ Value eval_frequency_lazy(const parser::AstNode& call, Arena& arena, const Funct
   // Excel's documented degenerate case for empty bins).
   std::vector<std::uint64_t> counts(n_bins + 1U, 0U);
 
-  // Walk data_array. For each numeric cell, find the first bin index i
-  // where value <= bins[i]; if none satisfies, drop into the trailing
-  // extra slot.
+  // Each numeric value counts at the position of the smallest bin >= it (the
+  // first given of equal bins), whatever the bins' order; a NaN or a value
+  // above every bin takes the trailing slot.
   for (const Value& v : data_arr.cells) {
     if (!v.is_number()) {
       continue;
     }
     const double x = v.as_number();
-    // First bin with x <= bin; a NaN or past-the-end value takes the trailing slot.
-    const std::size_t slot =
-        std::isnan(x) ? n_bins : static_cast<std::size_t>(std::lower_bound(bins.begin(), bins.end(), x) - bins.begin());
-    counts[slot] += 1U;
+    const auto it = std::isnan(x) ? by_value.end()
+                                  : std::lower_bound(by_value.begin(), by_value.end(), x,
+                                                     [&bins](std::uint32_t i, double value) { return bins[i] < value; });
+    counts[it == by_value.end() ? n_bins : *it] += 1U;
   }
 
   // Materialise as a column ArrayValue. With zero numeric bins, this is

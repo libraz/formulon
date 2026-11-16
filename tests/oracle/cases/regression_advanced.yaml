@@ -167,7 +167,7 @@ cases:
     formula: '=FREQUENCY({1;"x";5;"y";9}, {3;6;9})'
 
   - id: frequency_unsorted_bins
-    description: "FREQUENCY({1;2;3;4;5;6}, {6;3;9}) -> 4x1 spill (Excel sorts numeric bins ascending)"
+    description: "FREQUENCY({1;2;3;4;5;6}, {6;3;9}) -> {3;3;0;0}: each value counts at the position of the smallest bin >= it"
     formula: '=FREQUENCY({1;2;3;4;5;6}, {6;3;9})'
 
   - id: frequency_all_data_exceeds_bins

@@ -3,8 +3,10 @@
 // `regression_lazy.{h,cpp}` and dispatches via the central
 // `kLazyDispatch` table in `tree_walker.cpp`.
 
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
+#include <vector>
 
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
@@ -241,24 +243,35 @@ TEST(BuiltinsFrequency, OneArgRejected) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(BuiltinsFrequency, BinsTakenAsGivenNotSorted) {
-  // bins given out of order -> Excel sorts numeric bins ascending before
-  // bucketing.
-  // data = {1, 5, 10}, bins = {7, 3}.
-  // sorted bins = {3, 7}; result: {1; 1; 1}.
+TEST(BuiltinsFrequency, CountsSitAtTheGivenBinPositions) {
+  // Each value counts at the smallest bin >= it, reported at that bin's own
+  // position; of equal bins the first given takes the values, and the
+  // overflow slot stays last (Mac Excel 16.115).
+  struct Case {
+    const char* formula;
+    std::vector<double> want;
+  };
+  const Case cases[] = {
+      {"=FREQUENCY(0,{2,0,2})", {0, 1, 0, 0}},
+      {"=FREQUENCY({1,3,5,7},{6,2,4})", {1, 1, 1, 1}},
+      {"=FREQUENCY({1,2,2,3,5},{3,1,3,2})", {1, 1, 0, 2, 1}},
+  };
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
   const EvalContext ctx(wb, sheet, state);
-  Arena parse_arena;
-  Arena eval_arena;
-  const Value v = EvalUnder("=FREQUENCY({1;5;10}, {7;3})", &parse_arena, &eval_arena, ctx);
-  ASSERT_TRUE(v.is_array());
-  ASSERT_EQ(v.as_array_rows(), 3U);
-  const Value* c = v.as_array_cells();
-  EXPECT_DOUBLE_EQ(c[0].as_number(), 1.0);
-  EXPECT_DOUBLE_EQ(c[1].as_number(), 1.0);
-  EXPECT_DOUBLE_EQ(c[2].as_number(), 1.0);
+  for (const Case& tc : cases) {
+    SCOPED_TRACE(tc.formula);
+    Arena parse_arena;
+    Arena eval_arena;
+    const Value v = EvalUnder(tc.formula, &parse_arena, &eval_arena, ctx);
+    ASSERT_TRUE(v.is_array());
+    ASSERT_EQ(v.as_array_rows(), tc.want.size());
+    ASSERT_EQ(v.as_array_cols(), 1U);
+    for (std::size_t i = 0; i < tc.want.size(); ++i) {
+      EXPECT_DOUBLE_EQ(v.as_array_cells()[i].as_number(), tc.want[i]) << i;
+    }
+  }
 }
 
 TEST(BuiltinsFrequency, RowVectorBinsAreAcceptedAsArray) {
