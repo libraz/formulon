@@ -39,7 +39,12 @@ std::string value_label(const Workbook& wb, const PivotTable& table, std::size_t
 // True when a caption equal to the item's own label removes the caption instead.
 bool caption_clears(const Workbook& wb, const PivotTable& table, std::size_t field_index, const PivotItem& item,
                     std::string_view caption) {
-  return caption.empty() || same_label(wb, caption, value_label(wb, table, field_index, item));
+  return same_label(wb, caption, value_label(wb, table, field_index, item));
+}
+
+// The label `item` shows: its caption (an empty one included), else its own label.
+std::string shown_label(const Workbook& wb, const PivotTable& table, std::size_t field_index, const PivotItem& item) {
+  return !item.caption.empty() || item.blank_caption ? item.caption : value_label(wb, table, field_index, item);
 }
 
 }  // namespace
@@ -154,7 +159,7 @@ Expected<void, Error> check_item_patch(const Workbook& wb, const PivotTable& tab
   if (item_index >= field.items.size()) {
     return invalid("item_index is out of range");
   }
-  if (!patch.caption.has_value()) {
+  if (patch.clear_caption || !patch.caption.has_value()) {
     return ok();
   }
   const std::string& caption = *patch.caption;
@@ -166,8 +171,7 @@ Expected<void, Error> check_item_patch(const Workbook& wb, const PivotTable& tab
   }
   for (std::size_t i = 0; i < field.items.size(); ++i) {
     const PivotItem& other = field.items[i];
-    const std::string shown = !other.caption.empty() ? other.caption : value_label(wb, table, field_index, other);
-    if (i != item_index && same_label(wb, caption, shown)) {
+    if (i != item_index && same_label(wb, caption, shown_label(wb, table, field_index, other))) {
       return name_taken("patch.caption matches another item of the field", "item_index=" + std::to_string(i));
     }
   }
@@ -184,8 +188,13 @@ Expected<void, Error> apply_item_patch(const Workbook& wb, PivotTable& table, st
   if (patch.show_detail.has_value()) {
     item.show_detail = *patch.show_detail;
   }
-  if (patch.caption.has_value()) {
-    item.caption = caption_clears(wb, table, field_index, item, *patch.caption) ? std::string() : *patch.caption;
+  if (patch.clear_caption) {
+    item.caption.clear();
+    item.blank_caption = false;
+  } else if (patch.caption.has_value()) {
+    const bool clears = caption_clears(wb, table, field_index, item, *patch.caption);
+    item.caption = clears ? std::string() : *patch.caption;
+    item.blank_caption = !clears && patch.caption->empty();
   }
   return ok();
 }

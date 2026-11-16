@@ -1040,7 +1040,8 @@ export interface PivotWorksheetSourceInput {
    *  have. A qualified string or a `SheetRect` whose sheet disagrees with it fails with `StatusCode.InvalidArgument`.
    *  Omitted leaves the attribute off. */
   sheet?: SheetRef;
-  /** The defined name or table the source reads; omitted leaves the attribute off. */
+  /** The defined name or table the source reads; omitted leaves the attribute off. An empty string fails with
+   *  `StatusCode.InvalidArgument` (api-conventions §5 rule 30). */
   name?: string | null;
 }
 
@@ -1057,15 +1058,17 @@ export interface PivotWorksheetSource {
 
 /** Plain-data spec for `Pivot.addDataField` / `Pivot.setDataField`. */
 export interface PivotDataFieldInput {
-  /** The display name of the data field, the key GETPIVOTDATA looks it up by. When `null` or empty the engine names it
-   *  from the workbook profile's pivot wording, such as `Sum of Sales` (en-US) or `合計 / Sales` (ja-JP), numbered 2, 3,
-   *  ... while the name repeats another data field's or a field's display name; that needs `fieldIndex` to be in range. */
+  /** The display name of the data field, the key GETPIVOTDATA looks it up by. `""` is an empty caption, as Excel stores
+   *  it (api-conventions §5 rule 30). When omitted the engine names it from the workbook profile's pivot wording, such as
+   *  `Sum of Sales` (en-US) or `合計 / Sales` (ja-JP), numbered 2, 3, ... while the name repeats another data field's or
+   *  a field's display name; that needs `fieldIndex` to be in range. */
   readonly name?: string;
   /** The index of the source pivot field the data field aggregates; it must be in range. */
   readonly fieldIndex: PivotFieldRef;
   /** The aggregation function applied to the source field; omitted is `PivotAggregation.Sum`. */
   readonly aggregation?: PivotAggregation;
-  /** The number format code of the data field's values; `null` or empty for none. */
+  /** The number format code of the data field's values; `null` and `""` both mean none, since Excel stores no empty
+   *  format code (api-conventions §5 rule 30). */
   readonly numberFormat?: string | null;
   /** How the value is derived from the data: as is, or as a difference, percentage, running total or rank against a
    *  base. */
@@ -1114,7 +1117,10 @@ export type PivotGrandTotalsPatch = Patch<PivotGrandTotals>;
 /** The PivotTable Options of one pivot (`Pivot.getOptions` /
  *  `Pivot.updateOptions`). A string is `null` when
  *  the option is unset. `updateOptions` takes any subset of the members:
- *  an omitted member keeps its current value, and `null` unsets a string. */
+ *  an omitted member keeps its current value, and `null` unsets a string. `""` unsets `errorCaption`,
+ *  `missingCaption`, `altText`, `altTextSummary` and `grandTotalCaption` as well, since Excel and the file hold no
+ *  empty form of them (api-conventions §5 rule 30); the locale's grand total word shows again after `grandTotalCaption`
+ *  is unset. */
 export interface PivotOptions {
   /** Whether error cells show `errorCaption`; the caption is kept while this is off. */
   readonly showError: boolean;
@@ -1243,7 +1249,8 @@ export interface PivotField {
 }
 
 /** Argument of `Pivot.updateField`. `customName` and `numberFormat` (a number format code) clear with `null`
- *  (or `""`), `sortByField: null` sorts by label; the flags and `sortOrder` have no cleared form.
+ *  or `""`, since Excel reverts an empty name to the source name and drops an empty format code
+ *  (api-conventions §5 rule 30); `sortByField: null` sorts by label; the flags and `sortOrder` have no cleared form.
  *  `PivotSortOrder.Manual` with a `sortByField` fails with `StatusCode.InvalidArgument`. An empty patch
  *  changes nothing. */
 export type PivotFieldPatch = Patch<
@@ -1272,14 +1279,15 @@ export interface PivotItem {
   readonly cacheIndex: number | null;
   /** Whether the item is shown. */
   readonly visible: boolean;
-  /** The caption shown instead of the item's value; `null` when it has none. */
+  /** The caption shown instead of the item's value; `null` when it has none, `""` for an item renamed to an empty
+   *  label. */
   readonly caption: string | null;
   /** Whether the item is expanded; false for a collapsed item. */
   readonly showDetail: boolean;
 }
 
-/** Argument of `Pivot.updateFieldItem`. `caption: null` (or `""`) clears the caption; `visible` and `showDetail`
- *  have no cleared form. */
+/** Argument of `Pivot.updateFieldItem`. `caption: null` clears the caption, and `caption: ""` renames the item to an
+ *  empty label, as Excel stores it (api-conventions §5 rule 30); `visible` and `showDetail` have no cleared form. */
 export type PivotItemPatch = Patch<Pick<PivotItem, 'visible' | 'showDetail' | 'caption'>, 'caption'>;
 
 /** Argument of `Sheet.addPivot`: a new pivot named `name`, drawing from cache `cacheId` (a {@link PivotCacheRef}), with
@@ -8877,11 +8885,11 @@ export interface Pivot {
   /** Reads data field `dataFieldIndex`; an index past the last data field fails with
    *  `StatusCode.IndexOutOfRange`. */
   getDataField(dataFieldIndex: number): PivotDataField;
-  /** Appends a new data-field entry. An omitted or empty `spec.name` is
-   *  derived from the Excel profile; see {@link PivotDataFieldInput}. */
+  /** Appends a new data-field entry. An omitted or `null` `spec.name` is
+   *  derived from the Excel profile, `""` is an empty caption; see {@link PivotDataFieldInput}. */
   addDataField(spec: PivotDataFieldInput): number;
   /** Replaces the data-field entry at `dataFieldIndex` in place. An omitted
-   *  or empty `spec.name` is derived as in `addDataField`. */
+   *  or `null` `spec.name` is derived as in `addDataField`. */
   setDataField(dataFieldIndex: number, spec: PivotDataFieldInput): void;
   /** Reads the name a new data field would get for `fieldIndex` and `aggregation`, without adding one.
    *  `excludeDataField` leaves that data field out of the numbering (as `setDataField` does); omit it

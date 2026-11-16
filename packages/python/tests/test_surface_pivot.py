@@ -1448,9 +1448,9 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
                     call()
                 self.assertEqual(caught.exception.code, code)
 
-    def test_empty_data_field_name_is_derived_from_the_profile(self) -> None:
+    def test_omitted_data_field_name_is_derived_from_the_profile(self) -> None:
         for profile, expected in (("win-365-ja_JP", "合計 / Amount"), ("win-365-en_US", "Sum of Amount")):
-            for name in ("", None):
+            for name in (None,):
                 with Workbook.create_default() as wb:
                     f = _PivotFixture(wb)
                     wb.set_profile_id(profile)
@@ -1549,7 +1549,7 @@ class PivotDefinitionReadBackTests(unittest.TestCase):
         with Workbook.create_default() as wb:
             f = _PivotFixture(wb)
             with self.assertRaises(FormulonError):
-                wb.sheet(0).pivot(f.pivot).add_data_field(PivotDataFieldInput(name="", field_index=99))
+                wb.sheet(0).pivot(f.pivot).add_data_field(PivotDataFieldInput(name=None, field_index=99))
             self.assertEqual(len(wb.sheet(0).pivot(f.pivot).list_data_fields()), 1)
 
 

@@ -287,6 +287,16 @@ extern "C" fm_status_t fm_workbook_set_pivot_cache_worksheet_source(fm_workbook_
   if (auto rc = check_utf8({source->ref, source->sheet, source->name}); rc != 0) {
     return rc;
   }
+  const struct {
+    const char* text;
+    const char* field;
+  } attributes[] = {{source->ref, "ref"}, {source->sheet, "sheet"}, {source->name, "name"}};
+  for (const auto& attribute : attributes) {
+    if (attribute.text != nullptr && attribute.text[0] == '\0') {
+      return invalid_argument((std::string(attribute.field) + " must not be empty").c_str(),
+                              std::string("field=") + attribute.field);
+    }
+  }
   // A worksheet source replaces whatever source kind the cache was read with,
   // so the captured `<cacheSource>` type and its other children go with it.
   cache->mutable_cache_source_attrs().clear();

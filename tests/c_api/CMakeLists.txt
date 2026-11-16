@@ -50,6 +50,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_pivot_authoring_test.cpp
   formulon_c_pivot_options_test.cpp
   formulon_c_pivot_patch_test.cpp
+  pivot_empty_strings_test.cpp
   formulon_c_pivot_calc_test.cpp
   formulon_c_pivot_definition_test.cpp
   formulon_c_pivot_filters_test.cpp

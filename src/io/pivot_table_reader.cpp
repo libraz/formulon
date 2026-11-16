@@ -87,6 +87,7 @@ Expected<void, Error> ParseItems(const pugi::xml_node& items_node, pivot::PivotF
     pivot::PivotItem entry;
     entry.visible = !parse_xml_bool_attr(it.attribute("h"));
     entry.caption = it.attribute("n").as_string();
+    entry.blank_caption = !it.attribute("n").empty() && entry.caption.empty();
     entry.show_detail = attr_bool(it, "sd", true);
     entry.calculated = attr_bool(it, "f", false);
     capture_unknown_attrs(it, {"x", "h", "t", "n", "sd", "f"}, entry.passthrough_attrs);

@@ -51,8 +51,11 @@ struct PivotFieldPatch {
 struct PivotItemPatch {
   std::optional<bool> visible;
   std::optional<bool> show_detail;
-  /// Empty, or the item's own label, removes it; otherwise no other item of the field may show it.
+  /// The caption to show; empty is an empty label. The item's own label removes the caption instead; otherwise no
+  /// other item of the field may show it.
   std::optional<std::string> caption;
+  /// Removes the caption, so the item shows its own label again. Takes precedence over `caption`.
+  bool clear_caption = false;
 };
 
 /// True when every item and the default marker of `field` are expanded (a field without items is).

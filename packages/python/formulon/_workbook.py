@@ -6293,7 +6293,8 @@ class PivotWorksheetSourceInput:
     #: The sheet that qualifies an unqualified A1 ``range``; it may name a sheet the workbook does not have. Omitted
     #: leaves the attribute off.
     sheet: Optional[SheetRef] = None
-    #: The defined name or table the source reads; omitted leaves the attribute off.
+    #: The defined name or table the source reads; omitted leaves the attribute off. ``""`` is an
+    #: ``InvalidArgumentError`` (api-conventions §5 rule 30).
     name: Optional[str] = None
 
 
@@ -6503,7 +6504,8 @@ class PivotItem:
     cache_index: Optional[int]
     #: Whether the item is shown.
     visible: bool
-    #: The caption shown instead of the item's value; ``None`` when it has none.
+    #: The caption shown instead of the item's value; ``None`` when it has none, ``""`` for an item renamed to an
+    #: empty label.
     caption: Optional[str] = None
     #: Whether the item is expanded; false for a collapsed item.
     show_detail: bool = True
@@ -6627,14 +6629,15 @@ class PivotDataFieldInput:
 
     #: The index of the source pivot field the data field aggregates; it must be in range.
     field_index: PivotFieldRef
-    #: The display name of the data field, the key GETPIVOTDATA looks it up by. When ``None`` or empty the engine names
-    #: it from the workbook profile's pivot wording, such as ``Sum of Sales`` (en-US) or ``合計 / Sales`` (ja-JP),
-    #: numbered 2, 3, ... while the name repeats another data field's or a field's display name; that needs
-    #: ``field_index`` to be in range.
+    #: The display name of the data field, the key GETPIVOTDATA looks it up by. ``""`` is an empty caption, as Excel
+    #: stores it (api-conventions §5 rule 30). When ``None`` the engine names it from the workbook profile's pivot
+    #: wording, such as ``Sum of Sales`` (en-US) or ``合計 / Sales`` (ja-JP), numbered 2, 3, ... while the name repeats
+    #: another data field's or a field's display name; that needs ``field_index`` to be in range.
     name: Optional[str] = None
     #: The aggregation function applied to the source field; ``PivotAggregation.SUM`` by default.
     aggregation: PivotAggregation = PivotAggregation.SUM
-    #: The number format code of the data field's values; ``None`` or empty for none.
+    #: The number format code of the data field's values; ``None`` and ``""`` both mean none, since Excel stores no
+    #: empty format code (api-conventions §5 rule 30).
     number_format: Optional[str] = None
     #: How the value is derived from the data: as is, or as a difference, percentage, running total or rank against a
     #: base.
@@ -6999,9 +7002,9 @@ def _pack_pivot_worksheet_source(
         LIB,
         ptr,
         {
-            "ref": scope.nonempty_cstr(ref),
-            "sheet": scope.nonempty_cstr(sheet_name),
-            "name": scope.nonempty_cstr(source.name),
+            "ref": scope.opt_cstr(ref),
+            "sheet": scope.opt_cstr(sheet_name),
+            "name": scope.opt_cstr(source.name),
         },
     )
     return ptr

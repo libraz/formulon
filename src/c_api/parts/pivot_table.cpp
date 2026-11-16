@@ -581,8 +581,8 @@ std::string default_data_field_name(const formulon::pivot::PivotTable& table, co
 // point; `number_format` is its format code already converted to the
 // numFmtId text the model stores. `field_index` and a set
 // `show_as_base_field` must index `table.fields()`, else the binding error
-// is set and the status returned. A NULL or empty name is the one Excel
-// gives a new data field, `exclude` being the entry the spec replaces.
+// is set and the status returned. A NULL name is the one Excel
+// gives a new data field (`exclude` being the entry the spec replaces); an empty one is kept as the caption.
 // `kPreconditionFailed` for a function the cache's calculated items exclude.
 fm_status_t fill_data_field(const formulon::Workbook& workbook, const formulon::pivot::PivotTable& table,
                             const fm_pivot_data_field_t& spec, std::string number_format,
@@ -608,7 +608,7 @@ fm_status_t fill_data_field(const formulon::Workbook& workbook, const formulon::
       return set_last_error(checked.error());
     }
   }
-  if (spec.name != nullptr && spec.name[0] != '\0') {
+  if (spec.name != nullptr) {
     out->name = spec.name;
   } else {
     out->name =

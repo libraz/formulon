@@ -391,6 +391,8 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field, const st
     }
     if (!item.caption.empty()) {
       append_xml_attr(out, "n", item.caption);
+    } else if (item.blank_caption) {
+      out.append(" n=\"\"");
     }
     if (!item.show_detail) {
       out.append(" sd=\"0\"");

@@ -196,6 +196,10 @@ struct PivotItem {
   /// which hidden-item matching and page labels resolve against the cache.
   std::string caption{};
 
+  /// `<item n="">`: the item is renamed to an empty label. `caption` is empty then; an item with neither is not
+  /// renamed.
+  bool blank_caption = false;
+
   /// `<item sd>`: false when the item is collapsed, hiding the items of the
   /// inner fields below it.
   bool show_detail = true;

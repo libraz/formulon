@@ -571,7 +571,7 @@ class Pivot(_NoCopy):
         """Update the PivotTable Options; an omitted argument keeps its value.
 
         Arguments are the :class:`PivotOptions` fields. A caption or alt text
-        given as ``None`` (or ``""``) is cleared; a flag or a number cannot be.
+        given as ``None`` or ``""`` is cleared (api-conventions §5 rule 30); a flag or a number cannot be.
         A wrong-typed argument fails without changing the pivot.
 
         Raises:
@@ -786,11 +786,11 @@ class Pivot(_NoCopy):
     ) -> None:
         """Update pivot field ``field_index``; an omitted argument keeps its value.
 
-        ``custom_name`` renames the field in the report; ``None`` restores its
-        source name. It may be the field's own source name, not another
+        ``custom_name`` renames the field in the report; ``None`` or ``""``
+        restores its source name (api-conventions §5 rule 30). It may be the field's own source name, not another
         field's source or custom name or a data field's name.
         ``number_format`` is the number format code of the field's items;
-        ``None`` clears it. ``default_subtotal`` turns the automatic subtotal
+        ``None`` or ``""`` clears it. ``default_subtotal`` turns the automatic subtotal
         on or off (custom subtotal functions replace it either way);
         ``insert_blank_row`` adds a blank row after each item block;
         ``fill_down_labels`` repeats item labels on every row of a block;
@@ -1097,7 +1097,9 @@ class Pivot(_NoCopy):
         """Update item ``item_index`` of pivot field ``field_index``; an omitted argument keeps its value.
 
         ``show_detail`` expands (``True``) or collapses (``False``) the item.
-        ``caption`` is shown instead of the item's value; ``None`` clears it.
+        ``caption`` is shown instead of the item's value; ``None`` clears it,
+        and ``""`` renames the item to an empty label (api-conventions §5
+        rule 30).
         A caption longer than 255 UTF-16 code units, or one matching the label
         another item of the field shows, is rejected. The whole update is
         checked first and applied at once: a rejected argument leaves the
@@ -1379,7 +1381,7 @@ class Pivot(_NoCopy):
                 else _uint(spec.show_as_base_item, "show_as_base_item", role="position"),
             },
         )
-        S.write_str_field(LIB, ptr, S.PIVOT_DATA_FIELD_SPEC, "name", spec.name, scope)
+        S.write_str_field(LIB, ptr, S.PIVOT_DATA_FIELD_SPEC, "name", spec.name, scope, allow_empty=True)
         S.write_str_field(
             LIB,
             ptr,
@@ -1387,14 +1389,16 @@ class Pivot(_NoCopy):
             "number_format",
             spec.number_format,
             scope,
+            allow_empty=True,
         )
         return ptr
 
     def add_data_field(self, spec: PivotDataFieldInput) -> int:
         """Append a data-field entry; return its index.
 
-        An omitted or empty ``spec.name`` is derived from the workbook profile,
-        as :meth:`get_data_field_default_name` reports it.
+        An omitted or ``None`` ``spec.name`` is derived from the workbook profile,
+        as :meth:`get_data_field_default_name` reports it; ``""`` is an empty
+        caption.
         """
         field_index = self._field_index(spec.field_index)
         h, sheet, pivot_index = self._locate()
@@ -1415,7 +1419,7 @@ class Pivot(_NoCopy):
     def set_data_field(self, data_field_index: int, spec: PivotDataFieldInput) -> None:
         """Replace the data-field entry at ``data_field_index`` in place.
 
-        An omitted or empty ``spec.name`` is derived as in :meth:`add_data_field`.
+        An omitted or ``None`` ``spec.name`` is derived as in :meth:`add_data_field`.
         """
         field_index = self._field_index(spec.field_index)
         h, sheet, pivot_index = self._locate()

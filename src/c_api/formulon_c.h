@@ -7545,18 +7545,18 @@ typedef enum {
  */
 typedef struct {
   uint32_t struct_size;
-  /** The display name of the data field, the key GETPIVOTDATA looks it up by. When `NULL` or empty the engine names it
-   *  from the workbook profile's pivot wording, such as `Sum of Sales` (en-US) or `合計 / Sales` (ja-JP), numbered 2,
-   * 3,
-   *  ... while the name repeats another data field's or a field's display name; that needs `field_index` to be in
-   *  range. */
+  /** The display name of the data field, the key GETPIVOTDATA looks it up by. An empty string is an empty caption, as
+   *  Excel stores it (api-conventions §5 rule 30). When `NULL` the engine names it from the workbook profile's pivot
+   * wording, such as `Sum of Sales` (en-US) or `合計 / Sales` (ja-JP), numbered 2, 3, ... while the name repeats
+   * another data field's or a field's display name; that needs `field_index` to be in range. */
   const char* name;
   /** The index of the source pivot field the data field aggregates; it must be in range. */
   uint32_t field_index;
   /** The aggregation function applied to the source field. */
   int32_t aggregation;
   /** The number format code of the data field's values, under the rules of `fm_pivot_field_patch_t.number_format`;
-   *  `NULL` or empty for none. */
+   *  `NULL` and an empty string both mean none, since Excel stores no empty format code (api-conventions §5 rule 30).
+   */
   const char* number_format;
   /** How the value is derived from the data: as is, or as a difference, percentage, running total or rank against a
    *  base. */
@@ -7637,7 +7637,8 @@ typedef struct {
   uint32_t cache_index;
   /** Whether the item is shown. */
   int32_t visible;
-  /** The caption shown instead of the item's value; `NULL` when it has none. */
+  /** The caption shown instead of the item's value; `NULL` when it has none, an empty string for an item renamed to an
+   *  empty label. */
   const char* caption;
   /** Whether the item is expanded; false for a collapsed item. */
   int32_t show_detail;
@@ -7778,8 +7779,8 @@ typedef struct {
   /** Whether error cells show `error_caption`; the caption is kept while this is off (0 or non-zero when written). Read
    *  when `show_error_op` is `FM_PATCH_OP_SET`. */
   int32_t show_error;
-  /** How `error_caption` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it (an empty string unsets
-   *  it), `FM_PATCH_OP_CLEAR` unsets it. */
+  /** How `error_caption` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it (an empty string
+   *  unsets it, as `FM_PATCH_OP_CLEAR` does, since Excel drops an empty caption (api-conventions §5 rule 30)). */
   fm_patch_op_t error_caption_op;
   /** The text to write to the option. A set value is at most 255 UTF-16 code units. Read when `error_caption_op` is
    *  `FM_PATCH_OP_SET`. */
@@ -7791,7 +7792,7 @@ typedef struct {
    *  `FM_PATCH_OP_SET`. */
   int32_t show_missing;
   /** How `missing_caption` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it (an empty string
-   *  unsets it), `FM_PATCH_OP_CLEAR` unsets it. */
+   *  unsets it, as `FM_PATCH_OP_CLEAR` does, since Excel drops an empty caption (api-conventions §5 rule 30)). */
   fm_patch_op_t missing_caption_op;
   /** The text to write to the option. A set value is at most 255 UTF-16 code units. Read when `missing_caption_op` is
    *  `FM_PATCH_OP_SET`. */
@@ -7898,19 +7899,21 @@ typedef struct {
   /** Whether custom lists take part in sorting (0 or non-zero when written). Read when `custom_list_sort_op` is
    *  `FM_PATCH_OP_SET`. */
   int32_t custom_list_sort;
-  /** How `alt_text` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it (an empty string unsets it),
-   *  `FM_PATCH_OP_CLEAR` unsets it. */
+  /** How `alt_text` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it (an empty string unsets it,
+   *  as `FM_PATCH_OP_CLEAR` does, since the file holds no empty alternative text (api-conventions §5 rule 30)). */
   fm_patch_op_t alt_text_op;
   /** The text to write to the option. A set value is at most 255 UTF-16 code units. Read when `alt_text_op` is
    *  `FM_PATCH_OP_SET`. */
   const char* alt_text;
   /** How `alt_text_summary` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it (an empty string
-   *  unsets it), `FM_PATCH_OP_CLEAR` unsets it. */
+   *  unsets it, as `FM_PATCH_OP_CLEAR` does, since the file holds no empty alternative text (api-conventions §5 rule
+   * 30)). */
   fm_patch_op_t alt_text_summary_op;
   /** The text to write to the option. Read when `alt_text_summary_op` is `FM_PATCH_OP_SET`. */
   const char* alt_text_summary;
   /** How `grand_total_caption` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it (an empty string
-   *  unsets it), `FM_PATCH_OP_CLEAR` unsets it. */
+   *  unsets it, as `FM_PATCH_OP_CLEAR` does, and the locale's word shows again: Excel writes no empty caption
+   * (api-conventions §5 rule 30)). */
   fm_patch_op_t grand_total_caption_op;
   /** The text to write to the option. A set value is at most 255 UTF-16 code units. Read when `grand_total_caption_op`
    *  is `FM_PATCH_OP_SET`. */
@@ -8051,8 +8054,8 @@ FM_API fm_status_t fm_workbook_remove_pivot_cache(fm_workbook_t* wb, uint32_t ca
  *        reads it and `fm_workbook_set_pivot_cache_worksheet_source` writes it.
  *
  * `ref`, `sheet` and `name` are the element's attributes as text; each may
- * be `NULL` (absent) on input. On read the strings are model-backed views
- * owned by the workbook handle.
+ * be `NULL` (absent) on input; an empty string is refused (api-conventions §5 rule 30). On read the strings are
+ * model-backed views owned by the workbook handle.
  */
 typedef struct {
   uint32_t struct_size;
@@ -8099,7 +8102,8 @@ FM_API fm_status_t fm_workbook_get_pivot_cache_worksheet_source(const fm_workboo
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
  *         `FM_STATUS_NOT_FOUND` (6) when no cache matches `cache_id`;
- *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a string is not valid UTF-8.
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a string is not valid UTF-8;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `ref`, `sheet` or `name` is an empty string.
  */
 FM_API fm_status_t fm_workbook_set_pivot_cache_worksheet_source(fm_workbook_t* wb, uint32_t cache_id,
                                                                 const fm_pivot_worksheet_source_t* source);
@@ -8929,13 +8933,15 @@ typedef struct {
   fm_patch_op_t custom_name_op;
   /** The report name to write; it is non-`NULL`, at most 255 UTF-16 code units, and must not equal another field's
    *  source or custom name or a data field's name under the profile's collation (the field's own source name is
-   *  allowed). `FM_PATCH_OP_CLEAR` restores the source name. Read when `custom_name_op` is `FM_PATCH_OP_SET`. */
+   *  allowed). `FM_PATCH_OP_CLEAR` restores the source name, and so does an empty string, since Excel reverts to the
+   *  source name (api-conventions §5 rule 30). Read when `custom_name_op` is `FM_PATCH_OP_SET`. */
   const char* custom_name;
   /** How `number_format` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it, `FM_PATCH_OP_CLEAR`
    *  clears it. */
   fm_patch_op_t number_format_op;
   /** The number format code to write, in the workbook profile's vocabulary; a string of digits is a format code, not an
-   *  id. `FM_PATCH_OP_CLEAR` removes the format. Read when `number_format_op` is `FM_PATCH_OP_SET`. */
+   *  id. `FM_PATCH_OP_CLEAR` removes the format, and so does an empty string, since Excel drops an empty format code
+   * (api-conventions §5 rule 30). Read when `number_format_op` is `FM_PATCH_OP_SET`. */
   const char* number_format;
   /** How `default_subtotal` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR`
    *  is rejected. */
@@ -9031,7 +9037,8 @@ typedef struct {
   fm_patch_op_t caption_op;
   /** The caption to show instead of the item's value, at most 255 UTF-16 code units and distinct from the label another
    *  item of the field shows under the profile's text collation; a caption equal to the item's own value removes it.
-   *  Read when `caption_op` is `FM_PATCH_OP_SET`. */
+   *  An empty string is an empty label, as Excel stores it (api-conventions §5 rule 30). Read when `caption_op` is
+   * `FM_PATCH_OP_SET`. */
   const char* caption;
 } fm_pivot_item_patch_t;
 
@@ -9333,9 +9340,9 @@ FM_API fm_status_t fm_sheet_get_pivot_data_field_count(const fm_workbook_t* wb, 
                                                        size_t* out_count);
 
 /**
- * @brief Appends a new data-field entry. A `NULL` or empty `spec->name` is
+ * @brief Appends a new data-field entry. A `NULL` `spec->name` is
  *        replaced by the engine-derived name described on
- *        `fm_pivot_data_field_t`.
+ *        `fm_pivot_data_field_t`; an empty one is kept.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common pivot failure;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `spec->field_index` or a set
@@ -9358,7 +9365,7 @@ FM_API fm_status_t fm_sheet_clear_pivot_data_fields(fm_workbook_t* wb, size_t sh
 
 /**
  * @brief Replaces the data-field entry at `data_field_index` in place. A
- *        `NULL` or empty `spec->name` is derived as in
+ *        `NULL` `spec->name` is derived, and an empty one kept, as in
  *        `fm_sheet_add_pivot_data_field`.
  *
  * @return As `fm_sheet_add_pivot_data_field`.
@@ -9368,7 +9375,7 @@ FM_API fm_status_t fm_sheet_set_pivot_data_field(fm_workbook_t* wb, size_t sheet
 
 /**
  * @brief Reads into `*out` the name a data field over pivot field
- *        `field_index` with `aggregation` would get from an empty
+ *        `field_index` with `aggregation` would get from a `NULL`
  *        `spec->name`, without changing anything. `exclude_data_field` is the
  *        entry `fm_sheet_set_pivot_data_field` would replace, whose name is
  *        not counted as taken; `FM_PIVOT_DATA_FIELD_NONE` for none (the add case). The string

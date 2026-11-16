@@ -519,7 +519,7 @@ const PIVOT_MUTATORS = [
       expect: (b) => {
         assert.equal(b.wb.sheet(0).pivot(b.pivot).getFieldItem(b.region, 0).caption, 'Eastern');
         assert.equal(b.wb.sheet(0).pivot(b.pivot).getFieldItem(b.region, 1).caption, null);
-        b.wb.sheet(0).pivot(b.pivot).updateFieldItem(b.region, 0, { caption: '' });
+        b.wb.sheet(0).pivot(b.pivot).updateFieldItem(b.region, 0, { caption: null });
         assert.equal(b.wb.sheet(0).pivot(b.pivot).getFieldItem(b.region, 0).caption, null);
       },
     },

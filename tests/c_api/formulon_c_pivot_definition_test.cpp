@@ -253,12 +253,12 @@ TEST(FormulonCApiPivot, ReadBackRejectsBadArguments) {
             static_cast<fm_status_t>(formulon::FormulonErrorCode::kSheetIndexOutOfRange));
 }
 
-TEST(FormulonCApiPivot, EmptyDataFieldNameIsDerivedFromTheProfile) {
+TEST(FormulonCApiPivot, OmittedDataFieldNameIsDerivedFromTheProfile) {
   // The scratch pivot already holds "Sum of Amount", so Excel numbers the new one.
   EXPECT_EQ(DerivedDataFieldName("win-365-en_US", FM_PIVOT_AGGREGATION_SUM, nullptr), "Sum of Amount2");
-  EXPECT_EQ(DerivedDataFieldName("win-365-en_US", FM_PIVOT_AGGREGATION_AVERAGE, ""), "Average of Amount");
+  EXPECT_EQ(DerivedDataFieldName("win-365-en_US", FM_PIVOT_AGGREGATION_AVERAGE, nullptr), "Average of Amount");
   EXPECT_EQ(DerivedDataFieldName("win-365-ja_JP", FM_PIVOT_AGGREGATION_SUM, nullptr), "合計 / Amount");
-  EXPECT_EQ(DerivedDataFieldName("win-365-ja_JP", FM_PIVOT_AGGREGATION_COUNT, ""), "個数 / Amount");
+  EXPECT_EQ(DerivedDataFieldName("win-365-ja_JP", FM_PIVOT_AGGREGATION_COUNT, nullptr), "個数 / Amount");
   // An explicit name is kept as given.
   EXPECT_EQ(DerivedDataFieldName("win-365-ja_JP", FM_PIVOT_AGGREGATION_SUM, "Total"), "Total");
 }

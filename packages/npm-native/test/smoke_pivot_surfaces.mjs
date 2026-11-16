@@ -264,7 +264,7 @@ test('an empty or omitted data field name is derived from the workbook profile',
       wb.setProfileId(profile);
       for (const [i, spec] of [
         { fieldIndex: 1, aggregation: 0 },
-        { name: '', fieldIndex: 1, aggregation: 0 },
+        { fieldIndex: 1, aggregation: 0 },
       ].entries()) {
         const added = pivot.addDataField(spec);
         assert.equal(pivot.listDataFields()[added].name, expected[i]);

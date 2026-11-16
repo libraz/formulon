@@ -360,6 +360,24 @@ class FieldPatchReader {
     }
   }
 
+  // An item caption: CLEAR removes it, and SET of the empty string is an empty label.
+  void caption(fm_patch_op_t op, const char* value, formulon::pivot::PivotItemPatch& out) {
+    if (!accepts(op, true, "caption")) {
+      return;
+    }
+    if (op == FM_PATCH_OP_CLEAR) {
+      out.clear_caption = true;
+      return;
+    }
+    if (value == nullptr) {
+      rc_ = null_field("caption");
+      return;
+    }
+    if ((rc_ = check_utf8(value, "field", "caption")) == 0) {
+      out.caption = std::string(value);
+    }
+  }
+
   // A clearable text key: CLEAR writes the empty string, which the engine reads as removal.
   void text(fm_patch_op_t op, const char* value, std::optional<std::string>& out, const char* name) {
     if (!accepts(op, true, name)) {
@@ -510,7 +528,7 @@ extern "C" fm_status_t fm_sheet_update_pivot_field_item(fm_workbook_t* wb, std::
   formulon::pivot::PivotItemPatch next;
   reader.flag(patch->visible_op, patch->visible, next.visible, "visible");
   reader.flag(patch->show_detail_op, patch->show_detail, next.show_detail, "show_detail");
-  reader.text(patch->caption_op, patch->caption, next.caption, "caption");
+  reader.caption(patch->caption_op, patch->caption, next);
   if (reader.status() != 0) {
     return reader.status();
   }
@@ -518,7 +536,7 @@ extern "C" fm_status_t fm_sheet_update_pivot_field_item(fm_workbook_t* wb, std::
       !checked) {
     return finish_status(checked);
   }
-  if (!next.visible && !next.show_detail && !next.caption) {
+  if (!next.visible && !next.show_detail && !next.caption && !next.clear_caption) {
     return 0;
   }
   PivotEdit edit(wb->workbook(), sheet_index, pivot_index, *table);
@@ -910,7 +928,7 @@ extern "C" fm_status_t fm_sheet_get_pivot_field_item_at(const fm_workbook_t* wb,
   result.has_cache_index = item.has_cache_index ? 1 : 0;
   result.cache_index = item.has_cache_index ? item.cache_index : 0U;
   result.visible = item.visible ? 1 : 0;
-  result.caption = c_str_or_null(item.caption);
+  result.caption = item.blank_caption ? "" : c_str_or_null(item.caption);
   result.show_detail = item.show_detail ? 1 : 0;
   *out = result;
   return 0;

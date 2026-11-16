@@ -831,7 +831,7 @@ std::string DefaultName(const fm_workbook_t* wb, std::size_t field, fm_pivot_agg
 // Adds a data field with an empty name and returns the name it got.
 std::string AddUnnamed(fm_workbook_t* wb, std::size_t field, fm_pivot_aggregation_t aggregation) {
   fm_pivot_data_field_t spec = FM_STRUCT_INIT(fm_pivot_data_field_t);
-  spec.name = "";
+  spec.name = nullptr;
   spec.field_index = static_cast<std::uint32_t>(field);
   spec.aggregation = aggregation;
   spec.number_format = "";
