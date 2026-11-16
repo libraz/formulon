@@ -1178,5 +1178,55 @@ TEST(XlsbChartsheet, ExcelChartsheetConvertsOnAnXlsbSave) {
   EXPECT_EQ(again.sheet(0).opaque_ooxml_part_path(), "xl/chartsheets/sheet1.bin");
 }
 
+// The body of a <chartsheet> part from <sheetPr> on, without the root's namespaces and revision id.
+std::string ChartsheetBody(const std::string& xml) {
+  const std::size_t at = xml.find("<sheetPr");
+  return at == std::string::npos ? xml : xml.substr(at);
+}
+
+// Excel's own .xlsx and .xlsb saves of one chartsheet, each with one setting changed: protection, page setup, tab
+// colour or header. Each format saved to the other writes what Excel's save of that format holds.
+TEST(XlsbChartsheet, ExcelChartsheetSettingsConvertBothWays) {
+  struct Case {
+    const char* name;
+    std::uint32_t xlsb_unconverted;
+  };
+  // A theme tab colour stores its rendered value in the record, which the .xlsb writer does not resolve.
+  for (const Case& c : {Case{"prot_contents_only", 0U}, Case{"prot_both_pw_abc", 0U},
+                        Case{"page_first_page_number_5", 0U}, Case{"page_draft", 0U}, Case{"page_black_and_white", 0U},
+                        Case{"tab_color_rgb_red", 0U}, Case{"tab_color_theme", 1U}, Case{"header_center_HDR", 0U}}) {
+    SCOPED_TRACE(c.name);
+    const std::string base = std::string("chartsheet_twins/") + c.name;
+    const std::vector<std::uint8_t> xlsx = test::read_file_bytes(FixturePath((base + ".xlsx").c_str()));
+    const std::vector<std::uint8_t> xlsb = test::read_file_bytes(FixturePath((base + ".xlsb").c_str()));
+    ASSERT_FALSE(xlsx.empty());
+    ASSERT_FALSE(xlsb.empty());
+    std::string excel_xml;
+    std::string excel_bin;
+    ASSERT_TRUE(test::extract_part(test::span_of(xlsx), "xl/chartsheets/sheet1.xml", &excel_xml));
+    ASSERT_TRUE(test::extract_part(test::span_of(xlsb), "xl/chartsheets/sheet1.bin", &excel_bin));
+
+    auto from_xlsb = io::xlsb::read_xlsb(test::span_of(xlsb));
+    ASSERT_TRUE(static_cast<bool>(from_xlsb)) << from_xlsb.error().message;
+    auto as_xlsx = io::write_ooxml_with_result(from_xlsb.value().workbook);
+    ASSERT_TRUE(static_cast<bool>(as_xlsx)) << as_xlsx.error().message;
+    EXPECT_EQ(as_xlsx.value().diagnostics.deferred_feature_count, 0U);
+    std::string written_xml;
+    ASSERT_TRUE(test::extract_part(test::span_of(as_xlsx.value().bytes), "xl/chartsheets/sheet1.xml", &written_xml));
+    EXPECT_EQ(ChartsheetBody(written_xml), ChartsheetBody(excel_xml));
+
+    auto from_xlsx = io::read_ooxml(test::span_of(xlsx));
+    ASSERT_TRUE(static_cast<bool>(from_xlsx)) << from_xlsx.error().message;
+    auto as_xlsb = io::xlsb::write_xlsb_with_result(from_xlsx.value().workbook);
+    ASSERT_TRUE(static_cast<bool>(as_xlsb)) << as_xlsb.error().message;
+    EXPECT_EQ(as_xlsb.value().diagnostics.deferred_feature_count, c.xlsb_unconverted);
+    if (c.xlsb_unconverted == 0U) {
+      std::string written_bin;
+      ASSERT_TRUE(test::extract_part(test::span_of(as_xlsb.value().bytes), "xl/chartsheets/sheet1.bin", &written_bin));
+      EXPECT_EQ(ChartsheetRecords(written_bin), ChartsheetRecords(excel_bin));
+    }
+  }
+}
+
 }  // namespace
 }  // namespace formulon
