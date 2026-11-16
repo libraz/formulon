@@ -130,6 +130,7 @@ std::string WithCompatibilityVersionExt(std::string ext_lst, const Workbook& wb)
 // Relationship type URIs live in `io/ooxml_defs.h`.
 
 constexpr std::string_view kCtWorksheet = "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml";
+constexpr std::string_view kCtChartsheet = "application/vnd.openxmlformats-officedocument.spreadsheetml.chartsheet+xml";
 constexpr std::string_view kCtStyles = "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
 constexpr std::string_view kCtSharedStrings =
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml";
@@ -322,6 +323,9 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   AppendOverride(out, kWorkbookPartPath, workbook_kind_content_type(wb.kind()));
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     if (wb.sheet(i).is_opaque_ooxml_sheet()) {
+      if (const std::string converted = ConvertedChartsheetPath(wb.sheet(i)); !converted.empty()) {
+        AppendOverride(out, converted, kCtChartsheet);
+      }
       continue;
     }
     AppendOverride(out, SheetPartPath(i), kCtWorksheet);
@@ -705,8 +709,9 @@ std::string BuildWorkbookRels(std::size_t sheet_count, const EmissionPlan& plan,
   for (std::size_t i = 0; i < sheet_count; ++i) {
     const Sheet& sheet = wb.sheet(i);
     if (sheet.is_opaque_ooxml_sheet()) {
+      const std::string converted = ConvertedChartsheetPath(sheet);
       AppendRelationship(out, SheetRelId(i), sheet.opaque_ooxml_relationship_type(),
-                         TargetRelativeToWorkbook(sheet.opaque_ooxml_part_path()));
+                         TargetRelativeToWorkbook(converted.empty() ? sheet.opaque_ooxml_part_path() : converted));
     } else {
       AppendRelationship(out, SheetRelId(i), kRelWorksheet, TargetRelativeToWorkbook(SheetPartPath(i)));
     }

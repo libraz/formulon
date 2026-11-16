@@ -52,6 +52,15 @@ std::string SheetPartPath(std::size_t index) {
   return NumberedPartPath("xl/worksheets/sheet", static_cast<std::uint32_t>(index + 1U), ".xml");
 }
 
+std::string ConvertedChartsheetPath(const Sheet& sheet) {
+  const std::string& path = sheet.opaque_ooxml_part_path();
+  if (!sheet.is_opaque_ooxml_sheet() || !strings::ends_with(sheet.opaque_ooxml_relationship_type(), "/chartsheet") ||
+      !strings::ends_with(path, ".bin")) {
+    return {};
+  }
+  return path.substr(0, path.size() - 4U) + ".xml";
+}
+
 std::string SheetRelsPartPath(std::size_t index) {
   return NumberedPartPath("xl/worksheets/_rels/sheet", static_cast<std::uint32_t>(index + 1U), ".xml.rels");
 }
@@ -175,6 +184,9 @@ std::unordered_set<std::string> BuildGeneratedPathSet(
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
     if (!wb.sheet(i).is_opaque_ooxml_sheet()) {
       paths.insert(SheetPartPath(i));
+    } else if (std::string converted = ConvertedChartsheetPath(wb.sheet(i)); !converted.empty()) {
+      paths.insert(ooxml::rels_path_for_part(converted));
+      paths.insert(std::move(converted));
     }
   }
   for (const EmissionPlan::PerSheetTable& t : flat_tables) {
@@ -609,6 +621,12 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
   // reader could not model goes with them, its cache and every relationship
   // to either included, and is counted as a pivot left out.
   std::unordered_set<std::string> binary_parts;
+  std::unordered_set<std::string> converted_chartsheets;
+  for (std::size_t si = 0; si < wb.sheet_count(); ++si) {
+    if (!ConvertedChartsheetPath(wb.sheet(si)).empty()) {
+      converted_chartsheets.insert(wb.sheet(si).opaque_ooxml_part_path());
+    }
+  }
   for (const PassthroughPart& part : wb.passthrough_parts()) {
     if (IsXlsbBinaryContentType(EffectiveContentType(wb, part))) {
       binary_parts.insert(part.path);
@@ -653,7 +671,8 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
     // the same model from an `.xlsx` source produces.
     // A retained original of modelled state (styles, a lifted PivotTable group) is superseded, not lost.
     if (IsXlsbBinaryContentType(EffectiveContentType(wb, part))) {
-      if (part.is_unmodelled()) {
+      // A chartsheet's binary part is written as its converted XML, not lost.
+      if (part.is_unmodelled() && converted_chartsheets.count(part.path) == 0U) {
         StructuredLog("ooxml_writer.passthrough_dropped")
             .field("path", part.path)
             .field("content_type", part.content_type)

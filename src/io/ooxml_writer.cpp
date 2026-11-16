@@ -59,6 +59,7 @@
 #include "io/styles_writer.h"
 #include "io/threaded_comments_io.h"
 #include "io/writer_common.h"
+#include "io/xlsb/chartsheet_records.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
 #include "miniz.h"
@@ -71,6 +72,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/status_macros.h"
+#include "utils/structured_log.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -631,6 +633,29 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   }
   if (plan.generated_persons) {
     RETURN_IF_ERROR(AddPart(writer.get(), kPersonsPartPath, write_persons(wb.persons()), &written_paths));
+  }
+
+  // A chartsheet read from an .xlsb is written as the `<chartsheet>` its records state, with its relationships.
+  for (std::size_t i = 0; i < sheet_count; ++i) {
+    const std::string converted = ConvertedChartsheetPath(wb.sheet(i));
+    if (converted.empty()) {
+      continue;
+    }
+    const PassthroughPart* bin = source_index.find(wb.sheet(i).opaque_ooxml_part_path());
+    ASSIGN_OR_RETURN(const xlsb::ChartsheetXml chartsheet,
+                     xlsb::chartsheet_xml_from_records(ByteSpan{bin->bytes.data(), bin->bytes.size()}));
+    RETURN_IF_ERROR(AddPart(writer.get(), converted, chartsheet.xml, &written_paths));
+    if (const PassthroughPart* rels =
+            source_index.find(ooxml::rels_path_for_part(wb.sheet(i).opaque_ooxml_part_path()))) {
+      RETURN_IF_ERROR(AddPartBytes(writer.get(), ooxml::rels_path_for_part(converted), rels->bytes, &written_paths));
+    }
+    if (chartsheet.unconverted != 0U) {
+      StructuredLog("ooxml_writer.chartsheet_records_left_out")
+          .field("sheet", std::string_view(wb.sheet(i).name()))
+          .field("count", static_cast<int64_t>(chartsheet.unconverted))
+          .warn();
+      diagnostics.deferred_feature_count += chartsheet.unconverted;
+    }
   }
 
   // Passthrough parts — bytes from the original archive, written

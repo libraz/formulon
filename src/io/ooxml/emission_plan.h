@@ -245,6 +245,11 @@ std::string SheetPartPath(std::size_t index);
 /// Package path of that worksheet's rels file.
 std::string SheetRelsPartPath(std::size_t index);
 
+/// The `<chartsheet>` part an .xlsx save writes from the records of a
+/// chartsheet read from an .xlsb (its `.bin` path ending in `.xml`), or empty
+/// for any other sheet.
+std::string ConvertedChartsheetPath(const Sheet& sheet);
+
 /// Workbook-rels layout: sheets take rId1..rId(N), styles rId(N+1), the
 /// generated shared strings (when present) the next id, and the pivot caches,
 /// external links and retained relationships follow in that order.

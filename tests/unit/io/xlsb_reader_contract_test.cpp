@@ -1088,5 +1088,39 @@ TEST(XlsbChartsheet, ExcelChartsheetSurvivesAnXlsbSave) {
   EXPECT_EQ(again.sheet(1).name(), "Sheet1");
 }
 
+// An .xlsx save writes a chartsheet read from an .xlsb as the <chartsheet> its records state, as Excel's own .xlsx
+// save of the same book does, with its drawing relationship; nothing is counted as lost.
+TEST(XlsbChartsheet, ExcelChartsheetConvertsOnAnXlsxSave) {
+  const std::vector<std::uint8_t> bytes = test::read_file_bytes(FixturePath("chartsheet_empty.xlsb"));
+  ASSERT_FALSE(bytes.empty());
+  auto loaded = io::xlsb::read_xlsb(test::span_of(bytes));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  auto saved = io::write_ooxml_with_result(loaded.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  EXPECT_EQ(saved.value().diagnostics.dropped_part_count, 0U);
+  EXPECT_EQ(saved.value().diagnostics.deferred_feature_count, 0U);
+
+  std::string chartsheet;
+  ASSERT_TRUE(test::extract_part(test::span_of(saved.value().bytes), "xl/chartsheets/sheet1.xml", &chartsheet));
+  // Excel's .xlsx save of the same book, its namespaces and revision id aside.
+  EXPECT_NE(chartsheet.find("<sheetPr/><sheetViews><sheetView tabSelected=\"1\" zoomScale=\"125\" workbookViewId=\"0\" "
+                            "zoomToFit=\"1\"/></sheetViews><pageMargins left=\"0.7\" right=\"0.7\" top=\"0.75\" "
+                            "bottom=\"0.75\" header=\"0.3\" footer=\"0.3\"/><drawing r:id=\"rId1\"/></chartsheet>"),
+            std::string::npos)
+      << chartsheet;
+  std::string rels;
+  ASSERT_TRUE(test::extract_part(test::span_of(saved.value().bytes), "xl/chartsheets/_rels/sheet1.xml.rels", &rels));
+  EXPECT_NE(rels.find("Target=\"../drawings/drawing1.xml\""), std::string::npos) << rels;
+  std::string unused;
+  EXPECT_FALSE(test::extract_part(test::span_of(saved.value().bytes), "xl/chartsheets/sheet1.bin", &unused));
+
+  auto reloaded = io::read_ooxml(test::span_of(saved.value().bytes));
+  ASSERT_TRUE(static_cast<bool>(reloaded)) << reloaded.error().message;
+  const Workbook& again = reloaded.value().workbook;
+  ASSERT_EQ(again.sheet_count(), 2U);
+  EXPECT_TRUE(again.sheet(0).is_opaque_ooxml_sheet());
+  EXPECT_EQ(again.sheet(0).opaque_ooxml_part_path(), "xl/chartsheets/sheet1.xml");
+}
+
 }  // namespace
 }  // namespace formulon
