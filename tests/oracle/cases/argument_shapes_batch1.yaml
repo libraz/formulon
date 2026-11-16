@@ -1,0 +1,274 @@
+suite: argument_shapes_batch1
+description: >
+  Each argument position of a scalar call the existing suites pin, replaced
+  by a cell holding #N/A and by a blank cell; the first literal argument as an
+  array constant read through INDEX; the first number as zero and negated.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: atan2_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=ATAN2(B1,0)"
+  - id: atan2_arg1_blank_cell
+    formula: "=ATAN2(B2,0)"
+  - id: atan2_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=ATAN2(1,B1)"
+  - id: atan2_arg2_blank_cell
+    formula: "=ATAN2(1,B2)"
+  - id: atan2_arg1_array_lifted
+    formula: "=INDEX(ATAN2({1,1},0),2)"
+  - id: atan2_arg1_zero
+    formula: "=ATAN2(0,0)"
+  - id: atan2_arg1_negative
+    formula: "=ATAN2(-1,0)"
+  - id: besselj_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=BESSELJ(B1,10000000)"
+  - id: besselj_arg1_blank_cell
+    formula: "=BESSELJ(B2,10000000)"
+  - id: besselj_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=BESSELJ(1,B1)"
+  - id: besselj_arg2_blank_cell
+    formula: "=BESSELJ(1,B2)"
+  - id: besselj_arg1_array_lifted
+    formula: "=INDEX(BESSELJ({1,1},10000000),2)"
+  - id: besselj_arg1_zero
+    formula: "=BESSELJ(0,10000000)"
+  - id: besselj_arg1_negative
+    formula: "=BESSELJ(-1,10000000)"
+  - id: bin2dec_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=BIN2DEC(B1)"
+  - id: bin2dec_arg1_blank_cell
+    formula: "=BIN2DEC(B2)"
+  - id: bin2dec_arg1_array_lifted
+    formula: "=INDEX(BIN2DEC({\"1010\",\"1010\"}),2)"
+  - id: bin2hex_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=BIN2HEX(B1,4)"
+  - id: bin2hex_arg1_blank_cell
+    formula: "=BIN2HEX(B2,4)"
+  - id: bin2hex_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=BIN2HEX(\"1010\",B1)"
+  - id: bin2hex_arg2_blank_cell
+    formula: "=BIN2HEX(\"1010\",B2)"
+  - id: bin2hex_arg1_array_lifted
+    formula: "=INDEX(BIN2HEX({\"1010\",\"1010\"},4),2)"
+  - id: bin2hex_arg2_zero
+    formula: "=BIN2HEX(\"1010\",0)"
+  - id: bin2hex_arg2_negative
+    formula: "=BIN2HEX(\"1010\",-4)"
+  - id: bin2oct_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=BIN2OCT(B1,4)"
+  - id: bin2oct_arg1_blank_cell
+    formula: "=BIN2OCT(B2,4)"
+  - id: bin2oct_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=BIN2OCT(\"1010\",B1)"
+  - id: bin2oct_arg2_blank_cell
+    formula: "=BIN2OCT(\"1010\",B2)"
+  - id: bin2oct_arg1_array_lifted
+    formula: "=INDEX(BIN2OCT({\"1010\",\"1010\"},4),2)"
+  - id: bin2oct_arg2_zero
+    formula: "=BIN2OCT(\"1010\",0)"
+  - id: bin2oct_arg2_negative
+    formula: "=BIN2OCT(\"1010\",-4)"
+  - id: convert_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=CONVERT(B1,\"m\",\"ft\")"
+  - id: convert_arg1_blank_cell
+    formula: "=CONVERT(B2,\"m\",\"ft\")"
+  - id: convert_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=CONVERT(1,B1,\"ft\")"
+  - id: convert_arg2_blank_cell
+    formula: "=CONVERT(1,B2,\"ft\")"
+  - id: convert_arg3_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=CONVERT(1,\"m\",B1)"
+  - id: convert_arg3_blank_cell
+    formula: "=CONVERT(1,\"m\",B2)"
+  - id: convert_arg1_array_lifted
+    formula: "=INDEX(CONVERT({1,1},\"m\",\"ft\"),2)"
+  - id: convert_arg1_zero
+    formula: "=CONVERT(0,\"m\",\"ft\")"
+  - id: convert_arg1_negative
+    formula: "=CONVERT(-1,\"m\",\"ft\")"
+  - id: datedif_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=DATEDIF(B1,DATE(2024,7,1),\"Y\")"
+  - id: datedif_arg1_blank_cell
+    formula: "=DATEDIF(B2,DATE(2024,7,1),\"Y\")"
+  - id: datedif_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=DATEDIF(DATE(2020,3,15),B1,\"Y\")"
+  - id: datedif_arg2_blank_cell
+    formula: "=DATEDIF(DATE(2020,3,15),B2,\"Y\")"
+  - id: datedif_arg3_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=DATEDIF(DATE(2020,3,15),DATE(2024,7,1),B1)"
+  - id: datedif_arg3_blank_cell
+    formula: "=DATEDIF(DATE(2020,3,15),DATE(2024,7,1),B2)"
+  - id: datedif_arg3_array_lifted
+    formula: "=INDEX(DATEDIF(DATE(2020,3,15),DATE(2024,7,1),{\"Y\",\"Y\"}),2)"
+  - id: day_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=DAY(B1)"
+  - id: day_arg1_blank_cell
+    formula: "=DAY(B2)"
+  - id: days360_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=DAYS360(B1,DATE(2024,3,31),TRUE)"
+  - id: days360_arg1_blank_cell
+    formula: "=DAYS360(B2,DATE(2024,3,31),TRUE)"
+  - id: days360_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=DAYS360(DATE(2024,1,31),B1,TRUE)"
+  - id: days360_arg2_blank_cell
+    formula: "=DAYS360(DATE(2024,1,31),B2,TRUE)"
+  - id: days360_arg3_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=DAYS360(DATE(2024,1,31),DATE(2024,3,31),B1)"
+  - id: days360_arg3_blank_cell
+    formula: "=DAYS360(DATE(2024,1,31),DATE(2024,3,31),B2)"
+  - id: days360_arg3_array_lifted
+    formula: "=INDEX(DAYS360(DATE(2024,1,31),DATE(2024,3,31),{TRUE,TRUE}),2)"
+  - id: dec2bin_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=DEC2BIN(B1,4)"
+  - id: dec2bin_arg1_blank_cell
+    formula: "=DEC2BIN(B2,4)"
+  - id: dec2bin_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=DEC2BIN(2,B1)"
+  - id: dec2bin_arg2_blank_cell
+    formula: "=DEC2BIN(2,B2)"
+  - id: dec2bin_arg1_array_lifted
+    formula: "=INDEX(DEC2BIN({2,2},4),2)"
+  - id: dec2bin_arg1_zero
+    formula: "=DEC2BIN(0,4)"
+  - id: dec2bin_arg1_negative
+    formula: "=DEC2BIN(-2,4)"
+  - id: dec2hex_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=DEC2HEX(B1,4)"
+  - id: dec2hex_arg1_blank_cell
+    formula: "=DEC2HEX(B2,4)"
+  - id: dec2hex_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=DEC2HEX(255,B1)"
+  - id: dec2hex_arg2_blank_cell
+    formula: "=DEC2HEX(255,B2)"
+  - id: dec2hex_arg1_array_lifted
+    formula: "=INDEX(DEC2HEX({255,255},4),2)"
+  - id: dec2hex_arg1_zero
+    formula: "=DEC2HEX(0,4)"
+  - id: dec2hex_arg1_negative
+    formula: "=DEC2HEX(-255,4)"
+  - id: dec2oct_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=DEC2OCT(B1,4)"
+  - id: dec2oct_arg1_blank_cell
+    formula: "=DEC2OCT(B2,4)"
+  - id: dec2oct_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=DEC2OCT(8,B1)"
+  - id: dec2oct_arg2_blank_cell
+    formula: "=DEC2OCT(8,B2)"
+  - id: dec2oct_arg1_array_lifted
+    formula: "=INDEX(DEC2OCT({8,8},4),2)"
+  - id: dec2oct_arg1_zero
+    formula: "=DEC2OCT(0,4)"
+  - id: dec2oct_arg1_negative
+    formula: "=DEC2OCT(-8,4)"
+  - id: delta_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=DELTA(B1,5)"
+  - id: delta_arg1_blank_cell
+    formula: "=DELTA(B2,5)"
+  - id: delta_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=DELTA(5,B1)"
+  - id: delta_arg2_blank_cell
+    formula: "=DELTA(5,B2)"
+  - id: delta_arg1_array_lifted
+    formula: "=INDEX(DELTA({5,5},5),2)"
+  - id: delta_arg1_zero
+    formula: "=DELTA(0,5)"
+  - id: delta_arg1_negative
+    formula: "=DELTA(-5,5)"
+  - id: dollarde_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=DOLLARDE(B1,16)"
+  - id: dollarde_arg1_blank_cell
+    formula: "=DOLLARDE(B2,16)"
+  - id: dollarde_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=DOLLARDE(1.02,B1)"
+  - id: dollarde_arg2_blank_cell
+    formula: "=DOLLARDE(1.02,B2)"
+  - id: dollarde_arg1_array_lifted
+    formula: "=INDEX(DOLLARDE({1.02,1.02},16),2)"
+  - id: dollarde_arg1_zero
+    formula: "=DOLLARDE(0,16)"
+  - id: dollarde_arg1_negative
+    formula: "=DOLLARDE(-1.02,16)"
+  - id: effect_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=EFFECT(B1,12)"
+  - id: effect_arg1_blank_cell
+    formula: "=EFFECT(B2,12)"
+  - id: effect_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=EFFECT(0.0525,B1)"
+  - id: effect_arg2_blank_cell
+    formula: "=EFFECT(0.0525,B2)"
+  - id: effect_arg1_array_lifted
+    formula: "=INDEX(EFFECT({0.0525,0.0525},12),2)"
+  - id: effect_arg1_zero
+    formula: "=EFFECT(0,12)"
+  - id: effect_arg1_negative
+    formula: "=EFFECT(-0.0525,12)"
+  - id: exp_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=EXP(B1)"
+  - id: exp_arg1_blank_cell
+    formula: "=EXP(B2)"
+  - id: exp_arg1_array_lifted
+    formula: "=INDEX(EXP({0,0}),2)"
+  - id: exp_arg1_negative
+    formula: "=EXP(-0)"
+  - id: factdouble_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=FACTDOUBLE(B1)"
+  - id: factdouble_arg1_blank_cell
+    formula: "=FACTDOUBLE(B2)"
+  - id: factdouble_arg1_array_lifted
+    formula: "=INDEX(FACTDOUBLE({0,0}),2)"
+  - id: factdouble_arg1_negative
+    formula: "=FACTDOUBLE(-0)"
+  - id: find_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=FIND(B1,\"abcabc\",2)"
+  - id: find_arg1_blank_cell
+    formula: "=FIND(B2,\"abcabc\",2)"
+  - id: find_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=FIND(\"a\",B1,2)"
+  - id: find_arg2_blank_cell
+    formula: "=FIND(\"a\",B2,2)"
+  - id: find_arg3_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=FIND(\"a\",\"abcabc\",B1)"
+  - id: find_arg3_blank_cell
+    formula: "=FIND(\"a\",\"abcabc\",B2)"
+  - id: find_arg1_array_lifted
+    formula: "=INDEX(FIND({\"a\",\"a\"},\"abcabc\",2),2)"
+  - id: find_arg3_zero
+    formula: "=FIND(\"a\",\"abcabc\",0)"
+  - id: find_arg3_negative
+    formula: "=FIND(\"a\",\"abcabc\",-2)"
