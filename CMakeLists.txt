@@ -514,6 +514,7 @@ set(FORMULON_CORE_SOURCES
   src/eval/dbcs_lenb_table.cpp
   src/eval/locale_text.cpp
   src/eval/locale_function_names.cpp
+  src/eval/formula_entry.cpp
   src/eval/formula_entry_r1c1.cpp
   src/eval/formula_localize.cpp
   src/eval/coupon_schedule.cpp

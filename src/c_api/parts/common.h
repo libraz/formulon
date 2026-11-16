@@ -25,6 +25,7 @@
 
 #include "c_api/borrowed_arena.h"
 #include "c_api/formulon_c.h"
+#include "eval/formula_entry.h"
 #include "utils/error.h"
 #include "utils/strings.h"
 #include "value.h"
@@ -612,10 +613,8 @@ struct fm_workbook {
   void clear_cell_enumeration_cache() noexcept { cell_enumeration_cache = {}; }
 
   // The first spelling of each unknown function name the workbook has seen,
-  // with its ASCII lower-case key: an entered call takes it (Excel decides the
-  // spelling workbook-wide). Filled from the loaded formulas on first use.
-  mutable std::deque<std::pair<std::string, std::string>> unknown_call_spellings;
-  mutable bool unknown_call_spellings_seeded = false;
+  // which an entered call takes (Excel decides it workbook-wide).
+  mutable formulon::eval::EnteredCallSpellings entered_call_spellings;
 
   // Storage behind every borrowed field `fm_sheet_get_cf_rule_at` fills. They are
   // separate from `read_scratch` on purpose: only a successful

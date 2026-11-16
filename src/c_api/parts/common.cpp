@@ -20,14 +20,11 @@
 #include "c_api/parts/enum_map.h"
 #include "cf/cf_types.h"
 #include "drawing/drawing_xml.h"
-#include "eval/builtin_names.h"
 #include "eval/coerce.h"
-#include "eval/formula_entry_r1c1.h"
+#include "eval/formula_entry.h"
 #include "eval/function_registry.h"
-#include "excel_locale.h"
 #include "num_fmt_locale.h"
 #include "parser/formula_prefix.h"
-#include "parser/literal_spelling.h"
 #include "parser/parse_status.h"
 #include "parser/reference.h"
 #include "parser/structured_ref_spelling.h"
@@ -37,7 +34,6 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/formula_text.h"
-#include "utils/index_sort.h"
 #include "utils/number_text.h"
 #include "utils/resource_budget.h"
 #include "utils/strings.h"
@@ -1052,300 +1048,18 @@ fm_status_t check_keeps_visible_sheet(const formulon::Workbook& workbook, std::u
 
 namespace {
 
-using formulon::parser::AstNode;
-using formulon::parser::ParseErrorCode;
-using formulon::parser::ParseFailure;
-
-bool is_builtin_function_name(std::string_view name) {
-  return formulon::eval::resolve_builtin_function_name(name) != nullptr;
-}
-
-// Where entered text is spelled: the handle (for its unknown-function
-// spellings) and the sheet a defined name is looked up from, or `kNoSheet`.
-struct EntrySpellingContext {
-  const fm_workbook_t* wb;
-  std::size_t sheet;
-};
-
-// The workbook's own spelling of the sheet, defined name or table `typed` names, or empty.
-std::string_view own_entry_name(const void* ctx, formulon::parser::EnteredNameKind kind, std::string_view typed) {
-  const auto& entry = *static_cast<const EntrySpellingContext*>(ctx);
-  const formulon::Workbook& book = entry.wb->workbook();
-  switch (kind) {
-    case formulon::parser::EnteredNameKind::kSheet: {
-      const formulon::Sheet* sheet = book.sheet_by_name(typed);
-      return sheet != nullptr ? std::string_view(sheet->name()) : std::string_view();
-    }
-    case formulon::parser::EnteredNameKind::kTable: {
-      const std::size_t index = formulon::sheet_names::resolve_table(book.tables(), typed);
-      return index != formulon::sheet_names::kNotFound ? std::string_view(book.tables()[index].display_name)
-                                                       : std::string_view();
-    }
-    case formulon::parser::EnteredNameKind::kDefinedName:
+// `formula`'s entry outcome as a status: 0 when stored, else the refusal located in `formula`.
+fm_status_t entry_status(formulon::eval::EntryResult result, std::string_view formula,
+                         const formulon::parser::ParseFailure& failure, std::string_view context) {
+  switch (result) {
+    case formulon::eval::EntryResult::kStored:
+      return 0;
+    case formulon::eval::EntryResult::kInvalidUtf8:
+      return check_utf8(formula, context);
+    case formulon::eval::EntryResult::kRefused:
       break;
   }
-  // A name local to the entry sheet hides a workbook-scope one.
-  const formulon::DefinedName* workbook_scope = nullptr;
-  for (const formulon::DefinedName& name : book.defined_names()) {
-    if (!formulon::strings::case_insensitive_eq(name.name, typed)) {
-      continue;
-    }
-    if (entry.sheet != formulon::Workbook::kNoSheet && name.local_sheet_id == static_cast<std::int32_t>(entry.sheet)) {
-      return name.name;
-    }
-    if (name.local_sheet_id < 0 && workbook_scope == nullptr) {
-      workbook_scope = &name;
-    }
-  }
-  return workbook_scope != nullptr ? std::string_view(workbook_scope->name) : std::string_view();
-}
-
-// The first spelling recorded under `typed`'s key, recording `typed` when there is none.
-std::string_view recorded_unknown_call(const fm_workbook_t* wb, std::string_view typed) {
-  std::string key = formulon::strings::to_ascii_lower(typed);
-  for (const auto& [seen_key, spelling] : wb->unknown_call_spellings) {
-    if (seen_key == key) {
-      return spelling;
-    }
-  }
-  wb->unknown_call_spellings.emplace_back(std::move(key), std::string(typed));
-  return wb->unknown_call_spellings.back().second;
-}
-
-std::string_view no_entry_name(const void*, formulon::parser::EnteredNameKind, std::string_view) {
-  return std::string_view();
-}
-
-std::string_view seed_unknown_call(const void* ctx, std::string_view typed) {
-  return recorded_unknown_call(static_cast<const fm_workbook_t*>(ctx), typed);
-}
-
-// Records the unknown-function spellings of the workbook's stored formulas in
-// the order Excel reads them: defined names, then each sheet in tab order, its
-// cells row by row.
-void seed_unknown_call_spellings(const fm_workbook_t* wb) {
-  if (wb->unknown_call_spellings_seeded) {
-    return;
-  }
-  wb->unknown_call_spellings_seeded = true;
-  const formulon::Workbook& book = wb->workbook();
-  const formulon::parser::EnteredNames names{&formulon::eval::resolve_builtin_function_name, &no_entry_name,
-                                             &seed_unknown_call, wb};
-  for (const formulon::DefinedName& name : book.defined_names()) {
-    (void)formulon::parser::spell_entered_names(name.formula, names);
-  }
-  for (std::size_t s = 0; s < book.sheet_count(); ++s) {
-    const formulon::Sheet& sheet = book.sheet(s);
-    std::vector<formulon::CellAddress> cells = sheet.all_formula_cells();
-    formulon::sort_by_index(cells, [](const formulon::CellAddress& a, const formulon::CellAddress& b) {
-      return a.row != b.row ? a.row < b.row : a.col < b.col;
-    });
-    for (const formulon::CellAddress& address : cells) {
-      formulon::Sheet::CellRead read;
-      sheet.read_formula_cell(address.row, address.col, read);
-      (void)formulon::parser::spell_entered_names(read.formula_text(), names);
-    }
-  }
-}
-
-std::string_view entry_unknown_call(const void* ctx, std::string_view typed) {
-  const fm_workbook_t* wb = static_cast<const EntrySpellingContext*>(ctx)->wb;
-  seed_unknown_call_spellings(wb);
-  return recorded_unknown_call(wb, typed);
-}
-
-// Entered formula `text` with the name and reference spelling Excel stores,
-// defined names looked up from `sheet` (`Workbook::kNoSheet` for none).
-std::string spell_entered_names_in(const fm_workbook_t* wb, std::size_t sheet, std::string_view text) {
-  const EntrySpellingContext ctx{wb, sheet};
-  const formulon::parser::EnteredNames names{&formulon::eval::resolve_builtin_function_name, &own_entry_name,
-                                             &entry_unknown_call, &ctx};
-  return formulon::parser::spell_entered_names(text, names);
-}
-
-// `code` over the whole of `text`.
-ParseFailure whole_text_failure(ParseErrorCode code, std::string_view text) {
-  ParseFailure failure;
-  failure.code = code;
-  failure.range.end = formulon::utf16_units_in(text);
-  failure.message = formulon::parser::default_message(code);
-  return failure;
-}
-
-// `failure` moved right by `units` UTF-16 code units of first-line text.
-ParseFailure shifted(ParseFailure failure, std::uint32_t units) {
-  failure.range.start += units;
-  failure.range.end += units;
-  if (failure.range.line == 1U) {
-    failure.range.column += units;
-  }
-  return failure;
-}
-
-// UTF-16 code units of the text ahead of `body`, a suffix of `text`.
-std::uint32_t prefix_units(std::string_view text, std::string_view body) {
-  return formulon::utf16_units_in(text.substr(0, text.size() - body.size()));
-}
-
-// Bytes spanned by the first `units` UTF-16 code units of UTF-8 `text`.
-std::size_t utf8_prefix_bytes(std::string_view text, std::uint32_t units) {
-  std::size_t i = 0;
-  std::uint32_t seen = 0;
-  while (i < text.size() && seen < units) {
-    const auto lead = static_cast<unsigned char>(text[i]);
-    const std::size_t len = lead < 0x80U ? 1U : lead >= 0xF0U ? 4U : lead >= 0xE0U ? 3U : lead >= 0xC0U ? 2U : 1U;
-    seen += len == 4U ? 2U : 1U;
-    i += len;
-  }
-  return std::min(i, text.size());
-}
-
-// The call in `node` that takes `arg` as one of its arguments.
-const AstNode* call_taking(const AstNode& node, const AstNode* arg) {
-  if (node.kind() == formulon::parser::NodeKind::Call) {
-    for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
-      if (&node.as_call_arg(i) == arg) {
-        return &node;
-      }
-    }
-  }
-  const AstNode* hit = nullptr;
-  formulon::parser::any_child_node(node, [&](const AstNode& child) {
-    hit = call_taking(child, arg);
-    return hit != nullptr;
-  });
-  return hit;
-}
-
-// AST of formula body `src` (no leading '=') as entry accepts it, or nullptr
-// with `*failure` set in `src`'s coordinates: the parse diagnostic, a
-// qualified built-in, and with `refusals` a non-reference argument to a
-// reference-only parameter (`SUBTOTAL(9,)`), an argument count the callee
-// does not take (`ROWS()`), or a newer error literal (`#CALC!`).
-const AstNode* diagnose_entry(std::string_view src, formulon::Arena& arena, bool refusals, ParseFailure* failure) {
-  const AstNode* root = formulon::eval::parse_formula_entry_with_diagnostics(src, arena, failure);
-  if (root == nullptr || !refusals) {
-    return root;
-  }
-  ParseErrorCode code = ParseErrorCode::EntryReferenceRequired;
-  const AstNode* call = nullptr;
-  if (const AstNode* arg = formulon::eval::find_non_reference_argument(*root); arg != nullptr) {
-    call = call_taking(*root, arg);
-  } else if ((call = formulon::eval::find_wrong_arity_call(*root)) != nullptr) {
-    code = ParseErrorCode::EntryWrongArity;
-  } else if ((call = formulon::eval::find_refused_error_literal(*root)) != nullptr) {
-    code = ParseErrorCode::LexerInvalidErrorLiteral;
-  } else {
-    return root;
-  }
-  failure->code = code;
-  failure->range = call != nullptr ? call->range() : whole_text_failure(code, src).range;
-  failure->message = formulon::parser::default_message(code);
-  return nullptr;
-}
-
-// `failure`, from `diagnose_entry` on the body of `parsed` (the caller's
-// `caller` after normalization), placed in `caller`: as is when `parsed` and
-// `caller` agree up to its end, else as a re-diagnosis of `caller` finds it
-// when that yields the same code, else over all of `caller`.
-ParseFailure place_failure(std::string_view caller, std::string_view parsed, bool refusals,
-                           const ParseFailure& failure) {
-  const ParseFailure at = shifted(failure, prefix_units(parsed, strip_formula_prefix(parsed)));
-  const std::size_t bytes = utf8_prefix_bytes(parsed, at.range.end);
-  if (caller.substr(0, bytes) == parsed.substr(0, bytes)) {
-    return at;
-  }
-  const std::string_view body = strip_formula_prefix(caller);
-  formulon::Arena arena;
-  ParseFailure again;
-  if (diagnose_entry(body, arena, refusals, &again) == nullptr && again.code == failure.code) {
-    return shifted(again, prefix_units(caller, body));
-  }
-  return whole_text_failure(failure.code, caller);
-}
-
-// The refusal of a leading byte-order mark or a second leading '=', which
-// precede any parse.
-std::optional<ParseFailure> refused_entry_prefix(std::string_view formula) {
-  ParseFailure failure;
-  if (formula.substr(0, 3) == "\xEF\xBB\xBF") {
-    failure.code = ParseErrorCode::EntryBomNotSupported;
-    failure.range.end = 1;
-  } else if (formula.substr(0, 2) == "==") {
-    failure.code = ParseErrorCode::EntryDoubleEquals;
-    failure.range = formulon::parser::TextRange{1U, 2U, 1U, 2U};
-  } else {
-    return std::nullopt;
-  }
-  failure.message = formulon::parser::default_message(failure.code);
-  return failure;
-}
-
-// The refusal of typed `formula` text, a table reference whose table name opens with an R1C1
-// reference spelled in the profile locale of `book` and that names a table of `book`: Excel reads
-// the typed `F[` as a row reference. Run on the text as typed, before structured references are
-// bound, so a bare `[@Col]` has no such token and text naming no table falls through to R1C1.
-std::optional<ParseFailure> refused_typed_table_reference(std::string_view formula, const formulon::Workbook& book) {
-  const formulon::LocaleFacts& locale = formulon::locale_facts(book.excel_profile());
-  const std::string_view body = strip_formula_prefix(formula);
-  formulon::Arena arena;
-  ParseFailure ignored;
-  const AstNode* root = formulon::eval::parse_formula_entry_with_diagnostics(body, arena, &ignored);
-  const AstNode* ref = root != nullptr ? formulon::eval::find_refused_table_reference(
-                                             *root, locale.r1c1_row, locale.r1c1_col,
-                                             [](const void* ctx, std::string_view name) {
-                                               return static_cast<const formulon::Workbook*>(ctx)->is_table_name(name);
-                                             },
-                                             &book)
-                                       : nullptr;
-  if (ref == nullptr) {
-    return std::nullopt;
-  }
-  ParseFailure failure;
-  failure.code = ParseErrorCode::InvalidReference;
-  failure.range = ref->range();
-  failure.range.end = failure.range.start + formulon::utf16_units_in(ref->as_structured_ref_table());
-  failure.message = formulon::parser::default_message(failure.code);
-  return shifted(failure, prefix_units(formula, body));
-}
-
-// AST of entered `formula`'s stored spelling, written to `*stored`, or
-// nullptr with `*failure` placed in `caller` (the text the caller passed,
-// which `formula` binds): whitespace Excel refuses, or a stored spelling
-// `diagnose_entry` refuses.
-const AstNode* parse_entered_formula(std::string_view caller, std::string_view formula, formulon::Arena& arena,
-                                     std::string* stored, ParseFailure* failure) {
-  *stored =
-      formulon::Workbook::normalize_formula_text(std::string(formula), formulon::Workbook::FormulaSource::kEntered);
-  if (formulon::parser::has_refused_whitespace(formula, &is_builtin_function_name)) {
-    *failure = whole_text_failure(ParseErrorCode::EntryRefusedWhitespace, caller);
-    return nullptr;
-  }
-  ParseFailure raw;
-  const AstNode* root = diagnose_entry(strip_formula_prefix(*stored), arena, /*refusals=*/true, &raw);
-  if (root == nullptr) {
-    *failure = place_failure(caller, *stored, /*refusals=*/true, raw);
-  }
-  return root;
-}
-
-// Parse check of entered text: typed `_xlpm.` before a cell-shaped name fails
-// it, and so does `parse_entered_formula`. `*stored` receives the stored
-// spelling.
-fm_status_t check_entered_formula_parses(std::string_view formula, std::string_view context, std::string* stored) {
-  if (auto rc = check_utf8(formula, context); rc != 0) {
-    return rc;
-  }
-  if (formulon::eval::has_entered_cell_shaped_param(formula)) {
-    return formula_parse_failed(formula, whole_text_failure(ParseErrorCode::EntryParamShapedName, formula),
-                                std::string(context));
-  }
-  formulon::Arena arena;
-  ParseFailure failure;
-  if (parse_entered_formula(formula, formula, arena, stored, &failure) == nullptr) {
-    return formula_parse_failed(formula, failure, std::string(context));
-  }
-  return 0;
+  return formula_parse_failed(formula, failure, std::string(context));
 }
 
 }  // namespace
@@ -1356,18 +1070,14 @@ fm_status_t check_stored_formula(const fm_workbook_t* wb, std::string_view formu
     out->clear();
     return 0;
   }
-  // The parser skips one '=' of its own, so a second one is refused here.
-  if (const std::optional<ParseFailure> refused = refused_entry_prefix(formula)) {
-    return formula_parse_failed(formula, *refused, std::string(context));
-  }
-  if (const std::optional<ParseFailure> refused = refused_typed_table_reference(formula, wb->workbook())) {
-    return formula_parse_failed(formula, *refused, std::string(context));
-  }
   std::string stored;
-  if (auto rc = check_entered_formula_parses(formula, context, &stored); rc != 0) {
+  formulon::parser::ParseFailure failure;
+  const formulon::eval::EntryResult result =
+      formulon::eval::enter_stored_formula(wb->workbook(), wb->entered_call_spellings, formula, &stored, &failure);
+  if (auto rc = entry_status(result, formula, failure, context); rc != 0) {
     return rc;
   }
-  *out = std::string(strip_formula_prefix(spell_entered_names_in(wb, formulon::Workbook::kNoSheet, stored)));
+  *out = std::string(strip_formula_prefix(stored));
   return 0;
 }
 
@@ -1404,56 +1114,17 @@ bool parse_runtime_id(std::string_view text, std::uint32_t* out) {
 
 fm_status_t check_entered_cell_formula(const fm_workbook_t* wb, std::size_t sheet, std::uint32_t row, std::uint32_t col,
                                        std::string_view formula, std::string_view context, std::string* bound) {
-  if (auto rc = check_utf8(formula, context); rc != 0) {
-    return rc;
-  }
-  if (const std::optional<ParseFailure> refused = refused_entry_prefix(formula)) {
-    return formula_parse_failed(formula, *refused, std::string(context));
-  }
-  if (const std::optional<ParseFailure> refused = refused_typed_table_reference(formula, wb->workbook())) {
-    return formula_parse_failed(formula, *refused, std::string(context));
-  }
-  *bound = wb->workbook().bind_entered_structured_refs(formula, sheet, row, col);
-  if (formulon::eval::has_entered_cell_shaped_param(*bound)) {
-    return formula_parse_failed(formula, whole_text_failure(ParseErrorCode::EntryParamShapedName, formula),
-                                std::string(context));
-  }
-  std::string stored;
-  ParseFailure a1_failure;
-  bool a1_failed = false;
-  {
-    formulon::Arena arena;
-    const AstNode* root = parse_entered_formula(formula, *bound, arena, &stored, &a1_failure);
-    if (root != nullptr && !formulon::eval::needs_r1c1_entry(*root, *bound, wb->workbook())) {
-      *bound = with_formula_prefix(spell_entered_names_in(wb, sheet, *bound));
-      return 0;
-    }
-    a1_failed = root == nullptr;
-  }
-  // Excel reads text that fails as A1 again as R1C1 relative to the cell.
-  std::optional<std::string> translated = formulon::eval::translate_r1c1_entry(*bound, row, col);
-  if (translated) {
-    formulon::Arena arena;
-    ParseFailure r1c1_failure;
-    if (parse_entered_formula(*translated, *translated, arena, &stored, &r1c1_failure) != nullptr) {
-      *bound = with_formula_prefix(spell_entered_names_in(wb, sheet, *translated));
-      return 0;
-    }
-  }
-  // A failed A1 reading is the one the caller's text locates; text that read
-  // as A1 failed only as the R1C1 reference it names.
-  return formula_parse_failed(formula,
-                              a1_failed ? a1_failure : whole_text_failure(ParseErrorCode::InvalidReference, formula),
-                              std::string(context));
+  formulon::parser::ParseFailure failure;
+  const formulon::eval::EntryResult result = formulon::eval::enter_cell_formula(
+      wb->workbook(), wb->entered_call_spellings, sheet, row, col, formula, bound, &failure);
+  return entry_status(result, formula, failure, context);
 }
 
 const formulon::parser::AstNode* parse_evaluated_formula(std::string_view formula, std::string_view bound,
                                                          formulon::Arena& arena, fm_status_t* rc) {
-  ParseFailure raw;
-  const AstNode* root = diagnose_entry(strip_formula_prefix(bound), arena, /*refusals=*/false, &raw);
-  *rc = root == nullptr
-            ? formula_parse_failed(formula, place_failure(formula, bound, /*refusals=*/false, raw), std::string())
-            : 0;
+  formulon::parser::ParseFailure failure;
+  const formulon::parser::AstNode* root = formulon::eval::parse_evaluated_formula(formula, bound, arena, &failure);
+  *rc = root == nullptr ? formula_parse_failed(formula, failure, std::string()) : 0;
   return root;
 }
 
