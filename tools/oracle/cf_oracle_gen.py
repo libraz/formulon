@@ -439,15 +439,18 @@ def _build_workbook(case: Dict[str, Any], path: Path) -> List[Dict[str, Any]]:
                     "EndsWith",
                     "NotContainsText",
                 ):
-                    # Text-rule family. Each requires a synthesised
-                    # formula because Excel computes one at write time
-                    # but openpyxl will not supply it.
-                    text = rule.get("text", "")
-                    if not text:
-                        raise ValueError(f"{rtype} rule requires a `text` field")
+                    # Text-rule family. Excel formats by the stored formula; `text` is only the
+                    # dialog operand. A stated `formula1` is written verbatim; otherwise the
+                    # formula Excel would write for `text` is synthesised, since openpyxl will
+                    # not supply one. The `text` attribute is written only when stated ("" too).
+                    has_text = "text" in rule
+                    text = rule.get("text")
+                    formula1 = rule.get("formula1")
+                    if formula1 is None and not text:
+                        raise ValueError(f"{rtype} rule requires a non-empty `text` or a `formula1`")
                     first_sqref = block["sqref"][0]
                     anchor = _addr(first_sqref["first_row"], first_sqref["first_col"])
-                    text_escaped = text.replace('"', '""')
+                    text_escaped = (text or "").replace('"', '""')
                     if rtype == "ContainsText":
                         op_str = "containsText"
                         type_str = "containsText"
@@ -455,23 +458,26 @@ def _build_workbook(case: Dict[str, Any], path: Path) -> List[Dict[str, Any]]:
                     elif rtype == "BeginsWith":
                         op_str = "beginsWith"
                         type_str = "beginsWith"
-                        formula = [f'LEFT({anchor},{len(text)})="{text_escaped}"']
+                        formula = [f'LEFT({anchor},{len(text or "")})="{text_escaped}"']
                     elif rtype == "EndsWith":
                         op_str = "endsWith"
                         type_str = "endsWith"
-                        formula = [f'RIGHT({anchor},{len(text)})="{text_escaped}"']
+                        formula = [f'RIGHT({anchor},{len(text or "")})="{text_escaped}"']
                     else:  # NotContainsText
                         op_str = "notContains"
                         type_str = "notContainsText"
                         formula = [f'ISERROR(SEARCH("{text_escaped}",{anchor}))']
+                    if formula1 is not None:
+                        formula = [formula1]
+                    text_kwargs: Dict[str, Any] = {"text": text} if has_text else {}
                     opx_rule = Rule(
                         type=type_str,
                         operator=op_str,
-                        text=text,
                         formula=formula,
                         dxf=dxf,
                         priority=priority,
                         stopIfTrue=False,
+                        **text_kwargs,
                     )
                 elif rtype in (
                     "ContainsBlanks",

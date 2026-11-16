@@ -1,0 +1,575 @@
+{
+  "name": "cf_text_stored_formula",
+  "description": "A text rule (containsText, notContainsText, beginsWith, endsWith) formats by its stored formula; the text attribute is only the dialog operand. Over A1:A4 = x, y, xy, #DIV/0!.",
+  "cases": [
+    {
+      "id": "contains_text_x_formula_y",
+      "description": "ContainsText with text \"x\" and formula1 NOT(ISERROR(SEARCH(\"y\",A1))); Excel formats A2, A3.",
+      "sheet": [
+        {
+          "row": 0,
+          "col": 0,
+          "kind": "text",
+          "value": "x"
+        },
+        {
+          "row": 1,
+          "col": 0,
+          "kind": "text",
+          "value": "y"
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "kind": "text",
+          "value": "xy"
+        },
+        {
+          "row": 3,
+          "col": 0,
+          "kind": "error",
+          "value": "#DIV/0!"
+        }
+      ],
+      "cf_blocks": [
+        {
+          "sqref": [
+            {
+              "first_row": 0,
+              "first_col": 0,
+              "last_row": 3,
+              "last_col": 0
+            }
+          ],
+          "rules": [
+            {
+              "type": "ContainsText",
+              "priority": 1,
+              "dxf_id": 0,
+              "text": "x",
+              "formula1": "NOT(ISERROR(SEARCH(\"y\",A1)))"
+            }
+          ]
+        }
+      ],
+      "range": {
+        "first_row": 0,
+        "first_col": 0,
+        "last_row": 3,
+        "last_col": 0
+      }
+    },
+    {
+      "id": "contains_text_no_text_formula_y",
+      "description": "ContainsText with no text and formula1 NOT(ISERROR(SEARCH(\"y\",A1))); Excel formats A2, A3.",
+      "sheet": [
+        {
+          "row": 0,
+          "col": 0,
+          "kind": "text",
+          "value": "x"
+        },
+        {
+          "row": 1,
+          "col": 0,
+          "kind": "text",
+          "value": "y"
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "kind": "text",
+          "value": "xy"
+        },
+        {
+          "row": 3,
+          "col": 0,
+          "kind": "error",
+          "value": "#DIV/0!"
+        }
+      ],
+      "cf_blocks": [
+        {
+          "sqref": [
+            {
+              "first_row": 0,
+              "first_col": 0,
+              "last_row": 3,
+              "last_col": 0
+            }
+          ],
+          "rules": [
+            {
+              "type": "ContainsText",
+              "priority": 1,
+              "dxf_id": 0,
+              "formula1": "NOT(ISERROR(SEARCH(\"y\",A1)))"
+            }
+          ]
+        }
+      ],
+      "range": {
+        "first_row": 0,
+        "first_col": 0,
+        "last_row": 3,
+        "last_col": 0
+      }
+    },
+    {
+      "id": "contains_text_empty_text_formula_y",
+      "description": "ContainsText with text \"\" and formula1 NOT(ISERROR(SEARCH(\"y\",A1))); Excel formats A2, A3.",
+      "sheet": [
+        {
+          "row": 0,
+          "col": 0,
+          "kind": "text",
+          "value": "x"
+        },
+        {
+          "row": 1,
+          "col": 0,
+          "kind": "text",
+          "value": "y"
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "kind": "text",
+          "value": "xy"
+        },
+        {
+          "row": 3,
+          "col": 0,
+          "kind": "error",
+          "value": "#DIV/0!"
+        }
+      ],
+      "cf_blocks": [
+        {
+          "sqref": [
+            {
+              "first_row": 0,
+              "first_col": 0,
+              "last_row": 3,
+              "last_col": 0
+            }
+          ],
+          "rules": [
+            {
+              "type": "ContainsText",
+              "priority": 1,
+              "dxf_id": 0,
+              "text": "",
+              "formula1": "NOT(ISERROR(SEARCH(\"y\",A1)))"
+            }
+          ]
+        }
+      ],
+      "range": {
+        "first_row": 0,
+        "first_col": 0,
+        "last_row": 3,
+        "last_col": 0
+      }
+    },
+    {
+      "id": "not_contains_text_x_formula_y",
+      "description": "NotContainsText with text \"x\" and formula1 ISERROR(SEARCH(\"y\",A1)); Excel formats A1, A4.",
+      "sheet": [
+        {
+          "row": 0,
+          "col": 0,
+          "kind": "text",
+          "value": "x"
+        },
+        {
+          "row": 1,
+          "col": 0,
+          "kind": "text",
+          "value": "y"
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "kind": "text",
+          "value": "xy"
+        },
+        {
+          "row": 3,
+          "col": 0,
+          "kind": "error",
+          "value": "#DIV/0!"
+        }
+      ],
+      "cf_blocks": [
+        {
+          "sqref": [
+            {
+              "first_row": 0,
+              "first_col": 0,
+              "last_row": 3,
+              "last_col": 0
+            }
+          ],
+          "rules": [
+            {
+              "type": "NotContainsText",
+              "priority": 1,
+              "dxf_id": 0,
+              "text": "x",
+              "formula1": "ISERROR(SEARCH(\"y\",A1))"
+            }
+          ]
+        }
+      ],
+      "range": {
+        "first_row": 0,
+        "first_col": 0,
+        "last_row": 3,
+        "last_col": 0
+      }
+    },
+    {
+      "id": "begins_with_x_formula_y",
+      "description": "BeginsWith with text \"x\" and formula1 LEFT(A1,LEN(\"y\"))=\"y\"; Excel formats A2.",
+      "sheet": [
+        {
+          "row": 0,
+          "col": 0,
+          "kind": "text",
+          "value": "x"
+        },
+        {
+          "row": 1,
+          "col": 0,
+          "kind": "text",
+          "value": "y"
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "kind": "text",
+          "value": "xy"
+        },
+        {
+          "row": 3,
+          "col": 0,
+          "kind": "error",
+          "value": "#DIV/0!"
+        }
+      ],
+      "cf_blocks": [
+        {
+          "sqref": [
+            {
+              "first_row": 0,
+              "first_col": 0,
+              "last_row": 3,
+              "last_col": 0
+            }
+          ],
+          "rules": [
+            {
+              "type": "BeginsWith",
+              "priority": 1,
+              "dxf_id": 0,
+              "text": "x",
+              "formula1": "LEFT(A1,LEN(\"y\"))=\"y\""
+            }
+          ]
+        }
+      ],
+      "range": {
+        "first_row": 0,
+        "first_col": 0,
+        "last_row": 3,
+        "last_col": 0
+      }
+    },
+    {
+      "id": "ends_with_x_formula_y",
+      "description": "EndsWith with text \"x\" and formula1 RIGHT(A1,LEN(\"y\"))=\"y\"; Excel formats A2, A3.",
+      "sheet": [
+        {
+          "row": 0,
+          "col": 0,
+          "kind": "text",
+          "value": "x"
+        },
+        {
+          "row": 1,
+          "col": 0,
+          "kind": "text",
+          "value": "y"
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "kind": "text",
+          "value": "xy"
+        },
+        {
+          "row": 3,
+          "col": 0,
+          "kind": "error",
+          "value": "#DIV/0!"
+        }
+      ],
+      "cf_blocks": [
+        {
+          "sqref": [
+            {
+              "first_row": 0,
+              "first_col": 0,
+              "last_row": 3,
+              "last_col": 0
+            }
+          ],
+          "rules": [
+            {
+              "type": "EndsWith",
+              "priority": 1,
+              "dxf_id": 0,
+              "text": "x",
+              "formula1": "RIGHT(A1,LEN(\"y\"))=\"y\""
+            }
+          ]
+        }
+      ],
+      "range": {
+        "first_row": 0,
+        "first_col": 0,
+        "last_row": 3,
+        "last_col": 0
+      }
+    },
+    {
+      "id": "contains_text_x_control",
+      "description": "ContainsText with text \"x\" and formula1 NOT(ISERROR(SEARCH(\"x\",A1))); Excel formats A1, A3.",
+      "sheet": [
+        {
+          "row": 0,
+          "col": 0,
+          "kind": "text",
+          "value": "x"
+        },
+        {
+          "row": 1,
+          "col": 0,
+          "kind": "text",
+          "value": "y"
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "kind": "text",
+          "value": "xy"
+        },
+        {
+          "row": 3,
+          "col": 0,
+          "kind": "error",
+          "value": "#DIV/0!"
+        }
+      ],
+      "cf_blocks": [
+        {
+          "sqref": [
+            {
+              "first_row": 0,
+              "first_col": 0,
+              "last_row": 3,
+              "last_col": 0
+            }
+          ],
+          "rules": [
+            {
+              "type": "ContainsText",
+              "priority": 1,
+              "dxf_id": 0,
+              "text": "x",
+              "formula1": "NOT(ISERROR(SEARCH(\"x\",A1)))"
+            }
+          ]
+        }
+      ],
+      "range": {
+        "first_row": 0,
+        "first_col": 0,
+        "last_row": 3,
+        "last_col": 0
+      }
+    },
+    {
+      "id": "not_contains_text_x_control",
+      "description": "NotContainsText with text \"x\" and formula1 ISERROR(SEARCH(\"x\",A1)); Excel formats A2, A4.",
+      "sheet": [
+        {
+          "row": 0,
+          "col": 0,
+          "kind": "text",
+          "value": "x"
+        },
+        {
+          "row": 1,
+          "col": 0,
+          "kind": "text",
+          "value": "y"
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "kind": "text",
+          "value": "xy"
+        },
+        {
+          "row": 3,
+          "col": 0,
+          "kind": "error",
+          "value": "#DIV/0!"
+        }
+      ],
+      "cf_blocks": [
+        {
+          "sqref": [
+            {
+              "first_row": 0,
+              "first_col": 0,
+              "last_row": 3,
+              "last_col": 0
+            }
+          ],
+          "rules": [
+            {
+              "type": "NotContainsText",
+              "priority": 1,
+              "dxf_id": 0,
+              "text": "x",
+              "formula1": "ISERROR(SEARCH(\"x\",A1))"
+            }
+          ]
+        }
+      ],
+      "range": {
+        "first_row": 0,
+        "first_col": 0,
+        "last_row": 3,
+        "last_col": 0
+      }
+    },
+    {
+      "id": "begins_with_x_control",
+      "description": "BeginsWith with text \"x\" and formula1 LEFT(A1,LEN(\"x\"))=\"x\"; Excel formats A1, A3.",
+      "sheet": [
+        {
+          "row": 0,
+          "col": 0,
+          "kind": "text",
+          "value": "x"
+        },
+        {
+          "row": 1,
+          "col": 0,
+          "kind": "text",
+          "value": "y"
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "kind": "text",
+          "value": "xy"
+        },
+        {
+          "row": 3,
+          "col": 0,
+          "kind": "error",
+          "value": "#DIV/0!"
+        }
+      ],
+      "cf_blocks": [
+        {
+          "sqref": [
+            {
+              "first_row": 0,
+              "first_col": 0,
+              "last_row": 3,
+              "last_col": 0
+            }
+          ],
+          "rules": [
+            {
+              "type": "BeginsWith",
+              "priority": 1,
+              "dxf_id": 0,
+              "text": "x",
+              "formula1": "LEFT(A1,LEN(\"x\"))=\"x\""
+            }
+          ]
+        }
+      ],
+      "range": {
+        "first_row": 0,
+        "first_col": 0,
+        "last_row": 3,
+        "last_col": 0
+      }
+    },
+    {
+      "id": "ends_with_x_control",
+      "description": "EndsWith with text \"x\" and formula1 RIGHT(A1,LEN(\"x\"))=\"x\"; Excel formats A1.",
+      "sheet": [
+        {
+          "row": 0,
+          "col": 0,
+          "kind": "text",
+          "value": "x"
+        },
+        {
+          "row": 1,
+          "col": 0,
+          "kind": "text",
+          "value": "y"
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "kind": "text",
+          "value": "xy"
+        },
+        {
+          "row": 3,
+          "col": 0,
+          "kind": "error",
+          "value": "#DIV/0!"
+        }
+      ],
+      "cf_blocks": [
+        {
+          "sqref": [
+            {
+              "first_row": 0,
+              "first_col": 0,
+              "last_row": 3,
+              "last_col": 0
+            }
+          ],
+          "rules": [
+            {
+              "type": "EndsWith",
+              "priority": 1,
+              "dxf_id": 0,
+              "text": "x",
+              "formula1": "RIGHT(A1,LEN(\"x\"))=\"x\""
+            }
+          ]
+        }
+      ],
+      "range": {
+        "first_row": 0,
+        "first_col": 0,
+        "last_row": 3,
+        "last_col": 0
+      }
+    }
+  ]
+}

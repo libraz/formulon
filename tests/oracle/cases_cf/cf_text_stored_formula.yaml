@@ -1,0 +1,298 @@
+suite: cf_text_stored_formula
+description: |
+  A text conditional-format rule (containsText, notContainsText, beginsWith,
+  endsWith) formats by its stored formula; the `text` attribute is only the
+  dialog operand. Every rule carries a `formula1` that disagrees with its
+  `text` (or has no `text`), so the matched cells show which one Excel follows,
+  plus agreeing controls. Mirrored to cf_text_stored_formula.case.json.
+locale: en-US
+
+cases:
+  - id: contains_text_x_formula_y
+    description: |
+      ContainsText with text "x" and formula1 NOT(ISERROR(SEARCH("y",A1))); Excel formats A2, A3.
+    sheet:
+      A1: "x"
+      A2: "y"
+      A3: "xy"
+      A4: { kind: error, value: "#DIV/0!" }
+    cf_blocks:
+      - sqref: "A1:A4"
+        rules:
+          - type: ContainsText
+            priority: 1
+            dxf_id: 0
+            text: "x"
+            formula1: "NOT(ISERROR(SEARCH(\"y\",A1)))"
+    range: "A1:A4"
+    expected:
+      cells:
+        - addr: A2
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 0
+        - addr: A3
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 0
+
+  - id: contains_text_no_text_formula_y
+    description: |
+      ContainsText with no text and formula1 NOT(ISERROR(SEARCH("y",A1))); Excel formats A2, A3.
+    sheet:
+      A1: "x"
+      A2: "y"
+      A3: "xy"
+      A4: { kind: error, value: "#DIV/0!" }
+    cf_blocks:
+      - sqref: "A1:A4"
+        rules:
+          - type: ContainsText
+            priority: 1
+            dxf_id: 0
+            formula1: "NOT(ISERROR(SEARCH(\"y\",A1)))"
+    range: "A1:A4"
+    expected:
+      cells:
+        - addr: A2
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 0
+        - addr: A3
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 0
+
+  - id: contains_text_empty_text_formula_y
+    description: |
+      ContainsText with text "" and formula1 NOT(ISERROR(SEARCH("y",A1))); Excel formats A2, A3.
+    sheet:
+      A1: "x"
+      A2: "y"
+      A3: "xy"
+      A4: { kind: error, value: "#DIV/0!" }
+    cf_blocks:
+      - sqref: "A1:A4"
+        rules:
+          - type: ContainsText
+            priority: 1
+            dxf_id: 0
+            text: ""
+            formula1: "NOT(ISERROR(SEARCH(\"y\",A1)))"
+    range: "A1:A4"
+    expected:
+      cells:
+        - addr: A2
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 0
+        - addr: A3
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 0
+
+  - id: not_contains_text_x_formula_y
+    description: |
+      NotContainsText with text "x" and formula1 ISERROR(SEARCH("y",A1)); Excel formats A1, A4.
+    sheet:
+      A1: "x"
+      A2: "y"
+      A3: "xy"
+      A4: { kind: error, value: "#DIV/0!" }
+    cf_blocks:
+      - sqref: "A1:A4"
+        rules:
+          - type: NotContainsText
+            priority: 1
+            dxf_id: 0
+            text: "x"
+            formula1: "ISERROR(SEARCH(\"y\",A1))"
+    range: "A1:A4"
+    expected:
+      cells:
+        - addr: A1
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 0
+        - addr: A4
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 0
+
+  - id: begins_with_x_formula_y
+    description: |
+      BeginsWith with text "x" and formula1 LEFT(A1,LEN("y"))="y"; Excel formats A2.
+    sheet:
+      A1: "x"
+      A2: "y"
+      A3: "xy"
+      A4: { kind: error, value: "#DIV/0!" }
+    cf_blocks:
+      - sqref: "A1:A4"
+        rules:
+          - type: BeginsWith
+            priority: 1
+            dxf_id: 0
+            text: "x"
+            formula1: "LEFT(A1,LEN(\"y\"))=\"y\""
+    range: "A1:A4"
+    expected:
+      cells:
+        - addr: A2
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 0
+
+  - id: ends_with_x_formula_y
+    description: |
+      EndsWith with text "x" and formula1 RIGHT(A1,LEN("y"))="y"; Excel formats A2, A3.
+    sheet:
+      A1: "x"
+      A2: "y"
+      A3: "xy"
+      A4: { kind: error, value: "#DIV/0!" }
+    cf_blocks:
+      - sqref: "A1:A4"
+        rules:
+          - type: EndsWith
+            priority: 1
+            dxf_id: 0
+            text: "x"
+            formula1: "RIGHT(A1,LEN(\"y\"))=\"y\""
+    range: "A1:A4"
+    expected:
+      cells:
+        - addr: A2
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 0
+        - addr: A3
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 0
+
+  - id: contains_text_x_control
+    description: |
+      ContainsText with text "x" and formula1 NOT(ISERROR(SEARCH("x",A1))); Excel formats A1, A3.
+    sheet:
+      A1: "x"
+      A2: "y"
+      A3: "xy"
+      A4: { kind: error, value: "#DIV/0!" }
+    cf_blocks:
+      - sqref: "A1:A4"
+        rules:
+          - type: ContainsText
+            priority: 1
+            dxf_id: 0
+            text: "x"
+            formula1: "NOT(ISERROR(SEARCH(\"x\",A1)))"
+    range: "A1:A4"
+    expected:
+      cells:
+        - addr: A1
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 0
+        - addr: A3
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 0
+
+  - id: not_contains_text_x_control
+    description: |
+      NotContainsText with text "x" and formula1 ISERROR(SEARCH("x",A1)); Excel formats A2, A4.
+    sheet:
+      A1: "x"
+      A2: "y"
+      A3: "xy"
+      A4: { kind: error, value: "#DIV/0!" }
+    cf_blocks:
+      - sqref: "A1:A4"
+        rules:
+          - type: NotContainsText
+            priority: 1
+            dxf_id: 0
+            text: "x"
+            formula1: "ISERROR(SEARCH(\"x\",A1))"
+    range: "A1:A4"
+    expected:
+      cells:
+        - addr: A2
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 0
+        - addr: A4
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 0
+
+  - id: begins_with_x_control
+    description: |
+      BeginsWith with text "x" and formula1 LEFT(A1,LEN("x"))="x"; Excel formats A1, A3.
+    sheet:
+      A1: "x"
+      A2: "y"
+      A3: "xy"
+      A4: { kind: error, value: "#DIV/0!" }
+    cf_blocks:
+      - sqref: "A1:A4"
+        rules:
+          - type: BeginsWith
+            priority: 1
+            dxf_id: 0
+            text: "x"
+            formula1: "LEFT(A1,LEN(\"x\"))=\"x\""
+    range: "A1:A4"
+    expected:
+      cells:
+        - addr: A1
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 0
+        - addr: A3
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 0
+
+  - id: ends_with_x_control
+    description: |
+      EndsWith with text "x" and formula1 RIGHT(A1,LEN("x"))="x"; Excel formats A1.
+    sheet:
+      A1: "x"
+      A2: "y"
+      A3: "xy"
+      A4: { kind: error, value: "#DIV/0!" }
+    cf_blocks:
+      - sqref: "A1:A4"
+        rules:
+          - type: EndsWith
+            priority: 1
+            dxf_id: 0
+            text: "x"
+            formula1: "RIGHT(A1,LEN(\"x\"))=\"x\""
+    range: "A1:A4"
+    expected:
+      cells:
+        - addr: A1
+          matches:
+            - kind: DifferentialFormat
+              priority: 1
+              dxf_id: 0
