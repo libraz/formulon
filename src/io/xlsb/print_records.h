@@ -52,6 +52,10 @@ std::uint32_t unwritten_print_families(const std::vector<std::uint8_t>& after_hy
 /// header and footer. A family `print` does not hold is left out.
 void emit_view_print_records(std::vector<std::uint8_t>& dst, const SheetPrintSettings& print);
 
+/// Emits a chartsheet's margins and header and footer records, in that order,
+/// for each family `print` holds.
+void emit_chartsheet_print_records(std::vector<std::uint8_t>& dst, const SheetPrintSettings& print);
+
 /// True when `print` holds a setting the XLSB writer does not write from the
 /// model yet, which the save reports as a deferred `print_settings` feature.
 bool has_deferred_print_settings(const SheetPrintSettings& print);

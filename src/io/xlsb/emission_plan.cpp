@@ -56,6 +56,7 @@ namespace {
 // the index type makes Excel treat the package as having zero worksheets and
 // reject it (-50).
 constexpr std::string_view kCtWorksheetXlsb = "application/vnd.ms-excel.worksheet";
+constexpr std::string_view kCtChartsheetXlsb = "application/vnd.ms-excel.chartsheet";
 constexpr std::string_view kCtSharedStringsXlsb = "application/vnd.ms-excel.sharedStrings";
 constexpr std::string_view kCtStylesXlsb = "application/vnd.ms-excel.styles";
 constexpr std::string_view kCtSheetMetadataXlsb = "application/vnd.ms-excel.sheetMetadata";
@@ -123,6 +124,15 @@ bool IsExternalLinkPart(const std::string& path) {
 /// Package paths of the 1-based `position`-th worksheet part and its rels.
 bool is_retained_binary_sheet(const Sheet& sheet) {
   return sheet.is_opaque_ooxml_sheet() && strings::ends_with(sheet.opaque_ooxml_part_path(), ".bin");
+}
+
+std::string converted_chartsheet_bin_path(const Sheet& sheet) {
+  const std::string& path = sheet.opaque_ooxml_part_path();
+  if (!sheet.is_opaque_ooxml_sheet() || !strings::ends_with(sheet.opaque_ooxml_relationship_type(), "/chartsheet") ||
+      !strings::ends_with(path, ".xml")) {
+    return {};
+  }
+  return path.substr(0, path.size() - 4U) + ".bin";
 }
 
 std::string sheet_part_path(std::size_t position) {
@@ -267,6 +277,13 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
   }
 
   std::unordered_set<std::string> kept_paths;
+  std::unordered_set<std::string> converted_chartsheet_parts;
+  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    if (!converted_chartsheet_bin_path(wb.sheet(i)).empty()) {
+      converted_chartsheet_parts.insert(wb.sheet(i).opaque_ooxml_part_path());
+      converted_chartsheet_parts.insert(ooxml::rels_path_for_part(wb.sheet(i).opaque_ooxml_part_path()));
+    }
+  }
   for (const PassthroughPart& part : wb.passthrough_parts()) {
     if (!ooxml::is_safe_part_name(part.path)) {
       return make_error(FormulonErrorCode::kIoZipSlip, "passthrough part name escapes package root; refusing to write",
@@ -295,6 +312,10 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
     // (a further type such as XLMDX is dropped from its own xlsb save as well).
     if (IsBinaryIndexPart(part.path) || IsXlsxOnlyMetadataPart(part.path) || is_xml_slicer_part(part.path) ||
         IsExternalLinkPart(part.path)) {
+      continue;
+    }
+    // A chartsheet read from an .xlsx is written as records with its relationships, not as XML.
+    if (converted_chartsheet_parts.count(part.path) != 0U) {
       continue;
     }
     if (!kept_paths.insert(part.path).second) {
@@ -399,6 +420,10 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
       if (is_retained_binary_sheet(wb.sheet(i))) {
         continue;
       }
+      if (const std::string converted = converted_chartsheet_bin_path(wb.sheet(i)); !converted.empty()) {
+        AppendOverride(out, ooxml::rels_path_for_part(converted), kCtPackageRels);
+        continue;
+      }
       bool has_emitted_sheet_rels = (i < plan.sheet_tables.size() && !plan.sheet_tables[i].empty()) ||
                                     (i < plan.sheet_pivots.size() && !plan.sheet_pivots[i].empty()) ||
                                     !plan.sheet_drawing_rids[i].empty() ||
@@ -423,7 +448,9 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
     }
   }
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
-    if (!is_retained_binary_sheet(wb.sheet(i))) {
+    if (const std::string converted = converted_chartsheet_bin_path(wb.sheet(i)); !converted.empty()) {
+      AppendOverride(out, converted, kCtChartsheetXlsb);
+    } else if (!is_retained_binary_sheet(wb.sheet(i))) {
       AppendOverride(out, sheet_part_path(i + 1U), kCtWorksheetXlsb);
     }
   }
@@ -578,6 +605,10 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
     if (is_retained_binary_sheet(sheet)) {
       AppendRelationship(out, next_rid++, sheet.opaque_ooxml_relationship_type(),
                          TargetRelativeToWorkbook(sheet.opaque_ooxml_part_path()));
+      continue;
+    }
+    if (const std::string converted = converted_chartsheet_bin_path(sheet); !converted.empty()) {
+      AppendRelationship(out, next_rid++, sheet.opaque_ooxml_relationship_type(), TargetRelativeToWorkbook(converted));
       continue;
     }
     const std::string target = "worksheets/sheet" + std::to_string(i + 1U) + ".bin";

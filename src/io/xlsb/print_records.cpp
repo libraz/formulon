@@ -564,6 +564,14 @@ void emit_view_print_records(std::vector<std::uint8_t>& dst, const SheetPrintSet
   }
 }
 
+void emit_chartsheet_print_records(std::vector<std::uint8_t>& dst, const SheetPrintSettings& print) {
+  for (const Family family : {Family::kMargins, Family::kHeaderFooter}) {
+    if (ModelHolds(family, print)) {
+      EmitFamily(dst, family, print);
+    }
+  }
+}
+
 bool has_deferred_print_settings(const SheetPrintSettings& print) {
   // The xlsb save writes no printer-settings part, so a sheet linking one loses it.
   return !sheet_pr_writes_all(print.sheet_pr_xml) || !print.printer_settings_rid.empty();

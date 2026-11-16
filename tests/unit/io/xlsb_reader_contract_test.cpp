@@ -31,6 +31,7 @@
 #include "io/ooxml_writer.h"
 #include "io/xlsb/ptg_writer.h"
 #include "io/xlsb/reader.h"
+#include "io/xlsb/record.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
@@ -1120,6 +1121,61 @@ TEST(XlsbChartsheet, ExcelChartsheetConvertsOnAnXlsxSave) {
   ASSERT_EQ(again.sheet_count(), 2U);
   EXPECT_TRUE(again.sheet(0).is_opaque_ooxml_sheet());
   EXPECT_EQ(again.sheet(0).opaque_ooxml_part_path(), "xl/chartsheets/sheet1.xml");
+}
+
+// The records of a chartsheet part, framed, without the revision-id block (BrtFRTBegin, the uid, BrtFRTEnd) Excel
+// stamps per save.
+std::vector<std::pair<std::uint16_t, std::string>> ChartsheetRecords(const std::string& part) {
+  std::vector<std::pair<std::uint16_t, std::string>> out;
+  const std::vector<std::uint8_t> bytes(part.begin(), part.end());
+  io::ByteSpan cursor = test::span_of(bytes);
+  while (cursor.size > 0U) {
+    auto rec = io::xlsb::read_record(cursor);
+    if (!rec) {
+      ADD_FAILURE() << rec.error().message;
+      break;
+    }
+    if (rec.value().type == 37U || rec.value().type == 38U || rec.value().type == 3072U) {
+      continue;
+    }
+    out.emplace_back(rec.value().type,
+                     std::string(reinterpret_cast<const char*>(rec.value().payload.data), rec.value().payload.size));
+  }
+  return out;
+}
+
+// An .xlsb save writes a chartsheet read from an .xlsx as the records Excel's own .xlsb save of the same book holds,
+// with its relationships and content type; nothing is counted as lost.
+TEST(XlsbChartsheet, ExcelChartsheetConvertsOnAnXlsbSave) {
+  const std::vector<std::uint8_t> xlsx = test::read_file_bytes(FixturePath("chartsheet_empty.xlsx"));
+  const std::vector<std::uint8_t> xlsb = test::read_file_bytes(FixturePath("chartsheet_empty.xlsb"));
+  ASSERT_FALSE(xlsx.empty());
+  ASSERT_FALSE(xlsb.empty());
+  auto loaded = io::read_ooxml(test::span_of(xlsx));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  auto result = io::xlsb::write_xlsb_with_result(loaded.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  EXPECT_EQ(result.value().diagnostics.deferred_feature_count, 0U);
+  EXPECT_EQ(result.value().diagnostics.dropped_part_count, 0U);
+  const std::vector<std::uint8_t>& saved_bytes = result.value().bytes;
+
+  std::string excel_part;
+  std::string saved_part;
+  ASSERT_TRUE(test::extract_part(test::span_of(xlsb), "xl/chartsheets/sheet1.bin", &excel_part));
+  ASSERT_TRUE(test::extract_part(test::span_of(saved_bytes), "xl/chartsheets/sheet1.bin", &saved_part));
+  EXPECT_EQ(ChartsheetRecords(saved_part), ChartsheetRecords(excel_part));
+  std::string rels;
+  ASSERT_TRUE(test::extract_part(test::span_of(saved_bytes), "xl/chartsheets/_rels/sheet1.bin.rels", &rels));
+  EXPECT_NE(rels.find("Target=\"../drawings/drawing1.xml\""), std::string::npos) << rels;
+  std::string unused;
+  EXPECT_FALSE(test::extract_part(test::span_of(saved_bytes), "xl/chartsheets/sheet1.xml", &unused));
+
+  auto reloaded = io::xlsb::read_xlsb(test::span_of(saved_bytes));
+  ASSERT_TRUE(static_cast<bool>(reloaded)) << reloaded.error().message;
+  const Workbook& again = reloaded.value().workbook;
+  ASSERT_EQ(again.sheet_count(), 2U);
+  EXPECT_TRUE(again.sheet(0).is_opaque_ooxml_sheet());
+  EXPECT_EQ(again.sheet(0).opaque_ooxml_part_path(), "xl/chartsheets/sheet1.bin");
 }
 
 }  // namespace

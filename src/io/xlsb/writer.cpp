@@ -42,6 +42,7 @@
 #include "io/threaded_comments_io.h"
 #include "io/writer_common.h"
 #include "io/xlsb/auto_filter_records.h"
+#include "io/xlsb/chartsheet_records.h"
 #include "io/xlsb/comments_records.h"
 #include "io/xlsb/drawing_record.h"
 #include "io/xlsb/dxf_uses_xlsb.h"
@@ -537,6 +538,31 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   // records reference other parts (hyperlinks, drawings, table definitions).
   for (std::size_t i = 0; i < sheet_count; ++i) {
     if (is_retained_binary_sheet(workbook.sheet(i))) {
+      continue;
+    }
+    // A chartsheet read from an .xlsx is written as the records its `<chartsheet>` states, with its relationships.
+    if (const std::string converted = converted_chartsheet_bin_path(workbook.sheet(i)); !converted.empty()) {
+      const std::string& xml_path = workbook.sheet(i).opaque_ooxml_part_path();
+      const PassthroughPart* xml = source_passthrough_index.find(source_passthrough, xml_path);
+      if (xml == nullptr) {
+        return make_error(FormulonErrorCode::kIoWriteFailed, "opaque sheet has no passthrough payload",
+                          std::string(kWriteXlsbContext) + " part=" + xml_path);
+      }
+      ASSIGN_OR_RETURN(const ChartsheetBin chartsheet,
+                       chartsheet_records_from_xml(
+                           std::string_view(reinterpret_cast<const char*>(xml->bytes.data()), xml->bytes.size())));
+      RETURN_IF_ERROR(AddPartBytes(writer.get(), converted, chartsheet.bytes));
+      if (const PassthroughPart* rels =
+              source_passthrough_index.find(source_passthrough, ooxml::rels_path_for_part(xml_path))) {
+        RETURN_IF_ERROR(AddPartBytes(writer.get(), ooxml::rels_path_for_part(converted), rels->bytes));
+      }
+      if (chartsheet.unconverted != 0U) {
+        StructuredLog("xlsb.writer.chartsheet_left_out")
+            .field("sheet", std::string_view(workbook.sheet(i).name()))
+            .field("count", static_cast<int64_t>(chartsheet.unconverted))
+            .warn();
+        diagnostics.deferred_feature_count += chartsheet.unconverted;
+      }
       continue;
     }
     RETURN_IF_ERROR(AddPartBytes(writer.get(), sheet_part_path(i + 1U), sheet_bodies[i]));

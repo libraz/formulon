@@ -111,6 +111,10 @@ Expected<void, Error> CheckRetainedPartFreshness(const Workbook& workbook, const
 /// place of a worksheet part.
 bool is_retained_binary_sheet(const Sheet& sheet);
 
+/// The binary part an .xlsb save writes from a chartsheet read from an .xlsx
+/// (its `.xml` path ending in `.bin`), or empty for any other sheet.
+std::string converted_chartsheet_bin_path(const Sheet& sheet);
+
 /// Package paths of the 1-based `position`-th worksheet part, its rels, and
 /// the rels of the `position`-th external link part.
 std::string sheet_part_path(std::size_t position);
