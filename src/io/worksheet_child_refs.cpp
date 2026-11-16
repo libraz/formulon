@@ -1,6 +1,8 @@
 #include "io/worksheet_child_refs.h"
 
+#include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -9,18 +11,21 @@
 #include "io/sqref_text.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
+#include "utils/a1_ref.h"
 
 namespace formulon::io {
 namespace {
 
 enum class Outcome { kUnchanged, kChanged, kEmptied };
 
-/// The two ways an edit moves a retained range.
+/// The two ways an edit moves a retained range, and the edit itself for the
+/// children that hold cell anchors rather than ranges.
 struct ChildRefRemap {
   /// Ranges that stretch over an insert inside them and shrink under a delete.
   SqrefRemap move;
   /// Ranges an edit inside them cuts in two.
   SqrefRemap cut;
+  const StructuralEdit& edit;
 };
 
 // Maps the A1 text of `attr` through `remap`; an attribute that does not parse
@@ -165,6 +170,60 @@ bool RemapScenarios(pugi::xml_node root, const ChildRefRemap& remap, bool& chang
   return true;
 }
 
+// Reads the `edit`-axis line and offset of an anchor marker (`xdr:col` /
+// `xdr:colOff` or `xdr:row` / `xdr:rowOff`).
+AnchorLine ReadMarkerLine(const pugi::xml_node& marker, bool row_axis) {
+  return {static_cast<std::uint32_t>(child_local(marker, row_axis ? "row" : "col").text().as_ullong()),
+          child_local(marker, row_axis ? "rowOff" : "colOff").text().as_llong()};
+}
+
+void WriteMarkerLine(const pugi::xml_node& marker, bool row_axis, const AnchorLine& at) {
+  child_local(marker, row_axis ? "row" : "col").text().set(static_cast<unsigned long long>(at.line));
+  child_local(marker, row_axis ? "rowOff" : "colOff").text().set(static_cast<long long>(at.offset));
+}
+
+// The `anchor` of each form control (`controlPr`) and OLE object (`objectPr`),
+// in either branch of an `mc:AlternateContent`. An object that does not move
+// with cells keeps its anchor.
+bool RemapObjectAnchors(pugi::xml_node root, const ChildRefRemap& remap, bool& changed) {
+  const StructuralEdit& edit = remap.edit;
+  if (edit.band.has_value()) {
+    return true;
+  }
+  struct Walker : pugi::xml_tree_walker {
+    std::vector<pugi::xml_node> anchors;
+    bool for_each(pugi::xml_node& node) override {
+      const std::string_view parent = local_name(node.parent());
+      if (local_name(node) == "anchor" && (parent == "controlPr" || parent == "objectPr")) {
+        anchors.push_back(node);
+      }
+      return true;
+    }
+  } walker;
+  root.traverse(walker);
+  for (const pugi::xml_node& anchor : walker.anchors) {
+    const pugi::xml_node from_node = child_local(anchor, "from");
+    const pugi::xml_node to_node = child_local(anchor, "to");
+    if (!from_node || !to_node || !parse_xml_bool_attr(anchor.attribute("moveWithCells"))) {
+      continue;
+    }
+    const AnchorLine from = ReadMarkerLine(from_node, edit.row_axis);
+    const AnchorLine to = ReadMarkerLine(to_node, edit.row_axis);
+    AnchorLine moved_from = from;
+    AnchorLine moved_to = to;
+    move_cell_anchor(moved_from, moved_to, parse_xml_bool_attr(anchor.attribute("sizeWithCells")), edit);
+    if (moved_from.line != from.line || moved_from.offset != from.offset) {
+      WriteMarkerLine(from_node, edit.row_axis, moved_from);
+      changed = true;
+    }
+    if (moved_to.line != to.line || moved_to.offset != to.offset) {
+      WriteMarkerLine(to_node, edit.row_axis, moved_to);
+      changed = true;
+    }
+  }
+  return true;
+}
+
 using ChildRemap = bool (*)(pugi::xml_node, const ChildRefRemap&, bool&);
 
 struct ChildRule {
@@ -179,6 +238,11 @@ constexpr ChildRule kRules[] = {
     {"cellWatches", RemapCellWatches},
     {"ignoredErrors", RemapIgnoredErrors},
     {"webPublishItems", RemapWebPublishItems},
+    {"controls", RemapObjectAnchors},
+    {"oleObjects", RemapObjectAnchors},
+    // Excel wraps `<controls>` in an `mc:AlternateContent`, which takes the
+    // slot of the child before it.
+    {"AlternateContent", RemapObjectAnchors},
 };
 
 ChildRemap RuleFor(std::string_view name) {
@@ -190,20 +254,57 @@ ChildRemap RuleFor(std::string_view name) {
   return nullptr;
 }
 
+// Whether a retained child's root element is an `mc:AlternateContent`.
+bool IsAlternateContent(std::string_view xml) {
+  constexpr std::string_view kName = "AlternateContent";
+  const std::string_view tag = xml.substr(0, xml.find_first_of(" />"));
+  return tag.size() >= kName.size() && tag.substr(tag.size() - kName.size()) == kName;
+}
+
 }  // namespace
+
+AnchorLine shift_anchor_line(AnchorLine marker, const StructuralEdit& edit) {
+  if (marker.line < edit.index) {
+    return marker;
+  }
+  if (!edit.is_delete) {
+    marker.line = static_cast<std::uint32_t>(std::min<std::uint64_t>(
+        static_cast<std::uint64_t>(marker.line) + edit.count, a1::axis_extent(edit.row_axis) - 1U));
+  } else if (marker.line >= edit.end()) {
+    marker.line -= edit.count;
+  } else {
+    marker.line = edit.index;
+    marker.offset = 0;
+  }
+  return marker;
+}
+
+void move_cell_anchor(AnchorLine& from, AnchorLine& to, bool size_with_cells, const StructuralEdit& edit) {
+  const AnchorLine moved_from = shift_anchor_line(from, edit);
+  if (size_with_cells) {
+    to = shift_anchor_line(to, edit);
+  } else {
+    // `from` moved by `moved_from.line - from.line` lines; `to` keeps the span.
+    const std::int64_t delta = static_cast<std::int64_t>(moved_from.line) - static_cast<std::int64_t>(from.line);
+    const std::int64_t last = static_cast<std::int64_t>(a1::axis_extent(edit.row_axis)) - 1;
+    to.line = static_cast<std::uint32_t>(std::clamp<std::int64_t>(static_cast<std::int64_t>(to.line) + delta, 0, last));
+  }
+  from = moved_from;
+}
 
 void remap_worksheet_children(WorksheetRawExtensions& children, const StructuralEdit& edit) {
   const ChildRefRemap remap{[&edit](std::vector<MergeRange>& ranges) { shift_reference_ranges(ranges, edit); },
-                            [&edit](std::vector<MergeRange>& ranges) { cut_sqref_ranges(ranges, edit); }};
+                            [&edit](std::vector<MergeRange>& ranges) { cut_sqref_ranges(ranges, edit); }, edit};
   for (auto it = children.begin(); it != children.end();) {
     // The slot names the element unless it was an unknown one parked there.
-    if (it->slot >= worksheet_child::kCount || RuleFor(worksheet_child::kOrder[it->slot]) == nullptr) {
+    const bool named_rule = it->slot < worksheet_child::kCount && RuleFor(worksheet_child::kOrder[it->slot]) != nullptr;
+    if (!named_rule && !IsAlternateContent(it->xml)) {
       ++it;
       continue;
     }
     pugi::xml_document doc;
     const pugi::xml_node root = doc.load_string(it->xml.c_str()) ? doc.document_element() : pugi::xml_node();
-    const ChildRemap apply = root ? RuleFor(root.name()) : nullptr;
+    const ChildRemap apply = root ? RuleFor(local_name(root)) : nullptr;
     if (apply == nullptr) {
       ++it;
       continue;

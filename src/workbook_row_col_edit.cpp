@@ -18,10 +18,14 @@
 #include "chart/chart_ref.h"
 #include "defined_name.h"
 #include "drawing/drawing_edit.h"
+#include "drawing/drawing_geometry.h"
 #include "drawing/slicer_edit.h"
 #include "eval/dep_graph.h"
 #include "eval/recalc_engine.h"
 #include "io/auto_filter_xml.h"
+#include "io/ooxml/part_dom.h"
+#include "io/ooxml_defs.h"
+#include "io/vml_anchor_edit.h"
 #include "io/worksheet_child_refs.h"
 #include "new_workbook_defaults.h"
 #include "parser/ast.h"
@@ -909,6 +913,36 @@ Expected<void, Error> apply_row_col_edit(const Workbook& wb, std::size_t sheet_i
     shift_retained_extension_ranges(target, edit);
     const std::vector<std::string> framed_slicers_before = framed_slicers(wb, sheet_index);
     shift_drawing_anchors(wb, sheet_index, origin, count, edit.is_delete, edit.row_axis);
+    // The legacy VML shapes of form controls and OLE objects move by the same
+    // rule. Shapes the sheet models are written afresh once moved; a drawing it
+    // only retains (an `.xlsb` sheet without notes) is rewritten in place.
+    std::optional<Geometry> geo;
+    const io::LineOffsetPt offset_pt = [&](bool row_axis, std::uint32_t line) {
+      if (!geo) {
+        geo.emplace(wb, target);
+      }
+      return static_cast<double>(geo->offset(row_axis, line)) / static_cast<double>(kEmuPerPoint);
+    };
+    if (!target.comment_vml_extra_xml().empty()) {
+      std::string vml_shapes = target.comment_vml_extra_xml();
+      if (io::remap_vml_anchors(vml_shapes, edit, offset_pt)) {
+        target.set_comment_vml_extra_xml(std::move(vml_shapes));
+        target.set_comment_vml_path({});
+      }
+    } else {
+      for (const UnknownRelationship& rel : target.unknown_relationships()) {
+        const PassthroughPart* part = rel.type == io::kRelVmlDrawing && !rel.target_external
+                                          ? io::ooxml::find_passthrough_part(wb, rel.target)
+                                          : nullptr;
+        if (part == nullptr) {
+          continue;
+        }
+        std::string vml(part->bytes.begin(), part->bytes.end());
+        if (io::remap_vml_anchors(vml, edit, offset_pt)) {
+          static_cast<void>(wb.replace_passthrough_part(rel.target, std::vector<std::uint8_t>(vml.begin(), vml.end())));
+        }
+      }
+    }
     // A slicer whose frame the edit deleted goes with its cache; their `Slicer_*` names leave here, under the lock.
     if (erase_slicer_cache_names(defined_names, remove_unframed_slicers(wb, sheet_index, framed_slicers_before))) {
       names_changed = true;

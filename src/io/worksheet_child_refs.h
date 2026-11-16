@@ -19,6 +19,10 @@
 //                                     the scenarios left;
 //   cellWatch r                    -- a cell a delete leaves where it was.
 //
+//   controlPr / objectPr anchor    -- the cell anchor of a form control or
+//                                     OLE object (`move_cell_anchor`),
+//                                     whole row/column edits only.
+//
 // Under a band edit (Insert / Delete Cells) only a range inside the band moves.
 //
 // `dataConsolidate`, `customSheetViews` and the `<scenarios sqref>` keep
@@ -27,10 +31,28 @@
 #ifndef FORMULON_IO_WORKSHEET_CHILD_REFS_H_
 #define FORMULON_IO_WORKSHEET_CHILD_REFS_H_
 
+#include <cstdint>
+
 #include "sheet.h"
 #include "sheet_passthrough.h"
 
 namespace formulon::io {
+
+/// One axis of an anchor marker: a 0-based row or column and the offset into it.
+struct AnchorLine {
+  std::uint32_t line = 0;
+  std::int64_t offset = 0;
+};
+
+/// Moves `marker` for a row/column edit along its axis: at or after an insert
+/// it moves by the count (held on the sheet), past a deleted span it moves
+/// back, and inside one it lands on the deletion start with offset 0.
+AnchorLine shift_anchor_line(AnchorLine marker, const StructuralEdit& edit);
+
+/// Moves a cell-anchored object's markers along the edit's axis as Excel does:
+/// one that moves and sizes with cells shifts each marker; one that only moves
+/// shifts `from` and moves `to` by as many lines, keeping its line span.
+void move_cell_anchor(AnchorLine& from, AnchorLine& to, bool size_with_cells, const StructuralEdit& edit);
 
 /// Rewrites the cell coordinates of every child in `children` for `edit` by
 /// the rules above. A child the edit leaves without content is erased, as

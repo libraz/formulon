@@ -594,6 +594,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - An `.xlsb` holding an AutoFilter icon filter with no icon, which Excel stores with no icon set, failed to open; it now reads as that filter, and both formats save a filter with no icon as Excel does, with no set in `.xlsb` and the default `3Arrows` in `.xlsx`.
+- A row or column insert or delete moves form controls and OLE objects as
+  Excel does, in `.xlsx` and `.xlsb`: the worksheet's control and object
+  anchors, their drawing-part anchors and the legacy VML shape (its
+  `x:Anchor` and its position and size) move together. An object that moves
+  and sizes with cells moves each corner; one that only moves shifts with
+  the cells before it and keeps its rows and columns. The worksheet and VML
+  anchors kept their cells before, and a move-only object stored with no
+  size grew or shrank with an edit inside it.
 - `INDEX` with a row or column number given as an array in its three-argument
   form evaluates each element on its own and selects row or column 1 for an
   element of 0, returning an array, as Excel does: `INDEX(D1:G1,{0},2)` was

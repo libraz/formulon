@@ -200,6 +200,7 @@ set(FORMULON_CORE_SOURCES
   src/io/protection_xml.cpp
   src/io/sheet_phonetic.cpp
   src/io/worksheet_child_refs.cpp
+  src/io/vml_anchor_edit.cpp
   src/io/future_functions.cpp
   src/io/ooxml_reader.cpp
   src/io/ooxml/external_link_reader.cpp

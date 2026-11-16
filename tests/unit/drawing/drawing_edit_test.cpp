@@ -610,6 +610,40 @@ TEST(DrawingEdit, OneCellAndAbsoluteAnchorsOnRowDelete) {
   EXPECT_EQ(objects[0].from.row_off, 50800);
 }
 
+TEST(DrawingEdit, MoveOnlyShapeWithoutSizeKeepsItsLineSpan) {
+  // A form control's shape: editAs="oneCell" over D5:E6 with a zero xfrm.
+  const std::string drawing =
+      std::string(kWsDrOpen) + "<xdr:twoCellAnchor editAs=\"oneCell\">" + Marker("from", 3, 0, 4, 0) +
+      Marker("to", 5, 0, 6, 0) +
+      "<xdr:sp macro=\"\" textlink=\"\"><xdr:nvSpPr><xdr:cNvPr id=\"1025\" name=\"Check Box 1\"/><xdr:cNvSpPr/>"
+      "</xdr:nvSpPr><xdr:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"0\" cy=\"0\"/></a:xfrm>"
+      "<a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></xdr:spPr></xdr:sp><xdr:clientData/></xdr:twoCellAnchor>"
+      "</xdr:wsDr>";
+  const std::string rels = std::string(kRelsOpen) + "</Relationships>";
+  struct Case {
+    const char* name;
+    std::uint32_t index, count;
+    bool is_delete, row_axis;
+    AnchorPoint from, to;
+  };
+  // {row, col, row_off, col_off}; Mac Excel 16.115's anchors after each edit.
+  const Case cases[] = {
+      {"insert row 6 inside", 5, 1, false, true, {4, 3, 0, 0}, {6, 5, 0, 0}},
+      {"delete row 6 inside", 5, 1, true, true, {4, 3, 0, 0}, {6, 5, 0, 0}},
+      {"delete rows 4-13 over its top", 3, 10, true, true, {3, 3, 0, 0}, {5, 5, 0, 0}},
+      {"insert column E inside", 4, 1, false, false, {4, 3, 0, 0}, {6, 5, 0, 0}},
+      {"insert column B before", 1, 1, false, false, {4, 4, 0, 0}, {6, 6, 0, 0}},
+  };
+  for (const Case& c : cases) {
+    Workbook wb = WithDrawing(drawing, rels, {});
+    shift_drawing_anchors(wb, 0, c.index, c.count, c.is_delete, c.row_axis);
+    const std::vector<DrawingObject> objects = List(wb);
+    ASSERT_EQ(objects.size(), 1U) << c.name;
+    SCOPED_TRACE(c.name);
+    ExpectAnchor(objects[0], c.from, c.to);
+  }
+}
+
 TEST(DrawingEdit, EditAfterEveryObjectKeepsBytes) {
   Workbook wb = ThreePlacements();
   const Bytes before = Part(wb, kDrawingPath)->bytes;

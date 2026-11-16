@@ -17,6 +17,7 @@
 #include "io/ooxml/part_graph.h"
 #include "io/ooxml/relationship_xml.h"
 #include "io/ooxml_defs.h"
+#include "io/worksheet_child_refs.h"
 #include "io/xml_utils.h"
 #include "io/zip_reader.h"
 #include "new_workbook_defaults.h"
@@ -227,24 +228,14 @@ bool box_in_range(std::int64_t row_off, std::int64_t col_off, std::int64_t cx, s
          cell_in_range(row, col);
 }
 
-// Moves one marker for an edit along its axis; a marker inside a deleted span
-// lands on the deletion boundary with offset 0.
-AnchorPoint shift_point(AnchorPoint p, std::uint32_t index, std::uint32_t count, bool is_delete, bool row_axis) {
-  std::uint32_t& line = row_axis ? p.row : p.col;
-  std::int64_t& off = row_axis ? p.row_off : p.col_off;
-  if (line < index) {
-    return p;
-  }
-  if (!is_delete) {
-    const std::uint32_t limit = a1::axis_extent(row_axis);
-    const std::uint64_t shifted = static_cast<std::uint64_t>(line) + count;
-    line = static_cast<std::uint32_t>(std::min<std::uint64_t>(shifted, limit - 1U));
-  } else if (line >= index + count) {
-    line -= count;
-  } else {
-    line = index;
-    off = 0;
-  }
+// The `edit`-axis line and offset of a marker.
+io::AnchorLine axis_line(const AnchorPoint& p, bool row_axis) {
+  return row_axis ? io::AnchorLine{p.row, p.row_off} : io::AnchorLine{p.col, p.col_off};
+}
+
+AnchorPoint with_axis_line(AnchorPoint p, bool row_axis, const io::AnchorLine& at) {
+  (row_axis ? p.row : p.col) = at.line;
+  (row_axis ? p.row_off : p.col_off) = at.offset;
   return p;
 }
 
@@ -630,6 +621,7 @@ void shift_drawing_anchors(Workbook& wb, std::size_t sheet, std::uint32_t index,
     return;
   }
   const Geometry geo(wb, wb.sheet(sheet));
+  const StructuralEdit edit{index, count, is_delete, row_axis};
   const pugi::xml_node root = doc.document_element();
   const auto line = [row_axis](const AnchorPoint& p) { return row_axis ? p.row : p.col; };
   const auto deleted = [&](const AnchorPoint& p) { return is_delete && line(p) >= index && line(p) - index < count; };
@@ -653,9 +645,14 @@ void shift_drawing_anchors(Workbook& wb, std::size_t sheet, std::uint32_t index,
       }
       continue;
     }
-    const AnchorPoint from = shift_point(obj.from, index, count, is_delete, row_axis);
-    AnchorPoint to = shift_point(obj.to, index, count, is_delete, row_axis);
+    io::AnchorLine from_line = axis_line(obj.from, row_axis);
+    io::AnchorLine to_line_at = axis_line(obj.to, row_axis);
     const std::int64_t extent = row_axis ? obj.cy : obj.cx;
+    // A move-only object with no stored size (a form control or OLE object
+    // keeps its xfrm zero) keeps its line span.
+    io::move_cell_anchor(from_line, to_line_at, !(two_cell && obj.edit_as == EditAs::kOneCell && extent == 0), edit);
+    const AnchorPoint from = with_axis_line(obj.from, row_axis, from_line);
+    AnchorPoint to = with_axis_line(obj.to, row_axis, to_line_at);
     if (two_cell && obj.edit_as == EditAs::kOneCell && extent > 0) {
       // A move-only object keeps its size: `to` is re-derived from `from`.
       std::uint32_t& to_line = row_axis ? to.row : to.col;

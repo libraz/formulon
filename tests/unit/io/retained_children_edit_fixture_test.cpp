@@ -1,5 +1,5 @@
 //
-// Row / column edits against Mac Excel 365 (16.113, ja-JP) saves under
+// Row / column edits against Mac Excel 365 (16.113 and 16.115, ja-JP) saves under
 // `tests/fixtures/excel/retained_children_edit/`. The `children` book carries
 // every retained `<worksheet>` child that names cells -- protected ranges,
 // three scenarios, a sheet-level sort state, a consolidation source, a custom
@@ -9,7 +9,9 @@
 // each as-is and after each edit, in both formats. Applying the same edit to
 // the base file and saving must leave those coordinates where Excel's own
 // save does. The ranges inside one sqref are compared as a set: Excel
-// reorders them on save, and their order carries nothing.
+// reorders them on save, and their order carries nothing. The `controls`,
+// `ole_move` and `ole_size` books hold form controls and OLE objects, whose
+// cell anchors Excel moves in the worksheet, the drawing part and the VML.
 
 #include <algorithm>
 #include <cstdint>
@@ -270,6 +272,130 @@ TEST(RetainedChildrenEditFixture, AutoFilterXlsx) {
 
 TEST(RetainedChildrenEditFixture, AutoFilterXlsb) {
   CheckBook("autofilter", kAutoFilterEdits, true);
+}
+
+/// The text content of every element in `block` that is a bare integer, in
+/// order: the col / colOff / row / rowOff values of an anchor's markers.
+std::string MarkerNumbers(const std::string& block) {
+  std::string out;
+  for (std::size_t gt = block.find('>'); gt != std::string::npos; gt = block.find('>', gt + 1U)) {
+    const std::size_t lt = block.find('<', gt);
+    if (lt == std::string::npos || lt == gt + 1U) {
+      continue;
+    }
+    const std::string text = block.substr(gt + 1U, lt - gt - 1U);
+    if (text.find_first_not_of("-0123456789") == std::string::npos) {
+      out += (out.empty() ? "" : ",") + text;
+    }
+  }
+  return out;
+}
+
+/// Every `open`..`close` block of `text` as `label` plus its marker numbers.
+void CollectBlocks(const std::string& text, const std::string& open, const std::string& close, const char* label,
+                   std::vector<std::string>& out) {
+  for (std::size_t at = text.find(open); at != std::string::npos; at = text.find(open, at + 1U)) {
+    const std::size_t end = text.find(close, at);
+    if (end == std::string::npos) {
+      break;
+    }
+    const std::string block = text.substr(at, end - at);
+    out.push_back(std::string(label) + block.substr(open.size(), block.find('>') - open.size()) + " " +
+                  MarkerNumbers(block));
+  }
+}
+
+/// The cell anchors of a sheet's form controls and OLE objects in all three
+/// places a package keeps them: the worksheet's `controlPr` / `objectPr`
+/// anchor (`.xlsx` only), the drawing part's two-cell anchors, and the VML
+/// `x:Anchor` of each legacy shape.
+std::vector<std::string> ObjectAnchors(const std::vector<std::uint8_t>& package, bool xlsb) {
+  std::vector<std::string> out;
+  if (!xlsb) {
+    CollectBlocks(ReadEntry(package, "xl/worksheets/sheet1.xml"), "<anchor", "</anchor>", "sheet", out);
+  }
+  ZipReader zip;
+  EXPECT_TRUE(static_cast<bool>(zip.open(ByteSpan{package.data(), package.size()})));
+  for (const std::string& name : zip.list_entries()) {
+    if (name.rfind("xl/drawings/drawing", 0) == 0 && name.substr(name.size() - 4U) == ".xml") {
+      std::vector<std::string> anchors;
+      CollectBlocks(ReadEntry(package, name), "<xdr:twoCellAnchor", "</xdr:to>", "drawing", anchors);
+      // Excel adds a hidden AutoShape from A1 to the OLE books on every save;
+      // it is not one of the objects under test.
+      for (std::string& anchor : anchors) {
+        if (anchor.find(" 0,0,0,0,") == std::string::npos) {
+          out.push_back(std::move(anchor));
+        }
+      }
+    } else if (name.size() > 4U && name.substr(name.size() - 4U) == ".vml") {
+      const std::string vml = ReadEntry(package, name);
+      for (std::size_t at = vml.find("<x:Anchor>"); at != std::string::npos; at = vml.find("<x:Anchor>", at + 1U)) {
+        std::string anchor = vml.substr(at + 10U, vml.find('<', at + 10U) - at - 10U);
+        anchor.erase(
+            std::remove_if(anchor.begin(), anchor.end(), [](char c) { return c == ' ' || c == '\n' || c == '\r'; }),
+            anchor.end());
+        out.push_back("vml " + anchor);
+      }
+    }
+  }
+  // Part order in the package carries nothing.
+  std::sort(out.begin(), out.end());
+  return out;
+}
+
+const std::vector<EditCase> kControlEdits = {
+    {"R_ins_above", [](Workbook& wb) { return wb.insert_rows(0, 1, 2); }},
+    {"R_ins_in_cb", [](Workbook& wb) { return wb.insert_rows(0, 5, 1); }},
+    {"R_ins_in_bt", [](Workbook& wb) { return wb.insert_rows(0, 10, 1); }},
+    {"R_del_top_bt", [](Workbook& wb) { return wb.delete_rows(0, 8, 2); }},
+    {"R_del_all_cb", [](Workbook& wb) { return wb.delete_rows(0, 4, 2); }},
+    {"C_del_in_cb", [](Workbook& wb) { return wb.delete_cols(0, 4, 1); }},
+};
+
+const std::vector<EditCase> kOleMoveEdits = {
+    {"R_del_cover", [](Workbook& wb) { return wb.delete_rows(0, 3, 10); }},
+};
+
+const std::vector<EditCase> kOleSizeEdits = {
+    {"C_ins_in_cb", [](Workbook& wb) { return wb.insert_cols(0, 4, 1); }},
+};
+
+void CheckObjectAnchors(const std::string& book, const std::vector<EditCase>& edits, bool xlsb) {
+  const char* ext = xlsb ? ".xlsb" : ".xlsx";
+  const std::vector<std::uint8_t> base = ReadFixture(book + "_0_base" + ext);
+  const std::vector<std::string> base_anchors = ObjectAnchors(base, xlsb);
+  ASSERT_GE(base_anchors.size(), 2U) << book << ext;
+  EXPECT_EQ(ObjectAnchors(Save(Load(base, xlsb), xlsb), xlsb), base_anchors) << book << ext;
+  for (const EditCase& edit : edits) {
+    Workbook wb = Load(base, xlsb);
+    ASSERT_TRUE(static_cast<bool>(edit.apply(wb))) << edit.state;
+    const std::vector<std::string> excel = ObjectAnchors(ReadFixture(book + "_" + edit.state + ext), xlsb);
+    EXPECT_NE(excel, base_anchors) << book << "_" << edit.state << ext;
+    EXPECT_EQ(ObjectAnchors(Save(wb, xlsb), xlsb), excel) << book << "_" << edit.state << ext;
+  }
+}
+
+// A check box that moves with cells and a button that moves and sizes with
+// them: the check box keeps its line span through an edit inside it.
+TEST(RetainedChildrenEditFixture, FormControlAnchorsXlsx) {
+  CheckObjectAnchors("controls", kControlEdits, false);
+}
+
+TEST(RetainedChildrenEditFixture, FormControlAnchorsXlsb) {
+  CheckObjectAnchors("controls", kControlEdits, true);
+}
+
+// A move-only OLE object whose top row is deleted with the rows above it
+// lands on the deletion start at its own size; a move-and-size one grows
+// with a column inserted inside it.
+TEST(RetainedChildrenEditFixture, OleObjectAnchorsXlsx) {
+  CheckObjectAnchors("ole_move", kOleMoveEdits, false);
+  CheckObjectAnchors("ole_size", kOleSizeEdits, false);
+}
+
+TEST(RetainedChildrenEditFixture, OleObjectAnchorsXlsb) {
+  CheckObjectAnchors("ole_move", kOleMoveEdits, true);
+  CheckObjectAnchors("ole_size", kOleSizeEdits, true);
 }
 
 // What the comparisons hold for the two rules no other structure follows,
