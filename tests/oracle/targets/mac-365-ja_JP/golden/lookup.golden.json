@@ -2,11 +2,11 @@
   "suite": "lookup",
   "description": "MATCH / INDEX / CHOOSE / VLOOKUP / HLOOKUP / XLOOKUP / XMATCH",
   "environment": {
-    "excel_version": "16.114.1",
+    "excel_version": "16.115",
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-11-03T07:41:47Z"
+    "generated_at": "2026-11-16T03:20:24Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -4083,6 +4083,838 @@
           2,
           1
         ]
+      }
+    },
+    {
+      "id": "index_lifted_zero_row_on_row_vector",
+      "formula": "=INDEX(D1:G1,{0},2)",
+      "setup": {
+        "D1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "index_lifted_zero_rows_on_row_vector",
+      "formula": "=INDEX(D1:G1,{0,0},2)",
+      "setup": {
+        "D1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          20.0,
+          20.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "index_lifted_zero_row_with_column_array",
+      "formula": "=INDEX(D1:G1,{0},{2,3})",
+      "setup": {
+        "D1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          20.0,
+          30.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "index_lifted_zero_row_range_selector",
+      "formula": "=INDEX(D1:G1,A1:A2,2)",
+      "setup": {
+        "D1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          20.0,
+          20.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "index_lifted_scalar_zero_row_with_column_range",
+      "formula": "=INDEX(D1:G1,A1,B1:C1)",
+      "setup": {
+        "D1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "F1": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 40.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "C1": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          20.0,
+          30.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "index_lifted_zero_column_on_column_vector",
+      "formula": "=INDEX(I1:I4,2,{0})",
+      "setup": {
+        "I1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "I2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "I3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "I4": {
+          "kind": "number",
+          "value": 40.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "index_lifted_zero_row_on_block",
+      "formula": "=INDEX(D3:G5,{0},2)",
+      "setup": {
+        "D3": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "G3": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 21.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 22.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "G4": {
+          "kind": "number",
+          "value": 24.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 31.0
+        },
+        "E5": {
+          "kind": "number",
+          "value": 32.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 33.0
+        },
+        "G5": {
+          "kind": "number",
+          "value": 34.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "index_lifted_zero_column_on_block",
+      "formula": "=INDEX(D3:G5,2,{0})",
+      "setup": {
+        "D3": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "G3": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 21.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 22.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "G4": {
+          "kind": "number",
+          "value": 24.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 31.0
+        },
+        "E5": {
+          "kind": "number",
+          "value": 32.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 33.0
+        },
+        "G5": {
+          "kind": "number",
+          "value": 34.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 21.0
+      }
+    },
+    {
+      "id": "index_lifted_zero_and_one_rows_on_block",
+      "formula": "=INDEX(D3:G5,{0,1},{2})",
+      "setup": {
+        "D3": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "G3": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 21.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 22.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "G4": {
+          "kind": "number",
+          "value": 24.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 31.0
+        },
+        "E5": {
+          "kind": "number",
+          "value": 32.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 33.0
+        },
+        "G5": {
+          "kind": "number",
+          "value": 34.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          12.0,
+          12.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "index_lifted_zero_and_one_rows_vertical_on_block",
+      "formula": "=INDEX(D3:G5,{0;1},{2})",
+      "setup": {
+        "D3": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "G3": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 21.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 22.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "G4": {
+          "kind": "number",
+          "value": 24.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 31.0
+        },
+        "E5": {
+          "kind": "number",
+          "value": 32.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 33.0
+        },
+        "G5": {
+          "kind": "number",
+          "value": 34.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          12.0,
+          12.0
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "index_lifted_zero_on_block_is_an_array",
+      "formula": "=TYPE(INDEX(D3:G5,{0},2))",
+      "setup": {
+        "D3": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "G3": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 21.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 22.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "G4": {
+          "kind": "number",
+          "value": 24.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 31.0
+        },
+        "E5": {
+          "kind": "number",
+          "value": 32.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 33.0
+        },
+        "G5": {
+          "kind": "number",
+          "value": 34.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 64.0
+      }
+    },
+    {
+      "id": "index_lifted_zero_on_block_is_not_a_reference",
+      "formula": "=ISREF(INDEX(D3:G5,{0},2))",
+      "setup": {
+        "D3": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "G3": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 21.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 22.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "G4": {
+          "kind": "number",
+          "value": 24.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 31.0
+        },
+        "E5": {
+          "kind": "number",
+          "value": 32.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 33.0
+        },
+        "G5": {
+          "kind": "number",
+          "value": 34.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "index_scalar_zero_row_on_block_keeps_the_column",
+      "formula": "=ROWS(INDEX(D3:G5,A1,2))",
+      "setup": {
+        "D3": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "G3": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 21.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 22.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "G4": {
+          "kind": "number",
+          "value": 24.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 31.0
+        },
+        "E5": {
+          "kind": "number",
+          "value": 32.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 33.0
+        },
+        "G5": {
+          "kind": "number",
+          "value": 34.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "index_lifted_zero_and_one_row_range_on_block",
+      "formula": "=INDEX(D3:G5,A2:B2,A1)",
+      "setup": {
+        "D3": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "G3": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 21.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 22.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "G4": {
+          "kind": "number",
+          "value": 24.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 31.0
+        },
+        "E5": {
+          "kind": "number",
+          "value": 32.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 33.0
+        },
+        "G5": {
+          "kind": "number",
+          "value": 34.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          12.0,
+          12.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "index_lifted_scalar_zero_row_with_column_array_on_block",
+      "formula": "=INDEX(D3:G5,A1,{2,3})",
+      "setup": {
+        "D3": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "G3": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 21.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 22.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "G4": {
+          "kind": "number",
+          "value": 24.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 31.0
+        },
+        "E5": {
+          "kind": "number",
+          "value": 32.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 33.0
+        },
+        "G5": {
+          "kind": "number",
+          "value": 34.0
+        },
+        "A1": {
+          "kind": "number",
+          "value": 0.0
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          12.0,
+          13.0
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    },
+    {
+      "id": "index_lifted_fractional_row_on_block",
+      "formula": "=INDEX(D3:G5,{0.5},2)",
+      "setup": {
+        "D3": {
+          "kind": "number",
+          "value": 11.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 12.0
+        },
+        "F3": {
+          "kind": "number",
+          "value": 13.0
+        },
+        "G3": {
+          "kind": "number",
+          "value": 14.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 21.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 22.0
+        },
+        "F4": {
+          "kind": "number",
+          "value": 23.0
+        },
+        "G4": {
+          "kind": "number",
+          "value": 24.0
+        },
+        "D5": {
+          "kind": "number",
+          "value": 31.0
+        },
+        "E5": {
+          "kind": "number",
+          "value": 32.0
+        },
+        "F5": {
+          "kind": "number",
+          "value": 33.0
+        },
+        "G5": {
+          "kind": "number",
+          "value": 34.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
       }
     },
     {

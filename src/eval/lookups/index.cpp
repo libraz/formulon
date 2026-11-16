@@ -534,8 +534,19 @@ Value eval_index_array_selector(const IndexSource& source, bool source_ok, Error
   const SelectorView row_selector = make_selector_view(row_value);
   const Value implicit_col = Value::number(0.0);
   const SelectorView col_selector = col_explicit ? make_selector_view(*col_value) : make_selector_view(implicit_col);
-  const std::vector<DecodedIndex> row_decoded = decode_selector(row_selector, IndexSnap::kNearInteger);
-  const std::vector<DecodedIndex> col_decoded = decode_selector(col_selector, IndexSnap::kNearInteger);
+  std::vector<DecodedIndex> row_decoded = decode_selector(row_selector, IndexSnap::kNearInteger);
+  std::vector<DecodedIndex> col_decoded = decode_selector(col_selector, IndexSnap::kNearInteger);
+  // Lifted element by element, the three-argument form selects a 0 as 1: each
+  // lane yields one cell, never a whole row or column (Excel 365).
+  if (col_explicit) {
+    for (std::vector<DecodedIndex>* decoded : {&row_decoded, &col_decoded}) {
+      for (DecodedIndex& index : *decoded) {
+        if (index.state == IndexAxisState::kValid && index.index == 0U) {
+          index.index = 1U;
+        }
+      }
+    }
+  }
 
   const std::uint32_t selector_out_rows = selector_rows(row_selector, col_selector);
   const std::uint32_t selector_out_cols = selector_cols(row_selector, col_selector);

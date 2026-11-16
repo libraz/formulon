@@ -570,6 +570,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `INDEX` with a row or column number given as an array in its three-argument
+  form evaluates each element on its own and selects row or column 1 for an
+  element of 0, returning an array, as Excel does: `INDEX(D1:G1,{0},2)` was
+  `#REF!`, and `INDEX(D3:G5,{0},2)` returned the whole column. A single number
+  0 still selects the whole row or column and keeps the result a reference.
 - An `.xlsx` save no longer writes the `<pivotSelection>` of a sheet's view of a second workbook window, which made Excel refuse to open the file. Every sheet view is now read the way the first one is, so the views of the other windows lose what it loses (`<pivotSelection>`, an unknown `view` mode, an out-of-range zoom) and keep the rest.
 - A PivotTable field sorted by the totals of a value field (`sortByField` in
   `updateField`, Python `sort_by_field`, C `fm_pivot_field_patch_t.sort_by_field`)

@@ -891,6 +891,224 @@ cases:
       A2: 2
     formula: "=INDEX(#REF!,A1:A2,1)"
 
+  - id: index_lifted_zero_row_on_row_vector
+    setup:
+      D1: 10
+      E1: 20
+      F1: 30
+      G1: 40
+    formula: "=INDEX(D1:G1,{0},2)"
+
+  - id: index_lifted_zero_rows_on_row_vector
+    setup:
+      D1: 10
+      E1: 20
+      F1: 30
+      G1: 40
+    formula: "=INDEX(D1:G1,{0,0},2)"
+
+  - id: index_lifted_zero_row_with_column_array
+    setup:
+      D1: 10
+      E1: 20
+      F1: 30
+      G1: 40
+    formula: "=INDEX(D1:G1,{0},{2,3})"
+
+  - id: index_lifted_zero_row_range_selector
+    setup:
+      D1: 10
+      E1: 20
+      F1: 30
+      G1: 40
+      A1: 0
+      A2: 0
+    formula: "=INDEX(D1:G1,A1:A2,2)"
+
+  - id: index_lifted_scalar_zero_row_with_column_range
+    setup:
+      D1: 10
+      E1: 20
+      F1: 30
+      G1: 40
+      A1: 0
+      B1: 2
+      C1: 3
+    formula: "=INDEX(D1:G1,A1,B1:C1)"
+
+  - id: index_lifted_zero_column_on_column_vector
+    setup:
+      I1: 10
+      I2: 20
+      I3: 30
+      I4: 40
+    formula: "=INDEX(I1:I4,2,{0})"
+
+  - id: index_lifted_zero_row_on_block
+    setup:
+      D3: 11
+      E3: 12
+      F3: 13
+      G3: 14
+      D4: 21
+      E4: 22
+      F4: 23
+      G4: 24
+      D5: 31
+      E5: 32
+      F5: 33
+      G5: 34
+    formula: "=INDEX(D3:G5,{0},2)"
+
+  - id: index_lifted_zero_column_on_block
+    setup:
+      D3: 11
+      E3: 12
+      F3: 13
+      G3: 14
+      D4: 21
+      E4: 22
+      F4: 23
+      G4: 24
+      D5: 31
+      E5: 32
+      F5: 33
+      G5: 34
+    formula: "=INDEX(D3:G5,2,{0})"
+
+  - id: index_lifted_zero_and_one_rows_on_block
+    setup:
+      D3: 11
+      E3: 12
+      F3: 13
+      G3: 14
+      D4: 21
+      E4: 22
+      F4: 23
+      G4: 24
+      D5: 31
+      E5: 32
+      F5: 33
+      G5: 34
+    formula: "=INDEX(D3:G5,{0,1},{2})"
+
+  - id: index_lifted_zero_and_one_rows_vertical_on_block
+    setup:
+      D3: 11
+      E3: 12
+      F3: 13
+      G3: 14
+      D4: 21
+      E4: 22
+      F4: 23
+      G4: 24
+      D5: 31
+      E5: 32
+      F5: 33
+      G5: 34
+    formula: "=INDEX(D3:G5,{0;1},{2})"
+
+  - id: index_lifted_zero_on_block_is_an_array
+    setup:
+      D3: 11
+      E3: 12
+      F3: 13
+      G3: 14
+      D4: 21
+      E4: 22
+      F4: 23
+      G4: 24
+      D5: 31
+      E5: 32
+      F5: 33
+      G5: 34
+    formula: "=TYPE(INDEX(D3:G5,{0},2))"
+
+  - id: index_lifted_zero_on_block_is_not_a_reference
+    setup:
+      D3: 11
+      E3: 12
+      F3: 13
+      G3: 14
+      D4: 21
+      E4: 22
+      F4: 23
+      G4: 24
+      D5: 31
+      E5: 32
+      F5: 33
+      G5: 34
+    formula: "=ISREF(INDEX(D3:G5,{0},2))"
+
+  - id: index_scalar_zero_row_on_block_keeps_the_column
+    setup:
+      D3: 11
+      E3: 12
+      F3: 13
+      G3: 14
+      D4: 21
+      E4: 22
+      F4: 23
+      G4: 24
+      D5: 31
+      E5: 32
+      F5: 33
+      G5: 34
+      A1: 0
+    formula: "=ROWS(INDEX(D3:G5,A1,2))"
+
+  - id: index_lifted_zero_and_one_row_range_on_block
+    setup:
+      D3: 11
+      E3: 12
+      F3: 13
+      G3: 14
+      D4: 21
+      E4: 22
+      F4: 23
+      G4: 24
+      D5: 31
+      E5: 32
+      F5: 33
+      G5: 34
+      A2: 0
+      B2: 1
+      A1: 2
+    formula: "=INDEX(D3:G5,A2:B2,A1)"
+
+  - id: index_lifted_scalar_zero_row_with_column_array_on_block
+    setup:
+      D3: 11
+      E3: 12
+      F3: 13
+      G3: 14
+      D4: 21
+      E4: 22
+      F4: 23
+      G4: 24
+      D5: 31
+      E5: 32
+      F5: 33
+      G5: 34
+      A1: 0
+    formula: "=INDEX(D3:G5,A1,{2,3})"
+
+  - id: index_lifted_fractional_row_on_block
+    setup:
+      D3: 11
+      E3: 12
+      F3: 13
+      G3: 14
+      D4: 21
+      E4: 22
+      F4: 23
+      G4: 24
+      D5: 31
+      E5: 32
+      F5: 33
+      G5: 34
+    formula: "=INDEX(D3:G5,{0.5},2)"
+
   - id: choose_array_index_matrix_scalars
     setup:
       A1: 1

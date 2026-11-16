@@ -338,17 +338,62 @@ TEST(BuiltinsIndex, ArraySelectorBoundsAndErrorAreLaneLocal) {
   EXPECT_EQ(v.as_array_cells()[2].as_error(), ErrorCode::NA);
 }
 
-TEST(BuiltinsIndex, ArrayRowZeroComposesColumnTile) {
+TEST(BuiltinsIndex, ArrayRowZeroSelectsTheFirstRow) {
   const Value v = EvalSource("=INDEX({11,12;21,22},{0;2},1)");
   ExpectArrayShape(v, 2U, 1U);
   EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 11.0);
   EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 21.0);
 }
 
-TEST(BuiltinsIndex, ArrayColumnZeroComposesRowTile) {
+TEST(BuiltinsIndex, ArrayColumnZeroSelectsTheFirstColumn) {
   const Value v = EvalSource("=INDEX({11,12;21,22},1,{0,2})");
   ExpectArrayShape(v, 1U, 2U);
   EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 11.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 12.0);
+}
+
+// Row vector D1:G1 = 10..40 and block D3:G5 holding 10 * row + column.
+Workbook IndexZeroSelectorBook() {
+  Workbook wb = Workbook::create();
+  for (std::uint32_t c = 0; c < 4U; ++c) {
+    wb.sheet(0).set_cell_value(0, 3U + c, Value::number(10.0 * (c + 1U)));
+    for (std::uint32_t r = 0; r < 3U; ++r) {
+      wb.sheet(0).set_cell_value(2U + r, 3U + c, Value::number(10.0 * (r + 1U) + (c + 1U)));
+    }
+  }
+  return wb;
+}
+
+TEST(BuiltinsIndex, LiftedZeroRowOnRowVectorSelectsTheCell) {
+  Workbook wb = IndexZeroSelectorBook();
+  const Value v = EvalSourceIn("=INDEX(D1:G1,{0},2)", wb, wb.sheet(0));
+  ExpectArrayShape(v, 1U, 1U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 20.0);
+}
+
+TEST(BuiltinsIndex, LiftedZeroRowWithColumnArrayOnRowVector) {
+  Workbook wb = IndexZeroSelectorBook();
+  const Value v = EvalSourceIn("=INDEX(D1:G1,{0},{2,3})", wb, wb.sheet(0));
+  ExpectArrayShape(v, 1U, 2U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 20.0);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 30.0);
+}
+
+TEST(BuiltinsIndex, LiftedZeroOnBlockSelectsOneAndStaysOneByOne) {
+  Workbook wb = IndexZeroSelectorBook();
+  const Value row = EvalSourceIn("=INDEX(D3:G5,{0},2)", wb, wb.sheet(0));
+  ExpectArrayShape(row, 1U, 1U);
+  EXPECT_DOUBLE_EQ(row.as_array_cells()[0].as_number(), 12.0);
+  const Value col = EvalSourceIn("=INDEX(D3:G5,2,{0})", wb, wb.sheet(0));
+  ExpectArrayShape(col, 1U, 1U);
+  EXPECT_DOUBLE_EQ(col.as_array_cells()[0].as_number(), 21.0);
+}
+
+TEST(BuiltinsIndex, LiftedZeroAndOneRowsOnBlockAgree) {
+  Workbook wb = IndexZeroSelectorBook();
+  const Value v = EvalSourceIn("=INDEX(D3:G5,{0;1},{2})", wb, wb.sheet(0));
+  ExpectArrayShape(v, 2U, 1U);
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 12.0);
   EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 12.0);
 }
 
