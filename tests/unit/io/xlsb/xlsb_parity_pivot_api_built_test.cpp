@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
@@ -468,6 +469,40 @@ TEST(XlsbParityPivotApiBuiltDeferred, BlankInAnInlineFieldIsLeftOutWithItsReason
   EXPECT_NE(log.find("unmeasured xlsb pivot cache state: record cells of a field without shared items holding blanks"),
             std::string::npos)
       << log;
+}
+
+/// The xlsx cache definition of `wb`'s first cache.
+std::string CacheDefinitionXml(fm_workbook_t* wb) {
+  std::uint8_t* bytes = nullptr;
+  std::size_t len = 0;
+  EXPECT_EQ(fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0) << fm_get_last_error_message();
+  const tc::Bytes package(bytes, bytes + len);
+  fm_buffer_destroy(bytes);
+  const std::optional<tc::Bytes> part = tc::ReadPart(package, "xl/pivotCache/pivotCacheDefinition1.xml");
+  return part.has_value() ? std::string(part->begin(), part->end()) : std::string();
+}
+
+// Adding, editing or removing a calculated field leaves the records what the refresh read, so the cache built through
+// the API saves without refreshOnLoad.
+TEST(XlsbParityPivotApiBuiltCalculatedField, FieldEditsKeepTheCacheRefreshed) {
+  fm_workbook_t* wb = nullptr;
+  ASSERT_EQ(fm_workbook_create_for_profile(kProfile, &wb), 0);
+  BuildCase("d_calc_field", wb);
+  std::uint32_t cache_id = 0;
+  ASSERT_EQ(fm_workbook_get_pivot_cache_id_at(wb, 0U, &cache_id), 0);
+  constexpr std::size_t kMargin = 5;
+  std::string xml = CacheDefinitionXml(wb);
+  EXPECT_NE(xml.find("name=\"Margin\""), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("refreshOnLoad"), std::string::npos) << xml;
+  ASSERT_EQ(fm_workbook_set_pivot_cache_calculated_field_formula(wb, cache_id, kMargin, "=Amt*0.2"), 0)
+      << fm_get_last_error_message();
+  xml = CacheDefinitionXml(wb);
+  EXPECT_EQ(xml.find("refreshOnLoad"), std::string::npos) << xml;
+  ASSERT_EQ(fm_workbook_remove_pivot_cache_calculated_field(wb, cache_id, kMargin), 0) << fm_get_last_error_message();
+  xml = CacheDefinitionXml(wb);
+  EXPECT_EQ(xml.find("name=\"Margin\""), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("refreshOnLoad"), std::string::npos) << xml;
+  fm_workbook_destroy(wb);
 }
 
 /// The pivot table parts of a saved package.

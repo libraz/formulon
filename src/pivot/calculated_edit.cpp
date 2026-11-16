@@ -213,7 +213,12 @@ Expected<std::size_t, Error> add_calculated_field(PivotCache& cache, const std::
   field.num_fmt_id = 0U;
   field.is_database_field = false;
   field.formula = std::string(without_equals(formula));
+  // A calculated field leaves the records what the source gave them, so a refreshed cache stays refreshed.
+  const bool from_source = cache.records_from_source();
   cache.mutable_fields().push_back(std::move(field));
+  if (from_source) {
+    cache.mark_records_from_source();
+  }
   sync_table_fields(cache, tables);
   return cache.fields().size() - 1U;
 }
@@ -230,7 +235,11 @@ Expected<void, Error> set_calculated_field_formula(PivotCache& cache, std::size_
   if (field_refs_reach(host, cache, refs, field_index)) {
     return invalid("formula refers to its own field", formula);
   }
+  const bool from_source = cache.records_from_source();
   cache.mutable_fields()[field_index].formula = std::string(without_equals(formula));
+  if (from_source) {
+    cache.mark_records_from_source();
+  }
   return Expected<void, Error>::Ok();
 }
 
@@ -257,6 +266,7 @@ Expected<void, Error> remove_calculated_field(PivotCache& cache, const std::vect
     }
   }
 
+  const bool from_source = cache.records_from_source();
   std::vector<PivotCacheField>& fields = cache.mutable_fields();
   erase_at(fields, field_index);
   for (PivotCacheField& field : fields) {
@@ -291,6 +301,9 @@ Expected<void, Error> remove_calculated_field(PivotCache& cache, const std::vect
   }
   for (PivotTable* table : tables) {
     remap_table(*table, cache, remap);
+  }
+  if (from_source) {
+    cache.mark_records_from_source();
   }
   return Expected<void, Error>::Ok();
 }
