@@ -1,0 +1,254 @@
+{
+  "name": "cf_text_stored_formula",
+  "description": "Excel-actual golden captured by tools/oracle/cf_oracle_gen.py (macOS + Excel 365, ja-JP).",
+  "cases": [
+    {
+      "id": "contains_text_x_formula_y",
+      "cells": [
+        {
+          "row": 1,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 0
+            }
+          ]
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "contains_text_no_text_formula_y",
+      "cells": [
+        {
+          "row": 1,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 0
+            }
+          ]
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "contains_text_empty_text_formula_y",
+      "cells": [
+        {
+          "row": 1,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 0
+            }
+          ]
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "not_contains_text_x_formula_y",
+      "cells": [
+        {
+          "row": 0,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 0
+            }
+          ]
+        },
+        {
+          "row": 3,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "begins_with_x_formula_y",
+      "cells": [
+        {
+          "row": 1,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ends_with_x_formula_y",
+      "cells": [
+        {
+          "row": 1,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 0
+            }
+          ]
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "contains_text_x_control",
+      "cells": [
+        {
+          "row": 0,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 0
+            }
+          ]
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "not_contains_text_x_control",
+      "cells": [
+        {
+          "row": 1,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 0
+            }
+          ]
+        },
+        {
+          "row": 3,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "begins_with_x_control",
+      "cells": [
+        {
+          "row": 0,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 0
+            }
+          ]
+        },
+        {
+          "row": 2,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ends_with_x_control",
+      "cells": [
+        {
+          "row": 0,
+          "col": 0,
+          "matches": [
+            {
+              "kind": "DifferentialFormat",
+              "priority": 1,
+              "dxf_id": 0
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

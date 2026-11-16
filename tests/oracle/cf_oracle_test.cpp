@@ -52,24 +52,25 @@ using ::formulon::tests::oracle::JsonValue;
 // missing or malformed golden is a test-rig error, not a per-case
 // failure, so it surfaces via the accessor's ADD_FAILURE below rather
 // than crashing every fixture.
-const JsonValue& CfGolden() {
-  static const JsonValue golden = [] {
-    const std::string path = std::string(FORMULON_CF_GOLDEN_DIR) + "/cf_smoke.golden.json";
-    auto parsed = ::formulon::tests::oracle::parse_json_file(path);
-    if (!parsed.has_value()) {
-      ADD_FAILURE() << "failed to load CF golden at " << path << ": " << parsed.error().message;
-      return JsonValue::make_null();
-    }
-    return std::move(parsed).value();
-  }();
-  return golden;
+const JsonValue& CfGolden(std::string_view suite) {
+  static std::map<std::string, JsonValue, std::less<>> goldens;
+  if (const auto found = goldens.find(suite); found != goldens.end()) {
+    return found->second;
+  }
+  const std::string path = std::string(FORMULON_CF_GOLDEN_DIR) + "/" + std::string(suite) + ".golden.json";
+  auto parsed = ::formulon::tests::oracle::parse_json_file(path);
+  if (!parsed.has_value()) {
+    ADD_FAILURE() << "failed to load CF golden at " << path << ": " << parsed.error().message;
+    return goldens.emplace(std::string(suite), JsonValue::make_null()).first->second;
+  }
+  return goldens.emplace(std::string(suite), std::move(parsed).value()).first->second;
 }
 
 // Returns the `cells` array for `case_id`, or nullptr if the case (or
 // the golden document) is absent. The returned vector is owned by the
 // process-lifetime static in CfGolden(), so the pointer stays valid.
-const std::vector<JsonValue>* GoldenCellsFor(std::string_view case_id) {
-  const JsonValue& root = CfGolden();
+const std::vector<JsonValue>* GoldenCellsFor(std::string_view case_id, std::string_view suite = "cf_smoke") {
+  const JsonValue& root = CfGolden(suite);
   if (!root.is_object()) {
     return nullptr;
   }
@@ -201,8 +202,9 @@ constexpr double kBarLengthTolerance = 0.5;
 // by field; colour channels use `ColorMatches`, bar lengths use
 // `kBarLengthTolerance`. This is the single expectation authority: every
 // fixture builds its inputs, evaluates, then defers to this comparator.
-void VerifyAgainstGolden(std::string_view case_id, const std::vector<CFRangeCellMatches>& actual) {
-  const std::vector<JsonValue>* expected_cells = GoldenCellsFor(case_id);
+void VerifyAgainstGolden(std::string_view case_id, const std::vector<CFRangeCellMatches>& actual,
+                         std::string_view suite = "cf_smoke") {
+  const std::vector<JsonValue>* expected_cells = GoldenCellsFor(case_id, suite);
   ASSERT_NE(expected_cells, nullptr) << "no golden cells for case '" << case_id << "'";
   ASSERT_EQ(actual.size(), expected_cells->size()) << "matched-cell count mismatch for case '" << case_id << "'";
 
@@ -993,6 +995,53 @@ TEST(CfOracleSmoke, CellIsLessThanTextAMixedKinds) {
 
 TEST(CfOracleSmoke, CellIsEqualTrueMixedKinds) {
   RunCellIsMixedKindsCase(CellIsOperator::Equal, "TRUE", nullptr, 39u, false, "cellis_equal_true_mixed_kinds");
+}
+
+// ---------------------------------------------------------------------------
+// cf_text_stored_formula: a text rule formats by its stored formula, the
+// `text` attribute being only the dialog operand. Over A1:A4 = "x", "y",
+// "xy", #DIV/0!. Mirrors cases_cf/cf_text_stored_formula.yaml.
+// ---------------------------------------------------------------------------
+
+void ExpectTextRuleCase(std::string_view case_id, RuleType type, std::optional<std::string> text,
+                        std::string formula1) {
+  CFOracleHarness harness;
+  harness.sheet.set_cell_value(0, 0, Value::text("x"));
+  harness.sheet.set_cell_value(1, 0, Value::text("y"));
+  harness.sheet.set_cell_value(2, 0, Value::text("xy"));
+  harness.sheet.set_cell_value(3, 0, Value::error(ErrorCode::Div0));
+  ConditionalFormat block{};
+  block.sqref.push_back(MakeRange(0, 0, 3, 0));
+  CFRule rule;
+  rule.type = type;
+  rule.priority = 1;
+  rule.dxf_id = 0U;
+  rule.text = std::move(text);
+  rule.formula1 = std::move(formula1);
+  block.rules.push_back(std::move(rule));
+  harness.sheet.mutable_conditional_formats().push_back(std::move(block));
+  const CFHost host = harness.MakeHost();
+  const std::vector<CFRangeCellMatches> matches =
+      evaluate_cf_for_range(harness.sheet, MakeRange(0, 0, 3, 0), host).value();
+  VerifyAgainstGolden(case_id, matches, "cf_text_stored_formula");
+}
+
+TEST(CfOracleTextStoredFormula, FormulaDecidesOverText) {
+  ExpectTextRuleCase("contains_text_x_formula_y", RuleType::ContainsText, "x", "NOT(ISERROR(SEARCH(\"y\",A1)))");
+  ExpectTextRuleCase("contains_text_no_text_formula_y", RuleType::ContainsText, std::nullopt,
+                     "NOT(ISERROR(SEARCH(\"y\",A1)))");
+  ExpectTextRuleCase("contains_text_empty_text_formula_y", RuleType::ContainsText, "",
+                     "NOT(ISERROR(SEARCH(\"y\",A1)))");
+  ExpectTextRuleCase("not_contains_text_x_formula_y", RuleType::NotContainsText, "x", "ISERROR(SEARCH(\"y\",A1))");
+  ExpectTextRuleCase("begins_with_x_formula_y", RuleType::BeginsWith, "x", "LEFT(A1,LEN(\"y\"))=\"y\"");
+  ExpectTextRuleCase("ends_with_x_formula_y", RuleType::EndsWith, "x", "RIGHT(A1,LEN(\"y\"))=\"y\"");
+}
+
+TEST(CfOracleTextStoredFormula, AgreeingControls) {
+  ExpectTextRuleCase("contains_text_x_control", RuleType::ContainsText, "x", "NOT(ISERROR(SEARCH(\"x\",A1)))");
+  ExpectTextRuleCase("not_contains_text_x_control", RuleType::NotContainsText, "x", "ISERROR(SEARCH(\"x\",A1))");
+  ExpectTextRuleCase("begins_with_x_control", RuleType::BeginsWith, "x", "LEFT(A1,LEN(\"x\"))=\"x\"");
+  ExpectTextRuleCase("ends_with_x_control", RuleType::EndsWith, "x", "RIGHT(A1,LEN(\"x\"))=\"x\"");
 }
 
 }  // namespace

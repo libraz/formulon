@@ -6,24 +6,32 @@
   "verified": true,
   "active_ctest": true,
   "locale": "ja-JP",
-  "product": "Microsoft Excel for Mac 16.114.1",
+  "product": "Microsoft Excel for Mac 16.115",
   "m365_sentinel": "ARRAYTOTEXT(1) == text '1'",
-  "capture_id": "mac-365-ja_JP:Microsoft Excel for Mac 16.114.1:ja-JP:2026-10-23T20:19:54Z",
-  "generated_at": "2026-10-23T20:19:54Z",
+  "capture_id": "mac-365-ja_JP:Microsoft Excel for Mac 16.115:ja-JP:2026-11-16T20:29:02Z",
+  "generated_at": "2026-11-16T20:29:02Z",
   "required_suites": [
-    "cf_smoke"
+    "cf_smoke",
+    "cf_text_stored_formula"
   ],
   "captured_suites": [
-    "cf_smoke"
+    "cf_smoke",
+    "cf_text_stored_formula"
   ],
-  "case_count": 33,
+  "case_count": 43,
   "all_suites_same_capture": true,
   "suite_inventory": [
     {
       "suite": "cf_smoke",
       "case_count": 33,
       "sha256": "39d1bde38b00d9c0ea55fc1c49f2b9a951e368e497138052814211da8e06a035",
-      "capture_id": "mac-365-ja_JP:Microsoft Excel for Mac 16.114.1:ja-JP:2026-10-23T20:19:54Z"
+      "capture_id": "mac-365-ja_JP:Microsoft Excel for Mac 16.115:ja-JP:2026-11-16T20:29:02Z"
+    },
+    {
+      "suite": "cf_text_stored_formula",
+      "case_count": 10,
+      "sha256": "3f8414acc55fe81d521e3528aae3cb830c174a90e2b08e796d930d7ca72908ba",
+      "capture_id": "mac-365-ja_JP:Microsoft Excel for Mac 16.115:ja-JP:2026-11-16T20:29:02Z"
     }
   ],
   "reason": "CF goldens captured by the manifest-selected Mac Excel 365 target.",
