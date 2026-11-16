@@ -3,7 +3,8 @@
 //
 // A sheet's note drawing is written from its notes; a drawing the reader did not tie to notes stays a passthrough,
 // listed and counted. A desktop-written .xlsb's binary index over a sheet's cell records holds nothing the model
-// lacks, Excel rebuilds it, and .xlsx has no such part, so leaving it out loses nothing.
+// lacks, Excel rebuilds it, and .xlsx has no such part, so leaving it out loses nothing. The calculation chain of
+// either format only orders recalculation; the readers consume it and neither save writes or counts it.
 
 #include <cstddef>
 #include <cstdint>
@@ -183,6 +184,47 @@ TEST(BinaryIndexRetained, AnUnmodelledPartBesideItIsCounted) {
     ASSERT_TRUE(xlsx.has_value()) << xlsx.error().message;
     ExpectCounts(xlsx.value().diagnostics, 1U);
   }
+}
+
+// Desktop-written twins with formulas and a calculation chain.
+const char* const kChainedFixtures[] = {"self_book_name.xlsx", "self_book_name.xlsb"};
+
+Workbook LoadEither(const char* name) {
+  const tc::Bytes bytes = Fixture(name);
+  if (std::string(name).find(".xlsb") != std::string::npos) {
+    return LoadXlsb(bytes);
+  }
+  auto read = read_ooxml(ByteSpan{bytes.data(), bytes.size()});
+  EXPECT_TRUE(read.has_value()) << read.error().message;
+  return read.has_value() ? std::move(read.value().workbook) : Workbook::create();
+}
+
+/// Whether `package` has the part at `chain`, or a workbook relationship of the calcChain type in `rels`.
+bool HasChain(const tc::Bytes& package, const char* chain, const char* rels) {
+  const std::optional<tc::Bytes> rel_part = tc::ReadPart(package, rels);
+  EXPECT_TRUE(rel_part.has_value());
+  const std::string rel_xml = rel_part.has_value() ? std::string(rel_part->begin(), rel_part->end()) : std::string();
+  return tc::ReadPart(package, chain).has_value() || rel_xml.find("/calcChain\"") != std::string::npos;
+}
+
+TEST(CalcChainLeftOut, AnUneditedSaveCountsNothingAndWritesNoChain) {
+  for (const char* name : kChainedFixtures) {
+    SCOPED_TRACE(name);
+    const Workbook wb = LoadEither(name);
+    auto xlsx = write_ooxml_with_result(wb);
+    ASSERT_TRUE(xlsx.has_value()) << xlsx.error().message;
+    ExpectCounts(xlsx.value().diagnostics, 0U);
+    EXPECT_FALSE(HasChain(xlsx.value().bytes, "xl/calcChain.xml", "xl/_rels/workbook.xml.rels"));
+    auto xlsb = write_xlsb_with_result(wb);
+    ASSERT_TRUE(xlsb.has_value()) << xlsb.error().message;
+    ExpectCounts(xlsb.value().diagnostics, 0U);
+    EXPECT_FALSE(HasChain(xlsb.value().bytes, "xl/calcChain.bin", "xl/_rels/workbook.bin.rels"));
+  }
+}
+
+TEST(CalcChainLeftOut, AChainIsNotListed) {
+  EXPECT_FALSE(Listed(Fixture("self_book_name.xlsx"), "xl/calcChain.xml"));
+  EXPECT_FALSE(Listed(Fixture("self_book_name.xlsb"), "xl/calcChain.bin"));
 }
 
 }  // namespace

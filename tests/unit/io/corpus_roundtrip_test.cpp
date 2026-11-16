@@ -1,7 +1,10 @@
 // Corpus round trip: every .xlsx / .xlsb fixture under tests/fixtures/excel/ is
 // loaded, saved as .xlsx and as .xlsb, and both outputs are reloaded. The
 // reloaded model must keep the identities and counts of the first load and
-// each output must pass the package validators.
+// each output must pass the package validators. Each unedited save reports
+// every part and relationship it counts as dropped (a drop_* failure naming
+// the part path, or rel:<target>), so a part the model holds that a save
+// counts as lost fails here rather than downstream.
 //
 // The corpus is sharded by top-level fixture directory (loose files form the
 // "root" shard), a large directory in numbered chunks. Failures are "<relpath> <stage> <detail>"; the ones the
@@ -39,6 +42,7 @@
 #include "sheet.h"
 #include "support/xlsb_package_validator.h"
 #include "support/xlsx_package_validator.h"
+#include "utils/structured_log.h"
 #include "workbook.h"
 
 #ifndef FORMULON_FIXTURES_DIR
@@ -123,7 +127,7 @@ std::vector<Shard> ComputeShards() {
 
 // ---- manifest ----
 
-enum class Kind { kExcelRefuses, kMirrors, kSaveRefused, kKnownGap, kDamaged };
+enum class Kind { kExcelRefuses, kMirrors, kSaveRefused, kKnownGap, kUnmodelledDropped, kDamaged };
 
 struct Entry {
   std::string path;
@@ -139,6 +143,7 @@ bool ParseKind(const std::string& s, Kind& kind) {
                                                         {"mirrors_excel_refused_source", Kind::kMirrors},
                                                         {"save_refused", Kind::kSaveRefused},
                                                         {"known_gap", Kind::kKnownGap},
+                                                        {"unmodelled_dropped", Kind::kUnmodelledDropped},
                                                         {"damaged", Kind::kDamaged}};
   for (const auto& [text, value] : kKinds) {
     if (s == text) {
@@ -150,9 +155,9 @@ bool ParseKind(const std::string& s, Kind& kind) {
 }
 
 const std::set<std::string>& Stages() {
-  static const std::set<std::string> stages = {"load",        "save_xlsx",     "save_xlsb",
-                                               "reload_xlsx", "reload_xlsb",   "model_xlsx",
-                                               "model_xlsb",  "validate_xlsx", "validate_xlsb"};
+  static const std::set<std::string> stages = {"load",       "save_xlsx",     "save_xlsb",    "drop_xlsx",
+                                               "drop_xlsb",  "reload_xlsx",   "reload_xlsb",  "model_xlsx",
+                                               "model_xlsb", "validate_xlsx", "validate_xlsb"};
   return stages;
 }
 
@@ -191,6 +196,8 @@ Manifest LoadManifest() {
       manifest.problems.push_back("mirrors_excel_refused_source needs a validate_ stage: " + raw);
     } else if (e.kind == Kind::kSaveRefused && e.stage.rfind("save_", 0) != 0) {
       manifest.problems.push_back("save_refused needs a save_ stage: " + raw);
+    } else if ((e.kind == Kind::kUnmodelledDropped) != (e.stage.rfind("drop_", 0) == 0)) {
+      manifest.problems.push_back("a drop_ stage takes unmodelled_dropped, and only it: " + raw);
     }
     manifest.entries.push_back(std::move(e));
   }
@@ -342,6 +349,76 @@ io::ByteSpan Span(const std::vector<std::uint8_t>& bytes) {
   return io::ByteSpan{bytes.data(), bytes.size()};
 }
 
+/// The value of string field `key` in one structured-log record, or "" when absent.
+std::string RecordField(std::string_view record, std::string_view key) {
+  const std::string open = "\"" + std::string(key) + "\":\"";
+  const std::size_t at = record.find(open);
+  if (at == std::string_view::npos) {
+    return std::string();
+  }
+  std::string out;
+  for (std::size_t i = at + open.size(); i < record.size() && record[i] != '"'; ++i) {
+    if (record[i] == '\\' && i + 1U < record.size()) {
+      ++i;
+    }
+    out.push_back(record[i]);
+  }
+  return out;
+}
+
+/// The drops one save logs: a part path, or rel:<target> for a relationship.
+struct DropLog {
+  std::vector<std::string> parts;
+  std::vector<std::string> relationships;
+};
+
+void CollectDrop(std::string_view record, void* user_data) {
+  auto& log = *static_cast<DropLog*>(user_data);
+  const std::string event = RecordField(record, "event");
+  if (event == "ooxml_writer.passthrough_collision" || event == "xlsb.writer.passthrough_collision" ||
+      event == "ooxml_writer.passthrough_dropped") {
+    log.parts.push_back(RecordField(record, "path"));
+  } else if (event.size() > 12U && event.compare(event.size() - 12U, 12U, "_rel_skipped") == 0) {
+    log.relationships.push_back("rel:" + RecordField(record, "target"));
+  }
+}
+
+/// Routes warnings to a `DropLog` for one save, restoring the default (off) afterwards.
+class DropCapture {
+ public:
+  DropCapture() {
+    set_structured_log_sink(CollectDrop, &log_);
+    set_structured_log_min_level(StructuredLogLevel::kWarn);
+  }
+  ~DropCapture() {
+    set_structured_log_min_level(StructuredLogLevel::kOff);
+    set_structured_log_sink(nullptr);
+  }
+  DropCapture(const DropCapture&) = delete;
+  DropCapture& operator=(const DropCapture&) = delete;
+  const DropLog& log() const { return log_; }
+
+ private:
+  DropLog log_;
+};
+
+void AddDrops(const std::string& path, const std::string& tag, const io::WriteDiagnostics& diagnostics,
+              const DropLog& log, std::vector<Failure>& out) {
+  const std::string stage = "drop_" + tag;
+  for (const std::vector<std::string>* items : {&log.parts, &log.relationships}) {
+    for (const std::string& item : *items) {
+      out.push_back({path, stage, item, "counted as dropped by an unedited save"});
+    }
+  }
+  if (diagnostics.dropped_part_count != log.parts.size() ||
+      diagnostics.dropped_relationship_count != log.relationships.size()) {
+    out.push_back({path, stage, "count_mismatch",
+                   "counts " + std::to_string(diagnostics.dropped_part_count) + "/" +
+                       std::to_string(diagnostics.dropped_relationship_count) + " but logged " +
+                       std::to_string(log.parts.size()) + "/" + std::to_string(log.relationships.size())});
+  }
+}
+
 // Loads `bytes` as xlsx or xlsb; on failure fills `fail` with the code and message.
 bool LoadAny(const std::vector<std::uint8_t>& bytes, bool xlsb, Workbook& out, Error& error) {
   if (xlsb) {
@@ -405,19 +482,23 @@ std::vector<Failure> RunFile(const std::string& rel) {
     const std::string tag = xlsb ? "xlsb" : "xlsx";
     std::vector<std::uint8_t> saved;
     if (xlsb) {
-      auto r = io::xlsb::write_xlsb(wb);
+      DropCapture capture;
+      auto r = io::xlsb::write_xlsb_with_result(wb);
       if (!r) {
         out.push_back({rel, "save_" + tag, Code(r.error()), r.error().message});
         continue;
       }
-      saved = std::move(r.value());
+      AddDrops(rel, tag, r.value().diagnostics, capture.log(), out);
+      saved = std::move(r.value().bytes);
     } else {
-      auto r = io::write_ooxml(wb);
+      DropCapture capture;
+      auto r = io::write_ooxml_with_result(wb);
       if (!r) {
         out.push_back({rel, "save_" + tag, Code(r.error()), r.error().message});
         continue;
       }
-      saved = std::move(r.value());
+      AddDrops(rel, tag, r.value().diagnostics, capture.log(), out);
+      saved = std::move(r.value().bytes);
     }
 
     Workbook reloaded = Workbook::create_empty();
@@ -441,6 +522,8 @@ std::string SuggestedEntry(const Failure& f, bool source_refused) {
   const char* kind = "known_gap";
   if (f.stage.rfind("save_", 0) == 0) {
     kind = "save_refused";
+  } else if (f.stage.rfind("drop_", 0) == 0) {
+    kind = "unmodelled_dropped";
   } else if (source_refused && f.stage.rfind("validate_", 0) == 0) {
     kind = "mirrors_excel_refused_source";
   }

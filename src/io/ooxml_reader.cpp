@@ -258,14 +258,10 @@ static Expected<SharedStringTable, Error> ReadWorkbookAuxParts(ZipReader& zip, c
   // via Override only). This keeps `unknown_parts` from surfacing it.
   ConsumeIfPresent(zip, "xl/sharedStrings.xml", consumed_parts);
 
-  // Swallow calcChain.xml rather than passing it through. It is purely a
-  // recalculation-order cache; because the writer rewrites cell values it
-  // is necessarily stale after any save, and a stale calcChain makes real
-  // Excel reject / "repair" the workbook. Dropping it is safe (Excel
-  // rebuilds the chain on demand) and it consuming the part here means the
-  // passthrough sweep skips it, the workbook-rels calcChain relationship is
-  // not re-emitted (its target is no longer a passthrough part, so the
-  // unknown-rel guard drops it), and no `<Override>` is written for it.
+  // The calculation chain only orders recalculation: it is stale after any
+  // edit, Excel rebuilds it when absent, and neither writer writes one. Its
+  // part and workbook relationship are consumed, not passed through.
+  ConsumeIfPresent(zip, wb_rels.calc_chain_path, consumed_parts);
   ConsumeIfPresent(zip, "xl/calcChain.xml", consumed_parts);
 
   // Persons: the person list the sheets' threaded comments name. The part

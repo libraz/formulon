@@ -285,17 +285,14 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
     // Drop parts that would be stale or orphaned after we regenerate the
     // worksheets. The binary-index parts (`xl/worksheets/binaryIndex*.bin`)
     // describe the ROW layout of the original sheet bodies; once we re-emit
-    // sheets they no longer match, and Excel opens fine without them. The
-    // calc chain likewise references the original formula graph; a stale
-    // chain is rejected, and Excel rebuilds it on load when absent (same
-    // policy as the OOXML writer). Neither carries a workbook relationship
-    // here, so keeping them would leave dangling / mismatched parts. A
+    // sheets they no longer match, and Excel opens fine without them, so
+    // keeping them would leave mismatched parts. A
     // source external link part the generated set does not replace (an
     // `.xml` one, or a number past the model's links) would be an orphan.
     // An xlsx metadata part is replaced by the generated metadata.bin; Excel keeps only the types the model holds
     // (a further type such as XLMDX is dropped from its own xlsb save as well).
-    if (IsBinaryIndexPart(part.path) || part.path == "xl/calcChain.bin" || IsXlsxOnlyMetadataPart(part.path) ||
-        is_xml_slicer_part(part.path) || IsExternalLinkPart(part.path)) {
+    if (IsBinaryIndexPart(part.path) || IsXlsxOnlyMetadataPart(part.path) || is_xml_slicer_part(part.path) ||
+        IsExternalLinkPart(part.path)) {
       continue;
     }
     if (!kept_paths.insert(part.path).second) {

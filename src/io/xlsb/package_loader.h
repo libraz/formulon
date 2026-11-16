@@ -40,6 +40,8 @@ struct WorkbookRels {
   std::unordered_map<std::string, std::string> sheet_targets;  // rId -> resolved part path
   std::string sst_path;
   std::string styles_path;
+  /// The calculation chain, which the reader leaves out: it only orders recalculation and Excel rebuilds it.
+  std::string calc_chain_path;
   std::vector<UnknownRelationship> unknown_rels;
 };
 

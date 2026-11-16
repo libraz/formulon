@@ -237,25 +237,12 @@ TEST(OoxmlPassthroughRels, UnknownWorkbookRelsAreCaptured) {
   const std::vector<std::uint8_t> bytes = BuildPackageWithThemeAndCalcChain();
   auto load_or = io::read_ooxml(SpanOf(bytes));
   ASSERT_TRUE(static_cast<bool>(load_or)) << "read failed: " << load_or.error().message;
+  // The calcChain relationship is recognised and consumed with its part, so only the theme stays unknown.
   const std::vector<UnknownRelationship>& rels = load_or.value().workbook.unknown_workbook_rels();
-  ASSERT_EQ(rels.size(), 2U);
-
-  bool saw_theme = false;
-  bool saw_calc_chain = false;
-  for (const UnknownRelationship& r : rels) {
-    EXPECT_FALSE(r.target_external);
-    if (r.type == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme") {
-      saw_theme = true;
-      EXPECT_EQ(r.target, "xl/theme/theme1.xml");
-    } else if (r.type == "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain") {
-      saw_calc_chain = true;
-      EXPECT_EQ(r.target, "xl/calcChain.xml");
-    } else {
-      ADD_FAILURE() << "unexpected unknown rel type: " << r.type;
-    }
-  }
-  EXPECT_TRUE(saw_theme);
-  EXPECT_TRUE(saw_calc_chain);
+  ASSERT_EQ(rels.size(), 1U);
+  EXPECT_FALSE(rels[0].target_external);
+  EXPECT_EQ(rels[0].type, "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme");
+  EXPECT_EQ(rels[0].target, "xl/theme/theme1.xml");
 }
 
 TEST(OoxmlPassthroughRels, UnknownSheetRelationshipsAndTargetsRoundTrip) {
@@ -360,11 +347,10 @@ TEST(OoxmlPassthroughRels, UnknownWorkbookRelsRoundTrip) {
     }
   }
   EXPECT_TRUE(saw_theme_rel) << "theme relationship missing from emitted workbook rels";
-  // calcChain is deliberately dropped on save: it is a recalculation-order
-  // cache that goes stale the moment any cell value changes, and a stale
-  // calcChain makes real Excel reject / "repair" the workbook. The reader
-  // still captures its rel (see UnknownWorkbookRelsAreCaptured), but the
-  // writer must not re-emit it.
+  // calcChain is deliberately left out of a save: it only orders
+  // recalculation and goes stale the moment any cell value changes. The
+  // reader consumes the part and its relationship, so the writer has
+  // neither to re-emit.
   EXPECT_FALSE(saw_calc_chain_rel) << "stale calcChain relationship must be dropped on save";
 
   // The matching `<Override>` entries in `[Content_Types].xml` must

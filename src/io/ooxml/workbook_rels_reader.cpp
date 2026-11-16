@@ -62,6 +62,8 @@ Expected<WorkbookRels, Error> load_workbook_rels(const ZipReader& zip, std::stri
         } else if (type == kRelStyles) {
           ASSIGN_OR_RETURN(auto resolved, resolve_relative_path(base_dir, target));
           rels.styles_path = std::move(resolved);
+        } else if (type == kRelCalcChain) {
+          ASSIGN_OR_RETURN(rels.calc_chain_path, resolve_relative_path(base_dir, target));
         } else if (type == kRelPivotCacheDefinition) {
           const std::string id(attr_str(rel, "Id"));
           if (id.empty()) {
@@ -79,7 +81,7 @@ Expected<WorkbookRels, Error> load_workbook_rels(const ZipReader& zip, std::stri
         } else {
           // Unrecognised Type URI: capture verbatim so the writer can
           // re-emit the entry. Without this, the matching part (theme,
-          // calcChain, vbaProject, customXml, ...) survives in
+          // vbaProject, customXml, ...) survives in
           // passthrough but becomes an orphan in the relationship
           // graph and Excel opens the file in "needs repair" mode.
           ASSIGN_OR_RETURN(auto entry, make_unknown_relationship(rel, base_dir));

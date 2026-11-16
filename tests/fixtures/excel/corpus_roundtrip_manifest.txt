@@ -1,13 +1,16 @@
 # Corpus round-trip manifest. One entry per line, '#' starts a comment:
 #   <path relative to tests/fixtures/excel> <stage|*> <detail|*> <kind>  # reason
-# stage: load, save_xlsx, save_xlsb, reload_xlsx, reload_xlsb, model_xlsx, model_xlsb,
-#        validate_xlsx, validate_xlsb. detail: numeric error code, model field or rule name.
+# stage: load, save_xlsx, save_xlsb, drop_xlsx, drop_xlsb, reload_xlsx, reload_xlsb, model_xlsx,
+#        model_xlsb, validate_xlsx, validate_xlsb. detail: numeric error code, model field, rule
+#        name, or for drop_* the dropped part path (rel:<target> for a relationship).
 # kinds:
 #   excel_refuses                 Excel refuses the source; marker only (`*` `*`), accepts nothing.
 #   mirrors_excel_refused_source  exact validate_* rule failure that carries the source's invalid
 #                                 value through; the path must also have an excel_refuses line.
 #   save_refused                  exact save_* stage + numeric code the engine refuses by design.
 #   known_gap                     exact stage + detail of a failure that is owed a fix.
+#   unmodelled_dropped            exact drop_* stage + part an unedited save counts as dropped
+#                                 because the reader kept it without modelling it.
 #   damaged                       deliberately damaged control (`*` `*`); every failure is accepted.
 # An exact entry whose failure no longer occurs fails the test: remove the entry.
 win/book_protection/hand_lockWindows_afterWorkbookPr.rejected.input.xlsx * * excel_refuses  # Excel refuses the source (-50)
@@ -127,3 +130,58 @@ rich_errors/pvpage_blocked.xlsx model_xlsb pivot_count known_gap  # pending: tab
 xlsb_parity/pivot/hide_values_row_src.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a table extLst other than Excel default (hideValuesRow)
 xlsb_pivot_twins/C06_sort_desc.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a descending field for the default Windows host (unmeasured)
 xlsb_pivot_twins/C07_sort_by_data.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a descending field for the default Windows host (unmeasured)
+external_link_cell_kinds.xlsb drop_xlsb xl/externalLinks/_rels/externalLink1.bin.rels unmodelled_dropped  # the source external link part, also generated from the model
+external_link_cell_kinds.xlsb drop_xlsb xl/externalLinks/externalLink1.bin unmodelled_dropped  # the source external link part, also generated from the model
+external_link_cell_kinds.xlsb drop_xlsx rel:xl/externalLinks/externalLink1.bin unmodelled_dropped  # the source external link part, also generated from the model
+external_link_cell_kinds.xlsb drop_xlsx xl/externalLinks/externalLink1.bin unmodelled_dropped  # the source external link part, also generated from the model
+external_link_mixed.xlsb drop_xlsb xl/externalLinks/_rels/externalLink1.bin.rels unmodelled_dropped  # the source external link part, also generated from the model
+external_link_mixed.xlsb drop_xlsb xl/externalLinks/_rels/externalLink2.bin.rels unmodelled_dropped  # the source external link part, also generated from the model
+external_link_mixed.xlsb drop_xlsb xl/externalLinks/externalLink1.bin unmodelled_dropped  # the source external link part, also generated from the model
+external_link_mixed.xlsb drop_xlsb xl/externalLinks/externalLink2.bin unmodelled_dropped  # the source external link part, also generated from the model
+external_link_mixed.xlsb drop_xlsx rel:xl/externalLinks/externalLink1.bin unmodelled_dropped  # the source external link part, also generated from the model
+external_link_mixed.xlsb drop_xlsx rel:xl/externalLinks/externalLink2.bin unmodelled_dropped  # the source external link part, also generated from the model
+external_link_mixed.xlsb drop_xlsx xl/externalLinks/externalLink1.bin unmodelled_dropped  # the source external link part, also generated from the model
+external_link_mixed.xlsb drop_xlsx xl/externalLinks/externalLink2.bin unmodelled_dropped  # the source external link part, also generated from the model
+pivot_line_shapes/M6a_page_field_only.xlsb drop_xlsx rel:xl/pivotCache/pivotCacheDefinition1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
+pivot_line_shapes/M6a_page_field_only.xlsb drop_xlsx rel:xl/pivotTables/pivotTable1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
+pivot_line_shapes/M6a_page_field_only.xlsb drop_xlsx xl/pivotCache/pivotCacheDefinition1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
+pivot_line_shapes/M6a_page_field_only.xlsb drop_xlsx xl/pivotCache/pivotCacheRecords1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
+pivot_line_shapes/M6a_page_field_only.xlsb drop_xlsx xl/pivotTables/pivotTable1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
+pivot_line_shapes/M6b_completely_empty.xlsb drop_xlsx rel:xl/pivotCache/pivotCacheDefinition1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
+pivot_line_shapes/M6b_completely_empty.xlsb drop_xlsx rel:xl/pivotTables/pivotTable1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
+pivot_line_shapes/M6b_completely_empty.xlsb drop_xlsx xl/pivotCache/pivotCacheDefinition1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
+pivot_line_shapes/M6b_completely_empty.xlsb drop_xlsx xl/pivotCache/pivotCacheRecords1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
+pivot_line_shapes/M6b_completely_empty.xlsb drop_xlsx xl/pivotTables/pivotTable1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
+pivot_line_shapes/M7b_outer_tabular_inner_outline.xlsb drop_xlsx rel:xl/pivotCache/pivotCacheDefinition1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
+pivot_line_shapes/M7b_outer_tabular_inner_outline.xlsb drop_xlsx rel:xl/pivotTables/pivotTable1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
+pivot_line_shapes/M7b_outer_tabular_inner_outline.xlsb drop_xlsx xl/pivotCache/pivotCacheDefinition1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
+pivot_line_shapes/M7b_outer_tabular_inner_outline.xlsb drop_xlsx xl/pivotCache/pivotCacheRecords1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
+pivot_line_shapes/M7b_outer_tabular_inner_outline.xlsb drop_xlsx xl/pivotTables/pivotTable1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
+table_slicer.xlsb drop_xlsx rel:xl/slicerCaches/slicerCache1.bin unmodelled_dropped  # slicer, not written to the other format
+table_slicer.xlsb drop_xlsx rel:xl/slicers/slicer1.bin unmodelled_dropped  # slicer, not written to the other format
+table_slicer.xlsb drop_xlsx xl/slicerCaches/slicerCache1.bin unmodelled_dropped  # slicer, not written to the other format
+table_slicer.xlsb drop_xlsx xl/slicers/slicer1.bin unmodelled_dropped  # slicer, not written to the other format
+table_slicer.xlsx drop_xlsb rel:xl/slicerCaches/slicerCache1.xml unmodelled_dropped  # slicer, not written to the other format
+table_slicer.xlsx drop_xlsb rel:xl/slicers/slicer1.xml unmodelled_dropped  # slicer, not written to the other format
+xlsb_cm_marks_area.xlsb drop_xlsx rel:xl/volatileDependencies.bin unmodelled_dropped  # volatile dependencies, not modelled
+xlsb_cm_marks_area.xlsb drop_xlsx xl/volatileDependencies.bin unmodelled_dropped  # volatile dependencies, not modelled
+xlsb_cm_marks_area_op.xlsb drop_xlsx rel:xl/volatileDependencies.bin unmodelled_dropped  # volatile dependencies, not modelled
+xlsb_cm_marks_area_op.xlsb drop_xlsx xl/volatileDependencies.bin unmodelled_dropped  # volatile dependencies, not modelled
+xlsb_cm_marks_cell.xlsb drop_xlsx rel:xl/volatileDependencies.bin unmodelled_dropped  # volatile dependencies, not modelled
+xlsb_cm_marks_cell.xlsb drop_xlsx xl/volatileDependencies.bin unmodelled_dropped  # volatile dependencies, not modelled
+xlsb_cm_marks_cell_op.xlsb drop_xlsx rel:xl/volatileDependencies.bin unmodelled_dropped  # volatile dependencies, not modelled
+xlsb_cm_marks_cell_op.xlsb drop_xlsx xl/volatileDependencies.bin unmodelled_dropped  # volatile dependencies, not modelled
+xlsb_parity/globals/metadata_types_src.xlsx drop_xlsb rel:xl/metadata.xml unmodelled_dropped  # the xlsx metadata part, replaced by the generated metadata.bin
+xlsb_parity/pivot/api_built/d_calc_field.xlsb drop_xlsx rel:xl/pivotCache/pivotCacheDefinition1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
+xlsb_parity/pivot/api_built/d_calc_field.xlsb drop_xlsx rel:xl/pivotTables/pivotTable1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
+xlsb_parity/pivot/api_built/d_calc_field.xlsb drop_xlsx xl/pivotCache/pivotCacheDefinition1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
+xlsb_parity/pivot/api_built/d_calc_field.xlsb drop_xlsx xl/pivotCache/pivotCacheRecords1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
+xlsb_parity/pivot/api_built/d_calc_field.xlsb drop_xlsx xl/pivotTables/pivotTable1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
+xlsb_parity/sparklines/external_source.2.xlsb drop_xlsb xl/externalLinks/_rels/externalLink1.bin.rels unmodelled_dropped  # the source external link part, also generated from the model
+xlsb_parity/sparklines/external_source.2.xlsb drop_xlsb xl/externalLinks/externalLink1.bin unmodelled_dropped  # the source external link part, also generated from the model
+xlsb_parity/sparklines/external_source.2.xlsb drop_xlsx rel:xl/externalLinks/externalLink1.bin unmodelled_dropped  # the source external link part, also generated from the model
+xlsb_parity/sparklines/external_source.2.xlsb drop_xlsx xl/externalLinks/externalLink1.bin unmodelled_dropped  # the source external link part, also generated from the model
+xlsb_parity/sparklines/external_source.xlsb drop_xlsb xl/externalLinks/_rels/externalLink1.bin.rels unmodelled_dropped  # the source external link part, also generated from the model
+xlsb_parity/sparklines/external_source.xlsb drop_xlsb xl/externalLinks/externalLink1.bin unmodelled_dropped  # the source external link part, also generated from the model
+xlsb_parity/sparklines/external_source.xlsb drop_xlsx rel:xl/externalLinks/externalLink1.bin unmodelled_dropped  # the source external link part, also generated from the model
+xlsb_parity/sparklines/external_source.xlsb drop_xlsx xl/externalLinks/externalLink1.bin unmodelled_dropped  # the source external link part, also generated from the model

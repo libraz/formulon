@@ -594,7 +594,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   binary index (`xl/worksheets/binaryIndexN.bin`), or its sheet relationship
   in `droppedRelationshipCount` (Python `dropped_relationship_count`): the
   index only locates the sheet's cells, Excel rebuilds it, and `.xlsx` has no
-  such part. A refreshed PivotTable keeps its part names in an `.xlsb` save
+  such part. Nor does a save of a workbook that has a calculation chain
+  (`xl/calcChain.xml` or `xl/calcChain.bin`) count the chain or its workbook
+  relationship: the chain only orders recalculation, neither format's save
+  writes one, and Excel opens the result without repair and rebuilds the
+  chain. A refreshed PivotTable keeps its part names in an `.xlsb` save
   instead of moving to the next free number.
 
 - A PivotTable page field that shows one item because every other item is

@@ -42,10 +42,12 @@ struct WorkbookRels {
   std::unordered_map<std::string, SheetTarget> sheet_targets;
   std::string sst_path;
   std::string styles_path;
+  /// The calculation chain, which the reader leaves out: it only orders recalculation and Excel rebuilds it.
+  std::string calc_chain_path;
   std::unordered_map<std::string, std::string> pivot_cache_definition_paths_by_rid;
   std::unordered_map<std::string, std::string> external_link_paths_by_rid;
   // Relationship entries with Type URIs we don't recognise (theme,
-  // calcChain, vbaProject, customXml, ...). Captured verbatim so the
+  // vbaProject, customXml, ...). Captured verbatim so the
   // writer can re-emit them, keeping passthrough-listed parts reachable
   // in the package graph.
   std::vector<UnknownRelationship> unknown_rels;
