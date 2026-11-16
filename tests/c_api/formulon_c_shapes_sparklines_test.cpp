@@ -970,10 +970,12 @@ TEST(FormulonCApiSparklines, Validation) {
   EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 3, &g, good, 1, ignored_id()), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
   const fm_sparkline_t range_location[] = {{"Sheet1!A1:D1", "F1:F2"}};
   EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, range_location, 1, ignored_id()), kInvalidArgument);
-  const fm_sparkline_t no_formula[] = {{"", "F1"}};
+  const fm_sparkline_t no_formula[] = {{nullptr, "F1"}};
   EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, no_formula, 1, ignored_id()), 0)
       << fm_get_last_error_message();
-  // An empty source is stored as a deleted one, the form the getter reads back as `#REF!`.
+  // A NULL source is stored as a deleted one, the form the getter reads back as `#REF!`; an empty one is refused.
+  const fm_sparkline_t empty_formula[] = {{"", "F1"}};
+  EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, empty_formula, 1, ignored_id()), kInvalidArgument);
   fm_sparkline_group_t bad = g;
   bad.type = 7;
   EXPECT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &bad, good, 1, ignored_id()), kInvalidArgument);

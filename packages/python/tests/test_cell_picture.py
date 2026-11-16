@@ -152,10 +152,7 @@ class CellPictureTests(unittest.TestCase):
             self.ws.set_cell_picture("A1", CellPictureInput(data))
         self.assertIsNone(self.ws.get_cell_picture("A1"))
 
-    def test_empty_alt_text_and_coordinates_past_the_grid_are_invalid_arguments(self) -> None:
-        with self.assertRaises(InvalidArgumentError):
-            self.ws.set_cell_picture("A1", CellPictureInput(png(2, 2), ""))
-        self.assertIsNone(self.ws.get_cell_picture("A1"))
+    def test_coordinates_past_the_grid_are_invalid_arguments(self) -> None:
         with self.assertRaises(InvalidArgumentError):
             self.ws.get_cell_picture(1048576, 0)
         with self.assertRaises(InvalidArgumentError):

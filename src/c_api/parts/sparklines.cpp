@@ -87,11 +87,14 @@ fm_status_t check_group_enums(const fm_sparkline_group_t& g) {
   return check_enum_domain(g.empty_cells_as, FM_BLANKS_AS_ZERO, FM_BLANKS_AS_SPAN, "empty_cells_as");
 }
 
-// Rejects a sparkline whose formula or location is malformed UTF-8.
+// Rejects a sparkline whose formula or location is malformed UTF-8, or whose formula is empty.
 fm_status_t check_items_utf8(const fm_sparkline_t* items, size_t count) {
   for (size_t i = 0; i < count; ++i) {
     if (auto rc = check_utf8({items[i].formula, items[i].location}); rc != 0) {
       return rc;
+    }
+    if (items[i].formula != nullptr && items[i].formula[0] == '\0') {
+      return invalid_argument("formula must not be empty", "formula=");
     }
   }
   return 0;
@@ -225,6 +228,9 @@ fm_status_t apply_patch(const fm_sparkline_group_patch_t& p, io::SparklineGroup&
     }
     if (auto rc = check_utf8(p.date_axis_ref, "field", "date_axis_ref"); rc != 0) {
       return rc;
+    }
+    if (p.date_axis_ref[0] == '\0') {
+      return invalid_argument("date_axis_ref must not be empty", "date_axis_ref=");
     }
     g.date_axis_ref = std::string(formulon::strip_formula_prefix(p.date_axis_ref));
   } else if (p.date_axis_ref_op == FM_PATCH_OP_CLEAR) {
@@ -423,6 +429,9 @@ extern "C" fm_status_t fm_sheet_add_sparkline_group(fm_workbook_t* wb, size_t sh
   }
   if (auto rc = check_utf8({group->date_axis_ref}); rc != 0) {
     return rc;
+  }
+  if (group->date_axis_ref != nullptr && group->date_axis_ref[0] == '\0') {
+    return invalid_argument("date_axis_ref must not be empty", "date_axis_ref=");
   }
   if (auto rc = check_group_enums(*group); rc != 0) {
     return rc;

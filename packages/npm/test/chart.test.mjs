@@ -337,7 +337,7 @@ test('typed chart edits are visible through getChart', async () => {
     assert.equal(series.line.color.argb, 0xff0000ff);
 
     // Reference edits refill the cache and resolved data follows.
-    wb.sheet(0).chart(id).updateSeries(0, 0, { values: 'Sheet1!$D$2:$D$5', name: '' });
+    wb.sheet(0).chart(id).updateSeries(0, 0, { values: 'Sheet1!$D$2:$D$5', name: null });
     series = chartOf(wb, id).plots[0].series[0];
     assert.equal(series.values.formula, 'Sheet1!$D$2:$D$5');
     assert.equal(series.name.kind, mod.ChartSourceKind.None);

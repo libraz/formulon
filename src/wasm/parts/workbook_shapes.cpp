@@ -144,7 +144,8 @@ fm_sparkline_group_t pull_group(JsNarrowNumericReader& reader, const emscripten:
   return g;
 }
 
-/// Reads `[{ formula, location }]`; `texts` keeps the strings `items` points into.
+/// Reads `[{ formula, location }]`; `texts` keeps the strings `items` points into. An absent or `null` `formula` is
+/// the NULL pointer (a deleted source); an empty one is passed on.
 bool pull_sparklines(JsNarrowNumericReader& reader, const emscripten::val& array, std::vector<std::string>& texts,
                      std::vector<fm_sparkline_t>& items) {
   if (!reader.is_array(array, "sparklines")) {
@@ -152,13 +153,16 @@ bool pull_sparklines(JsNarrowNumericReader& reader, const emscripten::val& array
   }
   const uint32_t count = reader.length(array, "sparklines");
   texts.reserve(2U * count);
+  std::vector<bool> has_formula;
   for (uint32_t i = 0; reader.ok() && i < count; ++i) {
     const emscripten::val item = reader.array_element(array, i, "sparklines");
-    texts.push_back(reader.string(item, "formula", "sparkline.formula"));
+    const emscripten::val formula = reader.value(item, "formula", "sparkline.formula");
+    has_formula.push_back(reader.ok() && js_value_present(formula));
+    texts.push_back(has_formula.back() ? reader.string_value(formula, "sparkline.formula") : std::string());
     texts.push_back(reader.string(item, "location", "sparkline.location"));
   }
   for (std::size_t i = 0; reader.ok() && i < texts.size(); i += 2U) {
-    items.push_back(fm_sparkline_t{texts[i].c_str(), texts[i + 1U].c_str()});
+    items.push_back(fm_sparkline_t{has_formula[i / 2U] ? texts[i].c_str() : nullptr, texts[i + 1U].c_str()});
   }
   return reader.ok();
 }

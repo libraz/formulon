@@ -190,9 +190,6 @@ Expected<void, Error> Workbook::set_cell_picture(std::size_t sheet, std::uint32_
   if (format != ImageFormat::kPng && format != ImageFormat::kJpeg) {
     return make_error(FormulonErrorCode::kIoImageUnsupported, "cell picture: only PNG and JPEG images are accepted");
   }
-  if (alt_text.has_value() && alt_text->empty()) {
-    return make_error(FormulonErrorCode::kInvalidArgument, "alt_text must not be empty");
-  }
 
   // The write comes first and refuses without changing anything; it also drops
   // the cell's earlier rich value, so the picture is recorded after it.
@@ -217,7 +214,7 @@ Expected<void, Error> Workbook::set_cell_picture(std::size_t sheet, std::uint32_
   image.rel_type = std::string(kImageRelType);
   value.keys.push_back(std::move(image));
   value.keys.push_back(make_key(kOriginKey, "i", kPlacedOrigin));
-  if (alt_text.has_value()) {
+  if (alt_text.has_value() && !alt_text->empty()) {
     value.keys.push_back(make_key(kTextKey, "s", *alt_text));
   }
   sheets_[sheet].set_rich_value(row, col, std::move(value));

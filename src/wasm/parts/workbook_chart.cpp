@@ -163,12 +163,12 @@ struct Arena : std::deque<std::string> {
   std::deque<std::vector<fm_chart_literal_info_t>> literals;
 };
 
-/// A series input: reference text (empty is no input), or the read-back shape `{ kind, formula, literal }`.
+/// A series input: reference text (an empty one is refused), or the read-back shape `{ kind, formula, literal }`.
 fm_chart_data_source_spec_t read_source(JsNarrowNumericReader& r, Arena& arena, const val& v, const char* field) {
   fm_chart_data_source_spec_t spec{};
   if (!v.typeOf().strictlyEquals(val("object"))) {
     arena.push_back(r.string_value(v, field));
-    spec.kind = arena.back().empty() ? FM_CHART_SOURCE_KIND_NONE : FM_CHART_SOURCE_KIND_REF;
+    spec.kind = FM_CHART_SOURCE_KIND_REF;
     spec.formula = arena.back().c_str();
     return spec;
   }

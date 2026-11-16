@@ -2707,7 +2707,7 @@ class CellPictureInput:
 
     #: The image file, PNG or JPEG; it is stored as given.
     bytes: Union[bytes, bytearray, memoryview]
-    #: The picture's alt text; omitted or ``None`` means none, ``""`` is an ``InvalidArgumentError``.
+    #: The picture's alt text; omitted, ``None`` and ``""`` all mean none (api-conventions §5 rule 30).
     alt_text: Optional[str] = None
 
 
@@ -2760,9 +2760,10 @@ class DrawingPlacementInput:
     placement of a :class:`ChartInput`; :class:`ShapeInput` and :class:`SlicerInput` extend it).
     """
 
-    #: The object's name; empty or omitted takes the kind's default.
-    name: str = ""
-    #: The object's alternative text; empty or omitted means none.
+    #: The object's name; omitted takes the kind's default and ``""`` is an ``InvalidArgumentError`` (api-conventions
+    #: §5 rule 30).
+    name: Optional[str] = None
+    #: The object's alternative text; ``""`` and omitted both mean none (api-conventions §5 rule 30).
     description: str = ""
     #: Whether the object is hidden; unset means shown.
     hidden: Optional[bool] = None
@@ -2777,9 +2778,11 @@ class ShapeInput(DrawingPlacementInput):
     ``name`` defaults to ``Shape <id>``. The anchor is two-cell by default; an absolute anchor is not added.
     """
 
-    #: Name of the preset geometry; defaults to rect, and a line or connector geometry makes a connector.
+    #: Name of the preset geometry; ``None`` is rect, ``""`` is an ``InvalidArgumentError`` (api-conventions §5 rule
+    #: 30), and a line or connector geometry makes a connector.
     preset_geometry: Optional[str] = None
-    #: The shape's text, paragraphs joined with a newline; a connector holds none.
+    #: The shape's text, paragraphs joined with a newline; ``None`` and ``""`` both mean none (api-conventions §5 rule
+    #: 30), and a connector holds none.
     text: Optional[str] = None
     #: Whether the shape is a text box.
     text_box: Optional[bool] = None
@@ -2830,7 +2833,7 @@ class SlicerInput(DrawingPlacementInput):
     name and caption default to the column name (the name is made unique).
     """
 
-    #: The caption shown in the slicer header; the column name when omitted.
+    #: The caption shown in the slicer header; the column name when omitted or ``""`` (api-conventions §5 rule 30).
     caption: Optional[str] = None
     #: The name of the slicer style; ``None`` creates the slicer without a style and an empty string is rejected.
     #: Omitted leaves the default.
@@ -2902,8 +2905,8 @@ class DataTableInput:
 class Sparkline:
     """One sparkline: the data ``source`` and its single ``location`` cell."""
 
-    #: The data range the sparkline plots; ``None`` when the stored range text does not parse, in which case that text
-    #: is kept so the sparkline is written back unchanged.
+    #: The data range the sparkline plots; ``None`` when the source was deleted or the stored range text does not parse,
+    #: in which case that text is kept so the sparkline is written back unchanged.
     source: Optional[SheetRect]
     #: The single cell that shows the sparkline.
     location: CellAddress
@@ -2915,6 +2918,8 @@ class SparklineInput:
     """One sparkline of an input. A :class:`Sparkline` read back is accepted in its place."""
 
     #: The data range, as a range record or sheet-qualified A1 text; unqualified text resolves on the receiving sheet.
+    #: ``None`` stores a sparkline whose source was deleted and ``""`` is an ``InvalidArgumentError`` (api-conventions
+    #: §5 rule 30).
     source: Union[SheetRect, str, None]
     #: The cell that shows the sparkline, as an address record or A1 text.
     location: Union[CellAddress, str]
@@ -2981,7 +2986,8 @@ class SparklineGroup:
     manual_max: Optional[float] = None
     #: ``True`` to space points by a date axis.
     date_axis: bool = False
-    #: The group's date range; ``None`` when absent or when its stored text does not parse.
+    #: The group's date range; ``None`` when absent or when its stored text does not parse. ``""`` is an
+    #: ``InvalidArgumentError`` (api-conventions §5 rule 30).
     date_axis_range: Optional[SheetRect] = None
     #: Line width in points; 0.75 for a new group.
     line_width_pt: float = 0.75
@@ -3801,15 +3807,17 @@ class ChartLabelsPatch(TypedDict, total=False):
 class ChartSeriesPatch(TypedDict, total=False):
     """Series patch."""
 
-    #: The series name input, a reference or a data source; an empty reference or ``None`` removes it. Omitted keeps it.
+    #: The series name input, a reference or a data source; ``None`` removes it and an empty reference is rejected
+    #: (api-conventions §5 rule 30). Omitted keeps it.
     name: Union[ChartDataSource, str, None]
-    #: The category labels input, a reference or a data source; an empty reference or ``None`` removes it. Omitted keeps
-    #: it.
+    #: The category labels input, a reference or a data source; ``None`` removes it and an empty reference is rejected.
+    #: Omitted keeps it.
     categories: Union[ChartDataSource, str, None]
     #: The values input, a reference or a data source; an empty reference is rejected, and so is ``None``. Omitted keeps
     #: it.
     values: Union[ChartDataSource, str, None]
-    #: The x values input, a reference or a data source; an empty reference or ``None`` removes it. Omitted keeps it.
+    #: The x values input, a reference or a data source; ``None`` removes it and an empty reference is rejected. Omitted
+    #: keeps it.
     x: Union[ChartDataSource, str, None]
     #: The y values input, a reference or a data source; an empty reference is rejected, and so is ``None``. Omitted
     #: keeps it.
@@ -7317,8 +7325,8 @@ def _placement_fields(scope: _ArgScope, placement: Optional[DrawingPlacementInpu
     elif not isinstance(placement, DrawingPlacementInput):
         raise TypeError(f"placement must be a DrawingPlacementInput or None, got {type(placement).__name__}")
     fields: Dict[str, Any] = {
-        "name": scope.nonempty_cstr(placement.name),
-        "description": scope.nonempty_cstr(placement.description),
+        "name": scope.opt_cstr(placement.name),
+        "description": scope.opt_cstr(placement.description),
         "anchor": _anchor_fields(placement.anchor),
     }
     if placement.hidden is not None:
@@ -7400,8 +7408,8 @@ def _pack_shape_spec(scope: _ArgScope, spec: ShapeInput) -> int:
         values["rotation_deg"] = _finite(spec.rotation_deg, "rotation_deg")
     if spec.text_box is not None:
         values["text_box"] = _require_bool(spec.text_box, "text_box")
-    values["preset_geometry"] = scope.nonempty_cstr(spec.preset_geometry)
-    values["text"] = scope.nonempty_cstr(spec.text)
+    values["preset_geometry"] = scope.opt_cstr(spec.preset_geometry)
+    values["text"] = scope.opt_cstr(spec.text)
     S.SHAPE_SPEC.pack(LIB, ptr, values)
     return ptr
 
@@ -7457,7 +7465,7 @@ def _pack_slicer_spec(scope: _ArgScope, spec: SlicerInput) -> int:
         values["cross_filter"] = _sint(spec.cross_filter, "cross_filter")
     if spec.row_height_pt is not None:
         values["row_height_pt"] = _finite(spec.row_height_pt, "row_height_pt")
-    values["caption"] = scope.nonempty_cstr(spec.caption)
+    values["caption"] = scope.opt_cstr(spec.caption)
     values["style_name"] = scope.opt_cstr(spec.style_name)
     S.SLICER_SPEC.pack(LIB, ptr, values)
     return ptr
@@ -7582,7 +7590,7 @@ def _decode_sparkline(workbook: Workbook, sheet: int, d: Dict[str, Any]) -> Spar
         source=_parse_qualified_range(workbook, text, sheet),
         location=CellAddress(row=location.range.first_row, col=location.range.first_col),
     )
-    if item.source is None:
+    if item.source is None and text:
         object.__setattr__(item, "_stored_source", text)
     return item
 
@@ -7641,7 +7649,7 @@ def _pack_sparkline_group(
         "SparklineGroup.date_axis_range",
         getattr(group, "_stored_date_axis", None),
     )
-    S.write_str_field(LIB, ptr, S.SPARKLINE_GROUP, "date_axis_ref", date_axis, scope)
+    S.write_str_field(LIB, ptr, S.SPARKLINE_GROUP, "date_axis_ref", date_axis, scope, allow_empty=True)
     return ptr
 
 
@@ -7660,13 +7668,11 @@ def _pack_sparklines(
         source = _sparkline_range_text(
             workbook, item.source, sheet, "Sparkline.source", getattr(item, "_stored_source", None)
         )
-        if source is None:
-            # No source is a sparkline whose source was deleted, stored as `#REF!` is.
-            source = ""
         location = _cell_address(workbook, item.location, "Sparkline.location")
         location_text = workbook.format_reference(CellRect(location.row, location.col, location.row, location.col))
-        S.write_str_field(LIB, base, S.SPARKLINE, "formula", source, scope)
-        S.write_str_field(LIB, base, S.SPARKLINE, "location", location_text, scope)
+        # No source (``None``) is a sparkline whose source was deleted, stored as `#REF!` is.
+        S.write_str_field(LIB, base, S.SPARKLINE, "formula", source, scope, allow_empty=True)
+        S.write_str_field(LIB, base, S.SPARKLINE, "location", location_text, scope, allow_empty=True)
     return ptr
 
 

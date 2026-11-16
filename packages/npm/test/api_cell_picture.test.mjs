@@ -181,14 +181,9 @@ test('data over 32 MiB is refused with SecurityResourceLimit', async () => {
   });
 });
 
-test('an empty altText is InvalidArgument and a coordinate past the grid is refused', async () => {
+test('a coordinate past the grid is refused', async () => {
   await withWorkbook((wb, f) => {
     const ws = wb.sheet(0);
-    assert.throws(
-      () => ws.setCellPicture('A1', { bytes: png(2, 2), altText: '' }),
-      isStatus(f.StatusCode.InvalidArgument),
-    );
-    assert.equal(ws.getCellPicture('A1'), null);
     assert.throws(() => ws.getCellPicture(1048576, 0), isStatus(f.StatusCode.InvalidArgument));
     assert.throws(() => ws.setCellPicture(0, 16384, null), isStatus(f.StatusCode.InvalidArgument));
     assert.throws(() => ws.getCellPicture('Sheet1!A1'), isStatus(f.StatusCode.InvalidArgument));

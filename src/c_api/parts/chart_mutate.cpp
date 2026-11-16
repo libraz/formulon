@@ -106,6 +106,10 @@ void read_source(PatchReader& r, std::int32_t op, const fm_chart_data_source_spe
   }
   if (spec.kind == FM_CHART_SOURCE_KIND_REF) {
     if (r.text_ok(spec.formula, kind_name)) {
+      if (spec.formula != nullptr && spec.formula[0] == '\0') {
+        r.fail(kind_name, "formula must not be empty");
+        return;
+      }
       out = formulon::ChartSeriesSource::Ref(text_or_empty(spec.formula));
     }
     return;
@@ -241,6 +245,9 @@ extern "C" fm_status_t fm_sheet_add_chart(fm_workbook_t* wb, size_t sheet_index,
   if (auto rc = check_utf8(
           {opts->source, opts->title.text, opts->title.formula, opts->placement.name, opts->placement.description});
       rc != 0) {
+    return rc;
+  }
+  if (auto rc = formulon::c_api::parts::check_placement_name(opts->placement); rc != 0) {
     return rc;
   }
   PatchReader r;

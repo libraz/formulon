@@ -90,11 +90,13 @@ fm_sparkline_group_t PullGroup(CheckedSpecReader& reader, const Napi::Object& sp
   return g;
 }
 
-// Reads `[{ formula, location }]`; `texts` keeps the strings `items` points into.
+// Reads `[{ formula, location }]`; `texts` keeps the strings `items` points into. An absent or `null` `formula` is
+// the NULL pointer (a deleted source); an empty one is passed on.
 bool PullSparklines(CheckedSpecReader& reader, const Napi::Array& array, std::vector<std::string>& texts,
                     std::vector<fm_sparkline_t>& items) {
   const uint32_t count = array.Length();
   texts.reserve(2U * count);
+  std::vector<bool> has_formula;
   for (uint32_t i = 0; i < count; ++i) {
     Napi::Value element;
     Napi::Object item;
@@ -104,13 +106,13 @@ bool PullSparklines(CheckedSpecReader& reader, const Napi::Array& array, std::ve
       return false;
     }
     item = element.As<Napi::Object>();
-    reader.String(item, "formula", &formula);
+    has_formula.push_back(reader.String(item, "formula", &formula));
     reader.String(item, "location", &location);
     texts.push_back(std::move(formula));
     texts.push_back(std::move(location));
   }
   for (size_t i = 0; i < texts.size(); i += 2U) {
-    items.push_back(fm_sparkline_t{texts[i].c_str(), texts[i + 1U].c_str()});
+    items.push_back(fm_sparkline_t{has_formula[i / 2U] ? texts[i].c_str() : nullptr, texts[i + 1U].c_str()});
   }
   return reader.ok();
 }

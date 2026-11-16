@@ -309,9 +309,6 @@ TEST(CellPicture, RefusalsLeaveTheCellAsItWas) {
   refused = wb.set_cell_picture(0, Row("A1"), Col("A1"), &one, 32U * 1024U * 1024U + 1U, std::nullopt);
   ASSERT_FALSE(static_cast<bool>(refused));
   EXPECT_EQ(refused.error().code, FormulonErrorCode::kSecurityResourceLimit);
-  refused = Place(wb, "A1", png, std::string_view());
-  ASSERT_FALSE(static_cast<bool>(refused));
-  EXPECT_EQ(refused.error().code, FormulonErrorCode::kInvalidArgument);
   EXPECT_FALSE(static_cast<bool>(wb.set_cell_picture(0, Row("A1"), Col("A1"), nullptr, 4, std::nullopt)));
   expect_unchanged("A1");
   ASSERT_NE(wb.sheet(0).cell_at(Row("A1"), Col("A1")), nullptr);

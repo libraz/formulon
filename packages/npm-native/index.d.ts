@@ -2506,7 +2506,7 @@ export interface CellPicture extends PictureProperties {
 export interface CellPictureInput {
   /** The image file, PNG or JPEG; it is stored as given. */
   bytes: BytesInput;
-  /** The picture's alt text; omitted or `null` means none, `''` is `StatusCode.InvalidArgument`. */
+  /** The picture's alt text; omitted, `null` and `''` all mean none (api-conventions §5 rule 30). */
   altText?: string | null;
 }
 
@@ -5290,10 +5290,10 @@ export interface DrawingAnchorPatch {
 /** The placement of a new drawing object: a picture (`Sheet.addPicture`), and the base of {@link ChartInput},
  *  {@link ShapeInput} and {@link SlicerInput}. */
 export interface DrawingPlacementInput {
-  /** The object's name; empty or omitted takes the kind's default (`Picture <id>` for a picture; a chart or shape has
-   *  its own). */
+  /** The object's name; omitted takes the kind's default (`Picture <id>` for a picture; a chart or shape has its own)
+   *  and `''` is `StatusCode.InvalidArgument` (api-conventions §5 rule 30). */
   name?: string;
-  /** The object's alternative text; empty or omitted means none. */
+  /** The object's alternative text; omitted and `''` both mean none (api-conventions §5 rule 30). */
   description?: string;
   /** Whether the object is hidden; unset means shown. */
   hidden?: boolean;
@@ -5308,7 +5308,7 @@ export interface DrawingPatch {
   /** The new name; it cannot be empty and duplicates are allowed. A slicer's name cannot be set (it ties the frame to
    *  the slicer part) and fails with `StatusCode.PreconditionFailed`. */
   name?: string;
-  /** The new alternative text; clearing it, or an empty string, removes the description. */
+  /** The new alternative text; `null` and `''` both remove the description (api-conventions §5 rule 30). */
   description?: string | null;
   /** Whether the object is hidden. */
   hidden?: boolean;
@@ -5342,9 +5342,11 @@ export interface ShapeProperties {
  *  `to*` box; `name` defaults to `Shape <id>`) and the shape fields; a key left out is not applied. `fill` / `line`
  *  take the chart paint patches ({@link ChartFillPatch}, {@link ChartLinePatch}). */
 export interface ShapeInput extends DrawingPlacementInput {
-  /** Name of the preset geometry; defaults to rect, and a line or connector geometry makes a connector. */
+  /** Name of the preset geometry; omitted is rect, `''` is `StatusCode.InvalidArgument` (api-conventions §5 rule 30), and a line or
+   *  connector geometry makes a connector. */
   presetGeometry?: string;
-  /** The shape's text, paragraphs joined with a newline; a connector holds none. */
+  /** The shape's text, paragraphs joined with a newline; omitted and `''` both mean none (api-conventions §5 rule 30), and a connector
+   *  holds none. */
   text?: string;
   /** Whether the shape is a text box. */
   textBox?: boolean;
@@ -5408,7 +5410,7 @@ export interface SlicerProperties {
  *  not applied. The anchor is two-cell (`kind` omitted or `TwoCell`) and needs its `to*` box or a non-zero size.
  *  `name` defaults to the column name (made unique) and cannot be updated. */
 export interface SlicerInput extends DrawingPlacementInput {
-  /** The caption shown in the slicer header; the column name when omitted. */
+  /** The caption shown in the slicer header; the column name when omitted or `''` (api-conventions §5 rule 30). */
   caption?: string;
   /** The name of the slicer style; `null` creates the slicer without a style and an empty string is rejected. Omitted
    *  leaves the default. */
@@ -5499,8 +5501,8 @@ export interface Sparkline {
 export interface SparklineInput {
   /** The data range, as a range record or sheet-qualified A1 text; unqualified text resolves on the receiving sheet.
    *  Text may also be a 3-D span, another workbook's range, a defined name or `#REF!`; a union, structured
-   *  reference or expression fails with `StatusCode.InvalidArgument`. `null` or empty text stores a sparkline
-   *  whose source was deleted, as `#REF!` does. */
+   *  reference or expression fails with `StatusCode.InvalidArgument`. `null` stores a sparkline whose source was
+   *  deleted, as `#REF!` does, and `''` is `StatusCode.InvalidArgument` (api-conventions §5 rule 30). */
   source: SheetRect | string | null;
   /** The cell that shows the sparkline, as an address record or A1 text. */
   location: CellAddress | string;
@@ -5616,7 +5618,8 @@ export interface SparklineGroupInput {
   readonly manualMax?: number | null;
   /** `true` to space points by a date axis. */
   readonly dateAxis?: boolean;
-  /** The group's date range, as a range record or sheet-qualified A1 text; `null` for none. */
+  /** The group's date range, as a range record or sheet-qualified A1 text; `null` for none, `''` is
+   *  `StatusCode.InvalidArgument` (api-conventions §5 rule 30). */
   readonly dateAxisRange?: SheetRect | string | null;
   /** Line width in points; 0.75 for a new group. */
   readonly lineWidthPt?: number;
@@ -5681,7 +5684,8 @@ export interface ChartDataSource {
 }
 
 /** A series input as text, or the {@link ChartDataSource} record a series reads back (a `ChartSourceKind.Ref`
- *  source sets its `formula`, a `None` source an empty reference, a `Literal` source writes its points). */
+ *  source sets its `formula`, a `None` source is `null`, a `Literal` source writes its points). An empty string is
+ *  `StatusCode.InvalidArgument` (api-conventions §5 rule 30). */
 export type ChartDataSourceInput = ChartDataSource | string;
 
 /** A fill, as a chart element or a shape reads it. */
@@ -5827,7 +5831,8 @@ export interface ChartPlot {
   readonly series: readonly ChartSeries[];
 }
 
-/** A chart or axis title: `text` for `Text`, `formula` for `Ref`, each `null` for another kind. */
+/** A chart or axis title: `text` for `Text`, `formula` for `Ref`, each `null` for another kind. For `Text`, a missing
+ *  and an empty `text` are one state (api-conventions §5 rule 30). */
 export interface ChartTitle {
   /** Whether the title is absent, automatic, literal text or a cell reference. */
   readonly kind: ChartTitleKind;
@@ -6213,19 +6218,18 @@ export type ChartLabelsPatch = Patch<
   'separator' | 'position' | 'numberFormat' | 'fontColor' | 'fontSizePt'
 >;
 
-/** An empty string for `name`, `categories` or `x` removes the reference; one for `values`, `y` or `size` is rejected.
+/** An empty string is rejected for every input (api-conventions §5 rule 30); `null` removes the reference of `name`, `categories` or `x`.
  *  `null` removes `name`, `categories`, `x`, `fill`, `line`, `marker` or `labels`. */
 export type ChartSeriesPatch = Patch<
   {
-    /** The series name input, a reference or a data source; an empty reference or `null` removes it. Omitted keeps it. */
+    /** The series name input, a reference or a data source; `null` removes it. Omitted keeps it. */
     name: ChartDataSourceInput;
-    /** The category labels input, a reference or a data source; an empty reference or `null` removes it. Omitted keeps
-     *  it. */
+    /** The category labels input, a reference or a data source; `null` removes it. Omitted keeps it. */
     categories: ChartDataSourceInput;
     /** The values input, a reference or a data source; an empty reference is rejected, and so is `null`. Omitted keeps
      *  it. */
     values: ChartDataSourceInput;
-    /** The x values input, a reference or a data source; an empty reference or `null` removes it. Omitted keeps it. */
+    /** The x values input, a reference or a data source; `null` removes it. Omitted keeps it. */
     x: ChartDataSourceInput;
     /** The y values input, a reference or a data source; an empty reference is rejected, and so is `null`. Omitted
      *  keeps it. */
@@ -8125,8 +8129,7 @@ export interface Sheet {
   /** Places `picture` in the cell as a write of `#VALUE!` (a formula in the cell is replaced), or with `null` removes
    *  the cell's picture and empties the cell (doing nothing when it holds none). PNG and JPEG are stored as given;
    *  fails with `StatusCode.IoImageUnsupported` for empty or any other image data, `StatusCode.SecurityResourceLimit`
-   *  when `bytes` is longer than 32 MiB and `StatusCode.InvalidArgument` for an empty `altText`. A picture cell
-   *  evaluates as `#VALUE!` in formulas. */
+   *  when `bytes` is longer than 32 MiB. A picture cell evaluates as `#VALUE!` in formulas. */
   setCellPicture(row: number, col: number, picture: CellPictureInput | null): void;
   /** `setCellPicture` at the A1 address `a1`. */
   setCellPicture(a1: string, picture: CellPictureInput | null): void;

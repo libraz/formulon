@@ -166,8 +166,8 @@ void ReadLiteral(CheckedSpecReader& r, const Napi::Value& value, const char* key
   out.literal_count = static_cast<uint32_t>(points.size());
 }
 
-/// A series input: absent keeps, `null` removes when `nullable`, a string is a reference (an empty one removes), and an
-/// object is the read-back shape `{ kind, formula, literal }`.
+/// A series input: absent keeps, `null` removes when `nullable`, a string is a reference (the C ABI refuses an empty
+/// one), and an object is the read-back shape `{ kind, formula, literal }`.
 void ReadSource(CheckedSpecReader& r, const Napi::Object& owner, const char* key, bool nullable, Arena& arena,
                 fm_patch_op_t& op, fm_chart_data_source_spec_t& out) {
   const Field f = Probe(r, owner, key, nullable);
@@ -178,12 +178,8 @@ void ReadSource(CheckedSpecReader& r, const Napi::Object& owner, const char* key
   if (f.value.IsString()) {
     std::string text;
     r.String(f.value, key, &text);
-    if (text.empty()) {
-      out.kind = FM_CHART_SOURCE_KIND_NONE;
-    } else {
-      out.kind = FM_CHART_SOURCE_KIND_REF;
-      out.formula = Intern(arena, std::move(text));
-    }
+    out.kind = FM_CHART_SOURCE_KIND_REF;
+    out.formula = Intern(arena, std::move(text));
     return;
   }
   Napi::Object spec;

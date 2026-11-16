@@ -36,6 +36,10 @@ struct AnchorPlan {
 fm_status_t plan_add_anchor(const Workbook& wb, std::size_t sheet, const fm_drawing_anchor_t& anchor,
                             AnchorKind default_kind, bool size_required, AnchorPlan* out);
 
+/// Refuses an empty `placement.name` (`FM_STATUS_INVALID_ARGUMENT`); `NULL` is the absent value that takes the kind's
+/// default name. Returns the status to report.
+fm_status_t check_placement_name(const fm_drawing_placement_spec_t& placement);
+
 /// Applies what the engine's add entries do not take from a placement to the
 /// new object `object_id`: `hidden` (`FM_TRISTATE_TRUE`) and, when
 /// `with_description`, its non-empty `description`. Returns the status to report.

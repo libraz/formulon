@@ -1330,11 +1330,11 @@ class Workbook {
   /// Places the PNG or JPEG image `bytes[0..len)` in the cell as a write of
   /// `#VALUE!` (the array-block and data-table refusals and the spill and
   /// dependent handling of `set_cell_value` apply), then records the picture.
-  /// `alt_text`, when given, must not be empty. Atomic.
+  /// `alt_text` empty is none, as an absent one. Atomic.
   ///
   /// `kBindingNullPointer` for NULL `bytes`; `kIoImageUnsupported` for empty
   /// data or any other format; `kSecurityResourceLimit` above 32 MiB;
-  /// `kInvalidArgument` for empty alt text or a bad sheet or address.
+  /// `kInvalidArgument` for a bad sheet or address.
   Expected<void, Error> set_cell_picture(std::size_t sheet, std::uint32_t row, std::uint32_t col,
                                          const std::uint8_t* bytes, std::size_t len,
                                          std::optional<std::string_view> alt_text);

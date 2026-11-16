@@ -34,6 +34,7 @@ using formulon::c_api::parts::AnchorPlan;
 using formulon::c_api::parts::check_cell_coord;
 using formulon::c_api::parts::check_enum_domain;
 using formulon::c_api::parts::check_index;
+using formulon::c_api::parts::check_placement_name;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
@@ -207,6 +208,13 @@ fm_status_t plan_add_anchor(const Workbook& wb, std::size_t sheet, const fm_draw
     return invalid_argument("anchor needs a width or a height", "field=anchor");
   }
   *out = plan;
+  return 0;
+}
+
+fm_status_t check_placement_name(const fm_drawing_placement_spec_t& placement) {
+  if (placement.name != nullptr && placement.name[0] == '\0') {
+    return invalid_argument("placement.name must not be empty", "field=placement.name");
+  }
   return 0;
 }
 
@@ -533,6 +541,9 @@ extern "C" fm_status_t fm_sheet_add_picture(fm_workbook_t* wb, size_t sheet_inde
     return rc;
   }
   if (auto rc = check_utf8({opts->name, opts->description}); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_placement_name(*opts); rc != 0) {
     return rc;
   }
   if (auto rc = check_enum_domain(opts->hidden, FM_TRISTATE_DEFAULT, FM_TRISTATE_TRUE, "hidden"); rc != 0) {

@@ -4789,7 +4789,7 @@ function encodeSparklineGroup(raw, sheet, group, where, storedDateAxis = null) {
       }
       const formula = present(item.source)
         ? sparklineRangeText(raw, item.source, sheet, `${label}.source`)
-        : (item[STORED_SOURCE] ?? '');
+        : (item[STORED_SOURCE] ?? null);
       return { formula, location: cellText(raw, addressOf(raw, item.location, `${label}.location`)) };
     });
   }
@@ -6100,7 +6100,7 @@ const CHART_SOURCE_KEYS = new Set(['name', 'categories', 'values', 'x', 'y', 'si
 /** A `ChartDataSource` record as the raw layer reads it: reference text, or the record itself for a literal one. */
 function chartSourceInput(source) {
   if (source.kind === ChartSourceKind.Literal) return source;
-  return source.kind === ChartSourceKind.Ref ? source.formula : '';
+  return source.kind === ChartSourceKind.Ref ? source.formula : null;
 }
 
 /**

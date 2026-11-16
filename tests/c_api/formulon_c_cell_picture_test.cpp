@@ -256,9 +256,8 @@ TEST_F(FormulonCCellPicture, RefusesALengthOverTheCeilingWithoutReadingTheBytes)
   EXPECT_FALSE(Has(0, 0));
 }
 
-TEST_F(FormulonCCellPicture, RefusesEmptyAltTextAndMalformedUtf8) {
+TEST_F(FormulonCCellPicture, RefusesMalformedUtf8AltText) {
   const Bytes png = Png(2, 2);
-  EXPECT_EQ(Set(0, 0, png, ""), FM_STATUS_INVALID_ARGUMENT);
   EXPECT_EQ(Set(0, 0, png, "\xC3\x28"), FM_STATUS_BINDING_UTF8ENCODING_ERROR);
   EXPECT_FALSE(Has(0, 0));
 }
@@ -267,7 +266,7 @@ TEST_F(FormulonCCellPicture, RefusalsLeaveAnExistingPictureAndTheNeighboursAlone
   const Bytes png = Png(5, 5);
   ASSERT_EQ(Set(0, 0, png, "keep"), 0);
   EXPECT_EQ(Set(0, 0, Gif(), "gif"), FM_STATUS_IO_IMAGE_UNSUPPORTED);
-  EXPECT_EQ(Set(0, 0, png, ""), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(Set(0, 0, png, "\xC3\x28"), FM_STATUS_BINDING_UTF8ENCODING_ERROR);
 
   std::int32_t present = 0;
   fm_cell_picture_t out = FM_STRUCT_INIT(fm_cell_picture_t);

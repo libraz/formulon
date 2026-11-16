@@ -13888,10 +13888,10 @@ typedef struct {
  */
 typedef struct {
   uint32_t struct_size;
-  /** The object's name; `NULL`, empty or omitted takes the kind's default (`Picture <n>`, n being the object id minus
-   *  one, for a picture). */
+  /** The object's name; `NULL` takes the kind's default (`Picture <n>`, n being the object id minus one, for a
+   *  picture), and an empty string is `FM_STATUS_INVALID_ARGUMENT` (2) (api-conventions §5 rule 30). */
   const char* name;
-  /** The object's alternative text; `NULL`, empty or omitted means none. */
+  /** The object's alternative text; `NULL` and an empty string both mean none (api-conventions §5 rule 30). */
   const char* description;
   /** Whether the object is hidden; unset means shown. */
   int32_t hidden; /* fm_tristate_t */
@@ -14096,8 +14096,8 @@ typedef struct {
   const uint8_t* bytes;
   /** The length of `bytes` in bytes. */
   uint64_t len;
-  /** The picture's alt text as NUL-terminated UTF-8; `NULL` when it has none. On input `NULL` is none and `""` is
-   *  `FM_STATUS_INVALID_ARGUMENT`. */
+  /** The picture's alt text as NUL-terminated UTF-8; `NULL` when it has none. On input `NULL` and `""` both mean none
+   *  (api-conventions §5 rule 30). */
   const char* alt_text;
   /** The image's file format, an `fm_image_format_t`; read-only. */
   int32_t format;
@@ -14140,8 +14140,8 @@ FM_API fm_status_t fm_sheet_get_cell_picture(const fm_workbook_t* wb, size_t she
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`, or `picture->bytes` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `struct_size` is below the v1 size, `(row, col)` is outside the grid,
- *         or `alt_text` is `""`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `struct_size` is below the v1 size or `(row, col)` is outside the
+ *         grid;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `alt_text` is not well-formed UTF-8;
  *         `FM_STATUS_IO_IMAGE_UNSUPPORTED` (5023) when `len` is 0 or the bytes are not a PNG or JPEG image;
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when `len` is over 32 MiB (the engine's own ceiling, not an
@@ -14472,10 +14472,11 @@ typedef struct {
   double rotation_deg;
   /** 1 to make the shape a text box; 0 for a plain shape. */
   int32_t text_box;
-  /** Name of the preset geometry; `NULL` or empty means rect. A name that is not an ECMA-376 `ST_ShapeType` name is
-   *  `FM_STATUS_INVALID_ARGUMENT` (2). */
+  /** Name of the preset geometry; `NULL` means rect. An empty string, or a name that is not an ECMA-376
+   *  `ST_ShapeType` name, is `FM_STATUS_INVALID_ARGUMENT` (2) (api-conventions §5 rule 30). */
   const char* preset_geometry;
-  /** The shape's text, paragraphs joined with a newline; `NULL` for none. */
+  /** The shape's text, paragraphs joined with a newline; `NULL` and an empty string both mean none (api-conventions §5
+   *  rule 30). */
   const char* text;
 } fm_shape_spec_t;
 
@@ -14660,7 +14661,8 @@ typedef struct {
   /** The height of each item row in points; 0 takes Excel's default, and a negative or non-finite height is rejected.
    */
   double row_height_pt;
-  /** The caption shown in the slicer header; `NULL` takes the column name. */
+  /** The caption shown in the slicer header; `NULL` and an empty string both take the column name (api-conventions §5
+   *  rule 30). */
   const char* caption;
   /** The name of the slicer style; `NULL` for no style and an empty string is rejected. */
   const char* style_name;
@@ -14821,7 +14823,9 @@ typedef enum {
  *        Read-scratch-backed views on read.
  */
 typedef struct {
-  /** The data range as sheet-qualified text, read with a leading `=`; input takes it with or without one. */
+  /** The data range as sheet-qualified text, read with a leading `=`; input takes it with or without one. `NULL` stores
+   *  a deleted (`#REF!`) source and an empty string is `FM_STATUS_INVALID_ARGUMENT` (2) (api-conventions §5 rule 30).
+   */
   const char* formula;
   /** The single cell that shows the sparkline. */
   const char* location;
@@ -14892,7 +14896,8 @@ typedef struct {
    *  `FM_BLANKS_AS_ABSENT`. */
   int32_t empty_cells_as;
   /** The group's date range as sheet-qualified text, read with a leading `=`; `NULL` when absent. Input takes it with
-   *  or without one, and `NULL` or empty writes none. */
+   *  or without one; `NULL` writes none and an empty string is `FM_STATUS_INVALID_ARGUMENT` (2) (api-conventions §5
+   *  rule 30). */
   const char* date_axis_ref;
   /** The number of sparklines in the group; filled on read and ignored on input. */
   uint32_t sparkline_count;
@@ -15019,8 +15024,8 @@ typedef struct {
   int32_t empty_cells_as;
   /** Patch operation for `date_axis_ref`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t date_axis_ref_op;
-  /** The new date range as sheet-qualified text, with or without a leading `=`. Applies when `date_axis_ref_op` sets
-   *  it. */
+  /** The new date range as sheet-qualified text, with or without a leading `=`; an empty string is
+   *  `FM_STATUS_INVALID_ARGUMENT` (2). Applies when `date_axis_ref_op` sets it. */
   const char* date_axis_ref;
   /** Patch operation for `items`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t items_op;
@@ -15110,8 +15115,8 @@ FM_API fm_status_t fm_sheet_get_sparkline_at(const fm_workbook_t* wb, size_t she
  *         `date_axis_ref` that is not one reference or defined name (a union,
  *         a structured reference, an expression, a sheet-qualified `#REF!`;
  *         context `formula=<text>` or `date_axis_ref=<text>`), a non-finite
- *         number, a negative line weight, or an enumeration out of range. An empty (or `NULL`) formula is not
- *         refused: it is stored as a deleted (`#REF!`) source;
+ *         number, a negative line weight, an enumeration out of range, or an empty formula or `date_axis_ref`
+ *         (api-conventions §5 rule 30). A `NULL` formula is not refused: it is stored as a deleted (`#REF!`) source;
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when `count` is above 65536
  *         (context `part=sparkline_items requested=<n> limit=65536`).
  */
@@ -15362,7 +15367,8 @@ typedef enum {
 /** @brief Opaque snapshot of a chart's typed view. Release with `fm_chart_destroy`. */
 typedef struct fm_chart fm_chart_t;
 
-/** @brief A chart or axis title. As input, `NULL` and `""` both read as empty. */
+/** @brief A chart or axis title. For `FM_CHART_TITLE_KIND_TEXT`, `text` `NULL` and `""` are one state, and input
+ *         refuses it (api-conventions §5 rule 30). */
 typedef struct {
   /** Whether the title is absent, automatic, literal text or a cell reference, an `fm_chart_title_kind_t`. */
   int32_t kind;
@@ -16199,7 +16205,7 @@ typedef struct {
  * Each input (`name`, `categories`, `values`, `x`, `y`, `size`) has an
  * `fm_patch_op_t` companion and an `fm_chart_data_source_spec_t`. `KEEP`
  * leaves it. `SET` with `REF` writes `formula` (`NULL` or empty is
- * `FM_STATUS_INVALID_ARGUMENT` (2)); with `LITERAL` writes the points
+ * `FM_STATUS_INVALID_ARGUMENT` (2), api-conventions §5 rule 30); with `LITERAL` writes the points
  * (`literal_count` 0 is `FM_STATUS_INVALID_ARGUMENT` (2)); with `NONE`, like
  * `CLEAR`, removes the input of `name`, `categories` or `x` and is
  * `FM_STATUS_INVALID_ARGUMENT` (2) on `values`, `y` and `size`. `smooth` is

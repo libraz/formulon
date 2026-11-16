@@ -236,10 +236,10 @@ from ._workbook import (
     _pack_sparklines,
     _placement_fields,
     _print_titles_from,
-    _qualified_range_text,
     _read_count,
     _read_cstr_out,
     _read_optional_cstr_out,
+    _sparkline_range_text,
     _spill_from,
     _threaded_comment_from,
     _tristate_default,
@@ -4695,7 +4695,7 @@ class Sheet(_NoCopy):
     ) -> Picture:
         """Insert ``bytes`` as a picture placed as ``input`` says and return its handle.
 
-        An empty ``name`` becomes ``Picture <id>``. An ``anchor`` of ``None``
+        An omitted ``name`` becomes ``Picture <id>`` and ``""`` is rejected. An ``anchor`` of ``None``
         (and no ``input`` at all) is a one-cell anchor at A1. A ``width_emu``
         or ``height_emu`` of ``0`` means the image's pixel size times 9525.
         ``edit_as`` is honoured for a two-cell anchor only. Existing drawing
@@ -5081,7 +5081,8 @@ class Sheet(_NoCopy):
           InvalidArgumentError: when ``spec.sparklines`` is empty, a ``location``
             is not one cell, or a ``source`` or ``date_axis_range`` is not one
             reference or defined name (a union, a structured reference, an
-            expression). ``#REF!``, an empty ``source`` or ``None`` is accepted and stored without a source.
+            expression), or an empty ``source``, ``date_axis_range`` or ``location``. ``#REF!`` or a ``None``
+            ``source`` is accepted and stored without a source.
           SecurityError: when ``spec.sparklines`` holds more than 65536 sparklines.
         """
         if not isinstance(spec, (SparklineGroupInput, SparklineGroup)):
@@ -5226,7 +5227,7 @@ class Sheet(_NoCopy):
                     values[key + "_op"] = _PATCH_SET
                     values[key] = int(_require_bool(given[key], key))
             if "date_axis_range" in given:
-                text = _qualified_range_text(
+                text = _sparkline_range_text(
                     self._workbook, given["date_axis_range"], sheet, "SparklineGroup.date_axis_range"
                 )
                 if text is None:

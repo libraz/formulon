@@ -775,8 +775,8 @@ class Chart(_Snapshotable):
     ) -> None:
         """Update the series with ``c:idx`` ``series_id`` of plot group ``plot``; an omitted argument keeps its value.
 
-        A reference is its new text or a :class:`ChartDataSource` with a reference; ``""`` removes ``name``,
-        ``categories`` or ``x`` (an empty ``values``, ``y`` or ``size`` is rejected). ``None`` on ``name``,
+        A reference is its new text or a :class:`ChartDataSource` with a reference; an empty one is rejected
+        (api-conventions §5 rule 30). ``None`` on ``name``,
         ``categories``, ``x``, ``fill``, ``line``, ``marker`` or ``labels`` removes it; every other argument
         rejects ``None`` with a ``TypeError``. A changed reference refreshes its cache.
         """

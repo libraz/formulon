@@ -26,6 +26,7 @@ using formulon::c_api::parts::apply_placement_extras;
 using formulon::c_api::parts::chart_fill_to_c;
 using formulon::c_api::parts::chart_line_to_c;
 using formulon::c_api::parts::check_enum_domain;
+using formulon::c_api::parts::check_placement_name;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_utf8;
@@ -262,6 +263,12 @@ extern "C" fm_status_t fm_sheet_add_shape(fm_workbook_t* wb, size_t sheet_index,
   if (auto rc = check_utf8({placement.name, placement.description}); rc != 0) {
     return rc;
   }
+  if (auto rc = check_placement_name(placement); rc != 0) {
+    return rc;
+  }
+  if (spec->preset_geometry != nullptr && spec->preset_geometry[0] == '\0') {
+    return invalid_argument("preset_geometry must not be empty", "field=preset_geometry");
+  }
   if (auto rc = check_enum_domain(placement.hidden, FM_TRISTATE_DEFAULT, FM_TRISTATE_TRUE, "placement.hidden");
       rc != 0) {
     return rc;
@@ -288,7 +295,7 @@ extern "C" fm_status_t fm_sheet_add_shape(fm_workbook_t* wb, size_t sheet_index,
     fields.text_box_op = FM_PATCH_OP_SET;
     fields.text_box = spec->text_box;
   }
-  if (spec->preset_geometry != nullptr && spec->preset_geometry[0] != '\0') {
+  if (spec->preset_geometry != nullptr) {
     fields.preset_geometry_op = FM_PATCH_OP_SET;
     fields.preset_geometry = spec->preset_geometry;
   }
@@ -308,7 +315,7 @@ extern "C" fm_status_t fm_sheet_add_shape(fm_workbook_t* wb, size_t sheet_index,
   model.to = plan.to;
   model.cx = plan.cx;
   model.cy = plan.cy;
-  if (placement.name != nullptr && placement.name[0] != '\0') {
+  if (placement.name != nullptr) {
     model.fields |= field::kName;
     model.name = placement.name;
   }
