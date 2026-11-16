@@ -106,13 +106,9 @@ struct EncodedView {
   Guid guid{};
   std::vector<std::uint8_t> records;
   bool ok = false;
+  /// For a workbook view, whether it keeps print settings (`includePrintSettings`).
+  bool prints = true;
 };
-
-EncodedView EncodeView(const pugi::xml_node& node, bool (*encode)(const pugi::xml_node&, std::vector<std::uint8_t>&)) {
-  EncodedView view;
-  view.ok = ParseGuid(node.attribute("guid").value(), view.guid) && encode(node, view.records);
-  return view;
-}
 
 }  // namespace
 
@@ -126,14 +122,30 @@ XmlCustomViewPlan plan_xml_custom_views(const Workbook& workbook) {
   }
   std::vector<EncodedView> books;
   // A view set that does not parse names no GUID, so nothing can be paired with it.
-  bool readable = ForEachRawElement(
-      workbook.raw_children(), ooxml::workbook_child::slot_of("customWorkbookViews"), "customWorkbookView",
-      [&](const pugi::xml_node& node) { books.push_back(EncodeView(node, encode_book_view)); });
+  bool readable = ForEachRawElement(workbook.raw_children(), ooxml::workbook_child::slot_of("customWorkbookViews"),
+                                    "customWorkbookView", [&](const pugi::xml_node& node) {
+                                      EncodedView view;
+                                      view.ok = ParseGuid(node.attribute("guid").value(), view.guid) &&
+                                                encode_book_view(node, view.records);
+                                      const std::string_view prints = node.attribute("includePrintSettings").value();
+                                      view.prints = prints != "0" && prints != "false";
+                                      books.push_back(std::move(view));
+                                    });
+  const auto prints = [&books](const Guid& guid) {
+    const auto book =
+        std::find_if(books.begin(), books.end(), [&](const EncodedView& view) { return view.guid == guid; });
+    return book == books.end() || book->prints;
+  };
   std::vector<std::vector<EncodedView>> sheets(sheet_count);
   for (std::size_t i = 0; i < sheet_count; ++i) {
-    readable = ForEachRawElement(
-                   workbook.sheet(i).raw_extensions(), worksheet_child::slot_of("customSheetViews"), "customSheetView",
-                   [&](const pugi::xml_node& node) { sheets[i].push_back(EncodeView(node, encode_sheet_view)); }) &&
+    readable = ForEachRawElement(workbook.sheet(i).raw_extensions(), worksheet_child::slot_of("customSheetViews"),
+                                 "customSheetView",
+                                 [&](const pugi::xml_node& node) {
+                                   EncodedView view;
+                                   view.ok = ParseGuid(node.attribute("guid").value(), view.guid) &&
+                                             encode_sheet_view(node, prints(view.guid), view.records);
+                                   sheets[i].push_back(std::move(view));
+                                 }) &&
                readable;
   }
   std::vector<Guid> book_guids;
@@ -272,6 +284,8 @@ RecordCustomViewPlan plan_record_custom_views(const Workbook& workbook) {
     if (carried && decodes) {
       writable.insert(view.guid);
       book_views.append(*view.xml);
+    } else {
+      ++plan.refused_book_views;
     }
   }
   if (book_views.empty()) {

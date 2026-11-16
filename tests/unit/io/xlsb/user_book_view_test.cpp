@@ -220,9 +220,14 @@ TEST(XlsbUserBookView, XlsbViewWithoutAnXlsxFormLeavesBothSidesOut) {
       std::find_if(recs.begin(), recs.end(), [](const FramedRecord& rec) { return rec.type == kBrtEndUserShView; });
   ASSERT_NE(end_view, recs.end());
   slot.insert(slot.begin() + static_cast<std::ptrdiff_t>(end_view->begin), header.begin(), header.end());
+  auto baseline = write_ooxml_with_result(read.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(baseline)) << baseline.error().message;
   wb.sheet(0).set_xlsb_tail(tail);
   auto written = write_ooxml_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
+  // The left-out view counts once, as on an .xlsb save.
+  EXPECT_EQ(written.value().diagnostics.deferred_feature_count,
+            baseline.value().diagnostics.deferred_feature_count + 1U);
   EXPECT_EQ(Text(Entry(written.value().bytes, "xl/workbook.xml")).find("customWorkbookView"), std::string::npos);
   EXPECT_EQ(Text(Entry(written.value().bytes, "xl/worksheets/sheet1.xml")).find("customSheetView"), std::string::npos);
 }

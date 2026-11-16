@@ -400,6 +400,9 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
   plan.stale_formulas = wb.saves_stale_formulas();
   plan.recalc_marks = wb.saved_recalc_marks();
   plan.custom_views = xlsb::plan_record_custom_views(wb);
+  if (diagnostics != nullptr) {
+    diagnostics->deferred_feature_count += static_cast<std::uint32_t>(plan.custom_views.refused_book_views);
+  }
   plan.tables_by_sheet.assign(wb.sheet_count(), {});
   // A retained `xl/metadata.xml` keeps today's meaning and blocks generated
   // rich values (`rich_value_parts_kept_verbatim`); otherwise the writer

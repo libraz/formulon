@@ -88,9 +88,10 @@ struct OoxmlWriteResult {
 /// `dropped_part_count`, and the relationships dropped with them in
 /// `dropped_relationship_count`. The structured log is off by default in
 /// shipped builds, so these counters are what a caller actually sees.
-/// `downgraded_formula_count` and `deferred_feature_count` stay zero:
-/// this writer emits formula text verbatim and represents every modelled
-/// feature.
+/// `downgraded_formula_count` stays zero: this writer emits formula
+/// text verbatim. `deferred_feature_count` counts rich values kept
+/// verbatim, each XLSB-source PivotTable left out with its cache, and
+/// each XLSB-source custom view (one per GUID) with no OOXML form.
 Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb);
 
 /// Serialises `wb` and discards the write diagnostics. Equivalent to

@@ -106,6 +106,7 @@ TEST(CustomViewRecords, BookViewFlags) {
       {" autoUpdate=\"1\"", "ee38"},
       {" changesSavedWin=\"1\"", "ee58"},
       {" onlySync=\"1\"", "ee98"},
+      {" includePrintSettings=\"0\"", "ee10"},
   };
   for (const auto& [attrs, flags] : cases) {
     EXPECT_EQ(U16At(BookPayload(attrs), 42), flags) << attrs;
@@ -114,8 +115,8 @@ TEST(CustomViewRecords, BookViewFlags) {
 
 TEST(CustomViewRecords, BookViewsWithoutAKnownRecordAreRefused) {
   for (const std::string attrs :
-       {" includePrintSettings=\"0\"", " xWindow=\"-5\"", " tabRatio=\"1001\"", " mergeInterval=\"65535\"",
-        " showComments=\"other\"", " minimized=\"yes\"", " xr:uid=\"{00000000-0000-0000-0000-000000000000}\""}) {
+       {" xWindow=\"-5\"", " tabRatio=\"1001\"", " mergeInterval=\"65535\"", " showComments=\"other\"",
+        " minimized=\"yes\"", " xr:uid=\"{00000000-0000-0000-0000-000000000000}\""}) {
     bool ok = true;
     EXPECT_TRUE(Encode(encode_book_view, BookView(attrs), &ok).empty()) << attrs;
     EXPECT_FALSE(ok) << attrs;
@@ -136,13 +137,17 @@ constexpr const char* kSel = "03000000040000000200000000000000010000000400000005
 constexpr const char* kMargins =
     "666666666666e63f666666666666e63f000000000000e83f000000000000e83f333333333333d33f333333333333d33f";
 
+bool EncodeSheetView(const pugi::xml_node& view, std::vector<std::uint8_t>& dst) {
+  return encode_sheet_view(view, true, dst);
+}
+
 std::string SheetView(const std::string& attrs, const std::string& children) {
   return std::string("<customSheetView guid=\"") + kGuid + "\"" + attrs + ">" + children + "</customSheetView>";
 }
 
 Records SheetRecords(const std::string& attrs, const std::string& children) {
   bool ok = false;
-  Records records = Encode(encode_sheet_view, SheetView(attrs, children), &ok);
+  Records records = Encode(EncodeSheetView, SheetView(attrs, children), &ok);
   EXPECT_TRUE(ok) << attrs << children;
   return records;
 }
@@ -279,7 +284,7 @@ TEST(CustomViewRecords, SheetViewsWithoutKnownRecordsAreRefused) {
   };
   for (const auto& [attrs, children] : cases) {
     bool ok = true;
-    EXPECT_TRUE(Encode(encode_sheet_view, SheetView(attrs, children), &ok).empty()) << attrs << children;
+    EXPECT_TRUE(Encode(EncodeSheetView, SheetView(attrs, children), &ok).empty()) << attrs << children;
     EXPECT_FALSE(ok) << attrs << children;
   }
 }
@@ -312,7 +317,7 @@ std::optional<std::string> SheetRoundTrip(const std::string& xml) {
   pugi::xml_document doc;
   EXPECT_TRUE(doc.load_string(xml.c_str())) << xml;
   std::vector<std::uint8_t> bytes;
-  EXPECT_TRUE(encode_sheet_view(doc.document_element(), bytes)) << xml;
+  EXPECT_TRUE(encode_sheet_view(doc.document_element(), true, bytes)) << xml;
   return decode_sheet_view(split_records(bytes), bytes);
 }
 
@@ -337,7 +342,8 @@ TEST(CustomViewRecords, BookViewsDecodeBackToTheirXml) {
                                   " includeHiddenRowCol=\"0\"",
                                   " autoUpdate=\"1\"",
                                   " changesSavedWin=\"1\"",
-                                  " onlySync=\"1\""}) {
+                                  " onlySync=\"1\"",
+                                  " includePrintSettings=\"0\""}) {
     pugi::xml_document doc;
     ASSERT_TRUE(doc.load_string(BookView(attrs).c_str()));
     std::vector<std::uint8_t> bytes;
@@ -402,6 +408,26 @@ TEST(CustomViewRecords, SheetViewsWithoutAnXlsxFormAreNotDecoded) {
         std::string(kBaseMargins) + "<headerFooter><oddHeader>&amp;CTop</oddHeader></headerFooter>"}) {
     EXPECT_FALSE(SheetRoundTrip(SheetView("", children)).has_value()) << children;
   }
+}
+
+TEST(CustomViewRecords, SheetViewWithoutPrintSettingsKeepsNoPrintRecords) {
+  // The workbook view's includePrintSettings="0": Excel drops the view's margins and writes no print record.
+  pugi::xml_document doc;
+  ASSERT_TRUE(doc.load_string(SheetView(" topLeftCell=\"B3\"", std::string(kBaseSelection) + kBaseMargins).c_str()));
+  std::vector<std::uint8_t> bytes;
+  ASSERT_TRUE(encode_sheet_view(doc.document_element(), false, bytes));
+  Records records;
+  for (const FramedRecord& rec : split_records(bytes)) {
+    records.emplace_back(rec.type, Hex(rec.payload.data, rec.payload.size));
+  }
+  const Records expected = {
+      {kBrtBeginUserShView, ViewHead("3c000021", kTopLeftB3)}, {152, kSel}, {kBrtEndUserShView, ""}};
+  EXPECT_EQ(records, expected);
+  // Print options with no print settings were not seen; the view is refused.
+  ASSERT_TRUE(doc.load_string(SheetView("", "<printOptions headings=\"1\"/>").c_str()));
+  bytes.clear();
+  EXPECT_FALSE(encode_sheet_view(doc.document_element(), false, bytes));
+  EXPECT_TRUE(bytes.empty());
 }
 
 }  // namespace

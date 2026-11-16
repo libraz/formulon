@@ -349,10 +349,8 @@ bool encode_book_view(const pugi::xml_node& view, std::vector<std::uint8_t>& dst
     return false;
   }
   constexpr std::uint64_t kU32Max = std::numeric_limits<std::uint32_t>::max();
-  // A view without its print settings is not one Excel was seen to write.
   if (tab_ratio > kMaxTabRatio || (view.attribute("mergeInterval") && merge_interval >= kNoMergeInterval) ||
-      static_cast<std::uint64_t>(x) + width > kU32Max || static_cast<std::uint64_t>(y) + height > kU32Max ||
-      (flags & 0x0800U) == 0U) {
+      static_cast<std::uint64_t>(x) + width > kU32Max || static_cast<std::uint64_t>(y) + height > kU32Max) {
     return false;
   }
   flags |= (comments << kShowCommentsShift) | (objects << kShowObjectsShift);
@@ -373,7 +371,7 @@ bool encode_book_view(const pugi::xml_node& view, std::vector<std::uint8_t>& dst
   return true;
 }
 
-bool encode_sheet_view(const pugi::xml_node& view, std::vector<std::uint8_t>& dst) {
+bool encode_sheet_view(const pugi::xml_node& view, bool print_settings, std::vector<std::uint8_t>& dst) {
   if (!OnlyAttributes(view, {"guid",          "scale",        "colorId",        "showPageBreaks", "showFormulas",
                              "showGridLines", "showRowCol",   "outlineSymbols", "zeroValues",     "fitToPage",
                              "printArea",     "filter",       "showAutoFilter", "hiddenRows",     "hiddenColumns",
@@ -414,7 +412,11 @@ bool encode_sheet_view(const pugi::xml_node& view, std::vector<std::uint8_t>& ds
   }
   SheetView scratch;
   SheetPrintSettings print;
-  if (!ReadPaneAndSelections(view, &scratch) || !ReadViewPrint(view, &print, &flags)) {
+  // A view without its print settings keeps no print records; Excel drops its margins.
+  const bool print_children = view.child("printOptions") || view.child("pageSetup") || view.child("headerFooter") ||
+                              view.child("rowBreaks") || view.child("colBreaks");
+  if (!ReadPaneAndSelections(view, &scratch) || (print_settings && !ReadViewPrint(view, &print, &flags)) ||
+      (!print_settings && print_children)) {
     return false;
   }
   if (view.child("pane")) {
@@ -433,7 +435,9 @@ bool encode_sheet_view(const pugi::xml_node& view, std::vector<std::uint8_t>& ds
   emit_record(dst, kBrtBeginUserShView, payload);
   emit_view_pane(dst, scratch);
   emit_listed_selections(dst, scratch);
-  emit_view_print_records(dst, print);
+  if (print_settings) {
+    emit_view_print_records(dst, print);
+  }
   emit_record(dst, kBrtEndUserShView, ByteSpan{});
   return true;
 }

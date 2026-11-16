@@ -94,12 +94,16 @@ struct WriteDiagnostics {
   /// Fed by: `xlsb.writer.formula_downgraded`,
   /// `xlsb.writer.array_formula_downgraded`.
   std::uint32_t downgraded_formula_count = 0;
-  /// Modelled sheet features the writer could not lower to records at
-  /// all. OOXML never contributes: it represents every modelled feature,
-  /// and rejects the one case it cannot (a table naming a removed sheet)
-  /// with `kIoWriteFailed` before any part is built, so the caller loses
-  /// the save rather than the table.
-  /// Fed by: `xlsb.writer.deferred`.
+  /// Modelled features the writer could not carry, one per feature.
+  /// XLSB: sheet features not lowered to records, workbook settings the
+  /// records cannot hold, custom table styles, custom views (and sheet
+  /// views without their workbook view), rich values kept verbatim.
+  /// OOXML: rich values kept verbatim, an XLSB-source PivotTable the
+  /// reader could not model, a custom view of an XLSB source with no
+  /// OOXML form. A table naming a removed sheet fails the save with
+  /// `kIoWriteFailed` before any count is made.
+  /// Fed by: `xlsb.writer.deferred`, `ooxml_writer.rich_values_kept_verbatim`,
+  /// and the OOXML emission plan's PivotTable and custom-view counts.
   std::uint32_t deferred_feature_count = 0;
   /// Passthrough parts dropped, either because their package path
   /// collided with a path the writer generates itself (the generated copy

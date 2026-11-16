@@ -30,9 +30,11 @@ namespace xlsb {
 bool encode_book_view(const pugi::xml_node& view, std::vector<std::uint8_t>& dst);
 
 /// Appends the BrtBeginUserShView .. BrtEndUserShView records of a
-/// `<customSheetView>`. False, appending nothing, for an attribute, child or
-/// value the records do not hold, an AutoFilter view among them.
-bool encode_sheet_view(const pugi::xml_node& view, std::vector<std::uint8_t>& dst);
+/// `<customSheetView>`. Without `print_settings` (its workbook view's
+/// `includePrintSettings="0"`) the view keeps no print records, as Excel
+/// writes it. False, appending nothing, for an attribute, child or value the
+/// records do not hold, an AutoFilter view among them.
+bool encode_sheet_view(const pugi::xml_node& view, bool print_settings, std::vector<std::uint8_t>& dst);
 
 /// The `<customWorkbookView>` of a BrtUserBookView payload, attributes at
 /// their defaults left out as Excel writes them; nullopt for a payload not in

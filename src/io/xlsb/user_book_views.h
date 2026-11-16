@@ -56,6 +56,8 @@ struct RecordCustomViewPlan {
   std::string book_xml;
   /// Per sheet, the `<customSheetViews>` element; empty when none goes out.
   std::vector<std::string> sheet_xml;
+  /// Workbook views left out with their sheet views.
+  std::size_t refused_book_views = 0;
 };
 
 RecordCustomViewPlan plan_record_custom_views(const Workbook& workbook);

@@ -70,6 +70,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- An `.xlsx` save counts each custom view it leaves out in
+  `SaveDiagnostics.deferredFeatureCount` (Python `deferred_feature_count`, C
+  `fm_save_diagnostics_info_t::deferred_feature_count`), once per view: a view
+  of a workbook read from `.xlsb` with no `.xlsx` form, such as one with a
+  filter, a header or footer or manual page breaks. Before, those views were
+  dropped without being counted.
 - A PivotTable cache keeps Excel's mark that its source was edited since it
   was read (`dataSourceClean`) and saves it to `.xlsx` and `.xlsb`: a cache
   loaded, built through the API or refreshed is saved as clean, and an
@@ -605,9 +611,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Custom views are kept when a workbook read from `.xlsx` is saved to
   `.xlsb`, or one read from `.xlsb` is saved to `.xlsx`, each written as
   Excel writes it together with every sheet's view of it; they were left out
-  of such a save. A view the other format cannot hold here, such as one with
-  a filter, is left out with its sheet views, and an `.xlsb` save counts it
-  in `deferredFeatureCount`.
+  of such a save. A view the other format cannot hold here is left out with
+  its sheet views and counted in `deferredFeatureCount`: one with a filter,
+  and, read from `.xlsb`, one with a header or footer or manual page breaks.
 - An `.xlsb` holding an AutoFilter icon filter with no icon, which Excel stores with no icon set, failed to open; it now reads as that filter, and both formats save a filter with no icon as Excel does, with no set in `.xlsb` and the default `3Arrows` in `.xlsx`.
 - A row or column insert or delete moves form controls and OLE objects as
   Excel does, in `.xlsx` and `.xlsb`: the worksheet's control and object
