@@ -168,7 +168,10 @@ pugi::xml_node anchor_content(const pugi::xml_node& anchor) {
 }
 
 pugi::xml_node anchor_cnvpr(const pugi::xml_node& anchor) {
-  const pugi::xml_node content = anchor_content(anchor);
+  return content_cnvpr(anchor_content(anchor));
+}
+
+pugi::xml_node content_cnvpr(const pugi::xml_node& content) {
   for (pugi::xml_node child = content.first_child(); child; child = child.next_sibling()) {
     const std::string_view name = local_name(child);
     if (name.size() > 4 && name.substr(0, 2) == "nv" && name.substr(name.size() - 2) == "Pr") {
@@ -359,6 +362,29 @@ Expected<std::vector<io::ooxml::DrawingRel>, Error> load_part_rels(const Workboo
   return io::ooxml::parse_part_rels(rels->bytes, io::ooxml::dir_of(part_path));
 }
 
+namespace {
+
+// Appends the chart frames of `content`: the content itself, or the frames a group holds at any depth.
+void collect_chart_frames(const pugi::xml_node& content, std::vector<pugi::xml_node>& out) {
+  const DrawingObjectKind kind = classify(content);
+  if (kind == DrawingObjectKind::kChart) {
+    out.push_back(content);
+    return;
+  }
+  if (kind != DrawingObjectKind::kGroup) {
+    return;
+  }
+  for (pugi::xml_node child = content.first_child(); child; child = child.next_sibling()) {
+    if (child.type() != pugi::node_element) {
+      continue;
+    }
+    collect_chart_frames(
+        local_name(child) == "AlternateContent" ? child_local(child_local(child, "Choice"), "") : child, out);
+  }
+}
+
+}  // namespace
+
 Expected<std::vector<ChartPartRef>, Error> list_chart_parts(const Workbook& wb, std::size_t sheet) {
   ASSIGN_OR_RETURN(std::string path, sheet_drawing_path(wb, sheet));
   std::vector<ChartPartRef> charts;
@@ -369,13 +395,13 @@ Expected<std::vector<ChartPartRef>, Error> list_chart_parts(const Workbook& wb, 
   RETURN_IF_ERROR(load_drawing_part(wb, path, doc));
   ASSIGN_OR_RETURN(std::vector<io::ooxml::DrawingRel> rels, load_part_rels(wb, path));
   const RelationshipTargetIndex relation_index = index_drawing_relationships(rels);
+  std::vector<pugi::xml_node> frames;
   for (const pugi::xml_node& anchor : drawing_anchors(doc.document_element(), false)) {
-    const pugi::xml_node content = anchor_content(anchor);
-    if (classify(content) != DrawingObjectKind::kChart) {
-      continue;
-    }
+    collect_chart_frames(anchor_content(anchor), frames);
+  }
+  for (const pugi::xml_node& content : frames) {
     ChartPartRef ref;
-    ref.object_id = anchor_cnvpr(anchor).attribute("id").as_uint();
+    ref.object_id = content_cnvpr(content).attribute("id").as_uint();
     ref.is_chartex = strings::ends_with(
         child_local(child_local(content, "graphic"), "graphicData").attribute("uri").value(), "/chartex");
     const std::string_view rid = attr_local(frame_chart(content), "id").value();

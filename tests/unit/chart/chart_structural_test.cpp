@@ -5,12 +5,15 @@
 #include <utility>
 #include <vector>
 
+#include "chart/chart_cache.h"
 #include "drawing/drawing_edit.h"
+#include "drawing/drawing_xml.h"
 #include "gtest/gtest.h"
 #include "io/ooxml/part_dom.h"
 #include "io/ooxml_reader.h"
 #include "io/xlsb/reader.h"
 #include "passthrough_part.h"
+#include "value.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -126,7 +129,52 @@ Workbook Reload(const Workbook& wb) {
   return read ? std::move(read.value().workbook) : Workbook::create_empty();
 }
 
+/// Moves Sheet1's chart frame into a group, nested in a second group, as a loaded file can hold it.
+void GroupTheChart(Workbook& wb) {
+  auto path = sheet_drawing_path(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(path));
+  std::string drawing = PartText(wb, path.value());
+  const std::size_t begin = drawing.find("<xdr:graphicFrame");
+  const std::string close = "</xdr:graphicFrame>";
+  const std::size_t end = drawing.find(close);
+  ASSERT_NE(begin, std::string::npos);
+  ASSERT_NE(end, std::string::npos);
+  const std::string group_open =
+      "<xdr:grpSp><xdr:nvGrpSpPr><xdr:cNvPr id=\"20\" name=\"Group 19\"/><xdr:cNvGrpSpPr/></xdr:nvGrpSpPr>"
+      "<xdr:grpSpPr/>";
+  const std::string inner_open =
+      "<xdr:grpSp><xdr:nvGrpSpPr><xdr:cNvPr id=\"21\" name=\"Group 20\"/><xdr:cNvGrpSpPr/></xdr:nvGrpSpPr>"
+      "<xdr:grpSpPr/>";
+  drawing.insert(end + close.size(), "</xdr:grpSp></xdr:grpSp>");
+  drawing.insert(begin, group_open + inner_open);
+  ASSERT_TRUE(static_cast<bool>(wb.replace_passthrough_part(path.value(), Bytes(drawing.begin(), drawing.end()))));
+}
+
 }  // namespace
+
+// A chart inside a group is maintained like a top-level one: its references follow structural edits and
+// sheet renames, and its cache is refreshed for a save.
+TEST(ChartStructural, ChartInsideAGroupFollowsEditsAndRefreshes) {
+  Workbook wb = WithChart(ChartXml("Sheet1!$A$2:$A$5", "Sheet1!$B$2:$B$5"));
+  GroupTheChart(wb);
+  auto charts = list_chart_parts(wb, 0);
+  ASSERT_TRUE(static_cast<bool>(charts));
+  ASSERT_EQ(charts.value().size(), 1U);
+  EXPECT_EQ(charts.value()[0].part_path, kChartPath);
+
+  ASSERT_TRUE(static_cast<bool>(wb.insert_rows(0, 0, 1)));
+  EXPECT_TRUE(Has(PartText(wb), "<c:f>Sheet1!$B$3:$B$6</c:f>"));
+  ASSERT_TRUE(static_cast<bool>(wb.rename_sheet(0, "Sales")));
+  EXPECT_TRUE(Has(PartText(wb), "<c:f>Sales!$B$3:$B$6</c:f>"));
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0, 2, 1, Value::number(7.0))));
+  auto refreshed = refreshed_chart_parts(wb);
+  ASSERT_TRUE(static_cast<bool>(refreshed));
+  const auto part = std::find_if(refreshed.value().begin(), refreshed.value().end(),
+                                 [](const PassthroughPart& p) { return p.path == kChartPath; });
+  ASSERT_NE(part, refreshed.value().end());
+  EXPECT_TRUE(Has(std::string(part->bytes.begin(), part->bytes.end()), "<c:v>7</c:v>"));
+}
 
 TEST(ChartStructural, RowInsertAndDeleteMoveRefs) {
   Workbook wb = WithChart(ChartXml("Sheet1!$A$2:$A$5", "Sheet1!$B$2:$B$5"));

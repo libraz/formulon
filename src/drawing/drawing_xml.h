@@ -131,6 +131,9 @@ pugi::xml_node anchor_content(const pugi::xml_node& anchor);
 /// The `cNvPr` element naming the object `anchor` holds, or a null node.
 pugi::xml_node anchor_cnvpr(const pugi::xml_node& anchor);
 
+/// The `cNvPr` element naming drawing object `content`, or a null node.
+pugi::xml_node content_cnvpr(const pugi::xml_node& content);
+
 /// Reads one anchor element.
 DrawingObject read_drawing_object(const pugi::xml_node& anchor, const std::vector<io::ooxml::DrawingRel>& rels);
 
@@ -170,7 +173,8 @@ Expected<std::string, Error> editable_drawing_path(const Workbook& wb, std::size
 /// part. Fails with `kIoDrawingUnparseable` when the rels part does not parse.
 Expected<std::vector<io::ooxml::DrawingRel>, Error> load_part_rels(const Workbook& wb, std::string_view part_path);
 
-/// The chart frames of sheet `sheet`'s drawing in list order, resolved
+/// The chart frames of sheet `sheet`'s drawing in document order, those
+/// inside groups included, each resolved
 /// `graphicFrame` -> `c:chart` (or `cx:chart`) `r:id` -> drawing rels -> part.
 /// Fails like `list_drawing_objects`.
 Expected<std::vector<ChartPartRef>, Error> list_chart_parts(const Workbook& wb, std::size_t sheet);
