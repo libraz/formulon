@@ -48,6 +48,10 @@ enum class RefMode : std::uint8_t {
   kR1C1 = 1,
 };
 
+/// The `calcId` the running Excel 365 stamps on a save (Mac measured; Windows assumed equal). An automatic
+/// book carrying it and no `fullCalcOnLoad` opens with its cached values.
+inline constexpr std::uint32_t kCurrentExcelCalcId = 191029U;
+
 /// The `<calcPr>` attributes other than `calcMode` and the iterative trio.
 /// Round-trip metadata the host UI mirrors; the engine itself evaluates the
 /// same way whatever they hold. The defaults are the schema's, so a

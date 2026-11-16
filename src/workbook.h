@@ -806,12 +806,20 @@ class Workbook {
   void mark_all_formulas_dirty();
 
   /// Applies Excel's open-time stale rule to a workbook a reader just built,
-  /// whose formulas registration left all dirty. Under manual calculation
-  /// only the formulas the file marked for recalculation (`marked`, per sheet
-  /// index: `ca="1"`, fAlwaysCalc) and those loaded without a cached value
-  /// stay dirty; the rest keep their cached values as computed. Other modes
-  /// keep every formula dirty, so the first automatic read computes them all.
+  /// whose formulas registration left all dirty. A book Excel recalculates at
+  /// open (`opens_with_recalc`) keeps every formula dirty, so the first read
+  /// computes them all. Otherwise (manual calculation, or an automatic book
+  /// stamped with the current `calcId` and no `fullCalcOnLoad`) only the
+  /// formulas the file marked for recalculation (`marked`, per sheet index:
+  /// `ca="1"`, fAlwaysCalc) and those loaded without a cached value stay
+  /// dirty; the rest keep their cached values as computed.
   void apply_loaded_recalc_marks(const std::vector<std::vector<CellAddress>>& marked);
+
+  /// Whether the load left every formula dirty for an open-time recalc:
+  /// calculation is not manual, and the file set `fullCalcOnLoad` or carries
+  /// a `calcId` other than `kCurrentExcelCalcId` (or none). False for a
+  /// workbook no reader built.
+  bool opens_with_recalc() const noexcept { return opens_with_recalc_; }
 
   /// The formula cells a save stores as recalculated on open (`ca="1"`,
   /// fAlwaysCalc) for what the workbook holds rather than what the formula
@@ -2280,6 +2288,7 @@ class Workbook {
   // false (1900 system).
   bool date1904_ = false;
   bool pivot_refresh_on_load_pending_ = false;
+  bool opens_with_recalc_ = false;
   // Most callers receive parts from a reader that already sorted them by
   // package path. Keep that fact across the move-only workbook operations so
   // the common insertion path can use one lower-bound search instead of

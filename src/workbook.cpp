@@ -601,7 +601,10 @@ void Workbook::mark_all_formulas_dirty() {
 }
 
 void Workbook::apply_loaded_recalc_marks(const std::vector<std::vector<CellAddress>>& marked) {
-  if (calc_mode_ != CalcMode::kManual) {
+  opens_with_recalc_ =
+      calc_mode_ != CalcMode::kManual &&
+      (calc_options_.full_calc_on_load || !calc_options_.has_calc_id || calc_options_.calc_id != kCurrentExcelCalcId);
+  if (opens_with_recalc_) {
     return;
   }
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());

@@ -389,6 +389,52 @@ TEST(StaleRoundtrip, AutomaticOpenStillRecomputesEveryFormula) {
   EXPECT_EQ(Number(wb, 0, 0, 3), 4.0);
 }
 
+// An automatic book stamped with the current calcId opens with its cache, as a manual one does: only the uncached
+// and ca formulas compute.
+TEST(StaleRoundtrip, AutomaticBookWithTheCurrentCalcIdKeepsItsCache) {
+  for (const bool sax : {false, true}) {
+    SCOPED_TRACE(sax ? "sax" : "dom");
+    Workbook wb = Load(Package("calcId=\"191029\"", kCachedRow), sax);
+    ASSERT_EQ(wb.calc_mode(), CalcMode::kAuto);
+    EXPECT_FALSE(wb.opens_with_recalc());
+    EXPECT_FALSE(wb.recalc_engine().awaits_recalc(Node(0, 0, 1)));
+    EXPECT_TRUE(wb.recalc_engine().awaits_recalc(Node(0, 0, 2)));
+    EXPECT_TRUE(wb.recalc_engine().awaits_recalc(Node(0, 0, 3)));
+    ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+    EXPECT_EQ(Number(wb, 0, 0, 1), 7.0);
+    EXPECT_EQ(Number(wb, 0, 0, 2), 3.0);
+    EXPECT_EQ(Number(wb, 0, 0, 3), 4.0);
+  }
+}
+
+// fullCalcOnLoad, an older calcId or none makes an automatic book recompute every formula on open.
+TEST(StaleRoundtrip, AutomaticBookRecalculatesOnFullCalcOnLoadOrAnotherCalcId) {
+  for (const char* calc_pr : {"calcId=\"191029\" fullCalcOnLoad=\"1\"", "calcId=\"124519\"", ""}) {
+    SCOPED_TRACE(calc_pr);
+    Workbook wb = Load(Package(calc_pr, kCachedRow));
+    EXPECT_TRUE(wb.opens_with_recalc());
+    ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+    EXPECT_EQ(Number(wb, 0, 0, 1), 20.0);
+  }
+}
+
+// Manual calculation keeps the cache whatever calcId and fullCalcOnLoad say.
+TEST(StaleRoundtrip, ManualBookIgnoresFullCalcOnLoad) {
+  Workbook wb = Load(Package("calcId=\"124519\" calcMode=\"manual\" fullCalcOnLoad=\"1\"", kCachedRow));
+  EXPECT_FALSE(wb.opens_with_recalc());
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(Number(wb, 0, 0, 1), 7.0);
+}
+
+// The xlsb reader takes the same decision from BrtCalcProp.
+TEST(StaleRoundtrip, XlsbAutomaticBookWithTheCurrentCalcIdKeepsItsCache) {
+  Workbook source = Load(Package("calcId=\"191029\"", kCachedRow));
+  Workbook wb = LoadXlsb(SaveXlsb(source));
+  EXPECT_FALSE(wb.opens_with_recalc());
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(Number(wb, 0, 0, 1), 7.0);
+}
+
 // An .xlsb save carries the stale set as fAlwaysCalc and the book as fSomeUncalced, and reopens with it.
 TEST(StaleRoundtrip, XlsbSaveKeepsTheStaleSetAndSomeUncalced) {
   Workbook wb = ManualChain();
