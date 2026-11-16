@@ -18,6 +18,7 @@ import unittest
 from pathlib import Path
 
 from tools.oracle import divergence_check
+from tools.yaml_load import load_yaml
 
 
 class IsPendingStampTest(unittest.TestCase):
@@ -283,7 +284,7 @@ class SkipScopeTest(unittest.TestCase):
 
     def test_committed_registries_scope_every_skip(self) -> None:
         for path in divergence_check.divergence_files():
-            doc = divergence_check.yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+            doc = load_yaml(path.read_text(encoding="utf-8")) or {}
             for entry in doc.get("entries") or []:
                 if entry.get("mode") == "skip-oracle":
                     with self.subTest(path=path.name, entry=entry.get("id") or entry.get("ids") or entry.get("suite")):

@@ -38,14 +38,18 @@ try:  # pragma: no cover - trivial fallback
     from tools.oracle.drivers.base import CaseResult, EnvironmentInfo
     from tools.oracle.drivers.base import excel_version_tuple as _version_tuple
     from tools.oracle.targets_manifest import _load_targets, utc_timestamp
+    from tools.yaml_load import load_yaml
 except ImportError:  # pragma: no cover
     sys.path.insert(0, str(Path(__file__).resolve().parent))
+    sys.path.append(str(Path(__file__).resolve().parents[2]))  # tools.yaml_load
     import case_schema  # type: ignore
     from divergence_check import is_pending_stamp  # type: ignore
     from drivers import select_driver  # type: ignore
     from drivers.base import CaseResult, EnvironmentInfo  # type: ignore
     from drivers.base import excel_version_tuple as _version_tuple  # type: ignore
     from targets_manifest import _load_targets, utc_timestamp  # type: ignore
+
+    from tools.yaml_load import load_yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -274,9 +278,7 @@ def _load_divergence_entries(path: Path) -> List[Dict[str, Any]]:
     if not path.exists():
         return []
     try:
-        import yaml  # type: ignore
-
-        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        doc = load_yaml(path.read_text(encoding="utf-8")) or {}
     except Exception:
         return []
     entries = doc.get("entries") if isinstance(doc, dict) else None

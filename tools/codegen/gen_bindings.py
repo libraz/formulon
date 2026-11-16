@@ -33,13 +33,19 @@ from pathlib import Path
 from typing import Dict, List, Set, Tuple
 
 try:
-    import yaml  # type: ignore
+    import yaml  # type: ignore  # noqa: F401  (checked here for the install hint)
 except ImportError as exc:  # pragma: no cover - install hint only.
     sys.stderr.write(
         "PyYAML is required. Install with `pip install pyyaml` or use the\n"
         "tools/oracle/.venv (`tools/oracle/.venv/bin/pip install pyyaml`).\n"
     )
     raise SystemExit(1) from exc
+
+try:
+    from tools.yaml_load import load_yaml
+except ImportError:  # run as a script: the repository root holds tools/yaml_load.py
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from tools.yaml_load import load_yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -81,7 +87,7 @@ BINDING_FIELDS = (
 
 def _load_manifest(path: Path) -> Tuple[int, List[dict]]:
     """Parse the YAML manifest and return (schema_version, entries)."""
-    raw = yaml.safe_load(path.read_text())
+    raw = load_yaml(path.read_text())
     if not isinstance(raw, dict):
         raise SystemExit(f"{path}: manifest must be a mapping, got {type(raw).__name__}")
     version = raw.get("version", 1)

@@ -86,6 +86,12 @@ except ImportError:  # pragma: no cover
     from provenance import _M365_SENTINEL  # type: ignore
     from targets_manifest import target_root, track_primary, track_variants, utc_timestamp  # type: ignore
 
+try:
+    from tools.yaml_load import load_yaml
+except ImportError:  # run as a script: the repository root holds tools/yaml_load.py
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from tools.yaml_load import load_yaml
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases_cf"
 DEFAULT_GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "targets" / "mac-365-ja_JP" / "golden_cf"
@@ -95,14 +101,12 @@ DEFAULT_TARGETS_FILE = REPO_ROOT / "tools" / "oracle" / "targets.yaml"
 def _load_targets(path: Path) -> Dict[str, Any]:
     """Load the target manifest and fail closed on a malformed document."""
 
-    try:
-        import yaml  # type: ignore
-    except ImportError as exc:  # pragma: no cover - setup failure
-        raise RuntimeError("PyYAML is required to inspect oracle targets") from exc
     if not path.exists():
         raise RuntimeError(f"oracle targets file not found: {path}")
     try:
-        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        doc = load_yaml(path.read_text(encoding="utf-8")) or {}
+    except ImportError as exc:  # pragma: no cover - setup failure
+        raise RuntimeError("PyYAML is required to inspect oracle targets") from exc
     except Exception as exc:  # pragma: no cover - parser-specific
         raise RuntimeError(f"failed to parse {path}: {exc}") from exc
     if not isinstance(doc, dict) or not isinstance(doc.get("targets"), dict):

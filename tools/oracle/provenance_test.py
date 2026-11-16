@@ -23,6 +23,7 @@ from tools.oracle.provenance import (
     workbook_inactive_reason,
 )
 from tools.oracle.workbook_oracle_gen import _display_path, _workbook_primary, partial_capture_refusal
+from tools.yaml_load import load_yaml
 
 
 def _workbook_tree(root: Path, *, case_ids: list[str], golden_ids: list[str]) -> dict:
@@ -432,9 +433,7 @@ class ProvenancePolicyTest(unittest.TestCase):
             self.assertEqual(validate_targets(doc, root), [])
 
     def test_committed_manifest_names_the_chart_primary(self) -> None:
-        import yaml
-
-        doc = yaml.safe_load((Path(__file__).parent / "targets.yaml").read_text(encoding="utf-8"))
+        doc = load_yaml((Path(__file__).parent / "targets.yaml").read_text(encoding="utf-8"))
         self.assertEqual(doc["tracks"]["chart"]["primary"], "mac-365-ja_JP")
 
 
@@ -463,9 +462,7 @@ class GateTargetsTest(unittest.TestCase):
         self.assertEqual(gate_target_names(doc, "cf"), [])
 
     def test_committed_manifest_gates_thirteen_mac_targets(self) -> None:
-        import yaml
-
-        doc = yaml.safe_load((Path(__file__).parent / "targets.yaml").read_text(encoding="utf-8"))
+        doc = load_yaml((Path(__file__).parent / "targets.yaml").read_text(encoding="utf-8"))
         self.assertEqual(len(gate_target_names(doc, "formula")), 13)
 
     def test_complete_gate_passes(self) -> None:

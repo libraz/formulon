@@ -69,6 +69,12 @@ try:
 except ImportError:
     _yaml = None
 
+try:
+    from tools.yaml_load import load_yaml
+except ImportError:  # run as a script: the repository root holds tools/yaml_load.py
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from tools.yaml_load import load_yaml
+
 
 def _need_yaml() -> None:
     if _yaml is None:
@@ -130,7 +136,7 @@ def load_families() -> Tuple[Dict[str, Family], Dict[str, Family]]:
     _need_yaml()
     if not FAMILIES_PATH.exists():
         return {}, {}
-    raw = _yaml.safe_load(FAMILIES_PATH.read_text(encoding="utf-8")) or {}
+    raw = load_yaml(FAMILIES_PATH.read_text(encoding="utf-8")) or {}
     by_name: Dict[str, Family] = {}
     by_member: Dict[str, Family] = {}
     for entry in raw.get("families", []):
@@ -184,7 +190,7 @@ def load_behaviors() -> List[Dict]:
     _need_yaml()
     if not BEHAVIORS_PATH.exists():
         return []
-    raw = _yaml.safe_load(BEHAVIORS_PATH.read_text(encoding="utf-8")) or {}
+    raw = load_yaml(BEHAVIORS_PATH.read_text(encoding="utf-8")) or {}
     out: List[Dict] = []
     for group in raw.get("groups", []):
         gfn = group.get("function", "")
@@ -207,7 +213,7 @@ def load_divergence() -> List[Dict]:
     _need_yaml()
     if not DIVERGENCE_PATH.exists():
         return []
-    raw = _yaml.safe_load(DIVERGENCE_PATH.read_text(encoding="utf-8")) or {}
+    raw = load_yaml(DIVERGENCE_PATH.read_text(encoding="utf-8")) or {}
     return list(raw.get("entries", []))
 
 
@@ -221,7 +227,7 @@ def load_cases_for_family(family: Family) -> List[Dict]:
     cases: List[Dict] = []
     for fp in files:
         try:
-            raw = _yaml.safe_load(fp.read_text(encoding="utf-8")) or {}
+            raw = load_yaml(fp.read_text(encoding="utf-8")) or {}
         except (_yaml.YAMLError, OSError):
             continue
         for c in raw.get("cases", []) or []:

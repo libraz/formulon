@@ -52,6 +52,12 @@ try:
 except ImportError:
     _yaml = None
 
+try:
+    from tools.yaml_load import load_yaml
+except ImportError:  # run as a script: the repository root holds tools/yaml_load.py
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from tools.yaml_load import load_yaml
+
 
 GREEN = "\033[32m"
 RED = "\033[31m"
@@ -111,7 +117,7 @@ def _load_divergence_entries() -> List[Dict]:
     if _yaml is None or not DIVERGENCE_PATH.exists():
         return []
     try:
-        raw = _yaml.safe_load(DIVERGENCE_PATH.read_text(encoding="utf-8")) or {}
+        raw = load_yaml(DIVERGENCE_PATH.read_text(encoding="utf-8")) or {}
     except _yaml.YAMLError:
         return []
     entries = raw.get("entries") or []
@@ -192,7 +198,7 @@ def check_yaml_normalization(suite: str, case_path: Path) -> List[str]:
     if not yaml_path.exists():
         return [f"{suite}: YAML source missing ({yaml_path.name})"]
     try:
-        ydoc = _yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
+        ydoc = load_yaml(yaml_path.read_text(encoding="utf-8")) or {}
         jdoc = json.loads(case_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError, _yaml.YAMLError) as exc:
         return [f"{suite}: YAML/JSON description parse failed: {exc}"]

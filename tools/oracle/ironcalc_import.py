@@ -67,6 +67,12 @@ from openpyxl.utils.datetime import to_excel as _datetime_to_excel_serial
 from openpyxl.xml.constants import SHARED_STRINGS, SHEET_MAIN_NS
 from openpyxl.xml.functions import iterparse
 
+try:
+    from tools.yaml_load import load_yaml
+except ImportError:  # run as a script: the repository root holds tools/yaml_load.py
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from tools.yaml_load import load_yaml
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SOURCE_DIR = REPO_ROOT / "tests" / "oracle" / "external" / "ironcalc" / "fixtures"
 DEFAULT_OUT_DIR = REPO_ROOT / "tests" / "oracle" / "external" / "ironcalc" / "golden"
@@ -216,9 +222,7 @@ def _load_divergence_skips(path: Path) -> Dict[str, str]:
     if not path.exists():
         return {}
     try:
-        import yaml  # type: ignore
-
-        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        doc = load_yaml(path.read_text(encoding="utf-8")) or {}
     except Exception:
         return {}
     out: Dict[str, str] = {}

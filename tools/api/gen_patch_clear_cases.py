@@ -35,15 +35,19 @@ sys.path.insert(0, str(REPO_ROOT / "tools" / "dev"))
 from binding_drift.api_conventions_arguments import _patch_keys  # noqa: E402
 from binding_drift.api_conventions_bindings import JsSurface  # noqa: E402
 
+try:
+    from tools.yaml_load import load_yaml
+except ImportError:  # run as a script: the repository root holds tools/yaml_load.py
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from tools.yaml_load import load_yaml
+
 LEDGER_PATH = REPO_ROOT / "tools" / "api" / "names.yaml"
 WASM_DTS = REPO_ROOT / "src" / "wasm" / "formulon.d.ts"
 OUTPUT = REPO_ROOT / "tools" / "api" / "patch_clear_cases.json"
 
 
 def load_ledger(path: Path = LEDGER_PATH) -> dict:
-    import yaml  # type: ignore
-
-    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data = load_yaml(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict) or data.get("schema") != 1 or not isinstance(data.get("entries"), dict):
         raise SystemExit(f"gen_patch_clear_cases: {path} is not a `schema: 1` ledger")
     return data

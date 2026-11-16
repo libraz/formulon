@@ -26,6 +26,12 @@ import sys
 from pathlib import Path
 from typing import Dict, List, Optional
 
+try:
+    from tools.yaml_load import load_yaml
+except ImportError:  # run as a script: the repository root holds tools/yaml_load.py
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from tools.yaml_load import load_yaml
+
 TOOLS_API = Path(__file__).resolve().parent
 LEDGER = TOOLS_API / "names.yaml"
 OUTPUT = TOOLS_API / "roundtrip_cases.json"
@@ -94,9 +100,7 @@ PATCH_KNOWN_FIX: Dict[str, str] = {
 
 
 def _load_ledger() -> dict:
-    import yaml  # type: ignore
-
-    return yaml.safe_load(LEDGER.read_text(encoding="utf-8"))["entries"]
+    return load_yaml(LEDGER.read_text(encoding="utf-8"))["entries"]
 
 
 def _op(entries: dict, op_id: str, why: str) -> dict:

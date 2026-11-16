@@ -39,12 +39,19 @@ import copy
 import importlib
 import importlib.util
 import re
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, NamedTuple, Optional, Sequence, Tuple
 
 from .c_header import _C_FUNCTION_DECL_RE, _C_STRUCT_RE, _split_c_params
 from .surface_files import CAPI_HEADER, COMMENT_RE, REPO_ROOT
+
+try:
+    from tools.yaml_load import load_yaml
+except ImportError:  # run as a script: the repository root holds tools/yaml_load.py
+    sys.path.append(str(Path(__file__).resolve().parents[3]))
+    from tools.yaml_load import load_yaml
 
 BASELINE_DIR = Path(__file__).resolve().parents[1] / "api_convention_baseline"
 PENDING_DIR_NAME = "pending"
@@ -485,12 +492,12 @@ def common_base(classes: Sequence[str], bases: Dict[str, str]) -> str:
 _YAML_CACHE: Dict[Tuple[str, int, int], Any] = {}
 
 
-def _parse_yaml_cached(path: Path, yaml: Any) -> Any:
+def _parse_yaml_cached(path: Path) -> Any:
     """Parses `path` once per (path, mtime, size); callers get a private copy."""
     st = path.stat()
     key = (str(path.resolve()), st.st_mtime_ns, st.st_size)
     if key not in _YAML_CACHE:
-        _YAML_CACHE[key] = yaml.safe_load(path.read_text(encoding="utf-8"))
+        _YAML_CACHE[key] = load_yaml(path.read_text(encoding="utf-8"))
     return copy.deepcopy(_YAML_CACHE[key])
 
 
@@ -499,7 +506,7 @@ def load_ledger(path: Path = LEDGER_PATH) -> Ledger:
     if not path.is_file():
         return Ledger()
     try:
-        import yaml  # type: ignore
+        data = _parse_yaml_cached(path)
     except ImportError:
         ledger = Ledger()
         ledger.problems.append(
@@ -507,7 +514,6 @@ def load_ledger(path: Path = LEDGER_PATH) -> Ledger:
             "tools/oracle/.venv or `pip install pyyaml`"
         )
         return ledger
-    data = _parse_yaml_cached(path, yaml)
     if not isinstance(data, dict) or data.get("schema") != 1 or not isinstance(data.get("entries"), dict):
         ledger = Ledger()
         ledger.problems.append(f"api-conventions: {path} is not a `schema: 1` ledger with an `entries:` map")

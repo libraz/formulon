@@ -50,6 +50,12 @@ from collections import defaultdict
 from pathlib import Path
 from typing import Callable, Dict, Iterable, Iterator, List, NamedTuple, Optional, Sequence, Set, Tuple
 
+try:
+    from tools.yaml_load import load_yaml
+except ImportError:  # run as a script: the repository root holds tools/yaml_load.py
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from tools.yaml_load import load_yaml
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 LEDGER_PATH = REPO_ROOT / "tools" / "api" / "names.yaml"
 
@@ -139,9 +145,7 @@ _TYPE_KINDS = frozenset({"record", "enum", "typedef", "constant"})
 
 
 def load_ledger(path: Path = LEDGER_PATH) -> dict:
-    import yaml  # type: ignore
-
-    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data = load_yaml(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict) or data.get("schema") != 1 or not isinstance(data.get("entries"), dict):
         raise SystemExit(f"apply_renames: {path} is not a `schema: 1` ledger")
     return data

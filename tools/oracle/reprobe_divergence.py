@@ -10,8 +10,15 @@ them.
 from __future__ import annotations
 
 import argparse
+import sys
 from pathlib import Path
 from typing import List, Optional
+
+try:
+    from tools.yaml_load import load_yaml
+except ImportError:  # run as a script: the repository root holds tools/yaml_load.py
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from tools.yaml_load import load_yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DIVERGENCE = REPO_ROOT / "tests" / "divergence.yaml"
@@ -45,7 +52,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     except ImportError as exc:
         raise SystemExit("PyYAML is required; run make oracle-setup first") from exc
 
-    doc = yaml.safe_load(args.input.read_text(encoding="utf-8")) or {}
+    doc = load_yaml(args.input.read_text(encoding="utf-8")) or {}
     entries = doc.get("entries") or []
     if not isinstance(entries, list):
         raise SystemExit(f"{args.input}: `entries` must be a list")

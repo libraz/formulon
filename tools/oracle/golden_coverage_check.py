@@ -29,17 +29,19 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 try:  # pragma: no cover - trivial fallback
     from tools.oracle import case_schema
     from tools.oracle.divergence_check import is_pending_stamp
     from tools.oracle.oracle_gen import DEFAULT_DIVERGENCE, _load_divergence_skips
+    from tools.yaml_load import load_yaml
 except ImportError:  # pragma: no cover
     sys.path.insert(0, str(Path(__file__).resolve().parent))
+    sys.path.append(str(Path(__file__).resolve().parents[2]))  # tools.yaml_load
     import case_schema  # type: ignore
     from divergence_check import is_pending_stamp  # type: ignore
     from oracle_gen import DEFAULT_DIVERGENCE, _load_divergence_skips  # type: ignore
+
+    from tools.yaml_load import load_yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CASES_DIR = REPO_ROOT / "tests/oracle/cases"
@@ -65,7 +67,7 @@ def load_case_catalog() -> tuple[set[tuple[str, str]], set[str]]:
     pairs: set[tuple[str, str]] = set()
     suites: set[str] = set()
     for path in sorted(CASES_DIR.glob("*.yaml")):
-        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        doc = load_yaml(path.read_text(encoding="utf-8")) or {}
         suite = doc.get("suite") if isinstance(doc.get("suite"), str) else None
         if suite:
             suites.add(suite)

@@ -42,6 +42,12 @@ except ImportError:  # pragma: no cover
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from targets_manifest import target_root as _target_root  # type: ignore
 
+try:
+    from tools.yaml_load import load_yaml
+except ImportError:  # run as a script: the repository root holds tools/yaml_load.py
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from tools.yaml_load import load_yaml
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TARGETS = Path(__file__).resolve().parent / "targets.yaml"
 _VALID_STATUSES = {"primary", "scaffolded", "wanted"}
@@ -52,14 +58,12 @@ CAPTURE_TRACKS = {"cf": "golden_cf", "chart": "golden_chart"}
 
 
 def _load_yaml(path: Path) -> Dict[str, Any]:
-    try:
-        import yaml  # type: ignore
-    except ImportError as exc:  # pragma: no cover - setup failure
-        raise RuntimeError("PyYAML is required to inspect oracle targets") from exc
     if not path.exists():
         raise RuntimeError(f"targets file does not exist: {path}")
     try:
-        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        raw = load_yaml(path.read_text(encoding="utf-8")) or {}
+    except ImportError as exc:  # pragma: no cover - setup failure
+        raise RuntimeError("PyYAML is required to inspect oracle targets") from exc
     except Exception as exc:  # pragma: no cover - parser-specific
         raise RuntimeError(f"failed to parse {path}: {exc}") from exc
     if not isinstance(raw, dict):

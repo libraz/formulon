@@ -61,14 +61,18 @@ try:  # pragma: no cover - trivial fallback
     from tools.oracle.oracle_gen import _load_divergence_reprobes, _load_divergence_skips
     from tools.oracle.provenance import _M365_SENTINEL
     from tools.oracle.targets_manifest import target_root, track_primary, utc_timestamp
+    from tools.yaml_load import load_yaml
 except ImportError:  # pragma: no cover
     sys.path.insert(0, str(Path(__file__).resolve().parent))
+    sys.path.append(str(Path(__file__).resolve().parents[2]))  # tools.yaml_load
     import chart_case_schema as schema  # type: ignore
     from cf_oracle_gen import _assert_m365_or_abort  # type: ignore
     from drivers.excel_alerts import alerts_off  # type: ignore
     from oracle_gen import _load_divergence_reprobes, _load_divergence_skips  # type: ignore
     from provenance import _M365_SENTINEL  # type: ignore
     from targets_manifest import target_root, track_primary, utc_timestamp  # type: ignore
+
+    from tools.yaml_load import load_yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TARGETS_FILE = REPO_ROOT / "tools" / "oracle" / "targets.yaml"
@@ -115,9 +119,7 @@ class CaptureError(RuntimeError):
 
 
 def _resolve_target(targets_file: Path) -> Dict[str, Any]:
-    import yaml
-
-    doc = yaml.safe_load(targets_file.read_text(encoding="utf-8")) or {}
+    doc = load_yaml(targets_file.read_text(encoding="utf-8")) or {}
     name = track_primary(doc, _TRACK)
     record = (doc.get("targets") or {}).get(name)
     if name is None or not isinstance(record, dict):

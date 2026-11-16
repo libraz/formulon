@@ -31,3 +31,9 @@ extend-exclude = [
 # hand edits rather than mechanical fixes. Mirrors
 # packages/python/pyproject.toml [tool.ruff.lint].
 select = ["E4", "E7", "E9", "F", "I", "W"]
+# The one exception to the mirror: YAML in the tooling loads through
+# tools/yaml_load.py, which takes libyaml's parser when PyYAML has it.
+extend-select = ["TID251"]
+
+[lint.flake8-tidy-imports.banned-api]
+"yaml.safe_load".msg = "load YAML through tools.yaml_load.load_yaml"

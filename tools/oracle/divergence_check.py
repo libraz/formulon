@@ -36,6 +36,12 @@ from typing import Any
 
 import yaml
 
+try:
+    from tools.yaml_load import load_yaml
+except ImportError:  # run as a script: the repository root holds tools/yaml_load.py
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from tools.yaml_load import load_yaml
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FORMULA_CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases"
 WORKBOOK_CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases_wb"
@@ -113,9 +119,7 @@ SKIP_CAUSES = {
 def _formula_case_docs() -> tuple[dict, ...]:
     """Parsed formula-track case files, read once per process (read-only)."""
 
-    return tuple(
-        yaml.safe_load(path.read_text(encoding="utf-8")) or {} for path in sorted(FORMULA_CASES_DIR.glob("*.yaml"))
-    )
+    return tuple(load_yaml(path.read_text(encoding="utf-8")) or {} for path in sorted(FORMULA_CASES_DIR.glob("*.yaml")))
 
 
 def load_case_catalog() -> tuple[set[str], dict[str, int]]:
@@ -141,7 +145,7 @@ def load_case_catalog() -> tuple[set[str], dict[str, int]]:
                 ids.add(case["id"])
     # The chart registry selects by id only, as the workbook one does.
     for path in sorted(CHART_CASES_DIR.glob("*.yaml")):
-        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        doc = load_yaml(path.read_text(encoding="utf-8")) or {}
         for case in doc.get("cases") or []:
             if isinstance(case, dict) and isinstance(case.get("id"), str):
                 ids.add(case["id"])
@@ -212,7 +216,7 @@ def load_observations(golden_dirs: "list[Path] | None" = None) -> dict[str, str]
 def known_targets() -> frozenset[str]:
     """Every oracle target named in tools/oracle/targets.yaml."""
 
-    doc = yaml.safe_load(TARGETS_FILE.read_text(encoding="utf-8")) or {}
+    doc = load_yaml(TARGETS_FILE.read_text(encoding="utf-8")) or {}
     return frozenset((doc.get("targets") or {}).keys())
 
 
@@ -266,7 +270,7 @@ def _prefer_by_case(path: Path) -> dict[str, str]:
 
     out: dict[str, str] = {}
     try:
-        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        doc = load_yaml(path.read_text(encoding="utf-8")) or {}
     except (OSError, yaml.YAMLError):
         return out
     for entry in doc.get("entries") or []:
@@ -401,7 +405,7 @@ def is_stale_stamp(value: Any) -> bool:
 
 def validate(path: Path, *, strict: bool) -> int:
     try:
-        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        doc = load_yaml(path.read_text(encoding="utf-8")) or {}
     except (OSError, yaml.YAMLError) as exc:
         print(f"FAIL {path}: cannot parse YAML: {exc}", file=sys.stderr)
         return 1
@@ -743,7 +747,7 @@ def validate_ironcalc(path: Path, *, golden_dir: Path | None = None, probe_dir: 
     """
 
     try:
-        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        doc = load_yaml(path.read_text(encoding="utf-8")) or {}
     except (OSError, yaml.YAMLError) as exc:
         print(f"FAIL {path}: cannot parse YAML: {exc}", file=sys.stderr)
         return 1

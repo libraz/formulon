@@ -47,13 +47,15 @@ try:  # pragma: no cover - trivial fallback
     from tools.oracle import provenance as provenance_mod
     from tools.oracle.divergence_check import is_pending_stamp
     from tools.oracle.workbook_oracle_gen import staging_dir_for
+    from tools.yaml_load import load_yaml
 except ImportError:  # pragma: no cover
     sys.path.insert(0, str(Path(__file__).resolve().parent))
+    sys.path.append(str(Path(__file__).resolve().parents[2]))  # tools.yaml_load
     import provenance as provenance_mod  # type: ignore
     from divergence_check import is_pending_stamp  # type: ignore
     from workbook_oracle_gen import staging_dir_for  # type: ignore
 
-import yaml
+    from tools.yaml_load import load_yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TARGETS_FILE = Path(__file__).resolve().parent / "targets.yaml"
@@ -72,7 +74,7 @@ TRACKS = {
 
 def _load_targets(path: Path) -> Dict[str, Any]:
     with path.open("r", encoding="utf-8") as handle:
-        doc = yaml.safe_load(handle) or {}
+        doc = load_yaml(handle) or {}
     if not isinstance(doc, dict) or not isinstance(doc.get("targets"), dict):
         raise RuntimeError(f"{path}: missing a `targets:` mapping")
     return doc

@@ -21,13 +21,13 @@ import unittest
 from pathlib import Path
 from typing import Any, Dict
 
-import yaml
-
 try:  # pragma: no cover - trivial fallback
     from tools.oracle import case_schema, divergence_check, emit_skip_list, oracle_gen, workbook_case_schema
+    from tools.yaml_load import load_yaml
 except ImportError:  # pragma: no cover
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
     from tools.oracle import case_schema, divergence_check, emit_skip_list, oracle_gen, workbook_case_schema
+    from tools.yaml_load import load_yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -133,7 +133,7 @@ class ReprobeSelectionTests(unittest.TestCase):
         # naming individual entries -- an entry that gets retired must not
         # be able to take this guard down with it. Reads the YAML directly
         # so the expectation does not come from the code under test.
-        doc = yaml.safe_load((REPO_ROOT / "tests/divergence.yaml").read_text(encoding="utf-8")) or {}
+        doc = load_yaml((REPO_ROOT / "tests/divergence.yaml").read_text(encoding="utf-8")) or {}
         expected = set()
         for entry in doc.get("entries") or []:
             if not isinstance(entry, dict) or entry.get("mode") != "skip-oracle":
@@ -294,7 +294,7 @@ class SkipProjectionTests(unittest.TestCase):
         emit_skip_list.emit(registry_path, "mac-365-ja_JP", out, track="formula")
         skips = json.loads(out.read_text(encoding="utf-8"))["skips"]
         suites = {suite.name: suite for _, suite in case_schema.discover_suites(REPO_ROOT / "tests/oracle/cases")}
-        registry = yaml.safe_load(SUITE_SKIP_REGISTRY)
+        registry = load_yaml(SUITE_SKIP_REGISTRY)
         selected = [
             entry["suite"]
             for entry in registry["entries"]

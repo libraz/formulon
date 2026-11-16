@@ -35,6 +35,12 @@ from typing import Any, Dict, List, Mapping, Optional
 
 import yaml
 
+try:
+    from tools.yaml_load import load_yaml
+except ImportError:  # run as a script: the repository root holds tools/yaml_load.py
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from tools.yaml_load import load_yaml
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases_chart"
 GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "targets" / "mac-365-ja_JP" / "golden_chart"
@@ -417,7 +423,7 @@ def load_suites(cases_dir: Path = CASES_DIR) -> Dict[str, Dict[str, Any]]:
 
     out: Dict[str, Dict[str, Any]] = {}
     for path in sorted(cases_dir.glob("*.yaml")):
-        out[path.stem] = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        out[path.stem] = load_yaml(path.read_text(encoding="utf-8")) or {}
     return out
 
 

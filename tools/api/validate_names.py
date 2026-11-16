@@ -96,6 +96,12 @@ from binding_drift.api_conventions_arguments import _patch_keys  # noqa: E402
 from binding_drift.api_conventions_bindings import JsSurface, _js_record_keys  # noqa: E402
 from binding_drift.api_conventions_shapes import _strip_null  # noqa: E402
 
+try:
+    from tools.yaml_load import load_yaml
+except ImportError:  # run as a script: the repository root holds tools/yaml_load.py
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from tools.yaml_load import load_yaml
+
 KINDS = frozenset({"op", "list", "free", "factory", "record", "field", "typedef", "enum", "constant"})
 FIELDS = frozenset(
     {
@@ -153,12 +159,10 @@ def _load(path: Path):
     """Parses the ledger once per (path, mtime, size); callers get a private copy."""
     import copy
 
-    import yaml  # type: ignore
-
     st = path.stat()
     key = (str(path.resolve()), st.st_mtime_ns, st.st_size)
     if key not in _LEDGER_CACHE:
-        _LEDGER_CACHE[key] = yaml.safe_load(path.read_text(encoding="utf-8"))
+        _LEDGER_CACHE[key] = load_yaml(path.read_text(encoding="utf-8"))
     return copy.deepcopy(_LEDGER_CACHE[key])
 
 

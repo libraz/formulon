@@ -4,8 +4,15 @@ from __future__ import annotations
 
 import datetime as _dt
 import platform
+import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
+try:
+    from tools.yaml_load import load_yaml
+except ImportError:  # run as a script: the repository root holds tools/yaml_load.py
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from tools.yaml_load import load_yaml
 
 DEFAULT_TARGETS_FILE = Path(__file__).resolve().parent / "targets.yaml"
 
@@ -16,9 +23,7 @@ def _load_targets(path: Path) -> Dict[str, Any]:
     if not path.exists():
         raise RuntimeError(f"oracle targets file not found: {path}")
     try:
-        import yaml  # type: ignore
-
-        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        doc = load_yaml(path.read_text(encoding="utf-8")) or {}
     except Exception as exc:
         raise RuntimeError(f"failed to parse {path}: {exc}") from exc
     if not isinstance(doc, dict):

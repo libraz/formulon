@@ -16,11 +16,16 @@ switch over `kind`.
 from __future__ import annotations
 
 import re
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-import yaml
+try:
+    from tools.yaml_load import load_yaml
+except ImportError:  # run as a script: the repository root holds tools/yaml_load.py
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from tools.yaml_load import load_yaml
 
 # Recognised value kinds, mirroring src/value.h's ValueKind minus Array/Ref/
 # Lambda which the oracle pipeline doesn't exercise yet.
@@ -296,7 +301,7 @@ def load_suite(path: Path) -> Suite:
     """
 
     with path.open("r", encoding="utf-8") as f:
-        doc = yaml.safe_load(f)
+        doc = load_yaml(f)
     if not isinstance(doc, dict):
         raise ValueError(f"{path}: top-level YAML must be a mapping")
     name = doc.get("suite")

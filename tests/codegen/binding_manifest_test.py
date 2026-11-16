@@ -32,6 +32,12 @@ try:
 except ImportError:  # pragma: no cover - exercised with `python -S` below.
     yaml = None
 
+try:
+    from tools.yaml_load import load_yaml
+except ImportError:  # run as a script: the repository root holds tools/yaml_load.py
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from tools.yaml_load import load_yaml
+
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 GEN_SCRIPT = REPO_ROOT / "tools" / "codegen" / "gen_bindings.py"
 MANIFEST = REPO_ROOT / "tools" / "codegen" / "binding_manifest.yaml"
@@ -77,7 +83,7 @@ class BindingManifestTest(unittest.TestCase):
 
     @staticmethod
     def _load_manifest_entries() -> list[dict]:
-        raw = yaml.safe_load(MANIFEST.read_text())
+        raw = load_yaml(MANIFEST.read_text())
         if not isinstance(raw, dict):
             raise AssertionError("manifest top level must be a mapping")
         funcs = raw.get("functions") or []

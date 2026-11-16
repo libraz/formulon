@@ -34,6 +34,12 @@ from typing import Dict, List, Optional, Sequence, Tuple
 
 from _ansi import bold, dim, green, red, yellow
 
+try:
+    from tools.yaml_load import load_yaml
+except ImportError:  # run as a script: the repository root holds tools/yaml_load.py
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from tools.yaml_load import load_yaml
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BEHAVIORS_PATH = REPO_ROOT / "tools" / "catalog" / "behaviors.yaml"
 CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases"
@@ -114,7 +120,7 @@ def load_behaviors(path: Path) -> List[Group]:
         raise RuntimeError("PyYAML not available")
     if not path.exists():
         raise FileNotFoundError(str(path))
-    doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    doc = load_yaml(path.read_text(encoding="utf-8")) or {}
     raw_groups = doc.get("groups") or []
     if not isinstance(raw_groups, list):
         raise ValueError("behaviors.yaml: `groups` must be a list")
@@ -170,7 +176,7 @@ def load_divergence(path: Path) -> Dict[str, str]:
     if yaml is None:
         return {}
     try:
-        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        doc = load_yaml(path.read_text(encoding="utf-8")) or {}
     except Exception:
         return {}
     out: Dict[str, str] = {}
@@ -200,7 +206,7 @@ def load_oracle_cases(cases_dir: Path) -> List[Case]:
     cases: List[Case] = []
     for yaml_path in sorted(cases_dir.glob("*.yaml")):
         try:
-            doc = yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
+            doc = load_yaml(yaml_path.read_text(encoding="utf-8")) or {}
         except Exception:
             continue
         raw_cases = doc.get("cases") or []

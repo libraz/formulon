@@ -51,6 +51,12 @@ from binding_drift.api_conventions import (  # noqa: E402
 )
 from check_changelog_identifiers import previous_release, released_names, upgrade_guide  # noqa: E402
 
+try:
+    from tools.yaml_load import load_yaml
+except ImportError:  # run as a script: the repository root holds tools/yaml_load.py
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from tools.yaml_load import load_yaml
+
 LEDGER_PATH = REPO_ROOT / "tools" / "api" / "names.yaml"
 CHANGELOG = REPO_ROOT / "CHANGELOG.md"
 IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
@@ -70,9 +76,7 @@ _RECEIVERS = {"workbook": "wb", "sheet": "ws"}
 
 
 def load_ledger(path: Path = LEDGER_PATH) -> dict:
-    import yaml  # type: ignore
-
-    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    data = load_yaml(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict) or data.get("schema") != 1 or not isinstance(data.get("entries"), dict):
         raise SystemExit(f"gen_migration_table: {path} is not a `schema: 1` ledger")
     return data

@@ -29,11 +29,10 @@ import tempfile
 from pathlib import Path
 from typing import Any, Dict, List
 
-import yaml
-
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from tools.oracle import pivot_refresh_golden as prg  # noqa: E402
+from tools.yaml_load import load_yaml  # noqa: E402
 
 CASES_DIR = Path(__file__).resolve().parents[2] / "tests" / "oracle" / "cases_wb" / "pivot_edit"
 CASES_YAML = CASES_DIR / "cases.yaml"
@@ -42,7 +41,7 @@ EXCEL_VERSION = "16.114.4"
 
 
 def load_cases() -> Dict[str, Any]:
-    return yaml.safe_load(CASES_YAML.read_text(encoding="utf-8"))
+    return load_yaml(CASES_YAML.read_text(encoding="utf-8"))
 
 
 def _projection(case_dir: Path, xlsx: Path) -> Dict[str, Any]:

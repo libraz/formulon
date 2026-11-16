@@ -31,7 +31,11 @@ import sys
 from pathlib import Path
 from typing import Any, Dict, List
 
-import yaml
+try:
+    from tools.yaml_load import load_yaml
+except ImportError:  # run as a script: the repository root holds tools/yaml_load.py
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from tools.yaml_load import load_yaml
 
 CASES_DIR = Path(__file__).resolve().parents[2] / "tests" / "oracle" / "cases_wb" / "goal_seek"
 CASES_YAML = CASES_DIR / "cases.yaml"
@@ -48,7 +52,7 @@ def from_hex(text: str) -> float:
 
 
 def load_cases() -> List[Dict[str, Any]]:
-    spec = yaml.safe_load(CASES_YAML.read_text(encoding="utf-8"))
+    spec = load_yaml(CASES_YAML.read_text(encoding="utf-8"))
     pending = spec.get("pending", [])
     cases = []
 

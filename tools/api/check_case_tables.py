@@ -25,6 +25,12 @@ import sys
 from pathlib import Path
 from typing import Callable, Dict, List
 
+try:
+    from tools.yaml_load import load_yaml
+except ImportError:  # run as a script: the repository root holds tools/yaml_load.py
+    sys.path.append(str(Path(__file__).resolve().parents[2]))
+    from tools.yaml_load import load_yaml
+
 TOOLS_API = Path(__file__).resolve().parent
 REPO_ROOT = TOOLS_API.parent.parent
 PARSE_ERROR_H = REPO_ROOT / "src" / "parser" / "parse_error.h"
@@ -386,10 +392,9 @@ def check_to_native(doc: dict) -> List[str]:
 
 def _ledger_ids():
     try:
-        import yaml  # type: ignore
+        return set(load_yaml((TOOLS_API / "names.yaml").read_text(encoding="utf-8"))["entries"])
     except ImportError:
         return None
-    return set(yaml.safe_load((TOOLS_API / "names.yaml").read_text(encoding="utf-8"))["entries"])
 
 
 def _load(name: str) -> dict:
