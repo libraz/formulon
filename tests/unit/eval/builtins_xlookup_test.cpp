@@ -239,9 +239,9 @@ TEST(BuiltinsXLookup, ArrayLookupReferenceBlankPromotionAndScalarControls) {
   ASSERT_TRUE(scalar_slice_counta.is_number());
   EXPECT_DOUBLE_EQ(scalar_slice_counta.as_number(), 0.0);
 
-  // INDEX over G1:G1 supplies a reference-derived blank as if_not_found.
-  // Array lanes promote it at the output boundary, while scalar XLOOKUP
-  // preserves the raw blank.
+  // An array lookup's missing lane takes if_not_found only as a value: a reference of any kind (a blank
+  // cell, INDEX(G1:G1,1)) is #VALUE! there, which COUNTA counts. A scalar lookup returns the reference,
+  // whose blank COUNTA skips.
   const Value array_fallback_counta =
       EvalSourceIn("=COUNTA(XLOOKUP({1;2;99},A1:A3,B1:B3,INDEX(G1:G1,1)))", wb, wb.sheet(0));
   ASSERT_TRUE(array_fallback_counta.is_number());
@@ -249,13 +249,40 @@ TEST(BuiltinsXLookup, ArrayLookupReferenceBlankPromotionAndScalarControls) {
   const Value scalar_fallback_counta = EvalSourceIn("=COUNTA(XLOOKUP(99,A1:A3,B1:B3,INDEX(G1:G1,1)))", wb, wb.sheet(0));
   ASSERT_TRUE(scalar_fallback_counta.is_number());
   EXPECT_DOUBLE_EQ(scalar_fallback_counta.as_number(), 0.0);
-  // INDEX(G1:G1,1) is the reference G1, so the bare cell reads the same.
   const Value bare_array_fallback = EvalSourceIn("=COUNTA(XLOOKUP({1;2;99},A1:A3,B1:B3,G1))", wb, wb.sheet(0));
   ASSERT_TRUE(bare_array_fallback.is_number());
   EXPECT_DOUBLE_EQ(bare_array_fallback.as_number(), 3.0);
   const Value bare_scalar_fallback = EvalSourceIn("=COUNTA(XLOOKUP(99,A1:A3,B1:B3,G1))", wb, wb.sheet(0));
   ASSERT_TRUE(bare_scalar_fallback.is_number());
   EXPECT_DOUBLE_EQ(bare_scalar_fallback.as_number(), 0.0);
+}
+
+// The missing lane of an array lookup: a reference fallback (blank, number, text, INDEX) is #VALUE!, a
+// value fallback (a literal, a computed result) fills the lane; a scalar lookup returns the referenced value.
+TEST(BuiltinsXLookup, ArrayLaneFallbackIsAValueOnly) {
+  Workbook wb = Workbook::create();
+  for (std::uint32_t r = 0; r < 3; ++r) {
+    wb.sheet(0).set_cell_value(r, 0, Value::number(static_cast<double>(r + 1)));  // A1:A3 = 1,2,3
+    wb.sheet(0).set_cell_value(r, 1, Value::number(static_cast<double>(r + 5)));  // B1:B3 = 5,6,7
+  }
+  wb.sheet(0).set_cell_value(1, 6, Value::number(9.0));  // G2
+  wb.sheet(0).set_cell_value(2, 6, Value::text("t"));    // G3
+  const auto lane3 = [&](const char* fallback) {
+    const std::string source = std::string("=XLOOKUP({1;2;99},A1:A3,B1:B3,") + fallback + ")";
+    const Value v = EvalSourceIn(source, wb, wb.sheet(0));
+    EXPECT_TRUE(v.is_array()) << source;
+    return v.is_array() && v.as_array_rows() == 3U ? v.as_array_cells()[2] : Value::error(ErrorCode::Name);
+  };
+  for (const char* reference : {"G1", "G2", "G3", "INDEX(G1:G2,2)"}) {
+    const Value v = lane3(reference);
+    ASSERT_TRUE(v.is_error()) << reference << ": " << v.debug_to_string();
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << reference;
+  }
+  EXPECT_DOUBLE_EQ(lane3("9").as_number(), 9.0);
+  EXPECT_DOUBLE_EQ(lane3("G1+0").as_number(), 0.0);
+  const Value scalar = EvalSourceIn("=XLOOKUP(99,A1:A3,B1:B3,G2)", wb, wb.sheet(0));
+  ASSERT_TRUE(scalar.is_number());
+  EXPECT_DOUBLE_EQ(scalar.as_number(), 9.0);
 }
 
 TEST(BuiltinsXLookup, ArrayLookupValueErrorsAndTrueMissesAreIndependent) {

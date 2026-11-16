@@ -520,18 +520,14 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
     if (!fallback.has_value()) {
       if (call_arg_supplied(call, 3U)) {
         // A scalar lookup returns the fallback as it is: a `Ref` when it denotes one.
-        fallback = array_lane ? eval_node(call.as_call_arg(3), arena, registry, ctx)
-                              : eval_node_ref(call.as_call_arg(3), arena, registry, ctx);
+        fallback = eval_node_ref(call.as_call_arg(3), arena, registry, ctx);
       } else {
         fallback = Value::error(ErrorCode::NA);
       }
     }
-    if (array_lane && fallback->is_array()) {
+    // A lane takes a fallback value only: a reference (of a blank, a number, text) or an array is #VALUE!.
+    if (array_lane && (fallback->is_ref() || fallback->is_array())) {
       return Value::error(ErrorCode::Value);
-    }
-    // A blank fallback in an array lane is a value-array cell, however the blank was read.
-    if (array_lane && fallback->is_blank()) {
-      return Value::blank(BlankGridProjection::kValueArrayZero);
     }
     return *fallback;
   };
