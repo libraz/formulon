@@ -143,19 +143,13 @@ Expected<void, Error> prepare_drawing(const Workbook& wb, std::string& path, pug
   return load_drawing_part(wb, path, doc);
 }
 
-Expected<void, Error> drop_objects(Workbook& wb, const std::string& path, pugi::xml_document& doc,
-                                   const std::vector<pugi::xml_node>& tops) {
-  ASSIGN_OR_RETURN(std::vector<io::ooxml::DrawingRel> rels, load_part_rels(wb, path));
-  for (const pugi::xml_node& top : tops) {
-    top.parent().remove_child(top);
-  }
-  const std::vector<std::string> used = relationship_refs(doc);
-  RETURN_IF_ERROR(io::ooxml::store_part_dom(wb, path, doc));
-  const std::string rels_path = io::ooxml::rels_path_for_part(path);
-  pugi::xml_document rels_doc;
-  if (rels.empty() || !io::ooxml::load_part_dom(wb, rels_path, "drawing", rels_doc)) {
-    return Expected<void, Error>::Ok();
-  }
+namespace {
+
+// Removes the relationships of `rels_doc` no element of the drawing names (`used`), and the parts they
+// leave unreferenced.
+Expected<void, Error> drop_unused_rels(Workbook& wb, const std::string& rels_path, pugi::xml_document& rels_doc,
+                                       const std::vector<io::ooxml::DrawingRel>& rels,
+                                       const std::vector<std::string>& used) {
   std::vector<std::string> candidates;
   pugi::xml_node root = io::ooxml::relationship_root(rels_doc);
   if (!root) {
@@ -180,6 +174,29 @@ Expected<void, Error> drop_objects(Workbook& wb, const std::string& path, pugi::
   }
   RETURN_IF_ERROR(io::ooxml::store_part_dom(wb, rels_path, rels_doc));
   io::ooxml::remove_orphans(wb, std::move(candidates));
+  return Expected<void, Error>::Ok();
+}
+
+}  // namespace
+
+Expected<void, Error> drop_objects(Workbook& wb, std::size_t sheet, const std::string& path,
+                                   pugi::xml_document& doc, const std::vector<pugi::xml_node>& tops) {
+  ASSIGN_OR_RETURN(std::vector<io::ooxml::DrawingRel> rels, load_part_rels(wb, path));
+  for (const pugi::xml_node& top : tops) {
+    top.parent().remove_child(top);
+  }
+  const std::vector<std::string> used = relationship_refs(doc);
+  RETURN_IF_ERROR(io::ooxml::store_part_dom(wb, path, doc));
+  const std::string rels_path = io::ooxml::rels_path_for_part(path);
+  pugi::xml_document rels_doc;
+  if (!rels.empty() && io::ooxml::load_part_dom(wb, rels_path, "drawing", rels_doc)) {
+    RETURN_IF_ERROR(drop_unused_rels(wb, rels_path, rels_doc, rels, used));
+  }
+  if (doc.document_element() && !io::has_element_child(doc.document_element())) {
+    std::string part = path;  // `path` may be the sheet's own link, cleared next.
+    wb.sheet(sheet).set_drawing_rel_target({});
+    io::ooxml::remove_orphans(wb, {std::move(part)});
+  }
   return Expected<void, Error>::Ok();
 }
 
@@ -595,7 +612,7 @@ Expected<void, Error> remove_drawing(Workbook& wb, std::size_t sheet, std::uint3
   ASSIGN_OR_RETURN(std::string path, load_object_drawing(wb, sheet, doc));
   const pugi::xml_node root = doc.document_element();
   if (const pugi::xml_node target = find_drawing_object(root, object_id, is_editable)) {
-    return drop_objects(wb, path, doc, {top_of(root, target)});
+    return drop_objects(wb, sheet, path, doc, {top_of(root, target)});
   }
   // A slicer frame is checked before the shapes: its `mc:Fallback` holds a shape with the same id.
   if (find_drawing_object(root, object_id, is_slicer_object)) {
@@ -672,12 +689,7 @@ std::vector<std::uint32_t> shift_drawing_anchors(Workbook& wb, std::size_t sheet
     }
   }
   if (!removed.empty()) {
-    static_cast<void>(drop_objects(wb, path, doc, removed));
-    // Excel drops a drawing part the edit emptied, with the sheet's link to it.
-    if (!io::has_element_child(root)) {
-      wb.sheet(sheet).set_drawing_rel_target({});
-      io::ooxml::remove_orphans(wb, {path});
-    }
+    static_cast<void>(drop_objects(wb, sheet, path, doc, removed));
   } else if (changed) {
     static_cast<void>(io::ooxml::store_part_dom(wb, path, doc));
   }

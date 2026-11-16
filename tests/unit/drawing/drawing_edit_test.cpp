@@ -200,9 +200,18 @@ TEST(DrawingEdit, InsertUsesThePrefixBoundByTheRelationshipsRoot) {
   EXPECT_NE(xml.find("<p:Relationship"), std::string::npos);
 }
 
+std::string Rect(std::uint32_t id) {
+  return "<xdr:sp><xdr:nvSpPr><xdr:cNvPr id=\"" + std::to_string(id) + "\" name=\"Rectangle " +
+         std::to_string(id - 1) +
+         "\"/><xdr:cNvSpPr/></xdr:nvSpPr><xdr:spPr><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></xdr:spPr>"
+         "</xdr:sp><xdr:clientData/>";
+}
+
 TEST(DrawingEdit, RemovesAUsedPrefixedRelationshipAndItsPart) {
   const std::string drawing = std::string(kWsDrOpen) + "<xdr:twoCellAnchor>" + Marker("from", 0, 0, 0, 0) +
-                              Marker("to", 0, 0, 1, 0) + Pic(2, "rId1") + "</xdr:twoCellAnchor></xdr:wsDr>";
+                              Marker("to", 0, 0, 1, 0) + Pic(2, "rId1") + "</xdr:twoCellAnchor><xdr:twoCellAnchor>" +
+                              Marker("from", 2, 0, 0, 0) + Marker("to", 3, 0, 1, 0) + Rect(3) +
+                              "</xdr:twoCellAnchor></xdr:wsDr>";
   const std::string rels =
       "<p:Relationships xmlns:p=\"http://schemas.openxmlformats.org/package/2006/relationships\"><p:Relationship "
       "Id=\"rId1\" Type=\"" +
@@ -220,6 +229,37 @@ TEST(DrawingEdit, RemovesAUsedPrefixedRelationshipAndItsPart) {
   const std::string xml(Part(wb, kRelsPath)->bytes.begin(), Part(wb, kRelsPath)->bytes.end());
   EXPECT_NE(xml.find("<p:Relationships"), std::string::npos);
   EXPECT_EQ(xml.find("<p:Relationship "), std::string::npos);
+}
+
+// Removing the last object drops the drawing part, its rels and the sheet's link, whatever the kind.
+TEST(DrawingEdit, RemovingTheLastObjectDropsTheDrawingPart) {
+  const std::string picture = std::string(kWsDrOpen) + "<xdr:twoCellAnchor>" + Marker("from", 0, 0, 0, 0) +
+                              Marker("to", 0, 0, 1, 0) + Pic(2, "rId1") + "</xdr:twoCellAnchor></xdr:wsDr>";
+  const std::string picture_rels =
+      std::string(kRelsOpen) + Rel("rId1", kImageRel, "../media/image1.png") + "</Relationships>";
+  const std::string shapes = std::string(kWsDrOpen) + "<xdr:twoCellAnchor>" + Marker("from", 0, 0, 0, 0) +
+                             Marker("to", 1, 0, 1, 0) + Rect(2) + "</xdr:twoCellAnchor><xdr:twoCellAnchor>" +
+                             Marker("from", 2, 0, 0, 0) + Marker("to", 3, 0, 1, 0) + Rect(3) +
+                             "</xdr:twoCellAnchor></xdr:wsDr>";
+  const std::string shape_rels = std::string(kRelsOpen) + "</Relationships>";
+
+  Workbook wb = WithDrawing(picture, picture_rels, {"xl/media/image1.png"});
+  ASSERT_TRUE(static_cast<bool>(remove_drawing(wb, 0, 2)));
+  EXPECT_TRUE(wb.sheet(0).drawing_rel_target().empty());
+  EXPECT_EQ(Part(wb, kDrawingPath), nullptr);
+  EXPECT_EQ(Part(wb, kRelsPath), nullptr);
+  EXPECT_EQ(Part(wb, "xl/media/image1.png"), nullptr);
+
+  Workbook two = WithDrawing(shapes, shape_rels, {});
+  ASSERT_TRUE(static_cast<bool>(remove_drawing(two, 0, 2)));
+  EXPECT_EQ(two.sheet(0).drawing_rel_target(), kDrawingPath);
+  EXPECT_EQ(List(two).size(), 1U);
+  ASSERT_TRUE(static_cast<bool>(remove_drawing(two, 0, 3)));
+  EXPECT_TRUE(two.sheet(0).drawing_rel_target().empty());
+  EXPECT_EQ(Part(two, kDrawingPath), nullptr);
+  EXPECT_EQ(Part(two, kRelsPath), nullptr);
+  const Workbook saved = RoundTrip(two);
+  EXPECT_TRUE(saved.sheet(0).drawing_rel_target().empty());
 }
 
 TEST(DrawingEdit, ExhaustedObjectIdRejectsMutationsWithoutChangingPackage) {

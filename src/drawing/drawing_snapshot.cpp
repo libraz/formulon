@@ -698,7 +698,7 @@ Expected<std::uint32_t, Error> restore_drawing(Workbook& wb, std::size_t sheet, 
     RETURN_IF_ERROR(io::ooxml::store_part_dom(wb, rels_path, rels_doc));
   }
   if (replaced) {
-    RETURN_IF_ERROR(drop_objects(wb, path, doc, {replaced}));
+    RETURN_IF_ERROR(drop_objects(wb, sheet, path, doc, {replaced}));
   } else {
     RETURN_IF_ERROR(io::ooxml::store_part_dom(wb, path, doc));
   }

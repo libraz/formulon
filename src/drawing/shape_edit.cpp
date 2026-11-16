@@ -644,8 +644,7 @@ Expected<void, Error> remove_shape(Workbook& wb, std::size_t sheet, std::uint32_
   while (top.parent() != root) {
     top = top.parent();
   }
-  root.remove_child(top);
-  return io::ooxml::store_part_dom(wb, path, doc);
+  return drawing_edit::drop_objects(wb, sheet, path, doc, {top});
 }
 
 }  // namespace formulon

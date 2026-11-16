@@ -115,8 +115,10 @@ Expected<void, Error> update_shape(Workbook& wb, std::size_t sheet, std::uint32_
 Expected<void, Error> update_shape(Workbook& wb, std::size_t sheet, std::uint32_t object_id,
                                    const DrawingCommonPatch* common, const ShapeSpec* shape);
 
-/// Removes the shape, connector or group (with its children) with `object_id`.
-/// Fails as `update_shape` for an unknown id or an object of another kind.
+/// Removes the shape, connector or group (with its children) with `object_id`,
+/// the relationships only it named, and a drawing part left empty with the
+/// sheet's link to it. Fails as `update_shape` for an unknown id or an object
+/// of another kind.
 Expected<void, Error> remove_shape(Workbook& wb, std::size_t sheet, std::uint32_t object_id);
 
 }  // namespace formulon

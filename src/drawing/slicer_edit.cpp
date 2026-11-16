@@ -709,20 +709,13 @@ Expected<void, Error> remove_slicer_at(Workbook& wb, std::size_t sheet, std::siz
     while (top.parent() != root) {
       top = top.parent();
     }
-    root.remove_child(top);
-    RETURN_IF_ERROR(io::ooxml::store_part_dom(wb, wb.sheet(sheet).drawing_rel_target(), drawing));
+    RETURN_IF_ERROR(drawing_edit::drop_objects(wb, sheet, wb.sheet(sheet).drawing_rel_target(), drawing, {top}));
   }
-  const bool drawing_empty = drawing.document_element() && !io::has_element_child(drawing.document_element());
   doc.document_element().remove_child(node);
   if (children_local(doc.document_element(), "slicer").empty()) {
     drop_linked_part(wb, &sheet, slot.slicers_part);
   } else {
     RETURN_IF_ERROR(io::ooxml::store_part_dom(wb, slot.slicers_part, doc));
-  }
-  if (drawing_empty) {
-    const std::string drawing_path = wb.sheet(sheet).drawing_rel_target();
-    wb.sheet(sheet).set_drawing_rel_target({});
-    io::ooxml::remove_orphans(wb, {drawing_path});
   }
   if (!cache_in_use(wb, slot.info.cache_name)) {
     dropped.push_back(slot.info.cache_name);

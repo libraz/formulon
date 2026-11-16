@@ -209,7 +209,8 @@ Expected<std::uint32_t, Error> restore_drawing(Workbook& wb, std::size_t sheet, 
 /// plus the relationships it named and the parts (a chart's part and its
 /// dependents) nothing else references; a shape, connector or group with its
 /// children (`remove_shape`); a table slicer with its frame, and its cache
-/// once unused (`remove_slicer`). Fails with `kNotFound` for an unknown id and
+/// once unused (`remove_slicer`). A drawing part left empty goes with the
+/// sheet's link to it. Fails with `kNotFound` for an unknown id and
 /// `kInvalidArgument` for an object no edit models (SmartArt, a content part).
 Expected<void, Error> remove_drawing(Workbook& wb, std::size_t sheet, std::uint32_t object_id);
 
