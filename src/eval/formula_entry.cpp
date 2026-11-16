@@ -96,6 +96,10 @@ std::string_view entry_unknown_call(const void* ctx, std::string_view typed) {
   return entry.calls->spelling(*entry.book, typed);
 }
 
+std::string_view kept_unknown_call(const void*, std::string_view typed) {
+  return typed;
+}
+
 // Entered formula `text` with the name and reference spelling Excel stores,
 // defined names looked up from `sheet` (`Workbook::kNoSheet` for none).
 std::string spell_entered_names_in(const Workbook& book, EnteredCallSpellings& calls, std::size_t sheet,
@@ -379,6 +383,12 @@ EntryResult enter_stored_formula(const Workbook& book, EnteredCallSpellings& cal
   }
   *stored = spell_entered_names_in(book, calls, Workbook::kNoSheet, normalized);
   return EntryResult::kStored;
+}
+
+std::string spell_loaded_cell_formula(const Workbook& book, std::size_t sheet, std::string_view formula) {
+  const EntrySpellingContext ctx{&book, nullptr, sheet};
+  const parser::EnteredNames names{&resolve_builtin_function_name, &own_entry_name, &kept_unknown_call, &ctx};
+  return parser::spell_entered_names(formula, names);
 }
 
 const AstNode* parse_evaluated_formula(std::string_view formula, std::string_view bound, Arena& arena,

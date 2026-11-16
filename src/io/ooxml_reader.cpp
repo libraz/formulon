@@ -34,6 +34,7 @@
 
 #include "default_content_type.h"
 #include "defined_name.h"
+#include "eval/formula_entry.h"
 #include "io/cf_merge.h"
 #include "io/cf_reader.h"
 #include "io/comments_reader.h"
@@ -104,6 +105,24 @@ bool IsCdfv2Container(ByteSpan bytes) noexcept {
     return false;
   }
   return std::memcmp(bytes.data, kCdfv2Magic, sizeof(kCdfv2Magic)) == 0;
+}
+
+// Excel respells a cell formula on open as it does on entry. Run once sheets,
+// defined names and tables are all in.
+void SpellLoadedCellFormulas(Workbook& wb) {
+  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
+    Sheet& sheet = wb.sheet(s);
+    for (const CellAddress address : sheet.all_formula_cells()) {
+      const Cell* cell = sheet.cell_at(address.row, address.col);
+      if (cell == nullptr) {
+        continue;
+      }
+      std::string text = eval::spell_loaded_cell_formula(wb, s, cell->formula_text);
+      if (text != cell->formula_text) {
+        sheet.set_cell_formula_text(address.row, address.col, std::move(text));
+      }
+    }
+  }
 }
 
 }  // namespace
@@ -1049,6 +1068,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   wb.adopt_saved_blocked_pivots();
   // Cells and tables are both loaded, so the totals cells settle the columns' totals metadata.
   wb.normalize_table_totals_cells();
+  SpellLoadedCellFormulas(wb);
 
   // Compute unknown_parts: every part the reader did not consume,
   // captured raw so the writer can re-emit it verbatim. Two sources:

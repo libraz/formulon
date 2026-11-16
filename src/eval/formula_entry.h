@@ -64,6 +64,11 @@ EntryResult enter_cell_formula(const Workbook& book, EnteredCallSpellings& calls
 EntryResult enter_stored_formula(const Workbook& book, EnteredCallSpellings& calls, std::string_view formula,
                                  std::string* stored, parser::ParseFailure* failure);
 
+/// `formula`, a cell formula read from a file onto `sheet` of `book`, with the
+/// name and reference spelling entry stores; an unknown function keeps its
+/// spelling. Nothing is validated.
+std::string spell_loaded_cell_formula(const Workbook& book, std::size_t sheet, std::string_view formula);
+
 /// AST of ad-hoc `formula`, bound to `bound`, owned by `arena`; nullptr with
 /// `*failure` located in `formula` when it does not parse.
 const parser::AstNode* parse_evaluated_formula(std::string_view formula, std::string_view bound, Arena& arena,

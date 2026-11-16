@@ -16,6 +16,7 @@
 #include "formulon_c_record_arg.h"
 #include "formulon_c_setters.h"
 #include "gtest/gtest.h"
+#include "io/zip_reader.h"
 #include "parser/parse_status.h"
 #include "utils/error.h"
 #include "workbook.h"
@@ -672,7 +673,7 @@ TEST(FormulonCApiFormulaEntry, EnteredNamesAndReferencesTakeTheStoredSpelling) {
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 40, 2, "=total*2"), 0);
   EXPECT_EQ(GetFormula(wb.handle, 40, 2), "=Total*2");
 
-  // The reader's ingestion point keeps a file's spelling.
+  // `Workbook::set_cell_formula` stores the spelling it is given.
   ASSERT_TRUE(wb.handle->workbook().set_cell_formula(0, 50, 2, "=sum(data!a1)"));
   EXPECT_EQ(GetFormula(wb.handle, 50, 2), "=sum(data!a1)");
 }
@@ -770,6 +771,40 @@ TEST(FormulonCApiFormulaEntry, NewerErrorLiteralsAreRefusedOnEntryButLoadAndStor
   EXPECT_EQ(value.u.error_code, kCalc);
   EXPECT_EQ(fm_sheet_set_formula(loaded.handle, 0, 0, 1, "=#CALC!+1"), kParserUnexpectedToken);
   EXPECT_EQ(GetFormula(loaded.handle, 0, 1), "=#CALC!+1");
+}
+
+// `wb` saved as .xlsx: the package bytes and its first worksheet part.
+std::pair<std::vector<std::uint8_t>, std::string> SaveXlsx(fm_workbook_t* wb) {
+  std::uint8_t* bytes = nullptr;
+  std::size_t len = 0;
+  EXPECT_EQ(fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0) << fm_get_last_error_message();
+  std::vector<std::uint8_t> package(bytes, bytes + len);
+  fm_buffer_destroy(bytes);
+  formulon::io::ZipReader zip;
+  EXPECT_TRUE(static_cast<bool>(zip.open(formulon::io::ByteSpan{package.data(), package.size()})));
+  auto part = zip.read_entry("xl/worksheets/sheet1.xml");
+  EXPECT_TRUE(static_cast<bool>(part));
+  std::string xml = part ? std::string(part.value().begin(), part.value().end()) : std::string();
+  return {std::move(package), std::move(xml)};
+}
+
+// Excel respells a cell formula on open as it does on entry, and saves that
+// spelling.
+TEST(FormulonCApiFormulaEntry, LoadedCellFormulaTakesTheEnteredSpelling) {
+  WorkbookGuard source;
+  MakeWorkbook(&source);
+  ASSERT_TRUE(source.handle->workbook().set_cell_formula(0, 0, 1, "=sum(a1)"));
+  const auto [package, source_xml] = SaveXlsx(source.handle);
+  ASSERT_NE(source_xml.find("<f>sum(a1)</f>"), std::string::npos) << source_xml;
+
+  WorkbookGuard loaded;
+  ASSERT_EQ(fm_workbook_load(package.data(), package.size(), nullptr, &loaded.handle), 0)
+      << fm_get_last_error_message();
+  EXPECT_EQ(GetFormula(loaded.handle, 0, 1), "=SUM(A1)");
+
+  const std::string saved_xml = SaveXlsx(loaded.handle).second;
+  EXPECT_NE(saved_xml.find("<f>SUM(A1)</f>"), std::string::npos) << saved_xml;
+  EXPECT_EQ(saved_xml.find("sum(a1)"), std::string::npos) << saved_xml;
 }
 
 }  // namespace

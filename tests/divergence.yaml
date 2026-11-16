@@ -942,17 +942,6 @@ entries:
     first_noted: 2026-10-24
     last_verified_excel_version: "16.114.1"
 
-  - id: loaded_formula_keeps_its_stored_spelling
-    applies_to: all
-    cause: accepted-divergence
-    mode: skip-oracle
-    scope: api-contract
-    evidence: [tests/c_api/formulon_c_formula_entry_test.cpp]
-    reason: "Excel respells a formula on open as it does on entry: an .xlsx cell stored as <f>sum(a1)</f> reads =SUM(A1) after opening, and Excel's own save writes SUM(A1). Formulon keeps a loaded formula's text as stored and respells only entered text, because the writers pass stored formula text through, so a load-time respelling would change the bytes of every round trip and add a parse of every formula to each load."
-    prefer: formulon
-    first_noted: 2026-11-16
-    last_verified_excel_version: "16.115"
-
   # -- Table resize after a creation shift -----------------------------------
   - id: table_resize_refused_while_insert_row_shift
     applies_to: [mac]
