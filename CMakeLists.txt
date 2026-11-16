@@ -121,6 +121,7 @@ set(FORMULON_CORE_SOURCES
   src/utils/number_text.cpp
   src/utils/resource_budget.cpp
   src/utils/structured_log.cpp
+  src/utils/strings.cpp
   src/utils/text_ops.cpp
   src/utils/thread_launch.cpp
   src/utils/utf8_length.cpp

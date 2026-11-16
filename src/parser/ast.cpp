@@ -205,6 +205,10 @@ bool DepthWithinLimit(Stack& stack, const AstNode& root, std::uint32_t max_depth
 
 namespace detail {
 
+std::uint32_t ast_child_count(const AstNode& node) {
+  return static_cast<std::uint32_t>(ChildCount(node));
+}
+
 const AstNode& ast_child_at(const AstNode& node, std::uint32_t index) {
   return ChildAt(node, index);
 }
@@ -948,33 +952,14 @@ bool is_spill_anchor(const AstNode& node) noexcept {
 }
 
 bool is_volatile_function_name(std::string_view name) noexcept {
-  if (name.empty()) {
-    return false;
+  static constexpr std::string_view kVolatile[] = {"CELL", "FORMULATEXT", "INDIRECT",  "INFO",  "NOW",    "OFFSET",
+                                                   "RAND", "RANDBETWEEN", "RANDARRAY", "SHEET", "SHEETS", "TODAY"};
+  for (const std::string_view candidate : kVolatile) {
+    if (strings::case_insensitive_eq(name, candidate)) {
+      return true;
+    }
   }
-  using strings::ascii_to_upper;
-  using strings::case_insensitive_eq;
-  // Switch on the upper-cased first character to keep the comparison list small.
-  switch (ascii_to_upper(name.front())) {
-    case 'C':
-      return case_insensitive_eq(name, "CELL");
-    case 'F':
-      return case_insensitive_eq(name, "FORMULATEXT");
-    case 'I':
-      return case_insensitive_eq(name, "INDIRECT") || case_insensitive_eq(name, "INFO");
-    case 'N':
-      return case_insensitive_eq(name, "NOW");
-    case 'O':
-      return case_insensitive_eq(name, "OFFSET");
-    case 'R':
-      return case_insensitive_eq(name, "RAND") || case_insensitive_eq(name, "RANDBETWEEN") ||
-             case_insensitive_eq(name, "RANDARRAY");
-    case 'S':
-      return case_insensitive_eq(name, "SHEET") || case_insensitive_eq(name, "SHEETS");
-    case 'T':
-      return case_insensitive_eq(name, "TODAY");
-    default:
-      return false;
-  }
+  return false;
 }
 
 bool is_dynamic_reference_function_name(std::string_view name) noexcept {

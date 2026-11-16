@@ -20,10 +20,6 @@ class AstNode;
 
 namespace detail {
 
-/// The `index`-th child of `node` in the order the AST walkers visit them
-/// (the same order `ChildCount` in ast.cpp counts); `node` must have one.
-const AstNode& ast_child_at(const AstNode& node, std::uint32_t index);
-
 // Binding-power constants. See parser.cpp header comment for the precedence
 // table.
 //

@@ -632,6 +632,13 @@ bool is_self_book_name_ref(const AstNode& node) noexcept;
 bool references_other_sheet(const AstNode& root, std::string_view own_sheet,
                             const std::vector<std::string>* sheet_list = nullptr);
 
+namespace detail {
+/// Number of children `any_child_node` visits for `node` (array elements included).
+std::uint32_t ast_child_count(const AstNode& node);
+/// The `index`-th child of `node` in visiting order; `index` must be below `ast_child_count(node)`.
+const AstNode& ast_child_at(const AstNode& node, std::uint32_t index);
+}  // namespace detail
+
 /// The expressions directly under `node`, in source order: operands,
 /// arguments, a lambda call's callee, LET binding values and body, a lambda
 /// body and a computed spill anchor. The legacy vector API intentionally
@@ -647,83 +654,11 @@ std::vector<const AstNode*> child_nodes(const AstNode& node);
 /// instead of `child_nodes`.
 template <typename Predicate>
 bool any_child_node(const AstNode& node, Predicate&& predicate) {
-  switch (node.kind()) {
-    case NodeKind::UnaryOp:
-      return predicate(node.as_unary_operand());
-    case NodeKind::BinaryOp:
-      for (std::uint32_t i = 0; i < node.as_binary_arity(); ++i) {
-        if (predicate(node.as_binary_operand(i))) {
-          return true;
-        }
-      }
-      return false;
-    case NodeKind::RangeOp:
-      for (std::uint32_t i = 0; i < node.as_range_arity(); ++i) {
-        if (predicate(node.as_range_operand(i))) {
-          return true;
-        }
-      }
-      return false;
-    case NodeKind::IntersectOp:
-      return predicate(node.as_intersect_lhs()) || predicate(node.as_intersect_rhs());
-    case NodeKind::UnionOp:
-      for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
-        if (predicate(node.as_union_child(i))) {
-          return true;
-        }
-      }
-      return false;
-    case NodeKind::ImplicitIntersection:
-      return predicate(node.as_implicit_intersection_operand());
-    case NodeKind::Call:
-      for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
-        if (predicate(node.as_call_arg(i))) {
-          return true;
-        }
-      }
-      return false;
-    case NodeKind::LambdaCall:
-      if (predicate(node.as_lambda_call_callee())) {
-        return true;
-      }
-      for (std::uint32_t i = 0; i < node.as_lambda_call_arity(); ++i) {
-        if (predicate(node.as_lambda_call_arg(i))) {
-          return true;
-        }
-      }
-      return false;
-    case NodeKind::LetBinding:
-      for (std::uint32_t i = 0; i < node.as_let_binding_count(); ++i) {
-        if (predicate(node.as_let_binding_expr(i))) {
-          return true;
-        }
-      }
-      return predicate(node.as_let_body());
-    case NodeKind::Lambda:
-      return predicate(node.as_lambda_body());
-    case NodeKind::SpillRef:
-      if (const AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
-        return predicate(*anchor);
-      }
-      return false;
-    case NodeKind::ArrayLiteral:
-      for (std::uint32_t row = 0; row < node.as_array_rows(); ++row) {
-        for (std::uint32_t col = 0; col < node.as_array_cols(); ++col) {
-          if (predicate(node.as_array_element(row, col))) {
-            return true;
-          }
-        }
-      }
-      return false;
-    case NodeKind::Literal:
-    case NodeKind::Ref:
-    case NodeKind::StructuredRef:
-    case NodeKind::NameRef:
-    case NodeKind::ErrorLiteral:
-    case NodeKind::ErrorPlaceholder:
-    case NodeKind::Ref3D:
-    case NodeKind::ExternalRef:
-      return false;
+  const std::uint32_t count = detail::ast_child_count(node);
+  for (std::uint32_t i = 0; i < count; ++i) {
+    if (predicate(detail::ast_child_at(node, i))) {
+      return true;
+    }
   }
   return false;
 }

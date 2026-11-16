@@ -115,6 +115,9 @@ constexpr char ascii_to_upper(char c) noexcept {
   return (c >= 'a' && c <= 'z') ? static_cast<char>(c - ('a' - 'A')) : c;
 }
 
+/// Byte loop behind `case_insensitive_eq`; both ranges hold `n` bytes.
+bool case_insensitive_eq_bytes(const char* a, const char* b, std::size_t n) noexcept;
+
 /// Case-insensitive equality over the ASCII letters only. Any byte with the
 /// high bit set (for example, the leading byte of a UTF-8 multibyte sequence)
 /// is compared verbatim, so `"straße" != "STRASSE"` and
@@ -123,12 +126,7 @@ inline bool case_insensitive_eq(std::string_view a, std::string_view b) noexcept
   if (a.size() != b.size()) {
     return false;
   }
-  for (std::size_t i = 0; i < a.size(); ++i) {
-    if (ascii_to_lower(a[i]) != ascii_to_lower(b[i])) {
-      return false;
-    }
-  }
-  return true;
+  return case_insensitive_eq_bytes(a.data(), b.data(), a.size());
 }
 
 /// Lexicographic ASCII-case-insensitive comparison.

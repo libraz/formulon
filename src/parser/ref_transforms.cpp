@@ -105,11 +105,22 @@ SheetRemovalTransform::SheetRemovalTransform(const std::vector<std::string_view>
       removed_index_(removed_index),
       rebound_names_(std::move(rebound_names)) {}
 
+namespace {
+
+// Shared resolve_by instantiation; `at` reads the i-th sheet name from `names`.
+std::size_t ResolveSheet(const void* names, std::size_t count, std::string_view (*at)(const void*, std::size_t),
+                         std::string_view sheet) noexcept {
+  return sheet_names::resolve_by(
+      count, [&](std::size_t i, sheet_names::Fold fold) { return sheet_names::same(at(names, i), sheet, fold); });
+}
+
+}  // namespace
+
 std::size_t SheetRemovalTransform::find_sheet(std::string_view sheet) const noexcept {
-  const std::size_t index =
-      sheet_names::resolve_by(pre_removal_sheet_order_.size(), [&](std::size_t i, sheet_names::Fold fold) {
-        return sheet_names::same(pre_removal_sheet_order_[i], sheet, fold);
-      });
+  const std::size_t index = ResolveSheet(
+      &pre_removal_sheet_order_, pre_removal_sheet_order_.size(),
+      [](const void* names, std::size_t i) { return (*static_cast<const std::vector<std::string_view>*>(names))[i]; },
+      sheet);
   return index == sheet_names::kNotFound ? kInvalidSheetIndex : index;
 }
 
@@ -194,9 +205,12 @@ SheetMoveTransform::SheetMoveTransform(const std::vector<std::string_view>& pre_
     : pre_move_sheet_order_(pre_move_sheet_order.begin(), pre_move_sheet_order.end()), from_(from), to_(to) {}
 
 std::size_t SheetMoveTransform::find_sheet(std::string_view sheet) const noexcept {
-  return sheet_names::resolve_by(pre_move_sheet_order_.size(), [&](std::size_t i, sheet_names::Fold fold) {
-    return sheet_names::same(pre_move_sheet_order_[i], sheet, fold);
-  });
+  return ResolveSheet(
+      &pre_move_sheet_order_, pre_move_sheet_order_.size(),
+      [](const void* names, std::size_t i) {
+        return std::string_view((*static_cast<const std::vector<std::string>*>(names))[i]);
+      },
+      sheet);
 }
 
 std::size_t SheetMoveTransform::post_move_index(std::size_t index) const noexcept {
