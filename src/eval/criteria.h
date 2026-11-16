@@ -206,8 +206,14 @@ ParsedCriterion parse_criterion(const Value& criterion);
 /// text ("Sm" finds rows that begin with "Sm" such as "Smith" and
 /// "Smithfield"); the user escapes to full equality via `="Sm"`.
 ///
+/// A prefix criterion matches Text records only (never a blank, number or
+/// boolean, whatever its display form). A zero-length text criterion (`""`
+/// constant or `=""` formula) is the empty prefix and is marked the same way:
+/// it matches every Text record, zero-length text included.
+///
 /// All other criterion shapes (numeric scalar, comparator-prefixed text,
-/// wildcard text, error, blank) behave identically to `parse_criterion`.
+/// wildcard text, error, blank cell, bare `"="` / `"<>"`) behave identically
+/// to `parse_criterion`.
 ParsedCriterion parse_criterion_dfunc(const Value& criterion);
 
 /// Tests whether a cell `Value` matches a parsed criterion.

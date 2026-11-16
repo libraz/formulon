@@ -415,8 +415,12 @@ ParsedCriterion parse_criterion_dfunc(const Value& criterion) {
   //   * text criteria with a leading comparator (`<`, `>`, `<=`, `>=`,
   //     `<>`): these produce a non-Eq op and are already handled by the
   //     matcher.
-  //   * error criteria and blank criteria (empty rhs_text): preserve
-  //     existing blank-matching semantics.
+  //   * error criteria and blank criteria: preserve existing
+  //     blank-matching semantics.
+  //   * a bare comparator (`"="`, `"<>"`): keeps its own sentinel meaning.
+  //
+  // A zero-length text criterion (`""` constant or `=""` formula) is the
+  // empty prefix: it matches every Text record and no other kind.
   //
   // The one remaining source of ambiguity is `Op::Eq` originating from an
   // explicit `=foo` prefix. `strip_comparator` consumes the leading `=`,
@@ -434,10 +438,11 @@ ParsedCriterion parse_criterion_dfunc(const Value& criterion) {
   if (p.op != CriteriaOp::Eq) {
     return p;
   }
+  const std::string_view raw = criterion.as_text();
   if (p.rhs_text.empty()) {
+    p.prefix_match = raw.empty();
     return p;
   }
-  const std::string_view raw = criterion.as_text();
   if (!raw.empty() && raw[0] == '=') {
     // Explicit `=foo`: user is asking for exact match.
     return p;
@@ -684,6 +689,18 @@ bool matches_criterion(const Value& cell, const ParsedCriterion& c, ExcelProfile
   // them.
   if (!c.rhs_is_number && c.rhs_text.empty() && c.op == CriteriaOp::Eq && c.rhs_bare_comparator) {
     return cell.is_blank();
+  }
+
+  // D-function prefix criterion: only Text records can begin with a prefix, so a
+  // blank, number or boolean never matches, whatever its display form. The
+  // empty prefix matches every Text record, zero-length included.
+  if (c.prefix_match && c.op == CriteriaOp::Eq) {
+    if (cell.kind() != ValueKind::Text) {
+      return false;
+    }
+    if (c.rhs_text.empty()) {
+      return true;
+    }
   }
 
   // Blank-cell special cases. Excel's rule: `=""` matches blanks (see
