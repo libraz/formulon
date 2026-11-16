@@ -353,47 +353,57 @@ class ReadmeFactsTest(unittest.TestCase):
 
 
 class ReadmeIdentifiersTest(unittest.TestCase):
-    def _problems_after(self, readme: str, old: str, new: str) -> list[str]:
+    # Each stale identifier is planted in its own document; one check over all of them serves every test below.
+    STALE_EDITS = (
+        ("README.md", "formulon eval '=SUM(1,2,3)'", "fm_no_such_function(wb);"),
+        (
+            "packages/npm-native/README.md",
+            "import createFormulon from '@libraz/formulon-native';",
+            "import { NoSuchExport } from '@libraz/formulon-native';",
+        ),
+        ("packages/npm/README.md", "wb.dispose();", "wb.delete();"),
+        ("packages/npm/README.md", "Workbook.load(", "Workbook.open("),
+        ("packages/python/README.md", "wb.recalc()", "wb.recalculate()"),
+        ("CONTRIBUTING.md", "[Apache 2.0 license](LICENSE)", "[rules](CLAUDE.md)"),
+    )
+
+    @classmethod
+    def setUpClass(cls) -> None:
         original = readme_identifiers._read
-        target = readme_identifiers.REPO_ROOT / readme
 
         def read(path: Path) -> str:
             text = original(path)
-            return text.replace(old, new) if path == target else text
+            for readme, old, new in cls.STALE_EDITS:
+                if path == readme_identifiers.REPO_ROOT / readme:
+                    text = text.replace(old, new)
+            return text
 
         with patch.object(readme_identifiers, "_read", read):
-            return readme_identifiers.check_readme_identifiers()
+            cls.stale_problems = readme_identifiers.check_readme_identifiers()
+
+    def _assert_reported(self, needle: str) -> None:
+        self.assertTrue(any(needle in p for p in self.stale_problems), self.stale_problems)
 
     def test_current_documents_resolve(self) -> None:
         self.assertEqual(readme_identifiers.check_readme_identifiers(), [])
 
     def test_unknown_c_name_is_reported(self) -> None:
-        problems = self._problems_after("README.md", "formulon eval '=SUM(1,2,3)'", "fm_no_such_function(wb);")
-        self.assertTrue(any("`fm_no_such_function`" in p for p in problems), problems)
+        self._assert_reported("`fm_no_such_function`")
 
     def test_unknown_js_import_is_reported(self) -> None:
-        problems = self._problems_after(
-            "packages/npm-native/README.md",
-            "import createFormulon from '@libraz/formulon-native';",
-            "import { NoSuchExport } from '@libraz/formulon-native';",
-        )
-        self.assertTrue(any("`NoSuchExport`" in p for p in problems), problems)
+        self._assert_reported("`NoSuchExport`")
 
     def test_stale_workbook_method_is_reported(self) -> None:
-        problems = self._problems_after("packages/npm/README.md", "wb.dispose();", "wb.delete();")
-        self.assertTrue(any("`wb.delete`" in p for p in problems), problems)
+        self._assert_reported("`wb.delete`")
 
     def test_unknown_factory_is_reported(self) -> None:
-        problems = self._problems_after("packages/npm/README.md", "Workbook.load(", "Workbook.open(")
-        self.assertTrue(any("Workbook.open" in p for p in problems), problems)
+        self._assert_reported("Workbook.open")
 
     def test_stale_python_method_is_reported(self) -> None:
-        problems = self._problems_after("packages/python/README.md", "wb.recalc()", "wb.recalculate()")
-        self.assertTrue(any("`wb.recalculate`" in p for p in problems), problems)
+        self._assert_reported("`wb.recalculate`")
 
     def test_link_to_ignored_path_is_reported(self) -> None:
-        problems = self._problems_after("CONTRIBUTING.md", "[Apache 2.0 license](LICENSE)", "[rules](CLAUDE.md)")
-        self.assertTrue(any("git-ignored path `CLAUDE.md`" in p for p in problems), problems)
+        self._assert_reported("git-ignored path `CLAUDE.md`")
 
 
 def _conventions(header: str, ledger: dict | None = None) -> api_conventions.Context:
