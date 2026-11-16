@@ -30,6 +30,7 @@ from ._workbook import (
     _check,
     _decode_cell_rect_at,
     _encode_table_column_patch,
+    _install_workbook_locks,
     _pack_cell_rect_at,
 )
 
@@ -599,3 +600,6 @@ class Table(_NoCopy):
         return AutoFilterEval(
             *self._workbook._evaluate_auto_filter(LIB.fm_sheet_evaluate_table_auto_filter, sheet, index)
         )
+
+
+_install_workbook_locks(Table)

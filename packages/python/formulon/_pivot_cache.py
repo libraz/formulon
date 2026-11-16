@@ -30,6 +30,7 @@ from ._workbook import (
     _ArgScope,
     _cell_rect_from,
     _check,
+    _install_workbook_locks,
     _pack_pivot_worksheet_source,
     _pivot_cache_value_kind,
     _pivot_worksheet_source_from,
@@ -571,3 +572,6 @@ class PivotCache(_NoCopy):
             with _ArgScope() as scope:
                 text = scope.cstr(value)
                 _check(LIB.fm_workbook_set_pivot_cache_record_text(h, cache_id, record, field_index, text))
+
+
+_install_workbook_locks(PivotCache)
