@@ -24,6 +24,7 @@
 
 #include "io/zip_reader.h"
 #include "pivot/pivot_cache.h"
+#include "pivot/pivot_formula_host.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 
@@ -48,9 +49,11 @@ Expected<pivot::PivotCache, Error> pivot_cache_from_xlsb(ByteSpan definition_par
                                                          bool date1904);
 
 /// Encodes `cache` as its two parts; the definition names its records part
-/// by `records_rel_id`. With `saveData` off there is no records part. A model state the records cannot hold, or one
+/// by `records_rel_id`. With `saveData` off there is no records part. `formulas` holds the cache's calculated
+/// formulas as `Workbook::parse_pivot_cache_formulas` parses them. A model state the records cannot hold, or one
 /// with no Excel-saved sample, is kIoFeatureNotWritable (`kind=pivot_cache`).
-Expected<XlsbPivotCacheParts, Error> pivot_cache_to_xlsb(const pivot::PivotCache& cache, bool date1904,
+Expected<XlsbPivotCacheParts, Error> pivot_cache_to_xlsb(const pivot::PivotCache& cache,
+                                                         pivot::ParsedCacheFormulas formulas, bool date1904,
                                                          std::string_view records_rel_id);
 
 }  // namespace xlsb

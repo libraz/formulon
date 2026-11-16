@@ -1,6 +1,7 @@
 //
 // Host interface through which the pivot layer evaluates calculated-field and
-// calculated-item formulas without depending on the parser or evaluator.
+// calculated-item formulas without depending on the parser or evaluator, and
+// the parsed form the evaluator hands to the binary cache writer.
 
 #ifndef FORMULON_PIVOT_PIVOT_FORMULA_HOST_H_
 #define FORMULON_PIVOT_PIVOT_FORMULA_HOST_H_
@@ -13,9 +14,14 @@
 #include <vector>
 
 #include "pivot/pivot_cache.h"
+#include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "value.h"
+
+namespace formulon::parser {
+class AstNode;
+}  // namespace formulon::parser
 
 namespace formulon::pivot {
 
@@ -32,6 +38,22 @@ struct FormulaRef {
 struct FormulaScope {
   const PivotCache* cache;                ///< Names come from cache fields / shared items.
   std::optional<std::size_t> item_field;  ///< Set for a calculated-item formula.
+};
+
+/// A formula parsed against a cache: the AST names `refs[i]` by the identifier
+/// `append_formula_ref_name(i)` spells, and `canonical` is the stored text.
+struct ParsedFormula {
+  Arena arena;
+  const parser::AstNode* root = nullptr;
+  std::vector<FormulaRef> refs;
+  std::string canonical;
+};
+
+/// The calculated formulas of one cache parsed against it; an entry is empty
+/// where there is no formula or it does not parse.
+struct ParsedCacheFormulas {
+  std::vector<std::optional<ParsedFormula>> fields;  ///< By cache field.
+  std::vector<std::optional<ParsedFormula>> items;   ///< By calculated item.
 };
 
 /// Compiles and evaluates pivot formulas on behalf of the pivot layer.

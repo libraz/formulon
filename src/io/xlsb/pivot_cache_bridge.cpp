@@ -8,8 +8,6 @@
 #include <string>
 #include <utility>
 
-#include "eval/eval_profile_scope.h"
-#include "eval/pivot_formula.h"
 #include "io/cell_parser.h"
 #include "io/ooxml_defs.h"
 #include "io/pivot_built_defaults.h"
@@ -29,6 +27,7 @@
 #include "parser/ast_format.h"
 #include "pivot/date_serial.h"
 #include "pivot/field_grouping.h"
+#include "pivot/pivot_formula_names.h"
 #include "pivot/record_access.h"
 #include "utils/arena.h"
 #include "utils/date_time.h"
@@ -698,7 +697,7 @@ Expected<pivot::PivotCalculatedItem, Error> ReadCalcItem(const pivot_calc::CalcI
       item_text = std::string(item.as_text());
     }
     std::string text;
-    eval::append_pivot_formula_name(text, field.name);
+    pivot::append_formula_name(text, field.name);
     text.append("[").append(item_text).append("]");
     texts.push_back(std::move(text));
   }
@@ -739,7 +738,7 @@ Expected<std::string, Error> ReadFieldFormula(const pcd::Field& in, const pivot:
       }
     }
     std::string text;
-    eval::append_pivot_formula_name(text, cache.fields()[name.field].name);
+    pivot::append_formula_name(text, cache.fields()[name.field].name);
     texts.push_back(std::move(text));
   }
   return RenderFormula(*in.formula_rgce, in.formula_rgcb, texts, "calculated field");
@@ -1095,21 +1094,23 @@ bool HasTextItem(const pivot::PivotCache& cache, std::size_t field, std::string_
   return false;
 }
 
-/// Lowers a calculated field's (`item_field` empty) or calculated item's formula to rgce and its PNames entries;
-/// false when the text is not one Excel stores the same way, so that it does not read back as written.
-bool LowerFormula(const std::string& text, const pivot::PivotCache& cache, std::optional<std::size_t> item_field,
-                  std::vector<std::uint8_t>* rgce, std::vector<pivot_calc::PName>* names) {
-  eval::ParsedPivotFormula parsed;
-  if (!eval::parse_pivot_formula(text, pivot::FormulaScope{&cache, item_field}, &parsed)) {
+/// Lowers a calculated field's or calculated item's formula, `text` as `parsed` holds it (null or empty when it does
+/// not parse), to rgce and its PNames entries; false when the text is not one Excel stores the same way, so that it
+/// does not read back as written.
+bool LowerFormula(const std::string& text, std::optional<pivot::ParsedFormula>* parsed_slot,
+                  const pivot::PivotCache& cache, std::vector<std::uint8_t>* rgce,
+                  std::vector<pivot_calc::PName>* names) {
+  if (parsed_slot == nullptr || !parsed_slot->has_value()) {
     return false;
   }
+  pivot::ParsedFormula& parsed = **parsed_slot;
   std::vector<std::string> texts;
   for (const pivot::FormulaRef& ref : parsed.refs) {
     const pivot::PivotCacheField& field = cache.fields()[ref.field];
     pivot_calc::PName name;
     name.flags = kPNameFlags;
     std::string name_text;
-    eval::append_pivot_formula_name(name_text, field.name);
+    pivot::append_formula_name(name_text, field.name);
     if (ref.kind == pivot::FormulaRef::Kind::Field) {
       name.field = static_cast<std::uint32_t>(ref.field);
     } else {
@@ -1146,7 +1147,7 @@ bool LowerFormula(const std::string& text, const pivot::PivotCache& cache, std::
     return false;
   }
   const NameOperandHook name_operand = [&parsed](const parser::AstNode& node) -> std::optional<std::uint32_t> {
-    const std::optional<std::size_t> slot = eval::pivot_formula_ref_slot(node.as_name(), parsed.refs.size());
+    const std::optional<std::size_t> slot = pivot::formula_ref_slot(node.as_name(), parsed.refs.size());
     return slot ? std::optional<std::uint32_t>(static_cast<std::uint32_t>(*slot)) : std::nullopt;
   };
   const std::vector<std::string> no_sheets;
@@ -1165,10 +1166,11 @@ bool LowerFormula(const std::string& text, const pivot::PivotCache& cache, std::
   return true;
 }
 
-bool WriteFieldFormula(const std::string& text, const pivot::PivotCache& cache, pcd::Field* out) {
+bool WriteFieldFormula(const std::string& text, std::optional<pivot::ParsedFormula>* parsed,
+                       const pivot::PivotCache& cache, pcd::Field* out) {
   std::vector<pivot_calc::PName> names;
   std::vector<std::uint8_t> rgce;
-  if (!LowerFormula(text, cache, std::nullopt, &rgce, &names) || names.empty()) {
+  if (!LowerFormula(text, parsed, cache, &rgce, &names) || names.empty()) {
     return false;
   }
   out->formula_rgce = std::move(rgce);
@@ -1176,12 +1178,13 @@ bool WriteFieldFormula(const std::string& text, const pivot::PivotCache& cache, 
   return true;
 }
 
-bool WriteField(const pivot::PivotCacheField& in, const pivot::PivotCache& cache, bool date1904, pcd::Field* out) {
+bool WriteField(const pivot::PivotCacheField& in, std::optional<pivot::ParsedFormula>* parsed,
+                const pivot::PivotCache& cache, bool date1904, pcd::Field* out) {
   if (!in.extra_attrs.empty() || !in.trailing_children_xml.empty() || !in.num_fmt_id || *in.num_fmt_id > 0xFFFFU) {
     return false;
   }
   if (in.formula && (in.is_database_field || !in.shared_items.empty() || in.shared_items_hints.present ||
-                     in.field_group || !WriteFieldFormula(*in.formula, cache, out))) {
+                     in.field_group || !WriteFieldFormula(*in.formula, parsed, cache, out))) {
     return false;
   }
   out->flags = in.is_database_field ? pcd::kFieldDatabase : 0U;
@@ -1243,7 +1246,8 @@ bool WriteArea(const pivot::PivotArea& in, pivot_area::PivotArea* out) {
   return true;
 }
 
-bool WriteCalcItem(const pivot::PivotCalculatedItem& in, const pivot::PivotCache& cache, pivot_calc::CalcItem* out) {
+bool WriteCalcItem(const pivot::PivotCalculatedItem& in, std::optional<pivot::ParsedFormula>* parsed,
+                   const pivot::PivotCache& cache, pivot_calc::CalcItem* out) {
   if (in.has_field_attr || !in.extra_children_xml.empty()) {
     return false;
   }
@@ -1252,7 +1256,7 @@ bool WriteCalcItem(const pivot::PivotCalculatedItem& in, const pivot::PivotCache
   }
   std::vector<pivot_calc::PName> names;
   std::vector<std::uint8_t> rgce;
-  if (!LowerFormula(in.formula, cache, in.cache_field_index, &rgce, &names)) {
+  if (!LowerFormula(in.formula, parsed, cache, &rgce, &names)) {
     return false;
   }
   out->field = pivot_calc::kNoField;
@@ -1570,13 +1574,13 @@ Expected<pivot::PivotCache, Error> pivot_cache_from_xlsb(ByteSpan definition_par
   return cache;
 }
 
-Expected<XlsbPivotCacheParts, Error> pivot_cache_to_xlsb(const pivot::PivotCache& cache, bool date1904,
+Expected<XlsbPivotCacheParts, Error> pivot_cache_to_xlsb(const pivot::PivotCache& cache,
+                                                         pivot::ParsedCacheFormulas formulas, bool date1904,
                                                          std::string_view records_rel_id) {
-  // Formula names match fields under the caller's collation, else the default profile's.
-  std::optional<eval::ScopedEvalProfile> profile_scope;
-  if (!eval::eval_profile_scope_active()) {
-    profile_scope.emplace(default_excel_profile());
-  }
+  const auto slot = [](std::vector<std::optional<pivot::ParsedFormula>>& parsed,
+                       std::size_t index) -> std::optional<pivot::ParsedFormula>* {
+    return index < parsed.size() ? &parsed[index] : nullptr;
+  };
   pcd::Document doc;
   if (!WriteRoot(cache, &doc) || !WriteExtLst(cache, &doc)) {
     return NotWritable();
@@ -1588,18 +1592,18 @@ Expected<XlsbPivotCacheParts, Error> pivot_cache_to_xlsb(const pivot::PivotCache
     return NotWritable();
   }
   doc.record_count = static_cast<std::uint32_t>(cache.record_count_to_save());
-  for (const pivot::PivotCacheField& in : cache.fields()) {
+  for (std::size_t i = 0; i < cache.fields().size(); ++i) {
     pcd::Field field;
-    if (!WriteField(in, cache, date1904, &field)) {
+    if (!WriteField(cache.fields()[i], slot(formulas.fields, i), cache, date1904, &field)) {
       return NotWritable();
     }
     doc.fields.push_back(std::move(field));
   }
   if (!cache.calculated_items().empty()) {
     std::vector<pivot_calc::CalcItem> items;
-    for (const pivot::PivotCalculatedItem& in : cache.calculated_items()) {
+    for (std::size_t i = 0; i < cache.calculated_items().size(); ++i) {
       pivot_calc::CalcItem item;
-      if (!WriteCalcItem(in, cache, &item)) {
+      if (!WriteCalcItem(cache.calculated_items()[i], slot(formulas.items, i), cache, &item)) {
         return NotWritable();
       }
       items.push_back(std::move(item));

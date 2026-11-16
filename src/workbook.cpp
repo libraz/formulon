@@ -24,8 +24,10 @@
 #include "drawing/drawing_edit.h"
 #include "drawing/slicer_edit.h"
 #include "eval/dep_graph.h"
+#include "eval/eval_profile_scope.h"
 #include "eval/formula_entry.h"
 #include "eval/iterative_solver.h"
+#include "eval/pivot_formula.h"
 #include "eval/recalc_engine.h"
 #include "eval/recalc_reentry.h"
 #include "eval/scheduler.h"
@@ -56,6 +58,7 @@
 #include "passthrough_part.h"
 #include "phonetic.h"
 #include "pivot/pivot_cache.h"
+#include "pivot/pivot_formula_host.h"
 #include "pivot/pivot_table.h"
 #include "sheet.h"
 #include "sheet_name.h"
@@ -375,6 +378,33 @@ const pivot::PivotCache* Workbook::find_pivot_cache(std::uint32_t cache_id) cons
     }
   }
   return nullptr;
+}
+
+void Workbook::parse_pivot_cache_formulas(const pivot::PivotCache& cache, pivot::ParsedCacheFormulas* out) {
+  std::optional<eval::ScopedEvalProfile> profile_scope;
+  if (!eval::eval_profile_scope_active()) {
+    profile_scope.emplace(default_excel_profile());
+  }
+  const auto parse = [&cache](const std::string& formula, std::optional<std::size_t> item_field,
+                              std::optional<pivot::ParsedFormula>* slot) {
+    pivot::ParsedFormula parsed;
+    if (eval::parse_pivot_formula(formula, pivot::FormulaScope{&cache, item_field}, &parsed)) {
+      slot->emplace(std::move(parsed));
+    }
+  };
+  out->fields.clear();
+  out->fields.resize(cache.fields().size());
+  for (std::size_t i = 0; i < cache.fields().size(); ++i) {
+    if (cache.fields()[i].formula) {
+      parse(*cache.fields()[i].formula, std::nullopt, &out->fields[i]);
+    }
+  }
+  out->items.clear();
+  out->items.resize(cache.calculated_items().size());
+  for (std::size_t i = 0; i < cache.calculated_items().size(); ++i) {
+    const pivot::PivotCalculatedItem& item = cache.calculated_items()[i];
+    parse(item.formula, item.cache_field_index, &out->items[i]);
+  }
 }
 
 Expected<std::vector<std::uint8_t>, Error> Workbook::save() const {

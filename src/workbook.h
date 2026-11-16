@@ -66,6 +66,7 @@ namespace pivot {
 class PivotCache;
 class PivotTable;
 struct PivotCacheField;
+struct ParsedCacheFormulas;
 }  // namespace pivot
 
 namespace parser {
@@ -1506,6 +1507,12 @@ class Workbook {
   /// workbooks typically have fewer than ten caches so the cost is
   /// negligible. Returns `nullptr` when no cache matches.
   const pivot::PivotCache* find_pivot_cache(std::uint32_t cache_id) const noexcept;
+
+  /// Parses every calculated-field and calculated-item formula of `cache`
+  /// against it into `out`, indexed like the cache; the binary pivot cache
+  /// writer lowers them. Names match under the evaluating profile's collation,
+  /// else the default profile's.
+  static void parse_pivot_cache_formulas(const pivot::PivotCache& cache, pivot::ParsedCacheFormulas* out);
 
   /// Appends `field` to cache `cache_id` and one unplaced pivot field to every
   /// pivot bound to that cache; returns the new cache field index. Fails with

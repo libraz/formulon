@@ -6,6 +6,7 @@
 #include <iterator>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -17,9 +18,11 @@
 #include "io/zip_reader.h"
 #include "pivot/field_grouping.h"
 #include "pivot/pivot_cache.h"
+#include "pivot/pivot_formula_host.h"
 #include "pivot_twin_corpus.h"
 #include "utils/resource_budget.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace io {
@@ -27,6 +30,14 @@ namespace xlsb {
 namespace {
 
 using ItemEntries = std::vector<pivot_cache_definition::ItemEntry>;
+
+/// Encodes `cache` with its formulas parsed as the workbook writer parses them.
+Expected<XlsbPivotCacheParts, Error> ToXlsb(const pivot::PivotCache& cache, bool date1904,
+                                            std::string_view records_rel_id) {
+  pivot::ParsedCacheFormulas formulas;
+  Workbook::parse_pivot_cache_formulas(cache, &formulas);
+  return pivot_cache_to_xlsb(cache, std::move(formulas), date1904, records_rel_id);
+}
 
 /// One cache of a corpus package: its two binary parts and the xlsx twin's parts of the same number.
 struct CacheCase {
@@ -286,7 +297,7 @@ TEST(XlsbPivotCacheBridge, CorpusReadsWritesBackAndMatchesTheXlsxTwin) {
       auto cache = pivot_cache_from_xlsb(SpanOf(c.definition), SpanOf(c.records), c.date1904);
       ASSERT_TRUE(cache.has_value()) << c.label << ": " << cache.error().message;
 
-      auto parts = pivot_cache_to_xlsb(cache.value(), c.date1904, RecordsRelId(c.definition));
+      auto parts = ToXlsb(cache.value(), c.date1904, RecordsRelId(c.definition));
       ASSERT_TRUE(parts.has_value()) << c.label << ": " << parts.error().message;
       // A loaded cache is clean, so a part saved before Excel wrote dataSourceClean gains it.
       auto expected = decode_pivot_cache_definition(SpanOf(c.definition));
@@ -340,7 +351,7 @@ TEST(XlsbPivotCacheBridge, CalculatedFieldFormulaShapes) {
     ASSERT_TRUE(cache.has_value()) << cache.error().message;
     ASSERT_TRUE(cache.value().fields().back().formula.has_value());
     EXPECT_EQ(*cache.value().fields().back().formula, w.formula);
-    auto parts = pivot_cache_to_xlsb(cache.value(), c->date1904, RecordsRelId(c->definition));
+    auto parts = ToXlsb(cache.value(), c->date1904, RecordsRelId(c->definition));
     ASSERT_TRUE(parts.has_value()) << parts.error().message;
     auto expected = decode_pivot_cache_definition(SpanOf(c->definition));
     ASSERT_TRUE(expected.has_value());
@@ -363,7 +374,7 @@ TEST(XlsbPivotCacheBridge, MaterialisedGroupFieldsWriteBackExcelsRecords) {
       }
       ++grouped;
       pivot::materialize_group_fields(cache.value(), c.date1904);
-      auto parts = pivot_cache_to_xlsb(cache.value(), c.date1904, RecordsRelId(c.definition));
+      auto parts = ToXlsb(cache.value(), c.date1904, RecordsRelId(c.definition));
       ASSERT_TRUE(parts.has_value()) << c.label << ": " << parts.error().message;
       EXPECT_EQ(parts.value().records, c.records) << c.label;
     }
@@ -379,7 +390,7 @@ TEST(XlsbPivotCacheBridge, SeventeenDigitRangeHintWritesItsValue) {
   ASSERT_TRUE(cache.has_value()) << cache.error().message;
   ASSERT_TRUE(read_pivot_cache_records(ZipEntry(xlsx, "xl/pivotCache/pivotCacheRecords1.xml"), cache.value()));
   ASSERT_EQ(cache.value().fields()[2].shared_items_hints.max_value, "8.8000000000000007");
-  auto parts = pivot_cache_to_xlsb(cache.value(), false, "rId1");
+  auto parts = ToXlsb(cache.value(), false, "rId1");
   ASSERT_TRUE(parts.has_value()) << parts.error().message;
   auto back = pivot_cache_from_xlsb(SpanOf(parts.value().definition), SpanOf(parts.value().records), false);
   ASSERT_TRUE(back.has_value()) << back.error().message;
@@ -403,7 +414,7 @@ TEST(XlsbPivotCacheBridge, InlineErrorRecordCellReadsWritesBackAndMatchesTheXlsx
     EXPECT_EQ(amt.min_value, "-1E+16") << c.label;
     EXPECT_EQ(amt.max_value, "1E+16") << c.label;
 
-    auto parts = pivot_cache_to_xlsb(cache.value(), c.date1904, RecordsRelId(c.definition));
+    auto parts = ToXlsb(cache.value(), c.date1904, RecordsRelId(c.definition));
     ASSERT_TRUE(parts.has_value()) << c.label << ": " << parts.error().message;
     EXPECT_EQ(parts.value().definition, c.definition) << c.label;
     EXPECT_EQ(parts.value().records, c.records) << c.label;
@@ -422,7 +433,7 @@ TEST(XlsbPivotCacheBridge, InlineErrorRecordCellReadsWritesBackAndMatchesTheXlsx
     EXPECT_EQ(twin.value().fields()[2].shared_items_hints.min_value, amt.min_value) << c.label;
     EXPECT_EQ(twin.value().fields()[2].shared_items_hints.max_value, amt.max_value) << c.label;
 
-    auto from_twin = pivot_cache_to_xlsb(twin.value(), c.date1904, RecordsRelId(c.definition));
+    auto from_twin = ToXlsb(twin.value(), c.date1904, RecordsRelId(c.definition));
     ASSERT_TRUE(from_twin.has_value()) << c.label << ": " << from_twin.error().message;
     EXPECT_EQ(from_twin.value().records, c.records) << c.label;
   }
@@ -576,7 +587,7 @@ TEST(XlsbPivotCacheBridge, InlineDateTimeRecordCell) {
 
 /// The rgce of the first calculated item of a written definition part.
 std::vector<std::uint8_t> WrittenFormula(const pivot::PivotCache& cache) {
-  auto parts = pivot_cache_to_xlsb(cache, false, "rId1");
+  auto parts = ToXlsb(cache, false, "rId1");
   EXPECT_TRUE(parts.has_value());
   if (!parts) {
     return {};
@@ -593,7 +604,7 @@ std::vector<std::uint8_t> WrittenFormula(const pivot::PivotCache& cache) {
 }
 
 void ExpectNotWritable(const pivot::PivotCache& cache) {
-  auto parts = pivot_cache_to_xlsb(cache, false, "rId1");
+  auto parts = ToXlsb(cache, false, "rId1");
   ASSERT_FALSE(parts.has_value());
   EXPECT_EQ(parts.error().code, FormulonErrorCode::kIoFeatureNotWritable);
 }
@@ -657,7 +668,7 @@ TEST(XlsbPivotCacheBridge, CalculatedItemNumbersWriteAsPtgNum) {
   for (const char* formula : {"Region[East]*2.5", "Region[East]*70000"}) {
     cache.mutable_calculated_items()[0].formula = formula;
     SCOPED_TRACE(formula);
-    auto parts = pivot_cache_to_xlsb(cache, false, "rId1");
+    auto parts = ToXlsb(cache, false, "rId1");
     ASSERT_TRUE(parts.has_value()) << parts.error().message;
     auto back = pivot_cache_from_xlsb(SpanOf(parts.value().definition), SpanOf(parts.value().records), false);
     ASSERT_TRUE(back.has_value()) << back.error().message;
@@ -687,7 +698,7 @@ TEST(XlsbPivotCacheBridge, RefusesASharedDateItemWithAFractionOfASecond) {
   pivot::PivotCache cache = FirstCache("pivot_days_end");
   pivot::PivotCacheField& d = cache.mutable_fields()[0];
   d.shared_items[70] = Value::number(70.5);  // 1900-03-10T12:00:00 has a spelling.
-  ASSERT_TRUE(pivot_cache_to_xlsb(cache, false, "rId1").has_value());
+  ASSERT_TRUE(ToXlsb(cache, false, "rId1").has_value());
   d.shared_items[70] = Value::number(70.5 + 0.5 / 86400.0);
   ExpectNotWritable(cache);
 }
@@ -702,7 +713,7 @@ void AppendSharedItem(pivot::PivotCache& cache, std::size_t field_index, const V
 
 /// The item table of field `field_index` of a written definition part.
 ItemEntries WrittenItems(const pivot::PivotCache& cache, std::size_t field_index) {
-  auto parts = pivot_cache_to_xlsb(cache, false, "rId1");
+  auto parts = ToXlsb(cache, false, "rId1");
   EXPECT_TRUE(parts.has_value());
   if (!parts) {
     return {};
@@ -763,7 +774,7 @@ TEST(XlsbPivotCacheBridge, WritesACacheBuiltInMemoryWithExcelsDefaults) {
   cache.mutable_passthrough_attrs().clear();
   cache.mutable_trailing_children_after_calculated_xml().clear();
   cache.mark_records_from_source();
-  auto parts = pivot_cache_to_xlsb(cache, false, "rId1");
+  auto parts = ToXlsb(cache, false, "rId1");
   ASSERT_TRUE(parts.has_value()) << parts.error().message;
   auto doc = decode_pivot_cache_definition(SpanOf(parts.value().definition));
   ASSERT_TRUE(doc.has_value()) << doc.error().message;
@@ -781,7 +792,7 @@ TEST(XlsbPivotCacheBridge, WritesACacheBuiltInMemoryWithExcelsDefaults) {
   by_hand.mutable_passthrough_attrs().clear();
   by_hand.mutable_trailing_children_after_calculated_xml().clear();
   by_hand.mutable_records();
-  auto hand_parts = pivot_cache_to_xlsb(by_hand, false, "rId1");
+  auto hand_parts = ToXlsb(by_hand, false, "rId1");
   ASSERT_TRUE(hand_parts.has_value()) << hand_parts.error().message;
   auto hand_doc = decode_pivot_cache_definition(SpanOf(hand_parts.value().definition));
   ASSERT_TRUE(hand_doc.has_value());
@@ -795,7 +806,7 @@ TEST(XlsbPivotCacheBridge, KeepsACacheWithoutRefreshedBy) {
   auto& attrs = cache.mutable_passthrough_attrs();
   attrs.erase(std::remove_if(attrs.begin(), attrs.end(), [](const auto& a) { return a.first == "refreshedBy"; }),
               attrs.end());
-  auto parts = pivot_cache_to_xlsb(cache, false, "rId1");
+  auto parts = ToXlsb(cache, false, "rId1");
   ASSERT_TRUE(parts.has_value()) << parts.error().message;
   auto doc = decode_pivot_cache_definition(SpanOf(parts.value().definition));
   ASSERT_TRUE(doc.has_value()) << doc.error().message;
@@ -813,7 +824,7 @@ TEST(XlsbPivotCacheBridge, WritesACacheReadWithoutARefreshedDateAsZero) {
   attrs.erase(std::remove_if(attrs.begin(), attrs.end(),
                              [](const auto& a) { return a.first == "refreshedDate" || a.first == "refreshedBy"; }),
               attrs.end());
-  auto parts = pivot_cache_to_xlsb(cache, false, "rId1");
+  auto parts = ToXlsb(cache, false, "rId1");
   ASSERT_TRUE(parts.has_value()) << parts.error().message;
   auto doc = decode_pivot_cache_definition(SpanOf(parts.value().definition));
   ASSERT_TRUE(doc.has_value()) << doc.error().message;

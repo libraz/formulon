@@ -11,7 +11,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -25,24 +24,10 @@
 
 namespace formulon::eval {
 
-/// A pivot formula parsed against a cache: the AST holds synthetic `_fmpvN` names
-/// that index `refs`, and `canonical` is the text with item names qualified.
-struct ParsedPivotFormula {
-  Arena arena;
-  const parser::AstNode* root = nullptr;
-  std::vector<pivot::FormulaRef> refs;
-  std::string canonical;
-};
-
-/// Rewrites, parses and validates `formula`. The caller holds a `ScopedEvalProfile`.
+/// Rewrites, parses and validates `formula`; `canonical` is the text with item
+/// names qualified. The caller holds a `ScopedEvalProfile`.
 Expected<void, Error> parse_pivot_formula(std::string_view formula, const pivot::FormulaScope& scope,
-                                          ParsedPivotFormula* out);
-
-/// The `refs` index a synthetic NameRef name stands for, or nullopt when it is not one below `ref_count`.
-std::optional<std::size_t> pivot_formula_ref_slot(std::string_view name, std::size_t ref_count);
-
-/// Appends a field name as the formula text writes it: bare, or `'...'` with quotes doubled.
-void append_pivot_formula_name(std::string& out, std::string_view name);
+                                          pivot::ParsedFormula* out);
 
 /// Compiles and evaluates calculated-field / calculated-item formulas.
 ///
