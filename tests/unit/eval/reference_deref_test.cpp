@@ -1053,6 +1053,20 @@ TEST_F(SelectedRefTest, EdgeReachingRectanglesReadTheirPopulatedHead) {
   ExpectSame(Eval("=INDEX(DROP(A:A,1),100)"), Eval("=A101"), "pick past the head");
 }
 
+// The reference operators over operands that are references build the operator's `Ref`.
+TEST_F(SelectedRefTest, ReferenceOperatorsOverReferencesAreReferences) {
+  ExpectSelected("=IF(TRUE,A1:B2 B1:C3)", 0, 1, 1, 1);
+  ExpectSelected("=IF(TRUE,A1:B2:C3)", 0, 0, 2, 2);
+  ExpectSelected("=IF(TRUE,A1:OFFSET(A1,2,2))", 0, 0, 2, 2, kHome, /*dynamic=*/true);
+  ExpectSelected("=INDEX(A1:INDEX(A1:E5,3,3),2,2)", 1, 1, 1, 1);
+  const Value united = AsRef("=CHOOSE(1,(A1,C3))");
+  ASSERT_TRUE(united.is_ref()) << united.debug_to_string();
+  EXPECT_EQ(united.ref_form(), RefForm::kUnion);
+  ExpectError(AsRef("=IF(TRUE,A1:B2 D4:E5)"), ErrorCode::Null, "disjoint intersection");
+  ExpectSame(Eval("=SUM(IF(TRUE,A1:B2 B1:C3))"), Eval("=SUM(B1:B2)"), "value mode of an intersection");
+  ExpectSame(Eval("=IF(TRUE,(A1,C3))"), Eval("=(A1,C3)"), "a union read as a value");
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

@@ -47,6 +47,7 @@
 #include "eval/range_resolvers.h"
 #include "eval/recalc_engine.h"
 #include "eval/reference/deref.h"
+#include "eval/reference/ops.h"
 #include "eval/reference/ref_value.h"
 #include "eval/spill_anchor.h"
 #include "eval/structured_ref.h"
@@ -611,6 +612,69 @@ RefOrigin token_origin(const parser::Reference& lhs, const parser::Reference& rh
 
 }  // namespace
 
+bool evaluates_to_reference(const parser::AstNode& node) {
+  switch (node.kind()) {
+    case parser::NodeKind::Ref:
+    case parser::NodeKind::Ref3D:
+      return true;
+    case parser::NodeKind::RangeOp:
+      for (std::uint32_t i = 0; i < node.as_range_arity(); ++i) {
+        if (!evaluates_to_reference(node.as_range_operand(i))) {
+          return false;
+        }
+      }
+      return true;
+    case parser::NodeKind::UnionOp:
+      for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
+        if (!evaluates_to_reference(node.as_union_child(i))) {
+          return false;
+        }
+      }
+      return true;
+    case parser::NodeKind::IntersectOp:
+      return evaluates_to_reference(node.as_intersect_lhs()) && evaluates_to_reference(node.as_intersect_rhs());
+    case parser::NodeKind::Call: {
+      const LazyEntry* entry = find_lazy_entry(strip_future_prefix(node.as_call_name()));
+      return entry != nullptr && entry->ref_result != RefResult::kNone && entry->ref_result != RefResult::kProjected;
+    }
+    default:
+      return false;
+  }
+}
+
+namespace {
+
+// `:`, ` ` and `,` over operands that evaluate to references: the operator applied to their `Ref`s. Out of
+// line so the folds' temporaries stay off `eval_node_ref`'s frame.
+[[gnu::noinline]] Value fold_reference_operator(const parser::AstNode& node, Arena& arena,
+                                                const FunctionRegistry& registry, const EvalContext& ctx) {
+  switch (node.kind()) {
+    case parser::NodeKind::RangeOp: {
+      Value acc = eval_node_ref(node.as_range_operand(0), arena, registry, ctx);
+      for (std::uint32_t i = 1; i < node.as_range_arity() && !acc.is_error(); ++i) {
+        acc = ref_range(acc, eval_node_ref(node.as_range_operand(i), arena, registry, ctx), arena, ctx);
+      }
+      return acc;
+    }
+    case parser::NodeKind::UnionOp: {
+      Value acc = eval_node_ref(node.as_union_child(0), arena, registry, ctx);
+      for (std::uint32_t i = 1; i < node.as_union_arity() && !acc.is_error(); ++i) {
+        acc = ref_union(acc, eval_node_ref(node.as_union_child(i), arena, registry, ctx), arena, ctx);
+      }
+      return acc;
+    }
+    default: {
+      const Value lhs = eval_node_ref(node.as_intersect_lhs(), arena, registry, ctx);
+      if (lhs.is_error()) {
+        return lhs;
+      }
+      return ref_intersect(lhs, eval_node_ref(node.as_intersect_rhs(), arena, registry, ctx), arena, ctx);
+    }
+  }
+}
+
+}  // namespace
+
 Value eval_node_ref(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                     const EvalContext& ctx) {
   switch (node.kind()) {
@@ -620,15 +684,27 @@ Value eval_node_ref(const parser::AstNode& node, Arena& arena, const FunctionReg
     }
     case parser::NodeKind::RangeOp: {
       if (node.as_range_arity() != 2U) {
+        if (evaluates_to_reference(node)) {
+          return fold_reference_operator(node, arena, registry, ctx);
+        }
         break;
       }
       const auto& lhs = node.as_range_operand(0);
       const auto& rhs = node.as_range_operand(1);
       if (lhs.kind() != parser::NodeKind::Ref || rhs.kind() != parser::NodeKind::Ref) {
+        if (evaluates_to_reference(node)) {
+          return fold_reference_operator(node, arena, registry, ctx);
+        }
         break;
       }
       return make_area_ref(lhs.as_ref(), rhs.as_ref(), token_origin(lhs.as_ref(), rhs.as_ref()), arena, ctx);
     }
+    case parser::NodeKind::UnionOp:
+    case parser::NodeKind::IntersectOp:
+      if (evaluates_to_reference(node)) {
+        return fold_reference_operator(node, arena, registry, ctx);
+      }
+      break;
     case parser::NodeKind::Ref3D:
       // Inside grouping parentheses a 3-D span is no reference: `#NAME?`, as its value reads.
       if (is_grouped_ref3d(node)) {

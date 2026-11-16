@@ -199,7 +199,7 @@ Value eval_take_drop(const parser::AstNode& call, Arena& arena, const FunctionRe
                      const EvalContext& ctx, bool take) {
   const std::uint32_t arity = call.as_call_arity();
   // A cell or range token is read as its reference; a reference-returning call is evaluated once here.
-  if (arity >= 2U && arity <= 3U && source_returns_reference(call.as_call_arg(0))) {
+  if (arity >= 2U && arity <= 3U && evaluates_to_reference(call.as_call_arg(0))) {
     const Value source = eval_node_ref(call.as_call_arg(0), arena, registry, ctx);
     if (Value sliced = Value::blank(); slice_reference(call, source, take, arena, registry, ctx, &sliced)) {
       return sliced;

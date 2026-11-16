@@ -872,7 +872,7 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   }
   // A source that evaluates to a `Ref` is picked as a reference; its cells are read only for array indices.
   const Value source_ref =
-      source_returns_reference(source_node) ? eval_node_ref(source_node, arena, registry, ctx) : Value::blank();
+      evaluates_to_reference(source_node) ? eval_node_ref(source_node, arena, registry, ctx) : Value::blank();
   const bool picks_reference = is_one_area_ref(source_ref);
   // A single-cell pick reads one cell by its declared position, so the
   // whole-axis extent walk waits until a selection spans a line or more.
@@ -882,7 +882,7 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   std::optional<IndexSource> source;
   if (picks_reference && source_node.kind() == parser::NodeKind::Call) {
     by_reference = true;
-  } else if (source_node.kind() == parser::NodeKind::Call && source_returns_reference(source_node)) {
+  } else if (source_node.kind() == parser::NodeKind::Call && evaluates_to_reference(source_node)) {
     // The call answered a value or an error, read as the source's cells.
     if (source_ref.is_error()) {
       source_error = source_ref.as_error();

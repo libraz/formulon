@@ -2,7 +2,6 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <initializer_list>
 #include <string_view>
 #include <vector>
 
@@ -14,7 +13,6 @@
 #include "eval/jp_fold.h"
 #include "eval/name_env_resolve.h"
 #include "eval/structured_ref_project.h"
-#include "eval/tree_walker/dispatch.h"
 #include "eval/wildcard.h"
 #include "excel_locale.h"
 #include "external_book.h"
@@ -45,20 +43,6 @@ bool is_reference_token(const parser::AstNode& node) {
     default:
       return false;
   }
-}
-
-bool source_returns_reference(const parser::AstNode& node) {
-  if (node.kind() != parser::NodeKind::Call) {
-    return is_reference_token(node);
-  }
-  const std::string_view name = strip_future_prefix(node.as_call_name());
-  for (const std::string_view producer : {"OFFSET", "INDIRECT", "IF", "CHOOSE", "IFS", "SWITCH", "INDEX", "XLOOKUP",
-                                          "TAKE", "DROP", "TRIMRANGE", "_TRO_ALL", "_TRO_LEADING", "_TRO_TRAILING"}) {
-    if (strings::case_insensitive_eq(name, producer)) {
-      return true;
-    }
-  }
-  return false;
 }
 
 bool is_one_area_ref(const Value& value) {

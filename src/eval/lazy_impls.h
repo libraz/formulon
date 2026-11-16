@@ -57,6 +57,11 @@ Shaped eval_node_shaped(const parser::AstNode& node, Arena& arena, const Functio
 Value eval_node_ref(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                     const EvalContext& ctx);
 
+/// Whether `node` evaluates to a `Ref` when it names a reference, so `eval_node_ref` reads it once: a cell,
+/// range or whole-axis token, a 3-D span, a `:` / ` ` / `,` over such operands, or a call that returns its
+/// reference (a lazy entry whose `ref_result` is neither `kNone` nor `kProjected`).
+bool evaluates_to_reference(const parser::AstNode& node);
+
 /// Signature of every lazy (short-circuit / range-aware) function impl.
 /// The central dispatch table in `tree_walker.cpp` stores pointers of
 /// this type.

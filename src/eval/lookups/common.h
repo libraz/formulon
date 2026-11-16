@@ -43,12 +43,6 @@ class FunctionRegistry;
 // paths continue to return the original reference blank unchanged.
 Value promote_array_result_cell(const Value& value);
 
-/// Whether `node` evaluates to a `Ref` when it names a reference: a cell or
-/// range token, or a call that returns its reference (OFFSET, INDIRECT, IF,
-/// CHOOSE, IFS, SWITCH, INDEX, XLOOKUP, TAKE, DROP, TRIMRANGE and the trim
-/// operators). Other sources are read through the range seams.
-bool source_returns_reference(const parser::AstNode& node);
-
 /// `node` is a cell or range token, read as a reference without evaluating anything.
 bool is_reference_token(const parser::AstNode& node);
 
