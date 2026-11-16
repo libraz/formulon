@@ -1,0 +1,35 @@
+suite: match_scalar_lookup_array
+description: >
+  MATCH over a lookup_array that is neither a reference nor an array never
+  searches it; the error follows the value's type: #VALUE! for text, #N/A for a
+  number or a logical, literal or computed, at either match type, even when it
+  equals the lookup value. A one-cell reference and a one-element array are
+  searched.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: text_literal_equal
+    formula: '=MATCH("c3","c3",0)'
+
+  - id: text_computed_equal
+    formula: '=MATCH("c3","c"&"3",0)'
+
+  - id: text_from_cell_concat_approximate
+    setup: { A3: 'c3' }
+    formula: '=MATCH("c3",A3&"",1)'
+
+  - id: number_literal_equal
+    formula: '=MATCH(1,1,0)'
+
+  - id: number_computed_approximate
+    formula: '=MATCH(1,1+0,1)'
+
+  - id: logical_computed_equal
+    formula: '=MATCH(TRUE,1=1,0)'
+
+  - id: one_cell_reference_text
+    setup: { A3: 'c3' }
+    formula: '=MATCH("c3",A3,0)'
+
+  - id: one_element_array_text
+    formula: '=MATCH("c3",{"c3"},0)'

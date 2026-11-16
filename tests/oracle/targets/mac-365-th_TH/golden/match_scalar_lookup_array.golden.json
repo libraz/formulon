@@ -1,0 +1,99 @@
+{
+  "suite": "match_scalar_lookup_array",
+  "description": "MATCH over a lookup_array that is neither a reference nor an array never searches it; the error follows the value's type: #VALUE! for text, #N/A for a number or a logical, literal or computed, at either match type, even when it equals the lookup value. A one-cell reference and a one-element array are searched.\n",
+  "environment": {
+    "excel_version": "16.115",
+    "excel_locale": "th-TH",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-11-16T20:45:03Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "text_literal_equal",
+      "formula": "=MATCH(\"c3\",\"c3\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_computed_equal",
+      "formula": "=MATCH(\"c3\",\"c\"&\"3\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "text_from_cell_concat_approximate",
+      "formula": "=MATCH(\"c3\",A3&\"\",1)",
+      "setup": {
+        "A3": {
+          "kind": "text",
+          "value": "c3"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "number_literal_equal",
+      "formula": "=MATCH(1,1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "number_computed_approximate",
+      "formula": "=MATCH(1,1+0,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "logical_computed_equal",
+      "formula": "=MATCH(TRUE,1=1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "one_cell_reference_text",
+      "formula": "=MATCH(\"c3\",A3,0)",
+      "setup": {
+        "A3": {
+          "kind": "text",
+          "value": "c3"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "one_element_array_text",
+      "formula": "=MATCH(\"c3\",{\"c3\"},0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    }
+  ]
+}
