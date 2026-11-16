@@ -352,10 +352,10 @@ export function registerStyles(Module, test) {
       const protectionAgain = wb.addDxf(gotProtection);
       assert.equal(protectionAgain, protection);
 
-      // A save writes only the dxfs something references, in the order of its CF blocks.
+      // A save writes only the dxfs something references, in reverse order of the CF blocks naming them.
       for (const [row, dxfIndex] of [
-        [0, alignment],
-        [1, protection],
+        [0, protection],
+        [1, alignment],
       ]) {
         wb.addCfRule(0, {
           ranges: [{ firstRow: row, firstCol: 0, lastRow: row, lastCol: 0 }],
