@@ -17,13 +17,20 @@ targets for the next round of `make oracle-gen` work — Mac Excel 365 (ja-JP)
 acts as the authoritative oracle for fresh yaml suites we author in
 `tests/oracle/cases/`.
 
-Stdlib only. Works on CPython 3.8+.
+`--shapes` adds a second layer: for every implemented function it reads the
+yaml cases that call it and tags each call's arguments as array (an array
+constant or a range), error (an error literal, NA(), or a cell set up to hold
+an error), blank (a referenced cell the setup leaves empty) or omitted (an
+empty argument slot), then ranks functions by how many of array / error /
+blank no case exercises. That layer needs PyYAML (`make oracle-setup`); the
+rest is stdlib only. Works on CPython 3.8+.
 
 Usage:
     tools/oracle/coverage_gap.py                 # pilot candidates table
     tools/oracle/coverage_gap.py --all           # full per-function table
     tools/oracle/coverage_gap.py --json          # machine-readable
     tools/oracle/coverage_gap.py --missing-impl  # functions with no impl AND no oracle
+    tools/oracle/coverage_gap.py --shapes        # functions ranked by untested argument shapes
 """
 
 from __future__ import annotations
@@ -112,6 +119,112 @@ def scan_native_golden(directory: Path) -> Dict[str, Set[Path]]:
     return out
 
 
+# Argument shapes a function's cases should exercise, and those the ranking counts.
+SHAPES = ("array", "error", "blank", "omitted")
+RANKED_SHAPES = ("array", "error", "blank")
+# Functions whose value depends on the environment or the clock, or that take no
+# argument; an argument-shape case cannot be pinned for them.
+SHAPE_EXEMPT = frozenset(
+    "COPILOT CUBEKPIMEMBER CUBEMEMBER CUBEMEMBERPROPERTY CUBERANKEDMEMBER CUBESET CUBESETCOUNT CUBEVALUE "
+    "DETECTLANGUAGE IMAGE NOW PY RAND RANDARRAY RANDBETWEEN RTD STOCKHISTORY TODAY TRANSLATE WEBSERVICE "
+    "FALSE TRUE NA PI".split()
+)
+
+_ERROR_LITERAL_RE = re.compile(
+    r"#(?:N/A|VALUE!|REF!|DIV/0!|NUM!|NAME\?|NULL!|SPILL!|CALC!)|(?<![A-Za-z0-9_.])NA\(\)", re.I
+)
+_RANGE_RE = re.compile(
+    r"\$?[A-Z]{1,3}\$?\d+:\$?[A-Z]{1,3}\$?\d+|(?<![A-Za-z0-9_])\$?[A-Z]{1,3}:\$?[A-Z]{1,3}(?![A-Za-z0-9_(])|\b\d+:\d+\b"
+)
+# A single-cell reference: not part of a longer name, not a call (`LOG10(`), not a range end.
+_CELL_RE = re.compile(r"(?<![A-Za-z0-9_.:$])\$?([A-Z]{1,3})\$?(\d+)(?![A-Za-z0-9_(:])")
+_STRING_RE = re.compile(r'"(?:[^"]|"")*"')
+
+
+def call_arguments(formula: str, fn: str) -> List[List[str]]:
+    """The argument lists of every call of `fn` in `formula`, split at top-level commas."""
+    calls: List[List[str]] = []
+    if fn.upper() in OPERATOR_FORMS:
+        return calls
+    for m in function_pattern(fn).finditer(formula):
+        args, cur, depth, quoted = [], "", 1, False
+        for ch in formula[m.end() :]:
+            if ch == '"':
+                quoted = not quoted
+            elif not quoted and ch in "({":
+                depth += 1
+            elif not quoted and ch in ")}":
+                depth -= 1
+                if depth == 0:
+                    break
+            elif not quoted and depth == 1 and ch == ",":
+                args.append(cur.strip())
+                cur = ""
+                continue
+            cur += ch
+        args.append(cur.strip())
+        calls.append(args)
+    return calls
+
+
+def argument_shapes(args: Sequence[str], setup: Dict[str, object]) -> Set[str]:
+    """Tags one call's arguments with the shapes in `SHAPES`."""
+    cells = {str(k).upper().replace("$", ""): v for k, v in setup.items()}
+    tags: Set[str] = set()
+    if args != [""] and "" in args:
+        tags.add("omitted")
+    for arg in args:
+        bare = _STRING_RE.sub('""', arg)
+        if "{" in bare or _RANGE_RE.search(bare):
+            tags.add("array")
+        if _ERROR_LITERAL_RE.search(bare):
+            tags.add("error")
+        for col, row in _CELL_RE.findall(_RANGE_RE.sub("", bare)):
+            value = cells.get(col + row)
+            if value is None or value == "":
+                tags.add("blank")
+            elif isinstance(value, str) and (value.startswith("#") or _ERROR_LITERAL_RE.match(value.lstrip("="))):
+                tags.add("error")
+    return tags
+
+
+def classify_shapes(cases_dir: Path, functions: Iterable[str]) -> Dict[str, Dict[str, object]]:
+    """Per function: how many yaml case calls it has and the union of their argument shapes."""
+    if str(REPO_ROOT) not in sys.path:  # run as a script: the repository root holds tools/yaml_load.py
+        sys.path.insert(0, str(REPO_ROOT))
+    from tools.yaml_load import load_yaml  # PyYAML is needed only here
+
+    cases = []
+    for path in sorted(cases_dir.glob("*.yaml")):
+        doc = load_yaml(path.read_text(encoding="utf-8")) or {}
+        for case in doc.get("cases") or []:
+            formula = case.get("formula")
+            if isinstance(formula, str):
+                cases.append((formula, case.get("setup") or {}))
+    out: Dict[str, Dict[str, object]] = {}
+    for fn in functions:
+        calls, shapes = 0, set()
+        for formula, setup in cases:
+            for args in call_arguments(formula, fn):
+                calls += 1
+                shapes |= argument_shapes(args, setup)
+        out[fn] = {"calls": calls, "shapes": sorted(shapes)}
+    return out
+
+
+def shape_gaps(classified: Dict[str, Dict[str, object]]) -> List[Dict[str, object]]:
+    """Functions that miss a ranked shape, most missing first, exempt and uncalled ones left out."""
+    rows = []
+    for fn, info in classified.items():
+        if fn in SHAPE_EXEMPT or fn.startswith("_") or not info["calls"]:
+            continue
+        missing = [s for s in RANKED_SHAPES if s not in info["shapes"]]
+        if missing:
+            rows.append({"name": fn, "calls": info["calls"], "missing": missing})
+    rows.sort(key=lambda r: (-len(r["missing"]), r["name"]))
+    return rows
+
+
 def build_rows(
     catalog: Set[str],
     implemented: Set[str],
@@ -171,6 +284,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         action="store_true",
         help="Emit machine-readable JSON instead of a text table.",
     )
+    parser.add_argument(
+        "--shapes",
+        action="store_true",
+        help="Rank implemented functions by the argument shapes (array, error, blank) no yaml case exercises.",
+    )
     args = parser.parse_args(argv)
 
     _, catalog = catalog_status.load_catalog(catalog_status.CATALOG_PATH)
@@ -181,6 +299,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     native_golden_hits = scan_native_golden(ORACLE_GOLDEN_DIR)
 
     rows = build_rows(catalog, implemented, yaml_hits, ironcalc_hits, native_golden_hits)
+
+    if args.shapes:
+        gaps = shape_gaps(classify_shapes(ORACLE_CASES_DIR, sorted(implemented & catalog)))
+        if args.json:
+            json.dump({"shape_gaps": gaps}, sys.stdout, indent=2)
+            sys.stdout.write("\n")
+            return 0
+        print(f"Functions missing an argument shape: {len(gaps)}")
+        print()
+        for r in gaps:
+            print(f"{str(r['name']):32}  calls {r['calls']:4}  missing {', '.join(r['missing'])}")
+        return 0
 
     if args.json:
         summary = {

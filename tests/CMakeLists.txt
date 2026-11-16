@@ -961,6 +961,12 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     COMMAND ${_FORMULON_BEHAVIOR_PY} -m tools.oracle.reprobe_test
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
+  # The argument-shape ranking that picks which functions get edge cases next.
+  add_test(
+    NAME OracleCoverageShapes
+    COMMAND ${_FORMULON_BEHAVIOR_PY} -m tools.oracle.coverage_gap_test
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
 endif()
 
 add_subdirectory(integration)
