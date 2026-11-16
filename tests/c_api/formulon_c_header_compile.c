@@ -71,10 +71,10 @@ int main(void) {
   int version_matches = FM_CHECK_VERSION();
   fm_status_t (*parallel_recalc)(fm_workbook_t*, uint32_t, fm_parallel_recalc_stats_info_t*) =
       fm_workbook_recalc_parallel;
-  fm_status_t (*save_diagnostics)(const fm_workbook_t*, int32_t, uint8_t**, size_t*, fm_save_diagnostics_info_t*) =
+  fm_status_t (*save_diagnostics)(fm_workbook_t*, int32_t, uint8_t**, size_t*, fm_save_diagnostics_info_t*) =
       fm_workbook_save_with_diagnostics;
   fm_status_t (*read_diagnostics)(const fm_workbook_t*, fm_read_diagnostics_info_t*) = fm_workbook_get_diagnostics;
-  fm_status_t (*save)(const fm_workbook_t*, int32_t, uint8_t**, size_t*) = fm_workbook_save;
+  fm_status_t (*save)(fm_workbook_t*, int32_t, uint8_t**, size_t*) = fm_workbook_save;
   _Static_assert(FM_WORKBOOK_FORMAT_XLSX == 0, "a zeroed save format is xlsx");
   // Insert / Delete Cells take the rectangle by const pointer and the shift as
   // a raw ordinal; zero is Down, valid for an insert only.
