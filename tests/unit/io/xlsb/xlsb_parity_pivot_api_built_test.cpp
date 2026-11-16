@@ -417,6 +417,24 @@ INSTANTIATE_TEST_SUITE_P(Blanks, XlsbParityPivotBlank,
                                            "blank_value_only", "blank_date_not_on_axis", "blank_control_date_rows",
                                            "blank_date_row_field"));
 
+// A numeric range group in place on its database field (xlsb_parity/pivot/groups, Excel 16.115's saves, ja-JP and
+// en-US): the field keeps its shared items and carries the group, with automatic and manual bounds, on rows and
+// columns, against the ungrouped control.
+class XlsbParityPivotNumericGroups : public ::testing::TestWithParam<const char*> {};
+
+TEST_P(XlsbParityPivotNumericGroups, WritesExcelsPivotRecords) {
+  ExpectExcelsPivotRecords("groups", GetParam());
+}
+
+INSTANTIATE_TEST_SUITE_P(NumericGroups, XlsbParityPivotNumericGroups,
+                         ::testing::Values("numgroup_rows_auto", "numgroup_rows_control_none",
+                                           "numgroup_rows_manual_start", "numgroup_rows_manual_end",
+                                           "numgroup_rows_manual_both", "numgroup_cols_auto",
+                                           "numgroup_cols_control_none", "numgroup_cols_manual_start",
+                                           "numgroup_cols_manual_end", "numgroup_cols_manual_both",
+                                           "en-US/numgroup_rows_auto", "en-US/numgroup_rows_control_none",
+                                           "en-US/numgroup_cols_auto", "en-US/numgroup_cols_control_none"));
+
 // The date group's cache refreshes on load, so Excel's save is a refreshed state with its own group labels; the
 // group and range records still hold the base field, the parent field and the months and years periods as Excel's.
 /// The record types of every field group block in the package's first cache definition, in stream order.

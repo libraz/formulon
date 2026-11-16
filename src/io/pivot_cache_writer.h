@@ -35,7 +35,7 @@ struct PivotCacheFieldWritePlan {
   bool derived = false;
   /// True when the pivot-table writer completes the field's `<items>` against
   /// `items` (`detail::BoundItems`): a derived field, or one with shared items
-  /// that some table puts on the Row / Col / Page axis.
+  /// that some table puts on the Row / Col / Page axis, an in-place group aside.
   bool completes_items = false;
   /// The shared items: for a derived field its distinct record values in
   /// first-appearance order, otherwise the cache field's own.

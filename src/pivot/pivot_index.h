@@ -45,13 +45,13 @@ bool pivot_name_taken(const Sheet& sheet, std::string_view name, std::size_t sel
 
 /// Resolves the cache value item `item` of field `field_index` binds to:
 /// `shared_items[item.cache_index]` of the positionally-matching cache
-/// field, or `group_items[item.cache_index]` of a group field. Returns
+/// field, or `group_items[item.cache_index]` of a grouped field. Returns
 /// `nullptr` when the cache does not cover the field or the index falls
 /// outside those items: such an item has no trustworthy binding.
 const Value* pivot_item_cache_value(const PivotCache& cache, std::size_t field_index, const PivotItem& item);
 
 /// The record value item `item` of field `field_index` stands for, which an
-/// axis node carries as its identity: the shared item it binds to, or a group
+/// axis node carries as its identity: the shared item it binds to, or a grouped
 /// field's group-item number. Empty for an item without a resolvable binding.
 std::optional<Value> pivot_item_record_value(const PivotCache& cache, std::size_t field_index, const PivotItem& item);
 

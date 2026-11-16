@@ -82,8 +82,8 @@ struct HierLevel {
   /// `<items>` never enumerated) sorts after every mapped value, in the
   /// source first-appearance order.
   const std::map<Value, std::size_t, ValueLess>* manual_order;
-  /// Non-null for a group field: its `<groupItems>`, which label the
-  /// materialised group-item numbers the records carry.
+  /// Non-null for a grouped field: its `<groupItems>`, which label the
+  /// group-item numbers `axis_cell_value` reads from the records.
   const std::vector<Value>* group_items = nullptr;
   /// Non-null when items of this field carry captions: the caption that
   /// replaces the label of each cache value.

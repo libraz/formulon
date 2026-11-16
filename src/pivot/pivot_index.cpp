@@ -59,8 +59,8 @@ const Value* pivot_item_cache_value(const PivotCache& cache, std::size_t field_i
     return nullptr;
   }
   const PivotCacheField& field = cache.fields()[field_index];
-  // A group field's items index its `<groupItems>`; it has no shared items.
-  const std::vector<Value>& items = is_group_field(field) ? field.field_group->group_items : field.shared_items;
+  // A grouped field's items index its `<groupItems>`, not its shared items.
+  const std::vector<Value>& items = has_group_items(field) ? field.field_group->group_items : field.shared_items;
   if (item.cache_index >= items.size()) {
     return nullptr;
   }
@@ -75,7 +75,7 @@ std::optional<Value> pivot_item_record_value(const PivotCache& cache, std::size_
   if (bound == nullptr) {
     return std::nullopt;
   }
-  if (is_group_field(cache.fields()[field_index])) {
+  if (has_group_items(cache.fields()[field_index])) {
     return Value::number(static_cast<double>(item.cache_index));
   }
   return *bound;

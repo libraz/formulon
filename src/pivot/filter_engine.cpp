@@ -55,10 +55,10 @@ std::optional<double> raw_payload_number(const std::variant<std::monostate, int,
   return std::nullopt;
 }
 
-// The value a label comparison reads for `cell` of field `field_index`: a group
-// field's materialised number stands for its group item's text.
+// The value a label comparison reads for axis value `cell` of field `field_index`: a grouped
+// field's group-item number stands for its group item's text.
 Value label_value(const PivotCache& cache, std::size_t field_index, const Value& cell) {
-  if (!cell.is_number() || field_index >= cache.fields().size() || !is_group_field(cache.fields()[field_index])) {
+  if (!cell.is_number() || field_index >= cache.fields().size() || !has_group_items(cache.fields()[field_index])) {
     return cell;
   }
   const std::vector<Value>& items = cache.fields()[field_index].field_group->group_items;
@@ -278,7 +278,7 @@ PreparedRecordFilter::PreparedRecordFilter(const PivotTable& table, const PivotC
     if (is_page && page->item_index.has_value() && *page->item_index < field_items.size()) {
       selected_pos = *page->item_index;
     }
-    const bool group_field = fi < cache.fields().size() && is_group_field(cache.fields()[fi]);
+    const bool group_field = fi < cache.fields().size() && has_group_items(cache.fields()[fi]);
     for (std::size_t item_pos = 0; item_pos < field_items.size(); ++item_pos) {
       const PivotItem& item = field_items[item_pos];
       const bool selected_out = selected_pos < field_items.size() && selected_pos != item_pos;
@@ -492,7 +492,7 @@ bool PreparedRecordFilter::date_passes(const ResolvedFilter& f, const Value& v, 
 bool PreparedRecordFilter::passes(const PivotCacheRecord& record) const {
   const PivotCache& cache = *cache_;
   for (const HiddenItems& hidden : hidden_items_) {
-    const Value v = cell_value(cache, record, hidden.field_index);
+    const Value v = axis_cell_value(cache, record, hidden.field_index);
     if (!hidden.group_items.empty()) {
       const std::optional<std::size_t> number =
           v.is_number() ? index_from_double(v.as_number(), std::size_t{0xFFFFFFFFU}) : std::nullopt;
@@ -527,10 +527,12 @@ bool PreparedRecordFilter::passes(const PivotCacheRecord& record) const {
     }
   }
   for (const ResolvedFilter& f : filters_) {
-    const Value v = cell_value(cache, record, f.field_index);
-    const bool kept = is_caption_filter_type(f.type)
-                          ? caption_passes(f, label_value(cache, f.field_index, v))
-                          : date_passes(f, v, cell_is_date_value(cache, record, f.field_index));
+    // A caption filter reads the label the axis draws; a date filter reads the source value.
+    const bool kept =
+        is_caption_filter_type(f.type)
+            ? caption_passes(f, label_value(cache, f.field_index, axis_cell_value(cache, record, f.field_index)))
+            : date_passes(f, cell_value(cache, record, f.field_index),
+                          cell_is_date_value(cache, record, f.field_index));
     if (!kept) {
       return false;
     }

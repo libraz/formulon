@@ -28,6 +28,8 @@
 #include "pivot/field_grouping.h"
 #include "pivot/field_remap.h"
 #include "pivot/pivot_cache.h"
+#include "pivot/pivot_evaluator.h"
+#include "pivot/pivot_layout.h"
 #include "pivot/pivot_locale.h"
 #include "pivot/pivot_source.h"
 #include "pivot/pivot_table.h"
@@ -2197,6 +2199,133 @@ TEST(PivotRefresh, EnteredCaptionEqualityMatchesAsAPattern) {
   for (const auto& c : kCases) {
     SCOPED_TRACE(c.name);
     EXPECT_EQ(RefreshedCaptionItems(std::string("caption_equal/") + c.name, all, /*entered=*/true), c.visible);
+  }
+}
+
+// A numeric range group in place on its database field (xlsb_parity/pivot/groups, Excel 16.115's ja-JP saves): Qty
+// 1..12 by 4 keeps its shared items and carries `<fieldGroup base>` naming itself. Every variant, automatic or manual
+// bounds, shows 1-4 / 5-8 / 9-12 summing Amount to 102 / 122 / 142, 366 in all.
+constexpr std::uint32_t kGroupedQty = 4U;
+constexpr const char* kNumericGroupCases[] = {"numgroup_rows_auto", "numgroup_rows_manual_start",
+                                              "numgroup_rows_manual_end", "numgroup_rows_manual_both"};
+
+std::optional<Workbook> ReadNumericGroupFixture(const std::string& name) {
+  const std::string path = std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_parity/pivot/groups/" + name + ".xlsx";
+  std::vector<std::uint8_t> bytes;
+  if (FILE* handle = std::fopen(path.c_str(), "rb"); handle != nullptr) {
+    for (int ch = std::fgetc(handle); ch != EOF; ch = std::fgetc(handle)) {
+      bytes.push_back(static_cast<std::uint8_t>(ch));
+    }
+    std::fclose(handle);
+  }
+  if (bytes.empty()) {
+    ADD_FAILURE() << path;
+    return std::nullopt;
+  }
+  io::ReadOptions options;
+  options.profile = mac_365_ja_jp_profile();
+  auto read = io::read_ooxml(io::ByteSpan{bytes.data(), bytes.size()}, options);
+  if (!read) {
+    ADD_FAILURE() << read.error().message;
+    return std::nullopt;
+  }
+  return std::move(read.value().workbook);
+}
+
+// The report A3:B7 shows the three inner ranges and the grand total.
+void ExpectNumericGroupReport(const std::map<std::pair<std::uint32_t, std::uint32_t>, Value>& cells) {
+  const auto text_at = [&cells](std::uint32_t row, std::uint32_t col) {
+    const auto it = cells.find({row, col});
+    return it != cells.end() && it->second.is_text() ? std::string(it->second.as_text()) : std::string();
+  };
+  const auto number_at = [&cells](std::uint32_t row, std::uint32_t col) {
+    const auto it = cells.find({row, col});
+    return it != cells.end() && it->second.is_number() ? it->second.as_number() : -1.0;
+  };
+  EXPECT_EQ(text_at(3U, 0U), "1-4");
+  EXPECT_EQ(text_at(4U, 0U), "5-8");
+  EXPECT_EQ(text_at(5U, 0U), "9-12");
+  EXPECT_EQ(number_at(3U, 1U), 102.0);
+  EXPECT_EQ(number_at(4U, 1U), 122.0);
+  EXPECT_EQ(number_at(5U, 1U), 142.0);
+  EXPECT_EQ(number_at(6U, 1U), 366.0);
+}
+
+// The group's labels and the pivot field's items in Excel's order: <1, >13, then the inner ranges.
+void ExpectNumericGroupItems(Workbook& wb) {
+  const PivotTable& table = PivotAt(wb);
+  const PivotCache* cache = wb.find_pivot_cache(table.pivot_cache_id());
+  ASSERT_NE(cache, nullptr);
+  const PivotCacheField& qty = cache->fields()[kGroupedQty];
+  ASSERT_TRUE(pivot::is_in_place_group(qty));
+  EXPECT_EQ(qty.shared_items.size(), 12U);
+  std::vector<std::string> labels;
+  for (const Value& item : qty.field_group->group_items) {
+    labels.push_back(item.is_text() ? std::string(item.as_text()) : std::string());
+  }
+  EXPECT_EQ(labels, (std::vector<std::string>{"<1", "1-4", "5-8", "9-12", ">13"}));
+  std::vector<std::uint32_t> order;
+  for (const PivotItem& item : table.fields()[kGroupedQty].items) {
+    order.push_back(item.cache_index);
+  }
+  EXPECT_EQ(order, (std::vector<std::uint32_t>{0U, 4U, 1U, 2U, 3U}));
+}
+
+TEST(PivotRefresh, InPlaceNumericGroupEvaluatesToItsRanges) {
+  for (const char* name : kNumericGroupCases) {
+    SCOPED_TRACE(name);
+    std::optional<Workbook> wb = ReadNumericGroupFixture(name);
+    ASSERT_TRUE(wb.has_value());
+    const eval::ScopedEvalProfile scope(mac_365_ja_jp_profile());
+    const PivotTable& table = PivotAt(*wb);
+    const PivotCache* cache = wb->find_pivot_cache(table.pivot_cache_id());
+    ASSERT_NE(cache, nullptr);
+    // Records keep the source values; only the axis reads the group-item number.
+    const pivot::PivotCacheRecord& first = cache->records().front();
+    EXPECT_EQ(pivot::cell_value(*cache, first, kGroupedQty), Value::number(1.0));
+    EXPECT_EQ(pivot::axis_cell_value(*cache, first, kGroupedQty), Value::number(1.0));
+    EXPECT_EQ(pivot::axis_cell_value(*cache, cache->records().back(), kGroupedQty), Value::number(3.0));
+    const pivot::PivotLayoutOptions options = pivot::pivot_layout_options_for(mac_365_ja_jp_profile());
+    auto result =
+        pivot::evaluate(table, *cache, options, pivot::PivotFilterEnv{wb->pinned_now(), wb->date1904(), &wb->styles()});
+    ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+    auto cells = pivot::layout(table, result.value(), options);
+    ASSERT_TRUE(static_cast<bool>(cells)) << cells.error().message;
+    std::map<std::pair<std::uint32_t, std::uint32_t>, Value> shown;
+    for (const pivot::PivotCell& cell : cells.value().cells) {
+      shown.insert_or_assign({cell.row, cell.col}, cell.item_value.has_value() ? *cell.item_value : cell.value);
+    }
+    ExpectNumericGroupReport(shown);
+    ExpectNumericGroupItems(*wb);
+  }
+}
+
+TEST(PivotRefresh, InPlaceNumericGroupSurvivesARefresh) {
+  for (const char* name : kNumericGroupCases) {
+    SCOPED_TRACE(name);
+    std::optional<Workbook> wb = ReadNumericGroupFixture(name);
+    ASSERT_TRUE(wb.has_value());
+    // Clear the report Excel saved so only the engine's refresh can fill it.
+    for (std::uint32_t r = 0; r < 10U; ++r) {
+      for (std::uint32_t c = 0; c < 2U; ++c) {
+        EXPECT_TRUE(static_cast<bool>(wb->set_cell_value(kPivotSheet, r, c, Value::blank())));
+      }
+    }
+    const Expected<void, Error> refreshed =
+        wb->refresh_pivot_cache(PivotAt(*wb).pivot_cache_id(), eval::default_registry());
+    ASSERT_TRUE(static_cast<bool>(refreshed)) << refreshed.error().message;
+    ASSERT_TRUE(static_cast<bool>(wb->ensure_calculated(eval::default_registry())));
+    std::map<std::pair<std::uint32_t, std::uint32_t>, Value> shown;
+    for (std::uint32_t r = 0; r < 10U; ++r) {
+      for (std::uint32_t c = 0; c < 2U; ++c) {
+        shown.insert_or_assign({r, c}, wb->sheet(kPivotSheet).resolve_cell_value(r, c));
+      }
+    }
+    ExpectNumericGroupReport(shown);
+    ExpectNumericGroupItems(*wb);
+    // An .xlsx save lists the group items alone, in the same order.
+    Workbook reloaded = SaveAndReload(*wb);
+    ExpectNumericGroupItems(reloaded);
   }
 }
 

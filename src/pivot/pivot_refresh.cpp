@@ -523,6 +523,7 @@ Expected<RefreshPlan, Error> build_refreshed_cache(const PivotCache& old, const 
       RETURN_IF_ERROR(refresh_date_bounds(cache, group, column_values[base], column_dates[base], context,
                                           plan.remap.items[old_of[j]]));
     } else if (group.kind == GroupKind::Range) {
+      // An in-place group's pivot items are its group items, so the group's map replaces its shared-item map.
       RETURN_IF_ERROR(
           refresh_numeric_range(cache, group, column_values[base], context.profile, plan.remap.items[old_of[j]]));
     } else if (group.kind == GroupKind::Discrete && old_of[base] < old_count) {
@@ -648,9 +649,11 @@ void write_shared_record_value(PivotCache& cache, std::size_t record, std::size_
 }
 
 void keep_field_items(PivotField& field, const PivotCacheField& cache_field) {
-  const std::vector<Value>& shared = cache_field.shared_items;
-  const auto listed = [&cache_field](std::size_t k) {
-    return !flag_at(cache_field.shared_item_is_missing, k) && !flag_at(cache_field.shared_item_is_calculated, k);
+  const bool in_place = is_in_place_group(cache_field);
+  const std::vector<Value>& shared = in_place ? cache_field.field_group->group_items : cache_field.shared_items;
+  const auto listed = [&cache_field, in_place](std::size_t k) {
+    return in_place ||
+           (!flag_at(cache_field.shared_item_is_missing, k) && !flag_at(cache_field.shared_item_is_calculated, k));
   };
   const auto add = [&field](std::size_t k) {
     PivotItem item;
@@ -671,7 +674,10 @@ void keep_field_items(PivotField& field, const PivotCacheField& cache_field) {
         order.push_back(static_cast<std::uint32_t>(k));
       }
     } else {
-      const auto less = [&shared](std::uint32_t a, std::uint32_t b) { return value_less(shared[a], shared[b]); };
+      const auto less = [&shared, in_place](std::uint32_t a, std::uint32_t b) {
+        return in_place ? in_place_group_item_rank(a, shared.size()) < in_place_group_item_rank(b, shared.size())
+                        : value_less(shared[a], shared[b]);
+      };
       sorted_index_order(order, static_cast<std::uint32_t>(shared.size()), make_index_less(less));
       if (!field.sort.ascending) {
         std::reverse(order.begin(), order.end());

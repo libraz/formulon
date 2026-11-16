@@ -386,6 +386,10 @@ PivotCacheWritePlan build_pivot_cache_write_plan(const pivot::PivotCache& cache,
   for (std::size_t fi = 0; fi < cache.fields().size(); ++fi) {
     const pivot::PivotCacheField& field = cache.fields()[fi];
     if (field.is_database_field && !field.shared_items.empty()) {
+      // An in-place group's pivot items are its group items, which the table lists itself.
+      if (pivot::is_in_place_group(field)) {
+        continue;
+      }
       const bool on_axis = std::any_of(tables.begin(), tables.end(), [fi](const pivot::PivotTable* table) {
         return table != nullptr && fi < table->fields().size() && OnDiscreteAxis(table->fields()[fi].axis);
       });

@@ -145,10 +145,12 @@ std::vector<std::pair<std::string, std::filesystem::path>> CorpusFiles() {
 }
 
 /// The profile a book was saved under: English books carry `en_` at the start
-/// of a path segment, the `win/` tree is Windows, everything else Mac ja-JP.
+/// of a path segment or sit in an `en-US/` directory, the `win/` tree is
+/// Windows, everything else Mac ja-JP.
 ExcelProfile FixtureProfile(const std::string& relative) {
   const char* id = "mac-365-ja_JP";
-  if (relative.rfind("en_", 0) == 0 || relative.find("/en_") != std::string::npos) {
+  if (relative.rfind("en_", 0) == 0 || relative.find("/en_") != std::string::npos ||
+      relative.find("/en-US/") != std::string::npos) {
     id = "mac-365-en_US";
   } else if (relative.rfind("win/", 0) == 0) {
     id = "win-365-ja_JP";

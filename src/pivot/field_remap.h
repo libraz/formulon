@@ -45,7 +45,8 @@ struct FieldRemap {
 /// shared item is gone is removed, one kept as missing is marked `m="1"`, and
 /// every shared item no item names (missing and calculated ones aside) is
 /// appended, hidden when the field still hides an item. A field sorted
-/// ascending or descending is re-sorted, missing items included. Positions
+/// ascending or descending is re-sorted, missing items included; an in-place
+/// group sorts by `in_place_group_item_rank`. Positions
 /// into a field's items (a page field's item, a show-as base item) follow.
 ///
 /// A format or chart format's area follows too: its `<x v>` positions into a

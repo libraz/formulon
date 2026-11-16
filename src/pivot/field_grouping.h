@@ -5,8 +5,10 @@
 // column; each record's value is the index into its `<groupItems>` that the
 // base field's value falls in. A range group reserves item 0 for values below
 // its start and the last item for values above its end. The numbers are
-// materialised into `PivotCacheRecord::cells` once, so every consumer reads a
-// group field through `cell_value` like any database field.
+// materialised into `PivotCacheRecord::cells` once. A numeric range group Excel
+// stores in place on a database field (`base` its own index) keeps the source
+// values in its cells, which a save writes, and is numbered on read instead;
+// axis consumers read both kinds through `axis_cell_value`.
 //
 // Grouping a date field appends one group field per calendar period, finest
 // first, each labelled in the workbook's locale when it is created; the base
@@ -44,6 +46,25 @@ struct GroupBounds {
 
 /// True when `field` is a group field whose cells are derived from a base.
 bool is_group_field(const PivotCacheField& field) noexcept;
+
+/// True when database field `field` carries a numeric range group over its
+/// own values (`base` its own index): its axis items are its group items while
+/// its records keep the source values.
+bool is_in_place_group(const PivotCacheField& field) noexcept;
+
+/// True when the axis items of `field` are its `<groupItems>`: a group field
+/// or an in-place group.
+bool has_group_items(const PivotCacheField& field) noexcept;
+
+/// The value `record` carries for field `field_index` on an axis: the
+/// group-item number of the record's value for an in-place group, else
+/// `cell_value` (a group field's cell holds its materialised number).
+Value axis_cell_value(const PivotCache& cache, const PivotCacheRecord& record, std::size_t field_index);
+
+/// Rank of group item `item` among `item_count` in-place group items in
+/// Excel's ascending item order: the item below the start, the item above the
+/// end, then the inner ranges in order.
+std::uint32_t in_place_group_item_rank(std::uint32_t item, std::size_t item_count) noexcept;
 
 /// Serial of an ISO 8601 group bound (`startDate` / `endDate`) under the given
 /// epoch; empty when `iso` does not parse.

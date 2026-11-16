@@ -61,7 +61,7 @@ bool same_item(const Value& lhs, const Value& rhs) {
 bool record_on_path(const pivot::PivotCache& cache, const pivot::PivotCacheRecord& record,
                     const std::vector<pivot::PivotItemRef>& items) {
   for (const pivot::PivotItemRef& item : items) {
-    if (!same_item(pivot::cell_value(cache, record, item.field_index), item.identity)) {
+    if (!same_item(pivot::axis_cell_value(cache, record, item.field_index), item.identity)) {
       return false;
     }
   }
@@ -95,14 +95,14 @@ std::vector<std::size_t> display_ranks(const pivot::PivotTable& table, const piv
     // Values `items` never lists follow in source first-appearance order.
     std::size_t next = spec->items.size();
     for (const std::size_t r : records) {
-      if (rank.emplace(pivot::cell_value(cache, cache.records()[r], field), next).second) {
+      if (rank.emplace(pivot::axis_cell_value(cache, cache.records()[r], field), next).second) {
         ++next;
       }
     }
   } else {
     ValueRank labels;
     for (const std::size_t r : records) {
-      labels.emplace(pivot::cell_value(cache, cache.records()[r], field), 0U);
+      labels.emplace(pivot::axis_cell_value(cache, cache.records()[r], field), 0U);
     }
     std::size_t position = 0;
     for (auto& entry : labels) {
@@ -129,7 +129,7 @@ std::vector<std::size_t> display_ranks(const pivot::PivotTable& table, const piv
   std::vector<std::size_t> out;
   out.reserve(records.size());
   for (const std::size_t r : records) {
-    out.push_back(rank.find(pivot::cell_value(cache, cache.records()[r], field))->second);
+    out.push_back(rank.find(pivot::axis_cell_value(cache, cache.records()[r], field))->second);
   }
   return out;
 }

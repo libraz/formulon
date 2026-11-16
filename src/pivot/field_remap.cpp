@@ -51,7 +51,7 @@ void set_flag_attr(std::vector<std::pair<std::string, std::string>>& attrs, std:
 
 // The value item `cache_index` of `cache_field` stands for, for sorting.
 Value item_value(const PivotCacheField& cache_field, std::uint32_t cache_index) {
-  if (is_group_field(cache_field)) {
+  if (has_group_items(cache_field)) {
     const std::vector<Value>& items = cache_field.field_group->group_items;
     return cache_index < items.size() ? items[cache_index] : Value::blank();
   }
@@ -63,7 +63,8 @@ void remap_items(PivotField& field, const IndexMap& map, const PivotCacheField& 
   if (field.items.empty()) {
     return;
   }
-  const bool grouped = is_group_field(cache_field);
+  const bool grouped = has_group_items(cache_field);
+  const bool in_place = is_in_place_group(cache_field);
   const std::size_t item_count =
       grouped ? cache_field.field_group->group_items.size() : cache_field.shared_items.size();
   std::vector<bool> named(item_count, false);
@@ -89,8 +90,8 @@ void remap_items(PivotField& field, const IndexMap& map, const PivotCacheField& 
   }
   const bool hides = std::any_of(kept.begin(), kept.end(), [](const PivotItem& item) { return !item.visible; });
   for (std::uint32_t n = 0; n < item_count; ++n) {
-    if (named[n] || flag_at(cache_field.shared_item_is_missing, n) ||
-        flag_at(cache_field.shared_item_is_calculated, n)) {
+    if (named[n] || (!in_place && (flag_at(cache_field.shared_item_is_missing, n) ||
+                                   flag_at(cache_field.shared_item_is_calculated, n)))) {
       continue;
     }
     PivotItem added;
@@ -103,9 +104,14 @@ void remap_items(PivotField& field, const IndexMap& map, const PivotCacheField& 
     kept.push_back(std::move(added));
   }
 
-  if (!grouped && !field.sort.manual && field.sort.stated && field.sort.by_field.empty()) {
+  if ((!grouped || in_place) && !field.sort.manual && field.sort.stated && field.sort.by_field.empty()) {
     const bool ascending = field.sort.ascending;
     const auto less = [&](std::uint32_t a, std::uint32_t b) {
+      if (in_place) {
+        const std::uint32_t ra = in_place_group_item_rank(kept[a].cache_index, item_count);
+        const std::uint32_t rb = in_place_group_item_rank(kept[b].cache_index, item_count);
+        return ascending ? ra < rb : rb < ra;
+      }
       const Value va = item_value(cache_field, kept[a].cache_index);
       const Value vb = item_value(cache_field, kept[b].cache_index);
       return ascending ? value_less(va, vb) : value_less(vb, va);
@@ -275,7 +281,7 @@ void remap_table(PivotTable& table, const PivotCache& cache, const FieldRemap& r
       remap_items(field, remap.items[i], cache.fields()[target], positions[i]);
     }
     // A field left with no shared items lists no items, its subtotal marker included.
-    if (cache.fields()[target].shared_items.empty() && !is_group_field(cache.fields()[target])) {
+    if (cache.fields()[target].shared_items.empty() && !has_group_items(cache.fields()[target])) {
       field.items.clear();
       field.marker_items.clear();
     }

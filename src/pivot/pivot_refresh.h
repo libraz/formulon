@@ -130,7 +130,8 @@ void write_shared_record_value(PivotCache& cache, std::size_t record, std::size_
 /// sort order (ascending by default, blank last; shared-item order when sorted
 /// manually or by a data field); otherwise the items it has, then the shared
 /// items none of them names. Missing and calculated shared items are never
-/// added. The caller holds an `eval::ScopedEvalProfile`.
+/// added. An in-place group lists its group items instead, sorted by
+/// `in_place_group_item_rank`. The caller holds an `eval::ScopedEvalProfile`.
 void keep_field_items(PivotField& field, const PivotCacheField& cache_field);
 
 /// Lists (`keep_field_items`) the items of every field `table` places on the

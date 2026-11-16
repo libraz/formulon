@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "eval/text_format/display_text.h"
+#include "pivot/field_grouping.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_types.h"
@@ -168,7 +169,7 @@ HierNode* insert_path(const PivotCache& cache, const std::vector<HierLevel>& lev
                       ExcelProfile profile) {
   HierNode* cursor = &root;
   for (const HierLevel& level : levels) {
-    const Value raw = cell_value(cache, record, level.field_index);
+    const Value raw = axis_cell_value(cache, record, level.field_index);
     auto [it, inserted] = cursor->children.try_emplace(HierarchyKey{raw});
     if (inserted) {
       it->second.label_override = label_override_for(level, raw, blank_item_label, date1904, profile);

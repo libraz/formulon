@@ -149,6 +149,40 @@ bool is_group_field(const PivotCacheField& field) noexcept {
          field.field_group->kind != GroupKind::None;
 }
 
+bool is_in_place_group(const PivotCacheField& field) noexcept {
+  if (!field.is_database_field || !field.field_group.has_value() || !field.field_group->base.has_value()) {
+    return false;
+  }
+  const FieldGroup& group = *field.field_group;
+  return group.kind == GroupKind::Range && group.range.by == GroupBy::Range && !group.range.is_date;
+}
+
+bool has_group_items(const PivotCacheField& field) noexcept {
+  return is_group_field(field) || is_in_place_group(field);
+}
+
+Value axis_cell_value(const PivotCache& cache, const PivotCacheRecord& record, std::size_t field_index) {
+  const Value value = cell_value(cache, record, field_index);
+  if (field_index >= cache.fields().size() || !is_in_place_group(cache.fields()[field_index])) {
+    return value;
+  }
+  const FieldGroup& group = *cache.fields()[field_index].field_group;
+  // A numeric range states its bounds, and its numbering never consults the date epoch.
+  const GroupBounds bounds = stated_group_bounds(group.range, /*date1904=*/false).value_or(GroupBounds{});
+  return Value::number(
+      range_group_item_number(group.range, bounds, group.group_items.size(), value, /*date1904=*/false));
+}
+
+std::uint32_t in_place_group_item_rank(std::uint32_t item, std::size_t item_count) noexcept {
+  if (item == 0U) {
+    return 0U;
+  }
+  if (item_count >= 2U && item == item_count - 1U) {
+    return 1U;
+  }
+  return item + 1U;
+}
+
 std::optional<double> group_date_serial(std::string_view iso, bool date1904) noexcept {
   double serial = 0.0;
   if (!date_time::parse_iso_date_serial(iso, &serial)) {

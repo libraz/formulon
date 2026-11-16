@@ -292,7 +292,7 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
                     value_sort.has_value() ? std::optional<Aggregation>(value_sort->aggregation) : std::nullopt,
                     manual ? manual_order_for(fi) : nullptr};
     level.captions = captions_for(fi);
-    if (fi < cache.fields().size() && is_group_field(cache.fields()[fi])) {
+    if (fi < cache.fields().size() && has_group_items(cache.fields()[fi])) {
       level.group_items = &cache.fields()[fi].field_group->group_items;
     } else {
       level.number_format = item_number_format(table, cache, fi, options.profile, env.styles);
@@ -360,7 +360,7 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
     std::vector<std::vector<RecordlessItem>> items(levels.size());
     for (std::size_t depth = 0; depth < levels.size(); ++depth) {
       const std::uint32_t fi = levels[depth].field_index;
-      if (fi >= cache.fields().size() || fi >= table.fields().size() || is_group_field(cache.fields()[fi])) {
+      if (fi >= cache.fields().size() || fi >= table.fields().size() || has_group_items(cache.fields()[fi])) {
         continue;
       }
       const PivotCacheField& cache_field = cache.fields()[fi];
