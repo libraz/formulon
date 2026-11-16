@@ -912,6 +912,13 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_gtest_param_names.py
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
+  # Every tracked tests/**/*_test.cpp is in some target's source list; a dropped
+  # entry would otherwise just stop being compiled and run.
+  add_test(
+    NAME TestSourcesListed
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/dev/check_test_sources_listed.py
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
   # Excel's alert switch is only flipped through the helper that restores it.
   add_test(
     NAME DisplayAlertsRestored
