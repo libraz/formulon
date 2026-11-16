@@ -303,7 +303,7 @@ Value evaluate_top(const parser::AstNode& node, Arena& arena, const FunctionRegi
   // An array past Excel's element bound abandons the whole formula, which
   // then holds 0 whatever encloses the array.
   const ScopedFormulaAbandon abandon_scope;
-  const Value v = evaluate_top_body(node, arena, registry, ctx, mode);
+  const Value v = contain_escape(evaluate_top_body(node, arena, registry, ctx, mode));
   return abandon_scope.abandoned() ? Value::number(0.0) : v;
 }
 

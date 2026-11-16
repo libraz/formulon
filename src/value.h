@@ -7,9 +7,9 @@
 // to an arena-backed `ArrayValue`) and `Lambda` (non-owning pointer to an
 // arena-backed `eval::LambdaValue`). All pointer-shaped variants share the
 // `Text` lifetime contract: callers must keep the arena alive for as long
-// as any `Value` references it. The `Ref` variant still reserves a slot in
-// `ValueKind` but has no factory yet — that follows once the cell reference
-// representation lands.
+// as any `Value` references it. The `Ref` variant carries a `RefForm`; a
+// single own-workbook area or 3-D span lives inline, every other form is an
+// arena-backed `RefValue`.
 //
 // `Value` is intentionally trivially copyable so it can be passed freely
 // through the evaluator's value stack without heap allocation. The `Array`
@@ -35,6 +35,7 @@ struct LambdaValue;
 
 class Arena;
 struct ArrayValue;
+enum class ErrorCode : std::uint16_t;
 
 /// Discriminator tag for every variant a cell may hold.
 ///
@@ -69,6 +70,77 @@ enum class BlankGridProjection : std::uint8_t {
   // the terminal projection bit. New code should choose the provenance
   // specific name above.
   kZero = kValueArrayZero,
+  /// A blank standing for a reference-grid element that holds no cell. It
+  /// exists only inside the evaluator and never crosses a value boundary.
+  kOpaqueElement = 3,
+};
+
+/// Shape of a reference value.
+enum class RefForm : std::uint8_t {
+  /// One 2-D area on one sheet.
+  kArea,
+  /// An ordered list of 2-D areas.
+  kUnion,
+  /// One area repeated over a run of sheets (`first:last!A1`).
+  kSpan3D,
+  /// A rows x cols array whose elements are each an area or an error.
+  kGrid,
+};
+
+/// How a reference's text was produced.
+enum class RefOrigin : std::uint8_t { kImplicit = 0, kSpelled = 1, kDerived = 2 };
+
+/// One rectangular reference. Trivially copyable, 16 bytes. An error element
+/// has `sheet_first == kErrorElement` and the `ErrorCode` in `row_first`.
+struct RefArea {
+  /// `sheet_first` / `sheet_last` value meaning the formula's own sheet.
+  static constexpr std::uint16_t kHomeSheet = 0xFFFF;
+  /// `sheet_first` value marking an error element.
+  static constexpr std::uint16_t kErrorElement = 0xFFFE;
+
+  std::uint32_t row_first;  ///< Inclusive.
+  std::uint32_t row_last;   ///< Inclusive.
+  std::uint16_t col_first : 14;
+  std::uint16_t origin : 2;  ///< `RefOrigin`.
+  std::uint16_t col_last : 14;
+  std::uint16_t whole_col : 1;
+  std::uint16_t whole_row : 1;
+  std::uint16_t sheet_first;  ///< Workbook order.
+  std::uint16_t sheet_last;
+
+  /// Builds an error element carrying `code`.
+  static RefArea error_element(ErrorCode code) noexcept {
+    RefArea a{};
+    a.row_first = static_cast<std::uint32_t>(code);
+    a.sheet_first = kErrorElement;
+    return a;
+  }
+  bool is_error_element() const noexcept { return sheet_first == kErrorElement; }
+  /// Precondition: `is_error_element()`.
+  ErrorCode error_code() const noexcept { return static_cast<ErrorCode>(row_first); }
+};
+
+/// Out-of-line reference payload. Arena-allocated, trivially destructible.
+struct RefValue {
+  const RefArea* areas;                ///< kUnion: `area_count` areas; kGrid: rows * cols, row-major.
+  const std::uint16_t* element_books;  ///< kGrid only; nullptr = every element is in `book`.
+  std::uint32_t area_count;
+  std::uint32_t rows;
+  std::uint32_t cols;
+  std::uint16_t book;  ///< 0 = this workbook, n = `external_links()[n-1]`.
+  RefForm form;
+};
+
+/// Read-only view of any `Ref`, inline or out-of-line. Valid while the
+/// viewed `Value` (inline form) or its arena (out-of-line form) is alive.
+struct RefView {
+  const RefArea* areas;
+  const std::uint16_t* element_books;
+  std::uint32_t area_count;
+  std::uint32_t rows;  ///< kGrid only; 0 otherwise.
+  std::uint32_t cols;  ///< kGrid only; 0 otherwise.
+  std::uint16_t book;
+  RefForm form;
 };
 
 /// Excel-visible error codes that surface in cell values.
@@ -279,6 +351,27 @@ class Value {
     return out;
   }
 
+  /// Builds a `Ref` holding one own-workbook area inline. The form is
+  /// `kSpan3D` when the sheets differ and `kArea` otherwise.
+  static Value ref_area(const RefArea& area) noexcept {
+    Value out;
+    out.kind_ = ValueKind::Ref;
+    out.ref_form_ = static_cast<std::uint8_t>(area.sheet_first != area.sheet_last ? RefForm::kSpan3D : RefForm::kArea);
+    out.data_.area = area;
+    return out;
+  }
+
+  /// Builds an out-of-line `Ref` over arena-backed `rv`; same lifetime
+  /// contract as `array`. Prefer `make_ref`, which picks inline or
+  /// out-of-line storage.
+  static Value ref_out_of_line(const RefValue* rv) noexcept {
+    Value out;
+    out.kind_ = ValueKind::Ref;
+    out.ref_form_ = static_cast<std::uint8_t>(static_cast<std::uint8_t>(rv->form) | kRefOutOfLine);
+    out.data_.ref = rv;
+    return out;
+  }
+
   /// Builds a `Lambda` value referencing the closure `lv`. The caller owns
   /// the arena-backed `LambdaValue` (which itself transitively borrows the
   /// parameter array, the body AST, and the captured environment) and must
@@ -294,8 +387,7 @@ class Value {
   /// Returns the discriminator tag for this value.
   ValueKind kind() const noexcept { return kind_; }
 
-  // Kind queries: one per variant. `is_ref()` and `is_lambda()` always
-  // return false until those variants are implemented.
+  // Kind queries: one per variant.
   bool is_blank() const noexcept { return kind_ == ValueKind::Blank; }
   bool is_number() const noexcept { return kind_ == ValueKind::Number; }
   bool is_boolean() const noexcept { return kind_ == ValueKind::Bool; }
@@ -304,6 +396,17 @@ class Value {
   bool is_array() const noexcept { return kind_ == ValueKind::Array; }
   bool is_ref() const noexcept { return kind_ == ValueKind::Ref; }
   bool is_lambda() const noexcept { return kind_ == ValueKind::Lambda; }
+
+  /// Returns whether this is a Blank marking a reference-grid element.
+  bool is_opaque_element() const noexcept {
+    return is_blank() && blank_projection_ == BlankGridProjection::kOpaqueElement;
+  }
+
+  /// Returns the form of a `Ref`. Aborts if `kind() != Ref`.
+  RefForm ref_form() const;
+
+  /// Returns a view of a `Ref`. Aborts if `kind() != Ref`.
+  RefView as_ref() const;
 
   /// Returns whether this Blank should project to numeric zero at a
   /// top-level array/grid boundary. Non-Blank values always return false.
@@ -377,7 +480,8 @@ class Value {
   friend bool operator!=(const Value& a, const Value& b) noexcept { return !(a == b); }
 
  private:
-  Value() noexcept : kind_(ValueKind::Blank), blank_projection_(BlankGridProjection::kPreserve), data_{} {}
+  Value() noexcept
+      : kind_(ValueKind::Blank), blank_projection_(BlankGridProjection::kPreserve), ref_form_(0), data_{} {}
 
   union Payload {
     double number;
@@ -395,11 +499,19 @@ class Value {
     /// same lifetime contract as `text` / `array`. Holds parameter list,
     /// body AST, and captured `NameEnv` chain for an Excel `LAMBDA` form.
     const eval::LambdaValue* lambda;
+    /// Inline own-workbook `kArea` / `kSpan3D` reference.
+    RefArea area;
+    /// Out-of-line reference, selected by the out-of-line bit of `ref_form_`.
+    const RefValue* ref;
     Payload() noexcept : number(0.0) {}
   };
 
+  /// Out-of-line bit of `ref_form_`; the low bits hold the `RefForm`.
+  static constexpr std::uint8_t kRefOutOfLine = 0x80;
+
   ValueKind kind_;
   BlankGridProjection blank_projection_;
+  std::uint8_t ref_form_ = 0;
   Payload data_;
 };
 
@@ -418,19 +530,42 @@ struct ArrayValue {
 static_assert(std::is_trivially_destructible_v<ArrayValue>,
               "ArrayValue must be trivially destructible to live in Arena::create");
 
+static_assert(std::is_trivially_destructible_v<RefValue>,
+              "RefValue must be trivially destructible to live in Arena::create");
+static_assert(std::is_trivially_copyable_v<RefArea>, "RefArea must be trivially copyable");
+static_assert(sizeof(RefArea) == 16, "RefArea must stay 16 bytes");
+
 // Keeping `Value` trivially copyable means the evaluator can pass values by
 // value through the VM stack and arg packs without moves or allocations.
 // Every variant payload (including the `Array` and `Lambda` 8-byte pointers)
-// preserves this property. This invariant must be revisited when `Ref`
-// lands.
+// preserves this property, and `Ref` stores either a 16-byte `RefArea` or an
+// 8-byte pointer.
 static_assert(std::is_trivially_copyable_v<Value>, "Value must be trivially copyable");
 
-// The payload union is driven by the 16-byte `string_view` text member
-// (and will later be driven by a 16-byte `Reference` payload). The
-// `Array` and `Lambda` payloads are 8-byte pointers that fit inside the
-// existing budget. With a 1-byte tag and alignment padding the struct
-// lands at 24 bytes on every platform Formulon targets.
-static_assert(sizeof(Value) <= 24, "Value must fit within 24 bytes");
+// The payload union is driven by the 16-byte `string_view` text member and
+// the 16-byte `RefArea`; the 8-byte pointers fit inside. With the tag bytes
+// and alignment padding the struct lands at 24 bytes.
+static_assert(sizeof(Value) == 24, "Value must be exactly 24 bytes");
+
+/// Builds a `Ref` of `form` over `area_count` areas, copying the areas (and,
+/// for `kGrid`, `element_books` of `rows * cols` entries when non-null) into
+/// `arena`. An own-workbook single area is stored inline (`kSpan3D` when its
+/// sheets differ); every other shape is an arena-backed `RefValue`. `rows`
+/// and `cols` apply to `kGrid` only. Aborts when `form` is `kArea` /
+/// `kSpan3D` and `area_count != 1`.
+Value make_ref(Arena& arena, RefForm form, std::uint16_t book, const RefArea* areas, std::uint32_t area_count,
+               std::uint32_t rows = 0, std::uint32_t cols = 0, const std::uint16_t* element_books = nullptr);
+
+/// Returns whether `v` must never cross a value boundary (binding, spill,
+/// cached cell value, memo, evaluation result): a `Ref` of any form, or a
+/// Blank marking a reference-grid element.
+inline bool escapes_boundary(const Value& v) noexcept {
+  return v.is_ref() || v.is_opaque_element();
+}
+
+/// `v` unless it would escape the evaluator; an escaping value asserts in
+/// Debug and degrades to #VALUE! in Release, so a user formula never aborts.
+Value contain_escape(Value v) noexcept;
 
 /// Copies a Text payload into `arena` and returns the re-homed value. All
 /// non-Text variants, including pointer-backed Array and Lambda values, pass

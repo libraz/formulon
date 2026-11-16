@@ -31,6 +31,7 @@ void SpillCommitter::notify_release() const noexcept {
 }
 
 Value SpillCommitter::commit(Value v) const {
+  v = contain_escape(v);
   // A former array formula can subsequently evaluate to a scalar. Drop any
   // old region before returning it; otherwise the reverse index continues
   // to mask real cells in the former footprint.

@@ -303,6 +303,7 @@ void Sheet::set_cell_value(std::uint32_t row, std::uint32_t col, Value v) {
   // reader) own coordinate validation. A debug assert catches programming
   // errors without imposing a release-mode branch.
   assert(row < kMaxRows && col < kMaxCols);
+  v = contain_escape(v);
 
   const std::lock_guard<std::mutex> guard(*spill_mutex_);
 
@@ -371,6 +372,7 @@ void Sheet::set_cell_formula_text(std::uint32_t row, std::uint32_t col, std::str
 }
 
 void Sheet::set_cell_cached_value_locked(Cell& slot, Value v) {
+  v = contain_escape(v);
   if (v.is_text()) {
     // Deep-copy the Text payload into a heap-stable `std::string` owned by
     // the Cell so the stored `cached_value` no longer references whatever

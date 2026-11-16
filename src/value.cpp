@@ -4,6 +4,7 @@
 
 #include "value.h"
 
+#include <cassert>
 #include <string>
 
 #include "eval/lambda_value.h"
@@ -63,6 +64,64 @@ const Value* Value::as_array_cells() const {
 const eval::LambdaValue* Value::as_lambda() const {
   FM_CHECK(kind_ == ValueKind::Lambda, "Value::as_lambda() on non-Lambda");
   return data_.lambda;
+}
+
+RefForm Value::ref_form() const {
+  FM_CHECK(kind_ == ValueKind::Ref, "Value::ref_form() on non-Ref");
+  return static_cast<RefForm>(ref_form_ & ~kRefOutOfLine);
+}
+
+RefView Value::as_ref() const {
+  FM_CHECK(kind_ == ValueKind::Ref, "Value::as_ref() on non-Ref");
+  const RefForm form = static_cast<RefForm>(ref_form_ & ~kRefOutOfLine);
+  if ((ref_form_ & kRefOutOfLine) == 0) {
+    return RefView{&data_.area, nullptr, 1, 0, 0, 0, form};
+  }
+  const RefValue* rv = data_.ref;
+  return RefView{rv->areas, rv->element_books, rv->area_count, rv->rows, rv->cols, rv->book, form};
+}
+
+Value contain_escape(Value v) noexcept {
+  assert(!escapes_boundary(v) && "a reference value cannot leave the evaluator");
+  return escapes_boundary(v) ? Value::error(ErrorCode::Value) : v;
+}
+
+Value make_ref(Arena& arena, RefForm form, std::uint16_t book, const RefArea* areas, std::uint32_t area_count,
+               std::uint32_t rows, std::uint32_t cols, const std::uint16_t* element_books) {
+  const bool single = form == RefForm::kArea || form == RefForm::kSpan3D;
+  FM_CHECK(!single || area_count == 1, "make_ref: kArea / kSpan3D takes exactly one area");
+  if (single && book == 0) {
+    return Value::ref_area(areas[0]);
+  }
+  RefValue* rv = arena.create<RefValue>();
+  RefArea* copy = arena.create_array<RefArea>(area_count);
+  if (rv == nullptr || (copy == nullptr && area_count != 0)) {
+    return Value::error(ErrorCode::Calc);
+  }
+  for (std::uint32_t i = 0; i < area_count; ++i) {
+    copy[i] = areas[i];
+  }
+  const std::uint16_t* books = nullptr;
+  if (element_books != nullptr) {
+    const std::size_t n = static_cast<std::size_t>(rows) * cols;
+    std::uint16_t* b = arena.create_array<std::uint16_t>(n);
+    if (b == nullptr && n != 0) {
+      return Value::error(ErrorCode::Calc);
+    }
+    for (std::size_t i = 0; i < n; ++i) {
+      b[i] = element_books[i];
+    }
+    books = b;
+  }
+  const bool span = single && areas[0].sheet_first != areas[0].sheet_last;
+  rv->areas = copy;
+  rv->element_books = books;
+  rv->area_count = area_count;
+  rv->rows = rows;
+  rv->cols = cols;
+  rv->book = book;
+  rv->form = single ? (span ? RefForm::kSpan3D : RefForm::kArea) : form;
+  return Value::ref_out_of_line(rv);
 }
 
 std::string Value::debug_to_string() const {

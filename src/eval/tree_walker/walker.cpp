@@ -394,8 +394,10 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
   return densify(eval_node_shaped(node, arena, registry, ctx), arena);
 }
 
-Shaped eval_node_shaped(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                        const EvalContext& ctx) {
+namespace {
+
+Shaped eval_node_shaped_body(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                             const EvalContext& ctx) {
   // Bounds linear cell-chain recursion through `EvalContext::resolve_ref`
   // and any other re-entrant evaluator path. See `kMaxEvalDepth`.
   EvalDepthGuard depth_guard(ctx.eval_depth_counter(), kMaxEvalDepth);
@@ -570,6 +572,15 @@ Shaped eval_node_shaped(const parser::AstNode& node, Arena& arena, const Functio
     default:
       return Shaped{eval_node_plain(node, arena, registry, ctx), nullptr};
   }
+}
+
+}  // namespace
+
+Shaped eval_node_shaped(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx) {
+  Shaped out = eval_node_shaped_body(node, arena, registry, ctx);
+  out.value = contain_escape(out.value);
+  return out;
 }
 
 }  // namespace eval

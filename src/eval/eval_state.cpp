@@ -9,6 +9,7 @@
 
 #include "cell.h"
 #include "sheet.h"
+#include "value.h"
 
 namespace formulon {
 namespace eval {
@@ -43,6 +44,7 @@ const Value* EvalState::lookup_memo(const Sheet* sheet, std::uint32_t row, std::
 }
 
 void EvalState::memoize(const Sheet* sheet, std::uint32_t row, std::uint32_t col, Value value) {
+  value = contain_escape(value);
   // `unordered_map::operator[]` requires a default-constructible mapped
   // type; `Value`'s default ctor is private. `insert_or_assign` constructs
   // the pair from the supplied Value directly. `Value` is trivially
