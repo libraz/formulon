@@ -106,11 +106,11 @@ bool names_view_mode(const SheetView& view) {
 }
 
 /// Calls `fn(view, workbook_view)` for each `<sheetView>` of `extra_views_xml`
-/// shown in a window 1 to `workbook_views` - 1, in document order. Returns how
-/// many it leaves out: window 0 is the main view's and Excel refuses a window
-/// the workbook lacks; a fragment that does not parse counts as one.
+/// shown in a window other than 0, in document order. Returns how many it
+/// leaves out: window 0 is the main view's; a fragment that does not parse
+/// counts as one.
 template <typename Fn>
-std::size_t for_each_written_extra_view(const std::string& extra_views_xml, std::uint32_t workbook_views, Fn&& fn) {
+std::size_t for_each_written_extra_view(const std::string& extra_views_xml, Fn&& fn) {
   pugi::xml_document doc;
   if (!parse_extra_views(extra_views_xml, doc)) {
     return 1U;
@@ -118,7 +118,7 @@ std::size_t for_each_written_extra_view(const std::string& extra_views_xml, std:
   std::size_t left_out = 0U;
   for (pugi::xml_node node = doc.child("sheetView"); node; node = node.next_sibling("sheetView")) {
     const std::uint32_t workbook_view = attr_u32(node, "workbookViewId", 0U);
-    if (workbook_view == 0U || workbook_view >= workbook_views) {
+    if (workbook_view == 0U) {
       ++left_out;
       continue;
     }
@@ -355,27 +355,22 @@ Expected<void, Error> emit_ws_view(std::vector<std::uint8_t>& dst, const SheetVi
 }
 
 Expected<void, Error> emit_extra_ws_views(std::vector<std::uint8_t>& dst, const SheetView& view,
-                                          std::uint32_t workbook_views, std::size_t sheet_index) {
-  (void)for_each_written_extra_view(view.extra_views_xml, workbook_views,
-                                    [&](const SheetView& extra, std::uint32_t workbook_view) {
-                                      (void)emit_ws_view(dst, extra, workbook_view, sheet_index);
-                                    });
+                                          std::size_t sheet_index) {
+  (void)for_each_written_extra_view(view.extra_views_xml, [&](const SheetView& extra, std::uint32_t workbook_view) {
+    (void)emit_ws_view(dst, extra, workbook_view, sheet_index);
+  });
   return Expected<void, Error>::Ok();
 }
 
-std::size_t unwritten_sheet_view_count(const SheetView& view, std::uint32_t workbook_views) {
+std::size_t unwritten_sheet_view_count(const SheetView& view) {
   std::size_t renamed_modes = names_view_mode(view) ? 0U : 1U;
   const std::size_t left_out = for_each_written_extra_view(
-      view.extra_views_xml, workbook_views,
+      view.extra_views_xml,
       [&](const SheetView& extra, std::uint32_t) { renamed_modes += names_view_mode(extra) ? 0U : 1U; });
   return renamed_modes + left_out;
 }
 
-bool append_extra_view(SheetView& main, const SheetView& extra, std::uint32_t workbook_view,
-                       std::uint32_t workbook_views) {
-  if (workbook_view >= workbook_views) {
-    return false;
-  }
+bool append_extra_view(SheetView& main, const SheetView& extra, std::uint32_t workbook_view) {
   if (workbook_view == 0U) {
     // A later view of the main window replaces it; the sheet-level state stays.
     SheetView replaced = extra;

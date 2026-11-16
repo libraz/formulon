@@ -33,24 +33,21 @@ Expected<void, Error> emit_ws_view(std::vector<std::uint8_t>& dst, const SheetVi
                                    std::size_t sheet_index);
 
 /// Emits one view per `<sheetView>` of `view.extra_views_xml`, in document
-/// order, as `emit_ws_view` does. A view of a window other than 1 to
-/// `workbook_views` - 1 (the BrtBookView records the workbook part writes),
-/// or a fragment that does not parse, is left out. Always succeeds.
+/// order, as `emit_ws_view` does. A view of window 0 or a fragment that does
+/// not parse is left out. Always succeeds.
 Expected<void, Error> emit_extra_ws_views(std::vector<std::uint8_t>& dst, const SheetView& view,
-                                          std::uint32_t workbook_views, std::size_t sheet_index);
+                                          std::size_t sheet_index);
 
 /// What the view records of `view` and its extra windows leave out or change:
-/// each view mode written as normal, each extra view of a window outside 1 to
-/// `workbook_views` - 1, and a fragment that does not parse, one apiece.
-std::size_t unwritten_sheet_view_count(const SheetView& view, std::uint32_t workbook_views);
+/// each view mode written as normal, each extra view of window 0, and a
+/// fragment that does not parse, one apiece.
+std::size_t unwritten_sheet_view_count(const SheetView& view);
 
 /// Adds the view of workbook window `workbook_view` decoded from XLSB after
 /// the sheet's first: it replaces the main view or an extra view of the same
 /// window, as the later view does in Excel, else joins
-/// `main.extra_views_xml`. False, changing nothing, for a window past the
-/// `workbook_views` the workbook part declares.
-bool append_extra_view(SheetView& main, const SheetView& extra, std::uint32_t workbook_view,
-                       std::uint32_t workbook_views);
+/// `main.extra_views_xml`. False when `main.extra_views_xml` does not parse.
+bool append_extra_view(SheetView& main, const SheetView& extra, std::uint32_t workbook_view);
 
 /// Decodes one BrtPane into `view`'s freeze or split fields. False for an
 /// unfrozen pane with no valid split; an error when a frozen pane's counts

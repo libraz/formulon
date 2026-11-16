@@ -136,7 +136,7 @@ TEST(XlsbSheetFidelity, ViewExtensionsAreLeftOutAndAnUnknownViewModeIsWrittenAsN
   EXPECT_TRUE(RoundTrip(wb).sheet(0).view().tail_xml.empty());
 
   view.view_mode = "futureMode";
-  EXPECT_EQ(unwritten_sheet_view_count(view, 1U), 1U);
+  EXPECT_EQ(unwritten_sheet_view_count(view), 1U);
   std::uint32_t deferred = 0U;
   EXPECT_EQ(RoundTrip(wb, &deferred).sheet(0).view().view_mode, "");
   EXPECT_EQ(deferred, baseline + 1U);
@@ -179,38 +179,42 @@ TEST(XlsbSheetFidelity, ExtraWindowViewDecodesIntoExtraViewsXml) {
   EXPECT_EQ(reread.selections[0].pane, "bottomLeft");
   EXPECT_EQ(reread.selections[0].active_cell, "A5");
 
-  // With one window in the workbook part the same view has none to attach to and is skipped.
+  // With one window in the workbook part the same view is still kept.
   Workbook one_window = Workbook::create_empty();
   one_window.add_sheet("Windows");
-  const SheetDecodeState skipped = DecodeBody(body, one_window);
-  EXPECT_EQ(skipped.skipped_features, 1U);
-  EXPECT_TRUE(one_window.sheet(0).view().extra_views_xml.empty());
+  const SheetDecodeState kept = DecodeBody(body, one_window);
+  EXPECT_EQ(kept.skipped_features, 0U);
+  EXPECT_NE(one_window.sheet(0).view().extra_views_xml.find("workbookViewId=\"1\""), std::string::npos);
 }
 
-TEST(XlsbSheetFidelity, ExtraWindowViewFromXlsxWithoutItsWindowIsLeftOutAndReported) {
+TEST(XlsbSheetFidelity, ExtraWindowViewFromXlsxWithoutItsWindowIsWrittenAndReadBack) {
   Workbook wb = Workbook::create_empty();
   wb.add_sheet("Windows");
   const std::uint32_t baseline = DeferredCount(wb);
   wb.sheet(0).mutable_view().extra_views_xml = "<sheetView workbookViewId=\"1\" zoomScale=\"80\"/>";
-  EXPECT_EQ(unwritten_sheet_view_count(wb.sheet(0).view(), 1U), 1U);
-  EXPECT_EQ(unwritten_sheet_view_count(wb.sheet(0).view(), 2U), 0U);
+  EXPECT_EQ(unwritten_sheet_view_count(wb.sheet(0).view()), 0U);
   std::uint32_t deferred = 0U;
-  EXPECT_TRUE(RoundTrip(wb, &deferred).sheet(0).view().extra_views_xml.empty());
-  EXPECT_EQ(deferred, baseline + 1U);
+  const Workbook back = RoundTrip(wb, &deferred);
+  EXPECT_EQ(deferred, baseline);
   const std::vector<std::uint16_t> types = RecordTypes(EmitSheetBody(wb.sheet(0)));
-  EXPECT_EQ(CountOf(types, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginWsView)), 1U);
+  EXPECT_EQ(CountOf(types, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginWsView)), 2U);
+  pugi::xml_document doc;
+  const std::string& back_xml = back.sheet(0).view().extra_views_xml;
+  ASSERT_TRUE(doc.load_string(back_xml.c_str())) << back_xml;
+  const pugi::xml_node node = doc.child("sheetView");
+  ASSERT_TRUE(node) << back_xml;
+  EXPECT_STREQ(node.attribute("workbookViewId").value(), "1");
+  SheetView reread;
+  read_sheet_view_element(node, reread);
+  EXPECT_EQ(reread.zoom_scale, 80U);
 
   // A fragment that does not parse is left out and counted once.
   Workbook broken = Workbook::create_empty();
   broken.add_sheet("Windows");
   broken.sheet(0).mutable_view().extra_views_xml = "<sheetView workbookViewId=\"1\"";
-  EXPECT_EQ(unwritten_sheet_view_count(broken.sheet(0).view(), 2U), 1U);
+  EXPECT_EQ(unwritten_sheet_view_count(broken.sheet(0).view()), 1U);
   EXPECT_TRUE(RoundTrip(broken, &deferred).sheet(0).view().extra_views_xml.empty());
   EXPECT_EQ(deferred, baseline + 1U);
-
-  wb.set_book_views_xml(kTwoWindows);
-  const Workbook back = RoundTrip(wb);
-  EXPECT_NE(back.sheet(0).view().extra_views_xml.find("zoomScale=\"80\""), std::string::npos);
 }
 
 std::vector<ProtectedRange> SampleRanges() {

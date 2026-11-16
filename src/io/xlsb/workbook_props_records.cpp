@@ -403,19 +403,6 @@ bool decode_book_view(ByteSpan payload, std::string& xml) {
   return true;
 }
 
-std::uint32_t workbook_view_count(const std::string& book_views_xml) {
-  pugi::xml_document doc;
-  if (book_views_xml.empty() || !doc.load_buffer(book_views_xml.data(), book_views_xml.size())) {
-    return 1U;
-  }
-  std::uint32_t count = 0U;
-  for (pugi::xml_node node = doc.child("bookViews").child("workbookView"); node;
-       node = node.next_sibling("workbookView")) {
-    ++count;
-  }
-  return count == 0U ? 1U : count;
-}
-
 bool emit_book_views(std::vector<std::uint8_t>& dst, const std::string& book_views_xml, std::uint32_t active_sheet,
                      std::size_t sheet_count) {
   emit_record(dst, kBrtBeginBookViews, ByteSpan{});

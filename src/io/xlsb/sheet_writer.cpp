@@ -175,11 +175,10 @@ void EmitColumnInfos(std::vector<std::uint8_t>& dst, const SheetLayout& layout, 
 /// worksheet: visible grid/headings and 100% zoom. The default metrics come
 /// from the sheet's modelled `<sheetFormatPr>` values.
 Expected<void, Error> EmitWorksheetViewsAndFormatting(std::vector<std::uint8_t>& dst, const SheetView& sheet_view,
-                                                      const SheetFormatDefaults& defaults, std::uint32_t workbook_views,
-                                                      std::size_t sheet_index) {
+                                                      const SheetFormatDefaults& defaults, std::size_t sheet_index) {
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginWsViews), ByteSpan{});
   RETURN_IF_ERROR(emit_ws_view(dst, sheet_view, 0U, sheet_index));
-  RETURN_IF_ERROR(emit_extra_ws_views(dst, sheet_view, workbook_views, sheet_index));
+  RETURN_IF_ERROR(emit_extra_ws_views(dst, sheet_view, sheet_index));
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtEndWsViews), ByteSpan{});
 
   return emit_ws_fmt_info(dst, defaults, sheet_index);
@@ -333,8 +332,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     const Sheet& sheet, SstBuilder& sst, const std::vector<std::string>& sheet_names,
     const SheetRangeTable& sheet_ranges, const NameTable& name_table, const std::vector<std::string>& hyperlink_ids,
     std::uint32_t* downgraded_formula_count, std::uint32_t dynamic_array_ifmd, const NameShapes& name_shapes,
-    const std::vector<std::string>& table_part_rel_ids, std::uint32_t workbook_views, std::string_view drawing_rel_id,
-    bool owns_drawing, const RichErrorVmMap* rich_error_vm, std::string_view book_directory,
+    const std::vector<std::string>& table_part_rel_ids, std::string_view drawing_rel_id, bool owns_drawing,
+    const RichErrorVmMap* rich_error_vm, std::string_view book_directory,
     const std::optional<PhoneticProperties>& absent_phonetic, const CellStyleSavePlan* style_plan,
     std::string_view legacy_drawing_rel_id, const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks,
     const std::vector<std::uint8_t>* custom_views) {
@@ -361,7 +360,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   // A row without its own height states the default, truncated to twips as BrtWsFmtInfo stores it.
   const auto default_row_twips =
       static_cast<std::uint16_t>(std::clamp(std::floor(format_defaults.default_row_height * 20.0), 0.0, 65535.0));
-  RETURN_IF_ERROR(EmitWorksheetViewsAndFormatting(body, sheet.view(), format_defaults, workbook_views, own_index));
+  RETURN_IF_ERROR(EmitWorksheetViewsAndFormatting(body, sheet.view(), format_defaults, own_index));
   EmitColumnInfos(body, sheet.layout(), style_plan);
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginSheetData), ByteSpan{});
 

@@ -383,8 +383,7 @@ std::size_t ViewCount(const Bytes& package, std::size_t sheet) {
 }
 
 // Sources whose xlsb save once succeeded: each saves again, writing a stand-in for a default Excel does not hold
-// (reported as format_defaults), outline level 8 as 7 (not reported), and leaving out an extra view of a window
-// the workbook lacks (reported as sheet_view); the package validates and reads back.
+// (reported as format_defaults) and outline level 8 as 7 (not reported); the package validates and reads back.
 /// The first worksheet's records of `type`, in stream order.
 std::vector<Bytes> RecordsOf(const Bytes& package, std::uint16_t type) {
   std::vector<Bytes> out;
@@ -435,23 +434,23 @@ TEST(XlsbSaveRestoredSources, TenSourcesSaveOpenValidateAndReload) {
   struct Case {
     const char* path;
     std::size_t format_defaults;
-    std::size_t sheet_view;
+    std::size_t views;  // sheet views written for the first sheet
     std::uint32_t dx_g_col;
     std::uint16_t base_col_width;
     std::uint16_t row_height_twips;
     std::uint32_t flags;
   };
   const Case cases[] = {
-      {"format/base_256_src.xlsx", 1U, 0U, kAbsentWidth, 8U, 300U, 0U},
-      {"format/base_large_src.xlsx", 1U, 0U, kAbsentWidth, 8U, 300U, 0U},
-      {"format/width_256_src.xlsx", 1U, 0U, kAbsentWidth, 8U, 300U, 0U},
-      {"format/width_large_src.xlsx", 1U, 0U, kAbsentWidth, 8U, 300U, 0U},
-      {"format/width_record_max_src.xlsx", 1U, 0U, kAbsentWidth, 8U, 300U, 0U},
-      {"format/width_record_max.xlsx", 1U, 0U, kAbsentWidth, 10U, 280U, 0U},
-      {"format/outline_col_8_src.xlsx", 0U, 0U, kAbsentWidth, 8U, 300U, 7U << 24U},
-      {"format/outline_row_8_src.xlsx", 0U, 0U, kAbsentWidth, 8U, 300U, 7U << 16U},
-      {"views/bad_window_id_src.xlsx", 0U, 1U, kAbsentWidth, 8U, 300U, 0U},
-      {"views/window_id_past_src.xlsx", 0U, 1U, kAbsentWidth, 8U, 300U, 0U},
+      {"format/base_256_src.xlsx", 1U, 1U, kAbsentWidth, 8U, 300U, 0U},
+      {"format/base_large_src.xlsx", 1U, 1U, kAbsentWidth, 8U, 300U, 0U},
+      {"format/width_256_src.xlsx", 1U, 1U, kAbsentWidth, 8U, 300U, 0U},
+      {"format/width_large_src.xlsx", 1U, 1U, kAbsentWidth, 8U, 300U, 0U},
+      {"format/width_record_max_src.xlsx", 1U, 1U, kAbsentWidth, 8U, 300U, 0U},
+      {"format/width_record_max.xlsx", 1U, 1U, kAbsentWidth, 10U, 280U, 0U},
+      {"format/outline_col_8_src.xlsx", 0U, 1U, kAbsentWidth, 8U, 300U, 7U << 24U},
+      {"format/outline_row_8_src.xlsx", 0U, 1U, kAbsentWidth, 8U, 300U, 7U << 16U},
+      {"views/bad_window_id_src.xlsx", 0U, 2U, kAbsentWidth, 8U, 300U, 0U},
+      {"views/window_id_past_src.xlsx", 0U, 2U, kAbsentWidth, 8U, 300U, 0U},
   };
   for (const Case& c : cases) {
     SCOPED_TRACE(c.path);
@@ -465,9 +464,9 @@ TEST(XlsbSaveRestoredSources, TenSourcesSaveOpenValidateAndReload) {
     EXPECT_EQ(::formulon::test::ValidateXlsbPackage(reader_test_support::SpanOf(bytes)), std::vector<std::string>{});
     EXPECT_TRUE(static_cast<bool>(read_xlsb(reader_test_support::SpanOf(bytes))));
     EXPECT_EQ(deferred.count("format_defaults"), c.format_defaults);
-    EXPECT_EQ(deferred.count("sheet_view"), c.sheet_view);
+    EXPECT_EQ(deferred.count("sheet_view"), 0U);
     EXPECT_EQ(deferred.count("outline_level"), 0U);
-    EXPECT_GE(written.value().diagnostics.deferred_feature_count, c.format_defaults + c.sheet_view);
+    EXPECT_GE(written.value().diagnostics.deferred_feature_count, c.format_defaults);
     const std::optional<Bytes> payload = FmtInfo(bytes);
     ASSERT_TRUE(payload.has_value());
     const FmtFields fields = DecodeFmt(*payload);
@@ -475,8 +474,7 @@ TEST(XlsbSaveRestoredSources, TenSourcesSaveOpenValidateAndReload) {
     EXPECT_EQ(fields.base_col_width, c.base_col_width);
     EXPECT_EQ(fields.row_height_twips, c.row_height_twips);
     EXPECT_EQ(fields.flags, c.flags);
-    // The extra view of window 5 is left out; only the main view is written.
-    EXPECT_EQ(ViewCount(bytes, 1U), 1U);
+    EXPECT_EQ(ViewCount(bytes, 1U), c.views);
   }
 }
 

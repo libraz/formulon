@@ -67,10 +67,6 @@ bool emit_wb_prop(std::vector<std::uint8_t>& dst, const std::string& workbook_pr
 /// to `xml`. Returns false on a truncated payload.
 bool decode_book_view(ByteSpan payload, std::string& xml);
 
-/// Windows the workbook part writes for `book_views_xml`: one per
-/// `<workbookView>`, and one when there is none.
-std::uint32_t workbook_view_count(const std::string& book_views_xml);
-
 /// Emits the BOOKVIEWS block: one BrtBookView per `<workbookView>`, or the
 /// default window when there is none. The first window's itabCur is
 /// `active_sheet`; a sheet index past `sheet_count` writes 0. Returns false

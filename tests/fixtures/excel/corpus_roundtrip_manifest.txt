@@ -76,8 +76,6 @@ xlsb_parity/protection/title_256_src.xlsx validate_xlsx protected_range_title mi
 xlsb_parity/protection/title_astral_128_src.xlsx validate_xlsx protected_range_title mirrors_excel_refused_source  # carries the refused source value through
 
 # An xlsb save leaves out a sheet view of a window the workbook lacks.
-xlsb_parity/views/bad_window_id_src.xlsx model_xlsb sheet_view_count known_gap  # extra view of a missing window left out of xlsb
-xlsb_parity/views/window_id_past_src.xlsx model_xlsb sheet_view_count known_gap  # extra view of a missing window left out of xlsb
 
 # Custom views are not carried between formats.
 

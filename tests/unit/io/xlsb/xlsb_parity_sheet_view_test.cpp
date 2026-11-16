@@ -218,7 +218,7 @@ TEST(XlsbParitySheetView, NormaliseViewExtensionIsLeftOutOfXlsb) {
   EXPECT_EQ(types, (std::vector<std::uint16_t>{133, kBrtBeginWsView, kBrtSel, kBrtEndWsView, 134}));
 }
 
-TEST(XlsbParitySheetView, NormaliseWindowPastTheBookViewsReadsAndIsLeftOutOfXlsb) {
+TEST(XlsbParitySheetView, NormaliseWindowPastTheBookViewsIsWrittenToXlsbAndReadBack) {
   for (const char* name : {"window_id_past_src.xlsx", "bad_window_id_src.xlsx"}) {
     SCOPED_TRACE(name);
     const Workbook book = ReadXlsx(name);
@@ -231,8 +231,11 @@ TEST(XlsbParitySheetView, NormaliseWindowPastTheBookViewsReadsAndIsLeftOutOfXlsb
         }
       }
     }
-    // The main view alone; the view of window 5 has no window to attach to.
-    EXPECT_EQ(types, (std::vector<std::uint16_t>{133, kBrtBeginWsView, kBrtSel, kBrtEndWsView, 134}));
+    // The main view and the view of window 5, each with its one selection.
+    EXPECT_EQ(types, (std::vector<std::uint16_t>{133, kBrtBeginWsView, kBrtSel, kBrtEndWsView, kBrtBeginWsView, kBrtSel,
+                                                 kBrtEndWsView, 134}));
+    EXPECT_NE(ReadXlsb(WriteXlsb(book)).workbook.sheet(0).view().extra_views_xml.find("workbookViewId=\"5\""),
+              std::string::npos);
   }
   // The repeated window on bad_window_id's second sheet folds as in window_id_repeat.
   const Workbook bad = ReadXlsx("bad_window_id_src.xlsx");
@@ -298,7 +301,7 @@ TEST(XlsbParitySheetView, NormaliseXlsbReaderAligned) {
   EXPECT_EQ(unknown_mode.skipped_feature_count, 1U);
   EXPECT_EQ(unknown_mode.workbook.sheet(0).view().view_mode, "");
 
-  // A second view: window 5 of a one-window book is skipped; window 0 replaces the first view.
+  // A second view: window 5 of a one-window book is kept as an extra view; window 0 replaces the first view.
   const auto with_second_view = [&](std::uint32_t window) {
     Bytes begin;
     return WithFirstSheet(control, [&, window](const test::IndexedRecord& r, Bytes& out) {
@@ -313,8 +316,8 @@ TEST(XlsbParitySheetView, NormaliseXlsbReaderAligned) {
     });
   };
   const XlsbReadResult past = ReadXlsb(with_second_view(5U));
-  EXPECT_EQ(past.skipped_feature_count, 1U);
-  EXPECT_TRUE(past.workbook.sheet(0).view().extra_views_xml.empty());
+  EXPECT_EQ(past.skipped_feature_count, 0U);
+  EXPECT_NE(past.workbook.sheet(0).view().extra_views_xml.find("workbookViewId=\"5\""), std::string::npos);
   ASSERT_EQ(past.workbook.sheet(0).view().selections.size(), 1U);
   EXPECT_EQ(past.workbook.sheet(0).view().selections[0].active_cell, "B2");
 

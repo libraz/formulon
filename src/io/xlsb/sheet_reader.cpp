@@ -36,7 +36,6 @@
 #include "io/xlsb/sheet_record_flags.h"
 #include "io/xlsb/sparkline_records.h"
 #include "io/xlsb/view_records.h"
-#include "io/xlsb/workbook_props_records.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
 #include "phonetic.h"
@@ -802,8 +801,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
       state.in_tail = true;
     } else if (type == XlsbRecordType::BrtEndWsView) {
       if (state.in_extra_ws_view) {
-        if (!append_extra_view(wb.sheet(sheet_index).mutable_view(), state.extra_view, state.extra_workbook_view,
-                               workbook_view_count(wb.book_views_xml()))) {
+        if (!append_extra_view(wb.sheet(sheet_index).mutable_view(), state.extra_view, state.extra_workbook_view)) {
           CountSkippedFeature(state, "sheet_view", sheet_index);
         }
         state.in_extra_ws_view = false;
