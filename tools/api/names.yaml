@@ -4559,7 +4559,7 @@ entries:
     py: evaluate_formula
     cell_args: [[0, 1]]
     surfaces: [wasm, native, py]
-    exception: "binding convenience: the top-left element of fm_sheet_evaluate_formula_array"
+    exception: "binding convenience: a 1x1 result of fm_sheet_evaluate_formula_array as its value, any other result as the grid"
     was: { c: fm_workbook_evaluate_formula, js: evaluateFormulaText }
     drop: { c: fm_workbook_evaluate_formula, closes: R0.coverage }
     facade: handwritten

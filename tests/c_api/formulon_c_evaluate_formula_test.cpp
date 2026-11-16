@@ -107,11 +107,9 @@ TEST(EvaluateFormula, WorkbookScopedDefinedName) {
   EXPECT_DOUBLE_EQ(v.u.number, 8.0);
 }
 
-// The bindings fold an array/spill result to its top-left element, the
-// documented intentional divergence (see divergence.yaml:
-// evaluate_formula_array_scalar_reduction). It is NOT implicit intersection
-// and NOT spilling.
-TEST(EvaluateFormula, ArrayResultFoldsToTopLeft) {
+// An array result keeps every cell; its first cell is the array's top-left
+// element, not an implicit intersection.
+TEST(EvaluateFormula, ArrayResultStartsAtItsTopLeftElement) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 

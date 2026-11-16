@@ -128,27 +128,6 @@ entries:
     prefer: formulon
     first_noted: 2026-09-30
     last_verified_excel_version: "16.113.4"
-  # -- ad-hoc evaluate-formula scalar reduction (intentional API shape) ----
-  # `fm_sheet_evaluate_formula` (and the WASM / Node
-  # `evaluateFormulaText`) return a single scalar. When the evaluated
-  # formula produces an array/spill (e.g. `=SEQUENCE(3)`), the API reduces
-  # it to the top-left element. In a real Excel cell the same formula would
-  # spill the whole array; this is a deliberate Phase 1 API-shape choice,
-  # not an Excel-compatibility bug, and not implicit intersection (which
-  # selects the anchor-row/column element and yields #VALUE! when there is
-  # none). evaluateFormulaArray returns the whole result. No oracle case is
-  # generated for this behaviour; the entry documents the intent for
-  # reviewers.
-  - id: evaluate_formula_array_scalar_reduction
-    applies_to: all
-    cause: accepted-divergence
-    mode: skip-oracle
-    scope: api-contract
-    evidence: [tests/c_api/formulon_c_evaluate_formula_test.cpp]
-    reason: "The bindings' evaluateFormula / evaluate_formula (over fm_sheet_evaluate_formula_array) and evaluateFormulaText fold an array result to its top-left element; a real cell would spill. Intentional API-shape divergence, not implicit intersection or an Excel bug."
-    prefer: formulon
-    first_noted: 2026-07-03
-    last_verified_excel_version: "16.111.2"
   # -- ftp hyperlink target with a space -------------------------------------
   # Mac Excel saves the relationship Target of an ftp link whose path holds a
   # space as the literal `NULL`, which loses the link. Formulon writes the
