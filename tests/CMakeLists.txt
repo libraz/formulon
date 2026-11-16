@@ -541,6 +541,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/print/print_area_test.cpp
   unit/print/pagination_detail_test.cpp
   unit/print/pagination_test.cpp
+  unit/print/mac_print_breaks_test.cpp
   unit/print/sheet_geometry_test.cpp
   unit/font_metrics_test.cpp
   unit/drawing/drawing_color_test.cpp

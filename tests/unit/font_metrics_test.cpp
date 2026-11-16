@@ -315,17 +315,20 @@ TEST(FontMetrics, WindowsDefaultStoredWidthIsUnchanged) {
   EXPECT_DOUBLE_EQ(model.padding_pt, 3.75);
 }
 
-TEST(FontMetrics, PrintIsTheWindowsFigureOnEveryHost) {
+TEST(FontMetrics, PrintUsesEachHostsOwnFigure) {
   const ColumnWidthModel mac_print = MacModel("Calibri", 11, GeometryMode::kPrint);
+  const ColumnWidthModel mac_display = MacModel("Calibri", 11, GeometryMode::kDisplay);
+  EXPECT_EQ(mac_print.host, mac_display.host);
+  EXPECT_DOUBLE_EQ(mac_print.points_per_char, mac_display.points_per_char);
+  EXPECT_DOUBLE_EQ(mac_print.padding_pt, mac_display.padding_pt);
+  EXPECT_EQ(mac_print.max_digit_width_px, mac_display.max_digit_width_px);
+
   const ColumnWidthModel win_print = resolve_column_width_model(StylesWith("Calibri", 11), default_theme(),
                                                                 win_365_en_us_profile(), GeometryMode::kPrint);
-  EXPECT_EQ(mac_print.host, ExcelHost::kWin365);
-  EXPECT_STREQ(mac_print.platform, "win");
-  EXPECT_DOUBLE_EQ(mac_print.points_per_char, win_print.points_per_char);
-  EXPECT_DOUBLE_EQ(mac_print.padding_pt, win_print.padding_pt);
-  EXPECT_NEAR(mac_print.points_per_char, 39.0 / 7.0, 1e-12);
-  EXPECT_NEAR(mac_print.padding_pt, 27.0 / 7.0, 1e-12);
-  EXPECT_EQ(mac_print.max_digit_width_px, 7);
+  EXPECT_EQ(win_print.host, ExcelHost::kWin365);
+  EXPECT_NEAR(win_print.points_per_char, 39.0 / 7.0, 1e-12);
+  EXPECT_NEAR(win_print.padding_pt, 27.0 / 7.0, 1e-12);
+  EXPECT_EQ(win_print.max_digit_width_px, 7);
 }
 
 TEST(FontMetrics, ModelReportsTheResolvedThemeFace) {

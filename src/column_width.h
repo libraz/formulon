@@ -13,9 +13,10 @@
 //   * `kDisplay` — the screen figure of the profile's host: on Windows
 //     `Range.Width` at 96 DPI, the stored width snapping to whole pixels of
 //     the MDW (ECMA-376 §18.3.1.13); on Mac the whole-point layout.
-//   * `kPrint` — the DPI-stable Windows figure the pagination break math uses
-//     on every host (Calibri 11: 39/7 pt per displayed character plus 27/7 pt
-//     padding).
+//   * `kPrint` — the figure the pagination break math uses: on Windows the
+//     DPI-stable print figure (Calibri 11: 39/7 pt per displayed character
+//     plus 27/7 pt padding); on Mac the whole-point screen layout, which Mac
+//     Excel paginates with unchanged.
 //
 // Dimensions come from `font_metrics.h` per Excel host. Windows converts
 // through 96-DPI pixels; Mac lays columns out in whole points, one pixel being
@@ -41,7 +42,7 @@ struct Theme;
 /// Which column-width figure a conversion uses.
 enum class GeometryMode : std::int32_t {
   kDisplay = 0,  ///< Screen figure of the profile's host.
-  kPrint = 1,    ///< Windows print-layout figure used by pagination, on every host.
+  kPrint = 1,    ///< Print-layout figure used by pagination (Mac: the screen figure).
 };
 
 /// The character-unit to point conversion for one Normal font and mode.
@@ -57,7 +58,7 @@ struct ColumnWidthModel {
   /// False when `(normal_font_name, normal_font_size)` is not a tabulated
   /// calibration point of `host` and its Calibri 11 figure was used instead.
   bool calibrated = true;
-  ExcelHost host = ExcelHost::kWin365;  ///< Host whose table the model uses; `kPrint` is always Windows.
+  ExcelHost host = ExcelHost::kWin365;  ///< Host whose table the model uses.
   const char* platform = "win";         ///< `"win"` or `"mac"`, spelling of `host`.
 };
 

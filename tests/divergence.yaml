@@ -717,32 +717,19 @@ entries:
   # Mac Excel 16.111.3 ja-JP result (see builtins_pivotby_test.cpp). No
   # divergence entry is needed for these shapes.
 
-  # -- Column print-layout width is inferred for every font but Calibri ----
-  # Excel resolves a column's width in points from its stored character-unit
-  # width times the Normal font's maximum digit width (MDW), so the
-  # conversion is a property of that font -- but two DIFFERENT MDW figures
-  # are in play. The reported `Range.Width` ("display" width) is DPI-
-  # dependent: sweeping Calibri, ＭＳ Ｐゴシック, 游ゴシック and Meiryo UI
-  # at 8-18 pt gave different numbers at 100% scaling (96 DPI) than at 175%
-  # (168 DPI) for the identical fonts/sizes. The width print pagination
-  # actually breaks on is NOT this figure: the same print-track cases'
-  # page-break positions are identical across both DPI captures, which the
-  # 168-DPI Range.Width sweep approximates and the 96-DPI one does not.
-  # Only Calibri 11's print-layout width is therefore directly evidenced
-  # (from the print captures' own breaks, not a Range.Width sweep); every
-  # other font/size's print-layout width is inferred by scaling its
-  # (separate, DPI-dependent) 96-DPI display calibration by
-  # Calibri 11's print/display ratio -- an approximation, not a second
-  # sweep. The display calibration itself remains exact and continues to
-  # drive `applied_geometry.column_widths_pt` in the workbook oracle
-  # goldens (a diagnostic field no verifier compares today).
+  # -- Column print-layout width on Windows is inferred for every font but Calibri 11 --
+  # Windows Excel paginates with a DPI-stable print figure that differs from
+  # its DPI-dependent `Range.Width`; only Calibri 11's print figure is
+  # measured. Mac Excel paginates with its screen layout (whole points of the
+  # Mac MDW), which Mac Excel 16.115's breaks confirm for Calibri 11/14 and
+  # 游ゴシック 11/14 (tests/fixtures/excel/mac/print_breaks/).
   - id: pagination_column_width_calibrated_to_one_normal_font
     applies_to: all
     cause: engine-gap
     mode: skip-oracle
     scope: deferred-feature
-    evidence: [src/column_width.cpp, src/font_metrics.cpp, tests/unit/print/pagination_test.cpp]
-    reason: "Pagination lays columns out by the workbook's Normal font: `resolve_column_width_model` in `GeometryMode::kPrint` (src/column_width.cpp) looks that font's max digit width (MDW) and padding up in the Windows width table (src/font_metrics.cpp, from tests/fixtures/excel/win/column_width_dpi100/results.json: Calibri, 游ゴシック, ＭＳ Ｐゴシック and Meiryo UI at 8/9/10/11/12/14/16/18 pt, 96 DPI) and converts them to the DPI-stable print figure, which every host paginates with. Only Calibri 11's print figure is measured: 39/7 pt per character plus 27/7 pt padding, the page-break positions of the print-track captures, which are identical at 96 and 168 DPI. Every other font and size takes its 96-DPI display MDW and padding scaled by Calibri 11's print/display ratios (`kPrintMdwRatio`, `kPrintPaddingRatio`); no print capture under another Normal font confirms that scaling. A Normal font or size outside the table falls back to the Calibri 11 figures."
+    evidence: [src/column_width.cpp, src/font_metrics.cpp, tests/unit/print/pagination_test.cpp, tests/unit/print/mac_print_breaks_test.cpp]
+    reason: "Pagination lays columns out by the workbook's Normal font through `resolve_column_width_model` in `GeometryMode::kPrint` (src/column_width.cpp). On Windows it converts the font's 96-DPI max digit width (MDW) and padding from the Windows table (src/font_metrics.cpp) to the DPI-stable print figure. Only Calibri 11's print figure is measured (39/7 pt per character plus 27/7 pt padding, from the print-track breaks); every other Windows font and size scales its display figures by Calibri 11's print/display ratios (`kPrintMdwRatio`, `kPrintPaddingRatio`), which no print capture under another Normal font confirms. On Mac the print figure is the screen layout from the measured Mac table, matching Mac Excel's breaks; a Mac Normal font or size absent from that table falls back to the Calibri 11 figures, unmeasured."
     prefer: win-excel-365
     first_noted: 2026-08-22
     last_verified_excel_version: "16.0.20326"

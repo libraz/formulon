@@ -25,7 +25,10 @@ namespace {
 // confused:
 //
 //   * Print-layout width, consumed only by `paginate()`'s own break math
-//     (h_breaks / v_breaks / page count). Comparing a Windows Excel 365
+//     (h_breaks / v_breaks / page count). Mac Excel paginates with its
+//     whole-point screen layout: a column is floor(stored pixels) points of
+//     the Mac MDW, and the breaks of Mac Excel 16.115 at Calibri 8-18 fill the
+//     printable width greedily with exactly those widths. On Windows, comparing a Windows Excel 365
 //     ja-JP build 16.0.20228/16.0.20326 capture taken at 100% display
 //     scaling (96 DPI) against one of the *same build* taken at 175%
 //     (168 DPI) shows `Range.Width` itself is DPI-dependent (Calibri 11
@@ -40,7 +43,7 @@ namespace {
 //     verifier today (`workbook_oracle_test.cpp` never reads it). This
 //     is the 96-DPI `Range.Width` figure, unadjusted.
 //
-// Only Calibri 11's print-layout width is known directly (from the
+// Only Calibri 11's Windows print-layout width is known directly (from the
 // print-track break positions, not `Range.Width`).
 // Other fonts/sizes' print-layout widths are not known; they are
 // inferred by scaling that font's *display* calibration by the ratio
@@ -104,16 +107,14 @@ const FontRecord* resolve_normal_font(const StylesTable& styles) {
 
 ColumnWidthModel resolve_column_width_model(const StylesTable& styles, const Theme& theme, ExcelProfile profile,
                                             GeometryMode mode) {
-  // Print is the Windows figure on every host.
-  const ExcelProfile host_profile{mode == GeometryMode::kPrint ? ExcelHost::kWin365 : profile.host, profile.locale};
-  const NormalFontMetrics metrics = normal_font_metrics(styles, theme, host_profile);
+  const NormalFontMetrics metrics = normal_font_metrics(styles, theme, profile);
   ColumnWidthModel model;
   model.normal_font_name = metrics.family;
   model.normal_font_size = metrics.size_pt;
   model.calibrated = metrics.width_calibrated;
   model.host = metrics.host;
   if (metrics.host == ExcelHost::kMac365) {
-    // A pixel is a point on Mac.
+    // A pixel is a point on Mac, and Mac Excel paginates with the screen layout.
     model.points_per_char = metrics.mdw_pt;
     model.padding_pt = metrics.padding_pt;
     model.max_digit_width_px = static_cast<int>(std::lround(metrics.mdw_pt));
@@ -132,7 +133,7 @@ ColumnWidthModel resolve_column_width_model(const StylesTable& styles, const The
 
 ColumnWidthModel resolve_column_width_model(const Workbook& wb, ExcelProfile profile, GeometryMode mode) {
   const StylesTable& styles = wb.styles();
-  if (profile.host == ExcelHost::kMac365 && mode == GeometryMode::kDisplay) {
+  if (profile.host == ExcelHost::kMac365) {
     const FontRecord* font = resolve_normal_font(styles);
     if (font != nullptr && font->scheme == kFontSchemeMinor) {
       return resolve_column_width_model(styles, wb.load_theme().theme, profile, mode);
