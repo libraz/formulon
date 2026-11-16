@@ -584,7 +584,9 @@ std::optional<std::string> decode_sheet_view(const std::vector<FramedRecord>& re
       if (!decode_selection(record, scratch)) {
         return std::nullopt;
       }
-    } else if (rec.type == kBrtMargins || rec.type == kBrtPageSetup) {
+    } else if (rec.type == kBrtMargins || rec.type == kBrtPageSetup || rec.type == kBrtBeginHeaderFooter ||
+               rec.type == kBrtEndHeaderFooter || rec.type == kBrtBeginRwBrk || rec.type == kBrtEndRwBrk ||
+               rec.type == kBrtBeginColBrk || rec.type == kBrtEndColBrk || rec.type == kBrtBrk) {
       print_records.insert(print_records.end(), body.begin() + static_cast<std::ptrdiff_t>(rec.begin),
                            body.begin() + static_cast<std::ptrdiff_t>(rec.end));
     } else if (rec.type == kBrtPrintOptions) {
@@ -629,11 +631,8 @@ std::optional<std::string> decode_sheet_view(const std::vector<FramedRecord>& re
   }
   SheetPrintSettings print;
   decode_print_records(print_records, print);
-  for (const FramedRecord& rec : split_records(print_records)) {
-    if ((rec.type == kBrtMargins && print.page_margins_xml.empty()) ||
-        (rec.type == kBrtPageSetup && print.page_setup_xml.empty())) {
-      return std::nullopt;
-    }
+  if (unwritten_print_families(print_records, print) != 0U) {
+    return std::nullopt;
   }
   // The view's flags repeat its print options.
   std::uint32_t option_bits = 0;
@@ -688,8 +687,11 @@ std::optional<std::string> decode_sheet_view(const std::vector<FramedRecord>& re
   if (top_row != 0U || top_col != 0U) {
     append_xml_attr(xml, "topLeftCell", a1::encode_a1(top_row, top_col));
   }
-  const std::string children = build_pane_and_selections_xml(scratch, true) + print.page_margins_xml + *print_options +
-                               print.page_setup_xml + filter_xml;
+  const std::string children = build_pane_and_selections_xml(scratch, true) +
+                               ooxml::build_page_breaks_xml("rowBreaks", print.manual_row_breaks) +
+                               ooxml::build_page_breaks_xml("colBreaks", print.manual_col_breaks) +
+                               print.page_margins_xml + *print_options + print.page_setup_xml +
+                               print.header_footer_xml + filter_xml;
   if (children.empty()) {
     xml.append("/>");
   } else {

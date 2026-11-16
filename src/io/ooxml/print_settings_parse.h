@@ -15,6 +15,7 @@
 #ifndef FORMULON_IO_OOXML_PRINT_SETTINGS_PARSE_H_
 #define FORMULON_IO_OOXML_PRINT_SETTINGS_PARSE_H_
 
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -55,6 +56,20 @@ void apply_structured_page_margins(const pugi::xml_node& page_margins, PageMargi
 /// repeat an `id`; the first entry for each `id` wins, and any excess
 /// past the axis cap is dropped.
 void read_manual_breaks(const pugi::xml_node& breaks_node, std::vector<ManualBreak>& out);
+
+/// Emits a `<rowBreaks>` or `<colBreaks>` block for the given manual
+/// breaks. Returns an empty string when `breaks` is empty so the caller
+/// adds no bytes. The stored index is emitted as-is: OOXML's `id` is the
+/// same 0-based index the break precedes, not a 1-based one (Excel 365
+/// writes `id="20"` for a break before row 21).
+///
+/// `count` is every `<brk>` child; `manualBreakCount` is only those
+/// carrying `man="1"`. A sheet can hold both kinds at once - Excel records
+/// the automatic breaks it computed alongside the ones the user placed -
+/// and the two attributes coincide only when every break is manual.
+/// Overstating `manualBreakCount` makes Excel's page-break preview draw
+/// solid user-break lines where the file declares computed ones.
+std::string build_page_breaks_xml(std::string_view element, const std::vector<ManualBreak>& breaks);
 
 /// Reads `<sheetPr><pageSetUpPr fitToPage>`. Returns false when either
 /// element or the attribute is absent, matching ECMA-376's default.

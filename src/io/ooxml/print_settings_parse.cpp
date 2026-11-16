@@ -2,7 +2,9 @@
 #include "io/ooxml/print_settings_parse.h"
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -176,6 +178,45 @@ void refresh_structured_views(std::string_view element_name, std::string_view fr
     settings.page_setup.fit_to_page = read_fit_to_page(root);
     settings.tab_color = read_tab_color(root);
   }
+}
+
+std::string build_page_breaks_xml(std::string_view element, const std::vector<ManualBreak>& breaks) {
+  if (breaks.empty()) {
+    return {};
+  }
+  // Rough size estimate so the buffer rarely reallocates: a fixed
+  // allowance for the wrapper element plus one allowance per `<brk>`.
+  constexpr std::size_t kBreaksWrapperReserveBytes = 48U;
+  constexpr std::size_t kPerBreakReserveBytes = 48U;
+  std::string out;
+  out.reserve(kBreaksWrapperReserveBytes + breaks.size() * kPerBreakReserveBytes);
+  std::size_t manual_count = 0;
+  for (const ManualBreak& brk : breaks) {
+    if (brk.manual) {
+      ++manual_count;
+    }
+  }
+  out.push_back('<');
+  out.append(element);
+  append_xml_attr_uint(out, "count", breaks.size());
+  append_xml_attr_uint(out, "manualBreakCount", manual_count);
+  out.append(">");
+  for (const ManualBreak& brk : breaks) {
+    out.append("<brk");
+    append_xml_attr_uint(out, "id", brk.id);
+    if (brk.min != 0U) {
+      append_xml_attr_uint(out, "min", brk.min);
+    }
+    append_xml_attr_uint(out, "max", brk.max);
+    if (brk.manual) {
+      emit_xsd_bool_attr(out, "man", true);
+    }
+    out.append("/>");
+  }
+  out.append("</");
+  out.append(element);
+  out.push_back('>');
+  return out;
 }
 
 }  // namespace ooxml

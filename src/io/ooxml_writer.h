@@ -90,8 +90,10 @@ struct OoxmlWriteResult {
 /// shipped builds, so these counters are what a caller actually sees.
 /// `downgraded_formula_count` stays zero: this writer emits formula
 /// text verbatim. `deferred_feature_count` counts rich values kept
-/// verbatim, each XLSB-source PivotTable left out with its cache, and
-/// each XLSB-source custom view (one per GUID) with no OOXML form.
+/// verbatim, each XLSB-source PivotTable left out with its cache, each
+/// XLSB-source custom view (one per GUID) with no OOXML form, and each
+/// XLSB-source sheet print record family (header and footer, a break axis,
+/// page setup, margins, print options) the model could not state exactly.
 Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb);
 
 /// Serialises `wb` and discards the write diagnostics. Equivalent to

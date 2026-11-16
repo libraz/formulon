@@ -207,13 +207,13 @@ TEST(XlsbUserBookView, XlsbViewWithoutAnXlsxFormLeavesBothSidesOut) {
   auto read = read_xlsb(SpanOf(Fixture("children_0_base.xlsb")));
   ASSERT_TRUE(static_cast<bool>(read)) << read.error().message;
   Workbook& wb = read.value().workbook;
-  // A header inside the view has no `.xlsx` form here: the view goes on both sides.
+  // An automatic page break inside the view has no `.xlsx` form: the view goes on both sides.
   XlsbSheetTail tail = wb.sheet(0).xlsb_tail();
   std::vector<std::uint8_t> header;
-  emit_record(header, kBrtBeginHeaderFooter,
-              std::vector<std::uint8_t>{0x0c, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-                                        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff});
-  emit_record(header, kBrtEndHeaderFooter, ByteSpan{});
+  emit_record(header, kBrtBeginRwBrk, std::vector<std::uint8_t>{0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00});
+  emit_record(header, kBrtBrk, std::vector<std::uint8_t>{0x05, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0x3f,
+                                                         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00});
+  emit_record(header, kBrtEndRwBrk, ByteSpan{});
   std::vector<std::uint8_t>& slot = tail.before_merges;
   const std::vector<FramedRecord> recs = split_records(slot);
   const auto end_view =
@@ -446,6 +446,75 @@ TEST(XlsbUserBookView, FilterCriteriaViewCrossesBothWaysAsExcelSavesIt) {
   const std::size_t views_at = saved.find("<customSheetViews>");
   ASSERT_NE(views_at, std::string::npos);
   EXPECT_NE(saved.substr(0U, views_at).find("<autoFilter ref=\"A1:D13\""), std::string::npos);
+}
+
+/// Both directions of a view whose print children Excel saved in an `.xlsx` / `.xlsb` twin pair.
+void ExpectPrintViewCrossesBothWays(const std::string& stem, const std::vector<const char*>& children) {
+  const std::vector<std::uint8_t> twin_xlsb = CustomViewsFixture(stem + ".xlsb");
+  const std::vector<std::uint8_t> twin_xlsx = CustomViewsFixture(stem + ".xlsx");
+  constexpr const char* kSheetXml = "xl/worksheets/sheet1.xml";
+  const SplitBlock expected = SplitAtBlock(Entry(twin_xlsb, kSheetBin), kBrtBeginUserShViews, kBrtEndUserShViews);
+  ASSERT_FALSE(expected.inside.empty());
+
+  // .xlsx to .xlsb: the view's records.
+  auto from_xlsx = read_ooxml(SpanOf(twin_xlsx));
+  ASSERT_TRUE(static_cast<bool>(from_xlsx)) << from_xlsx.error().message;
+  auto as_xlsb = write_xlsb_with_result(from_xlsx.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(as_xlsb)) << as_xlsb.error().message;
+  const SplitBlock actual =
+      SplitAtBlock(Entry(as_xlsb.value().bytes, kSheetBin), kBrtBeginUserShViews, kBrtEndUserShViews);
+  EXPECT_EQ(WithoutTypes(actual.inside, {kBrtBeginUserShViews, kBrtEndUserShViews}),
+            WithoutTypes(expected.inside, {kBrtBeginUserShViews, kBrtEndUserShViews}));
+
+  // .xlsb keeps the view on an .xlsb save.
+  auto from_xlsb = read_xlsb(SpanOf(twin_xlsb));
+  ASSERT_TRUE(static_cast<bool>(from_xlsb)) << from_xlsb.error().message;
+  auto resaved = write_xlsb_with_result(from_xlsb.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(resaved)) << resaved.error().message;
+  EXPECT_EQ(SplitAtBlock(Entry(resaved.value().bytes, kSheetBin), kBrtBeginUserShViews, kBrtEndUserShViews).inside,
+            expected.inside);
+
+  // .xlsb to .xlsx: the view element as Excel's .xlsx twin states it.
+  auto as_xlsx = write_ooxml_with_result(from_xlsb.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(as_xlsx)) << as_xlsx.error().message;
+  const std::string saved =
+      ElementSpan(Text(Entry(as_xlsx.value().bytes, kSheetXml)), "<customSheetView ", "</customSheetView>");
+  const std::string twin_view =
+      ElementSpan(Text(Entry(twin_xlsx, kSheetXml)), "<customSheetView ", "</customSheetView>");
+  ASSERT_FALSE(twin_view.empty());
+  EXPECT_EQ(saved, twin_view);
+  for (const char* child : children) {
+    EXPECT_NE(saved.find(child), std::string::npos) << child;
+  }
+}
+
+TEST(XlsbUserBookView, HeaderFooterViewCrossesBothWaysAsExcelSavesIt) {
+  ExpectPrintViewCrossesBothWays("headerfooter_view",
+                                 {"<headerFooter differentOddEven=\"1\" differentFirst=\"1\">",
+                                  "<oddHeader>&amp;CODD-H</oddHeader>", "<firstFooter>&amp;CFIRST-F</firstFooter>"});
+}
+
+TEST(XlsbUserBookView, PageBreakViewCrossesBothWaysAsExcelSavesIt) {
+  ExpectPrintViewCrossesBothWays(
+      "pagebreaks_view",
+      {"<rowBreaks count=\"2\" manualBreakCount=\"2\"><brk id=\"10\" max=\"16383\" man=\"1\"/><brk id=\"20\" "
+       "max=\"16383\" man=\"1\"/></rowBreaks>",
+       "<colBreaks count=\"2\" manualBreakCount=\"2\"><brk id=\"3\" max=\"1048575\" man=\"1\"/><brk id=\"6\" "
+       "max=\"1048575\" man=\"1\"/></colBreaks>"});
+}
+
+TEST(XlsbUserBookView, ViewPageBreaksAreNotTheSheetsOnLoad) {
+  auto xlsb = read_xlsb(SpanOf(CustomViewsFixture("pagebreaks_view.xlsb")));
+  ASSERT_TRUE(static_cast<bool>(xlsb)) << xlsb.error().message;
+  auto xlsx = read_ooxml(SpanOf(CustomViewsFixture("pagebreaks_view.xlsx")));
+  ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
+  const SheetPrintSettings& got = xlsb.value().workbook.sheet(0).print_settings();
+  const SheetPrintSettings& want = xlsx.value().workbook.sheet(0).print_settings();
+  ASSERT_EQ(want.manual_row_breaks.size(), 1U);
+  ASSERT_EQ(got.manual_row_breaks.size(), 1U);
+  EXPECT_EQ(got.manual_row_breaks[0].id, 15U);
+  ASSERT_EQ(got.manual_col_breaks.size(), 1U);
+  EXPECT_EQ(got.manual_col_breaks[0].id, 4U);
 }
 
 }  // namespace

@@ -44,9 +44,9 @@ std::optional<std::string> decode_book_view(ByteSpan payload);
 
 /// The `<customSheetView>` of one view's records, from its BrtBeginUserShView
 /// through its BrtEndUserShView in `records` (framed in `body`); nullopt for
-/// a view holding a record or bit Excel was not seen to write, or one the
-/// `.xlsx` form here cannot state (header and footer, page breaks). The
-/// filter's revision-uid wrapper is not carried over.
+/// a view holding a record or bit Excel was not seen to write, or a print
+/// record the `.xlsx` form here cannot state exactly (an automatic page break
+/// among them). The filter's revision-uid wrapper is not carried over.
 std::optional<std::string> decode_sheet_view(const std::vector<FramedRecord>& records,
                                              const std::vector<std::uint8_t>& body);
 

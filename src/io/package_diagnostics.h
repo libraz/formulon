@@ -100,7 +100,8 @@ struct WriteDiagnostics {
   /// views without their workbook view), rich values kept verbatim.
   /// OOXML: rich values kept verbatim, an XLSB-source PivotTable the
   /// reader could not model, a custom view of an XLSB source with no
-  /// OOXML form. A table naming a removed sheet fails the save with
+  /// OOXML form, an XLSB-source print record family the reader could not
+  /// state exactly. A table naming a removed sheet fails the save with
   /// `kIoWriteFailed` before any count is made.
   /// Fed by: `xlsb.writer.deferred`, `ooxml_writer.rich_values_kept_verbatim`,
   /// and the OOXML emission plan's PivotTable and custom-view counts.

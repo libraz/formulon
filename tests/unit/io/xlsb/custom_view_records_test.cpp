@@ -537,14 +537,32 @@ TEST(CustomViewRecords, SheetViewFilterCriteriaDecodeToExcelsElement) {
   EXPECT_EQ(*xml, kCriteriaViewXml);
 }
 
-TEST(CustomViewRecords, SheetViewsWithoutAnXlsxFormAreNotDecoded) {
-  // Page breaks and a header have records but no `.xlsx` form here.
-  for (const std::string& children :
-       {std::string(kBaseMargins) + "<rowBreaks count=\"1\" manualBreakCount=\"1\"><brk id=\"5\" max=\"16383\" "
-                                    "man=\"1\"/></rowBreaks>",
-        std::string(kBaseMargins) + "<headerFooter><oddHeader>&amp;CTop</oddHeader></headerFooter>"}) {
-    EXPECT_FALSE(SheetRoundTrip(SheetView("", children)).has_value()) << children;
+TEST(CustomViewRecords, SheetViewWithAnAutomaticBreakIsNotDecoded) {
+  // The view's `.xlsx` form states manual breaks only.
+  const std::string children = std::string(kBaseMargins) +
+                               "<rowBreaks count=\"1\" manualBreakCount=\"1\"><brk id=\"5\" max=\"16383\" "
+                               "man=\"1\"/></rowBreaks>";
+  pugi::xml_document doc;
+  ASSERT_TRUE(doc.load_string(SheetView("", children).c_str()));
+  std::vector<std::uint8_t> bytes;
+  ASSERT_TRUE(encode_sheet_view(doc.document_element(), true, bytes));
+  ASSERT_TRUE(decode_sheet_view(split_records(bytes), bytes).has_value());
+  bool cleared = false;
+  for (const FramedRecord& rec : split_records(bytes)) {
+    if (rec.type == kBrtBrk) {
+      // BrtBrk's manual flag sits at payload offset 12.
+      bytes[static_cast<std::size_t>(rec.payload.data - bytes.data()) + 12U] = 0U;
+      cleared = true;
+    }
   }
+  ASSERT_TRUE(cleared);
+  EXPECT_FALSE(decode_sheet_view(split_records(bytes), bytes).has_value());
+  // Nor does the encoder take an automatic break from an `.xlsx` view.
+  ASSERT_TRUE(doc.load_string(
+      SheetView("", std::string(kBaseMargins) + "<rowBreaks count=\"1\"><brk id=\"5\" max=\"16383\"/></rowBreaks>")
+          .c_str()));
+  bytes.clear();
+  EXPECT_FALSE(encode_sheet_view(doc.document_element(), true, bytes));
 }
 
 TEST(CustomViewRecords, SheetViewWithoutPrintSettingsKeepsNoPrintRecords) {

@@ -25,6 +25,7 @@
 #include "io/dv_overlay.h"
 #include "io/ooxml/cell_ref_writer.h"
 #include "io/ooxml/emission_plan.h"
+#include "io/ooxml/print_settings_parse.h"
 #include "io/ooxml/relationship_writer.h"
 #include "io/ooxml/shared_strings_writer.h"
 #include "io/ooxml_defs.h"
@@ -278,57 +279,6 @@ std::string PageSetupWithRelationshipId(std::string page_setup_xml, std::string_
   attr.push_back('"');
   page_setup_xml.insert(pos, attr);
   return page_setup_xml;
-}
-
-/// Emits a `<rowBreaks>` or `<colBreaks>` block for the given manual
-/// breaks. Returns an empty string when `breaks` is empty so the caller
-/// adds no bytes. The stored index is emitted as-is: OOXML's `id` is the
-/// same 0-based index the break precedes, not a 1-based one (Excel 365
-/// writes `id="20"` for a break before row 21).
-///
-/// `count` is every `<brk>` child; `manualBreakCount` is only those
-/// carrying `man="1"`. A sheet can hold both kinds at once - Excel records
-/// the automatic breaks it computed alongside the ones the user placed -
-/// and the two attributes coincide only when every break is manual.
-/// Overstating `manualBreakCount` makes Excel's page-break preview draw
-/// solid user-break lines where the file declares computed ones.
-std::string BuildPageBreaksXml(std::string_view element, const std::vector<ManualBreak>& breaks) {
-  if (breaks.empty()) {
-    return {};
-  }
-  // Rough size estimate so the buffer rarely reallocates: a fixed
-  // allowance for the wrapper element plus one allowance per `<brk>`.
-  constexpr std::size_t kBreaksWrapperReserveBytes = 48U;
-  constexpr std::size_t kPerBreakReserveBytes = 48U;
-  std::string out;
-  out.reserve(kBreaksWrapperReserveBytes + breaks.size() * kPerBreakReserveBytes);
-  std::size_t manual_count = 0;
-  for (const ManualBreak& brk : breaks) {
-    if (brk.manual) {
-      ++manual_count;
-    }
-  }
-  out.push_back('<');
-  out.append(element);
-  append_xml_attr_uint(out, "count", breaks.size());
-  append_xml_attr_uint(out, "manualBreakCount", manual_count);
-  out.append(">");
-  for (const ManualBreak& brk : breaks) {
-    out.append("<brk");
-    append_xml_attr_uint(out, "id", brk.id);
-    if (brk.min != 0U) {
-      append_xml_attr_uint(out, "min", brk.min);
-    }
-    append_xml_attr_uint(out, "max", brk.max);
-    if (brk.manual) {
-      emit_xsd_bool_attr(out, "man", true);
-    }
-    out.append("/>");
-  }
-  out.append("</");
-  out.append(element);
-  out.push_back('>');
-  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -637,10 +587,10 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   // <pageSetup> and before drawing parts / <tableParts>.
   {
     flush_raw_before("rowBreaks");
-    const std::string row_breaks_xml = BuildPageBreaksXml("rowBreaks", print.manual_row_breaks);
+    const std::string row_breaks_xml = ooxml::build_page_breaks_xml("rowBreaks", print.manual_row_breaks);
     emit_if(row_breaks_xml);
     flush_raw_before("colBreaks");
-    const std::string col_breaks_xml = BuildPageBreaksXml("colBreaks", print.manual_col_breaks);
+    const std::string col_breaks_xml = ooxml::build_page_breaks_xml("colBreaks", print.manual_col_breaks);
     emit_if(col_breaks_xml);
   }
   // <drawing> precedes <tableParts> in ECMA-376 worksheet element order.

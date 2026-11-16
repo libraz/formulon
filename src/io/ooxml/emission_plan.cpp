@@ -25,6 +25,7 @@
 #include "io/ooxml/sheet_xml_builder.h"
 #include "io/ooxml_defs.h"
 #include "io/rich_values.h"
+#include "io/xlsb/print_records.h"
 #include "passthrough_part.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
@@ -402,6 +403,19 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
   plan.custom_views = xlsb::plan_record_custom_views(wb);
   if (diagnostics != nullptr) {
     diagnostics->deferred_feature_count += static_cast<std::uint32_t>(plan.custom_views.refused_book_views);
+    // An xlsb sheet's print records the reader could not state exactly stay retained for an xlsb save only.
+    for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
+      const Sheet& sheet = wb.sheet(s);
+      if (const std::uint32_t lost =
+              xlsb::unwritten_print_families(sheet.xlsb_tail().after_hyperlinks, sheet.print_settings());
+          lost != 0U) {
+        StructuredLog("ooxml_writer.print_records_left_out")
+            .field("sheet_index", static_cast<std::int64_t>(s))
+            .field("families", static_cast<std::int64_t>(lost))
+            .warn();
+        diagnostics->deferred_feature_count += lost;
+      }
+    }
   }
   plan.tables_by_sheet.assign(wb.sheet_count(), {});
   // A retained `xl/metadata.xml` keeps today's meaning and blocks generated

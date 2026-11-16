@@ -5,7 +5,9 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -17,6 +19,7 @@
 #include "io/xlsb/reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_ids.h"
+#include "io/xlsb/record_writer.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
 #include "workbook.h"
@@ -286,6 +289,142 @@ TEST(XlsbParityPrint, ExcelXlsbLoadsTheTwinsHeaderFooterAndBreaksAndKeepsThemOnB
     auto saved = write_xlsb_with_result(loaded.value().workbook);
     ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
     EXPECT_EQ(PrintRecords(saved.value().bytes), PrintRecords(excel));
+  }
+}
+
+/// A header/footer family with the default flag word and an odd header only.
+Bytes HeaderFooterFamily() {
+  Bytes out;
+  Bytes head;
+  emit_u16(head, 0x0CU);
+  emit_xlnullablewidestring(head, std::string_view("&CPage"));
+  for (int i = 0; i < 5; ++i) {
+    emit_xlnullablewidestring(head, std::nullopt);
+  }
+  emit_record(out, kBrtBeginHeaderFooter, head);
+  emit_record(out, kBrtEndHeaderFooter, Bytes());
+  return out;
+}
+
+/// A break family on one axis holding a single break before index 10.
+Bytes BreakFamily(bool row_axis, bool manual) {
+  Bytes out;
+  Bytes head;
+  emit_u32(head, 1U);
+  emit_u32(head, manual ? 1U : 0U);
+  emit_record(out, row_axis ? kBrtBeginRwBrk : kBrtBeginColBrk, head);
+  Bytes brk;
+  emit_u32(brk, 10U);
+  emit_u32(brk, 0U);
+  emit_u32(brk, row_axis ? 16383U : 1048575U);
+  emit_u32(brk, manual ? 1U : 0U);
+  emit_u32(brk, 0U);
+  emit_record(out, kBrtBrk, brk);
+  emit_record(out, row_axis ? kBrtEndRwBrk : kBrtEndColBrk, Bytes());
+  return out;
+}
+
+Bytes PrintOptionsRecord(std::uint16_t flags) {
+  Bytes out;
+  Bytes payload;
+  emit_u16(payload, flags);
+  emit_record(out, kBrtPrintOptions, payload);
+  return out;
+}
+
+SheetPrintSettings Decoded(const Bytes& stream) {
+  SheetPrintSettings print;
+  decode_print_records(stream, print);
+  return print;
+}
+
+TEST(XlsbPrintFamilies, HeaderFooterTheModelStatesIsWrittenAndOneItLacksIsCounted) {
+  const Bytes stream = HeaderFooterFamily();
+  SheetPrintSettings print = Decoded(stream);
+  ASSERT_FALSE(print.header_footer_xml.empty());
+  EXPECT_EQ(unwritten_print_families(stream, print), 0U);
+  // The same stream against a model without it.
+  print.header_footer_xml.clear();
+  EXPECT_EQ(unwritten_print_families(stream, print), 1U);
+}
+
+TEST(XlsbPrintFamilies, ManualRowBreakIsReadAndAutomaticOneStaysRetainedAndCounted) {
+  const Bytes manual = BreakFamily(true, true);
+  const SheetPrintSettings read = Decoded(manual);
+  ASSERT_EQ(read.manual_row_breaks.size(), 1U);
+  EXPECT_EQ(read.manual_row_breaks[0].id, 10U);
+  EXPECT_TRUE(read.manual_row_breaks[0].manual);
+  EXPECT_EQ(unwritten_print_families(manual, read), 0U);
+
+  const Bytes automatic = BreakFamily(true, false);
+  const SheetPrintSettings kept = Decoded(automatic);
+  EXPECT_TRUE(kept.manual_row_breaks.empty());
+  EXPECT_EQ(unwritten_print_families(automatic, kept), 1U);
+}
+
+TEST(XlsbPrintFamilies, RowAndColumnBreaksCountAsSeparateFamilies) {
+  Bytes stream = BreakFamily(true, false);
+  const Bytes cols = BreakFamily(false, false);
+  stream.insert(stream.end(), cols.begin(), cols.end());
+  EXPECT_EQ(unwritten_print_families(stream, Decoded(stream)), 2U);
+}
+
+TEST(XlsbPrintFamilies, DefaultPrintOptionsStateNothingAndAreNotCounted) {
+  const Bytes stream = PrintOptionsRecord(0x10U);
+  const SheetPrintSettings print = Decoded(stream);
+  EXPECT_TRUE(print.print_options_xml.empty());
+  EXPECT_EQ(unwritten_print_families(stream, print), 0U);
+}
+
+TEST(XlsbPrintFamilies, GridLinesAndHeadingsPrintOptionsAreReadAsExcelStatesThem) {
+  const Bytes stream = PrintOptionsRecord(0x1CU);
+  const SheetPrintSettings print = Decoded(stream);
+  EXPECT_EQ(print.print_options_xml, "<printOptions headings=\"1\" gridLines=\"1\"/>");
+  EXPECT_EQ(unwritten_print_families(stream, print), 0U);
+}
+
+TEST(XlsbPrintFamilies, PrintOptionsWithAnUnmeasuredBitStayRetainedAndCounted) {
+  const Bytes stream = PrintOptionsRecord(0x30U);
+  const SheetPrintSettings print = Decoded(stream);
+  EXPECT_TRUE(print.print_options_xml.empty());
+  EXPECT_EQ(unwritten_print_families(stream, print), 1U);
+}
+
+/// The deferred-feature count of an `.xlsx` save of the Excel xlsb `hf_codes` with `extra` appended to its sheet tail.
+std::uint32_t XlsxDeferredCountWithTailExtra(const Bytes& extra) {
+  auto loaded = read_xlsb(SpanOf(ReadFile(Fixture("hf_codes.xlsb"))));
+  EXPECT_TRUE(static_cast<bool>(loaded));
+  if (!loaded) {
+    return 0U;
+  }
+  Workbook& wb = loaded.value().workbook;
+  XlsbSheetTail tail = wb.sheet(0).xlsb_tail();
+  tail.after_hyperlinks.insert(tail.after_hyperlinks.end(), extra.begin(), extra.end());
+  wb.sheet(0).set_xlsb_tail(std::move(tail));
+  auto saved = write_ooxml_with_result(wb);
+  EXPECT_TRUE(static_cast<bool>(saved));
+  return saved ? saved.value().diagnostics.deferred_feature_count : 0U;
+}
+
+TEST(XlsbPrintFamilies, XlsxSaveCountsEachPrintFamilyItCannotWrite) {
+  const std::uint32_t base = XlsxDeferredCountWithTailExtra(Bytes());
+  // Print options at their defaults state nothing.
+  EXPECT_EQ(XlsxDeferredCountWithTailExtra(PrintOptionsRecord(0x10U)), base);
+  EXPECT_EQ(XlsxDeferredCountWithTailExtra(BreakFamily(true, false)), base + 1U);
+  Bytes both = BreakFamily(true, false);
+  const Bytes cols = BreakFamily(false, false);
+  both.insert(both.end(), cols.begin(), cols.end());
+  EXPECT_EQ(XlsxDeferredCountWithTailExtra(both), base + 2U);
+  EXPECT_EQ(XlsxDeferredCountWithTailExtra(PrintOptionsRecord(0x30U)), base + 1U);
+}
+
+TEST(XlsbPrintFamilies, XlsxSaveOfExcelsXlsbCountsNoPrintFamily) {
+  for (const char* name : {"hf_codes", "breaks_many", "base", "brk_minmax"}) {
+    SCOPED_TRACE(name);
+    auto loaded = read_xlsb(SpanOf(ReadFile(Fixture(std::string(name) + ".xlsb"))));
+    ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+    const Sheet& sheet = loaded.value().workbook.sheet(0);
+    EXPECT_EQ(unwritten_print_families(sheet.xlsb_tail().after_hyperlinks, sheet.print_settings()), 0U);
   }
 }
 

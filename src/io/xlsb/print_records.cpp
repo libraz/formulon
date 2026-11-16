@@ -494,6 +494,12 @@ void decode_print_records(const std::vector<std::uint8_t>& after_hyperlinks, She
         print.page_margins_xml = std::move(xml);
         ooxml::refresh_structured_views("pageMargins", print.page_margins_xml, print);
       }
+    } else if (rec.type == kBrtPrintOptions && print.print_options_xml.empty()) {
+      // Adopted only when the writer re-emits exactly the retained payload.
+      std::optional<std::string> xml = decode_print_options(rec.payload);
+      if (xml && !xml->empty() && rec.payload.size == 2U && load_u16(rec.payload.data) == PrintOptionsFlags(*xml)) {
+        print.print_options_xml = std::move(*xml);
+      }
     }
   }
   if (print.header_footer_xml.empty()) {
@@ -522,6 +528,31 @@ std::optional<std::string> decode_print_options(ByteSpan payload) {
     }
   }
   return xml.empty() ? std::string() : "<printOptions" + xml + "/>";
+}
+
+std::uint32_t unwritten_print_families(const std::vector<std::uint8_t>& after_hyperlinks,
+                                       const SheetPrintSettings& print) {
+  std::array<bool, kFamilyCount> retained{};
+  bool in_row_breaks = true;
+  for (const FramedRecord& rec : split_records(after_hyperlinks)) {
+    const Family family = FamilyOf(rec.type, in_row_breaks);
+    if (family == Family::kNone) {
+      continue;
+    }
+    // Print options all at their defaults state nothing the model could miss.
+    if (family == Family::kOptions) {
+      const std::optional<std::string> xml = decode_print_options(rec.payload);
+      if (xml && xml->empty()) {
+        continue;
+      }
+    }
+    retained[static_cast<std::size_t>(family)] = true;
+  }
+  std::uint32_t count = 0;
+  for (std::size_t i = 0; i < kFamilyCount; ++i) {
+    count += retained[i] && !ModelHolds(static_cast<Family>(i), print) ? 1U : 0U;
+  }
+  return count;
 }
 
 void emit_view_print_records(std::vector<std::uint8_t>& dst, const SheetPrintSettings& print) {
