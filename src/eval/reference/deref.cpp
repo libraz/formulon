@@ -14,6 +14,7 @@
 #include "eval/eval_context.h"
 #include "eval/external_ref.h"
 #include "eval/range_args.h"
+#include "eval/reference/ref_value.h"
 #include "eval/tail_array.h"
 #include "eval/tree_walker/walker_internal.h"
 #include "external_book.h"
@@ -32,21 +33,6 @@ namespace formulon {
 namespace eval {
 
 namespace {
-
-// The name of local sheet `index` as a reference spells it (empty for the
-// formula's own sheet). False when the workbook has no such sheet.
-bool local_sheet_name(const EvalContext& ctx, std::uint16_t index, std::string_view* name) {
-  if (index == RefArea::kHomeSheet) {
-    *name = {};
-    return true;
-  }
-  const Workbook* wb = ctx.workbook();
-  if (wb == nullptr || index >= wb->sheet_count()) {
-    return false;
-  }
-  *name = wb->sheet(index).name();
-  return true;
-}
 
 // The cached supporting workbook `book` (1-based) names, or null.
 const ExternalBook* external_book_of(const EvalContext& ctx, std::uint16_t book) {
@@ -138,7 +124,7 @@ class Reader {
       return external_shaped(a, book);
     }
     std::string_view name;
-    if (!local_sheet_name(ctx_, a.sheet_first, &name)) {
+    if (!ref_sheet_name(ctx_, a.sheet_first, &name)) {
       return Shaped{Value::error(ErrorCode::Ref), nullptr};
     }
     parser::Reference lo{};
@@ -169,7 +155,7 @@ class Reader {
       return external_cell(*ext, sheet, a.row_first, a.col_first, arena_);
     }
     std::string_view name;
-    if (!local_sheet_name(ctx_, sheet, &name)) {
+    if (!ref_sheet_name(ctx_, sheet, &name)) {
       return Value::error(ErrorCode::Ref);
     }
     parser::Reference cell{};
@@ -199,7 +185,7 @@ class Reader {
       }
       previous = &n;
       std::string_view name;
-      if (local_sheet_name(ctx_, n.sheet, &name)) {
+      if (ref_sheet_name(ctx_, n.sheet, &name)) {
         ctx_.note_dynamic_read(name, n.rect);
       }
     }
@@ -246,7 +232,7 @@ class Reader {
       return external_cells(a, book, out, rows, cols, err);
     }
     std::string_view name;
-    if (!local_sheet_name(ctx_, sheet, &name)) {
+    if (!ref_sheet_name(ctx_, sheet, &name)) {
       *err = ErrorCode::Ref;
       return false;
     }

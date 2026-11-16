@@ -16,7 +16,6 @@
 #include <utility>
 #include <vector>
 
-#include "eval/array_alloc.h"
 #include "eval/coerce.h"
 #include "eval/declared_rect.h"
 #include "eval/eval_context.h"
@@ -27,10 +26,12 @@
 #include "eval/range_expanders.h"
 #include "eval/range_resolvers.h"
 #include "eval/reference/common.h"
+#include "eval/reference/ref_value.h"
 #include "eval/special_forms_lazy.h"
 #include "eval/structured_ref_project.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
+#include "sheet.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -57,16 +58,10 @@ bool resolve_offset_rect(const parser::AstNode& call, Arena& arena, const Functi
                                             &out->height, &out->width, out_err);
 }
 
-// Reads every cell of `rect` through `EvalContext::expand_range`, which
-// already handles cross-sheet routing, cycle detection, and per-cell
-// recursion.
-Expected<std::vector<Value>, ErrorCode> expand_offset_rect(const OffsetRect& rect, Arena& arena,
-                                                           const FunctionRegistry& registry, const EvalContext& ctx) {
-  parser::Reference lhs{};
-  parser::Reference rhs{};
-  set_rect_corner_refs(rect.base.sheet, rect.top_row, rect.left_col, rect.top_row + rect.height - 1U,
-                       rect.left_col + rect.width - 1U, &lhs, &rhs);
-  return ctx.expand_range(lhs, rhs, arena, registry);
+// The rectangle `rect` names; a span of a whole grid axis is a whole-axis rectangle.
+DeclaredRect declared_offset_rect(const OffsetRect& rect) {
+  return DeclaredRect{rect.top_row, rect.top_row + rect.height - 1U, rect.left_col, rect.left_col + rect.width - 1U,
+                      /*whole_axis=*/rect.height == Sheet::kMaxRows || rect.width == Sheet::kMaxCols};
 }
 
 // Resolves `node` through `resolve_range_arg` into the expander out-params.
@@ -98,29 +93,8 @@ Value eval_offset_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (!resolve_offset_rect(call, arena, registry, ctx, &rect, &err)) {
     return Value::error(err);
   }
-  const std::uint32_t height = rect.height;
-  const std::uint32_t width = rect.width;
-  if (height == 1U && width == 1U) {
-    parser::Reference target{};
-    target.sheet = rect.base.sheet;
-    target.row = rect.top_row;
-    target.col = rect.left_col;
-    return ctx.resolve_ref(target, arena, registry);
-  }
-
-  // A direct multi-cell OFFSET is a dynamic array. Materialise the whole
-  // rectangle so it can spill at the formula cell; range-aware consumers
-  // use the matching `expand_offset_call` path below.
-  auto expanded = expand_offset_rect(rect, arena, registry, ctx);
-  if (!expanded) {
-    return Value::error(expanded.error());
-  }
-  const std::vector<Value>& cells = expanded.value();
-  ArrayValue* out = array_from_values(height, width, cells.data(), cells.size(), arena);
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::array(out);
+  // The reference itself; reading it as values is the dereference's job, which records the read.
+  return make_rect_ref(rect.base.sheet, declared_offset_rect(rect), RefOrigin::kDerived, arena, ctx).with_ref_dynamic();
 }
 
 bool expand_offset_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -132,6 +106,7 @@ bool expand_offset_call(const parser::AstNode& call, Arena& arena, const Functio
     *out_err_code = err;
     return false;
   }
+  ctx.note_dynamic_read(rect.base.sheet, declared_offset_rect(rect));
   return expand_resolved_rect_cells(rect.base.sheet, rect.top_row, rect.left_col, rect.top_row + rect.height - 1U,
                                     rect.left_col + rect.width - 1U, arena, registry, ctx, out_cells, out_err_code,
                                     out_rows, out_cols);

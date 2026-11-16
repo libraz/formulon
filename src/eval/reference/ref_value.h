@@ -26,6 +26,16 @@ class EvalContext;
 RefArea make_ref_area(const DeclaredRect& rect, std::uint16_t sheet_first, std::uint16_t sheet_last,
                       RefOrigin origin) noexcept;
 
+/// The name of sheet `index` (`RefArea::kHomeSheet` gives the empty name,
+/// read as the formula's own sheet); false when the workbook has no such sheet.
+bool ref_sheet_name(const EvalContext& ctx, std::uint16_t index, std::string_view* name);
+
+/// A `kArea` reference over `rect` on the sheet `sheet` names (empty = the
+/// formula's own sheet). A name that is not a sheet of the workbook gives
+/// `#REF!`, returned as a `Value`.
+Value make_rect_ref(std::string_view sheet, const DeclaredRect& rect, RefOrigin origin, Arena& arena,
+                    const EvalContext& ctx);
+
 /// A `kArea` reference over the rectangle `[lhs : rhs]` (pass the same
 /// reference twice for a single cell or a whole-axis token). A bare side
 /// inherits the other side's sheet qualifier. A qualifier that does not name

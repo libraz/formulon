@@ -29,6 +29,7 @@
 #include "eval/name_env.h"
 #include "eval/name_env_resolve.h"
 #include "eval/reference/common.h"
+#include "eval/reference/ref_value.h"
 #include "eval/special_forms_lazy.h"
 #include "eval/structured_ref_project.h"
 #include "eval/tree_walker/dispatch.h"
@@ -65,55 +66,32 @@ bool resolve_picked_reference(const parser::AstNode& picked, Arena& arena, const
   return true;
 }
 
-bool resolve_indirect_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                           const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
-                           std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
-                           bool* out_is_range, ErrorCode* out_err) {
-  refs_internal::IndirectReference indirect{};
-  if (!refs_internal::resolve_indirect_reference(node, arena, registry, ctx, &indirect, out_err)) {
+// INDIRECT / OFFSET build their reference: the rectangle of the one-area `Ref` the call returns. A dynamic one is
+// recorded here, on the caller's context, as the call's read; a caller resolving only a position strips the callback.
+bool resolve_built_reference(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                             const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
+                             std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
+                             bool* out_is_range, ErrorCode* out_err) {
+  const Value ref = eval_node_ref(node, arena, registry, ctx);
+  if (!ref.is_ref()) {
+    *out_err = ref.is_error() ? ref.as_error() : ErrorCode::Value;
     return false;
   }
-  // A sheet qualifier is only valid if the workbook actually holds a
-  // matching sheet. Without this check a caller like `ROW(INDIRECT(
-  // "NonExistent!A1"))` would happily report row 1 for a sheet that
-  // doesn't exist; Excel surfaces `#REF!` in that case.
-  if (!indirect.sheet.empty()) {
-    const Workbook* wb = ctx.workbook();
-    if (wb == nullptr || wb->sheet_by_name(indirect.sheet) == nullptr) {
-      *out_err = ErrorCode::Ref;
-      return false;
-    }
-  }
-  *out_sheet = indirect.sheet;
-  *out_top_row = indirect.top_row;
-  *out_left_col = indirect.left_col;
-  *out_bottom_row = indirect.bottom_row;
-  *out_right_col = indirect.right_col;
-  *out_is_range = indirect.is_range;
-  return true;
-}
-
-bool resolve_offset_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                         const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
-                         std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
-                         bool* out_is_range, ErrorCode* out_err) {
-  refs_internal::OffsetBase base{};
-  std::uint32_t top_row = 0;
-  std::uint32_t left_col = 0;
-  std::uint32_t height = 0;
-  std::uint32_t width = 0;
-  ErrorCode err = ErrorCode::Value;
-  if (!refs_internal::compute_offset_rect(node, arena, registry, ctx, &base, &top_row, &left_col, &height, &width,
-                                          &err)) {
-    *out_err = err;
+  const RefView view = ref.as_ref();
+  const RefArea& area = view.areas[0];
+  if (view.form != RefForm::kArea || view.book != 0U || !ref_sheet_name(ctx, area.sheet_first, out_sheet)) {
+    *out_err = ErrorCode::Ref;
     return false;
   }
-  *out_sheet = base.sheet;
-  *out_top_row = top_row;
-  *out_left_col = left_col;
-  *out_bottom_row = top_row + height - 1U;
-  *out_right_col = left_col + width - 1U;
+  *out_top_row = area.row_first;
+  *out_left_col = area.col_first;
+  *out_bottom_row = area.row_last;
+  *out_right_col = area.col_last;
   *out_is_range = refs_internal::rect_is_range(*out_top_row, *out_left_col, *out_bottom_row, *out_right_col);
+  if (ref.ref_is_dynamic()) {
+    ctx.note_dynamic_read(*out_sheet, DeclaredRect{area.row_first, area.row_last, area.col_first, area.col_last,
+                                                   /*whole_axis=*/area.whole_col != 0U || area.whole_row != 0U});
+  }
   return true;
 }
 
@@ -241,8 +219,8 @@ constexpr bool carries_xlookup_result(std::uint32_t index, std::uint32_t /*arity
 // dispatches through it. `SINGLE` is reference-returning to Excel too
 // (`kReferenceReturning` in builtin_names.cpp) but has no rectangle resolver here.
 constexpr ReferenceCall kReferenceCalls[] = {
-    {"INDIRECT", &resolve_indirect_call, &carries_none},
-    {"OFFSET", &resolve_offset_call, &carries_none},
+    {"INDIRECT", &resolve_built_reference, &carries_none},
+    {"OFFSET", &resolve_built_reference, &carries_none},
     {"IF", &resolve_if_call, &carries_if_branch},
     {"CHOOSE", &resolve_choose_call, &carries_choose_value},
     {"IFS", &resolve_ifs_call, &carries_ifs_value},

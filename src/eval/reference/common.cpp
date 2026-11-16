@@ -128,8 +128,6 @@ bool resolve_indirect_reference(const parser::AstNode& call, Arena& arena, const
     out->right_col = parsed.col;
     out->is_range = false;
   }
-  ctx.note_dynamic_read(out->sheet, DeclaredRect{out->top_row, out->bottom_row, out->left_col, out->right_col,
-                                                 /*whole_axis=*/out->is_full_col || out->is_full_row});
   return true;
 }
 
@@ -389,8 +387,6 @@ bool compute_offset_rect(const parser::AstNode& call, Arena& arena, const Functi
   *out_left_col = static_cast<std::uint32_t>(left_col);
   *out_height = abs_height;
   *out_width = abs_width;
-  ctx.note_dynamic_read(out_base->sheet, DeclaredRect{*out_top_row, *out_top_row + abs_height - 1U, *out_left_col,
-                                                      *out_left_col + abs_width - 1U, /*whole_axis=*/false});
   return true;
 }
 

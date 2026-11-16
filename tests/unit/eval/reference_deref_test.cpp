@@ -14,6 +14,7 @@
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/lazy_impls.h"
+#include "eval/range_resolvers.h"
 #include "eval/reference/deref.h"
 #include "eval/reference/ops.h"
 #include "eval/reference/ref_value.h"
@@ -718,6 +719,111 @@ TEST_F(WalkerRefTest, DereferencedLiteralCountsItsReads) {
   notes.clear();
   (void)eval_node_ref(*dyn, arena_, default_registry(), ctx);
   EXPECT_TRUE(notes.empty());
+}
+
+// OFFSET and INDIRECT build their reference: a `kDerived` area marked dynamic.
+class BuiltRefTest : public WalkerRefTest {
+ protected:
+  void ExpectBuilt(const char* source, std::uint32_t r1, std::uint32_t c1, std::uint32_t r2, std::uint32_t c2,
+                   std::uint16_t sheet = kHome) {
+    const Value ref = AsRef(source);
+    ASSERT_TRUE(ref.is_ref()) << source << ": " << ref.debug_to_string();
+    EXPECT_EQ(ref.ref_form(), RefForm::kArea) << source;
+    EXPECT_TRUE(ref.ref_is_dynamic()) << source;
+    const RefArea& a = ref.as_ref().areas[0];
+    EXPECT_EQ(static_cast<RefOrigin>(a.origin), RefOrigin::kDerived) << source;
+    EXPECT_EQ(a.sheet_first, sheet) << source;
+    EXPECT_EQ(a.row_first, r1) << source;
+    EXPECT_EQ(a.col_first, c1) << source;
+    EXPECT_EQ(a.row_last, r2) << source;
+    EXPECT_EQ(a.col_last, c2) << source;
+  }
+};
+
+TEST_F(BuiltRefTest, OffsetAndIndirectReturnDynamicReferences) {
+  ExpectBuilt("=OFFSET(A1,1,1,2,2)", 1, 1, 2, 2);
+  ExpectBuilt("=OFFSET(B2:C3,-1,-1)", 0, 0, 1, 1);
+  ExpectBuilt("=OFFSET(Sheet2!A1,0,0)", 0, 0, 0, 0, 1);
+  ExpectBuilt("=OFFSET(OFFSET(A1,1,0),1,0)", 2, 0, 2, 0);
+  ExpectBuilt("=INDIRECT(\"B2:C3\")", 1, 1, 2, 2);
+  ExpectBuilt("=INDIRECT(\"Sheet3!C4\")", 3, 2, 3, 2, 2);
+  ExpectBuilt("=INDIRECT(\"R2C2\",FALSE)", 1, 1, 1, 1);
+}
+
+TEST_F(BuiltRefTest, WholeAxisResultsKeepTheAxisMark) {
+  const Value col = AsRef("=INDIRECT(\"B:B\")");
+  ASSERT_TRUE(col.is_ref());
+  EXPECT_EQ(col.as_ref().areas[0].whole_col, 1U);
+  const Value row = AsRef("=INDIRECT(\"2:3\")");
+  ASSERT_TRUE(row.is_ref());
+  EXPECT_EQ(row.as_ref().areas[0].whole_row, 1U);
+  const Value shifted = AsRef("=OFFSET(A:A,0,1)");
+  ASSERT_TRUE(shifted.is_ref());
+  EXPECT_EQ(shifted.as_ref().areas[0].whole_col, 1U);
+  EXPECT_EQ(shifted.as_ref().areas[0].col_first, 1U);
+}
+
+TEST_F(BuiltRefTest, FailuresAreErrors) {
+  ExpectError(AsRef("=INDIRECT(\"Nope!A1\")"), ErrorCode::Ref, "unknown sheet");
+  ExpectError(AsRef("=INDIRECT(\"\")"), ErrorCode::Ref, "empty text");
+  ExpectError(AsRef("=OFFSET(A1,-1,0)"), ErrorCode::Ref, "off the grid");
+  ExpectError(AsRef("=OFFSET(A1,0,0,0)"), ErrorCode::Ref, "zero height");
+  ExpectError(AsRef("=OFFSET(A1,1/0,0)"), ErrorCode::Div0, "argument error");
+}
+
+TEST_F(BuiltRefTest, ValueModeReadsTheReference) {
+  ExpectSame(Eval("=OFFSET(A1,1,1,2,2)"), Eval("=B2:C3"), "rectangle");
+  ExpectSame(Eval("=OFFSET(A1,1,1)"), Eval("=B2"), "one cell");
+  ExpectSame(Eval("=INDIRECT(\"Sheet2!A1:B2\")"), Eval("=Sheet2!A1:B2"), "qualified rectangle");
+  ExpectSame(Eval("=INDIRECT(\"C3\")"), Eval("=C3"), "one cell by text");
+  ExpectSame(Eval("=SUM(OFFSET(A1,0,0,2,2))"), Eval("=SUM(A1:B2)"), "range argument");
+}
+
+TEST_F(BuiltRefTest, TheReadRecordsTheRectangleAndTheProducerDoesNot) {
+  std::vector<Note> notes;
+  const EvalContext ctx = Ctx().with_dynamic_read_callback(&CollectNote, &notes);
+  const parser::AstNode& offset = Parse("=OFFSET(A1,1,1,2,2)");
+  (void)eval_node_ref(offset, arena_, default_registry(), ctx);
+  EXPECT_TRUE(notes.empty());
+  (void)eval_node_shaped(offset, arena_, default_registry(), ctx);
+  ASSERT_EQ(notes.size(), 1U);
+  EXPECT_EQ(notes[0].rect.row_first, 1U);
+  EXPECT_EQ(notes[0].rect.row_last, 2U);
+  EXPECT_EQ(notes[0].rect.col_first, 1U);
+  EXPECT_EQ(notes[0].rect.col_last, 2U);
+}
+
+TEST_F(BuiltRefTest, TheResolverRecordsOnTheCallersContext) {
+  std::vector<Note> notes;
+  const EvalContext ctx = Ctx().with_dynamic_read_callback(&CollectNote, &notes);
+  const parser::AstNode& indirect = Parse("=INDIRECT(\"Sheet2!B2:C3\")");
+  std::string_view sheet;
+  std::uint32_t top = 0;
+  std::uint32_t left = 0;
+  std::uint32_t bottom = 0;
+  std::uint32_t right = 0;
+  bool is_range = false;
+  ErrorCode err = ErrorCode::Value;
+  ASSERT_TRUE(resolve_reference_call(indirect, arena_, default_registry(), ctx, &sheet, &top, &left, &bottom, &right,
+                                     &is_range, &err));
+  EXPECT_EQ(sheet, "Sheet2");
+  EXPECT_EQ(top, 1U);
+  EXPECT_EQ(left, 1U);
+  EXPECT_EQ(bottom, 2U);
+  EXPECT_EQ(right, 2U);
+  EXPECT_TRUE(is_range);
+  ASSERT_EQ(notes.size(), 1U);
+  EXPECT_EQ(notes[0].sheet, "Sheet2");
+
+  // A caller resolving only the position strips the callback and records nothing.
+  notes.clear();
+  ASSERT_TRUE(resolve_reference_call(indirect, arena_, default_registry(), ctx.without_dynamic_read_callback(), &sheet,
+                                     &top, &left, &bottom, &right, &is_range, &err));
+  EXPECT_TRUE(notes.empty());
+
+  ASSERT_FALSE(resolve_reference_call(Parse("=INDIRECT(\"Nope!A1\")"), arena_, default_registry(), ctx, &sheet, &top,
+                                      &left, &bottom, &right, &is_range, &err));
+  EXPECT_EQ(err, ErrorCode::Ref);
 }
 
 }  // namespace

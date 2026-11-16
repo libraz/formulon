@@ -86,6 +86,7 @@ inline bool rect_is_range(std::uint32_t top_row, std::uint32_t left_col, std::ui
 // Evaluates the INDIRECT call AST, decoding its text argument into a
 // rectangle. Returns `false` on any error and writes the Excel-visible
 // code into `*out_err`; on success populates `*out` and returns `true`.
+// Records no dynamic read: the caller that reads the rectangle does.
 bool resolve_indirect_reference(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                                 const EvalContext& ctx, IndirectReference* out, ErrorCode* out_err);
 
@@ -102,7 +103,7 @@ bool resolve_offset_base(const parser::AstNode& arg, Arena& arena, const Functio
 // Computes the (0-based) top-left corner and the (height, width) of the
 // rectangle produced by `OFFSET(base, rows, cols, [height], [width])`.
 // Returns `false` on any error, writing the Excel-visible code into
-// `*out_err`.
+// `*out_err`. Records no dynamic read: the caller that reads the rectangle does.
 bool compute_offset_rect(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx, OffsetBase* out_base, std::uint32_t* out_top_row,
                          std::uint32_t* out_left_col, std::uint32_t* out_height, std::uint32_t* out_width,

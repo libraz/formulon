@@ -310,14 +310,18 @@ TEST(BuiltinsIndirect, FullColumnTextExpandsInSum) {
   EXPECT_DOUBLE_EQ(v.as_number(), 9.0);
 }
 
-TEST(BuiltinsIndirect, FullColumnTextEmptyResolvesToZero) {
-  // An empty column has no cells to spill; the expansion collapses to a
-  // blank scalar, which the top-level resolves to 0 exactly like a bare
-  // reference to an empty cell (`=Z1`).
+TEST(BuiltinsIndirect, FullColumnTextOverAnEmptyColumnReadsAsTheBareColumn) {
+  // A whole-column INDIRECT reads the same as the spelled whole column.
   Workbook wb = Workbook::create();
-  const Value v = EvalSourceIn("=INDIRECT(\"D:D\")", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+  // Each evaluation resets the shared arena, so read one result before the next.
+  const Value built = EvalSourceIn("=INDIRECT(\"D:D\")", wb, wb.sheet(0));
+  ASSERT_TRUE(built.is_array());
+  EXPECT_EQ(built.as_array_rows(), 1048576U);
+  EXPECT_EQ(built.as_array_cols(), 1U);
+  const Value spelled = EvalSourceIn("=D:D", wb, wb.sheet(0));
+  ASSERT_TRUE(spelled.is_array());
+  EXPECT_EQ(spelled.as_array_rows(), 1048576U);
+  EXPECT_EQ(spelled.as_array_cols(), 1U);
 }
 
 TEST(BuiltinsIndirect, FullRowTextExpandsInSum) {

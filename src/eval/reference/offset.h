@@ -26,11 +26,10 @@ class EvalContext;
 class FunctionRegistry;
 
 /// `OFFSET(reference, rows, cols, [height], [width])` — offsets `reference`
-/// by `(rows, cols)` and returns either the single cell at the shifted
-/// position (when height = width = 1) or `#VALUE!` when the resulting
-/// rectangle is multi-cell. Multi-cell OFFSET is visible to lazy range
-/// consumers (SUM/AVERAGE/COUNTIF/…) through `expand_offset_call` (declared
-/// in `eval/range_expanders.h`).
+/// by `(rows, cols)`, resizes it to `height` x `width`, and returns the
+/// rectangle as a `Ref` marked dynamic, so the dereference that reads it
+/// records the read. Range-aware consumers reach the same rectangle through
+/// `expand_offset_call` (declared in `eval/range_expanders.h`).
 Value eval_offset_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx);
 

@@ -61,6 +61,29 @@ RefArea make_ref_area(const DeclaredRect& rect, std::uint16_t sheet_first, std::
   return a;
 }
 
+bool ref_sheet_name(const EvalContext& ctx, std::uint16_t index, std::string_view* name) {
+  if (index == RefArea::kHomeSheet) {
+    *name = {};
+    return true;
+  }
+  const Workbook* wb = ctx.workbook();
+  if (wb == nullptr || index >= wb->sheet_count()) {
+    return false;
+  }
+  *name = wb->sheet(index).name();
+  return true;
+}
+
+Value make_rect_ref(std::string_view sheet, const DeclaredRect& rect, RefOrigin origin, Arena& arena,
+                    const EvalContext& ctx) {
+  std::uint16_t index = RefArea::kHomeSheet;
+  if (!sheet_index_of(ctx, sheet, &index)) {
+    return Value::error(ErrorCode::Ref);
+  }
+  const RefArea area = make_ref_area(rect, index, index, origin);
+  return make_ref(arena, RefForm::kArea, 0, &area, 1);
+}
+
 Value make_area_ref(const parser::Reference& lhs, const parser::Reference& rhs, RefOrigin origin, Arena& arena,
                     const EvalContext& ctx) {
   const Expected<DeclaredRect, ErrorCode> rect = ctx.declared_range_rect_or_bare(lhs, rhs);
@@ -68,12 +91,10 @@ Value make_area_ref(const parser::Reference& lhs, const parser::Reference& rhs, 
     return Value::error(rect.error());
   }
   const Expected<std::string_view, ErrorCode> sheet = merge_sheet_qualifiers(lhs.sheet, rhs.sheet, ctx.workbook());
-  std::uint16_t index = RefArea::kHomeSheet;
-  if (!sheet || !sheet_index_of(ctx, sheet.value(), &index)) {
+  if (!sheet) {
     return Value::error(ErrorCode::Ref);
   }
-  const RefArea area = make_ref_area(rect.value(), index, index, origin);
-  return make_ref(arena, RefForm::kArea, 0, &area, 1);
+  return make_rect_ref(sheet.value(), rect.value(), origin, arena, ctx);
 }
 
 Value make_span3d_ref(std::string_view sheet_begin, std::string_view sheet_end, const parser::Reference& lhs,
