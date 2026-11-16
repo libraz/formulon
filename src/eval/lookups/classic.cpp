@@ -463,10 +463,16 @@ Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   if (by_reference && by_reference.value() && table.declared.rows() != 1U && table.declared.cols() != 1U) {
     return fail_lookup(lookup, arena, Value::error(ErrorCode::NA));
   }
-  // A lone value is no lookup_array (`MATCH(1,1,0)` is #N/A); a one-cell reference is.
+  // A lone value is no lookup_array and is never searched; a one-cell reference is. Its error follows its type: text
+  // is #VALUE!, a number or a logical #N/A (`MATCH(1,1,0)`), literal or computed.
   auto resolved = resolve_range_arg_no_scalar(call.as_call_arg(1), arena, registry, ctx, ErrorCode::NA);
   if (!resolved) {
-    return fail_lookup(lookup, arena, Value::error(resolved.error()));
+    ErrorCode code = resolved.error();
+    if (code == ErrorCode::NA && !(by_reference && by_reference.value()) &&
+        eval_node(call.as_call_arg(1), arena, registry, ctx).is_text()) {
+      code = ErrorCode::Value;
+    }
+    return fail_lookup(lookup, arena, Value::error(code));
   }
   const std::uint32_t rows = resolved.value().rows;
   const std::uint32_t cols = resolved.value().cols;

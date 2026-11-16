@@ -414,6 +414,33 @@ TEST(BuiltinsLookup, WholeAxisResultVectorPastPopulatedCellsIsBlank) {
   EXPECT_EQ(short_result.as_error(), ErrorCode::NA);
 }
 
+// A lookup_array that is no reference and no array is never searched: its error follows its type, #VALUE! for text
+// and #N/A for a number or a logical, literal or computed and at either match type, even when it equals the lookup
+// value (Mac Excel 16.115). A one-cell reference and a one-element array are searched.
+TEST(BuiltinsMatch, ScalarLookupArrayErrorFollowsItsType) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  s.set_cell_value(2, 0, Value::text("c3"));   // A3
+  s.set_cell_value(2, 1, Value::number(5.0));  // B3
+  const auto expect_error = [&](const char* src, ErrorCode code) {
+    const Value v = EvalSourceIn(src, wb, s);
+    ASSERT_TRUE(v.is_error()) << src << " -> " << v.debug_to_string();
+    EXPECT_EQ(v.as_error(), code) << src;
+  };
+  for (const char* src : {"=MATCH(\"c3\",\"c3\",0)", "=MATCH(\"c3\",\"c\"&\"3\",0)", "=MATCH(\"c3\",A3&\"\",1)",
+                          "=MATCH(\"c3\",A3&B3,0)"}) {
+    expect_error(src, ErrorCode::Value);
+  }
+  for (const char* src : {"=MATCH(1,1,0)", "=MATCH(1,1+0,1)", "=MATCH(5,B3+0,0)", "=MATCH(TRUE,1=1,0)"}) {
+    expect_error(src, ErrorCode::NA);
+  }
+  for (const char* src : {"=MATCH(\"c3\",A3,0)", "=MATCH(5,B3,1)", "=MATCH(\"c3\",{\"c3\"},0)"}) {
+    const Value v = EvalSourceIn(src, wb, s);
+    ASSERT_TRUE(v.is_number()) << src << " -> " << v.debug_to_string();
+    EXPECT_DOUBLE_EQ(v.as_number(), 1.0) << src;
+  }
+}
+
 // An approximate lookup bisects a whole-axis vector over its declared length, the blank cells past the populated ones
 // included: on a column that is not sorted (ascending values, then a tail of small ones, then blanks) the whole column
 // lands in the tail where the bounded reference lands on the sorted position (Mac Excel 16.115).
