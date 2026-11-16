@@ -37,7 +37,14 @@ struct ContentTypesView {
 Expected<ContentTypesView, Error> LoadContentTypes(const std::vector<std::uint8_t>& ct_bytes);
 
 struct WorkbookRels {
-  std::unordered_map<std::string, std::string> sheet_targets;  // rId -> resolved part path
+  /// A sheet the workbook lists: its part and the relationship type naming it.
+  struct SheetTarget {
+    std::string path;
+    std::string relationship_type;
+  };
+  /// rId -> sheet; a worksheet, or a chartsheet / dialogsheet / macrosheet the
+  /// reader keeps as an opaque sheet.
+  std::unordered_map<std::string, SheetTarget> sheet_targets;
   std::string sst_path;
   std::string styles_path;
   /// Parts the reader leaves out because Excel rebuilds them and neither writer writes them: the calculation

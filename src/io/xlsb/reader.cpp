@@ -812,7 +812,11 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
     if (b.visibility != SheetVisibility::kVisible) {
       wb.sheet(wb.sheet_count() - 1U).mutable_view().set_visibility(b.visibility);
     }
-    sheet_part_paths.push_back(it->second);
+    if (it->second.relationship_type != kRelWorksheet) {
+      // A chartsheet or other non-worksheet keeps its tab; its parts stay passthrough.
+      wb.sheet(wb.sheet_count() - 1U).set_opaque_ooxml_sheet(it->second.path, it->second.relationship_type);
+    }
+    sheet_part_paths.push_back(it->second.path);
   }
 
   // Ordered sheet display names — the Ptg decoder maps a 3-D reference's
@@ -836,7 +840,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
   ReadDiagnostics table_diagnostics;
   for (std::size_t i = 0; i < sheet_part_paths.size(); ++i) {
     const std::string rels_path = ooxml::rels_path_for_part(sheet_part_paths[i]);
-    if (!zip.has_entry(rels_path)) {
+    if (wb.sheet(i).is_opaque_ooxml_sheet() || !zip.has_entry(rels_path)) {
       continue;
     }
     auto rels_or = LoadSheetRelationships(zip, rels_path, ooxml::dir_of(sheet_part_paths[i]));
@@ -960,6 +964,9 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
 
   for (std::size_t i = 0; i < sheet_part_paths.size(); ++i) {
     const std::string& sheet_path = sheet_part_paths[i];
+    if (wb.sheet(i).is_opaque_ooxml_sheet()) {
+      continue;
+    }
     if (!zip.has_entry(sheet_path)) {
       std::string ctx("context=xlsb_reader sheet_path=");
       ctx.append(sheet_path);

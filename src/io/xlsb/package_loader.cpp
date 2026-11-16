@@ -140,13 +140,14 @@ Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string
         if (target.empty()) {
           return Expected<void, Error>::Ok();
         }
-        if (type == kRelWorksheet) {
+        // Every in-package relationship whose type ends in "sheet" names a sheet, as in the OOXML reader.
+        if (type == kRelWorksheet || strings::ends_with(type, "sheet")) {
           const std::string id = rel.attribute("Id").value();
           if (id.empty()) {
             return Expected<void, Error>::Ok();
           }
           ASSIGN_OR_RETURN(auto resolved, ooxml::resolve_relative_path(base_dir, target));
-          rels.sheet_targets.emplace(id, std::move(resolved));
+          rels.sheet_targets.emplace(id, WorkbookRels::SheetTarget{std::move(resolved), std::string(type)});
         } else if (type == kRelSharedStrings) {
           ASSIGN_OR_RETURN(rels.sst_path, ooxml::resolve_relative_path(base_dir, target));
         } else if (type == kRelStyles) {

@@ -36,6 +36,7 @@
 #include "miniz.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
+#include "passthrough_part.h"
 #include "sheet.h"
 #include "support/roundtrip_symmetry.h"
 #include "utils/arena.h"
@@ -1023,6 +1024,32 @@ TEST(XlsbToOoxml, EnvelopeIntroducesNothingTheXlsxOriginWouldNotEmit) {
     EXPECT_NE(from_xlsx_types.find(declaration), std::string::npos)
         << "content-type declaration present only when the source was .xlsb: " << declaration;
     pos = end;
+  }
+}
+
+// Excel's own .xlsb with a chartsheet (an empty chart, created ahead of Sheet1): the chartsheet loads as an opaque
+// sheet in its tab position, its parts carried through.
+TEST(XlsbChartsheet, ExcelBookWithAChartsheetLoads) {
+  const std::vector<std::uint8_t> bytes = test::read_file_bytes(FixturePath("chartsheet_empty.xlsb"));
+  ASSERT_FALSE(bytes.empty());
+  auto loaded = io::xlsb::read_xlsb(test::span_of(bytes));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  const Workbook& wb = loaded.value().workbook;
+  ASSERT_EQ(wb.sheet_count(), 2U);
+  EXPECT_EQ(wb.sheet(0).name(),
+            "\xE3\x82\xB0\xE3\x83\xA9\xE3\x83\x95"
+            "1");  // グラフ1
+  EXPECT_TRUE(wb.sheet(0).is_opaque_ooxml_sheet());
+  EXPECT_EQ(wb.sheet(0).opaque_ooxml_part_path(), "xl/chartsheets/sheet1.bin");
+  EXPECT_EQ(wb.sheet(0).opaque_ooxml_relationship_type(),
+            "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet");
+  EXPECT_EQ(wb.sheet(1).name(), "Sheet1");
+  EXPECT_FALSE(wb.sheet(1).is_opaque_ooxml_sheet());
+  const auto& parts = wb.passthrough_parts();
+  for (const char* path : {"xl/chartsheets/sheet1.bin", "xl/chartsheets/_rels/sheet1.bin.rels",
+                           "xl/drawings/drawing1.xml", "xl/charts/chart1.xml"}) {
+    EXPECT_TRUE(std::any_of(parts.begin(), parts.end(), [path](const PassthroughPart& p) { return p.path == path; }))
+        << path;
   }
 }
 
