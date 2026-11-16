@@ -222,13 +222,14 @@ def _uint(value: int, name: str, bits: int = 32, role: str = "quantity") -> int:
 
     Raises:
       TypeError: when ``value`` is not an integer (a ``float`` and a ``bool`` included).
-      IndexOutOfRangeError: when ``value`` is a negative position or sheet position.
+      IndexOutOfRangeError: when ``value`` is a negative position or sheet position, or one
+        that fits ``uint64_t`` but not ``bits``.
       InvalidArgumentError: when ``value`` is a negative coordinate or quantity, or a
         coordinate the grid cannot hold.
-      ValueError: when ``value`` does not fit ``bits``.
+      ValueError: when ``value`` does not fit ``bits`` (a position or sheet position: ``uint64_t``).
     """
     ivalue = _coerce_integral(value, name)
-    if ivalue < 0:
+    if ivalue < 0 or (role in ("sheet", "position") and (1 << bits) <= ivalue < (1 << 64)):
         if role == "sheet":
             raise FormulonError(
                 StatusCode.SHEET_INDEX_OUT_OF_RANGE,

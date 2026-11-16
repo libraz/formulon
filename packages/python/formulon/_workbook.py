@@ -9842,7 +9842,7 @@ class Workbook(_NoCopy):
             index = _read_count(
                 LIB.fm_workbook_copy_sheet,
                 h,
-                _uint(source_index, "source"),
+                _uint(source_index, "source", role="sheet"),
                 _uint(before, "insert_before", role="sheet"),
                 name_ptr,
             )
