@@ -125,6 +125,7 @@ export function registerPivotRegressions(Module, test) {
       };
       assert.equal(sumDataCells(), 300);
 
+      wb.clearPivotFieldItems(0, pivot, regionField);
       wb.addPivotFieldItem(0, pivot, regionField, 'North', true);
       wb.addPivotFieldItem(0, pivot, regionField, { cacheIndex: 1 }, false);
       assert.equal(sumDataCells(), 100);
