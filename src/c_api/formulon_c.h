@@ -1856,10 +1856,9 @@ typedef struct fm_value_array fm_value_array_t;
  * surfaces as a single `#VALUE!` cell.
  *
  * @note A formula that refers to its own anchor cell, such as `=A1+1`
- *       anchored at A1, is a self-cycle: under automatic calculation the
- *       result is 0, as for a cell holding that formula. Under manual
- *       calculation, or with iterative calculation enabled, the anchor's
- *       cached value is read instead (`=A1+1` at an empty A1 gives 1).
+ *       anchored at A1, reads the anchor cell's current value, as Excel's
+ *       Evaluate does, in every calculation mode (`=A1+1` at an empty A1
+ *       gives 1); it is not a cycle.
  *
  * Lifetime: owned (until fm_value_array_destroy).
  *
