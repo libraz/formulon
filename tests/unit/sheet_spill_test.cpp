@@ -247,6 +247,16 @@ TEST(SheetSpillTest, MergeAtAnchorBlocksVerticalSpill) {
   EXPECT_EQ(s.merges()[0].last_row, 0U);
   EXPECT_EQ(s.merges()[0].last_col, 1U);
 }
+TEST(SheetSpillTest, MergeAnchoredAtAnchorDoesNotBlockOneCellResult) {
+  Sheet s("Sheet1");
+  s.set_cell_formula(0U, 0U, "=UPPER(\"a\")");
+  s.mutable_merges().push_back(MergeRange{0U, 0U, 0U, 1U});
+
+  EXPECT_FALSE(s.spill_would_collide(0U, 0U, 1U, 1U));
+  EXPECT_TRUE(s.commit_spill(0U, 0U, 1U, 1U, {Value::number(1.0)}));
+  EXPECT_EQ(s.resolve_cell_value(0U, 0U), Value::number(1.0));
+  EXPECT_TRUE(s.spill_would_collide(0U, 0U, 1U, 2U));
+}
 TEST(SheetSpillTest, SpillWouldCollideRejectsMalformedFootprints) {
   Sheet s("Sheet1");
   EXPECT_TRUE(s.spill_would_collide(0U, 0U, 0U, 1U));

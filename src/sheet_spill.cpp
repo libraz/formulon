@@ -451,10 +451,15 @@ Sheet::SpillAdmission Sheet::probe_spill_footprint_locked(std::uint32_t anchor_r
     return SpillAdmission::kBlocked;
   }
   // Merged cells occupy their complete rectangle even when only the top-left
-  // coordinate has a stored Cell. Any intersection is a blocker, including a
-  // merge whose top-left cell is the requested spill anchor.
+  // coordinate has a stored Cell. Any intersection is a blocker, except that a
+  // one-cell result occupies only its own cell, so a merge anchored there
+  // does not block it.
+  const bool anchor_only = rows == 1U && cols == 1U;
   for (const MergeRange& merge : merges_) {
     if (merge.first_row > merge.last_row || merge.first_col > merge.last_col) {
+      continue;
+    }
+    if (anchor_only && merge.first_row == anchor_row && merge.first_col == anchor_col) {
       continue;
     }
     if (RectIntersectsMerge(anchor_row, row_end, anchor_col, col_end, merge)) {

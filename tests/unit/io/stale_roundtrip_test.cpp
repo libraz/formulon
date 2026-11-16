@@ -564,4 +564,19 @@ TEST(StaleRoundtrip, RefreshOnLoadPivotUsesTheLoadProfile) {
   EXPECT_EQ(CountText(ja, "Grand Total"), 0U);
 }
 
+// A one-cell dynamic array at the top-left of a merge keeps its value on load and across a save.
+TEST(StaleRoundtrip, MergedOneCellDynamicArrayKeepsItsValueInManualMode) {
+  const auto c3_text = [](const Workbook& wb) {
+    const Value v = wb.sheet(0).resolve_cell_value(2U, 2U);
+    EXPECT_TRUE(v.is_text());
+    return v.is_text() ? std::string(v.as_text()) : std::string();
+  };
+  Workbook wb = Load(ReadFixture("../load_save/merged_one_cell_dynamic_array.xlsx"));
+  EXPECT_EQ(c3_text(wb), "A");
+  wb.set_calc_mode(CalcMode::kManual);
+  const Workbook manual = Load(Save(wb));
+  ASSERT_EQ(manual.calc_mode(), CalcMode::kManual);
+  EXPECT_EQ(c3_text(manual), "A");
+}
+
 }  // namespace formulon
