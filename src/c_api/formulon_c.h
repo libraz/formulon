@@ -427,6 +427,10 @@ typedef struct {
 /**
  * @brief Builds a default workbook (a single sheet named `"Sheet1"`).
  *
+ * Font 0 is a fixed `Calibri` 11 (family 2) with no theme link, so the Normal
+ * font does not follow the theme; `fm_workbook_create_for_profile` builds the
+ * workbook Excel creates for a profile.
+ *
  * Lifetime: owned (until fm_workbook_destroy).
  *
  * @param out  On success receives a freshly allocated handle. The
@@ -453,8 +457,9 @@ FM_API fm_status_t fm_workbook_create_default(fm_workbook_t** out);
  * unchanged and still seeds `Calibri` 11.
  *
  * Only the `mac-*` values come from Excel. The `win-*` ids are estimates: the
- * Mac locale table with an 11 pt body font, and no default row height or
- * base column width (the engine defaults apply).
+ * Mac locale table with an 11 pt body font and that font's Windows default row
+ * height (measured for ja-JP's `游ゴシック` 11, otherwise `Calibri` 11's); the
+ * base column width is the engine default.
  *
  * Changing font 0 afterwards (`fm_workbook_set_default_font`) leaves the
  * phonetic font (font 1) as it was.

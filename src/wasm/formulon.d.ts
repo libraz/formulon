@@ -9178,7 +9178,8 @@ export interface Slicer extends Drawing {
 /** Static factories on the Workbook class, the only way to create one. Each returns a new workbook or throws
  *  `FormulonError`. */
 export interface WorkbookCtor {
-  /** Workbook with a single default sheet (`"Sheet1"`).
+  /** Workbook with a single default sheet (`"Sheet1"`). Font 0 is a fixed Calibri 11 with no theme link, so the
+   *  Normal font does not follow the theme; `createForProfile` builds the workbook Excel creates for a profile.
    *
    *  @example
    *  ```ts
@@ -9196,7 +9197,9 @@ export interface WorkbookCtor {
    *  column width follow the locale. The workbook's Excel profile is set to
    *  the id. No theme part is written (Excel treats that as the Office theme).
    *  Only `mac-*` values are measured; `win-*` ids are estimates (the Mac
-   *  table with an 11 pt body font, no row height or base column width).
+   *  table with an 11 pt body font and that font's Windows row height, measured
+   *  for ja-JP's 游ゴシック 11, otherwise Calibri 11's; the base column width is
+   *  the engine default).
    *  `setDefaultFont` afterwards leaves font 1 unchanged. `createDefault`
    *  still seeds Calibri 11. An unknown id fails with `StatusCode.InvalidArgument`. */
   createForProfile(profileId: ProfileId): Workbook;

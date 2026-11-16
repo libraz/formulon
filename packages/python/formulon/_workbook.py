@@ -9034,6 +9034,9 @@ class Workbook(_NoCopy):
     def create_default(cls) -> "Workbook":
         """Build a default workbook (a single sheet named ``Sheet1``).
 
+        Font 0 is a fixed Calibri 11 with no theme link, so the Normal font does not follow the theme;
+        :meth:`create_for_profile` builds the workbook Excel creates for a profile.
+
         Example::
 
             with Workbook.create_default() as wb:
@@ -9057,9 +9060,11 @@ class Workbook(_NoCopy):
         body font (name, charset, minor theme scheme), phonetic font (font 1,
         ja/ko/zh only), Normal style name, vertical alignment, first sheet
         name, row height, margins and phonetic settings. ``mac-*`` values are
-        measured; ``win-*`` ids are estimates (body size 11, no row height or
-        base column width set). Unlike :meth:`create_default` no theme part is
-        written, so the workbook reads the default Office theme. Changing
+        measured; ``win-*`` ids are estimates (body size 11 and that font's
+        Windows row height, measured for ja-JP's 游ゴシック 11, otherwise
+        Calibri 11's; no base column width set). As with :meth:`create_default`
+        no theme part is written, so the workbook reads the default Office
+        theme. Changing
         font 0 later (:meth:`set_default_font`) leaves font 1 untouched.
         Unknown ids raise :class:`InvalidArgumentError`.
         """

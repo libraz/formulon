@@ -141,7 +141,10 @@ enum class StyleKind : std::uint8_t {
 /// currently only mutate the one sheet's display name.
 class Workbook {
  public:
-  /// Factory for the default workbook: a single sheet named `"Sheet1"`.
+  /// Factory for the default workbook: a single sheet named `"Sheet1"`. Font 0
+  /// is a fixed Calibri 11 (family 2) with no theme link, so the Normal font
+  /// does not follow the theme; `create_for_profile` builds the workbook Excel
+  /// creates for a profile.
   static Workbook create();
 
   /// Factory for a workbook with no sheets at all.
@@ -172,9 +175,10 @@ class Workbook {
   /// font, phonetic font, Normal style name, sheet name, vertical alignment
   /// and page margins (`new_workbook_defaults.h`). The body font is 12 pt
   /// on Mac and 11 pt on Windows; the Mac default row height and base
-  /// column width are set, the Windows ones are left at the engine
-  /// defaults. Windows values other than the size are estimated from the
-  /// Mac values. No theme part is created; Excel reads its absence as
+  /// column width are set, and on Windows the default row height of the
+  /// body font (measured for ja-JP's 游ゴシック 11, otherwise Calibri 11's)
+  /// with the engine's base column width. Windows values other than the
+  /// size and that row height are estimated from the Mac values. No theme part is created; Excel reads its absence as
   /// the Office theme. The phonetic font (font 1) keeps the locale face
   /// when font 0 is changed later. Sheets added afterwards through any
   /// `add_sheet*` receive the first sheet's row metrics, page margins and
