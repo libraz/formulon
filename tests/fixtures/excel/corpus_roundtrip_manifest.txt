@@ -81,12 +81,6 @@ xlsb_parity/protection/title_astral_128_src.xlsx validate_xlsx protected_range_t
 
 # PivotTables loaded from .xlsb do not yet survive a save.
 chart_pivot.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses chartFormat and other unmeasured root attributes
-pivot_calc/cf1_price_amt_per_qty.xlsx model_xlsb pivot_count known_gap  # pending: cache bridge refuses calculated fields
-pivot_calc/cf2_div_zero_error_caption.xlsx model_xlsb pivot_count known_gap  # pending: cache bridge refuses calculated fields
-pivot_calc/cf3_quoted_names_if.xlsx model_xlsb pivot_count known_gap  # pending: cache bridge refuses calculated fields
-pivot_calc/cf4_function_average_count.xlsx model_xlsb pivot_count known_gap  # pending: cache bridge refuses calculated fields
-pivot_calc/cf5_nested_calc_field.xlsx model_xlsb pivot_count known_gap  # pending: cache bridge refuses calculated fields
-pivot_calc/ci3_item_positional_refs.xlsx model_xlsb pivot_count known_gap  # pending: cache bridge refuses positional calculated item references
 pivot_options/op_alttext.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses alternative text
 pivot_show_as/K1_parentRegion__sum.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses x14 pivotShowAs
 pivot_show_as/K1_rankDescGrp__sum.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses x14 pivotShowAs
@@ -101,8 +95,59 @@ table_slicer.xlsb drop_xlsx rel:xl/slicerCaches/slicerCache1.bin unmodelled_drop
 table_slicer.xlsb drop_xlsx rel:xl/slicers/slicer1.bin unmodelled_dropped  # slicer, not written to the other format
 table_slicer.xlsb drop_xlsx xl/slicerCaches/slicerCache1.bin unmodelled_dropped  # slicer, not written to the other format
 table_slicer.xlsb drop_xlsx xl/slicers/slicer1.bin unmodelled_dropped  # slicer, not written to the other format
-xlsb_parity/pivot/api_built/d_calc_field.xlsb drop_xlsx rel:xl/pivotCache/pivotCacheDefinition1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
-xlsb_parity/pivot/api_built/d_calc_field.xlsb drop_xlsx rel:xl/pivotTables/pivotTable1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
-xlsb_parity/pivot/api_built/d_calc_field.xlsb drop_xlsx xl/pivotCache/pivotCacheDefinition1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
-xlsb_parity/pivot/api_built/d_calc_field.xlsb drop_xlsx xl/pivotCache/pivotCacheRecords1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
-xlsb_parity/pivot/api_built/d_calc_field.xlsb drop_xlsx xl/pivotTables/pivotTable1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx rel:xl/pivotCache/pivotCacheDefinition10.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx rel:xl/pivotCache/pivotCacheDefinition11.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx rel:xl/pivotCache/pivotCacheDefinition12.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx rel:xl/pivotCache/pivotCacheDefinition2.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx rel:xl/pivotCache/pivotCacheDefinition3.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx rel:xl/pivotCache/pivotCacheDefinition4.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx rel:xl/pivotCache/pivotCacheDefinition5.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx rel:xl/pivotCache/pivotCacheDefinition6.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx rel:xl/pivotCache/pivotCacheDefinition7.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx rel:xl/pivotCache/pivotCacheDefinition8.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx rel:xl/pivotCache/pivotCacheDefinition9.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx rel:xl/pivotTables/pivotTable10.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx rel:xl/pivotTables/pivotTable11.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx rel:xl/pivotTables/pivotTable12.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx rel:xl/pivotTables/pivotTable2.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx rel:xl/pivotTables/pivotTable3.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx rel:xl/pivotTables/pivotTable4.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx rel:xl/pivotTables/pivotTable5.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx rel:xl/pivotTables/pivotTable6.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx rel:xl/pivotTables/pivotTable7.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx rel:xl/pivotTables/pivotTable8.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx rel:xl/pivotTables/pivotTable9.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotCache/pivotCacheDefinition10.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotCache/pivotCacheDefinition11.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotCache/pivotCacheDefinition12.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotCache/pivotCacheDefinition2.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotCache/pivotCacheDefinition3.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotCache/pivotCacheDefinition4.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotCache/pivotCacheDefinition5.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotCache/pivotCacheDefinition6.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotCache/pivotCacheDefinition7.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotCache/pivotCacheDefinition8.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotCache/pivotCacheDefinition9.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotCache/pivotCacheRecords10.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotCache/pivotCacheRecords11.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotCache/pivotCacheRecords12.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotCache/pivotCacheRecords2.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotCache/pivotCacheRecords3.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotCache/pivotCacheRecords4.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotCache/pivotCacheRecords5.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotCache/pivotCacheRecords6.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotCache/pivotCacheRecords7.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotCache/pivotCacheRecords8.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotCache/pivotCacheRecords9.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotTables/pivotTable10.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotTables/pivotTable11.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotTables/pivotTable12.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotTables/pivotTable2.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotTables/pivotTable3.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotTables/pivotTable4.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotTables/pivotTable5.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotTables/pivotTable6.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotTables/pivotTable7.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotTables/pivotTable8.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb drop_xlsx xl/pivotTables/pivotTable9.bin unmodelled_dropped  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table
+xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsx model_xlsb pivot_count known_gap  # a calculated field set to include new items in a filter, unmeasured in an xlsb pivot table

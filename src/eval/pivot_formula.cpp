@@ -90,6 +90,19 @@ std::string_view trim_spaces(std::string_view s) {
   return s;
 }
 
+// A field name stays bare in `Field[...]` only when it reads back as one run.
+bool needs_quotes(std::string_view name) {
+  if (name.empty() || strings::case_insensitive_starts_with(name, kSyntheticPrefix)) {
+    return true;
+  }
+  for (const char ch : name) {
+    if (!is_run_byte(static_cast<unsigned char>(ch))) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // Rewrites pivot names in a formula body to synthetic identifiers and records
 // the reference each one stands for.
 class Rewriter {
@@ -140,32 +153,10 @@ class Rewriter {
       return;
     }
     qualify_ = false;
-    const std::string& field = scope_.cache->fields()[*scope_.item_field].name;
-    if (needs_quotes(field)) {
-      canonical_.push_back('\'');
-      for (const char ch : field) {
-        canonical_.append(ch == '\'' ? 2U : 1U, ch);
-      }
-      canonical_.push_back('\'');
-    } else {
-      canonical_.append(field);
-    }
+    append_pivot_formula_name(canonical_, scope_.cache->fields()[*scope_.item_field].name);
     canonical_.push_back('[');
     canonical_.append(token);
     canonical_.push_back(']');
-  }
-
-  // A field name stays bare in `Field[...]` only when it reads back as one run.
-  static bool needs_quotes(std::string_view name) {
-    if (name.empty() || strings::case_insensitive_starts_with(name, kSyntheticPrefix)) {
-      return true;
-    }
-    for (const char ch : name) {
-      if (!is_run_byte(static_cast<unsigned char>(ch))) {
-        return true;
-      }
-    }
-    return false;
   }
 
   std::size_t copy_string_literal(std::size_t i) {
@@ -477,12 +468,10 @@ Expected<void, Error> check_node(const parser::AstNode& node, std::size_t ref_co
 
 }  // namespace
 
-Expected<std::uint32_t, Error> PivotFormulaEvaluator::compile(std::string_view formula,
-                                                              const pivot::FormulaScope& scope,
-                                                              std::vector<pivot::FormulaRef>* refs,
-                                                              std::string* canonical) {
+Expected<void, Error> parse_pivot_formula(std::string_view formula, const pivot::FormulaScope& scope,
+                                          ParsedPivotFormula* out) {
   assert(eval_profile_scope_active());
-  if (scope.cache == nullptr || refs == nullptr) {
+  if (scope.cache == nullptr || out == nullptr) {
     return invalid("pivot formula scope has no cache");
   }
   if (scope.item_field && *scope.item_field >= scope.cache->fields().size()) {
@@ -493,34 +482,76 @@ Expected<std::uint32_t, Error> PivotFormulaEvaluator::compile(std::string_view f
     return invalid("pivot formula longer than 8192 characters");
   }
 
-  refs->clear();
-  Rewriter rewriter(scope, refs);
+  out->refs.clear();
+  Rewriter rewriter(scope, &out->refs);
   Expected<std::string, Error> text = rewriter.run(formula);
   if (!text) {
     return text.error();
   }
 
-  Compiled compiled;
   // Placeholders can lengthen the text past the limit the input already met.
   parser::ParserOptions parse_opts;
   parse_opts.max_formula_length_utf16 = std::max(parse_opts.max_formula_length_utf16, utf16_units_in(text.value()));
-  compiled.root = parser::parse_strict(text.value(), compiled.arena, parse_opts);
-  if (compiled.root == nullptr) {
+  out->root = parser::parse_strict(text.value(), out->arena, parse_opts);
+  if (out->root == nullptr) {
     return make_error(FormulonErrorCode::kParserUnexpectedToken, "formula has a syntax error", std::string(formula));
   }
-  if (auto st = check_node(*compiled.root, refs->size()); !st) {
+  if (auto st = check_node(*out->root, out->refs.size()); !st) {
     return st.error();
   }
-  compiled.ref_count = refs->size();
+  out->canonical = std::move(rewriter.canonical());
+  return {};
+}
 
-  while (names_.size() < refs->size()) {
+std::optional<std::size_t> pivot_formula_ref_slot(std::string_view name, std::size_t ref_count) {
+  if (!is_bound_synthetic(name, ref_count)) {
+    return std::nullopt;
+  }
+  std::size_t index = 0;
+  for (const char ch : name.substr(kSyntheticPrefix.size())) {
+    index = index * 10 + static_cast<std::size_t>(ch - '0');
+  }
+  return index;
+}
+
+void append_pivot_formula_name(std::string& out, std::string_view name) {
+  if (!needs_quotes(name)) {
+    out.append(name);
+    return;
+  }
+  out.push_back('\'');
+  for (const char ch : name) {
+    out.append(ch == '\'' ? 2U : 1U, ch);
+  }
+  out.push_back('\'');
+}
+
+Expected<std::uint32_t, Error> PivotFormulaEvaluator::compile(std::string_view formula,
+                                                              const pivot::FormulaScope& scope,
+                                                              std::vector<pivot::FormulaRef>* refs,
+                                                              std::string* canonical) {
+  if (refs == nullptr) {
+    return invalid("pivot formula scope has no cache");
+  }
+  ParsedPivotFormula parsed;
+  if (auto st = parse_pivot_formula(formula, scope, &parsed); !st) {
+    refs->clear();
+    return st.error();
+  }
+
+  Compiled compiled;
+  compiled.arena = std::move(parsed.arena);
+  compiled.root = parsed.root;
+  compiled.ref_count = parsed.refs.size();
+  while (names_.size() < parsed.refs.size()) {
     std::string name;
     append_synthetic(name, names_.size());
     names_.push_back(std::move(name));
   }
+  *refs = std::move(parsed.refs);
   formulas_.push_back(std::move(compiled));
   if (canonical != nullptr) {
-    *canonical = std::move(rewriter.canonical());
+    *canonical = std::move(parsed.canonical);
   }
   return static_cast<std::uint32_t>(formulas_.size() - 1);
 }

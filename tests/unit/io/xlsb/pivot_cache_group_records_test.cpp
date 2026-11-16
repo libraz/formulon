@@ -336,14 +336,6 @@ TEST(XlsbPivotCacheGroupRecords, CalcItemFieldsMatchTwin) {
   const std::vector<std::uint8_t> rgce = {0x18, 0x1d, 0, 0, 0, 0, 0x18, 0x1d, 1, 0, 0, 0, 0x03};
   EXPECT_EQ(item.rgce, rgce);
   EXPECT_TRUE(item.rgcb.empty());
-  auto tokens = pivot_calc::walk_calc_item_formula(item.rgce);
-  ASSERT_TRUE(tokens) << ErrorText(tokens.error());
-  ASSERT_EQ(tokens.value().size(), 3U);
-  EXPECT_EQ(tokens.value()[0].ptg, pivot_calc::kPtgSxName);
-  EXPECT_EQ(tokens.value()[0].sx_name, 0U);
-  EXPECT_EQ(tokens.value()[1].ptg, pivot_calc::kPtgSxName);
-  EXPECT_EQ(tokens.value()[1].sx_name, 1U);
-  EXPECT_EQ(tokens.value()[2].ptg, 0x03);
 
   // Each PtgSxName index names one (field, shared item) pair.
   const pugi::xml_node region = def.child("cacheFields").child("cacheField");
@@ -358,10 +350,11 @@ TEST(XlsbPivotCacheGroupRecords, CalcItemFieldsMatchTwin) {
   for (std::size_t k = 0; k < 2U; ++k) {
     const pivot_calc::PName& name = (*item.names)[k];
     EXPECT_EQ(name.field, pivot_calc::kNoField);
-    ASSERT_EQ(name.pairs.size(), 1U);
-    EXPECT_EQ(name.pairs[0].field, 0U);
-    ASSERT_LT(name.pairs[0].item, shared.size());
-    EXPECT_EQ(shared[name.pairs[0].item], expected_items[k]);
+    ASSERT_TRUE(name.pairs.has_value());
+    ASSERT_EQ(name.pairs->size(), 1U);
+    EXPECT_EQ((*name.pairs)[0].field, 0U);
+    ASSERT_LT((*name.pairs)[0].item, shared.size());
+    EXPECT_EQ(shared[(*name.pairs)[0].item], expected_items[k]);
   }
 
   // pivotArea cacheIndex="1" outline="0" fieldPosition="0", reference field 0, x 3.
@@ -381,19 +374,6 @@ TEST(XlsbPivotCacheGroupRecords, CalcItemFieldsMatchTwin) {
   ASSERT_EQ(filter.items.size(), 1U);
   EXPECT_EQ(filter.items[0], ref.child("x").attribute("v").as_uint());
   EXPECT_EQ(filter.items[0], 3U);
-}
-
-TEST(XlsbPivotCacheGroupRecords, CalcItemFormulaWalkRefusesUnknownToken) {
-  // PtgNum (0x1F) has no Excel-saved calculated-item sample; PtgInt does.
-  auto tokens = pivot_calc::walk_calc_item_formula({0x1f, 0, 0, 0, 0, 0, 0, 0xf0, 0x3f});
-  ASSERT_FALSE(tokens);
-  EXPECT_EQ(tokens.error().code, FormulonErrorCode::kIoXlsbUnsupportedPtg);
-  EXPECT_FALSE(pivot_calc::walk_calc_item_formula({0x18, 0x1d, 0x00}));
-  EXPECT_FALSE(pivot_calc::walk_calc_item_formula({0x1e, 0x02}));
-  auto integer = pivot_calc::walk_calc_item_formula({0x1e, 0x02, 0x00});
-  ASSERT_TRUE(integer);
-  ASSERT_EQ(integer.value().size(), 1U);
-  EXPECT_EQ(integer.value()[0].integer, 2U);
 }
 
 TEST(XlsbPivotCacheGroupRecords, CalcItemRefusesCountMismatch) {

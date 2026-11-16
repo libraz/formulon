@@ -74,6 +74,16 @@ std::vector<std::string> ItemKindPaths() {
                            "blank_date_not_on_axis", "blank_control_date_rows", "blank_date_row_field"}) {
     paths.push_back(root + "blank/" + stem + ".xlsb");
   }
+  // Calculated fields, and calculated items naming items by position.
+  for (const char* stem :
+       {"calcfield_control_none", "calcfield_one", "calcfield_not_data", "calcfield_int_constant",
+        "calcfield_same_field_twice", "calcfield_two_chained", "calcfield_two_fields", "calcfield_two_independent"}) {
+    paths.push_back(root + "calcfield/" + stem + ".xlsb");
+  }
+  for (const char* stem : {"ctl", "p_abs1", "p_abs2", "p_big", "p_prev", "p_bare", "p_next", "p_mix", "p_prod",
+                           "p_zero", "p_zero_bare", "d_desc_abs1", "d_desc_prev", "d_move_abs1", "d_move_late"}) {
+    paths.push_back(root + "calc_item_position/" + stem + ".xlsb");
+  }
   return paths;
 }
 
@@ -294,6 +304,50 @@ TEST(XlsbPivotCacheBridge, CorpusReadsWritesBackAndMatchesTheXlsxTwin) {
     }
   }
   EXPECT_GT(caches, 80U);
+}
+
+// One cache per calculated-field formula shape (xlsb_parity/pivot/calcfield/cf3_formula_shapes, Excel 16.115's saves
+// of one book, cache N per case): a fraction, an integer past 16 bits and a negative number are PtgNum, a name with a
+// space is quoted and a non-ASCII one is not, and functions and strings are Ptg tokens; each reads as its .xlsx
+// formula and writes back Excel's records.
+TEST(XlsbPivotCacheBridge, CalculatedFieldFormulaShapes) {
+  const std::string path =
+      std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_parity/pivot/calcfield/cf3_formula_shapes.xlsb";
+  const std::vector<CacheCase> cases = Cases(path);
+  const auto find = [&cases](int number) -> const CacheCase* {
+    const std::string suffix = " xl/pivotCache/pivotCacheDefinition" + std::to_string(number) + ".bin";
+    for (const CacheCase& c : cases) {
+      if (c.label.size() > suffix.size() &&
+          c.label.compare(c.label.size() - suffix.size(), suffix.size(), suffix) == 0) {
+        return &c;
+      }
+    }
+    ADD_FAILURE() << "no cache " << number;
+    return nullptr;
+  };
+  const struct {
+    int number;
+    const char* formula;
+  } kWritten[] = {{2, "IF(Qty>2,Amount,0)"}, {3, "IF(Qty>2,Amount)"}, {4, "IF(AND(Qty>1,Qty<5),Amount,0)"},
+                  {5, "SUM(Amount,Qty)"},    {6, "ABS(Amount-100)"},  {7, "Amount*1.5"},
+                  {8, "Amount*70000"},       {9, "Amount*-1"},        {10, "IF(Qty>2,\"x\",0)"},
+                  {11, "'Amt Net'*2"},       {12, "数量*2"}};
+  for (const auto& w : kWritten) {
+    const CacheCase* c = find(w.number);
+    ASSERT_NE(c, nullptr);
+    SCOPED_TRACE(c->label);
+    auto cache = pivot_cache_from_xlsb(SpanOf(c->definition), SpanOf(c->records), c->date1904);
+    ASSERT_TRUE(cache.has_value()) << cache.error().message;
+    ASSERT_TRUE(cache.value().fields().back().formula.has_value());
+    EXPECT_EQ(*cache.value().fields().back().formula, w.formula);
+    auto parts = pivot_cache_to_xlsb(cache.value(), c->date1904, RecordsRelId(c->definition));
+    ASSERT_TRUE(parts.has_value()) << parts.error().message;
+    auto expected = decode_pivot_cache_definition(SpanOf(c->definition));
+    ASSERT_TRUE(expected.has_value());
+    expected.value().data_source_clean = std::uint8_t{1};
+    EXPECT_EQ(parts.value().definition, encode_pivot_cache_definition(expected.value()));
+    EXPECT_EQ(parts.value().records, c->records);
+  }
 }
 
 TEST(XlsbPivotCacheBridge, MaterialisedGroupFieldsWriteBackExcelsRecords) {
@@ -590,11 +644,25 @@ TEST(XlsbPivotCacheBridge, CalculatedItemFormulasCompileToExcelsTokens) {
 
 TEST(XlsbPivotCacheBridge, RefusesUnmeasuredFormulaOperators) {
   pivot::PivotCache cache = FirstCache("C13_calc_item");
-  for (const char* formula : {"+Region[East]", "Region[East]%", "Region[East] Region[West]",
-                              "Region[East],Region[West]", "Region[East]:Region[West]", "Region[East]==Region[West]"}) {
+  for (const char* formula : {"Region[East] Region[West]", "Region[East],Region[West]", "Region[East]:Region[West]",
+                              "Region[East]==Region[West]"}) {
     cache.mutable_calculated_items()[0].formula = formula;
     SCOPED_TRACE(formula);
     ExpectNotWritable(cache);
+  }
+}
+
+TEST(XlsbPivotCacheBridge, CalculatedItemNumbersWriteAsPtgNum) {
+  pivot::PivotCache cache = FirstCache("C13_calc_item");
+  for (const char* formula : {"Region[East]*2.5", "Region[East]*70000"}) {
+    cache.mutable_calculated_items()[0].formula = formula;
+    SCOPED_TRACE(formula);
+    auto parts = pivot_cache_to_xlsb(cache, false, "rId1");
+    ASSERT_TRUE(parts.has_value()) << parts.error().message;
+    auto back = pivot_cache_from_xlsb(SpanOf(parts.value().definition), SpanOf(parts.value().records), false);
+    ASSERT_TRUE(back.has_value()) << back.error().message;
+    ASSERT_EQ(back.value().calculated_items().size(), 1U);
+    EXPECT_EQ(back.value().calculated_items()[0].formula, formula);
   }
 }
 
@@ -602,8 +670,7 @@ TEST(XlsbPivotCacheBridge, RefusesFormulaTextWithoutATokenSpelling) {
   pivot::PivotCache cache = FirstCache("C13_calc_item");
   const std::string deep = std::string(300, '(') + "Region[East]" + std::string(300, ')');
   for (const std::string& formula :
-       {std::string("Region[East]*2.5"), std::string("Region[East]*02"), std::string("Region[East]*70000"),
-        std::string("Region[East] + Region[West]"), deep}) {
+       {std::string("Region[East]*02"), std::string("Region[East] + Region[West]"), deep}) {
     cache.mutable_calculated_items()[0].formula = formula;
     SCOPED_TRACE(formula.substr(0, 40));
     ExpectNotWritable(cache);

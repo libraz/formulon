@@ -190,6 +190,9 @@ inline constexpr std::uint8_t kPtgPercent = 0x14;
 inline constexpr std::uint8_t kPtgParen = 0x15;
 inline constexpr std::uint8_t kPtgMissArg = 0x16;
 inline constexpr std::uint8_t kPtgStr = 0x17;
+/// `PtgSxName` (pivot-cache formula name operand): 0x18, 0x1D, then a u32 name index.
+inline constexpr std::uint8_t kPtgSxName = 0x18;
+inline constexpr std::uint8_t kEptgSxName = 0x1D;
 inline constexpr std::uint8_t kPtgAttr = 0x19;
 inline constexpr std::uint8_t kPtgErr = 0x1C;
 inline constexpr std::uint8_t kPtgBool = 0x1D;

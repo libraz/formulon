@@ -3,10 +3,13 @@
 #include <array>
 #include <cmath>
 #include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <string>
 #include <utility>
 
+#include "eval/eval_profile_scope.h"
+#include "eval/pivot_formula.h"
 #include "io/cell_parser.h"
 #include "io/ooxml_defs.h"
 #include "io/pivot_built_defaults.h"
@@ -17,13 +20,17 @@
 #include "io/xlsb/pivot_cache_group_records.h"
 #include "io/xlsb/pivot_cache_records.h"
 #include "io/xlsb/pivot_calc_item_records.h"
+#include "io/xlsb/ptg_reader.h"
+#include "io/xlsb/ptg_writer.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xsd_double.h"
 #include "parser/ast.h"
+#include "parser/ast_format.h"
 #include "pivot/date_serial.h"
 #include "pivot/field_grouping.h"
 #include "pivot/record_access.h"
+#include "utils/arena.h"
 #include "utils/date_time.h"
 #include "utils/number_text.h"
 #include "utils/resource_budget.h"
@@ -61,59 +68,16 @@ constexpr std::string_view kPcd14Ext =
 /// dataSourceClean payload of the `1` text, the only one Excel's parts show.
 constexpr std::uint8_t kDataSourceCleanTrue = 1U;
 
-/// BrtBeginPName and BrtBeginPNPair constants of every Excel-saved calculated item.
+/// BrtBeginPName and BrtBeginPNPair constants of every Excel-saved calculated item and calculated field.
 constexpr std::uint16_t kPNameFlags = 0x0001U;
-constexpr std::uint8_t kPNPairFlags = 0U;
+/// BrtBeginPNPair byte 0: the item is named by its cache index, by its 0-based position among the field's items in
+/// their shown order (`Field[n]` stores n - 1), or by its position relative to the calculated item (`Field[-n]`,
+/// `Field[+n]`); the value is the pair's item word.
+constexpr std::uint8_t kPNPairByIndex = 0U;
+constexpr std::uint8_t kPNPairAbsolute = 1U;
+constexpr std::uint8_t kPNPairRelative = 3U;
 /// BrtBeginPRFilter bit set in every Excel-saved reference, `selected` or not.
 constexpr std::uint32_t kFilterAlways = 0x000001U;
-
-/// The PivotParsedFormula operators Excel's saved calculated items use; any other has no sample.
-constexpr std::uint8_t kPtgAdd = 0x03U;
-constexpr std::uint8_t kPtgSub = 0x04U;
-constexpr std::uint8_t kPtgMul = 0x05U;
-constexpr std::uint8_t kPtgDiv = 0x06U;
-constexpr std::uint8_t kPtgPower = 0x07U;
-constexpr std::uint8_t kPtgConcat = 0x08U;
-constexpr std::uint8_t kPtgLt = 0x09U;
-constexpr std::uint8_t kPtgLe = 0x0AU;
-constexpr std::uint8_t kPtgEq = 0x0BU;
-constexpr std::uint8_t kPtgGe = 0x0CU;
-constexpr std::uint8_t kPtgGt = 0x0DU;
-constexpr std::uint8_t kPtgNe = 0x0EU;
-constexpr std::uint8_t kPtgUminus = 0x13U;
-constexpr std::uint8_t kPtgParen = 0x15U;
-
-/// Infix text of a measured binary operator; empty for any other ptg.
-std::string_view BinaryOperatorText(std::uint8_t ptg) {
-  switch (ptg) {
-    case kPtgAdd:
-      return "+";
-    case kPtgSub:
-      return "-";
-    case kPtgMul:
-      return "*";
-    case kPtgDiv:
-      return "/";
-    case kPtgPower:
-      return "^";
-    case kPtgConcat:
-      return "&";
-    case kPtgLt:
-      return "<";
-    case kPtgLe:
-      return "<=";
-    case kPtgEq:
-      return "=";
-    case kPtgGe:
-      return ">=";
-    case kPtgGt:
-      return ">";
-    case kPtgNe:
-      return "<>";
-    default:
-      return {};
-  }
-}
 
 Error Corrupt(const std::string& message) {
   return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, "xlsb pivot cache: " + message, kContext);
@@ -232,29 +196,12 @@ std::optional<double> IsoSerial(const std::string& iso, bool date1904) {
 }
 
 // ---------------------------------------------------------------------------
-// Calculated-item formulas: `Field[Item]` names joined by operators, as the
-// PtgSxName tokens and payload-free operators of a PivotParsedFormula spell
-// them. Names that would need quoting have no Excel-saved sample.
+// Calculated-field and calculated-item formulas: the engine's pivot formula parse lowered to Ptg tokens whose
+// names are PtgSxName operands indexing the PNames list.
 
 bool IsNameByte(unsigned char c) {
   return c >= 0x80U || (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' ||
          c == '.';
-}
-
-bool IsPlainField(std::string_view text) {
-  if (text.empty()) {
-    return false;
-  }
-  const auto first = static_cast<unsigned char>(text.front());
-  if ((first >= '0' && first <= '9') || first == '.') {
-    return false;
-  }
-  for (const char c : text) {
-    if (!IsNameByte(static_cast<unsigned char>(c))) {
-      return false;
-    }
-  }
-  return true;
 }
 
 bool IsPlainItem(std::string_view text) {
@@ -269,268 +216,160 @@ bool IsPlainItem(std::string_view text) {
   return true;
 }
 
-/// Rendered text a calculated-item formula may reach; far above Excel's 8,192-character formula cap, it only
-/// bounds a hostile token stream.
-// @limit: engine
-constexpr std::uint64_t kMaxCalcItemFormulaBytes = 65536U;
-
-/// Infix text of a token stream; `names` holds the text of each PNames entry.
-Expected<std::string, Error> RenderFormula(const std::vector<pivot_calc::FormulaToken>& tokens,
-                                           const std::vector<std::string>& names) {
-  ResourceBudget bytes(kMaxCalcItemFormulaBytes, "pivot_calc_item_formula_bytes");
-  std::vector<std::string> stack;
-  for (const pivot_calc::FormulaToken& token : tokens) {
-    if (token.ptg == pivot_calc::kPtgSxName) {
-      if (token.sx_name >= names.size()) {
-        return Corrupt("calculated item formula names an entry past its names table");
-      }
-      RETURN_IF_ERROR(bytes.consume(names[token.sx_name].size()));
-      stack.push_back(names[token.sx_name]);
-      continue;
-    }
-    if (token.ptg == pivot_calc::kPtgInt) {
-      std::string text = std::to_string(token.integer);
-      RETURN_IF_ERROR(bytes.consume(text.size()));
-      stack.push_back(std::move(text));
-      continue;
-    }
-    const std::string_view op = BinaryOperatorText(token.ptg);
-    if (!op.empty()) {
-      if (stack.size() < 2U) {
-        return Corrupt("calculated item formula operator lacks its operands");
-      }
-      std::string rhs = std::move(stack.back());
-      stack.pop_back();
-      RETURN_IF_ERROR(bytes.consume(op.size() + rhs.size()));
-      stack.back().append(op).append(rhs);
-      continue;
-    }
-    if (token.ptg != kPtgUminus && token.ptg != kPtgParen) {
-      return Unmeasured("calculated item formula operator");
-    }
-    if (stack.empty()) {
-      return Corrupt("calculated item formula operator lacks its operand");
-    }
-    // A prefix needs a fresh string; its full length is charged so nesting cannot copy without bound.
-    std::string& top = stack.back();
-    std::string out;
-    out.reserve(top.size() + 2U);
-    out.push_back(token.ptg == kPtgUminus ? '-' : '(');
-    out.append(top);
-    if (token.ptg == kPtgParen) {
-      out.push_back(')');
-    }
-    RETURN_IF_ERROR(bytes.consume(out.size()));
-    top = std::move(out);
+/// The PNPair kind and value of a positional item reference (`n`, `+n`, `-n`), or nullopt for any other text.
+std::optional<std::pair<std::uint8_t, std::uint32_t>> PositionOf(std::string_view text) {
+  if (text.empty()) {
+    return std::nullopt;
   }
-  if (stack.size() != 1U) {
-    return Corrupt("calculated item formula does not reduce to one expression");
+  const bool signed_text = text.front() == '+' || text.front() == '-';
+  const std::optional<std::uint32_t> n =
+      ParseUnsigned(signed_text ? text.substr(1) : text, static_cast<std::uint32_t>(INT32_MAX));
+  if (!n) {
+    return std::nullopt;
   }
-  return std::move(stack.front());
+  if (!signed_text) {
+    return std::make_pair(kPNPairAbsolute, *n - 1U);
+  }
+  if (*n == 0U) {
+    return std::nullopt;
+  }
+  return std::make_pair(kPNPairRelative, text.front() == '-' ? 0U - *n : *n);
 }
 
-/// Compiles calculated-item formula text to rgce and its PNames (cache field, shared item) pairs. The grammar
-/// is the operators Excel's saved items use, by precedence: comparisons < `&` < `+ -` < `* /` < `^` < unary `-`, over
-/// `Field[Item]` names, integers and parentheses. Only parentheses recurse, at most kMaxGroupingParenDepth deep.
-class FormulaCompiler {
- public:
-  FormulaCompiler(std::string_view text, const pivot::PivotCache& cache) : text_(text), cache_(cache) {}
+/// The text of a positional item reference; the inverse of PositionOf.
+std::string PositionText(std::uint8_t kind, std::uint32_t value) {
+  const auto v = static_cast<std::int32_t>(value);
+  if (kind == kPNPairAbsolute) {
+    return std::to_string(static_cast<std::int64_t>(v) + 1);
+  }
+  return (v < 0 ? "-" : "+") + std::to_string(v < 0 ? -static_cast<std::int64_t>(v) : static_cast<std::int64_t>(v));
+}
 
-  bool Compile() { return Comparison() && pos_ == text_.size(); }
+const parser::AstNode* MoveLiteralSigns(Arena& arena, const parser::AstNode& node, bool fold);
 
-  const std::vector<std::uint8_t>& rgce() const { return rgce_; }
-  const std::vector<std::pair<std::uint32_t, std::uint32_t>>& names() const { return names_; }
-
- private:
-  bool At(char c) const { return pos_ < text_.size() && text_[pos_] == c; }
-
-  using Rule = bool (FormulaCompiler::*)();
-
-  /// One left-associative level: `next` operands joined by the operators `ops` lists, with their ptgs.
-  bool Level(Rule next, std::string_view ops, const std::uint8_t* ptgs) {
-    if (!(this->*next)()) {
-      return false;
+/// Infix text of an rgce whose PtgSxName operands are the entries of `names` (the text of each PNames entry), each
+/// listed once, in order of first use.
+Expected<std::string, Error> RenderFormula(const std::vector<std::uint8_t>& rgce, const std::vector<std::uint8_t>& rgcb,
+                                           const std::vector<std::string>& names, const std::string& what) {
+  Arena arena;
+  parser::FormulaWhitespace whitespace;
+  std::size_t next_new = 0;
+  const SxNameOperandHook name_operand = [&](std::uint32_t index, Arena& a) -> Expected<parser::AstNode*, Error> {
+    if (index >= names.size()) {
+      return Corrupt(what + " names an entry past its names table");
     }
-    while (pos_ < text_.size()) {
-      const std::size_t which = ops.find(text_[pos_]);
-      if (which == std::string_view::npos) {
-        return true;
+    if (index >= next_new) {
+      if (index != next_new) {
+        return Unmeasured(what + " names table out of first-use order");
       }
-      ++pos_;
-      if (!(this->*next)()) {
-        return false;
-      }
-      rgce_.push_back(ptgs[which]);
+      ++next_new;
     }
-    return true;
+    return parser::make_name_ref(a, a.intern(names[index]));
+  };
+  const std::vector<std::string> no_sheets;
+  const std::vector<XlsbName> no_names;
+  const std::vector<XlsbSheetRange> no_ranges;
+  const XlsbExternalBooks no_books;
+  ASSIGN_OR_RETURN(parser::AstNode * root,
+                   decode_ptgs(ByteSpan{rgce.data(), rgce.size()}, ByteSpan{rgcb.data(), rgcb.size()}, arena, no_sheets,
+                               no_names, no_ranges, no_books, -1, std::nullopt, &whitespace, nullptr, name_operand));
+  if (next_new != names.size()) {
+    return Unmeasured(what + " names table with an unused entry");
   }
+  const parser::AstNode* printed = MoveLiteralSigns(arena, *root, /*fold=*/false);
+  if (printed == nullptr) {
+    return Corrupt(what + " is too large");
+  }
+  return parser::format_formula(*printed, &whitespace);
+}
 
-  bool Comparison() {
-    if (!Concat()) {
-      return false;
-    }
-    for (;;) {
-      const std::string_view rest = text_.substr(pos_);
-      std::uint8_t ptg = 0;
-      std::size_t width = 2;
-      if (rest.substr(0, 2) == "<=") {
-        ptg = kPtgLe;
-      } else if (rest.substr(0, 2) == ">=") {
-        ptg = kPtgGe;
-      } else if (rest.substr(0, 2) == "<>") {
-        ptg = kPtgNe;
-      } else if (At('<') || At('>') || At('=')) {
-        ptg = At('<') ? kPtgLt : At('>') ? kPtgGt : kPtgEq;
-        width = 1;
-      } else {
-        return true;
-      }
-      pos_ += width;
-      if (!Concat()) {
-        return false;
-      }
-      rgce_.push_back(ptg);
-    }
-  }
-  bool Concat() {
-    static constexpr std::uint8_t kPtgs[] = {kPtgConcat};
-    return Level(&FormulaCompiler::Additive, "&", kPtgs);
-  }
-  bool Additive() {
-    static constexpr std::uint8_t kPtgs[] = {kPtgAdd, kPtgSub};
-    return Level(&FormulaCompiler::Multiplicative, "+-", kPtgs);
-  }
-  bool Multiplicative() {
-    static constexpr std::uint8_t kPtgs[] = {kPtgMul, kPtgDiv};
-    return Level(&FormulaCompiler::Power, "*/", kPtgs);
-  }
-  bool Power() {
-    static constexpr std::uint8_t kPtgs[] = {kPtgPower};
-    return Level(&FormulaCompiler::Unary, "^", kPtgs);
-  }
+parser::AstNode* Mutable(const parser::AstNode* node) {
+  // Every node lives in the formula's own arena, which the caller owns.
+  return const_cast<parser::AstNode*>(node);
+}
 
-  /// A run of unary minus signs, read as a loop, then its operand.
-  bool Unary() {
-    std::size_t signs = 0;
-    while (At('-')) {
-      ++pos_;
-      if (++signs > parser::kMaxOperatorNesting) {
-        return false;
+/// `node` with the sign of number literals moved between the two spellings: `fold` turns a `-` written against a
+/// number into a negative literal, the form a calculated formula stores; otherwise a negative literal becomes a `-`
+/// over its magnitude, the form the formula text uses. Untouched subtrees are shared. Null when the arena is
+/// exhausted.
+const parser::AstNode* MoveLiteralSigns(Arena& arena, const parser::AstNode& node, bool fold) {
+  const auto rewrite_all = [&arena, fold](std::uint32_t arity, auto operand_at,
+                                          std::vector<const parser::AstNode*>* out) {
+    bool changed = false;
+    for (std::uint32_t i = 0; i < arity; ++i) {
+      const parser::AstNode& operand = operand_at(i);
+      const parser::AstNode* moved = MoveLiteralSigns(arena, operand, fold);
+      if (moved == nullptr) {
+        return std::optional<bool>();
       }
+      changed = changed || moved != &operand;
+      out->push_back(moved);
     }
-    if (!Primary()) {
-      return false;
-    }
-    rgce_.insert(rgce_.end(), signs, kPtgUminus);
-    return true;
-  }
-
-  bool Primary() {
-    if (At('(')) {
-      if (++paren_depth_ > parser::kMaxGroupingParenDepth) {
-        return false;
+    return std::optional<bool>(changed);
+  };
+  parser::AstNode* copy = nullptr;
+  switch (node.kind()) {
+    case parser::NodeKind::Literal: {
+      if (fold || !node.as_literal().is_number() || !(node.as_literal().as_number() < 0.0)) {
+        return &node;
       }
-      ++pos_;
-      if (!Comparison() || !At(')')) {
-        return false;
+      parser::AstNode* magnitude = parser::make_literal(arena, Value::number(-node.as_literal().as_number()));
+      copy = magnitude == nullptr ? nullptr : parser::make_unary_op(arena, parser::UnaryOp::Minus, magnitude);
+      break;
+    }
+    case parser::NodeKind::UnaryOp: {
+      const parser::AstNode& operand = node.as_unary_operand();
+      if (fold && node.as_unary_op() == parser::UnaryOp::Minus && operand.kind() == parser::NodeKind::Literal &&
+          operand.as_literal().is_number() && operand.paren_depth() == 0U) {
+        copy = parser::make_literal(arena, Value::number(-operand.as_literal().as_number()));
+        break;
       }
-      ++pos_;
-      --paren_depth_;
-      rgce_.push_back(kPtgParen);
-      return true;
-    }
-    if (pos_ < text_.size() && text_[pos_] >= '0' && text_[pos_] <= '9') {
-      return Integer();
-    }
-    return Name();
-  }
-
-  /// A PtgInt literal: decimal digits naming 0..65535 (the text check after compilation rejects leading zeros).
-  bool Integer() {
-    std::uint32_t value = 0;
-    while (pos_ < text_.size() && text_[pos_] >= '0' && text_[pos_] <= '9') {
-      value = value * 10U + static_cast<std::uint32_t>(text_[pos_] - '0');
-      if (value > 0xFFFFU) {
-        return false;
+      const parser::AstNode* moved = MoveLiteralSigns(arena, operand, fold);
+      if (moved == &operand) {
+        return &node;
       }
-      ++pos_;
+      copy = moved == nullptr ? nullptr : parser::make_unary_op(arena, node.as_unary_op(), Mutable(moved));
+      break;
     }
-    rgce_.push_back(pivot_calc::kPtgInt);
-    emit_u16(rgce_, static_cast<std::uint16_t>(value));
-    return true;
-  }
-
-  bool Name() {
-    const std::size_t open = text_.find('[', pos_);
-    if (open == std::string_view::npos) {
-      return false;
-    }
-    const std::size_t close = text_.find(']', open);
-    if (close == std::string_view::npos) {
-      return false;
-    }
-    const std::string_view field_text = text_.substr(pos_, open - pos_);
-    const std::string_view item_text = text_.substr(open + 1U, close - open - 1U);
-    if (!IsPlainField(field_text) || !IsPlainItem(item_text)) {
-      return false;
-    }
-    const std::optional<std::uint32_t> field = UniqueField(field_text);
-    if (!field) {
-      return false;
-    }
-    const std::optional<std::uint32_t> item = UniqueItem(*field, item_text);
-    if (!item) {
-      return false;
-    }
-    pos_ = close + 1U;
-    const std::pair<std::uint32_t, std::uint32_t> pair{*field, *item};
-    std::uint32_t index = 0;
-    while (index < names_.size() && names_[index] != pair) {
-      ++index;
-    }
-    if (index == names_.size()) {
-      names_.push_back(pair);
-    }
-    rgce_.push_back(pivot_calc::kPtgSxName);
-    rgce_.push_back(pivot_calc::kEptgSxName);
-    emit_u32(rgce_, index);
-    return true;
-  }
-
-  std::optional<std::uint32_t> UniqueField(std::string_view name) const {
-    std::optional<std::uint32_t> found;
-    for (std::size_t i = 0; i < cache_.fields().size(); ++i) {
-      if (cache_.fields()[i].name == name) {
-        if (found) {
-          return std::nullopt;
-        }
-        found = static_cast<std::uint32_t>(i);
+    case parser::NodeKind::ImplicitIntersection: {
+      const parser::AstNode& operand = node.as_implicit_intersection_operand();
+      const parser::AstNode* moved = MoveLiteralSigns(arena, operand, fold);
+      if (moved == &operand) {
+        return &node;
       }
+      copy = moved == nullptr ? nullptr : parser::make_implicit_intersection(arena, Mutable(moved));
+      break;
     }
-    return found;
-  }
-
-  std::optional<std::uint32_t> UniqueItem(std::uint32_t field, std::string_view text) const {
-    const std::vector<Value>& items = cache_.fields()[field].shared_items;
-    std::optional<std::uint32_t> found;
-    for (std::size_t i = 0; i < items.size(); ++i) {
-      if (items[i].is_text() && items[i].as_text() == text) {
-        if (found) {
-          return std::nullopt;
-        }
-        found = static_cast<std::uint32_t>(i);
+    case parser::NodeKind::BinaryOp: {
+      std::vector<const parser::AstNode*> operands;
+      const std::optional<bool> changed = rewrite_all(
+          node.as_binary_arity(),
+          [&node](std::uint32_t i) -> const parser::AstNode& { return node.as_binary_operand(i); }, &operands);
+      if (changed && !*changed) {
+        return &node;
       }
+      copy = changed ? parser::make_chain_with_operands(arena, node, operands.data()) : nullptr;
+      break;
     }
-    return found;
+    case parser::NodeKind::Call: {
+      std::vector<const parser::AstNode*> args;
+      const std::optional<bool> changed = rewrite_all(
+          node.as_call_arity(), [&node](std::uint32_t i) -> const parser::AstNode& { return node.as_call_arg(i); },
+          &args);
+      if (changed && !*changed) {
+        return &node;
+      }
+      copy = changed ? parser::make_call(arena, node.as_call_name(), args.data(), node.as_call_arity()) : nullptr;
+      break;
+    }
+    default:
+      return &node;
   }
-
-  std::string_view text_;
-  const pivot::PivotCache& cache_;
-  std::size_t pos_ = 0;
-  std::uint32_t paren_depth_ = 0;
-  std::vector<std::uint8_t> rgce_;
-  std::vector<std::pair<std::uint32_t, std::uint32_t>> names_;
-};
+  if (copy != nullptr) {
+    copy->set_paren_depth(node.paren_depth());
+  }
+  return copy;
+}
 
 // ---------------------------------------------------------------------------
 // Read.
@@ -824,49 +663,47 @@ Expected<pivot::PivotCalculatedItem, Error> ReadCalcItem(const pivot_calc::CalcI
   if (in.field != pivot_calc::kNoField || !in.rgcb.empty()) {
     return Unmeasured("calculated item with a field index or formula extra data");
   }
-  ASSIGN_OR_RETURN(const std::vector<pivot_calc::FormulaToken> tokens, pivot_calc::walk_calc_item_formula(in.rgce));
   const std::vector<pivot_calc::PName> empty;
   const std::vector<pivot_calc::PName>& names = in.names ? *in.names : empty;
   std::vector<std::string> texts;
   for (std::size_t i = 0; i < names.size(); ++i) {
     const pivot_calc::PName& name = names[i];
-    if (name.field != pivot_calc::kNoField || name.flags != kPNameFlags || name.pairs.size() != 1U ||
-        name.pairs.front().flags != kPNPairFlags) {
+    if (name.field != pivot_calc::kNoField || name.flags != kPNameFlags || !name.pairs || name.pairs->size() != 1U) {
       return Unmeasured("calculated item name shape");
     }
-    const pivot_calc::PNPair& pair = name.pairs.front();
-    if (pair.field >= cache.fields().size() || pair.item >= cache.fields()[pair.field].shared_items.size()) {
+    const pivot_calc::PNPair& pair = name.pairs->front();
+    const bool positional = pair.flags == kPNPairAbsolute || pair.flags == kPNPairRelative;
+    if ((pair.flags != kPNPairByIndex && !positional) || (pair.flags == kPNPairRelative && pair.item == 0U)) {
+      return Unmeasured("calculated item name kind");
+    }
+    if (pair.field >= cache.fields().size() ||
+        (!positional && pair.item >= cache.fields()[pair.field].shared_items.size())) {
       return Corrupt("calculated item name points past the cache");
     }
     for (std::size_t j = 0; j < i; ++j) {
-      if (names[j].pairs.front().field == pair.field && names[j].pairs.front().item == pair.item) {
+      const pivot_calc::PNPair& prior = names[j].pairs->front();
+      if (prior.field == pair.field && prior.item == pair.item && prior.flags == pair.flags) {
         return Unmeasured("calculated item names table with a repeated entry");
       }
     }
     const pivot::PivotCacheField& field = cache.fields()[pair.field];
-    const Value& item = field.shared_items[pair.item];
-    if (!item.is_text() || !IsPlainField(field.name) || !IsPlainItem(item.as_text())) {
-      return Unmeasured("calculated item name that is not a plain Field[Item]");
+    std::string item_text;
+    if (positional) {
+      item_text = PositionText(pair.flags, pair.item);
+    } else {
+      const Value& item = field.shared_items[pair.item];
+      if (!item.is_text() || !IsPlainItem(item.as_text()) || PositionOf(item.as_text())) {
+        return Unmeasured("calculated item name that is not a plain Field[Item]");
+      }
+      item_text = std::string(item.as_text());
     }
-    std::string text = field.name;
-    text.append("[").append(item.as_text()).append("]");
+    std::string text;
+    eval::append_pivot_formula_name(text, field.name);
+    text.append("[").append(item_text).append("]");
     texts.push_back(std::move(text));
   }
-  // The names table lists each name at its first use.
-  std::size_t next_new = 0;
-  for (const pivot_calc::FormulaToken& token : tokens) {
-    if (token.ptg == pivot_calc::kPtgSxName && token.sx_name >= next_new) {
-      if (token.sx_name != next_new) {
-        return Unmeasured("calculated item names table out of first-use order");
-      }
-      ++next_new;
-    }
-  }
-  if (next_new != names.size()) {
-    return Unmeasured("calculated item names table with an unused entry");
-  }
   pivot::PivotCalculatedItem item;
-  ASSIGN_OR_RETURN(item.formula, RenderFormula(tokens, texts));
+  ASSIGN_OR_RETURN(item.formula, RenderFormula(in.rgce, in.rgcb, texts, "calculated item"));
   item.has_area = in.area.has_value();
   if (in.area) {
     ASSIGN_OR_RETURN(item.area, ReadArea(*in.area, cache));
@@ -875,6 +712,37 @@ Expected<pivot::PivotCalculatedItem, Error> ReadCalcItem(const pivot_calc::CalcI
     }
   }
   return item;
+}
+
+/// A calculated field's formula text: its PNames name cache fields (any field, a calculated one included) by
+/// index, each spelled as the formula spells a field name.
+Expected<std::string, Error> ReadFieldFormula(const pcd::Field& in, const pivot::PivotCache& cache) {
+  if (!in.formula_rgcb.empty()) {
+    return Unmeasured("calculated field formula extra data");
+  }
+  std::vector<pivot_calc::PName> names;
+  if (!in.names.empty()) {
+    ASSIGN_OR_RETURN(names, pivot_calc::decode_names(in.names));
+  }
+  std::vector<std::string> texts;
+  for (std::size_t i = 0; i < names.size(); ++i) {
+    const pivot_calc::PName& name = names[i];
+    if (name.flags != kPNameFlags || name.pairs) {
+      return Unmeasured("calculated field name shape");
+    }
+    if (name.field >= cache.fields().size()) {
+      return Corrupt("calculated field name points past the cache");
+    }
+    for (std::size_t j = 0; j < i; ++j) {
+      if (names[j].field == name.field) {
+        return Unmeasured("calculated field names table with a repeated entry");
+      }
+    }
+    std::string text;
+    eval::append_pivot_formula_name(text, cache.fields()[name.field].name);
+    texts.push_back(std::move(text));
+  }
+  return RenderFormula(*in.formula_rgce, in.formula_rgcb, texts, "calculated field");
 }
 
 void ReadRoot(const pcd::Document& doc, pivot::PivotCache& cache) {
@@ -1218,9 +1086,102 @@ bool WriteGroup(const pivot::FieldGroup& in, bool date1904, std::vector<pivot_re
   return true;
 }
 
-bool WriteField(const pivot::PivotCacheField& in, bool date1904, pcd::Field* out) {
-  if (in.formula || !in.extra_attrs.empty() || !in.trailing_children_xml.empty() || !in.num_fmt_id ||
-      *in.num_fmt_id > 0xFFFFU) {
+bool HasTextItem(const pivot::PivotCache& cache, std::size_t field, std::string_view text) {
+  for (const Value& item : cache.fields()[field].shared_items) {
+    if (item.is_text() && item.as_text() == text) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// Lowers a calculated field's (`item_field` empty) or calculated item's formula to rgce and its PNames entries;
+/// false when the text is not one Excel stores the same way, so that it does not read back as written.
+bool LowerFormula(const std::string& text, const pivot::PivotCache& cache, std::optional<std::size_t> item_field,
+                  std::vector<std::uint8_t>* rgce, std::vector<pivot_calc::PName>* names) {
+  eval::ParsedPivotFormula parsed;
+  if (!eval::parse_pivot_formula(text, pivot::FormulaScope{&cache, item_field}, &parsed)) {
+    return false;
+  }
+  std::vector<std::string> texts;
+  for (const pivot::FormulaRef& ref : parsed.refs) {
+    const pivot::PivotCacheField& field = cache.fields()[ref.field];
+    pivot_calc::PName name;
+    name.flags = kPNameFlags;
+    std::string name_text;
+    eval::append_pivot_formula_name(name_text, field.name);
+    if (ref.kind == pivot::FormulaRef::Kind::Field) {
+      name.field = static_cast<std::uint32_t>(ref.field);
+    } else {
+      pivot_calc::PNPair pair{kPNPairByIndex, static_cast<std::uint32_t>(ref.field), 0U};
+      std::string item_text;
+      if (ref.kind == pivot::FormulaRef::Kind::Item) {
+        pair.item = static_cast<std::uint32_t>(ref.item);
+        item_text = std::string(field.shared_items[ref.item].as_text());
+      } else {
+        if (ref.kind == pivot::FormulaRef::Kind::ItemAt) {
+          pair.flags = kPNPairAbsolute;
+          pair.item = static_cast<std::uint32_t>(ref.position) - 1U;
+        } else if (ref.position != 0) {
+          pair.flags = kPNPairRelative;
+          pair.item = static_cast<std::uint32_t>(ref.position);
+        } else {
+          return false;
+        }
+        item_text = PositionText(pair.flags, pair.item);
+        // A position spelled the same as an item has no Excel-saved sample.
+        if (HasTextItem(cache, ref.field, item_text)) {
+          return false;
+        }
+      }
+      name.field = pivot_calc::kNoField;
+      name.pairs = std::vector<pivot_calc::PNPair>{pair};
+      name_text.append("[").append(item_text).append("]");
+    }
+    names->push_back(std::move(name));
+    texts.push_back(std::move(name_text));
+  }
+  const parser::AstNode* root = MoveLiteralSigns(parsed.arena, *parsed.root, /*fold=*/true);
+  if (root == nullptr) {
+    return false;
+  }
+  const NameOperandHook name_operand = [&parsed](const parser::AstNode& node) -> std::optional<std::uint32_t> {
+    const std::optional<std::size_t> slot = eval::pivot_formula_ref_slot(node.as_name(), parsed.refs.size());
+    return slot ? std::optional<std::uint32_t>(static_cast<std::uint32_t>(*slot)) : std::nullopt;
+  };
+  const std::vector<std::string> no_sheets;
+  const SheetRangeTable no_ranges;
+  const NameTable no_names;
+  auto encoded = encode_ptgs(*root, no_sheets, no_ranges, no_names, PtgRootClass::kValue, std::nullopt,
+                             PtgEvaluation::kDynamicArray, NameShapes(), {}, name_operand);
+  if (!encoded || !encoded.value().rgcb.empty()) {
+    return false;
+  }
+  auto rendered = RenderFormula(encoded.value().rgce, {}, texts, "calculated formula");
+  if (!rendered || rendered.value() != text) {
+    return false;
+  }
+  *rgce = std::move(encoded.value().rgce);
+  return true;
+}
+
+bool WriteFieldFormula(const std::string& text, const pivot::PivotCache& cache, pcd::Field* out) {
+  std::vector<pivot_calc::PName> names;
+  std::vector<std::uint8_t> rgce;
+  if (!LowerFormula(text, cache, std::nullopt, &rgce, &names) || names.empty()) {
+    return false;
+  }
+  out->formula_rgce = std::move(rgce);
+  pivot_calc::encode_names(names, &out->names);
+  return true;
+}
+
+bool WriteField(const pivot::PivotCacheField& in, const pivot::PivotCache& cache, bool date1904, pcd::Field* out) {
+  if (!in.extra_attrs.empty() || !in.trailing_children_xml.empty() || !in.num_fmt_id || *in.num_fmt_id > 0xFFFFU) {
+    return false;
+  }
+  if (in.formula && (in.is_database_field || !in.shared_items.empty() || in.shared_items_hints.present ||
+                     in.field_group || !WriteFieldFormula(*in.formula, cache, out))) {
     return false;
   }
   out->flags = in.is_database_field ? pcd::kFieldDatabase : 0U;
@@ -1286,33 +1247,16 @@ bool WriteCalcItem(const pivot::PivotCalculatedItem& in, const pivot::PivotCache
   if (in.has_field_attr || !in.extra_children_xml.empty()) {
     return false;
   }
-  FormulaCompiler compiler(in.formula, cache);
-  if (!compiler.Compile()) {
+  if (in.cache_field_index >= cache.fields().size()) {
     return false;
   }
   std::vector<pivot_calc::PName> names;
-  std::vector<std::string> texts;
-  for (const auto& [field, item] : compiler.names()) {
-    pivot_calc::PName name;
-    name.field = pivot_calc::kNoField;
-    name.flags = kPNameFlags;
-    name.pairs.push_back(pivot_calc::PNPair{kPNPairFlags, field, item});
-    names.push_back(std::move(name));
-    std::string text = cache.fields()[field].name;
-    text.append("[").append(cache.fields()[field].shared_items[item].as_text()).append("]");
-    texts.push_back(std::move(text));
-  }
-  // The read side must give the formula back as stored.
-  auto tokens = pivot_calc::walk_calc_item_formula(compiler.rgce());
-  if (!tokens) {
-    return false;
-  }
-  auto rendered = RenderFormula(tokens.value(), texts);
-  if (!rendered || rendered.value() != in.formula) {
+  std::vector<std::uint8_t> rgce;
+  if (!LowerFormula(in.formula, cache, in.cache_field_index, &rgce, &names)) {
     return false;
   }
   out->field = pivot_calc::kNoField;
-  out->rgce = compiler.rgce();
+  out->rgce = std::move(rgce);
   if (!names.empty()) {
     out->names = std::move(names);
   }
@@ -1561,7 +1505,9 @@ Expected<std::vector<std::uint8_t>, Error> WriteRecords(const pivot::PivotCache&
   cache_records::PivotCacheRecordsDoc doc;
   doc.rows.reserve(cache.records().size());
   for (const pivot::PivotCacheRecord& record : cache.records()) {
-    if (record.cells.size() != cache.fields().size()) {
+    // A calculated field added after the records leaves them without its trailing cell.
+    if (record.cells.size() > cache.fields().size() ||
+        (!db_positions.empty() && record.cells.size() <= db_positions.back())) {
       return NotWritable();
     }
     std::vector<RecordCell> row(db_positions.size());
@@ -1600,6 +1546,13 @@ Expected<pivot::PivotCache, Error> pivot_cache_from_xlsb(ByteSpan definition_par
     ASSIGN_OR_RETURN(pivot::PivotCacheField field, ReadField(in, cache, date1904));
     cache.mutable_fields().push_back(std::move(field));
   }
+  // A calculated field may name any field, so formulas resolve once every field is read.
+  for (std::size_t i = 0; i < doc.fields.size(); ++i) {
+    if (doc.fields[i].formula_rgce) {
+      ASSIGN_OR_RETURN(std::string formula, ReadFieldFormula(doc.fields[i], cache));
+      cache.mutable_fields()[i].formula = std::move(formula);
+    }
+  }
   if (!doc.calculated_items.empty()) {
     std::size_t pos = 0;
     ASSIGN_OR_RETURN(const std::vector<pivot_calc::CalcItem> items,
@@ -1619,6 +1572,11 @@ Expected<pivot::PivotCache, Error> pivot_cache_from_xlsb(ByteSpan definition_par
 
 Expected<XlsbPivotCacheParts, Error> pivot_cache_to_xlsb(const pivot::PivotCache& cache, bool date1904,
                                                          std::string_view records_rel_id) {
+  // Formula names match fields under the caller's collation, else the default profile's.
+  std::optional<eval::ScopedEvalProfile> profile_scope;
+  if (!eval::eval_profile_scope_active()) {
+    profile_scope.emplace(default_excel_profile());
+  }
   pcd::Document doc;
   if (!WriteRoot(cache, &doc) || !WriteExtLst(cache, &doc)) {
     return NotWritable();
@@ -1632,7 +1590,7 @@ Expected<XlsbPivotCacheParts, Error> pivot_cache_to_xlsb(const pivot::PivotCache
   doc.record_count = static_cast<std::uint32_t>(cache.record_count_to_save());
   for (const pivot::PivotCacheField& in : cache.fields()) {
     pcd::Field field;
-    if (!WriteField(in, date1904, &field)) {
+    if (!WriteField(in, cache, date1904, &field)) {
       return NotWritable();
     }
     doc.fields.push_back(std::move(field));

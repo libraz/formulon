@@ -310,13 +310,11 @@ struct IxtiTarget {
 
 }  // namespace
 
-Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Arena& arena,
-                                              const std::vector<std::string>& sheet_names,
-                                              const std::vector<XlsbName>& name_table,
-                                              const std::vector<XlsbSheetRange>& sheet_ranges,
-                                              const XlsbExternalBooks& external_books, std::int32_t host_itab,
-                                              std::optional<PtgBaseCell> base, parser::FormulaWhitespace* whitespace,
-                                              const std::vector<TableMetadata>* tables) {
+Expected<parser::AstNode*, Error> decode_ptgs(
+    ByteSpan ptgs, ByteSpan rgcb, Arena& arena, const std::vector<std::string>& sheet_names,
+    const std::vector<XlsbName>& name_table, const std::vector<XlsbSheetRange>& sheet_ranges,
+    const XlsbExternalBooks& external_books, std::int32_t host_itab, std::optional<PtgBaseCell> base,
+    parser::FormulaWhitespace* whitespace, const std::vector<TableMetadata>* tables, const SxNameOperandHook& sx_name) {
   std::vector<parser::AstNode*> stack;
   // `PtgArray` stores only an 8-byte placeholder inline (see its case
   // below); the real dimensions + elements are consumed from this
@@ -754,6 +752,18 @@ Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Aren
       stack.push_back(list);
       if (pending_spaces != 0) {
         record_space(PtgKind::Area, stack.back());
+        pending_spaces = 0;
+      }
+      continue;
+    }
+    if (first_byte == kPtgSxName && sx_name && cursor.size >= 2U && cursor.data[1] == kEptgSxName) {
+      cursor.data += 2;
+      cursor.size -= 2;
+      ASSIGN_OR_RETURN(const std::uint32_t name_index, read_u32(cursor));
+      ASSIGN_OR_RETURN(auto operand, sx_name(name_index, arena));
+      RETURN_IF_ERROR(push_node(stack, operand, "PtgSxName"));
+      if (pending_spaces != 0) {
+        record_space(PtgKind::Name, stack.back());
         pending_spaces = 0;
       }
       continue;

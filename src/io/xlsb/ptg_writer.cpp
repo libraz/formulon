@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <iterator>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -273,8 +274,10 @@ class Encoder {
  public:
   Encoder(const parser::AstNode& root, const std::vector<std::string>& sheet_names, const SheetRangeTable& sheet_ranges,
           const NameTable& name_table, PtgRootClass root_class, std::optional<PtgBaseCell> base,
-          PtgEvaluation evaluation, const NameShapes& names, parser::FormulaWhitespace whitespace)
-      : sheet_names_(sheet_names),
+          PtgEvaluation evaluation, const NameShapes& names, parser::FormulaWhitespace whitespace,
+          const NameOperandHook& name_operand)
+      : name_operand_(name_operand),
+        sheet_names_(sheet_names),
         sheet_ranges_(sheet_ranges),
         name_table_(name_table),
         base_(base),
@@ -284,6 +287,13 @@ class Encoder {
         name_body_(root_class == PtgRootClass::kReference && !base),
         whitespace_(std::move(whitespace)) {
     parser::collect_parenthesized_nodes(root, parens_);
+    // PtgNum holds its own sign; only parentheses the source wrote become PtgParen.
+    for (auto it = parens_.begin(); it != parens_.end();) {
+      const parser::AstNode& n = *it->first;
+      const bool bare_negative = n.kind() == parser::NodeKind::Literal && n.as_literal().is_number() &&
+                                 n.as_literal().as_number() < 0.0 && n.paren_depth() == 0U;
+      it = bare_negative ? parens_.erase(it) : std::next(it);
+    }
     function_values_ = function_value_refs(root, names);
     if (evaluation == PtgEvaluation::kLegacy) {
       implied_at_ = legacy_intersections(root, names);
@@ -429,6 +439,14 @@ class Encoder {
         return emit_array(node, c == kPtgReferenceClass ? kPtgArrayClass : c);
       }
       case parser::NodeKind::NameRef: {
+        if (name_operand_ && node.as_name_sheet().empty()) {
+          if (const auto sx = name_operand_(node)) {
+            emit_u8(out_, kPtgSxName);
+            emit_u8(out_, kEptgSxName);
+            emit_u32(out_, *sx);
+            return Expected<void, Error>::Ok();
+          }
+        }
         // A name's class follows what it stands for, as an area's or a cell's.
         const std::uint8_t name_cls = cls(measured_calls_ && shapes_.of(node) != Shape::kScalar);
         if (!node.as_name_sheet().empty()) {
@@ -1504,6 +1522,7 @@ class Encoder {
     return Expected<void, Error>::Ok();
   }
 
+  const NameOperandHook& name_operand_;
   const std::vector<std::string>& sheet_names_;
   const SheetRangeTable& sheet_ranges_;
   const NameTable& name_table_;
@@ -1557,13 +1576,14 @@ class Encoder {
 Expected<EncodedFormula, Error> encode_ptgs(const parser::AstNode& node, const std::vector<std::string>& sheet_names,
                                             const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                             PtgRootClass root_class, std::optional<PtgBaseCell> base,
-                                            PtgEvaluation evaluation, const NameShapes& names,
-                                            std::string_view source) {
+                                            PtgEvaluation evaluation, const NameShapes& names, std::string_view source,
+                                            const NameOperandHook& name_operand) {
   parser::FormulaWhitespace whitespace;
   if (source.find_first_of(" \n") != std::string_view::npos) {
     SourceWhitespace(source, whitespace).collect(node);
   }
-  Encoder enc(node, sheet_names, sheet_ranges, name_table, root_class, base, evaluation, names, std::move(whitespace));
+  Encoder enc(node, sheet_names, sheet_ranges, name_table, root_class, base, evaluation, names, std::move(whitespace),
+              name_operand);
   // A formula calling a volatile function itself (not through a name) opens
   // with `PtgAttrSemi`, without which Excel does not recalculate it
   // (in cells and name bodies; the u16 is unused). A whitespace

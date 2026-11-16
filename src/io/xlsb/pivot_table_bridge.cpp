@@ -81,13 +81,14 @@ constexpr std::uint8_t kDataOnRows = 1;
 constexpr std::uint8_t kDataOnCols = 2;
 constexpr std::uint32_t kNoDataPosition = 0xFFFFFFFFU;
 
-/// BrtBeginSXVD: `dragToCol` / `dragToPage`, cleared together; the unnamed bits
-/// every Excel-saved field sets; the default `itemPageCount`.
+/// BrtBeginSXVD: `dragToRow` (cleared on a calculated field); `dragToCol` / `dragToPage`, cleared together; the
+/// unnamed bits every Excel-saved field sets; the default `itemPageCount`.
+constexpr std::uint32_t kFieldDragToRow = 0x00000001U;
 constexpr std::uint32_t kFieldDragPair = 0x00000006U;
-constexpr std::uint32_t kFieldFixed = 0x00048019U;
-constexpr std::uint32_t kFieldNamed = kFieldDragPair | kSxFieldShowAll | kSxFieldOutline | kSxFieldInsertBlankRow |
-                                      kSxFieldSubtotalTop | kSxFieldAutoSort | kSxFieldAscendSort |
-                                      kSxFieldMeasureFilter;
+constexpr std::uint32_t kFieldFixed = 0x00048018U;
+constexpr std::uint32_t kFieldNamed = kFieldDragToRow | kFieldDragPair | kSxFieldShowAll | kSxFieldOutline |
+                                      kSxFieldInsertBlankRow | kSxFieldSubtotalTop | kSxFieldAutoSort |
+                                      kSxFieldAscendSort | kSxFieldMeasureFilter;
 constexpr std::uint32_t kItemPageCount = 10;
 constexpr std::uint32_t kFieldReserved16 = 0xFFFFFFFFU;
 /// `subtotals` bit of `kPivotSubtotalNames[k]` is `1 << (k + 1)`.
@@ -591,6 +592,9 @@ Expected<pivot::PivotField, Error> ReadField(const SxField& in) {
   RETURN_IF_ERROR(ReadItems(in, field));
   field.insert_blank_row = (in.flags & kSxFieldInsertBlankRow) != 0U;
   field.show_all = (in.flags & kSxFieldShowAll) != 0U;
+  if ((in.flags & kFieldDragToRow) == 0U) {
+    field.passthrough_attrs.emplace_back("dragToRow", "0");
+  }
   if (drag == 0U) {
     field.passthrough_attrs.emplace_back("dragToCol", "0");
     field.passthrough_attrs.emplace_back("dragToPage", "0");
@@ -1250,10 +1254,16 @@ bool WriteField(const pivot::PivotTable& table, std::size_t index, ExcelHost hos
     return false;
   }
   bool drag_off = false;
+  bool row_drag_off = false;
   bool measure_attr = false;
   unsigned drag_seen = 0;
   for (const auto& [name, value] : field.passthrough_attrs) {
-    if (name == "dragToCol" || name == "dragToPage") {
+    if (name == "dragToRow") {
+      if (value != "0" || row_drag_off) {
+        return false;
+      }
+      row_drag_off = true;
+    } else if (name == "dragToCol" || name == "dragToPage") {
       const unsigned bit = name == "dragToCol" ? 1U : 2U;
       if (value != "0" || (drag_seen & bit) != 0U) {
         return false;
@@ -1301,9 +1311,10 @@ bool WriteField(const pivot::PivotTable& table, std::size_t index, ExcelHost hos
   const bool on_axis = field.axis == pivot::PivotAxis::Row || field.axis == pivot::PivotAxis::Col ||
                        field.axis == pivot::PivotAxis::Page;
   const bool auto_sort = (on_axis || field.sort.stated) && !field.sort.manual;
-  out.flags = kFieldFixed | (drag_off ? 0U : kFieldDragPair) | (field.show_all ? kSxFieldShowAll : 0U) |
-              (outline ? kSxFieldOutline : 0U) | (field.insert_blank_row ? kSxFieldInsertBlankRow : 0U) |
-              (field.subtotal_top ? kSxFieldSubtotalTop : 0U) | (auto_sort ? kSxFieldAutoSort : 0U) |
+  out.flags = kFieldFixed | (row_drag_off ? 0U : kFieldDragToRow) | (drag_off ? 0U : kFieldDragPair) |
+              (field.show_all ? kSxFieldShowAll : 0U) | (outline ? kSxFieldOutline : 0U) |
+              (field.insert_blank_row ? kSxFieldInsertBlankRow : 0U) | (field.subtotal_top ? kSxFieldSubtotalTop : 0U) |
+              (auto_sort ? kSxFieldAutoSort : 0U) |
               ((auto_sort || host == ExcelHost::kWin365) && field.sort.ascending ? kSxFieldAscendSort : 0U) |
               (measure_attr || measure_filter ? kSxFieldMeasureFilter : 0U);
   out.item_page_count = kItemPageCount;

@@ -1,5 +1,6 @@
 // XLSB Ptg codec tests grouped by reference, function, scalar, and validation behavior.
 
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <optional>
@@ -31,6 +32,52 @@ TEST(XlsbPtgCodec, ArithmeticWithPrecedence) {
   // `A1+B2*3`: PtgRef, PtgRef, PtgInt, PtgMul, PtgAdd.
   EXPECT_EQ(RoundTrip("A1+B2*3"), "A1+B2*3");
 }
+TEST(XlsbPtgCodec, SxNameHooksEncodeAndDecodePivotNameOperands) {
+  Arena parse_arena;
+  parser::Parser p("Alpha+Beta", parse_arena);
+  const parser::AstNode* root = p.parse();
+  ASSERT_NE(root, nullptr);
+  const NameOperandHook encode_hook = [](const parser::AstNode& node) -> std::optional<std::uint32_t> {
+    return node.as_name() == "Beta" ? std::optional<std::uint32_t>(7U) : std::nullopt;
+  };
+  // Without a hook the names resolve through the (empty) name table and the encode fails.
+  EXPECT_FALSE(encode_ptgs(*root, {}, {}, {}, PtgRootClass::kValue).has_value());
+  NameTable names;
+  names.emplace("Alpha", 1U);
+  auto encoded = encode_ptgs(*root, {}, {}, names, PtgRootClass::kValue, std::nullopt, PtgEvaluation::kDynamicArray,
+                             NameShapes(), {}, encode_hook);
+  ASSERT_TRUE(encoded.has_value()) << encoded.error().message;
+  const std::vector<std::uint8_t>& rgce = encoded.value().rgce;
+  const std::vector<std::uint8_t> tail = {0x18, 0x1D, 0x07, 0x00, 0x00, 0x00, 0x03};
+  ASSERT_GE(rgce.size(), tail.size());
+  EXPECT_TRUE(std::equal(tail.begin(), tail.end(), rgce.end() - static_cast<std::ptrdiff_t>(tail.size())));
+
+  const std::vector<std::uint8_t> stream = {0x18, 0x1D, 0x02, 0x00, 0x00, 0x00, 0x18,
+                                            0x1D, 0x00, 0x00, 0x00, 0x00, 0x03};
+  const ByteSpan span{stream.data(), stream.size()};
+  Arena arena;
+  EXPECT_FALSE(decode_ptgs(span, {}, arena, {}, {}, {}, {}).has_value());
+  const SxNameOperandHook decode_hook = [](std::uint32_t index, Arena& a) -> Expected<parser::AstNode*, Error> {
+    return parser::make_name_ref(a, a.intern(index == 0U ? "First" : "Third"));
+  };
+  auto decoded = decode_ptgs(span, {}, arena, {}, {}, {}, {}, -1, std::nullopt, nullptr, nullptr, decode_hook);
+  ASSERT_TRUE(decoded.has_value()) << decoded.error().message;
+  EXPECT_EQ(parser::format_formula(*decoded.value()), "Third+First");
+}
+
+TEST(XlsbPtgCodec, NegativeNumberLiteralOperandEncodesWithoutPtgParen) {
+  Arena arena;
+  parser::AstNode* lhs = parser::make_literal(arena, Value::number(2.0));
+  parser::AstNode* rhs = parser::make_literal(arena, Value::number(-1.0));
+  parser::AstNode* root = parser::make_binary_op(arena, parser::BinOp::Mul, lhs, rhs);
+  ASSERT_NE(root, nullptr);
+  auto encoded = encode_ptgs(*root, {}, {}, {}, PtgRootClass::kValue);
+  ASSERT_TRUE(encoded.has_value()) << encoded.error().message;
+  const std::vector<std::uint8_t>& rgce = encoded.value().rgce;
+  EXPECT_EQ(std::count(rgce.begin(), rgce.end(), static_cast<std::uint8_t>(0x15)), 0);
+  EXPECT_EQ(rgce.back(), 0x05);
+}
+
 TEST(XlsbPtgCodec, AttrChooseSkipsU16JumpOffsets) {
   // PtgInt(1), followed by PtgAttrChoose with count=1 and two 16-bit
   // jump offsets. [MS-XLSB] 2.5.98.25 defines rgOffset as an array of

@@ -220,6 +220,9 @@ enum class PtgEvaluation : std::uint8_t {
   kConditionalFormat,
 };
 
+/// Maps a `NameRef` node to a `PtgSxName` index, or nullopt to resolve it as a defined name.
+using NameOperandHook = std::function<std::optional<std::uint32_t>(const parser::AstNode&)>;
+
 /// Result of `encode_ptgs`: the main token stream plus the array-
 /// constant extra-data area a `CellParsedFormula` appends after it.
 struct EncodedFormula {
@@ -393,6 +396,9 @@ std::vector<const parser::AstNode*> legacy_intersections(const parser::AstNode& 
 /// fully absolute reference, and every reference without a base, keeps
 /// `PtgRef` / `PtgArea`.
 ///
+/// `name_operand`, when set, is asked about every unqualified `NameRef`; an
+/// index it returns is emitted as `PtgSxName` instead of resolving the name.
+///
 /// Returns `kIoXlsbUnsupportedPtg` for any node kind outside the
 /// supported set (see header banner). The error context names the
 /// offending node kind. `names` feeds the shapes that decide a call's class
@@ -414,7 +420,8 @@ Expected<EncodedFormula, Error> encode_ptgs(const parser::AstNode& node, const s
                                             const SheetRangeTable& sheet_ranges, const NameTable& name_table,
                                             PtgRootClass root_class, std::optional<PtgBaseCell> base = std::nullopt,
                                             PtgEvaluation evaluation = PtgEvaluation::kDynamicArray,
-                                            const NameShapes& names = NameShapes(), std::string_view source = {});
+                                            const NameShapes& names = NameShapes(), std::string_view source = {},
+                                            const NameOperandHook& name_operand = nullptr);
 
 }  // namespace xlsb
 }  // namespace io

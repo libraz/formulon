@@ -2,8 +2,7 @@
 // api_built, each built as the workbook Excel 16.115 opened from the engine's `.xlsx` save and re-saved as `.xlsb`
 // (`<case>.xlsb`). The save keeps every pivot part, passes the package validator, reads back to the same tables, and
 // its pivot records match Excel's but for the revision uid Excel adds. A pivot whose state has no measured layout
-// (a calculated field, a quarter or numeric range group, a rank or percent-of-running-total display) is left out
-// and counted.
+// (a rank or percent-of-running-total display) is left out and counted.
 
 #include <cstddef>
 #include <cstdint>
@@ -440,8 +439,23 @@ INSTANTIATE_TEST_SUITE_P(Sources, XlsbParityPivotSource,
                                            "source_dynamic_name", "source_table", "source_table_resized_not_refreshed",
                                            "source_table_resized_refreshed", "source_table_on_pivot_sheet"));
 
+// A calculated field over database fields, over another calculated field, with a fractional or integer constant,
+// naming one field twice, two at once, and one not used as a data field (xlsb_parity/pivot/calcfield, Excel 16.115's
+// saves), against the control with none.
+class XlsbParityPivotCalcField : public ::testing::TestWithParam<const char*> {};
+
+TEST_P(XlsbParityPivotCalcField, WritesExcelsPivotRecords) {
+  ExpectExcelsPivotRecords("calcfield", GetParam());
+}
+
+INSTANTIATE_TEST_SUITE_P(CalcFields, XlsbParityPivotCalcField,
+                         ::testing::Values("calcfield_control_none", "calcfield_one", "calcfield_not_data",
+                                           "calcfield_int_constant", "calcfield_same_field_twice",
+                                           "calcfield_two_chained", "calcfield_two_fields",
+                                           "calcfield_two_independent"));
+
 // A cache saved without its data (xlsb_parity/pivot/save_data, Excel 16.115's saves; set through the object model,
-// and authored), against the control that saves it: no records part, the record count
+// authored, and over a calculated field), against the control that saves it: no records part, the record count
 // kept, and the table's asteriskTotals.
 class XlsbParityPivotSaveData : public ::testing::TestWithParam<const char*> {};
 
@@ -450,7 +464,22 @@ TEST_P(XlsbParityPivotSaveData, WritesExcelsPivotRecords) {
 }
 
 INSTANTIATE_TEST_SUITE_P(SaveData, XlsbParityPivotSaveData,
-                         ::testing::Values("option_control_s", "option_save_data_off", "authored_save_data_off"));
+                         ::testing::Values("option_control_s", "option_save_data_off", "authored_save_data_off",
+                                           "option_save_data_off_calcfield"));
+
+// A calculated item naming items by position (xlsb_parity/pivot/calc_item_position, Excel 16.115's saves): absolute,
+// past the end and `[0]`, relative before and after, mixed with a name, after a sort and a manual move, against the
+// control naming its item.
+class XlsbParityPivotCalcItemPosition : public ::testing::TestWithParam<const char*> {};
+
+TEST_P(XlsbParityPivotCalcItemPosition, WritesExcelsPivotRecords) {
+  ExpectExcelsPivotRecords("calc_item_position", GetParam());
+}
+
+INSTANTIATE_TEST_SUITE_P(Positions, XlsbParityPivotCalcItemPosition,
+                         ::testing::Values("ctl", "p_abs1", "p_abs2", "p_big", "p_prev", "p_bare", "p_next", "p_mix",
+                                           "p_prod", "p_zero", "p_zero_bare", "d_desc_abs1", "d_desc_prev",
+                                           "d_move_abs1", "d_move_late"));
 
 // Table options with a view-header bit or byte (xlsb_parity/pivot/options, Excel 16.115's saves, set through the
 // object model or authored): items shown on empty rows and columns, page fields wrapped down then over and over
@@ -532,6 +561,28 @@ TEST(XlsbParityPivotApiBuiltGroups, WritesExcelsDateGroupRecords) {
   const std::vector<std::uint16_t> excel_types = GroupBlockTypes(excel);
   ASSERT_FALSE(excel_types.empty());
   EXPECT_EQ(GroupBlockTypes(saved.bytes), excel_types);
+}
+
+// A calculated field refreshes its cache on load, so Excel's save is a refreshed state whose styles renumber the
+// date field's number format; the calculated field's record, its formula among it, is still Excel's.
+TEST(XlsbParityPivotApiBuiltCalcField, WritesExcelsCalculatedFieldRecord) {
+  const Saved saved = SaveCase("d_calc_field");
+  ASSERT_FALSE(saved.bytes.empty());
+  EXPECT_EQ(saved.deferred, 0U);
+  ExpectValid(saved.bytes);
+  EXPECT_EQ(ReloadedReport(saved.bytes), saved.report);
+
+  const tc::Bytes excel =
+      tc::ReadBytes(std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_parity/pivot/api_built/d_calc_field.xlsb");
+  ASSERT_FALSE(excel.empty());
+  EXPECT_EQ(PivotNames(ReloadedReport(excel)), PivotNames(saved.report));
+  const std::string part = "xl/pivotCache/pivotCacheDefinition1.bin";
+  const tc::RecordSet ours = tc::ExtractRecords(saved.bytes, {pivot_records::kBeginPCDField});
+  const tc::RecordSet theirs = tc::ExtractRecords(excel, {pivot_records::kBeginPCDField});
+  ASSERT_EQ(ours.count(part), 1U);
+  ASSERT_EQ(theirs.count(part), 1U);
+  ASSERT_EQ(ours.at(part).size(), theirs.at(part).size());
+  EXPECT_EQ(ours.at(part).back().payload, theirs.at(part).back().payload);
 }
 
 void AppendRecord(std::string_view record, void* log) {
@@ -715,8 +766,7 @@ TEST_P(XlsbParityPivotApiBuiltDeferred, LeavesItsGroupOutAndCountsIt) {
   }
 }
 
-INSTANTIATE_TEST_SUITE_P(Causes, XlsbParityPivotApiBuiltDeferred,
-                         ::testing::Values("d_calc_field", "h_rank", "i_running_percent"));
+INSTANTIATE_TEST_SUITE_P(Causes, XlsbParityPivotApiBuiltDeferred, ::testing::Values("h_rank", "i_running_percent"));
 
 /// The BrtBeginPCDFGRange payloads (groupBy, flags, start, end, interval) of a package's caches.
 std::vector<tc::Bytes> RangeGroups(const tc::Bytes& package) {

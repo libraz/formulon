@@ -4,14 +4,14 @@
 //
 //   [ACUID] BrtBeginPivotCacheDef
 //     BrtBeginPCDSource BrtBeginPCDSRange BrtEndPCDSRange BrtEndPCDSource
-//     BrtBeginPCDFields { BrtBeginPCDField [item table] [grouping] BrtEndPCDField }* BrtEndPCDFields
+//     BrtBeginPCDFields { BrtBeginPCDField [item table] [grouping] [names] BrtEndPCDField }* BrtEndPCDFields
 //     [calculated items] [FRT x14 cache definition] [FRT dataSourceClean]
 //   BrtEndPivotCacheDef
 //
 // Decoding is fail-closed: a record out of place, a flag bit or record kind
 // Excel's own parts never show, or a size that does not match its counts is
-// an error. The grouping block of a field and the calculated-item block are
-// carried verbatim as `RawRecord`s. `encode(decode(x)) == x` byte for byte.
+// an error. The grouping block of a field, a calculated field's PNames block
+// and the calculated-item block are carried verbatim as `RawRecord`s. `encode(decode(x)) == x` byte for byte.
 
 #ifndef FORMULON_IO_XLSB_PIVOT_CACHE_DEFINITION_RECORDS_H_
 #define FORMULON_IO_XLSB_PIVOT_CACHE_DEFINITION_RECORDS_H_
@@ -46,6 +46,8 @@ inline constexpr std::uint8_t kCacheSaveDataEnableRefresh = kCacheSaveData | kCa
 
 /// BrtBeginPCDField flag: the field comes from the source (`databaseField`, default on).
 inline constexpr std::uint8_t kFieldDatabase = 0x04U;
+/// BrtBeginPCDField second flag byte: a formula follows the name (`cacheField@formula`).
+inline constexpr std::uint8_t kFieldFormula = 0x01U;
 
 /// BrtBeginPCDFAtbl flags (`sharedItems@contains*`).
 inline constexpr std::uint16_t kAtblSemiMixedTypesString = 0x0009U;  ///< containsSemiMixedTypes + containsString.
@@ -134,6 +136,11 @@ struct Field {
   std::optional<ItemTable> items;
   /// Records between the item table and BrtEndPCDField (the fieldGroup block), verbatim.
   std::vector<pivot_records::RawRecord> grouping;
+  /// A calculated field's formula (kFieldFormula): PivotParsedFormula rgce and rgcb.
+  std::optional<std::vector<std::uint8_t>> formula_rgce;
+  std::vector<std::uint8_t> formula_rgcb;
+  /// The formula's PNames block (BrtBeginPNames .. BrtEndPNames), verbatim; empty when absent.
+  std::vector<pivot_records::RawRecord> names;
 };
 
 /// BrtBeginPCDSource + BrtBeginPCDSRange of a worksheet source (`cacheSource type="worksheet"`): a range on `sheet`,

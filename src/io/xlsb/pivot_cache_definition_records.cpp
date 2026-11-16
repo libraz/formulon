@@ -51,6 +51,7 @@ using pivot_records::kBeginPCDIRun;
 using pivot_records::kBeginPCDSource;
 using pivot_records::kBeginPCDSRange;
 using pivot_records::kBeginPivotCacheDef;
+using pivot_records::kBeginPNames;
 using pivot_records::kBeginPRFItem;
 using pivot_records::kDataSourceClean;
 using pivot_records::kEndPCD14;
@@ -63,6 +64,7 @@ using pivot_records::kEndPCDIRun;
 using pivot_records::kEndPCDSource;
 using pivot_records::kEndPCDSRange;
 using pivot_records::kEndPivotCacheDef;
+using pivot_records::kEndPNames;
 using pivot_records::kEndPNPair;
 using pivot_records::kEndPRFItem;
 using pivot_records::kPCDIAMissing;
@@ -421,26 +423,46 @@ bool IsGroupingRecord(std::uint16_t type) {
          type == kPCDIString;
 }
 
+// Reads a u32 byte count and that many bytes (a PivotParsedFormula's cce/rgce or cb/rgcb).
+Expected<std::vector<std::uint8_t>, Error> ReadCountedBytes(ByteSpan& p) {
+  ASSIGN_OR_RETURN(const std::uint32_t size, read_u32(p));
+  if (p.size < size) {
+    return Corrupt("xlsb pivot cache field formula truncated", kBeginPCDField);
+  }
+  std::vector<std::uint8_t> out(p.data, p.data + size);
+  p.data += size;
+  p.size -= size;
+  return out;
+}
+
 bool IsCalcItemRecord(std::uint16_t type) {
   return (type >= kBeginPCDCalcItems && type <= kEndPNPair) || type == kBeginPRFItem || type == kEndPRFItem;
 }
 
-// BrtBeginPCDField: flag byte, zero byte, numFmtId (u16), 16 zero bytes, name (XLWideString).
+// BrtBeginPCDField: flag byte, formula byte, numFmtId (u16), 16 zero bytes, name (XLWideString), then for a
+// calculated field its PivotParsedFormula (cce u32, rgce, cb u32, rgcb).
 Expected<pcd::Field, Error> DecodeField(Records& recs) {
   pcd::Field field;
   ASSIGN_OR_RETURN(ByteSpan p, recs.expect(kBeginPCDField));
   ASSIGN_OR_RETURN(field.flags, read_u8(p));
-  ASSIGN_OR_RETURN(const std::uint8_t zero, read_u8(p));
+  ASSIGN_OR_RETURN(const std::uint8_t formula, read_u8(p));
   ASSIGN_OR_RETURN(field.num_fmt_id, read_u16(p));
   if (p.size < kFieldReservedBytes) {
     return Corrupt("xlsb pivot cache field header truncated", kBeginPCDField);
   }
-  if ((field.flags & ~pcd::kFieldDatabase) != 0 || zero != 0U || !AllZero(p.data, kFieldReservedBytes)) {
-    return Unmeasured("cache field header bits (caption, formula, SQL type, server field)", kBeginPCDField);
+  // A calculated field is never a database field.
+  const bool calculated = formula == pcd::kFieldFormula && field.flags == 0U;
+  if ((field.flags & ~pcd::kFieldDatabase) != 0 || (formula != 0U && !calculated) ||
+      !AllZero(p.data, kFieldReservedBytes)) {
+    return Unmeasured("cache field header bits (caption, SQL type, server field)", kBeginPCDField);
   }
   p.data += kFieldReservedBytes;
   p.size -= kFieldReservedBytes;
   ASSIGN_OR_RETURN(field.name, read_xlwidestring(p));
+  if (calculated) {
+    ASSIGN_OR_RETURN(field.formula_rgce, ReadCountedBytes(p));
+    ASSIGN_OR_RETURN(field.formula_rgcb, ReadCountedBytes(p));
+  }
   if (p.size != 0U) {
     return Unmeasured("cache field header tail after the name", kBeginPCDField);
   }
@@ -454,6 +476,18 @@ Expected<pcd::Field, Error> DecodeField(Records& recs) {
         return Unknown("xlsb pivot cache field grouping carries an unknown record", recs.peek().type);
       }
       field.grouping.push_back(ToRaw(recs.take()));
+    }
+  }
+  if (calculated && recs.at(kBeginPNames)) {
+    while (!recs.done()) {
+      const std::uint16_t type = recs.peek().type;
+      if (!IsCalcItemRecord(type)) {
+        return Unknown("xlsb pivot cache field names carry an unknown record", type);
+      }
+      field.names.push_back(ToRaw(recs.take()));
+      if (type == kEndPNames) {
+        break;
+      }
     }
   }
   RETURN_IF_ERROR(recs.expect_end(kEndPCDField));
@@ -576,10 +610,13 @@ void EmitItemEntry(std::vector<std::uint8_t>& dst, const pcd::ItemEntry& entry) 
 void EmitField(std::vector<std::uint8_t>& dst, const pcd::Field& field) {
   std::vector<std::uint8_t> p;
   emit_u8(p, field.flags);
-  emit_u8(p, 0U);
+  emit_u8(p, field.formula_rgce ? pcd::kFieldFormula : 0U);
   emit_u16(p, field.num_fmt_id);
   p.insert(p.end(), kFieldReservedBytes, 0U);
   emit_xlwidestring(p, field.name);
+  if (field.formula_rgce) {
+    emit_cell_parsed_formula(p, *field.formula_rgce, field.formula_rgcb);
+  }
   emit_record(dst, kBeginPCDField, p);
   if (field.items.has_value()) {
     const pcd::ItemTable& table = *field.items;
@@ -597,6 +634,7 @@ void EmitField(std::vector<std::uint8_t>& dst, const pcd::Field& field) {
     EmitEnd(dst, kEndPCDFAtbl);
   }
   EmitRaw(dst, field.grouping);
+  EmitRaw(dst, field.names);
   EmitEnd(dst, kEndPCDField);
 }
 

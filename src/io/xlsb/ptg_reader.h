@@ -24,6 +24,7 @@
 #define FORMULON_IO_XLSB_PTG_READER_H_
 
 #include <cstdint>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -101,6 +102,9 @@ struct XlsbExternalBook {
 /// meaning; a reference into it fails to resolve a sheet or name and is
 /// reported undecodable.
 using XlsbExternalBooks = std::vector<XlsbExternalBook>;
+
+/// Builds the operand node for a `PtgSxName` name index.
+using SxNameOperandHook = std::function<Expected<parser::AstNode*, Error>(std::uint32_t, Arena&)>;
 
 /// Decodes the `rgce` Ptg byte stream `ptgs` into a `parser::AstNode`
 /// tree allocated in `arena`. The returned node is the formula root
@@ -181,6 +185,9 @@ using XlsbExternalBooks = std::vector<XlsbExternalBook>;
 /// structured reference (`io/xlsb/ptg_list.h`); without it one is
 /// `kIoXlsbUnsupportedPtg`.
 ///
+/// `sx_name`, when given, builds the operand a `PtgSxName` token stands for from
+/// its u32 name index; without it that token is `kIoXlsbUnsupportedPtg`.
+///
 /// Errors:
 ///   * `kIoXlsbUnsupportedPtg` — a token outside the supported set
 ///     (PtgTbl/PtgNameX/PtgMemFunc materialisation/...), or a 3-D
@@ -190,14 +197,12 @@ using XlsbExternalBooks = std::vector<XlsbExternalBook>;
 ///   * `kIoXlsbCorrupt` — the operand stack is unbalanced (too few
 ///     operands for an operator, or not exactly one value remaining).
 ///   * `kOutOfMemory` — arena allocation failed.
-Expected<parser::AstNode*, Error> decode_ptgs(ByteSpan ptgs, ByteSpan rgcb, Arena& arena,
-                                              const std::vector<std::string>& sheet_names,
-                                              const std::vector<XlsbName>& name_table,
-                                              const std::vector<XlsbSheetRange>& sheet_ranges,
-                                              const XlsbExternalBooks& external_books, std::int32_t host_itab = -1,
-                                              std::optional<PtgBaseCell> base = std::nullopt,
-                                              parser::FormulaWhitespace* whitespace = nullptr,
-                                              const std::vector<TableMetadata>* tables = nullptr);
+Expected<parser::AstNode*, Error> decode_ptgs(
+    ByteSpan ptgs, ByteSpan rgcb, Arena& arena, const std::vector<std::string>& sheet_names,
+    const std::vector<XlsbName>& name_table, const std::vector<XlsbSheetRange>& sheet_ranges,
+    const XlsbExternalBooks& external_books, std::int32_t host_itab = -1,
+    std::optional<PtgBaseCell> base = std::nullopt, parser::FormulaWhitespace* whitespace = nullptr,
+    const std::vector<TableMetadata>* tables = nullptr, const SxNameOperandHook& sx_name = nullptr);
 
 }  // namespace xlsb
 }  // namespace io

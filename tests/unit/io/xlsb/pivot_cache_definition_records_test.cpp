@@ -226,6 +226,43 @@ TEST(XlsbPivotCacheDefinitionRecords, SourceNamesARangeANameOrATable) {
   }
 }
 
+// A calculated field (xlsb_parity/pivot/calcfield, Excel 16.115's saves) is a non-database field whose header carries
+// its formula, followed by the formula's names block; each one matches a `<cacheField formula>` of the .xlsx twin.
+TEST(XlsbPivotCacheDefinitionRecords, CalculatedFieldsCarryFormulaAndNames) {
+  for (const char* stem :
+       {"calcfield_control_none", "calcfield_one", "calcfield_two_chained", "calcfield_two_fields"}) {
+    SCOPED_TRACE(stem);
+    const std::string path = Fixture(std::string("xlsb_parity/pivot/calcfield/") + stem + ".xlsb");
+    const std::string part = "xl/pivotCache/pivotCacheDefinition1.bin";
+    const std::vector<std::uint8_t> bytes = PartNamed(path, part);
+    auto doc = decode_pivot_cache_definition(SpanOf(bytes));
+    ASSERT_TRUE(doc) << doc.error().message;
+    const std::string xml = TwinXml(path, part);
+    std::size_t formulas = 0;
+    for (std::size_t at = xml.find(" formula=\""); at != std::string::npos; at = xml.find(" formula=\"", at + 1U)) {
+      ++formulas;
+    }
+    std::size_t calculated = 0;
+    for (const auto& field : doc.value().fields) {
+      if (field.formula_rgce.has_value()) {
+        ++calculated;
+        EXPECT_EQ(field.flags, 0U) << field.name;
+        EXPECT_FALSE(field.items.has_value()) << field.name;
+        EXPECT_FALSE(field.names.empty()) << field.name;
+      } else {
+        EXPECT_TRUE(field.names.empty()) << field.name;
+      }
+    }
+    EXPECT_EQ(calculated, formulas);
+    const std::vector<std::uint8_t> written = encode_pivot_cache_definition(doc.value());
+    if (doc.value().refreshed_by.has_value()) {
+      EXPECT_EQ(written, bytes);
+    } else {
+      EXPECT_EQ(written.size() + 4U, bytes.size());
+    }
+  }
+}
+
 TEST(XlsbPivotCacheDefinitionRecords, A5C9SumNumberMissingAndUnusedItems) {
   const auto bytes = PartNamed(Fixture("xlsb_pivot_twins/A5_C9__sum.xlsb"), "xl/pivotCache/pivotCacheDefinition1.bin");
   auto decoded = decode_pivot_cache_definition(SpanOf(bytes));

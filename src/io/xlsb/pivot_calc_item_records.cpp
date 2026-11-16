@@ -1,6 +1,5 @@
 #include "io/xlsb/pivot_calc_item_records.h"
 
-#include <string>
 #include <utility>
 
 #include "io/xlsb/pivot_record_cursor.h"
@@ -24,11 +23,6 @@ constexpr std::size_t kCountSize = 4U;
 constexpr std::size_t kNameSize = 6U;
 // BrtBeginPNPair: flags u8, field u32, item u32.
 constexpr std::size_t kPairSize = 9U;
-// Payload-free operator ptgs: PtgAdd (0x03) through PtgParen (0x15).
-constexpr std::uint8_t kFirstOperatorPtg = 0x03U;
-constexpr std::uint8_t kLastOperatorPtg = 0x15U;
-constexpr std::size_t kSxNameSize = 6U;
-constexpr std::size_t kIntSize = 3U;
 
 Error Corrupt(const char* message) {
   return make_error(FormulonErrorCode::kIoXlsbRecordCorrupt, message, "context=xlsb_pivot_calc_item");
@@ -71,7 +65,12 @@ Expected<PName, Error> DecodeName(const std::vector<RawRecord>& records, std::si
   PName name;
   name.field = load_u32(head->payload.data());
   name.flags = load_u16(head->payload.data() + 4);
+  if (!pivot_records::at(records, *pos, pivot_records::kBeginPNPairs)) {
+    RETURN_IF_ERROR(pivot_records::take_end(kBlock, records, pos, pivot_records::kEndPName));
+    return name;
+  }
   ASSIGN_OR_RETURN(const std::uint32_t count, TakeCount(records, pos, pivot_records::kBeginPNPairs));
+  name.pairs.emplace();
   while (pivot_records::at(records, *pos, pivot_records::kBeginPNPair)) {
     const RawRecord& rec = records[(*pos)++];
     if (rec.payload.size() != kPairSize) {
@@ -81,11 +80,11 @@ Expected<PName, Error> DecodeName(const std::vector<RawRecord>& records, std::si
     pair.flags = rec.payload[0];
     pair.field = load_u32(rec.payload.data() + 1);
     pair.item = load_u32(rec.payload.data() + 5);
-    name.pairs.push_back(pair);
+    name.pairs->push_back(pair);
     RETURN_IF_ERROR(pivot_records::take_end(kBlock, records, pos, pivot_records::kEndPNPair));
   }
   RETURN_IF_ERROR(pivot_records::take_end(kBlock, records, pos, pivot_records::kEndPNPairs));
-  if (name.pairs.size() != count) {
+  if (name.pairs->size() != count) {
     return Corrupt("xlsb pivot calculated item name pair count does not match its pairs");
   }
   RETURN_IF_ERROR(pivot_records::take_end(kBlock, records, pos, pivot_records::kEndPName));
@@ -156,62 +155,44 @@ void encode_calc_items(const std::vector<CalcItem>& items, std::vector<RawRecord
       pivot_area::encode_pivot_area(*item.area, out);
     }
     if (item.names) {
-      PushCount(out, pivot_records::kBeginPNames, item.names->size());
-      for (const PName& name : *item.names) {
-        std::vector<std::uint8_t> name_head;
-        emit_u32(name_head, name.field);
-        emit_u16(name_head, name.flags);
-        pivot_records::push(out, pivot_records::kBeginPName, std::move(name_head));
-        PushCount(out, pivot_records::kBeginPNPairs, name.pairs.size());
-        for (const PNPair& pair : name.pairs) {
-          std::vector<std::uint8_t> payload;
-          emit_u8(payload, pair.flags);
-          emit_u32(payload, pair.field);
-          emit_u32(payload, pair.item);
-          pivot_records::push(out, pivot_records::kBeginPNPair, std::move(payload));
-          pivot_records::push(out, pivot_records::kEndPNPair);
-        }
-        pivot_records::push(out, pivot_records::kEndPNPairs);
-        pivot_records::push(out, pivot_records::kEndPName);
-      }
-      pivot_records::push(out, pivot_records::kEndPNames);
+      encode_names(*item.names, out);
     }
     pivot_records::push(out, pivot_records::kEndPCDCalcItem);
   }
   pivot_records::push(out, pivot_records::kEndPCDCalcItems);
 }
 
-Expected<std::vector<FormulaToken>, Error> walk_calc_item_formula(const std::vector<std::uint8_t>& rgce) {
-  std::vector<FormulaToken> tokens;
-  std::size_t i = 0;
-  while (i < rgce.size()) {
-    const std::uint8_t ptg = rgce[i];
-    if (ptg == kPtgSxName) {
-      if (rgce.size() - i < kSxNameSize || rgce[i + 1] != kEptgSxName) {
-        return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
-                          "xlsb pivot calculated item formula carries a malformed PtgSxName",
-                          "context=xlsb_pivot_calc_item");
-      }
-      tokens.push_back(FormulaToken{ptg, load_u32(rgce.data() + i + 2), 0U});
-      i += kSxNameSize;
-    } else if (ptg == kPtgInt) {
-      if (rgce.size() - i < kIntSize) {
-        return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
-                          "xlsb pivot calculated item formula carries a truncated PtgInt",
-                          "context=xlsb_pivot_calc_item");
-      }
-      tokens.push_back(FormulaToken{ptg, 0U, load_u16(rgce.data() + i + 1)});
-      i += kIntSize;
-    } else if (ptg >= kFirstOperatorPtg && ptg <= kLastOperatorPtg) {
-      tokens.push_back(FormulaToken{ptg, 0U, 0U});
-      ++i;
-    } else {
-      return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
-                        "xlsb pivot calculated item formula carries a token outside the walked set",
-                        "context=xlsb_pivot_calc_item ptg=" + std::to_string(ptg));
-    }
+Expected<std::vector<PName>, Error> decode_names(const std::vector<RawRecord>& records) {
+  std::size_t pos = 0;
+  ASSIGN_OR_RETURN(std::vector<PName> names, DecodeNames(records, &pos));
+  if (pos != records.size()) {
+    return Corrupt("xlsb pivot calculated field names are followed by other records");
   }
-  return tokens;
+  return names;
+}
+
+void encode_names(const std::vector<PName>& names, std::vector<RawRecord>* out) {
+  PushCount(out, pivot_records::kBeginPNames, names.size());
+  for (const PName& name : names) {
+    std::vector<std::uint8_t> name_head;
+    emit_u32(name_head, name.field);
+    emit_u16(name_head, name.flags);
+    pivot_records::push(out, pivot_records::kBeginPName, std::move(name_head));
+    if (name.pairs) {
+      PushCount(out, pivot_records::kBeginPNPairs, name.pairs->size());
+      for (const PNPair& pair : *name.pairs) {
+        std::vector<std::uint8_t> payload;
+        emit_u8(payload, pair.flags);
+        emit_u32(payload, pair.field);
+        emit_u32(payload, pair.item);
+        pivot_records::push(out, pivot_records::kBeginPNPair, std::move(payload));
+        pivot_records::push(out, pivot_records::kEndPNPair);
+      }
+      pivot_records::push(out, pivot_records::kEndPNPairs);
+    }
+    pivot_records::push(out, pivot_records::kEndPName);
+  }
+  pivot_records::push(out, pivot_records::kEndPNames);
 }
 
 }  // namespace pivot_calc
