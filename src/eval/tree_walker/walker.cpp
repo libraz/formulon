@@ -633,10 +633,8 @@ bool evaluates_to_reference(const parser::AstNode& node) {
       return true;
     case parser::NodeKind::IntersectOp:
       return evaluates_to_reference(node.as_intersect_lhs()) && evaluates_to_reference(node.as_intersect_rhs());
-    case parser::NodeKind::Call: {
-      const LazyEntry* entry = find_lazy_entry(strip_future_prefix(node.as_call_name()));
-      return entry != nullptr && entry->ref_result != RefResult::kNone && entry->ref_result != RefResult::kProjected;
-    }
+    case parser::NodeKind::Call:
+      return is_reference_call_name(node.as_call_name());
     default:
       return false;
   }

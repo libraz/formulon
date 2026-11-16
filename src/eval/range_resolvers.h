@@ -39,10 +39,9 @@ class EvalContext;
 class FunctionRegistry;
 
 /// True when `name` (with or without an `_xlfn.` storage prefix) is a
-/// builtin whose result can be a reference: INDIRECT, OFFSET, IF, CHOOSE,
-/// IFS, SWITCH, INDEX, XLOOKUP, TRIMRANGE and the `_TRO_*` trim operators. Answers from the same table
-/// `resolve_reference_call` dispatches through, so every consumer that asks
-/// "is this call a reference?" sees one list.
+/// builtin whose result can be a reference: a lazy entry whose `ref_result`
+/// is neither `kNone` nor `kProjected` (INDIRECT, OFFSET, IF, CHOOSE, IFS,
+/// SWITCH, INDEX, XLOOKUP, TAKE, DROP, TRIMRANGE and the `_TRO_*` trims).
 bool is_reference_call_name(std::string_view name) noexcept;
 
 /// True when argument `arg_index` of a reference-returning call `call_name`
@@ -50,7 +49,7 @@ bool is_reference_call_name(std::string_view name) noexcept;
 /// source, XLOOKUP's return_array / if_not_found, an IF branch, a CHOOSE
 /// value, an IFS value, or a SWITCH result / default. Always false for
 /// INDIRECT, OFFSET and the trims, whose result is built at evaluation time, and for a
-/// name `is_reference_call_name` rejects.
+/// name `is_reference_call_name` rejects. Answers from the lazy table's `ref_result`.
 bool is_reference_carrying_arg(std::string_view call_name, std::uint32_t arg_index, std::uint32_t arity) noexcept;
 
 /// Attempts to resolve `node` as a reference-returning call (see

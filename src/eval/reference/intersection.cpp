@@ -33,6 +33,7 @@
 #include "eval/special_forms_lazy.h"
 #include "eval/structured_ref_project.h"
 #include "eval/tree_walker/dispatch.h"
+#include "eval/tree_walker_lazy_table.h"
 #include "eval/trimrange_lazy.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
@@ -178,20 +179,13 @@ using ReferenceCallResolver = bool (*)(const parser::AstNode&, Arena&, const Fun
                                        std::string_view*, std::uint32_t*, std::uint32_t*, std::uint32_t*,
                                        std::uint32_t*, bool*, ErrorCode*);
 
-// Which argument slots can hand their reference through as the call's result.
-using ReferenceCarrier = bool (*)(std::uint32_t index, std::uint32_t arity);
+// Which argument slots can hand their reference through as the call's result, per `RefResult`.
 
 struct ReferenceCall {
   std::string_view name;
   ReferenceCallResolver resolve;
-  ReferenceCarrier carries;
 };
 
-// INDIRECT and OFFSET build their reference at evaluation time; no argument
-// is the reference they return.
-constexpr bool carries_none(std::uint32_t /*index*/, std::uint32_t /*arity*/) {
-  return false;
-}
 constexpr bool carries_first(std::uint32_t index, std::uint32_t /*arity*/) {
   return index == 0U;
 }
@@ -214,26 +208,23 @@ constexpr bool carries_xlookup_result(std::uint32_t index, std::uint32_t /*arity
   return index == 2U || index == 3U;
 }
 
-// Every builtin whose reference result this layer can resolve to a rectangle:
-// `is_reference_call_name` answers from it and `resolve_reference_call`
-// dispatches through it. `SINGLE` is reference-returning to Excel too
-// (`kReferenceReturning` in builtin_names.cpp) but has no rectangle resolver here.
+// The rectangle resolvers `resolve_reference_call` dispatches through, one per
+// reference-returning builtin. `SINGLE` has none here.
 constexpr ReferenceCall kReferenceCalls[] = {
-    {"INDIRECT", &resolve_built_reference, &carries_none},
-    {"OFFSET", &resolve_built_reference, &carries_none},
-    {"IF", &resolve_if_call, &carries_if_branch},
-    {"CHOOSE", &resolve_choose_call, &carries_choose_value},
-    {"IFS", &resolve_ifs_call, &carries_ifs_value},
-    {"SWITCH", &resolve_switch_call, &carries_switch_result},
-    {"INDEX", &resolve_lookup_call<&resolve_index_reference>, &carries_first},
-    {"XLOOKUP", &resolve_lookup_call<&resolve_xlookup_reference>, &carries_xlookup_result},
-    {"TAKE", &resolve_take_drop_reference, &carries_first},
-    {"DROP", &resolve_take_drop_reference, &carries_first},
-    // Rebuilt from the source's populated extent, so no argument is carried.
-    {"TRIMRANGE", &resolve_trim_reference, &carries_none},
-    {"_TRO_ALL", &resolve_trim_reference, &carries_none},
-    {"_TRO_LEADING", &resolve_trim_reference, &carries_none},
-    {"_TRO_TRAILING", &resolve_trim_reference, &carries_none},
+    {"INDIRECT", &resolve_built_reference},
+    {"OFFSET", &resolve_built_reference},
+    {"IF", &resolve_if_call},
+    {"CHOOSE", &resolve_choose_call},
+    {"IFS", &resolve_ifs_call},
+    {"SWITCH", &resolve_switch_call},
+    {"INDEX", &resolve_lookup_call<&resolve_index_reference>},
+    {"XLOOKUP", &resolve_lookup_call<&resolve_xlookup_reference>},
+    {"TAKE", &resolve_take_drop_reference},
+    {"DROP", &resolve_take_drop_reference},
+    {"TRIMRANGE", &resolve_trim_reference},
+    {"_TRO_ALL", &resolve_trim_reference},
+    {"_TRO_LEADING", &resolve_trim_reference},
+    {"_TRO_TRAILING", &resolve_trim_reference},
 };
 
 const ReferenceCall* find_reference_call(std::string_view name) noexcept {
@@ -249,12 +240,35 @@ const ReferenceCall* find_reference_call(std::string_view name) noexcept {
 }  // namespace
 
 bool is_reference_call_name(std::string_view name) noexcept {
-  return find_reference_call(name) != nullptr;
+  const LazyEntry* entry = find_lazy_entry(strip_future_prefix(name));
+  return entry != nullptr && entry->ref_result != RefResult::kNone && entry->ref_result != RefResult::kProjected;
 }
 
 bool is_reference_carrying_arg(std::string_view call_name, std::uint32_t arg_index, std::uint32_t arity) noexcept {
-  const ReferenceCall* entry = find_reference_call(call_name);
-  return entry != nullptr && arg_index < arity && entry->carries(arg_index, arity);
+  const LazyEntry* entry = find_lazy_entry(strip_future_prefix(call_name));
+  if (entry == nullptr || arg_index >= arity) {
+    return false;
+  }
+  switch (entry->ref_result) {
+    case RefResult::kArg0:
+      return carries_first(arg_index, arity);
+    case RefResult::kIfBranch:
+      return carries_if_branch(arg_index, arity);
+    case RefResult::kChooseValue:
+      return carries_choose_value(arg_index, arity);
+    case RefResult::kIfsValue:
+      return carries_ifs_value(arg_index, arity);
+    case RefResult::kSwitchResult:
+      return carries_switch_result(arg_index, arity);
+    case RefResult::kXlookupResult:
+      return carries_xlookup_result(arg_index, arity);
+    case RefResult::kNone:
+    case RefResult::kBuilds:
+    case RefResult::kTrimmed:
+    case RefResult::kProjected:
+      break;
+  }
+  return false;
 }
 
 bool resolve_reference_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
