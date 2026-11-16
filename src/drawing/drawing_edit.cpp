@@ -179,8 +179,8 @@ Expected<void, Error> drop_unused_rels(Workbook& wb, const std::string& rels_pat
 
 }  // namespace
 
-Expected<void, Error> drop_objects(Workbook& wb, std::size_t sheet, const std::string& path,
-                                   pugi::xml_document& doc, const std::vector<pugi::xml_node>& tops) {
+Expected<void, Error> drop_objects(Workbook& wb, std::size_t sheet, const std::string& path, pugi::xml_document& doc,
+                                   const std::vector<pugi::xml_node>& tops) {
   ASSIGN_OR_RETURN(std::vector<io::ooxml::DrawingRel> rels, load_part_rels(wb, path));
   for (const pugi::xml_node& top : tops) {
     top.parent().remove_child(top);

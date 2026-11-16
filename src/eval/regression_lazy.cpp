@@ -443,9 +443,10 @@ Value eval_frequency_lazy(const parser::AstNode& call, Arena& arena, const Funct
       continue;
     }
     const double x = v.as_number();
-    const auto it = std::isnan(x) ? by_value.end()
-                                  : std::lower_bound(by_value.begin(), by_value.end(), x,
-                                                     [&bins](std::uint32_t i, double value) { return bins[i] < value; });
+    const auto it = std::isnan(x)
+                        ? by_value.end()
+                        : std::lower_bound(by_value.begin(), by_value.end(), x,
+                                           [&bins](std::uint32_t i, double value) { return bins[i] < value; });
     counts[it == by_value.end() ? n_bins : *it] += 1U;
   }
 

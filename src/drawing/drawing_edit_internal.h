@@ -103,8 +103,8 @@ Expected<void, Error> prepare_drawing(const Workbook& wb, std::string& path, pug
 // part `path`, then the relationships no remaining element names and the parts
 // they leave unreferenced. Excel drops a drawing part left empty, with the
 // sheet's link to it.
-Expected<void, Error> drop_objects(Workbook& wb, std::size_t sheet, const std::string& path,
-                                   pugi::xml_document& doc, const std::vector<pugi::xml_node>& tops);
+Expected<void, Error> drop_objects(Workbook& wb, std::size_t sheet, const std::string& path, pugi::xml_document& doc,
+                                   const std::vector<pugi::xml_node>& tops);
 
 // Creates an empty part at `path` so `store_part_dom` can fill it.
 Expected<void, Error> add_empty_part(Workbook& wb, const std::string& path, const char* content_type);
