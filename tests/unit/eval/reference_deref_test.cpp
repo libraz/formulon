@@ -826,6 +826,74 @@ TEST_F(BuiltRefTest, TheResolverRecordsOnTheCallersContext) {
   EXPECT_EQ(err, ErrorCode::Ref);
 }
 
+// IF / CHOOSE / IFS / SWITCH with a scalar selector return the selected argument as it is.
+class SelectedRefTest : public WalkerRefTest {
+ protected:
+  void ExpectSelected(const char* source, std::uint32_t r1, std::uint32_t c1, std::uint32_t r2, std::uint32_t c2,
+                      std::uint16_t sheet = kHome, bool dynamic = false) {
+    const Value ref = AsRef(source);
+    ASSERT_TRUE(ref.is_ref()) << source << ": " << ref.debug_to_string();
+    EXPECT_EQ(ref.ref_form(), RefForm::kArea) << source;
+    EXPECT_EQ(ref.ref_is_dynamic(), dynamic) << source;
+    const RefArea& a = ref.as_ref().areas[0];
+    EXPECT_EQ(a.sheet_first, sheet) << source;
+    EXPECT_EQ(a.row_first, r1) << source;
+    EXPECT_EQ(a.col_first, c1) << source;
+    EXPECT_EQ(a.row_last, r2) << source;
+    EXPECT_EQ(a.col_last, c2) << source;
+  }
+};
+
+TEST_F(SelectedRefTest, AScalarSelectorReturnsTheSelectedReference) {
+  ExpectSelected("=IF(TRUE,B2:C3,A1)", 1, 1, 2, 2);
+  ExpectSelected("=IF(FALSE,A1,OFFSET(A1,1,1,2,2))", 1, 1, 2, 2, kHome, /*dynamic=*/true);
+  ExpectSelected("=CHOOSE(2,A1,Sheet2!B2)", 1, 1, 1, 1, 1);
+  ExpectSelected("=IFS(FALSE,A1,TRUE,C3)", 2, 2, 2, 2);
+  ExpectSelected("=SWITCH(2,1,A1,2,B2:B3)", 1, 1, 2, 1);
+  ExpectSelected("=SWITCH(9,1,A1,D4)", 3, 3, 3, 3);
+  ExpectSelected("=IF(TRUE,IF(FALSE,A1,INDIRECT(\"C3\")))", 2, 2, 2, 2, kHome, /*dynamic=*/true);
+}
+
+TEST_F(SelectedRefTest, OtherSelectionsAreValues) {
+  const Value number = AsRef("=IF(TRUE,5)");
+  ASSERT_TRUE(number.is_number());
+  EXPECT_EQ(number.as_number(), 5.0);
+  const Value missing_else = AsRef("=IF(FALSE,A1)");
+  ASSERT_TRUE(missing_else.is_boolean());
+  EXPECT_FALSE(missing_else.as_boolean());
+  EXPECT_TRUE(AsRef("=IF({TRUE,FALSE},A1,B1)").is_array());
+  EXPECT_TRUE(AsRef("=CHOOSE({1,2},A1,B1)").is_array());
+  ExpectError(AsRef("=IFS(FALSE,A1)"), ErrorCode::NA, "no condition holds");
+  ExpectError(AsRef("=CHOOSE(3,A1,B1)"), ErrorCode::Value, "index out of range");
+}
+
+TEST_F(SelectedRefTest, ThreeDimensionalArmsKeepTheirErrors) {
+  ExpectError(AsRef("=IF(TRUE,Sheet2:Sheet3!A1)"), ErrorCode::Value, "IF over a 3-D arm");
+  ExpectError(AsRef("=CHOOSE(1,Sheet2:Sheet3!A1)"), ErrorCode::Value, "CHOOSE over a 3-D arm");
+  ExpectError(Eval("=IFS(TRUE,Sheet2:Sheet3!A1)"), ErrorCode::Ref, "IFS over a 3-D arm");
+  ExpectError(Eval("=SWITCH(1,1,(Sheet2:Sheet3!A1))"), ErrorCode::Name, "grouped 3-D arm");
+  ExpectError(AsRef("=(Sheet2:Sheet3!A1)"), ErrorCode::Name, "grouped 3-D span");
+}
+
+TEST_F(SelectedRefTest, ValueModeReadsTheSelectedReference) {
+  ExpectSame(Eval("=IF(TRUE,B2:C3)"), Eval("=B2:C3"), "IF rectangle");
+  ExpectSame(Eval("=CHOOSE(1,C3)"), Eval("=C3"), "CHOOSE one cell");
+  ExpectSame(Eval("=SUM(IFS(TRUE,A1:B2))"), Eval("=SUM(A1:B2)"), "IFS range argument");
+  ExpectSame(Eval("=SWITCH(1,1,Sheet2!A1:B2)"), Eval("=Sheet2!A1:B2"), "SWITCH qualified rectangle");
+}
+
+TEST_F(SelectedRefTest, ASelectedDynamicReferenceIsRecordedByItsRead) {
+  std::vector<Note> notes;
+  const EvalContext ctx = Ctx().with_dynamic_read_callback(&CollectNote, &notes);
+  const parser::AstNode& node = Parse("=IF(TRUE,OFFSET(A1,1,1,2,2))");
+  (void)eval_node_ref(node, arena_, default_registry(), ctx);
+  EXPECT_TRUE(notes.empty());
+  (void)eval_node_shaped(node, arena_, default_registry(), ctx);
+  ASSERT_EQ(notes.size(), 1U);
+  EXPECT_EQ(notes[0].rect.row_first, 1U);
+  EXPECT_EQ(notes[0].rect.col_last, 2U);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

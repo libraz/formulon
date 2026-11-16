@@ -331,7 +331,7 @@ Value eval_if_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegi
   const SelectedBranch picked = select_if_branch(call, arena, registry, ctx);
   switch (picked.kind) {
     case SelectedBranch::Kind::kArgument:
-      return eval_selected_arm(call.as_call_arg(picked.arg), arena, registry, ctx);
+      return eval_selected_arm_ref(call.as_call_arg(picked.arg), arena, registry, ctx);
     case SelectedBranch::Kind::kArraySubject:
       return eval_if_array_cond_lazy(call, picked.value, arena, registry, ctx);
     case SelectedBranch::Kind::kResult:
@@ -652,7 +652,7 @@ Value eval_ifs_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
   const SelectedBranch picked = select_ifs_branch(call, arena, registry, ctx);
   switch (picked.kind) {
     case SelectedBranch::Kind::kArgument:
-      return eval_node(call.as_call_arg(picked.arg), arena, registry, ctx);
+      return eval_node_ref(call.as_call_arg(picked.arg), arena, registry, ctx);
     case SelectedBranch::Kind::kArraySubject:
       return eval_ifs_array_cond(call, picked.arg, picked.value, arena, registry, ctx);
     case SelectedBranch::Kind::kResult:
@@ -818,7 +818,7 @@ Value eval_switch_lazy(const parser::AstNode& call, Arena& arena, const Function
   const SelectedBranch picked = select_switch_branch(call, arena, registry, ctx);
   switch (picked.kind) {
     case SelectedBranch::Kind::kArgument:
-      return eval_node(call.as_call_arg(picked.arg), arena, registry, ctx);
+      return eval_node_ref(call.as_call_arg(picked.arg), arena, registry, ctx);
     case SelectedBranch::Kind::kArraySubject:
       return eval_switch_array_subject(call, picked.value, arena, registry, ctx);
     case SelectedBranch::Kind::kResult:

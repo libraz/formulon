@@ -617,6 +617,10 @@ Value eval_node_ref(const parser::AstNode& node, Arena& arena, const FunctionReg
       return make_area_ref(lhs.as_ref(), rhs.as_ref(), token_origin(lhs.as_ref(), rhs.as_ref()), arena, ctx);
     }
     case parser::NodeKind::Ref3D:
+      // Inside grouping parentheses a 3-D span is no reference: `#NAME?`, as its value reads.
+      if (is_grouped_ref3d(node)) {
+        return Value::error(ErrorCode::Name);
+      }
       return make_span3d_ref(node.as_ref3d_sheet_begin(), node.as_ref3d_sheet_end(), node.as_ref3d_cell(),
                              node.as_ref3d_cell_end(), RefOrigin::kSpelled, arena, ctx);
     case parser::NodeKind::Literal:

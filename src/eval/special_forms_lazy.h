@@ -29,6 +29,7 @@ namespace eval {
 class EvalContext;
 class FunctionRegistry;
 
+/// IF with a scalar condition returns the taken arm as it is: a `Ref` when the arm denotes one.
 Value eval_if_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx);
 /// Evaluates an array-condition `IF` after its condition has already been
 /// materialised. There is no short-circuit here: Excel evaluates both
@@ -92,7 +93,8 @@ SelectedBranch select_switch_branch(const parser::AstNode& call, Arena& arena, c
 // condition is evaluated in turn; the first TRUE wins and the paired value
 // is returned. Untaken value subtrees are never evaluated. Returns #N/A
 // when no condition matches (including when the argument count is zero or
-// odd). Errors in any evaluated condition propagate.
+// odd). Errors in any evaluated condition propagate. The taken value is
+// returned as it is: a `Ref` when it denotes one.
 Value eval_ifs_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                     const EvalContext& ctx);
 
@@ -102,7 +104,8 @@ Value eval_ifs_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
 // is used as the default. Returns #N/A when no match and no default.
 // Comparison semantics match the `=` operator: ASCII case-insensitive for
 // text, ordinary equality for numbers and bools; cross-type pairs never
-// match (but are not errors).
+// match (but are not errors). The matched result is returned as it is: a
+// `Ref` when it denotes one.
 Value eval_switch_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx);
 

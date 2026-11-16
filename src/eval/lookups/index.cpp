@@ -782,7 +782,7 @@ Value eval_choose_lazy(const parser::AstNode& call, Arena& arena, const Function
   const SelectedBranch picked = select_choose_branch(call, arena, registry, ctx);
   switch (picked.kind) {
     case SelectedBranch::Kind::kArgument:
-      return eval_selected_arm(call.as_call_arg(picked.arg), arena, registry, ctx);
+      return eval_selected_arm_ref(call.as_call_arg(picked.arg), arena, registry, ctx);
     case SelectedBranch::Kind::kArraySubject:
       return eval_choose_array_index_lazy(call, picked.value, arena, registry, ctx);
     case SelectedBranch::Kind::kResult:

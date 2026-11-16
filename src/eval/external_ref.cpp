@@ -302,6 +302,14 @@ Value eval_selected_arm(const parser::AstNode& arm, Arena& arena, const Function
   return eval_node(arm, arena, registry, ctx);
 }
 
+Value eval_selected_arm_ref(const parser::AstNode& arm, Arena& arena, const FunctionRegistry& registry,
+                            const EvalContext& ctx) {
+  if (is_three_d_reference(arm)) {
+    return Value::error(three_d_reference_error(arm));
+  }
+  return eval_node_ref(arm, arena, registry, ctx);
+}
+
 bool collect_external_ref3d_cells(const parser::AstNode& node, Arena& arena, const EvalContext& ctx,
                                   std::vector<Value>* out) {
   const ExternalBook* found = BookFor(node, ctx);
