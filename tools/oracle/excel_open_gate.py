@@ -27,6 +27,8 @@ The outputs go to a folder inside Excel's sandbox container, so opening them rai
 prompt. Hold the shared Excel lock while this runs. The script never brings Excel to the front.
 
 Usage: tools/oracle/.venv/bin/python tools/oracle/excel_open_gate.py [--cli build/bin/formulon_cli]
+       [--source-root <checkout the CLI was built from>]
+The run stops before Excel opens when the CLI is older than a file under the source root's src/.
 Exit status: 0 when every output opens cleanly with the source's readings and every control behaves.
 """
 
@@ -308,22 +310,32 @@ def diff(source: dict, output: dict) -> list[str]:
     return lost
 
 
-def stale_cli(cli: Path) -> str | None:
-    """Why `cli` cannot vouch for the tree: it is missing, or older than the newest file under src/."""
+def stale_cli(cli: Path, source_root: Path) -> str | None:
+    """Why `cli` cannot vouch for the sources it was built from: it is missing, or older than the
+    newest file under `source_root`/src."""
 
     if not cli.is_file():
         return "formulon_cli not found: %s" % cli
-    newest = max((p for p in (ROOT / "src").rglob("*") if p.is_file()), key=lambda p: p.stat().st_mtime)
+    files = [p for p in (source_root / "src").rglob("*") if p.is_file()]
+    if not files:
+        return "no sources under %s" % (source_root / "src")
+    newest = max(files, key=lambda p: p.stat().st_mtime)
     if cli.stat().st_mtime < newest.stat().st_mtime:
-        return "formulon_cli %s is older than %s; rebuild it first" % (cli, newest.relative_to(ROOT))
+        return "formulon_cli %s is older than %s; rebuild it first" % (cli, newest)
     return None
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--cli", default=str(ROOT / "build" / "bin" / "formulon_cli"))
+    parser.add_argument(
+        "--source-root",
+        default=str(ROOT),
+        help="the checkout the CLI was built from; its src/ must not be newer than the CLI",
+    )
     args = parser.parse_args()
-    stale = stale_cli(Path(args.cli))
+    print("checking formulon_cli against %s" % (Path(args.source_root) / "src"))
+    stale = stale_cli(Path(args.cli), Path(args.source_root))
     if stale:
         print("FAIL " + stale)
         return 1

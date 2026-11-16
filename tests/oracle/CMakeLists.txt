@@ -896,6 +896,7 @@ if(Python3_Interpreter_FOUND)
   formulon_add_oracle_unittest(formulon_windows_excel_driver_unit tools.oracle.windows_excel_test)
   formulon_add_oracle_unittest(formulon_oracle_golden_diff_unit tools.oracle.golden_diff_test)
   formulon_add_oracle_unittest(formulon_oracle_gen_incremental_unit tools.oracle.oracle_gen_incremental_test)
+  formulon_add_oracle_unittest(formulon_excel_open_gate_unit tools.oracle.excel_open_gate_test)
   option(FORMULON_ORACLE_RELEASE_GATES
     "Register strict external-capture oracle gates (release CI only)"
     OFF
