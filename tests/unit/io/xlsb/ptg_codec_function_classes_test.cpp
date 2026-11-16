@@ -79,6 +79,10 @@ TEST(XlsbPtgCodec, ParameterClassTailRepeats) {
   const char sumifs[] = "RRVRVRV";
   for (std::uint32_t i = 0; i < 7U; ++i) {
     EXPECT_EQ(xlsb_parameter_class("sumifs", i), sumifs[i]) << i;
+    // Every criteria-pair function takes its later ranges as references too.
+    EXPECT_EQ(xlsb_parameter_class("AVERAGEIFS", i), sumifs[i]) << i;
+    EXPECT_EQ(xlsb_parameter_class("MAXIFS", i), sumifs[i]) << i;
+    EXPECT_EQ(xlsb_parameter_class("MINIFS", i), sumifs[i]) << i;
   }
   EXPECT_EQ(xlsb_parameter_class("ABS", 0), 'V');
   EXPECT_EQ(xlsb_parameter_class("NOT.A.FUNCTION", 3), 'V');
