@@ -12,6 +12,7 @@
 #include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
+#include "io/ooxml_writer.h"
 #include "io/xlsb/print_records.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/record.h"
@@ -223,6 +224,64 @@ TEST(XlsbParityPrint, ExcelXlsbLoadsTheTwinsPageSetupAndMarginsAndResavesExcelsR
     EXPECT_EQ(got.page_margins.bottom, want.page_margins.bottom);
     EXPECT_EQ(got.page_margins.header, want.page_margins.header);
     EXPECT_EQ(got.page_margins.footer, want.page_margins.footer);
+
+    auto saved = write_xlsb_with_result(loaded.value().workbook);
+    ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+    EXPECT_EQ(PrintRecords(saved.value().bytes), PrintRecords(excel));
+  }
+}
+
+/// The first worksheet's XML part of an `.xlsx` package.
+std::string SheetXml(const Bytes& package) {
+  ZipReader zip;
+  EXPECT_TRUE(static_cast<bool>(zip.open(SpanOf(package))));
+  auto part = zip.read_entry("xl/worksheets/sheet1.xml");
+  EXPECT_TRUE(static_cast<bool>(part));
+  return part ? std::string(part.value().begin(), part.value().end()) : std::string();
+}
+
+/// The `<element ...>...</element>` of `xml`, empty when it has none.
+std::string ElementOf(const std::string& xml, const std::string& element) {
+  const std::size_t begin = xml.find("<" + element);
+  const std::string close = "</" + element + ">";
+  const std::size_t end = xml.find(close, begin);
+  return begin == std::string::npos || end == std::string::npos ? std::string()
+                                                                : xml.substr(begin, end + close.size() - begin);
+}
+
+void ExpectSameBreaks(const std::vector<ManualBreak>& got, const std::vector<ManualBreak>& want) {
+  ASSERT_EQ(got.size(), want.size());
+  for (std::size_t i = 0; i < got.size(); ++i) {
+    EXPECT_EQ(got[i].id, want[i].id) << i;
+    EXPECT_EQ(got[i].min, want[i].min) << i;
+    EXPECT_EQ(got[i].max, want[i].max) << i;
+    EXPECT_EQ(got[i].manual, want[i].manual) << i;
+  }
+}
+
+TEST(XlsbParityPrint, ExcelXlsbLoadsTheTwinsHeaderFooterAndBreaksAndKeepsThemOnBothSaves) {
+  for (const char* name : {"hf_codes", "hf_empty_header", "hf_odd_even_first", "hf_scale_align0", "brk_auto_pt",
+                           "brk_minmax", "breaks_many", "breaks_row_1024", "breaks_col_1024"}) {
+    SCOPED_TRACE(name);
+    const Bytes excel = ReadFile(Fixture(std::string(name) + ".xlsb"));
+    const Bytes twin_package = ReadFile(Fixture(std::string(name) + ".xlsx"));
+    auto twin = read_ooxml(SpanOf(twin_package));
+    ASSERT_TRUE(static_cast<bool>(twin)) << twin.error().message;
+    auto loaded = read_xlsb(SpanOf(excel));
+    ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+    const SheetPrintSettings& want = twin.value().workbook.sheet(0).print_settings();
+    const SheetPrintSettings& got = loaded.value().workbook.sheet(0).print_settings();
+    EXPECT_EQ(got.header_footer_xml, want.header_footer_xml);
+    ExpectSameBreaks(got.manual_row_breaks, want.manual_row_breaks);
+    ExpectSameBreaks(got.manual_col_breaks, want.manual_col_breaks);
+
+    auto xlsx = write_ooxml(loaded.value().workbook);
+    ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
+    const std::string wrote = SheetXml(xlsx.value());
+    const std::string twin_xml = SheetXml(twin_package);
+    for (const char* element : {"headerFooter", "rowBreaks", "colBreaks"}) {
+      EXPECT_EQ(ElementOf(wrote, element), ElementOf(twin_xml, element)) << element;
+    }
 
     auto saved = write_xlsb_with_result(loaded.value().workbook);
     ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;

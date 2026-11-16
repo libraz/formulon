@@ -21,6 +21,7 @@
 #include "io/xlsb/sheet_properties_records.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
+#include "utils/resource_budget.h"
 
 namespace formulon {
 namespace io {
@@ -353,6 +354,122 @@ void EmitFamily(std::vector<std::uint8_t>& dst, Family family, const SheetPrintS
   }
 }
 
+/// The retained records of `family`, framed, as the splice keeps them.
+std::vector<std::uint8_t> RetainedFamilyBytes(const std::vector<std::uint8_t>& stream,
+                                              const std::vector<FramedRecord>& recs, Family family) {
+  std::vector<std::uint8_t> out;
+  bool in_row_breaks = true;
+  for (const FramedRecord& rec : recs) {
+    if (FamilyOf(rec.type, in_row_breaks) == family) {
+      out.insert(out.end(), stream.begin() + static_cast<std::ptrdiff_t>(rec.begin),
+                 stream.begin() + static_cast<std::ptrdiff_t>(rec.end));
+    }
+  }
+  return out;
+}
+
+/// The `<headerFooter>` Excel writes in `.xlsx` for a BrtBeginHeaderFooter payload: an attribute only when it differs
+/// from its default, the strings in schema order. Empty when the payload does not parse.
+std::string DecodeHeaderFooter(ByteSpan payload) {
+  if (payload.size < 2U) {
+    return std::string();
+  }
+  const std::uint32_t flags = load_u16(payload.data);
+  payload.data += 2U;
+  payload.size -= 2U;
+  pugi::xml_document doc;
+  pugi::xml_node root = doc.append_child("headerFooter");
+  if ((flags & kDifferentOddEven) != 0U) {
+    root.append_attribute("differentOddEven") = "1";
+  }
+  if ((flags & kDifferentFirst) != 0U) {
+    root.append_attribute("differentFirst") = "1";
+  }
+  if ((flags & kScaleWithDoc) == 0U) {
+    root.append_attribute("scaleWithDoc") = "0";
+  }
+  if ((flags & kAlignWithMargins) == 0U) {
+    root.append_attribute("alignWithMargins") = "0";
+  }
+  for (const char* part : {"oddHeader", "oddFooter", "evenHeader", "evenFooter", "firstHeader", "firstFooter"}) {
+    auto text = read_xlnullablewidestring(payload);
+    if (!text) {
+      return std::string();
+    }
+    if (!text.value().empty()) {
+      root.append_child(part).text().set(text.value().c_str());
+    }
+  }
+  return raw_xml(root);
+}
+
+/// Sets `print.header_footer_xml` when the record set re-encodes to exactly the retained bytes.
+void DecodeHeaderFooterFamily(const std::vector<std::uint8_t>& stream, const std::vector<FramedRecord>& recs,
+                              SheetPrintSettings& print) {
+  for (const FramedRecord& rec : recs) {
+    if (rec.type != kBrtBeginHeaderFooter) {
+      continue;
+    }
+    std::string xml = DecodeHeaderFooter(rec.payload);
+    std::vector<std::uint8_t> again;
+    EmitHeaderFooter(again, xml);
+    if (!xml.empty() && again == RetainedFamilyBytes(stream, recs, Family::kHeaderFooter)) {
+      print.header_footer_xml = std::move(xml);
+    }
+    return;
+  }
+}
+
+/// BrtBeginRwBrk / BrtBeginColBrk: the break count and the manual break count.
+constexpr std::size_t kBreakHeadSize = 8U;
+/// BrtBrk: id, min, max, then the manual and page-break flags.
+constexpr std::size_t kBreakSize = 20U;
+
+/// Sets the break vectors the retained records state exactly: every break manual, ids strictly increasing, and the
+/// record set equal to what the writer emits for them.
+void DecodeBreakFamilies(const std::vector<std::uint8_t>& stream, const std::vector<FramedRecord>& recs,
+                         SheetPrintSettings& print) {
+  std::vector<ManualBreak> rows;
+  std::vector<ManualBreak> cols;
+  bool rows_ok = true;
+  bool cols_ok = true;
+  std::vector<ManualBreak>* axis = nullptr;
+  bool* axis_ok = nullptr;
+  for (const FramedRecord& rec : recs) {
+    if (rec.type == kBrtBeginRwBrk || rec.type == kBrtBeginColBrk) {
+      const bool is_row = rec.type == kBrtBeginRwBrk;
+      axis = is_row ? &rows : &cols;
+      axis_ok = is_row ? &rows_ok : &cols_ok;
+      *axis_ok = *axis_ok && rec.payload.size == kBreakHeadSize;
+    } else if (rec.type == kBrtEndRwBrk || rec.type == kBrtEndColBrk) {
+      axis = nullptr;
+      axis_ok = nullptr;
+    } else if (rec.type == kBrtBrk && axis != nullptr && *axis_ok) {
+      const std::uint8_t* p = rec.payload.data;
+      const bool exact = rec.payload.size == kBreakSize && load_u32(p + 12U) == 1U && load_u32(p + 16U) == 0U &&
+                         axis->size() < kMaxManualBreaksPerAxis && (axis->empty() || axis->back().id < load_u32(p));
+      if (!exact) {
+        *axis_ok = false;
+        continue;
+      }
+      axis->push_back(ManualBreak{load_u32(p), load_u32(p + 4U), load_u32(p + 8U), true});
+    }
+  }
+  const auto adopt = [&](bool ok, std::vector<ManualBreak>& found, std::vector<ManualBreak>& model, Family family,
+                         std::uint16_t begin, std::uint16_t end) {
+    if (!ok || found.empty() || !model.empty()) {
+      return;
+    }
+    std::vector<std::uint8_t> again;
+    EmitBreaks(again, found, begin, end);
+    if (again == RetainedFamilyBytes(stream, recs, family)) {
+      model = std::move(found);
+    }
+  };
+  adopt(rows_ok, rows, print.manual_row_breaks, Family::kRowBreaks, kBrtBeginRwBrk, kBrtEndRwBrk);
+  adopt(cols_ok, cols, print.manual_col_breaks, Family::kColBreaks, kBrtBeginColBrk, kBrtEndColBrk);
+}
+
 }  // namespace
 
 bool model_owns_print_records(const SheetPrintSettings& print) {
@@ -365,7 +482,8 @@ bool model_owns_print_records(const SheetPrintSettings& print) {
 }
 
 void decode_print_records(const std::vector<std::uint8_t>& after_hyperlinks, SheetPrintSettings& print) {
-  for (const FramedRecord& rec : split_records(after_hyperlinks)) {
+  const std::vector<FramedRecord> recs = split_records(after_hyperlinks);
+  for (const FramedRecord& rec : recs) {
     if (rec.type == kBrtPageSetup && print.page_setup_xml.empty()) {
       if (std::string xml = DecodePageSetup(rec.payload); !xml.empty()) {
         print.page_setup_xml = std::move(xml);
@@ -378,6 +496,10 @@ void decode_print_records(const std::vector<std::uint8_t>& after_hyperlinks, She
       }
     }
   }
+  if (print.header_footer_xml.empty()) {
+    DecodeHeaderFooterFamily(after_hyperlinks, recs, print);
+  }
+  DecodeBreakFamilies(after_hyperlinks, recs, print);
 }
 
 std::optional<std::string> decode_print_options(ByteSpan payload) {
