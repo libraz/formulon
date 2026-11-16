@@ -226,13 +226,7 @@ EffectiveStyle effective_style(const Workbook& wb, const Sheet& sheet, std::uint
 
   std::optional<LoadedTheme> theme;
   const auto resolve = [&](const ColorSpec& spec, ColorContext context) {
-    if (spec.kind != ColorSpec::Kind::kTheme) {
-      return resolve_color(spec, default_theme(), ThemeSource::kDefault, styles.indexed_colors, context);
-    }
-    if (!theme) {
-      theme.emplace(wb.load_theme());
-    }
-    return resolve_color(spec, theme->theme, theme->source, styles.indexed_colors, context);
+    return resolve_color(wb, theme, spec, context);
   };
 
   out.font_index = xf.font_index < styles.fonts.size() ? xf.font_index : 0U;

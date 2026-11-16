@@ -179,12 +179,20 @@ ResolvedColor resolve_color(const ColorSpec& spec, const Theme& theme, ThemeSour
   }
 }
 
-ResolvedColor resolve_color(const Workbook& wb, const ColorSpec& spec, ColorContext context) {
+ResolvedColor resolve_color(const Workbook& wb, std::optional<LoadedTheme>& theme, const ColorSpec& spec,
+                            ColorContext context) {
   if (spec.kind != ColorSpec::Kind::kTheme) {
     return resolve_color(spec, default_theme(), ThemeSource::kDefault, wb.styles().indexed_colors, context);
   }
-  const LoadedTheme loaded = wb.load_theme();
-  return resolve_color(spec, loaded.theme, loaded.source, wb.styles().indexed_colors, context);
+  if (!theme) {
+    theme.emplace(wb.load_theme());
+  }
+  return resolve_color(spec, theme->theme, theme->source, wb.styles().indexed_colors, context);
+}
+
+ResolvedColor resolve_color(const Workbook& wb, const ColorSpec& spec, ColorContext context) {
+  std::optional<LoadedTheme> theme;
+  return resolve_color(wb, theme, spec, context);
 }
 
 }  // namespace formulon

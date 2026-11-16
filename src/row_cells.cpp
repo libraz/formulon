@@ -320,7 +320,7 @@ std::size_t RowCells::split_runs_at(std::uint64_t col) {
   }
   const StyleRun right{static_cast<std::uint16_t>(col), list[index].last, list[index].xf};
   list[index].last = static_cast<std::uint16_t>(col - 1U);
-  list.insert(list.begin() + static_cast<std::ptrdiff_t>(index) + 1, right);
+  splice_runs(list, index + 1U, index + 1U, &right, &right + 1);
   return index + 1U;
 }
 

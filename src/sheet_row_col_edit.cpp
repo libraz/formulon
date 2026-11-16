@@ -30,34 +30,40 @@ namespace {
 // past `bound`, are removed. `field` names the axis coordinate, so one
 // instantiation per anchor type serves both axes. Under a `band`, an entry
 // whose `perp` coordinate lies outside it stays.
+// Applies the insert / delete rule to one anchor coordinate at or past the
+// edit index; false when the anchor is dropped.
+bool ShiftCoord(std::uint32_t& value, std::uint32_t count, std::uint32_t index, bool is_delete, std::uint32_t bound) {
+  if (is_delete) {
+    if (value < index + count) {
+      return false;  // Anchor inside deleted interval.
+    }
+    value -= count;
+    return true;
+  }
+  const std::uint64_t shifted = static_cast<std::uint64_t>(value) + count;
+  if (shifted >= bound) {
+    return false;  // Pushed past the sheet bound.
+  }
+  value = static_cast<std::uint32_t>(shifted);
+  return true;
+}
+
 template <typename Anchor>
 void ShiftAnchored(std::vector<Anchor>& items, std::uint32_t Anchor::*field, std::uint32_t index, std::uint32_t count,
                    bool is_delete, std::uint32_t bound, const std::optional<Band>& band = std::nullopt,
                    std::uint32_t Anchor::*perp = nullptr) {
-  std::vector<Anchor> retained;
-  retained.reserve(items.size());
+  std::size_t kept = 0;
   for (Anchor& item : items) {
-    if (item.*field < index || (band.has_value() && (item.*perp < band->first || item.*perp > band->last))) {
-      retained.push_back(std::move(item));
-      continue;
-    }
-    if (is_delete) {
-      if (item.*field < index + count) {
-        continue;  // Anchor inside deleted interval; drop the entry.
+    const bool outside =
+        item.*field < index || (band.has_value() && (item.*perp < band->first || item.*perp > band->last));
+    if (outside || ShiftCoord(item.*field, count, index, is_delete, bound)) {
+      if (kept != static_cast<std::size_t>(&item - items.data())) {
+        items[kept] = std::move(item);
       }
-      item.*field -= count;
-    } else {
-      // Insert. Anchors at or past `index` shift forward; entries pushed
-      // past the sheet bound are dropped.
-      const std::uint64_t shifted = static_cast<std::uint64_t>(item.*field) + count;
-      if (shifted >= bound) {
-        continue;
-      }
-      item.*field = static_cast<std::uint32_t>(shifted);
+      ++kept;
     }
-    retained.push_back(std::move(item));
   }
-  items = std::move(retained);
+  items.erase(items.begin() + static_cast<std::ptrdiff_t>(kept), items.end());
 }
 
 // A note or threaded comment moves with its cell.

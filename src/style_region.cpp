@@ -165,42 +165,21 @@ void finish_row(RowLayout& entry, RowDecide decide, void* ctx, bool default_hidd
   }
 }
 
-// Rewrites every row of `[first, last]`; use for operations that really do
-// materialize a style on every row. New entries inherit the sheet's default
-// visibility, and pre-existing visible exceptions survive a style clear.
-void rewrite_row_styles(SheetLayout& layout, std::uint32_t first, std::uint32_t last, bool default_hidden,
-                        RowDecide decide, void* ctx) {
-  std::vector<RowLayout>& rows = layout.row_overrides;
-  std::vector<RowLayout> out;
-  out.reserve(rows.size());
-  std::size_t next = static_cast<std::size_t>(row_override_lower_bound(layout, first) - rows.begin());
-  out.insert(out.end(), rows.begin(), rows.begin() + static_cast<std::ptrdiff_t>(next));
-  for (std::uint64_t row = first; row <= last; ++row) {
-    RowLayout entry;
-    entry.row = static_cast<std::uint32_t>(row);
-    bool existed_before = false;
-    if (next < rows.size() && rows[next].row == row) {
-      entry = rows[next++];
-      existed_before = true;
-    } else {
-      entry.hidden = default_hidden;
-    }
-    finish_row(entry, decide, ctx, default_hidden, existed_before, out);
-  }
-  out.insert(out.end(), rows.begin() + static_cast<std::ptrdiff_t>(next), rows.end());
-  rows = std::move(out);
-}
-
 // Rewrites only existing row overrides and any explicit rows supplied by a
 // capture. The two ordered inputs are merged into one pass; absent rows are
-// materialized only when the callback assigns them state.
+// materialized only when the callback assigns them state. `dense` instead
+// visits every row of `[first, last]`: new entries inherit the sheet's default
+// visibility and pre-existing visible exceptions survive a style clear.
 void rewrite_sparse_row_styles(SheetLayout& layout, std::uint32_t first, std::uint32_t last, bool default_hidden,
-                               RowDecide decide, void* ctx, const std::vector<RowStyle>* additional_rows = nullptr) {
+                               RowDecide decide, void* ctx, const std::vector<RowStyle>* additional_rows = nullptr,
+                               bool dense = false) {
   std::vector<RowLayout>& rows = layout.row_overrides;
   std::vector<RowLayout> out;
   out.reserve(rows.size() + (additional_rows == nullptr ? 0U : additional_rows->size()));
   std::size_t next = static_cast<std::size_t>(row_override_lower_bound(layout, first) - rows.begin());
-  out.insert(out.end(), rows.begin(), rows.begin() + static_cast<std::ptrdiff_t>(next));
+  for (std::size_t i = 0; i < next; ++i) {
+    out.push_back(rows[i]);
+  }
   std::size_t extra = 0U;
   if (additional_rows != nullptr) {
     extra = static_cast<std::size_t>(
@@ -209,14 +188,16 @@ void rewrite_sparse_row_styles(SheetLayout& layout, std::uint32_t first, std::ui
         additional_rows->begin());
   }
 
+  std::uint64_t dense_row = first;
   while (true) {
     const bool has_existing = next < rows.size() && rows[next].row <= last;
     const bool has_additional =
         additional_rows != nullptr && extra < additional_rows->size() && (*additional_rows)[extra].row <= last;
-    if (!has_existing && !has_additional) {
+    if (dense ? dense_row > last : (!has_existing && !has_additional)) {
       break;
     }
-    const std::uint32_t row = !has_additional || (has_existing && rows[next].row < (*additional_rows)[extra].row)
+    const std::uint32_t row = dense ? static_cast<std::uint32_t>(dense_row++)
+                              : !has_additional || (has_existing && rows[next].row < (*additional_rows)[extra].row)
                                   ? rows[next].row
                                   : (*additional_rows)[extra].row;
     RowLayout entry;
@@ -233,8 +214,15 @@ void rewrite_sparse_row_styles(SheetLayout& layout, std::uint32_t first, std::ui
     }
     finish_row(entry, decide, ctx, default_hidden, existed_before, out);
   }
-  out.insert(out.end(), rows.begin() + static_cast<std::ptrdiff_t>(next), rows.end());
+  for (std::size_t i = next; i < rows.size(); ++i) {
+    out.push_back(rows[i]);
+  }
   rows = std::move(out);
+}
+
+void rewrite_row_styles(SheetLayout& layout, std::uint32_t first, std::uint32_t last, bool default_hidden,
+                        RowDecide decide, void* ctx) {
+  rewrite_sparse_row_styles(layout, first, last, default_hidden, decide, ctx, nullptr, true);
 }
 
 void append_u32(std::vector<std::uint8_t>& out, std::uint32_t value) {

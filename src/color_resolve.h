@@ -10,6 +10,7 @@
 #define FORMULON_COLOR_RESOLVE_H_
 
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 #include "styles.h"
@@ -63,6 +64,10 @@ ResolvedColor resolve_color(const ColorSpec& spec, const Theme& theme, ThemeSour
 
 /// Resolves against the workbook's theme and `<indexedColors>`.
 ResolvedColor resolve_color(const Workbook& wb, const ColorSpec& spec, ColorContext context);
+
+/// As above, loading the workbook theme into `theme` on first use.
+ResolvedColor resolve_color(const Workbook& wb, std::optional<LoadedTheme>& theme, const ColorSpec& spec,
+                            ColorContext context);
 
 }  // namespace formulon
 
