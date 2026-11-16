@@ -2,6 +2,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
+#include <string_view>
 #include <vector>
 
 #include "eval/declared_rect.h"
@@ -12,6 +14,7 @@
 #include "eval/jp_fold.h"
 #include "eval/name_env_resolve.h"
 #include "eval/structured_ref_project.h"
+#include "eval/tree_walker/dispatch.h"
 #include "eval/wildcard.h"
 #include "excel_locale.h"
 #include "external_book.h"
@@ -30,6 +33,35 @@ namespace eval {
 
 Value promote_array_result_cell(const Value& value) {
   return value.promote_reference_blank_to_value_array();
+}
+
+bool is_reference_token(const parser::AstNode& node) {
+  switch (node.kind()) {
+    case parser::NodeKind::Ref:
+      return true;
+    case parser::NodeKind::RangeOp:
+      return node.as_range_arity() == 2U && node.as_range_operand(0).kind() == parser::NodeKind::Ref &&
+             node.as_range_operand(1).kind() == parser::NodeKind::Ref;
+    default:
+      return false;
+  }
+}
+
+bool source_returns_reference(const parser::AstNode& node) {
+  if (node.kind() != parser::NodeKind::Call) {
+    return is_reference_token(node);
+  }
+  const std::string_view name = strip_future_prefix(node.as_call_name());
+  for (const std::string_view producer : {"OFFSET", "INDIRECT", "IF", "CHOOSE", "IFS", "SWITCH", "INDEX", "XLOOKUP"}) {
+    if (strings::case_insensitive_eq(name, producer)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool is_one_area_ref(const Value& value) {
+  return value.is_ref() && value.ref_form() == RefForm::kArea && value.as_ref().book == 0U;
 }
 
 Expected<bool, ErrorCode> resolve_reference_table(const parser::AstNode& arg, const EvalContext& ctx,

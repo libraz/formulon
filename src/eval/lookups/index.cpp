@@ -7,7 +7,6 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <initializer_list>
 #include <limits>
 #include <optional>
 #include <string_view>
@@ -32,11 +31,9 @@
 #include "eval/reference/ref_value.h"
 #include "eval/special_forms_lazy.h"
 #include "eval/tree_walker/broadcast.h"
-#include "eval/tree_walker/dispatch.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
-#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
@@ -546,32 +543,6 @@ Expected<IndexPick, ErrorCode> index_pick(std::uint32_t rows, std::uint32_t cols
     return ErrorCode::Ref;
   }
   return IndexPick{IndexPickKind::kCell, row_idx - 1U, col_idx - 1U};
-}
-
-// The calls that return their reference as a `Ref`; any other source is read through the range seams.
-bool source_returns_reference(const parser::AstNode& node) {
-  switch (node.kind()) {
-    case parser::NodeKind::Ref:
-      return true;
-    case parser::NodeKind::RangeOp:
-      return node.as_range_arity() == 2U && node.as_range_operand(0).kind() == parser::NodeKind::Ref &&
-             node.as_range_operand(1).kind() == parser::NodeKind::Ref;
-    case parser::NodeKind::Call: {
-      const std::string_view name = strip_future_prefix(node.as_call_name());
-      for (const std::string_view producer : {"OFFSET", "INDIRECT", "IF", "CHOOSE", "IFS", "SWITCH", "INDEX"}) {
-        if (strings::case_insensitive_eq(name, producer)) {
-          return true;
-        }
-      }
-      return false;
-    }
-    default:
-      return false;
-  }
-}
-
-bool is_one_area_ref(const Value& value) {
-  return value.is_ref() && value.ref_form() == RefForm::kArea && value.as_ref().book == 0U;
 }
 
 std::uint32_t area_rows(const Value& ref) {

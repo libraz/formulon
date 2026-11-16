@@ -17,6 +17,7 @@
 #include "eval/array_alloc.h"
 #include "eval/coerce.h"
 #include "eval/collation.h"
+#include "eval/declared_rect.h"
 #include "eval/dynamic_array/common.h"
 #include "eval/error_type_code.h"
 #include "eval/eval_context.h"
@@ -27,6 +28,7 @@
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "eval/range_resolvers.h"
+#include "eval/reference/ref_value.h"
 #include "eval/regex_lazy.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -458,6 +460,20 @@ MatchOutcome match_query(const std::vector<Value>& cells, const Value& query, XM
   return {MatchOutcomeKind::Hit, offset, Value::blank()};
 }
 
+// The row (vertical lookup) or column (horizontal lookup) `offset` of the one-area reference `ref`.
+Value matched_slice(const Value& ref, bool horizontal, std::uint32_t offset, Arena& arena) {
+  const RefArea& a = ref.as_ref().areas[0];
+  DeclaredRect rect{a.row_first, a.row_last, a.col_first, a.col_last,
+                    /*whole_axis=*/a.whole_col != 0U || a.whole_row != 0U};
+  if (horizontal) {
+    rect.col_first = rect.col_last = a.col_first + offset;
+  } else {
+    rect.row_first = rect.row_last = a.row_first + offset;
+  }
+  const RefArea slice = make_ref_area(rect, a.sheet_first, a.sheet_last, RefOrigin::kDerived);
+  return make_ref(arena, RefForm::kArea, 0, &slice, 1);
+}
+
 }  // namespace
 
 /// XLOOKUP(lookup_value, lookup_array, return_array, [if_not_found],
@@ -503,7 +519,9 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
   const auto value_for_miss = [&](bool array_lane) -> Value {
     if (!fallback.has_value()) {
       if (call_arg_supplied(call, 3U)) {
-        fallback = eval_node(call.as_call_arg(3), arena, registry, ctx);
+        // A scalar lookup returns the fallback as it is: a `Ref` when it denotes one.
+        fallback = array_lane ? eval_node(call.as_call_arg(3), arena, registry, ctx)
+                              : eval_node_ref(call.as_call_arg(3), arena, registry, ctx);
       } else {
         fallback = Value::error(ErrorCode::NA);
       }
@@ -559,6 +577,13 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
   // the existing multi-cell return behavior: the matched row (vertical
   // lookup) or column (horizontal lookup) spills as an array.
   const std::size_t off = match.offset;
+  // A return_array written as a reference returns the matched slice as a reference.
+  if (is_reference_token(call.as_call_arg(2))) {
+    const Value return_ref = eval_node_ref(call.as_call_arg(2), arena, registry, ctx);
+    if (is_one_area_ref(return_ref)) {
+      return matched_slice(return_ref, horizontal_lookup, static_cast<std::uint32_t>(off), arena);
+    }
+  }
   if (plan.slice_extent == 1U) {
     // Single-cell result. `off` indexes the match axis; with a 1-lane
     // return_array the flat index is `off` regardless of orientation.

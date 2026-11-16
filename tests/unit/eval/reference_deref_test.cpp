@@ -934,6 +934,29 @@ TEST_F(SelectedRefTest, ValueModeReadsTheIndexedReference) {
   ExpectSame(Eval("=INDEX(IF(TRUE,{5,6}),2)"), Eval("=6"), "value source");
 }
 
+// XLOOKUP over a written return_array returns the matched slice as a reference; a scalar
+// lookup's fallback is returned as it is.
+TEST_F(SelectedRefTest, XlookupReturnsTheMatchedSlice) {
+  // A3 holds 31 and B1 holds 12.
+  ExpectSelected("=XLOOKUP(31,A1:A5,B1:C5)", 2, 1, 2, 2);
+  ExpectSelected("=XLOOKUP(12,A1:C1,A3:C4)", 2, 1, 3, 1);
+  ExpectSelected("=XLOOKUP(-1,A1:A5,B1:B5,D4)", 3, 3, 3, 3);
+  ExpectSelected("=XLOOKUP(-1,A1:A5,B1:B5,OFFSET(A1,1,1))", 1, 1, 1, 1, kHome, /*dynamic=*/true);
+  ExpectSelected("=INDEX(XLOOKUP(31,A1:A5,B1:C5),2)", 2, 2, 2, 2);
+}
+
+TEST_F(SelectedRefTest, XlookupOverValuesOrArrayLookupsGivesValues) {
+  EXPECT_TRUE(AsRef("=XLOOKUP(2,{1;2},{5;6})").is_number());
+  EXPECT_TRUE(AsRef("=XLOOKUP(-1,A1:A5,B1:B5,7)").is_number());
+  EXPECT_TRUE(AsRef("=XLOOKUP({1;2},A1:A5,B1:B5)").is_array());
+  ExpectError(AsRef("=XLOOKUP(-1,A1:A5,B1:B5)"), ErrorCode::NA, "a miss with no fallback");
+}
+
+TEST_F(SelectedRefTest, ValueModeReadsTheMatchedSlice) {
+  ExpectSame(Eval("=XLOOKUP(31,A1:A5,B1:C5)"), Eval("=B3:C3"), "matched row");
+  ExpectSame(Eval("=XLOOKUP(-1,A1:A5,B1:B5,D4)"), Eval("=D4"), "fallback reference");
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

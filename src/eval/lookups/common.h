@@ -43,6 +43,18 @@ class FunctionRegistry;
 // paths continue to return the original reference blank unchanged.
 Value promote_array_result_cell(const Value& value);
 
+/// Whether `node` evaluates to a `Ref` when it names a reference: a cell or
+/// range token, or a call that returns its reference (OFFSET, INDIRECT, IF,
+/// CHOOSE, IFS, SWITCH, INDEX, XLOOKUP). Other sources are read through the
+/// range seams.
+bool source_returns_reference(const parser::AstNode& node);
+
+/// `node` is a cell or range token, read as a reference without evaluating anything.
+bool is_reference_token(const parser::AstNode& node);
+
+/// `value` is a one-area reference into this workbook.
+bool is_one_area_ref(const Value& value);
+
 // Three-way numeric compare: -1, 0 or 1 (0 whenever either side is NaN).
 inline int compare_numbers(double x, double y) {
   return x < y ? -1 : (x > y ? 1 : 0);
