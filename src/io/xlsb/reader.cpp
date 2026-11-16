@@ -916,6 +916,7 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
     const std::vector<std::uint8_t>& styles_bytes = styles_bytes_or.value();
     ByteSpan styles_span{styles_bytes.data(), styles_bytes.size()};
     ASSIGN_OR_RETURN(auto styles, read_styles_bin(styles_span));
+    complete_loaded_fonts(styles, wb, options);
     retained_part_origins.set(wb_rels.styles_path,
                               RetainedPartOriginTag{PassthroughPart::RetainedOrigin::kStyles, 0, 0, 0});
     wb.set_styles(std::move(styles));

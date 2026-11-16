@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "external_link.h"
+#include "font_completion.h"
 #include "io/dynamic_array_formula.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml_defs.h"
@@ -56,6 +57,13 @@ Error sheet_add_error(Error error, std::string_view message, std::string context
     return error;
   }
   return make_error(FormulonErrorCode::kIoSheetCorrupt, std::string(message), std::move(context));
+}
+
+void complete_loaded_fonts(StylesTable& styles, const Workbook& wb, const ReadOptions& options) {
+  const ExcelLocale locale = options.profile.has_value() ? options.profile->locale : wb.excel_profile().locale;
+  for (FontRecord& font : styles.fonts) {
+    complete_font_from_face(font, locale);
+  }
 }
 
 void finish_loaded_workbook(Workbook& wb, const ReadOptions& options,

@@ -585,6 +585,7 @@ src/eval/aggregate_lazy.cpp
   src/eval/lookups/index.cpp
   src/eval/lookups/xlookup.cpp
   src/c_api/parts/auto_filter.cpp
+  src/c_api/parts/cell_format_patch.cpp
   src/c_api/parts/cells.cpp
   src/c_api/parts/cf_eval.cpp
   src/c_api/parts/eval_adhoc.cpp

@@ -114,6 +114,7 @@ FORMULON_STRUCT_V1(fm_function_metadata_info_t, sizeof(fm_function_metadata_info
 FORMULON_STRUCT_V1(fm_locale_facts_info_t, sizeof(fm_locale_facts_info_t))
 FORMULON_STRUCT_V1(fm_sheet_view_info_t, sizeof(fm_sheet_view_info_t))
 FORMULON_STRUCT_V1(fm_sheet_view_patch_t, sizeof(fm_sheet_view_patch_t))
+FORMULON_STRUCT_V1(fm_cell_format_patch_t, sizeof(fm_cell_format_patch_t))
 FORMULON_STRUCT_V1(fm_column_layout_info_t, sizeof(fm_column_layout_info_t))
 FORMULON_STRUCT_V1(fm_row_layout_info_t, sizeof(fm_row_layout_info_t))
 FORMULON_STRUCT_V1(fm_auto_filter_t, sizeof(fm_auto_filter_t))

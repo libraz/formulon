@@ -18,6 +18,8 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "c_api/parts/struct_v1_sizes.h"
+#include "c_api/parts/styles_records.h"
+#include "font_completion.h"
 #include "io/styles_writer.h"
 #include "sheet_name.h"
 #include "styles.h"
@@ -27,13 +29,22 @@
 
 using formulon::effective_num_fmt;
 using formulon::c_api::parts::add_num_fmt_code;
+using formulon::c_api::parts::border_key;
 using formulon::c_api::parts::check_finite_non_negative;
 using formulon::c_api::parts::check_font_enums;
+using formulon::c_api::parts::check_font_size_pt;
 using formulon::c_api::parts::check_index;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::color_from_c;
+using formulon::c_api::parts::ensure_default_cell_xf;
+using formulon::c_api::parts::ensure_default_style_roots;
+using formulon::c_api::parts::fill_from_c;
+using formulon::c_api::parts::fill_key;
+using formulon::c_api::parts::find_or_append_record;
 using formulon::c_api::parts::finish_status;
+using formulon::c_api::parts::font_key;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::null_field;
@@ -42,12 +53,9 @@ using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::text_or_empty;
 using formulon::c_api::parts::validate;
 
-namespace {
-
-static_assert(std::is_nothrow_move_constructible_v<formulon::StylesTable>,
-              "StylesTable must be nothrow-move-constructible for staged style commits");
-static_assert(std::is_nothrow_move_assignable_v<formulon::StylesTable>,
-              "StylesTable must be nothrow-move-assignable for staged style commits");
+namespace formulon {
+namespace c_api {
+namespace parts {
 
 /// Dedup identity for the font / fill / border tables.
 ///
@@ -72,43 +80,61 @@ std::string border_key(const formulon::BorderRecord& value) {
   return formulon::io::border_fragment(value);
 }
 
-bool font_records_equal(const formulon::FontRecord& a, const formulon::FontRecord& b) {
-  return font_key(a) == font_key(b);
+/// Accepts a colour specification from the caller. An out-of-range `kind`
+/// degrades to `kNone` rather than reaching the writer as an unknown
+/// attribute; `out_argb` receives the record's legacy ARGB field.
+formulon::ColorSpec color_from_c(fm_color_t src, std::uint32_t* out_argb) {
+  if (src.kind < 0 || src.kind > static_cast<int32_t>(formulon::ColorSpec::Kind::kAuto)) {
+    src.kind = FM_COLOR_KIND_NONE;
+  }
+  return color_spec_from_c(src, out_argb);
 }
 
-bool fill_records_equal(const formulon::FillRecord& a, const formulon::FillRecord& b) {
-  return fill_key(a) == fill_key(b);
+/// A stated font size is `1..409` points, Excel's font-size box range.
+fm_status_t check_font_size_pt(double size_pt) {
+  if (size_pt < 1.0 || size_pt > 409.0) {
+    return invalid_argument("size_pt must be in 1..409", "size_pt=" + fixed_string(size_pt, 6));
+  }
+  return 0;
 }
 
-bool border_records_equal(const formulon::BorderRecord& a, const formulon::BorderRecord& b) {
-  return border_key(a) == border_key(b);
+double finite_or_zero(double value) noexcept {
+  return std::isfinite(value) ? value : 0.0;
 }
 
-/// Index of the record in `table` whose key equals `candidate`'s, appending
-/// `candidate` when none does. The candidate's key is built once, so the scan
-/// stays linear in the table size.
-template <typename Record>
-uint32_t find_or_append_record(std::vector<Record>& table, Record candidate, std::string (*key)(const Record&)) {
-  const std::string candidate_key = key(candidate);
-  for (std::size_t i = 0; i < table.size(); ++i) {
-    if (key(table[i]) == candidate_key) {
-      return static_cast<uint32_t>(i);
+formulon::FillRecord fill_from_c(const fm_fill_t& record) {
+  formulon::FillRecord out;
+  out.pattern = static_cast<std::uint8_t>(record.pattern);
+  out.fg = color_from_c(record.foreground, &out.fg_argb);
+  out.bg = color_from_c(record.background, &out.bg_argb);
+  if (record.has_gradient != 0) {
+    out.has_gradient = true;
+    // The pattern fields do not exist on a gradient fill; clearing them keeps
+    // records that differ only there from comparing unequal.
+    out.pattern = 0;
+    out.fg_argb = 0;
+    out.bg_argb = 0;
+    out.fg = formulon::ColorSpec{};
+    out.bg = formulon::ColorSpec{};
+    formulon::GradientFill& gradient = out.gradient;
+    gradient.path = record.gradient_type == FM_GRADIENT_TYPE_PATH;
+    gradient.degree = finite_or_zero(record.gradient_angle_deg);
+    gradient.left = finite_or_zero(record.gradient_left);
+    gradient.right = finite_or_zero(record.gradient_right);
+    gradient.top = finite_or_zero(record.gradient_top);
+    gradient.bottom = finite_or_zero(record.gradient_bottom);
+    // `validate` has already refused a count past `kMaxGradientStops`.
+    const std::size_t count = record.gradient_stops == nullptr ? 0U : record.gradient_stop_count;
+    gradient.stops.reserve(count);
+    for (std::size_t i = 0; i < count; ++i) {
+      const fm_gradient_stop_t& in = record.gradient_stops[i];
+      formulon::GradientStop stop;
+      stop.position = finite_or_zero(in.position);
+      stop.color = color_from_c(in.color, &stop.argb);
+      gradient.stops.push_back(stop);
     }
   }
-  table.push_back(std::move(candidate));
-  return static_cast<uint32_t>(table.size() - 1U);
-}
-
-/// A dxf's engaged children are compared through the same writer-derived
-/// keys as the global tables, so a differential font that only differs in
-/// `<vertAlign>` or in an explicit `<b val="0"/>` is a distinct record.
-///
-bool dxf_records_equal(const formulon::DifferentialFormat& a, const formulon::DifferentialFormat& b) {
-  return a.has_font == b.has_font && (!a.has_font || font_records_equal(a.font, b.font)) && a.has_fill == b.has_fill &&
-         (!a.has_fill || fill_records_equal(a.fill, b.fill)) && a.has_border == b.has_border &&
-         (!a.has_border || border_records_equal(a.border, b.border)) && a.has_num_fmt == b.has_num_fmt &&
-         (!a.has_num_fmt || (a.num_fmt_id == b.num_fmt_id && a.num_fmt_code == b.num_fmt_code)) &&
-         a.alignment_xml == b.alignment_xml && a.protection_xml == b.protection_xml;
+  return out;
 }
 
 void ensure_default_style_roots(formulon::StylesTable& styles) {
@@ -128,6 +154,41 @@ void ensure_default_cell_xf(formulon::StylesTable& styles) {
   if (styles.cell_xfs.empty()) {
     styles.cell_xfs.emplace_back();
   }
+}
+
+}  // namespace parts
+}  // namespace c_api
+}  // namespace formulon
+
+namespace {
+
+static_assert(std::is_nothrow_move_constructible_v<formulon::StylesTable>,
+              "StylesTable must be nothrow-move-constructible for staged style commits");
+static_assert(std::is_nothrow_move_assignable_v<formulon::StylesTable>,
+              "StylesTable must be nothrow-move-assignable for staged style commits");
+
+bool font_records_equal(const formulon::FontRecord& a, const formulon::FontRecord& b) {
+  return font_key(a) == font_key(b);
+}
+
+bool fill_records_equal(const formulon::FillRecord& a, const formulon::FillRecord& b) {
+  return fill_key(a) == fill_key(b);
+}
+
+bool border_records_equal(const formulon::BorderRecord& a, const formulon::BorderRecord& b) {
+  return border_key(a) == border_key(b);
+}
+
+/// A dxf's engaged children are compared through the same writer-derived
+/// keys as the global tables, so a differential font that only differs in
+/// `<vertAlign>` or in an explicit `<b val="0"/>` is a distinct record.
+///
+bool dxf_records_equal(const formulon::DifferentialFormat& a, const formulon::DifferentialFormat& b) {
+  return a.has_font == b.has_font && (!a.has_font || font_records_equal(a.font, b.font)) && a.has_fill == b.has_fill &&
+         (!a.has_fill || fill_records_equal(a.fill, b.fill)) && a.has_border == b.has_border &&
+         (!a.has_border || border_records_equal(a.border, b.border)) && a.has_num_fmt == b.has_num_fmt &&
+         (!a.has_num_fmt || (a.num_fmt_id == b.num_fmt_id && a.num_fmt_code == b.num_fmt_code)) &&
+         a.alignment_xml == b.alignment_xml && a.protection_xml == b.protection_xml;
 }
 
 /// Rejects an `<xf>` whose font / fill / border / number-format reference
@@ -228,16 +289,6 @@ formulon::CellXf cell_xf_from_c(const fm_cell_xf_t& record, std::uint32_t xf_id)
   return candidate;
 }
 
-/// Accepts a colour specification from the caller. An out-of-range `kind`
-/// degrades to `kNone` rather than reaching the writer as an unknown
-/// attribute; `out_argb` receives the record's legacy ARGB field.
-formulon::ColorSpec color_from_c(fm_color_t src, std::uint32_t* out_argb) {
-  if (src.kind < 0 || src.kind > static_cast<int32_t>(formulon::ColorSpec::Kind::kAuto)) {
-    src.kind = FM_COLOR_KIND_NONE;
-  }
-  return formulon::c_api::parts::color_spec_from_c(src, out_argb);
-}
-
 formulon::FontRecord font_from_c(const fm_font_t& record) {
   formulon::FontRecord out;
   out.name = text_or_empty(record.name);
@@ -269,8 +320,11 @@ formulon::FontRecord font_from_c(const fm_font_t& record) {
 }
 
 /// Cell fonts always carry a size: only a differential font may leave it
-/// unchanged. An unstated size or a `NULL` name takes the Normal font's.
-formulon::FontRecord cell_font_from_c(const fm_font_t& record, const formulon::FontRecord& normal) {
+/// unchanged. An unstated size or a `NULL` name takes the Normal font's. A font
+/// that states no family, charset or scheme is the font Excel holds after
+/// loading it (`complete_font_from_face`).
+formulon::FontRecord cell_font_from_c(const fm_font_t& record, const formulon::FontRecord& normal,
+                                      formulon::ExcelLocale locale) {
   formulon::FontRecord out = font_from_c(record);
   if (record.has_size_pt == 0) {
     out.size = normal.size;
@@ -279,15 +333,8 @@ formulon::FontRecord cell_font_from_c(const fm_font_t& record, const formulon::F
     out.name = normal.name;
   }
   out.has_size = true;
+  formulon::complete_font_from_face(out, locale);
   return out;
-}
-
-/// A stated font size is `1..409` points, Excel's font-size box range.
-fm_status_t check_font_size_pt(double size_pt) {
-  if (size_pt < 1.0 || size_pt > 409.0) {
-    return invalid_argument("size_pt must be in 1..409", "size_pt=" + formulon::fixed_string(size_pt, 6));
-  }
-  return 0;
 }
 
 /// `validate` of a cell font plus its size range.
@@ -296,45 +343,6 @@ fm_status_t validate_cell_font(const fm_font_t& record) {
     return rc;
   }
   return record.has_size_pt != 0 ? check_font_size_pt(record.size_pt) : 0;
-}
-
-double finite_or_zero(double value) noexcept {
-  return std::isfinite(value) ? value : 0.0;
-}
-
-formulon::FillRecord fill_from_c(const fm_fill_t& record) {
-  formulon::FillRecord out;
-  out.pattern = static_cast<std::uint8_t>(record.pattern);
-  out.fg = color_from_c(record.foreground, &out.fg_argb);
-  out.bg = color_from_c(record.background, &out.bg_argb);
-  if (record.has_gradient != 0) {
-    out.has_gradient = true;
-    // The pattern fields do not exist on a gradient fill; clearing them keeps
-    // records that differ only there from comparing unequal.
-    out.pattern = 0;
-    out.fg_argb = 0;
-    out.bg_argb = 0;
-    out.fg = formulon::ColorSpec{};
-    out.bg = formulon::ColorSpec{};
-    formulon::GradientFill& gradient = out.gradient;
-    gradient.path = record.gradient_type == FM_GRADIENT_TYPE_PATH;
-    gradient.degree = finite_or_zero(record.gradient_angle_deg);
-    gradient.left = finite_or_zero(record.gradient_left);
-    gradient.right = finite_or_zero(record.gradient_right);
-    gradient.top = finite_or_zero(record.gradient_top);
-    gradient.bottom = finite_or_zero(record.gradient_bottom);
-    // `validate` has already refused a count past `kMaxGradientStops`.
-    const std::size_t count = record.gradient_stops == nullptr ? 0U : record.gradient_stop_count;
-    gradient.stops.reserve(count);
-    for (std::size_t i = 0; i < count; ++i) {
-      const fm_gradient_stop_t& in = record.gradient_stops[i];
-      formulon::GradientStop stop;
-      stop.position = finite_or_zero(in.position);
-      stop.color = color_from_c(in.color, &stop.argb);
-      gradient.stops.push_back(stop);
-    }
-  }
-  return out;
 }
 
 formulon::BorderSide border_side_from_c(const fm_border_side_t& src) noexcept {
@@ -368,7 +376,7 @@ extern "C" fm_status_t fm_workbook_add_font(fm_workbook_t* wb, const fm_font_t* 
   }
   formulon::StylesTable& styles = wb->workbook().mutable_styles();
   ensure_default_style_roots(styles);
-  formulon::FontRecord candidate = cell_font_from_c(*record, styles.fonts[0]);
+  formulon::FontRecord candidate = cell_font_from_c(*record, styles.fonts[0], wb->workbook().excel_profile().locale);
   *out_index = find_or_append_record(styles.fonts, std::move(candidate), &font_key);
   return 0;
 }
@@ -388,7 +396,7 @@ extern "C" fm_status_t fm_workbook_set_font(fm_workbook_t* wb, uint32_t font_ind
   if (auto rc = validate_cell_font(*record); rc != 0) {
     return rc;
   }
-  styles.fonts[font_index] = cell_font_from_c(*record, styles.fonts[0]);
+  styles.fonts[font_index] = cell_font_from_c(*record, styles.fonts[0], wb->workbook().excel_profile().locale);
   return 0;
 }
 
@@ -405,7 +413,7 @@ extern "C" fm_status_t fm_workbook_set_default_font(fm_workbook_t* wb, const fm_
   // by construction, so a table without it is an empty table rather than one
   // whose slot the caller mis-numbered.
   ensure_default_style_roots(styles);
-  styles.fonts[0] = cell_font_from_c(*record, styles.fonts[0]);
+  styles.fonts[0] = cell_font_from_c(*record, styles.fonts[0], wb->workbook().excel_profile().locale);
   return 0;
 }
 
@@ -754,7 +762,8 @@ extern "C" fm_status_t fm_workbook_add_batch(fm_workbook_t* wb, const fm_styles_
   for (uint32_t i = 0; i < staged.borders.size(); ++i)
     borders.emplace(border_key(staged.borders[i]), i);
   for (size_t i = 0; i < batch->font_count; ++i) {
-    formulon::FontRecord value = cell_font_from_c(batch->fonts[i], staged.fonts[0]);
+    formulon::FontRecord value =
+        cell_font_from_c(batch->fonts[i], staged.fonts[0], wb->workbook().excel_profile().locale);
     const std::string key = font_key(value);
     const auto [it, inserted] = fonts.emplace(key, static_cast<uint32_t>(staged.fonts.size()));
     if (inserted)

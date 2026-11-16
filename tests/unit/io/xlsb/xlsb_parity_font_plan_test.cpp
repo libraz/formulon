@@ -12,9 +12,11 @@
 
 #include "cell_style_save_plan.h"
 #include "excel_profile.h"
+#include "font_completion.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
+#include "io/xlsb/reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
@@ -167,10 +169,11 @@ TEST(XlsbParityFontPlan, FontsAndSheetPhoneticsMatchExcel) {
     for (const char* name : locale.cases) {
       const std::string stem = std::string("pf_") + name + "_" + locale.suffix;
       SCOPED_TRACE(stem);
-      auto loaded = read_ooxml(SpanOf(ReadFile(Fixture(stem + "_src.xlsx"))));
+      ReadOptions options;
+      options.profile = locale.profile;
+      auto loaded = read_ooxml(SpanOf(ReadFile(Fixture(stem + "_src.xlsx"))), options);
       ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
       Workbook& wb = loaded.value().workbook;
-      wb.set_excel_profile(locale.profile);
       auto xlsx = write_ooxml(wb);
       ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
       auto xlsb = write_xlsb_with_result(wb);
@@ -245,8 +248,8 @@ std::vector<Bytes> XlsbLiteralFonts(const Bytes& package) {
   return out;
 }
 
-// A literal font that names a face and carries neither family nor charset is saved with the ones Excel fills in, in
-// every measured locale.
+// A literal font that names a face and carries neither family nor charset is held with the ones Excel fills in when it
+// loads the font, so its save matches Excel's in every measured locale.
 TEST(XlsbParityFontPlan, LiteralFontsMatchExcel) {
   for (const LocaleCase& locale : Measured()) {
     for (const char* name : locale.cases) {
@@ -255,10 +258,11 @@ TEST(XlsbParityFontPlan, LiteralFontsMatchExcel) {
       }
       const std::string stem = std::string("pf_") + name + "_" + locale.suffix;
       SCOPED_TRACE(stem);
-      auto loaded = read_ooxml(SpanOf(ReadFile(Fixture(stem + "_src.xlsx"))));
+      ReadOptions options;
+      options.profile = locale.profile;
+      auto loaded = read_ooxml(SpanOf(ReadFile(Fixture(stem + "_src.xlsx"))), options);
       ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
       Workbook& wb = loaded.value().workbook;
-      wb.set_excel_profile(locale.profile);
       auto xlsx = write_ooxml(wb);
       ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
       auto xlsb = write_xlsb_with_result(wb);
@@ -282,13 +286,13 @@ std::string FontFamFixture(const std::string& name) {
 }
 
 // Sixteen literal faces without family or charset, saved by Excel: a known face gets its family and charset, an alias
-// its canonical name, and an unknown face nothing. The model keeps what was loaded.
+// its canonical name, and an unknown face nothing. The load completes them, so the model holds what Excel saves.
 TEST(XlsbParityFontPlan, LiteralFamilyCompletionMatchesExcel) {
-  auto loaded = read_ooxml(SpanOf(ReadFile(FontFamFixture("literal_no_family_src.xlsx"))));
+  ReadOptions options;
+  options.profile = ExcelProfile{ExcelHost::kMac365, ExcelLocale::kJaJP};
+  auto loaded = read_ooxml(SpanOf(ReadFile(FontFamFixture("literal_no_family_src.xlsx"))), options);
   ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
   Workbook& wb = loaded.value().workbook;
-  wb.set_excel_profile(ExcelProfile{ExcelHost::kMac365, ExcelLocale::kJaJP});
-  const std::vector<FontRecord> before = wb.styles().fonts;
   auto xlsx = write_ooxml(wb);
   ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
   auto xlsb = write_xlsb_with_result(wb);
@@ -298,63 +302,59 @@ TEST(XlsbParityFontPlan, LiteralFamilyCompletionMatchesExcel) {
             Literal(XlsxAllFonts(ReadFile(FontFamFixture("literal_no_family.xlsx")))));
   EXPECT_EQ(XlsbLiteralFonts(xlsb.value().bytes), XlsbLiteralFonts(ReadFile(FontFamFixture("literal_no_family.xlsb"))));
 
-  ASSERT_EQ(wb.styles().fonts.size(), before.size());
-  for (std::size_t i = 0; i < before.size(); ++i) {
-    EXPECT_EQ(wb.styles().fonts[i].name, before[i].name) << i;
-    EXPECT_EQ(wb.styles().fonts[i].has_family, before[i].has_family) << i;
-    EXPECT_EQ(wb.styles().fonts[i].has_charset, before[i].has_charset) << i;
-  }
-
   // A reloaded save is completed already, so a second save writes the same fonts.
-  auto reloaded = read_ooxml(SpanOf(xlsx.value()));
+  auto reloaded = read_ooxml(SpanOf(xlsx.value()), options);
   ASSERT_TRUE(static_cast<bool>(reloaded)) << reloaded.error().message;
   auto again = write_ooxml(reloaded.value().workbook);
   ASSERT_TRUE(static_cast<bool>(again)) << again.error().message;
   EXPECT_EQ(Literal(XlsxAllFonts(again.value())), Literal(XlsxAllFonts(xlsx.value())));
 }
 
-// Only a font carrying neither element is completed; a partial one, a theme-linked one and an unknown face are
-// written as stored.
+// Only a font carrying no family, no charset and no scheme is completed; a partial one, a theme-linked one and an
+// unknown face are held as stored.
 TEST(XlsbParityFontPlan, LiteralFamilyCompletionNeedsBothAbsent) {
-  Workbook wb = Workbook::create();
-  std::vector<FontRecord>& fonts = wb.mutable_styles().fonts;
+  const ExcelLocale locale = ExcelLocale::kJaJP;
   FontRecord family_only;
   family_only.name = "Arial";
   family_only.has_family = true;
   family_only.family = 0;
+  complete_font_from_face(family_only, locale);
+  EXPECT_TRUE(family_only.has_family);
+  EXPECT_EQ(family_only.family, 0U);
+  EXPECT_FALSE(family_only.has_charset);
+
   FontRecord charset_only;
   charset_only.name = "Malgun Gothic";
   charset_only.has_charset = true;
   charset_only.charset = 0;
+  complete_font_from_face(charset_only, locale);
+  EXPECT_FALSE(charset_only.has_family);
+  EXPECT_TRUE(charset_only.has_charset);
+  EXPECT_EQ(charset_only.charset, 0U);
+
   FontRecord unknown;
   unknown.name = "Aptos";
+  complete_font_from_face(unknown, locale);
+  EXPECT_FALSE(unknown.has_family);
+  EXPECT_FALSE(unknown.has_charset);
+
   FontRecord themed;
   themed.name = "Arial";
   themed.scheme = 2;
-  const std::size_t first = fonts.size();
-  fonts.push_back(family_only);
-  fonts.push_back(charset_only);
-  fonts.push_back(unknown);
-  const FontSavePlan plan = build_font_save_plan(wb);
-  ASSERT_GE(plan.fonts().size(), first + 3);
-  EXPECT_TRUE(plan.fonts()[first].has_family);
-  EXPECT_EQ(plan.fonts()[first].family, 0U);
-  EXPECT_FALSE(plan.fonts()[first].has_charset);
-  EXPECT_FALSE(plan.fonts()[first + 1].has_family);
-  EXPECT_TRUE(plan.fonts()[first + 1].has_charset);
-  EXPECT_EQ(plan.fonts()[first + 1].charset, 0U);
-  EXPECT_FALSE(plan.fonts()[first + 2].has_family);
-  EXPECT_FALSE(plan.fonts()[first + 2].has_charset);
+  complete_font_from_face(themed, locale);
+  EXPECT_FALSE(themed.has_family);
+  EXPECT_FALSE(themed.has_charset);
 
-  fonts.push_back(themed);
-  const FontSavePlan themed_plan = build_font_save_plan(wb);
-  EXPECT_FALSE(themed_plan.fonts()[first + 3].has_family);
-  EXPECT_FALSE(themed_plan.fonts()[first + 3].has_charset);
+  FontRecord bare;
+  bare.name = "Arial";
+  complete_font_from_face(bare, locale);
+  EXPECT_TRUE(bare.has_family);
+  EXPECT_EQ(bare.family, 2U);
+  EXPECT_FALSE(bare.has_charset);
 }
 
-// A face Excel completes with a family and charset gets them on a literal Normal font that states neither, in both
-// package formats.
-TEST(XlsbParityFontPlan, LiteralNormalFontOfAMeasuredFaceIsCompleted) {
+// The save writes a font as stored, and the load completes it, in both package formats.
+TEST(XlsbParityFontPlan, LiteralNormalFontOfAMeasuredFaceIsCompletedByTheLoad) {
   constexpr std::size_t kFamilyOffset = 9;
   constexpr std::size_t kCharsetOffset = 10;
   Workbook wb = Workbook::create();
@@ -365,25 +365,36 @@ TEST(XlsbParityFontPlan, LiteralNormalFontOfAMeasuredFaceIsCompleted) {
   normal.scheme = 0;
 
   const FontSavePlan plan = build_font_save_plan(wb);
-  EXPECT_FALSE(plan.is_identity());
-  EXPECT_TRUE(plan.fonts()[0].has_family);
-  EXPECT_EQ(plan.fonts()[0].family, 1U);
-  EXPECT_TRUE(plan.fonts()[0].has_charset);
-  EXPECT_EQ(plan.fonts()[0].charset, 128U);
+  EXPECT_TRUE(plan.is_identity());
+  EXPECT_FALSE(plan.fonts()[0].has_family);
+  EXPECT_FALSE(plan.fonts()[0].has_charset);
 
   auto xlsx = write_ooxml(wb);
   ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
   const std::vector<std::string> fonts = XlsxAllFonts(xlsx.value());
   ASSERT_FALSE(fonts.empty());
-  EXPECT_NE(fonts[0].find("<family val=\"1\"/><charset val=\"128\"/>"), std::string::npos) << fonts[0];
+  EXPECT_EQ(fonts[0].find("<family"), std::string::npos) << fonts[0];
+  EXPECT_EQ(fonts[0].find("<charset"), std::string::npos) << fonts[0];
 
   auto xlsb = write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(xlsb)) << xlsb.error().message;
   const std::vector<Bytes> bin_fonts = XlsbLiteralFonts(xlsb.value().bytes);
   ASSERT_FALSE(bin_fonts.empty());
   ASSERT_GT(bin_fonts[0].size(), kCharsetOffset);
-  EXPECT_EQ(bin_fonts[0][kFamilyOffset], 1U);
-  EXPECT_EQ(bin_fonts[0][kCharsetOffset], 128U);
+  EXPECT_EQ(bin_fonts[0][kFamilyOffset], 0U);
+  EXPECT_EQ(bin_fonts[0][kCharsetOffset], 0U);
+
+  auto from_xlsx = read_ooxml(SpanOf(xlsx.value()));
+  ASSERT_TRUE(static_cast<bool>(from_xlsx)) << from_xlsx.error().message;
+  auto from_xlsb = read_xlsb(SpanOf(xlsb.value().bytes));
+  ASSERT_TRUE(static_cast<bool>(from_xlsb)) << from_xlsb.error().message;
+  for (const FontRecord* font :
+       {&from_xlsx.value().workbook.styles().fonts[0], &from_xlsb.value().workbook.styles().fonts[0]}) {
+    EXPECT_TRUE(font->has_family);
+    EXPECT_EQ(font->family, 1U);
+    EXPECT_TRUE(font->has_charset);
+    EXPECT_EQ(font->charset, 128U);
+  }
 }
 
 }  // namespace

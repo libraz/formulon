@@ -858,6 +858,7 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   std::deque<std::string>& result_text_storage = wb.mutable_text_storage();
 
   ASSIGN_OR_RETURN(SharedStringTable sst, ReadWorkbookAuxParts(zip, wb_root, wb_rels, wb, consumed_parts));
+  complete_loaded_fonts(wb.mutable_styles(), wb, options);
 
   // 4d. Defined names, after the external links their `[N]` spell and before
   // any cell formula: each formula registers against the names the file

@@ -13860,14 +13860,14 @@ entries:
   binding.set_cell_format:
     kind: op
     scope: sheet
+    c: fm_sheet_update_cell_format
     js: updateCellFormat
     py: update_cell_format
     rect_args: [0]
     patch: true
     patch_record: CellFormat
     patch_nested: { font: Font, fill: Fill, border: Border, border.left: BorderSide, border.right: BorderSide, border.top: BorderSide, border.bottom: BorderSide, border.diagonal: BorderSide, alignment: Alignment, protection: CellProtection }
-    surfaces: [wasm, native, py]
-    exception: "binding convenience: merges a format patch into each style base and remaps the range"
+    surfaces: [c, wasm, native, py]
     facade: handwritten
   binding.to_native:
     kind: free
@@ -14386,47 +14386,54 @@ entries:
   record.cell_format_patch:
     kind: record
     role: patch
+    c: fm_cell_format_patch_t
     js: CellFormatPatch
-    surfaces: [wasm, native]
+    surfaces: [c, wasm, native]
     read_only_keys: [source]
   record.font_patch:
     kind: record
     role: patch
+    c: fm_font_patch_t
     js: FontPatch
     py: FontPatch
-    surfaces: [wasm, native, py]
+    surfaces: [c, wasm, native, py]
     clearable: [name, size_pt, bold, italic, strike, outline, shadow, condense, extend, family, charset, color]
   record.fill_patch:
     kind: record
     role: patch
+    c: fm_fill_patch_t
     js: FillPatch
     py: FillPatch
-    surfaces: [wasm, native, py]
+    surfaces: [c, wasm, native, py]
     clearable: [gradient]
   record.border_side_patch:
     kind: record
     role: patch
+    c: fm_border_side_patch_t
     js: BorderSidePatch
     py: BorderSidePatch
-    surfaces: [wasm, native, py]
+    surfaces: [c, wasm, native, py]
   record.border_patch:
     kind: record
     role: patch
+    c: fm_border_patch_t
     js: BorderPatch
     py: BorderPatch
-    surfaces: [wasm, native, py]
+    surfaces: [c, wasm, native, py]
   record.alignment_patch:
     kind: record
     role: patch
+    c: fm_alignment_patch_t
     js: AlignmentPatch
     py: AlignmentPatch
-    surfaces: [wasm, native, py]
+    surfaces: [c, wasm, native, py]
   record.cell_protection_patch:
     kind: record
     role: patch
+    c: fm_cell_protection_patch_t
     js: CellProtectionPatch
     py: CellProtectionPatch
-    surfaces: [wasm, native, py]
+    surfaces: [c, wasm, native, py]
   record.phonetic_properties_input:
     kind: record
     role: input

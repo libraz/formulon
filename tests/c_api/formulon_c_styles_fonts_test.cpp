@@ -3,6 +3,7 @@
 #include <array>
 #include <limits>
 
+#include "font_completion.h"
 #include "formulon_c_record_arg.h"
 #include "formulon_c_styles_test_helpers.h"
 
@@ -128,6 +129,10 @@ TEST(FormulonCApiStyles, AddFontIsIdentityAgainstAFileLoadedTable) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_NO_FATAL_FAILURE(LoadExcelAuthoredStyles(wb.handle));
+  // The table is read directly, so complete its fonts the way a file load does.
+  for (formulon::FontRecord& font : wb.handle->workbook().mutable_styles().fonts) {
+    formulon::complete_font_from_face(font, wb.handle->workbook().excel_profile().locale);
+  }
 
   std::size_t count = 0;
   ASSERT_EQ(fm_workbook_get_font_count(wb.handle, &count), 0);
@@ -543,4 +548,168 @@ TEST(FormulonCApiStyles, ReadingTheDefaultFontBackAndRenamingItKeepsTheStatedCha
   ASSERT_EQ(fm_workbook_set_default_font(wb.handle, &read), 0);
   ExpectNormalFont(wb.handle, "Tahoma", read.has_family != 0 ? static_cast<int>(read.family) : 0,
                    static_cast<int>(read.charset));
+}
+
+TEST(FormulonCApiStyles, RenamingTheDefaultFontToAFaceOutsideTheTableStatesNeitherFamilyNorCharset) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_for_profile("mac-365-ja_JP", &wb.handle), 0);
+  ASSERT_EQ(RenameDefaultFont(wb.handle, "NoSuchFontXyz"), 0);
+  fm_font_t read{};
+  ASSERT_EQ(fm_workbook_get_font_at(wb.handle, 0, &read), 0);
+  EXPECT_EQ(read.has_family, 0);
+  EXPECT_EQ(read.has_charset, 0);
+}
+
+TEST(FormulonCApiStyles, RenamingTheDefaultFontStatesTheFontZeroFamilyAtTheSetter) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_for_profile("mac-365-ja_JP", &wb.handle), 0);
+  ASSERT_EQ(RenameDefaultFont(wb.handle, "Arial"), 0);
+  ASSERT_EQ(RenameDefaultFont(wb.handle, "游ゴシック"), 0);
+  fm_font_t read{};
+  ASSERT_EQ(fm_workbook_get_font_at(wb.handle, 0, &read), 0);
+  EXPECT_EQ(read.has_family, 1);
+  EXPECT_EQ(read.family, 3);
+  EXPECT_EQ(read.has_charset, 1);
+  EXPECT_EQ(read.charset, 128);
+  EXPECT_EQ(read.scheme, 0);
+}
+
+namespace {
+
+struct LoadedFace {
+  const char* face;
+  int family;
+  int charset;
+};
+
+/// A workbook of `profile` whose font table holds one literal font per face with no family, charset or scheme (the
+/// styles table is edited directly: the API completes such a font when it is added), saved in `format`.
+void SaveFamilyLessFaces(const char* profile, int32_t format, const LoadedFace* faces, size_t count, BufferGuard* out) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_for_profile(profile, &wb.handle), 0);
+  for (size_t i = 0; i < count; ++i) {
+    formulon::FontRecord font;
+    font.name = faces[i].face;
+    wb.handle->workbook().mutable_styles().fonts.push_back(font);
+  }
+  ASSERT_EQ(fm_workbook_save(wb.handle, format, &out->data, &out->len), 0) << fm_get_last_error_message();
+}
+
+/// The font records appended after the Normal font, in file order, of a package loaded under `profile`.
+void ExpectLoadedFaces(const BufferGuard& saved, const char* profile, const LoadedFace* faces, size_t count) {
+  fm_load_options_spec_t options = FM_STRUCT_INIT(fm_load_options_spec_t);
+  options.profile_id = profile;
+  WorkbookGuard loaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, &options, &loaded.handle), 0) << fm_get_last_error_message();
+  size_t fonts = 0;
+  ASSERT_EQ(fm_workbook_get_font_count(loaded.handle, &fonts), 0);
+  ASSERT_GE(fonts, count + 1);
+  for (size_t i = 0; i < count; ++i) {
+    SCOPED_TRACE(std::string(profile) + " " + faces[i].face);
+    fm_font_t font{};
+    ASSERT_EQ(fm_workbook_get_font_at(loaded.handle, static_cast<uint32_t>(fonts - count + i), &font), 0);
+    EXPECT_STREQ(font.name, faces[i].face);
+    EXPECT_EQ(font.has_family != 0, faces[i].family != 0);
+    EXPECT_EQ(font.has_charset != 0, faces[i].charset != 0);
+    if (faces[i].family != 0) {
+      EXPECT_EQ(font.family, faces[i].family);
+    }
+    if (faces[i].charset != 0) {
+      EXPECT_EQ(font.charset, faces[i].charset);
+    }
+    EXPECT_EQ(font.scheme, 0);
+  }
+}
+
+}  // namespace
+
+TEST(FormulonCApiStyles, LoadCompletesFamilyAndCharsetOfAFamilyLessFaceInBothPackageFormats) {
+  // The measured table of a ja-profile load; 游ゴシック is family 3 here and has none under en.
+  constexpr std::array<LoadedFace, 15> kJa = {{{"Arial", 2, 0},
+                                               {"Verdana", 2, 0},
+                                               {"Helvetica Neue", 2, 0},
+                                               {"Cambria", 1, 0},
+                                               {"游ゴシック", 3, 128},
+                                               {"游明朝", 1, 128},
+                                               {"等线", 4, 134},
+                                               {"맑은 고딕", 2, 129},
+                                               {"新細明體", 1, 136},
+                                               {"ＭＳ ゴシック", 2, 128},
+                                               {"ＭＳ Ｐゴシック", 2, 128},
+                                               {"ＭＳ 明朝", 1, 128},
+                                               {"Meiryo", 2, 128},
+                                               {"Meiryo UI", 2, 128},
+                                               {"Aptos Narrow", 0, 0}}};
+  for (const int32_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
+    SCOPED_TRACE(format);
+    BufferGuard saved;
+    SaveFamilyLessFaces("mac-365-ja_JP", format, kJa.data(), kJa.size(), &saved);
+    ExpectLoadedFaces(saved, "mac-365-ja_JP", kJa.data(), kJa.size());
+  }
+}
+
+TEST(FormulonCApiStyles, LoadGivesYuGothicNoFamilyUnderAnEnglishProfileAndNormalFaceNothingExtra) {
+  constexpr std::array<LoadedFace, 3> kEn = {{{"游ゴシック", 0, 128},
+                                              {"Aptos Narrow", 0, 0},  // the en Normal face: no family copied from it
+                                              {"Calibri", 2, 0}}};
+  for (const int32_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
+    SCOPED_TRACE(format);
+    BufferGuard saved;
+    SaveFamilyLessFaces("mac-365-en_US", format, kEn.data(), kEn.size(), &saved);
+    ExpectLoadedFaces(saved, "mac-365-en_US", kEn.data(), kEn.size());
+  }
+}
+
+TEST(FormulonCApiStyles, LoadLeavesAPartialOrThemeLinkedFontAlone) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_for_profile("mac-365-en_US", &wb.handle), 0);
+  formulon::StylesTable& styles = wb.handle->workbook().mutable_styles();
+  formulon::FontRecord charset_only;
+  charset_only.name = "Arial";
+  charset_only.has_charset = true;
+  charset_only.charset = 1;
+  formulon::FontRecord themed;
+  themed.name = "Arial";
+  themed.scheme = FM_FONT_SCHEME_MINOR;
+  styles.fonts.push_back(charset_only);
+  styles.fonts.push_back(themed);
+  BufferGuard saved;
+  ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
+  WorkbookGuard loaded;
+  ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &loaded.handle), 0);
+  size_t fonts = 0;
+  ASSERT_EQ(fm_workbook_get_font_count(loaded.handle, &fonts), 0);
+  fm_font_t partial{};
+  ASSERT_EQ(fm_workbook_get_font_at(loaded.handle, static_cast<uint32_t>(fonts - 2), &partial), 0);
+  EXPECT_EQ(partial.has_family, 0);
+  EXPECT_EQ(partial.charset, 1);
+  fm_font_t linked{};
+  ASSERT_EQ(fm_workbook_get_font_at(loaded.handle, static_cast<uint32_t>(fonts - 1), &linked), 0);
+  EXPECT_EQ(linked.has_family, 0);
+  EXPECT_EQ(linked.has_charset, 0);
+}
+
+TEST(FormulonCApiStyles, AddFontWithoutFamilyOrCharsetIsCompletedAtCreation) {
+  for (const auto& [profile, family] : {std::pair<const char*, int>{"mac-365-ja_JP", 3}, {"mac-365-en_US", 0}}) {
+    SCOPED_TRACE(profile);
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create_for_profile(profile, &wb.handle), 0);
+    fm_font_t record{};
+    record.name = "游ゴシック";
+    std::uint32_t index = 0;
+    ASSERT_EQ(fm_workbook_add_font(wb.handle, &record, &index), 0);
+    fm_font_t read{};
+    ASSERT_EQ(fm_workbook_get_font_at(wb.handle, index, &read), 0);
+    EXPECT_EQ(read.has_family != 0, family != 0);
+    EXPECT_EQ(read.has_charset, 1);
+    EXPECT_EQ(read.charset, 128);
+
+    fm_font_t stated = record;
+    stated.has_charset = 1;
+    stated.charset = 5;
+    ASSERT_EQ(fm_workbook_add_font(wb.handle, &stated, &index), 0);
+    ASSERT_EQ(fm_workbook_get_font_at(wb.handle, index, &read), 0);
+    EXPECT_EQ(read.has_family, 0);  // a stated charset suppresses the completion
+    EXPECT_EQ(read.charset, 5);
+  }
 }

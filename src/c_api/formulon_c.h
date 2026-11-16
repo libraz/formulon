@@ -11319,11 +11319,11 @@ FM_API fm_status_t fm_sheet_reset_row_xf_index(fm_workbook_t* wb, size_t sheet_i
 /*
  * Attribute-only formatting of a selection. The `range` rectangle is a
  * selection: spanning every row makes it a column selection, every
- * column a row selection, both the whole sheet. To change some attributes
- * (say the font size) and keep the rest, read the XFs the selection resolves
- * to with `fm_sheet_get_range_xf_bases`, build each one's patched XF with
- * `fm_workbook_add_font` / `fm_workbook_add_cell_xf`, and apply the pairs with
- * `fm_sheet_remap_range_xfs`. Every cell then resolves to the patched form
+ * column a row selection, both the whole sheet. `fm_sheet_update_cell_format`
+ * applies a format patch to a selection; `fm_sheet_get_range_xf_bases` reads the
+ * XFs the selection resolves to and `fm_sheet_remap_range_xfs` applies pairs
+ * of them, for a host that builds its XFs itself with `fm_workbook_add_font` /
+ * `fm_workbook_add_cell_xf`. Every cell then resolves to the patched form
  * of the XF it resolved to before, as Excel applies such a change: covered
  * column and row styles are rewritten, existing cells are remapped, and a
  * blank cell gets its own format only where the row-over-column precedence
@@ -12133,6 +12133,12 @@ typedef enum {
  * font when cleared: `has_size_pt == 0` for the size, `name == NULL` for the
  * name (`fm_workbook_set_default_font` keeps the current one). An attribute
  * with an absent state goes absent: `FM_COLOR_KIND_NONE` writes no `<color>`.
+ *
+ * A cell font that states no family, no charset and `scheme` 0 is stored as the
+ * font Excel holds after loading it: the family and charset of its face
+ * (`Arial` is family 2; a face the engine has not measured gets neither), and
+ * the canonical name of an alias. The same completion applies to a font read
+ * from a file.
  */
 typedef struct {
   /** The typeface name as UTF-8; NULL when the font names none, which on a cell font takes the Normal style's name. */
@@ -12314,6 +12320,298 @@ typedef struct {
   /** Whether the diagonal runs from top left to bottom right. */
   int32_t diagonal_down;
 } fm_border_t;
+
+/**
+ * @brief Partial update of a font (`fm_cell_format_patch_t::font`), with the
+ *        fields of `fm_font_t`.
+ *
+ * Frozen value type: no `struct_size`. Each value has an `fm_patch_op_t`
+ * companion before it; `KEEP` leaves the field, `SET` writes it, and `CLEAR`
+ * (allowed on `name`, `size_pt`, `bold`, `italic`, `strike`, `outline`,
+ * `shadow`, `condense`, `extend`, `family`, `charset` and `color`) gives the
+ * field its absent state. A cleared `name` or `size_pt` takes the Normal font's
+ * (font 0), as an unstated one does on `fm_workbook_add_font`.
+ *
+ * Naming a face adjusts `scheme`, `family` and `charset` the way Excel does
+ * for a renamed font; the rules are under `fm_sheet_update_cell_format`.
+ */
+typedef struct {
+  /** Operation on `name`. */
+  fm_patch_op_t name_op;
+  /** The typeface name to set, UTF-8; `NULL` with `SET` is `FM_STATUS_INVALID_ARGUMENT` (2). */
+  const char* name;
+  /** Operation on `size_pt`. */
+  fm_patch_op_t size_pt_op;
+  /** The size in points to set, 1 to 409 and finite. */
+  double size_pt;
+  /** Operation on `bold`. */
+  fm_patch_op_t bold_op;
+  /** Non-zero sets bold on; zero sets it explicitly off. */
+  int32_t bold;
+  /** Operation on `italic`. */
+  fm_patch_op_t italic_op;
+  /** Non-zero sets italic on; zero sets it explicitly off. */
+  int32_t italic;
+  /** Operation on `strike`. */
+  fm_patch_op_t strike_op;
+  /** Non-zero sets strike-through on; zero sets it explicitly off. */
+  int32_t strike;
+  /** Operation on `outline`. */
+  fm_patch_op_t outline_op;
+  /** Non-zero draws the glyphs as outlines; zero sets it explicitly off. */
+  int32_t outline;
+  /** Operation on `shadow`. */
+  fm_patch_op_t shadow_op;
+  /** Non-zero gives the glyphs a shadow; zero sets it explicitly off. */
+  int32_t shadow;
+  /** Operation on `condense`. */
+  fm_patch_op_t condense_op;
+  /** Non-zero condenses the glyphs; zero sets it explicitly off. */
+  int32_t condense;
+  /** Operation on `extend`. */
+  fm_patch_op_t extend_op;
+  /** Non-zero extends the glyphs; zero sets it explicitly off. */
+  int32_t extend;
+  /** Operation on `underline`; it cannot be cleared. */
+  fm_patch_op_t underline_op;
+  /** The underline style to set, an `fm_underline_style_t`. */
+  int32_t underline;
+  /** Operation on `vert_align`; it cannot be cleared. */
+  fm_patch_op_t vert_align_op;
+  /** The text-run alignment to set, an `fm_font_vertical_align_t`. */
+  int32_t vert_align;
+  /** Operation on `family`. */
+  fm_patch_op_t family_op;
+  /** The font-family class to set, an `fm_font_family_t`. */
+  int32_t family;
+  /** Operation on `charset`. */
+  fm_patch_op_t charset_op;
+  /** The charset codepage id to set, 0 to 255. */
+  int32_t charset;
+  /** Operation on `scheme`; it cannot be cleared (set `FM_FONT_SCHEME_NONE` to unlink). */
+  fm_patch_op_t scheme_op;
+  /** The theme-font link to set, an `fm_font_scheme_t`. */
+  int32_t scheme;
+  /** Operation on `color`; `CLEAR` removes the `<color>` element. */
+  fm_patch_op_t color_op;
+  /** The colour to set; its `kind` must be an `fm_color_kind_t`. */
+  fm_color_t color;
+} fm_font_patch_t;
+
+/**
+ * @brief Partial update of a fill (`fm_cell_format_patch_t::fill`), with the
+ *        fields of `fm_fill_t`.
+ *
+ * Frozen value type: no `struct_size`. Each value has an `fm_patch_op_t`
+ * companion before it. Only the gradient can be cleared, which drops it.
+ */
+typedef struct {
+  /** Operation on `pattern`; it cannot be cleared. */
+  fm_patch_op_t pattern_op;
+  /** The pattern to set, an `fm_fill_pattern_t`. */
+  int32_t pattern;
+  /** Operation on `foreground`; it cannot be cleared. */
+  fm_patch_op_t foreground_op;
+  /** The pattern's foreground colour to set. */
+  fm_color_t foreground;
+  /** Operation on `background`; it cannot be cleared. */
+  fm_patch_op_t background_op;
+  /** The pattern's background colour to set. */
+  fm_color_t background;
+  /** Operation on `gradient`: `SET` replaces the fill with that gradient, `CLEAR` and `KEEP` leave a gradient dropped
+   *  by any other change to the fill (see `fm_sheet_update_cell_format`). */
+  fm_patch_op_t gradient_op;
+  /** The gradient to set, borrowed for the call: the `gradient_*` fields of an `fm_fill_t`, read as a gradient
+   *  whatever its `has_gradient` and pattern fields say; `NULL` with `SET` is `FM_STATUS_INVALID_ARGUMENT` (2), as is a
+   *  non-zero `gradient_stop_count` with a `NULL` `gradient_stops`, and more than 1024 stops are
+   *  `FM_STATUS_SECURITY_RESOURCE_LIMIT`. */
+  const fm_fill_t* gradient;
+} fm_fill_patch_t;
+
+/**
+ * @brief Partial update of one border side (`fm_border_patch_t`), with the
+ *        fields of `fm_border_side_t`.
+ *
+ * Frozen value type: no `struct_size`. Neither field can be cleared.
+ */
+typedef struct {
+  /** Operation on `style`. */
+  fm_patch_op_t style_op;
+  /** The line style to set, an `fm_border_style_t`. */
+  int32_t style;
+  /** Operation on `color`. */
+  fm_patch_op_t color_op;
+  /** The side's colour to set. */
+  fm_color_t color;
+} fm_border_side_patch_t;
+
+/**
+ * @brief Partial update of a border (`fm_cell_format_patch_t::border`), with
+ *        the fields of `fm_border_t`.
+ *
+ * Frozen value type: no `struct_size`. Each side merges field by field; a side
+ * with every operation `KEEP` is left alone. Nothing can be cleared.
+ */
+typedef struct {
+  /** The update of the left side. */
+  fm_border_side_patch_t left;
+  /** The update of the right side. */
+  fm_border_side_patch_t right;
+  /** The update of the top side. */
+  fm_border_side_patch_t top;
+  /** The update of the bottom side. */
+  fm_border_side_patch_t bottom;
+  /** The update of the diagonal line. */
+  fm_border_side_patch_t diagonal;
+  /** Operation on `diagonal_up`. */
+  fm_patch_op_t diagonal_up_op;
+  /** Non-zero draws the diagonal from bottom left to top right. */
+  int32_t diagonal_up;
+  /** Operation on `diagonal_down`. */
+  fm_patch_op_t diagonal_down_op;
+  /** Non-zero draws the diagonal from top left to bottom right. */
+  int32_t diagonal_down;
+} fm_border_patch_t;
+
+/**
+ * @brief Partial update of the alignment (`fm_cell_format_patch_t::alignment`),
+ *        with the alignment fields of `fm_cell_xf_t`.
+ *
+ * Frozen value type: no `struct_size`. Nothing can be cleared; a field that is
+ * set is written as stated, even when it equals the default.
+ */
+typedef struct {
+  /** Operation on `horizontal`. */
+  fm_patch_op_t horizontal_op;
+  /** The horizontal alignment to set, an `fm_horizontal_align_t`. */
+  int32_t horizontal;
+  /** Operation on `vertical`. */
+  fm_patch_op_t vertical_op;
+  /** The vertical alignment to set, an `fm_vertical_align_t`. */
+  int32_t vertical;
+  /** Operation on `wrap_text`. */
+  fm_patch_op_t wrap_text_op;
+  /** Non-zero wraps text within the cell. */
+  int32_t wrap_text;
+  /** Operation on `shrink_to_fit`. */
+  fm_patch_op_t shrink_to_fit_op;
+  /** Non-zero shrinks text to fit the cell width. */
+  int32_t shrink_to_fit;
+  /** Operation on `indent`. */
+  fm_patch_op_t indent_op;
+  /** The indent level to set, 0 to 255. */
+  uint32_t indent;
+  /** Operation on `text_rotation`. */
+  fm_patch_op_t text_rotation_op;
+  /** The text rotation in degrees to set, 0 to 180, or 255 for vertical text. */
+  uint32_t text_rotation;
+  /** Operation on `reading_order`. */
+  fm_patch_op_t reading_order_op;
+  /** The reading order to set, an `fm_reading_order_t`. */
+  int32_t reading_order;
+  /** Operation on `justify_last_line`. */
+  fm_patch_op_t justify_last_line_op;
+  /** Non-zero justifies the last line. */
+  int32_t justify_last_line;
+  /** Operation on `relative_indent`. */
+  fm_patch_op_t relative_indent_op;
+  /** The signed indent relative to the parent style to set. */
+  int32_t relative_indent;
+} fm_alignment_patch_t;
+
+/**
+ * @brief Partial update of the cell protection
+ *        (`fm_cell_format_patch_t::protection`), with the protection fields of
+ *        `fm_cell_xf_t`.
+ *
+ * Frozen value type: no `struct_size`. Neither flag can be cleared.
+ */
+typedef struct {
+  /** Operation on `locked`. */
+  fm_patch_op_t locked_op;
+  /** Non-zero locks the cell once the sheet is protected. */
+  int32_t locked;
+  /** Operation on `hidden`. */
+  fm_patch_op_t hidden_op;
+  /** Non-zero hides the formula once the sheet is protected. */
+  int32_t hidden;
+} fm_cell_protection_patch_t;
+
+/**
+ * @brief Partial update of a cell format (`fm_sheet_update_cell_format`),
+ *        following the header's patch rules (Patches, above).
+ *
+ * `number_format` is a format code; it cannot be cleared and `""` is refused.
+ * Each nested sub-patch carries its own operations. Initialise the record with
+ * `FM_STRUCT_INIT(fm_cell_format_patch_t)`, which leaves every operation `KEEP`.
+ */
+typedef struct {
+  uint32_t struct_size;
+  /** Operation on `number_format`; it cannot be cleared. */
+  fm_patch_op_t number_format_op;
+  /** The number-format code to set, UTF-8 (`"General"` selects the General format); `NULL` or `""` with `SET` is
+   *  `FM_STATUS_INVALID_ARGUMENT` (2). */
+  const char* number_format;
+  /** The update of the font. */
+  fm_font_patch_t font;
+  /** The update of the fill. */
+  fm_fill_patch_t fill;
+  /** The update of the border. */
+  fm_border_patch_t border;
+  /** The update of the alignment. */
+  fm_alignment_patch_t alignment;
+  /** The update of the cell protection. */
+  fm_cell_protection_patch_t protection;
+} fm_cell_format_patch_t;
+
+/**
+ * @brief Applies a cell-format patch to the selection `range`.
+ *
+ * Every XF some cell of the selection resolves to (`fm_sheet_get_range_xf_bases`)
+ * is replaced by a copy with the patch merged in, and the selection is remapped
+ * as `fm_sheet_remap_range_xfs` describes (row and column formats, cell
+ * records, the cell ceiling). Only style state is touched. A sub-patch whose
+ * operations are all `KEEP` changes nothing and sets no apply flag; a patch whose
+ * every part is `KEEP` is a no-op after validation. A sub-patch that states
+ * something sets the matching apply flag of each new XF.
+ *
+ * Dependent fields merge the way Excel does for the same edit:
+ *  - Font. A stated `name` sets `scheme` to none unless `scheme_op` is `SET`,
+ *    even when the name is the current one. When the name differs from the font's
+ *    current one and the patch states neither `family` nor `charset` (both `KEEP`),
+ *    the font takes what Excel gives the new face: a face equal to the Normal
+ *    font's (font 0) copies that font's family and charset; any other face the
+ *    engine has measured takes its own (`游ゴシック` is charset 128, with family 3
+ *    under a ja profile and none under any other); a face outside the table gets
+ *    neither, and stays without them until a load completes it. A rename to the
+ *    current name keeps family and charset. Size, colour and style flags are
+ *    unchanged by a rename. A cleared `name` takes the Normal font's name and
+ *    leaves `scheme`, `family` and `charset` alone.
+ *  - Fill. Any change to the fill drops a gradient unless `gradient_op` sets one.
+ *    A foreground or background colour set while the pattern is none and
+ *    `pattern_op` is `KEEP` makes the fill solid (Excel's fill colour).
+ *  - Protection. A stated flag gives the XF an explicit protection child; an
+ *    unstated one keeps the XF's value (locked unless the XF says otherwise,
+ *    hidden off).
+ *
+ * Validation runs before any write and a failure changes nothing. A value
+ * outside its table (an enum, `size_pt` outside 1..409 or not finite, `charset`
+ * outside 0..255, `indent` above 255, `text_rotation` outside 0..180 and not 255)
+ * and `number_format` `""` are `FM_STATUS_INVALID_ARGUMENT`; so is `CLEAR` on a field
+ * that cannot be cleared and `SET` of a `NULL` string.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `range` or `patch` is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `patch->struct_size` is below the v1 size, the rect is out of
+ *         range, or a patch value is refused as above;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a string is not valid UTF-8;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the rectangle covers more than 134,217,728 cells and is
+ *         not a whole row or column selection, or a gradient has more than 1024 stops (the engine's own ceilings,
+ *         not Excel limits). Nothing changes on failure.
+ */
+FM_API fm_status_t fm_sheet_update_cell_format(fm_workbook_t* wb, size_t sheet_index, const fm_cell_rect_t* range,
+                                               const fm_cell_format_patch_t* patch);
 
 /**
  * @brief One-shot style-table insertion request.
@@ -13049,9 +13347,11 @@ FM_API fm_status_t fm_workbook_set_font(fm_workbook_t* wb, uint32_t font_index, 
  *
  * Every field but a NULL `name` and an unset `size_pt` is written as the
  * record states; `scheme` and `charset` are never carried over from the
- * font being replaced. To get Excel's rename result, pass the name without
- * charset and family; a record that names the current face still replaces
- * the whole record.
+ * font being replaced. A record that states no `family`, `charset` or `scheme`
+ * takes the family and charset Excel holds for its face (`游ゴシック` is family 3
+ * and charset 128; a face the engine has not measured gets neither), as a cell
+ * font does (see `fm_font_t`); a record that names the current face still
+ * replaces the whole record.
  *
  * The record is a font, not a theme. A workbook without a theme part is
  * treated by Excel as having the Office theme, and Excel's own new-workbook
