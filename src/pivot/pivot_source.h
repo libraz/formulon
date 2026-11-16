@@ -35,6 +35,10 @@ struct WorksheetSourceRange {
 /// does not resolve.
 Expected<WorksheetSourceRange, Error> resolve_worksheet_source(const Workbook& wb, const PivotCache& cache);
 
+/// Marks every cache whose source meets `rect` on `sheet` as edited (clears `source_clean`): a range or
+/// defined-name source whose resolved rectangle overlaps it. A table source is never marked.
+void mark_sources_edited(Workbook& wb, std::size_t sheet, const MergeRange& rect);
+
 }  // namespace formulon::pivot
 
 #endif  // FORMULON_PIVOT_PIVOT_SOURCE_H_

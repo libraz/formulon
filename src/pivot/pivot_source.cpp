@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <initializer_list>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -138,6 +139,24 @@ Expected<WorksheetSourceRange, Error> resolve_worksheet_source(const Workbook& w
     return unresolved("The pivot cache source sheet does not exist");
   }
   return WorksheetSourceRange{sheet, range.rect};
+}
+
+void mark_sources_edited(Workbook& wb, std::size_t sheet, const MergeRange& rect) {
+  for (const std::unique_ptr<PivotCache>& cache : wb.mutable_pivot_caches()) {
+    if (cache == nullptr) {
+      continue;
+    }
+    const std::string& name = cache->worksheet_source().name;
+    if (!name.empty() && sheet_names::resolve_table(wb.tables(), name) != sheet_names::kNotFound) {
+      continue;
+    }
+    const Expected<WorksheetSourceRange, Error> source = resolve_worksheet_source(wb, *cache);
+    if (source && source.value().sheet == sheet && source.value().rect.first_row <= rect.last_row &&
+        rect.first_row <= source.value().rect.last_row && source.value().rect.first_col <= rect.last_col &&
+        rect.first_col <= source.value().rect.last_col) {
+      cache->set_source_clean(false);
+    }
+  }
 }
 
 }  // namespace formulon::pivot

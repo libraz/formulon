@@ -718,6 +718,65 @@ TEST(FormulonCApiPivotSaveShape, AnyStructuralEditOnTheSourceSheetClearsDataSour
   }
 }
 
+// A value typed into a range or defined-name source, or an AutoFilter set on it, marks the source edited in both
+// containers; a refresh marks it clean again.
+TEST(FormulonCApiPivotSaveShape, AValueEditOrAutoFilterOnTheSourceClearsDataSourceCleanUntilRefresh) {
+  enum class Source { kRange, kName };
+  enum class Edit { kText, kNumber, kBlank, kAutoFilter, kAutoFilterXml };
+  for (const Source source : {Source::kRange, Source::kName}) {
+    for (const Edit edit : {Edit::kText, Edit::kNumber, Edit::kBlank, Edit::kAutoFilter, Edit::kAutoFilterXml}) {
+      SCOPED_TRACE(static_cast<int>(source) * 10 + static_cast<int>(edit));
+      WorkbookGuard wb;
+      ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+      const char* source_name = nullptr;
+      if (source == Source::kName) {
+        fm_defined_name_t name{};
+        name.struct_size = sizeof(name);
+        name.name = "Src";
+        name.formula = "=Sheet1!$K$1:$L$3";
+        name.local_sheet_id = FM_DEFINED_NAME_SCOPE_WORKBOOK;
+        ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, &name), 0) << fm_get_last_error_message();
+        source_name = "Src";
+      }
+      BuildStaleProbePivot(wb.handle, source_name);
+      ASSERT_NE(ExtractZipEntry(Save(wb.handle, FM_WORKBOOK_FORMAT_XLSX), kCacheXml).find(kDataSourceClean),
+                std::string::npos);
+      switch (edit) {
+        case Edit::kText:
+          ASSERT_EQ(fm_sheet_set_text(wb.handle, 0U, 1U, 10U, "Z"), 0);
+          break;
+        case Edit::kNumber:
+          ASSERT_EQ(fm_sheet_set_number(wb.handle, 0U, 1U, 11U, 7.0), 0);
+          break;
+        case Edit::kBlank:
+          ASSERT_EQ(fm_sheet_set_blank(wb.handle, 0U, 2U, 11U), 0);
+          break;
+        case Edit::kAutoFilter: {
+          fm_auto_filter_t filter{};
+          filter.struct_size = sizeof(filter);
+          filter.range = {0U, 10U, 2U, 11U};
+          ASSERT_EQ(fm_sheet_set_auto_filter(wb.handle, 0U, &filter), 0) << fm_get_last_error_message();
+          break;
+        }
+        case Edit::kAutoFilterXml:
+          ASSERT_EQ(fm_sheet_set_auto_filter_xml(wb.handle, 0U, "<autoFilter ref=\"K1:L3\"/>"), 0)
+              << fm_get_last_error_message();
+          break;
+      }
+      EXPECT_EQ(ExtractZipEntry(Save(wb.handle, FM_WORKBOOK_FORMAT_XLSX), kCacheXml).find(kDataSourceClean),
+                std::string::npos);
+      EXPECT_FALSE(XlsbDataSourceClean(ExtractZipEntry(Save(wb.handle, FM_WORKBOOK_FORMAT_XLSB), kCacheBin)));
+
+      std::uint32_t cache_id = 0;
+      ASSERT_EQ(fm_workbook_get_pivot_cache_id_at(wb.handle, 0U, &cache_id), 0);
+      ASSERT_EQ(fm_workbook_refresh_pivot_cache(wb.handle, cache_id), 0) << fm_get_last_error_message();
+      EXPECT_NE(ExtractZipEntry(Save(wb.handle, FM_WORKBOOK_FORMAT_XLSX), kCacheXml).find(kDataSourceClean),
+                std::string::npos);
+      EXPECT_TRUE(XlsbDataSourceClean(ExtractZipEntry(Save(wb.handle, FM_WORKBOOK_FORMAT_XLSB), kCacheBin)));
+    }
+  }
+}
+
 // Every load starts clean: a cache saved without the extension and one saved with it are each written with it once.
 TEST(FormulonCApiPivotSaveShape, ALoadedCacheIsWrittenClean) {
   for (const char* relative : {"pivot_aggregation/C9__sum.xlsx", "xlsb_parity/pivot/caption_equal/P_ne_B.xlsx"}) {

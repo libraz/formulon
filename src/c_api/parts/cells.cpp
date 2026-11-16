@@ -26,6 +26,7 @@
 #include "parser/ast_format_r1c1.h"
 #include "parser/parser.h"
 #include "phonetic.h"
+#include "pivot/pivot_source.h"
 #include "sheet.h"
 #include "sheet_name.h"
 #include "style_resolve.h"
@@ -97,6 +98,12 @@ fm_status_t enter_cell(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint
     }
   }
   return 0;
+}
+
+// A literal typed through a C setter edits a PivotTable source that holds the cell. The readers write through the
+// Workbook setters and leave the flag alone.
+void mark_pivot_sources_edited(fm_workbook_t* wb, size_t sheet_index, uint32_t row, uint32_t col) {
+  formulon::pivot::mark_sources_edited(wb->workbook(), sheet_index, formulon::MergeRange{row, col, row, col});
 }
 
 // Table and column whose header cell is (`row`, `col`).
@@ -200,6 +207,7 @@ extern "C" fm_status_t fm_sheet_set_number(fm_workbook_t* wb, size_t sheet_index
       rc != 0) {
     return rc;
   }
+  mark_pivot_sources_edited(wb, sheet_index, row, col);
   return follow_table_cell(wb, sheet_index, row, col, false);
 }
 
@@ -222,6 +230,7 @@ extern "C" fm_status_t fm_sheet_set_bool(fm_workbook_t* wb, size_t sheet_index, 
       rc != 0) {
     return rc;
   }
+  mark_pivot_sources_edited(wb, sheet_index, row, col);
   return follow_table_cell(wb, sheet_index, row, col, false);
 }
 
@@ -249,6 +258,7 @@ extern "C" fm_status_t fm_sheet_set_error(fm_workbook_t* wb, size_t sheet_index,
       rc != 0) {
     return rc;
   }
+  mark_pivot_sources_edited(wb, sheet_index, row, col);
   return follow_table_cell(wb, sheet_index, row, col, false);
 }
 
@@ -283,6 +293,7 @@ extern "C" fm_status_t fm_sheet_set_text(fm_workbook_t* wb, size_t sheet_index, 
       rc != 0) {
     return rc;
   }
+  mark_pivot_sources_edited(wb, sheet_index, row, col);
   return follow_table_cell(wb, sheet_index, row, col, false);
 }
 
@@ -520,6 +531,7 @@ extern "C" fm_status_t fm_sheet_set_blank(fm_workbook_t* wb, size_t sheet_index,
       rc != 0) {
     return rc;
   }
+  mark_pivot_sources_edited(wb, sheet_index, row, col);
   return follow_table_cell(wb, sheet_index, row, col, true);
 }
 

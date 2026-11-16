@@ -20,6 +20,7 @@
 #include "c_api/parts/xml_fragment.h"
 #include "cf/auto_filter_eval.h"
 #include "io/auto_filter_xml.h"
+#include "pivot/pivot_source.h"
 #include "sheet.h"
 #include "utils/error.h"
 #include "workbook.h"
@@ -503,6 +504,8 @@ fm_status_t store(fm_workbook_t* wb, const Target& target, formulon::AutoFilter 
   return finish_status(result);
 }
 
+// An AutoFilter set on a sheet edits a PivotTable source it overlaps. The readers write through the Workbook
+// setter and leave the flag alone.
 fm_status_t set_body(fm_workbook_t* wb, const Target& target, const fm_auto_filter_t* filter) {
   if (auto rc = check_record_size(*filter); rc != 0) {
     return rc;
@@ -514,7 +517,14 @@ fm_status_t set_body(fm_workbook_t* wb, const Target& target, const fm_auto_filt
   if (target.filter != nullptr && !target.filter->is_opaque()) {
     carry_unmodelled(*target.filter, &model);
   }
-  return store(wb, target, std::move(model));
+  const formulon::MergeRange range = model.range;
+  if (auto rc = store(wb, target, std::move(model)); rc != 0) {
+    return rc;
+  }
+  if (!target.table.has_value()) {
+    formulon::pivot::mark_sources_edited(wb->workbook(), target.sheet, range);
+  }
+  return 0;
 }
 
 fm_status_t remove_body(fm_workbook_t* wb, const Target& target) {
@@ -730,6 +740,9 @@ extern "C" fm_status_t fm_sheet_set_auto_filter_xml(fm_workbook_t* wb, size_t sh
   // dirty state follow the change.
   if (auto result = wb->workbook().set_sheet_auto_filter_xml(sheet_index, fragment); !result) {
     return set_last_error(result.error());
+  }
+  if (const formulon::AutoFilter* filter = wb->workbook().sheet(sheet_index).auto_filter(); filter != nullptr) {
+    formulon::pivot::mark_sources_edited(wb->workbook(), sheet_index, filter->range);
   }
   return 0;
 }
