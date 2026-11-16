@@ -222,7 +222,7 @@ export function registerSurfaceRecalc(Module, test, threadsBuild) {
       assert.equal(callerOnly.workerThreadsUsed, 0);
       assert.equal(wb.getValue(0, branchCount, 2).number, (5 + branchCount + 1) * 2);
 
-      expectFailure(() => wb.recalcParallel(9), StatusCode.InvalidArgument);
+      expectFailure(() => wb.recalcParallel(9), StatusCode.SecurityResourceLimit);
       expectFailure(() => wb.recalcParallel(-1), StatusCode.InvalidArgument);
       assert.throws(() => wb.recalcParallel(2 ** 32 + 1), RangeError);
 
