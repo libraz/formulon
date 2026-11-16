@@ -580,7 +580,7 @@ test('pivot definition read-backs reject out-of-range indices', async () => {
   }
 });
 
-test('an empty or omitted data field name is derived from the workbook profile', async () => {
+test('an omitted data field name is derived from the workbook profile and "" is an empty caption', async () => {
   const Module = await getModule();
   const { wb, pivot } = makePivotWorkbook(Module.Workbook);
   try {
@@ -589,15 +589,13 @@ test('an empty or omitted data field name is derived from the workbook profile',
       ['win-365-en_US', 'Sum of Amount'],
     ]) {
       wb.setProfileId(profile);
-      for (const spec of [
-        { fieldIndex: 1, aggregation: 0 },
-        { name: '', fieldIndex: 1, aggregation: 0 },
-      ]) {
-        // A repeat of the same source field is numbered, so each name starts from none.
-        wb.sheet(0).pivot(pivot).clearDataFields();
-        const added = wb.sheet(0).pivot(pivot).addDataField(spec);
-        assert.equal(wb.sheet(0).pivot(pivot).listDataFields()[added].name, expected);
-      }
+      // A repeat of the same source field is numbered, so each name starts from none.
+      wb.sheet(0).pivot(pivot).clearDataFields();
+      const derived = wb.sheet(0).pivot(pivot).addDataField({ fieldIndex: 1, aggregation: 0 });
+      assert.equal(wb.sheet(0).pivot(pivot).listDataFields()[derived].name, expected);
+      wb.sheet(0).pivot(pivot).clearDataFields();
+      const empty = wb.sheet(0).pivot(pivot).addDataField({ name: '', fieldIndex: 1, aggregation: 0 });
+      assert.equal(wb.sheet(0).pivot(pivot).listDataFields()[empty].name, '');
       wb.sheet(0).pivot(pivot).setDataField(0, { fieldIndex: 1, aggregation: 2 });
       assert.ok(wb.sheet(0).pivot(pivot).listDataFields()[0].name.endsWith(' Amount'));
     }
