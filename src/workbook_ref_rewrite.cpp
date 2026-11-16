@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "auto_filter.h"
 #include "cf/cf_types.h"
 #include "defined_name.h"
 #include "eval/dep_graph.h"
@@ -18,6 +19,7 @@
 #include "io/xlsb/tail_refs.h"
 #include "io/xml_utils.h"
 #include "io/xsd_int.h"
+#include "merge_range.h"
 #include "parser/ast.h"
 #include "parser/ast_shift.h"
 #include "pivot/pivot_cache.h"
@@ -268,6 +270,9 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
     if (cache == nullptr || !removed_sheet_name.empty()) {
       continue;
     }
+    // The records stay what the source gave them; Excel moves only the reference and marks the source edited
+    // when its extent changes, a row or column inserted or deleted inside it.
+    const bool from_source = cache->records_from_source();
     pivot::WorksheetSource& source = cache->mutable_worksheet_source();
     if (!direct_sheet_old.empty() &&
         detail::find_sheet_index(sheets, source.sheet) == detail::find_sheet_index(sheets, direct_sheet_old)) {
@@ -276,7 +281,17 @@ void rewrite_sheet_metadata_formulas(std::vector<Sheet>& sheets,
     const std::size_t owner_sheet = detail::find_sheet_index(sheets, source.sheet);
     const parser::RefTransform& transform =
         owner_sheet != Workbook::kNoSheet ? transform_for(owner_sheet) : unowned_transform;
+    const std::optional<MergeRange> before = parse_a1_rectangle(source.ref);
     rewrite_formula_in_place(source.ref, transform);
+    const std::optional<MergeRange> after = parse_a1_rectangle(source.ref);
+    if (before.has_value() && after.has_value() &&
+        (before->last_row - before->first_row != after->last_row - after->first_row ||
+         before->last_col - before->first_col != after->last_col - after->first_col)) {
+      cache->set_source_clean(false);
+    }
+    if (from_source) {
+      cache->mark_records_from_source();
+    }
   }
 }
 

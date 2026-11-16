@@ -9,6 +9,7 @@
 #include <fstream>
 #include <iterator>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "formulon_c_pivot_test_helpers.h"
@@ -516,9 +517,9 @@ std::vector<std::uint8_t> Save(fm_workbook_t* wb, int32_t format) {
   return out;
 }
 
-/// The first field's BrtBeginPCDFAtbl flag byte in an `.xlsb` cache definition part.
-int FirstFieldItemTableFlags(const std::string& part) {
-  constexpr std::uint32_t kBeginPcdfAtbl = 189;
+/// The record types of an `.xlsb` part, in order, with each record's first payload byte (-1 when empty).
+std::vector<std::pair<std::uint32_t, int>> RecordTypes(const std::string& part) {
+  std::vector<std::pair<std::uint32_t, int>> out;
   std::size_t i = 0;
   const auto varint = [&part, &i](int bytes) {
     std::uint32_t value = 0;
@@ -534,12 +535,77 @@ int FirstFieldItemTableFlags(const std::string& part) {
   while (i < part.size()) {
     const std::uint32_t type = varint(2);
     const std::uint32_t length = varint(4);
-    if (type == kBeginPcdfAtbl && length > 0U && i < part.size()) {
-      return static_cast<std::uint8_t>(part[i]);
-    }
+    out.emplace_back(type, length > 0U && i < part.size() ? static_cast<std::uint8_t>(part[i]) : -1);
     i += length;
   }
+  return out;
+}
+
+/// The first field's BrtBeginPCDFAtbl flag byte in an `.xlsb` cache definition part.
+int FirstFieldItemTableFlags(const std::string& part) {
+  constexpr std::uint32_t kBeginPcdfAtbl = 189;
+  for (const auto& [type, first] : RecordTypes(part)) {
+    if (type == kBeginPcdfAtbl) {
+      return first;
+    }
+  }
   return -1;
+}
+
+constexpr const char* kCacheXml = "xl/pivotCache/pivotCacheDefinition1.xml";
+constexpr const char* kCacheBin = "xl/pivotCache/pivotCacheDefinition1.bin";
+constexpr const char* kDataSourceClean = "<xlpdsc:dataSourceClean>1</xlpdsc:dataSourceClean>";
+
+/// Whether an `.xlsb` cache definition part holds the dataSourceClean block (FRT 5153).
+bool XlsbDataSourceClean(const std::string& part) {
+  constexpr std::uint32_t kDataSourceCleanRecord = 5153;
+  for (const auto& [type, first] : RecordTypes(part)) {
+    if (type == kDataSourceCleanRecord) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/// A pivot on PV over Sheet1!K1:L3 (Item / Amt; A 1, B 2), refreshed and projected, as Excel's no-save probe built.
+void BuildStaleProbePivot(fm_workbook_t* wb) {
+  ASSERT_EQ(fm_sheet_set_text(wb, 0U, 0U, 10U, "Item"), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb, 0U, 0U, 11U, "Amt"), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb, 0U, 1U, 10U, "A"), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb, 0U, 1U, 11U, 1.0), 0);
+  ASSERT_EQ(fm_sheet_set_text(wb, 0U, 2U, 10U, "B"), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb, 0U, 2U, 11U, 2.0), 0);
+  std::uint32_t cache_id = 0;
+  ASSERT_EQ(fm_workbook_add_pivot_cache(wb, 0U, &cache_id), 0) << fm_get_last_error_message();
+  ASSERT_EQ(SetPivotCacheWorksheetSource(wb, cache_id, 1, "K1:L3", "Sheet1", nullptr), 0);
+  ASSERT_EQ(fm_workbook_refresh_pivot_cache(wb, cache_id), 0) << fm_get_last_error_message();
+  std::size_t sheet = 0;
+  ASSERT_EQ(fm_workbook_add_sheet(wb, "PV", 1U, &sheet), 0) << fm_get_last_error_message();
+  fm_pivot_spec_t spec{sizeof(fm_pivot_spec_t), "PivotS", cache_id, 2U, 0U};
+  std::size_t pivot = 0;
+  ASSERT_EQ(fm_sheet_add_pivot(wb, sheet, &spec, &pivot), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb, sheet, pivot, 0U, FM_PIVOT_AXIS_ROW), 0) << fm_get_last_error_message();
+  fm_pivot_data_field_t data{};
+  data.struct_size = sizeof(data);
+  data.field_index = 1U;
+  data.aggregation = FM_PIVOT_AGGREGATION_SUM;
+  std::size_t index = 0;
+  ASSERT_EQ(fm_sheet_add_pivot_data_field(wb, sheet, pivot, &data, &index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_project_pivot(wb, sheet, pivot), 0) << fm_get_last_error_message();
+}
+
+/// Column A of sheet 1 (the pivot sheet) from row 3, as the report shows it.
+std::vector<std::string> RowLabels(const std::vector<std::uint8_t>& package) {
+  WorkbookGuard wb;
+  EXPECT_EQ(fm_workbook_load(package.data(), package.size(), nullptr, &wb.handle), 0) << fm_get_last_error_message();
+  std::vector<std::string> out;
+  for (std::uint32_t row = 3U; row < 8U && wb.handle != nullptr; ++row) {
+    const char* text = nullptr;
+    std::int32_t status = 0;
+    EXPECT_EQ(fm_sheet_get_display_text(wb.handle, 1U, row, 0U, &text, &status), 0);
+    out.emplace_back(text != nullptr ? text : "");
+  }
+  return out;
 }
 
 }  // namespace
@@ -547,8 +613,6 @@ int FirstFieldItemTableFlags(const std::string& part) {
 // A Region field keeping an unused blank item (<m u="1"/>) besides its text: Excel writes containsBlank for it and
 // refuses a save without. Both books refresh on load, so a plain save and one after a refresh derive it again.
 TEST(FormulonCApiPivotSaveShape, AKeptUnusedBlankItemKeepsContainsBlank) {
-  constexpr const char* kCacheXml = "xl/pivotCache/pivotCacheDefinition1.xml";
-  constexpr const char* kCacheBin = "xl/pivotCache/pivotCacheDefinition1.bin";
   for (const std::string name : {"P_ne_Bescstar", "P_ne_esctildeB"}) {
     SCOPED_TRACE(name);
     const std::string stem = "xlsb_parity/pivot/caption_equal/" + name;
@@ -573,5 +637,62 @@ TEST(FormulonCApiPivotSaveShape, AKeptUnusedBlankItemKeepsContainsBlank) {
       EXPECT_EQ(FirstFieldItemTableFlags(ExtractZipEntry(Save(wb.handle, FM_WORKBOOK_FORMAT_XLSB), kCacheBin)),
                 excel_flags);
     }
+  }
+}
+
+// A row inserted inside the source widens its reference and marks it edited, as Excel does: the save keeps the
+// records and the report, writes the wider reference, and leaves dataSourceClean out until a refresh.
+TEST(FormulonCApiPivotSaveShape, AnInsertInsideTheSourceKeepsTheRecordsAndClearsDataSourceClean) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  BuildStaleProbePivot(wb.handle);
+  const std::vector<std::string> report = {"A", "B", "Grand Total", "", ""};
+  std::string xml = ExtractZipEntry(Save(wb.handle, FM_WORKBOOK_FORMAT_XLSX), kCacheXml);
+  EXPECT_NE(xml.find(kDataSourceClean), std::string::npos) << xml;
+
+  ASSERT_EQ(fm_sheet_insert_rows(wb.handle, 0U, 1U, 1U), 0) << fm_get_last_error_message();
+  const std::vector<std::uint8_t> xlsx = Save(wb.handle, FM_WORKBOOK_FORMAT_XLSX);
+  const std::vector<std::uint8_t> xlsb = Save(wb.handle, FM_WORKBOOK_FORMAT_XLSB);
+  xml = ExtractZipEntry(xlsx, kCacheXml);
+  EXPECT_NE(xml.find("ref=\"K1:L4\""), std::string::npos) << xml;
+  EXPECT_NE(xml.find("recordCount=\"2\""), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("refreshOnLoad"), std::string::npos) << xml;
+  EXPECT_EQ(xml.find("dataSourceClean"), std::string::npos) << xml;
+  EXPECT_FALSE(XlsbDataSourceClean(ExtractZipEntry(xlsb, kCacheBin)));
+  EXPECT_EQ(RowLabels(xlsx), report);
+  EXPECT_EQ(RowLabels(xlsb), report);
+
+  // The inserted row filled, a refresh reads three records and marks the source clean again.
+  ASSERT_EQ(fm_sheet_set_text(wb.handle, 0U, 1U, 10U, "C"), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0U, 1U, 11U, 3.0), 0);
+  std::uint32_t cache_id = 0;
+  ASSERT_EQ(fm_workbook_get_pivot_cache_id_at(wb.handle, 0U, &cache_id), 0);
+  ASSERT_EQ(fm_workbook_refresh_pivot_cache(wb.handle, cache_id), 0) << fm_get_last_error_message();
+  xml = ExtractZipEntry(Save(wb.handle, FM_WORKBOOK_FORMAT_XLSX), kCacheXml);
+  EXPECT_NE(xml.find(kDataSourceClean), std::string::npos) << xml;
+  EXPECT_TRUE(XlsbDataSourceClean(ExtractZipEntry(Save(wb.handle, FM_WORKBOOK_FORMAT_XLSB), kCacheBin)));
+}
+
+// An insert outside the source leaves it clean.
+TEST(FormulonCApiPivotSaveShape, AnInsertOutsideTheSourceKeepsDataSourceClean) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  BuildStaleProbePivot(wb.handle);
+  ASSERT_EQ(fm_sheet_insert_rows(wb.handle, 0U, 10U, 10U), 0) << fm_get_last_error_message();
+  const std::string xml = ExtractZipEntry(Save(wb.handle, FM_WORKBOOK_FORMAT_XLSX), kCacheXml);
+  EXPECT_NE(xml.find("ref=\"K1:L3\""), std::string::npos) << xml;
+  EXPECT_NE(xml.find(kDataSourceClean), std::string::npos) << xml;
+}
+
+// Every load starts clean: a cache saved without the extension and one saved with it are each written with it once.
+TEST(FormulonCApiPivotSaveShape, ALoadedCacheIsWrittenClean) {
+  for (const char* relative : {"pivot_aggregation/C9__sum.xlsx", "xlsb_parity/pivot/caption_equal/P_ne_B.xlsx"}) {
+    SCOPED_TRACE(relative);
+    const std::vector<std::uint8_t> source = ReadFixture(relative);
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_load(source.data(), source.size(), nullptr, &wb.handle), 0) << fm_get_last_error_message();
+    const std::string xml = ExtractZipEntry(Save(wb.handle, FM_WORKBOOK_FORMAT_XLSX), kCacheXml);
+    EXPECT_EQ(CountOccurrences(xml, kDataSourceClean), 1U) << xml;
+    EXPECT_TRUE(XlsbDataSourceClean(ExtractZipEntry(Save(wb.handle, FM_WORKBOOK_FORMAT_XLSB), kCacheBin)));
   }
 }

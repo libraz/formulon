@@ -273,7 +273,11 @@ TEST(XlsbPivotCacheBridge, CorpusReadsWritesBackAndMatchesTheXlsxTwin) {
 
       auto parts = pivot_cache_to_xlsb(cache.value(), c.date1904, RecordsRelId(c.definition));
       ASSERT_TRUE(parts.has_value()) << c.label << ": " << parts.error().message;
-      EXPECT_EQ(parts.value().definition, c.definition) << c.label;
+      // A loaded cache is clean, so a part saved before Excel wrote dataSourceClean gains it.
+      auto expected = decode_pivot_cache_definition(SpanOf(c.definition));
+      ASSERT_TRUE(expected.has_value()) << c.label;
+      expected.value().data_source_clean = std::uint8_t{1};
+      EXPECT_EQ(parts.value().definition, encode_pivot_cache_definition(expected.value())) << c.label;
       EXPECT_EQ(parts.value().records, c.records) << c.label;
 
       auto twin = read_pivot_cache_definition(c.xlsx_definition, c.date1904);

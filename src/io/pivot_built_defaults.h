@@ -7,6 +7,7 @@
 #define FORMULON_IO_PIVOT_BUILT_DEFAULTS_H_
 
 #include <cstdint>
+#include <string>
 #include <string_view>
 
 #include "io/pivot_table_writer_internal.h"
@@ -29,6 +30,26 @@ inline constexpr std::string_view kBuiltTableDefinition16Ext =
     "<ext uri=\"{747A6164-185A-40DC-8AA5-F01512510D54}\" "
     "xmlns:xpdl=\"http://schemas.microsoft.com/office/spreadsheetml/2016/pivotdefaultlayout\">"
     "<xpdl:pivotTableDefinition16/></ext>";
+
+/// The cache extension Excel writes while its source range is unedited in the session.
+inline constexpr std::string_view kDataSourceCleanUri = "{F4336242-56EE-4DD3-A5F7-E900642BF6E9}";
+inline constexpr std::string_view kDataSourceCleanExt =
+    "<ext uri=\"{F4336242-56EE-4DD3-A5F7-E900642BF6E9}\" "
+    "xmlns:xlpdsc=\"http://schemas.microsoft.com/office/spreadsheetml/2026/pivotDataSourceClean\">"
+    "<xlpdsc:dataSourceClean>1</xlpdsc:dataSourceClean></ext>";
+
+/// A cache's trailing children `xml` with the dataSourceClean extension ending
+/// its `<extLst>`, which is added when there is none.
+inline std::string with_data_source_clean(std::string_view xml) {
+  constexpr std::string_view kClose = "</extLst>";
+  std::string out(xml);
+  if (xml.size() >= kClose.size() && xml.substr(xml.size() - kClose.size()) == kClose) {
+    out.insert(out.size() - kClose.size(), kDataSourceCleanExt);
+  } else {
+    out.append("<extLst>").append(kDataSourceCleanExt).append(kClose);
+  }
+  return out;
+}
 
 /// True for a cache built in memory: no root attribute was captured on read.
 inline bool cache_built_in_memory(const pivot::PivotCache& cache) {

@@ -300,9 +300,15 @@ class PivotCache {
 
   /// True while the fields and records are exactly what a refresh read from
   /// the worksheet source: set by the refresh, cleared by any edit to them or
-  /// to the source.
+  /// to the source definition. A structural edit moving the source keeps it.
   bool records_from_source() const { return records_from_source_; }
   void mark_records_from_source() { records_from_source_ = true; }
+
+  /// Whether the source range is unedited since the cache was loaded, built or
+  /// refreshed; a structural edit inside it clears this. Saved as Excel's
+  /// dataSourceClean, written only while set.
+  bool source_clean() const { return source_clean_; }
+  void set_source_clean(bool clean) { source_clean_ = clean; }
 
   /// Unmodelled `<pivotCacheDefinition>` root attributes (`refreshedBy`,
   /// `refreshedDate`, `createdVersion`, ...), captured as
@@ -434,6 +440,7 @@ class PivotCache {
   std::vector<PivotCacheField> fields_;
   std::vector<PivotCacheRecord> records_;
   bool records_from_source_ = false;
+  bool source_clean_ = true;
   std::deque<std::string> text_storage_;
   WorksheetSource worksheet_source_;
   std::vector<std::pair<std::string, std::string>> passthrough_attrs_;

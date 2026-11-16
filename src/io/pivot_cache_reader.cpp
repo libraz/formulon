@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "io/pivot_attr_names.h"
+#include "io/pivot_built_defaults.h"
 #include "io/xml_utils.h"
 #include "io/xsd_double.h"
 #include "pivot/field_grouping.h"
@@ -386,6 +387,19 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
     } else if (name == "calculatedMembers" || name == "dimensions" || name == "measureGroups" || name == "maps" ||
                name == "extLst") {
       past_calculated_items = true;
+      // dataSourceClean is session state: every load starts clean, and the writers add it from that.
+      if (name == "extLst") {
+        for (pugi::xml_node ext = child.child("ext"); ext;) {
+          const pugi::xml_node next = ext.next_sibling("ext");
+          if (std::string_view(ext.attribute("uri").as_string()) == kDataSourceCleanUri) {
+            child.remove_child(ext);
+          }
+          ext = next;
+        }
+        if (!child.first_child()) {
+          continue;
+        }
+      }
       append_raw_xml(cache.mutable_trailing_children_after_calculated_xml(), child);
     } else {
       append_raw_xml(past_calculated_items ? cache.mutable_trailing_children_after_calculated_xml()

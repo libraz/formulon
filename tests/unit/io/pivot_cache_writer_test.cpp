@@ -18,6 +18,7 @@
 
 #include "gtest/gtest.h"
 #include "io/ooxml_writer.h"
+#include "io/pivot_built_defaults.h"
 #include "io/pivot_cache_reader.h"
 #include "io/zip_reader.h"
 #include "pivot/pivot_cache.h"
@@ -1076,13 +1077,15 @@ TEST(PivotCacheCalculated, CalculatedItemsSitBetweenTheSurroundingTrailingChildr
       "<cacheHierarchies count=\"0\"/>" + std::string(kCalcItemsXml) + "<extLst><ext uri=\"{u}\"/></extLst>";
   const std::string out =
       write_pivot_cache_definition(ReadCache(DefinitionXml(" refreshedBy=\"x\"", kCalcItemFields, trailing)));
-  EXPECT_TRUE(Has(out, "</cacheFields>" + trailing + "</pivotCacheDefinition>")) << out;
+  // A loaded cache is clean, so dataSourceClean ends its extLst.
+  EXPECT_TRUE(Has(out, "</cacheFields>" + with_data_source_clean(trailing) + "</pivotCacheDefinition>")) << out;
 }
 
 TEST(PivotCacheCalculated, ExtLstWithoutCalculatedItemsStaysAfterTheCacheHierarchies) {
   const std::string trailing = "<cacheHierarchies count=\"0\"/><extLst><ext uri=\"{u}\"/></extLst>";
   pivot::PivotCache cache = ReadCache(DefinitionXml(" refreshedBy=\"x\"", kCalcItemFields, trailing));
-  EXPECT_TRUE(Has(write_pivot_cache_definition(cache), "</cacheFields>" + trailing + "</pivotCacheDefinition>"));
+  EXPECT_TRUE(Has(write_pivot_cache_definition(cache),
+                  "</cacheFields>" + with_data_source_clean(trailing) + "</pivotCacheDefinition>"));
   pivot::PivotCalculatedItem item;
   item.formula = "Region[East]";
   item.area.references.push_back({});

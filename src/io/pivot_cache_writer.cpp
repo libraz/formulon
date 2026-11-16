@@ -649,7 +649,8 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache, const P
   out.append("</cacheFields>");
   out.append(cache.trailing_children_xml());
   AppendCalculatedItems(out, cache.calculated_items());
-  out.append(cache.trailing_children_after_calculated_xml());
+  out.append(cache.source_clean() ? with_data_source_clean(cache.trailing_children_after_calculated_xml())
+                                  : cache.trailing_children_after_calculated_xml());
   out.append("</pivotCacheDefinition>");
   return out;
 }

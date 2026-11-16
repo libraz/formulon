@@ -51,16 +51,13 @@ constexpr std::uint16_t kAtblString = 0x0008U;
 /// Attribute values Excel writes on the root of an xlsx cache definition that carries `xr:uid`.
 constexpr std::string_view kXrPrefix = "xr";
 
-/// The cache extLst, as the xlsx reader keeps it, for the two extensions the definition records hold.
+/// The cache extLst, as the xlsx reader keeps it, for the x14 extension the definition records hold; the
+/// dataSourceClean one is the cache's session state, not kept text.
 constexpr std::string_view kExtLstOpen = "<extLst>";
 constexpr std::string_view kExtLstClose = "</extLst>";
 constexpr std::string_view kPcd14Ext =
     "<ext uri=\"{725AE2AE-9491-48be-B2B4-4EB974FC3084}\" "
     "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\"><x14:pivotCacheDefinition/></ext>";
-constexpr std::string_view kDataSourceCleanExt =
-    "<ext uri=\"{F4336242-56EE-4DD3-A5F7-E900642BF6E9}\" "
-    "xmlns:xlpdsc=\"http://schemas.microsoft.com/office/spreadsheetml/2026/pivotDataSourceClean\">"
-    "<xlpdsc:dataSourceClean>1</xlpdsc:dataSourceClean></ext>";
 /// dataSourceClean payload of the `1` text, the only one Excel's parts show.
 constexpr std::uint8_t kDataSourceCleanTrue = 1U;
 
@@ -909,21 +906,14 @@ void ReadRoot(const pcd::Document& doc, pivot::PivotCache& cache) {
 }
 
 Expected<void, Error> ReadExtLst(const pcd::Document& doc, pivot::PivotCache& cache) {
-  if (!doc.has_pcd14 && !doc.data_source_clean) {
-    return Expected<void, Error>::Ok();
+  // dataSourceClean is session state: every load starts clean whatever the file says.
+  if (doc.data_source_clean && *doc.data_source_clean != kDataSourceCleanTrue) {
+    return Unmeasured("dataSourceClean other than 1");
   }
-  std::string& xml = cache.mutable_trailing_children_after_calculated_xml();
-  xml.append(kExtLstOpen);
   if (doc.has_pcd14) {
-    xml.append(kPcd14Ext);
+    std::string& xml = cache.mutable_trailing_children_after_calculated_xml();
+    xml.append(kExtLstOpen).append(kPcd14Ext).append(kExtLstClose);
   }
-  if (doc.data_source_clean) {
-    if (*doc.data_source_clean != kDataSourceCleanTrue) {
-      return Unmeasured("dataSourceClean other than 1");
-    }
-    xml.append(kDataSourceCleanExt);
-  }
-  xml.append(kExtLstClose);
   return Expected<void, Error>::Ok();
 }
 
@@ -1426,13 +1416,13 @@ bool WriteExtLst(const pivot::PivotCache& cache, pcd::Document* doc) {
   if (!cache.trailing_children_xml().empty()) {
     return false;
   }
+  if (cache.source_clean()) {
+    doc->data_source_clean = kDataSourceCleanTrue;
+  }
   std::string_view xml = cache.trailing_children_after_calculated_xml();
   if (xml.empty()) {
-    // Excel's re-save of a cache built in memory adds both extensions.
-    if (cache_built_in_memory(cache)) {
-      doc->has_pcd14 = true;
-      doc->data_source_clean = kDataSourceCleanTrue;
-    }
+    // Excel's re-save of a cache built in memory adds the x14 extension.
+    doc->has_pcd14 = cache_built_in_memory(cache);
     return true;
   }
   const auto consume = [&xml](std::string_view part) {
@@ -1446,10 +1436,7 @@ bool WriteExtLst(const pivot::PivotCache& cache, pcd::Document* doc) {
     return false;
   }
   doc->has_pcd14 = consume(kPcd14Ext);
-  if (consume(kDataSourceCleanExt)) {
-    doc->data_source_clean = kDataSourceCleanTrue;
-  }
-  return consume(kExtLstClose) && xml.empty() && (doc->has_pcd14 || doc->data_source_clean);
+  return consume(kExtLstClose) && xml.empty() && doc->has_pcd14;
 }
 
 bool WriteRecordCell(const pivot::PivotCache& cache, const pivot::PivotCacheRecord& record, std::size_t pos,
