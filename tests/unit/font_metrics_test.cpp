@@ -108,7 +108,7 @@ TEST(FontMetrics, UnknownFontOrSizeFallsBackToTheHostCalibri11) {
   EXPECT_FALSE(mac.row_height_calibrated);
   EXPECT_EQ(mac.family, "Garamond");
 
-  const NormalFontMetrics mac_size = Metrics("Calibri", 13, mac_365_ja_jp_profile());
+  const NormalFontMetrics mac_size = Metrics("Calibri", 17, mac_365_ja_jp_profile());
   EXPECT_FALSE(mac_size.width_calibrated);
 
   const NormalFontMetrics win = Metrics("Arial", 10, win_365_en_us_profile());
