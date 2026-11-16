@@ -258,10 +258,12 @@ static Expected<SharedStringTable, Error> ReadWorkbookAuxParts(ZipReader& zip, c
   // via Override only). This keeps `unknown_parts` from surfacing it.
   ConsumeIfPresent(zip, "xl/sharedStrings.xml", consumed_parts);
 
-  // The calculation chain only orders recalculation: it is stale after any
-  // edit, Excel rebuilds it when absent, and neither writer writes one. Its
-  // part and workbook relationship are consumed, not passed through.
-  ConsumeIfPresent(zip, wb_rels.calc_chain_path, consumed_parts);
+  // The calculation chain and the volatile dependencies are stale after any
+  // edit, Excel rebuilds them when absent, and neither writer writes them.
+  // Their parts and workbook relationships are consumed, not passed through.
+  for (const std::string& path : wb_rels.rebuilt_part_paths) {
+    ConsumeIfPresent(zip, path, consumed_parts);
+  }
   ConsumeIfPresent(zip, "xl/calcChain.xml", consumed_parts);
 
   // Persons: the person list the sheets' threaded comments name. The part

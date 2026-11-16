@@ -286,7 +286,8 @@ TEST(XlsbDrawingWrite, MissingPartDropsLinkAndRetainedRecord) {
   const XlsbWriteResult without = Save(plain);
   ExpectNotLinked(with.bytes);
   EXPECT_TRUE(SheetRels(with.bytes).empty());
-  EXPECT_EQ(with.diagnostics.dropped_relationship_count, without.diagnostics.dropped_relationship_count + 1U);
+  // The package never had the drawing, so leaving its relationship out loses nothing.
+  EXPECT_EQ(with.diagnostics.dropped_relationship_count, without.diagnostics.dropped_relationship_count);
   EXPECT_EQ(with.diagnostics.deferred_feature_count, without.diagnostics.deferred_feature_count);
 }
 

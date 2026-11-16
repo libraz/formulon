@@ -25,8 +25,8 @@ void mark_sheet_dynamic_arrays(
 /// `kIoSheetCorrupt` with `message` and `context`, any other error passes through.
 Error sheet_add_error(Error error, std::string_view message, std::string context);
 
-/// Tags the parts derived from modelled sheet content: the legacy drawing a sheet's `comment_vml_path()` names and
-/// the binary index a sheet relationship names.
+/// Tags the parts derived from modelled content: the legacy drawing a sheet's `comment_vml_path()` names, the binary
+/// index a sheet relationship names, and the part of each external-book link with its relationships part.
 void mark_model_derived_parts(const Workbook& wb, std::vector<PassthroughPart>& parts);
 
 /// Final steps of a package read, once every part is in the workbook: legacy implicit intersections,

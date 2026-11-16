@@ -151,8 +151,9 @@ Expected<WorkbookRels, Error> LoadWorkbookRels(const ZipReader& zip, std::string
           ASSIGN_OR_RETURN(rels.sst_path, ooxml::resolve_relative_path(base_dir, target));
         } else if (type == kRelStyles) {
           ASSIGN_OR_RETURN(rels.styles_path, ooxml::resolve_relative_path(base_dir, target));
-        } else if (type == kRelCalcChain) {
-          ASSIGN_OR_RETURN(rels.calc_chain_path, ooxml::resolve_relative_path(base_dir, target));
+        } else if (type == kRelCalcChain || type == kRelVolatileDependencies) {
+          ASSIGN_OR_RETURN(auto resolved, ooxml::resolve_relative_path(base_dir, target));
+          rels.rebuilt_part_paths.push_back(std::move(resolved));
         } else {
           ASSIGN_OR_RETURN(UnknownRelationship unknown, ooxml::make_unknown_relationship(rel, base_dir));
           if (!unknown.type.empty()) {

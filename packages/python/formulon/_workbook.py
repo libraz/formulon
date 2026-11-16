@@ -541,8 +541,8 @@ class SaveDiagnostics:
     #: The number of passthrough parts dropped for colliding with a generated path, or for two entries claiming one
     #: path. Applies to both containers.
     dropped_part_count: int
-    #: The number of relationships dropped because their target part is gone, at package, workbook or (XLSB) sheet
-    #: scope. Rises with ``dropped_part_count`` for one dropped part, so do not add them.
+    #: The number of relationships dropped with a part counted in ``dropped_part_count``, at package, workbook or
+    #: (XLSB) sheet scope. Rises with ``dropped_part_count`` for one dropped part, so do not add them.
     dropped_relationship_count: int
     #: The number of tables emitted under a writer-assigned id. Always 0 for XLSB.
     renumbered_part_count: int

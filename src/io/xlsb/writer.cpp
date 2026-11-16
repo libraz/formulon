@@ -185,8 +185,6 @@ struct MetadataPlan {
   RichErrorTable rich;
   /// The regenerated `richValueRel` pair and the read parts the save leaves out.
   RichValueRelPlan rich_rels;
-  /// Workbook relationships to the read `richValueRel` that go with its part.
-  std::uint32_t rich_value_rels_retired = 0;
 };
 
 MetadataPlan BuildMetadataPlan(const Workbook& wb) {
@@ -205,11 +203,6 @@ MetadataPlan BuildMetadataPlan(const Workbook& wb) {
     // A blocked pivot's anchor is written plain unless its pivot part is: only a part kept from an XLSB source says so.
     plan.rich = build_rich_value_table(wb, pivot_table_kept_verbatim);
     plan.rich_rels = plan_rich_value_rels(wb, plan.rich);
-    if (plan.rich_rels.parts.empty() && plan.rich_rels.skipped.count(std::string(kRichValueRelPartPath)) != 0U) {
-      for (const UnknownRelationship& r : wb.unknown_workbook_rels()) {
-        plan.rich_value_rels_retired += !r.target_external && r.target == kRichValueRelPartPath ? 1U : 0U;
-      }
-    }
     plan.generate_part = plan.dynamic_arrays || !plan.rich.empty();
     plan.ifmd = plan.dynamic_arrays ? 1U : 0U;  // The generated part's XLDAPR entry comes first.
     return plan;
@@ -508,10 +501,6 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   RETURN_IF_ERROR(AddPart(
       writer.get(), kWorkbookBinRelsPath,
       BuildWorkbookRels(sheet_count, emit_sst_part, plan, workbook, link_rel_ids, &diagnostics, &workbook_rel_ids)));
-  // A `richValueRel` link left with no part once every rich value naming it
-  // is gone is dropped on purpose, as Excel does, and is no loss.
-  diagnostics.dropped_relationship_count -=
-      std::min(diagnostics.dropped_relationship_count, metadata.rich_value_rels_retired);
   // 4. xl/workbook.bin
   {
     ASSIGN_OR_RETURN(auto wb_bytes, BuildWorkbookBin(workbook, ordered_names, sheet_ranges, sheet_names, link_rel_ids));
@@ -634,6 +623,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
 
   ASSIGN_OR_RETURN(auto bytes, FinalizeArchive(writer, kWriteXlsbContext));
   diagnostics.downgraded_formula_count = downgraded_formula_count;
+  SettleDroppedRelationships(diagnostics);
   return XlsbWriteResult{std::move(bytes), diagnostics};
 }
 

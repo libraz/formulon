@@ -69,6 +69,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `droppedRelationshipCount` (Python `dropped_relationship_count`, C
+  `fm_save_diagnostics_info_t.dropped_relationship_count`) counts a
+  relationship only when its target part is counted in `droppedPartCount`.
+  A relationship to a part the save writes again, leaves out because Excel
+  rebuilds it, reports as a deferred feature, or that the package never had,
+  is left out without being counted; each was counted before.
+
 - `fm_workbook_load` takes a `const fm_load_options_spec_t*` before its
   out-parameter; pass NULL for the defaults.
 - The CLI applies `--profile` when it loads a workbook, so `recalc --profile`
@@ -582,7 +589,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   part and the parts of every PivotTable read into the model too, which the
   workbook holds in its model and writes from it once edited, on either
   format the VML drawing of a sheet's notes, and on an `.xlsb` the binary
-  index of each sheet.
+  index of each sheet and the parts of each external-book link. The
+  calculation chain and the volatile dependencies are not listed either:
+  both readers leave them out.
 
 - Saving a workbook read from `.xlsb` no longer counts the styles part or
   the parts of a PivotTable read into the model in `droppedPartCount` (Python
@@ -598,7 +607,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`xl/calcChain.xml` or `xl/calcChain.bin`) count the chain or its workbook
   relationship: the chain only orders recalculation, neither format's save
   writes one, and Excel opens the result without repair and rebuilds the
-  chain. A refreshed PivotTable keeps its part names in an `.xlsb` save
+  chain. The volatile dependencies of RTD and CUBE formulas
+  (`xl/volatileDependencies.bin`) are left out the same way, by both
+  formats' saves (an `.xlsb` save used to keep them), and are not counted.
+  Nor does a save of a desktop-written `.xlsb` with external-book links
+  count the link parts (`xl/externalLinks/externalLinkN.bin` and their
+  relationships), which both formats write again from the links. A
+  refreshed PivotTable keeps its part names in an `.xlsb` save
   instead of moving to the next free number.
 
 - A PivotTable page field that shows one item because every other item is

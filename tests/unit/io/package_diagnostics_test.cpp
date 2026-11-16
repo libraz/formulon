@@ -22,6 +22,7 @@
 #include "gtest/gtest.h"
 #include "io/cf_reader.h"
 #include "io/ooxml/emission_plan.h"
+#include "io/ooxml/relationship_writer.h"
 #include "io/ooxml/workbook_xml_builder.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
@@ -47,6 +48,33 @@ Workbook OneSheetWorkbook() {
   Workbook wb = Workbook::create();
   wb.set_cell_value(0, 0, 0, Value::number(1.0));
   return wb;
+}
+
+/// A one-sheet workbook whose passthrough copy of `styles_path` loses to the generated styles part, so the save
+/// counts it as dropped; a relationship to it is lost with it.
+Workbook WorkbookLosingStyles(const char* styles_path) {
+  Workbook wb = OneSheetWorkbook();
+  PassthroughPart stale;
+  stale.path = styles_path;
+  stale.bytes = {'<', '/', '>'};
+  wb.set_passthrough_parts({std::move(stale)});
+  return wb;
+}
+
+/// A one-sheet workbook whose unmodelled copy of the workbook part loses to the generated one in an .xlsb save.
+Workbook WorkbookLosingTheXlsbWorkbookPart() {
+  Workbook wb = OneSheetWorkbook();
+  wb.set_passthrough_parts({PassthroughPart(
+      "xl/workbook.bin", "application/vnd.ms-excel.sheet.binary.macroEnabled.main", std::vector<std::uint8_t>{0U})});
+  return wb;
+}
+
+UnknownRelationship OrphanTo(const char* target) {
+  UnknownRelationship rel;
+  rel.id = "rId9";
+  rel.type = "http://schemas.example.com/orphan";
+  rel.target = target;
+  return rel;
 }
 
 pugi::xml_document ParseWorksheet(const std::string& xml) {
@@ -136,50 +164,45 @@ TEST(OoxmlWriteDiagnostics, ASinglePackageScopeRelationshipDropCountsExactlyOne)
   // `dropped_relationship_count` is fed from several sites; each has to
   // count one per dropped relationship, not one per pass. Drive exactly one
   // drop and assert equality rather than a threshold.
-  Workbook wb = OneSheetWorkbook();
-  UnknownRelationship package_rel;
-  package_rel.id = "rId9";
-  package_rel.type = "http://schemas.example.com/orphan";
-  package_rel.target = "docProps/missing.xml";
-  wb.set_unknown_package_rels({std::move(package_rel)});
+  Workbook wb = WorkbookLosingStyles("xl/styles.xml");
+  wb.set_unknown_package_rels({OrphanTo("xl/styles.xml")});
 
   auto result = write_ooxml_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
   EXPECT_EQ(result.value().diagnostics.dropped_relationship_count, 1U);
-  EXPECT_EQ(result.value().diagnostics.dropped_part_count, 0U);
+  EXPECT_EQ(result.value().diagnostics.dropped_part_count, 1U);
 }
 
 TEST(OoxmlWriteDiagnostics, ASingleWorkbookScopeRelationshipDropCountsExactlyOne) {
-  Workbook wb = OneSheetWorkbook();
-  UnknownRelationship workbook_rel;
-  workbook_rel.id = "rId9";
-  workbook_rel.type = "http://schemas.example.com/orphan";
-  workbook_rel.target = "xl/missing.xml";
-  wb.set_unknown_workbook_rels({std::move(workbook_rel)});
+  Workbook wb = WorkbookLosingStyles("xl/styles.xml");
+  wb.set_unknown_workbook_rels({OrphanTo("xl/styles.xml")});
 
   auto result = write_ooxml_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
   EXPECT_EQ(result.value().diagnostics.dropped_relationship_count, 1U);
-  EXPECT_EQ(result.value().diagnostics.dropped_part_count, 0U);
+  EXPECT_EQ(result.value().diagnostics.dropped_part_count, 1U);
 }
 
 TEST(OoxmlWriteDiagnostics, TwoScopesDroppingOneRelationshipEachSumToTwo) {
-  Workbook wb = OneSheetWorkbook();
-  UnknownRelationship package_rel;
-  package_rel.id = "rId9";
-  package_rel.type = "http://schemas.example.com/orphan";
-  package_rel.target = "docProps/missing.xml";
-  wb.set_unknown_package_rels({std::move(package_rel)});
-
-  UnknownRelationship workbook_rel;
-  workbook_rel.id = "rId9";
-  workbook_rel.type = "http://schemas.example.com/orphan";
-  workbook_rel.target = "xl/missing.xml";
-  wb.set_unknown_workbook_rels({std::move(workbook_rel)});
+  Workbook wb = WorkbookLosingStyles("xl/styles.xml");
+  wb.set_unknown_package_rels({OrphanTo("xl/styles.xml")});
+  wb.set_unknown_workbook_rels({OrphanTo("xl/styles.xml")});
 
   auto result = write_ooxml_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
   EXPECT_EQ(result.value().diagnostics.dropped_relationship_count, 2U);
+  EXPECT_EQ(result.value().diagnostics.dropped_part_count, 1U);
+}
+
+// A relationship takes its target's classification: one to a part the package never had loses nothing.
+TEST(OoxmlWriteDiagnostics, ARelationshipToAPartThePackageNeverHadIsNotCounted) {
+  Workbook wb = OneSheetWorkbook();
+  wb.set_unknown_package_rels({OrphanTo("docProps/missing.xml")});
+  wb.set_unknown_workbook_rels({OrphanTo("xl/missing.xml")});
+
+  auto result = write_ooxml_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  EXPECT_EQ(result.value().diagnostics.dropped_relationship_count, 0U);
   EXPECT_EQ(result.value().diagnostics.dropped_part_count, 0U);
 }
 
@@ -258,7 +281,7 @@ TEST(OoxmlWriteDiagnostics, ANullSinkDiscardsTheCountsAndChangesNothingElse) {
   UnknownRelationship orphan;
   orphan.id = "rId9";
   orphan.type = "http://schemas.example.com/orphan";
-  orphan.target = "xl/missing.xml";
+  orphan.target = "xl/styles.xml";
   TableMetadata table;
   table.id = 0;
   table.name = "Table1";
@@ -285,6 +308,7 @@ TEST(OoxmlWriteDiagnostics, ANullSinkDiscardsTheCountsAndChangesNothingElse) {
   const EmissionPlan planned = BuildEmissionPlan(wb, /*generated_shared_strings=*/false, &collected_again);
   EXPECT_EQ(BuildPackageRels(wb, planned, &collected_again), package_rels);
   EXPECT_EQ(BuildWorkbookRels(wb.sheet_count(), planned, wb, &collected_again), workbook_rels);
+  SettleDroppedRelationships(collected_again);
   EXPECT_EQ(collected_again.dropped_part_count, 1U);
   EXPECT_EQ(collected_again.dropped_relationship_count, 1U);
   EXPECT_EQ(collected_again.renumbered_part_count, 1U);
@@ -485,37 +509,35 @@ TEST(XlsbWriteDiagnostics, EachRelationshipScopeDropsExactlyOne) {
   // Package, workbook and sheet scope each feed `dropped_relationship_count`.
   // Sheet scope has no OOXML counterpart, so it is the one that disappears
   // if the field is unified from the OOXML side alone.
-  UnknownRelationship orphan;
-  orphan.id = "rId9";
-  orphan.type = "http://schemas.example.com/orphan";
-
   {
-    Workbook wb = OneSheetWorkbook();
-    UnknownRelationship rel = orphan;
-    rel.target = "docProps/missing.xml";
-    wb.set_unknown_package_rels({std::move(rel)});
+    Workbook wb = WorkbookLosingTheXlsbWorkbookPart();
+    wb.set_unknown_package_rels({OrphanTo("xl/workbook.bin")});
     auto result = xlsb::write_xlsb_with_result(wb);
     ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
     EXPECT_EQ(result.value().diagnostics.dropped_relationship_count, 1U) << "package scope";
   }
   {
-    Workbook wb = OneSheetWorkbook();
-    UnknownRelationship rel = orphan;
-    rel.target = "xl/missing.bin";
-    wb.set_unknown_workbook_rels({std::move(rel)});
+    Workbook wb = WorkbookLosingTheXlsbWorkbookPart();
+    wb.set_unknown_workbook_rels({OrphanTo("xl/workbook.bin")});
     auto result = xlsb::write_xlsb_with_result(wb);
     ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
     EXPECT_EQ(result.value().diagnostics.dropped_relationship_count, 1U) << "workbook scope";
   }
   {
-    Workbook wb = OneSheetWorkbook();
-    UnknownRelationship rel = orphan;
-    rel.target = "xl/drawings/missing.bin";
-    wb.sheet(0).set_unknown_relationships({std::move(rel)});
+    Workbook wb = WorkbookLosingTheXlsbWorkbookPart();
+    wb.sheet(0).set_unknown_relationships({OrphanTo("xl/workbook.bin")});
     auto result = xlsb::write_xlsb_with_result(wb);
     ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
     EXPECT_EQ(result.value().diagnostics.dropped_relationship_count, 1U) << "sheet scope";
   }
+  // A relationship to a part the package never had loses nothing, at any scope.
+  Workbook wb = OneSheetWorkbook();
+  wb.set_unknown_package_rels({OrphanTo("docProps/missing.xml")});
+  wb.set_unknown_workbook_rels({OrphanTo("xl/missing.bin")});
+  wb.sheet(0).set_unknown_relationships({OrphanTo("xl/drawings/missing.bin")});
+  auto result = xlsb::write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  EXPECT_EQ(result.value().diagnostics.dropped_relationship_count, 0U);
 }
 
 // ---------------------------------------------------------------------------

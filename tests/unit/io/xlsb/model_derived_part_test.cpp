@@ -3,8 +3,10 @@
 //
 // A sheet's note drawing is written from its notes; a drawing the reader did not tie to notes stays a passthrough,
 // listed and counted. A desktop-written .xlsb's binary index over a sheet's cell records holds nothing the model
-// lacks, Excel rebuilds it, and .xlsx has no such part, so leaving it out loses nothing. The calculation chain of
-// either format only orders recalculation; the readers consume it and neither save writes or counts it.
+// lacks, Excel rebuilds it, and .xlsx has no such part, so leaving it out loses nothing. An .xlsb external-book
+// link's part and its relationships are written again from the link the reader modelled. The calculation chain and
+// the volatile dependencies of either format are rebuilt by Excel; the readers consume them and neither save writes
+// or counts them.
 
 #include <cstddef>
 #include <cstdint>
@@ -199,12 +201,16 @@ Workbook LoadEither(const char* name) {
   return read.has_value() ? std::move(read.value().workbook) : Workbook::create();
 }
 
-/// Whether `package` has the part at `chain`, or a workbook relationship of the calcChain type in `rels`.
-bool HasChain(const tc::Bytes& package, const char* chain, const char* rels) {
+/// Whether `package` has the part at `path`, or a workbook relationship in `rels` whose type ends in `type`.
+bool HasRebuiltPart(const tc::Bytes& package, const char* path, const char* rels, const std::string& type) {
   const std::optional<tc::Bytes> rel_part = tc::ReadPart(package, rels);
   EXPECT_TRUE(rel_part.has_value());
   const std::string rel_xml = rel_part.has_value() ? std::string(rel_part->begin(), rel_part->end()) : std::string();
-  return tc::ReadPart(package, chain).has_value() || rel_xml.find("/calcChain\"") != std::string::npos;
+  return tc::ReadPart(package, path).has_value() || rel_xml.find("/" + type + "\"") != std::string::npos;
+}
+
+bool HasChain(const tc::Bytes& package, const char* chain, const char* rels) {
+  return HasRebuiltPart(package, chain, rels, "calcChain");
 }
 
 TEST(CalcChainLeftOut, AnUneditedSaveCountsNothingAndWritesNoChain) {
@@ -225,6 +231,53 @@ TEST(CalcChainLeftOut, AnUneditedSaveCountsNothingAndWritesNoChain) {
 TEST(CalcChainLeftOut, AChainIsNotListed) {
   EXPECT_FALSE(Listed(Fixture("self_book_name.xlsx"), "xl/calcChain.xml"));
   EXPECT_FALSE(Listed(Fixture("self_book_name.xlsb"), "xl/calcChain.bin"));
+}
+
+// Desktop-written with a cube formula, so with volatile dependencies.
+const char kVolatileFixture[] = "xlsb_cm_marks_cell.xlsb";
+const char kVolatilePart[] = "xl/volatileDependencies.bin";
+
+TEST(VolatileDependenciesLeftOut, AnUneditedSaveCountsNothingAndWritesNone) {
+  const Workbook wb = LoadXlsb(Fixture(kVolatileFixture));
+  auto xlsx = write_ooxml_with_result(wb);
+  ASSERT_TRUE(xlsx.has_value()) << xlsx.error().message;
+  ExpectCounts(xlsx.value().diagnostics, 0U);
+  EXPECT_FALSE(HasRebuiltPart(xlsx.value().bytes, "xl/volatileDependencies.xml", "xl/_rels/workbook.xml.rels",
+                              "volatileDependencies"));
+  auto xlsb = write_xlsb_with_result(wb);
+  ASSERT_TRUE(xlsb.has_value()) << xlsb.error().message;
+  ExpectCounts(xlsb.value().diagnostics, 0U);
+  EXPECT_FALSE(HasRebuiltPart(xlsb.value().bytes, kVolatilePart, "xl/_rels/workbook.bin.rels", "volatileDependencies"));
+}
+
+TEST(VolatileDependenciesLeftOut, TheyAreNotListed) {
+  EXPECT_FALSE(Listed(Fixture(kVolatileFixture), kVolatilePart));
+}
+
+// Desktop-written with external-book links: one, and two beside other link kinds.
+const char* const kLinkedFixtures[] = {"external_link_cell_kinds.xlsb", "external_link_mixed.xlsb"};
+const char kLinkPart[] = "xl/externalLinks/externalLink1.bin";
+
+TEST(ExternalLinkRetained, AnUneditedSaveCountsNothingAndWritesTheLink) {
+  for (const char* name : kLinkedFixtures) {
+    SCOPED_TRACE(name);
+    const Workbook wb = LoadXlsb(Fixture(name));
+    auto xlsx = write_ooxml_with_result(wb);
+    ASSERT_TRUE(xlsx.has_value()) << xlsx.error().message;
+    ExpectCounts(xlsx.value().diagnostics, 0U);
+    EXPECT_TRUE(tc::ReadPart(xlsx.value().bytes, "xl/externalLinks/externalLink1.xml").has_value());
+    auto xlsb = write_xlsb_with_result(wb);
+    ASSERT_TRUE(xlsb.has_value()) << xlsb.error().message;
+    ExpectCounts(xlsb.value().diagnostics, 0U);
+    EXPECT_TRUE(tc::ReadPart(xlsb.value().bytes, kLinkPart).has_value());
+  }
+}
+
+TEST(ExternalLinkRetained, AnExternalBookLinkPartIsNotListed) {
+  for (const char* name : kLinkedFixtures) {
+    SCOPED_TRACE(name);
+    EXPECT_FALSE(Listed(Fixture(name), kLinkPart));
+  }
 }
 
 }  // namespace

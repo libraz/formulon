@@ -92,7 +92,8 @@ void AppendRelationship(std::string& out, std::uint32_t rid, std::string_view ty
 std::string EncodeTargetSpaces(std::string_view target);
 
 /// Logs `event` for an internal relationship whose target part is not in the
-/// package and counts it in `diagnostics` (when non-null) as dropped.
+/// package and notes its target in `diagnostics` (when non-null); see
+/// `SettleDroppedRelationships`.
 void RecordDroppedRelationship(std::string_view event, std::string_view type, std::string_view target,
                                WriteDiagnostics* diagnostics);
 
@@ -100,6 +101,14 @@ void RecordDroppedRelationship(std::string_view event, std::string_view type, st
 /// `diagnostics` (when non-null) as dropped.
 void RecordDroppedPart(std::string_view event, std::string_view path, std::string_view reason,
                        WriteDiagnostics* diagnostics);
+
+/// Counts `path` in `diagnostics` (when non-null) as a dropped part.
+void CountDroppedPart(std::string_view path, WriteDiagnostics* diagnostics);
+
+/// Sets `dropped_relationship_count` to the left-out relationships whose
+/// target was counted as a dropped part. Called once, after every part and
+/// relationship of the save is built.
+void SettleDroppedRelationships(WriteDiagnostics& diagnostics);
 
 }  // namespace io
 }  // namespace formulon

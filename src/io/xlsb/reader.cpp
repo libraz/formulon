@@ -918,13 +918,15 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
   if (!wb_rels.sst_path.empty()) {
     consumed_parts.insert(wb_rels.sst_path);
   }
-  // The calculation chain only orders recalculation: it is stale after any
-  // edit, Excel rebuilds it when absent, and neither writer writes one.
-  for (const std::string_view chain :
-       {std::string_view(wb_rels.calc_chain_path), std::string_view("xl/calcChain.bin")}) {
-    if (!chain.empty() && zip.has_entry(chain)) {
-      consumed_parts.emplace(chain);
+  // The calculation chain and the volatile dependencies are stale after any
+  // edit, Excel rebuilds them when absent, and neither writer writes them.
+  for (const std::string& path : wb_rels.rebuilt_part_paths) {
+    if (zip.has_entry(path)) {
+      consumed_parts.insert(path);
     }
+  }
+  if (zip.has_entry("xl/calcChain.bin")) {
+    consumed_parts.insert("xl/calcChain.bin");
   }
 
   // A formula is a dynamic-array formula exactly when a `BrtCellMeta`

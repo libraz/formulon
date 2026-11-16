@@ -415,8 +415,8 @@ export interface SaveDiagnostics {
   /** The number of passthrough parts dropped for colliding with a generated path, or for two entries claiming one path.
    *  Applies to both containers. */
   readonly droppedPartCount: number;
-  /** The number of relationships dropped because their target part is gone, at package, workbook or (XLSB) sheet scope.
-   *  Rises with `droppedPartCount` for one dropped part, so do not add them. */
+  /** The number of relationships dropped with a part counted in `droppedPartCount`, at package, workbook or (XLSB)
+   *  sheet scope. Rises with `droppedPartCount` for one dropped part, so do not add them. */
   readonly droppedRelationshipCount: number;
   /** The number of tables emitted under a writer-assigned id. Always 0 for XLSB. */
   readonly renumberedPartCount: number;

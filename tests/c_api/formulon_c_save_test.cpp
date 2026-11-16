@@ -265,8 +265,8 @@ TEST(FormulonCApi, SaveWithDiagnosticsCarriesTheOoxmlWriterCountersAcrossTheAbi)
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 1.0), 0);
 
   // A preserved copy of a part the writer always generates loses the
-  // collision and is dropped; a relationship whose target part is absent is
-  // dropped rather than left dangling.
+  // collision and is dropped; a relationship to it is dropped with it rather
+  // than left dangling.
   formulon::PassthroughPart stale;
   stale.path = "xl/styles.xml";
   stale.content_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml";
@@ -275,7 +275,7 @@ TEST(FormulonCApi, SaveWithDiagnosticsCarriesTheOoxmlWriterCountersAcrossTheAbi)
   formulon::UnknownRelationship orphan;
   orphan.id = "rId9";
   orphan.type = "http://schemas.example.com/orphan";
-  orphan.target = "xl/missing.xml";
+  orphan.target = "xl/styles.xml";
   wb.handle->workbook().set_unknown_workbook_rels({std::move(orphan)});
 
   BufferGuard buf;

@@ -62,8 +62,9 @@ Expected<WorkbookRels, Error> load_workbook_rels(const ZipReader& zip, std::stri
         } else if (type == kRelStyles) {
           ASSIGN_OR_RETURN(auto resolved, resolve_relative_path(base_dir, target));
           rels.styles_path = std::move(resolved);
-        } else if (type == kRelCalcChain) {
-          ASSIGN_OR_RETURN(rels.calc_chain_path, resolve_relative_path(base_dir, target));
+        } else if (type == kRelCalcChain || type == kRelVolatileDependencies) {
+          ASSIGN_OR_RETURN(auto resolved, resolve_relative_path(base_dir, target));
+          rels.rebuilt_part_paths.push_back(std::move(resolved));
         } else if (type == kRelPivotCacheDefinition) {
           const std::string id(attr_str(rel, "Id"));
           if (id.empty()) {

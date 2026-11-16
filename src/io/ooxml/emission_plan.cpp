@@ -413,11 +413,6 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
   }
   RichValueRelPlan rich_value_rels = plan_rich_value_rels(wb, plan.rich_errors);
   plan.rich_value_rel_parts = std::move(rich_value_rels.parts);
-  if (plan.rich_value_rel_parts.empty() && rich_value_rels.skipped.count(std::string(kRichValueRelPartPath)) != 0U) {
-    for (const UnknownRelationship& r : wb.unknown_workbook_rels()) {
-      plan.rich_value_rels_retired += !r.target_external && r.target == kRichValueRelPartPath ? 1U : 0U;
-    }
-  }
   bool retained_metadata = false;
   for (const PassthroughPart& part : wb.passthrough_parts()) {
     retained_metadata = retained_metadata || part.path == kMetadataPartPath;
@@ -609,9 +604,6 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
     }
   }
   for (const PassthroughPart& part : wb.passthrough_parts()) {
-    if (part.retained_origin == PassthroughPart::RetainedOrigin::kDerivedFromModel) {
-      plan.derived_part_paths.insert(part.path);
-    }
     // The relationships of a binary part that is not written would dangle.
     if (const std::string owner = RelsOwner(part.path); !owner.empty() && binary_parts.count(owner) != 0U) {
       continue;
@@ -649,9 +641,7 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
             .field("content_type", part.content_type)
             .field("reason", std::string_view("xlsb_binary_part"))
             .warn();
-        if (diagnostics != nullptr) {
-          ++diagnostics->dropped_part_count;
-        }
+        CountDroppedPart(part.path, diagnostics);
       }
       continue;
     }

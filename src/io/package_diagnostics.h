@@ -33,6 +33,8 @@
 #define FORMULON_IO_PACKAGE_DIAGNOSTICS_H_
 
 #include <cstdint>
+#include <string>
+#include <vector>
 
 namespace formulon {
 namespace io {
@@ -105,18 +107,14 @@ struct WriteDiagnostics {
   /// Fed by: `ooxml_writer.passthrough_collision`,
   /// `xlsb.writer.passthrough_collision`.
   std::uint32_t dropped_part_count = 0;
-  /// Round-tripped relationships not re-emitted because the part they
-  /// target is no longer in the package. Emitting them anyway would leave
-  /// a dangling relationship and Excel would open the package in repair
-  /// mode, so dropping is the correct write.
+  /// Round-tripped relationships left out with a part counted in
+  /// `dropped_part_count`. A relationship takes the classification of its
+  /// target: one whose part the save regenerates, leaves out as derived, or
+  /// reports as a deferred feature is not counted here either.
   ///
-  /// This is an *observation of* a loss, not an independent loss. When a
-  /// part is dropped and a relationship pointed at it, both this counter
-  /// and `dropped_part_count` rise by one for that single part: the two
-  /// are separate observations of the same event and must not be summed.
-  /// The counter is not suppressed in that case because a relationship
-  /// can also dangle for a part that was never captured at all, and the
-  /// caller cannot tell those apart from a suppressed count.
+  /// This is an *observation of* a loss, not an independent loss: both
+  /// counters rise for one dropped part with a relationship to it, so they
+  /// must not be summed. Settled once per save from the two lists below.
   /// Fed by: `ooxml_writer.package_rel_skipped`,
   /// `ooxml_writer.workbook_rel_skipped`,
   /// `xlsb.writer.package_rel_skipped`,
@@ -129,6 +127,11 @@ struct WriteDiagnostics {
   /// never contributes: the binary writer does not reassign part ids.
   /// Fed by: `ooxml_writer.table_id_fallback`.
   std::uint32_t renumbered_part_count = 0;
+  /// Paths counted in `dropped_part_count`, and the targets of the
+  /// relationships the save left out; bookkeeping for
+  /// `dropped_relationship_count`, not reported.
+  std::vector<std::string> dropped_part_paths;
+  std::vector<std::string> unwritten_relationship_targets;
 };
 
 }  // namespace io

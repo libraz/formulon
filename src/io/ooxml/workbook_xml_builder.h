@@ -32,8 +32,9 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan);
 /// relationships when the corresponding passthrough parts survived.
 ///
 /// A round-tripped relationship whose target part is no longer in the
-/// package is omitted and bumps `diagnostics->dropped_relationship_count`.
-/// `diagnostics` may be NULL, which discards the count.
+/// package is omitted and noted in `diagnostics` (see
+/// `SettleDroppedRelationships`). `diagnostics` may be NULL, which
+/// discards the count.
 std::string BuildPackageRels(const Workbook& wb, const EmissionPlan& plan, WriteDiagnostics* diagnostics);
 
 /// Format-neutral form of the above, shared with the XLSB writer:

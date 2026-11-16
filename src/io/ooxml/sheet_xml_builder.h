@@ -81,10 +81,10 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
 /// Every relationship with an internal target is emitted only when that
 /// target is present in `plan.passthrough_kept`; external relationships
 /// remain eligible without a local payload. A relationship dropped by
-/// that rule bumps `diagnostics->dropped_relationship_count`, which is
-/// the only signal a caller gets that the saved sheet references less
-/// than the source did. `diagnostics` may be NULL, which discards the
-/// counts and changes nothing else.
+/// that rule is noted in `diagnostics`, which counts it in
+/// `dropped_relationship_count` when its target part was counted as
+/// dropped. `diagnostics` may be NULL, which discards the counts and
+/// changes nothing else.
 SheetRelsResult BuildSheetRels(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
                                const std::vector<EmissionPlan::PivotTablePlan>& sheet_pivot_tables,
                                const EmissionPlan::CommentsPlan& comments_plan, const EmissionPlan& plan,

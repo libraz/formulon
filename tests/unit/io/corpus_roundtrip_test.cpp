@@ -366,10 +366,10 @@ std::string RecordField(std::string_view record, std::string_view key) {
   return out;
 }
 
-/// The drops one save logs: a part path, or rel:<target> for a relationship.
+/// The drops one save logs: a part path, or the target of a relationship left out.
 struct DropLog {
   std::vector<std::string> parts;
-  std::vector<std::string> relationships;
+  std::vector<std::string> relationship_targets;
 };
 
 void CollectDrop(std::string_view record, void* user_data) {
@@ -379,7 +379,7 @@ void CollectDrop(std::string_view record, void* user_data) {
       event == "ooxml_writer.passthrough_dropped") {
     log.parts.push_back(RecordField(record, "path"));
   } else if (event.size() > 12U && event.compare(event.size() - 12U, 12U, "_rel_skipped") == 0) {
-    log.relationships.push_back("rel:" + RecordField(record, "target"));
+    log.relationship_targets.push_back(RecordField(record, "target"));
   }
 }
 
@@ -405,17 +405,25 @@ class DropCapture {
 void AddDrops(const std::string& path, const std::string& tag, const io::WriteDiagnostics& diagnostics,
               const DropLog& log, std::vector<Failure>& out) {
   const std::string stage = "drop_" + tag;
-  for (const std::vector<std::string>* items : {&log.parts, &log.relationships}) {
+  // A relationship is lost only with its target part.
+  std::vector<std::string> relationships;
+  for (const std::string& target : log.relationship_targets) {
+    if (std::find(log.parts.begin(), log.parts.end(), target) != log.parts.end()) {
+      relationships.push_back("rel:" + target);
+    }
+  }
+  const std::vector<std::string>& counted_relationships = relationships;
+  for (const std::vector<std::string>* items : {&log.parts, &counted_relationships}) {
     for (const std::string& item : *items) {
       out.push_back({path, stage, item, "counted as dropped by an unedited save"});
     }
   }
   if (diagnostics.dropped_part_count != log.parts.size() ||
-      diagnostics.dropped_relationship_count != log.relationships.size()) {
+      diagnostics.dropped_relationship_count != relationships.size()) {
     out.push_back({path, stage, "count_mismatch",
                    "counts " + std::to_string(diagnostics.dropped_part_count) + "/" +
                        std::to_string(diagnostics.dropped_relationship_count) + " but logged " +
-                       std::to_string(log.parts.size()) + "/" + std::to_string(log.relationships.size())});
+                       std::to_string(log.parts.size()) + "/" + std::to_string(relationships.size())});
   }
 }
 

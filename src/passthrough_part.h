@@ -66,10 +66,10 @@ struct PassthroughPart {
     kPivotCacheDefinition,
     kPivotCacheRecords,
     kStyles,
-    /// A part derived from sheet content the reader modelled: the legacy
-    /// drawing of its notes and form controls, or the binary index over its
-    /// cell records. The writer regenerates it or leaves it out; neither
-    /// loses anything.
+    /// A part derived from content the reader modelled: the legacy drawing
+    /// of a sheet's notes and form controls, the binary index over its cell
+    /// records, or an external-book link and its relationships. The writer
+    /// regenerates it or leaves it out; neither loses anything.
     kDerivedFromModel,
   };
   RetainedOrigin retained_origin = RetainedOrigin::kNone;

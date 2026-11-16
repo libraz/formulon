@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 
 #include "io/ooxml_defs.h"
 #include "io/xml_escape.h"
@@ -134,15 +135,29 @@ void RecordDroppedRelationship(std::string_view event, std::string_view type, st
       .field("target", target)
       .warn();
   if (diagnostics != nullptr) {
-    ++diagnostics->dropped_relationship_count;
+    diagnostics->unwritten_relationship_targets.emplace_back(target);
   }
 }
 
 void RecordDroppedPart(std::string_view event, std::string_view path, std::string_view reason,
                        WriteDiagnostics* diagnostics) {
   StructuredLog(event).field("path", path).field("reason", reason).warn();
+  CountDroppedPart(path, diagnostics);
+}
+
+void CountDroppedPart(std::string_view path, WriteDiagnostics* diagnostics) {
   if (diagnostics != nullptr) {
     ++diagnostics->dropped_part_count;
+    diagnostics->dropped_part_paths.emplace_back(path);
+  }
+}
+
+void SettleDroppedRelationships(WriteDiagnostics& diagnostics) {
+  const std::unordered_set<std::string_view> dropped(diagnostics.dropped_part_paths.begin(),
+                                                     diagnostics.dropped_part_paths.end());
+  diagnostics.dropped_relationship_count = 0;
+  for (const std::string& target : diagnostics.unwritten_relationship_targets) {
+    diagnostics.dropped_relationship_count += dropped.count(target) != 0U ? 1U : 0U;
   }
 }
 

@@ -500,7 +500,8 @@ TEST(OoxmlPrinterSettings, MissingBodyPartDropsTheRelationshipAndTheReference) {
   if (test::extract_part(test::span_of(saved.value().bytes), "xl/worksheets/_rels/sheet1.xml.rels", &sheet_rels)) {
     EXPECT_EQ(sheet_rels.find("printerSettings"), std::string::npos) << sheet_rels;
   }
-  EXPECT_GE(saved.value().diagnostics.dropped_relationship_count, 1U);
+  // The package never had the part, so dropping the relationship loses nothing.
+  EXPECT_EQ(saved.value().diagnostics.dropped_relationship_count, 0U);
 }
 
 /// Resolves a `<Relationship Target>` against the part directory that owns
@@ -586,7 +587,8 @@ TEST(OoxmlDrawing, MissingBodyPartDropsTheRelationshipAndTheReference) {
   if (test::extract_part(test::span_of(saved.value().bytes), "xl/worksheets/_rels/sheet1.xml.rels", &sheet_rels)) {
     EXPECT_EQ(sheet_rels.find("drawing1.xml"), std::string::npos) << sheet_rels;
   }
-  EXPECT_GE(saved.value().diagnostics.dropped_relationship_count, 1U);
+  // The package never had the part, so dropping the relationship loses nothing.
+  EXPECT_EQ(saved.value().diagnostics.dropped_relationship_count, 0U);
 }
 
 TEST(OoxmlSheetRels, EveryInternalRelationshipNamesAWrittenPart) {
@@ -679,7 +681,8 @@ TEST(OoxmlSheetRels, DroppedUnknownRelationshipIsCounted) {
 
   auto saved = io::write_ooxml_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
-  EXPECT_GE(saved.value().diagnostics.dropped_relationship_count, 1U);
+  // The package never had the part, so dropping the relationship loses nothing.
+  EXPECT_EQ(saved.value().diagnostics.dropped_relationship_count, 0U);
 }
 
 TEST(OoxmlExternalLinks, PresentBodyPartKeepsBothHalvesOfTheReference) {

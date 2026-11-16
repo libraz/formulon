@@ -263,9 +263,6 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
 
   std::unordered_set<std::string> kept_paths;
   for (const PassthroughPart& part : wb.passthrough_parts()) {
-    if (part.retained_origin == PassthroughPart::RetainedOrigin::kDerivedFromModel) {
-      plan.derived_part_paths.insert(part.path);
-    }
     if (!ooxml::is_safe_part_name(part.path)) {
       return make_error(FormulonErrorCode::kIoZipSlip, "passthrough part name escapes package root; refusing to write",
                         std::string(kWriteXlsbContext) + " part=" + part.path);
@@ -499,9 +496,6 @@ std::string BuildSheetRels(const Sheet& sheet, const EmissionPlan& plan, const s
       // Counted alongside the package- and workbook-scope drops: a dropped
       // sheet relationship is a dropped relationship, and OOXML having no
       // sheet-scope equivalent must not make it invisible.
-      if (plan.derived_part_paths.count(rel.target) != 0U) {
-        continue;
-      }
       RecordDroppedRelationship("xlsb.writer.sheet_rel_skipped", rel.type, rel.target, diagnostics);
       continue;
     }

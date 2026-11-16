@@ -722,8 +722,8 @@ typedef struct {
   /** The number of passthrough parts dropped for colliding with a generated path, or for two entries claiming one path.
    *  Applies to both containers. */
   uint32_t dropped_part_count;
-  /** The number of relationships dropped because their target part is gone, at package, workbook or (XLSB) sheet scope.
-   *  Rises with `dropped_part_count` for one dropped part, so do not add them. */
+  /** The number of relationships dropped with a part counted in `dropped_part_count`, at package, workbook or (XLSB)
+   *  sheet scope. Rises with `dropped_part_count` for one dropped part, so do not add them. */
   uint32_t dropped_relationship_count;
   /** The number of tables emitted under a writer-assigned id. Always 0 for XLSB. */
   uint32_t renumbered_part_count;

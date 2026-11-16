@@ -99,6 +99,8 @@ inline constexpr std::string_view kRelSheetMetadata =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/sheetMetadata";
 inline constexpr std::string_view kRelCalcChain =
     "http://schemas.openxmlformats.org/officeDocument/2006/relationships/calcChain";
+inline constexpr std::string_view kRelVolatileDependencies =
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/volatileDependencies";
 inline constexpr std::string_view kRelRdRichValue =
     "http://schemas.microsoft.com/office/2017/06/relationships/rdRichValue";
 inline constexpr std::string_view kRelRdRichValueStructure =

@@ -8,8 +8,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
-#include <string_view>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -34,8 +32,6 @@ struct EmissionPlan {
   // Shared membership index over the finalized kept list. The list and its
   // pointed-to parts remain immutable for the rest of the write.
   PassthroughPathIndex passthrough_path_index;
-  /// Parts the reader derived from modelled sheet content. A relationship to one the save leaves out is not lost.
-  std::unordered_set<std::string_view> derived_part_paths;
   /// Source Default registrations, lower-case by extension and unique. They
   /// remain available even when a source archive contains no current part of
   /// a given extension: keeping the registry avoids changing the meaning of

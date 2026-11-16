@@ -121,9 +121,6 @@ struct EmissionPlan {
   // `passthrough_kept` in place of the read ones. `passthrough_kept` points
   // into this vector, so the plan is moved, never copied.
   std::vector<PassthroughPart> rich_value_rel_parts;
-  // Workbook relationships to the read `richValueRel` that the save drops
-  // because no rich value names a relationship any more; they are not losses.
-  std::uint32_t rich_value_rels_retired = 0;
   // True when the writer generates `kPersonsPartPath` from `Workbook::persons()`.
   bool generated_persons = false;
   // The canonical folder of `Workbook::location()`, or empty without one;
@@ -222,8 +219,6 @@ struct EmissionPlan {
   // points into `passthrough_kept`; the vector and pointed-to parts stay
   // immutable after this plan is built.
   PassthroughPathIndex passthrough_path_index;
-  // Parts the reader derived from modelled sheet content. A relationship to one the save leaves out is not lost.
-  std::unordered_set<std::string_view> derived_part_paths;
   // Per-sheet rels build, indexed by sheet index (opaque sheets carry a
   // default-constructed, unused entry). Built once after passthrough
   // collision filtering so internal unknown relationships only survive when

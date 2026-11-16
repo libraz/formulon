@@ -1,10 +1,12 @@
 #include "io/package_reader_common.h"
 
-#include <string_view>
+#include <string>
 #include <unordered_set>
 #include <utility>
 
+#include "external_link.h"
 #include "io/dynamic_array_formula.h"
+#include "io/ooxml/package_validator.h"
 #include "io/ooxml_defs.h"
 #include "io/sheet_phonetic.h"
 
@@ -24,7 +26,13 @@ void mark_sheet_dynamic_arrays(
 }
 
 void mark_model_derived_parts(const Workbook& wb, std::vector<PassthroughPart>& parts) {
-  std::unordered_set<std::string_view> derived;
+  std::unordered_set<std::string> derived;
+  for (const ExternalLinkRecord& link : wb.external_links()) {
+    if (link.kind == ExternalLinkRecord::Kind::kExternalBook && !link.part_path.empty()) {
+      derived.insert(link.part_path);
+      derived.insert(ooxml::rels_path_for_part(link.part_path));
+    }
+  }
   for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
     const Sheet& sheet = wb.sheet(s);
     if (!sheet.comment_vml_path().empty()) {

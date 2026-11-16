@@ -85,7 +85,7 @@ struct OoxmlWriteResult {
 /// Every drop and fallback described above also increments a
 /// `WriteDiagnostics` counter: fallback table ids land in
 /// `renumbered_part_count`, dropped passthrough copies in
-/// `dropped_part_count`, and relationships whose target part is gone in
+/// `dropped_part_count`, and the relationships dropped with them in
 /// `dropped_relationship_count`. The structured log is off by default in
 /// shipped builds, so these counters are what a caller actually sees.
 /// `downgraded_formula_count` and `deferred_feature_count` stay zero:
