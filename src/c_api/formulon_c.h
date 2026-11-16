@@ -1062,7 +1062,8 @@ typedef struct {
  *
  * The record replaces the whole entry: a replaced name takes the given
  * formula, comment and hidden flag, so a `NULL` `comment` or a zero `hidden`
- * resets that attribute. A formula that does not parse is rejected and
+ * resets that attribute. A macro name read from an `.xlsb` stays one (an
+ * `.xlsx` save leaves it out); remove it first to set a plain name. A formula that does not parse is rejected and
  * leaves the name list unchanged. One leading `=` is accepted and dropped:
  * the name stores the formula as files carry it, spelled as
  * `fm_sheet_set_formula` stores a cell formula, and the getters read it back

@@ -289,9 +289,12 @@ Model Snapshot(const Workbook& wb) {
   }
   m.emplace_back("sheet_names", names);
 
+  // A macro name is .xlsb-only, as in Excel (an .xlsx save leaves it out); xlsb_roundtrip_defined_names_test pins it.
   std::vector<std::string> defined;
   for (const DefinedName& d : wb.defined_names()) {
-    defined.push_back(d.name + "@" + std::to_string(d.local_sheet_id));
+    if (d.macro_kind == NameMacroKind::kNone) {
+      defined.push_back(d.name + "@" + std::to_string(d.local_sheet_id));
+    }
   }
   m.emplace_back("defined_names", Join(defined));
 

@@ -27,9 +27,10 @@ namespace io {
 /// `DefinedName` shape and the per-attribute semantics; this is the
 /// pugi-typed entry point intended for `io/`-internal callers.
 ///
-/// Excel refuses to open a book holding a name flagged `xlm="1"` when the
-/// book has no macro sheet, so without `book_has_macro_sheet` the flag is
-/// dropped from the name, counted in `diagnostics->skipped_feature_count`.
+/// Without a macro sheet, Excel refuses to open a book holding a name flagged
+/// `xlm="1"` and drops a lone `function="1"` or `vbProcedure="1"` on save, so
+/// without `book_has_macro_sheet` those flags leave the name, one count per
+/// name in `diagnostics->skipped_feature_count`.
 Expected<std::vector<DefinedName>, Error> read_defined_names(const pugi::xml_document& workbook_doc,
                                                              bool book_has_macro_sheet = true,
                                                              ReadDiagnostics* diagnostics = nullptr);

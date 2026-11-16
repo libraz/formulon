@@ -71,11 +71,12 @@ struct ReadDiagnostics {
   /// far enough to clear those slots.
   /// Also counts one per .xlsx sparkline group dropped because an item's
   /// location is not one range.
-  /// Also counts one per defined name whose `xlm` macro flag an .xlsx load
-  /// drops because the book has no macro sheet.
+  /// Also counts one per defined name whose `xlm`, `function` or
+  /// `vbProcedure` flag an .xlsx load drops because the book has no macro
+  /// sheet, and one per .xlsb name whose lone `fFunc` flag the load drops.
   /// Fed by: `io.sheet.overlay.skip`, `io.cf.skip`, `io.sheet.formula.data_table_skip`,
-  /// `io.table.column_header.skip`, `io.defined_name.macro_flag_dropped`, `io.sparkline.skip`,
-  /// `xlsb.table.unreadable_dropped`.
+  /// `io.table.column_header.skip`, `io.defined_name.macro_flag_dropped`,
+  /// `io.sparkline.skip`, `xlsb.defined_name.function_flag_dropped`, `xlsb.table.unreadable_dropped`.
   std::uint32_t skipped_feature_count = 0;
   /// Workbook parts whose declared content type was unrecognised, so the
   /// read fell back to `WorkbookKind::kXlsx`. At most 1 per read.
@@ -106,10 +107,12 @@ struct WriteDiagnostics {
   /// OOXML: rich values kept verbatim, an XLSB-source PivotTable the
   /// reader could not model, a custom view of an XLSB source with no
   /// OOXML form, an XLSB-source print record family the reader could not
-  /// state exactly. A table naming a removed sheet fails the save with
+  /// state exactly, a macro name (an .xlsx without a macro sheet cannot
+  /// hold one). A table naming a removed sheet fails the save with
   /// `kIoWriteFailed` before any count is made.
   /// Fed by: `xlsb.writer.deferred`, `ooxml_writer.rich_values_kept_verbatim`,
-  /// and the OOXML emission plan's PivotTable and custom-view counts.
+  /// `ooxml_writer.macro_name_left_out`, and the OOXML emission plan's
+  /// PivotTable and custom-view counts.
   std::uint32_t deferred_feature_count = 0;
   /// Passthrough parts dropped, either because their package path
   /// collided with a path the writer generates itself (the generated copy

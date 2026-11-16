@@ -12,7 +12,7 @@
 //
 //   * Package level: `load_save_cycle` runs `read_ooxml -> Workbook::save`,
 //     `extract_part` pulls a named part (e.g. "xl/styles.xml") out of an
-//     xlsx zip, and `part_attributes_survive_save` asserts that the
+//     xlsx zip, `replace_part` swaps one part's bytes, and `part_attributes_survive_save` asserts that the
 //     attributes present at a given XPath in the ORIGINAL part are still
 //     present with equal values in the SAVED output.
 //
@@ -30,6 +30,7 @@
 #ifndef FORMULON_TESTS_SUPPORT_ROUNDTRIP_SYMMETRY_H_
 #define FORMULON_TESTS_SUPPORT_ROUNDTRIP_SYMMETRY_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <fstream>
 #include <initializer_list>
@@ -41,6 +42,7 @@
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/zip_reader.h"
+#include "miniz.h"
 #include "pugixml.hpp"
 #include "workbook.h"
 
@@ -80,6 +82,47 @@ inline ::testing::AssertionResult extract_part(io::ByteSpan pkg, std::string_vie
   }
   out->assign(bytes.value().begin(), bytes.value().end());
   return ::testing::AssertionSuccess();
+}
+
+/// `pkg` with part `name` replaced by `content`, every other part copied as
+/// is; empty, with a gtest failure, when the package does not rezip.
+inline std::vector<std::uint8_t> replace_part(io::ByteSpan pkg, std::string_view name, std::string_view content) {
+  mz_zip_archive reader{};
+  if (mz_zip_reader_init_mem(&reader, pkg.data, pkg.size, 0) == MZ_FALSE) {
+    ADD_FAILURE() << "zip open failed";
+    return {};
+  }
+  mz_zip_archive writer{};
+  bool ok = mz_zip_writer_init_heap(&writer, 0, 4096) != MZ_FALSE;
+  const mz_uint count = mz_zip_reader_get_num_files(&reader);
+  for (mz_uint i = 0; ok && i < count; ++i) {
+    char entry[512];
+    mz_zip_reader_get_filename(&reader, i, entry, sizeof(entry));
+    if (name == entry) {
+      ok = mz_zip_writer_add_mem(&writer, entry, content.data(), content.size(),
+                                 static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION)) != MZ_FALSE;
+      continue;
+    }
+    std::size_t size = 0;
+    void* data = mz_zip_reader_extract_to_heap(&reader, i, &size, 0);
+    ok = data != nullptr &&
+         mz_zip_writer_add_mem(&writer, entry, data, size, static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION)) != MZ_FALSE;
+    mz_free(data);
+  }
+  mz_zip_reader_end(&reader);
+  void* archive = nullptr;
+  std::size_t archive_size = 0;
+  ok = ok && mz_zip_writer_finalize_heap_archive(&writer, &archive, &archive_size) != MZ_FALSE;
+  mz_zip_writer_end(&writer);
+  if (!ok) {
+    ADD_FAILURE() << "rezip failed";
+    mz_free(archive);
+    return {};
+  }
+  std::vector<std::uint8_t> out(static_cast<const std::uint8_t*>(archive),
+                                static_cast<const std::uint8_t*>(archive) + archive_size);
+  mz_free(archive);
+  return out;
 }
 
 /// Runs one full package cycle: `pkg -> read_ooxml -> Workbook::save`, writing

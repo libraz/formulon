@@ -43,6 +43,7 @@
 #include "unknown_relationship.h"
 #include "utils/arena.h"
 #include "utils/double_format.h"
+#include "utils/structured_log.h"
 #include "workbook.h"
 
 namespace formulon {
@@ -210,12 +211,21 @@ std::string SynchronizedWorkbookPr(const Workbook& wb) {
 }
 
 void AppendDefinedNamesBlock(std::string& out, const std::vector<DefinedName>& names,
-                             const parser::ExternalBookIndexer& indexer) {
-  if (names.empty()) {
-    return;
-  }
-  out.append("  <definedNames>\n");
+                             const parser::ExternalBookIndexer& indexer, WriteDiagnostics* diagnostics) {
+  bool opened = false;
   for (const DefinedName& n : names) {
+    // An .xlsx without a macro sheet cannot hold a macro name: Excel refuses one on open and leaves one out on save.
+    if (n.macro_kind != NameMacroKind::kNone) {
+      StructuredLog("ooxml_writer.macro_name_left_out").field("name", std::string_view(n.name)).warn();
+      if (diagnostics != nullptr) {
+        ++diagnostics->deferred_feature_count;
+      }
+      continue;
+    }
+    if (!opened) {
+      out.append("  <definedNames>\n");
+      opened = true;
+    }
     out.append("    <definedName");
     append_xml_attr(out, "name", n.name);
     if (n.local_sheet_id >= 0) {
@@ -265,7 +275,9 @@ void AppendDefinedNamesBlock(std::string& out, const std::vector<DefinedName>& n
     }
     out.append("</definedName>\n");
   }
-  out.append("  </definedNames>\n");
+  if (opened) {
+    out.append("  </definedNames>\n");
+  }
 }
 
 }  // namespace
@@ -494,7 +506,7 @@ std::string RemapRelationshipIds(const Workbook& wb, const EmissionPlan& plan, c
 
 }  // namespace
 
-std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
+std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan, WriteDiagnostics* diagnostics) {
   std::string out;
   out.reserve(512 + wb.sheet_count() * 96 + wb.defined_names().size() * 96 + plan.pivot_caches.size() * 64);
   out.append(kXmlDecl);
@@ -608,7 +620,7 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
   // <definedNames> sits between <sheets> and <calcPr>/end-of-workbook
   // per OOXML schema (cf. ECMA-376 sheet ordering).
   const parser::ExternalBookIndexer indexer = plan.external_link_ordinals.indexer();
-  AppendDefinedNamesBlock(out, wb.defined_names(), indexer);
+  AppendDefinedNamesBlock(out, wb.defined_names(), indexer, diagnostics);
   flush_raw_before("calcPr");
   // <calcPr> persists Excel's workbook-level calculation policy
   // (`calcMode` + iterative trio). Emit only when at least one

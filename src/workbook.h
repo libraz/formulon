@@ -871,7 +871,8 @@ class Workbook {
   /// or appends it if it does not exist. Pass `-1` for workbook scope;
   /// pass a 0-based sheet index for sheet scope. An empty formula
   /// removes the matching entry. `name` resolves within the same scope only
-  /// (`sheet_names::resolve_by`); the entry found takes the new spelling.
+  /// (`sheet_names::resolve_by`); the entry found takes the new spelling and
+  /// keeps its hidden flag, comment and macro kind.
   /// The formula passes through `bind_self_book_names`.
   ///
   /// Returns `kInvalidArgument` when `name` is empty, is not a valid new

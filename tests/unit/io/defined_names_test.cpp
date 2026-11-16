@@ -345,8 +345,9 @@ TEST(DefinedNamesReader, EmptyNameAttributeIsCorruption) {
   EXPECT_EQ(names_or.error().code, FormulonErrorCode::kIoSheetCorrupt);
 }
 
-// Excel refuses to open a book holding a name flagged as an XLM macro name
-// when the book has no macro sheet, so the flag leaves the model at load.
+// Without a macro sheet, Excel refuses to open a book holding a name flagged
+// as an XLM macro name and drops a lone function or vbProcedure flag on save,
+// so those flags leave the model at load.
 TEST(DefinedNamesReader, MacroNameFlagWithoutAMacroSheetIsDroppedAndCounted) {
   std::string xml(kXmlDecl);
   xml.append("<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">");
@@ -354,6 +355,7 @@ TEST(DefinedNamesReader, MacroNameFlagWithoutAMacroSheetIsDroppedAndCounted) {
   xml.append("    <definedName name=\"_xlpm.A\" hidden=\"1\" xlm=\"1\">#NAME?</definedName>");
   xml.append("    <definedName name=\"Foo\" xlm=\"1\" function=\"1\">Sheet1!$A$1</definedName>");
   xml.append("    <definedName name=\"Bar\" xlm=\"0\">Sheet1!$B$1</definedName>");
+  xml.append("    <definedName name=\"Baz\" vbProcedure=\"1\" shortcutKey=\"q\">Sheet1!$C$1</definedName>");
   xml.append("  </definedNames>");
   xml.append("</workbook>");
 
@@ -364,19 +366,21 @@ TEST(DefinedNamesReader, MacroNameFlagWithoutAMacroSheetIsDroppedAndCounted) {
   auto names_or = read_defined_names(doc, /*book_has_macro_sheet=*/false, &diagnostics);
   ASSERT_TRUE(static_cast<bool>(names_or)) << names_or.error().message;
   const std::vector<DefinedName>& names = names_or.value();
-  ASSERT_EQ(names.size(), 3U);
+  ASSERT_EQ(names.size(), 4U);
   EXPECT_EQ(names[0].name, "_xlpm.A");
   EXPECT_TRUE(names[0].hidden);
   EXPECT_EQ(names[0].extra_attrs.find("xlm"), std::string::npos) << names[0].extra_attrs;
   EXPECT_EQ(names[1].extra_attrs.find("xlm"), std::string::npos) << names[1].extra_attrs;
-  EXPECT_NE(names[1].extra_attrs.find("function=\"1\""), std::string::npos) << names[1].extra_attrs;
+  EXPECT_EQ(names[1].extra_attrs.find("function"), std::string::npos) << names[1].extra_attrs;
   EXPECT_NE(names[2].extra_attrs.find("xlm=\"0\""), std::string::npos) << names[2].extra_attrs;
-  EXPECT_EQ(diagnostics.skipped_feature_count, 2U);
+  EXPECT_EQ(names[3].extra_attrs, " shortcutKey=\"q\"");
+  EXPECT_EQ(diagnostics.skipped_feature_count, 3U);
 
   ReadDiagnostics with_sheet;
   auto kept_or = read_defined_names(doc, /*book_has_macro_sheet=*/true, &with_sheet);
   ASSERT_TRUE(static_cast<bool>(kept_or)) << kept_or.error().message;
   EXPECT_NE(kept_or.value()[0].extra_attrs.find("xlm=\"1\""), std::string::npos);
+  EXPECT_NE(kept_or.value()[3].extra_attrs.find("vbProcedure=\"1\""), std::string::npos);
   EXPECT_EQ(with_sheet.skipped_feature_count, 0U);
 }
 

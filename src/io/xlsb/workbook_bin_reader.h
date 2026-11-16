@@ -102,12 +102,15 @@ Expected<std::vector<XlsbSheetRange>, Error> DecodeExternSheet(const std::vector
                                                                const std::vector<XlsbSupBook>& books);
 
 /// Registers every user-visible `BrtName` entry as a workbook defined name.
+/// A name flagged `fFunc` without `fProc` names no macro and loses the flag,
+/// counted in `*skipped_feature_count`.
 Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body,
                                            const std::vector<XlsbName>& name_table,
                                            const std::vector<std::string>& sheet_names,
                                            const std::vector<XlsbSheetRange>& sheet_ranges,
                                            const XlsbExternalBooks& external_books, Workbook& wb,
-                                           std::uint32_t* undecoded_defined_name_count);
+                                           std::uint32_t* undecoded_defined_name_count,
+                                           std::uint32_t* skipped_feature_count);
 
 }  // namespace xlsb
 }  // namespace io

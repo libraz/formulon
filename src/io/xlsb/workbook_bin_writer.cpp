@@ -630,9 +630,10 @@ void EmitExternSheet(std::vector<std::uint8_t>& body, const SheetRangeTable& ran
 /// Emits one `BrtName` record. Byte layout verified against a real
 /// Excel-365-produced `xl/workbook.bin` (see `workbook_bin_reader.cpp`'s
 /// `DecodeWorkbookNames`, the decoder counterpart):
-///   flags (u16: bit 0 = fHidden) + 3 reserved bytes + itab (i32,
-///   `-1` = workbook scope) + cch (u32) + cch x UTF-16LE name +
-///   cce (u32) + cce bytes rgce + cb (u32) + cb bytes rgcb.
+///   flags (u32: fHidden 0x1, fFunc 0x2, fProc 0x8, fCalcExp 0x10,
+///   fGrp bits 6-14, fFutureFunction 0x20000) + chKey (u8) + itab (i32, `-1` = workbook
+///   scope) + cch (u32) + cch x UTF-16LE name + cce (u32) + cce bytes rgce +
+///   cb (u32) + cb bytes rgcb + the trailing strings.
 /// `formula` is the name's own bare expression text (no leading `=`,
 /// matching `<definedName>`'s XML text content); an empty string emits
 /// a zero-length `rgce` (the hidden future-function / LET-parameter
@@ -640,7 +641,8 @@ void EmitExternSheet(std::vector<std::uint8_t>& body, const SheetRangeTable& ran
 /// Excel stores a `#NAME?` placeholder there, which is not required for
 /// this writer's own reader to round-trip the name table).
 Expected<void, Error> EmitName(std::vector<std::uint8_t>& body, const std::string& name, std::string_view formula,
-                               std::int32_t itab, bool hidden, bool calc_exp, std::string_view comment,
+                               std::int32_t itab, bool hidden, bool calc_exp, NameMacroKind macro_kind,
+                               bool macro_future_function, std::uint16_t function_group, std::string_view comment,
                                const std::vector<std::string>& sheet_names, const SheetRangeTable& sheet_ranges,
                                const NameTable& name_table) {
   // Names carrying Excel's hidden storage prefixes are not ordinary
@@ -672,6 +674,12 @@ Expected<void, Error> EmitName(std::vector<std::uint8_t>& body, const std::strin
     flags = 0x0002000bU;
   } else {
     flags = hidden ? 0x00000001U : 0x00000000U;
+    flags |= (static_cast<std::uint32_t>(function_group) & 0x1FFU) << 6U;  // fGrp
+    if (macro_kind != NameMacroKind::kNone) {
+      flags |= 0x00000008U;                                                // fProc
+      flags |= macro_kind == NameMacroKind::kFunction ? 0x00000002U : 0U;  // fFunc
+      flags |= macro_future_function ? 0x00020000U : 0U;                   // fFutureFunction
+    }
   }
   std::vector<std::uint8_t> p;
   emit_u32(p, flags);  // grbit (flags word)
@@ -721,6 +729,10 @@ Expected<void, Error> EmitName(std::vector<std::uint8_t>& body, const std::strin
     }
   } else {
     emit_xlnullablewidestring(p, comment.empty() ? std::nullopt : std::make_optional(comment));
+    // A macro name carries four more strings, null in Excel's saves; a record without them does not open.
+    for (int i = 0; macro_kind != NameMacroKind::kNone && i < 4; ++i) {
+      emit_u32(p, 0xFFFFFFFFU);
+    }
   }
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtName), p);
   return Expected<void, Error>::Ok();
@@ -840,14 +852,16 @@ Expected<std::vector<std::uint8_t>, Error> BuildWorkbookBin(const Workbook& wb,
   for (std::size_t i = 0; i < ordered_names.size(); ++i) {
     if (i < defined_count) {
       const DefinedName& dn = wb.defined_names()[i];
-      RETURN_IF_ERROR(EmitName(body, dn.name, dn.formula, dn.local_sheet_id, dn.hidden, shapes[i].calc_exp, dn.comment,
-                               sheet_names, sheet_ranges, table_for_scope(dn.local_sheet_id)));
+      RETURN_IF_ERROR(EmitName(body, dn.name, dn.formula, dn.local_sheet_id, dn.hidden, shapes[i].calc_exp,
+                               dn.macro_kind, dn.macro_future_function, dn.function_group, dn.comment, sheet_names,
+                               sheet_ranges, table_for_scope(dn.local_sheet_id)));
     } else {
       // Placeholders carry no formula body, so the table they are handed is
       // never consulted; the workbook-scope one keeps the call uniform. A
       // stub for an undefined name is not hidden, as Excel saves it.
       const OrderedName& slot = ordered_names[i];
       RETURN_IF_ERROR(EmitName(body, slot.name, /*formula=*/{}, slot.itab, /*hidden=*/false, /*calc_exp=*/false,
+                               NameMacroKind::kNone, /*macro_future_function=*/false, /*function_group=*/0U,
                                /*comment=*/{}, sheet_names, sheet_ranges, table_for_scope(-1)));
     }
   }

@@ -13,6 +13,15 @@
 
 namespace formulon {
 
+/// The macro a defined name names. Only an .xlsb carries one (`fProc`, with
+/// `fFunc` for a function macro); an .xlsx without a macro sheet cannot, so
+/// Excel's .xlsx save leaves such a name out.
+enum class NameMacroKind : std::uint8_t {
+  kNone = 0,
+  kCommand = 1,
+  kFunction = 2,
+};
+
 /// In-memory representation of one `<definedName>` element from
 /// `xl/workbook.xml`. `name` is preserved with its authored case
 /// (although Excel matches names case-insensitively at use-site);
@@ -39,6 +48,14 @@ struct DefinedName {
   std::int32_t local_sheet_id = -1;
   bool hidden = false;
   std::string comment;
+  /// Set by the .xlsb reader for a name flagged as a macro; the name is live
+  /// and evaluates as any other.
+  NameMacroKind macro_kind = NameMacroKind::kNone;
+  /// The macro name's `fFutureFunction` flag, kept for the .xlsb writer.
+  bool macro_future_function = false;
+  /// The .xlsb function category (`fGrp`, 0-511), kept for the .xlsb writer.
+  /// Excel sets 14 when a macro name's formula is assigned.
+  std::uint16_t function_group = 0;
   /// Attributes not represented by the model (`function`, `vbProcedure`,
   /// `shortcutKey`, `description`, ...) retained as escaped ` name="value"`
   /// pairs.

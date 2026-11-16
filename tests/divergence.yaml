@@ -948,7 +948,7 @@ entries:
     mode: skip-oracle
     scope: api-contract
     evidence: [tests/unit/io/package_diagnostics_test.cpp, tests/unit/io/defined_names_test.cpp]
-    reason: "Excel refuses to open an .xlsx holding a defined name flagged xlm=\"1\" when the book has no macro sheet, whatever the name or its hidden flag, so it gives no workbook to compare. Formulon loads the book, drops the flag from each such name (the name stays) and counts each drop in the read diagnostics' skipped_feature_count, so a save writes a book Excel opens. The flag beside a macro sheet is kept as stored."
+    reason: "An .xlsx without a macro sheet cannot hold a macro name: Excel refuses to open one holding a defined name flagged xlm=\"1\", whatever the name or its hidden flag, so it gives no workbook to compare, and its own .xlsx save leaves a macro name out. Formulon loads such a book, drops the flag from each name (the name stays) and counts each drop in the read diagnostics' skipped_feature_count, so a save writes a book Excel opens. The flag beside a macro sheet is kept as stored."
     prefer: formulon
     first_noted: 2026-11-17
     last_verified_excel_version: "16.115"

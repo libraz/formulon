@@ -137,7 +137,8 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
   }
   bind_external_books_unlocked(std::string_view(formula));
   // An upsert: the name resolves within the requested scope only, and the
-  // entry found takes the new spelling, as Excel's Names.Add does.
+  // entry found takes the new spelling and formula and keeps its hidden flag,
+  // comment and macro kind, as an Excel RefersTo edit does.
   if (const auto it = find_defined_name(defined_names_, name, local_sheet_id); it != defined_names_.end()) {
     // Formulas spelling the stored name are found through it; the new spelling resolves to the same entry.
     std::string stored = it->name;
@@ -146,6 +147,10 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
     } else {
       it->name = std::move(name);
       it->formula = std::move(formula);
+      // Excel files a macro name whose formula is assigned under function category 14.
+      if (it->macro_kind != NameMacroKind::kNone) {
+        it->function_group = 14U;
+      }
     }
     // Retargeting or removing an existing name changes what every formula
     // that references it (directly or through another name that expands

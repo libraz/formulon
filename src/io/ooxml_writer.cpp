@@ -366,7 +366,7 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   RETURN_IF_ERROR(AddPart(writer.get(), "_rels/.rels", BuildPackageRels(wb, plan, &diagnostics), &written_paths));
 
   // xl/workbook.xml
-  RETURN_IF_ERROR(AddPart(writer.get(), kWorkbookPartPath, BuildWorkbookXml(wb, plan), &written_paths));
+  RETURN_IF_ERROR(AddPart(writer.get(), kWorkbookPartPath, BuildWorkbookXml(wb, plan, &diagnostics), &written_paths));
 
   // xl/_rels/workbook.xml.rels
   RETURN_IF_ERROR(AddPart(writer.get(), "xl/_rels/workbook.xml.rels",

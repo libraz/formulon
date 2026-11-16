@@ -555,5 +555,170 @@ TEST(FeatureFormulaSpelling, XlsbLoadKeepsTheRenderedSigns) {
   ExpectFeatureFormula(loaded.value().workbook, "-0+1", "xlsb");
 }
 
+// `BrtName` payloads of `xl/workbook.bin` in `pkg`, keyed by name.
+std::vector<std::pair<std::string, std::string>> NamePayloads(const std::vector<std::uint8_t>& pkg) {
+  std::vector<std::pair<std::string, std::string>> out;
+  std::string bin;
+  EXPECT_TRUE(test::extract_part(test::span_of(pkg), "xl/workbook.bin", &bin));
+  const std::vector<std::uint8_t> bytes(bin.begin(), bin.end());
+  io::ByteSpan cursor = test::span_of(bytes);
+  while (cursor.size > 0U) {
+    auto rec_or = io::xlsb::read_record(cursor);
+    if (!rec_or) {
+      break;
+    }
+    if (rec_or.value().type != static_cast<std::uint16_t>(io::xlsb::XlsbRecordType::BrtName)) {
+      continue;
+    }
+    const io::ByteSpan payload = rec_or.value().payload;
+    io::ByteSpan p = payload;
+    p.data += 9;
+    p.size -= 9;
+    auto name = io::xlsb::read_xlwidestring(p);
+    out.emplace_back(name ? name.value() : std::string(),
+                     std::string(reinterpret_cast<const char*>(payload.data), payload.size));
+  }
+  return out;
+}
+
+std::string PayloadOf(const std::vector<std::pair<std::string, std::string>>& payloads, const std::string& name) {
+  for (const auto& entry : payloads) {
+    if (entry.first == name) {
+      return entry.second;
+    }
+  }
+  ADD_FAILURE() << "no BrtName " << name;
+  return {};
+}
+
+// The defined name `name` of `wb`; a failure, and the first name, when it has none.
+const DefinedName& NamedDefinedName(const Workbook& wb, const char* name) {
+  for (const DefinedName& entry : wb.defined_names()) {
+    if (entry.name == name) {
+      return entry;
+    }
+  }
+  ADD_FAILURE() << "no defined name " << name;
+  return wb.defined_names().front();
+}
+
+// Excel's own .xlsb saves of a hidden name Foo (=Sheet1!$A$1, A1 = 7) flagged as a macro name, beside a plain name
+// Bar; Z1 holds =Foo. A macro name is live, keeps its kind and its record through an .xlsb save, and is left out of
+// an .xlsx save, as Excel's own saves do.
+TEST(XlsbWriteReadSymmetry, ExcelMacroNamesKeepTheirKindInXlsbAndLeaveXlsx) {
+  struct Case {
+    const char* fixture;
+    NameMacroKind kind;
+    bool future;
+  };
+  for (const Case& c : {Case{"macro_name_command.xlsb", NameMacroKind::kCommand, false},
+                        Case{"macro_name_function.xlsb", NameMacroKind::kFunction, false},
+                        Case{"macro_name_command_future.xlsb", NameMacroKind::kCommand, true}}) {
+    SCOPED_TRACE(c.fixture);
+    const std::vector<std::uint8_t> bytes = test::read_file_bytes(FixturePath(c.fixture));
+    ASSERT_FALSE(bytes.empty());
+    auto loaded = io::xlsb::read_xlsb(test::span_of(bytes));
+    ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+    EXPECT_EQ(loaded.value().skipped_feature_count, 0U);
+    Workbook wb = std::move(loaded.value().workbook);
+    ASSERT_EQ(wb.defined_names().size(), 2U);
+    const DefinedName& foo = NamedDefinedName(wb, "Foo");
+    EXPECT_TRUE(foo.hidden);
+    EXPECT_EQ(foo.macro_kind, c.kind);
+    EXPECT_EQ(foo.macro_future_function, c.future);
+    EXPECT_EQ(NamedDefinedName(wb, "Bar").macro_kind, NameMacroKind::kNone);
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(9.0))));
+    ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+    EXPECT_EQ(wb.sheet(0).resolve_cell_value(0U, 25U).as_number(), 9.0);
+
+    auto saved = io::xlsb::write_xlsb(wb);
+    ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+    const auto excel = NamePayloads(bytes);
+    const auto ours = NamePayloads(saved.value());
+    EXPECT_EQ(PayloadOf(ours, "Foo"), PayloadOf(excel, "Foo"));
+    EXPECT_EQ(PayloadOf(ours, "Bar"), PayloadOf(excel, "Bar"));
+    auto reloaded = io::xlsb::read_xlsb(test::span_of(saved.value()));
+    ASSERT_TRUE(static_cast<bool>(reloaded)) << reloaded.error().message;
+    EXPECT_EQ(NamedDefinedName(reloaded.value().workbook, "Foo").macro_kind, c.kind);
+
+    auto xlsx = io::write_ooxml_with_result(wb);
+    ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
+    EXPECT_EQ(xlsx.value().diagnostics.deferred_feature_count, 1U);
+    std::string workbook_xml;
+    ASSERT_TRUE(test::extract_part(test::span_of(xlsx.value().bytes), "xl/workbook.xml", &workbook_xml));
+    EXPECT_EQ(workbook_xml.find("\"Foo\""), std::string::npos) << workbook_xml;
+    EXPECT_NE(workbook_xml.find("<definedName name=\"Bar\">"), std::string::npos) << workbook_xml;
+  }
+}
+
+// Editing a macro name's formula or hidden flag keeps its kind, as Excel's RefersTo and Visible edits do; removing
+// it and setting it again leaves a plain name, as Excel's Names.Add does.
+TEST(XlsbWriteReadSymmetry, MacroNameEditsKeepItsKindAndRemoveThenSetLeavesAPlainName) {
+  const std::vector<std::uint8_t> bytes = test::read_file_bytes(FixturePath("macro_name_command.xlsb"));
+  ASSERT_FALSE(bytes.empty());
+  auto loaded = io::xlsb::read_xlsb(test::span_of(bytes));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  Workbook wb = std::move(loaded.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name_hidden("Foo", -1, false)));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name_comment("Foo", -1, "note")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Foo", "Sheet1!$B$1")));
+  EXPECT_EQ(NamedDefinedName(wb, "Foo").macro_kind, NameMacroKind::kCommand);
+  EXPECT_FALSE(NamedDefinedName(wb, "Foo").hidden);
+  EXPECT_EQ(NamedDefinedName(wb, "Foo").comment, "note");
+  // Excel's save after that edit writes fHidden off, fProc and fGrp 14: 0x388.
+  auto edited = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(edited)) << edited.error().message;
+  const std::string edited_record = PayloadOf(NamePayloads(edited.value()), "Foo");
+  ASSERT_GE(edited_record.size(), 4U);
+  EXPECT_EQ(edited_record.substr(0, 4), std::string("\x88\x03\x00\x00", 4));
+  auto kept = io::write_ooxml_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(kept)) << kept.error().message;
+  EXPECT_EQ(kept.value().diagnostics.deferred_feature_count, 1U);
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Foo", "")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Foo", "Sheet1!$B$1")));
+  EXPECT_EQ(NamedDefinedName(wb, "Foo").macro_kind, NameMacroKind::kNone);
+  auto xlsb = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(xlsb)) << xlsb.error().message;
+  const std::string record = PayloadOf(NamePayloads(xlsb.value()), "Foo");
+  ASSERT_GE(record.size(), 4U);
+  EXPECT_EQ(record.substr(0, 4), std::string("\x00\x00\x00\x00", 4));
+  EXPECT_EQ(record.size(), PayloadOf(NamePayloads(bytes), "Bar").size());
+  auto xlsx = io::write_ooxml_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
+  EXPECT_EQ(xlsx.value().diagnostics.deferred_feature_count, 0U);
+  std::string workbook_xml;
+  ASSERT_TRUE(test::extract_part(test::span_of(xlsx.value().bytes), "xl/workbook.xml", &workbook_xml));
+  EXPECT_NE(workbook_xml.find("<definedName name=\"Foo\">Sheet1!$B$1</definedName>"), std::string::npos)
+      << workbook_xml;
+}
+
+// A lone fFunc flag names no macro: Excel opens such a book and its save drops the flag, so the load drops it and
+// counts it.
+TEST(XlsbWriteReadSymmetry, FunctionFlagWithoutAMacroIsDroppedAndCounted) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("Foo", "Sheet1!$A$1")));
+  auto saved = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  std::vector<std::uint8_t> patched = saved.value();
+  std::string bin;
+  ASSERT_TRUE(test::extract_part(test::span_of(patched), "xl/workbook.bin", &bin));
+  // The BrtName record of Foo: grbit 0, chKey 0, workbook scope, cch 3, "Foo".
+  const std::string plain(
+      "\x00\x00\x00\x00\x00\xff\xff\xff\xff\x03\x00\x00\x00"
+      "F\x00o\x00o\x00",
+      19);
+  const std::size_t at = bin.find(plain);
+  ASSERT_NE(at, std::string::npos);
+  bin[at] = '\x02';  // fFunc
+  patched = test::replace_part(test::span_of(patched), "xl/workbook.bin", bin);
+  ASSERT_FALSE(patched.empty());
+  auto loaded = io::xlsb::read_xlsb(test::span_of(patched));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  EXPECT_EQ(loaded.value().skipped_feature_count, 1U);
+  ASSERT_EQ(loaded.value().workbook.defined_names().size(), 1U);
+  EXPECT_EQ(loaded.value().workbook.defined_names()[0].macro_kind, NameMacroKind::kNone);
+}
+
 }  // namespace
 }  // namespace formulon

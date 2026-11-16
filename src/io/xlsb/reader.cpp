@@ -858,8 +858,9 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
   // only run after both are fully built above.
   std::uint32_t undecoded_formula_count = 0;
   std::uint32_t undecoded_defined_name_count = 0;
+  std::uint32_t skipped_feature_count = 0;
   if (auto r = RegisterDefinedNames(wb_bytes, name_table, sheet_names, sheet_ranges, external_books, wb,
-                                    &undecoded_defined_name_count);
+                                    &undecoded_defined_name_count, &skipped_feature_count);
       !r) {
     return std::move(r.error());
   }
@@ -925,7 +926,6 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
   // 7. Each sheet binary.
   std::uint32_t cells_read = 0;
   std::uint32_t dropped_record_count = 0;
-  std::uint32_t skipped_feature_count = 0;
   std::unordered_set<std::string> consumed_parts;
   consumed_parts.insert("[Content_Types].xml");
   consumed_parts.insert("_rels/.rels");

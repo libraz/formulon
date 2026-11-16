@@ -55,8 +55,9 @@ std::string BuildPackageRels(const Workbook& wb, std::string_view workbook_targe
 
 /// Builds the `xl/workbook.xml` part: `<sheets>`, optional
 /// `<externalReferences>`, `<definedNames>`, `<calcPr>`, and
-/// `<pivotCaches>` in ECMA-376 element order.
-std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan);
+/// `<pivotCaches>` in ECMA-376 element order. A macro name is left out,
+/// counted in `diagnostics->deferred_feature_count` (NULL discards it).
+std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan, WriteDiagnostics* diagnostics);
 
 /// Builds the `xl/_rels/workbook.xml.rels` part: per-sheet worksheet
 /// relationships, the styles relationship, pivot-cache / external-link

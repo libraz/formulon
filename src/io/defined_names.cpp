@@ -75,13 +75,17 @@ Expected<std::vector<DefinedName>, Error> read_defined_names(const pugi::xml_doc
     {
       std::vector<std::pair<std::string, std::string>> extra;
       capture_unknown_attrs(dn, {"name", "localSheetId", "hidden", "comment"}, extra);
-      if (!book_has_macro_sheet && read_xsd_bool(dn, "xlm", false)) {
+      // Without a macro sheet Excel refuses a name flagged xlm and drops a lone function or vbProcedure flag.
+      const auto is_macro_flag = [&dn](const std::pair<std::string, std::string>& attr) {
+        return (attr.first == "xlm" || attr.first == "function" || attr.first == "vbProcedure") &&
+               read_xsd_bool(dn, attr.first.c_str(), false);
+      };
+      if (!book_has_macro_sheet && std::any_of(extra.begin(), extra.end(), is_macro_flag)) {
         StructuredLog("io.defined_name.macro_flag_dropped").field("name", std::string_view(entry.name)).warn();
         if (diagnostics != nullptr) {
           ++diagnostics->skipped_feature_count;
         }
-        extra.erase(std::remove_if(extra.begin(), extra.end(), [](const auto& attr) { return attr.first == "xlm"; }),
-                    extra.end());
+        extra.erase(std::remove_if(extra.begin(), extra.end(), is_macro_flag), extra.end());
       }
       append_raw_attrs(entry.extra_attrs, extra);
     }

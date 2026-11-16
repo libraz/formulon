@@ -138,13 +138,18 @@ Expected<WorkbookBinInfo, Error> DecodeWorkbookBin(const std::vector<std::uint8_
 
 namespace {
 
-/// BrtName fixed header: flags (u16), 3 reserved bytes, itab (u32).
+/// BrtName fixed header: flags (u32), chKey (u8), itab (u32).
 constexpr std::size_t kBrtNameHeaderBytes = 9;
 constexpr std::size_t kBrtNameItabOffset = 5;
-constexpr std::uint16_t kBrtNameFlagHidden = 0x0001U;
+constexpr std::uint32_t kBrtNameFlagHidden = 0x00000001U;
+constexpr std::uint32_t kBrtNameFlagFunc = 0x00000002U;
+constexpr std::uint32_t kBrtNameFlagProc = 0x00000008U;
+constexpr std::uint32_t kBrtNameFlagFutureFunction = 0x00020000U;
+constexpr std::uint32_t kBrtNameGroupShift = 6U;
+constexpr std::uint32_t kBrtNameGroupMask = 0x1FFU;
 
 struct BrtNameHeader {
-  std::uint16_t flags = 0;
+  std::uint32_t flags = 0;
   std::uint32_t itab = 0;
 };
 
@@ -153,7 +158,7 @@ bool ReadBrtNameHeader(ByteSpan& p, BrtNameHeader& out) {
   if (p.size < kBrtNameHeaderBytes) {
     return false;
   }
-  out.flags = load_u16(p.data);
+  out.flags = load_u32(p.data);
   out.itab = load_u32(p.data + kBrtNameItabOffset);
   p.data += kBrtNameHeaderBytes;
   p.size -= kBrtNameHeaderBytes;
@@ -362,7 +367,8 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
                                            const std::vector<std::string>& sheet_names,
                                            const std::vector<XlsbSheetRange>& sheet_ranges,
                                            const XlsbExternalBooks& external_books, Workbook& wb,
-                                           std::uint32_t* undecoded_defined_name_count) {
+                                           std::uint32_t* undecoded_defined_name_count,
+                                           std::uint32_t* skipped_feature_count) {
   ByteSpan cursor{body.data(), body.size()};
   std::size_t name_index = 0;
   std::vector<DefinedName> out;
@@ -450,6 +456,17 @@ Expected<void, Error> RegisterDefinedNames(const std::vector<std::uint8_t>& body
     dn.local_sheet_id = entry.itab;
     dn.hidden = entry.hidden;
     dn.comment = std::move(comment);
+    dn.function_group = static_cast<std::uint16_t>((header.flags >> kBrtNameGroupShift) & kBrtNameGroupMask);
+    if ((header.flags & kBrtNameFlagProc) != 0U) {
+      dn.macro_kind = (header.flags & kBrtNameFlagFunc) != 0U ? NameMacroKind::kFunction : NameMacroKind::kCommand;
+      dn.macro_future_function = (header.flags & kBrtNameFlagFutureFunction) != 0U;
+    } else if ((header.flags & kBrtNameFlagFunc) != 0U) {
+      // Excel opens a name flagged fFunc without fProc and its save drops the flag.
+      StructuredLog("xlsb.defined_name.function_flag_dropped").field("name", entry.name).warn();
+      if (skipped_feature_count != nullptr) {
+        ++*skipped_feature_count;
+      }
+    }
     out.push_back(std::move(dn));
   }
   wb.set_defined_names(std::move(out));
