@@ -102,7 +102,8 @@ TEST(XlsbUserBookView, XlsbSourceKeepsTheViewsAtExcelsPosition) {
     const std::vector<std::uint16_t> types = TypesOf(book);
     const std::size_t first = IndexOf(types, kBrtUserBookView);
     const std::size_t last = static_cast<std::size_t>(
-        types.size() - 1U - (std::find(types.rbegin(), types.rend(), kBrtUserBookView) - types.rbegin()));
+        types.size() - 1U -
+        static_cast<std::size_t>(std::find(types.rbegin(), types.rend(), kBrtUserBookView) - types.rbegin()));
     ASSERT_LT(first, types.size());
     if (IndexOf(types, kBrtCalcProp) < types.size()) {
       EXPECT_LT(IndexOf(types, kBrtCalcProp), first);
@@ -192,7 +193,7 @@ TEST(XlsbUserBookView, OnlyViewsASheetStillCarriesAreWritten) {
   ASSERT_EQ(recs.size(), 1U);
   std::vector<std::uint8_t> other(views.begin() + static_cast<std::ptrdiff_t>(recs[0].begin),
                                   views.begin() + static_cast<std::ptrdiff_t>(recs[0].end));
-  const std::size_t guid_at = recs[0].payload.data - views.data() - recs[0].begin + 24U;
+  const std::size_t guid_at = static_cast<std::size_t>(recs[0].payload.data - views.data()) - recs[0].begin + 24U;
   other[guid_at] ^= 0xFFU;
   views.insert(views.end(), other.begin(), other.end());
   wb.set_xlsb_user_book_views(views);

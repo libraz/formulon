@@ -53,7 +53,8 @@ inline bool IsWorksheetPart(const std::string& name) {
 // UTF-16 code units of a UTF-8 string.
 inline std::size_t Utf16Length(const std::string& s) {
   std::size_t units = 0;
-  for (const unsigned char c : s) {
+  for (const char ch : s) {
+    const auto c = static_cast<unsigned char>(ch);
     if ((c & 0xC0U) != 0x80U) {
       units += (c >= 0xF0U) ? 2U : 1U;
     }
