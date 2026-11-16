@@ -14,6 +14,7 @@
 
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
+#include "eval/formula_entry.h"
 #include "eval/function_registry.h"
 #include "eval/iterative_solver.h"
 #include "eval/tree_walker.h"
@@ -78,7 +79,8 @@ inline bool display_name_to_code(std::string_view name, ErrorCode* out) {
 // Applies a single {kind, value} JSON record to a cell. Returns nullptr on
 // success or a short error string on failure (unknown kind, missing value,
 // etc.) that the caller folds into the test failure message.
-inline const char* apply_cell_value(const JsonValue& spec, Sheet& sheet, std::uint32_t row, std::uint32_t col,
+inline const char* apply_cell_value(const JsonValue& spec, Workbook& book, eval::EnteredCallSpellings& calls,
+                                    std::size_t sheet_index, Sheet& sheet, std::uint32_t row, std::uint32_t col,
                                     Arena& text_arena) {
   if (!spec.is_object())
     return "setup cell is not an object";
@@ -91,7 +93,14 @@ inline const char* apply_cell_value(const JsonValue& spec, Sheet& sheet, std::ui
     const JsonValue* f = spec.find("formula");
     if (f == nullptr || !f->is_string())
       return "formula cell missing 'formula'";
-    sheet.set_cell_formula(row, col, f->as_string());
+    // Setup formulas are typed into Excel, so they take the text entry stores.
+    std::string stored;
+    parser::ParseFailure failure;
+    if (eval::enter_cell_formula(book, calls, sheet_index, row, col, f->as_string(), &stored, &failure) !=
+        eval::EntryResult::kStored)
+      return "formula refused at entry";
+    if (!book.set_cell_formula(sheet_index, row, col, stored))
+      return "formula not stored";
     return nullptr;
   }
 

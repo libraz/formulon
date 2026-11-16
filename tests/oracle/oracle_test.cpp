@@ -146,8 +146,12 @@ TEST_P(OracleTest, Matches) {
     }
   }
 
+  eval::EnteredCallSpellings entered_calls;
   if (const JsonValue* setup = param.raw_case.find("setup"); setup && setup->is_object()) {
-    for (const auto& entry : setup->as_object()) {
+    // In the order the case states, as the capture writes it: entered text
+    // takes its spelling from the sheets and cells written before it.
+    for (const std::string& key : setup->object_keys()) {
+      const std::pair<const std::string, JsonValue>& entry = *setup->as_object().find(key);
       // Setup keys may be sheet-qualified ("Sheet2!A1", "'My Sheet'!B5")
       // or bare A1; the qualifier targets a secondary sheet that we add
       // to the workbook on first reference. Bare keys still land on the
@@ -171,7 +175,8 @@ TEST_P(OracleTest, Matches) {
         FAIL() << param.suite << "." << param.case_id << ": invalid A1 address '" << entry.first << "'";
         return;
       }
-      const char* err_msg = apply_cell_value(entry.second, *target_sheet, row, col, text_arena);
+      const char* err_msg =
+          apply_cell_value(entry.second, wb, entered_calls, target_sheet_index, *target_sheet, row, col, text_arena);
       if (err_msg != nullptr) {
         FAIL() << param.suite << "." << param.case_id << ": setup[" << entry.first << "]: " << err_msg;
         return;
@@ -180,7 +185,9 @@ TEST_P(OracleTest, Matches) {
       const JsonValue* setup_formula_v = entry.second.find("formula");
       if (kind_v != nullptr && kind_v->is_string() && kind_v->as_string() == "formula" && setup_formula_v != nullptr &&
           setup_formula_v->is_string()) {
-        setup_formulas.push_back({target_sheet_index, row, col, setup_formula_v->as_string()});
+        Sheet::CellRead stored;
+        target_sheet->read_formula_cell(row, col, stored);
+        setup_formulas.push_back({target_sheet_index, row, col, std::string(stored.formula_text())});
       }
     }
   }
