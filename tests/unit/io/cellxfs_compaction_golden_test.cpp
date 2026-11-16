@@ -394,9 +394,8 @@ TEST_P(XfCollapseGolden, XlsxSaveIsIdempotent) {
 INSTANTIATE_TEST_SUITE_P(Cases, XfCollapseGolden, ::testing::ValuesIn(XfCollapseCases()), CaseName);
 
 // Excel recomputes the apply flags on save, so two cell xfs that differ only in
-// applyNumberFormat collapse there. Formulon writes the flags as stored and
-// keeps both (tests/divergence.yaml).
-TEST(CellXfsCompactionGoldenApplyFlags, CellXfsDifferingOnlyInApplyFlagsStayApart) {
+// applyNumberFormat collapse there, and Formulon collapses them the same way.
+TEST(CellXfsCompactionGoldenApplyFlags, CellXfsDifferingOnlyInApplyFlagsCollapse) {
   for (const char* id : {"cx1_D2_dup_apply_differs", "cx1_D10_dup_first_lacks_apply"}) {
     const Case c{"cellxfs_compaction", id};
     const auto wb = LoadAuthored(c);
@@ -405,15 +404,8 @@ TEST(CellXfsCompactionGoldenApplyFlags, CellXfsDifferingOnlyInApplyFlagsStayApar
     ASSERT_TRUE(SaveXlsx(*wb, &ours));
     const Bytes excel = test::read_file_bytes(FixturePath(c, "_resaved.xlsx"));
     EXPECT_EQ(CellXfLines(excel), (Lines{"numFmtId=0 style=標準", "numFmtId=3 style=標準"})) << id;
-    EXPECT_EQ(CellXfLines(ours), (Lines{"numFmtId=0 style=標準", "numFmtId=3 style=標準", "numFmtId=3 style=標準"}))
-        << id;
-    Lines row20;
-    for (const std::string& line : SheetRefLines(ours)) {
-      if (line.find("20 s=") != std::string::npos) {
-        row20.push_back(line);
-      }
-    }
-    EXPECT_EQ(row20, (Lines{"sheet1.xml cell A20 s=1", "sheet1.xml cell B20 s=2"})) << id;
+    EXPECT_EQ(CellXfLines(excel), CellXfLines(ours)) << id;
+    EXPECT_EQ(SheetRefLines(excel), SheetRefLines(ours)) << id;
   }
 }
 
@@ -467,43 +459,18 @@ TEST(CellXfsCompactionGoldenMergeOnXf0, MergedXf0CellsTakeTheirOwnEntry) {
   EXPECT_EQ(expected, SheetRefLines(ours));
 }
 
-// Pivot tables Excel wrote with merged item labels. Excel also collapses the
-// entry that differs from xf 0 only in applyNumberFormat (index 2 in B14, 1 in
-// op_merge_tabular); with that entry folded back into 0, Formulon's output is
-// Excel's.
+// Pivot tables Excel wrote with merged item labels: the entries, and the index
+// each cell names, are Excel's.
 TEST(CellXfsCompactionGoldenMergedPivotLabels, MergedCellsTakeTheirOwnEntriesAfterTheOthers) {
-  const std::pair<const char*, unsigned> cases[] = {{"mg2_B14_merge_items", 2U}, {"mg2_op_merge_tabular", 1U}};
-  for (const auto& [id, apply_only] : cases) {
+  for (const char* id : {"mg2_B14_merge_items", "mg2_op_merge_tabular"}) {
     const Case c{"cellxfs_compaction", id};
     const auto wb = LoadAuthored(c);
     ASSERT_TRUE(wb);
     Bytes ours;
     ASSERT_TRUE(SaveXlsx(*wb, &ours));
     const Bytes excel = test::read_file_bytes(FixturePath(c, "_resaved.xlsx"));
-    Lines xfs = CellXfLines(ours);
-    ASSERT_GT(xfs.size(), apply_only) << id;
-    EXPECT_EQ(xfs[apply_only], CellXfLines(excel)[0]) << id;
-    xfs.erase(xfs.begin() + apply_only);
-    EXPECT_EQ(CellXfLines(excel), xfs) << id;
-    Lines refs;
-    for (std::string line : SheetRefLines(ours)) {
-      const std::size_t at = line.find(" s=");
-      if (at == std::string::npos) {
-        refs.push_back(line);
-        continue;
-      }
-      const std::size_t end = line.find(' ', at + 3U);
-      const std::string n = line.substr(at + 3U, end == std::string::npos ? std::string::npos : end - at - 3U);
-      unsigned k = 0U;
-      for (const char ch : n) {
-        k = k * 10U + static_cast<unsigned>(ch - '0');
-      }
-      if (!n.empty() && k >= apply_only) {
-        line.replace(at + 3U, n.size(), k == apply_only ? std::string() : std::to_string(k - 1U));
-      }
-      refs.push_back(line);
-    }
-    EXPECT_EQ(SheetRefLines(excel), refs) << id;
+    EXPECT_EQ(CellXfLines(excel), CellXfLines(ours)) << id;
+    EXPECT_EQ(SheetRefLines(excel), SheetRefLines(ours)) << id;
   }
 }
 

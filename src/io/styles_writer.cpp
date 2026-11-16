@@ -285,8 +285,9 @@ void AppendBorders(std::string& out, const StylesTable& table) {
 // in-memory reference must not produce a dangling OOXML relationship.
 // Keeping this normalization local to serialization leaves the caller's
 // model byte-for-byte unchanged.
-// `xf_id` is the written `xfId`, absent for a `<cellStyleXfs>` entry.
-void AppendXfBody(std::string& out, const CellXf& xf, std::optional<std::uint32_t> xf_id,
+// `xf_id` is the written `xfId`, absent for a `<cellStyleXfs>` entry. `parent`
+// is the style xf a cell xf names; a style xf carries no apply flags.
+void AppendXfBody(std::string& out, const CellXf& xf, std::optional<std::uint32_t> xf_id, const CellXf* parent,
                   const StyleTableCounts& bounds) {
   const auto in_bounds = [](std::uint32_t index, std::size_t count) { return index < count ? index : 0U; };
   out.append("    <xf");
@@ -302,12 +303,15 @@ void AppendXfBody(std::string& out, const CellXf& xf, std::optional<std::uint32_
       emit_xsd_bool_attr(out, name, true);
     }
   };
-  append_apply("applyNumberFormat", xf.apply_number_format);
-  append_apply("applyFont", xf.apply_font);
-  append_apply("applyFill", xf.apply_fill);
-  append_apply("applyBorder", xf.apply_border);
-  append_apply("applyAlignment", xf.apply_alignment);
-  append_apply("applyProtection", xf.apply_protection);
+  if (parent != nullptr) {
+    const CellXfApplyFlags apply = effective_apply_flags(xf, *parent);
+    append_apply("applyNumberFormat", apply.number_format);
+    append_apply("applyFont", apply.font);
+    append_apply("applyFill", apply.fill);
+    append_apply("applyBorder", apply.border);
+    append_apply("applyAlignment", apply.alignment);
+    append_apply("applyProtection", apply.protection);
+  }
   append_apply("quotePrefix", xf.quote_prefix);
   out.append(xf.extra_attrs);
   const char* halign = HorizontalAlignName(xf.horizontal_align);
@@ -380,11 +384,11 @@ void AppendCellStyleXfs(std::string& out, const StylesTable& table, const CellSt
   const StyleTableCounts bounds = EmittedCounts(table);
   if (style_plan != nullptr) {
     for (const std::uint32_t x : style_plan->style_xf_order()) {
-      AppendXfBody(out, table.cell_style_xfs[x], std::nullopt, bounds);
+      AppendXfBody(out, table.cell_style_xfs[x], std::nullopt, nullptr, bounds);
     }
   } else {
     for (const CellXf& xf : table.cell_style_xfs) {
-      AppendXfBody(out, xf, std::nullopt, bounds);
+      AppendXfBody(out, xf, std::nullopt, nullptr, bounds);
     }
   }
   out.append("  </cellStyleXfs>\n");
@@ -407,11 +411,14 @@ void AppendCellXfs(std::string& out, const StylesTable& table, const CellStyleSa
     if (style_plan != nullptr) {
       for (const std::uint32_t c : style_plan->cell_xf_order()) {
         const CellXf& xf = table.cell_xfs[c];
-        AppendXfBody(out, xf, style_plan->cell_xf_parent(xf.xf_id), bounds);
+        const std::uint32_t parent = style_plan->cell_xf_parent(xf.xf_id);
+        const CellXf& parent_xf = cell_style_xf_or_default(table, style_plan->style_xf_order()[parent]);
+        AppendXfBody(out, xf, parent, &parent_xf, bounds);
       }
     } else {
       for (const CellXf& xf : table.cell_xfs) {
-        AppendXfBody(out, xf, xf.xf_id < bounds.cell_style_xfs ? xf.xf_id : 0U, bounds);
+        const std::uint32_t parent = xf.xf_id < bounds.cell_style_xfs ? xf.xf_id : 0U;
+        AppendXfBody(out, xf, parent, &cell_style_xf_or_default(table, parent), bounds);
       }
     }
   }

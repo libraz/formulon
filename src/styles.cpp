@@ -372,20 +372,9 @@ void append_key_scalar(std::string& out, const T& value) {
 
 }  // namespace
 
-std::string cell_xf_key(const formulon::CellXf& value) {
-  std::string out;
-  append_key_scalar(out, value.font_index);
-  append_key_scalar(out, value.fill_index);
-  append_key_scalar(out, value.border_index);
-  append_key_scalar(out, value.num_fmt_id);
-  append_key_scalar(out, value.xf_id);
-  append_key_scalar(out, value.apply_number_format);
-  append_key_scalar(out, value.apply_font);
-  append_key_scalar(out, value.apply_fill);
-  append_key_scalar(out, value.apply_border);
-  append_key_scalar(out, value.apply_alignment);
-  append_key_scalar(out, value.apply_protection);
-  append_key_scalar(out, value.quote_prefix);
+namespace {
+
+void append_alignment_key(std::string& out, const formulon::CellXf& value) {
   const bool has_alignment = formulon::HasAlignment(value);
   append_key_scalar(out, has_alignment);
   const bool has_horizontal_align = formulon::HasHorizontalAlign(value);
@@ -428,14 +417,76 @@ std::string cell_xf_key(const formulon::CellXf& value) {
   if (value.has_reading_order) {
     append_key_scalar(out, value.reading_order);
   }
+}
+
+void append_protection_key(std::string& out, const formulon::CellXf& value) {
   append_key_scalar(out, value.has_protection);
   if (value.has_protection) {
     append_key_scalar(out, value.locked);
     append_key_scalar(out, value.hidden);
   }
+}
+
+// `flags` replaces the stored apply flags in the key when given.
+std::string build_cell_xf_key(const formulon::CellXf& value, const formulon::CellXfApplyFlags* flags) {
+  std::string out;
+  append_key_scalar(out, value.font_index);
+  append_key_scalar(out, value.fill_index);
+  append_key_scalar(out, value.border_index);
+  append_key_scalar(out, value.num_fmt_id);
+  append_key_scalar(out, value.xf_id);
+  append_key_scalar(out, flags != nullptr ? flags->number_format : value.apply_number_format);
+  append_key_scalar(out, flags != nullptr ? flags->font : value.apply_font);
+  append_key_scalar(out, flags != nullptr ? flags->fill : value.apply_fill);
+  append_key_scalar(out, flags != nullptr ? flags->border : value.apply_border);
+  append_key_scalar(out, flags != nullptr ? flags->alignment : value.apply_alignment);
+  append_key_scalar(out, flags != nullptr ? flags->protection : value.apply_protection);
+  append_key_scalar(out, value.quote_prefix);
+  append_alignment_key(out, value);
+  append_protection_key(out, value);
   // Unmodelled attributes (`pivotButton`, ...) distinguish records too.
   out.append(value.extra_attrs);
   return out;
+}
+
+bool equal_alignment(const formulon::CellXf& a, const formulon::CellXf& b) {
+  std::string ka;
+  std::string kb;
+  append_alignment_key(ka, a);
+  append_alignment_key(kb, b);
+  return ka == kb;
+}
+
+}  // namespace
+
+std::string cell_xf_key(const formulon::CellXf& value) {
+  return build_cell_xf_key(value, nullptr);
+}
+
+formulon::CellXfApplyFlags effective_apply_flags(const formulon::CellXf& xf, const formulon::CellXf& parent) {
+  formulon::CellXfApplyFlags out;
+  out.number_format = xf.num_fmt_id != parent.num_fmt_id;
+  out.font = xf.font_index != parent.font_index;
+  out.alignment = !equal_alignment(xf, parent);
+  out.border = xf.border_index != parent.border_index;
+  out.fill = xf.fill_index != parent.fill_index;
+  // An absent <protection> is locked and not hidden.
+  const bool locked = !xf.has_protection || xf.locked;
+  const bool parent_locked = !parent.has_protection || parent.locked;
+  const bool hidden = xf.has_protection && xf.hidden;
+  const bool parent_hidden = parent.has_protection && parent.hidden;
+  out.protection = locked != parent_locked || hidden != parent_hidden;
+  return out;
+}
+
+std::string cell_xf_save_key(const formulon::CellXf& xf, const formulon::CellXf& parent) {
+  const formulon::CellXfApplyFlags flags = effective_apply_flags(xf, parent);
+  return build_cell_xf_key(xf, &flags);
+}
+
+const formulon::CellXf& cell_style_xf_or_default(const formulon::StylesTable& styles, std::uint32_t index) {
+  static const formulon::CellXf kDefault;
+  return index < styles.cell_style_xfs.size() ? styles.cell_style_xfs[index] : kDefault;
 }
 
 std::uint32_t intern_cell_xf(StylesTable& styles, CellXf candidate) {

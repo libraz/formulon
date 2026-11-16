@@ -86,9 +86,11 @@ struct CellXfLayout {
 };
 
 // Step 10: `<cellXfs>` compaction. `parent_index[x]` is the written `xfId`
-// of model style xf x, kNone when that style xf is not written.
+// of model style xf x, kNone when that style xf is not written; `style_xf_order`
+// lists the written style xfs as model indices.
 CellXfLayout plan_cell_xfs(const StylesTable& styles, const UsedCellXfs& used,
-                           const std::vector<std::uint32_t>& parent_index) {
+                           const std::vector<std::uint32_t>& parent_index,
+                           const std::vector<std::uint32_t>& style_xf_order) {
   CellXfLayout out;
   const auto count = static_cast<std::uint32_t>(styles.cell_xfs.size());
   if (count == 0U || used.all_used) {
@@ -117,7 +119,13 @@ CellXfLayout plan_cell_xfs(const StylesTable& styles, const UsedCellXfs& used,
       const bool parent_written = parent_index[parent] != kNone;
       // A parent that is not written keeps its model identity, apart from every written index.
       xf.xf_id = parent_written ? parent_index[parent] : parent;
-      std::string key = cell_xf_key(xf);
+      // The apply flags are recomputed against the style xf written for the parent.
+      const std::uint32_t model_parent = parent_written ? style_xf_order[parent_index[parent]] : parent;
+      CellXf parent_xf = cell_style_xf_or_default(styles, model_parent);
+      parent_xf.font_index = parent_xf.font_index < fonts ? parent_xf.font_index : 0U;
+      parent_xf.fill_index = parent_xf.fill_index < fills ? parent_xf.fill_index : 0U;
+      parent_xf.border_index = parent_xf.border_index < borders ? parent_xf.border_index : 0U;
+      std::string key = cell_xf_save_key(xf, parent_xf);
       key.push_back(parent_written ? 'w' : 'm');
       key.append(xf.trailing_children_xml);
       first_of[c] = by_key.emplace(std::move(key), c).first->second;
@@ -466,7 +474,7 @@ CellStyleSavePlan build_cell_style_save_plan(const StylesTable& styles, const Us
   }
   // A table with no named styles has nothing to plan; the writers' default Normal is not a change.
   plan.identity_ = identity || (styles.cell_styles.empty() && styles.cell_style_xfs.empty());
-  CellXfLayout cell_xfs = plan_cell_xfs(styles, used, parent_index);
+  CellXfLayout cell_xfs = plan_cell_xfs(styles, used, parent_index, plan.style_xf_order_);
   plan.cell_xf_order_ = std::move(cell_xfs.order);
   plan.cell_xf_index_ = std::move(cell_xfs.index);
   plan.merged_cell_xf_index_ = std::move(cell_xfs.merged_index);

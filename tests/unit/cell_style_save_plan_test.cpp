@@ -483,11 +483,13 @@ TEST(CellStyleSavePlan, Cx1D13GroupSitsAtItsUnusedFirstMember) {
   EXPECT_EQ(plan.cell_xf_index(4), 2U);
 }
 
-TEST(CellStyleSavePlan, Cx1D2ApplyFlagsKeepCellXfsApart) {
+TEST(CellStyleSavePlan, Cx1D2StoredApplyFlagsDoNotKeepCellXfsApart) {
   StylesTable table = CellXfTable(Cx1NumFmts({{1, 3}, {2, 3}}));
   table.cell_xfs[2].apply_number_format = false;
   const CellStyleSavePlan plan = Plan(table, Used(13, {1, 2}));
-  EXPECT_EQ(plan.cell_xf_order(), (std::vector<std::uint32_t>{0, 1, 2}));
+  EXPECT_EQ(plan.cell_xf_order(), (std::vector<std::uint32_t>{0, 1}));
+  EXPECT_EQ(plan.cell_xf_index(1), 1U);
+  EXPECT_EQ(plan.cell_xf_index(2), 1U);
 }
 
 TEST(CellStyleSavePlan, CellXfsAllUsedIsIdentity) {

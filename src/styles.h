@@ -502,6 +502,29 @@ Expected<void, Error> set_cell_style_xf(StylesTable& styles, std::uint32_t index
 /// with equal keys are written identically.
 std::string cell_xf_key(const CellXf& value);
 
+/// The six apply flags a save writes for a cell xf.
+struct CellXfApplyFlags {
+  bool number_format = false;
+  bool font = false;
+  bool alignment = false;
+  bool border = false;
+  bool fill = false;
+  bool protection = false;
+};
+
+/// The apply flags Excel writes on save, whatever the stored ones say: a flag
+/// is set exactly when that attribute group of `xf` differs from `parent`, the
+/// `cell_style_xfs` record it names. Fonts, fills and borders compare by id.
+CellXfApplyFlags effective_apply_flags(const CellXf& xf, const CellXf& parent);
+
+/// `cell_xf_key` with the stored apply flags replaced by `effective_apply_flags`:
+/// two cell xfs equal under it are written identically.
+std::string cell_xf_save_key(const CellXf& xf, const CellXf& parent);
+
+/// `cell_style_xfs[index]`, or a default record when the table has no such slot
+/// (the xf a writer synthesizes for an empty table).
+const CellXf& cell_style_xf_or_default(const StylesTable& styles, std::uint32_t index);
+
 /// Index of the `cell_xfs` record whose `cell_xf_key` equals `candidate`'s,
 /// appending `candidate` when none does.
 std::uint32_t intern_cell_xf(StylesTable& styles, CellXf candidate);

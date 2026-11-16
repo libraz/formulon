@@ -161,8 +161,10 @@ void EmitBorder(std::vector<std::uint8_t>& out, const BorderRecord& border) {
   emit_record(out, static_cast<std::uint16_t>(XlsbRecordType::BrtBorder), payload);
 }
 
-// `parent` is the written ixfeParent, absent for a style xf.
-void EmitXf(std::vector<std::uint8_t>& out, const CellXf& xf, std::optional<std::uint32_t> parent) {
+// `parent` is the written ixfeParent, absent for a style xf; `parent_xf` is that
+// style xf's record, null for a style xf, which carries no apply flags.
+void EmitXf(std::vector<std::uint8_t>& out, const CellXf& xf, std::optional<std::uint32_t> parent,
+            const CellXf* parent_xf) {
   std::vector<std::uint8_t> payload;
   emit_u16(payload, parent.has_value() ? ClampIndex(*parent) : kXfNoParent);
   emit_u16(payload, xf.num_fmt_id);
@@ -198,18 +200,21 @@ void EmitXf(std::vector<std::uint8_t>& out, const CellXf& xf, std::optional<std:
     flags |= kXfQuotePrefix;
   emit_u16(payload, flags);
   std::uint16_t apply = 0U;
-  if (xf.apply_number_format)
-    apply |= kXfApplyNumberFormat;
-  if (xf.apply_font)
-    apply |= kXfApplyFont;
-  if (xf.apply_alignment)
-    apply |= kXfApplyAlignment;
-  if (xf.apply_border)
-    apply |= kXfApplyBorder;
-  if (xf.apply_fill)
-    apply |= kXfApplyFill;
-  if (xf.apply_protection)
-    apply |= kXfApplyProtection;
+  if (parent_xf != nullptr) {
+    const CellXfApplyFlags groups = effective_apply_flags(xf, *parent_xf);
+    if (groups.number_format)
+      apply |= kXfApplyNumberFormat;
+    if (groups.font)
+      apply |= kXfApplyFont;
+    if (groups.alignment)
+      apply |= kXfApplyAlignment;
+    if (groups.border)
+      apply |= kXfApplyBorder;
+    if (groups.fill)
+      apply |= kXfApplyFill;
+    if (groups.protection)
+      apply |= kXfApplyProtection;
+  }
   emit_u16(payload, apply);
   emit_record(out, static_cast<std::uint16_t>(XlsbRecordType::BrtXF), payload);
 }
@@ -524,11 +529,11 @@ std::vector<std::uint8_t> write_styles_bin(const StylesTable& table, const DxfSa
     EmitCount(out, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginCellStyleXFs),
               style_plan->style_xf_order().size());
     for (const std::uint32_t x : style_plan->style_xf_order())
-      EmitXf(out, style_xfs[x], std::nullopt);
+      EmitXf(out, style_xfs[x], std::nullopt, nullptr);
   } else {
     EmitCount(out, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginCellStyleXFs), style_xfs.size());
     for (const CellXf& xf : style_xfs)
-      EmitXf(out, xf, std::nullopt);
+      EmitXf(out, xf, std::nullopt, nullptr);
   }
   emit_record(out, static_cast<std::uint16_t>(XlsbRecordType::BrtEndCellStyleXFs), empty);
 
@@ -536,12 +541,18 @@ std::vector<std::uint8_t> write_styles_bin(const StylesTable& table, const DxfSa
   const std::vector<CellXf>& cell_xfs = Normalized(table.cell_xfs, cell_default);
   if (style_plan != nullptr && !table.cell_xfs.empty()) {
     EmitCount(out, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginCellXFs), style_plan->cell_xf_order().size());
-    for (const std::uint32_t c : style_plan->cell_xf_order())
-      EmitXf(out, cell_xfs[c], style_plan->cell_xf_parent(cell_xfs[c].xf_id));
+    for (const std::uint32_t c : style_plan->cell_xf_order()) {
+      const std::uint32_t parent = style_plan->cell_xf_parent(cell_xfs[c].xf_id);
+      EmitXf(out, cell_xfs[c], parent, &style_xfs[style_plan->style_xf_order()[parent]]);
+    }
   } else {
     EmitCount(out, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginCellXFs), cell_xfs.size());
-    for (const CellXf& xf : cell_xfs)
-      EmitXf(out, xf, style_plan != nullptr ? style_plan->cell_xf_parent(xf.xf_id) : xf.xf_id);
+    for (const CellXf& xf : cell_xfs) {
+      const std::uint32_t parent = style_plan != nullptr ? style_plan->cell_xf_parent(xf.xf_id) : xf.xf_id;
+      const std::uint32_t model_parent =
+          style_plan != nullptr ? style_plan->style_xf_order()[parent] : (parent < style_xfs.size() ? parent : 0U);
+      EmitXf(out, xf, parent, &style_xfs[model_parent]);
+    }
   }
   emit_record(out, static_cast<std::uint16_t>(XlsbRecordType::BrtEndCellXFs), empty);
 
