@@ -5773,8 +5773,10 @@ class Sheet(_NoCopy):
 
         Raises:
           TypeError: when ``titles`` is not one of the two record types.
-          InvalidArgumentError: for a span string that is not a whole-row or
-            whole-column span of its axis.
+          FormulaSyntaxError: for a span string that does not parse, with the
+            parser's status.
+          InvalidArgumentError: for a span string that parses but is not a
+            whole-row or whole-column span of its axis.
         """
         if titles is not None and not isinstance(titles, (PrintTitlesInput, PrintTitles)):
             raise TypeError(_argument_message("titles", "must be a PrintTitlesInput"))
