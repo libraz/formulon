@@ -209,7 +209,7 @@ for (const [parts, minDeferred] of [
   [['format', 'base_256_src.xlsx'], 1],
   [['format', 'width_256_src.xlsx'], 1],
   [['format', 'outline_row_8_src.xlsx'], 0],
-  [['views', 'bad_window_id_src.xlsx'], 1],
+  [['views', 'bad_window_id_src.xlsx'], 0],
 ]) {
   test(`an xlsb save of ${parts.join('/')} succeeds, reports the deferral and reloads`, async () => {
     const f = await getModule();

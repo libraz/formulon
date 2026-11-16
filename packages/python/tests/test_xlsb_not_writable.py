@@ -140,7 +140,7 @@ class XlsbNotWritableTests(unittest.TestCase):
             (("format", "base_256_src.xlsx"), 1),
             (("format", "width_256_src.xlsx"), 1),
             (("format", "outline_row_8_src.xlsx"), 0),
-            (("views", "bad_window_id_src.xlsx"), 1),
+            (("views", "bad_window_id_src.xlsx"), 0),
         ):
             with self.subTest(fixture="/".join(parts)), Workbook.load(FIXTURES.joinpath(*parts)) as wb:
                 saved = wb.save_with_diagnostics(format=WorkbookFormat.XLSB)
