@@ -262,6 +262,7 @@ __all__ = [
     "IconSetName",
     "ImageFormat",
     "ImageInfo",
+    "ImageProperties",
     "InvalidFileError",
     "IterativeSettings",
     "list_function_names",
@@ -2684,15 +2685,27 @@ class ImageInfo:
 
 
 @dataclass(frozen=True)
-class PictureProperties(ImageInfo):
-    """A picture's :class:`ImageInfo` and a copy of its media bytes (:meth:`Picture.get_properties`)."""
+class ImageProperties(ImageInfo):
+    """An image's :class:`ImageInfo` and a copy of its media bytes."""
 
-    #: A copy of the picture's media bytes.
+    #: A copy of the image's media bytes.
     bytes: bytes
 
 
 @dataclass(frozen=True)
-class CellPicture(PictureProperties):
+class PictureProperties(ImageProperties):
+    """A picture's :class:`ImageProperties` and its transform (:meth:`Picture.get_properties`)."""
+
+    #: Clockwise rotation in degrees, as stored: 360 reads 360 and -90 reads -90.
+    rotation_deg: float
+    #: ``True`` when the picture is flipped horizontally.
+    flip_h: bool
+    #: ``True`` when the picture is flipped vertically.
+    flip_v: bool
+
+
+@dataclass(frozen=True)
+class CellPicture(ImageProperties):
     """A picture placed in a cell (:meth:`Sheet.get_cell_picture`): the image file as stored (PNG or JPEG), its
     format and pixel size, and its alt text."""
 
@@ -2753,8 +2766,12 @@ class ShapeProperties:
     fill: Optional[ChartFill]
     #: The shape's own outline; ``None`` when it has none and draws its style's.
     line: Optional[ChartLine]
-    #: Clockwise rotation in degrees.
+    #: Clockwise rotation in degrees, as stored: 360 reads 360 and -90 reads -90.
     rotation_deg: float
+    #: ``True`` when the shape is flipped horizontally.
+    flip_h: bool
+    #: ``True`` when the shape is flipped vertically.
+    flip_v: bool
 
 
 @dataclass
@@ -2793,8 +2810,13 @@ class ShapeInput(DrawingPlacementInput):
     fill: Optional[ChartFill] = None
     #: The shape's own outline; unset draws the shape style's.
     line: Optional[ChartLine] = None
-    #: Clockwise rotation in degrees.
+    #: Clockwise rotation in degrees, stored as given to 1/60000 degree; a value that is not finite or beyond about
+    #: +/-35791 degrees is an ``InvalidArgumentError``.
     rotation_deg: Optional[float] = None
+    #: Whether the shape is flipped horizontally; ``None`` is not flipped.
+    flip_h: Optional[bool] = None
+    #: Whether the shape is flipped vertically; ``None`` is not flipped.
+    flip_v: Optional[bool] = None
 
 
 @dataclass(frozen=True)
@@ -7429,6 +7451,10 @@ def _pack_shape_spec(scope: _ArgScope, spec: ShapeInput) -> int:
         values["text_box"] = _require_bool(spec.text_box, "text_box")
     values["preset_geometry"] = scope.opt_cstr(spec.preset_geometry)
     values["text"] = scope.opt_cstr(spec.text)
+    for name in ("flip_h", "flip_v"):
+        flag = getattr(spec, name)
+        if flag is not None:
+            values[name] = _tristate_default(_require_bool(flag, name))
     S.SHAPE_SPEC.pack(LIB, ptr, values)
     return ptr
 
@@ -7441,6 +7467,8 @@ def _pack_shape_patch(
     fill,
     line,
     rotation_deg,
+    flip_h=None,
+    flip_v=None,
     clear: Sequence[str] = (),
 ) -> int:
     """Build an ``fm_shape_patch_t``; a ``None`` argument is a field left ``KEEP``, a name in ``clear``
@@ -7466,7 +7494,26 @@ def _pack_shape_patch(
     if text is not None:
         values["text_op"] = _PATCH_SET
         values["text"] = scope.cstr(text)
+    for name, flag in (("flip_h", flip_h), ("flip_v", flip_v)):
+        if flag is not None:
+            values[name + "_op"] = _PATCH_SET
+            values[name] = int(_require_bool(flag, name))
     S.SHAPE_PATCH.pack(LIB, ptr, values)
+    return ptr
+
+
+def _pack_picture_patch(scope: _ArgScope, rotation_deg, flip_h, flip_v) -> int:
+    """Build an ``fm_picture_patch_t``; a ``None`` argument is a field left ``KEEP``."""
+    ptr = scope.struct(S.PICTURE_PATCH)
+    values: Dict[str, Any] = {}
+    if rotation_deg is not None:
+        values["rotation_deg_op"] = _PATCH_SET
+        values["rotation_deg"] = _finite(rotation_deg, "rotation_deg")
+    for name, flag in (("flip_h", flip_h), ("flip_v", flip_v)):
+        if flag is not None:
+            values[name + "_op"] = _PATCH_SET
+            values[name] = int(_require_bool(flag, name))
+    S.PICTURE_PATCH.pack(LIB, ptr, values)
     return ptr
 
 
@@ -8569,6 +8616,8 @@ def _shape_from(d: Dict[str, Any]) -> ShapeProperties:
         fill=_shape_paint_read(_read_chart_fill(d["fill"])),
         line=_shape_paint_read(_read_chart_line(d["line"])),
         rotation_deg=d["rotation_deg"],
+        flip_h=bool(d["flip_h"]),
+        flip_v=bool(d["flip_v"]),
     )
 
 

@@ -19,9 +19,11 @@
 namespace {
 
 constexpr bool kWasm32 = sizeof(void*) == 4U;
-static_assert(sizeof(fm_shape_info_t) == (kWasm32 ? 160U : 168U), "fm_shape_info_t ABI layout changed");
-static_assert(sizeof(fm_shape_spec_t) == (kWasm32 ? 240U : 264U), "fm_shape_spec_t ABI layout changed");
-static_assert(sizeof(fm_shape_patch_t) == (kWasm32 ? 184U : 200U), "fm_shape_patch_t ABI layout changed");
+static_assert(sizeof(fm_shape_info_t) == (kWasm32 ? 168U : 176U), "fm_shape_info_t ABI layout changed");
+static_assert(sizeof(fm_shape_spec_t) == (kWasm32 ? 248U : 272U), "fm_shape_spec_t ABI layout changed");
+static_assert(sizeof(fm_shape_patch_t) == (kWasm32 ? 200U : 216U), "fm_shape_patch_t ABI layout changed");
+static_assert(sizeof(fm_picture_info_t) == 24U, "fm_picture_info_t ABI layout changed");
+static_assert(sizeof(fm_picture_patch_t) == 32U, "fm_picture_patch_t ABI layout changed");
 static_assert(sizeof(fm_sparkline_group_patch_t) == (kWasm32 ? 440U : 456U),
               "fm_sparkline_group_patch_t ABI layout changed");
 static_assert(sizeof(fm_sparkline_t) == 2U * sizeof(void*), "fm_sparkline_t ABI layout changed");
@@ -34,6 +36,34 @@ void SaveAndReload(fm_workbook_t* wb, WorkbookGuard* out) {
   BufferGuard buf;
   ASSERT_EQ(fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &buf.data, &buf.len), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_workbook_load(buf.data, buf.len, nullptr, &out->handle), 0) << fm_get_last_error_message();
+}
+
+// Saves `wb` as `format` and loads the result into `out`.
+void ReloadAs(fm_workbook_t* wb, fm_workbook_format_t format, WorkbookGuard* out) {
+  BufferGuard buf;
+  ASSERT_EQ(fm_workbook_save(wb, format, &buf.data, &buf.len), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_workbook_load(buf.data, buf.len, nullptr, &out->handle), 0) << fm_get_last_error_message();
+}
+
+// The first sheet's drawing part as an xlsx save writes it.
+std::string DrawingXml(fm_workbook_t* wb) {
+  BufferGuard buf;
+  EXPECT_EQ(fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &buf.data, &buf.len), 0) << fm_get_last_error_message();
+  mz_zip_archive reader{};
+  if (mz_zip_reader_init_mem(&reader, buf.data, buf.len, 0) == MZ_FALSE) {
+    ADD_FAILURE() << "mz_zip_reader_init_mem failed";
+    return {};
+  }
+  std::size_t size = 0;
+  void* bytes = mz_zip_reader_extract_file_to_heap(&reader, "xl/drawings/drawing1.xml", &size, 0);
+  mz_zip_reader_end(&reader);
+  if (bytes == nullptr) {
+    ADD_FAILURE() << "xl/drawings/drawing1.xml not found";
+    return {};
+  }
+  std::string xml(static_cast<const char*>(bytes), size);
+  mz_free(bytes);
+  return xml;
 }
 
 template <typename T, typename V>
@@ -277,24 +307,148 @@ TEST(FormulonCApiShapes, RotationDegreesAndLineWidthPointsSurviveReload) {
   EXPECT_DOUBLE_EQ(out.line.width_pt, 2.25);
 }
 
-TEST(FormulonCApiShapes, RotationIsNormalisedAndRangeChecked) {
+TEST(FormulonCApiShapes, RotationIsStoredAsGivenAndRangeChecked) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_shape_spec_t spec = Callout();
-  spec.rotation_deg = -90.0;
   uint32_t id = 0;
-  ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), 0) << fm_get_last_error_message();
-  EXPECT_DOUBLE_EQ(ShapeById(wb.handle, id).rotation_deg, 270.0);
+  for (const double deg : {360.0, -90.0, 400.0, -30.0, 12.5, 35791.0}) {
+    spec.rotation_deg = deg;
+    ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), 0) << deg << ": " << fm_get_last_error_message();
+    EXPECT_DOUBLE_EQ(ShapeById(wb.handle, id).rotation_deg, deg);
+  }
 
-  spec.rotation_deg = 450.0;
-  ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), 0) << fm_get_last_error_message();
-  EXPECT_DOUBLE_EQ(ShapeById(wb.handle, id).rotation_deg, 90.0);
-
+  // Each refusal leaves the shape as it was, on add and on update.
+  fm_shape_patch_t patch = FM_STRUCT_INIT(fm_shape_patch_t);
   for (const double bad :
-       {3601.0, -3601.0, std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN()}) {
+       {35792.0, -35792.0, 1.0e12, std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN()}) {
     spec.rotation_deg = bad;
     EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), kInvalidArgument) << bad;
+    Set(patch.rotation_deg_op, patch.rotation_deg, bad);
+    EXPECT_EQ(fm_sheet_update_shape(wb.handle, 0, id, nullptr, &patch), kInvalidArgument) << bad;
   }
+  EXPECT_DOUBLE_EQ(ShapeById(wb.handle, id).rotation_deg, 35791.0);
+
+  // 0 removes the attribute, and a raw value survives a save in both formats.
+  Set(patch.rotation_deg_op, patch.rotation_deg, -90.0);
+  ASSERT_EQ(fm_sheet_update_shape(wb.handle, 0, id, nullptr, &patch), 0) << fm_get_last_error_message();
+  for (const fm_workbook_format_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
+    WorkbookGuard again;
+    ReloadAs(wb.handle, format, &again);
+    EXPECT_DOUBLE_EQ(ShapeById(again.handle, id).rotation_deg, -90.0) << "format " << format;
+  }
+  Set(patch.rotation_deg_op, patch.rotation_deg, 0.0);
+  ASSERT_EQ(fm_sheet_update_shape(wb.handle, 0, id, nullptr, &patch), 0) << fm_get_last_error_message();
+  EXPECT_DOUBLE_EQ(ShapeById(wb.handle, id).rotation_deg, 0.0);
+}
+
+// Adds the shape of `Callout()` with the given flip states.
+std::uint32_t AddFlipped(fm_workbook_t* wb, int32_t flip_h, int32_t flip_v) {
+  fm_shape_spec_t spec = Callout();
+  spec.rotation_deg = 0.0;
+  spec.flip_h = flip_h;
+  spec.flip_v = flip_v;
+  uint32_t id = 0;
+  EXPECT_EQ(fm_sheet_add_shape(wb, 0, &spec, &id), 0) << fm_get_last_error_message();
+  return id;
+}
+
+TEST(FormulonCApiShapes, FlipsReadWriteAndOmitTheAttributeWhenFalse) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const std::uint32_t plain = AddFlipped(wb.handle, FM_TRISTATE_DEFAULT, FM_TRISTATE_FALSE);
+  fm_shape_info_t out = ShapeById(wb.handle, plain);
+  EXPECT_EQ(out.flip_h, 0);
+  EXPECT_EQ(out.flip_v, 0);
+  EXPECT_EQ(DrawingXml(wb.handle).find("flip"), std::string::npos);
+  EXPECT_EQ(DrawingXml(wb.handle).find("rot="), std::string::npos);
+
+  const std::uint32_t both = AddFlipped(wb.handle, FM_TRISTATE_TRUE, FM_TRISTATE_TRUE);
+  out = ShapeById(wb.handle, both);
+  EXPECT_EQ(out.flip_h, 1);
+  EXPECT_EQ(out.flip_v, 1);
+  EXPECT_NE(DrawingXml(wb.handle).find("flipH=\"1\" flipV=\"1\""), std::string::npos);
+
+  // Patching to false removes the attribute; the other flip and the position stay.
+  fm_shape_patch_t patch = FM_STRUCT_INIT(fm_shape_patch_t);
+  Set(patch.flip_h_op, patch.flip_h, 0);
+  ASSERT_EQ(fm_sheet_update_shape(wb.handle, 0, both, nullptr, &patch), 0) << fm_get_last_error_message();
+  out = ShapeById(wb.handle, both);
+  EXPECT_EQ(out.flip_h, 0);
+  EXPECT_EQ(out.flip_v, 1);
+  EXPECT_EQ(DrawingXml(wb.handle).find("flipH"), std::string::npos);
+
+  // A patch equal to the stored state, and a keep, write nothing.
+  const std::string before = DrawingXml(wb.handle);
+  Set(patch.flip_v_op, patch.flip_v, 1);
+  ASSERT_EQ(fm_sheet_update_shape(wb.handle, 0, both, nullptr, &patch), 0) << fm_get_last_error_message();
+  EXPECT_EQ(DrawingXml(wb.handle), before);
+
+  // A flip on a rotated shape keeps the attribute order Excel writes.
+  fm_shape_patch_t turn = FM_STRUCT_INIT(fm_shape_patch_t);
+  Set(turn.rotation_deg_op, turn.rotation_deg, -30.0);
+  Set(turn.flip_h_op, turn.flip_h, 1);
+  ASSERT_EQ(fm_sheet_update_shape(wb.handle, 0, both, nullptr, &turn), 0) << fm_get_last_error_message();
+  EXPECT_NE(DrawingXml(wb.handle).find("rot=\"-1800000\" flipH=\"1\" flipV=\"1\""), std::string::npos);
+
+  for (const fm_workbook_format_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
+    WorkbookGuard again;
+    ReloadAs(wb.handle, format, &again);
+    out = ShapeById(again.handle, both);
+    EXPECT_EQ(out.flip_h, 1) << "format " << format;
+    EXPECT_EQ(out.flip_v, 1) << "format " << format;
+    EXPECT_DOUBLE_EQ(out.rotation_deg, -30.0) << "format " << format;
+    out = ShapeById(again.handle, plain);
+    EXPECT_EQ(out.flip_h, 0) << "format " << format;
+    EXPECT_EQ(out.flip_v, 0) << "format " << format;
+  }
+}
+
+TEST(FormulonCApiShapes, FlipOnAConnectorIsStoredAsGiven) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_shape_spec_t line = FM_STRUCT_INIT(fm_shape_spec_t);
+  line.placement = FM_STRUCT_INIT(fm_drawing_placement_spec_t);
+  line.placement.anchor.kind = FM_ANCHOR_KIND_ONE_CELL;
+  line.placement.anchor.width_emu = 914400;
+  line.placement.anchor.height_emu = 457200;
+  line.preset_geometry = "straightConnector1";
+  line.flip_v = FM_TRISTATE_TRUE;
+  uint32_t id = 0;
+  ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &line, &id), 0) << fm_get_last_error_message();
+  fm_shape_info_t out = ShapeById(wb.handle, id);
+  EXPECT_EQ(out.kind, FM_DRAWING_OBJECT_KIND_CONNECTOR);
+  EXPECT_EQ(out.flip_h, 0);
+  EXPECT_EQ(out.flip_v, 1);
+}
+
+TEST(FormulonCApiShapes, FlipRefusals) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const std::uint32_t id = AddFlipped(wb.handle, FM_TRISTATE_TRUE, FM_TRISTATE_DEFAULT);
+  const std::string before = DrawingXml(wb.handle);
+
+  fm_shape_patch_t patch = FM_STRUCT_INIT(fm_shape_patch_t);
+  patch.flip_h_op = FM_PATCH_OP_CLEAR;
+  EXPECT_EQ(fm_sheet_update_shape(wb.handle, 0, id, nullptr, &patch), kInvalidArgument);
+  patch = FM_STRUCT_INIT(fm_shape_patch_t);
+  patch.flip_v_op = static_cast<fm_patch_op_t>(3);
+  EXPECT_EQ(fm_sheet_update_shape(wb.handle, 0, id, nullptr, &patch), kInvalidArgument);
+  patch = FM_STRUCT_INIT(fm_shape_patch_t);
+  Set(patch.flip_h_op, patch.flip_h, 2);
+  EXPECT_EQ(fm_sheet_update_shape(wb.handle, 0, id, nullptr, &patch), kInvalidArgument);
+  patch = FM_STRUCT_INIT(fm_shape_patch_t);
+  Set(patch.flip_v_op, patch.flip_v, -1);
+  EXPECT_EQ(fm_sheet_update_shape(wb.handle, 0, id, nullptr, &patch), kInvalidArgument);
+  EXPECT_EQ(DrawingXml(wb.handle), before);
+
+  fm_shape_spec_t spec = Callout();
+  spec.flip_h = 3;
+  uint32_t added = 0;
+  EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &added), kInvalidArgument);
+  spec.flip_h = FM_TRISTATE_DEFAULT;
+  spec.flip_v = -1;
+  EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &added), kInvalidArgument);
 }
 
 TEST(FormulonCApiShapes, ThemeColorsRoundTripAndAreValidated) {

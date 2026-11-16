@@ -75,7 +75,7 @@ collections:
   row_override: { key: natural, by: row, plural: row_overrides, ops: [row_override.get_at, row_override.get_count], no_getter: "read by row through the per-property row getters" }
   theme_script_font: { key: natural, by: script, plural: theme_script_fonts, ops: [theme_script_font.get, theme_script_font.get_at, theme_script_font.get_count, theme_script_font.set, theme_script_fonts.list] }
   shape: { key: natural, by: object_id, access: handles, handle_class: Shape, handle_base: Drawing, plural: shapes, ops: [shape.add, shape.get, shape.get_at, shape.get_count, shape.remove, shape.update, shapes.list, binding.shape] }
-  image: { key: natural, by: object_id, access: handles, handle_class: Picture, handle_base: Drawing, plural: pictures, ops: [image.add, image.get, binding.picture, binding.list_pictures, binding.add_picture] }
+  image: { key: natural, by: object_id, access: handles, handle_class: Picture, handle_base: Drawing, plural: pictures, ops: [image.add, image.get, picture.update, binding.picture, binding.list_pictures, binding.add_picture] }
   chart: { key: natural, by: object_id, access: handles, handle_class: Chart, handle_base: Drawing, plural: charts, ops: [chart.add, chart.get, binding.chart, binding.list_charts] }
   slicer: { key: natural, by: object_id, access: handles, handle_class: Slicer, handle_base: Drawing, plural: slicers, ops: [slicer.add, slicer.get, slicer.get_at, slicer.get_count, slicer.remove, slicer.update, slicers.list, binding.slicer] }
   drawing_object: { key: natural, by: object_id, access: handles, handle_class: Drawing, plural: drawings, ops: [drawing_object.get, drawing_object.get_at, drawing_object.get_count, drawing.remove, drawing_objects.list, binding.drawing, binding.list_drawings, binding.remove_drawing] }
@@ -283,7 +283,7 @@ entries:
     js: CellPicture
     py: CellPicture
     surfaces: [c, wasm, native, py]
-    exception: "the picture a cell holds reads back as a PictureProperties plus its alt text; C reads and writes the one record, the bindings take CellPictureInput"
+    exception: "the picture a cell holds reads back as an ImageProperties plus its alt text; C reads and writes the one record, the bindings take CellPictureInput"
   record.cell_picture_input:
     kind: record
     role: input
@@ -1782,9 +1782,18 @@ entries:
   record.image:
     kind: record
     role: result
+    js: ImageProperties
+    py: ImageProperties
+    surfaces: [wasm, native, py]
+    exception: "the image a picture or a cell holds: ImageInfo plus a copy of the media bytes; a picture handle adds its transform as PictureProperties"
+  record.picture_info:
+    kind: record
+    role: result
+    c: fm_picture_info_t
     js: PictureProperties
     py: PictureProperties
-    surfaces: [wasm, native, py]
+    surfaces: [c, wasm, native, py]
+    exception: "C reads the transform (rotation and flips) apart from the media; the bindings compose it with the ImageProperties read into one PictureProperties"
   record.image_info:
     kind: record
     role: result
@@ -3725,6 +3734,14 @@ entries:
     surfaces: [c, wasm, native]
     clearable: [fill, line]
     read_only_keys: [object_id, kind]
+  record.picture_patch:
+    kind: record
+    role: patch
+    c: fm_picture_patch_t
+    js: PicturePatch
+    surfaces: [c, wasm, native]
+    clearable: []
+    read_only_keys: [object_id, bytes, format, width_px, height_px]
   record.slicer_patch:
     kind: record
     role: patch
@@ -9179,6 +9196,25 @@ entries:
     was: { c: fm_sheet_get_image, js: getImage, py: get_image }
     missing: null
     handle: { class: Picture, js: getProperties, py: get_properties, supplies: [sheet, object_id] }
+  picture_info.get:
+    kind: op
+    scope: sheet
+    noun: picture_info
+    c: fm_sheet_get_picture_info
+    surfaces: [c]
+    exception: "internal: the bindings compose this read with fm_sheet_get_picture into getPicture"
+  picture.update:
+    kind: op
+    scope: sheet
+    noun: picture
+    c: fm_sheet_update_picture
+    js: updatePicture
+    py: update_picture
+    patch: true
+    patch_record: PictureProperties
+    surfaces: [c, wasm, native, py]
+    handle: { class: Picture, js: update, py: update, supplies: [sheet, object_id] }
+    facade: handwritten
   image.add:
     kind: op
     scope: sheet

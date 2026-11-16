@@ -116,6 +116,8 @@ RECORD_NAMES = frozenset(
         "fm_iterative_settings_info_t",
         "fm_iterative_settings_patch_t",
         "fm_load_options_spec_t",
+        "fm_picture_info_t",
+        "fm_picture_patch_t",
         "fm_locale_facts_info_t",
         "fm_margins_pt_info_t",
         "fm_number_format_info_t",
@@ -2034,6 +2036,8 @@ SHAPE = Struct(
         ("text_box", I32),
         ("preset_geometry", PTR),
         ("text", PTR),
+        ("flip_h", I32),
+        ("flip_v", I32),
     ],
 )
 
@@ -2047,6 +2051,8 @@ SHAPE_SPEC = Struct(
         ("text_box", I32),
         ("preset_geometry", PTR),
         ("text", PTR),
+        ("flip_h", I32),
+        ("flip_v", I32),
     ],
 )
 
@@ -2765,6 +2771,27 @@ SHAPE_PATCH = Struct(
         ("preset_geometry", PTR),
         ("text_op", I32),
         ("text", PTR),
+        ("flip_h_op", I32),
+        ("flip_h", I32),
+        ("flip_v_op", I32),
+        ("flip_v", I32),
+    ],
+)
+
+PICTURE_INFO = Struct(
+    "fm_picture_info_t",
+    [("object_id", U32), ("rotation_deg", F64), ("flip_h", I32), ("flip_v", I32)],
+)
+
+PICTURE_PATCH = Struct(
+    "fm_picture_patch_t",
+    [
+        ("rotation_deg_op", I32),
+        ("rotation_deg", F64),
+        ("flip_h_op", I32),
+        ("flip_h", I32),
+        ("flip_v_op", I32),
+        ("flip_v", I32),
     ],
 )
 

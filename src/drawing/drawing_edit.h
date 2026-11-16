@@ -169,6 +169,32 @@ struct DrawingCommonPatch {
 Expected<void, Error> update_drawing(Workbook& wb, std::size_t sheet, std::uint32_t object_id,
                                      const DrawingCommonPatch& patch);
 
+/// A picture's `a:xfrm` rotation and flips as stored.
+struct PictureTransform {
+  std::int32_t rotation = 0;  ///< `rot` in 60000ths of a degree.
+  bool flip_h = false;        ///< `flipH`.
+  bool flip_v = false;        ///< `flipV`.
+};
+
+/// The fields of the transform an update sets; an unset field keeps the current value.
+struct PictureTransformPatch {
+  std::optional<std::int32_t> rotation;  ///< 0 removes `rot`.
+  std::optional<bool> flip_h;            ///< false removes the attribute.
+  std::optional<bool> flip_v;
+};
+
+/// The transform of the picture with `object_id` (whether or not its media exists), or no value when the sheet
+/// holds no picture with that id. Fails with `kIoDrawingUnparseable` for a drawing that does not parse.
+Expected<std::optional<PictureTransform>, Error> get_picture_transform(const Workbook& wb, std::size_t sheet,
+                                                                       std::uint32_t object_id);
+
+/// Applies `picture` (rotation and flips) and then `common` (as `update_drawing`, so an anchor resolves against the
+/// new rotation) to the picture with `object_id`; the drawing is left as it was when either half fails. A rotation
+/// change alone never moves the anchor, and a transform equal to the current one writes nothing. Either pointer may
+/// be null. Fails with `kNotFound` for an unknown id and `kInvalidArgument` for an object that is not a picture.
+Expected<void, Error> update_picture(Workbook& wb, std::size_t sheet, std::uint32_t object_id,
+                                     const DrawingCommonPatch* common, const PictureTransformPatch* picture);
+
 /// Renames the first picture, chart or shape with `object_id`. Duplicate
 /// names are allowed. Fails with `kInvalidArgument` for an empty `name` or an
 /// object of another kind, and with `kNotFound` for an unknown id.

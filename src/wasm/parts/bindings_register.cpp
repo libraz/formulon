@@ -195,6 +195,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
                 }))
       .function("addShape", &JsWorkbook::insertShape)
       .function("updateShape", &JsWorkbook::updateShape)
+      .function("updatePicture", &JsWorkbook::updatePicture)
       .function("getShape", &JsWorkbook::getShape)
       .function("getSlicer", &JsWorkbook::getSlicer)
       .function("addSlicer", &JsWorkbook::addSlicer)

@@ -14421,6 +14421,82 @@ FM_API fm_status_t fm_sheet_get_picture(const fm_workbook_t* wb, size_t sheet_in
                                         int32_t* out_present, const uint8_t** out_bytes, size_t* out_len,
                                         fm_image_info_t* out_info);
 
+/** @brief The transform of a picture object: the record `fm_sheet_get_picture_info` reads. */
+typedef struct {
+  uint32_t struct_size;
+  /** The object's id in the sheet's drawing. */
+  uint32_t object_id;
+  /** Clockwise rotation in degrees, stored as given to 1/60000 degree (360 reads 360, -90 reads -90). */
+  double rotation_deg;
+  /** `1` when the picture is flipped horizontally (`a:xfrm/@flipH`). */
+  int32_t flip_h;
+  /** `1` when the picture is flipped vertically (`a:xfrm/@flipV`). */
+  int32_t flip_v;
+} fm_picture_info_t;
+
+/**
+ * @brief Reads the transform of the picture object `object_id`. `*out_present` is `1` and `*out` filled when the
+ *        sheet has a picture with that id, whether or not its media part exists, else `0` and `*out` zeroed (still
+ *        `FM_STATUS_OK` (0)); an id that names another kind of object is not present. The image itself is read with
+ *        `fm_sheet_get_picture`.
+ *
+ * Lifetime: transient.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse.
+ */
+FM_API fm_status_t fm_sheet_get_picture_info(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                             int32_t* out_present, fm_picture_info_t* out);
+
+/**
+ * @brief Partial update of the transform of a picture (`fm_sheet_update_picture`), following the header's patch
+ *        rules (Patches, above). The fields are the writable ones of `fm_picture_info_t`, in its units and domains;
+ *        the anchor, name, description and visibility are the `common` half of `fm_sheet_update_picture`.
+ *
+ * No field can be cleared. A flip patched to the state it already has writes nothing; patched to false it removes the
+ * attribute, and a rotation of 0 removes `rot`.
+ */
+typedef struct {
+  uint32_t struct_size;
+  /** Patch operation for `rotation_deg`: leave it unchanged or set it; `CLEAR` is not accepted. */
+  fm_patch_op_t rotation_deg_op;
+  /** The new clockwise rotation in degrees. */
+  double rotation_deg;
+  /** Patch operation for `flip_h`: leave it unchanged or set it; `CLEAR` is not accepted. */
+  fm_patch_op_t flip_h_op;
+  /** Whether the picture is flipped horizontally, `0` or `1`. */
+  int32_t flip_h;
+  /** Patch operation for `flip_v`: leave it unchanged or set it; `CLEAR` is not accepted. */
+  fm_patch_op_t flip_v_op;
+  /** Whether the picture is flipped vertically, `0` or `1`. */
+  int32_t flip_v;
+} fm_picture_patch_t;
+
+/**
+ * @brief Merges `common` (as `fm_sheet_update_drawing` applies it) and `picture` (the transform fields) into the
+ *        picture `object_id` as one edit, keeping the rest of its XML.
+ *
+ * Either patch may be `NULL`; both `NULL` changes nothing. The transform applies first, then `common.anchor` resolves
+ * against the new rotation (a picture rotated into [45, 135) or [225, 315) degrees has its anchor box laid out with
+ * width and height swapped); a rotation change alone never moves the anchor. Both halves are checked before anything is
+ * written, so nothing changes on failure.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_NOT_FOUND` (6) when no object of the sheet's drawing holds that id;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the id belongs to something other than a picture, an op is outside
+ *         0..2, a field is `CLEAR`, a `flip_h` or `flip_v` `SET` value is not 0 or 1, a `rotation_deg` `SET` value
+ *         is not finite or its 1/60000-degree count does not fit an int32, or `common` fails a rule of
+ *         `fm_sheet_update_drawing`;
+ *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
+ *         or is an `.xlsb` drawing the reader could not lift.
+ */
+FM_API fm_status_t fm_sheet_update_picture(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                           const fm_drawing_patch_t* common, const fm_picture_patch_t* picture);
+
 /**
  * @brief A picture placed in a cell (Excel's Place in Cell): the image file as stored and its alt text.
  *
@@ -14780,8 +14856,9 @@ typedef struct {
    *  write); `width_pt` is at most 1584 points (a larger, negative or non-finite value is
    *  `FM_STATUS_INVALID_ARGUMENT` (2)). */
   fm_chart_line_t line;
-  /** Clockwise rotation in degrees; an input in [-3600, 3600] is stored normalised to [0, 360), and a value outside
-   *  that range or not finite is `FM_STATUS_INVALID_ARGUMENT` (2). */
+  /** Clockwise rotation in degrees, stored as given to 1/60000 degree (360 reads 360, -90 reads -90); an input that
+   *  is not finite, or whose 1/60000-degree count does not fit an int32 (about +/-35791 degrees), is
+   *  `FM_STATUS_INVALID_ARGUMENT` (2). */
   double rotation_deg;
   /** `1` when the shape is a text box. */
   int32_t text_box;
@@ -14789,6 +14866,10 @@ typedef struct {
   const char* preset_geometry;
   /** The shape's text, paragraphs joined with a newline. */
   const char* text;
+  /** `1` when the shape is flipped horizontally (`a:xfrm/@flipH`). */
+  int32_t flip_h;
+  /** `1` when the shape is flipped vertically (`a:xfrm/@flipV`). */
+  int32_t flip_v;
 } fm_shape_info_t;
 
 /**
@@ -14806,7 +14887,7 @@ typedef struct {
   fm_chart_fill_t fill;
   /** The shape's own outline; all zero draws the shape style's. `other` set is `FM_STATUS_INVALID_ARGUMENT` (2). */
   fm_chart_line_t line;
-  /** Clockwise rotation in degrees; 0 for none. */
+  /** Clockwise rotation in degrees, as `fm_shape_info_t::rotation_deg`; 0 for none. */
   double rotation_deg;
   /** 1 to make the shape a text box; 0 for a plain shape. */
   int32_t text_box;
@@ -14816,6 +14897,11 @@ typedef struct {
   /** The shape's text, paragraphs joined with a newline; `NULL` and an empty string both mean none (api-conventions §5
    *  rule 30). */
   const char* text;
+  /** Horizontal flip, an `fm_tristate_t`: only `FM_TRISTATE_TRUE` writes `flipH`; a value outside the enumeration is
+   *  `FM_STATUS_INVALID_ARGUMENT` (2). */
+  int32_t flip_h; /* fm_tristate_t */
+  /** Vertical flip, as `flip_h`. */
+  int32_t flip_v; /* fm_tristate_t */
 } fm_shape_spec_t;
 
 /**
@@ -14826,7 +14912,8 @@ typedef struct {
  *        description and visibility are the `common` half of
  *        `fm_sheet_update_shape`.
  *
- * Apart from `fill` and `line`, no field can be cleared.
+ * Apart from `fill` and `line`, no field can be cleared. A flip patched to the state it already has writes nothing;
+ * patched to false it removes the attribute.
  */
 typedef struct {
   uint32_t struct_size;
@@ -14851,6 +14938,14 @@ typedef struct {
   /** The new text, paragraphs joined with a newline; applies to a shape only and keeps the first paragraph's properties
    *  and the first run's formatting. */
   const char* text;
+  /** Patch operation for `flip_h`: leave it unchanged or set it; `CLEAR` is not accepted. */
+  fm_patch_op_t flip_h_op;
+  /** Whether the shape is flipped horizontally, `0` or `1`. */
+  int32_t flip_h;
+  /** Patch operation for `flip_v`: leave it unchanged or set it; `CLEAR` is not accepted. */
+  fm_patch_op_t flip_v_op;
+  /** Whether the shape is flipped vertically, `0` or `1`. */
+  int32_t flip_v;
 } fm_shape_patch_t;
 
 /**
@@ -14885,13 +14980,13 @@ FM_API fm_status_t fm_sheet_get_shape(const fm_workbook_t* wb, size_t sheet_inde
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `spec` or `out_object_id` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) for a `struct_size` below the first layout of
- *         `fm_shape_spec_t` or its `placement`, a bad enumeration, an absolute anchor kind,
- *         a `preset_geometry` that is not an ECMA-376 `ST_ShapeType` name, an offset or size
- *         outside [0, 2^31) EMU, a zero size where the anchor needs one, a cell outside
- *         the sheet, a two-cell `to` before `from`, `other` set on `fill` or `line`,
- *         an Indexed or Auto colour, a colour given with `none`, a transparency
- *         without a solid colour, a line width or dash out of range, or text with
- *         control characters;
+ *         `fm_shape_spec_t` or its `placement`, a bad enumeration, a `rotation_deg` that is not
+ *         finite or does not fit, an absolute anchor kind, a `preset_geometry` that is not an
+ *         ECMA-376 `ST_ShapeType` name, an offset or size outside [0, 2^31) EMU, a zero size
+ *         where the anchor needs one, a cell outside the sheet, a two-cell `to` before `from`,
+ *         `other` set on `fill` or `line`, an Indexed or Auto colour, a colour given with
+ *         `none`, a transparency without a solid colour, a line width or dash out of range, or
+ *         text with control characters;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a string is not valid UTF-8;
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when the drawing's id space is exhausted;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
@@ -14915,7 +15010,8 @@ FM_API fm_status_t fm_sheet_add_shape(fm_workbook_t* wb, size_t sheet_index, con
  *         `FM_STATUS_NOT_FOUND` (6) when no object of the sheet's drawing holds that id;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when the id belongs to a picture, chart or
  *         slicer, an op is outside 0..2, a field other than a `fill` / `line` member or
- *         `common`'s `description` is `CLEAR`, `SET` carries a `NULL` string, a `SET`
+ *         `common`'s `description` is `CLEAR`, `flip_h` or `flip_v` is `SET` to a value other than 0 or 1,
+ *         `rotation_deg` is `SET` to a value that is not finite or does not fit, `SET` carries a `NULL` string, a `SET`
  *         value fails a rule of `fm_sheet_add_shape`, `text` or `text_box` is `SET` on a
  *         connector or group, `preset_geometry` is `SET` on a group, or `common` fails a
  *         rule of `fm_sheet_update_drawing`;

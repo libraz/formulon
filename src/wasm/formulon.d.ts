@@ -2506,7 +2506,7 @@ export interface CommentInput {
 
 /** A picture placed in a cell, as `Sheet.getCellPicture(row, col)` reads it: the image file as stored (PNG or JPEG),
  *  its format and pixel size, and its alt text. */
-export interface CellPicture extends PictureProperties {
+export interface CellPicture extends ImageProperties {
   /** The picture's alt text; `null` when it has none. */
   readonly altText: string | null;
 }
@@ -5197,10 +5197,35 @@ export interface ImageInfo {
   readonly heightPx: number;
 }
 
-/** Return type of `Picture.getProperties()`: the picture's format, pixel size and a copy of its media bytes. */
-export interface PictureProperties extends ImageInfo {
-  /** A copy of the picture's media bytes. */
+/** An image as stored: its format, pixel size and a copy of its media bytes. */
+export interface ImageProperties extends ImageInfo {
+  /** A copy of the image's media bytes. */
   readonly bytes: Uint8Array<ArrayBuffer>;
+}
+
+/** Return type of `Picture.getProperties()`: the picture's {@link ImageProperties} and its transform. */
+export interface PictureProperties extends ImageProperties {
+  /** Clockwise rotation in degrees, as stored: 360 reads 360 and -90 reads -90. */
+  readonly rotationDeg: number;
+  /** `true` when the picture is flipped horizontally. */
+  readonly flipH: boolean;
+  /** `true` when the picture is flipped vertically. */
+  readonly flipV: boolean;
+}
+
+/** The picture-specific keys of `Picture.update`, each optional; a key left out is unchanged and no key accepts
+ *  `null`. `Picture.update` also takes the {@link DrawingPatch} keys. A rotation change alone never moves the anchor;
+ *  in one call the transform applies first, then the anchor resolves against the new rotation. The read-only keys of a
+ *  {@link PictureProperties} (`bytes`, `format`, `widthPx`, `heightPx`) are ignored; any other unknown key fails with
+ *  a `TypeError`. */
+export interface PicturePatch {
+  /** The new clockwise rotation in degrees, stored as given to 1/60000 degree; 0 removes it. A value that is not
+   *  finite, or beyond about +/-35791 degrees, fails with `StatusCode.InvalidArgument`. */
+  rotationDeg?: number;
+  /** Whether the picture is flipped horizontally; `false` removes the attribute. */
+  flipH?: boolean;
+  /** Whether the picture is flipped vertically; `false` removes the attribute. */
+  flipV?: boolean;
 }
 
 /** Return type of `Drawing.getDrawingProperties()`: the fields every anchored object of a sheet's drawing has,
@@ -5367,8 +5392,12 @@ export interface ShapeProperties {
   readonly fill: ChartFill | null;
   /** The shape's own outline; `null` when it has none and draws its style's. */
   readonly line: ChartLine | null;
-  /** Clockwise rotation in degrees. */
+  /** Clockwise rotation in degrees, as stored: 360 reads 360 and -90 reads -90. */
   readonly rotationDeg: number;
+  /** `true` when the shape is flipped horizontally. */
+  readonly flipH: boolean;
+  /** `true` when the shape is flipped vertically. */
+  readonly flipV: boolean;
 }
 
 /** Argument of `Sheet.addShape`: the {@link DrawingPlacementInput} keys (its anchor needs a non-zero size or a
@@ -5387,8 +5416,13 @@ export interface ShapeInput extends DrawingPlacementInput {
   fill?: ChartFillPatch | null;
   /** The shape's own outline; omitted or `null` draws the shape style's. */
   line?: ChartLinePatch | null;
-  /** Clockwise rotation in degrees. */
+  /** Clockwise rotation in degrees, stored as given to 1/60000 degree; 0 for none. A value that is not finite, or
+   *  beyond about +/-35791 degrees, fails with `StatusCode.InvalidArgument`. */
   rotationDeg?: number;
+  /** Whether the shape is flipped horizontally; omitted is not flipped, and `null` is a `TypeError`. */
+  flipH?: boolean;
+  /** Whether the shape is flipped vertically; omitted is not flipped, and `null` is a `TypeError`. */
+  flipV?: boolean;
 }
 
 /** The shape-specific keys of `Shape.update`: those of {@link ShapeInput} except the placement keys, each optional. A
@@ -5408,8 +5442,12 @@ export interface ShapePatch {
   /** Update merged into the shape's own outline; `null`, or clearing every member, removes it so the shape draws its
    *  style's. */
   line?: ChartLinePatch | null;
-  /** The new clockwise rotation in degrees. */
+  /** The new clockwise rotation in degrees, stored as given to 1/60000 degree; 0 removes it. */
   rotationDeg?: number;
+  /** Whether the shape is flipped horizontally; `false` removes the attribute. */
+  flipH?: boolean;
+  /** Whether the shape is flipped vertically; `false` removes the attribute. */
+  flipV?: boolean;
 }
 
 /** Return type of `Slicer.getProperties()`: the slicer-specific fields of a table slicer of a worksheet. Its anchor,
@@ -9065,9 +9103,13 @@ export interface Drawing {
 
 /** A picture of a sheet's drawing; also has the members of {@link Drawing}. Add one with `Sheet.addPicture`. */
 export interface Picture extends Drawing {
-  /** Reads the picture's format, pixel size and a copy of its media bytes. Fails with `StatusCode.NotFound` when
-   *  the picture's media part is missing. */
+  /** Reads the picture's format, pixel size, a copy of its media bytes, rotation and flips. Fails with
+   *  `StatusCode.NotFound` when the picture's media part is missing. */
   getProperties(): PictureProperties;
+  /** Applies the fields `patch` names: the {@link PicturePatch} keys and the {@link DrawingPatch} keys (name,
+   *  description, hidden, anchor). Every key is checked before anything changes, so a rejected patch leaves the
+   *  picture as it was. */
+  update(patch: PicturePatch & DrawingPatch): void;
   /** Makes the picture item `zOrderIndex` of `Sheet.listDrawings()`, whose order is the stacking order (0 is the
    *  back). */
   setZOrder(zOrderIndex: number): void;

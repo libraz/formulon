@@ -197,11 +197,20 @@ emscripten::val JsWorkbook::getImage(uint32_t sheet, uint32_t objectId) const {
   if (rc != 0 || present == 0) {
     return optional_or_null(rc, present, emscripten::val::null());
   }
+  fm_picture_info_t transform = FM_STRUCT_INIT(fm_picture_info_t);
+  int32_t transform_present = 0;
+  const fm_status_t transform_rc = fm_sheet_get_picture_info(handle_, sheet, objectId, &transform_present, &transform);
+  if (transform_rc != 0 || transform_present == 0) {
+    return optional_or_null(transform_rc, transform_present, emscripten::val::null());
+  }
   emscripten::val image = emscripten::val::object();
   image.set("format", info.format);
   image.set("widthPx", info.width_px);
   image.set("heightPx", info.height_px);
   image.set("bytes", bytes_to_val(data, len));
+  image.set("rotationDeg", transform.rotation_deg);
+  image.set("flipH", transform.flip_h != 0);
+  image.set("flipV", transform.flip_v != 0);
   return optional_or_null(rc, present, image);
 }
 

@@ -174,6 +174,16 @@ Napi::Value Workbook::GetImage(const Napi::CallbackInfo& info) {
   image.Set("heightPx", JsNumber(env, img.height_px));
   // The C pointer dies on the next mutation, so the bytes are copied out.
   image.Set("bytes", CopyBytes(env, bytes, len));
+  fm_picture_info_t transform = FM_STRUCT_INIT(fm_picture_info_t);
+  int32_t transform_present = 0;
+  const fm_status_t transform_rc =
+      fm_sheet_get_picture_info(handle_, ArgU32(info, 0), ArgU32(info, 1), &transform_present, &transform);
+  if (transform_rc != 0 || transform_present == 0) {
+    return OptionalOrNull(env, transform_rc, transform_present, env.Null());
+  }
+  image.Set("rotationDeg", JsNumber(env, transform.rotation_deg));
+  image.Set("flipH", Napi::Boolean::New(env, transform.flip_h != 0));
+  image.Set("flipV", Napi::Boolean::New(env, transform.flip_v != 0));
   return OptionalOrNull(env, rc, present, image);
 }
 

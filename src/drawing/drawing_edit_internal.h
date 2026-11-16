@@ -116,6 +116,40 @@ void ensure_default_content_type(Workbook& wb, const char* extension, const char
 // The `xdr:wsDr` child holding `node`.
 pugi::xml_node top_of(const pugi::xml_node& root, pugi::xml_node node);
 
+// The `rot`, `flipH` and `flipV` attributes of an `a:xfrm`; absent reads as 0 / false.
+struct XfrmTransform {
+  std::int32_t rot = 0;  ///< 60000ths of a degree.
+  bool flip_h = false;
+  bool flip_v = false;
+  bool operator==(const XfrmTransform& o) const { return rot == o.rot && flip_h == o.flip_h && flip_v == o.flip_v; }
+  bool operator!=(const XfrmTransform& o) const { return !(*this == o); }
+};
+
+// The transform `xfrm` holds; a null node holds none.
+inline XfrmTransform read_xfrm_transform(const pugi::xml_node& xfrm) {
+  XfrmTransform t;
+  t.rot = xfrm.attribute("rot").as_int();
+  t.flip_h = xfrm.attribute("flipH").as_bool();
+  t.flip_v = xfrm.attribute("flipV").as_bool();
+  return t;
+}
+
+// Writes `t` as Excel orders the attributes (rot, flipH, flipV); a default member is left out.
+inline void write_xfrm_transform(pugi::xml_node xfrm, const XfrmTransform& t) {
+  for (const char* name : {"rot", "flipH", "flipV"}) {
+    xfrm.remove_attribute(name);
+  }
+  if (t.rot != 0) {
+    xfrm.append_attribute("rot").set_value(t.rot);
+  }
+  if (t.flip_h) {
+    xfrm.append_attribute("flipH").set_value("1");
+  }
+  if (t.flip_v) {
+    xfrm.append_attribute("flipV").set_value("1");
+  }
+}
+
 // The kinds the drawing edits move and remove.
 inline bool is_editable(DrawingObjectKind kind) {
   return kind == DrawingObjectKind::kPicture || kind == DrawingObjectKind::kChart;

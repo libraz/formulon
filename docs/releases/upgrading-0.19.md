@@ -1806,6 +1806,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
   an `.xlsb` save that rewrites them from the model, and an `.xlsx` save that
   writes them as XML, lose nothing. A refreshed PivotTable keeps its part names
   in an `.xlsb` save.
+- Shape and picture rotationDeg is now stored as given: 360 reads 360 and -90 reads -90, where it used to be normalised into [0, 360).
 
 ## Reference tables
 
@@ -2898,7 +2899,7 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 | `ImageInfoResult` | folded into `ImageInfo` |
 | `ImageInsertOptions` | `DrawingPlacementInput` |
 | `ImagePlacement` | folded into `DrawingAnchor` |
-| `ImageResult` | folded into `PictureProperties` |
+| `ImageResult` | folded into `ImageProperties` |
 | `ImageSnapshotResult` | removed |
 | `insertChart()` | `addChart()` |
 | `InsertChartResult` | removed |

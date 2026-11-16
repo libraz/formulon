@@ -190,7 +190,10 @@ ShapeInfo read_shape(const Workbook& wb, pugi::xml_node anchor, DrawingObject ob
   info.prst = child_local(props, "prstGeom").attribute("prst").value();
   info.text = read_text(content);
   info.text_box = child_local(child_local(content, "nvSpPr"), "cNvSpPr").attribute("txBox").as_bool();
-  info.rotation = child_local(props, "xfrm").attribute("rot").as_int();
+  const drawing_edit::XfrmTransform transform = drawing_edit::read_xfrm_transform(child_local(props, "xfrm"));
+  info.rotation = transform.rot;
+  info.flip_h = transform.flip_h;
+  info.flip_v = transform.flip_v;
   info.paint_fill = read_paint_fill(wb, props);
   info.paint_line = read_paint_line(wb, props);
   return info;
@@ -445,12 +448,20 @@ Expected<void, Error> apply_fields(pugi::xml_node anchor, pugi::xml_node content
       (geom.attribute("prst") ? geom.attribute("prst") : geom.append_attribute("prst")).set_value(spec.prst.c_str());
     }
   }
-  if ((f & shape_field::kRotation) != 0U) {
-    pugi::xml_node xfrm = ensure_xfrm(props);
-    if (spec.rotation == 0) {
-      xfrm.remove_attribute("rot");
-    } else {
-      io::set_attr(xfrm, "rot", spec.rotation);
+  if ((f & (shape_field::kRotation | shape_field::kFlipH | shape_field::kFlipV)) != 0U) {
+    const drawing_edit::XfrmTransform current = drawing_edit::read_xfrm_transform(child_local(props, "xfrm"));
+    drawing_edit::XfrmTransform wanted = current;
+    if ((f & shape_field::kRotation) != 0U) {
+      wanted.rot = spec.rotation;
+    }
+    if ((f & shape_field::kFlipH) != 0U) {
+      wanted.flip_h = spec.flip_h;
+    }
+    if ((f & shape_field::kFlipV) != 0U) {
+      wanted.flip_v = spec.flip_v;
+    }
+    if (wanted != current) {
+      drawing_edit::write_xfrm_transform(ensure_xfrm(props), wanted);
     }
   }
   if ((f & shape_field::kText) != 0U) {

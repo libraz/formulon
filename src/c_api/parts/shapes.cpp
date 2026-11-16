@@ -3,7 +3,6 @@
 // inserting, updating and removing them.
 
 #include <array>
-#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -18,7 +17,6 @@
 #include "drawing/drawing_edit.h"
 #include "drawing/shape_edit.h"
 #include "utils/error.h"
-#include "utils/number_text.h"
 #include "workbook.h"
 
 using formulon::c_api::parts::AnchorPlan;
@@ -44,17 +42,13 @@ using formulon::c_api::parts::PatchReader;
 using formulon::c_api::parts::plan_add_anchor;
 using formulon::c_api::parts::read_fill;
 using formulon::c_api::parts::read_line;
+using formulon::c_api::parts::rotation_deg_from_units;
+using formulon::c_api::parts::rotation_units_from_deg;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::TextStore;
 
 namespace {
-
-/// `a:xfrm/@rot` counts 60000ths of a degree.
-constexpr double kRotationUnitsPerDegree = 60000.0;
-// @limit: excel
-constexpr double kMaxRotationDeg = 3600.0;
-constexpr double kFullTurnDeg = 360.0;
 
 bool is_set(fm_patch_op_t op) {
   return op == FM_PATCH_OP_SET;
@@ -62,8 +56,10 @@ bool is_set(fm_patch_op_t op) {
 
 // The ops, strings and UTF-8 of the non-paint fields of `p`; none of them can be cleared.
 fm_status_t check_patch(const fm_shape_patch_t& p) {
-  const std::array<std::pair<fm_patch_op_t, const char*>, 2> plain = {
-      {{p.rotation_deg_op, "rotation_deg"}, {p.text_box_op, "text_box"}}};
+  const std::array<std::pair<fm_patch_op_t, const char*>, 4> plain = {{{p.rotation_deg_op, "rotation_deg"},
+                                                                       {p.text_box_op, "text_box"},
+                                                                       {p.flip_h_op, "flip_h"},
+                                                                       {p.flip_v_op, "flip_v"}}};
   for (const auto& [op, name] : plain) {
     if (!patch_op_ok_without_clear(op)) {
       return patch_op_refusal(op, name);
@@ -121,18 +117,24 @@ fm_status_t to_spec(const fm_shape_patch_t& p, formulon::ShapeSpec& spec) {
     spec.text_box = p.text_box != 0;
   }
   if (is_set(p.rotation_deg_op)) {
-    if (!std::isfinite(p.rotation_deg) || std::fabs(p.rotation_deg) > kMaxRotationDeg) {
-      return invalid_argument("rotation_deg must be in -3600..3600",
-                              "rotation_deg=" + formulon::fixed_string(p.rotation_deg, 6));
+    if (auto rc = rotation_units_from_deg(p.rotation_deg, &spec.rotation); rc != 0) {
+      return rc;
     }
-    double turned = std::fmod(p.rotation_deg, kFullTurnDeg);
-    if (turned < 0.0) {
-      turned += kFullTurnDeg;
-    }
-    const std::int64_t units = std::llround(turned * kRotationUnitsPerDegree);
     spec.fields |= field::kRotation;
-    spec.rotation =
-        static_cast<std::int32_t>(units % static_cast<std::int64_t>(kFullTurnDeg * kRotationUnitsPerDegree));
+  }
+  if (is_set(p.flip_h_op)) {
+    if (auto rc = check_flag(p.flip_h, "flip_h"); rc != 0) {
+      return rc;
+    }
+    spec.fields |= field::kFlipH;
+    spec.flip_h = p.flip_h != 0;
+  }
+  if (is_set(p.flip_v_op)) {
+    if (auto rc = check_flag(p.flip_v, "flip_v"); rc != 0) {
+      return rc;
+    }
+    spec.fields |= field::kFlipV;
+    spec.flip_v = p.flip_v != 0;
   }
   return 0;
 }
@@ -234,7 +236,9 @@ extern "C" fm_status_t fm_sheet_get_shape(const fm_workbook_t* wb, size_t sheet_
     out->kind = static_cast<int32_t>(info.object.kind);
     out->fill = chart_fill_to_c(info.paint_fill);
     out->line = chart_line_to_c(info.paint_line);
-    out->rotation_deg = static_cast<double>(info.rotation) / kRotationUnitsPerDegree;
+    out->rotation_deg = rotation_deg_from_units(info.rotation);
+    out->flip_h = info.flip_h ? 1 : 0;
+    out->flip_v = info.flip_v ? 1 : 0;
     out->text_box = info.text_box ? 1 : 0;
     out->preset_geometry = info.prst.empty() ? nullptr : store_cstr(store, info.prst);
     out->text = store_cstr(store, info.text);
@@ -294,6 +298,20 @@ extern "C" fm_status_t fm_sheet_add_shape(fm_workbook_t* wb, size_t sheet_index,
   if (spec->text_box != 0) {
     fields.text_box_op = FM_PATCH_OP_SET;
     fields.text_box = spec->text_box;
+  }
+  for (const auto& [flag, name] : {std::pair<std::int32_t, const char*>{spec->flip_h, "flip_h"},
+                                   std::pair<std::int32_t, const char*>{spec->flip_v, "flip_v"}}) {
+    if (auto rc = check_enum_domain(flag, FM_TRISTATE_DEFAULT, FM_TRISTATE_TRUE, name); rc != 0) {
+      return rc;
+    }
+  }
+  if (spec->flip_h == FM_TRISTATE_TRUE) {
+    fields.flip_h_op = FM_PATCH_OP_SET;
+    fields.flip_h = 1;
+  }
+  if (spec->flip_v == FM_TRISTATE_TRUE) {
+    fields.flip_v_op = FM_PATCH_OP_SET;
+    fields.flip_v = 1;
   }
   if (spec->preset_geometry != nullptr) {
     fields.preset_geometry_op = FM_PATCH_OP_SET;

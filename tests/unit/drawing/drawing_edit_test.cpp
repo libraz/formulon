@@ -1600,6 +1600,45 @@ TEST(DrawingAnchorUpdate, PairwiseCombinations) {
   }
 }
 
+TEST(DrawingPictureTransform, ReadsAndWritesRotationAndFlipsInExcelOrder) {
+  Workbook wb = OnePicture(RichAnchor("two", 2, 30));
+  auto read = get_picture_transform(wb, 0, 2);
+  ASSERT_TRUE(static_cast<bool>(read));
+  ASSERT_TRUE(read.value().has_value());
+  EXPECT_EQ(read.value()->rotation, 30 * 60000);
+  EXPECT_TRUE(read.value()->flip_h);
+  EXPECT_FALSE(read.value()->flip_v);
+  auto unknown = get_picture_transform(wb, 0, 99);
+  ASSERT_TRUE(static_cast<bool>(unknown));
+  EXPECT_FALSE(unknown.value().has_value());
+
+  PictureTransformPatch patch;
+  patch.rotation = -5400000;
+  patch.flip_h = false;
+  patch.flip_v = true;
+  ASSERT_TRUE(static_cast<bool>(update_picture(wb, 0, 2, nullptr, &patch)));
+  pugi::xml_document doc;
+  ParseDrawing(wb, doc);
+  const pugi::xml_node xfrm = PicXfrm(drawing_anchors(doc.document_element(), false)[0]);
+  EXPECT_STREQ(xfrm.first_attribute().name(), "rot");
+  EXPECT_STREQ(xfrm.attribute("rot").value(), "-5400000");
+  EXPECT_FALSE(xfrm.attribute("flipH"));
+  EXPECT_STREQ(xfrm.attribute("flipV").value(), "1");
+  EXPECT_TRUE(child_local(xfrm, "off"));
+  EXPECT_TRUE(child_local(xfrm, "ext"));
+
+  // Rotation 0 removes `rot`; the stored state patched to itself writes nothing.
+  PictureTransformPatch zero;
+  zero.rotation = 0;
+  ASSERT_TRUE(static_cast<bool>(update_picture(wb, 0, 2, nullptr, &zero)));
+  const Bytes after_zero = Part(wb, kDrawingPath)->bytes;
+  ASSERT_TRUE(static_cast<bool>(update_picture(wb, 0, 2, nullptr, &zero)));
+  EXPECT_EQ(Part(wb, kDrawingPath)->bytes, after_zero);
+  pugi::xml_document reread;
+  ParseDrawing(wb, reread);
+  EXPECT_FALSE(PicXfrm(drawing_anchors(reread.document_element(), false)[0]).attribute("rot"));
+}
+
 // Picture 2, shape 3 and picture 4 wrapped in mc:AlternateContent.
 Workbook ZOrderFixture() {
   const std::string shape = "<xdr:oneCellAnchor>" + Marker("from", 8, 0, 1, 0) +
@@ -1607,6 +1646,29 @@ Workbook ZOrderFixture() {
                             "<xdr:cNvPr id=\"3\" name=\"Oval 2\"/><xdr:cNvSpPr/></xdr:nvSpPr><xdr:spPr/></xdr:sp>"
                             "<xdr:clientData/></xdr:oneCellAnchor>";
   return OnePicture(RichAnchor("two", 2, 0) + shape + Wrapped(RichAnchor("one", 4, 0)));
+}
+
+TEST(DrawingPictureTransform, RefusalsLeaveTheDrawingAsItWas) {
+  Workbook wb = ZOrderFixture();
+  const Bytes before = Part(wb, kDrawingPath)->bytes;
+  PictureTransformPatch patch;
+  patch.rotation = 90 * 60000;
+  auto shape = update_picture(wb, 0, 3, nullptr, &patch);
+  ASSERT_FALSE(static_cast<bool>(shape));
+  EXPECT_EQ(shape.error().code, FormulonErrorCode::kInvalidArgument);
+  auto missing = update_picture(wb, 0, 99, nullptr, &patch);
+  ASSERT_FALSE(static_cast<bool>(missing));
+  EXPECT_EQ(missing.error().code, FormulonErrorCode::kNotFound);
+  auto none = get_picture_transform(wb, 0, 3);
+  ASSERT_TRUE(static_cast<bool>(none));
+  EXPECT_FALSE(none.value().has_value());
+
+  // A refused common half undoes the transform that was applied before it.
+  DrawingCommonPatch common;
+  common.name = "";
+  auto refused = update_picture(wb, 0, 2, &common, &patch);
+  ASSERT_FALSE(static_cast<bool>(refused));
+  EXPECT_EQ(Part(wb, kDrawingPath)->bytes, before);
 }
 
 std::vector<std::uint32_t> Ids(const Workbook& wb) {

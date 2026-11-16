@@ -566,6 +566,7 @@ class JsWorkbook {
 
   uint32_t insertShape(uint32_t sheet, emscripten::val spec);
   void updateShape(uint32_t sheet, uint32_t objectId, emscripten::val spec);
+  void updatePicture(uint32_t sheet, uint32_t objectId, emscripten::val spec);
   emscripten::val getShape(uint32_t sheet, uint32_t objectId) const;
 
   emscripten::val getSlicer(uint32_t sheet, uint32_t objectId) const;

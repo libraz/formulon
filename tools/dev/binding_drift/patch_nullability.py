@@ -15,12 +15,13 @@ from .surface_files import PYTHON_PKG_DIR, WASM_DTS, _read
 _PATCH_RECORD_FOR_SNAPSHOT: Dict[str, Optional[str]] = {
     "TableProperties": "record.table_patch",
     "ShapeProperties": "record.shape_patch",
+    "PictureProperties": "record.picture_patch",
     "SlicerProperties": "record.slicer_patch",
     "ChartProperties": "record.chart_display_patch",
     "DrawingProperties": None,
 }
 # `description` takes `None` on every drawing-family update by design (an empty description).
-_DRAWING_FAMILY_SNAPSHOTS = frozenset({"DrawingProperties", "ShapeProperties", "SlicerProperties"})
+_DRAWING_FAMILY_SNAPSHOTS = frozenset({"DrawingProperties", "PictureProperties", "ShapeProperties", "SlicerProperties"})
 _DRAWING_FAMILY_CLEARS = frozenset({"description"})
 # Class-name prefixes an op drops from its method name on its handle class.
 _HANDLE_PREFIXES = ("pivot_cache", "pivot", "chart", "table", "shape", "slicer", "drawing")

@@ -30,6 +30,15 @@ struct ShapeText {
   std::string text;
 };
 
+// Reads the optional boolean flip `owner[key]` as an `fm_tristate_t`; `null` is a TypeError.
+int32_t PullFlip(CheckedSpecReader& reader, const Napi::Object& owner, const char* key) {
+  if (reader.Get(owner, key).IsNull()) {
+    reader.FailNull(key);
+    return FM_TRISTATE_DEFAULT;
+  }
+  return reader.Tristate(owner, key);
+}
+
 // Reads a shape to add: the common placement keys plus the shape keys; an omitted key takes the default, and an
 // omitted or `null` `fill` / `line` is the shape style's paint.
 fm_shape_spec_t PullShapeSpec(CheckedSpecReader& reader, const Napi::Object& spec, ShapeText& store) {
@@ -42,6 +51,8 @@ fm_shape_spec_t PullShapeSpec(CheckedSpecReader& reader, const Napi::Object& spe
   s.preset_geometry =
       reader.String(spec, "presetGeometry", &store.preset_geometry) ? store.preset_geometry.c_str() : nullptr;
   s.text = reader.String(spec, "text", &store.text) ? store.text.c_str() : nullptr;
+  s.flip_h = PullFlip(reader, spec, "flipH");
+  s.flip_v = PullFlip(reader, spec, "flipV");
   return s;
 }
 
@@ -55,6 +66,8 @@ fm_shape_patch_t PullShapePatch(CheckedSpecReader& reader, const Napi::Object& s
   s.text_box_op = PatchBool(reader, spec, "textBox", &s.text_box);
   s.preset_geometry_op = PatchString(reader, spec, "presetGeometry", false, &store.preset_geometry, &s.preset_geometry);
   s.text_op = PatchString(reader, spec, "text", false, &store.text, &s.text);
+  s.flip_h_op = PatchBool(reader, spec, "flipH", &s.flip_h);
+  s.flip_v_op = PatchBool(reader, spec, "flipV", &s.flip_v);
   return s;
 }
 
@@ -129,6 +142,8 @@ Napi::Object ShapeToJs(Napi::Env env, const fm_shape_info_t& s) {
   item.Set("fill", FillOrNull(env, s.fill));
   item.Set("line", LineOrNull(env, s.line));
   item.Set("rotationDeg", JsNumber(env, s.rotation_deg));
+  item.Set("flipH", Napi::Boolean::New(env, s.flip_h != 0));
+  item.Set("flipV", Napi::Boolean::New(env, s.flip_v != 0));
   return item;
 }
 
@@ -176,6 +191,26 @@ Napi::Value Workbook::UpdateShape(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   return ValueOrThrow(env, fm_sheet_update_shape(handle_, ArgU32(info, 0), ArgU32(info, 1), &common, &shape),
+                      env.Undefined());
+}
+
+Napi::Value Workbook::UpdatePicture(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  CheckedSpecReader reader(env);
+  const Napi::Object spec = ArgObject(info, 2);
+  ShapeText store;
+  const fm_drawing_patch_t common = PullDrawingPatch(reader, spec, store.name, store.description);
+  fm_picture_patch_t picture = FM_STRUCT_INIT(fm_picture_patch_t);
+  picture.rotation_deg_op = PatchDouble(reader, spec, "rotationDeg", &picture.rotation_deg);
+  picture.flip_h_op = PatchBool(reader, spec, "flipH", &picture.flip_h);
+  picture.flip_v_op = PatchBool(reader, spec, "flipV", &picture.flip_v);
+  if (!reader.ok()) {
+    return env.Undefined();
+  }
+  return ValueOrThrow(env, fm_sheet_update_picture(handle_, ArgU32(info, 0), ArgU32(info, 1), &common, &picture),
                       env.Undefined());
 }
 

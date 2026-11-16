@@ -75,6 +75,7 @@ from ._workbook import (
     _id_array,
     _install_workbook_locks,
     _pack_drawing_patch,
+    _pack_picture_patch,
     _pack_shape_patch,
     _pack_slicer_patch,
     _read_chart,
@@ -113,7 +114,11 @@ _SHAPE_UPDATE_NAMES = (
     "fill",
     "line",
     "rotation_deg",
+    "flip_h",
+    "flip_v",
 )
+# The picture keys beside the common ones.
+_PICTURE_UPDATE_NAMES = ("rotation_deg", "flip_h", "flip_v")
 # The shape keys whose ``None`` clears the field to the style's paint.
 _CLEARABLE_SHAPE_NAMES = ("fill", "line")
 _SLICER_UPDATE_NAMES = ("caption", "style_name", "column_count", "row_height_pt", "sort_order", "cross_filter")
@@ -425,7 +430,7 @@ class Picture(_Snapshotable):
     __slots__ = ()
 
     def get_properties(self) -> PictureProperties:
-        """Return the picture's format, pixel size and a copy of its media bytes.
+        """Return the picture's format, pixel size, a copy of its media bytes, rotation and flips.
 
         Raises:
           NotFoundError: when the picture or its sheet was removed, or the
@@ -443,12 +448,57 @@ class Picture(_Snapshotable):
             if not LIB.read_u32(present):
                 raise FormulonError(StatusCode.NOT_FOUND, "the picture's media part is missing", "")
             d = S.IMAGE_INFO.unpack(LIB, info)
+            image_format = _enum(ImageFormat, d["format"])
+            media = LIB.read_bytes(LIB.read_u32(bytes_ptr), LIB.read_u32(len_ptr))
+            transform_present = scope.out_ptr()
+            transform = scope.struct(S.PICTURE_INFO)
+            _check(LIB.fm_sheet_get_picture_info(h, sheet, object_id, transform_present, transform))
+            if not LIB.read_u32(transform_present):
+                raise FormulonError(StatusCode.NOT_FOUND, "the picture's media part is missing", "")
+            t = S.PICTURE_INFO.unpack(LIB, transform)
             return PictureProperties(
-                format=_enum(ImageFormat, d["format"]),
+                format=image_format,
                 width_px=d["width_px"],
                 height_px=d["height_px"],
-                bytes=LIB.read_bytes(LIB.read_u32(bytes_ptr), LIB.read_u32(len_ptr)),
+                bytes=media,
+                rotation_deg=t["rotation_deg"],
+                flip_h=bool(t["flip_h"]),
+                flip_v=bool(t["flip_v"]),
             )
+
+    def update(
+        self,
+        *,
+        name: Union[str, Unchanged] = UNCHANGED,
+        description: Union[str, None, Unchanged] = UNCHANGED,
+        hidden: Union[bool, Unchanged] = UNCHANGED,
+        anchor: Union[DrawingAnchorInput, Unchanged] = UNCHANGED,
+        rotation_deg: Union[float, Unchanged] = UNCHANGED,
+        flip_h: Union[bool, Unchanged] = UNCHANGED,
+        flip_v: Union[bool, Unchanged] = UNCHANGED,
+    ) -> None:
+        """Apply the arguments that are given to the picture; the rest of its XML is kept.
+
+        An argument left at :data:`UNCHANGED` keeps its value. ``name``, ``description``, ``hidden`` and
+        ``anchor`` are those of :meth:`Drawing.update`; ``rotation_deg`` (stored as given, 0 removes it),
+        ``flip_h`` and ``flip_v`` are the picture's transform and apply first, so ``anchor`` resolves against
+        the new rotation. A rotation change alone never moves the anchor. Every argument is checked before
+        anything changes, and the call changes everything or nothing.
+
+        Raises:
+          TypeError: when an argument other than ``description`` is ``None`` or has the wrong type.
+          InvalidArgumentError: when ``rotation_deg`` is not finite or beyond about +/-35791 degrees.
+        """
+        arguments = dict(locals())
+        given = _present(arguments, _COMMON_UPDATE_NAMES + _PICTURE_UPDATE_NAMES, clearable=_CLEARABLE_COMMON_NAMES)
+        h, sheet, object_id = self._at()
+        with _ArgScope() as scope:
+            common = _common_patch(scope, given)
+            picture = 0
+            if any(key in given for key in _PICTURE_UPDATE_NAMES):
+                picture = _pack_picture_patch(scope, *(given.get(key) for key in _PICTURE_UPDATE_NAMES))
+            if common or picture:
+                _check(LIB.fm_sheet_update_picture(h, sheet, object_id, common, picture))
 
 
 class Chart(_Snapshotable):
@@ -1009,6 +1059,8 @@ class Shape(_Snapshotable):
         fill: Union[ChartFill, ChartFillPatch, None, Unchanged] = UNCHANGED,
         line: Union[ChartLine, ChartLinePatch, None, Unchanged] = UNCHANGED,
         rotation_deg: Union[float, Unchanged] = UNCHANGED,
+        flip_h: Union[bool, Unchanged] = UNCHANGED,
+        flip_v: Union[bool, Unchanged] = UNCHANGED,
     ) -> None:
         """Apply the arguments that are given to the shape; the rest of its XML is kept.
 
@@ -1017,8 +1069,9 @@ class Shape(_Snapshotable):
         own. ``fill`` and ``line`` are :class:`ChartFill` / :class:`ChartLine` records or patches; ``None``
         removes the shape's own paint so the one its style names applies, and a record that reads ``other``
         keeps the stored paint. Text applies to a shape only and keeps the first paragraph's
-        properties and first run's formatting. Every argument is checked before anything changes, and the
-        call changes everything or nothing.
+        properties and first run's formatting. ``rotation_deg`` is stored as given (0 removes it); ``flip_h``
+        and ``flip_v`` set or remove the flip attributes. Every argument is checked before anything changes,
+        and the call changes everything or nothing.
 
         Raises:
           TypeError: when an argument other than ``description`` is ``None`` or has the wrong type.

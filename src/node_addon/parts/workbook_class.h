@@ -598,6 +598,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   // Drawing shapes and sparkline groups.
   Napi::Value InsertShape(const Napi::CallbackInfo& info);
   Napi::Value UpdateShape(const Napi::CallbackInfo& info);
+  Napi::Value UpdatePicture(const Napi::CallbackInfo& info);
   Napi::Value GetShape(const Napi::CallbackInfo& info);
   Napi::Value GetSlicer(const Napi::CallbackInfo& info);
   Napi::Value AddSlicer(const Napi::CallbackInfo& info);

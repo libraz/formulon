@@ -50,6 +50,13 @@ fm_status_t apply_placement_extras(Workbook& wb, std::size_t sheet, std::uint32_
 /// anchor merge fields) and converts it into `*out`. Returns the status to report.
 fm_status_t drawing_patch_from_c(const fm_drawing_patch_t& patch, DrawingCommonPatch* out);
 
+/// Converts a rotation in degrees to the 60000ths of a degree `a:xfrm/@rot` stores, as given and rounded. Refuses a
+/// value that is not finite or whose count does not fit an int32. Returns the status to report.
+fm_status_t rotation_units_from_deg(double degrees, std::int32_t* out);
+
+/// The rotation in degrees that `a:xfrm/@rot` stores as `units`.
+double rotation_deg_from_units(std::int32_t units);
+
 /// Fills `*out` with the anchor of `obj` as the reads report it.
 void fill_drawing_anchor(const Workbook& wb, std::size_t sheet, const DrawingObject& obj, fm_drawing_anchor_t* out);
 

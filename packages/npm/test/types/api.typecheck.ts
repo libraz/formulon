@@ -1934,8 +1934,10 @@ import {
   type ChartFill,
   type ChartLine,
   type ImageInfo,
+  type ImageProperties,
   type Mention,
   type MentionInput,
+  type PicturePatch,
   type PictureProperties,
   type SheetComment,
   type CfRangeEvaluationOptions,
@@ -2036,6 +2038,14 @@ export function drawingPaintAndUnits(): void {
   void defaults.pivotStyle;
   const asImage: ImageInfo = pictureProps;
   const pictureBytes: Uint8Array = pictureProps.bytes;
+  const asImageProperties: ImageProperties = pictureProps;
+  const pictureRotation: number = pictureProps.rotationDeg;
+  const pictureFlipH: boolean = pictureProps.flipH;
+  const shapeFlipV: boolean = shapeProps.flipV;
+  const picturePatch: PicturePatch = { rotationDeg: 90, flipH: true, flipV: false };
+  // @ts-expect-error a flip is a boolean; null is not accepted
+  const nullFlip: PicturePatch = { flipH: null };
+  void [asImageProperties, pictureRotation, pictureFlipH, shapeFlipV, picturePatch, nullFlip];
   void [noFill, otherPaint, seriesFill, markerLine, overlapPct, holeSizePct, angleDeg, lineWidthPt];
   void [rowHeightPt, slicerStyle, defaultTableStyle, asImage, pictureBytes];
 }

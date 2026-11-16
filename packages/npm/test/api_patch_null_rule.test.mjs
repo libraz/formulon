@@ -147,6 +147,8 @@ const FAMILIES = {
       'anchor',
       'description',
       'fill',
+      'flipH',
+      'flipV',
       'hidden',
       'kind',
       'line',
@@ -166,6 +168,33 @@ const FAMILIES = {
         anchor: { kind: f.AnchorKind.OneCell, fromRow: 2, widthEmu: 914400, heightEmu: 457200 },
       }),
     apply: (_ws, patch, shape) => shape.update(patch),
+  },
+  'Picture.update': {
+    keys: [
+      'anchor',
+      'bytes',
+      'description',
+      'flipH',
+      'flipV',
+      'format',
+      'heightPx',
+      'hidden',
+      'kind',
+      'name',
+      'objectId',
+      'rotationDeg',
+      'widthPx',
+    ],
+    readOnly: ['bytes', 'format', 'heightPx', 'kind', 'objectId', 'widthPx'],
+    clearable: ['description'],
+    setup: (ws) =>
+      ws.addPicture(
+        Uint8Array.from(
+          atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='),
+          (c) => c.charCodeAt(0),
+        ),
+      ),
+    apply: (_ws, patch, picture) => picture.update(patch),
   },
   'Sheet.updateProtectedRange': {
     keys: [

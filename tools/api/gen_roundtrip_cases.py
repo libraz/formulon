@@ -72,6 +72,8 @@ PATCH_OVERRIDES: Dict[str, dict] = {
     "validation.update": {"id": "validation_update", "get": "validation.get", "create": ["validation.add"]},
     "threaded_comment.update": {"create": ["threaded_comment.add"]},
     "shape.update": {"create": ["shape.add"]},
+    # A picture is built from image bytes; its round trips live in the drawing suites.
+    "picture.update": {"skip": True},
     "slicer.update": {"create": ["table.create", "slicer.add"]},
     "sparkline_group.update": {"get": "sparkline_group.get", "create": ["sparkline_group.add"]},
     "pivot_grand_totals.set": {"create": _PIVOT},

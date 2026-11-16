@@ -37,7 +37,23 @@ emscripten::val shape_to_val(const fm_shape_info_t& s) {
   o.set("fill", chart_fill_to_val(s.fill));
   o.set("line", chart_line_to_val(s.line));
   o.set("rotationDeg", s.rotation_deg);
+  o.set("flipH", s.flip_h != 0);
+  o.set("flipV", s.flip_v != 0);
   return o;
+}
+
+/// Reads the optional boolean flip `owner[key]` as an `fm_tristate_t`; `null` is a type error, an omitted key is
+/// `FM_TRISTATE_DEFAULT`.
+int32_t pull_flip(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* key, const char* field) {
+  const emscripten::val value = reader.value(owner, key, field);
+  if (!reader.ok() || value.isUndefined()) {
+    return FM_TRISTATE_DEFAULT;
+  }
+  if (value.isNull()) {
+    reader.fail_null(field);
+    return FM_TRISTATE_DEFAULT;
+  }
+  return reader.boolean_value(value, false, field) ? FM_TRISTATE_TRUE : FM_TRISTATE_FALSE;
 }
 
 struct ShapeText {
@@ -60,6 +76,10 @@ fm_shape_patch_t pull_shape_patch(JsNarrowNumericReader& reader, const emscripte
   pull_chart_line_patch(reader, patch, "patch", &s.line);
   js_patch_value(reader, patch, "rotationDeg", "patch.rotationDeg", false, &s.rotation_deg_op, &s.rotation_deg,
                  [&](const emscripten::val& v) { return reader.number_value(v, 0.0, "patch.rotationDeg"); });
+  js_patch_value(reader, patch, "flipH", "patch.flipH", false, &s.flip_h_op, &s.flip_h,
+                 [&](const emscripten::val& v) { return reader.boolean_value(v, false, "patch.flipH") ? 1 : 0; });
+  js_patch_value(reader, patch, "flipV", "patch.flipV", false, &s.flip_v_op, &s.flip_v,
+                 [&](const emscripten::val& v) { return reader.boolean_value(v, false, "patch.flipV") ? 1 : 0; });
   return s;
 }
 
@@ -74,6 +94,8 @@ fm_shape_spec_t pull_shape_spec(JsNarrowNumericReader& reader, const emscripten:
   s.text_box = reader.boolean(spec, "textBox", false, "spec.textBox") ? 1 : 0;
   s.preset_geometry = reader.optional_string(spec, "presetGeometry", store.preset_geometry, "spec.presetGeometry");
   s.text = reader.optional_string(spec, "text", store.text, "spec.text");
+  s.flip_h = pull_flip(reader, spec, "flipH", "spec.flipH");
+  s.flip_v = pull_flip(reader, spec, "flipV", "spec.flipV");
   return s;
 }
 
@@ -226,6 +248,29 @@ void JsWorkbook::updateShape(uint32_t sheet, uint32_t objectId, emscripten::val 
     return;
   }
   succeeded(fm_sheet_update_shape(handle_, sheet, objectId, &common, &shape));
+}
+
+void JsWorkbook::updatePicture(uint32_t sheet, uint32_t objectId, emscripten::val spec) {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return;
+  }
+  JsNarrowNumericReader reader("Picture.update");
+  ShapeText store;
+  const emscripten::val options = js_object_or_empty(spec);
+  const fm_drawing_patch_t common = pull_drawing_patch(reader, options, "patch", store.name, store.description);
+  fm_picture_patch_t picture = FM_STRUCT_INIT(fm_picture_patch_t);
+  js_patch_value(reader, options, "rotationDeg", "patch.rotationDeg", false, &picture.rotation_deg_op,
+                 &picture.rotation_deg,
+                 [&](const emscripten::val& v) { return reader.number_value(v, 0.0, "patch.rotationDeg"); });
+  js_patch_value(reader, options, "flipH", "patch.flipH", false, &picture.flip_h_op, &picture.flip_h,
+                 [&](const emscripten::val& v) { return reader.boolean_value(v, false, "patch.flipH") ? 1 : 0; });
+  js_patch_value(reader, options, "flipV", "patch.flipV", false, &picture.flip_v_op, &picture.flip_v,
+                 [&](const emscripten::val& v) { return reader.boolean_value(v, false, "patch.flipV") ? 1 : 0; });
+  if (!reader.ok()) {
+    return;
+  }
+  succeeded(fm_sheet_update_picture(handle_, sheet, objectId, &common, &picture));
 }
 
 emscripten::val JsWorkbook::getShape(uint32_t sheet, uint32_t objectId) const {

@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <limits>
 #include <string>
 #include <vector>
 
@@ -315,6 +316,178 @@ TEST(FormulonCApiDrawing, AddPictureTakesSpecAndReportsPixelSize) {
   EXPECT_EQ(stored.width_px, 30U);
   EXPECT_EQ(stored.height_px, 12U);
   EXPECT_EQ(fm_sheet_add_picture(wb.handle, 0, png.data(), png.size(), nullptr, &id), kBindingNullPointer);
+}
+
+fm_picture_info_t PictureInfoOf(const fm_workbook_t* wb, std::uint32_t id, int32_t* present = nullptr) {
+  fm_picture_info_t out = FM_STRUCT_INIT(fm_picture_info_t);
+  int32_t local = 0;
+  EXPECT_EQ(fm_sheet_get_picture_info(wb, 0, id, present != nullptr ? present : &local, &out), 0)
+      << fm_get_last_error_message();
+  return out;
+}
+
+TEST(FormulonCApiDrawing, PictureTransformReadsPatchesAndKeepsTheAnchor) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  AddChartDrawing(wb.handle);
+  const Bytes png = Png(16, 8);
+  fm_drawing_placement_spec_t opts = Defaults();
+  uint32_t id = 0;
+  ASSERT_EQ(fm_sheet_add_picture(wb.handle, 0, png.data(), png.size(), &opts, &id), 0) << fm_get_last_error_message();
+
+  int32_t present = 0;
+  fm_picture_info_t info = PictureInfoOf(wb.handle, id, &present);
+  EXPECT_EQ(present, 1);
+  EXPECT_EQ(info.object_id, id);
+  EXPECT_DOUBLE_EQ(info.rotation_deg, 0.0);
+  EXPECT_EQ(info.flip_h, 0);
+  EXPECT_EQ(info.flip_v, 0);
+
+  fm_drawing_object_info_t anchor_before = FM_STRUCT_INIT(fm_drawing_object_info_t);
+  int32_t object_present = 0;
+  ASSERT_EQ(fm_sheet_get_drawing_object(wb.handle, 0, id, &object_present, &anchor_before), 0);
+
+  fm_picture_patch_t patch = FM_STRUCT_INIT(fm_picture_patch_t);
+  patch.rotation_deg_op = FM_PATCH_OP_SET;
+  patch.rotation_deg = -90.0;
+  patch.flip_h_op = FM_PATCH_OP_SET;
+  patch.flip_h = 1;
+  ASSERT_EQ(fm_sheet_update_picture(wb.handle, 0, id, nullptr, &patch), 0) << fm_get_last_error_message();
+  info = PictureInfoOf(wb.handle, id);
+  EXPECT_DOUBLE_EQ(info.rotation_deg, -90.0);
+  EXPECT_EQ(info.flip_h, 1);
+  EXPECT_EQ(info.flip_v, 0);
+  fm_drawing_object_info_t anchor_after = FM_STRUCT_INIT(fm_drawing_object_info_t);
+  ASSERT_EQ(fm_sheet_get_drawing_object(wb.handle, 0, id, &object_present, &anchor_after), 0);
+  EXPECT_EQ(anchor_after.anchor.from_row, anchor_before.anchor.from_row);
+  EXPECT_EQ(anchor_after.anchor.from_col, anchor_before.anchor.from_col);
+  EXPECT_EQ(anchor_after.anchor.width_emu, anchor_before.anchor.width_emu);
+  EXPECT_EQ(anchor_after.anchor.height_emu, anchor_before.anchor.height_emu);
+
+  // The media read is unchanged by the transform.
+  const uint8_t* got = nullptr;
+  size_t got_len = 0;
+  fm_image_info_t image = FM_STRUCT_INIT(fm_image_info_t);
+  ASSERT_EQ(fm_sheet_get_picture(wb.handle, 0, id, &present, &got, &got_len, &image), 0);
+  ASSERT_EQ(present, 1);
+  EXPECT_EQ(Bytes(got, got + got_len), png);
+
+  // Rotation 360 is stored as given; flips patched to false are removed; the common half applies in the same call.
+  fm_picture_patch_t again = FM_STRUCT_INIT(fm_picture_patch_t);
+  again.rotation_deg_op = FM_PATCH_OP_SET;
+  again.rotation_deg = 360.0;
+  again.flip_h_op = FM_PATCH_OP_SET;
+  again.flip_h = 0;
+  fm_drawing_patch_t common = FM_STRUCT_INIT(fm_drawing_patch_t);
+  common.name_op = FM_PATCH_OP_SET;
+  common.name = "Turned";
+  ASSERT_EQ(fm_sheet_update_picture(wb.handle, 0, id, &common, &again), 0) << fm_get_last_error_message();
+  info = PictureInfoOf(wb.handle, id);
+  EXPECT_DOUBLE_EQ(info.rotation_deg, 360.0);
+  EXPECT_EQ(info.flip_h, 0);
+  ASSERT_EQ(fm_sheet_get_drawing_object(wb.handle, 0, id, &object_present, &anchor_after), 0);
+  EXPECT_STREQ(anchor_after.name, "Turned");
+
+  // Neither half given changes nothing.
+  EXPECT_EQ(fm_sheet_update_picture(wb.handle, 0, id, nullptr, nullptr), 0) << fm_get_last_error_message();
+  EXPECT_DOUBLE_EQ(PictureInfoOf(wb.handle, id).rotation_deg, 360.0);
+}
+
+TEST(FormulonCApiDrawing, PictureTransformSurvivesReloadInBothFormats) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  const Bytes png = Png(16, 8);
+  fm_drawing_placement_spec_t opts = Defaults();
+  uint32_t id = 0;
+  ASSERT_EQ(fm_sheet_add_picture(wb.handle, 0, png.data(), png.size(), &opts, &id), 0) << fm_get_last_error_message();
+  fm_picture_patch_t patch = FM_STRUCT_INIT(fm_picture_patch_t);
+  patch.rotation_deg_op = FM_PATCH_OP_SET;
+  patch.rotation_deg = -30.0;
+  patch.flip_h_op = FM_PATCH_OP_SET;
+  patch.flip_h = 1;
+  patch.flip_v_op = FM_PATCH_OP_SET;
+  patch.flip_v = 1;
+  ASSERT_EQ(fm_sheet_update_picture(wb.handle, 0, id, nullptr, &patch), 0) << fm_get_last_error_message();
+
+  for (const fm_workbook_format_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
+    BufferGuard buf;
+    ASSERT_EQ(fm_workbook_save(wb.handle, format, &buf.data, &buf.len), 0) << fm_get_last_error_message();
+    WorkbookGuard reloaded;
+    ASSERT_EQ(fm_workbook_load(buf.data, buf.len, nullptr, &reloaded.handle), 0) << fm_get_last_error_message();
+    int32_t present = 0;
+    const fm_picture_info_t info = PictureInfoOf(reloaded.handle, id, &present);
+    EXPECT_EQ(present, 1) << "format " << format;
+    EXPECT_DOUBLE_EQ(info.rotation_deg, -30.0) << "format " << format;
+    EXPECT_EQ(info.flip_h, 1) << "format " << format;
+    EXPECT_EQ(info.flip_v, 1) << "format " << format;
+  }
+}
+
+TEST(FormulonCApiDrawing, PictureTransformRefusals) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  AddChartDrawing(wb.handle);
+  const Bytes png = Png(16, 8);
+  fm_drawing_placement_spec_t opts = Defaults();
+  uint32_t id = 0;
+  ASSERT_EQ(fm_sheet_add_picture(wb.handle, 0, png.data(), png.size(), &opts, &id), 0) << fm_get_last_error_message();
+
+  // The chart (id 2) is not a picture; an unknown id is absent.
+  int32_t present = 1;
+  fm_picture_info_t info = FM_STRUCT_INIT(fm_picture_info_t);
+  ASSERT_EQ(fm_sheet_get_picture_info(wb.handle, 0, 2, &present, &info), 0);
+  EXPECT_EQ(present, 0);
+  present = 1;
+  ASSERT_EQ(fm_sheet_get_picture_info(wb.handle, 0, 99, &present, &info), 0);
+  EXPECT_EQ(present, 0);
+  EXPECT_EQ(fm_sheet_get_picture_info(wb.handle, 0, id, nullptr, &info), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_get_picture_info(wb.handle, 0, id, &present, nullptr), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_get_picture_info(wb.handle, 5, id, &present, &info), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+
+  fm_picture_patch_t patch = FM_STRUCT_INIT(fm_picture_patch_t);
+  patch.rotation_deg_op = FM_PATCH_OP_SET;
+  patch.rotation_deg = 10.0;
+  EXPECT_EQ(fm_sheet_update_picture(wb.handle, 0, 2, nullptr, &patch), kInvalidArgument);
+  EXPECT_EQ(fm_sheet_update_picture(wb.handle, 0, 99, nullptr, &patch), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(fm_sheet_update_picture(nullptr, 0, id, nullptr, &patch), kBindingNullPointer);
+  EXPECT_EQ(fm_sheet_update_picture(wb.handle, 5, id, nullptr, &patch), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+
+  const auto refused = [&](fm_picture_patch_t bad) {
+    EXPECT_EQ(fm_sheet_update_picture(wb.handle, 0, id, nullptr, &bad), kInvalidArgument);
+  };
+  fm_picture_patch_t bad = FM_STRUCT_INIT(fm_picture_patch_t);
+  bad.rotation_deg_op = FM_PATCH_OP_CLEAR;
+  refused(bad);
+  bad = FM_STRUCT_INIT(fm_picture_patch_t);
+  bad.flip_h_op = FM_PATCH_OP_CLEAR;
+  refused(bad);
+  bad = FM_STRUCT_INIT(fm_picture_patch_t);
+  bad.flip_v_op = static_cast<fm_patch_op_t>(3);
+  refused(bad);
+  bad = FM_STRUCT_INIT(fm_picture_patch_t);
+  bad.flip_h_op = FM_PATCH_OP_SET;
+  bad.flip_h = 2;
+  refused(bad);
+  for (const double value :
+       {std::numeric_limits<double>::quiet_NaN(), std::numeric_limits<double>::infinity(), 35792.0, -35792.0}) {
+    bad = FM_STRUCT_INIT(fm_picture_patch_t);
+    bad.rotation_deg_op = FM_PATCH_OP_SET;
+    bad.rotation_deg = value;
+    refused(bad);
+  }
+  // The largest whole-degree rotation that fits an int32 is accepted.
+  bad = FM_STRUCT_INIT(fm_picture_patch_t);
+  bad.rotation_deg_op = FM_PATCH_OP_SET;
+  bad.rotation_deg = 35791.0;
+  EXPECT_EQ(fm_sheet_update_picture(wb.handle, 0, id, nullptr, &bad), 0) << fm_get_last_error_message();
+  EXPECT_DOUBLE_EQ(PictureInfoOf(wb.handle, id).rotation_deg, 35791.0);
+
+  // A refused common half leaves the transform as it was.
+  fm_drawing_patch_t empty_name = FM_STRUCT_INIT(fm_drawing_patch_t);
+  empty_name.name_op = FM_PATCH_OP_SET;
+  empty_name.name = "";
+  EXPECT_EQ(fm_sheet_update_picture(wb.handle, 0, id, &empty_name, &patch), kInvalidArgument);
+  EXPECT_DOUBLE_EQ(PictureInfoOf(wb.handle, id).rotation_deg, 35791.0);
 }
 
 TEST(FormulonCApiDrawing, InsertSaveReloadKeepsBytes) {

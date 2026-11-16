@@ -897,10 +897,28 @@ const SHAPE = {
   cases: {
     rotationDeg: k(30),
     textBox: k(FLIP),
+    flipH: k(FLIP),
+    flipV: k(FLIP),
     presetGeometry: k('ellipse'),
     text: k('Hello'),
     fill: k({ color: '#FF0000' }, { get: (r) => argb(r.fill?.color), want: 0xffff0000 }),
     line: k({ color: '#00FF00' }, { get: (r) => argb(r.line?.color), want: 0xff00ff00 }),
+  },
+};
+
+const PNG_1X1 = Uint8Array.from(
+  atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='),
+  (c) => c.charCodeAt(0),
+);
+
+const PICTURE = {
+  make: (ws) => ({ picture: ws.addPicture(PNG_1X1) }),
+  update: ({ picture }, patch) => picture.update(patch),
+  read: ({ picture }) => picture.getProperties(),
+  cases: {
+    rotationDeg: k(-90),
+    flipH: k(FLIP),
+    flipV: k(FLIP),
   },
 };
 
@@ -1031,6 +1049,7 @@ const TYPES = {
   DrawingPatch: DRAWING,
   DrawingAnchorPatch: DRAWING_ANCHOR,
   ShapePatch: SHAPE,
+  PicturePatch: PICTURE,
   SlicerPatch: SLICER,
   SheetViewPatch: SHEET_VIEW,
   PivotFieldPatch: PIVOT_FIELD,

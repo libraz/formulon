@@ -196,8 +196,8 @@ int main(void) {
   _Static_assert(sizeof(((fm_shape_patch_t*)0)->line) == sizeof(fm_chart_line_patch_t),
                  "fm_shape_patch_t.line is a chart line patch");
   _Static_assert(FM_DRAWING_RESTORE_NEW_ID == 1u, "FM_DRAWING_RESTORE_NEW_ID changed");
-  _Static_assert(sizeof(fm_shape_info_t) == (sizeof(void*) == 4 ? 160 : 168), "fm_shape_info_t ABI layout changed");
-  _Static_assert(sizeof(fm_shape_spec_t) == (sizeof(void*) == 4 ? 240 : 264), "fm_shape_spec_t ABI layout changed");
+  _Static_assert(sizeof(fm_shape_info_t) == (sizeof(void*) == 4 ? 168 : 176), "fm_shape_info_t ABI layout changed");
+  _Static_assert(sizeof(fm_shape_spec_t) == (sizeof(void*) == 4 ? 248 : 272), "fm_shape_spec_t ABI layout changed");
   _Static_assert(sizeof(fm_slicer_info_t) == (sizeof(void*) == 4 ? 56 : 72), "fm_slicer_info_t ABI layout changed");
   _Static_assert(sizeof(fm_slicer_spec_t) == (sizeof(void*) == 4 ? 128 : 152), "fm_slicer_spec_t ABI layout changed");
   _Static_assert(sizeof(fm_data_table_t) == 60, "fm_data_table_t ABI layout changed");
@@ -205,7 +205,9 @@ int main(void) {
   _Static_assert(sizeof(fm_sparkline_group_t) == (sizeof(void*) == 4 ? 296 : 312),
                  "fm_sparkline_group_t ABI layout changed");
   // The common drawing fields share one patch; each kind's update takes its own fields only.
-  _Static_assert(sizeof(fm_shape_patch_t) == (sizeof(void*) == 4 ? 184 : 200), "fm_shape_patch_t ABI layout changed");
+  _Static_assert(sizeof(fm_shape_patch_t) == (sizeof(void*) == 4 ? 200 : 216), "fm_shape_patch_t ABI layout changed");
+  _Static_assert(sizeof(fm_picture_info_t) == 24, "fm_picture_info_t ABI layout changed");
+  _Static_assert(sizeof(fm_picture_patch_t) == 32, "fm_picture_patch_t ABI layout changed");
   _Static_assert(sizeof(fm_slicer_patch_t) == (sizeof(void*) == 4 ? 56 : 72), "fm_slicer_patch_t ABI layout changed");
   _Static_assert(sizeof(fm_sparkline_group_patch_t) == (sizeof(void*) == 4 ? 440 : 456),
                  "fm_sparkline_group_patch_t ABI layout changed");
@@ -215,6 +217,10 @@ int main(void) {
   fm_status_t (*update_drawing)(fm_workbook_t*, size_t, uint32_t, const fm_drawing_patch_t*) = fm_sheet_update_drawing;
   fm_status_t (*update_shape)(fm_workbook_t*, size_t, uint32_t, const fm_drawing_patch_t*, const fm_shape_patch_t*) =
       fm_sheet_update_shape;
+  fm_status_t (*update_picture)(fm_workbook_t*, size_t, uint32_t, const fm_drawing_patch_t*,
+                                const fm_picture_patch_t*) = fm_sheet_update_picture;
+  fm_status_t (*get_picture_info)(const fm_workbook_t*, size_t, uint32_t, int32_t*, fm_picture_info_t*) =
+      fm_sheet_get_picture_info;
   fm_status_t (*update_slicer)(fm_workbook_t*, size_t, uint32_t, const fm_drawing_patch_t*, const fm_slicer_patch_t*) =
       fm_sheet_update_slicer;
   fm_status_t (*update_sparkline_group)(fm_workbook_t*, size_t, const char*, const fm_sparkline_group_patch_t*) =
@@ -522,6 +528,8 @@ int main(void) {
   (void)get_sparkline_group;
   (void)drawing_patch;
   (void)update_shape;
+  (void)update_picture;
+  (void)get_picture_info;
   (void)update_slicer;
   (void)update_sparkline_group;
   (void)chart_data;

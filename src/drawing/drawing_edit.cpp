@@ -1052,4 +1052,79 @@ Expected<void, Error> update_drawing(Workbook& wb, std::size_t sheet, std::uint3
   return Expected<void, Error>::Ok();
 }
 
+namespace {
+
+bool is_picture_kind(DrawingObjectKind kind) {
+  return kind == DrawingObjectKind::kPicture;
+}
+
+constexpr const char* kNoPicture = "object_id does not name a picture";
+
+}  // namespace
+
+Expected<std::optional<PictureTransform>, Error> get_picture_transform(const Workbook& wb, std::size_t sheet,
+                                                                       std::uint32_t object_id) {
+  ASSIGN_OR_RETURN(std::string path, sheet_drawing_path(wb, sheet));
+  if (path.empty()) {
+    return std::optional<PictureTransform>{};
+  }
+  pugi::xml_document doc;
+  RETURN_IF_ERROR(load_drawing_part(wb, path, doc));
+  const pugi::xml_node target = find_drawing_object(doc.document_element(), object_id, is_picture_kind);
+  if (!target) {
+    return std::optional<PictureTransform>{};
+  }
+  const XfrmTransform t = read_xfrm_transform(object_xfrm(target));
+  return std::optional<PictureTransform>{PictureTransform{t.rot, t.flip_h, t.flip_v}};
+}
+
+Expected<void, Error> update_picture(Workbook& wb, std::size_t sheet, std::uint32_t object_id,
+                                     const DrawingCommonPatch* common, const PictureTransformPatch* picture) {
+  const bool has_picture = picture != nullptr && (picture->rotation || picture->flip_h || picture->flip_v);
+  if (!has_picture) {
+    return common != nullptr ? update_drawing(wb, sheet, object_id, *common) : Expected<void, Error>::Ok();
+  }
+  pugi::xml_document doc;
+  ASSIGN_OR_RETURN(std::string path, load_object_drawing(wb, sheet, doc));
+  const pugi::xml_node root = doc.document_element();
+  const pugi::xml_node target = find_drawing_object(root, object_id, is_picture_kind);
+  if (!target) {
+    return refuse_object(root, object_id, kNoPicture);
+  }
+  pugi::xml_node props = child_local(anchor_content(target), "spPr");
+  if (!props) {
+    return invalid("The picture has no shape properties");
+  }
+  pugi::xml_node xfrm = child_local(props, "xfrm");
+  const XfrmTransform current = read_xfrm_transform(xfrm);
+  XfrmTransform wanted = current;
+  wanted.rot = picture->rotation.value_or(current.rot);
+  wanted.flip_h = picture->flip_h.value_or(current.flip_h);
+  wanted.flip_v = picture->flip_v.value_or(current.flip_v);
+  std::vector<std::uint8_t> before;
+  const bool changed = wanted != current;
+  if (changed) {
+    for (const PassthroughPart& part : wb.passthrough_parts()) {
+      if (part.path == path) {
+        before = part.bytes;
+        break;
+      }
+    }
+    if (!xfrm) {
+      xfrm = props.prepend_child(
+          (prefix_of(child_local(child_local(anchor_content(target), "blipFill"), "blip")) + "xfrm").c_str());
+    }
+    write_xfrm_transform(xfrm, wanted);
+    RETURN_IF_ERROR(io::ooxml::store_part_dom(wb, path, doc));
+  }
+  if (common == nullptr) {
+    return Expected<void, Error>::Ok();
+  }
+  auto applied = update_drawing(wb, sheet, object_id, *common);
+  if (!applied && changed) {
+    (void)wb.replace_passthrough_part(path, std::move(before));
+  }
+  return applied;
+}
+
 }  // namespace formulon

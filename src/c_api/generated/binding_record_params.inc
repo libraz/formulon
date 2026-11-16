@@ -27,6 +27,7 @@ constexpr RecordParam kRecordParams[] = {
     {"Formulon.convertCivilToSerial", "date"},
     {"Formulon.convertSerialToCivil", "options"},
     {"Formulon.localizeFormula", "options"},
+    {"Picture.update", "patch"},
     {"Pivot.addDataField", "spec"},
     {"Pivot.addFilter", "spec"},
     {"Pivot.setDataField", "spec"},

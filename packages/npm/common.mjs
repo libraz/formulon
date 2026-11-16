@@ -1679,6 +1679,7 @@ const HANDLE_FORWARDERS = Object.freeze({
   'Picture.getProperties': 'getPicture',
   'Picture.setZOrder': 'setDrawingZOrder',
   'Picture.snapshot': 'snapshotDrawing',
+  'Picture.update': null,
   'Pivot.addDataField': 'addPivotDataField',
   'Pivot.addFieldItem': 'addPivotFieldItem',
   'Pivot.addFilter': 'addPivotFilter',
@@ -1989,6 +1990,24 @@ const PATCH_KEYS = Object.freeze({
     ],
   ],
   'Drawing.update': [0, ['anchor', 'description', 'hidden', 'kind', 'name', 'objectId']],
+  'Picture.update': [
+    0,
+    [
+      'anchor',
+      'bytes',
+      'description',
+      'flipH',
+      'flipV',
+      'format',
+      'heightPx',
+      'hidden',
+      'kind',
+      'name',
+      'objectId',
+      'rotationDeg',
+      'widthPx',
+    ],
+  ],
   'Pivot.updateField': [
     1,
     [
@@ -2053,6 +2072,8 @@ const PATCH_KEYS = Object.freeze({
       'anchor',
       'description',
       'fill',
+      'flipH',
+      'flipV',
       'hidden',
       'kind',
       'line',
@@ -2531,6 +2552,8 @@ const INPUT_KEYS = Object.freeze({
       'anchor',
       'description',
       'fill',
+      'flipH',
+      'flipV',
       'hidden',
       'kind',
       'line',
@@ -3242,6 +3265,7 @@ const READ_ONLY_KEYS = Object.freeze({
   'Chart.updatePoint': ['index'],
   'Chart.updateSeries': ['filtered', 'order', 'points', 'seriesId'],
   'Drawing.update': ['kind', 'objectId'],
+  'Picture.update': ['bytes', 'format', 'heightPx', 'kind', 'objectId', 'widthPx'],
   'Pivot.updateField': ['axis', 'cacheFieldIndex', 'groupBaseIndex', 'sourceName', 'subtotalFunctions'],
   'Pivot.updateFieldItem': ['cacheIndex', 'name'],
   'Shape.update': ['kind', 'objectId'],
@@ -4644,7 +4668,11 @@ const PATCH_FIELDS = Object.freeze({
   'Table.updateStyleOptions': bools('showFirstColumn', 'showLastColumn', 'showRowStripes', 'showColumnStripes'),
   'Shape.update': {
     ...strings('presetGeometry', 'text'),
-    ...bools('textBox'),
+    ...bools('textBox', 'flipH', 'flipV'),
+    rotationDeg: 'number',
+  },
+  'Picture.update': {
+    ...bools('flipH', 'flipV'),
     rotationDeg: 'number',
   },
   'Slicer.update': {
@@ -7011,7 +7039,17 @@ function makeFacade(Raw, registry, runtime) {
     }
   }
 
-  class Picture extends Drawing {}
+  // As `Shape.update`: the common keys and the transform keys are checked, then applied by one raw call.
+  class Picture extends Drawing {
+    update(patch) {
+      const where = 'Picture.update';
+      const [common, rest] = splitDrawingPatch(where, patch);
+      checkPatch(where, rest, PATCH_FIELDS[where], PATCH_NULLABLE[where]);
+      const input = appliedFields(rest, PATCH_FIELDS[where], PATCH_NULLABLE[where]);
+      const [raw, sheet, id] = drawingState.locate(this);
+      raw.updatePicture(sheet, id, { ...rawDrawingPatch(common), ...input });
+    }
+  }
 
   class Chart extends Drawing {
     // The record replaces the legend, a key it leaves out taking Excel's default; `null` removes the legend.

@@ -4,6 +4,7 @@
 // capturing, restoring and removing pictures and charts.
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -27,6 +28,7 @@
 #include "io/ooxml/part_dom.h"
 #include "passthrough_part.h"
 #include "utils/error.h"
+#include "utils/number_text.h"
 #include "workbook.h"
 
 using formulon::c_api::parts::anchor_kind_from_c;
@@ -255,6 +257,30 @@ void fill_drawing_anchor(const Workbook& wb, std::size_t sheet, const DrawingObj
   out->height_emu = cy;
 }
 
+namespace {
+/// `a:xfrm/@rot` counts 60000ths of a degree.
+constexpr double kRotationUnitsPerDegree = 60000.0;
+}  // namespace
+
+fm_status_t rotation_units_from_deg(double degrees, std::int32_t* out) {
+  const double units = degrees * kRotationUnitsPerDegree;
+  if (!std::isfinite(units) || std::fabs(units) >= 2147483648.0) {
+    return invalid_argument("rotation_deg must be finite and fit 60000ths of a degree in an int32",
+                            "rotation_deg=" + formulon::fixed_string(degrees, 6));
+  }
+  const std::int64_t rounded = std::llround(units);
+  if (rounded < std::numeric_limits<std::int32_t>::min() || rounded > std::numeric_limits<std::int32_t>::max()) {
+    return invalid_argument("rotation_deg must be finite and fit 60000ths of a degree in an int32",
+                            "rotation_deg=" + formulon::fixed_string(degrees, 6));
+  }
+  *out = static_cast<std::int32_t>(rounded);
+  return 0;
+}
+
+double rotation_deg_from_units(std::int32_t units) {
+  return static_cast<double>(units) / kRotationUnitsPerDegree;
+}
+
 fm_status_t drawing_patch_from_c(const fm_drawing_patch_t& patch, formulon::DrawingCommonPatch* out) {
   if (auto rc = check_record_size(patch); rc != 0) {
     return rc;
@@ -450,6 +476,88 @@ extern "C" fm_status_t fm_sheet_get_picture(const fm_workbook_t* wb, size_t shee
     return 0;
   }
   return 0;
+}
+
+extern "C" fm_status_t fm_sheet_get_picture_info(const fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                                 int32_t* out_present, fm_picture_info_t* out) {
+  clear_last_error();
+  if (out_present == nullptr || out == nullptr) {
+    return null_argument("out");
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  *out_present = 0;
+  const std::uint32_t struct_size = out->struct_size;
+  *out = fm_picture_info_t{};
+  out->struct_size = struct_size;
+  auto transform = formulon::get_picture_transform(wb->workbook(), sheet_index, object_id);
+  if (!transform) {
+    return set_last_error(transform.error());
+  }
+  if (transform.value()) {
+    out->object_id = object_id;
+    out->rotation_deg = formulon::c_api::parts::rotation_deg_from_units(transform.value()->rotation);
+    out->flip_h = transform.value()->flip_h ? 1 : 0;
+    out->flip_v = transform.value()->flip_v ? 1 : 0;
+    *out_present = 1;
+  }
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_update_picture(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
+                                               const fm_drawing_patch_t* common, const fm_picture_patch_t* picture) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return null_argument("wb");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  formulon::DrawingCommonPatch common_model;
+  if (common != nullptr) {
+    if (auto rc = drawing_patch_from_c(*common, &common_model); rc != 0) {
+      return rc;
+    }
+  }
+  formulon::PictureTransformPatch picture_model;
+  if (picture != nullptr) {
+    if (auto rc = check_record_size(*picture); rc != 0) {
+      return rc;
+    }
+    const std::pair<fm_patch_op_t, const char*> ops[] = {
+        {picture->rotation_deg_op, "rotation_deg"}, {picture->flip_h_op, "flip_h"}, {picture->flip_v_op, "flip_v"}};
+    for (const auto& [op, name] : ops) {
+      if (!patch_op_ok_without_clear(op)) {
+        return patch_op_refusal(op, name);
+      }
+    }
+    if (picture->rotation_deg_op == FM_PATCH_OP_SET) {
+      std::int32_t units = 0;
+      if (auto rc = formulon::c_api::parts::rotation_units_from_deg(picture->rotation_deg, &units); rc != 0) {
+        return rc;
+      }
+      picture_model.rotation = units;
+    }
+    if (picture->flip_h_op == FM_PATCH_OP_SET) {
+      if (auto rc = check_enum_domain(picture->flip_h, 0, 1, "flip_h"); rc != 0) {
+        return rc;
+      }
+      picture_model.flip_h = picture->flip_h != 0;
+    }
+    if (picture->flip_v_op == FM_PATCH_OP_SET) {
+      if (auto rc = check_enum_domain(picture->flip_v, 0, 1, "flip_v"); rc != 0) {
+        return rc;
+      }
+      picture_model.flip_v = picture->flip_v != 0;
+    }
+  }
+  return finish_status(formulon::update_picture(wb->workbook(), sheet_index, object_id,
+                                                common != nullptr ? &common_model : nullptr,
+                                                picture != nullptr ? &picture_model : nullptr));
 }
 
 extern "C" fm_status_t fm_sheet_get_cell_picture(const fm_workbook_t* wb, size_t sheet_index, uint32_t row,

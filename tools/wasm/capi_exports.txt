@@ -550,6 +550,7 @@ fm_sheet_get_drawing_object_count
 fm_sheet_get_drawing_object_at
 fm_sheet_get_drawing_object
 fm_sheet_get_picture
+fm_sheet_get_picture_info
 fm_sheet_get_cell_picture
 fm_sheet_set_cell_picture
 fm_sheet_add_picture
@@ -602,6 +603,7 @@ fm_sheet_set_chart_source
 fm_sheet_get_shape
 fm_sheet_add_shape
 fm_sheet_update_shape
+fm_sheet_update_picture
 fm_sheet_get_slicer
 fm_sheet_add_slicer
 fm_sheet_update_slicer

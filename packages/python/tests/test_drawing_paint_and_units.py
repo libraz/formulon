@@ -335,9 +335,12 @@ class PictureTests(unittest.TestCase):
             props = pic.get_properties()
             self.assertIsInstance(props, ImageInfo)
             self.assertEqual((props.format, props.width_px, props.height_px, props.bytes), (ImageFormat.PNG, 4, 3, png))
+            # A picture adds its transform to the image part it shares with a cell picture.
             self.assertEqual(
-                {f.name for f in dataclasses.fields(PictureProperties)}, {"format", "width_px", "height_px", "bytes"}
+                {f.name for f in dataclasses.fields(PictureProperties)},
+                {"format", "width_px", "height_px", "bytes", "rotation_deg", "flip_h", "flip_v"},
             )
+            self.assertEqual((props.rotation_deg, props.flip_h, props.flip_v), (0.0, False, False))
 
 
 if __name__ == "__main__":

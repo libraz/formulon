@@ -41,7 +41,9 @@ struct ShapeInfo {
   std::string prst;           ///< `a:prstGeom/@prst`; empty for custom geometry or a group.
   std::string text;           ///< Paragraphs joined with `\n`; empty for connectors and groups.
   bool text_box = false;      ///< `cNvSpPr/@txBox`.
-  std::int32_t rotation = 0;  ///< `a:xfrm/@rot` in 60000ths of a degree.
+  std::int32_t rotation = 0;  ///< `a:xfrm/@rot` in 60000ths of a degree, as stored.
+  bool flip_h = false;        ///< `a:xfrm/@flipH`.
+  bool flip_v = false;        ///< `a:xfrm/@flipV`.
   /// The `spPr` fill and outline as the chart paint model reads them; `other`
   /// marks a gradient, pattern or picture paint the record cannot state.
   ChartFill paint_fill;
@@ -57,7 +59,9 @@ inline constexpr std::uint32_t kText = 1U << 3;
 inline constexpr std::uint32_t kTextBox = 1U << 4;
 inline constexpr std::uint32_t kRotation = 1U << 5;
 inline constexpr std::uint32_t kHidden = 1U << 6;
-inline constexpr std::uint32_t kAll = (1U << 7) - 1U;
+inline constexpr std::uint32_t kFlipH = 1U << 7;
+inline constexpr std::uint32_t kFlipV = 1U << 8;
+inline constexpr std::uint32_t kAll = (1U << 9) - 1U;
 }  // namespace shape_field
 
 /// Values for an insert or update; fields outside `fields` are ignored.
@@ -77,7 +81,9 @@ struct ShapeSpec {
   AnchorPoint to;
   std::int64_t cx = 0;
   std::int64_t cy = 0;
-  std::int32_t rotation = 0;
+  std::int32_t rotation = 0;  ///< 60000ths of a degree, stored as given; 0 removes `rot`.
+  bool flip_h = false;        ///< `kFlipH`; false removes the attribute.
+  bool flip_v = false;        ///< `kFlipV`.
   bool hidden = false;
   /// Fill and outline edits in the chart paint model, applied whatever
   /// `fields` says; a Clear field returns that part to the style's paint.

@@ -243,6 +243,14 @@
       "scale_pct"
     ]
   },
+  "PicturePatch": {
+    "clearable": [],
+    "non_clearable": [
+      "flip_h",
+      "flip_v",
+      "rotation_deg"
+    ]
+  },
   "PivotCacheOptionsPatch": {
     "clearable": [
       "missing_items_limit"
@@ -357,6 +365,8 @@
       "line"
     ],
     "non_clearable": [
+      "flip_h",
+      "flip_v",
       "preset_geometry",
       "rotation_deg",
       "text",

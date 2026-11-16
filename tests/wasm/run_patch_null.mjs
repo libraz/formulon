@@ -77,6 +77,8 @@ const FAMILIES = {
       'fill',
       'line',
       'rotationDeg',
+      'flipH',
+      'flipV',
     ],
     // `description` takes `null` on every drawing object.
     clearable: ['description', 'fill', 'line'],

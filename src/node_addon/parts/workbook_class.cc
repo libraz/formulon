@@ -510,6 +510,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::RestoreDrawing, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("restoreDrawing"),
           GuardedInstanceMethod<&Workbook::InsertShape, 0x1ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x2ULL>("addShape"),
           GuardedInstanceMethod<&Workbook::UpdateShape, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("updateShape"),
+          GuardedInstanceMethod<&Workbook::UpdatePicture, 0x3ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x4ULL>("updatePicture"),
           GuardedInstanceMethod<&Workbook::GetShape, 0x3ULL>("getShape"),
           GuardedInstanceMethod<&Workbook::GetSlicer, 0x3ULL>("getSlicer"),
           GuardedInstanceMethod<&Workbook::AddSlicer, 0xFULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x0ULL, 0x10ULL>("addSlicer"),
