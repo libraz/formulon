@@ -167,7 +167,7 @@ TEST(ValueRefTest, BoundariesDegradeEscapingValuesToValueError) {
     ASSERT_NE(cell, nullptr);
     EXPECT_TRUE(cell->cached_value.is_error());
 
-    EvalState state;
+    eval::EvalState state;
     state.memoize(&sheet, 1U, 1U, v);
     const Value* memo = state.lookup_memo(&sheet, 1U, 1U);
     ASSERT_NE(memo, nullptr);
