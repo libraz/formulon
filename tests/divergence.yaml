@@ -1017,7 +1017,7 @@ entries:
     mode: skip-oracle
     scope: api-contract
     evidence: [tests/unit/workbook_table_flow2b_test.cpp]
-    reason: "A table created from a header-only range over occupied cells carries insertRowShift. Resizing it while the mark is set is a silent no-op in Mac Excel: ListObject.Resize returns without error and the range and both marks stay. Formulon refuses that resize with PreconditionFailed instead, since a call reporting success while changing nothing gives the caller no way to tell it was ignored."
+    reason: "A table created from a header-only range over occupied cells carries insertRowShift. Mac Excel declines a resize while the mark is set: ListObject.Resize returns without error and the range and both marks stay. Formulon leaves the workbook in the same state and differs only in how the call reports: it returns PreconditionFailed for the declined edit, since a success status for an edit that changed nothing would give the caller no way to tell it was ignored."
     prefer: formulon
     first_noted: 2026-11-10
     last_verified_excel_version: "16.114"
