@@ -1,0 +1,237 @@
+{
+  "suite": "lookup_approx_whole_axis",
+  "description": "An approximate lookup (MATCH type 1, LOOKUP, VLOOKUP with TRUE) bisects a whole-column reference over its declared length, the blank cells past the populated ones included. On a column that is not sorted the whole column and the bounded reference to the populated cells probe different rows: here the whole-column bisection reaches C4 (a small value after larger ones) while the bounded one stops at C1.\n",
+  "environment": {
+    "excel_version": "16.115",
+    "excel_locale": "ru-RU",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-11-16T20:32:43Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "match_whole_column_unsorted",
+      "formula": "=MATCH(15,C:C,1)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "match_bounded_unsorted",
+      "formula": "=MATCH(15,C1:C4,1)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "lookup_whole_column_unsorted",
+      "formula": "=LOOKUP(15,C:C,D:D)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 400.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 400.0
+      }
+    },
+    {
+      "id": "lookup_bounded_unsorted",
+      "formula": "=LOOKUP(15,C1:C4,D1:D4)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 400.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    },
+    {
+      "id": "vlookup_whole_column_unsorted",
+      "formula": "=VLOOKUP(15,C:D,2,TRUE)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 400.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 400.0
+      }
+    },
+    {
+      "id": "vlookup_bounded_unsorted",
+      "formula": "=VLOOKUP(15,C1:D4,2,TRUE)",
+      "setup": {
+        "C1": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "C2": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "C3": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "C4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 100.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 200.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 300.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 400.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
+      }
+    }
+  ]
+}

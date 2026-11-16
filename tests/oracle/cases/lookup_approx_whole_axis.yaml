@@ -1,0 +1,40 @@
+suite: lookup_approx_whole_axis
+description: >
+  An approximate lookup (MATCH type 1, LOOKUP, VLOOKUP with TRUE) bisects a
+  whole-column reference over its declared length, the blank cells past the
+  populated ones included. On a column that is not sorted the whole column and
+  the bounded reference to the populated cells probe different rows: here the
+  whole-column bisection reaches C4 (a small value after larger ones) while the
+  bounded one stops at C1.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: match_whole_column_unsorted
+    description: 'whole column: 4'
+    setup: { C1: 10, C2: 20, C3: 30, C4: 1 }
+    formula: '=MATCH(15,C:C,1)'
+
+  - id: match_bounded_unsorted
+    description: 'bounded to the populated cells: 1'
+    setup: { C1: 10, C2: 20, C3: 30, C4: 1 }
+    formula: '=MATCH(15,C1:C4,1)'
+
+  - id: lookup_whole_column_unsorted
+    description: 'whole column: D4'
+    setup: { C1: 10, C2: 20, C3: 30, C4: 1, D1: 100, D2: 200, D3: 300, D4: 400 }
+    formula: '=LOOKUP(15,C:C,D:D)'
+
+  - id: lookup_bounded_unsorted
+    description: 'bounded: D1'
+    setup: { C1: 10, C2: 20, C3: 30, C4: 1, D1: 100, D2: 200, D3: 300, D4: 400 }
+    formula: '=LOOKUP(15,C1:C4,D1:D4)'
+
+  - id: vlookup_whole_column_unsorted
+    description: 'whole columns: D4'
+    setup: { C1: 10, C2: 20, C3: 30, C4: 1, D1: 100, D2: 200, D3: 300, D4: 400 }
+    formula: '=VLOOKUP(15,C:D,2,TRUE)'
+
+  - id: vlookup_bounded_unsorted
+    description: 'bounded: D1'
+    setup: { C1: 10, C2: 20, C3: 30, C4: 1, D1: 100, D2: 200, D3: 300, D4: 400 }
+    formula: '=VLOOKUP(15,C1:D4,2,TRUE)'
