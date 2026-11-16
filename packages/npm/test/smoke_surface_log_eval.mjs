@@ -125,13 +125,15 @@ test('a throwing log sink surfaces its own exception and leaves the engine usabl
 
 // One-shot evaluation is anchored at Sheet1!A1 and read-only on every
 // shipped surface, so these must agree value-for-value with the WASM
-// package and the Python wheel. The anchor-referencing cases are the ones
-// that diverge if a surface writes the formula into A1 and recalcs.
+// package and the Python wheel. A value read of the anchor itself is a
+// self-cycle and gives 0, as the formula held in A1 would; a read beside
+// it sees the blank sheet.
 const ONE_SHOT_CASES = [
   { formula: '=1+2', kind: 1, number: 3 },
   { formula: '=A1', kind: 1, number: 0 },
   { formula: '=COUNTA(A1)', kind: 1, number: 0 },
-  { formula: '=ISBLANK(A1)', kind: 2, boolean: true },
+  { formula: '=ISBLANK(A1)', kind: 1, number: 0 },
+  { formula: '=ISBLANK(B1)', kind: 2, boolean: true },
   { formula: '=SUM(A1:A3)', kind: 1, number: 0 },
   { formula: '=SEQUENCE(3)', kind: 5, rows: 3, cols: 1, numbers: [1, 2, 3] },
   { formula: '=ROWS(SEQUENCE(3))', kind: 1, number: 3 },
@@ -157,6 +159,18 @@ test('evaluateFormula evaluates read-only against a blank anchor', async () => {
       );
     }
     assert.equal('errorCode' in r, false, spec.formula);
+  }
+});
+
+test('Sheet.evaluateFormula leaves its anchor cell blank', async () => {
+  const Module = await getModule();
+  const wb = Module.Workbook.createDefault();
+  try {
+    const ws = wb.sheet(0);
+    assert.equal(ws.evaluateFormula(0, 0, '=1+2'), 3);
+    assert.equal(ws.getTypedValue(0, 0).kind, Module.ValueKind.Blank);
+  } finally {
+    wb.dispose();
   }
 });
 

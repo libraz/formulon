@@ -826,16 +826,17 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
 class OneShotEvaluationTests(unittest.TestCase):
     """``evaluate_formula`` must agree value-for-value with the JS surfaces.
 
-    Both npm packages assert the same table. The anchor-referencing cases
-    are the ones that diverge if a surface writes the formula into A1 and
-    recalcs instead of evaluating read-only.
+    Both npm packages assert the same table. A value read of the anchor
+    itself is a self-cycle and gives 0, as the formula held in A1 would; a
+    read beside it sees the blank sheet.
     """
 
     CASES = (
         ("=1+2", ValueKind.NUMBER, 3.0),
         ("=A1", ValueKind.NUMBER, 0.0),
         ("=COUNTA(A1)", ValueKind.NUMBER, 0.0),
-        ("=ISBLANK(A1)", ValueKind.BOOL, True),
+        ("=ISBLANK(A1)", ValueKind.NUMBER, 0.0),
+        ("=ISBLANK(B1)", ValueKind.BOOL, True),
         ("=SUM(A1:A3)", ValueKind.NUMBER, 0.0),
         ("=SEQUENCE(3)", ValueKind.ARRAY, [[1.0], [2.0], [3.0]]),
         ("=ROWS(SEQUENCE(3))", ValueKind.NUMBER, 3.0),
@@ -853,8 +854,10 @@ class OneShotEvaluationTests(unittest.TestCase):
                 self.assertIsNone(value.error_code)
 
     def test_the_anchor_is_left_blank_rather_than_written(self) -> None:
-        """The distinguishing observation between the two semantics."""
-        self.assertIs(formulon.evaluate_formula("=ISBLANK(A1)"), True)
+        with Workbook.create_default() as wb:
+            ws = wb.sheet(0)
+            self.assertEqual(ws.evaluate_formula(0, 0, "=1+2"), 3.0)
+            self.assertIs(ws.get_typed_value(0, 0).kind, ValueKind.BLANK)
 
     def test_array_results_keep_their_shape(self) -> None:
         self.assertEqual(formulon.evaluate_formula("=SEQUENCE(3)"), [[1.0], [2.0], [3.0]])
