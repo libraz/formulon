@@ -12,6 +12,7 @@
 
 #include "io/color_spec_xml.h"
 #include "io/ooxml_defs.h"
+#include "io/package_diagnostics.h"
 #include "io/sqref_text.h"
 #include "io/xml_utils.h"
 #include "parser/ast.h"
@@ -23,6 +24,7 @@
 #include "utils/resource_budget.h"
 #include "utils/runtime_id.h"
 #include "utils/status_macros.h"
+#include "utils/structured_log.h"
 #include "workbook.h"
 
 namespace formulon::io {
@@ -251,6 +253,16 @@ void set_color(pugi::xml_node group, const std::string& prefix, const char* name
   }
 }
 
+// The one range `text` names, a rectangle included; false for text that does not parse or names several.
+bool parse_one_range(std::string_view text, MergeRange& out) {
+  std::vector<MergeRange> cells;
+  if (!parse_sqref_text(text, cells) || cells.size() != 1U) {
+    return false;
+  }
+  out = cells.front();
+  return true;
+}
+
 Expected<void, Error> validate_items(const std::vector<SparklineItem>& items) {
   if (items.empty()) {
     return invalid("count must be at least 1");
@@ -260,9 +272,9 @@ Expected<void, Error> validate_items(const std::vector<SparklineItem>& items) {
                       limit_context("sparkline_items", items.size(), kMaxItems));
   }
   for (const SparklineItem& item : items) {
-    std::vector<MergeRange> cells;
-    if (!parse_sqref_text(item.location, cells) || cells.size() != 1U ||
-        cells.front().first_row != cells.front().last_row || cells.front().first_col != cells.front().last_col) {
+    MergeRange range;
+    if (!parse_one_range(item.location, range) || range.first_row != range.last_row ||
+        range.first_col != range.last_col) {
       return invalid("items each need one location cell");
     }
     if (!item.formula.empty() && !is_sparkline_source(item.formula)) {
@@ -433,6 +445,66 @@ std::vector<SparklineGroup> read_sparkline_groups(std::string_view ext_lst_xml) 
   for (pugi::xml_node node : group_nodes(doc)) {
     out.push_back(read_group(node));
   }
+  return out;
+}
+
+std::string normalize_sparkline_locations(const std::string& ext_lst_xml, ReadDiagnostics* diagnostics) {
+  pugi::xml_document doc;
+  if (ext_lst_xml.find("sparklineGroup") == std::string::npos || !load(doc, ext_lst_xml)) {
+    return ext_lst_xml;
+  }
+  bool changed = false;
+  for (pugi::xml_node group : group_nodes(doc)) {
+    std::vector<std::pair<pugi::xml_node, MergeRange>> rectangles;
+    bool readable = true;
+    for (pugi::xml_node item : children_local(child_local(group, "sparklines"), "sparkline")) {
+      pugi::xml_node sqref = child_local(item, "sqref");
+      MergeRange range;
+      if (!parse_one_range(sqref.text().get(), range)) {
+        readable = false;
+        break;
+      }
+      if (range.first_row != range.last_row || range.first_col != range.last_col) {
+        range.last_row = range.first_row;
+        range.last_col = range.first_col;
+        rectangles.emplace_back(sqref, range);
+      }
+    }
+    if (readable) {
+      for (const auto& [sqref, cell] : rectangles) {
+        sqref.text().set(format_sqref_text({cell}).c_str());
+        changed = true;
+      }
+      continue;
+    }
+    StructuredLog("io.sparkline.skip")
+        .field("reason", std::string_view("location is not one range"))
+        .error_code(FormulonErrorCode::kIoSheetCorrupt)
+        .warn();
+    if (diagnostics != nullptr) {
+      ++diagnostics->skipped_feature_count;
+    }
+    // Climb while the parent would be left without element children.
+    pugi::xml_node doomed = group;
+    while (doomed.parent() != doc.document_element()) {
+      pugi::xml_node parent = doomed.parent();
+      parent.remove_child(doomed);
+      if (has_element_child(parent)) {
+        doomed = pugi::xml_node();
+        break;
+      }
+      doomed = parent;
+    }
+    if (doomed) {
+      doc.document_element().remove_child(doomed);
+    }
+    changed = true;
+  }
+  if (!changed) {
+    return ext_lst_xml;
+  }
+  std::string out = ext_lst_xml;
+  store_root_xml(out, doc);
   return out;
 }
 

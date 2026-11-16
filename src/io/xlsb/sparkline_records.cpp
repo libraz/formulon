@@ -150,7 +150,7 @@ bool DecodeGroupHead(ByteSpan p, const FeatureFormulaReadContext& ctx, Sparkline
   return true;
 }
 
-/// BrtSparkline: FRTHeader with one single-cell FRTSqref and one FRTFormula,
+/// BrtSparkline: FRTHeader with one FRTSqref (a rectangle reads as its top-left cell) and one FRTFormula,
 /// or no formula for a deleted source.
 bool DecodeSparkline(ByteSpan p, const FeatureFormulaReadContext& ctx, SparklineItem& item) {
   auto flags = read_u32(p);
@@ -158,10 +158,12 @@ bool DecodeSparkline(ByteSpan p, const FeatureFormulaReadContext& ctx, Sparkline
   auto sqref_flags = read_u32(p);
   std::vector<MergeRange> cells;
   if (!flags || (flags.value() != (kFrtHeaderSqrefs | kFrtHeaderFormulas) && flags.value() != kFrtHeaderSqrefs) ||
-      !count || count.value() != 1U || !sqref_flags || !read_sqref(p, cells) || cells.size() != 1U ||
-      cells[0].first_row != cells[0].last_row || cells[0].first_col != cells[0].last_col) {
+      !count || count.value() != 1U || !sqref_flags || !read_sqref(p, cells) || cells.size() != 1U) {
     return false;
   }
+  // A rectangle keeps its top-left cell, as Excel saves it.
+  cells[0].last_row = cells[0].first_row;
+  cells[0].last_col = cells[0].first_col;
   item.location = format_sqref_text(cells);
   if (flags.value() == kFrtHeaderSqrefs) {
     item.formula = kDeletedSource;

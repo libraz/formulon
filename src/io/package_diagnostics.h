@@ -69,10 +69,13 @@ struct ReadDiagnostics {
   /// a file that carries either, in .xlsx and .xlsb alike), and one per .xlsb
   /// table part dropped, with its relationship, because it could not be read
   /// far enough to clear those slots.
+  /// Also counts one per .xlsx sparkline group dropped because an item's
+  /// location is not one range.
   /// Also counts one per defined name whose `xlm` macro flag an .xlsx load
   /// drops because the book has no macro sheet.
   /// Fed by: `io.sheet.overlay.skip`, `io.cf.skip`, `io.sheet.formula.data_table_skip`,
-  /// `io.table.column_header.skip`, `io.defined_name.macro_flag_dropped`, `xlsb.table.unreadable_dropped`.
+  /// `io.table.column_header.skip`, `io.defined_name.macro_flag_dropped`, `io.sparkline.skip`,
+  /// `xlsb.table.unreadable_dropped`.
   std::uint32_t skipped_feature_count = 0;
   /// Workbook parts whose declared content type was unrecognised, so the
   /// read fell back to `WorkbookKind::kXlsx`. At most 1 per read.

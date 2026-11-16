@@ -29,6 +29,8 @@ class Workbook;
 
 namespace formulon::io {
 
+struct ReadDiagnostics;
+
 /// One sparkline: the data `formula` (`xm:f`, sheet-qualified range text
 /// without `=`) and the single cell `location` (`xm:sqref`) that shows it.
 /// An empty `formula` is an absent `xm:f`: the source was deleted.
@@ -91,6 +93,13 @@ bool is_sparkline_source(std::string_view text);
 /// Whether `text` is a deleted reference (`#REF!`), which is stored as an
 /// absent `xm:f`.
 bool is_deleted_sparkline_source(std::string_view text);
+
+/// Load-time normalisation of the sparkline locations in `ext_lst_xml`: an
+/// item stored over a rectangle keeps its top-left cell, and a group with an
+/// item whose `xm:sqref` is not one range is dropped, with the `ext` and
+/// `extLst` once nothing remains in them. Each dropped group is one
+/// `diagnostics->skipped_feature_count` (null counts nothing).
+std::string normalize_sparkline_locations(const std::string& ext_lst_xml, ReadDiagnostics* diagnostics);
 
 /// Appends `group` with its `items`; a `#REF!` source or date-axis reference
 /// is stored absent. Fails with `kInvalidArgument` for no items, an item whose

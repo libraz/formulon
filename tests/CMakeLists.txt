@@ -92,6 +92,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/cf_overlay_test.cpp
   unit/io/cf_reader_test.cpp
   unit/io/cf_writer_test.cpp
+  unit/io/sparkline_groups_test.cpp
   unit/io/comments_roundtrip_test.cpp
   unit/io/data_validation_roundtrip_test.cpp
   unit/io/defined_names_test.cpp
