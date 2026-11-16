@@ -2,11 +2,11 @@
   "suite": "regression_advanced",
   "description": "Advanced regression family — LINEST, TREND, LOGEST, GROWTH, FREQUENCY (Excel 365). 35 perspectives (7 per function). Array-aware oracle capture makes most spill outputs live; remaining skip-oracle entries are limited to numerically unstable perfect-fit F-statistic slots and an empty bins-array literal read-back quirk. Tolerance widened to 1e-10 for stats-block fit metrics.",
   "environment": {
-    "excel_version": "16.113.4",
+    "excel_version": "16.115",
     "excel_locale": "ko-KR",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-17T17:34:05Z"
+    "generated_at": "2026-11-16T12:48:20Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -542,6 +542,61 @@
         ],
         "shape": [
           4,
+          1
+        ]
+      }
+    },
+    {
+      "id": "frequency_bins_counted_at_given_position",
+      "formula": "=FREQUENCY(0,{2,0,2})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          0.0,
+          1.0,
+          0.0,
+          0.0
+        ],
+        "shape": [
+          4,
+          1
+        ]
+      }
+    },
+    {
+      "id": "frequency_unsorted_row_bins",
+      "formula": "=FREQUENCY({1,3,5,7},{6,2,4})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "shape": [
+          4,
+          1
+        ]
+      }
+    },
+    {
+      "id": "frequency_duplicate_bins_first_takes",
+      "formula": "=FREQUENCY({1,2,2,3,5},{3,1,3,2})",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          1.0,
+          0.0,
+          2.0,
+          1.0
+        ],
+        "shape": [
+          5,
           1
         ]
       }
