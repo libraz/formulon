@@ -4965,6 +4965,13 @@ function tableRange(raw, sheet, range, where) {
   if (typeof range === 'string') {
     const ref = raw.parseReference(range);
     onSheet = ref.sheetName === null ? sheet : raw.getSheetIndex(ref.sheetName);
+    if (onSheet === null) {
+      throw new FormulonError(
+        StatusCode.NotFound,
+        `${argLabel(where, 0, 'range')} names no sheet of this workbook`,
+        `sheet_name=${ref.sheetName}`,
+      );
+    }
     rect = ref.rect;
   } else if (isObject(range) && range.rect === undefined) {
     onSheet = sheet;
