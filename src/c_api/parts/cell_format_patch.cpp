@@ -45,8 +45,14 @@ using formulon::c_api::parts::validate;
 
 namespace {
 
+// A font charset is one byte in both file formats.
+// @limit: format
 constexpr std::int64_t kMaxCharset = 255;
+// The xlsb cell format stores the indent level in one byte.
+// @limit: format
 constexpr std::uint32_t kMaxIndent = 255U;
+// Rotation degrees run 0..180 in both file formats; 255 is the vertical-text marker.
+// @limit: format
 constexpr std::uint32_t kMaxTextRotation = 180U;
 constexpr std::uint32_t kVerticalTextRotation = 255U;
 constexpr std::int32_t kLastReadingOrder = FM_READING_ORDER_RIGHT_TO_LEFT;
