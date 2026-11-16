@@ -721,8 +721,8 @@ typedef struct {
    * slicers), a workbook setting (protection, properties, book views), a custom table style, each custom view and each
    * custom sheet view without its workbook view, and rich values kept as stored. XLSX: rich values kept as stored
    * because their rich-data layout cannot be regenerated, each PivotTable of an XLSB source the reader could not
-   * model, and each custom view of an XLSB source with no XLSX form (such as one with an AutoFilter, a header/footer
-   * or manual page breaks). */
+   * model, each custom view of an XLSB source with no XLSX form (one holding an automatic page break), and each
+   * print record family of an XLSB sheet the model cannot state exactly, which is kept for an XLSB save only. */
   uint32_t deferred_feature_count;
   /** The number of passthrough parts dropped for colliding with a generated path, or for two entries claiming one path.
    *  Applies to both containers. */
