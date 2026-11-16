@@ -43,6 +43,12 @@ void mark_formulas_dirty_if_fonts_changed(Workbook& wb, const Theme& before);
 /// Implements `Workbook::load_theme`.
 LoadedTheme load_theme(const Workbook& wb);
 
+/// Removes `defaultThemeVersion` from `<workbookPr>`, as Excel does after it
+/// changes a theme: Mac Excel opens a book naming that version with the built-in
+/// theme in place of the part. An empty fragment becomes `<workbookPr/>` so the
+/// xlsb writer does not write its default version back.
+void drop_default_theme_version(Workbook& wb);
+
 /// Implements `Workbook::set_theme_colors`.
 Expected<void, Error> set_theme_colors(Workbook& wb, const ThemeColors& colors);
 

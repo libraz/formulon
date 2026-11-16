@@ -286,6 +286,21 @@ LoadedTheme load_theme(const Workbook& wb) {
   return out;
 }
 
+void drop_default_theme_version(Workbook& wb) {
+  const std::string& raw = wb.workbook_pr_xml();
+  pugi::xml_document doc;
+  const std::string_view source = raw.empty() ? std::string_view("<workbookPr/>") : std::string_view(raw);
+  if (!doc.load_buffer(source.data(), source.size(), pugi::parse_default, pugi::encoding_utf8)) {
+    return;
+  }
+  pugi::xml_node root = doc.first_child();
+  if (!root || std::string_view(root.name()) != "workbookPr") {
+    return;
+  }
+  root.remove_attribute("defaultThemeVersion");
+  wb.set_workbook_pr_xml(raw_xml(root));
+}
+
 Expected<void, Error> set_theme_colors(Workbook& wb, const ThemeColors& colors) {
   pugi::xml_document doc;
   auto path_or = open_theme_for_edit(wb, doc);
@@ -301,7 +316,9 @@ Expected<void, Error> set_theme_colors(Workbook& wb, const ThemeColors& colors) 
     }
     set_attr(slot.append_child((prefix + "srgbClr").c_str()), "val", hex6(colors[i]));
   }
-  return ooxml::store_part_dom(wb, path_or.value(), doc);
+  RETURN_IF_ERROR(ooxml::store_part_dom(wb, path_or.value(), doc));
+  drop_default_theme_version(wb);
+  return Expected<void, Error>();
 }
 
 Expected<void, Error> set_theme_fonts(Workbook& wb, const ThemeFonts& fonts) {
@@ -321,6 +338,7 @@ Expected<void, Error> set_theme_fonts(Workbook& wb, const ThemeFonts& fonts) {
   patch_font(major, fonts.major_latin, fonts.major_ea);
   patch_font(minor, fonts.minor_latin, fonts.minor_ea);
   RETURN_IF_ERROR(ooxml::store_part_dom(wb, path_or.value(), doc));
+  drop_default_theme_version(wb);
   mark_formulas_dirty_if_fonts_changed(wb, before);
   return Expected<void, Error>();
 }
@@ -349,6 +367,7 @@ Expected<void, Error> set_theme_script_font(Workbook& wb, bool major, std::strin
   const Theme before = load_theme(wb).theme;
   set_script_face(font_node, script, typeface);
   RETURN_IF_ERROR(ooxml::store_part_dom(wb, path_or.value(), doc));
+  drop_default_theme_version(wb);
   mark_formulas_dirty_if_fonts_changed(wb, before);
   return Expected<void, Error>();
 }

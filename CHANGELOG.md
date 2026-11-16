@@ -602,6 +602,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Changing a theme's colours or fonts (`setThemeColors`, `setThemeFonts`, `setThemeScriptFont`, Python
+  `set_theme_colors` / `set_theme_fonts` / `set_theme_script_font`, C `fm_workbook_set_theme_colors` /
+  `fm_workbook_set_theme_fonts` / `fm_workbook_set_theme_script_font`) now removes `defaultThemeVersion` from
+  the workbook's `<workbookPr>`, as Excel does after its own theme edit and as `applyTheme` already did. Mac
+  Excel opens a book that carries the attribute with its built-in theme in place of the theme part, so the
+  edit of a book Excel had created was lost when the saved file was opened.
+
 - A PivotTable item collapsed with `showDetail` set to false still showed the rows of the inner fields beneath it when the report had been built or refreshed through the API; it now keeps only its own row with its totals and the report shrinks by those rows, as Excel does.
 - A PivotTable whose field carries a numeric range grouping on itself, as
   Excel stores one, showed each source value as its own item once the report

@@ -199,23 +199,6 @@ Expected<std::vector<CarriedRel>, Error> read_theme_rels(const Workbook& wb, con
   return carried;
 }
 
-/// Excel's apply removes `defaultThemeVersion` from `<workbookPr>`. An empty
-/// fragment becomes `<workbookPr/>` so the xlsb writer does not default it back.
-void drop_default_theme_version(Workbook& wb) {
-  const std::string& raw = wb.workbook_pr_xml();
-  pugi::xml_document doc;
-  const std::string_view source = raw.empty() ? std::string_view("<workbookPr/>") : std::string_view(raw);
-  if (!doc.load_buffer(source.data(), source.size(), pugi::parse_default, pugi::encoding_utf8)) {
-    return;
-  }
-  pugi::xml_node root = doc.first_child();
-  if (!root || std::string_view(root.name()) != "workbookPr") {
-    return;
-  }
-  root.remove_attribute("defaultThemeVersion");
-  wb.set_workbook_pr_xml(raw_xml(root));
-}
-
 }  // namespace
 
 Expected<void, Error> apply_theme_package(Workbook& wb, const std::uint8_t* data, std::size_t size) {

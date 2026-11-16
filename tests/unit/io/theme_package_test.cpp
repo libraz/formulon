@@ -15,6 +15,8 @@
 #include "io/ooxml_defs.h"
 #include "io/ooxml_writer.h"
 #include "io/theme_part.h"
+#include "io/xlsb/reader.h"
+#include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
 #include "passthrough_part.h"
 #include "theme.h"
@@ -318,6 +320,50 @@ TEST(ThemePackage, ApplyDropsDefaultThemeVersion) {
   const std::string workbook_xml = Entry(saved.value(), "xl/workbook.xml");
   EXPECT_NE(workbook_xml, "<missing>");
   EXPECT_EQ(workbook_xml.find("defaultThemeVersion"), std::string::npos);
+}
+
+// Mac Excel opens a book whose workbookPr names a default theme version with that
+// built-in theme in place of an edited part, and drops the attribute after its own edit.
+TEST(ThemePackage, ThemeEditsDropDefaultThemeVersion) {
+  const std::string pr = "<workbookPr defaultThemeVersion=\"202300\" filterPrivacy=\"1\"/>";
+  ThemeColors colors = default_theme().colors;
+  colors[4] = 0xFFFF0000U;
+  for (int edit = 0; edit < 3; ++edit) {
+    SCOPED_TRACE(edit);
+    Workbook wb = Workbook::create();
+    wb.set_workbook_pr_xml(pr);
+    if (edit == 0) {
+      ASSERT_TRUE(static_cast<bool>(wb.set_theme_colors(colors)));
+    } else if (edit == 1) {
+      ThemeFonts fonts = default_theme().fonts;
+      fonts.minor_latin = "Verdana";
+      ASSERT_TRUE(static_cast<bool>(wb.set_theme_fonts(fonts)));
+    } else {
+      ASSERT_TRUE(static_cast<bool>(wb.set_theme_script_font(false, "Hang", "Batang")));
+    }
+    EXPECT_EQ(wb.workbook_pr_xml(), "<workbookPr filterPrivacy=\"1\"/>");
+
+    auto xlsx = write_ooxml(wb);
+    ASSERT_TRUE(static_cast<bool>(xlsx));
+    EXPECT_EQ(Entry(xlsx.value(), "xl/workbook.xml").find("defaultThemeVersion"), std::string::npos);
+    auto xlsb = xlsb::write_xlsb(wb);
+    ASSERT_TRUE(static_cast<bool>(xlsb));
+    auto reread = xlsb::read_xlsb(ByteSpan{xlsb.value().data(), xlsb.value().size()});
+    ASSERT_TRUE(static_cast<bool>(reread));
+    EXPECT_EQ(reread.value().workbook.workbook_pr_xml().find("defaultThemeVersion"), std::string::npos);
+  }
+
+  // A book with no workbookPr gets a bare one, so the xlsb writer does not write its default version.
+  Workbook bare = Workbook::create();
+  bare.set_workbook_pr_xml("");
+  ASSERT_TRUE(static_cast<bool>(bare.set_theme_colors(colors)));
+  EXPECT_EQ(bare.workbook_pr_xml(), "<workbookPr/>");
+
+  // A refused edit leaves the attribute.
+  Workbook refused = Workbook::create();
+  refused.set_workbook_pr_xml(pr);
+  EXPECT_FALSE(static_cast<bool>(refused.set_theme_script_font(false, "Hangul", "Batang")));
+  EXPECT_EQ(refused.workbook_pr_xml(), pr);
 }
 
 TEST(ThemePackage, NormalFontFollowsTheNewThemeUiScriptFace) {
