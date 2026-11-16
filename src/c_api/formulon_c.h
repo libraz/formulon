@@ -6485,7 +6485,7 @@ typedef struct {
    *  or `FALSE`. */
   int32_t gte; /* fm_tristate_t */
   /** The number, percentage or formula the `type` reads, copied on add; `NULL` for a type that reads none (minimum,
-   *  maximum). A formula reads back with a leading `=` and may be given with or without it. */
+   *  maximum); `""` is refused. A formula reads back with a leading `=` and may be given with or without it. */
   const char* value;
 } fm_cfvo_t;
 
@@ -6541,13 +6541,15 @@ typedef struct {
    * express, and the key `fm_sheet_get_cf_rule`, `fm_sheet_update_cf_rule`
    * and `fm_sheet_remove_cf_rule` take. On input it is a brace-wrapped GUID
    * (`{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}`, hex digits in either case);
-   * `NULL`, `""` or an id already used on the sheet makes the engine
-   * generate an upper-case one. On output, always a non-NULL view into
+   * `NULL` or an id already used on the sheet makes the engine
+   * generate an upper-case one; `""` is refused with `FM_STATUS_INVALID_ARGUMENT`
+   * (api-conventions §5 rule 30). On output, always a non-NULL view into
    * `fm_sheet_get_cf_rule_at`'s handle-owned storage (see that function's doc).
    *
    * Only rules that need such a block put their id in the saved file, so
    * for most rules this is an in-memory handle and nothing more. */
-  /** The rule's identifier, a GUID unique within the workbook; empty or `NULL` on add lets the engine assign one. */
+  /** The rule's identifier, a GUID unique within the workbook; `NULL` on add lets the engine assign one, `""` is
+   *  refused. */
   const char* id;
   /** The kind of rule, an `fm_cf_rule_type_t`; selects which of the other fields apply. */
   int32_t type;
@@ -6576,9 +6578,10 @@ typedef struct {
   /* Formula sources (Expression / CellIs / containsText-derived). On
    * output each non-empty one carries a leading `=`; input takes it with or
    * without one. */
-  /** The first formula of the rule; leading `=` included on read, optional on input. `NULL` when the rule has none. */
+  /** The first formula of the rule; leading `=` included on read, optional on input. `NULL` when the rule has none;
+   *  `""` is refused on input (api-conventions §5 rule 30). */
   const char* formula1;
-  /** The second formula, for the between and not-between operators; `NULL` otherwise. */
+  /** The second formula, for the between and not-between operators; `NULL` otherwise; `""` is refused on input. */
   const char* formula2;
   /** 1 when `op` is set; 0 means the rule has no comparison operator. */
   int32_t has_op;
@@ -6605,7 +6608,9 @@ typedef struct {
   double std_dev;
 
   /* ContainsText / BeginsWith / EndsWith / NotContainsText literal */
-  /** The text a text rule tests for; `NULL` when the rule has none. */
+  /** The text a text rule tests for; `NULL` when the rule has none. `""` is a value (an empty operand, as Excel stores
+   *  it): it is kept, read back as `""`, and the rule matches every cell that is not an error (api-conventions §5
+   *  rule 30). */
   const char* text;
 
   /* TimePeriod */
@@ -6842,7 +6847,8 @@ FM_API fm_status_t fm_sheet_get_cf_rule(const fm_workbook_t* wb, size_t sheet_in
  *           when any `rule.ranges` entry is inverted (`first` past
  *           `last`) or reaches outside the grid (`row >= 1048576`,
  *           `col >= 16384`) and therefore has no A1 spelling, when
- *           `rule.id` is non-empty but not a brace-wrapped GUID, when `rule.type`
+ *           `rule.id` is not a brace-wrapped GUID (`""` included), when `rule.formula1`,
+ *           `rule.formula2` or a present `fm_cfvo_t.value` is `""`, when `rule.type`
  *           / `rule.op` / `rule.time_period` / `rule.icon_set` /
  *           `rule.data_bar_axis_position` or any present `fm_cfvo_t`
  *           `type` names no declared enumerator, when `rule.dxf_index` is
@@ -6892,11 +6898,12 @@ typedef struct {
   uint32_t range_count;
   /** How an update treats `formula1`: `KEEP` leaves it, `SET` writes the value beside it, `CLEAR` removes it. */
   fm_patch_op_t formula1_op;
-  /** The first formula of the rule; leading `=` optional. */
+  /** The first formula of the rule; leading `=` optional; `""` is refused. */
   const char* formula1;
   /** How an update treats `formula2`: `KEEP` leaves it, `SET` writes the value beside it, `CLEAR` removes it. */
   fm_patch_op_t formula2_op;
-  /** The second formula of the rule, for the between and not-between operators; leading `=` optional. */
+  /** The second formula of the rule, for the between and not-between operators; leading `=` optional; `""` is
+   *  refused. */
   const char* formula2;
   /** How an update treats `op`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is refused. */
   fm_patch_op_t op_op;
@@ -6928,7 +6935,7 @@ typedef struct {
   double std_dev;
   /** How an update treats `text`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is refused. */
   fm_patch_op_t text_op;
-  /** The text a text rule tests for. */
+  /** The text a text rule tests for; `""` is a value, an empty operand. */
   const char* text;
   /** How an update treats `time_period`: `KEEP` leaves it, `SET` writes the value beside it; `CLEAR` is refused. */
   fm_patch_op_t time_period_op;

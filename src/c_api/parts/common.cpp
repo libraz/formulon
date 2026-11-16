@@ -459,10 +459,10 @@ fm_status_t check_enum_domain(std::int64_t value, std::int64_t min, std::int64_t
 namespace {
 
 // Rejects a string that is not GUID-shaped (`{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}`,
-// hexadecimal digits). NULL or empty passes: the entry point synthesizes an id.
-// `ST_Guid` attributes holding anything else make Excel drop the whole block.
+// hexadecimal digits). NULL passes: the entry point synthesizes an id. `""` is refused like any other non-GUID,
+// since `ST_Guid` attributes holding anything else make Excel drop the whole block.
 fm_status_t check_guid(const char* text, const char* field) {
-  if (text == nullptr || text[0] == '\0') {
+  if (text == nullptr) {
     return 0;
   }
   // `{8-4-4-4-12}`: 32 hexadecimal digits, four hyphens, two braces.
@@ -491,13 +491,17 @@ fm_status_t check_guid(const char* text, const char* field) {
 namespace {
 
 // Checks the `type` and `gte` (`fm_tristate_t`) domains of every `fm_cfvo_t`
-// in a threshold array; `field` names the array in the diagnostic.
+// in a threshold array and refuses an empty `value`; `field` names the array in the diagnostic.
 // The array bound is the caller's, so an entry point that has not yet
 // established `count` against its pointer must not reach here.
 fm_status_t check_cfvos(const fm_cfvo_t* thresholds, std::uint32_t count, const char* field) {
   const std::string type_field = std::string(field) + ".type";
   const std::string gte_field = std::string(field) + ".gte";
   for (std::uint32_t i = 0; i < count; ++i) {
+    if (thresholds[i].value != nullptr && thresholds[i].value[0] == '\0') {
+      return invalid_argument((std::string(field) + ".value must not be empty").c_str(),
+                              std::string("field=") + field + ".value");
+    }
     if (auto rc = check_enum_domain(thresholds[i].type, 0, static_cast<std::int64_t>(cf::CfvoType::AutoMax),
                                     type_field.c_str());
         rc != 0) {
@@ -603,6 +607,12 @@ fm_status_t validate(const fm_cf_rule_t& rule) {
   }
   if (auto rc = check_utf8({rule.text}); rc != 0) {
     return rc;
+  }
+  for (const auto& [value, field] : {std::pair<const char*, const char*>{rule.formula1, "formula1"},
+                                     std::pair<const char*, const char*>{rule.formula2, "formula2"}}) {
+    if (value != nullptr && value[0] == '\0') {
+      return invalid_argument((std::string(field) + " must not be empty").c_str(), std::string("field=") + field);
+    }
   }
   // The id reaches the file as `<x14:cfRule id="...">` and `<x14:id>`,
   // both of schema type `ST_Guid`. Excel repairs a workbook whose

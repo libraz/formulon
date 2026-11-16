@@ -4791,7 +4791,7 @@ class CfValueObject:
     #: the minimum or maximum of the data).
     type: CfValueObjectType
     #: The number, percentage or formula the ``type`` reads, with a leading ``=`` on a formula; ``None`` for a type that
-    #: reads none (minimum, maximum).
+    #: reads none (minimum, maximum). An empty string is ``InvalidArgumentError`` (api-conventions §5 rule 30).
     value: Optional[str] = None
     #: Whether the threshold is inclusive: ``True`` compares with ``>=``, ``False`` with ``>``.
     gte: bool = True
@@ -5026,9 +5026,10 @@ class _CfRuleInput:
     priority: int = 0
     #: ``True`` stops the evaluation of lower-priority rules on a cell once this rule matches; defaults to ``False``.
     stop_if_true: bool = False
-    #: A GUID in braces, hex digits in either case; omitted, empty or already used on the sheet, the engine generates an
-    #: upper-case one, and anything else is invalid.
-    id: str = ""
+    #: A GUID in braces, hex digits in either case; ``None`` or already used on the sheet, the engine generates an
+    #: upper-case one. An empty string, or anything that is not a GUID, is ``InvalidArgumentError`` (api-conventions
+    #: §5 rule 30).
+    id: Optional[str] = None
 
 
 @dataclass(kw_only=True)
@@ -5043,7 +5044,8 @@ class _CfFormatRuleInput(_CfRuleInput):
 class CfExpressionRuleInput(_CfFormatRuleInput):
     """``EXPRESSION``: formats a cell where ``formula1`` (leading ``=`` optional) is true."""
 
-    #: The formula that decides whether the cell is formatted; a leading ``=`` is optional.
+    #: The formula that decides whether the cell is formatted; a leading ``=`` is optional. An empty string is
+    #: ``InvalidArgumentError`` (api-conventions §5 rule 30).
     formula1: str
     #: Discriminant: always the expression rule kind.
     type: CfRuleType = field(default=CfRuleType.EXPRESSION, init=False)
@@ -5055,10 +5057,11 @@ class CfCellIsRuleInput(_CfFormatRuleInput):
 
     #: How the cell is compared with ``formula1`` (and ``formula2`` for between and not-between).
     operator: ComparisonOperator
-    #: The value or formula the cell is compared with; a leading ``=`` is optional.
+    #: The value or formula the cell is compared with; a leading ``=`` is optional. An empty string is
+    #: ``InvalidArgumentError`` (api-conventions §5 rule 30).
     formula1: str
     #: The upper bound for the between and not-between operators; a leading ``=`` is optional. Omitted for other
-    #: operators.
+    #: operators; an empty string is ``InvalidArgumentError`` (api-conventions §5 rule 30).
     formula2: Optional[str] = None
     #: Discriminant: always the cell-is rule kind.
     type: CfRuleType = field(default=CfRuleType.CELL_IS, init=False)
@@ -5129,9 +5132,11 @@ class CfTextRuleInput(_CfFormatRuleInput):
 
     #: The text test: contains, not-contains, begins-with or ends-with.
     type: CfRuleType
-    #: The text the cell is tested against.
+    #: The text the cell is tested against. An empty string is a value, as Excel stores it: it is kept and read back
+    #: as ``""``, and the rule matches every cell that is not an error (api-conventions §5 rule 30).
     text: str
-    #: The stored test formula Excel writes beside the rule; omitted or ``None`` derives it.
+    #: The stored test formula Excel writes beside the rule; omitted or ``None`` derives it, an empty string is
+    #: ``InvalidArgumentError`` (api-conventions §5 rule 30).
     formula1: Optional[str] = None
 
 

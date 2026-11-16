@@ -6563,7 +6563,7 @@ class Sheet(_NoCopy):
     def _write_cfvo(ptr: int, value: CfValueObject, scope: _ArgScope) -> None:
         S.CFVO.pack(LIB, ptr, {"type": _uint(value.type, "type", 8), "gte": _tristate_default(value.gte)})
         if value.value is not None:
-            S.write_str_field(LIB, ptr, S.CFVO, "value", value.value, scope)
+            S.write_str_field(LIB, ptr, S.CFVO, "value", value.value, scope, allow_empty=True)
 
     def _cf_rule_at(self, cf_rule_index: int) -> ConditionalFormat:
         """Read the ``cf_rule_index``-th CF rule on the sheet (flattened order)."""
@@ -6680,8 +6680,8 @@ class Sheet(_NoCopy):
         """Append a CF rule to the sheet; return its :data:`CfRuleId`.
 
         ``rule.id`` is a brace-wrapped GUID (``{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}``, hex digits in either
-        case); omitted, empty or already used on the sheet, the engine generates an upper-case one; anything
-        else is ``InvalidArgumentError``.
+        case); omitted or already used on the sheet, the engine generates an upper-case one; an empty string or
+        anything else is ``InvalidArgumentError`` (api-conventions §5 rule 30).
 
         ``rule`` is the input dataclass of its type (:class:`CfCellIsRuleInput`, :class:`CfColorScaleRuleInput`
         and the others of :data:`ConditionalFormatInput`); a :class:`ConditionalFormat` read back is accepted
@@ -6733,10 +6733,10 @@ class Sheet(_NoCopy):
             ro = S.CF_RULE.offsets
             LIB.write_bytes(ptr + ro["ranges"][1], struct.pack("<I", ranges_ptr))
             LIB.write_bytes(ptr + ro["range_count"][1], struct.pack("<I", len(ranges)))
-            S.write_str_field(LIB, ptr, S.CF_RULE, "id", rule.id, scope)
-            S.write_str_field(LIB, ptr, S.CF_RULE, "formula1", getattr(rule, "formula1", None), scope)
-            S.write_str_field(LIB, ptr, S.CF_RULE, "formula2", getattr(rule, "formula2", None), scope)
-            S.write_str_field(LIB, ptr, S.CF_RULE, "text", getattr(rule, "text", None), scope)
+            S.write_str_field(LIB, ptr, S.CF_RULE, "id", rule.id, scope, allow_empty=True)
+            S.write_str_field(LIB, ptr, S.CF_RULE, "formula1", getattr(rule, "formula1", None), scope, allow_empty=True)
+            S.write_str_field(LIB, ptr, S.CF_RULE, "formula2", getattr(rule, "formula2", None), scope, allow_empty=True)
+            S.write_str_field(LIB, ptr, S.CF_RULE, "text", getattr(rule, "text", None), scope, allow_empty=True)
             if color_scale is not None:
                 count = len(color_scale.thresholds)
                 if count != len(color_scale.colors):

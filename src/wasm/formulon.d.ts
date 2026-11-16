@@ -1822,7 +1822,8 @@ export interface CfValueObjectInput {
    *  minimum or maximum of the data). */
   type: CfValueObjectType;
   /** The number, percentage or formula the `type` reads, with or without a leading `=` for a formula; `null` or omitted
-   *  for a type that reads none (minimum, maximum). */
+   *  for a type that reads none (minimum, maximum). An empty string fails with `StatusCode.InvalidArgument`
+   *  (api-conventions §5 rule 30). */
   value?: string | null;
   /** Whether the threshold is inclusive: `true` (the default) compares with `>=`, `false` with `>`. */
   gte?: boolean;
@@ -3165,8 +3166,9 @@ interface CfRuleInputBase {
   priority?: number;
   /** `true` stops the evaluation of lower-priority rules on a cell once this rule matches; defaults to `false`. */
   stopIfTrue?: boolean;
-  /** A GUID in braces, hex digits in either case; omitted, empty or already used on the sheet, the engine generates an
-   *  upper-case one, and anything else is invalid. */
+  /** A GUID in braces, hex digits in either case; omitted or already used on the sheet, the engine generates an
+   *  upper-case one. An empty string, or anything that is not a GUID, fails with `StatusCode.InvalidArgument`
+   *  (api-conventions §5 rule 30). */
   id?: string;
 }
 
@@ -3183,7 +3185,8 @@ interface CfFormatRuleInputBase extends CfRuleInputBase {
 export interface CfExpressionRuleInput extends CfFormatRuleInputBase {
   /** Discriminant: always the expression rule kind. */
   type: typeof CfRuleType.Expression;
-  /** The formula that decides whether the cell is formatted; a leading `=` is optional. */
+  /** The formula that decides whether the cell is formatted; a leading `=` is optional. An empty string fails with
+   *  `StatusCode.InvalidArgument` (api-conventions §5 rule 30). */
   formula1: string;
 }
 
@@ -3193,9 +3196,11 @@ export interface CfCellIsRuleInput extends CfFormatRuleInputBase {
   type: typeof CfRuleType.CellIs;
   /** How the cell is compared with `formula1` (and `formula2` for between and not-between). */
   operator: ComparisonOperator;
-  /** The value or formula the cell is compared with; a leading `=` is optional. */
+  /** The value or formula the cell is compared with; a leading `=` is optional. An empty string fails with
+   *  `StatusCode.InvalidArgument` (api-conventions §5 rule 30). */
   formula1: string;
-  /** The upper bound for the between and not-between operators; a leading `=` is optional. Omitted for other operators. */
+  /** The upper bound for the between and not-between operators; a leading `=` is optional. Omitted for other operators;
+   *  an empty string fails with `StatusCode.InvalidArgument` (api-conventions §5 rule 30). */
   formula2?: string;
 }
 
@@ -3322,9 +3327,11 @@ export interface CfTextRuleInput extends CfFormatRuleInputBase {
     | typeof CfRuleType.NotContainsText
     | typeof CfRuleType.BeginsWith
     | typeof CfRuleType.EndsWith;
-  /** The text the cell is tested against. */
+  /** The text the cell is tested against. An empty string is a value, as Excel stores it: it is kept and read back as
+   *  `""`, and the rule matches every cell that is not an error (api-conventions §5 rule 30). */
   text: string;
-  /** The stored test formula Excel writes beside the rule; omitted or `null` derives it. */
+  /** The stored test formula Excel writes beside the rule; omitted or `null` derives it, an empty string fails with
+   *  `StatusCode.InvalidArgument` (api-conventions §5 rule 30). */
   formula1?: string;
 }
 
@@ -8249,8 +8256,9 @@ export interface Sheet {
    *  The result is the id the rule is stored under (a {@link CfRuleId}); it stays valid while the rule exists.
    *  A non-empty `formula1` / `formula2` that does not parse fails with its parser status and
    *  `FormulonError.parseError`. `id` is a brace-wrapped GUID
-   *  (`{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}`, hex digits in either case); omitted, empty or already used on the
-   *  sheet, the engine generates an upper-case one; anything else fails with `StatusCode.InvalidArgument`. More than 16384 ranges fail with `StatusCode.SecurityResourceLimit`. */
+   *  (`{XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX}`, hex digits in either case); omitted or already used on the
+   *  sheet, the engine generates an upper-case one; an empty string or anything else fails with `StatusCode.InvalidArgument`
+   *  (api-conventions §5 rule 30). More than 16384 ranges fail with `StatusCode.SecurityResourceLimit`. */
   addCfRule(rule: ConditionalFormatInput): CfRuleId;
   /** Adds back a rule `listCfRules` returned, as it is. More than 16384 ranges fail with `StatusCode.SecurityResourceLimit`. */
   addCfRule(rule: ConditionalFormat): CfRuleId;

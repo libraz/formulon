@@ -135,7 +135,8 @@ emscripten::val cf_rule_to_val(const fm_cf_rule_t& rule) {
   item.set("aboveAverage", above_average_rule ? emscripten::val(rule.above_average != 0) : null);
   item.set("equalAverage", above_average_rule ? emscripten::val(rule.equal_average != 0) : null);
   js_set_present_or_null(item, "stdDev", above_average_rule ? rule.has_std_dev : 0, rule.std_dev);
-  js_set_cstr_or_null(item, "text", rule.text);
+  // An empty text is a value (an empty operand); only a NULL pointer reads as absent.
+  item.set("text", rule.text != nullptr ? emscripten::val(std::string(rule.text)) : null);
   js_set_present_or_null(item, "timePeriod", rule.has_time_period, static_cast<uint32_t>(rule.time_period));
   if (rule.color_scale_count > 0 && rule.color_scale_thresholds != nullptr && rule.color_scale_colors != nullptr) {
     emscripten::val color_scale = emscripten::val::object();
@@ -265,13 +266,13 @@ emscripten::val JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val
   for (const fm_cell_rect_t& m : merge_ranges) {
     ranges_buf.push_back(fm_cell_rect_t{m.first_row, m.first_col, m.last_row, m.last_col});
   }
-  const std::string id = reader.string(v, "id", "rule.id");
-  const std::string formula1 = reader.string(v, "formula1", "rule.formula1");
-  const std::string formula2 = reader.string(v, "formula2", "rule.formula2");
-  const std::string text = reader.string(v, "text", "rule.text");
+  std::string id;
+  std::string formula1;
+  std::string formula2;
+  std::string text;
 
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
-  rule.id = id.empty() ? nullptr : id.c_str();
+  rule.id = reader.optional_string(v, "id", id, "rule.id");
   rule.type = reader.u8(v, "type", 0U, "rule.type");
   rule.priority = reader.i32(v, "priority", 0, "rule.priority");
   rule.stop_if_true = reader.boolean(v, "stopIfTrue", false, "rule.stopIfTrue") ? 1 : 0;
@@ -282,8 +283,8 @@ emscripten::val JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val
   }
   rule.ranges = ranges_buf.empty() ? nullptr : ranges_buf.data();
   rule.range_count = ranges_buf.size();
-  rule.formula1 = formula1.empty() ? nullptr : formula1.c_str();
-  rule.formula2 = formula2.empty() ? nullptr : formula2.c_str();
+  rule.formula1 = reader.optional_string(v, "formula1", formula1, "rule.formula1");
+  rule.formula2 = reader.optional_string(v, "formula2", formula2, "rule.formula2");
   const emscripten::val op = reader.value(v, "operator", "rule.operator");
   if (js_value_present(op)) {
     rule.has_op = 1;
@@ -303,7 +304,7 @@ emscripten::val JsWorkbook::addConditionalFormat(uint32_t sheet, emscripten::val
     rule.has_std_dev = 1;
     rule.std_dev = reader.number_value(std_dev, 0.0, "rule.stdDev");
   }
-  rule.text = text.empty() ? nullptr : text.c_str();
+  rule.text = reader.optional_string(v, "text", text, "rule.text");
   const emscripten::val time_period = reader.value(v, "timePeriod", "rule.timePeriod");
   if (js_value_present(time_period)) {
     rule.has_time_period = 1;

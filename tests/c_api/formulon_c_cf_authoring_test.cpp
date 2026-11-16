@@ -642,7 +642,7 @@ TEST(FormulonCApiCfMutate, AddRuleDerivesExcelsFormulaForSideFieldRules) {
   };
   const Case cases[] = {
       {7, "ab", -1, nullptr, "NOT(ISERROR(SEARCH(\"ab\",B2)))"},
-      {8, "q\"r", -1, "", "ISERROR(SEARCH(\"q\"\"r\",B2))"},
+      {8, "q\"r", -1, nullptr, "ISERROR(SEARCH(\"q\"\"r\",B2))"},
       {9, "x", -1, nullptr, "LEFT(B2,LEN(\"x\"))=\"x\""},
       {10, "y", -1, nullptr, "RIGHT(B2,LEN(\"y\"))=\"y\""},
       {11, nullptr, -1, nullptr, "LEN(TRIM(B2))=0"},

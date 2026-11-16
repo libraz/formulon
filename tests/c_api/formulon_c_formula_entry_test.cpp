@@ -478,17 +478,21 @@ TEST(FormulonCApiFormulaEntry, CfAddRuleRejectsUnparseableFormulasAndKeepsState)
   EXPECT_EQ(count, 1U);
 }
 
-TEST(FormulonCApiFormulaEntry, CfAddRuleAcceptsParseableAndEmptyFormulas) {
+TEST(FormulonCApiFormulaEntry, CfAddRuleAcceptsParseableFormulasAndRefusesEmptyOnes) {
   WorkbookGuard wb;
   MakeWorkbook(&wb);
   const fm_cell_rect_t sqref{0, 0, 9, 0};
-  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "'S2'!$A$1>0", "")), ignored_id()), 0);
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "'S2'!$A$1>0", nullptr)), ignored_id()),
+            0);
   EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "Gone!$A$1>0", nullptr)), ignored_id()),
             0);
-  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "", "")), ignored_id()), 0);
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "", nullptr)), ignored_id()),
+            FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "A1>0", "")), ignored_id()),
+            FM_STATUS_INVALID_ARGUMENT);
   std::size_t count = 0;
   ASSERT_EQ(fm_sheet_get_cf_rule_count(wb.handle, 0, &count), 0);
-  EXPECT_EQ(count, 3U);
+  EXPECT_EQ(count, 2U);
 }
 
 fm_data_validation_t MakeValidation(const fm_cell_rect_t* range, std::uint8_t type, const char* formula1,

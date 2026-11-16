@@ -622,7 +622,7 @@ fm_status_t assign_priority(const fm_cf_rule_t& rule, const formulon::Sheet& she
 // is replaced rather than refused, so a read rule re-adds to its own sheet.
 void assign_id(const fm_cf_rule_t& rule, const formulon::Sheet& sheet, std::size_t sheet_index,
                formulon::cf::CFRule* out) {
-  if (rule.id != nullptr && rule.id[0] != '\0') {
+  if (rule.id != nullptr) {
     // Already checked against the `ST_Guid` shape by `validate`; a GUID's hex digits match in either case.
     bool collides = false;
     for (const auto& block : sheet.conditional_formats()) {

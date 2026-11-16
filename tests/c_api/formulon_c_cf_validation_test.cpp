@@ -175,7 +175,7 @@ TEST(FormulonCApiCfMutate, AddRuleRejectsNonGuidId) {
 
   // An absent id is the "synthesize one for me" request, not a malformed
   // one, and the id it produces is itself GUID-shaped.
-  rule.id = "";
+  rule.id = nullptr;
   ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_id), 0) << fm_get_last_error_message();
   int32_t present = 0;
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, rule_id, &present, &out), 0);

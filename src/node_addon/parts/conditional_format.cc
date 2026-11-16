@@ -129,7 +129,8 @@ Napi::Object CfRuleToJs(Napi::Env env, const fm_cf_rule_t& rule) {
   item.Set("aboveAverage", JsBoolOrNull(env, above_average_rule ? 1 : 0, rule.above_average));
   item.Set("equalAverage", JsBoolOrNull(env, above_average_rule ? 1 : 0, rule.equal_average));
   item.Set("stdDev", JsNumberOrNull(env, above_average_rule ? rule.has_std_dev : 0, rule.std_dev));
-  item.Set("text", JsStringOrNull(env, rule.text));
+  // An empty text is a value (an empty operand); only a NULL pointer reads as absent.
+  item.Set("text", rule.text != nullptr ? Napi::Value(Napi::String::New(env, rule.text)) : env.Null());
   item.Set("timePeriod", JsNumberOrNull(env, rule.has_time_period, static_cast<uint32_t>(rule.time_period)));
   item.Set("colorScale", env.Null());
   if (rule.color_scale_count > 0 && rule.color_scale_thresholds != nullptr && rule.color_scale_colors != nullptr) {
@@ -266,13 +267,13 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
   std::string formula1;
   std::string formula2;
   std::string text;
-  reader.String(v, "id", &id);
-  reader.String(v, "formula1", &formula1);
-  reader.String(v, "formula2", &formula2);
-  reader.String(v, "text", &text);
+  const bool has_id = reader.String(v, "id", &id);
+  const bool has_formula1 = reader.String(v, "formula1", &formula1);
+  const bool has_formula2 = reader.String(v, "formula2", &formula2);
+  const bool has_text = reader.String(v, "text", &text);
 
   fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
-  rule.id = id.empty() ? nullptr : id.c_str();
+  rule.id = has_id ? id.c_str() : nullptr;
   rule.type = reader.I32(v, "type", 0);
   rule.priority = reader.I32(v, "priority", 0);
   rule.stop_if_true = reader.Bool(v, "stopIfTrue", false) ? 1 : 0;
@@ -283,8 +284,8 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
   }
   rule.ranges = ranges_buf.empty() ? nullptr : ranges_buf.data();
   rule.range_count = ranges_buf.size();
-  rule.formula1 = formula1.empty() ? nullptr : formula1.c_str();
-  rule.formula2 = formula2.empty() ? nullptr : formula2.c_str();
+  rule.formula1 = has_formula1 ? formula1.c_str() : nullptr;
+  rule.formula2 = has_formula2 ? formula2.c_str() : nullptr;
   bool op_present = false;
   rule.op = reader.I32(v, "operator", 0, &op_present);
   if (op_present) {
@@ -304,7 +305,7 @@ Napi::Value Workbook::AddConditionalFormat(const Napi::CallbackInfo& info) {
   if (std_dev_present) {
     rule.has_std_dev = 1;
   }
-  rule.text = text.empty() ? nullptr : text.c_str();
+  rule.text = has_text ? text.c_str() : nullptr;
   bool time_period_present = false;
   rule.time_period = reader.I32(v, "timePeriod", 0, &time_period_present);
   if (time_period_present) {

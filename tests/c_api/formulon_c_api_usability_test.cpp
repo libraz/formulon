@@ -786,10 +786,12 @@ TEST(FormulonCApiUsability, CfRuleIdIsGeneratedWhenOmittedAndMustOtherwiseBeAGui
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const fm_cell_rect_t sqref{0, 0, 9, 0};
   EXPECT_TRUE(IsUpperGuid(AddCfRule(wb.handle, 0, ExpressionRule(&sqref, "A1>0"))));
-  EXPECT_TRUE(IsUpperGuid(AddCfRule(wb.handle, 0, ExpressionRule(&sqref, "A1>0", ""))));
-  const fm_cf_rule_t bad = ExpressionRule(&sqref, "A1>0", "abc");
+  EXPECT_TRUE(IsUpperGuid(AddCfRule(wb.handle, 0, ExpressionRule(&sqref, "A1>0", nullptr))));
   const char* id = nullptr;
-  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &bad, &id), FM_STATUS_INVALID_ARGUMENT);
+  for (const char* rejected : {"abc", ""}) {
+    const fm_cf_rule_t bad = ExpressionRule(&sqref, "A1>0", rejected);
+    EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &bad, &id), FM_STATUS_INVALID_ARGUMENT) << rejected;
+  }
   EXPECT_EQ(CfRuleCount(wb.handle), 2U);
 }
 
