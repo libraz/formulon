@@ -68,6 +68,9 @@ struct SheetDecodeState {
   /// True once `BrtEndSheetData` has been seen: everything from there to
   /// `BrtEndSheet` is tail.
   bool in_tail = false;
+  /// True inside a BrtBeginUserShViews..BrtEndUserShViews block, whose
+  /// records belong to the custom views and are kept together, undecoded.
+  bool in_user_sheet_views = false;
   /// True between the first BrtBeginWsView and its BrtEndWsView, the view
   /// the model carries.
   bool in_main_ws_view = false;

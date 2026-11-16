@@ -91,7 +91,14 @@ namespace detail {
 /// BrtMargins on a sheet with no merges or hyperlinks) is not hoisted ahead.
 void RetainTailRecord(SheetDecodeState& state, XlsbRecordType type, const std::uint8_t* framed, std::size_t size) {
   std::vector<std::uint8_t>* dst = &state.tail.before_merges;
-  if (state.hyperlinks_seen || is_after_hyperlinks(static_cast<std::uint16_t>(type))) {
+  if (state.in_user_sheet_views) {
+    // A custom-view block stays whole in the slot the stream has reached.
+    if (state.hyperlinks_seen) {
+      dst = &state.tail.after_hyperlinks;
+    } else if (state.merges_seen) {
+      dst = &state.tail.after_merges_before_hyperlinks;
+    }
+  } else if (state.hyperlinks_seen || is_after_hyperlinks(static_cast<std::uint16_t>(type))) {
     dst = &state.tail.after_hyperlinks;
     state.hyperlinks_seen = true;
   } else if (state.merges_seen || IsAfterMergesBeforeHyperlinks(type)) {

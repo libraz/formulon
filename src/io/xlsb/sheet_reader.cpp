@@ -772,6 +772,13 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
     if (type == XlsbRecordType::BrtHLink) {
       state.hyperlinks_seen = true;
     }
+    if (state.in_tail && (state.in_user_sheet_views || rec.type == kBrtBeginUserShViews)) {
+      // A custom view's margins, print options and filter are not the sheet's.
+      state.in_user_sheet_views = true;
+      RetainTailRecord(state, type, framed, framed_size);
+      state.in_user_sheet_views = rec.type != kBrtEndUserShViews;
+      continue;
+    }
     if (state.in_tail) {
       auto feature = DecodeTailFeature(cursor, framed, rec, state, wb.sheet(sheet_index), feature_ctx);
       if (!feature) {

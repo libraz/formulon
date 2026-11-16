@@ -16,8 +16,10 @@
 
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
+#include "io/xlsb/frt_records.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/record.h"
+#include "io/xlsb/record_ids.h"
 #include "io/xlsb/user_book_views.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
@@ -216,6 +218,75 @@ TEST(XlsbUserBookView, ViewWithoutASheetSideIsLeftOut) {
   EXPECT_TRUE(RecordsOf(Entry(written.value().bytes, kSheetBin), kBrtBeginUserShView).empty());
   std::vector<std::uint8_t> book = Entry(written.value().bytes, kWorkbookBin);
   EXPECT_EQ(splice_book_user_views(book, wb), 1U);
+}
+
+/// The framed records from the first `begin` through the next `end`, and the
+/// records outside that span, of `body`.
+struct SplitBlock {
+  std::vector<std::uint8_t> inside;
+  std::vector<std::uint8_t> outside;
+};
+
+SplitBlock SplitAtBlock(const std::vector<std::uint8_t>& body, std::uint16_t begin, std::uint16_t end) {
+  SplitBlock out;
+  bool inside = false;
+  bool done = false;
+  for (const FramedRecord& rec : split_records(body)) {
+    const bool in_block = !done && (inside || rec.type == begin);
+    std::vector<std::uint8_t>& dst = in_block ? out.inside : out.outside;
+    dst.insert(dst.end(), body.begin() + static_cast<std::ptrdiff_t>(rec.begin),
+               body.begin() + static_cast<std::ptrdiff_t>(rec.end));
+    inside = in_block && rec.type != end;
+    done = done || (in_block && rec.type == end);
+  }
+  return out;
+}
+
+std::vector<std::uint8_t> CustomViewsFixture(const std::string& name) {
+  return ReadFixtureFile(std::string(FORMULON_FIXTURES_DIR) + "/custom_views/" + name);
+}
+
+TEST(XlsbUserBookView, ViewMarginsAreNotTheSheetsOnLoad) {
+  auto xlsb = read_xlsb(SpanOf(Fixture("children_0_base.xlsb")));
+  ASSERT_TRUE(static_cast<bool>(xlsb)) << xlsb.error().message;
+  auto xlsx = read_ooxml(SpanOf(Fixture("children_0_base.xlsx")));
+  ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
+  const SheetPrintSettings& print = xlsb.value().workbook.sheet(0).print_settings();
+  ASSERT_FALSE(print.page_margins_xml.empty());
+  EXPECT_EQ(print.page_margins_xml, xlsx.value().workbook.sheet(0).print_settings().page_margins_xml);
+}
+
+TEST(XlsbUserBookView, XlsbSaveKeepsTheViewBlockAndTheSheetsPrintRecords) {
+  const std::vector<std::uint8_t> source = Entry(Fixture("children_0_base.xlsb"), kSheetBin);
+  const SplitBlock expected = SplitAtBlock(source, kBrtBeginUserShViews, kBrtEndUserShViews);
+  ASSERT_FALSE(RecordsOf(expected.inside, kBrtMargins).empty());
+  auto read = read_xlsb(SpanOf(Fixture("children_0_base.xlsb")));
+  ASSERT_TRUE(static_cast<bool>(read)) << read.error().message;
+  auto written = write_xlsb_with_result(read.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
+  const SplitBlock actual =
+      SplitAtBlock(Entry(written.value().bytes, kSheetBin), kBrtBeginUserShViews, kBrtEndUserShViews);
+  EXPECT_EQ(actual.inside, expected.inside);
+  EXPECT_EQ(RecordsOf(actual.outside, kBrtMargins), RecordsOf(expected.outside, kBrtMargins));
+  EXPECT_EQ(RecordsOf(actual.outside, kBrtPrintOptions), RecordsOf(expected.outside, kBrtPrintOptions));
+}
+
+TEST(XlsbUserBookView, ViewAutoFilterIsNotTheSheetsAndStaysInTheView) {
+  const std::vector<std::uint8_t> package = CustomViewsFixture("autofilter_view.xlsb");
+  const SplitBlock expected = SplitAtBlock(Entry(package, kSheetBin), kBrtBeginUserShViews, kBrtEndUserShViews);
+  ASSERT_FALSE(RecordsOf(expected.inside, kBeginAFilter).empty());
+  auto read = read_xlsb(SpanOf(package));
+  ASSERT_TRUE(static_cast<bool>(read)) << read.error().message;
+  auto twin = read_ooxml(SpanOf(CustomViewsFixture("autofilter_view.xlsx")));
+  ASSERT_TRUE(static_cast<bool>(twin)) << twin.error().message;
+  EXPECT_FALSE(twin.value().workbook.sheet(0).has_auto_filter());
+  EXPECT_FALSE(read.value().workbook.sheet(0).has_auto_filter());
+  auto written = write_xlsb_with_result(read.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
+  const SplitBlock actual =
+      SplitAtBlock(Entry(written.value().bytes, kSheetBin), kBrtBeginUserShViews, kBrtEndUserShViews);
+  EXPECT_EQ(actual.inside, expected.inside);
+  EXPECT_TRUE(RecordsOf(actual.outside, kBeginAFilter).empty());
 }
 
 }  // namespace

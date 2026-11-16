@@ -140,6 +140,11 @@ inline constexpr std::uint16_t kBrtPageSetup = 478;
 inline constexpr std::uint16_t kBrtBeginHeaderFooter = 479;
 inline constexpr std::uint16_t kBrtEndHeaderFooter = 480;
 
+// A sheet's custom-view block, one view per inner record pair, each with its
+// own pane, selection, print and filter records.
+inline constexpr std::uint16_t kBrtBeginUserShViews = 422;
+inline constexpr std::uint16_t kBrtEndUserShViews = 425;
+
 }  // namespace xlsb
 }  // namespace io
 }  // namespace formulon
