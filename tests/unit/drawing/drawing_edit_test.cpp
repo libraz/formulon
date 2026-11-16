@@ -201,8 +201,7 @@ TEST(DrawingEdit, InsertUsesThePrefixBoundByTheRelationshipsRoot) {
 }
 
 std::string Rect(std::uint32_t id) {
-  return "<xdr:sp><xdr:nvSpPr><xdr:cNvPr id=\"" + std::to_string(id) + "\" name=\"Rectangle " +
-         std::to_string(id - 1) +
+  return "<xdr:sp><xdr:nvSpPr><xdr:cNvPr id=\"" + std::to_string(id) + "\" name=\"Rectangle " + std::to_string(id - 1) +
          "\"/><xdr:cNvSpPr/></xdr:nvSpPr><xdr:spPr><a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></xdr:spPr>"
          "</xdr:sp><xdr:clientData/>";
 }
