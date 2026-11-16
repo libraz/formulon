@@ -577,9 +577,12 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   if (plan.generated_persons) {
     RETURN_IF_ERROR(AddPart(writer.get(), std::string(kPersonsPartPath), write_persons(workbook.persons())));
   }
-  // 5a. The pivot caches the tables above draw from, each definition related to its records.
+  // 5a. The pivot caches the tables above draw from, each definition related to its records, if it saves them.
   for (const EmissionPlan::PivotCachePart& cache : plan.pivot_caches) {
     RETURN_IF_ERROR(AddPartBytes(writer.get(), cache.definition_path, cache.definition));
+    if (cache.records_path.empty()) {
+      continue;
+    }
     RETURN_IF_ERROR(AddPart(writer.get(), ooxml::rels_path_for_part(cache.definition_path),
                             single_relationship_part(kRelPivotCacheRecords,
                                                      relative_part_target(cache.definition_path, cache.records_path))));

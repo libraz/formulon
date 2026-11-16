@@ -99,7 +99,10 @@ const std::set<std::string>& PinnedRefused() {
 /// Pivots whose projection differs from the report Excel saved, as "<file>#s<sheet>p<pivot>".
 const std::set<std::string>& PinnedDivergent() {
   static const std::set<std::string> kDivergent = {
+      // Saved without its data: no records to lay the items out from.
       "pivot_options/op_savedata_off.xlsx#s0p0",
+      "xlsb_parity/pivot/save_data/authored_save_data_off.xlsx#s0p0",
+      "xlsb_parity/pivot/save_data/option_save_data_off.xlsx#s1p0",
       // Saved with the report Excel's dialog showed; Excel's own refresh of the value list shows the literal text.
       "xlsb_parity/pivot/caption_equal/P_eq_esctildeB.xlsx#s0p0",
       "xlsb_parity/pivot/caption_equal/P_eq_tildeB.xlsx#s0p0",

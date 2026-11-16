@@ -53,6 +53,8 @@ constexpr const char* kNotWritableKind = "pivot_table";
 constexpr std::uint8_t kViewFlags1 = 0x41;
 constexpr std::uint8_t kViewFlags2 = 0x40;
 constexpr std::uint8_t kViewFlags4 = 0xF0;
+/// Byte 4: `asteriskTotals`, which Excel sets on a table whose cache stops saving its data.
+constexpr std::uint8_t kViewAsteriskTotals = 0x02;
 /// Byte 7: `applyWidthHeightFormats`; every other bit is clear.
 constexpr std::uint8_t kViewApplyWidthHeight = 0x20;
 constexpr std::uint8_t kViewFlags5Named = kSxViewAutoFormat | kSxViewShowError | kSxViewRowGrand | kSxViewColGrand;
@@ -306,7 +308,7 @@ Expected<void, Error> CheckView(const PivotTableDoc& doc) {
     const std::uint8_t bits = static_cast<std::uint8_t>(v.flags8 & pair);
     return bits == 0U || bits == pair;
   };
-  if (v.flags1 != kViewFlags1 || v.flags2 != kViewFlags2 || v.flags4 != kViewFlags4 ||
+  if (v.flags1 != kViewFlags1 || v.flags2 != kViewFlags2 || (v.flags4 & ~kViewAsteriskTotals) != kViewFlags4 ||
       (v.flags7 & ~kViewApplyWidthHeight) != 0U || (v.flags5 & ~kViewFlags5Named) != kViewFlags5Fixed ||
       (v.flags6 & ~kViewFlags6Named) != kViewFlags6Fixed || (v.flags8 & ~kViewFlags8Named) != 0U ||
       (v.flags9 & ~kSxViewSingleFieldFilter) != 0U || v.flags10 != 0U || v.flags11 != 0U || v.flags13 != 0U ||
@@ -341,6 +343,9 @@ void ReadRootAttrs(const PivotTableDoc& doc, AttrList& attrs) {
   // Excel leaves out a version of 0, the schema default.
   if (doc.view.min_refreshable_version != 0U) {
     attrs.emplace_back("minRefreshableVersion", std::to_string(doc.view.min_refreshable_version));
+  }
+  if ((doc.view.flags4 & kViewAsteriskTotals) != 0U) {
+    attrs.emplace_back("asteriskTotals", "1");
   }
   if (doc.view.created_version != 0U) {
     attrs.emplace_back("createdVersion", std::to_string(doc.view.created_version));
@@ -836,11 +841,13 @@ bool WriteRootAttrs(const pivot::PivotTable& table, PivotTableDoc& doc, FormOver
     kNsXrDecl = 1U << 10U,
     kIgnorable = 1U << 11U,
     kUidSeen = 1U << 12U,
+    kAsteriskTotals = 1U << 13U,
     kUidBookkeeping = kNsMc | kNsXrDecl | kIgnorable | kUidSeen,
   };
   unsigned seen = 0;
   // Each attribute absent from the part is its schema default, but `updatedVersion`
   // is the xlsx writer's own.
+  doc.view.flags4 = 0;
   doc.view.flags7 = 0;
   doc.view.created_version = 0;
   doc.view.min_refreshable_version = 0;
@@ -884,6 +891,10 @@ bool WriteRootAttrs(const pivot::PivotTable& table, PivotTableDoc& doc, FormOver
       ok = take(kUpdated) && version(value, doc.view.updated_version);
     } else if (name == "minRefreshableVersion") {
       ok = take(kMinRefreshable) && version(value, doc.view.min_refreshable_version);
+    } else if (name == "asteriskTotals") {
+      // Excel omits it at 0.
+      ok = take(kAsteriskTotals) && value == "1";
+      doc.view.flags4 = kViewAsteriskTotals;
     } else if (name == "compact") {
       ok = ParseFlag(value, form.compact);
     } else if (name == "compactData") {
@@ -1606,7 +1617,7 @@ bool WriteTable(const pivot::PivotTable& table, ExcelHost host, std::optional<Pi
   v.flags1 = kViewFlags1;
   v.flags2 = kViewFlags2;
   v.flags3 = static_cast<std::uint8_t>(table.indent() | (table.show_headers() ? 0U : kSxViewNoHeaders));
-  v.flags4 = kViewFlags4;
+  v.flags4 = static_cast<std::uint8_t>(kViewFlags4 | (v.flags4 & kViewAsteriskTotals));
   v.flags5 = static_cast<std::uint8_t>(kViewFlags5Fixed | (table.auto_formatting() ? kSxViewAutoFormat : 0U) |
                                        (table.show_error() ? kSxViewShowError : 0U) |
                                        (table.grand_totals_cols() ? kSxViewRowGrand : 0U) |

@@ -37,8 +37,12 @@ namespace pivot_cache_definition {
 
 /// BrtBeginPivotCacheDef flag byte: `refreshOnLoad`.
 inline constexpr std::uint8_t kCacheRefreshOnLoad = 0x04U;
-/// BrtBeginPivotCacheDef flag byte: `saveData` and `enableRefresh`, set together in every Excel-saved cache.
-inline constexpr std::uint8_t kCacheSaveDataEnableRefresh = 0x11U;
+/// BrtBeginPivotCacheDef flag byte: `saveData`; with it clear the cache has no records part or relationship.
+inline constexpr std::uint8_t kCacheSaveData = 0x01U;
+/// BrtBeginPivotCacheDef flag byte: `enableRefresh`, set in every Excel-saved cache.
+inline constexpr std::uint8_t kCacheEnableRefresh = 0x10U;
+/// `saveData` and `enableRefresh` together, a cache's default.
+inline constexpr std::uint8_t kCacheSaveDataEnableRefresh = kCacheSaveData | kCacheEnableRefresh;
 
 /// BrtBeginPCDField flag: the field comes from the source (`databaseField`, default on).
 inline constexpr std::uint8_t kFieldDatabase = 0x04U;

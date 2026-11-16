@@ -278,6 +278,9 @@ Expected<pivot::PivotCache, Error> read_pivot_cache_definition(const std::vector
   capture_unknown_attrs(root, {"r:id", "recordCount", "saveData", "missingItemsLimit", "refreshOnLoad"},
                         cache.mutable_passthrough_attrs());
   cache.set_save_data(attr_bool(root, "saveData", true));
+  if (!cache.save_data()) {
+    cache.set_unsaved_record_count(parse_xml_u32_attr_strict(root.attribute("recordCount")));
+  }
   cache.set_missing_items_limit(parse_xml_u32_attr_strict(root.attribute("missingItemsLimit")));
   if (root.attribute("refreshOnLoad")) {
     cache.set_refresh_on_load(attr_bool(root, "refreshOnLoad"));

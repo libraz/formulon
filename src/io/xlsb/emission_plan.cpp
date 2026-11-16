@@ -441,7 +441,9 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
   }
   for (const EmissionPlan::PivotCachePart& cache : plan.pivot_caches) {
     AppendOverride(out, cache.definition_path, kCtPivotCacheDefinitionXlsb);
-    AppendOverride(out, cache.records_path, kCtPivotCacheRecordsXlsb);
+    if (!cache.records_path.empty()) {
+      AppendOverride(out, cache.records_path, kCtPivotCacheRecordsXlsb);
+    }
   }
   for (const std::vector<EmissionPlan::PivotTablePart>& pivots : plan.sheet_pivots) {
     for (const EmissionPlan::PivotTablePart& pivot : pivots) {

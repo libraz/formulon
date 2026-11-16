@@ -894,7 +894,10 @@ void ReadRoot(const pcd::Document& doc, pivot::PivotCache& cache) {
   if (doc.uid) {
     attrs.emplace_back("xr:uid", FormatGuid(doc.uid->data()));
   }
-  cache.set_save_data(true);
+  cache.set_save_data((doc.flags & pcd::kCacheSaveData) != 0U);
+  if (!cache.save_data()) {
+    cache.set_unsaved_record_count(doc.record_count);
+  }
   if (doc.missing_items_limit != 0xFFFFFFFFU) {
     cache.set_missing_items_limit(doc.missing_items_limit);
   }
@@ -1390,12 +1393,14 @@ bool WriteRoot(const pivot::PivotCache& cache, pcd::Document* doc) {
   }
   // The namespace bookkeeping is read exactly when the uid is, so any other combination would not read back.
   const unsigned bookkeeping = seen & kUidBookkeeping;
-  if ((seen & kRequired) != kRequired || bookkeeping != (doc->uid ? kUidBookkeeping : 0U) || !cache.save_data()) {
+  // Every Excel save of a cache without its data names the user who refreshed it.
+  if ((seen & kRequired) != kRequired || bookkeeping != (doc->uid ? kUidBookkeeping : 0U) ||
+      (!cache.save_data() && !doc->refreshed_by)) {
     return false;
   }
   const bool refresh_on_load = cache.refresh_on_load() || built_cache_refreshes_on_load(cache);
-  doc->flags =
-      static_cast<std::uint8_t>(pcd::kCacheSaveDataEnableRefresh | (refresh_on_load ? pcd::kCacheRefreshOnLoad : 0U));
+  doc->flags = static_cast<std::uint8_t>(pcd::kCacheEnableRefresh | (cache.save_data() ? pcd::kCacheSaveData : 0U) |
+                                         (refresh_on_load ? pcd::kCacheRefreshOnLoad : 0U));
   if (const std::optional<std::uint32_t> limit = cache.missing_items_limit(); limit) {
     if (*limit == 0xFFFFFFFFU) {
       return false;
@@ -1580,10 +1585,14 @@ Expected<std::vector<std::uint8_t>, Error> WriteRecords(const pivot::PivotCache&
 Expected<pivot::PivotCache, Error> pivot_cache_from_xlsb(ByteSpan definition_part, ByteSpan records_part,
                                                          bool date1904) {
   ASSIGN_OR_RETURN(const pcd::Document doc, decode_pivot_cache_definition(definition_part));
-  ASSIGN_OR_RETURN(const std::vector<CellKind> kinds, cell_kinds_of_cache_definition(definition_part));
-  ASSIGN_OR_RETURN(const cache_records::PivotCacheRecordsDoc records, decode_pivot_cache_records(records_part, kinds));
-  if (records.rows.size() != doc.record_count) {
-    return Corrupt("definition record count does not match the records part");
+  const bool save_data = (doc.flags & pcd::kCacheSaveData) != 0U;
+  cache_records::PivotCacheRecordsDoc records;
+  if (save_data) {
+    ASSIGN_OR_RETURN(const std::vector<CellKind> kinds, cell_kinds_of_cache_definition(definition_part));
+    ASSIGN_OR_RETURN(records, decode_pivot_cache_records(records_part, kinds));
+    if (records.rows.size() != doc.record_count) {
+      return Corrupt("definition record count does not match the records part");
+    }
   }
   pivot::PivotCache cache;
   ReadRoot(doc, cache);
@@ -1614,11 +1623,13 @@ Expected<XlsbPivotCacheParts, Error> pivot_cache_to_xlsb(const pivot::PivotCache
   if (!WriteRoot(cache, &doc) || !WriteExtLst(cache, &doc)) {
     return NotWritable();
   }
-  doc.records_rel_id = std::string(records_rel_id);
-  if (static_cast<std::uint64_t>(cache.records().size()) > 0xFFFFFFFFULL) {
+  if (cache.save_data()) {
+    doc.records_rel_id = std::string(records_rel_id);
+  }
+  if (static_cast<std::uint64_t>(cache.record_count_to_save()) > 0xFFFFFFFFULL) {
     return NotWritable();
   }
-  doc.record_count = static_cast<std::uint32_t>(cache.records().size());
+  doc.record_count = static_cast<std::uint32_t>(cache.record_count_to_save());
   for (const pivot::PivotCacheField& in : cache.fields()) {
     pcd::Field field;
     if (!WriteField(in, date1904, &field)) {
@@ -1643,8 +1654,10 @@ Expected<XlsbPivotCacheParts, Error> pivot_cache_to_xlsb(const pivot::PivotCache
   if (!decode_pivot_cache_definition(ByteSpan{parts.definition.data(), parts.definition.size()})) {
     return NotWritable();
   }
-  ASSIGN_OR_RETURN(parts.records,
-                   WriteRecords(cache, ByteSpan{parts.definition.data(), parts.definition.size()}, date1904));
+  if (cache.save_data()) {
+    ASSIGN_OR_RETURN(parts.records,
+                     WriteRecords(cache, ByteSpan{parts.definition.data(), parts.definition.size()}, date1904));
+  }
   return parts;
 }
 

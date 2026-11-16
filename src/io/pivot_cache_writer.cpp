@@ -477,7 +477,7 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache, const P
   if (cache.save_data()) {
     append_xml_attr(out, "r:id", "rId1");
   }
-  append_xml_attr_uint(out, "recordCount", cache.records().size());
+  append_xml_attr_uint(out, "recordCount", cache.record_count_to_save());
   // A cache built in memory whose records no refresh filled asks Excel to
   // rebuild the report on open, as does a plan whose caller found a table it
   // could not write lines for. Otherwise the captured attributes stand.

@@ -404,6 +404,15 @@ class PivotCache {
   bool save_data() const { return save_data_; }
   void set_save_data(bool value) { save_data_ = value; }
 
+  /// `recordCount` of a cache read without its records (`saveData` off): the count its last refresh found.
+  std::optional<std::uint32_t> unsaved_record_count() const { return unsaved_record_count_; }
+  void set_unsaved_record_count(std::optional<std::uint32_t> count) { unsaved_record_count_ = count; }
+
+  /// The `recordCount` a save writes: the records held, else the count read with a cache saved without them.
+  std::size_t record_count_to_save() const {
+    return records_.empty() && unsaved_record_count_.has_value() ? *unsaved_record_count_ : records_.size();
+  }
+
   /// Every `<pivotCacheDefinition>` property a refresh keeps: the root and
   /// `<cacheSource>` attributes, the retained children, the source, the
   /// options and the id. Fields, records, text and calculated items are not
@@ -450,6 +459,7 @@ class PivotCache {
   std::string trailing_children_after_calculated_xml_;
   std::vector<PivotCalculatedItem> calculated_items_;
   bool save_data_ = true;
+  std::optional<std::uint32_t> unsaved_record_count_;
   std::optional<std::uint32_t> missing_items_limit_;
   std::optional<bool> refresh_on_load_;
 };

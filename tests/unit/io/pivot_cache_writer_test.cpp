@@ -1122,6 +1122,24 @@ TEST(PivotCacheOptions, SaveDataLimitAndRefreshOnLoadRoundTrip) {
   EXPECT_FALSE(Has(out, "r:id=")) << out;
 }
 
+// A cache saved without its records keeps the count its last refresh found, as Excel writes it back; once records
+// are held again, they are counted.
+TEST(PivotCacheOptions, SaveDataOffKeepsItsRecordCount) {
+  pivot::PivotCache cache =
+      ReadCache(DefinitionXml(" refreshedBy=\"x\" saveData=\"0\" recordCount=\"12\"", kCalcItemFields, ""));
+  EXPECT_TRUE(cache.records().empty());
+  EXPECT_EQ(cache.unsaved_record_count(), std::optional<std::uint32_t>(12U));
+  std::string out = write_pivot_cache_definition(cache);
+  EXPECT_TRUE(Has(out, " recordCount=\"12\"")) << out;
+  cache.mutable_records().emplace_back();
+  out = write_pivot_cache_definition(cache);
+  EXPECT_TRUE(Has(out, " recordCount=\"1\"")) << out;
+  // With saveData on, the attribute is the records part's count and is not kept.
+  const pivot::PivotCache saved =
+      ReadCache(DefinitionXml(" refreshedBy=\"x\" recordCount=\"12\"", kCalcItemFields, ""));
+  EXPECT_FALSE(saved.unsaved_record_count().has_value());
+}
+
 TEST(PivotCacheOptions, DefaultsWriteNothing) {
   const std::string out =
       write_pivot_cache_definition(ReadCache(DefinitionXml(" refreshedBy=\"x\"", kCalcItemFields, "")));

@@ -407,18 +407,27 @@ void LoadPivotParts(const ZipReader& zip, Workbook& wb, std::vector<UnknownRelat
         wb.find_pivot_cache(entry.id) != nullptr) {
       continue;
     }
-    const std::string records_path = RelatedPart(zip, definition, kRelPivotCacheRecords);
-    if (!DirectBinPart(definition, "xl/pivotCache/") || !DirectBinPart(records_path, "xl/pivotCache/")) {
+    if (!DirectBinPart(definition, "xl/pivotCache/")) {
       continue;
     }
     const std::optional<std::vector<std::uint8_t>> definition_bytes = ReadPart(zip, definition);
-    const std::optional<std::vector<std::uint8_t>> records_bytes = ReadPart(zip, records_path);
-    if (!definition_bytes || !records_bytes) {
+    if (!definition_bytes) {
+      continue;
+    }
+    // A cache saved without its data (`saveData` off) has no records part and names none.
+    const auto header = decode_pivot_cache_definition(ByteSpan{definition_bytes->data(), definition_bytes->size()});
+    const bool save_data = !header || (header.value().flags & pivot_cache_definition::kCacheSaveData) != 0U;
+    const std::string records_path = save_data ? RelatedPart(zip, definition, kRelPivotCacheRecords) : std::string();
+    if (save_data && !DirectBinPart(records_path, "xl/pivotCache/")) {
+      continue;
+    }
+    const std::optional<std::vector<std::uint8_t>> records_bytes =
+        save_data ? ReadPart(zip, records_path) : std::optional<std::vector<std::uint8_t>>(std::vector<std::uint8_t>());
+    if (!records_bytes) {
       continue;
     }
     // A kept definition names its records by the id the writer relates them under.
-    const auto header = decode_pivot_cache_definition(ByteSpan{definition_bytes->data(), definition_bytes->size()});
-    if (header && header.value().records_rel_id != kPivotCacheRecordsRelId) {
+    if (save_data && header && header.value().records_rel_id != kPivotCacheRecordsRelId) {
       StructuredLog("xlsb.pivot.skipped")
           .field("part", definition)
           .field("reason", std::string_view("records relationship id differs from rId1"))
@@ -437,8 +446,10 @@ void LoadPivotParts(const ZipReader& zip, Workbook& wb, std::vector<UnknownRelat
     consumed_parts.insert(ooxml::rels_path_for_part(definition));
     origins.set(definition,
                 RetainedPartOriginTag{PassthroughPart::RetainedOrigin::kPivotCacheDefinition, 0, 0, entry.id});
-    origins.set(records_path,
-                RetainedPartOriginTag{PassthroughPart::RetainedOrigin::kPivotCacheRecords, 0, 0, entry.id});
+    if (save_data) {
+      origins.set(records_path,
+                  RetainedPartOriginTag{PassthroughPart::RetainedOrigin::kPivotCacheRecords, 0, 0, entry.id});
+    }
     book_rels.erase(std::remove_if(book_rels.begin(), book_rels.end(),
                                    [&definition](const UnknownRelationship& rel) {
                                      return !rel.target_external && rel.target == definition;

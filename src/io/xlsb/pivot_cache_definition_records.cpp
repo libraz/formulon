@@ -214,22 +214,26 @@ Expected<void, Error> DecodeHeader(ByteSpan p, pcd::Document* doc) {
   ASSIGN_OR_RETURN(doc->min_refreshable_version, read_u8(p));
   ASSIGN_OR_RETURN(doc->created_version, read_u8(p));
   ASSIGN_OR_RETURN(doc->flags, read_u8(p));
-  if ((doc->flags & ~kCacheKnownFlags) != 0 ||
-      (doc->flags & pcd::kCacheSaveDataEnableRefresh) != pcd::kCacheSaveDataEnableRefresh) {
+  if ((doc->flags & ~kCacheKnownFlags) != 0 || (doc->flags & pcd::kCacheEnableRefresh) == 0U) {
     return Unmeasured("cache definition flag bits", kBeginPivotCacheDef);
   }
+  const bool save_data = (doc->flags & pcd::kCacheSaveData) != 0U;
   ASSIGN_OR_RETURN(doc->missing_items_limit, read_u32(p));
   ASSIGN_OR_RETURN(doc->refreshed_date, read_double(p));
   ASSIGN_OR_RETURN(const std::uint8_t presence, read_u8(p));
-  if ((presence & ~kCacheRefreshedByPresent) != kCacheRecordsRelPresent) {
-    return Unmeasured("cache definition without a records relationship", kBeginPivotCacheDef);
+  // A cache saved without its data names no records relationship; Excel's saves of one all carry a refreshedBy.
+  if ((presence & ~kCacheRefreshedByPresent) != (save_data ? kCacheRecordsRelPresent : 0U) ||
+      (!save_data && (presence & kCacheRefreshedByPresent) == 0U)) {
+    return Unmeasured("cache definition records relationship against saveData", kBeginPivotCacheDef);
   }
   ASSIGN_OR_RETURN(doc->record_count, read_u32(p));
   if ((presence & kCacheRefreshedByPresent) != 0U) {
     ASSIGN_OR_RETURN(std::string by, read_xlwidestring(p));
     doc->refreshed_by = std::move(by);
   }
-  ASSIGN_OR_RETURN(doc->records_rel_id, read_xlwidestring(p));
+  if (save_data) {
+    ASSIGN_OR_RETURN(doc->records_rel_id, read_xlwidestring(p));
+  }
   if (!doc->refreshed_by) {
     if (p.size != 0U && p.size != kNoRefreshedByTailSize) {
       return Unmeasured("cache definition tail without refreshedBy", kBeginPivotCacheDef);
@@ -681,13 +685,16 @@ std::vector<std::uint8_t> encode_pivot_cache_definition(const pivot_cache_defini
   emit_u8(p, doc.flags);
   emit_u32(p, doc.missing_items_limit);
   emit_double(p, doc.refreshed_date);
-  emit_u8(p, static_cast<std::uint8_t>(kCacheRecordsRelPresent |
+  const bool save_data = (doc.flags & pcd::kCacheSaveData) != 0U;
+  emit_u8(p, static_cast<std::uint8_t>((save_data ? kCacheRecordsRelPresent : 0U) |
                                        (doc.refreshed_by.has_value() ? kCacheRefreshedByPresent : 0U)));
   emit_u32(p, doc.record_count);
   if (doc.refreshed_by.has_value()) {
     emit_xlwidestring(p, *doc.refreshed_by);
   }
-  emit_xlwidestring(p, doc.records_rel_id);
+  if (save_data) {
+    emit_xlwidestring(p, doc.records_rel_id);
+  }
   emit_record(out, kBeginPivotCacheDef, p);
 
   p.clear();

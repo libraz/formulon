@@ -34,11 +34,12 @@ namespace xlsb {
 /// The two parts of one pivot cache.
 struct XlsbPivotCacheParts {
   std::vector<std::uint8_t> definition;  ///< `xl/pivotCache/pivotCacheDefinitionN.bin`.
-  std::vector<std::uint8_t> records;     ///< `xl/pivotCache/pivotCacheRecordsN.bin`.
+  std::vector<std::uint8_t> records;     ///< `xl/pivotCache/pivotCacheRecordsN.bin`; empty with `saveData` off.
 };
 
-/// Decodes a cache from its definition and records parts. `date1904` is the
-/// workbook's date system. Errors are the codecs' (kIoXlsbRecordCorrupt,
+/// Decodes a cache from its definition and records parts; a cache saved
+/// without its data (`saveData` off) has no records part and ignores
+/// `records_part`. `date1904` is the workbook's date system. Errors are the codecs' (kIoXlsbRecordCorrupt,
 /// kIoXlsbRecordTruncated, kIoXlsbUnknownRecord, kIoXlsbUnsupportedPtg),
 /// kIoXlsbUnknownRecord with an "unmeasured" message for a record state with
 /// no Excel-saved sample, and kSecurityResourceLimit past
@@ -47,8 +48,8 @@ Expected<pivot::PivotCache, Error> pivot_cache_from_xlsb(ByteSpan definition_par
                                                          bool date1904);
 
 /// Encodes `cache` as its two parts; the definition names its records part
-/// by `records_rel_id`. A model state the records cannot hold, or one with no
-/// Excel-saved sample, is kIoFeatureNotWritable (`kind=pivot_cache`).
+/// by `records_rel_id`. With `saveData` off there is no records part. A model state the records cannot hold, or one
+/// with no Excel-saved sample, is kIoFeatureNotWritable (`kind=pivot_cache`).
 Expected<XlsbPivotCacheParts, Error> pivot_cache_to_xlsb(const pivot::PivotCache& cache, bool date1904,
                                                          std::string_view records_rel_id);
 

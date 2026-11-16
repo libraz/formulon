@@ -430,6 +430,18 @@ INSTANTIATE_TEST_SUITE_P(Sources, XlsbParityPivotSource,
                                            "source_dynamic_name", "source_table", "source_table_resized_not_refreshed",
                                            "source_table_resized_refreshed", "source_table_on_pivot_sheet"));
 
+// A cache saved without its data (xlsb_parity/pivot/save_data, Excel 16.115's saves; set through the object model,
+// and authored), against the control that saves it: no records part, the record count
+// kept, and the table's asteriskTotals.
+class XlsbParityPivotSaveData : public ::testing::TestWithParam<const char*> {};
+
+TEST_P(XlsbParityPivotSaveData, WritesExcelsPivotRecords) {
+  ExpectExcelsPivotRecords("save_data", GetParam());
+}
+
+INSTANTIATE_TEST_SUITE_P(SaveData, XlsbParityPivotSaveData,
+                         ::testing::Values("option_control_s", "option_save_data_off", "authored_save_data_off"));
+
 // A numeric range group in place on its database field (xlsb_parity/pivot/groups, Excel 16.115's saves, ja-JP and
 // en-US): the field keeps its shared items and carries the group, with automatic and manual bounds, on rows and
 // columns, against the ungrouped control.

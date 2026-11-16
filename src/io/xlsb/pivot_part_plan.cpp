@@ -275,7 +275,10 @@ PivotPartLoss plan_pivot_parts(const Workbook& wb, const std::unordered_set<std:
       });
       next_cache = k + 1U;
       part.definition_path = "xl/pivotCache/pivotCacheDefinition" + std::to_string(k) + ".bin";
-      part.records_path = "xl/pivotCache/pivotCacheRecords" + std::to_string(k) + ".bin";
+      // A cache saved without its data has neither a records part nor the relationship naming it.
+      if (cache->save_data()) {
+        part.records_path = "xl/pivotCache/pivotCacheRecords" + std::to_string(k) + ".bin";
+      }
       part.definition = std::move(parts.value().definition);
       part.records = std::move(parts.value().records);
     }
