@@ -684,6 +684,36 @@ TEST(BuiltinsShapeChainedRange, EveryDistinctQualifiedSheetIsValidated) {
   }
 }
 
+// ROW / COLUMN over a value array (not a reference) answer element by element: an error element keeps its error and
+// any other element is #VALUE!, so ERROR.TYPE over the result tells the #N/A elements apart (Mac Excel 16.115).
+TEST(BuiltinsColumn, OverAValueArrayMapsElementByElement) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  s.set_cell_value(0, 0, Value::error(ErrorCode::NA));  // A1
+  s.set_cell_value(0, 1, Value::number(42.0));          // B1
+  s.set_cell_value(0, 2, Value::error(ErrorCode::NA));  // C1
+  const Value types = EvalSourceIn("=ERROR.TYPE(COLUMN(IF(A1:C1<>\"z\",A1:C1)))", wb, s);
+  ASSERT_TRUE(types.is_array()) << types.debug_to_string();
+  ASSERT_EQ(types.as_array_cols(), 3U);
+  EXPECT_DOUBLE_EQ(types.as_array()->cells[0].as_number(), 7.0);
+  EXPECT_DOUBLE_EQ(types.as_array()->cells[1].as_number(), 3.0);
+  EXPECT_DOUBLE_EQ(types.as_array()->cells[2].as_number(), 7.0);
+  const Value picked =
+      EvalSourceIn("=IFNA(INDEX(A1:C1,MATCH(3,ERROR.TYPE(COLUMN(IF(A1:C1<>\"~N/A\",A1:C1))),0)),\"\")", wb, s);
+  ASSERT_TRUE(picked.is_number()) << picked.debug_to_string();
+  EXPECT_DOUBLE_EQ(picked.as_number(), 42.0);
+  const Value rows = EvalSourceIn("=ERROR.TYPE(ROW(IF({1;0;1}=1,{5;6;7},NA())))", wb, s);
+  ASSERT_TRUE(rows.is_array()) << rows.debug_to_string();
+  ASSERT_EQ(rows.as_array_rows(), 3U);
+  EXPECT_DOUBLE_EQ(rows.as_array()->cells[0].as_number(), 3.0);
+  EXPECT_DOUBLE_EQ(rows.as_array()->cells[1].as_number(), 7.0);
+  EXPECT_DOUBLE_EQ(rows.as_array()->cells[2].as_number(), 3.0);
+  // A scalar that is no reference stays #VALUE!.
+  const Value scalar = EvalSourceIn("=ROW(5)", wb, s);
+  ASSERT_TRUE(scalar.is_error());
+  EXPECT_EQ(scalar.as_error(), ErrorCode::Value);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

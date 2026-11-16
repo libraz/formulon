@@ -503,14 +503,12 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
     // Fall through to the scalar fallback so subtree errors propagate
     // and non-reference calls still surface `#VALUE!`.
   }
-  // Evaluate to surface errors from the subtree verbatim; otherwise
-  // reject non-references as `#VALUE!` (matches Excel for ROW(literal)
-  // and ROW({...}) array-literal forms).
-  const Value v = eval_node(arg, arena, registry, ctx);
-  if (v.is_error()) {
-    return v;
+  // A value that is no reference: errors surface, anything else is #VALUE!, element by element over an array. An
+  // array constant is refused at entry, so it is one #VALUE!.
+  if (k == parser::NodeKind::ArrayLiteral) {
+    return Value::error(ErrorCode::Value);
   }
-  return Value::error(ErrorCode::Value);
+  return row_column_of_values(eval_node(arg, arena, registry, ctx), arena);
 }
 
 }  // namespace

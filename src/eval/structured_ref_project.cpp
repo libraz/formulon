@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "eval/array_alloc.h"
+#include "eval/array_context.h"
 #include "eval/declared_rect.h"
 #include "eval/eval_context.h"
 #include "eval/range_args.h"
@@ -104,6 +105,21 @@ bool external_reference_rect(const parser::AstNode& node, std::uint32_t* top, st
   *bottom = std::max(a.row, b.row);
   *right = std::max(a.col, b.col);
   return true;
+}
+
+Value row_column_of_values(const Value& value, Arena& arena) {
+  const auto element = [](const Value& v) { return v.is_error() ? v : Value::error(ErrorCode::Value); };
+  if (!value.is_array()) {
+    return element(value);
+  }
+  const std::size_t count = static_cast<std::size_t>(value.as_array_rows()) * value.as_array_cols();
+  std::vector<Value> cells;
+  cells.reserve(count);
+  for (std::size_t i = 0; i < count; ++i) {
+    cells.push_back(element(value.as_array_cells()[i]));
+  }
+  return detail::array_value_or_num_error(
+      detail::make_array_value(arena, value.as_array_rows(), value.as_array_cols(), cells));
 }
 
 bool reference_endpoint_pair(const parser::AstNode& node, parser::Reference* out_lhs, parser::Reference* out_rhs,

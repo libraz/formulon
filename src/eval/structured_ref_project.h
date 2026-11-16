@@ -48,6 +48,10 @@ bool reference_endpoint_pair(const parser::AstNode& node, parser::Reference* out
 bool external_reference_rect(const parser::AstNode& node, std::uint32_t* top, std::uint32_t* left,
                              std::uint32_t* bottom, std::uint32_t* right);
 
+// ROW / COLUMN of a value that is no reference, element by element over an array: an error keeps its error and any
+// other value is #VALUE!. A scalar becomes one such element.
+Value row_column_of_values(const Value& value, Arena& arena);
+
 }  // namespace eval
 }  // namespace formulon
 

@@ -292,15 +292,24 @@ bool expand_row_or_column_call(const parser::AstNode& call, Arena& arena, const 
     return true;
   }
 
-  // Evaluate the subtree to surface any errors verbatim (e.g. `ROW(1/0)`),
-  // otherwise reject non-references with `#VALUE!`.
-  const Value v = eval_node(arg, arena, registry, ctx);
-  if (v.is_error()) {
+  // A value that is no reference: errors surface, anything else is #VALUE!, element by element over an array. An
+  // array constant is refused at entry, so it is one #VALUE!.
+  const Value v = k == parser::NodeKind::ArrayLiteral
+                      ? Value::error(ErrorCode::Value)
+                      : row_column_of_values(eval_node(arg, arena, registry, ctx), arena);
+  if (!v.is_array()) {
     *out_err_code = v.as_error();
     return false;
   }
-  *out_err_code = ErrorCode::Value;
-  return false;
+  const std::size_t count = static_cast<std::size_t>(v.as_array_rows()) * v.as_array_cols();
+  out_cells->assign(v.as_array_cells(), v.as_array_cells() + count);
+  if (out_rows != nullptr) {
+    *out_rows = v.as_array_rows();
+  }
+  if (out_cols != nullptr) {
+    *out_cols = v.as_array_cols();
+  }
+  return true;
 }
 
 }  // namespace
