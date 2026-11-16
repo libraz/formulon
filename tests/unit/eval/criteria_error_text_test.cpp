@@ -127,6 +127,32 @@ TEST(CriteriaErrorText, EveryErrorNameMatchesItsOwnCode) {
   }
 }
 
+// Under de-DE an error criterion names the error by its German spelling (#NV), in any letter case; the English
+// "#N/A" is plain text there and matches no error cell.
+TEST(CriteriaErrorText, ErrorNameCriteriaUseTheProfileSpelling) {
+  const ExcelProfile profile{ExcelHost::kMac365, ExcelLocale::kDeDE};
+  const ScopedEvalProfile scope(profile);
+  const Value na = Value::error(ErrorCode::NA);
+  const Value div0 = Value::error(ErrorCode::Div0);
+  const Value five = Value::number(5.0);
+  for (const char* text : {"#NV", "=#NV", "#nv"}) {
+    const ParsedCriterion c = parse_criterion(Value::text(text));
+    EXPECT_TRUE(matches_criterion(na, c, profile)) << text;
+    EXPECT_FALSE(matches_criterion(div0, c, profile)) << text;
+    EXPECT_FALSE(matches_criterion(five, c, profile)) << text;
+  }
+  const ParsedCriterion ne_nv = parse_criterion(Value::text("<>#NV"));
+  EXPECT_FALSE(matches_criterion(na, ne_nv, profile));
+  EXPECT_TRUE(matches_criterion(div0, ne_nv, profile));
+  EXPECT_TRUE(matches_criterion(five, ne_nv, profile));
+  const ParsedCriterion english = parse_criterion(Value::text("#N/A"));
+  EXPECT_FALSE(matches_criterion(na, english, profile));
+  const ParsedCriterion ne_english = parse_criterion(Value::text("<>#N/A"));
+  for (const Value* cell : {&na, &div0, &five}) {
+    EXPECT_TRUE(matches_criterion(*cell, ne_english, profile));
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon
