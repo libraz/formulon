@@ -55,22 +55,23 @@ Expected<std::uint32_t, ErrorCode> read_first_codepoint(const Value& value) {
   return decoded.codepoint;
 }
 
+// Shared shell of UPPER / LOWER / PROPER: coerce to text, map, intern.
+Value case_mapped_text(const Value* args, Arena& arena, std::string (*map)(std::string_view)) {
+  auto text = coerce_to_text(args[0]);
+  if (!text) {
+    return Value::error(text.error());
+  }
+  return Value::text(arena.intern(map(text.value())));
+}
+
 // UPPER(text) / LOWER(text) - simple Unicode case mapping (`utils/case_map.h`);
 // no mapping changes a character's length.
 Value Upper(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  auto text = coerce_to_text(args[0]);
-  if (!text) {
-    return Value::error(text.error());
-  }
-  return Value::text(arena.intern(case_map_to_upper(text.value())));
+  return case_mapped_text(args, arena, &case_map_to_upper);
 }
 
 Value Lower(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  auto text = coerce_to_text(args[0]);
-  if (!text) {
-    return Value::error(text.error());
-  }
-  return Value::text(arena.intern(case_map_to_lower(text.value())));
+  return case_mapped_text(args, arena, &case_map_to_lower);
 }
 
 // TRIM(text) - removes leading and trailing ASCII spaces (0x20), plus the
@@ -133,24 +134,7 @@ Value Trim(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   return Value::text(arena.intern(out));
 }
 
-// The `(text, [n])` arguments of LEFT / RIGHT; `n` defaults to 1, snaps to
-// a near integer, and a negative raw `n` is `#VALUE!`.
-struct TextAndCount {
-  std::string text;
-  int count;
-};
-
-Expected<TextAndCount, ErrorCode> read_text_and_count(const Value* args, std::uint32_t arity) {
-  auto text = coerce_to_text(args[0]);
-  if (!text) {
-    return std::move(text.error());
-  }
-  auto parsed = text_detail::read_optional_snapped_int_arg(args, arity, 1u, 0.0, 1);
-  if (!parsed) {
-    return std::move(parsed.error());
-  }
-  return TextAndCount{std::move(text.value()), parsed.value()};
-}
+using text_detail::read_text_and_count;
 
 // LEFT(text, [n]) - first `n` code points on every Compatibility Version. Default n=1. n<0 -> `#VALUE!`.
 Value Left(const Value* args, std::uint32_t arity, Arena& arena) {
@@ -502,11 +486,7 @@ Value Code_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // (`utils/case_map.h`). Digits, punctuation and characters outside the BMP
 // start a new word.
 Value Proper(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  auto text = coerce_to_text(args[0]);
-  if (!text) {
-    return Value::error(text.error());
-  }
-  return Value::text(arena.intern(case_map_to_proper(text.value())));
+  return case_mapped_text(args, arena, &case_map_to_proper);
 }
 
 // HYPERLINK(link_location, [friendly_name]) - Excel's hyperlink function

@@ -139,23 +139,17 @@ inline bool straddles_last_byte(std::uint64_t used, std::uint64_t budget, std::u
 // budget (the empty string).
 bool read_byte_budget_args(const Value* args, std::uint32_t arity, std::string* out_text, std::uint64_t* out_budget,
                            Value* out_early) {
-  auto text = coerce_to_text(args[0]);
-  if (!text) {
-    *out_early = Value::error(text.error());
+  auto in = text_detail::read_text_and_count(args, arity);
+  if (!in) {
+    *out_early = Value::error(in.error());
     return false;
   }
-  auto byte_count = text_detail::read_optional_snapped_int_arg(args, arity, 1u, 0.0, 1);
-  if (!byte_count) {
-    *out_early = Value::error(byte_count.error());
-    return false;
-  }
-  const int budget = byte_count.value();
-  if (budget == 0) {
+  if (in.value().count == 0) {
     *out_early = Value::text({});
     return false;
   }
-  *out_text = std::move(text.value());
-  *out_budget = static_cast<std::uint64_t>(budget);
+  *out_text = std::move(in.value().text);
+  *out_budget = static_cast<std::uint64_t>(in.value().count);
   return true;
 }
 

@@ -38,6 +38,15 @@ Expected<int, ErrorCode> read_snapped_int_arg(const Value& v, double min);
 Expected<int, ErrorCode> read_optional_snapped_int_arg(const Value* args, std::uint32_t arity, std::uint32_t index,
                                                        double min, int default_value);
 
+// The `(text, [n])` arguments of LEFT / RIGHT / LEFTB / RIGHTB; `n` defaults to 1,
+// snaps to a near integer, and a negative raw `n` is `#VALUE!`.
+struct TextAndCount {
+  std::string text;
+  int count;
+};
+
+Expected<TextAndCount, ErrorCode> read_text_and_count(const Value* args, std::uint32_t arity);
+
 // Reads optional integer argument `args[index]`, returning `default_value`
 // when the caller omitted it. Used by LEFT/RIGHT/FIND/SEARCH and their DBCS
 // variants so the defaulting rule stays in one place.

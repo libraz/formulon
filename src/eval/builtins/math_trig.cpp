@@ -41,7 +41,7 @@ using builtins_detail::to_finite_value;
 using DoubleFn = double (*)(double);
 using DomainPredicate = bool (*)(double);
 
-inline Value apply_unary_math(DoubleFn fn, const Value* args) {
+[[gnu::noinline]] inline Value apply_unary_math(DoubleFn fn, const Value* args) {
   auto x = coerce_to_number(args[0]);
   if (!x) {
     return Value::error(x.error());
@@ -50,7 +50,7 @@ inline Value apply_unary_math(DoubleFn fn, const Value* args) {
 }
 
 // sin / cos / tan: the argument must lie below 2^27 in magnitude.
-inline Value apply_trig_math(DoubleFn fn, const Value* args) {
+[[gnu::noinline]] inline Value apply_trig_math(DoubleFn fn, const Value* args) {
   auto x = coerce_to_number(args[0]);
   if (!x) {
     return Value::error(x.error());
@@ -61,7 +61,7 @@ inline Value apply_trig_math(DoubleFn fn, const Value* args) {
   return to_finite_value(fn(x.value()));
 }
 
-inline Value apply_guarded_unary_math(DoubleFn fn, DomainPredicate domain, const Value* args) {
+[[gnu::noinline]] inline Value apply_guarded_unary_math(DoubleFn fn, DomainPredicate domain, const Value* args) {
   auto x = coerce_to_number(args[0]);
   if (!x) {
     return Value::error(x.error());
@@ -74,7 +74,7 @@ inline Value apply_guarded_unary_math(DoubleFn fn, DomainPredicate domain, const
 
 // Coerces the single argument and hands it to a kernel that produces the
 // final `Value` itself (for functions with extra guards or special results).
-inline Value apply_unary_value(const Value* args, Value (*kernel)(double)) {
+[[gnu::noinline]] inline Value apply_unary_value(const Value* args, Value (*kernel)(double)) {
   auto x = coerce_to_number(args[0]);
   if (!x) {
     return Value::error(x.error());

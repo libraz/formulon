@@ -95,6 +95,18 @@ Expected<int, ErrorCode> read_optional_snapped_int_arg(const Value* args, std::u
   return read_snapped_int_arg(args[index], min);
 }
 
+Expected<TextAndCount, ErrorCode> read_text_and_count(const Value* args, std::uint32_t arity) {
+  auto text = coerce_to_text(args[0]);
+  if (!text) {
+    return std::move(text.error());
+  }
+  auto parsed = read_optional_snapped_int_arg(args, arity, 1u, 0.0, 1);
+  if (!parsed) {
+    return std::move(parsed.error());
+  }
+  return TextAndCount{std::move(text.value()), parsed.value()};
+}
+
 bool read_search_args(const Value* args, std::uint32_t arity, SearchUnit unit, SearchArgs* out, Value* out_result) {
   auto needle = coerce_to_text(args[0]);
   if (!needle) {

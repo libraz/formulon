@@ -297,27 +297,7 @@ Value Jis(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
     }
     if (cp >= 0xFF61 && cp <= 0xFF65) {
       // Half-width punctuation -> full-width CJK punctuation.
-      std::uint16_t mapped = 0;
-      switch (cp) {
-        case 0xFF61:
-          mapped = 0x3002;  // 。
-          break;
-        case 0xFF62:
-          mapped = 0x300C;  // 「
-          break;
-        case 0xFF63:
-          mapped = 0x300D;  // 」
-          break;
-        case 0xFF64:
-          mapped = 0x3001;  // 、
-          break;
-        case 0xFF65:
-          mapped = 0x30FB;  // ・
-          break;
-        default:
-          break;
-      }
-      append_codepoint(out, mapped);
+      append_codepoint(out, half_to_full_punctuation(cp));
       view.remove_prefix(d.byte_len);
       continue;
     }

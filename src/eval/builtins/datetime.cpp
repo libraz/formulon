@@ -234,7 +234,7 @@ Expected<date_time::YMD, ErrorCode> coerce_serial_ymd(const Value& v, bool date1
 
 // The time of day of a date argument, bounded by the workbook epoch's last
 // day like the calendar parts. Rebasing direct date text keeps the fraction.
-Expected<date_time::HMS, ErrorCode> coerce_serial_hms(const Value& v, bool date1904) {
+[[gnu::noinline]] Expected<date_time::HMS, ErrorCode> coerce_serial_hms(const Value& v, bool date1904) {
   auto bounded = coerce_bounded_date_arg(v, date1904);
   if (!bounded) {
     return std::move(bounded.error());

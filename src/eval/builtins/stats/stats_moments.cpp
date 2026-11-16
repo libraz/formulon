@@ -175,25 +175,14 @@ Value SkewP(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // Requires at least 4 numeric inputs (the cubic denominator collapses
 // otherwise) and non-zero sample variance; both failures yield `#DIV/0!`.
 Value Kurt(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  auto collected = collect_direct_stats(args, arity);
-  if (!collected) {
-    return Value::error(collected.error());
+  auto stat = centered_and_scaled(args, arity, 4u, 1.0);
+  if (!stat) {
+    return Value::error(stat.error());
   }
-  const std::vector<double>& xs = collected.value();
-  if (xs.size() < 4u) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const double n = static_cast<double>(xs.size());
-  const MeanSS ms = compute_mean_ss(xs);
-  const double mean = ms.mean;
-  const double variance = ms.ss / (n - 1.0);
-  if (!(variance > 0.0)) {
-    return Value::error(ErrorCode::Div0);
-  }
-  const double sd = std::sqrt(variance);
+  const double n = stat.value().n;
   double quartic_sum = 0.0;
-  for (double x : xs) {
-    const double q = (x - mean) / sd;
+  for (double x : stat.value().xs) {
+    const double q = (x - stat.value().mean) / stat.value().scale;
     quartic_sum += (q * q) * (q * q);
   }
   const double coeff_a = (n * (n + 1.0)) / (((n - 1.0) * (n - 2.0)) * (n - 3.0));

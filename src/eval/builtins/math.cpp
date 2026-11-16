@@ -235,14 +235,14 @@ inline double signum(double x) {
   return 0.0;
 }
 
-// Shared frame of legacy CEILING / FLOOR. `zero_significance` is the result
-// for `significance == 0`; `round` is `ceil` or `floor` on the quotient.
+// Shared frame of legacy CEILING / FLOOR. `ceiling` selects ceil vs floor on
+// the quotient and the `significance == 0` result (0 for CEILING, #DIV/0! for FLOOR).
 //
 // Matching signs round the magnitude, then restore the sign; mismatched signs
 // round the signed quotient. The quotient is read through its 15-digit view
 // (`FLOOR(7.1, 0.1)` is 7.1, not 7).
-template <typename RoundFn>
-Value legacy_significance_round(const Value* args, const Value& zero_significance, RoundFn round) {
+Value legacy_significance_round(const Value* args, bool ceiling) {
+  const auto round = ceiling ? +[](double q) { return std::ceil(q); } : +[](double q) { return std::floor(q); };
   auto operands = builtins_detail::read_number_pair(args, 0, 1);
   if (!operands) {
     return Value::error(operands.error());
@@ -260,7 +260,7 @@ Value legacy_significance_round(const Value* args, const Value& zero_significanc
     return Value::error(ErrorCode::Num);
   }
   if (s == 0.0) {
-    return zero_significance;
+    return ceiling ? Value::number(0.0) : Value::error(ErrorCode::Div0);
   }
   const double abs_s = std::fabs(s);
   const double r = (signum(n) == signum(s))
@@ -285,7 +285,7 @@ Value legacy_significance_round(const Value* args, const Value& zero_significanc
 // suite `floor_ceiling_edges.yaml` for the reference values.
 Value Ceiling(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   // Legacy CEILING: significance of zero yields zero (no #DIV/0!).
-  return legacy_significance_round(args, Value::number(0.0), [](double q) { return std::ceil(q); });
+  return legacy_significance_round(args, /*ceiling=*/true);
 }
 
 // FLOOR(number, significance) - legacy: nearest multiple of
@@ -301,7 +301,7 @@ Value Ceiling(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // direction falls through to the math-floor branch and returns a numeric
 // value. See oracle suite `floor_ceiling_edges.yaml` for reference.
 Value Floor(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return legacy_significance_round(args, Value::error(ErrorCode::Div0), [](double q) { return std::floor(q); });
+  return legacy_significance_round(args, /*ceiling=*/false);
 }
 
 // MROUND(number, multiple) - nearest multiple of `|multiple|` to `number`,
