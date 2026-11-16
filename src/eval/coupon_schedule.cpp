@@ -99,6 +99,7 @@ bool compute_coupon_dates(double settlement, double maturity, int frequency, int
   out->days_nc = std::round(days_nc_raw);
   out->period_days = period_days;
   out->coupons_remaining = coupons;
+  out->pcd_in_calendar = pcd >= date_time::first_calendar_serial(date1904);
   // `bond_dsc` is the effective DSC for bond pricing. For bases 0/1/4
   // the raw `days_nc` already satisfies `days_bs + days_nc ==
   // period_days`, so `bond_dsc == days_nc`. For bases 2 / 3 the raw

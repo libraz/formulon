@@ -34,6 +34,7 @@
 #include "eval/name_env_resolve.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_resolvers.h"
+#include "eval/scalar_args.h"
 #include "excel_locale.h"
 #include "parser/ast.h"
 #include "parser/formula_prefix.h"
@@ -537,15 +538,10 @@ constexpr std::uint32_t kHashigoTakaCodepoint = 0x9AD9u;
 constexpr double kHashigoTakaCode = 38526.0;
 constexpr double kUnmappableCode = 63.0;
 
-Value eval_code_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                     const EvalContext& ctx) {
-  if (call.as_call_arity() != 1U) {
-    return Value::error(ErrorCode::Value);
-  }
-  const Value arg = eval_node(call.as_call_arg(0), arena, registry, ctx);
-  if (arg.is_error()) {
-    return arg;
-  }
+namespace {
+
+// CODE of one value under the workbook's profile.
+Value code_of(const Value& arg, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
   const ExcelProfile profile = ctx.excel_profile();
   if (profile.host == ExcelHost::kWin365 && sbcs_codepage(profile) == SbcsCodepage::kCp932) {
     auto text = coerce_to_text(arg);
@@ -573,15 +569,8 @@ Value eval_code_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   return def->impl(&arg, 1U, arena);
 }
 
-Value eval_lenb_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                     const EvalContext& ctx) {
-  if (call.as_call_arity() != 1U) {
-    return Value::error(ErrorCode::Value);
-  }
-  const Value arg = eval_node(call.as_call_arg(0), arena, registry, ctx);
-  if (arg.is_error()) {
-    return arg;
-  }
+// LENB of one value under the workbook's profile.
+Value lenb_of(const Value& arg, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
   const ExcelProfile profile = ctx.excel_profile();
   if (profile.host == ExcelHost::kWin365 && locale_facts(profile).dbcs_codepage != DbcsCodepage::kNone) {
     auto text = coerce_to_text(arg);
@@ -614,6 +603,34 @@ Value eval_lenb_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return Value::error(ErrorCode::Name);
   }
   return def->impl(&arg, 1U, arena);
+}
+
+// A one-argument text function of the profile, lifted element by element over
+// an array argument.
+template <Value (*Cell)(const Value&, Arena&, const FunctionRegistry&, const EvalContext&)>
+Value eval_lifted_text_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                            const EvalContext& ctx) {
+  if (call.as_call_arity() != 1U) {
+    return Value::error(ErrorCode::Value);
+  }
+  const Value arg = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  if (arg.is_error()) {
+    return arg;
+  }
+  return lift_over_array_args(&arg, 1U, arena,
+                              [&](const Value* a, std::uint32_t /*n*/) { return Cell(a[0], arena, registry, ctx); });
+}
+
+}  // namespace
+
+Value eval_code_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx) {
+  return eval_lifted_text_lazy<&code_of>(call, arena, registry, ctx);
+}
+
+Value eval_lenb_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx) {
+  return eval_lifted_text_lazy<&lenb_of>(call, arena, registry, ctx);
 }
 
 Value eval_weeknum_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

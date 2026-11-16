@@ -431,6 +431,10 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
       saw_blank_scalar_ref = true;
       continue;
     }
+    if (def->blank_scalar_policy == FunctionDef::BlankScalarPolicy::RejectAnyScalarBlank &&
+        arg_node.kind() == parser::NodeKind::Ref && v.kind() == ValueKind::Blank) {
+      return Value::error(def->blank_scalar_error);
+    }
     // Provenance-aware filter also applies to a single-cell `Ref` argument
     // for range-aware aggregators. Excel treats `MIN(A1, A2, A3)` the same
     // way it treats `MIN(A1:A3)`: Text / Bool / Blank cells are silently

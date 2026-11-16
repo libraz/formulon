@@ -83,7 +83,8 @@ double accrint_period_length(double anchor, double pcd, int frequency, int basis
 // from its start, every period before issue's contributes `calc_method` (1 for
 // TRUE, 0 for FALSE) and the period holding issue contributes its fraction.
 // With calc_method TRUE and settlement after first_interest the settlement
-// period is found by walking forward from first_interest.
+// period is found by walking forward from first_interest. NaN when the period
+// holding issue starts before the date system's first day.
 double accrint_periods(double issue, double first_interest, double settlement, int frequency, int basis,
                        bool calc_method, bool date1904) noexcept {
   const int months = 12 / frequency;
@@ -114,6 +115,9 @@ double accrint_periods(double issue, double first_interest, double settlement, i
     const double ei =
         basis == 3 ? 365.0 / static_cast<double>(frequency) : accrint_days(pcd, old, basis, false, 3, date1904);
     total = total + (partial ? ai / ei : (calc_method ? 1.0 : 0.0));
+  }
+  if (pcd < date_time::first_calendar_serial(date1904)) {
+    return std::nan("");
   }
   return total;
 }

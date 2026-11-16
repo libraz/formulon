@@ -87,6 +87,12 @@ inline constexpr double kDate1904EpochGap = 1462.0;
 // @limit: excel
 inline constexpr double kMaxSerial1900 = 2958465.0;
 
+/// First serial that names a calendar day: 1900-01-01 is serial 1, while the
+/// 1904 system starts at serial 0 (1904-01-01).
+inline constexpr double first_calendar_serial(bool date1904) noexcept {
+  return date1904 ? 0.0 : 1.0;
+}
+
 /// Last valid day-of-month for a Gregorian (year, month) pair, under the
 /// Gregorian leap rule. Months outside `[1, 12]` return 31 rather than
 /// asserting: every caller normalises first, and the fallback keeps a

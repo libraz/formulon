@@ -77,7 +77,7 @@ Expected<double, ErrorCode> compute_macaulay(const Value* args, std::uint32_t ar
   if (!compute_coupon_dates(settlement, maturity, frequency, basis, date1904, &cd)) {
     return ErrorCode::Num;
   }
-  if (cd.coupons_remaining <= 0 || cd.period_days <= 0.0) {
+  if (cd.coupons_remaining <= 0 || cd.period_days <= 0.0 || !cd.pcd_in_calendar) {
     return ErrorCode::Num;
   }
 

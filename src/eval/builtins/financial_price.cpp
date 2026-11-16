@@ -61,7 +61,7 @@ Expected<CouponBondInputs, ErrorCode> read_coupon_bond(const Value* args, std::u
                             &out.cd)) {
     return ErrorCode::Num;
   }
-  if (out.cd.coupons_remaining <= 0 || out.cd.period_days <= 0.0) {
+  if (out.cd.coupons_remaining <= 0 || out.cd.period_days <= 0.0 || !out.cd.pcd_in_calendar) {
     return ErrorCode::Num;
   }
   out.freq_d = static_cast<double>(out.tail.frequency);

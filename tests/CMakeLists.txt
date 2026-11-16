@@ -304,6 +304,9 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/x87_arith_test.cpp
   unit/eval/eval_context_test.cpp
   unit/eval/financial_date_array_lift_test.cpp
+  unit/eval/coupon_calendar_floor_test.cpp
+  unit/eval/mode_blank_reference_test.cpp
+  unit/eval/code_lenb_array_lift_test.cpp
   unit/eval/formula_profile_test.cpp
   unit/eval/excel_locale_test.cpp
   unit/eval/locale_text_test.cpp

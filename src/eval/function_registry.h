@@ -164,9 +164,14 @@ struct FunctionDef {
   ///     surfaces `#VALUE!` for `=GCD(A1,B1,C1)` (all blank refs) but
   ///     returns `0` for `=GCD(A1:C1)` (range form, same blank cells).
   ///     `analysis_toolpak_args` decides an omitted slot first.
+  ///   * `RejectAnyScalarBlank` - Any blank scalar `Ref` slot surfaces
+  ///     `blank_scalar_error`. Used by `MODE` / `MODE.SNGL` / `MODE.MULT`,
+  ///     where Mac returns `#VALUE!` for `=MODE(B2,2,2)` with B2 blank but
+  ///     skips the same cell in `=MODE(B2:B3,2,2)`.
   enum class BlankScalarPolicy : std::uint8_t {
     Allow = 0,
     RejectAllScalarsBlank = 1,
+    RejectAnyScalarBlank = 2,
   };
   BlankScalarPolicy blank_scalar_policy = BlankScalarPolicy::Allow;
   /// Error code surfaced when `blank_scalar_policy` fires. Ignored when

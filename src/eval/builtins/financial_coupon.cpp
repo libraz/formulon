@@ -34,8 +34,11 @@ namespace {
 // / basis domains, enforces `settlement < maturity`, and runs the
 // coupon-schedule engine. On success the caller receives a populated
 // `CouponDates`; on any validation failure a `#NUM!` error is
-// returned for the caller to forward to Excel.
-Expected<CouponDates, ErrorCode> resolve_coupon(const Value* args, std::uint32_t arity, bool date1904) {
+// returned for the caller to forward to Excel. A schedule whose PCD falls
+// before the date system's first day is `#NUM!` too, unless the caller reads
+// only the PCD (`pcd_outside_calendar_ok`).
+Expected<CouponDates, ErrorCode> resolve_coupon(const Value* args, std::uint32_t arity, bool date1904,
+                                                bool pcd_outside_calendar_ok = false) {
   double dates[2];
   if (auto read = read_required_numbers(args, "dd", dates); !read) {
     return std::move(read.error());
@@ -62,6 +65,9 @@ Expected<CouponDates, ErrorCode> resolve_coupon(const Value* args, std::uint32_t
   if (!compute_coupon_dates(s, m, frequency, basis, date1904, &out)) {
     return ErrorCode::Num;
   }
+  if (!out.pcd_in_calendar && !pcd_outside_calendar_ok) {
+    return ErrorCode::Num;
+  }
   return out;
 }
 
@@ -69,13 +75,14 @@ Expected<CouponDates, ErrorCode> resolve_coupon(const Value* args, std::uint32_t
 
 // --- COUPPCD(settlement, maturity, frequency, [basis=0]) ---------------
 //
-// Excel serial of the previous coupon date on or before settlement.
+// Excel serial of the previous coupon date on or before settlement; 0 when
+// that date precedes the date system's first day.
 Value CoupPcd(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
-  auto ctx = resolve_coupon(args, arity, date1904);
+  auto ctx = resolve_coupon(args, arity, date1904, /*pcd_outside_calendar_ok=*/true);
   if (!ctx) {
     return Value::error(ctx.error());
   }
-  return to_finite_value(ctx.value().pcd);
+  return to_finite_value(ctx.value().pcd_in_calendar ? ctx.value().pcd : 0.0);
 }
 
 // --- COUPNCD(settlement, maturity, frequency, [basis=0]) ---------------

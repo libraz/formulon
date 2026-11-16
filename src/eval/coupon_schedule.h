@@ -49,6 +49,7 @@ struct CouponDates {
   double bond_dsc;                 ///< Effective DSC for bond pricing (= period_days - days_bs).
   double period_days;              ///< Basis-adjusted total days in the coupon period.
   std::int32_t coupons_remaining;  ///< Coupons strictly after settlement and <= maturity.
+  bool pcd_in_calendar;            ///< Whether the PCD is a date of the workbook's date system.
 };
 
 /// Computes the full coupon-schedule context.

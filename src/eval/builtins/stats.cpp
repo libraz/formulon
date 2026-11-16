@@ -269,9 +269,12 @@ static Value MinA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 void register_stats_builtins(FunctionRegistry& registry) {
   static constexpr builtins_detail::BuiltinRegistration range_stats[] = {
       {"MEDIAN", 1u, kVariadic, &stats_detail::Median, true, true, true},
-      {"MODE", 1u, kVariadic, &stats_detail::Mode, true, true, true},
-      {"MODE.SNGL", 1u, kVariadic, &stats_detail::Mode, true, true, true},
-      builtins_detail::array_result({"MODE.MULT", 1u, kVariadic, &stats_detail::ModeMult, true, true, true}),
+      {"MODE", 1u, kVariadic, &stats_detail::Mode, true, true, true, false, false,
+       FunctionDef::BlankScalarPolicy::RejectAnyScalarBlank, ErrorCode::Value},
+      {"MODE.SNGL", 1u, kVariadic, &stats_detail::Mode, true, true, true, false, false,
+       FunctionDef::BlankScalarPolicy::RejectAnyScalarBlank, ErrorCode::Value},
+      builtins_detail::array_result({"MODE.MULT", 1u, kVariadic, &stats_detail::ModeMult, true, true, true, false,
+                                     false, FunctionDef::BlankScalarPolicy::RejectAnyScalarBlank, ErrorCode::Value}),
       builtins_detail::scalar_last_arg({"LARGE", 2u, 2u, &stats_detail::Large, true, true, true}),
       builtins_detail::scalar_last_arg({"SMALL", 2u, 2u, &stats_detail::Small, true, true, true}),
       builtins_detail::scalar_last_arg({"PERCENTILE.INC", 2u, 2u, &stats_detail::PercentileInc, true, true, true}),
