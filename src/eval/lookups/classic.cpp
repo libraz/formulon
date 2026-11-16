@@ -296,17 +296,7 @@ Value eval_table_lookup_lazy(const parser::AstNode& call, Arena& arena, const Fu
       return fail_lookup(lookup, arena, *bad);
     }
   }
-  // A failure after the index check; an element's own index error comes first.
-  const auto fail_all = [&](const Value& err) -> Value {
-    if (!index_array) {
-      return fail_lookup(lookup, arena, err);
-    }
-    return map_query_lanes(index_val, arena, [&](const Value& element) -> Value {
-      std::uint32_t unused = 0U;
-      std::optional<Value> bad = index_error(element, &unused);
-      return bad ? *bad : err;
-    });
-  };
+  const auto fail_all = [&](const Value& err) -> Value { return fail_lookup(lookup, arena, err); };
 
   bool approximate = true;
   if (arity == 4) {
@@ -368,14 +358,33 @@ Value eval_table_lookup_lazy(const parser::AstNode& call, Arena& arena, const Fu
     return lookup_scan(*scan_cells, scan_rows, scan_cols, axis, query, approximate, ctx.excel_profile());
   };
   if (index_array) {
-    // One lookup; each index element picks its own column (row) of the hit.
     const std::size_t off = scan(lookup);
-    return map_query_lanes(index_val, arena, [&](const Value& element) -> Value {
-      std::uint32_t pick = 0U;
-      if (std::optional<Value> bad = index_error(element, &pick)) {
+    if (off == SIZE_MAX) {
+      return Value::error(ErrorCode::NA);
+    }
+    const std::size_t count = static_cast<std::size_t>(index_val.as_array_rows()) * index_val.as_array_cols();
+    const Value* elements = index_val.as_array_cells();
+    const Value* error_element = nullptr;
+    for (std::size_t i = 0; i < count; ++i) {
+      std::uint32_t unused = 0U;
+      std::optional<Value> bad = index_error(elements[i], &unused);
+      if (!bad) {
+        continue;
+      }
+      if (!elements[i].is_error()) {
         return *bad;
       }
-      return off == SIZE_MAX ? Value::error(ErrorCode::NA) : fetch(off, pick);
+      if (error_element == nullptr) {
+        error_element = &elements[i];
+      }
+    }
+    if (error_element != nullptr) {
+      return *error_element;
+    }
+    return map_query_lanes(index_val, arena, [&](const Value& element) -> Value {
+      std::uint32_t pick = 0U;
+      index_error(element, &pick);
+      return fetch(off, pick);
     });
   }
   const auto lane = [&](const Value& query) {

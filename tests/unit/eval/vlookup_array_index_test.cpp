@@ -1,7 +1,7 @@
 //
 // VLOOKUP / HLOOKUP with an array col_index_num / row_index_num: the lookup
-// runs once and the column (row) pick lifts over the index array's shape,
-// each element failing as the scalar call with that index would.
+// runs once and the column (row) pick lifts over the index array's shape; any
+// failure makes the whole call one scalar error.
 
 #include <cstdint>
 
@@ -74,15 +74,67 @@ TEST(VLookupArrayIndex, ArrayTableKeepsTheIndexShape) {
   ExpectNumber(v.as_array_cells()[1], 3.0);
 }
 
-TEST(VLookupArrayIndex, EachIndexFailsAsTheScalarCallWould) {
+TEST(VLookupArrayIndex, InvalidIndexElementReturnsOneRef) {
+  Workbook wb = MakeRowTable();
+  const Value v = EvalSourceIn("=VLOOKUP(\"k\",A1:C1,{2,4},0)", wb, wb.sheet(0));
+  EXPECT_FALSE(v.is_array()) << v.debug_to_string();
+  ExpectError(v, ErrorCode::Ref);
+}
+
+TEST(VLookupArrayIndex, MixedIndexWithPastEndZeroAndErrorReturnsRef) {
   Workbook wb = MakeRowTable();
   const Value v = EvalSourceIn("=VLOOKUP(\"k\",A1:C1,{2,4,0,#N/A},0)", wb, wb.sheet(0));
-  ExpectArrayShape(v, 1U, 4U);
-  const Value* cells = v.as_array_cells();
-  ExpectNumber(cells[0], 3.0);
-  ExpectError(cells[1], ErrorCode::Ref);
-  ExpectError(cells[2], ErrorCode::Value);
-  ExpectError(cells[3], ErrorCode::NA);
+  EXPECT_FALSE(v.is_array()) << v.debug_to_string();
+  ExpectError(v, ErrorCode::Ref);
+}
+
+TEST(VLookupArrayIndex, ZeroBeforePastEndReturnsValue) {
+  Workbook wb = MakeRowTable();
+  const Value v = EvalSourceIn("=VLOOKUP(\"k\",A1:C1,{0,4},0)", wb, wb.sheet(0));
+  EXPECT_FALSE(v.is_array()) << v.debug_to_string();
+  ExpectError(v, ErrorCode::Value);
+}
+
+TEST(VLookupArrayIndex, PastEndBeforeZeroReturnsRef) {
+  Workbook wb = MakeRowTable();
+  const Value v = EvalSourceIn("=VLOOKUP(\"k\",A1:C1,{4,0},0)", wb, wb.sheet(0));
+  EXPECT_FALSE(v.is_array()) << v.debug_to_string();
+  ExpectError(v, ErrorCode::Ref);
+}
+
+TEST(VLookupArrayIndex, ErrorElementBeforePastEndReturnsRef) {
+  Workbook wb = MakeRowTable();
+  const Value v = EvalSourceIn("=VLOOKUP(\"k\",A1:C1,{#N/A,4},0)", wb, wb.sheet(0));
+  EXPECT_FALSE(v.is_array()) << v.debug_to_string();
+  ExpectError(v, ErrorCode::Ref);
+}
+
+TEST(VLookupArrayIndex, PastEndBeforeErrorElementReturnsRef) {
+  Workbook wb = MakeRowTable();
+  const Value v = EvalSourceIn("=VLOOKUP(\"k\",A1:C1,{4,#N/A},0)", wb, wb.sheet(0));
+  EXPECT_FALSE(v.is_array()) << v.debug_to_string();
+  ExpectError(v, ErrorCode::Ref);
+}
+
+TEST(VLookupArrayIndex, ZeroBeforeErrorElementReturnsValue) {
+  Workbook wb = MakeRowTable();
+  const Value v = EvalSourceIn("=VLOOKUP(\"k\",A1:C1,{0,#N/A},0)", wb, wb.sheet(0));
+  EXPECT_FALSE(v.is_array()) << v.debug_to_string();
+  ExpectError(v, ErrorCode::Value);
+}
+
+TEST(VLookupArrayIndex, MissingKeyBeatsInvalidIndex) {
+  Workbook wb = MakeRowTable();
+  const Value v = EvalSourceIn("=VLOOKUP(\"z\",A1:C1,{2,4},0)", wb, wb.sheet(0));
+  EXPECT_FALSE(v.is_array()) << v.debug_to_string();
+  ExpectError(v, ErrorCode::NA);
+}
+
+TEST(VLookupArrayIndex, InvalidRangeLookupBeatsInvalidIndex) {
+  Workbook wb = MakeRowTable();
+  const Value v = EvalSourceIn("=VLOOKUP(\"k\",A1:C1,{2,4},\"x\")", wb, wb.sheet(0));
+  EXPECT_FALSE(v.is_array()) << v.debug_to_string();
+  ExpectError(v, ErrorCode::Value);
 }
 
 TEST(VLookupArrayIndex, ScalarIndexStaysScalar) {
@@ -99,13 +151,11 @@ TEST(HLookupArrayIndex, ReferenceTableReturnsOneCellPerIndex) {
   ExpectNumber(v.as_array_cells()[1], 7.0);
 }
 
-TEST(HLookupArrayIndex, EachIndexFailsAsTheScalarCallWould) {
+TEST(HLookupArrayIndex, InvalidIndexElementReturnsOneRef) {
   Workbook wb = MakeColumnTable();
   const Value v = EvalSourceIn("=HLOOKUP(\"k\",A1:A3,{3,4,0.5},0)", wb, wb.sheet(0));
-  ExpectArrayShape(v, 1U, 3U);
-  ExpectNumber(v.as_array_cells()[0], 7.0);
-  ExpectError(v.as_array_cells()[1], ErrorCode::Ref);
-  ExpectError(v.as_array_cells()[2], ErrorCode::Value);
+  EXPECT_FALSE(v.is_array()) << v.debug_to_string();
+  ExpectError(v, ErrorCode::Ref);
 }
 
 }  // namespace
