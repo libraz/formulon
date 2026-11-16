@@ -1,0 +1,383 @@
+suite: edge_args_batch3
+description: >
+  Each function's first argument replaced by a cell holding #N/A, an array
+  constant (read through INDEX), numeric text, TRUE and a blank cell, from a
+  scalar call the existing suites already pin.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: tdist_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=TDIST(B1, 5, 1)"
+  - id: tdist_first_arg_array_lifted
+    formula: "=INDEX(TDIST({1.5,1.5}, 5, 1),2)"
+  - id: tdist_first_arg_bool
+    formula: "=TDIST(TRUE, 5, 1)"
+  - id: tdist_first_arg_numeric_text
+    formula: "=TDIST(\"1.5\", 5, 1)"
+  - id: tdist_first_arg_blank_cell
+    formula: "=TDIST(B2, 5, 1)"
+  - id: weibull_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=WEIBULL(B1, 20, 100, TRUE)"
+  - id: weibull_first_arg_array_lifted
+    formula: "=INDEX(WEIBULL({105,105}, 20, 100, TRUE),2)"
+  - id: weibull_first_arg_bool
+    formula: "=WEIBULL(TRUE, 20, 100, TRUE)"
+  - id: weibull_first_arg_numeric_text
+    formula: "=WEIBULL(\"105\", 20, 100, TRUE)"
+  - id: weibull_first_arg_blank_cell
+    formula: "=WEIBULL(B2, 20, 100, TRUE)"
+  - id: binom_dist_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=BINOM.DIST(B1, 10, 0.5, FALSE)"
+  - id: binom_dist_first_arg_array_lifted
+    formula: "=INDEX(BINOM.DIST({5,5}, 10, 0.5, FALSE),2)"
+  - id: binom_dist_first_arg_bool
+    formula: "=BINOM.DIST(TRUE, 10, 0.5, FALSE)"
+  - id: binom_dist_first_arg_numeric_text
+    formula: "=BINOM.DIST(\"5\", 10, 0.5, FALSE)"
+  - id: binom_dist_first_arg_blank_cell
+    formula: "=BINOM.DIST(B2, 10, 0.5, FALSE)"
+  - id: bitand_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=BITAND(B1,3)"
+  - id: bitand_first_arg_array_lifted
+    formula: "=INDEX(BITAND({5,5},3),2)"
+  - id: bitand_first_arg_bool
+    formula: "=BITAND(TRUE,3)"
+  - id: bitand_first_arg_numeric_text
+    formula: "=BITAND(\"5\",3)"
+  - id: bitand_first_arg_blank_cell
+    formula: "=BITAND(B2,3)"
+  - id: cumipmt_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=CUMIPMT(B1, 60, 25000, 1, 60, 0)"
+  - id: cumipmt_first_arg_bool
+    formula: "=CUMIPMT(TRUE, 60, 25000, 1, 60, 0)"
+  - id: cumipmt_first_arg_blank_cell
+    formula: "=CUMIPMT(B2, 60, 25000, 1, 60, 0)"
+  - id: cumprinc_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=CUMPRINC(B1, 60, 25000, 1, 60, 0)"
+  - id: cumprinc_first_arg_bool
+    formula: "=CUMPRINC(TRUE, 60, 25000, 1, 60, 0)"
+  - id: cumprinc_first_arg_blank_cell
+    formula: "=CUMPRINC(B2, 60, 25000, 1, 60, 0)"
+  - id: degrees_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=DEGREES(B1)"
+  - id: degrees_first_arg_bool
+    formula: "=DEGREES(TRUE)"
+  - id: degrees_first_arg_blank_cell
+    formula: "=DEGREES(B2)"
+  - id: dollarfr_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=DOLLARFR(B1, 16)"
+  - id: dollarfr_first_arg_array_lifted
+    formula: "=INDEX(DOLLARFR({1.125,1.125}, 16),2)"
+  - id: dollarfr_first_arg_bool
+    formula: "=DOLLARFR(TRUE, 16)"
+  - id: dollarfr_first_arg_numeric_text
+    formula: "=DOLLARFR(\"1.125\", 16)"
+  - id: dollarfr_first_arg_blank_cell
+    formula: "=DOLLARFR(B2, 16)"
+  - id: encodeurl_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=ENCODEURL(B1)"
+  - id: encodeurl_first_arg_array_lifted
+    formula: "=INDEX(ENCODEURL({\"hello world\",\"hello world\"}),2)"
+  - id: encodeurl_first_arg_bool
+    formula: "=ENCODEURL(TRUE)"
+  - id: encodeurl_first_arg_blank_cell
+    formula: "=ENCODEURL(B2)"
+  - id: imreal_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=IMREAL(B1)"
+  - id: imreal_first_arg_array_lifted
+    formula: "=INDEX(IMREAL({\"3+4i\",\"3+4i\"}),2)"
+  - id: imreal_first_arg_bool
+    formula: "=IMREAL(TRUE)"
+  - id: imreal_first_arg_blank_cell
+    formula: "=IMREAL(B2)"
+  - id: imsin_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=IMSIN(B1)"
+  - id: imsin_first_arg_array_lifted
+    formula: "=INDEX(IMSIN({\"1+i\",\"1+i\"}),2)"
+  - id: imsin_first_arg_bool
+    formula: "=IMSIN(TRUE)"
+  - id: imsin_first_arg_blank_cell
+    formula: "=IMSIN(B2)"
+  - id: imsinh_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=IMSINH(B1)"
+  - id: imsinh_first_arg_array_lifted
+    formula: "=INDEX(IMSINH({\"1+i\",\"1+i\"}),2)"
+  - id: imsinh_first_arg_bool
+    formula: "=IMSINH(TRUE)"
+  - id: imsinh_first_arg_blank_cell
+    formula: "=IMSINH(B2)"
+  - id: intrate_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=INTRATE(B1, DATE(2008,5,15), 1000000, 1014420, 2)"
+  - id: intrate_first_arg_bool
+    formula: "=INTRATE(TRUE, DATE(2008,5,15), 1000000, 1014420, 2)"
+  - id: intrate_first_arg_blank_cell
+    formula: "=INTRATE(B2, DATE(2008,5,15), 1000000, 1014420, 2)"
+  - id: minute_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=MINUTE(B1)"
+  - id: minute_first_arg_bool
+    formula: "=MINUTE(TRUE)"
+  - id: minute_first_arg_blank_cell
+    formula: "=MINUTE(B2)"
+  - id: norm_s_dist_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=NORM.S.DIST(B1, TRUE)"
+  - id: norm_s_dist_first_arg_array_lifted
+    formula: "=INDEX(NORM.S.DIST({0,0}, TRUE),2)"
+  - id: norm_s_dist_first_arg_bool
+    formula: "=NORM.S.DIST(TRUE, TRUE)"
+  - id: norm_s_dist_first_arg_numeric_text
+    formula: "=NORM.S.DIST(\"0\", TRUE)"
+  - id: norm_s_dist_first_arg_blank_cell
+    formula: "=NORM.S.DIST(B2, TRUE)"
+  - id: oddfyield_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=ODDFYIELD(B1,DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.50,100,2,0)"
+  - id: oddfyield_first_arg_bool
+    formula: "=ODDFYIELD(TRUE,DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.50,100,2,0)"
+  - id: oddfyield_first_arg_blank_cell
+    formula: "=ODDFYIELD(B2,DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.50,100,2,0)"
+  - id: oddlprice_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=ODDLPRICE(B1,DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,0)"
+  - id: oddlprice_first_arg_bool
+    formula: "=ODDLPRICE(TRUE,DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,0)"
+  - id: oddlprice_first_arg_blank_cell
+    formula: "=ODDLPRICE(B2,DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,0)"
+  - id: oddlyield_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=ODDLYIELD(B1,DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,0)"
+  - id: oddlyield_first_arg_bool
+    formula: "=ODDLYIELD(TRUE,DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,0)"
+  - id: oddlyield_first_arg_blank_cell
+    formula: "=ODDLYIELD(B2,DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,0)"
+  - id: poisson_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=POISSON(B1, 2, FALSE)"
+  - id: poisson_first_arg_array_lifted
+    formula: "=INDEX(POISSON({3,3}, 2, FALSE),2)"
+  - id: poisson_first_arg_bool
+    formula: "=POISSON(TRUE, 2, FALSE)"
+  - id: poisson_first_arg_numeric_text
+    formula: "=POISSON(\"3\", 2, FALSE)"
+  - id: poisson_first_arg_blank_cell
+    formula: "=POISSON(B2, 2, FALSE)"
+  - id: pricedisc_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=PRICEDISC(B1, DATE(2018,3,1), 0.0525, 100, 2)"
+  - id: pricedisc_first_arg_bool
+    formula: "=PRICEDISC(TRUE, DATE(2018,3,1), 0.0525, 100, 2)"
+  - id: pricedisc_first_arg_blank_cell
+    formula: "=PRICEDISC(B2, DATE(2018,3,1), 0.0525, 100, 2)"
+  - id: pv_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=PV(B1, 60, -500)"
+  - id: pv_first_arg_bool
+    formula: "=PV(TRUE, 60, -500)"
+  - id: pv_first_arg_blank_cell
+    formula: "=PV(B2, 60, -500)"
+  - id: radians_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=RADIANS(B1)"
+  - id: radians_first_arg_array_lifted
+    formula: "=INDEX(RADIANS({180,180}),2)"
+  - id: radians_first_arg_bool
+    formula: "=RADIANS(TRUE)"
+  - id: radians_first_arg_numeric_text
+    formula: "=RADIANS(\"180\")"
+  - id: radians_first_arg_blank_cell
+    formula: "=RADIANS(B2)"
+  - id: received_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=RECEIVED(B1, DATE(2008,5,15), 1000000, 0.0575, 2)"
+  - id: received_first_arg_bool
+    formula: "=RECEIVED(TRUE, DATE(2008,5,15), 1000000, 0.0575, 2)"
+  - id: received_first_arg_blank_cell
+    formula: "=RECEIVED(B2, DATE(2008,5,15), 1000000, 0.0575, 2)"
+  - id: rightb_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=RIGHTB(B1, 3)"
+  - id: rightb_first_arg_array_lifted
+    formula: "=INDEX(RIGHTB({\"hello\",\"hello\"}, 3),2)"
+  - id: rightb_first_arg_bool
+    formula: "=RIGHTB(TRUE, 3)"
+  - id: rightb_first_arg_blank_cell
+    formula: "=RIGHTB(B2, 3)"
+  - id: second_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=SECOND(B1)"
+  - id: second_first_arg_bool
+    formula: "=SECOND(TRUE)"
+  - id: second_first_arg_blank_cell
+    formula: "=SECOND(B2)"
+  - id: t_dist_2t_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=T.DIST.2T(B1, 10)"
+  - id: t_dist_2t_first_arg_array_lifted
+    formula: "=INDEX(T.DIST.2T({2,2}, 10),2)"
+  - id: t_dist_2t_first_arg_bool
+    formula: "=T.DIST.2T(TRUE, 10)"
+  - id: t_dist_2t_first_arg_numeric_text
+    formula: "=T.DIST.2T(\"2\", 10)"
+  - id: t_dist_2t_first_arg_blank_cell
+    formula: "=T.DIST.2T(B2, 10)"
+  - id: tanh_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=TANH(B1)"
+  - id: tanh_first_arg_array_lifted
+    formula: "=INDEX(TANH({0,0}),2)"
+  - id: tanh_first_arg_bool
+    formula: "=TANH(TRUE)"
+  - id: tanh_first_arg_numeric_text
+    formula: "=TANH(\"0\")"
+  - id: tanh_first_arg_blank_cell
+    formula: "=TANH(B2)"
+  - id: tbillyield_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=TBILLYIELD(B1, DATE(2008,6,1), 98.45)"
+  - id: tbillyield_first_arg_bool
+    formula: "=TBILLYIELD(TRUE, DATE(2008,6,1), 98.45)"
+  - id: tbillyield_first_arg_blank_cell
+    formula: "=TBILLYIELD(B2, DATE(2008,6,1), 98.45)"
+  - id: csc_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=CSC(B1)"
+  - id: csc_first_arg_bool
+    formula: "=CSC(TRUE)"
+  - id: csc_first_arg_blank_cell
+    formula: "=CSC(B2)"
+  - id: csch_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=CSCH(B1)"
+  - id: csch_first_arg_array_lifted
+    formula: "=INDEX(CSCH({0.5,0.5}),2)"
+  - id: csch_first_arg_bool
+    formula: "=CSCH(TRUE)"
+  - id: csch_first_arg_numeric_text
+    formula: "=CSCH(\"0.5\")"
+  - id: csch_first_arg_blank_cell
+    formula: "=CSCH(B2)"
+  - id: findb_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=FINDB(B1, \"あいう\")"
+  - id: findb_first_arg_array_lifted
+    formula: "=INDEX(FINDB({\"う\",\"う\"}, \"あいう\"),2)"
+  - id: findb_first_arg_bool
+    formula: "=FINDB(TRUE, \"あいう\")"
+  - id: findb_first_arg_blank_cell
+    formula: "=FINDB(B2, \"あいう\")"
+  - id: floor_math_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=FLOOR.MATH(B1)"
+  - id: floor_math_first_arg_array_lifted
+    formula: "=INDEX(FLOOR.MATH({4.7,4.7}),2)"
+  - id: floor_math_first_arg_bool
+    formula: "=FLOOR.MATH(TRUE)"
+  - id: floor_math_first_arg_numeric_text
+    formula: "=FLOOR.MATH(\"4.7\")"
+  - id: floor_math_first_arg_blank_cell
+    formula: "=FLOOR.MATH(B2)"
+  - id: imconjugate_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=IMCONJUGATE(B1)"
+  - id: imconjugate_first_arg_array_lifted
+    formula: "=INDEX(IMCONJUGATE({\"3+4i\",\"3+4i\"}),2)"
+  - id: imconjugate_first_arg_bool
+    formula: "=IMCONJUGATE(TRUE)"
+  - id: imconjugate_first_arg_blank_cell
+    formula: "=IMCONJUGATE(B2)"
+  - id: imsub_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=IMSUB(B1,\"2+i\")"
+  - id: imsub_first_arg_array_lifted
+    formula: "=INDEX(IMSUB({\"5+3i\",\"5+3i\"},\"2+i\"),2)"
+  - id: imsub_first_arg_bool
+    formula: "=IMSUB(TRUE,\"2+i\")"
+  - id: imsub_first_arg_blank_cell
+    formula: "=IMSUB(B2,\"2+i\")"
+  - id: imtan_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=IMTAN(B1)"
+  - id: imtan_first_arg_array_lifted
+    formula: "=INDEX(IMTAN({\"1+i\",\"1+i\"}),2)"
+  - id: imtan_first_arg_bool
+    formula: "=IMTAN(TRUE)"
+  - id: imtan_first_arg_blank_cell
+    formula: "=IMTAN(B2)"
+  - id: munit_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=MUNIT(B1)"
+  - id: munit_first_arg_array_lifted
+    formula: "=INDEX(MUNIT({0,0}),2)"
+  - id: munit_first_arg_bool
+    formula: "=MUNIT(TRUE)"
+  - id: munit_first_arg_numeric_text
+    formula: "=MUNIT(\"0\")"
+  - id: munit_first_arg_blank_cell
+    formula: "=MUNIT(B2)"
+  - id: phi_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=PHI(B1)"
+  - id: phi_first_arg_array_lifted
+    formula: "=INDEX(PHI({0,0}),2)"
+  - id: phi_first_arg_bool
+    formula: "=PHI(TRUE)"
+  - id: phi_first_arg_numeric_text
+    formula: "=PHI(\"0\")"
+  - id: phi_first_arg_blank_cell
+    formula: "=PHI(B2)"
+  - id: rounddown_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=ROUNDDOWN(B1,1)"
+  - id: rounddown_first_arg_array_lifted
+    formula: "=INDEX(ROUNDDOWN({3.19,3.19},1),2)"
+  - id: rounddown_first_arg_bool
+    formula: "=ROUNDDOWN(TRUE,1)"
+  - id: rounddown_first_arg_numeric_text
+    formula: "=ROUNDDOWN(\"3.19\",1)"
+  - id: rounddown_first_arg_blank_cell
+    formula: "=ROUNDDOWN(B2,1)"
+  - id: rri_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=RRI(B1, 1000, 2000)"
+  - id: rri_first_arg_array_lifted
+    formula: "=INDEX(RRI({5,5}, 1000, 2000),2)"
+  - id: rri_first_arg_bool
+    formula: "=RRI(TRUE, 1000, 2000)"
+  - id: rri_first_arg_numeric_text
+    formula: "=RRI(\"5\", 1000, 2000)"
+  - id: rri_first_arg_blank_cell
+    formula: "=RRI(B2, 1000, 2000)"
+  - id: sech_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=SECH(B1)"
+  - id: sech_first_arg_array_lifted
+    formula: "=INDEX(SECH({0.5,0.5}),2)"
+  - id: sech_first_arg_bool
+    formula: "=SECH(TRUE)"
+  - id: sech_first_arg_numeric_text
+    formula: "=SECH(\"0.5\")"
+  - id: sech_first_arg_blank_cell
+    formula: "=SECH(B2)"
+  - id: substitute_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=SUBSTITUTE(B1,\"a\",\"o\")"
+  - id: substitute_first_arg_array_lifted
+    formula: "=INDEX(SUBSTITUTE({\"banana\",\"banana\"},\"a\",\"o\"),2)"
+  - id: substitute_first_arg_bool
+    formula: "=SUBSTITUTE(TRUE,\"a\",\"o\")"
+  - id: substitute_first_arg_blank_cell
+    formula: "=SUBSTITUTE(B2,\"a\",\"o\")"

@@ -632,6 +632,38 @@ entries:
     prefer: formulon
     first_noted: 2026-04-29
     last_verified_excel_version: "16.112"
+  - id: encodeurl_first_arg_na_cell
+    cause: excel-no-value
+    applies_to: [mac]
+    mode: skip-oracle
+    reason: "Mac Excel 365 does not register ENCODEURL (#NAME? in every locale). Formulon propagates the #N/A of the referenced cell."
+    prefer: formulon
+    first_noted: 2026-11-17
+    last_verified_excel_version: "16.115"
+  - id: encodeurl_first_arg_array_lifted
+    cause: excel-no-value
+    applies_to: [mac]
+    mode: skip-oracle
+    reason: "Mac Excel 365 does not register ENCODEURL (#NAME? in every locale). Formulon lifts over the array constant, so the second element is \"hello%20world\"."
+    prefer: formulon
+    first_noted: 2026-11-17
+    last_verified_excel_version: "16.115"
+  - id: encodeurl_first_arg_bool
+    cause: excel-no-value
+    applies_to: [mac]
+    mode: skip-oracle
+    reason: "Mac Excel 365 does not register ENCODEURL (#NAME? in every locale). Formulon coerces TRUE to \"TRUE\", which is all unreserved characters."
+    prefer: formulon
+    first_noted: 2026-11-17
+    last_verified_excel_version: "16.115"
+  - id: encodeurl_first_arg_blank_cell
+    cause: excel-no-value
+    applies_to: [mac]
+    mode: skip-oracle
+    reason: "Mac Excel 365 does not register ENCODEURL (#NAME? in every locale). Formulon reads the blank cell as \"\" and returns \"\"."
+    prefer: formulon
+    first_noted: 2026-11-17
+    last_verified_excel_version: "16.115"
   - id: info_release
     applies_to: all
     cause: excel-no-value
