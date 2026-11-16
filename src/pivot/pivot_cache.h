@@ -304,9 +304,9 @@ class PivotCache {
   bool records_from_source() const { return records_from_source_; }
   void mark_records_from_source() { records_from_source_ = true; }
 
-  /// Whether the source range is unedited since the cache was loaded, built or
-  /// refreshed; a structural edit inside it clears this. Saved as Excel's
-  /// dataSourceClean, written only while set.
+  /// Whether the source is unedited since the cache was loaded, built or
+  /// refreshed; a row or column inserted or deleted on its sheet clears this.
+  /// Saved as Excel's dataSourceClean, written only while set.
   bool source_clean() const { return source_clean_; }
   void set_source_clean(bool clean) { source_clean_ = clean; }
 

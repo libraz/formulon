@@ -164,18 +164,19 @@ entries:
     prefer: formulon
     first_noted: 2026-11-11
     last_verified_excel_version: "16.114.4"
-  # -- PivotTable dataSourceClean after a value edit in the source ------------
-  # Excel leaves dataSourceClean out of a cache whose source range had a value
-  # edited in the session. Formulon clears it only for a row or column inserted
-  # or deleted inside the range; a value edit keeps it. Excel ignores the flag
-  # when it opens a file, so the difference is not observable on reopen.
+  # -- PivotTable dataSourceClean after a value edit, sort or AutoFilter -------
+  # Excel leaves dataSourceClean out of a cache whose source had a value edited,
+  # was sorted or had an AutoFilter set in the session. Formulon clears it only
+  # for row, column and cell inserts and deletes; those three keep it. Excel
+  # ignores the flag when it opens a file, so the difference is not observable
+  # on reopen.
   - id: pivot_data_source_clean_value_edit
     applies_to: [mac]
     cause: accepted-divergence
     mode: skip-oracle
     scope: api-contract
     evidence: [tests/c_api/formulon_c_pivot_save_shape_test.cpp]
-    reason: "After a value typed into a PivotTable's source range with no refresh, Mac Excel saves the cache without the dataSourceClean extension (xlsx) or block (xlsb); Formulon keeps it. An inserted or deleted row inside the range clears it in both. Every load starts clean in Excel, so the saved flag does not change what a reopened file shows."
+    reason: "After a value typed into a PivotTable's range or defined-name source, a sort of a range source or an AutoFilter set on it, with no refresh, Mac Excel saves the cache without the dataSourceClean extension (xlsx) or block (xlsb); Formulon keeps it. Inserted or deleted rows, columns and cells clear it in both: anywhere on a range source's sheet, and inside a defined-name source. Every load starts clean in Excel, so the saved flag does not change what a reopened file shows."
     prefer: formulon
     first_noted: 2026-11-16
     last_verified_excel_version: "16.115"

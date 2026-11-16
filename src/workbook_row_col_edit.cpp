@@ -28,6 +28,8 @@
 #include "parser/ast_format.h"
 #include "parser/ast_shift.h"
 #include "parser/ref_transforms.h"
+#include "pivot/pivot_cache.h"
+#include "pivot/pivot_source.h"
 #include "pivot/pivot_table.h"
 #include "sheet.h"
 #include "sheet_metadata.h"
@@ -711,6 +713,33 @@ Expected<void, Error> check_structure_edit(const Workbook& wb, std::size_t sheet
 
 namespace {
 
+/// Whether a row or column edit on sheet `sheet_index` marks `cache`'s source as edited, as Excel's dataSourceClean
+/// shows it: any edit on a range source's sheet, a whole-row or whole-column edit that changes the extent of a
+/// defined-name source, and never a table source.
+bool EditMarksSourceEdited(const Workbook& wb, const std::vector<Sheet>& sheets, const pivot::PivotCache& cache,
+                           std::size_t sheet_index, const StructuralEdit& edit) {
+  const pivot::WorksheetSource& source = cache.worksheet_source();
+  if (source.name.empty() && !source.sheet.empty()) {
+    return detail::find_sheet_index(sheets, source.sheet) == sheet_index;
+  }
+  if (!source.name.empty() &&
+      (edit.band.has_value() || sheet_names::resolve_table(wb.tables(), source.name) != sheet_names::kNotFound)) {
+    return false;
+  }
+  const Expected<pivot::WorksheetSourceRange, Error> range = pivot::resolve_worksheet_source(wb, cache);
+  if (!range || range.value().sheet != sheet_index) {
+    return false;
+  }
+  if (source.name.empty()) {
+    return true;
+  }
+  const MergeRange& rect = range.value().rect;
+  const std::uint32_t first = edit.row_axis ? rect.first_row : rect.first_col;
+  const std::uint32_t last = edit.row_axis ? rect.last_row : rect.last_col;
+  // An insert strictly inside the range widens it; a delete meeting it narrows it.
+  return edit.is_delete ? edit.index <= last && edit.end() > first : edit.index > first && edit.index <= last;
+}
+
 // The argument checks of a row/column edit on `sheet_index`.
 Expected<void, Error> check_edit_arguments(const Workbook& wb, std::size_t sheet_index, const StructuralEdit& edit) {
   RETURN_IF_ERROR(check_sheet_index(sheet_index, wb.sheet_count()));
@@ -759,6 +788,13 @@ Expected<void, Error> apply_row_col_edit(const Workbook& wb, std::size_t sheet_i
                                                                      std::size_t sheet_index,
                                                                      const StructuralEdit& edit) {
   RETURN_IF_ERROR(apply_row_col_edit(wb, sheet_index, edit));
+  // The caches whose source this edit marks as edited, judged against the source before the edit.
+  std::vector<pivot::PivotCache*> edited_sources;
+  for (const std::unique_ptr<pivot::PivotCache>& cache : wb.mutable_pivot_caches()) {
+    if (cache != nullptr && EditMarksSourceEdited(wb, sheets, *cache, sheet_index, edit)) {
+      edited_sources.push_back(cache.get());
+    }
+  }
   const std::uint32_t origin = edit.index;
   const std::uint32_t count = edit.count;
   const std::string target_sheet_name = sheets[sheet_index].name();
@@ -850,6 +886,9 @@ Expected<void, Error> apply_row_col_edit(const Workbook& wb, std::size_t sheet_i
   // friends move afterwards.
   rewrite_sheet_metadata_formulas(sheets, per_sheet_transforms, wb.mutable_tables(), wb.mutable_pivot_caches(), {}, {},
                                   {}, name_rewrite);
+  for (pivot::PivotCache* cache : edited_sources) {
+    cache->set_source_clean(false);
+  }
   // Chart refs are always sheet-qualified, so the unowned policy is the right one.
   RETURN_IF_ERROR(chart_ref::rewrite_all(wb, name_rewrite));
   if (edit.band.has_value()) {

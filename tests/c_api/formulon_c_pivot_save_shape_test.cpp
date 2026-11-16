@@ -568,7 +568,8 @@ bool XlsbDataSourceClean(const std::string& part) {
 }
 
 /// A pivot on PV over Sheet1!K1:L3 (Item / Amt; A 1, B 2), refreshed and projected, as Excel's no-save probe built.
-void BuildStaleProbePivot(fm_workbook_t* wb) {
+/// With `source_name` the cache names its source (a defined name or a table) instead of the range.
+void BuildStaleProbePivot(fm_workbook_t* wb, const char* source_name = nullptr) {
   ASSERT_EQ(fm_sheet_set_text(wb, 0U, 0U, 10U, "Item"), 0);
   ASSERT_EQ(fm_sheet_set_text(wb, 0U, 0U, 11U, "Amt"), 0);
   ASSERT_EQ(fm_sheet_set_text(wb, 0U, 1U, 10U, "A"), 0);
@@ -577,7 +578,12 @@ void BuildStaleProbePivot(fm_workbook_t* wb) {
   ASSERT_EQ(fm_sheet_set_number(wb, 0U, 2U, 11U, 2.0), 0);
   std::uint32_t cache_id = 0;
   ASSERT_EQ(fm_workbook_add_pivot_cache(wb, 0U, &cache_id), 0) << fm_get_last_error_message();
-  ASSERT_EQ(SetPivotCacheWorksheetSource(wb, cache_id, 1, "K1:L3", "Sheet1", nullptr), 0);
+  if (source_name == nullptr) {
+    ASSERT_EQ(SetPivotCacheWorksheetSource(wb, cache_id, 1, "K1:L3", "Sheet1", nullptr), 0);
+  } else {
+    ASSERT_EQ(SetPivotCacheWorksheetSource(wb, cache_id, 1, nullptr, nullptr, source_name), 0)
+        << fm_get_last_error_message();
+  }
   ASSERT_EQ(fm_workbook_refresh_pivot_cache(wb, cache_id), 0) << fm_get_last_error_message();
   std::size_t sheet = 0;
   ASSERT_EQ(fm_workbook_add_sheet(wb, "PV", 1U, &sheet), 0) << fm_get_last_error_message();
@@ -673,15 +679,43 @@ TEST(FormulonCApiPivotSaveShape, AnInsertInsideTheSourceKeepsTheRecordsAndClears
   EXPECT_TRUE(XlsbDataSourceClean(ExtractZipEntry(Save(wb.handle, FM_WORKBOOK_FORMAT_XLSB), kCacheBin)));
 }
 
-// An insert outside the source leaves it clean.
-TEST(FormulonCApiPivotSaveShape, AnInsertOutsideTheSourceKeepsDataSourceClean) {
-  WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  BuildStaleProbePivot(wb.handle);
-  ASSERT_EQ(fm_sheet_insert_rows(wb.handle, 0U, 10U, 10U), 0) << fm_get_last_error_message();
-  const std::string xml = ExtractZipEntry(Save(wb.handle, FM_WORKBOOK_FORMAT_XLSX), kCacheXml);
-  EXPECT_NE(xml.find("ref=\"K1:L3\""), std::string::npos) << xml;
-  EXPECT_NE(xml.find(kDataSourceClean), std::string::npos) << xml;
+// Excel marks the source edited for any row or column inserted or deleted on its sheet, wherever it goes, and keeps
+// it clean for a structural edit on another sheet.
+TEST(FormulonCApiPivotSaveShape, AnyStructuralEditOnTheSourceSheetClearsDataSourceClean) {
+  const struct {
+    const char* label;
+    std::size_t sheet;
+    bool rows;
+    bool remove;
+    std::uint32_t at;
+    const char* ref;
+    bool clean;
+  } kCases[] = {
+      {"row above the source", 0U, true, false, 0U, "K2:L4", false},
+      {"column to the left", 0U, false, false, 0U, "L1:M3", false},
+      {"row below the source", 0U, true, false, 10U, "K1:L3", false},
+      {"column to the right", 0U, false, false, 20U, "K1:L3", false},
+      {"empty row below deleted", 0U, true, true, 10U, "K1:L3", false},
+      {"row on the pivot sheet", 1U, true, false, 0U, "K1:L3", true},
+  };
+  for (const auto& c : kCases) {
+    SCOPED_TRACE(c.label);
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+    BuildStaleProbePivot(wb.handle);
+    if (c.rows) {
+      ASSERT_EQ(c.remove ? fm_sheet_delete_rows(wb.handle, c.sheet, c.at, c.at)
+                         : fm_sheet_insert_rows(wb.handle, c.sheet, c.at, c.at),
+                0)
+          << fm_get_last_error_message();
+    } else {
+      ASSERT_EQ(fm_sheet_insert_columns(wb.handle, c.sheet, c.at, c.at), 0) << fm_get_last_error_message();
+    }
+    const std::string xml = ExtractZipEntry(Save(wb.handle, FM_WORKBOOK_FORMAT_XLSX), kCacheXml);
+    EXPECT_NE(xml.find(std::string("ref=\"") + c.ref + "\""), std::string::npos) << xml;
+    EXPECT_EQ(xml.find(kDataSourceClean) != std::string::npos, c.clean) << xml;
+    EXPECT_EQ(XlsbDataSourceClean(ExtractZipEntry(Save(wb.handle, FM_WORKBOOK_FORMAT_XLSB), kCacheBin)), c.clean);
+  }
 }
 
 // Every load starts clean: a cache saved without the extension and one saved with it are each written with it once.
@@ -694,5 +728,64 @@ TEST(FormulonCApiPivotSaveShape, ALoadedCacheIsWrittenClean) {
     const std::string xml = ExtractZipEntry(Save(wb.handle, FM_WORKBOOK_FORMAT_XLSX), kCacheXml);
     EXPECT_EQ(CountOccurrences(xml, kDataSourceClean), 1U) << xml;
     EXPECT_TRUE(XlsbDataSourceClean(ExtractZipEntry(Save(wb.handle, FM_WORKBOOK_FORMAT_XLSB), kCacheBin)));
+  }
+}
+
+// Insert Cells on the source's sheet marks a range source edited, inside the range or not. A defined-name source is
+// judged against the name's range: a row inserted inside it marks it, one elsewhere does not. A table source is
+// never marked.
+TEST(FormulonCApiPivotSaveShape, DataSourceCleanFollowsHowTheSourceIsGiven) {
+  enum class Source { kRange, kName, kTable };
+  const struct {
+    const char* label;
+    Source source;
+    bool band;
+    fm_cell_rect_t rect;  ///< The band for Insert Cells, or rows first_row..last_row for a row insert.
+    bool clean;
+  } kCases[] = {
+      {"cells inserted inside the range", Source::kRange, true, {1U, 10U, 1U, 11U}, false},
+      {"cells inserted at H2:I2", Source::kRange, true, {1U, 7U, 1U, 8U}, false},
+      {"row inserted inside the name", Source::kName, false, {1U, 0U, 1U, 0U}, false},
+      {"row inserted below the name", Source::kName, false, {10U, 0U, 10U, 0U}, true},
+      {"row inserted inside the table", Source::kTable, false, {1U, 0U, 1U, 0U}, true},
+  };
+  for (const auto& c : kCases) {
+    SCOPED_TRACE(c.label);
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+    const char* source_name = nullptr;
+    if (c.source == Source::kName) {
+      fm_defined_name_t name{};
+      name.struct_size = sizeof(name);
+      name.name = "Src";
+      name.formula = "=Sheet1!$K$1:$L$3";
+      name.local_sheet_id = FM_DEFINED_NAME_SCOPE_WORKBOOK;
+      ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, &name), 0) << fm_get_last_error_message();
+      source_name = "Src";
+    }
+    if (c.source == Source::kTable) {
+      ASSERT_EQ(fm_sheet_set_text(wb.handle, 0U, 0U, 10U, "Item"), 0);
+      ASSERT_EQ(fm_sheet_set_text(wb.handle, 0U, 0U, 11U, "Amt"), 0);
+      fm_table_spec_t spec{};
+      spec.struct_size = sizeof(spec);
+      spec.range = {0U, 10U, 2U, 11U};
+      spec.name = "Tbl";
+      std::size_t table = 0;
+      ASSERT_EQ(fm_sheet_add_table(wb.handle, 0U, &spec, &table), 0) << fm_get_last_error_message();
+      source_name = "Tbl";
+    }
+    BuildStaleProbePivot(wb.handle, source_name);
+    if (c.band) {
+      ASSERT_EQ(fm_sheet_insert_cells(wb.handle, 0U, &c.rect, FM_CELL_SHIFT_DOWN), 0) << fm_get_last_error_message();
+    } else {
+      ASSERT_EQ(fm_sheet_insert_rows(wb.handle, 0U, c.rect.first_row, c.rect.last_row), 0)
+          << fm_get_last_error_message();
+    }
+    const std::string xml = ExtractZipEntry(Save(wb.handle, FM_WORKBOOK_FORMAT_XLSX), kCacheXml);
+    EXPECT_EQ(xml.find(kDataSourceClean) != std::string::npos, c.clean) << xml;
+    // The xlsb cache writer holds range sources only; a named source's cache is left out of an .xlsb save.
+    if (c.source == Source::kRange) {
+      EXPECT_EQ(XlsbDataSourceClean(ExtractZipEntry(Save(wb.handle, FM_WORKBOOK_FORMAT_XLSB), kCacheBin)), c.clean);
+    }
   }
 }
