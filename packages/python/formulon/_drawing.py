@@ -579,7 +579,7 @@ class Chart(_Snapshotable):
                 h,
                 sheet,
                 object_id,
-                _uint(plot, "plot"),
+                _uint(plot, "plot", role="position"),
                 _sint(type, "type"),
                 _sint(ChartBarDirection.COLUMN if bar_direction is None else bar_direction, "bar_direction"),
                 _sint(grouping, "grouping"),
@@ -787,7 +787,7 @@ class Chart(_Snapshotable):
             S.CHART_SERIES_PATCH.pack(LIB, ptr, fields)
             _check(
                 LIB.fm_sheet_update_chart_series(
-                    h, sheet, object_id, _uint(plot, "plot"), _uint(series_id, "series_id"), ptr
+                    h, sheet, object_id, _uint(plot, "plot", role="position"), _uint(series_id, "series_id"), ptr
                 )
             )
 
@@ -861,7 +861,7 @@ class Chart(_Snapshotable):
                     h,
                     sheet,
                     object_id,
-                    _uint(plot, "plot"),
+                    _uint(plot, "plot", role="position"),
                     _uint(series_id, "series_id"),
                     _uint(point_index, "point_index", role="position"),
                     ptr,
@@ -889,7 +889,7 @@ class Chart(_Snapshotable):
             ptr = scope.struct_array(S.CHART_PLOT_PATCH, 1)
             fields = _encode_patch(_PLOT_PATCH_SPEC, patch, (), "plot patch", scope)
             S.CHART_PLOT_PATCH.pack(LIB, ptr, fields)
-            _check(LIB.fm_sheet_update_chart_plot(h, sheet, object_id, _uint(plot, "plot"), ptr))
+            _check(LIB.fm_sheet_update_chart_plot(h, sheet, object_id, _uint(plot, "plot", role="position"), ptr))
 
     def set_filter(self, filter: ChartFilter) -> None:
         """Replace the chart filter: the series (by ``c:idx``) and category positions ``filter`` lists are hidden.
@@ -932,14 +932,16 @@ class Chart(_Snapshotable):
             ptr = scope.struct_array(S.CHART_SERIES_PATCH, 1)
             fields = _encode_series_patch(patch, scope)
             S.CHART_SERIES_PATCH.pack(LIB, ptr, fields)
-            _check(LIB.fm_sheet_add_chart_series(h, sheet, object_id, _uint(plot, "plot"), ptr, out))
+            _check(LIB.fm_sheet_add_chart_series(h, sheet, object_id, _uint(plot, "plot", role="position"), ptr, out))
             return LIB.read_u32(out)
 
     def remove_series(self, plot: int, series_id: int) -> None:
         """Remove the series with ``c:idx`` ``series_id`` from plot group ``plot``."""
         h, sheet, object_id = self._at()
         _check(
-            LIB.fm_sheet_remove_chart_series(h, sheet, object_id, _uint(plot, "plot"), _uint(series_id, "series_id"))
+            LIB.fm_sheet_remove_chart_series(
+                h, sheet, object_id, _uint(plot, "plot", role="position"), _uint(series_id, "series_id")
+            )
         )
 
     def set_source(self, source: Union[ChartSourceInput, ChartSource]) -> None:
