@@ -6386,9 +6386,9 @@ export interface PrintTitles {
   readonly columns: Span | null;
 }
 
-/** Argument of `Sheet.setPrintTitles`: each axis is a {@link Span}, a span string (`$` allowed; the wrong axis or a
- *  malformed string fails with `StatusCode.InvalidArgument`) or `null` for no repeat. The {@link PrintTitles} a read
- *  returns passes as is. */
+/** Argument of `Sheet.setPrintTitles`: each axis is a {@link Span}, a span string (`$` allowed; a string that does not
+ *  parse fails with the parser's status and `parseError`, a span on the wrong axis with `StatusCode.InvalidArgument`) or
+ *  `null` for no repeat. The {@link PrintTitles} a read returns passes as is. */
 export interface PrintTitlesInput {
   /** The rows to repeat: a span, a row span string (such as `'3'` or `'1:2'`), or `null` for no repeat. */
   rows: Span | string | null;
@@ -6688,7 +6688,7 @@ export type IterativeProgressCallback = (
 ) => boolean | undefined | void;
 
 /** A sheet passed by its `Sheet` handle, its 0-based index, or its name (resolved by name identity, see
- *  {@link Workbook}). A `Sheet` of another workbook throws `TypeError`. */
+ *  {@link Workbook}). A `Sheet` of another workbook fails with `StatusCode.InvalidArgument`. */
 export type SheetRef = Sheet | number | string;
 
 /** Options of `Workbook.addSheet`. */
