@@ -471,6 +471,7 @@ function isCell(text) {
   return col <= 16384 && row >= 1 && row <= 1048576;
 }
 function refusalStatus(a1, StatusCode) {
+  if (!a1.isWellFormed()) return StatusCode.BindingUtf8EncodingError;
   const body = a1.replace(/^Sheet\d+!/, '');
   const parts = body.split(':');
   const wholeColumns = parts.length === 2 && parts.every((p) => /^\$?[A-Za-z]{1,3}$/.test(p));
@@ -1254,15 +1255,21 @@ test('O3: a missing required field is a TypeError and writes nothing', async () 
 
 // ---- Text (T1) ---------------------------------------------------------------
 
-test('T1: non-ASCII text round-trips and a lone surrogate becomes U+FFFD', async () => {
-  await withWorkbook((wb) => {
+test('T1: non-ASCII text round-trips and a lone surrogate is refused', async () => {
+  await withWorkbook((wb, formulon) => {
     const ws = wb.sheet(0);
     ws.setComment(0, 0, { author: '校閲', text: '確認😀' });
     assert.equal(ws.getComment(0, 0).text, '確認😀');
-    ws.setComment(1, 0, { author: 'a', text: 'x\uD800y' });
-    assert.equal(ws.getComment(1, 0).text, 'x\uFFFDy');
-    ws.setHyperlink({ location: 'Sheet1!A1', target: null, display: '表示\uDC00', range: 'A3' });
-    assert.equal(ws.getHyperlink(2, 0).display, '表示\uFFFD');
+    expectFormulonError(
+      () => ws.setComment(1, 0, { author: 'a', text: 'x\uD800y' }),
+      formulon.StatusCode.BindingUtf8EncodingError,
+    );
+    assert.equal(ws.getComment(1, 0), null);
+    expectFormulonError(
+      () => ws.setHyperlink({ location: 'Sheet1!A1', target: null, display: '表示\uDC00', range: 'A3' }),
+      formulon.StatusCode.BindingUtf8EncodingError,
+    );
+    assert.equal(ws.getHyperlink(2, 0), null);
   });
 });
 
@@ -1345,13 +1352,15 @@ test('setHyperlink refuses a missing range, a null link and a bad range, and cha
   });
 });
 
-test('setHyperlink stores U+FFFD for a lone surrogate in every text field', async () => {
-  await withWorkbook((wb) => {
+test('setHyperlink refuses a lone surrogate in every text field and changes nothing', async () => {
+  await withWorkbook((wb, formulon) => {
     const ws = wb.sheet(0);
     for (const field of ['target', 'location', 'display', 'tooltip']) {
-      ws.clearHyperlinks();
-      ws.setHyperlink({ target: LINK_URL, range: 'A1', [field]: 'x\uD800' });
-      assert.equal(ws.getHyperlink('A1')[field], 'x\uFFFD', field);
+      expectFormulonError(
+        () => ws.setHyperlink({ target: LINK_URL, range: 'A1', [field]: 'x\uD800' }),
+        formulon.StatusCode.BindingUtf8EncodingError,
+      );
+      assert.equal(ws.listHyperlinks().length, 0, field);
     }
   });
 });

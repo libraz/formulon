@@ -9,6 +9,7 @@ import formulon
 from formulon import (
     CellRect,
     FormulaSyntaxError,
+    FormulonError,
     HyperlinkInput,
     IndexOutOfRangeError,
     InvalidArgumentError,
@@ -94,14 +95,15 @@ class SetTests(_Base):
                     self.ws.set_hyperlink(_link(bad))
         self.assertEqual(self.ws.list_hyperlinks(), [])
 
-    def test_lone_surrogate_in_each_text_field_becomes_u_fffd(self) -> None:
+    def test_lone_surrogate_in_each_text_field_is_refused(self) -> None:
         for field in ("target", "location", "display", "tooltip"):
             fields = {"target": URL, "location": None, "display": None, "tooltip": None}
             fields[field] = "x\ud800"
             with self.subTest(field=field):
-                self.ws.clear_hyperlinks()
-                self.ws.set_hyperlink(HyperlinkInput(range="A1", **fields))  # type: ignore[arg-type]
-                self.assertEqual(getattr(self.ws.get_hyperlink("A1"), field), "x\ufffd")
+                with self.assertRaises(FormulonError) as caught:
+                    self.ws.set_hyperlink(HyperlinkInput(range="A1", **fields))  # type: ignore[arg-type]
+                self.assertEqual(caught.exception.code, 7002)
+                self.assertEqual(self.ws.list_hyperlinks(), [])
 
     def test_text_goes_into_an_empty_top_left_cell_only(self) -> None:
         self.ws.set_value("B1", "kept")

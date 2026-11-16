@@ -21,6 +21,39 @@ Napi::Uint8Array CopyBytes(Napi::Env env, const uint8_t* bytes, std::size_t len)
   return copy;
 }
 
+namespace {
+/// Encodes `text` as UTF-8, writing each lone surrogate in its 3-byte form so
+/// the C ABI sees ill-formed input and refuses it.
+std::string ToUtf8KeepingLoneSurrogates(const Napi::String& text) {
+  const std::u16string units = text.Utf16Value();
+  std::string out;
+  out.reserve(units.size());
+  for (size_t i = 0; i < units.size(); ++i) {
+    uint32_t cp = units[i];
+    if (cp >= 0xD800 && cp <= 0xDBFF && i + 1 < units.size() && units[i + 1] >= 0xDC00 && units[i + 1] <= 0xDFFF) {
+      cp = 0x10000 + ((cp - 0xD800) << 10) + (units[i + 1] - 0xDC00);
+      ++i;
+    }
+    if (cp < 0x80) {
+      out.push_back(static_cast<char>(cp));
+    } else if (cp < 0x800) {
+      out.push_back(static_cast<char>(0xC0 | (cp >> 6)));
+      out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+    } else if (cp < 0x10000) {
+      out.push_back(static_cast<char>(0xE0 | (cp >> 12)));
+      out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+      out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+    } else {
+      out.push_back(static_cast<char>(0xF0 | (cp >> 18)));
+      out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
+      out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+      out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+    }
+  }
+  return out;
+}
+}  // namespace
+
 Napi::Uint8Array TakeSavedBytes(Napi::Env env, uint8_t* bytes, std::size_t len) {
   Napi::Uint8Array copy = CopyBytes(env, bytes, len);
   fm_buffer_destroy(bytes);
@@ -298,7 +331,7 @@ bool CheckedSpecReader::String(const Napi::Value& value, const char* key, std::s
   }
   // Same acceptance as the WASM surface: a string, never a coerced value or a byte buffer.
   if (present.IsString()) {
-    *out = present.As<Napi::String>().Utf8Value();
+    *out = ToUtf8KeepingLoneSurrogates(present.As<Napi::String>());
   } else {
     out->clear();
     FailType(key, "a string");
@@ -569,7 +602,7 @@ double NumberArg(const Napi::CallbackInfo& info, size_t idx, double dflt) {
 
 std::string StringArg(const Napi::CallbackInfo& info, size_t idx) {
   const Napi::Value value = info[idx];
-  return value.IsString() ? value.As<Napi::String>().Utf8Value() : std::string();
+  return value.IsString() ? ToUtf8KeepingLoneSurrogates(value.As<Napi::String>()) : std::string();
 }
 
 bool ObjectArg(const Napi::CallbackInfo& info, size_t idx, Napi::Object* out) {
@@ -813,7 +846,7 @@ bool JsToValue(Napi::Env env, Napi::Value in, fm_value_t* out, std::string* text
       if (!field.IsString()) {
         return RejectValue(env, "value.text", "must be a string");
       }
-      *text = field.As<Napi::String>().Utf8Value();
+      *text = ToUtf8KeepingLoneSurrogates(field.As<Napi::String>());
       out->u.text = text->c_str();
       break;
     case FM_VALUE_KIND_ERROR:

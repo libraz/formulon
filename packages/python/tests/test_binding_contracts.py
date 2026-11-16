@@ -1440,28 +1440,31 @@ class ArgumentScopeTests(unittest.TestCase):
 
 
 class LoneSurrogateTests(unittest.TestCase):
-    """A lone surrogate is stored as U+FFFD, as the JavaScript bindings store it."""
+    """A lone surrogate is refused with the UTF-8 encoding error and changes nothing."""
 
-    def _assert_normalised(self, wb: Workbook) -> None:
-        self.assertEqual(wb.sheet(0).get_value(0, 0), "a\ufffdb")
-        self.assertEqual(wb.sheet(0).get_value(2, 0), "\U0001f600")
-        self.assertEqual(wb.sheet(0).name, "S\ufffd")
-        self.assertEqual(wb.sheet(0).get_formula(1, 0), '="x\ufffd"')
-        formula = next(n.formula for n in wb.list_defined_names() if n.name == "Lone")
-        self.assertIn("y\ufffd", formula)
+    def _assert_refused(self, call: object) -> None:
+        with self.assertRaises(FormulonError) as caught:
+            call()  # type: ignore[operator]
+        self.assertEqual(caught.exception.code, 7002)
 
-    def test_text_names_and_formulas_store_the_replacement_character(self) -> None:
+    def test_text_names_and_formulas_are_refused(self) -> None:
         with Workbook.create_default() as wb:
-            wb.sheet(0).set_text(0, 0, "a\ud800b")
-            # A surrogate pair is one code point, not two replacements.
-            wb.sheet(0).set_text(2, 0, "\ud83d\ude00")
-            wb.sheet(0).rename("S\udc00")
-            wb.sheet(0).set_formula(1, 0, '="x\ud800"')
-            wb.set_defined_name(DefinedNameInput("Lone", '="y\udfff"'))
-            self._assert_normalised(wb)
-            data = wb.save()
-        with Workbook.load(data) as reloaded:
-            self._assert_normalised(reloaded)
+            name = wb.sheet(0).name
+            wb.sheet(0).set_text(0, 0, "kept")
+            self._assert_refused(lambda: wb.sheet(0).set_text(0, 0, "a\ud800b"))
+            self._assert_refused(lambda: wb.sheet(0).rename("S\udc00"))
+            self._assert_refused(lambda: wb.sheet(0).set_formula(1, 0, '="x\ud800"'))
+            self._assert_refused(lambda: wb.set_defined_name(DefinedNameInput("Lone", '="y\udfff"')))
+            self.assertEqual(wb.sheet(0).get_value(0, 0), "kept")
+            self.assertEqual(wb.sheet(0).name, name)
+            self.assertIsNone(wb.sheet(0).get_formula(1, 0))
+            self.assertFalse([n for n in wb.list_defined_names() if n.name == "Lone"])
+
+    def test_a_surrogate_pair_written_as_two_code_points_is_refused(self) -> None:
+        with Workbook.create_default() as wb:
+            self._assert_refused(lambda: wb.sheet(0).set_text(2, 0, "\ud83d\ude00"))
+            wb.sheet(0).set_text(2, 0, "\U0001f600")
+            self.assertEqual(wb.sheet(0).get_value(2, 0), "\U0001f600")
 
 
 class ValueValidationTests(unittest.TestCase):

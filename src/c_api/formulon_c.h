@@ -110,7 +110,7 @@
  * Text input: every caller-supplied string (argument or struct field) must be
  * well-formed UTF-8. A lone surrogate, overlong form or truncated sequence
  * returns `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) with the workbook unchanged; bindings
- * holding UTF-16 replace lone surrogates with U+FFFD before the call.
+ * holding UTF-16 forward a lone surrogate unreplaced, so it is refused here.
  *
  * Threading model:
  *   * Each `fm_workbook_t*` is owned by exactly one caller thread at a time.

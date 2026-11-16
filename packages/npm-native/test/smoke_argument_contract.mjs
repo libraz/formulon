@@ -209,15 +209,23 @@ test('a failed read throws instead of returning a default payload', async () => 
   }
 });
 
-test('a lone surrogate in a spec string is stored as U+FFFD', async () => {
+test('a lone surrogate in a spec string or text argument is refused and changes nothing', async () => {
   const mod = await getModule();
   const wb = mod.Workbook.createDefault();
   try {
-    wb.addPerson({ id: PERSON_ID, displayName: 'a\uD800b' });
-    const person = wb.listPeople().find((p) => p.id === PERSON_ID);
-    assert.equal(person.displayName, 'a\uFFFDb');
-    wb.sheet(0).setText(0, 0, 'x\uDC00');
-    assert.equal(wb.sheet(0).getTypedValue(0, 0).text, 'x\uFFFD');
+    assert.throws(
+      () => wb.addPerson({ id: PERSON_ID, displayName: 'a\uD800b' }),
+      (e) => isFormulonError(e, mod.StatusCode.BindingUtf8EncodingError),
+    );
+    assert.equal(
+      wb.listPeople().find((p) => p.id === PERSON_ID),
+      undefined,
+    );
+    assert.throws(
+      () => wb.sheet(0).setText(0, 0, 'x\uDC00'),
+      (e) => isFormulonError(e, mod.StatusCode.BindingUtf8EncodingError),
+    );
+    assert.equal(wb.sheet(0).getTypedValue(0, 0).kind, mod.ValueKind.Blank);
   } finally {
     wb.dispose();
   }

@@ -53,9 +53,9 @@ enum ArgumentErrorKind : int32_t {
 // string/bytes snapshot may still return `undefined` for an unsupported
 // input; the C++ reader turns that into its normal type error. A thrown proxy,
 // getter, or typed-array hook reports success == 0 and returns an owned
-// `undefined` handle. A string snapshot replaces each lone surrogate with
-// U+FFFD, as N-API's UTF-8 conversion does, so ill-formed UTF-8 never reaches
-// the engine. The body is JavaScript source; keep formatting disabled so
+// `undefined` handle. A string snapshot is returned unchanged, so a lone
+// surrogate reaches the engine as ill-formed UTF-8 and the C ABI refuses it.
+// The body is JavaScript source; keep formatting disabled so
 // clang-format cannot rewrite its operators.
 // FORMULON-ALLOW: this JavaScript try/catch is the required no-escape boundary
 // for caller-owned getters and typed-array operations in a -fno-exceptions WASM
@@ -72,25 +72,7 @@ EM_JS(emscripten::EM_VAL, fm_wasm_safe_reader_operation,
     } else if (operation === 2) {
       result = Array.isArray(owner);
     } else if (operation === 3) {
-      if (typeof owner === 'string') {
-        if (typeof owner.toWellFormed === 'function') {
-          result = owner.toWellFormed();
-        } else {
-          result = '';
-          for (var i = 0; i < owner.length; i++) {
-            var unit = owner.charCodeAt(i);
-            var next = i + 1 < owner.length ? owner.charCodeAt(i + 1) : 0;
-            if (unit >= 0xD800 && unit <= 0xDBFF && next >= 0xDC00 && next <= 0xDFFF) {
-              result += owner.substring(i, i + 2);
-              i++;
-            } else {
-              result += unit >= 0xD800 && unit <= 0xDFFF ? String.fromCharCode(0xFFFD) : owner.charAt(i);
-            }
-          }
-        }
-      } else {
-        result = undefined;
-      }
+      result = typeof owner === 'string' ? owner : undefined;
     } else if (operation === 4) {
       // `isView` is false for a Proxy, which the Node binding also rejects.
       if (ArrayBuffer.isView(owner) && owner instanceof Uint8Array) {

@@ -436,8 +436,8 @@ bool CellRectArg(CheckedSpecReader& reader, const Napi::CallbackInfo& info, size
 double NumberValue(const Napi::Value& value, double dflt);
 /// `info[idx]` as a number, or `dflt` when absent or not a number.
 double NumberArg(const Napi::CallbackInfo& info, size_t idx, double dflt);
-/// `info[idx]` as UTF-8 (lone surrogates become U+FFFD), or "" when it is
-/// not a string.
+/// `info[idx]` as UTF-8 (a lone surrogate stays in its 3-byte form, which the
+/// C ABI refuses as ill-formed), or "" when it is not a string.
 std::string StringArg(const Napi::CallbackInfo& info, size_t idx);
 bool ObjectArg(const Napi::CallbackInfo& info, size_t idx, Napi::Object* out);
 bool ArrayArg(const Napi::CallbackInfo& info, size_t idx, Napi::Array* out);

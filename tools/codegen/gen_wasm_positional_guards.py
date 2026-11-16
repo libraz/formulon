@@ -464,23 +464,6 @@ def _render(metadata: dict[str, object]) -> str:
     }}
   }}
 
-  // Embind would forward a lone UTF-16 surrogate as WTF-8 bytes; replace it
-  // with U+FFFD as N-API's UTF-8 conversion does.
-  const loneSurrogate = /[\\uD800-\\uDBFF](?![\\uDC00-\\uDFFF])|(?<![\\uD800-\\uDBFF])[\\uDC00-\\uDFFF]/g;
-  function wellFormed(text) {{
-    return typeof text.toWellFormed === 'function' ? text.toWellFormed() : text.replace(loneSurrogate, '\\uFFFD');
-  }}
-
-  // Returns `args` with every string-mask position made well-formed. The
-  // array is the wrapper's own rest parameter, never the caller's.
-  function wellFormedStrings(args, spec) {{
-    const stringMask = spec.string ?? 0;
-    for (let index = 0; index < args.length; index += 1) {{
-      if ((stringMask & 2 ** index) !== 0) args[index] = wellFormed(args[index]);
-    }}
-    return args;
-  }}
-
   function receiverStateKey(receiver) {{
     if (receiver === null || receiver === undefined ||
         (typeof receiver !== 'object' && typeof receiver !== 'function')) return null;
@@ -515,7 +498,7 @@ def _render(metadata: dict[str, object]) -> str:
       let pending;
       let result;
       try {{
-        result = Reflect.apply(original, this, wellFormedStrings(args, spec));
+        result = Reflect.apply(original, this, args);
       }} finally {{
         argumentErrors.depth -= 1;
         pending = argumentErrors.pending;

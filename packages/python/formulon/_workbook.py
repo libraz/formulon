@@ -7193,16 +7193,13 @@ class _ArgScope:
     def cstr(self, value: str) -> int:
         """Copy ``value`` as a NUL-terminated UTF-8 string, ``""`` included.
 
-        A lone surrogate becomes U+FFFD and a surrogate pair its code point,
-        as the JavaScript bindings convert a UTF-16 string.
+        A lone surrogate is written in its 3-byte form, not replaced, so the
+        engine refuses the call with a UTF-8 encoding error. A surrogate pair
+        written as two code points is two lone surrogates and is refused too.
         """
         if not isinstance(value, str):
             raise TypeError(f"expected str, got {type(value).__name__}")
-        try:
-            encoded = value.encode("utf-8")
-        except UnicodeEncodeError:
-            utf16 = value.encode("utf-16-le", "surrogatepass")
-            encoded = utf16.decode("utf-16-le", "replace").encode("utf-8")
+        encoded = value.encode("utf-8", "surrogatepass")
         return self.buffer(encoded + b"\x00")
 
     def opt_cstr(self, value: Optional[str]) -> int:
