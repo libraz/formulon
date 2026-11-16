@@ -48,16 +48,25 @@ inline int compare_numbers(double x, double y) {
   return x < y ? -1 : (x > y ? 1 : 0);
 }
 
+// How a lookup family reads a blank lookup_value (a blank cell or an omitted
+// argument). VLOOKUP, HLOOKUP, MATCH and LOOKUP read it as the number 0;
+// XLOOKUP and XMATCH keep it blank, so it finds a blank cell and not a 0.
+enum class BlankLookup : std::uint8_t { kZero, kBlank };
+
+// `lookup` as the family's searches compare it.
+inline Value typed_lookup_value(const Value& lookup, BlankLookup blank) {
+  return blank == BlankLookup::kZero && lookup.is_blank() ? Value::number(0.0) : lookup;
+}
+
 // Literal equality of a cell against a number / blank / boolean lookup value
-// (a blank lookup value acts as 0; any other lookup kind never matches). A
-// blank cell matches a zero target only when `blank_cells_match_zero`.
-inline bool literal_equals(const Value& cell, const Value& lookup, bool blank_cells_match_zero) {
-  if (lookup.is_number() || lookup.is_blank()) {
-    const double target = lookup.is_blank() ? 0.0 : lookup.as_number();
-    if (cell.is_number()) {
-      return cell.as_number() == target;
-    }
-    return blank_cells_match_zero && cell.is_blank() && target == 0.0;
+// already typed by `typed_lookup_value`; any other lookup kind never matches.
+// A blank cell equals only a blank lookup value, never a 0.
+inline bool literal_equals(const Value& cell, const Value& lookup) {
+  if (lookup.is_number()) {
+    return cell.is_number() && cell.as_number() == lookup.as_number();
+  }
+  if (lookup.is_blank()) {
+    return cell.is_blank();
   }
   if (lookup.is_boolean()) {
     return cell.is_boolean() && cell.as_boolean() == lookup.as_boolean();

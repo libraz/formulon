@@ -45,15 +45,12 @@ std::size_t scan_exact_text_lookup(std::string_view raw, ExcelProfile profile, s
   return SIZE_MAX;
 }
 
-// First cell equal to a number / blank / boolean `lookup_value`, or SIZE_MAX.
-// A blank lookup_value acts as 0. `blank_cells_match_zero` lets a blank cell
-// match a zero target (VLOOKUP / HLOOKUP / LOOKUP scans); MATCH's exact mode
-// never matches blank cells.
+// First cell equal to a number / boolean `lookup_value`, or SIZE_MAX. Blank
+// cells never match.
 template <typename CellAt>
-std::size_t scan_exact_typed(const Value& lookup_value, std::size_t count, bool blank_cells_match_zero,
-                             CellAt&& cell_at) {
+std::size_t scan_exact_typed(const Value& lookup_value, std::size_t count, CellAt&& cell_at) {
   for (std::size_t i = 0; i < count; ++i) {
-    if (literal_equals(cell_at(i), lookup_value, blank_cells_match_zero)) {
+    if (literal_equals(cell_at(i), lookup_value)) {
       return i;
     }
   }
@@ -126,8 +123,7 @@ bool resolve_table_array(const parser::AstNode& arg_node, Arena& arena, const Fu
 
 // Orders a cell against the lookup value for the approximate searches: the
 // sign of (cell - lookup), or `kForeignType` for a cell of another type.
-// Only real numbers rank against a number (or blank) lookup; blank cells are
-// foreign. Wildcards are never honoured.
+// Only real numbers rank against a number lookup; blank cells are foreign. Wildcards are never honoured.
 class ApproxComparer {
  public:
   ApproxComparer(const Value& lookup, ExcelProfile profile)
@@ -143,11 +139,11 @@ class ApproxComparer {
       }
       return text_query_->compare(cell.as_text());
     }
-    if (lookup_.is_number() || lookup_.is_blank()) {
+    if (lookup_.is_number()) {
       if (!cell.is_number()) {
         return kForeignType;
       }
-      return compare_numbers(cell.as_number(), lookup_.is_blank() ? 0.0 : lookup_.as_number());
+      return compare_numbers(cell.as_number(), lookup_.as_number());
     }
     if (lookup_.is_boolean()) {
       if (!cell.is_boolean()) {
@@ -177,11 +173,11 @@ class ApproxComparer {
 //
 // Approximate mode follows `approximate_search`: a cell of another type than the
 // lookup value ends the binary search and the rest is scanned linearly.
-// `descending` (MATCH -1) replaces the binary search with `descending_scan`;
-// `blank_cells_match_zero` is false for MATCH's exact mode.
+// `descending` (MATCH -1) replaces the binary search with `descending_scan`.
+// A blank `raw_lookup` is the number 0 (`BlankLookup::kZero`).
 std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std::uint32_t cols, LookupAxis axis,
-                        const Value& lookup_value, bool approximate, ExcelProfile profile, bool descending = false,
-                        bool blank_cells_match_zero = true) {
+                        const Value& raw_lookup, bool approximate, ExcelProfile profile, bool descending = false) {
+  const Value lookup_value = typed_lookup_value(raw_lookup, BlankLookup::kZero);
   const std::size_t n = axis == LookupAxis::Column ? rows : cols;
   if (n == 0) {
     return SIZE_MAX;
@@ -202,7 +198,7 @@ std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std:
       const std::string_view raw = lookup_value.as_text();
       return scan_exact_text_lookup(raw, profile, n, cell_at);
     }
-    return scan_exact_typed(lookup_value, n, blank_cells_match_zero, cell_at);
+    return scan_exact_typed(lookup_value, n, cell_at);
   }
 
   // Approximate match: binary search, falling back to a left-to-right scan at
@@ -366,15 +362,9 @@ Value match_lookup_one(const std::vector<Value>& cells, const Value& lookup, int
   if (cells.empty()) {
     return Value::error(ErrorCode::NA);
   }
-  // Blank as lookup_value never matches anything in exact mode (Excel
-  // behaviour: blank search values short-circuit to #N/A even when the
-  // array contains blank cells).
-  if (match_type == 0 && lookup.is_blank()) {
-    return Value::error(ErrorCode::NA);
-  }
   // Exact mode honours wildcards for text; approximate treats them as literal.
   const std::size_t pos = lookup_scan(cells, static_cast<std::uint32_t>(cells.size()), 1U, LookupAxis::Column, lookup,
-                                      match_type != 0, profile, match_type < 0, /*blank_cells_match_zero=*/false);
+                                      match_type != 0, profile, match_type < 0);
   return pos == SIZE_MAX ? Value::error(ErrorCode::NA) : Value::number(static_cast<double>(pos + 1));
 }
 
@@ -515,8 +505,8 @@ Value eval_hlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
 //
 // Errors / edge cases:
 //   * `lookup_value` is an error: propagate unchanged.
-//   * `lookup_value` is blank or text that never sorts before any vector
-//     cell: `#N/A`.
+//   * `lookup_value` that never sorts before any vector cell: `#N/A`. A
+//     blank `lookup_value` is the number 0.
 //   * `result_vector` shorter than `lookup_vector`: we still index by the
 //     matched offset and fall back to `#N/A` if the index is out of range
 //     (Excel's observable behaviour).
@@ -545,9 +535,6 @@ Value eval_lookup_lazy(const parser::AstNode& call, Arena& arena, const Function
   const Value lookup = eval_node(call.as_call_arg(0), arena, registry, ctx);
   if (lookup.is_error()) {
     return lookup;
-  }
-  if (lookup.is_blank()) {
-    return Value::error(ErrorCode::NA);
   }
 
   auto lookup_resolved = resolve_range_arg(call.as_call_arg(1), arena, registry, ctx);

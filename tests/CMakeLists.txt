@@ -424,6 +424,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/reference_lazy_test.cpp
   unit/eval/builtins_vlookup_test.cpp
   unit/eval/builtins_xlookup_test.cpp
+  unit/eval/lookup_blank_value_test.cpp
   unit/eval/xmatch_mode_range_test.cpp
   unit/eval/address_sheet_quoting_test.cpp
   unit/eval/bessel_order_cap_test.cpp

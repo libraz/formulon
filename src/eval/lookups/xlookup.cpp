@@ -64,14 +64,14 @@ int error_order(ErrorCode code) {
 
 // Three-way compare of (cell - lookup) honouring Excel 365's cross-type
 // ordering for XLOOKUP approximate-match: kind-rank first, value second.
-// Rank 0 = Number / Blank (Blank acts as 0.0), Rank 1 = Text (case-insensitive
-// ASCII compare), Rank 2 = Bool (FALSE < TRUE), Rank 3 = Error (ordered by
-// ERROR.TYPE code). Anything else (Array, Ref, Lambda) is incomparable and the
-// function returns `false` so callers can decide how to handle it. On success
-// writes the sign to `*out_cmp` and returns `true`.
+// Rank 0 = Number, Rank 1 = Text (case-insensitive ASCII compare), Rank 2 =
+// Bool (FALSE < TRUE), Rank 3 = Error (ordered by ERROR.TYPE code), Rank 4 =
+// Blank, all blanks equal. Anything else (Array, Ref, Lambda) is incomparable
+// and the function returns `false` so callers can decide how to handle it. On
+// success writes the sign to `*out_cmp` and returns `true`.
 bool xlookup_cmp(const Value& cell, const Value& lookup, ExcelProfile profile, int* out_cmp) {
   auto rank_of = [](const Value& v, int* rank) -> bool {
-    if (v.is_number() || v.is_blank()) {
+    if (v.is_number()) {
       *rank = 0;
       return true;
     }
@@ -85,6 +85,10 @@ bool xlookup_cmp(const Value& cell, const Value& lookup, ExcelProfile profile, i
     }
     if (v.is_error()) {
       *rank = 3;
+      return true;
+    }
+    if (v.is_blank()) {
+      *rank = 4;
       return true;
     }
     return false;
@@ -113,23 +117,22 @@ bool xlookup_cmp(const Value& cell, const Value& lookup, ExcelProfile profile, i
     *out_cmp = compare_numbers(cb, lb);
     return true;
   }
-  // Rank 0: Number or Blank.
-  const double lv = lookup.is_blank() ? 0.0 : lookup.as_number();
-  const double cv = cell.is_blank() ? 0.0 : cell.as_number();
-  *out_cmp = compare_numbers(cv, lv);
+  if (cell_rank == 4) {
+    *out_cmp = 0;
+    return true;
+  }
+  *out_cmp = compare_numbers(cell.as_number(), lookup.as_number());
   return true;
 }
 
 // Exact-equality test for the scan paths that do not prepare a wildcard
 // query. Text pairs compare through the collator; the other kinds use literal
-// equality with the "Blank acts as numeric 0" rule VLOOKUP / HLOOKUP use
-// (classic.cpp's `lookup_scan`), not MATCH's exact mode, where a blank
-// lookup_value is #N/A unconditionally.
+// equality, a blank lookup_value staying blank (`BlankLookup::kBlank`).
 bool xlookup_exact_eq(const Value& cell, const Value& lookup, ExcelProfile profile) {
   if (lookup.is_text()) {
     return cell.is_text() && collate(cell.as_text(), lookup.as_text(), profile, CollationStrength::kDynamic) == 0;
   }
-  return literal_equals(cell, lookup, /*blank_cells_match_zero=*/true);
+  return literal_equals(cell, typed_lookup_value(lookup, BlankLookup::kBlank));
 }
 
 // Scan `cells` (already flattened to a 1-D axis of the lookup_array) for
@@ -139,8 +142,8 @@ bool xlookup_exact_eq(const Value& cell, const Value& lookup, ExcelProfile profi
 //
 // For `BinaryAsc` / `BinaryDesc`, the caller must guarantee the array is
 // sorted in the implied direction; we do not validate. Cross-type compares
-// follow Excel 365's kind-rank ordering (see `xlookup_cmp`): Number/Blank <
-// Text < Bool. Wildcards are only honoured when `match_mode ==
+// follow Excel 365's kind-rank ordering (see `xlookup_cmp`): Number < Text <
+// Bool < Error < Blank. Wildcards are only honoured when `match_mode ==
 // XMatchMode::Wildcard`; in every other mode `*` / `?` in the pattern are
 // treated as literal characters.
 std::size_t xlookup_scan(const std::vector<Value>& cells, const Value& lookup_value, XMatchMode match_mode,
@@ -327,8 +330,8 @@ Expected<XlookupPlan, ErrorCode> plan_xlookup(const parser::AstNode& call, Arena
 
   XlookupPlan plan;
 
-  // 1) lookup_value — errors propagate; Blank acts as numeric 0 via the
-  //    comparison primitives.
+  // 1) lookup_value — errors propagate; a blank stays blank and finds blank
+  //    cells (`BlankLookup::kBlank`).
   plan.lookup = eval_node(call.as_call_arg(0), arena, registry, ctx);
   if (plan.lookup.is_error()) {
     return plan.lookup.as_error();
