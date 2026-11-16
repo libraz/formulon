@@ -489,7 +489,10 @@ void ReadCfRuleAttributes(const pugi::xml_node& rule, cf::CFRule* rule_out) {
   }
   if (out.type == cf::RuleType::ContainsText || out.type == cf::RuleType::NotContainsText ||
       out.type == cf::RuleType::BeginsWith || out.type == cf::RuleType::EndsWith) {
-    out.text = attr_str(rule, "text");
+    // An absent attribute stays absent; `text=""` is kept as the empty string.
+    if (rule.attribute("text")) {
+      out.text = attr_str(rule, "text");
+    }
   }
 }
 

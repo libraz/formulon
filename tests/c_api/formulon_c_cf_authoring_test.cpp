@@ -1144,3 +1144,42 @@ TEST(FormulonCApiCfIconSetField, MatchAndRuleUseIconSet) {
   ASSERT_EQ(fm_sheet_get_cf_rule(wb.handle, 0, rule_id, &present, &back), 0);
   EXPECT_EQ(back.icon_set, FM_ICON_SET_NAME_THREE_FLAGS);
 }
+
+// A text rule's `text` is only the dialog operand: a file that omits it reads
+// back NULL and one that writes `text=""` reads back "", in both formats.
+TEST(FormulonCApiCfMutate, LoadedTextRuleReportsAbsentAndEmptyText) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_cell_rect_t range{0, 0, 3, 0};
+  const char* texts[] = {nullptr, "", "x"};
+  for (const char* text : texts) {
+    fm_cf_rule_t rule = FM_STRUCT_INIT(fm_cf_rule_t);
+    rule.type = 7;
+    rule.text = text;
+    rule.formula1 = "=NOT(ISERROR(SEARCH(\"y\",A1)))";
+    rule.ranges = &range;
+    rule.range_count = 1;
+    const char* rule_id = nullptr;
+    ASSERT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, &rule, &rule_id), 0) << fm_get_last_error_message();
+  }
+  for (std::int32_t format :
+       {static_cast<std::int32_t>(FM_WORKBOOK_FORMAT_XLSX), static_cast<std::int32_t>(FM_WORKBOOK_FORMAT_XLSB)}) {
+    BufferGuard saved;
+    ASSERT_EQ(fm_workbook_save(wb.handle, format, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+    WorkbookGuard reloaded;
+    ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0);
+    std::size_t count = 0;
+    ASSERT_EQ(fm_sheet_get_cf_rule_count(reloaded.handle, 0, &count), 0);
+    ASSERT_EQ(count, 3U);
+    for (std::size_t i = 0; i < count; ++i) {
+      fm_cf_rule_t out = FM_STRUCT_INIT(fm_cf_rule_t);
+      ASSERT_EQ(fm_sheet_get_cf_rule_at(reloaded.handle, 0, i, &out), 0);
+      if (texts[i] == nullptr) {
+        EXPECT_EQ(out.text, nullptr) << "format=" << format << " rule=" << i;
+      } else {
+        ASSERT_NE(out.text, nullptr) << "format=" << format << " rule=" << i;
+        EXPECT_STREQ(out.text, texts[i]) << "format=" << format << " rule=" << i;
+      }
+    }
+  }
+}

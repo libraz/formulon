@@ -1057,5 +1057,34 @@ TEST(CFReader, RuleWhoseTypeNamesNoVisualChildKeepsTheFirstOnePresent) {
   EXPECT_FALSE(r.icon_set.has_value());
 }
 
+TEST(CFReader, TextRuleKeepsAbsentAndEmptyTextApart) {
+  pugi::xml_document doc = Load(R"(
+    <worksheet>
+      <conditionalFormatting sqref="A1:A4">
+        <cfRule type="containsText" priority="1" operator="containsText">
+          <formula>NOT(ISERROR(SEARCH("y",A1)))</formula>
+        </cfRule>
+        <cfRule type="containsText" priority="2" operator="containsText" text="">
+          <formula>NOT(ISERROR(SEARCH("y",A1)))</formula>
+        </cfRule>
+        <cfRule type="endsWith" priority="3" operator="endsWith" text="x">
+          <formula>RIGHT(A1,LEN("y"))="y"</formula>
+        </cfRule>
+      </conditionalFormatting>
+    </worksheet>)");
+
+  auto cfs = read_conditional_formats(doc.child("worksheet"));
+  ASSERT_TRUE(cfs);
+  ASSERT_EQ(cfs.value().size(), 1u);
+  const auto& rules = cfs.value()[0].rules;
+  ASSERT_EQ(rules.size(), 3u);
+  EXPECT_FALSE(rules[0].text.has_value());
+  ASSERT_TRUE(rules[1].text.has_value());
+  EXPECT_EQ(*rules[1].text, "");
+  ASSERT_TRUE(rules[2].text.has_value());
+  EXPECT_EQ(*rules[2].text, "x");
+  EXPECT_EQ(rules[2].formula1, "RIGHT(A1,LEN(\"y\"))=\"y\"");
+}
+
 }  // namespace
 }  // namespace formulon::io

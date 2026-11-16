@@ -1,6 +1,8 @@
 // Conditional-format evaluator tests: expression, context-aware operands, and time periods.
 
 #include <cstdint>
+#include <optional>
+#include <string>
 
 #include "cell.h"
 #include "cf/cf_evaluator.h"
@@ -524,6 +526,65 @@ TEST(CFEvaluator, SqrefAnchorIsBoundingBoxTopLeft) {
   EXPECT_EQ(sqref_anchor({MakeRange(4U, 1U, 5U, 1U), MakeRange(1U, 3U, 2U, 3U)}), (CellAddress{1U, 1U}));
   EXPECT_EQ(sqref_anchor({MakeRange(2U, 5U, 3U, 5U), MakeRange(5U, 1U, 6U, 1U), MakeRange(1U, 3U, 2U, 3U)}),
             (CellAddress{1U, 1U}));
+}
+
+// ---------------------------------------------------------------------------
+// Text rules evaluate through their stored formula; the text attribute is
+// only the dialog operand (Mac Excel 365: cells "x", "y", "xy", #DIV/0!).
+// ---------------------------------------------------------------------------
+
+namespace {
+
+/// The cells of A1:A4 a text rule with `text` and `formula` formats.
+std::string TextRuleMatches(RuleType type, std::optional<std::string> text, std::optional<std::string> formula) {
+  CFEvalHarness harness;
+  const Value cells[4] = {Value::text("x"), Value::text("y"), Value::text("xy"), Value::error(ErrorCode::Div0)};
+  for (std::uint32_t row = 0; row < 4U; ++row) {
+    harness.sheet.set_cell_value(row, 0, cells[row]);
+  }
+  CFRule rule = MakeRule(type);
+  rule.text = std::move(text);
+  rule.formula1 = std::move(formula);
+  std::string hits;
+  for (std::uint32_t row = 0; row < 4U; ++row) {
+    if (match_rule(rule, cells[row], harness.context(At(0, 0), At(row, 0)))) {
+      hits += "A" + std::to_string(row + 1U) + " ";
+    }
+  }
+  return hits;
+}
+
+}  // namespace
+
+TEST(CFEvaluator, ContainsTextFollowsItsFormulaNotItsText) {
+  const std::string f = "NOT(ISERROR(SEARCH(\"y\",A1)))";
+  EXPECT_EQ(TextRuleMatches(RuleType::ContainsText, "x", f), "A2 A3 ");
+  EXPECT_EQ(TextRuleMatches(RuleType::ContainsText, std::nullopt, f), "A2 A3 ");
+  EXPECT_EQ(TextRuleMatches(RuleType::ContainsText, "", f), "A2 A3 ");
+}
+
+TEST(CFEvaluator, NotContainsTextFollowsItsFormulaNotItsText) {
+  EXPECT_EQ(TextRuleMatches(RuleType::NotContainsText, "x", "ISERROR(SEARCH(\"y\",A1))"), "A1 A4 ");
+}
+
+TEST(CFEvaluator, BeginsWithFollowsItsFormulaNotItsText) {
+  EXPECT_EQ(TextRuleMatches(RuleType::BeginsWith, "x", "LEFT(A1,LEN(\"y\"))=\"y\""), "A2 ");
+}
+
+TEST(CFEvaluator, EndsWithFollowsItsFormulaNotItsText) {
+  EXPECT_EQ(TextRuleMatches(RuleType::EndsWith, "x", "RIGHT(A1,LEN(\"y\"))=\"y\""), "A2 A3 ");
+}
+
+TEST(CFEvaluator, AgreeingTextRulesMatchTheMeasuredCells) {
+  EXPECT_EQ(TextRuleMatches(RuleType::ContainsText, "x", "NOT(ISERROR(SEARCH(\"x\",A1)))"), "A1 A3 ");
+  EXPECT_EQ(TextRuleMatches(RuleType::NotContainsText, "x", "ISERROR(SEARCH(\"x\",A1))"), "A2 A4 ");
+  EXPECT_EQ(TextRuleMatches(RuleType::BeginsWith, "x", "LEFT(A1,LEN(\"x\"))=\"x\""), "A1 A3 ");
+  EXPECT_EQ(TextRuleMatches(RuleType::EndsWith, "x", "RIGHT(A1,LEN(\"x\"))=\"x\""), "A1 ");
+}
+
+TEST(CFEvaluator, TextRuleWithoutFormulaStillMatchesByText) {
+  EXPECT_EQ(TextRuleMatches(RuleType::ContainsText, "x", std::nullopt), "A1 A3 ");
+  EXPECT_EQ(TextRuleMatches(RuleType::NotContainsText, "x", std::nullopt), "A2 A4 ");
 }
 
 }  // namespace

@@ -408,13 +408,16 @@ std::optional<cf::CFRule> DecodeRuleHeader(ByteSpan p, const MergeRange& base, c
       pri.value() > static_cast<std::uint32_t>(std::numeric_limits<std::int32_t>::max())) {
     return std::nullopt;
   }
+  // A null string (length 0xFFFFFFFF) is an absent text attribute, which
+  // `read_xlnullablewidestring` reports the same as an empty one.
+  const bool text_is_null = p.size >= 4U && load_u32(p.data) == 0xFFFFFFFFU;
   auto text = read_xlnullablewidestring(p);
   if (!text) {
     return std::nullopt;
   }
   cf::CFRule rule;
   if (!decode_cf_rule_fields(CfRuleFields{itype.value(), tmpl.value(), param.value(), flags.value()},
-                             std::move(text).value(), rule)) {
+                             text_is_null ? std::nullopt : std::optional<std::string>(std::move(text).value()), rule)) {
     return std::nullopt;
   }
   rule.priority = static_cast<std::int32_t>(pri.value());
@@ -641,7 +644,7 @@ bool cf_rule_has_formulas(cf::RuleType type) {
   }
 }
 
-bool decode_cf_rule_fields(const CfRuleFields& fields, std::string text, cf::CFRule& rule) {
+bool decode_cf_rule_fields(const CfRuleFields& fields, std::optional<std::string> text, cf::CFRule& rule) {
   if ((fields.flags & ~kKnownFlags) != 0U) {
     return false;
   }
@@ -711,7 +714,7 @@ bool decode_cf_rule_fields(const CfRuleFields& fields, std::string text, cf::CFR
       rule.text = std::move(text);
       break;
     default:
-      if (!text.empty()) {
+      if (text.has_value() && !text->empty()) {
         return false;
       }
       break;

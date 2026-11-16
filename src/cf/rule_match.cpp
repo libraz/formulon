@@ -131,6 +131,9 @@ bool is_cf_blank(const Value& cell_value) {
 // Text family — containsText / notContainsText / beginsWith / endsWith.
 // ---------------------------------------------------------------------------
 
+// Used for a loaded rule that carries no stored formula; with one, the
+// formula decides (see the context-aware `match_rule`).
+//
 // Excel's text-family rules are built on the displayed text of the cell,
 // not its raw kind. A number or blank cell is coerced to its General
 // rendering (`512`, ``) before the test. Each rule means the formula Excel
@@ -444,14 +447,17 @@ bool match_rule(const CFRule& rule, const Value& cell_value, const CFEvalContext
       return scales::resolve_data_bar(rule, cell_value, ctx).has_value();
     case RuleType::IconSet:
       return scales::resolve_icon_set(rule, cell_value, ctx).has_value();
-    case RuleType::ContainsBlanks:
-    case RuleType::NotContainsBlanks:
-    case RuleType::ContainsErrors:
-    case RuleType::NotContainsErrors:
     case RuleType::ContainsText:
     case RuleType::NotContainsText:
     case RuleType::BeginsWith:
     case RuleType::EndsWith:
+      // Excel formats by the stored formula; `text` is only the dialog
+      // operand. A rule with no formula falls back to its text.
+      return rule.formula1.has_value() ? match_expression(rule, ctx) : match_text_rule(rule, cell_value);
+    case RuleType::ContainsBlanks:
+    case RuleType::NotContainsBlanks:
+    case RuleType::ContainsErrors:
+    case RuleType::NotContainsErrors:
       // Value-only and not-yet-implemented rule types delegate to the
       // simple overload, which already encodes their semantics (or
       // false-fallthrough for the unimplemented kinds).

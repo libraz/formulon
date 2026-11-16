@@ -50,9 +50,10 @@ struct CfRuleFields {
 };
 
 /// Sets `rule`'s type, its type-specific fields, stopIfTrue and the text of
-/// a text rule from `fields` and `text`. False for a combination outside the
+/// a text rule from `fields` and `text` (`nullopt` for a null string, kept
+/// distinct from an empty one). False for a combination outside the
 /// supported set.
-bool decode_cf_rule_fields(const CfRuleFields& fields, std::string text, cf::CFRule& rule);
+bool decode_cf_rule_fields(const CfRuleFields& fields, std::optional<std::string> text, cf::CFRule& rule);
 
 /// The fields `decode_cf_rule_fields` reads back as `rule`. Fails for a rule
 /// type or value the records cannot carry.

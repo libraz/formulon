@@ -154,6 +154,37 @@ void ExpectIconRule(const Workbook& wb) {
   EXPECT_EQ(spec.custom_icons[2].icon_id, 1);
 }
 
+// BrtBeginCFRule keeps a null string (absent text attribute) apart from an
+// empty one.
+TEST(XlsbCfIconsFidelity, TextRuleKeepsAbsentAndEmptyTextApart) {
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Sheet1");
+  cf::ConditionalFormat block;
+  block.sqref = {cf::CFCellRange{{0, 0}, {3, 0}}};
+  const std::optional<std::string> texts[] = {std::nullopt, std::string(), std::string("x")};
+  std::int32_t priority = 1;
+  for (const auto& text : texts) {
+    cf::CFRule rule;
+    rule.type = cf::RuleType::ContainsText;
+    rule.priority = priority++;
+    rule.text = text;
+    rule.formula1 = "NOT(ISERROR(SEARCH(\"y\",A1)))";
+    block.rules.push_back(rule);
+  }
+  wb.sheet(0).mutable_conditional_formats().push_back(block);
+
+  const Workbook back = LoadXlsb(SaveXlsb(wb));
+  ASSERT_EQ(back.sheet(0).conditional_formats().size(), 1U);
+  const auto& rules = back.sheet(0).conditional_formats()[0].rules;
+  ASSERT_EQ(rules.size(), 3U);
+  EXPECT_FALSE(rules[0].text.has_value());
+  ASSERT_TRUE(rules[1].text.has_value());
+  EXPECT_EQ(*rules[1].text, "");
+  ASSERT_TRUE(rules[2].text.has_value());
+  EXPECT_EQ(*rules[2].text, "x");
+  EXPECT_EQ(rules[0].formula1, "NOT(ISERROR(SEARCH(\"y\",A1)))");
+}
+
 TEST(XlsbCfIconsFidelity, ModelRuleIsWrittenAsAStandaloneX14Rule) {
   const std::vector<std::uint8_t> bytes = SaveXlsb(BookWithIcons());
   const std::vector<std::uint16_t> types = SheetRecordTypes(bytes);
