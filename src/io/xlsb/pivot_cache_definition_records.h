@@ -132,10 +132,12 @@ struct Field {
   std::vector<pivot_records::RawRecord> grouping;
 };
 
-/// BrtBeginPCDSource + BrtBeginPCDSRange of a worksheet source (`cacheSource type="worksheet"`).
+/// BrtBeginPCDSource + BrtBeginPCDSRange of a worksheet source (`cacheSource type="worksheet"`): a range on `sheet`,
+/// or, when `name` is set, a defined name or table (`sheet` set only for a sheet-scoped name).
 struct WorksheetSource {
   std::uint32_t connection_id = 0;
   std::string sheet;
+  std::string name;
   MergeRange ref;
 };
 

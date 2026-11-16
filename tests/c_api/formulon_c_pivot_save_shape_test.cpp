@@ -783,9 +783,6 @@ TEST(FormulonCApiPivotSaveShape, DataSourceCleanFollowsHowTheSourceIsGiven) {
     }
     const std::string xml = ExtractZipEntry(Save(wb.handle, FM_WORKBOOK_FORMAT_XLSX), kCacheXml);
     EXPECT_EQ(xml.find(kDataSourceClean) != std::string::npos, c.clean) << xml;
-    // The xlsb cache writer holds range sources only; a named source's cache is left out of an .xlsb save.
-    if (c.source == Source::kRange) {
-      EXPECT_EQ(XlsbDataSourceClean(ExtractZipEntry(Save(wb.handle, FM_WORKBOOK_FORMAT_XLSB), kCacheBin)), c.clean);
-    }
+    EXPECT_EQ(XlsbDataSourceClean(ExtractZipEntry(Save(wb.handle, FM_WORKBOOK_FORMAT_XLSB), kCacheBin)), c.clean);
   }
 }

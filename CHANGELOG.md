@@ -588,8 +588,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its `.xlsx` save, is written to `.xlsb` as Excel saves it after opening
   the `.xlsx` save: cache versions 8/8/3, refresh date 0 and no refresh
   user, and the same table records; both formats save a cache no refresh
-  dated with refresh date 0, as Excel does. A source cell left blank is
-  written as Excel writes it, whether or not its cache field has shared
+  dated with refresh date 0, as Excel does. A cache over a defined name or
+  a table is written by that name, as over a range. A source cell left blank
+  is written as Excel writes it, whether or not its cache field has shared
   items. Date groupings by seconds, minutes, hours, days, months, quarters
   and years, and numeric range groupings, are read and written. A
   PivotTable the `.xlsb` records cannot yet hold (for example a calculated

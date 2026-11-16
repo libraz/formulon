@@ -907,8 +907,11 @@ void ReadRoot(const pcd::Document& doc, pivot::PivotCache& cache) {
   }
   pivot::WorksheetSource& source = cache.mutable_worksheet_source();
   source.present = true;
-  source.ref = format_sqref_text({doc.source.ref});
   source.sheet = doc.source.sheet;
+  source.name = doc.source.name;
+  if (doc.source.name.empty()) {
+    source.ref = format_sqref_text({doc.source.ref});
+  }
 }
 
 Expected<void, Error> ReadExtLst(const pcd::Document& doc, pivot::PivotCache& cache) {
@@ -1415,8 +1418,20 @@ bool WriteRoot(const pivot::PivotCache& cache, pcd::Document* doc) {
     }
   }
   const pivot::WorksheetSource& source = cache.worksheet_source();
-  if (!cache.cache_source_children_xml().empty() || !source.present || !source.name.empty() || source.sheet.empty() ||
-      !parse_a1_range(source.ref, &doc->source.ref) || format_sqref_text({doc->source.ref}) != source.ref) {
+  if (!cache.cache_source_children_xml().empty() || !source.present) {
+    return false;
+  }
+  // A defined name or table is written by its name alone, with the sheet of a sheet-scoped name.
+  if (!source.name.empty()) {
+    if (!source.ref.empty()) {
+      return false;
+    }
+    doc->source.name = source.name;
+    doc->source.sheet = source.sheet;
+    return true;
+  }
+  if (source.sheet.empty() || !parse_a1_range(source.ref, &doc->source.ref) ||
+      format_sqref_text({doc->source.ref}) != source.ref) {
     return false;
   }
   doc->source.sheet = source.sheet;

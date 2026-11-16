@@ -187,6 +187,45 @@ TEST(XlsbPivotCacheDefinitionRecords, HeaderSourceAndFieldsMatchTwinXlsx) {
   }
 }
 
+// A cache over a defined name or a table (xlsb_parity/pivot/source, Excel 16.115's saves) stores the name alone, with
+// the sheet only for a sheet-scoped name, and no range; a table is stored as a workbook name is.
+TEST(XlsbPivotCacheDefinitionRecords, SourceNamesARangeANameOrATable) {
+  const struct {
+    const char* stem;
+    const char* sheet;
+    const char* name;
+  } kCases[] = {
+      {"source_control_range", "Data", ""},
+      {"source_workbook_name", "", "SrcW"},
+      {"source_sheet_name", "Data", "SrcL"},
+      {"source_dynamic_name", "", "SrcD"},
+      {"source_table", "", "TblD"},
+      {"source_table_resized_not_refreshed", "", "TblD"},
+      {"source_table_resized_refreshed", "", "TblD"},
+      {"source_table_on_pivot_sheet", "", "TblP"},
+  };
+  for (const auto& c : kCases) {
+    SCOPED_TRACE(c.stem);
+    const std::string path = Fixture(std::string("xlsb_parity/pivot/source/") + c.stem + ".xlsb");
+    const std::string part = "xl/pivotCache/pivotCacheDefinition1.bin";
+    const std::vector<std::uint8_t> bytes = PartNamed(path, part);
+    auto doc = decode_pivot_cache_definition(SpanOf(bytes));
+    ASSERT_TRUE(doc) << doc.error().message;
+    const std::string source = StartTag(TwinXml(path, part), "worksheetSource");
+    EXPECT_EQ(doc.value().source.sheet, c.sheet);
+    EXPECT_EQ(doc.value().source.name, c.name);
+    EXPECT_EQ(doc.value().source.sheet, Attr(source, "sheet"));
+    EXPECT_EQ(doc.value().source.name, Attr(source, "name"));
+    EXPECT_EQ(Attr(source, "ref").empty(), *c.name != '\0');
+    const std::vector<std::uint8_t> written = encode_pivot_cache_definition(doc.value());
+    if (doc.value().refreshed_by.has_value()) {
+      EXPECT_EQ(written, bytes);
+    } else {
+      EXPECT_EQ(written.size() + 4U, bytes.size());
+    }
+  }
+}
+
 TEST(XlsbPivotCacheDefinitionRecords, A5C9SumNumberMissingAndUnusedItems) {
   const auto bytes = PartNamed(Fixture("xlsb_pivot_twins/A5_C9__sum.xlsb"), "xl/pivotCache/pivotCacheDefinition1.bin");
   auto decoded = decode_pivot_cache_definition(SpanOf(bytes));

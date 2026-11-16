@@ -93,8 +93,11 @@ constexpr std::uint8_t kCacheKnownFlags = pcd::kCacheSaveDataEnableRefresh | pcd
 
 /// BrtBeginPCDSource iSrcType of a worksheet source.
 constexpr std::uint32_t kSourceWorksheet = 0;
-/// BrtBeginPCDSRange flag bytes 0-2 of a range on a named sheet (fLoadSheet in byte 2).
-constexpr std::uint8_t kSRangeSheetFlags[] = {0x00, 0x00, 0x02};
+/// BrtBeginPCDSRange flag bytes 0-2: byte 0 0x01 = a name follows instead of an RfX, byte 2 0x02 = a sheet name
+/// follows; byte 1 is zero.
+constexpr std::size_t kSRangeFlagBytes = 3;
+constexpr std::uint8_t kSRangeName = 0x01U;
+constexpr std::uint8_t kSRangeSheet = 0x02U;
 
 /// BrtBeginPCDField: flag byte, zero byte, numFmtId (u16), 16 zero bytes, then the name.
 constexpr std::size_t kFieldReservedBytes = 16;
@@ -236,8 +239,8 @@ Expected<void, Error> DecodeHeader(ByteSpan p, pcd::Document* doc) {
   return ExpectConsumed(p, kBeginPivotCacheDef);
 }
 
-// BrtBeginPCDSource (iSrcType u32, connectionId u32) around BrtBeginPCDSRange (three flag bytes, sheet name,
-// RfX range).
+// BrtBeginPCDSource (iSrcType u32, connectionId u32) around BrtBeginPCDSRange (three flag bytes, the sheet name,
+// then the name or the RfX range).
 Expected<void, Error> DecodeSource(Records& recs, pcd::WorksheetSource* source) {
   ASSIGN_OR_RETURN(ByteSpan p, recs.expect(kBeginPCDSource));
   ASSIGN_OR_RETURN(const std::uint32_t source_type, read_u32(p));
@@ -248,16 +251,28 @@ Expected<void, Error> DecodeSource(Records& recs, pcd::WorksheetSource* source) 
   RETURN_IF_ERROR(ExpectConsumed(p, kBeginPCDSource));
 
   ASSIGN_OR_RETURN(ByteSpan range, recs.expect(kBeginPCDSRange));
-  if (range.size < sizeof(kSRangeSheetFlags)) {
+  if (range.size < kSRangeFlagBytes) {
     return Corrupt("xlsb pivot cache source range truncated", kBeginPCDSRange);
   }
-  if (!std::equal(std::begin(kSRangeSheetFlags), std::end(kSRangeSheetFlags), range.data)) {
-    return Unmeasured("cache source range flags (named range, relationship id or no sheet)", kBeginPCDSRange);
+  const bool named = range.data[0] == kSRangeName;
+  const bool has_sheet = range.data[2] == kSRangeSheet;
+  if ((range.data[0] != 0U && !named) || range.data[1] != 0U || (range.data[2] != 0U && !has_sheet) ||
+      (!named && !has_sheet)) {
+    return Unmeasured("cache source range flags (relationship id or a range with no sheet)", kBeginPCDSRange);
   }
-  range.data += sizeof(kSRangeSheetFlags);
-  range.size -= sizeof(kSRangeSheetFlags);
-  ASSIGN_OR_RETURN(source->sheet, read_xlwidestring(range));
-  ASSIGN_OR_RETURN(source->ref, read_rfx(range));
+  range.data += kSRangeFlagBytes;
+  range.size -= kSRangeFlagBytes;
+  if (has_sheet) {
+    ASSIGN_OR_RETURN(source->sheet, read_xlwidestring(range));
+  }
+  if (named) {
+    ASSIGN_OR_RETURN(source->name, read_xlwidestring(range));
+    if (source->name.empty()) {
+      return Corrupt("xlsb pivot cache source names an empty name", kBeginPCDSRange);
+    }
+  } else {
+    ASSIGN_OR_RETURN(source->ref, read_rfx(range));
+  }
   RETURN_IF_ERROR(ExpectConsumed(range, kBeginPCDSRange));
   RETURN_IF_ERROR(recs.expect_end(kEndPCDSRange));
   return recs.expect_end(kEndPCDSource);
@@ -679,9 +694,20 @@ std::vector<std::uint8_t> encode_pivot_cache_definition(const pivot_cache_defini
   emit_u32(p, kSourceWorksheet);
   emit_u32(p, doc.source.connection_id);
   emit_record(out, kBeginPCDSource, p);
-  p.assign(std::begin(kSRangeSheetFlags), std::end(kSRangeSheetFlags));
-  emit_xlwidestring(p, doc.source.sheet);
-  emit_rfx(p, doc.source.ref);
+  const bool named = !doc.source.name.empty();
+  const bool has_sheet = !doc.source.sheet.empty();
+  p.clear();
+  emit_u8(p, named ? kSRangeName : 0U);
+  emit_u8(p, 0U);
+  emit_u8(p, has_sheet ? kSRangeSheet : 0U);
+  if (has_sheet) {
+    emit_xlwidestring(p, doc.source.sheet);
+  }
+  if (named) {
+    emit_xlwidestring(p, doc.source.name);
+  } else {
+    emit_rfx(p, doc.source.ref);
+  }
   emit_record(out, kBeginPCDSRange, p);
   EmitEnd(out, kEndPCDSRange);
   EmitEnd(out, kEndPCDSource);

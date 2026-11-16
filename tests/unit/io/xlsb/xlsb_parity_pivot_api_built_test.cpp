@@ -417,6 +417,19 @@ INSTANTIATE_TEST_SUITE_P(Blanks, XlsbParityPivotBlank,
                                            "blank_value_only", "blank_date_not_on_axis", "blank_control_date_rows",
                                            "blank_date_row_field"));
 
+// A cache over a range, a workbook or sheet-scoped name, a dynamic name or a table, the table resized with and
+// without a refresh (xlsb_parity/pivot/source, Excel 16.115's saves).
+class XlsbParityPivotSource : public ::testing::TestWithParam<const char*> {};
+
+TEST_P(XlsbParityPivotSource, WritesExcelsPivotRecords) {
+  ExpectExcelsPivotRecords("source", GetParam());
+}
+
+INSTANTIATE_TEST_SUITE_P(Sources, XlsbParityPivotSource,
+                         ::testing::Values("source_control_range", "source_workbook_name", "source_sheet_name",
+                                           "source_dynamic_name", "source_table", "source_table_resized_not_refreshed",
+                                           "source_table_resized_refreshed", "source_table_on_pivot_sheet"));
+
 // A numeric range group in place on its database field (xlsb_parity/pivot/groups, Excel 16.115's saves, ja-JP and
 // en-US): the field keeps its shared items and carries the group, with automatic and manual bounds, on rows and
 // columns, against the ungrouped control.
