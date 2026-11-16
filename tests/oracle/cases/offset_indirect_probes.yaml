@@ -126,3 +126,23 @@ cases:
   - id: sum_indirect_range_numeric_text
     setup: { A2: '="7"', B2: 3 }
     formula: '=SUM(INDIRECT("A2:B2"))'
+
+  # G) ROW / COLUMN over a multi-cell reference INDIRECT returns: the index vector, as over the spelled range,
+  # also as the argument of a function lifted over it. Read through scalar wrappers so the case needs no spill.
+  - id: rows_of_row_indirect_row_span
+    formula: '=ROWS(ROW(INDIRECT("1:3")))'
+
+  - id: index_row_indirect_row_span
+    formula: '=INDEX(ROW(INDIRECT("1:3")),3)'
+
+  - id: sum_column_indirect_column_span
+    formula: '=SUM(COLUMN(INDIRECT("B:D")))'
+
+  - id: mid_lifted_over_row_indirect
+    formula: '=SUM(--MID("123",ROW(INDIRECT("1:3")),1))'
+
+  - id: npv_over_row_indirect_digits
+    formula: '=NPV(-0.9,--MID("123",ROW(INDIRECT("1:3")),1)/10)'
+
+  - id: npv_over_row_range_digits_control
+    formula: '=NPV(-0.9,--MID("123",ROW(A1:A3),1)/10)'
