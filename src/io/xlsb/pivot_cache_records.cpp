@@ -30,8 +30,8 @@ constexpr std::uint8_t kPCDFieldDatabase = 0x04U;
 
 /// BrtBeginPCDFAtbl flags, by the `sharedItems` attribute each mirrors. With no shared items, a field holding
 /// only dates has fDateInField alone, only text fHasText, only numbers fNumField (fIntField too when integral);
-/// fNonDates rides on the text and number shapes. Numbers beside an inline error set the whole low byte to
-/// kAtblNumbersWithErrors. Blank and other mixed-type inline cells are refused.
+/// fNonDates rides on the text and number shapes. A blank cell adds fHasBlank (and fSemiMixedTypes). Numbers beside
+/// an inline error set the whole low byte to kAtblNumbersWithErrors. Other mixed-type inline cells are refused.
 constexpr std::uint16_t kAtblSemiMixedTypes = 0x0001U;
 constexpr std::uint16_t kAtblNonDates = 0x0002U;
 constexpr std::uint16_t kAtblDateInField = 0x0004U;
@@ -63,12 +63,34 @@ Error Unmeasured(const char* what, std::uint16_t record_id) {
                     std::string(kContext) + " record_id=" + std::to_string(record_id));
 }
 
+/// The kind a field's non-blank, non-error cell takes.
+CellKind ValueKindOf(CellKind field) {
+  switch (field) {
+    case CellKind::kNumberOrError:
+    case CellKind::kNumberOrBlank:
+      return CellKind::kNumber;
+    case CellKind::kTextOrBlank:
+      return CellKind::kText;
+    case CellKind::kDateOrBlank:
+      return CellKind::kDate;
+    default:
+      return field;
+  }
+}
+
+bool AdmitsBlank(CellKind field) {
+  return field == CellKind::kNumberOrBlank || field == CellKind::kTextOrBlank || field == CellKind::kDateOrBlank;
+}
+
 /// Whether a cell of kind `cell` may sit in a field of kind `field`.
 bool FitsField(CellKind cell, CellKind field) {
-  if (field == CellKind::kNumberOrError) {
-    return cell == CellKind::kNumber || cell == CellKind::kError;
+  if (cell == CellKind::kError) {
+    return field == CellKind::kNumberOrError;
   }
-  return cell == field && field != CellKind::kError;
+  if (cell == CellKind::kMissing) {
+    return AdmitsBlank(field);
+  }
+  return cell == ValueKindOf(field) && cell != CellKind::kNumberOrError && !AdmitsBlank(cell);
 }
 
 bool IsCalendarDate(const RecordDate& date) {
@@ -89,21 +111,24 @@ Expected<CellKind, Error> KindOfAtbl(ByteSpan payload) {
   if ((flags & kAtblShapeBits) == kAtblNumbersWithErrors) {
     return CellKind::kNumberOrError;
   }
-  const auto shape = static_cast<std::uint16_t>(
-      flags & (kAtblDateInField | kAtblHasText | kAtblHasBlank | kAtblMixedTypes | kAtblNumField));
+  const bool blank = (flags & kAtblHasBlank) != 0U;
+  const auto shape =
+      static_cast<std::uint16_t>(flags & (kAtblDateInField | kAtblHasText | kAtblMixedTypes | kAtblNumField));
   if (shape == kAtblDateInField && (flags & kAtblNonDates) == 0U) {
-    return CellKind::kDate;
+    return blank ? CellKind::kDateOrBlank : CellKind::kDate;
   }
   if (shape == kAtblHasText) {
-    return CellKind::kText;
+    return blank ? CellKind::kTextOrBlank : CellKind::kText;
   }
   if (shape == kAtblNumField) {
-    return CellKind::kNumber;
+    return blank ? CellKind::kNumberOrBlank : CellKind::kNumber;
   }
   return Corrupt("xlsb pivot cache field without shared items has an inline value shape that is not characterised");
 }
 
-Expected<RecordCell, Error> DecodeCell(ByteSpan& cursor, CellKind kind) {
+Expected<RecordCell, Error> DecodeCell(ByteSpan& cursor, CellKind field) {
+  // A fixed row holds no error and no blank, so a field's cell takes its value kind here.
+  const CellKind kind = ValueKindOf(field);
   RecordCell cell;
   cell.kind = kind;
   switch (kind) {
@@ -111,14 +136,16 @@ Expected<RecordCell, Error> DecodeCell(ByteSpan& cursor, CellKind kind) {
       ASSIGN_OR_RETURN(cell.index, read_u32(cursor));
       break;
     }
-    case CellKind::kNumber:
-    case CellKind::kNumberOrError: {
-      // A fixed row holds no error, so a number-or-error field's cell is a number here.
-      cell.kind = CellKind::kNumber;
+    case CellKind::kNumber: {
       ASSIGN_OR_RETURN(cell.number, read_double(cursor));
       break;
     }
+    case CellKind::kNumberOrError:
+    case CellKind::kNumberOrBlank:
+    case CellKind::kTextOrBlank:
+    case CellKind::kDateOrBlank:
     case CellKind::kError:
+    case CellKind::kMissing:
       return Corrupt("xlsb pivot cache records decoded against a cell-only kind");
     case CellKind::kText: {
       const std::uint8_t* start = cursor.data;
@@ -177,62 +204,114 @@ Expected<void, Error> EncodeCell(std::vector<std::uint8_t>& dst, const RecordCel
       emit_u8(dst, cell.date.second);
       break;
     case CellKind::kNumberOrError:
+    case CellKind::kNumberOrBlank:
+    case CellKind::kTextOrBlank:
+    case CellKind::kDateOrBlank:
     case CellKind::kError:
+    case CellKind::kMissing:
       return refuse_write("XLSB pivot cache record cell has no fixed-row spelling");
   }
   return Expected<void, Error>::Ok();
+}
+
+/// The cell of one item record in a dynamic row.
+Expected<RecordCell, Error> DecodeItem(const XlsbRecord& item) {
+  RecordCell cell;
+  ByteSpan payload = item.payload;
+  switch (item.type) {
+    case pivot_records::kPCDIIndex:
+      cell.kind = CellKind::kSharedIndex;
+      break;
+    case pivot_records::kPCDINumber:
+      cell.kind = CellKind::kNumber;
+      break;
+    case pivot_records::kPCDIString:
+      cell.kind = CellKind::kText;
+      break;
+    case pivot_records::kPCDIDatetime:
+      cell.kind = CellKind::kDate;
+      break;
+    case pivot_records::kPCDIError:
+      if (payload.size != kErrorBytes) {
+        return Corrupt("xlsb pivot cache record error item is not one byte");
+      }
+      cell.kind = CellKind::kError;
+      cell.error = payload.data[0];
+      return cell;
+    case pivot_records::kPCDIMissing:
+      if (payload.size != 0U) {
+        return Corrupt("xlsb pivot cache record missing item carries a payload");
+      }
+      cell.kind = CellKind::kMissing;
+      return cell;
+    default:
+      return Unmeasured("xlsb pivot cache dynamic record item", item.type);
+  }
+  auto value = DecodeCell(payload, cell.kind);
+  if (!value || payload.size != 0U) {
+    return Corrupt("xlsb pivot cache record item does not hold exactly its value");
+  }
+  return std::move(value.value());
 }
 
 /// The item records after a BrtPCRRecordDt, one per field.
 Expected<std::vector<RecordCell>, Error> DecodeDynamicRow(ByteSpan& cursor, const std::vector<CellKind>& kinds) {
   std::vector<RecordCell> row;
   row.reserve(kinds.size());
-  bool has_error = false;
+  bool dynamic = false;
   for (const CellKind kind : kinds) {
     if (cursor.size == 0U) {
       return Corrupt("xlsb pivot cache dynamic record ends before its fields");
     }
     ASSIGN_OR_RETURN(const XlsbRecord item, read_record(cursor));
-    RecordCell cell;
-    if (kind == CellKind::kSharedIndex && item.type == pivot_records::kPCDIIndex) {
-      if (item.payload.size != kCountBytes) {
-        return Corrupt("xlsb pivot cache record index item is not four bytes");
-      }
-      cell.kind = CellKind::kSharedIndex;
-      cell.index = load_u32(item.payload.data);
-    } else if (kind == CellKind::kNumberOrError && item.type == pivot_records::kPCDIError) {
-      if (item.payload.size != kErrorBytes) {
-        return Corrupt("xlsb pivot cache record error item is not one byte");
-      }
-      cell.kind = CellKind::kError;
-      cell.error = item.payload.data[0];
-      has_error = true;
-    } else {
+    ASSIGN_OR_RETURN(RecordCell cell, DecodeItem(item));
+    if (!FitsField(cell.kind, kind)) {
       return Unmeasured("xlsb pivot cache dynamic record item for its field", item.type);
     }
+    dynamic = dynamic || cell.kind == CellKind::kError || cell.kind == CellKind::kMissing;
     row.push_back(std::move(cell));
   }
-  // The encoder spells a row without an error in the fixed form.
-  if (!has_error) {
-    return Unmeasured("xlsb pivot cache dynamic record without an error item", pivot_records::kPCRRecordDt);
+  // The encoder spells a row without an error or a blank in the fixed form.
+  if (!dynamic) {
+    return Unmeasured("xlsb pivot cache dynamic record without an error or blank item", pivot_records::kPCRRecordDt);
   }
   return row;
 }
 
-void EncodeDynamicRow(std::vector<std::uint8_t>& out, const std::vector<RecordCell>& row,
-                      std::vector<std::uint8_t>& payload) {
+Expected<void, Error> EncodeDynamicRow(std::vector<std::uint8_t>& out, const std::vector<RecordCell>& row,
+                                       std::vector<std::uint8_t>& payload) {
   payload.clear();
   emit_record(out, pivot_records::kPCRRecordDt, payload);
   for (const RecordCell& cell : row) {
     payload.clear();
-    if (cell.kind == CellKind::kSharedIndex) {
-      emit_u32(payload, cell.index);
-      emit_record(out, pivot_records::kPCDIIndex, payload);
-    } else {
-      emit_u8(payload, cell.error);
-      emit_record(out, pivot_records::kPCDIError, payload);
+    std::uint16_t type = pivot_records::kPCDIMissing;
+    switch (cell.kind) {
+      case CellKind::kSharedIndex:
+        type = pivot_records::kPCDIIndex;
+        break;
+      case CellKind::kNumber:
+        type = pivot_records::kPCDINumber;
+        break;
+      case CellKind::kText:
+        type = pivot_records::kPCDIString;
+        break;
+      case CellKind::kDate:
+        type = pivot_records::kPCDIDatetime;
+        break;
+      case CellKind::kError:
+        emit_u8(payload, cell.error);
+        emit_record(out, pivot_records::kPCDIError, payload);
+        continue;
+      case CellKind::kMissing:
+        emit_record(out, pivot_records::kPCDIMissing, payload);
+        continue;
+      default:
+        return refuse_write("XLSB pivot cache record cell has no dynamic-row spelling");
     }
+    RETURN_IF_ERROR(EncodeCell(payload, cell));
+    emit_record(out, type, payload);
   }
+  return Expected<void, Error>::Ok();
 }
 
 }  // namespace
@@ -315,20 +394,16 @@ Expected<std::vector<std::uint8_t>, Error> encode_pivot_cache_records(
     if (row.size() != kinds.size()) {
       return refuse_write("XLSB pivot cache record does not hold one cell per database field");
     }
-    bool has_error = false;
-    bool dynamic_spelling = true;
+    bool dynamic = false;
     for (std::size_t i = 0; i < row.size(); ++i) {
       if (!FitsField(row[i].kind, kinds[i])) {
         return refuse_write("XLSB pivot cache record cell kind does not match its field");
       }
-      has_error = has_error || row[i].kind == CellKind::kError;
-      dynamic_spelling = dynamic_spelling && (row[i].kind == CellKind::kSharedIndex || row[i].kind == CellKind::kError);
+      dynamic = dynamic || row[i].kind == CellKind::kError || row[i].kind == CellKind::kMissing;
     }
-    if (has_error) {
-      if (!dynamic_spelling) {
-        return refuse_write("XLSB pivot cache record with an error holds a cell of an unmeasured dynamic spelling");
-      }
-      EncodeDynamicRow(out, row, payload);
+    // A row holding an error or a blank is written item by item.
+    if (dynamic) {
+      RETURN_IF_ERROR(EncodeDynamicRow(out, row, payload));
       continue;
     }
     payload.clear();

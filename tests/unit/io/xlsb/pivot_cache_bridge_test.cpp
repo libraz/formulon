@@ -56,7 +56,7 @@ std::string TwinOf(const std::string& xlsb_path) {
   return stem + ".xlsx";
 }
 
-/// The cache-item twins of xlsb_parity/pivot, both Excel saves of each.
+/// The cache-item twins of xlsb_parity/pivot (both Excel saves of each where there are two) and the blank-row twins.
 std::vector<std::string> ItemKindPaths() {
   const std::string root = std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_parity/pivot/";
   std::vector<std::string> paths;
@@ -68,6 +68,11 @@ std::vector<std::string> ItemKindPaths() {
   for (const char* stem :
        {"calc_items", "calc_items2", "calc_items_column", "d1904_inline", "d1904_items", "run_threshold"}) {
     paths.push_back(root + stem + ".xlsb");
+  }
+  // Source rows left blank: missing items and blank inline cells.
+  for (const char* stem : {"blank_control", "blank_whole_row", "blank_row_field_only", "blank_value_only",
+                           "blank_date_not_on_axis", "blank_control_date_rows", "blank_date_row_field"}) {
+    paths.push_back(root + "blank/" + stem + ".xlsb");
   }
   return paths;
 }

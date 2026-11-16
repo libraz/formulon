@@ -26,6 +26,9 @@ constexpr CellKind kN = CellKind::kNumber;
 constexpr CellKind kS = CellKind::kText;
 constexpr CellKind kD = CellKind::kDate;
 constexpr CellKind kNE = CellKind::kNumberOrError;
+constexpr CellKind kNB = CellKind::kNumberOrBlank;
+constexpr CellKind kSB = CellKind::kTextOrBlank;
+constexpr CellKind kDB = CellKind::kDateOrBlank;
 constexpr CellKind kE = CellKind::kError;
 
 /// BErr byte of #N/A.
@@ -364,11 +367,13 @@ TEST(XlsbPivotCacheRecords, RefusesUnmeasuredDynamicRows) {
   emit_xlwidestring(text, "a");
   std::vector<std::uint8_t> index;
   emit_u32(index, 0U);
-  // A number item for the number field, a text item, an error in a plain number field, and no error at all.
+  // No error or blank in the row, an error in a plain number field, a blank in a field that admits none, and a
+  // text item for a number field.
   const std::vector<std::pair<std::vector<CellKind>, std::vector<std::uint8_t>>> cases = {
       {{kX, kNE}, DynamicRowPart({{pivot_records::kPCDIIndex, index}, {pivot_records::kPCDINumber, number}})},
-      {{kS, kNE}, DynamicRowPart({{pivot_records::kPCDIString, text}, {pivot_records::kPCDIError, {kErrNA}}})},
       {{kX, kN}, DynamicRowPart({{pivot_records::kPCDIIndex, index}, {pivot_records::kPCDIError, {kErrNA}}})},
+      {{kX, kN}, DynamicRowPart({{pivot_records::kPCDIIndex, index}, {pivot_records::kPCDIMissing, {}}})},
+      {{kS, kNB}, DynamicRowPart({{pivot_records::kPCDIString, text}, {pivot_records::kPCDIString, text}})},
       {{kX, kNE}, DynamicRowPart({{pivot_records::kPCDIIndex, index}, {pivot_records::kPCDIIndex, index}})},
   };
   for (std::size_t i = 0; i < cases.size(); ++i) {
@@ -377,25 +382,86 @@ TEST(XlsbPivotCacheRecords, RefusesUnmeasuredDynamicRows) {
     EXPECT_EQ(doc.error().code, FormulonErrorCode::kIoXlsbUnknownRecord) << i;
   }
 
-  // An error row whose other cell has no dynamic spelling, and an error outside a number-or-error field.
+  // An error outside a number-or-error field.
   RecordCell error;
   error.kind = kE;
   error.error = kErrNA;
-  RecordCell value;
-  value.kind = kN;
-  value.number = 1.0;
-  PivotCacheRecordsDoc with_number;
-  with_number.rows.push_back({value, error});
-  EXPECT_FALSE(encode_pivot_cache_records(with_number, {kNE, kNE}));
-  value.kind = kS;
-  value.text = "a";
-  PivotCacheRecordsDoc with_text;
-  with_text.rows.push_back({value, error});
-  EXPECT_FALSE(encode_pivot_cache_records(with_text, {kS, kNE}));
   PivotCacheRecordsDoc plain_number;
   plain_number.rows.push_back({error});
   EXPECT_FALSE(encode_pivot_cache_records(plain_number, {kN}));
   EXPECT_FALSE(encode_pivot_cache_records(plain_number, {kE}));
+}
+
+// A dynamic row spells each cell by its own item record, so a number or a text cell beside an error round trips.
+TEST(XlsbPivotCacheRecords, DynamicRowSpellsEveryCellKind) {
+  std::vector<std::uint8_t> number;
+  emit_double(number, 1.5);
+  std::vector<std::uint8_t> text;
+  emit_xlwidestring(text, "Fig");
+  std::vector<std::uint8_t> date = {0xE8, 0x07, 0x02, 0x00, 0x0F, 0x0C, 0x00, 0x00};
+  const std::vector<std::uint8_t> part = DynamicRowPart({{pivot_records::kPCDIDatetime, date},
+                                                         {pivot_records::kPCDIString, text},
+                                                         {pivot_records::kPCDINumber, number},
+                                                         {pivot_records::kPCDIError, {kErrNA}},
+                                                         {pivot_records::kPCDIMissing, {}}});
+  const std::vector<CellKind> kinds = {kD, kS, kN, kNE, kNB};
+  auto doc = decode_pivot_cache_records(SpanOf(part), kinds);
+  ASSERT_TRUE(doc) << doc.error().message;
+  const std::vector<RecordCell>& row = doc.value().rows.at(0);
+  ExpectDate(row[0], 2024, 2, 15);
+  EXPECT_EQ(row[1].text, "Fig");
+  EXPECT_EQ(row[2].number, 1.5);
+  EXPECT_EQ(row[3].kind, kE);
+  EXPECT_EQ(row[4].kind, CellKind::kMissing);
+  auto bytes = encode_pivot_cache_records(doc.value(), kinds);
+  ASSERT_TRUE(bytes) << bytes.error().message;
+  EXPECT_EQ(bytes.value(), part);
+}
+
+// Excel's saves of a source row left blank (xlsb_parity/pivot/blank): a field with shared items indexes its missing
+// item in a fixed row; a field without them makes that one row dynamic, with BrtPCDIMissing for the blank cell.
+TEST(XlsbPivotCacheRecords, BlankSourceCellsDecodeAndRoundTrip) {
+  const std::string root = std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_parity/pivot/blank/";
+  constexpr CellKind kM = CellKind::kMissing;
+  const struct {
+    const char* stem;
+    std::vector<CellKind> kinds;
+    std::vector<CellKind> blank_row;  ///< The cells of the one row holding a blank; empty when no row does.
+  } kCases[] = {
+      {"blank_control", {kD, kX, kS, kN, kN}, {}},
+      {"blank_value_only", {kD, kX, kS, kNB, kN}, {kD, kX, kS, kM, kN}},
+      {"blank_date_not_on_axis", {kDB, kX, kS, kN, kN}, {kM, kX, kS, kN, kN}},
+      {"blank_whole_row", {kDB, kX, kSB, kNB, kNB}, {kM, kX, kM, kM, kM}},
+      {"blank_row_field_only", {kD, kX, kS, kN, kN}, {}},
+  };
+  for (const auto& c : kCases) {
+    SCOPED_TRACE(c.stem);
+    const std::vector<RecordsPart> parts = RecordsParts(root + c.stem + ".xlsb");
+    ASSERT_EQ(parts.size(), 1U);
+    auto kinds = cell_kinds_of_cache_definition(SpanOf(parts.front().definition));
+    ASSERT_TRUE(kinds) << kinds.error().message;
+    EXPECT_EQ(kinds.value(), c.kinds);
+    auto doc = decode_pivot_cache_records(SpanOf(parts.front().records), kinds.value());
+    ASSERT_TRUE(doc) << doc.error().message;
+    ASSERT_EQ(doc.value().rows.size(), 13U);
+    std::vector<std::vector<CellKind>> blank_rows;
+    for (const std::vector<RecordCell>& row : doc.value().rows) {
+      std::vector<CellKind> cells;
+      bool blank = false;
+      for (const RecordCell& cell : row) {
+        cells.push_back(cell.kind);
+        blank = blank || cell.kind == kM;
+      }
+      if (blank) {
+        blank_rows.push_back(cells);
+      }
+    }
+    EXPECT_EQ(blank_rows, c.blank_row.empty() ? std::vector<std::vector<CellKind>>{}
+                                              : std::vector<std::vector<CellKind>>{c.blank_row});
+    auto bytes = encode_pivot_cache_records(doc.value(), kinds.value());
+    ASSERT_TRUE(bytes) << bytes.error().message;
+    EXPECT_EQ(bytes.value(), parts.front().records);
+  }
 }
 
 TEST(XlsbPivotCacheRecords, EncodeRefusesACellOfTheWrongKind) {

@@ -11,10 +11,13 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
+#include "io/read_options.h"
 #include "io/xlsb/frt_records.h"
 #include "io/xlsb/pivot_records_common.h"
 #include "io/xlsb/record_ids.h"
@@ -381,6 +384,34 @@ TEST_P(XlsbParityPivotApiBuilt, WritesExcelsPivotRecords) {
 INSTANTIATE_TEST_SUITE_P(Cases, XlsbParityPivotApiBuilt,
                          ::testing::Values("a_plain", "b_page_filter", "e_shared_cache"));
 
+// A source row left wholly or partly blank (xlsb_parity/pivot/blank, Excel 16.115's saves after a refresh): the
+// .xlsx read and written as .xlsb holds Excel's own pivot records, the blank cells and missing items included.
+class XlsbParityPivotBlank : public ::testing::TestWithParam<const char*> {};
+
+TEST_P(XlsbParityPivotBlank, WritesExcelsPivotRecords) {
+  const std::string stem = GetParam();
+  ReadOptions mac;
+  mac.profile = mac_365_en_us_profile();
+  const tc::Converted ours =
+      tc::ConvertToXlsb(std::string(FORMULON_FIXTURES_DIR), "excel/xlsb_parity/pivot/blank/" + stem + ".xlsx", mac);
+  ASSERT_TRUE(ours.error.empty()) << ours.error;
+  const tc::Bytes excel =
+      tc::ReadBytes(std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_parity/pivot/blank/" + stem + ".xlsb");
+  ASSERT_FALSE(excel.empty());
+  std::string diff;
+  for (const std::string& line : tc::CompareRecordSets(ours.bytes, excel, PivotTypesButUid(excel), Unmatched(excel))) {
+    if (line.find("xl/pivot") != std::string::npos) {
+      diff += "  " + line + "\n";
+    }
+  }
+  EXPECT_TRUE(diff.empty()) << diff;
+}
+
+INSTANTIATE_TEST_SUITE_P(Blanks, XlsbParityPivotBlank,
+                         ::testing::Values("blank_control", "blank_whole_row", "blank_row_field_only",
+                                           "blank_value_only", "blank_date_not_on_axis", "blank_control_date_rows",
+                                           "blank_date_row_field"));
+
 // The date group's cache refreshes on load, so Excel's save is a refreshed state with its own group labels; the
 // group and range records still hold the base field, the parent field and the months and years periods as Excel's.
 /// The record types of every field group block in the package's first cache definition, in stream order.
@@ -433,13 +464,17 @@ void AppendRecord(std::string_view record, void* log) {
   static_cast<std::string*>(log)->append(record);
 }
 
-// A cache refreshed over a source with an empty row holds a blank in a field with no shared items; its record cells
-// have no measured layout yet, so the group is left out, counted, and logged with that reason.
-TEST(XlsbParityPivotApiBuiltDeferred, BlankInAnInlineFieldIsLeftOutWithItsReason) {
+/// A pivot on PV over Sheet1!K1:L4 whose Amt column holds `second` in row 2 (blank when empty) and 1 and 2 below it.
+/// Returns the xlsb save's deferred count and the warn log written while saving.
+std::pair<std::size_t, std::string> SaveRefreshedOver(const char* second) {
   fm_workbook_t* wb = nullptr;
-  ASSERT_EQ(fm_workbook_create_for_profile(kProfile, &wb), 0);
+  EXPECT_EQ(fm_workbook_create_for_profile(kProfile, &wb), 0);
   EXPECT_EQ(fm_sheet_set_text(wb, 0U, 0U, 10U, "Item"), 0);
   EXPECT_EQ(fm_sheet_set_text(wb, 0U, 0U, 11U, "Amt"), 0);
+  EXPECT_EQ(fm_sheet_set_text(wb, 0U, 1U, 10U, "C"), 0);
+  if (*second != '\0') {
+    EXPECT_EQ(fm_sheet_set_text(wb, 0U, 1U, 11U, second), 0);
+  }
   EXPECT_EQ(fm_sheet_set_text(wb, 0U, 2U, 10U, "A"), 0);
   EXPECT_EQ(fm_sheet_set_number(wb, 0U, 2U, 11U, 1.0), 0);
   EXPECT_EQ(fm_sheet_set_text(wb, 0U, 3U, 10U, "B"), 0);
@@ -465,8 +500,22 @@ TEST(XlsbParityPivotApiBuiltDeferred, BlankInAnInlineFieldIsLeftOutWithItsReason
   set_structured_log_sink(nullptr);
   fm_buffer_destroy(bytes);
   fm_workbook_destroy(wb);
-  EXPECT_EQ(info.deferred_feature_count, 1U);
-  EXPECT_NE(log.find("unmeasured xlsb pivot cache state: record cells of a field without shared items holding blanks"),
+  return {info.deferred_feature_count, log};
+}
+
+// A blank source cell in a field with no shared items is written as Excel writes it, so the pivot is not left out.
+TEST(XlsbParityPivotApiBuiltBlank, ABlankInAnInlineFieldIsWritten) {
+  const auto [deferred, log] = SaveRefreshedOver("");
+  EXPECT_EQ(deferred, 0U) << log;
+}
+
+// Text and numbers in one field with no shared items have no measured record cells yet: the group is left out,
+// counted, and logged with that reason.
+TEST(XlsbParityPivotApiBuiltDeferred, MixedTypesInAnInlineFieldAreLeftOutWithTheirReason) {
+  const auto [deferred, log] = SaveRefreshedOver("x");
+  EXPECT_EQ(deferred, 1U);
+  EXPECT_NE(log.find("unmeasured xlsb pivot cache state: record cells of a field without shared items holding blanks "
+                     "or more than one value type"),
             std::string::npos)
       << log;
 }
