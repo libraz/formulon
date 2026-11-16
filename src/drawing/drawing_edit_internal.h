@@ -64,7 +64,9 @@ void for_each_element(const pugi::xml_node& node, const Fn& fn) {
 
 inline constexpr const char* kNoObject = "object_id does not name a picture or chart";
 inline constexpr const char* kNoShapeOrObject = "object_id does not name a picture, chart or shape";
-inline constexpr const char* kNoOrderable = "object_id does not name a picture, chart, shape or slicer";
+inline constexpr const char* kNoSnapshotObject = "object_id does not name a picture, chart, shape, connector or group";
+inline constexpr const char* kNoOrderable =
+    "object_id does not name a picture, chart, shape, connector, group or slicer";
 
 // The refusal of `object_id` by an edit whose kinds exclude it:
 // `kInvalidArgument` when an object of another kind holds the id under `root`,
@@ -141,12 +143,12 @@ inline bool is_nameable(DrawingObjectKind kind) {
 
 // The kinds a snapshot captures and a restore places.
 inline bool is_snapshot_kind(DrawingObjectKind kind) {
-  return is_editable(kind) || kind == DrawingObjectKind::kShape;
+  return is_editable(kind) || is_shape_kind(kind);
 }
 
-// The objects a z-order move accepts: the nameable kinds and slicer frames.
+// The objects a z-order move accepts: the snapshot kinds and slicer frames.
 inline bool is_orderable(const pugi::xml_node& anchor, DrawingObjectKind kind) {
-  return is_nameable(kind) || is_slicer_frame(anchor);
+  return is_snapshot_kind(kind) || is_slicer_frame(anchor);
 }
 
 // Where a top-level element moved to list position `index` goes: before the

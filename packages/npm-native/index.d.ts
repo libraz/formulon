@@ -1040,8 +1040,7 @@ export interface PivotWorksheetSourceInput {
    *  have. A qualified string or a `SheetRect` whose sheet disagrees with it fails with `StatusCode.InvalidArgument`.
    *  Omitted leaves the attribute off. */
   sheet?: SheetRef;
-  /** The defined name or table the source reads; omitted leaves the attribute off. An empty string fails with
-   *  `StatusCode.InvalidArgument` (api-conventions §5 rule 30). */
+  /** The defined name or table the source reads; omitted leaves the attribute off. */
   name?: string | null;
 }
 
@@ -1058,17 +1057,15 @@ export interface PivotWorksheetSource {
 
 /** Plain-data spec for `Pivot.addDataField` / `Pivot.setDataField`. */
 export interface PivotDataFieldInput {
-  /** The display name of the data field, the key GETPIVOTDATA looks it up by. `""` is an empty caption, as Excel stores
-   *  it (api-conventions §5 rule 30). When omitted the engine names it from the workbook profile's pivot wording, such as
-   *  `Sum of Sales` (en-US) or `合計 / Sales` (ja-JP), numbered 2, 3, ... while the name repeats another data field's or
-   *  a field's display name; that needs `fieldIndex` to be in range. */
+  /** The display name of the data field, the key GETPIVOTDATA looks it up by. When `null` or empty the engine names it
+   *  from the workbook profile's pivot wording, such as `Sum of Sales` (en-US) or `合計 / Sales` (ja-JP), numbered 2, 3,
+   *  ... while the name repeats another data field's or a field's display name; that needs `fieldIndex` to be in range. */
   readonly name?: string;
   /** The index of the source pivot field the data field aggregates; it must be in range. */
   readonly fieldIndex: PivotFieldRef;
   /** The aggregation function applied to the source field; omitted is `PivotAggregation.Sum`. */
   readonly aggregation?: PivotAggregation;
-  /** The number format code of the data field's values; `null` and `""` both mean none, since Excel stores no empty
-   *  format code (api-conventions §5 rule 30). */
+  /** The number format code of the data field's values; `null` or empty for none. */
   readonly numberFormat?: string | null;
   /** How the value is derived from the data: as is, or as a difference, percentage, running total or rank against a
    *  base. */
@@ -1117,10 +1114,7 @@ export type PivotGrandTotalsPatch = Patch<PivotGrandTotals>;
 /** The PivotTable Options of one pivot (`Pivot.getOptions` /
  *  `Pivot.updateOptions`). A string is `null` when
  *  the option is unset. `updateOptions` takes any subset of the members:
- *  an omitted member keeps its current value, and `null` unsets a string. `""` unsets `errorCaption`,
- *  `missingCaption`, `altText`, `altTextSummary` and `grandTotalCaption` as well, since Excel and the file hold no
- *  empty form of them (api-conventions §5 rule 30); the locale's grand total word shows again after `grandTotalCaption`
- *  is unset. */
+ *  an omitted member keeps its current value, and `null` unsets a string. */
 export interface PivotOptions {
   /** Whether error cells show `errorCaption`; the caption is kept while this is off. */
   readonly showError: boolean;
@@ -1249,8 +1243,7 @@ export interface PivotField {
 }
 
 /** Argument of `Pivot.updateField`. `customName` and `numberFormat` (a number format code) clear with `null`
- *  or `""`, since Excel reverts an empty name to the source name and drops an empty format code
- *  (api-conventions §5 rule 30); `sortByField: null` sorts by label; the flags and `sortOrder` have no cleared form.
+ *  (or `""`), `sortByField: null` sorts by label; the flags and `sortOrder` have no cleared form.
  *  `PivotSortOrder.Manual` with a `sortByField` fails with `StatusCode.InvalidArgument`. An empty patch
  *  changes nothing. */
 export type PivotFieldPatch = Patch<
@@ -1279,15 +1272,14 @@ export interface PivotItem {
   readonly cacheIndex: number | null;
   /** Whether the item is shown. */
   readonly visible: boolean;
-  /** The caption shown instead of the item's value; `null` when it has none, `""` for an item renamed to an empty
-   *  label. */
+  /** The caption shown instead of the item's value; `null` when it has none. */
   readonly caption: string | null;
   /** Whether the item is expanded; false for a collapsed item. */
   readonly showDetail: boolean;
 }
 
-/** Argument of `Pivot.updateFieldItem`. `caption: null` clears the caption, and `caption: ""` renames the item to an
- *  empty label, as Excel stores it (api-conventions §5 rule 30); `visible` and `showDetail` have no cleared form. */
+/** Argument of `Pivot.updateFieldItem`. `caption: null` (or `""`) clears the caption; `visible` and `showDetail`
+ *  have no cleared form. */
 export type PivotItemPatch = Patch<Pick<PivotItem, 'visible' | 'showDetail' | 'caption'>, 'caption'>;
 
 /** Argument of `Sheet.addPivot`: a new pivot named `name`, drawing from cache `cacheId` (a {@link PivotCacheRef}), with
@@ -7181,8 +7173,7 @@ export interface Workbook {
   removeTableStyle(name: string): void;
   /** Reads the default table and PivotTable style names. */
   getTableStyleDefaults(): TableStyleDefaults;
-  /** Sets the default style names; `""` fails with `StatusCode.InvalidArgument` (api-conventions §5 rule 30), an
-   *  omitted field keeps its default and `null` removes it. */
+  /** Sets the default style names; an omitted field keeps its default and `null` (or `""`) removes it. */
   updateTableStyleDefaults(patch: TableStyleDefaultsPatch): void;
 
   /** The theme's major and minor typefaces; the default theme's when the part is absent or unparseable
@@ -7317,7 +7308,7 @@ export interface Sheet {
   setText(row: number, col: number, text: string): void;
   /** `setText` at the A1 address `a1`. */
   setText(a1: string, text: string): void;
-  /** Stores the cell's OOXML phonetic guide (`<rPh>`); `null` and `""` both clear it, since Excel stores no empty reading (api-conventions §5 rule 30). Text above 32,767 UTF-16 units fails
+  /** Stores the cell's OOXML phonetic guide (`<rPh>`); `null` (or `""`) clears it. Text above 32,767 UTF-16 units fails
    *  with `StatusCode.InvalidArgument`. */
   setCellPhonetic(row: number, col: number, phonetic: string | null): void;
   /** `setCellPhonetic` at the A1 address `a1`. */
@@ -7761,7 +7752,8 @@ export interface Sheet {
    *  cache parts, the `Slicer_*` defined name and the drawing frame; the table may live on another sheet. A name no
    *  table has fails with `StatusCode.NotFound`. */
   addSlicer(table: Table | string, column: number | string, spec: SlicerInput): Slicer;
-  /** Puts a `snapshot` capture of a picture, chart or shape back and returns the object's handle: in place of
+  /** Puts a `snapshot` capture of a picture, chart, shape, connector or group back and returns the object's
+   *  handle: in place of
    *  an object with the same id at its recorded position, where a handle of that id addresses it again, or as a
    *  copy on top with `assignNewId`. Fails with `StatusCode.SecurityResourceLimit` when the package would exceed
    *  the reader's part or size limits. */
@@ -8407,40 +8399,40 @@ export interface SheetOoxml {
    *  `<autoFilter>` element; `null` when the sheet has no AutoFilter definition. */
   getAutoFilterXml(): string | null;
   /** OOXML fragment for round trips; normally use `setAutoFilter`. Replaces the worksheet-level `<autoFilter>`
-   *  element; `null` clears it, and `""` fails with `StatusCode.InvalidArgument` (api-conventions §5 rule 30). */
+   *  element; `null` (or `""`) clears it. */
   setAutoFilterXml(xml: string | null): void;
 
   /** OOXML fragment for round trips; normally use `getPageSetup`. Reads the worksheet's `<pageSetup>` element;
    *  `null` when absent. */
   getPageSetupXml(): string | null;
-  /** OOXML fragment for round trips; normally use `updatePageSetup`. Replaces `<pageSetup>`; `null` removes it and
-   *  restores the defaults, and `""` fails with `StatusCode.InvalidArgument` (api-conventions §5 rule 30). A fragment carrying `r:id` is rejected unless the sheet already has a
+  /** OOXML fragment for round trips; normally use `updatePageSetup`. Replaces `<pageSetup>`; `null` (or `""`)
+   *  removes it and restores the defaults. A fragment carrying `r:id` is rejected unless the sheet already has a
    *  printerSettings part, since the reference would otherwise dangle. A fragment over 4 KiB fails with `StatusCode.SecurityResourceLimit`. */
   setPageSetupXml(xml: string | null): void;
   /** OOXML fragment for round trips; normally use `getPageMargins`. Reads the worksheet's `<pageMargins>`
    *  element; `null` when absent. */
   getPageMarginsXml(): string | null;
-  /** OOXML fragment for round trips; normally use `updatePageMargins`. Replaces `<pageMargins>`; `null` removes it, and `""` fails with
-   *  `StatusCode.InvalidArgument` (api-conventions §5 rule 30). A fragment over 4 KiB fails with `StatusCode.SecurityResourceLimit`. */
+  /** OOXML fragment for round trips; normally use `updatePageMargins`. Replaces `<pageMargins>`; `null` (or `""`)
+   *  removes it. A fragment over 4 KiB fails with `StatusCode.SecurityResourceLimit`. */
   setPageMarginsXml(xml: string | null): void;
   /** OOXML fragment for round trips; normally use `getPrintOptions`. Reads the worksheet's `<printOptions>`
    *  element; `null` when absent. */
   getPrintOptionsXml(): string | null;
-  /** OOXML fragment for round trips; normally use `updatePrintOptions`. Replaces `<printOptions>`; `null` removes it, and `""` fails with
-   *  `StatusCode.InvalidArgument` (api-conventions §5 rule 30). A fragment over 4 KiB fails with `StatusCode.SecurityResourceLimit`. */
+  /** OOXML fragment for round trips; normally use `updatePrintOptions`. Replaces `<printOptions>`; `null` (or `""`)
+   *  removes it. A fragment over 4 KiB fails with `StatusCode.SecurityResourceLimit`. */
   setPrintOptionsXml(xml: string | null): void;
   /** OOXML fragment for round trips; normally use `getHeaderFooter`. Reads the worksheet's `<headerFooter>`
    *  element; `null` when absent. */
   getHeaderFooterXml(): string | null;
-  /** OOXML fragment for round trips; normally use `updateHeaderFooter`. Replaces `<headerFooter>`; `null` removes it, and `""` fails with
-   *  `StatusCode.InvalidArgument` (api-conventions §5 rule 30). Header codes live in XML element text, so a hand-built fragment writes them escaped
+  /** OOXML fragment for round trips; normally use `updateHeaderFooter`. Replaces `<headerFooter>`; `null` (or `""`)
+   *  removes it. Header codes live in XML element text, so a hand-built fragment writes them escaped
    *  (`<oddHeader>&amp;C...</oddHeader>`); `updateHeaderFooter` takes the decoded text instead. A fragment over 64 KiB fails with `StatusCode.SecurityResourceLimit`. */
   setHeaderFooterXml(xml: string | null): void;
   /** OOXML fragment for round trips; normally use `getPageSetup`, which reads its `fitToPage`. Reads the
    *  worksheet's `<sheetPr>` element; `null` when absent. It also carries the tab colour and VBA code name. */
   getSheetPrXml(): string | null;
   /** OOXML fragment for round trips; normally use `updatePageSetup`, which writes its `fitToPage`. Replaces
-   *  `<sheetPr>`; `null` removes it, and `""` fails with `StatusCode.InvalidArgument` (api-conventions §5 rule 30). A fragment over 8 KiB fails with `StatusCode.SecurityResourceLimit`. */
+   *  `<sheetPr>`; `null` (or `""`) removes it. A fragment over 8 KiB fails with `StatusCode.SecurityResourceLimit`. */
   setSheetPrXml(xml: string | null): void;
   /** Sets / replaces the cell XF on `[first, last]`; index 0 is the default XF. A value later entered into an unstyled
    *  cell of the span takes this XF, unless its row has one. An index not below `Workbook.ooxml.listCellXfs().length`
@@ -8885,11 +8877,11 @@ export interface Pivot {
   /** Reads data field `dataFieldIndex`; an index past the last data field fails with
    *  `StatusCode.IndexOutOfRange`. */
   getDataField(dataFieldIndex: number): PivotDataField;
-  /** Appends a new data-field entry. An omitted or `null` `spec.name` is
-   *  derived from the Excel profile, `""` is an empty caption; see {@link PivotDataFieldInput}. */
+  /** Appends a new data-field entry. An omitted or empty `spec.name` is
+   *  derived from the Excel profile; see {@link PivotDataFieldInput}. */
   addDataField(spec: PivotDataFieldInput): number;
   /** Replaces the data-field entry at `dataFieldIndex` in place. An omitted
-   *  or `null` `spec.name` is derived as in `addDataField`. */
+   *  or empty `spec.name` is derived as in `addDataField`. */
   setDataField(dataFieldIndex: number, spec: PivotDataFieldInput): void;
   /** Reads the name a new data field would get for `fieldIndex` and `aggregation`, without adding one.
    *  `excludeDataField` leaves that data field out of the numbering (as `setDataField` does); omit it
@@ -9117,7 +9109,8 @@ export interface Shape extends Drawing {
   /** Makes the shape item `zOrderIndex` of `Sheet.listDrawings()`, whose order is the stacking order (0 is the
    *  back). */
   setZOrder(zOrderIndex: number): void;
-  /** Captures the shape with its list position and element as opaque bytes for `Sheet.restoreDrawing`. */
+  /** Captures the shape, connector or group (a group with its children) with its list position and element as
+   *  opaque bytes for `Sheet.restoreDrawing`. */
   snapshot(): Uint8Array<ArrayBuffer>;
 }
 

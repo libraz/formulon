@@ -1410,10 +1410,9 @@ typedef struct {
 /**
  * @brief Stores a whole-cell phonetic guide (OOXML `<rPh>`).
  *
- * The guide is independent of the cell's visible text. `NULL` and an empty
- * string both clear an existing guide: Excel stores no empty reading
- * (api-conventions §5 rule 30). The destination cell copies `text`, so the
- * input does not need to outlive the call.
+ * The guide is independent of the cell's visible text. Passing an empty
+ * string clears an existing guide. The destination cell copies `text`, so
+ * the input does not need to outlive the call.
  *
  * This entry point has no span vocabulary, so the reading it stores covers
  * the surface text end to end — one run spanning the whole cell. Feeding
@@ -1422,7 +1421,7 @@ typedef struct {
  * Use `fm_sheet_set_cell_phonetic_runs` to preserve the spans.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common cell-mutation failure;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `text` is malformed UTF-8;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `text` exceeds 32,767 UTF-16 units.
  */
@@ -5631,10 +5630,9 @@ FM_API fm_status_t fm_sheet_get_page_setup_xml(const fm_workbook_t* wb, size_t s
  * prefix lifted out of its original namespace context would not bind there.
  * Content the engine does not model is preserved as-is.
  *
- * `NULL` removes the element and resets the structured views it
+ * An empty string removes the element and resets the structured views it
  * feeds (orientation / paper size / scale / fit-to-width / fit-to-height)
- * to their ECMA-376 defaults. An empty string is not one element and is
- * refused (api-conventions §5 rule 30). Otherwise the structured views are re-derived
+ * to their ECMA-376 defaults. Otherwise the structured views are re-derived
  * from the new fragment immediately, so a `fm_sheet_paginate` that
  * follows observes the new settings.
  *
@@ -5643,10 +5641,10 @@ FM_API fm_status_t fm_sheet_get_page_setup_xml(const fm_workbook_t* wb, size_t s
  * on `fm_sheet_update_page_setup`.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `xml` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `xml` is malformed UTF-8;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when the fragment is empty, malformed, carries more than one
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the fragment is malformed, carries more than one
  *           top-level element, or names the wrong root; and when it declares an `r:id` on a sheet that
  *           has no printer-settings part, which would leave a dangling relationship that makes Excel
  *           repair the file;
@@ -5664,15 +5662,15 @@ FM_API fm_status_t fm_sheet_set_page_setup_xml(fm_workbook_t* wb, size_t sheet_i
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range. */
 FM_API fm_status_t fm_sheet_get_page_margins_xml(const fm_workbook_t* wb, size_t sheet_index, const char** out_xml);
 
-/** @brief Replaces `<pageMargins>`. Re-derives the structured margins; `NULL`
- *         removes the element and restores the defaults; an empty string is refused (api-conventions §5 rule 30).
+/** @brief Replaces `<pageMargins>`. Re-derives the structured margins; an
+ *         empty string removes the element and restores the defaults.
  *         Fragment ceiling 4 KiB.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `xml` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `xml` is malformed UTF-8;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when the fragment is empty, malformed or names the wrong root;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the fragment is malformed or names the wrong root;
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the fragment exceeds 4 KiB. */
 FM_API fm_status_t fm_sheet_set_page_margins_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml);
 
@@ -5687,14 +5685,13 @@ FM_API fm_status_t fm_sheet_set_page_margins_xml(fm_workbook_t* wb, size_t sheet
 FM_API fm_status_t fm_sheet_get_print_options_xml(const fm_workbook_t* wb, size_t sheet_index, const char** out_xml);
 
 /** @brief Replaces `<printOptions>`. This element has no structured view;
- *         the raw fragment is the whole model. `NULL` removes the element;
- *         an empty string is refused (api-conventions §5 rule 30). Fragment ceiling 4 KiB.
+ *         the raw fragment is the whole model. Fragment ceiling 4 KiB.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `xml` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `xml` is malformed UTF-8;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when the fragment is empty, malformed or names the wrong root;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the fragment is malformed or names the wrong root;
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the fragment exceeds 4 KiB. */
 FM_API fm_status_t fm_sheet_set_print_options_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml);
 
@@ -5708,8 +5705,7 @@ FM_API fm_status_t fm_sheet_set_print_options_xml(fm_workbook_t* wb, size_t shee
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range. */
 FM_API fm_status_t fm_sheet_get_header_footer_xml(const fm_workbook_t* wb, size_t sheet_index, const char** out_xml);
 
-/** @brief Replaces `<headerFooter>`. No structured view. `NULL` removes the element; an empty
- *         string is refused (api-conventions §5 rule 30). Fragment ceiling
+/** @brief Replaces `<headerFooter>`. No structured view. Fragment ceiling
  *         64 KiB, which is wider than the other elements because six
  *         sections of formatting codes (and header images) live here.
  *
@@ -5721,10 +5717,10 @@ FM_API fm_status_t fm_sheet_get_header_footer_xml(const fm_workbook_t* wb, size_
  * text instead and handles the escaping.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `xml` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `xml` is malformed UTF-8;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when the fragment is empty, malformed or names the wrong root;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the fragment is malformed or names the wrong root;
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the fragment exceeds 64 KiB. */
 FM_API fm_status_t fm_sheet_set_header_footer_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml);
 
@@ -5744,14 +5740,13 @@ FM_API fm_status_t fm_sheet_set_header_footer_xml(fm_workbook_t* wb, size_t shee
 FM_API fm_status_t fm_sheet_get_sheet_pr_xml(const fm_workbook_t* wb, size_t sheet_index, const char** out_xml);
 
 /** @brief Replaces `<sheetPr>`. Re-derives `fitToPage` from
- *         `<pageSetUpPr>`; absent means false.
- *         `NULL` removes the element; an empty string is refused (api-conventions §5 rule 30). Fragment ceiling 8 KiB.
+ *         `<pageSetUpPr>`; absent means false. Fragment ceiling 8 KiB.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `xml` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `xml` is malformed UTF-8;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when the fragment is empty, malformed or names the wrong root;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the fragment is malformed or names the wrong root;
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the fragment exceeds 8 KiB. */
 FM_API fm_status_t fm_sheet_set_sheet_pr_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml);
 
@@ -7545,18 +7540,18 @@ typedef enum {
  */
 typedef struct {
   uint32_t struct_size;
-  /** The display name of the data field, the key GETPIVOTDATA looks it up by. An empty string is an empty caption, as
-   *  Excel stores it (api-conventions §5 rule 30). When `NULL` the engine names it from the workbook profile's pivot
-   * wording, such as `Sum of Sales` (en-US) or `合計 / Sales` (ja-JP), numbered 2, 3, ... while the name repeats
-   * another data field's or a field's display name; that needs `field_index` to be in range. */
+  /** The display name of the data field, the key GETPIVOTDATA looks it up by. When `NULL` or empty the engine names it
+   *  from the workbook profile's pivot wording, such as `Sum of Sales` (en-US) or `合計 / Sales` (ja-JP), numbered 2,
+   * 3,
+   *  ... while the name repeats another data field's or a field's display name; that needs `field_index` to be in
+   *  range. */
   const char* name;
   /** The index of the source pivot field the data field aggregates; it must be in range. */
   uint32_t field_index;
   /** The aggregation function applied to the source field. */
   int32_t aggregation;
   /** The number format code of the data field's values, under the rules of `fm_pivot_field_patch_t.number_format`;
-   *  `NULL` and an empty string both mean none, since Excel stores no empty format code (api-conventions §5 rule 30).
-   */
+   *  `NULL` or empty for none. */
   const char* number_format;
   /** How the value is derived from the data: as is, or as a difference, percentage, running total or rank against a
    *  base. */
@@ -7637,8 +7632,7 @@ typedef struct {
   uint32_t cache_index;
   /** Whether the item is shown. */
   int32_t visible;
-  /** The caption shown instead of the item's value; `NULL` when it has none, an empty string for an item renamed to an
-   *  empty label. */
+  /** The caption shown instead of the item's value; `NULL` when it has none. */
   const char* caption;
   /** Whether the item is expanded; false for a collapsed item. */
   int32_t show_detail;
@@ -7779,8 +7773,8 @@ typedef struct {
   /** Whether error cells show `error_caption`; the caption is kept while this is off (0 or non-zero when written). Read
    *  when `show_error_op` is `FM_PATCH_OP_SET`. */
   int32_t show_error;
-  /** How `error_caption` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it (an empty string
-   *  unsets it, as `FM_PATCH_OP_CLEAR` does, since Excel drops an empty caption (api-conventions §5 rule 30)). */
+  /** How `error_caption` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it (an empty string unsets
+   *  it), `FM_PATCH_OP_CLEAR` unsets it. */
   fm_patch_op_t error_caption_op;
   /** The text to write to the option. A set value is at most 255 UTF-16 code units. Read when `error_caption_op` is
    *  `FM_PATCH_OP_SET`. */
@@ -7792,7 +7786,7 @@ typedef struct {
    *  `FM_PATCH_OP_SET`. */
   int32_t show_missing;
   /** How `missing_caption` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it (an empty string
-   *  unsets it, as `FM_PATCH_OP_CLEAR` does, since Excel drops an empty caption (api-conventions §5 rule 30)). */
+   *  unsets it), `FM_PATCH_OP_CLEAR` unsets it. */
   fm_patch_op_t missing_caption_op;
   /** The text to write to the option. A set value is at most 255 UTF-16 code units. Read when `missing_caption_op` is
    *  `FM_PATCH_OP_SET`. */
@@ -7899,21 +7893,19 @@ typedef struct {
   /** Whether custom lists take part in sorting (0 or non-zero when written). Read when `custom_list_sort_op` is
    *  `FM_PATCH_OP_SET`. */
   int32_t custom_list_sort;
-  /** How `alt_text` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it (an empty string unsets it,
-   *  as `FM_PATCH_OP_CLEAR` does, since the file holds no empty alternative text (api-conventions §5 rule 30)). */
+  /** How `alt_text` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it (an empty string unsets it),
+   *  `FM_PATCH_OP_CLEAR` unsets it. */
   fm_patch_op_t alt_text_op;
   /** The text to write to the option. A set value is at most 255 UTF-16 code units. Read when `alt_text_op` is
    *  `FM_PATCH_OP_SET`. */
   const char* alt_text;
   /** How `alt_text_summary` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it (an empty string
-   *  unsets it, as `FM_PATCH_OP_CLEAR` does, since the file holds no empty alternative text (api-conventions §5 rule
-   * 30)). */
+   *  unsets it), `FM_PATCH_OP_CLEAR` unsets it. */
   fm_patch_op_t alt_text_summary_op;
   /** The text to write to the option. Read when `alt_text_summary_op` is `FM_PATCH_OP_SET`. */
   const char* alt_text_summary;
   /** How `grand_total_caption` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it (an empty string
-   *  unsets it, as `FM_PATCH_OP_CLEAR` does, and the locale's word shows again: Excel writes no empty caption
-   * (api-conventions §5 rule 30)). */
+   *  unsets it), `FM_PATCH_OP_CLEAR` unsets it. */
   fm_patch_op_t grand_total_caption_op;
   /** The text to write to the option. A set value is at most 255 UTF-16 code units. Read when `grand_total_caption_op`
    *  is `FM_PATCH_OP_SET`. */
@@ -8054,8 +8046,8 @@ FM_API fm_status_t fm_workbook_remove_pivot_cache(fm_workbook_t* wb, uint32_t ca
  *        reads it and `fm_workbook_set_pivot_cache_worksheet_source` writes it.
  *
  * `ref`, `sheet` and `name` are the element's attributes as text; each may
- * be `NULL` (absent) on input; an empty string is refused (api-conventions §5 rule 30). On read the strings are
- * model-backed views owned by the workbook handle.
+ * be `NULL` (absent) on input. On read the strings are model-backed views
+ * owned by the workbook handle.
  */
 typedef struct {
   uint32_t struct_size;
@@ -8102,8 +8094,7 @@ FM_API fm_status_t fm_workbook_get_pivot_cache_worksheet_source(const fm_workboo
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
  *         `FM_STATUS_NOT_FOUND` (6) when no cache matches `cache_id`;
- *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a string is not valid UTF-8;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `ref`, `sheet` or `name` is an empty string.
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a string is not valid UTF-8.
  */
 FM_API fm_status_t fm_workbook_set_pivot_cache_worksheet_source(fm_workbook_t* wb, uint32_t cache_id,
                                                                 const fm_pivot_worksheet_source_t* source);
@@ -8933,15 +8924,13 @@ typedef struct {
   fm_patch_op_t custom_name_op;
   /** The report name to write; it is non-`NULL`, at most 255 UTF-16 code units, and must not equal another field's
    *  source or custom name or a data field's name under the profile's collation (the field's own source name is
-   *  allowed). `FM_PATCH_OP_CLEAR` restores the source name, and so does an empty string, since Excel reverts to the
-   *  source name (api-conventions §5 rule 30). Read when `custom_name_op` is `FM_PATCH_OP_SET`. */
+   *  allowed). `FM_PATCH_OP_CLEAR` restores the source name. Read when `custom_name_op` is `FM_PATCH_OP_SET`. */
   const char* custom_name;
   /** How `number_format` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it, `FM_PATCH_OP_CLEAR`
    *  clears it. */
   fm_patch_op_t number_format_op;
   /** The number format code to write, in the workbook profile's vocabulary; a string of digits is a format code, not an
-   *  id. `FM_PATCH_OP_CLEAR` removes the format, and so does an empty string, since Excel drops an empty format code
-   * (api-conventions §5 rule 30). Read when `number_format_op` is `FM_PATCH_OP_SET`. */
+   *  id. `FM_PATCH_OP_CLEAR` removes the format. Read when `number_format_op` is `FM_PATCH_OP_SET`. */
   const char* number_format;
   /** How `default_subtotal` is patched: `FM_PATCH_OP_KEEP` leaves it, `FM_PATCH_OP_SET` writes it; `FM_PATCH_OP_CLEAR`
    *  is rejected. */
@@ -9037,8 +9026,7 @@ typedef struct {
   fm_patch_op_t caption_op;
   /** The caption to show instead of the item's value, at most 255 UTF-16 code units and distinct from the label another
    *  item of the field shows under the profile's text collation; a caption equal to the item's own value removes it.
-   *  An empty string is an empty label, as Excel stores it (api-conventions §5 rule 30). Read when `caption_op` is
-   * `FM_PATCH_OP_SET`. */
+   *  Read when `caption_op` is `FM_PATCH_OP_SET`. */
   const char* caption;
 } fm_pivot_item_patch_t;
 
@@ -9340,9 +9328,9 @@ FM_API fm_status_t fm_sheet_get_pivot_data_field_count(const fm_workbook_t* wb, 
                                                        size_t* out_count);
 
 /**
- * @brief Appends a new data-field entry. A `NULL` `spec->name` is
+ * @brief Appends a new data-field entry. A `NULL` or empty `spec->name` is
  *        replaced by the engine-derived name described on
- *        `fm_pivot_data_field_t`; an empty one is kept.
+ *        `fm_pivot_data_field_t`.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common pivot failure;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `spec->field_index` or a set
@@ -9365,7 +9353,7 @@ FM_API fm_status_t fm_sheet_clear_pivot_data_fields(fm_workbook_t* wb, size_t sh
 
 /**
  * @brief Replaces the data-field entry at `data_field_index` in place. A
- *        `NULL` `spec->name` is derived, and an empty one kept, as in
+ *        `NULL` or empty `spec->name` is derived as in
  *        `fm_sheet_add_pivot_data_field`.
  *
  * @return As `fm_sheet_add_pivot_data_field`.
@@ -9375,7 +9363,7 @@ FM_API fm_status_t fm_sheet_set_pivot_data_field(fm_workbook_t* wb, size_t sheet
 
 /**
  * @brief Reads into `*out` the name a data field over pivot field
- *        `field_index` with `aggregation` would get from a `NULL`
+ *        `field_index` with `aggregation` would get from an empty
  *        `spec->name`, without changing anything. `exclude_data_field` is the
  *        entry `fm_sheet_set_pivot_data_field` would replace, whose name is
  *        not counted as taken; `FM_PIVOT_DATA_FIELD_NONE` for none (the add case). The string
@@ -10670,15 +10658,14 @@ FM_API fm_status_t fm_sheet_get_auto_filter_xml(const fm_workbook_t* wb, size_t 
 /**
  * @brief Replaces the worksheet-level `<autoFilter>` XML fragment.
  *
- * Pass `NULL` to remove the AutoFilter. Any other input must be a
- * complete `<autoFilter ...>` fragment, so an empty string is refused
- * (api-conventions §5 rule 30); detailed schema validation remains
+ * Pass an empty string to remove the AutoFilter. Non-empty input must be a
+ * complete `<autoFilter ...>` fragment; detailed schema validation remains
  * with Excel/OOXML consumers because filter extensions are intentionally
  * preserved verbatim by the engine.
  *
- * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) if `xml` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) for an empty or malformed fragment.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) for a malformed fragment.
  */
 FM_API fm_status_t fm_sheet_set_auto_filter_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml);
 
@@ -14236,7 +14223,7 @@ FM_API fm_status_t fm_sheet_update_drawing(fm_workbook_t* wb, size_t sheet_index
                                            const fm_drawing_patch_t* patch);
 
 /**
- * @brief Moves the picture, chart, shape or slicer `object_id` so it becomes
+ * @brief Moves the picture, chart, shape, connector, group or slicer `object_id` so it becomes
  *        item `z_order_index` of the drawing's object list (0 is the back).
  *
  * The unit moved is the object's top-level element, a whole
@@ -14259,7 +14246,8 @@ FM_API fm_status_t fm_sheet_set_drawing_z_order(fm_workbook_t* wb, size_t sheet_
                                                 size_t z_order_index);
 
 /**
- * @brief Captures the picture, chart or shape `object_id` as an opaque, versioned
+ * @brief Captures the picture, chart, shape, connector or group `object_id` (a
+ *        group with its children) as an opaque, versioned
  *        byte string: its list position, its element, the relationships it
  *        names with their parts, and every part reachable from those parts'
  *        relationships (a chart's style, colors, user shapes, embeddings).
@@ -14293,7 +14281,8 @@ FM_API fm_status_t fm_sheet_snapshot_drawing(const fm_workbook_t* wb, size_t she
  * (capped at the object count); an id not present is added at that
  * position. With `FM_DRAWING_RESTORE_NEW_ID` the capture is added on top as
  * a copy with a fresh id and no `a16:creationId`, its chart parts copied to
- * fresh paths. A part whose path is free is written there, a media part
+ * fresh paths; a group's children take fresh ids too, and a connector the
+ * capture holds stays joined to the copied shapes. A part whose path is free is written there, a media part
  * with identical bytes is shared, and any other occupied path takes a fresh
  * one with the relationships naming it re-pointed. A sheet without a
  * drawing gets a new one.
@@ -14302,8 +14291,8 @@ FM_API fm_status_t fm_sheet_snapshot_drawing(const fm_workbook_t* wb, size_t she
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when the bytes
- *         are not a valid capture, `flags` has an unknown bit, the id is
- *         held by another kind of object;
+ *         are not a valid capture, `flags` has an unknown bit, or an id the
+ *         capture holds (a group child's included) belongs to another object;
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the package would exceed the
  *         reader's limits (context `part=zip_parts` or `part=zip_total_bytes`);
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when a fresh id is needed and the

@@ -434,8 +434,8 @@ TEST(DrawingSnapshot, RejectsMalformedBytes) {
   EXPECT_EQ(code(snap, 2), FormulonErrorCode::kInvalidArgument);
   EXPECT_EQ(code(Handmade(1, "<xdr:oneCellAnchor><xdr:from>")), FormulonErrorCode::kInvalidArgument);
   EXPECT_EQ(code(Handmade(1,
-                          "<xdr:oneCellAnchor><xdr:cxnSp><xdr:nvCxnSpPr><xdr:cNvPr id=\"9\"/></xdr:nvCxnSpPr>"
-                          "</xdr:cxnSp></xdr:oneCellAnchor>")),
+                          "<xdr:oneCellAnchor><xdr:contentPart><xdr:nvContentPartPr><xdr:cNvPr id=\"9\"/>"
+                          "</xdr:nvContentPartPr></xdr:contentPart></xdr:oneCellAnchor>")),
             FormulonErrorCode::kInvalidArgument);
   EXPECT_EQ(Restore(wb, 0, Bytes{}).error().code, FormulonErrorCode::kInvalidArgument);
   EXPECT_EQ(restore_drawing(wb, 0, nullptr, 0, 0).error().code, FormulonErrorCode::kInvalidArgument);
@@ -465,20 +465,20 @@ TEST(DrawingSnapshot, RefusesWhatItCannotCaptureOrPlace) {
   EXPECT_EQ(snapshot_drawing(wb, 4, 2).error().code, FormulonErrorCode::kInvalidArgument);
   const Bytes snap4 = Snapshot(wb, 4);
 
-  // Id 3 belongs to a connector on the target sheet.
+  // Id 3 belongs to a content part on the target sheet, which no snapshot holds.
   Workbook wired = Fixture();
   std::string xml(Part(wired, kDrawingPath)->bytes.begin(), Part(wired, kDrawingPath)->bytes.end());
-  for (const auto& swap : {std::pair<std::string, std::string>{"xdr:sp ", "xdr:cxnSp "},
-                           {"xdr:sp>", "xdr:cxnSp>"},
-                           {"xdr:nvSpPr>", "xdr:nvCxnSpPr>"},
-                           {"xdr:cNvSpPr/>", "xdr:cNvCxnSpPr/>"}}) {
+  for (const auto& swap : {std::pair<std::string, std::string>{"xdr:sp ", "xdr:contentPart "},
+                           {"xdr:sp>", "xdr:contentPart>"},
+                           {"xdr:nvSpPr>", "xdr:nvContentPartPr>"},
+                           {"xdr:cNvSpPr/>", "xdr:cNvContentPartPr/>"}}) {
     for (std::size_t at = xml.find(swap.first); at != std::string::npos;
          at = xml.find(swap.first, at + swap.second.size())) {
       xml.replace(at, swap.first.size(), swap.second);
     }
   }
   ASSERT_TRUE(static_cast<bool>(wired.replace_passthrough_part(kDrawingPath, ToBytes(xml))));
-  ASSERT_EQ(Find(wired, 3).kind, DrawingObjectKind::kConnector);
+  ASSERT_EQ(Find(wired, 3).kind, DrawingObjectKind::kOther);
   Bytes as_three = snap4;
   const std::string needle = "id=\"4\"";
   const auto at = std::search(as_three.begin(), as_three.end(), needle.begin(), needle.end());
@@ -498,6 +498,133 @@ TEST(DrawingSnapshot, RefusesWhatItCannotCaptureOrPlace) {
   ASSERT_FALSE(static_cast<bool>(refused));
   EXPECT_EQ(refused.error().code, FormulonErrorCode::kIoDrawingUnparseable);
   EXPECT_EQ(xlsb.passthrough_parts().size(), 1U);
+}
+
+// Group 5 holding picture 6, shape 7 and connector 8 (joining 7 to 6), then a top-level connector 9 joined to
+// shape 7. Every object is captured and reordered like a picture or shape.
+Workbook GroupFixture() {
+  const std::string group5 =
+      "<xdr:twoCellAnchor>" + Marker("from", 1, 0, 1, 0) + Marker("to", 6, 0, 9, 0) +
+      "<xdr:grpSp><xdr:nvGrpSpPr><xdr:cNvPr id=\"5\" name=\"Group 4\"/><xdr:cNvGrpSpPr/></xdr:nvGrpSpPr>"
+      "<xdr:grpSpPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"914400\" cy=\"914400\"/><a:chOff x=\"0\" "
+      "y=\"0\"/><a:chExt cx=\"914400\" cy=\"914400\"/></a:xfrm></xdr:grpSpPr>"
+      "<xdr:pic><xdr:nvPicPr><xdr:cNvPr id=\"6\" name=\"Picture 5\"/><xdr:cNvPicPr/></xdr:nvPicPr><xdr:blipFill>"
+      "<a:blip r:embed=\"rId1\"/></xdr:blipFill><xdr:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"95250\" "
+      "cy=\"95250\"/></a:xfrm></xdr:spPr></xdr:pic>"
+      "<xdr:sp macro=\"\" textlink=\"\"><xdr:nvSpPr><xdr:cNvPr id=\"7\" name=\"Shape 6\"/><xdr:cNvSpPr/></xdr:nvSpPr>"
+      "<xdr:spPr/></xdr:sp>"
+      "<xdr:cxnSp macro=\"\"><xdr:nvCxnSpPr><xdr:cNvPr id=\"8\" name=\"Connector 7\"/><xdr:cNvCxnSpPr>"
+      "<a:stCxn id=\"7\" idx=\"1\"/><a:endCxn id=\"6\" idx=\"3\"/></xdr:cNvCxnSpPr></xdr:nvCxnSpPr><xdr:spPr/>"
+      "</xdr:cxnSp></xdr:grpSp><xdr:clientData/></xdr:twoCellAnchor>";
+  const std::string connector9 =
+      "<xdr:oneCellAnchor>" + Marker("from", 8, 0, 1, 0) +
+      "<xdr:ext cx=\"914400\" cy=\"0\"/><xdr:cxnSp macro=\"\"><xdr:nvCxnSpPr><xdr:cNvPr id=\"9\" "
+      "name=\"Connector 8\"/><xdr:cNvCxnSpPr><a:stCxn id=\"7\" idx=\"2\"/></xdr:cNvCxnSpPr></xdr:nvCxnSpPr>"
+      "<xdr:spPr/></xdr:cxnSp><xdr:clientData/></xdr:oneCellAnchor>";
+  const std::string drawing =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\r\n"
+      "<xdr:wsDr xmlns:xdr=\"http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing\" "
+      "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" "
+      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">" +
+      group5 + connector9 + "</xdr:wsDr>";
+  const std::string rels =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\r\n"
+      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">" +
+      Rel("rId1", "../media/image1.png") + "</Relationships>";
+  Workbook wb = Workbook::create();
+  EXPECT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart(kDrawingPath, kCtDrawing, ToBytes(drawing)))));
+  EXPECT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart(kRelsPath, "", ToBytes(rels)))));
+  EXPECT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart("xl/media/image1.png", "", Png(10, 10)))));
+  wb.set_default_content_types({{"png", "image/png"}});
+  wb.sheet(0).set_drawing_rel_target(kDrawingPath);
+  return wb;
+}
+
+// `(object id, stCxn id, endCxn id)` of every connector in sheet 0's drawing, children included; 0 for a missing end.
+std::vector<std::vector<std::uint32_t>> Connections(const Workbook& wb) {
+  pugi::xml_document doc;
+  const PassthroughPart* part = Part(wb, kDrawingPath);
+  EXPECT_NE(part, nullptr);
+  std::vector<std::vector<std::uint32_t>> out;
+  if (part == nullptr || !parse_drawing_part(part->bytes, doc)) {
+    return out;
+  }
+  for (const pugi::xpath_node& hit : doc.select_nodes("//*[local-name()='cxnSp']")) {
+    const pugi::xml_node props = hit.node().first_child().first_child().next_sibling();
+    out.push_back({hit.node().first_child().first_child().attribute("id").as_uint(),
+                   props.child("a:stCxn").attribute("id").as_uint(),
+                   props.child("a:endCxn").attribute("id").as_uint()});
+  }
+  return out;
+}
+
+// Every `cNvPr/@id` of sheet 0's drawing, children included, in document order.
+std::vector<std::uint32_t> AllIds(const Workbook& wb) {
+  pugi::xml_document doc;
+  const PassthroughPart* part = Part(wb, kDrawingPath);
+  std::vector<std::uint32_t> ids;
+  if (part != nullptr && parse_drawing_part(part->bytes, doc)) {
+    for (const pugi::xpath_node& hit : doc.select_nodes("//*[local-name()='cNvPr']")) {
+      ids.push_back(hit.node().attribute("id").as_uint());
+    }
+  }
+  return ids;
+}
+
+TEST(DrawingSnapshot, GroupAndConnectorAreCapturedAndReordered) {
+  Workbook wb = GroupFixture();
+  ASSERT_TRUE(static_cast<bool>(set_drawing_z_order(wb, 0, 9, 0)));
+  EXPECT_EQ(Ids(wb), (std::vector<std::uint32_t>{9, 5}));
+  ASSERT_TRUE(static_cast<bool>(set_drawing_z_order(wb, 0, 9, 1)));
+  EXPECT_EQ(Ids(wb), (std::vector<std::uint32_t>{5, 9}));
+
+  const Bytes group = Snapshot(wb, 5);
+  const Bytes connector = Snapshot(wb, 9);
+  ASSERT_FALSE(group.empty());
+  ASSERT_FALSE(connector.empty());
+  // A child is not a top-level object of its own.
+  EXPECT_EQ(snapshot_drawing(wb, 0, 7).error().code, FormulonErrorCode::kNotFound);
+
+  ASSERT_TRUE(static_cast<bool>(remove_drawing(wb, 0, 5)));
+  ASSERT_TRUE(static_cast<bool>(remove_drawing(wb, 0, 9)));
+  EXPECT_TRUE(Ids(wb).empty());
+  auto back = Restore(wb, 0, group);
+  ASSERT_TRUE(static_cast<bool>(back)) << back.error().message;
+  EXPECT_EQ(back.value(), 5U);
+  auto joined = Restore(wb, 0, connector);
+  ASSERT_TRUE(static_cast<bool>(joined)) << joined.error().message;
+  EXPECT_EQ(Ids(wb), (std::vector<std::uint32_t>{5, 9}));
+  EXPECT_EQ(AllIds(wb), (std::vector<std::uint32_t>{5, 6, 7, 8, 9}));
+  EXPECT_EQ(Connections(wb), (std::vector<std::vector<std::uint32_t>>{{8, 7, 6}, {9, 7, 0}}));
+  EXPECT_NE(Part(wb, "xl/media/image1.png"), nullptr);
+}
+
+TEST(DrawingSnapshot, GroupCopyRenumbersEveryChildAndKeepsItsConnectorsJoined) {
+  Workbook wb = GroupFixture();
+  auto copy = Restore(wb, 0, Snapshot(wb, 5), kDrawingRestoreNewId);
+  ASSERT_TRUE(static_cast<bool>(copy)) << copy.error().message;
+  // Fresh ids fill the free ones from 2 up: the group takes 2, picture 3, shape 4 and connector 10.
+  EXPECT_EQ(copy.value(), 2U);
+  EXPECT_EQ(Ids(wb), (std::vector<std::uint32_t>{5, 9, 2}));
+  EXPECT_EQ(AllIds(wb), (std::vector<std::uint32_t>{5, 6, 7, 8, 9, 2, 3, 4, 10}));
+  // The copied connector joins the copied shapes; the originals keep theirs.
+  EXPECT_EQ(Connections(wb), (std::vector<std::vector<std::uint32_t>>{{8, 7, 6}, {9, 7, 0}, {10, 4, 3}}));
+}
+
+TEST(DrawingSnapshot, RestoreRefusesACaptureWhoseChildIdIsTaken) {
+  Workbook wb = GroupFixture();
+  const Bytes group = Snapshot(wb, 5);
+  ASSERT_TRUE(static_cast<bool>(remove_drawing(wb, 0, 5)));
+  // A new object takes id 6, which the captured group's picture holds.
+  std::string xml(Part(wb, kDrawingPath)->bytes.begin(), Part(wb, kDrawingPath)->bytes.end());
+  const std::string from = "id=\"9\"";
+  const std::size_t at = xml.find(from);
+  ASSERT_NE(at, std::string::npos);
+  xml.replace(at, from.size(), "id=\"6\"");
+  ASSERT_TRUE(static_cast<bool>(wb.replace_passthrough_part(kDrawingPath, ToBytes(xml))));
+  auto refused = Restore(wb, 0, group);
+  ASSERT_FALSE(static_cast<bool>(refused));
+  EXPECT_EQ(refused.error().code, FormulonErrorCode::kInvalidArgument);
 }
 
 constexpr const char* kChartRel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";

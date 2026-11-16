@@ -171,6 +171,10 @@ pugi::xml_node anchor_cnvpr(const pugi::xml_node& anchor) {
   return content_cnvpr(anchor_content(anchor));
 }
 
+DrawingObjectKind content_kind(const pugi::xml_node& content) {
+  return classify(content);
+}
+
 pugi::xml_node content_cnvpr(const pugi::xml_node& content) {
   for (pugi::xml_node child = content.first_child(); child; child = child.next_sibling()) {
     const std::string_view name = local_name(child);

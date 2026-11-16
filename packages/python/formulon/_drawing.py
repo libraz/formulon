@@ -392,7 +392,8 @@ class _ZOrdered(Drawing):
 
 
 class _Snapshotable(_ZOrdered):
-    """The drawing kinds :meth:`Sheet.restore_drawing` can bring back: pictures, charts and shapes."""
+    """The drawing kinds :meth:`Sheet.restore_drawing` can bring back: pictures, charts, shapes,
+    connectors and groups (a group with its children)."""
 
     __slots__ = ()
 

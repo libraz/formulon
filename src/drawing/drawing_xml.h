@@ -134,6 +134,9 @@ pugi::xml_node anchor_cnvpr(const pugi::xml_node& anchor);
 /// The `cNvPr` element naming drawing object `content`, or a null node.
 pugi::xml_node content_cnvpr(const pugi::xml_node& content);
 
+/// The kind of drawing object `content` (an anchor's content or a group child).
+DrawingObjectKind content_kind(const pugi::xml_node& content);
+
 /// Reads one anchor element.
 DrawingObject read_drawing_object(const pugi::xml_node& anchor, const std::vector<io::ooxml::DrawingRel>& rels);
 

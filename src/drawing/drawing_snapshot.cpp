@@ -456,7 +456,7 @@ Expected<std::vector<std::uint8_t>, Error> snapshot_drawing(const Workbook& wb, 
   const pugi::xml_node root = doc.document_element();
   const pugi::xml_node target = find_drawing_object(root, object_id, is_snapshot_kind);
   if (!target) {
-    return refuse_object(root, object_id, kNoShapeOrObject);
+    return refuse_object(root, object_id, kNoSnapshotObject);
   }
   const pugi::xml_node top = top_of(root, target);
   const std::vector<pugi::xml_node> items = drawing_anchors(root, false);
@@ -562,7 +562,7 @@ Expected<std::uint32_t, Error> restore_drawing(Workbook& wb, std::size_t sheet, 
     }
   }
   if (!object) {
-    return invalid("bytes holds no picture, chart or shape");
+    return invalid("bytes holds no picture, chart, shape, connector or group");
   }
   std::uint32_t id = read_drawing_object(object, {}).object_id;
   const bool new_id = (flags & kDrawingRestoreNewId) != 0;
@@ -588,33 +588,55 @@ Expected<std::uint32_t, Error> restore_drawing(Workbook& wb, std::size_t sheet, 
   io::ensure_attr(root, "xmlns:a", chart_ns::kNsA);
   ASSIGN_OR_RETURN(std::vector<io::ooxml::DrawingRel> rels, load_part_rels(wb, path));
 
+  // Every object id the capture holds: the object's own, then a group's children.
+  std::vector<pugi::xml_node> captured_ids;
+  for_each_element(fragment, [&captured_ids](const pugi::xml_node& node) {
+    if (local_name(node) == "cNvPr") {
+      captured_ids.push_back(node);
+    }
+  });
   pugi::xml_node replaced;
   if (new_id) {
-    ASSIGN_OR_RETURN(const std::uint32_t next, allocate_drawing_id(wb.sheet(sheet), doc));
-    const std::uint32_t old_id = id;
-    const DrawingObjectKind kind = read_drawing_object(object, {}).kind;
-    for_each_element(fragment, [&wb, kind, old_id, next](const pugi::xml_node& node) {
-      if (local_name(node) == "cNvPr" && node.attribute("id").as_uint() == old_id) {
-        node.attribute("id").set_value(next);
-        drop_creation_id(node);
-        if (is_default_drawing_name(wb, kind, node.attribute("name").value())) {
-          io::set_attr(node, "name", default_drawing_name(wb, kind, next));
+    std::vector<std::pair<std::uint32_t, std::uint32_t>> moved;
+    for (pugi::xml_node cnvpr : captured_ids) {
+      ASSIGN_OR_RETURN(const std::uint32_t next, allocate_drawing_id(wb.sheet(sheet), doc));
+      const DrawingObjectKind kind = content_kind(cnvpr.parent().parent());
+      moved.emplace_back(cnvpr.attribute("id").as_uint(), next);
+      cnvpr.attribute("id").set_value(next);
+      drop_creation_id(cnvpr);
+      if (is_default_drawing_name(wb, kind, cnvpr.attribute("name").value())) {
+        io::set_attr(cnvpr, "name", default_drawing_name(wb, kind, next));
+      }
+    }
+    // A connector inside the capture stays joined to the shapes it joined.
+    for_each_element(fragment, [&moved](const pugi::xml_node& node) {
+      const std::string_view name = local_name(node);
+      if (name != "stCxn" && name != "endCxn") {
+        return;
+      }
+      for (const auto& [from, to] : moved) {
+        if (node.attribute("id").as_uint() == from) {
+          node.attribute("id").set_value(to);
+          break;
         }
       }
     });
-    id = next;
+    id = moved.front().second;
   } else {
     if (const pugi::xml_node same = find_drawing_object(root, id, is_snapshot_kind)) {
       replaced = top_of(root, same);
     }
     bool clash = false;
     for_each_element(root, [&](const pugi::xml_node& node) {
-      const std::string_view holder = local_name(node.parent());
-      clash = clash || (local_name(node) == "cNvPr" && node.attribute("id").as_uint() == id && holder != "nvPicPr" &&
-                        holder != "nvGraphicFramePr" && holder != "nvSpPr" && !(replaced && is_within(node, replaced)));
+      if (clash || local_name(node) != "cNvPr" || (replaced && is_within(node, replaced))) {
+        return;
+      }
+      const std::uint32_t held = node.attribute("id").as_uint();
+      clash = std::any_of(captured_ids.begin(), captured_ids.end(),
+                          [held](const pugi::xml_node& c) { return c.attribute("id").as_uint() == held; });
     });
     if (clash) {
-      return invalid("The snapshot id belongs to an object that is not a picture, chart or shape");
+      return invalid("An id of the snapshot belongs to another object");
     }
   }
 
