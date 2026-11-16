@@ -1,0 +1,133 @@
+{
+  "suite": "row_column_values",
+  "description": "ROW and COLUMN over a value array (an IF result, not a reference) answer element by element: an #N/A element keeps #N/A and any other element is #VALUE!, so ERROR.TYPE over the result tells them apart. Read through scalar wrappers so no case needs a spill.\n",
+  "environment": {
+    "excel_version": "16.115",
+    "excel_locale": "th-TH",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-11-16T20:35:47Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "column_over_if_values_error_types",
+      "formula": "=SUM(ERROR.TYPE(COLUMN(IF(A1:C1<>\"z\",A1:C1))))",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 42.0
+        },
+        "C1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 17.0
+      }
+    },
+    {
+      "id": "column_over_if_values_picks_first_non_na",
+      "formula": "=IFNA(INDEX(A1:C1,MATCH(3,ERROR.TYPE(COLUMN(IF(A1:C1<>\"~N/A\",A1:C1))),0)),\"\")",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 42.0
+        },
+        "C1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 42.0
+      }
+    },
+    {
+      "id": "row_over_if_constants_error_types",
+      "formula": "=SUM(ERROR.TYPE(ROW(IF({1;0;1}=1,{5;6;7},NA()))))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 13.0
+      }
+    },
+    {
+      "id": "column_over_values_div0_element",
+      "formula": "=ERROR.TYPE(INDEX(COLUMN(IF({1,1}=1,{1,2}/{0,1})),1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "column_over_values_num_element",
+      "formula": "=ERROR.TYPE(INDEX(COLUMN(IF({1,1}=1,SQRT({-1,1}))),1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "column_over_values_value_element",
+      "formula": "=ERROR.TYPE(INDEX(COLUMN(IF({1,1}=1,{\"a\",1}+0)),1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "column_over_values_ref_element",
+      "formula": "=ERROR.TYPE(INDEX(COLUMN(IF({1,1}=1,{#REF!,1})),1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "column_over_values_name_element",
+      "formula": "=ERROR.TYPE(INDEX(COLUMN(IF({1,1}=1,{#NAME?,1})),1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "column_over_values_null_element",
+      "formula": "=ERROR.TYPE(INDEX(COLUMN(IF({1,1}=1,{#NULL!,1})),1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "row_over_values_div0_element",
+      "formula": "=ERROR.TYPE(INDEX(ROW(IF({1;1}=1,{1;2}/{0;1})),1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    }
+  ]
+}

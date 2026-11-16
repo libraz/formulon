@@ -1,0 +1,45 @@
+suite: row_column_values
+description: >
+  ROW and COLUMN over a value array (an IF result, not a reference) answer
+  element by element: an #N/A element keeps #N/A and any other element is
+  #VALUE!, so ERROR.TYPE over the result tells them apart. Read through scalar
+  wrappers so no case needs a spill.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: column_over_if_values_error_types
+    description: '7 + 3 + 7'
+    setup: { A1: '=NA()', B1: 42, C1: '=NA()' }
+    formula: '=SUM(ERROR.TYPE(COLUMN(IF(A1:C1<>"z",A1:C1))))'
+
+  - id: column_over_if_values_picks_first_non_na
+    description: 'the value of B1'
+    setup: { A1: '=NA()', B1: 42, C1: '=NA()' }
+    formula: '=IFNA(INDEX(A1:C1,MATCH(3,ERROR.TYPE(COLUMN(IF(A1:C1<>"~N/A",A1:C1))),0)),"")'
+
+  - id: row_over_if_constants_error_types
+    description: '3 + 7 + 3'
+    formula: '=SUM(ERROR.TYPE(ROW(IF({1;0;1}=1,{5;6;7},NA()))))'
+
+  # Each error kind as an element of the value array, read back with ERROR.TYPE: whether the element keeps its own
+  # error (1 #NULL!, 2 #DIV/0!, 3 #VALUE!, 4 #REF!, 5 #NAME?, 6 #NUM!) or becomes #VALUE! (3).
+  - id: column_over_values_div0_element
+    formula: '=ERROR.TYPE(INDEX(COLUMN(IF({1,1}=1,{1,2}/{0,1})),1))'
+
+  - id: column_over_values_num_element
+    formula: '=ERROR.TYPE(INDEX(COLUMN(IF({1,1}=1,SQRT({-1,1}))),1))'
+
+  - id: column_over_values_value_element
+    formula: '=ERROR.TYPE(INDEX(COLUMN(IF({1,1}=1,{"a",1}+0)),1))'
+
+  - id: column_over_values_ref_element
+    formula: '=ERROR.TYPE(INDEX(COLUMN(IF({1,1}=1,{#REF!,1})),1))'
+
+  - id: column_over_values_name_element
+    formula: '=ERROR.TYPE(INDEX(COLUMN(IF({1,1}=1,{#NAME?,1})),1))'
+
+  - id: column_over_values_null_element
+    formula: '=ERROR.TYPE(INDEX(COLUMN(IF({1,1}=1,{#NULL!,1})),1))'
+
+  - id: row_over_values_div0_element
+    formula: '=ERROR.TYPE(INDEX(ROW(IF({1;1}=1,{1;2}/{0;1})),1))'
