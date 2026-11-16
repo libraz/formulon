@@ -106,6 +106,11 @@ std::string pivot_cache_rel_key(std::size_t k);
 /// changed since load. Untracked passthrough parts always pass.
 Expected<void, Error> CheckRetainedPartFreshness(const Workbook& workbook, const PassthroughPart& part);
 
+/// True for a chartsheet, dialogsheet or macrosheet read from an .xlsb: its
+/// binary part and relationships are written back as they were read, in
+/// place of a worksheet part.
+bool is_retained_binary_sheet(const Sheet& sheet);
+
 /// Package paths of the 1-based `position`-th worksheet part, its rels, and
 /// the rels of the `position`-th external link part.
 std::string sheet_part_path(std::size_t position);

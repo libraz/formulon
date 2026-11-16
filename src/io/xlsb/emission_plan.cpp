@@ -121,6 +121,10 @@ bool IsExternalLinkPart(const std::string& path) {
 }  // namespace
 
 /// Package paths of the 1-based `position`-th worksheet part and its rels.
+bool is_retained_binary_sheet(const Sheet& sheet) {
+  return sheet.is_opaque_ooxml_sheet() && strings::ends_with(sheet.opaque_ooxml_part_path(), ".bin");
+}
+
 std::string sheet_part_path(std::size_t position) {
   return "xl/worksheets/sheet" + std::to_string(position) + ".bin";
 }
@@ -392,6 +396,9 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
       }
     }
     for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+      if (is_retained_binary_sheet(wb.sheet(i))) {
+        continue;
+      }
       bool has_emitted_sheet_rels = (i < plan.sheet_tables.size() && !plan.sheet_tables[i].empty()) ||
                                     (i < plan.sheet_pivots.size() && !plan.sheet_pivots[i].empty()) ||
                                     !plan.sheet_drawing_rids[i].empty() ||
@@ -416,7 +423,9 @@ std::string BuildContentTypes(const Workbook& wb, const EmissionPlan& plan) {
     }
   }
   for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
-    AppendOverride(out, sheet_part_path(i + 1U), kCtWorksheetXlsb);
+    if (!is_retained_binary_sheet(wb.sheet(i))) {
+      AppendOverride(out, sheet_part_path(i + 1U), kCtWorksheetXlsb);
+    }
   }
   if (plan.has_text_cells) {
     AppendOverride(out, kSharedStringsBinPath, kCtSharedStringsXlsb);
@@ -565,6 +574,12 @@ std::string BuildWorkbookRels(std::size_t sheet_count, bool emit_sst, const Emis
   BeginRelationships(out);
   std::uint32_t next_rid = 1;
   for (std::size_t i = 0; i < sheet_count; ++i) {
+    const Sheet& sheet = wb.sheet(i);
+    if (is_retained_binary_sheet(sheet)) {
+      AppendRelationship(out, next_rid++, sheet.opaque_ooxml_relationship_type(),
+                         TargetRelativeToWorkbook(sheet.opaque_ooxml_part_path()));
+      continue;
+    }
     const std::string target = "worksheets/sheet" + std::to_string(i + 1U) + ".bin";
     AppendRelationship(out, next_rid++, kRelWorksheet, target);
   }

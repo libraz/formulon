@@ -536,6 +536,9 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   // 5. xl/worksheets/sheet<N>.bin, plus its rels when the sheet's retained
   // records reference other parts (hyperlinks, drawings, table definitions).
   for (std::size_t i = 0; i < sheet_count; ++i) {
+    if (is_retained_binary_sheet(workbook.sheet(i))) {
+      continue;
+    }
     RETURN_IF_ERROR(AddPartBytes(writer.get(), sheet_part_path(i + 1U), sheet_bodies[i]));
     for (const XlsbTablePart& table : plan.sheet_tables[i]) {
       RETURN_IF_ERROR(AddPartBytes(writer.get(), table.path, table.bytes));

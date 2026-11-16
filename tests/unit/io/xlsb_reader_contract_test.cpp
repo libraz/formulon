@@ -1053,5 +1053,40 @@ TEST(XlsbChartsheet, ExcelBookWithAChartsheetLoads) {
   }
 }
 
+// An .xlsb save writes a chartsheet read from an .xlsb back as its own binary part and relationship, not as a
+// worksheet.
+TEST(XlsbChartsheet, ExcelChartsheetSurvivesAnXlsbSave) {
+  const std::vector<std::uint8_t> bytes = test::read_file_bytes(FixturePath("chartsheet_empty.xlsb"));
+  ASSERT_FALSE(bytes.empty());
+  auto loaded = io::xlsb::read_xlsb(test::span_of(bytes));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  auto saved = io::xlsb::write_xlsb(loaded.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+
+  std::string excel_part;
+  std::string saved_part;
+  ASSERT_TRUE(test::extract_part(test::span_of(bytes), "xl/chartsheets/sheet1.bin", &excel_part));
+  ASSERT_TRUE(test::extract_part(test::span_of(saved.value()), "xl/chartsheets/sheet1.bin", &saved_part));
+  EXPECT_EQ(saved_part, excel_part);
+  std::string rels;
+  ASSERT_TRUE(test::extract_part(test::span_of(saved.value()), "xl/_rels/workbook.bin.rels", &rels));
+  EXPECT_NE(rels.find("relationships/chartsheet\" Target=\"chartsheets/sheet1.bin\""), std::string::npos) << rels;
+  std::string content_types;
+  ASSERT_TRUE(test::extract_part(test::span_of(saved.value()), "[Content_Types].xml", &content_types));
+  EXPECT_NE(
+      content_types.find("PartName=\"/xl/chartsheets/sheet1.bin\" ContentType=\"application/vnd.ms-excel.chartsheet\""),
+      std::string::npos)
+      << content_types;
+  EXPECT_EQ(content_types.find("/xl/worksheets/sheet1.bin"), std::string::npos) << content_types;
+
+  auto reloaded = io::xlsb::read_xlsb(test::span_of(saved.value()));
+  ASSERT_TRUE(static_cast<bool>(reloaded)) << reloaded.error().message;
+  const Workbook& again = reloaded.value().workbook;
+  ASSERT_EQ(again.sheet_count(), 2U);
+  EXPECT_TRUE(again.sheet(0).is_opaque_ooxml_sheet());
+  EXPECT_EQ(again.sheet(0).opaque_ooxml_part_path(), "xl/chartsheets/sheet1.bin");
+  EXPECT_EQ(again.sheet(1).name(), "Sheet1");
+}
+
 }  // namespace
 }  // namespace formulon
