@@ -8165,7 +8165,7 @@ def _data_source_spec(value: object, key: str, scope: _ArgScope) -> Dict[str, ob
         return {"kind": ChartSourceKind.REF, "formula": scope.cstr(value)}
     if not isinstance(value, ChartDataSource):
         raise TypeError(f"{key} must be a str, a ChartDataSource or None, got {type(value).__name__}")
-    kind = _enum(ChartSourceKind, value.kind)
+    kind = _enum(ChartSourceKind, _sint(value.kind, "kind"))
     if kind == ChartSourceKind.REF:
         return {"kind": int(kind), "formula": scope.cstr(value.formula)}
     if kind == ChartSourceKind.NONE:
@@ -8259,7 +8259,7 @@ def _chart_source_fields(
         raise TypeError(f"expected a ChartSourceInput, got {type(source).__name__}")
     return (
         _chart_range_text(workbook, source.range, sheet, "ChartSourceInput.range"),
-        _sint(_enum(ChartSeriesDirection, source.direction), "direction"),
+        _sint(source.direction, "direction"),
         _sint(_header_mode(source.header_row), "header_row"),
         _sint(_header_mode(source.header_column), "header_column"),
     )
@@ -8273,9 +8273,9 @@ def _encode_chart_insert(scope: _ArgScope, workbook: Workbook, sheet: int, inser
     """
     if not isinstance(insert, ChartInput):
         raise TypeError(f"expected a ChartInput, got {type(insert).__name__}")
-    plot_type = _enum(ChartPlotType, insert.type)
+    plot_type = _enum(ChartPlotType, _sint(insert.type, "type"))
     if insert.bar_direction is not None and plot_type != ChartPlotType.BAR:
-        raise TypeError(f"bar_direction applies to a BAR chart only, not {plot_type.name}")
+        raise TypeError(f"bar_direction applies to a BAR chart only, not {getattr(plot_type, 'name', plot_type)}")
     title = insert.title
     auto_title = isinstance(title, ChartTitle) and title.kind == ChartTitleKind.AUTO
     if title is None:
@@ -8680,7 +8680,7 @@ def _pack_filter_column(ptr: int, col: AutoFilterColumn, scope: _ArgScope) -> No
                 LIB,
                 base + i * S.FILTER_CONDITION.size,
                 {
-                    "op": _sint(_enum(ComparisonOperator, condition.operator), "operator"),
+                    "op": _sint(condition.operator, "operator"),
                     "value": scope.cstr(condition.value),
                 },
             )
