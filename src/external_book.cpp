@@ -49,6 +49,13 @@ bool ExternalBook::cached_extent(std::uint32_t sheet, std::uint32_t* last_row, s
   return any;
 }
 
+Value ExternalBook::referenced_cell(std::uint32_t sheet, std::uint32_t row, std::uint32_t col) const noexcept {
+  if (sheet_refresh_failed(sheet) && cells.find(cell_key(sheet, row, col)) == cells.end()) {
+    return Value::error(ErrorCode::Ref);
+  }
+  return cached_cell(sheet, row, col);
+}
+
 Value ExternalBook::cached_cell(std::uint32_t sheet, std::uint32_t row, std::uint32_t col) const noexcept {
   const auto found = cells.find(cell_key(sheet, row, col));
   if (found == cells.end()) {

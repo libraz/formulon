@@ -91,6 +91,9 @@ struct ExternalBook {
   /// Parallel to `sheet_names`: whether the part carries a cached
   /// `<sheetData>` for that sheet. A missing entry reads as false.
   std::vector<bool> sheet_data;
+  /// Parallel to `sheet_names`: whether Excel marked the sheet's cache as a
+  /// failed refresh (`refreshError="1"`). A missing entry reads as false.
+  std::vector<bool> refresh_error;
 
   /// Cached cell values keyed by `cell_key`. Absent means Excel never
   /// cached that cell, which is not an error: see `cached_cell`.
@@ -135,6 +138,17 @@ struct ExternalBook {
   /// reference grid), not `#REF!`: it concatenates as "", `ISBLANK` is TRUE,
   /// and a formula result displays it as `0`.
   Value cached_cell(std::uint32_t sheet, std::uint32_t row, std::uint32_t col) const noexcept;
+
+  /// Whether `sheet`'s cache is marked as a failed refresh.
+  bool sheet_refresh_failed(std::uint32_t sheet) const noexcept {
+    return sheet < refresh_error.size() && refresh_error[sheet];
+  }
+
+  /// The value a reference to the single cell `(sheet, row, col)` reads: the
+  /// cached value, or for a cell never cached `#REF!` on a sheet whose refresh
+  /// failed and a blank otherwise. A cell read as part of a range is
+  /// `cached_cell` (blank when never cached), as Excel skips it there.
+  Value referenced_cell(std::uint32_t sheet, std::uint32_t row, std::uint32_t col) const noexcept;
 
   static constexpr std::uint32_t kNoSheet = static_cast<std::uint32_t>(-1);
 

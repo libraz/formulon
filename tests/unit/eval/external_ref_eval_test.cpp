@@ -564,5 +564,22 @@ TEST_F(ExternalRefEval, ATableOfTheLinkedBookIsNoReference) {
   EXPECT_FALSE(v.as_boolean());
 }
 
+// A sheet whose cache Excel marked as a failed refresh: a reference to one cell it never cached is #REF!, a cached
+// cell keeps its value, and inside a range the uncached cells are blank (Mac Excel 16.115). Without the mark an
+// uncached cell is blank everywhere.
+TEST_F(ExternalRefEval, ARefreshFailedSheetGivesRefForASingleUncachedCell) {
+  std::vector<ExternalLinkRecord> links = wb_.external_links();
+  links[0].book.refresh_error = {true};
+  wb_.set_external_links(std::move(links));
+  ExpectError("=[Src.xlsx]Data!A2", ErrorCode::Ref);
+  ExpectError("=[Src.xlsx]Data!A2+0", ErrorCode::Ref);
+  ExpectNumber("=[Src.xlsx]Data!A1", 10.0);
+  ExpectNumber("=SUM([Src.xlsx]Data!A1:A3)", 40.0);
+  ExpectNumber("=ROWS([Src.xlsx]Data!A1:A3)", 3.0);
+  // Data's other cached cell is B2; Mid and Last are not marked.
+  ExpectNumber("=[Src.xlsx]Data!B2", 5.0);
+  ExpectNumber("=[Src.xlsx]Mid!A2", 0.0);
+}
+
 }  // namespace
 }  // namespace formulon

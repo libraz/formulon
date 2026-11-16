@@ -199,7 +199,7 @@ Value ResolveDense(const parser::AstNode& node, Arena& arena, const EvalContext&
   }
   const parser::Reference& first = node.as_external_ref_cell();
   if (!node.as_external_ref_is_range() && !first.is_full_col && !first.is_full_row) {
-    return adopt_text_into(arena, book.cached_cell(sheet, first.row, first.col));
+    return adopt_text_into(arena, book.referenced_cell(sheet, first.row, first.col));
   }
   std::uint32_t row_first = 0;
   std::uint32_t row_last = 0;
@@ -283,7 +283,7 @@ Value resolve_external_book_name(const ExternalBook& book, std::uint32_t scope_s
     return Value::error(ErrorCode::Ref);
   }
   if (!entry->is_range) {
-    return adopt_text_into(arena, book.cached_cell(entry->sheet, entry->row, entry->col));
+    return adopt_text_into(arena, book.referenced_cell(entry->sheet, entry->row, entry->col));
   }
   return MaterializeRect(book, entry->sheet, entry->row, entry->row_end, entry->col, entry->col_end, arena);
 }
