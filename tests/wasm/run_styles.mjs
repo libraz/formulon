@@ -69,8 +69,9 @@ export function registerStyles(Module, test) {
       assert.equal(wb.getCellXfIndex(0, 98, 25), null);
       wb.setNumber(0, 2, 3, 5);
       assert.equal(wb.getCellXfIndex(0, 2, 3), 0);
+      // An explicit xf 0 under no axis format is the default, which reads as null.
       wb.setCellXfIndex(0, 98, 25, 0);
-      assert.equal(wb.getCellXfIndex(0, 98, 25), 0);
+      assert.equal(wb.getCellXfIndex(0, 98, 25), null);
     } finally {
       wb.delete();
     }
@@ -292,6 +293,14 @@ export function registerStyles(Module, test) {
       assert.equal(wb.getDxf(bareDxf).font.italic, null);
       assert.equal(dxfAgain, dxf);
 
+      // A save writes only the dxfs something references.
+      wb.addCfRule(0, {
+        ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
+        type: 1,
+        operator: 6,
+        formula1: '10',
+        dxfIndex: dxf,
+      });
       const saved = wb.save();
       const loaded = Module.Workbook.load(saved);
       try {
@@ -343,6 +352,19 @@ export function registerStyles(Module, test) {
       const protectionAgain = wb.addDxf(gotProtection);
       assert.equal(protectionAgain, protection);
 
+      // A save writes only the dxfs something references, in the order of its CF blocks.
+      for (const [row, dxfIndex] of [
+        [0, alignment],
+        [1, protection],
+      ]) {
+        wb.addCfRule(0, {
+          ranges: [{ firstRow: row, firstCol: 0, lastRow: row, lastCol: 0 }],
+          type: 1,
+          operator: 6,
+          formula1: '10',
+          dxfIndex,
+        });
+      }
       const saved = wb.save();
       const loaded = Module.Workbook.load(saved);
       try {
