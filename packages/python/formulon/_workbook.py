@@ -5879,9 +5879,9 @@ def _pack_font(ptr: int, record: Font, scope: _ArgScope) -> None:
         "underline": _uint(record.underline, "underline", 8),
         "vert_align": _uint(record.vert_align, "vert_align", 8),
         "has_family": 0 if record.family is None else 1,
-        "family": _uint(record.family or 0, "family", 8),
+        "family": _uint(0 if record.family is None else record.family, "family", 8),
         "has_charset": 0 if record.charset is None else 1,
-        "charset": _uint(record.charset or 0, "charset", 8),
+        "charset": _uint(0 if record.charset is None else record.charset, "charset", 8),
         "scheme": _uint(record.scheme, "scheme", 8),
     }
     for name in _FONT_TOGGLES:
@@ -7034,9 +7034,9 @@ def _cell_xf_fields(record: Union[CellXfInput, CellXf]) -> Dict[str, object]:
         "fill_index": _uint(record.fill_index, "fill_index", role="position"),
         "border_index": _uint(record.border_index, "border_index", role="position"),
         "num_fmt_id": _uint(record.num_fmt_id, "num_fmt_id", 16),
-        "horizontal": _uint(record.horizontal or 0, "horizontal", 8),
+        "horizontal": _uint(0 if record.horizontal is None else record.horizontal, "horizontal", 8),
         "has_horizontal": 0 if record.horizontal is None else 1,
-        "vertical": _uint(record.vertical or 0, "vertical", 8),
+        "vertical": _uint(0 if record.vertical is None else record.vertical, "vertical", 8),
         "has_vertical": 0 if record.vertical is None else 1,
         "wrap_text": _require_bool(record.wrap_text, "wrap_text") if record.wrap_text is not None else 0,
         "has_wrap_text": 0 if record.wrap_text is None else 1,
@@ -7062,17 +7062,17 @@ def _cell_xf_fields(record: Union[CellXfInput, CellXf]) -> Dict[str, object]:
         else 0,
         "style_xf_index": _uint(record.style_xf_index, "style_xf_index", role="position"),
         "has_text_rotation": 1 if record.text_rotation is not None else 0,
-        "text_rotation": _uint(record.text_rotation or 0, "text_rotation"),
+        "text_rotation": _uint(0 if record.text_rotation is None else record.text_rotation, "text_rotation"),
         "has_indent": 1 if record.indent is not None else 0,
-        "indent": _uint(record.indent or 0, "indent"),
+        "indent": _uint(0 if record.indent is None else record.indent, "indent"),
         "has_relative_indent": 1 if record.relative_indent is not None else 0,
-        "relative_indent": _sint(record.relative_indent or 0, "relative_indent"),
+        "relative_indent": _sint(0 if record.relative_indent is None else record.relative_indent, "relative_indent"),
         "has_shrink_to_fit": 1 if record.shrink_to_fit is not None else 0,
         "shrink_to_fit": (
             _require_bool(record.shrink_to_fit, "shrink_to_fit") if record.shrink_to_fit is not None else 0
         ),
         "has_reading_order": 1 if record.reading_order is not None else 0,
-        "reading_order": _sint(record.reading_order or 0, "reading_order"),
+        "reading_order": _sint(0 if record.reading_order is None else record.reading_order, "reading_order"),
         "apply_number_format": _require_bool(record.apply_number_format, "apply_number_format"),
         "apply_font": _require_bool(record.apply_font, "apply_font"),
         "apply_fill": _require_bool(record.apply_fill, "apply_fill"),
@@ -8720,10 +8720,10 @@ def _pack_sort_condition(ptr: int, cond: AutoFilterSortCondition, scope: _ArgSco
         {
             "descending": _require_bool(cond.descending, "descending"),
             "sort_by": _sint(cond.sort_by, "sort_by"),
-            "dxf_index": _uint(cond.dxf_index or 0, "dxf_index", role="position"),
+            "dxf_index": _uint(0 if cond.dxf_index is None else cond.dxf_index, "dxf_index", role="position"),
             "has_dxf_index": 0 if cond.dxf_index is None else 1,
             "icon_set": _sint(cond.icon_set, "icon_set"),
-            "icon_index": _sint(cond.icon_index or 0, "icon_index"),
+            "icon_index": _sint(0 if cond.icon_index is None else cond.icon_index, "icon_index"),
             "has_icon_index": 0 if cond.icon_index is None else 1,
         },
     )
@@ -11541,8 +11541,8 @@ def _notation_fields(*, r1c1: bool, base_row: Optional[int], base_col: Optional[
     return {
         "r1c1": _tristate_default(_require_bool(r1c1, "r1c1")),
         "has_base": 0 if base_row is None else 1,
-        "base_row": _uint(base_row or 0, "base_row", role="coordinate"),
-        "base_col": _uint(base_col or 0, "base_col", role="coordinate"),
+        "base_row": _uint(0 if base_row is None else base_row, "base_row", role="coordinate"),
+        "base_col": _uint(0 if base_col is None else base_col, "base_col", role="coordinate"),
     }
 
 

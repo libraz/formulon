@@ -4237,7 +4237,7 @@ class Sheet(_NoCopy):
     ) -> Tuple[List[Tuple[int, int, Optional[str], Value]], Optional[int]]:
         sheet = self._index()
         h = self._workbook._require()
-        page = _uint(cursor or 0, "cursor", 64), _uint(limit or 0, "limit")
+        page = _uint(0 if cursor is None else cursor, "cursor", 64), _uint(0 if limit is None else limit, "limit")
         if rect is None:
             return [], None
         with _ArgScope() as scope:
@@ -4393,8 +4393,8 @@ class Sheet(_NoCopy):
             LIB.fm_sheet_get_invalid_cells,
             h,
             _uint(sheet, "sheet_index", role="sheet"),
-            _uint(cursor or 0, "cursor", 64),
-            _uint(limit or 0, "limit"),
+            _uint(0 if cursor is None else cursor, "cursor", 64),
+            _uint(0 if limit is None else limit, "limit"),
         )
         return CellsInRange([_range_cell(*cell) for cell in cells], next_cursor)
 
@@ -6679,15 +6679,15 @@ class Sheet(_NoCopy):
                 ptr,
                 {
                     "type": _uint(rule.type, "type", 8),
-                    "op": _uint(operator or 0, "operator", 8),
-                    "time_period": _uint(time_period or 0, "time_period", 8),
+                    "op": _uint(0 if operator is None else operator, "operator", 8),
+                    "time_period": _uint(0 if time_period is None else time_period, "time_period", 8),
                     "priority": _sint(rule.priority, "priority"),
                     "stop_if_true": int(_require_bool(rule.stop_if_true, "rule.stop_if_true")),
                     "has_dxf_index": 1 if dxf_index is not None else 0,
-                    "dxf_index": _uint(dxf_index or 0, "dxf_index", role="position"),
+                    "dxf_index": _uint(0 if dxf_index is None else dxf_index, "dxf_index", role="position"),
                     "has_op": 1 if operator is not None else 0,
                     "has_rank": 1 if rank is not None else 0,
-                    "rank": _sint(rank or 0, "rank"),
+                    "rank": _sint(0 if rank is None else rank, "rank"),
                     "percent": int(_require_bool(getattr(rule, "percent", False), "rule.percent")),
                     "bottom": int(_require_bool(getattr(rule, "bottom", False), "rule.bottom")),
                     "above_average": int(_require_bool(getattr(rule, "above_average", False), "rule.above_average")),
