@@ -257,7 +257,6 @@ TEST(FormulonCApiReference, FormatsA1) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
 
   EXPECT_EQ(Format(wb.handle, nullptr, 0, 0, 0, 0), "A1");
-  EXPECT_EQ(Format(wb.handle, "", 0, 0, 0, 0), "A1");
   EXPECT_EQ(Format(wb.handle, nullptr, 0, 1, kLastRow, 3), "B:D");
   EXPECT_EQ(Format(wb.handle, nullptr, 1, 0, 10, kLastCol), "2:11");
   EXPECT_EQ(Format(wb.handle, "My Sheet", 0, 0, 0, 0), "'My Sheet'!A1");

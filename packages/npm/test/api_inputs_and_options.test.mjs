@@ -154,7 +154,6 @@ describe('formatReference takes one range and an options record', () => {
       assert.equal(wb.formatReference('B2:C3', { absolute: true }), '$B$2:$C$3');
       assert.equal(wb.formatReference(rect, { sheetName: 'Sheet1' }), 'Sheet1!B2:C3');
       assert.equal(wb.formatReference('B2:C3', { sheetName: null }), 'B2:C3');
-      assert.equal(wb.formatReference('B2:C3', { sheetName: '' }), 'B2:C3');
 
       const parsed = wb.parseReference('Sheet1!B2:C3');
       assert.equal(wb.formatReference(parsed), 'Sheet1!B2:C3');

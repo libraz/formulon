@@ -2958,8 +2958,8 @@ class Sheet(_NoCopy):
     def _pack_hyperlink(self, scope: _ArgScope, link: Union[HyperlinkInput, Hyperlink], rect: CellRect) -> int:
         ptr = scope.struct(S.HYPERLINK)
         S.HYPERLINK.pack(LIB, ptr, {"rect": _cell_rect_fields(rect)})
-        S.write_str_field(LIB, ptr, S.HYPERLINK, "target", link.target, scope)
-        S.write_str_field(LIB, ptr, S.HYPERLINK, "location", link.location, scope)
+        S.write_str_field(LIB, ptr, S.HYPERLINK, "target", link.target, scope, allow_empty=True)
+        S.write_str_field(LIB, ptr, S.HYPERLINK, "location", link.location, scope, allow_empty=True)
         S.write_str_field(LIB, ptr, S.HYPERLINK, "display", link.display, scope)
         S.write_str_field(LIB, ptr, S.HYPERLINK, "tooltip", link.tooltip, scope)
         return ptr
@@ -3170,7 +3170,7 @@ class Sheet(_NoCopy):
                 ptr = scope.struct(S.COMMENT)
                 S.COMMENT.pack(LIB, ptr, {})
                 S.write_str_field(LIB, ptr, S.COMMENT, "author", comment.author, scope)
-                S.write_str_field(LIB, ptr, S.COMMENT, "text", comment.text, scope)
+                S.write_str_field(LIB, ptr, S.COMMENT, "text", comment.text, scope, allow_empty=True)
             _check(
                 LIB.fm_sheet_set_comment(
                     h,
@@ -3447,7 +3447,7 @@ class Sheet(_NoCopy):
                 },
             )
             for fld in self._PROTECTED_RANGE_TEXT:
-                S.write_str_field(LIB, ptr, S.PROTECTED_RANGE, fld, getattr(protected, fld), scope)
+                S.write_str_field(LIB, ptr, S.PROTECTED_RANGE, fld, getattr(protected, fld), scope, allow_empty=True)
             name_out = scope.out_ptr()
             _check(fn(h, *leading, ptr, name_out))
             return LIB.read_cstr(LIB.read_u32(name_out))
@@ -3496,15 +3496,15 @@ class Sheet(_NoCopy):
         """Update ``protected_range``, an index or a protected range's name; an omitted argument keeps its value.
 
         The arguments are the :class:`ProtectedRange` fields (``ranges`` also
-        takes A1 text); an empty string or ``None`` clears a text field. Omitting ``ranges`` keeps the stored rectangles,
-        including any the reader could not parse.
+        takes A1 text); ``None`` clears a text field and an empty string is refused (api-conventions §5 rule 30).
+        Omitting ``ranges`` keeps the stored rectangles, including any the reader could not parse.
 
         Raises:
           TypeError: for ``None`` on ``name``, ``ranges`` or ``spin_count``.
           NotFoundError: when no protected range has the name ``protected_range``.
           IndexOutOfRangeError: when ``protected_range`` is an index past the last one.
-          InvalidArgumentError: when ``ranges`` is empty, ``name`` is empty or longer than 255 UTF-16 units, or more
-            than 8191 ranges are given.
+          InvalidArgumentError: when ``ranges`` is empty, ``name`` is empty or longer than 255 UTF-16 units, a text
+            field is an empty string, or more than 8191 ranges are given.
           SecurityError: when more than 16384 ranges are given.
         """
         given = {
@@ -3661,7 +3661,15 @@ class Sheet(_NoCopy):
                 "prompt_title",
                 "prompt_message",
             ):
-                S.write_str_field(LIB, ptr, S.DATA_VALIDATION, fld, getattr(validation, fld), scope)
+                S.write_str_field(
+                    LIB,
+                    ptr,
+                    S.DATA_VALIDATION,
+                    fld,
+                    getattr(validation, fld),
+                    scope,
+                    allow_empty=fld in ("formula1", "formula2"),
+                )
             out = scope.out_ptr()
             _check(LIB.fm_sheet_add_validation(h, _uint(sheet, "sheet", role="sheet"), ptr, out))
             return LIB.read_cstr(LIB.read_u32(out))
@@ -3859,7 +3867,9 @@ class Sheet(_NoCopy):
                     )
                 S.SHEET_PROTECTION.pack(LIB, ptr, values)
                 for fld in S.SHEET_PROTECTION_TEXT_FIELDS:
-                    S.write_str_field(LIB, ptr, S.SHEET_PROTECTION, fld, getattr(protection, fld), scope)
+                    S.write_str_field(
+                        LIB, ptr, S.SHEET_PROTECTION, fld, getattr(protection, fld), scope, allow_empty=True
+                    )
             _check(LIB.fm_sheet_set_sheet_protection(h, _uint(sheet, "sheet_index", role="sheet"), ptr))
 
     def update_sheet_protection(
@@ -3888,7 +3898,8 @@ class Sheet(_NoCopy):
     ) -> None:
         """Update the sheet's protection with the arguments given; an omitted argument keeps its value.
 
-        ``None`` clears a text field or ``spin_count``; an ``allow_*`` flag has
+        ``None`` clears a text field or ``spin_count`` and an empty text is refused with
+        ``InvalidArgumentError`` (api-conventions §5 rule 30); an ``allow_*`` flag has
         no cleared form. On an unprotected sheet the patch applies to the
         :class:`SheetProtectionInput` defaults and protects the sheet, unless
         every argument is omitted. The update is all-or-nothing.
@@ -4469,7 +4480,8 @@ class Sheet(_NoCopy):
             new thread's cell already holds a note or a thread.
           NotFoundError: when ``person_id`` names no person of the workbook or ``parent_id`` no comment
             of the sheet.
-          InvalidArgumentError: when ``parent_id`` is an empty string.
+          InvalidArgumentError: when ``id``, ``created`` or ``parent_id`` is an empty string, or a mention's
+            ``person_id`` or ``mention_id`` is (api-conventions §5 rule 30).
         """
         row, col = (0, 0) if comment.cell is None else self._cell_address(comment.cell, "cell")
         sheet = self._index()
@@ -4491,7 +4503,8 @@ class Sheet(_NoCopy):
                 ("created", _format_created(comment.created)),
                 ("text", comment.text),
             ):
-                S.write_str_field(LIB, ptr, S.THREADED_COMMENT, fld, text, scope)
+                # An empty id or created stamp reaches the engine, which refuses it.
+                S.write_str_field(LIB, ptr, S.THREADED_COMMENT, fld, text, scope, allow_empty=fld in ("id", "created"))
             # An empty parent id reaches the engine, which refuses it.
             S.write_str_field(LIB, ptr, S.THREADED_COMMENT, "parent_id", comment.parent_id, scope, allow_empty=True)
             _write_mentions(ptr, S.THREADED_COMMENT, comment.mentions, scope)

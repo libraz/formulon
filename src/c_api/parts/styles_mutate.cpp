@@ -910,7 +910,8 @@ fm_status_t build_dxf(formulon::Workbook& workbook, const fm_dxf_t* record, form
   if (candidate.has_border) {
     candidate.border = border_from_c(record->border);
   }
-  candidate.has_num_fmt = record->number_format != nullptr;
+  // An empty code is no code: Excel drops it from a differential format.
+  candidate.has_num_fmt = record->number_format != nullptr && record->number_format[0] != '\0';
   if (candidate.has_num_fmt) {
     candidate.num_fmt_code = record->number_format;
     std::uint32_t num_fmt_id = 0;

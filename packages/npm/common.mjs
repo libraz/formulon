@@ -8865,7 +8865,7 @@ function makeFacade(Raw, registry, runtime) {
           sheetName = options.sheetName === null ? null : requireString(options.sheetName, `${optionsLabel}.sheetName`);
         }
       }
-      const reference = sheetName === null || sheetName === '' ? { rect } : { sheetName, rect };
+      const reference = sheetName === null ? { rect } : { sheetName, rect };
       return absolute ? raw.formatReference(reference, { absolute }) : raw.formatReference(reference);
     }
 

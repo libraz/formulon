@@ -600,6 +600,9 @@ extern "C" fm_status_t fm_sheet_add_table(fm_workbook_t* wb, size_t sheet_index,
   if (spec->name == nullptr) {
     return null_argument("name");
   }
+  if (spec->name[0] == '\0') {
+    return invalid_argument("name must not be empty", "field=name");
+  }
   const fm_cell_rect_t& rect = spec->range;
   std::string ref;
   if (auto rc = table_ref_text(rect, &ref); rc != 0) {
@@ -612,6 +615,9 @@ extern "C" fm_status_t fm_sheet_add_table(fm_workbook_t* wb, size_t sheet_index,
   for (size_t i = 0; column_names != nullptr && i < spec->column_count; ++i) {
     if (column_names[i] == nullptr) {
       continue;
+    }
+    if (column_names[i][0] == '\0') {
+      return invalid_argument("column_names entry must not be empty", "column_names[" + std::to_string(i) + "]=");
     }
     if (auto rc = check_utf8(column_names[i], "column", i); rc != 0) {
       return rc;

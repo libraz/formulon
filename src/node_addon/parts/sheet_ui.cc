@@ -329,11 +329,15 @@ Napi::Value EditProtectedRange(fm_workbook_t* const& handle, const Napi::Callbac
   if (reader.RequiredArray(in, "ranges", &ranges_array)) {
     (void)ReadCellRects(reader, ranges_array, "ranges", &ranges);
   }
-  (void)reader.String(in, "legacyPasswordHash", &text[1]);
-  (void)reader.String(in, "algorithmName", &text[2]);
-  (void)reader.String(in, "hashValue", &text[3]);
-  (void)reader.String(in, "saltValue", &text[4]);
-  (void)reader.String(in, "securityDescriptor", &text[5]);
+  // An omitted or `null` string reaches C as `NULL`, which is absent; an empty one is refused there.
+  const auto optional = [&](const char* key, std::string* store) {
+    return reader.String(in, key, store) ? store->c_str() : nullptr;
+  };
+  const char* const legacy_password_hash = optional("legacyPasswordHash", &text[1]);
+  const char* const algorithm_name = optional("algorithmName", &text[2]);
+  const char* const hash_value = optional("hashValue", &text[3]);
+  const char* const salt_value = optional("saltValue", &text[4]);
+  const char* const security_descriptor = optional("securityDescriptor", &text[5]);
   fm_protected_range_t r = FM_STRUCT_INIT(fm_protected_range_t);
   r.spin_count = reader.U32(in, "spinCount", 0U);
   if (!reader.ok()) {
@@ -342,11 +346,11 @@ Napi::Value EditProtectedRange(fm_workbook_t* const& handle, const Napi::Callbac
   r.name = text[0].c_str();
   r.ranges = ranges.data();
   r.range_count = static_cast<uint32_t>(ranges.size());
-  r.legacy_password_hash = text[1].c_str();
-  r.algorithm_name = text[2].c_str();
-  r.hash_value = text[3].c_str();
-  r.salt_value = text[4].c_str();
-  r.security_descriptor = text[5].c_str();
+  r.legacy_password_hash = legacy_password_hash;
+  r.algorithm_name = algorithm_name;
+  r.hash_value = hash_value;
+  r.salt_value = salt_value;
+  r.security_descriptor = security_descriptor;
   return edit(handle, r);
 }
 
@@ -605,8 +609,8 @@ Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {
   std::string error_message;
   std::string prompt_title;
   std::string prompt_message;
-  reader.String(v, "formula1", &formula1);
-  reader.String(v, "formula2", &formula2);
+  const bool has_formula1 = reader.String(v, "formula1", &formula1);
+  const bool has_formula2 = reader.String(v, "formula2", &formula2);
   reader.String(v, "errorTitle", &error_title);
   reader.String(v, "errorMessage", &error_message);
   reader.String(v, "promptTitle", &prompt_title);
@@ -622,8 +626,8 @@ Napi::Value Workbook::AddValidation(const Napi::CallbackInfo& info) {
   dv.show_input_message = reader.Tristate(v, "showInputMessage");
   dv.show_error_message = reader.Tristate(v, "showErrorMessage");
   dv.show_in_cell_dropdown = reader.Tristate(v, "showInCellDropdown");
-  dv.formula1 = formula1.empty() ? nullptr : formula1.c_str();
-  dv.formula2 = formula2.empty() ? nullptr : formula2.c_str();
+  dv.formula1 = has_formula1 ? formula1.c_str() : nullptr;
+  dv.formula2 = has_formula2 ? formula2.c_str() : nullptr;
   dv.error_title = error_title.empty() ? nullptr : error_title.c_str();
   dv.error_message = error_message.empty() ? nullptr : error_message.c_str();
   dv.prompt_title = prompt_title.empty() ? nullptr : prompt_title.c_str();
@@ -693,7 +697,8 @@ Napi::Value Workbook::ClearValidations(const Napi::CallbackInfo& info) {
 
 namespace {
 
-// Reads the `MentionInput[]` at `arr`; `ids` backs the borrowed strings. An omitted `mentionId` is generated.
+// Reads the `MentionInput[]` at `arr`; `ids` backs the borrowed strings. An omitted `mentionId` reaches C as `NULL`,
+// which generates one.
 bool ReadMentions(CheckedSpecReader& reader, const Napi::Value& arr, std::vector<std::string>& ids,
                   std::vector<fm_mention_t>& out) {
   Napi::Array list;
@@ -714,12 +719,12 @@ bool ReadMentions(CheckedSpecReader& reader, const Napi::Value& arr, std::vector
     std::string person_id;
     std::string mention_id;
     reader.String(m, "personId", &person_id);
-    reader.String(m, "mentionId", &mention_id);
+    const bool has_mention_id = reader.String(m, "mentionId", &mention_id);
     ids.push_back(std::move(person_id));
     ids.push_back(std::move(mention_id));
     fm_mention_t c{};
     c.person_id = ids[ids.size() - 2].c_str();
-    c.mention_id = ids.back().c_str();
+    c.mention_id = has_mention_id ? ids.back().c_str() : nullptr;
     c.start = reader.U32(m, "start", 0U);
     c.end = reader.U32(m, "end", 0U);
     if (!reader.ok()) {
@@ -789,11 +794,11 @@ Napi::Value Workbook::AddThreadedComment(const Napi::CallbackInfo& info) {
   const Napi::Object spec = ArgObject(info, 1);
   std::string id;
   std::string person_id;
-  reader.String(spec, "id", &id);
+  const bool has_id = reader.String(spec, "id", &id);
   std::string created;
   std::string parent_id;
   reader.String(spec, "personId", &person_id);
-  reader.String(spec, "created", &created);
+  const bool has_created = reader.String(spec, "created", &created);
   const std::string text = reader.RequiredString(spec, "text");
   // An omitted or null parentId is NULL, which opens a thread.
   const bool has_parent = reader.String(spec, "parentId", &parent_id);
@@ -804,11 +809,11 @@ Napi::Value Workbook::AddThreadedComment(const Napi::CallbackInfo& info) {
     ReadMentions(reader, mention_array, mention_ids, mentions);
   }
   fm_threaded_comment_t c = FM_STRUCT_INIT(fm_threaded_comment_t);
-  c.id = id.c_str();
+  c.id = has_id ? id.c_str() : nullptr;
   c.row = reader.U32(spec, "row", 0U);
   c.col = reader.U32(spec, "col", 0U);
   c.person_id = person_id.c_str();
-  c.created = created.c_str();
+  c.created = has_created ? created.c_str() : nullptr;
   c.text = text.c_str();
   c.parent_id = has_parent ? parent_id.c_str() : nullptr;
   c.done = reader.Bool(spec, "done", false) ? 1 : 0;
@@ -908,16 +913,16 @@ Napi::Value Workbook::AddPerson(const Napi::CallbackInfo& info) {
   std::string display_name;
   std::string user_id;
   std::string provider_id;
-  // An omitted `id` is generated; an omitted or `null` `userId` / `providerId` is absent.
-  (void)reader.String(spec, "id", &id);
+  // An omitted `id` reaches C as `NULL`, which generates one; an omitted or `null` `userId` / `providerId` is absent.
+  const bool has_id = reader.String(spec, "id", &id);
   display_name = reader.RequiredString(spec, "displayName");
-  reader.String(spec, "userId", &user_id);
-  reader.String(spec, "providerId", &provider_id);
+  const bool has_user_id = reader.String(spec, "userId", &user_id);
+  const bool has_provider_id = reader.String(spec, "providerId", &provider_id);
   fm_person_t p = FM_STRUCT_INIT(fm_person_t);
-  p.id = id.c_str();
+  p.id = has_id ? id.c_str() : nullptr;
   p.display_name = display_name.c_str();
-  p.user_id = user_id.c_str();
-  p.provider_id = provider_id.c_str();
+  p.user_id = has_user_id ? user_id.c_str() : nullptr;
+  p.provider_id = has_provider_id ? provider_id.c_str() : nullptr;
   if (!reader.ok()) {
     return env.Undefined();
   }

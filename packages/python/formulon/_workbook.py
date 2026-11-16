@@ -1003,11 +1003,12 @@ class TableInput:
     #: sheet.
     range: Union[CellRect, str]
     #: The new table's name; it must not be one another table already uses, nor be or start with a reference in the
-    #: profile locale's R1C1 letters (de ``Z1S1``).
+    #: profile locale's R1C1 letters (de ``Z1S1``), and an empty string is rejected.
     name: str
     #: One name per column of the range; each non-empty header cell must already hold its name and an empty one receives
-    #: it. When omitted the names come from the header cells, an empty one named as Excel does (``Column1``, ...). Blank
-    #: and repeated names are numbered as :meth:`Sheet.add_table` describes.
+    #: it. An empty string as a name is rejected (api-conventions §5 rule 30). When omitted the names come from the
+    #: header cells, an empty one named as Excel does (``Column1``, ...). Blank and repeated names are numbered as
+    #: :meth:`Sheet.add_table` describes.
     columns: Optional[Sequence[str]] = None
     #: The built-in or custom table style to apply; omitted or ``None`` is the workbook's table-style default
     #: (:meth:`Workbook.get_table_style_defaults`), else ``TableStyleMedium2``; an empty string is invalid. A
@@ -2235,7 +2236,8 @@ class Hyperlink:
 class HyperlinkInput:
     """A hyperlink :meth:`Sheet.set_hyperlink` and :meth:`Sheet.insert_hyperlink_at` take.
 
-    A :class:`Hyperlink` read back is accepted in its place.
+    A :class:`Hyperlink` read back is accepted in its place. An empty ``target`` or ``location`` is refused with
+    ``StatusCode.INVALID_ARGUMENT`` (api-conventions §5 rule 30); an empty ``display`` or ``tooltip`` is none.
     """
 
     #: The cells the link covers, a ``CellRect`` or an A1 range (``"B2"`` for one cell). Required: it is the key
@@ -2261,7 +2263,8 @@ class CommentInput:
 
     #: The comment's text.
     text: str
-    #: The comment's author; omitted or ``None`` means none.
+    #: The comment's author; omitted, ``None`` or an empty string means none. An empty ``text`` writes a note with no
+    #: text (api-conventions §5 rule 30); ``Sheet.set_comment(..., None)`` removes the note.
     author: Optional[str] = None
 
 
@@ -2461,7 +2464,7 @@ class AutoFilterSortCondition:
     descending: bool = False
     #: What the condition sorts by: the value, the cell colour, the font colour or the icon.
     sort_by: SortBy = SortBy.VALUE
-    #: The custom sort list, as comma-separated items; ``None`` when the condition uses none.
+    #: The custom sort list, as comma-separated items; ``None`` or an empty string when the condition uses none.
     custom_list: Optional[str] = None
     #: The index of the differential format whose colour the condition sorts by; ``None`` when it names none.
     dxf_index: Optional[int] = None
@@ -2583,7 +2586,7 @@ class MentionInput:
     #: The end of the mentioned span in the comment text, as a code point offset (exclusive); it must not be less than
     #: ``start``.
     end: int
-    #: The mention's own id, a brace-wrapped GUID; omitted, one is generated.
+    #: The mention's own id, a brace-wrapped GUID; omitted, one is generated, and an empty string is rejected.
     mention_id: Optional[str] = None
 
 
@@ -2620,7 +2623,7 @@ class ThreadedCommentInput:
     person_id: str
     #: The comment's text.
     text: str
-    #: The comment's id, a brace-wrapped GUID; omitted, one is generated.
+    #: The comment's id, a brace-wrapped GUID; omitted, one is generated, and an empty string is rejected.
     id: Optional[str] = None
     #: The cell a new thread is anchored to, a ``CellAddress`` or an A1 cell; omitted is A1. Ignored on a reply.
     cell: Union[CellAddress, str, None] = None
@@ -2660,11 +2663,11 @@ class PersonInput:
 
     #: The person's display name.
     display_name: str
-    #: The id; omitted generates a brace-wrapped GUID.
+    #: The id; omitted generates a brace-wrapped GUID, and an empty string is rejected.
     id: Optional[str] = None
-    #: The user id; omitted or ``None`` means none.
+    #: The user id; omitted, ``None`` or an empty string means none.
     user_id: Optional[str] = None
-    #: The identity provider id; omitted or ``None`` means none.
+    #: The identity provider id; omitted or ``None`` means none, and an empty string is rejected.
     provider_id: Optional[str] = None
 
 
@@ -8399,7 +8402,8 @@ def _write_value_input(value: Value, value_ptr: int, scope: _ArgScope) -> None:
 def _pack_mentions(mentions: Sequence[Union[MentionInput, Mention]], scope: _ArgScope) -> int:
     """Pack ``mentions`` into a contiguous mention struct array (0 when empty), spans in code points.
 
-    A ``None`` or empty ``mention_id`` is left ``NULL`` and takes an engine-generated id.
+    A ``None`` ``mention_id`` is left ``NULL`` and takes an engine-generated id; an empty ``person_id`` or
+    ``mention_id`` reaches the engine, which refuses it.
     """
     if not mentions:
         return 0
@@ -8409,8 +8413,8 @@ def _pack_mentions(mentions: Sequence[Union[MentionInput, Mention]], scope: _Arg
             raise TypeError(f"expected a MentionInput, got {type(m).__name__}")
         ptr = base + i * S.MENTION.size
         S.MENTION.pack(LIB, ptr, {"start_cp": _uint(m.start, "start"), "end_cp": _uint(m.end, "end")})
-        S.write_str_field(LIB, ptr, S.MENTION, "person_id", m.person_id, scope)
-        S.write_str_field(LIB, ptr, S.MENTION, "mention_id", m.mention_id, scope)
+        S.write_str_field(LIB, ptr, S.MENTION, "person_id", m.person_id, scope, allow_empty=True)
+        S.write_str_field(LIB, ptr, S.MENTION, "mention_id", m.mention_id, scope, allow_empty=True)
     return base
 
 
@@ -8488,10 +8492,10 @@ def _parse_created(text: str) -> Optional[datetime.datetime]:
         return None
 
 
-def _format_created(value: Optional[Union[datetime.datetime, datetime.date]]) -> str:
-    """The C stamp of a threaded comment's ``created`` input; ``""`` for ``None``."""
+def _format_created(value: Optional[Union[datetime.datetime, datetime.date]]) -> Optional[str]:
+    """The C stamp of a threaded comment's ``created`` input; ``None`` for ``None``."""
     if value is None:
-        return ""
+        return None
     if isinstance(value, datetime.datetime) and value.tzinfo is not None:
         value = value.astimezone(datetime.timezone.utc).replace(tzinfo=None)
     return civil_datetime(value, "created").strftime("%Y-%m-%dT%H:%M:%S") + ".00"
@@ -8692,7 +8696,7 @@ def _pack_filter_column(ptr: int, col: AutoFilterColumn, scope: _ArgScope) -> No
     fields["condition_count"] = _uint(len(col.conditions), "condition_count")
     S.FILTER_COLUMN.pack(LIB, ptr, fields)
     for name, c_name in _FILTER_COLUMN_STRINGS:
-        S.write_str_field(LIB, ptr, S.FILTER_COLUMN, c_name, getattr(col, name), scope)
+        S.write_str_field(LIB, ptr, S.FILTER_COLUMN, c_name, getattr(col, name), scope, allow_empty=True)
     if col.values:
         arr = scope.alloc(4 * len(col.values))
         for i, text in enumerate(col.values):
@@ -9784,7 +9788,7 @@ class Workbook(_NoCopy):
         sheet = _uint(sheet_index, "sheet_index", role="sheet")
         with _ArgScope() as scope:
             names = [str(column) for column in table.columns or ()]
-            name_ptrs = [scope.nonempty_cstr(column) for column in names]
+            name_ptrs = [scope.cstr(column) for column in names]
             array_ptr = scope.alloc(4 * len(name_ptrs)) if name_ptrs else 0
             if array_ptr:
                 LIB.write_bytes(array_ptr, b"".join(struct.pack("<I", p) for p in name_ptrs))
@@ -9794,7 +9798,7 @@ class Workbook(_NoCopy):
                 spec,
                 {
                     "range": _cell_rect_fields(rect),
-                    "name": scope.nonempty_cstr(table.name),
+                    "name": scope.opt_cstr(table.name),
                     "column_names": array_ptr,
                     "column_count": _uint(len(name_ptrs), "column_count"),
                     "style_name": scope.opt_cstr(table.style_name),
@@ -9878,7 +9882,10 @@ class Workbook(_NoCopy):
         A :class:`DefinedName` read back from :meth:`get_defined_name` is accepted.
 
         An existing name in the same scope is replaced as a whole: an
-        omitted ``comment`` or ``hidden`` goes back to its default.
+        omitted ``comment`` or ``hidden`` goes back to its default, and an
+        empty ``comment`` is the same state as none (api-conventions §5 rule 30). A macro
+        name read from an ``.xlsb`` stays one (an ``.xlsx`` save leaves it
+        out); remove it first to set a plain name.
 
         Raises:
           InvalidArgumentError: when ``formula`` is empty (remove a name with
@@ -10269,7 +10276,9 @@ class Workbook(_NoCopy):
                 },
             )
             for fld in self._WORKBOOK_PROTECTION_TEXT:
-                S.write_str_field(LIB, ptr, S.WORKBOOK_PROTECTION, fld, getattr(protection, fld), scope)
+                S.write_str_field(
+                    LIB, ptr, S.WORKBOOK_PROTECTION, fld, getattr(protection, fld), scope, allow_empty=True
+                )
             _check(LIB.fm_workbook_set_workbook_protection(h, ptr))
 
     # -- AutoFilter ----------------------------------------------------------
@@ -10344,7 +10353,8 @@ class Workbook(_NoCopy):
 
         Raises:
           AlreadyExistsError: when the id is already listed.
-          InvalidArgumentError: for an id that is not a GUID, or an empty ``display_name``.
+          InvalidArgumentError: for an id that is not a GUID or is empty, an empty ``provider_id`` (api-conventions
+            §5 rule 30), or an empty ``display_name``.
         """
         if not isinstance(person, (PersonInput, Person)):
             raise TypeError(f"expected a PersonInput, got {type(person).__name__}")
@@ -10352,7 +10362,9 @@ class Workbook(_NoCopy):
         with _ArgScope() as scope:
             ptr = scope.struct_array(S.PERSON, 1)
             for fld in ("id", "display_name", "user_id", "provider_id"):
-                S.write_str_field(LIB, ptr, S.PERSON, fld, getattr(person, fld), scope)
+                # A userId of "" is the absent value; an empty id or providerId reaches the engine, which refuses it.
+                empty_ok = fld in ("id", "provider_id")
+                S.write_str_field(LIB, ptr, S.PERSON, fld, getattr(person, fld), scope, allow_empty=empty_ok)
             out = scope.out_ptr()
             _check(LIB.fm_workbook_add_person(h, ptr, out))
             return LIB.read_cstr(LIB.read_u32(out))
@@ -10998,8 +11010,9 @@ class Workbook(_NoCopy):
 
         Raises:
           TypeError: when ``sheet_name`` is given with a :class:`ParsedReference`.
-          FormulonError: with ``StatusCode.INVALID_ARGUMENT`` for a coordinate outside the grid, a reversed rectangle
-            or a sheet-qualified string.
+          FormulonError: with ``StatusCode.INVALID_ARGUMENT`` for a coordinate outside the grid, a reversed rectangle,
+            a sheet-qualified string or an empty ``sheet_name`` (api-conventions §5 rule 30; ``None`` writes no
+            qualifier).
         """
         if isinstance(range, ParsedReference):
             if sheet_name is not None:
@@ -11017,7 +11030,7 @@ class Workbook(_NoCopy):
             _check(
                 LIB.fm_workbook_format_reference(
                     h,
-                    scope.cstr(sheet_name) if sheet_name else 0,
+                    scope.cstr(sheet_name) if sheet_name is not None else 0,
                     rp,
                     int(_require_bool(absolute, "absolute")),
                     out,
@@ -11480,7 +11493,7 @@ def _pack_dxf(ptr: int, record: Union[DxfInput, Dxf], scope: _ArgScope) -> None:
         _pack_fill(ptr + offsets["fill"][1], record.fill, scope)
     if record.border is not None:
         _pack_border_record(ptr + offsets["border"][1], record.border)
-    S.write_str_field(LIB, ptr, S.DXF_RECORD, "number_format", record.number_format, scope)
+    S.write_str_field(LIB, ptr, S.DXF_RECORD, "number_format", record.number_format, scope, allow_empty=True)
     S.write_str_field(LIB, ptr, S.DXF_RECORD, "alignment_xml", _alignment_to_xml(record.alignment), scope)
     S.write_str_field(LIB, ptr, S.DXF_RECORD, "protection_xml", _protection_to_xml(record.protection), scope)
 

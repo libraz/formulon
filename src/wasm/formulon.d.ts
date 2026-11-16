@@ -474,7 +474,7 @@ export interface DefinedNameInput {
   formula: string;
   /** The sheet the name is local to; omitted or `null` makes it workbook scope. */
   scope?: SheetRef | null;
-  /** The Name Manager note; omitted or `null` means no comment. */
+  /** The Name Manager note; omitted, `null` or an empty string means no comment (api-conventions §5 rule 30). */
   comment?: string | null;
   /** `true` hides the name from the Name Manager; omitted means visible. */
   hidden?: boolean;
@@ -533,7 +533,8 @@ export interface TableInput {
    *  `StatusCode.AlreadyExists`. A name that is, or starts with, a reference in the profile locale's R1C1 letters (de `Z1S1`) fails with `StatusCode.InvalidArgument`. */
   name: string;
   /** One name per column of the range; each non-empty header cell must already hold its name (otherwise
-   *  `StatusCode.InvalidArgument`) and an empty one receives it. When omitted the names come from the header cells, and
+   *  `StatusCode.InvalidArgument`) and an empty one receives it. An empty string as a name fails with
+   *  `StatusCode.InvalidArgument` (api-conventions §5 rule 30). When omitted the names come from the header cells, and
    *  an empty header cell takes the profile's column word and a number (`Column2`). */
   columns?: readonly string[];
   /** The built-in or custom table style to apply; omitted or `null` is the workbook's table-style default, else
@@ -2321,7 +2322,8 @@ export interface SheetProtection {
 
 /** Argument of `Sheet.setSheetProtection`: the whole protection of a protected sheet. Every key is optional and an
  *  omitted `allow*` flag takes Excel's dialog default. The record `Sheet.getSheetProtection()` returns is accepted as
- *  is. */
+ *  is. A hash, salt or algorithm string that is omitted or `null` is absent; an empty one fails with
+ *  `StatusCode.InvalidArgument` (api-conventions §5 rule 30). */
 export interface SheetProtectionInput {
   /** The name of the hash algorithm that produced `hashValue`; omitted or `null` is absent. */
   algorithmName?: string | null;
@@ -2365,8 +2367,8 @@ export interface SheetProtectionInput {
   allowPivotTables?: boolean;
 }
 
-/** Argument of `Sheet.updateSheetProtection`. `null` clears a string or `spinCount`; an `allow*` flag has no
- *  cleared form (`TypeError`). On an unprotected sheet the patch applies to the {@link SheetProtectionInput}
+/** Argument of `Sheet.updateSheetProtection`. `null` clears a string or `spinCount`, and an empty string fails with
+ *  `StatusCode.InvalidArgument`; an `allow*` flag has no cleared form (`TypeError`). On an unprotected sheet the patch applies to the {@link SheetProtectionInput}
  *  defaults and protects the sheet, unless every key is omitted. */
 export type SheetProtectionPatch = Patch<
   SheetProtectionInput,
@@ -2467,7 +2469,8 @@ export interface Hyperlink {
 }
 
 /** Argument of `Sheet.setHyperlink` and `Sheet.insertHyperlinkAt`. A `null` `display` or `tooltip` is the same as
- *  omitting it, so a read `Hyperlink` can be passed back. */
+ *  omitting it, so a read `Hyperlink` can be passed back. An empty `target` or `location` fails with
+ *  `StatusCode.InvalidArgument` (api-conventions §5 rule 30); an empty `display` or `tooltip` is none. */
 export interface HyperlinkInput {
   /** The absolute or relative target (URL, email address, file); `null` makes an in-workbook link, which needs
    *  `location`. */
@@ -2491,12 +2494,12 @@ export interface Comment {
   readonly text: string;
 }
 
-/** Argument of `Sheet.setComment`. An omitted or `null` `author` means none. The {@link Comment} a read returns
- *  passes as is. */
+/** Argument of `Sheet.setComment`. An omitted, `null` or empty `author` means none. The {@link Comment} a read
+ *  returns passes as is. */
 export interface CommentInput {
-  /** The comment's text. */
+  /** The comment's text; an empty string writes a note with no text (api-conventions §5 rule 30). */
   text: string;
-  /** The comment's author; omitted or `null` means none. */
+  /** The comment's author; omitted, `null` or an empty string means none. */
   author?: string | null;
 }
 
@@ -2547,7 +2550,8 @@ export interface WorkbookProtection {
 }
 
 /** Argument of `Workbook.setWorkbookProtection`. Every key is optional. The {@link WorkbookProtection} a read
- *  returns passes as is. */
+ *  returns passes as is. A hash, salt or algorithm string that is omitted or `null` is absent; an empty one fails with
+ *  `StatusCode.InvalidArgument` (api-conventions §5 rule 30). */
 export interface WorkbookProtectionInput {
   /** `true` locks the workbook structure; omitted is `false`. */
   lockStructure?: boolean;
@@ -2601,7 +2605,8 @@ export interface ProtectedRange {
 }
 
 /** Argument of `Sheet.addProtectedRange`: `name` and `ranges` are required, every other key is optional. The
- *  {@link ProtectedRange} a read returns passes as is. */
+ *  {@link ProtectedRange} a read returns passes as is. A hash, salt, algorithm or descriptor string that is omitted or
+ *  `null` is absent; an empty one fails with `StatusCode.InvalidArgument` (api-conventions §5 rule 30). */
 export interface ProtectedRangeInput {
   /** The range's name, 1..255 UTF-16 units (an astral character counts 2), unused by the sheet's other protected ranges. */
   name: string;
@@ -2623,9 +2628,9 @@ export interface ProtectedRangeInput {
 }
 
 /** Argument of `updateProtectedRange`: every {@link ProtectedRangeInput} key, each optional. A key left out is
- *  unchanged; `null` (or the empty string) clears `legacyPasswordHash`, `algorithmName`, `hashValue`, `saltValue` and
- *  `securityDescriptor`, and any other `null` is a `TypeError`. The empty
- *  string clears `legacyPasswordHash`, `algorithmName`, `hashValue`, `saltValue` and `securityDescriptor`.
+ *  unchanged; `null` clears `legacyPasswordHash`, `algorithmName`, `hashValue`, `saltValue` and
+ *  `securityDescriptor`, and any other `null` is a `TypeError`. The empty string fails with
+ *  `StatusCode.InvalidArgument`.
  *  Leaving `ranges` out keeps the stored ranges, including any the engine cannot parse; an empty `ranges` fails
  *  with `StatusCode.InvalidArgument`.
  *  A `ProtectedRange` read back passes as is; any unknown key fails with a `TypeError`. */
@@ -2711,18 +2716,19 @@ export interface DataValidationInput {
   showErrorMessage?: boolean;
   /** Show the in-cell dropdown arrow (`list` rules only); default `true`. */
   showInCellDropdown?: boolean;
-  /** The first formula or value of the rule; the leading `=` is optional; omitted or `null` is none. */
+  /** The first formula or value of the rule; the leading `=` is optional; omitted or `null` is none, and an empty
+   *  string fails with `StatusCode.InvalidArgument` (api-conventions §5 rule 30). */
   formula1?: string | null;
   /** The second formula or value of the rule (the upper bound of a between rule); the leading `=` is optional; omitted
-   *  or `null` is none. */
+   *  or `null` is none, and an empty string fails with `StatusCode.InvalidArgument`. */
   formula2?: string | null;
-  /** The title of the error alert; omitted or `null` is none. */
+  /** The title of the error alert; omitted, `null` or an empty string is none. */
   errorTitle?: string | null;
-  /** The text of the error alert; omitted or `null` is none. */
+  /** The text of the error alert; omitted, `null` or an empty string is none. */
   errorMessage?: string | null;
-  /** The title of the input prompt; omitted or `null` is none. */
+  /** The title of the input prompt; omitted, `null` or an empty string is none. */
   promptTitle?: string | null;
-  /** The text of the input prompt; omitted or `null` is none. */
+  /** The text of the input prompt; omitted, `null` or an empty string is none. */
   promptMessage?: string | null;
 }
 
@@ -3006,8 +3012,8 @@ export interface LoadOptions {
 
 /** Options for `formatReference`. */
 export interface FormatReferenceOptions {
-  /** The qualifier to write; it overrides the sheet name of a parsed reference. Omitted, `null` or an empty string
-   *  writes no qualifier. */
+  /** The qualifier to write; it overrides the sheet name of a parsed reference. Omitted or `null` writes no
+   *  qualifier; an empty string is refused with `StatusCode.InvalidArgument` (api-conventions §5 rule 30). */
   sheetName?: string | null;
   /** `true` prefixes every component with `$`; default `false`. */
   absolute?: boolean;
@@ -4999,7 +5005,7 @@ export interface AutoFilterSortConditionInput {
   descending?: boolean;
   /** What the condition sorts by; omitted is the value. */
   sortBy?: SortBy;
-  /** The custom sort list, as comma-separated items; omitted or `null` means none. */
+  /** The custom sort list, as comma-separated items; omitted, `null` or an empty string means none. */
   customList?: string | null;
   /** The index of the differential format whose colour the condition sorts by; omitted or `null` is none. */
   dxfIndex?: number | null;
@@ -5068,9 +5074,11 @@ export interface Mention {
 /** A mention of a {@link ThreadedCommentInput} or {@link ThreadedCommentPatch}. The {@link Mention} a read
  *  returns passes as is. */
 export interface MentionInput {
-  /** The id of the mentioned person. */
+  /** The id of the mentioned person; an empty string fails with `StatusCode.InvalidArgument` (api-conventions §5
+   *  rule 30). */
   personId: string;
-  /** The mention's own id, a brace-wrapped GUID; omitted, one is generated (deterministic under a pinned clock). */
+  /** The mention's own id, a brace-wrapped GUID; omitted, one is generated (deterministic under a pinned clock), and
+   *  an empty string fails with `StatusCode.InvalidArgument`. */
   mentionId?: string;
   /** The start of the mentioned span in the comment text, as a UTF-16 code unit offset (inclusive). */
   start: number;
@@ -5103,7 +5111,8 @@ export interface ThreadedComment {
 /** Argument of `Sheet.addThreadedComment`: `text` and `personId` are required. The {@link ThreadedComment} a read
  *  returns passes as is. */
 export interface ThreadedCommentInput {
-  /** The comment's id, a brace-wrapped GUID; omitted, one is generated. */
+  /** The comment's id, a brace-wrapped GUID; omitted, one is generated, and an empty string fails with
+   *  `StatusCode.InvalidArgument` (api-conventions §5 rule 30). */
   id?: string;
   /** The comment's text. */
   text: string;
@@ -5150,13 +5159,15 @@ export interface Person {
 
 /** Argument of `Workbook.addPerson`. The {@link Person} a read returns passes as is. */
 export interface PersonInput {
-  /** The id; omitted generates a brace-wrapped GUID (deterministic under a pinned clock). */
+  /** The id; omitted generates a brace-wrapped GUID (deterministic under a pinned clock), and an empty string fails
+   *  with `StatusCode.InvalidArgument` (api-conventions §5 rule 30). */
   id?: string;
   /** The person's display name. */
   displayName: string;
-  /** The user id; omitted or `null` means none. */
+  /** The user id; omitted, `null` or an empty string means none. */
   userId?: string | null;
-  /** The identity provider id; omitted or `null` means none. */
+  /** The identity provider id; omitted or `null` means none, and an empty string fails with
+   *  `StatusCode.InvalidArgument`. */
   providerId?: string | null;
 }
 
@@ -7093,7 +7104,8 @@ export interface Workbook {
    *  has no such name. */
   removeDefinedName(name: string, scope?: SheetRef | null): void;
   /** Adds a defined name, or replaces every attribute of an existing one in the same scope: an omitted `comment` /
-   *  `hidden` returns to its default. An empty `formula` fails with `StatusCode.InvalidArgument`, and one that does
+   *  `hidden` returns to its default. A macro name read from an `.xlsb` stays one (an `.xlsx` save leaves it out);
+   *  remove it first to set a plain name. An empty `formula` fails with `StatusCode.InvalidArgument`, and one that does
    *  not parse with a parser status (1000-1014; `FormulonError.parseError` gives the position). A name that matches
    *  a table fails with `StatusCode.AlreadyExists`, a malformed one with `StatusCode.InvalidArgument`, and a
    *  `scope` past the last sheet with `StatusCode.SheetIndexOutOfRange`; `removeDefinedName` removes a name.
@@ -8115,7 +8127,7 @@ export interface Sheet {
    *  cells that carry no value. */
   listComments(): readonly SheetComment[];
   /** Sets / replaces the cell comment (an Excel note), or with `null` removes it (doing nothing when there is
-   *  none); an empty `text` writes an empty comment. Fails with `StatusCode.AlreadyExists` when the cell holds a
+   *  none); an empty `text` writes a note with no text (api-conventions §5 rule 30). Fails with `StatusCode.AlreadyExists` when the cell holds a
    *  threaded comment: a cell carries a note or a thread, never both. */
   setComment(row: number, col: number, comment: CommentInput | null): void;
   /** `setComment` at the A1 address `a1`. */

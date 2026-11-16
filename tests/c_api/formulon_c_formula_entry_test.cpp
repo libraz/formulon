@@ -542,9 +542,9 @@ TEST(FormulonCApiFormulaEntry, AddValidationAcceptsEveryListAndScalarShape) {
             0);
   EXPECT_EQ(
       fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 1, "-3.5", "TODAY()")), ignored_id()), 0);
-  EXPECT_EQ(
-      fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 7, "ISNUMBER(A1)", "")), ignored_id()),
-      0);
+  EXPECT_EQ(fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 7, "ISNUMBER(A1)", nullptr)),
+                                    ignored_id()),
+            0);
   EXPECT_EQ(
       fm_sheet_add_validation(wb.handle, 0, record_arg(MakeValidation(&range, 0, nullptr, nullptr)), ignored_id()), 0);
   std::size_t count = 0;

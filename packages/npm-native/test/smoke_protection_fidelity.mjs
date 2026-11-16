@@ -87,7 +87,7 @@ test('protected ranges add, list, update, remove and follow row edits', async ()
   // A partial update leaves the keys it omits as they were.
   assert.equal(loaded.sheet(0).listProtectedRanges()[0].name, 'Renamed');
   assert.equal(loaded.sheet(0).listProtectedRanges()[0].legacyPasswordHash, 'CC1A');
-  loaded.sheet(0).updateProtectedRange(0, { legacyPasswordHash: '' });
+  loaded.sheet(0).updateProtectedRange(0, { legacyPasswordHash: null });
   assert.equal(loaded.sheet(0).listProtectedRanges()[0].legacyPasswordHash, null);
   loaded.sheet(0).updateProtectedRange(0, { legacyPasswordHash: 'CC1A' });
   loaded.sheet(0).updateProtectedRange(0, { legacyPasswordHash: null });

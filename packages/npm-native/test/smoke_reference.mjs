@@ -118,7 +118,7 @@ test('formatReference writes A1 reference text and round-trips', async () => {
     assert.equal(fmt({ sheetName: 'TRUE', range: { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 } }), "'TRUE'!A1");
     assert.equal(fmt({ sheetName: '売上', range: { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 } }), '売上!A1');
     assert.equal(fmt({ sheetName: null, range: { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 } }), 'A1');
-    assert.equal(fmt({ sheetName: '', range: { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 } }), 'A1');
+    refused({ sheetName: '', range: { firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 } });
     assert.equal(fmt({ range: { firstRow: 0, firstCol: 0, lastRow: 1, lastCol: 1 } }, { absolute: true }), '$A$1:$B$2');
     refused({ range: { firstRow: 0, firstCol: 0, lastRow: 1048576, lastCol: 0 } });
     refused({ range: { firstRow: 2, firstCol: 0, lastRow: 1, lastCol: 0 } });

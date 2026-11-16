@@ -72,7 +72,8 @@ class FormatReferenceTests(unittest.TestCase):
         for name, expected in cases.items():
             self.assertEqual(self.wb.format_reference(CellRect(0, 0, 0, 0), sheet_name=name), expected)
         self.assertEqual(self.wb.format_reference(CellRect(0, 0, 0, 0), sheet_name="売上"), "売上!A1")
-        self.assertEqual(self.wb.format_reference(CellRect(0, 0, 0, 0), sheet_name=""), "A1")
+        with self.assertRaises(FormulonError):
+            self.wb.format_reference(CellRect(0, 0, 0, 0), sheet_name="")
 
     def test_out_of_grid_and_reversed_raise(self) -> None:
         with self.assertRaises(FormulonError):

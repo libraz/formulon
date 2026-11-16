@@ -1044,7 +1044,8 @@ typedef struct {
   const char* formula;
   /** The 0-based index of the sheet the name is local to, or `FM_DEFINED_NAME_SCOPE_WORKBOOK` for workbook scope. */
   int32_t local_sheet_id;
-  /** The Name Manager note; `NULL` or empty on input means none, and a read returns `NULL` when there is none. */
+  /** The Name Manager note; `NULL` or empty on input means none (api-conventions.md §5 rule 30), and a read returns
+   *  `NULL` when there is none. */
   const char* comment;
   /** 1 hides the name from the Name Manager; 0 leaves it visible. */
   int32_t hidden;
@@ -1978,10 +1979,10 @@ FM_API fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, const ch
  * @brief Formats the rectangle `range` as A1 reference text, the inverse of
  *        `fm_workbook_parse_reference`.
  *
- * `sheet_name` `NULL` or empty writes no qualifier; otherwise the name is
- * quoted as a stored formula quotes it (and is not validated as a sheet
- * name). A single cell writes one endpoint (`A1`), a rectangle spanning
- * every row writes columns (`B:D`), one spanning every column writes rows
+ * `sheet_name` `NULL` writes no qualifier and an empty name is refused
+ * (api-conventions.md §5 rule 30); otherwise the name is quoted as a stored
+ * formula quotes it (and is not validated as a sheet name). A single cell writes one endpoint (`A1`), a rectangle
+ * spanning every row writes columns (`B:D`), one spanning every column writes rows
  * (`2:11`). `absolute` 1 prefixes each component with `$`. `*out_text` is
  * a read-scratch-backed view.
  *
@@ -1990,7 +1991,7 @@ FM_API fm_status_t fm_workbook_parse_reference(const fm_workbook_t* wb, const ch
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `wb`, `range` or `out_text` is `NULL`;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `sheet_name` is malformed UTF-8;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when a coordinate is outside the grid,
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `sheet_name` is empty, a coordinate is outside the grid,
  *         the rectangle is inverted, or `absolute` is not 0/1.
  */
 FM_API fm_status_t fm_workbook_format_reference(const fm_workbook_t* wb, const char* sheet_name,
@@ -2443,9 +2444,10 @@ typedef struct {
   uint32_t struct_size;
   /** The cells the table covers, header row included, on the receiving sheet. */
   fm_cell_rect_t range;
-  /** The new table's name; it must not be one another table already uses. */
+  /** The new table's name; it must not be one another table already uses, and an empty string is invalid. */
   const char* name;
-  /** One name per column of the range, as for `columns`; `NULL` takes the names from the header cells of the sheet. */
+  /** One name per column of the range, as for `columns`; `NULL` takes the names from the header cells of the sheet,
+   *  and so does a `NULL` entry. An empty entry is invalid (api-conventions.md §5 rule 30). */
   const char* const* column_names;
   /** The number of entries in `column_names`. */
   uint32_t column_count;
@@ -2512,7 +2514,7 @@ typedef struct {
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `spec`, `spec->name` or `out_table_index` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `range` is inverted or outside the grid, a
- *         name breaks the rules above, `style_name` is empty, given with `styled`
+ *         name breaks the rules above or is empty, a column name is empty, `style_name` is empty, given with `styled`
  *         `FALSE`, names a custom style that does not apply to tables or names a built-in slicer style
  *         (`SlicerStyleLight1`, ...), the column names do not match the range, or a flag is outside
  *         `fm_tristate_t`;
@@ -2997,7 +2999,9 @@ FM_API fm_status_t fm_workbook_has_passthrough(const fm_workbook_t* wb, const ch
  *        until the next mutation that touches the sheet's hyperlink
  *        list or until the handle is destroyed. Reads do not invalidate
  *        them. `target`, `location`, `display` and `tooltip` are each
- *        optional: on input `NULL` and `""` both mean absent.
+ *        optional. On input `NULL` is absent for all four; an empty `target` or `location` is refused
+ *        (`FM_STATUS_INVALID_ARGUMENT` (2); api-conventions.md §5 rule 30), and an empty `display` or `tooltip`
+ *        is the same state as absent.
  *
  * A sheet may hold several hyperlinks over the same cells; they are kept in
  * the order they were added (file order after a load), duplicates of one
@@ -3024,7 +3028,8 @@ typedef struct {
  *        `fm_sheet_set_comment`.
  *
  * `author` and `text` are model-backed UTF-8 views with the same lifetime
- * contract as `fm_hyperlink_t`; on input a `NULL` `author` or `text` means empty.
+ * contract as `fm_hyperlink_t`; on input a `NULL` or empty `author` is the same state, and a `NULL` or empty
+ * `text` writes a note with no text (api-conventions.md §5 rule 30).
  */
 typedef struct {
   uint32_t struct_size;
@@ -3070,9 +3075,9 @@ typedef struct {
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `hl` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `struct_size` is below the v1 size, `hl->rect` is
- *         inverted or outside the grid, or the text for the top-left cell is over 32,767 UTF-16 units;
- *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a string is not well-formed UTF-8;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `struct_size` is below the v1 size, `hl->target` or `hl->location`
+ *         is empty, `hl->rect` is inverted or outside the grid, or the text for the top-left cell is over 32,767 UTF-16
+ * units; `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a string is not well-formed UTF-8;
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the rectangle covers more than 134,217,728 cells and is
  *         not a whole column or row (the engine's own ceiling, not an Excel limit). Nothing changes on
  *         failure.
@@ -3094,8 +3099,8 @@ FM_API fm_status_t fm_sheet_set_hyperlink(fm_workbook_t* wb, size_t sheet_index,
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `hl` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `struct_size` is below the v1 size, or the rectangle is
- *         inverted or outside the grid;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `struct_size` is below the v1 size, `hl->target` or `hl->location`
+ *         is empty, or the rectangle is inverted or outside the grid;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `index` is above the count (nothing changes);
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a string is not well-formed UTF-8.
  */
@@ -3394,10 +3399,11 @@ FM_API fm_status_t fm_sheet_set_comment_visible(fm_workbook_t* wb, size_t sheet_
 
 /**
  * @brief `<workbookProtection>`. The host computes every hash; the engine
- *        stores the strings as given. On input a `NULL` string and an empty
- *        string both mean absent, and a zero spin count means absent. On
- *        output the strings are views valid until the next successful
- *        scratch-backed read on the handle.
+ *        stores the strings as given. On input a `NULL` string means absent
+ *        and an empty string is refused (`FM_STATUS_INVALID_ARGUMENT` (2),
+ *        context `field=<name>`; api-conventions.md §5 rule 30), and a zero
+ *        spin count means absent. On output the strings are views valid until
+ *        the next successful scratch-backed read on the handle.
  */
 typedef struct {
   uint32_t struct_size;
@@ -3450,7 +3456,8 @@ FM_API fm_status_t fm_workbook_get_workbook_protection(const fm_workbook_t* wb, 
  *        does not model (the password character sets) are kept on a replace.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`.
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when a string field is empty (context `field=<name>`).
  */
 FM_API fm_status_t fm_workbook_set_workbook_protection(fm_workbook_t* wb, const fm_workbook_protection_t* protection);
 
@@ -3492,8 +3499,8 @@ typedef struct {
  *        rules (Patches, above).
  *
  * Each field of `fm_protected_range_t` has its `<field>_op`. A `SET` string
- * follows the input rule of `fm_protected_range_t` (an empty string writes
- * the attribute absent).
+ * follows the input rule of `fm_protected_range_t`: an empty string is refused
+ * and `CLEAR` removes the attribute.
  */
 typedef struct {
   uint32_t struct_size;
@@ -3593,7 +3600,8 @@ FM_API fm_status_t fm_sheet_get_protected_range(const fm_workbook_t* wb, size_t 
  *           `range.ranges` is `NULL` while `range.range_count > 0`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `name` is empty or longer than 255 UTF-16 units (context
- *         `part=name requested=<n> limit=255`), or when `range.range_count` is 0 or past 8,191 (context
+ *         `part=name requested=<n> limit=255`), when a hash, salt, algorithm or descriptor string is empty
+ *         (context `field=<name>`), or when `range.range_count` is 0 or past 8,191 (context
  *         `part=ranges requested=<n> limit=8191`; up to the per-call cap below), or a rectangle is inverted
  *         or outside the grid;
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when `range.range_count` is past
@@ -3612,8 +3620,9 @@ FM_API fm_status_t fm_sheet_add_protected_range(fm_workbook_t* wb, size_t sheet_
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `name` or `patch` is `NULL`, or a `SET`
  *           `ranges` is `NULL` while `range_count > 0`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is outside 0..2, `CLEAR` hits a
- *           field other than `legacy_password_hash`, `SET` carries a `NULL` string or
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is outside 0..2, `CLEAR` hits
+ *           `name`, `ranges` or `spin_count`, `SET` carries a `NULL` string, an empty
+ *           hash, salt, algorithm or descriptor string (context `field=<name>`), or
  *           a name that is empty or longer than 255 UTF-16 units (context
  *           `part=name requested=<n> limit=255`), or a `SET` `ranges` is empty,
  *           past 8,191 rectangles (context `part=ranges requested=<n> limit=8191`; up to the
@@ -3686,8 +3695,10 @@ typedef enum {
  * Mirrors `formulon::DataValidation`. On getter results `formula1`, `formula2`,
  * `error_title`, `error_message`, `prompt_title` and `prompt_message` are views
  * (see `fm_sheet_get_validation_at` for their lifetime); on the add path
- * (`fm_sheet_add_validation`) they are caller-owned input strings, where `NULL`
- * and the empty string both mean absent. A formula reads back with a leading
+ * (`fm_sheet_add_validation`) they are caller-owned input strings. `NULL` means absent for all six; an empty
+ * `formula1` or `formula2` is refused (`FM_STATUS_INVALID_ARGUMENT` (2), context `field=<name>`;
+ * api-conventions.md §5 rule 30), and an empty title or message is the same state as absent. A formula reads back with
+ * a leading
  * `=`; input takes it with or without one. The tristate fields read back as
  * `FM_TRISTATE_FALSE` or `FM_TRISTATE_TRUE`.
  */
@@ -3811,7 +3822,8 @@ FM_API fm_status_t fm_sheet_get_validation(const fm_workbook_t* wb, size_t sheet
  *           `NULL` while `v.range_count > 0`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `v.range_count` is 0, when
- *         any supplied range is inverted or outside the Excel grid, or when
+ *         any supplied range is inverted or outside the Excel grid, when
+ *         `v.formula1` or `v.formula2` is empty, or when
  *         `v.type`, `v.op`, `v.error_style`, `v.allow_blank` or
  *         `v.show_in_cell_dropdown` is outside the domain listed above;
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when `v.range_count` exceeds the
@@ -3902,7 +3914,8 @@ typedef struct {
  *           `NULL` while `range_count > 0`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is outside 0..2, `CLEAR` hits a field
- *           that cannot be cleared, `SET` carries a `NULL` string, a `SET` enumeration is outside
+ *           that cannot be cleared, `SET` carries a `NULL` string or an empty `formula1` / `formula2`
+ *           (context `field=<name>`), a `SET` enumeration is outside
  *           its domain, or a `SET` `ranges` is empty or holds an inverted or out-of-grid
  *           rectangle;
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when a `SET` `ranges` is past the
@@ -4011,10 +4024,10 @@ FM_API fm_status_t fm_sheet_get_invalid_cells(const fm_workbook_t* wb, size_t sh
  * `struct_size`.
  */
 typedef struct {
-  /** The id of the mentioned person. */
+  /** The id of the mentioned person; an empty string is `FM_STATUS_INVALID_ARGUMENT` (2). */
   const char* person_id;
-  /** The mention's own id, a brace-wrapped GUID; on input `NULL` or empty takes an engine-generated GUID, as
-   *  `fm_threaded_comment_t.id` does. */
+  /** The mention's own id, a brace-wrapped GUID; on input `NULL` takes an engine-generated GUID, as
+   *  `fm_threaded_comment_t.id` does, and an empty string is `FM_STATUS_INVALID_ARGUMENT` (2). */
   const char* mention_id;
   /** The start of the mentioned span in the comment text, as a UTF-16 code unit offset (inclusive). */
   uint32_t start;
@@ -4032,12 +4045,13 @@ typedef struct {
  *
  * Ids are brace-wrapped GUIDs, taken in either letter case, matched across
  * it, and stored uppercase as Excel writes them. On input every other
- * `const char*` may be `NULL`, meaning empty.
+ * `const char*` may be `NULL`, meaning empty. An empty `id` or `created` is refused
+ * (`FM_STATUS_INVALID_ARGUMENT` (2), context `field=<name>`; api-conventions.md §5 rule 30).
  */
 typedef struct {
   uint32_t struct_size;
-  /** The comment's id, a brace-wrapped GUID stored in upper case; on add a `NULL` or empty id takes an engine-generated
-   *  GUID (deterministic with a pinned clock). */
+  /** The comment's id, a brace-wrapped GUID stored in upper case; on add a `NULL` id takes an engine-generated
+   *  GUID (deterministic with a pinned clock) and an empty one is refused. */
   const char* id;
   /** The 0-based row of the cell the thread is anchored to. */
   uint32_t row;
@@ -4046,9 +4060,9 @@ typedef struct {
   /** The id of the person who wrote the comment. */
   const char* person_id;
   /** The creation time as UTC text `YYYY-MM-DDTHH:MM:SS.ss` with no zone designator; `NULL` when a loaded comment
-   *  states none. On add a trailing `Z` is accepted and dropped, a numeric offset (`+09:00`) or a three-digit fraction
-   *  is `FM_STATUS_INVALID_ARGUMENT`, and `NULL` or empty takes the current UTC time, or the pinned time written as-is
-   *  when a clock is pinned (`fm_workbook_set_pinned_now`). */
+   *  states none. On add a trailing `Z` is accepted and dropped, a numeric offset (`+09:00`), a three-digit fraction
+   *  or an empty string is `FM_STATUS_INVALID_ARGUMENT`, and `NULL` takes the current UTC time, or the pinned time
+   * written as-is when a clock is pinned (`fm_workbook_set_pinned_now`). */
   const char* created;
   /** The comment's text. */
   const char* text;
@@ -4064,12 +4078,12 @@ typedef struct {
 } fm_threaded_comment_t;
 
 /**
- * @brief One entry of the workbook's person list. On input `user_id` and
- *        `provider_id` take `NULL` and `""` alike as absent.
+ * @brief One entry of the workbook's person list. On input `user_id` takes `NULL` and `""` alike as absent
+ *        (api-conventions.md §5 rule 30); an empty `id` or `provider_id` is `FM_STATUS_INVALID_ARGUMENT` (2).
  */
 typedef struct {
   uint32_t struct_size;
-  /** The person's id; on add a `NULL` or empty id takes an engine-generated GUID, as `fm_threaded_comment_t.id` does
+  /** The person's id; on add a `NULL` id takes an engine-generated GUID, as `fm_threaded_comment_t.id` does
    *  (deterministic with the clock pinned); a read always carries it. */
   const char* id;
   /** The person's display name; required. */
@@ -4142,7 +4156,8 @@ FM_API fm_status_t fm_sheet_get_threaded_comment(const fm_workbook_t* wb, size_t
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `offset_unit` is not a `fm_text_offset_unit_t`
  *         member, a new thread's cell is outside the
- *         grid, the id or a mention id is not a GUID, `created` is malformed
+ *         grid, the id or a mention id is not a GUID or is empty, a mention's `person_id` is empty,
+ *         `created` is empty, `created` is malformed
  *         (including a numeric offset), a
  *         mention ends before it starts or lies outside the text, `parent_id`
  *         is empty, or `parent_id` names a reply;
@@ -4246,7 +4261,7 @@ FM_API fm_status_t fm_workbook_get_person(const fm_workbook_t* wb, const char* i
 /**
  * @brief Appends a person to the workbook's person list and writes the id as
  *        stored to `*out_person_id`. A given id is a brace-wrapped GUID in
- *        either letter case, stored uppercase; a `NULL` or empty one is
+ *        either letter case, stored uppercase; a `NULL` one is
  *        generated (`fm_person_t`). Person ids match across letter case.
  *
  * `*out_person_id` is a read-scratch-backed view, valid until the next
@@ -4256,7 +4271,7 @@ FM_API fm_status_t fm_workbook_get_person(const fm_workbook_t* wb, const char* i
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any argument is `NULL`;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when a given id is not a GUID or the
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when a given id is not a GUID or is empty, `provider_id` is empty, or the
  *         display name is `NULL` or empty;
  *         `FM_STATUS_ALREADY_EXISTS` (7) when the id is already listed.
  */
@@ -4921,7 +4936,8 @@ FM_API fm_status_t fm_workbook_set_location(fm_workbook_t* wb, const fm_workbook
  * the next mutation of the same sheet's protection record or handle
  * destruction. Reads do not invalidate them. On the write path the strings are
  * copied into the workbook; the caller's buffers may be released after the
- * call. Pass `NULL` for any string field to leave it absent.
+ * call. Pass `NULL` for any string field to leave it absent; an empty string is refused
+ * (`FM_STATUS_INVALID_ARGUMENT` (2), context `field=<name>`; api-conventions.md §5 rule 30).
  *
  * Each `allow_*` flag is the inverse of the OOXML attribute of the same action
  * (`allow_format_cells` is `formatCells="0"`). A getter returns
@@ -5111,7 +5127,7 @@ FM_API fm_status_t fm_sheet_get_sheet_protection(const fm_workbook_t* wb, size_t
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is NULL;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) if `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when a select flag is outside
- *         `fm_tristate_t` or another flag is not 0 / 1.
+ *         `fm_tristate_t`, another flag is not 0 / 1, or a string field is empty.
  */
 FM_API fm_status_t fm_sheet_set_sheet_protection(fm_workbook_t* wb, size_t sheet_index,
                                                  const fm_sheet_protection_t* in);
@@ -5126,7 +5142,7 @@ FM_API fm_status_t fm_sheet_set_sheet_protection(fm_workbook_t* wb, size_t sheet
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `patch` is NULL;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) if `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is outside 0..2, `CLEAR` hits
- *         a flag, `SET` carries a `NULL` string, or a flag is not 0 / 1;
+ *         a flag, `SET` carries a `NULL` or empty string (context `field=<name>`), or a flag is not 0 / 1;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a `SET` string is not valid UTF-8.
  */
 FM_API fm_status_t fm_sheet_update_sheet_protection(fm_workbook_t* wb, size_t sheet_index,
@@ -12365,7 +12381,8 @@ typedef struct {
   int32_t has_border;
   /** The border part; read only when `has_border` is 1. */
   fm_border_t border;
-  /** The number format code as UTF-8; NULL when the format sets none. The format's id is assigned on save. */
+  /** The number format code as UTF-8; NULL when the format sets none, and an empty string on input is the same state
+   *  (api-conventions.md §5 rule 30). The format's id is assigned on save. */
   const char* number_format;
   /** The serialized `<alignment/>` element as UTF-8; `NULL` when the format sets no alignment. */
   const char* alignment_xml;

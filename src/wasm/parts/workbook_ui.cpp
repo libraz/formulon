@@ -611,8 +611,10 @@ emscripten::val JsWorkbook::addValidation(uint32_t sheet, emscripten::val v) {
   if (!reader.ok()) {
     return emscripten::val::undefined();
   }
-  const std::string formula1 = reader.string(v, "formula1", "validation.formula1");
-  const std::string formula2 = reader.string(v, "formula2", "validation.formula2");
+  std::string formula1_storage;
+  std::string formula2_storage;
+  const char* const formula1 = reader.optional_string(v, "formula1", formula1_storage, "validation.formula1");
+  const char* const formula2 = reader.optional_string(v, "formula2", formula2_storage, "validation.formula2");
   const std::string error_title = reader.string(v, "errorTitle", "validation.errorTitle");
   const std::string error_message = reader.string(v, "errorMessage", "validation.errorMessage");
   const std::string prompt_title = reader.string(v, "promptTitle", "validation.promptTitle");
@@ -638,8 +640,8 @@ emscripten::val JsWorkbook::addValidation(uint32_t sheet, emscripten::val v) {
   if (!reader.ok()) {
     return emscripten::val::undefined();
   }
-  dv.formula1 = formula1.empty() ? nullptr : formula1.c_str();
-  dv.formula2 = formula2.empty() ? nullptr : formula2.c_str();
+  dv.formula1 = formula1;
+  dv.formula2 = formula2;
   dv.error_title = error_title.empty() ? nullptr : error_title.c_str();
   dv.error_message = error_message.empty() ? nullptr : error_message.c_str();
   dv.prompt_title = prompt_title.empty() ? nullptr : prompt_title.c_str();
@@ -822,9 +824,11 @@ emscripten::val JsWorkbook::addThreadedComment(uint32_t sheet, emscripten::val c
     return emscripten::val::undefined();
   }
   // An omitted id and an omitted `created` are filled in by the engine.
-  const std::string id = reader.string(comment, "id", "comment.id");
+  std::string id_store;
+  std::string created_store;
+  const char* const id = reader.optional_string(comment, "id", id_store, "comment.id");
   const std::string person_id = reader.string(comment, "personId", "comment.personId");
-  const std::string created = reader.string(comment, "created", "comment.created");
+  const char* const created = reader.optional_string(comment, "created", created_store, "comment.created");
   const std::string text = reader.required_string(comment, "text", "text");
   // An omitted or null parentId is NULL, which opens a thread.
   std::string parent_store;
@@ -838,14 +842,14 @@ emscripten::val JsWorkbook::addThreadedComment(uint32_t sheet, emscripten::val c
     return emscripten::val::undefined();
   }
   fm_threaded_comment_t c = FM_STRUCT_INIT(fm_threaded_comment_t);
-  c.id = id.c_str();
+  c.id = id;
   c.row = reader.u32(comment, "row", 0U, "comment.row");
   c.col = reader.u32(comment, "col", 0U, "comment.col");
   if (!reader.ok()) {
     return emscripten::val::undefined();
   }
   c.person_id = person_id.c_str();
-  c.created = created.c_str();
+  c.created = created;
   c.text = text.c_str();
   c.parent_id = parent_id;
   c.done = reader.boolean(comment, "done", false, "done") ? 1 : 0;

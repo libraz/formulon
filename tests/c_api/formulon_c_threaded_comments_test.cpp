@@ -464,7 +464,7 @@ TEST(FormulonCApiThreadedComments, UpdateRejectsClearUnknownOpsAndNullSetText) {
 TEST(FormulonCApiThreadedComments, AbsentOptionalStringsReadNull) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
-  const fm_person_t bare = MakePerson(kAlice, "Alice", nullptr, "");
+  const fm_person_t bare = MakePerson(kAlice, "Alice", "", nullptr);
   const char* added_id = nullptr;
   ASSERT_EQ(fm_workbook_add_person(wb.handle, &bare, &added_id), 0) << fm_get_last_error_message();
   fm_person_t p = FM_STRUCT_INIT(fm_person_t);
@@ -577,14 +577,16 @@ TEST(FormulonCApiGeneratedIds, PersonNullIdGenerated) {
   EXPECT_STREQ(read.display_name, "Alice");
 }
 
-TEST(FormulonCApiGeneratedIds, PersonEmptyIdGenerated) {
+TEST(FormulonCApiGeneratedIds, PersonNullIdGeneratedAndEmptyIdRefused) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   const fm_civil_time_t pinned{2026, 3, 4, 5, 6, 7};
   ASSERT_EQ(fm_workbook_set_pinned_now(wb.handle, &pinned), 0);
-  const fm_person_t first = MakePerson("", "Alice", nullptr, nullptr);
-  const fm_person_t second = MakePerson("", "Bob", nullptr, nullptr);
+  const fm_person_t first = MakePerson(nullptr, "Alice", nullptr, nullptr);
+  const fm_person_t second = MakePerson(nullptr, "Bob", nullptr, nullptr);
   const char* id = nullptr;
+  const fm_person_t empty = MakePerson("", "Carol", nullptr, nullptr);
+  EXPECT_EQ(fm_workbook_add_person(wb.handle, &empty, &id), FM_STATUS_INVALID_ARGUMENT);
   ASSERT_EQ(fm_workbook_add_person(wb.handle, &first, &id), 0) << fm_get_last_error_message();
   const std::string first_id = id != nullptr ? id : "";
   ASSERT_EQ(fm_workbook_add_person(wb.handle, &second, &id), 0) << fm_get_last_error_message();

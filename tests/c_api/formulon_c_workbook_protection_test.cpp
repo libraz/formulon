@@ -554,11 +554,10 @@ TEST(FormulonCApiProtectedRangePatch, OneSetFieldChangesOnlyThatField) {
   EXPECT_EQ(RangesText(wb, out), "B2:C3 E5");
 
   patch = Patch();
-  patch.security_descriptor_op = FM_PATCH_OP_SET;
-  patch.security_descriptor = "";
+  patch.security_descriptor_op = FM_PATCH_OP_CLEAR;
   ASSERT_EQ(fm_sheet_update_protected_range(wb.handle, 0, "Inputs", &patch), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_sheet_get_protected_range_at(wb.handle, 0, 0, &out), 0);
-  // An empty SET string writes the attribute absent.
+  // CLEAR removes the attribute.
   EXPECT_EQ(out.security_descriptor, nullptr);
   EXPECT_STREQ(out.salt_value, "cw==");
 }

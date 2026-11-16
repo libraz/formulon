@@ -32,6 +32,7 @@ using formulon::c_api::parts::display_formula_text;
 using formulon::c_api::parts::finish_status;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::ingest_entered_formula;
+using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::not_found;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::null_field;
@@ -83,6 +84,12 @@ fm_status_t remove_sheet_item_at(fm_workbook_t* wb, std::size_t sheet_index, std
 fm_status_t convert_hyperlink(const fm_hyperlink_t& hl, formulon::Hyperlink* out) {
   if (auto rc = check_utf8({hl.target, hl.location, hl.display, hl.tooltip}); rc != 0) {
     return rc;
+  }
+  if (hl.target != nullptr && hl.target[0] == '\0') {
+    return invalid_argument("target must not be empty");
+  }
+  if (hl.location != nullptr && hl.location[0] == '\0') {
+    return invalid_argument("location must not be empty");
   }
   if (auto rc = check_sheet_rect(hl.rect); rc != 0) {
     return rc;
@@ -717,6 +724,9 @@ extern "C" fm_status_t fm_sheet_add_validation(fm_workbook_t* wb, std::size_t sh
   std::string* const formula_slots[] = {&out.formula1, &out.formula2};
   for (std::size_t i = 0; i < 2; ++i) {
     if (formula_fields[i] != nullptr) {
+      if (formula_fields[i][0] == '\0') {
+        return invalid_argument("formula must not be empty", i == 0 ? "field=formula1" : "field=formula2");
+      }
       if (auto rc = check_stored_formula(wb, formula_fields[i], i == 0 ? "field=formula1" : "field=formula2",
                                          formula_slots[i]);
           rc != 0) {
@@ -826,6 +836,9 @@ fm_status_t check_validation_patch(const fm_workbook_t* wb, const fm_data_valida
       return rc;
     }
     if (t.is_formula) {
+      if (t.text[0] == '\0') {
+        return formulon::c_api::parts::invalid_argument("formula must not be empty", t.field);
+      }
       if (auto rc = check_stored_formula(wb, t.text, t.field, &t.stored); rc != 0) {
         return rc;
       }
@@ -1060,6 +1073,15 @@ extern "C" fm_status_t fm_sheet_set_sheet_protection(fm_workbook_t* wb, std::siz
     }
     return 0;
   }
+  const std::pair<const char*, const char*> texts[] = {{in->algorithm_name, "algorithm_name"},
+                                                       {in->hash_value, "hash_value"},
+                                                       {in->salt_value, "salt_value"},
+                                                       {in->legacy_password_hash, "legacy_password_hash"}};
+  for (const auto& [value, field] : texts) {
+    if (value != nullptr && value[0] == '\0') {
+      return invalid_argument("string must not be empty", std::string("field=") + field);
+    }
+  }
   if (auto rc = check_utf8({in->algorithm_name, in->hash_value, in->salt_value, in->legacy_password_hash}); rc != 0) {
     return rc;
   }
@@ -1106,6 +1128,9 @@ extern "C" fm_status_t fm_sheet_update_sheet_protection(fm_workbook_t* wb, std::
       return formulon::c_api::parts::null_field(f.name);
     }
     if (f.op == FM_PATCH_OP_SET) {
+      if (f.value[0] == '\0') {
+        return invalid_argument("string must not be empty", std::string("field=") + f.name);
+      }
       if (auto rc = check_utf8(f.value, "patch string"); rc != 0) {
         return rc;
       }

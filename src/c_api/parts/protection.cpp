@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <string>
 #include <utility>
 #include <vector>
@@ -59,6 +60,21 @@ formulon::ProtectedRange ToModel(const fm_protected_range_t& range) {
   out.spin_count = range.spin_count;
   out.security_descriptor = text_or_empty(range.security_descriptor);
   return out;
+}
+
+// Refuses an empty hash, salt, algorithm or descriptor string (api-conventions §5 rule 30); `NULL` is the absent value.
+struct OptionalText {
+  const char* value;
+  const char* field;
+};
+
+fm_status_t CheckNoEmptyText(std::initializer_list<OptionalText> texts) {
+  for (const OptionalText& t : texts) {
+    if (t.value != nullptr && t.value[0] == '\0') {
+      return invalid_argument("string must not be empty", std::string("field=") + t.field);
+    }
+  }
+  return 0;
 }
 
 // A name holds 1..`kMaxProtectedRangeNameUnits` UTF-16 units.
@@ -194,6 +210,17 @@ extern "C" fm_status_t fm_workbook_set_workbook_protection(fm_workbook_t* wb,
   if (auto rc = check_record_size(*protection); rc != 0) {
     return rc;
   }
+  if (auto rc = CheckNoEmptyText({{protection->workbook_legacy_password_hash, "workbook_legacy_password_hash"},
+                                  {protection->workbook_algorithm_name, "workbook_algorithm_name"},
+                                  {protection->workbook_hash_value, "workbook_hash_value"},
+                                  {protection->workbook_salt_value, "workbook_salt_value"},
+                                  {protection->revisions_legacy_password_hash, "revisions_legacy_password_hash"},
+                                  {protection->revisions_algorithm_name, "revisions_algorithm_name"},
+                                  {protection->revisions_hash_value, "revisions_hash_value"},
+                                  {protection->revisions_salt_value, "revisions_salt_value"}});
+      rc != 0) {
+    return rc;
+  }
   if (auto rc = check_utf8({protection->workbook_legacy_password_hash, protection->workbook_algorithm_name,
                             protection->workbook_hash_value, protection->workbook_salt_value,
                             protection->revisions_legacy_password_hash, protection->revisions_algorithm_name,
@@ -302,6 +329,14 @@ extern "C" fm_status_t fm_sheet_add_protected_range(fm_workbook_t* wb, size_t sh
   if (auto rc = check_record_size(*range); rc != 0) {
     return rc;
   }
+  if (auto rc = CheckNoEmptyText({{range->legacy_password_hash, "legacy_password_hash"},
+                                  {range->algorithm_name, "algorithm_name"},
+                                  {range->hash_value, "hash_value"},
+                                  {range->salt_value, "salt_value"},
+                                  {range->security_descriptor, "security_descriptor"}});
+      rc != 0) {
+    return rc;
+  }
   if (auto rc = check_rect_list(range->ranges, range->range_count); rc != 0) {
     return rc;
   }
@@ -352,6 +387,9 @@ extern "C" fm_status_t fm_sheet_update_protected_range(fm_workbook_t* wb, size_t
     if (f.op == FM_PATCH_OP_SET) {
       if (f.value == nullptr) {
         return null_field(f.name);
+      }
+      if (f.clearable && f.value[0] == '\0') {
+        return invalid_argument("string must not be empty", std::string("field=") + f.name);
       }
       if (auto rc = check_utf8({f.value}); rc != 0) {
         return rc;

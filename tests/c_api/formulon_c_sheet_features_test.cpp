@@ -1375,7 +1375,6 @@ TEST_F(FormulonCApiSheetFeatures, ValidationIndexPastTheCountNamesTheParameter) 
 
 TEST_F(FormulonCApiSheetFeatures, SheetProtectionAbsentStringsReadNull) {
   fm_sheet_protection_t in = FM_STRUCT_INIT(fm_sheet_protection_t);
-  in.hash_value = "";
   ASSERT_EQ(fm_sheet_set_sheet_protection(wb_, 0, &in), 0);
   int32_t present = 0;
   fm_sheet_protection_t out = FM_STRUCT_INIT(fm_sheet_protection_t);

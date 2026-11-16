@@ -122,6 +122,9 @@ extern "C" fm_status_t fm_workbook_format_reference(const fm_workbook_t* wb, con
   if (auto rc = check_utf8({sheet_name}); rc != 0) {
     return rc;
   }
+  if (sheet_name != nullptr && sheet_name[0] == '\0') {
+    return invalid_argument("sheet_name must not be empty");
+  }
   if (auto rc = check_cell_coord(row0, col0); rc != 0) {
     return rc;
   }

@@ -42,8 +42,8 @@ using formulon::c_api::parts::utf16_units_to_code_points;
 namespace {
 
 // Copies `count` caller mentions into the model shape, taking the code-point
-// pair when `by_code_point`; a span ending before it starts is refused. An
-// empty mention id is left for the engine to generate.
+// pair when `by_code_point`; a span ending before it starts is refused, and so is an empty person or mention id. A
+// `NULL` mention id is left for the engine to generate.
 fm_status_t mentions_from_fm(const fm_mention_t* mentions, uint32_t count, bool by_code_point,
                              std::vector<formulon::Mention>* out) {
   if (mentions == nullptr && count != 0U) {
@@ -52,6 +52,12 @@ fm_status_t mentions_from_fm(const fm_mention_t* mentions, uint32_t count, bool 
   for (uint32_t i = 0; i < count; ++i) {
     if (auto rc = check_utf8({mentions[i].person_id, mentions[i].mention_id}); rc != 0) {
       return rc;
+    }
+    if (mentions[i].person_id != nullptr && mentions[i].person_id[0] == '\0') {
+      return invalid_argument("person_id must not be empty", "field=mentions[" + std::to_string(i) + "].person_id");
+    }
+    if (mentions[i].mention_id != nullptr && mentions[i].mention_id[0] == '\0') {
+      return invalid_argument("mention_id must not be empty", "field=mentions[" + std::to_string(i) + "].mention_id");
     }
     const std::uint32_t start = by_code_point ? mentions[i].start_cp : mentions[i].start;
     const std::uint32_t end = by_code_point ? mentions[i].end_cp : mentions[i].end;
@@ -204,6 +210,12 @@ extern "C" fm_status_t fm_sheet_add_threaded_comment(fm_workbook_t* wb, size_t s
   // NULL opens a thread; an empty parent id names nothing.
   if (comment->parent_id != nullptr && comment->parent_id[0] == '\0') {
     return invalid_argument("parent_id must not be empty", "field=parent_id");
+  }
+  if (comment->id != nullptr && comment->id[0] == '\0') {
+    return invalid_argument("id must not be empty", "field=id");
+  }
+  if (comment->created != nullptr && comment->created[0] == '\0') {
+    return invalid_argument("created must not be empty", "field=created");
   }
   formulon::ThreadedComment model;
   if (auto rc = mentions_from_fm(comment->mentions, comment->mentions_count,
@@ -404,6 +416,12 @@ extern "C" fm_status_t fm_workbook_add_person(fm_workbook_t* wb, const fm_person
   }
   if (auto rc = check_utf8({person->id, person->display_name, person->user_id, person->provider_id}); rc != 0) {
     return rc;
+  }
+  if (person->id != nullptr && person->id[0] == '\0') {
+    return invalid_argument("id must not be empty", "field=id");
+  }
+  if (person->provider_id != nullptr && person->provider_id[0] == '\0') {
+    return invalid_argument("provider_id must not be empty", "field=provider_id");
   }
   formulon::Person model;
   model.id = text_or_empty(person->id);

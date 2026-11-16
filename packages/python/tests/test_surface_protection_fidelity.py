@@ -87,7 +87,7 @@ class ProtectedRangeTests(unittest.TestCase):
                 self.assertEqual((renamed.name, renamed.ranges), ("Renamed", [CellRect(3, 3, 3, 3)]))
                 # A partial update keeps the fields it does not name.
                 self.assertEqual(renamed.legacy_password_hash, "CC1A")
-                reloaded.sheet(0).update_protected_range(0, legacy_password_hash="")
+                reloaded.sheet(0).update_protected_range(0, legacy_password_hash=None)
                 cleared = reloaded.sheet(0).list_protected_ranges()[0]
                 self.assertEqual(
                     (cleared.name, cleared.ranges, cleared.legacy_password_hash),
