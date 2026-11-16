@@ -176,6 +176,73 @@ TEST(FormulonCApi, SaveLoadRoundTrip) {
   EXPECT_EQ(a1.kind, FM_VALUE_KIND_NUMBER);
   EXPECT_DOUBLE_EQ(a1.u.number, 7.0);
 }
+// A save commits what it changes in the workbook before writing, so a second
+// save of the same workbook writes the first one's bytes.
+TEST(FormulonCApi, SecondSaveWritesTheFirstSavesBytes) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_set_calc_mode(wb.handle, FM_CALC_MODE_MANUAL), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 7.0), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 1, 0, "=A1+1"), 0);
+  for (const std::int32_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
+    SCOPED_TRACE(format);
+    BufferGuard first;
+    BufferGuard second;
+    ASSERT_EQ(fm_workbook_save(wb.handle, format, &first.data, &first.len), 0);
+    ASSERT_EQ(fm_workbook_save(wb.handle, format, &second.data, &second.len), 0);
+    ASSERT_EQ(first.len, second.len);
+    EXPECT_EQ(std::memcmp(first.data, second.data, first.len), 0);
+  }
+}
+
+// The writer compacts and renumbers xfs only in the saved file; the in-memory
+// table keeps its numbering, so an xf index held across a save names the same
+// format after it.
+TEST(FormulonCApi, SaveKeepsTheInMemoryXfNumbering) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_cell_xf_t unused{};
+  unused.num_fmt_id = 14U;
+  unused.apply_number_format = 1;
+  std::uint32_t unused_index = 0U;
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &unused, &unused_index), 0);
+  fm_cell_xf_t used{};
+  used.num_fmt_id = 10U;
+  used.apply_number_format = 1;
+  std::uint32_t used_index = 0U;
+  ASSERT_EQ(fm_workbook_add_cell_xf(wb.handle, &used, &used_index), 0);
+  ASSERT_GT(used_index, unused_index);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 0.5), 0);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 0, 0, used_index), 0);
+  ASSERT_EQ(fm_sheet_set_cell_xf_index(wb.handle, 0, 1, 0, used_index), 0);
+
+  std::size_t count = 0U;
+  ASSERT_EQ(fm_workbook_get_cell_xf_count(wb.handle, &count), 0);
+  std::vector<fm_cell_xf_t> before(count);
+  for (std::size_t i = 0U; i < count; ++i) {
+    ASSERT_EQ(fm_workbook_get_cell_xf_at(wb.handle, static_cast<std::uint32_t>(i), &before[i]), 0);
+  }
+  for (const std::int32_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
+    SCOPED_TRACE(format);
+    BufferGuard saved;
+    ASSERT_EQ(fm_workbook_save(wb.handle, format, &saved.data, &saved.len), 0);
+    std::size_t after_count = 0U;
+    ASSERT_EQ(fm_workbook_get_cell_xf_count(wb.handle, &after_count), 0);
+    ASSERT_EQ(after_count, count);
+    for (std::size_t i = 0U; i < count; ++i) {
+      SCOPED_TRACE(i);
+      fm_cell_xf_t after{};
+      ASSERT_EQ(fm_workbook_get_cell_xf_at(wb.handle, static_cast<std::uint32_t>(i), &after), 0);
+      EXPECT_EQ(std::memcmp(&after, &before[i], sizeof after), 0);
+    }
+    std::int32_t present = 0;
+    std::uint32_t xf = 0U;
+    ASSERT_EQ(fm_sheet_get_cell_xf_index(wb.handle, 0, 0, 0, &present, &xf), 0);
+    EXPECT_EQ(present, 1);
+    EXPECT_EQ(xf, used_index);
+  }
+}
+
 TEST(FormulonCApi, SaveExXlsxMatchesSave) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);

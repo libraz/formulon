@@ -141,24 +141,27 @@ fm_status_t begin_save(const fm_workbook_t* wb, std::int32_t format, uint8_t** o
   return 0;
 }
 
-// The calculation a save adds to `ensure_calculated`: a manual workbook
-// with `calcOnSave` computes its pending cells before it is written.
-fm_status_t calculate_on_save(const fm_workbook_t* wb) {
-  formulon::Workbook& book = const_cast<fm_workbook_t*>(wb)->workbook();
-  if (book.calc_mode() != formulon::CalcMode::kManual || !book.calc_options().calc_on_save ||
-      book.recalc_engine().dirty().size() == 0U) {
-    return 0;
+// What Excel's save commits into its in-memory book beyond the value read
+// gate every save entry point runs first: a manual workbook with `calcOnSave`
+// recalculates its dirty cells, and pivots left stale by a cache edit are
+// projected into their cells. A retry after a failed write finds the book in
+// the same state, so a failed write keeps the commit.
+fm_status_t commit_for_save(fm_workbook_t* wb) {
+  formulon::Workbook& book = wb->workbook();
+  if (book.calc_mode() == formulon::CalcMode::kManual && book.calc_options().calc_on_save &&
+      book.recalc_engine().dirty().size() != 0U) {
+    auto r = book.recalc(formulon::eval::default_registry());
+    if (!r) {
+      return set_last_error(r.error());
+    }
   }
-  auto r = book.recalc(formulon::eval::default_registry());
-  return r ? 0 : set_last_error(r.error());
+  formulon::c_api::parts::project_pending_pivots(book);
+  return 0;
 }
 
 // Writes `wb` as `format`, which `begin_save` accepted, into the out-params.
 fm_status_t write_workbook(const fm_workbook_t* wb, std::int32_t format, uint8_t** out_bytes, size_t* out_len,
                            fm_save_diagnostics_info_t* out_diagnostics) {
-  // Pivots left stale by a cache edit are projected into their cells first. The
-  // handle is never a const object, so the cast is well-defined.
-  formulon::c_api::parts::project_pending_pivots(const_cast<fm_workbook_t*>(wb)->workbook());
   std::vector<std::uint8_t> bytes;
   fm_save_diagnostics_info_t diagnostics = FM_STRUCT_INIT(fm_save_diagnostics_info_t);
   if (format == FM_WORKBOOK_FORMAT_XLSX) {
@@ -333,16 +336,15 @@ extern "C" void fm_workbook_destroy(fm_workbook_t* wb) {
 // Save
 // ---------------------------------------------------------------------------
 
-extern "C" fm_status_t fm_workbook_save_with_diagnostics(const fm_workbook_t* wb, std::int32_t format,
-                                                         uint8_t** out_bytes, size_t* out_len,
-                                                         fm_save_diagnostics_info_t* out_diagnostics) {
+extern "C" fm_status_t fm_workbook_save_with_diagnostics(fm_workbook_t* wb, std::int32_t format, uint8_t** out_bytes,
+                                                         size_t* out_len, fm_save_diagnostics_info_t* out_diagnostics) {
   if (auto rc = begin_save(wb, format, out_bytes, out_len, out_diagnostics); rc != 0) {
     return rc;
   }
   if (auto rc = ensure_calculated(wb); rc != 0) {
     return rc;
   }
-  if (auto rc = calculate_on_save(wb); rc != 0) {
+  if (auto rc = commit_for_save(wb); rc != 0) {
     return rc;
   }
   return write_workbook(wb, format, out_bytes, out_len, out_diagnostics);
@@ -350,8 +352,7 @@ extern "C" fm_status_t fm_workbook_save_with_diagnostics(const fm_workbook_t* wb
 
 // The whole save family shares one failure-path contract: every out-param is
 // zeroed before validation and stays zeroed on every non-`kOk` return.
-extern "C" fm_status_t fm_workbook_save(const fm_workbook_t* wb, std::int32_t format, uint8_t** out_bytes,
-                                        size_t* out_len) {
+extern "C" fm_status_t fm_workbook_save(fm_workbook_t* wb, std::int32_t format, uint8_t** out_bytes, size_t* out_len) {
   fm_save_diagnostics_info_t diagnostics = FM_STRUCT_INIT(fm_save_diagnostics_info_t);
   if (auto rc = begin_save(wb, format, out_bytes, out_len, &diagnostics); rc != 0) {
     return rc;
@@ -359,7 +360,7 @@ extern "C" fm_status_t fm_workbook_save(const fm_workbook_t* wb, std::int32_t fo
   if (auto rc = ensure_calculated(wb); rc != 0) {
     return rc;
   }
-  if (auto rc = calculate_on_save(wb); rc != 0) {
+  if (auto rc = commit_for_save(wb); rc != 0) {
     return rc;
   }
   return write_workbook(wb, format, out_bytes, out_len, &diagnostics);

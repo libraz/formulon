@@ -122,7 +122,7 @@ std::int32_t Dirty(const fm_workbook_t* wb) {
   return dirty;
 }
 
-void SaveAndReload(const fm_workbook_t* wb, WorkbookGuard* out) {
+void SaveAndReload(fm_workbook_t* wb, WorkbookGuard* out) {
   BufferGuard buf;
   ASSERT_EQ(fm_workbook_save(wb, FM_WORKBOOK_FORMAT_XLSX, &buf.data, &buf.len), 0) << fm_get_last_error_message();
   ASSERT_EQ(fm_workbook_load(buf.data, buf.len, nullptr, &out->handle), 0) << fm_get_last_error_message();

@@ -337,7 +337,7 @@ removed fm_sheet_set_page_setup :: renamed to fm_sheet_update_page_setup, which 
 removed fm_sheet_set_print_options :: renamed to fm_sheet_update_print_options, which merges a const fm_print_options_patch_t*
 removed fm_sheet_set_show_row_col_headers :: set show_row_column_headers through fm_sheet_update_view
 removed fm_workbook_clear_pinned_now :: fm_workbook_set_pinned_now with NULL releases the pin
-signature fm_workbook_save_with_diagnostics :: parameter type renamed (fm_save_diagnostics_t -> fm_save_diagnostics_info_t); format ordinals are FM_WORKBOOK_FORMAT_XLSX 0 and FM_WORKBOOK_FORMAT_XLSB 1, FM_WORKBOOK_FORMAT_UNKNOWN is gone
+signature fm_workbook_save_with_diagnostics :: parameter type renamed (fm_save_diagnostics_t -> fm_save_diagnostics_info_t); format ordinals are FM_WORKBOOK_FORMAT_XLSX 0 and FM_WORKBOOK_FORMAT_XLSB 1, FM_WORKBOOK_FORMAT_UNKNOWN is gone; wb is no longer const, since a save changes the workbook as Excel's save does
 signature fm_workbook_get_iterative :: fills an fm_iterative_settings_info_t* out in place of out_enabled, out_max_iterations and out_max_change
 signature fm_sheet_get_view :: parameter type renamed (fm_sheet_view_t -> fm_sheet_view_info_t)
 signature fm_sheet_set_column_outline :: takes a uint32_t level (above 7 is FM_STATUS_INVALID_ARGUMENT) instead of uint8_t
@@ -348,7 +348,7 @@ removed fm_sheet_set_show_zeros :: set show_zeros through fm_sheet_update_view
 removed fm_sheet_set_right_to_left :: set right_to_left through fm_sheet_update_view
 removed fm_sheet_set_tab_selected :: set tab_selected through fm_sheet_update_view
 signature fm_workbook_load :: takes a const fm_load_options_spec_t* before out (NULL keeps the defaults); the spec's profile_id assigns the loaded workbook's profile without dirtying any formula
-signature fm_workbook_save :: takes an int32_t format (fm_workbook_format_t: FM_WORKBOOK_FORMAT_XLSX 0, FM_WORKBOOK_FORMAT_XLSB 1) before out_bytes
+signature fm_workbook_save :: takes an int32_t format (fm_workbook_format_t: FM_WORKBOOK_FORMAT_XLSX 0, FM_WORKBOOK_FORMAT_XLSB 1) before out_bytes; wb is no longer const, since a save changes the workbook as Excel's save does
 removed fm_workbook_save_as :: fm_workbook_save takes the format
 removed fm_chart_axis_at :: renamed fm_chart_get_axis_at
 removed fm_chart_data_axis_title_at :: renamed fm_chart_data_get_axis_title_at

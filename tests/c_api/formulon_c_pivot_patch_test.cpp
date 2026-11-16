@@ -814,7 +814,7 @@ std::vector<std::pair<std::string, int32_t>> Expansions(const fm_workbook_t* wb,
   return out;
 }
 
-ReportRows ReloadedReport(const fm_workbook_t* wb, fm_workbook_format_t format, std::size_t sheet) {
+ReportRows ReloadedReport(fm_workbook_t* wb, fm_workbook_format_t format, std::size_t sheet) {
   BufferGuard saved;
   EXPECT_EQ(fm_workbook_save(wb, format, &saved.data, &saved.len), 0) << fm_get_last_error_message();
   WorkbookGuard loaded;

@@ -685,6 +685,12 @@ typedef enum {
  * `fm_workbook_save_with_diagnostics` alike. Mixing allocators across the
  * boundary is undefined.
  *
+ * A save changes the workbook as Excel's save changes its open book, before
+ * anything is written: pending values are computed, a manual workbook with
+ * `calcOnSave` recalculates, and pivots left stale by a cache edit are
+ * projected into their cells. A write that fails keeps those changes; a
+ * retry starts from the same state and writes the same bytes.
+ *
  * Lifetime: owned (until fm_buffer_destroy).
  *
  * @param wb         Workbook handle. Must be non-NULL.
@@ -700,7 +706,7 @@ typedef enum {
  *         one, `sheet_index=` the sheet;
  *         another `FM_STATUS_IO_*` code on archive / writer failure.
  */
-FM_API fm_status_t fm_workbook_save(const fm_workbook_t* wb, int32_t format, uint8_t** out_bytes, size_t* out_len);
+FM_API fm_status_t fm_workbook_save(fm_workbook_t* wb, int32_t format, uint8_t** out_bytes, size_t* out_len);
 
 /**
  * @brief Loss and fallback counters produced by one save.
@@ -758,7 +764,7 @@ typedef struct {
  *         one, `sheet_index=` the sheet;
  *         another `FM_STATUS_IO_*` code on archive / writer failure.
  */
-FM_API fm_status_t fm_workbook_save_with_diagnostics(const fm_workbook_t* wb, int32_t format, uint8_t** out_bytes,
+FM_API fm_status_t fm_workbook_save_with_diagnostics(fm_workbook_t* wb, int32_t format, uint8_t** out_bytes,
                                                      size_t* out_len, fm_save_diagnostics_info_t* out_diagnostics);
 
 /**
