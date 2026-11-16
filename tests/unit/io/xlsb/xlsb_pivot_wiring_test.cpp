@@ -83,6 +83,38 @@ std::map<std::string, tc::Bytes> Parts(const std::vector<std::uint8_t>& package,
   return out;
 }
 
+/// An Excel save whose cache the reader refuses: its first cache field header carries a reserved byte Excel never
+/// sets, so the cache and its table stay an unmodelled group.
+tc::Bytes UnmodelledGroup() {
+  constexpr std::uint16_t kBeginPCDField = 183;
+  constexpr std::size_t kFirstReservedByte = 4;
+  const tc::Bytes source = tc::ReadBytes(Fixture("pivot_line_shapes/M6a_page_field_only.xlsb"));
+  const std::string name = "xl/pivotCache/pivotCacheDefinition1.bin";
+  tc::Bytes part = tc::ReadPart(source, name).value_or(tc::Bytes{});
+  std::size_t at = 0;
+  while (at < part.size()) {
+    std::uint16_t type = part[at] & 0x7FU;
+    if ((part[at++] & 0x80U) != 0U) {
+      type |= static_cast<std::uint16_t>((part[at++] & 0x7FU) << 7U);
+    }
+    std::size_t size = 0;
+    for (unsigned shift = 0;; shift += 7U) {
+      const std::uint8_t b = part[at++];
+      size |= static_cast<std::size_t>(b & 0x7FU) << shift;
+      if ((b & 0x80U) == 0U) {
+        break;
+      }
+    }
+    if (type == kBeginPCDField) {
+      part[at + kFirstReservedByte] = 1U;
+      return RepackWithEntries(source, {{name, part}});
+    }
+    at += size;
+  }
+  ADD_FAILURE() << "no cache field in " << name;
+  return source;
+}
+
 void ExpectValidXlsb(const std::vector<std::uint8_t>& bytes) {
   const std::vector<std::string> findings = formulon::test::ValidateXlsbPackage(SpanOf(bytes));
   EXPECT_TRUE(findings.empty()) << (findings.empty() ? "" : findings.front());
@@ -384,7 +416,7 @@ TEST(XlsbPivotWiring, ARefreshedTablesFormatAreaKeepsItsItem) {
 // A group the reader cannot model keeps its cache and parts verbatim, as every
 // xlsb pivot did before the model could write them.
 TEST(XlsbPivotWiring, AnUnreadGroupPassesThroughWhole) {
-  const tc::Bytes source = tc::ReadBytes(Fixture("pivot_line_shapes/M6a_page_field_only.xlsb"));
+  const tc::Bytes source = UnmodelledGroup();
   const std::map<std::string, tc::Bytes> source_parts = Parts(source, "xl/pivot");
   ASSERT_FALSE(source_parts.empty());
   const Workbook wb = LoadXlsb(source);
@@ -400,7 +432,7 @@ TEST(XlsbPivotWiring, AnUnreadGroupPassesThroughWhole) {
 // An xlsx package cannot carry an unmodelled group's binary parts: the group is left out whole, its
 // relationships with it, and counted.
 TEST(XlsbPivotWiring, AnXlsxSaveLeavesAnUnreadGroupOutAndCountsIt) {
-  const tc::Bytes source = tc::ReadBytes(Fixture("pivot_line_shapes/M6a_page_field_only.xlsb"));
+  const tc::Bytes source = UnmodelledGroup();
   ASSERT_EQ(Parts(source, "xl/pivotTables/").size(), 1U);
   const Workbook wb = LoadXlsb(source);
   ASSERT_EQ(PivotCount(wb), 0U);

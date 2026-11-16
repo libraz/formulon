@@ -88,8 +88,6 @@ pivot_calc/cf3_quoted_names_if.xlsx model_xlsb pivot_count known_gap  # pending:
 pivot_calc/cf4_function_average_count.xlsx model_xlsb pivot_count known_gap  # pending: cache bridge refuses calculated fields
 pivot_calc/cf5_nested_calc_field.xlsx model_xlsb pivot_count known_gap  # pending: cache bridge refuses calculated fields
 pivot_calc/ci3_item_positional_refs.xlsx model_xlsb pivot_count known_gap  # pending: cache bridge refuses positional calculated item references
-pivot_line_shapes/M6a_page_field_only.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a table without row and column line items
-pivot_line_shapes/M6b_completely_empty.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a table without row and column line items
 pivot_options/op_alttext.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses alternative text
 pivot_options/op_emptycol_show_all.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses showEmptyRow / showEmptyCol
 pivot_options/op_emptyrow_show_all.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses showEmptyRow / showEmptyCol
@@ -105,16 +103,6 @@ rich_errors/notypes_pivot_resaved.xlsx model_xlsb pivot_count known_gap  # pendi
 rich_errors/pivot_blocked.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a blocked pivot
 rich_errors/pvpage_blocked.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a blocked pivot
 xlsb_parity/pivot/hide_values_row_src.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a table extLst other than Excel default (hideValuesRow)
-pivot_line_shapes/M6a_page_field_only.xlsb drop_xlsx rel:xl/pivotCache/pivotCacheDefinition1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
-pivot_line_shapes/M6a_page_field_only.xlsb drop_xlsx rel:xl/pivotTables/pivotTable1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
-pivot_line_shapes/M6a_page_field_only.xlsb drop_xlsx xl/pivotCache/pivotCacheDefinition1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
-pivot_line_shapes/M6a_page_field_only.xlsb drop_xlsx xl/pivotCache/pivotCacheRecords1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
-pivot_line_shapes/M6a_page_field_only.xlsb drop_xlsx xl/pivotTables/pivotTable1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
-pivot_line_shapes/M6b_completely_empty.xlsb drop_xlsx rel:xl/pivotCache/pivotCacheDefinition1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
-pivot_line_shapes/M6b_completely_empty.xlsb drop_xlsx rel:xl/pivotTables/pivotTable1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
-pivot_line_shapes/M6b_completely_empty.xlsb drop_xlsx xl/pivotCache/pivotCacheDefinition1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
-pivot_line_shapes/M6b_completely_empty.xlsb drop_xlsx xl/pivotCache/pivotCacheRecords1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
-pivot_line_shapes/M6b_completely_empty.xlsb drop_xlsx xl/pivotTables/pivotTable1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
 pivot_line_shapes/M7b_outer_tabular_inner_outline.xlsb drop_xlsx rel:xl/pivotCache/pivotCacheDefinition1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
 pivot_line_shapes/M7b_outer_tabular_inner_outline.xlsb drop_xlsx rel:xl/pivotTables/pivotTable1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
 pivot_line_shapes/M7b_outer_tabular_inner_outline.xlsb drop_xlsx xl/pivotCache/pivotCacheDefinition1.bin unmodelled_dropped  # a pivot the xlsb reader does not model

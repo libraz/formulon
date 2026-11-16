@@ -243,13 +243,27 @@ TEST(XlsbPivotLineItemRecords, RefusesUncharacterisedShapes) {
   refused = decode_line_items(records, &pos, SxLineItemAxis::kRows);
   ASSERT_FALSE(refused.has_value());
   EXPECT_EQ(refused.error().code, FormulonErrorCode::kIoXlsbRecordCorrupt);
+}
 
-  // A column block read as rows.
-  records = Frame(bytes);
-  pos = 0;
-  refused = decode_line_items(records, &pos, SxLineItemAxis::kCols);
-  ASSERT_FALSE(refused.has_value());
-  EXPECT_EQ(refused.error().code, FormulonErrorCode::kIoXlsbUnknownRecord);
+// Excel writes no block for an axis without line items: a table with no fields on rows, columns or values.
+TEST(XlsbPivotLineItemRecords, AnAxisWithNoItemsHasNoBlock) {
+  std::vector<std::uint8_t> bytes;
+  encode_line_items(bytes, SxLineItems{}, SxLineItemAxis::kRows);
+  EXPECT_TRUE(bytes.empty());
+
+  SxLineItems items;
+  items.items.push_back(SxLineItem{0, 0, 0, {2U}});
+  encode_line_items(bytes, items, SxLineItemAxis::kRows);
+  const std::vector<XlsbRecord> records = Frame(bytes);
+  std::size_t pos = 0;
+  auto cols = decode_line_items(records, &pos, SxLineItemAxis::kCols);
+  ASSERT_TRUE(cols.has_value());
+  EXPECT_TRUE(cols.value().items.empty());
+  EXPECT_EQ(pos, 0U);
+  auto rows = decode_line_items(records, &pos, SxLineItemAxis::kRows);
+  ASSERT_TRUE(rows.has_value());
+  EXPECT_EQ(rows.value().items.size(), 1U);
+  EXPECT_EQ(pos, records.size());
 }
 
 }  // namespace

@@ -48,14 +48,16 @@ struct SxLineItems {
 
 /// Decodes the line-item block whose begin record is `records[*pos]`
 /// (BrtBeginSXLIRws or BrtBeginSXLICols, matching `axis`) through its end
-/// record; on success `*pos` indexes the record after the end record.
+/// record; on success `*pos` indexes the record after the end record. Excel
+/// writes no block for an axis with no line items, so a missing begin record
+/// decodes as no items and leaves `*pos` unchanged.
 ///
 /// Errors: `kIoXlsbUnknownRecord` for a record the block does not admit,
 /// `kIoXlsbRecordCorrupt` for a malformed payload or a count mismatch.
 Expected<SxLineItems, Error> decode_line_items(const std::vector<XlsbRecord>& records, std::size_t* pos,
                                                SxLineItemAxis axis);
 
-/// Appends the framed line-item block for `axis` to `dst`.
+/// Appends the framed line-item block for `axis` to `dst`; nothing for no items.
 void encode_line_items(std::vector<std::uint8_t>& dst, const SxLineItems& items, SxLineItemAxis axis);
 
 }  // namespace xlsb

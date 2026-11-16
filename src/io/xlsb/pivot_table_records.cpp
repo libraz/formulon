@@ -663,25 +663,29 @@ Expected<PivotTableDoc, Error> decode_pivot_table(ByteSpan part) {
     doc.page_fields = std::move(pages);
   }
 
-  ASSIGN_OR_RETURN(const ByteSpan dis, recs.take(ids::kBeginSXDIs, "xlsb pivot data fields expected"));
-  ASSIGN_OR_RETURN(const std::uint32_t data_count, CountOf(dis));
-  while (recs.peek(ids::kBeginSXDI)) {
-    ASSIGN_OR_RETURN(const ByteSpan di, recs.take(ids::kBeginSXDI, "xlsb pivot data field expected"));
-    ASSIGN_OR_RETURN(SxDataField data, DecodeDataField(di));
-    if (recs.peek(kFrtBegin)) {
-      ASSIGN_OR_RETURN(const ByteSpan x14, DecodeFrt14(recs, ids::kSXDI14));
-      if (x14.size != kDataField14Size || load_u32(x14.data) != 0U || load_u32(x14.data + 8) != 0xFFFFFFFFU ||
-          x14.data[12] != 0U || load_u32(x14.data + 4) != kSxDataShowAsPercentOfParentRow || data.show_data_as != 0U) {
-        return Corrupt("xlsb pivot data field x14 record carries an unmeasured state");
+  // A table with no data fields carries no data field list.
+  if (recs.peek(ids::kBeginSXDIs)) {
+    ASSIGN_OR_RETURN(const ByteSpan dis, recs.take(ids::kBeginSXDIs, "xlsb pivot data fields expected"));
+    ASSIGN_OR_RETURN(const std::uint32_t data_count, CountOf(dis));
+    while (recs.peek(ids::kBeginSXDI)) {
+      ASSIGN_OR_RETURN(const ByteSpan di, recs.take(ids::kBeginSXDI, "xlsb pivot data field expected"));
+      ASSIGN_OR_RETURN(SxDataField data, DecodeDataField(di));
+      if (recs.peek(kFrtBegin)) {
+        ASSIGN_OR_RETURN(const ByteSpan x14, DecodeFrt14(recs, ids::kSXDI14));
+        if (x14.size != kDataField14Size || load_u32(x14.data) != 0U || load_u32(x14.data + 8) != 0xFFFFFFFFU ||
+            x14.data[12] != 0U || load_u32(x14.data + 4) != kSxDataShowAsPercentOfParentRow ||
+            data.show_data_as != 0U) {
+          return Corrupt("xlsb pivot data field x14 record carries an unmeasured state");
+        }
+        data.pivot_show_as = load_u32(x14.data + 4);
       }
-      data.pivot_show_as = load_u32(x14.data + 4);
+      RETURN_IF_ERROR(recs.take_end(ids::kEndSXDI, "xlsb pivot data field is not closed"));
+      doc.data_fields.push_back(std::move(data));
     }
-    RETURN_IF_ERROR(recs.take_end(ids::kEndSXDI, "xlsb pivot data field is not closed"));
-    doc.data_fields.push_back(std::move(data));
-  }
-  RETURN_IF_ERROR(recs.take_end(ids::kEndSXDIs, "xlsb pivot data field list carries an uncharacterised record"));
-  if (doc.data_fields.size() != data_count) {
-    return Corrupt("xlsb pivot data field count does not match the fields decoded");
+    RETURN_IF_ERROR(recs.take_end(ids::kEndSXDIs, "xlsb pivot data field list carries an uncharacterised record"));
+    if (doc.data_fields.size() != data_count) {
+      return Corrupt("xlsb pivot data field count does not match the fields decoded");
+    }
   }
   if (recs.peek(ids::kBeginSXFormats)) {
     ASSIGN_OR_RETURN(doc.formats, DecodeFormats(recs));
@@ -774,28 +778,30 @@ Expected<std::vector<std::uint8_t>, Error> encode_pivot_table(const PivotTableDo
     }
     EmitEmpty(out, ids::kEndSXPIs);
   }
-  EmitCount(out, ids::kBeginSXDIs, doc.data_fields.size());
   std::vector<std::uint8_t> p;
-  for (const SxDataField& data : doc.data_fields) {
-    p.clear();
-    for (const std::uint32_t v :
-         {data.field, data.subtotal, data.show_data_as, data.base_field, data.base_item, data.num_fmt}) {
-      emit_u32(p, v);
+  if (!doc.data_fields.empty()) {
+    EmitCount(out, ids::kBeginSXDIs, doc.data_fields.size());
+    for (const SxDataField& data : doc.data_fields) {
+      p.clear();
+      for (const std::uint32_t v :
+           {data.field, data.subtotal, data.show_data_as, data.base_field, data.base_item, data.num_fmt}) {
+        emit_u32(p, v);
+      }
+      emit_u8(p, kDataFieldHasName);
+      emit_xlwidestring(p, data.name);
+      emit_record(out, ids::kBeginSXDI, p);
+      if (data.pivot_show_as) {
+        std::vector<std::uint8_t> x14;
+        emit_u32(x14, 0U);
+        emit_u32(x14, *data.pivot_show_as);
+        emit_u32(x14, 0xFFFFFFFFU);
+        emit_u8(x14, 0U);
+        EmitFrt14(out, ids::kSXDI14, x14.data(), x14.size());
+      }
+      EmitEmpty(out, ids::kEndSXDI);
     }
-    emit_u8(p, kDataFieldHasName);
-    emit_xlwidestring(p, data.name);
-    emit_record(out, ids::kBeginSXDI, p);
-    if (data.pivot_show_as) {
-      std::vector<std::uint8_t> x14;
-      emit_u32(x14, 0U);
-      emit_u32(x14, *data.pivot_show_as);
-      emit_u32(x14, 0xFFFFFFFFU);
-      emit_u8(x14, 0U);
-      EmitFrt14(out, ids::kSXDI14, x14.data(), x14.size());
-    }
-    EmitEmpty(out, ids::kEndSXDI);
+    EmitEmpty(out, ids::kEndSXDIs);
   }
-  EmitEmpty(out, ids::kEndSXDIs);
   if (!doc.formats.empty()) {
     EmitCount(out, ids::kBeginSXFormats, doc.formats.size());
     for (const SxFormat& format : doc.formats) {

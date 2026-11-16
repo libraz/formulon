@@ -41,8 +41,9 @@ bool TakeEnd(const std::vector<XlsbRecord>& records, std::size_t* pos, std::uint
 
 Expected<SxLineItems, Error> decode_line_items(const std::vector<XlsbRecord>& records, std::size_t* pos,
                                                SxLineItemAxis axis) {
+  // Excel leaves the block out of a table with no line items on the axis.
   if (*pos >= records.size() || records[*pos].type != BeginId(axis)) {
-    return Unexpected("xlsb pivot line-item block does not start with its begin record");
+    return SxLineItems{};
   }
   const ByteSpan begin = records[*pos].payload;
   if (begin.size != 4U) {
@@ -97,6 +98,9 @@ Expected<SxLineItems, Error> decode_line_items(const std::vector<XlsbRecord>& re
 }
 
 void encode_line_items(std::vector<std::uint8_t>& dst, const SxLineItems& items, SxLineItemAxis axis) {
+  if (items.items.empty()) {
+    return;
+  }
   std::vector<std::uint8_t> payload;
   emit_u32(payload, static_cast<std::uint32_t>(items.items.size()));
   emit_record(dst, BeginId(axis), payload);

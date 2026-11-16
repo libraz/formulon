@@ -617,13 +617,13 @@ Expected<void, Error> ReadFieldOrder(const std::optional<std::vector<std::uint32
 
 /// `<rowItems>` / `<colItems>` spelled as Excel writes them.
 std::string LineItemsXml(const SxLineItems& block, std::string_view tag) {
+  // Excel writes neither the block nor the element for an axis with no line items.
+  if (block.items.empty()) {
+    return std::string();
+  }
   std::string out("<");
   out.append(tag);
   append_xml_attr_uint(out, "count", block.items.size());
-  if (block.items.empty()) {
-    out.append("/>");
-    return out;
-  }
   out.push_back('>');
   for (const SxLineItem& line : block.items) {
     out.append("<i");
@@ -1329,8 +1329,11 @@ bool WriteFieldOrder(const std::vector<std::uint32_t>& order, std::optional<std:
 }
 
 bool WriteLineItems(std::string_view xml, std::string_view tag, SxLineItems& out) {
+  if (xml.empty()) {
+    return true;
+  }
   pugi::xml_document doc;
-  const pugi::xml_node root = xml.empty() ? pugi::xml_node() : LoadOne(doc, xml, tag);
+  const pugi::xml_node root = LoadOne(doc, xml, tag);
   const std::optional<std::vector<pugi::xml_node>> lines = root ? Elements(root) : std::nullopt;
   if (!lines || !OnlyAttrs(root, {"count"}) || attr_u32(root, "count", 0U) != lines->size()) {
     return false;
