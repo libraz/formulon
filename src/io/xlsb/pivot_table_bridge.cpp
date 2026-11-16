@@ -1604,15 +1604,18 @@ bool WriteTable(const pivot::PivotTable& table, ExcelHost host, std::optional<Pi
   }
   const bool compact = form_override ? *form.compact : table.layout() == pivot::PivotLayout::Compact;
   const bool outline = form_override ? *form.outline : table.layout() != pivot::PivotLayout::Tabular;
+  // The view's row outline bit is set when any row field is in outline form.
   bool row_outline = false;
-  if (!table.row_field_order().empty()) {
-    const std::uint32_t first = table.row_field_order().front();
-    bool first_compact = false;
-    if (first >= table.fields().size() ||
-        !FieldForm(table.fields()[first], table.layout(), first_compact, row_outline)) {
+  for (const std::uint32_t index : table.row_field_order()) {
+    bool field_compact = false;
+    bool field_outline = false;
+    if (index >= table.fields().size() ||
+        !FieldForm(table.fields()[index], table.layout(), field_compact, field_outline)) {
       return false;
     }
-  } else if (table.row_values_position()) {
+    row_outline = row_outline || field_outline;
+  }
+  if (table.row_field_order().empty() && table.row_values_position()) {
     return false;
   }
 
@@ -1713,12 +1716,15 @@ Expected<pivot::PivotTable, Error> pivot_table_from_xlsb(ByteSpan part) {
   std::optional<std::size_t> row_values;
   RETURN_IF_ERROR(ReadFieldOrder(doc.row_fields, field_count, table.mutable_row_field_order(), row_values));
   table.set_row_values_position(row_values);
-  // The first row field's own form decides the table's, as in the xlsx reader.
+  // The first row field's own form decides the table's, as in the xlsx reader; the view's row outline bit is set
+  // when any row field is in outline form.
   bool row_outline = false;
   if (!table.row_field_order().empty()) {
     const SxField& first = doc.fields[table.row_field_order().front()];
-    row_outline = (first.flags & kSxFieldOutline) != 0U;
-    table.set_layout(FormOf((first.name_flags & kSxFieldCompact) != 0U, row_outline));
+    table.set_layout(FormOf((first.name_flags & kSxFieldCompact) != 0U, (first.flags & kSxFieldOutline) != 0U));
+    for (const std::uint32_t index : table.row_field_order()) {
+      row_outline = row_outline || (doc.fields[index].flags & kSxFieldOutline) != 0U;
+    }
   }
   if (((view.flags6 & kViewRowOutline) != 0U) != row_outline ||
       (view.data_axis == kDataOnRows) != row_values.has_value()) {

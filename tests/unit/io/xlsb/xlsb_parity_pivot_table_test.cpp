@@ -43,7 +43,8 @@ namespace tc = test;
 using tc::Bytes;
 
 /// (xlsb, xlsx) paths of every Excel-saved pivot pair: the twin corpus, the
-/// two Windows-saved grouping books and the two tables with no line items.
+/// two Windows-saved grouping books, the two tables with no line items and
+/// the two with row fields in different forms.
 std::vector<std::pair<std::string, std::string>> TwinPairs() {
   const std::string root = std::string(FORMULON_FIXTURES_DIR) + "/excel/";
   std::vector<std::string> xlsb_paths;
@@ -56,6 +57,8 @@ std::vector<std::pair<std::string, std::string>> TwinPairs() {
   xlsb_paths.push_back(root + "win/pivot_week_1900/pivot_week_1900.xlsb");
   xlsb_paths.push_back(root + "pivot_line_shapes/M6a_page_field_only.xlsb");
   xlsb_paths.push_back(root + "pivot_line_shapes/M6b_completely_empty.xlsb");
+  xlsb_paths.push_back(root + "pivot_line_shapes/M7a_outer_outline_inner_compact.xlsb");
+  xlsb_paths.push_back(root + "pivot_line_shapes/M7b_outer_tabular_inner_outline.xlsb");
   std::sort(xlsb_paths.begin(), xlsb_paths.end());
   std::vector<std::pair<std::string, std::string>> pairs;
   for (const std::string& path : xlsb_paths) {
@@ -246,8 +249,9 @@ bool SamePayload(std::uint16_t type, const Bytes& excel, const Bytes& ours) {
 }
 
 TEST(XlsbParityPivotTableTwins, CorpusIsPresent) {
-  // 82 twin pairs, the two Windows grouping books and the two tables with no line items.
-  EXPECT_EQ(TwinPairs().size(), 86U);
+  // 82 twin pairs, the two Windows grouping books, the two tables with no line items and the two with mixed row
+  // field forms.
+  EXPECT_EQ(TwinPairs().size(), 88U);
 }
 
 TEST(XlsbParityPivotTableTwins, ReadMatchesXlsxTwin) {
