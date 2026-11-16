@@ -1789,9 +1789,8 @@ FM_API fm_status_t fm_sheet_get_lambda_text(const fm_workbook_t* wb, size_t shee
  * `*out` is always `FM_VALUE_KIND_BOOL`. Read-only, identical purity contract to
  * `fm_sheet_evaluate_formula_array`.
  *
- * @note The same self-reference caveat as `fm_sheet_evaluate_formula_array`
- *       applies: a rule that reads its own anchored cell sees the cached
- *       value rather than raising `#REF!`.
+ * @note A rule that reads its own anchored cell sees the cached value
+ *       rather than raising `#REF!`.
  *
  * Lifetime: transient.
  *
@@ -1848,11 +1847,11 @@ typedef struct fm_value_array fm_value_array_t;
  * A degenerate empty array result (which producers should never emit)
  * surfaces as a single `#VALUE!` cell.
  *
- * @note Because the ad-hoc formula is never inserted into the dependency
- *       graph, a self-reference such as `=A1` anchored at A1's own address
- *       reads A1's *cached* value rather than raising `#REF!` or engaging
- *       iterative calc. This diverges from true in-cell F9 entry;
- *       self-reference detection is out of scope for this API.
+ * @note A formula that refers to its own anchor cell, such as `=A1+1`
+ *       anchored at A1, is a self-cycle: under automatic calculation the
+ *       result is 0, as for a cell holding that formula. Under manual
+ *       calculation, or with iterative calculation enabled, the anchor's
+ *       cached value is read instead (`=A1+1` at an empty A1 gives 1).
  *
  * Lifetime: owned (until fm_value_array_destroy).
  *

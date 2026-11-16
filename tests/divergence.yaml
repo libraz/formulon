@@ -139,7 +139,7 @@ entries:
     mode: skip-oracle
     scope: api-contract
     evidence: [tests/unit/io/hyperlink_roundtrip_test.cpp]
-    reason: "A link set with target `ftp://e.x/a b` is saved with Target `ftp://e.x/a%20b`; Mac Excel writes the literal string `NULL`, so the target is lost in its file. Deliberately not reproduced."
+    reason: "A link set with target `ftp://e.x/a b` is saved with Target `ftp://e.x/a%20b`; Mac Excel writes the literal string `NULL`, so the target is lost in its file. Excel's own file no longer holds the link, and reproducing a destroyed target is not a compatibility goal."
     prefer: formulon
     first_noted: 2026-11-11
     last_verified_excel_version: "16.114.4"
@@ -191,7 +191,7 @@ entries:
     mode: skip-oracle
     scope: api-contract
     evidence: [tests/unit/io/book_location_save_test.cpp]
-    reason: "A link to `…/f1/a%b.xlsx` saved from `…/f1/` is written by Excel with Target and display `a%2525b.xlsx`, which no longer names the file, and every reopen and save adds another level (`a%252525b.xlsx`). Formulon escapes a stray '%' once and writes `a%25b.xlsx`, which decodes to `a%b.xlsx` and stays the same across saves."
+    reason: "A link to `…/f1/a%b.xlsx` saved from `…/f1/` is written by Excel with Target and display `a%2525b.xlsx`, which no longer names the file, and every reopen and save adds another level (`a%252525b.xlsx`). Formulon escapes a stray '%' once and writes `a%25b.xlsx`, which decodes to `a%b.xlsx` and stays the same across saves. Excel's own file no longer names the linked file, and reproducing a destroyed target is not a compatibility goal."
     prefer: formulon
     first_noted: 2026-11-11
     last_verified_excel_version: "16.115"
@@ -750,16 +750,6 @@ entries:
     scope: unit-test
     evidence: [tests/unit/eval/recalc_engine_test.cpp]
     reason: "With iterative calculation off, Excel leaves a cell that reads a cycle member at 0 when the cell was entered after the cycle closed (C1 =A1+1, D1 =C1+1, E1 =ISERROR(D1), =ISNUMBER(A1) all read 0, at any depth and on another sheet), and computes it from the members' values when it existed before (C1 2, D1 3, ISERROR FALSE, ISNUMBER TRUE). Neither state changes under Calculate, CalculateFull or CalculateFullRebuild, and the workbook does not record which order produced it. The same holds downstream of a single-cell self-cycle (C1 0 entered after, 1 entered before). Breaking the cycle recomputes every cell. Formulon reports a multi-cell cycle's members as #REF! and propagates it downstream, so ISERROR of a downstream cell is TRUE; downstream of a self-cycle it computes from the member's 0."
-    prefer: formulon
-    first_noted: 2026-10-18
-    last_verified_excel_version: "16.113.4"
-  - id: adhoc_evaluation_self_reference_reads_cached_value
-    applies_to: all
-    cause: accepted-divergence
-    mode: skip-oracle
-    scope: api-contract
-    evidence: [src/c_api/formulon_c.h]
-    reason: "An ad-hoc evaluation (fm_sheet_evaluate_formula and its siblings) is never inserted into the dependency graph, so a formula that refers to its own anchor cell reads that cell's cached value: =A1+1 anchored at an empty A1 gives 1. Excel with automatic calculation leaves such a cell at 0 (manual calculation gives 1). Whole-axis and bounded self-rectangles are answered by the walker's cycle rule and give 0 on this path too."
     prefer: formulon
     first_noted: 2026-10-18
     last_verified_excel_version: "16.113.4"

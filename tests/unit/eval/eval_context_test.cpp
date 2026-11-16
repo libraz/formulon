@@ -269,6 +269,45 @@ TEST(EvalContextRecursive, ReadOnlyEvalIgnoresIterativeCalcOnSelfReference) {
   EXPECT_DOUBLE_EQ(result.as_number(), 8.0);
 }
 
+namespace {
+
+double adhoc_number(const Workbook& wb, std::uint32_t row, std::uint32_t col, const char* formula) {
+  Arena arena;
+  const Value v = evaluate_formula_text(wb, wb.sheet(0), row, col, formula, arena, default_registry());
+  EXPECT_TRUE(v.is_number()) << formula;
+  return v.is_number() ? v.as_number() : -1.0;
+}
+
+}  // namespace
+
+TEST(EvalContextRecursive, AdhocSelfReferenceOnEmptyAnchorIsZeroUnderAutoCalc) {
+  Workbook wb = Workbook::create();
+  EXPECT_DOUBLE_EQ(adhoc_number(wb, 0U, 0U, "=A1+1"), 0.0);
+  EXPECT_DOUBLE_EQ(adhoc_number(wb, 0U, 0U, "=SUM(A1,2)"), 0.0);
+}
+
+TEST(EvalContextRecursive, AdhocSelfReferenceOnValueAnchorIsZeroUnderAutoCalc) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(5.0))));
+  EXPECT_DOUBLE_EQ(adhoc_number(wb, 0U, 0U, "=A1+1"), 0.0);
+}
+
+TEST(EvalContextRecursive, AdhocSelfReferenceReadsCachedValueUnderManualCalc) {
+  Workbook wb = Workbook::create();
+  wb.set_calc_mode(CalcMode::kManual);
+  EXPECT_DOUBLE_EQ(adhoc_number(wb, 0U, 0U, "=A1+1"), 1.0);
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(5.0))));
+  EXPECT_DOUBLE_EQ(adhoc_number(wb, 0U, 0U, "=A1+1"), 6.0);
+}
+
+TEST(EvalContextRecursive, AdhocFormulaNotTouchingAnchorIsUnchanged) {
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 1U, Value::number(4.0))));  // B1
+  EXPECT_DOUBLE_EQ(adhoc_number(wb, 0U, 0U, "=1+2"), 3.0);
+  EXPECT_DOUBLE_EQ(adhoc_number(wb, 0U, 0U, "=B1+1"), 5.0);
+  EXPECT_DOUBLE_EQ(adhoc_number(wb, 0U, 2U, "=B1*2"), 8.0);
+}
+
 TEST(EvalContextRecursive, ReadOnlyThreeDRangeUsesScalarFormulaAnchors) {
   Workbook wb = Workbook::create();
   wb.add_sheet("Sheet2");
