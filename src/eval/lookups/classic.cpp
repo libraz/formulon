@@ -415,7 +415,8 @@ Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   if (by_reference && by_reference.value() && table.declared.rows() != 1U && table.declared.cols() != 1U) {
     return fail_lookup(lookup, arena, Value::error(ErrorCode::NA));
   }
-  auto resolved = resolve_range_arg(call.as_call_arg(1), arena, registry, ctx);
+  // A lone value is no lookup_array (`MATCH(1,1,0)` is #N/A); a one-cell reference is.
+  auto resolved = resolve_range_arg_no_scalar(call.as_call_arg(1), arena, registry, ctx, ErrorCode::NA);
   if (!resolved) {
     return fail_lookup(lookup, arena, Value::error(resolved.error()));
   }

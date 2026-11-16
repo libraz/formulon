@@ -91,6 +91,10 @@ class Shapes {
 
   Shape of(const parser::AstNode& node);
 
+  /// `of(node)` where operators evaluate as arrays, as under an array-class
+  /// parameter (`INDEX(A1:A5*2,2)` indexes an array even without lifting).
+  Shape of_array_operand(const parser::AstNode& node);
+
   /// Class of argument `index` of the built-in `name` in the formulas this
   /// model describes: `xlsb_legacy_parameter_class` without lifting.
   char parameter_class(std::string_view name, std::uint32_t index) const;

@@ -32,6 +32,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "cell.h"
@@ -637,6 +638,79 @@ TEST(LegacyAt, LoadedLegacyOperandsAndCallsReadAsExcelShowsThem) {
     if (*c.value != '\0') {
       EXPECT_EQ(DisplayOf(cell->cached_value), c.value) << c.stored << " " << cell->formula_text;
     }
+  }
+}
+
+// Excel 365 (Mac, ja-JP) entering legacy formulas beside A1:A5 = 1, blank, 3,
+// "x", 5, each at the cell named: operators inside an array-taking parameter
+// (LOOKUP's vectors, INDEX's array, SUMPRODUCT) are evaluated as arrays, while
+// MATCH's lookup_array and a value parameter intersect them.
+struct PlacedLegacyCase {
+  std::uint32_t row;
+  std::uint32_t col;
+  LegacyCase formula;
+};
+
+constexpr PlacedLegacyCase kLegacyArrayParameters[] = {
+    {0U, 5U, {"=MATCH(1,1/($A$1:$A$5<>\"\"),0)", "=MATCH(1,1/(@$A$1:$A$5<>\"\"),0)", "#N/A"}},
+    {1U, 5U, {"=SUMPRODUCT(($A$1:$A$5>0)*1)", "=SUMPRODUCT(($A$1:$A$5>0)*1)", "4"}},
+    {2U, 5U, {"=INDEX($A$1:$A$5*2,3)", "=@INDEX($A$1:$A$5*2,3)", "6"}},
+    {2U, 9U, {"=INDEX($A$1:$A$5*2,2)", "=@INDEX($A$1:$A$5*2,2)", "0"}},
+    {3U, 5U, {"=LOOKUP(2,1/($A$1:$A$5<>\"\"),$A$1:$A$5)", "=LOOKUP(2,1/($A$1:$A$5<>\"\"),$A$1:$A$5)", "5"}},
+    {4U, 5U, {"=ABS($A$1:$A$5)", "=ABS(@$A$1:$A$5)", "5"}},
+    {4U, 7U, {"=$A$1:$A$5+0", "=@$A$1:$A$5+0", "5"}},
+    {2U, 7U, {"=$A$1:$A$5+0", "=@$A$1:$A$5+0", "3"}},
+    {0U, 7U, {"=MATCH(3,$A$1:$A$5,0)", "=MATCH(3,$A$1:$A$5,0)", "3"}},
+    {1U, 7U, {"=MATCH(TRUE,$A$1:$A$5>2,0)", "=MATCH(TRUE,@$A$1:$A$5>2,0)", "#N/A"}},
+};
+
+TEST(LegacyAt, LoadedLegacyArrayParametersEvaluateOperandsAsArrays) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  Sheet& s = wb.sheet(0);
+  s.set_cell_value(0U, 0U, Value::number(1.0));
+  s.set_cell_value(2U, 0U, Value::number(3.0));
+  s.set_cell_value(3U, 0U, Value::text("x"));
+  s.set_cell_value(4U, 0U, Value::number(5.0));
+  for (const PlacedLegacyCase& c : kLegacyArrayParameters) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, c.row, c.col, c.formula.stored)));
+    s.set_cell_dynamic_array(c.row, c.col, false);
+  }
+  wb.apply_legacy_implicit_intersections();
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  for (const PlacedLegacyCase& c : kLegacyArrayParameters) {
+    const Cell* cell = s.cell_at(c.row, c.col);
+    ASSERT_NE(cell, nullptr) << c.formula.stored;
+    EXPECT_EQ(cell->formula_text, c.formula.formula2) << c.formula.stored;
+    EXPECT_EQ(DisplayOf(cell->cached_value), c.formula.value) << c.formula.stored << " " << cell->formula_text;
+  }
+}
+
+// Excel 365 (Mac, ja-JP), the same grid, entered in row 1: MATCH alone takes a
+// lone value as no lookup_array; a 1x1 array, a one-cell reference, an
+// intersection and XMATCH all match.
+constexpr std::pair<const char*, const char*> kMatchLoneLookupArray[] = {
+    {"=MATCH(1,1,0)", "#N/A"}, {"=MATCH(1,1/(A1<>\"\"),0)", "#N/A"}, {"=MATCH(1,{1},0)", "1"},
+    {"=MATCH(1,A1,0)", "1"},   {"=MATCH(1,@A1:A5,0)", "1"},          {"=XMATCH(1,1)", "1"},
+};
+
+TEST(LegacyAt, MatchTakesNoLoneValueAsLookupArray) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  Sheet& s = wb.sheet(0);
+  s.set_cell_value(0U, 0U, Value::number(1.0));
+  s.set_cell_value(2U, 0U, Value::number(3.0));
+  s.set_cell_value(4U, 0U, Value::number(5.0));
+  std::uint32_t col = 5U;
+  for (const auto& c : kMatchLoneLookupArray) {
+    ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, col++, c.first)));
+  }
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  col = 5U;
+  for (const auto& c : kMatchLoneLookupArray) {
+    const Cell* cell = s.cell_at(0U, col++);
+    ASSERT_NE(cell, nullptr) << c.first;
+    EXPECT_EQ(DisplayOf(cell->cached_value), c.second) << c.first;
   }
 }
 

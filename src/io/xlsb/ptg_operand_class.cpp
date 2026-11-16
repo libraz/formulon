@@ -37,8 +37,9 @@ bool PassesArgumentThrough(std::string_view name) {
 
 std::uint8_t SlotClass(Slot slot, bool area, PtgEvaluation evaluation) {
   if (slot.operand && (evaluation == PtgEvaluation::kLegacy || evaluation == PtgEvaluation::kLegacyArray)) {
-    // A legacy formula intersects an operand unless the parameter forces arrays.
-    return slot.letter == 'F' ? kPtgArrayClass : kPtgValueClass;
+    // A legacy formula intersects an operand unless the parameter takes its
+    // operands as arrays (`LOOKUP(2,1/(A1:A5<>""),A1:A5)`, `@INDEX(A1:A5*2,2)`).
+    return slot.letter == 'F' || slot.letter == 'X' ? kPtgArrayClass : kPtgValueClass;
   }
   if (slot.operand && evaluation == PtgEvaluation::kConditionalFormat && slot.letter != 0 && slot.letter != 'V') {
     return kPtgArrayClass;
@@ -210,6 +211,17 @@ std::optional<std::pair<std::uint32_t, std::uint32_t>> Shapes::extent(const pars
   }
 }
 
+Shape Shapes::of_array_operand(const parser::AstNode& node) {
+  using parser::NodeKind;
+  if (node.kind() != NodeKind::UnaryOp && node.kind() != NodeKind::BinaryOp) {
+    return of(node);
+  }
+  return parser::any_child_node(
+             node, [this](const parser::AstNode& operand) { return of_array_operand(operand) != Shape::kScalar; })
+             ? Shape::kArray
+             : Shape::kScalar;
+}
+
 Shape Shapes::call_shape(const parser::AstNode& node) {
   const std::string_view name = canonical_function_name(node.as_call_name());
   if (bound(node.as_call_name()) || !IsBuiltin(name)) {
@@ -235,7 +247,7 @@ Shape Shapes::call_shape(const parser::AstNode& node) {
   }
   if (is("INDEX")) {
     // A reference indexed by positive integer constants is one cell.
-    const Shape source = arity == 0U ? Shape::kReference : of(node.as_call_arg(0));
+    const Shape source = arity == 0U ? Shape::kReference : of_array_operand(node.as_call_arg(0));
     if (source != Shape::kReference) {
       return source;
     }

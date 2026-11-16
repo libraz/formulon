@@ -120,6 +120,23 @@ bool assign_expanded(const EvalContext& ctx, const parser::Reference& lhs, const
   return true;
 }
 
+/// `node` is `@` over a written reference, which Excel reads as one cell.
+bool IsIntersectedReference(const parser::AstNode& node) {
+  using parser::NodeKind;
+  if (node.kind() != NodeKind::ImplicitIntersection) {
+    return false;
+  }
+  switch (node.as_implicit_intersection_operand().kind()) {
+    case NodeKind::Ref:
+    case NodeKind::RangeOp:
+    case NodeKind::SpillRef:
+    case NodeKind::StructuredRef:
+      return true;
+    default:
+      return false;
+  }
+}
+
 // `bool + out_param` core shared with the `expand_*_call` helpers; the public
 // `resolve_range_arg` below wraps it in an Expected.
 //
@@ -389,9 +406,10 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
   }
   // Scalar value (Number / Bool / Text / Blank / Lambda): treat as a 1x1
   // range so single-argument aggregators (`=SUM(7)`, `=AVERAGE(A1+1)`)
-  // behave as Excel does instead of failing.
+  // behave as Excel does instead of failing. An `@` over a reference is the
+  // reference's one cell, not a lone value (`MATCH(1,@A1:A5,0)` matches).
   if (out_scalar != nullptr) {
-    *out_scalar = true;
+    *out_scalar = !IsIntersectedReference(arg_node);
   }
   out_cells->clear();
   out_cells->push_back(result);
