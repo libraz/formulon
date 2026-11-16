@@ -7179,8 +7179,8 @@ export interface Workbook {
   removeTableStyle(name: string): void;
   /** Reads the default table and PivotTable style names. */
   getTableStyleDefaults(): TableStyleDefaults;
-  /** Sets the default style names; an omitted field keeps its default and `null` removes it; `""` fails with
-   *  `StatusCode.InvalidArgument` (api-conventions §5 rule 30). */
+  /** Sets the default style names; `""` fails with `StatusCode.InvalidArgument` (api-conventions §5 rule 30), an
+   *  omitted field keeps its default and `null` removes it. */
   updateTableStyleDefaults(patch: TableStyleDefaultsPatch): void;
 
   /** The theme's major and minor typefaces; the default theme's when the part is absent or unparseable
