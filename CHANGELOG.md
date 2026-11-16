@@ -585,6 +585,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   label sort. A `sortByField` that names no value field of the PivotTable
   now fails with `NotFound` (Python `NotFoundError`, C
   `FM_STATUS_NOT_FOUND`) instead of sorting by label.
+- A PivotTable with a field sorted descending, by label or by a value
+  field, is saved to `.xlsb` under a Windows profile as Excel saves it.
+  It was left out of such a save together with its cache.
 - A sheet AutoFilter text criterion is saved to .xlsb with the flag that has
   Excel compare the text literally rather than as a pattern. A criterion
   entered on text with no * or ? under <, <=, >, >= or <> carries it, one read

@@ -102,9 +102,6 @@ retained_children_edit/children_8_delete_colsB_D.xlsx model_xlsb custom_view_cou
 # PivotTables loaded from .xlsb do not yet survive a save.
 chart_pivot.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses chartFormat and other unmeasured root attributes
 pivot_aggregation/Gx__count.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses subtotalHiddenItems
-pivot_autosort/as2.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a descending field sort
-pivot_autosort/as3.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a descending field sort
-pivot_autosort/as4.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a descending field sort
 pivot_calc/cf1_price_amt_per_qty.xlsx model_xlsb pivot_count known_gap  # pending: cache bridge refuses calculated fields
 pivot_calc/cf2_div_zero_error_caption.xlsx model_xlsb pivot_count known_gap  # pending: cache bridge refuses calculated fields
 pivot_calc/cf3_quoted_names_if.xlsx model_xlsb pivot_count known_gap  # pending: cache bridge refuses calculated fields
@@ -131,8 +128,6 @@ rich_errors/notypes_pivot_resaved.xlsx model_xlsb pivot_count known_gap  # pendi
 rich_errors/pivot_blocked.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a blocked pivot
 rich_errors/pvpage_blocked.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a blocked pivot
 xlsb_parity/pivot/hide_values_row_src.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a table extLst other than Excel default (hideValuesRow)
-xlsb_pivot_twins/C06_sort_desc.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a descending field for the default Windows host (unmeasured)
-xlsb_pivot_twins/C07_sort_by_data.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a descending field for the default Windows host (unmeasured)
 pivot_line_shapes/M6a_page_field_only.xlsb drop_xlsx rel:xl/pivotCache/pivotCacheDefinition1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
 pivot_line_shapes/M6a_page_field_only.xlsb drop_xlsx rel:xl/pivotTables/pivotTable1.bin unmodelled_dropped  # a pivot the xlsb reader does not model
 pivot_line_shapes/M6a_page_field_only.xlsb drop_xlsx xl/pivotCache/pivotCacheDefinition1.bin unmodelled_dropped  # a pivot the xlsb reader does not model

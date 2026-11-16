@@ -1756,13 +1756,6 @@ Expected<std::vector<std::uint8_t>, Error> pivot_table_to_xlsb(const pivot::Pivo
                                                                std::size_t sheet_index,
                                                                std::optional<PivotRenderedSpan> rendered_span,
                                                                const PivotItemsXml* items) {
-  // No Windows-saved part shows a descending field, so its ascending bit is unmeasured there.
-  if (host == ExcelHost::kWin365 && std::any_of(table.fields().begin(), table.fields().end(),
-                                                [](const pivot::PivotField& field) { return !field.sort.ascending; })) {
-    Error error = not_writable(kNotWritableKind, sheet_index);
-    error.message = "unmeasured xlsb pivot table state: descending field saved by Windows Excel";
-    return error;
-  }
   PivotTableDoc doc;
   if (!WriteTable(table, host, rendered_span, items, doc)) {
     return not_writable(kNotWritableKind, sheet_index);

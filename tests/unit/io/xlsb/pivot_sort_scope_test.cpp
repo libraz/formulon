@@ -1,7 +1,8 @@
 // A pivot field sorted by a data field's values, against Excel-saved twins: Region / Product / Amount / Qty on Data,
 // one pivot on PV!A3. as1 sorts Region ascending by Sum of Amount, as2 descending, as3 sorts the column field Product
-// descending by Sum of Amount, as4 sorts Region descending by Sum of Qty (the second data field), and as5 sorts
-// Region by label. The "refreshed" orders are Excel's after Data!C9 went from 35 to -30 and the pivot was refreshed.
+// descending by Sum of Amount, as4 sorts Region descending by Sum of Qty (the second data field), as5 sorts Region by
+// label and as6 by label descending. The "refreshed" orders are Excel's after Data!C9 went from 35 to -30 and the pivot
+// was refreshed.
 
 #include <cstddef>
 #include <cstdint>
@@ -10,9 +11,12 @@
 #include <vector>
 
 #include "eval/function_registry.h"
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
+#include "io/xlsb/pivot_records_common.h"
+#include "io/xlsb/pivot_table_records.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/writer.h"
 #include "pivot/field_patch.h"
@@ -31,6 +35,7 @@ namespace io {
 namespace xlsb {
 namespace {
 
+namespace ids = pivot_records;
 namespace tc = test;
 
 constexpr std::size_t kData = 0;
@@ -132,6 +137,7 @@ const std::vector<Case>& Cases() {
        {"North", "East", "West", "South"},
        {"North", "East", "West", "South"}},
       {"as5", 0, "", true, 3, 0, true, {"East", "North", "South", "West"}, {"East", "North", "South", "West"}},
+      {"as6", 0, "", false, 3, 0, true, {"West", "South", "North", "East"}, {"West", "South", "North", "East"}},
   };
   return cases;
 }
@@ -204,6 +210,74 @@ TEST(PivotSortScope, AValueSortSetThroughThePatchIsSaved) {
     auto back = read_xlsb(SpanOf(xlsb.value()));
     ASSERT_TRUE(back.has_value()) << back.error().message;
     EXPECT_EQ(Table(back.value().workbook).fields().at(0).sort.by_field, "Sum of Amount");
+  }
+}
+
+/// What a field's records carry of its sort: the 285 sort bits, the item order of its 282s, and the sort scope
+/// block (459 through 460) as written.
+struct FieldSort {
+  std::uint32_t bits = 0;
+  std::vector<std::uint32_t> items;
+  std::vector<tc::IndexedRecord> scope;
+};
+
+std::uint32_t U32At(const tc::Bytes& payload) {
+  return static_cast<std::uint32_t>(payload[0]) | (static_cast<std::uint32_t>(payload[1]) << 8U) |
+         (static_cast<std::uint32_t>(payload[2]) << 16U) | (static_cast<std::uint32_t>(payload[3]) << 24U);
+}
+
+FieldSort SortRecords(const tc::Bytes& package, std::size_t field) {
+  FieldSort out;
+  const std::optional<tc::Bytes> part = tc::ReadPart(package, "xl/pivotTables/pivotTable1.bin");
+  EXPECT_TRUE(part.has_value());
+  if (!part) {
+    return out;
+  }
+  std::size_t seen = 0;
+  bool in_field = false;
+  bool in_scope = false;
+  for (tc::IndexedRecord& record : tc::SplitPart(*part)) {
+    if (record.type == ids::kBeginSXVD) {
+      in_field = seen++ == field;
+      if (in_field && record.payload.size() >= 12U) {
+        const tc::Bytes flags(record.payload.begin() + 8, record.payload.begin() + 12);
+        out.bits = U32At(flags) & (kSxFieldAutoSort | kSxFieldAscendSort);
+      }
+      continue;
+    }
+    if (!in_field) {
+      continue;
+    }
+    if (record.type == ids::kEndSXVD) {
+      in_field = false;
+    } else if (record.type == ids::kBeginSXVI && record.payload.size() >= 4U) {
+      out.items.push_back(U32At(record.payload));
+    } else if (record.type == ids::kBeginAutoSortScope || in_scope) {
+      in_scope = record.type != ids::kEndAutoSortScope;
+      record.index = 0;
+      out.scope.push_back(std::move(record));
+    }
+  }
+  return out;
+}
+
+// Saved as Windows Excel saves, the sorted field of each twin writes Excel's sort bits, item order and scope block.
+TEST(PivotSortScope, AnXlsbSaveOfTheXlsxWritesExcelsSortRecords) {
+  for (const Case& c : Cases()) {
+    SCOPED_TRACE(c.name);
+    Workbook wb = Load(std::string(c.name) + ".xlsx");
+    wb.set_excel_profile(win_365_ja_jp_profile());
+    auto saved = write_xlsb(wb);
+    ASSERT_TRUE(saved.has_value()) << saved.error().message;
+    const FieldSort ours = SortRecords(saved.value(), c.field);
+    const FieldSort excel = SortRecords(Fixture(std::string(c.name) + ".xlsb"), c.field);
+    EXPECT_EQ(ours.bits, excel.bits);
+    EXPECT_EQ(ours.items, excel.items);
+    ASSERT_EQ(ours.scope.size(), excel.scope.size());
+    for (std::size_t i = 0; i < ours.scope.size(); ++i) {
+      EXPECT_EQ(ours.scope[i].type, excel.scope[i].type) << i;
+      EXPECT_EQ(ours.scope[i].payload, excel.scope[i].payload) << i;
+    }
   }
 }
 

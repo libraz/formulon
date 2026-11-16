@@ -521,7 +521,8 @@ TEST(PivotTableBridge, FormatsEntryIsNotWritable) {
   EXPECT_NE(written.error().context.find("kind=pivot_table"), std::string::npos);
 }
 
-TEST(PivotTableBridge, WindowsDescendingFieldIsNotWritable) {
+// A descending automatic sort is the auto-sort bit without the ascending bit on either host.
+TEST(PivotTableBridge, DescendingFieldWritesAutoSortWithoutAscending) {
   const std::string path = pivot_twins::CorpusPaths().front();
   const auto parts = pivot_twins::Parts(path, kTablePrefix);
   ASSERT_FALSE(parts.empty());
@@ -532,12 +533,17 @@ TEST(PivotTableBridge, WindowsDescendingFieldIsNotWritable) {
   table.mutable_fields()[0].sort.ascending = false;
   table.mutable_fields()[0].sort.manual = false;
   table.mutable_fields()[0].sort.stated = true;
-  EXPECT_TRUE(pivot_table_to_xlsb(table, ExcelHost::kMac365, 0).has_value());
-  auto written = pivot_table_to_xlsb(table, ExcelHost::kWin365, 0);
-  ASSERT_FALSE(written.has_value());
-  EXPECT_EQ(written.error().code, FormulonErrorCode::kIoFeatureNotWritable);
-  EXPECT_NE(written.error().message.find("unmeasured"), std::string::npos);
-  EXPECT_NE(written.error().context.find("kind=pivot_table"), std::string::npos);
+  for (const ExcelHost host : {ExcelHost::kMac365, ExcelHost::kWin365}) {
+    auto written = pivot_table_to_xlsb(table, host, 0);
+    ASSERT_TRUE(written.has_value()) << written.error().message;
+    auto doc = decode_pivot_table(SpanOf(written.value()));
+    ASSERT_TRUE(doc.has_value()) << doc.error().message;
+    EXPECT_EQ(doc.value().fields[0].flags & (kSxFieldAutoSort | kSxFieldAscendSort), kSxFieldAutoSort);
+    auto back = pivot_table_from_xlsb(SpanOf(written.value()));
+    ASSERT_TRUE(back.has_value()) << back.error().message;
+    EXPECT_FALSE(back.value().fields()[0].sort.ascending);
+    EXPECT_FALSE(back.value().fields()[0].sort.manual);
+  }
 }
 
 /// The first pivot table part of the corpus book whose file name starts with `stem`.
