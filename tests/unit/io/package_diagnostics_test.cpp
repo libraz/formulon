@@ -696,6 +696,74 @@ TEST(OoxmlReadDiagnostics, UnrecognisedWorkbookContentTypeReachesTheReadResult) 
   EXPECT_EQ(result.value().diagnostics.skipped_feature_count, 0U);
 }
 
+/// `xl/workbook.xml` of an .xlsx write of `wb`.
+std::string SavedWorkbookXml(const Workbook& wb) {
+  auto bytes = write_ooxml(wb);
+  EXPECT_TRUE(static_cast<bool>(bytes));
+  if (!bytes) {
+    return {};
+  }
+  ZipReader zip;
+  EXPECT_TRUE(static_cast<bool>(zip.open(ByteSpan{bytes.value().data(), bytes.value().size()})));
+  auto part = zip.read_entry("xl/workbook.xml");
+  EXPECT_TRUE(static_cast<bool>(part));
+  return part ? std::string(part.value().begin(), part.value().end()) : std::string();
+}
+
+/// A package whose workbook holds `<definedName name="_xlpm.A" hidden="1" xlm="1">`, with a macro sheet beside the
+/// worksheet when `with_macro_sheet`.
+std::vector<std::uint8_t> PackageWithMacroFlaggedName(bool with_macro_sheet) {
+  std::string content_types = test::OoxmlContentTypes(test::kXlsxWorkbookContentType);
+  std::string workbook_xml =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+      "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
+      "<sheets><sheet name=\"Sheet1\" sheetId=\"1\" r:id=\"rId1\"/>";
+  std::string rels(test::kOneSheetWorkbookRels);
+  if (with_macro_sheet) {
+    content_types.insert(content_types.rfind("</Types>"),
+                         "<Override PartName=\"/xl/macrosheets/sheet1.xml\" "
+                         "ContentType=\"application/vnd.ms-excel.macrosheet+xml\"/>");
+    workbook_xml.append("<sheet name=\"Macro1\" sheetId=\"2\" r:id=\"rId2\"/>");
+    rels.insert(rels.rfind("</Relationships>"),
+                "<Relationship Id=\"rId2\" "
+                "Type=\"http://schemas.microsoft.com/office/2006/relationships/xlMacrosheet\" "
+                "Target=\"macrosheets/sheet1.xml\"/>");
+  }
+  workbook_xml.append(
+      "</sheets><definedNames><definedName name=\"_xlpm.A\" hidden=\"1\" xlm=\"1\">#NAME?</definedName>"
+      "</definedNames></workbook>");
+  constexpr std::string_view kMacroSheet =
+      "<xm:macrosheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+      "xmlns:xm=\"http://schemas.microsoft.com/office/excel/2006/main\"><sheetData/></xm:macrosheet>";
+  std::vector<std::pair<const char*, std::string_view>> extra;
+  if (with_macro_sheet) {
+    extra.emplace_back("xl/macrosheets/sheet1.xml", kMacroSheet);
+  }
+  return test::BuildOoxmlPackage(content_types, test::kEmptySheetXml, workbook_xml, rels, extra);
+}
+
+// Excel refuses to open a book that holds a name flagged xlm="1" and no macro sheet. The load drops the flag and
+// keeps the name, so the save writes a book Excel opens.
+TEST(OoxmlReadDiagnostics, MacroNameFlagWithoutAMacroSheetLeavesAtLoad) {
+  const std::vector<std::uint8_t> bytes = PackageWithMacroFlaggedName(/*with_macro_sheet=*/false);
+  auto result = read_ooxml(ByteSpan{bytes.data(), bytes.size()});
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  EXPECT_EQ(result.value().diagnostics.skipped_feature_count, 1U);
+  const std::string saved = SavedWorkbookXml(result.value().workbook);
+  EXPECT_NE(saved.find("name=\"_xlpm.A\""), std::string::npos) << saved;
+  EXPECT_EQ(saved.find("xlm="), std::string::npos) << saved;
+}
+
+TEST(OoxmlReadDiagnostics, MacroNameFlagBesideAMacroSheetIsKept) {
+  const std::vector<std::uint8_t> bytes = PackageWithMacroFlaggedName(/*with_macro_sheet=*/true);
+  auto result = read_ooxml(ByteSpan{bytes.data(), bytes.size()});
+  ASSERT_TRUE(static_cast<bool>(result)) << result.error().message;
+  EXPECT_EQ(result.value().diagnostics.skipped_feature_count, 0U);
+  const std::string saved = SavedWorkbookXml(result.value().workbook);
+  EXPECT_NE(saved.find("xlm=\"1\""), std::string::npos) << saved;
+}
+
 }  // namespace
 }  // namespace io
 }  // namespace formulon

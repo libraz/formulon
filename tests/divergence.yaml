@@ -942,6 +942,17 @@ entries:
     first_noted: 2026-10-24
     last_verified_excel_version: "16.114.1"
 
+  - id: macro_flagged_name_without_macro_sheet_loads
+    applies_to: all
+    cause: excel-no-value
+    mode: skip-oracle
+    scope: api-contract
+    evidence: [tests/unit/io/package_diagnostics_test.cpp, tests/unit/io/defined_names_test.cpp]
+    reason: "Excel refuses to open an .xlsx holding a defined name flagged xlm=\"1\" when the book has no macro sheet, whatever the name or its hidden flag, so it gives no workbook to compare. Formulon loads the book, drops the flag from each such name (the name stays) and counts each drop in the read diagnostics' skipped_feature_count, so a save writes a book Excel opens. The flag beside a macro sheet is kept as stored."
+    prefer: formulon
+    first_noted: 2026-11-17
+    last_verified_excel_version: "16.115"
+
   # -- Table resize after a creation shift -----------------------------------
   - id: table_resize_refused_while_insert_row_shift
     applies_to: [mac]

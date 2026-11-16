@@ -8,9 +8,10 @@
 // parts every package carries, plus a `[Content_Types].xml` template whose
 // workbook content type the caller chooses.
 //
-// Only the sheet body and the workbook content type vary across callers;
-// everything else is fixed so a fixture difference is always the thing the
-// test is actually about.
+// The sheet body and the workbook content type vary across callers; a test
+// about the workbook part may also supply that part, its relationships and
+// extra parts. Everything else is fixed so a fixture difference is always
+// the thing the test is actually about.
 
 #ifndef FORMULON_TESTS_SUPPORT_OOXML_PACKAGE_FIXTURE_H_
 #define FORMULON_TESTS_SUPPORT_OOXML_PACKAGE_FIXTURE_H_
@@ -54,10 +55,30 @@ inline std::string OoxmlContentTypes(std::string_view workbook_content_type) {
   return out;
 }
 
-/// Assembles a one-sheet package around `content_types` and `sheet_xml`.
-/// Returns the raw archive bytes, empty on a miniz failure (which is also
-/// reported as a non-fatal gtest failure).
-inline std::vector<std::uint8_t> BuildOoxmlPackage(std::string_view content_types, std::string_view sheet_xml) {
+/// The fixed `xl/workbook.xml`: one worksheet, `Sheet1`, at `rId1`.
+inline constexpr std::string_view kOneSheetWorkbookXml =
+    "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+    "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+    "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
+    "<sheets><sheet name=\"Sheet1\" sheetId=\"1\" r:id=\"rId1\"/></sheets>"
+    "</workbook>";
+
+/// The fixed `xl/_rels/workbook.xml.rels`: `rId1` to the one worksheet.
+inline constexpr std::string_view kOneSheetWorkbookRels =
+    "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+    "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+    "<Relationship Id=\"rId1\" "
+    "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" "
+    "Target=\"worksheets/sheet1.xml\"/>"
+    "</Relationships>";
+
+/// Assembles a package around `content_types`, `sheet_xml`, the workbook
+/// part and its relationships, plus `extra_parts` (path, bytes). Returns the
+/// raw archive bytes, empty on a miniz failure (which is also reported as a
+/// non-fatal gtest failure).
+inline std::vector<std::uint8_t> BuildOoxmlPackage(
+    std::string_view content_types, std::string_view sheet_xml, std::string_view workbook_xml,
+    std::string_view workbook_rels, const std::vector<std::pair<const char*, std::string_view>>& extra_parts = {}) {
   constexpr std::string_view kPackageRels =
       "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
       "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
@@ -65,30 +86,18 @@ inline std::vector<std::uint8_t> BuildOoxmlPackage(std::string_view content_type
       "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" "
       "Target=\"xl/workbook.xml\"/>"
       "</Relationships>";
-  constexpr std::string_view kWorkbookXml =
-      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
-      "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
-      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
-      "<sheets><sheet name=\"Sheet1\" sheetId=\"1\" r:id=\"rId1\"/></sheets>"
-      "</workbook>";
-  constexpr std::string_view kWorkbookRels =
-      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
-      "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
-      "<Relationship Id=\"rId1\" "
-      "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet\" "
-      "Target=\"worksheets/sheet1.xml\"/>"
-      "</Relationships>";
 
   mz_zip_archive writer{};
   if (mz_zip_writer_init_heap(&writer, 0, 4096) == MZ_FALSE) {
     ADD_FAILURE() << "mz_zip_writer_init_heap failed";
     return {};
   }
-  const std::pair<const char*, std::string_view> parts[] = {
+  std::vector<std::pair<const char*, std::string_view>> parts = {
       {"[Content_Types].xml", content_types},  {"_rels/.rels", kPackageRels},
-      {"xl/workbook.xml", kWorkbookXml},       {"xl/_rels/workbook.xml.rels", kWorkbookRels},
+      {"xl/workbook.xml", workbook_xml},       {"xl/_rels/workbook.xml.rels", workbook_rels},
       {"xl/worksheets/sheet1.xml", sheet_xml},
   };
+  parts.insert(parts.end(), extra_parts.begin(), extra_parts.end());
   for (const auto& part : parts) {
     if (mz_zip_writer_add_mem(&writer, part.first, part.second.data(), part.second.size(),
                               static_cast<mz_uint>(MZ_DEFAULT_COMPRESSION)) == MZ_FALSE) {
@@ -109,6 +118,11 @@ inline std::vector<std::uint8_t> BuildOoxmlPackage(std::string_view content_type
   mz_free(archive_ptr);
   mz_zip_writer_end(&writer);
   return out;
+}
+
+/// Assembles a one-sheet package around `content_types` and `sheet_xml`.
+inline std::vector<std::uint8_t> BuildOoxmlPackage(std::string_view content_types, std::string_view sheet_xml) {
+  return BuildOoxmlPackage(content_types, sheet_xml, kOneSheetWorkbookXml, kOneSheetWorkbookRels);
 }
 
 }  // namespace test

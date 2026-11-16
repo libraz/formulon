@@ -77,6 +77,7 @@
 #include "utils/expected.h"
 #include "utils/index_sort.h"
 #include "utils/status_macros.h"
+#include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -880,7 +881,10 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   // 4d. Defined names, after the external links their `[N]` spell and before
   // any cell formula: each formula registers against the names the file
   // states, so installing them is not an edit that invalidates loaded spills.
-  ASSIGN_OR_RETURN(auto defined_names, read_defined_names(wb_doc));
+  const bool has_macro_sheet =
+      std::any_of(wb_rels.sheet_targets.begin(), wb_rels.sheet_targets.end(),
+                  [](const auto& rel) { return strings::ends_with(rel.second.relationship_type, "Macrosheet"); });
+  ASSIGN_OR_RETURN(auto defined_names, read_defined_names(wb_doc, has_macro_sheet, &diagnostics));
   for (DefinedName& entry : defined_names) {
     entry.formula = wb.ingest_stored_formula(entry.formula, Workbook::FormulaSource::kEntered);
   }

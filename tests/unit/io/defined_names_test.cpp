@@ -11,6 +11,7 @@
 #include "defined_name.h"
 #include "gtest/gtest.h"
 #include "io/defined_names_internal.h"
+#include "io/package_diagnostics.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 
@@ -342,6 +343,41 @@ TEST(DefinedNamesReader, EmptyNameAttributeIsCorruption) {
   auto names_or = read_defined_names(doc);
   ASSERT_FALSE(static_cast<bool>(names_or));
   EXPECT_EQ(names_or.error().code, FormulonErrorCode::kIoSheetCorrupt);
+}
+
+// Excel refuses to open a book holding a name flagged as an XLM macro name
+// when the book has no macro sheet, so the flag leaves the model at load.
+TEST(DefinedNamesReader, MacroNameFlagWithoutAMacroSheetIsDroppedAndCounted) {
+  std::string xml(kXmlDecl);
+  xml.append("<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">");
+  xml.append("  <definedNames>");
+  xml.append("    <definedName name=\"_xlpm.A\" hidden=\"1\" xlm=\"1\">#NAME?</definedName>");
+  xml.append("    <definedName name=\"Foo\" xlm=\"1\" function=\"1\">Sheet1!$A$1</definedName>");
+  xml.append("    <definedName name=\"Bar\" xlm=\"0\">Sheet1!$B$1</definedName>");
+  xml.append("  </definedNames>");
+  xml.append("</workbook>");
+
+  pugi::xml_document doc;
+  ASSERT_TRUE(LoadDoc(doc, xml));
+
+  ReadDiagnostics diagnostics;
+  auto names_or = read_defined_names(doc, /*book_has_macro_sheet=*/false, &diagnostics);
+  ASSERT_TRUE(static_cast<bool>(names_or)) << names_or.error().message;
+  const std::vector<DefinedName>& names = names_or.value();
+  ASSERT_EQ(names.size(), 3U);
+  EXPECT_EQ(names[0].name, "_xlpm.A");
+  EXPECT_TRUE(names[0].hidden);
+  EXPECT_EQ(names[0].extra_attrs.find("xlm"), std::string::npos) << names[0].extra_attrs;
+  EXPECT_EQ(names[1].extra_attrs.find("xlm"), std::string::npos) << names[1].extra_attrs;
+  EXPECT_NE(names[1].extra_attrs.find("function=\"1\""), std::string::npos) << names[1].extra_attrs;
+  EXPECT_NE(names[2].extra_attrs.find("xlm=\"0\""), std::string::npos) << names[2].extra_attrs;
+  EXPECT_EQ(diagnostics.skipped_feature_count, 2U);
+
+  ReadDiagnostics with_sheet;
+  auto kept_or = read_defined_names(doc, /*book_has_macro_sheet=*/true, &with_sheet);
+  ASSERT_TRUE(static_cast<bool>(kept_or)) << kept_or.error().message;
+  EXPECT_NE(kept_or.value()[0].extra_attrs.find("xlm=\"1\""), std::string::npos);
+  EXPECT_EQ(with_sheet.skipped_feature_count, 0U);
 }
 
 }  // namespace

@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "defined_name.h"
+#include "io/package_diagnostics.h"
 #include "pugixml.hpp"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -25,7 +26,13 @@ namespace io {
 /// the supplied workbook document. See `defined_name.h` for the
 /// `DefinedName` shape and the per-attribute semantics; this is the
 /// pugi-typed entry point intended for `io/`-internal callers.
-Expected<std::vector<DefinedName>, Error> read_defined_names(const pugi::xml_document& workbook_doc);
+///
+/// Excel refuses to open a book holding a name flagged `xlm="1"` when the
+/// book has no macro sheet, so without `book_has_macro_sheet` the flag is
+/// dropped from the name, counted in `diagnostics->skipped_feature_count`.
+Expected<std::vector<DefinedName>, Error> read_defined_names(const pugi::xml_document& workbook_doc,
+                                                             bool book_has_macro_sheet = true,
+                                                             ReadDiagnostics* diagnostics = nullptr);
 
 }  // namespace io
 }  // namespace formulon

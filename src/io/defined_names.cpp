@@ -2,8 +2,10 @@
 // Implementation of the defined-names reader. See defined_name.h for the
 // public contract.
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -18,6 +20,7 @@
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/strings.h"
+#include "utils/structured_log.h"
 
 namespace formulon {
 namespace io {
@@ -38,7 +41,8 @@ std::int32_t ParseLocalSheetId(const pugi::xml_attribute& attr) {
 
 }  // namespace
 
-Expected<std::vector<DefinedName>, Error> read_defined_names(const pugi::xml_document& workbook_doc) {
+Expected<std::vector<DefinedName>, Error> read_defined_names(const pugi::xml_document& workbook_doc,
+                                                             bool book_has_macro_sheet, ReadDiagnostics* diagnostics) {
   std::vector<DefinedName> out;
 
   pugi::xml_node wb = workbook_doc.child("workbook");
@@ -71,6 +75,14 @@ Expected<std::vector<DefinedName>, Error> read_defined_names(const pugi::xml_doc
     {
       std::vector<std::pair<std::string, std::string>> extra;
       capture_unknown_attrs(dn, {"name", "localSheetId", "hidden", "comment"}, extra);
+      if (!book_has_macro_sheet && read_xsd_bool(dn, "xlm", false)) {
+        StructuredLog("io.defined_name.macro_flag_dropped").field("name", std::string_view(entry.name)).warn();
+        if (diagnostics != nullptr) {
+          ++diagnostics->skipped_feature_count;
+        }
+        extra.erase(std::remove_if(extra.begin(), extra.end(), [](const auto& attr) { return attr.first == "xlm"; }),
+                    extra.end());
+      }
       append_raw_attrs(entry.extra_attrs, extra);
     }
 
