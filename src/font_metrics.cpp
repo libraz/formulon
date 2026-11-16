@@ -66,6 +66,7 @@ constexpr FontMetricsRow kMacRows[] = {
     {"맑은 고딕", 11, 6.0, 5.0, 17.0},       {"Tahoma", 10, 5.0, 5.0, 13.0},
     {"Tahoma", 11, 6.0, 5.0, 14.0},          {"Courier New", 10, 6.0, 5.0, 14.0},
     {"ＭＳ Ｐゴシック", 12, 6.0, 5.0, 15.0}, {"新細明體", 11, 5.0, 5.0, 14.0},
+    {"Calibri", 8, 4.0, 3.0, 11.0},          {"Calibri", 18, 9.0, 7.0, 24.0},
 };
 
 // Windows Excel 365 ja-JP (build 16.0.20228) at 100% display scaling (96 DPI), the scaling a win-* profile means:

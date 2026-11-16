@@ -721,8 +721,8 @@ entries:
   # Windows Excel paginates with a DPI-stable print figure that differs from
   # its DPI-dependent `Range.Width`; only Calibri 11's print figure is
   # measured. Mac Excel paginates with its screen layout (whole points of the
-  # Mac MDW), which Mac Excel 16.115's breaks confirm for Calibri 11/14 and
-  # 游ゴシック 11/14 (tests/fixtures/excel/mac/print_breaks/).
+  # Mac MDW), which Mac Excel 16.115's breaks confirm for Calibri 8/11/14/18
+  # and 游ゴシック 11/14 (tests/fixtures/excel/mac/print_breaks/).
   - id: pagination_column_width_calibrated_to_one_normal_font
     applies_to: all
     cause: engine-gap

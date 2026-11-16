@@ -125,7 +125,7 @@ TEST(MacPrintBreaks, MatchMacExcel) {
   ASSERT_TRUE(
       test_support::LoadRepoJson(__FILE__, "tests/unit/", "tests/fixtures/excel/mac/print_breaks/breaks.json", &json));
   const test_support::Json& cases = json.At("cases");
-  ASSERT_EQ(cases.items.size(), 295U);
+  ASSERT_EQ(cases.items.size(), 453U);
 
   for (const test_support::Json& c : cases.items) {
     const std::string font = c.At("font").text;
