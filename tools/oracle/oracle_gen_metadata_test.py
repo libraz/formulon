@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import functools
 import json
 import tempfile
 import unittest
@@ -12,6 +13,12 @@ from tools.oracle import case_schema, oracle_gen
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VARIANT_DIVERGENCE = REPO_ROOT / "tests/oracle/targets/win-365-ja_JP/divergence.yaml"
+
+
+@functools.cache
+def _source_suites() -> tuple[tuple[Path, case_schema.Suite], ...]:
+    """The formula case suites, parsed once: every test reads them and none changes them."""
+    return tuple(case_schema.discover_suites(REPO_ROOT / "tests/oracle/cases"))
 
 
 SUITE_SKIP_REGISTRY = """\
@@ -29,7 +36,7 @@ entries:
 
 class OracleGeneratorMetadataTest(unittest.TestCase):
     def setUp(self) -> None:
-        source_suites = case_schema.discover_suites(REPO_ROOT / "tests/oracle/cases")
+        source_suites = _source_suites()
         self.suites = oracle_gen._apply_divergence_metadata(
             source_suites,
             oracle_gen._load_divergence_metadata(VARIANT_DIVERGENCE, "win-365-ja_JP"),
@@ -85,7 +92,7 @@ class OracleGeneratorMetadataTest(unittest.TestCase):
             self.assertEqual(actual, {k: v for k, v in expected.items() if k in actual}, name)
 
     def test_primary_suite_skip_expands_to_every_case(self) -> None:
-        source_suites = case_schema.discover_suites(REPO_ROOT / "tests/oracle/cases")
+        source_suites = _source_suites()
         with tempfile.TemporaryDirectory() as tmp:
             registry = Path(tmp) / "divergence.yaml"
             registry.write_text(SUITE_SKIP_REGISTRY, encoding="utf-8")
@@ -140,11 +147,7 @@ class FormulaCellSchemaTest(unittest.TestCase):
         self.assertEqual(oracle_gen._case_input(case)["formula_cell"], "AA5")
 
     def test_placement_round_trips_to_the_golden(self) -> None:
-        suite = next(
-            suite
-            for _, suite in case_schema.discover_suites(REPO_ROOT / "tests/oracle/cases")
-            if suite.name == "whole_axis_spill"
-        )
+        suite = next(suite for _, suite in _source_suites() if suite.name == "whole_axis_spill")
         declared = {case.id: case.formula_cell for case in suite.cases}
         self.assertTrue(declared)
         self.assertTrue(all(cell for cell in declared.values()))
@@ -251,7 +254,7 @@ class SuiteToleranceOverlayTest(unittest.TestCase):
         self.assertEqual(mac["display"], case_schema.Tolerance(abs=1e-4))
 
     def test_mac_targets_keep_exact_cases_exact(self) -> None:
-        source_suites = case_schema.discover_suites(REPO_ROOT / "tests/oracle/cases")
+        source_suites = _source_suites()
         mac = oracle_gen._apply_divergence_metadata(
             source_suites, oracle_gen._load_divergence_metadata(REPO_ROOT / "tests/divergence.yaml", "mac-365-ja_JP")
         )
