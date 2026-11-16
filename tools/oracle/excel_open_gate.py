@@ -16,7 +16,9 @@ as .xlsx and counting the parts or elements Excel wrote.
 A base listed as ``values:<path>`` also has its cell values, and whether each cell passes its data
 validation, compared after Excel recalculates the whole book, so a formula Excel reads differently from
 the source shows as a different number or verdict. Only bases
-without volatile functions are listed that way.
+without volatile functions are listed that way. Excel keeps a book's cached values unless told otherwise,
+so each such file is opened from a copy with fullCalcOnLoad set and every numeric formula cache replaced
+by a sentinel, then recalculated per book and per sheet; a sentinel still read back fails the gate.
 
 Lines of the form ``control:refused <path>`` or ``control:repaired <path>`` name files that are opened
 as they are and must produce that outcome, so the gate proves it can fail.
@@ -33,6 +35,7 @@ from __future__ import annotations
 import argparse
 import re
 import shutil
+import struct
 import subprocess
 import sys
 import zipfile
@@ -48,6 +51,13 @@ MANIFEST = Path(__file__).with_name("excel_open_gate.txt")
 CONTAINER = Path.home() / "Library/Containers/com.microsoft.Excel/Data/formulon_open_gate"
 REPAIR_MARKERS = ("Repaired", "修復")
 XLSX_FORMAT = 51
+# Written over every numeric formula cache of a `values:` file; a recalculation that reaches the cell replaces it.
+SENTINEL = 987654321.0
+BRT_FMLA_NUM = 9
+BRT_CALC_PROP = 157
+# BrtCalcProp: recalcID, fAutoRecalc, cCalcCount, xnumDelta, cUserThreadCount, then the flag word.
+CALC_PROP_FLAGS_AT = 24
+CALC_FULL_CALC_ON_LOAD = 0x0001
 # Parts and elements counted in an Excel re-save, for features the object model does not expose.
 RESAVE_PATTERNS = {
     "notes": (r"xl/comments\d+\.xml$", rb"<comment "),
@@ -153,11 +163,93 @@ def resave_readings(book, stem: str) -> dict:
     return counts
 
 
+def split_records(data: bytes):
+    """(type, payload start, payload end) of each record of an .xlsb part."""
+
+    at = 0
+    while at < len(data):
+        rtype = data[at] & 0x7F
+        if data[at] & 0x80:
+            rtype |= (data[at + 1] & 0x7F) << 7
+            at += 1
+        at += 1
+        size, shift = 0, 0
+        while True:
+            byte = data[at]
+            at += 1
+            size |= (byte & 0x7F) << shift
+            shift += 7
+            if not byte & 0x80:
+                break
+        yield rtype, at, at + size
+        at += size
+
+
+def plant_xlsb_part(name: str, data: bytes) -> tuple[bytes, int]:
+    out = bytearray(data)
+    planted = 0
+    for rtype, start, end in split_records(data):
+        if name == "xl/workbook.bin" and rtype == BRT_CALC_PROP and end - start >= CALC_PROP_FLAGS_AT + 2:
+            (flags,) = struct.unpack_from("<H", out, start + CALC_PROP_FLAGS_AT)
+            struct.pack_into("<H", out, start + CALC_PROP_FLAGS_AT, flags | CALC_FULL_CALC_ON_LOAD)
+        elif name.startswith("xl/worksheets/") and rtype == BRT_FMLA_NUM and end - start >= 16:
+            struct.pack_into("<d", out, start + 8, SENTINEL)
+            planted += 1
+    return bytes(out), planted
+
+
+def plant_xlsx_part(name: str, data: bytes) -> tuple[bytes, int]:
+    text = data.decode("utf-8")
+    if name == "xl/workbook.xml":
+        if "<calcPr" in text:
+            text = re.sub(r"<calcPr\b(?![^>]*fullCalcOnLoad)", '<calcPr fullCalcOnLoad="1"', text, count=1)
+        else:
+            text = text.replace("</workbook>", '<calcPr fullCalcOnLoad="1"/></workbook>', 1)
+        return text.encode("utf-8"), 0
+    if not re.match(r"xl/worksheets/sheet\d+\.xml$", name):
+        return data, 0
+    planted = 0
+
+    def cell(m: re.Match) -> str:
+        nonlocal planted
+        kind = re.search(r'\bt="([^"]*)"', m.group(1))
+        if (kind and kind.group(1) != "n") or "<f" not in m.group(2) or "<v>" not in m.group(2):
+            return m.group(0)
+        planted += 1
+        return m.group(1) + re.sub(r"<v>[^<]*</v>", "<v>%r</v>" % SENTINEL, m.group(2), count=1)
+
+    text = re.sub(r"(<c\b[^>]*(?<!/)>)(.*?</c>)", cell, text, flags=re.S)
+    return text.encode("utf-8"), planted
+
+
+def plant(source: Path, dest: Path) -> int:
+    """Copies `source` to `dest` with fullCalcOnLoad set and every numeric formula cache replaced by SENTINEL;
+    returns how many caches were replaced."""
+
+    planted = 0
+    xlsb = source.suffix == ".xlsb"
+    with zipfile.ZipFile(source) as zin, zipfile.ZipFile(dest, "w", zipfile.ZIP_DEFLATED) as zout:
+        for info in zin.infolist():
+            data = zin.read(info.filename)
+            data, n = (plant_xlsb_part if xlsb else plant_xlsx_part)(info.filename, data)
+            planted += n
+            zout.writestr(info, data)
+    return planted
+
+
+def holds_sentinel(value) -> bool:
+    if isinstance(value, (list, tuple)):
+        return any(holds_sentinel(v) for v in value)
+    return value == SENTINEL
+
+
 def value_readings(app, book) -> dict:
-    """Every sheet's used-range values after Excel recalculates the whole book, and whether each used cell passes
-    its data validation (Excel reports True for a cell without one)."""
+    """Every sheet's used-range values after Excel recalculates the whole book and each sheet, and whether each
+    used cell passes its data validation (Excel reports True for a cell without one)."""
 
     app.api.calculate_full()
+    for sheet in book.sheets:
+        sheet.api.calculate()
     out = {}
     for sheet in book.sheets:
         out[sheet.name] = safe(lambda s=sheet: s.used_range.value)
@@ -237,8 +329,13 @@ def main() -> int:
     for base, values in bases:
         sheets = source_sheet_count(base)
         staged = CONTAINER / ("source_" + base.name)
-        shutil.copy(base, staged)
+        if values:
+            plant(base, staged)
+        else:
+            shutil.copy(base, staged)
         error, source = open_and_read(app, staged, sheets, "source_" + base.stem, values)
+        if error is None and holds_sentinel(list(source.get("values", {}).values())):
+            error = "a planted cache survived the recalculation"
         if error:
             print("FAIL %s: the source itself does not open cleanly: %s" % (base.relative_to(ROOT), error))
             failures += 1
@@ -254,7 +351,13 @@ def main() -> int:
                 print("FAIL %s -> %s: formulon_cli: %s" % (base.relative_to(ROOT), ext, r.stderr.strip()))
                 failures += 1
                 continue
-            error, output = open_and_read(app, out, sheets, "%s_%s" % (base.stem, ext), values)
+            opened = out
+            if values:
+                opened = CONTAINER / ("planted_%s.%s" % (base.stem, ext))
+                plant(out, opened)
+            error, output = open_and_read(app, opened, sheets, "%s_%s" % (base.stem, ext), values)
+            if error is None and holds_sentinel(list(output.get("values", {}).values())):
+                error = "a planted cache survived the recalculation"
             problems = [error] if error else ["feature lost: " + d for d in diff(source, output)]
             status = "FAIL" if problems else "ok  "
             print("%s %s -> %s%s" % (status, base.relative_to(ROOT), ext, "".join("\n       " + p for p in problems)))
