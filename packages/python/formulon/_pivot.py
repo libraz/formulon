@@ -222,7 +222,7 @@ class Pivot(_NoCopy):
     def _field_index(self, field: PivotFieldRef) -> int:
         """The pivot field index ``field`` names: an index as it is, a source name through the cache's fields.
 
-        A name is matched case-insensitively under Unicode simple case folding.
+        A name resolves as sheet names do: exact, case-only, then a unique width fold.
 
         Raises:
           NotFoundError: when no cache field has the name.

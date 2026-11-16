@@ -179,6 +179,19 @@ Napi::Value Workbook::PivotName(const Napi::CallbackInfo& info) {
   return ValueOrThrow(env, rc, JsString(env, name));
 }
 
+Napi::Value Workbook::GetPivotIndex(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::string name = ArgString(info, 1);
+  std::size_t index = 0;
+  int32_t present = 0;
+  const fm_status_t rc = fm_sheet_get_pivot_index(handle_, sheet, name.c_str(), &present, &index);
+  return OptionalOrNull(env, rc, present, Napi::Number::New(env, static_cast<double>(index)));
+}
+
 Napi::Value Workbook::PivotRuntimeId(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {

@@ -4992,25 +4992,26 @@ function tableRange(raw, sheet, range, where) {
   return rect;
 }
 
-// How a string key of each `*Ref` kind is matched: the element count, the key
-// of element `i`, the wording of the errors, and the handle class that also
+// How a string key of each `*Ref` kind is matched, the wording of the errors, and the handle class that also
 // names an element.
 // A `keyed` kind reaches the raw call as its key: a string passes through for the engine to match (an unknown
 // one is `NotFound`), a position is read as the key stored there.
+// A name kind (no `keyed`) resolves a string through `find(raw, sheet, name)`: the element index, or null.
 const REF_KINDS = Object.freeze({
   table: {
     noun: 'table name',
     handle: 'Table',
     context: 'table_name',
-    count: (raw, sheet) => raw.getTableCount(sheet),
-    key: (raw, sheet, i) => raw.getTable(sheet, i).name,
+    find: (raw, sheet, name) => {
+      const found = raw.getTableIndex(name);
+      return found !== null && found.sheet === sheet ? found.index : null;
+    },
   },
   pivot: {
     noun: 'pivot name',
     handle: 'Pivot',
     context: 'pivot_name',
-    count: (raw, sheet) => raw.getPivotCount(sheet),
-    key: (raw, sheet, i) => raw.getPivotName(sheet, i),
+    find: (raw, sheet, name) => raw.getPivotIndex(sheet, name),
   },
   cfRule: {
     keyed: true,
@@ -5646,20 +5647,6 @@ function namesACell(raw, text) {
   return rect.firstRow === rect.lastRow && rect.firstCol === rect.lastCol;
 }
 
-// The identity key of a name under simple case folding, as the engine compares
-// sheet names: each code point maps one-to-one, and an expanding mapping
-// (`ß` -> `SS`) leaves it as it is.
-function foldName(name) {
-  let out = '';
-  for (const ch of name) {
-    const upper = ch.toUpperCase();
-    const one = [...upper].length === 1 ? upper : ch;
-    const lower = one.toLowerCase();
-    out += [...lower].length === 1 ? lower : one;
-  }
-  return out;
-}
-
 // The `Pivot` methods whose first argument is a `PivotFieldRef`.
 const PIVOT_FIELD_ARGUMENTS = Object.freeze([
   'getField',
@@ -5690,7 +5677,7 @@ const PIVOT_CACHE_FIELD_ARGUMENTS = Object.freeze([
   ['setRecordValue', 1],
 ]);
 
-/** The field index a `PivotFieldRef` names: a number is the index, a string the source name matched as names are. */
+/** The field index a `PivotFieldRef` names: a number is the index, a string the source name the engine resolves. */
 function pivotFieldIndex(raw, sheet, pivot, ref, label) {
   if (typeof ref === 'number') return requireIndex(ref, label, 'position');
   return cacheFieldIndex(raw, raw.getPivotCacheId(sheet, pivot), ref, label);
@@ -5700,10 +5687,8 @@ function pivotFieldIndex(raw, sheet, pivot, ref, label) {
 function cacheFieldIndex(raw, cacheId, ref, label) {
   if (typeof ref === 'number') return requireIndex(ref, label, 'position');
   if (typeof ref !== 'string') throw new TypeError(`${label} must be a field index or a field source name`);
-  const want = foldName(ref);
-  for (let i = 0, n = raw.getPivotCacheFieldCount(cacheId); i < n; i++) {
-    if (foldName(raw.getPivotCacheFieldName(cacheId, i)) === want) return i;
-  }
+  const index = raw.getPivotCacheFieldIndex(cacheId, ref);
+  if (index !== null) return index;
   throw new FormulonError(
     StatusCode.NotFound,
     `no field has the source name ${JSON.stringify(ref)}`,
@@ -5726,10 +5711,9 @@ function refuseNullRanges(where, patch) {
 
 /**
  * The index form of a call whose `*Ref` argument (`REF_ARGS`) may be a string or
- * a handle: a string is the first element whose key matches it
- * case-insensitively, as sheet names match, listed afresh on every call; a
- * handle is its element's current index (`handleIndex`, undefined for a value
- * that is not one). A kind without a `REF_KINDS` entry (a pivot cache, keyed by
+ * a handle: a string is the element the engine's name resolver finds for it
+ * (`find`), on every call; a handle is its element's current index
+ * (`handleIndex`, undefined for a value that is not one). A kind without a `REF_KINDS` entry (a pivot cache, keyed by
  * id) has no name form and is left to the method.
  */
 function resolveRef(raw, sheet, where, [at, kind], args, handleIndex) {
@@ -5763,13 +5747,10 @@ function resolveRef(raw, sheet, where, [at, kind], args, handleIndex) {
     out[at] = index;
     return out;
   }
-  const want = foldName(value);
-  const n = spec.count(raw, sheet);
-  for (let i = 0; i < n; i++) {
-    if (foldName(spec.key(raw, sheet, i)) === want) {
-      out[at] = i;
-      return out;
-    }
+  const found = spec.find(raw, sheet, value);
+  if (found !== null) {
+    out[at] = found;
+    return out;
   }
   throw new FormulonError(
     StatusCode.NotFound,
@@ -6998,23 +6979,26 @@ function makeFacade(Raw, registry, runtime) {
       requireObject(source, label);
       refuseOtherKeys(label, source, ['range', 'sheet', 'name']);
       const input = {};
-      let sheet = present(source.sheet) ? sheetRefIndex(this.#workbook, source.sheet, `${label}.sheet`) : undefined;
+      let sheet = present(source.sheet) ? sourceSheet(raw, this.#workbook, source.sheet, `${label}.sheet`) : undefined;
       if (present(source.range)) {
         let rect;
         let qualified;
         if (typeof source.range === 'string') {
           const [sheetName, parsed] = parsedRange(raw, source.range, `${label}.range`, 'SheetRect');
           rect = parsed;
-          qualified = sheetName === null ? undefined : sheetRefIndex(this.#workbook, sheetName, `${label}.range`);
+          qualified = sheetName === null ? undefined : sourceSheet(raw, this.#workbook, sheetName, `${label}.range`);
         } else {
           requireObject(source.range, `${label}.range`);
-          ({ rect, sheet: qualified } = source.range);
+          ({ rect } = source.range);
+          if (present(source.range.sheet)) {
+            qualified = sourceSheet(raw, this.#workbook, source.range.sheet, `${label}.range.sheet`);
+          }
         }
-        if (qualified !== undefined && sheet !== undefined && qualified !== sheet) {
+        if (qualified !== undefined && sheet !== undefined && !sameSourceSheet(qualified, sheet)) {
           throw new FormulonError(
             StatusCode.InvalidArgument,
             `${label}.sheet must match the sheet of range`,
-            `sheet=${sheet}`,
+            `sheet=${sheet.name}`,
           );
         }
         sheet ??= qualified;
@@ -7023,7 +7007,7 @@ function makeFacade(Raw, registry, runtime) {
         }
         input.ref = raw.formatReference({ rect });
       }
-      if (sheet !== undefined) input.sheet = raw.getSheetName(sheet);
+      if (sheet !== undefined) input.sheet = sheet.name;
       if (present(source.name)) input.name = requireString(source.name, `${label}.name`);
       raw.setPivotCacheWorksheetSource(this.#cacheId, input);
     }
@@ -7247,6 +7231,24 @@ function makeFacade(Raw, registry, runtime) {
     }
     if (typeof ref === 'number') return requireIndex(ref, label, 'sheet');
     throw new TypeError(`${label} must be a sheet name, a sheet index or a Sheet`);
+  }
+
+  // A source sheet as `{ index, name }`: a name the workbook resolves is written in its stored spelling, one it
+  // does not stays verbatim with a null index (the source may name a sheet the workbook lacks).
+  function sourceSheet(raw, workbook, ref, label) {
+    if (typeof ref === 'string') {
+      const index = raw.getSheetIndex(ref);
+      return index === null || index === undefined
+        ? { index: null, name: ref }
+        : { index, name: raw.getSheetName(index) };
+    }
+    const index = sheetRefIndex(workbook, ref, label);
+    return { index, name: raw.getSheetName(index) };
+  }
+
+  // Two source sheets agree when they resolve to the same sheet, or neither resolves and the spellings are equal.
+  function sameSourceSheet(a, b) {
+    return a.index === null && b.index === null ? a.name === b.name : a.index === b.index;
   }
 
   // The current index of a `TableRef` / `PivotRef` handle `value` passed to a method of the sheet `self`;
@@ -7574,7 +7576,7 @@ function makeFacade(Raw, registry, runtime) {
       return tables;
     }
 
-    // A position, a name matched case-insensitively among this sheet's tables, or the sheet's own handle.
+    // A position, a name resolved among this sheet's tables, or the sheet's own handle.
     table(ref) {
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
@@ -7664,12 +7666,8 @@ function makeFacade(Raw, registry, runtime) {
 
     // The rule whose id matches `id` as ids are matched everywhere; an unknown id is `NotFound`.
     #cfRuleById(raw, sheet, id, where) {
-      const want = foldName(id);
-      const n = raw.getCfRuleCount(sheet);
-      for (let i = 0; i < n; i++) {
-        const rule = raw.getCfRule(sheet, i);
-        if (foldName(rule.id) === want) return rule;
-      }
+      const rule = raw.getCfRule(sheet, id);
+      if (rule !== null && rule !== undefined) return rule;
       throw new FormulonError(
         StatusCode.NotFound,
         `${where} found no rule with the ${REF_KINDS.cfRule.noun} ${JSON.stringify(id)}`,
@@ -7944,7 +7942,7 @@ function makeFacade(Raw, registry, runtime) {
     }
 
     // The table may live on another sheet, so the raw call takes its sheet and its sheet-local index. A string
-    // `column` is the table's column name, matched as sheet names are.
+    // `column` is the table's column name, resolved as sheet names are.
     addSlicer(table, column, spec) {
       const where = 'Sheet.addSlicer';
       const raw = rawOf(this.#workbook);
@@ -7952,7 +7950,7 @@ function makeFacade(Raw, registry, runtime) {
       let tableSheet;
       let tableIndex;
       if (typeof table === 'string') {
-        const found = raw.findTable(table);
+        const found = raw.getTableIndex(table);
         if (found === null) {
           throw new FormulonError(
             StatusCode.NotFound,
@@ -7974,9 +7972,8 @@ function makeFacade(Raw, registry, runtime) {
         throw new TypeError(`${argLabel(where, 0)} must be a table name or a Table`);
       }
       if (typeof column === 'string') {
-        const want = foldName(column);
-        const at = raw.getTable(tableSheet, tableIndex).columns.findIndex((c) => foldName(c.name) === want);
-        if (at < 0) {
+        const at = raw.getTableColumnIndex(tableSheet, tableIndex, column);
+        if (at === null) {
           throw new FormulonError(
             StatusCode.NotFound,
             `the table has no column named ${JSON.stringify(column)}`,
@@ -8768,7 +8765,7 @@ function makeFacade(Raw, registry, runtime) {
     table(name) {
       requireString(name, argLabel('Workbook.table', 0));
       this.#alive();
-      const found = this.#raw.findTable(name);
+      const found = this.#raw.getTableIndex(name);
       if (found === null) {
         throw new FormulonError(
           StatusCode.NotFound,

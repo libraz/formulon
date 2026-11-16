@@ -1,33 +1,18 @@
 """Resolve a table or pivot reference to its index.
 
 A reference is a 0-based index, a name or its handle. A name is a table's
-display name or a pivot's name; it matches ignoring case under Unicode simple
-case folding, as sheet names do, and the first entry carrying it wins; a
-numeric-looking string is still a name. The collection is listed afresh on
-every call, so resolving is O(n). A handle resolves to its object's current
-index.
+display name or a pivot's name; the engine resolves it as it resolves sheet
+names (exact, then case-only, then a unique width fold); a numeric-looking
+string is still a name. A handle resolves to its object's current index.
 """
 
 from __future__ import annotations
 
 import operator
-from typing import Any, Callable, Iterable, Optional, Union
+from typing import Any, Callable, Optional, Union
 
 from ._c import FormulonError
 from ._status import StatusCode
-
-
-def _fold(text: str) -> str:
-    """``text`` under Unicode simple case folding (one code point per code point)."""
-    out = []
-    for char in text:
-        folded = char.casefold()
-        if len(folded) != 1:
-            # A full folding expands; the simple one is the one-code-point lowercase, else none.
-            lowered = char.lower()
-            folded = lowered if len(lowered) == 1 else char
-        out.append(folded)
-    return "".join(out)
 
 
 def _handle_index(ref: Any, owner: Any, what: str) -> Optional[int]:
@@ -56,15 +41,15 @@ def _handle_index(ref: Any, owner: Any, what: str) -> Optional[int]:
     return ref.index
 
 
-def resolve_ref(ref: Union[int, str, Any], names: Callable[[], Iterable[str]], what: str, owner: Any = None) -> int:
+def resolve_ref(ref: Union[int, str, Any], lookup: Callable[[str], Optional[int]], what: str, owner: Any = None) -> int:
     """Return the index ``ref`` addresses.
 
     Args:
       ref: an index, returned unchanged so the caller's index checks apply;
-        a name looked up in ``names()``, ignoring case; or a :class:`Table`
+        a name resolved by ``lookup``; or a :class:`Table`
         or :class:`Pivot` handle, resolved to its object's current index.
-      names: lists the collection's names in index order; called only for a
-        ``str`` reference.
+      lookup: resolves a name to its index, or ``None`` when it names nothing;
+        called only for a ``str`` reference.
       what: the collection's noun for the error message (``"table"``).
       owner: the :class:`Workbook` whose :class:`Table` handles, or the
         :class:`Sheet` whose :class:`Pivot` handles, ``ref`` may be; ``None``
@@ -78,10 +63,9 @@ def resolve_ref(ref: Union[int, str, Any], names: Callable[[], Iterable[str]], w
       InvalidArgumentError: when ``ref`` is a handle of another workbook or sheet.
     """
     if isinstance(ref, str):
-        wanted = _fold(ref)
-        for index, name in enumerate(names()):
-            if _fold(name) == wanted:
-                return index
+        found = lookup(ref)
+        if found is not None:
+            return found
         raise FormulonError(StatusCode.NOT_FOUND, f"no {what} is named {ref!r}", "")
     if isinstance(ref, bool):
         raise TypeError(f"formulon: {what} must be an int, a str or a handle, got bool")

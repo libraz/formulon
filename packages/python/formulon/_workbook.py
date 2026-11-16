@@ -465,10 +465,10 @@ SparklineGroupRef = Union[int, SparklineGroupId]
 #: A pivot cache: its ``cache_id`` or its :class:`PivotCache` handle.
 PivotCacheRef = Union[int, "PivotCache"]
 
-#: A pivot field: its index (the cache field index) or its source name, matched case-insensitively.
+#: A pivot field: its index (the cache field index) or its source name, resolved as sheet names are.
 PivotFieldRef = Union[int, str]
 
-#: A table: its index on the sheet, its name (matched case-insensitively) or its :class:`Table` handle.
+#: A table: its index on the sheet, its name (resolved as sheet names are) or its :class:`Table` handle.
 TableRef = Union[int, str, "Table"]
 
 #: A pivot table: its index on the sheet, its name (the first of several) or its :class:`Pivot` handle.
@@ -6977,7 +6977,18 @@ def _pack_pivot_worksheet_source(
             sheet_name = parsed.sheet_name
     elif value is not None:
         raise TypeError(f"range must be a SheetRect, an A1 string or None, got {type(value).__name__}")
-    if given_name is not None and sheet_name is not None and given_name.casefold() != sheet_name.casefold():
+    # A name the workbook resolves is written in its stored spelling; one it does not stays verbatim.
+    given_index = None if given_name is None else workbook._find_sheet(given_name)
+    sheet_index = None if sheet_name is None else workbook._find_sheet(sheet_name)
+    if given_index is not None:
+        given_name = workbook._sheet_name(given_index)
+    if sheet_index is not None:
+        sheet_name = workbook._sheet_name(sheet_index)
+    if (
+        given_name is not None
+        and sheet_name is not None
+        and (given_index != sheet_index or (given_index is None and given_name != sheet_name))
+    ):
         raise FormulonError(
             StatusCode.INVALID_ARGUMENT,
             "the range names a different sheet than sheet",
@@ -9696,7 +9707,7 @@ class Workbook(_NoCopy):
         return out
 
     def table(self, name: str) -> Table:
-        """Return the handle of the table named ``name`` (compared case-insensitively), on any sheet.
+        """Return the handle of the table ``name`` resolves to as sheet names do (a stored display name also resolves), on any sheet.
 
         Table names are unique across the workbook, which is why this lookup
         is workbook-wide; :meth:`Sheet.table` addresses a sheet's tables by
@@ -9709,17 +9720,23 @@ class Workbook(_NoCopy):
         """
         if not isinstance(name, str):
             raise TypeError(f"table name must be a str, got {type(name).__name__}")
+        found = self._find_table(name)
+        if found is None:
+            raise FormulonError(StatusCode.NOT_FOUND, f'no table is named "{name}"', f"name={name}")
+        return self._table_handle(*found)
+
+    def _find_table(self, name: str) -> Optional[Tuple[int, int]]:
+        """The ``(sheet index, table index)`` of the table ``name`` resolves to (name or display name), or ``None``."""
         h = self._require()
         with _ArgScope() as scope:
             name_ptr = scope.cstr(name)
             sheet_ptr = scope.out_ptr()
             index_ptr = scope.out_ptr()
             present = scope.out_ptr()
-            _check(LIB.fm_workbook_find_table(h, name_ptr, present, sheet_ptr, index_ptr))
+            _check(LIB.fm_workbook_get_table_index(h, name_ptr, present, sheet_ptr, index_ptr))
             if LIB.read_i32(present) == 0:
-                raise FormulonError(StatusCode.NOT_FOUND, f'no table is named "{name}"', f"name={name}")
-            sheet, index = LIB.read_u32(sheet_ptr), LIB.read_u32(index_ptr)
-        return self._table_handle(sheet, index)
+                return None
+            return LIB.read_u32(sheet_ptr), LIB.read_u32(index_ptr)
 
     def _table_count(self, sheet_index: int) -> int:
         """Return the number of tables on sheet ``sheet_index``."""

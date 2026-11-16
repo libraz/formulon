@@ -147,6 +147,17 @@ std::string JsWorkbook::pivotCacheFieldName(uint32_t cacheId, uint32_t fieldInde
   return string_from_cstr(name);
 }
 
+emscripten::val JsWorkbook::getPivotCacheFieldIndex(uint32_t cacheId, const std::string& name) const {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return emscripten::val::undefined();
+  }
+  std::size_t index = 0;
+  int32_t present = 0;
+  const fm_status_t rc = fm_workbook_get_pivot_cache_field_index(handle_, cacheId, name.c_str(), &present, &index);
+  return optional_or_null(rc, present, emscripten::val(static_cast<uint32_t>(index)));
+}
+
 emscripten::val JsWorkbook::pivotCacheFieldTypes(uint32_t cacheId, uint32_t fieldIndex) const {
   fm_pivot_cache_field_types_info_t types = FM_STRUCT_INIT(fm_pivot_cache_field_types_info_t);
   if (!succeeded(handle_ != nullptr ? fm_workbook_get_pivot_cache_field_types(handle_, cacheId, fieldIndex, &types)

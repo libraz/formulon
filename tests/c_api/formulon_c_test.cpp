@@ -132,7 +132,7 @@ TEST(FormulonCApi, TableCreateUpdateRemoveRoundTripsThroughOoxml) {
   size_t sheet = 99;
   size_t found = 99;
   int32_t present = 0;
-  ASSERT_EQ(fm_workbook_find_table(wb.handle, "sales", &present, &sheet, &found), 0);
+  ASSERT_EQ(fm_workbook_get_table_index(wb.handle, "sales", &present, &sheet, &found), 0);
   EXPECT_EQ(present, 1);
   EXPECT_EQ(sheet, 0U);
   EXPECT_EQ(found, index);

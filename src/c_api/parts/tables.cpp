@@ -523,22 +523,23 @@ extern "C" fm_status_t fm_sheet_get_table_at(const fm_workbook_t* wb, size_t she
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_find_table(const fm_workbook_t* wb, const char* name, int32_t* out_present,
-                                              size_t* out_sheet_index, size_t* out_table_index) {
+extern "C" fm_status_t fm_workbook_get_table_index(const fm_workbook_t* wb, const char* name, int32_t* out_present,
+                                                   size_t* out_sheet_index, size_t* out_table_index) {
   clear_last_error();
-  if (wb == nullptr || name == nullptr || out_present == nullptr || out_sheet_index == nullptr ||
-      out_table_index == nullptr) {
+  if (wb == nullptr || out_present == nullptr || out_sheet_index == nullptr || out_table_index == nullptr) {
     return null_argument();
+  }
+  *out_present = 0;
+  *out_sheet_index = 0;
+  *out_table_index = 0;
+  if (name == nullptr) {
+    return null_argument("name");
   }
   if (auto rc = check_utf8({name}); rc != 0) {
     return rc;
   }
-  *out_present = 0;
   const auto& tables = wb->workbook().tables();
-  const std::size_t i =
-      formulon::sheet_names::resolve_by(tables.size(), [&](std::size_t at, formulon::sheet_names::Fold fold) {
-        return formulon::sheet_names::same(tables[at].display_name, name, fold);
-      });
+  const std::size_t i = formulon::sheet_names::resolve_table(tables, name);
   if (i != formulon::sheet_names::kNotFound) {
     *out_sheet_index = tables[i].sheet_index;
     *out_table_index = local_table_index(wb->workbook(), i);
@@ -880,6 +881,33 @@ extern "C" fm_status_t fm_sheet_remove_table(fm_workbook_t* wb, size_t sheet_ind
   // The removed table's AutoFilter may have been the sheet's only one with
   // criteria.
   wb->workbook().mark_row_visibility_dependents_dirty();
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_get_table_column_index(const fm_workbook_t* wb, size_t sheet_index, size_t table_index,
+                                                       const char* name, int32_t* out_present,
+                                                       size_t* out_column_index) {
+  clear_last_error();
+  if (wb == nullptr || out_present == nullptr || out_column_index == nullptr) {
+    return null_argument();
+  }
+  *out_present = 0;
+  *out_column_index = 0;
+  if (name == nullptr) {
+    return null_argument("name");
+  }
+  std::size_t index = 0;
+  if (auto rc = resolve_sheet_table(wb, sheet_index, table_index, &index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8({name}); rc != 0) {
+    return rc;
+  }
+  const std::size_t found = formulon::sheet_names::resolve_named(wb->workbook().tables()[index].columns, name);
+  if (found != formulon::sheet_names::kNotFound) {
+    *out_present = 1;
+    *out_column_index = found;
+  }
   return 0;
 }
 

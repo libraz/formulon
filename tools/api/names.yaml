@@ -4183,9 +4183,8 @@ entries:
     noun: sheet_index
     c: fm_workbook_get_sheet_index
     js: getSheetIndex
-    py: get_sheet_index
-    surfaces: [c, wasm, native, py]
-    drop: { js: getSheetIndex, py: get_sheet_index, closes: R23.list }
+    surfaces: [c, wasm, native]
+    internal: true
     missing: null
   sheet.add:
     kind: op
@@ -4784,15 +4783,26 @@ entries:
     exception: "the bindings read by position through get<X>(index); only the C name carries `_at`"
     was: { c: fm_workbook_table_at, js: tableAt }
     handle: { class: Table, supplies: [sheet, table] }
-  table.find:
+  table_index.get:
     kind: op
     scope: workbook
-    noun: table
-    c: fm_workbook_find_table
-    js: findTable
+    noun: table_index
+    c: fm_workbook_get_table_index
+    js: getTableIndex
     surfaces: [c, wasm, native]
     internal: true
-    qualifies: "workbook-wide lookup by name: table names are unique across the workbook and formulas use them"
+    missing: null
+    qualifies: "workbook-wide lookup by name or display name: table names are unique across the workbook and formulas use them"
+  table_column_index.get:
+    kind: op
+    scope: sheet
+    noun: table_column_index
+    c: fm_sheet_get_table_column_index
+    js: getTableColumnIndex
+    surfaces: [c, wasm, native]
+    internal: true
+    missing: null
+    qualifies: "facade lookup behind table-column names (addSlicer): resolves a column name with the shared name resolver"
   table.create:
     kind: op
     scope: sheet
@@ -6440,6 +6450,16 @@ entries:
     py: refresh_pivot_cache
     surfaces: [c, wasm, native, py]
     handle: { class: PivotCache, supplies: [cache_id] }
+  pivot_cache_field_index.get:
+    kind: op
+    scope: workbook
+    noun: pivot_cache_field_index
+    c: fm_workbook_get_pivot_cache_field_index
+    js: getPivotCacheFieldIndex
+    surfaces: [c, wasm, native]
+    internal: true
+    missing: null
+    qualifies: "facade lookup behind PivotFieldRef names: resolves a cache field's source name with the shared name resolver"
   pivot_cache_field.get_count:
     kind: op
     scope: workbook
@@ -7305,6 +7325,16 @@ entries:
     surfaces: [c, wasm, native, py]
     was: { c: fm_workbook_pivot_get_name, js: pivotName, py: pivot_name }
     handle: { class: Pivot, js: name, py: name, property: true, supplies: [sheet, pivot] }
+  pivot_index.get:
+    kind: op
+    scope: sheet
+    noun: pivot_index
+    c: fm_sheet_get_pivot_index
+    js: getPivotIndex
+    surfaces: [c, wasm, native]
+    internal: true
+    missing: null
+    qualifies: "facade lookup behind PivotRef names: resolves a pivot name on one sheet with the shared name resolver"
   pivot_options.get:
     kind: op
     scope: sheet

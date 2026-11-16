@@ -27,6 +27,7 @@
 #include "pivot/pivot_index.h"
 #include "pivot/pivot_locale.h"
 #include "sheet.h"
+#include "sheet_name.h"
 #include "utils/error.h"
 #include "utils/utf8_length.h"
 #include "workbook.h"
@@ -764,6 +765,35 @@ extern "C" fm_status_t fm_sheet_get_pivot_name(const fm_workbook_t* wb, std::siz
     return rc;
   }
   *out_name = table->name().c_str();
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_get_pivot_index(const fm_workbook_t* wb, std::size_t sheet_index, const char* name,
+                                                std::int32_t* out_present, std::size_t* out_pivot_index) {
+  clear_last_error();
+  if (wb == nullptr || out_present == nullptr || out_pivot_index == nullptr) {
+    return null_argument();
+  }
+  *out_present = 0;
+  *out_pivot_index = 0;
+  if (name == nullptr) {
+    return null_argument("name");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8({name}); rc != 0) {
+    return rc;
+  }
+  const auto& pivots = wb->workbook().sheet(sheet_index).pivot_tables();
+  const std::size_t found =
+      formulon::sheet_names::resolve_by(pivots.size(), [&](std::size_t at, formulon::sheet_names::Fold fold) {
+        return pivots[at] != nullptr && formulon::sheet_names::same(pivots[at]->name(), name, fold);
+      });
+  if (found != formulon::sheet_names::kNotFound) {
+    *out_present = 1;
+    *out_pivot_index = found;
+  }
   return 0;
 }
 

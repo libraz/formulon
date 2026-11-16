@@ -154,8 +154,8 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
 - **C ABI, JavaScript, Python:** table lifecycle lives on `Sheet`, like
   pivots: `ws.addTable(input)`, `ws.table(ref)`, `ws.listTables()` and
   `ws.removeTable(ref)`. A table index is local to its sheet, and every C table
-  function is `fm_sheet_*table*`. `wb.table(name)` (`fm_workbook_find_table`)
-  stays as the one workbook-wide lookup by name. A table's `name` is the name
+  function is `fm_sheet_*table*`. `wb.table(name)` (`fm_workbook_get_table_index`)
+  is the one workbook-wide lookup by name. A table's `name` is the name
   formulas use, and `table.rename('Rev')` changes it; the file's separate
   display name is no longer a public field.
 - **C ABI, JavaScript, Python:** a table or PivotTable style is read and
@@ -366,7 +366,11 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   `FM_STATUS_INDEX_OUT_OF_RANGE`, and removing a record by a natural key that
   does not exist returns `FM_STATUS_NOT_FOUND`. Error message text no longer
   names C functions and is for display, not comparison.
-  `fm_workbook_get_sheet_index` finds a sheet by name and
+  `fm_workbook_get_sheet_index` finds a sheet by name, and
+  `fm_workbook_get_table_index`, `fm_sheet_get_pivot_index`,
+  `fm_workbook_get_pivot_cache_field_index` and
+  `fm_sheet_get_table_column_index` find a table, a pivot, a cache field and a
+  table column by name with the same resolution order;
   `fm_get_version_number` returns the version as one number.
 - **C ABI:** a few records and functions change shape; a caller compiled
   against an earlier header must be recompiled. See [C ABI changes](#c-abi-changes).
@@ -3777,7 +3781,7 @@ A caller compiled against an earlier header must be recompiled.
 | `fm_sheet_remove_hyperlink(wb, sheet_index, row, col)` | `fm_sheet_remove_hyperlink(wb, sheet_index, const fm_cell_rect_t* range)` removes every link intersecting the rectangle, `FM_STATUS_NOT_FOUND` when none does |
 | `fm_sheet_clear_row_height`, `fm_sheet_clear_column_width`, `fm_sheet_clear_column_style`, `fm_sheet_clear_row_style` | `fm_sheet_reset_row_height`, `fm_sheet_reset_column_width`, `fm_sheet_reset_column_xf_index`, `fm_sheet_reset_row_xf_index` |
 | `fm_sheet_clear_auto_filter`, `fm_table_clear_auto_filter` | `fm_sheet_clear_auto_filter_criteria`, `fm_sheet_clear_table_auto_filter_criteria` |
-| the `fm_workbook_*table*` functions | `fm_sheet_*table*` with a sheet-local `table_index`; `fm_workbook_find_table` is unchanged |
+| the `fm_workbook_*table*` functions | `fm_sheet_*table*` with a sheet-local `table_index`; `fm_workbook_get_table_index` finds a table by name workbook-wide |
 | `fm_workbook_pivot_set_anchor` taking a rectangle | `fm_sheet_set_pivot_anchor` takes one cell, as `fm_pivot_spec_t.anchor` does |
 | `fm_workbook_evaluate_formula` (top-left cell only) | removed; `fm_sheet_evaluate_formula_array` returns the array and a caller takes element (0, 0) |
 | `fm_pagination_horizontal_break_at(p, i, uint32_t* out_row)`, `fm_pagination_vertical_break_at(p, i, uint32_t* out_col)`, `fm_pagination_horizontal_break_is_manual`, `fm_pagination_vertical_break_is_manual` | `fm_pagination_get_row_break_at` / `fm_pagination_get_column_break_at` fill an `fm_row_break_t` / `fm_column_break_t` (span and `manual` included); the two `*_is_manual` functions are removed |

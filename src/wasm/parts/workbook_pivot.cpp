@@ -226,6 +226,17 @@ std::string JsWorkbook::pivotName(uint32_t sheet, uint32_t pivotIndex) const {
   return string_from_cstr(name);
 }
 
+emscripten::val JsWorkbook::getPivotIndex(uint32_t sheet, const std::string& name) const {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return emscripten::val::undefined();
+  }
+  std::size_t index = 0;
+  int32_t present = 0;
+  const fm_status_t rc = fm_sheet_get_pivot_index(handle_, sheet, name.c_str(), &present, &index);
+  return optional_or_null(rc, present, emscripten::val(static_cast<uint32_t>(index)));
+}
+
 uint32_t JsWorkbook::pivotRuntimeId(uint32_t sheet, uint32_t pivotIndex) const {
   uint32_t out = 0;
   succeeded(handle_ != nullptr ? fm_sheet_get_pivot_runtime_id(handle_, sheet, pivotIndex, &out)

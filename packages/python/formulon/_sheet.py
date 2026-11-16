@@ -51,7 +51,7 @@ from ._c import (
 )
 from ._handle_tables import READ_ONLY_KEYS
 from ._inputs import cell_rect, civil_datetime, color_input, date_serial, normalize_record_ranges, serial_datetime
-from ._refs import _fold, resolve_ref
+from ._refs import resolve_ref
 from ._status import (
     StatusCode,
 )
@@ -4738,12 +4738,30 @@ class Sheet(_NoCopy):
             object_id = LIB.read_u32(out)
         return cast("Shape", self._drawing_handle(object_id))
 
+    def _find_table_column(self, table_sheet: int, table_index: int, name: str) -> Optional[int]:
+        """Index of the column ``name`` resolves to in the table, or ``None``."""
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            out = scope.out_ptr()
+            present = scope.out_ptr()
+            _check(
+                LIB.fm_sheet_get_table_column_index(
+                    h,
+                    _uint(table_sheet, "table_sheet_index", role="sheet"),
+                    _uint(table_index, "table_index", role="position"),
+                    scope.cstr(name),
+                    present,
+                    out,
+                )
+            )
+            return LIB.read_u32(out) if LIB.read_i32(present) else None
+
     def add_slicer(self, table: Union[str, Table], column: Union[int, str], spec: SlicerInput) -> Slicer:
         """Add a slicer over column ``column`` of ``table`` (a :class:`Table` or its name); return its handle.
 
-        ``table`` may live on another sheet; a name is compared
-        case-insensitively. ``column`` is a 0-based position or the column's
-        name, compared case-insensitively. The frame is two-cell: ``spec.anchor``
+        ``table`` may live on another sheet; a name resolves as sheet names do
+        (exact, case-only, then a unique width fold). ``column`` is a 0-based
+        position or the column's name, resolved the same way. The frame is two-cell: ``spec.anchor``
         gives its box or its size, as for :class:`ShapeInput`. The name and
         caption default to the column name (the name is made unique),
         ``row_height_pt`` to 19 and ``column_count`` to 1.
@@ -4763,12 +4781,10 @@ class Sheet(_NoCopy):
             raise TypeError(_argument_message("table", "must be a Table or a string"))
         table_sheet, table_index = found.sheet.index, found.index
         if isinstance(column, str):
-            wanted = _fold(column)
-            names = [c.name for c in found.get_properties().columns]
-            matches = [i for i, name in enumerate(names) if _fold(name) == wanted]
-            if not matches:
+            at = self._find_table_column(table_sheet, table_index, column)
+            if at is None:
                 raise FormulonError(StatusCode.NOT_FOUND, f'the table has no column "{column}"', f"column={column}")
-            column = matches[0]
+            column = at
         elif isinstance(column, bool) or not isinstance(column, int):
             raise TypeError(_argument_message("column", "must be an integer or a string"))
         sheet = self._index()
@@ -7137,9 +7153,21 @@ class Sheet(_NoCopy):
 
     def _pivot_index(self, pivot: PivotRef) -> int:
         """The index ``pivot`` addresses: an index, a pivot table's name or a :class:`Pivot` of this sheet."""
-        return resolve_ref(
-            pivot, lambda: [self._pivot_name(i) for i in range(self._pivot_count())], "pivot", owner=self
-        )
+        return resolve_ref(pivot, self._find_pivot, "pivot", owner=self)
+
+    def _find_pivot(self, name: str) -> Optional[int]:
+        """Index of the pivot table ``name`` resolves to on this sheet, or ``None``."""
+        sheet = self._index()
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            out = scope.out_ptr()
+            present = scope.out_ptr()
+            _check(
+                LIB.fm_sheet_get_pivot_index(
+                    h, _uint(sheet, "sheet_index", role="sheet"), scope.cstr(name), present, out
+                )
+            )
+            return LIB.read_u32(out) if LIB.read_i32(present) else None
 
     def _pivot_at(self, pivot_index: int) -> Pivot:
         """The handle of the pivot at ``pivot_index``; the sheet keeps one per pivot."""
@@ -7247,13 +7275,12 @@ class Sheet(_NoCopy):
                     StatusCode.INVALID_ARGUMENT, _argument_message("table", "is a Table of another sheet"), ""
                 )
             return table.index
-        sheet = self._index()
-        h = self._workbook._require()
-        return resolve_ref(
-            table,
-            lambda: [Table._name(h, sheet, i) for i in range(self._table_count())],
-            "table",
-        )
+        return resolve_ref(table, self._find_table, "table")
+
+    def _find_table(self, name: str) -> Optional[int]:
+        """Sheet-local index of the table ``name`` resolves to, or ``None`` when it is not on this sheet."""
+        found = self._workbook._find_table(name)
+        return found[1] if found is not None and found[0] == self._index() else None
 
     def list_tables(self) -> List[Table]:
         """Return the handles of the sheet's worksheet tables; a table's position is its sheet-local index."""
@@ -7263,8 +7290,9 @@ class Sheet(_NoCopy):
     def table(self, table: TableRef) -> Table:
         """Return the handle of the table ``table`` on this sheet: an index, a name or a :class:`Table` of this sheet.
 
-        A name is compared case-insensitively and a string is always a name,
-        digits included. :meth:`Workbook.table` finds a table on any sheet.
+        A name resolves as sheet names do (exact, case-only, then a unique
+        width fold; the stored display name also resolves) and a string is
+        always a name, digits included. :meth:`Workbook.table` finds a table on any sheet.
 
         Raises:
           NotFoundError: when no table of the sheet has the name ``table``.

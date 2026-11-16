@@ -238,7 +238,21 @@ Napi::Value Workbook::ResolveTableRuntimeId(const Napi::CallbackInfo& info) {
   return out;
 }
 
-Napi::Value Workbook::FindTable(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::GetTableColumnIndex(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const std::size_t sheet = static_cast<std::size_t>(ArgU32(info, 0));
+  const std::size_t table_index = static_cast<std::size_t>(ArgU32(info, 1));
+  const std::string name = ArgString(info, 2);
+  std::size_t index = 0;
+  int32_t present = 0;
+  const fm_status_t rc = fm_sheet_get_table_column_index(handle_, sheet, table_index, name.c_str(), &present, &index);
+  return OptionalOrNull(env, rc, present, Napi::Number::New(env, static_cast<double>(index)));
+}
+
+Napi::Value Workbook::GetTableIndex(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
@@ -247,7 +261,7 @@ Napi::Value Workbook::FindTable(const Napi::CallbackInfo& info) {
   std::size_t sheet_index = 0;
   std::size_t table_index = 0;
   int32_t present = 0;
-  const fm_status_t rc = fm_workbook_find_table(handle_, name.c_str(), &present, &sheet_index, &table_index);
+  const fm_status_t rc = fm_workbook_get_table_index(handle_, name.c_str(), &present, &sheet_index, &table_index);
   if (rc != 0) {
     return ThrowStatus(env, rc);
   }

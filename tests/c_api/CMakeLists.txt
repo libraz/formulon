@@ -109,6 +109,7 @@ set(FORMULON_C_API_TEST_SOURCES
   empty_load_test.cpp
   error_text_test.cpp
   index_out_of_range_test.cpp
+  name_index_lookup_test.cpp
   partial_recalc_test.cpp
   pivot_field_order_test.cpp
   remove_missing_key_test.cpp

@@ -32,6 +32,7 @@
 #include "pivot/record_access.h"
 #include "pivot/shared_items_hints.h"
 #include "sheet.h"
+#include "sheet_name.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -341,6 +342,33 @@ extern "C" fm_status_t fm_workbook_get_pivot_cache_field_name(const fm_workbook_
     return status;
   }
   *out_utf8 = field->name.c_str();
+  return 0;
+}
+
+extern "C" fm_status_t fm_workbook_get_pivot_cache_field_index(const fm_workbook_t* wb, std::uint32_t cache_id,
+                                                               const char* name, std::int32_t* out_present,
+                                                               std::size_t* out_field_index) {
+  clear_last_error();
+  if (wb == nullptr || out_present == nullptr || out_field_index == nullptr) {
+    return null_argument();
+  }
+  *out_present = 0;
+  *out_field_index = 0;
+  if (name == nullptr) {
+    return null_argument("name");
+  }
+  const formulon::pivot::PivotCache* cache = nullptr;
+  if (fm_status_t rc = resolve_cache(wb, cache_id, &cache); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_utf8({name}); rc != 0) {
+    return rc;
+  }
+  const std::size_t found = formulon::sheet_names::resolve_named(cache->fields(), name);
+  if (found != formulon::sheet_names::kNotFound) {
+    *out_present = 1;
+    *out_field_index = found;
+  }
   return 0;
 }
 

@@ -327,12 +327,23 @@ emscripten::val JsWorkbook::resolveTableRuntimeId(uint32_t id) const {
   return o;
 }
 
-emscripten::val JsWorkbook::findTable(const std::string& name) const {
+emscripten::val JsWorkbook::getTableColumnIndex(uint32_t sheet, uint32_t tableIndex, const std::string& name) const {
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return emscripten::val::undefined();
+  }
+  std::size_t index = 0;
+  int32_t present = 0;
+  const fm_status_t rc = fm_sheet_get_table_column_index(handle_, sheet, tableIndex, name.c_str(), &present, &index);
+  return optional_or_null(rc, present, emscripten::val(static_cast<uint32_t>(index)));
+}
+
+emscripten::val JsWorkbook::getTableIndex(const std::string& name) const {
   std::size_t sheet_index = 0;
   std::size_t table_index = 0;
   int32_t present = 0;
   if (!succeeded(handle_ != nullptr
-                     ? fm_workbook_find_table(handle_, name.c_str(), &present, &sheet_index, &table_index)
+                     ? fm_workbook_get_table_index(handle_, name.c_str(), &present, &sheet_index, &table_index)
                      : kBindingInvalidHandle)) {
     return emscripten::val::undefined();
   }

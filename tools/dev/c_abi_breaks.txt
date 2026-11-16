@@ -274,7 +274,7 @@ retyped fm_workbook_set_theme_fonts :: parameter type renamed (fm_theme_fonts ->
 removed fm_workbook_sheet_count :: renamed to fm_workbook_get_sheet_count
 removed fm_workbook_sheet_name :: renamed to fm_workbook_get_sheet_name
 removed fm_workbook_spill_info :: renamed to fm_sheet_get_spill, which takes int32_t* out_present before fm_spill_info_t* out; the record loses engaged
-removed fm_workbook_table_at :: moved to fm_sheet_get_table(wb, sheet_index, table_index, out_name, out_rect); a table has one name, and fm_workbook_find_table finds it by name
+removed fm_workbook_table_at :: moved to fm_sheet_get_table(wb, sheet_index, table_index, out_name, out_rect); a table has one name, and fm_workbook_get_table_index finds it by name
 removed fm_workbook_table_count :: moved to fm_sheet_get_table_count, counting the tables of one sheet
 removed fm_workbook_table_create :: moved to fm_sheet_add_table, which takes const fm_table_spec_t* (range, one table name, columns, style, header / totals rows and the four style toggles) and writes a sheet-local table index
 removed fm_workbook_table_remove :: moved to fm_sheet_remove_table, addressing the table by sheet_index and a sheet-local table_index

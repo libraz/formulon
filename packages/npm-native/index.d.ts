@@ -6710,7 +6710,8 @@ export interface CopySheetOptions {
 export type BytesInput = Uint8Array | ArrayBuffer | ArrayBufferView;
 
 /** A table passed by its sheet-local position (its index in `Sheet.listTables()`), its name (the name formulas use,
- *  resolved by name identity, see {@link Workbook}) or its `Table` handle. A string is always a name, digits included.
+ *  resolved by name identity, see {@link Workbook}; a stored display name from a loaded file also resolves) or its
+ *  `Table` handle. A string is always a name, digits included.
  *  A position past the end fails with `StatusCode.IndexOutOfRange`, a name no table of the sheet has with
  *  `StatusCode.NotFound`, and a handle of another sheet with `StatusCode.InvalidArgument`. Resolving a name reads the
  *  table list, so removing tables by name in a loop is quadratic. */
@@ -7080,9 +7081,9 @@ export interface Workbook {
    *  `scope` past the last sheet with `StatusCode.SheetIndexOutOfRange`; `removeDefinedName` removes a name.
    *  A new name that is, or starts with, a reference in the profile locale's R1C1 letters (de `Z1S1`) is refused; redefining or renaming to an existing name stays allowed. The check uses the profile at the time of the call, so a loaded name is never re-checked. */
   setDefinedName(definedName: DefinedNameInput): void;
-  /** The handle of the table named `name` on any sheet, resolved by name identity (see {@link Workbook}); the one
-   *  workbook-wide table lookup (tables are added, listed and removed on their `Sheet`). A name no table has fails with
-   *  `StatusCode.NotFound`. */
+  /** The handle of the table named `name` on any sheet, resolved by name identity (see {@link Workbook}); a table's
+   *  stored display name, when a loaded file gives it one, also resolves. The one workbook-wide table lookup (tables
+   *  are added, listed and removed on their `Sheet`). A name no table has fails with `StatusCode.NotFound`. */
   table(name: string): Table;
   /** Lists the workbook's persons. */
   listPeople(): readonly Person[];

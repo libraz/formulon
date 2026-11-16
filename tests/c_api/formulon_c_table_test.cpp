@@ -1641,7 +1641,7 @@ TEST(FormulonCApiTable, AddAssignsTheNextSheetLocalIndex) {
   EXPECT_EQ(TableName(wb.handle, 0, 1), "Third");
 }
 
-TEST(FormulonCApiTable, FindTableLooksUpByNameAcrossTheWorkbook) {
+TEST(FormulonCApiTable, GetTableIndexLooksUpByNameAcrossTheWorkbook) {
   WorkbookGuard wb;
   CreateSalesTable(wb);
   std::size_t other = 99;
@@ -1652,28 +1652,28 @@ TEST(FormulonCApiTable, FindTableLooksUpByNameAcrossTheWorkbook) {
   std::size_t sheet = 99;
   std::size_t index = 99;
   int32_t present = -1;
-  ASSERT_EQ(fm_workbook_find_table(wb.handle, "Sales", &present, &sheet, &index), 0);
+  ASSERT_EQ(fm_workbook_get_table_index(wb.handle, "Sales", &present, &sheet, &index), 0);
   EXPECT_EQ(present, 1);
   EXPECT_EQ(sheet, 0U);
   EXPECT_EQ(index, 0U);
 
-  ASSERT_EQ(fm_workbook_find_table(wb.handle, "later", &present, &sheet, &index), 0) << "case-insensitive";
+  ASSERT_EQ(fm_workbook_get_table_index(wb.handle, "later", &present, &sheet, &index), 0) << "case-only match";
   EXPECT_EQ(present, 1);
   EXPECT_EQ(sheet, other);
   EXPECT_EQ(index, 1U);
 
   sheet = 99;
   index = 99;
-  ASSERT_EQ(fm_workbook_find_table(wb.handle, "Nope", &present, &sheet, &index), 0);
+  ASSERT_EQ(fm_workbook_get_table_index(wb.handle, "Nope", &present, &sheet, &index), 0);
   EXPECT_EQ(present, 0);
-  EXPECT_EQ(sheet, 99U) << "the indices are left unchanged when absent";
-  EXPECT_EQ(index, 99U);
+  EXPECT_EQ(sheet, 0U) << "the indices are zeroed when absent";
+  EXPECT_EQ(index, 0U);
 
-  EXPECT_EQ(fm_workbook_find_table(wb.handle, nullptr, &present, &sheet, &index), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_find_table(wb.handle, "Sales", &present, nullptr, &index), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_find_table(wb.handle, "Sales", &present, &sheet, nullptr), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_find_table(wb.handle, "Sales", nullptr, &sheet, &index), kBindingNullPointer);
-  EXPECT_EQ(fm_workbook_find_table(nullptr, "Sales", &present, &sheet, &index), kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_get_table_index(wb.handle, nullptr, &present, &sheet, &index), kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_get_table_index(wb.handle, "Sales", &present, nullptr, &index), kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_get_table_index(wb.handle, "Sales", &present, &sheet, nullptr), kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_get_table_index(wb.handle, "Sales", nullptr, &sheet, &index), kBindingNullPointer);
+  EXPECT_EQ(fm_workbook_get_table_index(nullptr, "Sales", &present, &sheet, &index), kBindingNullPointer);
 }
 
 TEST(FormulonCApiTable, AddRefusesATakenNameWithAlreadyExists) {

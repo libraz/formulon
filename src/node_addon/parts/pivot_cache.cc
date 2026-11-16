@@ -162,6 +162,19 @@ Napi::Value Workbook::PivotCacheFieldName(const Napi::CallbackInfo& info) {
   return ValueOrThrow(env, rc, JsString(env, name));
 }
 
+Napi::Value Workbook::GetPivotCacheFieldIndex(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  const uint32_t cache_id = ArgU32(info, 0);
+  const std::string name = ArgString(info, 1);
+  std::size_t index = 0;
+  int32_t present = 0;
+  const fm_status_t rc = fm_workbook_get_pivot_cache_field_index(handle_, cache_id, name.c_str(), &present, &index);
+  return OptionalOrNull(env, rc, present, Napi::Number::New(env, static_cast<double>(index)));
+}
+
 Napi::Value Workbook::PivotCacheFieldAdd(const Napi::CallbackInfo& info) {
   return IndexCall(info, [&](fm_workbook_t* handle, std::size_t* out) {
     const uint32_t cache_id = ArgU32(info, 0);

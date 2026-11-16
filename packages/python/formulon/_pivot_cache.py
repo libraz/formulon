@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Dict, List, Optional, Union
 from . import _structs as S
 from ._c import LIB, FormulonError, _argument_message, _NoCopy, _require_bool, _sint, _uint, fm_value_t_size
 from ._inputs import date_serial
-from ._refs import _fold
 from ._status import StatusCode
 from ._workbook import (
     _PATCH_CLEAR,
@@ -224,16 +223,19 @@ class PivotCache(_NoCopy):
 
     # -- Fields ------------------------------------------------------------
     def _field_ref(self, field: PivotFieldRef) -> int:
-        """The cache field index ``field`` names: an index as it is, a name matched case-insensitively.
+        """The cache field index ``field`` names: an index as it is, a name the engine resolves as it resolves sheet names.
 
         Raises:
           NotFoundError: when no cache field has the name.
         """
         if isinstance(field, str):
-            wanted = _fold(field)
-            for index, cache_field in enumerate(self.list_fields()):
-                if _fold(cache_field.name) == wanted:
-                    return index
+            h, cache_id = self._call()
+            with _ArgScope() as scope:
+                out = scope.out_ptr()
+                present = scope.out_ptr()
+                _check(LIB.fm_workbook_get_pivot_cache_field_index(h, cache_id, scope.cstr(field), present, out))
+                if LIB.read_i32(present):
+                    return LIB.read_u32(out)
             raise FormulonError(StatusCode.NOT_FOUND, f"the cache has no field named {field!r}", "")
         if isinstance(field, bool):
             raise TypeError(_argument_message("field", "must be an integer or a string"))

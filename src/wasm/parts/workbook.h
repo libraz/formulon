@@ -241,8 +241,10 @@ class JsWorkbook {
   uint32_t tableRuntimeId(uint32_t sheet, uint32_t idx) const;
   /// `{ sheet, index }` of the table with runtime id `id`.
   emscripten::val resolveTableRuntimeId(uint32_t id) const;
-  /// `{ sheet, index }` of the table named `name` (case-insensitive), `null` when there is none.
-  emscripten::val findTable(const std::string& name) const;
+  /// `{ sheet, index }` of the table `name` resolves to (its name or display name, resolved as sheet names are),
+  /// `null` when there is none.
+  emscripten::val getTableIndex(const std::string& name) const;
+  emscripten::val getTableColumnIndex(uint32_t sheet, uint32_t tableIndex, const std::string& name) const;
   uint32_t createTable(uint32_t sheet, emscripten::val spec);
   void updateTable(uint32_t sheet, uint32_t idx, emscripten::val spec);
   void renameTable(uint32_t sheet, uint32_t idx, const std::string& name);
@@ -653,6 +655,7 @@ class JsWorkbook {
 
   double pivotCacheFieldCount(uint32_t cacheId) const;
   std::string pivotCacheFieldName(uint32_t cacheId, uint32_t fieldIndex) const;
+  emscripten::val getPivotCacheFieldIndex(uint32_t cacheId, const std::string& name) const;
   /// The eight `<sharedItems>` content flags of a cache field as `{ containsNumber, ... }` booleans.
   emscripten::val pivotCacheFieldTypes(uint32_t cacheId, uint32_t fieldIndex) const;
   uint32_t pivotCacheFieldAdd(uint32_t cacheId, const std::string& name);
@@ -696,6 +699,7 @@ class JsWorkbook {
   /// from a package alike. `pivotCacheId` returns the cache id.
   uint32_t pivotCacheId(uint32_t sheet, uint32_t pivotIndex) const;
   std::string pivotName(uint32_t sheet, uint32_t pivotIndex) const;
+  emscripten::val getPivotIndex(uint32_t sheet, const std::string& name) const;
   uint32_t pivotRuntimeId(uint32_t sheet, uint32_t pivotIndex) const;
   uint32_t resolvePivotRuntimeId(uint32_t sheet, uint32_t id) const;
   emscripten::val pivotGetGrandTotals(uint32_t sheet, uint32_t pivotIndex) const;

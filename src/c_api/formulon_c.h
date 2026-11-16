@@ -2322,7 +2322,7 @@ FM_API fm_status_t fm_workbook_remove_defined_name(fm_workbook_t* wb, const char
  * A table belongs to a sheet and is addressed as `(sheet_index, table_index)`,
  * `table_index` being its 0-based position among that sheet's tables. Table
  * names are unique across the workbook (formulas use them), so
- * `fm_workbook_find_table` is the one workbook-wide lookup by name.
+ * `fm_workbook_get_table_index` is the one workbook-wide lookup by name.
  *
  * Common failures, besides those each entry lists:
  * `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) for an out-of-range sheet and
@@ -2388,17 +2388,26 @@ FM_API fm_status_t fm_sheet_get_table_at(const fm_workbook_t* wb, size_t sheet_i
                                          fm_table_info_t* out);
 
 /**
- * @brief Finds the table named `name` (case-insensitive) anywhere in the
- *        workbook. `*out_present` is `1` and the two indices are written when
- *        there is one; otherwise `*out_present` is `0` and the indices are
- *        left unchanged (still `FM_STATUS_OK` (0)).
+ * @brief Finds the table `name` resolves to anywhere in the workbook, by its name or its display name.
  *
+ * Resolution order: an exact match, a case-only match, then the one table
+ * matching under the wide fold (a unique wide fold match; none when two
+ * tables collide only under the wide fold). A name that matches no table is
+ * not an error: the call succeeds with `*out_present == 0` and both indices
+ * `0`.
+ *
+ * @param wb              Workbook handle. Must be non-NULL.
+ * @param name            Table name or display name (UTF-8). Must be non-NULL.
+ * @param out_present     Receives `1` when a table matches, `0` otherwise.
+ * @param out_sheet_index Receives the 0-based index of the sheet owning the table when present; `0` otherwise.
+ * @param out_table_index Receives the 0-based index among that sheet's tables when present; `0` otherwise.
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
- *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `name` is not valid UTF-8.
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `name`, `out_present`, `out_sheet_index` or
+ *         `out_table_index` is `NULL`;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) if `name` is not well-formed UTF-8.
  */
-FM_API fm_status_t fm_workbook_find_table(const fm_workbook_t* wb, const char* name, int32_t* out_present,
-                                          size_t* out_sheet_index, size_t* out_table_index);
+FM_API fm_status_t fm_workbook_get_table_index(const fm_workbook_t* wb, const char* name, int32_t* out_present,
+                                               size_t* out_sheet_index, size_t* out_table_index);
 
 /**
  * @brief Writes the runtime id of table `table_index` on `sheet_index` to `*out`.
@@ -2724,6 +2733,29 @@ typedef struct {
  */
 FM_API fm_status_t fm_sheet_get_table_column_at(const fm_workbook_t* wb, size_t sheet_index, size_t table_index,
                                                 size_t column_index, fm_table_column_info_t* out);
+
+/**
+ * @brief Finds the column of a table that `name` resolves to under the identity fold.
+ *
+ * Resolution order: an exact match, a case-only match, then the one column
+ * matching under the wide fold (a unique wide fold match; none when two
+ * columns of a loaded file collide there). A name that matches no column is
+ * not an error: the call succeeds with `*out_present == 0`.
+ *
+ * @param wb               Workbook handle. Must be non-NULL.
+ * @param sheet_index      0-based sheet index.
+ * @param table_index      0-based table index among that sheet's tables.
+ * @param name             Column name (UTF-8). Must be non-NULL; an empty name matches nothing.
+ * @param out_present      Receives `1` when a column matches, `0` otherwise.
+ * @param out_column_index Receives the 0-based column index in the table when present; `0` otherwise.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `name`, `out_present` or `out_column_index` is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `table_index` is out of range;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) if `name` is not well-formed UTF-8.
+ */
+FM_API fm_status_t fm_sheet_get_table_column_index(const fm_workbook_t* wb, size_t sheet_index, size_t table_index,
+                                                   const char* name, int32_t* out_present, size_t* out_column_index);
 
 /**
  * @brief A table's applied style (`<tableStyleInfo>`), the counterpart of
@@ -8135,6 +8167,28 @@ FM_API fm_status_t fm_workbook_get_pivot_cache_field_name(const fm_workbook_t* w
                                                           size_t field_index, const char** out_name);
 
 /**
+ * @brief Finds the field of pivot cache `cache_id` that `name` resolves to under the identity fold.
+ *
+ * Resolution order: an exact match, a case-only match, then the one field
+ * matching under the wide fold (a unique wide fold match; none when two
+ * fields collide only under the wide fold). A name that matches no field is
+ * not an error: the call succeeds with `*out_present == 0`.
+ *
+ * @param wb              Workbook handle. Must be non-NULL.
+ * @param cache_id        Cache id.
+ * @param name            Field name as the cache source spells it (UTF-8). Must be non-NULL; an empty name matches
+ *                        nothing.
+ * @param out_present     Receives `1` when a field matches, `0` otherwise.
+ * @param out_field_index Receives the 0-based field index in the cache when present; `0` otherwise.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `name`, `out_present` or `out_field_index` is `NULL`;
+ *         `FM_STATUS_NOT_FOUND` (6) when `cache_id` matches no cache;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) if `name` is not well-formed UTF-8.
+ */
+FM_API fm_status_t fm_workbook_get_pivot_cache_field_index(const fm_workbook_t* wb, uint32_t cache_id, const char* name,
+                                                           int32_t* out_present, size_t* out_field_index);
+
+/**
  * @brief The `<sharedItems>` content flags of one cache field
  *        (`fm_workbook_get_pivot_cache_field_types`). Each is `0` or `1`.
  *
@@ -9360,6 +9414,27 @@ FM_API fm_status_t fm_sheet_get_pivot_cache_id(const fm_workbook_t* wb, size_t s
  */
 FM_API fm_status_t fm_sheet_get_pivot_name(const fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                            const char** out_name);
+
+/**
+ * @brief Finds the pivot table on `sheet_index` that `name` resolves to under the identity fold.
+ *
+ * Resolution order: an exact match, a case-only match, then the one pivot
+ * matching under the wide fold (a unique wide fold match; none when two
+ * pivots of a loaded file collide there). A name that matches no pivot is
+ * not an error: the call succeeds with `*out_present == 0`.
+ *
+ * @param wb              Workbook handle. Must be non-NULL.
+ * @param sheet_index     0-based sheet index.
+ * @param name            Pivot name (UTF-8). Must be non-NULL; an empty name matches nothing.
+ * @param out_present     Receives `1` when a pivot matches, `0` otherwise.
+ * @param out_pivot_index Receives the 0-based pivot index on the sheet when present; `0` otherwise.
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `name`, `out_present` or `out_pivot_index` is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) if `name` is not well-formed UTF-8.
+ */
+FM_API fm_status_t fm_sheet_get_pivot_index(const fm_workbook_t* wb, size_t sheet_index, const char* name,
+                                            int32_t* out_present, size_t* out_pivot_index);
 
 /**
  * @brief Writes the runtime id of pivot `pivot_index` on `sheet_index` to

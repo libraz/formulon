@@ -265,7 +265,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value TableAt(const Napi::CallbackInfo& info);
   Napi::Value TableRuntimeId(const Napi::CallbackInfo& info);
   Napi::Value ResolveTableRuntimeId(const Napi::CallbackInfo& info);
-  Napi::Value FindTable(const Napi::CallbackInfo& info);
+  Napi::Value GetTableIndex(const Napi::CallbackInfo& info);
+  Napi::Value GetTableColumnIndex(const Napi::CallbackInfo& info);
   Napi::Value GetTableStyleOptions(const Napi::CallbackInfo& info);
   Napi::Value UpdateTableStyleOptions(const Napi::CallbackInfo& info);
   Napi::Value RenameTable(const Napi::CallbackInfo& info);
@@ -291,6 +292,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value PivotCacheFieldCount(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheFieldTypes(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheFieldName(const Napi::CallbackInfo& info);
+  Napi::Value GetPivotCacheFieldIndex(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheFieldAdd(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheFieldClear(const Napi::CallbackInfo& info);
   Napi::Value PivotCacheFieldSharedItemCount(const Napi::CallbackInfo& info);
@@ -327,6 +329,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   /// from a package alike. `pivotCacheId` returns the cache id.
   Napi::Value PivotCacheId(const Napi::CallbackInfo& info);
   Napi::Value PivotName(const Napi::CallbackInfo& info);
+  Napi::Value GetPivotIndex(const Napi::CallbackInfo& info);
   Napi::Value PivotRuntimeId(const Napi::CallbackInfo& info);
   Napi::Value ResolvePivotRuntimeId(const Napi::CallbackInfo& info);
   Napi::Value PivotGetGrandTotals(const Napi::CallbackInfo& info);
