@@ -295,10 +295,12 @@ TEST(XlsbWriteReadSymmetry, AlignmentAndApplyFlagsSurviveBothFormatsAlike) {
   EXPECT_TRUE(b.has_protection);
   EXPECT_FALSE(b.locked);
   EXPECT_TRUE(b.hidden);
-  EXPECT_TRUE(b.apply_number_format);
-  EXPECT_TRUE(b.apply_font);
-  EXPECT_TRUE(b.apply_fill);
-  EXPECT_TRUE(b.apply_border);
+  // A save writes an apply flag exactly when its group differs from the parent style xf: alignment and
+  // protection differ here, the number format, font, fill and border do not.
+  EXPECT_FALSE(b.apply_number_format);
+  EXPECT_FALSE(b.apply_font);
+  EXPECT_FALSE(b.apply_fill);
+  EXPECT_FALSE(b.apply_border);
   EXPECT_TRUE(b.apply_alignment);
   EXPECT_TRUE(b.apply_protection);
 }

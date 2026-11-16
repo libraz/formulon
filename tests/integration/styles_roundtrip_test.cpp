@@ -252,7 +252,8 @@ TEST(StylesRoundTrip, PreservesNamedCellStyles) {
 
   ASSERT_FALSE(rt.cell_xfs.empty());
   EXPECT_EQ(rt.cell_xfs[0].xf_id, 1U);
-  EXPECT_TRUE(rt.cell_xfs[0].apply_font);
+  // The font equals the parent style's, so a save writes no applyFont; the alignment differs.
+  EXPECT_FALSE(rt.cell_xfs[0].apply_font);
   EXPECT_TRUE(rt.cell_xfs[0].apply_alignment);
   EXPECT_TRUE(rt.cell_xfs[0].quote_prefix);
 
@@ -492,12 +493,14 @@ TEST(StylesRoundTrip, PreservesCellXfPresenceProjectionAndNormalizesParentId) {
   ASSERT_GE(load_or.value().workbook.styles().cell_xfs.size(), 2U);
   const CellXf& round = load_or.value().workbook.styles().cell_xfs[1];
   EXPECT_EQ(round.xf_id, 0U);
-  EXPECT_TRUE(round.apply_number_format);
-  EXPECT_TRUE(round.apply_font);
-  EXPECT_TRUE(round.apply_fill);
-  EXPECT_TRUE(round.apply_border);
+  // A save writes an apply flag exactly when its group differs from the parent style xf; only the
+  // alignment (its relative indent) differs here.
+  EXPECT_FALSE(round.apply_number_format);
+  EXPECT_FALSE(round.apply_font);
+  EXPECT_FALSE(round.apply_fill);
+  EXPECT_FALSE(round.apply_border);
   EXPECT_TRUE(round.apply_alignment);
-  EXPECT_TRUE(round.apply_protection);
+  EXPECT_FALSE(round.apply_protection);
   EXPECT_TRUE(round.quote_prefix);
   EXPECT_TRUE(round.has_alignment);
   EXPECT_TRUE(round.has_horizontal_align);

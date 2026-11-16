@@ -386,9 +386,24 @@ void ExpectFlagged(const fm_cell_xf_t& xf) {
   EXPECT_EQ(xf.hidden, 1);
 }
 
+// What a reload reads for a `MakeFlaggedXf` record saved under the default style: a save writes an
+// apply flag exactly when its group differs from the parent style xf, so only protection keeps one.
+void ExpectSavedUnderDefaultStyle(const fm_cell_xf_t& xf) {
+  EXPECT_EQ(xf.apply_number_format, 0);
+  EXPECT_EQ(xf.apply_font, 0);
+  EXPECT_EQ(xf.apply_fill, 0);
+  EXPECT_EQ(xf.apply_border, 0);
+  EXPECT_EQ(xf.apply_alignment, 0);
+  EXPECT_EQ(xf.apply_protection, 1);
+  EXPECT_EQ(xf.quote_prefix, 1);
+  EXPECT_EQ(xf.has_protection, 1);
+  EXPECT_EQ(xf.locked, 0);
+  EXPECT_EQ(xf.hidden, 1);
+}
+
 }  // namespace
 
-TEST(FormulonCApiStyles, XfApplyFlagsRoundTrip) {
+TEST(FormulonCApiStyles, XfApplyFlagsAreWrittenAgainstTheParentStyle) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   std::uint32_t xf_index = 0;
@@ -411,10 +426,8 @@ TEST(FormulonCApiStyles, XfApplyFlagsRoundTrip) {
   BufferGuard saved;
   ASSERT_EQ(fm_workbook_save(wb.handle, FM_WORKBOOK_FORMAT_XLSX, &saved.data, &saved.len), 0);
   const std::string styles_xml = ExtractStylesXml(saved);
-  EXPECT_NE(styles_xml.find("applyNumberFormat=\"1\" applyFont=\"1\" applyFill=\"1\" applyBorder=\"1\" "
-                            "applyAlignment=\"1\" applyProtection=\"1\" quotePrefix=\"1\""),
-            std::string::npos)
-      << styles_xml;
+  EXPECT_NE(styles_xml.find("xfId=\"0\" applyProtection=\"1\" quotePrefix=\"1\""), std::string::npos) << styles_xml;
+  EXPECT_EQ(styles_xml.find("applyFont=\"1\""), std::string::npos) << styles_xml;
   EXPECT_NE(styles_xml.find("<protection locked=\"0\" hidden=\"1\"/>"), std::string::npos) << styles_xml;
 
   WorkbookGuard reloaded;
@@ -423,10 +436,19 @@ TEST(FormulonCApiStyles, XfApplyFlagsRoundTrip) {
   ASSERT_EQ(GetCellXfIndex(reloaded.handle, 0, 0, 0, &reloaded_index), 0);
   fm_cell_xf_t after{};
   ASSERT_EQ(fm_workbook_get_cell_xf_at(reloaded.handle, reloaded_index, &after), 0);
-  ExpectFlagged(after);
+  ExpectSavedUnderDefaultStyle(after);
   fm_cell_xf_t style_after{};
   ASSERT_EQ(fm_workbook_get_cell_style_xf_at(reloaded.handle, style_xf_id, &style_after), 0);
-  ExpectFlagged(style_after);
+  // A style xf is written with no apply flags, as Excel writes it.
+  EXPECT_EQ(style_after.apply_number_format, 0);
+  EXPECT_EQ(style_after.apply_font, 0);
+  EXPECT_EQ(style_after.apply_fill, 0);
+  EXPECT_EQ(style_after.apply_border, 0);
+  EXPECT_EQ(style_after.apply_alignment, 0);
+  EXPECT_EQ(style_after.apply_protection, 0);
+  EXPECT_EQ(style_after.has_protection, 1);
+  EXPECT_EQ(style_after.locked, 0);
+  EXPECT_EQ(style_after.hidden, 1);
 }
 
 TEST(FormulonCApiStyles, XfProtectionDistinguishesDedup) {
