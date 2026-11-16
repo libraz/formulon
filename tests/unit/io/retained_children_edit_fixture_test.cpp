@@ -352,10 +352,7 @@ std::vector<std::string> ObjectAnchors(const std::vector<std::uint8_t>& package,
 /// the sheet's relationship types, and the worksheet elements (`.xlsx`) or
 /// records (`.xlsb`) that hold or link them. The binary index Excel adds to
 /// an `.xlsb` is left out, since a save regenerates the sheets without it.
-/// So is the `.xlsb` drawing link (BrtDrawing and its relationship) unless
-/// `drawing_link`: a save does not yet link a drawing holding form-control or
-/// OLE frames, and reports it as a deferred drawing.
-std::vector<std::string> ObjectParts(const std::vector<std::uint8_t>& package, bool xlsb, bool drawing_link) {
+std::vector<std::string> ObjectParts(const std::vector<std::uint8_t>& package, bool xlsb) {
   std::vector<std::string> out;
   ZipReader zip;
   EXPECT_TRUE(static_cast<bool>(zip.open(ByteSpan{package.data(), package.size()})));
@@ -374,7 +371,7 @@ std::vector<std::string> ObjectParts(const std::vector<std::uint8_t>& package, b
     const std::size_t end = rels.find('"', at + 7U);
     const std::string type = rels.substr(at + 7U, end - at - 7U);
     const std::string kind = type.substr(type.rfind('/') + 1U);
-    if (kind != "xlBinaryIndex" && (!xlsb || drawing_link || kind != "drawing")) {
+    if (kind != "xlBinaryIndex") {
       out.push_back("rel " + kind);
     }
   }
@@ -382,7 +379,7 @@ std::vector<std::string> ObjectParts(const std::vector<std::uint8_t>& package, b
     const std::string sheet = ReadEntry(package, "xl/worksheets/sheet1.bin");
     const std::vector<std::uint8_t> bytes(sheet.begin(), sheet.end());
     for (const xlsb::FramedRecord& rec : xlsb::split_records(bytes)) {
-      if ((rec.type == 550U && drawing_link) || rec.type == 551U || (rec.type >= 638U && rec.type <= 640U)) {
+      if (rec.type == 550U || rec.type == 551U || (rec.type >= 638U && rec.type <= 640U)) {
         out.push_back("record " + std::to_string(rec.type));
       }
     }
@@ -425,15 +422,14 @@ const std::vector<EditCase> kPictureEdits = {
     {"R_del_last_plus", [](Workbook& wb) { return wb.delete_rows(0, 5, 2); }},
 };
 
-void CheckObjectAnchors(const std::string& book, const std::vector<EditCase>& edits, bool xlsb,
-                        bool drawing_link = false) {
+void CheckObjectAnchors(const std::string& book, const std::vector<EditCase>& edits, bool xlsb) {
   const char* ext = xlsb ? ".xlsb" : ".xlsx";
   const std::vector<std::uint8_t> base = ReadFixture(book + "_0_base" + ext);
   const std::vector<std::string> base_anchors = ObjectAnchors(base, xlsb);
   ASSERT_GE(base_anchors.size(), 2U) << book << ext;
   const std::vector<std::uint8_t> resaved = Save(Load(base, xlsb), xlsb);
   EXPECT_EQ(ObjectAnchors(resaved, xlsb), base_anchors) << book << ext;
-  EXPECT_EQ(ObjectParts(resaved, xlsb, drawing_link), ObjectParts(base, xlsb, drawing_link)) << book << ext;
+  EXPECT_EQ(ObjectParts(resaved, xlsb), ObjectParts(base, xlsb)) << book << ext;
   for (const EditCase& edit : edits) {
     Workbook wb = Load(base, xlsb);
     ASSERT_TRUE(static_cast<bool>(edit.apply(wb))) << edit.state;
@@ -441,8 +437,7 @@ void CheckObjectAnchors(const std::string& book, const std::vector<EditCase>& ed
     const std::vector<std::uint8_t> saved = Save(wb, xlsb);
     EXPECT_NE(ObjectAnchors(excel, xlsb), base_anchors) << book << "_" << edit.state << ext;
     EXPECT_EQ(ObjectAnchors(saved, xlsb), ObjectAnchors(excel, xlsb)) << book << "_" << edit.state << ext;
-    EXPECT_EQ(ObjectParts(saved, xlsb, drawing_link), ObjectParts(excel, xlsb, drawing_link))
-        << book << "_" << edit.state << ext;
+    EXPECT_EQ(ObjectParts(saved, xlsb), ObjectParts(excel, xlsb)) << book << "_" << edit.state << ext;
   }
 }
 
@@ -475,11 +470,11 @@ TEST(RetainedChildrenEditFixture, OleObjectAnchorsXlsb) {
 // columns deletes both, and the emptied drawing part goes with them; deleting
 // their last row and the one below leaves them one row tall.
 TEST(RetainedChildrenEditFixture, PictureAndChartAnchorsXlsx) {
-  CheckObjectAnchors("pic", kPictureEdits, false, true);
+  CheckObjectAnchors("pic", kPictureEdits, false);
 }
 
 TEST(RetainedChildrenEditFixture, PictureAndChartAnchorsXlsb) {
-  CheckObjectAnchors("pic", kPictureEdits, true, true);
+  CheckObjectAnchors("pic", kPictureEdits, true);
 }
 
 // What the comparisons hold for the two rules no other structure follows,

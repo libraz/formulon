@@ -202,6 +202,11 @@ TEST(XlsbDrawingRecord, FramesWritable) {
   EXPECT_TRUE(drawing_frames_are_writable(Drawing("<xdr:sp><xdr:spPr/></xdr:sp>")));
   EXPECT_TRUE(drawing_frames_are_writable(Drawing(Frame("http://schemas.openxmlformats.org/drawingml/2006/chart"))));
   EXPECT_TRUE(drawing_frames_are_writable(std::string(kWsDrOpen) + "</xdr:wsDr>"));
+  // A form control or OLE object's frame sits in the Choice of an AlternateContent, as Excel writes it.
+  EXPECT_TRUE(
+      drawing_frames_are_writable(Drawing("<mc:AlternateContent><mc:Choice Requires=\"a14\">" +
+                                          Frame("http://schemas.microsoft.com/office/drawing/2010/compatibility") +
+                                          "</mc:Choice><mc:Fallback/></mc:AlternateContent>")));
 
   // A slicer frame sits in the Choice of an AlternateContent.
   const std::string slicer =

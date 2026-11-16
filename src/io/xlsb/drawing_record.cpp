@@ -5,6 +5,7 @@
 #include "io/xlsb/drawing_record.h"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -197,9 +198,14 @@ bool drawing_frames_are_writable(std::string_view drawing_xml) {
   if (!doc.load_buffer(drawing_xml.data(), drawing_xml.size(), pugi::parse_default, pugi::encoding_utf8)) {
     return false;
   }
-  const pugi::xml_node other = doc.find_node([](const pugi::xml_node& node) {
+  // The frame kinds whose owners an xlsb package carries: a chart part, and the compatibility frame Excel writes
+  // beside a form control or OLE object, which the sheet's own records hold.
+  constexpr std::array<std::string_view, 2> kLinkable = {
+      chart_ns::kNsC, "http://schemas.microsoft.com/office/drawing/2010/compatibility"};
+  const pugi::xml_node other = doc.find_node([&](const pugi::xml_node& node) {
     return node.type() == pugi::node_element && local_name(node) == "graphicData" &&
-           std::string_view(node.attribute("uri").value()) != chart_ns::kNsC;
+           std::find(kLinkable.begin(), kLinkable.end(), std::string_view(node.attribute("uri").value())) ==
+               kLinkable.end();
   });
   return !other;
 }

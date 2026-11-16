@@ -58,8 +58,10 @@ std::vector<std::string> strip_ole_objects(std::vector<std::uint8_t>& after_hype
                                            const std::vector<std::uint32_t>& shape_ids);
 
 /// True when `drawing_xml` parses and every `graphicData` in it, inside
-/// `mc:AlternateContent` included, names a chart. Pictures, shapes and
-/// groups carry no `graphicData` and always pass.
+/// `mc:AlternateContent` included, is of a kind the sheet's BrtDrawing may
+/// link: a chart, or the compatibility frame of a form control or OLE object.
+/// A frame of any other kind refuses the link, which the caller counts.
+/// Pictures, shapes and groups carry no `graphicData` and always pass.
 bool drawing_frames_are_writable(std::string_view drawing_xml);
 
 }  // namespace xlsb
