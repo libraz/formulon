@@ -72,6 +72,7 @@ NOT_API: Dict[str, Set[str]] = {
         "maxValue",
         "firstDataCol",
         "firstHeaderRow",
+        "dataSourceClean",
     },
     "Excel function arguments": {"total_depth", "relative_to", "if_not_found"},
     "command-line JSON keys": {"definedNames", "passthroughParts", "defined_names", "passthrough_parts"},
