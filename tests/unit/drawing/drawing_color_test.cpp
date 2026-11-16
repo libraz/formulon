@@ -4,9 +4,11 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "gtest/gtest.h"
 #include "pugixml.hpp"
+#include "workbook.h"
 
 namespace formulon {
 namespace {
@@ -115,6 +117,173 @@ TEST(DrawingColor, TintsCompareAtStoredPrecision) {
   ColorSpec rgb;
   rgb.kind = ColorSpec::Kind::kRgb;
   EXPECT_FALSE(drawing_color::same_color(rgb, Theme(4, 0.0)));
+}
+
+std::optional<DrawingColor> ReadDrawing(const Workbook& wb, const std::string& clr, const std::string& map = "") {
+  pugi::xml_document doc;
+  pugi::xml_document map_doc;
+  const pugi::xml_node map_node = map.empty() ? pugi::xml_node() : Parse(map_doc, map);
+  return drawing_color::read_drawing_color(wb, Parse(doc, clr), map_node);
+}
+
+std::uint32_t Resolved(std::uint32_t rgb, const std::vector<ColorTransform>& transforms) {
+  return drawing_color::resolve_transforms(0xFF000000U | rgb, transforms).value_or(0U);
+}
+
+std::string WrittenDrawing(const DrawingColor& color, const std::string& alpha = "") {
+  pugi::xml_document doc;
+  pugi::xml_node fill = doc.append_child("a:solidFill");
+  drawing_color::write_drawing_color(fill, "a:", color, alpha);
+  std::string out;
+  struct Writer : pugi::xml_writer {
+    std::string* sink;
+    void write(const void* data, std::size_t size) override { sink->append(static_cast<const char*>(data), size); }
+  } writer;
+  writer.sink = &out;
+  fill.first_child().print(writer, "", pugi::format_raw);
+  return out;
+}
+
+DrawingColor ThemeDrawing(std::uint32_t theme, std::vector<ColorTransform> transforms, double tint = 0.0) {
+  DrawingColor color;
+  color.base = Theme(theme, tint);
+  color.transforms = std::move(transforms);
+  return color;
+}
+
+// Excel 16.115 renders, for the Office theme colours named.
+TEST(DrawingColorResolve, LuminanceMatchesExcel) {
+  EXPECT_EQ(Resolved(0xE97132, {{"lumMod", 60000}, {"lumOff", 40000}}), 0xFFF2AA84U);  // accent2 -> 242,170,132
+  EXPECT_EQ(Resolved(0x156082, {{"lumMod", 75000}}), 0xFF104862U);                     // accent1 -> 16,72,98
+  EXPECT_EQ(Resolved(0xE97132, {{"lumMod", 20000}}), 0xFF331506U);                     // 51,21,6
+  EXPECT_EQ(Resolved(0xFFFFFF, {{"lumMod", 50000}}), 0xFF7F7F7FU);                     // 127, not 128
+  EXPECT_EQ(Resolved(0x000000, {{"lumMod", 50000}, {"lumOff", 50000}}), 0xFF7F7F7FU);
+  EXPECT_EQ(Resolved(0x0E2841, {{"lumMod", 25000}}), 0xFF030A10U);                     // 3,10,16
+  EXPECT_EQ(Resolved(0x156082, {{"lumMod", 95000}, {"lumOff", 5000}}), 0xFF186B91U);   // 24,107,145
+  EXPECT_EQ(Resolved(0xE8E8E8, {{"lumMod", 50000}, {"lumOff", 50000}}), 0xFFF4F4F4U);  // 244
+  EXPECT_EQ(Resolved(0x4EA72E, {{"lumMod", 25000}}), 0xFF132A0CU);                     // 19,42,12
+  EXPECT_EQ(Resolved(0xA02B93, {{"lumMod", 1000}}), 0xFF020001U);                      // 2,0,1
+  EXPECT_EQ(Resolved(0x123456, {}), 0xFF123456U);
+}
+
+TEST(DrawingColorResolve, ShadeWorksInLinearLight) {
+  EXPECT_EQ(Resolved(0xFFFFFF, {{"shade", 50000}}), 0xFFBCBCBCU);  // lt1 shade 50000 -> 188
+}
+
+TEST(DrawingColorResolve, UnmodelledTransformsHaveNoColour) {
+  const std::vector<std::vector<ColorTransform>> cases = {
+      {{"satMod", 120000}},
+      {{"tint", 50000}},
+      {{"lumOff", 10000}, {"lumMod", 50000}},
+      {{"shade", 50000}, {"lumMod", 50000}},
+      {{"lumMod", std::nullopt}},
+      {{"comp", std::nullopt}},
+  };
+  for (const auto& t : cases) {
+    EXPECT_FALSE(drawing_color::resolve_transforms(0xFF123456U, t).has_value()) << t.front().name;
+  }
+}
+
+TEST(DrawingColorRead, BaseTransformsAndRenderedColour) {
+  const Workbook wb = Workbook::create();
+  const auto shade =
+      ReadDrawing(wb, "<a:schemeClr xmlns:a=\"urn:a\" val=\"lt1\"><a:shade val=\"50000\"/></a:schemeClr>");
+  ASSERT_TRUE(shade.has_value());
+  EXPECT_EQ(shade->base.kind, ColorSpec::Kind::kTheme);
+  EXPECT_EQ(shade->base.theme, 0U);
+  EXPECT_EQ(shade->transforms, (std::vector<ColorTransform>{{"shade", 50000}}));
+  EXPECT_EQ(shade->resolved_argb, 0xFFBCBCBCU);
+
+  const auto kept = ReadDrawing(wb,
+                                "<a:srgbClr xmlns:a=\"urn:a\" val=\"7f3f9f\"><a:satMod val=\"-5\"/><a:alpha val=\"1\"/>"
+                                "<a:comp/><a:fooBar val=\"7\"/></a:srgbClr>");
+  ASSERT_TRUE(kept.has_value());
+  EXPECT_EQ(kept->base.kind, ColorSpec::Kind::kRgb);
+  EXPECT_EQ(kept->base.rgb & 0xFFFFFFU, 0x7F3F9FU);
+  EXPECT_EQ(kept->transforms, (std::vector<ColorTransform>{{"satMod", -5}, {"comp", std::nullopt}, {"fooBar", 7}}));
+  EXPECT_FALSE(kept->resolved_argb.has_value());
+
+  const auto sys = ReadDrawing(wb, "<a:sysClr xmlns:a=\"urn:a\" val=\"windowText\" lastClr=\"101010\"/>");
+  ASSERT_TRUE(sys.has_value());
+  EXPECT_EQ(sys->base.rgb, 0xFF101010U);
+  EXPECT_EQ(sys->resolved_argb, 0xFF101010U);
+}
+
+TEST(DrawingColorRead, RemappedSlotsReadAsTheMappedRgb) {
+  const Workbook wb = Workbook::create();
+  const auto mapped =
+      ReadDrawing(wb, "<a:schemeClr xmlns:a=\"urn:a\" val=\"bg1\"><a:lumMod val=\"50000\"/></a:schemeClr>",
+                  "<c:clrMapOvr bg1=\"dk1\" tx1=\"lt1\" bg2=\"lt2\" tx2=\"dk2\"/>");
+  ASSERT_TRUE(mapped.has_value());
+  EXPECT_EQ(mapped->base.kind, ColorSpec::Kind::kRgb);
+  EXPECT_EQ(mapped->base.rgb, 0xFF000000U);
+  EXPECT_EQ(mapped->transforms.size(), 1U);
+  const auto identity = ReadDrawing(wb, "<a:schemeClr xmlns:a=\"urn:a\" val=\"tx2\"/>",
+                                    "<c:clrMapOvr bg1=\"dk1\" tx1=\"lt1\" bg2=\"lt2\" tx2=\"dk2\"/>");
+  ASSERT_TRUE(identity.has_value());
+  EXPECT_EQ(identity->base.kind, ColorSpec::Kind::kTheme);
+  EXPECT_EQ(identity->base.theme, 3U);
+}
+
+TEST(DrawingColorRead, UnreadableColours) {
+  const Workbook wb = Workbook::create();
+  for (const std::string clr : {
+           "<a:schemeClr xmlns:a=\"urn:a\" val=\"phClr\"/>",
+           "<a:prstClr xmlns:a=\"urn:a\" val=\"red\"/>",
+           "<a:srgbClr xmlns:a=\"urn:a\" val=\"12345\"/>",
+           "<a:srgbClr xmlns:a=\"urn:a\" val=\"123456\"><a:lumMod val=\"1.5\"/></a:srgbClr>",
+           "<a:srgbClr xmlns:a=\"urn:a\" val=\"123456\"><a:lumMod val=\"2147483648\"/></a:srgbClr>",
+           "<a:srgbClr xmlns:a=\"urn:a\" xmlns:x=\"urn:x\" val=\"123456\"><x:lumMod val=\"1\"/></a:srgbClr>",
+       }) {
+    EXPECT_FALSE(ReadDrawing(wb, clr).has_value()) << clr;
+  }
+  std::string many = "<a:srgbClr xmlns:a=\"urn:a\" val=\"123456\">";
+  for (int i = 0; i < 65; ++i) {
+    many += "<a:comp/>";
+  }
+  EXPECT_FALSE(ReadDrawing(wb, many + "</a:srgbClr>").has_value());
+}
+
+TEST(DrawingColorWrite, TransformsInOrderAndTintShorthand) {
+  EXPECT_EQ(WrittenDrawing(ThemeDrawing(0, {{"shade", 50000}}), "30000"),
+            "<a:schemeClr val=\"bg1\"><a:shade val=\"50000\"/><a:alpha val=\"30000\"/></a:schemeClr>");
+  EXPECT_EQ(WrittenDrawing(ThemeDrawing(4, {}, 0.4)),
+            "<a:schemeClr val=\"accent1\"><a:lumMod val=\"60000\"/><a:lumOff val=\"40000\"/></a:schemeClr>");
+  DrawingColor rgb;
+  rgb.base.kind = ColorSpec::Kind::kRgb;
+  rgb.base.rgb = 0x80ABCDEFU;
+  rgb.transforms = {{"comp", std::nullopt}, {"lumMod", 0}};
+  EXPECT_EQ(WrittenDrawing(rgb), "<a:srgbClr val=\"ABCDEF\"><a:comp/><a:lumMod val=\"0\"/></a:srgbClr>");
+}
+
+TEST(DrawingColorWrite, SameColourComparesTheExpandedForm) {
+  EXPECT_TRUE(drawing_color::same_drawing_color(ThemeDrawing(4, {}, 0.4),
+                                                ThemeDrawing(4, {{"lumMod", 60000}, {"lumOff", 40000}})));
+  EXPECT_FALSE(drawing_color::same_drawing_color(ThemeDrawing(4, {{"lumOff", 40000}, {"lumMod", 60000}}),
+                                                 ThemeDrawing(4, {{"lumMod", 60000}, {"lumOff", 40000}})));
+  EXPECT_FALSE(drawing_color::same_drawing_color(ThemeDrawing(4, {{"shade", 1}}), ThemeDrawing(4, {})));
+}
+
+TEST(DrawingColorInput, Refusals) {
+  EXPECT_TRUE(static_cast<bool>(drawing_color::validate_input(ThemeDrawing(4, {{"shade", 1}, {"x9", std::nullopt}}))));
+  DrawingColor none;
+  EXPECT_EQ(drawing_color::validate_input(none).error().code, FormulonErrorCode::kInvalidArgument);
+  DrawingColor indexed;
+  indexed.base.kind = ColorSpec::Kind::kIndexed;
+  EXPECT_EQ(drawing_color::validate_input(indexed).error().code, FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(drawing_color::validate_input(ThemeDrawing(12, {})).error().code, FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(drawing_color::validate_input(ThemeDrawing(4, {{"shade", 1}}, 0.4)).error().code,
+            FormulonErrorCode::kInvalidArgument);
+  for (const std::string& name : std::vector<std::string>{"", "9a", "a-b", std::string(33, 'a')}) {
+    EXPECT_EQ(drawing_color::validate_input(ThemeDrawing(4, {{name, 1}})).error().code,
+              FormulonErrorCode::kInvalidArgument)
+        << name;
+  }
+  EXPECT_TRUE(static_cast<bool>(drawing_color::validate_input(ThemeDrawing(4, {{std::string(32, 'a'), 1}}))));
+  EXPECT_EQ(drawing_color::validate_input(ThemeDrawing(4, std::vector<ColorTransform>(65, {"comp", std::nullopt})))
+                .error()
+                .code,
+            FormulonErrorCode::kSecurityResourceLimit);
 }
 
 }  // namespace

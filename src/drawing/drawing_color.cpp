@@ -1,7 +1,10 @@
 #include "drawing/drawing_color.h"
 
 #include <algorithm>
+#include <cctype>
+#include <climits>
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 
 #include "color_resolve.h"
@@ -107,7 +110,288 @@ ColorSpec rgb_spec(std::uint32_t argb) {
   return spec;
 }
 
+// --- Rendering. Excel takes each channel through linear light held in 1/100000 units (the
+// `scrgbClr` grid) on the way in and out; luminance transforms run on float HSL in between and
+// `shade` on the linear value.
+
+double to_linear(double v) {
+  return v <= 0.04045 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4);
+}
+
+double from_linear(double v) {
+  return v <= 0.0031308 ? v * 12.92 : 1.055 * std::pow(v, 1.0 / 2.4) - 0.055;
+}
+
+double on_grid(double v) {
+  return std::floor(v * static_cast<double>(kUnit) + 0.5) / static_cast<double>(kUnit);
+}
+
+struct Hls {
+  double h = 0.0;
+  double l = 0.0;
+  double s = 0.0;
+};
+
+Hls to_hls(double r, double g, double b) {
+  const double hi = std::max({r, g, b});
+  const double lo = std::min({r, g, b});
+  Hls out;
+  out.l = (lo + hi) / 2.0;
+  if (hi == lo) {
+    return out;
+  }
+  const double span = hi - lo;
+  out.s = out.l <= 0.5 ? span / (hi + lo) : span / (2.0 - hi - lo);
+  const double rc = (hi - r) / span;
+  const double gc = (hi - g) / span;
+  const double bc = (hi - b) / span;
+  double h = r == hi ? bc - gc : g == hi ? 2.0 + rc - bc : 4.0 + gc - rc;
+  h /= 6.0;
+  out.h = h - std::floor(h);
+  return out;
+}
+
+double hue_channel(double m1, double m2, double hue) {
+  hue -= std::floor(hue);
+  if (hue < 1.0 / 6.0) {
+    return m1 + (m2 - m1) * hue * 6.0;
+  }
+  if (hue < 0.5) {
+    return m2;
+  }
+  if (hue < 2.0 / 3.0) {
+    return m1 + (m2 - m1) * (2.0 / 3.0 - hue) * 6.0;
+  }
+  return m1;
+}
+
+void from_hls(const Hls& c, double rgb[3]) {
+  if (c.s == 0.0) {
+    rgb[0] = rgb[1] = rgb[2] = c.l;
+    return;
+  }
+  const double m2 = c.l <= 0.5 ? c.l * (1.0 + c.s) : c.l + c.s - c.l * c.s;
+  const double m1 = 2.0 * c.l - m2;
+  rgb[0] = hue_channel(m1, m2, c.h + 1.0 / 3.0);
+  rgb[1] = hue_channel(m1, m2, c.h);
+  rgb[2] = hue_channel(m1, m2, c.h - 1.0 / 3.0);
+}
+
+bool valid_transform_name(std::string_view name) {
+  if (name.empty() || name.size() > 32U || !std::isalpha(static_cast<unsigned char>(name[0]))) {
+    return false;
+  }
+  return std::all_of(name.begin(), name.end(),
+                     [](char ch) { return std::isalnum(static_cast<unsigned char>(ch)) != 0; });
+}
+
+/// The namespace prefix of an element's qualified name; empty when it has none.
+std::string_view prefix_of(const xml_node& node) {
+  const std::string_view qname = node.name();
+  const std::size_t colon = qname.find(':');
+  return colon == std::string_view::npos ? std::string_view() : qname.substr(0, colon);
+}
+
+std::string_view scheme_name_of(std::uint32_t theme) {
+  return kSchemeNames[std::min<std::uint32_t>(theme, 11U)];
+}
+
 }  // namespace
+
+std::optional<std::uint32_t> resolve_transforms(std::uint32_t base_argb,
+                                                const std::vector<ColorTransform>& transforms) {
+  // Modelled: a luminance pair (`lumMod` then `lumOff`, either alone) or one `shade`.
+  bool shade = false;
+  long mod = kUnit;
+  long off = 0;
+  bool seen_mod = false;
+  bool seen_off = false;
+  for (const ColorTransform& t : transforms) {
+    if (!t.value) {
+      return std::nullopt;
+    }
+    if (t.name == "lumMod" && !seen_mod && !seen_off && !shade) {
+      seen_mod = true;
+      mod = *t.value;
+    } else if (t.name == "lumOff" && !seen_off && !shade) {
+      seen_off = true;
+      off = *t.value;
+    } else if (t.name == "shade" && transforms.size() == 1U) {
+      shade = true;
+      mod = *t.value;
+    } else {
+      return std::nullopt;
+    }
+  }
+  double lin[3];
+  for (int i = 0; i < 3; ++i) {
+    const auto byte = static_cast<double>((base_argb >> (16 - 8 * i)) & 0xFFU);
+    lin[i] = on_grid(to_linear(byte / 255.0));
+  }
+  if (shade) {
+    const double factor = std::clamp(static_cast<double>(mod) / static_cast<double>(kUnit), 0.0, 1.0);
+    for (double& v : lin) {
+      v *= factor;
+    }
+  } else if (seen_mod || seen_off) {
+    Hls c = to_hls(from_linear(lin[0]), from_linear(lin[1]), from_linear(lin[2]));
+    c.l = std::clamp(c.l * static_cast<double>(mod) / static_cast<double>(kUnit) +
+                         static_cast<double>(off) / static_cast<double>(kUnit),
+                     0.0, 1.0);
+    double rgb[3];
+    from_hls(c, rgb);
+    for (int i = 0; i < 3; ++i) {
+      lin[i] = to_linear(std::clamp(rgb[i], 0.0, 1.0));
+    }
+  }
+  std::uint32_t argb = 0xFF000000U;
+  for (int i = 0; i < 3; ++i) {
+    const double v = std::clamp(from_linear(on_grid(lin[i])) * 255.0, 0.0, 255.0);
+    argb |= static_cast<std::uint32_t>(std::floor(v + 0.5)) << (16 - 8 * i);
+  }
+  return argb;
+}
+
+DrawingColor expand_tint(const DrawingColor& color) {
+  if (color.base.kind != ColorSpec::Kind::kTheme || color.base.tint == 0.0) {
+    return color;
+  }
+  DrawingColor out = color;
+  const Luminance lum = luminance_of(color.base.tint);
+  out.base.tint = 0.0;
+  std::vector<ColorTransform> pair;
+  if (lum.mod != kUnit) {
+    pair.push_back({"lumMod", static_cast<std::int32_t>(lum.mod)});
+  }
+  if (lum.off != 0) {
+    pair.push_back({"lumOff", static_cast<std::int32_t>(lum.off)});
+  }
+  out.transforms.insert(out.transforms.begin(), pair.begin(), pair.end());
+  return out;
+}
+
+Expected<void, Error> validate_input(const DrawingColor& color) {
+  const ColorSpec::Kind kind = color.base.kind;
+  if (kind != ColorSpec::Kind::kRgb && kind != ColorSpec::Kind::kTheme) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "A drawing colour takes an Rgb or Theme base");
+  }
+  if (kind == ColorSpec::Kind::kTheme && color.base.theme > 11U) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "A theme colour index is 0..11");
+  }
+  if (kind == ColorSpec::Kind::kTheme && color.base.tint != 0.0 && !color.transforms.empty()) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "A tint and transforms cannot be given together");
+  }
+  if (color.transforms.size() > kMaxTransforms) {
+    return make_error(FormulonErrorCode::kSecurityResourceLimit, "A drawing colour takes at most 64 transforms");
+  }
+  for (const ColorTransform& t : color.transforms) {
+    if (!valid_transform_name(t.name)) {
+      return make_error(FormulonErrorCode::kInvalidArgument, "A colour transform name is 1..32 letters and digits");
+    }
+  }
+  return Expected<void, Error>::Ok();
+}
+
+bool same_drawing_color(const DrawingColor& a, const DrawingColor& b) {
+  const DrawingColor ea = expand_tint(a);
+  const DrawingColor eb = expand_tint(b);
+  return same_color(ea.base, eb.base) && ea.transforms == eb.transforms;
+}
+
+void write_drawing_color(xml_node parent, const std::string& prefix, const DrawingColor& color,
+                         const std::string& alpha) {
+  const DrawingColor c = expand_tint(color);
+  xml_node clr;
+  if (c.base.kind == ColorSpec::Kind::kTheme) {
+    clr = parent.append_child((prefix + "schemeClr").c_str());
+    clr.append_attribute("val").set_value(std::string(scheme_name_of(c.base.theme)).c_str());
+  } else {
+    char hex[8];
+    format_hex(hex, sizeof hex, c.base.rgb & 0xFFFFFFU, 6, true);
+    clr = parent.append_child((prefix + "srgbClr").c_str());
+    clr.append_attribute("val").set_value(hex);
+  }
+  for (const ColorTransform& t : c.transforms) {
+    xml_node node = clr.append_child((prefix + t.name).c_str());
+    if (t.value) {
+      node.append_attribute("val").set_value(std::to_string(*t.value).c_str());
+    }
+  }
+  if (!alpha.empty()) {
+    clr.append_child((prefix + "alpha").c_str()).append_attribute("val").set_value(alpha.c_str());
+  }
+}
+
+std::optional<DrawingColor> read_drawing_color(const Workbook& wb, const xml_node& clr, const xml_node& clr_map_ovr) {
+  const std::string_view kind = io::local_name(clr);
+  const std::string_view val = clr.attribute("val").value();
+  DrawingColor color;
+  std::uint32_t base_argb = 0;
+  if (kind == "srgbClr") {
+    if (val.size() != 6U || val.find_first_not_of("0123456789abcdefABCDEF") != std::string_view::npos) {
+      return std::nullopt;
+    }
+    base_argb = io::parse_rgb_hex(val, 0U) | 0xFF000000U;
+    color.base = rgb_spec(base_argb);
+  } else if (kind == "schemeClr") {
+    auto index = scheme_index(val);
+    if (!index) {
+      return std::nullopt;
+    }
+    bool mapped = false;
+    if (*index <= 3U && (val == "bg1" || val == "tx1" || val == "bg2" || val == "tx2")) {
+      const std::string_view to = clr_map_ovr.attribute(std::string(val).c_str()).value();
+      if (!to.empty()) {
+        const auto target = scheme_index(to);
+        if (!target || *target > 3U) {
+          return std::nullopt;
+        }
+        mapped = *target != *index;
+        index = target;
+      }
+    }
+    ColorSpec theme;
+    theme.kind = ColorSpec::Kind::kTheme;
+    theme.theme = *index;
+    base_argb = resolve_color(wb, theme, ColorContext::kFont).argb | 0xFF000000U;
+    color.base = mapped ? rgb_spec(base_argb) : theme;
+  } else if (kind == "sysClr") {
+    const std::string_view last = clr.attribute("lastClr").value();
+    base_argb =
+        !last.empty() ? io::parse_rgb_hex(last, 0U) | 0xFF000000U : (val == "window" ? 0xFFFFFFFFU : 0xFF000000U);
+    color.base = rgb_spec(base_argb);
+  } else {
+    return std::nullopt;
+  }
+  const std::string_view own_prefix = prefix_of(clr);
+  for (xml_node child = clr.first_child(); child; child = child.next_sibling()) {
+    if (child.type() != pugi::node_element) {
+      continue;
+    }
+    const std::string_view name = io::local_name(child);
+    if (prefix_of(child) != own_prefix) {
+      return std::nullopt;
+    }
+    if (name == "alpha") {
+      continue;
+    }
+    ColorTransform t;
+    t.name = std::string(name);
+    if (const pugi::xml_attribute v = child.attribute("val")) {
+      long parsed = 0;
+      if (!val_of(child, parsed) || parsed < INT32_MIN || parsed > INT32_MAX) {
+        return std::nullopt;
+      }
+      t.value = static_cast<std::int32_t>(parsed);
+    }
+    color.transforms.push_back(std::move(t));
+    if (color.transforms.size() > kMaxTransforms) {
+      return std::nullopt;
+    }
+  }
+  color.resolved_argb = resolve_transforms(base_argb, color.transforms);
+  return color;
+}
 
 std::optional<std::uint32_t> scheme_index(std::string_view name) {
   if (name == "bg1" || name == "lt1")
