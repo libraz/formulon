@@ -95,8 +95,8 @@ class JsWorkbook {
 
   double sheetCount() const;
   std::string sheetName(uint32_t idx) const;
-  /// The index of the sheet named `name`, compared case-insensitively, or
-  /// `null` when no sheet has that name.
+  /// The index of the sheet `name` resolves to (exact, case-only, then a unique
+  /// width fold), or `null` when it resolves to none.
   emscripten::val getSheetIndex(const std::string& name) const;
   /// The active sheet (`activeTab` of the first `<workbookView>`) as its
   /// index, and its setter.

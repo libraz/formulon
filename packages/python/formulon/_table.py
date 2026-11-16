@@ -311,7 +311,7 @@ class Table(_NoCopy):
     def rename(self, name: str) -> None:
         """Rename the table.
 
-        A name another table already has (compared case-insensitively) raises
+        A name that collides with another table's as sheet names do (ignoring case and width) raises
         ``AlreadyExistsError``, an empty or malformed one
         ``InvalidArgumentError``. A new name that is, or starts with, a reference in the
         profile locale's R1C1 letters (de ``Z1S1``) is refused the same way; renaming to the
@@ -413,8 +413,8 @@ class Table(_NoCopy):
 
         As typing over the header cell does: an empty ``name`` takes the
         profile's ``Column<N>`` (``列<N>``) with the lowest unused N, a name
-        another column already has (ignoring case under Unicode simple case
-        folding, as sheet names do) gains the
+        that collides with another column's as sheet names do (ignoring case
+        and width) gains the
         lowest unused N >= 2, and anything else is kept verbatim. Structured
         references to the column through this table are rewritten in cell,
         totals-row and defined-name formulas and chart series. Writing a

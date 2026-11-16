@@ -244,7 +244,7 @@ class Pivot(_NoCopy):
 
         Raises:
           InvalidArgumentError: when ``name`` is empty.
-          AlreadyExistsError: when another pivot on the sheet has the name (names compare case-insensitively).
+          AlreadyExistsError: when the name collides with another pivot's on the sheet (ignoring case and width).
         """
         h, sheet, pivot_index = self._locate()
         with _ArgScope() as scope:

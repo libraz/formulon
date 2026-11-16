@@ -7306,8 +7306,8 @@ class Sheet(_NoCopy):
     def add_table(self, input: TableInput) -> Table:
         """Create the worksheet table ``input`` describes on this sheet and return its handle.
 
-        A ``name`` another table already has (compared case-insensitively)
-        raises ``AlreadyExistsError``. A new name that is, or starts with, a reference in the
+        A ``name`` that collides with another table's as sheet names do
+        (ignoring case and width) raises ``AlreadyExistsError``. A new name that is, or starts with, a reference in the
         profile locale's R1C1 letters (de ``Z1S1``) raises ``InvalidArgumentError``. See
         :class:`TableInput` for the defaults.
 

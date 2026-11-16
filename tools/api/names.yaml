@@ -4186,6 +4186,7 @@ entries:
     surfaces: [c, wasm, native]
     internal: true
     missing: null
+    qualifies: "facade lookup behind SheetRef names and qualified A1 text: resolves a sheet name with the shared name resolver"
   sheet.add:
     kind: op
     scope: workbook

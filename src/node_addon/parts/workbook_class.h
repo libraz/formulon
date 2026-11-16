@@ -184,8 +184,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetSpill(const Napi::CallbackInfo& info);
   Napi::Value ParseReference(const Napi::CallbackInfo& info);
   Napi::Value FormatReference(const Napi::CallbackInfo& info);
-  /// `getSheetIndex(name)`: the index of the sheet named `name` (ignoring
-  /// case), or `null` when no sheet has that name.
+  /// `getSheetIndex(name)`: the index of the sheet `name` resolves to (exact,
+  /// case-only, then a unique width fold), or `null` when it resolves to none.
   Napi::Value GetSheetIndex(const Napi::CallbackInfo& info);
   Napi::Value GetArrayFormula(const Napi::CallbackInfo& info);
   Napi::Value SetArrayFormula(const Napi::CallbackInfo& info);
