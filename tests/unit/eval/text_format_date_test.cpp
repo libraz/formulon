@@ -172,6 +172,34 @@ TEST(DateFormatJaJpFullWidth, FullWidthDateCodesAlwaysFold) {
   EXPECT_EQ(Render(1234.5, "0.0E+0"), "1.2E+3");
 }
 
+// A letter with a diacritic forms the same date token as its base letter;
+// a run too short to be a token stays literal exactly as written.
+TEST(DateFormatJaJpDiacritics, FoldToBaseLetterToken) {
+  constexpr double kSaturday = 44926.0;  // 2022-12-31
+  EXPECT_EQ(Render(kSaturday, "ÅÅÅÅ"), "土曜日");
+  EXPECT_EQ(Render(kSaturday, "åååå"), "土曜日");
+  EXPECT_EQ(Render(kSaturday, "ÄÄÄÄ"), "土曜日");
+  EXPECT_EQ(Render(kSaturday, "ÁÁÁÁ"), "土曜日");
+  EXPECT_EQ(Render(kSaturday, "ÀÀÀÀ"), "土曜日");
+  EXPECT_EQ(Render(kSaturday, "AAAA"), "土曜日");
+  EXPECT_EQ(Render(kSaturday, "aaaa"), "土曜日");
+  EXPECT_EQ(Render(kSaturday, "AAA"), "土");
+  EXPECT_EQ(Render(kSaturday, "ÅÅÅ"), "土");
+  EXPECT_EQ(Render(kSaturday, "ÉÉ"), "04");
+  EXPECT_EQ(Render(kSaturday, "ÝÝÝÝ"), "2022");
+  EXPECT_EQ(Render(kSaturday, "ÐÐ"), "31");
+  EXPECT_EQ(Render(kSaturday, "ÅÅÅÅ-MM-DD"), "土曜日-12-31");
+}
+
+TEST(DateFormatJaJpDiacritics, ShortWeekdayRunStaysLiteral) {
+  constexpr double kSaturday = 44926.0;
+  EXPECT_EQ(Render(kSaturday, "ÅÅ"), "ÅÅ");
+  EXPECT_EQ(Render(kSaturday, "Å"), "Å");
+  EXPECT_EQ(Render(kSaturday, "AA"), "AA");
+  EXPECT_EQ(Render(kSaturday, "aa"), "aa");
+  EXPECT_EQ(Render(kSaturday, "A"), "A");
+}
+
 TEST(DateFormatJaJpFullWidth, AmPmAndWeekdayMarkers) {
   const double morning = 9.5 / 24.0;
   const double afternoon = 13.5 / 24.0;

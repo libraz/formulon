@@ -46,14 +46,44 @@ Utf8Scalar decode_utf8(std::string_view fmt, std::size_t i) noexcept {
   return {decoded.codepoint, decoded.byte_len, true};
 }
 
-bool is_date_codepoint(std::uint32_t cp) noexcept {
+// Letters with a diacritic whose base letter is a date/time format letter.
+struct DiacriticRange {
+  std::uint32_t first;
+  std::uint32_t last;
+  char base;
+};
+
+constexpr DiacriticRange kDiacriticBases[] = {
+    {0x00C0U, 0x00C5U, 'a'}, {0x00D0U, 0x00D0U, 'd'}, {0x00C8U, 0x00CBU, 'e'}, {0x00DDU, 0x00DDU, 'y'},
+    {0x00E0U, 0x00E5U, 'a'}, {0x00E8U, 0x00EBU, 'e'}, {0x00F0U, 0x00F0U, 'd'}, {0x00FDU, 0x00FDU, 'y'},
+    {0x00FFU, 0x00FFU, 'y'}, {0x0100U, 0x0105U, 'a'}, {0x010EU, 0x0111U, 'd'}, {0x0112U, 0x011BU, 'e'},
+    {0x011CU, 0x0123U, 'g'}, {0x0124U, 0x0127U, 'h'}, {0x015AU, 0x0161U, 's'}, {0x0176U, 0x0178U, 'y'},
+};
+
+/// Returns the lowercase letter a diacritic-bearing `cp` folds to, or '\0'.
+char diacritic_base(std::uint32_t cp) noexcept {
+  for (const DiacriticRange& r : kDiacriticBases) {
+    if (cp >= r.first && cp <= r.last) {
+      return r.base;
+    }
+  }
+  return '\0';
+}
+
+/// Returns the ASCII letter a full-width or diacritic `cp` stands for, or '\0'.
+char folded_letter(std::uint32_t cp) noexcept {
   const char c = eval::fullwidth_ascii_to_ascii(cp);
+  return c != '\0' ? c : diacritic_base(cp);
+}
+
+bool is_date_codepoint(std::uint32_t cp) noexcept {
+  const char c = folded_letter(cp);
   return c == 'y' || c == 'Y' || c == 'm' || c == 'M' || c == 'd' || c == 'D' || c == 'h' || c == 'H' || c == 's' ||
          c == 'S' || c == 'g' || c == 'G' || c == 'e' || c == 'E' || c == 'b' || c == 'B';
 }
 
 bool is_a_codepoint(std::uint32_t cp) noexcept {
-  return cp == 'a' || cp == 'A' || cp == 0xFF41U || cp == 0xFF21U;
+  return cp == 'a' || cp == 'A' || cp == 0xFF41U || cp == 0xFF21U || diacritic_base(cp) == 'a';
 }
 
 bool scalar_matches_ascii(std::string_view fmt, std::size_t i, char expected, std::size_t* width) noexcept {
@@ -262,7 +292,7 @@ std::string normalize_fullwidth_format_syntax(std::string_view fmt, std::string_
         continue;
       }
 
-      // Weekday `aaa`/`aaaa` is the only full-width A run accepted as a
+      // Weekday `aaa`/`aaaa` is the only full-width or diacritic A run accepted as a
       // date token. A or AA remain literal full-width text.
       if (is_a_codepoint(cp)) {
         std::size_t run_end = i;
@@ -340,8 +370,7 @@ std::string normalize_fullwidth_format_syntax(std::string_view fmt, std::string_
     // Full-width date/time codes (`ｙ ｍ ｄ ｈ ｓ ｇ ｅ ｂ`, either case) always fold to
     // their ASCII letter, whatever the neighbours. Other full-width letters, `Ａ` included, stay literal.
     if (is_date_codepoint(cp)) {
-      const char c = eval::fullwidth_ascii_to_ascii(cp);
-      out.push_back(strings::ascii_to_lower(c));
+      out.push_back(strings::ascii_to_lower(folded_letter(cp)));
       i += width;
       continue;
     }
