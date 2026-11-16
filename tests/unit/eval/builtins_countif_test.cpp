@@ -345,9 +345,8 @@ TEST(BuiltinsSumIf, ExplicitSumRangeSameShape) {
   EXPECT_DOUBLE_EQ(v.as_number(), 70.0);
 }
 
-TEST(BuiltinsSumIf, SumRangeSmallerClampsToMin) {
-  // Accepted divergence: Excel reshapes the sum range to match the
-  // criteria range's anchor. We clamp to min(size) instead.
+TEST(BuiltinsSumIf, SumRangeSmallerTakesCriteriaShape) {
+  // The sum range keeps its top-left cell and takes the criteria range's shape: B1:B2 reads as B1:B3.
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::text("x"));
   wb.sheet(0).set_cell_value(1, 0, Value::text("x"));
