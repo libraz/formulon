@@ -1097,6 +1097,21 @@ TEST_F(SelectedRefTest, LoneValuesAnswerTheirPolicy) {
   ExpectError(Eval("=Z.TEST(1,2)"), ErrorCode::NA, "Z.TEST");
 }
 
+// ROWS / COLUMNS / ROW / COLUMN measure a reference-returning call as the reference it returns; a call that
+// returns a value is read as that value.
+TEST_F(SelectedRefTest, ShapeFunctionsMeasureReturnedReferences) {
+  ExpectSame(Eval("=ROWS(INDIRECT(\"A1:B3\"))"), Eval("=3"), "ROWS over INDIRECT");
+  ExpectSame(Eval("=COLUMNS(OFFSET(A1,1,1,2,4))"), Eval("=4"), "COLUMNS over OFFSET");
+  ExpectSame(Eval("=ROWS(A1:INDEX(A1:A5,3))"), Eval("=3"), "ROWS over a range to a call");
+  ExpectSame(Eval("=SUM(ROW(INDIRECT(\"1:3\")))"), Eval("=6"), "ROW over whole rows");
+  ExpectSame(Eval("=SUM(ROW(A2:INDEX(A1:A5,4)))"), Eval("=9"), "ROW over a range to a call");
+  ExpectSame(Eval("=SUM(COLUMN(IF(TRUE,C2:D3)))"), Eval("=7"), "COLUMN over a selected range");
+  ExpectSame(Eval("=ROWS(IF(TRUE,{1;2;3}))"), Eval("=3"), "ROWS over a selected array");
+  ExpectSame(Eval("=LET(r,A2:A4,ROW(IF(TRUE,r)))"), Eval("=ROW(A2:A4)"), "ROW over a selected name");
+  ExpectError(Eval("=ROW(IF(TRUE,5))"), ErrorCode::Value, "ROW over a selected value");
+  ExpectError(Eval("=ROWS(INDIRECT(\"nope\"))"), ErrorCode::Ref, "ROWS over a failed INDIRECT");
+}
+
 // A two-argument IF whose condition fails selects the value FALSE, which a range argument reads as a direct value;
 // a selected reference stays one.
 TEST_F(SelectedRefTest, MissingElseArmIsTheValueFalse) {

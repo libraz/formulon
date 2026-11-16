@@ -271,6 +271,33 @@ bool is_reference_carrying_arg(std::string_view call_name, std::uint32_t arg_ind
   return false;
 }
 
+bool carries_name_reference(const parser::AstNode& node) noexcept {
+  switch (node.kind()) {
+    case parser::NodeKind::NameRef:
+      return true;
+    case parser::NodeKind::ExternalRef:
+      return parser::is_self_book_name_ref(node);
+    case parser::NodeKind::RangeOp:
+      for (std::uint32_t i = 0; i < node.as_range_arity(); ++i) {
+        if (carries_name_reference(node.as_range_operand(i))) {
+          return true;
+        }
+      }
+      return false;
+    case parser::NodeKind::Call: {
+      const std::uint32_t arity = node.as_call_arity();
+      for (std::uint32_t i = 0; i < arity; ++i) {
+        if (is_reference_carrying_arg(node.as_call_name(), i, arity) && carries_name_reference(node.as_call_arg(i))) {
+          return true;
+        }
+      }
+      return false;
+    }
+    default:
+      return false;
+  }
+}
+
 bool resolve_reference_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                             const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
                             std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,

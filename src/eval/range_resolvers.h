@@ -52,6 +52,12 @@ bool is_reference_call_name(std::string_view name) noexcept;
 /// name `is_reference_call_name` rejects. Answers from the lazy table's `ref_result`.
 bool is_reference_carrying_arg(std::string_view call_name, std::uint32_t arg_index, std::uint32_t arity) noexcept;
 
+/// True when `node` can denote a reference only through a name: a LET-bound or defined name, or a
+/// reference-returning call whose carried argument (`is_reference_carrying_arg`) does, at any depth. Such a node
+/// yields a value, not a `Ref`, from `eval_node_ref` until names bind as references, so a reader that needs the
+/// rectangle goes through `resolve_reference_call` / `resolve_reference_rect` for it.
+bool carries_name_reference(const parser::AstNode& node) noexcept;
+
 /// Attempts to resolve `node` as a reference-returning call (see
 /// `is_reference_call_name`), producing a rectangular reference without
 /// dereferencing. A call whose arguments select a non-reference (e.g.

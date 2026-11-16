@@ -31,6 +31,7 @@
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "eval/range_resolvers.h"
+#include "eval/reference/deref.h"
 #include "eval/scalar_ops.h"
 #include "eval/structured_ref_project.h"
 #include "eval/tail_array.h"
@@ -186,6 +187,35 @@ OperationShape operation_shape(const parser::AstNode& raw, Arena& arena, const F
   }
 }
 
+// Reads `node`, which `evaluates_to_reference`, as a reference without reading a cell: a one-area `Ref` is its
+// rectangle. Any other result is left in `*out_value` as the node's value, a multi-area `Ref` read as such.
+bool reference_area(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                    RefArea* out_area, Value* out_value) {
+  const Value result = eval_node_ref(node, arena, registry, ctx);
+  if (!result.is_ref()) {
+    *out_value = result;
+    return false;
+  }
+  const RefView view = result.as_ref();
+  if (view.form == RefForm::kArea) {
+    *out_area = view.areas[0];
+    return true;
+  }
+  *out_value = deref_shaped(result, arena, registry, ctx, ReadCount::kCounted).value;
+  return false;
+}
+
+// The shape of a value: an error is the result, an array its dimensions, anything else 1x1.
+bool value_shape(const Value& v, std::uint32_t* out_rows, std::uint32_t* out_cols, Value* out_err) {
+  if (v.is_error()) {
+    *out_err = v;
+    return false;
+  }
+  *out_rows = v.is_array() ? v.as_array_rows() : 1U;
+  *out_cols = v.is_array() ? v.as_array_cols() : 1U;
+  return true;
+}
+
 // Fills `out_rows` / `out_cols` with the rectangle shape implied by
 // `arg_node`. Returns `true` on success; on failure sets `*out_err` to
 // the appropriate Excel error (e.g. expansion error -> `#REF!`) and
@@ -245,8 +275,18 @@ bool resolve_shape(const parser::AstNode& raw_arg, Arena& arena, const FunctionR
       *out_cols = rect.value().cols();
       return true;
     }
-    // A `RangeOp` composed from reference-returning calls (`A1:OFFSET(...)`)
-    // has no static rectangle; its shape comes out of the expansion.
+    // A `RangeOp` composed from reference-returning calls (`A1:OFFSET(...)`) has no static rectangle; it is
+    // measured as the reference it evaluates to.
+    if (evaluates_to_reference(arg_node) && !carries_name_reference(arg_node)) {
+      RefArea area{};
+      Value value = Value::blank();
+      if (reference_area(arg_node, arena, registry, ctx, &area, &value)) {
+        *out_rows = area.row_last - area.row_first + 1U;
+        *out_cols = area.col_last - area.col_first + 1U;
+        return true;
+      }
+      return value_shape(value, out_rows, out_cols, out_err);
+    }
     auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
     if (!resolved) {
       *out_err = Value::error(resolved.error());
@@ -261,10 +301,20 @@ bool resolve_shape(const parser::AstNode& raw_arg, Arena& arena, const FunctionR
     *out_cols = arg_node.as_array_cols();
     return true;
   }
+  if (k == parser::NodeKind::Call && evaluates_to_reference(arg_node) && !carries_name_reference(arg_node)) {
+    // A reference-returning call is measured as the reference it returns, which reads none of its cells:
+    // `ROWS(INDIRECT("A1:B3"))` is 3.
+    RefArea area{};
+    Value value = Value::blank();
+    if (reference_area(arg_node, arena, registry, ctx, &area, &value)) {
+      *out_rows = area.row_last - area.row_first + 1U;
+      *out_cols = area.col_last - area.col_first + 1U;
+      return true;
+    }
+    return value_shape(value, out_rows, out_cols, out_err);
+  }
   if (k == parser::NodeKind::Call) {
-    // Recognise reference-returning builtins (INDIRECT, OFFSET) so
-    // `ROWS(INDIRECT("A1:B3"))` reports 3 rather than degrading to the
-    // 1x1 scalar fallback.
+    // A call reaching a reference through a name is resolved by the name.
     std::string_view sheet;
     std::uint32_t top = 0;
     std::uint32_t left = 0;
@@ -315,19 +365,7 @@ bool resolve_shape(const parser::AstNode& raw_arg, Arena& arena, const FunctionR
     *out_cols = shaped.tail_array->cols;
     return true;
   }
-  const Value& v = shaped.value;
-  if (v.is_error()) {
-    *out_err = v;
-    return false;
-  }
-  if (v.is_array()) {
-    *out_rows = v.as_array_rows();
-    *out_cols = v.as_array_cols();
-    return true;
-  }
-  *out_rows = 1U;
-  *out_cols = 1U;
-  return true;
+  return value_shape(shaped.value, out_rows, out_cols, out_err);
 }
 
 // Resolves `arg_node` through `resolve_range_arg` into `out_cells` in
@@ -461,9 +499,19 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
     }
     return index_array(rect.value().row_first, rect.value().col_first, rect.value().row_last, rect.value().col_last);
   }
+  if ((k == parser::NodeKind::RangeOp || k == parser::NodeKind::Call) && evaluates_to_reference(arg) &&
+      !carries_name_reference(arg)) {
+    // A reference-returning call, or a `RangeOp` over one (`A1:INDEX(...)`), names its rectangle without a cell
+    // read: `ROW(INDIRECT("A5"))` is 5.
+    RefArea area{};
+    Value value = Value::blank();
+    if (reference_area(arg, arena, registry, ctx, &area, &value)) {
+      return index_array(area.row_first, area.col_first, area.row_last, area.col_last);
+    }
+    return row_column_of_values(value, arena);
+  }
   if (k == parser::NodeKind::RangeOp) {
-    // A `RangeOp` over a reference-returning endpoint (`A1:INDEX(...)`)
-    // names its rectangle once the endpoint is resolved.
+    // A `RangeOp` over a name endpoint names its rectangle once the name is resolved.
     std::string_view sheet;
     std::uint32_t top = 0;
     std::uint32_t left = 0;
@@ -485,9 +533,7 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
     return index_array(ext_top, ext_left, ext_bottom, ext_right);
   }
   if (k == parser::NodeKind::Call) {
-    // Reference-returning builtins (INDIRECT, OFFSET) nested inside
-    // ROW/COLUMN must be inspected without dereferencing so
-    // `ROW(INDIRECT("A5"))` returns 5 rather than the value at A5.
+    // A call reaching a reference through a name is resolved by the name.
     std::string_view sheet;
     std::uint32_t top = 0;
     std::uint32_t left = 0;
