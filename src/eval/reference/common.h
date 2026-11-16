@@ -11,8 +11,7 @@
 // `eval/a1_parse.h`, with its bodies in `eval/a1_parse.cpp`.
 // Public lazy impl declarations (`eval_indirect_lazy`, `eval_offset_lazy`)
 // live in `reference/indirect.h` and `reference/offset.h`; the
-// range-expander / range-resolver externs live in `eval/range_expanders.h`
-// and `eval/range_resolvers.h`.
+// range-resolver externs live in `eval/range_resolvers.h`.
 //
 // The A1 endpoint parser stays local to eval rather than sharing
 // `src/utils/a1_ref.h`, whose column-letter parser has a different contract.

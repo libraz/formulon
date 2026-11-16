@@ -48,7 +48,6 @@
 #include "eval/name_env_resolve.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
-#include "eval/range_expanders.h"
 #include "eval/range_resolvers.h"
 #include "eval/tail_array.h"
 #include "eval/tree_walker/broadcast.h"
@@ -318,10 +317,9 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
     // `#VALUE!` from `coerce_to_number`. Flattening row-major mirrors the
     // SpillRef / RangeOp branches above, applying the same provenance
     // filters so blank / text / bool cells are dropped or coerced
-    // consistently. Calls whose specific shape we already special-cased
-    // (OFFSET, IF, CHOOSE, INDEX, INDIRECT, ROW, COLUMN, TRANSPOSE-via-
-    // SUMPRODUCT) reach `continue` before getting here, so this branch
-    // only catches the otherwise-uncovered Array-returning calls.
+    // consistently. Calls returning a reference reach `continue` in
+    // `collect_range_arg` before getting here, so this branch catches the
+    // Array-returning calls.
     if (def->accepts_ranges && v.is_array()) {
       had_range_shaped_arg = true;
       const ArrayValue* arr = v.as_array();

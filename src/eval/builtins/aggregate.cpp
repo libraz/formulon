@@ -11,6 +11,7 @@
 #include "eval/builtins/aggregate.h"
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -289,12 +290,11 @@ Value CountA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // SUM-style per-argument total used by PERCENTOF. Mirrors the eager SUM
 // dispatch path's two provenance rules:
 //
-//   * For range-shaped args (`Ref` / `RangeOp` / `SpillRef`, plus the
-//     reference-producing calls `OFFSET` / `CHOOSE` / `IF` / `ROW` /
-//     `COLUMN` that `resolve_range_arg` already expands) and for inline
-//     `{a;b;c}` array literals, Bool / Text / Blank cells are silently
-//     dropped. This is the same filter that `range_filter_numeric_only`
-//     applies in `tree_walker.cpp`.
+//   * For range-shaped args (`Ref` / `RangeOp` / `SpillRef`, plus the calls
+//     returning a reference that `resolve_range_arg` reads), for inline
+//     `{a;b;c}` array literals and for a computed array (`ROW(A1:A3)`),
+//     Bool / Text / Blank cells are silently dropped. This is the same
+//     filter that `range_filter_numeric_only` applies in `tree_walker.cpp`.
 //   * For any other (scalar) arg, `coerce_to_number` runs: TRUE -> 1,
 //     FALSE -> 0, blank -> 0, "5" -> 5, "abc" -> #VALUE!.
 //
@@ -352,7 +352,7 @@ bool sum_arg_for_percentof(const parser::AstNode& raw_arg, Arena& arena, const F
   // Range-shaped args (and the reference-producing calls that expand to
   // rectangles) go through `resolve_range_arg`; cells receive the
   // numeric-only provenance filter.
-  const bool is_range_call = k == parser::NodeKind::Call && is_range_shaped_call_name(arg_node.as_call_name());
+  const bool is_range_call = k == parser::NodeKind::Call && evaluates_to_reference(arg_node);
   if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp || k == parser::NodeKind::SpillRef ||
       is_range_call) {
     auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
@@ -398,6 +398,19 @@ bool sum_arg_for_percentof(const parser::AstNode& raw_arg, Arena& arena, const F
   if (v.is_error()) {
     *out_err = v;
     return false;
+  }
+  if (v.is_array()) {
+    // A computed array takes the array-literal filter.
+    const ArrayValue* arr = v.as_array();
+    double total = 0.0;
+    for (std::size_t i = 0; i < static_cast<std::size_t>(arr->rows) * arr->cols; ++i) {
+      if (arr->cells[i].is_error()) {
+        *out_err = Value::error(ErrorCode::Num);
+        return false;
+      }
+      add_number(arr->cells[i], total);
+    }
+    return finish_total(total);
   }
   auto coerced = coerce_to_number(v);
   if (!coerced) {

@@ -19,7 +19,6 @@
 #include "eval/function_registry.h"
 #include "eval/lazy_impls.h"
 #include "eval/range_args.h"
-#include "eval/range_expanders.h"
 #include "eval/range_resolvers.h"
 #include "eval/spill_anchor.h"
 #include "eval/structured_ref_project.h"
@@ -29,33 +28,11 @@
 #include "eval/tree_walker/dispatch_internal.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
-#include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
 
 namespace formulon {
 namespace eval {
-
-namespace {
-
-using RangeCallExpander = bool (*)(const parser::AstNode&, Arena&, const FunctionRegistry&, const EvalContext&,
-                                   std::vector<Value>*, ErrorCode*, std::uint32_t*, std::uint32_t*);
-
-struct RangeCallExpansion {
-  std::string_view name;
-  RangeCallExpander expand;
-};
-
-// Calls a range-aware function sees as the cells they produce rather than
-// the scalar they return: OFFSET, INDIRECT (a reference, so one cell still
-// takes the range filters), CHOOSE (its picked child, recursively), and
-// ROW / COLUMN over a range (Excel spills them to index vectors).
-const RangeCallExpansion kRangeCallExpansions[] = {
-    {"OFFSET", expand_offset_call}, {"INDIRECT", expand_indirect_call}, {"CHOOSE", expand_choose_call},
-    {"ROW", expand_row_call},       {"COLUMN", expand_column_call},
-};
-
-}  // namespace
 
 // A failed argument either aborts the call or, for a function that inspects
 // its error arguments, lands in `values` like any other value. Returns false
@@ -70,34 +47,6 @@ bool absorb_arg_error(const FunctionDef& def, const Value& err, std::vector<Valu
 }
 
 namespace {
-
-bool append_expanded_call_argument(const FunctionDef& def, const parser::AstNode& arg_node, std::string_view call_name,
-                                   RangeCallExpander expand, Arena& arena, const FunctionRegistry& registry,
-                                   const EvalContext& ctx, std::vector<Value>* values, bool* handled,
-                                   Value* immediate_return) {
-  *handled = false;
-  if (!def.accepts_ranges || arg_node.kind() != parser::NodeKind::Call ||
-      !strings::case_insensitive_eq(arg_node.as_call_name(), call_name)) {
-    return true;
-  }
-  *handled = true;
-  std::vector<Value> cells;
-  ErrorCode err_code = ErrorCode::Value;
-  if (!expand(arg_node, arena, registry, ctx, &cells, &err_code, nullptr, nullptr)) {
-    const Value err = Value::error(err_code);
-    if (!absorb_arg_error(def, err, values)) {
-      *immediate_return = err;
-      return false;
-    }
-    return true;
-  }
-  Value range_err = Value::blank();
-  if (!append_range_sourced_values(def, cells.data(), cells.size(), values, &range_err)) {
-    *immediate_return = range_err;
-    return false;
-  }
-  return true;
-}
 
 // Expands the rectangle [`lhs`, `rhs`] into `values` through `def`'s range
 // filters. An expansion error is pushed, or returned via `immediate_return`
@@ -449,46 +398,33 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
     }
     return RangeArgOutcome::kCollected;
   }
-  // Calls whose result is a range feed their cells through the range filters.
-  {
-    bool expanded_call_handled = false;
-    Value expanded_call_return = Value::blank();
-    for (const RangeCallExpansion& expansion : kRangeCallExpansions) {
-      if (!append_expanded_call_argument(def, arg_node, expansion.name, expansion.expand, arena, registry, ctx, &values,
-                                         &expanded_call_handled, &expanded_call_return)) {
-        result = expanded_call_return;
+  // A call returning a reference feeds its cells through the range filters.
+  // Any other result of it is an argument like a written one: an array's
+  // elements take the array filters, and a plain value (`IF(TRUE, "", 1)`)
+  // is no range cell, so the provenance filter must not drop it.
+  if (def.accepts_ranges && arg_node.kind() == parser::NodeKind::Call && evaluates_to_reference(arg_node)) {
+    RangeResult read;
+    Value picked = Value::blank();
+    if (read_reference_call(arg_node, arena, registry, ctx, &read, &picked)) {
+      had_range_shaped_arg = true;
+      return append_sourced_outcome(def, read.cells.data(), read.cells.size(), values, result);
+    }
+    if (picked.is_error()) {
+      return absorb_error_outcome(def, picked, values, result);
+    }
+    if (picked.is_array()) {
+      had_range_shaped_arg = true;
+      const ArrayValue* arr = picked.as_array();
+      Value range_err = Value::blank();
+      if (!append_array_sourced_values(def, arr->cells, static_cast<std::size_t>(arr->rows) * arr->cols, &values,
+                                       &range_err)) {
+        result = range_err;
         return RangeArgOutcome::kReturn;
       }
-      if (expanded_call_handled) {
-        had_range_shaped_arg = true;
-        return RangeArgOutcome::kCollected;
-      }
-    }
-  }
-  // IF as a range producer: a picked range branch is flattened through the
-  // range filters, so `=LET(r, IF(TRUE, A1:A3, B1:B3), SUM(r))` aggregates
-  // three cells. A picked plain value (`IF(TRUE, "", 1)`) is a direct
-  // argument, not a range cell, so the provenance filter must not drop it.
-  if (def.accepts_ranges && arg_node.kind() == parser::NodeKind::Call &&
-      strings::case_insensitive_eq(arg_node.as_call_name(), "IF")) {
-    auto picked = resolve_range_arg(arg_node, arena, registry, ctx);
-    if (!picked) {
-      return absorb_error_outcome(def, Value::error(picked.error()), values, result);
-    }
-    if (picked.value().from_scalar && picked.value().cells.size() == 1U) {
-      const Value& direct = picked.value().cells[0];
-      if (direct.is_error()) {
-        if (def.propagate_errors) {
-          result = direct;
-          return RangeArgOutcome::kReturn;
-        }
-        forget_error_origin();
-      }
-      values.push_back(direct);
       return RangeArgOutcome::kCollected;
     }
-    had_range_shaped_arg = true;
-    return append_sourced_outcome(def, picked.value().cells.data(), picked.value().cells.size(), values, result);
+    values.push_back(picked);
+    return RangeArgOutcome::kCollected;
   }
   if (def.accepts_ranges && arg_node.kind() == parser::NodeKind::StructuredRef) {
     // Structured (table) reference argument: evaluate it and unpack the

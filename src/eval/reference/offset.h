@@ -1,11 +1,6 @@
 //
 // Lazy impl entry point for `OFFSET(reference, rows, cols, [height],
-// [width])`. The matching range-expander surface
-// (`expand_offset_call` / `expand_choose_call` / `expand_row_call` /
-// `expand_column_call`) is declared in
-// `eval/range_expanders.h` and lives in `reference/offset.cpp` because
-// those helpers all flow through the same OFFSET rectangle-construction
-// pipeline.
+// [width])`.
 
 #ifndef FORMULON_EVAL_REFERENCE_OFFSET_H_
 #define FORMULON_EVAL_REFERENCE_OFFSET_H_
@@ -28,8 +23,7 @@ class FunctionRegistry;
 /// `OFFSET(reference, rows, cols, [height], [width])` — offsets `reference`
 /// by `(rows, cols)`, resizes it to `height` x `width`, and returns the
 /// rectangle as a `Ref` marked dynamic, so the dereference that reads it
-/// records the read. Range-aware consumers reach the same rectangle through
-/// `expand_offset_call` (declared in `eval/range_expanders.h`).
+/// records the read.
 Value eval_offset_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                        const EvalContext& ctx);
 

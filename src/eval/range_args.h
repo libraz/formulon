@@ -93,9 +93,9 @@ bool expand_ref3d_cells(const parser::AstNode& node, Arena& arena, const Functio
                         const EvalContext& ctx, std::vector<Value>* out, ErrorCode* out_err);
 
 /// Resolves `arg_node` to a `RangeResult`, expanding `RangeOp` / `Ref` /
-/// `SpillRef` / range-shaped Calls (`OFFSET` / `CHOOSE` / `IF` / `ROW` /
-/// `COLUMN`) and unwrapping dynamic-array producers (`MUNIT`,
-/// `SEQUENCE`, lambda invocations, …) into row-major cells.
+/// `SpillRef` / calls returning a reference and unwrapping dynamic-array
+/// producers (`MUNIT`, `SEQUENCE`, `ROW` over a range, lambda invocations,
+/// …) into row-major cells.
 ///
 /// Excel-level errors (`#REF!` for a missing sheet, `#VALUE!` for an
 /// unsupported argument shape, propagated cell errors, …) are returned
@@ -130,9 +130,12 @@ bool resolve_flat_cells(const parser::AstNode& arg_node, Arena& arena, const Fun
 /// The first Error cell of `cells` in order, or nullptr when there is none.
 const Value* first_error(const std::vector<Value>& cells);
 
-/// True for the reference-producing calls (`OFFSET` / `CHOOSE` / `IF` /
-/// `ROW` / `COLUMN`) that `resolve_range_arg` expands into a rectangle.
-bool is_range_shaped_call_name(std::string_view name);
+/// Evaluates `call`, a call returning a reference (`evaluates_to_reference`),
+/// and reads its cells into `*out` (a union or a 3-D span as one column).
+/// Returns false with the result in `*out_value` when it is no reference
+/// (a value, an array, an error), or a grid of references, read as its array.
+bool read_reference_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx, RangeResult* out, Value* out_value);
 
 /// Writes the declared shape of `arg_node` when it is a static reference
 /// (after LET passthrough) and returns true; returns false, leaving the

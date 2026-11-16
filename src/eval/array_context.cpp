@@ -43,16 +43,10 @@ Value array_value_or_num_error(const ArrayValue* arr) {
   return arr == nullptr ? Value::error(ErrorCode::Num) : Value::array(arr);
 }
 
-// True for the reference-shaped `Call` names that `resolve_range_arg`
-// already knows how to expand into a flat row-major rectangle. Kept
-// alongside the array-context dispatch so the two seams stay in sync
-// when a new reference-producing builtin (XLOOKUP-style spilling, etc.)
-// is added.
+// True for a call returning a reference, whose cells `resolve_range_arg`
+// reads as a flat row-major rectangle.
 bool is_range_producing_call(const parser::AstNode& call_node) {
-  if (call_node.kind() != parser::NodeKind::Call) {
-    return false;
-  }
-  return is_range_shaped_call_name(call_node.as_call_name());
+  return call_node.kind() == parser::NodeKind::Call && evaluates_to_reference(call_node);
 }
 
 }  // namespace detail

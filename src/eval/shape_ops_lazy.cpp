@@ -30,7 +30,6 @@
 #include "eval/name_env_resolve.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
-#include "eval/range_expanders.h"
 #include "eval/range_resolvers.h"
 #include "eval/scalar_ops.h"
 #include "eval/structured_ref_project.h"

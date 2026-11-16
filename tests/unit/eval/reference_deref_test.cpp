@@ -1067,6 +1067,17 @@ TEST_F(SelectedRefTest, ReferenceOperatorsOverReferencesAreReferences) {
   ExpectSame(Eval("=IF(TRUE,(A1,C3))"), Eval("=(A1,C3)"), "a union read as a value");
 }
 
+// A range argument that is a call returning a reference takes the reference's cells, under the range filters.
+TEST_F(SelectedRefTest, RangeArgumentsReadReferenceCallsAsTheirCells) {
+  ExpectSame(Eval("=SUM(INDEX(A1:E1,4),1)"), Eval("=SUM(D1,1)"), "text in a picked cell is skipped");
+  ExpectSame(Eval("=SUM(TAKE(A1:D1,1))"), Eval("=SUM(A1:D1)"), "taken rectangle");
+  ExpectSame(Eval("=SUM(XLOOKUP(11,A1:A5,D1:D5),1)"), Eval("=SUM(D1,1)"), "looked-up cell");
+  ExpectSame(Eval("=COUNTIF(INDEX(A1:E5,0,4),\"x\")"), Eval("=COUNTIF(D1:D5,\"x\")"), "indexed column");
+  ExpectSame(Eval("=MATCH(\"x\",IF(TRUE,D1:D5),0)"), Eval("=1"), "selected column");
+  ExpectSame(Eval("=SUM(IF(TRUE,\"\",1),2)"), Eval("=SUM(\"\",2)"), "a selected value is a direct argument");
+  ExpectSame(Eval("=SUM(ROW(A1:A3))"), Eval("=6"), "a computed array");
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

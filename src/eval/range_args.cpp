@@ -5,7 +5,6 @@
 #include "eval/range_args.h"
 
 #include <algorithm>
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <string_view>
@@ -21,9 +20,8 @@
 #include "eval/function_registry.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
-#include "eval/range_expanders.h"
 #include "eval/range_resolvers.h"
-#include "eval/special_forms_lazy.h"
+#include "eval/reference/deref.h"
 #include "eval/spill_anchor.h"
 #include "eval/structured_ref_project.h"
 #include "parser/ast.h"
@@ -31,7 +29,6 @@
 #include "sheet.h"
 #include "utils/arena.h"
 #include "utils/error.h"
-#include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -79,33 +76,6 @@ bool filter_range_sourced_value(const FunctionDef& def, const Value& value, Valu
   *out = value;
   *keep = true;
   return true;
-}
-
-/// Range-shaped Call-name dispatch. `OFFSET` / `CHOOSE` produce
-/// rectangles directly; `IF` preserves shape through the picked branch;
-/// `ROW` / `COLUMN` spill to a 1-D index array. Each kind routes to a
-/// dedicated expansion path below — the lookup table replaces a 5-way
-/// `if (case_insensitive_eq(name, ...))` chain so the case-insensitive
-/// compare runs at most twice (early-out on first hit) instead of five
-/// times in the worst case.
-enum class RangeShapedKind : std::uint8_t { Offset, Choose, If, Row, Column };
-
-constexpr std::array<std::pair<std::string_view, RangeShapedKind>, 5> kRangeShapedNames = {{
-    {"OFFSET", RangeShapedKind::Offset},
-    {"CHOOSE", RangeShapedKind::Choose},
-    {"IF", RangeShapedKind::If},
-    {"ROW", RangeShapedKind::Row},
-    {"COLUMN", RangeShapedKind::Column},
-}};
-
-bool lookup_range_shaped_kind(std::string_view name, RangeShapedKind* out) {
-  for (const auto& entry : kRangeShapedNames) {
-    if (strings::case_insensitive_eq(name, entry.first)) {
-      *out = entry.second;
-      return true;
-    }
-  }
-  return false;
 }
 
 // Expands `[lhs : rhs]` into `out_cells` and records the rectangle's shape.
@@ -171,63 +141,17 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
     out_cols = 1U;
     return true;
   }
-  // OFFSET / CHOOSE / IF / ROW / COLUMN all need range-shaped expansion
-  // glue (see per-branch comments below). Dispatch via a single
-  // case-insensitive name lookup against `kRangeShapedNames` so the hot
-  // path runs at most one full string compare per matching prefix —
-  // dramatically cheaper than the previous five-way `if`-chain when none
-  // of the names match (the common case for plain `RangeOp` / `Ref`
-  // arguments). Any other Call (INDIRECT, a user-defined function, etc.)
-  // falls through to the scalar-evaluation branch at the bottom of the
-  // function because dynamic range construction requires a `Value::Array`
-  // runtime we do not yet have.
-  if (arg_node.kind() == parser::NodeKind::Call) {
-    RangeShapedKind kind = RangeShapedKind::Offset;
-    if (lookup_range_shaped_kind(arg_node.as_call_name(), &kind)) {
-      switch (kind) {
-        case RangeShapedKind::Offset:
-          return expand_offset_call(arg_node, arena, registry, ctx, out_cells, out_err_code, &out_rows, &out_cols);
-        case RangeShapedKind::Choose:
-          return expand_choose_call(arg_node, arena, registry, ctx, out_cells, out_err_code, &out_rows, &out_cols);
-        case RangeShapedKind::Row:
-          // ROW(range) / COLUMN(range) spill in Excel 365 to a vertical /
-          // horizontal array of 1-based indices. Without a `Value::Array`
-          // runtime the scalar path collapses to the rectangle's first
-          // row / column, so the seam here unpacks the indices directly
-          // into the aggregator's range buffer.
-          return expand_row_call(arg_node, arena, registry, ctx, out_cells, out_err_code, &out_rows, &out_cols);
-        case RangeShapedKind::Column:
-          return expand_column_call(arg_node, arena, registry, ctx, out_cells, out_err_code, &out_rows, &out_cols);
-        case RangeShapedKind::If: {
-          // `IF(cond, then, [else])` preserves reference-shape through the
-          // picked branch in Mac Excel, so `=LET(r, IF(TRUE, A1:A3, B1:B3),
-          // SUM(r))` aggregates the 3-cell range rather than collapsing `r`
-          // to a scalar. Short-circuit the condition exactly like
-          // `eval_if_lazy`, then recurse into the chosen branch so nested
-          // CHOOSE / OFFSET / RangeOp / Ref keep their existing expansion
-          // paths. Errors propagate left-to-right (cond first, then the
-          // chosen branch), matching Excel and `expand_choose_call`. For
-          // the `IF(FALSE, then)` two-arity case Excel's scalar path
-          // returns boolean FALSE — not a reference — so we surface
-          // `#VALUE!` and let the caller fall back to the scalar branch
-          // (mirrors the `IF` block in `resolve_reference_call`).
-          const SelectedBranch picked = select_if_branch(arg_node, arena, registry, ctx);
-          if (picked.kind == SelectedBranch::Kind::kArraySubject) {
-            // An array condition picks per cell instead of short-circuiting, so
-            // `SUMPRODUCT(IF(A1:A5<=3, A1:A5, 0))` aggregates the masked column.
-            const Value result = eval_if_array_cond_lazy(arg_node, picked.value, arena, registry, ctx);
-            return expand_array_result(result, out_cells, out_err_code, &out_rows, &out_cols);
-          }
-          if (picked.kind == SelectedBranch::Kind::kResult) {
-            // `IF(FALSE, then)` is the scalar FALSE, not a reference.
-            *out_err_code = picked.value.is_error() ? picked.value.as_error() : ErrorCode::Value;
-            return false;
-          }
-          const parser::AstNode& chosen = arg_node.as_call_arg(picked.arg);
-          return resolve_range_arg_into(chosen, arena, registry, ctx, out_cells, out_err_code, out_rows, out_cols,
-                                        out_scalar);
-        }
-      }
+  // A call returning a reference reads that reference's cells; any other
+  // result of it takes the value path below.
+  Value call_value = Value::blank();
+  const bool reference_call = arg_node.kind() == parser::NodeKind::Call && evaluates_to_reference(arg_node);
+  if (reference_call) {
+    RangeResult read;
+    if (read_reference_call(arg_node, arena, registry, ctx, &read, &call_value)) {
+      *out_cells = std::move(read.cells);
+      out_rows = read.rows;
+      out_cols = read.cols;
+      return true;
     }
   }
   if (arg_node.kind() == parser::NodeKind::IntersectOp) {
@@ -380,17 +304,13 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
     return true;
   }
   // Generic fallback: evaluate the expression and inspect the resulting
-  // `Value`. Dynamic-array producers (MUNIT, SEQUENCE, RANDARRAY, MAP,
-  // REDUCE, BYROW, BYCOL, MAKEARRAY, LAMBDA invocations, ...) return a
-  // `Value::Array` here, which we unpack row-major into `out_cells` so
-  // INDEX / SUMPRODUCT / MATCH / aggregators navigate the rectangle as if
-  // it had been written as a literal range. Errors propagate; bare scalars
-  // (Number / Bool / Text / Blank) collapse to a 1x1 range, which fixes
-  // `=SUM(<scalar>)`-style formulas that previously surfaced #VALUE!.
-  // Reference-shaped nodes (`RangeOp` / `Ref` / `SpillRef` / `ArrayLiteral`
-  // / `OFFSET` / `CHOOSE` / `IF` / `ROW` / `COLUMN`) never reach this branch — their
-  // dedicated expansion paths above handle them without re-evaluation.
-  const Value result = eval_node(arg_node, arena, registry, ctx);
+  // `Value`. Dynamic-array producers (MUNIT, SEQUENCE, ROW / COLUMN over a
+  // range, MAP, LAMBDA invocations, ...) return a `Value::Array` here, which
+  // is unpacked row-major into `out_cells` so INDEX / SUMPRODUCT / MATCH /
+  // aggregators navigate the rectangle as if it had been written as a
+  // literal range. Errors propagate; bare scalars (Number / Bool / Text /
+  // Blank) collapse to a 1x1 range, so `=SUM(<scalar>)` takes the value.
+  const Value result = reference_call ? call_value : eval_node(arg_node, arena, registry, ctx);
   if (result.is_error()) {
     *out_err_code = result.as_error();
     return false;
@@ -421,9 +341,28 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
 
 }  // namespace
 
-bool is_range_shaped_call_name(std::string_view name) {
-  RangeShapedKind kind{};
-  return lookup_range_shaped_kind(name, &kind);
+bool read_reference_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx, RangeResult* out, Value* out_value) {
+  const Value result = eval_node_ref(call, arena, registry, ctx);
+  if (!result.is_ref()) {
+    *out_value = result;
+    return false;
+  }
+  if (result.ref_form() == RefForm::kGrid) {
+    *out_value = deref_shaped(result, arena, registry, ctx, ReadCount::kCounted).value;
+    return false;
+  }
+  auto read = deref_cells(result, /*allow_span3d=*/true, arena, registry, ctx, ReadCount::kCounted);
+  if (!read) {
+    *out_value = Value::error(read.error());
+    return false;
+  }
+  out->cells = std::move(read.value().cells);
+  const bool one_area = read.value().rows != 0U;
+  out->rows = one_area ? read.value().rows : static_cast<std::uint32_t>(out->cells.size());
+  out->cols = one_area ? read.value().cols : 1U;
+  out->from_scalar = false;
+  return true;
 }
 
 bool expand_resolved_rect_cells(std::string_view sheet, std::uint32_t top, std::uint32_t left, std::uint32_t bottom,

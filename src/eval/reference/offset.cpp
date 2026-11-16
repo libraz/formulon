@@ -1,40 +1,22 @@
 //
-// Implementation of the OFFSET lazy impl plus the related range-shape
-// expanders (`expand_offset_call`, `expand_choose_call`, `expand_row_call`,
-// `expand_column_call`).
+// Implementation of the OFFSET lazy impl.
 //
 // The rectangle-construction core (`compute_offset_rect`, `OffsetBase`)
 // lives in `reference/common.cpp` because the intersection resolver
-// (`reference/intersection.cpp`) reaches it too. This TU only owns the
-// OFFSET evaluator and the range-expander dispatch on top.
+// (`reference/intersection.cpp`) reaches it too.
 
 #include "eval/reference/offset.h"
 
-#include <cstddef>
 #include <cstdint>
-#include <string_view>
-#include <utility>
-#include <vector>
 
-#include "eval/coerce.h"
 #include "eval/declared_rect.h"
 #include "eval/eval_context.h"
-#include "eval/lazy_impls.h"
-#include "eval/lookups/classic.h"
-#include "eval/name_env_resolve.h"
-#include "eval/range_args.h"
-#include "eval/range_expanders.h"
-#include "eval/range_resolvers.h"
 #include "eval/reference/common.h"
 #include "eval/reference/ref_value.h"
-#include "eval/special_forms_lazy.h"
-#include "eval/structured_ref_project.h"
 #include "parser/ast.h"
-#include "parser/reference.h"
 #include "sheet.h"
 #include "utils/arena.h"
 #include "utils/error.h"
-#include "utils/expected.h"
 #include "value.h"
 
 namespace formulon {
@@ -64,26 +46,6 @@ DeclaredRect declared_offset_rect(const OffsetRect& rect) {
                       /*whole_axis=*/rect.height == Sheet::kMaxRows || rect.width == Sheet::kMaxCols};
 }
 
-// Resolves `node` through `resolve_range_arg` into the expander out-params.
-bool expand_resolved_range(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                           const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
-                           std::uint32_t* out_rows, std::uint32_t* out_cols) {
-  auto resolved = resolve_range_arg(node, arena, registry, ctx);
-  if (!resolved) {
-    *out_err_code = resolved.error();
-    return false;
-  }
-  auto& rr = resolved.value();
-  if (out_rows != nullptr) {
-    *out_rows = rr.rows;
-  }
-  if (out_cols != nullptr) {
-    *out_cols = rr.cols;
-  }
-  *out_cells = std::move(rr.cells);
-  return true;
-}
-
 }  // namespace
 
 Value eval_offset_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -95,237 +57,6 @@ Value eval_offset_lazy(const parser::AstNode& call, Arena& arena, const Function
   }
   // The reference itself; reading it as values is the dereference's job, which records the read.
   return make_rect_ref(rect.base.sheet, declared_offset_rect(rect), RefOrigin::kDerived, arena, ctx).with_ref_dynamic();
-}
-
-bool expand_offset_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                        const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
-                        std::uint32_t* out_rows, std::uint32_t* out_cols) {
-  OffsetRect rect{};
-  ErrorCode err = ErrorCode::Value;
-  if (!resolve_offset_rect(call, arena, registry, ctx, &rect, &err)) {
-    *out_err_code = err;
-    return false;
-  }
-  ctx.note_dynamic_read(rect.base.sheet, declared_offset_rect(rect));
-  return expand_resolved_rect_cells(rect.base.sheet, rect.top_row, rect.left_col, rect.top_row + rect.height - 1U,
-                                    rect.left_col + rect.width - 1U, arena, registry, ctx, out_cells, out_err_code,
-                                    out_rows, out_cols);
-}
-
-bool expand_indirect_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                          const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
-                          std::uint32_t* out_rows, std::uint32_t* out_cols) {
-  std::string_view sheet;
-  std::uint32_t top = 0;
-  std::uint32_t left = 0;
-  std::uint32_t bottom = 0;
-  std::uint32_t right = 0;
-  bool is_range = false;
-  ErrorCode err = ErrorCode::Ref;
-  if (!resolve_reference_call(call, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &is_range, &err)) {
-    *out_err_code = err;
-    return false;
-  }
-  return expand_resolved_rect_cells(sheet, top, left, bottom, right, arena, registry, ctx, out_cells, out_err_code,
-                                    out_rows, out_cols);
-}
-
-bool expand_choose_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                        const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
-                        std::uint32_t* out_rows, std::uint32_t* out_cols) {
-  const SelectedBranch picked = select_choose_branch(call, arena, registry, ctx);
-  switch (picked.kind) {
-    case SelectedBranch::Kind::kArgument:
-      // `resolve_range_arg` routes a nested OFFSET / CHOOSE / IF back through
-      // these expanders, so chains flatten cleanly.
-      return expand_resolved_range(call.as_call_arg(picked.arg), arena, registry, ctx, out_cells, out_err_code,
-                                   out_rows, out_cols);
-    case SelectedBranch::Kind::kArraySubject:
-      return expand_array_result(eval_choose_array_index_lazy(call, picked.value, arena, registry, ctx), out_cells,
-                                 out_err_code, out_rows, out_cols);
-    case SelectedBranch::Kind::kResult:
-      break;
-  }
-  *out_err_code = picked.value.as_error();
-  return false;
-}
-
-bool expand_array_result(const Value& result, std::vector<Value>* out_cells, ErrorCode* out_err_code,
-                         std::uint32_t* out_rows, std::uint32_t* out_cols) {
-  if (result.is_error()) {
-    *out_err_code = result.as_error();
-    return false;
-  }
-  if (!result.is_array()) {
-    *out_err_code = ErrorCode::Value;
-    return false;
-  }
-  const ArrayValue* array = result.as_array();
-  const std::size_t count = static_cast<std::size_t>(array->rows) * array->cols;
-  out_cells->assign(array->cells, array->cells + count);
-  if (out_rows != nullptr) {
-    *out_rows = array->rows;
-  }
-  if (out_cols != nullptr) {
-    *out_cols = array->cols;
-  }
-  return true;
-}
-
-namespace {
-
-// Shared body of `expand_row_call` / `expand_column_call`. `want_row`
-// picks the axis: when true, fills `out_cells` with 1-based row indices
-// drawn from `[top..bottom]` of the resolved rectangle and reports
-// `(rows = bottom-top+1, cols = 1)`; when false, fills with column
-// indices from `[left..right]` and reports `(rows = 1, cols = right-left+1)`.
-//
-// The shape inspection mirrors `eval_row_or_column` in `shape_ops_lazy.cpp`:
-// LET-bound NameRefs are looked through, single-cell `Ref` becomes a 1x1,
-// `RangeOp(Ref, Ref)` covers the full row / column span, and a nested
-// reference-returning `Call` (INDIRECT / OFFSET / IF / CHOOSE) routes
-// through `resolve_reference_call`. Anything else evaluates the subtree
-// to surface errors and otherwise reports `#VALUE!`. The 0-arity branch
-// (bare `=ROW()` / `=COLUMN()`) emits a single 1x1 indexed by the
-// formula cell, or `#VALUE!` if no formula cell is bound.
-bool expand_row_or_column_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                               const EvalContext& ctx, bool want_row, std::vector<Value>* out_cells,
-                               ErrorCode* out_err_code, std::uint32_t* out_rows, std::uint32_t* out_cols) {
-  const std::uint32_t arity = call.as_call_arity();
-  out_cells->clear();
-  if (arity == 0U) {
-    if (!ctx.has_formula_cell()) {
-      *out_err_code = ErrorCode::Value;
-      return false;
-    }
-    const std::uint32_t idx = want_row ? ctx.formula_row() : ctx.formula_col();
-    out_cells->push_back(Value::number(static_cast<double>(idx + 1U)));
-    if (out_rows != nullptr) {
-      *out_rows = 1U;
-    }
-    if (out_cols != nullptr) {
-      *out_cols = 1U;
-    }
-    return true;
-  }
-  if (arity != 1U) {
-    *out_err_code = ErrorCode::Value;
-    return false;
-  }
-
-  // LET-binding passthrough: `=LET(r, A1:A3, SUM(ROW(r)))` parses `r` as
-  // a NameRef. Mirror `eval_row_or_column`'s rule: accept the broader
-  // "Ref OR range-shaped" set so a single-cell binding still yields a
-  // meaningful row / column index.
-  const parser::AstNode& raw_arg = call.as_call_arg(0);
-  const parser::AstNode& arg = resolve_range_binding(raw_arg, ctx.name_env(), /*accept_ref=*/true);
-
-  std::uint32_t top = 0;
-  std::uint32_t left = 0;
-  std::uint32_t bottom = 0;
-  std::uint32_t right = 0;
-  bool resolved_rect = false;
-
-  const parser::NodeKind k = arg.kind();
-  parser::Reference rect_lhs{};
-  parser::Reference rect_rhs{};
-  if (reference_endpoint_pair(arg, &rect_lhs, &rect_rhs, ctx)) {
-    // Same derivation the scalar seam in `shape_ops_lazy.cpp` uses: a
-    // full-axis endpoint names a coordinate only on its bounded axis, so
-    // the rectangle cannot come from the endpoints' raw row/col fields.
-    const Expected<DeclaredRect, ErrorCode> rect = ctx.declared_range_rect_or_bare(rect_lhs, rect_rhs);
-    if (!rect) {
-      *out_err_code = rect.error();
-      return false;
-    }
-    top = rect.value().row_first;
-    bottom = rect.value().row_last;
-    left = rect.value().col_first;
-    right = rect.value().col_last;
-    resolved_rect = true;
-  } else if (external_reference_rect(arg, &top, &left, &bottom, &right)) {
-    // A reference into another workbook: its coordinates, not its (possibly uncached) cells.
-    resolved_rect = true;
-  } else if (k == parser::NodeKind::RangeOp) {
-    // A `RangeOp` whose endpoints are not both bare references names no
-    // rectangle until it is evaluated, which this seam does not do.
-    *out_err_code = ErrorCode::Value;
-    return false;
-  } else if (k == parser::NodeKind::Call) {
-    std::string_view sheet;
-    bool is_range = false;
-    ErrorCode err = ErrorCode::Value;
-    // Only the position is read, so the reference is no read of its cells.
-    // A failure falls through to the scalar-evaluate branch so subtree errors propagate.
-    if (resolve_reference_call(arg, arena, registry, ctx.without_dynamic_read_callback(), &sheet, &top, &left, &bottom,
-                               &right, &is_range, &err)) {
-      resolved_rect = true;
-    }
-  }
-
-  if (resolved_rect) {
-    if (want_row) {
-      const std::uint32_t height = bottom - top + 1U;
-      out_cells->reserve(height);
-      for (std::uint32_t r = top; r <= bottom; ++r) {
-        out_cells->push_back(Value::number(static_cast<double>(r + 1U)));
-      }
-      if (out_rows != nullptr) {
-        *out_rows = height;
-      }
-      if (out_cols != nullptr) {
-        *out_cols = 1U;
-      }
-    } else {
-      const std::uint32_t width = right - left + 1U;
-      out_cells->reserve(width);
-      for (std::uint32_t c = left; c <= right; ++c) {
-        out_cells->push_back(Value::number(static_cast<double>(c + 1U)));
-      }
-      if (out_rows != nullptr) {
-        *out_rows = 1U;
-      }
-      if (out_cols != nullptr) {
-        *out_cols = width;
-      }
-    }
-    return true;
-  }
-
-  // A value that is no reference: errors surface, anything else is #VALUE!, element by element over an array. An
-  // array constant is refused at entry, so it is one #VALUE!.
-  const Value v = k == parser::NodeKind::ArrayLiteral
-                      ? Value::error(ErrorCode::Value)
-                      : row_column_of_values(eval_node(arg, arena, registry, ctx), arena);
-  if (!v.is_array()) {
-    *out_err_code = v.as_error();
-    return false;
-  }
-  const std::size_t count = static_cast<std::size_t>(v.as_array_rows()) * v.as_array_cols();
-  out_cells->assign(v.as_array_cells(), v.as_array_cells() + count);
-  if (out_rows != nullptr) {
-    *out_rows = v.as_array_rows();
-  }
-  if (out_cols != nullptr) {
-    *out_cols = v.as_array_cols();
-  }
-  return true;
-}
-
-}  // namespace
-
-bool expand_row_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                     const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
-                     std::uint32_t* out_rows, std::uint32_t* out_cols) {
-  return expand_row_or_column_call(call, arena, registry, ctx, /*want_row=*/true, out_cells, out_err_code, out_rows,
-                                   out_cols);
-}
-
-bool expand_column_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                        const EvalContext& ctx, std::vector<Value>* out_cells, ErrorCode* out_err_code,
-                        std::uint32_t* out_rows, std::uint32_t* out_cols) {
-  return expand_row_or_column_call(call, arena, registry, ctx, /*want_row=*/false, out_cells, out_err_code, out_rows,
-                                   out_cols);
 }
 
 }  // namespace eval

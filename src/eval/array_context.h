@@ -78,8 +78,8 @@ const ArrayValue* make_array_value(Arena& arena, std::uint32_t rows, std::uint32
 /// Wraps `arr` as a `Value`, or `#NUM!` when it is null.
 Value array_value_or_num_error(const ArrayValue* arr);
 
-/// True for the reference-shaped `Call` names `resolve_range_arg` expands into
-/// a flat rectangle.
+/// True for a call returning a reference (`evaluates_to_reference`), whose
+/// cells `resolve_range_arg` reads as a flat rectangle.
 bool is_range_producing_call(const parser::AstNode& call_node);
 
 }  // namespace detail

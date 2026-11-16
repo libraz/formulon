@@ -4,9 +4,7 @@
 // exercises the seam where ROW / COLUMN appear as range-shaped arguments
 // to range-aware aggregators (SUM / SUMPRODUCT / PRODUCT). Mac Excel 365
 // spills the call to `{1;2;3;4;5}` / `{1,2,3,4,5}` and the surrounding
-// aggregator iterates the spill; Formulon mirrors that without a
-// `Value::Array` runtime by routing through `expand_row_call` /
-// `expand_column_call` in the aggregator dispatch path.
+// aggregator iterates the spill.
 
 #include <cstdint>
 #include <string_view>
