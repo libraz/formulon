@@ -2355,11 +2355,11 @@ class DataValidationInput:
     show_error_message: bool = True
     #: Show the in-cell dropdown arrow (``list`` rules only); default ``True``.
     show_in_cell_dropdown: bool = True
-    #: The first formula or value of the rule; the leading ``=`` is optional and an empty string is none.
-    formula1: str = ""
-    #: The second formula or value of the rule (the upper bound of a between rule); the leading ``=`` is optional and an
-    #: empty string is none.
-    formula2: str = ""
+    #: The first formula or value of the rule; the leading ``=`` is optional, ``None`` is none and ``""`` is refused.
+    formula1: Optional[str] = None
+    #: The second formula or value of the rule (the upper bound of a between rule); the leading ``=`` is optional,
+    #: ``None`` is none and ``""`` is refused.
+    formula2: Optional[str] = None
     #: The title of the error alert; an empty string is none.
     error_title: str = ""
     #: The text of the error alert; an empty string is none.
