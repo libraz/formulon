@@ -18,9 +18,12 @@
 #include "io/read_options.h"
 #include "io/xlsb/frt_records.h"
 #include "io/xlsb/pivot_records_common.h"
+#include "io/xlsb/reader.h"
 #include "io/xlsb/record_ids.h"
+#include "pivot/pivot_table.h"
 #include "support/xlsb_package_validator.h"
 #include "utils/structured_log.h"
+#include "workbook.h"
 #include "writer_test_helpers.h"
 #include "xlsb_twin_compare.h"
 
@@ -392,25 +395,65 @@ TEST_P(XlsbParityPivotApiBuilt, WritesExcelsPivotRecords) {
 INSTANTIATE_TEST_SUITE_P(Cases, XlsbParityPivotApiBuilt,
                          ::testing::Values("a_plain", "b_page_filter", "e_shared_cache"));
 
-/// Reads Excel's `.xlsx` save `<dir>/<stem>.xlsx`, writes it as `.xlsb`, and holds every pivot record against Excel's
-/// own `<stem>.xlsb` save.
-void ExpectExcelsPivotRecords(const std::string& dir, const std::string& stem) {
+/// Reads Excel's save `source` (relative to the fixtures root), writes it as `.xlsb`, and holds the records of every
+/// part under `parts` against Excel's own `.xlsb` save `excel_save`. Returns the written package.
+tc::Bytes ExpectExcelsRecords(const std::string& source, const std::string& excel_save,
+                              const std::string& parts = "xl/pivot") {
   ReadOptions mac;
   mac.profile = mac_365_en_us_profile();
-  const tc::Converted ours = tc::ConvertToXlsb(std::string(FORMULON_FIXTURES_DIR),
-                                               "excel/xlsb_parity/pivot/" + dir + "/" + stem + ".xlsx", mac);
-  ASSERT_TRUE(ours.error.empty()) << ours.error;
-  const tc::Bytes excel =
-      tc::ReadBytes(std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_parity/pivot/" + dir + "/" + stem + ".xlsb");
-  ASSERT_FALSE(excel.empty());
+  const tc::Converted ours = tc::ConvertToXlsb(std::string(FORMULON_FIXTURES_DIR), source, mac);
+  EXPECT_TRUE(ours.error.empty()) << ours.error;
+  const tc::Bytes excel = tc::ReadBytes(std::string(FORMULON_FIXTURES_DIR) + "/" + excel_save);
+  EXPECT_FALSE(excel.empty());
+  if (!ours.error.empty() || excel.empty()) {
+    return {};
+  }
   std::string diff;
   for (const std::string& line : tc::CompareRecordSets(ours.bytes, excel, PivotTypesButUid(excel), Unmatched(excel))) {
-    if (line.find("xl/pivot") != std::string::npos) {
+    if (line.find(parts) != std::string::npos) {
       diff += "  " + line + "\n";
     }
   }
   EXPECT_TRUE(diff.empty()) << diff;
+  return ours.bytes;
 }
+
+/// Reads Excel's `.xlsx` save `<dir>/<stem>.xlsx`, writes it as `.xlsb`, and holds every pivot record against Excel's
+/// own `<stem>.xlsb` save.
+void ExpectExcelsPivotRecords(const std::string& dir, const std::string& stem) {
+  const std::string base = "excel/xlsb_parity/pivot/" + dir + "/" + stem;
+  ExpectExcelsRecords(base + ".xlsx", base + ".xlsb");
+}
+
+// A pivot withheld by an occupied range, with a page field (pvpage_blocked) or not: Excel's .xlsx and .xlsb saves of
+// one book (rich_errors, rich_errors_xlsb). A save from either writes Excel's table records and reads back withheld.
+class XlsbParityPivotBlocked : public ::testing::TestWithParam<const char*> {};
+
+TEST_P(XlsbParityPivotBlocked, WritesExcelsTableRecords) {
+  const std::string stem = GetParam();
+  const std::string excel_save = "excel/rich_errors_xlsb/" + stem + ".xlsb";
+  for (const std::string& source : {"excel/rich_errors/" + stem + ".xlsx", excel_save}) {
+    SCOPED_TRACE(source);
+    const tc::Bytes ours = ExpectExcelsRecords(source, excel_save, "xl/pivotTables/");
+    ASSERT_FALSE(ours.empty());
+    ExpectValid(ours);
+    auto back = read_xlsb(SpanOf(ours));
+    ASSERT_TRUE(back.has_value()) << back.error().message;
+    const Workbook& wb = back.value().workbook;
+    std::size_t blocked = 0;
+    std::size_t pivots = 0;
+    for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
+      for (const auto& table : wb.sheet(s).pivot_tables()) {
+        ++pivots;
+        blocked += table != nullptr && table->blocked().has_value() ? 1U : 0U;
+      }
+    }
+    EXPECT_EQ(pivots, 1U);
+    EXPECT_EQ(blocked, 1U);
+  }
+}
+
+INSTANTIATE_TEST_SUITE_P(Rich, XlsbParityPivotBlocked, ::testing::Values("pivot_blocked", "pvpage_blocked"));
 
 // A source row left wholly or partly blank (xlsb_parity/pivot/blank, Excel 16.115's saves after a refresh): the
 // blank cells and missing items are written as Excel writes them.

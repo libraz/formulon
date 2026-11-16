@@ -1574,6 +1574,16 @@ bool WriteFilters(const pivot::PivotTable& table, RawRecords& out) {
 }
 
 bool WriteLocation(const pivot::PivotTable& table, std::optional<PivotRenderedSpan> rendered_span, SxLocation& loc) {
+  // A withheld report is saved as its anchor cell alone, with zero offsets and no page rows or columns.
+  if (table.blocked()) {
+    if (table.anchor_row() >= a1::kMaxRows || table.anchor_col() >= a1::kMaxCols) {
+      return false;
+    }
+    loc = SxLocation{};
+    loc.first_row = loc.last_row = loc.first_header_row = loc.first_data_row = table.anchor_row();
+    loc.first_col = loc.last_col = loc.first_data_col = table.anchor_col();
+    return true;
+  }
   // An offset the model does not carry is derived from the report shape, as the .xlsx writer derives it.
   const detail::LocationDefaults derived = detail::ComputeLocationDefaults(table);
   const std::uint32_t header = table.location_first_header_row().value_or(derived.first_header_row);
@@ -1597,10 +1607,9 @@ bool WriteLocation(const pivot::PivotTable& table, std::optional<PivotRenderedSp
     span_cols = !stale && span_cols > rendered_span->cols ? span_cols : rendered_span->cols;
     top = top > rendered_span->top ? top : rendered_span->top;
   }
-  if (table.blocked() || span_rows == 0U || span_cols == 0U || top >= a1::kMaxRows ||
-      table.anchor_col() >= a1::kMaxCols || span_rows > a1::kMaxRows - top ||
-      span_cols > a1::kMaxCols - table.anchor_col() || header >= a1::kMaxRows || data_row >= a1::kMaxRows ||
-      data_col >= a1::kMaxCols || row_pages == 0U || col_pages == 0U) {
+  if (span_rows == 0U || span_cols == 0U || top >= a1::kMaxRows || table.anchor_col() >= a1::kMaxCols ||
+      span_rows > a1::kMaxRows - top || span_cols > a1::kMaxCols - table.anchor_col() || header >= a1::kMaxRows ||
+      data_row >= a1::kMaxRows || data_col >= a1::kMaxCols || row_pages == 0U || col_pages == 0U) {
     return false;
   }
   loc.first_row = top;

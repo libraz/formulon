@@ -668,8 +668,60 @@ TEST(PivotTableBridge, WriteRefusesADataPosition) {
                      [](pivot::PivotTable& t) { t.mutable_passthrough_attrs().emplace_back("dataPosition", "0"); });
 }
 
-TEST(PivotTableBridge, WriteRefusesABlockedTable) {
-  ExpectWriteRefused("B01_base", [](pivot::PivotTable& t) { t.set_blocked(pivot::BlockedReport{}); });
+// A withheld report's location is its anchor cell alone, whatever span the caller projects: zero offsets and no
+// page rows or columns, a page field (pvpage_blocked) or not. Both books are Excel's saves of one workbook as .xlsx
+// (rich_errors) and .xlsb (rich_errors_xlsb).
+TEST(PivotTableBridge, BlockedTableWritesExcelsPart) {
+  const std::string root = std::string(FORMULON_FIXTURES_DIR) + "/excel/";
+  for (const char* stem : {"pivot_blocked", "pvpage_blocked"}) {
+    SCOPED_TRACE(stem);
+    const Workbook wb = LoadXlsx(tc::ReadBytes(root + "rich_errors/" + stem + ".xlsx"));
+    const auto parts = pivot_twins::Parts(root + "rich_errors_xlsb/" + stem + ".xlsb", kTablePrefix);
+    ASSERT_EQ(parts.size(), 1U);
+    const pivot::PivotTable* table = nullptr;
+    std::size_t sheet = 0;
+    for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
+      if (!wb.sheet(s).pivot_tables().empty()) {
+        table = wb.sheet(s).pivot_tables().front().get();
+        sheet = s;
+      }
+    }
+    ASSERT_NE(table, nullptr);
+    ASSERT_TRUE(table->blocked().has_value());
+    // Excel renumbers the cache on load; its save carries the new id.
+    auto excel = decode_pivot_table(SpanOf(parts.front().second));
+    ASSERT_TRUE(excel.has_value()) << excel.error().message;
+    std::unique_ptr<pivot::PivotTable> copy = table->clone();
+    copy->set_pivot_cache_id(excel.value().view.cache_id);
+    for (const std::optional<PivotRenderedSpan> span :
+         {std::optional<PivotRenderedSpan>(), std::optional<PivotRenderedSpan>(PivotRenderedSpan{9U, 6U, 4U})}) {
+      auto ours = pivot_table_to_xlsb(*copy, ExcelHost::kMac365, sheet, span);
+      ASSERT_TRUE(ours.has_value()) << ours.error().message;
+      const std::vector<std::string> diffs = RecordDiffs(ours.value(), parts.front().second);
+      EXPECT_TRUE(diffs.empty()) << Join(diffs);
+    }
+  }
+}
+
+TEST(PivotTableBridge, BlockedTableWritesItsAnchorCellAlone) {
+  auto read = pivot_table_from_xlsb(SpanOf(TablePart("B17_page_field")));
+  ASSERT_TRUE(read.has_value()) << read.error().message;
+  pivot::PivotTable table = std::move(read.value());
+  table.set_blocked(pivot::BlockedReport{});
+  auto written = pivot_table_to_xlsb(table, ExcelHost::kMac365, 0);
+  ASSERT_TRUE(written.has_value()) << written.error().message;
+  auto doc = decode_pivot_table(SpanOf(written.value()));
+  ASSERT_TRUE(doc.has_value()) << doc.error().message;
+  const SxLocation& loc = doc.value().location;
+  EXPECT_EQ(loc.first_row, table.anchor_row());
+  EXPECT_EQ(loc.last_row, table.anchor_row());
+  EXPECT_EQ(loc.first_col, table.anchor_col());
+  EXPECT_EQ(loc.last_col, table.anchor_col());
+  EXPECT_EQ(loc.first_header_row, table.anchor_row());
+  EXPECT_EQ(loc.first_data_row, table.anchor_row());
+  EXPECT_EQ(loc.first_data_col, table.anchor_col());
+  EXPECT_EQ(loc.row_page_count, 0U);
+  EXPECT_EQ(loc.col_page_count, 0U);
 }
 
 TEST(PivotTableBridge, WriteRefusesAPageFieldNameOrCaption) {

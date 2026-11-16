@@ -82,10 +82,6 @@ xlsb_parity/protection/title_astral_128_src.xlsx validate_xlsx protected_range_t
 # PivotTables loaded from .xlsb do not yet survive a save.
 chart_pivot.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses chartFormat and other unmeasured root attributes
 pivot_options/op_alttext.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses alternative text
-rich_errors/notypes_pivot.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a blocked pivot
-rich_errors/notypes_pivot_resaved.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a blocked pivot
-rich_errors/pivot_blocked.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a blocked pivot
-rich_errors/pvpage_blocked.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a blocked pivot
 table_slicer.xlsb drop_xlsx rel:xl/slicerCaches/slicerCache1.bin unmodelled_dropped  # slicer, not written to the other format
 table_slicer.xlsb drop_xlsx rel:xl/slicers/slicer1.bin unmodelled_dropped  # slicer, not written to the other format
 table_slicer.xlsb drop_xlsx xl/slicerCaches/slicerCache1.bin unmodelled_dropped  # slicer, not written to the other format
