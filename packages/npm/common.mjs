@@ -4738,6 +4738,8 @@ const CF_PATCH_KEYS = Object.freeze({
 
 // Where a sparkline whose source text does not parse keeps that text, so the group it is read in writes it back.
 const STORED_SOURCE = Symbol('formulon.sparklineSource');
+// The stored date-axis text of a group read back with `dateAxisRange: null` because that text is not one rectangle.
+const STORED_DATE_AXIS = Symbol('formulon.sparklineDateAxis');
 
 /** The public `ThreadedComment` of a raw record: its anchor as `cell`, its stamp as a civil time. */
 function threadedCommentRead({ row, col, created, ...comment }) {
@@ -4776,9 +4778,10 @@ function sparklineRangeText(raw, value, sheet, label) {
 /**
  * The raw record of a sparkline group (or of the keys of a patch) given as a public `SparklineGroupInput`:
  * each sparkline's `source` and `location`, and `dateAxisRange`, become the reference text the raw layer takes.
- * `sheet` resolves an unqualified source.
+ * `sheet` resolves an unqualified source; `storedDateAxis` is the stored date-axis text of the group the caller
+ * passed, which a `dateAxisRange: null` writes back (taken before any copy, which drops it).
  */
-function encodeSparklineGroup(raw, sheet, group, where) {
+function encodeSparklineGroup(raw, sheet, group, where, storedDateAxis = null) {
   const { sparklines, dateAxisRange, ...rest } = group;
   const out = { ...rest };
   if (sparklines !== undefined) {
@@ -4798,7 +4801,7 @@ function encodeSparklineGroup(raw, sheet, group, where) {
   }
   if (dateAxisRange !== undefined) {
     out.dateAxisRef =
-      dateAxisRange === null ? null : sparklineRangeText(raw, dateAxisRange, sheet, `${where} dateAxisRange`);
+      dateAxisRange === null ? storedDateAxis : sparklineRangeText(raw, dateAxisRange, sheet, `${where} dateAxisRange`);
   }
   return out;
 }
@@ -4807,9 +4810,10 @@ function encodeSparklineGroup(raw, sheet, group, where) {
 function decodeSparklineGroup(raw, group) {
   const { dateAxisRef, sparklines, ...rest } = group;
   const withoutEquals = (text) => (typeof text === 'string' && text.startsWith('=') ? text.slice(1) : text);
-  return {
+  const dateAxisRange = parseSheetRect(raw, withoutEquals(dateAxisRef));
+  const out = {
     ...rest,
-    dateAxisRange: parseSheetRect(raw, withoutEquals(dateAxisRef)),
+    dateAxisRange,
     sparklines: sparklines.map(({ formula, location }) => {
       const text = withoutEquals(formula);
       const source = parseSheetRect(raw, text);
@@ -4822,6 +4826,10 @@ function decodeSparklineGroup(raw, group) {
       return sparkline;
     }),
   };
+  if (dateAxisRange === null && typeof dateAxisRef === 'string' && dateAxisRef !== '') {
+    Object.defineProperty(out, STORED_DATE_AXIS, { value: dateAxisRef });
+  }
+  return out;
 }
 
 /**
@@ -5547,7 +5555,8 @@ function parseSheetRect(raw, text) {
 
 /**
  * A plain copy of every field the raw layer would read from `record`: it reads through the prototype chain, so
- * a getter or a non-enumerable field counts as well as an own enumerable one.
+ * a getter or a non-enumerable field counts as well as an own enumerable one. The facade's own symbol marks on a
+ * record read back (a stored text that did not parse) go along, still non-enumerable.
  */
 function readableCopy(record) {
   const out = {};
@@ -5556,6 +5565,7 @@ function readableCopy(record) {
       if (key !== 'constructor' && !Object.hasOwn(out, key)) out[key] = record[key];
     }
   }
+  for (const mark of Object.getOwnPropertySymbols(record)) Object.defineProperty(out, mark, { value: record[mark] });
   return out;
 }
 
@@ -8069,9 +8079,10 @@ function makeFacade(Raw, registry, runtime) {
       const where = 'Sheet.addSparklineGroup';
       const raw = rawOf(this.#workbook);
       const sheet = this.#current();
+      const stored = isObject(spec) ? (spec[STORED_DATE_AXIS] ?? null) : null;
       spec = colorInputs(spec, argLabel(where, 0));
       requireObject(spec, argLabel(where, 0));
-      return raw.addSparklineGroup(sheet, encodeSparklineGroup(raw, sheet, spec, where));
+      return raw.addSparklineGroup(sheet, encodeSparklineGroup(raw, sheet, spec, where, stored));
     }
 
     listSparklineGroups() {
@@ -8098,6 +8109,7 @@ function makeFacade(Raw, registry, runtime) {
     // The raw update merges the patch with the stored group; without `sparklines` it keeps the group's own.
     updateSparklineGroup(sparklineGroup, patch) {
       const where = 'Sheet.updateSparklineGroup';
+      const stored = isObject(patch) ? (patch[STORED_DATE_AXIS] ?? null) : null;
       patch = colorInputs(patch, argLabel(where, 1));
       checkSparklinePatch(where, patch);
       // `dateAxisRange` takes a record or text, which the one type word of the table cannot say.
@@ -8110,7 +8122,7 @@ function makeFacade(Raw, registry, runtime) {
         patch,
         (raw, sheet, given) =>
           raw.updateSparklineGroup(sheet, this.#idOf(sparklineGroup, where, 'sparklineGroup'), given),
-        (raw, sheet, given) => encodeSparklineGroup(raw, sheet, given, where),
+        (raw, sheet, given) => encodeSparklineGroup(raw, sheet, given, where, stored),
         ['dateAxisRange'],
       );
     }
