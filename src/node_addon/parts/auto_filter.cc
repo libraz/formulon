@@ -24,11 +24,9 @@ Napi::Value Workbook::GetAutoFilterXml(const Napi::CallbackInfo& info) {
   return ValueOrThrow(env, rc, JsStringOrNull(env, xml));
 }
 
+// `null` removes the AutoFilter (NULL at the C setter); "" is refused there.
 Napi::Value Workbook::SetAutoFilterXml(const Napi::CallbackInfo& info) {
-  return StatusCall(info, [&](fm_workbook_t* handle) {
-    const std::string xml = ArgString(info, 1);
-    return fm_sheet_set_auto_filter_xml(handle, ArgU32(info, 0), xml.c_str());
-  });
+  return SheetStringSetter(info, &fm_sheet_set_auto_filter_xml);
 }
 
 // ---- Typed AutoFilter -----------------------------------------------

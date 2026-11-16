@@ -1410,9 +1410,10 @@ typedef struct {
 /**
  * @brief Stores a whole-cell phonetic guide (OOXML `<rPh>`).
  *
- * The guide is independent of the cell's visible text. Passing an empty
- * string clears an existing guide. The destination cell copies `text`, so
- * the input does not need to outlive the call.
+ * The guide is independent of the cell's visible text. `NULL` and an empty
+ * string both clear an existing guide: Excel stores no empty reading
+ * (api-conventions §5 rule 30). The destination cell copies `text`, so the
+ * input does not need to outlive the call.
  *
  * This entry point has no span vocabulary, so the reading it stores covers
  * the surface text end to end — one run spanning the whole cell. Feeding
@@ -1421,7 +1422,7 @@ typedef struct {
  * Use `fm_sheet_set_cell_phonetic_runs` to preserve the spans.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common cell-mutation failure;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `text` is malformed UTF-8;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `text` exceeds 32,767 UTF-16 units.
  */
@@ -5630,9 +5631,10 @@ FM_API fm_status_t fm_sheet_get_page_setup_xml(const fm_workbook_t* wb, size_t s
  * prefix lifted out of its original namespace context would not bind there.
  * Content the engine does not model is preserved as-is.
  *
- * An empty string removes the element and resets the structured views it
+ * `NULL` removes the element and resets the structured views it
  * feeds (orientation / paper size / scale / fit-to-width / fit-to-height)
- * to their ECMA-376 defaults. Otherwise the structured views are re-derived
+ * to their ECMA-376 defaults. An empty string is not one element and is
+ * refused (api-conventions §5 rule 30). Otherwise the structured views are re-derived
  * from the new fragment immediately, so a `fm_sheet_paginate` that
  * follows observes the new settings.
  *
@@ -5641,10 +5643,10 @@ FM_API fm_status_t fm_sheet_get_page_setup_xml(const fm_workbook_t* wb, size_t s
  * on `fm_sheet_update_page_setup`.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `xml` is `NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `xml` is malformed UTF-8;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when the fragment is malformed, carries more than one
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the fragment is empty, malformed, carries more than one
  *           top-level element, or names the wrong root; and when it declares an `r:id` on a sheet that
  *           has no printer-settings part, which would leave a dangling relationship that makes Excel
  *           repair the file;
@@ -5662,15 +5664,15 @@ FM_API fm_status_t fm_sheet_set_page_setup_xml(fm_workbook_t* wb, size_t sheet_i
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range. */
 FM_API fm_status_t fm_sheet_get_page_margins_xml(const fm_workbook_t* wb, size_t sheet_index, const char** out_xml);
 
-/** @brief Replaces `<pageMargins>`. Re-derives the structured margins; an
- *         empty string removes the element and restores the defaults.
+/** @brief Replaces `<pageMargins>`. Re-derives the structured margins; `NULL`
+ *         removes the element and restores the defaults; an empty string is refused (api-conventions §5 rule 30).
  *         Fragment ceiling 4 KiB.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `xml` is `NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `xml` is malformed UTF-8;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when the fragment is malformed or names the wrong root;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the fragment is empty, malformed or names the wrong root;
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the fragment exceeds 4 KiB. */
 FM_API fm_status_t fm_sheet_set_page_margins_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml);
 
@@ -5685,13 +5687,14 @@ FM_API fm_status_t fm_sheet_set_page_margins_xml(fm_workbook_t* wb, size_t sheet
 FM_API fm_status_t fm_sheet_get_print_options_xml(const fm_workbook_t* wb, size_t sheet_index, const char** out_xml);
 
 /** @brief Replaces `<printOptions>`. This element has no structured view;
- *         the raw fragment is the whole model. Fragment ceiling 4 KiB.
+ *         the raw fragment is the whole model. `NULL` removes the element;
+ *         an empty string is refused (api-conventions §5 rule 30). Fragment ceiling 4 KiB.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `xml` is `NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `xml` is malformed UTF-8;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when the fragment is malformed or names the wrong root;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the fragment is empty, malformed or names the wrong root;
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the fragment exceeds 4 KiB. */
 FM_API fm_status_t fm_sheet_set_print_options_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml);
 
@@ -5705,7 +5708,8 @@ FM_API fm_status_t fm_sheet_set_print_options_xml(fm_workbook_t* wb, size_t shee
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range. */
 FM_API fm_status_t fm_sheet_get_header_footer_xml(const fm_workbook_t* wb, size_t sheet_index, const char** out_xml);
 
-/** @brief Replaces `<headerFooter>`. No structured view. Fragment ceiling
+/** @brief Replaces `<headerFooter>`. No structured view. `NULL` removes the element; an empty
+ *         string is refused (api-conventions §5 rule 30). Fragment ceiling
  *         64 KiB, which is wider than the other elements because six
  *         sections of formatting codes (and header images) live here.
  *
@@ -5717,10 +5721,10 @@ FM_API fm_status_t fm_sheet_get_header_footer_xml(const fm_workbook_t* wb, size_
  * text instead and handles the escaping.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `xml` is `NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `xml` is malformed UTF-8;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when the fragment is malformed or names the wrong root;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the fragment is empty, malformed or names the wrong root;
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the fragment exceeds 64 KiB. */
 FM_API fm_status_t fm_sheet_set_header_footer_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml);
 
@@ -5740,13 +5744,14 @@ FM_API fm_status_t fm_sheet_set_header_footer_xml(fm_workbook_t* wb, size_t shee
 FM_API fm_status_t fm_sheet_get_sheet_pr_xml(const fm_workbook_t* wb, size_t sheet_index, const char** out_xml);
 
 /** @brief Replaces `<sheetPr>`. Re-derives `fitToPage` from
- *         `<pageSetUpPr>`; absent means false. Fragment ceiling 8 KiB.
+ *         `<pageSetUpPr>`; absent means false.
+ *         `NULL` removes the element; an empty string is refused (api-conventions §5 rule 30). Fragment ceiling 8 KiB.
  *
  * @return `FM_STATUS_OK` (0) on success;
- *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `xml` is `NULL`;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when `xml` is malformed UTF-8;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when the fragment is malformed or names the wrong root;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when the fragment is empty, malformed or names the wrong root;
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when the fragment exceeds 8 KiB. */
 FM_API fm_status_t fm_sheet_set_sheet_pr_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml);
 
@@ -10658,14 +10663,15 @@ FM_API fm_status_t fm_sheet_get_auto_filter_xml(const fm_workbook_t* wb, size_t 
 /**
  * @brief Replaces the worksheet-level `<autoFilter>` XML fragment.
  *
- * Pass an empty string to remove the AutoFilter. Non-empty input must be a
- * complete `<autoFilter ...>` fragment; detailed schema validation remains
+ * Pass `NULL` to remove the AutoFilter. Any other input must be a
+ * complete `<autoFilter ...>` fragment, so an empty string is refused
+ * (api-conventions §5 rule 30); detailed schema validation remains
  * with Excel/OOXML consumers because filter extensions are intentionally
  * preserved verbatim by the engine.
  *
- * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) if `xml` is `NULL`;
+ * @return `FM_STATUS_OK` (0) on success; `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` is `NULL`;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) for a malformed fragment.
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) for an empty or malformed fragment.
  */
 FM_API fm_status_t fm_sheet_set_auto_filter_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml);
 

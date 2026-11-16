@@ -229,7 +229,7 @@ TEST(FormulonCApiSheetLayout, AutoFilterXmlRoundTripsAndClears) {
   ASSERT_NE(actual, nullptr);
   EXPECT_STREQ(actual, xml);
 
-  ASSERT_EQ(fm_sheet_set_auto_filter_xml(wb.handle, 0, ""), 0);
+  ASSERT_EQ(fm_sheet_set_auto_filter_xml(wb.handle, 0, nullptr), 0);
   ASSERT_EQ(fm_sheet_get_auto_filter_xml(wb.handle, 0, &actual), 0);
   ASSERT_NE(actual, nullptr);
   EXPECT_STREQ(actual, "");
@@ -267,7 +267,6 @@ TEST(FormulonCApiSheetLayout, AutoFilterXmlRejectsWrongRoot) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   EXPECT_NE(fm_sheet_set_auto_filter_xml(wb.handle, 0, "<filterColumn colId=\"0\"/>"), 0);
-  EXPECT_NE(fm_sheet_set_auto_filter_xml(wb.handle, 0, nullptr), 0);
   // A longer element name that merely starts with "autoFilter".
   EXPECT_NE(fm_sheet_set_auto_filter_xml(wb.handle, 0, "<autoFilterColumn colId=\"0\"/>"), 0);
   // An unterminated element would break the whole worksheet part.

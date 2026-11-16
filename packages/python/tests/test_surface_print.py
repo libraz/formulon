@@ -34,8 +34,8 @@ class PrintSettingsTests(unittest.TestCase):
             self.assertEqual(setup.scale_pct, 85)
             self.assertTrue(setup.scale_pct_stated)
 
-            # Empty removes the element and restores the defaults.
-            wb.sheet(0).ooxml.set_page_setup_xml("")
+            # None removes the element and restores the defaults.
+            wb.sheet(0).ooxml.set_page_setup_xml(None)
             self.assertIsNone(wb.sheet(0).ooxml.get_page_setup_xml())
             cleared = wb.sheet(0).get_page_setup()
             self.assertEqual(cleared.scale_pct, 100)

@@ -43,8 +43,23 @@ emscripten::val xml_result(const fm_workbook_t* handle, uint32_t sheet, XmlGette
   return cstr_or_null(xml);
 }
 
-void xml_set(fm_workbook_t* handle, uint32_t sheet, const std::string& xml, XmlSetter setter) {
-  succeeded(handle != nullptr ? setter(handle, sheet, xml.c_str()) : kBindingInvalidHandle);
+// `null` reaches the C setter as NULL (remove the element); anything but a
+// string or `null` is a type error.
+void xml_set(fm_workbook_t* handle, uint32_t sheet, const emscripten::val& xml, XmlSetter setter, const char* label) {
+  if (handle == nullptr) {
+    succeeded(kBindingInvalidHandle);
+    return;
+  }
+  if (xml.isNull()) {
+    succeeded(setter(handle, sheet, nullptr));
+    return;
+  }
+  if (!xml.isString()) {
+    record_type_error(label);
+    return;
+  }
+  const std::string text = xml.as<std::string>();
+  succeeded(setter(handle, sheet, text.c_str()));
 }
 
 emscripten::val breaks_array(const fm_workbook_t* handle, uint32_t sheet, bool rows) {
@@ -101,40 +116,44 @@ emscripten::val JsWorkbook::getSheetPageSetupXml(uint32_t sheet) const {
   return xml_result(handle_, sheet, &fm_sheet_get_page_setup_xml);
 }
 
-void JsWorkbook::setSheetPageSetupXml(uint32_t sheet, const std::string& xml) {
-  return xml_set(handle_, sheet, xml, &fm_sheet_set_page_setup_xml);
+void JsWorkbook::setSheetPageSetupXml(uint32_t sheet, const emscripten::val& xml) {
+  return xml_set(handle_, sheet, xml, &fm_sheet_set_page_setup_xml,
+                 "Sheet.setPageSetupXml xml must be a string or null");
 }
 
 emscripten::val JsWorkbook::getSheetPageMarginsXml(uint32_t sheet) const {
   return xml_result(handle_, sheet, &fm_sheet_get_page_margins_xml);
 }
 
-void JsWorkbook::setSheetPageMarginsXml(uint32_t sheet, const std::string& xml) {
-  return xml_set(handle_, sheet, xml, &fm_sheet_set_page_margins_xml);
+void JsWorkbook::setSheetPageMarginsXml(uint32_t sheet, const emscripten::val& xml) {
+  return xml_set(handle_, sheet, xml, &fm_sheet_set_page_margins_xml,
+                 "Sheet.setPageMarginsXml xml must be a string or null");
 }
 
 emscripten::val JsWorkbook::getSheetPrintOptionsXml(uint32_t sheet) const {
   return xml_result(handle_, sheet, &fm_sheet_get_print_options_xml);
 }
 
-void JsWorkbook::setSheetPrintOptionsXml(uint32_t sheet, const std::string& xml) {
-  return xml_set(handle_, sheet, xml, &fm_sheet_set_print_options_xml);
+void JsWorkbook::setSheetPrintOptionsXml(uint32_t sheet, const emscripten::val& xml) {
+  return xml_set(handle_, sheet, xml, &fm_sheet_set_print_options_xml,
+                 "Sheet.setPrintOptionsXml xml must be a string or null");
 }
 
 emscripten::val JsWorkbook::getSheetHeaderFooterXml(uint32_t sheet) const {
   return xml_result(handle_, sheet, &fm_sheet_get_header_footer_xml);
 }
 
-void JsWorkbook::setSheetHeaderFooterXml(uint32_t sheet, const std::string& xml) {
-  return xml_set(handle_, sheet, xml, &fm_sheet_set_header_footer_xml);
+void JsWorkbook::setSheetHeaderFooterXml(uint32_t sheet, const emscripten::val& xml) {
+  return xml_set(handle_, sheet, xml, &fm_sheet_set_header_footer_xml,
+                 "Sheet.setHeaderFooterXml xml must be a string or null");
 }
 
 emscripten::val JsWorkbook::getSheetSheetPrXml(uint32_t sheet) const {
   return xml_result(handle_, sheet, &fm_sheet_get_sheet_pr_xml);
 }
 
-void JsWorkbook::setSheetSheetPrXml(uint32_t sheet, const std::string& xml) {
-  return xml_set(handle_, sheet, xml, &fm_sheet_set_sheet_pr_xml);
+void JsWorkbook::setSheetSheetPrXml(uint32_t sheet, const emscripten::val& xml) {
+  return xml_set(handle_, sheet, xml, &fm_sheet_set_sheet_pr_xml, "Sheet.setSheetPrXml xml must be a string or null");
 }
 
 // `null` when the sheet has no `<tabColor>` (the C ABI reports kind None).

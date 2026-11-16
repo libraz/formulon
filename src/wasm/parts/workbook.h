@@ -277,17 +277,17 @@ class JsWorkbook {
   // absent setting.
 
   /// Raw print-settings fragments; `null` when the sheet declares no such
-  /// element. The setters take "" to remove the element.
+  /// element. The setters take `null` to remove the element and refuse "".
   emscripten::val getSheetPageSetupXml(uint32_t sheet) const;
-  void setSheetPageSetupXml(uint32_t sheet, const std::string& xml);
+  void setSheetPageSetupXml(uint32_t sheet, const emscripten::val& xml);
   emscripten::val getSheetPageMarginsXml(uint32_t sheet) const;
-  void setSheetPageMarginsXml(uint32_t sheet, const std::string& xml);
+  void setSheetPageMarginsXml(uint32_t sheet, const emscripten::val& xml);
   emscripten::val getSheetPrintOptionsXml(uint32_t sheet) const;
-  void setSheetPrintOptionsXml(uint32_t sheet, const std::string& xml);
+  void setSheetPrintOptionsXml(uint32_t sheet, const emscripten::val& xml);
   emscripten::val getSheetHeaderFooterXml(uint32_t sheet) const;
-  void setSheetHeaderFooterXml(uint32_t sheet, const std::string& xml);
+  void setSheetHeaderFooterXml(uint32_t sheet, const emscripten::val& xml);
   emscripten::val getSheetSheetPrXml(uint32_t sheet) const;
-  void setSheetSheetPrXml(uint32_t sheet, const std::string& xml);
+  void setSheetSheetPrXml(uint32_t sheet, const emscripten::val& xml);
   /// The `<tabColor>` colour spec, or `null` when the sheet has none.
   emscripten::val getSheetTabColor(uint32_t sheet) const;
   /// Sets the tab colour from a colour spec; `null` clears it.
@@ -394,7 +394,7 @@ class JsWorkbook {
   /** Complete worksheet-level `<autoFilter>` fragment. `null` means no
    * filter; a bad sheet fails the call instead. */
   emscripten::val getSheetAutoFilterXml(uint32_t sheet) const;
-  void setSheetAutoFilterXml(uint32_t sheet, const std::string& xml);
+  void setSheetAutoFilterXml(uint32_t sheet, const emscripten::val& xml);
 
   // ---- Styles -------------------------------------------------------------
 

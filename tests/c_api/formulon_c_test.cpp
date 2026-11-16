@@ -457,7 +457,6 @@ TEST(FormulonCApi, CellPhoneticCanBeReadClearedAndRejectsInvalidArguments) {
   EXPECT_EQ(phonetic, nullptr);
 
   EXPECT_NE(fm_sheet_set_cell_phonetic(nullptr, 0, 0, 0, "x"), 0);
-  EXPECT_NE(fm_sheet_set_cell_phonetic(wb.handle, 0, 0, 0, nullptr), 0);
   EXPECT_NE(fm_sheet_set_cell_phonetic(wb.handle, 0, formulon::Sheet::kMaxRows, 0, "x"), 0);
   EXPECT_NE(fm_sheet_get_cell_phonetic(wb.handle, 0, 0, 0, &present, nullptr), 0);
   EXPECT_NE(fm_sheet_get_cell_phonetic(wb.handle, 0, 0, 0, nullptr, &phonetic), 0);

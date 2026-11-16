@@ -45,8 +45,16 @@ Napi::Value Workbook::SheetStringGetter(const Napi::CallbackInfo& info, SheetStr
   return ValueOrThrow(env, rc, JsStringOrNull(env, text));
 }
 
+// `null` reaches the C setter as NULL (remove the element); anything but a string or `null` is a type error.
 Napi::Value Workbook::SheetStringSetter(const Napi::CallbackInfo& info, SheetStringSetFn setter) {
+  if (handle_ != nullptr && !info[1].IsNull() && !info[1].IsString()) {
+    ThrowPositionalTypeError(info.Env(), 1, "must be a string or null");
+    return info.Env().Undefined();
+  }
   return StatusCall(info, [&](fm_workbook_t* handle) {
+    if (info[1].IsNull()) {
+      return setter(handle, ArgU32(info, 0), nullptr);
+    }
     const std::string text = ArgString(info, 1);
     return setter(handle, ArgU32(info, 0), text.c_str());
   });

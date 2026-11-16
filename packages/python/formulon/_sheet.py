@@ -1871,8 +1871,8 @@ class Sheet(_NoCopy):
     def set_cell_phonetic(self, *args: Any, **kwargs: Any) -> None:
         """Set the cell's phonetic guide (OOXML ``<rPh>``, furigana).
 
-        ``row`` and ``col`` are 0-based. ``None`` (or ``""``) removes the
-        guide. The guide is display metadata attached to the
+        ``row`` and ``col`` are 0-based. ``None`` and ``""`` both remove the
+        guide: Excel stores no empty reading (api-conventions §5 rule 30). The guide is display metadata attached to the
         cell's string; it does not affect evaluation. Text longer than 32,767
         UTF-16 code units is rejected with ``InvalidArgumentError``.
         """
@@ -1880,7 +1880,7 @@ class Sheet(_NoCopy):
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
-            text_ptr = scope.cstr(phonetic or "")
+            text_ptr = scope.opt_cstr(phonetic)
             status = LIB.fm_sheet_set_cell_phonetic(
                 h,
                 _uint(sheet, "sheet_index", role="sheet"),
@@ -5718,7 +5718,7 @@ class Sheet(_NoCopy):
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
-            xml_ptr = scope.cstr(xml or "")
+            xml_ptr = scope.opt_cstr(xml)
             _check(getattr(LIB, export)(h, _uint(sheet, "sheet_index", role="sheet"), xml_ptr))
 
     def get_print_area(self) -> Optional[List[CellRect]]:
@@ -7599,14 +7599,15 @@ class SheetOoxml(_NoCopy):
     def set_auto_filter_xml(self, xml: Optional[str]) -> None:
         """OOXML fragment for round trips; normally use :meth:`Sheet.set_auto_filter`.
 
-        Replace the sheet's ``<autoFilter>`` element; ``None`` (or ``""``) removes the AutoFilter. Other input must be a
-        complete ``<autoFilter ...>`` fragment; the engine preserves filter
+        Replace the sheet's ``<autoFilter>`` element; ``None`` removes the AutoFilter. The input must be a
+        complete ``<autoFilter ...>`` fragment, so ``""`` is refused with ``InvalidArgumentError``
+        (api-conventions §5 rule 30); the engine preserves filter
         extensions verbatim rather than validating them in detail.
         """
         sheet = self._sheet._index()
         h = self._sheet._workbook._require()
         with _ArgScope() as scope:
-            xml_ptr = scope.cstr(xml or "")
+            xml_ptr = scope.opt_cstr(xml)
             _check(LIB.fm_sheet_set_auto_filter_xml(h, _uint(sheet, "sheet_index", role="sheet"), xml_ptr))
 
     def get_page_setup_xml(self) -> Optional[str]:
@@ -7619,8 +7620,8 @@ class SheetOoxml(_NoCopy):
     def set_page_setup_xml(self, xml: Optional[str]) -> None:
         """OOXML fragment for round trips; normally use :meth:`Sheet.update_page_setup`.
 
-        Replace the sheet's ``<pageSetup>`` element; ``None`` (or ``""``)
-        removes it. ``fitToPage`` is not a ``<pageSetup>`` attribute but lives
+        Replace the sheet's ``<pageSetup>`` element; ``None`` removes it and ``""`` is
+        refused with ``InvalidArgumentError`` (api-conventions §5 rule 30). ``fitToPage`` is not a ``<pageSetup>`` attribute but lives
         in ``<sheetPr>``. A fragment carrying ``r:id`` is rejected
         unless the sheet already has a printerSettings part, because the
         reference would otherwise dangle and Excel would repair the file.
@@ -7640,7 +7641,8 @@ class SheetOoxml(_NoCopy):
     def set_page_margins_xml(self, xml: Optional[str]) -> None:
         """OOXML fragment for round trips; normally use :meth:`Sheet.update_page_margins`.
 
-        Replace the sheet's ``<pageMargins>`` element; ``None`` (or ``""``) removes it.
+        Replace the sheet's ``<pageMargins>`` element; ``None`` removes it and ``""`` is refused
+        with ``InvalidArgumentError`` (api-conventions §5 rule 30).
 
         Raises:
           SecurityError: when the fragment is over 4 KiB.
@@ -7657,7 +7659,8 @@ class SheetOoxml(_NoCopy):
     def set_print_options_xml(self, xml: Optional[str]) -> None:
         """OOXML fragment for round trips; normally use :meth:`Sheet.update_print_options`.
 
-        Replace the sheet's ``<printOptions>`` element; ``None`` (or ``""``) removes it.
+        Replace the sheet's ``<printOptions>`` element; ``None`` removes it and ``""`` is refused
+        with ``InvalidArgumentError`` (api-conventions §5 rule 30).
 
         Raises:
           SecurityError: when the fragment is over 4 KiB.
@@ -7674,8 +7677,8 @@ class SheetOoxml(_NoCopy):
     def set_header_footer_xml(self, xml: Optional[str]) -> None:
         """OOXML fragment for round trips; normally use :meth:`Sheet.update_header_footer`.
 
-        Replace the sheet's ``<headerFooter>`` element; ``None`` (or ``""``)
-        removes it. Header and footer codes are introduced by ``&``, which lives in XML
+        Replace the sheet's ``<headerFooter>`` element; ``None`` removes it and ``""`` is
+        refused with ``InvalidArgumentError`` (api-conventions §5 rule 30). Header and footer codes are introduced by ``&``, which lives in XML
         element text and so must arrive escaped: Excel writes
         ``<oddHeader>&amp;C...</oddHeader>``. Pass decoded text to
         :meth:`Sheet.update_header_footer` instead to let the engine escape it.
@@ -7696,7 +7699,8 @@ class SheetOoxml(_NoCopy):
     def set_sheet_pr_xml(self, xml: Optional[str]) -> None:
         """OOXML fragment for round trips; normally use :meth:`Sheet.update_page_setup`, which writes its ``fitToPage``.
 
-        Replace the sheet's ``<sheetPr>`` element; ``None`` (or ``""``) removes it.
+        Replace the sheet's ``<sheetPr>`` element; ``None`` removes it and ``""`` is refused
+        with ``InvalidArgumentError`` (api-conventions §5 rule 30).
 
         Raises:
           SecurityError: when the fragment is over 8 KiB.

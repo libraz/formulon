@@ -720,14 +720,12 @@ extern "C" fm_status_t fm_sheet_get_auto_filter_xml(const fm_workbook_t* wb, siz
 
 extern "C" fm_status_t fm_sheet_set_auto_filter_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml) {
   clear_last_error();
-  if (xml == nullptr) {
-    return null_argument("xml");
-  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  const std::string fragment(xml);
-  if (!fragment.empty()) {
+  // NULL removes the AutoFilter; an empty string is not one element.
+  const std::string fragment(xml != nullptr ? xml : "");
+  if (xml != nullptr) {
     if (auto rc = check_utf8(fragment, "element=autoFilter"); rc != 0) {
       return rc;
     }

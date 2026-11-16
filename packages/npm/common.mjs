@@ -4536,15 +4536,9 @@ const C_FIELD_NAMES = Object.freeze({
 // takes the C sentinel: `Class.method` -> [position in the public call,
 // sentinel, whether an omitted argument also means absent].
 const ABSENT_ARGS = Object.freeze({
-  'Sheet.setAutoFilterXml': [0, ''],
   'Sheet.setCellPhonetic': [2, ''],
   'Sheet.setCellPhoneticRuns': [2, []],
-  'Sheet.setHeaderFooterXml': [0, ''],
-  'Sheet.setPageMarginsXml': [0, ''],
-  'Sheet.setPageSetupXml': [0, ''],
   'Sheet.setPrintArea': [0, []],
-  'Sheet.setPrintOptionsXml': [0, ''],
-  'Sheet.setSheetPrXml': [0, ''],
   'Pivot.setFieldAxis': [1, -1],
 });
 

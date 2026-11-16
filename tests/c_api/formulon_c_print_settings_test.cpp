@@ -122,7 +122,7 @@ TEST(FormulonCApiPrintSettings, SetRoundTripsThroughGetter) {
   EXPECT_EQ(GetPageSetupXml(wb.handle), fragment);
 }
 
-TEST(FormulonCApiPrintSettings, EmptyStringRemovesElementAndResetsStructuredView) {
+TEST(FormulonCApiPrintSettings, NullRemovesElementAndResetsStructuredView) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_page_setup_xml(wb.handle, 0, "<pageSetup orientation=\"landscape\" scale=\"50\"/>"), 0);
@@ -131,7 +131,7 @@ TEST(FormulonCApiPrintSettings, EmptyStringRemovesElementAndResetsStructuredView
   ASSERT_EQ(before.orientation, FM_PAGE_ORIENTATION_LANDSCAPE);
   ASSERT_EQ(before.scale_pct, 50U);
 
-  ASSERT_EQ(fm_sheet_set_page_setup_xml(wb.handle, 0, ""), 0);
+  ASSERT_EQ(fm_sheet_set_page_setup_xml(wb.handle, 0, nullptr), 0);
   EXPECT_EQ(GetPageSetupXml(wb.handle), "");
   fm_page_setup_t after = FM_STRUCT_INIT(fm_page_setup_t);
   ASSERT_EQ(fm_sheet_get_page_setup(wb.handle, 0, &after), 0);
@@ -1023,7 +1023,6 @@ TEST(FormulonCApiPrintSettings, NullArgumentsReportBindingNullPointer) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   EXPECT_EQ(fm_sheet_get_page_setup_xml(wb.handle, 0, nullptr), kNullPointer);
-  EXPECT_EQ(fm_sheet_set_page_setup_xml(wb.handle, 0, nullptr), kNullPointer);
   EXPECT_EQ(fm_sheet_set_print_area(wb.handle, 0, nullptr, 1), kNullPointer);
   std::size_t area_count = 0;
   EXPECT_EQ(fm_sheet_get_print_area(wb.handle, 0, nullptr, 1, &area_count), kNullPointer);

@@ -7179,7 +7179,8 @@ export interface Workbook {
   removeTableStyle(name: string): void;
   /** Reads the default table and PivotTable style names. */
   getTableStyleDefaults(): TableStyleDefaults;
-  /** Sets the default style names; an omitted field keeps its default and `null` (or `""`) removes it. */
+  /** Sets the default style names; an omitted field keeps its default and `null` removes it; `""` fails with
+   *  `StatusCode.InvalidArgument` (api-conventions §5 rule 30). */
   updateTableStyleDefaults(patch: TableStyleDefaultsPatch): void;
 
   /** The theme's major and minor typefaces; the default theme's when the part is absent or unparseable
@@ -7314,7 +7315,7 @@ export interface Sheet {
   setText(row: number, col: number, text: string): void;
   /** `setText` at the A1 address `a1`. */
   setText(a1: string, text: string): void;
-  /** Stores the cell's OOXML phonetic guide (`<rPh>`); `null` (or `""`) clears it. Text above 32,767 UTF-16 units fails
+  /** Stores the cell's OOXML phonetic guide (`<rPh>`); `null` and `""` both clear it, since Excel stores no empty reading (api-conventions §5 rule 30). Text above 32,767 UTF-16 units fails
    *  with `StatusCode.InvalidArgument`. */
   setCellPhonetic(row: number, col: number, phonetic: string | null): void;
   /** `setCellPhonetic` at the A1 address `a1`. */
@@ -8404,40 +8405,40 @@ export interface SheetOoxml {
    *  `<autoFilter>` element; `null` when the sheet has no AutoFilter definition. */
   getAutoFilterXml(): string | null;
   /** OOXML fragment for round trips; normally use `setAutoFilter`. Replaces the worksheet-level `<autoFilter>`
-   *  element; `null` (or `""`) clears it. */
+   *  element; `null` clears it, and `""` fails with `StatusCode.InvalidArgument` (api-conventions §5 rule 30). */
   setAutoFilterXml(xml: string | null): void;
 
   /** OOXML fragment for round trips; normally use `getPageSetup`. Reads the worksheet's `<pageSetup>` element;
    *  `null` when absent. */
   getPageSetupXml(): string | null;
-  /** OOXML fragment for round trips; normally use `updatePageSetup`. Replaces `<pageSetup>`; `null` (or `""`)
-   *  removes it and restores the defaults. A fragment carrying `r:id` is rejected unless the sheet already has a
+  /** OOXML fragment for round trips; normally use `updatePageSetup`. Replaces `<pageSetup>`; `null` removes it and
+   *  restores the defaults, and `""` fails with `StatusCode.InvalidArgument` (api-conventions §5 rule 30). A fragment carrying `r:id` is rejected unless the sheet already has a
    *  printerSettings part, since the reference would otherwise dangle. A fragment over 4 KiB fails with `StatusCode.SecurityResourceLimit`. */
   setPageSetupXml(xml: string | null): void;
   /** OOXML fragment for round trips; normally use `getPageMargins`. Reads the worksheet's `<pageMargins>`
    *  element; `null` when absent. */
   getPageMarginsXml(): string | null;
-  /** OOXML fragment for round trips; normally use `updatePageMargins`. Replaces `<pageMargins>`; `null` (or `""`)
-   *  removes it. A fragment over 4 KiB fails with `StatusCode.SecurityResourceLimit`. */
+  /** OOXML fragment for round trips; normally use `updatePageMargins`. Replaces `<pageMargins>`; `null` removes it, and `""` fails with
+   *  `StatusCode.InvalidArgument` (api-conventions §5 rule 30). A fragment over 4 KiB fails with `StatusCode.SecurityResourceLimit`. */
   setPageMarginsXml(xml: string | null): void;
   /** OOXML fragment for round trips; normally use `getPrintOptions`. Reads the worksheet's `<printOptions>`
    *  element; `null` when absent. */
   getPrintOptionsXml(): string | null;
-  /** OOXML fragment for round trips; normally use `updatePrintOptions`. Replaces `<printOptions>`; `null` (or `""`)
-   *  removes it. A fragment over 4 KiB fails with `StatusCode.SecurityResourceLimit`. */
+  /** OOXML fragment for round trips; normally use `updatePrintOptions`. Replaces `<printOptions>`; `null` removes it, and `""` fails with
+   *  `StatusCode.InvalidArgument` (api-conventions §5 rule 30). A fragment over 4 KiB fails with `StatusCode.SecurityResourceLimit`. */
   setPrintOptionsXml(xml: string | null): void;
   /** OOXML fragment for round trips; normally use `getHeaderFooter`. Reads the worksheet's `<headerFooter>`
    *  element; `null` when absent. */
   getHeaderFooterXml(): string | null;
-  /** OOXML fragment for round trips; normally use `updateHeaderFooter`. Replaces `<headerFooter>`; `null` (or `""`)
-   *  removes it. Header codes live in XML element text, so a hand-built fragment writes them escaped
+  /** OOXML fragment for round trips; normally use `updateHeaderFooter`. Replaces `<headerFooter>`; `null` removes it, and `""` fails with
+   *  `StatusCode.InvalidArgument` (api-conventions §5 rule 30). Header codes live in XML element text, so a hand-built fragment writes them escaped
    *  (`<oddHeader>&amp;C...</oddHeader>`); `updateHeaderFooter` takes the decoded text instead. A fragment over 64 KiB fails with `StatusCode.SecurityResourceLimit`. */
   setHeaderFooterXml(xml: string | null): void;
   /** OOXML fragment for round trips; normally use `getPageSetup`, which reads its `fitToPage`. Reads the
    *  worksheet's `<sheetPr>` element; `null` when absent. It also carries the tab colour and VBA code name. */
   getSheetPrXml(): string | null;
   /** OOXML fragment for round trips; normally use `updatePageSetup`, which writes its `fitToPage`. Replaces
-   *  `<sheetPr>`; `null` (or `""`) removes it. A fragment over 8 KiB fails with `StatusCode.SecurityResourceLimit`. */
+   *  `<sheetPr>`; `null` removes it, and `""` fails with `StatusCode.InvalidArgument` (api-conventions §5 rule 30). A fragment over 8 KiB fails with `StatusCode.SecurityResourceLimit`. */
   setSheetPrXml(xml: string | null): void;
   /** Sets / replaces the cell XF on `[first, last]`; index 0 is the default XF. A value later entered into an unstyled
    *  cell of the span takes this XF, unless its row has one. An index not below `Workbook.ooxml.listCellXfs().length`

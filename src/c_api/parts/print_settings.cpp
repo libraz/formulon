@@ -129,17 +129,15 @@ fm_status_t get_fragment(const fm_workbook_t* wb, std::size_t sheet_index, const
 }
 
 /// Shared body of the five raw-XML setters: size gate, structural check,
-/// store, re-derive.
+/// store, re-derive. A `NULL` `xml` removes the element; an empty string is
+/// not one element and is refused.
 fm_status_t set_fragment(fm_workbook_t* wb, std::size_t sheet_index, const FragmentSlot& slot, const char* xml) {
   clear_last_error();
-  if (xml == nullptr) {
-    return null_argument("xml");
-  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
-  const std::string_view fragment(xml);
-  if (!fragment.empty()) {
+  const std::string_view fragment(xml != nullptr ? xml : "");
+  if (xml != nullptr) {
     // Size before structure: the parser is the part a hostile fragment
     // would exercise, so it must not see one the engine would reject
     // anyway.
@@ -511,9 +509,6 @@ extern "C" fm_status_t fm_sheet_get_page_setup_xml(const fm_workbook_t* wb, size
 
 extern "C" fm_status_t fm_sheet_set_page_setup_xml(fm_workbook_t* wb, size_t sheet_index, const char* xml) {
   clear_last_error();
-  if (xml == nullptr) {
-    return null_argument("xml");
-  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
   }
@@ -522,7 +517,7 @@ extern "C" fm_status_t fm_sheet_set_page_setup_xml(fm_workbook_t* wb, size_t she
   // the writer cannot resolve, and Excel offers to repair the file. Reject
   // rather than strip: a fragment lifted off another sheet is a caller
   // mistake worth surfacing, and silently rewriting it would hide it.
-  const std::string_view fragment(xml);
+  const std::string_view fragment(xml != nullptr ? xml : "");
   if (fragment.find("r:id") != std::string_view::npos &&
       wb->workbook().sheet(sheet_index).print_settings().printer_settings_path.empty()) {
     return invalid_argument("xml references a printer settings part that does not exist");

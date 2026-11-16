@@ -805,7 +805,7 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
             self.assertIsNone(wb.sheet(0).ooxml.get_auto_filter_xml())
             wb.sheet(0).ooxml.set_auto_filter_xml(fragment)
             self.assertEqual(wb.sheet(0).ooxml.get_auto_filter_xml(), fragment)
-            wb.sheet(0).ooxml.set_auto_filter_xml("")
+            wb.sheet(0).ooxml.set_auto_filter_xml(None)
             self.assertIsNone(wb.sheet(0).ooxml.get_auto_filter_xml())
 
     def test_named_cell_style_registration_reaches_the_reader(self) -> None:

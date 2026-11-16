@@ -29,8 +29,22 @@ emscripten::val JsWorkbook::getSheetAutoFilterXml(uint32_t sheet) const {
   return cstr_or_null(xml);
 }
 
-void JsWorkbook::setSheetAutoFilterXml(uint32_t sheet, const std::string& xml) {
-  succeeded(handle_ != nullptr ? fm_sheet_set_auto_filter_xml(handle_, sheet, xml.c_str()) : kBindingInvalidHandle);
+// `null` removes the AutoFilter (NULL at the C setter); "" is refused there.
+void JsWorkbook::setSheetAutoFilterXml(uint32_t sheet, const emscripten::val& xml) {
+  if (handle_ == nullptr) {
+    succeeded(kBindingInvalidHandle);
+    return;
+  }
+  if (xml.isNull()) {
+    succeeded(fm_sheet_set_auto_filter_xml(handle_, sheet, nullptr));
+    return;
+  }
+  if (!xml.isString()) {
+    record_type_error("Sheet.setAutoFilterXml xml must be a string or null");
+    return;
+  }
+  const std::string text = xml.as<std::string>();
+  succeeded(fm_sheet_set_auto_filter_xml(handle_, sheet, text.c_str()));
 }
 
 // ---- Typed AutoFilter --------------------------------------------------

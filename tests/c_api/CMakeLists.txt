@@ -63,6 +63,7 @@ set(FORMULON_C_API_TEST_SOURCES
   formulon_c_pivot_blocked_test.cpp
   formulon_c_pivot_shared_item_limit_test.cpp
   formulon_c_print_settings_test.cpp
+  sheet_xml_empty_strings_test.cpp
   formulon_c_protection_test.cpp
   formulon_c_range_style_io_test.cpp
   formulon_c_range_style_runs_test.cpp

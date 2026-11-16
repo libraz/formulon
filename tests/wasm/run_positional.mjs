@@ -182,7 +182,7 @@ export function registerPositional(Module, test, hookProbe) {
       expectTypeError(() => wb.setAutoFilterXml(0, Symbol('xml')));
 
       assert.equal(wb.getAutoFilterXml(0), null);
-      wb.setAutoFilterXml(0, '');
+      wb.setAutoFilterXml(0, null);
     } finally {
       wb.delete();
     }

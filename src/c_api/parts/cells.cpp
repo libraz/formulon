@@ -303,11 +303,12 @@ extern "C" fm_status_t fm_sheet_set_cell_phonetic(fm_workbook_t* wb, size_t shee
   if (wb == nullptr) {
     return null_argument("wb");
   }
-  if (utf8 == nullptr) {
-    return null_argument("utf8");
-  }
   if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
     return rc;
+  }
+  // NULL and "" are one state (no reading) and both clear it.
+  if (utf8 == nullptr) {
+    utf8 = "";
   }
   if (auto rc = check_utf8({utf8}); rc != 0) {
     return rc;
