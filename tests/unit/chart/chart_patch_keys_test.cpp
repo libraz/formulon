@@ -228,6 +228,49 @@ TEST(ChartPatchKeys, DisplayStyleSetsClearsAndRefusesOutOfRange) {
   }
 }
 
+TEST(ChartPatchKeys, DisplayChartAndPlotAreaPaint) {
+  Workbook wb = GridBook();
+  const std::uint32_t id = InsertColumn(wb);
+  ChartModel m = Must(get_chart(wb, 0, id));
+  // A new chart states a background fill and a no-fill plot area, as Excel's insert writes them.
+  EXPECT_TRUE(m.chart_area.fill.color.has_value());
+  EXPECT_TRUE(m.plot_area.fill.none);
+  EXPECT_TRUE(m.plot_area.line.none);
+
+  ColorSpec rgb;
+  rgb.kind = ColorSpec::Kind::kRgb;
+  rgb.rgb = 0xFF102030U;
+  ChartDisplayPatch p;
+  p.chart_area.fill.color = ChartPatchField<ColorSpec>::Set(rgb);
+  p.chart_area.fill.transparency_pct = ChartPatchField<double>::Set(25.0);
+  p.plot_area.fill.none = false;
+  p.plot_area.line.color = ChartPatchField<ColorSpec>::Set(rgb);
+  p.plot_area.line.width_pt = ChartPatchField<double>::Set(1.5);
+  MustOk(set_chart_display(wb, 0, id, p));
+  m = Must(get_chart(wb, 0, id));
+  ASSERT_TRUE(m.chart_area.fill.color.has_value());
+  EXPECT_EQ(m.chart_area.fill.color->rgb, 0xFF102030U);
+  EXPECT_EQ(m.chart_area.fill.alpha, std::optional<std::uint32_t>(75000U));
+  EXPECT_FALSE(m.plot_area.fill.none);
+  EXPECT_FALSE(m.plot_area.line.none);
+  ASSERT_TRUE(m.plot_area.line.color.has_value());
+  EXPECT_EQ(m.plot_area.line.color->rgb, 0xFF102030U);
+  EXPECT_EQ(m.plot_area.line.width_emu, std::optional<std::int64_t>(19050));
+  const ChartModel again = Must(get_chart(OoxmlRoundTrip(wb), 0, id));
+  EXPECT_EQ(again.chart_area.fill.alpha, std::optional<std::uint32_t>(75000U));
+  EXPECT_EQ(again.plot_area.line.width_emu, std::optional<std::int64_t>(19050));
+  const std::string text = PartText(wb);
+  EXPECT_LT(text.find("</c:plotArea>"), text.find("</c:chart><c:spPr>"));
+
+  // A hidden fill with a colour is refused and writes nothing.
+  ChartDisplayPatch bad;
+  bad.style = ChartPatchField<std::int32_t>::Set(3);
+  bad.plot_area.fill.none = true;
+  bad.plot_area.fill.color = ChartPatchField<ColorSpec>::Set(rgb);
+  ExpectCode(set_chart_display(wb, 0, id, bad), Code::kInvalidArgument);
+  EXPECT_EQ(PartText(wb), text);
+}
+
 TEST(ChartPatchKeys, SeriesLiteralSourcesWriteAndRoundTrip) {
   Workbook wb = GridBook();
   const std::uint32_t id = InsertColumn(wb);

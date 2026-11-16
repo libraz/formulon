@@ -704,7 +704,9 @@ void read_drawingml_chart(const Workbook& wb, const xml_node& root, ChartModel& 
   const int blanks_idx = chart_token_index(kChartBlanksTokens, std::size(kChartBlanksTokens), blanks, 1);
   model.disp_blanks_as = blanks_idx < 0 ? ChartBlanksAs::kAbsent : static_cast<ChartBlanksAs>(blanks_idx);
 
+  read_shape(env, kid(root, "spPr"), model.chart_area);
   const xml_node plot_area = kid(chart, "plotArea");
+  read_shape(env, kid(plot_area, "spPr"), model.plot_area);
   for (xml_node node = plot_area.first_child(); node; node = node.next_sibling()) {
     if (node.type() != pugi::node_element) {
       continue;
@@ -848,9 +850,11 @@ ChartAxis read_cx_axis(const xml_node& node) {
   return axis;
 }
 
-void read_chartex(const xml_node& root, ChartModel& model) {
+void read_chartex(const Workbook& wb, const xml_node& root, ChartModel& model) {
   model.is_chartex = true;
   model.date1904 = false;
+  const ColorEnv env{wb, drawing_color::remaps_color_map(kid(root, "clrMapOvr"))};
+  read_shape(env, kid(root, "spPr"), model.chart_area);
 
   struct Dim {
     std::string type;
@@ -875,6 +879,7 @@ void read_chartex(const xml_node& root, ChartModel& model) {
 
   const xml_node chart = kid(root, "chart");
   const xml_node plot_area = kid(chart, "plotArea");
+  read_shape(env, kid(plot_area, "spPr"), model.plot_area);
   ChartPlot plot;
   plot.type = ChartPlotType::kChartex;
   for (const xml_node& ser : children_local(kid(plot_area, "plotAreaRegion"), "series")) {
@@ -948,7 +953,7 @@ Expected<ChartModel, Error> read_chart_model(const Workbook& wb, const pugi::xml
   }
   ChartModel model;
   if (kid(root, "chartData")) {
-    read_chartex(root, model);
+    read_chartex(wb, root, model);
   } else {
     read_drawingml_chart(wb, root, model);
   }

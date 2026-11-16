@@ -210,6 +210,13 @@ struct ChartLine {
   bool other = false;     ///< `a:ln` holds a paint the record cannot state, as `ChartFill::other`.
 };
 
+/// The `spPr` of the chart area (`c:chartSpace`) or the plot area: what the file states; an element that states no
+/// paint reads as an empty fill and line, and the chart style then supplies them.
+struct ChartAreaPaint {
+  ChartFill fill;
+  ChartLine line;
+};
+
 struct ChartMarker {
   ChartMarkerSymbol symbol = ChartMarkerSymbol::kAuto;
   std::string symbol_name;  ///< `c:symbol/@val` verbatim; empty when absent.
@@ -377,6 +384,8 @@ struct ChartModel {
   Tri disp_na_as_blank = Tri::kAbsent;  ///< `c16r3:dataDisplayOptions16/c16r3:dispNaAsBlank`.
   bool date1904 = false;
   std::optional<std::int32_t> style;  ///< `ST_Style` 1..48: `c:style`, else a `c14:style` 100 + n read as n.
+  ChartAreaPaint chart_area;          ///< `chartSpace/spPr`.
+  ChartAreaPaint plot_area;           ///< `chart/plotArea/spPr`.
 
   std::vector<ChartPlot> plots;
   std::vector<std::uint32_t> category_filter;  ///< Hidden category indices; empty when absent.
@@ -502,16 +511,6 @@ struct ChartPatchField {
   bool is_set() const { return op == Op::kSet; }
 };
 
-/// Chart-level display options; `na_as_blank` is the `c16r3:dispNaAsBlank` extension (false and Clear both remove it).
-struct ChartDisplayPatch {
-  ChartPatchField<ChartBlanksAs> blanks_as;  ///< Clear (or a `kAbsent` value) removes `c:dispBlanksAs`.
-  ChartPatchField<bool> plot_vis_only;
-  ChartPatchField<bool> na_as_blank;
-  /// `ST_Style` 1..48. A `c14:style` pair is kept with the Choice at 100 + n and the Fallback at n; without one a
-  /// plain `c:style` is written. Clear removes both.
-  ChartPatchField<std::int32_t> style;
-};
-
 struct ChartFillPatch {
   ChartPatchField<ColorSpec> color;
   ChartPatchField<double> transparency_pct;  ///< 0..100.
@@ -524,6 +523,24 @@ struct ChartLinePatch {
   ChartPatchField<double> width_pt;
   ChartPatchField<ChartLineDash> dash;
   std::optional<bool> none;
+};
+
+/// Paint of the chart area or the plot area; an empty patch leaves the `spPr` as it is.
+struct ChartAreaPaintPatch {
+  ChartFillPatch fill;
+  ChartLinePatch line;
+};
+
+/// Chart-level display options; `na_as_blank` is the `c16r3:dispNaAsBlank` extension (false and Clear both remove it).
+struct ChartDisplayPatch {
+  ChartPatchField<ChartBlanksAs> blanks_as;  ///< Clear (or a `kAbsent` value) removes `c:dispBlanksAs`.
+  ChartPatchField<bool> plot_vis_only;
+  ChartPatchField<bool> na_as_blank;
+  /// `ST_Style` 1..48. A `c14:style` pair is kept with the Choice at 100 + n and the Fallback at n; without one a
+  /// plain `c:style` is written. Clear removes both.
+  ChartPatchField<std::int32_t> style;
+  ChartAreaPaintPatch chart_area;  ///< Refused on a chartex chart, like every other key.
+  ChartAreaPaintPatch plot_area;
 };
 
 struct ChartMarkerPatch {

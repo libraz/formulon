@@ -479,8 +479,11 @@ void patch_na_as_blank(xml_node chart, const ChartPatchField<bool>& field) {
 
 }  // namespace
 
-void patch_display(const Chart& c, const ChartDisplayPatch& patch) {
+Expected<void, Error> patch_display(const Chart& c, const ChartDisplayPatch& patch) {
   xml_node chart = c.chart();
+  RETURN_IF_ERROR(apply_shape(c.root(), kSpaceOrder, patch.chart_area.fill, patch.chart_area.line));
+  RETURN_IF_ERROR(
+      apply_shape(child_local(chart, "plotArea"), kPlotAreaOrder, patch.plot_area.fill, patch.plot_area.line));
   if (!patch.blanks_as.is_keep()) {
     const int b = static_cast<int>(patch.blanks_as.value);
     if (patch.blanks_as.is_set() && chart_token_valid(kChartBlanksTokens, b, 1)) {
@@ -523,6 +526,7 @@ void patch_display(const Chart& c, const ChartDisplayPatch& patch) {
       }
     }
   }
+  return ok();
 }
 
 }  // namespace chart_edit

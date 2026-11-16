@@ -53,6 +53,7 @@ inline constexpr const char* const kSpaceOrder[] = {"date1904", "lang", "rounded
     "extLst", nullptr};
 inline constexpr const char* const kChartOrder[] = {"title", "autoTitleDeleted", "pivotFmts", "view3D", "floor", "sideWall",
     "backWall", "plotArea", "legend", "plotVisOnly", "dispBlanksAs", "showDLblsOverMax", "extLst", nullptr};
+inline constexpr const char* const kPlotAreaOrder[] = {"layout", "dTable", "spPr", "extLst", nullptr};
 inline constexpr const char* const kTitleOrder[] = {"tx", "layout", "overlay", "spPr", "txPr", "extLst", nullptr};
 inline constexpr const char* const kLegendOrder[] = {"legendPos", "legendEntry", "layout", "overlay", "spPr", "txPr", "extLst",
     nullptr};
@@ -403,7 +404,7 @@ xml_node find_point(const xml_node& ser, std::uint32_t idx);
 /// Excel's column vary-colours form: per-point accent fills replace the series fill.
 void vary_bar(xml_node plot, bool on, const Palette& palette);
 
-void patch_display(const Chart& c, const ChartDisplayPatch& patch);
+Expected<void, Error> patch_display(const Chart& c, const ChartDisplayPatch& patch);
 
 /// The `c:axId` values a plot references, in order.
 inline std::vector<std::uint32_t> axis_ids_of(const xml_node& plot) {

@@ -318,7 +318,7 @@ Expected<ChartData, Error> preview_chart_data(const Workbook& wb, std::size_t sh
   if (o.na_as_blank) {
     display.na_as_blank = ChartPatchField<bool>::Set(*o.na_as_blank);
   }
-  patch_display(c, display);
+  RETURN_IF_ERROR(patch_display(c, display));
   if (resplit) {
     refresh_chart_caches(wb, c.host, c.doc);
   }
@@ -585,7 +585,7 @@ Expected<void, Error> set_chart_display(Workbook& wb, std::size_t sheet, std::ui
   if (patch.style.is_set() && (patch.style.value < 1 || patch.style.value > 48)) {
     return bad_arg("style must be 1..48");
   }
-  patch_display(c, patch);
+  RETURN_IF_ERROR(patch_display(c, patch));
   return commit(wb, c, false);
 }
 

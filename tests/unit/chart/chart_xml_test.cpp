@@ -961,6 +961,50 @@ TEST(ChartXml, AbsentElementsStayAbsent) {
   EXPECT_FALSE(s.labels.has_value());
 }
 
+TEST(ChartXml, ChartAndPlotAreaPaintReadAsStated) {
+  const Workbook wb = Workbook::create();
+  const std::string head =
+      "<c:chartSpace xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\" "
+      "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\"><c:chart><c:plotArea><c:layout/>";
+  const ChartModel m = Read(head +
+                                "<c:spPr><a:noFill/><a:ln w=\"9525\"><a:solidFill><a:srgbClr val=\"102030\"/>"
+                                "</a:solidFill><a:prstDash val=\"dash\"/></a:ln></c:spPr></c:plotArea></c:chart>"
+                                "<c:spPr><a:solidFill><a:srgbClr val=\"F0E0D0\"><a:alpha val=\"40000\"/></a:srgbClr>"
+                                "</a:solidFill><a:ln><a:noFill/></a:ln></c:spPr></c:chartSpace>",
+                            wb);
+  ASSERT_TRUE(m.chart_area.fill.color.has_value());
+  EXPECT_EQ(m.chart_area.fill.color->kind, ColorSpec::Kind::kRgb);
+  EXPECT_EQ(m.chart_area.fill.color->rgb, 0xFFF0E0D0U);
+  EXPECT_EQ(m.chart_area.fill.alpha, std::optional<std::uint32_t>(40000U));
+  EXPECT_TRUE(m.chart_area.line.none);
+  EXPECT_TRUE(m.plot_area.fill.none);
+  ASSERT_TRUE(m.plot_area.line.color.has_value());
+  EXPECT_EQ(m.plot_area.line.color->rgb, 0xFF102030U);
+  EXPECT_EQ(m.plot_area.line.width_emu, std::optional<std::int64_t>(9525));
+  EXPECT_EQ(m.plot_area.line.dash, std::optional<ChartLineDash>(ChartLineDash::kDash));
+
+  // No spPr: nothing is stated, and the chart style supplies the paint.
+  const ChartModel bare = Read(head + "</c:plotArea></c:chart></c:chartSpace>", wb);
+  for (const ChartAreaPaint* area : {&bare.chart_area, &bare.plot_area}) {
+    EXPECT_FALSE(area->fill.color.has_value());
+    EXPECT_FALSE(area->fill.none);
+    EXPECT_FALSE(area->fill.other);
+    EXPECT_FALSE(area->line.color.has_value());
+    EXPECT_FALSE(area->line.none);
+  }
+
+  const ChartModel cx = Read(
+      "<cx:chartSpace xmlns:cx=\"http://schemas.microsoft.com/office/drawing/2014/chartex\" "
+      "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\"><cx:chartData/><cx:chart><cx:plotArea>"
+      "<cx:plotAreaRegion/><cx:spPr><a:solidFill><a:srgbClr val=\"0A0B0C\"/></a:solidFill></cx:spPr></cx:plotArea>"
+      "</cx:chart><cx:spPr><a:gradFill/></cx:spPr></cx:chartSpace>",
+      wb);
+  ASSERT_TRUE(cx.is_chartex);
+  ASSERT_TRUE(cx.plot_area.fill.color.has_value());
+  EXPECT_EQ(cx.plot_area.fill.color->rgb, 0xFF0A0B0CU);
+  EXPECT_TRUE(cx.chart_area.fill.other);
+}
+
 TEST(ChartXml, ChartLevelFlagsTitleLegendAndStyle) {
   const Workbook wb = Workbook::create();
   const std::string space =
