@@ -666,7 +666,7 @@ TEST(FormulonCApiCellFormatPatch, BadOperationsAndValuesAreInvalidArguments) {
     mutate(patch);
     EXPECT_EQ(Update(wb.handle, Cell(0, 0), patch), expected) << fm_get_last_error_message();
   };
-  const fm_patch_op_t bad_op = static_cast<fm_patch_op_t>(7);
+  const fm_patch_op_t bad_op = static_cast<fm_patch_op_t>(3);
   refused([&](fm_cell_format_patch_t& p) { p.font.bold_op = bad_op; });
   refused([&](fm_cell_format_patch_t& p) { p.number_format_op = FM_PATCH_OP_CLEAR; });
   refused([&](fm_cell_format_patch_t& p) {
