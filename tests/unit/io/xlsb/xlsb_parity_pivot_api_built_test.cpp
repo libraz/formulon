@@ -315,18 +315,28 @@ std::set<std::uint16_t> PivotTypesButUid(const tc::Bytes& excel) {
 }
 
 /// What a comparison ignores: the union bytes Excel leaves unset before a string filter operand, the four unset bytes
-/// ending a cache definition with no refreshedBy, which ours leaves out, and the ids Excel renumbers on load, the
-/// table's idCache (BrtBeginSXView bytes 28-31) and a custom number format's id (BrtBeginPCDField bytes 2-3).
+/// ending a cache definition with no refreshedBy, which ours leaves out, the refresh date of a cache that refreshes on
+/// load (Excel's save holds the date of its own refresh), and the ids Excel renumbers on load, the table's idCache
+/// (BrtBeginSXView bytes 28-31) and a custom number format's id (BrtBeginPCDField bytes 2-3).
 tc::ByteMask Unmatched(const tc::Bytes& excel) {
   constexpr std::uint16_t kFirstCustomNumFmt = 164;
   constexpr std::uint8_t kVtsString = 0x06;
   constexpr std::size_t kRefreshedByFlagByte = 16;
   constexpr std::size_t kUnsetTail = 4;
+  constexpr std::size_t kCacheFlagsByte = 3;
+  constexpr std::uint8_t kRefreshOnLoad = 0x04;
+  constexpr std::size_t kRefreshDate = 8;
   tc::ByteMask mask;
   for (const auto& [part, records] : tc::ExtractRecords(excel, {pivot_records::kBeginPivotCacheDef})) {
     for (const tc::IndexedRecord& rec : records) {
       if (rec.payload.size() > kRefreshedByFlagByte + kUnsetTail && (rec.payload[kRefreshedByFlagByte] & 0x01U) == 0U) {
         mask.unset_tails[{part, rec.index}] = kUnsetTail;
+      }
+      if (rec.payload.size() >= kRefreshDate + sizeof(double) &&
+          (rec.payload[kCacheFlagsByte] & kRefreshOnLoad) != 0U) {
+        for (std::size_t offset = kRefreshDate; offset < kRefreshDate + sizeof(double); ++offset) {
+          mask.bytes[part][rec.index].insert(offset);
+        }
       }
     }
   }
@@ -441,6 +451,22 @@ TEST_P(XlsbParityPivotSaveData, WritesExcelsPivotRecords) {
 
 INSTANTIATE_TEST_SUITE_P(SaveData, XlsbParityPivotSaveData,
                          ::testing::Values("option_control_s", "option_save_data_off", "authored_save_data_off"));
+
+// Table options with a view-header bit or byte (xlsb_parity/pivot/options, Excel 16.115's saves, set through the
+// object model or authored): items shown on empty rows and columns, page fields wrapped down then over and over
+// then down, and hidden page items in subtotals, against the controls with page fields and with items shown.
+class XlsbParityPivotOptions : public ::testing::TestWithParam<const char*> {};
+
+TEST_P(XlsbParityPivotOptions, WritesExcelsPivotRecords) {
+  ExpectExcelsPivotRecords("options", GetParam());
+}
+
+INSTANTIATE_TEST_SUITE_P(Options, XlsbParityPivotOptions,
+                         ::testing::Values("option_control_p3", "option_control_show_all_only",
+                                           "option_page_wrap_2_down_then_over", "option_page_wrap_2_over_then_down",
+                                           "option_show_empty_row", "option_show_empty_col",
+                                           "option_subtotal_hidden_items", "authored_page_wrap_2_down_over",
+                                           "authored_page_wrap_2_over_down", "authored_subtotal_hidden_items"));
 
 // A numeric range group in place on its database field (xlsb_parity/pivot/groups, Excel 16.115's saves, ja-JP and
 // en-US): the field keeps its shared items and carries the group, with automatic and manual bounds, on rows and

@@ -55,9 +55,17 @@ constexpr std::uint8_t kViewFlags2 = 0x40;
 constexpr std::uint8_t kViewFlags4 = 0xF0;
 /// Byte 4: `asteriskTotals`, which Excel sets on a table whose cache stops saving its data.
 constexpr std::uint8_t kViewAsteriskTotals = 0x02;
+/// Byte 4: `showEmptyRow` and `showEmptyCol`.
+constexpr std::uint8_t kViewShowEmptyRow = 0x04;
+constexpr std::uint8_t kViewShowEmptyCol = 0x08;
+constexpr std::uint8_t kViewFlags4Named = kViewAsteriskTotals | kViewShowEmptyRow | kViewShowEmptyCol;
+/// Byte 5: `pageOverThenDown` and `subtotalHiddenItems`; byte 13 is `pageWrap`.
+constexpr std::uint8_t kViewPageOverThenDown = 0x08;
+constexpr std::uint8_t kViewSubtotalHiddenItems = 0x10;
 /// Byte 7: `applyWidthHeightFormats`; every other bit is clear.
 constexpr std::uint8_t kViewApplyWidthHeight = 0x20;
-constexpr std::uint8_t kViewFlags5Named = kSxViewAutoFormat | kSxViewShowError | kSxViewRowGrand | kSxViewColGrand;
+constexpr std::uint8_t kViewFlags5Named = kSxViewAutoFormat | kSxViewShowError | kSxViewRowGrand | kSxViewColGrand |
+                                          kViewPageOverThenDown | kViewSubtotalHiddenItems;
 constexpr std::uint8_t kViewFlags5Fixed = 0x04;
 /// Byte 6 bit 0: the first row field is in outline form; clear without row fields.
 constexpr std::uint8_t kViewRowOutline = 0x01;
@@ -313,10 +321,10 @@ Expected<void, Error> CheckView(const PivotTableDoc& doc) {
     const std::uint8_t bits = static_cast<std::uint8_t>(v.flags8 & pair);
     return bits == 0U || bits == pair;
   };
-  if (v.flags1 != kViewFlags1 || v.flags2 != kViewFlags2 || (v.flags4 & ~kViewAsteriskTotals) != kViewFlags4 ||
+  if (v.flags1 != kViewFlags1 || v.flags2 != kViewFlags2 || (v.flags4 & ~kViewFlags4Named) != kViewFlags4 ||
       (v.flags7 & ~kViewApplyWidthHeight) != 0U || (v.flags5 & ~kViewFlags5Named) != kViewFlags5Fixed ||
       (v.flags6 & ~kViewFlags6Named) != kViewFlags6Fixed || (v.flags8 & ~kViewFlags8Named) != 0U ||
-      (v.flags9 & ~kSxViewSingleFieldFilter) != 0U || v.flags10 != 0U || v.flags11 != 0U || v.flags13 != 0U ||
+      (v.flags9 & ~kSxViewSingleFieldFilter) != 0U || v.flags10 != 0U || v.flags11 != 0U ||
       v.reserved20 != kViewReserved20 || !paired(kViewCompactPair) || !paired(kViewOutlinePair)) {
     return Unmeasured("view header bits");
   }
@@ -928,10 +936,9 @@ bool WriteRootAttrs(const pivot::PivotTable& table, PivotTableDoc& doc, FormOver
 /// The Excel defaults the header bytes this bridge does not name stand for.
 bool HasExcelDefaults(const pivot::PivotTable& t) {
   return t.enable_drill() && t.show_missing() && t.show_drill() && !t.print_drill() && t.show_data_tips() &&
-         !t.show_empty_row() && !t.show_empty_col() && !t.field_print_titles() && t.item_print_titles() &&
-         t.show_data_drop_down() && t.preserve_formatting() && !t.page_over_then_down() && t.page_wrap() == 0U &&
-         t.custom_list_sort() && !t.subtotal_hidden_items() && t.indent() <= kSxViewIndentMask &&
-         t.alt_text().empty() && t.alt_text_summary().empty();
+         !t.field_print_titles() && t.item_print_titles() && t.show_data_drop_down() && t.preserve_formatting() &&
+         t.page_wrap() <= 0xFFU && t.custom_list_sort() && t.indent() <= kSxViewIndentMask && t.alt_text().empty() &&
+         t.alt_text_summary().empty();
 }
 
 /// The field's `compact` / `outline`: its own override, else the table's form.
@@ -1636,11 +1643,15 @@ bool WriteTable(const pivot::PivotTable& table, ExcelHost host, std::optional<Pi
   v.flags1 = kViewFlags1;
   v.flags2 = kViewFlags2;
   v.flags3 = static_cast<std::uint8_t>(table.indent() | (table.show_headers() ? 0U : kSxViewNoHeaders));
-  v.flags4 = static_cast<std::uint8_t>(kViewFlags4 | (v.flags4 & kViewAsteriskTotals));
-  v.flags5 = static_cast<std::uint8_t>(kViewFlags5Fixed | (table.auto_formatting() ? kSxViewAutoFormat : 0U) |
-                                       (table.show_error() ? kSxViewShowError : 0U) |
-                                       (table.grand_totals_cols() ? kSxViewRowGrand : 0U) |
-                                       (table.grand_totals_rows() ? kSxViewColGrand : 0U));
+  v.flags4 = static_cast<std::uint8_t>(kViewFlags4 | (v.flags4 & kViewAsteriskTotals) |
+                                       (table.show_empty_row() ? kViewShowEmptyRow : 0U) |
+                                       (table.show_empty_col() ? kViewShowEmptyCol : 0U));
+  v.flags5 = static_cast<std::uint8_t>(
+      kViewFlags5Fixed | (table.auto_formatting() ? kSxViewAutoFormat : 0U) |
+      (table.show_error() ? kSxViewShowError : 0U) | (table.grand_totals_cols() ? kSxViewRowGrand : 0U) |
+      (table.grand_totals_rows() ? kSxViewColGrand : 0U) | (table.page_over_then_down() ? kViewPageOverThenDown : 0U) |
+      (table.subtotal_hidden_items() ? kViewSubtotalHiddenItems : 0U));
+  v.flags13 = static_cast<std::uint8_t>(table.page_wrap());
   v.flags6 = static_cast<std::uint8_t>(kViewFlags6Fixed | (table.merge_item() ? kSxViewMergeItem : 0U) |
                                        (row_outline ? kViewRowOutline : 0U));
   v.flags8 = static_cast<std::uint8_t>((compact ? kViewCompactPair : 0U) | (outline ? kViewOutlinePair : 0U) |
@@ -1717,6 +1728,11 @@ Expected<pivot::PivotTable, Error> pivot_table_from_xlsb(ByteSpan part) {
   table.set_item_print_titles(true);
   table.set_multiple_field_filters((view.flags9 & kSxViewSingleFieldFilter) == 0U);
   table.set_merge_item((view.flags6 & kSxViewMergeItem) != 0U);
+  table.set_show_empty_row((view.flags4 & kViewShowEmptyRow) != 0U);
+  table.set_show_empty_col((view.flags4 & kViewShowEmptyCol) != 0U);
+  table.set_page_over_then_down((view.flags5 & kViewPageOverThenDown) != 0U);
+  table.set_subtotal_hidden_items((view.flags5 & kViewSubtotalHiddenItems) != 0U);
+  table.set_page_wrap(view.flags13);
   table.set_indent(static_cast<std::uint32_t>(view.flags3 & kSxViewIndentMask));
   ReadRootAttrs(doc, table.mutable_passthrough_attrs());
   RETURN_IF_ERROR(ReadLocation(doc.location, table));
