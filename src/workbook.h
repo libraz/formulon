@@ -1192,6 +1192,11 @@ class Workbook {
   /// tables are both loaded.
   void normalize_table_totals_cells();
 
+  /// Respells every cell formula with the name and reference spelling entry
+  /// stores, as Excel does on open; the .xlsx reader calls it once sheets,
+  /// defined names and tables are in. Cached values and recalc marks stay.
+  void respell_loaded_cell_formulas();
+
   /// Smallest N >= 1 such that `<word><N>` is not the name or display name
   /// of any table nor a defined name (`sheet_names::write_collides`), as
   /// `add_table` checks.

@@ -24,6 +24,7 @@
 #include "drawing/drawing_edit.h"
 #include "drawing/slicer_edit.h"
 #include "eval/dep_graph.h"
+#include "eval/formula_entry.h"
 #include "eval/iterative_solver.h"
 #include "eval/recalc_engine.h"
 #include "eval/recalc_reentry.h"
@@ -598,6 +599,22 @@ void Workbook::mark_row_visibility_dependents_dirty() {
 void Workbook::mark_all_formulas_dirty() {
   std::lock_guard<std::mutex> guard(engine_->mutex_for_compound_mutation());
   mark_all_formulas_dirty_locked(sheets_, engine_->locked_mutator());
+}
+
+void Workbook::respell_loaded_cell_formulas() {
+  for (std::size_t index = 0; index < sheets_.size(); ++index) {
+    Sheet& sheet = sheets_[index];
+    for (const CellAddress address : sheet.all_formula_cells()) {
+      const Cell* cell = sheet.cell_at(address.row, address.col);
+      if (cell == nullptr) {
+        continue;
+      }
+      std::string text = eval::spell_loaded_cell_formula(*this, index, cell->formula_text);
+      if (text != cell->formula_text) {
+        sheet.set_cell_formula_text(address.row, address.col, std::move(text));
+      }
+    }
+  }
 }
 
 void Workbook::apply_loaded_recalc_marks(const std::vector<std::vector<CellAddress>>& marked) {
