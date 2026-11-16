@@ -102,7 +102,6 @@ rich_errors/notypes_pivot.xlsx model_xlsb pivot_count known_gap  # pending: tabl
 rich_errors/notypes_pivot_resaved.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a blocked pivot
 rich_errors/pivot_blocked.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a blocked pivot
 rich_errors/pvpage_blocked.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a blocked pivot
-xlsb_parity/pivot/hide_values_row_src.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a table extLst other than Excel default (hideValuesRow)
 table_slicer.xlsb drop_xlsx rel:xl/slicerCaches/slicerCache1.bin unmodelled_dropped  # slicer, not written to the other format
 table_slicer.xlsb drop_xlsx rel:xl/slicers/slicer1.bin unmodelled_dropped  # slicer, not written to the other format
 table_slicer.xlsb drop_xlsx xl/slicerCaches/slicerCache1.bin unmodelled_dropped  # slicer, not written to the other format

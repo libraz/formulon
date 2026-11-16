@@ -121,6 +121,11 @@ constexpr std::string_view kView14Ext =
     "<ext uri=\"{962EF5D1-5CA2-4c93-8EF4-DBF5C05439D2}\" "
     "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\"><x14:pivotTableDefinition "
     "hideValuesRow=\"1\" xmlns:xm=\"http://schemas.microsoft.com/office/excel/2006/main\"/></ext>";
+/// The x14 extension at `hideValuesRow="0"`, which Excel drops: its `.xlsb` holds no SXView14 record.
+constexpr std::string_view kView14OffExt =
+    "<ext uri=\"{962EF5D1-5CA2-4c93-8EF4-DBF5C05439D2}\" "
+    "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\"><x14:pivotTableDefinition "
+    "hideValuesRow=\"0\" xmlns:xm=\"http://schemas.microsoft.com/office/excel/2006/main\"/></ext>";
 constexpr std::string_view kView16Ext =
     "<ext uri=\"{747A6164-185A-40DC-8AA5-F01512510D54}\" "
     "xmlns:xpdl=\"http://schemas.microsoft.com/office/spreadsheetml/2016/pivotdefaultlayout\">"
@@ -1187,6 +1192,7 @@ bool WriteTableExtLst(std::string_view xml, bool& view14) {
   }
   view14 = false;
   bool view16 = false;
+  bool view14_off_seen = false;
   for (const pugi::xml_node& ext : *exts) {
     const std::string_view uri = ext.attribute("uri").as_string();
     if (std::string_view(ext.name()) != "ext") {
@@ -1195,10 +1201,17 @@ bool WriteTableExtLst(std::string_view xml, bool& view14) {
     if (uri == kView14Uri || uri == kView16Uri) {
       // The SXView14 extension precedes the SXView16 one, each at most once.
       const bool is14 = uri == kView14Uri;
-      if (view16 || (is14 && view14) || raw_xml(ext) != (is14 ? kView14Ext : kView16Ext)) {
+      const std::string ext_xml = raw_xml(ext);
+      const bool view14_off = is14 && ext_xml == kView14OffExt;
+      if (view16 || (is14 && (view14 || view14_off_seen)) ||
+          (ext_xml != (is14 ? kView14Ext : kView16Ext) && !view14_off)) {
         return false;
       }
-      (is14 ? view14 : view16) = true;
+      if (view14_off) {
+        view14_off_seen = true;
+      } else {
+        (is14 ? view14 : view16) = true;
+      }
       continue;
     }
     if (uri.empty() || std::find(std::begin(kOfficeTableExtUris), std::end(kOfficeTableExtUris), uri) !=
