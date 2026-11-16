@@ -996,7 +996,7 @@ const FORWARDED_OPTIONS = ['locateFile', 'print', 'printErr'];
 const FORMULON_OPTION_KEYS = Object.freeze([...FORWARDED_OPTIONS, 'wasm']);
 
 function dateSystem(options, where) {
-  if (options === undefined) return false;
+  if (options === undefined || options === null) return false;
   const label = argLabel(where, 1);
   requireObject(options, label);
   return options.date1904 === undefined ? false : requireBoolean(options.date1904, `${label}.date1904`);
@@ -8378,7 +8378,7 @@ function makeFacade(Raw, registry, runtime) {
       const raw = rawOf(this.#workbook);
       const input = {};
       let timePeriodRules = true;
-      if (options !== undefined) {
+      if (options !== undefined && options !== null) {
         const label = argLabel(where, 1);
         requireObject(options, label);
         refuseOtherKeys(label, options, ['today', 'timePeriodRules']);
@@ -8644,7 +8644,7 @@ function makeFacade(Raw, registry, runtime) {
     // The position an `insertBefore` option names: a `SheetRef`, or `null` / omitted for the end.
     #insertPosition(options, method, position) {
       const where = `Workbook.${method}`;
-      if (options === undefined) return this.#sheets.length;
+      if (options === undefined || options === null) return this.#sheets.length;
       const label = argLabel(where, position);
       requireObject(options, label);
       refuseOtherKeys(label, options, method === 'addSheet' ? ['insertBefore'] : ['insertBefore', 'newName']);
@@ -8862,7 +8862,7 @@ function makeFacade(Raw, registry, runtime) {
       if (typeof rect === 'string') rect = rangeAddress(raw, rect, `${label}.range`);
       requireObject(rect, label);
       let absolute = false;
-      if (options !== undefined) {
+      if (options !== undefined && options !== null) {
         const optionsLabel = argLabel(where, 1);
         requireObject(options, optionsLabel);
         refuseOtherKeys(optionsLabel, options, ['sheetName', 'absolute']);
