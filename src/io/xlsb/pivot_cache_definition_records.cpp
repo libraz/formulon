@@ -86,8 +86,9 @@ constexpr std::size_t kPcd14Bytes = 9;
 /// BrtBeginPivotCacheDef byte 16: the records relationship id follows, preceded by refreshedBy when that bit is set.
 constexpr std::uint8_t kCacheRecordsRelPresent = 0x02U;
 constexpr std::uint8_t kCacheRefreshedByPresent = 0x01U;
-/// The four bytes Excel writes after the relationship id when refreshedBy is absent.
-constexpr std::uint8_t kNoRefreshedByTail[] = {0x6D, 0x00, 0x20, 0x00};
+/// Excel leaves four unset bytes after the relationship id when refreshedBy is absent; they are read past, not
+/// written.
+constexpr std::size_t kNoRefreshedByTailSize = 4;
 constexpr std::uint8_t kCacheKnownFlags = pcd::kCacheSaveDataEnableRefresh | pcd::kCacheRefreshOnLoad;
 
 /// BrtBeginPCDSource iSrcType of a worksheet source.
@@ -227,7 +228,7 @@ Expected<void, Error> DecodeHeader(ByteSpan p, pcd::Document* doc) {
   }
   ASSIGN_OR_RETURN(doc->records_rel_id, read_xlwidestring(p));
   if (!doc->refreshed_by) {
-    if (p.size != sizeof(kNoRefreshedByTail)) {
+    if (p.size != 0U && p.size != kNoRefreshedByTailSize) {
       return Unmeasured("cache definition tail without refreshedBy", kBeginPivotCacheDef);
     }
     p.size = 0;
@@ -672,9 +673,6 @@ std::vector<std::uint8_t> encode_pivot_cache_definition(const pivot_cache_defini
     emit_xlwidestring(p, *doc.refreshed_by);
   }
   emit_xlwidestring(p, doc.records_rel_id);
-  if (!doc.refreshed_by) {
-    p.insert(p.end(), std::begin(kNoRefreshedByTail), std::end(kNoRefreshedByTail));
-  }
   emit_record(out, kBeginPivotCacheDef, p);
 
   p.clear();

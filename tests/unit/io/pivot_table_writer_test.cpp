@@ -1306,11 +1306,16 @@ TEST(PivotTableWriter, AuthoredFieldsCarryShowAllZeroAndUpdatedVersion) {
   EXPECT_NE(xml.find(" updatedVersion=\"8\""), std::string::npos) << xml;
 }
 
+// As Excel's save of the built table: the x14 extension, then pivotTableDefinition16.
 TEST(PivotTableWriter, AuthoredTableCarriesValuesRowExtension) {
   const std::string xml = write_pivot_table_definition(TableWithRowAndDataFields(1U));
   EXPECT_NE(xml.find("<extLst><ext uri=\"{962EF5D1-5CA2-4c93-8EF4-DBF5C05439D2}\""), std::string::npos) << xml;
   EXPECT_NE(xml.find("<x14:pivotTableDefinition hideValuesRow=\"1\""), std::string::npos) << xml;
-  EXPECT_NE(xml.find("</ext></extLst></pivotTableDefinition>"), std::string::npos) << xml;
+  EXPECT_NE(xml.find("</ext><ext uri=\"{747A6164-185A-40DC-8AA5-F01512510D54}\" "
+                     "xmlns:xpdl=\"http://schemas.microsoft.com/office/spreadsheetml/2016/pivotdefaultlayout\">"
+                     "<xpdl:pivotTableDefinition16/></ext></extLst></pivotTableDefinition>"),
+            std::string::npos)
+      << xml;
 }
 
 TEST(PivotTableWriter, CapturedExtLstIsKeptAndNotDuplicated) {

@@ -7,6 +7,7 @@
 #define FORMULON_IO_PIVOT_BUILT_DEFAULTS_H_
 
 #include <cstdint>
+#include <string_view>
 
 #include "io/pivot_table_writer_internal.h"
 #include "pivot/pivot_cache.h"
@@ -22,6 +23,12 @@ inline constexpr std::uint8_t kBuiltCacheMinRefreshableVersion = 3;
 /// A table's `updatedVersion` when none was captured; without it Excel adds a
 /// stray caption row above the pivot on refresh.
 inline constexpr std::uint8_t kBuiltTableUpdatedVersion = 8;
+
+/// The pivotTableDefinition16 extension Excel's save of a built table adds after the x14 one.
+inline constexpr std::string_view kBuiltTableDefinition16Ext =
+    "<ext uri=\"{747A6164-185A-40DC-8AA5-F01512510D54}\" "
+    "xmlns:xpdl=\"http://schemas.microsoft.com/office/spreadsheetml/2016/pivotdefaultlayout\">"
+    "<xpdl:pivotTableDefinition16/></ext>";
 
 /// True for a cache built in memory: no root attribute was captured on read.
 inline bool cache_built_in_memory(const pivot::PivotCache& cache) {

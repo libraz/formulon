@@ -93,20 +93,21 @@ void CompareRecord(const std::string& part, const IndexedRecord& ours, const Ind
     out->push_back(Where(part, excel.type, excel.index) + ": ours is type " + std::to_string(ours.type));
     return;
   }
-  if (ours.payload.size() != excel.payload.size()) {
+  const auto tail = mask.unset_tails.find({part, excel.index});
+  const std::size_t compared = excel.payload.size() - (tail != mask.unset_tails.end() ? tail->second : 0U);
+  if (ours.payload.size() != compared) {
     out->push_back(Where(part, excel.type, excel.index) + ": payload " + std::to_string(ours.payload.size()) +
                    " bytes, Excel " + std::to_string(excel.payload.size()));
     return;
   }
   std::size_t i = 0;
-  while (i < excel.payload.size()) {
+  while (i < compared) {
     if (ours.payload[i] == excel.payload[i] || mask.Masks(part, excel.index, i)) {
       ++i;
       continue;
     }
     std::size_t end = i + 1U;
-    while (end < excel.payload.size() && ours.payload[end] != excel.payload[end] &&
-           !mask.Masks(part, excel.index, end)) {
+    while (end < compared && ours.payload[end] != excel.payload[end] && !mask.Masks(part, excel.index, end)) {
       ++end;
     }
     out->push_back(Where(part, excel.type, excel.index) + " offset " + std::to_string(i) + ": ours " +

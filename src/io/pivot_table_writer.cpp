@@ -750,15 +750,17 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
   }
   AppendFilters(out, table);
   AppendTailWithAltText(out, table);
-  // Without the hidden-row extension Excel adds a caption row above the pivot
-  // on refresh. A table read from a file keeps its own `<extLst>`.
+  // A table read from a file keeps its own `<extLst>`. A built one takes the extensions Excel's save of it holds:
+  // the x14 one for the hidden Values caption row (without it Excel adds a caption row above the pivot on refresh)
+  // and alternative text, then the pivotTableDefinition16 one.
   if (table.raw_passthrough_xml().find("<extLst") == std::string::npos) {
     const bool hide_values_row = table_hides_values_row(table);
+    out.append("<extLst>");
     if (hide_values_row || !table.alt_text().empty() || !table.alt_text_summary().empty()) {
-      out.append("<extLst>");
       AppendTableExt(out, table, hide_values_row);
-      out.append("</extLst>");
     }
+    out.append(kBuiltTableDefinition16Ext);
+    out.append("</extLst>");
   }
 
   out.append("</pivotTableDefinition>");

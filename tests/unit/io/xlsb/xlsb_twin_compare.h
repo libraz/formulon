@@ -63,12 +63,15 @@ struct ByteMask {
   std::set<std::pair<std::string, std::size_t>> whole_records;
   /// Parts masked whole: present in one save only, or not record streams and not byte-identical.
   std::set<std::string> whole_parts;
+  /// Unset bytes ending an Excel record that ours leaves out, keyed by part and Excel record index.
+  std::map<std::pair<std::string, std::size_t>, std::size_t> unset_tails;
 
   bool Masks(const std::string& part, std::size_t index, std::size_t offset) const;
   std::size_t ByteCount() const;
-  bool empty() const { return bytes.empty() && whole_records.empty() && whole_parts.empty(); }
+  bool empty() const { return bytes.empty() && whole_records.empty() && whole_parts.empty() && unset_tails.empty(); }
   bool operator==(const ByteMask& other) const {
-    return bytes == other.bytes && whole_records == other.whole_records && whole_parts == other.whole_parts;
+    return bytes == other.bytes && whole_records == other.whole_records && whole_parts == other.whole_parts &&
+           unset_tails == other.unset_tails;
   }
 };
 

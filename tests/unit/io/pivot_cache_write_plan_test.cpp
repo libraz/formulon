@@ -304,9 +304,12 @@ TEST(PivotCacheWritePlan, InMemoryCacheCarriesExcelsVersionAttributes) {
   AddRecord(cache, {Value::number(1)});
   const PivotCacheWritePlan plan = build_pivot_cache_write_plan(cache, {});
   const std::string xml = write_pivot_cache_definition(cache, &plan);
-  EXPECT_TRUE(Contains(xml, " createdVersion=\"8\" refreshedVersion=\"8\" minRefreshableVersion=\"3\"")) << xml;
+  // Excel's save of a cache no refresh dated: refreshedDate 0 and no refreshedBy.
+  EXPECT_TRUE(Contains(xml,
+                       " refreshedDate=\"0\" createdVersion=\"8\" refreshedVersion=\"8\" "
+                       "minRefreshableVersion=\"3\""))
+      << xml;
   EXPECT_FALSE(Contains(xml, "refreshedBy")) << xml;
-  EXPECT_FALSE(Contains(xml, "refreshedDate")) << xml;
 }
 
 TEST(PivotCacheWritePlan, InMemoryCacheARefreshFilledDoesNotRefreshOnLoad) {

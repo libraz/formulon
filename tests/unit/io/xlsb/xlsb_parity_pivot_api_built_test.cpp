@@ -308,13 +308,22 @@ std::set<std::uint16_t> PivotTypesButUid(const tc::Bytes& excel) {
   return types;
 }
 
-/// What a comparison ignores: the union bytes Excel leaves unset before a string filter operand, and the ids Excel
-/// renumbers on load, the table's idCache (BrtBeginSXView bytes 28-31) and a custom number format's id
-/// (BrtBeginPCDField bytes 2-3).
+/// What a comparison ignores: the union bytes Excel leaves unset before a string filter operand, the four unset bytes
+/// ending a cache definition with no refreshedBy, which ours leaves out, and the ids Excel renumbers on load, the
+/// table's idCache (BrtBeginSXView bytes 28-31) and a custom number format's id (BrtBeginPCDField bytes 2-3).
 tc::ByteMask Unmatched(const tc::Bytes& excel) {
   constexpr std::uint16_t kFirstCustomNumFmt = 164;
   constexpr std::uint8_t kVtsString = 0x06;
+  constexpr std::size_t kRefreshedByFlagByte = 16;
+  constexpr std::size_t kUnsetTail = 4;
   tc::ByteMask mask;
+  for (const auto& [part, records] : tc::ExtractRecords(excel, {pivot_records::kBeginPivotCacheDef})) {
+    for (const tc::IndexedRecord& rec : records) {
+      if (rec.payload.size() > kRefreshedByFlagByte + kUnsetTail && (rec.payload[kRefreshedByFlagByte] & 0x01U) == 0U) {
+        mask.unset_tails[{part, rec.index}] = kUnsetTail;
+      }
+    }
+  }
   // Past its first two bytes, the union before a string operand is unset memory in Excel's save.
   for (const auto& [part, records] : tc::ExtractRecords(excel, {kBrtCustomFilter})) {
     for (const tc::IndexedRecord& rec : records) {
@@ -424,6 +433,71 @@ std::size_t PivotTableParts(const std::vector<std::uint8_t>& bytes) {
     out += part.rfind("xl/pivotTables/pivotTable", 0) == 0U ? 1U : 0U;
   }
   return out;
+}
+
+/// The xlsb save of case `name` after the engine's own xlsx save of it is read back.
+Saved SaveThroughXlsx(const std::string& name) {
+  Saved out;
+  fm_workbook_t* built = nullptr;
+  EXPECT_EQ(fm_workbook_create_for_profile(kProfile, &built), 0) << fm_get_last_error_message();
+  BuildCase(name, built);
+  out.report = Report(built);
+  std::uint8_t* xlsx = nullptr;
+  std::size_t xlsx_len = 0;
+  EXPECT_EQ(fm_workbook_save(built, FM_WORKBOOK_FORMAT_XLSX, &xlsx, &xlsx_len), 0) << fm_get_last_error_message();
+  fm_workbook_destroy(built);
+  fm_load_options_spec_t options{sizeof(fm_load_options_spec_t), kProfile};
+  fm_workbook_t* wb = nullptr;
+  EXPECT_EQ(fm_workbook_load(xlsx, xlsx_len, &options, &wb), 0) << fm_get_last_error_message();
+  fm_buffer_destroy(xlsx);
+  std::uint8_t* bytes = nullptr;
+  std::size_t len = 0;
+  fm_save_diagnostics_info_t info{};
+  info.struct_size = sizeof(fm_save_diagnostics_info_t);
+  const fm_status_t status = fm_workbook_save_with_diagnostics(wb, FM_WORKBOOK_FORMAT_XLSB, &bytes, &len, &info);
+  fm_workbook_destroy(wb);
+  EXPECT_EQ(status, 0) << fm_get_last_error_message();
+  if (status == 0) {
+    out.bytes.assign(bytes, bytes + len);
+    fm_buffer_destroy(bytes);
+  }
+  out.deferred = info.deferred_feature_count;
+  return out;
+}
+
+/// The BrtBeginPivotCacheDef payloads of a package.
+std::vector<tc::Bytes> CacheDefinitions(const tc::Bytes& package) {
+  std::vector<tc::Bytes> out;
+  for (const auto& [part, records] : tc::ExtractRecords(package, {pivot_records::kBeginPivotCacheDef})) {
+    for (const tc::IndexedRecord& rec : records) {
+      out.push_back(rec.payload);
+    }
+  }
+  return out;
+}
+
+// A pivot reopened from the engine's xlsx save, whose cache no refresh dated, is written to xlsb as Excel saves that
+// xlsx without a refresh: the version triple, refreshedDate 0 and no refreshedBy.
+TEST(XlsbParityPivotApiBuiltReopened, WritesTheCacheAsExcelSavesItWithoutARefresh) {
+  for (const char* name : {"a_plain", "b_page_filter"}) {
+    const Saved saved = SaveThroughXlsx(name);
+    ASSERT_FALSE(saved.bytes.empty()) << name;
+    EXPECT_EQ(saved.deferred, 0U) << name;
+    ExpectValid(saved.bytes);
+    EXPECT_EQ(PivotNames(ReloadedReport(saved.bytes)), PivotNames(saved.report)) << name;
+    const tc::Bytes excel =
+        tc::ReadBytes(std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_parity/pivot/api_built/" + name + ".xlsb");
+    const std::vector<tc::Bytes> ours = CacheDefinitions(saved.bytes);
+    const std::vector<tc::Bytes> theirs = CacheDefinitions(excel);
+    ASSERT_EQ(ours.size(), 1U) << name;
+    ASSERT_EQ(theirs.size(), 1U) << name;
+    ASSERT_GE(ours[0].size(), 17U);
+    ASSERT_GE(theirs[0].size(), 17U);
+    // Bytes 0-2 the version triple, 8-15 refreshedDate, 16 the flag naming a refreshedBy.
+    for (const std::size_t offset : {0U, 1U, 2U, 8U, 9U, 10U, 11U, 12U, 13U, 14U, 15U, 16U}) {
+      EXPECT_EQ(ours[0][offset], theirs[0][offset]) << name << " byte " << offset;
+    }
+  }
 }
 
 // A pivot whose state has no measured record layout is left out with its cache group, and counted.

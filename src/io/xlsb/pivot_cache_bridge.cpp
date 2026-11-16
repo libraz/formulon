@@ -1326,7 +1326,8 @@ bool WriteRoot(const pivot::PivotCache& cache, pcd::Document* doc) {
     kCreated = 4U,
     kRefreshed = 8U,
     kMinRefreshable = 16U,
-    kRequired = kDate | kCreated | kRefreshed | kMinRefreshable,
+    // A cache no refresh dated keeps refreshedDate 0, as Excel saves one.
+    kRequired = kCreated | kRefreshed | kMinRefreshable,
     kNsMc = 32U,
     kNsXrDecl = 64U,
     kIgnorable = 128U,

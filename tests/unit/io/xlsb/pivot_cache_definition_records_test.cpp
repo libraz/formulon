@@ -119,6 +119,27 @@ TEST(XlsbPivotCacheDefinitionRecords, RoundTripsEveryCorpusPart) {
   EXPECT_GE(parts, 89U);
 }
 
+// Excel ends a definition with no refreshedBy in four unset bytes (t_a2: 6d 00 20 00, t_b: d4 e8 1b 01); the reader
+// takes it with or without them (t_cut is t_a2 cut to 33 bytes, which Excel opens alike) and the writer leaves them
+// out.
+TEST(XlsbPivotCacheDefinitionRecords, ReadsPastTheUnsetTailAndWritesWithoutIt) {
+  const std::string root = "xlsb_parity/pivot/api_built/tail/";
+  const std::string part = "xl/pivotCache/pivotCacheDefinition1.bin";
+  const std::vector<std::uint8_t> cut = PartNamed(Fixture(root + "t_cut.xlsb"), part);
+  for (const char* name : {"t_a2", "t_b", "t_cut"}) {
+    const std::vector<std::uint8_t> bytes = PartNamed(Fixture(root + name + ".xlsb"), part);
+    auto doc = decode_pivot_cache_definition(SpanOf(bytes));
+    ASSERT_TRUE(doc) << name << ": " << doc.error().message;
+    EXPECT_FALSE(doc.value().refreshed_by.has_value()) << name;
+    EXPECT_EQ(doc.value().refreshed_date, 0.0) << name;
+    const std::vector<std::uint8_t> written = encode_pivot_cache_definition(doc.value());
+    EXPECT_EQ(written.size() + (std::string(name) == "t_cut" ? 0U : 4U), bytes.size()) << name;
+    if (std::string(name) != "t_b") {
+      EXPECT_EQ(written, cut) << name;
+    }
+  }
+}
+
 TEST(XlsbPivotCacheDefinitionRecords, HeaderSourceAndFieldsMatchTwinXlsx) {
   for (const std::string& path : pivot_twins::CorpusPaths()) {
     for (const auto& [name, bytes] : pivot_twins::Parts(path, kPartPrefix)) {

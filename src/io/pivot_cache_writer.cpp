@@ -490,6 +490,10 @@ std::string write_pivot_cache_definition(const pivot::PivotCache& cache, const P
   if (cache.missing_items_limit().has_value()) {
     append_xml_attr_uint(out, "missingItemsLimit", *cache.missing_items_limit());
   }
+  // A cache no refresh dated is saved with refreshedDate 0, as Excel saves one.
+  if (!detail::HasRawAttr(cache.passthrough_attrs(), "refreshedDate")) {
+    append_xml_attr(out, "refreshedDate", "0");
+  }
   // A cache built in memory carries the version triple every Excel-saved cache has.
   if (cache_built_in_memory(cache)) {
     append_xml_attr_uint(out, "createdVersion", kBuiltCacheCreatedVersion);
