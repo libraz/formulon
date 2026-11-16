@@ -1502,7 +1502,7 @@ Expected<std::vector<std::uint8_t>, Error> WriteRecords(const pivot::PivotCache&
                                                         bool date1904) {
   auto kinds = cell_kinds_of_cache_definition(definition);
   if (!kinds) {
-    return NotWritable();
+    return Unmeasured("record cells of a field without shared items holding blanks or more than one value type");
   }
   std::vector<std::size_t> db_positions;
   for (std::size_t i = 0; i < cache.fields().size(); ++i) {

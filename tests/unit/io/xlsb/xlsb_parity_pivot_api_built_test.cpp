@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <set>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "c_api/formulon_c.h"
@@ -17,6 +18,7 @@
 #include "io/xlsb/pivot_records_common.h"
 #include "io/xlsb/record_ids.h"
 #include "support/xlsb_package_validator.h"
+#include "utils/structured_log.h"
 #include "writer_test_helpers.h"
 #include "xlsb_twin_compare.h"
 
@@ -424,6 +426,48 @@ TEST(XlsbParityPivotApiBuiltGroups, WritesExcelsDateGroupRecords) {
   const std::vector<std::uint16_t> excel_types = GroupBlockTypes(excel);
   ASSERT_FALSE(excel_types.empty());
   EXPECT_EQ(GroupBlockTypes(saved.bytes), excel_types);
+}
+
+void AppendRecord(std::string_view record, void* log) {
+  static_cast<std::string*>(log)->append(record);
+}
+
+// A cache refreshed over a source with an empty row holds a blank in a field with no shared items; its record cells
+// have no measured layout yet, so the group is left out, counted, and logged with that reason.
+TEST(XlsbParityPivotApiBuiltDeferred, BlankInAnInlineFieldIsLeftOutWithItsReason) {
+  fm_workbook_t* wb = nullptr;
+  ASSERT_EQ(fm_workbook_create_for_profile(kProfile, &wb), 0);
+  EXPECT_EQ(fm_sheet_set_text(wb, 0U, 0U, 10U, "Item"), 0);
+  EXPECT_EQ(fm_sheet_set_text(wb, 0U, 0U, 11U, "Amt"), 0);
+  EXPECT_EQ(fm_sheet_set_text(wb, 0U, 2U, 10U, "A"), 0);
+  EXPECT_EQ(fm_sheet_set_number(wb, 0U, 2U, 11U, 1.0), 0);
+  EXPECT_EQ(fm_sheet_set_text(wb, 0U, 3U, 10U, "B"), 0);
+  EXPECT_EQ(fm_sheet_set_number(wb, 0U, 3U, 11U, 2.0), 0);
+  std::uint32_t cache_id = 0;
+  EXPECT_EQ(fm_workbook_add_pivot_cache(wb, 0U, &cache_id), 0) << fm_get_last_error_message();
+  fm_pivot_worksheet_source_t source{sizeof(fm_pivot_worksheet_source_t), "K1:L4", "Sheet1", nullptr};
+  EXPECT_EQ(fm_workbook_set_pivot_cache_worksheet_source(wb, cache_id, &source), 0) << fm_get_last_error_message();
+  EXPECT_EQ(fm_workbook_refresh_pivot_cache(wb, cache_id), 0) << fm_get_last_error_message();
+  const Placed p = AddPivot(wb, "PV", cache_id, "PivotS");
+  Axis(wb, p, 0U, FM_PIVOT_AXIS_ROW);
+  SumOf(wb, p, 1U);
+  Project(wb, p);
+  std::string log;
+  set_structured_log_sink(&AppendRecord, &log);
+  set_structured_log_min_level(StructuredLogLevel::kWarn);
+  std::uint8_t* bytes = nullptr;
+  std::size_t len = 0;
+  fm_save_diagnostics_info_t info{};
+  info.struct_size = sizeof(info);
+  EXPECT_EQ(fm_workbook_save_with_diagnostics(wb, FM_WORKBOOK_FORMAT_XLSB, &bytes, &len, &info), 0);
+  set_structured_log_min_level(StructuredLogLevel::kOff);
+  set_structured_log_sink(nullptr);
+  fm_buffer_destroy(bytes);
+  fm_workbook_destroy(wb);
+  EXPECT_EQ(info.deferred_feature_count, 1U);
+  EXPECT_NE(log.find("unmeasured xlsb pivot cache state: record cells of a field without shared items holding blanks"),
+            std::string::npos)
+      << log;
 }
 
 /// The pivot table parts of a saved package.
