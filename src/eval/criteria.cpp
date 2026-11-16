@@ -105,11 +105,16 @@ bool probe_bool(std::string_view rhs, bool* out_bool) {
   return parse_locale_bool_text(rhs, facts, out_bool);
 }
 
-// Recognises the active locale's spelling of an error value (`#N/A`).
+// Recognises the active locale's spelling of an error value (`#N/A`), compared
+// under the same collation as an Eq text criterion so `#n/a` names it too.
 bool probe_error(std::string_view rhs, ErrorCode* out_code) {
-  const LocaleFacts& facts = locale_facts(current_eval_profile());
+  if (rhs.empty() || rhs.front() != '#') {
+    return false;
+  }
+  const ExcelProfile profile = current_eval_profile();
+  const LocaleFacts& facts = locale_facts(profile);
   for (std::size_t i = 0; i < facts.error_names.size(); ++i) {
-    if (rhs == facts.error_names[i]) {
+    if (collate(rhs, facts.error_names[i], profile, CollationStrength::kCompare) == 0) {
       *out_code = static_cast<ErrorCode>(i);
       return true;
     }

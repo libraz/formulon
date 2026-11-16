@@ -54,6 +54,13 @@ Workbook ErrorColumnWorkbook() {
   return wb;
 }
 
+// ErrorColumnWorkbook plus A4 holding the text "#N/A".
+Workbook ErrorColumnWithTextWorkbook() {
+  Workbook wb = ErrorColumnWorkbook();
+  wb.sheet(0).set_cell_text(3, 0, "#N/A");
+  return wb;
+}
+
 void ExpectNumber(const Value& v, double expected) {
   ASSERT_TRUE(v.is_number()) << "kind=" << static_cast<int>(v.kind());
   EXPECT_DOUBLE_EQ(v.as_number(), expected);
@@ -80,6 +87,22 @@ TEST(CriteriaErrorText, SumIfNotEqSumsOtherErrorCell) {
   const Value v = EvalSourceIn("=SUMIF(A1:A3,\"<>#N/A\")", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+}
+
+TEST(CriteriaErrorText, ErrorNameCriteriaMatchTheErrorCellNotTheText) {
+  const Workbook wb = ErrorColumnWithTextWorkbook();
+  ExpectNumber(EvalSourceIn("=COUNTIF(A1:A4,\"#N/A\")", wb, wb.sheet(0)), 1.0);
+  ExpectNumber(EvalSourceIn("=COUNTIF(A1:A4,\"=#N/A\")", wb, wb.sheet(0)), 1.0);
+  ExpectNumber(EvalSourceIn("=COUNTIF(A1:A4,\"<>#N/A\")", wb, wb.sheet(0)), 3.0);
+  ExpectNumber(EvalSourceIn("=COUNTIF(A1:A4,\">#N/A\")", wb, wb.sheet(0)), 0.0);
+}
+
+TEST(CriteriaErrorText, ErrorNameCriteriaIgnoreLetterCase) {
+  const Workbook wb = ErrorColumnWithTextWorkbook();
+  ExpectNumber(EvalSourceIn("=COUNTIF(A1:A4,\"#n/a\")", wb, wb.sheet(0)), 1.0);
+  ExpectNumber(EvalSourceIn("=COUNTIF(A1:A4,\"=#n/a\")", wb, wb.sheet(0)), 1.0);
+  ExpectNumber(EvalSourceIn("=COUNTIF(A1:A4,\"<>#n/a\")", wb, wb.sheet(0)), 3.0);
+  ExpectNumber(EvalSourceIn("=COUNTIF(A1:A4,\"#div/0!\")", wb, wb.sheet(0)), 1.0);
 }
 
 TEST(CriteriaErrorText, EveryErrorNameMatchesItsOwnCode) {
