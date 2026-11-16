@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <vector>
 
 #include "node_addon/parts/chart_internal.h"
 #include "node_addon/parts/free_funcs.h"
@@ -16,40 +17,38 @@ namespace formulon_node {
 
 namespace {
 
-// Returns the bytes of the Uint8Array at `info[idx]`; false when it is not one.
-bool ReadImageBytes(const Napi::CallbackInfo& info, size_t idx, const uint8_t*& data, size_t& len) {
+// Copies the Uint8Array at `info[idx]` into `out`; false when it is not one. The copy is taken here, before any
+// caller-supplied getter runs, so a getter that mutates or detaches the buffer cannot reach the C call.
+bool ReadImageBytes(const Napi::CallbackInfo& info, size_t idx, std::vector<uint8_t>& out) {
   Napi::Uint8Array u8;
   if (!BytesArg(info, idx, &u8)) {
     return false;
   }
-  data = u8.Data();
-  len = u8.ElementLength();
+  const size_t len = u8.ElementLength();
+  out.assign(len == 0 ? nullptr : u8.Data(), len == 0 ? nullptr : u8.Data() + len);
   return true;
 }
 
+// The pointer handed to the C ABI: an empty array may have no backing store, and a non-NULL pointer lets the
+// C ABI report the empty image rather than a NULL argument.
+const uint8_t* ImageBytesData(const std::vector<uint8_t>& bytes) {
+  static const uint8_t kEmptyInput = 0;
+  return bytes.empty() ? &kEmptyInput : bytes.data();
+}
+
 struct BytesWithOpts {
-  const uint8_t* data = nullptr;
-  size_t len = 0;
+  std::vector<uint8_t> bytes;
   Napi::Object spec;
 };
 
-// Reads the `(sheet, bytes, opts?)` tail shared by `insertImage` and `restoreDrawing`;
-// a rejected argument list throws a TypeError and returns false.
+// Reads the `(sheet, bytes, opts?)` tail shared by `insertImage` and `restoreDrawing`; absent, `undefined` and
+// `null` options are none, and a rejected argument list throws a TypeError and returns false.
 bool ReadBytesWithOpts(const Napi::CallbackInfo& info, BytesWithOpts& args) {
-  Napi::Env env = info.Env();
-  const bool has_opts = ObjectArg(info, 2, &args.spec);
-  if (!ReadImageBytes(info, 1, args.data, args.len)) {
-    ThrowArgumentTypeError(env, "bytes", "must be a Uint8Array");
+  if (!ReadImageBytes(info, 1, args.bytes)) {
+    ThrowArgumentTypeError(info.Env(), "bytes", "must be a Uint8Array");
     return false;
   }
-  if (!info[2].IsUndefined() && !has_opts) {
-    ThrowArgumentTypeError(env, "", "must be an object");
-    return false;
-  }
-  if (!has_opts) {
-    args.spec = Napi::Object::New(env);
-  }
-  return true;
+  return OptionsArg(info, 2, &args.spec);
 }
 
 // The JS `DrawingAnchor` record of `a`.
@@ -113,14 +112,13 @@ fm_drawing_patch_t PullDrawingPatch(CheckedSpecReader& reader, const Napi::Objec
 
 Napi::Value ProbeImage(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
-  const uint8_t* data = nullptr;
-  size_t len = 0;
-  if (!ReadImageBytes(info, 0, data, len)) {
+  std::vector<uint8_t> bytes;
+  if (!ReadImageBytes(info, 0, bytes)) {
     ThrowArgumentTypeError(env, "bytes", "must be a Uint8Array");
     return env.Undefined();
   }
   fm_image_info_t img = FM_STRUCT_INIT(fm_image_info_t);
-  const fm_status_t rc = fm_get_image_info(data, len, &img);
+  const fm_status_t rc = fm_get_image_info(ImageBytesData(bytes), bytes.size(), &img);
   if (rc != 0) {
     return ThrowStatus(env, rc);
   }
@@ -253,7 +251,8 @@ Napi::Value Workbook::InsertImage(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   uint32_t object_id = 0;
-  const fm_status_t rc = fm_sheet_add_picture(handle_, ArgU32(info, 0), args.data, args.len, &opts, &object_id);
+  const fm_status_t rc =
+      fm_sheet_add_picture(handle_, ArgU32(info, 0), ImageBytesData(args.bytes), args.bytes.size(), &opts, &object_id);
   return ValueOrThrow(env, rc, JsNumber(env, object_id));
 }
 
@@ -306,7 +305,8 @@ Napi::Value Workbook::RestoreDrawing(const Napi::CallbackInfo& info) {
     return env.Undefined();
   }
   uint32_t object_id = 0;
-  const fm_status_t rc = fm_sheet_restore_drawing(handle_, ArgU32(info, 0), args.data, args.len, flags, &object_id);
+  const fm_status_t rc = fm_sheet_restore_drawing(handle_, ArgU32(info, 0), ImageBytesData(args.bytes),
+                                                  args.bytes.size(), flags, &object_id);
   return ValueOrThrow(env, rc, JsNumber(env, object_id));
 }
 

@@ -421,6 +421,9 @@ Napi::Value Workbook::LoadBytes(const Napi::CallbackInfo& info) {
     Napi::TypeError::New(env, "Workbook.load bytes must be a Uint8Array").ThrowAsJavaScriptException();
     return env.Undefined();
   }
+  // Copied now: the options getters below may mutate or detach the caller's buffer.
+  const std::size_t len = u8.ElementLength();
+  const std::vector<uint8_t> input(len == 0 ? nullptr : u8.Data(), len == 0 ? nullptr : u8.Data() + len);
   // `{ profileId? }`: absent, `undefined` and `null` options or profile keep the load's profile.
   static const GuardedMethodData load_label{PositionalArgSpec{}, "load", "Workbook", false, nullptr};
   const ScopedReaderLabel label(&PublicMethodLabel, &PublicArgumentName, &load_label);
@@ -441,8 +444,7 @@ Napi::Value Workbook::LoadBytes(const Napi::CallbackInfo& info) {
   // An empty array may have no backing store; a non-NULL pointer lets the
   // C ABI report the empty input rather than a NULL argument.
   static const uint8_t kEmptyInput = 0;
-  const std::size_t len = u8.ElementLength();
-  const uint8_t* data = len == 0 ? &kEmptyInput : u8.Data();
+  const uint8_t* data = len == 0 ? &kEmptyInput : input.data();
   return FactoryResult(env, jsobj, wb, fm_workbook_load(data, len, &spec, &wb->handle_));
 }
 
