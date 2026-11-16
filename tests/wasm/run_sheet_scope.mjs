@@ -32,8 +32,8 @@ export function registerSheetScope(Module, test) {
       );
 
       // The workbook-wide lookups return the sheet and the sheet-local index.
-      assert.deepEqual({ ...wb.findTable('costs') }, { sheet: 1, index: 0 });
-      assert.equal(wb.findTable('Nothing'), null);
+      assert.deepEqual({ ...wb.getTableIndex('costs') }, { sheet: 1, index: 0 });
+      assert.equal(wb.getTableIndex('Nothing'), null);
       const id = wb.getTableRuntimeId(1, 0);
       assert.deepEqual({ ...wb.resolveTableRuntimeId(id) }, { sheet: 1, index: 0 });
 
@@ -48,8 +48,8 @@ export function registerSheetScope(Module, test) {
 
       wb.renameTable(0, 0, 'Revenue');
       assert.equal(wb.getTable(0, 0).name, 'Revenue');
-      assert.deepEqual({ ...wb.findTable('revenue') }, { sheet: 0, index: 0 });
-      assert.equal(wb.findTable('Sales'), null);
+      assert.deepEqual({ ...wb.getTableIndex('revenue') }, { sheet: 0, index: 0 });
+      assert.equal(wb.getTableIndex('Sales'), null);
 
       wb.removeTable(0, 0);
       assert.equal(wb.getTableCount(0), 0);
