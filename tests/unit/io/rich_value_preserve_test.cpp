@@ -13,6 +13,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -25,7 +26,9 @@
 #include "io/ooxml_writer.h"
 #include "io/rich_value_errors.h"
 #include "io/rich_values.h"
+#include "io/xlsb/emission_plan.h"
 #include "io/xlsb/metadata_bin.h"
+#include "io/xlsb/pivot_part_plan.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/writer.h"
@@ -825,16 +828,15 @@ TEST(RichValuePreserve, PicturesCrossBetweenXlsxAndXlsb) {
 // .xlsb books holding only rich errors write what the error table alone writes.
 // ---------------------------------------------------------------------------
 
-// A blocked pivot's anchor keeps its rich value only when its pivot part is
-// written, as the .xlsb save decides.
-bool PivotPartKept(const Workbook& wb, std::size_t sheet, std::size_t pivot) {
+// A blocked pivot's anchor keeps its rich value only when its table part is
+// written, as the .xlsb save's pivot plan decides.
+std::vector<std::vector<bool>> WrittenPivots(const Workbook& wb) {
+  std::unordered_set<std::string> taken;
   for (const PassthroughPart& part : wb.passthrough_parts()) {
-    if (part.retained_origin == PassthroughPart::RetainedOrigin::kPivotTable && part.origin_sheet_index == sheet &&
-        part.origin_pivot_index == pivot) {
-      return true;
-    }
+    taken.insert(part.path);
   }
-  return false;
+  xlsb::EmissionPlan plan;
+  return xlsb::plan_pivot_parts(wb, taken, plan).written;
 }
 
 TEST(RichValuePreserve, XlsbErrorOnlyBooksWriteTheErrorTable) {
@@ -864,8 +866,9 @@ TEST(RichValuePreserve, XlsbErrorOnlyBooksWriteTheErrorTable) {
       EXPECT_EQ(PartRecords(saved.bytes, kMetadataBin), PartRecords(excel, kMetadataBin));
       continue;
     }
-    const RichErrorTable errors = build_rich_error_table(wb, PivotPartKept);
-    const RichErrorTable table = build_rich_value_table(wb, PivotPartKept);
+    const std::vector<std::vector<bool>> written = WrittenPivots(wb);
+    const RichErrorTable errors = build_rich_error_table(wb, &written);
+    const RichErrorTable table = build_rich_value_table(wb, &written);
     ASSERT_EQ(table.values.size(), errors.values.size());
     EXPECT_TRUE(table.opaque.empty());
     EXPECT_EQ(serialize_rdrichvalue(table), serialize_rdrichvalue(errors));

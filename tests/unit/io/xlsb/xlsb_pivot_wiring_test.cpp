@@ -20,7 +20,6 @@
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
-#include "io/xlsb/pivot_part_plan.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/writer.h"
 #include "pivot/pivot_cache.h"
@@ -532,7 +531,6 @@ TEST(XlsbPivotWiring, RemovingAPivotKeepsTheLaterPivotsRetainedParts) {
   const std::map<std::string, tc::Bytes> before = Parts(first_save.value().bytes, "xl/pivotTables/");
   ASSERT_TRUE(wb.remove_pivot(sheet, 0).has_value());
   ASSERT_EQ(wb.sheet(sheet).pivot_tables().size(), 1U);
-  EXPECT_TRUE(pivot_table_kept_verbatim(wb, sheet, 0));
 
   auto saved = write_xlsb_with_result(wb);
   ASSERT_TRUE(saved.has_value()) << saved.error().message;

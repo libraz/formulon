@@ -186,7 +186,7 @@ struct MetadataPlan {
   RichValueRelPlan rich_rels;
 };
 
-MetadataPlan BuildMetadataPlan(const Workbook& wb) {
+MetadataPlan BuildMetadataPlan(const Workbook& wb, const std::vector<std::vector<bool>>& written_pivots) {
   MetadataPlan plan;
   plan.dynamic_arrays = has_dynamic_array_formula(wb);
   // The first passthrough part wins the path; `BuildEmissionPlan` drops any
@@ -199,8 +199,8 @@ MetadataPlan BuildMetadataPlan(const Workbook& wb) {
     }
   }
   if (retained == nullptr) {
-    // A blocked pivot's anchor is written plain unless its pivot part is: only a part kept from an XLSB source says so.
-    plan.rich = build_rich_value_table(wb, pivot_table_kept_verbatim);
+    // A blocked pivot's anchor is written plain unless its table part is written.
+    plan.rich = build_rich_value_table(wb, &written_pivots);
     plan.rich_rels = plan_rich_value_rels(wb, plan.rich);
     plan.generate_part = plan.dynamic_arrays || !plan.rich.empty();
     plan.ifmd = plan.dynamic_arrays ? 1U : 0U;  // The generated part's XLDAPR entry comes first.
@@ -319,7 +319,14 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   const SheetRangeTable& sheet_ranges = sheet_ranges_or.value();
 
   SstBuilder sst;
-  const MetadataPlan metadata = BuildMetadataPlan(workbook);
+  // The pivot plan decides which blocked pivots keep their anchor's rich value, so it precedes the metadata plan.
+  std::unordered_set<std::string> taken_paths;
+  for (const PassthroughPart& part : workbook.passthrough_parts()) {
+    taken_paths.insert(part.path);
+  }
+  EmissionPlan pivots;
+  const PivotPartOutcome pivot_outcome = plan_pivot_parts(workbook, taken_paths, pivots);
+  const MetadataPlan metadata = BuildMetadataPlan(workbook, pivot_outcome.written);
   WriteDiagnostics diagnostics;
   std::uint32_t downgraded_formula_count = 0;
   const XmlCustomViewPlan custom_views = plan_xml_custom_views(workbook);
@@ -335,16 +342,10 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   // the package already carries. A table on a missing sheet fails the save,
   // as it does for `.xlsx`.
   RETURN_IF_ERROR(check_tables_have_sheets(workbook, kWriteXlsbContext));
-  std::unordered_set<std::string> taken_paths;
-  for (const PassthroughPart& part : workbook.passthrough_parts()) {
-    taken_paths.insert(part.path);
+  for (std::size_t i = 0; i < pivot_outcome.lost_tables.size(); ++i) {
+    ReportDeferred(&diagnostics.deferred_feature_count, "pivot_tables", pivot_outcome.lost_tables[i], i);
   }
-  EmissionPlan pivots;
-  const PivotPartLoss pivots_lost = plan_pivot_parts(workbook, taken_paths, pivots);
-  for (std::size_t i = 0; i < pivots_lost.tables.size(); ++i) {
-    ReportDeferred(&diagnostics.deferred_feature_count, "pivot_tables", pivots_lost.tables[i], i);
-  }
-  ReportDeferred(&diagnostics.deferred_feature_count, "pivot_caches", pivots_lost.caches, 0U);
+  ReportDeferred(&diagnostics.deferred_feature_count, "pivot_caches", pivot_outcome.lost_caches, 0U);
   XlsbTableAllocator table_allocator(std::move(taken_paths));
   // The named cell styles styles.bin writes and the names table parts may keep.
   // A retained styles.bin that passes through is the only style table in the file, so every part written beside it

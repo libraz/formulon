@@ -207,13 +207,14 @@ struct Candidate {
 };
 
 // Every rich error of `sheet`, unordered.
-std::vector<Candidate> SheetCandidates(const Workbook& wb, std::size_t sheet_index, PivotAnchorFilter pivot_filter) {
+std::vector<Candidate> SheetCandidates(const Workbook& wb, std::size_t sheet_index,
+                                       const std::vector<std::vector<bool>>* written_pivots) {
   const Sheet& sheet = wb.sheet(sheet_index);
   std::vector<Candidate> out;
   for (std::size_t p = 0; p < sheet.pivot_tables().size(); ++p) {
     const std::unique_ptr<pivot::PivotTable>& table = sheet.pivot_tables()[p];
     if (table != nullptr && table->blocked().has_value() &&
-        (pivot_filter == nullptr || pivot_filter(wb, sheet_index, p)) &&
+        (written_pivots == nullptr || (*written_pivots)[sheet_index][p]) &&
         CachesError(sheet.cell_at(table->anchor_row(), table->anchor_col()), ErrorCode::Spill)) {
       out.push_back({table->anchor_row(), table->anchor_col(), PivotValue(*table, *table->blocked())});
     }
@@ -416,7 +417,7 @@ bool SameStructure(const OpaqueRichValue& a, const OpaqueRichValue& b) {
 }
 
 // The table of `build_rich_error_table` and, `with_opaque`, of `build_rich_value_table`.
-RichErrorTable BuildTable(const Workbook& wb, PivotAnchorFilter pivot_filter, bool with_opaque) {
+RichErrorTable BuildTable(const Workbook& wb, const std::vector<std::vector<bool>>* written_pivots, bool with_opaque) {
   RichErrorTable table;
   table.vm_by_sheet.resize(wb.sheet_count());
   const bool kept_verbatim = with_opaque ? rich_value_parts_kept_verbatim(wb.passthrough_parts())
@@ -427,7 +428,7 @@ RichErrorTable BuildTable(const Workbook& wb, PivotAnchorFilter pivot_filter, bo
   // Opaque values as read, parallel to `table.opaque`, for deduplication before renumbering.
   std::vector<OpaqueRichValue> opaque_source;
   for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
-    std::vector<Candidate> cells = SheetCandidates(wb, s, pivot_filter);
+    std::vector<Candidate> cells = SheetCandidates(wb, s, written_pivots);
     // Appended after the errors, so the stable sort keeps a cell's rich error first.
     const std::vector<CellRichValue> opaque_cells =
         with_opaque ? wb.sheet(s).rich_values() : std::vector<CellRichValue>();
@@ -549,12 +550,12 @@ std::uint32_t rich_error_vm_at(const RichErrorVmMap& map, std::uint32_t row, std
   return it != map.end() && it->first == key ? it->second : 0U;
 }
 
-RichErrorTable build_rich_error_table(const Workbook& wb, PivotAnchorFilter pivot_filter) {
-  return BuildTable(wb, pivot_filter, /*with_opaque=*/false);
+RichErrorTable build_rich_error_table(const Workbook& wb, const std::vector<std::vector<bool>>* written_pivots) {
+  return BuildTable(wb, written_pivots, /*with_opaque=*/false);
 }
 
-RichErrorTable build_rich_value_table(const Workbook& wb, PivotAnchorFilter pivot_filter) {
-  return BuildTable(wb, pivot_filter, /*with_opaque=*/true);
+RichErrorTable build_rich_value_table(const Workbook& wb, const std::vector<std::vector<bool>>* written_pivots) {
+  return BuildTable(wb, written_pivots, /*with_opaque=*/true);
 }
 
 MetadataModel metadata_model(bool dynamic_arrays, std::size_t rich_values) {

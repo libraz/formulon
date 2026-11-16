@@ -170,22 +170,24 @@ bool is_retained_pivot_part(const Workbook& wb, const PassthroughPart& part) {
   return !PassthroughOnlyGroup(wb, cache_id, GroupOf(wb, cache_id));
 }
 
-bool pivot_table_kept_verbatim(const Workbook& wb, std::size_t sheet, std::size_t pivot) {
-  const auto& tables = wb.sheet(sheet).pivot_tables();
-  if (pivot >= tables.size() || tables[pivot] == nullptr) {
-    return false;
-  }
-  const std::uint32_t cache_id = tables[pivot]->pivot_cache_id();
-  const std::vector<Member> group = GroupOf(wb, cache_id);
-  return PassthroughOnlyGroup(wb, cache_id, group) ||
-         (wb.find_pivot_cache(cache_id) != nullptr && !KeptParts(wb, cache_id, group).empty());
-}
-
-PivotPartLoss plan_pivot_parts(const Workbook& wb, const std::unordered_set<std::string>& taken, EmissionPlan& plan) {
+PivotPartOutcome plan_pivot_parts(const Workbook& wb, const std::unordered_set<std::string>& taken,
+                                  EmissionPlan& plan) {
   plan.sheet_pivots.assign(wb.sheet_count(), {});
-  PivotPartLoss loss;
-  loss.tables.assign(wb.sheet_count(), 0U);
-  std::vector<std::size_t>& lost = loss.tables;
+  PivotPartOutcome outcome;
+  outcome.lost_tables.assign(wb.sheet_count(), 0U);
+  outcome.written.resize(wb.sheet_count());
+  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
+    const auto& tables = wb.sheet(s).pivot_tables();
+    outcome.written[s].assign(tables.size(), false);
+    // A passthrough-only group's retained parts are written by the passthrough list, cache modelled or not.
+    for (std::size_t i = 0; i < tables.size(); ++i) {
+      if (tables[i] != nullptr) {
+        const std::uint32_t cache_id = tables[i]->pivot_cache_id();
+        outcome.written[s][i] = PassthroughOnlyGroup(wb, cache_id, GroupOf(wb, cache_id));
+      }
+    }
+  }
+  std::vector<std::size_t>& lost = outcome.lost_tables;
   // Tables per sheet, with the creation order Excel numbers generated parts by.
   struct Planned {
     std::uint64_t creation_order = 0;
@@ -264,7 +266,7 @@ PivotPartLoss plan_pivot_parts(const Workbook& wb, const std::unordered_set<std:
         for (const Member& member : group) {
           ++lost[member.sheet];
         }
-        loss.caches += group.empty() ? 1U : 0U;
+        outcome.lost_caches += group.empty() ? 1U : 0U;
         continue;
       }
       const std::size_t k = FreePartNumber(next_cache, occupied, [](std::size_t n) {
@@ -308,10 +310,11 @@ PivotPartLoss plan_pivot_parts(const Workbook& wb, const std::unordered_set<std:
         next_table = k + 1U;
         entry.part.path = "xl/pivotTables/pivotTable" + std::to_string(k) + ".bin";
       }
+      outcome.written[s][entry.part.index] = true;
       plan.sheet_pivots[s].push_back(std::move(entry.part));
     }
   }
-  return loss;
+  return outcome;
 }
 
 std::vector<std::uint8_t> book_pivot_cache_ids(const std::vector<std::uint8_t>& retained, const EmissionPlan& plan) {

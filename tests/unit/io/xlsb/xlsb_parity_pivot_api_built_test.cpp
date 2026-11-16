@@ -3,6 +3,7 @@
 // (`<case>.xlsb`). The save keeps every pivot part, passes the package validator, reads back to the same tables, and
 // its pivot records match Excel's but for the revision uid Excel adds.
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -15,11 +16,13 @@
 #include "c_api/formulon_c.h"
 #include "excel_profile.h"
 #include "gtest/gtest.h"
+#include "io/ooxml_reader.h"
 #include "io/read_options.h"
 #include "io/xlsb/frt_records.h"
 #include "io/xlsb/pivot_records_common.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/record_ids.h"
+#include "io/xlsb/writer.h"
 #include "pivot/pivot_table.h"
 #include "support/xlsb_package_validator.h"
 #include "utils/structured_log.h"
@@ -426,8 +429,79 @@ void ExpectExcelsPivotRecords(const std::string& dir, const std::string& stem) {
 }
 
 // A pivot withheld by an occupied range, with a page field (pvpage_blocked) or not: Excel's .xlsx and .xlsb saves of
-// one book (rich_errors, rich_errors_xlsb). A save from either writes Excel's table records and reads back withheld.
+// one book (rich_errors, rich_errors_xlsb). A save from either writes Excel's table records and its anchor's rich
+// value, and reads back withheld.
 class XlsbParityPivotBlocked : public ::testing::TestWithParam<const char*> {};
+
+/// Every cell record of `package` that follows a BrtValueMeta, as its row, column, record type, vm and error byte,
+/// sorted: Excel numbers worksheet parts by creation order, so cells are matched by position, not by part.
+std::vector<std::string> ValueMetaCells(const tc::Bytes& package) {
+  constexpr std::uint16_t kRowHeader = 0;
+  constexpr std::uint16_t kFirstCell = 1;
+  constexpr std::uint16_t kLastCell = 11;
+  constexpr std::uint16_t kCellError = 3;
+  constexpr std::uint16_t kFormulaError = 11;
+  constexpr std::uint16_t kValueMeta = 50;
+  const auto u32 = [](const tc::Bytes& b, std::size_t at) {
+    return b.size() < at + 4U ? 0U
+                              : static_cast<std::uint32_t>(b[at] | b[at + 1U] << 8U | b[at + 2U] << 16U |
+                                                           static_cast<std::uint32_t>(b[at + 3U]) << 24U);
+  };
+  std::vector<std::string> out;
+  for (const auto& [part, records] : tc::ExtractRecords(package, {})) {
+    if (part.rfind("xl/worksheets/sheet", 0) != 0) {
+      continue;
+    }
+    std::uint32_t row = 0;
+    std::uint32_t vm = 0;
+    for (const tc::IndexedRecord& rec : records) {
+      if (rec.type == kRowHeader) {
+        row = u32(rec.payload, 0);
+        vm = 0;
+      } else if (rec.type == kValueMeta) {
+        vm = u32(rec.payload, 0);
+      } else if (rec.type >= kFirstCell && rec.type <= kLastCell) {
+        if (vm != 0U) {
+          const bool error = (rec.type == kCellError || rec.type == kFormulaError) && rec.payload.size() > 8U;
+          out.push_back("R" + std::to_string(row) + "C" + std::to_string(u32(rec.payload, 0)) + " type " +
+                        std::to_string(rec.type) + " vm " + std::to_string(vm) + " error " +
+                        (error ? std::to_string(rec.payload[8]) : std::string("-")));
+        }
+        vm = 0;
+      }
+    }
+  }
+  std::sort(out.begin(), out.end());
+  return out;
+}
+
+/// The anchor's rich value: the cells that name one, the metadata part's records and the richData parts, as
+/// Excel's save writes them.
+void ExpectExcelsRichValues(const tc::Bytes& ours, const tc::Bytes& excel) {
+  EXPECT_EQ(ValueMetaCells(ours), ValueMetaCells(excel));
+  const auto records = [](const std::optional<tc::Bytes>& part) {
+    std::vector<std::pair<std::uint16_t, tc::Bytes>> out;
+    for (const tc::IndexedRecord& rec : part ? tc::SplitPart(*part) : std::vector<tc::IndexedRecord>{}) {
+      out.emplace_back(rec.type, rec.payload);
+    }
+    return out;
+  };
+  const std::optional<tc::Bytes> metadata = tc::ReadPart(excel, "xl/metadata.bin");
+  ASSERT_TRUE(metadata.has_value());
+  EXPECT_EQ(records(tc::ReadPart(ours, "xl/metadata.bin")), records(metadata));
+  std::size_t rich_parts = 0;
+  for (const std::string& name : tc::ListParts(excel)) {
+    if (name.rfind("xl/richData/", 0) == 0) {
+      ++rich_parts;
+      const std::optional<tc::Bytes> got = tc::ReadPart(ours, name);
+      const std::optional<tc::Bytes> want = tc::ReadPart(excel, name);
+      EXPECT_EQ(got ? std::string(got->begin(), got->end()) : std::string("<missing>"),
+                std::string(want->begin(), want->end()))
+          << name;
+    }
+  }
+  EXPECT_GT(rich_parts, 0U);
+}
 
 TEST_P(XlsbParityPivotBlocked, WritesExcelsTableRecords) {
   const std::string stem = GetParam();
@@ -437,6 +511,7 @@ TEST_P(XlsbParityPivotBlocked, WritesExcelsTableRecords) {
     const tc::Bytes ours = ExpectExcelsRecords(source, excel_save, "xl/pivotTables/");
     ASSERT_FALSE(ours.empty());
     ExpectValid(ours);
+    ExpectExcelsRichValues(ours, tc::ReadBytes(std::string(FORMULON_FIXTURES_DIR) + "/" + excel_save));
     auto back = read_xlsb(SpanOf(ours));
     ASSERT_TRUE(back.has_value()) << back.error().message;
     const Workbook& wb = back.value().workbook;
@@ -454,6 +529,38 @@ TEST_P(XlsbParityPivotBlocked, WritesExcelsTableRecords) {
 }
 
 INSTANTIATE_TEST_SUITE_P(Rich, XlsbParityPivotBlocked, ::testing::Values("pivot_blocked", "pvpage_blocked"));
+
+// A blocked pivot whose table part the save leaves out keeps a plain anchor; the other rich values stay.
+TEST(XlsbParityPivotBlockedLost, LeftOutTableKeepsAPlainAnchor) {
+  ReadOptions mac;
+  mac.profile = mac_365_en_us_profile();
+  const tc::Bytes source = tc::ReadBytes(std::string(FORMULON_FIXTURES_DIR) + "/excel/rich_errors/pivot_blocked.xlsx");
+  auto loaded = read_ooxml(SpanOf(source), mac);
+  ASSERT_TRUE(loaded.has_value()) << loaded.error().message;
+  Workbook& wb = loaded.value().workbook;
+  pivot::PivotTable* table = nullptr;
+  for (std::size_t s = 0; s < wb.sheet_count(); ++s) {
+    for (auto& t : wb.sheet(s).mutable_pivot_tables()) {
+      table = t.get();
+    }
+  }
+  ASSERT_NE(table, nullptr);
+  ASSERT_TRUE(table->blocked().has_value());
+  // `dataPosition` has no Excel-saved sample, so the table bridge refuses the table.
+  table->mutable_passthrough_attrs().emplace_back("dataPosition", "0");
+  auto saved = write_xlsb_with_result(wb);
+  ASSERT_TRUE(saved.has_value()) << saved.error().message;
+  EXPECT_GT(saved.value().diagnostics.deferred_feature_count, 0U);
+  const std::vector<std::string> cells = ValueMetaCells(saved.value().bytes);
+  const std::string anchor =
+      "R" + std::to_string(table->anchor_row()) + "C" + std::to_string(table->anchor_col()) + " ";
+  EXPECT_TRUE(std::none_of(cells.begin(), cells.end(), [&](const std::string& c) { return c.rfind(anchor, 0) == 0; }))
+      << ::testing::PrintToString(cells);
+  EXPECT_EQ(cells.size(), ValueMetaCells(tc::ReadBytes(std::string(FORMULON_FIXTURES_DIR) +
+                                                       "/excel/rich_errors_xlsb/pivot_blocked.xlsb"))
+                                  .size() -
+                              1U);
+}
 
 // A source row left wholly or partly blank (xlsb_parity/pivot/blank, Excel 16.115's saves after a refresh): the
 // blank cells and missing items are written as Excel writes them.

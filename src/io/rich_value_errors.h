@@ -92,21 +92,22 @@ bool keeps_foreign_rich_data(const std::vector<PassthroughPart>& parts);
 /// position) table.
 std::optional<RichError> rich_error_of_detail(const CellErrorDetail& detail);
 
-/// Decides whether the blocked pivot `pivot` of sheet `sheet` is saved with its
-/// anchor's rich value; null keeps every one.
-using PivotAnchorFilter = bool (*)(const Workbook& wb, std::size_t sheet, std::size_t pivot);
-
 /// Builds the table for `wb`: every blocked pivot anchor and blocked formula
 /// spill anchor, every cell whose detail matches its cached error, and the
 /// phantoms such a detail covers. Empty when the book keeps foreign rich data.
-RichErrorTable build_rich_error_table(const Workbook& wb, PivotAnchorFilter pivot_filter = nullptr);
+/// `written_pivots[sheet][pivot]`, sized to the book's pivots, says whether a
+/// pivot's table part is saved; a blocked pivot whose part is not keeps a plain
+/// anchor. Null saves every one.
+RichErrorTable build_rich_error_table(const Workbook& wb,
+                                      const std::vector<std::vector<bool>>* written_pivots = nullptr);
 
 /// The table a save writes, in either format: `build_rich_error_table`'s
 /// values with each error cell's opaque rich value in its row-major place (a
 /// cell's rich error wins), and the `_rvRel:` targets numbered in first-use
 /// order. Empty when the book keeps its rich-value parts verbatim
 /// (`rich_value_parts_kept_verbatim`).
-RichErrorTable build_rich_value_table(const Workbook& wb, PivotAnchorFilter pivot_filter = nullptr);
+RichErrorTable build_rich_value_table(const Workbook& wb,
+                                      const std::vector<std::vector<bool>>* written_pivots = nullptr);
 
 /// `xl/metadata.xml` listing XLDAPR when `dynamic_arrays` and XLRICHVALUE
 /// with `rich_values` blocks when non-zero, as Excel writes it.

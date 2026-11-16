@@ -27,24 +27,25 @@ class Workbook;
 namespace io {
 namespace xlsb {
 
-/// What `plan_pivot_parts` left out: the tables per sheet, and the caches no table draws from.
-struct PivotPartLoss {
-  std::vector<std::size_t> tables;
-  std::size_t caches = 0;
+/// What `plan_pivot_parts` decided for each table.
+struct PivotPartOutcome {
+  /// Per sheet, per pivot: its table part is written, planned or kept passthrough with its group.
+  std::vector<std::vector<bool>> written;
+  /// Tables left out, per sheet.
+  std::vector<std::size_t> lost_tables;
+  /// Caches left out that no table draws from.
+  std::size_t lost_caches = 0;
 };
 
 /// Fills `plan.pivot_caches` and `plan.sheet_pivots`, numbering generated
 /// parts clear of `taken`. A cache no table draws from is planned like any
 /// other group: kept while unchanged, else encoded, else left out.
-PivotPartLoss plan_pivot_parts(const Workbook& wb, const std::unordered_set<std::string>& taken, EmissionPlan& plan);
+PivotPartOutcome plan_pivot_parts(const Workbook& wb, const std::unordered_set<std::string>& taken, EmissionPlan& plan);
 
 /// True for a retained pivot part whose group the pivot plan writes, or not;
 /// such a part never goes through the passthrough list. A group whose table
 /// parts are retained without its cache parts stays passthrough while fresh.
 bool is_retained_pivot_part(const Workbook& wb, const PassthroughPart& part);
-
-/// True when pivot `pivot` of sheet `sheet` is written from its retained part.
-bool pivot_table_kept_verbatim(const Workbook& wb, std::size_t sheet, std::size_t pivot);
 
 /// The PIVOTCACHEIDS block to splice: `retained`'s entries, then one per
 /// planned cache under the `pivot_cache_rel_key` the workbook rels map.

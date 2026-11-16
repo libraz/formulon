@@ -23,7 +23,6 @@
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_defs.h"
-#include "io/ooxml_reader.h"
 #include "io/xlsb/metadata_bin.h"
 #include "io/xlsb/pivot_cache_bridge.h"
 #include "io/xlsb/pivot_table_bridge.h"
@@ -55,10 +54,9 @@ ByteSpan SpanOf(const std::vector<std::uint8_t>& v) {
   return ByteSpan{v.data(), v.size()};
 }
 
-std::vector<std::uint8_t> ReadSample(std::string_view name, const char* dir = "rich_errors_xlsb",
-                                     const char* extension = "xlsb") {
-  std::vector<std::uint8_t> bytes = test::read_file_bytes(std::string(FORMULON_FIXTURES_DIR) + "/excel/" + dir + "/" +
-                                                          std::string(name) + "." + extension);
+std::vector<std::uint8_t> ReadSample(std::string_view name) {
+  std::vector<std::uint8_t> bytes = test::read_file_bytes(std::string(FORMULON_FIXTURES_DIR) +
+                                                          "/excel/rich_errors_xlsb/" + std::string(name) + ".xlsb");
   EXPECT_FALSE(bytes.empty()) << name;
   return bytes;
 }
@@ -621,29 +619,6 @@ TEST(XlsbRichValueErrorWriter, ABlockedSpillNamesBothMetadataEntries) {
   for (const std::string_view type : {kCtRdRichValue, kCtRdRichValueStructure, kCtRdRichValueTypes}) {
     EXPECT_NE(types.find(std::string(type)), std::string::npos) << type;
   }
-}
-
-TEST(XlsbRichValueErrorWriter, ABlockedPivotWithoutItsPartIsWrittenPlain) {
-  // A pivot loaded from .xlsx has no XLSB pivot part to write, so its anchor
-  // is the plain #VALUE! and the rich values number the remaining cells alone.
-  const std::vector<std::uint8_t> xlsx = ReadSample("pivot_blocked", "rich_errors", "xlsx");
-  auto loaded = read_ooxml(test::span_of(xlsx));
-  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
-  const Workbook& wb = loaded.value().workbook;
-  const Sheet* sheet2 = wb.sheet_by_name("Sheet2");
-  ASSERT_NE(sheet2, nullptr);
-  ASSERT_FALSE(sheet2->pivot_tables().empty());
-  ASSERT_TRUE(sheet2->pivot_tables().front()->blocked().has_value());
-
-  const std::vector<std::uint8_t> saved = Save(wb);
-  ASSERT_FALSE(saved.empty());
-  const auto bin = Part(saved, SheetPart(saved, "Sheet2"));
-  ASSERT_TRUE(bin.has_value());
-  const CellRecords anchor =
-      ScanCell(*bin, sheet2->pivot_tables().front()->anchor_row(), sheet2->pivot_tables().front()->anchor_col());
-  ASSERT_TRUE(anchor.found);
-  EXPECT_EQ(anchor.vm, 0U);
-  EXPECT_EQ(anchor.error_byte, 0x0F);
 }
 
 // ---------------------------------------------------------------------------
