@@ -7137,6 +7137,18 @@ typedef enum {
 } fm_pivot_cell_kind_t;
 
 /**
+ * @brief Expand / collapse button state of a projected PivotTable label cell.
+ */
+typedef enum {
+  /** The cell has no button. */
+  FM_PIVOT_CELL_EXPANSION_ABSENT = -1,
+  /** The item's inner-field items show. */
+  FM_PIVOT_CELL_EXPANSION_EXPANDED = 0,
+  /** The item is collapsed: its inner-field items are hidden by `show_detail`. */
+  FM_PIVOT_CELL_EXPANSION_COLLAPSED = 1
+} fm_pivot_cell_expansion_t;
+
+/**
  * @brief One projected PivotTable cell.
  *
  * `field_name` and `number_format` are NUL-terminated UTF-8 strings owned by
@@ -7160,6 +7172,10 @@ typedef struct {
   const char* field_name;
   /** The data field's number format code of the cell; `NULL` when it has none. */
   const char* number_format;
+  /** The cell's expand / collapse button, an `fm_pivot_cell_expansion_t`: `COLLAPSED` for a row or column item label
+   *  whose inner-field items are hidden by `show_detail`, `EXPANDED` when they are shown, `ABSENT` when the cell has no
+   *  button (an innermost-field label, a subtotal, a grand total, a header or a data cell). */
+  int32_t expansion;
 } fm_pivot_cell_info_t;
 
 /**

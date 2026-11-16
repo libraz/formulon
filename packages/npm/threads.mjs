@@ -97,6 +97,7 @@ export {
   PivotAggregation,
   PivotAxis,
   PivotCalendar,
+  PivotCellExpansion,
   PivotCellKind,
   PivotDatePeriod,
   PivotFilterKind,

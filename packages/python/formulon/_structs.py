@@ -729,6 +729,7 @@ PIVOT_CELL = Struct(
         ("depth", U32),
         ("field_name", PTR),
         ("number_format", PTR),
+        ("expansion", I32),
     ],
 )
 PIVOT_CELL_VALUE_OFFSET = PIVOT_CELL.offsets["value"][1]

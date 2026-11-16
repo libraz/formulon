@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "formulon_c_pivot_test_helpers.h"
@@ -794,6 +795,25 @@ ReportRows ReadReport(const fm_workbook_t* wb, std::size_t sheet) {
   return out;
 }
 
+// The expand / collapse state of each item label cell, by its text, plus the state the grand-total label reports.
+std::vector<std::pair<std::string, int32_t>> Expansions(const fm_workbook_t* wb, std::size_t sheet) {
+  std::vector<std::pair<std::string, int32_t>> out;
+  PivotCellsGuard report;
+  EXPECT_EQ(fm_sheet_get_pivot_layout(wb, sheet, kPivot, &report.handle), 0) << fm_get_last_error_message();
+  std::size_t count = 0;
+  EXPECT_EQ(fm_pivot_report_get_cell_count(report.handle, &count), 0);
+  for (std::size_t i = 0; i < count; ++i) {
+    fm_pivot_cell_info_t cell = FM_STRUCT_INIT(fm_pivot_cell_info_t);
+    EXPECT_EQ(fm_pivot_report_get_cell_at(report.handle, i, &cell), 0);
+    if (cell.value.kind == FM_VALUE_KIND_TEXT && cell.col == 0U) {
+      out.emplace_back(std::string(cell.value.u.text != nullptr ? cell.value.u.text : ""), cell.expansion);
+    } else {
+      EXPECT_EQ(cell.expansion, FM_PIVOT_CELL_EXPANSION_ABSENT) << cell.row << "," << cell.col;
+    }
+  }
+  return out;
+}
+
 ReportRows ReloadedReport(const fm_workbook_t* wb, fm_workbook_format_t format, std::size_t sheet) {
   BufferGuard saved;
   EXPECT_EQ(fm_workbook_save(wb, format, &saved.data, &saved.len), 0) << fm_get_last_error_message();
@@ -824,6 +844,14 @@ TEST(FormulonCApiPivotPatch, CollapsedItemDropsTheInnerRowsBeneathIt) {
   const ReportRows after = ReadReport(wb.handle, sheet);
   EXPECT_EQ(after.rows, collapsed);
   EXPECT_EQ(after.last_row + 1U, expanded.last_row);
+  // The collapsed item's label reports it; an expanded one and an inner item's do not.
+  using State = std::pair<std::string, int32_t>;
+  EXPECT_EQ(Expansions(wb.handle, sheet), (std::vector<State>{{"Row Labels", FM_PIVOT_CELL_EXPANSION_ABSENT},
+                                                              {"East", FM_PIVOT_CELL_EXPANSION_COLLAPSED},
+                                                              {"North", FM_PIVOT_CELL_EXPANSION_EXPANDED},
+                                                              {"A", FM_PIVOT_CELL_EXPANSION_ABSENT},
+                                                              {"B", FM_PIVOT_CELL_EXPANSION_ABSENT},
+                                                              {"Grand Total", FM_PIVOT_CELL_EXPANSION_ABSENT}}));
   for (const fm_workbook_format_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
     SCOPED_TRACE(format == FM_WORKBOOK_FORMAT_XLSX ? "xlsx" : "xlsb");
     EXPECT_EQ(ReloadedReport(wb.handle, format, sheet).rows, collapsed);

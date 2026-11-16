@@ -108,6 +108,7 @@ export const PivotCellKind = Object.freeze({
   GrandTotal: 6,
   Blank: 7,
 });
+export const PivotCellExpansion = Object.freeze({ Expanded: 0, Collapsed: 1 });
 export const PivotAxis = Object.freeze({ Row: 0, Column: 1, Value: 2, Page: 3 });
 export const PivotAggregation = Object.freeze({
   Sum: 0,
@@ -862,6 +863,7 @@ export const FORMULON_MEMBERS = Object.freeze([
   'CellShift',
   'SpillCause',
   'PivotCellKind',
+  'PivotCellExpansion',
   'PivotAxis',
   'PivotAggregation',
   'PivotShowAsBase',
@@ -6673,7 +6675,7 @@ function makeFacade(Raw, registry, runtime) {
     getLayout() {
       const [raw, sheet, pivot] = this.#locate();
       const layout = raw.getPivotLayout(sheet, pivot);
-      const cells = layout.cells.map(({ row, col, value, kind, depth, fieldName, numberFormat }) => ({
+      const cells = layout.cells.map(({ row, col, value, kind, depth, fieldName, numberFormat, expansion }) => ({
         row,
         col,
         value: toNative(value),
@@ -6681,6 +6683,7 @@ function makeFacade(Raw, registry, runtime) {
         depth,
         fieldName,
         numberFormat,
+        expansion,
       }));
       return { range: layout.rect, cells };
     }

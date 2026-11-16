@@ -745,6 +745,14 @@ export const PivotCellKind: Readonly<{
 /** Union of the {@link PivotCellKind} ordinals. */
 export type PivotCellKind = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
+/** Expand / collapse button state of a PivotTable label cell. */
+export const PivotCellExpansion: Readonly<{
+  Expanded: 0;
+  Collapsed: 1;
+}>;
+/** Union of the {@link PivotCellExpansion} ordinals. */
+export type PivotCellExpansion = 0 | 1;
+
 /** One concrete cell in a projected PivotTable layout. */
 export interface PivotCell {
   /** The absolute 0-based sheet row of the cell. */
@@ -762,6 +770,10 @@ export interface PivotCell {
   readonly fieldName: string | null;
   /** The data field's number format code of the cell; `null` when it has none. */
   readonly numberFormat: string | null;
+  /** The cell's expand / collapse button: `Collapsed` for a row or column item label whose inner-field items are
+   *  hidden by `showDetail`, `Expanded` when they are shown; `null` when the cell has no button (an innermost-field
+   *  label, a subtotal, a grand total, a header or a data cell). */
+  readonly expansion: PivotCellExpansion | null;
 }
 
 /** Return type of `Pivot.getLayout()`. */
@@ -9217,6 +9229,8 @@ export interface Formulon {
   SpillCause: typeof SpillCause;
   /** The `PivotCellKind` enum. */
   PivotCellKind: typeof PivotCellKind;
+  /** The `PivotCellExpansion` enum. */
+  PivotCellExpansion: typeof PivotCellExpansion;
   /** The `PivotAxis` enum. */
   PivotAxis: typeof PivotAxis;
   /** The `PivotAggregation` enum. */

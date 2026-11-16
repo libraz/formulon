@@ -156,6 +156,9 @@ extern "C" fm_status_t fm_sheet_get_pivot_layout(const fm_workbook_t* wb, std::s
         value_cell ? (value_code != nullptr ? std::string_view(value_code) : std::string_view())
                    : std::string_view(src.number_format);
     dst.number_format = number_format.empty() ? nullptr : store_cstr(handle->text_store, number_format);
+    dst.expansion = !src.collapsed.has_value() ? FM_PIVOT_CELL_EXPANSION_ABSENT
+                    : *src.collapsed           ? FM_PIVOT_CELL_EXPANSION_COLLAPSED
+                                               : FM_PIVOT_CELL_EXPANSION_EXPANDED;
     handle->cells.push_back(dst);
   }
 

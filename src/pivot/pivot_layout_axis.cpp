@@ -215,6 +215,7 @@ class AxisWalk {
     entry.nodes = node_path_;
     entry.kind = kind;
     entry.data_field = data_field;
+    entry.collapsed = collapsing_;
     if (kind == EntryKind::Leaf) {
       entry.leaf_index = index;
     } else if (kind == EntryKind::Subtotal) {
@@ -307,6 +308,7 @@ class AxisWalk {
     // A collapsed item shows its subtotal in place of its children, so one
     // without a subtotal stays expanded.
     const bool collapsed = count > 0 && is_collapsed(node, depth);
+    collapsing_ = collapsed;
     // Excel ignores `subtotal_top` once a field carries several functions:
     // the header row stays blank and every function gets a row below.
     const bool first = count == 1 && !values_below &&
@@ -335,6 +337,7 @@ class AxisWalk {
       skip_descendants(node, depth);
     } else {
       level(node.children, depth + 1, data_field, 0);
+      collapsing_ = false;
     }
     const std::size_t subtotal_begin = entries_.size();
     const std::size_t subtotal_index = subtotal_cursor_;
@@ -395,6 +398,8 @@ class AxisWalk {
   const AxisShape& shape_;
   std::size_t leaf_cursor_ = 0;
   std::size_t subtotal_cursor_ = 0;
+  // The node being placed is collapsed: its entries stand in for its subtree.
+  bool collapsing_ = false;
   std::vector<std::string> path_;
   std::vector<const AxisHierarchyNode*> node_path_;
   std::vector<AxisEntry> entries_;

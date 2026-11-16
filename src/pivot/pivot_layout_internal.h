@@ -58,6 +58,9 @@ struct AxisEntry {
   /// collapsed item's subtotals are such entries in every layout and on
   /// either axis.
   bool heads_group = false;
+  /// The entry stands in for a collapsed item: its subtotal, or the heading
+  /// row of one with several subtotals. The item is the path's last node.
+  bool collapsed = false;
   /// Custom subtotal function of a labelled subtotal: Excel names the row
   /// "<group> <function>" in place of the localized subtotal wording.
   std::optional<SubtotalFn> custom_fn;

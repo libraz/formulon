@@ -29,6 +29,7 @@ from ._workbook import (
     PivotAxis,
     PivotCalendar,
     PivotCell,
+    PivotCellExpansion,
     PivotCellKind,
     PivotDataField,
     PivotDataFieldInput,
@@ -303,6 +304,7 @@ class Pivot(_NoCopy):
                             depth=d["depth"],
                             field_name=LIB.read_optional_cstr(d["field_name"]),
                             number_format=LIB.read_optional_cstr(d["number_format"]),
+                            expansion=None if d["expansion"] == -1 else PivotCellExpansion(d["expansion"]),
                         )
                     )
                 return PivotLayout(range=rect, cells=cells)

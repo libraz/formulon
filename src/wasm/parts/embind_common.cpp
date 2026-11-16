@@ -816,6 +816,8 @@ emscripten::val pivot_cell_to_val(const fm_pivot_cell_info_t& cell) {
   item.set("depth", cell.depth);
   js_set_cstr_or_null(item, "fieldName", cell.field_name);
   js_set_cstr_or_null(item, "numberFormat", cell.number_format);
+  item.set("expansion", cell.expansion != FM_PIVOT_CELL_EXPANSION_ABSENT ? emscripten::val(cell.expansion)
+                                                                         : emscripten::val::null());
   return item;
 }
 

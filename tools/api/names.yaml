@@ -753,6 +753,19 @@ entries:
     py: PivotCell
     surfaces: [c, wasm, native, py]
     was: { c: fm_pivot_cell_t, js: PivotCell, py: PivotCell }
+  enum.pivot_cell_expansion:
+    kind: enum
+    c: fm_pivot_cell_expansion_t
+    js: PivotCellExpansion
+    py: PivotCellExpansion
+    surfaces: [c, wasm, native, py]
+  field.pivot_cell_expansion:
+    kind: field
+    record: record.pivot_cell
+    c: expansion
+    js: expansion
+    py: expansion
+    surfaces: [c, wasm, native, py]
   type.pivot_cells:
     kind: typedef
     c: fm_pivot_report_t
@@ -10462,6 +10475,25 @@ entries:
     py: BLANK
     surfaces: [c, wasm, native, py]
     was: { c: FM_PIVOT_CELL_BLANK, js: Blank, py: BLANK }
+  constant.fm_pivot_cell_expansion_absent:
+    kind: constant
+    c: FM_PIVOT_CELL_EXPANSION_ABSENT
+    enum: enum.pivot_cell_expansion
+    surfaces: [c]
+  constant.fm_pivot_cell_expansion_expanded:
+    kind: constant
+    c: FM_PIVOT_CELL_EXPANSION_EXPANDED
+    enum: enum.pivot_cell_expansion
+    js: Expanded
+    py: EXPANDED
+    surfaces: [c, wasm, native, py]
+  constant.fm_pivot_cell_expansion_collapsed:
+    kind: constant
+    c: FM_PIVOT_CELL_EXPANSION_COLLAPSED
+    enum: enum.pivot_cell_expansion
+    js: Collapsed
+    py: COLLAPSED
+    surfaces: [c, wasm, native, py]
   constant.fm_pivot_axis_row:
     kind: constant
     c: FM_PIVOT_AXIS_ROW

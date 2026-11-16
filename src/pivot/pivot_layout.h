@@ -115,6 +115,9 @@ struct PivotCell {
   /// The item's own value behind a number or date item label, which the sheet
   /// cell stores in place of the label text; unset for every other cell.
   std::optional<Value> item_value;
+  /// An item label with inner-field items beneath it: true when the item is
+  /// collapsed, false when they show; unset for every other cell.
+  std::optional<bool> collapsed;
   std::string field_name;
   std::string number_format;
 };

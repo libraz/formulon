@@ -314,6 +314,7 @@ __all__ = [
     "PivotCalculatedItem",
     "PivotCalendar",
     "PivotCell",
+    "PivotCellExpansion",
     "PivotCellKind",
     "PivotDataField",
     "PivotDataFieldInput",
@@ -2126,6 +2127,13 @@ class PivotCellKind(IntEnum):
     COLUMN_SUBTOTAL = 5
     GRAND_TOTAL = 6
     BLANK = 7
+
+
+class PivotCellExpansion(IntEnum):
+    """Expand / collapse button state of a PivotTable label cell."""
+
+    EXPANDED = 0
+    COLLAPSED = 1
 
 
 class PivotReportLayout(IntEnum):
@@ -6238,6 +6246,10 @@ class PivotCell:
     field_name: Optional[str]
     #: The data field's number format code of the cell; ``None`` when it has none.
     number_format: Optional[str]
+    #: The cell's expand / collapse button: ``COLLAPSED`` for a row or column item label whose inner-field items are
+    #: hidden by ``show_detail``, ``EXPANDED`` when they are shown; ``None`` when the cell has no button (an
+    #: innermost-field label, a subtotal, a grand total, a header or a data cell).
+    expansion: Optional[PivotCellExpansion]
 
 
 @dataclass(frozen=True)

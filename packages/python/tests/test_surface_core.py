@@ -49,7 +49,7 @@ class StructLayoutTests(unittest.TestCase):
         "CFVO": 12,
         "CF_MATCH": 136,
         "CF_RULE": 352,
-        "PIVOT_CELL": 48,
+        "PIVOT_CELL": 56,
         "PIVOT_DATA_FIELD_SPEC": 40,
         "PIVOT_FILTER_SPEC": 64,
         "PIVOT_FIELD_INFO": 72,

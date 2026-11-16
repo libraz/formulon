@@ -25,6 +25,7 @@ from formulon import (
     PivotAxis,
     PivotCache,
     PivotCalendar,
+    PivotCellExpansion,
     PivotDataFieldInput,
     PivotDateGroupInput,
     PivotDatePeriod,
@@ -44,6 +45,56 @@ from formulon import (
 
 
 class PivotTests(unittest.TestCase):
+    def test_collapsed_item_drops_its_inner_rows_and_reports_the_collapse(self) -> None:
+        with Workbook.create_default() as wb:
+            cache = wb.add_pivot_cache()
+            for name in ("Region", "Product", "Amt"):
+                cache.add_field(name)
+            for region, product, amt in [("East", "A", 1.0), ("North", "A", 2.0), ("North", "B", 3.0)]:
+                rec = cache.add_record()
+                cache.set_record_value(rec, 0, region)
+                cache.set_record_value(rec, 1, product)
+                cache.set_record_value(rec, 2, amt)
+            index = wb.sheet(0).add_pivot(PivotInput(name="Pivot1", cache_id=cache.cache_id, anchor=CellAddress(0, 4)))
+            pivot = wb.sheet(0).pivot(index)
+            pivot.set_field_axis("Region", PivotAxis.ROW)
+            pivot.set_field_axis("Product", PivotAxis.ROW)
+            pivot.set_field_axis("Amt", PivotAxis.VALUE)
+            pivot.add_data_field(
+                PivotDataFieldInput(name="Sum of Amt", field_index=2, aggregation=PivotAggregation.SUM)
+            )
+
+            def states() -> List[Tuple[str, Any]]:
+                return [
+                    (c.value, c.expansion) for c in pivot.get_layout().cells if isinstance(c.value, str) and c.col == 4
+                ]
+
+            expanded = PivotCellExpansion.EXPANDED
+            self.assertEqual(
+                states(),
+                [
+                    ("Row Labels", None),
+                    ("East", expanded),
+                    ("A", None),
+                    ("North", expanded),
+                    ("A", None),
+                    ("B", None),
+                    ("Grand Total", None),
+                ],
+            )
+            pivot.update_field_item(0, 0, show_detail=False)
+            self.assertEqual(
+                states(),
+                [
+                    ("Row Labels", None),
+                    ("East", PivotCellExpansion.COLLAPSED),
+                    ("North", expanded),
+                    ("A", None),
+                    ("B", None),
+                    ("Grand Total", None),
+                ],
+            )
+
     def test_build_and_project_pivot(self) -> None:
         with Workbook.create_default() as wb:
             cache_id = wb.add_pivot_cache().cache_id

@@ -6,6 +6,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <map>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -523,6 +524,47 @@ PivotCells ProjectCells(const PivotTable& table, const PivotCache& cache) {
   auto cells_or = layout(table, result_or.value(), options);
   EXPECT_TRUE(static_cast<bool>(cells_or)) << cells_or.error().message;
   return cells_or ? std::move(cells_or.value()) : PivotCells{};
+}
+
+// An item label with inner-field items reports whether it is collapsed; an innermost label, a data caption, a
+// subtotal or a total reports nothing.
+void ExpectExpansionStates(const PivotCells& cells) {
+  const std::map<std::string, std::optional<bool>> expected = {{"East", true}, {"North", false}, {"South", false}};
+  std::size_t labelled = 0;
+  for (const PivotCell& cell : cells.cells) {
+    if (!cell.value.is_text()) {
+      EXPECT_FALSE(cell.collapsed.has_value()) << cell.row << "," << cell.col;
+      continue;
+    }
+    const std::string text(cell.value.as_text());
+    const auto it = expected.find(text);
+    SCOPED_TRACE(text);
+    if (it != expected.end()) {
+      EXPECT_EQ(cell.collapsed, it->second);
+      ++labelled;
+    } else {
+      EXPECT_FALSE(cell.collapsed.has_value());
+    }
+  }
+  EXPECT_GE(labelled, 3U);
+}
+
+TEST(PivotLayoutOptions, ItemLabelsReportTheirExpandCollapseState) {
+  const PivotCache cache = build_region_product_cache();
+  for (const PivotLayout form : {PivotLayout::Compact, PivotLayout::Outline, PivotLayout::Tabular}) {
+    SCOPED_TRACE(static_cast<int>(form));
+    PivotTable table = build_region_product_table(form);
+    CollapseItem(table, 0);
+    ExpectExpansionStates(ProjectCells(table, cache));
+  }
+  // On the columns, with the Values level below the collapsed item.
+  PivotTable columns = build_region_product_table(PivotLayout::Compact);
+  columns.mutable_fields()[0].axis = PivotAxis::Col;
+  columns.mutable_fields()[1].axis = PivotAxis::Col;
+  columns.mutable_col_field_order() = columns.row_field_order();
+  columns.mutable_row_field_order().clear();
+  CollapseItem(columns, 0);
+  ExpectExpansionStates(ProjectCells(columns, cache));
 }
 
 TEST(PivotLayoutOptions, NumberAndDateItemsCarryTheirValue) {

@@ -837,6 +837,9 @@ Napi::Object TranslatePivotCell(Napi::Env env, const fm_pivot_cell_info_t& cell)
   out.Set("depth", Napi::Number::New(env, cell.depth));
   out.Set("fieldName", JsStringOrNull(env, cell.field_name));
   out.Set("numberFormat", JsStringOrNull(env, cell.number_format));
+  out.Set("expansion", cell.expansion != FM_PIVOT_CELL_EXPANSION_ABSENT
+                           ? Napi::Value(Napi::Number::New(env, cell.expansion))
+                           : env.Null());
   return out;
 }
 

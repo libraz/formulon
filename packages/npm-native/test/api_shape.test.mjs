@@ -1522,6 +1522,60 @@ test('removeHyperlinkAt then insertHyperlinkAt at the same index restores a list
 });
 
 // A one-pivot workbook: Region on rows, Sum of Amount as the data field.
+test('a collapsed pivot item drops its inner rows and its label reports the collapse', async () => {
+  const formulon = await getFormulon();
+  const { PivotCellExpansion } = formulon;
+  const wb = formulon.Workbook.createDefault();
+  try {
+    const ws = wb.sheet(0);
+    const cache = wb.addPivotCache();
+    cache.addField('Region');
+    cache.addField('Product');
+    cache.addField('Amt');
+    for (const [region, product, amt] of [
+      ['East', 'A', 1],
+      ['North', 'A', 2],
+      ['North', 'B', 3],
+    ]) {
+      const rec = cache.addRecord();
+      cache.setRecordValue(rec, 0, region);
+      cache.setRecordValue(rec, 1, product);
+      cache.setRecordValue(rec, 2, amt);
+    }
+    const index = ws.addPivot({ name: 'Pivot1', cacheId: cache.cacheId, anchor: { row: 0, col: 4 } });
+    const pivot = ws.pivot(index);
+    pivot.setFieldAxis('Region', 0);
+    pivot.setFieldAxis('Product', 0);
+    pivot.setFieldAxis('Amt', 2);
+    pivot.addDataField({ name: 'Sum of Amt', fieldIndex: 2, aggregation: 0 });
+    const states = () =>
+      pivot
+        .getLayout()
+        .cells.filter((c) => typeof c.value === 'string' && c.col === 4)
+        .map((c) => [c.value, c.expansion]);
+    assert.deepEqual(states(), [
+      ['Row Labels', null],
+      ['East', PivotCellExpansion.Expanded],
+      ['A', null],
+      ['North', PivotCellExpansion.Expanded],
+      ['A', null],
+      ['B', null],
+      ['Grand Total', null],
+    ]);
+    pivot.updateFieldItem(0, 0, { showDetail: false });
+    assert.deepEqual(states(), [
+      ['Row Labels', null],
+      ['East', PivotCellExpansion.Collapsed],
+      ['North', PivotCellExpansion.Expanded],
+      ['A', null],
+      ['B', null],
+      ['Grand Total', null],
+    ]);
+  } finally {
+    wb.dispose();
+  }
+});
+
 function pivotWorkbook(formulon) {
   const wb = formulon.Workbook.createDefault();
   const ws = wb.sheet(0);

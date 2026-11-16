@@ -252,6 +252,19 @@ std::optional<Value> label_item_value(const AxisEntry& entry, std::size_t level)
   return node.identity;
 }
 
+// The expand / collapse state of the item at `entry.labels[level]`, when it has inner-field items: collapsed when
+// the entry stands in for that item.
+std::optional<bool> label_collapsed(const AxisEntry& entry, std::size_t level) {
+  if (level >= entry.nodes.size() || entry.nodes[level] == nullptr || entry.nodes[level]->children.empty()) {
+    return std::nullopt;
+  }
+  std::size_t last = entry.nodes.size();
+  while (last > 0 && entry.nodes[last - 1] == nullptr) {
+    --last;
+  }
+  return entry.collapsed && level + 1 == last;
+}
+
 void emit_text_or_blank(PivotCells& cells, std::uint32_t row, std::uint32_t col, const std::string& text,
                         PivotCellKind kind, PivotCellRole role, std::uint32_t depth, std::string field_name = {},
                         std::string number_format = {}) {
@@ -385,6 +398,7 @@ void emit_col_hierarchy_row(const LayoutPlan& plan, PivotCells& cells, std::uint
                        subtotal_here ? std::string() : label_format(entry, depth));
     if (!subtotal_here && !label.empty()) {
       cells.cells.back().item_value = label_item_value(entry, depth);
+      cells.cells.back().collapsed = label_collapsed(entry, depth);
     }
   }
   if (row != plan.total_header_row) {
@@ -682,6 +696,7 @@ void emit_body_rows(const LayoutPlan& plan, PivotCells& cells) {
                     bare_level.has_value() ? label_format(entry, *bare_level) : std::string());
         if (bare_level.has_value()) {
           cells.cells.back().item_value = label_item_value(entry, *bare_level);
+          cells.cells.back().collapsed = label_collapsed(entry, *bare_level);
         }
         if (compact && role != PivotCellRole::FieldHeader) {
           set_compact_indent(plan, cells, level);
