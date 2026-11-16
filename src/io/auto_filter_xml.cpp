@@ -425,6 +425,10 @@ void read_filter_column(Reader& r, const pugi::xml_node& node, FilterColumn& col
     } else if (name == "iconFilter") {
       col.kind = FilterKind::kIcon;
       r.attrs(child, kIconAttrs, {&col.icon.icon_set, &col.icon.icon_id});
+      // Excel drops the set of a filter with no icon and saves it as the schema default.
+      if (!col.icon.icon_id) {
+        col.icon.icon_set = cf::IconSetName::Three_Arrows;
+      }
     } else if (name == "extLst") {
       for (const pugi::xml_node& ext : child.children()) {
         if (!is_element(ext)) {

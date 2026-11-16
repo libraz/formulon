@@ -333,12 +333,17 @@ Expected<FilterColumn, Error> ReadFilterColumn(ByteSpan& cursor, ByteSpan begin)
         ByteSpan payload = rec.payload;
         ASSIGN_OR_RETURN(const std::uint32_t set, read_u32(payload));
         ASSIGN_OR_RETURN(const std::uint32_t icon, read_u32(payload));
-        if (set == kKpiNil || set > static_cast<std::uint32_t>(cf::IconSetName::Five_Quarters)) {
+        // A filter with no icon has no set: Excel writes both nil, and reads any set with a nil icon as that filter,
+        // which keeps the default set.
+        const bool no_icon = icon == kKpiNil;
+        if (!(no_icon && set == kKpiNil) && set > static_cast<std::uint32_t>(cf::IconSetName::Five_Quarters)) {
           return Unsupported(kBrtIconFilter);
         }
         col.kind = FilterKind::kIcon;
-        col.icon.icon_set = static_cast<cf::IconSetName>(set);
-        col.icon.icon_id = icon == kKpiNil ? std::nullopt : std::optional<std::uint32_t>(icon);
+        if (!no_icon) {
+          col.icon.icon_set = static_cast<cf::IconSetName>(set);
+          col.icon.icon_id = icon;
+        }
         break;
       }
       default:
@@ -486,7 +491,8 @@ std::uint32_t EmitCriterion(std::vector<std::uint8_t>& out, const FilterColumn& 
       emit_record(out, kBrtColorFilter, payload);
       return 0U;
     case FilterKind::kIcon:
-      emit_u32(payload, static_cast<std::uint32_t>(col.icon.icon_set));
+      // A filter with no icon is written with no set.
+      emit_u32(payload, col.icon.icon_id ? static_cast<std::uint32_t>(col.icon.icon_set) : kKpiNil);
       emit_u32(payload, col.icon.icon_id.value_or(kKpiNil));
       emit_record(out, kBrtIconFilter, payload);
       return 0U;

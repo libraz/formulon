@@ -1,4 +1,5 @@
-// AutoFilter forms Excel 16.115 saves for the blank / non-blank custom criteria and the calendar types
+// AutoFilter forms Excel 16.115 saves for the blank / non-blank custom criteria, the calendar types and the icon
+// filter with no icon
 // (tests/fixtures/excel/afilter), read into the model and written back.
 
 #include <cstddef>
@@ -10,6 +11,7 @@
 
 #include "auto_filter.h"
 #include "gtest/gtest.h"
+#include "io/auto_filter_xml.h"
 #include "io/ooxml_reader.h"
 #include "io/xlsb/auto_filter_records.h"
 #include "io/xlsb/frt_records.h"
@@ -436,6 +438,61 @@ TEST(XlsbAutoFilterForms, EqualityCriteriaWriteBackExcelsBlock) {
       EXPECT_EQ(a, b) << "record " << i << " type " << excel[i].first;
     }
   }
+}
+
+// An icon filter with no icon keeps no set: Excel saves `<iconFilter iconSet="3Arrows"/>` (for any authored set) and
+// xlsb nil set and icon; an icon of a set is kept as authored.
+TEST(XlsbAutoFilterForms, IconFilterWithNoIconHasNoSet) {
+  const struct {
+    const char* name;
+    std::uint32_t set;
+    std::uint32_t icon;
+  } kCases[] = {
+      {"icon_no_id", 0xFFFFFFFFU, 0xFFFFFFFFU},
+      {"icon_id0", 0U, 0U},
+      {"icon_rating4_no_id", 0xFFFFFFFFU, 0xFFFFFFFFU},
+  };
+  for (const auto& c : kCases) {
+    SCOPED_TRACE(c.name);
+    const Records excel = ExcelBlock(c.name);
+    const Bytes* stored = FindRecord(excel, kBrtIconFilter);
+    ASSERT_NE(stored, nullptr);
+    ASSERT_EQ(stored->size(), 8U);
+    EXPECT_EQ(U32At(*stored, 0), c.set);
+    EXPECT_EQ(U32At(*stored, 4), c.icon);
+    EXPECT_EQ(Written(ExcelFilter(c.name)), excel);
+    const AutoFilter source = SourceFilter(c.name);
+    EXPECT_EQ(Written(source), excel);
+    ASSERT_EQ(source.columns.size(), 1U);
+    EXPECT_EQ(source.columns[0].icon.icon_set, cf::IconSetName::Three_Arrows);
+    const std::string xml = auto_filter_xml(&source);
+    EXPECT_NE(
+        xml.find(c.icon == 0U ? "<iconFilter iconSet=\"3Arrows\" iconId=\"0\"/>" : "<iconFilter iconSet=\"3Arrows\"/>"),
+        std::string::npos)
+        << xml;
+  }
+}
+
+// A set with a nil icon (Excel opens one and keeps it on an xlsb resave) reads as the filter with no icon; a nil set
+// with an icon is refused.
+TEST(XlsbAutoFilterForms, IconFilterSetWithANilIconReadsAsNoIcon) {
+  const AutoFilter filter = ExcelFilter("icon_set0_nil");
+  ASSERT_EQ(filter.columns.size(), 1U);
+  EXPECT_EQ(filter.columns[0].kind, FilterKind::kIcon);
+  EXPECT_EQ(filter.columns[0].icon.icon_set, cf::IconSetName::Three_Arrows);
+  EXPECT_FALSE(filter.columns[0].icon.icon_id.has_value());
+
+  Records block = ExcelBlock("icon_set0_nil");
+  for (auto& rec : block) {
+    if (rec.first == kBrtIconFilter) {
+      rec.second = {0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x00, 0x00, 0x00};
+    }
+  }
+  const Bytes stream = Stream(block);
+  ByteSpan cursor{stream.data(), stream.size()};
+  auto begin = read_record(cursor);
+  ASSERT_TRUE(static_cast<bool>(begin));
+  EXPECT_FALSE(static_cast<bool>(read_auto_filter_block(cursor, begin.value().payload)));
 }
 
 }  // namespace
