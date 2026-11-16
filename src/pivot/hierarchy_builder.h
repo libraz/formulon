@@ -62,10 +62,10 @@ struct HierNode {
   std::optional<Value> value_sort_key;
   /// Index into the flat leaf array assigned during finalisation. Leaves only.
   std::size_t leaf_index = static_cast<std::size_t>(-1);
-  /// When non-empty, used in place of `display_string(key)` for this
-  /// node's label. Set by `insert_path` when the label differs from the
-  /// cache value's textual form.
-  std::string label_override;
+  /// When set (an empty string included), used in place of
+  /// `display_string(key)` for this node's label. Set by `insert_path` when
+  /// the label differs from the cache value's textual form.
+  std::optional<std::string> label_override;
   /// True for a calculated item's node, which no record lands on.
   bool calculated = false;
 };

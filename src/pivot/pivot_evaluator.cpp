@@ -109,7 +109,7 @@ std::string page_item_label(const PivotCache& cache, std::size_t field_index, co
                             std::optional<std::uint32_t> selected, bool subtotal_hidden_items,
                             const PivotLayoutOptions& options) {
   const auto label_of = [&](const PivotItem& item) {
-    if (!item.caption.empty()) {
+    if (item_has_caption(item)) {
       return item.caption;
     }
     std::string label = pivot_item_label(cache, field_index, item);
@@ -288,7 +288,7 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
     std::map<Value, std::string, ValueLess> captions;
     if (fi < table.fields().size()) {
       for (const PivotItem& item : table.fields()[fi].items) {
-        if (item.caption.empty()) {
+        if (!item_has_caption(item)) {
           continue;
         }
         if (const std::optional<Value> key = pivot_item_record_value(cache, fi, item)) {

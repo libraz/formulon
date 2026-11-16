@@ -603,7 +603,7 @@ static void apply_transforms(const PivotTable& table, const PivotCache& cache, P
           }
           if (!spec.item_label.has_value()) {
             spec.item_label =
-                !item.caption.empty() ? item.caption : pivot_item_label(cache, *df.show_as_base_field, item);
+                item_has_caption(item) ? item.caption : pivot_item_label(cache, *df.show_as_base_field, item);
           }
         }
       }

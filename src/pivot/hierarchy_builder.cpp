@@ -69,15 +69,10 @@ void collect_axis_leaf_groups(const AxisHierarchyNode& node, std::size_t depth, 
   }
 }
 
-/// The label a node keyed `raw` on `level` draws instead of its cache value's
-/// text; empty when it draws that text.
-std::string label_override_for(const HierLevel& level, const Value& raw, std::string_view blank_item_label,
-                               bool date1904, ExcelProfile profile) {
-  if (level.captions != nullptr) {
-    if (const auto it_caption = level.captions->find(raw); it_caption != level.captions->end()) {
-      return it_caption->second;
-    }
-  }
+/// The label a node keyed `raw` on `level` draws for a group item, a blank
+/// source cell or a number format; empty when it draws the value's own text.
+std::string derived_label_for(const HierLevel& level, const Value& raw, std::string_view blank_item_label,
+                              bool date1904, ExcelProfile profile) {
   if (level.group_items != nullptr && raw.is_number()) {
     const std::optional<std::size_t> item = index_from_double(raw.as_number(), level.group_items->size());
     return item.has_value() ? display_string((*level.group_items)[*item]) : std::string();
@@ -94,6 +89,22 @@ std::string label_override_for(const HierLevel& level, const Value& raw, std::st
     return text_format::format_value_for_display(raw, level.number_format, date1904, profile).text;
   }
   return {};
+}
+
+/// The label a node keyed `raw` on `level` draws instead of its cache value's
+/// text; nullopt when it draws that text. A caption overrides even when empty.
+std::optional<std::string> label_override_for(const HierLevel& level, const Value& raw,
+                                              std::string_view blank_item_label, bool date1904, ExcelProfile profile) {
+  if (level.captions != nullptr) {
+    if (const auto it_caption = level.captions->find(raw); it_caption != level.captions->end()) {
+      return it_caption->second;
+    }
+  }
+  std::string derived = derived_label_for(level, raw, blank_item_label, date1904, profile);
+  if (derived.empty()) {
+    return std::nullopt;
+  }
+  return derived;
 }
 
 /// Copies the subtree shape of `src` (keys, labels, calculated flags) into `dst`.
@@ -202,8 +213,8 @@ AxisLeafPaths collect_leaf_paths(HierNode& tree, const std::vector<HierLevel>& l
 }
 
 std::string node_label(const HierarchyKey& key, const HierNode& child) {
-  if (!child.label_override.empty()) {
-    return child.label_override;
+  if (child.label_override.has_value()) {
+    return *child.label_override;
   }
   return display_string(key.value);
 }

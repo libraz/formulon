@@ -213,6 +213,12 @@ struct PivotItem {
   std::vector<std::pair<std::string, std::string>> passthrough_attrs{};
 };
 
+/// True when `item` shows a caption of its own instead of its source label.
+/// An empty caption counts when it was set (`blank_caption`).
+inline bool item_has_caption(const PivotItem& item) {
+  return !item.caption.empty() || item.blank_caption;
+}
+
 /// A non-data `<item t="...">` of a `<pivotField>`'s `<items>`: a subtotal
 /// marker (`default`, `sum`, `countA`, ...), `grand` or `blank`, kept
 /// verbatim so its attributes survive a save.
