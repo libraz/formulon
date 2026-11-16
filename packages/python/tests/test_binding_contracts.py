@@ -826,16 +826,16 @@ class WasmOnlyCapabilityTests(unittest.TestCase):
 class OneShotEvaluationTests(unittest.TestCase):
     """``evaluate_formula`` must agree value-for-value with the JS surfaces.
 
-    Both npm packages assert the same table. A value read of the anchor
-    itself is a self-cycle and gives 0, as the formula held in A1 would; a
-    read beside it sees the blank sheet.
+    Both npm packages assert the same table. A read of the anchor gets its
+    current value, as Excel's Application.Evaluate does, so an empty A1 reads
+    blank.
     """
 
     CASES = (
         ("=1+2", ValueKind.NUMBER, 3.0),
         ("=A1", ValueKind.NUMBER, 0.0),
         ("=COUNTA(A1)", ValueKind.NUMBER, 0.0),
-        ("=ISBLANK(A1)", ValueKind.NUMBER, 0.0),
+        ("=ISBLANK(A1)", ValueKind.BOOL, True),
         ("=ISBLANK(B1)", ValueKind.BOOL, True),
         ("=SUM(A1:A3)", ValueKind.NUMBER, 0.0),
         ("=SEQUENCE(3)", ValueKind.ARRAY, [[1.0], [2.0], [3.0]]),

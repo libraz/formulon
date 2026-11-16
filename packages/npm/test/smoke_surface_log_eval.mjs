@@ -125,14 +125,13 @@ test('a throwing log sink surfaces its own exception and leaves the engine usabl
 
 // One-shot evaluation is anchored at Sheet1!A1 and read-only on every
 // shipped surface, so these must agree value-for-value with the WASM
-// package and the Python wheel. A value read of the anchor itself is a
-// self-cycle and gives 0, as the formula held in A1 would; a read beside
-// it sees the blank sheet.
+// package and the Python wheel. A read of the anchor gets its current
+// value, as Excel's Application.Evaluate does, so an empty A1 reads blank.
 const ONE_SHOT_CASES = [
   { formula: '=1+2', kind: 1, number: 3 },
   { formula: '=A1', kind: 1, number: 0 },
   { formula: '=COUNTA(A1)', kind: 1, number: 0 },
-  { formula: '=ISBLANK(A1)', kind: 1, number: 0 },
+  { formula: '=ISBLANK(A1)', kind: 2, boolean: true },
   { formula: '=ISBLANK(B1)', kind: 2, boolean: true },
   { formula: '=SUM(A1:A3)', kind: 1, number: 0 },
   { formula: '=SEQUENCE(3)', kind: 5, rows: 3, cols: 1, numbers: [1, 2, 3] },
