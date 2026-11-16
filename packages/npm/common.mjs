@@ -8452,13 +8452,8 @@ function makeFacade(Raw, registry, runtime) {
       const span = (axis, key) => {
         const value = titles[key];
         if (typeof value !== 'string') return value;
-        try {
-          const [first, last] = spanAddress(raw, value, axis, argLabel(where, 0, key));
-          return { first, last };
-        } catch (e) {
-          if (e?.name !== 'FormulonError' || e.parseError === undefined) throw e;
-          throw new FormulonError(StatusCode.InvalidArgument, `${argLabel(where, 0, key)} must be an A1 span`, '');
-        }
+        const [first, last] = spanAddress(raw, value, axis, argLabel(where, 0, key));
+        return { first, last };
       };
       raw.setPrintTitles(sheet, { ...titles, rows: span('row', 'rows'), columns: span('col', 'columns') });
     }
