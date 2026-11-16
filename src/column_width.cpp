@@ -27,8 +27,9 @@ namespace {
 //   * Print-layout width, consumed only by `paginate()`'s own break math
 //     (h_breaks / v_breaks / page count). Mac Excel paginates with its
 //     whole-point screen layout: a column is floor(stored pixels) points of
-//     the Mac MDW, and the breaks of Mac Excel 16.115 at Calibri 8-18 fill the
-//     printable width greedily with exactly those widths. On Windows, comparing a Windows Excel 365
+//     the Mac MDW, and the breaks of Mac Excel 16.115 under Calibri 8-18,
+//     游ゴシック 10/11/14, 等线 11 and Aptos Narrow 12 fill the printable width
+//     greedily with exactly those widths. On Windows, comparing a Windows Excel 365
 //     ja-JP build 16.0.20228/16.0.20326 capture taken at 100% display
 //     scaling (96 DPI) against one of the *same build* taken at 175%
 //     (168 DPI) shows `Range.Width` itself is DPI-dependent (Calibri 11

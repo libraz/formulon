@@ -131,7 +131,7 @@ TEST(FontMetrics, EmptyFontTableYieldsTheUncalibratedCalibri11) {
   EXPECT_FALSE(win.width_calibrated);
 }
 
-TEST(FontMetrics, MacEnglishAliasesResolveAndYuGothicDoesNot) {
+TEST(FontMetrics, MacEnglishAliasesResolveAndYuGothicIsItsOwnFace) {
   struct Case {
     const char* alias;
     double size;
@@ -149,10 +149,11 @@ TEST(FontMetrics, MacEnglishAliasesResolveAndYuGothicDoesNot) {
     // Windows matches names exactly: an alias is not in its table.
     EXPECT_FALSE(Metrics(c.alias, c.size, win_365_ja_jp_profile()).width_calibrated) << c.alias;
   }
+  // "Yu Gothic" is its own measured face, not an alias of 游ゴシック: its 11 pt row is 17 pt, not 18.
   const NormalFontMetrics yu = Metrics("Yu Gothic", 11, mac_365_ja_jp_profile());
-  EXPECT_FALSE(yu.width_calibrated);
-  EXPECT_FALSE(yu.row_height_calibrated);
-  EXPECT_DOUBLE_EQ(yu.row_height_pt, 15.0);
+  EXPECT_TRUE(yu.width_calibrated);
+  EXPECT_DOUBLE_EQ(yu.mdw_pt, 6.0);
+  EXPECT_DOUBLE_EQ(yu.row_height_pt, 17.0);
 }
 
 // Model of the scheme=minor face test: host (mac, win) x locale (7) x scheme (none, minor) x

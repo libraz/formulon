@@ -684,15 +684,15 @@ entries:
   # Windows Excel paginates with a DPI-stable print figure that differs from
   # its DPI-dependent `Range.Width`; only Calibri 11's print figure is
   # measured. Mac Excel paginates with its screen layout (whole points of the
-  # Mac MDW), which Mac Excel 16.115's breaks confirm for Calibri 8/11/14/18
-  # and 游ゴシック 11/14 (tests/fixtures/excel/mac/print_breaks/).
+  # Mac MDW), measured per Normal face and size in src/font_metrics.cpp and
+  # pinned against Mac Excel 16.115 by tests/unit/print/mac_print_breaks_test.cpp.
   - id: pagination_column_width_calibrated_to_one_normal_font
     applies_to: all
     cause: engine-gap
     mode: skip-oracle
     scope: deferred-feature
-    evidence: [src/column_width.cpp, src/font_metrics.cpp, tests/unit/print/pagination_test.cpp, tests/unit/print/mac_print_breaks_test.cpp]
-    reason: "Pagination lays columns out by the workbook's Normal font through `resolve_column_width_model` in `GeometryMode::kPrint` (src/column_width.cpp). On Windows it converts the font's 96-DPI max digit width (MDW) and padding from the Windows table (src/font_metrics.cpp) to the DPI-stable print figure. Only Calibri 11's print figure is measured (39/7 pt per character plus 27/7 pt padding, from the print-track breaks); every other Windows font and size scales its display figures by Calibri 11's print/display ratios (`kPrintMdwRatio`, `kPrintPaddingRatio`), which no print capture under another Normal font confirms. On Mac the print figure is the screen layout from the measured Mac table, matching Mac Excel's breaks; a Mac Normal font or size absent from that table falls back to the Calibri 11 figures, unmeasured."
+    evidence: [src/column_width.cpp, src/font_metrics.cpp, tests/unit/print/pagination_test.cpp]
+    reason: "Pagination lays columns out by the workbook's Normal font through `resolve_column_width_model` in `GeometryMode::kPrint` (src/column_width.cpp). On Windows it converts the font's 96-DPI max digit width (MDW) and padding from the Windows table (src/font_metrics.cpp) to the DPI-stable print figure. Only Calibri 11's print figure is measured (39/7 pt per character plus 27/7 pt padding, from the print-track breaks); every other Windows font and size scales its display figures by Calibri 11's print/display ratios (`kPrintMdwRatio`, `kPrintPaddingRatio`), which no print capture under another Normal font confirms."
     prefer: win-excel-365
     first_noted: 2026-08-22
     last_verified_excel_version: "16.0.20326"
