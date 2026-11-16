@@ -7,15 +7,20 @@
 #include <string_view>
 #include <vector>
 
+#include "eval/array_alloc.h"
 #include "eval/builtin_names.h"
 #include "eval/coerce.h"
+#include "eval/declared_rect.h"
 #include "eval/dynamic_array/common.h"
 #include "eval/error_origin.h"
 #include "eval/eval_context.h"
+#include "eval/lazy_impls.h"
+#include "eval/lookups/common.h"
 #include "eval/name_env_resolve.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "eval/range_resolvers.h"
+#include "eval/reference/ref_value.h"
 #include "eval/tree_walker/dispatch.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -114,29 +119,24 @@ bool denotes_reference(const parser::AstNode& node, const EvalContext& ctx) {
   }
 }
 
-Value eval_take_drop(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                     const EvalContext& ctx, bool take) {
+// Slices `array` by TAKE / DROP's counts.
+Value slice_array(const parser::AstNode& call, const ArrayValue& array, bool take, Arena& arena,
+                  const FunctionRegistry& registry, const EvalContext& ctx) {
   Value err = Value::error(ErrorCode::Value);
-  const ArrayValue* array =
-      dynamic_array::resolve_array_prelude(call, 2U, 3U, /*reject_empty=*/false, arena, registry, ctx, err);
-  if (array == nullptr) {
-    return err;
-  }
-
   std::uint32_t row_lo = 0;
   std::uint32_t row_hi = 0;
   const parser::AstNode* row_arg = is_omitted_arg(call.as_call_arg(1)) ? nullptr : &call.as_call_arg(1);
-  if (!dynamic_array::resolve_take_drop_range(row_arg, array->rows, take, arena, registry, ctx, row_lo, row_hi, err)) {
+  if (!dynamic_array::resolve_take_drop_range(row_arg, array.rows, take, arena, registry, ctx, row_lo, row_hi, err)) {
     return err;
   }
   std::uint32_t col_lo = 0;
-  std::uint32_t col_hi = array->cols;
+  std::uint32_t col_hi = array.cols;
   const parser::AstNode* col_arg = call_arg_supplied(call, 2U) ? &call.as_call_arg(2) : nullptr;
-  if (!dynamic_array::resolve_take_drop_range(col_arg, array->cols, take, arena, registry, ctx, col_lo, col_hi, err)) {
+  if (!dynamic_array::resolve_take_drop_range(col_arg, array.cols, take, arena, registry, ctx, col_lo, col_hi, err)) {
     return err;
   }
 
-  ArrayValue* out = dynamic_array::materialise_slice(*array, row_lo, row_hi, col_lo, col_hi, arena);
+  ArrayValue* out = dynamic_array::materialise_slice(array, row_lo, row_hi, col_lo, col_hi, arena);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
@@ -145,6 +145,79 @@ Value eval_take_drop(const parser::AstNode& call, Arena& arena, const FunctionRe
     return out->cells[0];
   }
   return Value::array(out);
+}
+
+// TAKE / DROP over a source call that answered a value: the value read as an array.
+Value take_drop_value(const parser::AstNode& call, const Value& source, bool take, Arena& arena,
+                      const FunctionRegistry& registry, const EvalContext& ctx) {
+  if (source.is_error()) {
+    return source;
+  }
+  if (source.is_array()) {
+    return slice_array(call, *source.as_array(), take, arena, registry, ctx);
+  }
+  Value* buf = nullptr;
+  ArrayValue* one = allocate_derived_array_value(1U, 1U, arena, buf);
+  if (one == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  buf[0] = source;
+  return slice_array(call, *one, take, arena, registry, ctx);
+}
+
+// TAKE / DROP over a bounded one-area reference: the kept rectangle as a reference. `source` is the
+// evaluated source; a whole-axis one is left to the value path, which reads its populated extent.
+bool slice_reference(const parser::AstNode& call, const Value& source, bool take, Arena& arena,
+                     const FunctionRegistry& registry, const EvalContext& ctx, Value* out) {
+  if (!is_one_area_ref(source)) {
+    return false;
+  }
+  const RefArea& a = source.as_ref().areas[0];
+  if (a.whole_col != 0U || a.whole_row != 0U) {
+    return false;
+  }
+  const std::uint32_t rows = a.row_last - a.row_first + 1U;
+  const std::uint32_t cols = static_cast<std::uint32_t>(a.col_last) - a.col_first + 1U;
+  Value err = Value::error(ErrorCode::Value);
+  std::uint32_t row_lo = 0;
+  std::uint32_t row_hi = 0;
+  const parser::AstNode* row_arg = is_omitted_arg(call.as_call_arg(1)) ? nullptr : &call.as_call_arg(1);
+  std::uint32_t col_lo = 0;
+  std::uint32_t col_hi = cols;
+  const parser::AstNode* col_arg = call_arg_supplied(call, 2U) ? &call.as_call_arg(2) : nullptr;
+  if (!dynamic_array::resolve_take_drop_range(row_arg, rows, take, arena, registry, ctx, row_lo, row_hi, err) ||
+      !dynamic_array::resolve_take_drop_range(col_arg, cols, take, arena, registry, ctx, col_lo, col_hi, err)) {
+    *out = err;
+    return true;
+  }
+  const DeclaredRect rect{a.row_first + row_lo, a.row_first + row_hi - 1U, a.col_first + col_lo,
+                          a.col_first + col_hi - 1U, /*whole_axis=*/false};
+  const RefArea kept = make_ref_area(rect, a.sheet_first, a.sheet_last, RefOrigin::kDerived);
+  const Value ref = make_ref(arena, RefForm::kArea, 0, &kept, 1);
+  *out = source.ref_is_dynamic() ? ref.with_ref_dynamic() : ref;
+  return true;
+}
+
+Value eval_take_drop(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx, bool take) {
+  const std::uint32_t arity = call.as_call_arity();
+  // A cell or range token is read as its reference; a reference-returning call is evaluated once here.
+  if (arity >= 2U && arity <= 3U && source_returns_reference(call.as_call_arg(0))) {
+    const Value source = eval_node_ref(call.as_call_arg(0), arena, registry, ctx);
+    if (Value sliced = Value::blank(); slice_reference(call, source, take, arena, registry, ctx, &sliced)) {
+      return sliced;
+    }
+    if (call.as_call_arg(0).kind() == parser::NodeKind::Call && !source.is_ref()) {
+      return take_drop_value(call, source, take, arena, registry, ctx);
+    }
+  }
+  Value err = Value::error(ErrorCode::Value);
+  const ArrayValue* array =
+      dynamic_array::resolve_array_prelude(call, 2U, 3U, /*reject_empty=*/false, arena, registry, ctx, err);
+  if (array == nullptr) {
+    return err;
+  }
+  return slice_array(call, *array, take, arena, registry, ctx);
 }
 
 }  // namespace

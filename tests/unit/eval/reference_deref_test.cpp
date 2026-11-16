@@ -957,6 +957,62 @@ TEST_F(SelectedRefTest, ValueModeReadsTheMatchedSlice) {
   ExpectSame(Eval("=XLOOKUP(-1,A1:A5,B1:B5,D4)"), Eval("=D4"), "fallback reference");
 }
 
+// TAKE / DROP over a bounded reference and TRIMRANGE over a reference return the kept rectangle.
+TEST_F(SelectedRefTest, TakeDropAndTrimReturnTheKeptRectangle) {
+  ExpectSelected("=TAKE(A1:C5,2)", 0, 0, 1, 2);
+  ExpectSelected("=TAKE(A1:C5,-1,-2)", 4, 1, 4, 2);
+  ExpectSelected("=DROP(A1:C5,3,1)", 3, 1, 4, 2);
+  ExpectSelected("=DROP(Sheet2!A1:B4,-1)", 0, 0, 2, 1, 1);
+  ExpectSelected("=TAKE(OFFSET(A1,0,0,4,4),1,1)", 0, 0, 0, 0, kHome, /*dynamic=*/true);
+  ExpectSelected("=INDEX(DROP(A1:C5,1),1,1)", 1, 0, 1, 0);
+  // Row 5 and column E hold values but E5 is empty, so A1:E5 trims to itself and D4:F9 to D4:E5.
+  ExpectSelected("=TRIMRANGE(A1:E5)", 0, 0, 4, 4);
+  ExpectSelected("=TRIMRANGE(D4:F9)", 3, 3, 4, 4);
+}
+
+TEST_F(SelectedRefTest, TakeDropOverValuesGiveValues) {
+  EXPECT_TRUE(AsRef("=TAKE({1,2;3,4},1)").is_array());
+  EXPECT_TRUE(AsRef("=DROP(IF(TRUE,{1,2;3,4}),1)").is_array());
+  ExpectError(AsRef("=TAKE(A1:C5,0)"), ErrorCode::Calc, "zero rows");
+  ExpectError(AsRef("=DROP(A1:C5,5)"), ErrorCode::Calc, "every row dropped");
+  ExpectError(AsRef("=TAKE(OFFSET(A1,-1,0),1)"), ErrorCode::Ref, "source error");
+}
+
+TEST_F(SelectedRefTest, ValueModeReadsTheKeptRectangle) {
+  ExpectSame(Eval("=TAKE(A1:C5,2)"), Eval("=A1:C2"), "taken rows");
+  ExpectSame(Eval("=DROP(A1:C5,3,1)"), Eval("=B4:C5"), "dropped rows and column");
+  ExpectSame(Eval("=TAKE(A1:C5,1,1)"), Eval("=A1"), "one cell");
+  ExpectSame(Eval("=SUM(DROP(A1:C5,4))"), Eval("=SUM(A5:C5)"), "aggregate");
+  ExpectSame(Eval("=TRIMRANGE(D4:F9)"), Eval("=D4:E5"), "trimmed");
+}
+
+// TAKE / DROP over a whole column. As a reference argument they name the kept rows of the whole column;
+// read as values, the column is still narrowed to its populated rows first, so TAKE(A:A,-1) reads A5 where
+// the reference names A1048576.
+TEST_F(SelectedRefTest, WholeAxisTakeAndDropKnownReads) {
+  struct Case {
+    const char* source;
+    double value;
+  };
+  const Case cases[] = {
+      {"=ROWS(OFFSET(DROP(A:A,1),0,0))", 1048575.0},
+      {"=ROWS(OFFSET(TAKE(A:A,-1),0,0))", 1.0},
+      {"=ROW(INDEX(DROP(A:A,1),1))", 2.0},
+      {"=ROW(INDEX(TAKE(A:A,-1),1))", 1048576.0},
+      {"=ROWS(A1:TAKE(A:A,-1))", 1048576.0},
+      {"=ROWS(DROP(A:A,1):B2)", 1048575.0},
+      {"=ROWS(TAKE(A:A,-2))", 2.0},
+      {"=ROWS(DROP(A:A,1))", 1048575.0},
+      {"=SUM(DROP(A:A,1))", 144.0},
+      {"=TAKE(A:A,-1)", 51.0},
+  };
+  for (const Case& c : cases) {
+    const Value v = Eval(c.source);
+    ASSERT_TRUE(v.is_number()) << c.source << ": " << v.debug_to_string();
+    EXPECT_EQ(v.as_number(), c.value) << c.source;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

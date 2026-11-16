@@ -52,7 +52,8 @@ bool source_returns_reference(const parser::AstNode& node) {
     return is_reference_token(node);
   }
   const std::string_view name = strip_future_prefix(node.as_call_name());
-  for (const std::string_view producer : {"OFFSET", "INDIRECT", "IF", "CHOOSE", "IFS", "SWITCH", "INDEX", "XLOOKUP"}) {
+  for (const std::string_view producer : {"OFFSET", "INDIRECT", "IF", "CHOOSE", "IFS", "SWITCH", "INDEX", "XLOOKUP",
+                                          "TAKE", "DROP", "TRIMRANGE", "_TRO_ALL", "_TRO_LEADING", "_TRO_TRAILING"}) {
     if (strings::case_insensitive_eq(name, producer)) {
       return true;
     }

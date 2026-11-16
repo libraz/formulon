@@ -9,13 +9,14 @@
 #include "eval/array_alloc.h"
 #include "eval/array_context.h"
 #include "eval/coerce.h"
+#include "eval/declared_rect.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
 #include "eval/range_resolvers.h"
+#include "eval/reference/ref_value.h"
 #include "eval/scalar_args.h"
 #include "eval/tree_walker/dispatch.h"
 #include "parser/ast.h"
-#include "parser/reference.h"
 #include "sheet.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -233,8 +234,8 @@ bool trim_resolved_rect(const parser::AstNode& call, Arena& arena, const Functio
   return true;
 }
 
-// TRIMRANGE and the trim operators as a value: a reference source is read
-// over its trimmed rectangle like any range, anything else is trimmed by value.
+// TRIMRANGE and the trim operators: a reference source gives its trimmed
+// rectangle as a reference, anything else is trimmed by value.
 Value eval_trim(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
   if (call.as_call_arity() < 1U) {
     return Value::error(ErrorCode::Value);
@@ -251,21 +252,8 @@ Value eval_trim(const parser::AstNode& call, Arena& arena, const FunctionRegistr
   if (!trim_resolved_rect(call, arena, registry, ctx, sheet, &top, &left, &bottom, &right, &err)) {
     return Value::error(err);
   }
-  parser::Reference top_left{};
-  top_left.sheet = sheet;
-  top_left.row = top;
-  top_left.col = left;
-  parser::Reference bottom_right = top_left;
-  bottom_right.row = bottom;
-  bottom_right.col = right;
-  parser::AstNode* lhs = parser::make_ref(arena, top_left);
-  parser::AstNode* rhs = parser::make_ref(arena, bottom_right);
-  const parser::AstNode* rect =
-      lhs != nullptr && rhs != nullptr ? parser::make_range_op(arena, lhs, rhs, /*spliced=*/false) : nullptr;
-  if (rect == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  return eval_node_as_array(*rect, arena, registry, ctx);
+  return make_rect_ref(sheet, DeclaredRect{top, bottom, left, right, /*whole_axis=*/false}, RefOrigin::kDerived, arena,
+                       ctx);
 }
 
 }  // namespace

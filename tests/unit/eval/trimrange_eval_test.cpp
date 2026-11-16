@@ -65,12 +65,11 @@ TEST(BuiltinsTrimRange, DefaultTrimsBothEdgesOnColumn) {
   Workbook wb = Workbook::create();
   // A1 blank (default), A2=1, A3 blank.
   wb.sheet(0).set_cell_value(1, 0, Value::number(1.0));
+  // The trimmed reference is the one cell A2, which reads as its value.
   const Value v = EvalIn("=TRIMRANGE(A1:A3)", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_array());
-  EXPECT_EQ(v.as_array_rows(), 1U);
-  EXPECT_EQ(v.as_array_cols(), 1U);
-  ASSERT_TRUE(v.as_array_cells()[0].is_number());
-  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 1.0);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(EvalIn("=ROWS(TRIMRANGE(A1:A3))", wb, wb.sheet(0)).as_number(), 1.0);
 }
 
 TEST(BuiltinsTrimRange, DefaultTrimsBlankBorderOf3x3) {
@@ -238,14 +237,13 @@ TEST(BuiltinsTrimRange, ModeTwoRowsWithDefaultColumnTrimKeepsLeadingRows) {
 TEST(BuiltinsTrimRange, ModeThreeMatchesDefault) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(2, 2, Value::number(42));
+  // Both trim to the one cell C3, which reads as its value.
   const Value v_default = EvalIn("=TRIMRANGE(A1:E5)", wb, wb.sheet(0));
+  ASSERT_TRUE(v_default.is_number()) << v_default.debug_to_string();
+  EXPECT_DOUBLE_EQ(v_default.as_number(), 42.0);
   const Value v_explicit = EvalIn("=TRIMRANGE(A1:E5, 3, 3)", wb, wb.sheet(0));
-  ASSERT_TRUE(v_default.is_array());
-  ASSERT_TRUE(v_explicit.is_array());
-  EXPECT_EQ(v_default.as_array_rows(), v_explicit.as_array_rows());
-  EXPECT_EQ(v_default.as_array_cols(), v_explicit.as_array_cols());
-  EXPECT_EQ(v_default.as_array_rows(), 1U);
-  EXPECT_EQ(v_default.as_array_cols(), 1U);
+  ASSERT_TRUE(v_explicit.is_number()) << v_explicit.debug_to_string();
+  EXPECT_DOUBLE_EQ(v_explicit.as_number(), 42.0);
 }
 
 // ---------------------------------------------------------------------------
@@ -315,11 +313,8 @@ TEST(BuiltinsTrimRange, MixedRowWithBlankAndNumberPreserved) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::number(1));
   const Value v = EvalIn("=TRIMRANGE(A1:B2)", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_array());
-  EXPECT_EQ(v.as_array_rows(), 1U);
-  EXPECT_EQ(v.as_array_cols(), 1U);
-  ASSERT_TRUE(v.as_array_cells()[0].is_number());
-  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 1.0);
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
 }
 
 TEST(BuiltinsTrimRange, RangeConsumersRetainCopiedBlankProvenance) {
