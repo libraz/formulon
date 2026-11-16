@@ -83,11 +83,10 @@ struct ParsedCriterion {
   /// a Number criterion matches only Number cells. The matcher branches on
   /// this flag in the numeric path.
   bool rhs_from_bool = false;
-  /// True when the criterion itself is an error Value (e.g. a cell holding
-  /// `#N/A` passed as `COUNTIF(range, #N/A)`). The matcher counts cells whose
-  /// error code equals `rhs_error_code` and every other kind is a miss.
-  /// Observed in Excel 365: `COUNTIF` does not propagate an error criterion
-  /// but uses it as a filter over error cells in the range.
+  /// True when the criterion is an error Value (`COUNTIF(range, #N/A)`) or an
+  /// Eq / NotEq text naming one in the active locale (`"#N/A"`, `"<>#N/A"`).
+  /// Eq matches cells whose error code equals `rhs_error_code`; NotEq matches
+  /// every other cell. Excel 365 does not propagate an error criterion.
   bool rhs_is_error = false;
   ErrorCode rhs_error_code = ErrorCode::NA;
   /// True when a plain-text criterion should be interpreted as "cell text
@@ -188,7 +187,8 @@ struct ParsedCriterion {
 ///   * `Blank`  -> `Op::Eq` with text RHS "" (matches blank cells and
 ///     formula-result empty strings; see `matches_criterion`).
 ///   * `Text`   -> scanned for a leading comparator (`<>`, `<=`, `>=`,
-///     `<`, `>`, `=` — longer forms checked first). The remaining RHS is
+///     `<`, `>`, `=` — longer forms checked first). An Eq / NotEq RHS that
+///     is a locale error name becomes an error criterion. Otherwise the RHS is
 ///     probed as a number by constructing a temporary `Value::text` and
 ///     calling `coerce_to_number`; on success the criterion becomes
 ///     numeric, else text. Wildcards in text RHS set `has_wildcard`.
@@ -223,8 +223,9 @@ ParsedCriterion parse_criterion_dfunc(const Value& criterion);
 ///       - `"="`  -> blank cells only (a zero-length string is not blank)
 ///       - `"<>"` -> every non-blank cell, zero-length strings included
 ///       - `"<"` / `"<="` / `">"` / `">="` -> nothing at all
-///   * Error cell: always false. Excel silently skips errors in a
-///     criteria range; `COUNTIF`/`SUMIF`/`AVERAGEIF` do not propagate them.
+///   * Error criterion: Eq matches cells holding that error, NotEq all others.
+///   * Error cell, any other criterion: matches NotEq only. Errors in a
+///     criteria range are never propagated.
 ///   * Numeric criterion (`rhs_is_number == true`) — Eq and NotEq are
 ///     intentionally NOT exact complements, matching Mac Excel 365:
 ///       - `Op::Eq`: a same-kind cell compares numerically; a Text cell

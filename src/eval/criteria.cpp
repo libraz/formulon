@@ -105,6 +105,18 @@ bool probe_bool(std::string_view rhs, bool* out_bool) {
   return parse_locale_bool_text(rhs, facts, out_bool);
 }
 
+// Recognises the active locale's spelling of an error value (`#N/A`).
+bool probe_error(std::string_view rhs, ErrorCode* out_code) {
+  const LocaleFacts& facts = locale_facts(current_eval_profile());
+  for (std::size_t i = 0; i < facts.error_names.size(); ++i) {
+    if (rhs == facts.error_names[i]) {
+      *out_code = static_cast<ErrorCode>(i);
+      return true;
+    }
+  }
+  return false;
+}
+
 // Attempts to parse `rhs` as a date / time token, returning the Excel serial
 // on success. Used as a second-chance probe after `probe_number` fails so a
 // criterion like ">=2024-07-01" compares numerically against date-serial
@@ -297,6 +309,12 @@ ParsedCriterion parse_criterion(const Value& criterion) {
         parsed.rhs_is_number = true;
         parsed.rhs_from_bool = true;
         parsed.rhs_number = bool_value ? 1.0 : 0.0;
+        return parsed;
+      }
+      // An Eq / NotEq error name (`"#N/A"`, `"<>#N/A"`) filters cells by error code.
+      if ((parsed.op == CriteriaOp::Eq || parsed.op == CriteriaOp::NotEq) &&
+          probe_error(rhs_view, &parsed.rhs_error_code)) {
+        parsed.rhs_is_error = true;
         return parsed;
       }
       // Probe for numeric RHS first — Excel treats ">5" as numeric even
@@ -608,15 +626,12 @@ bool matches_numeric(const Value& cell, const ParsedCriterion& c) {
 }  // namespace
 
 bool matches_criterion(const Value& cell, const ParsedCriterion& c, ExcelProfile profile) {
-  // Error criterion (e.g. `COUNTIF(range, #N/A)`): match only cells whose
-  // error code is identical. Mirrors Excel 365 which treats an error value
-  // passed as the criterion as a filter over error cells rather than
-  // propagating. Non-error cells never satisfy this form.
+  // Error criterion (`#N/A`, `"#N/A"`, `"<>#N/A"`): Eq matches only cells
+  // holding that error code, NotEq every other cell. Excel uses it as a
+  // filter rather than propagating it.
   if (c.rhs_is_error) {
-    if (!cell.is_error()) {
-      return false;
-    }
-    return cell.as_error() == c.rhs_error_code;
+    const bool same_error = cell.is_error() && cell.as_error() == c.rhs_error_code;
+    return c.op == CriteriaOp::NotEq ? !same_error : same_error;
   }
   // Error cells in the criteria range never propagate out as the call's
   // result (criteria walks are error-tolerant by design, diverging

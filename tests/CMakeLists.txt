@@ -403,6 +403,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/stats/hypothesis_tests_test.cpp
   unit/eval/coerce_test.cpp
   unit/eval/criteria_test.cpp
+  unit/eval/criteria_error_text_test.cpp
   unit/eval/collation_test.cpp
   unit/eval/collation_classes_test.cpp
   unit/eval/wildcard_test.cpp
