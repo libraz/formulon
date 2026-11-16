@@ -101,6 +101,8 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/dxf_save_plan_test.cpp
   unit/io/future_functions_test.cpp
   unit/io/hyperlink_roundtrip_test.cpp
+  unit/io/stale_roundtrip_test.cpp
+  unit/io/corpus_roundtrip_test.cpp
   unit/io/book_location_save_test.cpp
   unit/io/book_location_abspath_test.cpp
   unit/io/merge_roundtrip_test.cpp
@@ -186,6 +188,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/ptg_list_flags_test.cpp
   unit/io/xlsb/xlsb_twin_compare.cpp
   unit/io/xlsb/xlsb_twin_compare_test.cpp
+  unit/io/xlsb/xlsb_package_validator_test.cpp
   unit/io/xlsb/xlsb_flag_corpus_test.cpp
   unit/io/xlsb/xlsb_styles_passthrough_test.cpp
   unit/io/xlsb/xlsb_package_consistency_test.cpp
@@ -196,10 +199,14 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/xlsb_parity_sheet_records_test.cpp
   unit/io/xlsb/xlsb_parity_font_plan_test.cpp
   unit/io/xlsb/xlsb_parity_print_test.cpp
+  unit/io/xlsb/print_fit_values_test.cpp
   unit/io/xlsb/xlsb_parity_autofilter_test.cpp
   unit/io/xlsb/auto_filter_forms_test.cpp
   unit/io/xlsb/xlsb_parity_notes_test.cpp
   unit/io/xlsb/xlsb_parity_tablestyles_test.cpp
+  unit/io/xlsb/xlsb_parity_pivot_table_test.cpp
+  unit/io/xlsb/xlsb_parity_pivot_formats_test.cpp
+  unit/io/xlsb/xlsb_parity_pivot_api_built_test.cpp
   unit/io/xlsb/xlsb_parity_protected_range_test.cpp
   unit/io/xlsb/xlsb_parity_sparkline_test.cpp
   unit/io/xlsb/xlsb_parity_format_test.cpp
@@ -235,10 +242,18 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/table_fidelity_test.cpp
   unit/io/xlsb/pivot_fidelity_test.cpp
   unit/io/xlsb/user_book_view_test.cpp
+  unit/io/xlsb/custom_view_records_test.cpp
   unit/io/xlsb/pivot_cache_definition_records_test.cpp
   unit/io/xlsb/pivot_cache_group_records_test.cpp
   unit/io/xlsb/pivot_cache_records_test.cpp
+  unit/io/xlsb/pivot_cache_bridge_test.cpp
   unit/io/xlsb/pivot_table_records_test.cpp
+  unit/io/xlsb/pivot_table_bridge_test.cpp
+  unit/io/xlsb/xlsb_pivot_wiring_test.cpp
+  unit/io/xlsb/xlsb_passthrough_listing_test.cpp
+  unit/io/xlsb/xlsb_retained_original_test.cpp
+  unit/io/xlsb/model_derived_part_test.cpp
+  unit/io/xlsb/pivot_sort_scope_test.cpp
   unit/io/xlsb/pivot_line_item_records_test.cpp
   unit/io/xlsb/slicer_fidelity_test.cpp
   unit/io/xlsb/drawing_record_test.cpp
@@ -510,6 +525,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/pivot/pivot_calculated_test.cpp
   unit/pivot/pivot_blocked_test.cpp
   unit/pivot/pivot_refresh_test.cpp
+  unit/pivot/pivot_format_remap_test.cpp
   unit/pivot/pivot_show_values_as_test.cpp
   unit/pivot/pivot_types_test.cpp
   unit/cf/cf_authoring_test.cpp
@@ -525,6 +541,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/print/print_area_test.cpp
   unit/print/pagination_detail_test.cpp
   unit/print/pagination_test.cpp
+  unit/print/mac_print_breaks_test.cpp
   unit/print/sheet_geometry_test.cpp
   unit/font_metrics_test.cpp
   unit/drawing/drawing_color_test.cpp
@@ -727,6 +744,9 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   # Parse-error codes: every ParseErrorCode maps to one status code, and the
   # tables each binding carries agree with src/parser/parse_status.h.
   formulon_add_binding_drift_test(binding_drift_parse_error_codes parse-error-codes)
+  # The JS test modules import only names their support modules export; the
+  # npm suites run outside the per-commit gate, so this stands in for them.
+  formulon_add_binding_drift_test(binding_drift_test_imports test-imports)
   # The name ledger is well-formed: unique names, known surfaces, `was` chains.
   add_test(
     NAME ApiNamesValidate
@@ -753,6 +773,21 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
     COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/api/check_changelog_identifiers_test.py
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
+  # The upgrade guide names every C ABI break the last published release's
+  # consumers can meet; the unit tests include the check over the repository.
+  add_test(
+    NAME ApiUpgradeGuideAbi
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/api/check_upgrade_guide_abi_test.py
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  set_tests_properties(ApiUpgradeGuideAbi PROPERTIES LABELS "Api")
+  # The released C ABI baseline is the newest published release.
+  add_test(
+    NAME ApiAbiBaselineRelease
+    COMMAND ${_FORMULON_BEHAVIOR_PY} ${CMAKE_SOURCE_DIR}/tools/api/check_abi_baseline_release_test.py
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  )
+  set_tests_properties(ApiAbiBaselineRelease PROPERTIES LABELS "Api")
   # The propagated rich-value table and its test rows are what the measured sweep generates.
   add_test(
     NAME RichValueErrorIftabDrift
