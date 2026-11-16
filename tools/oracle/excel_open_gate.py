@@ -308,10 +308,25 @@ def diff(source: dict, output: dict) -> list[str]:
     return lost
 
 
+def stale_cli(cli: Path) -> str | None:
+    """Why `cli` cannot vouch for the tree: it is missing, or older than the newest file under src/."""
+
+    if not cli.is_file():
+        return "formulon_cli not found: %s" % cli
+    newest = max((p for p in (ROOT / "src").rglob("*") if p.is_file()), key=lambda p: p.stat().st_mtime)
+    if cli.stat().st_mtime < newest.stat().st_mtime:
+        return "formulon_cli %s is older than %s; rebuild it first" % (cli, newest.relative_to(ROOT))
+    return None
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--cli", default=str(ROOT / "build" / "bin" / "formulon_cli"))
     args = parser.parse_args()
+    stale = stale_cli(Path(args.cli))
+    if stale:
+        print("FAIL " + stale)
+        return 1
     if CONTAINER.exists():
         shutil.rmtree(CONTAINER)
     CONTAINER.mkdir(parents=True)
