@@ -494,7 +494,7 @@ std::string_view TestOwn(const void*, EnteredNameKind kind, std::string_view typ
   std::vector<std::string_view> own;
   switch (kind) {
     case EnteredNameKind::kSheet:
-      own = {"Sheet1", "Sheet2", "My Data"};
+      own = {"Sheet1", "Sheet2", "My Data", "Src", "C"};
       break;
     case EnteredNameKind::kDefinedName:
       own = {"MyName"};
@@ -559,6 +559,9 @@ TEST(SpellEnteredNames, RespellsSheetQualifiers) {
   EXPECT_EQ(SpellNames("='sheet2'!a1"), "=Sheet2!A1");
   EXPECT_EQ(SpellNames("='my data'!a1"), "='My Data'!A1");
   EXPECT_EQ(SpellNames("=sum(SHEET1:sheet2!a2)"), "=SUM(Sheet1:Sheet2!A2)");
+  // A 3-D span whose sheet needs quotes stays as typed rather than reading as a column range.
+  EXPECT_EQ(SpellNames("=sum(Src:C!a1)"), "=SUM(Src:C!A1)");
+  EXPECT_EQ(SpellNames("=sum(src:c!a1)"), "=SUM(src:c!A1)");
   EXPECT_EQ(SpellNames("=nosuch!a1"), "=nosuch!A1");
 }
 

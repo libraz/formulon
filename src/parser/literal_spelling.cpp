@@ -393,9 +393,10 @@ std::string spell_entered_names(std::string_view formula, const EnteredNames& na
         if (!first.empty() && !last.empty() && first_spelled == first && last_spelled == last) {
           replace(token, first);
           replace(tokens[i + 2], last);
-          skip_to = i + 3;
-          continue;
         }
+        // Any other 3-D qualifier stays as typed.
+        skip_to = i + 3;
+        continue;
       }
     }
 
