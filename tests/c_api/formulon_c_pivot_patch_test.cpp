@@ -308,6 +308,11 @@ TEST(FormulonCApiPivotPatch, FieldPatchSortAndShowDetailRoundTrip) {
   EXPECT_EQ(field.sort_order, FM_PIVOT_SORT_ORDER_DESCENDING);
   EXPECT_EQ(field.sort_by_field, "Sum of Amount");
 
+  // A by-field naming no data field is not found, and the field keeps its sort.
+  patch.sort_by_field = "Sum of Nothing";
+  EXPECT_EQ(fm_sheet_update_pivot_field(wb.handle, 0, kPivot, kRegionField, &patch), FM_STATUS_NOT_FOUND);
+  EXPECT_EQ(Field(wb.handle).sort_by_field, "Sum of Amount");
+
   // CLEAR on the by-field key sorts by label and keeps the direction.
   patch = FM_STRUCT_INIT(fm_pivot_field_patch_t);
   patch.sort_by_field_op = FM_PATCH_OP_CLEAR;

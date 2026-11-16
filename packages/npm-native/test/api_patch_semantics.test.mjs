@@ -504,6 +504,17 @@ describe('sort order, sort field and show-detail are field patch keys', () => {
     });
   });
 
+  it('a sort field naming no data field is NotFound', () => {
+    withSheet((ws, wb) => {
+      const { pivot } = pivotOver(ws, wb);
+      expectCode(
+        () => pivot.updateField(0, { sortOrder: f.PivotSortOrder.Descending, sortByField: 'Sum of Nothing' }),
+        f.StatusCode.NotFound,
+      );
+      assert.equal(pivot.listFields()[0].sortByField, null);
+    });
+  });
+
   it('a manual order with a sort field is InvalidArgument', () => {
     withSheet((ws, wb) => {
       const { pivot } = pivotOver(ws, wb);

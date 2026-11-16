@@ -19,6 +19,7 @@
 
 #include "io/cell_parser.h"
 #include "io/pivot_attr_names.h"
+#include "io/pivot_sort_scope.h"
 #include "io/xml_utils.h"
 #include "io/xsd_double.h"
 #include "pivot/filter_engine.h"
@@ -1224,6 +1225,7 @@ Expected<pivot::PivotTable, Error> read_pivot_table_definition(const std::vector
     append_raw_xml(*bucket, child);
   }
 
+  lift_pivot_sort_scopes(table);
   return table;
 }
 

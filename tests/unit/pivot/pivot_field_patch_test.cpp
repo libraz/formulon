@@ -146,6 +146,29 @@ TEST_F(PivotFieldPatchTest, SortOrderAndByFieldAreCheckedTogether) {
   EXPECT_TRUE(Field(kRegion).sort.by_field.empty());
 }
 
+TEST_F(PivotFieldPatchTest, ASortByFieldNamingNoDataFieldIsNotFound) {
+  PivotFieldPatch patch;
+  patch.sort_order = FieldSortOrder::kDescending;
+  patch.sort_by_field = "Sum of Qty";
+  const auto result = pivot::apply_field_patch(wb_, table_, kRegion, patch);
+  ASSERT_FALSE(static_cast<bool>(result));
+  EXPECT_EQ(result.error().code, FormulonErrorCode::kNotFound);
+  EXPECT_FALSE(Field(kRegion).sort.stated);
+  // The source field's own name designates the data field too.
+  patch.sort_by_field = "Amt";
+  ASSERT_TRUE(static_cast<bool>(pivot::apply_field_patch(wb_, table_, kRegion, patch)));
+  EXPECT_EQ(Field(kRegion).sort.by_field, "Amt");
+}
+
+TEST_F(PivotFieldPatchTest, ASortPatchReplacesAScopeKeptAsRead) {
+  table_.mutable_fields()[kRegion].raw_children_xml =
+      "<autoSortScope><pivotArea dataOnly=\"0\" outline=\"0\" fieldPosition=\"0\"/></autoSortScope><other/>";
+  PivotFieldPatch patch;
+  patch.sort_order = FieldSortOrder::kAscending;
+  ASSERT_TRUE(static_cast<bool>(pivot::apply_field_patch(wb_, table_, kRegion, patch)));
+  EXPECT_EQ(Field(kRegion).raw_children_xml, "<other/>");
+}
+
 TEST_F(PivotFieldPatchTest, ShowDetailCoversEveryItemAndTheDefaultMarker) {
   EXPECT_TRUE(pivot::field_show_detail(Field(kRegion)));
   EXPECT_TRUE(pivot::field_show_detail(Field(kProduct)));

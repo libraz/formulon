@@ -19,6 +19,7 @@
 #include "io/pivot_attr_names.h"
 #include "io/pivot_built_defaults.h"
 #include "io/pivot_items_binding.h"
+#include "io/pivot_sort_scope.h"
 #include "io/pivot_table_writer_internal.h"
 #include "io/xml_escape.h"
 #include "io/xml_utils.h"
@@ -660,7 +661,7 @@ std::string write_pivot_table_definition(const pivot::PivotTable& table, std::op
           return pivot::is_value_filter_type(f.type) && !ReEmitsSource(table, f) && FilterFieldIndex(table, f) == i;
         });
     AppendPivotField(out, table.fields()[i], BoundItems(table.fields()[i], field_plan), table.layout(), used_as_data,
-                     measure_filter);
+                     measure_filter, pivot_field_trailing_children(table, table.fields()[i]));
   }
   out.append("</pivotFields>");
 

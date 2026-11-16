@@ -235,7 +235,7 @@ void AppendFieldExtLst(std::string& out, const pivot::PivotField& field) {
 /// `measure_filter` says whether a value filter is written against the field,
 /// which Excel marks with `measureFilter="1"`.
 void AppendPivotField(std::string& out, const pivot::PivotField& field, const std::vector<pivot::PivotItem>& items,
-                      pivot::PivotLayout layout, bool used_as_data, bool measure_filter) {
+                      pivot::PivotLayout layout, bool used_as_data, bool measure_filter, const std::string& trailing) {
   // Modelled and captured attributes alike are written in CT_PivotField order,
   // as Excel does; names the schema does not list follow.
   AttrList attrs;
@@ -305,11 +305,11 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field, const st
   out.append("<pivotField");
   AppendAttrsInOrder(out, attrs, kPivotFieldAttrOrder);
   if (items.empty() && field.marker_items.empty()) {
-    if (field.raw_children_xml.empty() && !HasFieldExtLst(field)) {
+    if (trailing.empty() && !HasFieldExtLst(field)) {
       out.append("/>");
     } else {
       out.push_back('>');
-      out.append(field.raw_children_xml);
+      out.append(trailing);
       if (HasFieldExtLst(field)) {
         AppendFieldExtLst(out, field);
       }
@@ -437,7 +437,7 @@ void AppendPivotField(std::string& out, const pivot::PivotField& field, const st
     }
   }
   out.append("</items>");
-  out.append(field.raw_children_xml);
+  out.append(trailing);
   if (HasFieldExtLst(field)) {
     AppendFieldExtLst(out, field);
   }

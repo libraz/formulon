@@ -233,6 +233,7 @@ set(FORMULON_CORE_SOURCES
   src/io/pivot_items_binding.cpp
   src/io/pivot_line_items_writer.cpp
   src/io/pivot_projection.cpp
+  src/io/pivot_sort_scope.cpp
   src/io/rich_value_errors.cpp
   src/io/rich_values.cpp
   src/io/format_detect.cpp

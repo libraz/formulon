@@ -102,6 +102,9 @@ retained_children_edit/children_8_delete_colsB_D.xlsx model_xlsb custom_view_cou
 # PivotTables loaded from .xlsb do not yet survive a save.
 chart_pivot.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses chartFormat and other unmeasured root attributes
 pivot_aggregation/Gx__count.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses subtotalHiddenItems
+pivot_autosort/as2.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a descending field sort
+pivot_autosort/as3.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a descending field sort
+pivot_autosort/as4.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a descending field sort
 pivot_calc/cf1_price_amt_per_qty.xlsx model_xlsb pivot_count known_gap  # pending: cache bridge refuses calculated fields
 pivot_calc/cf2_div_zero_error_caption.xlsx model_xlsb pivot_count known_gap  # pending: cache bridge refuses calculated fields
 pivot_calc/cf3_quoted_names_if.xlsx model_xlsb pivot_count known_gap  # pending: cache bridge refuses calculated fields

@@ -571,6 +571,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - An `.xlsx` save no longer writes the `<pivotSelection>` of a sheet's view of a second workbook window, which made Excel refuse to open the file. Every sheet view is now read the way the first one is, so the views of the other windows lose what it loses (`<pivotSelection>`, an unknown `view` mode, an out-of-range zoom) and keep the rest.
+- A PivotTable field sorted by the totals of a value field (`sortByField` in
+  `updateField`, Python `sort_by_field`, C `fm_pivot_field_patch_t.sort_by_field`)
+  is read from `.xlsx` and `.xlsb`, shown and refreshed in that order, and
+  saved to both formats as Excel saves it. Such a field was read and
+  refreshed in label order, and a sort set through the API was saved as a
+  label sort. A `sortByField` that names no value field of the PivotTable
+  now fails with `NotFound` (Python `NotFoundError`, C
+  `FM_STATUS_NOT_FOUND`) instead of sorting by label.
 - A sheet AutoFilter text criterion is saved to .xlsb with the flag that has
   Excel compare the text literally rather than as a pattern. A criterion
   entered on text with no * or ? under <, <=, >, >= or <> carries it, one read

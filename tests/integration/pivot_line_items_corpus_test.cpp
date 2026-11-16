@@ -103,7 +103,6 @@ const std::set<std::string>& PinnedDivergent() {
       // Saved with the report Excel's dialog showed; Excel's own refresh of the value list shows the literal text.
       "xlsb_parity/pivot/caption_equal/P_eq_esctildeB.xlsx#s0p0",
       "xlsb_parity/pivot/caption_equal/P_eq_tildeB.xlsx#s0p0",
-      "xlsb_pivot_twins/C07_sort_by_data.xlsx#s0p0",
   };
   return kDivergent;
 }

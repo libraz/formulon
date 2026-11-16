@@ -8,6 +8,7 @@
 #include <utility>
 
 #include "eval/collation.h"
+#include "pivot/field_lookup.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_errors.h"
 #include "pivot/pivot_index.h"
@@ -86,6 +87,10 @@ Expected<void, Error> check_field_patch(const Workbook& wb, const PivotTable& ta
   if (manual && !by_field.empty()) {
     return invalid("patch.sort_by_field must be empty for a manual order");
   }
+  if (patch.sort_by_field.has_value() && !by_field.empty() && !find_value_sort_data_field(table, by_field)) {
+    return make_error(FormulonErrorCode::kNotFound, "patch.sort_by_field names no data field of the pivot",
+                      "sort_by_field=" + by_field);
+  }
   return ok();
 }
 
@@ -120,6 +125,12 @@ Expected<void, Error> apply_field_patch(const Workbook& wb, PivotTable& table, s
   }
   if (patch.sort_order.has_value() || patch.sort_by_field.has_value()) {
     field.sort.stated = true;
+    // The sort replaces a scope kept as read in a shape the model does not hold.
+    const std::size_t scope = field.raw_children_xml.find("<autoSortScope");
+    const std::size_t scope_end = field.raw_children_xml.find("</autoSortScope>", scope);
+    if (scope != std::string::npos && scope_end != std::string::npos) {
+      field.raw_children_xml.erase(scope, scope_end + std::string_view("</autoSortScope>").size() - scope);
+    }
   }
   if (patch.show_detail.has_value()) {
     for (PivotItem& item : field.items) {

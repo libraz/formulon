@@ -95,9 +95,9 @@ bool IsFieldless(const pivot::PivotTable& table);
 /// fields plus the Values marker on each axis.
 LocationDefaults ComputeLocationDefaults(const pivot::PivotTable& table);
 
-/// Emits one `<pivotField>` (see the definition).
+/// Emits one `<pivotField>` (see the definition); `trailing` is what follows its `<items>`.
 void AppendPivotField(std::string& out, const pivot::PivotField& field, const std::vector<pivot::PivotItem>& items,
-                      pivot::PivotLayout layout, bool used_as_data, bool measure_filter);
+                      pivot::PivotLayout layout, bool used_as_data, bool measure_filter, const std::string& trailing);
 
 }  // namespace formulon::io::detail
 

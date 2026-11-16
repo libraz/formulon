@@ -103,6 +103,13 @@ class PivotFieldUpdateTests(unittest.TestCase):
             pivot.update_field(0, sort_by_field=None)
             self.assertIsNone(pivot.list_fields()[0].sort_by_field)
 
+    def test_update_field_with_a_sort_field_naming_no_data_field_is_not_found(self) -> None:
+        with Workbook.create_default() as wb:
+            pivot = _pivot(wb)
+            with self.assertRaises(formulon.NotFoundError):
+                pivot.update_field(0, sort_order=formulon.PivotSortOrder.DESCENDING, sort_by_field="Sum of Nothing")
+            self.assertIsNone(pivot.list_fields()[0].sort_by_field)
+
     def test_update_field_round_trips_the_read_record(self) -> None:
         with Workbook.create_default() as wb:
             pivot = _pivot(wb)

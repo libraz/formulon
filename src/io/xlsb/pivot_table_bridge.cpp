@@ -17,6 +17,7 @@
 #include "io/ooxml_defs.h"
 #include "io/pivot_attr_names.h"
 #include "io/pivot_built_defaults.h"
+#include "io/pivot_sort_scope.h"
 #include "io/pivot_table_reader.h"
 #include "io/pivot_table_writer_internal.h"
 #include "io/xlsb/auto_filter_records.h"
@@ -1279,7 +1280,8 @@ bool WriteField(const pivot::PivotTable& table, std::size_t index, ExcelHost hos
   if (!field.custom_name.empty()) {
     out.display_name = field.custom_name;
   }
-  if (!WriteItems(field, out.items) || !WriteAutoSortScope(field.raw_children_xml, out.auto_sort_scope)) {
+  if (!WriteItems(field, out.items) ||
+      !WriteAutoSortScope(pivot_field_trailing_children(table, field), out.auto_sort_scope)) {
     return false;
   }
   // SXVD14 is measured after the items of a field without a sort scope.
@@ -1746,6 +1748,7 @@ Expected<pivot::PivotTable, Error> pivot_table_from_xlsb(ByteSpan part) {
   }
   table.set_hide_values_row(doc.view14.has_value());
   table.mutable_raw_passthrough_xml() = TableExtLst(doc.view14.has_value());
+  lift_pivot_sort_scopes(table);
   return table;
 }
 

@@ -62,6 +62,19 @@ inline std::optional<std::size_t> find_unique_field_by_name(const PivotTable& ta
   return match;
 }
 
+/// Position in `table.data_fields()` of the data field a value sort by `name` orders by: the first bound one whose
+/// display name is `name` or whose source field `name` designates. `nullopt` when none does.
+inline std::optional<std::size_t> find_value_sort_data_field(const PivotTable& table, std::string_view name) {
+  for (std::size_t i = 0; i < table.data_fields().size(); ++i) {
+    const PivotDataField& data_field = table.data_fields()[i];
+    if (data_field.field_index < table.fields().size() &&
+        (data_field.name == name || pivot_field_has_name(table.fields()[data_field.field_index], name))) {
+      return i;
+    }
+  }
+  return std::nullopt;
+}
+
 /// Resolves `name` to an index into `table.fields()`. Direct field names win
 /// over data-field display names, so a data field named after another pivot
 /// field cannot shadow it. Returns `nullopt` when nothing matches or when the

@@ -74,16 +74,12 @@ std::optional<ValueSortSpec> resolve_value_sort(const PivotTable& table, std::ui
   if (by_field.empty()) {
     return std::nullopt;
   }
-  for (const PivotDataField& data_field : table.data_fields()) {
-    if (data_field.field_index >= table.fields().size()) {
-      continue;
-    }
-    const PivotField& source = table.fields()[data_field.field_index];
-    if (by_field == data_field.name || pivot_field_has_name(source, by_field)) {
-      return ValueSortSpec{data_field.field_index, data_field.aggregation};
-    }
+  const std::optional<std::size_t> index = find_value_sort_data_field(table, by_field);
+  if (!index.has_value()) {
+    return std::nullopt;
   }
-  return std::nullopt;
+  const PivotDataField& data_field = table.data_fields()[*index];
+  return ValueSortSpec{data_field.field_index, data_field.aggregation};
 }
 
 /// Whether the field carries `multipleItemSelectionAllowed="1"` (Excel's "Select Multiple Items").
