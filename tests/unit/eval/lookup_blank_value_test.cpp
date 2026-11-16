@@ -231,6 +231,25 @@ TEST(LookupBlankValue, XmatchSortsBlankAboveEveryOtherKind) {
   EXPECT_EQ(Eval("=XMATCH(Z1,C1:C3,1)", wb), "#N/A");
 }
 
+// A number above every numeric key takes the first blank key as the next larger one, from a range or an array.
+TEST(LookupBlankValue, XlookupNextLargerTakesTheFirstBlankKey) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  for (std::uint32_t c = 0; c < 5U; ++c) {
+    s.set_cell_value(0U, c + 1U, Value::number(10.0 * (c + 1U)));
+  }
+  s.set_cell_value(1U, 1U, Value::number(0.1));
+  s.set_cell_value(1U, 3U, Value::number(0.2));
+  s.set_cell_value(1U, 4U, Value::number(0.3));
+  s.set_cell_value(1U, 5U, Value::number(0.4));
+  for (std::uint32_t c = 0; c < 5U; ++c) {
+    s.set_cell_value(2U, c + 1U, Value::number(0.1 * (c + 1U)));
+  }
+  EXPECT_EQ(Eval("=XLOOKUP(0.5,B2:F2,B1:F1,\"\",1)", wb), "20");
+  EXPECT_EQ(Eval("=XLOOKUP(0.5,FILTER(B2:F2,TRUE),B1:F1,\"\",1)", wb), "20");
+  EXPECT_EQ(Eval("=XLOOKUP(0.5,B3:F3,B1:F1,\"\",1)", wb), "50");
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon
