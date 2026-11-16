@@ -614,13 +614,19 @@ TEST(DataValidationFidelity, UnmodelledAttributesSurviveAResave) {
   EXPECT_TRUE(Has(xml, "imeMode=\"hiragana\"")) << xml;
 }
 
-TEST(DefinedNameFidelity, UnmodelledAttributesSurviveAResave) {
+// Without a macro sheet Excel's save drops a lone function or vbProcedure flag, so the load drops and counts them;
+// the name's other unmodelled attributes survive. With a macro sheet the flags stay (DefinedNamesReader tests).
+TEST(DefinedNameFidelity, MacroFlagsLeaveABookWithoutAMacroSheetAndOtherAttributesSurviveAResave) {
   const std::string extra =
       "<definedNames><definedName name=\"Macro1\" function=\"1\" vbProcedure=\"1\" shortcutKey=\"q\" "
       "description=\"Runs &amp; checks\">Sheet1!$A$1</definedName></definedNames>";
-  const std::string xml = ReadPart(Resave(BuildPackage(Worksheet("<sheetData/>"), extra)), "xl/workbook.xml");
-  EXPECT_TRUE(Has(xml, "function=\"1\"")) << xml;
-  EXPECT_TRUE(Has(xml, "vbProcedure=\"1\"")) << xml;
+  const std::vector<std::uint8_t> bytes = BuildPackage(Worksheet("<sheetData/>"), extra);
+  auto load_or = io::read_ooxml(SpanOf(bytes));
+  ASSERT_TRUE(static_cast<bool>(load_or)) << load_or.error().message;
+  EXPECT_EQ(load_or.value().diagnostics.skipped_feature_count, 1U);
+  const std::string xml = ReadPart(SaveOrDie(load_or.value().workbook), "xl/workbook.xml");
+  EXPECT_FALSE(Has(xml, "function=")) << xml;
+  EXPECT_FALSE(Has(xml, "vbProcedure=")) << xml;
   EXPECT_TRUE(Has(xml, "shortcutKey=\"q\"")) << xml;
   EXPECT_TRUE(Has(xml, "description=\"Runs &amp; checks\"")) << xml;
 }
