@@ -477,6 +477,14 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
     }
     return index_array(top, left, bottom, right);
   }
+  std::uint32_t ext_top = 0;
+  std::uint32_t ext_left = 0;
+  std::uint32_t ext_bottom = 0;
+  std::uint32_t ext_right = 0;
+  if (external_reference_rect(arg, &ext_top, &ext_left, &ext_bottom, &ext_right)) {
+    // A reference into another workbook: its coordinates, not its (possibly uncached) cells.
+    return index_array(ext_top, ext_left, ext_bottom, ext_right);
+  }
   if (k == parser::NodeKind::Call) {
     // Reference-returning builtins (INDIRECT, OFFSET) nested inside
     // ROW/COLUMN must be inspected without dereferencing so
@@ -490,11 +498,7 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
     ErrorCode err = ErrorCode::Value;
     if (resolve_reference_call(arg, arena, registry, ctx.without_dynamic_read_callback(), &sheet, &top, &left, &bottom,
                                &right, &is_range, &err)) {
-      if (is_range && !strings::case_insensitive_eq(arg.as_call_name(), "INDIRECT")) {
-        return index_array(top, left, bottom, right);
-      }
-      const std::uint32_t idx = want_row ? top : left;
-      return Value::number(static_cast<double>(idx + 1U));
+      return index_array(top, left, bottom, right);
     }
     // Fall through to the scalar fallback so subtree errors propagate
     // and non-reference calls still surface `#VALUE!`.

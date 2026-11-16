@@ -534,5 +534,16 @@ TEST_F(ExternalRefEval, TheSelfBookNameStillResolvesLocally) {
   EXPECT_EQ(wb_.external_links().size(), 1U);
 }
 
+// ROW and COLUMN read an external reference's coordinates, not its cells, so a cached and an uncached cell alike
+// give their row and column, and a rectangle spills its indices.
+TEST_F(ExternalRefEval, RowAndColumnReadTheExternalReferenceCoordinates) {
+  ExpectNumber("=ROW([Src.xlsx]Data!$A$3)", 3.0);
+  ExpectNumber("=COLUMN([Src.xlsx]Data!B2)", 2.0);
+  ExpectNumber("=ROW([Src.xlsx]Data!Z99)", 99.0);
+  ExpectNumber("=SUM(ROW([Src.xlsx]Data!A1:A3))", 6.0);
+  ExpectNumber("=SUM(COLUMN([Src.xlsx]Data!A1:C1))", 6.0);
+  ExpectNumber("=ROWS([Src.xlsx]Data!A1:A3)", 3.0);
+}
+
 }  // namespace
 }  // namespace formulon

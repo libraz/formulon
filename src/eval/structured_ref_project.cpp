@@ -4,6 +4,7 @@
 
 #include "eval/structured_ref_project.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <utility>
@@ -89,6 +90,20 @@ Value project_structured_ref(std::string_view table_name, std::string_view colum
     return Value::error(ErrorCode::Num);
   }
   return Value::array(arr);
+}
+
+bool external_reference_rect(const parser::AstNode& node, std::uint32_t* top, std::uint32_t* left,
+                             std::uint32_t* bottom, std::uint32_t* right) {
+  if (node.kind() != parser::NodeKind::ExternalRef || !node.as_external_ref_name().empty()) {
+    return false;
+  }
+  const parser::Reference& a = node.as_external_ref_cell();
+  const parser::Reference& b = node.as_external_ref_cell_end();
+  *top = std::min(a.row, b.row);
+  *left = std::min(a.col, b.col);
+  *bottom = std::max(a.row, b.row);
+  *right = std::max(a.col, b.col);
+  return true;
 }
 
 bool reference_endpoint_pair(const parser::AstNode& node, parser::Reference* out_lhs, parser::Reference* out_rhs,

@@ -43,6 +43,11 @@ Value project_structured_ref(std::string_view table_name, std::string_view colum
 bool reference_endpoint_pair(const parser::AstNode& node, parser::Reference* out_lhs, parser::Reference* out_rhs,
                              const EvalContext& ctx, ErrorCode* out_err = nullptr);
 
+// The 0-based rectangle a cell reference into another workbook names (`[1]S!B2`, `[Book.xlsx]S!A1:C3`), for readers
+// of a reference's position (ROW / COLUMN). False for any other shape, an external defined name included.
+bool external_reference_rect(const parser::AstNode& node, std::uint32_t* top, std::uint32_t* left,
+                             std::uint32_t* bottom, std::uint32_t* right);
+
 }  // namespace eval
 }  // namespace formulon
 

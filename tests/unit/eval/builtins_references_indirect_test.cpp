@@ -333,11 +333,15 @@ TEST(BuiltinsIndirect, FullRowTextExpandsInSum) {
   EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
 }
 
+// ROW / COLUMN over a reference INDIRECT returns project it exactly as over the spelled reference: a span of more
+// than one row (column) spills its indices, as ROW(A:A) does.
 TEST(BuiltinsIndirectFullColRow, RowOfFullColumn) {
   Workbook wb = Workbook::create();
   const Value v = EvalSourceIn("=ROW(INDIRECT(\"D:D\"))", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), Sheet::kMaxRows);
+  EXPECT_EQ(v.as_array_cols(), 1U);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[0].as_number(), 1.0);
 }
 
 TEST(BuiltinsIndirectFullColRow, ColumnOfFullColumn) {
@@ -357,31 +361,39 @@ TEST(BuiltinsIndirectFullColRow, RowOfFullRow) {
 TEST(BuiltinsIndirectFullColRow, ColumnOfFullRow) {
   Workbook wb = Workbook::create();
   const Value v = EvalSourceIn("=COLUMN(INDIRECT(\"5:5\"))", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_rows(), 1U);
+  EXPECT_EQ(v.as_array_cols(), Sheet::kMaxCols);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[0].as_number(), 1.0);
 }
 
 TEST(BuiltinsIndirectFullColRow, AbsoluteMixedFullColumn) {
   // `$FF:FG` -> leftmost column is FF = 162.
   Workbook wb = Workbook::create();
   const Value v = EvalSourceIn("=COLUMN(INDIRECT(\"$FF:FG\"))", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 162.0);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_cols(), 2U);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[0].as_number(), 162.0);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[1].as_number(), 163.0);
 }
 
 TEST(BuiltinsIndirectFullColRow, ReversedFullColumnNormalisedByMin) {
   // `C:A` should report column 1 (A) as leftmost.
   Workbook wb = Workbook::create();
   const Value v = EvalSourceIn("=COLUMN(INDIRECT(\"C:A\"))", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 1.0);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_cols(), 3U);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[0].as_number(), 1.0);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[2].as_number(), 3.0);
 }
 
 TEST(BuiltinsIndirectFullColRow, AbsoluteFullRow) {
   Workbook wb = Workbook::create();
   const Value v = EvalSourceIn("=ROW(INDIRECT(\"$12:$23\"))", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_number());
-  EXPECT_DOUBLE_EQ(v.as_number(), 12.0);
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 12U);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[0].as_number(), 12.0);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[11].as_number(), 23.0);
 }
 
 TEST(BuiltinsIndirectFullColRow, LastColumnXfd) {
@@ -405,6 +417,21 @@ TEST(BuiltinsIndirectFullColRow, LeadingZeroRow) {
   const Value v = EvalSourceIn("=ROW(INDIRECT(\"05:05\"))", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
   EXPECT_DOUBLE_EQ(v.as_number(), 5.0);
+}
+
+// The common idiom: ROW(INDIRECT("1:n")) is the index vector 1..n, also as an argument a scalar function lifts over.
+TEST(BuiltinsIndirectFullColRow, RowOfARowSpanIsAnIndexVector) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=ROW(INDIRECT(\"1:3\"))", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_rows(), 3U);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[2].as_number(), 3.0);
+  const Value lifted = EvalSourceIn("=SUM(--MID(\"123\",ROW(INDIRECT(\"1:3\")),1))", wb, wb.sheet(0));
+  ASSERT_TRUE(lifted.is_number());
+  EXPECT_DOUBLE_EQ(lifted.as_number(), 6.0);
+  const Value npv = EvalSourceIn("=NPV(-0.9,--MID(\"123\",ROW(INDIRECT(\"1:3\")),1)/10)", wb, wb.sheet(0));
+  ASSERT_TRUE(npv.is_number());
+  EXPECT_NEAR(npv.as_number(), 321.0, 1e-9);
 }
 
 }  // namespace

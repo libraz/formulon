@@ -243,6 +243,9 @@ bool expand_row_or_column_call(const parser::AstNode& call, Arena& arena, const 
     left = rect.value().col_first;
     right = rect.value().col_last;
     resolved_rect = true;
+  } else if (external_reference_rect(arg, &top, &left, &bottom, &right)) {
+    // A reference into another workbook: its coordinates, not its (possibly uncached) cells.
+    resolved_rect = true;
   } else if (k == parser::NodeKind::RangeOp) {
     // A `RangeOp` whose endpoints are not both bare references names no
     // rectangle until it is evaluated, which this seam does not do.
