@@ -6822,13 +6822,16 @@ _PIVOT_STYLE_PATCH_CLEARABLE = ("style_name",)
 
 
 def _encode_clearable_patch(
-    spec: Sequence, clearable: Sequence[str], patch: Mapping, what: str, scope: _ArgScope
+    spec: Sequence, clearable: Sequence[str], patch: Mapping, what: str, scope: _ArgScope, extra: Sequence[str] = ()
 ) -> Dict[str, object]:
-    """Encode a flat patch: a key left out keeps, ``None`` clears a ``clearable`` key, else is a ``TypeError``."""
+    """Encode a flat patch: a key left out keeps, ``None`` clears a ``clearable`` key, else is a ``TypeError``.
+
+    ``extra`` names the keys the caller encodes itself; their ``None`` is the caller's to judge.
+    """
     for key, value in patch.items():
-        if value is None and key not in clearable:
+        if value is None and key not in clearable and key not in extra:
             raise TypeError(f"{key} cannot be None in a {what}")
-    return _encode_patch(spec, patch, (), what, scope)
+    return _encode_patch(spec, patch, extra, what, scope)
 
 
 def _pack_pivot_patch(
@@ -7368,7 +7371,8 @@ def _shape_paint_patch(name: str, value: object, scope: _ArgScope, *, clear: boo
         value = {key: getattr(value, key) for key, _, _ in spec}
     elif not isinstance(value, Mapping):
         raise TypeError(f"{name} must be a {record_type.__name__}, a patch or None, got {type(value).__name__}")
-    return _encode_patch(spec, value, (), f"{name} patch", scope)
+    clearable = _FILL_PATCH_CLEARABLE if name == "fill" else _LINE_PATCH_CLEARABLE
+    return _encode_clearable_patch(spec, clearable, value, f"{name} patch", scope, _PAINT_PATCH_READ_ONLY)
 
 
 def _pack_shape_spec(scope: _ArgScope, spec: ShapeInput) -> int:
@@ -7682,6 +7686,10 @@ _LINE_PATCH_SPEC = (
     ("dash", "dash", "i32"),
     ("none", "none", "bool"),
 )
+_FILL_PATCH_CLEARABLE = ("color", "transparency_pct")
+_LINE_PATCH_CLEARABLE = ("color", "transparency_pct", "width_pt", "dash")
+# The key a fill or line read back carries that a patch passes through and the engine ignores.
+_PAINT_PATCH_READ_ONLY = ("other",)
 _MARKER_PATCH_SPEC = (("symbol", "symbol", "i32"), ("size_pt", "size_pt", "f64"))
 _LABELS_PATCH_SPEC = (
     ("show_value", "show_value", "bool"),
@@ -7697,6 +7705,7 @@ _LABELS_PATCH_SPEC = (
     ("source_linked", "source_linked", "bool"),
     ("deleted", "deleted", "bool"),
 )
+_LABELS_PATCH_CLEARABLE = ("separator", "position", "number_format", "font_color", "font_size_pt")
 _PLOT_PATCH_SPEC = (
     ("gap_width_pct", "gap_width_pct", "u32"),
     ("overlap_pct", "overlap_pct", "i32"),
@@ -8139,13 +8148,13 @@ def _encode_paint_patches(out: Dict[str, object], patch: Mapping, scope: _ArgSco
 
 
 def _encode_marker_patch(patch: Mapping, scope: _ArgScope) -> Dict[str, object]:
-    out = _encode_patch(_MARKER_PATCH_SPEC, patch, ("fill", "line"), "marker patch", scope)
+    out = _encode_clearable_patch(_MARKER_PATCH_SPEC, ("size_pt",), patch, "marker patch", scope, ("fill", "line"))
     _encode_paint_patches(out, patch, scope)
     return out
 
 
 def _encode_labels_patch(patch: Mapping, scope: _ArgScope) -> Dict[str, object]:
-    return _encode_patch(_LABELS_PATCH_SPEC, patch, (), "labels patch", scope)
+    return _encode_clearable_patch(_LABELS_PATCH_SPEC, _LABELS_PATCH_CLEARABLE, patch, "labels patch", scope)
 
 
 def _encode_optional_patch(out: Dict[str, object], key: str, patch: Mapping, encode, scope: _ArgScope) -> None:
