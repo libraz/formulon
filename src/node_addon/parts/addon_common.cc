@@ -11,6 +11,10 @@ namespace formulon_node {
 
 Napi::Uint8Array CopyBytes(Napi::Env env, const uint8_t* bytes, std::size_t len) {
   Napi::Uint8Array copy = Napi::Uint8Array::New(env, len);
+  // A failed allocation leaves a pending RangeError and no backing store.
+  if (copy.IsEmpty() || env.IsExceptionPending()) {
+    return copy;
+  }
   if (len != 0 && bytes != nullptr) {
     std::memcpy(copy.Data(), bytes, len);
   }
