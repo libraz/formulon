@@ -244,6 +244,18 @@ void order_groups(const GroupSort& plan, const ArrayValue& keys, const std::vect
                   const std::vector<bool>& is_error, const std::vector<Value>& value_keys,
                   const std::vector<OuterSortLevel>& outer_levels, std::vector<std::size_t>* order);
 
+/// Orders one axis's groups by `plan`. A value sort reads each group's axis
+/// total for that value column from `totals[g][totals_offset + v]` when
+/// `totals_emitted`, otherwise aggregates it with the group's aggregator
+/// (`agg_of_group`). `hierarchical` ranks each key prefix first (see
+/// `build_outer_sort_levels`); a flat table compares its keys directly.
+void order_axis_groups(const GroupSort& plan, const ArrayValue& keys, const std::vector<std::uint32_t>& repr,
+                       const std::vector<std::vector<std::uint32_t>>& members, const std::vector<bool>& is_error,
+                       const std::vector<std::vector<Value>>& totals, bool totals_emitted, std::uint32_t totals_offset,
+                       bool hierarchical, const ArrayValue& values, const std::vector<const Aggregator*>& agg_of_group,
+                       Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                       std::vector<std::size_t>* out_order);
+
 /// `field_headers` value that requests header detection from the values
 /// argument; `resolve_auto_field_headers` turns it into a concrete mode.
 inline constexpr int kFieldHeadersAuto = -1;

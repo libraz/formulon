@@ -167,23 +167,11 @@ Value eval_groupby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   if (!plan_group_sort(sort_spec, key_cols, val_cols, flat_table, &sort_plan)) {
     return Value::error(ErrorCode::Value);
   }
-  std::vector<Value> value_keys;
-  std::vector<OuterSortLevel> outer_levels;
-  if (sort_plan.value_col != 0U) {
-    const std::uint32_t v = sort_plan.value_col - 1U;
-    value_keys.reserve(agg_rows.size());
-    for (const std::vector<Value>& row : agg_rows) {
-      value_keys.push_back(row[key_cols + v]);
-    }
-    // A hierarchy ranks each prefix of the key columns by its own aggregate.
-    if (!flat_table) {
-      const std::vector<const Aggregator*> agg_of_group(group_repr.size(), &agg);
-      outer_levels =
-          build_outer_sort_levels(*row_fields, group_repr, group_rows, *values, v, agg_of_group, arena, registry, ctx);
-    }
-  }
+  const std::vector<const Aggregator*> agg_of_group(group_repr.size(), &agg);
   std::vector<std::size_t> order;
-  order_groups(sort_plan, *row_fields, group_repr, group_is_error, value_keys, outer_levels, &order);
+  order_axis_groups(sort_plan, *row_fields, group_repr, group_rows, group_is_error, agg_rows,
+                    /*totals_emitted=*/true, /*totals_offset=*/key_cols, /*hierarchical=*/!flat_table, *values,
+                    agg_of_group, arena, registry, ctx, &order);
 
   // -- Compute grand total (if requested) ---------------------------------
   // The grand total aggregates over EVERY filtered data row. It is labelled in

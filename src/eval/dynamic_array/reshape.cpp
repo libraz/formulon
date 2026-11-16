@@ -59,6 +59,21 @@ bool resolve_stack_args(const parser::AstNode& call, std::uint32_t arity, Arena&
   return true;
 }
 
+/// Fills the `rows` x `cols` block of `buffer` (row stride `out_cols`) whose
+/// top-left is `(row_off, col_off)` with `src`'s cells, `pad` where the block
+/// reaches past `src`.
+void copy_padded_block(const ArrayValue& src, Value* buffer, std::uint32_t out_cols, std::uint32_t row_off,
+                       std::uint32_t col_off, std::uint32_t rows, std::uint32_t cols, const Value& pad) {
+  for (std::uint32_t r = 0; r < rows; ++r) {
+    for (std::uint32_t c = 0; c < cols; ++c) {
+      buffer[static_cast<std::size_t>(row_off + r) * out_cols + col_off + c] =
+          (r < src.rows && c < src.cols)
+              ? src.cells[static_cast<std::size_t>(r) * src.cols + c].promote_reference_blank_to_value_array()
+              : pad;
+    }
+  }
+}
+
 Value materialise_stacked_arrays(const std::vector<const ArrayValue*>& arrays, bool horizontal, Arena& arena) {
   std::size_t out_rows_sz = 0;
   std::size_t out_cols_sz = 0;
@@ -85,32 +100,15 @@ Value materialise_stacked_arrays(const std::vector<const ArrayValue*>& arrays, b
     return Value::error(ErrorCode::Num);
   }
 
-  if (horizontal) {
-    std::uint32_t col_off = 0;
-    for (const ArrayValue* a : arrays) {
-      for (std::uint32_t r = 0; r < out_rows; ++r) {
-        for (std::uint32_t c = 0; c < a->cols; ++c) {
-          const std::size_t dst = static_cast<std::size_t>(r) * out_cols + col_off + c;
-          buffer[dst] =
-              (r < a->rows)
-                  ? a->cells[static_cast<std::size_t>(r) * a->cols + c].promote_reference_blank_to_value_array()
-                  : Value::error(ErrorCode::NA);
-        }
-      }
+  const Value na = Value::error(ErrorCode::NA);
+  std::uint32_t row_off = 0;
+  std::uint32_t col_off = 0;
+  for (const ArrayValue* a : arrays) {
+    copy_padded_block(*a, buffer, out_cols, row_off, col_off, horizontal ? out_rows : a->rows,
+                      horizontal ? a->cols : out_cols, na);
+    if (horizontal) {
       col_off += a->cols;
-    }
-  } else {
-    std::uint32_t row_off = 0;
-    for (const ArrayValue* a : arrays) {
-      for (std::uint32_t r = 0; r < a->rows; ++r) {
-        for (std::uint32_t c = 0; c < out_cols; ++c) {
-          const std::size_t dst = static_cast<std::size_t>(row_off + r) * out_cols + c;
-          buffer[dst] =
-              (c < a->cols)
-                  ? a->cells[static_cast<std::size_t>(r) * a->cols + c].promote_reference_blank_to_value_array()
-                  : Value::error(ErrorCode::NA);
-        }
-      }
+    } else {
       row_off += a->rows;
     }
   }
@@ -208,17 +206,7 @@ Value eval_expand_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
-  for (std::uint32_t r = 0; r < out_rows; ++r) {
-    for (std::uint32_t c = 0; c < out_cols; ++c) {
-      const std::size_t dst = static_cast<std::size_t>(r) * out_cols + c;
-      if (r < array->rows && c < array->cols) {
-        buffer[dst] =
-            array->cells[static_cast<std::size_t>(r) * array->cols + c].promote_reference_blank_to_value_array();
-      } else {
-        buffer[dst] = pad_cell;
-      }
-    }
-  }
+  copy_padded_block(*array, buffer, out_cols, 0U, 0U, out_rows, out_cols, pad_cell);
 
   return Value::array(out);
 }

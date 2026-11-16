@@ -573,6 +573,36 @@ void order_groups(const GroupSort& plan, const ArrayValue& keys, const std::vect
   order->assign(sorted.begin(), sorted.end());
 }
 
+void order_axis_groups(const GroupSort& plan, const ArrayValue& keys, const std::vector<std::uint32_t>& repr,
+                       const std::vector<std::vector<std::uint32_t>>& members, const std::vector<bool>& is_error,
+                       const std::vector<std::vector<Value>>& totals, bool totals_emitted, std::uint32_t totals_offset,
+                       bool hierarchical, const ArrayValue& values, const std::vector<const Aggregator*>& agg_of_group,
+                       Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                       std::vector<std::size_t>* out_order) {
+  // One sort key per group, aggregated before the sort so the comparator
+  // never invokes the aggregator.
+  std::vector<Value> value_keys;
+  std::vector<OuterSortLevel> outer_levels;
+  if (plan.value_col != 0U) {
+    const std::uint32_t v = plan.value_col - 1U;
+    if (hierarchical) {
+      outer_levels = build_outer_sort_levels(keys, repr, members, values, v, agg_of_group, arena, registry, ctx);
+    }
+    value_keys.reserve(repr.size());
+    for (std::size_t g = 0; g < repr.size(); ++g) {
+      if (totals_emitted) {
+        value_keys.push_back(totals[g][totals_offset + v]);
+        continue;
+      }
+      const ArrayValue* slice = build_group_slice(values, v, members[g], arena);
+      value_keys.push_back((slice != nullptr)
+                               ? invoke_aggregator_for_group(*agg_of_group[g], v, slice, arena, registry, ctx)
+                               : Value::error(ErrorCode::Num));
+    }
+  }
+  order_groups(plan, keys, repr, is_error, value_keys, outer_levels, out_order);
+}
+
 int resolve_auto_field_headers(int field_headers, const ArrayValue& values) {
   if (field_headers != kFieldHeadersAuto) {
     return field_headers;

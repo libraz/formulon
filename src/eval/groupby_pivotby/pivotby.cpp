@@ -25,41 +25,6 @@
 namespace formulon {
 namespace eval {
 
-namespace {
-
-// Orders one axis's groups by `plan` (see `plan_group_sort`). A value sort
-// reads each group's axis total for that value column: `totals` when the
-// layout emits them, otherwise aggregated here with the group's aggregator.
-// The axis is a hierarchy, so a value sort ranks each key prefix first.
-void order_axis_groups(const GroupSort& plan, const ArrayValue& keys, const std::vector<std::uint32_t>& repr,
-                       const std::vector<std::vector<std::uint32_t>>& members, const std::vector<bool>& is_error,
-                       const std::vector<std::vector<Value>>& totals, bool totals_emitted, const ArrayValue& values,
-                       const std::vector<const Aggregator*>& agg_of_group, Arena& arena,
-                       const FunctionRegistry& registry, const EvalContext& ctx, std::vector<std::size_t>* out_order) {
-  // One sort key per group, aggregated before the sort so the comparator
-  // never invokes the aggregator.
-  std::vector<Value> value_keys;
-  std::vector<OuterSortLevel> outer_levels;
-  if (plan.value_col != 0U) {
-    const std::uint32_t v = plan.value_col - 1U;
-    outer_levels = build_outer_sort_levels(keys, repr, members, values, v, agg_of_group, arena, registry, ctx);
-    value_keys.reserve(repr.size());
-    for (std::size_t g = 0; g < repr.size(); ++g) {
-      if (totals_emitted) {
-        value_keys.push_back(totals[g][v]);
-        continue;
-      }
-      const ArrayValue* slice = build_group_slice(values, v, members[g], arena);
-      value_keys.push_back((slice != nullptr)
-                               ? invoke_aggregator_for_group(*agg_of_group[g], v, slice, arena, registry, ctx)
-                               : Value::error(ErrorCode::Num));
-    }
-  }
-  order_groups(plan, keys, repr, is_error, value_keys, outer_levels, out_order);
-}
-
-}  // namespace
-
 Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
@@ -423,10 +388,12 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   }
   std::vector<std::size_t> row_order;
   order_axis_groups(row_plan, *row_fields, row_repr, row_members, row_is_error, row_totals, emit_row_totals_col,
-                    *values, row_axis_agg, arena, registry, ctx, &row_order);
+                    /*totals_offset=*/0U, /*hierarchical=*/true, *values, row_axis_agg, arena, registry, ctx,
+                    &row_order);
   std::vector<std::size_t> col_order;
   order_axis_groups(col_plan, *col_fields, col_repr, col_members, col_is_error, col_totals, emit_col_totals_row,
-                    *values, col_axis_agg, arena, registry, ctx, &col_order);
+                    /*totals_offset=*/0U, /*hierarchical=*/true, *values, col_axis_agg, arena, registry, ctx,
+                    &col_order);
 
   // Output order of both axes: leaf groups plus the subtotal nodes the depths
   // request.

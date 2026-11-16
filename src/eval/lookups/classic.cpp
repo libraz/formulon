@@ -177,8 +177,11 @@ class ApproxComparer {
 //
 // Approximate mode follows `approximate_search`: a cell of another type than the
 // lookup value ends the binary search and the rest is scanned linearly.
+// `descending` (MATCH -1) replaces the binary search with `descending_scan`;
+// `blank_cells_match_zero` is false for MATCH's exact mode.
 std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std::uint32_t cols, LookupAxis axis,
-                        const Value& lookup_value, bool approximate, ExcelProfile profile) {
+                        const Value& lookup_value, bool approximate, ExcelProfile profile, bool descending = false,
+                        bool blank_cells_match_zero = true) {
   const std::size_t n = axis == LookupAxis::Column ? rows : cols;
   if (n == 0) {
     return SIZE_MAX;
@@ -199,13 +202,14 @@ std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std:
       const std::string_view raw = lookup_value.as_text();
       return scan_exact_text_lookup(raw, profile, n, cell_at);
     }
-    return scan_exact_typed(lookup_value, n, /*blank_cells_match_zero=*/true, cell_at);
+    return scan_exact_typed(lookup_value, n, blank_cells_match_zero, cell_at);
   }
 
   // Approximate match: binary search, falling back to a left-to-right scan at
   // the first probe of another type.
   const ApproxComparer order(lookup_value, profile);
-  return approximate_search(n, [&](std::size_t i) { return order(cell_at(i)); });
+  const auto cmp = [&](std::size_t i) { return order(cell_at(i)); };
+  return descending ? descending_scan(n, cmp) : approximate_search(n, cmp);
 }
 
 // Fails the whole call with `err`. An array lookup fails lane by lane, so a
@@ -344,62 +348,34 @@ Value eval_table_lookup_lazy(const parser::AstNode& call, Arena& arena, const Fu
     return cells[flat];
   };
 
+  const auto lane = [&](const Value& query) {
+    const std::size_t off =
+        lookup_scan(*scan_cells, scan_rows, scan_cols, axis, query, approximate, ctx.excel_profile());
+    return off == SIZE_MAX ? Value::error(ErrorCode::NA) : fetch(off);
+  };
   if (array_lookup) {
-    return map_query_lanes(lookup, arena, [&](const Value& query) {
-      if (query.is_error()) {
-        return query;
-      }
-      const std::size_t off =
-          lookup_scan(*scan_cells, scan_rows, scan_cols, axis, query, approximate, ctx.excel_profile());
-      if (off == SIZE_MAX) {
-        return Value::error(ErrorCode::NA);
-      }
-      return fetch(off);
-    });
+    return map_query_lanes(lookup, arena, [&](const Value& query) { return query.is_error() ? query : lane(query); });
   }
-
-  const std::size_t off =
-      lookup_scan(*scan_cells, scan_rows, scan_cols, axis, lookup, approximate, ctx.excel_profile());
-  if (off == SIZE_MAX) {
-    return Value::error(ErrorCode::NA);
-  }
-  return fetch(off);
+  return lane(lookup);
 }
 
 Value match_lookup_one(const std::vector<Value>& cells, const Value& lookup, int match_type, ExcelProfile profile) {
   if (lookup.is_error()) {
     return lookup;
   }
-  const std::size_t n = cells.size();
-  if (n == 0) {
+  if (cells.empty()) {
     return Value::error(ErrorCode::NA);
   }
-
-  // Exact match (match_type == 0): honours wildcards for Text lookup and
-  // typed literal equality for other lookup kinds. Non-matching cell kinds
-  // do not count.
-  if (match_type == 0) {
-    const auto cell_at = [&cells](std::size_t i) -> const Value& { return cells[i]; };
-    std::size_t index = SIZE_MAX;
-    if (lookup.is_text()) {
-      index = scan_exact_text_lookup(lookup.as_text(), profile, n, cell_at);
-    } else if (!lookup.is_blank()) {
-      // Blank as lookup_value never matches anything in exact mode (Excel
-      // behaviour: blank search values short-circuit to #N/A even when the
-      // array contains blank cells).
-      index = scan_exact_typed(lookup, n, /*blank_cells_match_zero=*/false, cell_at);
-    }
-    return index == SIZE_MAX ? Value::error(ErrorCode::NA) : Value::number(static_cast<double>(index + 1));
-  }
-
-  // Approximate match. Wildcards are literal text here.
-  const ApproxComparer order(lookup, profile);
-  const auto cmp = [&](std::size_t i) { return order(cells[i]); };
-  const std::size_t pos = match_type == 1 ? approximate_search(n, cmp) : descending_scan(n, cmp);
-  if (pos == SIZE_MAX) {
+  // Blank as lookup_value never matches anything in exact mode (Excel
+  // behaviour: blank search values short-circuit to #N/A even when the
+  // array contains blank cells).
+  if (match_type == 0 && lookup.is_blank()) {
     return Value::error(ErrorCode::NA);
   }
-  return Value::number(static_cast<double>(pos + 1));
+  // Exact mode honours wildcards for text; approximate treats them as literal.
+  const std::size_t pos = lookup_scan(cells, static_cast<std::uint32_t>(cells.size()), 1U, LookupAxis::Column, lookup,
+                                      match_type != 0, profile, match_type < 0, /*blank_cells_match_zero=*/false);
+  return pos == SIZE_MAX ? Value::error(ErrorCode::NA) : Value::number(static_cast<double>(pos + 1));
 }
 
 }  // namespace

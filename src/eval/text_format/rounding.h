@@ -34,6 +34,32 @@ inline double round_to_15_significant_digits(double value) noexcept {
   return std::round(value / quantum) * quantum;
 }
 
+// The 15-significant-digit exponential view of `v` (`-d.ddddddddddddddde+XX`)
+// split into its mantissa text and decimal exponent. `has_exponent` is false
+// for a non-finite `v`, which has no exponent.
+struct Exponential15 {
+  char text[48];
+  std::size_t mantissa_length = 0;
+  int exp10 = 0;
+  bool has_exponent = false;
+
+  std::string_view mantissa() const { return std::string_view(text, mantissa_length); }
+};
+
+inline Exponential15 exponential15(double v) {
+  Exponential15 out;
+  const int n = format_exponential(out.text, sizeof(out.text), excel_decimal_view(v, kExcelSignificantDigits),
+                                   kExcelSignificantDigits - 1);
+  const std::string_view text(out.text, n > 0 ? static_cast<std::size_t>(n) : 0U);
+  const std::size_t e = text.find('e');
+  if (e != std::string_view::npos) {
+    out.mantissa_length = e;
+    out.exp10 = static_cast<int>(parse_double_prefix(text.substr(e + 1U)).value);
+    out.has_exponent = true;
+  }
+  return out;
+}
+
 // Rounds ties away from zero at `decimals` places. Negative `decimals`
 // rounds to the left of the decimal point.
 //
@@ -48,39 +74,23 @@ inline double round_display_decimal(double value, int decimals) noexcept {
   if (value == 0.0 || !std::isfinite(value)) {
     return value;
   }
-  char text[32];
-  const int written = format_exponential(
-      text, sizeof(text), excel_decimal_view(std::fabs(value), kExcelSignificantDigits), kExcelSignificantDigits - 1);
-  if (written <= 0 || static_cast<std::size_t>(written) >= sizeof(text)) {
+  const Exponential15 view = exponential15(std::fabs(value));
+  if (!view.has_exponent) {
     return value;
   }
-  // `%.14e` yields `d.dddddddddddddde[+-]XX`. Collect the significant digits
-  // without assuming where the decimal point sits, then read the exponent of
-  // the leading digit.
+  // `d.dddddddddddddd`: collect the significant digits without assuming where
+  // the decimal point sits.
   char digits[kExcelSignificantDigits + 1];
   int digit_count = 0;
-  int cursor = 0;
-  for (; cursor < written && text[cursor] != 'e' && text[cursor] != 'E'; ++cursor) {
-    if (text[cursor] >= '0' && text[cursor] <= '9' && digit_count < kExcelSignificantDigits) {
-      digits[digit_count++] = text[cursor];
+  for (const char c : view.mantissa()) {
+    if (c >= '0' && c <= '9' && digit_count < kExcelSignificantDigits) {
+      digits[digit_count++] = c;
     }
   }
-  if (digit_count < kExcelSignificantDigits || cursor >= written) {
+  if (digit_count < kExcelSignificantDigits) {
     return value;
   }
-  ++cursor;  // Step over the `e`.
-  bool exponent_negative = false;
-  if (cursor < written && (text[cursor] == '+' || text[cursor] == '-')) {
-    exponent_negative = text[cursor] == '-';
-    ++cursor;
-  }
-  int exponent = 0;
-  for (; cursor < written && text[cursor] >= '0' && text[cursor] <= '9'; ++cursor) {
-    exponent = exponent * 10 + (text[cursor] - '0');
-  }
-  if (exponent_negative) {
-    exponent = -exponent;
-  }
+  int exponent = view.exp10;
 
   // `keep` digits survive the cut; the first dropped digit is `digits[keep]`.
   // `keep >= 15` means the decimal already ends at or above the requested

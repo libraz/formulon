@@ -33,32 +33,6 @@ namespace {
 // `General` renders in an 11-character-wide field.
 constexpr int kGeneralWidth = 11;
 
-// The 15-significant-digit exponential view of `v` (`-d.ddddddddddddddde+XX`)
-// split into its mantissa text and decimal exponent. `has_exponent` is false
-// for a non-finite `v`, which has no exponent.
-struct Exponential15 {
-  char text[48];
-  std::size_t mantissa_length = 0;
-  int exp10 = 0;
-  bool has_exponent = false;
-
-  std::string_view mantissa() const { return std::string_view(text, mantissa_length); }
-};
-
-Exponential15 exponential15(double v) {
-  Exponential15 out;
-  const int n = format_exponential(out.text, sizeof(out.text), excel_decimal_view(v, kExcelSignificantDigits),
-                                   kExcelSignificantDigits - 1);
-  const std::string_view text(out.text, n > 0 ? static_cast<std::size_t>(n) : 0U);
-  const std::size_t e = text.find('e');
-  if (e != std::string_view::npos) {
-    out.mantissa_length = e;
-    out.exp10 = static_cast<int>(parse_double_prefix(text.substr(e + 1U)).value);
-    out.has_exponent = true;
-  }
-  return out;
-}
-
 // Decimal exponent of the leading digit of `v`'s 15-significant-digit decimal. log10 rounds
 // 999999999999999 up to exactly 15.
 int decimal_exponent15(double v) {

@@ -124,6 +124,22 @@ bool sort_lane_less_keyed(const Value& key_a, const std::string* text_key_a, con
 int sort_lane_compare_keyed(const Value& key_a, const std::string* text_key_a, const Value& key_b,
                             const std::string* text_key_b, bool descending);
 
+/// One SORT / SORTBY key: lane `i` is `cells[i * stride]`, with its
+/// `sort_text_key` precomputed per lane.
+struct SortKey {
+  const Value* cells;
+  std::size_t stride;
+  bool descending;
+  std::vector<std::string> text_keys;
+};
+
+/// Builds the key over `lanes` lanes starting at `cells`, `stride` apart.
+SortKey make_sort_key(const Value* cells, std::size_t stride, std::uint32_t lanes, bool descending);
+
+/// Stable lane permutation ordered by `keys` in turn (first key most
+/// significant); lanes tying on every key keep their input order.
+void sorted_lane_order(std::vector<std::uint32_t>& perm, std::uint32_t lanes, const std::vector<SortKey>& keys);
+
 /// Classifies `count` values into equivalence classes and writes one id per
 /// value to `out_ids`. Ids are dense from 0 in ascending SORT order (number <
 /// text < bool < error by code < blank); two values share an id iff they have

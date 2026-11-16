@@ -19,6 +19,7 @@
 #include "excel_locale.h"
 #include "utils/double_parse.h"
 #include "utils/strings.h"
+#include "utils/text_ops.h"
 
 namespace formulon {
 namespace text_format {
@@ -32,47 +33,17 @@ struct Utf8Scalar {
   bool valid = false;
 };
 
+// On failure the caller copies just the original lead byte and continues,
+// which is the safest recovery for a user-supplied format.
 Utf8Scalar decode_utf8(std::string_view fmt, std::size_t i) noexcept {
   if (i >= fmt.size()) {
     return {};
   }
-  const auto byte = [&](std::size_t offset) -> std::uint8_t {
-    return static_cast<std::uint8_t>(static_cast<unsigned char>(fmt[offset]));
-  };
-  const std::uint8_t first = byte(i);
-  if (first < 0x80U) {
-    return {first, 1, true};
+  const Utf8DecodeResult decoded = decode_first_utf8_codepoint(fmt.substr(i));
+  if (!decoded.valid) {
+    return {static_cast<std::uint8_t>(static_cast<unsigned char>(fmt[i])), 1, false};
   }
-
-  // Reject overlong encodings, UTF-16 surrogate code points, and values above
-  // U+10FFFF. On failure the caller copies just the original lead byte and
-  // continues, which is the safest recovery for a user-supplied format.
-  if (first >= 0xC2U && first <= 0xDFU && i + 1 < fmt.size()) {
-    const std::uint8_t second = byte(i + 1);
-    if ((second & 0xC0U) == 0x80U) {
-      return {static_cast<std::uint32_t>(first & 0x1FU) << 6U | (second & 0x3FU), 2, true};
-    }
-  } else if (first >= 0xE0U && first <= 0xEFU && i + 2 < fmt.size()) {
-    const std::uint8_t second = byte(i + 1);
-    const std::uint8_t third = byte(i + 2);
-    if ((second & 0xC0U) == 0x80U && (third & 0xC0U) == 0x80U && (first != 0xE0U || second >= 0xA0U) &&
-        (first != 0xEDU || second <= 0x9FU)) {
-      return {static_cast<std::uint32_t>(first & 0x0FU) << 12U | static_cast<std::uint32_t>(second & 0x3FU) << 6U |
-                  (third & 0x3FU),
-              3, true};
-    }
-  } else if (first >= 0xF0U && first <= 0xF4U && i + 3 < fmt.size()) {
-    const std::uint8_t second = byte(i + 1);
-    const std::uint8_t third = byte(i + 2);
-    const std::uint8_t fourth = byte(i + 3);
-    if ((second & 0xC0U) == 0x80U && (third & 0xC0U) == 0x80U && (fourth & 0xC0U) == 0x80U &&
-        (first != 0xF0U || second >= 0x90U) && (first != 0xF4U || second <= 0x8FU)) {
-      return {static_cast<std::uint32_t>(first & 0x07U) << 18U | static_cast<std::uint32_t>(second & 0x3FU) << 12U |
-                  static_cast<std::uint32_t>(third & 0x3FU) << 6U | (fourth & 0x3FU),
-              4, true};
-    }
-  }
-  return {first, 1, false};
+  return {decoded.codepoint, decoded.byte_len, true};
 }
 
 bool is_date_codepoint(std::uint32_t cp) noexcept {

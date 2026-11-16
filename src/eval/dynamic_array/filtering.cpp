@@ -21,7 +21,6 @@
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
-#include "utils/index_sort.h"
 #include "value.h"
 
 namespace formulon {
@@ -216,24 +215,16 @@ Value eval_sort_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     }
   }
 
-  // Build a permutation of lane indices, sort it stably by the chosen
-  // key column / row, then materialise the output by gathering lanes.
+  // Sort a permutation of lane indices stably by the chosen key column / row,
+  // then materialise the output by gathering lanes.
   const std::uint32_t lanes = by_col ? array->cols : array->rows;
   const ArrayValue& arr_ref = *array;
-  const auto key_cell = [&](std::uint32_t lane) -> const Value& {
-    return by_col ? arr_ref.cells[static_cast<std::size_t>(key_idx) * arr_ref.cols + lane]
-                  : arr_ref.cells[static_cast<std::size_t>(lane) * arr_ref.cols + key_idx];
-  };
-  std::vector<std::string> text_keys(lanes);
-  for (std::uint32_t lane = 0; lane < lanes; ++lane) {
-    text_keys[lane] = dynamic_array::sort_text_key(key_cell(lane));
-  }
-  const auto lane_less = [&](std::uint32_t lhs, std::uint32_t rhs) {
-    return dynamic_array::sort_lane_less_keyed(key_cell(lhs), &text_keys[lhs], key_cell(rhs), &text_keys[rhs],
-                                               descending);
-  };
+  std::vector<dynamic_array::SortKey> keys;
+  keys.push_back(by_col ? dynamic_array::make_sort_key(arr_ref.cells + static_cast<std::size_t>(key_idx) * arr_ref.cols,
+                                                       1U, lanes, descending)
+                        : dynamic_array::make_sort_key(arr_ref.cells + key_idx, arr_ref.cols, lanes, descending));
   std::vector<std::uint32_t> perm;
-  sorted_index_order(perm, lanes, make_index_less(lane_less));
+  dynamic_array::sorted_lane_order(perm, lanes, keys);
 
   ArrayValue* out = dynamic_array::materialise_selected_lanes(arr_ref, perm, by_col, arena);
   if (out == nullptr) {
@@ -266,12 +257,7 @@ Value eval_sortby_lazy(const parser::AstNode& call, Arena& arena, const Function
   bool axis_decided = false;
   bool by_col = false;
   std::uint32_t lanes = 0;
-  struct KeySpec {
-    const ArrayValue* arr;
-    bool descending;
-    std::vector<std::string> text_keys;
-  };
-  std::vector<KeySpec> keys;
+  std::vector<dynamic_array::SortKey> keys;
   keys.reserve((arity - 1U + 1U) / 2U);
 
   for (std::uint32_t i = 1; i < arity; i += 2U) {
@@ -315,37 +301,13 @@ Value eval_sortby_lazy(const parser::AstNode& call, Arena& arena, const Function
         return order_err;
       }
     }
-    KeySpec spec{by, descending, {}};
-    const std::size_t by_cells = static_cast<std::size_t>(by->rows) * by->cols;
-    spec.text_keys.reserve(by_cells);
-    for (std::size_t k = 0; k < by_cells; ++k) {
-      spec.text_keys.push_back(dynamic_array::sort_text_key(by->cells[k]));
-    }
-    keys.push_back(std::move(spec));
+    // Each by_array is 1D and matches `lanes`, so its cells index by lane.
+    keys.push_back(dynamic_array::make_sort_key(by->cells, 1U, lanes, descending));
   }
 
-  // Lane-key accessor. Both axes flatten to a 1D index since each by_array
-  // is 1D by construction (column-vector or row-vector matching `lanes`).
-  auto key_at = [](const ArrayValue* by, std::uint32_t idx) -> const Value& { return by->cells[idx]; };
-
-  // Build permutation, sort with multi-key compare. Stable so rows that
-  // tie on every key keep their input order.
-  const auto lane_less = [&](std::uint32_t lhs, std::uint32_t rhs) {
-    for (const KeySpec& spec : keys) {
-      const Value& key_lhs = key_at(spec.arr, lhs);
-      const Value& key_rhs = key_at(spec.arr, rhs);
-      const std::string* tk_lhs = &spec.text_keys[lhs];
-      const std::string* tk_rhs = &spec.text_keys[rhs];
-      const int order = dynamic_array::sort_lane_compare_keyed(key_lhs, tk_lhs, key_rhs, tk_rhs, spec.descending);
-      if (order != 0) {
-        return order < 0;
-      }
-      // Equal under this key -> fall through to next.
-    }
-    return false;
-  };
+  // Stable multi-key sort: rows that tie on every key keep their input order.
   std::vector<std::uint32_t> perm;
-  sorted_index_order(perm, lanes, make_index_less(lane_less));
+  dynamic_array::sorted_lane_order(perm, lanes, keys);
 
   // Materialise output, preserving input shape (axis-only reorder).
   const ArrayValue& arr_ref = *array;

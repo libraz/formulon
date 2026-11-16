@@ -88,21 +88,17 @@ ArrayValue* materialise_selected_lanes(const ArrayValue& src, const std::vector<
   if (out == nullptr) {
     return nullptr;
   }
-  if (by_col) {
-    for (std::uint32_t r = 0; r < out_rows; ++r) {
-      for (std::uint32_t i = 0; i < out_cols; ++i) {
-        const std::uint32_t src_col = indices[i];
-        buffer[static_cast<std::size_t>(r) * out_cols + i] =
-            src.cells[static_cast<std::size_t>(r) * src.cols + src_col].promote_reference_blank_to_value_array();
-      }
-    }
-  } else {
-    for (std::uint32_t i = 0; i < out_rows; ++i) {
-      const std::uint32_t src_row = indices[i];
-      for (std::uint32_t c = 0; c < out_cols; ++c) {
-        buffer[static_cast<std::size_t>(i) * out_cols + c] =
-            src.cells[static_cast<std::size_t>(src_row) * src.cols + c].promote_reference_blank_to_value_array();
-      }
+  // `lane` walks the gathered axis, `across` the other one.
+  const std::uint32_t lanes = by_col ? out_cols : out_rows;
+  const std::uint32_t across = by_col ? out_rows : out_cols;
+  for (std::uint32_t i = 0; i < lanes; ++i) {
+    for (std::uint32_t j = 0; j < across; ++j) {
+      const std::uint32_t src_r = by_col ? j : indices[i];
+      const std::uint32_t src_c = by_col ? indices[i] : j;
+      const std::uint32_t dst_r = by_col ? j : i;
+      const std::uint32_t dst_c = by_col ? i : j;
+      buffer[static_cast<std::size_t>(dst_r) * out_cols + dst_c] =
+          src.cells[static_cast<std::size_t>(src_r) * src.cols + src_c].promote_reference_blank_to_value_array();
     }
   }
 
@@ -226,6 +222,29 @@ int sort_lane_compare_keyed(const Value& key_a, const std::string* text_key_a, c
 bool sort_lane_less_keyed(const Value& key_a, const std::string* text_key_a, const Value& key_b,
                           const std::string* text_key_b, bool descending) {
   return sort_lane_compare_keyed(key_a, text_key_a, key_b, text_key_b, descending) < 0;
+}
+
+SortKey make_sort_key(const Value* cells, std::size_t stride, std::uint32_t lanes, bool descending) {
+  SortKey key{cells, stride, descending, {}};
+  key.text_keys.reserve(lanes);
+  for (std::uint32_t lane = 0; lane < lanes; ++lane) {
+    key.text_keys.push_back(sort_text_key(cells[lane * stride]));
+  }
+  return key;
+}
+
+void sorted_lane_order(std::vector<std::uint32_t>& perm, std::uint32_t lanes, const std::vector<SortKey>& keys) {
+  const auto lane_less = [&keys](std::uint32_t lhs, std::uint32_t rhs) {
+    for (const SortKey& key : keys) {
+      const int order = sort_lane_compare_keyed(key.cells[lhs * key.stride], &key.text_keys[lhs],
+                                                key.cells[rhs * key.stride], &key.text_keys[rhs], key.descending);
+      if (order != 0) {
+        return order < 0;
+      }
+    }
+    return false;
+  };
+  sorted_index_order(perm, lanes, make_index_less(lane_less));
 }
 
 std::uint32_t collation_classes(const Value* values, std::size_t count, ExcelProfile profile,
