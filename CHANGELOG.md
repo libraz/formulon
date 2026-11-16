@@ -69,6 +69,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A PivotTable cache keeps Excel's mark that its source was edited since it
+  was read (`dataSourceClean`) and saves it to `.xlsx` and `.xlsb`: a cache
+  loaded, built through the API or refreshed is saved as clean, and an
+  insert or delete of rows, columns or cells anywhere on a range source's
+  sheet, or one that changes the extent of a defined-name source, saves it
+  as edited until the next refresh. A table source is never marked, and an
+  edit on another sheet marks nothing. Before, a loaded cache saved the mark
+  as it was read and an API-built cache saved none. A value edit, sort or
+  AutoFilter on the source leaves the cache clean, where Excel marks it;
+  Excel ignores the mark when it opens a file (listed in
+  `tests/divergence.yaml`).
 - A formula entered in a cell, or as a conditional-format, data-validation
   or defined-name formula, takes Excel's spelling: built-in function names,
   references, `TRUE` / `FALSE` and error literals are upper-cased
@@ -569,9 +580,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its `.xlsx` save, is written to `.xlsb` as Excel saves it after opening
   the `.xlsx` save: cache versions 8/8/3, refresh date 0 and no refresh
   user, and the same table records; both formats save a cache no refresh
-  dated with refresh date 0, as Excel does. Day, month and year date
+  dated with refresh date 0, as Excel does. A source cell left blank is
+  written as Excel writes it, whether or not its cache field has shared
+  items. Day, month and year date
   groupings are read and written. A PivotTable the `.xlsb` records
-  cannot yet hold (for example a calculated field or a quarter grouping) is
+  cannot yet hold (for example a calculated field, a quarter grouping, or a
+  cache field without shared items whose cells hold more than one type of
+  value, such as text and numbers) is
   left out of an `.xlsb` save together with its cache and the other
   PivotTables on that cache, and counted in `deferredFeatureCount`, as is an
   `.xlsb` PivotTable an `.xlsx` save cannot carry; it still saves to `.xlsx`.
