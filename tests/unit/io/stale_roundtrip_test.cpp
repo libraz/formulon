@@ -579,4 +579,55 @@ TEST(StaleRoundtrip, MergedOneCellDynamicArrayKeepsItsValueInManualMode) {
   EXPECT_EQ(c3_text(manual), "A");
 }
 
+// Sheet L holds a legacy array block A5:A7 =Nm*2 and sheet D the same as a dynamic array, Nm = L!$A$1:$A$3:
+// loading the names the block refers to keeps the block's cached members and the used range.
+TEST(StaleRoundtrip, ArrayBlockReferencingANameKeepsItsMembersOnLoad) {
+  const auto expect_block = [](const Workbook& wb) {
+    for (std::size_t sheet = 0; sheet < 2U; ++sheet) {
+      EXPECT_NE(wb.sheet(sheet).spill_region_at_anchor(4U, 0U), nullptr) << "sheet " << sheet;
+      EXPECT_EQ(Number(wb, sheet, 4U, 0U), 2.0);
+      EXPECT_EQ(Number(wb, sheet, 5U, 0U), 4.0);
+      EXPECT_EQ(Number(wb, sheet, 6U, 0U), 6.0);
+      const auto extent = wb.sheet(sheet).populated_extent(0U, 0U, Sheet::kMaxRows - 1U, Sheet::kMaxCols - 1U);
+      ASSERT_TRUE(extent.has_value());
+      EXPECT_EQ(extent->last_row, 6U) << "sheet " << sheet;
+    }
+  };
+  Workbook wb = Load(ReadFixture("../load_save/array_block_referencing_name.xlsx"));
+  expect_block(wb);
+  wb.set_calc_mode(CalcMode::kManual);
+  // An automatic-mode book loads with every formula pending; settle it so the manual save marks nothing.
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  ASSERT_TRUE(StaleFormulas(wb).empty());
+  for (const bool sax : {false, true}) {
+    const Workbook manual = Load(Save(wb), sax);
+    ASSERT_EQ(manual.calc_mode(), CalcMode::kManual);
+    expect_block(manual);
+    EXPECT_TRUE(StaleFormulas(manual).empty());
+    expect_block(Load(Save(manual)));
+  }
+}
+
+// Retargeting the name after load is an edit: the dependent blocks lose their spill and go stale until recalculated.
+TEST(StaleRoundtrip, RetargetingANameAfterLoadInvalidatesTheArrayBlocks) {
+  Workbook wb = Load(ReadFixture("../load_save/array_block_referencing_name.xlsx"));
+  wb.set_calc_mode(CalcMode::kManual);
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  Workbook manual = Load(Save(wb));
+  ASSERT_EQ(manual.calc_mode(), CalcMode::kManual);
+  ASSERT_TRUE(StaleFormulas(manual).empty());
+  ASSERT_TRUE(static_cast<bool>(manual.set_defined_name("Nm", "L!$A$2:$A$4")));
+  const CellSet stale = StaleFormulas(manual);
+  for (std::uint16_t sheet = 0; sheet < 2U; ++sheet) {
+    EXPECT_EQ(manual.sheet(sheet).spill_region_at_anchor(4U, 0U), nullptr) << "sheet " << sheet;
+    EXPECT_EQ(stale.count(Node(sheet, 4U, 0U)), 1U) << "sheet " << sheet;
+  }
+  ASSERT_TRUE(static_cast<bool>(manual.recalc(eval::default_registry())));
+  for (std::size_t sheet = 0; sheet < 2U; ++sheet) {
+    EXPECT_EQ(Number(manual, sheet, 4U, 0U), 4.0);
+    EXPECT_EQ(Number(manual, sheet, 5U, 0U), 6.0);
+    EXPECT_EQ(Number(manual, sheet, 6U, 0U), 0.0);
+  }
+}
+
 }  // namespace formulon

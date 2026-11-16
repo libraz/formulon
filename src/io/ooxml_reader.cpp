@@ -858,6 +858,15 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
 
   ASSIGN_OR_RETURN(SharedStringTable sst, ReadWorkbookAuxParts(zip, wb_root, wb_rels, wb, consumed_parts));
 
+  // 4d. Defined names, after the external links their `[N]` spell and before
+  // any cell formula: each formula registers against the names the file
+  // states, so installing them is not an edit that invalidates loaded spills.
+  ASSIGN_OR_RETURN(auto defined_names, read_defined_names(wb_doc));
+  for (DefinedName& entry : defined_names) {
+    entry.formula = wb.ingest_stored_formula(entry.formula, Workbook::FormulaSource::kEntered);
+  }
+  wb.set_defined_names(std::move(defined_names));
+
   // 5. Read each sheet's <sheetData> via the cell-aware sheet reader.
   // The sheet reader appends every inline-string payload directly into
   // the workbook-owned text-storage deque, a pointer-stable
@@ -1012,13 +1021,6 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
   // the XLDAPR entry of `xl/metadata.xml`; any other (a legacy CSE block, an
   // implicit-intersection formula) keeps its legacy meaning.
   MarkLoadedDynamicArrays(zip, wb, sheet_contexts);
-
-  // 7. Defined names, read from `wb_doc` after sheet construction and resolved lazily at evaluation time.
-  ASSIGN_OR_RETURN(auto defined_names, read_defined_names(wb_doc));
-  for (DefinedName& entry : defined_names) {
-    entry.formula = wb.ingest_stored_formula(entry.formula, Workbook::FormulaSource::kEntered);
-  }
-  wb.set_defined_names(std::move(defined_names));
 
   // 8. Tables — already accumulated in the per-sheet loop above. Move
   // the workbook-scope vector onto the workbook for round-trip.
