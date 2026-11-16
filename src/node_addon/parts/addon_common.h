@@ -66,6 +66,8 @@ struct AddonData {
   Napi::FunctionReference workbook_class;
   /// The `FormulonError` constructor injected through `__setErrorClass`.
   Napi::FunctionReference error_class;
+  /// Whether this environment has a log-sink cleanup hook registered.
+  bool log_sink_hook = false;
 };
 
 /// This environment's addon state, created on first use.

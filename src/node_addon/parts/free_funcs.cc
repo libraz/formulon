@@ -31,12 +31,48 @@ Napi::ThreadSafeFunction& log_sink_tsfn() {
   return tsfn;
 }
 
+// The environment that created `log_sink_tsfn()`, or null.
+napi_env& log_sink_env() {
+  static napi_env env = nullptr;
+  return env;
+}
+
+// Environment teardown of the sink's owner: the environment finalizes the
+// function itself, so the engine stops calling it and the handle is dropped
+// without a Release.
+void DropLogSinkOfEnv(void* arg) {
+  const napi_env env = static_cast<napi_env>(arg);
+  {
+    const std::lock_guard<std::mutex> lock(log_sink_mutex());
+    if (log_sink_env() != env) {
+      return;
+    }
+  }
+  (void)fm_set_log_sink(nullptr, nullptr);
+  const std::lock_guard<std::mutex> lock(log_sink_mutex());
+  if (log_sink_env() == env) {
+    log_sink_tsfn() = Napi::ThreadSafeFunction();
+    log_sink_env() = nullptr;
+  }
+}
+
+// Registers `DropLogSinkOfEnv` for `env` after its newest sink, so it runs
+// before the environment tears that function down.
+void HookLogSinkTeardown(Napi::Env env) {
+  AddonData& data = GetAddonData(env);
+  if (data.log_sink_hook) {
+    napi_remove_env_cleanup_hook(env, &DropLogSinkOfEnv, env);
+  }
+  data.log_sink_hook = napi_add_env_cleanup_hook(env, &DropLogSinkOfEnv, env) == napi_ok;
+}
+
 void ReleaseLogSinkLocked() {
   Napi::ThreadSafeFunction& tsfn = log_sink_tsfn();
   if (tsfn) {
     tsfn.Release();
     tsfn = Napi::ThreadSafeFunction();
   }
+  log_sink_env() = nullptr;
 }
 
 void LogSinkTrampoline(const char* record, std::size_t len, void* /*user_data*/) {
@@ -220,9 +256,13 @@ Napi::Value SetLogSink(const Napi::CallbackInfo& info) {
     if (rc == 0) {
       ReleaseLogSinkLocked();
       log_sink_tsfn() = fresh;
+      log_sink_env() = env;
     } else {
       fresh.Release();
     }
+  }
+  if (rc == 0) {
+    HookLogSinkTeardown(env);
   }
   return ValueOrThrow(env, rc, env.Undefined());
 }
