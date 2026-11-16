@@ -315,11 +315,12 @@ TEST(DrawingEmptyStrings, SparklineDateAxisRefEmptyIsRefusedOnAddAndPatch) {
 
   g.date_axis_ref = nullptr;
   ASSERT_EQ(fm_sheet_add_sparkline_group(wb.handle, 0, &g, items, 1, &id), 0) << fm_get_last_error_message();
+  // The returned id is a scratch view the next read reuses, so copy it before reading.
+  const std::string group_id = id;
   fm_sparkline_group_t read = FM_STRUCT_INIT(fm_sparkline_group_t);
   ASSERT_EQ(fm_sheet_get_sparkline_group_at(wb.handle, 0, 0, &read), 0);
   EXPECT_EQ(read.date_axis_ref, nullptr);
 
-  const std::string group_id = id;
   fm_sparkline_group_patch_t patch = FM_STRUCT_INIT(fm_sparkline_group_patch_t);
   patch.date_axis_ref_op = FM_PATCH_OP_SET;
   patch.date_axis_ref = "";
