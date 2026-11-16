@@ -23,6 +23,7 @@
 #include <cstdint>
 #include <string_view>
 
+#include "eval/function_registry.h"
 #include "eval/lazy_impls.h"
 
 namespace formulon {
@@ -38,6 +39,102 @@ enum class LazyResultShape : std::uint8_t {
   kArray,
   kReduce,
 };
+
+/// What a lazy form's call may return when it is a reference.
+enum class RefResult : std::uint8_t {
+  kNone,           ///< Never a reference.
+  kBuilds,         ///< Builds a reference from its arguments (OFFSET, INDIRECT).
+  kArg0,           ///< Returns a part of its first argument's reference (INDEX, TAKE, ...).
+  kTrimmed,        ///< Rebuilds its first argument from its populated extent (TRIMRANGE).
+  kProjected,      ///< Projects its argument onto the formula cell (SINGLE).
+  kIfBranch,       ///< The chosen branch of IF.
+  kChooseValue,    ///< The chosen value of CHOOSE.
+  kIfsValue,       ///< The chosen value of IFS.
+  kSwitchResult,   ///< The matched result of SWITCH.
+  kXlookupResult,  ///< The return array element of XLOOKUP.
+};
+
+/// A set of parameter positions (0-based) of a lazy form.
+enum class ParamSet : std::uint8_t {
+  kNone,
+  kFirst,           ///< 0
+  kSecond,          ///< 1
+  kFirstAndSecond,  ///< 0, 1
+  kFirstAndThird,   ///< 0, 2
+  kAllButFirst,     ///< 1, 2, ...
+  kEven,            ///< 0, 2, 4, ...
+  kFirstAndOdd,     ///< 0, 1, 3, 5, ...
+  kFourthOn,        ///< 3, 4, ...
+  kAll,             ///< every position
+};
+
+/// True when position `index` (0-based) belongs to `set`.
+constexpr bool param_in_set(ParamSet set, std::uint32_t index) noexcept {
+  switch (set) {
+    case ParamSet::kNone:
+      return false;
+    case ParamSet::kFirst:
+      return index == 0U;
+    case ParamSet::kSecond:
+      return index == 1U;
+    case ParamSet::kFirstAndSecond:
+      return index <= 1U;
+    case ParamSet::kFirstAndThird:
+      return index == 0U || index == 2U;
+    case ParamSet::kAllButFirst:
+      return index >= 1U;
+    case ParamSet::kEven:
+      return index % 2U == 0U;
+    case ParamSet::kFirstAndOdd:
+      return index == 0U || index % 2U == 1U;
+    case ParamSet::kFourthOn:
+      return index >= 3U;
+    case ParamSet::kAll:
+      return true;
+  }
+  return false;
+}
+
+/// How a lone value (neither a reference nor an array) in a scalar-policy
+/// parameter is answered.
+enum class ScalarArg : std::uint8_t {
+  kAccept,
+  kRejectValue,  ///< #VALUE!
+  kRejectNA,     ///< #N/A
+};
+
+/// `LazyEntry::min_arity` / `max_arity` value of an open argument list.
+inline constexpr std::uint8_t kLazyVariadic = 0xFF;
+
+/// One row of the lazy dispatch table.
+struct LazyEntry {
+  const char* name;  // canonical UPPERCASE
+  LazyImpl impl;
+  // Unannotated lazy forms are conservatively array-capable. A new lazy
+  // implementation must opt into kScalar/kReduce/kBroadcast only after its
+  // return paths have been checked; this prevents a catalog addition from
+  // creating a silent partial-recalc false negative.
+  LazyResultShape shape = LazyResultShape::kArray;
+  // Written argument counts Excel accepts at entry, as `FunctionDef`'s
+  // min_arity / max_arity (`kLazyVariadic` for an open list). The impl still
+  // checks its own arguments.
+  std::uint8_t min_arity;
+  std::uint8_t max_arity;
+  RefResult ref_result = RefResult::kNone;
+  ParamSet ref_params = ParamSet::kNone;   // parameters that take only a reference
+  ParamSet grid_params = ParamSet::kNone;  // parameters read through `grid_sel`
+  GridArg grid_sel = GridArg::kElementError;
+  GridArg grid_rest = GridArg::kElementError;
+  ParamSet scalar_params = ParamSet::kNone;  // parameters under the lone-value policy
+  ScalarArg scalar_error = ScalarArg::kAccept;
+  ParamSet lift_params = ParamSet::kNone;  // value parameters evaluated once to join the lift
+};
+
+static_assert(sizeof(LazyEntry) == (sizeof(void*) == 8 ? 32 : 20), "LazyEntry must not grow");
+
+/// Returns the row for `name` (canonical UPPERCASE, case-insensitive), or
+/// nullptr when it is not a lazy form.
+const LazyEntry* find_lazy_entry(std::string_view name) noexcept;
 
 /// Looks up `name` (canonical UPPERCASE, case-insensitive) in the lazy
 /// dispatch table. Returns the bound `LazyImpl` pointer on hit, or

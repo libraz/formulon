@@ -42,90 +42,10 @@ bool is_qualified_builtin_callee(const AstNode& callee) {
   return resolve_builtin_function_name(name) != nullptr;
 }
 
-// Which parameters of a built-in take only a reference.
-enum class ReferenceParams : std::uint8_t {
-  kFirst,          // 0
-  kFirstAndThird,  // 0 and 2
-  kSecond,         // 1
-  kAllButFirst,    // 1, 2, ...
-  kEven,           // 0, 2, 4, ...
-  kFirstAndOdd,    // 0, 1, 3, 5, ...
-};
-
-struct ReferenceParamEntry {
-  const char* name;
-  ReferenceParams params;
-};
-
-// Measured in Excel 365 by entering each built-in with an empty and a
-// constant argument in every position.
-constexpr ReferenceParamEntry kReferenceParams[] = {
-    {"AREAS", ReferenceParams::kFirst},
-    {"AVERAGEIF", ReferenceParams::kFirstAndThird},
-    {"AVERAGEIFS", ReferenceParams::kFirstAndOdd},
-    {"CELL", ReferenceParams::kSecond},
-    {"COLUMN", ReferenceParams::kFirst},
-    {"COUNTBLANK", ReferenceParams::kFirst},
-    {"COUNTIF", ReferenceParams::kFirst},
-    {"COUNTIFS", ReferenceParams::kEven},
-    {"DAVERAGE", ReferenceParams::kFirst},
-    {"DCOUNT", ReferenceParams::kFirst},
-    {"DCOUNTA", ReferenceParams::kFirst},
-    {"DGET", ReferenceParams::kFirst},
-    {"DMAX", ReferenceParams::kFirst},
-    {"DMIN", ReferenceParams::kFirst},
-    {"DPRODUCT", ReferenceParams::kFirst},
-    {"DSTDEV", ReferenceParams::kFirst},
-    {"DSTDEVP", ReferenceParams::kFirst},
-    {"DSUM", ReferenceParams::kFirst},
-    {"DVAR", ReferenceParams::kFirst},
-    {"DVARP", ReferenceParams::kFirst},
-    {"FORMULATEXT", ReferenceParams::kFirst},
-    {"ISFORMULA", ReferenceParams::kFirst},
-    {"MAXIFS", ReferenceParams::kFirstAndOdd},
-    {"MINIFS", ReferenceParams::kFirstAndOdd},
-    {"OFFSET", ReferenceParams::kFirst},
-    {"PHONETIC", ReferenceParams::kFirst},
-    {"RANK", ReferenceParams::kSecond},
-    {"RANK.AVG", ReferenceParams::kSecond},
-    {"RANK.EQ", ReferenceParams::kSecond},
-    {"ROW", ReferenceParams::kFirst},
-    {"SUBTOTAL", ReferenceParams::kAllButFirst},
-    {"SUMIF", ReferenceParams::kFirstAndThird},
-    {"SUMIFS", ReferenceParams::kFirstAndOdd},
-};
-
-// Built-ins whose call Excel takes as a reference whatever its arguments
-// (LET parses to its own node); the `_TRO_*` forms are the trim-range
-// operators `.:`, `:.` and `.:.`. A superset of the calls
-// `resolve_reference_call` can resolve to a rectangle (`SINGLE`, `TAKE` and
-// `DROP` are taken as references without one).
-constexpr const char* kReferenceReturning[] = {
-    "INDEX",     "INDIRECT", "OFFSET", "IF",   "CHOOSE",       "XLOOKUP",       "IFS",      "SWITCH",
-    "TRIMRANGE", "SINGLE",   "TAKE",   "DROP", "_TRO_LEADING", "_TRO_TRAILING", "_TRO_ALL", nullptr,
-};
-
+// Whether parameter `index` of the lazy form `name` takes only a reference.
 bool takes_only_reference(std::string_view name, std::uint32_t index) {
-  for (const ReferenceParamEntry& entry : kReferenceParams) {
-    if (!strings::case_insensitive_eq(name, entry.name)) {
-      continue;
-    }
-    switch (entry.params) {
-      case ReferenceParams::kFirst:
-        return index == 0U;
-      case ReferenceParams::kFirstAndThird:
-        return index == 0U || index == 2U;
-      case ReferenceParams::kSecond:
-        return index == 1U;
-      case ReferenceParams::kAllButFirst:
-        return index >= 1U;
-      case ReferenceParams::kEven:
-        return index % 2U == 0U;
-      case ReferenceParams::kFirstAndOdd:
-        return index == 0U || index % 2U == 1U;
-    }
-  }
-  return false;
+  const LazyEntry* entry = find_lazy_entry(name);
+  return entry != nullptr && param_in_set(entry->ref_params, index);
 }
 
 // Built-ins whose arguments come in pairs: a count within the arity range is
@@ -193,7 +113,11 @@ bool is_reference_expression(const AstNode& node) {
       return is_reference_expression(node.as_intersect_lhs()) && is_reference_expression(node.as_intersect_rhs());
     case NodeKind::Call: {
       const std::string name = parser::strip_storage_prefixes(node.as_call_name());
-      return resolve_builtin_function_name(name) == nullptr || find_in(kReferenceReturning, name) != nullptr;
+      if (resolve_builtin_function_name(name) == nullptr) {
+        return true;
+      }
+      const LazyEntry* entry = find_lazy_entry(name);
+      return entry != nullptr && entry->ref_result != RefResult::kNone;
     }
     default:
       return false;

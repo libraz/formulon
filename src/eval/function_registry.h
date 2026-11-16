@@ -27,6 +27,21 @@ namespace eval {
 /// Sentinel for `FunctionDef::max_arity` denoting an unbounded variadic.
 inline constexpr std::uint32_t kVariadic = std::numeric_limits<std::uint32_t>::max();
 
+/// How a function reads an argument that is a grid of references (an array
+/// whose elements are references).
+enum class GridArg : std::uint8_t {
+  kElementError,   ///< Each element dereferences as a value operand does: #VALUE!.
+  kPerRef,         ///< The call runs once per element, the element passed as a reference.
+  kPerValue,       ///< Elements read as values: a one-cell element gives its value, a larger one #VALUE!.
+  kTopLeft,        ///< Elements read as their top-left cells, through the range-sourced filters.
+  kOpaque,         ///< Elements are opaque blanks; error elements keep their error.
+  kKeepRef,        ///< The grid is passed on unchanged.
+  kReshape,        ///< The function rearranges elements; the result keeps them as references.
+  kLambdaElement,  ///< Each element binds to the lambda parameter as a reference.
+  kWholeValue,     ///< The whole call is #VALUE!.
+  kWholeNA,        ///< The whole call is #N/A.
+};
+
 /// Running state of a reducer taken one value at a time (`FoldOps`).
 struct FoldState {
   FinalStepSnapSum sum;  ///< Running sum, snapped on its last addition.
@@ -184,6 +199,8 @@ struct FunctionDef {
   /// is unknown: the call is `#NAME?` before arity or arguments are checked,
   /// whatever the arguments evaluate to.
   bool absent_on_mac = false;
+  /// How the function reads a grid-of-references argument. See `GridArg`.
+  GridArg grid_arg = GridArg::kElementError;
   /// One-value-at-a-time form of a range-aware reducer, or null. See `FoldOps`.
   const FoldOps* fold = nullptr;
   /// Defaults of omitted argument slots, `omitted_default_count` entries, or
@@ -191,6 +208,8 @@ struct FunctionDef {
   const OmittedArgDefault* omitted_defaults = nullptr;
   std::uint32_t omitted_default_count = 0;
 };
+
+static_assert(sizeof(FunctionDef) == (sizeof(void*) == 8 ? 72 : 48), "FunctionDef must not grow");
 
 /// Case-insensitive function lookup table. Registry keys are stored in an
 /// owned UPPERCASE form internally; lookup folds ASCII bytes while hashing and

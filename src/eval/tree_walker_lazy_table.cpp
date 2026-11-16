@@ -56,20 +56,6 @@ namespace formulon {
 namespace eval {
 namespace {
 
-struct LazyEntry {
-  const char* name;  // canonical UPPERCASE
-  LazyImpl impl;
-  // Unannotated lazy forms are conservatively array-capable. A new lazy
-  // implementation must opt into kScalar/kReduce/kBroadcast only after its
-  // return paths have been checked; this prevents a catalog addition from
-  // creating a silent partial-recalc false negative.
-  LazyResultShape shape = LazyResultShape::kArray;
-  // Written argument counts Excel accepts at entry, as `FunctionDef`'s
-  // min_arity / max_arity. The impl still checks its own arguments.
-  std::uint32_t min_arity;
-  std::uint32_t max_arity;
-};
-
 // The single source of truth for lazy-form routing. Sorted alphabetically
 // by canonical UPPERCASE name so a quick visual diff catches accidental
 // duplicates. Comments preserved verbatim from the prior in-place table.
@@ -77,15 +63,15 @@ constexpr LazyEntry kLazyDispatch[] = {
     // The trim-reference operators `.:`, `:.`, `.:.` (see
     // `parser::trim_ref_function_name`); `_` sorts first under the lookup's
     // lower-case folding.
-    {"_TRO_ALL", &eval_trim_ref_lazy, LazyResultShape::kArray, 1U, 1U},
-    {"_TRO_LEADING", &eval_trim_ref_lazy, LazyResultShape::kArray, 1U, 1U},
-    {"_TRO_TRAILING", &eval_trim_ref_lazy, LazyResultShape::kArray, 1U, 1U},
+    {"_TRO_ALL", &eval_trim_ref_lazy, LazyResultShape::kArray, 1U, 1U, RefResult::kTrimmed, ParamSet::kNone},
+    {"_TRO_LEADING", &eval_trim_ref_lazy, LazyResultShape::kArray, 1U, 1U, RefResult::kTrimmed, ParamSet::kNone},
+    {"_TRO_TRAILING", &eval_trim_ref_lazy, LazyResultShape::kArray, 1U, 1U, RefResult::kTrimmed, ParamSet::kNone},
     // Financial date1904-sensitive family: shares one lazy impl
     // (`eval_financial_date_lazy`) the same way the calendar family shares
     // `eval_datetime_lazy` -- see `eval/financial_lazy.h`.
     {"ACCRINT", &eval_financial_date_lazy, LazyResultShape::kScalar, 6U, 8U},
     {"ACCRINTM", &eval_financial_date_lazy, LazyResultShape::kScalar, 4U, 5U},
-    {"AGGREGATE", &eval_aggregate_lazy, LazyResultShape::kReduce, 3U, kVariadic},
+    {"AGGREGATE", &eval_aggregate_lazy, LazyResultShape::kReduce, 3U, kLazyVariadic},
     {"AMORDEGRC", &eval_financial_date_lazy, LazyResultShape::kScalar, 6U, 7U},
     {"AMORLINC", &eval_financial_date_lazy, LazyResultShape::kScalar, 6U, 7U},
     // ANCHORARRAY is the OOXML internal encoding of the postfix `#`
@@ -93,28 +79,30 @@ constexpr LazyEntry kLazyDispatch[] = {
     // `strip_future_prefix`, so callers register the canonical bare name.
     // See `eval_anchorarray_lazy`.
     {"ANCHORARRAY", &eval_anchorarray_lazy, LazyResultShape::kArray, 1U, 1U},
-    {"AND", &eval_and_lazy, LazyResultShape::kReduce, 1U, kVariadic},
-    {"AREAS", &eval_areas_lazy, LazyResultShape::kReduce, 1U, 1U},
+    {"AND", &eval_and_lazy, LazyResultShape::kReduce, 1U, kLazyVariadic},
+    {"AREAS", &eval_areas_lazy, LazyResultShape::kReduce, 1U, 1U, RefResult::kNone, ParamSet::kFirst},
     {"ARRAYTOTEXT", &eval_arraytotext_lazy, LazyResultShape::kScalar, 1U, 2U},
-    {"AVERAGEIF", &eval_averageif_lazy, LazyResultShape::kReduce, 2U, 3U},
-    {"AVERAGEIFS", &eval_averageifs_lazy, LazyResultShape::kReduce, 3U, kVariadic},
+    {"AVERAGEIF", &eval_averageif_lazy, LazyResultShape::kReduce, 2U, 3U, RefResult::kNone, ParamSet::kFirstAndThird},
+    {"AVERAGEIFS", &eval_averageifs_lazy, LazyResultShape::kReduce, 3U, kLazyVariadic, RefResult::kNone,
+     ParamSet::kFirstAndOdd},
     {"BYCOL", &eval_bycol_lazy, LazyResultShape::kArray, 1U, 2U},
     {"BYROW", &eval_byrow_lazy, LazyResultShape::kArray, 1U, 2U},
-    {"CELL", &eval_cell_lazy, LazyResultShape::kArray, 1U, 2U},
+    {"CELL", &eval_cell_lazy, LazyResultShape::kArray, 1U, 2U, RefResult::kNone, ParamSet::kSecond},
     // CHITEST is the pre-2010 legacy spelling of CHISQ.TEST; same impl.
     {"CHISQ.TEST", &eval_chisq_test_lazy, LazyResultShape::kReduce, 2U, 2U},
     {"CHITEST", &eval_chisq_test_lazy, LazyResultShape::kReduce, 2U, 2U},
-    {"CHOOSE", &eval_choose_lazy, LazyResultShape::kBroadcast, 2U, kVariadic},
-    {"CHOOSECOLS", &eval_choosecols_lazy, LazyResultShape::kArray, 2U, kVariadic},
-    {"CHOOSEROWS", &eval_chooserows_lazy, LazyResultShape::kArray, 2U, kVariadic},
+    {"CHOOSE", &eval_choose_lazy, LazyResultShape::kBroadcast, 2U, kLazyVariadic, RefResult::kChooseValue,
+     ParamSet::kNone},
+    {"CHOOSECOLS", &eval_choosecols_lazy, LazyResultShape::kArray, 2U, kLazyVariadic},
+    {"CHOOSEROWS", &eval_chooserows_lazy, LazyResultShape::kArray, 2U, kLazyVariadic},
     {"CODE", &eval_code_lazy, LazyResultShape::kScalar, 1U, 1U},
-    {"COLUMN", &eval_column_lazy, LazyResultShape::kBroadcast, 0U, 1U},
+    {"COLUMN", &eval_column_lazy, LazyResultShape::kBroadcast, 0U, 1U, RefResult::kNone, ParamSet::kFirst},
     {"COLUMNS", &eval_columns_lazy, LazyResultShape::kReduce, 1U, 1U},
     {"CORREL", &eval_correl_lazy, LazyResultShape::kReduce, 2U, 2U},
-    {"COUNT", &eval_count_lazy, LazyResultShape::kReduce, 1U, kVariadic},
-    {"COUNTBLANK", &eval_countblank_lazy, LazyResultShape::kReduce, 1U, 1U},
-    {"COUNTIF", &eval_countif_lazy, LazyResultShape::kReduce, 2U, 2U},
-    {"COUNTIFS", &eval_countifs_lazy, LazyResultShape::kReduce, 2U, kVariadic},
+    {"COUNT", &eval_count_lazy, LazyResultShape::kReduce, 1U, kLazyVariadic},
+    {"COUNTBLANK", &eval_countblank_lazy, LazyResultShape::kReduce, 1U, 1U, RefResult::kNone, ParamSet::kFirst},
+    {"COUNTIF", &eval_countif_lazy, LazyResultShape::kReduce, 2U, 2U, RefResult::kNone, ParamSet::kFirst},
+    {"COUNTIFS", &eval_countifs_lazy, LazyResultShape::kReduce, 2U, kLazyVariadic, RefResult::kNone, ParamSet::kEven},
     {"COUPDAYBS", &eval_financial_date_lazy, LazyResultShape::kScalar, 3U, 4U},
     {"COUPDAYS", &eval_financial_date_lazy, LazyResultShape::kScalar, 3U, 4U},
     {"COUPDAYSNC", &eval_financial_date_lazy, LazyResultShape::kScalar, 3U, 4U},
@@ -133,24 +121,24 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"DATE", &eval_datetime_lazy, LazyResultShape::kBroadcast, 3U, 3U},
     {"DATEDIF", &eval_datetime_lazy, LazyResultShape::kBroadcast, 3U, 3U},
     {"DATEVALUE", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
-    {"DAVERAGE", &eval_daverage_lazy, LazyResultShape::kReduce, 3U, 3U},
+    {"DAVERAGE", &eval_daverage_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
     {"DAY", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
     {"DAYS", &eval_datetime_lazy, LazyResultShape::kBroadcast, 2U, 2U},
     {"DAYS360", &eval_datetime_lazy, LazyResultShape::kBroadcast, 2U, 3U},
-    {"DCOUNT", &eval_dcount_lazy, LazyResultShape::kReduce, 3U, 3U},
-    {"DCOUNTA", &eval_dcounta_lazy, LazyResultShape::kReduce, 3U, 3U},
-    {"DGET", &eval_dget_lazy, LazyResultShape::kReduce, 3U, 3U},
+    {"DCOUNT", &eval_dcount_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
+    {"DCOUNTA", &eval_dcounta_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
+    {"DGET", &eval_dget_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
     {"DISC", &eval_financial_date_lazy, LazyResultShape::kScalar, 4U, 5U},
-    {"DMAX", &eval_dmax_lazy, LazyResultShape::kReduce, 3U, 3U},
-    {"DMIN", &eval_dmin_lazy, LazyResultShape::kReduce, 3U, 3U},
-    {"DPRODUCT", &eval_dproduct_lazy, LazyResultShape::kReduce, 3U, 3U},
-    {"DROP", &eval_drop_lazy, LazyResultShape::kArray, 2U, 3U},
-    {"DSTDEV", &eval_dstdev_lazy, LazyResultShape::kReduce, 3U, 3U},
-    {"DSTDEVP", &eval_dstdevp_lazy, LazyResultShape::kReduce, 3U, 3U},
-    {"DSUM", &eval_dsum_lazy, LazyResultShape::kReduce, 3U, 3U},
+    {"DMAX", &eval_dmax_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
+    {"DMIN", &eval_dmin_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
+    {"DPRODUCT", &eval_dproduct_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
+    {"DROP", &eval_drop_lazy, LazyResultShape::kArray, 2U, 3U, RefResult::kArg0, ParamSet::kNone},
+    {"DSTDEV", &eval_dstdev_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
+    {"DSTDEVP", &eval_dstdevp_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
+    {"DSUM", &eval_dsum_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
     {"DURATION", &eval_financial_date_lazy, LazyResultShape::kScalar, 5U, 6U},
-    {"DVAR", &eval_dvar_lazy, LazyResultShape::kReduce, 3U, 3U},
-    {"DVARP", &eval_dvarp_lazy, LazyResultShape::kReduce, 3U, 3U},
+    {"DVAR", &eval_dvar_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
+    {"DVARP", &eval_dvarp_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
     {"EDATE", &eval_datetime_lazy, LazyResultShape::kBroadcast, 2U, 2U},
     {"EOMONTH", &eval_datetime_lazy, LazyResultShape::kBroadcast, 2U, 2U},
     {"EXPAND", &eval_expand_lazy, LazyResultShape::kArray, 2U, 4U},
@@ -171,7 +159,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     // so it must inspect the un-evaluated Ref AST and the bound Sheet's
     // `formula_text` directly — the eager path would flatten the argument
     // to a Value before we could see the reference.
-    {"FORMULATEXT", &eval_formulatext_lazy, LazyResultShape::kScalar, 1U, 1U},
+    {"FORMULATEXT", &eval_formulatext_lazy, LazyResultShape::kScalar, 1U, 1U, RefResult::kNone, ParamSet::kFirst},
     {"FREQUENCY", &eval_frequency_lazy, LazyResultShape::kArray, 2U, 2U},
     // FTEST is the pre-2010 legacy spelling of F.TEST; same impl.
     {"FTEST", &eval_f_test_lazy, LazyResultShape::kReduce, 2U, 2U},
@@ -180,25 +168,25 @@ constexpr LazyEntry kLazyDispatch[] = {
     // freshest `PivotResult` off the bound Workbook on EvalContext;
     // the eager dispatcher would flatten the anchor to a Value before
     // the impl could see the reference.
-    {"GETPIVOTDATA", &eval_getpivotdata_lazy, LazyResultShape::kScalar, 2U, kVariadic},
+    {"GETPIVOTDATA", &eval_getpivotdata_lazy, LazyResultShape::kScalar, 2U, kLazyVariadic},
     {"GROUPBY", &eval_groupby_lazy, LazyResultShape::kArray, 3U, 8U},
     {"GROWTH", &eval_growth_lazy, LazyResultShape::kArray, 1U, 4U},
     {"HLOOKUP", &eval_hlookup_lazy, LazyResultShape::kArray, 3U, 4U},
     {"HOUR", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
-    {"HSTACK", &eval_hstack_lazy, LazyResultShape::kArray, 1U, kVariadic},
-    {"IF", &eval_if_lazy, LazyResultShape::kBroadcast, 2U, 3U},
+    {"HSTACK", &eval_hstack_lazy, LazyResultShape::kArray, 1U, kLazyVariadic},
+    {"IF", &eval_if_lazy, LazyResultShape::kBroadcast, 2U, 3U, RefResult::kIfBranch, ParamSet::kNone},
     {"IFERROR", &eval_iferror_lazy, LazyResultShape::kBroadcast, 2U, 2U},
     {"IFNA", &eval_ifna_lazy, LazyResultShape::kBroadcast, 2U, 2U},
-    {"IFS", &eval_ifs_lazy, LazyResultShape::kBroadcast, 2U, kVariadic},
-    {"INDEX", &eval_index_lazy, LazyResultShape::kArray, 2U, 4U},
-    {"INDIRECT", &eval_indirect_lazy, LazyResultShape::kArray, 1U, 2U},
+    {"IFS", &eval_ifs_lazy, LazyResultShape::kBroadcast, 2U, kLazyVariadic, RefResult::kIfsValue, ParamSet::kNone},
+    {"INDEX", &eval_index_lazy, LazyResultShape::kArray, 2U, 4U, RefResult::kArg0, ParamSet::kNone},
+    {"INDIRECT", &eval_indirect_lazy, LazyResultShape::kArray, 1U, 2U, RefResult::kBuilds, ParamSet::kNone},
     {"INTERCEPT", &eval_intercept_lazy, LazyResultShape::kScalar, 2U, 2U},
     {"INTRATE", &eval_financial_date_lazy, LazyResultShape::kScalar, 4U, 5U},
     // ISFORMULA / ISREF inspect the un-evaluated AST of their argument;
     // they cannot ride the eager path because it flattens references to
     // `Value` before the impl runs.
     {"IRR", &eval_irr_lazy, LazyResultShape::kScalar, 1U, 2U},
-    {"ISFORMULA", &eval_isformula_lazy, LazyResultShape::kScalar, 1U, 1U},
+    {"ISFORMULA", &eval_isformula_lazy, LazyResultShape::kScalar, 1U, 1U, RefResult::kNone, ParamSet::kFirst},
     {"ISOMITTED", &eval_isomitted_lazy, LazyResultShape::kScalar, 1U, 1U},
     {"ISOWEEKNUM", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
     {"ISREF", &eval_isref_lazy, LazyResultShape::kScalar, 1U, 1U},
@@ -207,12 +195,14 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"LOGEST", &eval_logest_lazy, LazyResultShape::kArray, 1U, 4U},
     {"LOOKUP", &eval_lookup_lazy, LazyResultShape::kScalar, 2U, 3U},
     {"MAKEARRAY", &eval_makearray_lazy, LazyResultShape::kArray, 3U, 3U},
-    {"MAP", &eval_map_lazy, LazyResultShape::kArray, 2U, kVariadic},
+    {"MAP", &eval_map_lazy, LazyResultShape::kArray, 2U, kLazyVariadic},
     {"MATCH", &eval_match_lazy, LazyResultShape::kArray, 2U, 3U},
-    {"MAXIFS", &eval_maxifs_lazy, LazyResultShape::kReduce, 3U, kVariadic},
+    {"MAXIFS", &eval_maxifs_lazy, LazyResultShape::kReduce, 3U, kLazyVariadic, RefResult::kNone,
+     ParamSet::kFirstAndOdd},
     {"MDETERM", &eval_mdeterm_lazy, LazyResultShape::kScalar, 1U, 1U},
     {"MDURATION", &eval_financial_date_lazy, LazyResultShape::kScalar, 5U, 6U},
-    {"MINIFS", &eval_minifs_lazy, LazyResultShape::kReduce, 3U, kVariadic},
+    {"MINIFS", &eval_minifs_lazy, LazyResultShape::kReduce, 3U, kLazyVariadic, RefResult::kNone,
+     ParamSet::kFirstAndOdd},
     {"MINUTE", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
     {"MINVERSE", &eval_minverse_lazy, LazyResultShape::kArray, 1U, 1U},
     {"MIRR", &eval_mirr_lazy, LazyResultShape::kScalar, 3U, 3U},
@@ -227,8 +217,8 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"ODDFYIELD", &eval_financial_date_lazy, LazyResultShape::kScalar, 8U, 9U},
     {"ODDLPRICE", &eval_financial_date_lazy, LazyResultShape::kScalar, 7U, 8U},
     {"ODDLYIELD", &eval_financial_date_lazy, LazyResultShape::kScalar, 7U, 8U},
-    {"OFFSET", &eval_offset_lazy, LazyResultShape::kArray, 3U, 5U},
-    {"OR", &eval_or_lazy, LazyResultShape::kReduce, 1U, kVariadic},
+    {"OFFSET", &eval_offset_lazy, LazyResultShape::kArray, 3U, 5U, RefResult::kBuilds, ParamSet::kFirst},
+    {"OR", &eval_or_lazy, LazyResultShape::kReduce, 1U, kLazyVariadic},
     // PEARSON is mathematically identical to CORREL (Pearson product-moment
     // correlation coefficient); Excel keeps both names for back-compat.
     {"PEARSON", &eval_correl_lazy, LazyResultShape::kReduce, 2U, 2U},
@@ -239,21 +229,21 @@ constexpr LazyEntry kLazyDispatch[] = {
     // PHONETIC reads the cell's <rPh> annotation off the un-evaluated
     // Ref AST; the eager dispatcher would flatten the argument to a
     // Value before the impl could consult `Cell::phonetic_text`.
-    {"PHONETIC", &eval_phonetic_lazy, LazyResultShape::kScalar, 1U, 1U},
+    {"PHONETIC", &eval_phonetic_lazy, LazyResultShape::kScalar, 1U, 1U, RefResult::kNone, ParamSet::kFirst},
     {"PIVOTBY", &eval_pivotby_lazy, LazyResultShape::kArray, 4U, 11U},
     {"PRICE", &eval_financial_date_lazy, LazyResultShape::kScalar, 6U, 7U},
     {"PRICEDISC", &eval_financial_date_lazy, LazyResultShape::kScalar, 4U, 5U},
     {"PRICEMAT", &eval_financial_date_lazy, LazyResultShape::kScalar, 5U, 6U},
     {"PROB", &eval_prob_lazy, LazyResultShape::kScalar, 3U, 4U},
-    {"RANK", &eval_rank_eq_lazy, LazyResultShape::kScalar, 2U, 3U},
-    {"RANK.AVG", &eval_rank_avg_lazy, LazyResultShape::kScalar, 2U, 3U},
-    {"RANK.EQ", &eval_rank_eq_lazy, LazyResultShape::kScalar, 2U, 3U},
+    {"RANK", &eval_rank_eq_lazy, LazyResultShape::kScalar, 2U, 3U, RefResult::kNone, ParamSet::kSecond},
+    {"RANK.AVG", &eval_rank_avg_lazy, LazyResultShape::kScalar, 2U, 3U, RefResult::kNone, ParamSet::kSecond},
+    {"RANK.EQ", &eval_rank_eq_lazy, LazyResultShape::kScalar, 2U, 3U, RefResult::kNone, ParamSet::kSecond},
     {"RECEIVED", &eval_financial_date_lazy, LazyResultShape::kScalar, 4U, 5U},
     {"REDUCE", &eval_reduce_lazy, LazyResultShape::kArray, 3U, 3U},
     {"REGEXEXTRACT", &eval_regexextract_lazy, LazyResultShape::kArray, 2U, 4U},
     {"REGEXREPLACE", &eval_regexreplace_lazy, LazyResultShape::kBroadcast, 3U, 5U},
     {"REGEXTEST", &eval_regextest_lazy, LazyResultShape::kBroadcast, 2U, 3U},
-    {"ROW", &eval_row_lazy, LazyResultShape::kBroadcast, 0U, 1U},
+    {"ROW", &eval_row_lazy, LazyResultShape::kBroadcast, 0U, 1U, RefResult::kNone, ParamSet::kFirst},
     {"ROWS", &eval_rows_lazy, LazyResultShape::kReduce, 1U, 1U},
     {"RSQ", &eval_rsq_lazy, LazyResultShape::kScalar, 2U, 2U},
     {"SCAN", &eval_scan_lazy, LazyResultShape::kArray, 3U, 3U},
@@ -270,43 +260,46 @@ constexpr LazyEntry kLazyDispatch[] = {
     // lazy impl so the un-evaluated RangeOp AST can be projected onto the
     // formula cell's row / column via `EvalContext::formula_row` /
     // `formula_col` — the same logic the `@` operator uses.
-    {"SINGLE", &eval_single_lazy, LazyResultShape::kScalar, 1U, 1U},
+    {"SINGLE", &eval_single_lazy, LazyResultShape::kScalar, 1U, 1U, RefResult::kProjected, ParamSet::kNone},
     {"SLOPE", &eval_slope_lazy, LazyResultShape::kScalar, 2U, 2U},
     {"SORT", &eval_sort_lazy, LazyResultShape::kArray, 1U, 4U},
-    {"SORTBY", &eval_sortby_lazy, LazyResultShape::kArray, 2U, kVariadic},
+    {"SORTBY", &eval_sortby_lazy, LazyResultShape::kArray, 2U, kLazyVariadic},
     {"STEYX", &eval_steyx_lazy, LazyResultShape::kScalar, 2U, 2U},
     // SUBTOTAL is lazy so codes 101..111 can read row visibility off the
     // sheet. See `eval_subtotal_lazy`.
-    {"SUBTOTAL", &eval_subtotal_lazy, LazyResultShape::kReduce, 2U, kVariadic},
-    {"SUMIF", &eval_sumif_lazy, LazyResultShape::kReduce, 2U, 3U},
-    {"SUMIFS", &eval_sumifs_lazy, LazyResultShape::kReduce, 3U, kVariadic},
-    {"SUMPRODUCT", &eval_sumproduct_lazy, LazyResultShape::kReduce, 1U, kVariadic},
+    {"SUBTOTAL", &eval_subtotal_lazy, LazyResultShape::kReduce, 2U, kLazyVariadic, RefResult::kNone,
+     ParamSet::kAllButFirst},
+    {"SUMIF", &eval_sumif_lazy, LazyResultShape::kReduce, 2U, 3U, RefResult::kNone, ParamSet::kFirstAndThird},
+    {"SUMIFS", &eval_sumifs_lazy, LazyResultShape::kReduce, 3U, kLazyVariadic, RefResult::kNone,
+     ParamSet::kFirstAndOdd},
+    {"SUMPRODUCT", &eval_sumproduct_lazy, LazyResultShape::kReduce, 1U, kLazyVariadic},
     {"SUMX2MY2", &eval_sumx2my2_lazy, LazyResultShape::kReduce, 2U, 2U},
     {"SUMX2PY2", &eval_sumx2py2_lazy, LazyResultShape::kReduce, 2U, 2U},
     {"SUMXMY2", &eval_sumxmy2_lazy, LazyResultShape::kReduce, 2U, 2U},
-    {"SWITCH", &eval_switch_lazy, LazyResultShape::kBroadcast, 3U, kVariadic},
+    {"SWITCH", &eval_switch_lazy, LazyResultShape::kBroadcast, 3U, kLazyVariadic, RefResult::kSwitchResult,
+     ParamSet::kNone},
     {"T", &eval_t_lazy, LazyResultShape::kBroadcast, 1U, 1U},
     {"T.TEST", &eval_t_test_lazy, LazyResultShape::kReduce, 4U, 4U},
-    {"TAKE", &eval_take_lazy, LazyResultShape::kArray, 2U, 3U},
+    {"TAKE", &eval_take_lazy, LazyResultShape::kArray, 2U, 3U, RefResult::kArg0, ParamSet::kNone},
     {"TBILLEQ", &eval_financial_date_lazy, LazyResultShape::kScalar, 3U, 3U},
     {"TBILLPRICE", &eval_financial_date_lazy, LazyResultShape::kScalar, 3U, 3U},
     {"TBILLYIELD", &eval_financial_date_lazy, LazyResultShape::kScalar, 3U, 3U},
     {"TEXT", &eval_text_lazy, LazyResultShape::kBroadcast, 2U, 2U},
-    {"TEXTJOIN", &eval_textjoin_lazy, LazyResultShape::kScalar, 3U, kVariadic},
+    {"TEXTJOIN", &eval_textjoin_lazy, LazyResultShape::kScalar, 3U, kLazyVariadic},
     {"TEXTSPLIT", &eval_textsplit_lazy, LazyResultShape::kArray, 2U, 6U},
     {"TOCOL", &eval_tocol_lazy, LazyResultShape::kArray, 1U, 3U},
     {"TODAY", &eval_datetime_lazy, LazyResultShape::kScalar, 0U, 0U},
     {"TOROW", &eval_torow_lazy, LazyResultShape::kArray, 1U, 3U},
     {"TRANSPOSE", &eval_transpose_lazy, LazyResultShape::kArray, 1U, 1U},
     {"TREND", &eval_trend_lazy, LazyResultShape::kArray, 1U, 4U},
-    {"TRIMRANGE", &eval_trimrange_lazy, LazyResultShape::kArray, 1U, 3U},
+    {"TRIMRANGE", &eval_trimrange_lazy, LazyResultShape::kArray, 1U, 3U, RefResult::kTrimmed, ParamSet::kNone},
     // TTEST is the pre-2010 legacy spelling of T.TEST; same impl.
     {"TTEST", &eval_t_test_lazy, LazyResultShape::kReduce, 4U, 4U},
     {"TYPE", &eval_type_lazy, LazyResultShape::kScalar, 1U, 1U},
     {"UNIQUE", &eval_unique_lazy, LazyResultShape::kArray, 1U, 3U},
     {"VALUE", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
     {"VLOOKUP", &eval_vlookup_lazy, LazyResultShape::kArray, 3U, 4U},
-    {"VSTACK", &eval_vstack_lazy, LazyResultShape::kArray, 1U, kVariadic},
+    {"VSTACK", &eval_vstack_lazy, LazyResultShape::kArray, 1U, kLazyVariadic},
     {"WEEKDAY", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 2U},
     {"WEEKNUM", &eval_weeknum_lazy, LazyResultShape::kScalar, 1U, 2U},
     {"WORKDAY", &eval_workday_lazy, LazyResultShape::kScalar, 2U, 3U},
@@ -314,7 +307,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"WRAPCOLS", &eval_wrapcols_lazy, LazyResultShape::kArray, 2U, 3U},
     {"WRAPROWS", &eval_wraprows_lazy, LazyResultShape::kArray, 2U, 3U},
     {"XIRR", &eval_xirr_lazy, LazyResultShape::kScalar, 2U, 3U},
-    {"XLOOKUP", &eval_xlookup_lazy, LazyResultShape::kArray, 3U, 6U},
+    {"XLOOKUP", &eval_xlookup_lazy, LazyResultShape::kArray, 3U, 6U, RefResult::kXlookupResult, ParamSet::kNone},
     {"XMATCH", &eval_xmatch_lazy, LazyResultShape::kArray, 2U, 4U},
     {"XNPV", &eval_xnpv_lazy, LazyResultShape::kScalar, 3U, 3U},
     {"YEAR", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
@@ -340,6 +333,8 @@ constexpr bool lazy_dispatch_is_strictly_sorted() {
 
 static_assert(lazy_dispatch_is_strictly_sorted(), "kLazyDispatch must stay in canonical-name order");
 
+}  // namespace
+
 // Binary search over the canonical-name-ordered table; nullptr when absent.
 const LazyEntry* find_lazy_entry(std::string_view name) noexcept {
   std::size_t first = 0;
@@ -359,8 +354,6 @@ const LazyEntry* find_lazy_entry(std::string_view name) noexcept {
   return nullptr;
 }
 
-}  // namespace
-
 LazyImpl find_lazy_impl(std::string_view name) noexcept {
   const LazyEntry* entry = find_lazy_entry(name);
   return entry != nullptr ? entry->impl : nullptr;
@@ -377,7 +370,7 @@ bool find_lazy_arity(std::string_view name, std::uint32_t* min_arity, std::uint3
     return false;
   }
   *min_arity = entry->min_arity;
-  *max_arity = entry->max_arity;
+  *max_arity = entry->max_arity == kLazyVariadic ? kVariadic : entry->max_arity;
   return true;
 }
 
