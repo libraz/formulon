@@ -51,7 +51,7 @@ Shaped eval_node_shaped(const parser::AstNode& node, Arena& arena, const Functio
                         const EvalContext& ctx);
 
 /// The node as a reference where it denotes one: a cell, range or whole-axis
-/// token and a 3-D span become a `Ref` (no cell is read), a call or a literal
+/// token and a 3-D span become a `Ref` (no cell is read), a call (a LAMBDA call included) or a literal
 /// yielding a `Ref` returns it as it is. Any other node is its `eval_node`
 /// value. A `Ref` from here is read through `eval/reference/deref.h`.
 Value eval_node_ref(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,

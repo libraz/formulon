@@ -628,7 +628,8 @@ Value eval_node_ref(const parser::AstNode& node, Arena& arena, const FunctionReg
         return node.as_literal();
       }
       break;
-    case parser::NodeKind::Call: {
+    case parser::NodeKind::Call:
+    case parser::NodeKind::LambdaCall: {
       const Shaped out = eval_node_shaped_body(node, arena, registry, ctx);
       return out.value.is_ref() ? out.value : contain_escape(densify(out, arena));
     }

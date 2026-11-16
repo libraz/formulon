@@ -987,8 +987,8 @@ TEST_F(SelectedRefTest, ValueModeReadsTheKeptRectangle) {
 }
 
 // TAKE / DROP over a whole column. As a reference argument they name the kept rows of the whole column;
-// read as values, the column is still narrowed to its populated rows first, so TAKE(A:A,-1) reads A5 where
-// the reference names A1048576.
+// read as values, the column is still narrowed to its populated rows first, so TAKE(A:A,-1) reads A5 (51)
+// where the reference names A1048576, which Excel reads as 0.
 TEST_F(SelectedRefTest, WholeAxisTakeAndDropKnownReads) {
   struct Case {
     const char* source;
@@ -1011,6 +1011,25 @@ TEST_F(SelectedRefTest, WholeAxisTakeAndDropKnownReads) {
     ASSERT_TRUE(v.is_number()) << c.source << ": " << v.debug_to_string();
     EXPECT_EQ(v.as_number(), c.value) << c.source;
   }
+}
+
+// A LAMBDA call returns its body's result as it is.
+TEST_F(SelectedRefTest, LambdaCallsReturnTheBodysReference) {
+  ExpectSelected("=LAMBDA(x,B2:C3)(1)", 1, 1, 2, 2);
+  ExpectSelected("=LAMBDA(x,OFFSET(A1,x,0))(2)", 2, 0, 2, 0, kHome, /*dynamic=*/true);
+  ExpectSame(Eval("=LET(f,LAMBDA(r,INDEX(A1:C3,r,1)),f(2))"), Eval("=A2"), "named LAMBDA call");
+  EXPECT_TRUE(AsRef("=LAMBDA(x,x+1)(1)").is_number());
+  ExpectSame(Eval("=LAMBDA(x,B2:C3)(1)"), Eval("=B2:C3"), "value mode");
+  ExpectSame(Eval("=SUM(LAMBDA(n,TAKE(A1:C5,n))(2))"), Eval("=SUM(A1:C2)"), "aggregate");
+}
+
+TEST_F(SelectedRefTest, TrimmedOneCellIsAReferenceToThatCell) {
+  const Value type = Eval("=TYPE(TRIMRANGE(D4:F9))");
+  ASSERT_TRUE(type.is_number()) << type.debug_to_string();
+  EXPECT_EQ(type.as_number(), 64.0);
+  const Value one = Eval("=TYPE(TRIMRANGE(E4:E9))");
+  ASSERT_TRUE(one.is_number()) << one.debug_to_string();
+  EXPECT_EQ(one.as_number(), 1.0);
 }
 
 }  // namespace

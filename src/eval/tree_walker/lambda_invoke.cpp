@@ -294,7 +294,8 @@ Value invoke_lambda(const LambdaValue* lv, std::uint32_t arity, const parser::As
           bind_call_site(call.lambda(), arity, call_args, arena, registry, ctx, &env)) {
     return Value::error(*err);
   }
-  return eval_node(*call.lambda()->body, arena, registry, lambda_body_context(call.lambda(), env, ctx));
+  // The body's result as it is: a `Ref` when the body denotes one.
+  return eval_node_ref(*call.lambda()->body, arena, registry, lambda_body_context(call.lambda(), env, ctx));
 }
 
 bool resolve_lambda_reference(const LambdaValue* lv, std::uint32_t arity, const parser::AstNode* const* call_args,
