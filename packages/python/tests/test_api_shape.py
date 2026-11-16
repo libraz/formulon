@@ -475,7 +475,7 @@ class SheetViewTests(unittest.TestCase):
 
     def test_rejected_addresses(self) -> None:
         # Text that is no reference fails to parse; a valid reference that is not one bare cell is an invalid argument.
-        unparseable = ("", "   ", "R1C1", "Ａ１", "Aé1", "\ud800A1")
+        unparseable = ("", "   ", "R1C1", "Ａ１", "Aé1")
         not_a_cell = ("A1:B2", "Sheet2!A1", "Sheet1!A1")
         for a1 in unparseable + not_a_cell:
             with self.subTest(a1=a1):
@@ -486,6 +486,10 @@ class SheetViewTests(unittest.TestCase):
                 self.assertEqual(cm.exception.code, want)
                 with self.assertRaises(error):
                     self.ws.set_value(a1, 1)
+        # A lone surrogate is not UTF-8 and is refused before it is parsed.
+        with self.assertRaises(FormulonError) as cm:
+            self.ws.get_value("\ud800A1")
+        self.assertEqual(cm.exception.code, StatusCode.BINDING_UTF8ENCODING_ERROR)
 
     def test_non_string_address_is_type_error(self) -> None:
         with self.assertRaises(TypeError):

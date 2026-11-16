@@ -808,7 +808,7 @@ class IndexRangeTests(unittest.TestCase):
         # argument, so it used to die inside ``struct.pack`` with a
         # ``struct.error`` that no caller guarding on ``ValueError`` sees.
         with Workbook.create_default() as wb:
-            with self.assertRaises(ValueError) as ctx:
+            with self.assertRaises(formulon.IndexOutOfRangeError) as ctx:
                 wb.sheet(0).remove_hyperlink_at(2**32 + 5)
             self.assertIn("hyperlink_index", str(ctx.exception))
             with self.assertRaises(formulon.InvalidArgumentError):

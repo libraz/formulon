@@ -475,10 +475,10 @@ class HandleRefTests(HandleTestCase):
             self.assertIs(ws.pivot(-0), pivot)
             self.assertCode(IndexOutOfRangeError, lambda: table_sheet.table(1), out_of_range)
             self.assertCode(IndexOutOfRangeError, lambda: ws.pivot(1), out_of_range)
-            # 2^31 is out of range, 2^32 is outside the integer type.
+            # 2^31 and 2^32 are out of range positions; 2^32 is outside an id's integer type.
             self.assertCode(IndexOutOfRangeError, lambda: table_sheet.table(2**31), out_of_range)
             self.assertCode(IndexOutOfRangeError, lambda: ws.pivot(2**31), out_of_range)
-            with self.assertRaises(ValueError):
+            with self.assertRaises(IndexOutOfRangeError):
                 table_sheet.table(2**32)
             with self.assertRaises(ValueError):
                 ws.drawing(2**32)
