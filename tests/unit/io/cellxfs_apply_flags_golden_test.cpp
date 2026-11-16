@@ -2,6 +2,7 @@
 // re-saving the same files as .xlsx and .xlsb. Every expectation is read from
 // Excel's own `.out` files next to the authored input.
 
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <set>
@@ -140,8 +141,8 @@ std::string XlsbFlags(ByteSpan payload) {
   if (payload.size < 16U) {
     return "short";
   }
-  const unsigned word = payload.data[14] | (payload.data[15] << 8);
-  const auto set = [word](int i) { return (word & kXfApplyBits[i]) != 0U; };
+  const std::uint16_t word = xlsb::load_u16(payload.data + 14);
+  const auto set = [word](std::size_t i) { return (word & kXfApplyBits[i]) != 0; };
   return FlagString(set(0), set(1), set(2), set(3), set(4), set(5));
 }
 
