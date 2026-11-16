@@ -16,6 +16,7 @@
 #include "eval/lazy_impls.h"
 #include "eval/name_env.h"
 #include "eval/omitted_arg.h"
+#include "eval/structured_ref_project.h"
 #include "eval/tree_walker/dispatch.h"
 #include "parser/ast.h"
 #include "utils/a1_ref.h"
@@ -90,7 +91,7 @@ SourceOrigin source_origin(const parser::AstNode& node, const ArrayValue* arr, A
   const parser::AstNode* ref = resolve_binding_reference(node, arena, registry, ctx);
   parser::Reference lhs{};
   parser::Reference rhs{};
-  if (ref == nullptr || !declared_rect_endpoint_pair(*ref, &lhs, &rhs, ctx.workbook())) {
+  if (ref == nullptr || !reference_endpoint_pair(*ref, &lhs, &rhs, ctx)) {
     return out;
   }
   const Expected<DeclaredRect, ErrorCode> rect = declared_rect(lhs, rhs);

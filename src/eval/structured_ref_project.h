@@ -7,7 +7,10 @@
 
 #include <string_view>
 
+#include "parser/ast.h"
+#include "parser/reference.h"
 #include "utils/arena.h"
+#include "utils/error.h"
 #include "value.h"
 
 namespace formulon {
@@ -30,6 +33,15 @@ class FunctionRegistry;
 // its structured out-of-memory error.
 Value project_structured_ref(std::string_view table_name, std::string_view column_payload, Arena& arena,
                              const FunctionRegistry& registry, const EvalContext& ctx, bool* out_arena_exhausted);
+
+// The endpoint pair of the static reference `node` names, as
+// `declared_rect_endpoint_pair` reports it, extended to structured
+// references: `T[p]` yields the sheet-qualified corners of the rectangle it
+// resolves to, so every reader treats it exactly as that A1 range. False for
+// any other shape, and for a structured reference that does not resolve,
+// whose error then goes to `*out_err` when given.
+bool reference_endpoint_pair(const parser::AstNode& node, parser::Reference* out_lhs, parser::Reference* out_rhs,
+                             const EvalContext& ctx, ErrorCode* out_err = nullptr);
 
 }  // namespace eval
 }  // namespace formulon

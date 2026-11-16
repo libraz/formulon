@@ -13,6 +13,7 @@
 #include "eval/name_env.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_resolvers.h"
+#include "eval/structured_ref_project.h"
 #include "eval/tree_walker/dispatch.h"
 #include "parser/ast.h"
 #include "sheet.h"
@@ -80,7 +81,7 @@ const parser::AstNode* resolve_computed_reference(const parser::AstNode& expr, A
   } else if (expr.kind() == parser::NodeKind::RangeOp) {
     parser::Reference lhs{};
     parser::Reference rhs{};
-    if (declared_rect_endpoint_pair(expr, &lhs, &rhs, ctx.workbook())) {
+    if (reference_endpoint_pair(expr, &lhs, &rhs, ctx)) {
       return nullptr;
     }
   } else if (expr.kind() != parser::NodeKind::IntersectOp) {
@@ -139,7 +140,7 @@ const parser::AstNode* resolve_binding_reference(const parser::AstNode& expr, Ar
       // The defined-name form (`[Book.xlsx]!Name`, `[0]!Name`) is not a cell.
       return expr.as_external_ref_name().empty() ? &expr : nullptr;
     case parser::NodeKind::RangeOp:
-      if (declared_rect_endpoint_pair(expr, &lhs, &rhs, ctx.workbook())) {
+      if (reference_endpoint_pair(expr, &lhs, &rhs, ctx)) {
         return &expr;
       }
       break;

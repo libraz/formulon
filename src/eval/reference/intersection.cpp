@@ -30,6 +30,7 @@
 #include "eval/name_env_resolve.h"
 #include "eval/reference/common.h"
 #include "eval/special_forms_lazy.h"
+#include "eval/structured_ref_project.h"
 #include "eval/tree_walker/dispatch.h"
 #include "eval/trimrange_lazy.h"
 #include "parser/ast.h"
@@ -440,6 +441,19 @@ bool resolve_range_endpoint(const parser::AstNode& endpoint, Arena& arena, const
     return resolve_name_endpoint(node, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row,
                                  out_right_col, out_err);
   }
+  if (node.kind() == parser::NodeKind::StructuredRef) {
+    parser::Reference lhs{};
+    parser::Reference rhs{};
+    if (!reference_endpoint_pair(node, &lhs, &rhs, ctx, out_err)) {
+      return false;
+    }
+    *out_sheet = lhs.sheet;
+    *out_top_row = lhs.row;
+    *out_left_col = lhs.col;
+    *out_bottom_row = rhs.row;
+    *out_right_col = rhs.col;
+    return true;
+  }
   // A sheet-span reference cannot anchor a `:` chain, like a whole-axis reference.
   if (node.kind() == parser::NodeKind::Ref3D) {
     *out_err = three_d_reference_error(node);
@@ -531,7 +545,7 @@ bool resolve_intersect_operand(const parser::AstNode& node, Arena& arena, const 
   // rectangle for — falls through to its existing resolution.
   parser::Reference rect_lhs{};
   parser::Reference rect_rhs{};
-  if (declared_rect_endpoint_pair(node, &rect_lhs, &rect_rhs, ctx.workbook())) {
+  if (reference_endpoint_pair(node, &rect_lhs, &rect_rhs, ctx)) {
     const Expected<DeclaredRect, ErrorCode> rect = declared_rect(rect_lhs, rect_rhs);
     if (rect && rect.value().whole_axis) {
       // The parser keeps the sheet qualifier on the left endpoint.

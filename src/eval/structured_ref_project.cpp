@@ -10,31 +10,36 @@
 #include <vector>
 
 #include "eval/array_alloc.h"
+#include "eval/declared_rect.h"
 #include "eval/eval_context.h"
 #include "eval/range_args.h"
 #include "eval/structured_ref.h"
 #include "parser/reference.h"
 #include "sheet.h"
 #include "utils/error.h"
+#include "utils/expected.h"
 #include "workbook.h"
 
 namespace formulon {
 namespace eval {
 
-Value project_structured_ref(std::string_view table_name, std::string_view column_payload, Arena& arena,
-                             const FunctionRegistry& registry, const EvalContext& ctx, bool* out_arena_exhausted) {
-  *out_arena_exhausted = false;
+namespace {
+
+// The rectangle `table_name[column_payload]` names for the formula `ctx` evaluates.
+Expected<StructuredRefRange, ErrorCode> resolve_structured_rect(std::string_view table_name,
+                                                                std::string_view column_payload,
+                                                                const EvalContext& ctx) {
   const Workbook* wb = ctx.workbook();
   const Sheet* current = ctx.current_sheet();
   if (wb == nullptr || current == nullptr) {
-    return Value::error(ErrorCode::Name);
+    return ErrorCode::Name;
   }
   // The bracket payload was captured verbatim by the parser; re-parsing
   // it here lets multi-specifier and column-range forms flow through a
   // single AST shape.
   auto sel_or = parse_structured_ref_payload(column_payload);
   if (!sel_or) {
-    return Value::error(sel_or.error());
+    return sel_or.error();
   }
   StructuredRefSelector sel = std::move(sel_or).value();
   sel.table_name = table_name;
@@ -49,7 +54,15 @@ Value project_structured_ref(std::string_view table_name, std::string_view colum
     }
   }
   const std::uint32_t current_row = ctx.has_formula_cell() ? ctx.formula_row() : EvalContext::kNoFormulaCell;
-  auto rect_or = resolve_structured_ref(sel, *wb, current_sheet_index, current_row);
+  return resolve_structured_ref(sel, *wb, current_sheet_index, current_row);
+}
+
+}  // namespace
+
+Value project_structured_ref(std::string_view table_name, std::string_view column_payload, Arena& arena,
+                             const FunctionRegistry& registry, const EvalContext& ctx, bool* out_arena_exhausted) {
+  *out_arena_exhausted = false;
+  auto rect_or = resolve_structured_rect(table_name, column_payload, ctx);
   if (!rect_or) {
     return Value::error(rect_or.error());
   }
@@ -76,6 +89,31 @@ Value project_structured_ref(std::string_view table_name, std::string_view colum
     return Value::error(ErrorCode::Num);
   }
   return Value::array(arr);
+}
+
+bool reference_endpoint_pair(const parser::AstNode& node, parser::Reference* out_lhs, parser::Reference* out_rhs,
+                             const EvalContext& ctx, ErrorCode* out_err) {
+  if (node.kind() != parser::NodeKind::StructuredRef) {
+    return declared_rect_endpoint_pair(node, out_lhs, out_rhs, ctx.workbook());
+  }
+  const auto rect = resolve_structured_rect(node.as_structured_ref_table(), node.as_structured_ref_column(), ctx);
+  if (!rect) {
+    if (out_err != nullptr) {
+      *out_err = rect.error();
+    }
+    return false;
+  }
+  // The sheet's own name outlives the evaluation, unlike the range's copy of it.
+  const std::string_view sheet = ctx.workbook()->sheet(rect.value().sheet_index).name();
+  *out_lhs = parser::Reference{};
+  *out_rhs = parser::Reference{};
+  out_lhs->sheet = sheet;
+  out_rhs->sheet = sheet;
+  out_lhs->row = rect.value().row_first;
+  out_lhs->col = rect.value().col_first;
+  out_rhs->row = rect.value().row_last;
+  out_rhs->col = rect.value().col_last;
+  return true;
 }
 
 }  // namespace eval

@@ -89,7 +89,7 @@ inline bool spans_all_cols(std::uint32_t col_first, std::uint32_t col_last) noex
 }
 
 /// True for an AST written as a reference -- a cell, a `:` range, a union, an
-/// intersection, a 3-D or spill reference -- which Excel refuses to call
+/// intersection, a 3-D, spill or structured reference -- which Excel refuses to call
 /// (`A1(1)`, `(A1:A2)(1)`) with #REF!.
 bool is_reference_shape(const parser::AstNode& node) noexcept;
 

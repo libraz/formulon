@@ -22,6 +22,7 @@
 #include "eval/range_expanders.h"
 #include "eval/range_resolvers.h"
 #include "eval/spill_anchor.h"
+#include "eval/structured_ref_project.h"
 #include "eval/tail_array.h"
 #include "eval/tree_walker/broadcast.h"
 #include "eval/tree_walker/dispatch.h"
@@ -305,7 +306,7 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
     if (whole_axis_pair) {
       chain_lhs = lhs_ast.as_ref();
       chain_rhs = rhs_ast.as_ref();
-    } else if (is_bare_pair || !declared_rect_endpoint_pair(arg_node, &chain_lhs, &chain_rhs, ctx.workbook())) {
+    } else if (is_bare_pair || !reference_endpoint_pair(arg_node, &chain_lhs, &chain_rhs, ctx)) {
       // Union the two endpoints into one rectangle and let `expand_range`
       // validate sheet equality (mismatched qualifiers surface as #REF!).
       ErrorCode endpoint_err = ErrorCode::Ref;

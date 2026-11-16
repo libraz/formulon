@@ -11,6 +11,7 @@
 #include "eval/function_registry.h"
 #include "eval/jp_fold.h"
 #include "eval/name_env_resolve.h"
+#include "eval/structured_ref_project.h"
 #include "eval/wildcard.h"
 #include "excel_locale.h"
 #include "external_book.h"
@@ -49,7 +50,7 @@ Expected<bool, ErrorCode> resolve_reference_table(const parser::AstNode& arg, co
     out->external_sheet = external.value().sheet;
     return true;
   }
-  if (!declared_rect_endpoint_pair(node, &out->lhs, &out->rhs, ctx.workbook())) {
+  if (!reference_endpoint_pair(node, &out->lhs, &out->rhs, ctx)) {
     return false;
   }
   const auto declared = ctx.declared_range_rect(out->lhs, out->rhs);

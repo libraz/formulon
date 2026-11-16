@@ -16,6 +16,7 @@
 #include "eval/external_ref.h"
 #include "eval/lazy_impls.h"        // eval_node, eval_node_shaped
 #include "eval/name_env_resolve.h"  // is_range_shaped_ast
+#include "eval/structured_ref_project.h"
 #include "external_book.h"
 #include "external_link.h"
 #include "parser/ast.h"
@@ -205,7 +206,7 @@ Shaped evaluate_defined_name_shaped(const DefinedName* def, Arena& arena, const 
     case parser::NodeKind::RangeOp: {
       parser::Reference lhs{};
       parser::Reference rhs{};
-      if (declared_rect_endpoint_pair(*root, &lhs, &rhs, ctx.workbook())) {
+      if (reference_endpoint_pair(*root, &lhs, &rhs, ctx)) {
         const Expected<DeclaredRect, ErrorCode> rect = declared_rect(lhs, rhs);
         shaped = rect && (rect.value().rows() == Sheet::kMaxRows || rect.value().cols() == Sheet::kMaxCols);
       }

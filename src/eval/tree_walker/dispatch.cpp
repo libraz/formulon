@@ -84,6 +84,7 @@ bool is_reference_shape(const parser::AstNode& node) noexcept {
     case parser::NodeKind::UnionOp:
     case parser::NodeKind::IntersectOp:
     case parser::NodeKind::SpillRef:
+    case parser::NodeKind::StructuredRef:
       return true;
     case parser::NodeKind::Ref3D:
       return !is_grouped_ref3d(node);

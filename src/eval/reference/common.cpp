@@ -23,6 +23,7 @@
 #include "eval/name_env_resolve.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_resolvers.h"
+#include "eval/structured_ref_project.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet.h"
@@ -169,7 +170,7 @@ bool resolve_offset_base(const parser::AstNode& raw_arg, Arena& arena, const Fun
     // A chained `:` (`A1:B2:C3`) folds to its bounding box's endpoint pair.
     parser::Reference lhs{};
     parser::Reference rhs{};
-    if (!declared_rect_endpoint_pair(arg, &lhs, &rhs, ctx.workbook())) {
+    if (!reference_endpoint_pair(arg, &lhs, &rhs, ctx)) {
       *out_err = ErrorCode::Ref;
       return false;
     }

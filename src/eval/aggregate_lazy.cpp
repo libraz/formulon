@@ -23,6 +23,7 @@
 #include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
 #include "eval/range_resolvers.h"
+#include "eval/structured_ref_project.h"
 #include "eval/tree_walker/dispatch.h"
 #include "numeric_aggregate_kernels.h"
 #include "parser/ast.h"
@@ -113,24 +114,12 @@ enum class HiddenScope : std::uint8_t {
   kFiltered,  ///< Only filter-hidden rows (`SUBTOTAL(1..11)`).
 };
 
-// Decodes a plain `Ref` or a `Ref:Ref` range into its endpoints (the same
-// reference twice for a single `Ref`). False for any other node, including
-// OFFSET / INDIRECT endpoints, which carry no static provenance.
-bool static_ref_endpoints(const parser::AstNode& node, const parser::Reference** first,
-                          const parser::Reference** second) {
-  if (node.kind() == parser::NodeKind::Ref) {
-    *first = &node.as_ref();
-    *second = *first;
-    return true;
-  }
-  if (node.kind() == parser::NodeKind::RangeOp && node.as_range_arity() == 2U &&
-      node.as_range_operand(0).kind() == parser::NodeKind::Ref &&
-      node.as_range_operand(1).kind() == parser::NodeKind::Ref) {
-    *first = &node.as_range_operand(0).as_ref();
-    *second = &node.as_range_operand(1).as_ref();
-    return true;
-  }
-  return false;
+// The endpoints of a static reference argument (a `Ref`, a `Ref:Ref` range or
+// a structured reference). False for any other node, including OFFSET /
+// INDIRECT endpoints, which carry no static provenance.
+bool static_ref_endpoints(const parser::AstNode& node, const EvalContext& ctx, parser::Reference* first,
+                          parser::Reference* second) {
+  return reference_endpoint_pair(node, first, second, ctx);
 }
 
 // Resolves the sheet a reference-shaped argument reads from, together with
@@ -141,23 +130,23 @@ bool static_ref_endpoints(const parser::AstNode& node, const parser::Reference**
 // keeps its natural origin at row 0, every other shape starts at the
 // rectangle's smallest row index.
 const Sheet* reference_arg_origin(const parser::AstNode& node, const EvalContext& ctx, std::uint32_t* out_top_row) {
-  const parser::Reference* first = nullptr;
-  const parser::Reference* second = nullptr;
-  if (!static_ref_endpoints(node, &first, &second)) {
+  parser::Reference first{};
+  parser::Reference second{};
+  if (!static_ref_endpoints(node, ctx, &first, &second)) {
     return nullptr;
   }
 
-  const bool whole_column = first->is_full_col || second->is_full_col;
-  const std::uint32_t top = whole_column ? 0U : std::min(first->row, second->row);
+  const bool whole_column = first.is_full_col || second.is_full_col;
+  const std::uint32_t top = whole_column ? 0U : std::min(first.row, second.row);
 
   // The parser keeps a `:` operator's qualifier on the left endpoint, so
   // `Sheet2!A1:B2` arrives as RangeOp(Ref{sheet=Sheet2}, Ref{sheet=""}) and
   // the right one inherits; `expand_range` also accepts the mirrored shape,
   // so read whichever endpoint carries a name. A pair that names two
   // different sheets is a `#REF!` the range resolver already rejected.
-  std::string_view sheet_name = first->sheet;
+  std::string_view sheet_name = first.sheet;
   if (sheet_name.empty()) {
-    sheet_name = second->sheet;
+    sheet_name = second.sheet;
   }
   const Sheet* sheet = ctx.sheet_for_qualifier(sheet_name);
   if (sheet == nullptr) {
@@ -263,13 +252,13 @@ void append_nested_flags(const parser::AstNode& node, const EvalContext& ctx, st
   const std::size_t base = out_nested->size();
   out_nested->resize(base + count, false);
 
-  const parser::Reference* first = nullptr;
-  const parser::Reference* second = nullptr;
-  if (count == 0U || !static_ref_endpoints(node, &first, &second)) {
+  parser::Reference first{};
+  parser::Reference second{};
+  if (count == 0U || !static_ref_endpoints(node, ctx, &first, &second)) {
     return;
   }
   const Sheet* sheet = nullptr;
-  const auto rect_or = ctx.walked_range_rect(*first, *second, &sheet);
+  const auto rect_or = ctx.walked_range_rect(first, second, &sheet);
   if (!rect_or || !rect_or.value().has_value() || sheet == nullptr) {
     return;
   }
@@ -353,7 +342,8 @@ bool collect_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRe
   }
 
   // Range / Ref / SpillRef / RangeOp -> use the canonical resolver.
-  if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp || k == parser::NodeKind::SpillRef) {
+  if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp || k == parser::NodeKind::SpillRef ||
+      k == parser::NodeKind::StructuredRef) {
     auto resolved = resolve_range_arg(node, arena, registry, ctx);
     if (!resolved) {
       *out_err = Value::error(resolved.error());
