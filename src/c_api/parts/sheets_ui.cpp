@@ -1079,7 +1079,7 @@ extern "C" fm_status_t fm_sheet_set_sheet_protection(fm_workbook_t* wb, std::siz
                                                        {in->legacy_password_hash, "legacy_password_hash"}};
   for (const auto& [value, field] : texts) {
     if (value != nullptr && value[0] == '\0') {
-      return invalid_argument("string must not be empty", std::string("field=") + field);
+      return invalid_argument((std::string(field) + " must not be empty").c_str(), std::string("field=") + field);
     }
   }
   if (auto rc = check_utf8({in->algorithm_name, in->hash_value, in->salt_value, in->legacy_password_hash}); rc != 0) {
@@ -1129,7 +1129,7 @@ extern "C" fm_status_t fm_sheet_update_sheet_protection(fm_workbook_t* wb, std::
     }
     if (f.op == FM_PATCH_OP_SET) {
       if (f.value[0] == '\0') {
-        return invalid_argument("string must not be empty", std::string("field=") + f.name);
+        return invalid_argument((std::string(f.name) + " must not be empty").c_str(), std::string("field=") + f.name);
       }
       if (auto rc = check_utf8(f.value, "patch string"); rc != 0) {
         return rc;

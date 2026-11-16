@@ -71,7 +71,7 @@ struct OptionalText {
 fm_status_t CheckNoEmptyText(std::initializer_list<OptionalText> texts) {
   for (const OptionalText& t : texts) {
     if (t.value != nullptr && t.value[0] == '\0') {
-      return invalid_argument("string must not be empty", std::string("field=") + t.field);
+      return invalid_argument((std::string(t.field) + " must not be empty").c_str(), std::string("field=") + t.field);
     }
   }
   return 0;
@@ -389,7 +389,7 @@ extern "C" fm_status_t fm_sheet_update_protected_range(fm_workbook_t* wb, size_t
         return null_field(f.name);
       }
       if (f.clearable && f.value[0] == '\0') {
-        return invalid_argument("string must not be empty", std::string("field=") + f.name);
+        return invalid_argument((std::string(f.name) + " must not be empty").c_str(), std::string("field=") + f.name);
       }
       if (auto rc = check_utf8({f.value}); rc != 0) {
         return rc;
