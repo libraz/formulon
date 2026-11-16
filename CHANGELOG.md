@@ -9,7 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- `PivotCell` carries `expansion` (Python `expansion`, C `fm_pivot_cell_info_t::expansion`), the expand / collapse button of a projected PivotTable cell: `PivotCellExpansion.Collapsed` (Python `PivotCellExpansion.COLLAPSED`, C `FM_PIVOT_CELL_EXPANSION_COLLAPSED`) for a row or column item label whose inner-field items are hidden, `Expanded` when they show, and `null` (Python `None`, C `FM_PIVOT_CELL_EXPANSION_ABSENT`) for a cell with no button, so a host can draw the buttons Excel draws.
 - Status `FM_STATUS_IO_FEATURE_NOT_WRITABLE` (5028; JS `StatusCode.IoFeatureNotWritable`, Python `StatusCode.IO_FEATURE_NOT_WRITABLE`, raised as `IoError`): an `.xlsb` save (`fm_workbook_save`, `fm_workbook_save_with_diagnostics`, JS `save` / `saveWithDiagnostics`, Python `save` / `save_with_diagnostics`, CLI `recalc -o *.xlsb`) of a workbook holding a feature this writer cannot write to xlsb fails with it and writes nothing. The error context's `kind=` names the feature and, for a sheet-scoped one, `sheet_index=` the sheet.
 - `PivotCache.getWorksheetSourceRange()` (Python `get_worksheet_source_range()`, C `fm_workbook_get_pivot_cache_worksheet_source_range`) reports the sheet and rectangle a cache's worksheet source resolves to now: a table's header row through its last data row, a defined name's current range, or the range as written. It is `null` / `None` / `out_present == 0` when the source does not resolve, for example after its table or name is deleted.
 - `SparklineGroup`, `SparklineGroupInput` and `SparklineGroupPatch` carry `rightToLeft` (Python `right_to_left`, C `fm_sparkline_group_t::right_to_left` and `fm_sparkline_group_patch_t::right_to_left_op` / `right_to_left`), read from and written to `.xlsx` and `.xlsb`.
@@ -59,54 +58,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   picture as a value (listed in `tests/divergence.yaml`). `.xlsx` and `.xlsb`
   keep them.
 
-- `Workbook.load(bytes, { profileId })` (Python `Workbook.load(source, *,
-  profile_id=...)`, C `fm_workbook_load` with an `fm_load_options_spec_t`
-  whose `profile_id` is set) loads a workbook under the given profile without
-  making any formula stale, so a manual-calculation workbook keeps exactly the
-  stale formulas and cached values it has under the default profile, where
-  `setProfileId` after the load makes every formula stale. Omitting it keeps
-  the profile the load assigns; an unknown or empty id is `InvalidArgument`.
-  Sheet names are checked under the default host while the file is read.
-
 ### Changed
 
-- An `.xlsx` save counts each custom view it leaves out in
-  `SaveDiagnostics.deferredFeatureCount` (Python `deferred_feature_count`, C
-  `fm_save_diagnostics_info_t::deferred_feature_count`), once per view: a view
-  of a workbook read from `.xlsb` with no `.xlsx` form, such as one with a
-  filter, a header or footer or manual page breaks. Before, those views were
-  dropped without being counted.
-- A PivotTable cache keeps Excel's mark that its source was edited since it
-  was read (`dataSourceClean`) and saves it to `.xlsx` and `.xlsb`: a cache
-  loaded, built through the API or refreshed is saved as clean, and an
-  insert or delete of rows, columns or cells anywhere on a range source's
-  sheet, or one that changes the extent of a defined-name source, saves it
-  as edited until the next refresh. A table source is never marked, and an
-  edit on another sheet marks nothing. Before, a loaded cache saved the mark
-  as it was read and an API-built cache saved none. A value edit, sort or
-  AutoFilter on the source leaves the cache clean, where Excel marks it;
-  Excel ignores the mark when it opens a file (listed in
-  `tests/divergence.yaml`).
-- A formula entered in a cell, or as a conditional-format, data-validation
-  or defined-name formula, takes Excel's spelling: built-in function names,
-  references, `TRUE` / `FALSE` and error literals are upper-cased
-  (`=sum(a1)` reads `=SUM(A1)`), a sheet, defined or table name takes its
-  stored spelling, a `LET` / `LAMBDA` parameter takes the spelling of its
-  definition, and an unknown function takes the spelling first seen in the
-  workbook. A formula loaded from a file keeps its stored text.
-
-- `droppedRelationshipCount` (Python `dropped_relationship_count`, C
-  `fm_save_diagnostics_info_t.dropped_relationship_count`) counts a
-  relationship only when its target part is counted in `droppedPartCount`.
-  A relationship to a part the save writes again, leaves out because Excel
-  rebuilds it, reports as a deferred feature, or that the package never had,
-  is left out without being counted; each was counted before.
-
-- `fm_workbook_load` takes a `const fm_load_options_spec_t*` before its
-  out-parameter; pass NULL for the defaults.
-- The CLI applies `--profile` when it loads a workbook, so `recalc --profile`
-  on a manual-calculation workbook computes what the file left stale and
-  nothing else, as without `--profile`, instead of every formula.
 - `fm_sheet_update_format_defaults` (`Sheet.updateFormatDefaults`, Python `update_format_defaults`) refuses a default column width above 255, a default row height above 409.6 and a base column width that is fractional or above 255 with `FM_STATUS_INVALID_ARGUMENT`. Excel refuses to open a workbook holding a larger width or base.
 - Reading `.xlsx`: a default row height is truncated to whole twips and capped at 409.6 points, a custom default height of 0 hides rows by default, and a fractional base column width reads as its whole part, as Excel opens them. Of two sheet views naming one workbook window the later is kept, a `view` other than `pageBreakPreview` or `pageLayout` reads as normal, and `<pivotSelection>` is no longer read or written; Excel keeps it in neither format.
 - Reading `.xlsb`: a default row height above 409.5 points reads as 409.5, as Excel opens it; a sheet view with an unknown view mode reads as normal, and a sheet view of a window the workbook does not have, or a default-format record with a width, base or outline level Excel does not open, is left out and counted in `skippedFeatureCount`.
@@ -121,20 +74,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the setting uses version 1, as Excel computes it on recalculation. `LEFT`
   and `RIGHT` count such a character as one position on every profile and
   version, as Excel does.
-- Stale formulas under manual calculation follow the file, as Excel opens
-  and saves them. A loaded `.xlsx` or `.xlsb` workbook reports the formulas
-  its file marks for recalculation (`ca`, fAlwaysCalc in `.xlsb`) as stale in
-  `Sheet.isCellStale` (Python `is_cell_stale()`, C `fm_sheet_is_cell_stale`);
-  the first `recalc` computes those, the formulas without a cached value and
-  what reads them, and keeps every other cached value, where before it
-  recomputed every formula. A save under manual calculation computes the
-  stale formulas first while recalculate-before-saving is on
-  (`calcOnSave`, the default, as in Excel), so the workbook in memory is
-  recalculated too. With it off, the save keeps them stale: it marks every
-  stale formula that way and the workbook as not fully calculated
-  (`<calcPr calcCompleted="0">`, fSomeUncalced). Either way a save marks
-  every formula that reads a volatile one, as Excel keeps them after a full
-  calculation. A recalc that leaves nothing stale clears that state.
 
 - `.xlsb` saves write each sheet's print options, page margins, page setup,
   header and footer, and manual page breaks from the workbook, as Excel does,
@@ -162,8 +101,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `.xlsb` saves write each sheet's notes, their drawing and its threaded
   comments from the workbook, as Excel does, so notes and threads set in
   `.xlsx` or through the API are kept, and a note's formatted runs keep their
-  fonts. A note without a revision id gets the one Excel assigns, built from
-  the sheet's tab position and the note's place in the sheet.
+  fonts. A note without a revision id gets the one Excel assigns on the first
+  two sheets; on a later sheet it is left out and reported as deferred.
   Loading an `.xlsb` reads its notes, threads and persons into the workbook.
 
 - A note's formatted runs, each with its own font, are kept through `.xlsx`
@@ -178,8 +117,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   applied the filter, are left out and reported as deferred; a colour
   criterion without a format is left out, as Excel leaves it out. A sheet
   filter read from `.xlsb` that cannot be written back whole is kept as
-  stored. A custom view's filter stays with the view instead of being read
-  as the sheet's.
+  stored.
 
 - A date-group criterion read in its plain form is written back in that form
   to `.xlsx` and `.xlsb`, as Excel keeps it. Before, `.xlsx` saves rewrote it
@@ -379,7 +317,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([C ABI changes](docs/releases/upgrading-0.19.md#c-abi-changes)).
 - More engine ceilings return `SecurityResourceLimit` (6005, Python
   `SecurityError`), each with a `part=<name> requested=<n> limit=<n>` context:
-  adding or copying a sheet past 65,535 (part=sheets, was status 5053, now
+  adding or copying a sheet past 65,535 (part=sheets, was status 12, now
   retired), a page grid over 2^24 pages (part=print_pages, was status 9005,
   now retired), a pivot result over its cell limit (part=pivot_result_cells,
   was `FunctionOverflow`), an array formula or dynamic array past its cell
@@ -398,13 +336,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gradient stops in a fill, written or loaded from `.xlsx` or `.xlsb`
   (part=gradient_stops; a load fails instead of dropping stops, and the
   `.xlsb` writer writes every stop), `getValues` and `getTypedValues` over
-  2^22 cells (part=values_range), and a thread count
+  2^22 cells (part=values_range, was `InvalidArgument`), and a thread count
   above 8 (part=threads; a negative count stays `InvalidArgument`). Excel's
   own limits stay `InvalidArgument`: a slicer column count past 20,000, and
   now more than 1,026 manual page breaks on an axis (part=manual_breaks, was
   `PreconditionFailed`) and more than 1,048,576 items in a numeric pivot
   group (part=pivot_field_items; `PreconditionFailed` when a refresh
-  rebuilds the group). The same key shape now
+  rebuilds the group, was `SecurityResourceLimit`). The same key shape now
   leads the context of a chart series past an Excel column's rows
   (part=chart_points, `InvalidArgument`) and of the compression-ratio check
   (part=zip_entry_ratio, `IO_ZIP_BOMB`). Callers that matched the old
@@ -554,6 +492,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `fm_sheet_get_cell_at` follow the blank-cell rule above; no signature or
   struct changes
   ([C ABI changes](docs/releases/upgrading-0.19.md#c-abi-changes)).
+- `remapRangeXfs` with a target XF past the cell-XF table fails with
+  `IndexOutOfRange` (C `FM_STATUS_INDEX_OUT_OF_RANGE`, Python
+  `IndexOutOfRangeError`) instead of `InvalidArgument`, like `setRangeXfIndex`;
+  a repeated source XF stays `InvalidArgument`.
 - `removeTableStyle` (Python `remove_table_style`, C
   `fm_workbook_remove_table_style`) re-points every table and PivotTable that
   used the style to the default table / PivotTable style of its own kind,
@@ -573,147 +515,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `setTableStyle` also refuses a name that is a built-in table, PivotTable or
   slicer style, and loading drops a custom style with such a name, as the
   desktop application does; tables and PivotTables naming it keep the name.
-- PivotTables and their caches in an `.xlsb` are read into the workbook
-  model like those of an `.xlsx`, so they can be inspected and edited, and an
-  `.xlsb` opened and saved as `.xlsx` keeps them; before, such a save failed
-  with `IoWriteFailed` (Python `IO_WRITE_FAILED`, C
-  `FM_STATUS_IO_WRITE_FAILED`, 5016) or left the pivot parts behind. A
-  PivotTable whose `.xlsb` records the reader cannot read is kept as stored:
-  `listPivots()` (Python `list_pivots`, C `fm_sheet_get_pivot_count`) leaves it
-  out and `listPassthroughs()` (C `fm_workbook_get_passthrough_count` /
-  `fm_workbook_get_passthrough_at`) lists its parts. An `.xlsb`
-  save writes an unchanged PivotTable as Excel saved it and an edited or
-  refreshed one from the model, with Excel's Windows or Mac records for the
-  workbook's profile. A PivotTable built through the API, or read back from
-  its `.xlsx` save, is written to `.xlsb` as Excel saves it after opening
-  the `.xlsx` save: cache versions 8/8/3, refresh date 0 and no refresh
-  user, and the same table records; both formats save a cache no refresh
-  dated with refresh date 0, as Excel does. A cache over a defined name or
-  a table is written by that name, as over a range. A source cell left blank
-  is written as Excel writes it, whether or not its cache field has shared
-  items. Date groupings by seconds, minutes, hours, days, months, quarters
-  and years, and numeric range groupings, are read and written. A
-  PivotTable the `.xlsb` records cannot yet hold (for example a calculated
-  field, or a cache field without shared items whose cells hold more than
-  one type of value, such as text and numbers) is
-  left out of an `.xlsb` save together with its cache and the other
-  PivotTables on that cache, and counted in `deferredFeatureCount`, as is an
-  `.xlsb` PivotTable an `.xlsx` save cannot carry; it still saves to `.xlsx`.
 
 ### Fixed
-
-- A PivotTable item collapsed with `showDetail` set to false still showed the rows of the inner fields beneath it when the report had been built or refreshed through the API; it now keeps only its own row with its totals and the report shrinks by those rows, as Excel does.
-- A PivotTable whose field carries a numeric range grouping on itself, as
-  Excel stores one, showed each source value as its own item once the report
-  was recalculated, named its items after the source values, and lost the
-  grouping on refresh. It now shows Excel's ranges in Excel's order, the
-  items below the start and above the end first, and keeps them through a
-  refresh and an `.xlsx` or `.xlsb` save.
-- Custom views are kept when a workbook read from `.xlsx` is saved to
-  `.xlsb`, or one read from `.xlsb` is saved to `.xlsx`, each written as
-  Excel writes it together with every sheet's view of it; they were left out
-  of such a save. A view the other format cannot hold here is left out with
-  its sheet views and counted in `deferredFeatureCount`: one with a filter,
-  and, read from `.xlsb`, one with a header or footer or manual page breaks.
-- An `.xlsb` holding an AutoFilter icon filter with no icon, which Excel stores with no icon set, failed to open; it now reads as that filter, and both formats save a filter with no icon as Excel does, with no set in `.xlsb` and the default `3Arrows` in `.xlsx`.
-- A row or column insert or delete moves form controls and OLE objects as
-  Excel does, in `.xlsx` and `.xlsb`: the worksheet's control and object
-  anchors, their drawing-part anchors and the legacy VML shape (its
-  `x:Anchor` and its position and size) move together. An object that moves
-  and sizes with cells moves each corner; one that only moves shifts with
-  the cells before it and keeps its rows and columns. The worksheet and VML
-  anchors kept their cells before, and a move-only object stored with no
-  size grew or shrank with an edit inside it.
-- `INDEX` with a row or column number given as an array in its three-argument
-  form evaluates each element on its own and selects row or column 1 for an
-  element of 0, returning an array, as Excel does: `INDEX(D1:G1,{0},2)` was
-  `#REF!`, and `INDEX(D3:G5,{0},2)` returned the whole column. A single number
-  0 still selects the whole row or column and keeps the result a reference.
-- An `.xlsx` save no longer writes the `<pivotSelection>` of a sheet's view of a second workbook window, which made Excel refuse to open the file. Every sheet view is now read the way the first one is, so the views of the other windows lose what it loses (`<pivotSelection>`, an unknown `view` mode, an out-of-range zoom) and keep the rest.
-- A PivotTable field sorted by the totals of a value field (`sortByField` in
-  `updateField`, Python `sort_by_field`, C `fm_pivot_field_patch_t.sort_by_field`)
-  is read from `.xlsx` and `.xlsb`, shown and refreshed in that order, and
-  saved to both formats as Excel saves it. Such a field was read and
-  refreshed in label order, and a sort set through the API was saved as a
-  label sort. A `sortByField` that names no value field of the PivotTable
-  now fails with `NotFound` (Python `NotFoundError`, C
-  `FM_STATUS_NOT_FOUND`) instead of sorting by label.
-- A PivotTable with a field sorted descending, by label or by a value
-  field, is saved to `.xlsb` under a Windows profile as Excel saves it.
-  It was left out of such a save together with its cache.
-- A sheet AutoFilter text criterion is saved to .xlsb with the flag that has
-  Excel compare the text literally rather than as a pattern. A criterion
-  entered on text with no * or ? under <, <=, >, >= or <> carries it, one read
-  from .xlsb keeps it as saved, and one read from .xlsx carries it under the
-  ordering operators only, as in Excel. It was saved without it.
-- A sheet AutoFilter text criterion under `=` or `<>` that carries Excel's
-  literal-comparison flag (one entered under `<>` on text with no * or ?, or
-  one read with the flag from .xlsb) compares its text as written, `~`
-  included, as Excel does: `<>~B` hides the rows holding `~B` and keeps the
-  rows holding `B`. It was matched as a wildcard pattern.
-- `listPassthroughs()` and `hasPassthrough()` (Python `list_passthroughs` /
-  `has_passthrough`, C `fm_workbook_get_passthrough_count` /
-  `fm_workbook_get_passthrough_at` / `fm_workbook_has_passthrough`, and the
-  command line's `passthroughParts`) list only the parts the reader keeps as
-  stored without modelling them. On an `.xlsb` they used to list the styles
-  part and the parts of every PivotTable read into the model too, which the
-  workbook holds in its model and writes from it once edited, on either
-  format the VML drawing of a sheet's notes, and on an `.xlsb` the binary
-  index of each sheet and the parts of each external-book link. The
-  calculation chain and the volatile dependencies are not listed either:
-  both readers leave them out.
-
-- Saving a workbook read from `.xlsb` no longer counts the styles part or
-  the parts of a PivotTable read into the model in `droppedPartCount` (Python
-  `dropped_part_count`, C `fm_save_diagnostics_info_t.dropped_part_count`)
-  when an `.xlsb` save rewrites them from the model or an `.xlsx` save writes
-  them as XML; nothing in them was lost. Nor does any save of a workbook with
-  notes count the VML drawing of those notes, which it writes from the
-  sheet. Nor does a save of a desktop-written `.xlsb` count each sheet's
-  binary index (`xl/worksheets/binaryIndexN.bin`), or its sheet relationship
-  in `droppedRelationshipCount` (Python `dropped_relationship_count`): the
-  index only locates the sheet's cells, Excel rebuilds it, and `.xlsx` has no
-  such part. Nor does a save of a workbook that has a calculation chain
-  (`xl/calcChain.xml` or `xl/calcChain.bin`) count the chain or its workbook
-  relationship: the chain only orders recalculation, neither format's save
-  writes one, and Excel opens the result without repair and rebuilds the
-  chain. The volatile dependencies of RTD and CUBE formulas
-  (`xl/volatileDependencies.bin`) are left out the same way, by both
-  formats' saves (an `.xlsb` save used to keep them), and are not counted.
-  Nor does a save of a desktop-written `.xlsb` with external-book links
-  count the link parts (`xl/externalLinks/externalLinkN.bin` and their
-  relationships), which both formats write again from the links. A
-  refreshed PivotTable keeps its part names in an `.xlsb` save
-  instead of moving to the next free number.
-
-- A PivotTable page field that shows one item because every other item is
-  hidden reads "(Multiple Items)", as Excel shows it, unless the field allows
-  multiple selection (Excel's Select Multiple Items), in which case it shows
-  the item's name. It showed the item's name in both cases before. The values
-  follow the visible items either way. The C API has no way to set the
-  multiple-selection attribute; a field keeps it from the file it was read
-  from.
-
-- PivotTable cell formats and pivot chart formats follow the items and value
-  fields they name, as Excel does. After a refresh a format moves with its
-  item to the item's new position; a format naming an item the refresh
-  removes (`missingItemsLimit` 0), or a field whose source column is gone, is
-  removed, and one on an item kept as missing stays. Removing a value field,
-  by refresh, by deleting a calculated field or by taking it out of the
-  values area, removes the formats on it and moves the formats of later value
-  fields down. Ungrouping removes the formats on the group fields, and on the
-  field itself for a numeric range group; Clear All removes every format.
-  Pivot chart format ids are not renumbered. Formats used to keep their old
-  positions and land on other items.
-
-- An `.xlsb` save writes a custom table style usable by both tables and
-  PivotTables, as Excel does, instead of leaving it out and reporting it in
-  `deferredFeatureCount`. Only a style usable by neither is still left out.
-
-- A conditional-format or table-style dxf whose fill sets only colours keeps
-  its `<patternFill>` without a `patternType` through an `.xlsx` save, and its
-  `.xlsb` dxf without the fill-pattern property, as Excel writes both. Such a
-  fill was saved with an explicit pattern before.
 
 - `.xlsb` AutoFilters keep a value filter under any calendar type, not only
   `japan`, and a blank (`equal ""`) custom criterion through a load and a
@@ -722,7 +525,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Excel refused to open an `.xlsb` that held a custom workbook view (View > Custom Views) after it was opened and saved again as `.xlsb`: the workbook part lost the view while the sheets kept theirs. The workbook's views are now kept and written where Excel writes them. Custom views read from an `.xlsx` are still left out of an `.xlsb` save, on the workbook and the sheets alike, and are now counted in `deferredFeatureCount`.
 
-- Saving `.xlsb` writes the default row height in whole twips, truncated, as Excel does. A default width, base width or row height Excel cannot hold, which only an `.xlsx` Excel itself refuses to open carries, is written as the format's default and counted in `deferredFeatureCount` (kind=format_defaults); an outline level of 8 or more is written as 7, as in `.xlsx`. A sheet view of a window the workbook does not have is left out and one with an unknown view mode is written as normal, each counted (kind=sheet_view). A sheet view's `<extLst>` is left out of `.xlsb`, as Excel leaves it, and is no longer reported as deferred.
+- Saving `.xlsb` writes the default row height in whole twips, truncated, as Excel does. A default width, base width or row height the format cannot hold, or an outline level of 8 or more, is no longer written as a stand-in value or wrapped to 0-7: such a workbook, which can only come from an `.xlsx` Excel itself refuses to open, fails the save with `IoFeatureNotWritable` (Python `IO_FEATURE_NOT_WRITABLE`, C `FM_STATUS_IO_FEATURE_NOT_WRITABLE`; kind=format_defaults or kind=outline_level), as does a sheet view with an unknown view mode or of a window the workbook does not have (kind=sheet_view). A sheet view's `<extLst>` is left out of `.xlsb`, as Excel leaves it, and is no longer reported as deferred.
 
 - In-cell pictures and the other rich values a workbook carries survive an
   `.xlsx` or `.xlsb` save: each cell keeps its value, the rich-data parts are rewritten
@@ -836,43 +639,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   was loaded under a different profile. The styles part is rebuilt only when
   the styles or the cell formats in use change; a conditional format, table or
   filter edit only renumbers its differential formats.
-- A loaded `.xlsb` sheet keeps Fit to page and its outline settings (summary
-  styles applied, outline symbols hidden), which were dropped on load and
-  counted as unread; they now read back as the `<sheetPr>` an `.xlsx` twin
-  carries and save again. Its page setup and margins read back as the twin's
-  `<pageSetup>` and `<pageMargins>` as well, so the page setup API reports
-  them instead of the defaults and an `.xlsx` save keeps them. The margins
-  and print options of a custom view stay with the view.
-- An `.xlsb` save of a data bar whose minimum or maximum is a formula fails
-  with `IoFeatureNotWritable` (Python `IO_FEATURE_NOT_WRITABLE`, C
-  `FM_STATUS_IO_FEATURE_NOT_WRITABLE`, 5028; kind=data_bar with the sheet's
-  `sheet_index=`), like the other features the writer cannot store, instead of
-  `InvalidArgument`.
-- A literal font (one not linked to the theme) that names a face but carries
-  neither a family nor a charset is saved with the ones Excel fills in for
-  that face, in `.xlsx` and `.xlsb` alike: Arial, Calibri, Helvetica and
-  Tahoma get family 2, Times New Roman and Courier New 1, Comic Sans MS 4;
-  Wingdings and Symbol charset 2, SimSun charset 134; メイリオ and
-  ヒラギノ角ゴシック family 2 with charset 128, Malgun Gothic family 2 with
-  charset 129; MS Pゴシック is written as ＭＳ Ｐゴシック, family 2 with
-  charset 128. Any other face is written as stored, and the workbook in
-  memory keeps what was loaded.
-- An `.xlsx` save treats a cell format identical to the default one as the
-  default, as Excel does: a blank cell, alone or in a run, or a customFormat
-  row carrying only such a format is no longer written and leaves the
-  `<dimension>`, a column keeps its width without the style, and the format
-  is folded into the first entry of `<cellXfs>`. A blank cell inside a merged
-  range keeps its format.
-- The Python package read `NOW()`, `TODAY()` and every other unpinned clock
-  (the conditional-format and AutoFilter "today", PivotTable date filters) in
-  UTC instead of local time, as its WebAssembly module had no time zone. The
-  module now asks the host for the local UTC offset at each read, so the
-  `TZ` in effect and a daylight-saving change are followed. A pinned clock is
-  unaffected, as are the npm package and the native builds.
-- Excel opened an `.xlsb` the engine wrote scrolled past its first rows: each
-  row record without its own height stated 0. It now states the sheet's
-  default row height, as Excel's saves do, without marking it as a set
-  height, so the row still fits its content and reads back without one.
 
 ## [0.19.0] - 2026-11-10
 
@@ -947,23 +713,22 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   ([C ABI changes](docs/releases/upgrading-0.19.md#c-abi-changes)).
 - C ABI: `fm_color_t` replaces `fm_cf_color_t` and the `*_argb` fields, and
   the shape fields `fill_rgb` / `line_rgb` are `fill` / `line`.
-- C ABI: `fm_text_compare` and `fm_collation_classes` are `fm_compare_text`
-  and `fm_get_collation_classes`, with the strength before the profile id.
+- C ABI: `fm_compare_text` and `fm_get_collation_classes` take the strength
+  before the profile id, and a stale call still compiles.
 - C ABI: `fm_workbook_save` takes the format (`fm_workbook_save_as` is gone),
-  `fm_workbook_pivot_field_set_date_group` is
-  `fm_sheet_set_pivot_field_date_group` and takes a period mask,
-  `fm_sheet_set_chart_display` is `fm_sheet_update_chart_display` and takes a
-  patch, formula entry fails with
+  `fm_sheet_set_pivot_field_date_group` takes a period mask,
+  `fm_sheet_update_chart_display` takes a patch, formula entry fails with
   parser statuses 1000 to 1014, and enum constants start with their type name
   ([C ABI callers](docs/releases/upgrading-0.19.md#c-abi-callers)).
-- C ABI: `fm_workbook_set_cell_phonetic_runs` is
-  `fm_sheet_set_cell_phonetic_runs`, and it and `fm_sheet_add_threaded_comment`
-  take an `fm_text_offset_unit_t` before the record; phonetic runs and
-  mentions carry their span in UTF-16 units and in code points.
+- C ABI: `fm_sheet_set_cell_phonetic_runs`, `fm_sheet_add_threaded_comment`
+  and `fm_sheet_update_threaded_comment` take an `fm_text_offset_unit_t`
+  before the record, and phonetic runs and mentions carry their span in UTF-16
+  units and in code points.
 - JavaScript and Python: one `list*` method replaces each count and index
   pair; `addChart` takes a `ChartPlotType`, pivot filters `value` /
   `valueHigh`, AutoFilter custom filters `conditions`, and `CfMatch` is a
-  union told apart by `kind`
+  union told apart by `kind`. A `Date` input is read through its local
+  getters, where `setValue(Date)` used UTC
   ([details](docs/releases/upgrading-0.19.md#javascript-and-python-callers)).
 - JavaScript: `createFormulon()` resolves to the `Formulon` object in both
   packages, `saveAs(format)` is `save(format)`, a value is a union on `kind`,
@@ -974,7 +739,7 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
 - Python: failures raise one `FormulonError` subclass per status range, and
   `FormulaSyntaxError` is no longer an `InvalidArgumentError`. Tuple results
   are frozen dataclasses, nine signatures take a record in place of keywords,
-  mention and phonetic-run positions are code points, and Python
+  mention, phonetic-run and parse-error positions are code points, and Python
   3.10 or later is required
   ([details](docs/releases/upgrading-0.19.md#python-callers)).
 - Command line: `dump` takes `--view`, `paginate` prints new keys, a usage
@@ -1180,9 +945,8 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   instead of being dropped.
 - Number-format codes use the workbook profile's vocabulary (id 14 is
   `m/d/yy` under en-US).
-- `evaluateCfRange` takes an optional `today` in place of the required
-  `todaySerial`; without it, time-period rules use the pinned clock or the
-  local date.
+- `evaluateCfRange` without `today` uses the pinned clock or the local date
+  instead of disabling time-period rules.
 - `getFunctionMetadata` reports the argument counts entry accepts for every
   built-in.
 - A conditional formatting rule added without an id gets one in Excel's form.
@@ -1217,7 +981,8 @@ Upgrading from 0.18: see [Upgrading from 0.18 to 0.19](docs/releases/upgrading-0
   ranges when `ranges` is `NULL`, and formula text views stay valid until the
   next read through the handle's scratch buffer.
 - Python runs one WebAssembly instance per process, so calls are serialised.
-- `GROUPBY` / `PIVOTBY` with `total_depth`
+- `TEXTBEFORE` and `TEXTAFTER` return `#N/A` on a miss without
+  `if_not_found` (they returned `0`); `GROUPBY` / `PIVOTBY` with `total_depth`
   of 2 or more over one key column, and a union across sheets, are `#VALUE!`;
   a union holding a 3-D reference is `#NAME?`. A range-sourced list
   validation compares numbers exactly.

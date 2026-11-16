@@ -346,6 +346,28 @@ TEST(XlsbUserBookView, XlsbSaveKeepsTheViewBlockAndTheSheetsPrintRecords) {
   EXPECT_EQ(RecordsOf(actual.outside, kBrtPrintOptions), RecordsOf(expected.outside, kBrtPrintOptions));
 }
 
+/// The text of `xml` from the first `open` through the next `close`, empty when either is missing.
+std::string ElementSpan(const std::string& xml, const std::string& open, const std::string& close) {
+  const std::size_t begin = xml.find(open);
+  const std::size_t end = xml.find(close, begin);
+  if (begin == std::string::npos || end == std::string::npos) {
+    return std::string();
+  }
+  return xml.substr(begin, end + close.size() - begin);
+}
+
+/// The framed records of `body` except those of the given types.
+std::vector<std::uint8_t> WithoutTypes(const std::vector<std::uint8_t>& body, const std::set<std::uint16_t>& types) {
+  std::vector<std::uint8_t> out;
+  for (const FramedRecord& rec : split_records(body)) {
+    if (types.count(rec.type) == 0U) {
+      out.insert(out.end(), body.begin() + static_cast<std::ptrdiff_t>(rec.begin),
+                 body.begin() + static_cast<std::ptrdiff_t>(rec.end));
+    }
+  }
+  return out;
+}
+
 TEST(XlsbUserBookView, ViewAutoFilterIsNotTheSheetsAndStaysInTheView) {
   const std::vector<std::uint8_t> package = CustomViewsFixture("autofilter_view.xlsb");
   const SplitBlock expected = SplitAtBlock(Entry(package, kSheetBin), kBrtBeginUserShViews, kBrtEndUserShViews);
@@ -362,6 +384,68 @@ TEST(XlsbUserBookView, ViewAutoFilterIsNotTheSheetsAndStaysInTheView) {
       SplitAtBlock(Entry(written.value().bytes, kSheetBin), kBrtBeginUserShViews, kBrtEndUserShViews);
   EXPECT_EQ(actual.inside, expected.inside);
   EXPECT_TRUE(RecordsOf(actual.outside, kBeginAFilter).empty());
+  // The view goes to an .xlsx save with its filter, apart from the sheet's own.
+  auto xlsx = write_ooxml_with_result(read.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
+  const std::string sheet_xml = Text(Entry(xlsx.value().bytes, "xl/worksheets/sheet1.xml"));
+  const std::string views = ElementOf(sheet_xml, "customSheetViews");
+  EXPECT_NE(views.find("<customSheetView "), std::string::npos);
+  const std::string view = ElementSpan(sheet_xml, "<customSheetView ", "</customSheetView>");
+  EXPECT_NE(view.find("<autoFilter ref=\"A1:E13\""), std::string::npos);
+  // The fixture's sheet has no AutoFilter of its own, so none sits outside the view.
+  std::string outside = sheet_xml;
+  outside.erase(outside.find(view), view.size());
+  EXPECT_EQ(outside.find("<autoFilter"), std::string::npos);
+}
+
+TEST(XlsbUserBookView, XlsxViewAutoFilterIsWrittenToTheXlsbViewOnly) {
+  const SplitBlock expected = SplitAtBlock(Entry(CustomViewsFixture("autofilter_view.xlsb"), kSheetBin),
+                                           kBrtBeginUserShViews, kBrtEndUserShViews);
+  auto twin = read_ooxml(SpanOf(CustomViewsFixture("autofilter_view.xlsx")));
+  ASSERT_TRUE(static_cast<bool>(twin)) << twin.error().message;
+  auto written = write_xlsb_with_result(twin.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
+  const SplitBlock actual =
+      SplitAtBlock(Entry(written.value().bytes, kSheetBin), kBrtBeginUserShViews, kBrtEndUserShViews);
+  ASSERT_FALSE(RecordsOf(actual.inside, kBeginAFilter).empty());
+  EXPECT_EQ(RecordsOf(actual.inside, kBeginAFilter), RecordsOf(expected.inside, kBeginAFilter));
+  EXPECT_EQ(RecordsOf(actual.inside, kBrtEndAFilter), RecordsOf(expected.inside, kBrtEndAFilter));
+  EXPECT_TRUE(RecordsOf(actual.outside, kBeginAFilter).empty());
+}
+
+TEST(XlsbUserBookView, FilterCriteriaViewCrossesBothWaysAsExcelSavesIt) {
+  const std::vector<std::uint8_t> twin_xlsb = CustomViewsFixture("filtercriteria_view.xlsb");
+  const std::vector<std::uint8_t> twin_xlsx = CustomViewsFixture("filtercriteria_view.xlsx");
+  constexpr const char* kSheetXml = "xl/worksheets/sheet1.xml";
+  const SplitBlock expected = SplitAtBlock(Entry(twin_xlsb, kSheetBin), kBrtBeginUserShViews, kBrtEndUserShViews);
+  ASSERT_FALSE(RecordsOf(expected.outside, kBeginAFilter).empty());
+
+  // .xlsx to .xlsb: the view's records, and the sheet's own filter.
+  auto from_xlsx = read_ooxml(SpanOf(twin_xlsx));
+  ASSERT_TRUE(static_cast<bool>(from_xlsx)) << from_xlsx.error().message;
+  auto as_xlsb = write_xlsb_with_result(from_xlsx.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(as_xlsb)) << as_xlsb.error().message;
+  const SplitBlock actual =
+      SplitAtBlock(Entry(as_xlsb.value().bytes, kSheetBin), kBrtBeginUserShViews, kBrtEndUserShViews);
+  EXPECT_EQ(WithoutTypes(actual.inside, {kBrtBeginUserShViews, kBrtEndUserShViews}),
+            WithoutTypes(expected.inside, {kBrtBeginUserShViews, kBrtEndUserShViews, kAcBegin, kUid, kAcEnd}));
+  EXPECT_EQ(RecordsOf(actual.outside, kBeginAFilter), RecordsOf(expected.outside, kBeginAFilter));
+
+  // .xlsb to .xlsx: the view element minus the filter's revision uid, and the sheet's own filter.
+  auto from_xlsb = read_xlsb(SpanOf(twin_xlsb));
+  ASSERT_TRUE(static_cast<bool>(from_xlsb)) << from_xlsb.error().message;
+  auto as_xlsx = write_ooxml_with_result(from_xlsb.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(as_xlsx)) << as_xlsx.error().message;
+  const std::string saved = Text(Entry(as_xlsx.value().bytes, kSheetXml));
+  std::string twin_view = ElementSpan(Text(Entry(twin_xlsx, kSheetXml)), "<customSheetView ", "</customSheetView>");
+  ASSERT_FALSE(twin_view.empty());
+  const std::size_t uid = twin_view.find(" xr:uid=\"");
+  ASSERT_NE(uid, std::string::npos);
+  twin_view.erase(uid, twin_view.find('"', uid + 9U) + 1U - uid);
+  EXPECT_EQ(ElementSpan(saved, "<customSheetView ", "</customSheetView>"), twin_view);
+  const std::size_t views_at = saved.find("<customSheetViews>");
+  ASSERT_NE(views_at, std::string::npos);
+  EXPECT_NE(saved.substr(0U, views_at).find("<autoFilter ref=\"A1:D13\""), std::string::npos);
 }
 
 }  // namespace

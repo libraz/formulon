@@ -12,8 +12,12 @@
 #include <string_view>
 #include <vector>
 
+#include "auto_filter.h"
+#include "io/auto_filter_xml.h"
 #include "io/ooxml/print_settings_parse.h"
 #include "io/sheet_view_xml.h"
+#include "io/xlsb/auto_filter_records.h"
+#include "io/xlsb/frt_records.h"
 #include "io/xlsb/guid_text.h"
 #include "io/xlsb/print_records.h"
 #include "io/xlsb/record.h"
@@ -83,7 +87,6 @@ constexpr std::array<FlagAttr, 4> kSheetPrintFlags = {{
     {"headings", 0x00000100U, false},
     {"gridLines", 0x00000200U, false},
 }};
-constexpr std::uint32_t kSheetFilterFlags = 0x00002000U | 0x00004000U;
 constexpr std::uint32_t kSheetPaneFlags = 0x00020000U | 0x00040000U;
 constexpr std::uint32_t kSheetAlwaysFlag = 0x01000000U;
 constexpr std::uint32_t kSheetStateHidden = 0x00400000U;
@@ -382,7 +385,7 @@ bool encode_sheet_view(const pugi::xml_node& view, bool print_settings, std::vec
   for (const pugi::xml_node& child : view.children()) {
     const std::string_view name = child.name();
     if ((name != "pane" && name != "selection" && name != "rowBreaks" && name != "colBreaks" && name != "pageMargins" &&
-         name != "printOptions" && name != "pageSetup" && name != "headerFooter") ||
+         name != "printOptions" && name != "pageSetup" && name != "headerFooter" && name != "autoFilter") ||
         (name != "selection" && !FirstSeen(&children, name))) {
       return false;
     }
@@ -398,7 +401,7 @@ bool encode_sheet_view(const pugi::xml_node& view, bool print_settings, std::vec
       !ParseEnum(view.attribute("state"), {"visible", "hidden", "veryHidden"}, 0U, &state) ||
       !ParseEnum(view.attribute("view"), {"normal", "pageBreakPreview", "pageLayout"}, 0U, &mode) ||
       !AddFlags(view, kSheetFlags.data(), kSheetFlags.size(), &flags) || scale < kMinScale || scale > kMaxScale ||
-      color > kDefaultColorId || (flags & kSheetFilterFlags) != 0U) {
+      color > kDefaultColorId) {
     return false;
   }
   constexpr std::array<std::uint32_t, 3> kStateBits = {0U, kSheetStateHidden, kSheetStateVeryHidden};
@@ -419,6 +422,14 @@ bool encode_sheet_view(const pugi::xml_node& view, bool print_settings, std::vec
       (!print_settings && print_children)) {
     return false;
   }
+  // The view's AutoFilter is carried whole or the view is refused.
+  std::vector<std::uint8_t> filter_block;
+  if (const pugi::xml_node filter_node = view.child("autoFilter")) {
+    const AutoFilter filter = auto_filter_from_node(filter_node);
+    if (filter.is_opaque() || emit_auto_filter_block(filter_block, filter) != 0U) {
+      return false;
+    }
+  }
   if (view.child("pane")) {
     flags |= kSheetPaneFlags;
   }
@@ -438,6 +449,7 @@ bool encode_sheet_view(const pugi::xml_node& view, bool print_settings, std::vec
   if (print_settings) {
     emit_view_print_records(dst, print);
   }
+  dst.insert(dst.end(), filter_block.begin(), filter_block.end());
   emit_record(dst, kBrtEndUserShView, ByteSpan{});
   return true;
 }
@@ -547,8 +559,7 @@ std::optional<std::string> decode_sheet_view(const std::vector<FramedRecord>& re
   }
   const std::uint32_t pane_bits = flags & kSheetPaneFlags;
   if (load_u32(p + 16U) != kSheetViewMarker || scale < kMinScale || scale > kMaxScale || color > kDefaultColorId ||
-      (flags & ~known) != 0U || (flags & kSheetAlwaysFlag) == 0U || (flags & kSheetFilterFlags) != 0U ||
-      (pane_bits != 0U && pane_bits != kSheetPaneFlags) ||
+      (flags & ~known) != 0U || (flags & kSheetAlwaysFlag) == 0U || (pane_bits != 0U && pane_bits != kSheetPaneFlags) ||
       (flags & (kSheetStateHidden | kSheetStateVeryHidden)) == (kSheetStateHidden | kSheetStateVeryHidden) ||
       (flags & (kSheetViewPageBreakPreview | kSheetViewPageLayout)) ==
           (kSheetViewPageBreakPreview | kSheetViewPageLayout) ||
@@ -558,6 +569,7 @@ std::optional<std::string> decode_sheet_view(const std::vector<FramedRecord>& re
   SheetView scratch;
   std::vector<std::uint8_t> print_records;
   std::optional<std::string> print_options = std::string();
+  std::string filter_xml;
   bool has_pane = false;
   for (std::size_t i = 1; i + 1U < records.size(); ++i) {
     const FramedRecord& rec = records[i];
@@ -580,6 +592,34 @@ std::optional<std::string> decode_sheet_view(const std::vector<FramedRecord>& re
       if (!print_options) {
         return std::nullopt;
       }
+    } else if (rec.type == kAcBegin || rec.type == kBeginAFilter) {
+      // A revision-uid wrapper leads the filter's block, which is the last thing in the view.
+      const std::size_t first = rec.type == kAcBegin ? i + 3U : i;
+      if (!filter_xml.empty() || first + 1U >= records.size() ||
+          (first != i && !(rec.payload.size == kAcUidBeginPayload.size() &&
+                           std::equal(kAcUidBeginPayload.begin(), kAcUidBeginPayload.end(), rec.payload.data) &&
+                           records[i + 1U].type == kUid && records[i + 1U].payload.size == kGuidBytes &&
+                           records[i + 2U].type == kAcEnd && records[i + 2U].payload.size == 0U)) ||
+          records[first].type != kBeginAFilter) {
+        return std::nullopt;
+      }
+      // The cursor spans from the record after BrtBeginAFilter to the view's end.
+      const std::size_t from = records[first + 1U].begin;
+      ByteSpan cursor{body.data() + from, records.back().begin - from};
+      auto filter = read_auto_filter_block(cursor, records[first].payload);
+      if (!filter || filter.value().is_opaque()) {
+        return std::nullopt;
+      }
+      const std::size_t block_end = from + static_cast<std::size_t>(cursor.data - (body.data() + from));
+      std::size_t last = first + 1U;
+      while (last + 1U < records.size() && records[last].end < block_end) {
+        ++last;
+      }
+      if (records[last].end != block_end || records[last].type != kBrtEndAFilter || last + 2U != records.size()) {
+        return std::nullopt;
+      }
+      filter_xml = serialize_auto_filter(filter.value());
+      i = last;
     } else {
       return std::nullopt;
     }
@@ -626,8 +666,9 @@ std::optional<std::string> decode_sheet_view(const std::vector<FramedRecord>& re
       }
     }
   };
-  for (const char* name : {"showPageBreaks", "showFormulas", "showGridLines", "showRowCol", "outlineSymbols",
-                           "zeroValues", "fitToPage", "printArea", "hiddenRows", "hiddenColumns"}) {
+  for (const char* name :
+       {"showPageBreaks", "showFormulas", "showGridLines", "showRowCol", "outlineSymbols", "zeroValues", "fitToPage",
+        "printArea", "filter", "showAutoFilter", "hiddenRows", "hiddenColumns"}) {
     bool_attr(name);
   }
   if ((flags & kSheetStateHidden) != 0U) {
@@ -647,8 +688,8 @@ std::optional<std::string> decode_sheet_view(const std::vector<FramedRecord>& re
   if (top_row != 0U || top_col != 0U) {
     append_xml_attr(xml, "topLeftCell", a1::encode_a1(top_row, top_col));
   }
-  const std::string children =
-      build_pane_and_selections_xml(scratch, true) + print.page_margins_xml + *print_options + print.page_setup_xml;
+  const std::string children = build_pane_and_selections_xml(scratch, true) + print.page_margins_xml + *print_options +
+                               print.page_setup_xml + filter_xml;
   if (children.empty()) {
     xml.append("/>");
   } else {

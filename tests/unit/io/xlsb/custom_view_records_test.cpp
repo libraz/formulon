@@ -15,8 +15,10 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "io/xlsb/frt_records.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_ids.h"
+#include "io/xlsb/record_writer.h"
 #include "pugixml.hpp"
 
 namespace formulon {
@@ -257,9 +259,8 @@ TEST(CustomViewRecords, SheetViewPanes) {
 
 TEST(CustomViewRecords, SheetViewsWithoutKnownRecordsAreRefused) {
   const std::vector<std::pair<std::string, std::string>> cases = {
-      {" filter=\"1\"", ""},
-      {" showAutoFilter=\"1\"", ""},
-      {"", "<autoFilter ref=\"A1:E13\"/>"},
+      {"", "<autoFilter ref=\"A1:E13\"><filterColumn colId=\"0\"><top10 val=\"3\"/></filterColumn></autoFilter>"},
+      {"", "<autoFilter ref=\"A1:E13\"/><autoFilter ref=\"A1:E13\"/>"},
       {"", "<extLst/>"},
       {" scale=\"5\"", ""},
       {" colorId=\"65\"", ""},
@@ -398,6 +399,142 @@ TEST(CustomViewRecords, SheetViewsDecodeBackToTheirXml) {
     ASSERT_TRUE(xml.has_value()) << attrs << children;
     EXPECT_EQ(Normalized(*xml), Normalized(SheetView(attrs, children))) << attrs << children;
   }
+}
+
+// The view of tests/fixtures/custom_views/autofilter_view as Excel saved it, without the filter's revision uid.
+constexpr const char* kFilterViewAttrs = " filter=\"1\" showAutoFilter=\"1\" topLeftCell=\"B3\"";
+constexpr const char* kFilterViewChildren =
+    "<selection activeCell=\"C5\" sqref=\"C5:D6\"/>"
+    "<pageMargins left=\"0.7\" right=\"0.7\" top=\"0.75\" bottom=\"0.75\" header=\"0.3\" footer=\"0.3\"/>"
+    "<autoFilter ref=\"A1:E13\"/>";
+constexpr const char* kFilterViewAFilter = "000000000c0000000000000004000000";
+
+TEST(CustomViewRecords, SheetViewAutoFilterIsExcelsBlock) {
+  const Records expected = {{kBrtBeginUserShView, ViewHead("3c600021", kTopLeftB3)},
+                            {152, kSel},
+                            {476, kMargins},
+                            {477, "1000"},
+                            {161, kFilterViewAFilter},
+                            {162, ""},
+                            {kBrtEndUserShView, ""}};
+  EXPECT_EQ(SheetRecords(kFilterViewAttrs, kFilterViewChildren), expected);
+}
+
+/// The records of the Excel filter view.
+std::vector<std::uint8_t> EncodedFilterView() {
+  pugi::xml_document doc;
+  EXPECT_TRUE(doc.load_string(SheetView(kFilterViewAttrs, kFilterViewChildren).c_str()));
+  std::vector<std::uint8_t> bytes;
+  EXPECT_TRUE(encode_sheet_view(doc.document_element(), true, bytes));
+  return bytes;
+}
+
+/// `bytes` with a revision-uid wrapper ahead of its BrtBeginAFilter, or in place of the filter block when `orphan`.
+std::vector<std::uint8_t> WithUidWrapper(const std::vector<std::uint8_t>& bytes, bool orphan) {
+  std::vector<std::uint8_t> out;
+  bool in_filter = false;
+  for (const FramedRecord& rec : split_records(bytes)) {
+    if (rec.type == kBeginAFilter) {
+      emit_record(out, kAcBegin, ByteSpan{kAcUidBeginPayload.data(), kAcUidBeginPayload.size()});
+      emit_record(out, kUid, std::vector<std::uint8_t>(16U, 0x5AU));
+      emit_record(out, kAcEnd, ByteSpan{});
+      in_filter = orphan;
+    }
+    if (!in_filter) {
+      emit_record(out, rec.type, rec.payload);
+    }
+    in_filter = in_filter && rec.type != kBrtEndAFilter;
+  }
+  return out;
+}
+
+TEST(CustomViewRecords, SheetViewAutoFilterDecodesBehindItsRevisionUid) {
+  const std::vector<std::uint8_t> bytes = WithUidWrapper(EncodedFilterView(), false);
+  const std::optional<std::string> xml = decode_sheet_view(split_records(bytes), bytes);
+  ASSERT_TRUE(xml.has_value());
+  EXPECT_EQ(Normalized(*xml), Normalized(SheetView(kFilterViewAttrs, kFilterViewChildren)));
+  // Without the wrapper the block decodes the same.
+  EXPECT_EQ(SheetRoundTrip(SheetView(kFilterViewAttrs, kFilterViewChildren)), xml);
+}
+
+TEST(CustomViewRecords, SheetViewAutoFilterOutOfPlaceIsNotDecoded) {
+  // A revision-uid wrapper with no filter behind it.
+  const std::vector<std::uint8_t> orphan = WithUidWrapper(EncodedFilterView(), true);
+  EXPECT_FALSE(decode_sheet_view(split_records(orphan), orphan).has_value());
+  // A print record after the filter block.
+  const std::vector<std::uint8_t> encoded = EncodedFilterView();
+  const std::vector<FramedRecord> records = split_records(encoded);
+  std::vector<std::uint8_t> late;
+  for (const FramedRecord& rec : records) {
+    if (rec.type == kBrtEndUserShView) {
+      emit_record(late, kBrtMargins, records[2].payload);
+    }
+    emit_record(late, rec.type, rec.payload);
+  }
+  EXPECT_FALSE(decode_sheet_view(split_records(late), late).has_value());
+}
+
+// The view of tests/fixtures/custom_views/filtercriteria_view as Excel saved it; the xlsx element without its
+// filter's xr:uid, and the xlsb records with the revision-uid wrapper in place.
+constexpr const char* kCriteriaViewXml =
+    "<customSheetView guid=\"{A0A0A0A0-3333-4333-8333-000000000003}\" showPageBreaks=\"1\" filter=\"1\" "
+    "showAutoFilter=\"1\"><pageMargins left=\"0.5\" right=\"0.6\" top=\"0.8\" bottom=\"0.9\" header=\"0.4\" "
+    "footer=\"0.45\"/><pageSetup paperSize=\"9\" orientation=\"landscape\"/><autoFilter ref=\"A1:D13\">"
+    "<filterColumn colId=\"1\"><filters><filter val=\"North\"/><filter val=\"East\"/></filters></filterColumn>"
+    "<filterColumn colId=\"2\"><customFilters><customFilter operator=\"greaterThan\" val=\"5\"/></customFilters>"
+    "</filterColumn></autoFilter></customSheetView>";
+
+const Records& CriteriaViewRecords() {
+  static const Records records = {
+      {kBrtBeginUserShView,
+       "a0a0a0a03333334383330000000000030100000064000000400000003d60002100000000000000000000000000000000"},
+      {476, "000000000000e03f333333333333e33f9a9999999999e93fcdccccccccccec3f9a9999999999d93fcdccccccccccdc3f"},
+      {477, "1000"},
+      {478, "09000000640000005802000058020000010000000100000001000000010000000200ffffffff"},
+      {161, "000000000c0000000000000003000000"},
+      {163, "010000000000"},
+      {165, "0000000000000000"},
+      {167, "050000004e006f00720074006800"},
+      {167, "040000004500610073007400"},
+      {166, ""},
+      {164, ""},
+      {163, "020000000000"},
+      {172, "00000000"},
+      {174, "04040000000000001440"},
+      {173, ""},
+      {164, ""},
+      {162, ""},
+      {kBrtEndUserShView, ""}};
+  return records;
+}
+
+std::vector<std::uint8_t> FromHex(const std::string& hex) {
+  std::vector<std::uint8_t> out;
+  for (std::size_t i = 0; i + 1U < hex.size(); i += 2U) {
+    out.push_back(static_cast<std::uint8_t>(std::stoi(hex.substr(i, 2U), nullptr, 16)));
+  }
+  return out;
+}
+
+TEST(CustomViewRecords, SheetViewFilterCriteriaAreExcelsBlock) {
+  bool ok = false;
+  EXPECT_EQ(Encode(EncodeSheetView, kCriteriaViewXml, &ok), CriteriaViewRecords());
+  EXPECT_TRUE(ok);
+}
+
+TEST(CustomViewRecords, SheetViewFilterCriteriaDecodeToExcelsElement) {
+  std::vector<std::uint8_t> bytes;
+  for (const auto& [type, hex] : CriteriaViewRecords()) {
+    if (type == 161) {
+      emit_record(bytes, kAcBegin, ByteSpan{kAcUidBeginPayload.data(), kAcUidBeginPayload.size()});
+      emit_record(bytes, kUid, FromHex("06b2df741c944d868553742496689f44"));
+      emit_record(bytes, kAcEnd, ByteSpan{});
+    }
+    emit_record(bytes, type, FromHex(hex));
+  }
+  const std::optional<std::string> xml = decode_sheet_view(split_records(bytes), bytes);
+  ASSERT_TRUE(xml.has_value());
+  EXPECT_EQ(*xml, kCriteriaViewXml);
 }
 
 TEST(CustomViewRecords, SheetViewsWithoutAnXlsxFormAreNotDecoded) {
