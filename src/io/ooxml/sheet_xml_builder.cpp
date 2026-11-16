@@ -514,7 +514,8 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
                               const std::vector<std::string>* sheet_names, const RichErrorVmMap* rich_error_vm,
                               std::string_view book_directory, const std::optional<PhoneticProperties>& absent_phonetic,
                               const CellStyleSavePlan* style_plan,
-                              const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks) {
+                              const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks,
+                              std::string_view custom_sheet_views_xml) {
   const std::string sheet_view_xml = BuildSheetViewXml(sheet.view());
   const std::string sheet_format_xml =
       BuildSheetFormatPrXml(WithDerivedOutlineLevels(sheet.format_defaults(), sheet.layout()));
@@ -603,6 +604,10 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
   flush_raw_before("autoFilter");
   if (sheet.has_auto_filter()) {
     emit_line(serialize_auto_filter(*sheet.auto_filter()));
+  }
+  flush_raw_before("customSheetViews");
+  if (!custom_sheet_views_xml.empty()) {
+    emit_line(custom_sheet_views_xml);
   }
   // Merge cells precede CF in ECMA-376 document order.
   flush_raw_before("mergeCells");

@@ -22,6 +22,7 @@
 #include "io/ooxml/external_link_writer.h"
 #include "io/package_diagnostics.h"
 #include "io/rich_value_errors.h"
+#include "io/xlsb/user_book_views.h"
 #include "passthrough_part.h"
 #include "row_cells.h"
 
@@ -132,6 +133,8 @@ struct EmissionPlan {
   // Per sheet, the formula cells written `ca="1"` beyond what their formula
   // says: the stale ones and the volatile chains (`Workbook::saved_recalc_marks`).
   std::vector<std::unordered_set<CellAddress, CellAddressHash>> recalc_marks;
+  // Custom views an `.xlsb` source kept as records, decoded for this save.
+  xlsb::RecordCustomViewPlan custom_views;
   // For each sheet (by 0-based index), the in-source TableMetadata
   // entries that target it, paired with the package-relative path the
   // writer assigned (`xl/tables/tableN.xml`). `(table_ref, path)` is

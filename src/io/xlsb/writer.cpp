@@ -98,18 +98,18 @@ void ReportDeferred(std::uint32_t* count, std::string_view kind, std::size_t ite
       .warn();
 }
 
-std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook) {
+std::uint32_t ReportDeferredSheetFeatures(const Workbook& workbook, const XmlCustomViewPlan& custom_views) {
   std::uint32_t count = 0U;
   const std::uint32_t views = workbook_view_count(workbook.book_views_xml());
   for (std::size_t i = 0; i < workbook.sheet_count(); ++i) {
     const Sheet& sheet = workbook.sheet(i);
     ReportDeferred(&count, "auto_filter", unwritten_auto_filter_settings(sheet), i);
     ReportDeferred(&count, "print_settings", has_deferred_print_settings(sheet.print_settings()) ? 1U : 0U, i);
-    ReportDeferred(&count, "custom_sheet_views", unwritten_xml_sheet_views(sheet), i);
+    ReportDeferred(&count, "custom_sheet_views", custom_views.orphan_sheet_views[i], i);
     ReportDeferred(&count, "format_defaults", unwritable_format_default_count(sheet.format_defaults()), i);
     ReportDeferred(&count, "sheet_view", unwritten_sheet_view_count(sheet.view(), views), i);
   }
-  ReportDeferred(&count, "custom_workbook_views", unwritten_xml_book_views(workbook), 0U);
+  ReportDeferred(&count, "custom_workbook_views", custom_views.refused_book_views, 0U);
   // Workbook globals the BrtBookProtection / BrtWbProp / BrtBookView records
   // cannot hold.
   std::vector<std::uint8_t> scratch;
@@ -323,7 +323,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   const MetadataPlan metadata = BuildMetadataPlan(workbook);
   WriteDiagnostics diagnostics;
   std::uint32_t downgraded_formula_count = 0;
-  diagnostics.deferred_feature_count = ReportDeferredSheetFeatures(workbook);
+  const XmlCustomViewPlan custom_views = plan_xml_custom_views(workbook);
+  diagnostics.deferred_feature_count = ReportDeferredSheetFeatures(workbook, custom_views);
   if (const std::string_view reason = rich_value_fallback_reason(workbook); !reason.empty()) {
     // The rich values go out verbatim, but no cell refers to them any more.
     StructuredLog("xlsb.writer.rich_values_kept_verbatim").field("reason", reason).warn();
@@ -426,7 +427,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
         workbook.sheet(i), sst, sheet_names, sheet_ranges, sheet_name_table, sheet_hyperlink_rids[i],
         &downgraded_formula_count, metadata.ifmd, name_shapes(workbook, i), table_rel_ids, views, sheet_drawing_rids[i],
         sheet_owns_drawing[i], metadata.rich.empty() ? nullptr : &metadata.rich.vm_by_sheet[i], book_directory,
-        absent_phonetic, sheet_style_plan, comment_rids[i].vml, &recalc_marks[i]);
+        absent_phonetic, sheet_style_plan, comment_rids[i].vml, &recalc_marks[i], &custom_views.sheet_blocks[i]);
     if (!sheet_body_or) {
       return std::move(sheet_body_or.error());
     }
@@ -505,7 +506,7 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   {
     ASSIGN_OR_RETURN(auto wb_bytes, BuildWorkbookBin(workbook, ordered_names, sheet_ranges, sheet_names, link_rel_ids));
     ReportDeferred(&diagnostics.deferred_feature_count, "custom_workbook_views",
-                   splice_book_user_views(wb_bytes, workbook), 0U);
+                   splice_book_user_views(wb_bytes, workbook, custom_views.book_records), 0U);
     splice_book_pivot_cache_ids(wb_bytes, book_pivot_cache_ids(workbook.xlsb_pivot_cache_ids(), plan),
                                 workbook_rel_ids);
     splice_book_slicer_cache_ids(wb_bytes, workbook.xlsb_book_frt(), workbook_rel_ids);

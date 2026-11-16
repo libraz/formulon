@@ -668,6 +668,10 @@ std::string BuildWorkbookXml(const Workbook& wb, const EmissionPlan& plan) {
       out.append("/>\n");
     }
   }
+  flush_raw_before("customWorkbookViews");
+  if (!plan.custom_views.book_xml.empty()) {
+    emit_line(plan.custom_views.book_xml);
+  }
   flush_raw_before("pivotCaches");
   // <pivotCaches> follows <calcPr> in the ECMA-376 schema element order.
   if (!plan.pivot_caches.empty()) {

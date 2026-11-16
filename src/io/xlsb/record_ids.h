@@ -143,7 +143,11 @@ inline constexpr std::uint16_t kBrtEndHeaderFooter = 480;
 // A sheet's custom-view block, one view per inner record pair, each with its
 // own pane, selection, print and filter records.
 inline constexpr std::uint16_t kBrtBeginUserShViews = 422;
+inline constexpr std::uint16_t kBrtBeginUserShView = 423;
+inline constexpr std::uint16_t kBrtEndUserShView = 424;
 inline constexpr std::uint16_t kBrtEndUserShViews = 425;
+/// A workbook's custom view; its GUID names the sheets' BrtBeginUserShView.
+inline constexpr std::uint16_t kBrtUserBookView = 397;
 
 }  // namespace xlsb
 }  // namespace io

@@ -380,6 +380,37 @@ void decode_print_records(const std::vector<std::uint8_t>& after_hyperlinks, She
   }
 }
 
+std::optional<std::string> decode_print_options(ByteSpan payload) {
+  if (payload.size != 2U) {
+    return std::nullopt;
+  }
+  const std::uint32_t flags =
+      static_cast<std::uint32_t>(payload.data[0]) | (static_cast<std::uint32_t>(payload.data[1]) << 8U);
+  if ((flags & ~(kGridLinesSet | kHorizontalCentered | kVerticalCentered | kHeadings | kGridLines)) != 0U ||
+      (flags & kGridLinesSet) == 0U) {
+    return std::nullopt;
+  }
+  std::string xml;
+  for (const auto& [name, mask] : {std::pair<const char*, std::uint32_t>{"horizontalCentered", kHorizontalCentered},
+                                   {"verticalCentered", kVerticalCentered},
+                                   {"headings", kHeadings},
+                                   {"gridLines", kGridLines}}) {
+    if ((flags & mask) != 0U) {
+      xml.append(" ").append(name).append("=\"1\"");
+    }
+  }
+  return xml.empty() ? std::string() : "<printOptions" + xml + "/>";
+}
+
+void emit_view_print_records(std::vector<std::uint8_t>& dst, const SheetPrintSettings& print) {
+  for (const Family family : {Family::kRowBreaks, Family::kColBreaks, Family::kMargins, Family::kOptions,
+                              Family::kPageSetup, Family::kHeaderFooter}) {
+    if (ModelHolds(family, print) || family == Family::kOptions) {
+      EmitFamily(dst, family, print);
+    }
+  }
+}
+
 bool has_deferred_print_settings(const SheetPrintSettings& print) {
   // The xlsb save writes no printer-settings part, so a sheet linking one loses it.
   return !sheet_pr_writes_all(print.sheet_pr_xml) || !print.printer_settings_rid.empty();

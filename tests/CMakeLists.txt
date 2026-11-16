@@ -242,6 +242,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/io/xlsb/table_fidelity_test.cpp
   unit/io/xlsb/pivot_fidelity_test.cpp
   unit/io/xlsb/user_book_view_test.cpp
+  unit/io/xlsb/custom_view_records_test.cpp
   unit/io/xlsb/pivot_cache_definition_records_test.cpp
   unit/io/xlsb/pivot_cache_group_records_test.cpp
   unit/io/xlsb/pivot_cache_records_test.cpp

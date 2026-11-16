@@ -602,6 +602,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   grouping on refresh. It now shows Excel's ranges in Excel's order, the
   items below the start and above the end first, and keeps them through a
   refresh and an `.xlsx` or `.xlsb` save.
+- Custom views are kept when a workbook read from `.xlsx` is saved to
+  `.xlsb`, or one read from `.xlsb` is saved to `.xlsx`, each written as
+  Excel writes it together with every sheet's view of it; they were left out
+  of such a save. A view the other format cannot hold here, such as one with
+  a filter, is left out with its sheet views, and an `.xlsb` save counts it
+  in `deferredFeatureCount`.
 - An `.xlsb` holding an AutoFilter icon filter with no icon, which Excel stores with no icon set, failed to open; it now reads as that filter, and both formats save a filter with no icon as Excel does, with no set in `.xlsb` and the default `3Arrows` in `.xlsx`.
 - A row or column insert or delete moves form controls and OLE objects as
   Excel does, in `.xlsx` and `.xlsb`: the worksheet's control and object

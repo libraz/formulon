@@ -217,7 +217,7 @@ bool decode_selection(const XlsbRecord& rec, SheetView& view) {
   return true;
 }
 
-void emit_pane_and_selections(std::vector<std::uint8_t>& dst, const SheetView& view) {
+void emit_view_pane(std::vector<std::uint8_t>& dst, const SheetView& view) {
   if (view.divides_rows() || view.divides_cols()) {
     std::vector<std::uint8_t> pane;
     const bool frozen = view.is_frozen();
@@ -236,6 +236,21 @@ void emit_pane_and_selections(std::vector<std::uint8_t>& dst, const SheetView& v
     emit_u8(pane, flags);
     emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtPane), pane);
   }
+}
+
+void emit_listed_selections(std::vector<std::uint8_t>& dst, const SheetView& view) {
+  for (const ResolvedSelection& selection : resolve_view_selections(view)) {
+    const bool listed = std::any_of(view.selections.begin(), view.selections.end(), [&](const SheetSelection& s) {
+      return SheetView::pane_key(s.pane) == selection.pane;
+    });
+    if (listed) {
+      emit_selection(dst, selection);
+    }
+  }
+}
+
+void emit_pane_and_selections(std::vector<std::uint8_t>& dst, const SheetView& view) {
+  emit_view_pane(dst, view);
   for (const ResolvedSelection& selection : resolve_view_selections(view)) {
     emit_selection(dst, selection);
   }

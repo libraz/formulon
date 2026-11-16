@@ -336,7 +336,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     const std::vector<std::string>& table_part_rel_ids, std::uint32_t workbook_views, std::string_view drawing_rel_id,
     bool owns_drawing, const RichErrorVmMap* rich_error_vm, std::string_view book_directory,
     const std::optional<PhoneticProperties>& absent_phonetic, const CellStyleSavePlan* style_plan,
-    std::string_view legacy_drawing_rel_id, const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks) {
+    std::string_view legacy_drawing_rel_id, const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks,
+    const std::vector<std::uint8_t>* custom_views) {
   std::vector<std::uint8_t> body;
   // Whether the save marks the formula at (`row`, `col`) as recalculated on open.
   const auto marked = [recalc_marks](std::uint32_t row, std::uint32_t col) {
@@ -634,6 +635,9 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   // Print options and margins come from the model ahead of the FRT splices below.
   splice_print_records(tail.after_hyperlinks, sheet.print_settings());
   splice_auto_filter(tail.before_merges, sheet);
+  if (custom_views != nullptr) {
+    tail.before_merges.insert(tail.before_merges.end(), custom_views->begin(), custom_views->end());
+  }
   std::unordered_set<std::string> x14_linked;
   for (std::vector<std::uint8_t>* slot :
        {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {

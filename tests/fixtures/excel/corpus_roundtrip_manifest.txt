@@ -80,24 +80,6 @@ xlsb_parity/views/bad_window_id_src.xlsx model_xlsb sheet_view_count known_gap  
 xlsb_parity/views/window_id_past_src.xlsx model_xlsb sheet_view_count known_gap  # extra view of a missing window left out of xlsb
 
 # Custom views are not carried between formats.
-retained_children_edit/children_0_base.xlsb model_xlsx custom_view_count known_gap  # custom views across formats
-retained_children_edit/children_0_base.xlsx model_xlsb custom_view_count known_gap  # custom views across formats
-retained_children_edit/children_1_insert_row4.xlsb model_xlsx custom_view_count known_gap  # custom views across formats
-retained_children_edit/children_1_insert_row4.xlsx model_xlsb custom_view_count known_gap  # custom views across formats
-retained_children_edit/children_2_delete_row5.xlsb model_xlsx custom_view_count known_gap  # custom views across formats
-retained_children_edit/children_2_delete_row5.xlsx model_xlsb custom_view_count known_gap  # custom views across formats
-retained_children_edit/children_3_delete_rows3_6.xlsb model_xlsx custom_view_count known_gap  # custom views across formats
-retained_children_edit/children_3_delete_rows3_6.xlsx model_xlsb custom_view_count known_gap  # custom views across formats
-retained_children_edit/children_4_delete_row9.xlsb model_xlsx custom_view_count known_gap  # custom views across formats
-retained_children_edit/children_4_delete_row9.xlsx model_xlsb custom_view_count known_gap  # custom views across formats
-retained_children_edit/children_5_delete_rows2_10.xlsb model_xlsx custom_view_count known_gap  # custom views across formats
-retained_children_edit/children_5_delete_rows2_10.xlsx model_xlsb custom_view_count known_gap  # custom views across formats
-retained_children_edit/children_6_insert_colC.xlsb model_xlsx custom_view_count known_gap  # custom views across formats
-retained_children_edit/children_6_insert_colC.xlsx model_xlsb custom_view_count known_gap  # custom views across formats
-retained_children_edit/children_7_delete_colB.xlsb model_xlsx custom_view_count known_gap  # custom views across formats
-retained_children_edit/children_7_delete_colB.xlsx model_xlsb custom_view_count known_gap  # custom views across formats
-retained_children_edit/children_8_delete_colsB_D.xlsb model_xlsx custom_view_count known_gap  # custom views across formats
-retained_children_edit/children_8_delete_colsB_D.xlsx model_xlsb custom_view_count known_gap  # custom views across formats
 
 # PivotTables loaded from .xlsb do not yet survive a save.
 chart_pivot.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses chartFormat and other unmeasured root attributes

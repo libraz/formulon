@@ -61,6 +61,8 @@ class SharedStrings;
 /// without its own is written with (`FontSavePlan::absent_sheet_phonetic`).
 /// `style_plan` renumbers the written cell, row and column xfs; null writes
 /// model indices. `recalc_marks` is this sheet's `EmissionPlan::recalc_marks` (null for none).
+/// `custom_sheet_views_xml` is a `<customSheetViews>` decoded from the
+/// sheet's `.xlsb` records, written where the element goes (empty for none).
 std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
                               const std::vector<std::string>& table_rids,
                               const std::vector<std::string>& hyperlink_rids, std::string_view printer_settings_rid,
@@ -72,7 +74,8 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
                               const RichErrorVmMap* rich_error_vm = nullptr, std::string_view book_directory = {},
                               const std::optional<PhoneticProperties>& absent_phonetic = std::nullopt,
                               const CellStyleSavePlan* style_plan = nullptr,
-                              const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks = nullptr);
+                              const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks = nullptr,
+                              std::string_view custom_sheet_views_xml = {});
 
 /// Builds the `_rels` document for a single sheet, covering tables,
 /// pivot tables, hyperlinks, printer settings, comments / VML, and

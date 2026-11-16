@@ -67,6 +67,13 @@ bool decode_selection(const XlsbRecord& rec, SheetView& view);
 /// the view has, as `resolve_view_selections` orders and fills them.
 void emit_pane_and_selections(std::vector<std::uint8_t>& dst, const SheetView& view);
 
+/// Emits the BrtPane of a frozen or split view; nothing for one without panes.
+void emit_view_pane(std::vector<std::uint8_t>& dst, const SheetView& view);
+
+/// Emits a BrtSel only for each pane `view.selections` names, as
+/// `resolve_view_selections` orders and fills them.
+void emit_listed_selections(std::vector<std::uint8_t>& dst, const SheetView& view);
+
 }  // namespace xlsb
 }  // namespace io
 }  // namespace formulon

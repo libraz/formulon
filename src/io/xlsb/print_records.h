@@ -9,8 +9,11 @@
 #define FORMULON_IO_XLSB_PRINT_RECORDS_H_
 
 #include <cstdint>
+#include <optional>
+#include <string>
 #include <vector>
 
+#include "io/xlsb/record.h"
 #include "sheet_layout.h"
 
 namespace formulon {
@@ -26,6 +29,17 @@ bool model_owns_print_records(const SheetPrintSettings& print);
 /// structured views, as the `.xlsx` twin states them. A record the reader
 /// cannot state exactly stays retained only.
 void decode_print_records(const std::vector<std::uint8_t>& after_hyperlinks, SheetPrintSettings& print);
+
+/// The `<printOptions>` of a BrtPrintOptions payload, empty when every
+/// option is at its default; nullopt for a payload whose bits Excel was not
+/// seen to write in a custom view (gridLinesSet cleared among them).
+std::optional<std::string> decode_print_options(ByteSpan payload);
+
+/// Emits the print records of a custom view in the order Excel writes them
+/// inside BrtBeginUserShView: row breaks, column breaks, margins, print
+/// options (always, with the defaults when `print` states none), page setup,
+/// header and footer. A family `print` does not hold is left out.
+void emit_view_print_records(std::vector<std::uint8_t>& dst, const SheetPrintSettings& print);
 
 /// True when `print` holds a setting the XLSB writer does not write from the
 /// model yet, which the save reports as a deferred `print_settings` feature.

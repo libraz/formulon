@@ -1,9 +1,9 @@
 // Custom workbook views in XLSB: an `.xlsb` source's BrtUserBookView records
 // go back verbatim between BrtCalcProp and BrtFileRecover / BrtEndBook, and
 // only together with the sheet custom-view blocks that name them. An `.xlsx`
-// source's custom views have no record encoding here, so both sides are left
-// out and counted. Fixtures: Excel saves under
-// tests/fixtures/excel/retained_children_edit/.
+// source's custom views are encoded as Excel writes them. Fixtures: Excel
+// saves under tests/fixtures/excel/retained_children_edit/ and
+// tests/fixtures/custom_views/.
 
 #include <algorithm>
 #include <array>
@@ -16,10 +16,12 @@
 
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
+#include "io/ooxml_writer.h"
 #include "io/xlsb/frt_records.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_ids.h"
+#include "io/xlsb/record_writer.h"
 #include "io/xlsb/user_book_views.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
@@ -89,6 +91,28 @@ std::size_t IndexOf(const std::vector<std::uint16_t>& types, std::uint16_t type)
   return static_cast<std::size_t>(std::find(types.begin(), types.end(), type) - types.begin());
 }
 
+/// The framed records from the first `begin` through the next `end`, and the
+/// records outside that span, of `body`.
+struct SplitBlock {
+  std::vector<std::uint8_t> inside;
+  std::vector<std::uint8_t> outside;
+};
+
+SplitBlock SplitAtBlock(const std::vector<std::uint8_t>& body, std::uint16_t begin, std::uint16_t end) {
+  SplitBlock out;
+  bool inside = false;
+  bool done = false;
+  for (const FramedRecord& rec : split_records(body)) {
+    const bool in_block = !done && (inside || rec.type == begin);
+    std::vector<std::uint8_t>& dst = in_block ? out.inside : out.outside;
+    dst.insert(dst.end(), body.begin() + static_cast<std::ptrdiff_t>(rec.begin),
+               body.begin() + static_cast<std::ptrdiff_t>(rec.end));
+    inside = in_block && rec.type != end;
+    done = done || (in_block && rec.type == end);
+  }
+  return out;
+}
+
 TEST(XlsbUserBookView, XlsbSourceKeepsTheViewsAtExcelsPosition) {
   for (const char* name : kChildren) {
     SCOPED_TRACE(name);
@@ -117,22 +141,90 @@ TEST(XlsbUserBookView, XlsbSourceKeepsTheViewsAtExcelsPosition) {
   }
 }
 
-TEST(XlsbUserBookView, XlsxSourceLeavesBothSidesOutAndCountsThem) {
+TEST(XlsbUserBookView, XlsxSourceWritesBothSidesAsExcelDoes) {
   for (const char* name : kChildren) {
     SCOPED_TRACE(name);
+    const std::vector<std::uint8_t> twin = Fixture(std::string(name) + ".xlsb");
     auto read = read_ooxml(SpanOf(Fixture(std::string(name) + ".xlsx")));
     ASSERT_TRUE(static_cast<bool>(read)) << read.error().message;
     const Workbook& wb = read.value().workbook;
-    ASSERT_EQ(unwritten_xml_book_views(wb), 1U);
-    ASSERT_EQ(unwritten_xml_sheet_views(wb.sheet(0)), 1U);
+    ASSERT_EQ(xml_book_view_count(wb), 1U);
+    ASSERT_EQ(xml_sheet_view_count(wb.sheet(0)), 1U);
     auto written = write_xlsb_with_result(wb);
     ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
-    EXPECT_TRUE(RecordsOf(Entry(written.value().bytes, kWorkbookBin), kBrtUserBookView).empty());
+    const std::vector<std::uint8_t> book = Entry(written.value().bytes, kWorkbookBin);
+    EXPECT_EQ(RecordsOf(book, kBrtUserBookView), RecordsOf(Entry(twin, kWorkbookBin), kBrtUserBookView));
+    const std::vector<std::uint16_t> types = TypesOf(book);
+    EXPECT_LT(IndexOf(types, kBrtCalcProp), IndexOf(types, kBrtUserBookView));
+    EXPECT_LT(IndexOf(types, kBrtUserBookView), IndexOf(types, kBrtEndBook));
     const std::vector<std::uint8_t> sheet = Entry(written.value().bytes, kSheetBin);
-    EXPECT_TRUE(RecordsOf(sheet, kBrtBeginUserShViews).empty());
-    EXPECT_TRUE(RecordsOf(sheet, kBrtBeginUserShView).empty());
-    EXPECT_GE(written.value().diagnostics.deferred_feature_count, 2U);
+    const std::vector<std::uint8_t> twin_sheet = Entry(twin, kSheetBin);
+    EXPECT_EQ(SplitAtBlock(sheet, kBrtBeginUserShViews, kBrtEndUserShViews).inside,
+              SplitAtBlock(twin_sheet, kBrtBeginUserShViews, kBrtEndUserShViews).inside);
+    // The block closes the records ahead of the merged cells, where Excel puts it.
+    const std::vector<std::uint16_t> sheet_types = TypesOf(sheet);
+    const std::vector<std::uint16_t> twin_types = TypesOf(twin_sheet);
+    const std::size_t end = IndexOf(sheet_types, kBrtEndUserShViews);
+    const std::size_t twin_end = IndexOf(twin_types, kBrtEndUserShViews);
+    ASSERT_LT(end + 1U, sheet_types.size());
+    ASSERT_LT(twin_end + 1U, twin_types.size());
+    EXPECT_EQ(sheet_types[end + 1U], twin_types[twin_end + 1U]);
+    EXPECT_EQ(written.value().diagnostics.deferred_feature_count, 0U);
   }
+}
+
+/// The `<tag>...</tag>` element of `xml`, empty when it has none.
+std::string ElementOf(const std::string& xml, const std::string& tag) {
+  const std::size_t begin = xml.find("<" + tag + ">");
+  const std::size_t end = xml.find("</" + tag + ">");
+  if (begin == std::string::npos || end == std::string::npos) {
+    return std::string();
+  }
+  return xml.substr(begin, end + tag.size() + 3U - begin);
+}
+
+std::string Text(const std::vector<std::uint8_t>& bytes) {
+  return std::string(bytes.begin(), bytes.end());
+}
+
+TEST(XlsbUserBookView, XlsbSourceWritesBothSidesToXlsxAsExcelDoes) {
+  for (const char* name : kChildren) {
+    SCOPED_TRACE(name);
+    const std::vector<std::uint8_t> twin = Fixture(std::string(name) + ".xlsx");
+    auto read = read_xlsb(SpanOf(Fixture(std::string(name) + ".xlsb")));
+    ASSERT_TRUE(static_cast<bool>(read)) << read.error().message;
+    auto written = write_ooxml_with_result(read.value().workbook);
+    ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
+    const std::string book = ElementOf(Text(Entry(written.value().bytes, "xl/workbook.xml")), "customWorkbookViews");
+    ASSERT_FALSE(book.empty());
+    EXPECT_EQ(book, ElementOf(Text(Entry(twin, "xl/workbook.xml")), "customWorkbookViews"));
+    EXPECT_EQ(ElementOf(Text(Entry(written.value().bytes, "xl/worksheets/sheet1.xml")), "customSheetViews"),
+              ElementOf(Text(Entry(twin, "xl/worksheets/sheet1.xml")), "customSheetViews"));
+  }
+}
+
+TEST(XlsbUserBookView, XlsbViewWithoutAnXlsxFormLeavesBothSidesOut) {
+  auto read = read_xlsb(SpanOf(Fixture("children_0_base.xlsb")));
+  ASSERT_TRUE(static_cast<bool>(read)) << read.error().message;
+  Workbook& wb = read.value().workbook;
+  // A header inside the view has no `.xlsx` form here: the view goes on both sides.
+  XlsbSheetTail tail = wb.sheet(0).xlsb_tail();
+  std::vector<std::uint8_t> header;
+  emit_record(header, kBrtBeginHeaderFooter,
+              std::vector<std::uint8_t>{0x0c, 0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+                                        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff});
+  emit_record(header, kBrtEndHeaderFooter, ByteSpan{});
+  std::vector<std::uint8_t>& slot = tail.before_merges;
+  const std::vector<FramedRecord> recs = split_records(slot);
+  const auto end_view =
+      std::find_if(recs.begin(), recs.end(), [](const FramedRecord& rec) { return rec.type == kBrtEndUserShView; });
+  ASSERT_NE(end_view, recs.end());
+  slot.insert(slot.begin() + static_cast<std::ptrdiff_t>(end_view->begin), header.begin(), header.end());
+  wb.sheet(0).set_xlsb_tail(tail);
+  auto written = write_ooxml_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(written)) << written.error().message;
+  EXPECT_EQ(Text(Entry(written.value().bytes, "xl/workbook.xml")).find("customWorkbookView"), std::string::npos);
+  EXPECT_EQ(Text(Entry(written.value().bytes, "xl/worksheets/sheet1.xml")).find("customSheetView"), std::string::npos);
 }
 
 using Guid = std::array<std::uint8_t, 16>;
@@ -217,29 +309,7 @@ TEST(XlsbUserBookView, ViewWithoutASheetSideIsLeftOut) {
   EXPECT_TRUE(RecordsOf(Entry(written.value().bytes, kWorkbookBin), kBrtUserBookView).empty());
   EXPECT_TRUE(RecordsOf(Entry(written.value().bytes, kSheetBin), kBrtBeginUserShView).empty());
   std::vector<std::uint8_t> book = Entry(written.value().bytes, kWorkbookBin);
-  EXPECT_EQ(splice_book_user_views(book, wb), 1U);
-}
-
-/// The framed records from the first `begin` through the next `end`, and the
-/// records outside that span, of `body`.
-struct SplitBlock {
-  std::vector<std::uint8_t> inside;
-  std::vector<std::uint8_t> outside;
-};
-
-SplitBlock SplitAtBlock(const std::vector<std::uint8_t>& body, std::uint16_t begin, std::uint16_t end) {
-  SplitBlock out;
-  bool inside = false;
-  bool done = false;
-  for (const FramedRecord& rec : split_records(body)) {
-    const bool in_block = !done && (inside || rec.type == begin);
-    std::vector<std::uint8_t>& dst = in_block ? out.inside : out.outside;
-    dst.insert(dst.end(), body.begin() + static_cast<std::ptrdiff_t>(rec.begin),
-               body.begin() + static_cast<std::ptrdiff_t>(rec.end));
-    inside = in_block && rec.type != end;
-    done = done || (in_block && rec.type == end);
-  }
-  return out;
+  EXPECT_EQ(splice_book_user_views(book, wb, {}), 1U);
 }
 
 std::vector<std::uint8_t> CustomViewsFixture(const std::string& name) {

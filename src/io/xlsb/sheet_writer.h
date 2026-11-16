@@ -90,7 +90,9 @@ std::vector<std::string> hyperlink_relationship_ids(const Sheet& sheet);
 /// `style_plan` renumbers every row, column and cell xf (`saved_cell_xf`); it is
 /// null when styles.bin passes through, which keeps every index as loaded.
 /// A non-empty `legacy_drawing_rel_id` replaces any retained BrtLegacyDrawing
-/// with one naming the sheet's generated notes drawing.
+/// with one naming the sheet's generated notes drawing. A non-empty
+/// `custom_views` is the sheet's custom-view block encoded from its `.xlsx`
+/// form, written after the retained records ahead of the merged cells.
 Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     const Sheet& sheet, SstBuilder& sst, const std::vector<std::string>& sheet_names,
     const SheetRangeTable& sheet_ranges, const NameTable& name_table, const std::vector<std::string>& hyperlink_ids,
@@ -100,7 +102,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     const RichErrorVmMap* rich_error_vm = nullptr, std::string_view book_directory = {},
     const std::optional<PhoneticProperties>& absent_phonetic = std::nullopt,
     const CellStyleSavePlan* style_plan = nullptr, std::string_view legacy_drawing_rel_id = {},
-    const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks = nullptr);
+    const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks = nullptr,
+    const std::vector<std::uint8_t>* custom_views = nullptr);
 
 }  // namespace xlsb
 }  // namespace io

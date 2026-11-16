@@ -35,6 +35,7 @@
 #include "io/ooxml_writer.h"
 #include "io/sparkline_groups.h"
 #include "io/xlsb/reader.h"
+#include "io/xlsb/record_ids.h"
 #include "io/xlsb/user_book_views.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
@@ -221,9 +222,8 @@ std::size_t CountElements(std::string_view xml, std::string_view tag) {
   return count;
 }
 
-// Number of BrtUserBookView (type 397) records in a framed record block.
-std::size_t CountUserBookViewRecords(const std::vector<std::uint8_t>& bytes) {
-  constexpr std::uint32_t kBrtUserBookView = 397;
+// Number of records of `wanted` in a framed record block.
+std::size_t CountRecords(const std::vector<std::uint8_t>& bytes, std::uint32_t wanted) {
   std::size_t count = 0;
   std::size_t at = 0;
   while (at < bytes.size()) {
@@ -239,7 +239,7 @@ std::size_t CountUserBookViewRecords(const std::vector<std::uint8_t>& bytes) {
         break;
       }
     }
-    if (type == kBrtUserBookView) {
+    if (type == wanted) {
       ++count;
     }
     at += size;
@@ -296,8 +296,17 @@ Model Snapshot(const Workbook& wb) {
   m.emplace_back("defined_names", Join(defined));
 
   const std::size_t custom_views =
-      io::xlsb::unwritten_xml_book_views(wb) + CountUserBookViewRecords(wb.xlsb_user_book_views());
+      io::xlsb::xml_book_view_count(wb) + CountRecords(wb.xlsb_user_book_views(), io::xlsb::kBrtUserBookView);
   m.emplace_back("custom_view_count", std::to_string(custom_views));
+  m.emplace_back("custom_sheet_view_count", PerSheet(wb, [](const Sheet& s, std::size_t) {
+                   std::size_t views = io::xlsb::xml_sheet_view_count(s);
+                   const XlsbSheetTail& tail = s.xlsb_tail();
+                   for (const std::vector<std::uint8_t>* slot :
+                        {&tail.before_merges, &tail.after_merges_before_hyperlinks, &tail.after_hyperlinks}) {
+                     views += CountRecords(*slot, io::xlsb::kBrtBeginUserShView);
+                   }
+                   return std::to_string(views);
+                 }));
   m.emplace_back("workbook_protection", WorkbookProtectionState(wb.workbook_protection_xml()));
 
   m.emplace_back("sheet_view_count", PerSheet(wb, [](const Sheet& s, std::size_t) {

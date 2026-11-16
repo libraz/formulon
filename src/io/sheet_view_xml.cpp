@@ -1,5 +1,6 @@
 #include "io/sheet_view_xml.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <string>
@@ -95,7 +96,7 @@ void read_sheet_view_element(const pugi::xml_node& sheet_view, SheetView& view) 
   }
 }
 
-std::string build_sheet_view_element_xml(const SheetView& view, std::uint32_t workbook_view_id) {
+std::string build_pane_and_selections_xml(const SheetView& view, bool listed_only) {
   std::string children;
   if (view.divides_rows() || view.divides_cols()) {
     children.append("<pane");
@@ -129,6 +130,11 @@ std::string build_sheet_view_element_xml(const SheetView& view, std::uint32_t wo
   }
   // Excel omits an A1 active cell, an A1 sqref, and a top-left selection that is both.
   for (const ResolvedSelection& selection : resolve_view_selections(view)) {
+    if (listed_only && std::none_of(view.selections.begin(), view.selections.end(), [&](const SheetSelection& s) {
+          return SheetView::pane_key(s.pane) == selection.pane;
+        })) {
+      continue;
+    }
     const bool a1_active = selection.active_row == 0U && selection.active_col == 0U;
     const bool a1_ranges = selection.ranges.size() == 1U && selection.ranges.front() == MergeRange{};
     if (selection.pane == "topLeft" && a1_active && a1_ranges) {
@@ -149,6 +155,11 @@ std::string build_sheet_view_element_xml(const SheetView& view, std::uint32_t wo
     }
     children.append("/>");
   }
+  return children;
+}
+
+std::string build_sheet_view_element_xml(const SheetView& view, std::uint32_t workbook_view_id) {
+  std::string children = build_pane_and_selections_xml(view, false);
   children.append(view.tail_xml);
   std::string out;
   out.reserve(192);
