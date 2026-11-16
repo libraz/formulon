@@ -174,8 +174,8 @@ Expected<void, Error> check_axis_impl(const AxisHierarchyNode& node, std::vector
   return Expected<void, Error>::Ok();
 }
 
-// The `<item>` a node renders: by group item number, else by the cache label
-// `PivotItem::name` resolves to.
+// The `<item>` a node renders by its stored name: by group item number, else
+// by the cache label `PivotItem::name` spells. Nameless items are not matched.
 const PivotItem* item_for_node(const PivotField& field, const AxisHierarchyNode& node) {
   if (!node.identity.has_value()) {
     return nullptr;
@@ -192,7 +192,7 @@ const PivotItem* item_for_node(const PivotField& field, const AxisHierarchyNode&
   }
   const std::string label = display_string(identity);
   for (const PivotItem& item : field.items) {
-    if (item.name == label) {
+    if (!item.name.empty() && item.name == label) {
       return &item;
     }
   }
@@ -270,6 +270,10 @@ class AxisWalk {
     const PivotField& field = *shape_.fields[depth];
     if (const PivotItem* item = item_for_node(field, node); item != nullptr) {
       return !item->show_detail;
+    }
+    // An item listed by cache index alone: the evaluator resolved it by record value.
+    if (node.show_detail.has_value()) {
+      return !*node.show_detail;
     }
     for (const PivotMarkerItem& marker : field.marker_items) {
       if (marker.type == "default") {

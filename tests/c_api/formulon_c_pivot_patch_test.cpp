@@ -730,4 +730,110 @@ TEST(FormulonCApiPivotPatch, DateGroupOfAPivotOrFieldPastTheEndIsOutOfRange) {
   EXPECT_EQ(DatePeriods(wb.handle), 0U);
 }
 
+// Region then Product on the rows of a compact report over Sheet1!A1:C4 (East/A 1, North/A 2, North/B 3), built and
+// refreshed through the API, so its items carry cache indexes and no stored names.
+void BuildRegionProductPivot(fm_workbook_t* wb, std::size_t* out_sheet) {
+  const char* const header[] = {"Region", "Product", "Amt"};
+  const char* const rows[][2] = {{"East", "A"}, {"North", "A"}, {"North", "B"}};
+  for (std::uint32_t c = 0; c < 3U; ++c) {
+    ASSERT_EQ(fm_sheet_set_text(wb, 0U, 0U, c, header[c]), 0);
+  }
+  for (std::uint32_t r = 0; r < 3U; ++r) {
+    ASSERT_EQ(fm_sheet_set_text(wb, 0U, r + 1U, 0U, rows[r][0]), 0);
+    ASSERT_EQ(fm_sheet_set_text(wb, 0U, r + 1U, 1U, rows[r][1]), 0);
+    ASSERT_EQ(fm_sheet_set_number(wb, 0U, r + 1U, 2U, static_cast<double>(r + 1U)), 0);
+  }
+  std::uint32_t cache_id = 0;
+  ASSERT_EQ(fm_workbook_add_pivot_cache(wb, 0U, &cache_id), 0) << fm_get_last_error_message();
+  ASSERT_EQ(SetPivotCacheWorksheetSource(wb, cache_id, 1, "A1:C4", "Sheet1", nullptr), 0);
+  ASSERT_EQ(fm_workbook_refresh_pivot_cache(wb, cache_id), 0) << fm_get_last_error_message();
+  std::size_t sheet = 0;
+  ASSERT_EQ(fm_workbook_add_sheet(wb, "PV", 1U, &sheet), 0) << fm_get_last_error_message();
+  fm_pivot_spec_t spec{sizeof(fm_pivot_spec_t), "PT", cache_id, 2U, 0U};
+  std::size_t pivot = 0;
+  ASSERT_EQ(fm_sheet_add_pivot(wb, sheet, &spec, &pivot), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb, sheet, pivot, 0U, FM_PIVOT_AXIS_ROW), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_set_pivot_field_axis(wb, sheet, pivot, 1U, FM_PIVOT_AXIS_ROW), 0) << fm_get_last_error_message();
+  fm_pivot_data_field_t data{};
+  data.struct_size = sizeof(data);
+  data.field_index = 2U;
+  data.aggregation = FM_PIVOT_AGGREGATION_SUM;
+  std::size_t index = 0;
+  ASSERT_EQ(fm_sheet_add_pivot_data_field(wb, sheet, pivot, &data, &index), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_project_pivot(wb, sheet, pivot), 0) << fm_get_last_error_message();
+  *out_sheet = sheet;
+}
+
+// The report's rows below its header, as "label|value", and its last row.
+struct ReportRows {
+  std::vector<std::string> rows;
+  std::uint32_t last_row = 0;
+};
+
+ReportRows ReadReport(const fm_workbook_t* wb, std::size_t sheet) {
+  ReportRows out;
+  PivotCellsGuard report;
+  EXPECT_EQ(fm_sheet_get_pivot_layout(wb, sheet, kPivot, &report.handle), 0) << fm_get_last_error_message();
+  if (report.handle == nullptr) {
+    return out;
+  }
+  int32_t present = 0;
+  fm_cell_rect_t rect{};
+  EXPECT_EQ(fm_pivot_report_get_bounds(report.handle, &present, &rect), 0);
+  out.last_row = rect.last_row;
+  for (std::uint32_t row = rect.first_row + 1U; row <= rect.last_row; ++row) {
+    std::string line;
+    for (std::uint32_t col = 0; col < 2U; ++col) {
+      const char* text = nullptr;
+      std::int32_t status = 0;
+      EXPECT_EQ(fm_sheet_get_display_text(wb, sheet, row, col, &text, &status), 0);
+      line += (col == 0U ? "" : "|") + std::string(text != nullptr ? text : "");
+    }
+    out.rows.push_back(line);
+  }
+  return out;
+}
+
+ReportRows ReloadedReport(const fm_workbook_t* wb, fm_workbook_format_t format, std::size_t sheet) {
+  BufferGuard saved;
+  EXPECT_EQ(fm_workbook_save(wb, format, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+  WorkbookGuard loaded;
+  EXPECT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &loaded.handle), 0) << fm_get_last_error_message();
+  return loaded.handle != nullptr ? ReadReport(loaded.handle, sheet) : ReportRows{};
+}
+
+// A collapsed item keeps its own row, with its totals, and drops the inner field's rows beneath it; the report
+// shrinks by those rows, and saving to either format keeps the collapse.
+TEST(FormulonCApiPivotPatch, CollapsedItemDropsTheInnerRowsBeneathIt) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::size_t sheet = 0;
+  BuildRegionProductPivot(wb.handle, &sheet);
+  if (HasFatalFailure()) {
+    return;
+  }
+  const ReportRows expanded = ReadReport(wb.handle, sheet);
+  ASSERT_EQ(expanded.rows, (std::vector<std::string>{"East|1", "A|1", "North|5", "A|2", "B|3", "Grand Total|6"}));
+
+  fm_pivot_item_patch_t patch = FM_STRUCT_INIT(fm_pivot_item_patch_t);
+  patch.show_detail_op = FM_PATCH_OP_SET;
+  patch.show_detail = 0;
+  ASSERT_EQ(fm_sheet_update_pivot_field_item(wb.handle, sheet, kPivot, kRegionField, 0, &patch), FM_STATUS_OK)
+      << fm_get_last_error_message();
+  const std::vector<std::string> collapsed = {"East|1", "North|5", "A|2", "B|3", "Grand Total|6"};
+  const ReportRows after = ReadReport(wb.handle, sheet);
+  EXPECT_EQ(after.rows, collapsed);
+  EXPECT_EQ(after.last_row + 1U, expanded.last_row);
+  for (const fm_workbook_format_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
+    SCOPED_TRACE(format == FM_WORKBOOK_FORMAT_XLSX ? "xlsx" : "xlsb");
+    EXPECT_EQ(ReloadedReport(wb.handle, format, sheet).rows, collapsed);
+  }
+
+  // Expanding it again brings the inner row back.
+  patch.show_detail = 1;
+  ASSERT_EQ(fm_sheet_update_pivot_field_item(wb.handle, sheet, kPivot, kRegionField, 0, &patch), FM_STATUS_OK)
+      << fm_get_last_error_message();
+  EXPECT_EQ(ReadReport(wb.handle, sheet).rows, expanded.rows);
+}
+
 }  // namespace

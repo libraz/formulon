@@ -205,6 +205,22 @@ std::vector<std::optional<Aggregation>> subtotal_specs(const PivotTable& table,
   return specs;
 }
 
+// The record value `item` renders: its cache binding, else the shared item its name spells.
+std::optional<Value> item_value_for_detail(const PivotCache& cache, std::size_t field_index, const PivotItem& item) {
+  if (std::optional<Value> bound = pivot_item_record_value(cache, field_index, item)) {
+    return bound;
+  }
+  if (item.has_cache_index || item.name.empty() || field_index >= cache.fields().size()) {
+    return std::nullopt;
+  }
+  for (const Value& shared : cache.fields()[field_index].shared_items) {
+    if (display_string(shared) == item.name) {
+      return shared;
+    }
+  }
+  return std::nullopt;
+}
+
 /// Steps 2-8 on `table`, which is `source` with the plan's hidden Sum data
 /// fields appended.
 Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const PivotTable& source, const PivotCache& cache,
@@ -283,6 +299,32 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
     const auto& stored = caption_cache.emplace(fi, std::move(captions)).first->second;
     return stored.empty() ? nullptr : &stored;
   };
+  // Each item's `show_detail`, keyed the same way, for a field with a
+  // collapsed item or default marker; the layout reads it off the nodes.
+  std::unordered_map<std::uint32_t, std::map<Value, bool, ValueLess>> detail_cache;
+  auto details_for = [&](std::uint32_t fi) -> const std::map<Value, bool, ValueLess>* {
+    if (auto it = detail_cache.find(fi); it != detail_cache.end()) {
+      return it->second.empty() ? nullptr : &it->second;
+    }
+    std::map<Value, bool, ValueLess> details;
+    if (fi < table.fields().size()) {
+      const PivotField& field = table.fields()[fi];
+      const auto collapsed_item = [](const PivotItem& item) { return !item.show_detail; };
+      const auto collapsed_marker = [](const PivotMarkerItem& marker) {
+        return marker.type == "default" && !marker.show_detail;
+      };
+      if (std::any_of(field.items.begin(), field.items.end(), collapsed_item) ||
+          std::any_of(field.marker_items.begin(), field.marker_items.end(), collapsed_marker)) {
+        for (const PivotItem& item : field.items) {
+          if (const std::optional<Value> key = item_value_for_detail(cache, fi, item)) {
+            details.emplace(*key, item.show_detail);
+          }
+        }
+      }
+    }
+    const auto& stored = detail_cache.emplace(fi, std::move(details)).first->second;
+    return stored.empty() ? nullptr : &stored;
+  };
   auto level_for = [&](std::uint32_t fi) -> HierLevel {
     const bool manual = fi < table.fields().size() && table.fields()[fi].sort.manual;
     const bool ascending = fi >= table.fields().size() || table.fields()[fi].sort.ascending;
@@ -292,6 +334,7 @@ Expected<PivotResult, Error> evaluate_table(const PivotTable& table, const Pivot
                     value_sort.has_value() ? std::optional<Aggregation>(value_sort->aggregation) : std::nullopt,
                     manual ? manual_order_for(fi) : nullptr};
     level.captions = captions_for(fi);
+    level.show_detail = details_for(fi);
     if (fi < cache.fields().size() && has_group_items(cache.fields()[fi])) {
       level.group_items = &cache.fields()[fi].field_group->group_items;
     } else {

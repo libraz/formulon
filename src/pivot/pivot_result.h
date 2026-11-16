@@ -32,6 +32,9 @@ struct AxisHierarchyNode {
   /// True when `identity` is a group item number: an internal key that
   /// matches records and items but that a lookup by value must not address.
   bool identity_is_group_item = false;
+  /// The `show_detail` of the field item this node renders, when the
+  /// field's collapse state is in play and lists that item.
+  std::optional<bool> show_detail = std::nullopt;
   /// Number-format code the label was rendered with, for the label cell;
   /// empty when the label is not a formatted number.
   std::string number_format{};

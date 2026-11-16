@@ -88,6 +88,9 @@ struct HierLevel {
   /// Non-null when items of this field carry captions: the caption that
   /// replaces the label of each cache value.
   const std::map<Value, std::string, ValueLess>* captions = nullptr;
+  /// Non-null when an item or the default marker of this field is
+  /// collapsed: each listed item's `show_detail`, by its cache value.
+  const std::map<Value, bool, ValueLess>* show_detail = nullptr;
   /// Number-format code a numeric item's label is rendered with; empty
   /// renders General.
   std::string number_format{};

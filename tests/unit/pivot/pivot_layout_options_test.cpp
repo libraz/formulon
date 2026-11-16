@@ -413,6 +413,26 @@ TEST(PivotLayoutOptions, CollapsedItemInOutlineKeepsOnlyItsHeaderRow) {
   EXPECT_EQ(RenderGrid(table, cache), expected);
 }
 
+// Items bound by cache index alone, as a pivot built or refreshed through the API lists them, collapse too.
+TEST(PivotLayoutOptions, CollapsedItemBoundOnlyByItsCacheIndex) {
+  PivotCache cache = build_region_product_cache();
+  for (const char* region : {"East", "North", "South"}) {
+    cache.mutable_fields()[0].shared_items.push_back(owned_text(cache, region));
+  }
+  PivotTable table = build_region_product_table(PivotLayout::Compact);
+  for (std::uint32_t i = 0; i < 3U; ++i) {
+    PivotItem& item = table.mutable_fields()[0].items[i];
+    item.name.clear();
+    item.has_cache_index = true;
+    item.cache_index = i;
+  }
+  std::vector<std::string> expected = RenderGrid(table, cache);
+  ASSERT_EQ(expected[1].rfind("East|", 0), 0U);
+  expected.erase(expected.begin() + 2);
+  CollapseItem(table, 0);
+  EXPECT_EQ(RenderGrid(table, cache), expected);
+}
+
 TEST(PivotLayoutOptions, CollapsedItemOnTheInnermostFieldIsIgnored) {
   const PivotCache cache = build_region_product_cache();
   PivotTable table = build_region_product_table(PivotLayout::Compact, true);

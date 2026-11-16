@@ -594,6 +594,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A PivotTable item collapsed with `showDetail` set to false still showed the rows of the inner fields beneath it when the report had been built or refreshed through the API; it now keeps only its own row with its totals and the report shrinks by those rows, as Excel does.
 - A PivotTable whose field carries a numeric range grouping on itself, as
   Excel stores one, showed each source value as its own item once the report
   was recalculated, named its items after the source values, and lost the

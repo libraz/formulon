@@ -227,6 +227,11 @@ void finalize_hierarchy(HierNode& tree, const std::vector<HierLevel>& levels, st
     if (depth < levels.size()) {
       const HierLevel& level = levels[depth];
       node.identity_is_group_item = level.group_items != nullptr;
+      if (level.show_detail != nullptr) {
+        if (const auto it = level.show_detail->find(key.value); it != level.show_detail->end()) {
+          node.show_detail = it->second;
+        }
+      }
       const bool captioned = level.captions != nullptr && level.captions->count(key.value) != 0U;
       if (key.value.is_number() && !captioned) {
         node.number_format = level.number_format;
