@@ -1963,6 +1963,10 @@ class ErrorDisplayNamesGeneratorTest(unittest.TestCase):
             self.rows, [("Null", "#NULL!"), ("Div0", "#DIV/0!"), ("GettingData", "#GETTING_DATA"), ("NA", "#N/A")]
         )
 
+    def test_a_forward_declaration_ahead_of_another_enum_is_skipped(self) -> None:
+        forward = "enum class ErrorCode : std::uint16_t;\nenum class Kind : std::uint8_t {\n  A = 0,\n  B = 1,\n};\n"
+        self.assertEqual(self.gen.parse_error_table(forward + _VALUE_H), self.rows)
+
     def test_a_row_naming_another_enumerator_is_an_error(self) -> None:
         with self.assertRaises(self.gen.GenError):
             self.gen.parse_error_table(_VALUE_H.replace("// ErrorCode::Div0", "// ErrorCode::Ref"))

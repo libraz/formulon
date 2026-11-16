@@ -43,7 +43,7 @@ class GenError(ValueError):
 
 
 def _enumerators(text: str) -> List[str]:
-    match = re.search(r"enum\s+class\s+ErrorCode\b[^{]*\{(.*?)\};", text, re.S)
+    match = re.search(r"enum\s+class\s+ErrorCode\b[^{;]*\{(.*?)\};", text, re.S)
     if match is None:
         raise GenError("src/value.h: `enum class ErrorCode` not found")
     body = re.sub(r"//[^\n]*|/\*.*?\*/", "", match.group(1), flags=re.S)
