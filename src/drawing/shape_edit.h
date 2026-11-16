@@ -19,6 +19,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -36,6 +37,13 @@ class Workbook;
 /// A listed shape. `object` carries id, kind (shape, connector or group),
 /// anchor, size, name, description and hidden flag as `list_drawing_objects`
 /// reports them.
+/// One end of a connector glued to a shape (`a:stCxn` / `a:endCxn`).
+struct ShapeConnection {
+  std::uint32_t object_id = 0;   ///< `@id`: the `cNvPr/@id` of the shape glued to.
+  std::uint32_t site_index = 0;  ///< `@idx`: the connection site on that shape, from 0.
+  bool operator==(const ShapeConnection& o) const { return object_id == o.object_id && site_index == o.site_index; }
+};
+
 struct ShapeInfo {
   DrawingObject object;
   std::string prst;           ///< `a:prstGeom/@prst`; empty for custom geometry or a group.
@@ -48,6 +56,9 @@ struct ShapeInfo {
   /// marks a gradient, pattern or picture paint the record cannot state.
   ChartFill paint_fill;
   ChartLine paint_line;
+  /// A connector's glued start and end; unset when that end is free or the object is not a connector.
+  std::optional<ShapeConnection> start_connection;
+  std::optional<ShapeConnection> end_connection;
 };
 
 /// `ShapeSpec::fields` bits: the fields an insert or update applies.

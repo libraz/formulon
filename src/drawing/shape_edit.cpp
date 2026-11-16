@@ -182,6 +182,16 @@ std::string read_text(pugi::xml_node content) {
   return out;
 }
 
+// One glued end; a missing or unreadable `id` or `idx` reads as a free end.
+std::optional<ShapeConnection> read_connection(const pugi::xml_node& node) {
+  const std::optional<std::uint32_t> id = io::parse_xml_u32_attr_strict(node.attribute("id"));
+  const std::optional<std::uint32_t> idx = io::parse_xml_u32_attr_strict(node.attribute("idx"));
+  if (!id || !idx) {
+    return std::nullopt;
+  }
+  return ShapeConnection{*id, *idx};
+}
+
 ShapeInfo read_shape(const Workbook& wb, pugi::xml_node anchor, DrawingObject object) {
   ShapeInfo info;
   info.object = std::move(object);
@@ -196,6 +206,9 @@ ShapeInfo read_shape(const Workbook& wb, pugi::xml_node anchor, DrawingObject ob
   info.flip_v = transform.flip_v;
   info.paint_fill = read_paint_fill(wb, props);
   info.paint_line = read_paint_line(wb, props);
+  const pugi::xml_node cxn = child_local(child_local(content, "nvCxnSpPr"), "cNvCxnSpPr");
+  info.start_connection = read_connection(child_local(cxn, "stCxn"));
+  info.end_connection = read_connection(child_local(cxn, "endCxn"));
   return info;
 }
 
@@ -462,6 +475,10 @@ Expected<void, Error> apply_fields(pugi::xml_node anchor, pugi::xml_node content
     }
     if (wanted != current) {
       drawing_edit::write_xfrm_transform(ensure_xfrm(props), wanted);
+      // Excel detaches a connector at both ends when it is flipped or rotated.
+      pugi::xml_node cxn = child_local(child_local(content, "nvCxnSpPr"), "cNvCxnSpPr");
+      cxn.remove_child(child_local(cxn, "stCxn"));
+      cxn.remove_child(child_local(cxn, "endCxn"));
     }
   }
   if ((f & shape_field::kText) != 0U) {

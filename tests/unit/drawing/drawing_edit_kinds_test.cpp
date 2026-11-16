@@ -1,7 +1,9 @@
 #include <algorithm>
 #include <cstdint>
+#include <cstdio>
 #include <iterator>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -15,6 +17,8 @@
 #include "io/ooxml/part_graph.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
+#include "io/xlsb/reader.h"
+#include "io/xlsb/writer.h"
 #include "passthrough_part.h"
 #include "pugixml.hpp"
 #include "sheet.h"
@@ -855,6 +859,152 @@ TEST(ShapePaintRecord, GradientReadsOther) {
   EXPECT_FALSE(plain.paint_fill.other);
   ASSERT_TRUE(plain.paint_fill.color.has_value());
   EXPECT_EQ(plain.paint_fill.color->rgb, 0xFF00FF00U);
+}
+
+// ---------------------------------------------------------------------------
+// Connector glue
+// ---------------------------------------------------------------------------
+
+// A straight connector; `glue` goes inside its `cNvCxnSpPr`.
+std::string Cxn(std::uint32_t id, const std::string& glue) {
+  return "<xdr:cxnSp macro=\"\"><xdr:nvCxnSpPr><xdr:cNvPr id=\"" + std::to_string(id) + "\" name=\"Connector " +
+         std::to_string(id) + "\"/><xdr:cNvCxnSpPr>" + glue +
+         "</xdr:cNvCxnSpPr></xdr:nvCxnSpPr><xdr:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"914400\" "
+         "cy=\"457200\"/></a:xfrm><a:prstGeom prst=\"straightConnector1\"><a:avLst/></a:prstGeom></xdr:spPr>"
+         "</xdr:cxnSp>";
+}
+
+// Rectangles 2 and 3; connector 4 glued at both ends, connector 5 at its start only.
+Workbook ConnectorFixture() {
+  const std::string drawing = std::string(kWsDrOpen) + Anchor(0, Sp(2, "Rectangle 1", "", "")) +
+                              Anchor(5, Sp(3, "Rectangle 2", "", "")) +
+                              Anchor(10, Cxn(4, "<a:stCxn id=\"2\" idx=\"3\"/><a:endCxn id=\"3\" idx=\"1\"/>")) +
+                              Anchor(15, Cxn(5, "<a:stCxn id=\"2\" idx=\"0\"/>")) + "</xdr:wsDr>";
+  Workbook wb = Workbook::create();
+  EXPECT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart(kDrawingPath, kCtDrawing, ToBytes(drawing)))));
+  wb.sheet(0).set_drawing_rel_target(kDrawingPath);
+  return wb;
+}
+
+Workbook XlsbRoundTrip(const Workbook& wb) {
+  auto bytes = io::xlsb::write_xlsb(wb);
+  EXPECT_TRUE(static_cast<bool>(bytes));
+  auto read = io::xlsb::read_xlsb(io::ByteSpan{bytes.value().data(), bytes.value().size()});
+  EXPECT_TRUE(static_cast<bool>(read));
+  return std::move(read.value().workbook);
+}
+
+// The `cxnSp` with `cNvPr/@id` == `id` in sheet 0's drawing, printed raw.
+std::string ConnectorXml(const Workbook& wb, std::uint32_t id) {
+  pugi::xml_document doc;
+  ParseDrawing(wb, 0, doc);
+  const pugi::xml_node cxn = doc.document_element().find_node([id](const pugi::xml_node& n) {
+    return local_name(n) == "cxnSp" && n.child("xdr:nvCxnSpPr").child("xdr:cNvPr").attribute("id").as_uint() == id;
+  });
+  std::ostringstream out;
+  cxn.print(out, "", pugi::format_raw);
+  return out.str();
+}
+
+TEST(ShapeConnectorGlue, ReadsGluedAndFreeEnds) {
+  const Workbook wb = ConnectorFixture();
+  const ShapeInfo both = ShapeWithId(wb, 4);
+  EXPECT_EQ(both.start_connection, std::optional<ShapeConnection>(ShapeConnection{2, 3}));
+  EXPECT_EQ(both.end_connection, std::optional<ShapeConnection>(ShapeConnection{3, 1}));
+  const ShapeInfo start_only = ShapeWithId(wb, 5);
+  EXPECT_EQ(start_only.start_connection, std::optional<ShapeConnection>(ShapeConnection{2, 0}));
+  EXPECT_FALSE(start_only.end_connection.has_value());
+  EXPECT_FALSE(ShapeWithId(wb, 2).start_connection.has_value());
+  EXPECT_FALSE(ShapeWithId(wb, 2).end_connection.has_value());
+  EXPECT_EQ(ShapeWithId(RoundTrip(wb), 4).end_connection, std::optional<ShapeConnection>(ShapeConnection{3, 1}));
+  EXPECT_EQ(ShapeWithId(XlsbRoundTrip(wb), 4).end_connection, std::optional<ShapeConnection>(ShapeConnection{3, 1}));
+}
+
+TEST(ShapeConnectorGlue, FlipOrRotationDetachesBothEnds) {
+  ShapeSpec flip_h;
+  flip_h.fields = shape_field::kFlipH;
+  flip_h.flip_h = true;
+  ShapeSpec flip_v;
+  flip_v.fields = shape_field::kFlipV;
+  flip_v.flip_v = true;
+  ShapeSpec rotate;
+  rotate.fields = shape_field::kRotation;
+  rotate.rotation = 45 * 60000;
+  for (const ShapeSpec& spec : {flip_h, flip_v, rotate}) {
+    for (const std::uint32_t id : {4U, 5U}) {
+      Workbook wb = ConnectorFixture();
+      ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, id, spec)));
+      const ShapeInfo shape = ShapeWithId(wb, id);
+      EXPECT_FALSE(shape.start_connection.has_value()) << id;
+      EXPECT_FALSE(shape.end_connection.has_value()) << id;
+      EXPECT_EQ(shape.flip_h, spec.flip_h);
+      EXPECT_EQ(shape.flip_v, spec.flip_v);
+      EXPECT_EQ(shape.rotation, spec.rotation);
+      // Excel's save keeps the emptied element.
+      EXPECT_NE(ConnectorXml(wb, id).find("<xdr:cNvCxnSpPr/>"), std::string::npos) << ConnectorXml(wb, id);
+      EXPECT_EQ(ConnectorXml(RoundTrip(wb), id).find("stCxn"), std::string::npos);
+      EXPECT_EQ(ConnectorXml(XlsbRoundTrip(wb), id).find("stCxn"), std::string::npos);
+    }
+  }
+}
+
+TEST(ShapeConnectorGlue, OtherEditsAndUnchangedTransformsKeepTheGlue) {
+  Workbook wb = ConnectorFixture();
+  ShapeSpec rename;
+  rename.fields = shape_field::kName;
+  rename.name = "Arrow";
+  ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, 4, rename)));
+  ShapeSpec same;
+  same.fields = shape_field::kRotation | shape_field::kFlipH | shape_field::kFlipV;
+  ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, 4, same)));
+  const ShapeInfo shape = ShapeWithId(wb, 4);
+  EXPECT_EQ(shape.start_connection, std::optional<ShapeConnection>(ShapeConnection{2, 3}));
+  EXPECT_EQ(shape.end_connection, std::optional<ShapeConnection>(ShapeConnection{3, 1}));
+}
+
+// Excel's own save after a horizontal flip of a connector glued at both ends: the same edit on the glued connector
+// writes what Excel wrote.
+TEST(ShapeConnectorGlue, FlipMatchesExcelsSave) {
+  const std::string path = std::string(FORMULON_FIXTURES_DIR) + "/excel/connector_flip_detached.xlsx";
+  FILE* file = std::fopen(path.c_str(), "rb");
+  ASSERT_NE(file, nullptr) << path;
+  Bytes bytes;
+  for (int c = std::fgetc(file); c != EOF; c = std::fgetc(file)) {
+    bytes.push_back(static_cast<std::uint8_t>(c));
+  }
+  std::fclose(file);
+  auto read = io::read_ooxml(io::ByteSpan{bytes.data(), bytes.size()});
+  ASSERT_TRUE(static_cast<bool>(read));
+  Workbook wb = std::move(read.value().workbook);
+  for (const std::uint32_t id : {4U, 7U, 10U, 13U, 16U, 19U}) {
+    EXPECT_FALSE(ShapeWithId(wb, id).start_connection.has_value()) << id;
+    EXPECT_FALSE(ShapeWithId(wb, id).end_connection.has_value()) << id;
+  }
+  const std::string excel = ConnectorXml(wb, 4);
+  ASSERT_NE(excel.find("<a:xfrm flipH=\"1\">"), std::string::npos) << excel;
+
+  // Connector 4 as it was before the flip: unflipped, glued to rectangles 2 and 3.
+  const std::string drawing_path = wb.sheet(0).drawing_rel_target();
+  const PassthroughPart* part = Part(wb, drawing_path);
+  ASSERT_NE(part, nullptr);
+  std::string text(part->bytes.begin(), part->bytes.end());
+  const std::size_t at = text.find("name=\"C_both_flipH\"");
+  ASSERT_NE(at, std::string::npos);
+  const std::size_t glue = text.find("<xdr:cNvCxnSpPr/>", at);
+  ASSERT_NE(glue, std::string::npos);
+  text.replace(glue, 17,
+               "<xdr:cNvCxnSpPr><a:stCxn id=\"2\" idx=\"3\"/><a:endCxn id=\"3\" idx=\"1\"/></xdr:cNvCxnSpPr>");
+  const std::size_t xfrm = text.find("<a:xfrm flipH=\"1\">", at);
+  ASSERT_NE(xfrm, std::string::npos);
+  text.replace(xfrm, 18, "<a:xfrm>");
+  ASSERT_TRUE(static_cast<bool>(wb.replace_passthrough_part(drawing_path, ToBytes(text))));
+  ASSERT_TRUE(ShapeWithId(wb, 4).end_connection.has_value());
+
+  ShapeSpec flip;
+  flip.fields = shape_field::kFlipH;
+  flip.flip_h = true;
+  ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, 4, flip)));
+  EXPECT_EQ(ConnectorXml(wb, 4), excel);
 }
 
 }  // namespace
