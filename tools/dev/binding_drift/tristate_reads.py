@@ -3,8 +3,9 @@
 `FM_TRISTATE_FALSE` is 1, so `bool(field)`, `field != 0` or `if field:` reads FALSE as true. The fields are the
 `int32_t` struct members src/c_api/formulon_c.h marks `/* fm_tristate_t */`. A name that is a plain `int32_t` in
 another struct is checked only where the enclosing function names a struct holding it as a tristate (`fm_x_t`, or
-`S.X` in Python) and none holding it plain. A read passes when it is compared with a
+`S.X` in Python) and none holding it plain. A read passes when it is compared for equality with a
 `FM_TRISTATE_*` / `TRISTATE_*` constant, handed to a tristate helper, taken by address, or assigned on (a write).
+A `!=` comparison is flagged: `!= FM_TRISTATE_FALSE` reads DEFAULT as true, so a flag is read `== FM_TRISTATE_TRUE`.
 
 The marker is the header's single convention for an enum held in an `int32_t`, so it is checked too: a field the C
 implementation (src/c_api) assigns a tristate to, compares with `FM_TRISTATE_*` or decodes with `tristate_to_bool`
@@ -25,7 +26,10 @@ _GLUE_DIRS = (REPO_ROOT / "src" / "wasm" / "parts", REPO_ROOT / "src" / "node_ad
 _PYTHON_DIR = REPO_ROOT / "packages" / "python" / "formulon"
 # Helpers that decode or carry a tristate.
 _HELPERS = ("tristate_flag", "JsTristate", "js_tristate", "TriToJs", "tristate", "_tri")
-_DECODED = re.compile(r"\s*(?:==|!=)\s*(?:S\.)?(?:FM_)?TRISTATE_")
+_DECODED = re.compile(r"\s*==\s*(?:S\.)?(?:FM_)?TRISTATE_")
+# Fields whose header contract reads DEFAULT as true, so `!= FM_TRISTATE_FALSE` is their documented decode.
+_DEFAULT_TRUE_FIELDS = ("gte",)
+_NOT_FALSE = re.compile(r"\s*!=\s*(?:S\.)?(?:FM_)?TRISTATE_FALSE\b")
 _WRITE = re.compile(r"\s*=(?!=)")
 
 
@@ -98,12 +102,14 @@ def _scope_structs(text: str, python: bool, py_structs: Dict[str, str]) -> List[
 def _passes(line: str, start: int, end: int, field: str) -> bool:
     if _DECODED.match(line[end:]) or _WRITE.match(line[end:]):
         return True
+    if field in _DEFAULT_TRUE_FIELDS and _NOT_FALSE.match(line[end:]):
+        return True
     before = line[:start].rstrip()
     # Taken by address (`&p.allow_blank`), or copied into the same tristate field (`brk.manual = span.manual`).
     if re.search(r"&\s*[\w.>-]*$", before) or re.search(rf"[\w.>-]+(?:\.|->){field}\s*=\s*[\w.>-]*$", before):
         return True
     # `x == FM_TRISTATE_TRUE` written constant-first.
-    if re.search(r"(?:FM_)?TRISTATE_[A-Z]+\s*(?:==|!=)\s*$", before):
+    if re.search(r"(?:FM_)?TRISTATE_[A-Z]+\s*==\s*$", before):
         return True
     return any(re.search(rf"\b{h}\(\s*$", before) or re.search(rf"\b{h}\([^()]*$", before) for h in _HELPERS)
 

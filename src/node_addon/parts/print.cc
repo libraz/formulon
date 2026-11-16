@@ -286,7 +286,7 @@ Napi::Value Workbook::BreaksArray(const Napi::CallbackInfo& info, bool rows) {
       item.Set("row", Napi::Number::New(env, brk.row));
       item.Set("first", Napi::Number::New(env, brk.first));
       item.Set("last", Napi::Number::New(env, brk.last));
-      item.Set("manual", Napi::Boolean::New(env, brk.manual != FM_TRISTATE_FALSE));
+      item.Set("manual", Napi::Boolean::New(env, brk.manual == FM_TRISTATE_TRUE));
     } else {
       fm_column_break_t brk = FM_STRUCT_INIT(fm_column_break_t);
       if (const fm_status_t rc = fm_sheet_get_column_break_at(handle_, sheet, i, &brk); rc != 0) {
@@ -295,7 +295,7 @@ Napi::Value Workbook::BreaksArray(const Napi::CallbackInfo& info, bool rows) {
       item.Set("col", Napi::Number::New(env, brk.col));
       item.Set("first", Napi::Number::New(env, brk.first));
       item.Set("last", Napi::Number::New(env, brk.last));
-      item.Set("manual", Napi::Boolean::New(env, brk.manual != FM_TRISTATE_FALSE));
+      item.Set("manual", Napi::Boolean::New(env, brk.manual == FM_TRISTATE_TRUE));
     }
     items.Set(i, item);
   }
@@ -538,7 +538,7 @@ Napi::Value Workbook::Paginate(const Napi::CallbackInfo& info) {
     item.Set("row", Napi::Number::New(env, brk.row));
     item.Set("first", Napi::Number::New(env, brk.first));
     item.Set("last", Napi::Number::New(env, brk.last));
-    item.Set("manual", Napi::Boolean::New(env, brk.manual != FM_TRISTATE_FALSE));
+    item.Set("manual", Napi::Boolean::New(env, brk.manual == FM_TRISTATE_TRUE));
     row_breaks.Set(row_breaks.Length(), item);
   }
   for (std::size_t i = 0; i < PaginationCount(pagination, &fm_pagination_get_column_break_count); ++i) {
@@ -550,7 +550,7 @@ Napi::Value Workbook::Paginate(const Napi::CallbackInfo& info) {
     item.Set("col", Napi::Number::New(env, brk.col));
     item.Set("first", Napi::Number::New(env, brk.first));
     item.Set("last", Napi::Number::New(env, brk.last));
-    item.Set("manual", Napi::Boolean::New(env, brk.manual != FM_TRISTATE_FALSE));
+    item.Set("manual", Napi::Boolean::New(env, brk.manual == FM_TRISTATE_TRUE));
     column_breaks.Set(column_breaks.Length(), item);
   }
   result.Set("printArea", print_area);

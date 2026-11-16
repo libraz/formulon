@@ -72,6 +72,8 @@ flag("gte", &p.gte_op, &p.gte);
 brk.manual = span.manual;
 item.Set("gte", JsTristate(env, v.gte));
 o.set("manual", val(brk.manual != 0));
+o.set("manual", brk.manual != FM_TRISTATE_FALSE);
+o.set("gte", c.gte != FM_TRISTATE_FALSE);
 """
 
 
@@ -88,7 +90,8 @@ class TristateReadsTest(unittest.TestCase):
             (glue / "g.cpp").write_text(GLUE, encoding="utf-8")
             problems = check_tristate_reads(HEADER, [(glue, False), (py, True)])
         lines = sorted((p.split(":")[1].rsplit("/", 1)[-1], int(p.split(":")[2])) for p in problems)
-        self.assertEqual(lines, [("g.cpp", 7), ("m.py", 4), ("m.py", 5)])
+        # `!= FM_TRISTATE_FALSE` reads DEFAULT as true: flagged, except on `gte`, whose contract reads DEFAULT as true.
+        self.assertEqual(lines, [("g.cpp", 7), ("g.cpp", 8), ("m.py", 4), ("m.py", 5)])
 
     def test_a_name_plain_elsewhere_is_checked_where_only_its_tristate_struct_is_in_scope(self) -> None:
         with TemporaryDirectory() as tmp:
