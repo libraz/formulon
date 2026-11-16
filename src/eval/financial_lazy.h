@@ -121,9 +121,10 @@ struct FinancialDateEntry {
 const FinancialDateEntry* find_financial_date_entry(std::string_view name) noexcept;
 
 /// Single tree-walker lazy impl covering the whole date1904-sensitive
-/// financial family. Evaluates the call's arguments (scalar-only,
-/// left-most error wins, matching the eager dispatcher's contract), then
-/// invokes the matching `FinancialDateEntry::impl` with `ctx.date1904()`.
+/// financial family. Evaluates the call's arguments (left-most error wins,
+/// matching the eager dispatcher's contract), then invokes the matching
+/// `FinancialDateEntry::impl` with `ctx.date1904()`, element by element over
+/// array arguments (`lift_over_array_args`).
 /// Registered in the lazy dispatch table under each of the family's names.
 Value eval_financial_date_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                                const EvalContext& ctx);

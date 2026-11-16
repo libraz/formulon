@@ -1,0 +1,413 @@
+suite: edge_args_batch2
+description: >
+  Each function's first argument replaced by a cell holding #N/A, an array
+  constant (read through INDEX), numeric text, TRUE and a blank cell, from a
+  scalar call the existing suites already pin.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: nper_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=NPER(B1, -500, 25000)"
+  - id: nper_first_arg_bool
+    formula: "=NPER(TRUE, -500, 25000)"
+  - id: nper_first_arg_blank_cell
+    formula: "=NPER(B2, -500, 25000)"
+  - id: pduration_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=PDURATION(B1, 1000, 2000)"
+  - id: pduration_first_arg_array_lifted
+    formula: "=INDEX(PDURATION({0.1,0.1}, 1000, 2000),2)"
+  - id: pduration_first_arg_bool
+    formula: "=PDURATION(TRUE, 1000, 2000)"
+  - id: pduration_first_arg_numeric_text
+    formula: "=PDURATION(\"0.1\", 1000, 2000)"
+  - id: pduration_first_arg_blank_cell
+    formula: "=PDURATION(B2, 1000, 2000)"
+  - id: pmt_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=PMT(B1, 60, 25000)"
+  - id: pmt_first_arg_bool
+    formula: "=PMT(TRUE, 60, 25000)"
+  - id: pmt_first_arg_blank_cell
+    formula: "=PMT(B2, 60, 25000)"
+  - id: poisson_dist_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=POISSON.DIST(B1, 3, FALSE)"
+  - id: poisson_dist_first_arg_array_lifted
+    formula: "=INDEX(POISSON.DIST({2,2}, 3, FALSE),2)"
+  - id: poisson_dist_first_arg_bool
+    formula: "=POISSON.DIST(TRUE, 3, FALSE)"
+  - id: poisson_dist_first_arg_numeric_text
+    formula: "=POISSON.DIST(\"2\", 3, FALSE)"
+  - id: poisson_dist_first_arg_blank_cell
+    formula: "=POISSON.DIST(B2, 3, FALSE)"
+  - id: ppmt_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=PPMT(B1, 1, 60, 25000)"
+  - id: ppmt_first_arg_bool
+    formula: "=PPMT(TRUE, 1, 60, 25000)"
+  - id: ppmt_first_arg_blank_cell
+    formula: "=PPMT(B2, 1, 60, 25000)"
+  - id: sln_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=SLN(B1, 1000, 5)"
+  - id: sln_first_arg_array_lifted
+    formula: "=INDEX(SLN({10000,10000}, 1000, 5),2)"
+  - id: sln_first_arg_bool
+    formula: "=SLN(TRUE, 1000, 5)"
+  - id: sln_first_arg_numeric_text
+    formula: "=SLN(\"10000\", 1000, 5)"
+  - id: sln_first_arg_blank_cell
+    formula: "=SLN(B2, 1000, 5)"
+  - id: standardize_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=STANDARDIZE(B1, 40, 1.5)"
+  - id: standardize_first_arg_array_lifted
+    formula: "=INDEX(STANDARDIZE({42,42}, 40, 1.5),2)"
+  - id: standardize_first_arg_bool
+    formula: "=STANDARDIZE(TRUE, 40, 1.5)"
+  - id: standardize_first_arg_numeric_text
+    formula: "=STANDARDIZE(\"42\", 40, 1.5)"
+  - id: standardize_first_arg_blank_cell
+    formula: "=STANDARDIZE(B2, 40, 1.5)"
+  - id: syd_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=SYD(B1, 1000, 5, 1)"
+  - id: syd_first_arg_array_lifted
+    formula: "=INDEX(SYD({10000,10000}, 1000, 5, 1),2)"
+  - id: syd_first_arg_bool
+    formula: "=SYD(TRUE, 1000, 5, 1)"
+  - id: syd_first_arg_numeric_text
+    formula: "=SYD(\"10000\", 1000, 5, 1)"
+  - id: syd_first_arg_blank_cell
+    formula: "=SYD(B2, 1000, 5, 1)"
+  - id: tinv_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=TINV(B1, 5)"
+  - id: tinv_first_arg_array_lifted
+    formula: "=INDEX(TINV({0.05,0.05}, 5),2)"
+  - id: tinv_first_arg_bool
+    formula: "=TINV(TRUE, 5)"
+  - id: tinv_first_arg_numeric_text
+    formula: "=TINV(\"0.05\", 5)"
+  - id: tinv_first_arg_blank_cell
+    formula: "=TINV(B2, 5)"
+  - id: xor_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=XOR(B1,TRUE)"
+  - id: xor_first_arg_array_lifted
+    formula: "=INDEX(XOR({TRUE,TRUE},TRUE),2)"
+  - id: xor_first_arg_bool
+    formula: "=XOR(TRUE,TRUE)"
+  - id: xor_first_arg_blank_cell
+    formula: "=XOR(B2,TRUE)"
+  - id: betadist_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=BETADIST(B1, 8, 10)"
+  - id: betadist_first_arg_array_lifted
+    formula: "=INDEX(BETADIST({0.4,0.4}, 8, 10),2)"
+  - id: betadist_first_arg_bool
+    formula: "=BETADIST(TRUE, 8, 10)"
+  - id: betadist_first_arg_numeric_text
+    formula: "=BETADIST(\"0.4\", 8, 10)"
+  - id: betadist_first_arg_blank_cell
+    formula: "=BETADIST(B2, 8, 10)"
+  - id: ceiling_precise_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=CEILING.PRECISE(B1,0.3)"
+  - id: ceiling_precise_first_arg_array_lifted
+    formula: "=INDEX(CEILING.PRECISE({1E+15,1E+15},0.3),2)"
+  - id: ceiling_precise_first_arg_bool
+    formula: "=CEILING.PRECISE(TRUE,0.3)"
+  - id: ceiling_precise_first_arg_blank_cell
+    formula: "=CEILING.PRECISE(B2,0.3)"
+  - id: coth_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=COTH(B1)"
+  - id: coth_first_arg_array_lifted
+    formula: "=INDEX(COTH({0,0}),2)"
+  - id: coth_first_arg_bool
+    formula: "=COTH(TRUE)"
+  - id: coth_first_arg_numeric_text
+    formula: "=COTH(\"0\")"
+  - id: coth_first_arg_blank_cell
+    formula: "=COTH(B2)"
+  - id: erf_precise_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=ERF.PRECISE(B1)"
+  - id: erf_precise_first_arg_array_lifted
+    formula: "=INDEX(ERF.PRECISE({1,1}),2)"
+  - id: erf_precise_first_arg_bool
+    formula: "=ERF.PRECISE(TRUE)"
+  - id: erf_precise_first_arg_numeric_text
+    formula: "=ERF.PRECISE(\"1\")"
+  - id: erf_precise_first_arg_blank_cell
+    formula: "=ERF.PRECISE(B2)"
+  - id: erfc_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=ERFC(B1)"
+  - id: erfc_first_arg_array_lifted
+    formula: "=INDEX(ERFC({0,0}),2)"
+  - id: erfc_first_arg_bool
+    formula: "=ERFC(TRUE)"
+  - id: erfc_first_arg_numeric_text
+    formula: "=ERFC(\"0\")"
+  - id: erfc_first_arg_blank_cell
+    formula: "=ERFC(B2)"
+  - id: erfc_precise_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=ERFC.PRECISE(B1)"
+  - id: erfc_precise_first_arg_array_lifted
+    formula: "=INDEX(ERFC.PRECISE({1,1}),2)"
+  - id: erfc_precise_first_arg_bool
+    formula: "=ERFC.PRECISE(TRUE)"
+  - id: erfc_precise_first_arg_numeric_text
+    formula: "=ERFC.PRECISE(\"1\")"
+  - id: erfc_precise_first_arg_blank_cell
+    formula: "=ERFC.PRECISE(B2)"
+  - id: even_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=EVEN(B1)"
+  - id: even_first_arg_array_lifted
+    formula: "=INDEX(EVEN({1.5,1.5}),2)"
+  - id: even_first_arg_bool
+    formula: "=EVEN(TRUE)"
+  - id: even_first_arg_numeric_text
+    formula: "=EVEN(\"1.5\")"
+  - id: even_first_arg_blank_cell
+    formula: "=EVEN(B2)"
+  - id: expondist_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=EXPONDIST(B1,1.523,TRUE)"
+  - id: expondist_first_arg_array_lifted
+    formula: "=INDEX(EXPONDIST({19.898,19.898},1.523,TRUE),2)"
+  - id: expondist_first_arg_bool
+    formula: "=EXPONDIST(TRUE,1.523,TRUE)"
+  - id: expondist_first_arg_numeric_text
+    formula: "=EXPONDIST(\"19.898\",1.523,TRUE)"
+  - id: expondist_first_arg_blank_cell
+    formula: "=EXPONDIST(B2,1.523,TRUE)"
+  - id: f_dist_rt_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=F.DIST.RT(B1, 5, 10)"
+  - id: f_dist_rt_first_arg_array_lifted
+    formula: "=INDEX(F.DIST.RT({2,2}, 5, 10),2)"
+  - id: f_dist_rt_first_arg_bool
+    formula: "=F.DIST.RT(TRUE, 5, 10)"
+  - id: f_dist_rt_first_arg_numeric_text
+    formula: "=F.DIST.RT(\"2\", 5, 10)"
+  - id: f_dist_rt_first_arg_blank_cell
+    formula: "=F.DIST.RT(B2, 5, 10)"
+  - id: fisher_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=FISHER(B1)"
+  - id: fisher_first_arg_array_lifted
+    formula: "=INDEX(FISHER({0,0}),2)"
+  - id: fisher_first_arg_bool
+    formula: "=FISHER(TRUE)"
+  - id: fisher_first_arg_numeric_text
+    formula: "=FISHER(\"0\")"
+  - id: fisher_first_arg_blank_cell
+    formula: "=FISHER(B2)"
+  - id: fv_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=FV(B1, 120, -200)"
+  - id: fv_first_arg_bool
+    formula: "=FV(TRUE, 120, -200)"
+  - id: fv_first_arg_blank_cell
+    formula: "=FV(B2, 120, -200)"
+  - id: gamma_inv_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=GAMMA.INV(B1, 3, 2)"
+  - id: gamma_inv_first_arg_bool
+    formula: "=GAMMA.INV(TRUE, 3, 2)"
+  - id: gamma_inv_first_arg_blank_cell
+    formula: "=GAMMA.INV(B2, 3, 2)"
+  - id: gammadist_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=GAMMADIST(B1,1,1,FALSE)"
+  - id: gammadist_first_arg_array_lifted
+    formula: "=INDEX(GAMMADIST({0,0},1,1,FALSE),2)"
+  - id: gammadist_first_arg_bool
+    formula: "=GAMMADIST(TRUE,1,1,FALSE)"
+  - id: gammadist_first_arg_numeric_text
+    formula: "=GAMMADIST(\"0\",1,1,FALSE)"
+  - id: gammadist_first_arg_blank_cell
+    formula: "=GAMMADIST(B2,1,1,FALSE)"
+  - id: hypgeomdist_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=HYPGEOMDIST(B1, 4, 8, 20)"
+  - id: hypgeomdist_first_arg_array_lifted
+    formula: "=INDEX(HYPGEOMDIST({1,1}, 4, 8, 20),2)"
+  - id: hypgeomdist_first_arg_bool
+    formula: "=HYPGEOMDIST(TRUE, 4, 8, 20)"
+  - id: hypgeomdist_first_arg_numeric_text
+    formula: "=HYPGEOMDIST(\"1\", 4, 8, 20)"
+  - id: hypgeomdist_first_arg_blank_cell
+    formula: "=HYPGEOMDIST(B2, 4, 8, 20)"
+  - id: imaginary_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=IMAGINARY(B1)"
+  - id: imaginary_first_arg_array_lifted
+    formula: "=INDEX(IMAGINARY({\"3+4i\",\"3+4i\"}),2)"
+  - id: imaginary_first_arg_bool
+    formula: "=IMAGINARY(TRUE)"
+  - id: imaginary_first_arg_blank_cell
+    formula: "=IMAGINARY(B2)"
+  - id: imargument_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=IMARGUMENT(B1)"
+  - id: imargument_first_arg_array_lifted
+    formula: "=INDEX(IMARGUMENT({\"3+4i\",\"3+4i\"}),2)"
+  - id: imargument_first_arg_bool
+    formula: "=IMARGUMENT(TRUE)"
+  - id: imargument_first_arg_blank_cell
+    formula: "=IMARGUMENT(B2)"
+  - id: imcos_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=IMCOS(B1)"
+  - id: imcos_first_arg_array_lifted
+    formula: "=INDEX(IMCOS({\"1+i\",\"1+i\"}),2)"
+  - id: imcos_first_arg_bool
+    formula: "=IMCOS(TRUE)"
+  - id: imcos_first_arg_blank_cell
+    formula: "=IMCOS(B2)"
+  - id: imcosh_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=IMCOSH(B1)"
+  - id: imcosh_first_arg_array_lifted
+    formula: "=INDEX(IMCOSH({\"1+i\",\"1+i\"}),2)"
+  - id: imcosh_first_arg_bool
+    formula: "=IMCOSH(TRUE)"
+  - id: imcosh_first_arg_blank_cell
+    formula: "=IMCOSH(B2)"
+  - id: imcsch_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=IMCSCH(B1)"
+  - id: imcsch_first_arg_array_lifted
+    formula: "=INDEX(IMCSCH({\"1\",\"1\"}),2)"
+  - id: imcsch_first_arg_bool
+    formula: "=IMCSCH(TRUE)"
+  - id: imcsch_first_arg_blank_cell
+    formula: "=IMCSCH(B2)"
+  - id: imsec_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=IMSEC(B1)"
+  - id: imsec_first_arg_array_lifted
+    formula: "=INDEX(IMSEC({\"1+i\",\"1+i\"}),2)"
+  - id: imsec_first_arg_bool
+    formula: "=IMSEC(TRUE)"
+  - id: imsec_first_arg_blank_cell
+    formula: "=IMSEC(B2)"
+  - id: int_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=INT(B1)"
+  - id: int_first_arg_array_lifted
+    formula: "=INDEX(INT({3.7,3.7}),2)"
+  - id: int_first_arg_bool
+    formula: "=INT(TRUE)"
+  - id: int_first_arg_numeric_text
+    formula: "=INT(\"3.7\")"
+  - id: int_first_arg_blank_cell
+    formula: "=INT(B2)"
+  - id: ipmt_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=IPMT(B1, 1, 60, 25000)"
+  - id: ipmt_first_arg_bool
+    formula: "=IPMT(TRUE, 1, 60, 25000)"
+  - id: ipmt_first_arg_blank_cell
+    formula: "=IPMT(B2, 1, 60, 25000)"
+  - id: iso_ceiling_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=ISO.CEILING(B1,0.3)"
+  - id: iso_ceiling_first_arg_array_lifted
+    formula: "=INDEX(ISO.CEILING({1E+15,1E+15},0.3),2)"
+  - id: iso_ceiling_first_arg_bool
+    formula: "=ISO.CEILING(TRUE,0.3)"
+  - id: iso_ceiling_first_arg_blank_cell
+    formula: "=ISO.CEILING(B2,0.3)"
+  - id: ln_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=LN(B1)"
+  - id: ln_first_arg_array_lifted
+    formula: "=INDEX(LN({1,1}),2)"
+  - id: ln_first_arg_bool
+    formula: "=LN(TRUE)"
+  - id: ln_first_arg_numeric_text
+    formula: "=LN(\"1\")"
+  - id: ln_first_arg_blank_cell
+    formula: "=LN(B2)"
+  - id: loginv_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=LOGINV(B1, 0, 1)"
+  - id: loginv_first_arg_array_lifted
+    formula: "=INDEX(LOGINV({0.5,0.5}, 0, 1),2)"
+  - id: loginv_first_arg_bool
+    formula: "=LOGINV(TRUE, 0, 1)"
+  - id: loginv_first_arg_numeric_text
+    formula: "=LOGINV(\"0.5\", 0, 1)"
+  - id: loginv_first_arg_blank_cell
+    formula: "=LOGINV(B2, 0, 1)"
+  - id: lognorm_dist_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=LOGNORM.DIST(B1, 3.5, 1.2, TRUE)"
+  - id: lognorm_dist_first_arg_array_lifted
+    formula: "=INDEX(LOGNORM.DIST({4,4}, 3.5, 1.2, TRUE),2)"
+  - id: lognorm_dist_first_arg_bool
+    formula: "=LOGNORM.DIST(TRUE, 3.5, 1.2, TRUE)"
+  - id: lognorm_dist_first_arg_numeric_text
+    formula: "=LOGNORM.DIST(\"4\", 3.5, 1.2, TRUE)"
+  - id: lognorm_dist_first_arg_blank_cell
+    formula: "=LOGNORM.DIST(B2, 3.5, 1.2, TRUE)"
+  - id: lognormdist_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=LOGNORMDIST(B1, 3.5, 1.2)"
+  - id: lognormdist_first_arg_array_lifted
+    formula: "=INDEX(LOGNORMDIST({4,4}, 3.5, 1.2),2)"
+  - id: lognormdist_first_arg_bool
+    formula: "=LOGNORMDIST(TRUE, 3.5, 1.2)"
+  - id: lognormdist_first_arg_numeric_text
+    formula: "=LOGNORMDIST(\"4\", 3.5, 1.2)"
+  - id: lognormdist_first_arg_blank_cell
+    formula: "=LOGNORMDIST(B2, 3.5, 1.2)"
+  - id: odd_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=ODD(B1)"
+  - id: odd_first_arg_array_lifted
+    formula: "=INDEX(ODD({1.5,1.5}),2)"
+  - id: odd_first_arg_bool
+    formula: "=ODD(TRUE)"
+  - id: odd_first_arg_numeric_text
+    formula: "=ODD(\"1.5\")"
+  - id: odd_first_arg_blank_cell
+    formula: "=ODD(B2)"
+  - id: regextest_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=REGEXTEST(B1, \"[0-9]+\")"
+  - id: regextest_first_arg_array_lifted
+    formula: "=INDEX(REGEXTEST({\"abc123\",\"abc123\"}, \"[0-9]+\"),2)"
+  - id: regextest_first_arg_bool
+    formula: "=REGEXTEST(TRUE, \"[0-9]+\")"
+  - id: regextest_first_arg_blank_cell
+    formula: "=REGEXTEST(B2, \"[0-9]+\")"
+  - id: replaceb_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=REPLACEB(B1, 3, 2, \"X\")"
+  - id: replaceb_first_arg_array_lifted
+    formula: "=INDEX(REPLACEB({\"あいう\",\"あいう\"}, 3, 2, \"X\"),2)"
+  - id: replaceb_first_arg_bool
+    formula: "=REPLACEB(TRUE, 3, 2, \"X\")"
+  - id: replaceb_first_arg_blank_cell
+    formula: "=REPLACEB(B2, 3, 2, \"X\")"
+  - id: t_dist_rt_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=T.DIST.RT(B1, 10)"
+  - id: t_dist_rt_first_arg_array_lifted
+    formula: "=INDEX(T.DIST.RT({1.5,1.5}, 10),2)"
+  - id: t_dist_rt_first_arg_bool
+    formula: "=T.DIST.RT(TRUE, 10)"
+  - id: t_dist_rt_first_arg_numeric_text
+    formula: "=T.DIST.RT(\"1.5\", 10)"
+  - id: t_dist_rt_first_arg_blank_cell
+    formula: "=T.DIST.RT(B2, 10)"

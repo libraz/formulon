@@ -303,6 +303,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/scalar_ops_test.cpp
   unit/eval/x87_arith_test.cpp
   unit/eval/eval_context_test.cpp
+  unit/eval/financial_date_array_lift_test.cpp
   unit/eval/formula_profile_test.cpp
   unit/eval/excel_locale_test.cpp
   unit/eval/locale_text_test.cpp

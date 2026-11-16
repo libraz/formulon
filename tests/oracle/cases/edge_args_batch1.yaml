@@ -1,0 +1,439 @@
+suite: edge_args_batch1
+description: >
+  Each function's first argument replaced by a cell holding #N/A, an array
+  constant (read through INDEX), numeric text, TRUE and a blank cell, from a
+  scalar call the existing suites already pin.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: acos_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=ACOS(B1)"
+  - id: acos_first_arg_array_lifted
+    formula: "=INDEX(ACOS({0,0}),2)"
+  - id: acos_first_arg_bool
+    formula: "=ACOS(TRUE)"
+  - id: acos_first_arg_numeric_text
+    formula: "=ACOS(\"0\")"
+  - id: acos_first_arg_blank_cell
+    formula: "=ACOS(B2)"
+  - id: acot_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=ACOT(B1)"
+  - id: acot_first_arg_array_lifted
+    formula: "=INDEX(ACOT({0,0}),2)"
+  - id: acot_first_arg_bool
+    formula: "=ACOT(TRUE)"
+  - id: acot_first_arg_numeric_text
+    formula: "=ACOT(\"0\")"
+  - id: acot_first_arg_blank_cell
+    formula: "=ACOT(B2)"
+  - id: amorlinc_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=AMORLINC(B1, DATE(2008,8,19), DATE(2008,12,31), 300, 1, 0.15, 1)"
+  - id: amorlinc_first_arg_array_lifted
+    formula: "=INDEX(AMORLINC({2400,2400}, DATE(2008,8,19), DATE(2008,12,31), 300, 1, 0.15, 1),2)"
+  - id: amorlinc_first_arg_bool
+    formula: "=AMORLINC(TRUE, DATE(2008,8,19), DATE(2008,12,31), 300, 1, 0.15, 1)"
+  - id: amorlinc_first_arg_numeric_text
+    formula: "=AMORLINC(\"2400\", DATE(2008,8,19), DATE(2008,12,31), 300, 1, 0.15, 1)"
+  - id: amorlinc_first_arg_blank_cell
+    formula: "=AMORLINC(B2, DATE(2008,8,19), DATE(2008,12,31), 300, 1, 0.15, 1)"
+  - id: asin_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=ASIN(B1)"
+  - id: asin_first_arg_array_lifted
+    formula: "=INDEX(ASIN({0,0}),2)"
+  - id: asin_first_arg_bool
+    formula: "=ASIN(TRUE)"
+  - id: asin_first_arg_numeric_text
+    formula: "=ASIN(\"0\")"
+  - id: asin_first_arg_blank_cell
+    formula: "=ASIN(B2)"
+  - id: asinh_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=ASINH(B1)"
+  - id: asinh_first_arg_array_lifted
+    formula: "=INDEX(ASINH({0,0}),2)"
+  - id: asinh_first_arg_bool
+    formula: "=ASINH(TRUE)"
+  - id: asinh_first_arg_numeric_text
+    formula: "=ASINH(\"0\")"
+  - id: asinh_first_arg_blank_cell
+    formula: "=ASINH(B2)"
+  - id: betainv_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=BETAINV(B1, 2, 3)"
+  - id: betainv_first_arg_array_lifted
+    formula: "=INDEX(BETAINV({0.5,0.5}, 2, 3),2)"
+  - id: betainv_first_arg_bool
+    formula: "=BETAINV(TRUE, 2, 3)"
+  - id: betainv_first_arg_numeric_text
+    formula: "=BETAINV(\"0.5\", 2, 3)"
+  - id: betainv_first_arg_blank_cell
+    formula: "=BETAINV(B2, 2, 3)"
+  - id: binom_dist_range_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=BINOM.DIST.RANGE(B1, 0.5, 4, 6)"
+  - id: binom_dist_range_first_arg_array_lifted
+    formula: "=INDEX(BINOM.DIST.RANGE({10,10}, 0.5, 4, 6),2)"
+  - id: binom_dist_range_first_arg_bool
+    formula: "=BINOM.DIST.RANGE(TRUE, 0.5, 4, 6)"
+  - id: binom_dist_range_first_arg_numeric_text
+    formula: "=BINOM.DIST.RANGE(\"10\", 0.5, 4, 6)"
+  - id: binom_dist_range_first_arg_blank_cell
+    formula: "=BINOM.DIST.RANGE(B2, 0.5, 4, 6)"
+  - id: binomdist_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=BINOMDIST(B1, 10, 0.5, FALSE)"
+  - id: binomdist_first_arg_array_lifted
+    formula: "=INDEX(BINOMDIST({5,5}, 10, 0.5, FALSE),2)"
+  - id: binomdist_first_arg_bool
+    formula: "=BINOMDIST(TRUE, 10, 0.5, FALSE)"
+  - id: binomdist_first_arg_numeric_text
+    formula: "=BINOMDIST(\"5\", 10, 0.5, FALSE)"
+  - id: binomdist_first_arg_blank_cell
+    formula: "=BINOMDIST(B2, 10, 0.5, FALSE)"
+  - id: bitor_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=BITOR(B1,3)"
+  - id: bitor_first_arg_array_lifted
+    formula: "=INDEX(BITOR({5,5},3),2)"
+  - id: bitor_first_arg_bool
+    formula: "=BITOR(TRUE,3)"
+  - id: bitor_first_arg_numeric_text
+    formula: "=BITOR(\"5\",3)"
+  - id: bitor_first_arg_blank_cell
+    formula: "=BITOR(B2,3)"
+  - id: bitxor_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=BITXOR(B1,3)"
+  - id: bitxor_first_arg_array_lifted
+    formula: "=INDEX(BITXOR({5,5},3),2)"
+  - id: bitxor_first_arg_bool
+    formula: "=BITXOR(TRUE,3)"
+  - id: bitxor_first_arg_numeric_text
+    formula: "=BITXOR(\"5\",3)"
+  - id: bitxor_first_arg_blank_cell
+    formula: "=BITXOR(B2,3)"
+  - id: chidist_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=CHIDIST(B1, 2)"
+  - id: chidist_first_arg_array_lifted
+    formula: "=INDEX(CHIDIST({5,5}, 2),2)"
+  - id: chidist_first_arg_bool
+    formula: "=CHIDIST(TRUE, 2)"
+  - id: chidist_first_arg_numeric_text
+    formula: "=CHIDIST(\"5\", 2)"
+  - id: chidist_first_arg_blank_cell
+    formula: "=CHIDIST(B2, 2)"
+  - id: chiinv_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=CHIINV(B1, 2)"
+  - id: chiinv_first_arg_array_lifted
+    formula: "=INDEX(CHIINV({0.05,0.05}, 2),2)"
+  - id: chiinv_first_arg_bool
+    formula: "=CHIINV(TRUE, 2)"
+  - id: chiinv_first_arg_numeric_text
+    formula: "=CHIINV(\"0.05\", 2)"
+  - id: chiinv_first_arg_blank_cell
+    formula: "=CHIINV(B2, 2)"
+  - id: clean_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=CLEAN(B1)"
+  - id: clean_first_arg_array_lifted
+    formula: "=INDEX(CLEAN({\"ab\tcd\",\"ab\tcd\"}),2)"
+  - id: clean_first_arg_bool
+    formula: "=CLEAN(TRUE)"
+  - id: clean_first_arg_blank_cell
+    formula: "=CLEAN(B2)"
+  - id: confidence_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=CONFIDENCE(B1, 20, 100)"
+  - id: confidence_first_arg_array_lifted
+    formula: "=INDEX(CONFIDENCE({0.05,0.05}, 20, 100),2)"
+  - id: confidence_first_arg_bool
+    formula: "=CONFIDENCE(TRUE, 20, 100)"
+  - id: confidence_first_arg_numeric_text
+    formula: "=CONFIDENCE(\"0.05\", 20, 100)"
+  - id: confidence_first_arg_blank_cell
+    formula: "=CONFIDENCE(B2, 20, 100)"
+  - id: confidence_norm_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=CONFIDENCE.NORM(B1, 20, 100)"
+  - id: confidence_norm_first_arg_array_lifted
+    formula: "=INDEX(CONFIDENCE.NORM({0.05,0.05}, 20, 100),2)"
+  - id: confidence_norm_first_arg_bool
+    formula: "=CONFIDENCE.NORM(TRUE, 20, 100)"
+  - id: confidence_norm_first_arg_numeric_text
+    formula: "=CONFIDENCE.NORM(\"0.05\", 20, 100)"
+  - id: confidence_norm_first_arg_blank_cell
+    formula: "=CONFIDENCE.NORM(B2, 20, 100)"
+  - id: confidence_t_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=CONFIDENCE.T(B1, 20, 30)"
+  - id: confidence_t_first_arg_array_lifted
+    formula: "=INDEX(CONFIDENCE.T({0.05,0.05}, 20, 30),2)"
+  - id: confidence_t_first_arg_bool
+    formula: "=CONFIDENCE.T(TRUE, 20, 30)"
+  - id: confidence_t_first_arg_numeric_text
+    formula: "=CONFIDENCE.T(\"0.05\", 20, 30)"
+  - id: confidence_t_first_arg_blank_cell
+    formula: "=CONFIDENCE.T(B2, 20, 30)"
+  - id: critbinom_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=CRITBINOM(B1, 0.5, 0.75)"
+  - id: critbinom_first_arg_array_lifted
+    formula: "=INDEX(CRITBINOM({100,100}, 0.5, 0.75),2)"
+  - id: critbinom_first_arg_bool
+    formula: "=CRITBINOM(TRUE, 0.5, 0.75)"
+  - id: critbinom_first_arg_numeric_text
+    formula: "=CRITBINOM(\"100\", 0.5, 0.75)"
+  - id: critbinom_first_arg_blank_cell
+    formula: "=CRITBINOM(B2, 0.5, 0.75)"
+  - id: exact_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=EXACT(B1,\"abc\")"
+  - id: exact_first_arg_array_lifted
+    formula: "=INDEX(EXACT({\"abc\",\"abc\"},\"abc\"),2)"
+  - id: exact_first_arg_bool
+    formula: "=EXACT(TRUE,\"abc\")"
+  - id: exact_first_arg_blank_cell
+    formula: "=EXACT(B2,\"abc\")"
+  - id: f_inv_rt_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=F.INV.RT(B1, 5, 10)"
+  - id: f_inv_rt_first_arg_array_lifted
+    formula: "=INDEX(F.INV.RT({0.05,0.05}, 5, 10),2)"
+  - id: f_inv_rt_first_arg_bool
+    formula: "=F.INV.RT(TRUE, 5, 10)"
+  - id: f_inv_rt_first_arg_numeric_text
+    formula: "=F.INV.RT(\"0.05\", 5, 10)"
+  - id: f_inv_rt_first_arg_blank_cell
+    formula: "=F.INV.RT(B2, 5, 10)"
+  - id: fdist_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=FDIST(B1, 5, 5)"
+  - id: fdist_first_arg_array_lifted
+    formula: "=INDEX(FDIST({2,2}, 5, 5),2)"
+  - id: fdist_first_arg_bool
+    formula: "=FDIST(TRUE, 5, 5)"
+  - id: fdist_first_arg_numeric_text
+    formula: "=FDIST(\"2\", 5, 5)"
+  - id: fdist_first_arg_blank_cell
+    formula: "=FDIST(B2, 5, 5)"
+  - id: finv_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=FINV(B1, 5, 5)"
+  - id: finv_first_arg_array_lifted
+    formula: "=INDEX(FINV({0.05,0.05}, 5, 5),2)"
+  - id: finv_first_arg_bool
+    formula: "=FINV(TRUE, 5, 5)"
+  - id: finv_first_arg_numeric_text
+    formula: "=FINV(\"0.05\", 5, 5)"
+  - id: finv_first_arg_blank_cell
+    formula: "=FINV(B2, 5, 5)"
+  - id: fisherinv_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=FISHERINV(B1)"
+  - id: fisherinv_first_arg_bool
+    formula: "=FISHERINV(TRUE)"
+  - id: fisherinv_first_arg_blank_cell
+    formula: "=FISHERINV(B2)"
+  - id: gammainv_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=GAMMAINV(B1, 2, 1)"
+  - id: gammainv_first_arg_array_lifted
+    formula: "=INDEX(GAMMAINV({0.5,0.5}, 2, 1),2)"
+  - id: gammainv_first_arg_bool
+    formula: "=GAMMAINV(TRUE, 2, 1)"
+  - id: gammainv_first_arg_numeric_text
+    formula: "=GAMMAINV(\"0.5\", 2, 1)"
+  - id: gammainv_first_arg_blank_cell
+    formula: "=GAMMAINV(B2, 2, 1)"
+  - id: gammaln_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=GAMMALN(B1)"
+  - id: gammaln_first_arg_array_lifted
+    formula: "=INDEX(GAMMALN({10,10}),2)"
+  - id: gammaln_first_arg_bool
+    formula: "=GAMMALN(TRUE)"
+  - id: gammaln_first_arg_numeric_text
+    formula: "=GAMMALN(\"10\")"
+  - id: gammaln_first_arg_blank_cell
+    formula: "=GAMMALN(B2)"
+  - id: gammaln_precise_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=GAMMALN.PRECISE(B1)"
+  - id: gammaln_precise_first_arg_array_lifted
+    formula: "=INDEX(GAMMALN.PRECISE({7.5,7.5}),2)"
+  - id: gammaln_precise_first_arg_bool
+    formula: "=GAMMALN.PRECISE(TRUE)"
+  - id: gammaln_precise_first_arg_numeric_text
+    formula: "=GAMMALN.PRECISE(\"7.5\")"
+  - id: gammaln_precise_first_arg_blank_cell
+    formula: "=GAMMALN.PRECISE(B2)"
+  - id: gauss_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=GAUSS(B1)"
+  - id: gauss_first_arg_array_lifted
+    formula: "=INDEX(GAUSS({0,0}),2)"
+  - id: gauss_first_arg_bool
+    formula: "=GAUSS(TRUE)"
+  - id: gauss_first_arg_numeric_text
+    formula: "=GAUSS(\"0\")"
+  - id: gauss_first_arg_blank_cell
+    formula: "=GAUSS(B2)"
+  - id: hyperlink_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=HYPERLINK(B1)"
+  - id: hyperlink_first_arg_array_lifted
+    formula: "=INDEX(HYPERLINK({\"http://example.com\",\"http://example.com\"}),2)"
+  - id: hyperlink_first_arg_bool
+    formula: "=HYPERLINK(TRUE)"
+  - id: hyperlink_first_arg_blank_cell
+    formula: "=HYPERLINK(B2)"
+  - id: imcot_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=IMCOT(B1)"
+  - id: imcot_first_arg_array_lifted
+    formula: "=INDEX(IMCOT({\"1\",\"1\"}),2)"
+  - id: imcot_first_arg_bool
+    formula: "=IMCOT(TRUE)"
+  - id: imcot_first_arg_blank_cell
+    formula: "=IMCOT(B2)"
+  - id: imcsc_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=IMCSC(B1)"
+  - id: imcsc_first_arg_array_lifted
+    formula: "=INDEX(IMCSC({\"1+i\",\"1+i\"}),2)"
+  - id: imcsc_first_arg_bool
+    formula: "=IMCSC(TRUE)"
+  - id: imcsc_first_arg_blank_cell
+    formula: "=IMCSC(B2)"
+  - id: imsech_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=IMSECH(B1)"
+  - id: imsech_first_arg_array_lifted
+    formula: "=INDEX(IMSECH({\"0\",\"0\"}),2)"
+  - id: imsech_first_arg_bool
+    formula: "=IMSECH(TRUE)"
+  - id: imsech_first_arg_blank_cell
+    formula: "=IMSECH(B2)"
+  - id: info_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=INFO(B1)"
+  - id: info_first_arg_bool
+    formula: "=INFO(TRUE)"
+  - id: info_first_arg_blank_cell
+    formula: "=INFO(B2)"
+  - id: log_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=LOG(B1)"
+  - id: log_first_arg_array_lifted
+    formula: "=INDEX(LOG({1000,1000}),2)"
+  - id: log_first_arg_bool
+    formula: "=LOG(TRUE)"
+  - id: log_first_arg_numeric_text
+    formula: "=LOG(\"1000\")"
+  - id: log_first_arg_blank_cell
+    formula: "=LOG(B2)"
+  - id: lognorm_inv_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=LOGNORM.INV(B1, 0, 1)"
+  - id: lognorm_inv_first_arg_array_lifted
+    formula: "=INDEX(LOGNORM.INV({0.5,0.5}, 0, 1),2)"
+  - id: lognorm_inv_first_arg_bool
+    formula: "=LOGNORM.INV(TRUE, 0, 1)"
+  - id: lognorm_inv_first_arg_numeric_text
+    formula: "=LOGNORM.INV(\"0.5\", 0, 1)"
+  - id: lognorm_inv_first_arg_blank_cell
+    formula: "=LOGNORM.INV(B2, 0, 1)"
+  - id: negbinom_dist_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=NEGBINOM.DIST(B1, 5, 0.25, FALSE)"
+  - id: negbinom_dist_first_arg_array_lifted
+    formula: "=INDEX(NEGBINOM.DIST({10,10}, 5, 0.25, FALSE),2)"
+  - id: negbinom_dist_first_arg_bool
+    formula: "=NEGBINOM.DIST(TRUE, 5, 0.25, FALSE)"
+  - id: negbinom_dist_first_arg_numeric_text
+    formula: "=NEGBINOM.DIST(\"10\", 5, 0.25, FALSE)"
+  - id: negbinom_dist_first_arg_blank_cell
+    formula: "=NEGBINOM.DIST(B2, 5, 0.25, FALSE)"
+  - id: negbinomdist_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=NEGBINOMDIST(B1, 5, 0.25)"
+  - id: negbinomdist_first_arg_array_lifted
+    formula: "=INDEX(NEGBINOMDIST({10,10}, 5, 0.25),2)"
+  - id: negbinomdist_first_arg_bool
+    formula: "=NEGBINOMDIST(TRUE, 5, 0.25)"
+  - id: negbinomdist_first_arg_numeric_text
+    formula: "=NEGBINOMDIST(\"10\", 5, 0.25)"
+  - id: negbinomdist_first_arg_blank_cell
+    formula: "=NEGBINOMDIST(B2, 5, 0.25)"
+  - id: norm_inv_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=NORM.INV(B1, 0, 1)"
+  - id: norm_inv_first_arg_array_lifted
+    formula: "=INDEX(NORM.INV({0.5,0.5}, 0, 1),2)"
+  - id: norm_inv_first_arg_bool
+    formula: "=NORM.INV(TRUE, 0, 1)"
+  - id: norm_inv_first_arg_numeric_text
+    formula: "=NORM.INV(\"0.5\", 0, 1)"
+  - id: norm_inv_first_arg_blank_cell
+    formula: "=NORM.INV(B2, 0, 1)"
+  - id: norm_s_inv_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=NORM.S.INV(B1)"
+  - id: norm_s_inv_first_arg_array_lifted
+    formula: "=INDEX(NORM.S.INV({0.5,0.5}),2)"
+  - id: norm_s_inv_first_arg_bool
+    formula: "=NORM.S.INV(TRUE)"
+  - id: norm_s_inv_first_arg_numeric_text
+    formula: "=NORM.S.INV(\"0.5\")"
+  - id: norm_s_inv_first_arg_blank_cell
+    formula: "=NORM.S.INV(B2)"
+  - id: normdist_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=NORMDIST(B1, 0, 1, TRUE)"
+  - id: normdist_first_arg_array_lifted
+    formula: "=INDEX(NORMDIST({1.5,1.5}, 0, 1, TRUE),2)"
+  - id: normdist_first_arg_bool
+    formula: "=NORMDIST(TRUE, 0, 1, TRUE)"
+  - id: normdist_first_arg_numeric_text
+    formula: "=NORMDIST(\"1.5\", 0, 1, TRUE)"
+  - id: normdist_first_arg_blank_cell
+    formula: "=NORMDIST(B2, 0, 1, TRUE)"
+  - id: norminv_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=NORMINV(B1, 10, 2)"
+  - id: norminv_first_arg_array_lifted
+    formula: "=INDEX(NORMINV({0.5,0.5}, 10, 2),2)"
+  - id: norminv_first_arg_bool
+    formula: "=NORMINV(TRUE, 10, 2)"
+  - id: norminv_first_arg_numeric_text
+    formula: "=NORMINV(\"0.5\", 10, 2)"
+  - id: norminv_first_arg_blank_cell
+    formula: "=NORMINV(B2, 10, 2)"
+  - id: normsdist_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=NORMSDIST(B1)"
+  - id: normsdist_first_arg_array_lifted
+    formula: "=INDEX(NORMSDIST({1.96,1.96}),2)"
+  - id: normsdist_first_arg_bool
+    formula: "=NORMSDIST(TRUE)"
+  - id: normsdist_first_arg_numeric_text
+    formula: "=NORMSDIST(\"1.96\")"
+  - id: normsdist_first_arg_blank_cell
+    formula: "=NORMSDIST(B2)"
+  - id: normsinv_first_arg_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=NORMSINV(B1)"
+  - id: normsinv_first_arg_array_lifted
+    formula: "=INDEX(NORMSINV({0.975,0.975}),2)"
+  - id: normsinv_first_arg_bool
+    formula: "=NORMSINV(TRUE)"
+  - id: normsinv_first_arg_numeric_text
+    formula: "=NORMSINV(\"0.975\")"
+  - id: normsinv_first_arg_blank_cell
+    formula: "=NORMSINV(B2)"

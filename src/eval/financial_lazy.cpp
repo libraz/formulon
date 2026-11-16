@@ -742,17 +742,18 @@ Value eval_financial_date_lazy(const parser::AstNode& call, Arena& arena, const 
   if (arity < entry->min_arity || arity > entry->max_arity) {
     return Value::error(ErrorCode::Value);
   }
-  // This family is scalar-only, follows the Analysis-ToolPak argument
-  // rule, and propagates the left-most argument error (none opt out of
-  // that rule), matching the eager dispatcher's pre-evaluation contract.
+  // This family follows the Analysis-ToolPak argument rule, propagates the
+  // left-most argument error, and lifts element by element over array
+  // arguments, as the calendar family does.
   std::vector<Value> args;
   if (const Value err = eval_scalar_call_args(call, entry->min_arity, entry->max_arity, /*atp_rule=*/true,
                                               entry->logical_args, arena, registry, ctx, args);
       err.is_error()) {
     return err;
   }
-  return entry->impl(args.empty() ? nullptr : args.data(), static_cast<std::uint32_t>(args.size()), arena,
-                     ctx.date1904());
+  const bool date1904 = ctx.date1904();
+  return lift_over_array_args(args.empty() ? nullptr : args.data(), static_cast<std::uint32_t>(args.size()), arena,
+                              [&](const Value* a, std::uint32_t n) { return entry->impl(a, n, arena, date1904); });
 }
 
 }  // namespace eval

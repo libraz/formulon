@@ -91,9 +91,9 @@ Value invoke_date_entry(const DateEntry& entry, const Value* args, std::uint32_t
                         const date_time::CivilTime& now);
 
 /// Single tree-walker lazy impl covering the whole date1904-sensitive
-/// calendar family. Evaluates the call's arguments (scalar-only,
-/// left-most error wins), then invokes the matching `DateEntry::impl` with
-/// `ctx.date1904()`. Registered in the lazy dispatch table under each
+/// calendar family. Evaluates the call's arguments (left-most error wins),
+/// then invokes the matching `DateEntry::impl` with `ctx.date1904()` through
+/// `invoke_date_entry`. Registered in the lazy dispatch table under each
 /// calendar name.
 Value eval_datetime_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx);

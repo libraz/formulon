@@ -1,0 +1,521 @@
+{
+  "suite": "atp_financial_array_lift",
+  "description": "The Analysis-ToolPak financial date functions with their first argument given as a two-element array constant: whether each lifts element by element (the second element through INDEX, the width through COLUMNS).\n",
+  "environment": {
+    "excel_version": "16.115",
+    "excel_locale": "ru-RU",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-11-16T21:45:12Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "accrint_first_arg_array_lifted",
+      "formula": "=INDEX(ACCRINT({45444,45444},DATE(2024,3,31),DATE(2024,9,15),0.05,1000,1,0,TRUE),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 14.444444444444443
+      }
+    },
+    {
+      "id": "accrint_first_arg_array_rows",
+      "formula": "=COLUMNS(ACCRINT({45444,45444},DATE(2024,3,31),DATE(2024,9,15),0.05,1000,1,0,TRUE))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "accrintm_first_arg_array_lifted",
+      "formula": "=INDEX(ACCRINTM({39539,39539},DATE(2008,6,15),0.1,1000,3),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 20.54794520547945
+      }
+    },
+    {
+      "id": "accrintm_first_arg_array_rows",
+      "formula": "=COLUMNS(ACCRINTM({39539,39539},DATE(2008,6,15),0.1,1000,3))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "amordegrc_first_arg_array_lifted",
+      "formula": "=INDEX(AMORDEGRC({2400,2400},DATE(2008,8,19),DATE(2008,12,31),300,1,0.15,1),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 776.0
+      }
+    },
+    {
+      "id": "amordegrc_first_arg_array_rows",
+      "formula": "=COLUMNS(AMORDEGRC({2400,2400},DATE(2008,8,19),DATE(2008,12,31),300,1,0.15,1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "amorlinc_first_arg_array_lifted",
+      "formula": "=INDEX(AMORLINC({1,1},DATE(2008,8,19),DATE(2008,12,31),300,1,0.15,1),2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "amorlinc_first_arg_array_rows",
+      "formula": "=COLUMNS(AMORLINC({1,1},DATE(2008,8,19),DATE(2008,12,31),300,1,0.15,1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "coupdaybs_first_arg_array_lifted",
+      "formula": "=INDEX(COUPDAYBS({45306,45306},DATE(2026,11,15),2,0),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 60.0
+      }
+    },
+    {
+      "id": "coupdaybs_first_arg_array_rows",
+      "formula": "=COLUMNS(COUPDAYBS({45306,45306},DATE(2026,11,15),2,0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "coupdays_first_arg_array_lifted",
+      "formula": "=INDEX(COUPDAYS({45306,45306},DATE(2026,11,15),2,0),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 180.0
+      }
+    },
+    {
+      "id": "coupdays_first_arg_array_rows",
+      "formula": "=COLUMNS(COUPDAYS({45306,45306},DATE(2026,11,15),2,0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "coupdaysnc_first_arg_array_lifted",
+      "formula": "=INDEX(COUPDAYSNC({45306,45306},DATE(2026,11,15),2,0),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 120.0
+      }
+    },
+    {
+      "id": "coupdaysnc_first_arg_array_rows",
+      "formula": "=COLUMNS(COUPDAYSNC({45306,45306},DATE(2026,11,15),2,0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "coupncd_first_arg_array_lifted",
+      "formula": "=INDEX(COUPNCD({45306,45306},DATE(2026,11,15),2,0),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45427.0
+      }
+    },
+    {
+      "id": "coupncd_first_arg_array_rows",
+      "formula": "=COLUMNS(COUPNCD({45306,45306},DATE(2026,11,15),2,0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "coupnum_first_arg_array_lifted",
+      "formula": "=INDEX(COUPNUM({45306,45306},DATE(2026,11,15),2,0),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "coupnum_first_arg_array_rows",
+      "formula": "=COLUMNS(COUPNUM({45306,45306},DATE(2026,11,15),2,0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "couppcd_first_arg_array_lifted",
+      "formula": "=INDEX(COUPPCD({45306,45306},DATE(2026,11,15),2,0),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 45245.0
+      }
+    },
+    {
+      "id": "couppcd_first_arg_array_rows",
+      "formula": "=COLUMNS(COUPPCD({45306,45306},DATE(2026,11,15),2,0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "disc_first_arg_array_lifted",
+      "formula": "=INDEX(DISC({43125,43125},DATE(2018,6,15),97.975,100,1),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.05242021276595771
+      }
+    },
+    {
+      "id": "disc_first_arg_array_rows",
+      "formula": "=COLUMNS(DISC({43125,43125},DATE(2018,6,15),97.975,100,1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "duration_first_arg_array_lifted",
+      "formula": "=INDEX(DURATION({39448,39448},DATE(2016,1,1),0.08,0.09,2,1),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.993774955545186
+      }
+    },
+    {
+      "id": "duration_first_arg_array_rows",
+      "formula": "=COLUMNS(DURATION({39448,39448},DATE(2016,1,1),0.08,0.09,2,1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "intrate_first_arg_array_lifted",
+      "formula": "=INDEX(INTRATE({39493,39493},DATE(2008,5,15),1000000,1014420,2),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.05768
+      }
+    },
+    {
+      "id": "intrate_first_arg_array_rows",
+      "formula": "=COLUMNS(INTRATE({39493,39493},DATE(2008,5,15),1000000,1014420,2))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "mduration_first_arg_array_lifted",
+      "formula": "=INDEX(MDURATION({39448,39448},DATE(2016,1,1),0.08,0.09,2,1),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.735669813918839
+      }
+    },
+    {
+      "id": "mduration_first_arg_array_rows",
+      "formula": "=COLUMNS(MDURATION({39448,39448},DATE(2016,1,1),0.08,0.09,2,1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "oddfprice_first_arg_array_lifted",
+      "formula": "=INDEX(ODDFPRICE({39458,39458},DATE(2021,3,1),DATE(2007,10,15),DATE(2008,3,1),0.0785,0.0625,100,2,1),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 114.19065832009143
+      }
+    },
+    {
+      "id": "oddfprice_first_arg_array_rows",
+      "formula": "=COLUMNS(ODDFPRICE({39458,39458},DATE(2021,3,1),DATE(2007,10,15),DATE(2008,3,1),0.0785,0.0625,100,2,1))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "oddfyield_first_arg_array_lifted",
+      "formula": "=INDEX(ODDFYIELD({39763,39763},DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.50,100,2,0),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.07724554159729888
+      }
+    },
+    {
+      "id": "oddfyield_first_arg_array_rows",
+      "formula": "=COLUMNS(ODDFYIELD({39763,39763},DATE(2021,3,1),DATE(2008,10,15),DATE(2009,3,1),0.0575,84.50,100,2,0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "oddlprice_first_arg_array_lifted",
+      "formula": "=INDEX(ODDLPRICE({39485,39485},DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,0),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 99.87828601472134
+      }
+    },
+    {
+      "id": "oddlprice_first_arg_array_rows",
+      "formula": "=COLUMNS(ODDLPRICE({39485,39485},DATE(2008,6,15),DATE(2007,10,15),0.0375,0.0405,100,2,0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "oddlyield_first_arg_array_lifted",
+      "formula": "=INDEX(ODDLYIELD({39558,39558},DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,0),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.04519223562916916
+      }
+    },
+    {
+      "id": "oddlyield_first_arg_array_rows",
+      "formula": "=COLUMNS(ODDLYIELD({39558,39558},DATE(2008,6,15),DATE(2007,12,24),0.0375,99.875,100,2,0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "price_first_arg_array_lifted",
+      "formula": "=INDEX(PRICE({39493,39493},DATE(2017,11,15),0.0575,0.065,100,2,0),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 94.63436162132213
+      }
+    },
+    {
+      "id": "price_first_arg_array_rows",
+      "formula": "=COLUMNS(PRICE({39493,39493},DATE(2017,11,15),0.0575,0.065,100,2,0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "pricedisc_first_arg_array_lifted",
+      "formula": "=INDEX(PRICEDISC({43147,43147},DATE(2018,3,1),0.0525,100,2),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 99.81041666666667
+      }
+    },
+    {
+      "id": "pricedisc_first_arg_array_rows",
+      "formula": "=COLUMNS(PRICEDISC({43147,43147},DATE(2018,3,1),0.0525,100,2))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "pricemat_first_arg_array_lifted",
+      "formula": "=INDEX(PRICEMAT({39493,39493},DATE(2008,4,13),DATE(2007,11,11),0.061,0.061,0),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 99.98449887555694
+      }
+    },
+    {
+      "id": "pricemat_first_arg_array_rows",
+      "formula": "=COLUMNS(PRICEMAT({39493,39493},DATE(2008,4,13),DATE(2007,11,11),0.061,0.061,0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "received_first_arg_array_lifted",
+      "formula": "=INDEX(RECEIVED({39493,39493},DATE(2008,5,15),1000000,0.0575,2),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1014584.6544071021
+      }
+    },
+    {
+      "id": "received_first_arg_array_rows",
+      "formula": "=COLUMNS(RECEIVED({39493,39493},DATE(2008,5,15),1000000,0.0575,2))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "tbilleq_first_arg_array_lifted",
+      "formula": "=INDEX(TBILLEQ({39538,39538},DATE(2008,6,1),0.0914),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.09415149356594302
+      }
+    },
+    {
+      "id": "tbilleq_first_arg_array_rows",
+      "formula": "=COLUMNS(TBILLEQ({39538,39538},DATE(2008,6,1),0.0914))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "tbillprice_first_arg_array_lifted",
+      "formula": "=INDEX(TBILLPRICE({39538,39538},DATE(2008,6,1),0.09),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 98.45
+      }
+    },
+    {
+      "id": "tbillprice_first_arg_array_rows",
+      "formula": "=COLUMNS(TBILLPRICE({39538,39538},DATE(2008,6,1),0.09))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "tbillyield_first_arg_array_lifted",
+      "formula": "=INDEX(TBILLYIELD({39538,39538},DATE(2008,6,1),98.45),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.09141696292534264
+      }
+    },
+    {
+      "id": "tbillyield_first_arg_array_rows",
+      "formula": "=COLUMNS(TBILLYIELD({39538,39538},DATE(2008,6,1),98.45))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "yield_first_arg_array_lifted",
+      "formula": "=INDEX(YIELD({39493,39493},DATE(2016,11,15),0.0575,95.04287,100,2,0),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.06500000688073143
+      }
+    },
+    {
+      "id": "yield_first_arg_array_rows",
+      "formula": "=COLUMNS(YIELD({39493,39493},DATE(2016,11,15),0.0575,95.04287,100,2,0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "yielddisc_first_arg_array_lifted",
+      "formula": "=INDEX(YIELDDISC({39494,39494},DATE(2008,3,1),99.795,100,2),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.05282257198685834
+      }
+    },
+    {
+      "id": "yielddisc_first_arg_array_rows",
+      "formula": "=COLUMNS(YIELDDISC({39494,39494},DATE(2008,3,1),99.795,100,2))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "yieldmat_first_arg_array_lifted",
+      "formula": "=INDEX(YIELDMAT({39522,39522},DATE(2008,11,3),DATE(2007,11,8),0.0625,100.0123,0),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.06095433369153867
+      }
+    },
+    {
+      "id": "yieldmat_first_arg_array_rows",
+      "formula": "=COLUMNS(YIELDMAT({39522,39522},DATE(2008,11,3),DATE(2007,11,8),0.0625,100.0123,0))",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    }
+  ]
+}

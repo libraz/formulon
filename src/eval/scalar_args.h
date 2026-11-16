@@ -56,6 +56,25 @@ Value eval_scalar_call_args(const parser::AstNode& call, std::uint32_t min_arity
                             bool atp_rule, std::uint32_t logical_args, Arena& arena, const FunctionRegistry& registry,
                             const EvalContext& ctx, std::vector<Value>& out);
 
+/// One scalar evaluation of a lifted call over `arity` per-element arguments.
+using LiftedCellFn = Value (*)(const Value* args, std::uint32_t arity, const void* state);
+
+/// Applies a scalar function element by element when an argument is an array.
+/// The result spans the widest extent on each axis and a size-1 axis stretches;
+/// a position some argument cannot supply is #N/A, and a position whose
+/// arguments hold an error takes the left-most one. Without an array argument
+/// `cell` runs once on `args`.
+Value lift_over_array_args(const Value* args, std::uint32_t arity, Arena& arena, LiftedCellFn cell, const void* state);
+
+/// `lift_over_array_args` with a const callable `cell(const Value*, std::uint32_t)`.
+template <typename Cell>
+Value lift_over_array_args(const Value* args, std::uint32_t arity, Arena& arena, const Cell& cell) {
+  return lift_over_array_args(
+      args, arity, arena,
+      [](const Value* a, std::uint32_t n, const void* state) { return (*static_cast<const Cell*>(state))(a, n); },
+      static_cast<const void*>(&cell));
+}
+
 }  // namespace eval
 }  // namespace formulon
 
