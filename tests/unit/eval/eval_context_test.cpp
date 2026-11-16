@@ -280,19 +280,19 @@ double adhoc_number(const Workbook& wb, std::uint32_t row, std::uint32_t col, co
 
 }  // namespace
 
-TEST(EvalContextRecursive, AdhocSelfReferenceOnEmptyAnchorIsZeroUnderAutoCalc) {
+// Ad-hoc evaluation is Excel's Application.Evaluate: a read of the anchor gives the anchor's current value,
+// never a cycle result, in either calculation mode.
+TEST(EvalContextRecursive, AdhocReadOfTheAnchorGivesItsCurrentValue) {
   Workbook wb = Workbook::create();
-  EXPECT_DOUBLE_EQ(adhoc_number(wb, 0U, 0U, "=A1+1"), 0.0);
-  EXPECT_DOUBLE_EQ(adhoc_number(wb, 0U, 0U, "=SUM(A1,2)"), 0.0);
+  EXPECT_DOUBLE_EQ(adhoc_number(wb, 0U, 0U, "=A1+1"), 1.0);
+  EXPECT_DOUBLE_EQ(adhoc_number(wb, 0U, 0U, "=SUM(A1,2)"), 2.0);
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(7.0))));
+  EXPECT_DOUBLE_EQ(adhoc_number(wb, 0U, 0U, "=A1+1"), 8.0);
+  EXPECT_DOUBLE_EQ(adhoc_number(wb, 0U, 0U, "=A1*2"), 14.0);
+  EXPECT_DOUBLE_EQ(adhoc_number(wb, 0U, 0U, "=COUNTA(A1)"), 1.0);
 }
 
-TEST(EvalContextRecursive, AdhocSelfReferenceOnValueAnchorIsZeroUnderAutoCalc) {
-  Workbook wb = Workbook::create();
-  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::number(5.0))));
-  EXPECT_DOUBLE_EQ(adhoc_number(wb, 0U, 0U, "=A1+1"), 0.0);
-}
-
-TEST(EvalContextRecursive, AdhocSelfReferenceReadsCachedValueUnderManualCalc) {
+TEST(EvalContextRecursive, AdhocReadOfTheAnchorIsTheSameUnderManualCalc) {
   Workbook wb = Workbook::create();
   wb.set_calc_mode(CalcMode::kManual);
   EXPECT_DOUBLE_EQ(adhoc_number(wb, 0U, 0U, "=A1+1"), 1.0);

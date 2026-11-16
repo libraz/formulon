@@ -94,10 +94,6 @@ bool evaluate_cf_formula(const Workbook& workbook, const Sheet& sheet, std::uint
 Value evaluate_parsed_formula_array(const Workbook& workbook, const Sheet& sheet, std::uint32_t row, std::uint32_t col,
                                     const parser::AstNode& root, Arena& arena, const FunctionRegistry& registry) {
   EvalState state;
-  // Under automatic calculation the anchor is in evaluation, so reading it is a self-cycle; manual reads its cache.
-  if (workbook.calc_mode() != CalcMode::kManual) {
-    state.push_cell(&sheet, row, col);
-  }
   const EvalContext ctx = make_readonly_context(workbook, sheet, state, row, col);
   return evaluate(root, arena, registry, ctx);
 }

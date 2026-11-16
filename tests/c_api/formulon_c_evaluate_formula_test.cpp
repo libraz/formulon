@@ -131,10 +131,9 @@ TEST(EvaluateFormula, SingleOperatorEvaluates) {
   EXPECT_DOUBLE_EQ(v.u.number, 1.0);
 }
 
-// "=A1" evaluated at A1 is the formula A1 would hold, which closes a cycle on
-// itself: under automatic calculation it gives 0, as the cell entry that
-// closes a cycle does in Excel, whatever A1 held before (here the number 7).
-TEST(EvaluateFormula, SelfReferenceIsASelfCycleUnderAutomaticCalculation) {
+// One-shot evaluation is Excel's Application.Evaluate: "=A1" anchored at A1
+// reads A1's current value (7), never a cycle result, in either calculation mode.
+TEST(EvaluateFormula, SelfReferenceReadsTheAnchorsValue) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 7.0), 0);  // A1
@@ -143,20 +142,19 @@ TEST(EvaluateFormula, SelfReferenceIsASelfCycleUnderAutomaticCalculation) {
   fm_value_t v{};
   ASSERT_EQ(evaluate_top_left(wb.handle, 0, 0, 0, "=A1", &v), 0);
   EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
-  EXPECT_DOUBLE_EQ(v.u.number, 0.0);
+  EXPECT_DOUBLE_EQ(v.u.number, 7.0);
 }
 
-// Under manual calculation nothing is in evaluation, so the anchor's held value is read.
-TEST(EvaluateFormula, SelfReferenceReadsTheHeldValueUnderManualCalculation) {
+TEST(EvaluateFormula, SelfReferenceReadsTheAnchorsValueUnderManualCalculation) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 7.0), 0);  // A1
   ASSERT_EQ(fm_workbook_set_calc_mode(wb.handle, FM_CALC_MODE_MANUAL), 0);
 
   fm_value_t v{};
-  ASSERT_EQ(evaluate_top_left(wb.handle, 0, 0, 0, "=A1", &v), 0);
+  ASSERT_EQ(evaluate_top_left(wb.handle, 0, 0, 0, "=A1*2", &v), 0);
   EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
-  EXPECT_DOUBLE_EQ(v.u.number, 7.0);
+  EXPECT_DOUBLE_EQ(v.u.number, 14.0);
 }
 
 // The evaluation must not mutate the workbook: neither the referenced cell

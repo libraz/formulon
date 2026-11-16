@@ -285,11 +285,6 @@ Value EvalContext::resolve_cell(const Sheet& sheet, const parser::Reference& ref
   Sheet::CellRead read;
   target->read_formula_cell(ref.row, ref.col, read);
   if (!read.is_formula()) {
-    // An ad-hoc evaluation anchored here (the state's top frame) reading its own non-formula anchor is a self-cycle.
-    if (state_ != nullptr && !state_->observing_reads() && state_->is_top_cell(target, ref.row, ref.col) &&
-        !(workbook_ != nullptr && workbook_->iterative_options().enabled)) {
-      abandon_formula();
-    }
     // Phantom-aware read: an absent or literal cell resolves through the
     // spill table so phantom cells of a committed region are visible to
     // cross-cell references.
