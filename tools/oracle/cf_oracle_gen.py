@@ -897,9 +897,8 @@ def _write_provenance(
 
     A CF golden has no workbook environment block of its own, so this marker
     is the evidence boundary for product, locale, suite completeness, and
-    content identity.  Partial ``--suite`` runs are deliberately marked
-    inactive; a later full run must refresh the marker before CTest can treat
-    the directory as a complete capture.
+    content identity.  It is written only by a run that captured every
+    required suite: a partial ``--suite`` run leaves the marker as it is.
     """
 
     inventory = []
@@ -1041,6 +1040,16 @@ def main() -> int:
         captured_suites.append(suite)
         print(f"[cf-oracle-gen]   wrote {golden_path}")
 
+    # The manifest describes one capture of every suite; a partial run leaves it as it is (so a verified directory
+    # is never rewritten as unverified) and the provenance check reports the suites it no longer describes.
+    if sorted(captured_suites) != sorted(required_suites):
+        missing = sorted(set(required_suites) - set(captured_suites))
+        print(
+            f"[cf-oracle-gen]   partial capture: {golden_dir / 'PROVENANCE.json'} left unchanged; "
+            f"capture every suite in one run to refresh it (not captured: {', '.join(missing)})",
+            file=sys.stderr,
+        )
+        return 0
     _write_provenance(
         golden_dir,
         target=target,
