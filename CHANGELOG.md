@@ -582,17 +582,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   user, and the same table records; both formats save a cache no refresh
   dated with refresh date 0, as Excel does. A source cell left blank is
   written as Excel writes it, whether or not its cache field has shared
-  items. Day, month and year date
-  groupings are read and written. A PivotTable the `.xlsb` records
-  cannot yet hold (for example a calculated field, a quarter grouping, or a
-  cache field without shared items whose cells hold more than one type of
-  value, such as text and numbers) is
+  items. Date groupings by seconds, minutes, hours, days, months, quarters
+  and years, and numeric range groupings, are read and written. A
+  PivotTable the `.xlsb` records cannot yet hold (for example a calculated
+  field, or a cache field without shared items whose cells hold more than
+  one type of value, such as text and numbers) is
   left out of an `.xlsb` save together with its cache and the other
   PivotTables on that cache, and counted in `deferredFeatureCount`, as is an
   `.xlsb` PivotTable an `.xlsx` save cannot carry; it still saves to `.xlsx`.
 
 ### Fixed
 
+- A PivotTable whose field carries a numeric range grouping on itself, as
+  Excel stores one, showed each source value as its own item once the report
+  was recalculated, named its items after the source values, and lost the
+  grouping on refresh. It now shows Excel's ranges in Excel's order, the
+  items below the start and above the end first, and keeps them through a
+  refresh and an `.xlsx` or `.xlsb` save.
 - An `.xlsb` holding an AutoFilter icon filter with no icon, which Excel stores with no icon set, failed to open; it now reads as that filter, and both formats save a filter with no icon as Excel does, with no set in `.xlsb` and the default `3Arrows` in `.xlsx`.
 - A row or column insert or delete moves form controls and OLE objects as
   Excel does, in `.xlsx` and `.xlsb`: the worksheet's control and object
