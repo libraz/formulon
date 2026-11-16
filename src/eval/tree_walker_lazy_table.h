@@ -99,8 +99,9 @@ constexpr bool param_in_set(ParamSet set, std::uint32_t index) noexcept {
 /// parameter is answered.
 enum class ScalarArg : std::uint8_t {
   kAccept,
-  kRejectValue,  ///< #VALUE!
-  kRejectNA,     ///< #N/A
+  kRejectValue,          ///< #VALUE!
+  kRejectNA,             ///< #N/A
+  kRejectNAOrTextValue,  ///< #N/A, or #VALUE! for text
 };
 
 /// `LazyEntry::min_arity` / `max_arity` value of an open argument list.

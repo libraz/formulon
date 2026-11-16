@@ -144,7 +144,8 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
   // A call returning a reference reads that reference's cells; any other
   // result of it takes the value path below.
   Value call_value = Value::blank();
-  const bool reference_call = arg_node.kind() == parser::NodeKind::Call && evaluates_to_reference(arg_node);
+  const bool reference_call = (arg_node.kind() == parser::NodeKind::Call && evaluates_to_reference(arg_node)) ||
+                              (arg_node.kind() == parser::NodeKind::Literal && arg_node.as_literal().is_ref());
   if (reference_call) {
     RangeResult read;
     if (read_reference_call(arg_node, arena, registry, ctx, &read, &call_value)) {
@@ -514,7 +515,7 @@ Expected<RangeResult, ErrorCode> resolve_range_arg(const parser::AstNode& arg_no
 
 bool resolve_flat_cells(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx, std::vector<Value>* out_cells, Value* out_err) {
-  auto resolved = resolve_range_arg_no_scalar(arg_node, arena, registry, ctx, ErrorCode::Value);
+  auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
   if (!resolved) {
     *out_err = Value::error(resolved.error());
     return false;
@@ -532,19 +533,6 @@ const Value* first_error(const std::vector<Value>& cells) {
   return nullptr;
 }
 
-Expected<RangeResult, ErrorCode> resolve_range_arg_no_scalar(const parser::AstNode& arg_node, Arena& arena,
-                                                             const FunctionRegistry& registry, const EvalContext& ctx,
-                                                             ErrorCode scalar_error) {
-  auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
-  if (!resolved) {
-    return std::move(resolved.error());
-  }
-  if (resolved.value().from_scalar) {
-    return scalar_error;
-  }
-  return std::move(resolved.value());
-}
-
 bool resolve_array_value(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx, const ArrayValue** out, Value* out_err) {
   const Value v = eval_node_as_array(arg, arena, registry, ctx);
@@ -558,21 +546,6 @@ bool resolve_array_value(const parser::AstNode& arg, Arena& arena, const Functio
   }
   *out = v.as_array();
   return true;
-}
-
-Expected<RangeResult, ErrorCode> resolve_array_arg_na(const parser::AstNode& arg_node, Arena& arena,
-                                                      const FunctionRegistry& registry, const EvalContext& ctx) {
-  auto resolved = resolve_range_arg_no_scalar(arg_node, arena, registry, ctx, ErrorCode::NA);
-  if (!resolved) {
-    // `resolve_range_arg` reports `#VALUE!` for a subtree it cannot turn
-    // into a rectangle and `#REF!` for expansion failures. The regression
-    // and hypothesis-test families use `#N/A` for shape errors, so remap
-    // the shape-rejection case while letting every other code (`#REF!`,
-    // a propagated `#DIV/0!`, …) pass through.
-    const ErrorCode err_code = resolved.error();
-    return err_code == ErrorCode::Value ? ErrorCode::NA : err_code;
-  }
-  return std::move(resolved.value());
 }
 
 namespace {

@@ -21,8 +21,11 @@
 namespace formulon {
 namespace eval {
 
+/// A slot the parser left empty: a plain blank literal. An evaluated blank
+/// substituted into a call carries a projection and is no omission.
 inline bool is_omitted_arg(const parser::AstNode& arg) {
-  return arg.kind() == parser::NodeKind::Literal && arg.as_literal().is_blank();
+  return arg.kind() == parser::NodeKind::Literal && arg.as_literal().is_blank() &&
+         !arg.as_literal().blank_projects_to_zero();
 }
 
 /// Whether argument slot `index` of `call` is present and not syntactically

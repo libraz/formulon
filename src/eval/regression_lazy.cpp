@@ -14,10 +14,7 @@
 // deviations, and sum-of-cross-products.
 //
 // See `eval/shape_ops_lazy.cpp` for the sibling SUMPRODUCT family this
-// file is modelled on. The shape-resolution helper `resolve_array_arg_na`
-// is shared with `eval/hypothesis_lazy.cpp` via `eval/range_args.{h,cpp}`
-// — both families need the same `#N/A`-vocabulary remapping that
-// SUMPRODUCT does not.
+// file is modelled on.
 
 #include "eval/regression_lazy.h"
 

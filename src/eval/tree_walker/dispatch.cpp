@@ -107,6 +107,77 @@ Value literal_text_failure(const std::optional<ErrorOriginSnapshot>& origin) {
   return Value::error(ErrorCode::Value);
 }
 
+// The error a lone value (neither a reference nor an array) answers in a
+// parameter under `policy`, or nullopt when it is accepted.
+std::optional<ErrorCode> lone_value_error(ScalarArg policy, const Value& v) {
+  if (v.is_ref() || v.is_array() || v.is_error()) {
+    return std::nullopt;
+  }
+  switch (policy) {
+    case ScalarArg::kAccept:
+      return std::nullopt;
+    case ScalarArg::kRejectValue:
+      return ErrorCode::Value;
+    case ScalarArg::kRejectNA:
+      return ErrorCode::NA;
+    case ScalarArg::kRejectNAOrTextValue:
+      return v.is_text() ? ErrorCode::Value : ErrorCode::NA;
+  }
+  return std::nullopt;
+}
+
+// A node that names a reference where it is written, read by the impl itself.
+bool is_written_reference(const parser::AstNode& node) {
+  switch (node.kind()) {
+    case parser::NodeKind::Ref3D:
+    case parser::NodeKind::ExternalRef:
+      return true;
+    case parser::NodeKind::ImplicitIntersection:
+      return is_reference_shape(node.as_implicit_intersection_operand());
+    default:
+      return is_reference_shape(node);
+  }
+}
+
+// `call` with each argument under the lone-value policy evaluated once and
+// replaced by its result, a lone value by the error the policy answers. A
+// constant, an omitted slot and a written reference stay in place. Null when
+// the arena cannot hold the new call.
+[[gnu::noinline]] const parser::AstNode* prepare_lazy_args(const parser::AstNode& call, const LazyEntry& entry,
+                                                           Arena& arena, const FunctionRegistry& registry,
+                                                           const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  std::vector<const parser::AstNode*> args;
+  for (std::uint32_t i = 0; i < arity; ++i) {
+    const parser::AstNode& arg = call.as_call_arg(i);
+    if (!param_in_set(entry.scalar_params, i) || is_omitted_arg(arg) || is_written_reference(arg) ||
+        arg.kind() == parser::NodeKind::ArrayLiteral || arg.kind() == parser::NodeKind::ErrorLiteral) {
+      continue;
+    }
+    const bool constant = arg.kind() == parser::NodeKind::Literal;
+    const Value v = constant ? arg.as_literal() : eval_node_ref(arg, arena, registry, ctx);
+    const std::optional<ErrorCode> rejected = lone_value_error(entry.scalar_error, v);
+    if (constant && !rejected) {
+      continue;
+    }
+    const parser::AstNode* replaced = parser::make_literal(arena, rejected ? Value::error(*rejected) : v);
+    if (replaced == nullptr) {
+      return nullptr;
+    }
+    if (args.empty()) {
+      args.reserve(arity);
+      for (std::uint32_t j = 0; j < arity; ++j) {
+        args.push_back(&call.as_call_arg(j));
+      }
+    }
+    args[i] = replaced;
+  }
+  if (args.empty()) {
+    return &call;
+  }
+  return parser::make_call(arena, call.as_call_name(), args.data(), arity);
+}
+
 // The body of `dispatch_call`. A scalar function applied over a whole column /
 // row returns through `*tail_out` (the returned value is then unused).
 Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
@@ -159,14 +230,21 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
     return invoke_lambda(defined.as_lambda(), arity, node.as_call_args(), arena, registry, ctx);
   }
 
-  if (LazyImpl lazy = find_lazy_impl(name); lazy != nullptr) {
+  if (const LazyEntry* entry = find_lazy_entry(name); entry != nullptr) {
+    const parser::AstNode* call = &node;
+    if (entry->scalar_params != ParamSet::kNone) {
+      call = prepare_lazy_args(node, *entry, arena, registry, ctx);
+      if (call == nullptr) {
+        return Value::error(ErrorCode::Num);
+      }
+    }
     // Lazy callees read their arguments as rectangles, so whole-axis
     // references among them are walked to one shared length and agree on
     // shape however far each is populated. Eager callees flatten ranges and
     // have no shape to agree on.
     WholeAxisScope scope;
-    scope.call = &node;
-    return lazy(node, arena, registry, ctx.with_whole_axis_scope(&scope));
+    scope.call = call;
+    return entry->impl(*call, arena, registry, ctx.with_whole_axis_scope(&scope));
   }
 
   const FunctionDef* def = lookup_on_current_host(registry, name);

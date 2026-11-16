@@ -117,6 +117,46 @@ TEST(LazyTableColumns, ShortCircuitFormsDeclareNoClass) {
   }
 }
 
+// The functions that read a reference or an array and refuse a lone value there, with the positions and the answer.
+TEST(LazyTableColumns, LoneValuePolicyRows) {
+  struct Row {
+    const char* name;
+    ParamSet params;
+    ScalarArg answer;
+  };
+  const Row rows[] = {
+      {"MATCH", ParamSet::kSecond, ScalarArg::kRejectNAOrTextValue},
+      {"IRR", ParamSet::kFirst, ScalarArg::kRejectValue},
+      {"MIRR", ParamSet::kFirst, ScalarArg::kRejectValue},
+      {"XIRR", ParamSet::kFirstAndSecond, ScalarArg::kRejectValue},
+      {"XNPV", ParamSet::kAllButFirst, ScalarArg::kRejectValue},
+      {"RANK", ParamSet::kSecond, ScalarArg::kRejectValue},
+      {"RANK.EQ", ParamSet::kSecond, ScalarArg::kRejectValue},
+      {"RANK.AVG", ParamSet::kSecond, ScalarArg::kRejectValue},
+      {"T.TEST", ParamSet::kFirstAndSecond, ScalarArg::kRejectNA},
+      {"TTEST", ParamSet::kFirstAndSecond, ScalarArg::kRejectNA},
+      {"F.TEST", ParamSet::kFirstAndSecond, ScalarArg::kRejectNA},
+      {"FTEST", ParamSet::kFirstAndSecond, ScalarArg::kRejectNA},
+      {"Z.TEST", ParamSet::kFirst, ScalarArg::kRejectNA},
+      {"ZTEST", ParamSet::kFirst, ScalarArg::kRejectNA},
+  };
+  std::set<std::string> expected;
+  for (const Row& row : rows) {
+    const LazyEntry* entry = find_lazy_entry(row.name);
+    ASSERT_NE(entry, nullptr) << row.name;
+    EXPECT_EQ(entry->scalar_params, row.params) << row.name;
+    EXPECT_EQ(entry->scalar_error, row.answer) << row.name;
+    expected.insert(row.name);
+  }
+  std::set<std::string> actual;
+  for (const char* const* p = lazy_form_names(); *p != nullptr; ++p) {
+    if (find_lazy_entry(*p)->scalar_params != ParamSet::kNone) {
+      actual.insert(*p);
+    }
+  }
+  EXPECT_EQ(actual, expected);
+}
+
 TEST(LazyTableColumns, ReferenceCallsAreTheResultsCarryingARectangle) {
   // SINGLE projects onto the formula cell, so it has no static rectangle.
   for (const char* const* p = lazy_form_names(); *p != nullptr; ++p) {

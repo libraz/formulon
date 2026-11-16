@@ -2,11 +2,8 @@
 // Implementation of the hypothesis-test / probability lazy impls: T.TEST
 // (TTEST), F.TEST (FTEST), CHISQ.TEST (CHITEST), Z.TEST (ZTEST), PROB.
 //
-// The argument-resolution machinery is shared with `eval/regression_lazy.cpp`
-// via `resolve_array_arg_na` (in `eval/range_args.{h,cpp}`), which walks a
-// `Ref` / `RangeOp` / `ArrayLiteral` / scalar subtree into a `RangeResult`
-// (remapping the non-array rejection to `#N/A` to match Excel's
-// hypothesis-test conventions). `collect_paired_samples` pairs two resolved
+// A lone value as an array argument is #N/A, answered by the lazy table's
+// lone-value policy before the impl runs. `collect_paired_samples` pairs two resolved
 // arrays for the shape-matched paths (T.TEST type==1, CHISQ.TEST, PROB);
 // the independent-collection paths (T.TEST types 2 and 3, F.TEST, Z.TEST)
 // use `collect_single_array_numeric`, which does NOT shape-match and
@@ -59,9 +56,10 @@ std::variant<Value, NumericPairs> collect_paired_samples(const parser::AstNode& 
 // `true` on success; `false` if `*out_err` was written.
 bool collect_single_array_numeric(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
                                   const EvalContext& ctx, std::vector<double>* out, Value* out_err) {
-  auto resolved = resolve_array_arg_na(arg_node, arena, registry, ctx);
+  auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
   if (!resolved) {
-    *out_err = Value::error(resolved.error());
+    // An argument that names no rectangle is #N/A in this family; `#REF!` and a propagated error pass through.
+    *out_err = Value::error(resolved.error() == ErrorCode::Value ? ErrorCode::NA : resolved.error());
     return false;
   }
   RangeResult r = std::move(resolved.value());

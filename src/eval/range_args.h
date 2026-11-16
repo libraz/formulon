@@ -110,28 +110,16 @@ bool expand_ref3d_cells(const parser::AstNode& node, Arena& arena, const Functio
 Expected<RangeResult, ErrorCode> resolve_range_arg(const parser::AstNode& arg_node, Arena& arena,
                                                    const FunctionRegistry& registry, const EvalContext& ctx);
 
-/// Resolution variant for argument slots documented as a reference or an
-/// array (`IRR` / `XIRR` / `RANK` / the regression family, …). Every shape
-/// `resolve_range_arg` handles is accepted — including dynamic-array
-/// producers such as `SEQUENCE` and spilled-range references — but a
-/// subtree that collapses to a bare scalar is rejected with
-/// `scalar_error` instead of becoming a 1x1 range, because Excel does not
-/// walk a lone value as a sequence.
-Expected<RangeResult, ErrorCode> resolve_range_arg_no_scalar(const parser::AstNode& arg_node, Arena& arena,
-                                                             const FunctionRegistry& registry, const EvalContext& ctx,
-                                                             ErrorCode scalar_error);
-
-/// `resolve_range_arg_no_scalar` (scalar rejected with `#VALUE!`) flattened
-/// row-major into `*out_cells`. On failure writes the Excel error into
-/// `*out_err` and returns false.
+/// `resolve_range_arg` flattened row-major into `*out_cells`. On failure
+/// writes the Excel error into `*out_err` and returns false.
 bool resolve_flat_cells(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx, std::vector<Value>* out_cells, Value* out_err);
 
 /// The first Error cell of `cells` in order, or nullptr when there is none.
 const Value* first_error(const std::vector<Value>& cells);
 
-/// Evaluates `call`, a call returning a reference (`evaluates_to_reference`),
-/// and reads its cells into `*out` (a union or a 3-D span as one column).
+/// Evaluates `call`, a call returning a reference (`evaluates_to_reference`)
+/// or a literal holding one, and reads its cells into `*out` (a union or a 3-D span as one column).
 /// Returns false with the result in `*out_value` when it is no reference
 /// (a value, an array, an error), or a grid of references, read as its array.
 bool read_reference_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -174,17 +162,6 @@ WholeAxisExtent shared_whole_axis_extent(const parser::AstNode& call, const Eval
 /// SUMPRODUCT-style families.
 bool resolve_array_value(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx, const ArrayValue** out, Value* out_err);
-
-/// Resolution variant for the regression and hypothesis-test families.
-/// Thin `#N/A` remap over `resolve_range_arg_no_scalar`: every range,
-/// array literal and dynamic-array shape resolves, a bare scalar is
-/// rejected, and a pre-evaluated error propagates verbatim.
-///
-/// Excel uses `#N/A` rather than `#VALUE!` as the shape-error vocabulary
-/// for these families, so any `#VALUE!` from `resolve_range_arg`'s
-/// shape rejection is remapped to `#N/A`. `#REF!` passes through.
-Expected<RangeResult, ErrorCode> resolve_array_arg_na(const parser::AstNode& arg_node, Arena& arena,
-                                                      const FunctionRegistry& registry, const EvalContext& ctx);
 
 }  // namespace eval
 }  // namespace formulon

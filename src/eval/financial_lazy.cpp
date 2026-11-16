@@ -51,8 +51,8 @@ using builtins_detail::to_finite_value;
 // Collects the numeric cash flows from IRR's first argument. Every shape
 // `resolve_range_arg` understands is accepted — `Ref` / `RangeOp` /
 // `SpillRef` / `ArrayLiteral` and dynamic-array producers such as
-// `SEQUENCE` — while a bare scalar is rejected with #VALUE!, mirroring
-// Excel's requirement that IRR's first argument be a reference or array.
+// `SEQUENCE`. A lone value is #VALUE!, answered by the lazy table's
+// lone-value policy before the impl runs.
 //
 // The per-cell rule then splits on where the cells came from:
 //
@@ -71,7 +71,7 @@ using builtins_detail::to_finite_value;
 bool collect_cash_flows(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx, std::vector<double>* out_flows, Value* out_err) {
   out_flows->clear();
-  auto resolved = resolve_range_arg_no_scalar(arg, arena, registry, ctx, ErrorCode::Value);
+  auto resolved = resolve_range_arg(arg, arena, registry, ctx);
   if (!resolved) {
     *out_err = Value::error(resolved.error());
     return false;

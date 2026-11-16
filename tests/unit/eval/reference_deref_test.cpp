@@ -1078,6 +1078,40 @@ TEST_F(SelectedRefTest, RangeArgumentsReadReferenceCallsAsTheirCells) {
   ExpectSame(Eval("=SUM(ROW(A1:A3))"), Eval("=6"), "a computed array");
 }
 
+// A lone value where a function reads a reference or an array answers the lazy table's policy; a reference or an
+// array of any origin is read.
+TEST_F(SelectedRefTest, LoneValuesAnswerTheirPolicy) {
+  ExpectError(Eval("=MATCH(11,11,0)"), ErrorCode::NA, "literal number");
+  ExpectError(Eval("=MATCH(11,A1+0,0)"), ErrorCode::NA, "computed number");
+  ExpectError(Eval("=MATCH(11,\"x\",0)"), ErrorCode::Value, "text");
+  ExpectError(Eval("=MATCH(1/0,11,0)"), ErrorCode::Div0, "the lookup value's error comes first");
+  ExpectSame(Eval("=MATCH(11,@A1:A5,0)"), Eval("=1"), "an intersected reference");
+  ExpectSame(Eval("=MATCH(11,{11},0)"), Eval("=1"), "an array constant");
+  ExpectSame(Eval("=MATCH(31,OFFSET(A1,0,0,5),0)"), Eval("=3"), "a built reference");
+  ExpectSame(Eval("=MATCH(41,A1:A5*1,0)"), Eval("=4"), "a computed array");
+  ExpectError(Eval("=IRR(5)"), ErrorCode::Value, "IRR");
+  ExpectError(Eval("=IRR(A1+1)"), ErrorCode::Value, "IRR over a computed value");
+  ExpectError(Eval("=XNPV(0.1,5,A1)"), ErrorCode::Value, "XNPV values");
+  ExpectError(Eval("=RANK(11,IF(TRUE,5))"), ErrorCode::Value, "RANK");
+  ExpectError(Eval("=T.TEST(1,A1:A5,2,1)"), ErrorCode::NA, "T.TEST");
+  ExpectError(Eval("=Z.TEST(1,2)"), ErrorCode::NA, "Z.TEST");
+}
+
+// A two-argument IF whose condition fails selects the value FALSE, which a range argument reads as a direct value;
+// a selected reference stays one.
+TEST_F(SelectedRefTest, MissingElseArmIsTheValueFalse) {
+  ExpectError(Eval("=MATCH(1,IF(FALSE,A1:A3),0)"), ErrorCode::NA, "MATCH over FALSE");
+  ExpectError(Eval("=MATCH(FALSE,IF(FALSE,A1:A3),0)"), ErrorCode::NA, "MATCH for FALSE over FALSE");
+  ExpectSame(Eval("=SUM(IF(FALSE,A1:A3))"), Eval("=0"), "SUM");
+  ExpectSame(Eval("=SUM(IF(FALSE,A1:A3),1)"), Eval("=1"), "SUM with a second argument");
+  ExpectSame(Eval("=COUNT(IF(FALSE,A1:A3))"), Eval("=1"), "COUNT");
+  ExpectSame(Eval("=COUNTA(IF(FALSE,A1:A3))"), Eval("=1"), "COUNTA");
+  ExpectSame(Eval("=AVERAGE(IF(FALSE,A1:A3))"), Eval("=0"), "AVERAGE");
+  ExpectSame(Eval("=SUM(IF(TRUE,D1:D3))"), Eval("=SUM(D1:D3)"), "selected reference skips text");
+  ExpectError(Eval("=LOOKUP(1,IF(FALSE,A1:A3))"), ErrorCode::NA, "LOOKUP");
+  ExpectSame(Eval("=INDEX(IF(FALSE,A1:A3),1)"), Eval("=FALSE"), "INDEX");
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

@@ -59,6 +59,13 @@ namespace {
 // The single source of truth for lazy-form routing. Sorted alphabetically
 // by canonical UPPERCASE name so a quick visual diff catches accidental
 // duplicates. Comments preserved verbatim from the prior in-place table.
+// `entry` with `params` under the lone-value policy `answer`.
+constexpr LazyEntry lone_value(LazyEntry entry, ParamSet params, ScalarArg answer) {
+  entry.scalar_params = params;
+  entry.scalar_error = answer;
+  return entry;
+}
+
 constexpr LazyEntry kLazyDispatch[] = {
     // The trim-reference operators `.:`, `:.`, `.:.` (see
     // `parser::trim_ref_function_name`); `_` sorts first under the lookup's
@@ -142,7 +149,8 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"EDATE", &eval_datetime_lazy, LazyResultShape::kBroadcast, 2U, 2U},
     {"EOMONTH", &eval_datetime_lazy, LazyResultShape::kBroadcast, 2U, 2U},
     {"EXPAND", &eval_expand_lazy, LazyResultShape::kArray, 2U, 4U},
-    {"F.TEST", &eval_f_test_lazy, LazyResultShape::kReduce, 2U, 2U},
+    lone_value({"F.TEST", &eval_f_test_lazy, LazyResultShape::kReduce, 2U, 2U}, ParamSet::kFirstAndSecond,
+               ScalarArg::kRejectNA),
     {"FILTER", &eval_filter_lazy, LazyResultShape::kArray, 2U, 3U},
     // FORECAST is the legacy spelling kept by Excel for back-compat;
     // its impl and arity are identical to FORECAST.LINEAR.
@@ -162,7 +170,8 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"FORMULATEXT", &eval_formulatext_lazy, LazyResultShape::kScalar, 1U, 1U, RefResult::kNone, ParamSet::kFirst},
     {"FREQUENCY", &eval_frequency_lazy, LazyResultShape::kArray, 2U, 2U},
     // FTEST is the pre-2010 legacy spelling of F.TEST; same impl.
-    {"FTEST", &eval_f_test_lazy, LazyResultShape::kReduce, 2U, 2U},
+    lone_value({"FTEST", &eval_f_test_lazy, LazyResultShape::kReduce, 2U, 2U}, ParamSet::kFirstAndSecond,
+               ScalarArg::kRejectNA),
     // GETPIVOTDATA recovers the (sheet, row, col) anchor of its second
     // argument from the un-evaluated Reference AST and reads the
     // freshest `PivotResult` off the bound Workbook on EvalContext;
@@ -185,7 +194,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     // ISFORMULA / ISREF inspect the un-evaluated AST of their argument;
     // they cannot ride the eager path because it flattens references to
     // `Value` before the impl runs.
-    {"IRR", &eval_irr_lazy, LazyResultShape::kScalar, 1U, 2U},
+    lone_value({"IRR", &eval_irr_lazy, LazyResultShape::kScalar, 1U, 2U}, ParamSet::kFirst, ScalarArg::kRejectValue),
     {"ISFORMULA", &eval_isformula_lazy, LazyResultShape::kScalar, 1U, 1U, RefResult::kNone, ParamSet::kFirst},
     {"ISOMITTED", &eval_isomitted_lazy, LazyResultShape::kScalar, 1U, 1U},
     {"ISOWEEKNUM", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
@@ -196,7 +205,8 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"LOOKUP", &eval_lookup_lazy, LazyResultShape::kScalar, 2U, 3U},
     {"MAKEARRAY", &eval_makearray_lazy, LazyResultShape::kArray, 3U, 3U},
     {"MAP", &eval_map_lazy, LazyResultShape::kArray, 2U, kLazyVariadic},
-    {"MATCH", &eval_match_lazy, LazyResultShape::kArray, 2U, 3U},
+    lone_value({"MATCH", &eval_match_lazy, LazyResultShape::kArray, 2U, 3U}, ParamSet::kSecond,
+               ScalarArg::kRejectNAOrTextValue),
     {"MAXIFS", &eval_maxifs_lazy, LazyResultShape::kReduce, 3U, kLazyVariadic, RefResult::kNone,
      ParamSet::kFirstAndOdd},
     {"MDETERM", &eval_mdeterm_lazy, LazyResultShape::kScalar, 1U, 1U},
@@ -205,7 +215,7 @@ constexpr LazyEntry kLazyDispatch[] = {
      ParamSet::kFirstAndOdd},
     {"MINUTE", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
     {"MINVERSE", &eval_minverse_lazy, LazyResultShape::kArray, 1U, 1U},
-    {"MIRR", &eval_mirr_lazy, LazyResultShape::kScalar, 3U, 3U},
+    lone_value({"MIRR", &eval_mirr_lazy, LazyResultShape::kScalar, 3U, 3U}, ParamSet::kFirst, ScalarArg::kRejectValue),
     {"MMULT", &eval_mmult_lazy, LazyResultShape::kArray, 2U, 2U},
     {"MONTH", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
     {"N", &eval_n_lazy, LazyResultShape::kBroadcast, 1U, 1U},
@@ -235,9 +245,12 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"PRICEDISC", &eval_financial_date_lazy, LazyResultShape::kBroadcast, 4U, 5U},
     {"PRICEMAT", &eval_financial_date_lazy, LazyResultShape::kBroadcast, 5U, 6U},
     {"PROB", &eval_prob_lazy, LazyResultShape::kScalar, 3U, 4U},
-    {"RANK", &eval_rank_eq_lazy, LazyResultShape::kScalar, 2U, 3U, RefResult::kNone, ParamSet::kSecond},
-    {"RANK.AVG", &eval_rank_avg_lazy, LazyResultShape::kScalar, 2U, 3U, RefResult::kNone, ParamSet::kSecond},
-    {"RANK.EQ", &eval_rank_eq_lazy, LazyResultShape::kScalar, 2U, 3U, RefResult::kNone, ParamSet::kSecond},
+    lone_value({"RANK", &eval_rank_eq_lazy, LazyResultShape::kScalar, 2U, 3U, RefResult::kNone, ParamSet::kSecond},
+               ParamSet::kSecond, ScalarArg::kRejectValue),
+    lone_value({"RANK.AVG", &eval_rank_avg_lazy, LazyResultShape::kScalar, 2U, 3U, RefResult::kNone, ParamSet::kSecond},
+               ParamSet::kSecond, ScalarArg::kRejectValue),
+    lone_value({"RANK.EQ", &eval_rank_eq_lazy, LazyResultShape::kScalar, 2U, 3U, RefResult::kNone, ParamSet::kSecond},
+               ParamSet::kSecond, ScalarArg::kRejectValue),
     {"RECEIVED", &eval_financial_date_lazy, LazyResultShape::kBroadcast, 4U, 5U},
     {"REDUCE", &eval_reduce_lazy, LazyResultShape::kArray, 3U, 3U},
     {"REGEXEXTRACT", &eval_regexextract_lazy, LazyResultShape::kArray, 2U, 4U},
@@ -279,7 +292,8 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"SWITCH", &eval_switch_lazy, LazyResultShape::kBroadcast, 3U, kLazyVariadic, RefResult::kSwitchResult,
      ParamSet::kNone},
     {"T", &eval_t_lazy, LazyResultShape::kBroadcast, 1U, 1U},
-    {"T.TEST", &eval_t_test_lazy, LazyResultShape::kReduce, 4U, 4U},
+    lone_value({"T.TEST", &eval_t_test_lazy, LazyResultShape::kReduce, 4U, 4U}, ParamSet::kFirstAndSecond,
+               ScalarArg::kRejectNA),
     {"TAKE", &eval_take_lazy, LazyResultShape::kArray, 2U, 3U, RefResult::kArg0, ParamSet::kNone},
     {"TBILLEQ", &eval_financial_date_lazy, LazyResultShape::kBroadcast, 3U, 3U},
     {"TBILLPRICE", &eval_financial_date_lazy, LazyResultShape::kBroadcast, 3U, 3U},
@@ -294,7 +308,8 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"TREND", &eval_trend_lazy, LazyResultShape::kArray, 1U, 4U},
     {"TRIMRANGE", &eval_trimrange_lazy, LazyResultShape::kArray, 1U, 3U, RefResult::kTrimmed, ParamSet::kNone},
     // TTEST is the pre-2010 legacy spelling of T.TEST; same impl.
-    {"TTEST", &eval_t_test_lazy, LazyResultShape::kReduce, 4U, 4U},
+    lone_value({"TTEST", &eval_t_test_lazy, LazyResultShape::kReduce, 4U, 4U}, ParamSet::kFirstAndSecond,
+               ScalarArg::kRejectNA),
     {"TYPE", &eval_type_lazy, LazyResultShape::kScalar, 1U, 1U},
     {"UNIQUE", &eval_unique_lazy, LazyResultShape::kArray, 1U, 3U},
     {"VALUE", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
@@ -306,18 +321,20 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"WORKDAY.INTL", &eval_workday_intl_lazy, LazyResultShape::kScalar, 2U, 4U},
     {"WRAPCOLS", &eval_wrapcols_lazy, LazyResultShape::kArray, 2U, 3U},
     {"WRAPROWS", &eval_wraprows_lazy, LazyResultShape::kArray, 2U, 3U},
-    {"XIRR", &eval_xirr_lazy, LazyResultShape::kScalar, 2U, 3U},
+    lone_value({"XIRR", &eval_xirr_lazy, LazyResultShape::kScalar, 2U, 3U}, ParamSet::kFirstAndSecond,
+               ScalarArg::kRejectValue),
     {"XLOOKUP", &eval_xlookup_lazy, LazyResultShape::kArray, 3U, 6U, RefResult::kXlookupResult, ParamSet::kNone},
     {"XMATCH", &eval_xmatch_lazy, LazyResultShape::kArray, 2U, 4U},
-    {"XNPV", &eval_xnpv_lazy, LazyResultShape::kScalar, 3U, 3U},
+    lone_value({"XNPV", &eval_xnpv_lazy, LazyResultShape::kScalar, 3U, 3U}, ParamSet::kAllButFirst,
+               ScalarArg::kRejectValue),
     {"YEAR", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
     {"YEARFRAC", &eval_datetime_lazy, LazyResultShape::kBroadcast, 2U, 3U},
     {"YIELD", &eval_financial_date_lazy, LazyResultShape::kBroadcast, 6U, 7U},
     {"YIELDDISC", &eval_financial_date_lazy, LazyResultShape::kBroadcast, 4U, 5U},
     {"YIELDMAT", &eval_financial_date_lazy, LazyResultShape::kBroadcast, 5U, 6U},
-    {"Z.TEST", &eval_z_test_lazy, LazyResultShape::kReduce, 2U, 3U},
+    lone_value({"Z.TEST", &eval_z_test_lazy, LazyResultShape::kReduce, 2U, 3U}, ParamSet::kFirst, ScalarArg::kRejectNA),
     // ZTEST is the pre-2010 legacy spelling of Z.TEST; same impl.
-    {"ZTEST", &eval_z_test_lazy, LazyResultShape::kReduce, 2U, 3U},
+    lone_value({"ZTEST", &eval_z_test_lazy, LazyResultShape::kReduce, 2U, 3U}, ParamSet::kFirst, ScalarArg::kRejectNA),
 };
 
 constexpr std::size_t kLazyDispatchCount = sizeof(kLazyDispatch) / sizeof(kLazyDispatch[0]);
