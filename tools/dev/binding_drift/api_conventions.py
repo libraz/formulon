@@ -35,7 +35,9 @@ Further rule modules register into the same registry: the sibling modules
 
 from __future__ import annotations
 
+import bisect
 import copy
+import functools
 import importlib
 import importlib.util
 import re
@@ -607,11 +609,23 @@ def _doc_before(header: str, start: int) -> str:
     return " ".join(line.strip().lstrip("*").strip() for line in text.splitlines())
 
 
+@functools.lru_cache(maxsize=8)
+def _newline_offsets(text: str) -> Tuple[int, ...]:
+    return tuple(i for i, ch in enumerate(text) if ch == "\n")
+
+
 def _line_of(text: str, offset: int) -> int:
-    return text.count("\n", 0, offset) + 1
+    return bisect.bisect_left(_newline_offsets(text), offset) + 1
 
 
 def parse_header(header: str) -> Tuple[List[CFunction], List[CTypedef]]:
+    """The functions and typedefs `header` declares; the parse is shared by every caller passing the same text."""
+    functions, typedefs = _parse_header(header)
+    return list(functions), list(typedefs)
+
+
+@functools.lru_cache(maxsize=8)
+def _parse_header(header: str) -> Tuple[Tuple[CFunction, ...], Tuple[CTypedef, ...]]:
     functions: List[CFunction] = []
     for match in _C_FUNCTION_DECL_RE.finditer(header):
         ret, name, params = match.groups()
@@ -635,7 +649,7 @@ def parse_header(header: str) -> Tuple[List[CFunction], List[CTypedef]]:
         for match in regex.finditer(header):
             typedefs.append(CTypedef(match.group(1), kind, (), _line_of(header, match.start())))
     typedefs.sort(key=lambda t: t.line)
-    return functions, typedefs
+    return tuple(functions), tuple(typedefs)
 
 
 # ---------------------------------------------------------------------------
