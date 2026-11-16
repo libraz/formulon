@@ -211,11 +211,11 @@ describe('A1 text stands for a rectangle wherever a record holds one', () => {
     });
   });
 
-  it('print titles refuse a span on the wrong axis or a malformed one', () => {
+  it('print titles refuse a span on the wrong axis, and a malformed one as a parse error', () => {
     withSheet((ws) => {
       expectInvalid(() => ws.setPrintTitles({ rows: 'A:B', columns: null }));
       expectInvalid(() => ws.setPrintTitles({ rows: null, columns: '1:2' }));
-      expectInvalid(() => ws.setPrintTitles({ rows: '1:', columns: null }));
+      expectCode(() => ws.setPrintTitles({ rows: '1:', columns: null }), f.StatusCode.ParserInvalidReference);
     });
   });
 
