@@ -899,9 +899,24 @@ TEST(PivotTableBridge, WriteRefusesUnmeasuredFormatStates) {
                          [](pivot::PivotTable& t) { t.mutable_chart_formats()[0].chart = 1U; });
   ExpectPartWriteRefused(charts, "chart_formats",
                          [](pivot::PivotTable& t) { t.mutable_chart_formats()[0].series = false; });
-  ExpectPartWriteRefused(ParityPart("x14_show_as.xlsb"), "x14_show_as", [](pivot::PivotTable& t) {
-    t.mutable_data_fields()[0].show_as = pivot::ShowValuesAs::PercentOfParentCol;
-  });
+}
+
+TEST(PivotTableBridge, EveryX14DisplayModeWritesAndReadsBack) {
+  const std::vector<std::uint8_t> part = ParityPart("x14_show_as.xlsb");
+  for (const pivot::ShowValuesAs mode :
+       {pivot::ShowValuesAs::PercentOfParentRow, pivot::ShowValuesAs::PercentOfParentCol,
+        pivot::ShowValuesAs::PercentOfParent, pivot::ShowValuesAs::PercentOfRunningTotal,
+        pivot::ShowValuesAs::RankAscending, pivot::ShowValuesAs::RankDescending}) {
+    auto read = pivot_table_from_xlsb(SpanOf(part));
+    ASSERT_TRUE(read.has_value()) << read.error().message;
+    pivot::PivotTable table = std::move(read.value());
+    table.mutable_data_fields()[0].show_as = mode;
+    auto written = pivot_table_to_xlsb(table, ExcelHost::kMac365, 0);
+    ASSERT_TRUE(written.has_value()) << static_cast<int>(mode) << ": " << written.error().message;
+    auto reread = pivot_table_from_xlsb(SpanOf(written.value()));
+    ASSERT_TRUE(reread.has_value()) << reread.error().message;
+    EXPECT_EQ(reread.value().data_fields()[0].show_as, mode);
+  }
 }
 
 TEST(PivotTableBridge, TableExtensionsWriteAsExcelDropsThem) {

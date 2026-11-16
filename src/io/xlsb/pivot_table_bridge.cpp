@@ -174,6 +174,14 @@ constexpr pivot::ShowValuesAs kShowDataAs[] = {
     pivot::ShowValuesAs::Index,
 };
 
+/// SXDI14 `pivotShowAs` codes from kSxDataShowAsPercentOfParentRow, in ST_PivotShowAs order.
+constexpr pivot::ShowValuesAs kPivotShowAs[] = {
+    pivot::ShowValuesAs::PercentOfParentRow, pivot::ShowValuesAs::PercentOfParentCol,
+    pivot::ShowValuesAs::PercentOfParent,    pivot::ShowValuesAs::PercentOfRunningTotal,
+    pivot::ShowValuesAs::RankAscending,      pivot::ShowValuesAs::RankDescending,
+};
+static_assert(std::size(kPivotShowAs) == kSxDataShowAsRankDescending - kSxDataShowAsPercentOfParentRow + 1U);
+
 /// `ST_PivotFilterType` spellings by BrtBeginSXFilter type (PivotFilterType order).
 constexpr std::string_view kPivotFilterTypes[] = {
     "unknown",
@@ -688,8 +696,9 @@ Expected<void, Error> ReadDataFields(const PivotTableDoc& doc, pivot::PivotTable
     if (in.num_fmt != 0U) {
       entry.number_format = std::to_string(in.num_fmt);
     }
-    // The codec admits SXDI14 only as `percentOfParentRow` beside a plain SXDI display mode.
-    entry.show_as = in.pivot_show_as ? pivot::ShowValuesAs::PercentOfParentRow : kShowDataAs[in.show_data_as];
+    // The codec admits SXDI14 only with a known code, beside a plain SXDI display mode.
+    entry.show_as = in.pivot_show_as ? kPivotShowAs[*in.pivot_show_as - kSxDataShowAsPercentOfParentRow]
+                                     : kShowDataAs[in.show_data_as];
     entry.show_as_base_field = in.base_field;
     entry.show_as_base_item = in.base_item;
     table.mutable_data_fields().push_back(std::move(entry));
@@ -1424,12 +1433,13 @@ bool WritePages(const pivot::PivotTable& table, PivotTableDoc& doc) {
 bool WriteDataFields(const pivot::PivotTable& table, PivotTableDoc& doc) {
   for (const pivot::PivotDataField& in : table.data_fields()) {
     SxDataField out;
-    // `percentOfParentRow` is the one x14 display mode measured: SXDI14 beside a plain SXDI.
-    const bool parent_row = in.show_as == pivot::ShowValuesAs::PercentOfParentRow;
+    // An x14 display mode is SXDI14 beside a plain SXDI.
+    const auto* x14 = std::find(std::begin(kPivotShowAs), std::end(kPivotShowAs), in.show_as);
+    const bool is_x14 = x14 != std::end(kPivotShowAs);
     const pivot::ShowValuesAs show_as =
-        parent_row ? pivot::ShowValuesAs::Normal
-                   : (in.show_as == pivot::ShowValuesAs::RunningTotalInCol ? pivot::ShowValuesAs::RunningTotalInRow
-                                                                           : in.show_as);
+        is_x14 ? pivot::ShowValuesAs::Normal
+               : (in.show_as == pivot::ShowValuesAs::RunningTotalInCol ? pivot::ShowValuesAs::RunningTotalInRow
+                                                                       : in.show_as);
     const auto* code = std::find(std::begin(kShowDataAs), std::end(kShowDataAs), show_as);
     if (in.field_index >= table.fields().size() || in.name.empty() || code == std::end(kShowDataAs) ||
         !NumFmt(in.number_format, out.num_fmt) || !in.raw_ext_xml.empty() || !in.x14_attrs.empty() ||
@@ -1451,8 +1461,8 @@ bool WriteDataFields(const pivot::PivotTable& table, PivotTableDoc& doc) {
     out.base_field = in.show_as_base_field.value_or(0U);
     out.base_item = in.show_as_base_item.value_or(0U);
     out.name = in.name;
-    if (parent_row) {
-      out.pivot_show_as = kSxDataShowAsPercentOfParentRow;
+    if (is_x14) {
+      out.pivot_show_as = kSxDataShowAsPercentOfParentRow + static_cast<std::uint32_t>(x14 - std::begin(kPivotShowAs));
     }
     doc.data_fields.push_back(std::move(out));
   }

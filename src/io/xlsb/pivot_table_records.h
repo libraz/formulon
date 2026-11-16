@@ -148,8 +148,9 @@ struct SxPageField {
   std::uint32_t hierarchy = 0xFFFFFFFFU;
 };
 
-/// SXDI14 `pivotShowAs` for `percentOfParentRow`, the only value measured.
+/// SXDI14 `pivotShowAs` codes: `percentOfParentRow` 9 through `rankDescending` 14, in ST_PivotShowAs order.
 inline constexpr std::uint32_t kSxDataShowAsPercentOfParentRow = 9U;
+inline constexpr std::uint32_t kSxDataShowAsRankDescending = 14U;
 
 /// BrtBeginSXDI: one `<dataField>`.
 struct SxDataField {
@@ -160,8 +161,7 @@ struct SxDataField {
   std::uint32_t base_item = 0;
   std::uint32_t num_fmt = 0;
   std::string name;
-  /// The x14 `pivotShowAs` (SXDI14 bytes 4-7); only kSxDataShowAsPercentOfParentRow,
-  /// with `show_data_as` 0, is measured.
+  /// The x14 `pivotShowAs` (SXDI14 bytes 4-7), beside `show_data_as` 0.
   std::optional<std::uint32_t> pivot_show_as;
 };
 

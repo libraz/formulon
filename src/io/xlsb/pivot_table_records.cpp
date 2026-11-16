@@ -36,6 +36,10 @@ constexpr std::array<std::uint8_t, 4> kFrt14 = {0x02, 0x0E, 0x00, 0x00};
 constexpr std::array<std::uint8_t, 12> kFillDownLabels = {0x00, 0x00, 0x00, 0x00, 0x01, 0x00,
                                                           0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
 constexpr std::size_t kDataField14Size = 13;
+
+constexpr bool IsPivotShowAs(std::uint32_t code) {
+  return code >= kSxDataShowAsPercentOfParentRow && code <= kSxDataShowAsRankDescending;
+}
 constexpr std::size_t kFormatSize = 6;
 /// BrtBeginSXFormat bytes 0-1 for `action="formatting"`.
 constexpr std::uint16_t kFormatActionFormatting = 0x0001;
@@ -673,8 +677,7 @@ Expected<PivotTableDoc, Error> decode_pivot_table(ByteSpan part) {
       if (recs.peek(kFrtBegin)) {
         ASSIGN_OR_RETURN(const ByteSpan x14, DecodeFrt14(recs, ids::kSXDI14));
         if (x14.size != kDataField14Size || load_u32(x14.data) != 0U || load_u32(x14.data + 8) != 0xFFFFFFFFU ||
-            x14.data[12] != 0U || load_u32(x14.data + 4) != kSxDataShowAsPercentOfParentRow ||
-            data.show_data_as != 0U) {
+            x14.data[12] != 0U || !IsPivotShowAs(load_u32(x14.data + 4)) || data.show_data_as != 0U) {
           return Corrupt("xlsb pivot data field x14 record carries an unmeasured state");
         }
         data.pivot_show_as = load_u32(x14.data + 4);
@@ -729,7 +732,7 @@ Expected<std::vector<std::uint8_t>, Error> encode_pivot_table(const PivotTableDo
     }
   }
   for (const SxDataField& data : doc.data_fields) {
-    if (data.pivot_show_as && (*data.pivot_show_as != kSxDataShowAsPercentOfParentRow || data.show_data_as != 0U)) {
+    if (data.pivot_show_as && (!IsPivotShowAs(*data.pivot_show_as) || data.show_data_as != 0U)) {
       return refuse_write("XLSB pivot data field x14 show-as value is unmeasured");
     }
   }

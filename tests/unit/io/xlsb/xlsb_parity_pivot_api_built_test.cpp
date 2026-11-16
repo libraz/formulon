@@ -1,8 +1,7 @@
 // PivotTables built through the C API and saved as `.xlsb`: the cases of tests/fixtures/excel/xlsb_parity/pivot/
 // api_built, each built as the workbook Excel 16.115 opened from the engine's `.xlsx` save and re-saved as `.xlsb`
 // (`<case>.xlsb`). The save keeps every pivot part, passes the package validator, reads back to the same tables, and
-// its pivot records match Excel's but for the revision uid Excel adds. A pivot whose state has no measured layout
-// (a rank or percent-of-running-total display) is left out and counted.
+// its pivot records match Excel's but for the revision uid Excel adds.
 
 #include <cstddef>
 #include <cstdint>
@@ -481,6 +480,18 @@ INSTANTIATE_TEST_SUITE_P(Positions, XlsbParityPivotCalcItemPosition,
                                            "p_prod", "p_zero", "p_zero_bare", "d_desc_abs1", "d_desc_prev",
                                            "d_move_abs1", "d_move_late"));
 
+// Every x14 value display (xlsb_parity/pivot/show_as, Excel 16.115's saves): percent of the parent row and column,
+// percent of the parent total and of the running total over two base fields each, and rank ascending and descending.
+class XlsbParityPivotShowAs : public ::testing::TestWithParam<const char*> {};
+
+TEST_P(XlsbParityPivotShowAs, WritesExcelsPivotRecords) {
+  ExpectExcelsPivotRecords("show_as", GetParam());
+}
+
+INSTANTIATE_TEST_SUITE_P(ShowAs, XlsbParityPivotShowAs,
+                         ::testing::Values("K1_parentRow", "K1_parentCol", "K1_parentRegion", "K1_parentBase11",
+                                           "P1Z22", "S8_pctRunR", "RKa", "K1_rankDescGrp"));
+
 // Table options with a view-header bit or byte (xlsb_parity/pivot/options, Excel 16.115's saves, set through the
 // object model or authored): items shown on empty rows and columns, page fields wrapped down then over and over
 // then down, and hidden page items in subtotals, against the controls with page fields and with items shown.
@@ -753,20 +764,18 @@ TEST(XlsbParityPivotApiBuiltReopened, WritesTheCacheAsExcelSavesItWithoutARefres
   }
 }
 
-// A pivot whose state has no measured record layout is left out with its cache group, and counted.
-class XlsbParityPivotApiBuiltDeferred : public ::testing::TestWithParam<const char*> {};
+// A rank and a percent-of-running-total display are written with their x14 display mode and read back with it.
+class XlsbParityPivotApiBuiltX14ShowAs : public ::testing::TestWithParam<const char*> {};
 
-TEST_P(XlsbParityPivotApiBuiltDeferred, LeavesItsGroupOutAndCountsIt) {
+TEST_P(XlsbParityPivotApiBuiltX14ShowAs, WritesTheDisplayAndReadsItBack) {
   const Saved saved = SaveCase(GetParam());
   ASSERT_FALSE(saved.bytes.empty());
-  EXPECT_EQ(saved.deferred, 1U);
+  EXPECT_EQ(saved.deferred, 0U);
   ExpectValid(saved.bytes);
-  for (const std::string& part : tc::ListParts(saved.bytes)) {
-    EXPECT_EQ(part.find("xl/pivot"), std::string::npos) << part;
-  }
+  EXPECT_EQ(ReloadedReport(saved.bytes), saved.report);
 }
 
-INSTANTIATE_TEST_SUITE_P(Causes, XlsbParityPivotApiBuiltDeferred, ::testing::Values("h_rank", "i_running_percent"));
+INSTANTIATE_TEST_SUITE_P(Modes, XlsbParityPivotApiBuiltX14ShowAs, ::testing::Values("h_rank", "i_running_percent"));
 
 /// The BrtBeginPCDFGRange payloads (groupBy, flags, start, end, interval) of a package's caches.
 std::vector<tc::Bytes> RangeGroups(const tc::Bytes& package) {

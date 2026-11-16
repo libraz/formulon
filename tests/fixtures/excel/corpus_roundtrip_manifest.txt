@@ -82,11 +82,6 @@ xlsb_parity/protection/title_astral_128_src.xlsx validate_xlsx protected_range_t
 # PivotTables loaded from .xlsb do not yet survive a save.
 chart_pivot.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses chartFormat and other unmeasured root attributes
 pivot_options/op_alttext.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses alternative text
-pivot_show_as/K1_parentRegion__sum.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses x14 pivotShowAs
-pivot_show_as/K1_rankDescGrp__sum.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses x14 pivotShowAs
-pivot_show_as/P1Z22__sum.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses x14 pivotShowAs
-pivot_show_as/RKa__sum.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses x14 pivotShowAs
-pivot_show_as/S8_pctRunR__sum.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses x14 pivotShowAs
 rich_errors/notypes_pivot.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a blocked pivot
 rich_errors/notypes_pivot_resaved.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a blocked pivot
 rich_errors/pivot_blocked.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a blocked pivot

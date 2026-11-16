@@ -461,9 +461,9 @@ TEST(XlsbPivotTableRecords, EncodeRefusesUnmeasuredFormatStates) {
   (*empty_ref.formats[0].area.filters)[0].items.clear();
   EXPECT_TRUE(refused(empty_ref));
 
-  PivotTableDoc show_col = show;
-  show_col.data_fields[0].pivot_show_as = 10U;  // `percentOfParentCol`
-  EXPECT_TRUE(refused(show_col));
+  PivotTableDoc show_past = show;
+  show_past.data_fields[0].pivot_show_as = kSxDataShowAsRankDescending + 1U;
+  EXPECT_TRUE(refused(show_past));
 
   PivotTableDoc fill_no_items = DecodeParity("x14_fill_down");
   fill_no_items.fields[1].fill_down_labels = true;  // a field without items
