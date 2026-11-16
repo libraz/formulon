@@ -163,6 +163,9 @@ Checks:
                   declaration, constant table or shim from going stale.
                   Reports "SKIPPED" when the package has not been staged,
                   because `dist/` is gitignored and absent in a fresh clone.
+                  Not part of `all`: a dist/ staged once goes stale as the
+                  sources move, so it runs right after staging instead
+                  (`make node-package`, the npm bundling job).
   header-error-codes
                   Every numeric status code a doc comment in
                   src/c_api/formulon_c.h prints beside an enumerator name
@@ -272,6 +275,10 @@ CHECKS = {
 }
 
 
+# Checks of build outputs, run by the step that produces them rather than by `all`.
+_NOT_IN_ALL = frozenset({"staged-dist"})
+
+
 def main(argv: List[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
@@ -279,7 +286,7 @@ def main(argv: List[str]) -> int:
         nargs="?",
         default="all",
         choices=[*CHECKS.keys(), "all"],
-        help="which drift check to run (default: all)",
+        help="which drift check to run (default: all, which leaves out staged-dist)",
     )
     parser.add_argument("--baseline-dir", type=Path, help="api-conventions: baseline directory to compare against")
     actions = parser.add_mutually_exclusive_group()
@@ -311,7 +318,7 @@ def main(argv: List[str]) -> int:
     if action:
         return api_conventions.run_action(action.replace("_", "-"), args.baseline_dir, rule_ids=args.write_pending)
 
-    names = list(CHECKS.keys()) if args.check == "all" else [args.check]
+    names = [n for n in CHECKS if n not in _NOT_IN_ALL] if args.check == "all" else [args.check]
     _SKIPPED.clear()
     problems: List[str] = []
     for name in names:

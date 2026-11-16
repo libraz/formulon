@@ -209,6 +209,9 @@ jobs:
           ls -la packages/npm-native/dist/
           find packages/npm-native/dist -type f
 
+      - name: Check the staged copies against their sources
+        run: python3 tools/dev/check_binding_drift.py staged-dist
+
       - name: Upload bundled npm tree
         uses: actions/upload-artifact@v7
         with:

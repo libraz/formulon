@@ -483,6 +483,7 @@ node-package: node-native
 	$(NODE) $(NODE_NATIVE_PKG_DIR)/scripts/stage.mjs \
 	  --build-dir $(NODE_NATIVE_BUILD_DIR) \
 	  --out-dir $(NODE_NATIVE_PKG_DIR)/dist
+	$(PYTHON) tools/dev/check_binding_drift.py staged-dist
 
 node-test: node-package
 	(cd $(NODE_NATIVE_PKG_DIR) && $(NODE) --test 'test/*.test.mjs')

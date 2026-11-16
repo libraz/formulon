@@ -722,13 +722,9 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   formulon_add_binding_drift_test(binding_drift_style_record_fields style-record-fields)
   formulon_add_binding_drift_test(binding_drift_engine_messages engine-messages)
   formulon_add_binding_drift_test(binding_drift_tristate_reads tristate-reads)
-  # Byte-compares the files `stage.mjs` copies verbatim into the native
-  # package against their sources. Unlike the sibling checks this one has an
-  # input that need not exist: `dist/` is a build output, so in an unstaged
-  # tree the check reports itself as skipped rather than passing silently.
-  # That makes it a local-loop guard only -- a job that must not publish a
-  # one-sided edit has to run it after staging, where the skip cannot apply.
-  formulon_add_binding_drift_test(binding_drift_staged_dist staged-dist)
+  # `staged-dist` is not registered here: it compares the gitignored
+  # npm-native `dist/` with its sources, which only means something right
+  # after staging, so `make node-package` and the bundling job run it there.
   # The released C ABI surface is still declared, or its loss is on the
   # ledger. This is the only artifact that notices a deleted or renamed base
   # entry point: five of the eight base/`_ex` families have no in-repo caller,
