@@ -93,6 +93,9 @@ except ImportError:  # run as a script: the repository root holds tools/yaml_loa
     from tools.yaml_load import load_yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+# Workbooks Excel opens live inside its own container: a path outside it raises a sandbox file-access panel that an
+# unattended capture would wait on.
+CONTAINER_DIR = Path.home() / "Library/Containers/com.microsoft.Excel/Data/formulon_cf_oracle"
 DEFAULT_CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases_cf"
 DEFAULT_GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "targets" / "mac-365-ja_JP" / "golden_cf"
 DEFAULT_TARGETS_FILE = REPO_ROOT / "tools" / "oracle" / "targets.yaml"
@@ -161,6 +164,25 @@ def _ensure_darwin() -> None:
         )
 
 
+def _excel_app():
+    """The running Excel, attached, or a new one when none runs. Returns ``(app, owned)``: only an owned instance is
+    quit afterwards, and a second instance beside a running one is never started (it would be sandbox-blocked)."""
+    import xlwings as xw  # type: ignore
+
+    if xw.apps:
+        return xw.apps.active, False
+    return xw.App(visible=False, add_book=False), True
+
+
+def _release_excel(app, owned: bool) -> None:
+    if not owned:
+        return
+    try:
+        app.quit()
+    except Exception:
+        pass
+
+
 def _assert_m365_or_abort() -> Dict[str, str]:
     """Aborts when the attached Excel install is not Microsoft 365.
 
@@ -174,8 +196,6 @@ def _assert_m365_or_abort() -> Dict[str, str]:
         RuntimeError: when Excel returns ``#NAME?`` for ARRAYTOTEXT.
     """
 
-    import xlwings as xw  # type: ignore
-
     try:
         from tools.oracle.drivers._locale import detect_locale_from_app
         from tools.oracle.drivers.excel_alerts import alerts_off
@@ -183,7 +203,7 @@ def _assert_m365_or_abort() -> Dict[str, str]:
         from drivers._locale import detect_locale_from_app  # type: ignore
         from drivers.excel_alerts import alerts_off  # type: ignore
 
-    app = xw.App(visible=False, add_book=False)
+    app, owned = _excel_app()
     try:
         with alerts_off(app):
             _sentinel_wb = app.books.add()
@@ -232,10 +252,7 @@ def _assert_m365_or_abort() -> Dict[str, str]:
                 except Exception:
                     pass
     finally:
-        try:
-            app.quit()
-        except Exception:
-            pass
+        _release_excel(app, owned)
 
 
 def _addr(row: int, col: int) -> str:
@@ -802,8 +819,6 @@ def _capture_via_excel(xlsx: Path, case: Dict[str, Any], descriptors: List[Dict[
     every cell in ``case['range']`` and decodes the resolved
     ``DisplayFormat`` against ``descriptors``.
     """
-    import xlwings as xw  # type: ignore
-
     try:
         from tools.oracle.drivers.excel_alerts import alerts_off
     except ImportError:  # direct `python tools/oracle/cf_oracle_gen.py`
@@ -822,7 +837,9 @@ def _capture_via_excel(xlsx: Path, case: Dict[str, Any], descriptors: List[Dict[
     # DifferentialFormat / ColorScale rules in the same sqref.
     visual_matches = _compute_visual_matches(case, descriptors)
 
-    app = xw.App(visible=False, add_book=False)
+    app, owned = _excel_app()
+    calculation = app.calculation
+    screen_updating = app.screen_updating
     app.calculation = "manual"
     app.screen_updating = False
     try:
@@ -852,15 +869,18 @@ def _capture_via_excel(xlsx: Path, case: Dict[str, Any], descriptors: List[Dict[
                     pass
     finally:
         try:
-            app.quit()
+            app.calculation = calculation
+            app.screen_updating = screen_updating
         except Exception:
             pass
+        _release_excel(app, owned)
 
 
 def _process_suite(case_path: Path, golden_path: Path) -> int:
     doc = json.loads(case_path.read_text(encoding="utf-8"))
     out_cases: List[Dict[str, Any]] = []
-    with tempfile.TemporaryDirectory(prefix="formulon-cf-oracle-") as tmp:
+    CONTAINER_DIR.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="formulon-cf-oracle-", dir=CONTAINER_DIR) as tmp:
         tmpdir = Path(tmp)
         for case in doc["cases"]:
             xlsx = tmpdir / f"{case['id']}.xlsx"
