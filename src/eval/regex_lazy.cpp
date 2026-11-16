@@ -377,28 +377,21 @@ Value substitute_nth(const CompiledPattern& program, std::string_view subject, c
 // through as the cell's error.
 template <typename PerCell>
 Value broadcast_over_text(const ArrayValue* in, Arena& arena, PerCell&& per_cell) {
-  Value* cells = nullptr;
-  ArrayValue* out = allocate_derived_array_value(in->rows, in->cols, arena, cells);
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  const std::size_t n = static_cast<std::size_t>(in->rows) * static_cast<std::size_t>(in->cols);
   // Results are interned into the arena, so a subject only lives for its own cell.
-  for (std::size_t i = 0; i < n; ++i) {
-    const Value& cell = in->cells[i];
-    if (cell.is_error()) {
-      cells[i] = cell;
-      continue;
-    }
-    auto t = coerce_to_text(cell);
-    if (!t) {
-      cells[i] = Value::error(t.error());
-      continue;
-    }
-    const std::string subject = std::move(t.value());
-    cells[i] = per_cell(std::string_view(subject));
-  }
-  return Value::array(out);
+  return map_array_with(
+      *in,
+      [&per_cell](const Value& cell) -> Value {
+        if (cell.is_error()) {
+          return cell;
+        }
+        auto t = coerce_to_text(cell);
+        if (!t) {
+          return Value::error(t.error());
+        }
+        const std::string subject = std::move(t.value());
+        return per_cell(std::string_view(subject));
+      },
+      arena);
 }
 
 // Resolves the leading (text, pattern) pair every REGEX* function takes, in

@@ -292,24 +292,26 @@ void walk_invoked_lambda_body(const parser::AstNode& lambda, WalkState& state, c
   walk_deferred_args(args, param_count, state);
 }
 
-// Parses a defined name's formula text in the extractor-local arena and
-// hands the resulting AST to `visit`. Cycles (`Loop = Loop + 1`, `A = B; B = A`) are detected
-// via `state.name_stack`: every definition currently being expanded is
-// pushed before recursion and popped after. A repeated entry
-// causes a silent skip — no volatility flag, no diagnostic — matching the
-// "graceful skip on unresolvable refs" policy already used for unknown
-// sheets and out-of-bounds coordinates. Parser failures on the defined-
-// name's formula are also silently skipped: malformed defined-name
-// formulas exist in the wild and the dep extractor is not the right layer
-// to surface them.
-template <typename Visit>
-void visit_defined_name_body(const DefinedName& def, WalkState& state, Visit&& visit) {
+/// State `enter_defined_name_body` replaces and `leave_defined_name_body`
+/// restores.
+struct DefinedNameFrame {
+  std::vector<WalkState::LexicalBinding> saved_lexical;
+  std::uint16_t saved_scope = 0;
+};
+
+/// Parses `def`'s formula in the extractor-local arena and returns its root
+/// with the name stack, scope and lexical shadow stack set for the walk. A
+/// cyclic (`Loop = Loop + 1`, `A = B; B = A`), empty or unparseable body
+/// yields nullptr with the state untouched: a silent skip, no volatility flag
+/// and no diagnostic, like unknown sheets and out-of-bounds coordinates. A
+/// non-null result must be paired with `leave_defined_name_body`.
+parser::AstNode* enter_defined_name_body(const DefinedName& def, WalkState& state, DefinedNameFrame& frame) {
   // Cycle detection by definition identity: a mixed-case re-entry
   // (`Foo` -> `=foo+1`) resolves to the same entry, while `Sheet1!X` naming
   // `Sheet2!X` reaches a different one.
   for (const DefinedName* active : state.name_stack) {
     if (active == &def) {
-      return;
+      return nullptr;
     }
   }
 
@@ -317,38 +319,42 @@ void visit_defined_name_body(const DefinedName& def, WalkState& state, Visit&& v
   // expressions but Excel sometimes keeps the prefix on import.
   const std::string_view src = strip_formula_prefix(def.formula);
   if (src.empty()) {
-    return;
+    return nullptr;
   }
 
   parser::AstNode* root = parse_formula_entry(src, *state.name_arena);
   if (root == nullptr) {
-    return;  // Unparseable (or valid-prefix-plus-garbage) formula: skip.
+    return nullptr;  // Unparseable (or valid-prefix-plus-garbage) formula: skip.
   }
 
   // Defined-name evaluation clears the caller's lexical NameEnv. Keep the
   // extractor's lexical shadow stack isolated for the same reason: a LET
   // binding at the call site must not hide a workbook name referenced by the
   // definition body.
-  std::vector<WalkState::LexicalBinding> saved_lexical;
-  saved_lexical.swap(state.lexical_stack);
+  frame.saved_lexical.swap(state.lexical_stack);
   // A sheet-local body binds its names in the owning sheet's scope, as
   // `resolve_defined_name` evaluates it.
-  const std::uint16_t saved_scope = state.name_scope_sheet_id;
+  frame.saved_scope = state.name_scope_sheet_id;
   if (def.local_sheet_id >= 0 && static_cast<std::size_t>(def.local_sheet_id) < state.workbook->sheet_count()) {
     state.name_scope_sheet_id = static_cast<std::uint16_t>(def.local_sheet_id);
   }
   state.name_stack.push_back(&def);
-  visit(*root);
+  return root;
+}
+
+void leave_defined_name_body(WalkState& state, DefinedNameFrame& frame) {
   state.name_stack.pop_back();
-  state.name_scope_sheet_id = saved_scope;
-  state.lexical_stack.swap(saved_lexical);
+  state.name_scope_sheet_id = frame.saved_scope;
+  state.lexical_stack.swap(frame.saved_lexical);
 }
 
 // Expands a defined-name reference, recursing into its body through the
 // shared `walk()`.
 void expand_defined_name(const DefinedName& def, WalkState& state, bool invoked, const DeferredArgs* args = nullptr) {
   bool bound = false;
-  visit_defined_name_body(def, state, [&](const parser::AstNode& root) {
+  DefinedNameFrame frame;
+  if (const parser::AstNode* body = enter_defined_name_body(def, state, frame)) {
+    const parser::AstNode& root = *body;
     if (invoked && root.kind() == parser::NodeKind::Lambda) {
       bound = true;
       // A direct defined-name LAMBDA body is evaluated by a call, so descend
@@ -368,7 +374,8 @@ void expand_defined_name(const DefinedName& def, WalkState& state, bool invoked,
     } else {
       walk(root, state);
     }
-  });
+    leave_defined_name_body(state, frame);
+  }
   if (!bound) {
     walk_deferred_args(args, 0U, state);
   }
@@ -582,8 +589,11 @@ std::optional<Footprint> reference_footprint(const parser::AstNode& node, WalkSt
         return std::nullopt;
       }
       std::optional<Footprint> out;
-      visit_defined_name_body(*def, state,
-                              [&](const parser::AstNode& root) { out = reference_footprint(root, state); });
+      DefinedNameFrame frame;
+      if (const parser::AstNode* body = enter_defined_name_body(*def, state, frame)) {
+        out = reference_footprint(*body, state);
+        leave_defined_name_body(state, frame);
+      }
       return out;
     }
 
@@ -678,8 +688,11 @@ bool is_static_reference(const parser::AstNode& node, WalkState& state) {
         return false;
       }
       bool is_static = false;
-      visit_defined_name_body(*def, state,
-                              [&](const parser::AstNode& root) { is_static = is_static_reference(root, state); });
+      DefinedNameFrame frame;
+      if (const parser::AstNode* body = enter_defined_name_body(*def, state, frame)) {
+        is_static = is_static_reference(*body, state);
+        leave_defined_name_body(state, frame);
+      }
       return is_static;
     }
     default:

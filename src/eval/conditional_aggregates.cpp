@@ -187,8 +187,9 @@ using ParsedCriteria = std::vector<std::unique_ptr<ParsedCriterion>>;
 /// there). `aggregate(parsed)`
 /// computes one result from scalar criteria; with no array criterion it is
 /// the call's result.
-template <typename Aggregate>
-Value lift_criteria(const std::vector<Value>& criteria, Arena& arena, Aggregate&& aggregate) {
+using CriteriaAggregate = Value (*)(const ParsedCriteria& parsed, void* context);
+
+Value lift_criteria(const std::vector<Value>& criteria, Arena& arena, CriteriaAggregate aggregate, void* context) {
   std::uint32_t rows = 1U;
   std::uint32_t cols = 1U;
   bool lifted = false;
@@ -204,7 +205,7 @@ Value lift_criteria(const std::vector<Value>& criteria, Arena& arena, Aggregate&
     for (const Value& criterion : criteria) {
       parsed.push_back(std::make_unique<ParsedCriterion>(parse_criterion(criterion)));
     }
-    return aggregate(parsed);
+    return aggregate(parsed, context);
   }
   std::vector<Value> scalar_slots(criteria.size(), Value::blank());
   std::vector<ArrayView> views;
@@ -226,7 +227,7 @@ Value lift_criteria(const std::vector<Value>& criteria, Arena& arena, Aggregate&
         parsed.push_back(std::make_unique<ParsedCriterion>(
             parse_criterion(element != nullptr ? *element : Value::error(ErrorCode::NA))));
       }
-      slot = aggregate(parsed);
+      slot = aggregate(parsed, context);
     }
   }
   return Value::array(out);
@@ -381,9 +382,18 @@ Value eval_ifs_numeric_lazy(const parser::AstNode& call, Arena& arena, const Fun
   if (!resolve_ifs_inputs(call, arena, registry, ctx, &inputs, &err)) {
     return err;
   }
-  return lift_criteria(inputs.criteria, arena, [&](const ParsedCriteria& parsed) {
-    return aggregate_matching_numbers(inputs, parsed, ctx.excel_profile(), aggregate);
-  });
+  struct State {
+    const IfsInputs& inputs;
+    ExcelProfile profile;
+    IfsNumericAggregate aggregate;
+  } state{inputs, ctx.excel_profile(), aggregate};
+  return lift_criteria(
+      inputs.criteria, arena,
+      [](const ParsedCriteria& parsed, void* context) {
+        const State& s = *static_cast<const State*>(context);
+        return aggregate_matching_numbers(s.inputs, parsed, s.profile, s.aggregate);
+      },
+      &state);
 }
 
 /// Resolved inputs of SUMIF / AVERAGEIF: the criteria range, the criterion
@@ -466,22 +476,31 @@ Value eval_sum_or_average_if(const parser::AstNode& call, Arena& arena, const Fu
   if (!resolve_if_inputs(call, arity, arena, registry, ctx, &inputs, &err)) {
     return err;
   }
-  return lift_criteria({inputs.criterion}, arena, [&](const ParsedCriteria& parsed) {
-    double sum = 0.0;
-    double count = 0.0;
-    Value match_err = Value::blank();
-    if (!sum_matching_if(inputs, *parsed[0], ctx.excel_profile(), &sum, &count, &match_err)) {
-      return match_err;
-    }
-    if (!average) {
-      return Value::number(sum);
-    }
-    if (count == 0.0) {
-      return Value::error(ErrorCode::Div0);
-    }
-    const double mean = sum / count;
-    return std::isfinite(mean) ? Value::number(mean) : Value::error(ErrorCode::Num);
-  });
+  struct State {
+    const IfInputs& inputs;
+    ExcelProfile profile;
+    bool average;
+  } state{inputs, ctx.excel_profile(), average};
+  return lift_criteria(
+      {inputs.criterion}, arena,
+      [](const ParsedCriteria& parsed, void* context) {
+        const State& s = *static_cast<const State*>(context);
+        double sum = 0.0;
+        double count = 0.0;
+        Value match_err = Value::blank();
+        if (!sum_matching_if(s.inputs, *parsed[0], s.profile, &sum, &count, &match_err)) {
+          return match_err;
+        }
+        if (!s.average) {
+          return Value::number(sum);
+        }
+        if (count == 0.0) {
+          return Value::error(ErrorCode::Div0);
+        }
+        const double mean = sum / count;
+        return std::isfinite(mean) ? Value::number(mean) : Value::error(ErrorCode::Num);
+      },
+      &state);
 }
 
 }  // namespace
@@ -498,41 +517,15 @@ Value eval_sum_or_average_if(const parser::AstNode& call, Arena& arena, const Fu
 
 // COUNTIF(range, criterion)
 //
-// Counts cells in `range` that match `criterion`. Errors encountered in
-// the range itself are silently skipped (per-cell #DIV/0! does NOT
-// propagate); an error CRITERION, however, propagates. An error in
-// resolving the range itself (e.g. `#REF!` from a missing sheet) is
-// surfaced directly.
+// The single-pair case of COUNTIFS: same range checks, error handling and
+// blank-tail rule. An error criterion is NOT propagated, and per-cell errors
+// in the range are skipped.
 Value eval_countif_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx) {
   if (call.as_call_arity() != 2) {
     return Value::error(ErrorCode::Value);
   }
-  if (is_external_range_arg(call.as_call_arg(0), ctx)) {
-    return Value::error(ErrorCode::Value);
-  }
-  auto resolved = resolve_conditional_range(call.as_call_arg(0), arena, registry, ctx);
-  if (!resolved) {
-    return Value::error(resolved.error());
-  }
-  const std::vector<Value>& cells = resolved.value().cells;
-  const double tail = unpopulated_tail(resolved.value(), call.as_call_arg(0), ctx);
-  // An error-valued criterion (e.g. `COUNTIF(range, #N/A)`) is NOT
-  // propagated: `parse_criterion` turns it into an error-match filter.
-  const Value criterion = eval_node(call.as_call_arg(1), arena, registry, ctx);
-  return lift_criteria({criterion}, arena, [&](const ParsedCriteria& parsed) {
-    double count = 0.0;
-    for (const Value& cell : cells) {
-      if (matches_criterion(cell, *parsed[0], ctx.excel_profile())) {
-        count += 1.0;
-      }
-    }
-    // The cells past the used range are blank; count them when a blank matches.
-    if (tail > 0.0 && matches_criterion(Value::blank(), *parsed[0], ctx.excel_profile())) {
-      count += tail;
-    }
-    return Value::number(count);
-  });
+  return eval_countifs_lazy(call, arena, registry, ctx);
 }
 
 // SUMIF(range, criterion [, sum_range])
@@ -618,26 +611,36 @@ Value eval_countifs_lazy(const parser::AstNode& call, Arena& arena, const Functi
     }
   }
 
-  return lift_criteria(criteria, arena, [&](const ParsedCriteria& parsed) {
-    double count = 0.0;
-    for (std::size_t i = 0; i < expected_size; ++i) {
-      if (all_criteria_match(criteria_cells, parsed, i, ctx.excel_profile())) {
-        count += 1.0;
-      }
-    }
-    // The tail common to every range is blank; it counts only when every
-    // criterion matches a blank.
-    if (tail > 0.0) {
-      bool blank_matches_all = true;
-      for (const auto& criterion : parsed) {
-        blank_matches_all = blank_matches_all && matches_criterion(Value::blank(), *criterion, ctx.excel_profile());
-      }
-      if (blank_matches_all) {
-        count += tail;
-      }
-    }
-    return Value::number(count);
-  });
+  struct State {
+    const std::vector<std::vector<Value>>& criteria_cells;
+    std::size_t size;
+    double tail;
+    ExcelProfile profile;
+  } state{criteria_cells, expected_size, tail, ctx.excel_profile()};
+  return lift_criteria(
+      criteria, arena,
+      [](const ParsedCriteria& parsed, void* context) {
+        const State& s = *static_cast<const State*>(context);
+        double count = 0.0;
+        for (std::size_t i = 0; i < s.size; ++i) {
+          if (all_criteria_match(s.criteria_cells, parsed, i, s.profile)) {
+            count += 1.0;
+          }
+        }
+        // The tail common to every range is blank; it counts only when every
+        // criterion matches a blank.
+        if (s.tail > 0.0) {
+          bool blank_matches_all = true;
+          for (const auto& criterion : parsed) {
+            blank_matches_all = blank_matches_all && matches_criterion(Value::blank(), *criterion, s.profile);
+          }
+          if (blank_matches_all) {
+            count += s.tail;
+          }
+        }
+        return Value::number(count);
+      },
+      &state);
 }
 
 // SUMIFS(sum_range, range1, crit1 [, range2, crit2, ...])

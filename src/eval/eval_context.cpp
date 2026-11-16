@@ -401,12 +401,12 @@ struct WalkedRange {
   std::optional<DeclaredRect> rect;
 };
 
-// `shared` yields the call's shared extent; it is consulted only for a
-// whole-axis reference.
-template <typename SharedExtent>
+// `shared_extent(context)` yields the call's shared extent; it is consulted
+// only for a whole-axis reference.
 Expected<WalkedRange, ErrorCode> walk_range(const parser::Reference& lhs, const parser::Reference& rhs,
                                             const Sheet* current_sheet, const Workbook* workbook,
-                                            const SharedExtent& shared_extent, const CellValueOverlay* overlay) {
+                                            WholeAxisExtent (*shared_extent)(const void*), const void* context,
+                                            const CellValueOverlay* overlay) {
   if (current_sheet == nullptr) {
     return ErrorCode::Name;
   }
@@ -453,7 +453,7 @@ Expected<WalkedRange, ErrorCode> walk_range(const parser::Reference& lhs, const 
   // caller needing a shape has to reach for it. Where one call reads several
   // whole-axis references, `shared` walks them all to one length so they
   // stay the same shape as each other.
-  const WholeAxisExtent shared = shared_extent();
+  const WholeAxisExtent shared = shared_extent(context);
   const bool column_span = rect.rows() == Sheet::kMaxRows;
   const std::uint32_t axis_len = column_span ? Sheet::kMaxRows : Sheet::kMaxCols;
   const std::uint32_t shared_len = std::min(column_span ? shared.rows : shared.cols, axis_len);
@@ -497,20 +497,19 @@ Expected<std::vector<Value>, ErrorCode> EvalContext::expand_range(const parser::
                                                                   const FunctionRegistry& registry,
                                                                   std::uint32_t* out_rows,
                                                                   std::uint32_t* out_cols) const {
-  auto walked = walk_range(
-      lhs, rhs, current_sheet_, workbook_, [this] { return shared_whole_axis_extent(); }, cell_value_overlay_);
+  const Sheet* target_sheet = nullptr;
+  auto walked = walked_range_rect(lhs, rhs, &target_sheet);
   if (!walked) {
     return walked.error();
   }
-  if (!walked.value().rect.has_value()) {
+  if (!walked.value().has_value()) {
     set_shape(out_rows, out_cols, 0, 0);
     return std::vector<Value>{};
   }
-  const Sheet* target_sheet = walked.value().sheet;
-  const std::uint32_t r_min = walked.value().rect->row_first;
-  const std::uint32_t r_max = walked.value().rect->row_last;
-  const std::uint32_t c_min = walked.value().rect->col_first;
-  const std::uint32_t c_max = walked.value().rect->col_last;
+  const std::uint32_t r_min = walked.value()->row_first;
+  const std::uint32_t r_max = walked.value()->row_last;
+  const std::uint32_t c_min = walked.value()->col_first;
+  const std::uint32_t c_max = walked.value()->col_last;
 
   // Cells are flattened as stored; each caller applies Excel's range-vs-direct
   // coercion (SUM / AVERAGE skip TRUE and text found in a range).
@@ -608,7 +607,9 @@ Expected<std::optional<DeclaredRect>, ErrorCode> EvalContext::walked_range_rect(
                                                                                 const parser::Reference& rhs,
                                                                                 const Sheet** out_sheet) const {
   auto walked = walk_range(
-      lhs, rhs, current_sheet_, workbook_, [this] { return shared_whole_axis_extent(); }, cell_value_overlay_);
+      lhs, rhs, current_sheet_, workbook_,
+      [](const void* self) { return static_cast<const EvalContext*>(self)->shared_whole_axis_extent(); }, this,
+      cell_value_overlay_);
   if (!walked) {
     return walked.error();
   }

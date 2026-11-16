@@ -396,18 +396,22 @@ Value confint_at(const FittedSeries& fs, double target_date, double confidence) 
   return to_finite_value(z * (variance > 0.0 ? std::sqrt(variance) : 0.0));
 }
 
-// Applies `at` to target_date: once for a scalar, per element of an array
+// Forecasts at target_date (the confidence-interval half-width when
+// `confidence` is non-null): once for a scalar, per element of an array
 // keeping its shape. As in the scalar call, which reads target_date first, a
 // target error wins over `head_err`, the failure of the rest of the call.
-template <typename At>
-Value at_each_target(const Value& target, bool head_ok, const Value& head_err, const At& at, Arena& arena) {
+Value at_each_target(const Value& target, bool head_ok, const Value& head_err, const FittedSeries& fs,
+                     const double* confidence, Arena& arena) {
   const auto one = [&](const Value& v) -> Value {
     double t = 0.0;
     Value err = Value::blank();
     if (!finite_number(v, &t, &err, ErrorCode::Num)) {
       return err;
     }
-    return head_ok ? at(t) : head_err;
+    if (!head_ok) {
+      return head_err;
+    }
+    return confidence != nullptr ? confint_at(fs, t, *confidence) : forecast_at(fs, t);
   };
   if (!target.is_array()) {
     return one(target);
@@ -434,7 +438,7 @@ Value eval_forecast_ets_lazy(const parser::AstNode& call, Arena& arena, const Fu
 
   FittedSeries fs;
   const bool fitted = fit_series(call, arity, 3U, arena, registry, ctx, &fs, &err);
-  return at_each_target(target, fitted, err, [&fs](double t) { return forecast_at(fs, t); }, arena);
+  return at_each_target(target, fitted, err, fs, /*confidence=*/nullptr, arena);
 }
 
 Value eval_forecast_ets_confint_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -465,8 +469,7 @@ Value eval_forecast_ets_confint_lazy(const parser::AstNode& call, Arena& arena, 
 
   FittedSeries fs;
   head_ok = head_ok && fit_series(call, arity, 4U, arena, registry, ctx, &fs, &err);
-  return at_each_target(
-      target, head_ok, err, [&fs, confidence](double t) { return confint_at(fs, t, confidence); }, arena);
+  return at_each_target(target, head_ok, err, fs, &confidence, arena);
 }
 
 Value eval_forecast_ets_seasonality_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

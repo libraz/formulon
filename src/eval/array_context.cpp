@@ -88,16 +88,8 @@ Value eval_node_as_array(const parser::AstNode& node, Arena& arena, const Functi
       return Value::error(ErrorCode::Value);
     }
     const ArrayValue* in_arr = inner.as_array();
-    const std::size_t n = static_cast<std::size_t>(in_arr->rows) * static_cast<std::size_t>(in_arr->cols);
-    Value* buf = nullptr;
-    ArrayValue* out = allocate_derived_array_value(in_arr->rows, in_arr->cols, arena, buf);
-    if (out == nullptr) {
-      return Value::error(ErrorCode::Num);
-    }
-    for (std::size_t i = 0; i < n; ++i) {
-      buf[i] = apply_unary(target.as_unary_op(), in_arr->cells[i]);
-    }
-    return Value::array(out);
+    const parser::UnaryOp op = target.as_unary_op();
+    return map_array_with(*in_arr, [op](const Value& cell) { return apply_unary(op, cell); }, arena);
   }
 
   // Range-shaped AST: Ref / RangeOp / one of the reference-producing Calls.

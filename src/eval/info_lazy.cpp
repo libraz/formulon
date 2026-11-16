@@ -145,18 +145,7 @@ Value eval_first_cell_coercion(const parser::AstNode& call, Arena& arena, const 
   if (!v.is_array()) {
     return coerce(v);
   }
-  const std::uint32_t rows = v.as_array_rows();
-  const std::uint32_t cols = v.as_array_cols();
-  Value* buf = nullptr;
-  ArrayValue* out = allocate_derived_array_value(rows, cols, arena, buf);
-  if (out == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  const Value* cells = v.as_array_cells();
-  for (std::size_t i = 0; i < static_cast<std::size_t>(rows) * cols; ++i) {
-    buf[i] = coerce(cells[i]);
-  }
-  return Value::array(out);
+  return map_array_with(*v.as_array(), coerce, arena);
 }
 
 // Locates `sheet` inside `workbook` by pointer identity and returns
@@ -664,17 +653,8 @@ namespace {
 // (text_format.text_backslash_escape); an array of formats is rewritten per element.
 Value backslash_as_yen(const Value& fmt, Arena& arena) {
   if (fmt.is_array()) {
-    const ArrayValue* src = fmt.as_array();
-    Value* cells = nullptr;
-    ArrayValue* out = allocate_derived_array_value(src->rows, src->cols, arena, cells);
-    if (out == nullptr) {
-      return Value::error(ErrorCode::Num);
-    }
-    const std::size_t count = static_cast<std::size_t>(src->rows) * src->cols;
-    for (std::size_t i = 0; i < count; ++i) {
-      cells[i] = backslash_as_yen(src->cells[i], arena);
-    }
-    return Value::array(out);
+    return map_array_with(
+        *fmt.as_array(), [&arena](const Value& cell) { return backslash_as_yen(cell, arena); }, arena);
   }
   if (!fmt.is_text() || fmt.as_text().find('\\') == std::string_view::npos) {
     return fmt;

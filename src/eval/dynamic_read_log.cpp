@@ -28,7 +28,7 @@ void DynamicReadLog::observe(CellNodeId cell, std::uint64_t ordinal, EvaluateCel
   }
   // The reader is registered even when it ends up reading nothing, so its
   // learned edges from an earlier recalc are dropped.
-  readers_[cell] = ordinal;
+  readers_[cell] = static_cast<std::size_t>(ordinal);
   current_ = cell;
   current_ordinal_ = ordinal;
   active_ = true;
@@ -54,11 +54,11 @@ void DynamicReadLog::record_trampoline(void* user_data, std::string_view sheet, 
 }
 
 void DynamicReadLog::note_commit(CellNodeId cell, std::uint64_t ordinal) {
-  commits_[cell] = ordinal;
+  commits_[cell] = static_cast<std::size_t>(ordinal);
 }
 
 void DynamicReadLog::note_iterative_member(CellNodeId cell, std::uint64_t component) {
-  iterative_members_[cell] = component;
+  iterative_members_[cell] = static_cast<std::size_t>(component);
 }
 
 void DynamicReadLog::keep_prior_value(CellNodeId cell, const Value& prior) {

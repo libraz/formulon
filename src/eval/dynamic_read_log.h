@@ -99,7 +99,7 @@ class DynamicReadLog {
   /// Drops the wave records and keeps the prior values.
   void clear_wave();
 
-  const std::unordered_map<CellNodeId, std::uint64_t, CellNodeIdHash>& readers() const noexcept { return readers_; }
+  const std::unordered_map<CellNodeId, std::size_t, CellNodeIdHash>& readers() const noexcept { return readers_; }
   const std::vector<DynamicRead>& reads() const noexcept { return reads_; }
   std::optional<std::uint64_t> commit_ordinal(CellNodeId cell) const;
   std::optional<std::uint64_t> iterative_component(CellNodeId cell) const;
@@ -111,7 +111,9 @@ class DynamicReadLog {
     Value value;
     std::string text;
   };
-  using CellIndex = std::unordered_map<CellNodeId, std::uint64_t, CellNodeIdHash>;
+  // Evaluation ordinals and component ids; `size_t` shares the instantiation
+  // the graph code already uses.
+  using CellIndex = std::unordered_map<CellNodeId, std::size_t, CellNodeIdHash>;
 
   /// Keeps `prior` as the value `cell` showed before this recalc changed
   /// it, unless one is already kept. Only scalars are kept.
