@@ -903,13 +903,13 @@ entries:
   # their .xlsb records) with them; Windows Excel's own edited saves are the
   # fixture in tests/unit/io/x14_structural_edit_fixture_test.cpp. What
   # remains is below.
-  - id: structural_edit_does_not_remap_ole_and_control_anchors
+  - id: structural_edit_keeps_smart_tags
     applies_to: all
     cause: engine-gap
     mode: skip-oracle
     scope: deferred-feature
-    evidence: [src/io/worksheet_child_refs.h, tests/unit/io/retained_children_edit_fixture_test.cpp]
-    reason: "A row/column edit moves the cells named by the retained `<worksheet>` children as Excel moves them -- protected ranges, scenarios, the sheet sort state, cell watches, ignored errors, web-publish ranges, and in a `.xlsb` the AutoFilter and breaks kept as records (Excel saves under tests/fixtures/excel/retained_children_edit/). The anchors inside `<oleObjects>` and `<controls>` still keep their pre-edit cells, and nothing reports it; this host cannot author either object to establish how Excel moves them. `<smartTags>` stays put too, though Excel drops smart tags on any save."
+    evidence: [src/io/worksheet_child_refs.h]
+    reason: "A row/column edit leaves the cells named by a retained `<smartTags>` where they were. Excel drops smart tags on any save, so none of its saves carries them after an edit."
     prefer: mac-excel-365
     first_noted: 2026-08-21
     last_verified_excel_version: "16.113.3"

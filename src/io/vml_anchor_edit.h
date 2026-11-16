@@ -16,6 +16,8 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <string_view>
+#include <vector>
 
 #include "sheet_metadata.h"
 
@@ -30,6 +32,14 @@ using LineOffsetPt = std::function<double(bool row_axis, std::uint32_t line)>;
 /// re-derives the moved shapes' `style` geometry through `offset_pt`. Returns
 /// whether any shape changed.
 bool remap_vml_anchors(std::string& shapes, const StructuralEdit& edit, const LineOffsetPt& offset_pt);
+
+/// Removes the shapes of `shapes` whose id is `_x0000_s<N>` for an `N` in
+/// `shape_ids`. Returns the `o:relid` of each removed shape's image (an OLE
+/// object's preview), relative to the drawing's own relationships.
+std::vector<std::string> remove_vml_shapes(std::string& shapes, const std::vector<std::uint32_t>& shape_ids);
+
+/// Whether `shapes` still holds a `v:shape`.
+bool vml_has_shapes(std::string_view shapes);
 
 }  // namespace formulon::io
 

@@ -1,5 +1,6 @@
 #include "io/vml_anchor_edit.h"
 
+#include <algorithm>
 #include <array>
 #include <charconv>
 #include <cstddef>
@@ -138,6 +139,50 @@ bool RemapShape(std::string& shape, const StructuralEdit& edit, const LineOffset
 }
 
 }  // namespace
+
+std::vector<std::string> remove_vml_shapes(std::string& shapes, const std::vector<std::uint32_t>& shape_ids) {
+  constexpr std::string_view kIdPrefix = "id=\"_x0000_s";
+  constexpr std::string_view kRelId = "o:relid=\"";
+  std::vector<std::string> image_rel_ids;
+  std::string out;
+  std::size_t copied = 0;
+  for (std::size_t at = shapes.find(kShapeOpen); at != std::string::npos; at = shapes.find(kShapeOpen, at)) {
+    const std::size_t close = shapes.find(kShapeClose, at);
+    if (close == std::string::npos) {
+      break;
+    }
+    const std::size_t end = close + kShapeClose.size();
+    const std::string_view shape = std::string_view(shapes).substr(at, end - at);
+    const std::size_t id_at = shape.substr(0, shape.find('>')).find(kIdPrefix);
+    std::uint32_t id = 0;
+    const char* digits = id_at == std::string_view::npos ? nullptr : shape.data() + id_at + kIdPrefix.size();
+    if (digits == nullptr || std::from_chars(digits, shape.data() + shape.size(), id).ec != std::errc() ||
+        std::find(shape_ids.begin(), shape_ids.end(), id) == shape_ids.end()) {
+      at = end;
+      continue;
+    }
+    if (const std::size_t rel = shape.find(kRelId); rel != std::string_view::npos) {
+      const std::size_t value = rel + kRelId.size();
+      image_rel_ids.emplace_back(shape.substr(value, shape.find('"', value) - value));
+    }
+    out.append(shapes, copied, at - copied);
+    // The line break Excel writes after the shape goes with it.
+    copied = end;
+    while (copied < shapes.size() && (shapes[copied] == '\r' || shapes[copied] == '\n')) {
+      ++copied;
+    }
+    at = copied;
+  }
+  if (copied != 0U) {
+    out.append(shapes, copied, std::string::npos);
+    shapes = std::move(out);
+  }
+  return image_rel_ids;
+}
+
+bool vml_has_shapes(std::string_view shapes) {
+  return shapes.find(kShapeOpen) != std::string_view::npos;
+}
 
 bool remap_vml_anchors(std::string& shapes, const StructuralEdit& edit, const LineOffsetPt& offset_pt) {
   if (edit.band.has_value() || edit.count == 0U) {

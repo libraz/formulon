@@ -11,19 +11,23 @@
 // save does. The ranges inside one sqref are compared as a set: Excel
 // reorders them on save, and their order carries nothing. The `controls`,
 // `ole_move` and `ole_size` books hold form controls and OLE objects, whose
-// cell anchors Excel moves in the worksheet, the drawing part and the VML.
+// cell anchors Excel moves in the worksheet, the drawing part and the VML;
+// the `pic` book a picture and a chart. A delete covering every row or column
+// of a move-and-size object removes it with the parts only it used.
 
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <functional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
+#include "io/worksheet_child_refs.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/writer.h"
@@ -343,12 +347,65 @@ std::vector<std::string> ObjectAnchors(const std::vector<std::uint8_t>& package,
   return out;
 }
 
+/// What a sheet keeps of its drawing objects besides their anchors: the
+/// drawing-related parts by kind (digits dropped, as Excel renumbers them),
+/// the sheet's relationship types, and the worksheet elements (`.xlsx`) or
+/// records (`.xlsb`) that hold or link them. The binary index Excel adds to
+/// an `.xlsb` is left out, since a save regenerates the sheets without it.
+/// So is the `.xlsb` drawing link (BrtDrawing and its relationship) unless
+/// `drawing_link`: a save does not yet link a drawing holding form-control or
+/// OLE frames, and reports it as a deferred drawing.
+std::vector<std::string> ObjectParts(const std::vector<std::uint8_t>& package, bool xlsb, bool drawing_link) {
+  std::vector<std::string> out;
+  ZipReader zip;
+  EXPECT_TRUE(static_cast<bool>(zip.open(ByteSpan{package.data(), package.size()})));
+  for (const std::string& name : zip.list_entries()) {
+    for (const char* dir : {"xl/drawings/", "xl/embeddings/", "xl/media/", "xl/ctrlProps/", "xl/charts/"}) {
+      if (name.rfind(dir, 0) == 0) {
+        std::string kind = name;
+        kind.erase(std::remove_if(kind.begin(), kind.end(), [](char c) { return c >= '0' && c <= '9'; }), kind.end());
+        out.push_back("part " + kind);
+      }
+    }
+  }
+  const std::string rels_path = xlsb ? "xl/worksheets/_rels/sheet1.bin.rels" : "xl/worksheets/_rels/sheet1.xml.rels";
+  const std::string rels = zip.has_entry(rels_path) ? ReadEntry(package, rels_path) : std::string();
+  for (std::size_t at = rels.find(" Type=\""); at != std::string::npos; at = rels.find(" Type=\"", at + 1U)) {
+    const std::size_t end = rels.find('"', at + 7U);
+    const std::string type = rels.substr(at + 7U, end - at - 7U);
+    const std::string kind = type.substr(type.rfind('/') + 1U);
+    if (kind != "xlBinaryIndex" && (!xlsb || drawing_link || kind != "drawing")) {
+      out.push_back("rel " + kind);
+    }
+  }
+  if (xlsb) {
+    const std::string sheet = ReadEntry(package, "xl/worksheets/sheet1.bin");
+    const std::vector<std::uint8_t> bytes(sheet.begin(), sheet.end());
+    for (const xlsb::FramedRecord& rec : xlsb::split_records(bytes)) {
+      if ((rec.type == 550U && drawing_link) || rec.type == 551U || (rec.type >= 638U && rec.type <= 640U)) {
+        out.push_back("record " + std::to_string(rec.type));
+      }
+    }
+  } else {
+    const std::string sheet = ReadEntry(package, "xl/worksheets/sheet1.xml");
+    for (const char* tag : {"<drawing ", "<legacyDrawing ", "<oleObjects>", "<controls>", "<mc:AlternateContent",
+                            "<oleObject ", "<control "}) {
+      for (std::size_t at = sheet.find(tag); at != std::string::npos; at = sheet.find(tag, at + 1U)) {
+        out.push_back(std::string("element ") + tag);
+      }
+    }
+  }
+  std::sort(out.begin(), out.end());
+  return out;
+}
+
 const std::vector<EditCase> kControlEdits = {
     {"R_ins_above", [](Workbook& wb) { return wb.insert_rows(0, 1, 2); }},
     {"R_ins_in_cb", [](Workbook& wb) { return wb.insert_rows(0, 5, 1); }},
     {"R_ins_in_bt", [](Workbook& wb) { return wb.insert_rows(0, 10, 1); }},
     {"R_del_top_bt", [](Workbook& wb) { return wb.delete_rows(0, 8, 2); }},
     {"R_del_all_cb", [](Workbook& wb) { return wb.delete_rows(0, 4, 2); }},
+    {"R_del_all_bt", [](Workbook& wb) { return wb.delete_rows(0, 9, 3); }},
     {"C_del_in_cb", [](Workbook& wb) { return wb.delete_cols(0, 4, 1); }},
 };
 
@@ -358,25 +415,40 @@ const std::vector<EditCase> kOleMoveEdits = {
 
 const std::vector<EditCase> kOleSizeEdits = {
     {"C_ins_in_cb", [](Workbook& wb) { return wb.insert_cols(0, 4, 1); }},
+    {"R_del_all_cb", [](Workbook& wb) { return wb.delete_rows(0, 4, 2); }},
+    {"C_del_cover", [](Workbook& wb) { return wb.delete_cols(0, 2, 7); }},
 };
 
-void CheckObjectAnchors(const std::string& book, const std::vector<EditCase>& edits, bool xlsb) {
+const std::vector<EditCase> kPictureEdits = {
+    {"R_del_exact", [](Workbook& wb) { return wb.delete_rows(0, 4, 2); }},
+    {"C_del_exact", [](Workbook& wb) { return wb.delete_cols(0, 3, 2); }},
+    {"R_del_last_plus", [](Workbook& wb) { return wb.delete_rows(0, 5, 2); }},
+};
+
+void CheckObjectAnchors(const std::string& book, const std::vector<EditCase>& edits, bool xlsb,
+                        bool drawing_link = false) {
   const char* ext = xlsb ? ".xlsb" : ".xlsx";
   const std::vector<std::uint8_t> base = ReadFixture(book + "_0_base" + ext);
   const std::vector<std::string> base_anchors = ObjectAnchors(base, xlsb);
   ASSERT_GE(base_anchors.size(), 2U) << book << ext;
-  EXPECT_EQ(ObjectAnchors(Save(Load(base, xlsb), xlsb), xlsb), base_anchors) << book << ext;
+  const std::vector<std::uint8_t> resaved = Save(Load(base, xlsb), xlsb);
+  EXPECT_EQ(ObjectAnchors(resaved, xlsb), base_anchors) << book << ext;
+  EXPECT_EQ(ObjectParts(resaved, xlsb, drawing_link), ObjectParts(base, xlsb, drawing_link)) << book << ext;
   for (const EditCase& edit : edits) {
     Workbook wb = Load(base, xlsb);
     ASSERT_TRUE(static_cast<bool>(edit.apply(wb))) << edit.state;
-    const std::vector<std::string> excel = ObjectAnchors(ReadFixture(book + "_" + edit.state + ext), xlsb);
-    EXPECT_NE(excel, base_anchors) << book << "_" << edit.state << ext;
-    EXPECT_EQ(ObjectAnchors(Save(wb, xlsb), xlsb), excel) << book << "_" << edit.state << ext;
+    const std::vector<std::uint8_t> excel = ReadFixture(book + "_" + edit.state + ext);
+    const std::vector<std::uint8_t> saved = Save(wb, xlsb);
+    EXPECT_NE(ObjectAnchors(excel, xlsb), base_anchors) << book << "_" << edit.state << ext;
+    EXPECT_EQ(ObjectAnchors(saved, xlsb), ObjectAnchors(excel, xlsb)) << book << "_" << edit.state << ext;
+    EXPECT_EQ(ObjectParts(saved, xlsb, drawing_link), ObjectParts(excel, xlsb, drawing_link))
+        << book << "_" << edit.state << ext;
   }
 }
 
 // A check box that moves with cells and a button that moves and sizes with
-// them: the check box keeps its line span through an edit inside it.
+// them: the check box keeps its line span through an edit inside it, and
+// deleting all of the button's rows deletes the button.
 TEST(RetainedChildrenEditFixture, FormControlAnchorsXlsx) {
   CheckObjectAnchors("controls", kControlEdits, false);
 }
@@ -387,7 +459,8 @@ TEST(RetainedChildrenEditFixture, FormControlAnchorsXlsb) {
 
 // A move-only OLE object whose top row is deleted with the rows above it
 // lands on the deletion start at its own size; a move-and-size one grows
-// with a column inserted inside it.
+// with a column inserted inside it, and a delete covering all of its rows or
+// columns deletes it with its embedding and preview image.
 TEST(RetainedChildrenEditFixture, OleObjectAnchorsXlsx) {
   CheckObjectAnchors("ole_move", kOleMoveEdits, false);
   CheckObjectAnchors("ole_size", kOleSizeEdits, false);
@@ -398,9 +471,64 @@ TEST(RetainedChildrenEditFixture, OleObjectAnchorsXlsb) {
   CheckObjectAnchors("ole_size", kOleSizeEdits, true);
 }
 
+// A move-and-size picture and chart over D5:E6: deleting exactly their rows or
+// columns deletes both, and the emptied drawing part goes with them; deleting
+// their last row and the one below leaves them one row tall.
+TEST(RetainedChildrenEditFixture, PictureAndChartAnchorsXlsx) {
+  CheckObjectAnchors("pic", kPictureEdits, false, true);
+}
+
+TEST(RetainedChildrenEditFixture, PictureAndChartAnchorsXlsb) {
+  CheckObjectAnchors("pic", kPictureEdits, true, true);
+}
+
 // What the comparisons hold for the two rules no other structure follows,
 // spelt out: an insert cuts an ignored-error range instead of stretching it,
 // and a watch on a deleted cell keeps its address.
+// Removing every control empties `<controls>`, which takes the top-level
+// `mc:AlternateContent` around it; the controls' relationship ids come back.
+TEST(RetainedChildrenEditFixture, RemovingEveryControlDropsTheWrapper) {
+  Workbook wb = Load(ReadFixture("controls_0_base.xlsx"), false);
+  WorksheetRawExtensions& children = wb.sheet(0).mutable_raw_extensions();
+  const auto holds_controls = [&children] {
+    return std::any_of(children.begin(), children.end(),
+                       [](const WorksheetRawChild& child) { return child.xml.find("controls>") != std::string::npos; });
+  };
+  ASSERT_TRUE(holds_controls());
+  std::vector<std::string> ids = remove_worksheet_objects(children, {1025U});
+  EXPECT_EQ(ids.size(), 1U);
+  EXPECT_TRUE(holds_controls());
+  std::vector<std::string> rest = remove_worksheet_objects(children, {1026U});
+  EXPECT_EQ(rest.size(), 1U);
+  EXPECT_NE(ids, rest);
+  EXPECT_FALSE(holds_controls());
+  EXPECT_TRUE(std::none_of(children.begin(), children.end(), [](const WorksheetRawChild& child) {
+    return child.xml.find("AlternateContent") != std::string::npos;
+  }));
+}
+
+// The deletion rule reads a control's worksheet anchor as well as its drawing
+// frame: Button 2 (move-and-size, rows 9..11) goes, Check Box 1 (move-only)
+// never does, and a sheet without the drawing still loses the button.
+TEST(RetainedChildrenEditFixture, CoveredControlGoesWithoutItsDrawingFrame) {
+  Workbook wb = Load(ReadFixture("controls_0_base.xlsx"), false);
+  const WorksheetRawExtensions& children = wb.sheet(0).raw_extensions();
+  EXPECT_EQ(deleted_cell_objects(children, StructuralEdit{9U, 3U, true, true}), std::vector<std::uint32_t>{1026U});
+  EXPECT_TRUE(deleted_cell_objects(children, StructuralEdit{9U, 2U, true, true}).empty());
+  EXPECT_TRUE(deleted_cell_objects(children, StructuralEdit{4U, 2U, true, true}).empty());
+  EXPECT_TRUE(deleted_cell_objects(children, StructuralEdit{9U, 3U, false, true}).empty());
+
+  wb.sheet(0).set_drawing_rel_target({});
+  ASSERT_TRUE(static_cast<bool>(wb.delete_rows(0, 9, 3)));
+  const auto holds = [&children](std::string_view shape_id) {
+    return std::any_of(children.begin(), children.end(), [shape_id](const WorksheetRawChild& child) {
+      return child.xml.find(shape_id) != std::string::npos;
+    });
+  };
+  EXPECT_FALSE(holds("shapeId=\"1026\""));
+  EXPECT_TRUE(holds("shapeId=\"1025\""));
+}
+
 TEST(RetainedChildrenEditFixture, IgnoredErrorsCutAndWatchesStay) {
   Workbook inserted = Load(ReadFixture("children_0_base.xlsx"), false);
   ASSERT_TRUE(static_cast<bool>(inserted.insert_rows(0, 3, 1)));

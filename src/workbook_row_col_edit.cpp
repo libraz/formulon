@@ -23,10 +23,13 @@
 #include "eval/dep_graph.h"
 #include "eval/recalc_engine.h"
 #include "io/auto_filter_xml.h"
+#include "io/ooxml/package_validator.h"
 #include "io/ooxml/part_dom.h"
+#include "io/ooxml/part_graph.h"
 #include "io/ooxml_defs.h"
 #include "io/vml_anchor_edit.h"
 #include "io/worksheet_child_refs.h"
+#include "io/xlsb/drawing_record.h"
 #include "new_workbook_defaults.h"
 #include "parser/ast.h"
 #include "parser/ast_format.h"
@@ -744,6 +747,87 @@ bool EditMarksSourceEdited(const Workbook& wb, const std::vector<Sheet>& sheets,
   return edit.is_delete ? edit.index <= last && edit.end() > first : edit.index > first && edit.index <= last;
 }
 
+// Removes what sheet `sheet_index` keeps of the form controls and OLE objects
+// whose drawing anchors a delete removed (`shape_ids`): their worksheet
+// entries or `.xlsb` records, their VML shapes, and the relationships and
+// parts only they used. A legacy drawing left with no shape and no note goes
+// too, with its link.
+void remove_cell_objects(Workbook& wb, std::size_t sheet_index, const std::vector<std::uint32_t>& shape_ids) {
+  Sheet& sheet = wb.sheet(sheet_index);
+  std::vector<std::string> rel_ids = io::remove_worksheet_objects(sheet.mutable_raw_extensions(), shape_ids);
+  XlsbSheetTail tail = sheet.xlsb_tail();
+  for (std::string& id : io::xlsb::strip_ole_objects(tail.after_hyperlinks, shape_ids)) {
+    rel_ids.push_back(std::move(id));
+  }
+  std::vector<std::string> candidates;
+  // Resolves the VML shapes' image ids through the drawing's own relationships.
+  std::vector<std::string> preview_targets;
+  const auto note_previews = [&](const std::string& vml_path, const std::vector<std::string>& image_ids) {
+    const PassthroughPart* rels =
+        image_ids.empty() ? nullptr : io::ooxml::find_passthrough_part(wb, io::ooxml::rels_path_for_part(vml_path));
+    if (rels == nullptr) {
+      return;
+    }
+    auto parsed = io::ooxml::parse_part_rels(rels->bytes, io::ooxml::dir_of(vml_path));
+    for (const io::ooxml::DrawingRel& rel : parsed ? parsed.value() : std::vector<io::ooxml::DrawingRel>{}) {
+      if (!rel.external && std::find(image_ids.begin(), image_ids.end(), rel.id) != image_ids.end()) {
+        preview_targets.push_back(rel.target);
+      }
+    }
+  };
+  const bool has_notes = !sheet.comments().empty() || !sheet.threaded_comments().empty();
+  if (!sheet.comment_vml_extra_xml().empty()) {
+    std::string shapes = sheet.comment_vml_extra_xml();
+    const std::vector<std::string> image_ids = io::remove_vml_shapes(shapes, shape_ids);
+    const std::string source = sheet.comment_vml_path();
+    note_previews(source, image_ids);
+    if (shapes != sheet.comment_vml_extra_xml()) {
+      sheet.set_comment_vml_extra_xml(io::vml_has_shapes(shapes) ? std::move(shapes) : std::string());
+      sheet.set_comment_vml_path({});
+      if (!source.empty()) {
+        candidates.push_back(source);
+      }
+    }
+  }
+  std::vector<UnknownRelationship> rels = sheet.unknown_relationships();
+  for (auto it = rels.begin(); it != rels.end();) {
+    const PassthroughPart* part = it->type == io::kRelVmlDrawing && !it->target_external
+                                      ? io::ooxml::find_passthrough_part(wb, it->target)
+                                      : nullptr;
+    if (part == nullptr) {
+      ++it;
+      continue;
+    }
+    std::string vml(part->bytes.begin(), part->bytes.end());
+    const std::vector<std::string> image_ids = io::remove_vml_shapes(vml, shape_ids);
+    note_previews(it->target, image_ids);
+    if (vml.size() == part->bytes.size()) {
+      ++it;
+    } else if (io::vml_has_shapes(vml) || has_notes) {
+      static_cast<void>(wb.replace_passthrough_part(it->target, std::vector<std::uint8_t>(vml.begin(), vml.end())));
+      ++it;
+    } else {
+      io::xlsb::strip_drawing_records(tail.after_hyperlinks, io::xlsb::kBrtLegacyDrawing);
+      candidates.push_back(it->target);
+      it = rels.erase(it);
+    }
+  }
+  sheet.set_xlsb_tail(std::move(tail));
+  for (auto it = rels.begin(); it != rels.end();) {
+    const bool named = std::find(rel_ids.begin(), rel_ids.end(), it->id) != rel_ids.end();
+    const bool preview = std::find(preview_targets.begin(), preview_targets.end(), it->target) != preview_targets.end();
+    if (it->target_external || (!named && !preview)) {
+      ++it;
+      continue;
+    }
+    candidates.push_back(it->target);
+    it = rels.erase(it);
+  }
+  sheet.set_unknown_relationships(std::move(rels));
+  candidates.insert(candidates.end(), preview_targets.begin(), preview_targets.end());
+  io::ooxml::remove_orphans(wb, std::move(candidates));
+}
+
 // The argument checks of a row/column edit on `sheet_index`.
 Expected<void, Error> check_edit_arguments(const Workbook& wb, std::size_t sheet_index, const StructuralEdit& edit) {
   RETURN_IF_ERROR(check_sheet_index(sheet_index, wb.sheet_count()));
@@ -910,9 +994,20 @@ Expected<void, Error> apply_row_col_edit(const Workbook& wb, std::size_t sheet_i
     } else {
       target.insert_cols(origin, count);
     }
+    // A delete removes a covered form control or OLE object by its worksheet
+    // anchor as well as by its drawing frame, so one missing either still goes.
+    std::vector<std::uint32_t> removed_objects = io::deleted_cell_objects(target.raw_extensions(), edit);
     shift_retained_extension_ranges(target, edit);
     const std::vector<std::string> framed_slicers_before = framed_slicers(wb, sheet_index);
-    shift_drawing_anchors(wb, sheet_index, origin, count, edit.is_delete, edit.row_axis);
+    for (const std::uint32_t id :
+         shift_drawing_anchors(wb, sheet_index, origin, count, edit.is_delete, edit.row_axis)) {
+      if (std::find(removed_objects.begin(), removed_objects.end(), id) == removed_objects.end()) {
+        removed_objects.push_back(id);
+      }
+    }
+    if (!removed_objects.empty()) {
+      remove_cell_objects(wb, sheet_index, removed_objects);
+    }
     // The legacy VML shapes of form controls and OLE objects move by the same
     // rule. Shapes the sheet models are written afresh once moved; a drawing it
     // only retains (an `.xlsb` sheet without notes) is rewritten in place.

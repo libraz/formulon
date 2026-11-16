@@ -50,6 +50,13 @@ bool splice_drawing(std::vector<std::uint8_t>& after_hyperlinks, std::string_vie
 /// records ahead of it, as `splice_drawing` places BrtDrawing.
 bool splice_legacy_drawing(std::vector<std::uint8_t>& after_hyperlinks, std::string_view rel_id);
 
+/// Removes the BrtOleObject records whose shapeId is in `shape_ids`, and the
+/// BrtBeginOleObjects / BrtEndOleObjects pair once no object is left between
+/// them. Returns the relationship id each removed embedded object named. A
+/// non-empty buffer that does not split into records is left untouched.
+std::vector<std::string> strip_ole_objects(std::vector<std::uint8_t>& after_hyperlinks,
+                                           const std::vector<std::uint32_t>& shape_ids);
+
 /// True when `drawing_xml` parses and every `graphicData` in it, inside
 /// `mc:AlternateContent` included, names a chart. Pictures, shapes and
 /// groups carry no `graphicData` and always pass.

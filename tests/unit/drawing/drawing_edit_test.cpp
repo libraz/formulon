@@ -644,6 +644,32 @@ TEST(DrawingEdit, MoveOnlyShapeWithoutSizeKeepsItsLineSpan) {
   }
 }
 
+TEST(DrawingEdit, DeleteCoveringAMoveAndSizeShapeRemovesIt) {
+  // A move-and-size button over D5:E6; `to` sits on row 7 (index 6) at offset 0.
+  const auto drawing = [](std::int64_t to_row_off) {
+    return std::string(kWsDrOpen) + "<xdr:twoCellAnchor>" + Marker("from", 3, 0, 4, 0) +
+           Marker("to", 5, 0, 6, to_row_off) +
+           "<xdr:sp macro=\"\" textlink=\"\"><xdr:nvSpPr><xdr:cNvPr id=\"1026\" name=\"Button 2\"/><xdr:cNvSpPr/>"
+           "</xdr:nvSpPr><xdr:spPr><a:xfrm><a:off x=\"0\" y=\"0\"/><a:ext cx=\"0\" cy=\"0\"/></a:xfrm>"
+           "<a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom></xdr:spPr></xdr:sp><xdr:clientData/>"
+           "</xdr:twoCellAnchor></xdr:wsDr>";
+  };
+  const std::string rels = std::string(kRelsOpen) + "</Relationships>";
+  // Deleting rows 5:6 covers it: its `to` is exclusive at offset 0. The emptied drawing goes too.
+  Workbook covered = WithDrawing(drawing(0), rels, {});
+  EXPECT_EQ(shift_drawing_anchors(covered, 0, 4, 2, true, true), std::vector<std::uint32_t>{1026U});
+  EXPECT_TRUE(covered.sheet(0).drawing_rel_target().empty());
+  EXPECT_EQ(Part(covered, kDrawingPath), nullptr);
+  // A `to` reaching into row 7 keeps a sliver of it, as does a delete one row lower.
+  Workbook reaching = WithDrawing(drawing(1000), rels, {});
+  EXPECT_TRUE(shift_drawing_anchors(reaching, 0, 4, 2, true, true).empty());
+  ASSERT_EQ(List(reaching).size(), 1U);
+  Workbook lower = WithDrawing(drawing(0), rels, {});
+  EXPECT_TRUE(shift_drawing_anchors(lower, 0, 5, 2, true, true).empty());
+  ASSERT_EQ(List(lower).size(), 1U);
+  ExpectAnchor(List(lower)[0], {4, 3, 0, 0}, {5, 5, 0, 0});
+}
+
 TEST(DrawingEdit, EditAfterEveryObjectKeepsBytes) {
   Workbook wb = ThreePlacements();
   const Bytes before = Part(wb, kDrawingPath)->bytes;

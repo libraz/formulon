@@ -387,12 +387,14 @@ TEST(ShapeFidelity, AnchorsShiftWithColumnInsertionAndDeletion) {
   EXPECT_EQ(shapes.value()[3].object.from.col, 9U);
 
   Workbook again = LoadOrDie(SaveOrDie(wb));
-  // The connector spans columns 2..4 after the insert; deleting all three removes it.
+  // After the insert the connector covers columns 2..3 and Rect columns 3..4 (each `to` at offset 0).
+  // Deleting columns 2..4 covers both move-and-size anchors, so both go, as in the pic_C_del_exact twin.
   ASSERT_TRUE(static_cast<bool>(again.delete_cols(0, 2, 3)));
   shapes = list_shapes(again, 0);
-  ASSERT_EQ(shapes.value().size(), 3U);
-  EXPECT_EQ(shapes.value()[2].object.name, "Group");
-  EXPECT_EQ(shapes.value()[2].object.from.col, 6U);
+  ASSERT_EQ(shapes.value().size(), 2U);
+  EXPECT_EQ(shapes.value()[0].object.name, "Custom");
+  EXPECT_EQ(shapes.value()[1].object.name, "Group");
+  EXPECT_EQ(shapes.value()[1].object.from.col, 6U);
 }
 
 TEST(ShapeFidelity, UpdateChangesOnlyTheNamedFields) {

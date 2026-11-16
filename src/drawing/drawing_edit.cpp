@@ -613,18 +613,18 @@ Expected<void, Error> remove_drawing(Workbook& wb, std::size_t sheet, std::uint3
   return refuse_object(root, object_id, kNoObject);
 }
 
-void shift_drawing_anchors(Workbook& wb, std::size_t sheet, std::uint32_t index, std::uint32_t count, bool is_delete,
-                           bool row_axis) {
+std::vector<std::uint32_t> shift_drawing_anchors(Workbook& wb, std::size_t sheet, std::uint32_t index,
+                                                 std::uint32_t count, bool is_delete, bool row_axis) {
+  std::vector<std::uint32_t> removed_ids;
   const std::string path = wb.sheet(sheet).drawing_rel_target();
   pugi::xml_document doc;
   if (path.empty() || count == 0 || !load_drawing_part(wb, path, doc)) {
-    return;
+    return removed_ids;
   }
   const Geometry geo(wb, wb.sheet(sheet));
   const StructuralEdit edit{index, count, is_delete, row_axis};
   const pugi::xml_node root = doc.document_element();
   const auto line = [row_axis](const AnchorPoint& p) { return row_axis ? p.row : p.col; };
-  const auto deleted = [&](const AnchorPoint& p) { return is_delete && line(p) >= index && line(p) - index < count; };
   std::vector<pugi::xml_node> removed;
   bool changed = false;
   for (const pugi::xml_node& anchor : drawing_anchors(root, true)) {
@@ -638,15 +638,16 @@ void shift_drawing_anchors(Workbook& wb, std::size_t sheet, std::uint32_t index,
     if (two_cell && line(obj.to) < index) {
       continue;  // The edit lies wholly after the object.
     }
-    if (obj.edit_as == EditAs::kTwoCell && deleted(obj.from) && deleted(obj.to)) {
+    io::AnchorLine from_line = axis_line(obj.from, row_axis);
+    io::AnchorLine to_line_at = axis_line(obj.to, row_axis);
+    if (two_cell && obj.edit_as == EditAs::kTwoCell && io::cell_anchor_deleted(from_line, to_line_at, edit)) {
       const pugi::xml_node top = top_of(root, anchor);
       if (std::find(removed.begin(), removed.end(), top) == removed.end()) {
         removed.push_back(top);
       }
+      removed_ids.push_back(obj.object_id);
       continue;
     }
-    io::AnchorLine from_line = axis_line(obj.from, row_axis);
-    io::AnchorLine to_line_at = axis_line(obj.to, row_axis);
     const std::int64_t extent = row_axis ? obj.cy : obj.cx;
     // A move-only object with no stored size (a form control or OLE object
     // keeps its xfrm zero) keeps its line span.
@@ -672,9 +673,15 @@ void shift_drawing_anchors(Workbook& wb, std::size_t sheet, std::uint32_t index,
   }
   if (!removed.empty()) {
     static_cast<void>(drop_objects(wb, path, doc, removed));
+    // Excel drops a drawing part the edit emptied, with the sheet's link to it.
+    if (!io::has_element_child(root)) {
+      wb.sheet(sheet).set_drawing_rel_target({});
+      io::ooxml::remove_orphans(wb, {path});
+    }
   } else if (changed) {
     static_cast<void>(io::ooxml::store_part_dom(wb, path, doc));
   }
+  return removed_ids;
 }
 
 std::int64_t sheet_offset_emu(const Workbook& wb, std::size_t sheet, bool row_axis, std::uint32_t line) {

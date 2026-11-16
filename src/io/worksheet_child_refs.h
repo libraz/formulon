@@ -32,6 +32,8 @@
 #define FORMULON_IO_WORKSHEET_CHILD_REFS_H_
 
 #include <cstdint>
+#include <string>
+#include <vector>
 
 #include "sheet.h"
 #include "sheet_passthrough.h"
@@ -54,10 +56,28 @@ AnchorLine shift_anchor_line(AnchorLine marker, const StructuralEdit& edit);
 /// shifts `from` and moves `to` by as many lines, keeping its line span.
 void move_cell_anchor(AnchorLine& from, AnchorLine& to, bool size_with_cells, const StructuralEdit& edit);
 
+/// Whether a whole-line delete removes a move-and-size object anchored from
+/// `from` to `to`: every line it covers is deleted, a `to` at offset 0 on the
+/// line after the span included. Excel removes such an object rather than
+/// shrinking it; one that only moves is never removed.
+bool cell_anchor_deleted(const AnchorLine& from, const AnchorLine& to, const StructuralEdit& edit);
+
+/// The `shapeId`s of the form controls and OLE objects in `children` whose
+/// anchor moves and sizes with cells and that `edit` deletes by
+/// `cell_anchor_deleted`.
+std::vector<std::uint32_t> deleted_cell_objects(const WorksheetRawExtensions& children, const StructuralEdit& edit);
+
 /// Rewrites the cell coordinates of every child in `children` for `edit` by
 /// the rules above. A child the edit leaves without content is erased, as
 /// Excel drops it; a child that does not parse is left alone.
 void remap_worksheet_children(WorksheetRawExtensions& children, const StructuralEdit& edit);
+
+/// Removes the form controls and OLE objects whose `shapeId` is in
+/// `shape_ids` from the retained `<controls>` / `<oleObjects>`, with the
+/// `mc:AlternateContent` around each, then any container the removal empties.
+/// Returns the relationship ids the removed objects named.
+std::vector<std::string> remove_worksheet_objects(WorksheetRawExtensions& children,
+                                                  const std::vector<std::uint32_t>& shape_ids);
 
 }  // namespace formulon::io
 

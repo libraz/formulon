@@ -215,9 +215,12 @@ Expected<void, Error> remove_drawing(Workbook& wb, std::size_t sheet, std::uint3
 
 /// Moves sheet `sheet`'s anchors for a row (`row_axis`) or column edit of
 /// `count` lines at `index`, after the sheet's own cells and layout moved. A
-/// drawing that does not parse is left untouched.
-void shift_drawing_anchors(Workbook& wb, std::size_t sheet, std::uint32_t index, std::uint32_t count, bool is_delete,
-                           bool row_axis);
+/// delete covering every line of a move-and-size object removes it with the
+/// parts only it used, and the drawing part once it is empty. Returns the
+/// `cNvPr/@id` of each removed object. A drawing that does not parse is left
+/// untouched.
+std::vector<std::uint32_t> shift_drawing_anchors(Workbook& wb, std::size_t sheet, std::uint32_t index,
+                                                 std::uint32_t count, bool is_delete, bool row_axis);
 
 }  // namespace formulon
 

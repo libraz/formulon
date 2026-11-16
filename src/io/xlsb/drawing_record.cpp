@@ -4,6 +4,7 @@
 
 #include "io/xlsb/drawing_record.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <string>
@@ -145,6 +146,50 @@ bool splice_drawing(std::vector<std::uint8_t>& after_hyperlinks, std::string_vie
 
 bool splice_legacy_drawing(std::vector<std::uint8_t>& after_hyperlinks, std::string_view rel_id) {
   return SpliceDrawingRecord(after_hyperlinks, rel_id, kBrtLegacyDrawing);
+}
+
+std::vector<std::string> strip_ole_objects(std::vector<std::uint8_t>& after_hyperlinks,
+                                           const std::vector<std::uint32_t>& shape_ids) {
+  std::vector<std::string> rel_ids;
+  const std::vector<FramedRecord> recs = split_records(after_hyperlinks);
+  if (shape_ids.empty() || !IsSplit(after_hyperlinks, recs)) {
+    return rel_ids;
+  }
+  std::vector<bool> drop(recs.size(), false);
+  std::size_t kept_objects = 0;
+  for (std::size_t i = 0; i < recs.size(); ++i) {
+    if (recs[i].type != kBrtOleObject) {
+      continue;
+    }
+    // dwAspect, dwOleUpdate, shapeId, then flags whose bit 0 marks a linked object.
+    ByteSpan cursor = recs[i].payload;
+    const auto aspect = read_u32(cursor);
+    const auto update = read_u32(cursor);
+    const auto shape_id = read_u32(cursor);
+    const auto flags = read_u16(cursor);
+    if (!aspect || !update || !shape_id || !flags ||
+        std::find(shape_ids.begin(), shape_ids.end(), shape_id.value()) == shape_ids.end()) {
+      ++kept_objects;
+      continue;
+    }
+    drop[i] = true;
+    // An embedded object names its part after the progId.
+    if ((flags.value() & 1U) == 0U && read_xlwidestring(cursor)) {
+      if (auto rel_id = read_xlwidestring(cursor)) {
+        rel_ids.push_back(std::move(rel_id.value()));
+      }
+    }
+  }
+  std::vector<std::uint8_t> kept;
+  kept.reserve(after_hyperlinks.size());
+  for (std::size_t i = 0; i < recs.size(); ++i) {
+    const bool bracket = recs[i].type == kBrtBeginOleObjects || recs[i].type == kBrtEndOleObjects;
+    if (!drop[i] && !(bracket && kept_objects == 0U)) {
+      append_record(kept, after_hyperlinks, recs[i]);
+    }
+  }
+  after_hyperlinks = std::move(kept);
+  return rel_ids;
 }
 
 bool drawing_frames_are_writable(std::string_view drawing_xml) {
