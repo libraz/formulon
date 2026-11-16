@@ -9429,12 +9429,10 @@ class Workbook(_NoCopy):
         """Evaluate as :meth:`Sheet.evaluate_typed_formula`: a 1x1 result is its cell, any other an ``ARRAY``."""
         if not isinstance(formula, str):
             raise TypeError(f"formula must be a str, got {type(formula).__name__}")
-        return _folded(self._evaluate_formula_cells(sheet, row, col, formula, top_left_only=False))
+        return _folded(self._evaluate_formula_cells(sheet, row, col, formula))
 
-    def _evaluate_formula_cells(
-        self, sheet: int, row: int, col: int, formula: str, *, top_left_only: bool
-    ) -> List[List[Value]]:
-        """Evaluate ``formula`` into an owned value array and read its cells (only the first when asked)."""
+    def _evaluate_formula_cells(self, sheet: int, row: int, col: int, formula: str) -> List[List[Value]]:
+        """Evaluate ``formula`` into an owned value array and read every cell, row by row."""
         h = self._require()
         with _ArgScope() as scope:
             formula_ptr = scope.cstr(formula)
@@ -9454,9 +9452,8 @@ class Workbook(_NoCopy):
                 rows_ptr = scope.out_ptr()
                 cols_ptr = scope.out_ptr()
                 _check(LIB.fm_value_array_get_dimensions(array, rows_ptr, cols_ptr))
-                rows = 1 if top_left_only else LIB.read_u32(rows_ptr)
-                cols = 1 if top_left_only else LIB.read_u32(cols_ptr)
-                stride = LIB.read_u32(cols_ptr)
+                rows = LIB.read_u32(rows_ptr)
+                cols = LIB.read_u32(cols_ptr)
                 value_ptr = scope.alloc(fm_value_t_size)
                 grid: List[List[Value]] = []
                 for r in range(rows):
@@ -9464,7 +9461,7 @@ class Workbook(_NoCopy):
                     for c in range(cols):
                         _check(
                             LIB.fm_value_array_get_value_at(
-                                array, _uint(r * stride + c, "index", role="position"), value_ptr
+                                array, _uint(r * cols + c, "index", role="position"), value_ptr
                             )
                         )
                         out_row.append(Value._from_wasm(value_ptr))

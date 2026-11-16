@@ -2559,7 +2559,7 @@ class Sheet(_NoCopy):
     def _evaluate_grid(self, row: int, col: int, formula: Any) -> List[List[Value]]:
         if not isinstance(formula, str):
             raise TypeError(_argument_message("formula", "must be a string"))
-        return self._workbook._evaluate_formula_cells(self._index(), row, col, formula, top_left_only=False)
+        return self._workbook._evaluate_formula_cells(self._index(), row, col, formula)
 
     # -- Iteration ---------------------------------------------------------
     def list_cells(self, range: Union[CellRect, str, None] = None) -> List[RangeCell]:
