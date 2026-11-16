@@ -496,3 +496,82 @@ TEST(FormulonCApiPivotSaveShape, ProjectionEntryPointsRejectBadArguments) {
         << index;
   }
 }
+
+namespace {
+
+std::vector<std::uint8_t> ReadFixture(const std::string& relative) {
+  std::ifstream in(std::string(FORMULON_FIXTURES_DIR) + "/excel/" + relative, std::ios::binary);
+  return std::vector<std::uint8_t>(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
+}
+
+std::vector<std::uint8_t> Save(fm_workbook_t* wb, int32_t format) {
+  std::uint8_t* bytes = nullptr;
+  std::size_t len = 0;
+  EXPECT_EQ(fm_workbook_save(wb, format, &bytes, &len), 0) << fm_get_last_error_message();
+  std::vector<std::uint8_t> out;
+  if (bytes != nullptr) {
+    out.assign(bytes, bytes + len);
+    fm_buffer_destroy(bytes);
+  }
+  return out;
+}
+
+/// The first field's BrtBeginPCDFAtbl flag byte in an `.xlsb` cache definition part.
+int FirstFieldItemTableFlags(const std::string& part) {
+  constexpr std::uint32_t kBeginPcdfAtbl = 189;
+  std::size_t i = 0;
+  const auto varint = [&part, &i](int bytes) {
+    std::uint32_t value = 0;
+    for (int k = 0; k < bytes && i < part.size(); ++k) {
+      const auto c = static_cast<std::uint8_t>(part[i++]);
+      value |= static_cast<std::uint32_t>(c & 0x7FU) << (7 * k);
+      if ((c & 0x80U) == 0U) {
+        break;
+      }
+    }
+    return value;
+  };
+  while (i < part.size()) {
+    const std::uint32_t type = varint(2);
+    const std::uint32_t length = varint(4);
+    if (type == kBeginPcdfAtbl && length > 0U && i < part.size()) {
+      return static_cast<std::uint8_t>(part[i]);
+    }
+    i += length;
+  }
+  return -1;
+}
+
+}  // namespace
+
+// A Region field keeping an unused blank item (<m u="1"/>) besides its text: Excel writes containsBlank for it and
+// refuses a save without. Both books refresh on load, so a plain save and one after a refresh derive it again.
+TEST(FormulonCApiPivotSaveShape, AKeptUnusedBlankItemKeepsContainsBlank) {
+  constexpr const char* kCacheXml = "xl/pivotCache/pivotCacheDefinition1.xml";
+  constexpr const char* kCacheBin = "xl/pivotCache/pivotCacheDefinition1.bin";
+  for (const std::string name : {"P_ne_Bescstar", "P_ne_esctildeB"}) {
+    SCOPED_TRACE(name);
+    const std::string stem = "xlsb_parity/pivot/caption_equal/" + name;
+    const std::vector<std::uint8_t> source = ReadFixture(stem + ".xlsx");
+    const std::vector<std::uint8_t> excel_xlsb = ReadFixture(stem + ".xlsb");
+    ASSERT_FALSE(source.empty());
+    const int excel_flags = FirstFieldItemTableFlags(ExtractZipEntry(excel_xlsb, kCacheBin));
+    ASSERT_NE(excel_flags, -1);
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_load(source.data(), source.size(), nullptr, &wb.handle), 0) << fm_get_last_error_message();
+    for (const bool refresh : {false, true}) {
+      SCOPED_TRACE(refresh ? "after refresh" : "plain save");
+      if (refresh) {
+        std::uint32_t cache_id = 0;
+        ASSERT_EQ(fm_workbook_get_pivot_cache_id_at(wb.handle, 0U, &cache_id), 0);
+        ASSERT_EQ(fm_workbook_refresh_pivot_cache(wb.handle, cache_id), 0) << fm_get_last_error_message();
+      }
+      const std::string xml = ExtractZipEntry(Save(wb.handle, FM_WORKBOOK_FORMAT_XLSX), kCacheXml);
+      EXPECT_NE(xml.find("<cacheField name=\"Region\" numFmtId=\"0\"><sharedItems containsBlank=\"1\" count=\"15\">"),
+                std::string::npos)
+          << xml.substr(0, 600);
+      EXPECT_EQ(FirstFieldItemTableFlags(ExtractZipEntry(Save(wb.handle, FM_WORKBOOK_FORMAT_XLSB), kCacheBin)),
+                excel_flags);
+    }
+  }
+}

@@ -448,6 +448,7 @@ Expected<RefreshPlan, Error> build_refreshed_cache(const PivotCache& old, const 
     const bool keeps_missing = !purge_missing || any_set(previous.shared_item_is_calculated);
     IndexMap& items = plan.remap.items[*from];
     items.assign(previous.shared_items.size(), std::nullopt);
+    bool keeps_blank = false;
     for (const bool calculated : {false, true}) {
       for (std::size_t k = 0; k < previous.shared_items.size(); ++k) {
         if (flag_at(previous.shared_item_is_calculated, k) != calculated) {
@@ -461,8 +462,18 @@ Expected<RefreshPlan, Error> build_refreshed_cache(const PivotCache& old, const 
         } else if (calculated || keeps_missing) {
           items[k] = static_cast<std::uint32_t>(field.shared_items.size());
           append_item(field, owned(cache, value), is_date, !calculated, calculated);
+          keeps_blank = keeps_blank || (!calculated && value.is_blank());
         }
       }
+    }
+    // A kept unused blank item counts in the hints as a blank value does: Excel writes containsBlank for it.
+    if (keeps_blank && !field.shared_items_hints.contains_blank) {
+      std::vector<Value> with_blank = values;
+      std::vector<bool> with_blank_dates = dates;
+      with_blank.push_back(Value::blank());
+      with_blank_dates.push_back(false);
+      field.shared_items_hints = derive_shared_items_hints(with_blank, with_blank_dates, context.date1904);
+      apply_mixed_date_slots(with_blank, with_blank_dates, context.date1904, field.shared_items_hints);
     }
   }
 
