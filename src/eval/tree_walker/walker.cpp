@@ -578,14 +578,27 @@ Shaped eval_node_shaped_body(const parser::AstNode& node, Arena& arena, const Fu
 
 }  // namespace
 
-Shaped eval_node_shaped(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                        const EvalContext& ctx) {
-  Shaped out = eval_node_shaped_body(node, arena, registry, ctx);
-  // A `Ref` a call or a literal yields is read as a value by the one dereference rule.
+namespace {
+
+// The exit of `eval_node_shaped` for a value that may not leave evaluation as it is: a `Ref` a call or a
+// literal yields is read by the one dereference rule, then anything still escaping is contained. Out of line
+// so its temporaries stay off the frame every nesting level pays for.
+[[gnu::noinline]] void settle_escaping(Shaped& out, Arena& arena, const FunctionRegistry& registry,
+                                       const EvalContext& ctx) {
   if (out.value.is_ref()) {
     out = deref_shaped(out.value, arena, registry, ctx, ReadCount::kCounted);
   }
   out.value = contain_escape(out.value);
+}
+
+}  // namespace
+
+Shaped eval_node_shaped(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx) {
+  Shaped out = eval_node_shaped_body(node, arena, registry, ctx);
+  if (escapes_boundary(out.value)) {
+    settle_escaping(out, arena, registry, ctx);
+  }
   return out;
 }
 
