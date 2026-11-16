@@ -5486,7 +5486,12 @@ class PhoneticProperties:
 
 @dataclass(frozen=True)
 class Font:
-    """A font record (``add_font`` input / ``get_font`` result)."""
+    """A font record (``add_font`` input / ``get_font`` result).
+
+    A font with ``scheme`` minor or major takes the name of the theme's face for the workbook profile's script (the
+    script entry for a ja, ko, zh or th profile, the latin face for any other), whenever the font, the theme or the
+    profile changes; the name given for it is replaced. A theme with no entry for the script leaves the name as it is.
+    """
 
     #: The typeface name; ``None`` when the font names none.
     name: Optional[str] = None

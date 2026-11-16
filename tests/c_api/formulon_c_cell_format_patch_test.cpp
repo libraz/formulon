@@ -182,7 +182,7 @@ TEST(FormulonCApiCellFormatPatch, SameFaceRenameDropsTheThemeLinkButKeepsFamilyA
   EXPECT_EQ(renamed.raw.charset, normal.raw.charset);
 }
 
-TEST(FormulonCApiCellFormatPatch, StatedSchemeBeatsTheUnlinkOfANewName) {
+TEST(FormulonCApiCellFormatPatch, StatedSchemeBeatsTheUnlinkOfANewNameAndTakesTheThemeFace) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_for_profile("mac-365-ja_JP", &wb.handle), 0);
   fm_cell_format_patch_t patch = NewPatch();
@@ -191,8 +191,21 @@ TEST(FormulonCApiCellFormatPatch, StatedSchemeBeatsTheUnlinkOfANewName) {
   patch.font.scheme = FM_FONT_SCHEME_MINOR;
   ASSERT_EQ(Update(wb.handle, Cell(1, 1), patch), 0);
   const FontView font = FontOf(wb.handle, 1, 1);
-  EXPECT_EQ(font.name, "Arial");
+  EXPECT_EQ(font.name, kYuGothic);
   EXPECT_EQ(font.raw.scheme, FM_FONT_SCHEME_MINOR);
+}
+
+TEST(FormulonCApiCellFormatPatch, SchemeSetToNoneKeepsTheStatedName) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_for_profile("mac-365-ja_JP", &wb.handle), 0);
+  fm_cell_format_patch_t patch = NewPatch();
+  SetName(&patch, "Arial");
+  patch.font.scheme_op = FM_PATCH_OP_SET;
+  patch.font.scheme = FM_FONT_SCHEME_NONE;
+  ASSERT_EQ(Update(wb.handle, Cell(1, 1), patch), 0);
+  const FontView font = FontOf(wb.handle, 1, 1);
+  EXPECT_EQ(font.name, "Arial");
+  EXPECT_EQ(font.raw.scheme, FM_FONT_SCHEME_NONE);
 }
 
 TEST(FormulonCApiCellFormatPatch, StatedFamilyOrCharsetSuppressesTheFaceCompletion) {

@@ -12145,6 +12145,12 @@ typedef enum {
  * (`Arial` is family 2; a face the engine has not measured gets neither), and
  * the canonical name of an alias. The same completion applies to a font read
  * from a file.
+ *
+ * A font with `scheme` minor or major takes the name of the theme's face for the
+ * workbook profile's script (the script entry for a ja, ko, zh or th profile,
+ * the latin face for any other), whenever the font, the theme or the profile
+ * changes; the name given for it is replaced. A theme with no entry for the
+ * script leaves the name as it is.
  */
 typedef struct {
   /** The typeface name as UTF-8; NULL when the font names none, which on a cell font takes the Normal style's name. */
@@ -13352,7 +13358,8 @@ FM_API fm_status_t fm_workbook_set_font(fm_workbook_t* wb, uint32_t font_index, 
  * Reading the current default is `fm_workbook_get_font_at(wb, 0, out)`.
  *
  * Every field but a NULL `name` and an unset `size_pt` is written as the
- * record states; `scheme` and `charset` are never carried over from the
+ * record states (a font with a `scheme` takes the theme's face for its name, see
+ * `fm_font_t`); `scheme` and `charset` are never carried over from the
  * font being replaced. A record that states no `family`, `charset` or `scheme`
  * takes the family and charset Excel holds for its face (`游ゴシック` is family 3
  * and charset 128; a face the engine has not measured gets neither), as a cell

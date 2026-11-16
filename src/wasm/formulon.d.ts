@@ -3631,7 +3631,13 @@ export interface Color {
   readonly indexed: number;
 }
 
-/** Plain-data shape of a font record (OOXML `<font>`), as `Workbook.ooxml.getFont` returns it. */
+/**
+ * Plain-data shape of a font record (OOXML `<font>`), as `Workbook.ooxml.getFont` returns it.
+ *
+ * A font with `scheme` minor or major takes the name of the theme's face for the workbook profile's script (the
+ * script entry for a ja, ko, zh or th profile, the latin face for any other), whenever the font, the theme or the
+ * profile changes; the name given for it is replaced. A theme with no entry for the script leaves the name as it is.
+ */
 export interface Font {
   /** The typeface name; `null` when the font names none. */
   readonly name: string;

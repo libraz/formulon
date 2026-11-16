@@ -689,6 +689,45 @@ TEST(FormulonCApiStyles, LoadLeavesAPartialOrThemeLinkedFontAlone) {
   EXPECT_EQ(linked.has_charset, 0);
 }
 
+// A font with a scheme takes the theme's face whatever name it is given; an equal resolved font dedups.
+TEST(FormulonCApiStyles, SchemeFontWritesTakeTheThemeFace) {
+  for (const char* profile : {"mac-365-ja_JP", "mac-365-en_US"}) {
+    SCOPED_TRACE(profile);
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create_for_profile(profile, &wb.handle), 0);
+    fm_font_t normal{};
+    ASSERT_EQ(fm_workbook_get_font_at(wb.handle, 0, &normal), 0);
+    ASSERT_EQ(normal.scheme, FM_FONT_SCHEME_MINOR);
+    const std::string face = normal.name;
+
+    fm_font_t record{};
+    record.name = "Arial";
+    record.scheme = FM_FONT_SCHEME_MINOR;
+    record.size_pt = 14.0;
+    record.has_size_pt = 1;
+    std::uint32_t first = 0;
+    std::uint32_t second = 0;
+    ASSERT_EQ(fm_workbook_add_font(wb.handle, &record, &first), 0);
+    record.name = "Verdana";
+    ASSERT_EQ(fm_workbook_add_font(wb.handle, &record, &second), 0);
+    EXPECT_EQ(first, second);
+    fm_font_t read{};
+    ASSERT_EQ(fm_workbook_get_font_at(wb.handle, first, &read), 0);
+    EXPECT_EQ(std::string(read.name), face);
+
+    record.name = "Courier New";
+    ASSERT_EQ(fm_workbook_set_font(wb.handle, first, &record), 0);
+    ASSERT_EQ(fm_workbook_get_font_at(wb.handle, first, &read), 0);
+    EXPECT_EQ(std::string(read.name), face);
+
+    fm_font_t body = normal;
+    body.name = "Courier New";
+    ASSERT_EQ(fm_workbook_set_default_font(wb.handle, &body), 0);
+    ASSERT_EQ(fm_workbook_get_font_at(wb.handle, 0, &read), 0);
+    EXPECT_EQ(std::string(read.name), face);
+  }
+}
+
 TEST(FormulonCApiStyles, AddFontWithoutFamilyOrCharsetIsCompletedAtCreation) {
   for (const auto& [profile, family] : {std::pair<const char*, int>{"mac-365-ja_JP", 3}, {"mac-365-en_US", 0}}) {
     SCOPED_TRACE(profile);

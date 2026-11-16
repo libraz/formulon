@@ -538,6 +538,7 @@ void Workbook::set_excel_profile(ExcelProfile profile) {
     return;
   }
   excel_profile_ = profile;
+  io::resolve_scheme_font_names(*this);
   invalidate_context_dependent_state_locked(sheets_, engine_->locked_mutator());
 }
 

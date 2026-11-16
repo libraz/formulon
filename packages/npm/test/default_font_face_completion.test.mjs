@@ -25,7 +25,8 @@ function savedDefaultFont(edit) {
   const wb = f.Workbook.createForProfile('mac-365-ja_JP');
   try {
     edit(wb);
-    const back = f.Workbook.load(wb.save(f.WorkbookFormat.Xlsx));
+    // A theme-linked font is named for the profile a book is opened under, so reopen under the same one.
+    const back = f.Workbook.load(wb.save(f.WorkbookFormat.Xlsx), { profileId: 'mac-365-ja_JP' });
     try {
       return back.getDefaultFont();
     } finally {

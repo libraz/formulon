@@ -10,6 +10,7 @@
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml_defs.h"
 #include "io/sheet_phonetic.h"
+#include "io/theme_part.h"
 
 namespace formulon {
 namespace io {
@@ -74,6 +75,7 @@ void finish_loaded_workbook(Workbook& wb, const ReadOptions& options,
   if (options.profile.has_value()) {
     wb.assign_loaded_profile(*options.profile);
   }
+  resolve_scheme_font_names(wb);
   wb.apply_loaded_recalc_marks(recalc_marked);
 }
 

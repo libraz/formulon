@@ -162,10 +162,8 @@ CellStyleSavePlan stored_cell_style_save_plan(const StylesTable& styles, ExcelPr
 bool saved_file_names_cell_style(const CellStyleSavePlan& plan, std::string_view name);
 
 /// The `<fonts>` a save writes, and the `<phoneticPr>` of the sheets that state
-/// none. A font linked to the theme (`scheme` minor or major) is written with
-/// the theme's face for the script of the profile's UI locale, which is what
-/// Excel stores for it on save; the model keeps the stored name. A font without
-/// a scheme, or one the theme names no face for, is written as stored.
+/// none. Every font is written as the model holds it: the name of a font linked
+/// to the theme is already resolved in the model (`resolve_scheme_font_names`).
 ///
 /// Under a locale whose new workbooks carry a phonetic font (ja, zh_CN, zh_TW,
 /// ko), a book with a sheet lacking `<phoneticPr>` gets that locale's phonetic
@@ -203,8 +201,7 @@ inline std::uint32_t saved_cell_xf(const CellStyleSavePlan* style_plan, std::uin
   return merged ? style_plan->merged_cell_xf_index(xf_index) : style_plan->cell_xf_index(xf_index);
 }
 
-/// Plans the fonts of `wb` for a save under its profile, with its theme (the
-/// default theme when the book has no theme part).
+/// Plans the fonts of `wb` for a save under its profile.
 FontSavePlan build_font_save_plan(const Workbook& wb);
 
 }  // namespace formulon

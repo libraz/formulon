@@ -7,12 +7,15 @@
 #include <utility>
 #include <vector>
 
+#include "font_metrics.h"
 #include "io/ooxml/part_dom.h"
 #include "io/ooxml/part_graph.h"
 #include "io/ooxml_defs.h"
 #include "io/xml_utils.h"
 #include "passthrough_part.h"
 #include "pugixml.hpp"
+#include "sheet.h"
+#include "text_run.h"
 #include "utils/number_text.h"
 #include "utils/status_macros.h"
 #include "workbook.h"
@@ -254,7 +257,68 @@ bool same_fonts(const Theme& a, const Theme& b) {
          same_scripts(a.major_scripts, b.major_scripts) && same_scripts(a.minor_scripts, b.minor_scripts);
 }
 
+// The theme's major or minor face for `script`; null when the theme names none.
+const std::string* theme_face(const Theme& theme, bool major, const char* script) {
+  if (*script == '\0') {
+    return &(major ? theme.fonts.major_latin : theme.fonts.minor_latin);
+  }
+  for (const ThemeScriptFont& font : major ? theme.major_scripts : theme.minor_scripts) {
+    if (font.script == script) {
+      return &font.typeface;
+    }
+  }
+  return nullptr;
+}
+
+bool is_scheme_font(const FontRecord& font) noexcept {
+  return font.scheme == kFontSchemeMajor || font.scheme == kFontSchemeMinor;
+}
+
 }  // namespace
+
+void resolve_scheme_font_name(FontRecord& font, const Theme& theme, ExcelLocale locale) {
+  if (!is_scheme_font(font)) {
+    return;
+  }
+  // A missing or empty entry for the script leaves the stored name, as Excel does.
+  const std::string* face = theme_face(theme, font.scheme == kFontSchemeMajor, theme_font_script(locale));
+  if (face != nullptr && !face->empty()) {
+    font.name = *face;
+  }
+}
+
+void resolve_scheme_font_name(FontRecord& font, const Workbook& wb) {
+  if (is_scheme_font(font)) {
+    resolve_scheme_font_name(font, wb.load_theme().theme, wb.excel_profile().locale);
+  }
+}
+
+void resolve_scheme_font_names(Workbook& wb) {
+  // The style table's fonts and the copies note runs carry, so a run still matches its table entry.
+  std::vector<FontRecord*> fonts;
+  for (FontRecord& font : wb.mutable_styles().fonts) {
+    if (is_scheme_font(font)) {
+      fonts.push_back(&font);
+    }
+  }
+  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    for (CellComment& note : wb.sheet(i).mutable_comments()) {
+      for (TextRun& run : note.runs) {
+        if (run.font.has_value() && is_scheme_font(*run.font)) {
+          fonts.push_back(&*run.font);
+        }
+      }
+    }
+  }
+  if (fonts.empty()) {
+    return;
+  }
+  const Theme theme = wb.load_theme().theme;
+  const ExcelLocale locale = wb.excel_profile().locale;
+  for (FontRecord* font : fonts) {
+    resolve_scheme_font_name(*font, theme, locale);
+  }
+}
 
 bool is_parseable_theme(const std::vector<std::uint8_t>& bytes) {
   pugi::xml_document doc;
@@ -339,6 +403,7 @@ Expected<void, Error> set_theme_fonts(Workbook& wb, const ThemeFonts& fonts) {
   patch_font(minor, fonts.minor_latin, fonts.minor_ea);
   RETURN_IF_ERROR(ooxml::store_part_dom(wb, path_or.value(), doc));
   drop_default_theme_version(wb);
+  resolve_scheme_font_names(wb);
   mark_formulas_dirty_if_fonts_changed(wb, before);
   return Expected<void, Error>();
 }
@@ -368,6 +433,7 @@ Expected<void, Error> set_theme_script_font(Workbook& wb, bool major, std::strin
   set_script_face(font_node, script, typeface);
   RETURN_IF_ERROR(ooxml::store_part_dom(wb, path_or.value(), doc));
   drop_default_theme_version(wb);
+  resolve_scheme_font_names(wb);
   mark_formulas_dirty_if_fonts_changed(wb, before);
   return Expected<void, Error>();
 }
@@ -388,6 +454,7 @@ Expected<void, Error> reset_theme(Workbook& wb) {
              rels.end());
   wb.set_unknown_workbook_rels(std::move(rels));
   ooxml::remove_orphans(wb, {path});
+  resolve_scheme_font_names(wb);
   mark_formulas_dirty_if_fonts_changed(wb, before);
   return Expected<void, Error>();
 }

@@ -236,15 +236,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   font in its flags the way Excel does; such fonts used to be written as black
   RGB with the bold flag clear.
 
-- Saving `.xlsx` and `.xlsb` now writes a font linked to the theme (`scheme`
-  `minor` or `major`) under the name of the theme's face for the script of the
-  workbook profile's locale, as Excel does on save. For example, a minor font
-  stored as `ＭＳ Ｐゴシック` in a book whose theme has a Calibri minor Latin
-  face is saved as `Calibri` under an `en_US` profile and stays
-  `ＭＳ Ｐゴシック` under `ja_JP`. A book without a theme part uses the built-in
-  Office theme (`Aptos Narrow`, `游ゴシック`, `等线`, …). The workbook keeps the
-  stored name; only the written file changes. Fonts without a scheme are written
-  as stored, and a new workbook of any profile saves unchanged.
+- A font linked to the theme (`scheme` `minor` or `major`) takes the name of the theme's face for the
+  script of the workbook profile's locale (the theme's script entry for a ja, ko, zh or th profile, its Latin
+  face for any other; a theme with no entry for the script leaves the name), as Excel does:
+  when a workbook is opened, when such a font is set or added, when a cell-format patch states a scheme,
+  when the theme's fonts change or a theme is applied or reset, and when the profile changes. For example,
+  a minor font stored as `ＭＳ Ｐゴシック` in a book whose theme has a Calibri minor Latin face reads as
+  `Calibri` under an `en_US` profile and stays `ＭＳ Ｐゴシック` under `ja_JP`. Only the name changes; a
+  font without a scheme is written as stored. `getFont` / `get_font` report the resolved name at once, the
+  name given to `setFont`, `setDefaultFont` or `addFont` for such a font is replaced, and saving renames
+  nothing.
 
 - Saving `.xlsb` writes each sheet's own phonetic (furigana) settings, the
   `<phoneticPr>` font, type and alignment, and closes the sheet with its revision

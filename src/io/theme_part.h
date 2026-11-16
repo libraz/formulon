@@ -12,7 +12,11 @@
 #include <string_view>
 #include <vector>
 
+#include "excel_profile.h"
+#include "passthrough_part.h"
+#include "styles.h"
 #include "theme.h"
+#include "unknown_relationship.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 
@@ -39,6 +43,18 @@ bool is_parseable_theme(const std::vector<std::uint8_t>& bytes);
 /// Marks every formula dirty when the theme's font faces or script faces now
 /// differ from `before` (Normal-font metrics read them).
 void mark_formulas_dirty_if_fonts_changed(Workbook& wb, const Theme& before);
+
+/// Gives `font` the name of the theme's face for `locale`'s script when its scheme is minor or major: the script entry
+/// for a locale with one (ja, ko, zh, th), else the latin face. A missing or empty entry for the script leaves the
+/// name, as does a font without a scheme. Only the name changes. Idempotent.
+void resolve_scheme_font_name(FontRecord& font, const Theme& theme, ExcelLocale locale);
+
+/// `resolve_scheme_font_name` for `font` under `wb`'s theme and profile; the theme is read only for a scheme font.
+void resolve_scheme_font_name(FontRecord& font, const Workbook& wb);
+
+/// `resolve_scheme_font_name` for every font of `wb` (the style table and the fonts note runs carry), under its theme
+/// and profile. Run after each event that can change the result: a load, a font write, a theme edit, a profile change.
+void resolve_scheme_font_names(Workbook& wb);
 
 /// Implements `Workbook::load_theme`.
 LoadedTheme load_theme(const Workbook& wb);

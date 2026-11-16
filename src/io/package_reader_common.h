@@ -34,7 +34,8 @@ void mark_model_derived_parts(const Workbook& wb, std::vector<PassthroughPart>& 
 void complete_loaded_fonts(StylesTable& styles, const Workbook& wb, const ReadOptions& options);
 
 /// Final steps of a package read, once every part is in the workbook: legacy implicit intersections,
-/// phonetic fonts, pivot refresh, the requested profile, then the recalc marks.
+/// phonetic fonts, pivot refresh, the requested profile, the scheme font names (the theme is in place by now), then
+/// the recalc marks.
 void finish_loaded_workbook(Workbook& wb, const ReadOptions& options,
                             const std::vector<std::vector<CellAddress>>& recalc_marked);
 

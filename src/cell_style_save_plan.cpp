@@ -17,7 +17,6 @@
 #include "sheet.h"
 #include "sheet_layout.h"
 #include "sheet_passthrough.h"
-#include "theme.h"
 #include "utils/index_sort.h"
 #include "utils/strings.h"
 #include "workbook.h"
@@ -539,37 +538,12 @@ bool writes_phonetic_font(const FontRecord& font, const FontRecord& phonetic) {
          font.color.kind == ColorSpec::Kind::kNone && font.color_argb == 0xFF000000U;
 }
 
-// The theme's major or minor face for `script`; null when the theme names none.
-const std::string* theme_face(const Theme& theme, bool major, const char* script) {
-  if (*script == '\0') {
-    return &(major ? theme.fonts.major_latin : theme.fonts.minor_latin);
-  }
-  for (const ThemeScriptFont& font : major ? theme.major_scripts : theme.minor_scripts) {
-    if (font.script == script) {
-      return &font.typeface;
-    }
-  }
-  return nullptr;
-}
-
 }  // namespace
 
 FontSavePlan build_font_save_plan(const Workbook& wb) {
   FontSavePlan plan;
   plan.fonts_ = wb.styles().fonts;
   const ExcelLocale locale = wb.excel_profile().locale;
-  const LoadedTheme loaded = wb.load_theme();
-  const char* script = theme_font_script(locale);
-  for (FontRecord& font : plan.fonts_) {
-    if (font.scheme != kFontSchemeMajor && font.scheme != kFontSchemeMinor) {
-      continue;
-    }
-    const std::string* face = theme_face(loaded.theme, font.scheme == kFontSchemeMajor, script);
-    if (face != nullptr && !face->empty() && *face != font.name) {
-      font.name = *face;
-      plan.identity_ = false;
-    }
-  }
 
   const NewWorkbookDefaults& row = new_workbook_defaults(locale);
   if (row.phonetic_size == 0U || plan.fonts_.empty() || plan.fonts_[0].scheme == 0U ||

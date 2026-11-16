@@ -11,6 +11,7 @@
 #include "auto_filter.h"
 #include "cell_style_save_plan.h"
 #include "cf/cf_types.h"
+#include "font_metrics.h"
 #include "io/auto_filter_xml.h"
 #include "io/pivot_cache_writer.h"
 #include "io/pivot_table_writer.h"
@@ -59,8 +60,15 @@ std::optional<std::uint64_t> current_retained_part_fingerprint(const Workbook& w
     }
 
     case PassthroughPart::RetainedOrigin::kStyles: {
-      // The style tables and the cell formats in use, so clearing a format's last user also stales the part.
-      std::string state = write_styles(wb.styles());
+      // The style tables and the cell formats in use, so clearing a format's last user also stales the part. A
+      // minor or major font's name is derived from the theme and the profile, so resolving it is not an edit.
+      StylesTable styles = wb.styles();
+      for (FontRecord& font : styles.fonts) {
+        if (font.scheme == kFontSchemeMajor || font.scheme == kFontSchemeMinor) {
+          font.name.clear();
+        }
+      }
+      std::string state = write_styles(styles);
       const UsedCellXfs used = collect_used_cell_xfs(wb);
       state += used.all_used ? 'A' : 'U';
       for (const bool u : used.used) {

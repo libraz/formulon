@@ -27,7 +27,8 @@ def _saved_default_font(edit: Callable[[Workbook], None]) -> Font:
     with Workbook.create_for_profile("mac-365-ja_JP") as wb:
         edit(wb)
         data = wb.save()
-    with Workbook.load(data) as back:
+    # A theme-linked font is named for the profile a book is opened under, so reopen under the same one.
+    with Workbook.load(data, profile_id="mac-365-ja_JP") as back:
         return back.get_default_font()
 
 

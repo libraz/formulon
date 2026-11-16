@@ -15,6 +15,7 @@
 #include "c_api/parts/struct_v1_sizes.h"
 #include "c_api/parts/styles_records.h"
 #include "font_completion.h"
+#include "io/theme_part.h"
 #include "style_region.h"
 #include "styles.h"
 #include "workbook.h"
@@ -570,9 +571,12 @@ extern "C" fm_status_t fm_sheet_update_cell_format(fm_workbook_t* wb, size_t she
     }
     if (font) {
       xf.apply_font = true;
-      xf.font_index = find_or_append_record(
-          styles.fonts, merged_font(record_or_default(styles.fonts, xf.font_index), normal, locale, patch->font),
-          &font_key);
+      formulon::FontRecord merged =
+          merged_font(record_or_default(styles.fonts, xf.font_index), normal, locale, patch->font);
+      if (is_set(patch->font.scheme_op)) {
+        formulon::io::resolve_scheme_font_name(merged, wb->workbook());
+      }
+      xf.font_index = find_or_append_record(styles.fonts, std::move(merged), &font_key);
     }
     if (fill) {
       xf.apply_fill = true;

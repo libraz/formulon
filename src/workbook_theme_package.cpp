@@ -267,6 +267,7 @@ Expected<void, Error> apply_theme_package(Workbook& wb, const std::uint8_t* data
     wb.add_workbook_relationship(std::string(kRelTheme), path);
   }
   ooxml::remove_orphans(wb, std::move(orphans));
+  resolve_scheme_font_names(wb);
   mark_formulas_dirty_if_fonts_changed(wb, before);
   drop_default_theme_version(wb);
   return Expected<void, Error>();

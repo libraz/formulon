@@ -21,6 +21,7 @@
 #include "c_api/parts/styles_records.h"
 #include "font_completion.h"
 #include "io/styles_writer.h"
+#include "io/theme_part.h"
 #include "sheet_name.h"
 #include "styles.h"
 #include "utils/error.h"
@@ -322,9 +323,10 @@ formulon::FontRecord font_from_c(const fm_font_t& record) {
 /// Cell fonts always carry a size: only a differential font may leave it
 /// unchanged. An unstated size or a `NULL` name takes the Normal font's. A font
 /// that states no family, charset or scheme is the font Excel holds after
-/// loading it (`complete_font_from_face`).
+/// loading it (`complete_font_from_face`); one with a scheme takes the theme's
+/// face (`resolve_scheme_font_name`).
 formulon::FontRecord cell_font_from_c(const fm_font_t& record, const formulon::FontRecord& normal,
-                                      formulon::ExcelLocale locale) {
+                                      const formulon::Workbook& book) {
   formulon::FontRecord out = font_from_c(record);
   if (record.has_size_pt == 0) {
     out.size = normal.size;
@@ -333,7 +335,8 @@ formulon::FontRecord cell_font_from_c(const fm_font_t& record, const formulon::F
     out.name = normal.name;
   }
   out.has_size = true;
-  formulon::complete_font_from_face(out, locale);
+  formulon::complete_font_from_face(out, book.excel_profile().locale);
+  formulon::io::resolve_scheme_font_name(out, book);
   return out;
 }
 
@@ -376,7 +379,7 @@ extern "C" fm_status_t fm_workbook_add_font(fm_workbook_t* wb, const fm_font_t* 
   }
   formulon::StylesTable& styles = wb->workbook().mutable_styles();
   ensure_default_style_roots(styles);
-  formulon::FontRecord candidate = cell_font_from_c(*record, styles.fonts[0], wb->workbook().excel_profile().locale);
+  formulon::FontRecord candidate = cell_font_from_c(*record, styles.fonts[0], wb->workbook());
   *out_index = find_or_append_record(styles.fonts, std::move(candidate), &font_key);
   return 0;
 }
@@ -396,7 +399,7 @@ extern "C" fm_status_t fm_workbook_set_font(fm_workbook_t* wb, uint32_t font_ind
   if (auto rc = validate_cell_font(*record); rc != 0) {
     return rc;
   }
-  styles.fonts[font_index] = cell_font_from_c(*record, styles.fonts[0], wb->workbook().excel_profile().locale);
+  styles.fonts[font_index] = cell_font_from_c(*record, styles.fonts[0], wb->workbook());
   return 0;
 }
 
@@ -413,7 +416,7 @@ extern "C" fm_status_t fm_workbook_set_default_font(fm_workbook_t* wb, const fm_
   // by construction, so a table without it is an empty table rather than one
   // whose slot the caller mis-numbered.
   ensure_default_style_roots(styles);
-  styles.fonts[0] = cell_font_from_c(*record, styles.fonts[0], wb->workbook().excel_profile().locale);
+  styles.fonts[0] = cell_font_from_c(*record, styles.fonts[0], wb->workbook());
   return 0;
 }
 
@@ -762,8 +765,7 @@ extern "C" fm_status_t fm_workbook_add_batch(fm_workbook_t* wb, const fm_styles_
   for (uint32_t i = 0; i < staged.borders.size(); ++i)
     borders.emplace(border_key(staged.borders[i]), i);
   for (size_t i = 0; i < batch->font_count; ++i) {
-    formulon::FontRecord value =
-        cell_font_from_c(batch->fonts[i], staged.fonts[0], wb->workbook().excel_profile().locale);
+    formulon::FontRecord value = cell_font_from_c(batch->fonts[i], staged.fonts[0], wb->workbook());
     const std::string key = font_key(value);
     const auto [it, inserted] = fonts.emplace(key, static_cast<uint32_t>(staged.fonts.size()));
     if (inserted)

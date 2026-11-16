@@ -376,15 +376,15 @@ TEST(ThemePackage, NormalFontFollowsTheNewThemeUiScriptFace) {
   ASSERT_TRUE(static_cast<bool>(saved));
   EXPECT_NE(Entry(saved.value(), "xl/styles.xml").find("<name val=\"" + jpan + "\""), std::string::npos);
 
-  const std::string model_face = wb.styles().fonts[0].name;
+  EXPECT_EQ(wb.styles().fonts[0].name, jpan);
+  // A theme with no entry for the UI's script leaves the name the font has.
   PackageSpec without_jpan;
   without_jpan.theme = ThemeXml("112233", "Minor One");
   ASSERT_TRUE(static_cast<bool>(Apply(wb, BuildPackage(without_jpan))));
+  EXPECT_EQ(wb.styles().fonts[0].name, jpan);
   saved = write_ooxml(wb);
   ASSERT_TRUE(static_cast<bool>(saved));
-  const std::string styles = Entry(saved.value(), "xl/styles.xml");
-  EXPECT_EQ(styles.find(jpan), std::string::npos);
-  EXPECT_NE(styles.find("<name val=\"" + model_face + "\""), std::string::npos);
+  EXPECT_NE(Entry(saved.value(), "xl/styles.xml").find("<name val=\"" + jpan + "\""), std::string::npos);
 }
 
 }  // namespace

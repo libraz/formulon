@@ -6,6 +6,7 @@
 // stored, as are Aptos and Aptos Narrow, which Excel completes with neither. A font renamed by a cell-format patch
 // is given the same values, except that a face equal to the Normal font's copies the Normal font's.
 
+#include <cassert>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -91,6 +92,8 @@ inline void complete_font_from_face(FontRecord& font, ExcelLocale locale) {
   if (row == nullptr) {
     return;
   }
+  // A font linked to the theme takes its name from the theme (`resolve_scheme_font_names`), never from this table.
+  assert(font.scheme == 0U);
   font.family = completion_family(*row, locale);
   font.has_family = font.family != 0U;
   font.charset = row->charset;

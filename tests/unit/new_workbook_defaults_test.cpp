@@ -223,7 +223,10 @@ void CheckProfile(const Captured& c, const char* profile_id, bool mac, double ro
   ExpectSheetXml(sheet, c, mac, row_height);
   ExpectWorkbookXmlSheetName(book, c);
 
-  auto reloaded = io::read_ooxml(io::ByteSpan{pkg.data(), pkg.size()});
+  // Scheme font names resolve for the profile a book is opened under, so reload under the same one.
+  io::ReadOptions options;
+  options.profile = profile;
+  auto reloaded = io::read_ooxml(io::ByteSpan{pkg.data(), pkg.size()}, options);
   ASSERT_TRUE(static_cast<bool>(reloaded));
   ExpectReloaded(reloaded.value().workbook, c);
 }
