@@ -405,6 +405,20 @@ class Value {
   /// Returns the form of a `Ref`. Aborts if `kind() != Ref`.
   RefForm ref_form() const;
 
+  /// Whether this is a `Ref` marked as built from a computed (dynamic)
+  /// address; false for every other kind.
+  bool ref_is_dynamic() const noexcept { return kind_ == ValueKind::Ref && (ref_form_ & kRefDynamic) != 0; }
+
+  /// Returns this value with the dynamic mark set when it is a `Ref`;
+  /// any other value is returned unchanged.
+  Value with_ref_dynamic() const noexcept {
+    Value out = *this;
+    if (kind_ == ValueKind::Ref) {
+      out.ref_form_ = static_cast<std::uint8_t>(out.ref_form_ | kRefDynamic);
+    }
+    return out;
+  }
+
   /// Returns a view of a `Ref`. Aborts if `kind() != Ref`.
   RefView as_ref() const;
 
@@ -508,6 +522,8 @@ class Value {
 
   /// Out-of-line bit of `ref_form_`; the low bits hold the `RefForm`.
   static constexpr std::uint8_t kRefOutOfLine = 0x80;
+  /// Dynamic bit of `ref_form_`: the reference came from a computed address.
+  static constexpr std::uint8_t kRefDynamic = 0x40;
 
   ValueKind kind_;
   BlankGridProjection blank_projection_;

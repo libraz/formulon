@@ -564,9 +564,12 @@ src/eval/aggregate_lazy.cpp
   src/eval/trimrange_lazy.cpp
   src/eval/a1_parse.cpp
   src/eval/reference/common.cpp
+  src/eval/reference/deref.cpp
   src/eval/reference/indirect.cpp
   src/eval/reference/intersection.cpp
   src/eval/reference/offset.cpp
+  src/eval/reference/ops.cpp
+  src/eval/reference/ref_value.cpp
   src/eval/regression_lazy.cpp
   src/eval/series_sum_lazy.cpp
   src/eval/rank_lazy.cpp

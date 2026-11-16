@@ -68,12 +68,12 @@ const eval::LambdaValue* Value::as_lambda() const {
 
 RefForm Value::ref_form() const {
   FM_CHECK(kind_ == ValueKind::Ref, "Value::ref_form() on non-Ref");
-  return static_cast<RefForm>(ref_form_ & ~kRefOutOfLine);
+  return static_cast<RefForm>(ref_form_ & ~(kRefOutOfLine | kRefDynamic));
 }
 
 RefView Value::as_ref() const {
   FM_CHECK(kind_ == ValueKind::Ref, "Value::as_ref() on non-Ref");
-  const RefForm form = static_cast<RefForm>(ref_form_ & ~kRefOutOfLine);
+  const RefForm form = static_cast<RefForm>(ref_form_ & ~(kRefOutOfLine | kRefDynamic));
   if ((ref_form_ & kRefOutOfLine) == 0) {
     return RefView{&data_.area, nullptr, 1, 0, 0, 0, form};
   }

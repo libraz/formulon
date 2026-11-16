@@ -337,6 +337,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/function_registry_test.cpp
   unit/eval/builtin_names_test.cpp
   unit/eval/lazy_table_columns_test.cpp
+  unit/eval/reference_deref_test.cpp
   unit/eval/builtins_test.cpp
   unit/eval/builtins_logical_test.cpp
   unit/eval/builtins_floor_ceiling_test.cpp
