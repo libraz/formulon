@@ -110,8 +110,6 @@ pivot_calc/cf5_nested_calc_field.xlsx model_xlsb pivot_count known_gap  # pendin
 pivot_calc/ci3_item_positional_refs.xlsx model_xlsb pivot_count known_gap  # pending: cache bridge refuses positional calculated item references
 pivot_line_shapes/M6a_page_field_only.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a table without row and column line items
 pivot_line_shapes/M6b_completely_empty.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses a table without row and column line items
-pivot_options/date_group_quarters.xlsx model_xlsb pivot_count known_gap  # pending: cache bridge WriteGroup refuses a quarters group (no Excel sample)
-pivot_options/date_group_quarters_months_years.xlsx model_xlsb pivot_count known_gap  # pending: cache bridge WriteGroup refuses a quarters group (no Excel sample)
 pivot_options/op_alttext.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses alternative text
 pivot_options/op_emptycol_show_all.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses showEmptyRow / showEmptyCol
 pivot_options/op_emptyrow_show_all.xlsx model_xlsb pivot_count known_gap  # pending: table bridge refuses showEmptyRow / showEmptyCol

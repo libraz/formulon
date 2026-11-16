@@ -27,9 +27,14 @@ namespace pivot_group {
 /// `par` / `base` value meaning the attribute is absent.
 inline constexpr std::uint32_t kNoField = 0xFFFFFFFFU;
 
-/// BrtBeginPCDFGRange byte 0 (`groupBy`), ST_GroupBy order; `days`, `months` and `years` are the values measured.
+/// BrtBeginPCDFGRange byte 0 (`groupBy`), ST_GroupBy order; a numeric range is 0.
+inline constexpr std::uint8_t kGroupByRange = 0U;
+inline constexpr std::uint8_t kGroupBySeconds = 1U;
+inline constexpr std::uint8_t kGroupByMinutes = 2U;
+inline constexpr std::uint8_t kGroupByHours = 3U;
 inline constexpr std::uint8_t kGroupByDays = 4U;
 inline constexpr std::uint8_t kGroupByMonths = 5U;
+inline constexpr std::uint8_t kGroupByQuarters = 6U;
 inline constexpr std::uint8_t kGroupByYears = 7U;
 /// BrtBeginPCDFGRange byte 1 bits: `autoStart`, `autoEnd`, and a date range
 /// (`startDate`/`endDate` rather than `startNum`/`endNum`).

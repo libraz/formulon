@@ -384,19 +384,16 @@ TEST_P(XlsbParityPivotApiBuilt, WritesExcelsPivotRecords) {
 INSTANTIATE_TEST_SUITE_P(Cases, XlsbParityPivotApiBuilt,
                          ::testing::Values("a_plain", "b_page_filter", "e_shared_cache"));
 
-// A source row left wholly or partly blank (xlsb_parity/pivot/blank, Excel 16.115's saves after a refresh): the
-// .xlsx read and written as .xlsb holds Excel's own pivot records, the blank cells and missing items included.
-class XlsbParityPivotBlank : public ::testing::TestWithParam<const char*> {};
-
-TEST_P(XlsbParityPivotBlank, WritesExcelsPivotRecords) {
-  const std::string stem = GetParam();
+/// Reads Excel's `.xlsx` save `<dir>/<stem>.xlsx`, writes it as `.xlsb`, and holds every pivot record against Excel's
+/// own `<stem>.xlsb` save.
+void ExpectExcelsPivotRecords(const std::string& dir, const std::string& stem) {
   ReadOptions mac;
   mac.profile = mac_365_en_us_profile();
-  const tc::Converted ours =
-      tc::ConvertToXlsb(std::string(FORMULON_FIXTURES_DIR), "excel/xlsb_parity/pivot/blank/" + stem + ".xlsx", mac);
+  const tc::Converted ours = tc::ConvertToXlsb(std::string(FORMULON_FIXTURES_DIR),
+                                               "excel/xlsb_parity/pivot/" + dir + "/" + stem + ".xlsx", mac);
   ASSERT_TRUE(ours.error.empty()) << ours.error;
   const tc::Bytes excel =
-      tc::ReadBytes(std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_parity/pivot/blank/" + stem + ".xlsb");
+      tc::ReadBytes(std::string(FORMULON_FIXTURES_DIR) + "/excel/xlsb_parity/pivot/" + dir + "/" + stem + ".xlsb");
   ASSERT_FALSE(excel.empty());
   std::string diff;
   for (const std::string& line : tc::CompareRecordSets(ours.bytes, excel, PivotTypesButUid(excel), Unmatched(excel))) {
@@ -405,6 +402,14 @@ TEST_P(XlsbParityPivotBlank, WritesExcelsPivotRecords) {
     }
   }
   EXPECT_TRUE(diff.empty()) << diff;
+}
+
+// A source row left wholly or partly blank (xlsb_parity/pivot/blank, Excel 16.115's saves after a refresh): the
+// blank cells and missing items are written as Excel writes them.
+class XlsbParityPivotBlank : public ::testing::TestWithParam<const char*> {};
+
+TEST_P(XlsbParityPivotBlank, WritesExcelsPivotRecords) {
+  ExpectExcelsPivotRecords("blank", GetParam());
 }
 
 INSTANTIATE_TEST_SUITE_P(Blanks, XlsbParityPivotBlank,
@@ -642,8 +647,42 @@ TEST_P(XlsbParityPivotApiBuiltDeferred, LeavesItsGroupOutAndCountsIt) {
 }
 
 INSTANTIATE_TEST_SUITE_P(Causes, XlsbParityPivotApiBuiltDeferred,
-                         ::testing::Values("d_calc_field", "f_quarter_group", "g_numeric_group", "h_rank",
-                                           "i_running_percent"));
+                         ::testing::Values("d_calc_field", "h_rank", "i_running_percent"));
+
+/// The BrtBeginPCDFGRange payloads (groupBy, flags, start, end, interval) of a package's caches.
+std::vector<tc::Bytes> RangeGroups(const tc::Bytes& package) {
+  std::vector<tc::Bytes> out;
+  for (const auto& [part, records] : tc::ExtractRecords(package, {pivot_records::kBeginPCDFGRange})) {
+    for (const tc::IndexedRecord& rec : records) {
+      out.push_back(rec.payload);
+    }
+  }
+  return out;
+}
+
+// A quarter group over dates and a numeric range group are written: groupBy 6 with the date bit and the automatic
+// bounds, and groupBy 0 with the bounds as numbers and no date bit. The saves read back with their pivots.
+TEST(XlsbParityPivotApiBuiltGroups, WritesQuarterAndNumericRangeGroups) {
+  const struct {
+    const char* name;
+    std::uint8_t group_by;
+    std::uint8_t flags;
+  } kCases[] = {{"f_quarter_group", 6U, 0x07U}, {"g_numeric_group", 0U, 0x03U}};
+  for (const auto& c : kCases) {
+    SCOPED_TRACE(c.name);
+    const Saved saved = SaveCase(c.name);
+    ASSERT_FALSE(saved.bytes.empty());
+    EXPECT_EQ(saved.deferred, 0U);
+    ExpectValid(saved.bytes);
+    EXPECT_EQ(PivotNames(ReloadedReport(saved.bytes)), PivotNames(saved.report));
+    bool found = false;
+    for (const tc::Bytes& range : RangeGroups(saved.bytes)) {
+      ASSERT_GE(range.size(), 2U);
+      found = found || (range[0] == c.group_by && range[1] == c.flags);
+    }
+    EXPECT_TRUE(found);
+  }
+}
 
 // Every pivot the model holds is either written or counted as left out.
 TEST(XlsbParityPivotApiBuiltCount, EveryPivotIsWrittenOrCounted) {

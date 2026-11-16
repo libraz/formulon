@@ -697,21 +697,20 @@ Expected<void, Error> ReadItems(const pcd::ItemTable& table, pivot::PivotCache& 
   return Expected<void, Error>::Ok();
 }
 
-/// The model period of a BrtBeginPCDFGRange `groupBy` an Excel save has shown, or nullopt.
+/// The model period of a BrtBeginPCDFGRange `groupBy`, or nullopt past ST_GroupBy.
 std::optional<pivot::GroupBy> MeasuredGroupBy(std::uint8_t code) {
-  switch (code) {
-    case pivot_group::kGroupByDays:
-      return pivot::GroupBy::Days;
-    case pivot_group::kGroupByMonths:
-      return pivot::GroupBy::Months;
-    case pivot_group::kGroupByYears:
-      return pivot::GroupBy::Years;
-    default:
-      return std::nullopt;
+  if (code > pivot_group::kGroupByYears) {
+    return std::nullopt;
   }
+  return static_cast<pivot::GroupBy>(code);
 }
-static_assert(static_cast<std::uint8_t>(pivot::GroupBy::Days) == pivot_group::kGroupByDays &&
+static_assert(static_cast<std::uint8_t>(pivot::GroupBy::Range) == pivot_group::kGroupByRange &&
+              static_cast<std::uint8_t>(pivot::GroupBy::Seconds) == pivot_group::kGroupBySeconds &&
+              static_cast<std::uint8_t>(pivot::GroupBy::Minutes) == pivot_group::kGroupByMinutes &&
+              static_cast<std::uint8_t>(pivot::GroupBy::Hours) == pivot_group::kGroupByHours &&
+              static_cast<std::uint8_t>(pivot::GroupBy::Days) == pivot_group::kGroupByDays &&
               static_cast<std::uint8_t>(pivot::GroupBy::Months) == pivot_group::kGroupByMonths &&
+              static_cast<std::uint8_t>(pivot::GroupBy::Quarters) == pivot_group::kGroupByQuarters &&
               static_cast<std::uint8_t>(pivot::GroupBy::Years) == pivot_group::kGroupByYears);
 
 Expected<pivot::FieldGroup, Error> ReadGroup(const std::vector<pivot_records::RawRecord>& records,
@@ -733,14 +732,21 @@ Expected<pivot::FieldGroup, Error> ReadGroup(const std::vector<pivot_records::Ra
     constexpr std::uint8_t kKnown =
         pivot_group::kRangeAutoStart | pivot_group::kRangeAutoEnd | pivot_group::kRangeDates;
     const std::optional<pivot::GroupBy> by = MeasuredGroupBy(r.group_by);
-    if (!by || (r.flags & ~kKnown) != 0U || (r.flags & pivot_group::kRangeDates) == 0U) {
-      return Unmeasured("range group other than a days, months or years group over dates");
+    // A numeric range groups by `range` over numbers; every period groups dates.
+    const bool dates = (r.flags & pivot_group::kRangeDates) != 0U;
+    if (!by || (r.flags & ~kKnown) != 0U || dates != (*by != pivot::GroupBy::Range)) {
+      return Unmeasured("range group whose period and value type disagree");
     }
     out.kind = pivot::GroupKind::Range;
     out.range.by = *by;
-    out.range.is_date = true;
-    ASSIGN_OR_RETURN(out.range.start_date, DateIso(r.start, date1904));
-    ASSIGN_OR_RETURN(out.range.end_date, DateIso(r.end, date1904));
+    out.range.is_date = dates;
+    if (dates) {
+      ASSIGN_OR_RETURN(out.range.start_date, DateIso(r.start, date1904));
+      ASSIGN_OR_RETURN(out.range.end_date, DateIso(r.end, date1904));
+    } else {
+      out.range.start_num = r.start;
+      out.range.end_num = r.end;
+    }
     out.range.auto_start = (r.flags & pivot_group::kRangeAutoStart) != 0U;
     out.range.auto_end = (r.flags & pivot_group::kRangeAutoEnd) != 0U;
     out.range.interval = r.interval;
@@ -1174,19 +1180,19 @@ bool WriteGroup(const pivot::FieldGroup& in, bool date1904, std::vector<pivot_re
   group.base = in.base.value_or(pivot_group::kNoField);
   if (in.kind == pivot::GroupKind::Range) {
     const pivot::RangeGroup& r = in.range;
-    if (!MeasuredGroupBy(static_cast<std::uint8_t>(r.by)) || !r.is_date) {
+    if (!MeasuredGroupBy(static_cast<std::uint8_t>(r.by)) || r.is_date != (r.by != pivot::GroupBy::Range)) {
       return false;
     }
-    const std::optional<double> start = IsoSerial(r.start_date, date1904);
-    const std::optional<double> end = IsoSerial(r.end_date, date1904);
+    const std::optional<double> start = r.is_date ? IsoSerial(r.start_date, date1904) : r.start_num;
+    const std::optional<double> end = r.is_date ? IsoSerial(r.end_date, date1904) : r.end_num;
     if (!start || !end) {
       return false;
     }
     pivot_group::RangeGroup range;
     range.group_by = static_cast<std::uint8_t>(r.by);
-    range.flags =
-        static_cast<std::uint8_t>(pivot_group::kRangeDates | (r.auto_start ? pivot_group::kRangeAutoStart : 0U) |
-                                  (r.auto_end ? pivot_group::kRangeAutoEnd : 0U));
+    range.flags = static_cast<std::uint8_t>((r.is_date ? pivot_group::kRangeDates : 0U) |
+                                            (r.auto_start ? pivot_group::kRangeAutoStart : 0U) |
+                                            (r.auto_end ? pivot_group::kRangeAutoEnd : 0U));
     range.start = *start;
     range.end = *end;
     range.interval = r.interval;
