@@ -169,11 +169,12 @@ TEST(FormulonCApiCellGeometry, MacProfileWidthModelUsesWholePoints) {
   EXPECT_STREQ(display.normal_font_name, "Calibri");
   EXPECT_EQ(display.platform, FM_WIDTH_PLATFORM_MAC);
 
-  // Print is the Windows figure on every host.
+  // Mac paginates with its screen layout.
   fm_width_model_info_t print = FM_STRUCT_INIT(fm_width_model_info_t);
   ASSERT_EQ(fm_sheet_get_width_model(wb.handle, 0, FM_GEOMETRY_MODE_PRINT, &print), 0);
-  EXPECT_EQ(print.platform, FM_WIDTH_PLATFORM_WIN);
-  EXPECT_DOUBLE_EQ(print.points_per_char, 39.0 / 7.0);
+  EXPECT_EQ(print.platform, FM_WIDTH_PLATFORM_MAC);
+  EXPECT_DOUBLE_EQ(print.points_per_char, 6.0);
+  EXPECT_DOUBLE_EQ(print.padding_pt, 5.0);
 
   // A sheet with no <sheetFormatPr> derives its default from base 10 although the base still reads 8.
   fm_sheet_format_defaults_t defaults = FM_STRUCT_INIT(fm_sheet_format_defaults_t);
