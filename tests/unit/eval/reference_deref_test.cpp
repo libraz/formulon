@@ -986,9 +986,8 @@ TEST_F(SelectedRefTest, ValueModeReadsTheKeptRectangle) {
   ExpectSame(Eval("=TRIMRANGE(D4:F9)"), Eval("=D4:E5"), "trimmed");
 }
 
-// TAKE / DROP over a whole column. As a reference argument they name the kept rows of the whole column;
-// read as values, the column is still narrowed to its populated rows first, so TAKE(A:A,-1) reads A5 (51)
-// where the reference names A1048576, which Excel reads as 0.
+// TAKE / DROP over a whole column name the kept rows of the whole column, as a reference argument and as
+// values: TAKE(A:A,-1) is A1048576, which reads 0 (Excel-measured).
 TEST_F(SelectedRefTest, WholeAxisTakeAndDropKnownReads) {
   struct Case {
     const char* source;
@@ -1004,7 +1003,7 @@ TEST_F(SelectedRefTest, WholeAxisTakeAndDropKnownReads) {
       {"=ROWS(TAKE(A:A,-2))", 2.0},
       {"=ROWS(DROP(A:A,1))", 1048575.0},
       {"=SUM(DROP(A:A,1))", 144.0},
-      {"=TAKE(A:A,-1)", 51.0},
+      {"=TAKE(A:A,-1)", 0.0},
   };
   for (const Case& c : cases) {
     const Value v = Eval(c.source);
@@ -1030,6 +1029,28 @@ TEST_F(SelectedRefTest, TrimmedOneCellIsAReferenceToThatCell) {
   const Value one = Eval("=TYPE(TRIMRANGE(E4:E9))");
   ASSERT_TRUE(one.is_number()) << one.debug_to_string();
   EXPECT_EQ(one.as_number(), 1.0);
+}
+
+TEST_F(SelectedRefTest, WholeAxisTakeAndDropReturnReferences) {
+  ExpectSelected("=TAKE(A:A,-1)", 1048575, 0, 1048575, 0);
+  ExpectSelected("=TAKE(A:A,3)", 0, 0, 2, 0);
+  ExpectSelected("=DROP(A:A,1)", 1, 0, 1048575, 0);
+  ExpectSelected("=DROP(1:1,0,2)", 0, 2, 0, 16383);
+  const Value whole = AsRef("=TAKE(A:B,,1)");
+  ASSERT_TRUE(whole.is_ref());
+  EXPECT_EQ(whole.as_ref().areas[0].whole_col, 1U);
+}
+
+// A rectangle running to the grid's last row reads as a whole column does: its populated head, then blanks.
+TEST_F(SelectedRefTest, EdgeReachingRectanglesReadTheirPopulatedHead) {
+  const Shaped dropped = ValueMode(Parse("=DROP(A:A,1)"));
+  ASSERT_NE(dropped.tail_array, nullptr) << dropped.value.debug_to_string();
+  EXPECT_EQ(dropped.tail_array->rows, 1048575U);
+  ExpectSame(Eval("=SUM(DROP(A:A,2))"), Eval("=SUM(A3:A5)"), "aggregate over the head");
+  ExpectSame(Eval("=COUNT(DROP(B:B,1))"), Eval("=COUNT(B2:B5)"), "count over the head");
+  ExpectSame(Eval("=ROWS(DROP(A:A,1))"), Eval("=1048575"), "declared height");
+  ExpectSame(Eval("=INDEX(DROP(A:A,1),2)"), Eval("=A3"), "pick inside the head");
+  ExpectSame(Eval("=INDEX(DROP(A:A,1),100)"), Eval("=A101"), "pick past the head");
 }
 
 }  // namespace

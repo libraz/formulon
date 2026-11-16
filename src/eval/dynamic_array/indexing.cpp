@@ -165,17 +165,14 @@ Value take_drop_value(const parser::AstNode& call, const Value& source, bool tak
   return slice_array(call, *one, take, arena, registry, ctx);
 }
 
-// TAKE / DROP over a bounded one-area reference: the kept rectangle as a reference. `source` is the
-// evaluated source; a whole-axis one is left to the value path, which reads its populated extent.
+// TAKE / DROP over a one-area reference: the kept rectangle as a reference. `source` is the evaluated
+// source; over a whole axis the counts run over the whole grid line, as Excel's do.
 bool slice_reference(const parser::AstNode& call, const Value& source, bool take, Arena& arena,
                      const FunctionRegistry& registry, const EvalContext& ctx, Value* out) {
   if (!is_one_area_ref(source)) {
     return false;
   }
   const RefArea& a = source.as_ref().areas[0];
-  if (a.whole_col != 0U || a.whole_row != 0U) {
-    return false;
-  }
   const std::uint32_t rows = a.row_last - a.row_first + 1U;
   const std::uint32_t cols = static_cast<std::uint32_t>(a.col_last) - a.col_first + 1U;
   Value err = Value::error(ErrorCode::Value);
@@ -191,7 +188,7 @@ bool slice_reference(const parser::AstNode& call, const Value& source, bool take
     return true;
   }
   const DeclaredRect rect{a.row_first + row_lo, a.row_first + row_hi - 1U, a.col_first + col_lo,
-                          a.col_first + col_hi - 1U, /*whole_axis=*/false};
+                          a.col_first + col_hi - 1U, /*whole_axis=*/a.whole_col != 0U || a.whole_row != 0U};
   const RefArea kept = make_ref_area(rect, a.sheet_first, a.sheet_last, RefOrigin::kDerived);
   const Value ref = make_ref(arena, RefForm::kArea, 0, &kept, 1);
   *out = source.ref_is_dynamic() ? ref.with_ref_dynamic() : ref;

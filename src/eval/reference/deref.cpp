@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string_view>
 #include <vector>
 
@@ -52,6 +53,18 @@ DeclaredRect rect_of(const RefArea& a) noexcept {
   r.col_last = a.col_last;
   r.whole_axis = a.whole_col != 0U || a.whole_row != 0U;
   return r;
+}
+
+// A rectangle of more than one line that runs to the grid's last row (or last column) from inside the grid,
+// short of a whole axis (`A2:A1048576`): it reads as a whole axis does, its populated head followed by blanks.
+bool reaches_grid_edge(const RefArea& a, TailAxis* axis) noexcept {
+  if (a.whole_col != 0U || a.whole_row != 0U) {
+    return false;
+  }
+  const bool rows = a.row_first != 0U && a.row_first != a.row_last && a.row_last == Sheet::kMaxRows - 1U;
+  const bool cols = a.col_first != 0U && a.col_first != a.col_last && a.col_last == Sheet::kMaxCols - 1U;
+  *axis = rows ? TailAxis::kRows : TailAxis::kCols;
+  return rows || cols;
 }
 
 bool is_one_cell(const RefArea& a) noexcept {
@@ -134,10 +147,69 @@ class Reader {
     if (lo.is_full_col || lo.is_full_row) {
       return read_whole_axis(lo, hi, arena_, registry_, ctx_);
     }
+    if (TailAxis axis = TailAxis::kRows; reaches_grid_edge(a, &axis)) {
+      return read_edge_tail(a, name, axis);
+    }
     if (is_one_cell(a)) {
       return Shaped{ctx_.resolve_ref(lo, arena_, registry_), nullptr};
     }
     return Shaped{materialize_rectangle(lo, hi, arena_, registry_, ctx_), nullptr};
+  }
+
+  // The populated head of the edge-reaching `a` on sheet `name`: the band's whole axis is walked as a whole
+  // column (row) is, and the head is its part from `a`'s first row (column); empty when none of `a` is populated.
+  Expected<std::optional<DeclaredRect>, ErrorCode> edge_head(const RefArea& a, std::string_view name, TailAxis axis) {
+    parser::Reference lo{};
+    parser::Reference hi{};
+    set_rect_corner_refs(name, a.row_first, a.col_first, a.row_last, a.col_last, &lo, &hi);
+    (axis == TailAxis::kRows ? lo.is_full_col : lo.is_full_row) = true;
+    (axis == TailAxis::kRows ? hi.is_full_col : hi.is_full_row) = true;
+    const auto walked = ctx_.walked_range_rect(lo, hi);
+    if (!walked) {
+      return walked.error();
+    }
+    if (!walked.value().has_value()) {
+      return std::optional<DeclaredRect>{};
+    }
+    DeclaredRect head = rect_of(a);
+    std::uint32_t& last = axis == TailAxis::kRows ? head.row_last : head.col_last;
+    const std::uint32_t first = axis == TailAxis::kRows ? head.row_first : head.col_first;
+    last = axis == TailAxis::kRows ? walked.value()->row_last : walked.value()->col_last;
+    if (last < first) {
+      return std::optional<DeclaredRect>{};
+    }
+    return std::optional<DeclaredRect>{head};
+  }
+
+  // Reads the edge-reaching `a` as a whole axis reads: its populated head, then blanks to its declared size.
+  Shaped read_edge_tail(const RefArea& a, std::string_view name, TailAxis axis) {
+    const auto head = edge_head(a, name, axis);
+    if (!head) {
+      return Shaped{Value::error(head.error()), nullptr};
+    }
+    std::vector<Value> cells;
+    std::uint32_t head_len = 0U;
+    if (head.value().has_value()) {
+      const DeclaredRect& h = *head.value();
+      parser::Reference lo{};
+      parser::Reference hi{};
+      set_rect_corner_refs(name, h.row_first, h.col_first, h.row_last, h.col_last, &lo, &hi);
+      auto expanded = ctx_.expand_range(lo, hi, arena_, registry_);
+      if (!expanded) {
+        return Shaped{Value::error(expanded.error()), nullptr};
+      }
+      cells = std::move(expanded.value());
+      head_len = axis == TailAxis::kRows ? h.rows() : h.cols();
+    }
+    Value* stored = cells.empty() ? nullptr : arena_.create_array<Value>(cells.size());
+    if (!cells.empty() && stored == nullptr) {
+      return Shaped{Value::error(ErrorCode::Num), nullptr};
+    }
+    for (std::size_t i = 0; i < cells.size(); ++i) {
+      stored[i] = cells[i];
+    }
+    const DeclaredRect declared = rect_of(a);
+    return make_reference_tail(arena_, declared.rows(), declared.cols(), head_len, axis, stored);
   }
 
   // Reads the top-left cell of `a` (its first sheet); an error element is its
@@ -239,6 +311,26 @@ class Reader {
     parser::Reference lo{};
     parser::Reference hi{};
     corner_refs(a, name, &lo, &hi);
+    // An edge-reaching rectangle narrows to its populated head, as a whole axis does.
+    if (TailAxis axis = TailAxis::kRows; reaches_grid_edge(a, &axis)) {
+      const auto head = edge_head(a, name, axis);
+      if (!head) {
+        *err = head.error();
+        return false;
+      }
+      if (!head.value().has_value()) {
+        note(sheet, rect_of(a));
+        if (rows != nullptr) {
+          *rows = axis == TailAxis::kRows ? 0U : a.row_last - a.row_first + 1U;
+        }
+        if (cols != nullptr) {
+          *cols = axis == TailAxis::kRows ? static_cast<std::uint32_t>(a.col_last) - a.col_first + 1U : 0U;
+        }
+        return true;
+      }
+      const DeclaredRect& h = *head.value();
+      set_rect_corner_refs(name, h.row_first, h.col_first, h.row_last, h.col_last, &lo, &hi);
+    }
     auto expanded = ctx_.expand_range(lo, hi, arena_, registry_, rows, cols);
     if (!expanded) {
       *err = expanded.error();
