@@ -55,7 +55,8 @@ emscripten::val reject(int32_t kind, const std::string& message) {
 
 bool options_object(const emscripten::val& options, const char* call, emscripten::val* out) {
   *out = js_object_or_empty(options);
-  if (out->typeOf().strictlyEquals(emscripten::val("object"))) {
+  if (out->typeOf().strictlyEquals(emscripten::val("object")) &&
+      !emscripten::val::global("Array").call<bool>("isArray", *out)) {
     return true;
   }
   reject(kReferenceTypeError, binding::argument_message(call, "options", "must be an object"));

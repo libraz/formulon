@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 
+#include "c_api/binding_message.h"
 #include "c_api/formulon_c.h"
 #include "wasm/parts/embind_common.h"
 #include "wasm/parts/workbook.h"
@@ -86,6 +87,16 @@ fm_drawing_anchor_t pull_drawing_anchor(JsNarrowNumericReader& reader, const ems
   out.width_emu = reader.i64(anchor, "widthEmu", 0, label("widthEmu").c_str());
   out.height_emu = reader.i64(anchor, "heightEmu", 0, label("heightEmu").c_str());
   return out;
+}
+
+/// True when `options` is absent or an object; an array is refused with a TypeError naming `call`.
+bool options_is_object(const emscripten::val& options, const char* call) {
+  if (!js_value_present(options) || (options.typeOf().strictlyEquals(emscripten::val("object")) &&
+                                     !emscripten::val::global("Array").call<bool>("isArray", options))) {
+    return true;
+  }
+  record_type_error(binding::argument_message(call, "options", "must be an object").c_str());
+  return false;
 }
 
 }  // namespace
@@ -250,7 +261,7 @@ uint32_t JsWorkbook::insertImage(uint32_t sheet, emscripten::val bytes, emscript
   std::string description_store;
   JsNarrowNumericReader reader("Sheet.addPicture");
   std::vector<uint8_t> data;
-  if (!val_to_bytes_checked(bytes, &data)) {
+  if (!val_to_bytes_checked(bytes, &data) || !options_is_object(input, "Sheet.addPicture")) {
     return 0U;
   }
   const fm_drawing_placement_spec_t ins = pull_drawing_placement(reader, input, "input", name_store, description_store);
@@ -308,7 +319,7 @@ uint32_t JsWorkbook::restoreDrawing(uint32_t sheet, emscripten::val bytes, emscr
   JsNarrowNumericReader reader("Sheet.restoreDrawing");
   const emscripten::val options = js_object_or_empty(opts);
   std::vector<uint8_t> data;
-  if (!val_to_bytes_checked(bytes, &data)) {
+  if (!val_to_bytes_checked(bytes, &data) || !options_is_object(opts, "Sheet.restoreDrawing")) {
     return 0U;
   }
   const uint32_t flags = reader.boolean(options, "assignNewId", false, "assignNewId") ? FM_DRAWING_RESTORE_NEW_ID : 0U;
