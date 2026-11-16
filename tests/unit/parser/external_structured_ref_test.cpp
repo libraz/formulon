@@ -5,8 +5,10 @@
 // reference keeps its text and evaluates to #REF! (see external_ref_eval_test).
 
 #include <cstdint>
+#include <cstdio>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "eval/function_registry.h"
@@ -181,6 +183,41 @@ TEST(ExternalStructuredRefWorkbook, XlsxSaveKeepsTheFormulaText) {
   ASSERT_NE(cell, nullptr);
   ASSERT_TRUE(cell->cached_value.is_error());
   EXPECT_EQ(cell->cached_value.as_error(), ErrorCode::Ref);
+}
+
+// An Excel-saved book whose cells name a table of a closed workbook: every value use is #REF! and ISREF is FALSE
+// after a full recalculation, and an .xlsx save writes the formulas back as Excel stored them.
+TEST(ExternalStructuredRefWorkbook, ExcelSavedBookKeepsItsTableReferences) {
+  std::FILE* file = std::fopen(FORMULON_FIXTURES_DIR "/excel/external_table_ref_closed.xlsx", "rb");
+  ASSERT_NE(file, nullptr);
+  std::vector<std::uint8_t> bytes;
+  for (int c = std::fgetc(file); c != EOF; c = std::fgetc(file)) {
+    bytes.push_back(static_cast<std::uint8_t>(c));
+  }
+  std::fclose(file);
+  auto loaded = io::read_ooxml(test::span_of(bytes));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  Workbook& wb = loaded.value().workbook;
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  for (const auto& [row, col] : {std::pair<std::uint32_t, std::uint32_t>{0, 0}, {1, 0}, {3, 0}}) {
+    const Cell* cell = wb.sheet(0).cell_at(row, col);
+    ASSERT_NE(cell, nullptr);
+    ASSERT_TRUE(cell->cached_value.is_error()) << row;
+    EXPECT_EQ(cell->cached_value.as_error(), ErrorCode::Ref) << row;
+  }
+  const Cell* isref = wb.sheet(0).cell_at(2, 0);
+  ASSERT_NE(isref, nullptr);
+  ASSERT_TRUE(isref->cached_value.is_boolean());
+  EXPECT_FALSE(isref->cached_value.as_boolean());
+
+  auto saved = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  std::string sheet;
+  ASSERT_TRUE(test::extract_part(test::span_of(saved.value()), "xl/worksheets/sheet1.xml", &sheet));
+  for (const char* text :
+       {">ROWS([1]!Tbl[#Data])</f>", ">SUM([1]!Tbl[v])</f>", ">ISREF([1]!Tbl[v])</f>", ">[1]!Tbl[v]</f>"}) {
+    EXPECT_NE(sheet.find(text), std::string::npos) << text;
+  }
 }
 
 // A table has no stored form in the link part, which lists names and sheets
