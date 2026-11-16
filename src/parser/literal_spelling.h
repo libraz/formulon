@@ -12,6 +12,8 @@
 //
 // Entered text also loses the whitespace its parsed form has no place for
 // (`drop_unkept_whitespace`); `spell_entered_formula` applies both steps.
+// `spell_entered_names` then gives names and references the case Excel
+// stores, which needs the workbook's built-in and sheet names.
 //
 // The rewrite is not idempotent where Excel's is not either: a surviving
 // sign touching a literal (`=+5` stored for `=++5`) is absorbed when the
@@ -20,6 +22,7 @@
 #ifndef FORMULON_PARSER_LITERAL_SPELLING_H_
 #define FORMULON_PARSER_LITERAL_SPELLING_H_
 
+#include <cstdint>
 #include <string>
 #include <string_view>
 
@@ -52,6 +55,36 @@ bool has_refused_whitespace(std::string_view formula, bool (*is_function_name)(s
 /// Stored spelling of entered formula text: `drop_unkept_whitespace`, then
 /// `spell_number_literals`.
 std::string spell_entered_formula(std::string_view formula);
+
+/// What a name in entered text may denote, for `EnteredNames::own`.
+enum class EnteredNameKind : std::uint8_t { kSheet, kDefinedName, kTable };
+
+/// What `spell_entered_names` reads from outside the formula.
+struct EnteredNames {
+  /// Canonical spelling of the built-in `name`, or nullptr when it is none.
+  const char* (*builtin)(std::string_view name);
+  /// The workbook's own spelling of the sheet, defined name or table `typed`
+  /// resolves to, or empty when none does.
+  std::string_view (*own)(const void* ctx, EnteredNameKind kind, std::string_view typed);
+  /// The spelling of a call of the unknown function `typed`: the first one
+  /// the workbook has seen, `typed` itself when it is the first (and is
+  /// remembered as such).
+  std::string_view (*unknown_call)(const void* ctx, std::string_view typed);
+  const void* ctx;
+};
+
+/// Returns entered `formula` (a leading `=` optional) with the spelling Excel
+/// stores for its names: a built-in function name in its canonical spelling,
+/// TRUE / FALSE (also as `FALSE()`), error literals and A1 cell, column and
+/// range references upper-cased; a sheet qualifier, a defined name and the
+/// table of a structured reference respelled to what they name, a qualifier
+/// quoted only where needed; every use of a LET / LAMBDA parameter in the
+/// spelling of its definition; an unknown function as `unknown_call` spells
+/// it. A name that resolves to nothing, string literals, the inside of
+/// structured-reference brackets, external qualifiers and whitespace are
+/// copied verbatim; a 3-D qualifier is respelled only when neither sheet needs
+/// quotes. Nothing is validated.
+std::string spell_entered_names(std::string_view formula, const EnteredNames& names);
 
 }  // namespace parser
 }  // namespace formulon

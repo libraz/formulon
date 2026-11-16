@@ -69,6 +69,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- A formula entered in a cell, or as a conditional-format, data-validation
+  or defined-name formula, takes Excel's spelling: built-in function names,
+  references, `TRUE` / `FALSE` and error literals are upper-cased
+  (`=sum(a1)` reads `=SUM(A1)`), a sheet, defined or table name takes its
+  stored spelling, a `LET` / `LAMBDA` parameter takes the spelling of its
+  definition, and an unknown function takes the spelling first seen in the
+  workbook. A formula loaded from a file keeps its stored text.
+
 - `droppedRelationshipCount` (Python `dropped_relationship_count`, C
   `fm_save_diagnostics_info_t.dropped_relationship_count`) counts a
   relationship only when its target part is counted in `droppedPartCount`.

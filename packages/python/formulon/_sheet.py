@@ -4187,7 +4187,9 @@ class Sheet(_NoCopy):
         """Return the stored A1 formula (leading ``=`` included), or ``None`` for a non-formula cell.
 
         The text is re-spelled from the parsed formula, so literals read
-        normalised (``=1.50`` reads ``=1.5``); a formula loaded from a file
+        normalised (``=1.50`` reads ``=1.5``) and entered names and references
+        take Excel's case (``=sum(a1)`` reads ``=SUM(A1)``), while those of a
+        formula loaded from a file keep their stored case; a loaded formula
         shows book names, not ``[N]`` indexes. A data table's result cell reads
         the table's formula, ``=TABLE(row_input,col_input)``, with an absent
         input left empty (``=TABLE(,B3)``) and a deleted one as ``#REF!``.

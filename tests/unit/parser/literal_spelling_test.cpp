@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace parser {
@@ -478,6 +479,102 @@ TEST(HasRefusedWhitespace, AcceptsKeptWhitespaceAndIntersections) {
   for (const std::string_view text : accepted) {
     EXPECT_FALSE(has_refused_whitespace(text, &IsTestFunction)) << text;
   }
+}
+
+const char* TestBuiltin(std::string_view name) {
+  for (const char* builtin : {"SUM", "IFERROR", "XLOOKUP", "PI", "LET", "LAMBDA", "ISERROR", "INDIRECT", "LOG10"}) {
+    if (strings::case_insensitive_eq(name, builtin)) {
+      return builtin;
+    }
+  }
+  return nullptr;
+}
+
+std::string_view TestOwn(const void*, EnteredNameKind kind, std::string_view typed) {
+  std::vector<std::string_view> own;
+  switch (kind) {
+    case EnteredNameKind::kSheet:
+      own = {"Sheet1", "Sheet2", "My Data"};
+      break;
+    case EnteredNameKind::kDefinedName:
+      own = {"MyName"};
+      break;
+    case EnteredNameKind::kTable:
+      own = {"Table1"};
+      break;
+  }
+  for (const std::string_view name : own) {
+    if (strings::case_insensitive_eq(typed, name)) {
+      return name;
+    }
+  }
+  return std::string_view();
+}
+
+// First spellings of unknown calls, as a workbook records them.
+struct UnknownCalls {
+  std::vector<std::string> seen;
+};
+
+std::string_view TestUnknownCall(const void* ctx, std::string_view typed) {
+  auto& calls = *static_cast<UnknownCalls*>(const_cast<void*>(ctx));
+  for (const std::string& spelling : calls.seen) {
+    if (strings::case_insensitive_eq(spelling, typed)) {
+      return spelling;
+    }
+  }
+  calls.seen.emplace_back(typed);
+  return calls.seen.back();
+}
+
+std::string SpellNames(std::string_view text, UnknownCalls* calls = nullptr) {
+  UnknownCalls local;
+  return spell_entered_names(text,
+                             EnteredNames{&TestBuiltin, &TestOwn, &TestUnknownCall, calls != nullptr ? calls : &local});
+}
+
+TEST(SpellEnteredNames, UpperCasesBuiltinsReferencesErrorsAndBooleans) {
+  EXPECT_EQ(SpellNames("=sum(a2,$c$2:d3)"), "=SUM(A2,$C$2:D3)");
+  EXPECT_EQ(SpellNames("=sum(c:c)+sum($a:b)"), "=SUM(C:C)+SUM($A:B)");
+  EXPECT_EQ(SpellNames("=a$2+$a3"), "=A$2+$A3");
+  EXPECT_EQ(SpellNames("=IFERROR(a2:c3 b2:d4,0)"), "=IFERROR(A2:C3 B2:D4,0)");
+  EXPECT_EQ(SpellNames("=iserror(#div/0!)"), "=ISERROR(#DIV/0!)");
+  EXPECT_EQ(SpellNames("=true"), "=TRUE");
+  EXPECT_EQ(SpellNames("=false()"), "=FALSE()");
+  EXPECT_EQ(SpellNames("=pi( )"), "=PI( )");
+  EXPECT_EQ(SpellNames("=log10(100)"), "=LOG10(100)");
+  EXPECT_EQ(SpellNames("=_xlfn.xlookup(1,{1},{2})"), "=XLOOKUP(1,{1},{2})");
+}
+
+TEST(SpellEnteredNames, KeepsStringsNamesStructuredRefsAndWhitespace) {
+  EXPECT_EQ(SpellNames("=\"abc\"&indirect(\"a2\")"), "=\"abc\"&INDIRECT(\"a2\")");
+  EXPECT_EQ(SpellNames("=myname+abc"), "=MyName+abc");
+  EXPECT_EQ(SpellNames("=sum(table1[[#this row],[col a]])"), "=SUM(Table1[[#this row],[col a]])");
+  EXPECT_EQ(SpellNames("=sum( a1 ,\n b2 )"), "=SUM( A1 ,\n B2 )");
+  EXPECT_EQ(SpellNames("=[Book.xlsx]sheet1!a1"), "=[Book.xlsx]sheet1!A1");
+}
+
+TEST(SpellEnteredNames, RespellsSheetQualifiers) {
+  EXPECT_EQ(SpellNames("=sheet2!a1"), "=Sheet2!A1");
+  EXPECT_EQ(SpellNames("='sheet2'!a1"), "=Sheet2!A1");
+  EXPECT_EQ(SpellNames("='my data'!a1"), "='My Data'!A1");
+  EXPECT_EQ(SpellNames("=sum(SHEET1:sheet2!a2)"), "=SUM(Sheet1:Sheet2!A2)");
+  EXPECT_EQ(SpellNames("=nosuch!a1"), "=nosuch!A1");
+}
+
+TEST(SpellEnteredNames, FoldsParametersAndUnknownCallsToTheirFirstSpelling) {
+  EXPECT_EQ(SpellNames("=let(Xy,1,xY+1)"), "=LET(Xy,1,Xy+1)");
+  EXPECT_EQ(SpellNames("=let(x,1,X+1)"), "=LET(x,1,x+1)");
+  EXPECT_EQ(SpellNames("=lambda(Ab,aB+1)(2)"), "=LAMBDA(Ab,Ab+1)(2)");
+  EXPECT_EQ(SpellNames("=let(f,lambda(v,V*2),F(3))"), "=LET(f,LAMBDA(v,v*2),f(3))");
+  EXPECT_EQ(SpellNames("=IFERROR(foo(1),0)"), "=IFERROR(foo(1),0)");
+  EXPECT_EQ(SpellNames("=IFERROR(FOO(1)+fOo(2),0)"), "=IFERROR(FOO(1)+FOO(2),0)");
+  EXPECT_EQ(SpellNames("=let(_X1,1,_x1+1)"), "=LET(_X1,1,_X1+1)");
+
+  // The first spelling the workbook saw wins across formulas.
+  UnknownCalls calls;
+  EXPECT_EQ(SpellNames("=IFERROR(foo(1),0)", &calls), "=IFERROR(foo(1),0)");
+  EXPECT_EQ(SpellNames("=IFERROR(FOO(1),0)", &calls), "=IFERROR(foo(1),0)");
 }
 
 }  // namespace

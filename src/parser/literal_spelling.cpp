@@ -6,12 +6,16 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <cstdint>
 #include <vector>
 
+#include "parser/ast_format.h"
+#include "parser/parser_detail.h"
 #include "parser/token.h"
 #include "parser/tokenizer.h"
 #include "utils/double_format.h"
 #include "utils/formula_text.h"
+#include "utils/strings.h"
 
 namespace formulon {
 namespace parser {
@@ -122,6 +126,93 @@ bool has_touching_unary_sign(const std::vector<Token>& tokens, std::size_t i) no
   return prev == i - 1 || !ends_operand(tokens[prev].kind);
 }
 
+std::string ascii_upper(std::string_view text) {
+  std::string out(text);
+  for (char& c : out) {
+    c = strings::ascii_to_upper(c);
+  }
+  return out;
+}
+
+// True when `token` is a column endpoint (`c`, `$C`) of a whole-column range.
+bool is_column_token(const Token& token) noexcept {
+  if (token.kind != TokenKind::Ident) {
+    return false;
+  }
+  std::string_view letters = token.lexeme;
+  if (!letters.empty() && letters.front() == '$') {
+    letters.remove_prefix(1);
+  }
+  return detail::DecodeColumnLetters(letters) != 0U;
+}
+
+// True when the column-shaped name at `i` is one end of a `:` whose other end
+// is column-shaped too (`c:c`, `$a:B`).
+bool is_column_endpoint(const std::vector<Token>& tokens, std::size_t i) noexcept {
+  if (!is_column_token(tokens[i])) {
+    return false;
+  }
+  const std::size_t prev = previous_significant(tokens, i);
+  if (prev != i && tokens[prev].kind == TokenKind::Colon) {
+    const std::size_t other = previous_significant(tokens, prev);
+    if (other != prev && is_column_token(tokens[other])) {
+      return true;
+    }
+  }
+  const std::size_t next = next_significant(tokens, i);
+  if (next < tokens.size() && tokens[next].kind == TokenKind::Colon) {
+    const std::size_t other = next_significant(tokens, next);
+    return other < tokens.size() && is_column_token(tokens[other]);
+  }
+  return false;
+}
+
+// True when `kind` can spell a sheet before a `!`.
+bool may_name_sheet(TokenKind kind) noexcept {
+  return kind == TokenKind::Ident || kind == TokenKind::CellRef || kind == TokenKind::SheetName ||
+         kind == TokenKind::Bool;
+}
+
+// True when token `j` follows token `i` with nothing in between.
+bool touches(const std::vector<Token>& tokens, std::size_t i, std::size_t j) noexcept {
+  return j < tokens.size() && tokens[i].lexeme.data() + tokens[i].lexeme.size() == tokens[j].lexeme.data();
+}
+
+// `name` without a typed `_xlfn.` / `_xlfn._xlws.` / `_xlws.` storage prefix.
+std::string_view without_storage_prefix(std::string_view name) noexcept {
+  for (const std::string_view prefix : {std::string_view("_xlfn."), std::string_view("_xlws.")}) {
+    if (name.size() > prefix.size() && strings::case_insensitive_eq(name.substr(0, prefix.size()), prefix)) {
+      name.remove_prefix(prefix.size());
+    }
+  }
+  return name;
+}
+
+// A name and the spelling every later occurrence takes.
+struct Spelling {
+  std::string key;
+  std::string_view text;
+};
+
+const Spelling* find_spelling(const std::vector<Spelling>& spellings, std::string_view name) {
+  const std::string key = strings::to_ascii_lower(name);
+  for (std::size_t k = spellings.size(); k > 0; --k) {
+    if (spellings[k - 1].key == key) {
+      return &spellings[k - 1];
+    }
+  }
+  return nullptr;
+}
+
+// A `(` open while the walk is inside it: a call (LET / LAMBDA bind their
+// parameters) or a grouping.
+struct OpenParen {
+  bool let = false;
+  bool lambda = false;
+  std::uint32_t argument = 0;
+  std::size_t scope_size = 0;
+};
+
 }  // namespace
 
 std::string spell_number_literals(std::string_view formula) {
@@ -222,6 +313,149 @@ bool has_refused_whitespace(std::string_view formula, bool (*is_function_name)(s
 
 std::string spell_entered_formula(std::string_view formula) {
   return spell_number_literals(drop_unkept_whitespace(formula));
+}
+
+std::string spell_entered_names(std::string_view formula, const EnteredNames& names) {
+  TokenWalk walk(formula);
+  const std::vector<Token>& tokens = walk.tokens;
+  const auto begin_of = [&formula](const Token& token) {
+    return static_cast<std::size_t>(token.lexeme.data() - formula.data());
+  };
+
+  std::string out;
+  out.reserve(formula.size());
+  std::size_t copied = 0;
+  const auto replace = [&](const Token& token, std::string_view text) {
+    out.append(formula.substr(copied, begin_of(token) - copied));
+    out.append(text);
+    copied = begin_of(token) + token.lexeme.size();
+  };
+
+  std::vector<OpenParen> parens;
+  std::vector<Spelling> scope;
+  OpenParen pending;
+  std::size_t skip_to = 0;
+  while (walk.advance()) {
+    const std::size_t i = walk.i;
+    const Token& token = tokens[i];
+    if (walk.brackets > 0 || token.kind == TokenKind::RBracket || i < skip_to) {
+      continue;
+    }
+    const TokenKind kind = token.kind;
+    if (kind == TokenKind::LParen) {
+      pending.scope_size = scope.size();
+      parens.push_back(pending);
+      pending = OpenParen();
+      continue;
+    }
+    if (kind == TokenKind::RParen) {
+      if (!parens.empty()) {
+        scope.resize(parens.back().scope_size);
+        parens.pop_back();
+      }
+      continue;
+    }
+    if (kind == TokenKind::Comma && walk.braces == 0) {
+      if (!parens.empty()) {
+        ++parens.back().argument;
+      }
+      continue;
+    }
+    if (kind == TokenKind::ErrorLiteral) {
+      replace(token, ascii_upper(token.lexeme));
+      continue;
+    }
+
+    // A sheet qualifier: `name!` or the 3-D `first:last!`.
+    if (may_name_sheet(kind) && touches(tokens, i, i + 1)) {
+      const TokenKind next = tokens[i + 1].kind;
+      if (next == TokenKind::Bang) {
+        const std::string_view typed = kind == TokenKind::SheetName ? token.text : token.lexeme;
+        const std::string_view own = typed.find(':') == std::string_view::npos
+                                         ? names.own(names.ctx, EnteredNameKind::kSheet, typed)
+                                         : std::string_view();
+        if (!own.empty()) {
+          std::string spelled;
+          append_sheet_name(own, false, spelled);
+          replace(token, spelled);
+        }
+        continue;
+      }
+      if (next == TokenKind::Colon && kind != TokenKind::SheetName && touches(tokens, i + 1, i + 2) &&
+          may_name_sheet(tokens[i + 2].kind) && tokens[i + 2].kind != TokenKind::SheetName &&
+          touches(tokens, i + 2, i + 3) && tokens[i + 3].kind == TokenKind::Bang) {
+        const std::string_view first = names.own(names.ctx, EnteredNameKind::kSheet, token.lexeme);
+        const std::string_view last = names.own(names.ctx, EnteredNameKind::kSheet, tokens[i + 2].lexeme);
+        std::string first_spelled;
+        std::string last_spelled;
+        append_sheet_name(first, false, first_spelled);
+        append_sheet_name(last, false, last_spelled);
+        if (!first.empty() && !last.empty() && first_spelled == first && last_spelled == last) {
+          replace(token, first);
+          replace(tokens[i + 2], last);
+          skip_to = i + 3;
+          continue;
+        }
+      }
+    }
+
+    const bool qualified = i > 0 && tokens[i - 1].kind == TokenKind::Bang;
+    if ((kind == TokenKind::Ident || kind == TokenKind::CellRef || kind == TokenKind::Bool) &&
+        touches(tokens, i, i + 1) && tokens[i + 1].kind == TokenKind::LParen) {
+      if (qualified) {
+        continue;
+      }
+      if (kind == TokenKind::Bool) {
+        replace(token, ascii_upper(token.lexeme));
+      } else if (const Spelling* param = find_spelling(scope, token.lexeme)) {
+        replace(token, param->text);
+      } else if (const char* builtin = names.builtin(without_storage_prefix(token.lexeme))) {
+        const std::string_view canonical(builtin);
+        pending.let = canonical == "LET";
+        pending.lambda = canonical == "LAMBDA";
+        replace(token, canonical);
+      } else {
+        replace(token, names.unknown_call(names.ctx, token.lexeme));
+      }
+      continue;
+    }
+    if (kind == TokenKind::Bool) {
+      replace(token, ascii_upper(token.lexeme));
+      continue;
+    }
+    if (kind != TokenKind::Ident && kind != TokenKind::CellRef) {
+      continue;
+    }
+    // A parameter, cell-shaped (`B1`) or not, is a whole argument of LET
+    // (every other one but the last) or LAMBDA (every one but the last).
+    if (!qualified && !parens.empty() && (parens.back().let || parens.back().lambda)) {
+      const OpenParen& open = parens.back();
+      const std::size_t prev = previous_significant(tokens, i);
+      const std::size_t next = next_significant(tokens, i);
+      const bool whole = prev != i &&
+                         (tokens[prev].kind == TokenKind::LParen || tokens[prev].kind == TokenKind::Comma) &&
+                         next < tokens.size() && tokens[next].kind == TokenKind::Comma;
+      if (whole && (open.lambda || open.argument % 2U == 0U)) {
+        scope.push_back(Spelling{strings::to_ascii_lower(token.lexeme), token.lexeme});
+        continue;
+      }
+    }
+    if (const Spelling* param = qualified ? nullptr : find_spelling(scope, token.lexeme)) {
+      replace(token, param->text);
+    } else if (kind == TokenKind::CellRef || is_column_endpoint(tokens, i)) {
+      replace(token, ascii_upper(token.lexeme));
+    } else {
+      // A table before its `[...]`, else a defined name.
+      const bool table = touches(tokens, i, i + 1) && tokens[i + 1].kind == TokenKind::LBracket;
+      const std::string_view own =
+          names.own(names.ctx, table ? EnteredNameKind::kTable : EnteredNameKind::kDefinedName, token.lexeme);
+      if (!own.empty()) {
+        replace(token, own);
+      }
+    }
+  }
+  out.append(formula.substr(copied));
+  return out;
 }
 
 }  // namespace parser

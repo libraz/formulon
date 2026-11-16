@@ -611,6 +611,12 @@ struct fm_workbook {
 
   void clear_cell_enumeration_cache() noexcept { cell_enumeration_cache = {}; }
 
+  // The first spelling of each unknown function name the workbook has seen,
+  // with its ASCII lower-case key: an entered call takes it (Excel decides the
+  // spelling workbook-wide). Filled from the loaded formulas on first use.
+  mutable std::deque<std::pair<std::string, std::string>> unknown_call_spellings;
+  mutable bool unknown_call_spellings_seeded = false;
+
   // Storage behind every borrowed field `fm_sheet_get_cf_rule_at` fills. They are
   // separate from `read_scratch` on purpose: only a successful
   // `fm_sheet_get_cf_rule_at` clears and refreshes them, so neither an unrelated

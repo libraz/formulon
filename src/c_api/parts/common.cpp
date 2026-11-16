@@ -37,6 +37,7 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/formula_text.h"
+#include "utils/index_sort.h"
 #include "utils/number_text.h"
 #include "utils/resource_budget.h"
 #include "utils/strings.h"
@@ -1059,6 +1060,109 @@ bool is_builtin_function_name(std::string_view name) {
   return formulon::eval::resolve_builtin_function_name(name) != nullptr;
 }
 
+// Where entered text is spelled: the handle (for its unknown-function
+// spellings) and the sheet a defined name is looked up from, or `kNoSheet`.
+struct EntrySpellingContext {
+  const fm_workbook_t* wb;
+  std::size_t sheet;
+};
+
+// The workbook's own spelling of the sheet, defined name or table `typed` names, or empty.
+std::string_view own_entry_name(const void* ctx, formulon::parser::EnteredNameKind kind, std::string_view typed) {
+  const auto& entry = *static_cast<const EntrySpellingContext*>(ctx);
+  const formulon::Workbook& book = entry.wb->workbook();
+  switch (kind) {
+    case formulon::parser::EnteredNameKind::kSheet: {
+      const formulon::Sheet* sheet = book.sheet_by_name(typed);
+      return sheet != nullptr ? std::string_view(sheet->name()) : std::string_view();
+    }
+    case formulon::parser::EnteredNameKind::kTable: {
+      const std::size_t index = formulon::sheet_names::resolve_table(book.tables(), typed);
+      return index != formulon::sheet_names::kNotFound ? std::string_view(book.tables()[index].display_name)
+                                                       : std::string_view();
+    }
+    case formulon::parser::EnteredNameKind::kDefinedName:
+      break;
+  }
+  // A name local to the entry sheet hides a workbook-scope one.
+  const formulon::DefinedName* workbook_scope = nullptr;
+  for (const formulon::DefinedName& name : book.defined_names()) {
+    if (!formulon::strings::case_insensitive_eq(name.name, typed)) {
+      continue;
+    }
+    if (entry.sheet != formulon::Workbook::kNoSheet && name.local_sheet_id == static_cast<std::int32_t>(entry.sheet)) {
+      return name.name;
+    }
+    if (name.local_sheet_id < 0 && workbook_scope == nullptr) {
+      workbook_scope = &name;
+    }
+  }
+  return workbook_scope != nullptr ? std::string_view(workbook_scope->name) : std::string_view();
+}
+
+// The first spelling recorded under `typed`'s key, recording `typed` when there is none.
+std::string_view recorded_unknown_call(const fm_workbook_t* wb, std::string_view typed) {
+  std::string key = formulon::strings::to_ascii_lower(typed);
+  for (const auto& [seen_key, spelling] : wb->unknown_call_spellings) {
+    if (seen_key == key) {
+      return spelling;
+    }
+  }
+  wb->unknown_call_spellings.emplace_back(std::move(key), std::string(typed));
+  return wb->unknown_call_spellings.back().second;
+}
+
+std::string_view no_entry_name(const void*, formulon::parser::EnteredNameKind, std::string_view) {
+  return std::string_view();
+}
+
+std::string_view seed_unknown_call(const void* ctx, std::string_view typed) {
+  return recorded_unknown_call(static_cast<const fm_workbook_t*>(ctx), typed);
+}
+
+// Records the unknown-function spellings of the workbook's stored formulas in
+// the order Excel reads them: defined names, then each sheet in tab order, its
+// cells row by row.
+void seed_unknown_call_spellings(const fm_workbook_t* wb) {
+  if (wb->unknown_call_spellings_seeded) {
+    return;
+  }
+  wb->unknown_call_spellings_seeded = true;
+  const formulon::Workbook& book = wb->workbook();
+  const formulon::parser::EnteredNames names{&formulon::eval::resolve_builtin_function_name, &no_entry_name,
+                                             &seed_unknown_call, wb};
+  for (const formulon::DefinedName& name : book.defined_names()) {
+    (void)formulon::parser::spell_entered_names(name.formula, names);
+  }
+  for (std::size_t s = 0; s < book.sheet_count(); ++s) {
+    const formulon::Sheet& sheet = book.sheet(s);
+    std::vector<formulon::CellAddress> cells = sheet.all_formula_cells();
+    formulon::sort_by_index(cells, [](const formulon::CellAddress& a, const formulon::CellAddress& b) {
+      return a.row != b.row ? a.row < b.row : a.col < b.col;
+    });
+    for (const formulon::CellAddress& address : cells) {
+      formulon::Sheet::CellRead read;
+      sheet.read_formula_cell(address.row, address.col, read);
+      (void)formulon::parser::spell_entered_names(read.formula_text(), names);
+    }
+  }
+}
+
+std::string_view entry_unknown_call(const void* ctx, std::string_view typed) {
+  const fm_workbook_t* wb = static_cast<const EntrySpellingContext*>(ctx)->wb;
+  seed_unknown_call_spellings(wb);
+  return recorded_unknown_call(wb, typed);
+}
+
+// Entered formula `text` with the name and reference spelling Excel stores,
+// defined names looked up from `sheet` (`Workbook::kNoSheet` for none).
+std::string spell_entered_names_in(const fm_workbook_t* wb, std::size_t sheet, std::string_view text) {
+  const EntrySpellingContext ctx{wb, sheet};
+  const formulon::parser::EnteredNames names{&formulon::eval::resolve_builtin_function_name, &own_entry_name,
+                                             &entry_unknown_call, &ctx};
+  return formulon::parser::spell_entered_names(text, names);
+}
+
 // `code` over the whole of `text`.
 ParseFailure whole_text_failure(ParseErrorCode code, std::string_view text) {
   ParseFailure failure;
@@ -1263,7 +1367,7 @@ fm_status_t check_stored_formula(const fm_workbook_t* wb, std::string_view formu
   if (auto rc = check_entered_formula_parses(formula, context, &stored); rc != 0) {
     return rc;
   }
-  *out = std::string(strip_formula_prefix(stored));
+  *out = std::string(strip_formula_prefix(spell_entered_names_in(wb, formulon::Workbook::kNoSheet, stored)));
   return 0;
 }
 
@@ -1321,7 +1425,7 @@ fm_status_t check_entered_cell_formula(const fm_workbook_t* wb, std::size_t shee
     formulon::Arena arena;
     const AstNode* root = parse_entered_formula(formula, *bound, arena, &stored, &a1_failure);
     if (root != nullptr && !formulon::eval::needs_r1c1_entry(*root, *bound, wb->workbook())) {
-      *bound = with_formula_prefix(*bound);
+      *bound = with_formula_prefix(spell_entered_names_in(wb, sheet, *bound));
       return 0;
     }
     a1_failed = root == nullptr;
@@ -1332,7 +1436,7 @@ fm_status_t check_entered_cell_formula(const fm_workbook_t* wb, std::size_t shee
     formulon::Arena arena;
     ParseFailure r1c1_failure;
     if (parse_entered_formula(*translated, *translated, arena, &stored, &r1c1_failure) != nullptr) {
-      *bound = with_formula_prefix(*translated);
+      *bound = with_formula_prefix(spell_entered_names_in(wb, sheet, *translated));
       return 0;
     }
   }

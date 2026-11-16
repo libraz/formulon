@@ -632,6 +632,66 @@ TEST(FormulonCApiFormulaEntry, EnteredWhitespaceTakesTheStoredSpelling) {
   EXPECT_EQ(value.u.error_code, 2);  // #VALUE!
 }
 
+// Names, references, errors and booleans take the spelling Excel stores on
+// entry, an unknown function the first one the workbook saw; strings and
+// whitespace stay as typed.
+TEST(FormulonCApiFormulaEntry, EnteredNamesAndReferencesTakeTheStoredSpelling) {
+  WorkbookGuard wb;
+  MakeWorkbook(&wb);
+  const std::pair<const char*, const char*> cases[] = {
+      {"=sum(1,2)", "=SUM(1,2)"},
+      {"=_xlfn.xlookup(1,{1},{2})", "=XLOOKUP(1,{1},{2})"},
+      {"=IFERROR(FOO(1)+fOo(2),0)", "=IFERROR(FOO(1)+FOO(2),0)"},
+      {"=IFERROR(foo(1),0)", "=IFERROR(FOO(1),0)"},
+      {"=pi( )", "=PI( )"},
+      {"=sum(a2,$c$2:d3)+sum(c:c)+sum(3:3)", "=SUM(A2,$C$2:D3)+SUM(C:C)+SUM(3:3)"},
+      {"=IFERROR(a2:c3 b2:d4,0)", "=IFERROR(A2:C3 B2:D4,0)"},
+      {"=data!a1+'s2'!b2", "=Data!A1+'S2'!B2"},
+      {"=sum(SHEET1:data!a2)", "=SUM(Sheet1:Data!A2)"},
+      {"=iserror(#div/0!)", "=ISERROR(#DIV/0!)"},
+      {"=true", "=TRUE"},
+      {"=false()", "=FALSE()"},
+      {"=\"abc\"&indirect(\"a2\")", "=\"abc\"&INDIRECT(\"a2\")"},
+      {"=let(Xy,1,xY+1)", "=LET(Xy,1,Xy+1)"},
+      {"=lambda(Ab,aB+1)(2)", "=LAMBDA(Ab,Ab+1)(2)"},
+      {"=concat(\"a\" , \"b\")", "=CONCAT(\"a\", \"b\")"},
+      {"=r2c1", "=$A$2"},
+  };
+  std::uint32_t row = 20;
+  for (const auto& [typed, stored] : cases) {
+    SCOPED_TRACE(typed);
+    ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, row, 2, typed), 0) << fm_get_last_error_message();
+    EXPECT_EQ(GetFormula(wb.handle, row, 2), stored);
+    ++row;
+  }
+
+  ASSERT_EQ(SetDefinedName(wb.handle, "Total", "=sum(data!a1:a3)"), 0);
+  fm_defined_name_t entry = FM_STRUCT_INIT(fm_defined_name_t);
+  ASSERT_EQ(fm_workbook_get_defined_name_at(wb.handle, 0, &entry), 0);
+  EXPECT_STREQ(entry.formula, "=SUM(Data!A1:A3)");
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 40, 2, "=total*2"), 0);
+  EXPECT_EQ(GetFormula(wb.handle, 40, 2), "=Total*2");
+
+  // The reader's ingestion point keeps a file's spelling.
+  ASSERT_TRUE(wb.handle->workbook().set_cell_formula(0, 50, 2, "=sum(data!a1)"));
+  EXPECT_EQ(GetFormula(wb.handle, 50, 2), "=sum(data!a1)");
+}
+
+// An unknown function entered takes the spelling of its first stored
+// occurrence: sheets in tab order, each read row by row.
+TEST(FormulonCApiFormulaEntry, EnteredUnknownCallTakesTheFirstStoredSpelling) {
+  WorkbookGuard wb;
+  MakeWorkbook(&wb);
+  formulon::Workbook& book = wb.handle->workbook();
+  // Stored as a reader stores them. Sheet1 precedes Data in tab order, and
+  // within Sheet1 the row-2 cell B2 is read before the row-3 cell A3.
+  ASSERT_TRUE(book.set_cell_formula(1, 0, 0, "=IFERROR(FOo(1),0)"));
+  ASSERT_TRUE(book.set_cell_formula(0, 2, 0, "=IFERROR(Foo(1),0)"));
+  ASSERT_TRUE(book.set_cell_formula(0, 1, 1, "=IFERROR(fOO(1),0)"));
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 3, "=IFERROR(foo(3),0)"), 0);
+  EXPECT_EQ(GetFormula(wb.handle, 0, 3), "=IFERROR(fOO(3),0)");
+}
+
 TEST(FormulonCApiFormulaEntry, LoadedUnparseableFormulaIsKeptVerbatim) {
   WorkbookGuard source;
   MakeWorkbook(&source);

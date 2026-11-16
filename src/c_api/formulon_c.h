@@ -1575,7 +1575,11 @@ FM_API fm_status_t fm_sheet_set_blank(fm_workbook_t* wb, size_t sheet_index, uin
  * entered text: number literals respelled from their values (`1.50` reads
  * back as `1.5`), a unary sign touching one absorbed (`+5` as `5`), and
  * whitespace Excel drops (trailing, before `,`, around `:`, inside array
- * constants) removed.
+ * constants) removed. Built-in function names, references, `TRUE` / `FALSE`
+ * and error literals take Excel's case (`=sum(a1)` reads back as
+ * `=SUM(A1)`); a sheet, defined or table name takes its stored spelling, and
+ * an unknown function the spelling first seen in the workbook. A formula
+ * loaded from a file keeps its stored text.
  *
  * Structured references are accepted in the formula-bar form the getters
  * return and stored in Excel's long form: in a cell of table `T`, `[Qty]`
