@@ -433,6 +433,21 @@ bool whole_settings(const NumericGroupState& state) noexcept {
          std::floor(state.interval) == state.interval;
 }
 
+// True when every number the base field of `group` holds is whole at 15 significant digits.
+bool whole_source(const PivotCache& cache, const FieldGroup& group) {
+  if (!group.base.has_value() || *group.base >= cache.fields().size()) {
+    return true;
+  }
+  const std::vector<BaseValue> values = present_base_values(cache, *group.base);
+  return std::all_of(values.begin(), values.end(), [](const BaseValue& v) {
+    if (!v.value.is_number()) {
+      return true;
+    }
+    const double shown = excel_decimal_view(v.value.as_number(), 15);
+    return std::floor(shown) == shown;
+  });
+}
+
 // Ranges of `state` from the start up to the first edge at or past the end, at least one (also when
 // the start follows the end), as a double so an oversized count is caught before any cast.
 double numeric_bucket_count(const NumericGroupState& state) noexcept {
@@ -906,7 +921,7 @@ Expected<void, Error> set_numeric_range(PivotCache& cache, FieldGroup& group, co
   std::vector<Value> items;
   items.reserve(buckets + 2U);
   const char separator = locale_facts(profile).decimal_separator;
-  const bool whole = whole_settings(state);
+  const bool whole = whole_settings(state) && whole_source(cache, group);
   std::string lower = label_number(state.start, separator);
   items.push_back(cache_text(cache, "<" + lower));
   for (std::size_t n = 0; n < buckets; ++n) {

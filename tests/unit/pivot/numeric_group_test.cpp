@@ -15,6 +15,7 @@
 #include "eval/eval_profile_scope.h"
 #include "excel_profile.h"
 #include "gtest/gtest.h"
+#include "io/pivot_cache_writer.h"
 #include "pivot/field_grouping.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
@@ -584,6 +585,86 @@ TEST(NumericGroup, WholeSettingsBelow1e15KeepTheIntegerForm) {
   EXPECT_EQ(GroupTexts(CacheOf(offset).fields()[kGroup]),
             (std::vector<std::string>{"<20.5", "20.5-120.5", "120.5-220.5", "220.5-320.5", ">320.5"}));
   EXPECT_EQ(GroupNumbers(CacheOf(offset)), (std::vector<double>{1, 3}));
+}
+
+// Groups the Amt of `values` by `start`..`end` step `interval` and returns the cache.
+Workbook GroupedBy(const std::vector<Value>& values, double start, double end, double interval) {
+  Workbook wb = AmountWorkbook(values);
+  EXPECT_TRUE(static_cast<bool>(set_numeric_group(wb, 0U, 0U, kAmt, start, end, interval)));
+  return wb;
+}
+
+TEST(NumericGroup, ATenthStepPutsAnEdgeValueInTheUpperRange) {
+  const eval::ScopedEvalProfile scope(mac_365_ja_jp_profile());
+  const Workbook wb = GroupedBy(Numbers({0.3, 0.7, 0.21, 0.28, 0.49, 0.98}), 0.0, 100.0, 0.1);
+  const std::vector<std::string> texts = GroupTexts(CacheOf(wb).fields()[kGroup]);
+  ASSERT_EQ(texts.size(), 1002U);
+  EXPECT_EQ(texts[0], "<0");
+  EXPECT_EQ(texts[1], "0-0.1");
+  EXPECT_EQ(texts[1000], "99.9-100");
+  EXPECT_EQ(texts[1001], ">100");
+  EXPECT_EQ(RecordLabels(CacheOf(wb)),
+            (std::vector<std::string>{"0.3-0.4", "0.7-0.8", "0.2-0.3", "0.2-0.3", "0.4-0.5", "0.9-1"}));
+}
+
+TEST(NumericGroup, AStepOfSevenHundredthsPutsEveryEdgeValueInTheUpperRange) {
+  const eval::ScopedEvalProfile scope(mac_365_ja_jp_profile());
+  const Workbook wb = GroupedBy(Numbers({0.3, 0.7, 0.21, 0.28, 0.49, 0.98}), 0.0, 1.0, 0.07);
+  EXPECT_EQ(GroupTexts(CacheOf(wb).fields()[kGroup]),
+            (std::vector<std::string>{"<0", "0-0.07", "0.07-0.14", "0.14-0.21", "0.21-0.28", "0.28-0.35", "0.35-0.42",
+                                      "0.42-0.49", "0.49-0.56", "0.56-0.63", "0.63-0.7", "0.7-0.77", "0.77-0.84",
+                                      "0.84-0.91", "0.91-0.98", "0.98-1.05", ">1.05"}));
+  EXPECT_EQ(RecordLabels(CacheOf(wb)),
+            (std::vector<std::string>{"0.28-0.35", "0.7-0.77", "0.21-0.28", "0.28-0.35", "0.49-0.56", "0.98-1.05"}));
+}
+
+TEST(NumericGroup, FractionalSourceValuesTakeTheDecimalFormOfWholeSettings) {
+  const eval::ScopedEvalProfile scope(mac_365_ja_jp_profile());
+  const Workbook wb = GroupedBy(Numbers({0.5, 5.5, 15.5, 49.5, 99.5, 9.5, 10.5, 50.5, 100.5, -0.5}), 0.0, 100.0, 10.0);
+  const std::vector<std::string> texts = GroupTexts(CacheOf(wb).fields()[kGroup]);
+  EXPECT_EQ(texts, (std::vector<std::string>{"<0", "0-10", "10-20", "20-30", "30-40", "40-50", "50-60", "60-70",
+                                             "70-80", "80-90", "90-100", ">100"}));
+  EXPECT_EQ(RecordLabels(CacheOf(wb)), (std::vector<std::string>{"0-10", "0-10", "10-20", "40-50", "90-100", "0-10",
+                                                                 "10-20", "50-60", ">100", "<0"}));
+}
+
+TEST(NumericGroup, WholeSourceValuesKeepTheIntegerFormOfWholeSettings) {
+  const eval::ScopedEvalProfile scope(mac_365_ja_jp_profile());
+  const Workbook wb = GroupedBy(Numbers({5, 15, 95, 100}), 0.0, 100.0, 10.0);
+  EXPECT_EQ(GroupTexts(CacheOf(wb).fields()[kGroup]),
+            (std::vector<std::string>{"<0", "0-9", "10-19", "20-29", "30-39", "40-49", "50-59", "60-69", "70-79",
+                                      "80-89", "90-100", ">100"}));
+}
+
+TEST(NumericGroup, AFractionalEndTakesTheDecimalFormAndTheLastRangeRunsPastIt) {
+  const eval::ScopedEvalProfile scope(mac_365_ja_jp_profile());
+  const Workbook wb = GroupedBy(Numbers({5, 15, 99, 100}), 0.0, 99.5, 10.0);
+  EXPECT_EQ(GroupTexts(CacheOf(wb).fields()[kGroup]),
+            (std::vector<std::string>{"<0", "0-10", "10-20", "20-30", "30-40", "40-50", "50-60", "60-70", "70-80",
+                                      "80-90", "90-100", ">100"}));
+  EXPECT_EQ(RecordLabels(CacheOf(wb)), (std::vector<std::string>{"0-10", "10-20", "90-100", ">100"}));
+}
+
+TEST(NumericGroup, TheIntervalIsWrittenAsExcelStoresIt) {
+  const eval::ScopedEvalProfile scope(mac_365_ja_jp_profile());
+  const Workbook seventh = GroupedBy(Numbers({0.3}), 0.0, 1.0, 0.07);
+  EXPECT_NE(io::write_pivot_cache_definition(CacheOf(seventh))
+                .find("<rangePr autoStart=\"0\" autoEnd=\"0\" startNum=\"0\" endNum=\"1\" "
+                      "groupInterval=\"7.0000000000000007E-2\"/>"),
+            std::string::npos);
+  const Workbook tenth = GroupedBy(Numbers({0.3}), 0.0, 100.0, 0.1);
+  EXPECT_NE(io::write_pivot_cache_definition(CacheOf(tenth))
+                .find("<rangePr autoStart=\"0\" autoEnd=\"0\" startNum=\"0\" endNum=\"100\" "
+                      "groupInterval=\"0.1\"/>"),
+            std::string::npos);
+}
+
+TEST(NumericGroup, AFractionalStartTakesTheDecimalForm) {
+  const eval::ScopedEvalProfile scope(mac_365_ja_jp_profile());
+  const Workbook wb = GroupedBy(Numbers({5, 15, 100}), 0.5, 100.0, 10.0);
+  EXPECT_EQ(GroupTexts(CacheOf(wb).fields()[kGroup]),
+            (std::vector<std::string>{"<0.5", "0.5-10.5", "10.5-20.5", "20.5-30.5", "30.5-40.5", "40.5-50.5",
+                                      "50.5-60.5", "60.5-70.5", "70.5-80.5", "80.5-90.5", "90.5-100.5", ">100.5"}));
 }
 
 TEST(NumericGroup, TooManyItemsAreRefusedAndChangeNothing) {
