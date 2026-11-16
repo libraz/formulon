@@ -175,8 +175,13 @@ class ApproxComparer {
 // lookup value ends the binary search and the rest is scanned linearly.
 // `descending` (MATCH -1) replaces the binary search with `descending_scan`.
 // A blank `raw_lookup` is the number 0 (`BlankLookup::kZero`).
+// `declared` is the vector's declared length when it is longer than the cells
+// read (a whole-axis reference read up to its last populated cell): the
+// ascending binary search runs over that length with the rest blank, as Excel
+// bisects the whole axis.
 std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std::uint32_t cols, LookupAxis axis,
-                        const Value& raw_lookup, bool approximate, ExcelProfile profile, bool descending = false) {
+                        const Value& raw_lookup, bool approximate, ExcelProfile profile, bool descending = false,
+                        std::size_t declared = 0U) {
   const Value lookup_value = typed_lookup_value(raw_lookup, BlankLookup::kZero);
   const std::size_t n = axis == LookupAxis::Column ? rows : cols;
   if (n == 0) {
@@ -204,8 +209,12 @@ std::size_t lookup_scan(const std::vector<Value>& flat, std::uint32_t rows, std:
   // Approximate match: binary search, falling back to a left-to-right scan at
   // the first probe of another type.
   const ApproxComparer order(lookup_value, profile);
-  const auto cmp = [&](std::size_t i) { return order(cell_at(i)); };
-  return descending ? descending_scan(n, cmp) : approximate_search(n, cmp);
+  if (descending) {
+    return descending_scan(n, [&](std::size_t i) { return order(cell_at(i)); });
+  }
+  const std::size_t length = declared > n ? declared : n;
+  const auto cmp = [&](std::size_t i) { return i < n ? order(cell_at(i)) : kForeignType; };
+  return approximate_search(length, cmp, n);
 }
 
 // Fails the whole call with `err`. An array lookup fails lane by lane, so a
@@ -354,8 +363,14 @@ Value eval_table_lookup_lazy(const parser::AstNode& call, Arena& arena, const Fu
     return cells[flat];
   };
 
+  // The declared length of the scanned line, for the approximate search over a whole-axis table.
+  const std::size_t declared_line =
+      read_by_reference
+          ? static_cast<std::size_t>(axis == LookupAxis::Column ? table.declared.rows() : table.declared.cols())
+          : 0U;
   const auto scan = [&](const Value& query) {
-    return lookup_scan(*scan_cells, scan_rows, scan_cols, axis, query, approximate, ctx.excel_profile());
+    return lookup_scan(*scan_cells, scan_rows, scan_cols, axis, query, approximate, ctx.excel_profile(), false,
+                       declared_line);
   };
   if (index_array) {
     const std::size_t off = scan(lookup);
@@ -397,7 +412,8 @@ Value eval_table_lookup_lazy(const parser::AstNode& call, Arena& arena, const Fu
   return lane(lookup);
 }
 
-Value match_lookup_one(const std::vector<Value>& cells, const Value& lookup, int match_type, ExcelProfile profile) {
+Value match_lookup_one(const std::vector<Value>& cells, const Value& lookup, int match_type, ExcelProfile profile,
+                       std::size_t declared = 0U) {
   if (lookup.is_error()) {
     return lookup;
   }
@@ -406,7 +422,7 @@ Value match_lookup_one(const std::vector<Value>& cells, const Value& lookup, int
   }
   // Exact mode honours wildcards for text; approximate treats them as literal.
   const std::size_t pos = lookup_scan(cells, static_cast<std::uint32_t>(cells.size()), 1U, LookupAxis::Column, lookup,
-                                      match_type != 0, profile, match_type < 0);
+                                      match_type != 0, profile, match_type < 0, declared);
   return pos == SIZE_MAX ? Value::error(ErrorCode::NA) : Value::number(static_cast<double>(pos + 1));
 }
 
@@ -495,12 +511,16 @@ Value eval_match_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     return fail_lookup(lookup, arena, Value::error(ErrorCode::NA));
   }
 
+  // A one-dimensional reference is searched over its declared length.
+  const std::size_t declared = by_reference && by_reference.value()
+                                   ? static_cast<std::size_t>(table.declared.rows()) * table.declared.cols()
+                                   : 0U;
   if (array_lookup) {
     return map_query_lanes(lookup, arena, [&](const Value& query) {
-      return match_lookup_one(cells, query, match_type, ctx.excel_profile());
+      return match_lookup_one(cells, query, match_type, ctx.excel_profile(), declared);
     });
   }
-  return match_lookup_one(cells, lookup, match_type, ctx.excel_profile());
+  return match_lookup_one(cells, lookup, match_type, ctx.excel_profile(), declared);
 }
 
 // VLOOKUP(lookup_value, table_array, col_index_num, [range_lookup])
@@ -598,9 +618,11 @@ Value eval_lookup_lazy(const parser::AstNode& call, Arena& arena, const Function
   const LookupAxis axis = lshape_rows >= lshape_cols ? LookupAxis::Column : LookupAxis::Row;
   // A whole-axis vector with nothing populated walks no cells; every declared
   // cell is blank, so nothing matches.
-  const std::size_t off = lookup_cells.empty() ? SIZE_MAX
-                                               : lookup_scan(lookup_cells, lrows, lcols, axis, lookup,
-                                                             /*approximate=*/true, ctx.excel_profile());
+  const std::size_t declared_line = axis == LookupAxis::Column ? lshape_rows : lshape_cols;
+  const std::size_t off = lookup_cells.empty()
+                              ? SIZE_MAX
+                              : lookup_scan(lookup_cells, lrows, lcols, axis, lookup,
+                                            /*approximate=*/true, ctx.excel_profile(), false, declared_line);
   if (off == SIZE_MAX) {
     return Value::error(ErrorCode::NA);
   }

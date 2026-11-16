@@ -414,6 +414,32 @@ TEST(BuiltinsLookup, WholeAxisResultVectorPastPopulatedCellsIsBlank) {
   EXPECT_EQ(short_result.as_error(), ErrorCode::NA);
 }
 
+// An approximate lookup bisects a whole-axis vector over its declared length, the blank cells past the populated ones
+// included: on a column that is not sorted (ascending values, then a tail of small ones, then blanks) the whole column
+// lands in the tail where the bounded reference lands on the sorted position (Mac Excel 16.115).
+TEST(BuiltinsLookup, ApproximateSearchBisectsAWholeAxisOverItsDeclaredLength) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  s.set_cell_value(9, 2, Value::number(3.0));  // C10
+  s.set_cell_value(10, 2, Value::text("t"));   // C11
+  for (std::uint32_t r = 11; r <= 146; ++r) {  // C12:C147, M12:M147
+    const double key = r <= 106U ? 35462.0 + 90.0 * static_cast<double>(r - 11U) : 5.0;
+    s.set_cell_value(r, 2, Value::number(key));
+    s.set_cell_value(r, 12, Value::number(static_cast<double>(r + 1U)));
+  }
+  const auto number = [&](const char* src) {
+    const Value v = EvalSourceIn(src, wb, s);
+    EXPECT_TRUE(v.is_number()) << src << " -> " << v.debug_to_string();
+    return v.is_number() ? v.as_number() : -1.0;
+  };
+  EXPECT_DOUBLE_EQ(number("=MATCH(35797,C:C,1)"), 147.0);
+  EXPECT_DOUBLE_EQ(number("=MATCH(35797,C1:C1048576,1)"), 147.0);
+  EXPECT_DOUBLE_EQ(number("=VLOOKUP(35797,C:M,11,TRUE)"), 147.0);
+  EXPECT_DOUBLE_EQ(number("=LOOKUP(35797,C:C,M:M)"), 147.0);
+  EXPECT_DOUBLE_EQ(number("=MATCH(35797,C1:C147,1)"), 15.0);
+  EXPECT_DOUBLE_EQ(number("=VLOOKUP(35797,C1:M147,11,TRUE)"), 15.0);
+}
+
 // ---- text collation ----
 
 Value EvalWithProfile(const std::string& formula, ExcelProfile profile) {

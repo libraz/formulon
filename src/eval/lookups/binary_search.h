@@ -55,9 +55,12 @@ SortedSearchResult sorted_search(std::size_t n, bool descending, bool prefer_las
 // candidate. A foreign-type probe (another type, or an error) is looked past:
 // the first same-type cell after it decides, a greater one sends the search
 // left, a smaller one becomes the candidate, and an equal one ends the search
-// at the last cell of its run. Returns SIZE_MAX when nothing matches.
+// at the last cell of its run. Returns SIZE_MAX when nothing matches. Cells
+// from `blank_from` on are known blank (foreign to any lookup type): a
+// whole-axis vector is searched over its declared length, and the look-past
+// over that tail ends at once instead of walking it.
 template <typename Cmp>
-std::size_t approximate_search(std::size_t n, const Cmp& cmp) {
+std::size_t approximate_search(std::size_t n, const Cmp& cmp, std::size_t blank_from = SIZE_MAX) {
   std::ptrdiff_t lo = 0;
   std::ptrdiff_t hi = static_cast<std::ptrdiff_t>(n) - 1;
   std::size_t found = SIZE_MAX;
@@ -67,8 +70,11 @@ std::size_t approximate_search(std::size_t n, const Cmp& cmp) {
     int c = cmp(static_cast<std::size_t>(mid));
     if (c == kForeignType) {
       std::size_t j = static_cast<std::size_t>(mid) + 1U;
-      while (j < n && (c = cmp(j)) == kForeignType) {
+      while (j < n && j < blank_from && (c = cmp(j)) == kForeignType) {
         ++j;
+      }
+      if (j >= blank_from) {
+        j = n;
       }
       if (j >= n || c > 0) {
         hi = mid - 1;
