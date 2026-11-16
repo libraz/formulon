@@ -268,35 +268,55 @@ Value eval_table_lookup_lazy(const parser::AstNode& call, Arena& arena, const Fu
   // from any other expression propagates.
   const Value index_val = eval_node(call.as_call_arg(2), arena, registry, ctx);
   const bool index_unusable = index_val.is_error() && call.as_call_arg(2).kind() == parser::NodeKind::Ref;
-  if (index_val.is_error() && !index_unusable) {
-    return fail_lookup(lookup, arena, index_val);
-  }
-  std::uint32_t result_index = 0U;
-  if (!index_unusable) {
-    auto index_num = coerce_to_number(index_val);
+  const std::uint32_t result_extent = axis == LookupAxis::Column ? cols : rows;
+  // The error one index fails with, or nullopt with `*out` set to it.
+  const auto index_error = [result_extent](const Value& candidate, std::uint32_t* out) -> std::optional<Value> {
+    if (candidate.is_error()) {
+      return candidate;
+    }
+    auto index_num = coerce_to_number(candidate);
     if (!index_num) {
-      return fail_lookup(lookup, arena, Value::error(index_num.error()));
+      return Value::error(index_num.error());
     }
     if (truncate_index(index_num.value()) < 1.0 && snap_near_integer(index_num.value()) < 1.0) {
-      return fail_lookup(lookup, arena, Value::error(ErrorCode::Value));
+      return Value::error(ErrorCode::Value);
     }
     const double index_raw = truncate_index(snap_near_integer(index_num.value()));
-    const std::uint32_t result_extent = axis == LookupAxis::Column ? cols : rows;
     if (index_raw > static_cast<double>(result_extent)) {
-      return fail_lookup(lookup, arena, Value::error(ErrorCode::Ref));
+      return Value::error(ErrorCode::Ref);
     }
-    result_index = static_cast<std::uint32_t>(index_raw);
+    *out = static_cast<std::uint32_t>(index_raw);
+    return std::nullopt;
+  };
+  // A scalar lookup with an array index picks one column (row) per element.
+  const bool index_array = !array_lookup && index_val.is_array();
+  std::uint32_t result_index = 0U;
+  if (!index_unusable && !index_array) {
+    if (std::optional<Value> bad = index_error(index_val, &result_index)) {
+      return fail_lookup(lookup, arena, *bad);
+    }
   }
+  // A failure after the index check; an element's own index error comes first.
+  const auto fail_all = [&](const Value& err) -> Value {
+    if (!index_array) {
+      return fail_lookup(lookup, arena, err);
+    }
+    return map_query_lanes(index_val, arena, [&](const Value& element) -> Value {
+      std::uint32_t unused = 0U;
+      std::optional<Value> bad = index_error(element, &unused);
+      return bad ? *bad : err;
+    });
+  };
 
   bool approximate = true;
   if (arity == 4) {
     const Value rl_val = eval_node(call.as_call_arg(3), arena, registry, ctx);
     if (rl_val.is_error()) {
-      return fail_lookup(lookup, arena, rl_val);
+      return fail_all(rl_val);
     }
     auto rl_bool = coerce_to_bool(rl_val);
     if (!rl_bool) {
-      return fail_lookup(lookup, arena, Value::error(rl_bool.error()));
+      return fail_all(Value::error(rl_bool.error()));
     }
     approximate = rl_bool.value();
   }
@@ -316,38 +336,51 @@ Value eval_table_lookup_lazy(const parser::AstNode& call, Arena& arena, const Fu
                     : read_table_block(table, table.declared.row_first, table.declared.row_first, walked.col_first,
                                        walked.col_last, arena, registry, ctx);
     if (!line) {
-      return fail_lookup(lookup, arena, Value::error(line.error()));
+      return fail_all(Value::error(line.error()));
     }
     scan_line = std::move(line.value());
     scan_cells = &scan_line;
     scan_rows = axis == LookupAxis::Column ? walked.rows() : 1U;
     scan_cols = axis == LookupAxis::Column ? 1U : walked.cols();
   }
-  const auto fetch = [&](std::size_t off) -> Value {
+  const auto fetch = [&](std::size_t off, std::uint32_t pick) -> Value {
     if (index_unusable) {
       return Value::error(ErrorCode::Ref);
     }
     if (read_by_reference) {
-      if (result_index == 1U) {
+      if (pick == 1U) {
         return scan_line[off];
       }
       const auto along = static_cast<std::uint32_t>(off);
-      return axis == LookupAxis::Column ? read_table_cell(table, along, result_index - 1U, arena, registry, ctx)
-                                        : read_table_cell(table, result_index - 1U, along, arena, registry, ctx);
+      return axis == LookupAxis::Column ? read_table_cell(table, along, pick - 1U, arena, registry, ctx)
+                                        : read_table_cell(table, pick - 1U, along, arena, registry, ctx);
     }
     const std::size_t flat = axis == LookupAxis::Column
-                                 ? (off * static_cast<std::size_t>(cols)) + static_cast<std::size_t>(result_index - 1U)
-                                 : (static_cast<std::size_t>(result_index - 1U) * static_cast<std::size_t>(cols)) + off;
+                                 ? (off * static_cast<std::size_t>(cols)) + static_cast<std::size_t>(pick - 1U)
+                                 : (static_cast<std::size_t>(pick - 1U) * static_cast<std::size_t>(cols)) + off;
     if (flat >= cells.size()) {
       return Value::error(ErrorCode::Ref);
     }
     return cells[flat];
   };
 
+  const auto scan = [&](const Value& query) {
+    return lookup_scan(*scan_cells, scan_rows, scan_cols, axis, query, approximate, ctx.excel_profile());
+  };
+  if (index_array) {
+    // One lookup; each index element picks its own column (row) of the hit.
+    const std::size_t off = scan(lookup);
+    return map_query_lanes(index_val, arena, [&](const Value& element) -> Value {
+      std::uint32_t pick = 0U;
+      if (std::optional<Value> bad = index_error(element, &pick)) {
+        return *bad;
+      }
+      return off == SIZE_MAX ? Value::error(ErrorCode::NA) : fetch(off, pick);
+    });
+  }
   const auto lane = [&](const Value& query) {
-    const std::size_t off =
-        lookup_scan(*scan_cells, scan_rows, scan_cols, axis, query, approximate, ctx.excel_profile());
-    return off == SIZE_MAX ? Value::error(ErrorCode::NA) : fetch(off);
+    const std::size_t off = scan(query);
+    return off == SIZE_MAX ? Value::error(ErrorCode::NA) : fetch(off, result_index);
   };
   if (array_lookup) {
     return map_query_lanes(lookup, arena, [&](const Value& query) { return query.is_error() ? query : lane(query); });

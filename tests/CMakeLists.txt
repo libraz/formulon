@@ -427,6 +427,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/builtins_references_endpoints_test.cpp
   unit/eval/reference_lazy_test.cpp
   unit/eval/builtins_vlookup_test.cpp
+  unit/eval/vlookup_array_index_test.cpp
   unit/eval/builtins_xlookup_test.cpp
   unit/eval/lookup_blank_value_test.cpp
   unit/eval/xmatch_mode_range_test.cpp
