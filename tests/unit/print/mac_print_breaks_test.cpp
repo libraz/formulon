@@ -155,7 +155,7 @@ TEST(MacPrintBreaks, MatchMacExcel) {
   ASSERT_TRUE(
       test_support::LoadRepoJson(__FILE__, "tests/unit/", "tests/fixtures/excel/mac/print_breaks/breaks.json", &json));
   const test_support::Json& cases = json.At("cases");
-  ASSERT_EQ(cases.items.size(), 453U);
+  ASSERT_EQ(cases.items.size(), 474U);
 
   for (const test_support::Json& c : cases.items) {
     const std::string font = c.At("font").text;
@@ -170,8 +170,12 @@ TEST(MacPrintBreaks, MatchMacExcel) {
     Workbook wb = std::move(read_or.value().workbook);
     wb.set_excel_profile(mac_365_ja_jp_profile());
 
-    const ColumnWidthModel model = resolve_column_width_model(wb, wb.excel_profile(), GeometryMode::kPrint);
-    EXPECT_DOUBLE_EQ(column_chars_to_points(width, model), c.At("width_pt").number);
+    for (const GeometryMode mode : {GeometryMode::kDisplay, GeometryMode::kPrint}) {
+      const ColumnWidthModel model = resolve_column_width_model(wb, wb.excel_profile(), mode);
+      EXPECT_TRUE(model.calibrated);
+      EXPECT_DOUBLE_EQ(column_chars_to_points(width, model), c.At("width_pt").number);
+      EXPECT_DOUBLE_EQ(column_display_chars(width, model), c.At("column_width").number);
+    }
 
     auto page_or = paginate(wb, 0U);
     ASSERT_TRUE(static_cast<bool>(page_or)) << page_or.error().message;
