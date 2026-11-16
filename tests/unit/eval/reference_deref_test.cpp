@@ -13,9 +13,11 @@
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
+#include "eval/lazy_impls.h"
 #include "eval/reference/deref.h"
 #include "eval/reference/ops.h"
 #include "eval/reference/ref_value.h"
+#include "eval/tail_array.h"
 #include "eval/tree_walker.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
@@ -618,6 +620,104 @@ TEST_F(DerefTest, SpanReportsOneRectanglePerSheet) {
   auto r = deref_cells(span, true, arena_, default_registry(), ctx, ReadCount::kCounted);
   ASSERT_TRUE(r);
   EXPECT_EQ(notes.size(), 3U);
+}
+
+// ---------------------------------------------------------------------------
+// The walker: references as values, and a `Ref` read in value mode
+// ---------------------------------------------------------------------------
+
+class WalkerRefTest : public DerefTest {
+ protected:
+  const parser::AstNode& Parse(const char* source) {
+    parser::Parser p(source, parse_arena_);
+    parser::AstNode* root = p.parse();
+    EXPECT_NE(root, nullptr) << source;
+    return *root;
+  }
+
+  Value AsRef(const char* source) { return eval_node_ref(Parse(source), arena_, default_registry(), Ctx()); }
+
+  Shaped ValueMode(const parser::AstNode& node) { return eval_node_shaped(node, arena_, default_registry(), Ctx()); }
+};
+
+TEST_F(WalkerRefTest, TokensBecomeReferencesThatReadAsTheEvaluatorReads) {
+  struct Case {
+    const char* source;
+    RefForm form;
+    bool compare;  // a whole axis is compared by its form only
+  };
+  const Case cases[] = {
+      {"=A1", RefForm::kArea, true},           {"=B2:C3", RefForm::kArea, true},
+      {"=Sheet2!A1:B2", RefForm::kArea, true}, {"=B:B", RefForm::kArea, false},
+      {"=2:2", RefForm::kArea, false},         {"=Sheet2:Sheet3!A1:B2", RefForm::kSpan3D, false},
+  };
+  for (const Case& c : cases) {
+    const Value ref = AsRef(c.source);
+    ASSERT_TRUE(ref.is_ref()) << c.source << ": " << ref.debug_to_string();
+    EXPECT_EQ(ref.ref_form(), c.form) << c.source;
+    EXPECT_FALSE(ref.ref_is_dynamic()) << c.source;
+    if (c.compare) {
+      ExpectSame(densify(deref_shaped(ref, arena_, default_registry(), Ctx(), ReadCount::kCounted), arena_),
+                 Eval(c.source), c.source);
+    }
+  }
+}
+
+TEST_F(WalkerRefTest, QualifierSetsTheOrigin) {
+  EXPECT_EQ(static_cast<RefOrigin>(AsRef("=A1:B2").as_ref().areas[0].origin), RefOrigin::kImplicit);
+  EXPECT_EQ(static_cast<RefOrigin>(AsRef("=Sheet2!A1:B2").as_ref().areas[0].origin), RefOrigin::kSpelled);
+}
+
+TEST_F(WalkerRefTest, BadQualifierIsTheEvaluatorsError) {
+  ExpectError(AsRef("=Nope!A1"), ErrorCode::Ref, "unknown sheet");
+}
+
+TEST_F(WalkerRefTest, OtherNodesAreTheirValues) {
+  ExpectSame(AsRef("=1+2"), Value::number(3.0), "operator");
+  ExpectSame(AsRef("=SUM(A1:B2)"), Eval("=SUM(A1:B2)"), "call returning a value");
+  ExpectSame(AsRef("=A1:B2+0"), Eval("=A1:B2+0"), "array");
+  ExpectSame(AsRef("=\"t\""), Value::text("t"), "text literal");
+}
+
+TEST_F(WalkerRefTest, LiteralReferenceIsDereferencedInValueMode) {
+  const parser::AstNode* area = parser::make_literal(parse_arena_, AreaRef(0, 0, 1, 1));
+  ASSERT_NE(area, nullptr);
+  ExpectSame(densify(ValueMode(*area), arena_), Eval("=A1:B2"), "rectangle");
+  const Value kept = eval_node_ref(*area, arena_, default_registry(), Ctx());
+  ASSERT_TRUE(kept.is_ref());
+  EXPECT_EQ(kept.ref_form(), RefForm::kArea);
+
+  const parser::AstNode* cell = parser::make_literal(parse_arena_, AreaRef(1, 1, 1, 1));
+  ExpectSame(ValueMode(*cell).value, Value::number(CellValue(0, 1, 1)), "one cell");
+}
+
+TEST_F(WalkerRefTest, LiteralGridAndUnionFollowTheDefaultRule) {
+  std::vector<RefArea> elements;
+  const parser::AstNode* grid = parser::make_literal(parse_arena_, MixedGrid(&elements));
+  const Value g = densify(ValueMode(*grid), arena_);
+  ASSERT_TRUE(g.is_array()) << g.debug_to_string();
+  ASSERT_EQ(g.as_array_rows(), 2U);
+  ASSERT_EQ(g.as_array_cols(), 2U);
+  ExpectError(g.as_array_cells()[0], ErrorCode::Value, "one-cell element");
+  ExpectError(g.as_array_cells()[1], ErrorCode::Value, "multi-cell element");
+  ExpectError(g.as_array_cells()[2], ErrorCode::Ref, "error element");
+  ExpectError(g.as_array_cells()[3], ErrorCode::Value, "one-cell element");
+
+  const RefArea areas[] = {Area(0, 0, 0, 0), Area(2, 2, 2, 2)};
+  const parser::AstNode* uni = parser::make_literal(parse_arena_, make_union_ref(arena_, areas, 2));
+  ExpectError(ValueMode(*uni).value, ErrorCode::Value, "union");
+}
+
+TEST_F(WalkerRefTest, DereferencedLiteralCountsItsReads) {
+  std::vector<Note> notes;
+  const parser::AstNode* dyn = parser::make_literal(parse_arena_, AreaRef(0, 0, 1, 1).with_ref_dynamic());
+  const EvalContext ctx = Ctx().with_dynamic_read_callback(&CollectNote, &notes);
+  (void)eval_node_shaped(*dyn, arena_, default_registry(), ctx);
+  ASSERT_EQ(notes.size(), 1U);
+  EXPECT_EQ(notes[0].rect.row_last, 1U);
+  notes.clear();
+  (void)eval_node_ref(*dyn, arena_, default_registry(), ctx);
+  EXPECT_TRUE(notes.empty());
 }
 
 }  // namespace

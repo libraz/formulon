@@ -46,6 +46,8 @@
 #include "eval/name_env_resolve.h"
 #include "eval/range_resolvers.h"
 #include "eval/recalc_engine.h"
+#include "eval/reference/deref.h"
+#include "eval/reference/ref_value.h"
 #include "eval/spill_anchor.h"
 #include "eval/structured_ref.h"
 #include "eval/structured_ref_project.h"
@@ -579,8 +581,57 @@ Shaped eval_node_shaped_body(const parser::AstNode& node, Arena& arena, const Fu
 Shaped eval_node_shaped(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx) {
   Shaped out = eval_node_shaped_body(node, arena, registry, ctx);
+  // A `Ref` a call or a literal yields is read as a value by the one dereference rule.
+  if (out.value.is_ref()) {
+    out = deref_shaped(out.value, arena, registry, ctx, ReadCount::kCounted);
+  }
   out.value = contain_escape(out.value);
   return out;
+}
+
+namespace {
+
+// A token spelled with a sheet qualifier is `kSpelled`; a bare one names the formula's own sheet.
+RefOrigin token_origin(const parser::Reference& lhs, const parser::Reference& rhs) {
+  return lhs.sheet.empty() && rhs.sheet.empty() ? RefOrigin::kImplicit : RefOrigin::kSpelled;
+}
+
+}  // namespace
+
+Value eval_node_ref(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                    const EvalContext& ctx) {
+  switch (node.kind()) {
+    case parser::NodeKind::Ref: {
+      const parser::Reference& ref = node.as_ref();
+      return make_area_ref(ref, ref, token_origin(ref, ref), arena, ctx);
+    }
+    case parser::NodeKind::RangeOp: {
+      if (node.as_range_arity() != 2U) {
+        break;
+      }
+      const auto& lhs = node.as_range_operand(0);
+      const auto& rhs = node.as_range_operand(1);
+      if (lhs.kind() != parser::NodeKind::Ref || rhs.kind() != parser::NodeKind::Ref) {
+        break;
+      }
+      return make_area_ref(lhs.as_ref(), rhs.as_ref(), token_origin(lhs.as_ref(), rhs.as_ref()), arena, ctx);
+    }
+    case parser::NodeKind::Ref3D:
+      return make_span3d_ref(node.as_ref3d_sheet_begin(), node.as_ref3d_sheet_end(), node.as_ref3d_cell(),
+                             node.as_ref3d_cell_end(), RefOrigin::kSpelled, arena, ctx);
+    case parser::NodeKind::Literal:
+      if (node.as_literal().is_ref()) {
+        return node.as_literal();
+      }
+      break;
+    case parser::NodeKind::Call: {
+      const Shaped out = eval_node_shaped_body(node, arena, registry, ctx);
+      return out.value.is_ref() ? out.value : contain_escape(densify(out, arena));
+    }
+    default:
+      break;
+  }
+  return eval_node(node, arena, registry, ctx);
 }
 
 }  // namespace eval

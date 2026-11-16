@@ -9,6 +9,7 @@
 #include "cell.h"
 #include "eval/array_alloc.h"
 #include "eval/builtins.h"
+#include "eval/dep_graph.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
@@ -165,6 +166,29 @@ TEST(PartialRecalc, SingleCellViewportRecomputesAncestorsOnly) {
   EXPECT_EQ(full.value().cells_evaluated, 1u);
   EXPECT_TRUE(CellValue(wb, 0U, 0U, 2U).is_number());
   EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 20.0);
+}
+
+TEST(PartialRecalc, ShapeOnlyOffsetPullsNoTargetIntoPartialRecalc) {
+  // C1 reads only the shape of OFFSET(A1,...), never A1's value, so A1 is no
+  // dependency of C1 and a partial recalc of C1 leaves A1 dirty.
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 1U, Value::number(3.0))));            // B1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=B1")));                       // A1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 3U, Value::number(3.0))));            // D1
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 2U, "=ROWS(OFFSET(A1,0,0,D1))")));  // C1
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 3.0);
+  EXPECT_FALSE(wb.recalc_engine().dep_graph().has_dynamic_dependencies(CellNodeId{0U, 0U, 2U}));
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 1U, Value::number(4.0))));
+  auto stats = wb.partial_recalc(default_registry(), SingleCell(0U, 2U));
+  ASSERT_TRUE(static_cast<bool>(stats));
+  EXPECT_EQ(stats.value().cells_evaluated, 1u);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 2U).as_number(), 3.0);
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 0U).as_number(), 3.0);
+
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 0U).as_number(), 4.0);
 }
 
 TEST(PartialRecalc, MultiCellViewportUnionsClosures) {

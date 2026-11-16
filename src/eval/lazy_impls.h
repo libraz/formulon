@@ -50,6 +50,13 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
 Shaped eval_node_shaped(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                         const EvalContext& ctx);
 
+/// The node as a reference where it denotes one: a cell, range or whole-axis
+/// token and a 3-D span become a `Ref` (no cell is read), a call or a literal
+/// yielding a `Ref` returns it as it is. Any other node is its `eval_node`
+/// value. A `Ref` from here is read through `eval/reference/deref.h`.
+Value eval_node_ref(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                    const EvalContext& ctx);
+
 /// Signature of every lazy (short-circuit / range-aware) function impl.
 /// The central dispatch table in `tree_walker.cpp` stores pointers of
 /// this type.
