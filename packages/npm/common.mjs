@@ -5275,6 +5275,15 @@ function requireIndex(value, label, role) {
   return value;
 }
 
+// A `coordinate` (`requireIndex`) on an axis of `extent` cells, for a read the facade answers without an engine call.
+function requireGridIndex(value, extent, label) {
+  requireIndex(value, label, 'coordinate');
+  if (value >= extent) {
+    throw new FormulonError(StatusCode.InvalidArgument, `${label} ${value} is outside the grid`, `coordinate=${value}`);
+  }
+  return value;
+}
+
 /** A byte-input argument as a `Uint8Array`: an `ArrayBuffer`, a `Uint8Array` or any `ArrayBufferView`. */
 function requireBytes(value, where, param) {
   if (value instanceof Uint8Array) return value;
@@ -8976,14 +8985,14 @@ function makeFacade(Raw, registry, runtime) {
     }
 
     getColumnXfIndex(col) {
-      requireIndex(col, argLabel('Sheet.getColumnXfIndex', 0), 'coordinate');
+      requireGridIndex(col, GRID_COLS, argLabel('Sheet.getColumnXfIndex', 0));
       const raw = rawOf(this.#sheet.workbook);
       const span = raw.listColumnOverrides(sheetIndex(this.#sheet)).find((c) => c.first <= col && col <= c.last);
       return span?.xfIndex ?? null;
     }
 
     getRowXfIndex(row) {
-      requireIndex(row, argLabel('Sheet.getRowXfIndex', 0), 'coordinate');
+      requireGridIndex(row, GRID_ROWS, argLabel('Sheet.getRowXfIndex', 0));
       const raw = rawOf(this.#sheet.workbook);
       const override = raw.listRowOverrides(sheetIndex(this.#sheet)).find((r) => r.row === row);
       return override?.xfIndex ?? null;

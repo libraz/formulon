@@ -7481,6 +7481,19 @@ class Sheet(_NoCopy):
             _check(status)
 
 
+def _grid_coordinate(value: int, name: str, last: int) -> int:
+    """``value`` as a ``"coordinate"`` (:func:`_uint`) no greater than ``last``, for a read answered without an engine
+    call."""
+    value = _uint(value, name, role="coordinate")
+    if value > last:
+        raise FormulonError(
+            StatusCode.INVALID_ARGUMENT,
+            _argument_message(f"{name} {value}", "is outside the grid"),
+            f"coordinate={value}",
+        )
+    return value
+
+
 class SheetOoxml(_NoCopy):
     """The OOXML-level layer of a sheet, :attr:`Sheet.ooxml`.
 
@@ -7509,7 +7522,7 @@ class SheetOoxml(_NoCopy):
 
         ``col`` is a zero-based index or one A1 column such as ``"B"``.
         """
-        col = _uint(self._sheet._single_axis(col, "col"), "col", role="coordinate")
+        col = _grid_coordinate(self._sheet._single_axis(col, "col"), "col", _LAST_COL)
         spans = self._sheet._layout_overrides(
             LIB.fm_sheet_get_column_layout_count, LIB.fm_sheet_get_column_layout_at, S.COLUMN_LAYOUT
         )
@@ -7525,7 +7538,7 @@ class SheetOoxml(_NoCopy):
         format of XF 0, this reports no format until the workbook is reloaded, although the saved file records
         XF 0.
         """
-        row = _uint(self._sheet._single_axis(row, "row"), "row", role="coordinate")
+        row = _grid_coordinate(self._sheet._single_axis(row, "row"), "row", _LAST_ROW)
         rows = self._sheet._layout_overrides(
             LIB.fm_sheet_get_row_layout_count, LIB.fm_sheet_get_row_layout_at, S.ROW_LAYOUT
         )
