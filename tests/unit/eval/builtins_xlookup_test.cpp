@@ -249,6 +249,13 @@ TEST(BuiltinsXLookup, ArrayLookupReferenceBlankPromotionAndScalarControls) {
   const Value scalar_fallback_counta = EvalSourceIn("=COUNTA(XLOOKUP(99,A1:A3,B1:B3,INDEX(G1:G1,1)))", wb, wb.sheet(0));
   ASSERT_TRUE(scalar_fallback_counta.is_number());
   EXPECT_DOUBLE_EQ(scalar_fallback_counta.as_number(), 0.0);
+  // INDEX(G1:G1,1) is the reference G1, so the bare cell reads the same.
+  const Value bare_array_fallback = EvalSourceIn("=COUNTA(XLOOKUP({1;2;99},A1:A3,B1:B3,G1))", wb, wb.sheet(0));
+  ASSERT_TRUE(bare_array_fallback.is_number());
+  EXPECT_DOUBLE_EQ(bare_array_fallback.as_number(), 3.0);
+  const Value bare_scalar_fallback = EvalSourceIn("=COUNTA(XLOOKUP(99,A1:A3,B1:B3,G1))", wb, wb.sheet(0));
+  ASSERT_TRUE(bare_scalar_fallback.is_number());
+  EXPECT_DOUBLE_EQ(bare_scalar_fallback.as_number(), 0.0);
 }
 
 TEST(BuiltinsXLookup, ArrayLookupValueErrorsAndTrueMissesAreIndependent) {

@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <initializer_list>
 #include <limits>
 #include <optional>
 #include <string_view>
@@ -27,11 +28,15 @@
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "eval/range_resolvers.h"
+#include "eval/reference/deref.h"
+#include "eval/reference/ref_value.h"
 #include "eval/special_forms_lazy.h"
 #include "eval/tree_walker/broadcast.h"
+#include "eval/tree_walker/dispatch.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/expected.h"
+#include "utils/strings.h"
 #include "value.h"
 
 namespace formulon {
@@ -419,6 +424,22 @@ struct IndexPick {
   std::uint32_t col = 0U;  // 0-based; meaningful for kCell / kColumn.
 };
 
+// The part of the one-area reference `source` a scalar pick names, keeping its sheet and its dynamic mark.
+Value picked_reference(const Value& source, const IndexPick& pick, Arena& arena) {
+  const RefArea& a = source.as_ref().areas[0];
+  DeclaredRect rect{a.row_first, a.row_last, a.col_first, a.col_last,
+                    /*whole_axis=*/a.whole_col != 0U || a.whole_row != 0U};
+  if (pick.kind == IndexPickKind::kCell || pick.kind == IndexPickKind::kRow) {
+    rect.row_first = rect.row_last = a.row_first + pick.row;
+  }
+  if (pick.kind == IndexPickKind::kCell || pick.kind == IndexPickKind::kColumn) {
+    rect.col_first = rect.col_last = a.col_first + pick.col;
+  }
+  const RefArea picked = make_ref_area(rect, a.sheet_first, a.sheet_last, RefOrigin::kDerived);
+  const Value ref = make_ref(arena, RefForm::kArea, 0, &picked, 1);
+  return source.ref_is_dynamic() ? ref.with_ref_dynamic() : ref;
+}
+
 // Resolves a scalar (row_idx, col_idx) pair against a `rows` x `cols` source.
 // Zero indices are "whole dimension" in Excel's spill model. The value path
 // reads the pick out of the source and the reference path maps it onto the
@@ -525,6 +546,59 @@ Expected<IndexPick, ErrorCode> index_pick(std::uint32_t rows, std::uint32_t cols
     return ErrorCode::Ref;
   }
   return IndexPick{IndexPickKind::kCell, row_idx - 1U, col_idx - 1U};
+}
+
+// The calls that return their reference as a `Ref`; any other source is read through the range seams.
+bool source_returns_reference(const parser::AstNode& node) {
+  switch (node.kind()) {
+    case parser::NodeKind::Ref:
+      return true;
+    case parser::NodeKind::RangeOp:
+      return node.as_range_arity() == 2U && node.as_range_operand(0).kind() == parser::NodeKind::Ref &&
+             node.as_range_operand(1).kind() == parser::NodeKind::Ref;
+    case parser::NodeKind::Call: {
+      const std::string_view name = strip_future_prefix(node.as_call_name());
+      for (const std::string_view producer : {"OFFSET", "INDIRECT", "IF", "CHOOSE", "IFS", "SWITCH", "INDEX"}) {
+        if (strings::case_insensitive_eq(name, producer)) {
+          return true;
+        }
+      }
+      return false;
+    }
+    default:
+      return false;
+  }
+}
+
+bool is_one_area_ref(const Value& value) {
+  return value.is_ref() && value.ref_form() == RefForm::kArea && value.as_ref().book == 0U;
+}
+
+std::uint32_t area_rows(const Value& ref) {
+  const RefArea& a = ref.as_ref().areas[0];
+  return a.row_last - a.row_first + 1U;
+}
+
+std::uint32_t area_cols(const Value& ref) {
+  const RefArea& a = ref.as_ref().areas[0];
+  return static_cast<std::uint32_t>(a.col_last) - a.col_first + 1U;
+}
+
+// A source value's cells, row-major; a scalar is one cell.
+std::vector<Value> value_cells(const Value& value) {
+  if (!value.is_array()) {
+    return {value};
+  }
+  const Value* cells = value.as_array_cells();
+  return {cells, cells + static_cast<std::size_t>(value.as_array_rows()) * value.as_array_cols()};
+}
+
+std::uint32_t value_rows(const Value& value) {
+  return value.is_array() ? value.as_array_rows() : 1U;
+}
+
+std::uint32_t value_cols(const Value& value) {
+  return value.is_array() ? value.as_array_cols() : 1U;
 }
 
 Value eval_index_array_selector(const IndexSource& source, bool source_ok, ErrorCode source_error,
@@ -825,27 +899,43 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   if (is_three_d_reference(source_node)) {
     return Value::error(three_d_reference_error(source_node));
   }
+  // A source that evaluates to a `Ref` is picked as a reference; its cells are read only for array indices.
+  const Value source_ref =
+      source_returns_reference(source_node) ? eval_node_ref(source_node, arena, registry, ctx) : Value::blank();
+  const bool picks_reference = is_one_area_ref(source_ref);
   // A single-cell pick reads one cell by its declared position, so the
   // whole-axis extent walk waits until a selection spans a line or more.
   ReferenceTable table;
-  const auto by_reference = resolve_reference_table(source_node, ctx, &table, TableWalk::kDeferred);
+  Expected<bool, ErrorCode> by_reference = false;
   ErrorCode source_error = ErrorCode::Value;
   std::optional<IndexSource> source;
-  if (!by_reference) {
-    source_error = by_reference.error();
-  } else if (by_reference.value()) {
-    source.emplace(table);
-  } else {
-    auto resolved = resolve_range_arg(source_node, arena, registry, ctx);
-    if (resolved) {
-      source.emplace(std::move(resolved.value().cells), resolved.value().rows, resolved.value().cols);
+  if (picks_reference && source_node.kind() == parser::NodeKind::Call) {
+    by_reference = true;
+  } else if (source_node.kind() == parser::NodeKind::Call && source_returns_reference(source_node)) {
+    // The call answered a value or an error, read as the source's cells.
+    if (source_ref.is_error()) {
+      source_error = source_ref.as_error();
     } else {
-      source_error = resolved.error();
+      source.emplace(value_cells(source_ref), value_rows(source_ref), value_cols(source_ref));
+    }
+  } else {
+    by_reference = resolve_reference_table(source_node, ctx, &table, TableWalk::kDeferred);
+    if (!by_reference) {
+      source_error = by_reference.error();
+    } else if (by_reference.value()) {
+      source.emplace(table);
+    } else {
+      auto resolved = resolve_range_arg(source_node, arena, registry, ctx);
+      if (resolved) {
+        source.emplace(std::move(resolved.value().cells), resolved.value().rows, resolved.value().cols);
+      } else {
+        source_error = resolved.error();
+      }
     }
   }
-  const std::uint32_t rows = source.has_value() ? source->rows() : 0U;
-  const std::uint32_t cols = source.has_value() ? source->cols() : 0U;
-  bool source_ok = source.has_value();
+  const std::uint32_t rows = picks_reference ? area_rows(source_ref) : source.has_value() ? source->rows() : 0U;
+  const std::uint32_t cols = picks_reference ? area_cols(source_ref) : source.has_value() ? source->cols() : 0U;
+  bool source_ok = picks_reference || source.has_value();
 
   // row_num is required, col_num is optional.
   const bool col_explicit = arity >= 3U;
@@ -855,7 +945,15 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     col_val = eval_node(call.as_call_arg(2), arena, registry, ctx);
   }
   if (row_val.is_array() || col_val.is_array()) {
-    if (source_ok) {
+    if (picks_reference && !source.has_value()) {
+      auto cells = deref_cells(source_ref, /*allow_span3d=*/false, arena, registry, ctx, ReadCount::kCounted);
+      if (cells) {
+        source.emplace(std::move(cells.value().cells), cells.value().rows, cells.value().cols);
+      } else {
+        source_error = cells.error();
+        source_ok = false;
+      }
+    } else if (source_ok) {
       const auto walked = walk_reference_table(&table, ctx);
       if (!walked) {
         source_error = walked.error();
@@ -881,6 +979,9 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   const auto pick = index_pick(rows, cols, row.index, col.index, col_explicit, by_reference && by_reference.value());
   if (!pick) {
     return Value::error(pick.error());
+  }
+  if (picks_reference) {
+    return picked_reference(source_ref, pick.value(), arena);
   }
   if (pick.value().kind != IndexPickKind::kCell) {
     const auto walked = walk_reference_table(&table, ctx);

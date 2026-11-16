@@ -476,9 +476,12 @@ TEST(BuiltinsIndex, WholeColumnPicksMatchTheBoundedReference) {
   ASSERT_TRUE(beyond.is_boolean()) << beyond.debug_to_string();
   EXPECT_TRUE(beyond.as_boolean());
 
+  // A picked whole column reads as the spelled column does.
   Value v = EvalSourceIn("=INDEX(A:B,0,2)", wb, wb.sheet(0));
-  ExpectArrayShape(v, 3U, 1U);
+  ExpectArrayShape(v, 1048576U, 1U);
   EXPECT_DOUBLE_EQ(v.as_array_cells()[2].as_number(), 30.0);
+  v = EvalSourceIn("=B:B", wb, wb.sheet(0));
+  ExpectArrayShape(v, 1048576U, 1U);
   v = EvalSourceIn("=INDEX(A:B,3,0)", wb, wb.sheet(0));
   ExpectArrayShape(v, 1U, 2U);
   EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 30.0);

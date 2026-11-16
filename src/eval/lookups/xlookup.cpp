@@ -511,6 +511,10 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
     if (array_lane && fallback->is_array()) {
       return Value::error(ErrorCode::Value);
     }
+    // A blank fallback in an array lane is a value-array cell, however the blank was read.
+    if (array_lane && fallback->is_blank()) {
+      return Value::blank(BlankGridProjection::kValueArrayZero);
+    }
     return *fallback;
   };
 

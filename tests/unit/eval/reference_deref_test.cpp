@@ -894,6 +894,46 @@ TEST_F(SelectedRefTest, ASelectedDynamicReferenceIsRecordedByItsRead) {
   EXPECT_EQ(notes[0].rect.col_last, 2U);
 }
 
+// INDEX over a reference with scalar indices returns the picked part as a reference.
+TEST_F(SelectedRefTest, IndexPicksAReference) {
+  ExpectSelected("=INDEX(A1:C3,2,3)", 1, 2, 1, 2);
+  ExpectSelected("=INDEX(A1:C3,2,0)", 1, 0, 1, 2);
+  ExpectSelected("=INDEX(A1:C3,0,2)", 0, 1, 2, 1);
+  ExpectSelected("=INDEX(A1:C3,0,0)", 0, 0, 2, 2);
+  ExpectSelected("=INDEX(B2:B9,3)", 3, 1, 3, 1);
+  ExpectSelected("=INDEX(B2:E2,3)", 1, 3, 1, 3);
+  ExpectSelected("=INDEX(Sheet2!A1:B4,4,2)", 3, 1, 3, 1, 1);
+  ExpectSelected("=INDEX((A1:B2,C3:D4),2,1,2)", 3, 2, 3, 2);
+  ExpectSelected("=INDEX(INDEX(A1:C3,0,2),3)", 2, 1, 2, 1);
+  ExpectSelected("=INDEX(IF(TRUE,B2:C3),1,2)", 1, 2, 1, 2);
+  ExpectSelected("=INDEX(OFFSET(A1,1,1,3,3),2,2)", 2, 2, 2, 2, kHome, /*dynamic=*/true);
+  const Value col = AsRef("=INDEX(A:B,0,2)");
+  ASSERT_TRUE(col.is_ref());
+  EXPECT_EQ(col.as_ref().areas[0].whole_col, 1U);
+  EXPECT_EQ(col.as_ref().areas[0].col_first, 1U);
+  const Value cell = AsRef("=INDEX(A:A,5)");
+  ASSERT_TRUE(cell.is_ref());
+  EXPECT_EQ(cell.as_ref().areas[0].whole_col, 0U);
+  EXPECT_EQ(cell.as_ref().areas[0].row_first, 4U);
+}
+
+TEST_F(SelectedRefTest, IndexOverValuesOrArrayIndicesGivesValues) {
+  EXPECT_TRUE(AsRef("=INDEX({1,2;3,4},2,1)").is_number());
+  EXPECT_TRUE(AsRef("=INDEX(A1:C3,{1;2},1)").is_array());
+  EXPECT_TRUE(AsRef("=INDEX(IF(TRUE,{5,6}),2)").is_number());
+  ExpectError(AsRef("=INDEX(A1:C3,4,1)"), ErrorCode::Ref, "row past the end");
+  ExpectError(AsRef("=INDEX(A1:C3,2)"), ErrorCode::Ref, "2-D reference with a row alone");
+  ExpectError(AsRef("=INDEX(OFFSET(A1,-1,0),1)"), ErrorCode::Ref, "source error");
+}
+
+TEST_F(SelectedRefTest, ValueModeReadsTheIndexedReference) {
+  ExpectSame(Eval("=INDEX(A1:C3,2,3)"), Eval("=C2"), "cell");
+  ExpectSame(Eval("=INDEX(A1:C3,0,2)"), Eval("=B1:B3"), "column");
+  ExpectSame(Eval("=SUM(INDEX(A1:C3,2,0))"), Eval("=SUM(A2:C2)"), "row in an aggregate");
+  ExpectSame(Eval("=INDEX(OFFSET(A1,0,0,3,3),{1;2},2)"), Eval("=B1:B2"), "array indices over a built reference");
+  ExpectSame(Eval("=INDEX(IF(TRUE,{5,6}),2)"), Eval("=6"), "value source");
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon
