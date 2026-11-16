@@ -545,5 +545,24 @@ TEST_F(ExternalRefEval, RowAndColumnReadTheExternalReferenceCoordinates) {
   ExpectNumber("=ROWS([Src.xlsx]Data!A1:A3)", 3.0);
 }
 
+// A link caches cells and defined names, never table definitions, so a table of the other book is #REF! wherever
+// it is used, as a value and as a reference argument alike.
+TEST_F(ExternalRefEval, ATableOfTheLinkedBookIsRef) {
+  ExpectError("=Src.xlsx!Tbl[#Data]", ErrorCode::Ref);
+  ExpectError("=Src.xlsx!Tbl[v]", ErrorCode::Ref);
+  ExpectError("=ROWS(Src.xlsx!Tbl[#Data])", ErrorCode::Ref);
+  ExpectError("=VLOOKUP(1,Src.xlsx!Tbl[#Data],2,0)", ErrorCode::Ref);
+  ExpectError("=YEAR(Src.xlsx!Tbl[[#This Row],[D]])", ErrorCode::Ref);
+  ExpectError("=SUMPRODUCT(Src.xlsx!Tbl[v])", ErrorCode::Ref);
+  ExpectError("=SUM(Src.xlsx!Tbl[[A]:[B]])", ErrorCode::Ref);
+  ExpectError("=Src.xlsx!Tbl[v]+1", ErrorCode::Ref);
+}
+
+TEST_F(ExternalRefEval, ATableOfTheLinkedBookIsNoReference) {
+  const Value v = Eval("=ISREF(Src.xlsx!Tbl[v])");
+  ASSERT_TRUE(v.is_boolean()) << v.debug_to_string();
+  EXPECT_FALSE(v.as_boolean());
+}
+
 }  // namespace
 }  // namespace formulon

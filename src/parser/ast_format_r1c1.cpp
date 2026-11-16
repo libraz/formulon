@@ -71,6 +71,11 @@ void AppendExternalRef(const AstNode& node, const Host& host, std::string& out) 
   append_external_qualifier(node, /*r1c1=*/true, out);
   if (!name.empty()) {
     out.append(name);
+    if (const std::string_view structured = node.as_external_ref_structured(); !structured.empty()) {
+      out.push_back('[');
+      out.append(structured);
+      out.push_back(']');
+    }
     return;
   }
   AppendCell(node.as_external_ref_cell(), host, out);

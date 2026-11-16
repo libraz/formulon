@@ -483,8 +483,8 @@ bool Parser::parse_call_args(std::vector<const AstNode*>* args, TextRange open_r
   return true;
 }
 
-AstNode* Parser::consume_structured_ref(std::string_view table_name, const TextRange& start_range,
-                                        std::size_t lbracket_offset, std::size_t close_offset) {
+std::string_view Parser::consume_bracket_payload(std::size_t lbracket_offset, std::size_t close_offset,
+                                                 TextRange* close_range) {
   const Token& lbracket = peek_at(lbracket_offset);
   const Token& rbracket = peek_at(close_offset);
   // The lexemes are views into `source_`, so pointer arithmetic gives the
@@ -496,14 +496,21 @@ AstNode* Parser::consume_structured_ref(std::string_view table_name, const TextR
   // dropped via this span.
   struct_ref_byte_spans_.emplace_back(static_cast<std::uint32_t>(payload_start),
                                       static_cast<std::uint32_t>(payload_end));
-  const TextRange span = SpanRange(start_range, rbracket.range);
+  *close_range = rbracket.range;
   for (std::size_t i = 0; i <= close_offset; ++i) {
     advance();
   }
+  return source_.substr(payload_start, payload_end - payload_start);
+}
+
+AstNode* Parser::consume_structured_ref(std::string_view table_name, const TextRange& start_range,
+                                        std::size_t lbracket_offset, std::size_t close_offset) {
+  TextRange close_range;
   // The payload goes into the node verbatim; the resolver re-parses its
   // specifiers, column ranges and `@` shorthand at evaluation time.
-  AstNode* n = make_structured_ref(arena_, table_name, source_.substr(payload_start, payload_end - payload_start),
-                                   StructuredRefModifier::None);
+  const std::string_view payload = consume_bracket_payload(lbracket_offset, close_offset, &close_range);
+  const TextRange span = SpanRange(start_range, close_range);
+  AstNode* n = make_structured_ref(arena_, table_name, payload, StructuredRefModifier::None);
   if (n != nullptr) {
     n->set_range(span);
   }

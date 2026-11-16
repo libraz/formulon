@@ -927,6 +927,12 @@ class Encoder {
     const XlsbLinkTables& link = sheet_ranges_.links[position - 1U];
     const std::string_view name =
         node.kind() == parser::NodeKind::NameRef ? node.as_name() : node.as_external_ref_name();
+    // A table of the other workbook has no stored form: the link part lists names and sheets only.
+    if (node.kind() == parser::NodeKind::ExternalRef && !node.as_external_ref_structured().empty()) {
+      return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
+                        "xlsb encoder: external table reference not in its link's name list",
+                        std::string(kCtx) + std::string(" name=") + std::string(name));
+    }
     if (!name.empty()) {
       const std::uint32_t ilbl = external_name_ilbl(link, name);
       if (ilbl == 0U) {

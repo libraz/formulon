@@ -248,10 +248,19 @@ void AppendExternalQualifier(const AstNode& node, bool r1c1, const ExternalBookI
   out.push_back('!');
 }
 
+void AppendStructuredPayload(std::string_view structured, std::string& out) {
+  if (!structured.empty()) {
+    out.push_back('[');
+    out.append(structured);
+    out.push_back(']');
+  }
+}
+
 void FormatExternalRef(const AstNode& node, std::string& out, const ExternalBookIndexer* indexer = nullptr) {
   AppendExternalQualifier(node, /*r1c1=*/false, indexer, out);
   if (const std::string_view name = node.as_external_ref_name(); !name.empty()) {
     out.append(name);
+    AppendStructuredPayload(node.as_external_ref_structured(), out);
     return;
   }
   AppendSheetlessArea(node.as_external_ref_cell(), node.as_external_ref_cell_end(), node.as_external_ref_is_range(),

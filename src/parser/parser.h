@@ -285,6 +285,19 @@ class Parser {
   AstNode* consume_structured_ref(std::string_view table_name, const TextRange& start_range,
                                   std::size_t lbracket_offset, std::size_t close_offset);
 
+  // Tail of an external table reference after its table name (`peek()` is the
+  // `[`): an external node with a book-scope table, or the local table for
+  // the formula's own book.
+  AstNode* parse_external_structured_tail(std::string_view path, std::string_view book, const Token& table,
+                                          TextRange start_range);
+
+  // Slices the verbatim payload of the balanced bracket group (`[` at
+  // `peek_at(lbracket_offset)`, `]` at `peek_at(close_offset)`), records its
+  // byte span so lexer diagnostics inside it are dropped, consumes every token
+  // through the `]` and stores the `]`'s range in `close_range`.
+  std::string_view consume_bracket_payload(std::size_t lbracket_offset, std::size_t close_offset,
+                                           TextRange* close_range);
+
   // Builds a Reference from a CellRef token's lexeme.
   bool decode_cellref_lexeme(std::string_view lex, Reference* out) noexcept;
   // Returns the column index encoded by an Ident token's letters; 0 means

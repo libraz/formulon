@@ -407,6 +407,23 @@ AstNode* make_external_name_ref(Arena& arena, std::string_view path, std::string
   return n;
 }
 
+AstNode* make_external_structured_ref(Arena& arena, std::string_view path, std::string_view book,
+                                      std::string_view sheet, std::string_view table, std::string_view structured) {
+  auto* payload = NewExternalPayload<AstNode::ExternalRefPayload>(arena, path, book, sheet);
+  if (payload == nullptr || !InternChecked(arena, table, &payload->name) ||
+      !InternChecked(arena, structured, &payload->structured)) {
+    return nullptr;
+  }
+  payload->sheet_end = {};
+  payload->is_range = false;
+  AstNode* n = AstNode::make_node(arena, NodeKind::ExternalRef);
+  if (n == nullptr) {
+    return nullptr;
+  }
+  n->data_.external_ref = payload;
+  return n;
+}
+
 AstNode* make_structured_ref(Arena& arena, std::string_view table, std::string_view column,
                              StructuredRefModifier modifier) {
   AstNode* n = AstNode::make_node(arena, NodeKind::StructuredRef);
@@ -992,6 +1009,11 @@ std::string_view AstNode::as_external_ref_sheet_end() const {
 std::string_view AstNode::as_external_ref_name() const {
   FM_CHECK(kind_ == NodeKind::ExternalRef, "AstNode::as_external_ref_name on non-ExternalRef");
   return data_.external_ref->name;
+}
+
+std::string_view AstNode::as_external_ref_structured() const {
+  FM_CHECK(kind_ == NodeKind::ExternalRef, "AstNode::as_external_ref_structured on non-ExternalRef");
+  return data_.external_ref->structured;
 }
 
 const Reference& AstNode::as_external_ref_cell() const {

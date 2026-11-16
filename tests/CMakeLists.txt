@@ -276,6 +276,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/parser/local_sheet_qualifier_test.cpp
   unit/parser/sheet_quoting_test.cpp
   unit/parser/external_ref_parse_test.cpp
+  unit/parser/external_structured_ref_test.cpp
   unit/parser/external_book_spelling_test.cpp
   unit/parser/literal_spelling_test.cpp
   unit/parser/ast_test.cpp

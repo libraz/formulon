@@ -72,6 +72,9 @@ void AddExternalRef(const parser::AstNode& node, SheetRangeTable& ranges, std::u
   if (position == 0U) {
     return;  // The encode reports the unknown book.
   }
+  if (node.kind() == parser::NodeKind::ExternalRef && !node.as_external_ref_structured().empty()) {
+    return;  // A table is no link name; the encode reports it.
+  }
   XlsbLinkTables& link = ranges.links[position - 1U];
   const std::string_view name = node.kind() == parser::NodeKind::NameRef ? node.as_name() : node.as_external_ref_name();
   if (!name.empty()) {

@@ -165,6 +165,10 @@ bool WholeAxisTail(const parser::AstNode& node, Arena& arena, const EvalContext&
 }
 
 Value ResolveDense(const parser::AstNode& node, Arena& arena, const EvalContext& ctx) {
+  // A link caches cells and defined names, never table definitions.
+  if (!node.as_external_ref_structured().empty()) {
+    return Value::error(ErrorCode::Ref);
+  }
   const ExternalBook* found = BookFor(node, ctx);
   if (found == nullptr) {
     return Value::error(ErrorCode::Ref);
@@ -225,6 +229,9 @@ Shaped resolve_external_ref_shaped(const parser::AstNode& node, Arena& arena, co
 }
 
 Expected<ExternalRect, ErrorCode> resolve_external_rect(const parser::AstNode& node, const EvalContext& ctx) {
+  if (!node.as_external_ref_structured().empty()) {
+    return ErrorCode::Ref;
+  }
   const parser::Reference* lhs = nullptr;
   const parser::Reference* rhs = nullptr;
   if (!external_ref_declared_endpoints(node, &lhs, &rhs)) {

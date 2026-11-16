@@ -252,6 +252,11 @@ class AstNode final {
   /// form. Non-empty is what distinguishes the two; with a sheet it is that
   /// sheet's local name.
   std::string_view as_external_ref_name() const;
+  /// Bracket payload of a table reference into the supporting workbook
+  /// (`Table1[[#Data],[A]]` -> `[#Data],[A]`), verbatim between the outer
+  /// brackets; `as_external_ref_name()` is then the table name. Empty
+  /// for every other shape.
+  std::string_view as_external_ref_structured() const;
   const Reference& as_external_ref_cell() const;
   /// Bottom-right corner of a rectangle; equals `as_external_ref_cell()`
   /// when `as_external_ref_is_range()` is false.
@@ -362,6 +367,8 @@ class AstNode final {
                                     const Reference&, const Reference&, bool);
   friend AstNode* make_external_name_ref(Arena&, std::string_view, std::string_view, std::string_view,
                                          std::string_view);
+  friend AstNode* make_external_structured_ref(Arena&, std::string_view, std::string_view, std::string_view,
+                                               std::string_view, std::string_view);
   friend AstNode* make_structured_ref(Arena&, std::string_view, std::string_view, StructuredRefModifier);
   friend AstNode* make_name_ref(Arena&, std::string_view);
   friend AstNode* make_sheet_name_ref(Arena&, std::string_view, std::string_view, bool);
@@ -419,6 +426,7 @@ class AstNode final {
     std::string_view sheet;
     std::string_view sheet_end;
     std::string_view name;
+    std::string_view structured;
     Reference cell;
     Reference cell_end;
     bool is_range = false;
@@ -614,6 +622,14 @@ AstNode* make_external_ref(Arena& arena, std::string_view path, std::string_view
 /// views are re-interned into `arena`.
 AstNode* make_external_name_ref(Arena& arena, std::string_view path, std::string_view book, std::string_view sheet,
                                 std::string_view name);
+
+/// Builds an `ExternalRef` node naming the table `table` of the supporting
+/// workbook with the bracket payload `structured` (between the outer
+/// brackets, verbatim). Such a reference never resolves, since a link
+/// carries no table definitions. The string views are re-interned into
+/// `arena`.
+AstNode* make_external_structured_ref(Arena& arena, std::string_view path, std::string_view book,
+                                      std::string_view sheet, std::string_view table, std::string_view structured);
 
 /// True for `[0]!Name`: the defined name `Name` of the formula's own
 /// workbook, read as workbook-scoped first (see

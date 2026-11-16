@@ -284,6 +284,30 @@ AstNode* Parser::parse_quoted_qualifier_ref(SyncContext ctx) {
   return finish(parse_sheet_qualified_ref(text, /*quoted=*/true, tok.range));
 }
 
+// `Book.xlsx!Table[...]` / `[1]!Table[...]`: a table of another workbook. The
+// link cache holds no table definitions, so the node only keeps the text; the
+// evaluator answers #REF!. `[0]!Table[...]` is the formula's own table.
+AstNode* Parser::parse_external_structured_tail(std::string_view path, std::string_view book, const Token& table,
+                                                TextRange start_range) {
+  const Token& lbracket = peek();
+  const std::size_t close_offset = matching_rbracket_offset(0);
+  if (close_offset == 0) {
+    record_error_with_token(ParseErrorCode::UnbalancedBrackets, lbracket.range, lbracket.lexeme);
+    return make_recovery_placeholder(lbracket.range);
+  }
+  TextRange close_range;
+  const std::string_view payload = consume_bracket_payload(0, close_offset, &close_range);
+  // A table belongs to the book, so Excel drops a sheet written before it (`[Book]Sheet!Table[c]`).
+  AstNode* node = book == detail::kSelfBookIndex && path.empty()
+                      ? make_structured_ref(arena_, table.lexeme, payload, StructuredRefModifier::None)
+                      : make_external_structured_ref(arena_, path, book, {}, table.lexeme, payload);
+  if (node == nullptr) {
+    return nullptr;
+  }
+  node->set_range(SpanRange(start_range, close_range));
+  return node;
+}
+
 AstNode* Parser::parse_external_ref_tail(std::string_view path, std::string_view book, std::string_view sheet,
                                          std::string_view sheet_end, TextRange start_range) {
   if (peek_kind() != TokenKind::Bang) {
@@ -307,6 +331,9 @@ AstNode* Parser::parse_external_ref_tail(std::string_view path, std::string_view
       return nullptr;
     }
     const Token& name = advance();
+    if (peek_kind() == TokenKind::LBracket) {
+      return parse_external_structured_tail(path, book, name, start_range);
+    }
     AstNode* node = make_external_name_ref(arena_, path, book, sheet, name.lexeme);
     if (node == nullptr) {
       return nullptr;

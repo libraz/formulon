@@ -166,6 +166,10 @@ void DumpInto(const AstNode& node, std::string& out) {
       if (const std::string_view name = node.as_external_ref_name(); !name.empty()) {
         out.append(" name ");
         out.append(name);
+        if (const std::string_view structured = node.as_external_ref_structured(); !structured.empty()) {
+          out.append(" structured ");
+          out.append(structured);
+        }
         out.push_back(')');
         return;
       }
