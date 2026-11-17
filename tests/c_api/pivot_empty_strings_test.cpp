@@ -217,6 +217,33 @@ TEST(PivotEmptyStrings, DataFieldNameEmptyIsKeptAndNullDerives) {
   EXPECT_STREQ(added.name, "");
 }
 
+// No two data fields share a caption, an empty or blank one included, and none takes a field's name.
+TEST(PivotEmptyStrings, DataFieldNameRepeatedIsRefusedEvenWhenEmpty) {
+  WorkbookGuard wb;
+  LoadScratchPivot(wb);
+  fm_pivot_data_field_t spec = FM_STRUCT_INIT(fm_pivot_data_field_t);
+  spec.field_index = static_cast<std::uint32_t>(kAmountField);
+  spec.aggregation = FM_PIVOT_AGGREGATION_COUNT;
+  spec.show_as = FM_PIVOT_SHOW_VALUES_AS_NORMAL;
+  std::size_t index = 99;
+  for (const char* name : {"", " "}) {
+    ASSERT_EQ(SetDataFieldName(wb.handle, name), 0) << fm_get_last_error_message();
+    // Setting the caption a data field already shows is no collision with itself.
+    ASSERT_EQ(SetDataFieldName(wb.handle, name), 0) << fm_get_last_error_message();
+    spec.name = name;
+    EXPECT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0U, kPivot, &spec, &index), FM_STATUS_ALREADY_EXISTS);
+  }
+  spec.name = "X";
+  ASSERT_EQ(fm_sheet_add_pivot_data_field(wb.handle, 0U, kPivot, &spec, &index), 0) << fm_get_last_error_message();
+  EXPECT_EQ(SetDataFieldName(wb.handle, "x"), FM_STATUS_ALREADY_EXISTS);
+  EXPECT_EQ(SetDataFieldName(wb.handle, "Amount"), FM_STATUS_ALREADY_EXISTS);
+  EXPECT_EQ(SetDataFieldName(wb.handle, "Region"), FM_STATUS_ALREADY_EXISTS);
+  std::size_t count = 0;
+  ASSERT_EQ(fm_sheet_get_pivot_data_field_count(wb.handle, 0U, kPivot, &count), 0);
+  EXPECT_EQ(count, 2U);
+  EXPECT_STREQ(DataField(wb.handle).name, " ");
+}
+
 TEST(PivotEmptyStrings, DataFieldEmptyNameIsStoredAsAnEmptyNameAttribute) {
   WorkbookGuard wb;
   LoadScratchPivot(wb);

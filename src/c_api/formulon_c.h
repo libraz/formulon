@@ -7638,9 +7638,11 @@ typedef enum {
 typedef struct {
   uint32_t struct_size;
   /** The display name of the data field, the key GETPIVOTDATA looks it up by. An empty string is an empty caption, as
-   *  Excel stores it (api-conventions §5 rule 30). When `NULL` the engine names it from the workbook profile's pivot
-   * wording, such as `Sum of Sales` (en-US) or `合計 / Sales` (ja-JP), numbered 2, 3, ... while the name repeats
-   * another data field's or a field's display name; that needs `field_index` to be in range. */
+   *  Excel stores it (api-conventions §5 rule 30). A given name that is another data field's, an empty or blank one
+   *  included, or a field's name fails with `FM_STATUS_ALREADY_EXISTS`; a data field may keep its own caption. When
+   *  `NULL` the engine names it from the workbook profile's pivot wording, such as `Sum of Sales` (en-US) or
+   *  `合計 / Sales` (ja-JP), numbered 2, 3, ... while the name repeats another data field's or a field's display name;
+   *  that needs `field_index` to be in range. */
   const char* name;
   /** The index of the source pivot field the data field aggregates; it must be in range. */
   uint32_t field_index;
@@ -9434,7 +9436,8 @@ FM_API fm_status_t fm_sheet_get_pivot_data_field_count(const fm_workbook_t* wb, 
 /**
  * @brief Appends a new data-field entry. A `NULL` `spec->name` is
  *        replaced by the engine-derived name described on
- *        `fm_pivot_data_field_t`; an empty one is kept.
+ *        `fm_pivot_data_field_t`; an empty one is kept, subject to the name
+ *        rule there.
  *
  * @return `FM_STATUS_OK` (0) on success, or a common pivot failure;
  *         `FM_STATUS_INDEX_OUT_OF_RANGE` (13) when `spec->field_index` or a set
@@ -9443,7 +9446,9 @@ FM_API fm_status_t fm_sheet_get_pivot_data_field_count(const fm_workbook_t* wb, 
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when `spec->aggregation` / `spec->show_as`
  *           names no declared enumerator;
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when the cache has calculated items and
- *           `spec->aggregation` is Average, StdDev, StdDevP, Var or VarP.
+ *           `spec->aggregation` is Average, StdDev, StdDevP, Var or VarP;
+ *         `FM_STATUS_ALREADY_EXISTS` (7) when a non-NULL `spec->name` is another
+ *           data field's name, an empty or blank one included, or a field's name.
  */
 FM_API fm_status_t fm_sheet_add_pivot_data_field(fm_workbook_t* wb, size_t sheet_index, size_t pivot_index,
                                                  const fm_pivot_data_field_t* spec, size_t* out_data_field_index);

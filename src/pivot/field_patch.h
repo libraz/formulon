@@ -14,6 +14,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
@@ -65,6 +66,11 @@ bool field_show_detail(const PivotField& field) noexcept;
 /// index out of range, a name too long, or a manual order with a by-field; `kAlreadyExists` for a name taken.
 Expected<void, Error> check_field_patch(const Workbook& wb, const PivotTable& table, std::size_t field_index,
                                         const PivotFieldPatch& patch);
+
+/// Whether `name` may caption data field `self` of `table` (`data_fields().size()` for a new one): no other data
+/// field may show it, an empty or blank caption included, and no field may hold it as its source or custom name.
+Expected<void, Error> check_data_field_name(const Workbook& wb, const PivotTable& table, std::string_view name,
+                                            std::size_t self);
 
 /// `check_field_patch`, then writes every set key; on failure the table is unchanged.
 Expected<void, Error> apply_field_patch(const Workbook& wb, PivotTable& table, std::size_t field_index,

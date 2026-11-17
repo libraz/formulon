@@ -674,6 +674,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A PivotTable data field could be given another data field's name, or a field's name, through `addDataField` / `setDataField` (Python `add_data_field` / `set_data_field`, C `fm_sheet_add_pivot_data_field` / `fm_sheet_set_pivot_data_field`); such a name now fails with AlreadyExists and nothing changes. As in Excel, an empty or blank caption counts: two data fields cannot both show `""`.
 - The load contract (`Workbook.load`, the `Workbook` class notes) and `hasDirtyCells` (Python `has_dirty_cells`, C `fm_workbook_has_dirty_cells`) now state which loaded workbooks hold their formulas dirty, and no longer list a file location change as one that dirties cells.
 - Changing a theme's colours or fonts (`setThemeColors`, `setThemeFonts`, `setThemeScriptFont`, Python
   `set_theme_colors` / `set_theme_fonts` / `set_theme_script_font`, C `fm_workbook_set_theme_colors` /

@@ -13,10 +13,12 @@
 #include <utility>
 #include <vector>
 
+#include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_evaluator.h"
 #include "pivot/pivot_layout.h"
+#include "pivot/pivot_locale.h"
 #include "pivot/pivot_result.h"
 #include "pivot/pivot_table.h"
 #include "pivot/pivot_types.h"
@@ -220,6 +222,32 @@ TEST(PivotLayoutOptions, GrandTotalCaptionKeepsDataTotalLabels) {
   auto cells_or = layout(table, result_or.value(), options);
   ASSERT_TRUE(static_cast<bool>(cells_or)) << cells_or.error().message;
   EXPECT_EQ(Grid(cells_or.value()), expected);
+}
+
+// An empty or blank data-field caption is drawn as given: its header carries no
+// text and its grand-total label is the locale's data-total affixes around it.
+TEST(PivotLayoutOptions, EmptyDataFieldCaptionKeepsTheDataTotalAffixes) {
+  const PivotCache cache = build_region_product_cache();
+  PivotTable table = build_region_product_table(PivotLayout::Compact, true);
+  table.set_row_values_position(1);
+  table.mutable_data_fields()[0].name.clear();
+  table.mutable_data_fields()[1].name = " ";
+  for (std::uint8_t l = 0; l <= static_cast<std::uint8_t>(ExcelLocale::kNlNL); ++l) {
+    const PivotLayoutOptions options = pivot_layout_options_for(ExcelProfile{ExcelHost::kMac365, ExcelLocale(l)});
+    auto result_or = evaluate(table, cache, options);
+    ASSERT_TRUE(static_cast<bool>(result_or)) << result_or.error().message;
+    auto cells_or = layout(table, result_or.value(), options);
+    ASSERT_TRUE(static_cast<bool>(cells_or)) << cells_or.error().message;
+    const std::vector<std::string> grid = Grid(cells_or.value());
+    ASSERT_EQ(grid.size(), 12U) << int(l);
+    EXPECT_EQ(grid[2], "|500") << int(l);
+    EXPECT_EQ(grid[3], " |5") << int(l);
+    EXPECT_EQ(grid[10], options.data_total_prefix + options.data_total_suffix + "|1500") << int(l);
+    EXPECT_EQ(grid[11], options.data_total_prefix + " " + options.data_total_suffix + "|15") << int(l);
+  }
+  // "全体の " / "全体の  ".
+  const PivotLayoutOptions ja = pivot_layout_options_for(ExcelProfile{ExcelHost::kMac365, ExcelLocale::kJaJP});
+  EXPECT_EQ(ja.data_total_prefix + ja.data_total_suffix, "\xE5\x85\xA8\xE4\xBD\x93\xE3\x81\xAE ");
 }
 
 TEST(PivotLayoutOptions, GrandTotalCaptionRenamesTheGrandTotalColumn) {

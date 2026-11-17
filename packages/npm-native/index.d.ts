@@ -1063,9 +1063,11 @@ export interface PivotWorksheetSource {
 /** Plain-data spec for `Pivot.addDataField` / `Pivot.setDataField`. */
 export interface PivotDataFieldInput {
   /** The display name of the data field, the key GETPIVOTDATA looks it up by. `""` is an empty caption, as Excel stores
-   *  it (api-conventions §5 rule 30). When omitted the engine names it from the workbook profile's pivot wording, such as
-   *  `Sum of Sales` (en-US) or `合計 / Sales` (ja-JP), numbered 2, 3, ... while the name repeats another data field's or
-   *  a field's display name; that needs `fieldIndex` to be in range. */
+   *  it (api-conventions §5 rule 30). A given name that is another data field's, an empty or blank one included, or a
+   *  field's name fails with `StatusCode.AlreadyExists`; a data field may keep its own caption. When omitted the engine
+   *  names it from the workbook profile's pivot wording, such as `Sum of Sales` (en-US) or `合計 / Sales` (ja-JP),
+   *  numbered 2, 3, ... while the name repeats another data field's or a field's display name; that needs `fieldIndex`
+   *  to be in range. */
   readonly name?: string;
   /** The index of the source pivot field the data field aggregates; it must be in range. */
   readonly fieldIndex: PivotFieldRef;
@@ -9186,11 +9188,12 @@ export interface Pivot {
   /** Reads data field `dataFieldIndex`; an index past the last data field fails with
    *  `StatusCode.IndexOutOfRange`. */
   getDataField(dataFieldIndex: number): PivotDataField;
-  /** Appends a new data-field entry. An omitted or `null` `spec.name` is
-   *  derived from the Excel profile, `""` is an empty caption; see {@link PivotDataFieldInput}. */
+  /** Appends a new data-field entry. An omitted or `null` `spec.name` is derived from the Excel profile, `""` is an
+   *  empty caption; see {@link PivotDataFieldInput}. A given name that another data field or a field already holds
+   *  fails with `StatusCode.AlreadyExists` and changes nothing. */
   addDataField(spec: PivotDataFieldInput): number;
-  /** Replaces the data-field entry at `dataFieldIndex` in place. An omitted
-   *  or `null` `spec.name` is derived as in `addDataField`. */
+  /** Replaces the data-field entry at `dataFieldIndex` in place. An omitted or `null` `spec.name` is derived as in
+   *  `addDataField`, and a given one is checked as there; the entry may keep the caption it already shows. */
   setDataField(dataFieldIndex: number, spec: PivotDataFieldInput): void;
   /** Reads the name a new data field would get for `fieldIndex` and `aggregation`, without adding one.
    *  `excludeDataField` leaves that data field out of the numbering (as `setDataField` does); omit it

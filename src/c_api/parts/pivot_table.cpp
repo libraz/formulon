@@ -22,6 +22,7 @@
 #include "c_api/parts/table_style_defaults.h"
 #include "pivot/calculated.h"
 #include "pivot/field_lookup.h"
+#include "pivot/field_patch.h"
 #include "pivot/filter_engine.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_index.h"
@@ -609,6 +610,11 @@ fm_status_t fill_data_field(const formulon::Workbook& workbook, const formulon::
     }
   }
   if (spec.name != nullptr) {
+    if (auto checked = formulon::pivot::check_data_field_name(workbook, table, spec.name,
+                                                              exclude.value_or(table.data_fields().size()));
+        !checked) {
+      return set_last_error(checked.error());
+    }
     out->name = spec.name;
   } else {
     out->name =

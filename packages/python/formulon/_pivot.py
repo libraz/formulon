@@ -1399,6 +1399,11 @@ class Pivot(_NoCopy):
         An omitted or ``None`` ``spec.name`` is derived from the workbook profile,
         as :meth:`get_data_field_default_name` reports it; ``""`` is an empty
         caption.
+
+        Raises:
+          AlreadyExistsError: when a given ``spec.name`` is another data field's
+            name, an empty or blank one included, or a field's name; nothing changes.
+            ``set_data_field`` lets an entry keep the caption it already shows.
         """
         field_index = self._field_index(spec.field_index)
         h, sheet, pivot_index = self._locate()
@@ -1420,6 +1425,9 @@ class Pivot(_NoCopy):
         """Replace the data-field entry at ``data_field_index`` in place.
 
         An omitted or ``None`` ``spec.name`` is derived as in :meth:`add_data_field`.
+
+        Raises:
+          AlreadyExistsError: as in :meth:`add_data_field`.
         """
         field_index = self._field_index(spec.field_index)
         h, sheet, pivot_index = self._locate()

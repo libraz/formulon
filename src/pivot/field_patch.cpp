@@ -99,6 +99,22 @@ Expected<void, Error> check_field_patch(const Workbook& wb, const PivotTable& ta
   return ok();
 }
 
+Expected<void, Error> check_data_field_name(const Workbook& wb, const PivotTable& table, std::string_view name,
+                                            std::size_t self) {
+  for (std::size_t i = 0; i < table.data_fields().size(); ++i) {
+    if (i != self && same_label(wb, name, table.data_fields()[i].name)) {
+      return name_taken("data field name matches another data field", "data_field_index=" + std::to_string(i));
+    }
+  }
+  const auto taken = [&](const std::string& existing) { return !existing.empty() && same_label(wb, name, existing); };
+  for (std::size_t i = 0; i < table.fields().size(); ++i) {
+    if (taken(table.fields()[i].source_name) || taken(table.fields()[i].custom_name)) {
+      return name_taken("data field name matches a field", "field_index=" + std::to_string(i));
+    }
+  }
+  return ok();
+}
+
 Expected<void, Error> apply_field_patch(const Workbook& wb, PivotTable& table, std::size_t field_index,
                                         const PivotFieldPatch& patch) {
   RETURN_IF_ERROR(check_field_patch(wb, table, field_index, patch));
