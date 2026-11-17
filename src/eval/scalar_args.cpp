@@ -164,6 +164,10 @@ void lift_positions(const Value* args, std::uint32_t arity, const AreaEnds* ends
       }
       const auto error = std::find_if(cell_args.begin(), cell_args.end(), [](const Value& v) { return v.is_error(); });
       out[k] = error != cell_args.end() ? *error : cell(cell_args.data(), arity, state);
+      // A position whose call answers an array holds that array's top-left element.
+      if (out[k].is_array()) {
+        out[k] = out[k].as_array()->cells[0];
+      }
     }
   }
 }

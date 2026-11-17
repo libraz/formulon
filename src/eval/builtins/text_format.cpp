@@ -128,6 +128,10 @@ Value text_builtin_impl(const Value* args, std::uint32_t /*arity*/, Arena& arena
     return Value::error(ErrorCode::Num);
   }
 
+  // An empty format shows only the sign of a negative number.
+  if (format_text.empty()) {
+    return Value::text(number < 0.0 ? "-" : "");
+  }
   std::string out;
   out.reserve(32);
   const auto status = ::formulon::text_format::apply_format(number, format_text, out, date1904,
@@ -673,6 +677,10 @@ Value eval_arraytotext_lazy(const parser::AstNode& call, Arena& arena, const Fun
     // error's display text (eval_node_as_array wraps scalar args).
     if (arr.rows == 1U && arr.cols == 1U && arr.cells[0].is_error()) {
       return arr.cells[0];
+    }
+    // A lone blank cell has no strict representation.
+    if (strict && arr.rows == 1U && arr.cols == 1U && arr.cells[0].is_blank()) {
+      return Value::error(ErrorCode::Value);
     }
     return arraytotext_from_array(arr, strict, arena);
   }

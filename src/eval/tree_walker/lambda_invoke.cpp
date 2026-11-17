@@ -268,7 +268,13 @@ const LambdaValue* check_callable(const LambdaValue* lv, std::uint32_t call_arit
 const LambdaValue* resolve_callable(const parser::AstNode& arg, std::uint32_t call_arity, Arena& arena,
                                     const FunctionRegistry& registry, const EvalContext& ctx, Value* out_err) {
   // A bare built-in name evaluates to a function value like any LAMBDA.
-  return resolve_callable_value(eval_node(arg, arena, registry, ctx), call_arity, arena, out_err);
+  const Value v = eval_node(arg, arena, registry, ctx);
+  // A cell holding an error is no function: #VALUE!, not the error itself.
+  if (v.is_error() && arg.kind() == parser::NodeKind::Ref) {
+    *out_err = Value::error(ErrorCode::Value);
+    return nullptr;
+  }
+  return resolve_callable_value(v, call_arity, arena, out_err);
 }
 
 const LambdaValue* resolve_callable_value(const Value& v, std::uint32_t call_arity, Arena& arena, Value* out_err) {

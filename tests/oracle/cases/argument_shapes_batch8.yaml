@@ -182,6 +182,8 @@ cases:
   - id: and_arg1_na_cell
     setup: { B1: "=NA()" }
     formula: "=AND(B1,TRUE,TRUE)"
+  - id: arraytotext_arg1_blank_cell
+    formula: "=ARRAYTOTEXT(B2,1)"
   - id: average_arg1_blank_cell
     formula: "=AVERAGE(B2,4,,6,7)"
   - id: averagea_arg1_blank_cell
@@ -229,6 +231,12 @@ cases:
     formula: "=COUPNUM(DATE(2024,1,15),DATE(2026,11,15),B2,0)"
   - id: couppcd_arg3_blank_cell
     formula: "=COUPPCD(DATE(2024,1,15),DATE(2026,11,15),B2,0)"
+  - id: covar_arg1_blank_cell
+    formula: "=COVAR(B2,2)"
+  - id: covariance_p_arg1_blank_cell
+    formula: "=COVARIANCE.P(B2,2)"
+  - id: covariance_s_arg1_blank_cell
+    formula: "=COVARIANCE.S(B2,2)"
   - id: csc_arg1_array_lifted
     formula: "=INDEX(CSC({134217727,134217727}),2)"
   - id: cumipmt_arg2_array_lifted

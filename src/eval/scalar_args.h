@@ -79,7 +79,8 @@ bool lift_extent(const Value* args, std::uint32_t arity, const AreaEnds* ends, s
 /// size-1 axis stretches; a grid element is a one-area `Ref`, an error element
 /// its error), an active `ends` entry its `AreaEnds` value, any other argument
 /// itself. A position some argument cannot supply is #N/A, and a position whose
-/// arguments hold an error takes the left-most one without running `cell`.
+/// arguments hold an error takes the left-most one without running `cell`. A
+/// position whose `cell` answers an array holds that array's top-left element.
 void lift_positions(const Value* args, std::uint32_t arity, const AreaEnds* ends, std::uint32_t rows,
                     std::uint32_t cols, Arena& arena, LiftedCellFn cell, const void* state, Value* out);
 

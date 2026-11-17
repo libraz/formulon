@@ -561,6 +561,15 @@ TEST(HypothesisZTest, DegenerateSamples) {
   EXPECT_EQ(flat.as_error(), ErrorCode::Num);
 }
 
+TEST(HypothesisTTest, BlankTailsOrTypeCellIsZero) {
+  Workbook wb = Workbook::create();
+  for (const char* src : {"=T.TEST({1,2,3,4,5},{6,7,8,9,10},B2,2)", "=T.TEST({1,2,3,4,5},{6,7,8,9,10},2,B2)"}) {
+    const Value v = EvalSourceIn(src, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_error()) << src;
+    EXPECT_EQ(v.as_error(), ErrorCode::Num) << src;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

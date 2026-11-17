@@ -86,6 +86,9 @@ cases:
     formula: "=INDEX(MONTH({0,0}),2)"
   - id: n_arg1_array_lifted
     formula: "=INDEX(N({\"2024-03-15\",\"2024-03-15\"}),2)"
+  - id: networkdays_intl_arg3_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=NETWORKDAYS.INTL(DATE(2024,1,1),DATE(2024,1,12),B1,{45292,45293})"
   - id: nper_arg2_array_lifted
     formula: "=INDEX(NPER(0.05/12,{-500,-500},25000,0,1),2)"
   - id: numbervalue_arg1_array_lifted
@@ -186,8 +189,12 @@ cases:
   - id: switch_arg1_na_cell
     setup: { B1: "=NA()" }
     formula: "=SWITCH(B1,\"a\",1,\"b\",2,\"c\",3)"
+  - id: t_test_arg3_blank_cell
+    formula: "=T.TEST({1,2,3,4,5},{6,7,8,9,10},B2,2)"
   - id: tan_arg1_array_lifted
     formula: "=INDEX(TAN({0,0}),2)"
+  - id: text_arg2_blank_cell
+    formula: "=TEXT(0.5-0.4-0.1,B2)"
   - id: textsplit_arg1_blank_cell
     formula: "=TEXTSPLIT(B2,\",\",\";\",FALSE,0,\"x\")"
   - id: tocol_arg2_blank_cell

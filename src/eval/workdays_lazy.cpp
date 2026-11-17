@@ -220,8 +220,8 @@ bool resolve_intl_calendar(const parser::AstNode& call, std::uint32_t arity, boo
   if (arity >= 3U && !is_omitted_arg(call.as_call_arg(2))) {
     const Value weekend = eval_node(call.as_call_arg(2), arena, registry, ctx);
     if (weekend.is_error()) {
-      // Measured for WORKDAY.INTL only: any error in `weekend` reads as #NUM!.
-      *out_err = add_days ? Value::error(ErrorCode::Num) : weekend;
+      // Any error in `weekend` reads as #NUM! for WORKDAY.INTL, #VALUE! for NETWORKDAYS.INTL.
+      *out_err = Value::error(add_days ? ErrorCode::Num : ErrorCode::Value);
       return false;
     }
     ErrorCode code = ErrorCode::Value;

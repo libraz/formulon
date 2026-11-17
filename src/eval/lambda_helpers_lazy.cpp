@@ -17,6 +17,7 @@
 #include "eval/name_env.h"
 #include "eval/omitted_arg.h"
 #include "eval/reference/ref_value.h"
+#include "eval/scalar_args.h"
 #include "eval/structured_ref_project.h"
 #include "eval/tree_walker/dispatch.h"
 #include "parser/ast.h"
@@ -177,23 +178,17 @@ const ArrayValue* eval_array_arg(const parser::AstNode& node, Arena& arena, cons
   return v.as_array();
 }
 
-// Coerces a scalar argument to a positive integer count for MAKEARRAY's
-// `rows` and `cols`. Non-numeric or below-1 values surface `#VALUE!`
-// (Microsoft's documented contract); only exceeding the per-axis grid
-// limit surfaces `#NUM!`. Argument errors propagate verbatim.
-//
-// `max_value` is the per-axis Excel grid limit. The numeric value is
-// truncated toward zero (Excel rounds `2.9` down to 2 here, matching the
-// behaviour observed for ROUND-free integer args across the dynamic-array
-// helpers).
-bool read_count_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
-                    std::uint32_t max_value, std::uint32_t* out, Value* out_err) {
-  // An omitted count is 1; a blank reference coerces to 0.
-  if (is_omitted_arg(node)) {
-    *out = 1U;
-    return true;
-  }
-  const Value v = eval_node(node, arena, registry, ctx);
+// A count argument's value: an omitted count is 1.
+Value count_arg_value(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx) {
+  return is_omitted_arg(node) ? Value::number(1.0) : eval_node(node, arena, registry, ctx);
+}
+
+// Coerces a scalar to a positive integer count for MAKEARRAY's `rows` and
+// `cols`, truncated toward zero; a blank coerces to 0. Non-numeric or below-1
+// values are #VALUE!, past `max_value` (the per-axis grid limit) #NUM!, and an
+// error is itself.
+bool count_from_value(const Value& v, std::uint32_t max_value, std::uint32_t* out, Value* out_err) {
   if (v.is_error()) {
     *out_err = v;
     return false;
@@ -241,8 +236,7 @@ Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, con
   }
   const LambdaValue* lv = resolve_callable(call.as_call_arg(1), /*call_arity=*/1U, arena, registry, ctx, &err);
   if (lv == nullptr) {
-    // A cell holding an error is no function: #VALUE!, not the error itself.
-    return call.as_call_arg(1).kind() == parser::NodeKind::Ref && err.is_error() ? Value::error(ErrorCode::Value) : err;
+    return err;
   }
   const SourceOrigin origin = source_origin(call.as_call_arg(0), in, arena, registry, ctx);
   if (in->rows == 0U || in->cols == 0U) {
@@ -531,22 +525,23 @@ const LambdaValue* makearray_shape(const parser::AstNode& call, Arena& arena, co
     *out_err = Value::error(ErrorCode::Value);
     return nullptr;
   }
-  if (!read_count_arg(call.as_call_arg(0), arena, registry, ctx, a1::kMaxRows, out_rows, out_err) ||
-      !read_count_arg(call.as_call_arg(1), arena, registry, ctx, a1::kMaxCols, out_cols, out_err)) {
+  const Value rows = count_arg_value(call.as_call_arg(0), arena, registry, ctx);
+  const Value cols = count_arg_value(call.as_call_arg(1), arena, registry, ctx);
+  if (rows.is_array() || cols.is_array()) {
+    return nullptr;
+  }
+  if (!count_from_value(rows, a1::kMaxRows, out_rows, out_err) ||
+      !count_from_value(cols, a1::kMaxCols, out_cols, out_err)) {
     return nullptr;
   }
   return resolve_callable(call.as_call_arg(2), /*call_arity=*/2U, arena, registry, ctx, out_err);
 }
 
-Value eval_makearray_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                          const EvalContext& ctx) {
-  Value err = Value::blank();
-  std::uint32_t rows = 0;
-  std::uint32_t cols = 0;
-  const LambdaValue* lv = makearray_shape(call, arena, registry, ctx, &rows, &cols, &err);
-  if (lv == nullptr) {
-    return err;
-  }
+namespace {
+
+// The `rows` x `cols` grid of `lv(r, c)`.
+Value fill_makearray(const LambdaValue* lv, std::uint32_t rows, std::uint32_t cols, Arena& arena,
+                     const FunctionRegistry& registry, const EvalContext& ctx) {
   if (abandons_formula(rows, cols) ||
       static_cast<std::uint64_t>(rows) * static_cast<std::uint64_t>(cols) > kMaxDynamicArrayCells) {
     return Value::error(ErrorCode::Num);
@@ -575,6 +570,38 @@ Value eval_makearray_lazy(const parser::AstNode& call, Arena& arena, const Funct
   }
 
   return Value::array(out_arr);
+}
+
+}  // namespace
+
+Value eval_makearray_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                          const EvalContext& ctx) {
+  if (call.as_call_arity() != 3U) {
+    return Value::error(ErrorCode::Value);
+  }
+  Value counts[2] = {count_arg_value(call.as_call_arg(0), arena, registry, ctx),
+                     count_arg_value(call.as_call_arg(1), arena, registry, ctx)};
+  for (const Value& v : counts) {
+    if (v.is_error()) {
+      return v;
+    }
+  }
+  Value err = Value::blank();
+  const LambdaValue* lv = resolve_callable(call.as_call_arg(2), /*call_arity=*/2U, arena, registry, ctx, &err);
+  if (lv == nullptr) {
+    return err;
+  }
+  // An array of counts lifts the call.
+  return lift_over_array_args(counts, 2U, arena, [&](const Value* a, std::uint32_t) {
+    std::uint32_t rows = 0;
+    std::uint32_t cols = 0;
+    Value count_err = Value::blank();
+    if (!count_from_value(a[0], a1::kMaxRows, &rows, &count_err) ||
+        !count_from_value(a[1], a1::kMaxCols, &cols, &count_err)) {
+      return count_err;
+    }
+    return fill_makearray(lv, rows, cols, arena, registry, ctx);
+  });
 }
 
 }  // namespace eval

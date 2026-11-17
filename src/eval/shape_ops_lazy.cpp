@@ -69,7 +69,12 @@ OperationShape generator_shape(const parser::AstNode& call, Arena& arena, const 
   const std::string_view name = strip_future_prefix(call.as_call_name());
   const std::uint32_t arity = call.as_call_arity();
   if (strings::case_insensitive_eq(name, "MAKEARRAY")) {
-    if (makearray_shape(call, arena, registry, ctx, out_rows, out_cols, out_err) == nullptr) {
+    Value shape_err = Value::blank();
+    if (makearray_shape(call, arena, registry, ctx, out_rows, out_cols, &shape_err) == nullptr) {
+      if (!shape_err.is_error()) {
+        return OperationShape::kUnknown;
+      }
+      *out_err = shape_err;
       return OperationShape::kError;
     }
   } else {

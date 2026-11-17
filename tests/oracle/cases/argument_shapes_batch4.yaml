@@ -382,8 +382,13 @@ cases:
     formula: "=MAKEARRAY(2,B1,LAMBDA(r,c,r))"
   - id: makearray_arg2_blank_cell
     formula: "=MAKEARRAY(2,B2,LAMBDA(r,c,r))"
+  - id: makearray_arg3_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=MAKEARRAY(2,,B1)"
   - id: makearray_arg3_blank_cell
     formula: "=MAKEARRAY(2,,B2)"
+  - id: makearray_arg1_array_lifted
+    formula: "=INDEX(MAKEARRAY({2,2},,LAMBDA(r,c,r)),2)"
   - id: makearray_arg1_zero
     formula: "=MAKEARRAY(0,,LAMBDA(r,c,r))"
   - id: makearray_arg1_negative

@@ -508,6 +508,23 @@ TEST(RegressionFamily, NumericLiteralKeepsFifteenDigits) {
   ExpectRegExact("=3.8541666666666665", 3.85416666666666);
 }
 
+TEST(RegressionCovariance, BlankCellBesideAScalarIsValue) {
+  Workbook wb = Workbook::create();
+  for (const char* src : {"=COVAR(B2,2)", "=COVARIANCE.P(B2,2)", "=COVARIANCE.S(2,B2)"}) {
+    const Value v = EvalSourceIn(src, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_error()) << src;
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << src;
+  }
+}
+
+TEST(RegressionCovariance, NumberCellBesideAScalarIsOnePair) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(1, 1, Value::number(3.0));
+  const Value v = EvalSourceIn("=COVARIANCE.P(B2,2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 0.0);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

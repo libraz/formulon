@@ -106,7 +106,8 @@ Value eval_scan_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
 /// `rows` x `cols` grid it returns, without invoking the lambda. Returns the
 /// lambda the grid would be filled with, or nullptr with `*out_err` set to
 /// the error MAKEARRAY returns instead (`#VALUE!` for a lambda that cannot
-/// take 2 arguments).
+/// take 2 arguments), or nullptr with `*out_err` untouched when a count is an
+/// array, which lifts the call.
 const LambdaValue* makearray_shape(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                                    const EvalContext& ctx, std::uint32_t* out_rows, std::uint32_t* out_cols,
                                    Value* out_err);

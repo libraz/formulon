@@ -149,8 +149,9 @@ Value invoke_lambda_values(const LambdaValue* lv, std::uint32_t arity, const Val
 /// bare built-in function name, which Excel reads as the eta-reduced
 /// `LAMBDA(p1, ..., pn, FN(p1, ..., pn))` and is expanded to exactly that.
 /// On failure returns nullptr and writes the scalar error to `*out_err`: the
-/// argument's own error, `#VALUE!` for a non-lambda or an arity the lambda
-/// cannot accept, `#NAME?` for an unknown name or a body-less lambda.
+/// argument's own error (`#VALUE!` when it is a cell's), `#VALUE!` for a
+/// non-lambda or an arity the lambda cannot accept, `#NAME?` for an unknown
+/// name or a body-less lambda.
 const LambdaValue* resolve_callable(const parser::AstNode& arg, std::uint32_t call_arity, Arena& arena,
                                     const FunctionRegistry& registry, const EvalContext& ctx, Value* out_err);
 

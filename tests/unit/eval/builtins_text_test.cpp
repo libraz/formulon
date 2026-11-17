@@ -1039,6 +1039,26 @@ TEST(TextLengthLimits, FormatWithMoreThan127DecimalPlacesIsValue) {
   }
 }
 
+TEST(BuiltinsText, TextEmptyFormatShowsOnlyTheMinusSign) {
+  Workbook wb = Workbook::create();
+  const Value negative = EvalSourceIn("=TEXT(0.5-0.4-0.1,B2)", wb, wb.sheet(0));
+  ASSERT_TRUE(negative.is_text());
+  EXPECT_EQ(negative.as_text(), "-");
+  const Value positive = EvalSource("=TEXT(5,\"\")");
+  ASSERT_TRUE(positive.is_text());
+  EXPECT_EQ(positive.as_text(), "");
+}
+
+TEST(BuiltinsText, ArrayToTextStrictLoneBlankCellIsValue) {
+  Workbook wb = Workbook::create();
+  const Value strict = EvalSourceIn("=ARRAYTOTEXT(B2,1)", wb, wb.sheet(0));
+  ASSERT_TRUE(strict.is_error());
+  EXPECT_EQ(strict.as_error(), ErrorCode::Value);
+  const Value concise = EvalSourceIn("=ARRAYTOTEXT(B2)", wb, wb.sheet(0));
+  ASSERT_TRUE(concise.is_text());
+  EXPECT_EQ(concise.as_text(), "");
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

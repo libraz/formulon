@@ -601,6 +601,14 @@ TEST(DateTimeAnalysisToolPak, BooleanCellsAreValue) {
   }
 }
 
+TEST(DateTimeNetworkdaysIntl, ErrorCellAsWeekendIsValue) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 1, Value::error(ErrorCode::NA));
+  const Value v = EvalSourceIn("=NETWORKDAYS.INTL(DATE(2024,1,1),DATE(2024,1,12),B1,{45292,45293})", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

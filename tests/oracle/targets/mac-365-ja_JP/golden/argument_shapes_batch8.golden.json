@@ -1681,6 +1681,15 @@
       }
     },
     {
+      "id": "arraytotext_arg1_blank_cell",
+      "formula": "=ARRAYTOTEXT(B2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
       "id": "average_arg1_blank_cell",
       "formula": "=AVERAGE(B2,4,,6,7)",
       "setup": {},
@@ -2082,6 +2091,33 @@
       "expect": {
         "kind": "error",
         "code": "#NUM!"
+      }
+    },
+    {
+      "id": "covar_arg1_blank_cell",
+      "formula": "=COVAR(B2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "covariance_p_arg1_blank_cell",
+      "formula": "=COVARIANCE.P(B2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "covariance_s_arg1_blank_cell",
+      "formula": "=COVARIANCE.S(B2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
       }
     },
     {

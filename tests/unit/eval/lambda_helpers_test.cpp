@@ -49,9 +49,11 @@
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "test_eval_helpers.h"
+#include "util/test_eval_helpers.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace eval {
@@ -875,6 +877,20 @@ TEST(LambdaHelpersEta, UnknownNameIsNameErrorInEveryHelper) {
 TEST(LambdaHelpersMakeArray, OmittedCountIsOne) {
   ExpectNumbers(EvalSrc("=MAKEARRAY(2,,LAMBDA(r,c,r))"), 2U, 1U, {1.0, 2.0}, "MAKEARRAY omitted cols");
   ExpectNumbers(EvalSrc("=MAKEARRAY(,2,LAMBDA(r,c,c))"), 1U, 2U, {1.0, 2.0}, "MAKEARRAY omitted rows");
+}
+
+TEST(LambdaHelpersMakeArray, ArrayOfCountsLiftsTheCall) {
+  const Value v = EvalSrc("=INDEX(MAKEARRAY({2,2},,LAMBDA(r,c,r)),2)");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 1.0);
+}
+
+TEST(LambdaHelpersMakeArray, ErrorCellAsTheFunctionIsValue) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 1, Value::error(ErrorCode::NA));
+  const Value v = formulon::test::EvalSourceIn("=MAKEARRAY(2,,B1)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 }  // namespace

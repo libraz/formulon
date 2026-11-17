@@ -127,24 +127,33 @@ bool compute_slope_intercept(const std::variant<Value, NumericPairs>& prepared, 
   return true;
 }
 
-// COVARIANCE.P / COVARIANCE.S given two scalar expressions treat each as a
-// one-element array. Returns the single pair (a non-numeric scalar leaves
-// none), or an error Value when either argument evaluates to an error;
-// nullopt when either argument is not a scalar expression.
+// COVARIANCE.P / COVARIANCE.S given a scalar expression and a scalar or a
+// one-cell reference treat each as a one-element array. Returns the single
+// pair (a non-numeric scalar leaves none, a non-numeric cell is #VALUE!), or
+// an error Value when either argument evaluates to an error; nullopt when
+// neither argument is a scalar expression or either holds more than one cell.
 std::optional<std::variant<Value, NumericPairs>> scalar_covariance_pairs(const parser::AstNode& call, Arena& arena,
                                                                          const FunctionRegistry& registry,
                                                                          const EvalContext& ctx) {
   RangeResult scalars[2];
   for (std::uint32_t i = 0; i < 2U; ++i) {
     auto resolved = resolve_range_arg(call.as_call_arg(i), arena, registry, ctx);
-    if (!resolved || !resolved.value().from_scalar || resolved.value().cells.size() != 1U) {
+    if (!resolved || resolved.value().cells.size() != 1U) {
       return std::nullopt;
     }
     scalars[i] = std::move(resolved.value());
   }
+  if (!scalars[0].from_scalar && !scalars[1].from_scalar) {
+    return std::nullopt;
+  }
   for (const RangeResult& r : scalars) {
     if (r.cells.front().is_error()) {
       return std::variant<Value, NumericPairs>{r.cells.front()};
+    }
+  }
+  for (const RangeResult& r : scalars) {
+    if (!r.from_scalar && !r.cells.front().is_number()) {
+      return std::variant<Value, NumericPairs>{Value::error(ErrorCode::Value)};
     }
   }
   NumericPairs pairs;

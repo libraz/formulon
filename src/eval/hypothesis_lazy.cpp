@@ -103,20 +103,21 @@ Value eval_t_test_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (tails_v.is_error()) {
     return tails_v;
   }
-  if (!tails_v.is_number()) {
+  if (!tails_v.is_number() && !tails_v.is_blank()) {
     return Value::error(ErrorCode::Value);
   }
   const Value type_v = eval_node(call.as_call_arg(3), arena, registry, ctx);
   if (type_v.is_error()) {
     return type_v;
   }
-  if (!type_v.is_number()) {
+  if (!type_v.is_number() && !type_v.is_blank()) {
     return Value::error(ErrorCode::Value);
   }
   // Excel truncates (not rounds) `tails` and `type` toward zero before
   // the domain check, matching the documented behaviour.
-  const double tails_d = std::trunc(tails_v.as_number());
-  const double type_d = std::trunc(type_v.as_number());
+  // A blank cell reads as zero.
+  const double tails_d = tails_v.is_blank() ? 0.0 : std::trunc(tails_v.as_number());
+  const double type_d = type_v.is_blank() ? 0.0 : std::trunc(type_v.as_number());
   if (!std::isfinite(tails_d) || (tails_d != 1.0 && tails_d != 2.0)) {
     return Value::error(ErrorCode::Num);
   }

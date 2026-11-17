@@ -1801,12 +1801,35 @@
       }
     },
     {
+      "id": "makearray_arg3_na_cell",
+      "formula": "=MAKEARRAY(2,,B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
       "id": "makearray_arg3_blank_cell",
       "formula": "=MAKEARRAY(2,,B2)",
       "setup": {},
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "makearray_arg1_array_lifted",
+      "formula": "=INDEX(MAKEARRAY({2,2},,LAMBDA(r,c,r)),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
       }
     },
     {
