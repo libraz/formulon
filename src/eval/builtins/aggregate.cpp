@@ -466,7 +466,8 @@ void register_aggregate_builtins(FunctionRegistry& registry) {
   // dropped silently, while direct scalar arguments continue through normal
   // coercion.
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
-      builtins_detail::with_fold({"SUM", 1u, kVariadic, &Sum, true, true, true}, &kSumFold),
+      builtins_detail::grid_top_left(
+          builtins_detail::with_fold({"SUM", 1u, kVariadic, &Sum, true, true, true}, &kSumFold)),
       // CONCAT accepts ranges: cells are coerced to text in row-major order.
       {"CONCAT", 1u, kVariadic, &Concat, true, true},
       // CONCATENATE keeps legacy implicit-intersection semantics, so it is

@@ -484,6 +484,84 @@ TEST(BuiltinsOffset, ZeroOffsetReturnsBase) {
   EXPECT_DOUBLE_EQ(v.as_number(), 42.0);
 }
 
+// OFFSET with an array of offsets or sizes is one reference per element, which SUBTOTAL / SUMIF / COUNTIF read
+// one by one.
+TEST(BuiltinsOffset, ArrayArgumentsGiveOneReferencePerElement) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  for (std::uint32_t r = 0; r < 3; ++r) {
+    s.set_cell_value(r, 0, Value::number(r + 1.0));
+    s.set_cell_value(r, 1, Value::number((r + 1.0) * 10.0));
+  }
+  s.set_cell_value(0, 2, Value::text("x"));
+  s.set_cell_value(2, 2, Value::text("y"));
+  const std::pair<const char*, double> rows[] = {
+      {"=SUMPRODUCT(SUBTOTAL(9,OFFSET(A1,ROW(A1:A3)-1,0)))", 6.0},
+      {"=SUM(SUBTOTAL(9,OFFSET(A1,ROW(A1:A3)-1,0)))", 6.0},
+      {"=SUM(SUMIF(A1:A3,\">1\",OFFSET(A1:A3,,{0,1})))", 55.0},
+      {"=SUMPRODUCT(COUNTIF(OFFSET(A1,,,{1,2,3}),\">1\"))", 3.0},
+      {"=MATCH(1,INDEX(SUBTOTAL(3,OFFSET(C1,ROW(C1:C3)-1,0,1,1)),0),0)", 1.0},
+      {"=SUMPRODUCT(SUBTOTAL(4,OFFSET(A1:A3,,{0,1})))", 33.0},
+      {"=INDEX(SUBTOTAL(9,OFFSET(A1,ROW(A1:A3)-1,0)),3,1)", 3.0},
+      {"=SUMPRODUCT(SUBTOTAL(9,OFFSET(A1,0,{0,1})))", 11.0},
+      {"=SUM(OFFSET(A1,0,{0,1}))", 11.0},
+  };
+  for (const auto& [src, expected] : rows) {
+    const Value v = EvalSourceIn(src, wb, s);
+    EXPECT_TRUE(v.is_number() && v.as_number() == expected) << src << " -> " << v.debug_to_string();
+  }
+}
+
+// The *IF(S) ranges read a grid one element at a time, and the criteria still lift.
+TEST(BuiltinsOffset, ConditionalAggregatesReadEachElementRange) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  for (std::uint32_t r = 0; r < 12; ++r) {
+    s.set_cell_value(r, 0, Value::number(r + 1.0));
+    s.set_cell_value(r, 1, Value::number((r + 1.0) * 10.0));
+  }
+  const std::pair<const char*, double> rows[] = {
+      {"=INDEX(AVERAGEIF(OFFSET(A1:A3,{0;3},0),\">1\"),2,1)", 5.0},
+      {"=INDEX(AVERAGEIFS(OFFSET(B1:B3,{0;3},0),OFFSET(A1:A3,{0;3},0),\">1\"),1,1)", 25.0},
+      {"=INDEX(SUMIFS(OFFSET(B1:B3,{0;3},0),OFFSET(A1:A3,{0;3},0),\">1\"),2,1)", 150.0},
+      {"=INDEX(COUNTIFS(OFFSET(A1:A3,{0;3},0),\">1\"),1,1)", 2.0},
+      {"=INDEX(MAXIFS(OFFSET(B1:B3,{0;3},0),OFFSET(A1:A3,{0;3},0),\">1\"),2,1)", 60.0},
+      {"=INDEX(MINIFS(OFFSET(B1:B3,{0;3},0),OFFSET(A1:A3,{0;3},0),\">1\"),1,1)", 20.0},
+      {"=INDEX(SUMIF(A1:A3,\">1\",OFFSET(B1:B3,{0;3},0)),2,1)", 110.0},
+      {"=ROWS(COUNTIF(OFFSET(A1:A3,{0;3},0),{\">1\",\">5\"}))", 2.0},
+  };
+  for (const auto& [src, expected] : rows) {
+    const Value v = EvalSourceIn(src, wb, s);
+    EXPECT_TRUE(v.is_number() && v.as_number() == expected) << src << " -> " << v.debug_to_string();
+  }
+}
+
+// A blank cell in an offset or size argument reads as 0, not as an omitted argument.
+TEST(BuiltinsOffset, BlankCellArgumentReadsAsZero) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  s.set_cell_value(0, 0, Value::number(7.0));
+  s.set_cell_value(1, 0, Value::number(8.0));
+  const Value v = EvalSourceIn("=OFFSET(A1,E9,0)", wb, s);
+  EXPECT_TRUE(v.is_number() && v.as_number() == 7.0) << v.debug_to_string();
+  const Value n = EvalSourceIn("=COUNTIF(A1:A2,E9)", wb, s);
+  EXPECT_TRUE(n.is_number() && n.as_number() == 0.0) << n.debug_to_string();
+}
+
+// INDIRECT over an array of texts gives one reference, or one error, per text.
+TEST(BuiltinsOffset, IndirectOverTextsGivesOneReferencePerText) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  s.set_cell_value(0, 0, Value::number(1.0));
+  s.set_cell_value(0, 1, Value::number(2.0));
+  const Value bad = EvalSourceIn("=INDEX(INDIRECT({\"not a ref\",\"not a ref\"}),2)", wb, s);
+  EXPECT_TRUE(bad.is_error() && bad.as_error() == ErrorCode::Ref) << bad.debug_to_string();
+  const Value sum = EvalSourceIn("=SUM(SUBTOTAL(9,INDIRECT({\"A1\",\"B1\"})))", wb, s);
+  EXPECT_TRUE(sum.is_number() && sum.as_number() == 3.0) << sum.debug_to_string();
+  const Value mixed = EvalSourceIn("=INDEX(SUBTOTAL(9,INDIRECT({\"A1\",\"x y\"})),2)", wb, s);
+  EXPECT_TRUE(mixed.is_error() && mixed.as_error() == ErrorCode::Ref) << mixed.debug_to_string();
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

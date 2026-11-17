@@ -47,6 +47,7 @@ struct BuiltinRegistration {
   const OmittedArgDefault* omitted_defaults = nullptr;
   std::uint32_t omitted_default_count = 0;
   bool first_arg_scalar = false;
+  GridArg grid_arg = GridArg::kElementError;
 };
 
 /// Gives a range-aware reducer its one-value-at-a-time form; see `FoldOps`.
@@ -94,6 +95,13 @@ constexpr BuiltinRegistration scalar_last_arg(BuiltinRegistration def) noexcept 
 constexpr BuiltinRegistration scalar_first_arg(BuiltinRegistration def) noexcept {
   def.first_arg_scalar = true;
   def.result_shape = FunctionDef::ResultShape::kArray;
+  return def;
+}
+
+/// Reads a reference grid argument of `def` by its elements' top-left cells; see
+/// `FunctionDef::grid_arg`.
+constexpr BuiltinRegistration grid_top_left(BuiltinRegistration def) noexcept {
+  def.grid_arg = GridArg::kTopLeft;
   return def;
 }
 
@@ -158,6 +166,7 @@ inline void register_builtin_functions(FunctionRegistry& registry, const Builtin
     fn.last_arg_scalar = def.last_arg_scalar;
     fn.absent_on_mac = def.absent_on_mac;
     fn.fold = def.fold;
+    fn.grid_arg = def.grid_arg;
     fn.omitted_defaults = def.omitted_defaults;
     fn.omitted_default_count = def.omitted_default_count;
     fn.first_arg_scalar = def.first_arg_scalar;

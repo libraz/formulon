@@ -414,10 +414,10 @@ bool collect_arg(const parser::AstNode& node, Arena& arena, const FunctionRegist
     return true;
   }
 
-  // A reference a call returns, a `:` over one (`A1:OFFSET(...)`) or a name
-  // standing for one is read as that reference, so `SUBTOTAL(109, OFFSET(...))`
-  // skips hidden rows.
-  if ((k == parser::NodeKind::Call || k == parser::NodeKind::NameRef ||
+  // A reference a call returns, a `:` over one (`A1:OFFSET(...)`), a name
+  // standing for one, or one already evaluated in place is read as that
+  // reference, so `SUBTOTAL(109, OFFSET(...))` skips hidden rows.
+  if ((k == parser::NodeKind::Call || k == parser::NodeKind::NameRef || k == parser::NodeKind::Literal ||
        (k == parser::NodeKind::RangeOp && !has_static_endpoints(node, ctx))) &&
       evaluates_to_reference(node)) {
     const Value ref = eval_node_ref(node, arena, registry, ctx);

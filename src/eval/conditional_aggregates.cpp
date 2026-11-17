@@ -117,9 +117,13 @@ bool is_external_range_arg(const parser::AstNode& arg, const EvalContext& ctx) {
 }
 
 /// True when `node` is a reference a call returns, a `:` over one
-/// (`A1:OFFSET(...)`) or a name, read as the `Ref` it evaluates to.
+/// (`A1:OFFSET(...)`), a name, or such a reference already evaluated in place,
+/// read as the `Ref` it evaluates to.
 bool is_returned_reference(const parser::AstNode& node, const EvalContext& ctx) {
   const parser::NodeKind k = node.kind();
+  if (k == parser::NodeKind::Literal) {
+    return node.as_literal().is_ref();
+  }
   if (k != parser::NodeKind::Call && k != parser::NodeKind::RangeOp && k != parser::NodeKind::NameRef) {
     return false;
   }
