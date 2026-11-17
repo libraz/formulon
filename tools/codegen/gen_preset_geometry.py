@@ -9,7 +9,7 @@ For each preset, in byte order of the names (the order of the `ST_ShapeType` nam
 src/io/ooxml/preset_geometry.cpp), the table keeps:
   - the adjust guides (`avLst`): name and default value;
   - the guides (`gdLst`) the connection sites depend on, pruned of the rest, as bytecode;
-  - the connection sites (`cxnLst`): x and y operands.
+  - the connection sites (`cxnLst`): x, y and angle operands.
 
 Operands are one byte, `tag << 6 | index`, or two when the index is 63 or more (`tag << 6 | 63`, then
 `index - 63`). Tags: 0 a shared value (`kPresetValues`: a constant, or w, h, ss, ls divided by n),
@@ -85,6 +85,10 @@ def builtin(name: str) -> tuple[int, int] | None:
     }
     if name in fixed:
         return fixed[name]
+    # One published site angle names `cd3`, read by the `cdN` naming as a third of the circle.
+    m = re.fullmatch(r"([1-9]?)cd(\d+)", name)
+    if m:
+        return CONST, int(m.group(1) or 1) * 21600000 // int(m.group(2))
     m = re.fullmatch(r"(wd|hd|ssd)(\d+)", name)
     if m:
         return {"wd": W, "hd": H, "ssd": SS}[m.group(1)], int(m.group(2))
@@ -117,7 +121,8 @@ class Compiler:
         av = [(g.get("name"), g.get("fmla")) for g in node.findall(f"{NS}avLst/{NS}gd")]
         gd = [(g.get("name"), g.get("fmla")) for g in node.findall(f"{NS}gdLst/{NS}gd")]
         sites = [
-            (c.find(f"{NS}pos").get("x"), c.find(f"{NS}pos").get("y")) for c in node.findall(f"{NS}cxnLst/{NS}cxn")
+            (c.find(f"{NS}pos").get("x"), c.find(f"{NS}pos").get("y"), c.get("ang"))
+            for c in node.findall(f"{NS}cxnLst/{NS}cxn")
         ]
         av_slot = {name: i for i, (name, _) in enumerate(av)}
 
@@ -163,8 +168,9 @@ class Compiler:
             blob.append(code)
             for arg in args:
                 blob += ref(arg, entry)
-        for x, y in sites:
-            blob += ref(x, len(gd)) + ref(y, len(gd))
+        for site in sites:
+            for operand in site:
+                blob += ref(operand, len(gd))
         key = bytes(blob)
         if key not in self.blobs:
             self.blobs[key] = len(self.code)

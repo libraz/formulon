@@ -305,7 +305,8 @@ std::optional<double> guide_value(std::string_view fmla, double w, double h) {
   return std::nullopt;
 }
 
-std::vector<Point> connection_sites(std::size_t index, double w, double h, const std::vector<AdjustGuide>& stated) {
+std::vector<ConnectionSite> connection_sites(std::size_t index, double w, double h,
+                                             const std::vector<AdjustGuide>& stated) {
   const PresetEntry& entry = kPresetEntries[index];
   std::vector<double> adjusts;
   for (const AdjustGuide& guide : adjust_guides(index)) {
@@ -320,12 +321,13 @@ std::vector<Point> connection_sites(std::size_t index, double w, double h, const
   Evaluator eval(w, h, std::move(adjusts));
   const std::uint8_t* at = kPresetCode + entry.code_offset;
   eval.run(at, entry.guide_count);
-  std::vector<Point> sites;
+  std::vector<ConnectionSite> sites;
   sites.reserve(entry.site_count);
   for (std::size_t i = 0; i < entry.site_count; ++i) {
     const double x = eval.operand(at);
     const double y = eval.operand(at);
-    sites.push_back(Point{x, y});
+    const double angle = eval.operand(at);
+    sites.push_back(ConnectionSite{x, y, angle});
   }
   return sites;
 }

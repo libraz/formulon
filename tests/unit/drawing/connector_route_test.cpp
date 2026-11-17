@@ -1,10 +1,12 @@
 // Connectors glued to shapes following an edit of those shapes: both ends glued route again between the two sites,
 // one end glued moves the whole connector. The expected boxes are what Mac Excel 16.115 saves after the same edit.
 
+#include <algorithm>
 #include <cstdint>
 #include <ostream>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "drawing/drawing_edit.h"
@@ -117,6 +119,12 @@ Xfrm ConnectorXfrm(const Workbook& wb, std::uint32_t id) {
               x.attribute("flipV").as_bool()};
 }
 
+std::int32_t ConnectorRotation(const Workbook& wb, std::uint32_t id) {
+  pugi::xml_document doc;
+  Parse(wb, doc);
+  return Find(doc, id).child("xdr:spPr").child("a:xfrm").attribute("rot").as_int();
+}
+
 std::string GeometryXml(const Workbook& wb, std::uint32_t id) {
   pugi::xml_document doc;
   Parse(wb, doc);
@@ -168,20 +176,344 @@ TEST(ConnectorRoute, AStraightConnectorGluedAtBothEndsRunsBetweenTheSites) {
   }
 }
 
-// Until the routing of bent and curved connectors is modelled, they keep their preset and adjust values; a move or
-// a resize that keeps the arrangement is what Excel saves too.
-TEST(ConnectorRoute, BentAndCurvedConnectorsKeepTheirPresetAndAdjustValues) {
-  for (const char* prst : {"bentConnector3", "curvedConnector3"}) {
-    for (const MoveRow& row : {kMoves[0], kMoves[1]}) {
-      const std::string guide = "<a:gd name=\"adj1\" fmla=\"val 50000\"/>";
-      Workbook wb = Book(
-          Absolute(kStartShape, Sp(2, "rect", kStartShape)) + Absolute(kEndShape, Sp(3, "rect", kEndShape)) +
-          Absolute(BoxOf(kBothRoute), Cxn(4, prst, kBothRoute, Glue("stCxn", 2, 3) + Glue("endCxn", 3, 1), guide)));
+// A bent or curved connector whose shapes move keeps its route while the arrangement holds; once the end shape
+// crosses to the other side, the connector goes around the start shape.
+TEST(ConnectorRoute, BentAndCurvedConnectorsFollowTheArrangement) {
+  const char* families[] = {"bentConnector", "curvedConnector"};
+  for (const char* family : families) {
+    const std::string three = std::string(family) + "3";
+    for (const MoveRow& row : kMoves) {
+      Workbook wb =
+          Book(Absolute(kStartShape, Sp(2, "rect", kStartShape)) + Absolute(kEndShape, Sp(3, "rect", kEndShape)) +
+               Absolute(BoxOf(kBothRoute), Cxn(4, three.c_str(), kBothRoute, Glue("stCxn", 2, 3) + Glue("endCxn", 3, 1),
+                                               "<a:gd name=\"adj1\" fmla=\"val 50000\"/>")));
       Move(wb, 3, row.end_shape);
-      EXPECT_EQ(ConnectorXfrm(wb, 4), row.expected) << prst << " " << row.op;
-      EXPECT_EQ(GeometryXml(wb, 4),
-                std::string("<a:prstGeom prst=\"") + prst + "\"><a:avLst>" + guide + "</a:avLst></a:prstGeom>");
+      EXPECT_EQ(ConnectorXfrm(wb, 4), row.expected) << family << " " << row.op;
+      const bool crossed = std::string(row.op) == "cross";
+      EXPECT_EQ(GeometryXml(wb, 4), std::string("<a:prstGeom prst=\"") + family + (crossed ? "5" : "3") +
+                                        "\"><a:avLst><a:gd name=\"adj1\" fmla=\"val " +
+                                        (crossed ? "-8182\"/><a:gd name=\"adj2\" fmla=\"val 50000\"/><a:gd "
+                                                   "name=\"adj3\" fmla=\"val 108182"
+                                                 : "50000") +
+                                        "\"/></a:avLst></a:prstGeom>")
+          << family << " " << row.op;
     }
+  }
+}
+
+struct MatrixRow {
+  const char* family;
+  bool far;
+  const char* quadrant;
+  std::uint32_t start_site, end_site;
+  int segments;
+  std::vector<std::int32_t> adjust;
+  int quarter_turns;
+  bool flip_h, flip_v;
+  Box box;
+};
+
+// Mac Excel 16.115 routes between two 80 x 40 pt rectangles: shape 2 at (400, 300) pt, shape 3 diagonally off it
+// with a 20 pt (near) or 200 x 150 pt (far) gap, glued at every pair of their four sites.
+const MatrixRow kMatrix[] = {
+    {"elbow", false, "NE", 0, 0, 3, {130000}, 1, true, true, {5842000, 2794000, 762000, 1270000}},
+    {"elbow", false, "NE", 0, 1, 2, {}, 1, true, true, {5715000, 3175000, 508000, 762000}},
+    {"elbow", false, "NE", 0, 2, 3, {50000}, 1, true, true, {6096000, 3048000, 254000, 1270000}},
+    {"elbow", false, "NE", 0, 3, 4, {25000, 112857}, 1, true, true, {6223000, 2667000, 508000, 1778000}},
+    {"elbow", false, "NE", 1, 0, 4, {-12857, 122500}, 2, true, false, {5080000, 3048000, 1778000, 1016000}},
+    {"elbow", false, "NE", 1, 1, 3, {-18000}, 2, true, false, {5080000, 3302000, 1270000, 762000}},
+    {"elbow", false, "NE", 1, 2, 4, {-12857, 75000}, 2, true, false, {5080000, 3556000, 1778000, 508000}},
+    {"elbow", false, "NE", 1, 3, 5, {-10000, 50000, 110000}, 2, true, false, {5080000, 3302000, 2286000, 762000}},
+    {"elbow", false, "NE", 2, 0, 5, {-18000, 50000, 118000}, 1, true, true, {5588000, 3048000, 1270000, 1270000}},
+    {"elbow", false, "NE", 2, 1, 4, {-22500, 83333}, 1, true, true, {5461000, 3429000, 1016000, 762000}},
+    {"elbow", false, "NE", 2, 2, 3, {-30000}, 1, true, true, {5842000, 3302000, 762000, 1270000}},
+    {"elbow", false, "NE", 2, 3, 4, {-22500, 112857}, 1, true, true, {5969000, 2921000, 1016000, 1778000}},
+    {"elbow", false, "NE", 3, 0, 4, {16667, 122500}, 0, false, true, {6096000, 3048000, 762000, 1016000}},
+    {"elbow", false, "NE", 3, 1, 3, {50000}, 0, false, true, {6096000, 3302000, 254000, 762000}},
+    {"elbow", false, "NE", 3, 2, 2, {}, 0, false, true, {6096000, 3556000, 762000, 508000}},
+    {"elbow", false, "NE", 3, 3, 3, {118000}, 0, false, true, {6096000, 3302000, 1270000, 762000}},
+    {"elbow", false, "SE", 0, 0, 3, {-30000}, 3, true, false, {5842000, 3556000, 762000, 1270000}},
+    {"elbow", false, "SE", 0, 1, 4, {-22500, 83333}, 3, true, false, {5461000, 3937000, 1016000, 762000}},
+    {"elbow", false, "SE", 0, 2, 5, {-18000, 50000, 118000}, 3, true, false, {5588000, 3810000, 1270000, 1270000}},
+    {"elbow", false, "SE", 0, 3, 4, {-22500, 112857}, 3, true, false, {5969000, 3429000, 1016000, 1778000}},
+    {"elbow", false, "SE", 1, 0, 4, {-12857, 75000}, 2, true, true, {5080000, 4064000, 1778000, 508000}},
+    {"elbow", false, "SE", 1, 1, 3, {-18000}, 2, true, true, {5080000, 4064000, 1270000, 762000}},
+    {"elbow", false, "SE", 1, 2, 4, {-12857, 122500}, 2, true, true, {5080000, 4064000, 1778000, 1016000}},
+    {"elbow", false, "SE", 1, 3, 5, {-10000, 50000, 110000}, 2, true, true, {5080000, 4064000, 2286000, 762000}},
+    {"elbow", false, "SE", 2, 0, 3, {50000}, 3, true, false, {6096000, 3810000, 254000, 1270000}},
+    {"elbow", false, "SE", 2, 1, 2, {}, 3, true, false, {5715000, 4191000, 508000, 762000}},
+    {"elbow", false, "SE", 2, 2, 3, {130000}, 3, true, false, {5842000, 4064000, 762000, 1270000}},
+    {"elbow", false, "SE", 2, 3, 4, {25000, 112857}, 3, true, false, {6223000, 3683000, 508000, 1778000}},
+    {"elbow", false, "SE", 3, 0, 2, {}, 0, false, false, {6096000, 4064000, 762000, 508000}},
+    {"elbow", false, "SE", 3, 1, 3, {50000}, 0, false, false, {6096000, 4064000, 254000, 762000}},
+    {"elbow", false, "SE", 3, 2, 4, {16667, 122500}, 0, false, false, {6096000, 4064000, 762000, 1016000}},
+    {"elbow", false, "SE", 3, 3, 3, {118000}, 0, false, false, {6096000, 4064000, 1270000, 762000}},
+    {"elbow", false, "SW", 0, 0, 3, {-30000}, 3, true, true, {4572000, 3556000, 762000, 1270000}},
+    {"elbow", false, "SW", 0, 1, 4, {-22500, 112857}, 3, true, true, {4191000, 3429000, 1016000, 1778000}},
+    {"elbow", false, "SW", 0, 2, 5, {-18000, 50000, 118000}, 3, true, true, {4318000, 3810000, 1270000, 1270000}},
+    {"elbow", false, "SW", 0, 3, 4, {-22500, 83333}, 3, true, true, {4699000, 3937000, 1016000, 762000}},
+    {"elbow", false, "SW", 1, 0, 2, {}, 2, false, true, {4318000, 4064000, 762000, 508000}},
+    {"elbow", false, "SW", 1, 1, 3, {118000}, 2, false, true, {3810000, 4064000, 1270000, 762000}},
+    {"elbow", false, "SW", 1, 2, 4, {16667, 122500}, 2, false, true, {4318000, 4064000, 762000, 1016000}},
+    {"elbow", false, "SW", 1, 3, 3, {50000}, 2, false, true, {4826000, 4064000, 254000, 762000}},
+    {"elbow", false, "SW", 2, 0, 3, {50000}, 1, false, false, {4826000, 3810000, 254000, 1270000}},
+    {"elbow", false, "SW", 2, 1, 4, {25000, 112857}, 1, false, false, {4445000, 3683000, 508000, 1778000}},
+    {"elbow", false, "SW", 2, 2, 3, {130000}, 1, false, false, {4572000, 4064000, 762000, 1270000}},
+    {"elbow", false, "SW", 2, 3, 2, {}, 1, false, false, {4953000, 4191000, 508000, 762000}},
+    {"elbow", false, "SW", 3, 0, 4, {-12857, 75000}, 0, true, false, {4318000, 4064000, 1778000, 508000}},
+    {"elbow", false, "SW", 3, 1, 5, {-10000, 50000, 110000}, 0, true, false, {3810000, 4064000, 2286000, 762000}},
+    {"elbow", false, "SW", 3, 2, 4, {-12857, 122500}, 0, true, false, {4318000, 4064000, 1778000, 1016000}},
+    {"elbow", false, "SW", 3, 3, 3, {-18000}, 0, true, false, {4826000, 4064000, 1270000, 762000}},
+    {"elbow", false, "NW", 0, 0, 3, {130000}, 3, false, true, {4572000, 2794000, 762000, 1270000}},
+    {"elbow", false, "NW", 0, 1, 4, {25000, 112857}, 3, false, true, {4445000, 2667000, 508000, 1778000}},
+    {"elbow", false, "NW", 0, 2, 3, {50000}, 3, false, true, {4826000, 3048000, 254000, 1270000}},
+    {"elbow", false, "NW", 0, 3, 2, {}, 3, false, true, {4953000, 3175000, 508000, 762000}},
+    {"elbow", false, "NW", 1, 0, 4, {16667, 122500}, 2, false, false, {4318000, 3048000, 762000, 1016000}},
+    {"elbow", false, "NW", 1, 1, 3, {118000}, 2, false, false, {3810000, 3302000, 1270000, 762000}},
+    {"elbow", false, "NW", 1, 2, 2, {}, 2, false, false, {4318000, 3556000, 762000, 508000}},
+    {"elbow", false, "NW", 1, 3, 3, {50000}, 2, false, false, {4826000, 3302000, 254000, 762000}},
+    {"elbow", false, "NW", 2, 0, 5, {-18000, 50000, 118000}, 1, true, false, {4318000, 3048000, 1270000, 1270000}},
+    {"elbow", false, "NW", 2, 1, 4, {-22500, 112857}, 1, true, false, {4191000, 2921000, 1016000, 1778000}},
+    {"elbow", false, "NW", 2, 2, 3, {-30000}, 1, true, false, {4572000, 3302000, 762000, 1270000}},
+    {"elbow", false, "NW", 2, 3, 4, {-22500, 83333}, 1, true, false, {4699000, 3429000, 1016000, 762000}},
+    {"elbow", false, "NW", 3, 0, 4, {-12857, 122500}, 0, true, true, {4318000, 3048000, 1778000, 1016000}},
+    {"elbow", false, "NW", 3, 1, 5, {-10000, 50000, 110000}, 0, true, true, {3810000, 3302000, 2286000, 762000}},
+    {"elbow", false, "NW", 3, 2, 4, {-12857, 75000}, 0, true, true, {4318000, 3556000, 1778000, 508000}},
+    {"elbow", false, "NW", 3, 3, 3, {-18000}, 0, true, true, {4826000, 3302000, 1270000, 762000}},
+    {"elbow", true, "NE", 0, 0, 3, {109474}, 1, true, true, {6159500, 825500, 2413000, 3556000}},
+    {"elbow", true, "NE", 0, 1, 2, {}, 1, true, true, {6032500, 1206500, 2159000, 3048000}},
+    {"elbow", true, "NE", 0, 2, 3, {50000}, 1, true, true, {6413500, 1079500, 1905000, 3556000}},
+    {"elbow", true, "NE", 0, 3, 4, {44118, 105625}, 1, true, true, {6540500, 698500, 2159000, 4064000}},
+    {"elbow", true, "NE", 1, 0, 4, {-5625, 108571}, 2, true, false, {5080000, 1397000, 4064000, 2667000}},
+    {"elbow", true, "NE", 1, 1, 3, {-6429}, 2, true, false, {5080000, 1651000, 3556000, 2413000}},
+    {"elbow", true, "NE", 1, 2, 4, {-5625, 55882}, 2, true, false, {5080000, 1905000, 4064000, 2159000}},
+    {"elbow", true, "NE", 1, 3, 5, {-5000, 50000, 105000}, 2, true, false, {5080000, 1651000, 4572000, 2413000}},
+    {"elbow", true, "NE", 2, 0, 5, {-7826, 50000, 107826}, 1, true, true, {5905500, 1079500, 2921000, 3556000}},
+    {"elbow", true, "NE", 2, 1, 4, {-8571, 58333}, 1, true, true, {5778500, 1460500, 2667000, 3048000}},
+    {"elbow", true, "NE", 2, 2, 3, {-9474}, 1, true, true, {6159500, 1333500, 2413000, 3556000}},
+    {"elbow", true, "NE", 2, 3, 4, {-8571, 105625}, 1, true, true, {6286500, 952500, 2667000, 4064000}},
+    {"elbow", true, "NE", 3, 0, 4, {41667, 108571}, 0, false, true, {6096000, 1397000, 3048000, 2667000}},
+    {"elbow", true, "NE", 3, 1, 3, {50000}, 0, false, true, {6096000, 1651000, 2540000, 2413000}},
+    {"elbow", true, "NE", 3, 2, 2, {}, 0, false, true, {6096000, 1905000, 3048000, 2159000}},
+    {"elbow", true, "NE", 3, 3, 3, {106429}, 0, false, true, {6096000, 1651000, 3556000, 2413000}},
+    {"elbow", true, "SE", 0, 0, 3, {-9474}, 3, true, false, {6159500, 3238500, 2413000, 3556000}},
+    {"elbow", true, "SE", 0, 1, 4, {-8571, 58333}, 3, true, false, {5778500, 3619500, 2667000, 3048000}},
+    {"elbow", true, "SE", 0, 2, 5, {-7826, 50000, 107826}, 3, true, false, {5905500, 3492500, 2921000, 3556000}},
+    {"elbow", true, "SE", 0, 3, 4, {-8571, 105625}, 3, true, false, {6286500, 3111500, 2667000, 4064000}},
+    {"elbow", true, "SE", 1, 0, 4, {-5625, 55882}, 2, true, true, {5080000, 4064000, 4064000, 2159000}},
+    {"elbow", true, "SE", 1, 1, 3, {-6429}, 2, true, true, {5080000, 4064000, 3556000, 2413000}},
+    {"elbow", true, "SE", 1, 2, 4, {-5625, 108571}, 2, true, true, {5080000, 4064000, 4064000, 2667000}},
+    {"elbow", true, "SE", 1, 3, 5, {-5000, 50000, 105000}, 2, true, true, {5080000, 4064000, 4572000, 2413000}},
+    {"elbow", true, "SE", 2, 0, 3, {50000}, 3, true, false, {6413500, 3492500, 1905000, 3556000}},
+    {"elbow", true, "SE", 2, 1, 2, {}, 3, true, false, {6032500, 3873500, 2159000, 3048000}},
+    {"elbow", true, "SE", 2, 2, 3, {109474}, 3, true, false, {6159500, 3746500, 2413000, 3556000}},
+    {"elbow", true, "SE", 2, 3, 4, {44118, 105625}, 3, true, false, {6540500, 3365500, 2159000, 4064000}},
+    {"elbow", true, "SE", 3, 0, 2, {}, 0, false, false, {6096000, 4064000, 3048000, 2159000}},
+    {"elbow", true, "SE", 3, 1, 3, {50000}, 0, false, false, {6096000, 4064000, 2540000, 2413000}},
+    {"elbow", true, "SE", 3, 2, 4, {41667, 108571}, 0, false, false, {6096000, 4064000, 3048000, 2667000}},
+    {"elbow", true, "SE", 3, 3, 3, {106429}, 0, false, false, {6096000, 4064000, 3556000, 2413000}},
+    {"elbow", true, "SW", 0, 0, 3, {-9474}, 3, true, true, {2603500, 3238500, 2413000, 3556000}},
+    {"elbow", true, "SW", 0, 1, 4, {-8571, 105625}, 3, true, true, {2222500, 3111500, 2667000, 4064000}},
+    {"elbow", true, "SW", 0, 2, 5, {-7826, 50000, 107826}, 3, true, true, {2349500, 3492500, 2921000, 3556000}},
+    {"elbow", true, "SW", 0, 3, 4, {-8571, 58333}, 3, true, true, {2730500, 3619500, 2667000, 3048000}},
+    {"elbow", true, "SW", 1, 0, 2, {}, 2, false, true, {2032000, 4064000, 3048000, 2159000}},
+    {"elbow", true, "SW", 1, 1, 3, {106429}, 2, false, true, {1524000, 4064000, 3556000, 2413000}},
+    {"elbow", true, "SW", 1, 2, 4, {41667, 108571}, 2, false, true, {2032000, 4064000, 3048000, 2667000}},
+    {"elbow", true, "SW", 1, 3, 3, {50000}, 2, false, true, {2540000, 4064000, 2540000, 2413000}},
+    {"elbow", true, "SW", 2, 0, 3, {50000}, 1, false, false, {2857500, 3492500, 1905000, 3556000}},
+    {"elbow", true, "SW", 2, 1, 4, {44118, 105625}, 1, false, false, {2476500, 3365500, 2159000, 4064000}},
+    {"elbow", true, "SW", 2, 2, 3, {109474}, 1, false, false, {2603500, 3746500, 2413000, 3556000}},
+    {"elbow", true, "SW", 2, 3, 2, {}, 1, false, false, {2984500, 3873500, 2159000, 3048000}},
+    {"elbow", true, "SW", 3, 0, 4, {-5625, 55882}, 0, true, false, {2032000, 4064000, 4064000, 2159000}},
+    {"elbow", true, "SW", 3, 1, 5, {-5000, 50000, 105000}, 0, true, false, {1524000, 4064000, 4572000, 2413000}},
+    {"elbow", true, "SW", 3, 2, 4, {-5625, 108571}, 0, true, false, {2032000, 4064000, 4064000, 2667000}},
+    {"elbow", true, "SW", 3, 3, 3, {-6429}, 0, true, false, {2540000, 4064000, 3556000, 2413000}},
+    {"elbow", true, "NW", 0, 0, 3, {109474}, 3, false, true, {2603500, 825500, 2413000, 3556000}},
+    {"elbow", true, "NW", 0, 1, 4, {44118, 105625}, 3, false, true, {2476500, 698500, 2159000, 4064000}},
+    {"elbow", true, "NW", 0, 2, 3, {50000}, 3, false, true, {2857500, 1079500, 1905000, 3556000}},
+    {"elbow", true, "NW", 0, 3, 2, {}, 3, false, true, {2984500, 1206500, 2159000, 3048000}},
+    {"elbow", true, "NW", 1, 0, 4, {41667, 108571}, 2, false, false, {2032000, 1397000, 3048000, 2667000}},
+    {"elbow", true, "NW", 1, 1, 3, {106429}, 2, false, false, {1524000, 1651000, 3556000, 2413000}},
+    {"elbow", true, "NW", 1, 2, 2, {}, 2, false, false, {2032000, 1905000, 3048000, 2159000}},
+    {"elbow", true, "NW", 1, 3, 3, {50000}, 2, false, false, {2540000, 1651000, 2540000, 2413000}},
+    {"elbow", true, "NW", 2, 0, 5, {-7826, 50000, 107826}, 1, true, false, {2349500, 1079500, 2921000, 3556000}},
+    {"elbow", true, "NW", 2, 1, 4, {-8571, 105625}, 1, true, false, {2222500, 952500, 2667000, 4064000}},
+    {"elbow", true, "NW", 2, 2, 3, {-9474}, 1, true, false, {2603500, 1333500, 2413000, 3556000}},
+    {"elbow", true, "NW", 2, 3, 4, {-8571, 58333}, 1, true, false, {2730500, 1460500, 2667000, 3048000}},
+    {"elbow", true, "NW", 3, 0, 4, {-5625, 108571}, 0, true, true, {2032000, 1397000, 4064000, 2667000}},
+    {"elbow", true, "NW", 3, 1, 5, {-5000, 50000, 105000}, 0, true, true, {1524000, 1651000, 4572000, 2413000}},
+    {"elbow", true, "NW", 3, 2, 4, {-5625, 55882}, 0, true, true, {2032000, 1905000, 4064000, 2159000}},
+    {"elbow", true, "NW", 3, 3, 3, {-6429}, 0, true, true, {2540000, 1651000, 3556000, 2413000}},
+    {"curve", false, "NE", 0, 0, 3, {130000}, 1, true, true, {5842000, 2794000, 762000, 1270000}},
+    {"curve", false, "NE", 0, 1, 2, {}, 1, true, true, {5715000, 3175000, 508000, 762000}},
+    {"curve", false, "NE", 0, 2, 3, {50000}, 1, true, true, {6096000, 3048000, 254000, 1270000}},
+    {"curve", false, "NE", 0, 3, 4, {25000, 112857}, 1, true, true, {6223000, 2667000, 508000, 1778000}},
+    {"curve", false, "NE", 1, 0, 4, {-12857, 122500}, 2, true, false, {5080000, 3048000, 1778000, 1016000}},
+    {"curve", false, "NE", 1, 1, 3, {-18000}, 2, true, false, {5080000, 3302000, 1270000, 762000}},
+    {"curve", false, "NE", 1, 2, 4, {-12857, 75000}, 2, true, false, {5080000, 3556000, 1778000, 508000}},
+    {"curve", false, "NE", 1, 3, 5, {-10000, 50000, 110000}, 2, true, false, {5080000, 3302000, 2286000, 762000}},
+    {"curve", false, "NE", 2, 0, 5, {-18000, 50000, 118000}, 1, true, true, {5588000, 3048000, 1270000, 1270000}},
+    {"curve", false, "NE", 2, 1, 4, {-22500, 83333}, 1, true, true, {5461000, 3429000, 1016000, 762000}},
+    {"curve", false, "NE", 2, 2, 3, {-30000}, 1, true, true, {5842000, 3302000, 762000, 1270000}},
+    {"curve", false, "NE", 2, 3, 4, {-22500, 112857}, 1, true, true, {5969000, 2921000, 1016000, 1778000}},
+    {"curve", false, "NE", 3, 0, 4, {16667, 122500}, 0, false, true, {6096000, 3048000, 762000, 1016000}},
+    {"curve", false, "NE", 3, 1, 3, {50000}, 0, false, true, {6096000, 3302000, 254000, 762000}},
+    {"curve", false, "NE", 3, 2, 2, {}, 0, false, true, {6096000, 3556000, 762000, 508000}},
+    {"curve", false, "NE", 3, 3, 3, {118000}, 0, false, true, {6096000, 3302000, 1270000, 762000}},
+    {"curve", false, "SE", 0, 0, 3, {-30000}, 3, true, false, {5842000, 3556000, 762000, 1270000}},
+    {"curve", false, "SE", 0, 1, 4, {-22500, 83333}, 3, true, false, {5461000, 3937000, 1016000, 762000}},
+    {"curve", false, "SE", 0, 2, 5, {-18000, 50000, 118000}, 3, true, false, {5588000, 3810000, 1270000, 1270000}},
+    {"curve", false, "SE", 0, 3, 4, {-22500, 112857}, 3, true, false, {5969000, 3429000, 1016000, 1778000}},
+    {"curve", false, "SE", 1, 0, 4, {-12857, 75000}, 2, true, true, {5080000, 4064000, 1778000, 508000}},
+    {"curve", false, "SE", 1, 1, 3, {-18000}, 2, true, true, {5080000, 4064000, 1270000, 762000}},
+    {"curve", false, "SE", 1, 2, 4, {-12857, 122500}, 2, true, true, {5080000, 4064000, 1778000, 1016000}},
+    {"curve", false, "SE", 1, 3, 5, {-10000, 50000, 110000}, 2, true, true, {5080000, 4064000, 2286000, 762000}},
+    {"curve", false, "SE", 2, 0, 3, {50000}, 3, true, false, {6096000, 3810000, 254000, 1270000}},
+    {"curve", false, "SE", 2, 1, 2, {}, 3, true, false, {5715000, 4191000, 508000, 762000}},
+    {"curve", false, "SE", 2, 2, 3, {130000}, 3, true, false, {5842000, 4064000, 762000, 1270000}},
+    {"curve", false, "SE", 2, 3, 4, {25000, 112857}, 3, true, false, {6223000, 3683000, 508000, 1778000}},
+    {"curve", false, "SE", 3, 0, 2, {}, 0, false, false, {6096000, 4064000, 762000, 508000}},
+    {"curve", false, "SE", 3, 1, 3, {50000}, 0, false, false, {6096000, 4064000, 254000, 762000}},
+    {"curve", false, "SE", 3, 2, 4, {16667, 122500}, 0, false, false, {6096000, 4064000, 762000, 1016000}},
+    {"curve", false, "SE", 3, 3, 3, {118000}, 0, false, false, {6096000, 4064000, 1270000, 762000}},
+    {"curve", false, "SW", 0, 0, 3, {-30000}, 3, true, true, {4572000, 3556000, 762000, 1270000}},
+    {"curve", false, "SW", 0, 1, 4, {-22500, 112857}, 3, true, true, {4191000, 3429000, 1016000, 1778000}},
+    {"curve", false, "SW", 0, 2, 5, {-18000, 50000, 118000}, 3, true, true, {4318000, 3810000, 1270000, 1270000}},
+    {"curve", false, "SW", 0, 3, 4, {-22500, 83333}, 3, true, true, {4699000, 3937000, 1016000, 762000}},
+    {"curve", false, "SW", 1, 0, 2, {}, 2, false, true, {4318000, 4064000, 762000, 508000}},
+    {"curve", false, "SW", 1, 1, 3, {118000}, 2, false, true, {3810000, 4064000, 1270000, 762000}},
+    {"curve", false, "SW", 1, 2, 4, {16667, 122500}, 2, false, true, {4318000, 4064000, 762000, 1016000}},
+    {"curve", false, "SW", 1, 3, 3, {50000}, 2, false, true, {4826000, 4064000, 254000, 762000}},
+    {"curve", false, "SW", 2, 0, 3, {50000}, 1, false, false, {4826000, 3810000, 254000, 1270000}},
+    {"curve", false, "SW", 2, 1, 4, {25000, 112857}, 1, false, false, {4445000, 3683000, 508000, 1778000}},
+    {"curve", false, "SW", 2, 2, 3, {130000}, 1, false, false, {4572000, 4064000, 762000, 1270000}},
+    {"curve", false, "SW", 2, 3, 2, {}, 1, false, false, {4953000, 4191000, 508000, 762000}},
+    {"curve", false, "SW", 3, 0, 4, {-12857, 75000}, 0, true, false, {4318000, 4064000, 1778000, 508000}},
+    {"curve", false, "SW", 3, 1, 5, {-10000, 50000, 110000}, 0, true, false, {3810000, 4064000, 2286000, 762000}},
+    {"curve", false, "SW", 3, 2, 4, {-12857, 122500}, 0, true, false, {4318000, 4064000, 1778000, 1016000}},
+    {"curve", false, "SW", 3, 3, 3, {-18000}, 0, true, false, {4826000, 4064000, 1270000, 762000}},
+    {"curve", false, "NW", 0, 0, 3, {130000}, 3, false, true, {4572000, 2794000, 762000, 1270000}},
+    {"curve", false, "NW", 0, 1, 4, {25000, 112857}, 3, false, true, {4445000, 2667000, 508000, 1778000}},
+    {"curve", false, "NW", 0, 2, 3, {50000}, 3, false, true, {4826000, 3048000, 254000, 1270000}},
+    {"curve", false, "NW", 0, 3, 2, {}, 3, false, true, {4953000, 3175000, 508000, 762000}},
+    {"curve", false, "NW", 1, 0, 4, {16667, 122500}, 2, false, false, {4318000, 3048000, 762000, 1016000}},
+    {"curve", false, "NW", 1, 1, 3, {118000}, 2, false, false, {3810000, 3302000, 1270000, 762000}},
+    {"curve", false, "NW", 1, 2, 2, {}, 2, false, false, {4318000, 3556000, 762000, 508000}},
+    {"curve", false, "NW", 1, 3, 3, {50000}, 2, false, false, {4826000, 3302000, 254000, 762000}},
+    {"curve", false, "NW", 2, 0, 5, {-18000, 50000, 118000}, 1, true, false, {4318000, 3048000, 1270000, 1270000}},
+    {"curve", false, "NW", 2, 1, 4, {-22500, 112857}, 1, true, false, {4191000, 2921000, 1016000, 1778000}},
+    {"curve", false, "NW", 2, 2, 3, {-30000}, 1, true, false, {4572000, 3302000, 762000, 1270000}},
+    {"curve", false, "NW", 2, 3, 4, {-22500, 83333}, 1, true, false, {4699000, 3429000, 1016000, 762000}},
+    {"curve", false, "NW", 3, 0, 4, {-12857, 122500}, 0, true, true, {4318000, 3048000, 1778000, 1016000}},
+    {"curve", false, "NW", 3, 1, 5, {-10000, 50000, 110000}, 0, true, true, {3810000, 3302000, 2286000, 762000}},
+    {"curve", false, "NW", 3, 2, 4, {-12857, 75000}, 0, true, true, {4318000, 3556000, 1778000, 508000}},
+    {"curve", false, "NW", 3, 3, 3, {-18000}, 0, true, true, {4826000, 3302000, 1270000, 762000}},
+    {"curve", true, "NE", 0, 0, 3, {109474}, 1, true, true, {6159500, 825500, 2413000, 3556000}},
+    {"curve", true, "NE", 0, 1, 2, {}, 1, true, true, {6032500, 1206500, 2159000, 3048000}},
+    {"curve", true, "NE", 0, 2, 3, {50000}, 1, true, true, {6413500, 1079500, 1905000, 3556000}},
+    {"curve", true, "NE", 0, 3, 4, {44118, 105625}, 1, true, true, {6540500, 698500, 2159000, 4064000}},
+    {"curve", true, "NE", 1, 0, 4, {-5625, 108571}, 2, true, false, {5080000, 1397000, 4064000, 2667000}},
+    {"curve", true, "NE", 1, 1, 3, {-6429}, 2, true, false, {5080000, 1651000, 3556000, 2413000}},
+    {"curve", true, "NE", 1, 2, 4, {-5625, 55882}, 2, true, false, {5080000, 1905000, 4064000, 2159000}},
+    {"curve", true, "NE", 1, 3, 5, {-5000, 50000, 105000}, 2, true, false, {5080000, 1651000, 4572000, 2413000}},
+    {"curve", true, "NE", 2, 0, 5, {-7826, 50000, 107826}, 1, true, true, {5905500, 1079500, 2921000, 3556000}},
+    {"curve", true, "NE", 2, 1, 4, {-8571, 58333}, 1, true, true, {5778500, 1460500, 2667000, 3048000}},
+    {"curve", true, "NE", 2, 2, 3, {-9474}, 1, true, true, {6159500, 1333500, 2413000, 3556000}},
+    {"curve", true, "NE", 2, 3, 4, {-8571, 105625}, 1, true, true, {6286500, 952500, 2667000, 4064000}},
+    {"curve", true, "NE", 3, 0, 4, {41667, 108571}, 0, false, true, {6096000, 1397000, 3048000, 2667000}},
+    {"curve", true, "NE", 3, 1, 3, {50000}, 0, false, true, {6096000, 1651000, 2540000, 2413000}},
+    {"curve", true, "NE", 3, 2, 2, {}, 0, false, true, {6096000, 1905000, 3048000, 2159000}},
+    {"curve", true, "NE", 3, 3, 3, {106429}, 0, false, true, {6096000, 1651000, 3556000, 2413000}},
+    {"curve", true, "SE", 0, 0, 3, {-9474}, 3, true, false, {6159500, 3238500, 2413000, 3556000}},
+    {"curve", true, "SE", 0, 1, 4, {-8571, 58333}, 3, true, false, {5778500, 3619500, 2667000, 3048000}},
+    {"curve", true, "SE", 0, 2, 5, {-7826, 50000, 107826}, 3, true, false, {5905500, 3492500, 2921000, 3556000}},
+    {"curve", true, "SE", 0, 3, 4, {-8571, 105625}, 3, true, false, {6286500, 3111500, 2667000, 4064000}},
+    {"curve", true, "SE", 1, 0, 4, {-5625, 55882}, 2, true, true, {5080000, 4064000, 4064000, 2159000}},
+    {"curve", true, "SE", 1, 1, 3, {-6429}, 2, true, true, {5080000, 4064000, 3556000, 2413000}},
+    {"curve", true, "SE", 1, 2, 4, {-5625, 108571}, 2, true, true, {5080000, 4064000, 4064000, 2667000}},
+    {"curve", true, "SE", 1, 3, 5, {-5000, 50000, 105000}, 2, true, true, {5080000, 4064000, 4572000, 2413000}},
+    {"curve", true, "SE", 2, 0, 3, {50000}, 3, true, false, {6413500, 3492500, 1905000, 3556000}},
+    {"curve", true, "SE", 2, 1, 2, {}, 3, true, false, {6032500, 3873500, 2159000, 3048000}},
+    {"curve", true, "SE", 2, 2, 3, {109474}, 3, true, false, {6159500, 3746500, 2413000, 3556000}},
+    {"curve", true, "SE", 2, 3, 4, {44118, 105625}, 3, true, false, {6540500, 3365500, 2159000, 4064000}},
+    {"curve", true, "SE", 3, 0, 2, {}, 0, false, false, {6096000, 4064000, 3048000, 2159000}},
+    {"curve", true, "SE", 3, 1, 3, {50000}, 0, false, false, {6096000, 4064000, 2540000, 2413000}},
+    {"curve", true, "SE", 3, 2, 4, {41667, 108571}, 0, false, false, {6096000, 4064000, 3048000, 2667000}},
+    {"curve", true, "SE", 3, 3, 3, {106429}, 0, false, false, {6096000, 4064000, 3556000, 2413000}},
+    {"curve", true, "SW", 0, 0, 3, {-9474}, 3, true, true, {2603500, 3238500, 2413000, 3556000}},
+    {"curve", true, "SW", 0, 1, 4, {-8571, 105625}, 3, true, true, {2222500, 3111500, 2667000, 4064000}},
+    {"curve", true, "SW", 0, 2, 5, {-7826, 50000, 107826}, 3, true, true, {2349500, 3492500, 2921000, 3556000}},
+    {"curve", true, "SW", 0, 3, 4, {-8571, 58333}, 3, true, true, {2730500, 3619500, 2667000, 3048000}},
+    {"curve", true, "SW", 1, 0, 2, {}, 2, false, true, {2032000, 4064000, 3048000, 2159000}},
+    {"curve", true, "SW", 1, 1, 3, {106429}, 2, false, true, {1524000, 4064000, 3556000, 2413000}},
+    {"curve", true, "SW", 1, 2, 4, {41667, 108571}, 2, false, true, {2032000, 4064000, 3048000, 2667000}},
+    {"curve", true, "SW", 1, 3, 3, {50000}, 2, false, true, {2540000, 4064000, 2540000, 2413000}},
+    {"curve", true, "SW", 2, 0, 3, {50000}, 1, false, false, {2857500, 3492500, 1905000, 3556000}},
+    {"curve", true, "SW", 2, 1, 4, {44118, 105625}, 1, false, false, {2476500, 3365500, 2159000, 4064000}},
+    {"curve", true, "SW", 2, 2, 3, {109474}, 1, false, false, {2603500, 3746500, 2413000, 3556000}},
+    {"curve", true, "SW", 2, 3, 2, {}, 1, false, false, {2984500, 3873500, 2159000, 3048000}},
+    {"curve", true, "SW", 3, 0, 4, {-5625, 55882}, 0, true, false, {2032000, 4064000, 4064000, 2159000}},
+    {"curve", true, "SW", 3, 1, 5, {-5000, 50000, 105000}, 0, true, false, {1524000, 4064000, 4572000, 2413000}},
+    {"curve", true, "SW", 3, 2, 4, {-5625, 108571}, 0, true, false, {2032000, 4064000, 4064000, 2667000}},
+    {"curve", true, "SW", 3, 3, 3, {-6429}, 0, true, false, {2540000, 4064000, 3556000, 2413000}},
+    {"curve", true, "NW", 0, 0, 3, {109474}, 3, false, true, {2603500, 825500, 2413000, 3556000}},
+    {"curve", true, "NW", 0, 1, 4, {44118, 105625}, 3, false, true, {2476500, 698500, 2159000, 4064000}},
+    {"curve", true, "NW", 0, 2, 3, {50000}, 3, false, true, {2857500, 1079500, 1905000, 3556000}},
+    {"curve", true, "NW", 0, 3, 2, {}, 3, false, true, {2984500, 1206500, 2159000, 3048000}},
+    {"curve", true, "NW", 1, 0, 4, {41667, 108571}, 2, false, false, {2032000, 1397000, 3048000, 2667000}},
+    {"curve", true, "NW", 1, 1, 3, {106429}, 2, false, false, {1524000, 1651000, 3556000, 2413000}},
+    {"curve", true, "NW", 1, 2, 2, {}, 2, false, false, {2032000, 1905000, 3048000, 2159000}},
+    {"curve", true, "NW", 1, 3, 3, {50000}, 2, false, false, {2540000, 1651000, 2540000, 2413000}},
+    {"curve", true, "NW", 2, 0, 5, {-7826, 50000, 107826}, 1, true, false, {2349500, 1079500, 2921000, 3556000}},
+    {"curve", true, "NW", 2, 1, 4, {-8571, 105625}, 1, true, false, {2222500, 952500, 2667000, 4064000}},
+    {"curve", true, "NW", 2, 2, 3, {-9474}, 1, true, false, {2603500, 1333500, 2413000, 3556000}},
+    {"curve", true, "NW", 2, 3, 4, {-8571, 58333}, 1, true, false, {2730500, 1460500, 2667000, 3048000}},
+    {"curve", true, "NW", 3, 0, 4, {-5625, 108571}, 0, true, true, {2032000, 1397000, 4064000, 2667000}},
+    {"curve", true, "NW", 3, 1, 5, {-5000, 50000, 105000}, 0, true, true, {1524000, 1651000, 4572000, 2413000}},
+    {"curve", true, "NW", 3, 2, 4, {-5625, 55882}, 0, true, true, {2032000, 1905000, 4064000, 2159000}},
+    {"curve", true, "NW", 3, 3, 3, {-6429}, 0, true, true, {2540000, 1651000, 3556000, 2413000}},
+};
+
+TEST(ConnectorRoute, BentAndCurvedConnectorsRouteAsExcelDoes) {
+  constexpr std::int64_t kPt = 12700;
+  const Box start_shape{400 * kPt, 300 * kPt, 80 * kPt, 40 * kPt};
+  const auto site = [](const Box& b, std::uint32_t idx) {
+    const std::int64_t xs[] = {b.x + b.w / 2, b.x, b.x + b.w / 2, b.x + b.w};
+    const std::int64_t ys[] = {b.y, b.y + b.h / 2, b.y + b.h, b.y + b.h / 2};
+    return std::make_pair(xs[idx], ys[idx]);
+  };
+  for (const MatrixRow& row : kMatrix) {
+    const std::string q = row.quadrant;
+    const std::int64_t gap_x = (row.far ? 200 : 20) * kPt;
+    const std::int64_t gap_y = (row.far ? 150 : 20) * kPt;
+    const Box end_shape{q[1] == 'E' ? start_shape.x + start_shape.w + gap_x : start_shape.x - start_shape.w - gap_x,
+                        q[0] == 'S' ? start_shape.y + start_shape.h + gap_y : start_shape.y - start_shape.h - gap_y,
+                        start_shape.w, start_shape.h};
+    const auto [sx, sy] = site(start_shape, row.start_site);
+    const auto [ex, ey] = site(end_shape, row.end_site);
+    const Xfrm authored{std::min(sx, ex), std::min(sy, ey), ex > sx ? ex - sx : sx - ex, ey > sy ? ey - sy : sy - ey,
+                        ex < sx,          ey < sy};
+    const std::string family = std::string(row.family) == "elbow" ? "bentConnector" : "curvedConnector";
+    Workbook wb =
+        Book(Absolute(start_shape, Sp(2, "rect", start_shape)) + Absolute(end_shape, Sp(3, "rect", end_shape)) +
+             Absolute(BoxOf(authored), Cxn(4, (family + "3").c_str(), authored,
+                                           Glue("stCxn", 2, row.start_site) + Glue("endCxn", 3, row.end_site),
+                                           "<a:gd name=\"adj1\" fmla=\"val 50000\"/>")));
+    // Excel's route was read after a 1 pt move and back.
+    Move(wb, 3, Box{end_shape.x + kPt, end_shape.y, end_shape.w, end_shape.h});
+    Move(wb, 3, end_shape);
+    const std::string what = std::string(row.family) + (row.far ? " far " : " near ") + q + " " +
+                             std::to_string(row.start_site) + std::to_string(row.end_site);
+    std::string guides;
+    for (std::size_t i = 0; i < row.adjust.size(); ++i) {
+      guides += "<a:gd name=\"adj" + std::to_string(i + 1U) + "\" fmla=\"val " + std::to_string(row.adjust[i]) + "\"/>";
+    }
+    EXPECT_EQ(GeometryXml(wb, 4), "<a:prstGeom prst=\"" + family + std::to_string(row.segments) + "\">" +
+                                      (guides.empty() ? "<a:avLst/>" : "<a:avLst>" + guides + "</a:avLst>") +
+                                      "</a:prstGeom>")
+        << what;
+    EXPECT_EQ(ConnectorXfrm(wb, 4), (Xfrm{row.box.x, row.box.y, row.box.w, row.box.h, row.flip_h, row.flip_v})) << what;
+    EXPECT_EQ(ConnectorRotation(wb, 4), row.quarter_turns * 5400000) << what;
   }
 }
 

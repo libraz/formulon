@@ -34,15 +34,18 @@ std::vector<AdjustGuide> adjust_guides(std::size_t index);
 /// Unset for a formula naming anything else or with the wrong number of operands.
 std::optional<double> guide_value(std::string_view fmla, double w, double h);
 
-/// A point in a shape's own frame, in EMU from its top-left corner before rotation and flips.
-struct Point {
+/// A connection site: where a glued connector end lands, in EMU from the shape's top-left corner before rotation
+/// and flips, and the direction it leaves the shape in, in 60000ths of a degree clockwise from the +x axis.
+struct ConnectionSite {
   double x = 0.0;
   double y = 0.0;
+  double angle = 0.0;
 };
 
 /// The connection sites of preset `index` on a `w` x `h` EMU shape, in the preset's site order (a file's `idx`).
 /// `stated` overrides the defaults of the guides it names; a name the preset does not define is ignored.
-std::vector<Point> connection_sites(std::size_t index, double w, double h, const std::vector<AdjustGuide>& stated);
+std::vector<ConnectionSite> connection_sites(std::size_t index, double w, double h,
+                                             const std::vector<AdjustGuide>& stated);
 
 }  // namespace preset_geometry
 }  // namespace formulon

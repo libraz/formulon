@@ -1,9 +1,11 @@
 #include "drawing/connector_route.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -20,9 +22,15 @@ namespace formulon {
 namespace drawing_edit {
 namespace {
 
-using preset_geometry::Point;
+struct Point {
+  double x = 0.0;
+  double y = 0.0;
+};
 
 constexpr double kRadiansPerUnit = 3.14159265358979323846 / (180.0 * 60000.0);
+constexpr double kQuarterTurn = 5400000.0;
+// How far a bent or curved connector runs past a shape it has to go around: 18 pt.
+constexpr double kClearance = 228600.0;
 
 std::int64_t emu(const pugi::xml_node& node, const char* name) {
   return node.attribute(name).as_llong();
@@ -35,6 +43,8 @@ double emu_d(const pugi::xml_node& node, const char* name) {
 // Maps a point of a frame to the sheet: per axis, `scale * p + shift`.
 struct Frame {
   double sx = 1.0, sy = 1.0, tx = 0.0, ty = 0.0;
+  Point to_sheet(const Point& p) const { return Point{sx * p.x + tx, sy * p.y + ty}; }
+  Point from_sheet(const Point& p) const { return Point{(p.x - tx) / sx, (p.y - ty) / sy}; }
 };
 
 // The frame the `a:xfrm` of `content` is stated in: the child space of every group holding it, mapped through
@@ -58,9 +68,17 @@ Frame frame_of(const pugi::xml_node& content) {
   return f;
 }
 
-// Site `idx` of the shape or picture `content` on the sheet: the preset's site on the current size and stated
-// adjust guides, flipped and rotated with the object, then placed through its frame.
-std::optional<Point> site_on_sheet(const pugi::xml_node& content, std::uint32_t idx) {
+// A site placed on the sheet: its point, the direction it leaves the shape in (60000ths of a degree, clockwise),
+// and the corners of the shape it is on.
+struct PlacedSite {
+  Point at;
+  double angle = 0.0;
+  Point corners[4];
+};
+
+// Site `idx` of the shape or picture `content`: the preset's site on the current size and stated adjust guides,
+// flipped and rotated with the object, then placed through its frame.
+std::optional<PlacedSite> place_site(const pugi::xml_node& content, std::uint32_t idx) {
   const pugi::xml_node props = child_local(content, "spPr");
   const pugi::xml_node geom = child_local(props, "prstGeom");
   const std::optional<std::size_t> preset = preset_geometry::index_of(geom.attribute("prst").value());
@@ -77,25 +95,36 @@ std::optional<Point> site_on_sheet(const pugi::xml_node& content, std::uint32_t 
       stated.push_back(preset_geometry::AdjustGuide{gd.attribute("name").value(), *v});
     }
   }
-  const std::vector<Point> sites = preset_geometry::connection_sites(*preset, w, h, stated);
+  const std::vector<preset_geometry::ConnectionSite> sites = preset_geometry::connection_sites(*preset, w, h, stated);
+  // An end naming a site past the preset's list is read as a free end.
   if (idx >= sites.size()) {
     return std::nullopt;
   }
-  Point p = sites[idx];
   const XfrmTransform t = read_xfrm_transform(xfrm);
-  p.x = t.flip_h ? w - p.x : p.x;
-  p.y = t.flip_v ? h - p.y : p.y;
-  if (t.rot != 0) {
-    const double angle = static_cast<double>(t.rot) * kRadiansPerUnit;
-    const double c = elementary::cos(angle);
-    const double s = elementary::sin(angle);
-    const double dx = p.x - w / 2.0;
-    const double dy = p.y - h / 2.0;
-    p = Point{w / 2.0 + dx * c - dy * s, h / 2.0 + dx * s + dy * c};
-  }
-  const pugi::xml_node off = child_local(xfrm, "off");
-  const Frame f = frame_of(content);
-  return Point{f.sx * (p.x + emu_d(off, "x")) + f.tx, f.sy * (p.y + emu_d(off, "y")) + f.ty};
+  const double rot = static_cast<double>(t.rot) * kRadiansPerUnit;
+  const double c = t.rot != 0 ? elementary::cos(rot) : 1.0;
+  const double s = t.rot != 0 ? elementary::sin(rot) : 0.0;
+  const Point off{emu_d(child_local(xfrm, "off"), "x"), emu_d(child_local(xfrm, "off"), "y")};
+  const Frame frame = frame_of(content);
+  // A point of the unflipped, unrotated shape, flipped and turned about the centre, then put on the sheet.
+  const auto place = [&](double x, double y) {
+    x = t.flip_h ? w - x : x;
+    y = t.flip_v ? h - y : y;
+    const double dx = x - w / 2.0;
+    const double dy = y - h / 2.0;
+    return frame.to_sheet(Point{off.x + w / 2.0 + dx * c - dy * s, off.y + h / 2.0 + dx * s + dy * c});
+  };
+  PlacedSite placed;
+  placed.at = place(sites[idx].x, sites[idx].y);
+  double angle = sites[idx].angle;
+  angle = t.flip_h ? 2.0 * kQuarterTurn - angle : angle;
+  angle = t.flip_v ? -angle : angle;
+  placed.angle = angle + static_cast<double>(t.rot);
+  placed.corners[0] = place(0.0, 0.0);
+  placed.corners[1] = place(w, 0.0);
+  placed.corners[2] = place(0.0, h);
+  placed.corners[3] = place(w, h);
+  return placed;
 }
 
 // The shapes and pictures connectors can be glued to, by id; the first of a repeated id.
@@ -127,9 +156,135 @@ bool moved(const GluedEnd* before, const GluedEnd& after) {
   return before == nullptr || before->x != after.x || before->y != after.y;
 }
 
-// Both ends glued: the connector runs from its start site to its end site, its flips giving the direction. A
-// bent or curved connector keeps its preset and adjust values.
-void route_connector(pugi::xml_node xfrm, const GluedEnd& start, const GluedEnd& end) {
+bool changed(const GluedEnd* before, const GluedEnd& after) {
+  return moved(before, after) || before->direction != after.direction || before->left != after.left ||
+         before->top != after.top || before->right != after.right || before->bottom != after.bottom;
+}
+
+// `v` turned `quarters` quarter turns counterclockwise: the inverse of a clockwise `a:xfrm` rotation.
+Point unturn(Point v, int quarters) {
+  for (int i = 0; i < quarters; ++i) {
+    v = Point{v.y, -v.x};
+  }
+  return v;
+}
+
+constexpr Point kDirections[] = {{1.0, 0.0}, {0.0, 1.0}, {-1.0, 0.0}, {0.0, -1.0}};
+
+std::int32_t adjust(double v, double span) {
+  return span != 0.0 ? static_cast<std::int32_t>(std::llround(v / span * 100000.0)) : 0;
+}
+
+void write_geometry(pugi::xml_node geom, std::string_view family, int segments, const std::vector<std::int32_t>& adj) {
+  const std::string prst = std::string(family) + std::to_string(segments);
+  geom.attribute("prst").set_value(prst.c_str());
+  const std::string ap(io::qname_prefix_colon(geom.name()));
+  pugi::xml_node guides = child_local(geom, "avLst");
+  if (!guides) {
+    guides = geom.prepend_child((ap + "avLst").c_str());
+  }
+  while (guides.first_child()) {
+    guides.remove_child(guides.first_child());
+  }
+  for (std::size_t i = 0; i < adj.size(); ++i) {
+    pugi::xml_node gd = guides.append_child((ap + "gd").c_str());
+    gd.append_attribute("name").set_value(("adj" + std::to_string(i + 1U)).c_str());
+    gd.append_attribute("fmla").set_value(("val " + std::to_string(adj[i])).c_str());
+  }
+}
+
+// A bent or curved connector glued at both ends, routed as Excel routes it. The connector's frame is turned so
+// that it leaves the start along its local x axis and flipped so that the end lies at (w, h); in that frame the
+// path turns halfway across the gap between the two shapes, or runs `kClearance` past them where it has to come
+// back, and the number of segments follows from the two directions.
+void route_elbow(pugi::xml_node xfrm, pugi::xml_node geom, std::string_view family, const GluedEnd& start,
+                 const GluedEnd& end) {
+  int r = start.direction;
+  const Point delta = unturn(Point{static_cast<double>(end.x - start.x), static_cast<double>(end.y - start.y)}, r);
+  bool flip_h = delta.x < 0.0;
+  bool flip_v = delta.y < 0.0;
+  // Excel writes these two frames as their half-turned equivalents.
+  if ((r == 3 && !flip_h && !flip_v) || (r == 1 && !flip_h && flip_v)) {
+    r = (r + 2) % 4;
+    flip_h = !flip_h;
+    flip_v = !flip_v;
+  }
+  // A sheet vector or point in the connector's local frame, the start at the origin.
+  const auto local = [&](Point v) {
+    v = unturn(v, r);
+    return Point{flip_h ? -v.x : v.x, flip_v ? -v.y : v.y};
+  };
+  const auto local_box = [&](const GluedEnd& e) {
+    double box[4] = {0.0, 0.0, 0.0, 0.0};  // left, right, top, bottom
+    bool first = true;
+    for (const double x : {e.left, e.right}) {
+      for (const double y : {e.top, e.bottom}) {
+        const Point p = local(Point{x - static_cast<double>(start.x), y - static_cast<double>(start.y)});
+        box[0] = first ? p.x : std::min(box[0], p.x);
+        box[1] = first ? p.x : std::max(box[1], p.x);
+        box[2] = first ? p.y : std::min(box[2], p.y);
+        box[3] = first ? p.y : std::max(box[3], p.y);
+        first = false;
+      }
+    }
+    return std::array<double, 4>{box[0], box[1], box[2], box[3]};
+  };
+  const Point span = local(Point{static_cast<double>(end.x - start.x), static_cast<double>(end.y - start.y)});
+  const double w = span.x;
+  const double h = span.y;
+  const std::array<double, 4> b1 = local_box(start);
+  const std::array<double, 4> b2 = local_box(end);
+  const bool out_forward = local(kDirections[start.direction]).x > 0.0;
+  const Point to_end = local(kDirections[end.direction]);
+  const double beyond_x = std::max(b1[1], b2[1]) + kClearance;
+  const double beyond_y = std::max(b1[3], b2[3]) + kClearance;
+  const double gap_x = (b1[1] + b2[0]) / 2.0;
+  const double gap_y = (b1[3] + b2[2]) / 2.0;
+  const double back_x = std::min(b1[0], b2[0]) - kClearance;
+  int segments = 3;
+  std::vector<std::int32_t> adj;
+  if (out_forward) {
+    if (to_end.x < 0.0) {
+      adj = {adjust(gap_x, w)};
+    } else if (to_end.x > 0.0) {
+      adj = {adjust(beyond_x, w)};
+    } else if (to_end.y < 0.0) {
+      segments = 2;
+    } else {
+      segments = 4;
+      adj = {adjust(gap_x, w), adjust(beyond_y, h)};
+    }
+  } else if (to_end.x < 0.0) {
+    adj = {adjust(back_x, w)};
+  } else if (to_end.x > 0.0) {
+    segments = 5;
+    adj = {adjust(back_x, w), adjust(gap_y, h), adjust(beyond_x, w)};
+  } else {
+    segments = 4;
+    adj = {adjust(back_x, w), adjust(to_end.y < 0.0 ? gap_y : beyond_y, h)};
+  }
+  write_geometry(geom, family, segments, adj);
+  // The box is the start-to-end box, turned with the frame about its centre.
+  const std::int64_t cx = static_cast<std::int64_t>(std::llround(w));
+  const std::int64_t cy = static_cast<std::int64_t>(std::llround(h));
+  io::set_attr(child_local(xfrm, "off"), "x", (start.x + end.x - cx) / 2);
+  io::set_attr(child_local(xfrm, "off"), "y", (start.y + end.y - cy) / 2);
+  io::set_attr(child_local(xfrm, "ext"), "cx", cx);
+  io::set_attr(child_local(xfrm, "ext"), "cy", cy);
+  write_xfrm_transform(xfrm, XfrmTransform{static_cast<std::int32_t>(r) * 5400000, flip_h, flip_v});
+}
+
+// Both ends glued: a straight connector runs from its start site to its end site, its flips giving the direction;
+// a bent or curved one is routed around the two shapes.
+void route_connector(pugi::xml_node connector, pugi::xml_node xfrm, const GluedEnd& start, const GluedEnd& end) {
+  const pugi::xml_node geom = child_local(child_local(connector, "spPr"), "prstGeom");
+  const std::string_view prst = geom.attribute("prst").value();
+  for (const std::string_view family : {std::string_view("bentConnector"), std::string_view("curvedConnector")}) {
+    if (prst.substr(0, family.size()) == family) {
+      route_elbow(xfrm, geom, family, start, end);
+      return;
+    }
+  }
   io::set_attr(child_local(xfrm, "off"), "x", std::min(start.x, end.x));
   io::set_attr(child_local(xfrm, "off"), "y", std::min(start.y, end.y));
   io::set_attr(child_local(xfrm, "ext"), "cx", end.x > start.x ? end.x - start.x : start.x - end.x);
@@ -194,9 +349,27 @@ std::vector<GluedEnd> glued_ends(const pugi::xml_node& root) {
       if (!idx || target == targets.end() || own.sx == 0.0 || own.sy == 0.0) {
         continue;
       }
-      if (const std::optional<Point> site = site_on_sheet(target->second, *idx)) {
-        out.push_back(GluedEnd{node, start, std::llround((site->x - own.tx) / own.sx),
-                               std::llround((site->y - own.ty) / own.sy)});
+      if (const std::optional<PlacedSite> site = place_site(target->second, *idx)) {
+        GluedEnd glued;
+        glued.connector = node;
+        glued.start = start;
+        const Point at = own.from_sheet(site->at);
+        glued.x = std::llround(at.x);
+        glued.y = std::llround(at.y);
+        // Frames scale without turning, so the direction is the sheet's, snapped to the nearest axis.
+        const double quarters = std::fmod(site->angle / kQuarterTurn, 4.0);
+        glued.direction = static_cast<int>(std::llround(quarters < 0.0 ? quarters + 4.0 : quarters) % 4);
+        const Point first = own.from_sheet(site->corners[0]);
+        glued.left = glued.right = first.x;
+        glued.top = glued.bottom = first.y;
+        for (const Point& corner : site->corners) {
+          const Point p = own.from_sheet(corner);
+          glued.left = std::min(glued.left, p.x);
+          glued.right = std::max(glued.right, p.x);
+          glued.top = std::min(glued.top, p.y);
+          glued.bottom = std::max(glued.bottom, p.y);
+        }
+        out.push_back(glued);
       }
     }
   });
@@ -223,10 +396,10 @@ void follow_glued_shapes(const Workbook& wb, std::size_t sheet, const pugi::xml_
       continue;
     }
     if (start_after != nullptr && end_after != nullptr) {
-      if (!moved(start_before, *start_after) && !moved(end_before, *end_after)) {
+      if (!changed(start_before, *start_after) && !changed(end_before, *end_after)) {
         continue;
       }
-      route_connector(xfrm, *start_after, *end_after);
+      route_connector(connector, xfrm, *start_after, *end_after);
     } else if (const GluedEnd* now = start_after != nullptr ? start_after : end_after) {
       // Glued at one end, the connector moves with it, its free end included.
       const GluedEnd* was = start_after != nullptr ? start_before : end_before;

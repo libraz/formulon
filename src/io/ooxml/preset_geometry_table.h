@@ -23,7 +23,7 @@ struct PresetAdjust {
 };
 
 /// One preset: its adjust guides (`kPresetAdjusts[adjust_first ..]`), and at `kPresetCode[code_offset]` its
-/// `guide_count` guide instructions followed by `site_count` connection sites (x then y operand).
+/// `guide_count` guide instructions followed by `site_count` connection sites (x, y, then angle operand).
 struct PresetEntry {
   std::uint16_t adjust_first;
   std::uint8_t adjust_count;

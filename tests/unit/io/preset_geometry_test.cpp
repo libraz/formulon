@@ -169,7 +169,7 @@ TEST(PresetGeometry, SitesMatchExcel) {
       {"upArrow", 2032000, 1270000, {{"adj2", 70000}}, 3, 2032000, 889000},
   };
   for (const Row& row : rows) {
-    const std::vector<Point> sites = connection_sites(*index_of(row.prst), row.w, row.h, row.adjusts);
+    const std::vector<ConnectionSite> sites = connection_sites(*index_of(row.prst), row.w, row.h, row.adjusts);
     ASSERT_LT(row.idx, sites.size()) << row.prst;
     EXPECT_NEAR(sites[row.idx].x, row.x, 0.5) << row.prst << " " << row.w << "x" << row.h << " idx " << row.idx;
     EXPECT_NEAR(sites[row.idx].y, row.y, 0.5) << row.prst << " " << row.w << "x" << row.h << " idx " << row.idx;
@@ -184,6 +184,16 @@ TEST(PresetGeometry, StatedAdjustValuesMoveTheSites) {
   EXPECT_LT(wide, plain);
   // A guide the preset does not define is ignored.
   EXPECT_EQ(connection_sites(p, 1524000.0, 1016000.0, {{"adj9", 1}})[2].x, plain);
+}
+
+// Each site carries the direction a connector leaves the shape in.
+TEST(PresetGeometry, SitesCarryTheirDirection) {
+  const std::vector<ConnectionSite> rect = connection_sites(*index_of("rect"), 1000.0, 500.0, {});
+  ASSERT_EQ(rect.size(), 4U);
+  EXPECT_EQ(rect[0].angle, 16200000.0);
+  EXPECT_EQ(rect[1].angle, 10800000.0);
+  EXPECT_EQ(rect[2].angle, 5400000.0);
+  EXPECT_EQ(rect[3].angle, 0.0);
 }
 
 // A stated guide holds one operator over numbers and built-in guide names.
