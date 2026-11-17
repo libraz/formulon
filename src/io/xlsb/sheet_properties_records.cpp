@@ -304,10 +304,9 @@ std::array<std::uint8_t, 8> encode_tab_color(const ColorSpec& spec, const Theme&
     case ColorSpec::Kind::kRgb:
       return encode_brt_color(spec.rgb, spec);
     case ColorSpec::Kind::kTheme:
+    case ColorSpec::Kind::kIndexed:
       return encode_brt_color(
           resolve_color(spec, theme, ThemeSource::kPart, IndexedPalette{}, ColorContext::kFillForeground).argb, spec);
-    case ColorSpec::Kind::kIndexed:
-      return encode_brt_color(0U, spec);
     case ColorSpec::Kind::kAuto:
     case ColorSpec::Kind::kNone:
       break;

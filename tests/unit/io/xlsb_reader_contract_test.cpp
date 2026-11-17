@@ -29,9 +29,11 @@
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
+#include "io/xlsb/chartsheet_records.h"
 #include "io/xlsb/ptg_writer.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/record.h"
+#include "io/xlsb/record_writer.h"
 #include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
@@ -40,6 +42,7 @@
 #include "passthrough_part.h"
 #include "sheet.h"
 #include "support/roundtrip_symmetry.h"
+#include "theme.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "value.h"
@@ -1219,6 +1222,87 @@ TEST(XlsbChartsheet, ExcelChartsheetSettingsConvertBothWays) {
     ASSERT_TRUE(test::extract_part(test::span_of(as_xlsb.value().bytes), "xl/chartsheets/sheet1.bin", &written_bin));
     EXPECT_EQ(ChartsheetRecords(written_bin), ChartsheetRecords(excel_bin));
   }
+}
+
+std::vector<std::uint8_t> HexBytes(std::string_view hex) {
+  std::vector<std::uint8_t> out;
+  for (std::size_t i = 0; i + 1U < hex.size(); i += 2U) {
+    out.push_back(static_cast<std::uint8_t>(std::stoul(std::string(hex.substr(i, 2U)), nullptr, 16)));
+  }
+  return out;
+}
+
+// One setting of a chartsheet as Mac Excel 16.115 saves it in both formats: the element of the .xlsx and the payload
+// of the .xlsb record holding it.
+struct CsSettingTwin {
+  const char* name;
+  const char* xml;
+  std::uint16_t record;
+  const char* payload;
+};
+
+constexpr std::uint16_t kBrtCsProp = 651;
+constexpr std::uint16_t kBrtCsPageSetup = 652;
+constexpr std::uint16_t kBrtCsProtection = 669;
+constexpr const char* kNoTab = "0100004000000000000000000000";
+constexpr CsSettingTwin kCsSettingTwins[] = {
+    {"legacy password, contents", R"(<sheetProtection password="CBEB" content="1"/>)", kBrtCsProtection,
+     "ebcb0100000000000000"},
+    {"legacy password, contents and objects", R"(<sheetProtection password="CBEB" content="1" objects="1"/>)",
+     kBrtCsProtection, "ebcb0100000001000000"},
+    {"legacy password only", R"(<sheetProtection password="CBEB"/>)", kBrtCsProtection, "ebcb0000000000000000"},
+    {"theme tab colour with tint", R"(<sheetPr><tabColor theme="5" tint="0.39997558519241921"/></sheetPr>)", kBrtCsProp,
+     "010007053233f1a983ff00000000"},
+    {"indexed tab colour", R"(<sheetPr><tabColor indexed="10"/></sheetPr>)", kBrtCsProp,
+     "0100030a0000ff0000ff00000000"},
+    {"page setup with printer settings", R"(<pageSetup paperSize="9" orientation="landscape" r:id="rId1"/>)",
+     kBrtCsPageSetup, "0900000058020000580200000100000001000100040000007200490064003100"},
+    {"page setup at the default dpi", R"(<pageSetup paperSize="9" orientation="landscape"/>)", kBrtCsPageSetup,
+     "0900000058020000580200000100000001000100ffffffff"},
+};
+
+std::string CsPart(std::string_view setting_xml) {
+  return std::string(R"(<chartsheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" )"
+                     R"(xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">)") +
+         std::string(setting_xml) + "</chartsheet>";
+}
+
+/// The payload of the `type` record a chartsheet part holds; empty when it holds none.
+std::vector<std::uint8_t> CsRecord(const std::vector<std::uint8_t>& part, std::uint16_t type) {
+  for (const auto& [at, payload] : ChartsheetRecords(std::string(part.begin(), part.end()))) {
+    if (at == type) {
+      return std::vector<std::uint8_t>(payload.begin(), payload.end());
+    }
+  }
+  return {};
+}
+
+TEST(XlsbChartsheet, ExcelChartsheetRecordSettingsConvertBothWays) {
+  for (const CsSettingTwin& twin : kCsSettingTwins) {
+    SCOPED_TRACE(twin.name);
+    auto bin = io::xlsb::chartsheet_records_from_xml(CsPart(twin.xml), default_theme());
+    ASSERT_TRUE(static_cast<bool>(bin)) << bin.error().message;
+    EXPECT_EQ(bin.value().unconverted, 0U);
+    EXPECT_EQ(CsRecord(bin.value().bytes, twin.record), HexBytes(twin.payload));
+
+    std::vector<std::uint8_t> part;
+    io::xlsb::emit_record(part, 129U, std::vector<std::uint8_t>{});
+    io::xlsb::emit_record(part, twin.record, HexBytes(twin.payload));
+    io::xlsb::emit_record(part, 130U, std::vector<std::uint8_t>{});
+    auto xml = io::xlsb::chartsheet_xml_from_records(test::span_of(part));
+    ASSERT_TRUE(static_cast<bool>(xml)) << xml.error().message;
+    EXPECT_EQ(xml.value().unconverted, 0U);
+    EXPECT_NE(xml.value().xml.find(twin.xml), std::string::npos) << xml.value().xml;
+  }
+}
+
+// Excel saves an automatic chartsheet tab colour as no tab colour.
+TEST(XlsbChartsheet, AutomaticTabColourWritesNone) {
+  auto bin =
+      io::xlsb::chartsheet_records_from_xml(CsPart(R"(<sheetPr><tabColor auto="1"/></sheetPr>)"), default_theme());
+  ASSERT_TRUE(static_cast<bool>(bin)) << bin.error().message;
+  EXPECT_EQ(bin.value().unconverted, 0U);
+  EXPECT_EQ(CsRecord(bin.value().bytes, kBrtCsProp), HexBytes(kNoTab));
 }
 
 }  // namespace

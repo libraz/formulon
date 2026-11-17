@@ -50,13 +50,17 @@ constexpr std::uint32_t kDefaultZoom = 100;
 constexpr std::size_t kCsProtectionBytes = 10;
 // BrtCsProp: flags (u16), the tab colour (8 bytes), the code name (XLWideString).
 constexpr std::size_t kCsPropColorAt = 2;
-constexpr std::uint8_t kColorAuto = 0x00;   // fValidRGB clear, automatic
-constexpr std::uint8_t kColorRgb = 0x05;    // fValidRGB, xColorType 2
-constexpr std::uint8_t kColorTheme = 0x07;  // fValidRGB, xColorType 3
+constexpr std::uint8_t kColorAuto = 0x00;     // fValidRGB clear, automatic
+constexpr std::uint8_t kColorIndexed = 0x03;  // fValidRGB, xColorType 1
+constexpr std::uint8_t kColorRgb = 0x05;      // fValidRGB, xColorType 2
+constexpr std::uint8_t kColorTheme = 0x07;    // fValidRGB, xColorType 3
 constexpr std::uint8_t kColorIndexAuto = 0x40;
 // BrtCsPageSetup: paper (u32), horizontal and vertical dpi (u32), copies (u32), first page (u16), flags (u16),
 // printer settings relationship (XLNullableWideString). Flags as Excel writes them.
 constexpr std::size_t kCsPageSetupFixedBytes = 20;
+constexpr std::uint32_t kNullWideString = 0xFFFFFFFFU;
+// The dpi an absent horizontalDpi or verticalDpi states.
+constexpr std::uint32_t kDefaultDpi = 600;
 constexpr std::uint16_t kPageLandscape = 0x0001U;
 constexpr std::uint16_t kPageBlackAndWhite = 0x0004U;
 constexpr std::uint16_t kPageUseFirstPage = 0x0010U;
@@ -75,9 +79,9 @@ std::string hex_argb(const std::uint8_t* rgba) {
   return text;
 }
 
-// AARRGGBB text as a 32-bit ARGB value; nullopt unless it is exactly eight hex digits.
-std::optional<std::uint32_t> parse_argb(std::string_view text) {
-  if (text.size() != 8U) {
+// `text` as a hex number; nullopt unless it is exactly `digits` hex digits (eight for AARRGGBB).
+std::optional<std::uint32_t> parse_hex(std::string_view text, std::size_t digits) {
+  if (text.size() != digits) {
     return std::nullopt;
   }
   std::uint32_t value = 0;
@@ -95,7 +99,7 @@ std::optional<std::uint32_t> parse_argb(std::string_view text) {
 }
 
 // `<sheetPr>` of a BrtCsProp payload; nullopt for a state whose XML is not measured (a code name, a tinted RGB or
-// an indexed colour, other flags).
+// indexed colour, other flags).
 std::optional<std::string> sheet_pr_xml(ByteSpan payload) {
   if (payload.size != sizeof(kDefaultCsProp) || load_u16(payload.data) != 0x0001U ||
       load_u32(payload.data + 10) != 0U) {
@@ -108,6 +112,11 @@ std::optional<std::string> sheet_pr_xml(ByteSpan payload) {
   }
   if (color[0] == kColorRgb && tint == 0) {
     return "<sheetPr><tabColor rgb=\"" + hex_argb(color + 4) + "\"/></sheetPr>";
+  }
+  if (color[0] == kColorIndexed && tint == 0) {
+    std::string xml = "<sheetPr><tabColor";
+    append_xml_attr_uint(xml, "indexed", color[1]);
+    return xml + "/></sheetPr>";
   }
   if (color[0] == kColorTheme) {
     std::string xml = "<sheetPr><tabColor";
@@ -138,13 +147,22 @@ std::optional<std::vector<std::uint8_t>> cs_prop_record(const pugi::xml_node& sh
     }
     const pugi::xml_attribute rgb = child.attribute("rgb");
     const pugi::xml_attribute theme_index = child.attribute("theme");
+    const pugi::xml_attribute indexed = child.attribute("indexed");
     const pugi::xml_attribute tint = child.attribute("tint");
-    if (child.attribute("indexed") || child.attribute("auto") || (rgb && theme_index) || (tint && !theme_index)) {
+    const pugi::xml_attribute automatic = child.attribute("auto");
+    const int selectors = (rgb ? 1 : 0) + (theme_index ? 1 : 0) + (indexed ? 1 : 0) + (automatic ? 1 : 0);
+    if (selectors > 1 || (tint && !theme_index) || (automatic && !automatic.as_bool())) {
       return std::nullopt;
     }
+    if (automatic) {
+      continue;  // Excel saves an automatic tab colour as none.
+    }
     ColorSpec spec;
-    if (rgb) {
-      const std::optional<std::uint32_t> parsed = parse_argb(rgb.value());
+    if (indexed) {
+      spec.kind = ColorSpec::Kind::kIndexed;
+      spec.indexed = indexed.as_uint();
+    } else if (rgb) {
+      const std::optional<std::uint32_t> parsed = parse_hex(rgb.value(), 8U);
       if (!parsed) {
         return std::nullopt;
       }
@@ -163,7 +181,18 @@ std::optional<std::vector<std::uint8_t>> cs_prop_record(const pugi::xml_node& sh
 
 // `<pageSetup>` of a BrtCsPageSetup payload; nullopt for a state whose XML is not measured.
 std::optional<std::string> page_setup_xml(ByteSpan payload) {
-  if (payload.size < kCsPageSetupFixedBytes + 4U || load_u32(payload.data + kCsPageSetupFixedBytes) != 0xFFFFFFFFU) {
+  if (payload.size < kCsPageSetupFixedBytes + 4U) {
+    return std::nullopt;
+  }
+  std::string rid;
+  if (load_u32(payload.data + kCsPageSetupFixedBytes) != kNullWideString) {
+    ByteSpan tail{payload.data + kCsPageSetupFixedBytes, payload.size - kCsPageSetupFixedBytes};
+    auto read = read_xlwidestring(tail);
+    if (!read || tail.size != 0U || read.value().empty()) {
+      return std::nullopt;
+    }
+    rid = std::move(read.value());
+  } else if (payload.size != kCsPageSetupFixedBytes + 4U) {
     return std::nullopt;
   }
   const std::uint32_t paper = load_u32(payload.data);
@@ -190,10 +219,17 @@ std::optional<std::string> page_setup_xml(ByteSpan payload) {
   if ((flags & kPageUseFirstPage) != 0U) {
     xml.append(" useFirstPageNumber=\"1\"");
   }
-  append_xml_attr_uint(xml, "horizontalDpi", h_dpi);
-  append_xml_attr_uint(xml, "verticalDpi", v_dpi);
+  if (h_dpi != kDefaultDpi) {
+    append_xml_attr_uint(xml, "horizontalDpi", h_dpi);
+  }
+  if (v_dpi != kDefaultDpi) {
+    append_xml_attr_uint(xml, "verticalDpi", v_dpi);
+  }
   if (copies != 1U) {
     append_xml_attr_uint(xml, "copies", copies);
+  }
+  if (!rid.empty()) {
+    append_xml_attr(xml, "r:id", rid);
   }
   xml.append("/>");
   return xml;
@@ -202,9 +238,10 @@ std::optional<std::string> page_setup_xml(ByteSpan payload) {
 // BrtCsPageSetup for `<pageSetup>`; nullopt when it states something without a measured record form.
 std::optional<std::vector<std::uint8_t>> cs_page_setup_record(const pugi::xml_node& page_setup) {
   std::uint32_t paper = 1;
-  std::uint32_t h_dpi = 0;
-  std::uint32_t v_dpi = 0;
+  std::uint32_t h_dpi = kDefaultDpi;
+  std::uint32_t v_dpi = kDefaultDpi;
   std::uint32_t copies = 1;
+  std::string_view rid;
   std::uint16_t first = 1;
   std::uint16_t flags = 0;
   bool oriented = false;
@@ -231,6 +268,8 @@ std::optional<std::vector<std::uint8_t>> cs_page_setup_record(const pugi::xml_no
       flags |= kPageDraft;
     } else if (name == "useFirstPageNumber" && attr.as_bool()) {
       flags |= kPageUseFirstPage;
+    } else if (local_name(attr.name()) == "id" && *attr.value() != '\0') {
+      rid = attr.value();
     } else {
       return std::nullopt;
     }
@@ -245,19 +284,34 @@ std::optional<std::vector<std::uint8_t>> cs_page_setup_record(const pugi::xml_no
   emit_u32(payload, copies);
   emit_u16(payload, first);
   emit_u16(payload, flags);
-  emit_u32(payload, 0xFFFFFFFFU);
+  if (rid.empty()) {
+    emit_u32(payload, kNullWideString);
+  } else {
+    emit_xlwidestring(payload, rid);
+  }
   return payload;
 }
 
 // `<sheetProtection>` of BrtCsProtection and an optional BrtCsProtectionIso; empty when unprotected, nullopt for
-// a state whose XML is not measured (a legacy password).
+// a state whose XML is not measured (a legacy password beside a hash).
 std::optional<std::string> protection_xml(ByteSpan legacy, ByteSpan iso) {
-  if (legacy.size != kCsProtectionBytes || load_u16(legacy.data) != 0U) {
+  if (legacy.size != kCsProtectionBytes) {
     return std::nullopt;
   }
+  const std::uint16_t password = load_u16(legacy.data);
   const bool content = load_u32(legacy.data + 2) != 0U;
   const bool objects = load_u32(legacy.data + 6) != 0U;
   std::string xml;
+  if (password != 0U) {
+    if (iso.size > 0U) {
+      return std::nullopt;
+    }
+    xml.append(" password=\"");
+    for (int shift = 12; shift >= 0; shift -= 4) {
+      xml.push_back(kHexDigits[(password >> shift) & 0x0FU]);
+    }
+    xml.push_back('"');
+  }
   if (iso.size > 0U) {
     ByteSpan p = iso;
     auto spin = read_u32(p);
@@ -303,6 +357,7 @@ std::optional<std::string> protection_xml(ByteSpan legacy, ByteSpan iso) {
 bool emit_cs_protection(std::vector<std::uint8_t>& dst, const pugi::xml_node& protection) {
   std::uint32_t content = 0;
   std::uint32_t objects = 0;
+  std::uint16_t password = 0;
   std::string algorithm;
   std::vector<std::uint8_t> hash;
   std::vector<std::uint8_t> salt;
@@ -325,9 +380,18 @@ bool emit_cs_protection(std::vector<std::uint8_t>& dst, const pugi::xml_node& pr
       }
     } else if (name == "spinCount") {
       spin = attr.as_uint();
+    } else if (name == "password") {
+      const std::optional<std::uint32_t> legacy = parse_hex(attr.value(), 4U);
+      if (!legacy || *legacy == 0U) {
+        return false;
+      }
+      password = static_cast<std::uint16_t>(*legacy);
     } else {
       return false;
     }
+  }
+  if (password != 0U && (!algorithm.empty() || !hash.empty() || !salt.empty())) {
+    return false;
   }
   if (!algorithm.empty() || !hash.empty() || !salt.empty()) {
     if (algorithm.empty() || hash.empty()) {
@@ -345,7 +409,7 @@ bool emit_cs_protection(std::vector<std::uint8_t>& dst, const pugi::xml_node& pr
     emit_record(dst, kBrtCsProtectionIso, payload);
   }
   std::vector<std::uint8_t> payload;
-  emit_u16(payload, 0U);
+  emit_u16(payload, password);
   emit_u32(payload, content);
   emit_u32(payload, objects);
   emit_record(dst, kBrtCsProtection, payload);

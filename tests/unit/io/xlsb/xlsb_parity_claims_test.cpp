@@ -370,6 +370,34 @@ TEST(XlsbParityClaims, TabColorsMatchExcel) {
   }
 }
 
+// An indexed tab colour carries its palette colour beside the index, and an automatic one is written as Excel writes
+// no colour; both measured from Mac Excel 16.115 .xlsb saves.
+TEST(XlsbParityClaims, IndexedAndAutomaticTabColorsMatchExcel) {
+  constexpr std::uint16_t kBrtWsProp = 147;
+  constexpr std::size_t kColorAt = 3;
+  struct Twin {
+    ColorSpec color;
+    std::vector<std::uint8_t> excel;
+  };
+  ColorSpec indexed;
+  indexed.kind = ColorSpec::Kind::kIndexed;
+  indexed.indexed = 10U;
+  ColorSpec automatic;
+  automatic.kind = ColorSpec::Kind::kAuto;
+  for (const Twin& twin : {Twin{indexed, {0x03, 0x0A, 0x00, 0x00, 0xFF, 0x00, 0x00, 0xFF}},
+                           Twin{automatic, {0x00, 0x40, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}}}) {
+    Workbook wb = Workbook::create_empty();
+    wb.add_sheet("Sheet1");
+    wb.sheet(0).mutable_print_settings().tab_color = twin.color;
+    auto saved = write_xlsb(wb);
+    ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+    const auto prop = RecordsOf(Part(saved.value(), "xl/worksheets/sheet1.bin"), kBrtWsProp);
+    ASSERT_EQ(prop.size(), 1U);
+    ASSERT_GE(prop[0].size(), kColorAt + 8U);
+    EXPECT_EQ(std::vector<std::uint8_t>(prop[0].begin() + kColorAt, prop[0].begin() + kColorAt + 8), twin.excel);
+  }
+}
+
 }  // namespace
 }  // namespace xlsb
 }  // namespace io
