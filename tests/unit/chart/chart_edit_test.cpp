@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <regex>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -22,6 +23,7 @@
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
 #include "io/xlsb/reader.h"
+#include "io/xlsb/writer.h"
 #include "io/xml_utils.h"
 #include "passthrough_part.h"
 #include "pugixml.hpp"
@@ -649,6 +651,47 @@ TEST(ChartEdit, PlainTitleAndReferencesSurviveTwoOoxmlCyclesAndMutation) {
   ASSERT_EQ(after_mutation.plots.size(), 1U);
   ASSERT_EQ(after_mutation.plots[0].series.size(), 1U);
   EXPECT_EQ(after_mutation.plots[0].series[0].val.formula, changed_formula);
+}
+
+/// The chart's title text runs and its `autoTitleDeleted` value, as a file saves them.
+std::string TitleState(const Workbook& wb) {
+  const Located c = Find(wb);
+  const std::string part = PartText(wb, c.path);
+  const std::string title = Between(part, "<c:title>", "</c:title>");
+  const std::string runs = title.empty() ? "no title" : "title [" + Between(title, "<a:t>", "</a:t>") + "]";
+  return runs + " " + Between(part, "<c:autoTitleDeleted", "/>");
+}
+
+Workbook XlsbRoundTrip(const Workbook& wb) {
+  auto saved = io::xlsb::write_xlsb(wb);
+  EXPECT_TRUE(static_cast<bool>(saved)) << (saved ? "" : saved.error().message);
+  if (!saved) {
+    return Workbook::create_empty();
+  }
+  auto read = io::xlsb::read_xlsb(io::ByteSpan{saved.value().data(), saved.value().size()});
+  EXPECT_TRUE(static_cast<bool>(read)) << (read ? "" : read.error().message);
+  return read ? std::move(read.value().workbook) : Workbook::create_empty();
+}
+
+// Excel's caption set to "" deletes the title and sets autoTitleDeleted, the state a removal writes; " " keeps a
+// one-space title. An empty text title is no stored state, so it is refused.
+TEST(ChartEdit, TitleRemovalAndSpaceMatchExcel) {
+  const std::string removed = TitleState(LoadFixture("chart_title_blank/caption_empty.xlsx"));
+  const std::string space = TitleState(LoadFixture("chart_title_blank/caption_space.xlsx"));
+  ASSERT_EQ(removed, "no title <c:autoTitleDeleted val=\"1\"/>");
+  ASSERT_EQ(space, "title [<a:t> </a:t>] <c:autoTitleDeleted val=\"0\"/>");
+  for (const auto& [kind, text, expected] :
+       {std::tuple{ChartTitleKind::kNone, "", removed}, std::tuple{ChartTitleKind::kText, " ", space}}) {
+    Workbook wb = LoadFixture("chart_title_blank/titled.xlsx");
+    const Located c = Find(wb);
+    MustOk(set_chart_title(wb, c.sheet, c.id, ChartTitle{kind, text, ""}));
+    EXPECT_EQ(TitleState(OoxmlRoundTrip(wb)), expected) << "xlsx";
+    EXPECT_EQ(TitleState(XlsbRoundTrip(wb)), expected) << "xlsb";
+  }
+  Workbook wb = LoadFixture("chart_title_blank/titled.xlsx");
+  const Located c = Find(wb);
+  EXPECT_FALSE(set_chart_title(wb, c.sheet, c.id, ChartTitle{ChartTitleKind::kText, "", ""}));
+  EXPECT_EQ(TitleState(wb), "title [<a:t>T</a:t>] <c:autoTitleDeleted val=\"0\"/>");
 }
 
 TEST(ChartEdit, AxisRoundTrip) {

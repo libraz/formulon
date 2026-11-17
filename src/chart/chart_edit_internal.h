@@ -179,8 +179,9 @@ inline bool flag(const xml_node& node) {
   return node && (!node.attribute("val") || flag_attr(node, "val"));
 }
 
+/// Parses generated XML, keeping a whitespace-only leaf text such as a one-space title run.
 inline bool load_xml(pugi::xml_document& doc, const std::string& xml) {
-  return static_cast<bool>(doc.load_buffer(xml.data(), xml.size()));
+  return static_cast<bool>(doc.load_buffer(xml.data(), xml.size(), pugi::parse_default | pugi::parse_ws_pcdata_single));
 }
 
 inline std::string num(double v) {
