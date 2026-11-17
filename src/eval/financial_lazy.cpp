@@ -396,16 +396,23 @@ bool collect_xpairs(XFinKind which, const parser::AstNode& values_arg, const par
     *out_err = Value::error(dates.error());
     return false;
   }
-  const std::vector<Value>& value_cells = values.value().cells;
-  const std::vector<Value>& date_cells = dates.value().cells;
+  const RangeResult value_range = std::move(values.value());
+  const RangeResult date_range = std::move(dates.value());
+  const std::vector<Value>& value_cells = value_range.cells;
+  const std::vector<Value>& date_cells = date_range.cells;
   // A lone value (a scalar or a one-cell reference) answers its error before
   // the count check; an array's error element, computed or read from a range,
   // only after it.
-  for (const auto& [arg, resolved] :
-       {std::make_pair(&values_arg, &values.value()), std::make_pair(&dates_arg, &dates.value())}) {
-    if (resolved->cells.size() == 1U && resolved->cells.front().is_error() &&
-        (resolved->from_scalar || resolve_binding_reference(*arg, arena, registry, ctx) != nullptr)) {
-      *out_err = resolved->cells.front();
+  const auto lone_error = [&](const parser::AstNode& arg, const RangeResult& resolved) -> const Value* {
+    if (resolved.cells.size() == 1U && resolved.cells.front().is_error() &&
+        (resolved.from_scalar || resolve_binding_reference(arg, arena, registry, ctx) != nullptr)) {
+      return &resolved.cells.front();
+    }
+    return nullptr;
+  };
+  for (const Value* error : {lone_error(values_arg, value_range), lone_error(dates_arg, date_range)}) {
+    if (error != nullptr) {
+      *out_err = *error;
       return false;
     }
   }
