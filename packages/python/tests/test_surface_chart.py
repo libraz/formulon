@@ -16,6 +16,7 @@ from formulon import (
     BlanksAs,
     CellRect,
     Chart,
+    ChartAreaPaint,
     ChartAxisCrosses,
     ChartAxisKey,
     ChartAxisKind,
@@ -31,6 +32,10 @@ from formulon import (
     ChartLegendPosition,
     ChartLine,
     ChartLineDash,
+    ChartLineEnd,
+    ChartLineEndInput,
+    ChartLineEndSize,
+    ChartLineEndType,
     ChartMarkerSymbol,
     ChartPlotType,
     ChartPoint,
@@ -44,12 +49,17 @@ from formulon import (
     ChartTitleKind,
     Color,
     ColorKind,
+    ColorResolution,
+    ColorTransform,
     DrawingAnchorInput,
+    DrawingColor,
+    DrawingColorInput,
     DrawingObjectKind,
     FormulonError,
     IndexOutOfRangeError,
     InvalidArgumentError,
     NotFoundError,
+    SecurityError,
     ShapeInput,
     SheetRect,
     Workbook,
@@ -108,6 +118,9 @@ class ChartEnumTests(unittest.TestCase):
             self.assertFalse(hasattr(ChartLegendPosition, absent))
             self.assertFalse(hasattr(ChartTitleKind, absent))
         self.assertEqual((ChartLineDash.SOLID, ChartLineDash.OTHER), (0, 4))
+        self.assertEqual((ChartLineDash.SYS_DOT, ChartLineDash.SYS_DASH_DOT_DOT), (5, 11))
+        self.assertEqual((ChartLineEndType.NONE, ChartLineEndType.ARROW), (0, 5))
+        self.assertEqual((ChartLineEndSize.MEDIUM, ChartLineEndSize.SMALL, ChartLineEndSize.LARGE), (0, 1, 2))
         self.assertEqual((ChartMarkerSymbol.NONE, ChartMarkerSymbol.PICTURE), (0, 11))
         self.assertEqual((ChartLabelPosition.BEST_FIT, ChartLabelPosition.RIGHT), (0, 8))
 
@@ -407,8 +420,9 @@ class ChartEditTests(unittest.TestCase):
             theme = Color(ColorKind.THEME, theme=4, tint=0.4)
             wb.sheet(0).chart(oid).update_series(0, 0, fill={"color": theme})
             got = wb.sheet(0).chart(oid).get_properties().plots[0].series[0].fill.color
-            self.assertEqual((got.kind, got.theme), (ColorKind.THEME, 4))
-            self.assertAlmostEqual(got.tint, 0.4, delta=1e-5)
+            self.assertEqual((got.base.kind, got.base.theme), (ColorKind.THEME, 4))
+            # The tint reads back as the luminance transforms it stands for.
+            self.assertEqual([t.name for t in got.transforms], ["lumMod", "lumOff"])
             with self.assertRaises(InvalidArgumentError):
                 wb.sheet(0).chart(oid).update_series(0, 0, fill={"color": Color(ColorKind.INDEXED, indexed=5)})
 
@@ -420,17 +434,162 @@ class ChartEditTests(unittest.TestCase):
                 ),
             )
             paint = shape.get_properties().fill.color
-            self.assertEqual((paint.kind, paint.theme), (ColorKind.THEME, 4))
-            self.assertAlmostEqual(paint.tint, 0.4, delta=1e-5)
+            self.assertEqual((paint.base.kind, paint.base.theme), (ColorKind.THEME, 4))
+            self.assertEqual([t.name for t in paint.transforms], ["lumMod", "lumOff"])
             with self.assertRaises(InvalidArgumentError):
                 shape.update(fill={"color": Color(ColorKind.INDEXED, indexed=5)})
             # A colour patch keeps the rest of the stored fill; a colour with no-fill is a status error.
             shape.update(fill={"color": Color(ColorKind.THEME, theme=5)})
-            self.assertEqual(shape.get_properties().fill.color.theme, 5)
+            self.assertEqual(shape.get_properties().fill.color.base.theme, 5)
             shape.update(fill={"color": theme})
             with self.assertRaises(InvalidArgumentError):
                 shape.update(fill={"none": True, "color": theme})
-            self.assertEqual(shape.get_properties().fill.color.theme, 4)
+            self.assertEqual(shape.get_properties().fill.color.base.theme, 4)
+
+    def test_drawing_colour_transforms_and_resolved_values(self) -> None:
+        wb, oid = _chart()
+        with wb:
+            chart = wb.sheet(0).chart(oid)
+            transforms = [ColorTransform("lumMod", 75000), ColorTransform("alpha", 50000)]
+            chart.update_series(0, 0, fill={"color": DrawingColorInput(base="#FFFF0000", transforms=transforms)})
+            color = chart.get_properties().plots[0].series[0].fill.color
+            self.assertIsInstance(color, DrawingColor)
+            self.assertEqual((color.base, color.transforms), (_rgb(0xFFFF0000), transforms))
+            self.assertEqual(color.resolved.resolution, ColorResolution.EXACT)
+            self.assertEqual(color.resolved.argb >> 24, 0xFF)
+            # An alpha transform leaves the rendered opacity unknown.
+            self.assertIsNone(color.resolved_transparency_pct)
+            # A transform without a value, and a plain colour (no transforms, opaque).
+            green = DrawingColorInput(base="#FF00FF00", transforms=[ColorTransform("gray")])
+            # A colour patch keeps the stored transparency, so it is cleared here as well.
+            chart.update_series(0, 0, fill={"color": green, "transparency_pct": None})
+            gray = chart.get_properties().plots[0].series[0].fill.color
+            self.assertEqual(gray.transforms, [ColorTransform("gray", None)])
+            chart.update_series(0, 0, fill={"color": "#FF0000FF"})
+            plain = chart.get_properties().plots[0].series[0].fill.color
+            self.assertEqual(
+                (plain.base, plain.transforms, plain.resolved_transparency_pct), (_rgb(0xFF0000FF), [], 0.0)
+            )
+            # A read colour feeds back; its resolved members are ignored.
+            chart.update_series(0, 1, fill={"color": color})
+            self.assertEqual(chart.get_properties().plots[0].series[1].fill.color.transforms, transforms)
+
+    def test_drawing_colour_refusals(self) -> None:
+        wb, oid = _chart()
+        with wb:
+            chart = wb.sheet(0).chart(oid)
+
+            def fill(*names, **patch):
+                colour = DrawingColorInput(base="#FFFF0000", transforms=[ColorTransform(n, 1000) for n in names])
+                chart.update_series(0, 0, fill={"color": colour, **patch})
+
+            with self.assertRaises(InvalidArgumentError):
+                fill("lum Mod")
+            with self.assertRaises(InvalidArgumentError):
+                fill("")
+            with self.assertRaises(SecurityError):
+                fill(*["lumMod"] * 65)
+            fill(*["lumMod"] * 64)
+            # An alpha transform beside a transparency must state the same opacity.
+            with self.assertRaises(InvalidArgumentError):
+                chart.update_series(
+                    0,
+                    0,
+                    fill={
+                        "color": DrawingColorInput(base="#FFFF0000", transforms=[ColorTransform("alpha", 50000)]),
+                        "transparency_pct": 25.0,
+                    },
+                )
+            chart.update_series(
+                0,
+                0,
+                fill={
+                    "color": DrawingColorInput(base="#FFFF0000", transforms=[ColorTransform("alpha", 50000)]),
+                    "transparency_pct": 50.0,
+                },
+            )
+            # A tinted theme colour cannot sit beside transforms.
+            with self.assertRaises(InvalidArgumentError):
+                chart.update_series(
+                    0,
+                    0,
+                    fill={
+                        "color": DrawingColorInput(
+                            base=Color(ColorKind.THEME, theme=4, tint=0.4), transforms=[ColorTransform("lumMod", 1000)]
+                        )
+                    },
+                )
+            with self.assertRaises(TypeError):
+                chart.update_series(0, 0, fill={"color": DrawingColorInput(base="#FFFF0000", transforms=["lumMod"])})
+
+    def test_line_ends_and_system_dashes(self) -> None:
+        wb, oid = _chart(_chart_input.LINE)
+        with wb:
+            chart = wb.sheet(0).chart(oid)
+            chart.update_series(
+                0,
+                0,
+                line={
+                    "dash": ChartLineDash.SYS_DASH_DOT,
+                    "head_end": ChartLineEndInput(ChartLineEndType.ARROW, width=ChartLineEndSize.LARGE),
+                    "tail_end": ChartLineEndInput(ChartLineEndType.OVAL),
+                },
+            )
+            line = chart.get_properties().plots[0].series[0].line
+            self.assertEqual(line.dash, ChartLineDash.SYS_DASH_DOT)
+            self.assertEqual(line.head_end, ChartLineEnd(ChartLineEndType.ARROW, ChartLineEndSize.LARGE, None))
+            self.assertEqual(line.tail_end, ChartLineEnd(ChartLineEndType.OVAL, None, None))
+            # An end replaces the stored one whole: the size it does not state is dropped.
+            stealth = ChartLineEndInput(ChartLineEndType.STEALTH, length=ChartLineEndSize.SMALL)
+            chart.update_series(0, 0, line={"head_end": stealth})
+            line = chart.get_properties().plots[0].series[0].line
+            self.assertEqual(line.head_end, ChartLineEnd(ChartLineEndType.STEALTH, None, ChartLineEndSize.SMALL))
+            self.assertEqual(line.tail_end.type, ChartLineEndType.OVAL)
+            # A read end feeds back; None removes it.
+            chart.update_series(0, 0, line={"tail_end": line.head_end})
+            chart.update_series(0, 0, line={"head_end": None})
+            line = chart.get_properties().plots[0].series[0].line
+            self.assertIsNone(line.head_end)
+            self.assertEqual(line.tail_end, ChartLineEnd(ChartLineEndType.STEALTH, None, ChartLineEndSize.SMALL))
+            with self.assertRaises(TypeError):
+                chart.update_series(0, 0, line={"head_end": {"type": 1}})  # type: ignore[typeddict-item]
+            with self.assertRaises(FormulonError):
+                chart.update_series(0, 0, line={"head_end": ChartLineEndInput(99)})  # type: ignore[arg-type]
+            with self.assertRaises(FormulonError):
+                wide = ChartLineEndInput(ChartLineEndType.ARROW, width=9)  # type: ignore[arg-type]
+                chart.update_series(0, 0, line={"tail_end": wide})
+
+    def test_chart_area_and_plot_area_paint(self) -> None:
+        wb, oid = _chart()
+        with wb:
+            chart = wb.sheet(0).chart(oid)
+            info = chart.get_properties()
+            self.assertIsInstance(info.chart_area, ChartAreaPaint)
+            self.assertIsInstance(info.plot_area, ChartAreaPaint)
+            chart.update_display(
+                chart_area={"fill": {"color": "#FFEEDDCC"}, "line": {"width_pt": 2.0, "color": "#FF102030"}},
+                plot_area={"fill": {"color": "#FF0000FF"}},
+            )
+            info = chart.get_properties()
+            self.assertEqual(info.chart_area.fill.color.base, _rgb(0xFFEEDDCC))
+            self.assertEqual((info.chart_area.line.color.base, info.chart_area.line.width_pt), (_rgb(0xFF102030), 2.0))
+            self.assertEqual(info.plot_area.fill.color.base, _rgb(0xFF0000FF))
+            # The other members of the display patch are kept, and an omitted area key keeps its paint.
+            chart.update_display(plot_area={"fill": {"transparency_pct": 30.0}})
+            info = chart.get_properties()
+            self.assertEqual(info.plot_area.fill.transparency_pct, 30.0)
+            self.assertEqual(info.chart_area.fill.color.base, _rgb(0xFFEEDDCC))
+            # A member None removes the paint the file states.
+            chart.update_display(chart_area={"fill": None, "line": None})
+            info = chart.get_properties()
+            self.assertEqual((info.chart_area.fill, info.chart_area.line), (None, None))
+            self.assertEqual(info.plot_area.fill.color.base, _rgb(0xFF0000FF))
+            # The area keys themselves cannot be removed.
+            for key in ("chart_area", "plot_area"):
+                with self.assertRaises(TypeError):
+                    chart.update_display(**{key: None})  # type: ignore[arg-type]
+            with self.assertRaises(TypeError):
+                chart.update_display(chart_area={"colour": 1})  # type: ignore[typeddict-unknown-key]
 
     def test_series_patch(self) -> None:
         wb, oid = _chart()
@@ -444,15 +603,17 @@ class ChartEditTests(unittest.TestCase):
             )
             s = wb.sheet(0).chart(oid).get_properties().plots[0].series[1]
             self.assertEqual(s.name.formula, "Sheet1!$D$1")
-            self.assertEqual((s.fill.color, s.fill.transparency_pct), (_rgb(0xFFFF0000), 25.0))
-            self.assertEqual((s.line.color, s.line.width_pt, s.line.dash), (_rgb(0xFF00FF00), 2.5, ChartLineDash.DASH))
+            self.assertEqual((s.fill.color.base, s.fill.transparency_pct), (_rgb(0xFFFF0000), 25.0))
+            self.assertEqual(
+                (s.line.color.base, s.line.width_pt, s.line.dash), (_rgb(0xFF00FF00), 2.5, ChartLineDash.DASH)
+            )
             self.assertEqual(wb.sheet(0).chart(oid).get_data().series[1].name, "S3")
 
             wb.sheet(0).chart(oid).update_series(0, 1, fill={"transparency_pct": None}, name=None)
             s = wb.sheet(0).chart(oid).get_properties().plots[0].series[1]
             self.assertEqual(s.name.kind, ChartSourceKind.NONE)
             self.assertIsNone(s.fill.transparency_pct)
-            self.assertEqual(s.fill.color, _rgb(0xFFFF0000))
+            self.assertEqual(s.fill.color.base, _rgb(0xFFFF0000))
 
             wb.sheet(0).chart(oid).update_series(
                 0, 0, labels={"show_value": True, "separator": "; ", "position": ChartLabelPosition.OUTSIDE_END}
@@ -495,7 +656,7 @@ class ChartEditTests(unittest.TestCase):
             s = wb.sheet(0).chart(oid).get_properties().plots[0].series[0]
             self.assertIsNotNone(s.marker)
             self.assertEqual((s.marker.symbol, s.marker.size_pt), (ChartMarkerSymbol.DIAMOND, 9))
-            self.assertEqual(s.marker.fill.color, _rgb(0xFF112233))
+            self.assertEqual(s.marker.fill.color.base, _rgb(0xFF112233))
             self.assertTrue(s.marker.line.none)
             self.assertIs(s.smooth, True)
             wb.sheet(0).chart(oid).update_series(0, 0, marker=None)
@@ -510,7 +671,7 @@ class ChartEditTests(unittest.TestCase):
                 0, 0, 2, ChartPoint(index=2, fill=ChartFill(color=_rgb(0xFF0000FF)), line=ChartLine(), marker=None)
             )
             points = wb.sheet(0).chart(oid).get_properties().plots[0].series[0].points
-            self.assertEqual([(p.index, p.fill.color) for p in points], [(2, _rgb(0xFF0000FF))])
+            self.assertEqual([(p.index, p.fill.color.base) for p in points], [(2, _rgb(0xFF0000FF))])
             self.assertIsNone(points[0].marker)
             wb.sheet(0).chart(oid).set_point(0, 0, 2, None)
             self.assertEqual(wb.sheet(0).chart(oid).get_properties().plots[0].series[0].points, [])

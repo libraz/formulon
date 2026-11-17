@@ -21,6 +21,10 @@ from formulon import (
     ChartInput,
     ChartLabelPosition,
     ChartLineDash,
+    ChartLineEnd,
+    ChartLineEndInput,
+    ChartLineEndSize,
+    ChartLineEndType,
     ChartMarkerSymbol,
     ChartPlotType,
     ChartSourceKind,
@@ -74,6 +78,11 @@ class PatchType:
 
 def _argb(color: Any) -> Optional[int]:
     return None if color is None else color.argb & 0xFFFFFFFF
+
+
+def _paint_argb(color: Any) -> Optional[int]:
+    """The base colour of a fill or outline ``DrawingColor``."""
+    return None if color is None else _argb(color.base)
 
 
 def _rgb(argb: int) -> Color:
@@ -133,7 +142,7 @@ def _bar_paint(slot: Callable[[Any], Any], name: str) -> Dict[str, Any]:
 CHART_FILL = PatchType(
     **_bar_paint(lambda s: s.fill, "fill"),
     cases={
-        "color": Case("#FF0000", get=lambda r: _argb(r and r.color), want=0xFFFF0000, clear=True),
+        "color": Case("#FF0000", get=lambda r: _paint_argb(r and r.color), want=0xFFFF0000, clear=True),
         "transparency_pct": Case(
             40,
             get=lambda r: r and r.transparency_pct,
@@ -147,7 +156,7 @@ CHART_FILL = PatchType(
 CHART_LINE = PatchType(
     **_paint(lambda s: s.line, "line"),
     cases={
-        "color": Case("#00FF00", get=lambda r: _argb(r and r.color), want=0xFF00FF00, clear=True),
+        "color": Case("#00FF00", get=lambda r: _paint_argb(r and r.color), want=0xFF00FF00, clear=True),
         "transparency_pct": Case(
             25,
             get=lambda r: r and r.transparency_pct,
@@ -157,6 +166,32 @@ CHART_LINE = PatchType(
         "width_pt": Case(3.5, get=lambda r: r and r.width_pt, clear=True),
         "dash": Case(ChartLineDash.DOT, get=lambda r: r and r.dash, clear=True),
         "none": Case(FLIP, get=lambda r: bool(r and r.none)),
+        "head_end": Case(
+            ChartLineEndInput(ChartLineEndType.ARROW, width=ChartLineEndSize.LARGE),
+            get=lambda r: r and r.head_end,
+            want=ChartLineEnd(ChartLineEndType.ARROW, ChartLineEndSize.LARGE, None),
+            clear=True,
+        ),
+        "tail_end": Case(
+            ChartLineEndInput(ChartLineEndType.OVAL, length=ChartLineEndSize.SMALL),
+            get=lambda r: r and r.tail_end,
+            want=ChartLineEnd(ChartLineEndType.OVAL, None, ChartLineEndSize.SMALL),
+            clear=True,
+        ),
+    },
+)
+
+CHART_AREA_PAINT = PatchType(
+    make=lambda ws, wb: _chart(ws),
+    update=lambda chart, **patch: chart.update_display(chart_area=patch),
+    read=lambda chart: chart.get_properties().chart_area,
+    cases={
+        "fill": Case(
+            {"color": "#FFEEDD"}, get=lambda r: _paint_argb(r.fill and r.fill.color), want=0xFFFFEEDD, clear=True
+        ),
+        "line": Case(
+            {"color": "#102030"}, get=lambda r: _paint_argb(r.line and r.line.color), want=0xFF102030, clear=True
+        ),
     },
 )
 
@@ -173,13 +208,13 @@ CHART_MARKER = PatchType(
         ),
         "fill": Case(
             {"color": "#FF0000"},
-            get=lambda r: _argb(r and r.fill and r.fill.color),
+            get=lambda r: _paint_argb(r and r.fill and r.fill.color),
             want=0xFFFF0000,
             patch=lambda v: {"symbol": ChartMarkerSymbol.CIRCLE, "fill": v},
         ),
         "line": Case(
             {"color": "#00FF00"},
-            get=lambda r: _argb(r and r.line and r.line.color),
+            get=lambda r: _paint_argb(r and r.line and r.line.color),
             want=0xFF00FF00,
             patch=lambda v: {"symbol": ChartMarkerSymbol.CIRCLE, "line": v},
         ),
@@ -237,11 +272,11 @@ CHART_SERIES = PatchType(
         "smooth": Case(FLIP, get=lambda r: bool(r.smooth)),
         "fill": Case(
             {"color": "#FF0000"},
-            get=lambda r: _argb(r.fill and r.fill.color),
+            get=lambda r: _paint_argb(r.fill and r.fill.color),
             want=0xFFFF0000,
             make=lambda ws, wb: _chart(ws),
         ),
-        "line": Case({"color": "#00FF00"}, get=lambda r: _argb(r.line and r.line.color), want=0xFF00FF00),
+        "line": Case({"color": "#00FF00"}, get=lambda r: _paint_argb(r.line and r.line.color), want=0xFF00FF00),
         "labels": Case(
             {"show_value": True},
             get=lambda r: bool(r.labels and r.labels.show_value),
@@ -265,11 +300,11 @@ CHART_POINT = PatchType(
         ),
         "fill": Case(
             {"color": "#FF0000"},
-            get=lambda r: _argb(r and r.fill and r.fill.color),
+            get=lambda r: _paint_argb(r and r.fill and r.fill.color),
             want=0xFFFF0000,
             make=lambda ws, wb: _chart(ws),
         ),
-        "line": Case({"color": "#00FF00"}, get=lambda r: _argb(r and r.line and r.line.color), want=0xFF00FF00),
+        "line": Case({"color": "#00FF00"}, get=lambda r: _paint_argb(r and r.line and r.line.color), want=0xFF00FF00),
     },
 )
 
@@ -326,6 +361,16 @@ CHART_DISPLAY = PatchType(
         ),
         "na_as_blank": Case(FLIP, get=lambda r: bool(r.na_as_blank), clear=True, cleared=False),
         "style": Case(26, clear=True),
+        "chart_area": Case(
+            {"fill": {"color": "#FFEEDD"}},
+            get=lambda r: _paint_argb(r.chart_area.fill and r.chart_area.fill.color),
+            want=0xFFFFEEDD,
+        ),
+        "plot_area": Case(
+            {"fill": {"color": "#102030"}},
+            get=lambda r: _paint_argb(r.plot_area.fill and r.plot_area.fill.color),
+            want=0xFF102030,
+        ),
     },
 )
 
@@ -486,6 +531,7 @@ TYPES: Dict[str, PatchType] = {
     "ChartPlotPatch": CHART_PLOT,
     "ChartAxisPatch": CHART_AXIS,
     "ChartDisplayPatch": CHART_DISPLAY,
+    "ChartAreaPaintPatch": CHART_AREA_PAINT,
     "FontPatch": FONT,
     "FillPatch": FILL,
     "BorderSidePatch": BORDER_SIDE,

@@ -317,12 +317,23 @@ def _array_element(text: str) -> Optional[str]:
     return None if match is None else (match.group(1) or match.group(2)).strip()
 
 
+def _record_value(text: str) -> Optional[str]:
+    """`T` of `Record<string, T>` / `Readonly<Record<string, T>>`, else None."""
+    match = re.fullmatch(r"(?:Readonly<\s*)?Record<\s*string\s*,\s*(.*?)\s*>(?:\s*>)?", text.strip(), re.S)
+    return None if match is None else match.group(1)
+
+
 def _same_type(patch_type: str, record_type: str, decls: Optional[Dict[str, TsDecl]] = None) -> bool:
     """The patch key's type is the record field's, `null` aside, the patch of a nested record, a rectangle
     field that also takes its A1 string (a `SheetRect` also a sheet-local `CellRect`), the record type's
-    declared input alias or `<X>Input` interface, or a list whose elements compare so."""
+    declared input alias or `<X>Input` interface, a list whose elements compare so, or a string-keyed map whose
+    values compare so."""
     patch = sorted(_strip_null(patch_type, True))
     record = sorted(_strip_null(record_type, True))
+    patch_map, record_map = _record_value(patch_type), _record_value(record_type)
+    if patch_map is not None and record_map is not None:
+        # A merge-by-key map: `null` on a value removes that entry.
+        return sorted(_strip_null(patch_map, True)) == sorted(_strip_null(record_map, True))
     if len(record) == 1 and _array_element(record[0]) is not None:
         # A list compares element-wise; a rectangle list also takes one A1 string of its ranges.
         element = _array_element(record[0])

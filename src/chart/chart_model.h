@@ -28,6 +28,7 @@
 #include <utility>
 #include <vector>
 
+#include "drawing/drawing_color.h"
 #include "drawing/drawing_edit.h"
 #include "drawing/drawing_xml.h"
 #include "styles.h"
@@ -140,8 +141,8 @@ enum class ChartLineEndType : std::int32_t {
   kArrow = 5
 };
 
-/// `ST_LineEndWidth` / `ST_LineEndLength`.
-enum class ChartLineEndSize : std::int32_t { kSmall = 0, kMedium = 1, kLarge = 2 };
+/// `ST_LineEndWidth` / `ST_LineEndLength`; zero is the schema default `med`.
+enum class ChartLineEndSize : std::int32_t { kMedium = 0, kSmall = 1, kLarge = 2 };
 
 /// One end of a line. Excel draws ends only on open geometry (lines, connectors, arcs); a closed shape keeps the
 /// element and ignores it.
@@ -192,7 +193,7 @@ inline constexpr const char* kChartDashTokens[] = {"solid",     "dash",         
                                                    "",          "sysDot",       "sysDash",    "lgDash",
                                                    "lgDashDot", "lgDashDotDot", "sysDashDot", "sysDashDotDot"};
 inline constexpr const char* kChartLineEndTokens[] = {"none", "triangle", "stealth", "diamond", "oval", "arrow"};
-inline constexpr const char* kChartLineEndSizeTokens[] = {"sm", "med", "lg"};
+inline constexpr const char* kChartLineEndSizeTokens[] = {"med", "sm", "lg"};
 inline constexpr const char* kChartSymbolTokens[] = {"none", "auto", "circle", "square", "diamond", "triangle",
                                                      "x",    "star", "plus",   "dot",    "dash",    "picture"};
 inline constexpr const char* kChartLabelPositionTokens[] = {"bestFit", "ctr", "inBase", "inEnd", "outEnd",
@@ -231,17 +232,17 @@ enum class ChartHeaderMode : std::uint8_t { kAuto = 0, kYes = 1, kNo = 2 };
 
 /// `c:spPr` solid fill. `color` unset means no explicit fill color.
 struct ChartFill {
-  std::optional<ColorSpec> color;
+  std::optional<DrawingColor> color;   ///< Base, transforms and rendered colour of `a:solidFill`.
   std::optional<std::uint32_t> alpha;  ///< 0..100000 (`a:alpha/@val`).
   bool none = false;                   ///< `a:noFill`.
-  /// A gradient, pattern or picture fill, or a solid colour `color` states only approximately (as the rendered Rgb)
-  /// or not at all; the record cannot state it.
+  /// A gradient, pattern or picture fill, or a solid colour element `color` cannot state (`hslClr`, `prstClr`, ...);
+  /// the record cannot state it.
   bool other = false;
 };
 
 /// `a:ln` of a series, point or marker.
 struct ChartLine {
-  std::optional<ColorSpec> color;
+  std::optional<DrawingColor> color;   ///< As `ChartFill::color`.
   std::optional<std::uint32_t> alpha;  ///< 0..100000.
   std::optional<std::int64_t> width_emu;
   std::optional<ChartLineDash> dash;
@@ -554,13 +555,14 @@ struct ChartPatchField {
 };
 
 struct ChartFillPatch {
-  ChartPatchField<ColorSpec> color;
+  /// An `alpha` transform stated beside `transparency_pct` must equal it.
+  ChartPatchField<DrawingColor> color;
   ChartPatchField<double> transparency_pct;  ///< 0..100.
   std::optional<bool> none;                  ///< True writes `a:noFill`; false removes it.
 };
 
 struct ChartLinePatch {
-  ChartPatchField<ColorSpec> color;
+  ChartPatchField<DrawingColor> color;  ///< As `ChartFillPatch::color`.
   ChartPatchField<double> transparency_pct;
   ChartPatchField<double> width_pt;
   ChartPatchField<ChartLineDash> dash;

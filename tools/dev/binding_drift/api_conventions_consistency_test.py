@@ -35,8 +35,9 @@ def _quiet(call, *args):
         return call(*args)
 
 
-def _c_hits(header: str, rule_id: str) -> list[tuple[str, str]]:
-    ctx = api_conventions.Context(header, api_conventions.Ledger({"schema": 1, "entries": {"fixture.present": {}}}))
+def _c_hits(header: str, rule_id: str, entries: dict | None = None) -> list[tuple[str, str]]:
+    ledger = {"schema": 1, "entries": {"fixture.present": {}, **(entries or {})}}
+    ctx = api_conventions.Context(header, api_conventions.Ledger(ledger))
     rules = {rule_id: api_conventions.all_rules()[rule_id]}
     return [(v.op_key, v.discriminator) for v in api_conventions.collect(ctx, rules)]
 
@@ -391,6 +392,30 @@ class CHeaderRuleTest(unittest.TestCase):
         )
         self.assertEqual(_c_hits(good, "R40.c.patch_op"), [])
 
+    def test_r40_a_patch_key_takes_no_op(self) -> None:
+        header = (
+            "typedef struct {\n  const char* name;\n  fm_patch_op_t value_op;\n  int32_t value;\n"
+            "} fm_shape_adjust_patch_t;\n"
+        )
+        record = {"kind": "record", "role": "patch", "c": "fm_shape_adjust_patch_t", "surfaces": ["c"]}
+        self.assertEqual(
+            _c_hits(header, "R40.c.patch_op", {"record.adjust_patch": record}), [("record.adjust_patch", "op:name")]
+        )
+        keyed = {"record.adjust_patch": {**record, "patch_key": ["name"]}}
+        self.assertEqual(_c_hits(header, "R40.c.patch_op", keyed), [])
+
+    def test_r42_an_enum_valued_field_is_a_selector(self) -> None:
+        header = (
+            "typedef enum { FM_END_SIZE_MEDIUM = 0, FM_END_SIZE_SMALL = 1 } fm_end_size_t;\n"
+            "typedef struct {\n  /** The end's width, {doc}. */\n  int32_t width;\n} fm_line_end_t;\n"
+        )
+
+        def c_hits(doc: str) -> list[tuple[str, str]]:
+            return [h for h in _c_hits(header.replace("{doc}", doc), "R42.unit.suffix") if h[0] == "fm_line_end_t"]
+
+        self.assertEqual(c_hits("a size class"), [("fm_line_end_t", "width")])
+        self.assertEqual(c_hits("an `fm_end_size_t`"), [])
+
     def test_r43_a_status_is_documented(self) -> None:
         decl = "FM_API fm_status_t fm_sheet_{}(fm_workbook_t* wb, size_t sheet_index);\n"
         destroy = "/** Frees it. */\nFM_API void fm_workbook_destroy(fm_workbook_t* wb);\n"
@@ -447,6 +472,8 @@ class ValidateNamesVocabularyTest(unittest.TestCase):
                                               "py": "ASCENDING", "surfaces": ["wasm", "py"],
                                               "was": {"js": "Asc", "py": "ASC"}},
         }  # fmt: skip
+        entries["record.adjust_patch"] = {"kind": "record", "role": "patch", "c": "fm_adjust_patch_t",
+                                          "surfaces": ["c"], "patch_key": ["name"]}  # fmt: skip
         self.assertEqual(self.schema(entries, unitless=["zoom", "gapWidth"]), [])
 
     def test_malformed_vocabulary_is_refused(self) -> None:
@@ -456,12 +483,16 @@ class ValidateNamesVocabularyTest(unittest.TestCase):
                            "clearable": ["position"]},
             "record.legend": {"kind": "record", "js": "ChartLegend", "surfaces": ["wasm"],
                               "clearable": ["hiddenSeries", "hiddenSeries"]},
+            "record.adjust": {"kind": "record", "role": "result", "c": "fm_adjust_t", "surfaces": ["c"],
+                              "patch_key": ["guideName"]},
         }  # fmt: skip
         problems = self.schema(entries, unitless=["gapWidth", "gap_width"])
         self.assertTrue(any("add_returns is one of" in p for p in problems), problems)
         self.assertTrue(any("clearable belongs to a record" in p for p in problems), problems)
         self.assertTrue(any("clearable lists distinct field names" in p for p in problems), problems)
         self.assertTrue(any("unitless: gap_width is listed in two casings" in p for p in problems), problems)
+        self.assertTrue(any("patch_key belongs to a patch record" in p for p in problems), problems)
+        self.assertTrue(any("patch_key lists distinct snake_case" in p for p in problems), problems)
 
     def test_ref_exempt_names_arguments_and_a_reason(self) -> None:
         def add(exempt: object) -> dict:

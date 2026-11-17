@@ -41,12 +41,12 @@ xml_node ensure_shape_properties(xml_node owner, Order order) {
 }
 
 /// Applies a hidden / shown flag to `holder`: hidden swaps the fills for `a:noFill`, shown removes it.
-Expected<void, Error> apply_hidden(xml_node holder, Order order, const std::optional<bool>& none,
-                                   const ChartPatchField<ColorSpec>& color, const char* colour_message) {
+Expected<void, Error> apply_hidden(xml_node holder, Order order, const std::optional<bool>& none, bool color_set,
+                                   const char* colour_message) {
   if (!none.has_value()) {
     return ok();
   }
-  if (*none && color.is_set()) {
+  if (*none && color_set) {
     return bad_arg(colour_message);
   }
   if (*none) {
@@ -69,21 +69,12 @@ void remove_children_except(xml_node node, std::string_view keep) {
   }
 }
 
-/// Colour and transparency of `holder`'s solid fill (`a:spPr`, `a:ln` or `a:defRPr`).
-Expected<void, Error> apply_paint(xml_node holder, Order order, const ChartPatchField<ColorSpec>& color,
-                                  const ChartPatchField<double>& transparency) {
-  if (color.is_clear()) {
-    drop(holder, "solidFill");
-  } else if (color.is_set()) {
-    const xml_node current = io::first_element_child(child_local(holder, "solidFill"));
-    // An unchanged colour keeps its stored element (`lt1` stays `lt1` rather than becoming `bg1`).
-    const auto stored = drawing_color::read_exact(current, false);
-    if (!stored || !drawing_color::same_color(*stored, color.value)) {
-      const std::string alpha = drawing_color::alpha_of(current);
-      drop_fills(holder);
-      drawing_color::write_color(ensure(holder, "a:solidFill", order), "a:", color.value, alpha);
-    }
-  }
+std::string alpha_val(double transparency_pct) {
+  return rounded((100.0 - transparency_pct) * 1000.0);
+}
+
+/// Sets or removes the `a:alpha` of `holder`'s solid colour.
+Expected<void, Error> apply_transparency(xml_node holder, const ChartPatchField<double>& transparency) {
   if (transparency.is_keep()) {
     return ok();
   }
@@ -99,8 +90,66 @@ Expected<void, Error> apply_paint(xml_node holder, Order order, const ChartPatch
     return bad_arg("transparency_pct must be 0..100");
   }
   xml_node alpha = child_local(clr, "alpha");
-  io::set_attr(alpha ? alpha : clr.append_child("a:alpha"), "val", rounded((100.0 - transparency.value) * 1000.0));
+  io::set_attr(alpha ? alpha : clr.append_child("a:alpha"), "val", alpha_val(transparency.value));
   return ok();
+}
+
+/// Colour and transparency of `holder`'s solid fill as a Theme or Rgb (`a:defRPr`).
+Expected<void, Error> apply_paint(xml_node holder, Order order, const ChartPatchField<ColorSpec>& color,
+                                  const ChartPatchField<double>& transparency) {
+  if (color.is_clear()) {
+    drop(holder, "solidFill");
+  } else if (color.is_set()) {
+    const xml_node current = io::first_element_child(child_local(holder, "solidFill"));
+    // An unchanged colour keeps its stored element (`lt1` stays `lt1` rather than becoming `bg1`).
+    const auto stored = drawing_color::read_exact(current, false);
+    if (!stored || !drawing_color::same_color(*stored, color.value)) {
+      const std::string alpha = drawing_color::alpha_of(current);
+      drop_fills(holder);
+      drawing_color::write_color(ensure(holder, "a:solidFill", order), "a:", color.value, alpha);
+    }
+  }
+  return apply_transparency(holder, transparency);
+}
+
+/// `color` without its `alpha` transforms, which `transparency_pct` owns when the colour states none.
+DrawingColor without_alpha(DrawingColor color) {
+  auto& t = color.transforms;
+  t.erase(std::remove_if(t.begin(), t.end(), [](const ColorTransform& x) { return x.name == "alpha"; }), t.end());
+  return color;
+}
+
+/// Colour (base and transforms) and transparency of `holder`'s solid fill (`a:spPr` or `a:ln`). An `alpha`
+/// transform the colour states must equal a `transparency` set beside it; a colour without one keeps the
+/// stored alpha.
+Expected<void, Error> apply_paint(xml_node holder, Order order, const ChartPatchField<DrawingColor>& color,
+                                  const ChartPatchField<double>& transparency) {
+  if (color.is_set()) {
+    RETURN_IF_ERROR(drawing_color::validate_input(color.value));
+    for (const ColorTransform& t : color.value.transforms) {
+      if (t.name == "alpha" && transparency.is_set() &&
+          (!t.value || std::to_string(*t.value) != alpha_val(transparency.value))) {
+        return bad_arg("An alpha transform and transparency_pct state different opacities");
+      }
+    }
+  }
+  if (color.is_clear()) {
+    drop(holder, "solidFill");
+  } else if (color.is_set()) {
+    const xml_node current = io::first_element_child(child_local(holder, "solidFill"));
+    const DrawingColor& wanted = color.value;
+    const bool own_alpha = wanted.transforms.size() != without_alpha(wanted).transforms.size();
+    // An unchanged colour keeps its stored element (`lt1` stays `lt1` rather than becoming `bg1`).
+    const auto stored = drawing_color::read_written_color(current);
+    const bool same = stored && (own_alpha ? drawing_color::same_drawing_color(*stored, wanted)
+                                           : drawing_color::same_drawing_color(without_alpha(*stored), wanted));
+    if (!same) {
+      const std::string alpha = own_alpha ? std::string() : drawing_color::alpha_of(current);
+      drop_fills(holder);
+      drawing_color::write_drawing_color(ensure(holder, "a:solidFill", order), "a:", wanted, alpha);
+    }
+  }
+  return apply_transparency(holder, transparency);
 }
 
 /// Replaces `a:headEnd` / `a:tailEnd` whole, so a size the patch omits is dropped rather than kept stale.
@@ -132,13 +181,13 @@ Expected<void, Error> apply_line_end(xml_node ln, const char* qname, const Chart
 }  // namespace
 
 Expected<void, Error> apply_paint_properties(xml_node sp, const ChartFillPatch& fill, const ChartLinePatch& line) {
-  RETURN_IF_ERROR(apply_hidden(sp, kShapeOrder, fill.none, fill.color, "A hidden fill takes no colour"));
+  RETURN_IF_ERROR(apply_hidden(sp, kShapeOrder, fill.none, fill.color.is_set(), "A hidden fill takes no colour"));
   RETURN_IF_ERROR(apply_paint(sp, kShapeOrder, fill.color, fill.transparency_pct));
   if (line_empty(line)) {
     return ok();
   }
   xml_node ln = ensure(sp, "a:ln", kShapeOrder);
-  RETURN_IF_ERROR(apply_hidden(ln, kLineOrder, line.none, line.color, "A hidden line takes no colour"));
+  RETURN_IF_ERROR(apply_hidden(ln, kLineOrder, line.none, line.color.is_set(), "A hidden line takes no colour"));
   RETURN_IF_ERROR(apply_paint(ln, kLineOrder, line.color, line.transparency_pct));
   if (line.width_pt.is_clear()) {
     ln.remove_attribute("w");

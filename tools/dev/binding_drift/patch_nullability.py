@@ -75,11 +75,12 @@ def _balanced(text: str, open_at: int) -> str:
 
 
 def _member_nulls(body: str) -> Set[str]:
-    """Names of the members of an object-type body whose type admits `null`."""
+    """Names of the members of an object-type body whose type admits `null` at its top level (a `null` inside a
+    `Record<string, T | null>` removes one entry of a merge-by-key map, not the member)."""
     out: Set[str] = set()
     for member in _split_top(body, ";,"):
         m = re.match(r"(?:readonly\s+)?(\w+)\??\s*:\s*(.*)$", member, re.S)
-        if m and re.search(r"\bnull\b", m.group(2)):
+        if m and any(alt.strip() == "null" for alt in _split_top(m.group(2), "|")):
             out.add(m.group(1))
     return out
 
@@ -133,14 +134,20 @@ def _python_update_methods(package: Path) -> Dict[Tuple[str, str], Dict[str, boo
 
 
 def _admits_none(annotation: ast.AST) -> bool:
-    for node in ast.walk(annotation):
-        if isinstance(node, ast.Constant) and (
-            node.value is None or (isinstance(node.value, str) and re.search(r"\bNone\b", node.value))
-        ):
+    """The annotation admits `None` at its top level: `None`, `Optional[...]`, or a `Union` / `|` arm that does.
+    A `None` nested in an argument type (`Mapping[str, Optional[int]]`) removes a map entry, not the keyword."""
+    node = annotation
+    if isinstance(node, ast.Constant):
+        return node.value is None or (isinstance(node.value, str) and bool(re.search(r"\bNone\b", node.value)))
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.BitOr):
+        return _admits_none(node.left) or _admits_none(node.right)
+    if isinstance(node, ast.Subscript) and isinstance(node.value, ast.Name):
+        if node.value.id == "Optional":
             return True
-        if isinstance(node, ast.Name) and node.id == "Optional":
-            return True
-    return False
+        if node.value.id == "Union":
+            arms = node.slice.elts if isinstance(node.slice, ast.Tuple) else [node.slice]
+            return any(_admits_none(arm) for arm in arms)
+    return isinstance(node, ast.Name) and node.id == "Optional"
 
 
 def _method_names(op: dict) -> List[str]:
@@ -190,7 +197,7 @@ def check_patch_nullability(
             )
     # A patch record without a `clearable:` list declares no clear rule to compare.
     unlisted = {
-        v["js"]
+        v.get("js")
         for v in ledger.entries.values()
         if v.get("kind") == "record" and v.get("role") == "patch" and "clearable" not in v
     }

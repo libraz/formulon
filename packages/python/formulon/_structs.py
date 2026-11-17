@@ -1971,10 +1971,34 @@ DRAWING_PATCH = Struct(
 )
 
 
+COLOR_TRANSFORM = Struct(
+    "fm_color_transform_t",
+    [("name", PTR), ("has_value", I32), ("value", I32)],
+)
+
+DRAWING_COLOR = Struct(
+    "fm_drawing_color_t",
+    [
+        ("base", COLOR_SPEC_BLOB),
+        ("transforms", PTR),
+        ("transform_count", U32),
+        ("has_resolved", I32),
+        ("resolved", U32),
+        ("has_resolved_transparency_pct", I32),
+        ("resolved_transparency_pct", F64),
+    ],
+)
+DRAWING_COLOR_BLOB = nested(DRAWING_COLOR)
+
+CHART_LINE_END = Struct(
+    "fm_chart_line_end_t",
+    [("type", I32), ("has_width", I32), ("width", I32), ("has_length", I32), ("length", I32)],
+)
+
 CHART_FILL = Struct(
     "fm_chart_fill_t",
     [
-        ("color", COLOR_SPEC_BLOB),
+        ("color", DRAWING_COLOR_BLOB),
         ("has_transparency_pct", I32),
         ("transparency_pct", F64),
         ("none", I32),
@@ -1985,7 +2009,7 @@ CHART_FILL = Struct(
 CHART_LINE = Struct(
     "fm_chart_line_t",
     [
-        ("color", COLOR_SPEC_BLOB),
+        ("color", DRAWING_COLOR_BLOB),
         ("has_transparency_pct", I32),
         ("transparency_pct", F64),
         ("has_width_pt", I32),
@@ -1994,6 +2018,10 @@ CHART_LINE = Struct(
         ("dash", I32),
         ("none", I32),
         ("other", I32),
+        ("has_head_end", I32),
+        ("head_end", nested(CHART_LINE_END)),
+        ("has_tail_end", I32),
+        ("tail_end", nested(CHART_LINE_END)),
     ],
 )
 
@@ -2001,7 +2029,7 @@ CHART_FILL_PATCH = Struct(
     "fm_chart_fill_patch_t",
     [
         ("color_op", I32),
-        ("color", COLOR_SPEC_BLOB),
+        ("color", DRAWING_COLOR_BLOB),
         ("transparency_pct_op", I32),
         ("transparency_pct", F64),
         ("none_op", I32),
@@ -2013,7 +2041,7 @@ CHART_LINE_PATCH = Struct(
     "fm_chart_line_patch_t",
     [
         ("color_op", I32),
-        ("color", COLOR_SPEC_BLOB),
+        ("color", DRAWING_COLOR_BLOB),
         ("transparency_pct_op", I32),
         ("transparency_pct", F64),
         ("width_pt_op", I32),
@@ -2022,7 +2050,30 @@ CHART_LINE_PATCH = Struct(
         ("dash", I32),
         ("none_op", I32),
         ("none", I32),
+        ("head_end_op", I32),
+        ("head_end", nested(CHART_LINE_END)),
+        ("tail_end_op", I32),
+        ("tail_end", nested(CHART_LINE_END)),
     ],
+)
+
+CHART_AREA_PAINT = Struct(
+    "fm_chart_area_paint_t",
+    [("fill", nested(CHART_FILL)), ("line", nested(CHART_LINE))],
+)
+
+CHART_AREA_PAINT_PATCH = Struct(
+    "fm_chart_area_paint_patch_t",
+    [("fill", nested(CHART_FILL_PATCH)), ("line", nested(CHART_LINE_PATCH))],
+)
+
+SHAPE_CONNECTION = Struct("fm_shape_connection_t", [("object_id", U32), ("site_index", U32)])
+
+SHAPE_ADJUST = Struct("fm_shape_adjust_t", [("name", PTR), ("value", I32)])
+
+SHAPE_ADJUST_PATCH = Struct(
+    "fm_shape_adjust_patch_t",
+    [("name", PTR), ("value_op", I32), ("value", I32)],
 )
 
 SHAPE = Struct(
@@ -2038,6 +2089,13 @@ SHAPE = Struct(
         ("text", PTR),
         ("flip_h", I32),
         ("flip_v", I32),
+        ("has_start_connection", I32),
+        ("start_connection", nested(SHAPE_CONNECTION)),
+        ("has_end_connection", I32),
+        ("end_connection", nested(SHAPE_CONNECTION)),
+        ("adjust_values", PTR),
+        ("adjust_values_count", U32),
+        ("text_vert", I32),
     ],
 )
 
@@ -2053,6 +2111,10 @@ SHAPE_SPEC = Struct(
         ("text", PTR),
         ("flip_h", I32),
         ("flip_v", I32),
+        ("adjust_values", PTR),
+        ("adjust_values_count", U32),
+        ("has_text_vert", I32),
+        ("text_vert", I32),
     ],
 )
 
@@ -2203,6 +2265,8 @@ CHART_INFO = Struct(
         ("source_header_row", I32),
         ("source_header_column", I32),
         ("na_as_blank", I32),
+        ("chart_area", nested(CHART_AREA_PAINT)),
+        ("plot_area", nested(CHART_AREA_PAINT)),
     ],
 )
 
@@ -2560,6 +2624,8 @@ CHART_DISPLAY_PATCH = Struct(
         ("na_as_blank", I32),
         ("style_op", I32),
         ("style", I32),
+        ("chart_area", nested(CHART_AREA_PAINT_PATCH)),
+        ("plot_area", nested(CHART_AREA_PAINT_PATCH)),
     ],
 )
 
@@ -2775,6 +2841,10 @@ SHAPE_PATCH = Struct(
         ("flip_h", I32),
         ("flip_v_op", I32),
         ("flip_v", I32),
+        ("adjust_values", PTR),
+        ("adjust_values_count", U32),
+        ("text_vert_op", I32),
+        ("text_vert", I32),
     ],
 )
 

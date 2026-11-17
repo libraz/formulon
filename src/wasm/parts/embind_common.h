@@ -223,6 +223,8 @@ class JsNarrowNumericReader {
   void fail_null(const char* field);
   /// Records a type error for `field` (it "is required").
   void fail_required(const char* field);
+  /// The own enumerable string keys of the object `owner` as a JS array; empty after a rejection.
+  emscripten::val own_keys(const emscripten::val& owner, const char* field);
   uint32_t length(const emscripten::val& array, const char* field = nullptr);
   emscripten::val array_element(const emscripten::val& array, uint32_t index, const char* field = nullptr);
 

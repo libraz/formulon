@@ -196,8 +196,16 @@ int main(void) {
   _Static_assert(sizeof(((fm_shape_patch_t*)0)->line) == sizeof(fm_chart_line_patch_t),
                  "fm_shape_patch_t.line is a chart line patch");
   _Static_assert(FM_DRAWING_RESTORE_NEW_ID == 1u, "FM_DRAWING_RESTORE_NEW_ID changed");
-  _Static_assert(sizeof(fm_shape_info_t) == (sizeof(void*) == 4 ? 168 : 176), "fm_shape_info_t ABI layout changed");
-  _Static_assert(sizeof(fm_shape_spec_t) == (sizeof(void*) == 4 ? 248 : 272), "fm_shape_spec_t ABI layout changed");
+  _Static_assert(sizeof(fm_shape_info_t) == (sizeof(void*) == 4 ? 312 : 328), "fm_shape_info_t ABI layout changed");
+  _Static_assert(sizeof(fm_shape_spec_t) == (sizeof(void*) == 4 ? 376 : 408), "fm_shape_spec_t ABI layout changed");
+  // A paint colour is a base colour, its transforms and the rendered result.
+  _Static_assert(sizeof(((fm_chart_fill_t*)0)->color) == sizeof(fm_drawing_color_t),
+                 "fm_chart_fill_t.color is a drawing colour");
+  _Static_assert(sizeof(fm_chart_line_end_t) == 20, "fm_chart_line_end_t ABI layout changed");
+  _Static_assert(sizeof(fm_shape_connection_t) == 8, "fm_shape_connection_t ABI layout changed");
+  _Static_assert(FM_CHART_LINE_END_SIZE_MEDIUM == 0, "a zeroed line end size is the schema default");
+  _Static_assert(FM_SHAPE_TEXT_VERT_ABSENT == -1, "FM_SHAPE_TEXT_VERT_ABSENT changed");
+  _Static_assert(FM_CHART_LINE_DASH_SYS_DASH_DOT_DOT == 11, "fm_chart_line_dash_t changed");
   _Static_assert(sizeof(fm_slicer_info_t) == (sizeof(void*) == 4 ? 56 : 72), "fm_slicer_info_t ABI layout changed");
   _Static_assert(sizeof(fm_slicer_spec_t) == (sizeof(void*) == 4 ? 128 : 152), "fm_slicer_spec_t ABI layout changed");
   _Static_assert(sizeof(fm_data_table_t) == 60, "fm_data_table_t ABI layout changed");
@@ -205,7 +213,7 @@ int main(void) {
   _Static_assert(sizeof(fm_sparkline_group_t) == (sizeof(void*) == 4 ? 296 : 312),
                  "fm_sparkline_group_t ABI layout changed");
   // The common drawing fields share one patch; each kind's update takes its own fields only.
-  _Static_assert(sizeof(fm_shape_patch_t) == (sizeof(void*) == 4 ? 200 : 216), "fm_shape_patch_t ABI layout changed");
+  _Static_assert(sizeof(fm_shape_patch_t) == (sizeof(void*) == 4 ? 328 : 352), "fm_shape_patch_t ABI layout changed");
   _Static_assert(sizeof(fm_picture_info_t) == 24, "fm_picture_info_t ABI layout changed");
   _Static_assert(sizeof(fm_picture_patch_t) == 32, "fm_picture_patch_t ABI layout changed");
   _Static_assert(sizeof(fm_slicer_patch_t) == (sizeof(void*) == 4 ? 56 : 72), "fm_slicer_patch_t ABI layout changed");

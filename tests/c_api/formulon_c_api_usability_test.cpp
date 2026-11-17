@@ -474,7 +474,7 @@ TEST(FormulonCApiUsability, ShapeFillClearedReturnsToTheStylesFill) {
   const fm_shape_info_t shape = ReadShape(wb.handle, id);
   EXPECT_EQ(shape.fill.none, 0);
   EXPECT_EQ(shape.fill.other, 0);
-  EXPECT_EQ(shape.fill.color.kind, FM_COLOR_KIND_NONE);
+  EXPECT_EQ(shape.fill.color.base.kind, FM_COLOR_KIND_NONE);
 }
 
 // A shape added with only its anchor takes Excel's defaults for the rest, and
@@ -486,10 +486,10 @@ TEST(FormulonCApiUsability, ShapeAddedFromASpecTakesTheDefaultsItLeavesOut) {
   const fm_shape_info_t shape = ReadShape(wb.handle, id);
   EXPECT_EQ(std::string(shape.preset_geometry), "rect");
   // All-zero paint records: the shape draws its style's fill and outline.
-  EXPECT_EQ(shape.fill.color.kind, FM_COLOR_KIND_NONE);
+  EXPECT_EQ(shape.fill.color.base.kind, FM_COLOR_KIND_NONE);
   EXPECT_EQ(shape.fill.none, 0);
   EXPECT_EQ(shape.fill.other, 0);
-  EXPECT_EQ(shape.line.color.kind, FM_COLOR_KIND_NONE);
+  EXPECT_EQ(shape.line.color.base.kind, FM_COLOR_KIND_NONE);
   EXPECT_EQ(shape.line.has_width_pt, 0);
   EXPECT_EQ(shape.line.none, 0);
   const fm_drawing_object_info_t object = ReadDrawing(wb.handle, id);

@@ -4415,6 +4415,19 @@ export const DrawingObjectKind: Readonly<{
 /** Union of the {@link DrawingObjectKind} ordinals. */
 export type DrawingObjectKind = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 
+/** The text direction of a shape (`a:bodyPr/@vert`). */
+export const ShapeTextVert: Readonly<{
+  Horz: 0;
+  Vert: 1;
+  Vert270: 2;
+  EaVert: 3;
+  WordArtVert: 4;
+  WordArtVertRtl: 5;
+  MongolianVert: 6;
+}>;
+/** Union of the {@link ShapeTextVert} ordinals. */
+export type ShapeTextVert = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
 /** The anchor element type of a drawing object. `Default` is input only: the operation's default kind (`OneCell`
  *  for a picture, `TwoCell` for a chart, shape or slicer; an update keeps the object's kind). A read never
  *  returns it. */
@@ -4614,9 +4627,37 @@ export const ChartLineDash: Readonly<{
   Dot: 2;
   DashDot: 3;
   Other: 4;
+  SysDot: 5;
+  SysDash: 6;
+  LgDash: 7;
+  LgDashDot: 8;
+  LgDashDotDot: 9;
+  SysDashDot: 10;
+  SysDashDotDot: 11;
 }>;
 /** Union of the {@link ChartLineDash} ordinals. */
-export type ChartLineDash = 0 | 1 | 2 | 3 | 4;
+export type ChartLineDash = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
+
+/** The decoration at one end of a line (`a:headEnd` / `a:tailEnd`). */
+export const ChartLineEndType: Readonly<{
+  None: 0;
+  Triangle: 1;
+  Stealth: 2;
+  Diamond: 3;
+  Oval: 4;
+  Arrow: 5;
+}>;
+/** Union of the {@link ChartLineEndType} ordinals. */
+export type ChartLineEndType = 0 | 1 | 2 | 3 | 4 | 5;
+
+/** The width or length of a line end; `Medium` is the OOXML default. */
+export const ChartLineEndSize: Readonly<{
+  Medium: 0;
+  Small: 1;
+  Large: 2;
+}>;
+/** Union of the {@link ChartLineEndSize} ordinals. */
+export type ChartLineEndSize = 0 | 1 | 2;
 
 /** Marker symbol. `Picture` is read-only: a patch carrying it is rejected. */
 export const ChartMarkerSymbol: Readonly<{
@@ -5201,9 +5242,11 @@ export interface ImageProperties extends ImageInfo {
 export interface PictureProperties extends ImageProperties {
   /** Clockwise rotation in degrees, as stored: 360 reads 360 and -90 reads -90. */
   readonly rotationDeg: number;
-  /** `true` when the picture is flipped horizontally. */
+  /** `true` when the picture is flipped horizontally.
+   *  Excel's Flip command toggles this flag and sets the rotation to (360 - r) mod 360. */
   readonly flipH: boolean;
-  /** `true` when the picture is flipped vertically. */
+  /** `true` when the picture is flipped vertically.
+   *  Excel's Flip command toggles this flag and sets the rotation to (360 - r) mod 360. */
   readonly flipV: boolean;
 }
 
@@ -5216,9 +5259,11 @@ export interface PicturePatch {
   /** The new clockwise rotation in degrees, stored as given to 1/60000 degree; 0 removes it. A value that is not
    *  finite, or beyond about +/-35791 degrees, fails with `StatusCode.InvalidArgument`. */
   rotationDeg?: number;
-  /** Whether the picture is flipped horizontally; `false` removes the attribute. */
+  /** Whether the picture is flipped horizontally; `false` removes the attribute.
+   *  Excel's Flip command toggles this flag and sets the rotation to (360 - r) mod 360. */
   flipH?: boolean;
-  /** Whether the picture is flipped vertically; `false` removes the attribute. */
+  /** Whether the picture is flipped vertically; `false` removes the attribute.
+   *  Excel's Flip command toggles this flag and sets the rotation to (360 - r) mod 360. */
   flipV?: boolean;
 }
 
@@ -5388,10 +5433,29 @@ export interface ShapeProperties {
   readonly line: ChartLine | null;
   /** Clockwise rotation in degrees, as stored: 360 reads 360 and -90 reads -90. */
   readonly rotationDeg: number;
-  /** `true` when the shape is flipped horizontally. */
+  /** `true` when the shape is flipped horizontally.
+   *  Excel's Flip command toggles this flag and sets the rotation to (360 - r) mod 360. */
   readonly flipH: boolean;
-  /** `true` when the shape is flipped vertically. */
+  /** `true` when the shape is flipped vertically.
+   *  Excel's Flip command toggles this flag and sets the rotation to (360 - r) mod 360. */
   readonly flipV: boolean;
+  /** The shape the connector's start is glued to; `null` when the start is free or the object is not a connector. */
+  readonly startConnection: ShapeConnection | null;
+  /** The shape the connector's end is glued to; `null` when the end is free or the object is not a connector. */
+  readonly endConnection: ShapeConnection | null;
+  /** The preset geometry's adjust values stated as plain values, by guide name, in the preset's raw DrawingML units;
+   *  `{}` when there are none. */
+  readonly adjustValues: Readonly<Record<string, number>>;
+  /** The text direction; `null` when the shape states none, which Excel draws horizontal. */
+  readonly textVert: ShapeTextVert | null;
+}
+
+/** One glued end of a connector (`a:stCxn` / `a:endCxn`). */
+export interface ShapeConnection {
+  /** The id of the shape the end is glued to, in the same drawing. */
+  readonly objectId: number;
+  /** The connection site on that shape, from 0. */
+  readonly siteIndex: number;
 }
 
 /** Argument of `Sheet.addShape`: the {@link DrawingPlacementInput} keys (its anchor needs a non-zero size or a
@@ -5413,16 +5477,26 @@ export interface ShapeInput extends DrawingPlacementInput {
   /** Clockwise rotation in degrees, stored as given to 1/60000 degree; 0 for none. A value that is not finite, or
    *  beyond about +/-35791 degrees, fails with `StatusCode.InvalidArgument`. */
   rotationDeg?: number;
-  /** Whether the shape is flipped horizontally; omitted is not flipped, and `null` is a `TypeError`. */
+  /** Whether the shape is flipped horizontally; omitted is not flipped, and `null` is a `TypeError`. Excel's Flip
+   *  command toggles this flag and sets the rotation to (360 - r) mod 360. */
   flipH?: boolean;
-  /** Whether the shape is flipped vertically; omitted is not flipped, and `null` is a `TypeError`. */
+  /** Whether the shape is flipped vertically; omitted is not flipped, and `null` is a `TypeError`.
+   *  Excel's Flip command toggles this flag and sets the rotation to (360 - r) mod 360. */
   flipV?: boolean;
+  /** Adjust values of the preset geometry by guide name, in the preset's raw DrawingML units; omitted writes none, and
+   *  `null` is a `TypeError`. A malformed name, or a guide on a shape without preset geometry, fails with
+   *  `StatusCode.InvalidArgument`; more than 64 guides fails with `StatusCode.SecurityResourceLimit`. */
+  adjustValues?: Record<string, number>;
+  /** The text direction; omitted states none, `null` is a `TypeError`, and a connector or group fails with
+   *  `StatusCode.InvalidArgument`. */
+  textVert?: ShapeTextVert;
 }
 
 /** The shape-specific keys of `Shape.update`: those of {@link ShapeInput} except the placement keys, each optional. A
- *  key left out is unchanged and no key other than `fill` / `line` accepts `null`. `fill` / `line` merge as a chart
- *  series' do. `Shape.update` also takes the {@link DrawingPatch} keys. `objectId` and `kind` of a {@link
- *  ShapeProperties} are ignored; any other unknown key fails with a `TypeError`. */
+ *  key left out is unchanged and no key other than `fill` / `line` / `textVert` accepts `null`. `fill` / `line` merge
+ *  as a chart series' do. `Shape.update` also takes the {@link DrawingPatch} keys. `objectId` and `kind` of a {@link
+ *  ShapeProperties} are ignored (`startConnection` and `endConnection` included); any other unknown key fails with a
+ *  `TypeError`. */
 export interface ShapePatch {
   /** The new preset geometry name. */
   presetGeometry?: string;
@@ -5438,10 +5512,20 @@ export interface ShapePatch {
   line?: ChartLinePatch | null;
   /** The new clockwise rotation in degrees, stored as given to 1/60000 degree; 0 removes it. */
   rotationDeg?: number;
-  /** Whether the shape is flipped horizontally; `false` removes the attribute. */
+  /** Whether the shape is flipped horizontally; `false` removes the attribute.
+   *  Excel's Flip command toggles this flag and sets the rotation to (360 - r) mod 360.
+   *  A flip or rotation patched on a connector unglues both of its ends. */
   flipH?: boolean;
-  /** Whether the shape is flipped vertically; `false` removes the attribute. */
+  /** Whether the shape is flipped vertically; `false` removes the attribute.
+   *  Excel's Flip command toggles this flag and sets the rotation to (360 - r) mod 360. */
   flipV?: boolean;
+  /** Adjust values by guide name, applied after a `presetGeometry` change (which drops every guide): a number sets the
+   *  guide, `null` removes it so the preset's default applies, and a guide not named is kept. A malformed name, or an
+   *  object without preset geometry, fails with `StatusCode.InvalidArgument`; more than 64 entries fails with
+   *  `StatusCode.SecurityResourceLimit`. */
+  adjustValues?: Record<string, number | null>;
+  /** The new text direction; `null` removes it. Applies to a shape only. */
+  textVert?: ShapeTextVert | null;
 }
 
 /** Return type of `Slicer.getProperties()`: the slicer-specific fields of a table slicer of a worksheet. Its anchor,
@@ -5753,24 +5837,55 @@ export interface ChartDataSource {
  *  `StatusCode.InvalidArgument` (api-conventions §5 rule 30). */
 export type ChartDataSourceInput = ChartDataSource | string;
 
+/** One transform child of a DrawingML colour (`a:lumMod`, `a:shade`, `a:alpha`, ...). */
+export interface ColorTransform {
+  /** The transform element's local name, such as "lumMod" or "alpha". */
+  readonly name: string;
+  /** The `val` attribute in the element's DrawingML unit (thousandths of a percent for most); `null` for an element
+   *  without one. */
+  readonly value: number | null;
+}
+
+/** A DrawingML colour as the file states it, with the colour and opacity Excel renders for it. */
+export interface DrawingColor {
+  /** The base colour: `ColorKind.Rgb` or `ColorKind.Theme`. */
+  readonly base: Color;
+  /** The transforms in document order, `alpha` included. */
+  readonly transforms: readonly ColorTransform[];
+  /** The colour Excel renders, opaque; `null` when a transform is one the engine does not model. */
+  readonly resolved: ResolvedColor | null;
+  /** The transparency Excel renders as a percentage (0..100), 0 without an `alpha` transform; `null` when an opacity
+   *  transform is one the engine does not model or `resolved` is `null`. */
+  readonly resolvedTransparencyPct: number | null;
+}
+
 /** A fill, as a chart element or a shape reads it. */
 export interface ChartFill {
-  /** The solid fill colour: `ColorKind.Rgb`, or `ColorKind.Theme` for a theme reference (a colour with other
-   *  transforms reads as its rendered `Rgb`); `null` when the element states none. */
-  readonly color: Color | null;
+  /** The solid fill colour with its transforms; `null` when the element states none. */
+  readonly color: DrawingColor | null;
   /** The fill transparency as a percentage (0..100); `null` when the colour has no alpha. */
   readonly transparencyPct: number | null;
   /** `true` for an explicit no-fill. */
   readonly none: boolean;
-  /** `true` on a read when the stored paint cannot be stated by this record (a gradient, pattern or picture); read
-   *  only. */
+  /** `true` on a read when the stored paint cannot be stated by this record (a gradient, pattern, picture or a solid
+   *  colour element it cannot hold); read only. */
   readonly other: boolean;
+}
+
+/** One end of a line (`a:headEnd` / `a:tailEnd`). Excel draws it on open geometry (lines, connectors, arcs) only. */
+export interface ChartLineEnd {
+  /** The decoration. */
+  readonly type: ChartLineEndType;
+  /** The decoration's width; `null` when the end states none (drawn medium). */
+  readonly width: ChartLineEndSize | null;
+  /** The decoration's length; `null` when the end states none (drawn medium). */
+  readonly length: ChartLineEndSize | null;
 }
 
 /** A line, read as a {@link ChartFill} is. */
 export interface ChartLine {
-  /** The outline colour, an RGB or theme colour; `null` when the element states none. */
-  readonly color: Color | null;
+  /** The outline colour with its transforms; `null` when the element states none. */
+  readonly color: DrawingColor | null;
   /** The outline transparency as a percentage (0..100); `null` when the colour has no alpha. */
   readonly transparencyPct: number | null;
   /** The outline width in points; `null` when the element states none. */
@@ -5779,8 +5894,21 @@ export interface ChartLine {
   readonly dash: ChartLineDash | null;
   /** `true` for an explicit no-line. */
   readonly none: boolean;
-  /** `true` on a read when the outline fill cannot be stated by this record (a gradient or pattern); read only. */
+  /** `true` on a read when the outline fill cannot be stated by this record (a gradient, pattern or a colour element it
+   *  cannot hold); read only. */
   readonly other: boolean;
+  /** The decoration at the line's start; `null` when the outline states none. */
+  readonly headEnd: ChartLineEnd | null;
+  /** The decoration at the line's end; `null` when the outline states none. */
+  readonly tailEnd: ChartLineEnd | null;
+}
+
+/** The paint of the chart area or the plot area as the file states it; the chart style supplies what is `null`. */
+export interface ChartAreaPaint {
+  /** The area's fill; `null` when it states none. */
+  readonly fill: ChartFill | null;
+  /** The area's outline; `null` when it states none. */
+  readonly line: ChartLine | null;
 }
 
 /** A series or point marker. */
@@ -6056,6 +6184,10 @@ export interface ChartProperties {
   readonly date1904: boolean;
   /** The chart style number (1..48); `null` when the chart states none. */
   readonly style: number | null;
+  /** The paint of the chart area. */
+  readonly chartArea: ChartAreaPaint;
+  /** The paint of the plot area. */
+  readonly plotArea: ChartAreaPaint;
   /** The plot groups of the chart. */
   readonly plots: readonly ChartPlot[];
   /** The axes of the chart. */
@@ -6200,14 +6332,28 @@ export interface ChartSourceInput {
   headerColumn?: boolean | null;
 }
 
+/** A paint colour with transforms, taken where a patch accepts a colour beside a plain {@link ColorInput}. The
+ *  {@link DrawingColor} a read returns passes as is, its `resolved` keys ignored. A transform's `name` is
+ *  `[A-Za-z][A-Za-z0-9]*`, at most 32 characters, and a `value` left out or `null` writes an element without `val`. A
+ *  `ColorKind.Theme` base with a non-zero `tint` is the shorthand for its luminance modulation and offset transforms
+ *  and cannot sit beside transforms; more than 64 transforms fail with `StatusCode.SecurityResourceLimit`. An `alpha`
+ *  transform written beside `transparencyPct` must state the same opacity, else `StatusCode.InvalidArgument`. */
+export interface DrawingColorInput {
+  /** The base colour: a `ColorKind.Rgb` or `ColorKind.Theme` colour. */
+  base: ColorInput;
+  /** The transforms in document order; omitted writes none. */
+  transforms?: readonly { name: string; value?: number | null }[];
+}
+
 /** A patch leaves an omitted field unchanged; `null` removes the element of a key that accepts it, and `none: true`
  *  writes an explicit no-fill (no-line on a {@link ChartLinePatch}). A colour is `"#RRGGBB"`,
  *  `"#AARRGGBB"`, a `ColorKind.Rgb` {@link Color} or a `ColorKind.Theme` {@link Color} (`theme` 0..11 as in a
- *  cell colour, `tint` in -1..1 quantised to 1e-5); indexed and automatic colours are rejected. */
+ *  cell colour, `tint` in -1..1 quantised to 1e-5), or a {@link DrawingColorInput} with transforms; indexed and
+ *  automatic colours are rejected. */
 export type ChartFillPatch = Patch<
   {
-    /** The solid fill colour, an RGB or theme colour. Omitted keeps it, `null` removes it. */
-    color: ColorInput;
+    /** The solid fill colour, an RGB or theme colour, with optional transforms. Omitted keeps it, `null` removes it. */
+    color: ColorInput | DrawingColorInput;
     /** The fill transparency as a percentage, 0 to 100. Omitted keeps it, `null` removes it. */
     transparencyPct: number;
     /** `true` writes an explicit no-fill and `false` removes it; omitted keeps it, `null` is rejected. */
@@ -6216,13 +6362,23 @@ export type ChartFillPatch = Patch<
   'color' | 'transparencyPct'
 >;
 
+/** A line end for {@link ChartLinePatch}: `type`, and a `width` and `length` left out or `null` for none. */
+export interface ChartLineEndInput {
+  /** The decoration drawn at the end. */
+  type: ChartLineEndType;
+  /** The decoration's width; omitted or `null` states none (drawn medium). */
+  width?: ChartLineEndSize | null;
+  /** The decoration's length; omitted or `null` states none (drawn medium). */
+  length?: ChartLineEndSize | null;
+}
+
 /** Line paint of a series, point, marker or shape in `Chart.updateSeries` / `Chart.addSeries` /
- *  `Chart.updatePoint` and a shape's `line`; `null` for `color`, `transparencyPct`, `widthPt` or `dash` removes
- *  that element, and `none: true` writes an explicit no-line. */
+ *  `Chart.updatePoint` and a shape's `line`; `null` for `color`, `transparencyPct`, `widthPt`, `dash`, `headEnd` or
+ *  `tailEnd` removes that element, and `none: true` writes an explicit no-line. */
 export type ChartLinePatch = Patch<
   {
-    /** The outline colour, an RGB or theme colour. Omitted keeps it, `null` removes it. */
-    color: ColorInput;
+    /** The outline colour, an RGB or theme colour, with optional transforms. Omitted keeps it, `null` removes it. */
+    color: ColorInput | DrawingColorInput;
     /** The outline transparency as a percentage, 0 to 100. Omitted keeps it, `null` removes it. */
     transparencyPct: number;
     /** The outline width in points. Omitted keeps it, `null` removes it. */
@@ -6231,8 +6387,25 @@ export type ChartLinePatch = Patch<
     dash: ChartLineDash;
     /** `true` writes an explicit no-line and `false` removes it. Omitted keeps it; `null` is rejected. */
     none: boolean;
+    /** The decoration at the line's start; it replaces the stored one whole, so a size it leaves out is dropped.
+     *  Omitted keeps it, `null` removes it. */
+    headEnd: ChartLineEndInput;
+    /** The decoration at the line's end, as `headEnd`. */
+    tailEnd: ChartLineEndInput;
   },
-  'color' | 'transparencyPct' | 'widthPt' | 'dash'
+  'color' | 'transparencyPct' | 'widthPt' | 'dash' | 'headEnd' | 'tailEnd'
+>;
+
+/** Paint of the chart area or the plot area in {@link ChartDisplayPatch}; `null` for `fill` or `line` removes the
+ *  paint the file states. */
+export type ChartAreaPaintPatch = Patch<
+  {
+    /** The patch applied to the area's fill. Omitted keeps it, `null` removes it. */
+    fill: ChartFillPatch;
+    /** The patch applied to the area's outline. Omitted keeps it, `null` removes it. */
+    line: ChartLinePatch;
+  },
+  'fill' | 'line'
 >;
 
 /** Marker of a series or point in `Chart.updateSeries` / `Chart.addSeries` / `Chart.updatePoint`; `null` for
@@ -6416,6 +6589,10 @@ export type ChartDisplayPatch = Patch<
     naAsBlank: boolean;
     /** The chart style number, 1 to 48. Omitted keeps it, `null` removes it. */
     style: number;
+    /** Update merged into the chart area's paint. Omitted keeps it; `null` is rejected. */
+    chartArea: ChartAreaPaintPatch;
+    /** Update merged into the plot area's paint. Omitted keeps it; `null` is rejected. */
+    plotArea: ChartAreaPaintPatch;
   },
   'blanksAs' | 'plotVisibleOnly' | 'naAsBlank' | 'style'
 >;
@@ -9392,6 +9569,8 @@ export interface Formulon {
   ImageFormat: typeof ImageFormat;
   /** The `DrawingObjectKind` enum. */
   DrawingObjectKind: typeof DrawingObjectKind;
+  /** The `ShapeTextVert` enum. */
+  ShapeTextVert: typeof ShapeTextVert;
   /** The `AnchorKind` enum. */
   AnchorKind: typeof AnchorKind;
   /** The `AnchorEditAs` enum. */
@@ -9448,6 +9627,10 @@ export interface Formulon {
   ChartLegendPosition: typeof ChartLegendPosition;
   /** The `ChartLineDash` enum. */
   ChartLineDash: typeof ChartLineDash;
+  /** The `ChartLineEndType` enum. */
+  ChartLineEndType: typeof ChartLineEndType;
+  /** The `ChartLineEndSize` enum. */
+  ChartLineEndSize: typeof ChartLineEndSize;
   /** The `ChartMarkerSymbol` enum. */
   ChartMarkerSymbol: typeof ChartMarkerSymbol;
   /** The `ChartLabelPosition` enum. */

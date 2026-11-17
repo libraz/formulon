@@ -208,11 +208,37 @@ describe('enum tables list their members at the exact ordinals', () => {
         fill: { color: '#336699' },
         line: { none: true },
       });
-      assert.equal(painted.getProperties().fill.color.argb, 0xff336699);
+      assert.equal(painted.getProperties().fill.color.base.argb, 0xff336699);
       painted.update({ fill: null, line: null });
       assert.equal(painted.getProperties().fill, null);
       assert.equal(painted.getProperties().line, null);
     });
+  });
+
+  it('line end, line dash and text direction tables follow the header order', () => {
+    assertTable('ChartLineEndType', inOrder('None', 'Triangle', 'Stealth', 'Diamond', 'Oval', 'Arrow'));
+    assertTable('ChartLineEndSize', inOrder('Medium', 'Small', 'Large'));
+    assertTable(
+      'ChartLineDash',
+      inOrder(
+        'Solid',
+        'Dash',
+        'Dot',
+        'DashDot',
+        'Other',
+        'SysDot',
+        'SysDash',
+        'LgDash',
+        'LgDashDot',
+        'LgDashDotDot',
+        'SysDashDot',
+        'SysDashDotDot',
+      ),
+    );
+    assertTable(
+      'ShapeTextVert',
+      inOrder('Horz', 'Vert', 'Vert270', 'EaVert', 'WordArtVert', 'WordArtVertRtl', 'MongolianVert'),
+    );
   });
 
   it('TableTotalsRowFunction follows the schema order', () => {

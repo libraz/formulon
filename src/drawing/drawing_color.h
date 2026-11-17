@@ -39,6 +39,15 @@ struct DrawingColor {
   /// Opaque 0xFFRRGGBB as Excel renders the colour; unset when a transform is one the engine
   /// does not model. Computed on read, ignored on input.
   std::optional<std::uint32_t> resolved_argb;
+  /// Opacity Excel renders, 0..100000 (100000 opaque); unset when an alpha transform is one the
+  /// engine does not model or `resolved_argb` is unset. Computed on read, ignored on input.
+  std::optional<std::uint32_t> resolved_alpha;
+};
+
+/// The colour and opacity a base and its transforms render as.
+struct ResolvedPaint {
+  std::optional<std::uint32_t> argb;   ///< Opaque 0xFFRRGGBB.
+  std::optional<std::uint32_t> alpha;  ///< 0..100000.
 };
 
 namespace drawing_color {
@@ -53,16 +62,23 @@ std::optional<std::uint32_t> scheme_index(std::string_view name);
 /// True when a `c:clrMapOvr` element remaps `bg1` / `tx1` / `bg2` / `tx2`.
 bool remaps_color_map(const pugi::xml_node& clr_map_ovr);
 
-/// The base and transforms of a `srgbClr` / `schemeClr` / `sysClr` element with its rendered colour;
+/// The base and transforms (`alpha` included, in place) of a `srgbClr` / `schemeClr` / `sysClr` element with
+/// its rendered colour and opacity;
 /// unset for any other element, a scheme name outside the twelve, a `val` that is not an int32,
 /// a transform outside the colour's namespace, or more than `kMaxTransforms` transforms. A `bg1` /
 /// `tx1` / `bg2` / `tx2` that `clr_map_ovr` remaps reads as the Rgb of the slot it maps to.
 std::optional<DrawingColor> read_drawing_color(const Workbook& wb, const pugi::xml_node& clr,
                                                const pugi::xml_node& clr_map_ovr);
 
-/// The colour Excel renders for `base_argb` under `transforms`, applied in order; unset when one is
-/// not modelled (the alpha transforms, an unknown name) or lacks the value it needs.
-std::optional<std::uint32_t> resolve_transforms(std::uint32_t base_argb, const std::vector<ColorTransform>& transforms);
+/// The base and transforms of a colour element as written, without `c:clrMapOvr` or rendering; unset as
+/// `read_drawing_color`.
+std::optional<DrawingColor> read_written_color(const pugi::xml_node& clr);
+
+/// The colour and opacity Excel renders for `base_argb` under `transforms`, applied in order. `alpha`
+/// leaves the colour as it is. The colour is unset when a transform is not modelled (`alphaMod`,
+/// `alphaOff`, an unknown name) or lacks the value it needs; the opacity is 100000 without an alpha
+/// transform and unset with one, or when the colour is unset.
+ResolvedPaint resolve_transforms(std::uint32_t base_argb, const std::vector<ColorTransform>& transforms);
 
 /// `color` with a Theme tint expanded into its `lumMod` / `lumOff` transforms.
 DrawingColor expand_tint(const DrawingColor& color);

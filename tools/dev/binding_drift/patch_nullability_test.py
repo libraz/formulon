@@ -84,6 +84,23 @@ class DtsNullKeysTest(unittest.TestCase):
     def test_an_undeclared_type_is_none(self) -> None:
         self.assertIsNone(dts_null_keys(DTS, "MissingPatch"))
 
+    def test_a_null_map_value_is_not_a_null_member(self) -> None:
+        dts = "export interface GuidePatch {\n  values?: Record<string, number | null>;\n  fill?: Fill | null;\n}\n"
+        self.assertEqual(dts_null_keys(dts, "GuidePatch"), {"fill"})
+
+    def test_a_nested_optional_does_not_admit_none(self) -> None:
+        import ast
+
+        from tools.dev.binding_drift.patch_nullability import _admits_none
+
+        def admits(text: str) -> bool:
+            return _admits_none(ast.parse(text, mode="eval").body)
+
+        self.assertFalse(admits("Union[Mapping[str, Optional[int]], Unchanged]"))
+        self.assertTrue(admits("Union[Fill, None, Unchanged]"))
+        self.assertTrue(admits("Optional[Fill]"))
+        self.assertTrue(admits("Fill | None"))
+
 
 class PatchNullabilityTest(unittest.TestCase):
     def test_agreement_is_clean(self) -> None:

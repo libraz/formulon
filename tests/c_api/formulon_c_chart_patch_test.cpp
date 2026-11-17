@@ -545,8 +545,8 @@ TEST(FormulonCApiChartPatch, InsertRefusesABarDirectionOnAnotherTypeAndCreatesNo
 fm_chart_point_patch_t SetPointColor() {
   fm_chart_point_patch_t point = FM_STRUCT_INIT(fm_chart_point_patch_t);
   point.line.color_op = FM_PATCH_OP_SET;
-  point.line.color.kind = FM_COLOR_KIND_RGB;
-  point.line.color.argb = 0xFF123456U;
+  point.line.color.base.kind = FM_COLOR_KIND_RGB;
+  point.line.color.base.argb = 0xFF123456U;
   point.marker_op = FM_PATCH_OP_SET;
   point.marker.symbol_op = FM_PATCH_OP_SET;
   point.marker.symbol = FM_CHART_MARKER_SYMBOL_TRIANGLE;
@@ -586,7 +586,7 @@ TEST(FormulonCApiChartPatch, AllKeepPointPatchLeavesTheOverrideAndClearingEveryM
   fm_chart_point_info_t point = FM_STRUCT_INIT(fm_chart_point_info_t);
   ASSERT_EQ(fm_chart_get_series_point_at(chart.handle, 0, 1, 0, &point), FM_STATUS_OK);
   EXPECT_EQ(point.idx, 2U);
-  EXPECT_EQ(point.line.color.argb, 0xFF123456U);
+  EXPECT_EQ(point.line.color.base.argb, 0xFF123456U);
   EXPECT_EQ(point.has_marker, 1);
   EXPECT_EQ(point.marker.symbol, FM_CHART_MARKER_SYMBOL_TRIANGLE);
 
@@ -626,7 +626,7 @@ TEST(FormulonCApiChartPatch, PointOverrideEmptiedByClearsDisappearsOnlyWhenNothi
   fm_chart_point_info_t point = FM_STRUCT_INIT(fm_chart_point_info_t);
   ASSERT_EQ(fm_chart_get_series_point_at(chart.handle, 0, 0, 0, &point), FM_STATUS_OK);
   EXPECT_EQ(point.has_marker, 0);
-  EXPECT_EQ(point.line.color.argb, 0xFF123456U);
+  EXPECT_EQ(point.line.color.base.argb, 0xFF123456U);
 
   // A new point repeats the series line, so its width stays after the colour goes.
   fm_chart_point_patch_t colour = FM_STRUCT_INIT(fm_chart_point_patch_t);
@@ -658,7 +658,7 @@ TEST(FormulonCApiChartPaintClear, ClearFillToStyle) {
   ChartGuard chart;
   OpenChart(wb.handle, id, &chart);
   const fm_chart_series_info_t fresh = Series(chart, 0, 0);
-  EXPECT_EQ(fresh.fill.color.kind, FM_COLOR_KIND_THEME);
+  EXPECT_EQ(fresh.fill.color.base.kind, FM_COLOR_KIND_THEME);
   EXPECT_EQ(fresh.fill.none, 0);
   EXPECT_EQ(fresh.fill.other, 0);
 
@@ -676,8 +676,8 @@ TEST(FormulonCApiChartPaintClear, ClearFillToStyle) {
   // A colour given with no-fill is refused and changes nothing.
   fm_chart_series_patch_t both = no_fill;
   both.fill.color_op = FM_PATCH_OP_SET;
-  both.fill.color.kind = FM_COLOR_KIND_RGB;
-  both.fill.color.argb = 0xFF336699U;
+  both.fill.color.base.kind = FM_COLOR_KIND_RGB;
+  both.fill.color.base.argb = 0xFF336699U;
   EXPECT_EQ(fm_sheet_update_chart_series(reloaded.handle, 0, id, 0, 0, &both), FM_STATUS_INVALID_ARGUMENT);
   OpenChart(reloaded.handle, id, &after);
   EXPECT_EQ(Series(after, 0, 0).fill.none, 1);
@@ -692,7 +692,7 @@ TEST(FormulonCApiChartPaintClear, ClearFillToStyle) {
   OpenChart(reloaded.handle, id, &after);
   const fm_chart_series_info_t cleared = Series(after, 0, 0);
   EXPECT_EQ(cleared.fill.none, 0);
-  EXPECT_EQ(cleared.fill.color.kind, FM_COLOR_KIND_NONE);
+  EXPECT_EQ(cleared.fill.color.base.kind, FM_COLOR_KIND_NONE);
   EXPECT_EQ(cleared.fill.has_transparency_pct, 0);
 }
 

@@ -36,6 +36,8 @@ function withSheet(body) {
 const plain = (value) => JSON.parse(JSON.stringify(value) ?? 'null');
 const rect = (firstRow, firstCol, lastRow, lastCol) => ({ firstRow, firstCol, lastRow, lastCol });
 const argb = (c) => (c == null ? null : c.argb >>> 0);
+/** The base colour of a chart or shape paint colour, as an unsigned ARGB. */
+const paintArgb = (c) => (c == null ? null : c.base.argb >>> 0);
 const addr = (a) => (a == null ? null : { row: a.row, col: a.col });
 
 /** Set the opposite of what the getter reads before the patch. */
@@ -125,7 +127,7 @@ const CHART_FILL = {
   ),
   make: (ws) => ({ chart: addChart(ws) }),
   cases: {
-    color: k('#FF0000', { get: (r) => argb(r?.color), want: 0xffff0000, clear: true }),
+    color: k('#FF0000', { get: (r) => paintArgb(r?.color), want: 0xffff0000, clear: true }),
     transparencyPct: k(40, {
       get: (r) => r?.transparencyPct,
       clear: true,
@@ -141,7 +143,7 @@ const CHART_LINE = {
     (p) => ({ line: p }),
   ),
   cases: {
-    color: k('#00FF00', { get: (r) => argb(r?.color), want: 0xff00ff00, clear: true }),
+    color: k('#00FF00', { get: (r) => paintArgb(r?.color), want: 0xff00ff00, clear: true }),
     transparencyPct: k(25, {
       get: (r) => r?.transparencyPct,
       clear: true,
@@ -150,6 +152,18 @@ const CHART_LINE = {
     widthPt: k(3.5, { get: (r) => r?.widthPt, clear: true }),
     dash: k(f.ChartLineDash.Dot, { get: (r) => r?.dash, clear: true }),
     none: k(FLIP, { get: (r) => r?.none ?? false }),
+    headEnd: k(
+      { type: f.ChartLineEndType.Triangle, width: f.ChartLineEndSize.Large },
+      {
+        get: (r) => r?.headEnd,
+        want: { type: f.ChartLineEndType.Triangle, width: f.ChartLineEndSize.Large, length: null },
+        clear: true,
+      },
+    ),
+    tailEnd: k(
+      { type: f.ChartLineEndType.Oval },
+      { get: (r) => r?.tailEnd, want: { type: f.ChartLineEndType.Oval, width: null, length: null }, clear: true },
+    ),
   },
 };
 
@@ -169,7 +183,7 @@ const CHART_MARKER = {
     fill: k(
       { color: '#FF0000' },
       {
-        get: (r) => argb(r?.fill?.color),
+        get: (r) => paintArgb(r?.fill?.color),
         want: 0xffff0000,
         patch: (v) => ({ symbol: f.ChartMarkerSymbol.Circle, fill: v }),
       },
@@ -177,7 +191,7 @@ const CHART_MARKER = {
     line: k(
       { color: '#00FF00' },
       {
-        get: (r) => argb(r?.line?.color),
+        get: (r) => paintArgb(r?.line?.color),
         want: 0xff00ff00,
         patch: (v) => ({ symbol: f.ChartMarkerSymbol.Circle, line: v }),
       },
@@ -243,9 +257,9 @@ const CHART_SERIES = {
     smooth: k(FLIP, { get: (r) => r.smooth ?? false }),
     fill: k(
       { color: '#FF0000' },
-      { get: (r) => argb(r.fill?.color), want: 0xffff0000, make: (ws) => ({ chart: addChart(ws) }) },
+      { get: (r) => paintArgb(r.fill?.color), want: 0xffff0000, make: (ws) => ({ chart: addChart(ws) }) },
     ),
-    line: k({ color: '#00FF00' }, { get: (r) => argb(r.line?.color), want: 0xff00ff00 }),
+    line: k({ color: '#00FF00' }, { get: (r) => paintArgb(r.line?.color), want: 0xff00ff00 }),
     labels: k(
       { showValue: true },
       { get: (r) => r.labels?.showValue ?? false, want: true, clear: true, cleared: false },
@@ -264,9 +278,9 @@ const CHART_POINT = {
     ),
     fill: k(
       { color: '#FF0000' },
-      { get: (r) => argb(r?.fill?.color), want: 0xffff0000, make: (ws) => ({ chart: addChart(ws) }) },
+      { get: (r) => paintArgb(r?.fill?.color), want: 0xffff0000, make: (ws) => ({ chart: addChart(ws) }) },
     ),
-    line: k({ color: '#00FF00' }, { get: (r) => argb(r?.line?.color), want: 0xff00ff00 }),
+    line: k({ color: '#00FF00' }, { get: (r) => paintArgb(r?.line?.color), want: 0xff00ff00 }),
   },
 };
 
@@ -328,6 +342,18 @@ const CHART_DISPLAY = {
     plotVisibleOnly: k(FLIP, { get: (r) => r.plotVisibleOnly ?? true, clear: true, cleared: true }),
     naAsBlank: k(FLIP, { get: (r) => r.naAsBlank ?? false, clear: true, cleared: false }),
     style: k(26, { clear: true }),
+    chartArea: k({ fill: { color: '#FF0000' } }, { get: (r) => paintArgb(r.chartArea.fill?.color), want: 0xffff0000 }),
+    plotArea: k({ line: { color: '#00FF00' } }, { get: (r) => paintArgb(r.plotArea.line?.color), want: 0xff00ff00 }),
+  },
+};
+
+const CHART_AREA_PAINT = {
+  make: (ws) => ({ chart: addChart(ws) }),
+  update: ({ chart }, patch) => chart.updateDisplay({ chartArea: patch }),
+  read: ({ chart }) => chart.getProperties().chartArea,
+  cases: {
+    fill: k({ color: '#FF0000' }, { get: (r) => paintArgb(r.fill?.color), want: 0xffff0000, clear: true }),
+    line: k({ color: '#00FF00' }, { get: (r) => paintArgb(r.line?.color), want: 0xff00ff00, clear: true }),
   },
 };
 
@@ -904,8 +930,9 @@ const SHAPE = {
     flipV: k(FLIP),
     presetGeometry: k('ellipse'),
     text: k('Hello'),
-    fill: k({ color: '#FF0000' }, { get: (r) => argb(r.fill?.color), want: 0xffff0000 }),
-    line: k({ color: '#00FF00' }, { get: (r) => argb(r.line?.color), want: 0xff00ff00 }),
+    textVert: k(f.ShapeTextVert.Vert270, { clear: true }),
+    fill: k({ color: '#FF0000' }, { get: (r) => paintArgb(r.fill?.color), want: 0xffff0000 }),
+    line: k({ color: '#00FF00' }, { get: (r) => paintArgb(r.line?.color), want: 0xff00ff00 }),
   },
 };
 
@@ -1043,6 +1070,7 @@ const TYPES = {
   ChartAxisPatch: CHART_AXIS,
   ChartLegendPatch: CHART_LEGEND,
   ChartDisplayPatch: CHART_DISPLAY,
+  ChartAreaPaintPatch: CHART_AREA_PAINT,
   PivotGrandTotalsPatch: PIVOT_GRAND_TOTALS,
   TableStyleDefaultsPatch: TABLE_STYLE_DEFAULTS,
   TablePatch: TABLE,

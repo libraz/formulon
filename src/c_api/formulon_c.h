@@ -350,9 +350,10 @@ typedef enum {
  * A theme, indexed or auto colour is a selector, not a rendered colour: resolve it
  * with `fm_workbook_resolve_color`. A field documented as "None or Rgb"
  * (CF evaluation colours) never carries a selector, and its `argb` is the
- * colour as drawn. A chart or shape colour is "None, Rgb or Theme": Theme
+ * colour as drawn. A chart text colour is "None, Rgb or Theme": Theme
  * (tint quantised to 1e-5) reads for a palette scheme colour with only a
- * luminance tint, Rgb as drawn for any other colour.
+ * luminance tint, Rgb as drawn for any other colour. A chart or shape paint
+ * colour is an `fm_drawing_color_t`, whose `base` is None, Rgb or Theme.
  */
 typedef struct {
   /** The theme tint from -1 (darker) to 1 (lighter); meaningful when `kind` is theme. */
@@ -14428,9 +14429,11 @@ typedef struct {
   uint32_t object_id;
   /** Clockwise rotation in degrees, stored as given to 1/60000 degree (360 reads 360, -90 reads -90). */
   double rotation_deg;
-  /** `1` when the picture is flipped horizontally (`a:xfrm/@flipH`). */
+  /** `1` when the picture is flipped horizontally (`a:xfrm/@flipH`). Excel's Flip command toggles this flag and sets
+   *  the rotation to (360 - r) mod 360. */
   int32_t flip_h;
-  /** `1` when the picture is flipped vertically (`a:xfrm/@flipV`). */
+  /** `1` when the picture is flipped vertically (`a:xfrm/@flipV`). Excel's Flip command toggles this flag and sets the
+   *  rotation to (360 - r) mod 360. */
   int32_t flip_v;
 } fm_picture_info_t;
 
@@ -14466,11 +14469,13 @@ typedef struct {
   double rotation_deg;
   /** Patch operation for `flip_h`: leave it unchanged or set it; `CLEAR` is not accepted. */
   fm_patch_op_t flip_h_op;
-  /** Whether the picture is flipped horizontally, `0` or `1`. */
+  /** Whether the picture is flipped horizontally, `0` or `1`. Excel's Flip command toggles this flag and sets the
+   *  rotation to (360 - r) mod 360. */
   int32_t flip_h;
   /** Patch operation for `flip_v`: leave it unchanged or set it; `CLEAR` is not accepted. */
   fm_patch_op_t flip_v_op;
-  /** Whether the picture is flipped vertically, `0` or `1`. */
+  /** Whether the picture is flipped vertically, `0` or `1`. Excel's Flip command toggles this flag and sets the
+   *  rotation to (360 - r) mod 360. */
   int32_t flip_v;
 } fm_picture_patch_t;
 
@@ -14736,23 +14741,107 @@ FM_API fm_status_t fm_sheet_restore_drawing(fm_workbook_t* wb, size_t sheet_inde
 /* -------------------------------------------------------------------------- */
 
 /**
+ * @brief One colour transform child of a DrawingML colour (`a:lumMod`, `a:shade`, `a:alpha`, ...).
+ *
+ * Frozen value type: no `struct_size`.
+ */
+typedef struct {
+  /** The element's local name (`lumMod`, `alpha`, ...): `[A-Za-z][A-Za-z0-9]*`, at most 32 characters. */
+  const char* name;
+  /** 1 when `value` is set; 0 for an element without `val`. */
+  int32_t has_value;
+  /** The `val` attribute, in the element's DrawingML unit (thousandths of a percent for most); meaningful when
+   *  `has_value` is set. */
+  int32_t value;
+} fm_color_transform_t;
+
+/**
+ * @brief A DrawingML colour as the file states it: a base colour, its transforms in document order (`alpha`
+ *        included) and the colour and opacity Excel renders for them.
+ *
+ * On a read `transforms` lives as long as the strings of the record holding the colour. On input `resolved` and
+ * `resolved_transparency_pct` (with their `has_` flags) are ignored; a Theme base with a non-zero `tint` is the
+ * shorthand for its `lumMod` / `lumOff` pair and cannot sit beside transforms. A transform name outside its form, or a
+ * `has_value` other than 0 or 1, is `FM_STATUS_INVALID_ARGUMENT` (2); more than 64 transforms is
+ * `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005). An `alpha` transform beside a `transparency_pct` set in the same write
+ * must state the same opacity, else `FM_STATUS_INVALID_ARGUMENT` (2).
+ *
+ * Frozen value type: no `struct_size`.
+ */
+typedef struct {
+  /** The base colour, None, Rgb or Theme; kind NONE when there is no colour. */
+  fm_color_t base;
+  /** The `transform_count` transforms in document order; `NULL` when there are none. */
+  const fm_color_transform_t* transforms;
+  /** The number of entries of `transforms`. */
+  uint32_t transform_count;
+  /** 1 on a read when `resolved` is set; 0 when a transform is one the engine does not model. */
+  int32_t has_resolved;
+  /** The colour Excel renders, opaque 0xFFRRGGBB; meaningful when `has_resolved` is set. */
+  uint32_t resolved;
+  /** 1 on a read when `resolved_transparency_pct` is set; 0 when an opacity transform is one the engine does not model
+   *  or `has_resolved` is 0. */
+  int32_t has_resolved_transparency_pct;
+  /** The transparency Excel renders as a percentage (0..100); 0 without an `alpha` transform. Meaningful when
+   *  `has_resolved_transparency_pct` is set. */
+  double resolved_transparency_pct;
+} fm_drawing_color_t;
+
+/** @brief Decoration at one end of a line (`ST_LineEndType`). */
+typedef enum {
+  FM_CHART_LINE_END_TYPE_NONE = 0,
+  FM_CHART_LINE_END_TYPE_TRIANGLE = 1,
+  FM_CHART_LINE_END_TYPE_STEALTH = 2,
+  FM_CHART_LINE_END_TYPE_DIAMOND = 3,
+  FM_CHART_LINE_END_TYPE_OVAL = 4,
+  FM_CHART_LINE_END_TYPE_ARROW = 5,
+} fm_chart_line_end_type_t;
+
+/** @brief Width or length of a line end (`ST_LineEndWidth` / `ST_LineEndLength`); zero is the OOXML default `med`. */
+typedef enum {
+  FM_CHART_LINE_END_SIZE_MEDIUM = 0,
+  FM_CHART_LINE_END_SIZE_SMALL = 1,
+  FM_CHART_LINE_END_SIZE_LARGE = 2,
+} fm_chart_line_end_size_t;
+
+/**
+ * @brief One end of a line (`a:headEnd` / `a:tailEnd`). Excel draws it only on open geometry (lines, connectors,
+ *        arcs); a closed shape keeps it and ignores it.
+ *
+ * Frozen value type: no `struct_size`. A value outside its enumeration, or a `has_` flag other than 0 or 1, is
+ * `FM_STATUS_INVALID_ARGUMENT` (2).
+ */
+typedef struct {
+  /** The decoration, an `fm_chart_line_end_type_t`. */
+  int32_t type;
+  /** 1 when `width` is set; 0 means the end states none (drawn medium). */
+  int32_t has_width;
+  /** The decoration's width, an `fm_chart_line_end_size_t`; meaningful when `has_width` is set. */
+  int32_t width;
+  /** 1 when `length` is set; 0 means the end states none (drawn medium). */
+  int32_t has_length;
+  /** The decoration's length, an `fm_chart_line_end_size_t`; meaningful when `has_length` is set. */
+  int32_t length;
+} fm_chart_line_end_t;
+
+/**
  * @brief Fill of a shape's or chart element's `spPr`, as the shape and
  *        chart reads report it and `fm_shape_spec_t` takes it.
  *
  * An all-zero record states no fill of its own: a shape then draws its style's fill.
  */
 typedef struct {
-  /** The solid fill colour, None, Rgb or Theme; kind NONE when there is no solid colour. */
-  fm_color_t color;
+  /** The solid fill colour; base kind NONE when there is no solid colour. */
+  fm_drawing_color_t color;
   /** 1 when `transparency_pct` is set; 0 means the colour has no alpha. */
   int32_t has_transparency_pct;
   /** The fill transparency as a percentage (0..100); meaningful when `has_transparency_pct` is set. */
   double transparency_pct;
   /** `1` for an explicit no-fill. */
   int32_t none;
-  /** 1 on a read when the stored paint cannot be stated exactly: a gradient, pattern or picture fill (the other fields
-   *  are then zero), or a solid colour form the record cannot hold (`color` then carries the nearest rendered colour).
-   *  It passes through a save untouched and must be 0 on input. */
+  /** 1 on a read when the stored paint cannot be stated exactly: a gradient, pattern or picture fill, or a solid
+   *  colour element the record cannot hold (the other fields are then zero). It passes through a save untouched and
+   *  must be 0 on input. */
   int32_t other;
 } fm_chart_fill_t;
 
@@ -14763,8 +14852,8 @@ typedef struct {
  * style's outline.
  */
 typedef struct {
-  /** The outline colour, None, Rgb or Theme; kind NONE when there is no solid colour. */
-  fm_color_t color;
+  /** The outline colour; base kind NONE when there is no solid colour. */
+  fm_drawing_color_t color;
   /** 1 when `transparency_pct` is set; 0 means the colour has no alpha. */
   int32_t has_transparency_pct;
   /** The outline transparency as a percentage (0..100); meaningful when `has_transparency_pct` is set. */
@@ -14779,10 +14868,17 @@ typedef struct {
   int32_t dash;
   /** `1` for an explicit no-line. */
   int32_t none;
-  /** 1 on a read when the outline fill cannot be stated exactly (a gradient, pattern or a colour form the record cannot
-   *  hold, with `color` as the nearest rendering); it
-   *  must be 0 on input. */
+  /** 1 on a read when the outline fill cannot be stated exactly (a gradient, pattern or a colour element the record
+   *  cannot hold, with `color` then absent); it must be 0 on input. */
   int32_t other;
+  /** 1 when `head_end` is set; 0 means the outline states no start decoration (or one the record cannot hold). */
+  int32_t has_head_end;
+  /** The decoration at the line's start (`a:headEnd`); meaningful when `has_head_end` is set. */
+  fm_chart_line_end_t head_end;
+  /** 1 when `tail_end` is set; 0 means the outline states no end decoration (or one the record cannot hold). */
+  int32_t has_tail_end;
+  /** The decoration at the line's end (`a:tailEnd`); meaningful when `has_tail_end` is set. */
+  fm_chart_line_end_t tail_end;
 } fm_chart_line_t;
 
 /**
@@ -14792,8 +14888,8 @@ typedef struct {
 typedef struct {
   /** Patch operation for `color`: keep it, set it from `color`, or clear it. */
   fm_patch_op_t color_op;
-  /** The solid colour to set, kind None, Rgb or Theme (`theme` below 12, `tint` in [-1, 1]); needs `color_op` set. */
-  fm_color_t color;
+  /** The solid colour to set, base kind Rgb or Theme (`theme` below 12, `tint` in [-1, 1]); needs `color_op` set. */
+  fm_drawing_color_t color;
   /** Patch operation for `transparency_pct`: keep it, set it from `transparency_pct`, or clear it. */
   fm_patch_op_t transparency_pct_op;
   /** The transparency percentage to set (0..100); needs a solid colour. */
@@ -14812,9 +14908,9 @@ typedef struct {
 typedef struct {
   /** Patch operation for `color`: keep it, set it from `color`, or clear it. */
   fm_patch_op_t color_op;
-  /** The outline colour to set, kind None, Rgb or Theme (`theme` below 12, `tint` within [-1, 1]); needs `color_op`
+  /** The outline colour to set, base kind Rgb or Theme (`theme` below 12, `tint` within [-1, 1]); needs `color_op`
    *  set. */
-  fm_color_t color;
+  fm_drawing_color_t color;
   /** Patch operation for `transparency_pct`: keep it, set it from `transparency_pct`, or clear it. */
   fm_patch_op_t transparency_pct_op;
   /** The transparency percentage to set (0..100); needs a solid colour. */
@@ -14831,7 +14927,63 @@ typedef struct {
   fm_patch_op_t none_op;
   /** 1 to write an explicit no-line, 0 to remove it; `CLEAR` resets it to 0. */
   int32_t none;
+  /** Patch operation for `head_end`: keep it, set it from `head_end`, or clear (remove) it. */
+  fm_patch_op_t head_end_op;
+  /** The start decoration to set; it replaces the stored one whole, so a size it does not state is dropped. */
+  fm_chart_line_end_t head_end;
+  /** Patch operation for `tail_end`: keep it, set it from `tail_end`, or clear (remove) it. */
+  fm_patch_op_t tail_end_op;
+  /** The end decoration to set, as `head_end`. */
+  fm_chart_line_end_t tail_end;
 } fm_chart_line_patch_t;
+
+/** @brief One glued end of a connector (`a:stCxn` / `a:endCxn`). Frozen value type: no `struct_size`. */
+typedef struct {
+  /** The id of the shape the end is glued to, in the same drawing. */
+  uint32_t object_id;
+  /** The connection site on that shape, from 0. */
+  uint32_t site_index;
+} fm_shape_connection_t;
+
+/** @brief Text direction of a shape (`a:bodyPr/@vert`, `ST_TextVerticalType`). */
+typedef enum {
+  FM_SHAPE_TEXT_VERT_ABSENT = -1,
+  FM_SHAPE_TEXT_VERT_HORZ = 0,
+  FM_SHAPE_TEXT_VERT_VERT = 1,
+  FM_SHAPE_TEXT_VERT_VERT270 = 2,
+  FM_SHAPE_TEXT_VERT_EA_VERT = 3,
+  FM_SHAPE_TEXT_VERT_WORD_ART_VERT = 4,
+  FM_SHAPE_TEXT_VERT_WORD_ART_VERT_RTL = 5,
+  FM_SHAPE_TEXT_VERT_MONGOLIAN_VERT = 6,
+} fm_shape_text_vert_t;
+
+/**
+ * @brief One adjust value of a preset geometry (`a:avLst/a:gd` with `fmla="val <value>"`), in the preset's raw
+ *        DrawingML units.
+ *
+ * Frozen value type: no `struct_size`.
+ */
+typedef struct {
+  /** The guide name (`adj`, `adj1`, ...): `[A-Za-z][A-Za-z0-9]*`, at most 32 characters. */
+  const char* name;
+  /** The guide's value. */
+  int32_t value;
+} fm_shape_adjust_t;
+
+/**
+ * @brief One adjust-value edit of `fm_shape_patch_t::adjust_values`: `SET` writes the guide, `CLEAR` removes it so the
+ *        preset's default applies, and `KEEP` is `FM_STATUS_INVALID_ARGUMENT` (2).
+ *
+ * Frozen value type: no `struct_size`.
+ */
+typedef struct {
+  /** The guide name, as `fm_shape_adjust_t::name`. */
+  const char* name;
+  /** Patch operation for `value`: set it or clear (remove) the guide. */
+  fm_patch_op_t value_op;
+  /** The value to write. */
+  int32_t value;
+} fm_shape_adjust_patch_t;
 
 /**
  * @brief The shape-specific fields of a shape, connector or group of a
@@ -14866,10 +15018,28 @@ typedef struct {
   const char* preset_geometry;
   /** The shape's text, paragraphs joined with a newline. */
   const char* text;
-  /** `1` when the shape is flipped horizontally (`a:xfrm/@flipH`). */
+  /** `1` when the shape is flipped horizontally (`a:xfrm/@flipH`). Excel's Flip command toggles this flag and sets the
+   *  rotation to (360 - r) mod 360. */
   int32_t flip_h;
-  /** `1` when the shape is flipped vertically (`a:xfrm/@flipV`). */
+  /** `1` when the shape is flipped vertically (`a:xfrm/@flipV`). Excel's Flip command toggles this flag and sets the
+   *  rotation to (360 - r) mod 360. */
   int32_t flip_v;
+  /** 1 when `start_connection` is set; 0 when the connector's start is free or the object is not a connector. */
+  int32_t has_start_connection;
+  /** The shape the connector's start is glued to; meaningful when `has_start_connection` is set. */
+  fm_shape_connection_t start_connection;
+  /** 1 when `end_connection` is set; 0 when the connector's end is free or the object is not a connector. */
+  int32_t has_end_connection;
+  /** The shape the connector's end is glued to; meaningful when `has_end_connection` is set. */
+  fm_shape_connection_t end_connection;
+  /** The preset's adjust values stated as plain values, in document order; `NULL` when there are none. A guide
+   *  holding another formula is not listed. */
+  const fm_shape_adjust_t* adjust_values;
+  /** The number of entries of `adjust_values`. */
+  uint32_t adjust_values_count;
+  /** The text direction, an `fm_shape_text_vert_t`; `FM_SHAPE_TEXT_VERT_ABSENT` when the shape states none (or one
+   *  the record cannot hold), which Excel draws horizontal. */
+  int32_t text_vert;
 } fm_shape_info_t;
 
 /**
@@ -14898,10 +15068,22 @@ typedef struct {
    *  rule 30). */
   const char* text;
   /** Horizontal flip, an `fm_tristate_t`: only `FM_TRISTATE_TRUE` writes `flipH`; a value outside the enumeration is
-   *  `FM_STATUS_INVALID_ARGUMENT` (2). */
+   *  `FM_STATUS_INVALID_ARGUMENT` (2). Excel's Flip command toggles this flag and sets the rotation to
+   *  (360 - r) mod 360. */
   int32_t flip_h; /* fm_tristate_t */
-  /** Vertical flip, as `flip_h`. */
+  /** Vertical flip, as `flip_h`. Excel's Flip command toggles this flag and sets the rotation to (360 - r) mod 360. */
   int32_t flip_v; /* fm_tristate_t */
+  /** The adjust values to write, each a guide of the preset; `NULL` with a zero count writes none. An empty, malformed
+   *  or repeated name is `FM_STATUS_INVALID_ARGUMENT` (2), and more than 64 entries
+   *  `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005). */
+  const fm_shape_adjust_t* adjust_values;
+  /** The number of entries of `adjust_values`. */
+  uint32_t adjust_values_count;
+  /** 1 to write `text_vert`; 0 leaves the text direction unstated. A shape only. */
+  int32_t has_text_vert;
+  /** The text direction to write, an `fm_shape_text_vert_t` other than `ABSENT`; meaningful when `has_text_vert` is
+   *  set. */
+  int32_t text_vert;
 } fm_shape_spec_t;
 
 /**
@@ -14912,8 +15094,9 @@ typedef struct {
  *        description and visibility are the `common` half of
  *        `fm_sheet_update_shape`.
  *
- * Apart from `fill` and `line`, no field can be cleared. A flip patched to the state it already has writes nothing;
- * patched to false it removes the attribute.
+ * Apart from `fill`, `line` and `text_vert`, no field can be cleared. A flip patched to the state it already has
+ * writes nothing; patched to false it removes the attribute. A flip or rotation patched on a connector unglues both
+ * of its ends.
  */
 typedef struct {
   uint32_t struct_size;
@@ -14940,12 +15123,25 @@ typedef struct {
   const char* text;
   /** Patch operation for `flip_h`: leave it unchanged or set it; `CLEAR` is not accepted. */
   fm_patch_op_t flip_h_op;
-  /** Whether the shape is flipped horizontally, `0` or `1`. */
+  /** Whether the shape is flipped horizontally, `0` or `1`. Excel's Flip command toggles this flag and sets the
+   *  rotation to (360 - r) mod 360. */
   int32_t flip_h;
   /** Patch operation for `flip_v`: leave it unchanged or set it; `CLEAR` is not accepted. */
   fm_patch_op_t flip_v_op;
-  /** Whether the shape is flipped vertically, `0` or `1`. */
+  /** Whether the shape is flipped vertically, `0` or `1`. Excel's Flip command toggles this flag and sets the rotation
+   *  to (360 - r) mod 360. */
   int32_t flip_v;
+  /** Adjust-value edits by guide name, applied after a `preset_geometry` change (which drops every guide); a guide no
+   *  entry names is kept. `NULL` with a zero count changes nothing. An entry whose `value_op` is `KEEP` or outside
+   *  0..2, an empty, malformed or repeated name, or an object without preset geometry is
+   *  `FM_STATUS_INVALID_ARGUMENT` (2); more than 64 entries is `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005). */
+  const fm_shape_adjust_patch_t* adjust_values;
+  /** The number of entries of `adjust_values`. */
+  uint32_t adjust_values_count;
+  /** Patch operation for `text_vert`: leave it unchanged, set it, or clear (remove) it. */
+  fm_patch_op_t text_vert_op;
+  /** The text direction to set, an `fm_shape_text_vert_t` other than `ABSENT`. */
+  int32_t text_vert;
 } fm_shape_patch_t;
 
 /**
@@ -14985,9 +15181,12 @@ FM_API fm_status_t fm_sheet_get_shape(const fm_workbook_t* wb, size_t sheet_inde
  *         ECMA-376 `ST_ShapeType` name, an offset or size outside [0, 2^31) EMU, a zero size
  *         where the anchor needs one, a cell outside the sheet, a two-cell `to` before `from`,
  *         `other` set on `fill` or `line`, an Indexed or Auto colour, a colour given with
- *         `none`, a transparency without a solid colour, a line width or dash out of range, or
- *         text with control characters;
+ *         `none`, a transparency without a solid colour, a line width, dash or line end out of
+ *         range, text with control characters, a `text_vert` on a connector or group, or an
+ *         adjust value with a bad or repeated name or on an object without preset geometry;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a string is not valid UTF-8;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) for more than 64 adjust values or colour
+ *         transforms;
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when the drawing's id space is exhausted;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
  *         or is an `.xlsb` drawing the reader could not lift.
@@ -15009,13 +15208,15 @@ FM_API fm_status_t fm_sheet_add_shape(fm_workbook_t* wb, size_t sheet_index, con
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_NOT_FOUND` (6) when no object of the sheet's drawing holds that id;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when the id belongs to a picture, chart or
- *         slicer, an op is outside 0..2, a field other than a `fill` / `line` member or
+ *         slicer, an op is outside 0..2, a field other than a `fill` / `line` member, `text_vert` or
  *         `common`'s `description` is `CLEAR`, `flip_h` or `flip_v` is `SET` to a value other than 0 or 1,
  *         `rotation_deg` is `SET` to a value that is not finite or does not fit, `SET` carries a `NULL` string, a `SET`
- *         value fails a rule of `fm_sheet_add_shape`, `text` or `text_box` is `SET` on a
+ *         value fails a rule of `fm_sheet_add_shape`, `text`, `text_box` or `text_vert` is `SET` on a
  *         connector or group, `preset_geometry` is `SET` on a group, or `common` fails a
  *         rule of `fm_sheet_update_drawing`;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a `SET` string is not valid UTF-8;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) for more than 64 adjust values or colour
+ *         transforms;
  *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the drawing part does not parse
  *         or is an `.xlsb` drawing the reader could not lift.
  */
@@ -15737,12 +15938,20 @@ typedef enum {
   FM_CHART_LEGEND_POSITION_TOP = 4,
 } fm_chart_legend_position_t;
 
+/** @brief Dash style of an outline (`a:prstDash`); `OTHER` is a custom dash or a token the record cannot hold. */
 typedef enum {
   FM_CHART_LINE_DASH_SOLID = 0,
   FM_CHART_LINE_DASH_DASH = 1,
   FM_CHART_LINE_DASH_DOT = 2,
   FM_CHART_LINE_DASH_DASH_DOT = 3,
   FM_CHART_LINE_DASH_OTHER = 4,
+  FM_CHART_LINE_DASH_SYS_DOT = 5,
+  FM_CHART_LINE_DASH_SYS_DASH = 6,
+  FM_CHART_LINE_DASH_LG_DASH = 7,
+  FM_CHART_LINE_DASH_LG_DASH_DOT = 8,
+  FM_CHART_LINE_DASH_LG_DASH_DOT_DOT = 9,
+  FM_CHART_LINE_DASH_SYS_DASH_DOT = 10,
+  FM_CHART_LINE_DASH_SYS_DASH_DOT_DOT = 11,
 } fm_chart_line_dash_t;
 
 typedef enum {
@@ -15860,6 +16069,32 @@ typedef struct {
 } fm_chart_labels_t;
 
 /**
+ * @brief The paint of the chart area or the plot area (`c:spPr`) as the file states it; a zero fill and line state
+ *        none, and the chart style supplies them.
+ *
+ * Frozen value type: no `struct_size`.
+ */
+typedef struct {
+  /** The area's fill. */
+  fm_chart_fill_t fill;
+  /** The area's outline. */
+  fm_chart_line_t line;
+} fm_chart_area_paint_t;
+
+/**
+ * @brief Paint update of the chart area or the plot area; every member `KEEP` leaves its `c:spPr` as it is, every
+ *        member `CLEAR` removes the paint the file states.
+ *
+ * Frozen value type: no `struct_size`.
+ */
+typedef struct {
+  /** Update merged into the area's fill. */
+  fm_chart_fill_patch_t fill;
+  /** Update merged into the area's outline. */
+  fm_chart_line_patch_t line;
+} fm_chart_area_paint_patch_t;
+
+/**
  * @brief Top-level fields of a chart.
  *
  * The anchor, name and description are read with
@@ -15913,6 +16148,10 @@ typedef struct {
   /** Whether `#N/A` points draw as blank cells (`c16r3:dispNaAsBlank`), a tri-state value (default when the chart
    *  carries no setting). */
   int32_t na_as_blank; /* fm_tristate_t */
+  /** The paint of the chart area (`c:chartSpace/c:spPr`). */
+  fm_chart_area_paint_t chart_area;
+  /** The paint of the plot area (`c:plotArea/c:spPr`). */
+  fm_chart_area_paint_t plot_area;
 } fm_chart_info_t;
 
 /** @brief One plot group. */
@@ -16220,6 +16459,8 @@ FM_API fm_status_t fm_chart_get_series_literal_at(const fm_chart_t* chart, size_
 
 /**
  * @brief Reads formatted point `index` of a series (`index < point_count`).
+ *
+ * Lifetime: owned (until fm_chart_destroy).
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when any pointer argument is `NULL`;
@@ -16881,6 +17122,10 @@ typedef struct {
   fm_patch_op_t style_op;
   /** The chart style number (`c:style`), 1..48 (`ST_Style`). */
   int32_t style;
+  /** Update of the chart area's paint; it has no operation of its own. */
+  fm_chart_area_paint_patch_t chart_area;
+  /** Update of the plot area's paint; it has no operation of its own. */
+  fm_chart_area_paint_patch_t plot_area;
 } fm_chart_display_patch_t;
 
 /**
@@ -16976,7 +17221,9 @@ FM_API fm_status_t fm_sheet_update_chart_axis(fm_workbook_t* wb, size_t sheet_in
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) when `patch` is `NULL`;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when a `SET` value is outside its domain
  *         (`blanks_as` `ABSENT` and a `style` outside 1..48 included; `CLEAR`
- *         removes the element).
+ *         removes the element), or a `chart_area` / `plot_area` member fails a
+ *         rule of `fm_chart_fill_patch_t` / `fm_chart_line_patch_t`;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) for more than 64 colour transforms.
  */
 FM_API fm_status_t fm_sheet_update_chart_display(fm_workbook_t* wb, size_t sheet_index, uint32_t object_id,
                                                  const fm_chart_display_patch_t* patch);

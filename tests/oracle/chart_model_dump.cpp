@@ -153,14 +153,37 @@ class Json {
   }
   void tri(Tri t) { t == Tri::kAbsent ? null() : boolean(t == Tri::kTrue); }
   void color(const std::optional<ColorSpec>& c) {
-    if (!c || (c->kind != ColorSpec::Kind::kRgb && c->kind != ColorSpec::Kind::kTheme)) {
+    if (!c) {
       null();
       return;
     }
-    const std::uint32_t argb =
-        c->kind == ColorSpec::Kind::kRgb ? c->rgb : resolve_color(wb_, *c, ColorContext::kFont).argb;
+    DrawingColor dc;
+    dc.base = *c;
+    color(std::optional<DrawingColor>(dc));
+  }
+  void color(const std::optional<DrawingColor>& dc) {
+    if (!dc) {
+      null();
+      return;
+    }
+    bool plain = true;
+    for (const ColorTransform& t : dc->transforms) {
+      plain = plain && t.name == "alpha";
+    }
+    std::optional<std::uint32_t> argb;
+    if (!plain) {
+      argb = dc->resolved_argb;
+    } else if (dc->base.kind == ColorSpec::Kind::kRgb) {
+      argb = dc->base.rgb;
+    } else if (dc->base.kind == ColorSpec::Kind::kTheme) {
+      argb = resolve_color(wb_, dc->base, ColorContext::kFont).argb;
+    }
+    if (!argb) {
+      null();
+      return;
+    }
     char buf[12];
-    std::snprintf(buf, sizeof buf, "%08X", static_cast<unsigned>(argb));
+    std::snprintf(buf, sizeof buf, "%08X", static_cast<unsigned>(*argb));
     str(buf);
   }
 
@@ -967,6 +990,13 @@ Expected<ColorSpec, Error> argb(const JsonValue& v) {
   return spec;
 }
 
+Expected<DrawingColor, Error> drawing_argb(const JsonValue& v) {
+  ASSIGN_OR_RETURN(const ColorSpec spec, argb(v));
+  DrawingColor color;
+  color.base = spec;
+  return color;
+}
+
 template <typename T, typename F>
 Expected<void, Error> patch_field(const JsonValue& obj, const char* key, ChartPatchField<T>& field, F convert) {
   const JsonValue* v = member(obj, key);
@@ -1023,7 +1053,7 @@ Expected<ChartLabelPosition, Error> label_pos_of(const JsonValue& v) {
 Expected<ChartFillPatch, Error> fill_patch(const JsonValue* obj) {
   ChartFillPatch p;
   if (obj != nullptr) {
-    RETURN_IF_ERROR(patch_field(*obj, "color", p.color, argb));
+    RETURN_IF_ERROR(patch_field(*obj, "color", p.color, drawing_argb));
     RETURN_IF_ERROR(patch_field(*obj, "transparency", p.transparency_pct, as_double));
   }
   return p;
@@ -1032,7 +1062,7 @@ Expected<ChartFillPatch, Error> fill_patch(const JsonValue* obj) {
 Expected<ChartLinePatch, Error> line_patch(const JsonValue* obj) {
   ChartLinePatch p;
   if (obj != nullptr) {
-    RETURN_IF_ERROR(patch_field(*obj, "color", p.color, argb));
+    RETURN_IF_ERROR(patch_field(*obj, "color", p.color, drawing_argb));
     RETURN_IF_ERROR(patch_field(*obj, "transparency", p.transparency_pct, as_double));
     RETURN_IF_ERROR(patch_field(*obj, "width_pt", p.width_pt, as_double));
     RETURN_IF_ERROR(patch_field(*obj, "dash", p.dash, dash_of));

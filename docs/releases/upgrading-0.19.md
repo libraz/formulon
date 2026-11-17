@@ -1807,6 +1807,12 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
   writes them as XML, lose nothing. A refreshed PivotTable keeps its part names
   in an `.xlsb` save.
 - Shape and picture rotationDeg is now stored as given: 360 reads 360 and -90 reads -90, where it used to be normalised into [0, 360).
+- `ChartFill.color` and `ChartLine.color` (Python `color`) are a `DrawingColor` instead of a `Color`: the colour's
+  `base`, its `transforms` in document order and the colour Excel renders (`resolved`). A colour with transforms
+  beyond a plain luminance tint used to read as its rendered Rgb with `other` set; it now reads its base and transforms
+  with `other` clear. A Theme colour given with a `tint` reads back as its `lumMod` / `lumOff` transforms. Read the
+  displayed colour from `resolved`, and the stored one from `base` and `transforms`.
+- The system and long dash presets read as their own `ChartLineDash` members instead of `Other`.
 
 ## Reference tables
 
@@ -3929,6 +3935,8 @@ current spelling is in the [Name migration](#name-migration) table.
 | `fm_cf_icon_t` | `icon_set` is an `int32_t` `fm_icon_set_name_t` instead of text |
 | `fm_cf_rule_t`, `fm_data_validation`, the AutoFilter column | the operator fields are an `fm_comparison_operator_t`; the sparkline group's `empty_cells_as` is an `fm_blanks_as_t` and `FM_BLANKS_AS_ABSENT` is `FM_STATUS_INVALID_ARGUMENT` there |
 | `fm_styles_batch` | `font_count`, `fill_count`, `border_count`, `cell_xf_count`, `num_fmt_count` are `uint32_t` |
+| `fm_chart_fill_t`, `fm_chart_line_t`, `fm_chart_fill_patch`, `fm_chart_line_patch` | `color` is an `fm_drawing_color_t` (`base`, `transforms`, `transform_count` and the rendered `resolved` and `resolved_transparency_pct`) instead of an `fm_color_t`; `fm_chart_line_t` appends `has_head_end`, `head_end`, `has_tail_end` and `tail_end` (`fm_chart_line_end_t`), and `fm_chart_line_patch_t` appends `head_end_op`, `head_end`, `tail_end_op` and `tail_end`. Every record embedding one moves with it: `fm_chart_marker_t`, the series and point records and their patches |
+| `fm_chart_info_t` | appends `chart_area` and `plot_area`, each an `fm_chart_area_paint_t` |
 
 **Records, patches and getters.**
 

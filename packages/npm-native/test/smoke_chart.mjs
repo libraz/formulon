@@ -106,8 +106,8 @@ test('insertChart creates a two-cell chart that getChart and getChartData read b
     assert.equal(s0.values.formula, 'Sheet1!$B$2:$B$5');
     assert.equal(s0.x.kind, mod.ChartSourceKind.None);
     // A new chart's series take the palette colour as a theme reference (accent1 first).
-    assert.equal(s0.fill.color.kind, mod.ColorKind.Theme);
-    assert.equal(s0.fill.color.theme, 4);
+    assert.equal(s0.fill.color.base.kind, mod.ColorKind.Theme);
+    assert.equal(s0.fill.color.base.theme, 4);
     assert.equal(s0.marker, null);
     assert.equal(s0.labels, null);
     assert.deepEqual(s0.points, []);
@@ -325,7 +325,7 @@ test('typed chart edits are visible through getChart', async () => {
     let series = chartOf(wb, id).plots[0].series[1];
     // A line series takes no fill of its own; its colour is the line's.
     assert.equal(series.fill, null);
-    assert.equal(series.line.color.argb, 0xff0000ff);
+    assert.equal(series.line.color.base.argb, 0xff0000ff);
     assert.equal(series.line.widthPt, 2);
     assert.equal(series.line.dash, mod.ChartLineDash.Dash);
     assert.equal(series.marker.symbol, mod.ChartMarkerSymbol.Circle);
@@ -339,7 +339,7 @@ test('typed chart edits are visible through getChart', async () => {
     series = chartOf(wb, id).plots[0].series[1];
     assert.equal(series.marker, null);
     assert.equal(series.labels, null);
-    assert.equal(series.line.color.argb, 0xff0000ff);
+    assert.equal(series.line.color.base.argb, 0xff0000ff);
 
     // Reference edits refill the cache and resolved data follows.
     wb.sheet(0).chart(id).updateSeries(0, 0, { values: 'Sheet1!$D$2:$D$5', name: null });
@@ -355,7 +355,7 @@ test('typed chart edits are visible through getChart', async () => {
       .updatePoint(0, 1, 2, { line: { color: '#00FF00' } });
     const points = chartOf(wb, id).plots[0].series[1].points;
     assert.equal(points.length, otherPoints.length + 1);
-    assert.equal(points.find((point) => point.index === 2).line.color.argb, 0xff00ff00);
+    assert.equal(points.find((point) => point.index === 2).line.color.base.argb, 0xff00ff00);
     assert.deepEqual(
       points.filter((point) => point.index !== 2),
       otherPoints,
@@ -417,7 +417,7 @@ test('series can be added, removed and rebuilt from a new source', async () => {
     });
     let chart = chartOf(wb, id);
     assert.equal(chart.plots[0].series.length, 3);
-    assert.equal(chart.plots[0].series[0].fill.color.argb, 0xff112233);
+    assert.equal(chart.plots[0].series[0].fill.color.base.argb, 0xff112233);
     assert.deepEqual(
       { sheet: chart.source.range.sheet, ...chart.source.range.rect },
       { sheet: 0, firstRow: 0, firstCol: 0, lastRow: 4, lastCol: 3 },

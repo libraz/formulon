@@ -90,8 +90,8 @@ describe('a shape paints with the chart fill and line records', () => {
         line: { color: '#00FF00', widthPt: 2, dash: ChartLineDash.Dash },
       });
       const { fill, line } = shape.getProperties();
-      assert.equal(fill.color.kind, ColorKind.Rgb);
-      assert.equal(fill.color.argb & 0xffffff, 0xff0000);
+      assert.equal(fill.color.base.kind, ColorKind.Rgb);
+      assert.equal(fill.color.base.argb & 0xffffff, 0xff0000);
       assert.equal(fill.transparencyPct, 25);
       assert.equal(fill.none, false);
       assert.equal(fill.other, false);
@@ -136,7 +136,7 @@ describe('a shape paints with the chart fill and line records', () => {
       assert.equal(cleared.line, null);
       chart.updateSeries(0, series.seriesId, { fill: { color: '#336699' } });
       const painted = chart.getProperties().plots[0].series[0];
-      assert.equal(painted.fill.color.argb & 0xffffff, 0x336699);
+      assert.equal(painted.fill.color.base.argb & 0xffffff, 0x336699);
       assert.equal(painted.line, null);
     });
   });
@@ -227,6 +227,281 @@ describe('chart data names the role of an unresolved input', () => {
         assert.ok(Object.values(f.ChartRole).includes(entry.role));
         assert.equal('source' in entry, false);
       }
+    });
+  });
+});
+
+describe('a drawing colour carries its transforms and the colour Excel renders', () => {
+  const base = { kind: ColorKind.Rgb, argb: 0xff336699 };
+  const fillOf = (shape) => shape.getProperties().fill;
+
+  it('reads base, transforms and resolved colour back', () => {
+    withSheet((ws) => {
+      const shape = ws.addShape({
+        anchor: box,
+        fill: {
+          color: {
+            base,
+            transforms: [
+              { name: 'lumMod', value: 50000 },
+              { name: 'alpha', value: 40000 },
+            ],
+          },
+        },
+      });
+      const { color } = fillOf(shape);
+      assert.equal(color.base.argb >>> 0, 0xff336699);
+      assert.deepEqual(color.transforms, [
+        { name: 'lumMod', value: 50000 },
+        { name: 'alpha', value: 40000 },
+      ]);
+      assert.equal(color.resolved.resolution, f.ColorResolution.Exact);
+      // An alpha transform leaves the rendered opacity unknown.
+      assert.equal(color.resolvedTransparencyPct, null);
+    });
+  });
+
+  it('a plain colour has no transforms and an opaque resolved colour', () => {
+    withSheet((ws) => {
+      const { color } = fillOf(ws.addShape({ anchor: box, fill: { color: base } }));
+      assert.deepEqual(color.transforms, []);
+      assert.equal(color.resolved.argb >>> 0, 0xff336699);
+      assert.equal(color.resolvedTransparencyPct, 0);
+    });
+  });
+
+  it('a transform without val reads value null', () => {
+    withSheet((ws) => {
+      const { color } = fillOf(ws.addShape({ anchor: box, fill: { color: { base, transforms: [{ name: 'comp' }] } } }));
+      assert.deepEqual(color.transforms, [{ name: 'comp', value: null }]);
+    });
+  });
+
+  it('accepts the colour a read returned and ignores its resolved members', () => {
+    withSheet((ws) => {
+      const shape = ws.addShape({
+        anchor: box,
+        fill: { color: { base, transforms: [{ name: 'lumMod', value: 75000 }] } },
+      });
+      const read = fillOf(shape).color;
+      const other = ws.addShape({ anchor: box, fill: { color: { ...read, resolvedTransparencyPct: 99 } } });
+      assert.deepEqual(fillOf(other).color.transforms, read.transforms);
+      other.update({ line: { color: read } });
+      assert.deepEqual(other.getProperties().line.color.transforms, read.transforms);
+    });
+  });
+
+  it('a patch replaces the colour whole and null clears it', () => {
+    withSheet((ws) => {
+      const shape = ws.addShape({
+        anchor: box,
+        fill: { color: { base, transforms: [{ name: 'lumMod', value: 50000 }] } },
+      });
+      shape.update({ fill: { color: { base, transforms: [{ name: 'lumOff', value: 20000 }] } } });
+      assert.deepEqual(fillOf(shape).color.transforms, [{ name: 'lumOff', value: 20000 }]);
+      shape.update({ fill: { color: null } });
+      assert.equal(fillOf(shape), null);
+    });
+  });
+
+  it('refuses a bad transform name, too many transforms and a mismatched opacity', () => {
+    withSheet((ws) => {
+      const shape = ws.addShape({ anchor: box });
+      const patch =
+        (transforms, extra = {}) =>
+        () =>
+          shape.update({ fill: { color: { base, transforms }, ...extra } });
+      expectCode(patch([{ name: '1bad', value: 1 }]), StatusCode.InvalidArgument);
+      expectCode(patch([{ name: '', value: 1 }]), StatusCode.InvalidArgument);
+      const many = Array.from({ length: 65 }, () => ({ name: 'lumMod', value: 100000 }));
+      expectCode(patch(many), StatusCode.SecurityResourceLimit);
+      expectCode(patch([{ name: 'alpha', value: 40000 }], { transparencyPct: 10 }), StatusCode.InvalidArgument);
+      patch([{ name: 'alpha', value: 40000 }], { transparencyPct: 60 })();
+      assert.equal(fillOf(shape).transparencyPct, 60);
+    });
+  });
+
+  it('a tint beside transforms is refused', () => {
+    withSheet((ws) => {
+      const shape = ws.addShape({ anchor: box });
+      const theme = { kind: ColorKind.Theme, theme: 4, tint: 0.5 };
+      expectCode(
+        () => shape.update({ fill: { color: { base: theme, transforms: [{ name: 'lumMod', value: 1 }] } } }),
+        StatusCode.InvalidArgument,
+      );
+    });
+  });
+});
+
+describe('a line carries its end decorations and the system dashes', () => {
+  const lineOf = (shape) => shape.getProperties().line;
+
+  it('reads headEnd and tailEnd, a stated size or null', () => {
+    withSheet((ws) => {
+      const shape = ws.addShape({
+        anchor: box,
+        line: {
+          color: '#00FF00',
+          headEnd: {
+            type: f.ChartLineEndType.Stealth,
+            width: f.ChartLineEndSize.Small,
+            length: f.ChartLineEndSize.Large,
+          },
+          tailEnd: { type: f.ChartLineEndType.Arrow },
+        },
+      });
+      assert.deepEqual(lineOf(shape).headEnd, { type: 2, width: 1, length: 2 });
+      assert.deepEqual(lineOf(shape).tailEnd, { type: 5, width: null, length: null });
+    });
+  });
+
+  it('a shape line without ends reads null for both', () => {
+    withSheet((ws) => {
+      const line = lineOf(ws.addShape({ anchor: box, line: { color: '#00FF00' } }));
+      assert.equal(line.headEnd, null);
+      assert.equal(line.tailEnd, null);
+    });
+  });
+
+  it('a patch replaces an end whole and null removes it', () => {
+    withSheet((ws) => {
+      const shape = ws.addShape({
+        anchor: box,
+        line: { color: '#00FF00', headEnd: { type: 1, width: 0, length: 0 }, tailEnd: { type: 4 } },
+      });
+      shape.update({ line: { headEnd: { type: 3 }, tailEnd: null } });
+      assert.deepEqual(lineOf(shape).headEnd, { type: 3, width: null, length: null });
+      assert.equal(lineOf(shape).tailEnd, null);
+      shape.update({ line: null });
+      assert.equal(lineOf(shape), null);
+    });
+  });
+
+  it('refuses an end type outside the table', () => {
+    withSheet((ws) => {
+      const shape = ws.addShape({ anchor: box, line: { color: '#00FF00' } });
+      expectCode(() => shape.update({ line: { headEnd: { type: 6 } } }), StatusCode.InvalidArgument);
+      expectCode(() => shape.update({ line: { tailEnd: { type: 1, width: 3 } } }), StatusCode.InvalidArgument);
+      expectTypeError(() => shape.update({ line: { headEnd: {} } }));
+    });
+  });
+
+  it('the system dashes round trip', () => {
+    withSheet((ws) => {
+      const shape = ws.addShape({ anchor: box, line: { color: '#00FF00' } });
+      for (let dash = 5; dash <= 11; dash++) {
+        shape.update({ line: { dash } });
+        assert.equal(lineOf(shape).dash, dash);
+      }
+      expectCode(() => shape.update({ line: { dash: 12 } }), StatusCode.InvalidArgument);
+    });
+  });
+});
+
+describe('chart and plot area paint', () => {
+  it('reads null members for a chart that states none', () => {
+    withSheet((ws) => {
+      const { chartArea, plotArea } = chartOf(ws).getProperties();
+      for (const area of [chartArea, plotArea]) {
+        assert.deepEqual(Object.keys(area).sort(), ['fill', 'line']);
+      }
+    });
+  });
+
+  it('updateDisplay sets and clears the area paint, and keeps what it does not name', () => {
+    withSheet((ws) => {
+      const chart = chartOf(ws);
+      chart.updateDisplay({
+        chartArea: { fill: { color: '#112233' }, line: { color: '#445566', widthPt: 2 } },
+        plotArea: {
+          fill: {
+            color: { base: { kind: ColorKind.Rgb, argb: 0xff778899 }, transforms: [{ name: 'alpha', value: 50000 }] },
+          },
+        },
+      });
+      let props = chart.getProperties();
+      assert.equal(props.chartArea.fill.color.base.argb >>> 0, 0xff112233);
+      assert.equal(props.chartArea.line.widthPt, 2);
+      assert.equal(props.plotArea.fill.color.transforms[0].name, 'alpha');
+      chart.updateDisplay({ chartArea: { line: null } });
+      props = chart.getProperties();
+      assert.equal(props.chartArea.line, null);
+      assert.equal(props.chartArea.fill.color.base.argb >>> 0, 0xff112233);
+      chart.updateDisplay({ chartArea: { fill: null } });
+      assert.equal(chart.getProperties().chartArea.fill, null);
+      chart.updateDisplay({ blanksAs: f.BlanksAs.Gap });
+      assert.equal(chart.getProperties().plotArea.fill.color.transforms[0].name, 'alpha');
+    });
+  });
+
+  it('the area keys themselves cannot be cleared', () => {
+    withSheet((ws) => {
+      const chart = chartOf(ws);
+      expectTypeError(() => chart.updateDisplay({ chartArea: null }));
+      expectTypeError(() => chart.updateDisplay({ plotArea: null }));
+    });
+  });
+});
+
+describe('a shape reads and writes its adjust values and text direction', () => {
+  it('adjustValues round trips and a patch merges by name', () => {
+    withSheet((ws) => {
+      const shape = ws.addShape({
+        anchor: box,
+        presetGeometry: 'wedgeRectCallout',
+        adjustValues: { adj1: 10000, adj2: 20000 },
+      });
+      assert.deepEqual({ ...shape.getProperties().adjustValues }, { adj1: 10000, adj2: 20000 });
+      shape.update({ adjustValues: { adj1: 5 } });
+      assert.deepEqual({ ...shape.getProperties().adjustValues }, { adj1: 5, adj2: 20000 });
+      shape.update({ adjustValues: { adj2: null } });
+      assert.deepEqual({ ...shape.getProperties().adjustValues }, { adj1: 5 });
+      shape.update({ adjustValues: {} });
+      assert.deepEqual({ ...shape.getProperties().adjustValues }, { adj1: 5 });
+      shape.update({ presetGeometry: 'rect' });
+      assert.deepEqual({ ...shape.getProperties().adjustValues }, {});
+    });
+  });
+
+  it('a shape without adjust values reads an empty record', () => {
+    withSheet((ws) => {
+      assert.deepEqual({ ...ws.addShape({ anchor: box }).getProperties().adjustValues }, {});
+    });
+  });
+
+  it('refuses null on input, an empty name and too many entries', () => {
+    withSheet((ws) => {
+      expectTypeError(() => ws.addShape({ anchor: box, adjustValues: null }));
+      expectTypeError(() =>
+        ws.addShape({ anchor: box, presetGeometry: 'wedgeRectCallout', adjustValues: { adj1: null } }),
+      );
+      expectTypeError(() => ws.addShape({ anchor: box, presetGeometry: 'wedgeRectCallout', adjustValues: 3 }));
+      const shape = ws.addShape({ anchor: box, presetGeometry: 'wedgeRectCallout' });
+      expectTypeError(() => shape.update({ adjustValues: null }));
+      expectCode(() => shape.update({ adjustValues: { '': 1 } }), StatusCode.InvalidArgument);
+      const many = Object.fromEntries(Array.from({ length: 65 }, (_, i) => [`adj${i + 1}`, i]));
+      expectCode(() => shape.update({ adjustValues: many }), StatusCode.SecurityResourceLimit);
+    });
+  });
+
+  it('textVert reads null until stated, round trips and clears with null', () => {
+    withSheet((ws) => {
+      assert.equal(ws.addShape({ anchor: box }).getProperties().textVert, null);
+      const shape = ws.addShape({ anchor: box, textVert: f.ShapeTextVert.Vert270 });
+      assert.equal(shape.getProperties().textVert, 2);
+      shape.update({ textVert: f.ShapeTextVert.MongolianVert });
+      assert.equal(shape.getProperties().textVert, 6);
+      shape.update({ textVert: null });
+      assert.equal(shape.getProperties().textVert, null);
+      expectTypeError(() => ws.addShape({ anchor: box, textVert: null }));
+    });
+  });
+
+  it('a shape that is no connector reads null connections', () => {
+    withSheet((ws) => {
+      const props = ws.addShape({ anchor: box }).getProperties();
+      assert.equal(props.startConnection, null);
+      assert.equal(props.endConnection, null);
     });
   });
 });

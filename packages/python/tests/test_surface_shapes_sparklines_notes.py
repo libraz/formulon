@@ -23,9 +23,11 @@ from formulon import (
     FormulonError,
     InvalidArgumentError,
     NotFoundError,
+    SecurityError,
     Shape,
     ShapeInput,
     ShapeProperties,
+    ShapeTextVert,
     SheetRect,
     Sparkline,
     SparklineAxisType,
@@ -81,7 +83,7 @@ class ShapeTests(unittest.TestCase):
                 self.assertEqual(
                     (common[0].name, shapes[0].preset_geometry, shapes[0].text), ("Box", "roundRect", "Hello\nWorld")
                 )
-                self.assertEqual(shapes[0].fill, ChartFill(color=Color(ColorKind.RGB, argb=0xFFFF0000)))
+                self.assertEqual(shapes[0].fill.color.base, Color(ColorKind.RGB, argb=0xFFFF0000))
                 self.assertEqual(shapes[0].line, ChartLine(none=True))
                 self.assertEqual((shapes[0].rotation_deg, common[0].hidden, shapes[0].text_box), (15.0, False, False))
                 self.assertEqual(
@@ -89,7 +91,7 @@ class ShapeTests(unittest.TestCase):
                 )
                 self.assertEqual(shapes[1].kind, DrawingObjectKind.CONNECTOR)
                 self.assertEqual(
-                    (common[1].anchor.from_col_offset_emu, common[1].anchor.width_emu, shapes[1].line.color),
+                    (common[1].anchor.from_col_offset_emu, common[1].anchor.width_emu, shapes[1].line.color.base),
                     (500, 914400, Color(ColorKind.RGB, argb=0xFF00FF00)),
                 )
                 self.assertEqual(shapes[1].line.width_pt, 1.5)
@@ -220,6 +222,88 @@ def _group(**overrides) -> SparklineGroupInput:
     for key, value in overrides.items():
         setattr(group, key, value)
     return group
+
+
+class ShapeAdjustAndTextDirectionTests(unittest.TestCase):
+    def test_adjust_values_read_merge_and_remove(self) -> None:
+        with Workbook.create_default() as wb:
+            plain = wb.sheet(0).add_shape(ShapeInput(**_box(preset_geometry="rect")))
+            self.assertEqual(plain.get_properties().adjust_values, {})
+            shape = wb.sheet(0).add_shape(ShapeInput(**_box(adjust_values={"adj": 12345})))
+            self.assertEqual(shape.get_properties().adjust_values, {"adj": 12345})
+            with Workbook.load(wb.save()) as loaded:
+                handle = loaded.sheet(0).shape(shape.object_id)
+                self.assertEqual(handle.get_properties().adjust_values, {"adj": 12345})
+            shape.update(adjust_values={"adj": 5000})
+            self.assertEqual(shape.get_properties().adjust_values, {"adj": 5000})
+            # An empty mapping changes nothing; a None value removes the guide so the preset's default applies.
+            shape.update(adjust_values={})
+            self.assertEqual(shape.get_properties().adjust_values, {"adj": 5000})
+            shape.update(adjust_values={"adj": None})
+            self.assertEqual(shape.get_properties().adjust_values, {})
+            # A preset change drops every guide and the edits apply after it.
+            shape.update(adjust_values={"adj": 7000})
+            shape.update(preset_geometry="roundRect", adjust_values={"adj": 9000})
+            self.assertEqual(shape.get_properties().adjust_values, {"adj": 9000})
+
+    def test_adjust_values_refusals(self) -> None:
+        with Workbook.create_default() as wb:
+            shape = wb.sheet(0).add_shape(ShapeInput(**_box(adjust_values={"adj": 1})))
+            for bad in ({"": 1}, {"1adj": 1}, {"a" * 33: 1}, {"adj ": 2}):
+                with self.assertRaises(InvalidArgumentError):
+                    wb.sheet(0).add_shape(ShapeInput(**_box(adjust_values=bad)))
+            with self.assertRaises(InvalidArgumentError):
+                shape.update(adjust_values={"": 1})
+            with self.assertRaises(InvalidArgumentError):
+                shape.update(adjust_values={"1adj": None})
+            many = {f"adj{i}": i for i in range(65)}
+            with self.assertRaises(SecurityError):
+                wb.sheet(0).add_shape(ShapeInput(**_box(adjust_values=many)))
+            with self.assertRaises(SecurityError):
+                shape.update(adjust_values=many)
+            # None is a TypeError where the mapping or one of the input values is concerned.
+            with self.assertRaises(TypeError):
+                shape.update(adjust_values=None)  # type: ignore[arg-type]
+            with self.assertRaises(TypeError):
+                wb.sheet(0).add_shape(ShapeInput(**_box(adjust_values={"adj": None})))  # type: ignore[dict-item]
+            self.assertEqual(shape.get_properties().adjust_values, {"adj": 1})
+
+    def test_text_direction(self) -> None:
+        with Workbook.create_default() as wb:
+            plain = wb.sheet(0).add_shape(ShapeInput(**_box()))
+            self.assertIsNone(plain.get_properties().text_vert)
+            shape = wb.sheet(0).add_shape(ShapeInput(**_box(text_vert=ShapeTextVert.VERT270)))
+            self.assertEqual(shape.get_properties().text_vert, ShapeTextVert.VERT270)
+            with Workbook.load(wb.save()) as loaded:
+                self.assertEqual(
+                    loaded.sheet(0).shape(shape.object_id).get_properties().text_vert, ShapeTextVert.VERT270
+                )
+            shape.update(text_vert=ShapeTextVert.HORZ)
+            self.assertEqual(shape.get_properties().text_vert, ShapeTextVert.HORZ)
+            shape.update(text_vert=None)
+            self.assertIsNone(shape.get_properties().text_vert)
+            self.assertEqual([m.value for m in ShapeTextVert], list(range(7)))
+            connector = wb.sheet(0).add_shape(ShapeInput(**_box(preset_geometry="line", fill=None, text=None)))
+            with self.assertRaises(InvalidArgumentError):
+                connector.update(text_vert=ShapeTextVert.VERT)
+            with self.assertRaises(InvalidArgumentError):
+                wb.sheet(0).add_shape(
+                    ShapeInput(**_box(preset_geometry="line", fill=None, text=None, text_vert=ShapeTextVert.VERT))
+                )
+
+    def test_connector_ends_read_as_free(self) -> None:
+        with Workbook.create_default() as wb:
+            shape = wb.sheet(0).add_shape(ShapeInput(**_box()))
+            connector = wb.sheet(0).add_shape(ShapeInput(**_box(preset_geometry="line", fill=None, text=None)))
+            for handle in (shape, connector):
+                props = handle.get_properties()
+                self.assertEqual((props.start_connection, props.end_connection), (None, None))
+            names = {f.name for f in dataclasses.fields(ShapeProperties)}
+            self.assertTrue({"start_connection", "end_connection", "adjust_values", "text_vert"} <= names)
+            # A flip or rotation patched on a connector writes through and leaves the ends unglued.
+            connector.update(flip_h=True, rotation_deg=90.0)
+            props = connector.get_properties()
+            self.assertEqual((props.flip_h, props.rotation_deg, props.start_connection), (True, 90.0, None))
 
 
 class SparklineGroupTests(unittest.TestCase):

@@ -25,6 +25,10 @@ Field Probe(CheckedSpecReader& reader, const Napi::Object& owner, const char* ke
 /// throwing when a value other than a plain object was supplied.
 bool PatchObjectArg(const Napi::CallbackInfo& info, size_t idx, Napi::Object* out);
 
+/// Reads a `DrawingColorInput` (a `ColorInput`, or `{ base, transforms? }`); the transform array and names live as
+/// long as `reader`. A nullish value reads as no colour.
+fm_drawing_color_t ReadDrawingColor(CheckedSpecReader& reader, const Napi::Value& value, const char* key);
+
 /// Reads `owner.fill` / `owner.line` into a paint patch: absent keeps every member, `null` clears every member
 /// (the style's paint), and an object patches the members it carries.
 void ReadFillPatch(CheckedSpecReader& reader, const Napi::Object& owner, fm_chart_fill_patch_t& out);
@@ -34,6 +38,9 @@ void ReadLinePatch(CheckedSpecReader& reader, const Napi::Object& owner, fm_char
 /// zero), and a `null` member is an absent one.
 fm_chart_fill_t ReadFillSpec(CheckedSpecReader& reader, const Napi::Object& owner);
 fm_chart_line_t ReadLineSpec(CheckedSpecReader& reader, const Napi::Object& owner);
+
+/// The JS `DrawingColor`, or `null` when the colour states no base and no transform.
+Napi::Value DrawingColorOrNull(Napi::Env env, const fm_drawing_color_t& color);
 
 /// The JS `ChartFill` / `ChartLine` record of a paint, or `null` when it states nothing (the style's paint).
 Napi::Value FillOrNull(Napi::Env env, const fm_chart_fill_t& fill);
@@ -46,12 +53,14 @@ fm_drawing_patch_t PullDrawingPatch(CheckedSpecReader& reader, const Napi::Objec
 
 }  // namespace detail
 
+using detail::DrawingColorOrNull;
 using detail::Field;
 using detail::FillOrNull;
 using detail::LineOrNull;
 using detail::PatchObjectArg;
 using detail::Probe;
 using detail::PullDrawingPatch;
+using detail::ReadDrawingColor;
 using detail::ReadFillPatch;
 using detail::ReadFillSpec;
 using detail::ReadLinePatch;

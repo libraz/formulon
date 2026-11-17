@@ -637,7 +637,7 @@ struct fm_workbook {
   formulon::c_api::BorrowedArrayArena<fm_cf_icon_t> cf_icon_scratch;
 
   // Arrays behind the borrowed `const T*` fields of the typed AutoFilter,
-  // threaded-comment and custom table-style getters. They carry
+  // threaded-comment, custom table-style and shape getters. They carry
   // `read_scratch`'s lifetime: each producer clears them together with
   // `read_scratch` before refilling.
   formulon::c_api::BorrowedArrayArena<fm_filter_column_t> filter_column_scratch;
@@ -647,6 +647,8 @@ struct fm_workbook {
   formulon::c_api::BorrowedArrayArena<fm_sort_condition_t> sort_condition_scratch;
   formulon::c_api::BorrowedArrayArena<fm_mention_t> mention_scratch;
   formulon::c_api::BorrowedArrayArena<fm_table_style_element_t> table_style_element_scratch;
+  formulon::c_api::BorrowedArrayArena<fm_color_transform_t> color_transform_scratch;
+  formulon::c_api::BorrowedArrayArena<fm_shape_adjust_t> shape_adjust_scratch;
   // Stops behind the `gradient_stops` view of `fm_workbook_get_fill_at` /
   // `fm_workbook_get_dxf_at`; refreshed by each of those calls.
   formulon::c_api::BorrowedArrayArena<fm_gradient_stop_t> gradient_stop_scratch;

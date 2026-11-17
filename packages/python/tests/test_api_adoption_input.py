@@ -250,10 +250,10 @@ class ColourInputTests(unittest.TestCase):
             )
             # A shape colour reads back opaque; the alpha of the input is ignored.
             props = shape.get_properties()
-            self.assertEqual(props.fill.color, Color(kind=ColorKind.RGB, argb=0xFFFF0000))
-            self.assertEqual(props.line.color, Color(kind=ColorKind.RGB, argb=0xFF0000FF))
+            self.assertEqual(props.fill.color.base, Color(kind=ColorKind.RGB, argb=0xFFFF0000))
+            self.assertEqual(props.line.color.base, Color(kind=ColorKind.RGB, argb=0xFF0000FF))
             shape.update(fill={"color": "#00FF00"})
-            self.assertEqual(shape.get_properties().fill.color, Color(kind=ColorKind.RGB, argb=0xFF00FF00))
+            self.assertEqual(shape.get_properties().fill.color.base, Color(kind=ColorKind.RGB, argb=0xFF00FF00))
             passed_back = {
                 f.name: getattr(props, f.name) for f in dataclasses.fields(props) if f.name in ("fill", "line")
             }

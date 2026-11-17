@@ -95,6 +95,10 @@ std::string Hex(const ColorSpec& spec) {
   return Hex(Rendered(spec));
 }
 
+std::string Hex(const DrawingColor& color) {
+  return color.resolved_argb ? Hex(*color.resolved_argb) : Hex(Rendered(color.base));
+}
+
 /// Shortest decimal text that reads back as `value`.
 std::string Num(double value) {
   char buf[40];
@@ -973,13 +977,13 @@ TEST(ChartXml, ChartAndPlotAreaPaintReadAsStated) {
                                 "</a:solidFill><a:ln><a:noFill/></a:ln></c:spPr></c:chartSpace>",
                             wb);
   ASSERT_TRUE(m.chart_area.fill.color.has_value());
-  EXPECT_EQ(m.chart_area.fill.color->kind, ColorSpec::Kind::kRgb);
-  EXPECT_EQ(m.chart_area.fill.color->rgb, 0xFFF0E0D0U);
+  EXPECT_EQ(m.chart_area.fill.color->base.kind, ColorSpec::Kind::kRgb);
+  EXPECT_EQ(m.chart_area.fill.color->base.rgb, 0xFFF0E0D0U);
   EXPECT_EQ(m.chart_area.fill.alpha, std::optional<std::uint32_t>(40000U));
   EXPECT_TRUE(m.chart_area.line.none);
   EXPECT_TRUE(m.plot_area.fill.none);
   ASSERT_TRUE(m.plot_area.line.color.has_value());
-  EXPECT_EQ(m.plot_area.line.color->rgb, 0xFF102030U);
+  EXPECT_EQ(m.plot_area.line.color->base.rgb, 0xFF102030U);
   EXPECT_EQ(m.plot_area.line.width_emu, std::optional<std::int64_t>(9525));
   EXPECT_EQ(m.plot_area.line.dash, std::optional<ChartLineDash>(ChartLineDash::kDash));
 
@@ -1001,7 +1005,7 @@ TEST(ChartXml, ChartAndPlotAreaPaintReadAsStated) {
       wb);
   ASSERT_TRUE(cx.is_chartex);
   ASSERT_TRUE(cx.plot_area.fill.color.has_value());
-  EXPECT_EQ(cx.plot_area.fill.color->rgb, 0xFF0A0B0CU);
+  EXPECT_EQ(cx.plot_area.fill.color->base.rgb, 0xFF0A0B0CU);
   EXPECT_TRUE(cx.chart_area.fill.other);
 }
 
@@ -1159,12 +1163,12 @@ TEST(ChartXml, SeriesFormatForms) {
   const ChartSeries& s0 = m.plots[0].series[0];
   EXPECT_EQ(FillStr(s0.fill), "FF196B24 alpha=25000");  // accent3 rendered
   ASSERT_TRUE(s0.fill.color.has_value());
-  EXPECT_EQ(s0.fill.color->kind, ColorSpec::Kind::kTheme);
-  EXPECT_EQ(s0.fill.color->theme, 6U);
+  EXPECT_EQ(s0.fill.color->base.kind, ColorSpec::Kind::kTheme);
+  EXPECT_EQ(s0.fill.color->base.theme, 6U);
   EXPECT_EQ(s0.fill.alpha, std::optional<std::uint32_t>(25000U));
   EXPECT_EQ(s0.line.width_emu, 12700);
   ASSERT_TRUE(s0.line.color.has_value());
-  EXPECT_EQ(s0.line.color->rgb, 0xFF112233U);
+  EXPECT_EQ(s0.line.color->base.rgb, 0xFF112233U);
   EXPECT_EQ(s0.line.dash_name, "sysDot");
   EXPECT_EQ(s0.line.dash, ChartLineDash::kSysDot);
   ASSERT_TRUE(s0.marker.has_value());
@@ -1175,7 +1179,7 @@ TEST(ChartXml, SeriesFormatForms) {
   ASSERT_EQ(s0.points.size(), 1U);
   EXPECT_EQ(s0.points[0].idx, 2U);
   ASSERT_TRUE(s0.points[0].fill.color.has_value());
-  EXPECT_EQ(s0.points[0].fill.color->rgb, 0xFFAABBCCU);
+  EXPECT_EQ(s0.points[0].fill.color->base.rgb, 0xFFAABBCCU);
   EXPECT_TRUE(s0.points[0].line.none);
   EXPECT_FALSE(s0.points[0].marker.has_value());
   ASSERT_TRUE(s0.labels.has_value());
@@ -1271,11 +1275,11 @@ TEST(ChartXml, ThemeColoursResolveThroughTheWorkbookTheme) {
   const ChartSeries& s = m.plots[0].series[0];
   ASSERT_TRUE(s.fill.color.has_value());
   ASSERT_TRUE(s.line.color.has_value());
-  EXPECT_EQ(s.fill.color->kind, ColorSpec::Kind::kTheme);
-  EXPECT_EQ(s.fill.color->theme, 4U);
-  EXPECT_EQ(resolve_color(wb, *s.fill.color, ColorContext::kFont).argb, 0xFF102030U);
-  EXPECT_EQ(s.line.color->kind, ColorSpec::Kind::kTheme);
-  EXPECT_EQ(s.line.color->theme, 0U);  // bg1 = lt1, not tx1
+  EXPECT_EQ(s.fill.color->base.kind, ColorSpec::Kind::kTheme);
+  EXPECT_EQ(s.fill.color->base.theme, 4U);
+  EXPECT_EQ(resolve_color(wb, s.fill.color->base, ColorContext::kFont).argb, 0xFF102030U);
+  EXPECT_EQ(s.line.color->base.kind, ColorSpec::Kind::kTheme);
+  EXPECT_EQ(s.line.color->base.theme, 0U);  // bg1 = lt1, not tx1
 }
 
 /// The first series' fill and line colours of a bar chart whose `c:spPr` holds the given fills.
@@ -1288,29 +1292,38 @@ ChartSeries ReadBarSeries(const std::string& sp_pr, const std::string& space_chi
   return m.plots[0].series[0];
 }
 
-TEST(ChartXml, PaletteSchemeColourReadsAsThemeWithTint) {
+TEST(ChartXml, PaletteSchemeColourReadsAsThemeWithTransforms) {
   const ChartSeries s = ReadBarSeries(
       "<a:solidFill><a:schemeClr val=\"accent1\"><a:lumMod val=\"60000\"/><a:lumOff val=\"40000\"/></a:schemeClr>"
       "</a:solidFill><a:ln><a:solidFill><a:schemeClr val=\"tx1\"><a:lumMod val=\"75000\"/></a:schemeClr>"
       "</a:solidFill></a:ln>");
   ASSERT_TRUE(s.fill.color.has_value());
-  EXPECT_EQ(s.fill.color->kind, ColorSpec::Kind::kTheme);
-  EXPECT_EQ(s.fill.color->theme, 4U);
-  EXPECT_NEAR(s.fill.color->tint, 0.4, 1e-9);
+  EXPECT_EQ(s.fill.color->base.kind, ColorSpec::Kind::kTheme);
+  EXPECT_EQ(s.fill.color->base.theme, 4U);
+  EXPECT_EQ(s.fill.color->transforms, (std::vector<ColorTransform>{{"lumMod", 60000}, {"lumOff", 40000}}));
+  EXPECT_TRUE(s.fill.color->resolved_argb.has_value());
+  EXPECT_FALSE(s.fill.other);
   ASSERT_TRUE(s.line.color.has_value());
-  EXPECT_EQ(s.line.color->kind, ColorSpec::Kind::kTheme);
-  EXPECT_EQ(s.line.color->theme, 1U);
-  EXPECT_NEAR(s.line.color->tint, -0.25, 1e-9);
+  EXPECT_EQ(s.line.color->base.kind, ColorSpec::Kind::kTheme);
+  EXPECT_EQ(s.line.color->base.theme, 1U);
+  EXPECT_EQ(s.line.color->transforms, (std::vector<ColorTransform>{{"lumMod", 75000}}));
+  EXPECT_TRUE(s.line.color->resolved_argb.has_value());
 }
 
-TEST(ChartXml, UnrepresentableColourReadsAsRenderedRgb) {
+TEST(ChartXml, TransformedSchemeColourKeepsBaseTransformsAndRenderedColour) {
   const ChartSeries s = ReadBarSeries(
       "<a:solidFill><a:schemeClr val=\"accent1\"><a:shade val=\"50000\"/></a:schemeClr></a:solidFill>"
       "<a:ln><a:solidFill><a:schemeClr val=\"accent2\"><a:lumOff val=\"40000\"/></a:schemeClr></a:solidFill></a:ln>");
   ASSERT_TRUE(s.fill.color.has_value());
-  EXPECT_EQ(s.fill.color->kind, ColorSpec::Kind::kRgb);
+  EXPECT_EQ(s.fill.color->base.kind, ColorSpec::Kind::kTheme);
+  EXPECT_EQ(s.fill.color->transforms, (std::vector<ColorTransform>{{"shade", 50000}}));
+  EXPECT_TRUE(s.fill.color->resolved_argb.has_value());
+  EXPECT_FALSE(s.fill.other);
   ASSERT_TRUE(s.line.color.has_value());
-  EXPECT_EQ(s.line.color->kind, ColorSpec::Kind::kRgb);
+  EXPECT_EQ(s.line.color->base.kind, ColorSpec::Kind::kTheme);
+  EXPECT_EQ(s.line.color->transforms, (std::vector<ColorTransform>{{"lumOff", 40000}}));
+  EXPECT_TRUE(s.line.color->resolved_argb.has_value());
+  EXPECT_FALSE(s.line.other);
 }
 
 TEST(ChartXml, RemappedColourMapKeepsBaseSchemeColoursAsRgb) {
@@ -1320,12 +1333,12 @@ TEST(ChartXml, RemappedColourMapKeepsBaseSchemeColoursAsRgb) {
   const ChartSeries remapped =
       ReadBarSeries(fills, "<c:clrMapOvr bg1=\"dk1\" tx1=\"lt1\" bg2=\"dk2\" tx2=\"lt2\" accent1=\"accent1\"/>");
   ASSERT_TRUE(remapped.fill.color.has_value());
-  EXPECT_EQ(remapped.fill.color->kind, ColorSpec::Kind::kRgb);
+  EXPECT_EQ(remapped.fill.color->base.kind, ColorSpec::Kind::kRgb);
   ASSERT_TRUE(remapped.line.color.has_value());
-  EXPECT_EQ(remapped.line.color->kind, ColorSpec::Kind::kTheme);
+  EXPECT_EQ(remapped.line.color->base.kind, ColorSpec::Kind::kTheme);
   const ChartSeries identity =
       ReadBarSeries(fills, "<c:clrMapOvr bg1=\"lt1\" tx1=\"dk1\" bg2=\"lt2\" tx2=\"dk2\" accent1=\"accent1\"/>");
-  EXPECT_EQ(identity.fill.color->kind, ColorSpec::Kind::kTheme);
+  EXPECT_EQ(identity.fill.color->base.kind, ColorSpec::Kind::kTheme);
 }
 
 }  // namespace

@@ -520,6 +520,10 @@ extern "C" fm_status_t fm_sheet_update_chart_display(fm_workbook_t* wb, size_t s
   r.bool_field(patch->plot_visible_only_op, patch->plot_visible_only, model.plot_vis_only, "plot_visible_only");
   r.bool_field(patch->na_as_blank_op, patch->na_as_blank, model.na_as_blank, "na_as_blank");
   r.field(patch->style_op, patch->style, model.style, "style_op");
+  model.chart_area =
+      formulon::ChartAreaPaintPatch{read_fill(r, patch->chart_area.fill), read_line(r, patch->chart_area.line)};
+  model.plot_area =
+      formulon::ChartAreaPaintPatch{read_fill(r, patch->plot_area.fill), read_line(r, patch->plot_area.line)};
   if (r.status() != 0) {
     return r.status();
   }

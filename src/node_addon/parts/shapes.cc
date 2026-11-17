@@ -28,6 +28,8 @@ struct ShapeText {
   std::string description;
   std::string preset_geometry;
   std::string text;
+  std::vector<fm_shape_adjust_t> adjusts;
+  std::vector<fm_shape_adjust_patch_t> adjust_patches;
 };
 
 // Reads the optional boolean flip `owner[key]` as an `fm_tristate_t`; `null` is a TypeError.
@@ -37,6 +39,45 @@ int32_t PullFlip(CheckedSpecReader& reader, const Napi::Object& owner, const cha
     return FM_TRISTATE_DEFAULT;
   }
   return reader.Tristate(owner, key);
+}
+
+// Reads `owner.adjustValues` (`{ name: number }`), calling `add(name, value)` per own key; `patch` also admits `null`
+// (removes the guide). An absent key reads as no entries.
+template <typename Add>
+void PullAdjustValues(CheckedSpecReader& reader, const Napi::Object& owner, bool patch, Add&& add) {
+  const Napi::Value v = reader.Get(owner, "adjustValues");
+  if (!reader.ok() || v.IsUndefined()) {
+    return;
+  }
+  Napi::Object map;
+  if (v.IsNull() || v.IsArray() || !reader.Object(v, "adjustValues", &map)) {
+    if (!reader.ok()) {
+      return;
+    }
+    if (v.IsNull()) {
+      reader.FailNull("adjustValues");
+    } else {
+      reader.FailType("adjustValues", "an object");
+    }
+    return;
+  }
+  const Napi::Array names = map.GetPropertyNames();
+  for (uint32_t i = 0; i < names.Length() && reader.ok(); ++i) {
+    const std::string name = names.Get(i).ToString().Utf8Value();
+    const Napi::Value entry = reader.Get(map, name.c_str());
+    if (!reader.ok()) {
+      return;
+    }
+    if (entry.IsNull() && patch) {
+      add(reader.KeepString(name), false, 0);
+    } else if (entry.IsNull()) {
+      reader.FailNull(name.c_str());
+    } else if (entry.IsUndefined()) {
+      reader.FailType(name.c_str(), patch ? "a number or null" : "a number");
+    } else {
+      add(reader.KeepString(name), true, reader.I32(entry, name.c_str(), 0));
+    }
+  }
 }
 
 // Reads a shape to add: the common placement keys plus the shape keys; an omitted key takes the default, and an
@@ -53,6 +94,17 @@ fm_shape_spec_t PullShapeSpec(CheckedSpecReader& reader, const Napi::Object& spe
   s.text = reader.String(spec, "text", &store.text) ? store.text.c_str() : nullptr;
   s.flip_h = PullFlip(reader, spec, "flipH");
   s.flip_v = PullFlip(reader, spec, "flipV");
+  PullAdjustValues(reader, spec, false, [&](const char* name, bool, int32_t value) {
+    store.adjusts.push_back(fm_shape_adjust_t{name, value});
+  });
+  s.adjust_values = store.adjusts.empty() ? nullptr : store.adjusts.data();
+  s.adjust_values_count = static_cast<uint32_t>(store.adjusts.size());
+  if (reader.Get(spec, "textVert").IsNull()) {
+    reader.FailNull("textVert");
+  }
+  bool has_text_vert = false;
+  s.text_vert = reader.I32(spec, "textVert", 0, &has_text_vert);
+  s.has_text_vert = has_text_vert ? 1 : 0;
   return s;
 }
 
@@ -68,6 +120,12 @@ fm_shape_patch_t PullShapePatch(CheckedSpecReader& reader, const Napi::Object& s
   s.text_op = PatchString(reader, spec, "text", false, &store.text, &s.text);
   s.flip_h_op = PatchBool(reader, spec, "flipH", &s.flip_h);
   s.flip_v_op = PatchBool(reader, spec, "flipV", &s.flip_v);
+  PullAdjustValues(reader, spec, true, [&](const char* name, bool set, int32_t value) {
+    store.adjust_patches.push_back(fm_shape_adjust_patch_t{name, set ? FM_PATCH_OP_SET : FM_PATCH_OP_CLEAR, value});
+  });
+  s.adjust_values = store.adjust_patches.empty() ? nullptr : store.adjust_patches.data();
+  s.adjust_values_count = static_cast<uint32_t>(store.adjust_patches.size());
+  s.text_vert_op = PatchNullableI32(reader, spec, "textVert", &s.text_vert);
   return s;
 }
 
@@ -130,6 +188,16 @@ bool PullSparklines(CheckedSpecReader& reader, const Napi::Array& array, std::ve
   return reader.ok();
 }
 
+Napi::Value ConnectionOrNull(Napi::Env env, int32_t has, const fm_shape_connection_t& c) {
+  if (has == 0) {
+    return env.Null();
+  }
+  Napi::Object o = Napi::Object::New(env);
+  o.Set("objectId", JsNumber(env, c.object_id));
+  o.Set("siteIndex", JsNumber(env, c.site_index));
+  return o;
+}
+
 // The JS `ShapeProperties` record of `s`: the shape-specific fields only; a `null` `fill` / `line` is the shape
 // style's paint.
 Napi::Object ShapeToJs(Napi::Env env, const fm_shape_info_t& s) {
@@ -144,6 +212,14 @@ Napi::Object ShapeToJs(Napi::Env env, const fm_shape_info_t& s) {
   item.Set("rotationDeg", JsNumber(env, s.rotation_deg));
   item.Set("flipH", Napi::Boolean::New(env, s.flip_h != 0));
   item.Set("flipV", Napi::Boolean::New(env, s.flip_v != 0));
+  item.Set("startConnection", ConnectionOrNull(env, s.has_start_connection, s.start_connection));
+  item.Set("endConnection", ConnectionOrNull(env, s.has_end_connection, s.end_connection));
+  Napi::Object adjust_values = Napi::Object::New(env);
+  for (uint32_t i = 0; i < s.adjust_values_count; ++i) {
+    adjust_values.Set(s.adjust_values[i].name, JsNumber(env, s.adjust_values[i].value));
+  }
+  item.Set("adjustValues", adjust_values);
+  item.Set("textVert", s.text_vert == FM_SHAPE_TEXT_VERT_ABSENT ? env.Null() : JsNumber(env, s.text_vert));
   return item;
 }
 

@@ -67,6 +67,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `setProfileId` after the load makes every formula stale. Omitting it keeps
   the profile the load assigns; an unknown or empty id is `InvalidArgument`.
   Sheet names are checked under the default host while the file is read.
+- Chart and shape paint colours carry their DrawingML transforms: `ChartFill.color` and
+  `ChartLine.color` (Python `color`, C `fm_chart_fill_t::color` / `fm_chart_line_t::color`)
+  read a `DrawingColor` (C `fm_drawing_color_t`) with the `base` colour, its `transforms`
+  (`ColorTransform`, C `fm_color_transform_t`) in document order, `alpha` included, and the
+  colour and opacity Excel renders. `DrawingColor.resolved` and
+  `DrawingColor.resolvedTransparencyPct` (Python `resolved` / `resolved_transparency_pct`, C
+  `has_resolved` / `resolved` and `has_resolved_transparency_pct` /
+  `resolved_transparency_pct`) report the colour and opacity Excel renders; `transforms`
+  keeps `alpha` as written. `ChartFillPatch.color` and `ChartLinePatch.color` take a
+  `DrawingColorInput`, a colour or a base with transforms. An `alpha` transform written
+  beside `transparencyPct` must state the same opacity (`InvalidArgument` otherwise), and a
+  colour takes at most 64 transforms (`SecurityResourceLimit` beyond).
+- `ChartProperties.chartArea` and `plotArea` (Python `chart_area` / `plot_area`, C
+  `fm_chart_info_t::chart_area` / `plot_area`) read the chart area's and plot area's own
+  fill and outline as a `ChartAreaPaint` (C `fm_chart_area_paint_t`), and
+  `ChartDisplayPatch.chartArea` / `plotArea` (C `fm_chart_display_patch_t::chart_area` /
+  `plot_area`) change them with a `ChartAreaPaintPatch` (C `fm_chart_area_paint_patch_t`).
+- `ChartLine.headEnd` and `tailEnd` (Python `head_end` / `tail_end`, C
+  `fm_chart_line_t::head_end` / `tail_end`) read the decorations at a line's ends as a
+  `ChartLineEnd` (C `fm_chart_line_end_t`) with a `ChartLineEndType` and an optional
+  `ChartLineEndSize` width and length (C `fm_chart_line_end_type_t`,
+  `fm_chart_line_end_size_t`); `ChartLinePatch.headEnd` / `tailEnd` (C `head_end_op` /
+  `tail_end_op`) set one whole from a `ChartLineEndInput` or remove it. `ChartLineDash`
+  gains the presets `SysDot`, `SysDash`, `LgDash`, `LgDashDot`, `LgDashDotDot`,
+  `SysDashDot` and `SysDashDotDot` (C `FM_CHART_LINE_DASH_SYS_DOT` to
+  `FM_CHART_LINE_DASH_SYS_DASH_DOT_DOT`).
+- `ShapeProperties.startConnection` and `endConnection` (Python `start_connection` /
+  `end_connection`, C `fm_shape_info_t::start_connection` / `end_connection` with
+  `has_start_connection` / `has_end_connection`) read the shape a connector's end is glued
+  to as a `ShapeConnection` (C `fm_shape_connection_t`). A flip or rotation patched on a
+  connector unglues both of its ends, as Excel does.
+- `ShapeProperties.adjustValues`, `ShapeInput.adjustValues` and `ShapePatch.adjustValues`
+  (Python `adjust_values`, C `adjust_values` / `adjust_values_count` of `fm_shape_info_t`,
+  `fm_shape_spec_t` and `fm_shape_patch_t`, with `fm_shape_adjust_t` and
+  `fm_shape_adjust_patch_t`) read and write a preset geometry's adjust values by guide
+  name; a patch sets or removes the guides it names and keeps the rest.
+- `ShapeProperties.textVert`, `ShapeInput.textVert` and `ShapePatch.textVert` (Python
+  `text_vert`, C `fm_shape_info_t::text_vert`, `fm_shape_spec_t::has_text_vert` /
+  `text_vert` and `fm_shape_patch_t::text_vert_op` / `text_vert`) read and write a shape's
+  text direction as a `ShapeTextVert` (C `fm_shape_text_vert_t`); `null` (C
+  `FM_SHAPE_TEXT_VERT_ABSENT`) is a shape that states none.
 
 ### Changed
 
@@ -606,6 +647,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   left out of an `.xlsb` save together with its cache and the other
   PivotTables on that cache, and counted in `deferredFeatureCount`, as is an
   `.xlsb` PivotTable an `.xlsx` save cannot carry; it still saves to `.xlsx`.
+- `ChartFill.color` and `ChartLine.color` read a `DrawingColor` instead of a `Color`
+  (Python likewise; C `fm_drawing_color_t` instead of `fm_color_t`). Before, a colour with
+  transforms beyond a plain luminance tint read as its rendered Rgb with `other` set; it now
+  reads its base and transforms with `other` clear, and a Theme tint given on input reads
+  back as its `lumMod` / `lumOff` transforms. `other` marks only a paint the record cannot
+  state, and its colour is then absent.
+- The system and long dash presets read as their own `ChartLineDash` members instead of
+  `Other`.
+- C ABI: `fm_chart_fill_t`, `fm_chart_line_t`, `fm_chart_fill_patch_t` and
+  `fm_chart_line_patch_t` change layout (`color` is an `fm_drawing_color_t`, and the line
+  records gain the line ends), and with them every record embedding one: the chart marker,
+  series and point records and patches, `fm_shape_info_t`, `fm_shape_spec_t`,
+  `fm_shape_patch_t`, `fm_chart_info_t` and `fm_chart_display_patch_t`, which also gain the
+  fields above. A caller compiled against an earlier header must be recompiled
+  ([C ABI changes](docs/releases/upgrading-0.19.md#c-abi-changes)).
 
 ### Fixed
 

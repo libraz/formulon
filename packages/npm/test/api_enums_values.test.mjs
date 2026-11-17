@@ -171,6 +171,36 @@ describe('enum tables list their members at the exact ordinals', () => {
     assertTable('ChartLegendPosition', { Right: 0, Bottom: 1, TopRight: 2, Left: 3, Top: 4 });
   });
 
+  it('line dashes, line ends and text directions follow the OOXML vocabularies', () => {
+    assertTable('ChartLineDash', {
+      Solid: 0,
+      Dash: 1,
+      Dot: 2,
+      DashDot: 3,
+      Other: 4,
+      SysDot: 5,
+      SysDash: 6,
+      LgDash: 7,
+      LgDashDot: 8,
+      LgDashDotDot: 9,
+      SysDashDot: 10,
+      SysDashDotDot: 11,
+    });
+    assertTable('ChartLineEndType', { None: 0, Triangle: 1, Stealth: 2, Diamond: 3, Oval: 4, Arrow: 5 });
+    // Zero is the OOXML default `med`.
+    assertTable('ChartLineEndSize', { Medium: 0, Small: 1, Large: 2 });
+    assertTable('ShapeTextVert', {
+      Horz: 0,
+      Vert: 1,
+      Vert270: 2,
+      EaVert: 3,
+      WordArtVert: 4,
+      WordArtVertRtl: 5,
+      MongolianVert: 6,
+    });
+    assert.equal(f.ShapeTextVert.Absent, undefined);
+  });
+
   it('PivotSortOrder starts at Manual and SlicerSortOrder at Ascending', () => {
     assertTable('PivotSortOrder', { Manual: 0, Ascending: 1, Descending: 2 });
     assertTable('SlicerSortOrder', { Ascending: 0, Descending: 1 });
@@ -211,7 +241,7 @@ describe('enum tables list their members at the exact ordinals', () => {
         fill: { color: '#336699' },
         line: { none: true },
       });
-      assert.equal(painted.getProperties().fill.color.argb, 0xff336699);
+      assert.equal(painted.getProperties().fill.color.base.argb, 0xff336699);
       painted.update({ fill: null, line: null });
       assert.equal(painted.getProperties().fill, null);
       assert.equal(painted.getProperties().line, null);

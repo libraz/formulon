@@ -1930,6 +1930,15 @@ class SetterSymmetryTest(BindingRuleTestBase):
             [("wasm", "setIterative", "shape"), ("wasm", "setOptions", "Partial:o"), ("wasm", "setThing", "fields")],
         )
 
+    def test_r18_a_merge_map_patch_matches_its_read_map(self) -> None:
+        from tools.dev.binding_drift.api_conventions_arguments import _same_type
+
+        read = "Readonly<Record<string, number>>"
+        self.assertTrue(_same_type("Record<string, number | null>", read))
+        self.assertTrue(_same_type("Record<string, number>", read))
+        self.assertFalse(_same_type("Record<string, string | null>", read))
+        self.assertFalse(_same_type("number", read))
+
     def test_r18_js_a_setter_taking_a_patch_is_a_merge(self) -> None:
         merging = self.RECORDS + _wb(
             "  getIterative(): IterativeSettings;\n  setIterative(patch: IterativeSettingsPatch): void;\n"

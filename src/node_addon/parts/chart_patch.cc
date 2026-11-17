@@ -79,6 +79,11 @@ void ReadColorOp(CheckedSpecReader& r, const Napi::Object& owner, const char* ke
   ReadOp(r, owner, key, nullable, op, out, [&](const Napi::Value& v) { return ReadColorSpec(r, v, key); });
 }
 
+void ReadDrawingColorOp(CheckedSpecReader& r, const Napi::Object& owner, const char* key, bool nullable,
+                        fm_patch_op_t& op, fm_drawing_color_t& out) {
+  ReadOp(r, owner, key, nullable, op, out, [&](const Napi::Value& v) { return ReadDrawingColor(r, v, key); });
+}
+
 void ReadI32Op(CheckedSpecReader& r, const Napi::Object& owner, const char* key, bool nullable, fm_patch_op_t& op,
                int32_t& out) {
   ReadOp(r, owner, key, nullable, op, out, [&](const Napi::Value& v) { return r.I32(v, key, 0); });
@@ -201,6 +206,78 @@ void ReadSource(CheckedSpecReader& r, const Napi::Object& owner, const char* key
 
 namespace detail {
 
+fm_drawing_color_t ReadDrawingColor(CheckedSpecReader& r, const Napi::Value& value, const char* key) {
+  fm_drawing_color_t out{};
+  Napi::Object o;
+  if (!r.Object(value, key, &o)) {
+    return out;
+  }
+  const Napi::Value base = r.Get(o, "base");
+  if (!r.ok()) {
+    return out;
+  }
+  if (base.IsUndefined()) {
+    out.base = ReadColorSpec(r, value, key);
+    return out;
+  }
+  out.base = ReadColorSpec(r, base, "base");
+  Napi::Array list;
+  if (!r.Array(o, "transforms", &list)) {
+    return out;
+  }
+  std::vector<fm_color_transform_t> items;
+  for (uint32_t i = 0; i < list.Length() && r.ok(); ++i) {
+    Napi::Value element;
+    Napi::Object t;
+    const std::string path = formulon::binding::element_path("transforms", i);
+    if (!r.ArrayElement(list, i, &element) || !r.Object(element, path.c_str(), &t)) {
+      continue;
+    }
+    fm_color_transform_t item{};
+    item.name = r.KeepString(r.RequiredString(t, "name"));
+    bool present = false;
+    item.value = r.I32(t, "value", 0, &present);
+    item.has_value = present ? 1 : 0;
+    items.push_back(item);
+  }
+  out.transform_count = static_cast<uint32_t>(items.size());
+  out.transforms = r.KeepTransforms(std::move(items));
+  return out;
+}
+
+namespace {
+
+fm_chart_line_end_t ReadLineEnd(CheckedSpecReader& r, const Napi::Value& value, const char* key) {
+  fm_chart_line_end_t out{};
+  Napi::Object o;
+  if (!r.Object(value, key, &o)) {
+    return out;
+  }
+  bool present = false;
+  out.type = r.I32(o, "type", 0, &present);
+  if (!present) {
+    r.FailRequired("type");
+  }
+  out.width = r.I32(o, "width", 0, &present);
+  out.has_width = present ? 1 : 0;
+  out.length = r.I32(o, "length", 0, &present);
+  out.has_length = present ? 1 : 0;
+  return out;
+}
+
+// A spec's line end: absent and `null` state none.
+void ReadLineEndSpec(CheckedSpecReader& r, const Napi::Object& line, const char* key, int32_t& has,
+                     fm_chart_line_end_t& out) {
+  const Napi::Value v = r.Get(line, key);
+  if (!r.ok() || v.IsUndefined() || v.IsNull()) {
+    return;
+  }
+  has = 1;
+  out = ReadLineEnd(r, v, key);
+}
+
+}  // namespace
+
 void ReadFillPatch(CheckedSpecReader& r, const Napi::Object& owner, fm_chart_fill_patch_t& out) {
   const Field f = Probe(r, owner, "fill", true);
   if (f.op == FM_PATCH_OP_CLEAR) {
@@ -213,7 +290,7 @@ void ReadFillPatch(CheckedSpecReader& r, const Napi::Object& owner, fm_chart_fil
   if (f.op != FM_PATCH_OP_SET || !r.Object(f.value, "fill", &o)) {
     return;
   }
-  ReadColorOp(r, o, "color", true, out.color_op, out.color);
+  ReadDrawingColorOp(r, o, "color", true, out.color_op, out.color);
   ReadDoubleOp(r, o, "transparencyPct", true, out.transparency_pct_op, out.transparency_pct);
   ReadBoolOp(r, o, "none", false, out.none_op, out.none);
 }
@@ -226,17 +303,23 @@ void ReadLinePatch(CheckedSpecReader& r, const Napi::Object& owner, fm_chart_lin
     out.width_pt_op = FM_PATCH_OP_CLEAR;
     out.dash_op = FM_PATCH_OP_CLEAR;
     out.none_op = FM_PATCH_OP_CLEAR;
+    out.head_end_op = FM_PATCH_OP_CLEAR;
+    out.tail_end_op = FM_PATCH_OP_CLEAR;
     return;
   }
   Napi::Object o;
   if (f.op != FM_PATCH_OP_SET || !r.Object(f.value, "line", &o)) {
     return;
   }
-  ReadColorOp(r, o, "color", true, out.color_op, out.color);
+  ReadDrawingColorOp(r, o, "color", true, out.color_op, out.color);
   ReadDoubleOp(r, o, "transparencyPct", true, out.transparency_pct_op, out.transparency_pct);
   ReadDoubleOp(r, o, "widthPt", true, out.width_pt_op, out.width_pt);
   ReadI32Op(r, o, "dash", true, out.dash_op, out.dash);
   ReadBoolOp(r, o, "none", false, out.none_op, out.none);
+  ReadOp(r, o, "headEnd", true, out.head_end_op, out.head_end,
+         [&](const Napi::Value& v) { return ReadLineEnd(r, v, "headEnd"); });
+  ReadOp(r, o, "tailEnd", true, out.tail_end_op, out.tail_end,
+         [&](const Napi::Value& v) { return ReadLineEnd(r, v, "tailEnd"); });
 }
 
 fm_chart_fill_t ReadFillSpec(CheckedSpecReader& r, const Napi::Object& owner) {
@@ -246,7 +329,7 @@ fm_chart_fill_t ReadFillSpec(CheckedSpecReader& r, const Napi::Object& owner) {
     return out;
   }
   bool present = false;
-  out.color = PullColorSpec(r, o, "color");
+  out.color = ReadDrawingColor(r, r.Get(o, "color"), "color");
   out.transparency_pct = r.Double(o, "transparencyPct", 0.0, &present);
   out.has_transparency_pct = present ? 1 : 0;
   out.none = r.Bool(o, "none", false) ? 1 : 0;
@@ -260,7 +343,7 @@ fm_chart_line_t ReadLineSpec(CheckedSpecReader& r, const Napi::Object& owner) {
     return out;
   }
   bool present = false;
-  out.color = PullColorSpec(r, o, "color");
+  out.color = ReadDrawingColor(r, r.Get(o, "color"), "color");
   out.transparency_pct = r.Double(o, "transparencyPct", 0.0, &present);
   out.has_transparency_pct = present ? 1 : 0;
   out.width_pt = r.Double(o, "widthPt", 0.0, &present);
@@ -268,6 +351,8 @@ fm_chart_line_t ReadLineSpec(CheckedSpecReader& r, const Napi::Object& owner) {
   out.dash = r.I32(o, "dash", 0, &present);
   out.has_dash = present ? 1 : 0;
   out.none = r.Bool(o, "none", false) ? 1 : 0;
+  ReadLineEndSpec(r, o, "headEnd", out.has_head_end, out.head_end);
+  ReadLineEndSpec(r, o, "tailEnd", out.has_tail_end, out.tail_end);
   return out;
 }
 
@@ -349,6 +434,8 @@ void ClearOmittedMembers(fm_chart_point_patch_t& patch) {
     clear(line.width_pt_op);
     clear(line.dash_op);
     clear(line.none_op);
+    clear(line.head_end_op);
+    clear(line.tail_end_op);
   };
   clear_fill(patch.fill);
   clear_line(patch.line);
@@ -358,6 +445,18 @@ void ClearOmittedMembers(fm_chart_point_patch_t& patch) {
     clear_fill(patch.marker.fill);
     clear_line(patch.marker.line);
   }
+}
+
+// The key itself cannot be cleared (`null` is a TypeError); its `fill` / `line` follow the paint patches.
+void ReadAreaPaintPatch(CheckedSpecReader& r, const Napi::Object& owner, const char* key,
+                        fm_chart_area_paint_patch_t& out) {
+  const Field f = Probe(r, owner, key, false);
+  Napi::Object o;
+  if (f.op != FM_PATCH_OP_SET || !r.Object(f.value, key, &o)) {
+    return;
+  }
+  ReadFillPatch(r, o, out.fill);
+  ReadLinePatch(r, o, out.line);
 }
 
 int32_t HeaderModeArg(CheckedSpecReader& r, const Napi::CallbackInfo& info, size_t idx, const char* key) {
@@ -614,6 +713,8 @@ Napi::Value Workbook::SetChartDisplay(const Napi::CallbackInfo& info) {
   ReadBoolOp(reader, spec, "plotVisibleOnly", true, patch.plot_visible_only_op, patch.plot_visible_only);
   ReadBoolOp(reader, spec, "naAsBlank", true, patch.na_as_blank_op, patch.na_as_blank);
   ReadI32Op(reader, spec, "style", true, patch.style_op, patch.style);
+  ReadAreaPaintPatch(reader, spec, "chartArea", patch.chart_area);
+  ReadAreaPaintPatch(reader, spec, "plotArea", patch.plot_area);
   if (!reader.ok()) {
     return env.Undefined();
   }

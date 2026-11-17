@@ -19,9 +19,14 @@
 namespace {
 
 constexpr bool kWasm32 = sizeof(void*) == 4U;
-static_assert(sizeof(fm_shape_info_t) == (kWasm32 ? 168U : 176U), "fm_shape_info_t ABI layout changed");
-static_assert(sizeof(fm_shape_spec_t) == (kWasm32 ? 248U : 272U), "fm_shape_spec_t ABI layout changed");
-static_assert(sizeof(fm_shape_patch_t) == (kWasm32 ? 200U : 216U), "fm_shape_patch_t ABI layout changed");
+static_assert(sizeof(fm_shape_info_t) == (kWasm32 ? 312U : 328U), "fm_shape_info_t ABI layout changed");
+static_assert(sizeof(fm_shape_spec_t) == (kWasm32 ? 376U : 408U), "fm_shape_spec_t ABI layout changed");
+static_assert(sizeof(fm_shape_patch_t) == (kWasm32 ? 328U : 352U), "fm_shape_patch_t ABI layout changed");
+static_assert(sizeof(fm_shape_connection_t) == 8U, "fm_shape_connection_t ABI layout changed");
+static_assert(sizeof(fm_shape_adjust_t) == (kWasm32 ? 8U : 16U), "fm_shape_adjust_t ABI layout changed");
+static_assert(sizeof(fm_shape_adjust_patch_t) == (kWasm32 ? 12U : 16U), "fm_shape_adjust_patch_t ABI layout changed");
+static_assert(offsetof(fm_shape_info_t, has_start_connection) == offsetof(fm_shape_info_t, flip_v) + 4U,
+              "the connections follow flip_v");
 static_assert(sizeof(fm_picture_info_t) == 24U, "fm_picture_info_t ABI layout changed");
 static_assert(sizeof(fm_picture_patch_t) == 32U, "fm_picture_patch_t ABI layout changed");
 static_assert(sizeof(fm_sparkline_group_patch_t) == (kWasm32 ? 440U : 456U),
@@ -100,7 +105,7 @@ fm_shape_spec_t Callout() {
   s.placement.anchor.to_col = 4;
   s.preset_geometry = "wedgeRectCallout";
   s.text = "Hello\nWorld";
-  s.fill.color = Rgb(0xFFFFCC00U);
+  s.fill.color.base = Rgb(0xFFFFCC00U);
   s.line.none = 1;
   s.rotation_deg = 5.0;
   return s;
@@ -160,7 +165,7 @@ TEST(FormulonCApiShapes, InsertReadUpdateRemoveAndReload) {
   connector.placement.anchor.from_col_offset_emu = 500;
   connector.placement.anchor.width_emu = 914400;
   connector.placement.anchor.height_emu = 914400;
-  connector.line.color = Rgb(0xFF00FF00U);
+  connector.line.color.base = Rgb(0xFF00FF00U);
   uint32_t line_id = 0;
   ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &connector, &line_id), 0) << fm_get_last_error_message();
 
@@ -173,11 +178,11 @@ TEST(FormulonCApiShapes, InsertReadUpdateRemoveAndReload) {
   EXPECT_EQ(out.kind, FM_DRAWING_OBJECT_KIND_SHAPE);
   EXPECT_STREQ(out.preset_geometry, "wedgeRectCallout");
   EXPECT_STREQ(out.text, "Hello\nWorld");
-  EXPECT_EQ(out.fill.color.kind, FM_COLOR_KIND_RGB);
-  EXPECT_EQ(out.fill.color.argb, 0xFFFFCC00U);
+  EXPECT_EQ(out.fill.color.base.kind, FM_COLOR_KIND_RGB);
+  EXPECT_EQ(out.fill.color.base.argb, 0xFFFFCC00U);
   EXPECT_EQ(out.fill.none, 0);
   EXPECT_EQ(out.line.none, 1);
-  EXPECT_EQ(out.line.color.kind, FM_COLOR_KIND_NONE);
+  EXPECT_EQ(out.line.color.base.kind, FM_COLOR_KIND_NONE);
   EXPECT_DOUBLE_EQ(out.rotation_deg, 5.0);
   fm_drawing_object_info_t frame = ObjectById(again.handle, id);
   EXPECT_STREQ(frame.name, "Callout");
@@ -187,8 +192,8 @@ TEST(FormulonCApiShapes, InsertReadUpdateRemoveAndReload) {
   EXPECT_EQ(frame.anchor.to_col, 4U);
   out = ShapeById(again.handle, line_id);
   EXPECT_EQ(out.kind, FM_DRAWING_OBJECT_KIND_CONNECTOR);
-  EXPECT_EQ(out.line.color.kind, FM_COLOR_KIND_RGB);
-  EXPECT_EQ(out.line.color.argb, 0xFF00FF00U);
+  EXPECT_EQ(out.line.color.base.kind, FM_COLOR_KIND_RGB);
+  EXPECT_EQ(out.line.color.base.argb, 0xFF00FF00U);
   frame = ObjectById(again.handle, line_id);
   EXPECT_EQ(frame.anchor.from_col_offset_emu, 500);
   EXPECT_EQ(frame.anchor.width_emu, 914400);
@@ -208,7 +213,7 @@ TEST(FormulonCApiShapes, InsertReadUpdateRemoveAndReload) {
   EXPECT_STREQ(frame.name, "Renamed");
   EXPECT_EQ(frame.hidden, 1);
   EXPECT_EQ(out.fill.none, 1);
-  EXPECT_EQ(out.fill.color.kind, FM_COLOR_KIND_NONE);
+  EXPECT_EQ(out.fill.color.base.kind, FM_COLOR_KIND_NONE);
   EXPECT_DOUBLE_EQ(out.rotation_deg, 5.0);
 
   EXPECT_EQ(fm_sheet_update_shape(again.handle, 0, 99, nullptr, &patch), FM_STATUS_NOT_FOUND);
@@ -248,10 +253,10 @@ TEST(FormulonCApiShapes, PlacementDescriptionAndHiddenReachTheShape) {
   const fm_shape_info_t shape = ShapeById(wb.handle, plain_id);
   EXPECT_STREQ(shape.preset_geometry, "rect");
   // All-zero paint records: the shape draws its style's fill and outline.
-  EXPECT_EQ(shape.fill.color.kind, FM_COLOR_KIND_NONE);
+  EXPECT_EQ(shape.fill.color.base.kind, FM_COLOR_KIND_NONE);
   EXPECT_EQ(shape.fill.none, 0);
   EXPECT_EQ(shape.fill.other, 0);
-  EXPECT_EQ(shape.line.color.kind, FM_COLOR_KIND_NONE);
+  EXPECT_EQ(shape.line.color.base.kind, FM_COLOR_KIND_NONE);
   EXPECT_EQ(shape.line.none, 0);
   EXPECT_EQ(shape.line.has_width_pt, 0);
 }
@@ -279,7 +284,7 @@ TEST(FormulonCApiShapes, RotationDegreesAndLineWidthPointsSurviveReload) {
   fm_shape_spec_t spec = Callout();
   spec.rotation_deg = 12.5;
   spec.line = fm_chart_line_t{};
-  spec.line.color = Rgb(0xFF102030U);
+  spec.line.color.base = Rgb(0xFF102030U);
   spec.line.has_width_pt = 1;
   spec.line.width_pt = 2.25;
   uint32_t id = 0;
@@ -455,19 +460,27 @@ TEST(FormulonCApiShapes, ThemeColorsRoundTripAndAreValidated) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_shape_spec_t spec = Callout();
-  spec.fill.color = Theme(4, 0.4);
+  spec.fill.color.base = Theme(4, 0.4);
   spec.line = fm_chart_line_t{};
-  spec.line.color = Theme(1, -0.25);
+  spec.line.color.base = Theme(1, -0.25);
   uint32_t id = 0;
   ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), 0) << fm_get_last_error_message();
 
   const fm_shape_info_t out = ShapeById(wb.handle, id);
-  EXPECT_EQ(out.fill.color.kind, FM_COLOR_KIND_THEME);
-  EXPECT_EQ(out.fill.color.theme, 4U);
-  EXPECT_DOUBLE_EQ(out.fill.color.tint, 0.4);
-  EXPECT_EQ(out.line.color.kind, FM_COLOR_KIND_THEME);
-  EXPECT_EQ(out.line.color.theme, 1U);
-  EXPECT_DOUBLE_EQ(out.line.color.tint, -0.25);
+  EXPECT_EQ(out.fill.color.base.kind, FM_COLOR_KIND_THEME);
+  EXPECT_EQ(out.fill.color.base.theme, 4U);
+  // A tint is the input shorthand for its luminance transforms, which the read reports.
+  EXPECT_DOUBLE_EQ(out.fill.color.base.tint, 0.0);
+  ASSERT_EQ(out.fill.color.transform_count, 2U);
+  EXPECT_STREQ(out.fill.color.transforms[0].name, "lumMod");
+  EXPECT_EQ(out.fill.color.transforms[0].value, 60000);
+  EXPECT_STREQ(out.fill.color.transforms[1].name, "lumOff");
+  EXPECT_EQ(out.fill.color.transforms[1].value, 40000);
+  EXPECT_EQ(out.line.color.base.kind, FM_COLOR_KIND_THEME);
+  EXPECT_EQ(out.line.color.base.theme, 1U);
+  ASSERT_EQ(out.line.color.transform_count, 1U);
+  EXPECT_STREQ(out.line.color.transforms[0].name, "lumMod");
+  EXPECT_EQ(out.line.color.transforms[0].value, 75000);
 
   struct Bad {
     int32_t kind;
@@ -481,10 +494,10 @@ TEST(FormulonCApiShapes, ThemeColorsRoundTripAndAreValidated) {
   };
   for (const Bad& b : bad) {
     fm_shape_spec_t s = Callout();
-    s.fill.color = fm_color_t{};
-    s.fill.color.kind = b.kind;
-    s.fill.color.theme = b.theme;
-    s.fill.color.tint = b.tint;
+    s.fill.color.base = fm_color_t{};
+    s.fill.color.base.kind = b.kind;
+    s.fill.color.base.theme = b.theme;
+    s.fill.color.base.tint = b.tint;
     EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &s, &id), kInvalidArgument)
         << "kind=" << b.kind << " theme=" << b.theme << " tint=" << b.tint;
   }
@@ -494,10 +507,10 @@ TEST(FormulonCApiShapes, ThemeColorsRoundTripAndAreValidated) {
   none.fill.none = 1;
   EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &none, &id), kInvalidArgument);
   none = Callout();
-  none.line.color = Rgb(0xFF000000U);
+  none.line.color.base = Rgb(0xFF000000U);
   EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &none, &id), kInvalidArgument);
   // A colour left None states no colour.
-  none.line.color = fm_color_t{};
+  none.line.color.base = fm_color_t{};
   EXPECT_EQ(fm_sheet_add_shape(wb.handle, 0, &none, &id), 0) << fm_get_last_error_message();
 }
 
@@ -509,7 +522,7 @@ TEST(FormulonCApiShapes, ClearingEveryPaintMemberRestoresTheStylesPaint) {
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
   fm_shape_spec_t spec = Callout();
   spec.line = fm_chart_line_t{};
-  spec.line.color = Rgb(0xFF0000FFU);
+  spec.line.color.base = Rgb(0xFF0000FFU);
   uint32_t id = 0;
   ASSERT_EQ(fm_sheet_add_shape(wb.handle, 0, &spec, &id), 0) << fm_get_last_error_message();
 
@@ -519,27 +532,27 @@ TEST(FormulonCApiShapes, ClearingEveryPaintMemberRestoresTheStylesPaint) {
   reset.line.dash_op = reset.line.none_op = FM_PATCH_OP_CLEAR;
   ASSERT_EQ(fm_sheet_update_shape(wb.handle, 0, id, nullptr, &reset), 0) << fm_get_last_error_message();
   fm_shape_info_t out = ShapeById(wb.handle, id);
-  EXPECT_EQ(out.fill.color.kind, FM_COLOR_KIND_NONE);
+  EXPECT_EQ(out.fill.color.base.kind, FM_COLOR_KIND_NONE);
   EXPECT_EQ(out.fill.none, 0);
-  EXPECT_EQ(out.line.color.kind, FM_COLOR_KIND_NONE);
+  EXPECT_EQ(out.line.color.base.kind, FM_COLOR_KIND_NONE);
   EXPECT_EQ(out.line.none, 0);
 
   WorkbookGuard again;
   SaveAndReload(wb.handle, &again);
   out = ShapeById(again.handle, id);
-  EXPECT_EQ(out.fill.color.kind, FM_COLOR_KIND_NONE);
-  EXPECT_EQ(out.line.color.kind, FM_COLOR_KIND_NONE);
+  EXPECT_EQ(out.fill.color.base.kind, FM_COLOR_KIND_NONE);
+  EXPECT_EQ(out.line.color.base.kind, FM_COLOR_KIND_NONE);
 
   // No field outside the paint patches can be cleared, and a refused patch changes nothing.
   fm_shape_patch_t clear = FM_STRUCT_INIT(fm_shape_patch_t);
-  Set(clear.fill.color_op, clear.fill.color, Rgb(0xFF00FF00U));
+  Set(clear.fill.color_op, clear.fill.color.base, Rgb(0xFF00FF00U));
   clear.rotation_deg_op = FM_PATCH_OP_CLEAR;
   EXPECT_EQ(fm_sheet_update_shape(again.handle, 0, id, nullptr, &clear), kInvalidArgument);
   fm_shape_patch_t clear_text = FM_STRUCT_INIT(fm_shape_patch_t);
   clear_text.text_op = FM_PATCH_OP_CLEAR;
   EXPECT_EQ(fm_sheet_update_shape(again.handle, 0, id, nullptr, &clear_text), kInvalidArgument);
   out = ShapeById(again.handle, id);
-  EXPECT_EQ(out.fill.color.kind, FM_COLOR_KIND_NONE);
+  EXPECT_EQ(out.fill.color.base.kind, FM_COLOR_KIND_NONE);
   EXPECT_DOUBLE_EQ(out.rotation_deg, 5.0);
 }
 
@@ -553,20 +566,20 @@ TEST(FormulonCApiShapes, PaintPatchMergesIntoTheStoredPaint) {
 
   fm_shape_patch_t colour = FM_STRUCT_INIT(fm_shape_patch_t);
   Set(colour.line.none_op, colour.line.none, 0);
-  Set(colour.line.color_op, colour.line.color, Rgb(0xFF0000FFU));
+  Set(colour.line.color_op, colour.line.color.base, Rgb(0xFF0000FFU));
   ASSERT_EQ(fm_sheet_update_shape(wb.handle, 0, id, nullptr, &colour), 0) << fm_get_last_error_message();
   fm_shape_info_t out = ShapeById(wb.handle, id);
   EXPECT_EQ(out.line.none, 0);
-  EXPECT_EQ(out.line.color.argb, 0xFF0000FFU);
+  EXPECT_EQ(out.line.color.base.argb, 0xFF0000FFU);
 
   fm_shape_patch_t width = FM_STRUCT_INIT(fm_shape_patch_t);
   Set(width.line.width_pt_op, width.line.width_pt, 3.0);
   Set(width.fill.transparency_pct_op, width.fill.transparency_pct, 40.0);
   ASSERT_EQ(fm_sheet_update_shape(wb.handle, 0, id, nullptr, &width), 0) << fm_get_last_error_message();
   out = ShapeById(wb.handle, id);
-  EXPECT_EQ(out.line.color.argb, 0xFF0000FFU);
+  EXPECT_EQ(out.line.color.base.argb, 0xFF0000FFU);
   EXPECT_DOUBLE_EQ(out.line.width_pt, 3.0);
-  EXPECT_EQ(out.fill.color.argb, 0xFFFFCC00U);
+  EXPECT_EQ(out.fill.color.base.argb, 0xFFFFCC00U);
   EXPECT_EQ(out.fill.has_transparency_pct, 1);
   EXPECT_NEAR(out.fill.transparency_pct, 40.0, 1e-9);
 }
@@ -655,7 +668,7 @@ TEST(FormulonCApiShapes, DrawingPatchConvertsTheShapeAnchorKind) {
   EXPECT_EQ(a.from_col, 1U);
   EXPECT_EQ(a.width_emu, box.width_emu);
   EXPECT_EQ(a.height_emu, box.height_emu);
-  EXPECT_EQ(ShapeById(wb.handle, id).fill.color.argb, 0xFFFFCC00U);
+  EXPECT_EQ(ShapeById(wb.handle, id).fill.color.base.argb, 0xFFFFCC00U);
 
   fm_drawing_patch_t two = FM_STRUCT_INIT(fm_drawing_patch_t);
   Set(two.anchor.kind_op, two.anchor.kind, FM_ANCHOR_KIND_TWO_CELL);
@@ -671,7 +684,7 @@ TEST(FormulonCApiShapes, DrawingPatchConvertsTheShapeAnchorKind) {
   a = ObjectById(again.handle, id).anchor;
   EXPECT_EQ(a.kind, FM_ANCHOR_KIND_ONE_CELL);
   EXPECT_EQ(a.width_emu, box.width_emu);
-  EXPECT_EQ(ShapeById(again.handle, id).fill.color.argb, 0xFFFFCC00U);
+  EXPECT_EQ(ShapeById(again.handle, id).fill.color.base.argb, 0xFFFFCC00U);
 }
 
 // A read anchor passed back whole is accepted and changes nothing: a two-cell
@@ -826,7 +839,7 @@ TEST(FormulonCApiShapePaintRecord, FillLineRecords) {
   spec.fill.has_transparency_pct = 1;
   spec.fill.transparency_pct = 25.0;
   spec.line = fm_chart_line_t{};
-  spec.line.color = Theme(1, 0.0);
+  spec.line.color.base = Theme(1, 0.0);
   spec.line.has_width_pt = 1;
   spec.line.width_pt = 2.0;
   spec.line.has_dash = 1;
@@ -837,14 +850,14 @@ TEST(FormulonCApiShapePaintRecord, FillLineRecords) {
   WorkbookGuard again;
   SaveAndReload(wb.handle, &again);
   const fm_shape_info_t out = ShapeById(again.handle, id);
-  EXPECT_EQ(out.fill.color.kind, FM_COLOR_KIND_RGB);
-  EXPECT_EQ(out.fill.color.argb, 0xFFFFCC00U);
+  EXPECT_EQ(out.fill.color.base.kind, FM_COLOR_KIND_RGB);
+  EXPECT_EQ(out.fill.color.base.argb, 0xFFFFCC00U);
   EXPECT_EQ(out.fill.has_transparency_pct, 1);
   EXPECT_NEAR(out.fill.transparency_pct, 25.0, 1e-9);
   EXPECT_EQ(out.fill.none, 0);
   EXPECT_EQ(out.fill.other, 0);
-  EXPECT_EQ(out.line.color.kind, FM_COLOR_KIND_THEME);
-  EXPECT_EQ(out.line.color.theme, 1U);
+  EXPECT_EQ(out.line.color.base.kind, FM_COLOR_KIND_THEME);
+  EXPECT_EQ(out.line.color.base.theme, 1U);
   EXPECT_EQ(out.line.has_width_pt, 1);
   EXPECT_DOUBLE_EQ(out.line.width_pt, 2.0);
   EXPECT_EQ(out.line.has_dash, 1);
@@ -859,7 +872,7 @@ TEST(FormulonCApiShapePaintRecord, FillLineRecords) {
   uint32_t copy_id = 0;
   ASSERT_EQ(fm_sheet_add_shape(again.handle, 0, &copy, &copy_id), 0) << fm_get_last_error_message();
   const fm_shape_info_t copied = ShapeById(again.handle, copy_id);
-  EXPECT_EQ(copied.fill.color.argb, 0xFFFFCC00U);
+  EXPECT_EQ(copied.fill.color.base.argb, 0xFFFFCC00U);
   EXPECT_NEAR(copied.fill.transparency_pct, 25.0, 1e-9);
   EXPECT_DOUBLE_EQ(copied.line.width_pt, 2.0);
   EXPECT_EQ(copied.line.dash, FM_CHART_LINE_DASH_DASH);

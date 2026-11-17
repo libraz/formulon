@@ -8,6 +8,10 @@ import createFormulon, {
   ChartExtendedLayout,
   ChartAxisKind,
   ChartLegendPosition,
+  ChartLineDash,
+  ChartLineEndSize,
+  ChartLineEndType,
+  ShapeTextVert,
   ChartTickLabelPosition,
   ComparisonOperator,
   DatePeriod,
@@ -43,7 +47,11 @@ import createFormulon, {
   type ChartDataSource,
   type ChartPlot,
   type CivilTime,
+  type ChartAreaPaint,
+  type ChartLineEnd,
   type Color,
+  type DrawingColor,
+  type ShapeConnection,
   type ColumnBreak,
   type ConditionalFormat,
   type ConditionalFormatInput,
@@ -636,7 +644,7 @@ export function colors(): void {
   // @ts-expect-error the ARGB sibling fields are gone
   void font.colorArgb;
   shape.update({ fill: { color: '#336699' } });
-  const fill: Color | null | undefined = shapeProps.fill?.color;
+  const fill: DrawingColor | null | undefined = shapeProps.fill?.color;
   void [tab, color, fill];
 }
 
@@ -1987,6 +1995,32 @@ export function commentsPeopleAndLinks(): void {
   // @ts-expect-error a mention is a `[start, end)` span
   sheet.addThreadedComment({ text: 't', personId: generated, mentions: [{ personId: generated, start: 0, length: 2 }] });
   void [userId, providerId, notedCell, mentionEnd];
+}
+
+export function drawingColorsLineEndsAndShapeFields(): void {
+  const color: DrawingColor | null | undefined = shapeProps.fill?.color;
+  const transformName: string | undefined = color?.transforms[0]?.name;
+  const resolvedPct: number | null | undefined = color?.resolvedTransparencyPct;
+  shape.update({ fill: { color: { base: '#336699', transforms: [{ name: 'lumMod', value: 75000 }, { name: 'gray' }] } } });
+  if (color !== null && color !== undefined) shape.update({ fill: { color } });
+  const head: ChartLineEnd | null | undefined = shapeProps.line?.headEnd;
+  shape.update({ line: { headEnd: { type: ChartLineEndType.Arrow, width: ChartLineEndSize.Small }, tailEnd: null, dash: ChartLineDash.SysDot } });
+  const area: ChartAreaPaint = chartProps.chartArea;
+  chart.updateDisplay({ chartArea: { fill: { color: '#FF0000' } }, plotArea: { line: { widthPt: 1 } } });
+  const start: ShapeConnection | null = shapeProps.startConnection;
+  const guides: Readonly<Record<string, number>> = shapeProps.adjustValues;
+  const vert: ShapeTextVert | null = shapeProps.textVert;
+  sheet.addShape({ anchor: { widthEmu: 9525, heightEmu: 9525 }, adjustValues: { adj: 1 }, textVert: ShapeTextVert.Vert });
+  shape.update({ adjustValues: { adj: null }, textVert: null });
+  // @ts-expect-error a connection is read only
+  shape.update({ startConnection: null });
+  // @ts-expect-error an input adjust value is a number
+  sheet.addShape({ anchor: { widthEmu: 9525, heightEmu: 9525 }, adjustValues: { adj: null } });
+  // @ts-expect-error an area patch is not clearable
+  chart.updateDisplay({ chartArea: null });
+  // @ts-expect-error the text direction has no Absent member
+  void ShapeTextVert.Absent;
+  void [transformName, resolvedPct, head, area, start, guides, vert];
 }
 
 export function drawingPaintAndUnits(): void {

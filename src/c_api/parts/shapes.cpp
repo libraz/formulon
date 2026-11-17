@@ -5,6 +5,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -17,6 +18,7 @@
 #include "drawing/drawing_edit.h"
 #include "drawing/shape_edit.h"
 #include "utils/error.h"
+#include "utils/resource_budget.h"
 #include "workbook.h"
 
 using formulon::c_api::parts::AnchorPlan;
@@ -31,6 +33,7 @@ using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::drawing_patch_from_c;
 using formulon::c_api::parts::finish_status;
+using formulon::c_api::parts::fresh_arena;
 using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
@@ -44,6 +47,7 @@ using formulon::c_api::parts::read_fill;
 using formulon::c_api::parts::read_line;
 using formulon::c_api::parts::rotation_deg_from_units;
 using formulon::c_api::parts::rotation_units_from_deg;
+using formulon::c_api::parts::set_binding_error;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::store_cstr;
 using formulon::c_api::parts::TextStore;
@@ -52,6 +56,56 @@ namespace {
 
 bool is_set(fm_patch_op_t op) {
   return op == FM_PATCH_OP_SET;
+}
+
+// Storage behind a shape read's borrowed views: the read scratch's lifetime.
+struct ScratchSink {
+  TextStore& store;
+  formulon::c_api::BorrowedArrayArena<fm_color_transform_t>& transform_arena;
+
+  const char* text(const std::string& s) { return store_cstr(store, s); }
+  const fm_color_transform_t* transforms(const formulon::DrawingColor&, std::vector<fm_color_transform_t>&& view) {
+    return transform_arena.adopt(std::move(view));
+  }
+};
+
+// Rejects an adjust-value array that is NULL with entries or longer than the engine takes.
+fm_status_t check_adjust_array(const void* items, std::uint32_t count) {
+  if (count != 0U && items == nullptr) {
+    return null_field("adjust_values");
+  }
+  if (count > formulon::kMaxAdjustPatches) {
+    return set_binding_error(formulon::FormulonErrorCode::kSecurityResourceLimit,
+                             "adjust_values_count is above the limit",
+                             formulon::limit_context("adjust_values", count, formulon::kMaxAdjustPatches));
+  }
+  return 0;
+}
+
+// The adjust-value edits of a patch as the model's; each entry must set or clear its guide.
+fm_status_t adjust_values_of(const fm_shape_patch_t& p, std::vector<formulon::ShapeAdjustPatch>& out) {
+  if (auto rc = check_adjust_array(p.adjust_values, p.adjust_values_count); rc != 0) {
+    return rc;
+  }
+  for (std::uint32_t i = 0; i < p.adjust_values_count; ++i) {
+    const fm_shape_adjust_patch_t& e = p.adjust_values[i];
+    if (e.name == nullptr) {
+      return null_field("adjust_values.name");
+    }
+    if (auto rc = check_utf8(e.name, "field", "adjust_values.name"); rc != 0) {
+      return rc;
+    }
+    if (!patch_op_ok(e.value_op)) {
+      return patch_op_refusal(e.value_op, "adjust_values.value");
+    }
+    if (e.value_op == FM_PATCH_OP_KEEP) {
+      return invalid_argument("adjust_values.value must be set or cleared",
+                              "adjust_values.value_op=" + std::to_string(static_cast<int>(e.value_op)));
+    }
+    out.push_back(
+        formulon::ShapeAdjustPatch{e.name, is_set(e.value_op) ? std::optional<std::int32_t>(e.value) : std::nullopt});
+  }
+  return 0;
 }
 
 // The ops, strings and UTF-8 of the non-paint fields of `p`; none of them can be cleared.
@@ -100,6 +154,24 @@ fm_status_t to_spec(const fm_shape_patch_t& p, formulon::ShapeSpec& spec) {
   spec.paint_line = read_line(r, p.line);
   if (r.status() != 0) {
     return r.status();
+  }
+  if (auto rc = adjust_values_of(p, spec.adjust_values); rc != 0) {
+    return rc;
+  }
+  if (!patch_op_ok(p.text_vert_op)) {
+    return patch_op_refusal(p.text_vert_op, "text_vert");
+  }
+  if (p.text_vert_op == FM_PATCH_OP_CLEAR) {
+    spec.fields |= field::kTextVert;
+    spec.text_vert = std::nullopt;
+  } else if (is_set(p.text_vert_op)) {
+    if (auto rc =
+            check_enum_domain(p.text_vert, FM_SHAPE_TEXT_VERT_HORZ, FM_SHAPE_TEXT_VERT_MONGOLIAN_VERT, "text_vert");
+        rc != 0) {
+      return rc;
+    }
+    spec.fields |= field::kTextVert;
+    spec.text_vert = static_cast<formulon::ShapeTextVert>(p.text_vert);
   }
   if (is_set(p.preset_geometry_op)) {
     spec.fields |= field::kPrst;
@@ -151,7 +223,7 @@ fm_status_t fill_patch_of(const fm_chart_fill_t& f, fm_chart_fill_patch_t& out) 
     return rc;
   }
   out = fm_chart_fill_patch_t{};
-  if (f.color.kind != FM_COLOR_KIND_NONE) {
+  if (f.color.base.kind != FM_COLOR_KIND_NONE || f.color.transform_count != 0U) {
     out.color_op = FM_PATCH_OP_SET;
     out.color = f.color;
   }
@@ -171,18 +243,20 @@ fm_status_t line_patch_of(const fm_chart_line_t& l, fm_chart_line_patch_t& out) 
   if (l.other != 0) {
     return invalid_argument("line.other must be 0", "line.other=" + std::to_string(l.other));
   }
-  const std::array<std::pair<std::int32_t, const char*>, 4> flags = {
+  const std::array<std::pair<std::int32_t, const char*>, 6> flags = {
       {{l.has_transparency_pct, "line.has_transparency_pct"},
        {l.has_width_pt, "line.has_width_pt"},
        {l.has_dash, "line.has_dash"},
-       {l.none, "line.none"}}};
+       {l.none, "line.none"},
+       {l.has_head_end, "line.has_head_end"},
+       {l.has_tail_end, "line.has_tail_end"}}};
   for (const auto& [value, name] : flags) {
     if (auto rc = check_flag(value, name); rc != 0) {
       return rc;
     }
   }
   out = fm_chart_line_patch_t{};
-  if (l.color.kind != FM_COLOR_KIND_NONE) {
+  if (l.color.base.kind != FM_COLOR_KIND_NONE || l.color.transform_count != 0U) {
     out.color_op = FM_PATCH_OP_SET;
     out.color = l.color;
   }
@@ -201,6 +275,14 @@ fm_status_t line_patch_of(const fm_chart_line_t& l, fm_chart_line_patch_t& out) 
   if (l.none != 0) {
     out.none_op = FM_PATCH_OP_SET;
     out.none = 1;
+  }
+  if (l.has_head_end != 0) {
+    out.head_end_op = FM_PATCH_OP_SET;
+    out.head_end = l.head_end;
+  }
+  if (l.has_tail_end != 0) {
+    out.tail_end_op = FM_PATCH_OP_SET;
+    out.tail_end = l.tail_end;
   }
   return 0;
 }
@@ -232,16 +314,34 @@ extern "C" fm_status_t fm_sheet_get_shape(const fm_workbook_t* wb, size_t sheet_
       continue;
     }
     TextStore& store = fresh_read_scratch(wb);
+    ScratchSink sink{store, fresh_arena(wb, &fm_workbook_t::color_transform_scratch)};
     out->object_id = info.object.object_id;
     out->kind = static_cast<int32_t>(info.object.kind);
-    out->fill = chart_fill_to_c(info.paint_fill);
-    out->line = chart_line_to_c(info.paint_line);
+    out->fill = chart_fill_to_c(info.paint_fill, sink);
+    out->line = chart_line_to_c(info.paint_line, sink);
     out->rotation_deg = rotation_deg_from_units(info.rotation);
     out->flip_h = info.flip_h ? 1 : 0;
     out->flip_v = info.flip_v ? 1 : 0;
     out->text_box = info.text_box ? 1 : 0;
     out->preset_geometry = info.prst.empty() ? nullptr : store_cstr(store, info.prst);
     out->text = store_cstr(store, info.text);
+    if (info.start_connection) {
+      out->has_start_connection = 1;
+      out->start_connection =
+          fm_shape_connection_t{info.start_connection->object_id, info.start_connection->site_index};
+    }
+    if (info.end_connection) {
+      out->has_end_connection = 1;
+      out->end_connection = fm_shape_connection_t{info.end_connection->object_id, info.end_connection->site_index};
+    }
+    std::vector<fm_shape_adjust_t> adjust;
+    adjust.reserve(info.adjust_values.size());
+    for (const formulon::ShapeAdjust& a : info.adjust_values) {
+      adjust.push_back(fm_shape_adjust_t{store_cstr(store, a.name), a.value});
+    }
+    out->adjust_values_count = static_cast<uint32_t>(adjust.size());
+    out->adjust_values = fresh_arena(wb, &fm_workbook_t::shape_adjust_scratch).adopt(std::move(adjust));
+    out->text_vert = info.text_vert ? static_cast<int32_t>(*info.text_vert) : FM_SHAPE_TEXT_VERT_ABSENT;
     *out_present = 1;
     break;
   }
@@ -321,6 +421,22 @@ extern "C" fm_status_t fm_sheet_add_shape(fm_workbook_t* wb, size_t sheet_index,
     fields.text_op = FM_PATCH_OP_SET;
     fields.text = spec->text;
   }
+  if (auto rc = check_enum_domain(spec->has_text_vert, 0, 1, "has_text_vert"); rc != 0) {
+    return rc;
+  }
+  if (spec->has_text_vert != 0) {
+    fields.text_vert_op = FM_PATCH_OP_SET;
+    fields.text_vert = spec->text_vert;
+  }
+  if (auto rc = check_adjust_array(spec->adjust_values, spec->adjust_values_count); rc != 0) {
+    return rc;
+  }
+  std::vector<fm_shape_adjust_patch_t> adjust(spec->adjust_values_count);
+  for (std::uint32_t i = 0; i < spec->adjust_values_count; ++i) {
+    adjust[i] = fm_shape_adjust_patch_t{spec->adjust_values[i].name, FM_PATCH_OP_SET, spec->adjust_values[i].value};
+  }
+  fields.adjust_values = adjust.data();
+  fields.adjust_values_count = spec->adjust_values_count;
   formulon::ShapeSpec model;
   if (auto rc = to_spec(fields, model); rc != 0) {
     return rc;

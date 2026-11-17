@@ -68,6 +68,7 @@ enum class Rd : uint8_t {
   kOptU32,
   kTri,
   kColor,
+  kDrawingColor,
   kObj,
   kObjOpt,
   kTitle,
@@ -92,6 +93,7 @@ struct RdField {
 #define RD_TITLE(key, T, member, table) {key, offsetof(T, member), 0, Rd::kTitle, table}
 #define RD_FILL(key, T, member) {key, offsetof(T, member), 0, Rd::kFill, nullptr}
 #define RD_LINE(key, T, member) {key, offsetof(T, member), 0, Rd::kLine, nullptr}
+#define RD_AREA(key, T, member) {key, offsetof(T, member), 0, Rd::kObj, kAreaRd}
 #define RD_END {nullptr, 0, 0, Rd::kI32, nullptr}
 // clang-format on
 
@@ -103,24 +105,39 @@ constexpr RdField kTitleRd[] = {
 };
 
 constexpr RdField kFillRd[] = {
-    RD("color", fm_chart_fill_t, color, kColor),
+    RD("color", fm_chart_fill_t, color, kDrawingColor),
     RD_OPT("transparencyPct", fm_chart_fill_t, has_transparency_pct, transparency_pct, kOptF64),
     RD("none", fm_chart_fill_t, none, kBool),
     RD("other", fm_chart_fill_t, other, kBool),
     RD_END,
 };
 
+constexpr RdField kLineEndRd[] = {
+    RD("type", fm_chart_line_end_t, type, kI32),
+    RD_OPT("width", fm_chart_line_end_t, has_width, width, kOptI32),
+    RD_OPT("length", fm_chart_line_end_t, has_length, length, kOptI32),
+    RD_END,
+};
+
 // clang-format off
 constexpr RdField kLineRd[] = {
-    RD("color", fm_chart_line_t, color, kColor),
+    RD("color", fm_chart_line_t, color, kDrawingColor),
     RD_OPT("transparencyPct", fm_chart_line_t, has_transparency_pct, transparency_pct, kOptF64),
     RD_OPT("widthPt", fm_chart_line_t, has_width_pt, width_pt, kOptF64),
     RD_OPT("dash", fm_chart_line_t, has_dash, dash, kOptI32),
     RD("none", fm_chart_line_t, none, kBool),
     RD("other", fm_chart_line_t, other, kBool),
+    RD_OBJ_OPT("headEnd", fm_chart_line_t, has_head_end, head_end, kLineEndRd),
+    RD_OBJ_OPT("tailEnd", fm_chart_line_t, has_tail_end, tail_end, kLineEndRd),
     RD_END,
 };
 // clang-format on
+
+constexpr RdField kAreaRd[] = {
+    RD_FILL("fill", fm_chart_area_paint_t, fill),
+    RD_LINE("line", fm_chart_area_paint_t, line),
+    RD_END,
+};
 
 constexpr RdField kMarkerRd[] = {
     RD("symbol", fm_chart_marker_t, symbol, kI32),
@@ -210,8 +227,36 @@ constexpr RdField kInfoRd[] = {
     RD("naAsBlank", fm_chart_info_t, na_as_blank, kTri),
     RD("date1904", fm_chart_info_t, date1904, kBool),
     RD_OPT("style", fm_chart_info_t, has_style, style, kOptI32),
+    RD_AREA("chartArea", fm_chart_info_t, chart_area),
+    RD_AREA("plotArea", fm_chart_info_t, plot_area),
     RD_END,
 };
+
+/// A `DrawingColor`: the base, the transforms in document order and the rendered colour and transparency.
+val drawing_color_to_val(const fm_drawing_color_t& color) {
+  val o = val::object();
+  o.set("base", js_color_spec(color.base));
+  val transforms = val::array();
+  for (uint32_t i = 0; i < color.transform_count; ++i) {
+    const fm_color_transform_t& t = color.transforms[i];
+    val item = val::object();
+    item.set("name", val(string_from_cstr(t.name)));
+    item.set("value", t.has_value != 0 ? val(t.value) : val::null());
+    push(transforms, item);
+  }
+  o.set("transforms", transforms);
+  if (color.has_resolved != 0) {
+    val resolved = val::object();
+    resolved.set("argb", color.resolved);
+    resolved.set("resolution", static_cast<int32_t>(FM_COLOR_RESOLUTION_EXACT));
+    o.set("resolved", resolved);
+  } else {
+    o.set("resolved", val::null());
+  }
+  o.set("resolvedTransparencyPct",
+        color.has_resolved_transparency_pct != 0 ? val(color.resolved_transparency_pct) : val::null());
+  return o;
+}
 
 val fields_to_val(const void* base, const RdField* f) {
   val o = val::object();
@@ -268,6 +313,11 @@ val fields_to_val(const void* base, const RdField* f) {
         break;
       case Rd::kColor:
         v = js_color_spec_or_null(load<fm_color_t>(base, f->off));
+        break;
+      case Rd::kDrawingColor:
+        if (const auto color = load<fm_drawing_color_t>(base, f->off); color.base.kind != FM_COLOR_KIND_NONE) {
+          v = drawing_color_to_val(color);
+        }
         break;
       case Rd::kObj:
         v = fields_to_val(static_cast<const char*>(base) + f->off, f->sub);
@@ -596,15 +646,16 @@ val open_chart_data_val(fm_status_t rc, int32_t present, fm_chart_data_t* raw) {
 }  // namespace
 
 val chart_fill_to_val(const fm_chart_fill_t& fill) {
-  if (fill.color.kind == FM_COLOR_KIND_NONE && fill.has_transparency_pct == 0 && fill.none == 0 && fill.other == 0) {
+  if (fill.color.base.kind == FM_COLOR_KIND_NONE && fill.has_transparency_pct == 0 && fill.none == 0 &&
+      fill.other == 0) {
     return val::null();
   }
   return fields_to_val(&fill, kFillRd);
 }
 
 val chart_line_to_val(const fm_chart_line_t& line) {
-  if (line.color.kind == FM_COLOR_KIND_NONE && line.has_transparency_pct == 0 && line.has_width_pt == 0 &&
-      line.has_dash == 0 && line.none == 0 && line.other == 0) {
+  if (line.color.base.kind == FM_COLOR_KIND_NONE && line.has_transparency_pct == 0 && line.has_width_pt == 0 &&
+      line.has_dash == 0 && line.none == 0 && line.other == 0 && line.has_head_end == 0 && line.has_tail_end == 0) {
     return val::null();
   }
   return fields_to_val(&line, kLineRd);

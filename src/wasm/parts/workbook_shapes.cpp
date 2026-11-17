@@ -6,6 +6,7 @@
 #include <emscripten/val.h>
 
 #include <cstdint>
+#include <deque>
 #include <string>
 #include <vector>
 
@@ -27,6 +28,16 @@ bool present(JsNarrowNumericReader& reader, const emscripten::val& owner, const 
   return reader.ok() && js_value_present(reader.value(owner, key, key));
 }
 
+emscripten::val connection_to_val(int32_t has, const fm_shape_connection_t& connection) {
+  if (has == 0) {
+    return emscripten::val::null();
+  }
+  emscripten::val o = emscripten::val::object();
+  o.set("objectId", connection.object_id);
+  o.set("siteIndex", connection.site_index);
+  return o;
+}
+
 emscripten::val shape_to_val(const fm_shape_info_t& s) {
   emscripten::val o = emscripten::val::object();
   o.set("objectId", s.object_id);
@@ -39,6 +50,14 @@ emscripten::val shape_to_val(const fm_shape_info_t& s) {
   o.set("rotationDeg", s.rotation_deg);
   o.set("flipH", s.flip_h != 0);
   o.set("flipV", s.flip_v != 0);
+  o.set("startConnection", connection_to_val(s.has_start_connection, s.start_connection));
+  o.set("endConnection", connection_to_val(s.has_end_connection, s.end_connection));
+  emscripten::val adjust = emscripten::val::object();
+  for (uint32_t i = 0; i < s.adjust_values_count; ++i) {
+    adjust.set(s.adjust_values[i].name, s.adjust_values[i].value);
+  }
+  o.set("adjustValues", adjust);
+  o.set("textVert", s.text_vert == FM_SHAPE_TEXT_VERT_ABSENT ? emscripten::val::null() : emscripten::val(s.text_vert));
   return o;
 }
 
@@ -61,7 +80,50 @@ struct ShapeText {
   std::string description;
   std::string preset_geometry;
   std::string text;
+  /// Owns the paint transforms and the adjust-value names the records point into.
+  ChartPatchArena arena;
+  std::vector<fm_shape_adjust_t> adjust;
+  std::vector<fm_shape_adjust_patch_t> adjust_patch;
 };
+
+/// Calls `each(name, value, path)` for every own key of `owner.adjustValues` whose value is not `undefined`; the names
+/// live in `names`. `null` for the whole map is a type error.
+template <class Each>
+void for_each_adjust(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* field,
+                     std::deque<std::string>& names, Each each) {
+  const emscripten::val map = reader.value(owner, "adjustValues", field);
+  if (!reader.ok() || map.isUndefined()) {
+    return;
+  }
+  if (map.isNull()) {
+    reader.fail_null(field);
+    return;
+  }
+  const emscripten::val keys = reader.own_keys(map, field);
+  const uint32_t count = reader.length(keys, field);
+  for (uint32_t i = 0; i < count && reader.ok(); ++i) {
+    names.push_back(reader.string_value(reader.array_element(keys, i, field), field));
+    const std::string path = std::string(field) + "." + names.back();
+    const emscripten::val value = reader.value(map, names.back().c_str(), path.c_str());
+    if (reader.ok() && !value.isUndefined()) {
+      each(names.back().c_str(), value, path.c_str());
+    }
+  }
+}
+
+/// Reads the optional `owner.textVert` into `*has` / `*value`; `null` is a type error.
+void pull_text_vert(JsNarrowNumericReader& reader, const emscripten::val& owner, int32_t* has, int32_t* value) {
+  const emscripten::val v = reader.value(owner, "textVert", "spec.textVert");
+  if (!reader.ok() || v.isUndefined()) {
+    return;
+  }
+  if (v.isNull()) {
+    reader.fail_null("spec.textVert");
+    return;
+  }
+  *has = 1;
+  *value = reader.i32_value(v, 0, "spec.textVert");
+}
 
 /// Reads the shape fields `patch` carries; an omitted field is `KEEP`. `fill` / `line` take the chart paint
 /// patches, `null` there removing the shape's own paint; `null` on any other shape field is a type error.
@@ -72,14 +134,32 @@ fm_shape_patch_t pull_shape_patch(JsNarrowNumericReader& reader, const emscripte
   js_patch_string(reader, patch, "text", "patch.text", false, store.text, &s.text_op, &s.text);
   js_patch_value(reader, patch, "textBox", "patch.textBox", false, &s.text_box_op, &s.text_box,
                  [&](const emscripten::val& v) { return reader.boolean_value(v, false) ? 1 : 0; });
-  pull_chart_fill_patch(reader, patch, "patch", &s.fill);
-  pull_chart_line_patch(reader, patch, "patch", &s.line);
+  pull_chart_fill_patch(reader, store.arena, patch, "patch", &s.fill);
+  pull_chart_line_patch(reader, store.arena, patch, "patch", &s.line);
   js_patch_value(reader, patch, "rotationDeg", "patch.rotationDeg", false, &s.rotation_deg_op, &s.rotation_deg,
                  [&](const emscripten::val& v) { return reader.number_value(v, 0.0, "patch.rotationDeg"); });
   js_patch_value(reader, patch, "flipH", "patch.flipH", false, &s.flip_h_op, &s.flip_h,
                  [&](const emscripten::val& v) { return reader.boolean_value(v, false, "patch.flipH") ? 1 : 0; });
   js_patch_value(reader, patch, "flipV", "patch.flipV", false, &s.flip_v_op, &s.flip_v,
                  [&](const emscripten::val& v) { return reader.boolean_value(v, false, "patch.flipV") ? 1 : 0; });
+  for_each_adjust(reader, patch, "patch.adjustValues", store.arena,
+                  [&](const char* name, const emscripten::val& v, const char* path) {
+                    fm_shape_adjust_patch_t entry{};
+                    entry.name = name;
+                    if (v.isNull()) {
+                      entry.value_op = FM_PATCH_OP_CLEAR;
+                    } else {
+                      entry.value_op = FM_PATCH_OP_SET;
+                      entry.value = reader.i32_value(v, 0, path);
+                    }
+                    store.adjust_patch.push_back(entry);
+                  });
+  if (!store.adjust_patch.empty()) {
+    s.adjust_values = store.adjust_patch.data();
+    s.adjust_values_count = static_cast<uint32_t>(store.adjust_patch.size());
+  }
+  js_patch_value(reader, patch, "textVert", "patch.textVert", true, &s.text_vert_op, &s.text_vert,
+                 [&](const emscripten::val& v) { return reader.i32_value(v, 0, "patch.textVert"); });
   return s;
 }
 
@@ -88,14 +168,27 @@ fm_shape_patch_t pull_shape_patch(JsNarrowNumericReader& reader, const emscripte
 fm_shape_spec_t pull_shape_spec(JsNarrowNumericReader& reader, const emscripten::val& spec, ShapeText& store) {
   fm_shape_spec_t s = FM_STRUCT_INIT(fm_shape_spec_t);
   s.placement = pull_drawing_placement(reader, spec, "spec", store.name, store.description);
-  s.fill = pull_chart_fill(reader, spec, "spec");
-  s.line = pull_chart_line(reader, spec, "spec");
+  s.fill = pull_chart_fill(reader, store.arena, spec, "spec");
+  s.line = pull_chart_line(reader, store.arena, spec, "spec");
   s.rotation_deg = reader.number(spec, "rotationDeg", 0.0, "spec.rotationDeg");
   s.text_box = reader.boolean(spec, "textBox", false, "spec.textBox") ? 1 : 0;
   s.preset_geometry = reader.optional_string(spec, "presetGeometry", store.preset_geometry, "spec.presetGeometry");
   s.text = reader.optional_string(spec, "text", store.text, "spec.text");
   s.flip_h = pull_flip(reader, spec, "flipH", "spec.flipH");
   s.flip_v = pull_flip(reader, spec, "flipV", "spec.flipV");
+  for_each_adjust(reader, spec, "spec.adjustValues", store.arena,
+                  [&](const char* name, const emscripten::val& v, const char* path) {
+                    if (v.isNull()) {
+                      reader.fail_null(path);
+                      return;
+                    }
+                    store.adjust.push_back(fm_shape_adjust_t{name, reader.i32_value(v, 0, path)});
+                  });
+  if (!store.adjust.empty()) {
+    s.adjust_values = store.adjust.data();
+    s.adjust_values_count = static_cast<uint32_t>(store.adjust.size());
+  }
+  pull_text_vert(reader, spec, &s.has_text_vert, &s.text_vert);
   return s;
 }
 

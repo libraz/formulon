@@ -546,8 +546,11 @@ Expected<void, Error> apply_fields(pugi::xml_node anchor, pugi::xml_node content
   if (!spec.adjust_values.empty() && !child_local(props, "prstGeom") && (f & shape_field::kPrst) == 0U) {
     return invalid("adjust_values apply only to preset geometry");
   }
-  if ((f & (shape_field::kText | shape_field::kTextBox | shape_field::kTextVert)) != 0U && kind != "sp") {
-    return invalid("text, text_box and text_vert apply only to a shape");
+  if ((f & (shape_field::kText | shape_field::kTextBox)) != 0U && kind != "sp") {
+    return invalid("text and text_box apply only to a shape");
+  }
+  if ((f & shape_field::kTextVert) != 0U && kind != "sp") {
+    return invalid("text_vert applies only to a shape");
   }
   if ((f & shape_field::kTextVert) != 0U && spec.text_vert &&
       static_cast<std::size_t>(*spec.text_vert) >= std::size(kTextVertTokens)) {

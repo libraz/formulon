@@ -94,31 +94,33 @@ double double_of(const xml_node& node) {
 /// Workbook and the part's colour map: a remapped `bg1` / `tx1` / `bg2` / `tx2` reads as Rgb.
 struct ColorEnv {
   const Workbook& wb;
-  bool remapped = false;
+  xml_node clr_map_ovr;  ///< The chart's `c:clrMapOvr`; empty when it has none.
 };
 
 struct Paint {
-  std::optional<ColorSpec> color;
+  std::optional<DrawingColor> color;
   std::optional<std::uint32_t> alpha;
-  bool approximate = false;  ///< A solid fill whose colour `color` states only approximately, or not at all.
+  bool other = false;  ///< A solid fill whose colour element `color` cannot state, or one with no colour.
 };
 
-/// Colour of an `a:solidFill`; unresolvable colour kinds read as no colour.
+/// Colour of an `a:solidFill`; a colour element the model cannot state reads as no colour.
 Paint read_solid(const ColorEnv& env, const xml_node& solid_fill) {
   Paint paint;
   const xml_node clr = kid(solid_fill, "");
-  if (!clr) {
-    paint.approximate = static_cast<bool>(solid_fill);
-    return paint;
-  }
-  paint.approximate = !drawing_color::read_exact(clr, env.remapped).has_value();
-  paint.color = drawing_color::read_color(env.wb, clr, env.remapped);
+  paint.color = clr ? drawing_color::read_drawing_color(env.wb, clr, env.clr_map_ovr) : std::nullopt;
+  paint.other = static_cast<bool>(solid_fill) && !paint.color;
   if (paint.color.has_value()) {
     if (const xml_node alpha = kid(clr, "alpha")) {
       paint.alpha = static_cast<std::uint32_t>(alpha.attribute("val").as_uint());
     }
   }
   return paint;
+}
+
+/// A text colour as a Theme or rendered Rgb.
+std::optional<ColorSpec> read_text_color(const ColorEnv& env, const xml_node& solid_fill) {
+  const xml_node clr = kid(solid_fill, "");
+  return clr ? drawing_color::read_color(env.wb, clr, drawing_color::remaps_color_map(env.clr_map_ovr)) : std::nullopt;
 }
 
 // True when `holder` states its paint with a fill element the paint records cannot carry.
@@ -137,7 +139,7 @@ ChartFill read_fill(const ColorEnv& env, const xml_node& sp_pr) {
   fill.color = paint.color;
   fill.alpha = paint.alpha;
   fill.none = static_cast<bool>(kid(sp_pr, "noFill"));
-  fill.other = has_other_fill(sp_pr) || paint.approximate;
+  fill.other = has_other_fill(sp_pr) || paint.other;
   return fill;
 }
 
@@ -184,7 +186,7 @@ ChartLine read_line(const ColorEnv& env, const xml_node& sp_pr) {
   }
   line.none = static_cast<bool>(kid(ln, "noFill"));
   const Paint paint = read_solid(env, kid(ln, "solidFill"));
-  line.other = has_other_fill(ln) || paint.approximate;
+  line.other = has_other_fill(ln) || paint.other;
   line.color = paint.color;
   line.alpha = paint.alpha;
   if (const xml_node dash = kid(ln, "prstDash")) {
@@ -258,7 +260,7 @@ ChartLabels read_labels(const ColorEnv& env, const xml_node& dlbls) {
     if (const pugi::xml_attribute sz = def_rpr.attribute("sz")) {
       labels.font_size_hundredths_pt = static_cast<std::uint32_t>(sz.as_uint());
     }
-    labels.font_color = read_solid(env, kid(def_rpr, "solidFill")).color;
+    labels.font_color = read_text_color(env, kid(def_rpr, "solidFill"));
   }
   return labels;
 }
@@ -719,7 +721,7 @@ void read_drawingml_chart(const Workbook& wb, const xml_node& root, ChartModel& 
   const xml_node date1904 = kid(root, "date1904");
   model.date1904 = date1904 ? flag_of(date1904) : wb.date1904();
   model.style = read_style(root);
-  const ColorEnv env{wb, drawing_color::remaps_color_map(kid(root, "clrMapOvr"))};
+  const ColorEnv env{wb, kid(root, "clrMapOvr")};
 
   const xml_node chart = kid(root, "chart");
   model.title = read_title(kid(chart, "title"));
@@ -884,7 +886,7 @@ ChartAxis read_cx_axis(const xml_node& node) {
 void read_chartex(const Workbook& wb, const xml_node& root, ChartModel& model) {
   model.is_chartex = true;
   model.date1904 = false;
-  const ColorEnv env{wb, drawing_color::remaps_color_map(kid(root, "clrMapOvr"))};
+  const ColorEnv env{wb, kid(root, "clrMapOvr")};
   read_shape(env, kid(root, "spPr"), model.chart_area);
 
   struct Dim {
@@ -992,11 +994,11 @@ Expected<ChartModel, Error> read_chart_model(const Workbook& wb, const pugi::xml
 }
 
 ChartFill read_paint_fill(const Workbook& wb, const pugi::xml_node& sp_pr) {
-  return read_fill(ColorEnv{wb}, sp_pr);
+  return read_fill(ColorEnv{wb, xml_node()}, sp_pr);
 }
 
 ChartLine read_paint_line(const Workbook& wb, const pugi::xml_node& sp_pr) {
-  return read_line(ColorEnv{wb}, sp_pr);
+  return read_line(ColorEnv{wb, xml_node()}, sp_pr);
 }
 
 }  // namespace formulon

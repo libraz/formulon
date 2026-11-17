@@ -13,19 +13,19 @@ handle address it again.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence, Tuple, Type, Union, cast
+from typing import TYPE_CHECKING, Any, Dict, Mapping, Optional, Sequence, Tuple, Type, Union, cast
 
 from . import _structs as S
 from ._c import LIB, FormulonError, _argument_message, _NoCopy, _require_bool, _sint, _uint
 from ._status import StatusCode
 from ._workbook import (
     _CHART_TITLE_NONE,
-    _DISPLAY_PATCH_SPEC,
     _PATCH_SET,
     _PLOT_PATCH_SPEC,
     _PREVIEW_OVERRIDE_SPEC,
     UNCHANGED,
     BlanksAs,
+    ChartAreaPaintPatch,
     ChartAxisCrosses,
     ChartAxisKind,
     ChartAxisPatch,
@@ -59,6 +59,7 @@ from ._workbook import (
     DrawingAnchorInput,
     DrawingObjectKind,
     ImageFormat,
+    ShapeTextVert,
     SheetRect,
     SlicerCrossFilter,
     SlicerSortOrder,
@@ -68,6 +69,7 @@ from ._workbook import (
     _chart_source_fields,
     _check,
     _encode_axis_patch,
+    _encode_display_patch,
     _encode_patch,
     _encode_point_patch,
     _encode_series_patch,
@@ -116,11 +118,13 @@ _SHAPE_UPDATE_NAMES = (
     "rotation_deg",
     "flip_h",
     "flip_v",
+    "adjust_values",
+    "text_vert",
 )
 # The picture keys beside the common ones.
 _PICTURE_UPDATE_NAMES = ("rotation_deg", "flip_h", "flip_v")
-# The shape keys whose ``None`` clears the field to the style's paint.
-_CLEARABLE_SHAPE_NAMES = ("fill", "line")
+# The shape keys whose ``None`` clears the field: the paint to the style's, the text direction to none.
+_CLEARABLE_SHAPE_NAMES = ("fill", "line", "text_vert")
 _SLICER_UPDATE_NAMES = ("caption", "style_name", "column_count", "row_height_pt", "sort_order", "cross_filter")
 _SHAPE_KINDS = frozenset({DrawingObjectKind.SHAPE, DrawingObjectKind.CONNECTOR, DrawingObjectKind.GROUP})
 
@@ -254,6 +258,8 @@ def _line_patch_of(line: Optional[ChartLine]) -> Optional[ChartLinePatch]:
         "width_pt": line.width_pt,
         "dash": line.dash,
         "none": line.none,
+        "head_end": line.head_end,
+        "tail_end": line.tail_end,
     }
 
 
@@ -482,7 +488,7 @@ class Picture(_Snapshotable):
         An argument left at :data:`UNCHANGED` keeps its value. ``name``, ``description``, ``hidden`` and
         ``anchor`` are those of :meth:`Drawing.update`; ``rotation_deg`` (stored as given, 0 removes it),
         ``flip_h`` and ``flip_v`` are the picture's transform and apply first, so ``anchor`` resolves against
-        the new rotation. A rotation change alone never moves the anchor. Every argument is checked before
+        the new rotation. Excel's Flip command toggles a flip flag and sets the rotation to (360 - r) mod 360. A rotation change alone never moves the anchor. Every argument is checked before
         anything changes, and the call changes everything or nothing.
 
         Raises:
@@ -793,15 +799,19 @@ class Chart(_Snapshotable):
         plot_visible_only: Union[bool, None, Unchanged] = UNCHANGED,
         na_as_blank: Union[bool, None, Unchanged] = UNCHANGED,
         style: Union[int, None, Unchanged] = UNCHANGED,
+        chart_area: Union[ChartAreaPaintPatch, Unchanged] = UNCHANGED,
+        plot_area: Union[ChartAreaPaintPatch, Unchanged] = UNCHANGED,
     ) -> None:
-        """Update how blanks plot, whether hidden cells are skipped, whether ``#N/A`` plots as blank and the chart style.
+        """Update how blanks plot, whether hidden cells are skipped, whether ``#N/A`` plots as blank, the chart style
+        and the paint of the chart area and plot area.
 
-        ``style`` is 1..48. An omitted argument keeps its value, ``None`` removes the element.
+        ``style`` is 1..48. An omitted argument keeps its value, ``None`` removes the element; ``chart_area`` and
+        ``plot_area`` are paint patches that cannot be removed, so ``None`` is a ``TypeError``.
         """
         patch = _given(dict(locals()), ChartDisplayPatch)
         h, sheet, object_id = self._at()
         with _ArgScope() as scope:
-            fields = _encode_patch(_DISPLAY_PATCH_SPEC, patch, (), "display patch", scope)
+            fields = _encode_display_patch(patch, scope)
             ptr = scope.struct(S.CHART_DISPLAY_PATCH)
             S.CHART_DISPLAY_PATCH.pack(LIB, ptr, fields)
             _check(LIB.fm_sheet_update_chart_display(h, sheet, object_id, ptr))
@@ -1061,6 +1071,8 @@ class Shape(_Snapshotable):
         rotation_deg: Union[float, Unchanged] = UNCHANGED,
         flip_h: Union[bool, Unchanged] = UNCHANGED,
         flip_v: Union[bool, Unchanged] = UNCHANGED,
+        adjust_values: Union[Mapping[str, Optional[int]], Unchanged] = UNCHANGED,
+        text_vert: Union[ShapeTextVert, None, Unchanged] = UNCHANGED,
     ) -> None:
         """Apply the arguments that are given to the shape; the rest of its XML is kept.
 
@@ -1070,8 +1082,12 @@ class Shape(_Snapshotable):
         removes the shape's own paint so the one its style names applies, and a record that reads ``other``
         keeps the stored paint. Text applies to a shape only and keeps the first paragraph's
         properties and first run's formatting. ``rotation_deg`` is stored as given (0 removes it); ``flip_h``
-        and ``flip_v`` set or remove the flip attributes. Every argument is checked before anything changes,
-        and the call changes everything or nothing.
+        and ``flip_v`` set or remove the flip attributes. Excel's Flip command toggles a flip flag and sets the
+        rotation to (360 - r) mod 360; a flip or rotation patched on a connector unglues both of its ends.
+        ``adjust_values`` merges by guide name after a ``preset_geometry`` change, which drops every guide: a
+        value sets the guide, ``None`` removes it so the preset's default applies, and a guide no entry names
+        is kept. ``text_vert`` is the text direction and ``None`` removes it. Every argument is checked before
+        anything changes, and the call changes everything or nothing.
 
         Raises:
           TypeError: when an argument other than ``description`` is ``None`` or has the wrong type.

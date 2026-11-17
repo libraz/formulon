@@ -127,7 +127,7 @@ std::optional<DrawingColor> ReadDrawing(const Workbook& wb, const std::string& c
 }
 
 std::uint32_t Resolved(std::uint32_t rgb, const std::vector<ColorTransform>& transforms) {
-  return drawing_color::resolve_transforms(0xFF000000U | rgb, transforms).value_or(0U);
+  return drawing_color::resolve_transforms(0xFF000000U | rgb, transforms).argb.value_or(0U);
 }
 
 std::string WrittenDrawing(const DrawingColor& color, const std::string& alpha = "") {
@@ -207,8 +207,18 @@ TEST(DrawingColorResolve, UnmodelledTransformsHaveNoColour) {
       {{"lumMod", std::nullopt}}, {{"shade", std::nullopt}}, {{"tint", 50000}, {"hueMod", std::nullopt}},
   };
   for (const auto& t : cases) {
-    EXPECT_FALSE(drawing_color::resolve_transforms(0xFF123456U, t).has_value()) << t.front().name;
+    const ResolvedPaint got = drawing_color::resolve_transforms(0xFF123456U, t);
+    EXPECT_FALSE(got.argb.has_value()) << t.front().name;
+    EXPECT_FALSE(got.alpha.has_value()) << t.front().name;
   }
+}
+
+TEST(DrawingColorResolve, AlphaKeepsTheColourAndLeavesTheOpacityToTheModel) {
+  const ResolvedPaint plain = drawing_color::resolve_transforms(0xFF123456U, {{"shade", 50000}});
+  EXPECT_EQ(plain.alpha, std::optional<std::uint32_t>(100000U));
+  const ResolvedPaint alpha = drawing_color::resolve_transforms(0xFF123456U, {{"alpha", 40000}, {"shade", 50000}});
+  EXPECT_EQ(alpha.argb, plain.argb);
+  EXPECT_FALSE(alpha.alpha.has_value());
 }
 
 TEST(DrawingColorRead, BaseTransformsAndRenderedColour) {
@@ -220,6 +230,7 @@ TEST(DrawingColorRead, BaseTransformsAndRenderedColour) {
   EXPECT_EQ(shade->base.theme, 0U);
   EXPECT_EQ(shade->transforms, (std::vector<ColorTransform>{{"shade", 50000}}));
   EXPECT_EQ(shade->resolved_argb, 0xFFBCBCBCU);
+  EXPECT_EQ(shade->resolved_alpha, std::optional<std::uint32_t>(100000U));
 
   const auto kept = ReadDrawing(wb,
                                 "<a:srgbClr xmlns:a=\"urn:a\" val=\"7f3f9f\"><a:satMod val=\"-5\"/><a:alpha val=\"1\"/>"
@@ -227,8 +238,10 @@ TEST(DrawingColorRead, BaseTransformsAndRenderedColour) {
   ASSERT_TRUE(kept.has_value());
   EXPECT_EQ(kept->base.kind, ColorSpec::Kind::kRgb);
   EXPECT_EQ(kept->base.rgb & 0xFFFFFFU, 0x7F3F9FU);
-  EXPECT_EQ(kept->transforms, (std::vector<ColorTransform>{{"satMod", -5}, {"comp", std::nullopt}, {"fooBar", 7}}));
+  EXPECT_EQ(kept->transforms,
+            (std::vector<ColorTransform>{{"satMod", -5}, {"alpha", 1}, {"comp", std::nullopt}, {"fooBar", 7}}));
   EXPECT_FALSE(kept->resolved_argb.has_value());
+  EXPECT_FALSE(kept->resolved_alpha.has_value());
 
   const auto sys = ReadDrawing(wb, "<a:sysClr xmlns:a=\"urn:a\" val=\"windowText\" lastClr=\"101010\"/>");
   ASSERT_TRUE(sys.has_value());

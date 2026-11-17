@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
@@ -53,6 +54,8 @@ using formulon::c_api::parts::to_c;
 
 struct fm_chart {
   formulon::ChartModel model;
+  /// The C views of the paint colours' transforms, built on first read and kept for the handle's lifetime.
+  mutable std::map<const formulon::DrawingColor*, std::vector<fm_color_transform_t>> transform_views;
 };
 
 struct fm_chart_data {
@@ -111,21 +114,40 @@ fm_chart_title_t to_fm(const formulon::ChartTitle& t) {
   return fm_chart_title_t{to_c(t.kind), is_text ? t.text.c_str() : nullptr, is_ref ? t.ref_formula.c_str() : nullptr};
 }
 
-fm_chart_fill_t to_fm(const formulon::ChartFill& f) {
-  return chart_fill_to_c(f);
+// Storage behind a chart read's borrowed views: the handle and its model.
+struct HandleSink {
+  const fm_chart& chart;
+
+  const char* text(const std::string& s) { return s.c_str(); }
+  const fm_color_transform_t* transforms(const formulon::DrawingColor& color,
+                                         std::vector<fm_color_transform_t>&& view) {
+    std::vector<fm_color_transform_t>& slot = chart.transform_views[&color];
+    if (slot.empty()) {
+      slot = std::move(view);
+    }
+    return slot.data();
+  }
+};
+
+fm_chart_fill_t to_fm(const formulon::ChartFill& f, HandleSink& sink) {
+  return chart_fill_to_c(f, sink);
 }
 
-fm_chart_line_t to_fm(const formulon::ChartLine& l) {
-  return chart_line_to_c(l);
+fm_chart_line_t to_fm(const formulon::ChartLine& l, HandleSink& sink) {
+  return chart_line_to_c(l, sink);
 }
 
-fm_chart_marker_t to_fm(const formulon::ChartMarker& m) {
+fm_chart_area_paint_t to_fm(const formulon::ChartAreaPaint& a, HandleSink& sink) {
+  return fm_chart_area_paint_t{to_fm(a.fill, sink), to_fm(a.line, sink)};
+}
+
+fm_chart_marker_t to_fm(const formulon::ChartMarker& m, HandleSink& sink) {
   fm_chart_marker_t out{};
   out.symbol = static_cast<std::int32_t>(m.symbol);
   out.has_size_pt = m.size ? 1 : 0;
   out.size_pt = m.size.value_or(0U);
-  out.fill = to_fm(m.fill);
-  out.line = to_fm(m.line);
+  out.fill = to_fm(m.fill, sink);
+  out.line = to_fm(m.line, sink);
   return out;
 }
 
@@ -353,6 +375,9 @@ extern "C" fm_status_t fm_chart_get_info(const fm_chart_t* chart, fm_chart_info_
     out->source_header_column = m.source->header_column ? 1 : 0;
   }
   out->na_as_blank = tri(m.disp_na_as_blank);
+  HandleSink sink{*chart};
+  out->chart_area = to_fm(m.chart_area, sink);
+  out->plot_area = to_fm(m.plot_area, sink);
   return 0;
 }
 
@@ -453,11 +478,12 @@ extern "C" fm_status_t fm_chart_get_series_at(const fm_chart_t* chart, size_t pl
   out->x = to_fm(s->x);
   out->y = to_fm(s->y);
   out->size = to_fm(s->size);
-  out->fill = to_fm(s->fill);
-  out->line = to_fm(s->line);
+  HandleSink sink{*chart};
+  out->fill = to_fm(s->fill, sink);
+  out->line = to_fm(s->line, sink);
   if (s->marker) {
     out->has_marker = 1;
-    out->marker = to_fm(*s->marker);
+    out->marker = to_fm(*s->marker, sink);
   }
   out->smooth = tri(s->smooth);
   out->point_count = static_cast<std::uint32_t>(s->points.size());
@@ -515,11 +541,12 @@ extern "C" fm_status_t fm_chart_get_series_point_at(const fm_chart_t* chart, siz
     return rc;
   }
   out->idx = p.idx;
-  out->fill = to_fm(p.fill);
-  out->line = to_fm(p.line);
+  HandleSink sink{*chart};
+  out->fill = to_fm(p.fill, sink);
+  out->line = to_fm(p.line, sink);
   if (p.marker) {
     out->has_marker = 1;
-    out->marker = to_fm(*p.marker);
+    out->marker = to_fm(*p.marker, sink);
   }
   return 0;
 }

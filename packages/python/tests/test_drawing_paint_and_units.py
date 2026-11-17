@@ -115,8 +115,8 @@ class ShapePaintTests(unittest.TestCase):
             props = shape.get_properties()
             self.assertIsInstance(props.fill, ChartFill)
             self.assertIsInstance(props.line, ChartLine)
-            self.assertEqual((props.fill.color, props.fill.transparency_pct), (RED, 25.0))
-            self.assertEqual((props.line.color, props.line.width_pt), (RED, 2.0))
+            self.assertEqual((props.fill.color.base, props.fill.transparency_pct), (RED, 25.0))
+            self.assertEqual((props.line.color.base, props.line.width_pt), (RED, 2.0))
             self.assertFalse(props.fill.none or props.fill.other or props.line.other)
             names = {f.name for f in dataclasses.fields(type(props))}
             self.assertFalse(names & {"fill_kind", "fill_color", "line_kind", "line_color", "line_width_pt"})
@@ -154,7 +154,7 @@ class ShapePaintTests(unittest.TestCase):
             self.assertIsNone(cleared.fill)
             self.assertIsNone(cleared.line)
             chart.update_series(0, series.series_id, fill=ChartFill(color=RED))
-            self.assertEqual(chart.get_properties().plots[0].series[0].fill.color, RED)
+            self.assertEqual(chart.get_properties().plots[0].series[0].fill.color.base, RED)
             chart.update_series(0, series.series_id, fill=None)
             self.assertIsNone(chart.get_properties().plots[0].series[0].fill)
 

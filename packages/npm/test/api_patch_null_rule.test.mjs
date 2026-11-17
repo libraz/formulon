@@ -144,8 +144,10 @@ const FAMILIES = {
   },
   'Shape.update': {
     keys: [
+      'adjustValues',
       'anchor',
       'description',
+      'endConnection',
       'fill',
       'flipH',
       'flipV',
@@ -156,12 +158,14 @@ const FAMILIES = {
       'objectId',
       'presetGeometry',
       'rotationDeg',
+      'startConnection',
       'text',
       'textBox',
+      'textVert',
     ],
-    readOnly: ['kind', 'objectId'],
+    readOnly: ['endConnection', 'kind', 'objectId', 'startConnection'],
     // `description` takes `null` on every drawing object.
-    clearable: ['description', 'fill', 'line'],
+    clearable: ['description', 'fill', 'line', 'textVert'],
     setup: (ws) =>
       ws.addShape({
         presetGeometry: 'rect',

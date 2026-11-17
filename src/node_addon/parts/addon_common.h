@@ -40,6 +40,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <limits>
 #include <string>
 #include <type_traits>
@@ -334,6 +335,10 @@ class CheckedSpecReader final {
   /// RangeError "must be an integer"; a negative one for a field whose smallest value is `min_value >= 0` is an
   /// InvalidArgument FormulonError "must not be negative"; any other value is a RangeError "is too large".
   void FailInteger(const char* key, double number, double min_value);
+  /// Keeps `text` / `items` alive as long as this reader, so a C record can point into them; the returned
+  /// pointers stay valid across later calls.
+  const char* KeepString(std::string text);
+  const fm_color_transform_t* KeepTransforms(std::vector<fm_color_transform_t> items);
 
  private:
   bool ReadOptional(const Napi::Object& owner, const char* key, Napi::Value* out, bool* present = nullptr);
@@ -362,6 +367,8 @@ class CheckedSpecReader final {
   bool element_ = false;
   Napi::Env env_;
   bool failed_ = false;
+  std::deque<std::string> kept_strings_;
+  std::deque<std::vector<fm_color_transform_t>> kept_transforms_;
 };
 
 /// The state of one key of a partial-update (patch) object.

@@ -78,7 +78,7 @@ describe('a chart point override', () => {
       const points = chart.getProperties().plots[0].series[0].points;
       assert.equal(points.length, 1);
       assert.equal(points[0].index, 1);
-      assert.equal(points[0].fill.color.argb >>> 0, 0xffff0000);
+      assert.equal(points[0].fill.color.base.argb >>> 0, 0xffff0000);
     });
   });
 
@@ -104,7 +104,7 @@ describe('a chart point override', () => {
         points.map((p) => p.index),
         [1, 3],
       );
-      assert.equal(points[1].fill.color.argb >>> 0, 0xffff0000);
+      assert.equal(points[1].fill.color.base.argb >>> 0, 0xffff0000);
     });
   });
 });

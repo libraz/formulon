@@ -542,6 +542,15 @@ export const DrawingObjectKind = Object.freeze({
   GraphicFrame: 5,
   Other: 6,
 });
+export const ShapeTextVert = Object.freeze({
+  Horz: 0,
+  Vert: 1,
+  Vert270: 2,
+  EaVert: 3,
+  WordArtVert: 4,
+  WordArtVertRtl: 5,
+  MongolianVert: 6,
+});
 export const AnchorKind = Object.freeze({ Default: 0, OneCell: 1, TwoCell: 2, Absolute: 3 });
 export const AnchorEditAs = Object.freeze({ Default: 0, OneCell: 1, TwoCell: 2, Absolute: 3 });
 export const SlicerSortOrder = Object.freeze({
@@ -611,7 +620,22 @@ export const ChartLegendPosition = Object.freeze({
 });
 export const ChartAxisPosition = Object.freeze({ Bottom: 0, Top: 1, Left: 2, Right: 3 });
 export const ChartBarDirection = Object.freeze({ Column: 0, Bar: 1 });
-export const ChartLineDash = Object.freeze({ Solid: 0, Dash: 1, Dot: 2, DashDot: 3, Other: 4 });
+export const ChartLineDash = Object.freeze({
+  Solid: 0,
+  Dash: 1,
+  Dot: 2,
+  DashDot: 3,
+  Other: 4,
+  SysDot: 5,
+  SysDash: 6,
+  LgDash: 7,
+  LgDashDot: 8,
+  LgDashDotDot: 9,
+  SysDashDot: 10,
+  SysDashDotDot: 11,
+});
+export const ChartLineEndType = Object.freeze({ None: 0, Triangle: 1, Stealth: 2, Diamond: 3, Oval: 4, Arrow: 5 });
+export const ChartLineEndSize = Object.freeze({ Medium: 0, Small: 1, Large: 2 });
 export const ChartMarkerSymbol = Object.freeze({
   None: 0,
   Auto: 1,
@@ -900,6 +924,7 @@ export const FORMULON_MEMBERS = Object.freeze([
   'ColorContext',
   'ImageFormat',
   'DrawingObjectKind',
+  'ShapeTextVert',
   'AnchorKind',
   'AnchorEditAs',
   'SlicerSortOrder',
@@ -928,6 +953,8 @@ export const FORMULON_MEMBERS = Object.freeze([
   'ChartSourceKind',
   'ChartLegendPosition',
   'ChartLineDash',
+  'ChartLineEndType',
+  'ChartLineEndSize',
   'ChartMarkerSymbol',
   'ChartLabelPosition',
   'ColorResolution',
@@ -1936,6 +1963,7 @@ const PATCH_KEYS = Object.freeze({
       'autoTitleDeleted',
       'axes',
       'blanksAs',
+      'chartArea',
       'date1904',
       'filter',
       'isExtended',
@@ -1944,6 +1972,7 @@ const PATCH_KEYS = Object.freeze({
       'naAsBlank',
       'objectId',
       'onChartsheet',
+      'plotArea',
       'plotVisibleOnly',
       'plots',
       'source',
@@ -2069,8 +2098,10 @@ const PATCH_KEYS = Object.freeze({
   'Shape.update': [
     0,
     [
+      'adjustValues',
       'anchor',
       'description',
+      'endConnection',
       'fill',
       'flipH',
       'flipV',
@@ -2081,8 +2112,10 @@ const PATCH_KEYS = Object.freeze({
       'objectId',
       'presetGeometry',
       'rotationDeg',
+      'startConnection',
       'text',
       'textBox',
+      'textVert',
     ],
   ],
   'Sheet.updateCellFormat': [1, ['alignment', 'border', 'fill', 'font', 'numberFormat', 'protection', 'source']],
@@ -2328,12 +2361,28 @@ const PATCH_KEYS = Object.freeze({
   'Workbook.updateTableStyleDefaults': [0, ['pivotStyleName', 'tableStyleName']],
 });
 const PATCH_NESTED_KEYS = Object.freeze({
+  'Chart.updateDisplay': {
+    chartArea: ['fill', 'line'],
+    'chartArea.fill': ['color', 'none', 'other', 'transparencyPct'],
+    'chartArea.line': ['color', 'dash', 'headEnd', 'none', 'other', 'tailEnd', 'transparencyPct', 'widthPt'],
+    'chartArea.line.headEnd': ['length', 'type', 'width'],
+    'chartArea.line.tailEnd': ['length', 'type', 'width'],
+    plotArea: ['fill', 'line'],
+    'plotArea.fill': ['color', 'none', 'other', 'transparencyPct'],
+    'plotArea.line': ['color', 'dash', 'headEnd', 'none', 'other', 'tailEnd', 'transparencyPct', 'widthPt'],
+    'plotArea.line.headEnd': ['length', 'type', 'width'],
+    'plotArea.line.tailEnd': ['length', 'type', 'width'],
+  },
   'Chart.updatePoint': {
     fill: ['color', 'none', 'other', 'transparencyPct'],
-    line: ['color', 'dash', 'none', 'other', 'transparencyPct', 'widthPt'],
+    line: ['color', 'dash', 'headEnd', 'none', 'other', 'tailEnd', 'transparencyPct', 'widthPt'],
+    'line.headEnd': ['length', 'type', 'width'],
+    'line.tailEnd': ['length', 'type', 'width'],
     marker: ['fill', 'line', 'sizePt', 'symbol'],
     'marker.fill': ['color', 'none', 'other', 'transparencyPct'],
-    'marker.line': ['color', 'dash', 'none', 'other', 'transparencyPct', 'widthPt'],
+    'marker.line': ['color', 'dash', 'headEnd', 'none', 'other', 'tailEnd', 'transparencyPct', 'widthPt'],
+    'marker.line.headEnd': ['length', 'type', 'width'],
+    'marker.line.tailEnd': ['length', 'type', 'width'],
   },
   'Chart.updateSeries': {
     fill: ['color', 'none', 'other', 'transparencyPct'],
@@ -2351,14 +2400,20 @@ const PATCH_NESTED_KEYS = Object.freeze({
       'showValue',
       'sourceLinked',
     ],
-    line: ['color', 'dash', 'none', 'other', 'transparencyPct', 'widthPt'],
+    line: ['color', 'dash', 'headEnd', 'none', 'other', 'tailEnd', 'transparencyPct', 'widthPt'],
+    'line.headEnd': ['length', 'type', 'width'],
+    'line.tailEnd': ['length', 'type', 'width'],
     marker: ['fill', 'line', 'sizePt', 'symbol'],
     'marker.fill': ['color', 'none', 'other', 'transparencyPct'],
-    'marker.line': ['color', 'dash', 'none', 'other', 'transparencyPct', 'widthPt'],
+    'marker.line': ['color', 'dash', 'headEnd', 'none', 'other', 'tailEnd', 'transparencyPct', 'widthPt'],
+    'marker.line.headEnd': ['length', 'type', 'width'],
+    'marker.line.tailEnd': ['length', 'type', 'width'],
   },
   'Shape.update': {
     fill: ['color', 'none', 'other', 'transparencyPct'],
-    line: ['color', 'dash', 'none', 'other', 'transparencyPct', 'widthPt'],
+    line: ['color', 'dash', 'headEnd', 'none', 'other', 'tailEnd', 'transparencyPct', 'widthPt'],
+    'line.headEnd': ['length', 'type', 'width'],
+    'line.tailEnd': ['length', 'type', 'width'],
   },
   'Sheet.updateCellFormat': {
     alignment: [
@@ -2549,8 +2604,10 @@ const INPUT_KEYS = Object.freeze({
   'Sheet.addShape': [
     0,
     [
+      'adjustValues',
       'anchor',
       'description',
+      'endConnection',
       'fill',
       'flipH',
       'flipV',
@@ -2561,8 +2618,10 @@ const INPUT_KEYS = Object.freeze({
       'objectId',
       'presetGeometry',
       'rotationDeg',
+      'startConnection',
       'text',
       'textBox',
+      'textVert',
     ],
   ],
   'Sheet.addSlicer': [
@@ -2922,21 +2981,41 @@ const INPUT_NESTED_KEYS = Object.freeze({
       'showValue',
       'sourceLinked',
     ],
-    line: ['color', 'dash', 'none', 'other', 'transparencyPct', 'widthPt'],
+    line: ['color', 'dash', 'headEnd', 'none', 'other', 'tailEnd', 'transparencyPct', 'widthPt'],
+    'line.headEnd': ['length', 'type', 'width'],
+    'line.tailEnd': ['length', 'type', 'width'],
     marker: ['fill', 'line', 'sizePt', 'symbol'],
     'marker.fill': ['color', 'none', 'other', 'transparencyPct'],
-    'marker.line': ['color', 'dash', 'none', 'other', 'transparencyPct', 'widthPt'],
+    'marker.line': ['color', 'dash', 'headEnd', 'none', 'other', 'tailEnd', 'transparencyPct', 'widthPt'],
+    'marker.line.headEnd': ['length', 'type', 'width'],
+    'marker.line.tailEnd': ['length', 'type', 'width'],
   },
   'Chart.setPoint': {
     fill: ['color', 'none', 'other', 'transparencyPct'],
-    'fill.color': ['argb', 'indexed', 'kind', 'theme', 'tint'],
-    line: ['color', 'dash', 'none', 'other', 'transparencyPct', 'widthPt'],
-    'line.color': ['argb', 'indexed', 'kind', 'theme', 'tint'],
+    'fill.color': ['base', 'resolved', 'resolvedTransparencyPct', 'transforms'],
+    'fill.color.base': ['argb', 'indexed', 'kind', 'theme', 'tint'],
+    'fill.color.resolved': ['argb', 'resolution'],
+    'fill.color.transforms[]': ['name', 'value'],
+    line: ['color', 'dash', 'headEnd', 'none', 'other', 'tailEnd', 'transparencyPct', 'widthPt'],
+    'line.color': ['base', 'resolved', 'resolvedTransparencyPct', 'transforms'],
+    'line.color.base': ['argb', 'indexed', 'kind', 'theme', 'tint'],
+    'line.color.resolved': ['argb', 'resolution'],
+    'line.color.transforms[]': ['name', 'value'],
+    'line.headEnd': ['length', 'type', 'width'],
+    'line.tailEnd': ['length', 'type', 'width'],
     marker: ['fill', 'line', 'sizePt', 'symbol'],
     'marker.fill': ['color', 'none', 'other', 'transparencyPct'],
-    'marker.fill.color': ['argb', 'indexed', 'kind', 'theme', 'tint'],
-    'marker.line': ['color', 'dash', 'none', 'other', 'transparencyPct', 'widthPt'],
-    'marker.line.color': ['argb', 'indexed', 'kind', 'theme', 'tint'],
+    'marker.fill.color': ['base', 'resolved', 'resolvedTransparencyPct', 'transforms'],
+    'marker.fill.color.base': ['argb', 'indexed', 'kind', 'theme', 'tint'],
+    'marker.fill.color.resolved': ['argb', 'resolution'],
+    'marker.fill.color.transforms[]': ['name', 'value'],
+    'marker.line': ['color', 'dash', 'headEnd', 'none', 'other', 'tailEnd', 'transparencyPct', 'widthPt'],
+    'marker.line.color': ['base', 'resolved', 'resolvedTransparencyPct', 'transforms'],
+    'marker.line.color.base': ['argb', 'indexed', 'kind', 'theme', 'tint'],
+    'marker.line.color.resolved': ['argb', 'resolution'],
+    'marker.line.color.transforms[]': ['name', 'value'],
+    'marker.line.headEnd': ['length', 'type', 'width'],
+    'marker.line.tailEnd': ['length', 'type', 'width'],
   },
   'Sheet.addCfRule': {
     colorScale: ['colors', 'thresholds'],
@@ -3054,7 +3133,9 @@ const INPUT_NESTED_KEYS = Object.freeze({
       'widthEmu',
     ],
     fill: ['color', 'none', 'other', 'transparencyPct'],
-    line: ['color', 'dash', 'none', 'other', 'transparencyPct', 'widthPt'],
+    line: ['color', 'dash', 'headEnd', 'none', 'other', 'tailEnd', 'transparencyPct', 'widthPt'],
+    'line.headEnd': ['length', 'type', 'width'],
+    'line.tailEnd': ['length', 'type', 'width'],
   },
   'Sheet.addSlicer': {
     anchor: [
@@ -3268,9 +3349,9 @@ const READ_ONLY_KEYS = Object.freeze({
   'Picture.update': ['bytes', 'format', 'heightPx', 'kind', 'objectId', 'widthPx'],
   'Pivot.updateField': ['axis', 'cacheFieldIndex', 'groupBaseIndex', 'sourceName', 'subtotalFunctions'],
   'Pivot.updateFieldItem': ['cacheIndex', 'name'],
-  'Shape.update': ['kind', 'objectId'],
+  'Shape.update': ['endConnection', 'kind', 'objectId', 'startConnection'],
   'Sheet.addDataTable': ['columnInput.deleted', 'rowInput.deleted', 'rowOriented', 'twoDimensional'],
-  'Sheet.addShape': ['kind', 'objectId'],
+  'Sheet.addShape': ['endConnection', 'kind', 'objectId', 'startConnection'],
   'Sheet.addSlicer': ['cacheName', 'columnName', 'objectId', 'tableName'],
   'Sheet.addSparklineGroup': ['id'],
   'Sheet.addValidation': ['id'],
@@ -3350,7 +3431,7 @@ const PATCH_NULLABLE = Object.freeze({
   },
   'Pivot.updateStyleOptions': { styleName: 'string' },
   'PivotCache.updateOptions': { missingItemsLimit: 'number' },
-  'Shape.update': { fill: 'object', line: 'object' },
+  'Shape.update': { fill: 'object', line: 'object', textVert: 'number' },
   'Sheet.updateCfRule': { dxfIndex: 'number', formula1: 'string', formula2: 'string' },
   'Sheet.updateFormatDefaults': { defaultColumnWidthChars: 'number', defaultRowHeightPt: 'number' },
   'Sheet.updateHeaderFooter': {
@@ -4670,6 +4751,7 @@ const PATCH_FIELDS = Object.freeze({
     ...strings('presetGeometry', 'text'),
     ...bools('textBox', 'flipH', 'flipV'),
     rotationDeg: 'number',
+    adjustValues: 'object',
   },
   'Picture.update': {
     ...bools('flipH', 'flipV'),
@@ -5819,7 +5901,9 @@ function refuseUnknownKeys(where, patch, source = where, tables = PATCH_TABLES) 
       if (item === undefined) continue;
       const path = `${prefix}${key}`;
       if (!accepted.includes(key)) throw new TypeError(`${trail} has no field ${key}`);
-      if (Object.hasOwn(nested, path) && isObject(item)) visit(item, nested[path], `${path}.`, `${trail}.${key}`);
+      // A plain `Color` is a valid paint colour; only a `DrawingColor`-shaped record has keys to check.
+      if (Object.hasOwn(nested, path) && isObject(item) && !(PAINT_COLOR_PATH.test(path) && isPlainColor(item)))
+        visit(item, nested[path], `${path}.`, `${trail}.${key}`);
       const each = `${path}[]`;
       if (Object.hasOwn(nested, each) && Array.isArray(item)) {
         for (const [i, element] of item.entries()) {
@@ -6167,7 +6251,13 @@ const COLOR_INPUT_KEYS = new Set([
   'colorHigh',
   'colorLow',
   'fontColor',
+  'base',
 ]);
+
+// A chart or shape paint colour is a `DrawingColor` below the facade: a plain colour becomes `{ base }`.
+const PAINT_PARENT = /\.(?:fill|line)$/;
+const PAINT_COLOR_PATH = /(?:^|\.)(?:fill|line)\.color$/;
+const isPlainColor = (value) => isObject(value) && !('base' in value) && 'kind' in value;
 
 const asColor = (value, label) => (typeof value === 'string' ? formatColor(value, label) : value);
 
@@ -6189,7 +6279,9 @@ function colorInputs(value, label) {
   for (const [key, item] of Object.entries(value)) {
     const path = `${label}.${key}`;
     let next;
-    if (COLOR_INPUT_KEYS.has(key) && typeof item === 'string') next = formatColor(item, path);
+    if (key === 'color' && PAINT_PARENT.test(label) && (typeof item === 'string' || isPlainColor(item)))
+      next = { base: asColor(item, path) };
+    else if (COLOR_INPUT_KEYS.has(key) && typeof item === 'string') next = formatColor(item, path);
     else if (key === 'colors' && Array.isArray(item)) next = item.map((c, i) => asColor(c, `${path}[${i}]`));
     else if (CHART_SOURCE_KEYS.has(key) && isObject(item) && typeof item.kind === 'number' && 'formula' in item)
       next = chartSourceInput(item);

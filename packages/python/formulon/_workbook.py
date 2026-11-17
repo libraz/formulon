@@ -147,6 +147,8 @@ __all__ = [
     "ChartAxisCrosses",
     "ChartAxisKey",
     "ChartAxisKind",
+    "ChartAreaPaint",
+    "ChartAreaPaintPatch",
     "ChartAxisPatch",
     "ChartAxisPosition",
     "ChartAxisRef",
@@ -172,6 +174,10 @@ __all__ = [
     "ChartLegendPosition",
     "ChartLine",
     "ChartLineDash",
+    "ChartLineEnd",
+    "ChartLineEndInput",
+    "ChartLineEndSize",
+    "ChartLineEndType",
     "ChartLinePatch",
     "ChartMarker",
     "ChartMarkerPatch",
@@ -202,6 +208,7 @@ __all__ = [
     "ColorInput",
     "ColorKind",
     "ColorResolution",
+    "ColorTransform",
     "ColumnBreak",
     "ColumnLayout",
     "Comment",
@@ -221,6 +228,8 @@ __all__ = [
     "DisplayText",
     "DrawingAnchor",
     "DrawingAnchorInput",
+    "DrawingColor",
+    "DrawingColorInput",
     "DrawingObjectKind",
     "DrawingProperties",
     "Dxf",
@@ -350,7 +359,9 @@ __all__ = [
     "RowLayout",
     "SaveDiagnostics",
     "ShapeInput",
+    "ShapeConnection",
     "ShapeProperties",
+    "ShapeTextVert",
     "SheetComment",
     "SheetFormatDefaults",
     "SheetProtection",
@@ -2699,8 +2710,10 @@ class PictureProperties(ImageProperties):
     #: Clockwise rotation in degrees, as stored: 360 reads 360 and -90 reads -90.
     rotation_deg: float
     #: ``True`` when the picture is flipped horizontally.
+    #: Excel's Flip command toggles this flag and sets the rotation to (360 - r) mod 360.
     flip_h: bool
     #: ``True`` when the picture is flipped vertically.
+    #: Excel's Flip command toggles this flag and sets the rotation to (360 - r) mod 360.
     flip_v: bool
 
 
@@ -2747,6 +2760,16 @@ class DrawingProperties:
 
 
 @dataclass(frozen=True)
+class ShapeConnection:
+    """One glued end of a connector."""
+
+    #: The id of the shape the end is glued to, in the same drawing.
+    object_id: int
+    #: The connection site on that shape, from 0.
+    site_index: int
+
+
+@dataclass(frozen=True)
 class ShapeProperties:
     """The shape fields of a shape, connector or group; the anchor, name, description and visibility are on
     :class:`DrawingProperties`.
@@ -2769,9 +2792,20 @@ class ShapeProperties:
     #: Clockwise rotation in degrees, as stored: 360 reads 360 and -90 reads -90.
     rotation_deg: float
     #: ``True`` when the shape is flipped horizontally.
+    #: Excel's Flip command toggles this flag and sets the rotation to (360 - r) mod 360.
     flip_h: bool
     #: ``True`` when the shape is flipped vertically.
+    #: Excel's Flip command toggles this flag and sets the rotation to (360 - r) mod 360.
     flip_v: bool
+    #: The shape a connector's start is glued to; ``None`` when the start is free or the object is not a connector.
+    start_connection: Optional[ShapeConnection]
+    #: The shape a connector's end is glued to; ``None`` when the end is free or the object is not a connector.
+    end_connection: Optional[ShapeConnection]
+    #: The preset's adjust values stated as plain values, by guide name in document order, in the preset's raw
+    #: DrawingML units; a guide holding another formula is not listed.
+    adjust_values: Mapping[str, int]
+    #: The text direction; ``None`` when the shape states none, which Excel draws horizontal.
+    text_vert: Optional[ShapeTextVert]
 
 
 @dataclass
@@ -2814,9 +2848,17 @@ class ShapeInput(DrawingPlacementInput):
     #: +/-35791 degrees is an ``InvalidArgumentError``.
     rotation_deg: Optional[float] = None
     #: Whether the shape is flipped horizontally; ``None`` is not flipped.
+    #: Excel's Flip command toggles this flag and sets the rotation to (360 - r) mod 360.
     flip_h: Optional[bool] = None
     #: Whether the shape is flipped vertically; ``None`` is not flipped.
+    #: Excel's Flip command toggles this flag and sets the rotation to (360 - r) mod 360.
     flip_v: Optional[bool] = None
+    #: Adjust values by guide name, each a guide of the preset, in its raw DrawingML units; ``None`` writes none. An
+    #: empty, malformed or repeated name is an ``InvalidArgumentError``, and more than 64 entries a
+    #: ``SecurityError``.
+    adjust_values: Optional[Mapping[str, int]] = None
+    #: The text direction; ``None`` states none. A shape only.
+    text_vert: Optional[ShapeTextVert] = None
 
 
 @dataclass(frozen=True)
@@ -3205,13 +3247,51 @@ class ChartBarDirection(IntEnum):
 
 
 class ChartLineDash(IntEnum):
-    """Outline dash style."""
+    """Outline dash style; ``OTHER`` is a custom dash or a token the record cannot hold."""
 
     SOLID = 0
     DASH = 1
     DOT = 2
     DASH_DOT = 3
     OTHER = 4
+    SYS_DOT = 5
+    SYS_DASH = 6
+    LG_DASH = 7
+    LG_DASH_DOT = 8
+    LG_DASH_DOT_DOT = 9
+    SYS_DASH_DOT = 10
+    SYS_DASH_DOT_DOT = 11
+
+
+class ChartLineEndType(IntEnum):
+    """Decoration at one end of a line."""
+
+    NONE = 0
+    TRIANGLE = 1
+    STEALTH = 2
+    DIAMOND = 3
+    OVAL = 4
+    ARROW = 5
+
+
+class ChartLineEndSize(IntEnum):
+    """Width or length of a line end; ``MEDIUM`` is the default."""
+
+    MEDIUM = 0
+    SMALL = 1
+    LARGE = 2
+
+
+class ShapeTextVert(IntEnum):
+    """Text direction of a shape; a shape that states none draws ``HORZ``."""
+
+    HORZ = 0
+    VERT = 1
+    VERT270 = 2
+    EA_VERT = 3
+    WORD_ART_VERT = 4
+    WORD_ART_VERT_RTL = 5
+    MONGOLIAN_VERT = 6
 
 
 class ChartMarkerSymbol(IntEnum):
@@ -3297,26 +3377,96 @@ class ChartTitle:
 
 
 @dataclass(frozen=True)
+class ColorTransform:
+    """One colour transform child of a DrawingML colour (``lumMod``, ``shade``, ``alpha``, ...)."""
+
+    #: The element's local name: a letter, then letters and digits, at most 32 characters.
+    name: str
+    #: The ``val`` attribute in the element's DrawingML unit (thousandths of a percent for most); ``None`` for an
+    #: element without one.
+    value: Optional[int] = None
+
+
+@dataclass(frozen=True)
+class DrawingColor:
+    """A DrawingML colour as the file states it: a base colour, its transforms in document order (``alpha``
+    included) and the colour and opacity Excel renders for them.
+
+    On input ``resolved`` and ``resolved_transparency_pct`` are ignored. A theme base with a non-zero ``tint`` is the
+    shorthand for its ``lumMod`` / ``lumOff`` pair and cannot sit beside transforms.
+    """
+
+    #: The base colour: RGB or theme.
+    base: Color
+    #: The transforms in document order.
+    transforms: List[ColorTransform] = field(default_factory=list)
+    #: The colour Excel renders, opaque; ``None`` when a transform is one the engine does not model.
+    resolved: Optional[ResolvedColor] = None
+    #: The transparency Excel renders as a percentage (0..100), 0 without an ``alpha`` transform; ``None`` when an
+    #: opacity transform is one the engine does not model or ``resolved`` is ``None``.
+    resolved_transparency_pct: Optional[float] = None
+
+
+@dataclass
+class DrawingColorInput:
+    """A colour with transforms for a fill or outline; a plain ``ColorInput`` stands for a base with none.
+
+    A :class:`DrawingColor` read back is accepted in its place; its ``resolved`` and ``resolved_transparency_pct``
+    are ignored.
+    """
+
+    #: The base colour, an RGB or theme colour.
+    base: ColorInput
+    #: The transforms in document order.
+    transforms: Sequence[ColorTransform] = ()
+
+
+@dataclass(frozen=True)
 class ChartFill:
     """Solid fill of a chart element."""
 
-    #: The solid fill colour, an RGB or theme colour; ``None`` when the element states none.
-    color: Optional[Color] = None
+    #: The solid fill colour; ``None`` when the element states none.
+    color: Optional[DrawingColor] = None
     #: The fill transparency as a percentage (0..100); ``None`` when the colour has no alpha.
     transparency_pct: Optional[float] = None
     #: ``True`` for an explicit no-fill.
     none: bool = False
-    #: ``True`` on a read when the stored paint cannot be stated by this record (a gradient, pattern or picture); read
-    #: only.
+    #: ``True`` on a read when the stored paint cannot be stated by this record (a gradient, pattern or picture, or a
+    #: colour element it cannot hold); read only.
     other: bool = False
+
+
+@dataclass(frozen=True)
+class ChartLineEnd:
+    """Decoration at one end of a line; drawn only on open geometry."""
+
+    #: The decoration.
+    type: ChartLineEndType
+    #: The decoration's width; ``None`` when the end states none (drawn medium).
+    width: Optional[ChartLineEndSize] = None
+    #: The decoration's length; ``None`` when the end states none (drawn medium).
+    length: Optional[ChartLineEndSize] = None
+
+
+@dataclass
+class ChartLineEndInput:
+    """A line end to set; an omitted size states none (drawn medium). A :class:`ChartLineEnd` read back is accepted
+    in its place."""
+
+    #: The decoration.
+    type: ChartLineEndType
+    #: The decoration's width.
+    width: Optional[ChartLineEndSize] = None
+    #: The decoration's length.
+    length: Optional[ChartLineEndSize] = None
 
 
 @dataclass(frozen=True)
 class ChartLine:
     """Outline of a chart element."""
 
-    #: The outline colour, an RGB or theme colour; ``None`` when the element states none.
-    color: Optional[Color] = None
+    #: The outline colour; ``None`` when the element states none.
+    color: Optional[DrawingColor] = None
     #: The outline transparency as a percentage (0..100); ``None`` when the colour has no alpha.
     transparency_pct: Optional[float] = None
     #: The outline width in points; ``None`` when the element states none.
@@ -3325,8 +3475,24 @@ class ChartLine:
     dash: Optional[ChartLineDash] = None
     #: ``True`` for an explicit no-line.
     none: bool = False
-    #: ``True`` on a read when the outline fill cannot be stated by this record (a gradient or pattern); read only.
+    #: ``True`` on a read when the outline fill cannot be stated by this record (a gradient, pattern or a colour
+    #: element it cannot hold); read only.
     other: bool = False
+    #: The decoration at the line's start; ``None`` when the outline states none.
+    head_end: Optional[ChartLineEnd] = None
+    #: The decoration at the line's end; ``None`` when the outline states none.
+    tail_end: Optional[ChartLineEnd] = None
+
+
+@dataclass(frozen=True)
+class ChartAreaPaint:
+    """The paint of the chart area or the plot area; a ``None`` member is stated by the file as nothing and the chart
+    style supplies it."""
+
+    #: The area's fill.
+    fill: Optional[ChartFill]
+    #: The area's outline.
+    line: Optional[ChartLine]
 
 
 @dataclass(frozen=True)
@@ -3654,6 +3820,10 @@ class ChartProperties:
     source: Optional[ChartSource]
     #: ``True`` when ``#N/A`` points draw as blank cells; ``None`` when the chart carries no setting.
     na_as_blank: Optional[bool]
+    #: The paint of the chart area.
+    chart_area: ChartAreaPaint
+    #: The paint of the plot area.
+    plot_area: ChartAreaPaint
 
 
 @dataclass(frozen=True)
@@ -3764,8 +3934,8 @@ class ChartData:
 class ChartFillPatch(TypedDict, total=False):
     """Fill patch: an omitted key is kept, ``None`` removes the element; a colour is an RGB or theme ``ColorInput`` (indexed and automatic are rejected)."""
 
-    #: The solid fill colour, an RGB or theme colour. Omitted keeps it, ``None`` removes it.
-    color: Optional[ColorInput]
+    #: The solid fill colour, an RGB or theme colour with optional transforms. Omitted keeps it, ``None`` removes it.
+    color: Optional[Union[ColorInput, DrawingColorInput, DrawingColor]]
     #: The fill transparency as a percentage, 0 to 100. Omitted keeps it, ``None`` removes it.
     transparency_pct: Optional[float]
     #: ``True`` writes an explicit no-fill and ``False`` removes it; omitted keeps it, ``None`` is rejected.
@@ -3773,10 +3943,13 @@ class ChartFillPatch(TypedDict, total=False):
 
 
 class ChartLinePatch(TypedDict, total=False):
-    """Outline patch; a colour is an RGB or theme ``ColorInput`` (indexed and automatic are rejected)."""
+    """Outline patch; a colour is an RGB or theme ``ColorInput`` (indexed and automatic are rejected).
 
-    #: The outline colour, an RGB or theme colour. Omitted keeps it, ``None`` removes it.
-    color: Optional[ColorInput]
+    A line end is drawn only on open geometry (lines, connectors, arcs); a closed shape keeps it and ignores it.
+    """
+
+    #: The outline colour, an RGB or theme colour with optional transforms. Omitted keeps it, ``None`` removes it.
+    color: Optional[Union[ColorInput, DrawingColorInput, DrawingColor]]
     #: The outline transparency as a percentage, 0 to 100. Omitted keeps it, ``None`` removes it.
     transparency_pct: Optional[float]
     #: The outline width in points. Omitted keeps it, ``None`` removes it.
@@ -3785,6 +3958,19 @@ class ChartLinePatch(TypedDict, total=False):
     dash: Optional[ChartLineDash]
     #: ``True`` writes an explicit no-line and ``False`` removes it. Omitted keeps it; ``None`` is rejected.
     none: Optional[bool]
+    #: The decoration at the line's start; it replaces the stored one whole. Omitted keeps it, ``None`` removes it.
+    head_end: Optional[Union[ChartLineEndInput, ChartLineEnd]]
+    #: The decoration at the line's end; it replaces the stored one whole. Omitted keeps it, ``None`` removes it.
+    tail_end: Optional[Union[ChartLineEndInput, ChartLineEnd]]
+
+
+class ChartAreaPaintPatch(TypedDict, total=False):
+    """Paint patch of the chart area or the plot area; the area itself cannot be removed."""
+
+    #: The patch applied to the area's fill. Omitted keeps it, ``None`` removes it.
+    fill: Optional[ChartFillPatch]
+    #: The patch applied to the area's outline. Omitted keeps it, ``None`` removes it.
+    line: Optional[ChartLinePatch]
 
 
 class ChartMarkerPatch(TypedDict, total=False):
@@ -3972,6 +4158,10 @@ class ChartDisplayPatch(TypedDict, total=False):
     na_as_blank: Optional[bool]
     #: The chart style number, 1 to 48. Omitted keeps it, ``None`` removes it.
     style: Optional[int]
+    #: The patch applied to the chart area's paint. Omitted keeps it; ``None`` is rejected.
+    chart_area: ChartAreaPaintPatch
+    #: The patch applied to the plot area's paint. Omitted keeps it; ``None`` is rejected.
+    plot_area: ChartAreaPaintPatch
 
 
 @dataclass(frozen=True)
@@ -7375,6 +7565,48 @@ def _placement_fields(scope: _ArgScope, placement: Optional[DrawingPlacementInpu
     return fields
 
 
+def _drawing_color_fields(value: object, label: str, scope: _ArgScope) -> Dict[str, Any]:
+    """The ``fm_drawing_color_t`` fields of a colour: a ``ColorInput``, a :class:`DrawingColor` or a
+    :class:`DrawingColorInput`; ``resolved`` and ``resolved_transparency_pct`` are never written."""
+    transforms: Sequence[Any] = ()
+    if isinstance(value, (DrawingColor, DrawingColorInput)):
+        base, transforms = value.base, value.transforms
+    else:
+        base = value
+    fields: Dict[str, Any] = {"base": _color_fields(color_input(base, label + ".base" if transforms else label))}
+    if isinstance(transforms, (str, bytes)) or not isinstance(transforms, Sequence):
+        raise TypeError(_argument_message(label + ".transforms", "must be a sequence"))
+    if transforms:
+        array = scope.struct_array(S.COLOR_TRANSFORM, len(transforms))
+        for i, entry in enumerate(transforms):
+            where = f"{label}.transforms[{i}]"
+            if not isinstance(entry, ColorTransform):
+                raise TypeError(_argument_message(where, "must be a ColorTransform"))
+            if not isinstance(entry.name, str):
+                raise TypeError(_argument_message(where + ".name", "must be a str"))
+            slot: Dict[str, Any] = {"name": scope.cstr(entry.name)}
+            if entry.value is not None:
+                slot["has_value"] = 1
+                slot["value"] = _sint(entry.value, where + ".value")
+            S.COLOR_TRANSFORM.pack(LIB, array + i * S.COLOR_TRANSFORM.size, slot)
+        fields["transforms"] = array
+        fields["transform_count"] = len(transforms)
+    return fields
+
+
+def _line_end_fields(value: object, label: str) -> Dict[str, Any]:
+    """The ``fm_chart_line_end_t`` fields of a :class:`ChartLineEnd` or :class:`ChartLineEndInput`."""
+    if not isinstance(value, (ChartLineEnd, ChartLineEndInput)):
+        raise TypeError(_argument_message(label, "must be a ChartLineEnd, a ChartLineEndInput or None"))
+    fields: Dict[str, Any] = {"type": _sint(value.type, label + ".type")}
+    for key in ("width", "length"):
+        size = getattr(value, key)
+        if size is not None:
+            fields["has_" + key] = 1
+            fields[key] = _sint(size, f"{label}.{key}")
+    return fields
+
+
 def _chart_fill_fields(fill: Optional[ChartFill], scope: _ArgScope) -> Dict[str, Any]:
     """The ``fm_chart_fill_t`` fields of ``fill``; ``None`` is the all-zero record (the style's fill)."""
     if fill is None:
@@ -7383,7 +7615,7 @@ def _chart_fill_fields(fill: Optional[ChartFill], scope: _ArgScope) -> Dict[str,
         raise TypeError(f"fill must be a ChartFill or None, got {type(fill).__name__}")
     fields: Dict[str, Any] = {"none": _require_bool(fill.none, "none"), "other": _require_bool(fill.other, "other")}
     if fill.color is not None:
-        fields["color"] = _color_fields(color_input(fill.color, "fill.color"))
+        fields["color"] = _drawing_color_fields(fill.color, "fill.color", scope)
     if fill.transparency_pct is not None:
         fields["has_transparency_pct"] = 1
         fields["transparency_pct"] = _finite(fill.transparency_pct, "fill.transparency_pct")
@@ -7398,7 +7630,7 @@ def _chart_line_fields(line: Optional[ChartLine], scope: _ArgScope) -> Dict[str,
         raise TypeError(f"line must be a ChartLine or None, got {type(line).__name__}")
     fields: Dict[str, Any] = {"none": _require_bool(line.none, "none"), "other": _require_bool(line.other, "other")}
     if line.color is not None:
-        fields["color"] = _color_fields(color_input(line.color, "line.color"))
+        fields["color"] = _drawing_color_fields(line.color, "line.color", scope)
     if line.transparency_pct is not None:
         fields["has_transparency_pct"] = 1
         fields["transparency_pct"] = _finite(line.transparency_pct, "line.transparency_pct")
@@ -7408,6 +7640,11 @@ def _chart_line_fields(line: Optional[ChartLine], scope: _ArgScope) -> Dict[str,
     if line.dash is not None:
         fields["has_dash"] = 1
         fields["dash"] = _sint(line.dash, "line.dash")
+    for key in ("head_end", "tail_end"):
+        end = getattr(line, key)
+        if end is not None:
+            fields["has_" + key] = 1
+            fields[key] = _line_end_fields(end, "line." + key)
     return fields
 
 
@@ -7435,6 +7672,30 @@ def _shape_paint_patch(name: str, value: object, scope: _ArgScope, *, clear: boo
     return _encode_clearable_patch(spec, clearable, value, f"{name} patch", scope, _PAINT_PATCH_READ_ONLY)
 
 
+def _adjust_array(scope: _ArgScope, adjust_values: object, *, patch: bool) -> Dict[str, Any]:
+    """The ``adjust_values`` pointer and count of a shape spec or patch.
+
+    A patch maps a name to its new value or ``None`` (remove the guide); a spec maps a name to its value.
+    """
+    if not isinstance(adjust_values, Mapping):
+        raise TypeError(_argument_message("adjust_values", "must be a mapping of guide name to value"))
+    if not adjust_values:
+        return {}
+    layout = S.SHAPE_ADJUST_PATCH if patch else S.SHAPE_ADJUST
+    array = scope.struct_array(layout, len(adjust_values))
+    for i, (name, value) in enumerate(adjust_values.items()):
+        if not isinstance(name, str):
+            raise TypeError(_argument_message("adjust_values", "has a key that is not a str"))
+        where = f"adjust_values.{name}"
+        slot: Dict[str, Any] = {"name": scope.cstr(name)}
+        if patch:
+            slot["value_op"] = _PATCH_CLEAR if value is None else _PATCH_SET
+        if value is not None or not patch:
+            slot["value"] = _sint(value, where)
+        layout.pack(LIB, array + i * layout.size, slot)
+    return {"adjust_values": array, "adjust_values_count": len(adjust_values)}
+
+
 def _pack_shape_spec(scope: _ArgScope, spec: ShapeInput) -> int:
     """Build an ``fm_shape_spec_t`` from a :class:`ShapeInput`; a ``None`` field is left at its zero default."""
     if not isinstance(spec, ShapeInput):
@@ -7455,6 +7716,11 @@ def _pack_shape_spec(scope: _ArgScope, spec: ShapeInput) -> int:
         flag = getattr(spec, name)
         if flag is not None:
             values[name] = _tristate_default(_require_bool(flag, name))
+    if spec.adjust_values is not None:
+        values.update(_adjust_array(scope, spec.adjust_values, patch=False))
+    if spec.text_vert is not None:
+        values["has_text_vert"] = 1
+        values["text_vert"] = _sint(spec.text_vert, "text_vert")
     S.SHAPE_SPEC.pack(LIB, ptr, values)
     return ptr
 
@@ -7469,10 +7735,12 @@ def _pack_shape_patch(
     rotation_deg,
     flip_h=None,
     flip_v=None,
+    adjust_values=None,
+    text_vert=None,
     clear: Sequence[str] = (),
 ) -> int:
     """Build an ``fm_shape_patch_t``; a ``None`` argument is a field left ``KEEP``, a name in ``clear``
-    (``"fill"`` or ``"line"``) removes the shape's own paint.
+    (``"fill"``, ``"line"`` or ``"text_vert"``) removes the shape's own paint or text direction.
 
     ``fill`` / ``line`` are a :class:`ChartFill` / :class:`ChartLine` or a patch mapping (see
     :func:`_shape_paint_patch`); ``rotation_deg`` is in degrees.
@@ -7498,6 +7766,13 @@ def _pack_shape_patch(
         if flag is not None:
             values[name + "_op"] = _PATCH_SET
             values[name] = int(_require_bool(flag, name))
+    if adjust_values is not None:
+        values.update(_adjust_array(scope, adjust_values, patch=True))
+    if "text_vert" in clear:
+        values["text_vert_op"] = _PATCH_CLEAR
+    elif text_vert is not None:
+        values["text_vert_op"] = _PATCH_SET
+        values["text_vert"] = _sint(text_vert, "text_vert")
     S.SHAPE_PATCH.pack(LIB, ptr, values)
     return ptr
 
@@ -7758,19 +8033,21 @@ _CHART_ROLES = ("name", "categories", "values", "x", "y", "size")
 
 # (patch key, C field, scalar kind) per patch struct.
 _FILL_PATCH_SPEC = (
-    ("color", "color", "color"),
+    ("color", "color", "drawing_color"),
     ("transparency_pct", "transparency_pct", "f64"),
     ("none", "none", "bool"),
 )
 _LINE_PATCH_SPEC = (
-    ("color", "color", "color"),
+    ("color", "color", "drawing_color"),
     ("transparency_pct", "transparency_pct", "f64"),
     ("width_pt", "width_pt", "f64"),
     ("dash", "dash", "i32"),
     ("none", "none", "bool"),
+    ("head_end", "head_end", "line_end"),
+    ("tail_end", "tail_end", "line_end"),
 )
 _FILL_PATCH_CLEARABLE = ("color", "transparency_pct")
-_LINE_PATCH_CLEARABLE = ("color", "transparency_pct", "width_pt", "dash")
+_LINE_PATCH_CLEARABLE = ("color", "transparency_pct", "width_pt", "dash", "head_end", "tail_end")
 # The key a fill or line read back carries that a patch passes through and the engine ignores.
 _PAINT_PATCH_READ_ONLY = ("other",)
 _MARKER_PATCH_SPEC = (("symbol", "symbol", "i32"), ("size_pt", "size_pt", "f64"))
@@ -7827,6 +8104,7 @@ _DISPLAY_PATCH_SPEC = (
     ("na_as_blank", "na_as_blank", "bool"),
     ("style", "style", "i32"),
 )
+_DISPLAY_AREA_KEYS = ("chart_area", "plot_area")
 _SERIES_REF_KEYS = ("name", "categories", "values", "x", "y", "size")
 
 
@@ -7870,9 +8148,47 @@ def _read_chart_title(d: Dict[str, object]) -> Optional[ChartTitle]:
     )
 
 
+def _read_drawing_color(d: Dict[str, object]) -> Optional[DrawingColor]:
+    """A :class:`DrawingColor` from a decoded ``fm_drawing_color_t``; ``None`` for the absent colour.
+
+    The transforms are copied out of the engine's memory, which is valid only until the next read.
+    """
+    base = _optional_color_from(d["base"])
+    if base is None:
+        return None
+    count = d["transform_count"]
+    transforms: List[ColorTransform] = []
+    if count:
+        size = S.COLOR_TRANSFORM.size
+        raw = LIB.read_bytes(d["transforms"], size * count)
+        for i in range(count):
+            t = S.COLOR_TRANSFORM.unpack_from(raw, i * size)
+            transforms.append(ColorTransform(LIB.read_cstr(t["name"]), t["value"] if t["has_value"] else None))
+    return DrawingColor(
+        base=base,
+        transforms=transforms,
+        resolved=ResolvedColor(d["resolved"], ColorResolution.EXACT) if d["has_resolved"] else None,
+        resolved_transparency_pct=d["resolved_transparency_pct"] if d["has_resolved_transparency_pct"] else None,
+    )
+
+
+def _read_line_end(d: Dict[str, object]) -> ChartLineEnd:
+    return ChartLineEnd(
+        type=_enum(ChartLineEndType, d["type"]),
+        width=_enum(ChartLineEndSize, d["width"]) if d["has_width"] else None,
+        length=_enum(ChartLineEndSize, d["length"]) if d["has_length"] else None,
+    )
+
+
+def _read_chart_area(d: Dict[str, object]) -> ChartAreaPaint:
+    return ChartAreaPaint(
+        fill=_shape_paint_read(_read_chart_fill(d["fill"])), line=_shape_paint_read(_read_chart_line(d["line"]))
+    )
+
+
 def _read_chart_fill(d: Dict[str, object]) -> ChartFill:
     return ChartFill(
-        color=_optional_color_from(d["color"]),
+        color=_read_drawing_color(d["color"]),
         transparency_pct=d["transparency_pct"] if d["has_transparency_pct"] else None,
         none=bool(d["none"]),
         other=bool(d["other"]),
@@ -7881,12 +8197,14 @@ def _read_chart_fill(d: Dict[str, object]) -> ChartFill:
 
 def _read_chart_line(d: Dict[str, object]) -> ChartLine:
     return ChartLine(
-        color=_optional_color_from(d["color"]),
+        color=_read_drawing_color(d["color"]),
         transparency_pct=d["transparency_pct"] if d["has_transparency_pct"] else None,
         width_pt=d["width_pt"] if d["has_width_pt"] else None,
         dash=_enum(ChartLineDash, d["dash"]) if d["has_dash"] else None,
         none=bool(d["none"]),
         other=bool(d["other"]),
+        head_end=_read_line_end(d["head_end"]) if d["has_head_end"] else None,
+        tail_end=_read_line_end(d["tail_end"]) if d["has_tail_end"] else None,
     )
 
 
@@ -8045,6 +8363,8 @@ def _read_chart(chart: int, workbook: Workbook, sheet: int) -> ChartProperties:
             ],
         ),
         source=source,
+        chart_area=_read_chart_area(d["chart_area"]),
+        plot_area=_read_chart_area(d["plot_area"]),
     )
 
 
@@ -8161,6 +8481,10 @@ def _patch_scalar(kind: str, value, key: str, scope: _ArgScope, path: str = ""):
         return _uint(value, key)
     if kind == "color":
         return _color_fields(color_input(value, key))
+    if kind == "drawing_color":
+        return _drawing_color_fields(value, key, scope)
+    if kind == "line_end":
+        return _line_end_fields(value, key)
     if kind == "i32":
         return _sint(value, key)
     if kind == "bool":
@@ -8228,6 +8552,27 @@ def _encode_paint_patches(out: Dict[str, object], patch: Mapping, scope: _ArgSco
     and a record or patch mapping applies as in :func:`_shape_paint_patch`."""
     for name in ("fill", "line"):
         out[name] = _shape_paint_patch(name, patch.get(name), scope, clear=name in patch and patch[name] is None)
+
+
+def _encode_display_patch(patch: Mapping, scope: _ArgScope) -> Dict[str, object]:
+    """Encode a :class:`ChartDisplayPatch`: the flat members, then the nested ``chart_area`` / ``plot_area`` paints.
+
+    The area keys cannot be removed, so ``None`` on one is a ``TypeError``.
+    """
+    out = _encode_patch(_DISPLAY_PATCH_SPEC, patch, _DISPLAY_AREA_KEYS, "display patch", scope)
+    for area in _DISPLAY_AREA_KEYS:
+        if area not in patch:
+            continue
+        value = patch[area]
+        if not isinstance(value, Mapping):
+            raise TypeError(_argument_message(area, "must be a ChartAreaPaintPatch"))
+        unknown = set(value) - {"fill", "line"}
+        if unknown:
+            raise TypeError(_argument_message(area, f"has no field {sorted(unknown)[0]}"))
+        nested: Dict[str, object] = {}
+        _encode_paint_patches(nested, value, scope)
+        out[area] = nested
+    return out
 
 
 def _encode_marker_patch(patch: Mapping, scope: _ArgScope) -> Dict[str, object]:
@@ -8618,7 +8963,28 @@ def _shape_from(d: Dict[str, Any]) -> ShapeProperties:
         rotation_deg=d["rotation_deg"],
         flip_h=bool(d["flip_h"]),
         flip_v=bool(d["flip_v"]),
+        start_connection=_read_connection(d["start_connection"]) if d["has_start_connection"] else None,
+        end_connection=_read_connection(d["end_connection"]) if d["has_end_connection"] else None,
+        adjust_values=_read_adjust_values(d["adjust_values"], d["adjust_values_count"]),
+        text_vert=None if d["text_vert"] < 0 else _enum(ShapeTextVert, d["text_vert"]),
     )
+
+
+def _read_connection(d: Dict[str, Any]) -> ShapeConnection:
+    return ShapeConnection(object_id=d["object_id"], site_index=d["site_index"])
+
+
+def _read_adjust_values(ptr: int, count: int) -> Dict[str, int]:
+    """Copy the shape's adjust values out of the engine's memory, valid only until the next read."""
+    if not count:
+        return {}
+    size = S.SHAPE_ADJUST.size
+    raw = LIB.read_bytes(ptr, size * count)
+    out: Dict[str, int] = {}
+    for i in range(count):
+        a = S.SHAPE_ADJUST.unpack_from(raw, i * size)
+        out[LIB.read_cstr(a["name"])] = a["value"]
+    return out
 
 
 def _shape_paint_read(record: Union[ChartFill, ChartLine]) -> Optional[Union[ChartFill, ChartLine]]:
@@ -8630,6 +8996,8 @@ def _shape_paint_read(record: Union[ChartFill, ChartLine]) -> Optional[Union[Cha
         or record.transparency_pct is not None
         or getattr(record, "width_pt", None) is not None
         or getattr(record, "dash", None) is not None
+        or getattr(record, "head_end", None) is not None
+        or getattr(record, "tail_end", None) is not None
     )
     return record if stated else None
 

@@ -75,7 +75,7 @@ test('shapes insert, list, update, remove and round-trip', async () => {
   assert.equal(props[0].anchor.kind, mod.AnchorKind.TwoCell);
   assert.equal(props[0].anchor.toCol, 4);
   assert.equal(props[0].fill.none, false);
-  assert.equal(props[0].fill.color.argb, 0xffff0000);
+  assert.equal(props[0].fill.color.base.argb, 0xffff0000);
   assert.equal(props[0].line.none, true);
   assert.equal(props[0].rotationDeg, 15);
   assert.equal(props[0].hidden, false);
@@ -83,7 +83,7 @@ test('shapes insert, list, update, remove and round-trip', async () => {
   assert.equal(props[1].anchor.kind, mod.AnchorKind.OneCell);
   assert.equal(props[1].anchor.fromColOffsetEmu, 500);
   assert.equal(props[1].anchor.widthEmu, 914400);
-  assert.equal(props[1].line.color.argb, 0xff00ff00);
+  assert.equal(props[1].line.color.base.argb, 0xff00ff00);
   assert.equal(props[1].line.widthPt, 1.5);
   assert.equal(props[1].fill, null);
 

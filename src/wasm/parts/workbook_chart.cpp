@@ -8,7 +8,6 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
-#include <deque>
 #include <iterator>
 #include <string>
 #include <utility>
@@ -33,7 +32,20 @@ void store(void* base, size_t off, T v) {
 
 // ---- Patch input ----------------------------------------------------
 
-enum class Wr : uint8_t { kU32, kI32, kF64, kBool, kStr, kTitle, kColor, kSource, kObj, kObjOp };
+enum class Wr : uint8_t {
+  kU32,
+  kI32,
+  kF64,
+  kBool,
+  kStr,
+  kTitle,
+  kColor,
+  kDrawingColor,
+  kLineEnd,
+  kSource,
+  kObj,
+  kObjOp
+};
 
 /// One input property: the `_op` and value slots in the C patch struct. A `kObj` nests without an op,
 /// a `kObjOp` carries one, a `kSource` value is an `fm_chart_data_source_spec_t`.
@@ -60,18 +72,20 @@ struct WrField {
 // clang-format on
 
 constexpr WrField kFillWr[] = {
-    WRN("color", fm_chart_fill_patch_t, kColor, color_op, color),
+    WRN("color", fm_chart_fill_patch_t, kDrawingColor, color_op, color),
     WRN("transparencyPct", fm_chart_fill_patch_t, kF64, transparency_pct_op, transparency_pct),
     WR("none", fm_chart_fill_patch_t, kBool, none_op, none),
     WR_END,
 };
 
 constexpr WrField kLineWr[] = {
-    WRN("color", fm_chart_line_patch_t, kColor, color_op, color),
+    WRN("color", fm_chart_line_patch_t, kDrawingColor, color_op, color),
     WRN("transparencyPct", fm_chart_line_patch_t, kF64, transparency_pct_op, transparency_pct),
     WRN("widthPt", fm_chart_line_patch_t, kF64, width_pt_op, width_pt),
     WRN("dash", fm_chart_line_patch_t, kI32, dash_op, dash),
     WR("none", fm_chart_line_patch_t, kBool, none_op, none),
+    WRN("headEnd", fm_chart_line_patch_t, kLineEnd, head_end_op, head_end),
+    WRN("tailEnd", fm_chart_line_patch_t, kLineEnd, tail_end_op, tail_end),
     WR_END,
 };
 
@@ -150,18 +164,100 @@ constexpr WrField kAxisWr[] = {
     WR_END,
 };
 
+constexpr WrField kAreaWr[] = {
+    WRN_OBJ("fill", fm_chart_area_paint_patch_t, fill, kFillWr),
+    WRN_OBJ("line", fm_chart_area_paint_patch_t, line, kLineWr),
+    WR_END,
+};
+
 constexpr WrField kDisplayWr[] = {
     WRN("blanksAs", fm_chart_display_patch_t, kI32, blanks_as_op, blanks_as),
     WRN("plotVisibleOnly", fm_chart_display_patch_t, kBool, plot_visible_only_op, plot_visible_only),
     WRN("naAsBlank", fm_chart_display_patch_t, kBool, na_as_blank_op, na_as_blank),
     WRN("style", fm_chart_display_patch_t, kI32, style_op, style),
+    WR_OBJ("chartArea", fm_chart_display_patch_t, chart_area, kAreaWr),
+    WR_OBJ("plotArea", fm_chart_display_patch_t, plot_area, kAreaWr),
     WR_END,
 };
 
-/// Keeps the bytes behind the `const char*` fields of a patch, and the literal points of its sources, alive.
-struct Arena : std::deque<std::string> {
-  std::deque<std::vector<fm_chart_literal_info_t>> literals;
-};
+using Arena = ChartPatchArena;
+
+/// A `ChartLineEndInput`: `type` is required, a `width` or `length` left out or `null` is none.
+fm_chart_line_end_t read_line_end(JsNarrowNumericReader& r, const val& v, const char* field) {
+  fm_chart_line_end_t end{};
+  if (!r.require_object(v, field)) {
+    return end;
+  }
+  const std::string type_path = std::string(field) + ".type";
+  const val type = r.value(v, "type", type_path.c_str());
+  if (!r.ok()) {
+    return end;
+  }
+  if (!js_value_present(type)) {
+    r.fail_required(type_path.c_str());
+    return end;
+  }
+  end.type = r.i32_value(type, 0, type_path.c_str());
+  const std::string width_path = std::string(field) + ".width";
+  const val width = r.value(v, "width", width_path.c_str());
+  if (r.ok() && js_value_present(width)) {
+    end.has_width = 1;
+    end.width = r.i32_value(width, 0, width_path.c_str());
+  }
+  const std::string length_path = std::string(field) + ".length";
+  const val length = r.value(v, "length", length_path.c_str());
+  if (r.ok() && js_value_present(length)) {
+    end.has_length = 1;
+    end.length = r.i32_value(length, 0, length_path.c_str());
+  }
+  return end;
+}
+
+/// A `DrawingColorInput`: a `Color`, or `{ base, transforms? }`. The `resolved*` keys of a read-back are not read.
+fm_drawing_color_t read_drawing_color(JsNarrowNumericReader& r, Arena& arena, const val& v, const char* field) {
+  fm_drawing_color_t out{};
+  if (!r.require_object(v, field)) {
+    return out;
+  }
+  const std::string base_path = std::string(field) + ".base";
+  const val base = r.value(v, "base", base_path.c_str());
+  if (!r.ok()) {
+    return out;
+  }
+  if (!js_value_present(base)) {
+    out.base = js_pull_color_spec_value(v, field, &r);
+    return out;
+  }
+  out.base = js_pull_color_spec_value(base, base_path.c_str(), &r);
+  const std::string list_path = std::string(field) + ".transforms";
+  const val list = r.value(v, "transforms", list_path.c_str());
+  if (!r.ok() || !js_value_present(list) || !r.require_array(list, list_path.c_str())) {
+    return out;
+  }
+  const std::string item_path = list_path + "[]";
+  const uint32_t n = r.length(list, list_path.c_str());
+  std::vector<fm_color_transform_t> items;
+  for (uint32_t i = 0; i < n && r.ok(); ++i) {
+    const val item = r.array_element(list, i, item_path.c_str());
+    if (!r.require_object(item, item_path.c_str())) {
+      break;
+    }
+    fm_color_transform_t t{};
+    arena.push_back(r.required_string(item, "name", (item_path + ".name").c_str()));
+    t.name = arena.back().c_str();
+    const std::string value_path = item_path + ".value";
+    const val value = r.value(item, "value", value_path.c_str());
+    if (r.ok() && js_value_present(value)) {
+      t.has_value = 1;
+      t.value = r.i32_value(value, 0, value_path.c_str());
+    }
+    items.push_back(t);
+  }
+  arena.transforms.push_back(std::move(items));
+  out.transforms = arena.transforms.back().empty() ? nullptr : arena.transforms.back().data();
+  out.transform_count = static_cast<uint32_t>(arena.transforms.back().size());
+  return out;
+}
 
 /// A series input: reference text (an empty one is refused), or the read-back shape `{ kind, formula, literal }`.
 fm_chart_data_source_spec_t read_source(JsNarrowNumericReader& r, Arena& arena, const val& v, const char* field) {
@@ -283,6 +379,12 @@ void read_patch(JsNarrowNumericReader& r, Arena& arena, const val& owner, void* 
           case Wr::kColor:
             store(base, f->value, js_pull_color_spec_value(v, field, &r));
             break;
+          case Wr::kDrawingColor:
+            store(base, f->value, read_drawing_color(r, arena, v, field));
+            break;
+          case Wr::kLineEnd:
+            store(base, f->value, read_line_end(r, v, field));
+            break;
           default:
             arena.push_back(r.string_value(v, field));
             store(base, f->value, arena.back().c_str());
@@ -394,6 +496,8 @@ constexpr RecSlot kLineRec[] = {
     REC_OPT(fm_chart_line_t, has_width_pt, width_pt),
     REC_OPT(fm_chart_line_t, has_dash, dash),
     REC(fm_chart_line_t, none),
+    REC_OPT(fm_chart_line_t, has_head_end, head_end),
+    REC_OPT(fm_chart_line_t, has_tail_end, tail_end),
 };
 static_assert(std::size(kLineRec) + 1U == std::size(kLineWr), "one record slot per line patch member");
 
@@ -417,29 +521,27 @@ void patch_to_record(const void* patch, const WrField* f, const RecSlot* slot, v
 
 // ---- Paint records ----------------------------------------------------
 
-void pull_chart_fill_patch(JsNarrowNumericReader& reader, const val& owner, const char* param,
+void pull_chart_fill_patch(JsNarrowNumericReader& reader, Arena& arena, const val& owner, const char* param,
                            fm_chart_fill_patch_t* out) {
-  Arena arena;
   read_patch(reader, arena, owner, out, kFillKeyWr, param);
 }
 
-void pull_chart_line_patch(JsNarrowNumericReader& reader, const val& owner, const char* param,
+void pull_chart_line_patch(JsNarrowNumericReader& reader, Arena& arena, const val& owner, const char* param,
                            fm_chart_line_patch_t* out) {
-  Arena arena;
   read_patch(reader, arena, owner, out, kLineKeyWr, param);
 }
 
-fm_chart_fill_t pull_chart_fill(JsNarrowNumericReader& reader, const val& owner, const char* param) {
+fm_chart_fill_t pull_chart_fill(JsNarrowNumericReader& reader, Arena& arena, const val& owner, const char* param) {
   fm_chart_fill_patch_t p{};
-  pull_chart_fill_patch(reader, owner, param, &p);
+  pull_chart_fill_patch(reader, arena, owner, param, &p);
   fm_chart_fill_t out{};
   patch_to_record(&p, kFillWr, kFillRec, &out);
   return out;
 }
 
-fm_chart_line_t pull_chart_line(JsNarrowNumericReader& reader, const val& owner, const char* param) {
+fm_chart_line_t pull_chart_line(JsNarrowNumericReader& reader, Arena& arena, const val& owner, const char* param) {
   fm_chart_line_patch_t p{};
-  pull_chart_line_patch(reader, owner, param, &p);
+  pull_chart_line_patch(reader, arena, owner, param, &p);
   fm_chart_line_t out{};
   patch_to_record(&p, kLineWr, kLineRec, &out);
   return out;

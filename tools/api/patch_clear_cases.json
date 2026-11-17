@@ -1,4 +1,11 @@
 {
+  "ChartAreaPaintPatch": {
+    "clearable": [
+      "fill",
+      "line"
+    ],
+    "non_clearable": []
+  },
   "ChartAxisPatch": {
     "clearable": [
       "log_base",
@@ -28,7 +35,10 @@
       "plot_visible_only",
       "style"
     ],
-    "non_clearable": []
+    "non_clearable": [
+      "chart_area",
+      "plot_area"
+    ]
   },
   "ChartFillPatch": {
     "clearable": [
@@ -69,6 +79,8 @@
     "clearable": [
       "color",
       "dash",
+      "head_end",
+      "tail_end",
       "transparency_pct",
       "width_pt"
     ],
@@ -362,9 +374,11 @@
   "ShapePatch": {
     "clearable": [
       "fill",
-      "line"
+      "line",
+      "text_vert"
     ],
     "non_clearable": [
+      "adjust_values",
       "flip_h",
       "flip_v",
       "preset_geometry",

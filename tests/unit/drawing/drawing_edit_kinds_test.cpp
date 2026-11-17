@@ -656,10 +656,10 @@ ShapeSpec OneCellShape(std::string prst) {
   return spec;
 }
 
-ColorSpec Rgb(std::uint32_t argb) {
-  ColorSpec color;
-  color.kind = ColorSpec::Kind::kRgb;
-  color.rgb = argb;
+DrawingColor Rgb(std::uint32_t argb) {
+  DrawingColor color;
+  color.base.kind = ColorSpec::Kind::kRgb;
+  color.base.rgb = argb;
   return color;
 }
 
@@ -794,9 +794,9 @@ TEST(ShapePresetGeometryValidation, EveryShapeTypeAcceptedInByteOrder) {
 TEST(ShapePaintRecord, SolidNoneTransparencyDashRoundTrip) {
   Workbook wb = Workbook::create();
   ShapeSpec spec = OneCellShape("rect");
-  spec.paint_fill.color = ChartPatchField<ColorSpec>::Set(Rgb(0xFF336699U));
+  spec.paint_fill.color = ChartPatchField<DrawingColor>::Set(Rgb(0xFF336699U));
   spec.paint_fill.transparency_pct = ChartPatchField<double>::Set(25.0);
-  spec.paint_line.color = ChartPatchField<ColorSpec>::Set(Rgb(0xFFAA0000U));
+  spec.paint_line.color = ChartPatchField<DrawingColor>::Set(Rgb(0xFFAA0000U));
   spec.paint_line.width_pt = ChartPatchField<double>::Set(2.0);
   spec.paint_line.dash = ChartPatchField<ChartLineDash>::Set(ChartLineDash::kDash);
   auto id = insert_shape(wb, 0, spec);
@@ -804,12 +804,12 @@ TEST(ShapePaintRecord, SolidNoneTransparencyDashRoundTrip) {
 
   const ShapeInfo read = ShapeWithId(RoundTrip(wb), id.value());
   ASSERT_TRUE(read.paint_fill.color.has_value());
-  EXPECT_EQ(read.paint_fill.color->rgb, 0xFF336699U);
+  EXPECT_EQ(read.paint_fill.color->base.rgb, 0xFF336699U);
   EXPECT_EQ(read.paint_fill.alpha, std::optional<std::uint32_t>(75000U));
   EXPECT_FALSE(read.paint_fill.none);
   EXPECT_FALSE(read.paint_fill.other);
   ASSERT_TRUE(read.paint_line.color.has_value());
-  EXPECT_EQ(read.paint_line.color->rgb, 0xFFAA0000U);
+  EXPECT_EQ(read.paint_line.color->base.rgb, 0xFFAA0000U);
   EXPECT_EQ(read.paint_line.width_emu, std::optional<std::int64_t>(25400));
   EXPECT_EQ(read.paint_line.dash, std::optional<ChartLineDash>(ChartLineDash::kDash));
   EXPECT_FALSE(read.paint_line.none);
@@ -825,9 +825,9 @@ TEST(ShapePaintRecord, SolidNoneTransparencyDashRoundTrip) {
 
   // Clearing returns both parts to the style's paint.
   ShapeSpec clear;
-  clear.paint_fill.color = ChartPatchField<ColorSpec>::Clear();
+  clear.paint_fill.color = ChartPatchField<DrawingColor>::Clear();
   clear.paint_fill.none = false;
-  clear.paint_line.color = ChartPatchField<ColorSpec>::Clear();
+  clear.paint_line.color = ChartPatchField<DrawingColor>::Clear();
   clear.paint_line.none = false;
   ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, id.value(), clear)));
   const ShapeInfo styled = ShapeWithId(wb, id.value());
@@ -858,7 +858,7 @@ TEST(ShapePaintRecord, GradientReadsOther) {
   const ShapeInfo plain = ShapeWithId(wb, 3);
   EXPECT_FALSE(plain.paint_fill.other);
   ASSERT_TRUE(plain.paint_fill.color.has_value());
-  EXPECT_EQ(plain.paint_fill.color->rgb, 0xFF00FF00U);
+  EXPECT_EQ(plain.paint_fill.color->base.rgb, 0xFF00FF00U);
 }
 
 // ---------------------------------------------------------------------------

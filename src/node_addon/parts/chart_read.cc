@@ -63,12 +63,54 @@ Napi::Value TitleToJs(Napi::Env env, const fm_chart_title_t& t) {
 
 namespace detail {
 
-Napi::Value FillOrNull(Napi::Env env, const fm_chart_fill_t& f) {
-  if (f.color.kind == FM_COLOR_KIND_NONE && f.has_transparency_pct == 0 && f.none == 0 && f.other == 0) {
+Napi::Value DrawingColorOrNull(Napi::Env env, const fm_drawing_color_t& c) {
+  if (c.base.kind == FM_COLOR_KIND_NONE && c.transform_count == 0) {
     return env.Null();
   }
   Napi::Object o = Napi::Object::New(env);
-  o.Set("color", ColorSpecOrNull(env, f.color));
+  o.Set("base", ColorSpecToJs(env, c.base));
+  Napi::Array transforms = Napi::Array::New(env);
+  for (uint32_t i = 0; i < c.transform_count; ++i) {
+    Napi::Object t = Napi::Object::New(env);
+    t.Set("name", JsString(env, c.transforms[i].name));
+    t.Set("value", JsNumberOrNull(env, c.transforms[i].has_value, c.transforms[i].value));
+    transforms.Set(i, t);
+  }
+  o.Set("transforms", transforms);
+  if (c.has_resolved != 0) {
+    Napi::Object resolved = Napi::Object::New(env);
+    resolved.Set("argb", JsNumber(env, c.resolved));
+    resolved.Set("resolution", JsNumber(env, FM_COLOR_RESOLUTION_EXACT));
+    o.Set("resolved", resolved);
+  } else {
+    o.Set("resolved", env.Null());
+  }
+  o.Set("resolvedTransparencyPct", JsNumberOrNull(env, c.has_resolved_transparency_pct, c.resolved_transparency_pct));
+  return o;
+}
+
+namespace {
+
+Napi::Value LineEndOrNull(Napi::Env env, int32_t has, const fm_chart_line_end_t& e) {
+  if (has == 0) {
+    return env.Null();
+  }
+  Napi::Object o = Napi::Object::New(env);
+  o.Set("type", JsNumber(env, e.type));
+  o.Set("width", JsNumberOrNull(env, e.has_width, e.width));
+  o.Set("length", JsNumberOrNull(env, e.has_length, e.length));
+  return o;
+}
+
+}  // namespace
+
+Napi::Value FillOrNull(Napi::Env env, const fm_chart_fill_t& f) {
+  if (f.color.base.kind == FM_COLOR_KIND_NONE && f.color.transform_count == 0 && f.has_transparency_pct == 0 &&
+      f.none == 0 && f.other == 0) {
+    return env.Null();
+  }
+  Napi::Object o = Napi::Object::New(env);
+  o.Set("color", DrawingColorOrNull(env, f.color));
   o.Set("transparencyPct", OptionalNumber(env, f.has_transparency_pct, f.transparency_pct));
   o.Set("none", JsBool(env, f.none));
   o.Set("other", JsBool(env, f.other));
@@ -76,17 +118,20 @@ Napi::Value FillOrNull(Napi::Env env, const fm_chart_fill_t& f) {
 }
 
 Napi::Value LineOrNull(Napi::Env env, const fm_chart_line_t& l) {
-  if (l.color.kind == FM_COLOR_KIND_NONE && l.has_transparency_pct == 0 && l.has_width_pt == 0 && l.has_dash == 0 &&
-      l.none == 0 && l.other == 0) {
+  if (l.color.base.kind == FM_COLOR_KIND_NONE && l.color.transform_count == 0 && l.has_transparency_pct == 0 &&
+      l.has_width_pt == 0 && l.has_dash == 0 && l.none == 0 && l.other == 0 && l.has_head_end == 0 &&
+      l.has_tail_end == 0) {
     return env.Null();
   }
   Napi::Object o = Napi::Object::New(env);
-  o.Set("color", ColorSpecOrNull(env, l.color));
+  o.Set("color", DrawingColorOrNull(env, l.color));
   o.Set("transparencyPct", OptionalNumber(env, l.has_transparency_pct, l.transparency_pct));
   o.Set("widthPt", OptionalNumber(env, l.has_width_pt, l.width_pt));
   o.Set("dash", OptionalNumber(env, l.has_dash, l.dash));
   o.Set("none", JsBool(env, l.none));
   o.Set("other", JsBool(env, l.other));
+  o.Set("headEnd", LineEndOrNull(env, l.has_head_end, l.head_end));
+  o.Set("tailEnd", LineEndOrNull(env, l.has_tail_end, l.tail_end));
   return o;
 }
 
@@ -231,6 +276,13 @@ Napi::Object AxisToJs(Napi::Env env, const fm_chart_axis_info_t& a) {
   return o;
 }
 
+Napi::Object AreaPaintToJs(Napi::Env env, const fm_chart_area_paint_t& p) {
+  Napi::Object o = Napi::Object::New(env);
+  o.Set("fill", FillOrNull(env, p.fill));
+  o.Set("line", LineOrNull(env, p.line));
+  return o;
+}
+
 Napi::Object ChartToJs(Napi::Env env, const fm_chart_t* chart, fm_status_t& rc) {
   Napi::Object o = Napi::Object::New(env);
   fm_chart_info_t info = FM_STRUCT_INIT(fm_chart_info_t);
@@ -266,6 +318,8 @@ Napi::Object ChartToJs(Napi::Env env, const fm_chart_t* chart, fm_status_t& rc) 
   o.Set("naAsBlank", TriToJs(env, info.na_as_blank));
   o.Set("date1904", JsBool(env, info.date1904));
   o.Set("style", OptionalNumber(env, info.has_style, info.style));
+  o.Set("chartArea", AreaPaintToJs(env, info.chart_area));
+  o.Set("plotArea", AreaPaintToJs(env, info.plot_area));
 
   Napi::Array plots = Napi::Array::New(env);
   for (size_t i = 0; i < info.plot_count && rc == 0; ++i) {

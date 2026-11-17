@@ -50,7 +50,20 @@ ColorSpec RgbColor(std::uint32_t argb) {
   return spec;
 }
 
+DrawingColor Dc(const ColorSpec& base) {
+  DrawingColor color;
+  color.base = base;
+  return color;
+}
+
 /// The Rgb value of a colour; unset for no colour or a Theme colour.
+std::optional<std::uint32_t> Argb(const std::optional<DrawingColor>& color) {
+  if (!color || color->base.kind != ColorSpec::Kind::kRgb) {
+    return std::nullopt;
+  }
+  return color->base.rgb;
+}
+
 std::optional<std::uint32_t> Argb(const std::optional<ColorSpec>& color) {
   if (!color || color->kind != ColorSpec::Kind::kRgb) {
     return std::nullopt;
@@ -418,7 +431,7 @@ TEST(ChartEdit, ChartexAndPivotRefusals) {
   MustOk(set_chart_title(pv, p.sheet, p.id, title));
   EXPECT_EQ(Must(get_chart(pv, p.sheet, p.id)).title.text, "Pivot");
   ChartSeriesPatch color;
-  color.fill.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFF102030U));
+  color.fill.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0xFF102030U)));
   MustOk(set_chart_series(pv, p.sheet, p.id, 0, 0, color));
 }
 
@@ -451,7 +464,7 @@ TEST(ChartEdit, NoOpAndFailedEditsWriteNothing) {
   }
   ChartSeriesPatch bad;
   bad.val = ChartSeriesSource::Ref("Nope!$A$1:$A$4");
-  bad.fill.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFF000000U));
+  bad.fill.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0xFF000000U)));
   ExpectCode(set_chart_series(wb, c.sheet, c.id, 0, m.plots[0].series[0].idx, bad), Code::kIoChartInvalidReference);
   bad.val = ChartSeriesSource::None();
   ExpectCode(set_chart_series(wb, c.sheet, c.id, 0, m.plots[0].series[0].idx, bad), Code::kInvalidArgument);
@@ -818,13 +831,13 @@ TEST(ChartEdit, PointFormsFollowSeries) {
   Workbook wb = LoadFixture("chart_bar.xlsx");
   const Located bar = Find(wb, "xl/charts/chart2.xml");
   ChartPointPatch fill;
-  fill.fill.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFF7030A0U));
+  fill.fill.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0xFF7030A0U)));
   MustOk(set_chart_point(wb, bar.sheet, bar.id, 0, 0, 1, fill));
   EXPECT_EQ(Between(PartText(wb, bar.path), "<c:dPt>", "</c:dPt>"),
             "<c:dPt><c:idx val=\"1\"/><c:invertIfNegative val=\"0\"/><c:bubble3D val=\"0\"/><c:spPr><a:solidFill>"
             "<a:srgbClr val=\"7030A0\"/></a:solidFill><a:ln><a:noFill/></a:ln><a:effectLst/></c:spPr></c:dPt>");
   ChartPointPatch outline;
-  outline.line.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFFFF0000U));
+  outline.line.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0xFFFF0000U)));
   MustOk(set_chart_point(wb, bar.sheet, bar.id, 0, 0, 2, outline));
   const ChartModel bar_model = Must(get_chart(wb, bar.sheet, bar.id));
   const ChartSeries& b = bar_model.plots[0].series[0];
@@ -864,12 +877,12 @@ TEST(ChartEdit, PointFormsFollowSeries) {
 // transparency stay.
 TEST(ChartEdit, LineAndScatterSeriesTakeNoFill) {
   ChartSeriesPatch p;
-  p.fill.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFF1F77B4U));
+  p.fill.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0xFF1F77B4U)));
   p.fill.transparency_pct = ChartPatchField<double>::Set(20.0);
-  p.line.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFF333333U));
+  p.line.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0xFF333333U)));
   p.line.transparency_pct = ChartPatchField<double>::Set(20.0);
   ChartMarkerPatch mk;
-  mk.fill.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFFAA0000U));
+  mk.fill.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0xFFAA0000U)));
   mk.fill.transparency_pct = ChartPatchField<double>::Set(20.0);
   p.marker = ChartPatchField<ChartMarkerPatch>::Set(mk);
   const std::pair<const char*, const char*> charts[] = {{"chart_line.xlsx", "xl/charts/chart4.xml"},
@@ -914,10 +927,10 @@ TEST(ChartEdit, MarkerSettlesAsExcel) {
       mk.size = ChartPatchField<double>::Set(size);
     }
     if (fill) {
-      mk.fill.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFFAA0000U));
+      mk.fill.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0xFFAA0000U)));
     }
     if (line_color) {
-      mk.line.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFF000000U));
+      mk.line.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0xFF000000U)));
     }
     if (dash) {
       mk.line.dash = ChartPatchField<ChartLineDash>::Set(ChartLineDash::kDash);
@@ -996,8 +1009,8 @@ TEST(ChartEdit, MarkerSettlesAsExcel) {
   ChartPointPatch pt;
   ChartMarkerPatch mk;
   mk.symbol = S::kSquare;
-  mk.fill.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFFAA0000U));
-  mk.line.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFF000000U));
+  mk.fill.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0xFFAA0000U)));
+  mk.line.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0xFF000000U)));
   pt.marker = ChartPatchField<ChartMarkerPatch>::Set(mk);
   MustOk(set_chart_point(wb, c.sheet, c.id, 0, 1, 1, pt));
   mk.symbol = S::kAuto;
@@ -1048,7 +1061,7 @@ TEST(ChartEdit, MarkerSymbolsRoundTrip) {
 // a bar or area point keeps its fill, and one coming back from a line plot takes the series fill.
 TEST(ChartEdit, TypeChangeCarriesPoints) {
   ChartPointPatch pt;
-  pt.fill.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFF7030A0U));
+  pt.fill.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0xFF7030A0U)));
   const auto point = [](const Workbook& wb, const Located& c) {
     return Must(get_chart(wb, c.sheet, c.id)).plots[0].series[0];
   };
@@ -1156,7 +1169,7 @@ TEST(ChartEdit, TypeChangeTradesExplicitLinesAndOutlines) {
   Workbook lw = LoadFixture("chart_line.xlsx");
   const Located plain = Find(lw, "xl/charts/chart1.xml");
   ChartSeriesPatch red;
-  red.line.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFFFF0000U));
+  red.line.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0xFFFF0000U)));
   MustOk(set_chart_series(lw, plain.sheet, plain.id, 0, 0, red));
   MustOk(set_chart_type(lw, plain.sheet, plain.id, 0, K::kColumn, ChartGrouping::kClustered));
   const std::string xml = PartText(lw, plain.path);
@@ -1184,9 +1197,9 @@ TEST(ChartEdit, TypeChangeCarriesSeriesFillBetweenBarAndAreaOnly) {
   theme.theme = 7;
   theme.tint = 0.4;
   ChartSeriesPatch tinted;
-  tinted.fill.color = ChartPatchField<ColorSpec>::Set(theme);
+  tinted.fill.color = ChartPatchField<DrawingColor>::Set(Dc(theme));
   ChartSeriesPatch red;
-  red.fill.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFFFF0000U));
+  red.fill.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0xFFFF0000U)));
   const std::string accent4 =
       "<a:solidFill><a:schemeClr val=\"accent4\"><a:lumMod val=\"60000\"/><a:lumOff val=\"40000\"/></a:schemeClr>"
       "</a:solidFill>";
@@ -1214,7 +1227,7 @@ TEST(ChartEdit, TypeChangeCarriesSeriesFillBetweenBarAndAreaOnly) {
   Workbook lw = LoadFixture("chart_line.xlsx");
   const Located line = Find(lw, "xl/charts/chart1.xml");
   ChartSeriesPatch red_line;
-  red_line.line.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFFFF0000U));
+  red_line.line.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0xFFFF0000U)));
   MustOk(set_chart_series(lw, line.sheet, line.id, 0, 1, red_line));
   MustOk(set_chart_type(lw, line.sheet, line.id, 0, K::kScatter, ChartGrouping::kStandard));
   EXPECT_EQ(PartText(lw, line.path).find("FF0000"), std::string::npos);
@@ -1679,15 +1692,15 @@ TEST(ChartEdit, SeriesFormatPairwise) {
     const ChartSeries before = Must(get_chart(wb, 0, id)).plots[0].series[0];
     ChartSeriesPatch p;
     if (is(r.fill, "set"))
-      p.fill.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFF112233U));
+      p.fill.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0xFF112233U)));
     if (is(r.fill, "clear"))
-      p.fill.color = ChartPatchField<ColorSpec>::Clear();
+      p.fill.color = ChartPatchField<DrawingColor>::Clear();
     if (is(r.alpha, "set"))
       p.fill.transparency_pct = ChartPatchField<double>::Set(30.0);
     if (is(r.alpha, "clear"))
       p.fill.transparency_pct = ChartPatchField<double>::Clear();
     if (is(r.line, "color"))
-      p.line.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFF445566U));
+      p.line.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0xFF445566U)));
     if (is(r.line, "none"))
       p.line.none = true;
     if (is(r.width, "set"))
@@ -1715,7 +1728,7 @@ TEST(ChartEdit, SeriesFormatPairwise) {
       ChartMarkerPatch mk;
       mk.symbol = ChartMarkerSymbol::kDiamond;
       mk.size = ChartPatchField<double>::Set(7.0);
-      mk.fill.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFFAABBCCU));
+      mk.fill.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0xFFAABBCCU)));
       p.marker = ChartPatchField<ChartMarkerPatch>::Set(mk);
       p.smooth = true;
     }
@@ -1783,7 +1796,7 @@ TEST(ChartEdit, PointsSeriesAndSource) {
   Workbook wb = GridBook();
   const std::uint32_t id = Insert(wb, K::kLine);
   ChartPointPatch pt;
-  pt.fill.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFF0000FFU));
+  pt.fill.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0xFF0000FFU)));
   pt.line.width_pt = ChartPatchField<double>::Set(1.0);
   ChartMarkerPatch mk;
   mk.symbol = ChartMarkerSymbol::kTriangle;
@@ -1804,7 +1817,7 @@ TEST(ChartEdit, PointsSeriesAndSource) {
   add.name = ChartSeriesSource::Ref("Sheet1!$D$1");
   add.cat = ChartSeriesSource::Ref("Sheet1!$A$2:$A$5");
   add.val = ChartSeriesSource::Ref("Sheet1!$D$2:$D$5");
-  add.line.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFF123456U));
+  add.line.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0xFF123456U)));
   MustOk(remove_chart_series(wb, 0, id, 0, 2));
   EXPECT_EQ(Must(add_chart_series(wb, 0, id, 0, add)), 2U);
   EXPECT_TRUE(NoRefresh(wb));
@@ -1826,7 +1839,7 @@ TEST(ChartEdit, PointsSeriesAndSource) {
 
   // Source rebuild keeps per-series formatting by idx and drops series past the new count.
   ChartSeriesPatch red;
-  red.line.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFFFF0000U));
+  red.line.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0xFFFF0000U)));
   MustOk(set_chart_series(wb, 0, id, 0, 0, red));
   MustOk(set_chart_source(wb, 0, id, "Sheet1!$A$1:$C$5", D::kRows, H::kAuto, H::kAuto));
   EXPECT_TRUE(NoRefresh(wb));
@@ -1979,9 +1992,9 @@ TEST(ChartEdit, FormatFormsMatchExcel) {
   const Located c = Find(wb, "xl/charts/chart3.xml");
 
   ChartSeriesPatch p;
-  p.fill.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFF008000U));
+  p.fill.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0xFF008000U)));
   p.fill.transparency_pct = ChartPatchField<double>::Set(50.0);
-  p.line.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFF000000U));
+  p.line.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0xFF000000U)));
   p.line.width_pt = ChartPatchField<double>::Set(2.0);
   ChartLabelsPatch l;
   l.show_val = true;
@@ -1995,7 +2008,7 @@ TEST(ChartEdit, FormatFormsMatchExcel) {
   ExpectSameForm(Between(text, "<c:dLbls>", "</c:dLbls>"), Between(col_form, "<c:dLbls>", "</c:dLbls>"));
 
   ChartPointPatch pt;
-  pt.fill.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFF0000FFU));
+  pt.fill.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0xFF0000FFU)));
   pt.line.none = true;
   MustOk(set_chart_point(wb, c.sheet, c.id, 0, 1, 2, pt));
   std::string want = Between(col_form, "<c:dPt>", "</c:dPt>");
@@ -2450,9 +2463,9 @@ TEST(ChartEdit, ThemeColourWritesPaletteFormAndRoundTrips) {
   const auto series_xml = [&] { return Between(PartText(wb, c.path), "<c:ser>", "</c:ser>"); };
 
   ChartSeriesPatch p;
-  p.fill.color = ChartPatchField<ColorSpec>::Set(ThemeColor(4, 0.4));
+  p.fill.color = ChartPatchField<DrawingColor>::Set(Dc(ThemeColor(4, 0.4)));
   p.fill.transparency_pct = ChartPatchField<double>::Set(25.0);
-  p.line.color = ChartPatchField<ColorSpec>::Set(ThemeColor(1, -0.25));
+  p.line.color = ChartPatchField<DrawingColor>::Set(Dc(ThemeColor(1, -0.25)));
   MustOk(set_chart_series(wb, c.sheet, c.id, 0, 0, p));
   std::string xml = series_xml();
   EXPECT_NE(xml.find("<a:schemeClr val=\"accent1\"><a:lumMod val=\"60000\"/><a:lumOff val=\"40000\"/>"
@@ -2463,7 +2476,7 @@ TEST(ChartEdit, ThemeColourWritesPaletteFormAndRoundTrips) {
 
   // Replacing the colour keeps the alpha.
   ChartSeriesPatch swap;
-  swap.fill.color = ChartPatchField<ColorSpec>::Set(ThemeColor(0, 0.0));
+  swap.fill.color = ChartPatchField<DrawingColor>::Set(Dc(ThemeColor(0, 0.0)));
   MustOk(set_chart_series(wb, c.sheet, c.id, 0, 0, swap));
   xml = series_xml();
   EXPECT_NE(xml.find("<a:schemeClr val=\"bg1\"><a:alpha val=\"75000\"/></a:schemeClr>"), std::string::npos) << xml;
@@ -2471,13 +2484,23 @@ TEST(ChartEdit, ThemeColourWritesPaletteFormAndRoundTrips) {
   const double tints[] = {0.4, -0.25, 0.123456, 0.123455};
   for (const double tint : tints) {
     ChartSeriesPatch round;
-    round.fill.color = ChartPatchField<ColorSpec>::Set(ThemeColor(7, tint));
+    round.fill.color = ChartPatchField<DrawingColor>::Set(Dc(ThemeColor(7, tint)));
     MustOk(set_chart_series(wb, c.sheet, c.id, 0, 0, round));
     const ChartSeries s = Must(get_chart(wb, c.sheet, c.id)).plots[0].series[0];
     ASSERT_TRUE(s.fill.color.has_value());
-    EXPECT_EQ(s.fill.color->kind, ColorSpec::Kind::kTheme);
-    EXPECT_EQ(s.fill.color->theme, 7U);
-    EXPECT_NEAR(s.fill.color->tint, tint, 1e-5);
+    EXPECT_EQ(s.fill.color->base.kind, ColorSpec::Kind::kTheme);
+    EXPECT_EQ(s.fill.color->base.theme, 7U);
+    // A read never carries a tint: it is the lumMod / lumOff pair the tint expands to.
+    double lum_mod = 100000.0;
+    double lum_off = 0.0;
+    for (const ColorTransform& t : s.fill.color->transforms) {
+      if (t.name == "lumMod") {
+        lum_mod = static_cast<double>(t.value.value_or(0));
+      } else if (t.name == "lumOff") {
+        lum_off = static_cast<double>(t.value.value_or(0));
+      }
+    }
+    EXPECT_NEAR(tint > 0 ? lum_off / 100000.0 : lum_mod / 100000.0 - 1.0, tint, 1e-5);
   }
 }
 
@@ -2500,7 +2523,7 @@ TEST(ChartFillNoneOther, NoFillRoundTrip) {
 
   ChartSeriesPatch show;
   show.fill.none = false;
-  show.fill.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFF1F77B4U));
+  show.fill.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0xFF1F77B4U)));
   MustOk(set_chart_series(wb, col.sheet, col.id, 0, 0, show));
   s = Must(get_chart(wb, col.sheet, col.id)).plots[0].series[0];
   EXPECT_FALSE(s.fill.none);

@@ -237,24 +237,24 @@ TEST(ChartPatchKeys, DisplayChartAndPlotAreaPaint) {
   EXPECT_TRUE(m.plot_area.fill.none);
   EXPECT_TRUE(m.plot_area.line.none);
 
-  ColorSpec rgb;
-  rgb.kind = ColorSpec::Kind::kRgb;
-  rgb.rgb = 0xFF102030U;
+  DrawingColor rgb;
+  rgb.base.kind = ColorSpec::Kind::kRgb;
+  rgb.base.rgb = 0xFF102030U;
   ChartDisplayPatch p;
-  p.chart_area.fill.color = ChartPatchField<ColorSpec>::Set(rgb);
+  p.chart_area.fill.color = ChartPatchField<DrawingColor>::Set(rgb);
   p.chart_area.fill.transparency_pct = ChartPatchField<double>::Set(25.0);
   p.plot_area.fill.none = false;
-  p.plot_area.line.color = ChartPatchField<ColorSpec>::Set(rgb);
+  p.plot_area.line.color = ChartPatchField<DrawingColor>::Set(rgb);
   p.plot_area.line.width_pt = ChartPatchField<double>::Set(1.5);
   MustOk(set_chart_display(wb, 0, id, p));
   m = Must(get_chart(wb, 0, id));
   ASSERT_TRUE(m.chart_area.fill.color.has_value());
-  EXPECT_EQ(m.chart_area.fill.color->rgb, 0xFF102030U);
+  EXPECT_EQ(m.chart_area.fill.color->base.rgb, 0xFF102030U);
   EXPECT_EQ(m.chart_area.fill.alpha, std::optional<std::uint32_t>(75000U));
   EXPECT_FALSE(m.plot_area.fill.none);
   EXPECT_FALSE(m.plot_area.line.none);
   ASSERT_TRUE(m.plot_area.line.color.has_value());
-  EXPECT_EQ(m.plot_area.line.color->rgb, 0xFF102030U);
+  EXPECT_EQ(m.plot_area.line.color->base.rgb, 0xFF102030U);
   EXPECT_EQ(m.plot_area.line.width_emu, std::optional<std::int64_t>(19050));
   const ChartModel again = Must(get_chart(OoxmlRoundTrip(wb), 0, id));
   EXPECT_EQ(again.chart_area.fill.alpha, std::optional<std::uint32_t>(75000U));
@@ -266,7 +266,7 @@ TEST(ChartPatchKeys, DisplayChartAndPlotAreaPaint) {
   ChartDisplayPatch bad;
   bad.style = ChartPatchField<std::int32_t>::Set(3);
   bad.plot_area.fill.none = true;
-  bad.plot_area.fill.color = ChartPatchField<ColorSpec>::Set(rgb);
+  bad.plot_area.fill.color = ChartPatchField<DrawingColor>::Set(rgb);
   ExpectCode(set_chart_display(wb, 0, id, bad), Code::kInvalidArgument);
   EXPECT_EQ(PartText(wb), text);
 }
@@ -413,9 +413,9 @@ TEST(ChartPatchKeys, PointEmptyPatchKeepsAndClearAllRemovesOverride) {
   const std::uint32_t id = InsertColumn(wb);
   const std::string before = PartText(wb);
   ChartPointPatch cleared;
-  cleared.fill.color = ChartPatchField<ColorSpec>::Clear();
+  cleared.fill.color = ChartPatchField<DrawingColor>::Clear();
   cleared.fill.transparency_pct = ChartPatchField<double>::Clear();
-  cleared.line.color = ChartPatchField<ColorSpec>::Clear();
+  cleared.line.color = ChartPatchField<DrawingColor>::Clear();
   cleared.line.transparency_pct = ChartPatchField<double>::Clear();
   cleared.line.width_pt = ChartPatchField<double>::Clear();
   cleared.line.dash = ChartPatchField<ChartLineDash>::Clear();
@@ -427,10 +427,10 @@ TEST(ChartPatchKeys, PointEmptyPatchKeepsAndClearAllRemovesOverride) {
 
   // An override survives an empty patch and is removed by one that clears every member.
   ChartPointPatch fill;
-  ColorSpec red;
-  red.kind = ColorSpec::Kind::kRgb;
-  red.rgb = 0xFFFF0000U;
-  fill.fill.color = ChartPatchField<ColorSpec>::Set(red);
+  DrawingColor red;
+  red.base.kind = ColorSpec::Kind::kRgb;
+  red.base.rgb = 0xFFFF0000U;
+  fill.fill.color = ChartPatchField<DrawingColor>::Set(red);
   MustOk(set_chart_point(wb, 0, id, 0, 0, 1, fill));
   ASSERT_EQ(Must(get_chart(wb, 0, id)).plots[0].series[0].points.size(), 1U);
   MustOk(set_chart_point(wb, 0, id, 0, 0, 1, ChartPointPatch{}));

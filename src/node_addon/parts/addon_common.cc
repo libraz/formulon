@@ -219,6 +219,16 @@ void CheckedSpecReader::FailInteger(const char* key, double number, double min_v
   }
 }
 
+const char* CheckedSpecReader::KeepString(std::string text) {
+  kept_strings_.push_back(std::move(text));
+  return kept_strings_.back().c_str();
+}
+
+const fm_color_transform_t* CheckedSpecReader::KeepTransforms(std::vector<fm_color_transform_t> items) {
+  kept_transforms_.push_back(std::move(items));
+  return kept_transforms_.back().empty() ? nullptr : kept_transforms_.back().data();
+}
+
 bool CheckedSpecReader::ReadOptional(const Napi::Object& owner, const char* key, Napi::Value* out, bool* present) {
   if (present != nullptr) {
     *present = false;

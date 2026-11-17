@@ -30,16 +30,23 @@ using Bytes = std::vector<std::uint8_t>;
 
 constexpr bool kWasm32 = sizeof(void*) == 4U;
 static_assert(sizeof(fm_chart_title_t) == (kWasm32 ? 12U : 24U), "fm_chart_title_t ABI layout changed");
-static_assert(sizeof(fm_chart_fill_t) == 48U, "fm_chart_fill_t ABI layout changed");
-static_assert(sizeof(fm_chart_line_t) == 72U, "fm_chart_line_t ABI layout changed");
-static_assert(sizeof(fm_chart_marker_t) == 136U, "fm_chart_marker_t ABI layout changed");
+static_assert(sizeof(fm_color_transform_t) == (kWasm32 ? 12U : 16U), "fm_color_transform_t ABI layout changed");
+static_assert(sizeof(fm_drawing_color_t) == 56U, "fm_drawing_color_t ABI layout changed");
+static_assert(offsetof(fm_drawing_color_t, transform_count) == (kWasm32 ? 28U : 32U), "fm_drawing_color_t layout");
+static_assert(sizeof(fm_chart_line_end_t) == 20U, "fm_chart_line_end_t ABI layout changed");
+static_assert(sizeof(fm_chart_fill_t) == 80U, "fm_chart_fill_t ABI layout changed");
+static_assert(sizeof(fm_chart_line_t) == 152U, "fm_chart_line_t ABI layout changed");
+static_assert(offsetof(fm_chart_line_t, head_end) == 108U, "fm_chart_line_t head_end offset");
+static_assert(sizeof(fm_chart_marker_t) == 248U, "fm_chart_marker_t ABI layout changed");
+static_assert(sizeof(fm_chart_area_paint_t) == 232U, "fm_chart_area_paint_t ABI layout changed");
+static_assert(sizeof(fm_chart_area_paint_patch_t) == 248U, "fm_chart_area_paint_patch_t ABI layout changed");
 static_assert(sizeof(fm_chart_labels_t) == (kWasm32 ? 88U : 104U), "fm_chart_labels_t ABI layout changed");
-static_assert(sizeof(fm_chart_info_t) == (kWasm32 ? 100U : 120U), "fm_chart_info_t ABI layout changed");
+static_assert(sizeof(fm_chart_info_t) == (kWasm32 ? 568U : 584U), "fm_chart_info_t ABI layout changed");
 static_assert(sizeof(fm_chart_plot_info_t) == 68U, "fm_chart_plot_info_t ABI layout changed");
 static_assert(sizeof(fm_chart_data_source_t) == (kWasm32 ? 12U : 24U), "fm_chart_data_source_t ABI layout changed");
-static_assert(sizeof(fm_chart_series_info_t) == (kWasm32 ? 456U : 544U), "fm_chart_series_info_t ABI layout changed");
+static_assert(sizeof(fm_chart_series_info_t) == (kWasm32 ? 680U : 768U), "fm_chart_series_info_t ABI layout changed");
 static_assert(sizeof(fm_chart_literal_info_t) == 32U, "fm_chart_literal_info_t ABI layout changed");
-static_assert(sizeof(fm_chart_point_info_t) == 272U, "fm_chart_point_info_t ABI layout changed");
+static_assert(sizeof(fm_chart_point_info_t) == 496U, "fm_chart_point_info_t ABI layout changed");
 static_assert(sizeof(fm_chart_axis_info_t) == (kWasm32 ? 152U : 176U), "fm_chart_axis_info_t ABI layout changed");
 static_assert(sizeof(fm_chart_preview_overrides_spec_t) == (kWasm32 ? 60U : 64U),
               "fm_chart_preview_overrides_spec_t ABI layout changed");
@@ -55,17 +62,17 @@ static_assert(sizeof(fm_chart_axis_title_text_info_t) == (kWasm32 ? 12U : 16U),
               "fm_chart_axis_title_text_info_t ABI layout changed");
 static_assert(sizeof(fm_chart_unresolved_info_t) == 16U, "fm_chart_unresolved_info_t ABI layout changed");
 static_assert(sizeof(fm_chart_spec_t) == (kWasm32 ? 144U : 176U), "fm_chart_spec_t ABI layout changed");
-static_assert(sizeof(fm_chart_fill_patch_t) == 56U, "fm_chart_fill_patch_t ABI layout changed");
-static_assert(sizeof(fm_chart_line_patch_t) == 80U, "fm_chart_line_patch_t ABI layout changed");
-static_assert(sizeof(fm_chart_marker_patch_t) == 160U, "fm_chart_marker_patch_t ABI layout changed");
+static_assert(sizeof(fm_chart_fill_patch_t) == 88U, "fm_chart_fill_patch_t ABI layout changed");
+static_assert(sizeof(fm_chart_line_patch_t) == 160U, "fm_chart_line_patch_t ABI layout changed");
+static_assert(sizeof(fm_chart_marker_patch_t) == 272U, "fm_chart_marker_patch_t ABI layout changed");
 static_assert(sizeof(fm_chart_labels_patch_t) == (kWasm32 ? 128U : 144U), "fm_chart_labels_patch_t ABI layout changed");
-static_assert(sizeof(fm_chart_series_patch_t) == (kWasm32 ? 576U : 704U), "fm_chart_series_patch_t ABI layout changed");
-static_assert(sizeof(fm_chart_point_patch_t) == 312U, "fm_chart_point_patch_t ABI layout changed");
+static_assert(sizeof(fm_chart_series_patch_t) == (kWasm32 ? 800U : 928U), "fm_chart_series_patch_t ABI layout changed");
+static_assert(sizeof(fm_chart_point_patch_t) == 536U, "fm_chart_point_patch_t ABI layout changed");
 static_assert(sizeof(fm_chart_plot_patch_t) == 44U, "fm_chart_plot_patch_t ABI layout changed");
 static_assert(sizeof(fm_chart_axis_patch_t) == (kWasm32 ? 184U : 208U), "fm_chart_axis_patch_t ABI layout changed");
 static_assert(sizeof(fm_chart_legend_patch_t) == (kWasm32 ? 32U : 40U), "fm_chart_legend_patch_t ABI layout changed");
 static_assert(sizeof(fm_chart_legend_t) == (kWasm32 ? 20U : 32U), "fm_chart_legend_t ABI layout changed");
-static_assert(sizeof(fm_chart_display_patch_t) == 36U, "fm_chart_display_patch_t ABI layout changed");
+static_assert(sizeof(fm_chart_display_patch_t) == 536U, "fm_chart_display_patch_t ABI layout changed");
 static_assert(offsetof(fm_chart_info_t, na_as_blank) == (kWasm32 ? 96U : 116U), "fm_chart_info_t na_as_blank offset");
 
 constexpr fm_status_t Code(formulon::FormulonErrorCode c) {
@@ -706,7 +713,9 @@ TEST(FormulonCApiChart, TypeTitleLegendDisplayPlotEdits) {
                                    FM_PATCH_OP_KEEP,
                                    0,
                                    FM_PATCH_OP_KEEP,
-                                   0};
+                                   0,
+                                   {},
+                                   {}};
   ASSERT_EQ(fm_sheet_update_chart_display(wb.handle, 0, id, &display), 0) << fm_get_last_error_message();
   Open(wb.handle, id, &chart);
   info = Info(chart);
@@ -720,7 +729,9 @@ TEST(FormulonCApiChart, TypeTitleLegendDisplayPlotEdits) {
                                      FM_PATCH_OP_KEEP,
                                      0,
                                      FM_PATCH_OP_KEEP,
-                                     0};
+                                     0,
+                                     {},
+                                     {}};
   EXPECT_EQ(fm_sheet_update_chart_display(wb.handle, 0, id, &display), kInvalidArgument);
   display = fm_chart_display_patch_t{sizeof(fm_chart_display_patch_t),
                                      FM_PATCH_OP_KEEP,
@@ -730,7 +741,9 @@ TEST(FormulonCApiChart, TypeTitleLegendDisplayPlotEdits) {
                                      FM_PATCH_OP_KEEP,
                                      0,
                                      FM_PATCH_OP_KEEP,
-                                     0};
+                                     0,
+                                     {},
+                                     {}};
   EXPECT_EQ(fm_sheet_update_chart_display(wb.handle, 0, id, &display), kInvalidArgument);
 
   ASSERT_EQ(fm_sheet_set_chart_type(wb.handle, 0, id, 0, FM_CHART_PLOT_TYPE_LINE, FM_CHART_BAR_DIRECTION_COLUMN,
@@ -882,8 +895,8 @@ TEST(FormulonCApiChart, SeriesPointFilterAndSourceEdits) {
 
   fm_chart_series_patch_t patch = FM_STRUCT_INIT(fm_chart_series_patch_t);
   patch.line.color_op = FM_PATCH_OP_SET;
-  patch.line.color.kind = FM_COLOR_KIND_RGB;
-  patch.line.color.argb = 0xFFFF0000U;
+  patch.line.color.base.kind = FM_COLOR_KIND_RGB;
+  patch.line.color.base.argb = 0xFFFF0000U;
   patch.line.transparency_pct_op = FM_PATCH_OP_SET;
   patch.line.transparency_pct = 25.0;
   patch.line.width_pt_op = FM_PATCH_OP_SET;
@@ -896,8 +909,8 @@ TEST(FormulonCApiChart, SeriesPointFilterAndSourceEdits) {
   patch.marker.size_pt_op = FM_PATCH_OP_SET;
   patch.marker.size_pt = 7.0;
   patch.marker.fill.color_op = FM_PATCH_OP_SET;
-  patch.marker.fill.color.kind = FM_COLOR_KIND_RGB;
-  patch.marker.fill.color.argb = 0xFF00FF00U;
+  patch.marker.fill.color.base.kind = FM_COLOR_KIND_RGB;
+  patch.marker.fill.color.base.argb = 0xFF00FF00U;
   patch.smooth_op = FM_PATCH_OP_SET;
   patch.smooth = 1;
   patch.labels_op = FM_PATCH_OP_SET;
@@ -915,8 +928,8 @@ TEST(FormulonCApiChart, SeriesPointFilterAndSourceEdits) {
   ASSERT_EQ(fm_sheet_update_chart_series(wb.handle, 0, id, 0, 0, &patch), 0) << fm_get_last_error_message();
   Open(wb.handle, id, &chart);
   fm_chart_series_info_t s = Series(chart, 0, 0);
-  EXPECT_EQ(s.line.color.kind, FM_COLOR_KIND_RGB);
-  EXPECT_EQ(s.line.color.argb, 0xFFFF0000U);
+  EXPECT_EQ(s.line.color.base.kind, FM_COLOR_KIND_RGB);
+  EXPECT_EQ(s.line.color.base.argb, 0xFFFF0000U);
   EXPECT_DOUBLE_EQ(s.line.transparency_pct, 25.0);
   EXPECT_DOUBLE_EQ(s.line.width_pt, 2.0);
   EXPECT_EQ(s.line.has_dash, 1);
@@ -925,8 +938,8 @@ TEST(FormulonCApiChart, SeriesPointFilterAndSourceEdits) {
   EXPECT_EQ(s.marker.symbol, FM_CHART_MARKER_SYMBOL_CIRCLE);
   EXPECT_EQ(s.marker.has_size_pt, 1);
   EXPECT_EQ(s.marker.size_pt, 7U);
-  EXPECT_EQ(s.marker.fill.color.kind, FM_COLOR_KIND_RGB);
-  EXPECT_EQ(s.marker.fill.color.argb, 0xFF00FF00U);
+  EXPECT_EQ(s.marker.fill.color.base.kind, FM_COLOR_KIND_RGB);
+  EXPECT_EQ(s.marker.fill.color.base.argb, 0xFF00FF00U);
   EXPECT_EQ(s.smooth, FM_TRISTATE_TRUE);
 
   // A picture marker is read-only: it needs a blip a patch cannot carry.
@@ -980,8 +993,8 @@ TEST(FormulonCApiChart, SeriesPointFilterAndSourceEdits) {
 
   fm_chart_point_patch_t point = FM_STRUCT_INIT(fm_chart_point_patch_t);
   point.line.color_op = FM_PATCH_OP_SET;
-  point.line.color.kind = FM_COLOR_KIND_RGB;
-  point.line.color.argb = 0xFF123456U;
+  point.line.color.base.kind = FM_COLOR_KIND_RGB;
+  point.line.color.base.argb = 0xFF123456U;
   point.marker_op = FM_PATCH_OP_SET;
   point.marker.symbol_op = FM_PATCH_OP_SET;
   point.marker.symbol = FM_CHART_MARKER_SYMBOL_TRIANGLE;
@@ -992,8 +1005,8 @@ TEST(FormulonCApiChart, SeriesPointFilterAndSourceEdits) {
   fm_chart_point_info_t pt = FM_STRUCT_INIT(fm_chart_point_info_t);
   ASSERT_EQ(fm_chart_get_series_point_at(chart.handle, 0, 1, 0, &pt), 0);
   EXPECT_EQ(pt.idx, 2U);
-  EXPECT_EQ(pt.line.color.kind, FM_COLOR_KIND_RGB);
-  EXPECT_EQ(pt.line.color.argb, 0xFF123456U);
+  EXPECT_EQ(pt.line.color.base.kind, FM_COLOR_KIND_RGB);
+  EXPECT_EQ(pt.line.color.base.argb, 0xFF123456U);
   ASSERT_EQ(pt.has_marker, 1);
   EXPECT_EQ(pt.marker.symbol, FM_CHART_MARKER_SYMBOL_TRIANGLE);
   EXPECT_EQ(fm_chart_get_series_point_at(chart.handle, 0, 1, 1, &pt), FM_STATUS_INDEX_OUT_OF_RANGE);
@@ -1084,9 +1097,9 @@ TEST(FormulonCApiChart, ThemeColorsRoundTripAndAreValidated) {
 
   fm_chart_series_patch_t patch = FM_STRUCT_INIT(fm_chart_series_patch_t);
   patch.line.color_op = FM_PATCH_OP_SET;
-  patch.line.color.kind = FM_COLOR_KIND_THEME;
-  patch.line.color.theme = 4;
-  patch.line.color.tint = 0.4;
+  patch.line.color.base.kind = FM_COLOR_KIND_THEME;
+  patch.line.color.base.theme = 4;
+  patch.line.color.base.tint = 0.4;
   patch.labels_op = FM_PATCH_OP_SET;
   patch.labels.font_color_op = FM_PATCH_OP_SET;
   patch.labels.font_color.kind = FM_COLOR_KIND_THEME;
@@ -1102,9 +1115,15 @@ TEST(FormulonCApiChart, ThemeColorsRoundTripAndAreValidated) {
   ChartGuard chart;
   Open(reloaded.handle, id, &chart);
   const fm_chart_series_info_t s = Series(chart, 0, 0);
-  EXPECT_EQ(s.line.color.kind, FM_COLOR_KIND_THEME);
-  EXPECT_EQ(s.line.color.theme, 4U);
-  EXPECT_DOUBLE_EQ(s.line.color.tint, 0.4);
+  EXPECT_EQ(s.line.color.base.kind, FM_COLOR_KIND_THEME);
+  EXPECT_EQ(s.line.color.base.theme, 4U);
+  // A tint is the input shorthand for its luminance transforms, which the read reports.
+  EXPECT_DOUBLE_EQ(s.line.color.base.tint, 0.0);
+  ASSERT_EQ(s.line.color.transform_count, 2U);
+  EXPECT_STREQ(s.line.color.transforms[0].name, "lumMod");
+  EXPECT_EQ(s.line.color.transforms[0].value, 60000);
+  EXPECT_STREQ(s.line.color.transforms[1].name, "lumOff");
+  EXPECT_EQ(s.line.color.transforms[1].value, 40000);
   EXPECT_EQ(s.labels.font_color.kind, FM_COLOR_KIND_THEME);
   EXPECT_EQ(s.labels.font_color.theme, 1U);
   EXPECT_DOUBLE_EQ(s.labels.font_color.tint, -0.25);
@@ -1126,9 +1145,9 @@ TEST(FormulonCApiChart, ThemeColorsRoundTripAndAreValidated) {
   for (const Bad& b : bad) {
     fm_chart_series_patch_t p = FM_STRUCT_INIT(fm_chart_series_patch_t);
     p.line.color_op = FM_PATCH_OP_SET;
-    p.line.color.kind = b.kind;
-    p.line.color.theme = b.theme;
-    p.line.color.tint = b.tint;
+    p.line.color.base.kind = b.kind;
+    p.line.color.base.theme = b.theme;
+    p.line.color.base.tint = b.tint;
     EXPECT_EQ(fm_sheet_update_chart_series(wb.handle, 0, id, 0, 0, &p), kInvalidArgument)
         << "kind=" << int(b.kind) << " theme=" << b.theme << " tint=" << b.tint;
   }
@@ -1421,7 +1440,9 @@ TEST(FormulonCApiChart, ChartexAndPivotChartsRefuseEdits) {
                                          FM_PATCH_OP_KEEP,
                                          0,
                                          FM_PATCH_OP_KEEP,
-                                         0};
+                                         0,
+                                         {},
+                                         {}};
   EXPECT_EQ(fm_sheet_update_chart_display(cx.handle, c.sheet, c.id, &display), kUnsupportedKind);
   fm_chart_preview_overrides_spec_t o = FM_STRUCT_INIT(fm_chart_preview_overrides_spec_t);
   fm_chart_data_t* preview = nullptr;
@@ -1514,8 +1535,17 @@ TEST(FormulonCApiChart, LiteralsAndMultiLevelCategoriesFromExcelFiles) {
 
 /// A display patch touching only `c16r3:dispNaAsBlank`.
 fm_chart_display_patch_t NaPatch(fm_patch_op_t op, int32_t value) {
-  return fm_chart_display_patch_t{
-      sizeof(fm_chart_display_patch_t), FM_PATCH_OP_KEEP, 0, FM_PATCH_OP_KEEP, 0, op, value, FM_PATCH_OP_KEEP, 0};
+  return fm_chart_display_patch_t{sizeof(fm_chart_display_patch_t),
+                                  FM_PATCH_OP_KEEP,
+                                  0,
+                                  FM_PATCH_OP_KEEP,
+                                  0,
+                                  op,
+                                  value,
+                                  FM_PATCH_OP_KEEP,
+                                  0,
+                                  {},
+                                  {}};
 }
 
 int32_t NaAsBlank(fm_workbook_t* wb, uint32_t id, size_t sheet = 0) {
@@ -1644,7 +1674,9 @@ TEST(FormulonCApiChart, NaAsBlankPatchSetClearAndKeep) {
                                    FM_PATCH_OP_KEEP,
                                    0,
                                    FM_PATCH_OP_KEEP,
-                                   0};
+                                   0,
+                                   {},
+                                   {}};
   ASSERT_EQ(fm_sheet_update_chart_display(wb.handle, 0, id, &patch), 0) << fm_get_last_error_message();
   Open(wb.handle, id, &chart);
   info = Info(chart);
@@ -1666,26 +1698,107 @@ TEST(FormulonCApiChart, DisplayPatchRejectsBadFields) {
   EXPECT_EQ(fm_sheet_update_chart_display(wb.handle, 0, id, nullptr), kBindingNullPointer);
   const fm_chart_display_patch_t bad[] = {
       // An op outside KEEP / CLEAR / SET.
-      {sizeof(fm_chart_display_patch_t), static_cast<fm_patch_op_t>(3), FM_BLANKS_AS_GAP, FM_PATCH_OP_KEEP, 0,
-       FM_PATCH_OP_KEEP, 0, FM_PATCH_OP_KEEP, 0},
-      {sizeof(fm_chart_display_patch_t), FM_PATCH_OP_KEEP, 0, static_cast<fm_patch_op_t>(3), 0, FM_PATCH_OP_KEEP, 0,
-       FM_PATCH_OP_KEEP, 0},
-      {sizeof(fm_chart_display_patch_t), FM_PATCH_OP_KEEP, 0, FM_PATCH_OP_KEEP, 0, static_cast<fm_patch_op_t>(3), 1,
-       FM_PATCH_OP_KEEP, 0},
+      {sizeof(fm_chart_display_patch_t),
+       static_cast<fm_patch_op_t>(3),
+       FM_BLANKS_AS_GAP,
+       FM_PATCH_OP_KEEP,
+       0,
+       FM_PATCH_OP_KEEP,
+       0,
+       FM_PATCH_OP_KEEP,
+       0,
+       {},
+       {}},
+      {sizeof(fm_chart_display_patch_t),
+       FM_PATCH_OP_KEEP,
+       0,
+       static_cast<fm_patch_op_t>(3),
+       0,
+       FM_PATCH_OP_KEEP,
+       0,
+       FM_PATCH_OP_KEEP,
+       0,
+       {},
+       {}},
+      {sizeof(fm_chart_display_patch_t),
+       FM_PATCH_OP_KEEP,
+       0,
+       FM_PATCH_OP_KEEP,
+       0,
+       static_cast<fm_patch_op_t>(3),
+       1,
+       FM_PATCH_OP_KEEP,
+       0,
+       {},
+       {}},
       // ABSENT is not a value; CLEAR removes the element.
-      {sizeof(fm_chart_display_patch_t), FM_PATCH_OP_SET, FM_BLANKS_AS_ABSENT, FM_PATCH_OP_KEEP, 0, FM_PATCH_OP_KEEP, 0,
-       FM_PATCH_OP_KEEP, 0},
-      {sizeof(fm_chart_display_patch_t), FM_PATCH_OP_SET, 4, FM_PATCH_OP_KEEP, 0, FM_PATCH_OP_KEEP, 0, FM_PATCH_OP_KEEP,
-       0},
-      {sizeof(fm_chart_display_patch_t), FM_PATCH_OP_SET, -1, FM_PATCH_OP_KEEP, 0, FM_PATCH_OP_KEEP, 0,
-       FM_PATCH_OP_KEEP, 0},
+      {sizeof(fm_chart_display_patch_t),
+       FM_PATCH_OP_SET,
+       FM_BLANKS_AS_ABSENT,
+       FM_PATCH_OP_KEEP,
+       0,
+       FM_PATCH_OP_KEEP,
+       0,
+       FM_PATCH_OP_KEEP,
+       0,
+       {},
+       {}},
+      {sizeof(fm_chart_display_patch_t),
+       FM_PATCH_OP_SET,
+       4,
+       FM_PATCH_OP_KEEP,
+       0,
+       FM_PATCH_OP_KEEP,
+       0,
+       FM_PATCH_OP_KEEP,
+       0,
+       {},
+       {}},
+      {sizeof(fm_chart_display_patch_t),
+       FM_PATCH_OP_SET,
+       -1,
+       FM_PATCH_OP_KEEP,
+       0,
+       FM_PATCH_OP_KEEP,
+       0,
+       FM_PATCH_OP_KEEP,
+       0,
+       {},
+       {}},
       // Flags are 0/1.
-      {sizeof(fm_chart_display_patch_t), FM_PATCH_OP_KEEP, 0, FM_PATCH_OP_SET, 2, FM_PATCH_OP_KEEP, 0, FM_PATCH_OP_KEEP,
-       0},
-      {sizeof(fm_chart_display_patch_t), FM_PATCH_OP_KEEP, 0, FM_PATCH_OP_KEEP, 0, FM_PATCH_OP_SET, 2, FM_PATCH_OP_KEEP,
-       0},
-      {sizeof(fm_chart_display_patch_t), FM_PATCH_OP_KEEP, 0, FM_PATCH_OP_KEEP, 0, FM_PATCH_OP_SET, -1,
-       FM_PATCH_OP_KEEP, 0},
+      {sizeof(fm_chart_display_patch_t),
+       FM_PATCH_OP_KEEP,
+       0,
+       FM_PATCH_OP_SET,
+       2,
+       FM_PATCH_OP_KEEP,
+       0,
+       FM_PATCH_OP_KEEP,
+       0,
+       {},
+       {}},
+      {sizeof(fm_chart_display_patch_t),
+       FM_PATCH_OP_KEEP,
+       0,
+       FM_PATCH_OP_KEEP,
+       0,
+       FM_PATCH_OP_SET,
+       2,
+       FM_PATCH_OP_KEEP,
+       0,
+       {},
+       {}},
+      {sizeof(fm_chart_display_patch_t),
+       FM_PATCH_OP_KEEP,
+       0,
+       FM_PATCH_OP_KEEP,
+       0,
+       FM_PATCH_OP_SET,
+       -1,
+       FM_PATCH_OP_KEEP,
+       0,
+       {},
+       {}},
   };
   for (const fm_chart_display_patch_t& p : bad) {
     EXPECT_EQ(fm_sheet_update_chart_display(wb.handle, 0, id, &p), kInvalidArgument)
@@ -1887,8 +2000,8 @@ TEST(FormulonCApiChart, UpdatePointMergesIntoExistingPointFormat) {
 
   fm_chart_point_patch_t color = FM_STRUCT_INIT(fm_chart_point_patch_t);
   color.line.color_op = FM_PATCH_OP_SET;
-  color.line.color.kind = FM_COLOR_KIND_RGB;
-  color.line.color.argb = 0xFF112233U;
+  color.line.color.base.kind = FM_COLOR_KIND_RGB;
+  color.line.color.base.argb = 0xFF112233U;
   ASSERT_EQ(fm_sheet_update_chart_point(wb.handle, 0, id, 0, 1, 2, &color), 0) << fm_get_last_error_message();
 
   fm_chart_point_patch_t marker = FM_STRUCT_INIT(fm_chart_point_patch_t);
@@ -1904,7 +2017,7 @@ TEST(FormulonCApiChart, UpdatePointMergesIntoExistingPointFormat) {
   fm_chart_point_info_t pt = FM_STRUCT_INIT(fm_chart_point_info_t);
   ASSERT_EQ(fm_chart_get_series_point_at(chart.handle, 0, 1, 0, &pt), 0);
   EXPECT_EQ(pt.idx, 2U);
-  EXPECT_EQ(pt.line.color.argb, 0xFF112233U);
+  EXPECT_EQ(pt.line.color.base.argb, 0xFF112233U);
   ASSERT_EQ(pt.has_marker, 1);
   EXPECT_EQ(pt.marker.symbol, FM_CHART_MARKER_SYMBOL_DIAMOND);
   EXPECT_EQ(pt.marker.has_size_pt, 1);
@@ -1976,8 +2089,8 @@ TEST(FormulonCApiChart, FillTransparencyPctRoundTripsThroughSeriesPatch) {
 
   fm_chart_series_patch_t patch = FM_STRUCT_INIT(fm_chart_series_patch_t);
   patch.fill.color_op = FM_PATCH_OP_SET;
-  patch.fill.color.kind = FM_COLOR_KIND_RGB;
-  patch.fill.color.argb = 0xFF336699U;
+  patch.fill.color.base.kind = FM_COLOR_KIND_RGB;
+  patch.fill.color.base.argb = 0xFF336699U;
   patch.fill.transparency_pct_op = FM_PATCH_OP_SET;
   patch.fill.transparency_pct = 40.0;
   ASSERT_EQ(fm_sheet_update_chart_series(wb.handle, 0, id, 0, 0, &patch), 0) << fm_get_last_error_message();

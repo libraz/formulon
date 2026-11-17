@@ -24,7 +24,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <string>
+#include <vector>
 
 #include "c_api/formulon_c.h"
 #include "wasm/parts/embind_common.h"
@@ -940,22 +942,31 @@ fm_drawing_placement_spec_t pull_drawing_placement(JsNarrowNumericReader& reader
 fm_drawing_patch_t pull_drawing_patch(JsNarrowNumericReader& reader, const emscripten::val& patch, const char* param,
                                       std::string& name_store, std::string& description_store);
 
+/// Keeps the bytes behind the pointers of a chart or shape paint input alive: its strings, the literal points of a
+/// series source and the transforms of a drawing colour.
+struct ChartPatchArena : std::deque<std::string> {
+  std::deque<std::vector<fm_chart_literal_info_t>> literals;
+  std::deque<std::vector<fm_color_transform_t>> transforms;
+};
+
 /// The `ChartFill` / `ChartLine` record of a shape's or chart element's paint, `null` when it states no element of
 /// its own (the all-zero record).
 emscripten::val chart_fill_to_val(const fm_chart_fill_t& fill);
 emscripten::val chart_line_to_val(const fm_chart_line_t& line);
 
 /// Reads `owner.fill` / `owner.line` as a paint patch: omitted keeps every member, `null` clears every member
-/// (the style's paint), an object sets the members it carries.
-void pull_chart_fill_patch(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* param,
-                           fm_chart_fill_patch_t* out);
-void pull_chart_line_patch(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* param,
-                           fm_chart_line_patch_t* out);
+/// (the style's paint), an object sets the members it carries. `arena` owns the memory the result points into.
+void pull_chart_fill_patch(JsNarrowNumericReader& reader, ChartPatchArena& arena, const emscripten::val& owner,
+                           const char* param, fm_chart_fill_patch_t* out);
+void pull_chart_line_patch(JsNarrowNumericReader& reader, ChartPatchArena& arena, const emscripten::val& owner,
+                           const char* param, fm_chart_line_patch_t* out);
 
 /// Reads `owner.fill` / `owner.line` as the paint of a new object: omitted or `null` is the style's paint (the
 /// all-zero record), and a `null` member is an omitted one.
-fm_chart_fill_t pull_chart_fill(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* param);
-fm_chart_line_t pull_chart_line(JsNarrowNumericReader& reader, const emscripten::val& owner, const char* param);
+fm_chart_fill_t pull_chart_fill(JsNarrowNumericReader& reader, ChartPatchArena& arena, const emscripten::val& owner,
+                                const char* param);
+fm_chart_line_t pull_chart_line(JsNarrowNumericReader& reader, ChartPatchArena& arena, const emscripten::val& owner,
+                                const char* param);
 
 }  // namespace parts
 }  // namespace wasm

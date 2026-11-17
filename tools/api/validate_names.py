@@ -41,7 +41,9 @@ it. `read_only_keys: [field, ...]` on an input, patch or both record lists the
 snake_case fields (a dotted path for a nested one) of the read record that
 passes back into it which the record itself does not declare; each is a field
 of a read twin (the `patch_record` of a patch op taking it, `X` of `XInput` /
-`XPatch`, `XProperties`) and none of the record. The top-level
+`XPatch`, `XProperties`) and none of the record. `patch_key: [field, ...]` on a
+patch record lists the fields that name the element a merge-by-key entry
+patches (a guide name); R40 asks no `<field>_op` of them. The top-level
 `unitless: [name, ...]` lists the field and parameter names (any casing;
 compared in snake_case) that carry a dimension without a unit
 suffix (R42). A `kind: constant` entry with `enum:` and a `js` / `py` name is
@@ -110,6 +112,7 @@ FIELDS = frozenset(
         "missing", "facade", "review", "note", "cell_args", "rect_args", "ref_args", "ref_exempt", "patch",
         "patch_record", "patch_reason", "patch_nested", "span_args", "internal", "handle", "reads_values", "resolved",
         "color", "namespace", "a1_exempt", "add_returns", "clearable", "read_only_keys", "was_semantics",
+        "patch_key",
     }
 )  # fmt: skip
 HANDLE_FIELDS = frozenset({"class", "js", "py", "supplies", "property"})
@@ -452,6 +455,11 @@ def _adoption_schema(where: str, entry: dict) -> List[str]:
             problems.append(f"{where}: read_only_keys lists distinct field names")
         elif any(not _SNAKE_PATH_RE.fullmatch(k) for k in keys):
             problems.append(f"{where}: read_only_keys names fields in snake_case, nested ones as a dotted path")
+    if "patch_key" in entry:
+        if kind != "record" or entry.get("role") != "patch":
+            problems.append(f"{where}: patch_key belongs to a patch record")
+        if not _names_list(entry["patch_key"]) or any(_snake_case(f) != f for f in entry["patch_key"]):
+            problems.append(f"{where}: patch_key lists distinct snake_case field names")
     if "reads_values" in entry and (entry["reads_values"] is not True or kind != "op" or "c" not in entry):
         problems.append(f"{where}: reads_values is `true` on an op with a C name")
     if "resolved" in entry and (entry["resolved"] is not True or kind != "op"):

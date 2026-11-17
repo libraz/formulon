@@ -38,6 +38,7 @@ enum SafeReaderOperation : int32_t {
   kSafeIsArray = 2,
   kSafeStringSnapshot = 3,
   kSafeBytesSnapshot = 4,
+  kSafeOwnKeys = 5,
 };
 
 // The error class the pre-js wrapper raises for a reader rejection.
@@ -82,6 +83,8 @@ EM_JS(emscripten::EM_VAL, fm_wasm_safe_reader_operation,
       } else {
         result = undefined;
       }
+    } else if (operation === 5) {
+      result = Object.keys(owner);
     } else {
       result = undefined;
     }
@@ -631,6 +634,19 @@ emscripten::val JsNarrowNumericReader::array_element(const emscripten::val& arra
   }
   bool completed = false;
   return safe_get(array, emscripten::val(index), field, &completed);
+}
+
+emscripten::val JsNarrowNumericReader::own_keys(const emscripten::val& owner, const char* field) {
+  if (!require_object(owner, field)) {
+    return emscripten::val::array();
+  }
+  bool completed = false;
+  const emscripten::val keys = safe_operation(owner, emscripten::val::undefined(), kSafeOwnKeys, &completed);
+  if (!completed) {
+    reject_access(nullptr, field);
+    return emscripten::val::array();
+  }
+  return keys;
 }
 
 bool JsNarrowNumericReader::require_array(const emscripten::val& value, const char* field) {

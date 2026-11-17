@@ -6,7 +6,6 @@
 #ifndef FORMULON_C_API_PARTS_CHART_PATCH_READER_H_
 #define FORMULON_C_API_PARTS_CHART_PATCH_READER_H_
 
-#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -14,11 +13,14 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "chart/chart_edit.h"
+#include "drawing/drawing_color.h"
 #include "utils/error.h"
+#include "utils/resource_budget.h"
 
 namespace formulon {
 namespace c_api {
@@ -85,6 +87,42 @@ class PatchReader {
       return;
     }
     field(op, value == 1, out, name);
+  }
+
+  // A paint colour patch: a `SET` value is converted by `drawing_color_from_c`.
+  void drawing_color_field(std::int32_t op, const fm_drawing_color_t& value,
+                           ChartPatchField<formulon::DrawingColor>& out, const char* name);
+
+  // A line end patch: a `SET` value must lie inside its enumerations.
+  void line_end_field(std::int32_t op, const fm_chart_line_end_t& value, ChartPatchField<formulon::ChartLineEnd>& out,
+                      const char* name) {
+    if (op == FM_PATCH_OP_SET && !line_end_ok(value, name)) {
+      return;
+    }
+    field(op, line_end_from_c(value), out, name);
+  }
+
+  // Whether `value` is a valid line end, recording the failure under `name`.
+  bool line_end_ok(const fm_chart_line_end_t& value, const char* name) {
+    const std::string at = public_name(name);
+    return enum_ok(value.type, FM_CHART_LINE_END_TYPE_ARROW, (at + ".type").c_str()) &&
+           enum_ok(value.has_width, 1, (at + ".has_width").c_str()) &&
+           (value.has_width == 0 || enum_ok(value.width, FM_CHART_LINE_END_SIZE_LARGE, (at + ".width").c_str())) &&
+           enum_ok(value.has_length, 1, (at + ".has_length").c_str()) &&
+           (value.has_length == 0 || enum_ok(value.length, FM_CHART_LINE_END_SIZE_LARGE, (at + ".length").c_str()));
+  }
+
+  /// The model line end of a validated C one.
+  static formulon::ChartLineEnd line_end_from_c(const fm_chart_line_end_t& value) {
+    formulon::ChartLineEnd out;
+    out.type = static_cast<formulon::ChartLineEndType>(value.type);
+    if (value.has_width != 0) {
+      out.width = static_cast<formulon::ChartLineEndSize>(value.width);
+    }
+    if (value.has_length != 0) {
+      out.length = static_cast<formulon::ChartLineEndSize>(value.length);
+    }
+    return out;
   }
 
   // A colour patch: a `SET` value must be None, Rgb or a valid Theme colour.
@@ -187,7 +225,7 @@ class PatchReader {
 
  private:
   /// The C field `name` as a binding sees it: without the patch-op suffix.
-  static std::string public_name(const char* name) {
+  static std::string public_name(const std::string& name) {
     std::string out(name);
     constexpr std::string_view kOpSuffix = "_op";
     if (out.size() > kOpSuffix.size() && out.compare(out.size() - kOpSuffix.size(), kOpSuffix.size(), kOpSuffix) == 0) {
@@ -210,9 +248,91 @@ class PatchReader {
   fm_status_t rc_ = 0;
 };
 
-/// The C colour of a model paint colour; None when absent.
-inline fm_color_t paint_color_to_c(const std::optional<formulon::ColorSpec>& color) {
-  return color_spec_to_c(color ? *color : formulon::ColorSpec{});
+/// A C paint colour as the model's, recording the first failure in `r`: the base must be None, Rgb or a valid Theme
+/// colour and each transform carry a name and a 0 / 1 `has_value`. The engine checks the rest.
+inline formulon::DrawingColor drawing_color_from_c(PatchReader& r, const fm_drawing_color_t& value,
+                                                   const std::string& name) {
+  formulon::DrawingColor out;
+  if (const char* why = color_spec_problem(value.base); why != nullptr) {
+    r.fail(name.c_str(), why);
+    return out;
+  }
+  out.base = color_spec_from_c(value.base);
+  if (value.transform_count == 0U) {
+    return out;
+  }
+  if (value.transforms == nullptr) {
+    r.check(null_field(name + ".transforms"));
+    return out;
+  }
+  if (value.transform_count > formulon::drawing_color::kMaxTransforms) {
+    r.check(set_binding_error(
+        formulon::FormulonErrorCode::kSecurityResourceLimit, "transform_count is above the limit",
+        formulon::limit_context("color_transforms", value.transform_count, formulon::drawing_color::kMaxTransforms)));
+    return out;
+  }
+  out.transforms.reserve(value.transform_count);
+  for (std::uint32_t i = 0; i < value.transform_count; ++i) {
+    const fm_color_transform_t& t = value.transforms[i];
+    if (t.name == nullptr) {
+      r.check(null_field(name + ".transforms.name"));
+      return out;
+    }
+    if (!r.text_ok(t.name, (name + ".transforms.name").c_str()) ||
+        !r.enum_ok(t.has_value, 1, (name + ".transforms.has_value").c_str())) {
+      return out;
+    }
+    out.transforms.push_back(
+        formulon::ColorTransform{t.name, t.has_value != 0 ? std::optional<std::int32_t>(t.value) : std::nullopt});
+  }
+  return out;
+}
+
+inline void PatchReader::drawing_color_field(std::int32_t op, const fm_drawing_color_t& value,
+                                             ChartPatchField<formulon::DrawingColor>& out, const char* name) {
+  field(op, op == FM_PATCH_OP_SET ? drawing_color_from_c(*this, value, public_name(name)) : formulon::DrawingColor{},
+        out, name);
+}
+
+/// The C view of a model paint colour; base None when absent. `sink` owns what the view borrows:
+/// `sink.text(s)` returns a stable copy of a transform name, and `sink.transforms(color, view)` a stable array.
+template <typename Sink>
+fm_drawing_color_t drawing_color_to_c(const std::optional<formulon::DrawingColor>& color, Sink& sink) {
+  fm_drawing_color_t out{};
+  if (!color) {
+    return out;
+  }
+  out.base = color_spec_to_c(color->base);
+  if (!color->transforms.empty()) {
+    std::vector<fm_color_transform_t> view;
+    view.reserve(color->transforms.size());
+    for (const formulon::ColorTransform& t : color->transforms) {
+      view.push_back(fm_color_transform_t{sink.text(t.name), t.value ? 1 : 0, t.value.value_or(0)});
+    }
+    out.transform_count = static_cast<std::uint32_t>(view.size());
+    out.transforms = sink.transforms(*color, std::move(view));
+  }
+  if (color->resolved_argb) {
+    out.has_resolved = 1;
+    out.resolved = *color->resolved_argb;
+  }
+  if (color->resolved_alpha) {
+    constexpr double kOpaque = 100000.0;
+    out.has_resolved_transparency_pct = 1;
+    out.resolved_transparency_pct = (kOpaque - static_cast<double>(*color->resolved_alpha)) / 1000.0;
+  }
+  return out;
+}
+
+/// A model line end as the C record reports it.
+inline fm_chart_line_end_t line_end_to_c(const formulon::ChartLineEnd& end) {
+  fm_chart_line_end_t out{};
+  out.type = static_cast<std::int32_t>(end.type);
+  out.has_width = end.width ? 1 : 0;
+  out.width = end.width ? static_cast<std::int32_t>(*end.width) : 0;
+  out.has_length = end.length ? 1 : 0;
+  out.length = end.length ? static_cast<std::int32_t>(*end.length) : 0;
+  return out;
 }
 
 /// The transparency percentage of an alpha in thousandths of a percent; 0 without one.
@@ -220,10 +340,11 @@ inline double paint_transparency_of(const std::optional<std::uint32_t>& alpha) {
   return alpha ? 100.0 - static_cast<double>(*alpha) / 1000.0 : 0.0;
 }
 
-/// A model fill as the C record reports it.
-inline fm_chart_fill_t chart_fill_to_c(const formulon::ChartFill& f) {
+/// A model fill as the C record reports it; `sink` as `drawing_color_to_c`.
+template <typename Sink>
+fm_chart_fill_t chart_fill_to_c(const formulon::ChartFill& f, Sink& sink) {
   fm_chart_fill_t out{};
-  out.color = paint_color_to_c(f.color);
+  out.color = drawing_color_to_c(f.color, sink);
   out.has_transparency_pct = f.alpha ? 1 : 0;
   out.transparency_pct = paint_transparency_of(f.alpha);
   out.none = f.none ? 1 : 0;
@@ -231,27 +352,31 @@ inline fm_chart_fill_t chart_fill_to_c(const formulon::ChartFill& f) {
   return out;
 }
 
-/// A model outline as the C record reports it.
-inline fm_chart_line_t chart_line_to_c(const formulon::ChartLine& l) {
+/// A model outline as the C record reports it; `sink` as `drawing_color_to_c`.
+template <typename Sink>
+fm_chart_line_t chart_line_to_c(const formulon::ChartLine& l, Sink& sink) {
   constexpr double kEmuPerPt = 12700.0;
   fm_chart_line_t out{};
-  out.color = paint_color_to_c(l.color);
+  out.color = drawing_color_to_c(l.color, sink);
   out.has_transparency_pct = l.alpha ? 1 : 0;
   out.transparency_pct = paint_transparency_of(l.alpha);
   out.has_width_pt = l.width_emu ? 1 : 0;
   out.width_pt = l.width_emu ? static_cast<double>(*l.width_emu) / kEmuPerPt : 0.0;
   out.has_dash = l.dash ? 1 : 0;
-  // The C enum ends at Other; the later presets read as Other.
-  out.dash = l.dash ? static_cast<std::int32_t>(std::min(*l.dash, formulon::ChartLineDash::kOther)) : 0;
+  out.dash = l.dash ? static_cast<std::int32_t>(*l.dash) : 0;
   out.none = l.none ? 1 : 0;
   out.other = l.other ? 1 : 0;
+  out.has_head_end = l.head_end ? 1 : 0;
+  out.head_end = l.head_end ? line_end_to_c(*l.head_end) : fm_chart_line_end_t{};
+  out.has_tail_end = l.tail_end ? 1 : 0;
+  out.tail_end = l.tail_end ? line_end_to_c(*l.tail_end) : fm_chart_line_end_t{};
   return out;
 }
 
 /// A C fill patch as the model's; shared by the chart and shape edits.
 inline formulon::ChartFillPatch read_fill(PatchReader& r, const fm_chart_fill_patch_t& p) {
   formulon::ChartFillPatch out;
-  r.color_field(p.color_op, p.color, out.color, "fill.color_op");
+  r.drawing_color_field(p.color_op, p.color, out.color, "fill.color_op");
   r.field(p.transparency_pct_op, p.transparency_pct, out.transparency_pct, "fill.transparency_pct_op");
   // CLEAR drops an explicit no-fill as SET 0 does, so a patch clearing every member stays valid.
   if (p.none_op == FM_PATCH_OP_CLEAR) {
@@ -265,10 +390,12 @@ inline formulon::ChartFillPatch read_fill(PatchReader& r, const fm_chart_fill_pa
 /// A C outline patch as the model's; shared by the chart and shape edits.
 inline formulon::ChartLinePatch read_line(PatchReader& r, const fm_chart_line_patch_t& p) {
   formulon::ChartLinePatch out;
-  r.color_field(p.color_op, p.color, out.color, "line.color_op");
+  r.drawing_color_field(p.color_op, p.color, out.color, "line.color_op");
   r.field(p.transparency_pct_op, p.transparency_pct, out.transparency_pct, "line.transparency_pct_op");
   r.field(p.width_pt_op, p.width_pt, out.width_pt, "line.width_pt_op");
-  r.enum_field(p.dash_op, p.dash, formulon::ChartLineDash::kOther, out.dash, "line.dash");
+  r.enum_field(p.dash_op, p.dash, formulon::ChartLineDash::kSysDashDotDot, out.dash, "line.dash");
+  r.line_end_field(p.head_end_op, p.head_end, out.head_end, "line.head_end_op");
+  r.line_end_field(p.tail_end_op, p.tail_end, out.tail_end, "line.tail_end_op");
   // CLEAR drops an explicit no-line as SET 0 does, so a patch clearing every member stays valid.
   if (p.none_op == FM_PATCH_OP_CLEAR) {
     out.none = false;

@@ -60,7 +60,12 @@ from .api_conventions_bindings import (
     _words,
     surfaces,
 )
-from .api_conventions_shapes import _UNCHANGED_DEFAULTS, _address_positions, _is_coordinate, _strip_null
+from .api_conventions_shapes import (
+    _UNCHANGED_DEFAULTS,
+    _address_positions,
+    _is_coordinate,
+    _strip_null,
+)
 from .surface_files import REPO_ROOT
 from .ts_decl import _extract_braced_block
 
@@ -393,12 +398,12 @@ def _struct_docs(header: str) -> Dict[str, str]:
     return out
 
 
-def _patch_field_problems(fields: Sequence[CParam]) -> Iterator[Tuple[str, str]]:
+def _patch_field_problems(fields: Sequence[CParam], keys: Set[str]) -> Iterator[Tuple[str, str]]:
     names = {f.name for f in fields}
     types = {f.name: f.ctype for f in fields}
     for f in fields:
         name = f.name
-        if name == "struct_size" or f.base_type.endswith("_patch_t"):
+        if name == "struct_size" or name in keys or f.base_type.endswith("_patch_t"):
             continue
         if name.endswith("_op"):
             if types[name] != PATCH_OP_TYPE:
@@ -420,12 +425,14 @@ def _patch_field_problems(fields: Sequence[CParam]) -> Iterator[Tuple[str, str]]
 @_owned("R40.c.patch_op")
 def _rule_patch_ops(ctx: Context) -> Iterable[Violation]:
     """A C patch struct gives every value field a `<field>_op` typed `fm_patch_op_t` (an array its `_count` and
-    one op, an embedded sub-patch its own ops); no `_mask`, `has_` or `_engaged` field, no negative keep."""
+    one op, an embedded sub-patch its own ops); no `_mask`, `has_` or `_engaged` field, no negative keep. The
+    fields a ledger record lists under `patch_key:` name the element a merge-by-key entry patches and take no op."""
     structs = {t.name: t for t in ctx.typedefs if t.kind == "struct"}
     docs = _struct_docs(ctx.header)
     for name in sorted(_patch_structs(ctx)):
         typedef = structs[name]
-        for disc, message in _patch_field_problems(typedef.fields):
+        keys = set(ctx.ledger.entry(ctx.ledger.key_for("c", name)).get("patch_key") or [])
+        for disc, message in _patch_field_problems(typedef.fields, keys):
             yield ctx.c_violation("R40.c.patch_op", name, disc, message, typedef.line)
         if _NEGATIVE_KEEP_RE.search(docs.get(name, "")):
             yield ctx.c_violation(
@@ -555,6 +562,28 @@ def _unitless(ctx: Context) -> Set[str]:
     return {_snake(n) for n in listed if isinstance(n, str)}
 
 
+# A field comment stating the field holds one enum's value: "an `fm_x_t`", "one of `fm_x_t`".
+_ENUM_VALUE_DOC_RE = re.compile(r"\b(?:an?|one of)\s+`(fm_[a-z0-9_]+_t)`")
+
+
+def _c_selector_fields(ctx: Context) -> Set[Tuple[str, str]]:
+    """`(struct, field)` pairs whose doc comment (above or trailing) says the field holds an enum value."""
+    out: Set[Tuple[str, str]] = set()
+    for match in _C_STRUCT_RE.finditer(ctx.header):
+        doc = ""
+        for line in match.group(1).splitlines():
+            code, _, comment = line.partition("/*")
+            found = re.match(r"^\s*[\w ]*?[\w*]\s*\b(\w+)\s*;", code)
+            if found is None:
+                doc = doc + " " + line if code.strip() == "" or doc else ""
+                continue
+            for name in _ENUM_VALUE_DOC_RE.findall(doc + " " + comment):
+                if name in ctx.enum_names:
+                    out.add((match.group(2), found.group(1)))
+            doc = ""
+    return out
+
+
 def _js_numeric(ptype: str) -> bool:
     return "number" in _strip_null(ptype, True)
 
@@ -573,10 +602,14 @@ def _rule_unit_suffix(ctx: Context) -> Iterable[Violation]:
         return needs_unit(name, owner) and _snake(name) not in exempt
 
     message = "`{}` carries a dimension; end it with its unit or list it under `unitless:`"
+    selectors = _c_selector_fields(ctx)
     for typedef in ctx.typedefs:
         if typedef.kind != "struct":
             continue
         for f in typedef.fields:
+            # A field holding an enum value is a selector, whatever its name.
+            if (typedef.name, f.name) in selectors:
+                continue
             if f.pointer_depth == 0 and f.base_type in _C_NUMERIC and flagged(f.name, typedef.name):
                 yield ctx.c_violation("R42.unit.suffix", typedef.name, f.name, message.format(f.name), typedef.line)
     for fn in ctx.functions:

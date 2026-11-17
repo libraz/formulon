@@ -92,8 +92,11 @@ describe('a shape paints with the chart fill and line records', () => {
         line: { color: '#00FF00', widthPt: 2, dash: ChartLineDash.Dash },
       });
       const { fill, line } = shape.getProperties();
-      assert.equal(fill.color.kind, ColorKind.Rgb);
-      assert.equal(fill.color.argb & 0xffffff, 0xff0000);
+      assert.equal(fill.color.base.kind, ColorKind.Rgb);
+      assert.equal(fill.color.base.argb & 0xffffff, 0xff0000);
+      assert.equal(fill.color.resolved.argb >>> 0, 0xffff0000);
+      // The stated transparency is an alpha transform, which leaves the rendered opacity unknown.
+      assert.equal(fill.color.resolvedTransparencyPct, null);
       assert.equal(fill.transparencyPct, 25);
       assert.equal(fill.none, false);
       assert.equal(fill.other, false);
@@ -138,7 +141,7 @@ describe('a shape paints with the chart fill and line records', () => {
       assert.equal(cleared.line, null);
       chart.updateSeries(0, series.seriesId, { fill: { color: '#336699' } });
       const painted = chart.getProperties().plots[0].series[0];
-      assert.equal(painted.fill.color.argb & 0xffffff, 0x336699);
+      assert.equal(painted.fill.color.base.argb & 0xffffff, 0x336699);
       assert.equal(painted.line, null);
     });
   });
@@ -229,6 +232,175 @@ describe('chart data names the role of an unresolved input', () => {
         assert.ok(Object.values(f.ChartRole).includes(entry.role));
         assert.equal('source' in entry, false);
       }
+    });
+  });
+});
+
+describe('a paint colour carries its transforms', () => {
+  const shapeWith = (ws, color, extra = {}) => ws.addShape({ anchor: box, fill: { color, ...extra } });
+
+  it('reads the base, the transforms in order and the rendered colour', () => {
+    withSheet((ws) => {
+      const shape = shapeWith(ws, {
+        base: '#336699',
+        transforms: [{ name: 'lumMod', value: 75000 }, { name: 'gray' }],
+      });
+      const { color } = shape.getProperties().fill;
+      assert.equal(color.base.kind, ColorKind.Rgb);
+      assert.equal(color.base.argb >>> 0, 0xff336699);
+      assert.deepEqual(color.transforms, [
+        { name: 'lumMod', value: 75000 },
+        { name: 'gray', value: null },
+      ]);
+      assert.equal(typeof color.resolved.argb, 'number');
+      assert.equal(color.resolved.resolution, f.ColorResolution.Exact);
+      assert.equal(color.resolvedTransparencyPct, 0);
+    });
+  });
+
+  it('a plain colour reads with no transforms', () => {
+    withSheet((ws) => {
+      const { color } = shapeWith(ws, '#FF0000').getProperties().fill;
+      assert.deepEqual(color.transforms, []);
+      assert.equal(color.resolved.argb >>> 0, 0xffff0000);
+    });
+  });
+
+  it('an alpha transform leaves the rendered transparency unknown, and a read record passes back as input', () => {
+    withSheet((ws) => {
+      const shape = shapeWith(ws, { base: '#FF0000', transforms: [{ name: 'alpha', value: 60000 }] });
+      const { fill } = shape.getProperties();
+      assert.equal(fill.color.resolvedTransparencyPct, null);
+      const copy = ws.addShape({ anchor: box });
+      copy.update({ fill });
+      assert.deepEqual(copy.getProperties().fill.color, fill.color);
+    });
+  });
+
+  it('an alpha transform beside transparencyPct must state the same opacity', () => {
+    withSheet((ws) => {
+      const color = { base: '#FF0000', transforms: [{ name: 'alpha', value: 60000 }] };
+      expectCode(() => shapeWith(ws, color, { transparencyPct: 10 }), StatusCode.InvalidArgument);
+      shapeWith(ws, color, { transparencyPct: 40 });
+      assert.equal(ws.listDrawings().length, 1);
+    });
+  });
+
+  it('refuses a malformed transform name, a tint beside transforms and more than 64 transforms', () => {
+    withSheet((ws) => {
+      const withTransforms = (transforms, base = '#FF0000') => shapeWith(ws, { base, transforms });
+      expectCode(() => withTransforms([{ name: '1bad', value: 1 }]), StatusCode.InvalidArgument);
+      const themed = { kind: ColorKind.Theme, argb: 0, theme: 4, tint: 0.4, indexed: 0 };
+      expectCode(() => withTransforms([{ name: 'alpha', value: 1 }], themed), StatusCode.InvalidArgument);
+      const many = Array.from({ length: 65 }, () => ({ name: 'lumMod', value: 1 }));
+      expectCode(() => withTransforms(many), StatusCode.SecurityResourceLimit);
+      expectTypeError(() => withTransforms([{ value: 1 }]));
+      expectTypeError(() => withTransforms([{ name: 'alpha', value: 'half' }]));
+      assert.equal(ws.listDrawings().length, 0);
+    });
+  });
+
+  it('a chart series takes the same colour', () => {
+    withSheet((ws) => {
+      const chart = chartOf(ws);
+      const color = { base: '#336699', transforms: [{ name: 'lumMod', value: 50000 }] };
+      chart.updateSeries(0, 0, { fill: { color } });
+      const read = chart.getProperties().plots[0].series[0].fill.color;
+      assert.equal(read.base.argb >>> 0, 0xff336699);
+      assert.deepEqual(read.transforms, [{ name: 'lumMod', value: 50000 }]);
+    });
+  });
+});
+
+describe('a line carries its end decorations and the system dash presets', () => {
+  const lineOf = (ws, line) => ws.addShape({ anchor: box, presetGeometry: 'line', line });
+
+  it('headEnd and tailEnd round trip, and null removes one end', () => {
+    withSheet((ws) => {
+      const shape = lineOf(ws, {
+        color: '#000000',
+        headEnd: { type: f.ChartLineEndType.Triangle, width: f.ChartLineEndSize.Large },
+        tailEnd: { type: f.ChartLineEndType.Arrow, width: null, length: f.ChartLineEndSize.Small },
+      });
+      let { line } = shape.getProperties();
+      assert.deepEqual(line.headEnd, {
+        type: f.ChartLineEndType.Triangle,
+        width: f.ChartLineEndSize.Large,
+        length: null,
+      });
+      assert.deepEqual(line.tailEnd, {
+        type: f.ChartLineEndType.Arrow,
+        width: null,
+        length: f.ChartLineEndSize.Small,
+      });
+      shape.update({ line: { headEnd: null } });
+      line = shape.getProperties().line;
+      assert.equal(line.headEnd, null);
+      assert.equal(line.tailEnd.type, f.ChartLineEndType.Arrow);
+      // An end replaces the stored one whole: the size it leaves out is dropped.
+      shape.update({ line: { tailEnd: { type: f.ChartLineEndType.Oval } } });
+      assert.deepEqual(shape.getProperties().line.tailEnd, {
+        type: f.ChartLineEndType.Oval,
+        width: null,
+        length: null,
+      });
+    });
+  });
+
+  it('a line end needs a type in range', () => {
+    withSheet((ws) => {
+      expectTypeError(() => lineOf(ws, { headEnd: {} }));
+      expectTypeError(() => lineOf(ws, { headEnd: { width: f.ChartLineEndSize.Small } }));
+      expectCode(() => lineOf(ws, { headEnd: { type: 6 } }), StatusCode.InvalidArgument);
+      const wide = { type: f.ChartLineEndType.Arrow, width: 3 };
+      expectCode(() => lineOf(ws, { tailEnd: wide }), StatusCode.InvalidArgument);
+    });
+  });
+
+  it('the system and long dash presets read as their own members', () => {
+    withSheet((ws) => {
+      for (const name of ['SysDot', 'SysDash', 'LgDash', 'LgDashDot', 'LgDashDotDot', 'SysDashDot', 'SysDashDotDot']) {
+        const shape = lineOf(ws, { dash: f.ChartLineDash[name] });
+        assert.equal(shape.getProperties().line.dash, f.ChartLineDash[name], name);
+      }
+      expectCode(() => lineOf(ws, { dash: 12 }), StatusCode.InvalidArgument);
+    });
+  });
+});
+
+describe('the chart area and the plot area carry their own paint', () => {
+  it('both read as records, and a display patch merges into them', () => {
+    withSheet((ws) => {
+      const chart = chartOf(ws);
+      for (const key of ['chartArea', 'plotArea']) {
+        const area = chart.getProperties()[key];
+        assert.deepEqual(Object.keys(area), ['fill', 'line'], key);
+      }
+      chart.updateDisplay({
+        chartArea: { fill: { color: '#FF0000' }, line: { widthPt: 2 } },
+        plotArea: { fill: { color: '#00FF00' } },
+      });
+      const props = chart.getProperties();
+      assert.equal(props.chartArea.fill.color.base.argb >>> 0, 0xffff0000);
+      assert.equal(props.chartArea.line.widthPt, 2);
+      assert.equal(props.plotArea.fill.color.base.argb >>> 0, 0xff00ff00);
+      // An omitted key keeps the paint; the other area is untouched.
+      chart.updateDisplay({ chartArea: { line: { widthPt: 3 } } });
+      const after = chart.getProperties();
+      assert.equal(after.chartArea.fill.color.base.argb >>> 0, 0xffff0000);
+      assert.equal(after.chartArea.line.widthPt, 3);
+      assert.equal(after.plotArea.fill.color.base.argb >>> 0, 0xff00ff00);
+    });
+  });
+
+  it('null on an area key is a TypeError, and null on a member removes its paint', () => {
+    withSheet((ws) => {
+      const chart = chartOf(ws);
+      expectTypeError(() => chart.updateDisplay({ chartArea: null }));
+      expectTypeError(() => chart.updateDisplay({ plotArea: null }));
+      chart.updateDisplay({ chartArea: { fill: { color: '#FF0000' } } });
+      chart.updateDisplay({ chartArea: { fill: null } });
+      assert.equal(chart.getProperties().chartArea.fill, null);
     });
   });
 });

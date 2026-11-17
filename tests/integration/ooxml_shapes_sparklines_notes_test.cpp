@@ -37,7 +37,14 @@ ColorSpec ThemeColor(std::uint32_t theme, double tint) {
   return spec;
 }
 
-std::uint32_t Rgb24(const ColorSpec& spec) {
+DrawingColor Dc(const ColorSpec& base) {
+  DrawingColor color;
+  color.base = base;
+  return color;
+}
+
+std::uint32_t Rgb24(const DrawingColor& color) {
+  const ColorSpec& spec = color.base;
   EXPECT_EQ(spec.kind, ColorSpec::Kind::kRgb);
   return spec.rgb & 0xFFFFFFU;
 }
@@ -255,9 +262,10 @@ TEST(ShapeFidelity, ListReportsEveryModelledField) {
   EXPECT_TRUE(custom.text_box);
   EXPECT_TRUE(custom.paint_fill.other);
   EXPECT_TRUE(custom.paint_line.color.has_value());
-  EXPECT_EQ(custom.paint_line.color->kind, ColorSpec::Kind::kTheme);
-  EXPECT_EQ(custom.paint_line.color->theme, 4U);
-  EXPECT_DOUBLE_EQ(custom.paint_line.color->tint, 0.0);
+  EXPECT_EQ(custom.paint_line.color->base.kind, ColorSpec::Kind::kTheme);
+  EXPECT_EQ(custom.paint_line.color->base.theme, 4U);
+  EXPECT_DOUBLE_EQ(custom.paint_line.color->base.tint, 0.0);
+  EXPECT_TRUE(custom.paint_line.color->transforms.empty());
 
   EXPECT_EQ(shapes.value()[2].object.kind, DrawingObjectKind::kConnector);
   EXPECT_EQ(shapes.value()[2].prst, "straightConnector1");
@@ -281,29 +289,37 @@ std::vector<std::uint8_t> OneShapePackage(const std::string& paints) {
                       {{"xl/drawings/drawing1.xml", drawing, std::string(kDrawingCt)}});
 }
 
-TEST(ShapeColor, PaletteSchemeColoursReadAsTheme) {
+TEST(ShapeColor, PaletteSchemeColoursReadAsThemeWithTransforms) {
   const Workbook wb = LoadOrDie(OneShapePackage(
       "<a:solidFill><a:schemeClr val=\"accent1\"><a:lumMod val=\"60000\"/><a:lumOff val=\"40000\"/>"
       "<a:alpha val=\"50000\"/></a:schemeClr></a:solidFill>"
       "<a:ln><a:solidFill><a:schemeClr val=\"tx1\"><a:lumMod val=\"75000\"/></a:schemeClr></a:solidFill></a:ln>"));
   const ShapeInfo shape = list_shapes(wb, 0).value()[0];
   EXPECT_TRUE(shape.paint_fill.color.has_value());
-  EXPECT_EQ(shape.paint_fill.color->kind, ColorSpec::Kind::kTheme);
-  EXPECT_EQ(shape.paint_fill.color->theme, 4U);
-  EXPECT_NEAR(shape.paint_fill.color->tint, 0.4, 1e-9);
+  EXPECT_EQ(shape.paint_fill.color->base.kind, ColorSpec::Kind::kTheme);
+  EXPECT_EQ(shape.paint_fill.color->base.theme, 4U);
+  EXPECT_EQ(shape.paint_fill.color->transforms,
+            (std::vector<ColorTransform>{{"lumMod", 60000}, {"lumOff", 40000}, {"alpha", 50000}}));
+  EXPECT_TRUE(shape.paint_fill.color->resolved_argb.has_value());
   EXPECT_TRUE(shape.paint_line.color.has_value());
-  EXPECT_EQ(shape.paint_line.color->theme, 1U);
-  EXPECT_NEAR(shape.paint_line.color->tint, -0.25, 1e-9);
+  EXPECT_EQ(shape.paint_line.color->base.theme, 1U);
+  EXPECT_EQ(shape.paint_line.color->transforms, (std::vector<ColorTransform>{{"lumMod", 75000}}));
+  EXPECT_TRUE(shape.paint_line.color->resolved_argb.has_value());
 }
 
-TEST(ShapeColor, UnrepresentableColoursStayOther) {
+TEST(ShapeColor, UnreadableColourStaysOtherAndShadedSchemeColourKeepsTransforms) {
   // The default text-box outline: a white scheme colour darkened by `shade`.
   const Workbook wb = LoadOrDie(OneShapePackage(
       "<a:solidFill><a:prstClr val=\"red\"/></a:solidFill>"
       "<a:ln><a:solidFill><a:schemeClr val=\"lt1\"><a:shade val=\"50000\"/></a:schemeClr></a:solidFill></a:ln>"));
   const ShapeInfo shape = list_shapes(wb, 0).value()[0];
   EXPECT_TRUE(shape.paint_fill.other);
-  EXPECT_TRUE(shape.paint_line.other);
+  EXPECT_FALSE(shape.paint_line.other);
+  ASSERT_TRUE(shape.paint_line.color.has_value());
+  EXPECT_EQ(shape.paint_line.color->base.kind, ColorSpec::Kind::kTheme);
+  EXPECT_EQ(shape.paint_line.color->base.theme, 0U);
+  EXPECT_EQ(shape.paint_line.color->transforms, (std::vector<ColorTransform>{{"shade", 50000}}));
+  EXPECT_TRUE(shape.paint_line.color->resolved_argb.has_value());
 }
 
 TEST(ShapeColor, ThemeColourWritesPaletteFormAndKeepsAlpha) {
@@ -312,8 +328,8 @@ TEST(ShapeColor, ThemeColourWritesPaletteFormAndKeepsAlpha) {
                                 "</a:solidFill><a:ln><a:noFill/></a:ln>"));
   ShapeSpec spec;
   spec.fields = 0;
-  spec.paint_fill.color = ChartPatchField<ColorSpec>::Set(ThemeColor(4, 0.4));
-  spec.paint_line.color = ChartPatchField<ColorSpec>::Set(ThemeColor(1, -0.25));
+  spec.paint_fill.color = ChartPatchField<DrawingColor>::Set(Dc(ThemeColor(4, 0.4)));
+  spec.paint_line.color = ChartPatchField<DrawingColor>::Set(Dc(ThemeColor(1, -0.25)));
   ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, 2, spec)));
   const std::string xml = ReadPart(SaveOrDie(wb), "xl/drawings/drawing1.xml");
   EXPECT_TRUE(Has(xml,
@@ -324,13 +340,23 @@ TEST(ShapeColor, ThemeColourWritesPaletteFormAndKeepsAlpha) {
 
   const double tints[] = {0.4, -0.25, 0.123456, 0.123455};
   for (const double tint : tints) {
-    spec.paint_fill.color = ChartPatchField<ColorSpec>::Set(ThemeColor(9, tint));
+    spec.paint_fill.color = ChartPatchField<DrawingColor>::Set(Dc(ThemeColor(9, tint)));
     ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, 2, spec)));
     Workbook again = LoadOrDie(SaveOrDie(wb));
     const ShapeInfo shape = list_shapes(again, 0).value()[0];
-    EXPECT_EQ(shape.paint_fill.color->kind, ColorSpec::Kind::kTheme);
-    EXPECT_EQ(shape.paint_fill.color->theme, 9U);
-    EXPECT_NEAR(shape.paint_fill.color->tint, tint, 1e-5);
+    EXPECT_EQ(shape.paint_fill.color->base.kind, ColorSpec::Kind::kTheme);
+    EXPECT_EQ(shape.paint_fill.color->base.theme, 9U);
+    // A read never carries a tint: it is the lumMod / lumOff pair the tint expands to.
+    double lum_mod = 100000.0;
+    double lum_off = 0.0;
+    for (const ColorTransform& t : shape.paint_fill.color->transforms) {
+      if (t.name == "lumMod") {
+        lum_mod = static_cast<double>(t.value.value_or(0));
+      } else if (t.name == "lumOff") {
+        lum_off = static_cast<double>(t.value.value_or(0));
+      }
+    }
+    EXPECT_NEAR(tint > 0 ? lum_off / 100000.0 : lum_mod / 100000.0 - 1.0, tint, 1e-5);
   }
 }
 
@@ -341,8 +367,8 @@ TEST(ShapeColor, SameSchemeColourIsNotRewritten) {
   Workbook wb = LoadOrDie(OneShapePackage(paints));
   ShapeSpec spec;
   spec.fields = 0;
-  spec.paint_fill.color = ChartPatchField<ColorSpec>::Set(ThemeColor(0, 0.0));
-  spec.paint_line.color = ChartPatchField<ColorSpec>::Set(ThemeColor(5, -0.25));
+  spec.paint_fill.color = ChartPatchField<DrawingColor>::Set(Dc(ThemeColor(0, 0.0)));
+  spec.paint_line.color = ChartPatchField<DrawingColor>::Set(Dc(ThemeColor(5, -0.25)));
   ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, 2, spec)));
   const std::string xml = ReadPart(SaveOrDie(wb), "xl/drawings/drawing1.xml");
   EXPECT_TRUE(Has(xml, "<a:schemeClr val=\"lt1\"/>")) << xml;
@@ -402,7 +428,7 @@ TEST(ShapeFidelity, UpdateChangesOnlyTheNamedFields) {
   ShapeSpec spec;
   spec.fields = shape_field::kName | shape_field::kText | shape_field::kRotation;
   spec.name = "Renamed";
-  spec.paint_fill.color = ChartPatchField<ColorSpec>::Set(RgbColor(0x00AA11));
+  spec.paint_fill.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0x00AA11)));
   spec.text = "One\nTwo\nThree";
   spec.rotation = 0;
   ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, 2, spec)));
@@ -471,8 +497,8 @@ TEST(ShapeFidelity, InsertAppendsOnTopAndRemoveDeletes) {
   spec.prst = "wedgeRectCallout";
   spec.text = "a < b";
   spec.text_box = true;
-  spec.paint_fill.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFFFF00));
-  spec.paint_line.color = ChartPatchField<ColorSpec>::Set(RgbColor(0x123456));
+  spec.paint_fill.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0xFFFF00)));
+  spec.paint_line.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0x123456)));
   spec.paint_line.width_pt = ChartPatchField<double>::Set(2.0);
   spec.name = "Callout";
   auto id = insert_shape(wb, 0, spec);
@@ -513,7 +539,7 @@ TEST(ShapeFidelity, InsertIntoASheetWithoutADrawingCreatesOne) {
   spec.cx = 100000;
   spec.cy = 0;
   spec.prst = "line";
-  spec.paint_line.color = ChartPatchField<ColorSpec>::Set(RgbColor(0xFF00FF));
+  spec.paint_line.color = ChartPatchField<DrawingColor>::Set(Dc(RgbColor(0xFF00FF)));
   auto id = insert_shape(wb, 0, spec);
   ASSERT_TRUE(static_cast<bool>(id));
 

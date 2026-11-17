@@ -251,8 +251,9 @@ std::string_view scheme_name_of(std::uint32_t theme) {
 
 }  // namespace
 
-std::optional<std::uint32_t> resolve_transforms(std::uint32_t base_argb,
-                                                const std::vector<ColorTransform>& transforms) {
+ResolvedPaint resolve_transforms(std::uint32_t base_argb, const std::vector<ColorTransform>& transforms) {
+  ResolvedPaint out;
+  bool has_alpha = false;
   const double unit = static_cast<double>(kUnit);
   double lin[3];
   for (int i = 0; i < 3; ++i) {
@@ -266,7 +267,7 @@ std::optional<std::uint32_t> resolve_transforms(std::uint32_t base_argb,
       Hls c = to_hls(from_linear(lin[0]), from_linear(lin[1]), from_linear(lin[2]));
       for (; i < transforms.size() && is_hls_transform(transforms[i].name); ++i) {
         if (!apply_hls(transforms[i], c)) {
-          return std::nullopt;
+          return out;
         }
       }
       double rgb[3];
@@ -280,9 +281,11 @@ std::optional<std::uint32_t> resolve_transforms(std::uint32_t base_argb,
     const double v = t.value ? static_cast<double>(*t.value) / unit : 0.0;
     const bool needs_value = name != "inv" && name != "gray" && name != "gamma" && name != "invGamma";
     if (needs_value && !t.value) {
-      return std::nullopt;
+      return out;
     }
-    if (name == "shade") {
+    if (name == "alpha") {
+      has_alpha = true;
+    } else if (name == "shade") {
       for (double& x : lin) {
         x = on_grid(x * v);
       }
@@ -310,7 +313,7 @@ std::optional<std::uint32_t> resolve_transforms(std::uint32_t base_argb,
       const std::string_view op = name.substr(name[0] == 'r' ? 3 : name[0] == 'g' ? 5 : 4);
       lin[ch] = on_grid(op.empty() ? v : op == "Mod" ? lin[ch] * v : lin[ch] + v);
     } else {
-      return std::nullopt;
+      return out;
     }
     ++i;
   }
@@ -319,7 +322,11 @@ std::optional<std::uint32_t> resolve_transforms(std::uint32_t base_argb,
     const double v = std::clamp(from_linear(std::clamp(lin[i], 0.0, 1.0)) * 255.0, 0.0, 255.0);
     argb |= static_cast<std::uint32_t>(std::floor(v + 0.5)) << (16 - 8 * i);
   }
-  return argb;
+  out.argb = argb;
+  if (!has_alpha) {
+    out.alpha = static_cast<std::uint32_t>(kUnit);
+  }
+  return out;
 }
 
 DrawingColor expand_tint(const DrawingColor& color) {
@@ -392,7 +399,10 @@ void write_drawing_color(xml_node parent, const std::string& prefix, const Drawi
   }
 }
 
-std::optional<DrawingColor> read_drawing_color(const Workbook& wb, const xml_node& clr, const xml_node& clr_map_ovr) {
+namespace {
+
+/// `read_drawing_color`, rendering only when `wb` is given.
+std::optional<DrawingColor> parse_drawing_color(const Workbook* wb, const xml_node& clr, const xml_node& clr_map_ovr) {
   const std::string_view kind = io::local_name(clr);
   const std::string_view val = clr.attribute("val").value();
   DrawingColor color;
@@ -423,7 +433,7 @@ std::optional<DrawingColor> read_drawing_color(const Workbook& wb, const xml_nod
     ColorSpec theme;
     theme.kind = ColorSpec::Kind::kTheme;
     theme.theme = *index;
-    base_argb = resolve_color(wb, theme, ColorContext::kFont).argb | 0xFF000000U;
+    base_argb = wb ? resolve_color(*wb, theme, ColorContext::kFont).argb | 0xFF000000U : 0U;
     color.base = mapped ? rgb_spec(base_argb) : theme;
   } else if (kind == "sysClr") {
     const std::string_view last = clr.attribute("lastClr").value();
@@ -442,9 +452,6 @@ std::optional<DrawingColor> read_drawing_color(const Workbook& wb, const xml_nod
     if (prefix_of(child) != own_prefix) {
       return std::nullopt;
     }
-    if (name == "alpha") {
-      continue;
-    }
     ColorTransform t;
     t.name = std::string(name);
     if (const pugi::xml_attribute v = child.attribute("val")) {
@@ -459,8 +466,22 @@ std::optional<DrawingColor> read_drawing_color(const Workbook& wb, const xml_nod
       return std::nullopt;
     }
   }
-  color.resolved_argb = resolve_transforms(base_argb, color.transforms);
+  if (wb) {
+    const ResolvedPaint resolved = resolve_transforms(base_argb, color.transforms);
+    color.resolved_argb = resolved.argb;
+    color.resolved_alpha = resolved.alpha;
+  }
   return color;
+}
+
+}  // namespace
+
+std::optional<DrawingColor> read_drawing_color(const Workbook& wb, const xml_node& clr, const xml_node& clr_map_ovr) {
+  return parse_drawing_color(&wb, clr, clr_map_ovr);
+}
+
+std::optional<DrawingColor> read_written_color(const xml_node& clr) {
+  return parse_drawing_color(nullptr, clr, xml_node());
 }
 
 std::optional<std::uint32_t> scheme_index(std::string_view name) {
