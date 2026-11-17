@@ -469,6 +469,14 @@ TEST(BuiltinsMatch, NameStandingForAReferenceIsAReference) {
     ASSERT_TRUE(v.is_boolean()) << src << " -> " << v.debug_to_string();
     EXPECT_TRUE(v.as_boolean()) << src;
   }
+  // A lone value is no lookup array; IRR is #NUM! for a one-cell reference and its binding.
+  const Value lone = EvalSourceIn("=MATCH(1,1,0)", wb, s);
+  EXPECT_TRUE(lone.is_error() && lone.as_error() == ErrorCode::NA) << lone.debug_to_string();
+  EXPECT_DOUBLE_EQ(number("=MATCH(1,A1,0)"), 1.0);
+  for (const char* src : {"=LET(r,A1,IRR(r))", "=IRR(A1)"}) {
+    const Value v = EvalSourceIn(src, wb, s);
+    EXPECT_TRUE(v.is_error() && v.as_error() == ErrorCode::Num) << src << " -> " << v.debug_to_string();
+  }
 }
 
 // An approximate lookup bisects a whole-axis vector over its declared length, the blank cells past the populated ones
