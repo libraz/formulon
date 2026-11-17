@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { deflateSync } from 'node:zlib';
 import { AnchorEditAs, AnchorKind, DrawingObjectKind, ImageFormat, StatusCode } from '../../packages/npm/common.mjs';
-import { expectFailure } from './smoke_support.mjs';
+import { expectFailure, readZipEntryText, zipStore } from './smoke_support.mjs';
 
 const EMU_PER_PX = 9525;
 
@@ -40,6 +40,21 @@ function makePng(width, height) {
       chunk('IEND', Buffer.alloc(0)),
     ]),
   );
+}
+
+// Every entry name of the ZIP `bytes`, from its central directory.
+function zipNames(bytes) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let eocd = bytes.length - 22;
+  while (eocd >= 0 && view.getUint32(eocd, true) !== 0x06054b50) eocd -= 1;
+  const names = [];
+  let cursor = view.getUint32(eocd + 16, true);
+  for (let i = view.getUint16(eocd + 10, true); i > 0; i -= 1) {
+    const nameSize = view.getUint16(cursor + 28, true);
+    names.push(new TextDecoder().decode(bytes.slice(cursor + 46, cursor + 46 + nameSize)));
+    cursor += 46 + nameSize + view.getUint16(cursor + 30, true) + view.getUint16(cursor + 32, true);
+  }
+  return names;
 }
 
 function withWorkbook(Module, fn) {
@@ -282,6 +297,27 @@ export function registerDrawing(Module, test) {
 
       wb.removeDrawingObject(0, id);
       assert.equal(wb.getShape(0, id), null);
+    });
+  });
+
+  // The value is read at a fixed width, so the same file reads the same on every target.
+  test('a colour transform value outside the 32-bit range reads as no colour', () => {
+    withWorkbook(Module, (wb) => {
+      const id = wb.addShape(0, { anchor: { fromRow: 1, fromCol: 1, toRow: 4, toCol: 4 }, presetGeometry: 'rect' });
+      const color = { base: { kind: 1, argb: 0xff123456 }, transforms: [{ name: 'lumMod', value: 50000 }] };
+      wb.updateShape(0, id, { fill: { color } });
+      assert.equal(wb.getShape(0, id).fill.color.transforms[0].value, 50000);
+      const saved = wb.save();
+      const entries = zipNames(saved).map((name) => [name, readZipEntryText(saved, name)]);
+      const drawing = entries.find(([name]) => name.startsWith('xl/drawings/drawing'));
+      assert.ok(drawing[1].includes('<a:lumMod val="50000"/>'), drawing[1]);
+      drawing[1] = drawing[1].replace('<a:lumMod val="50000"/>', '<a:lumMod val="2147483648"/>');
+      const loaded = Module.Workbook.load(zipStore(entries));
+      try {
+        assert.equal(loaded.getShape(0, id).fill.color, null);
+      } finally {
+        loaded.dispose();
+      }
     });
   });
 

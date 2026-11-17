@@ -2,7 +2,8 @@
 
 #include <algorithm>
 #include <cctype>
-#include <cstdlib>
+#include <charconv>
+#include <cstdint>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -311,8 +312,11 @@ std::string unused_path(const Workbook& wb, const std::string& stem) {
 std::string fresh_rid(const std::vector<UnknownRelationship>& rels) {
   std::uint32_t top = 0;
   for (const UnknownRelationship& rel : rels) {
-    top = std::max(top, static_cast<std::uint32_t>(
-                            std::strtoul(rel.id.c_str() + std::min<std::size_t>(3, rel.id.size()), nullptr, 10)));
+    // Parsed to a fixed width, so every target reads the same number.
+    const std::string_view digits = std::string_view(rel.id).substr(std::min<std::size_t>(3, rel.id.size()));
+    std::uint32_t n = 0;
+    std::from_chars(digits.data(), digits.data() + digits.size(), n);
+    top = std::max(top, n);
   }
   return "rId" + std::to_string(top + 1U);
 }

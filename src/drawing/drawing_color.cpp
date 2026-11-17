@@ -2,10 +2,11 @@
 
 #include <algorithm>
 #include <cctype>
-#include <climits>
+#include <charconv>
 #include <cmath>
 #include <cstdint>
-#include <cstdlib>
+#include <string_view>
+#include <system_error>
 
 #include "color_resolve.h"
 #include "io/xml_utils.h"
@@ -18,44 +19,53 @@ namespace {
 
 using pugi::xml_node;
 
-constexpr long kUnit = 100000;
+constexpr std::int32_t kUnit = 100000;
 constexpr std::string_view kSchemeNames[] = {"bg1",     "tx1",     "bg2",     "tx2",     "accent1", "accent2",
                                              "accent3", "accent4", "accent5", "accent6", "hlink",   "folHlink"};
 
 /// `a:lumMod` / `a:lumOff` of a tint, in 1/100000 units; {kUnit, 0} is the identity.
 struct Luminance {
-  long mod = kUnit;
-  long off = 0;
+  std::int32_t mod = kUnit;
+  std::int32_t off = 0;
 };
 
 Luminance luminance_of(double tint) {
   Luminance lum;
   if (tint > 0.0) {
-    lum.off = std::lround(tint * static_cast<double>(kUnit));
+    lum.off = static_cast<std::int32_t>(std::lround(tint * static_cast<double>(kUnit)));
     lum.mod = kUnit - lum.off;
   } else if (tint < 0.0) {
-    lum.mod = std::lround((1.0 + tint) * static_cast<double>(kUnit));
+    lum.mod = static_cast<std::int32_t>(std::lround((1.0 + tint) * static_cast<double>(kUnit)));
   }
   return lum;
 }
 
-bool val_of(const xml_node& node, long& out) {
+// The `val` attribute of `node` as a 32-bit integer; false when it is absent, not a whole number or out of range.
+// Parsed to a fixed width, so every target reads the same values.
+bool val_of(const xml_node& node, std::int32_t& out) {
   const pugi::xml_attribute val = node.attribute("val");
   if (!val) {
     return false;
   }
-  char* end = nullptr;
-  const char* text = val.value();
-  out = std::strtol(text, &end, 10);
-  return end != text && *end == '\0';
+  std::string_view text = val.value();
+  if (!text.empty() && text.front() == '+') {
+    text.remove_prefix(1);
+  }
+  std::int32_t parsed = 0;
+  const std::from_chars_result r = std::from_chars(text.data(), text.data() + text.size(), parsed);
+  if (text.empty() || r.ec != std::errc() || r.ptr != text.data() + text.size()) {
+    return false;
+  }
+  out = parsed;
+  return true;
 }
 
 /// Tint of the `lumMod` / `lumOff` children, when they are a form a tint writes.
 std::optional<double> tint_of(const xml_node& clr) {
   bool has_mod = false;
   bool has_off = false;
-  long mod = 0;
-  long off = 0;
+  std::int32_t mod = 0;
+  std::int32_t off = 0;
   for (xml_node child = clr.first_child(); child; child = child.next_sibling()) {
     if (child.type() != pugi::node_element) {
       continue;
@@ -76,7 +86,7 @@ std::optional<double> tint_of(const xml_node& clr) {
     }
   }
   if (has_off) {
-    if (!has_mod || off <= 0 || mod + off != kUnit) {
+    if (!has_mod || off <= 0 || std::int64_t{mod} + off != kUnit) {
       return std::nullopt;
     }
     return static_cast<double>(off) / static_cast<double>(kUnit);
@@ -365,10 +375,10 @@ DrawingColor expand_tint(const DrawingColor& color) {
   out.base.tint = 0.0;
   std::vector<ColorTransform> pair;
   if (lum.mod != kUnit) {
-    pair.push_back({"lumMod", static_cast<std::int32_t>(lum.mod)});
+    pair.push_back({"lumMod", lum.mod});
   }
   if (lum.off != 0) {
-    pair.push_back({"lumOff", static_cast<std::int32_t>(lum.off)});
+    pair.push_back({"lumOff", lum.off});
   }
   out.transforms.insert(out.transforms.begin(), pair.begin(), pair.end());
   return out;
@@ -482,11 +492,11 @@ std::optional<DrawingColor> parse_drawing_color(const Workbook* wb, const xml_no
     ColorTransform t;
     t.name = std::string(name);
     if (const pugi::xml_attribute v = child.attribute("val")) {
-      long parsed = 0;
-      if (!val_of(child, parsed) || parsed < INT32_MIN || parsed > INT32_MAX) {
+      std::int32_t parsed = 0;
+      if (!val_of(child, parsed)) {
         return std::nullopt;
       }
-      t.value = static_cast<std::int32_t>(parsed);
+      t.value = parsed;
     }
     color.transforms.push_back(std::move(t));
     if (color.transforms.size() > kMaxTransforms) {
