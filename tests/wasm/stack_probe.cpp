@@ -38,6 +38,13 @@
 #error "FORMULON_WASM_EXPECTED_STACK_SIZE must name the -sSTACK_SIZE the link requested"
 #endif
 
+#if defined(FORMULON_WASM_HOST_UTC_OFFSET)
+// The capi engine reads its local clock through a host import; the probe answers as a UTC host.
+extern "C" std::int32_t formulon_host_utc_offset(std::int64_t /*unix_seconds*/) {
+  return 0;
+}
+#endif
+
 namespace {
 
 using formulon::Arena;

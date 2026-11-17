@@ -315,7 +315,8 @@ wasm-capi:
 	$(EM_CMAKE) -B $(WASM_CAPI_BUILD_DIR) -DCMAKE_BUILD_TYPE=Release \
 	  -DFM_BUILD_WASM=ON -DFM_WASM_VARIANT=capi \
 	  -DFM_BUILD_TESTING=OFF -DFM_BUILD_CLI=OFF
-	$(CMAKE) --build $(WASM_CAPI_BUILD_DIR) --parallel $(JOBS) --target formulon_wasm
+	$(CMAKE) --build $(WASM_CAPI_BUILD_DIR) --parallel $(JOBS) \
+	  --target formulon_wasm formulon_wasm_stack_probe
 	@echo ""
 	@echo "wasm-capi artifact:"
 	@ls -la $(WASM_CAPI_BUILD_DIR)/formulon_capi.wasm 2>/dev/null || \
@@ -437,6 +438,7 @@ python-test: python-package
 	  exit 1; \
 	fi
 	@(cd $(PY_PKG_DIR) && $(PY_TEST_PYTHON) -m unittest discover -v tests)
+	$(NODE) $(WASM_CAPI_BUILD_DIR)/stack_probe.js
 	@# The oracle's print round-trip fixtures are authored through this
 	@# binding, so they belong to whatever interpreter can import it. The
 	@# CTest copy runs on the oracle venv, which installs the capture

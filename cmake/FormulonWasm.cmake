@@ -476,8 +476,9 @@ endif()
 # observable through the binding surface, and it links with the shipped
 # optimisation level and stack size so the numbers describe shipped codegen.
 #
-# `make wasm` builds it, `make test-wasm` runs it. It is deliberately not
-# part of `formulon_wasm`'s link: it is a second artifact next to the shipped
+# `make wasm` and `make wasm-capi` build it; `make test-wasm` and
+# `make python-test` run it. It is deliberately not part of
+# `formulon_wasm`'s link: it is a second artifact next to the shipped
 # one, and nothing stages it into a package. `make wasm-debug` does not build
 # it either -- the budget it asserts is a statement about release codegen, and
 # -O0 frames are several times wider.
@@ -526,6 +527,7 @@ target_compile_definitions(formulon_core PRIVATE FORMULON_WASM=1)
 # carries no time zone; the embind build keeps libc's localtime.
 if(FM_WASM_VARIANT STREQUAL "capi")
   target_compile_definitions(formulon_core PRIVATE FORMULON_WASM_HOST_UTC_OFFSET=1)
+  target_compile_definitions(formulon_wasm_stack_probe PRIVATE FORMULON_WASM_HOST_UTC_OFFSET=1)
 endif()
 
 # pugixml parses numbers with strtod and prints them with snprintf. Wrapping
