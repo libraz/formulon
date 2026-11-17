@@ -270,6 +270,12 @@ TEST(XlsbPtgCodec, LegacyIntersectionsFollowExcelsFormula2) {
   // A computed array argument is intersected at its operands unless a forced-array parameter evaluates it.
   EXPECT_EQ(listed("SUM(ROWS(OFFSET(A1,ROW(A1:A3)-1,0)))"), Texts{"ROW(A1:A3)"});
   EXPECT_EQ(listed("SUMPRODUCT(SUBTOTAL(9,OFFSET(A1,ROW(A1:A3)-1,0)))"), Texts{});
+  EXPECT_EQ(listed("SUM(ROWS(OFFSET(A1,A1:A3,0)))"), Texts{"A1:A3"});
+  // Every reference argument of AGGREGATE's reference form iterates, as its array form's array does.
+  for (const char* formula :
+       {"SUM(AGGREGATE(9,0,A1:A2,OFFSET(B1,{0;1},0)))", "SUM(AGGREGATE(14,6,A1:A2,OFFSET(B1,{0;1},0)))"}) {
+    EXPECT_EQ(listed(formula), Texts{}) << formula;
+  }
   // INDEX and XLOOKUP give one reference, so an array constant they would spread over is intersected.
   EXPECT_EQ(listed("SUM(SUBTOTAL(9,INDEX(A1:B3,0,{1,2})))"), Texts{"{1,2}"});
   EXPECT_EQ(listed("SUM(SUBTOTAL(9,XLOOKUP({1;3},A1:A5,B1:B5)))"), Texts{"{1;3}"});

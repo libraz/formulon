@@ -487,7 +487,7 @@ constexpr std::string_view kLegacyParameterClasses = "|IFERROR:V|TRANSPOSE:V|";
 /// `I` for such a parameter and `-` otherwise, repeating as in
 /// `kParameterClasses`.
 constexpr std::string_view kIteratedReferences =
-    "|AGGREGATE:--I-|AREAS:I|AVERAGEIF:I-I|AVERAGEIFS:II-2|COLUMNS:I|COUNTBLANK:I|COUNTIF:I-|COUNTIFS:I-2|DAVERAGE:I-|"
+    "|AGGREGATE:--I|AREAS:I|AVERAGEIF:I-I|AVERAGEIFS:II-2|COLUMNS:I|COUNTBLANK:I|COUNTIF:I-|COUNTIFS:I-2|DAVERAGE:I-|"
     "DCOUNT:I-|DCOUNTA:I-|DGET:I-|DMAX:I-|DMIN:I-|DPRODUCT:I-|DSTDEV:I-|DSTDEVP:I-|DSUM:I-|DVAR:I-|DVARP:I-|ISREF:I|"
     "MAXIFS:II-2|MINIFS:II-2|N:I|ROWS:I|SUBTOTAL:-I|SUMIF:I-I|SUMIFS:II-2|T:I|";
 

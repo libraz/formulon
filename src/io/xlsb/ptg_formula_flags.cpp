@@ -265,9 +265,10 @@ class LegacyIntersections {
         }
         continue;
       }
-      if (builds && param.letter == 'V' && shapes_.of_array_operand(arg) == Shape::kArray) {
-        // A computed array is intersected at its own operands (`OFFSET(A1,@ROW(A1:A3)-1,0)`) unless a forced-array
-        // parameter around the call evaluates it as an array; an array parameter holding the call does not.
+      if (builds && param.letter == 'V' && shapes_.of_array_operand(arg) != Shape::kScalar) {
+        // An area or a computed array is intersected (`OFFSET(A1,@A1:A3,0)`), a computed one at its own operands
+        // (`OFFSET(A1,@ROW(A1:A3)-1,0)`), unless a forced-array parameter around the call evaluates it as an array;
+        // an array parameter holding the call does not.
         const FlagScope lifted(in_forced_array_,
                                in_forced_array_ && !intersects_arguments(use) && !use.forced_by_array_parameter);
         walk(arg, param, false);
