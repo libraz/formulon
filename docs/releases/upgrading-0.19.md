@@ -1553,6 +1553,12 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
   Setting a new defined name refuses a name outside that syntax or one a
   table uses. Such workbooks were written without complaint and Excel
   refused to open them.
+- `Pivot.addDataField` / `setDataField` (Python `add_data_field` /
+  `set_data_field`, C `fm_sheet_add_pivot_data_field` /
+  `fm_sheet_set_pivot_data_field`) refuse a name that another data field or
+  a field (by its source or custom name) already holds, with `AlreadyExists`,
+  as Excel does; an empty or blank caption counts, and a data field may keep
+  its own caption. 0.18.0 stored the repeated name.
 - A dynamic-array result of more than one cell whose spill range touches a
   table, its anchor cell included, is `#SPILL!`, as in Excel. Adding,
   resizing or removing a table, and row or column edits that move one,
