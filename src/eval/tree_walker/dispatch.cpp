@@ -175,6 +175,13 @@ bool prepares_args(const LazyEntry& entry) {
          entry.grid_rest != GridArg::kElementError || entry.lift_params != ParamSet::kNone;
 }
 
+// A value substituted for an argument; an evaluated blank is a blank cell, not
+// an omitted slot (`COUNTIF(A1:A5,B2)` with B2 empty).
+const parser::AstNode* value_literal(Arena& arena, const Value& v) {
+  return parser::make_literal(
+      arena, v.is_blank() && !v.blank_projects_to_zero() ? Value::blank(BlankGridProjection::kValueArrayZero) : v);
+}
+
 // One synthesized call of a lift: the prepared arguments, a lifted position
 // taking its element.
 struct LiftCall {
@@ -191,7 +198,7 @@ Value run_lifted_call(const Value* elements, std::uint32_t arity, const void* st
   const LiftCall& lift = *static_cast<const LiftCall*>(state);
   std::vector<const parser::AstNode*> args(lift.nodes, lift.nodes + arity);
   for (std::uint32_t i = 0; i < arity; ++i) {
-    if (lift.lifted[i] != 0U && (args[i] = parser::make_literal(lift.arena, elements[i])) == nullptr) {
+    if (lift.lifted[i] != 0U && (args[i] = value_literal(lift.arena, elements[i])) == nullptr) {
       return Value::error(ErrorCode::Num);
     }
   }
@@ -339,7 +346,7 @@ Value map_reshaped(const Value& result, const ReshapeSource& source, Arena& aren
   bool changed = false;
   bool lifts = false;
   auto replace = [&](std::uint32_t i, const Value& v) {
-    args[i] = parser::make_literal(arena, v);
+    args[i] = value_literal(arena, v);
     changed = true;
     return args[i] != nullptr;
   };

@@ -15,6 +15,7 @@
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
 #include "eval/lazy_impls.h"
+#include "eval/omitted_arg.h"
 #include "eval/range_resolvers.h"
 #include "eval/reference/deref.h"
 #include "eval/reference/ops.h"
@@ -1370,6 +1371,31 @@ TEST_F(GridShapeTest, LambdaHelpersBindElementsAsReferencesAndRowsAsSlices) {
   const Value two_by_two = Grid({Area(0, 0, 0, 0), Area(1, 1, 1, 1), Area(2, 2, 2, 2), Area(3, 3, 3, 3)}, 2, 2);
   EXPECT_EQ(Elements(grid_slice(two_by_two, 1, 0, 1, 2, arena_)), (std::vector<std::string>{"2,2", "3,3"}));
   EXPECT_EQ(Elements(grid_slice(two_by_two, 0, 1, 2, 1, arena_)), (std::vector<std::string>{"1,1", "3,3"}));
+}
+
+TEST_F(GridShapeTest, AnEvaluatedBlankCellIsNotAnOmittedArgument) {
+  // The impl answers whether its second argument reads as an omitted slot.
+  const LazyEntry probe{"PROBE",
+                        [](const parser::AstNode& call, Arena&, const FunctionRegistry&, const EvalContext&) {
+                          return Value::boolean(is_omitted_arg(call.as_call_arg(1)));
+                        },
+                        LazyResultShape::kArray,
+                        2U,
+                        2U,
+                        RefResult::kNone,
+                        ParamSet::kNone,
+                        ParamSet::kNone,
+                        GridArg::kElementError,
+                        GridArg::kElementError,
+                        ParamSet::kNone,
+                        ScalarArg::kAccept,
+                        ParamSet::kSecond};
+  // E5 is empty: as a lone value and as the elements of a lifted range.
+  EXPECT_EQ(run_lazy_call(*Parsed("=PROBE(1,E5)"), probe, arena_, default_registry(), Ctx()), Value::boolean(false));
+  ExpectSame(run_lazy_call(*Parsed("=PROBE(1,E5:E6)"), probe, arena_, default_registry(), Ctx()),
+             Array(2, 1, {Value::boolean(false), Value::boolean(false)}), "lifted");
+  // A syntactically omitted slot stays omitted.
+  EXPECT_EQ(run_lazy_call(*Parsed("=PROBE(1,)"), probe, arena_, default_registry(), Ctx()), Value::boolean(true));
 }
 
 // ---------------------------------------------------------------------------
