@@ -17,7 +17,12 @@
 #ifndef FORMULON_UNKNOWN_RELATIONSHIP_H_
 #define FORMULON_UNKNOWN_RELATIONSHIP_H_
 
+#include <algorithm>
+#include <charconv>
+#include <cstdint>
 #include <string>
+#include <string_view>
+#include <vector>
 
 namespace formulon {
 
@@ -44,6 +49,21 @@ struct UnknownRelationship {
   std::string target;
   bool target_external = false;
 };
+
+/// `rId<n>` with `n` one past the largest `rId` number in `rels`. The number is read at a
+/// fixed width, so every target mints the same id; one that does not fit reads as 0.
+inline std::string next_unknown_rel_id(const std::vector<UnknownRelationship>& rels) {
+  std::uint32_t top = 0;
+  for (const UnknownRelationship& rel : rels) {
+    const std::string_view id(rel.id);
+    std::uint32_t n = 0;
+    if (id.size() > 3U && id.compare(0, 3, "rId") == 0 &&
+        std::from_chars(id.data() + 3, id.data() + id.size(), n).ec == std::errc()) {
+      top = std::max(top, n);
+    }
+  }
+  return "rId" + std::to_string(top + 1U);
+}
 
 }  // namespace formulon
 

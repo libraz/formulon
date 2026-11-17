@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <charconv>
 #include <cstdint>
 #include <string>
 #include <string_view>
@@ -308,19 +307,6 @@ std::string unused_path(const Workbook& wb, const std::string& stem) {
   }
 }
 
-// `rId<N>` past every id in `rels`.
-std::string fresh_rid(const std::vector<UnknownRelationship>& rels) {
-  std::uint32_t top = 0;
-  for (const UnknownRelationship& rel : rels) {
-    // Parsed to a fixed width, so every target reads the same number.
-    const std::string_view digits = std::string_view(rel.id).substr(std::min<std::size_t>(3, rel.id.size()));
-    std::uint32_t n = 0;
-    std::from_chars(digits.data(), digits.data() + digits.size(), n);
-    top = std::max(top, n);
-  }
-  return "rId" + std::to_string(top + 1U);
-}
-
 // Appends `entry` to the list element of the extension `skeleton` describes, in the `<extLst>` text `xml`,
 // copying the extension from `skeleton` when absent.
 void add_ext_entry(std::string& xml, const char* skeleton, const std::string& entry) {
@@ -391,7 +377,7 @@ std::string detach(std::vector<UnknownRelationship>& rels, std::string_view path
 // Records a relationship of `type` to `path` in `rels` and its `<tag r:id>` entry in the `<extLst>` text `ext`.
 void link_part(std::vector<UnknownRelationship>& rels, std::string& ext, std::string_view type, const std::string& path,
                const char* skeleton, const char* tag) {
-  const std::string rid = fresh_rid(rels);
+  const std::string rid = next_unknown_rel_id(rels);
   rels.push_back({rid, std::string(type), path, false});
   add_ext_entry(ext, skeleton, std::string("<") + tag + " r:id=\"" + rid + "\"/>");
 }

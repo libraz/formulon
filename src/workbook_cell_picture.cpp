@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -87,14 +86,8 @@ void register_rich_value_rel(Workbook& wb) {
   if (io::rich_value_rel_registered(rels)) {
     return;
   }
-  std::uint32_t top = 0;
-  for (const UnknownRelationship& rel : rels) {
-    if (rel.id.size() > 3U && rel.id.compare(0, 3, "rId") == 0) {
-      top = std::max(top, static_cast<std::uint32_t>(std::strtoul(rel.id.c_str() + 3, nullptr, 10)));
-    }
-  }
-  rels.push_back({"rId" + std::to_string(top + 1U), std::string(io::kRelRichValueRel),
-                  std::string(io::kRichValueRelPartPath), false});
+  rels.push_back(
+      {next_unknown_rel_id(rels), std::string(io::kRelRichValueRel), std::string(io::kRichValueRelPartPath), false});
   wb.set_unknown_workbook_rels(std::move(rels));
 }
 

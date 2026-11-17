@@ -16,9 +16,11 @@
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
+#include "io/rich_values.h"
 #include "io/zip_reader.h"
 #include "sheet.h"
 #include "support/roundtrip_symmetry.h"
+#include "unknown_relationship.h"
 #include "utils/a1_ref.h"
 #include "value.h"
 #include "workbook.h"
@@ -176,6 +178,27 @@ TEST(CellPicture, PlacesPngAndJpegWithAndWithoutAltText) {
   EXPECT_FALSE(wb.cell_picture(5, 0, 0).has_value());
   // The cell caches #VALUE! and keeps it after the picture is recorded.
   EXPECT_EQ(wb.sheet(0).cell_at(Row("A1"), Col("A1"))->cached_value.as_error(), ErrorCode::Value);
+}
+
+// The relationship id after the book's largest is read at a fixed width: one too large for 32 bits
+// counts as 0 on every target.
+TEST(CellPicture, TheRelationshipIdFollowsTheLargestThatFits) {
+  const auto rel_id = [](std::vector<UnknownRelationship> rels) {
+    Workbook wb = Workbook::create();
+    wb.set_unknown_workbook_rels(std::move(rels));
+    EXPECT_TRUE(static_cast<bool>(Place(wb, "A1", Png(4, 4))));
+    for (const UnknownRelationship& rel : wb.unknown_workbook_rels()) {
+      if (rel.type == kRelRichValueRel) {
+        return rel.id;
+      }
+    }
+    return std::string();
+  };
+  const UnknownRelationship wide{"rId4294967296", "urn:other", "https://example.com/", true};
+  EXPECT_EQ(rel_id({wide}), "rId1");
+  EXPECT_EQ(rel_id({{"rId4294967303", "urn:other", "https://example.com/", true}}), "rId1");
+  EXPECT_EQ(rel_id({wide, {"rId7", "urn:other", "https://example.com/7", true}}), "rId8");
+  EXPECT_EQ(rel_id({{"rId4294967294", "urn:other", "https://example.com/", true}}), "rId4294967295");
 }
 
 TEST(CellPicture, SavedPicturesReloadWithTheFixtureStructure) {
