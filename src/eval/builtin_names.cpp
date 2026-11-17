@@ -235,6 +235,19 @@ const AstNode* find_refused_error_literal(const AstNode& root) {
   return hit;
 }
 
+const AstNode* find_anchor_array_call(const AstNode& root) {
+  if (root.kind() == NodeKind::Call &&
+      strings::case_insensitive_eq(parser::strip_storage_prefixes(root.as_call_name()), parser::kAnchorArrayFn)) {
+    return &root;
+  }
+  const AstNode* hit = nullptr;
+  parser::any_child_node(root, [&](const AstNode& child) {
+    hit = find_anchor_array_call(child);
+    return hit != nullptr;
+  });
+  return hit;
+}
+
 const AstNode* find_refused_table_reference(const AstNode& root, char row_letter, char col_letter,
                                             bool (*is_table)(const void* ctx, std::string_view name), const void* ctx) {
   if (root.kind() == NodeKind::StructuredRef &&

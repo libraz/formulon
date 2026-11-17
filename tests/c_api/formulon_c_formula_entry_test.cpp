@@ -64,11 +64,34 @@ void ExpectParseRefusal(fm_status_t rc, const std::string& formula) {
 
 const std::vector<std::string>& RejectedFormulas() {
   static const std::vector<std::string> formulas = {
-      "=TRUE!A1",        "=SUM(",      "=1+",           "=Data!SUM(A1:A2)",        "=SUM(Data:Sheet1!A1",
-      "=(1+2",           "SUM(",       "=1\t+2",        "=SUM(1,\r\n2)",           "=SUM (1)",
-      "=SUBTOTAL(9,)",   "=SUMIF(,1)", "=COUNTIF(1,1)", "=OFFSET(A1+0,0,0)",       "=ROWS()",
-      "=ABS(1,2)",       "=SUM()",     "=IF(1)",        "=COUNTIFS(A1,1,A1)",      "=1+ROWS()",
-      "=LARGE(A1,A1,1)", "=#CALC!+1",  "={#CALC!}",     "=IFERROR(#SPILL!,\"x\")", "=#UNKNOWN!",
+      "=TRUE!A1",
+      "=SUM(",
+      "=1+",
+      "=Data!SUM(A1:A2)",
+      "=SUM(Data:Sheet1!A1",
+      "=(1+2",
+      "SUM(",
+      "=1\t+2",
+      "=SUM(1,\r\n2)",
+      "=SUM (1)",
+      "=SUBTOTAL(9,)",
+      "=SUMIF(,1)",
+      "=COUNTIF(1,1)",
+      "=OFFSET(A1+0,0,0)",
+      "=ROWS()",
+      "=ABS(1,2)",
+      "=SUM()",
+      "=IF(1)",
+      "=COUNTIFS(A1,1,A1)",
+      "=1+ROWS()",
+      "=LARGE(A1,A1,1)",
+      "=#CALC!+1",
+      "={#CALC!}",
+      "=IFERROR(#SPILL!,\"x\")",
+      "=#UNKNOWN!",
+      "=ANCHORARRAY(B1)",
+      "=_xlfn.ANCHORARRAY(B1)",
+      "=SUM(anchorarray(B1))",
   };
   return formulas;
 }
@@ -119,6 +142,9 @@ const std::vector<std::string>& AcceptedFormulas() {
       "=#N/A",
       "=#DIV/0!+1",
       "=#GETTING_DATA",
+      "=B1#",
+      "=SUM(B1#)",
+      "=ANCHORARRAY",
   };
   return formulas;
 }

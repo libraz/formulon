@@ -348,6 +348,7 @@ export const ParseErrorCode = Object.freeze({
   EntryDoubleEquals: 34,
   EntryBomNotSupported: 35,
   StructuredRefInvalid: 36,
+  EntryAnchorArrayCall: 37,
 });
 export const ErrorCode = Object.freeze({
   Null: 0,

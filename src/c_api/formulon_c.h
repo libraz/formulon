@@ -11890,7 +11890,8 @@ typedef enum {
   FM_PARSE_ERROR_CODE_ENTRY_PARAM_SHAPED_NAME = 33,  /* typed `_xlpm.` before a cell-shaped name */
   FM_PARSE_ERROR_CODE_ENTRY_DOUBLE_EQUALS = 34,      /* a second leading `=` */
   FM_PARSE_ERROR_CODE_ENTRY_BOM_NOT_SUPPORTED = 35,  /* a leading byte-order mark */
-  FM_PARSE_ERROR_CODE_STRUCTURED_REF_INVALID = 36    /* a malformed structured reference */
+  FM_PARSE_ERROR_CODE_STRUCTURED_REF_INVALID = 36,   /* a malformed structured reference */
+  FM_PARSE_ERROR_CODE_ENTRY_ANCHOR_ARRAY_CALL = 37   /* `ANCHORARRAY` typed as a call instead of the `#` operator */
 } fm_parse_error_code_t;
 
 /**

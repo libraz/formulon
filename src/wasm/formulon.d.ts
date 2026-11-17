@@ -197,6 +197,8 @@ export const ParseErrorCode: Readonly<{
   EntryBomNotSupported: 35;
   /** A malformed structured reference. */
   StructuredRefInvalid: 36;
+  /** `ANCHORARRAY` typed as a call instead of the `#` operator. */
+  EntryAnchorArrayCall: 37;
 }>;
 /** Union of the {@link ParseErrorCode} ordinals. */
 export type ParseErrorCode =
@@ -236,7 +238,8 @@ export type ParseErrorCode =
   | 33
   | 34
   | 35
-  | 36;
+  | 36
+  | 37;
 
 /** Where and why a formula failed to parse. A failure that cannot be
  *  placed in the caller's text covers all of it. */

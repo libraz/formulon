@@ -76,6 +76,7 @@ enum class ParseErrorCode : std::uint16_t {
   EntryDoubleEquals,       // `==1`
   EntryBomNotSupported,    // leading byte-order mark
   StructuredRefInvalid,    // malformed structured-reference payload
+  EntryAnchorArrayCall,    // `=ANCHORARRAY(B1)`: the spill operator typed as a call
 };
 
 /// Diagnostic severity. The parser currently emits only `Error`; `Warning`

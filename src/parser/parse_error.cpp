@@ -83,6 +83,8 @@ const char* default_message(ParseErrorCode code) noexcept {
       return "byte order mark not allowed in a formula";
     case ParseErrorCode::StructuredRefInvalid:
       return "invalid structured reference";
+    case ParseErrorCode::EntryAnchorArrayCall:
+      return "ANCHORARRAY is entered as the # spill operator, not as a call";
   }
   return "parse error";
 }

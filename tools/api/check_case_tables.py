@@ -6,7 +6,7 @@ Checks `parse_error_cases.json`, `date_value_cases.json`, `roundtrip_cases.json`
 here instead of in one of the five suites that read the tables:
 
 * parse errors: unique ids, a known entry, `formula` xor `formula_repeat`, every code a
-  `ParseErrorCode` member (src/parser/parse_error.h plus the entry codes 29..36), a status
+  `ParseErrorCode` member (src/parser/parse_error.h plus the entry codes 29..37), a status
   equal to the one the code maps to, start <= end, and line / column agreeing with start;
 * date values: unique ids, a known direction and input kind, an expectation per surface;
 * round trips: unique ids, ledger ops that exist, and pending rows naming a real row;
@@ -45,6 +45,7 @@ ENTRY_CODES = {
     "EntryDoubleEquals": 34,
     "EntryBomNotSupported": 35,
     "StructuredRefInvalid": 36,
+    "EntryAnchorArrayCall": 37,
 }
 # Code -> status. Every other code is 1000.
 STATUS_OF = {

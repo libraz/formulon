@@ -75,6 +75,11 @@ const parser::AstNode* find_wrong_arity_call(const parser::AstNode& root);
 /// codes legitimately.
 const parser::AstNode* find_refused_error_literal(const parser::AstNode& root);
 
+/// Returns the first call to `ANCHORARRAY` in `root`, with or without its
+/// `_xlfn.` prefix: Excel stores the `#` spill operator as that call but
+/// refuses it when typed. nullptr when there is none.
+const parser::AstNode* find_anchor_array_call(const parser::AstNode& root);
+
 /// Returns the first structured reference in `root` whose table name opens
 /// with an R1C1 reference spelled with `row_letter` / `col_letter` (a
 /// locale's R1C1 tokens) and for which `is_table(ctx, name)` holds, which

@@ -13,6 +13,7 @@
 #include "eval/formula_entry_r1c1.h"
 #include "excel_locale.h"
 #include "parser/ast.h"
+#include "parser/formula_prefix.h"
 #include "parser/literal_spelling.h"
 #include "parser/parse_error.h"
 #include "sheet.h"
@@ -167,7 +168,8 @@ const AstNode* call_taking(const AstNode& node, const AstNode* arg) {
 // with `*failure` set in `src`'s coordinates: the parse diagnostic, a
 // qualified built-in, and with `refusals` a non-reference argument to a
 // reference-only parameter (`SUBTOTAL(9,)`), an argument count the callee
-// does not take (`ROWS()`), or a newer error literal (`#CALC!`).
+// does not take (`ROWS()`), a newer error literal (`#CALC!`), or a typed
+// `ANCHORARRAY` call.
 const AstNode* diagnose_entry(std::string_view src, Arena& arena, bool refusals, ParseFailure* failure) {
   const AstNode* root = parse_formula_entry_with_diagnostics(src, arena, failure);
   if (root == nullptr || !refusals) {
@@ -181,6 +183,8 @@ const AstNode* diagnose_entry(std::string_view src, Arena& arena, bool refusals,
     code = ParseErrorCode::EntryWrongArity;
   } else if ((call = find_refused_error_literal(*root)) != nullptr) {
     code = ParseErrorCode::LexerInvalidErrorLiteral;
+  } else if ((call = find_anchor_array_call(*root)) != nullptr) {
+    code = ParseErrorCode::EntryAnchorArrayCall;
   } else {
     return root;
   }
@@ -255,15 +259,40 @@ std::optional<ParseFailure> refused_typed_table_reference(std::string_view formu
   return shifted(failure, prefix_units(formula, body));
 }
 
+// The refusal of an `ANCHORARRAY` call in typed `formula`, in the coordinates
+// of its body. Run on the text as typed: normalization respells the call as
+// the `#` operator Excel accepts.
+std::optional<ParseFailure> refused_anchor_array_call(std::string_view formula) {
+  if (!strings::case_insensitive_contains(formula, parser::kAnchorArrayFn)) {
+    return std::nullopt;
+  }
+  Arena arena;
+  ParseFailure ignored;
+  const AstNode* root = parse_formula_entry_with_diagnostics(strip_formula_prefix(formula), arena, &ignored);
+  const AstNode* call = root != nullptr ? find_anchor_array_call(*root) : nullptr;
+  if (call == nullptr) {
+    return std::nullopt;
+  }
+  ParseFailure failure;
+  failure.code = ParseErrorCode::EntryAnchorArrayCall;
+  failure.range = call->range();
+  failure.message = parser::default_message(failure.code);
+  return failure;
+}
+
 // AST of entered `formula`'s stored spelling, written to `*stored`, or
 // nullptr with `*failure` placed in `caller` (the text the caller passed,
 // which `formula` binds): whitespace Excel refuses, or a stored spelling
-// `diagnose_entry` refuses.
+// `diagnose_entry` refuses, or an `ANCHORARRAY` call as typed.
 const AstNode* parse_entered_formula(std::string_view caller, std::string_view formula, Arena& arena,
                                      std::string* stored, ParseFailure* failure) {
   *stored = Workbook::normalize_formula_text(std::string(formula), Workbook::FormulaSource::kEntered);
   if (parser::has_refused_whitespace(formula, &is_builtin_function_name)) {
     *failure = whole_text_failure(ParseErrorCode::EntryRefusedWhitespace, caller);
+    return nullptr;
+  }
+  if (const std::optional<ParseFailure> typed = refused_anchor_array_call(formula); typed.has_value()) {
+    *failure = place_failure(caller, formula, /*refusals=*/true, *typed);
     return nullptr;
   }
   ParseFailure raw;

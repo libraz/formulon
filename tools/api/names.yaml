@@ -8819,6 +8819,11 @@ entries:
     c: FM_PARSE_ERROR_CODE_STRUCTURED_REF_INVALID
     enum: enum.parse_error_code
     surfaces: [c]
+  constant.fm_parse_error_entry_anchor_array_call:
+    kind: constant
+    c: FM_PARSE_ERROR_CODE_ENTRY_ANCHOR_ARRAY_CALL
+    enum: enum.parse_error_code
+    surfaces: [c]
   status_name.get:
     kind: op
     scope: process

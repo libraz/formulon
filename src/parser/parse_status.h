@@ -83,6 +83,7 @@ constexpr FormulonErrorCode parse_error_status(ParseErrorCode code) noexcept {
     case ParseErrorCode::EntryRefusedWhitespace:
     case ParseErrorCode::EntryParamShapedName:
     case ParseErrorCode::EntryDoubleEquals:
+    case ParseErrorCode::EntryAnchorArrayCall:
       return FormulonErrorCode::kParserUnexpectedToken;
   }
   return FormulonErrorCode::kParserUnexpectedToken;

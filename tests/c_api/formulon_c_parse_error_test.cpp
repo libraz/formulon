@@ -68,6 +68,7 @@ const std::map<std::string, int32_t>& CodeValues() {
       {"EntryDoubleEquals", FM_PARSE_ERROR_CODE_ENTRY_DOUBLE_EQUALS},
       {"EntryBomNotSupported", FM_PARSE_ERROR_CODE_ENTRY_BOM_NOT_SUPPORTED},
       {"StructuredRefInvalid", FM_PARSE_ERROR_CODE_STRUCTURED_REF_INVALID},
+      {"EntryAnchorArrayCall", FM_PARSE_ERROR_CODE_ENTRY_ANCHOR_ARRAY_CALL},
   };
   return kCodes;
 }

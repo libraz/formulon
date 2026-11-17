@@ -333,6 +333,8 @@ class ParseErrorCode(IntEnum):
     ENTRY_BOM_NOT_SUPPORTED = 35
     #: A malformed structured reference.
     STRUCTURED_REF_INVALID = 36
+    #: ``ANCHORARRAY`` typed as a call instead of the ``#`` operator.
+    ENTRY_ANCHOR_ARRAY_CALL = 37
 
 
 @dataclass(frozen=True)

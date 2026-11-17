@@ -39,6 +39,7 @@ TEST(ParseDiagnostics, AppendedCodesKeepTheirValues) {
   EXPECT_EQ(static_cast<int>(ParseErrorCode::EntryDoubleEquals), 34);
   EXPECT_EQ(static_cast<int>(ParseErrorCode::EntryBomNotSupported), 35);
   EXPECT_EQ(static_cast<int>(ParseErrorCode::StructuredRefInvalid), 36);
+  EXPECT_EQ(static_cast<int>(ParseErrorCode::EntryAnchorArrayCall), 37);
 }
 
 TEST(ParseDiagnostics, EveryCodeMapsToItsStatus) {
@@ -80,8 +81,9 @@ TEST(ParseDiagnostics, EveryCodeMapsToItsStatus) {
       {ParseErrorCode::EntryDoubleEquals, 1000},
       {ParseErrorCode::EntryBomNotSupported, 1013},
       {ParseErrorCode::StructuredRefInvalid, 1010},
+      {ParseErrorCode::EntryAnchorArrayCall, 1000},
   };
-  ASSERT_EQ(table.size(), 37U);
+  ASSERT_EQ(table.size(), 38U);
   for (std::size_t i = 0; i < table.size(); ++i) {
     EXPECT_EQ(static_cast<std::size_t>(table[i].first), i);
     EXPECT_EQ(static_cast<int>(parse_error_status(table[i].first)), table[i].second) << "code " << i;
