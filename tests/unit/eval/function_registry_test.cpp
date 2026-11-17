@@ -231,6 +231,8 @@ TEST(FunctionRegistry, SpillPotentialCoversLazyReturnShapes) {
   EXPECT_TRUE(FormulaMaySpill("=FILTERXML(\"<a><b>1</b><b>2</b></a>\",\"//b\")"));
   EXPECT_TRUE(FormulaMaySpill("=REDUCE(0,A1:B2,LAMBDA(a,b,a+b))"));
   EXPECT_TRUE(FormulaMaySpill("=MODE.MULT(1,2,1,2)"));
+  EXPECT_FALSE(FormulaMaySpill("=SHEET(\"Sheet1\")"));
+  EXPECT_TRUE(FormulaMaySpill("=SHEET({\"Sheet1\",\"Sheet2\"})"));
 }
 
 TEST(FunctionRegistry, SpillPotentialLetUsesOnlyTheBodyShape) {

@@ -920,6 +920,15 @@
       }
     },
     {
+      "id": "sheet_arg1_array_lifted",
+      "formula": "=INDEX(SHEET({\"NoSuchSheet\",\"NoSuchSheet\"}),2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
       "id": "single_arg1_na_cell",
       "formula": "=SINGLE(B1)",
       "setup": {

@@ -200,6 +200,8 @@ cases:
     formula: "=SERIESSUM(0,0,1,{1;1;1;1})"
   - id: seriessum_arg1_negative
     formula: "=SERIESSUM(-2,0,1,{1;1;1;1})"
+  - id: sheet_arg1_array_lifted
+    formula: "=INDEX(SHEET({\"NoSuchSheet\",\"NoSuchSheet\"}),2)"
   - id: single_arg1_na_cell
     setup: { B1: "=NA()" }
     formula: "=SINGLE(B1)"

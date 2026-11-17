@@ -265,7 +265,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     // SHEET / SHEETS consult the bound Workbook + current Sheet on the
     // EvalContext; AST introspection of an optional reference argument
     // tells them which sheet to answer for.
-    {"SHEET", &eval_sheet_lazy, LazyResultShape::kScalar, 0U, 1U},
+    {"SHEET", &eval_sheet_lazy, LazyResultShape::kBroadcast, 0U, 1U},
     {"SHEETS", &eval_sheets_lazy, LazyResultShape::kReduce, 0U, 1U},
     // SINGLE is the explicit-name form of the `@` implicit-intersection
     // operator; xlsx serialises `@range` as `_xlfn.SINGLE(range)` (the

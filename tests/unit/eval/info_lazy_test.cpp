@@ -392,6 +392,18 @@ TEST(BuiltinsSheet, UnknownNameIsNA) {
   EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
+TEST(BuiltinsSheet, ArrayOfNamesLooksUpEachElement) {
+  Workbook wb = MakeThreeSheetWorkbook();
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  const Value v = EvalWith("=SHEET({\"Missing\",\"Sheet2\"})", ctx);
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array()->cols, 2U);
+  ASSERT_TRUE(v.as_array()->cells[0].is_error());
+  EXPECT_EQ(v.as_array()->cells[0].as_error(), ErrorCode::NA);
+  EXPECT_EQ(v.as_array()->cells[1].as_number(), 2.0);
+}
+
 TEST(BuiltinsSheet, UnboundContextReturnsValue) {
   // Default-constructed context: no sheet, no workbook.
   const EvalContext ctx;
