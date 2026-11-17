@@ -1,8 +1,8 @@
 // The DrawingML preset shapes (ECMA-376 Part 1, 20.1.10.56 ST_ShapeType, and the geometries annex): their names,
 // their adjust guides with defaults, and their connection sites evaluated on a shape's size and adjust values.
 
-#ifndef FORMULON_DRAWING_PRESET_GEOMETRY_H_
-#define FORMULON_DRAWING_PRESET_GEOMETRY_H_
+#ifndef FORMULON_IO_OOXML_PRESET_GEOMETRY_H_
+#define FORMULON_IO_OOXML_PRESET_GEOMETRY_H_
 
 #include <cstddef>
 #include <cstdint>
@@ -42,4 +42,4 @@ std::vector<Point> connection_sites(std::size_t index, double w, double h, const
 }  // namespace preset_geometry
 }  // namespace formulon
 
-#endif  // FORMULON_DRAWING_PRESET_GEOMETRY_H_
+#endif  // FORMULON_IO_OOXML_PRESET_GEOMETRY_H_

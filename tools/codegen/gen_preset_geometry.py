@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Compile the DrawingML preset shape definitions into src/drawing/preset_geometry_table.inc.
+"""Compile the DrawingML preset shape definitions into src/io/ooxml/preset_geometry_table.inc.
 
 Input: `presetShapeDefinitions.xml` from ECMA-376 Part 1 (Office Open XML File Formats, the
 DrawingML geometries annex), given as a path. The file is not part of this tree; the generated table
 records the edition and the file's SHA-256 in its header.
 
 For each preset, in byte order of the names (the order of the `ST_ShapeType` name table in
-src/drawing/preset_geometry.cpp), the table keeps:
+src/io/ooxml/preset_geometry.cpp), the table keeps:
   - the adjust guides (`avLst`): name and default value;
   - the guides (`gdLst`) the connection sites depend on, pruned of the rest, as bytecode;
   - the connection sites (`cxnLst`): x and y operands.
@@ -30,7 +30,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
-OUT = REPO / "src" / "drawing" / "preset_geometry_table.inc"
+OUT = REPO / "src" / "io" / "ooxml" / "preset_geometry_table.inc"
 NS = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
 EDITION = "ECMA-376 Part 1, 5th edition (December 2016)"
 

@@ -1,8 +1,8 @@
 // Record types of the generated preset geometry table (preset_geometry_table.inc). The table is data only; the
 // evaluator in preset_geometry.cpp reads it.
 
-#ifndef FORMULON_DRAWING_PRESET_GEOMETRY_TABLE_H_
-#define FORMULON_DRAWING_PRESET_GEOMETRY_TABLE_H_
+#ifndef FORMULON_IO_OOXML_PRESET_GEOMETRY_TABLE_H_
+#define FORMULON_IO_OOXML_PRESET_GEOMETRY_TABLE_H_
 
 #include <cstdint>
 #include <string_view>
@@ -35,4 +35,4 @@ struct PresetEntry {
 }  // namespace preset_geometry
 }  // namespace formulon
 
-#endif  // FORMULON_DRAWING_PRESET_GEOMETRY_TABLE_H_
+#endif  // FORMULON_IO_OOXML_PRESET_GEOMETRY_TABLE_H_

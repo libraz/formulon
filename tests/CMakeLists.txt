@@ -87,6 +87,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/deps/miniz_smoke_test.cpp
   unit/deps/pugixml_smoke_test.cpp
   unit/io/a1_ref_test.cpp
+  unit/io/preset_geometry_test.cpp
   unit/io/cell_parser_test.cpp
   unit/io/cf_layout_test.cpp
   unit/io/cf_merge_test.cpp
@@ -565,7 +566,6 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/print/sheet_geometry_test.cpp
   unit/font_metrics_test.cpp
   unit/drawing/drawing_color_test.cpp
-  unit/drawing/preset_geometry_test.cpp
   unit/drawing/drawing_xml_test.cpp
   unit/drawing/image_header_test.cpp
   unit/drawing/drawing_clone_test.cpp

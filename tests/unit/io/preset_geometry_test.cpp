@@ -1,4 +1,4 @@
-#include "drawing/preset_geometry.h"
+#include "io/ooxml/preset_geometry.h"
 
 #include <cmath>
 #include <cstddef>
@@ -9,14 +9,14 @@
 #include <utility>
 #include <vector>
 
-#include "drawing/preset_geometry_table.h"
 #include "gtest/gtest.h"
+#include "io/ooxml/preset_geometry_table.h"
 
 namespace formulon {
 namespace preset_geometry {
 namespace table_check {
 #define FORMULON_PRESET_GEOMETRY_TABLE_NAMES
-#include "drawing/preset_geometry_table.inc"
+#include "io/ooxml/preset_geometry_table.inc"
 }  // namespace table_check
 namespace {
 

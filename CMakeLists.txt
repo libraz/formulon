@@ -207,6 +207,7 @@ set(FORMULON_CORE_SOURCES
   src/io/ooxml/external_link_reader.cpp
   src/io/ooxml/package_rels_reader.cpp
   src/io/ooxml/package_validator.cpp
+  src/io/ooxml/preset_geometry.cpp
   src/io/ooxml/pivot_target_reader.cpp
   src/io/ooxml/part_dom.cpp
   src/io/ooxml/part_graph.cpp
@@ -382,7 +383,6 @@ set(FORMULON_CORE_SOURCES
   src/drawing/drawing_clone.cpp
   src/drawing/drawing_edit.cpp
   src/drawing/drawing_snapshot.cpp
-  src/drawing/preset_geometry.cpp
   src/drawing/shape_edit.cpp
   src/drawing/slicer_edit.cpp
   src/chart/chart_xml.cpp

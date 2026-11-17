@@ -1,4 +1,4 @@
-#include "drawing/preset_geometry.h"
+#include "io/ooxml/preset_geometry.h"
 
 #include <array>
 #include <cmath>
@@ -9,7 +9,7 @@
 #include <utility>
 #include <vector>
 
-#include "drawing/preset_geometry_table.h"
+#include "io/ooxml/preset_geometry_table.h"
 #include "utils/elementary_math.h"
 
 namespace formulon {
@@ -81,7 +81,7 @@ std::string_view preset_at(std::size_t i) {
   return {kPresetGeometries + kPresetOffsets[i], length};
 }
 
-#include "drawing/preset_geometry_table.inc"
+#include "io/ooxml/preset_geometry_table.inc"
 
 static_assert(std::size(kPresetEntries) == kPresetCount, "the geometry table covers every ST_ShapeType name");
 
