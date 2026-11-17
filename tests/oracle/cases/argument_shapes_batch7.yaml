@@ -301,6 +301,9 @@ cases:
     formula: "=PHONETIC(A1)"
   - id: phonetic_blank_cell
     formula: "=PHONETIC(A1)"
+  - id: phonetic_range_first_cell
+    setup: { A1: "a", A2: "b" }
+    formula: "=PHONETIC(A1:A2)"
   - id: phonetic_number_cell
     setup: { A1: 42 }
     formula: "=PHONETIC(A1)"

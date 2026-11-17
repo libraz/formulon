@@ -4454,6 +4454,24 @@
       }
     },
     {
+      "id": "phonetic_range_first_cell",
+      "formula": "=PHONETIC(A1:A2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "a"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "b"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
       "id": "phonetic_number_cell",
       "formula": "=PHONETIC(A1)",
       "setup": {

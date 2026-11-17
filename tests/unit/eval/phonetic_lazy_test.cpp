@@ -79,6 +79,19 @@ TEST(BuiltinsPhoneticLazy, AnnotatedTextCellReturnsKana) {
   EXPECT_EQ(v.as_text(), "\xE3\x82\x84\xE3\x81\xBE\xE3\x81\xA0");
 }
 
+TEST(BuiltinsPhoneticLazy, RangeJoinsTheReadingsOfItsCells) {
+  Workbook wb = MakeSingleSheetWorkbook();
+  wb.sheet(0).set_cell_value(0, 0, Value::text("a"));
+  wb.sheet(0).set_cell_value(1, 0, Value::text("kanji"));
+  wb.sheet(0).set_cell_phonetic(1, 0, "furigana");
+  wb.sheet(0).set_cell_value(2, 0, Value::number(42.0));
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  const Value v = EvalWith("=PHONETIC(A1:A4)", ctx);
+  ASSERT_TRUE(v.is_text()) << v.debug_to_string();
+  EXPECT_EQ(v.as_text(), "afurigana");
+}
+
 TEST(BuiltinsPhoneticLazy, AnnotatedAsciiCellReturnsKana) {
   // Ensures the impl reads the annotation regardless of the surface
   // text encoding; an ASCII surface with an ASCII annotation still
@@ -326,14 +339,8 @@ TEST(BuiltinsPhoneticLazy, FullRowRefReturnsValue) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(BuiltinsPhoneticLazy, OneByOneRangeRefFallsThroughToScalar) {
-  // `A1:A1` parses as a RangeOp, not a single Ref. The lazy impl falls
-  // through to the eager-evaluation arm; the 1x1 range collapses to
-  // the cell's scalar text under implicit intersection. The kana
-  // annotation is NOT consulted because the impl never sees the
-  // un-evaluated Reference shape; only the surface text is returned.
-  // This matches Mac Excel's surface for `=PHONETIC(A1:A1)` where the
-  // annotation is dropped by the range-evaluation arm.
+TEST(BuiltinsPhoneticLazy, OneByOneRangeReadsTheCellAnnotation) {
+  // `A1:A1` parses as a RangeOp; its one cell is read like `A1`.
   Workbook wb = MakeSingleSheetWorkbook();
   wb.sheet(0).set_cell_value(0, 0, Value::text("kanji"));
   wb.sheet(0).set_cell_phonetic(0, 0, "kana");
@@ -342,14 +349,10 @@ TEST(BuiltinsPhoneticLazy, OneByOneRangeRefFallsThroughToScalar) {
   const EvalContext ctx(wb, wb.sheet(0), state);
   const Value v = EvalWith("=PHONETIC(A1:A1)", ctx);
   ASSERT_TRUE(v.is_text());
-  EXPECT_EQ(v.as_text(), "kanji");
+  EXPECT_EQ(v.as_text(), "kana");
 }
 
-TEST(BuiltinsPhoneticLazy, MultiCellRangeRefReturnsNA) {
-  // A multi-cell range that does NOT collapse to a scalar surfaces
-  // through the eager arm as an Array (or, today, the first-element
-  // value depending on intersection rules). For numeric data, the
-  // strict-text rule rejects with #N/A.
+TEST(BuiltinsPhoneticLazy, NumberCellsInARangeReadAsEmpty) {
   Workbook wb = MakeSingleSheetWorkbook();
   wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
   wb.sheet(0).set_cell_value(1, 0, Value::number(2.0));
@@ -357,8 +360,8 @@ TEST(BuiltinsPhoneticLazy, MultiCellRangeRefReturnsNA) {
   EvalState state;
   const EvalContext ctx(wb, wb.sheet(0), state);
   const Value v = EvalWith("=PHONETIC(A1:A2)", ctx);
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+  ASSERT_TRUE(v.is_text()) << v.debug_to_string();
+  EXPECT_EQ(v.as_text(), "");
 }
 
 // ---------------------------------------------------------------------------

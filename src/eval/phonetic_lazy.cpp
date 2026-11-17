@@ -13,6 +13,7 @@
 #include "cell.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
+#include "eval/range_resolvers.h"
 #include "excel_locale.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
@@ -45,6 +46,22 @@ Value apply_passthrough_surface(const Value& v, Arena& arena) {
     return Value::text(arena.intern(""));
   }
   return Value::error(ErrorCode::NA);
+}
+
+// The reading of cell `r` of `target`: its annotated spans substituted, the
+// surface text otherwise, and the empty text for a number, boolean or error.
+Value cell_phonetic(const Sheet& target, const parser::Reference& r, const EvalContext& text_ctx, Arena& arena) {
+  const Cell* cell = target.cell_at(r.row, r.col);
+  const Value surface = text_ctx.resolve_ref(r);
+  if (cell != nullptr && !cell->phonetic_runs.empty()) {
+    const std::string composed =
+        compose_phonetic(surface.is_text() ? surface.as_text() : std::string_view{}, cell->phonetic_runs);
+    return Value::text(arena.intern(composed));
+  }
+  if (surface.is_number() || surface.is_error() || surface.is_boolean()) {
+    return Value::text(arena.intern(""));
+  }
+  return apply_passthrough_surface(surface, arena);
 }
 
 // Advances `*byte` past one UTF-8 sequence of `surface` and adds the
@@ -126,31 +143,41 @@ Value eval_phonetic_lazy(const parser::AstNode& call, Arena& arena, const Functi
     }
     // Excel does not count PHONETIC's read toward circularity:
     // `=PHONETIC(A1)` in A1 is not circular (Mac Excel 365).
-    const EvalContext text_ctx = ctx.without_read_observer();
-    const Cell* cell = target->cell_at(r.row, r.col);
-    if (cell != nullptr && !cell->phonetic_runs.empty()) {
-      // Annotated cell: substitute the annotated spans and keep the rest
-      // of the surface text. Intern into the eval arena so the returned
-      // Value's lifetime matches every other Text emitted by the
-      // evaluator.
-      const Value surface = text_ctx.resolve_ref(r);
-      const std::string composed =
-          compose_phonetic(surface.is_text() ? surface.as_text() : std::string_view{}, cell->phonetic_runs);
-      return Value::text(arena.intern(composed));
-    }
-    // No annotation: fall back to the value-based passthrough surface.
-    // We don't recurse with a registry here because PHONETIC's argument
-    // is required to be a literal Ref; the resolve does not need to
-    // re-evaluate a formula cell, only to read its cached value.
-    Value resolved = text_ctx.resolve_ref(r);
-    // A number, boolean or error in the cell has no phonetic reading: the empty text.
-    if (resolved.is_number() || resolved.is_error() || resolved.is_boolean()) {
-      return Value::text(arena.intern(""));
-    }
-    return apply_passthrough_surface(resolved, arena);
+    return cell_phonetic(*target, r, ctx.without_read_observer(), arena);
   }
 
-  // Non-Ref arg (literal text, arithmetic, function call, range, ...):
+  // A range: the readings of its cells joined row by row.
+  if (arg.kind() == parser::NodeKind::RangeOp) {
+    std::string_view qualifier;
+    RefArea area{};
+    ErrorCode err = ErrorCode::Value;
+    if (!eval_reference_area(arg, arena, registry, ctx, &qualifier, &area, &err)) {
+      return Value::error(err);
+    }
+    if (area.whole_col != 0U || area.whole_row != 0U) {
+      return Value::error(ErrorCode::Value);
+    }
+    const Sheet* target = ctx.sheet_for_qualifier(qualifier);
+    if (target == nullptr) {
+      return Value::error(ctx.current_sheet() == nullptr ? ErrorCode::Name : ErrorCode::Ref);
+    }
+    const EvalContext text_ctx = ctx.without_read_observer();
+    std::string joined;
+    parser::Reference r{};
+    r.sheet = qualifier;
+    for (r.row = area.row_first; r.row <= area.row_last; ++r.row) {
+      for (r.col = area.col_first; r.col <= area.col_last; ++r.col) {
+        const Value part = cell_phonetic(*target, r, text_ctx, arena);
+        if (!part.is_text()) {
+          return part;
+        }
+        joined.append(part.as_text());
+      }
+    }
+    return Value::text(arena.intern(joined));
+  }
+
+  // Any other arg (literal text, arithmetic, function call, ...):
   // eagerly evaluate the subtree so error propagation and the "literal
   // text passes through" rule still apply in ja-JP. Everything non-text
   // yields #N/A.
