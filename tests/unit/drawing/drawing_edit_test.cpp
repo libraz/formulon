@@ -1734,5 +1734,79 @@ TEST(DrawingZOrder, MovesAChart) {
   EXPECT_EQ(refs.value()[0].part_path, "xl/charts/chart1.xml");
 }
 
+// A picture stored with an absolute anchor moves and resizes with its kind kept; nothing else becomes absolute.
+TEST(DrawingAnchorUpdate, AnAbsoluteAnchorKeepsItsKind) {
+  const std::string drawing = std::string(kWsDrOpen) + "<xdr:oneCellAnchor>" + Marker("from", 1, 0, 4, 0) +
+                              "<xdr:ext cx=\"381000\" cy=\"762000\"/>" + Pic(2, "rId1") +
+                              "</xdr:oneCellAnchor><xdr:absoluteAnchor><xdr:pos x=\"5000\" y=\"6000\"/>"
+                              "<xdr:ext cx=\"381000\" cy=\"762000\"/>" +
+                              Pic(3, "rId1") + "</xdr:absoluteAnchor></xdr:wsDr>";
+  const std::string rels = std::string(kRelsOpen) + Rel("rId1", kImageRel, "../media/image1.png") + "</Relationships>";
+  Workbook wb = WithDrawing(drawing, rels, {"xl/media/image1.png"});
+
+  DrawingAnchor moved = Placement(AnchorKind::kAbsolute, EditAs::kTwoCell, 400000, 500000);
+  moved.row = 0;
+  moved.col = 0;
+  moved.row_off = 9000;
+  moved.col_off = 7000;
+  ASSERT_TRUE(static_cast<bool>(set_drawing_anchor(wb, 0, 3, moved)));
+  DrawingObject pic = List(wb)[1];
+  EXPECT_EQ(pic.anchor_kind, AnchorKind::kAbsolute);
+  EXPECT_EQ(pic.from.col_off, 7000);
+  EXPECT_EQ(pic.from.row_off, 9000);
+  EXPECT_EQ(pic.cx, 400000);
+  EXPECT_EQ(pic.cy, 500000);
+  const std::string text(Part(wb, kDrawingPath)->bytes.begin(), Part(wb, kDrawingPath)->bytes.end());
+  EXPECT_NE(text.find("<xdr:absoluteAnchor><xdr:pos x=\"7000\" y=\"9000\"/><xdr:ext cx=\"400000\" cy=\"500000\"/>"),
+            std::string::npos)
+      << text;
+
+  // A patch merges into the absolute anchor whether or not it restates the kind.
+  DrawingCommonPatch right;
+  right.anchor.from_col_off = 1000;
+  ASSERT_TRUE(static_cast<bool>(update_drawing(wb, 0, 3, right)));
+  DrawingCommonPatch taller;
+  taller.anchor.kind = AnchorKind::kAbsolute;
+  taller.anchor.height_emu = 600000;
+  ASSERT_TRUE(static_cast<bool>(update_drawing(wb, 0, 3, taller)));
+  pic = List(wb)[1];
+  EXPECT_EQ(pic.anchor_kind, AnchorKind::kAbsolute);
+  EXPECT_EQ(pic.from.col_off, 1000);
+  EXPECT_EQ(pic.from.row_off, 9000);
+  EXPECT_EQ(pic.cy, 600000);
+  const auto check_saved = [](const Workbook& again) {
+    const DrawingObject read = List(again)[1];
+    EXPECT_EQ(read.anchor_kind, AnchorKind::kAbsolute);
+    EXPECT_EQ(read.from.col_off, 1000);
+    EXPECT_EQ(read.cy, 600000);
+  };
+  check_saved(RoundTrip(wb));
+  auto xlsb = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(xlsb));
+  auto read_back = io::xlsb::read_xlsb(io::ByteSpan{xlsb.value().data(), xlsb.value().size()});
+  ASSERT_TRUE(static_cast<bool>(read_back));
+  check_saved(read_back.value().workbook);
+
+  // Cells on an absolute anchor, or an absolute kind on any other anchor, are refused and change nothing.
+  const Bytes before = Part(wb, kDrawingPath)->bytes;
+  DrawingCommonPatch cells;
+  cells.anchor.from_row = 2;
+  EXPECT_EQ(Code(update_drawing(wb, 0, 3, cells)), FormulonErrorCode::kInvalidArgument);
+  DrawingAnchor with_cells = moved;
+  with_cells.col = 1;
+  EXPECT_EQ(Code(set_drawing_anchor(wb, 0, 3, with_cells)), FormulonErrorCode::kInvalidArgument);
+  DrawingCommonPatch made_absolute;
+  made_absolute.anchor.kind = AnchorKind::kAbsolute;
+  EXPECT_EQ(Code(update_drawing(wb, 0, 2, made_absolute)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(Code(set_drawing_anchor(wb, 0, 2, moved)), FormulonErrorCode::kInvalidArgument);
+  EXPECT_EQ(Part(wb, kDrawingPath)->bytes, before);
+
+  // Converting it to a cell anchor still works.
+  DrawingCommonPatch to_cell;
+  to_cell.anchor.kind = AnchorKind::kOneCell;
+  ASSERT_TRUE(static_cast<bool>(update_drawing(wb, 0, 3, to_cell)));
+  EXPECT_EQ(List(wb)[1].anchor_kind, AnchorKind::kOneCell);
+}
+
 }  // namespace
 }  // namespace formulon

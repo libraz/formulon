@@ -1545,7 +1545,8 @@ class DrawingAnchorInput:
     and a ``to_*`` field on a one-cell anchor or a size on a two-cell one is refused.
     """
 
-    #: The anchor kind: absolute, one-cell or two-cell; an absolute kind is not added.
+    #: The anchor kind: absolute, one-cell or two-cell. An absolute kind is not added; on update it is kept on an
+    #: object whose anchor is absolute, with ``from_row`` and ``from_col`` 0 and the offsets as its position from A1.
     kind: Optional[AnchorKind] = None
     #: How the object follows row and column edits (it moves and resizes, moves only, or stays put); written for a
     #: two-cell anchor only.

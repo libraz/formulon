@@ -369,8 +369,15 @@ void place_anchor(pugi::xml_node anchor, const Placement& p) {
           .set_value(p.edit_as == EditAs::kOneCell ? "oneCell" : "absolute");
     }
   }
-  const pugi::xml_node from = put_marker(anchor, {}, "from", p.from);
-  if (two) {
+  if (p.kind == AnchorKind::kAbsolute) {
+    // Only an absolute anchor stays absolute: its `xdr:pos` and `xdr:ext` are already there.
+    pugi::xml_node pos = child_local(anchor, "pos");
+    io::set_attr(pos, "x", p.from.col_off);
+    io::set_attr(pos, "y", p.from.row_off);
+    pugi::xml_node ext = child_local(anchor, "ext");
+    io::set_attr(ext, "cx", p.box_w);
+    io::set_attr(ext, "cy", p.box_h);
+  } else if (const pugi::xml_node from = put_marker(anchor, {}, "from", p.from); two) {
     put_marker(anchor, from, "to", p.to);
   } else {
     pugi::xml_node ext = child_local(anchor, "ext");
@@ -748,9 +755,6 @@ Expected<void, Error> set_drawing_name(Workbook& wb, std::size_t sheet, std::uin
 Expected<void, Error> set_drawing_anchor(Workbook& wb, std::size_t sheet, std::uint32_t object_id,
                                          const DrawingAnchor& anchor) {
   ASSIGN_OR_RETURN(std::string path, editable_drawing_path(wb, sheet));
-  if (anchor.anchor_kind == AnchorKind::kAbsolute) {
-    return invalid("anchor.kind must be a one-cell or two-cell anchor");
-  }
   pugi::xml_document doc;
   if (path.empty()) {
     return not_found(kNoObject);
@@ -763,6 +767,13 @@ Expected<void, Error> set_drawing_anchor(Workbook& wb, std::size_t sheet, std::u
   }
   const Geometry geo(wb, wb.sheet(sheet));
   const DrawingObject obj = read_drawing_object(target, {});
+  const bool absolute = anchor.anchor_kind == AnchorKind::kAbsolute;
+  if (absolute && obj.anchor_kind != AnchorKind::kAbsolute) {
+    return invalid(kNotAbsolute);
+  }
+  if (absolute && (anchor.row != 0 || anchor.col != 0)) {
+    return invalid(kAbsoluteCells);
+  }
   std::int64_t cur_cx = obj.cx;
   std::int64_t cur_cy = obj.cy;
   if (obj.kind == DrawingObjectKind::kChart && obj.anchor_kind == AnchorKind::kTwoCell) {
@@ -792,6 +803,7 @@ Expected<void, Error> set_drawing_anchor(Workbook& wb, std::size_t sheet, std::u
   p.box_w = swap ? p.cy : p.cx;
   p.box_h = swap ? p.cx : p.cy;
   p.to = p.from;
+  // An absolute position is an offset from A1, so the same walk bounds it.
   if (!geo.advance(true, p.to.row, p.to.row_off, p.box_h) || !geo.advance(false, p.to.col, p.to.col_off, p.box_w)) {
     return invalid("anchor.width_emu and anchor.height_emu must keep the object within the sheet");
   }
@@ -865,8 +877,8 @@ Expected<MergedAnchor, Error> merge_anchor(const Geometry& geo, const DrawingObj
   MergedAnchor m;
   m.kind = p.kind.value_or(obj.anchor_kind);
   m.edit_as = p.edit_as.value_or(obj.edit_as);
-  if (p.kind && m.kind == AnchorKind::kAbsolute) {
-    return invalid("anchor.kind must be a one-cell or two-cell anchor");
+  if (m.kind == AnchorKind::kAbsolute && obj.anchor_kind != AnchorKind::kAbsolute) {
+    return invalid(kNotAbsolute);
   }
   const bool two = m.kind == AnchorKind::kTwoCell;
   const bool has_to = p.to_row || p.to_col || p.to_row_off || p.to_col_off;
@@ -883,6 +895,9 @@ Expected<MergedAnchor, Error> merge_anchor(const Geometry& geo, const DrawingObj
   m.from.col = p.from_col.value_or(m.from.col);
   m.from.row_off = p.from_row_off.value_or(m.from.row_off);
   m.from.col_off = p.from_col_off.value_or(m.from.col_off);
+  if (m.kind == AnchorKind::kAbsolute && (m.from.row != 0 || m.from.col != 0)) {
+    return invalid(kAbsoluteCells);
+  }
   if (!two) {
     m.cx = p.width_emu.value_or(box_cx);
     m.cy = p.height_emu.value_or(box_cy);

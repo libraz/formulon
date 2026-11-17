@@ -125,9 +125,9 @@ fm_status_t anchor_patch_from_c(const fm_drawing_anchor_patch_t& p, formulon::Dr
     }
   }
   if (is_set(p.kind_op)) {
-    if (p.kind != FM_ANCHOR_KIND_ONE_CELL && p.kind != FM_ANCHOR_KIND_TWO_CELL) {
-      return invalid_argument("anchor.kind is not a one-cell or two-cell kind",
-                              "anchor.kind=" + std::to_string(p.kind));
+    // An absolute kind is checked by the model, which keeps it only on an absolute anchor.
+    if (auto rc = check_enum_domain(p.kind, FM_ANCHOR_KIND_ONE_CELL, FM_ANCHOR_KIND_ABSOLUTE, "anchor.kind"); rc != 0) {
+      return rc;
     }
     out->kind = formulon::c_api::parts::anchor_kind_from_c(p.kind, formulon::AnchorKind::kOneCell);
   }

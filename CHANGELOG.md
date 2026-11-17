@@ -111,6 +111,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `DrawingAnchorPatch.kind` (Python `DrawingAnchorInput.kind` on update, C
+  `fm_drawing_anchor_patch_t::kind`) accepts `AnchorKind.Absolute` on a picture,
+  chart or shape whose anchor is absolute, so such an object can be moved and
+  resized with its kind kept, in `.xlsx` and `.xlsb`; `fromRow` and `fromCol` are
+  0 and the offsets give the position from A1. Making any other anchor absolute
+  is still refused.
+
 - An `.xlsx` save counts each custom view it leaves out in
   `SaveDiagnostics.deferredFeatureCount` (Python `deferred_feature_count`, C
   `fm_save_diagnostics_info_t::deferred_feature_count`), once per view: a view

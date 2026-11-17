@@ -5355,7 +5355,8 @@ export interface DrawingAnchorInput {
  *  an anchor that ends up one-cell, or a size key on one that ends up two-cell, fails with
  *  `StatusCode.InvalidArgument`. No key accepts `null`; an unknown key fails with a `TypeError`. */
 export interface DrawingAnchorPatch {
-  /** The anchor kind: absolute, one-cell or two-cell; an absolute kind is not added. */
+  /** The anchor kind: absolute, one-cell or two-cell. Absolute is kept on an object whose anchor is absolute, with
+   *  `fromRow` and `fromCol` 0 and the offsets as its position from A1; no other anchor becomes absolute. */
   kind?: AnchorKind;
   /** How the object follows row and column edits (it moves and resizes, moves only, or stays put); written for a
    *  two-cell anchor only. */

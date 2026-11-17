@@ -63,6 +63,8 @@ void for_each_element(const pugi::xml_node& node, const Fn& fn) {
 }
 
 inline constexpr const char* kNoObject = "object_id does not name a picture or chart";
+inline constexpr const char* kNotAbsolute = "anchor.kind may be absolute only on an object whose anchor is absolute";
+inline constexpr const char* kAbsoluteCells = "anchor.from_row and anchor.from_col must be 0 on an absolute anchor";
 inline constexpr const char* kNoShapeOrObject = "object_id does not name a picture, chart or shape";
 inline constexpr const char* kNoSnapshotObject = "object_id does not name a picture, chart, shape, connector or group";
 inline constexpr const char* kNoOrderable =

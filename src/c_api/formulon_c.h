@@ -14259,7 +14259,8 @@ typedef struct {
 typedef struct {
   /** Patch operation for `kind`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t kind_op;
-  /** The anchor kind: absolute, one-cell or two-cell; an absolute kind is not added. */
+  /** The anchor kind: absolute, one-cell or two-cell. Absolute is kept on an object whose anchor is absolute, with
+   *  `from_row` and `from_col` 0 and the offsets as its position from A1; no other anchor becomes absolute. */
   int32_t kind;
   /** Patch operation for `edit_as`: leave it unchanged, set it, or (where it can be cleared) remove it. */
   fm_patch_op_t edit_as_op;
@@ -14640,7 +14641,8 @@ FM_API fm_status_t fm_sheet_remove_drawing(fm_workbook_t* wb, size_t sheet_index
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is outside 0..2, `CLEAR`
  *         hits a field other than `description`, `SET` carries a `NULL` or
  *         empty `name` or a `NULL` description, an enum field is outside its
- *         domain, a `SET` anchor kind is not one-cell or two-cell, a field
+ *         domain, a `SET` anchor kind is absolute on an object whose anchor
+ *         is not, an absolute anchor's `from_row` or `from_col` is not 0, a field
  *         the resulting anchor kind does not hold is `SET` without one it
  *         holds (`fm_drawing_anchor_patch_t`), an offset or size
  *         is negative or 2^31 EMU or more, the anchor lies outside the sheet,
