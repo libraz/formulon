@@ -290,7 +290,7 @@ TEST(BuiltinsTrend, NewXFeatureCountMismatchReturnsRef) {
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
-TEST(BuiltinsTrend, ErrorInYPropagates) {
+TEST(BuiltinsTrend, ErrorInYIsValue) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
@@ -299,11 +299,10 @@ TEST(BuiltinsTrend, ErrorInYPropagates) {
   Arena eval_arena;
   const Value v = EvalUnder("=TREND({1,#N/A,3}, {1,2,3})", &parse_arena, &eval_arena, ctx);
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(BuiltinsTrend, ErrorInNewXPropagates) {
-  // Error in new_x cells -> propagate that error.
+TEST(BuiltinsTrend, ErrorInNewXIsValue) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
@@ -312,7 +311,7 @@ TEST(BuiltinsTrend, ErrorInNewXPropagates) {
   Arena eval_arena;
   const Value v = EvalUnder("=TREND({1,2,3}, {1,2,3}, {#N/A,5})", &parse_arena, &eval_arena, ctx);
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(BuiltinsTrend, NonNumericYReturnsValue) {

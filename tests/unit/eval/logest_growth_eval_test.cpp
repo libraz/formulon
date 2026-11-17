@@ -182,7 +182,7 @@ TEST(BuiltinsLogest, NegativeYReturnsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
-TEST(BuiltinsLogest, ErrorInYPropagates) {
+TEST(BuiltinsLogest, ErrorInYIsValue) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
@@ -191,7 +191,7 @@ TEST(BuiltinsLogest, ErrorInYPropagates) {
   Arena eval_arena;
   const Value v = EvalUnder("=LOGEST({2,#N/A,8,16}, {1,2,3,4})", &parse_arena, &eval_arena, ctx);
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(BuiltinsLogest, ZeroArgRejected) {
@@ -313,7 +313,7 @@ TEST(BuiltinsGrowth, NonPositiveYReturnsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
-TEST(BuiltinsGrowth, ErrorInNewXPropagates) {
+TEST(BuiltinsGrowth, ErrorInNewXIsValue) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
@@ -322,7 +322,7 @@ TEST(BuiltinsGrowth, ErrorInNewXPropagates) {
   Arena eval_arena;
   const Value v = EvalUnder("=GROWTH({6,12,24,48}, {1,2,3,4}, {5,#N/A})", &parse_arena, &eval_arena, ctx);
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(BuiltinsGrowth, NewXFeatureCountMismatchReturnsRef) {

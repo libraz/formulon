@@ -275,9 +275,60 @@
       }
     },
     {
+      "id": "trend_arg1_na_cell",
+      "formula": "=TREND(B1,{1;2;3},,FALSE)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
       "id": "trend_arg1_blank_cell",
       "formula": "=TREND(B2,{1;2;3},,FALSE)",
       "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "trend_arg2_na_cell",
+      "formula": "=TREND({2;4;6},B1,,FALSE)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "trend_arg2_blank_cell",
+      "formula": "=TREND({2;4;6},B2,,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "trend_arg3_na_cell",
+      "formula": "=TREND({2;4;6},{1;2;3},B1,FALSE)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
@@ -290,6 +341,46 @@
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "trend_arg4_na_cell",
+      "formula": "=TREND({2;4;6},{1;2;3},,B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "trend_arg4_blank_cell",
+      "formula": "=TREND({2;4;6},{1;2;3},,B2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          2.0000000000000004,
+          4.000000000000001,
+          6.000000000000002
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "trend_arg4_array_lifted",
+      "formula": "=INDEX(TREND({2;4;6},{1;2;3},,{FALSE,FALSE}),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0000000000000004
       }
     },
     {

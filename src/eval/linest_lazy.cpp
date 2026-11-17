@@ -24,6 +24,7 @@
 #include "eval/matrix_ops_lazy.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
+#include "eval/scalar_args.h"
 #include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -35,20 +36,19 @@ namespace formulon {
 namespace eval {
 namespace {
 
-/// Evaluates an optional scalar Boolean argument. Numbers coerce
-/// to false (zero) / true (non-zero); Booleans pass through; errors
-/// propagate via `*out_err` (returning `false`); other types -> `#VALUE!`.
-bool eval_optional_flag_arg(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
-                            const EvalContext& ctx, bool default_value, bool* out, Value* out_err) {
-  const Value v = eval_node(arg, arena, registry, ctx);
-  if (v.is_error()) {
-    *out_err = v;
-    return false;
+/// The value of optional flag argument `index`: `default_value` when the
+/// slot is absent or omitted, otherwise the evaluated argument.
+Value flag_arg_value(const parser::AstNode& call, std::uint32_t index, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx, bool default_value) {
+  if (!call_arg_supplied(call, index)) {
+    return Value::boolean(default_value);
   }
-  if (v.is_blank()) {
-    *out = default_value;
-    return true;
-  }
+  return eval_node(call.as_call_arg(index), arena, registry, ctx);
+}
+
+/// Reads a flag: Booleans pass through, numbers are non-zero, a blank cell is
+/// FALSE. Anything else, errors included, is `#VALUE!`.
+bool read_flag(const Value& v, bool* out) {
   if (v.is_boolean()) {
     *out = v.as_boolean();
     return true;
@@ -57,7 +57,39 @@ bool eval_optional_flag_arg(const parser::AstNode& arg, Arena& arena, const Func
     *out = v.as_number() != 0.0;
     return true;
   }
-  *out_err = Value::error(ErrorCode::Value);
+  if (v.is_blank()) {
+    *out = false;
+    return true;
+  }
+  return false;
+}
+
+/// Runs `fit` once for scalar flags, or element by element when a flag is an
+/// array; each lifted element is the top-left cell of its result.
+template <typename Fit>
+Value lift_flags(const Value* flags, std::uint32_t count, Arena& arena, const Fit& fit) {
+  std::uint32_t rows = 0;
+  std::uint32_t cols = 0;
+  const bool lifted = lift_extent(flags, count, nullptr, &rows, &cols);
+  return lift_over_array_args(flags, count, arena, [&](const Value* args, std::uint32_t n) {
+    bool values[2] = {false, false};
+    for (std::uint32_t i = 0; i < n; ++i) {
+      if (!read_flag(args[i], &values[i])) {
+        return Value::error(ErrorCode::Value);
+      }
+    }
+    const Value out = fit(values);
+    return lifted && out.is_array() ? out.as_array()->cells[0] : out;
+  });
+}
+
+/// Coerces a regression input matrix: any cell that is not a number, an
+/// error included, is `#VALUE!`.
+bool coerce_fit_matrix(const ArrayValue& src, std::vector<double>& out, Value& out_err) {
+  if (coerce_matrix(src, out, out_err)) {
+    return true;
+  }
+  out_err = Value::error(ErrorCode::Value);
   return false;
 }
 
@@ -353,8 +385,8 @@ void fill_coeff_row(const std::vector<double>& coeffs, std::uint32_t k, bool wit
 /// determines how `known_x` is read. If `x_arr` is `nullptr`, the
 /// predictor defaults to the index sequence `{1, 2, ..., m}`.
 ///
-/// Returns `false` on shape mismatch (writes `#REF!` / `#VALUE!` into
-/// `*out_err`) or on a non-numeric / error cell (propagates verbatim).
+/// Returns `false` on a non-numeric y cell (`#VALUE!`), then on a shape
+/// mismatch (`#REF!`), then on a non-numeric x cell (`#VALUE!`).
 bool build_design_matrix(const ArrayValue& y_arr, const ArrayValue* x_arr, bool with_const, DesignMatrix* dm,
                          Value* out_err) {
   // y must be 1-D (column m x 1 or row 1 x m).
@@ -366,9 +398,9 @@ bool build_design_matrix(const ArrayValue& y_arr, const ArrayValue* x_arr, bool 
   }
   const std::uint32_t m = y_is_col ? y_arr.rows : y_arr.cols;
 
-  // Coerce y first; errors here propagate (left-to-right rule: y first).
+  // y's content is checked before x's shape, x's shape before its content.
   std::vector<double> y_vec;
-  if (!coerce_matrix(y_arr, y_vec, *out_err)) {
+  if (!coerce_fit_matrix(y_arr, y_vec, *out_err)) {
     return false;
   }
 
@@ -383,52 +415,31 @@ bool build_design_matrix(const ArrayValue& y_arr, const ArrayValue* x_arr, bool 
       x_data[i] = static_cast<double>(i + 1U);
     }
   } else {
-    std::vector<double> x_vec;
-    if (!coerce_matrix(*x_arr, x_vec, *out_err)) {
+    // Match orientation against y. The "observation axis" of x must
+    // equal m; the other axis becomes k. Mac Excel accepts either layout.
+    bool transpose = false;
+    if (y_is_col && x_arr->rows == m) {
+      k = x_arr->cols;  // m x k, the canonical column-y layout
+    } else if (y_is_col && x_arr->cols == m) {
+      k = x_arr->rows;  // k x m (1 x m for a single variable)
+      transpose = k > 1U;
+    } else if (!y_is_col && x_arr->cols == m) {
+      k = x_arr->rows;  // k x m, predictors stacked
+      transpose = true;
+    } else if (!y_is_col && x_arr->rows == m) {
+      k = x_arr->cols;  // m x k (m x 1 for a single variable)
+    } else {
+      *out_err = Value::error(ErrorCode::Ref);
       return false;
     }
-    // Match orientation against y. The "observation axis" of x must
-    // equal m. Mac Excel accepts either layout; the other axis becomes k.
-    if (y_is_col) {
-      // y is m x 1; x should be m x k.
-      if (x_arr->rows != m) {
-        // Allow x as 1 x m as a fallback (single-variable, transposed).
-        if (x_arr->rows == 1U && x_arr->cols == m) {
-          k = 1U;
-          x_data = std::move(x_vec);  // already length m
-        } else if (x_arr->cols == m && x_arr->rows >= 1U) {
-          // x is k x m: transpose to m x k.
-          k = x_arr->rows;
-          transpose_into(x_vec, m, k, x_data);
-        } else {
-          *out_err = Value::error(ErrorCode::Ref);
-          return false;
-        }
-      } else {
-        // x is m x k (the canonical column-y layout).
-        k = x_arr->cols;
-        x_data = std::move(x_vec);  // already row-major m x k
-      }
+    std::vector<double> x_vec;
+    if (!coerce_fit_matrix(*x_arr, x_vec, *out_err)) {
+      return false;
+    }
+    if (transpose) {
+      transpose_into(x_vec, m, k, x_data);
     } else {
-      // y is 1 x m; x should be k x m (row layout, predictors stacked).
-      if (x_arr->cols != m) {
-        // Allow x as m x 1 as a fallback (single-variable).
-        if (x_arr->cols == 1U && x_arr->rows == m) {
-          k = 1U;
-          x_data = std::move(x_vec);
-        } else if (x_arr->rows == m && x_arr->cols >= 1U) {
-          // x is m x k: take row-major m x k as-is.
-          k = x_arr->cols;
-          x_data = std::move(x_vec);
-        } else {
-          *out_err = Value::error(ErrorCode::Ref);
-          return false;
-        }
-      } else {
-        // x is k x m: transpose to m x k.
-        k = x_arr->rows;
-        transpose_into(x_vec, m, k, x_data);
-      }
+      x_data = std::move(x_vec);
     }
   }
 
@@ -527,10 +538,12 @@ ArrayValue* build_stats_output(const LinFit& fit, const DesignMatrix& dm, Arena&
   }
   cells[2U * out_cols + 1U] = num_or_na(std::sqrt(sigma2));
 
-  // Row 4: [F, df_resid, #N/A, ...]; F is undefined for a zero residual.
+  // Row 4: [F, df_resid, #N/A, ...]; F divides by the residual variance, so
+  // a zero residual is #NUM!.
   const double kx = static_cast<double>(fit.steps) - (dm.with_const ? 1.0 : 0.0);
-  if (fit.df > 0.0 && kx > 0.0 && fit.ss_resid != 0.0) {
-    cells[3U * out_cols + 0U] = num_or_na((ss_reg / kx) / (fit.ss_resid / fit.df));
+  if (fit.df > 0.0 && kx > 0.0) {
+    cells[3U * out_cols + 0U] =
+        fit.ss_resid == 0.0 ? Value::error(ErrorCode::Num) : num_or_na((ss_reg / kx) / (fit.ss_resid / fit.df));
   }
   cells[3U * out_cols + 1U] = Value::number(fit.df);
 
@@ -559,7 +572,8 @@ bool log_transform_y(DesignMatrix& dm) {
 /// `known_x` was omitted, which the design-matrix builder reads as the
 /// implicit `{1, 2, 3, ...}` predictor.
 ///
-/// Returns `false` with the propagating error in `*out_err`.
+/// Returns `false` with the error in `*out_err`: an argument that evaluates to
+/// an error is `#VALUE!`.
 bool read_known_xy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
                    const ArrayValue** out_y, const ArrayValue** out_x, Value* out_err) {
   const std::uint32_t arity = call.as_call_arity();
@@ -567,10 +581,9 @@ bool read_known_xy(const parser::AstNode& call, Arena& arena, const FunctionRegi
     *out_err = Value::error(ErrorCode::Value);
     return false;
   }
-  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, out_y, out_err)) {
-    return false;
-  }
-  if (arity >= 2U && !resolve_array_value(call.as_call_arg(1), arena, registry, ctx, out_x, out_err)) {
+  if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, out_y, out_err) ||
+      (arity >= 2U && !resolve_array_value(call.as_call_arg(1), arena, registry, ctx, out_x, out_err))) {
+    *out_err = Value::error(ErrorCode::Value);
     return false;
   }
   return true;
@@ -612,45 +625,21 @@ Value eval_fit(const parser::AstNode& call, Arena& arena, const FunctionRegistry
   if (!read_known_xy(call, arena, registry, ctx, &y_arr, &x_arr, &err)) {
     return err;
   }
-  const std::uint32_t arity = call.as_call_arity();
-
-  bool with_const = true;
-  if (arity >= 3U) {
-    if (!eval_optional_flag_arg(call.as_call_arg(2), arena, registry, ctx, true, &with_const, &err)) {
-      return err;
+  const Value flags[2] = {flag_arg_value(call, 2U, arena, registry, ctx, true),
+                          flag_arg_value(call, 3U, arena, registry, ctx, false)};
+  return lift_flags(flags, 2U, arena, [&](const bool* values) {
+    const bool with_const = values[0];
+    const bool want_stats = values[1];
+    DesignMatrix dm;
+    LinFit fit;
+    Value fit_err = Value::blank();
+    if (!fit_coefficients(*y_arr, x_arr, with_const, log_form, /*want_inv=*/want_stats, &dm, &fit, &fit_err)) {
+      return fit_err;
     }
-  }
-
-  bool want_stats = false;
-  if (arity >= 4U) {
-    if (!eval_optional_flag_arg(call.as_call_arg(3), arena, registry, ctx, false, &want_stats, &err)) {
-      return err;
-    }
-  }
-
-  DesignMatrix dm;
-  LinFit fit;
-  if (!fit_coefficients(*y_arr, x_arr, with_const, log_form, /*want_inv=*/want_stats, &dm, &fit, &err)) {
-    return err;
-  }
-  const std::vector<double>& coeffs = fit.coeffs;
-
-  if (!want_stats) {
-    // `build_simple_output` reads coeffs[0..k-1] always and coeffs[k]
-    // only on the `with_const=true` branch — so `coeffs.size() == p`
-    // is correct in both branches.
-    ArrayValue* arr = build_simple_output(coeffs, dm.k, with_const, arena, log_form);
-    if (arr == nullptr) {
-      return Value::error(ErrorCode::Num);
-    }
-    return Value::array(arr);
-  }
-
-  ArrayValue* arr = build_stats_output(fit, dm, arena, log_form);
-  if (arr == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::array(arr);
+    ArrayValue* arr = want_stats ? build_stats_output(fit, dm, arena, log_form)
+                                 : build_simple_output(fit.coeffs, dm.k, with_const, arena, log_form);
+    return arr == nullptr ? Value::error(ErrorCode::Num) : Value::array(arr);
+  });
 }
 
 }  // namespace
@@ -674,42 +663,35 @@ namespace {
 /// predictor axis is its columns; when row, its rows. A single-variable
 /// fallback (`k == 1`) accepts the orthogonal orientation as a courtesy.
 ///
-/// Returns `false` on shape mismatch (`#REF!`) or non-numeric / error
-/// cells (errors propagate verbatim, non-numeric -> `#VALUE!`).
+/// Returns `false` on shape mismatch (`#REF!`), then on a non-numeric
+/// cell, an error included (`#VALUE!`).
 bool resolve_new_x_design(const ArrayValue& new_x, const DesignMatrix& dm, bool y_is_col, bool with_const,
                           std::vector<double>* out_design, std::uint32_t* out_n, Value* out_err) {
-  std::vector<double> raw;
-  if (!coerce_matrix(new_x, raw, *out_err)) {
-    return false;
-  }
   const std::uint32_t k = dm.k;
   std::uint32_t n = 0;
-  std::vector<double> features;  // N x k row-major
-  if (y_is_col) {
-    if (new_x.cols == k) {
-      n = new_x.rows;
-      features = std::move(raw);  // already N x k row-major
-    } else if (k == 1U && new_x.rows == 1U && new_x.cols >= 1U) {
-      // Single-variable fallback: 1 x N row works as N x 1 column.
-      n = new_x.cols;
-      features = std::move(raw);
-    } else {
-      *out_err = Value::error(ErrorCode::Ref);
-      return false;
-    }
+  bool transpose = false;
+  if (y_is_col && new_x.cols == k) {
+    n = new_x.rows;  // already N x k row-major
+  } else if (y_is_col && k == 1U && new_x.rows == 1U) {
+    n = new_x.cols;  // single-variable fallback: 1 x N works as N x 1
+  } else if (!y_is_col && new_x.rows == k) {
+    n = new_x.cols;  // k x N -> transpose to N x k
+    transpose = true;
+  } else if (!y_is_col && k == 1U && new_x.cols == 1U) {
+    n = new_x.rows;  // single-variable fallback: N x 1 works as 1 x N
   } else {
-    if (new_x.rows == k) {
-      // k x N -> transpose to N x k.
-      n = new_x.cols;
-      transpose_into(raw, n, k, features);
-    } else if (k == 1U && new_x.cols == 1U && new_x.rows >= 1U) {
-      // Single-variable fallback: N x 1 column works as 1 x N row.
-      n = new_x.rows;
-      features = std::move(raw);
-    } else {
-      *out_err = Value::error(ErrorCode::Ref);
-      return false;
-    }
+    *out_err = Value::error(ErrorCode::Ref);
+    return false;
+  }
+  std::vector<double> raw;
+  if (!coerce_fit_matrix(new_x, raw, *out_err)) {
+    return false;
+  }
+  std::vector<double> features;  // N x k row-major
+  if (transpose) {
+    transpose_into(raw, n, k, features);
+  } else {
+    features = std::move(raw);
   }
 
   const std::uint32_t p = k + (with_const ? 1U : 0U);
@@ -738,49 +720,35 @@ Value eval_prediction(const parser::AstNode& call, Arena& arena, const FunctionR
   if (!read_known_xy(call, arena, registry, ctx, &y_arr, &x_arr, &err)) {
     return err;
   }
-  const std::uint32_t arity = call.as_call_arity();
   const ArrayValue* new_x_arr = nullptr;
-  if (arity >= 3U && !is_omitted_arg(call.as_call_arg(2))) {
-    if (!resolve_array_value(call.as_call_arg(2), arena, registry, ctx, &new_x_arr, &err)) {
-      return err;
+  if (call_arg_supplied(call, 2U) &&
+      !resolve_array_value(call.as_call_arg(2), arena, registry, ctx, &new_x_arr, &err)) {
+    return Value::error(ErrorCode::Value);
+  }
+  const Value flags[1] = {flag_arg_value(call, 3U, arena, registry, ctx, true)};
+  return lift_flags(flags, 1U, arena, [&](const bool* values) {
+    const bool with_const = values[0];
+    DesignMatrix dm;
+    LinFit fit;
+    Value fit_err = Value::blank();
+    if (!fit_coefficients(*y_arr, x_arr, with_const, log_form, /*want_inv=*/false, &dm, &fit, &fit_err)) {
+      return fit_err;
     }
-  }
-  bool with_const = true;
-  if (arity >= 4U) {
-    if (!eval_optional_flag_arg(call.as_call_arg(3), arena, registry, ctx, true, &with_const, &err)) {
-      return err;
+    const std::uint32_t p = dm.k + (with_const ? 1U : 0U);
+    // Without new_x the prediction runs over the training design itself.
+    const bool y_is_col = y_arr->cols == 1U && y_arr->rows >= 1U;
+    std::vector<double> pred_design;
+    std::uint32_t n_obs = 0;
+    if (new_x_arr == nullptr) {
+      n_obs = dm.m;
+      pred_design = std::move(dm.data);
+    } else if (!resolve_new_x_design(*new_x_arr, dm, y_is_col, with_const, &pred_design, &n_obs, &fit_err)) {
+      return fit_err;
     }
-  }
-
-  DesignMatrix dm;
-  LinFit fit;
-  if (!fit_coefficients(*y_arr, x_arr, with_const, log_form, /*want_inv=*/false, &dm, &fit, &err)) {
-    return err;
-  }
-  const std::vector<double>& coeffs = fit.coeffs;
-  const std::uint32_t p = dm.k + (with_const ? 1U : 0U);
-
-  // Build the prediction design buffer. When new_x is omitted, this is
-  // the original design matrix (returns the fitted values y_hat at the
-  // training observations); otherwise we build a fresh N x p buffer.
-  const bool y_is_col = y_arr->cols == 1U && y_arr->rows >= 1U;
-  std::vector<double> pred_design;
-  std::uint32_t n_obs = 0;
-  if (new_x_arr == nullptr) {
-    n_obs = dm.m;
-    pred_design = std::move(dm.data);  // m x p row-major, intercept column included when with_const
-  } else {
-    if (!resolve_new_x_design(*new_x_arr, dm, y_is_col, with_const, &pred_design, &n_obs, &err)) {
-      return err;
-    }
-  }
-
-  ArrayValue* arr =
-      build_prediction_output(coeffs, pred_design, n_obs, p, with_const, y_is_col, /*exp_result=*/log_form, arena);
-  if (arr == nullptr) {
-    return Value::error(ErrorCode::Num);
-  }
-  return Value::array(arr);
+    ArrayValue* arr = build_prediction_output(fit.coeffs, pred_design, n_obs, p, with_const, y_is_col,
+                                              /*exp_result=*/log_form, arena);
+    return arr == nullptr ? Value::error(ErrorCode::Num) : Value::array(arr);
+  });
 }
 
 }  // namespace

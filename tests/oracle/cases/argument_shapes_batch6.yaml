@@ -63,10 +63,28 @@ cases:
     formula: "=TIME(0,0,0)"
   - id: time_arg1_negative
     formula: "=TIME(-12,0,0)"
+  - id: trend_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=TREND(B1,{1;2;3},,FALSE)"
   - id: trend_arg1_blank_cell
     formula: "=TREND(B2,{1;2;3},,FALSE)"
+  - id: trend_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=TREND({2;4;6},B1,,FALSE)"
+  - id: trend_arg2_blank_cell
+    formula: "=TREND({2;4;6},B2,,FALSE)"
+  - id: trend_arg3_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=TREND({2;4;6},{1;2;3},B1,FALSE)"
   - id: trend_arg3_blank_cell
     formula: "=TREND({2;4;6},{1;2;3},B2,FALSE)"
+  - id: trend_arg4_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=TREND({2;4;6},{1;2;3},,B1)"
+  - id: trend_arg4_blank_cell
+    formula: "=TREND({2;4;6},{1;2;3},,B2)"
+  - id: trend_arg4_array_lifted
+    formula: "=INDEX(TREND({2;4;6},{1;2;3},,{FALSE,FALSE}),2)"
   - id: trim_arg1_na_cell
     setup: { B1: "=NA()" }
     formula: "=TRIM(B1)"

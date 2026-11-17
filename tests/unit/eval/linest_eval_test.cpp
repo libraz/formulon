@@ -278,10 +278,8 @@ TEST(BuiltinsLinest, PerfectFitReportsAHugeFiniteFStatistic) {
   EXPECT_LT(c[9].as_number(), 1e-20);
 }
 
-TEST(BuiltinsLinest, FlatResponseLeavesTheFStatisticUndefined) {
-  // A constant y has no regression sum of squares at all, so F is genuinely
-  // undefined rather than merely unstable; the residual floor must not
-  // manufacture a value here.
+TEST(BuiltinsLinest, ZeroResidualMakesTheFStatisticNum) {
+  // A constant y leaves no residual, and F divides by the residual variance.
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
@@ -291,8 +289,8 @@ TEST(BuiltinsLinest, FlatResponseLeavesTheFStatisticUndefined) {
   const Value v = EvalUnder("=LINEST({7;7;7;7;7}, {1;2;3;4;5}, TRUE, TRUE)", &parse_arena, &eval_arena, ctx);
   ASSERT_TRUE(v.is_array());
   const Value* c = v.as_array_cells();
-  ASSERT_TRUE(c[6].is_error()) << "F slot should stay #N/A for a flat response";
-  EXPECT_EQ(c[6].as_error(), ErrorCode::NA);
+  ASSERT_TRUE(c[6].is_error());
+  EXPECT_EQ(c[6].as_error(), ErrorCode::Num);
 }
 
 TEST(BuiltinsLinest, StatsBlockTrailingSlotsAreNAForMultiVariable) {
@@ -418,8 +416,8 @@ TEST(BuiltinsLinest, NonNumericYCellReturnsValue) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(BuiltinsLinest, ErrorCellInYPropagatesVerbatim) {
-  // #N/A in y -> the impl surfaces #N/A unchanged.
+TEST(BuiltinsLinest, ErrorCellInYIsValue) {
+  // An error in y is a non-numeric cell like any other.
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
@@ -428,7 +426,39 @@ TEST(BuiltinsLinest, ErrorCellInYPropagatesVerbatim) {
   Arena eval_arena;
   const Value v = EvalUnder("=LINEST({1,#N/A,3}, {1,2,3})", &parse_arena, &eval_arena, ctx);
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::NA);
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsLinest, XShapeIsCheckedBeforeItsCells) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 0, Value::error(ErrorCode::NA));
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=LINEST({1;2;3}, A1)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Ref);
+}
+
+TEST(BuiltinsLinest, BlankConstCellIsFalseAndAnErrorFlagIsValue) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 1, Value::error(ErrorCode::Div0));
+  EvalState state;
+  const EvalContext ctx(wb, sheet, state);
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value v = EvalUnder("=LINEST({3;5;7}, {1;2;3}, A1)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(v.is_array());
+  EXPECT_EQ(v.as_array_cells()[1].as_number(), 0.0);
+  const Value omitted = EvalUnder("=LINEST({3;5;7}, {1;2;3}, , FALSE)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(omitted.is_array());
+  EXPECT_NEAR(omitted.as_array_cells()[1].as_number(), 1.0, kEps);
+  const Value err = EvalUnder("=LINEST({2;4;6}, {1;2;3}, TRUE, B1)", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(err.is_error());
+  EXPECT_EQ(err.as_error(), ErrorCode::Value);
 }
 
 TEST(BuiltinsLinest, ShapeMismatchReturnsRef) {
