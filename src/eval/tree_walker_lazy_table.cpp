@@ -316,7 +316,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"VLOOKUP", &eval_vlookup_lazy, LazyResultShape::kArray, 3U, 4U},
     {"VSTACK", &eval_vstack_lazy, LazyResultShape::kArray, 1U, kLazyVariadic},
     {"WEEKDAY", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 2U},
-    {"WEEKNUM", &eval_weeknum_lazy, LazyResultShape::kScalar, 1U, 2U},
+    {"WEEKNUM", &eval_weeknum_lazy, LazyResultShape::kBroadcast, 1U, 2U},
     {"WORKDAY", &eval_workday_lazy, LazyResultShape::kScalar, 2U, 3U},
     {"WORKDAY.INTL", &eval_workday_intl_lazy, LazyResultShape::kScalar, 2U, 4U},
     {"WRAPCOLS", &eval_wrapcols_lazy, LazyResultShape::kArray, 2U, 3U},

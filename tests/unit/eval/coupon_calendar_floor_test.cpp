@@ -1,7 +1,9 @@
 //
-// A coupon schedule whose previous coupon date falls before the date system's first day: the bond functions answer
-// #NUM!, COUPPCD answers 0, and the discount functions, which have no schedule, are unaffected.
+// A coupon schedule whose previous coupon date falls before the date system's first day has no coupon count: COUPNUM
+// and the bond functions answer #NUM!. COUPPCD reports the date as 0, COUPDAYBS accrues from it, basis 1's COUPDAYS
+// spans the real date, and the discount functions, which have no schedule, are unaffected.
 
+#include <string>
 #include <string_view>
 
 #include "gtest/gtest.h"
@@ -44,6 +46,26 @@ TEST(CouponCalendarFloor, ACouponDateOnTheFirstDayIsKept) {
 TEST(CouponCalendarFloor, CouppcdAnswersZero) {
   EXPECT_EQ(Number("=COUPPCD(1,DATE(1900,6,15),2,0)"), 0.0);
   EXPECT_EQ(Number("=COUPPCD(0,DATE(2016,1,1),2,1)"), 0.0);
+  EXPECT_EQ(Number("=COUPPCD(1,DATE(1900,7,1),1,0)"), 0.0);
+  EXPECT_EQ(Number("=COUPPCD(1,DATE(1900,7,1),2,0)"), 1.0);
+}
+
+// Settlement 1 and maturity 1900-06-15, by basis 0..4.
+TEST(CouponCalendarFloor, TheOtherCouponFunctionsStillAnswer) {
+  const double days_nc[] = {164, 166, 166, 166, 164};
+  const double days[] = {180, 182, 180, 182.5, 180};
+  for (int basis = 0; basis <= 4; ++basis) {
+    const std::string tail = ",2," + std::to_string(basis) + ")";
+    EXPECT_EQ(Number("=COUPNCD(1,DATE(1900,6,15)" + tail), 167.0) << basis;
+    EXPECT_EQ(Number("=COUPDAYBS(1,DATE(1900,6,15)" + tail), 1.0) << basis;
+    EXPECT_EQ(Number("=COUPDAYSNC(1,DATE(1900,6,15)" + tail), days_nc[basis]) << basis;
+    EXPECT_EQ(Number("=COUPDAYS(1,DATE(1900,6,15)" + tail), days[basis]) << basis;
+  }
+  EXPECT_EQ(Number("=COUPNCD(1,DATE(1900,6,15),4,0)"), 75.0);
+  EXPECT_EQ(Number("=COUPDAYSNC(1,DATE(1900,6,15),4,0)"), 74.0);
+  EXPECT_EQ(Number("=COUPDAYBS(1,DATE(1900,7,1),1,0)"), 1.0);
+  EXPECT_EQ(Error("=COUPNUM(1,DATE(1900,7,1),1,0)"), ErrorCode::Num);
+  EXPECT_EQ(Number("=COUPNUM(1,DATE(1900,7,1),4,0)"), 2.0);
 }
 
 TEST(CouponCalendarFloor, AFunctionWithoutASchedule) {

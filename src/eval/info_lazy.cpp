@@ -35,6 +35,7 @@
 #include "eval/omitted_arg.h"
 #include "eval/range_resolvers.h"
 #include "eval/scalar_args.h"
+#include "eval/tree_walker/dispatch.h"
 #include "excel_locale.h"
 #include "parser/ast.h"
 #include "parser/formula_prefix.h"
@@ -649,6 +650,10 @@ Value eval_weeknum_lazy(const parser::AstNode& call, Arena& arena, const Functio
     if (args[i].is_error()) {
       return args[i];
     }
+    // An array argument lifts, but a multi-cell reference is #VALUE!, unlike ISOWEEKNUM's.
+    if (args[i].is_array() && is_reference_shape(call.as_call_arg(i))) {
+      return Value::error(ErrorCode::Value);
+    }
     if (const Value atp = atp_arg_error(call.as_call_arg(i), args[i], atp_slot_required(i, 1U, 2U)); atp.is_error()) {
       return atp;
     }
@@ -661,7 +666,9 @@ Value eval_weeknum_lazy(const parser::AstNode& call, Arena& arena, const Functio
   if (entry == nullptr) {
     return Value::error(ErrorCode::Name);
   }
-  return entry->impl(args, evaluated, arena, ctx.date1904());
+  const bool date1904 = ctx.date1904();
+  return lift_over_array_args(args, evaluated, arena,
+                              [&](const Value* a, std::uint32_t n) { return entry->impl(a, n, arena, date1904); });
 }
 
 namespace {

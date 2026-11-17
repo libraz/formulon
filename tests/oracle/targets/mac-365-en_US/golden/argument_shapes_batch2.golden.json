@@ -1,0 +1,1080 @@
+{
+  "suite": "argument_shapes_batch2",
+  "description": "Each argument position of a scalar call the existing suites pin, replaced by a cell holding #N/A and by a blank cell; the first literal argument as an array constant read through INDEX; the first number as zero and negated.\n",
+  "environment": {
+    "excel_version": "16.115",
+    "excel_locale": "en-US",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-11-16T23:40:29Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "gestep_arg1_na_cell",
+      "formula": "=GESTEP(B1,4)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "gestep_arg1_blank_cell",
+      "formula": "=GESTEP(B2,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "gestep_arg2_na_cell",
+      "formula": "=GESTEP(5,B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "gestep_arg2_blank_cell",
+      "formula": "=GESTEP(5,B2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "gestep_arg1_array_lifted",
+      "formula": "=INDEX(GESTEP({5,5},4),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "gestep_arg1_zero",
+      "formula": "=GESTEP(0,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "gestep_arg1_negative",
+      "formula": "=GESTEP(-5,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "hex2bin_arg1_na_cell",
+      "formula": "=HEX2BIN(B1,8)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "hex2bin_arg1_blank_cell",
+      "formula": "=HEX2BIN(B2,8)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "00000000"
+      }
+    },
+    {
+      "id": "hex2bin_arg2_na_cell",
+      "formula": "=HEX2BIN(\"F\",B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "hex2bin_arg2_blank_cell",
+      "formula": "=HEX2BIN(\"F\",B2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "hex2bin_arg1_array_lifted",
+      "formula": "=INDEX(HEX2BIN({\"F\",\"F\"},8),2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "00001111"
+      }
+    },
+    {
+      "id": "hex2bin_arg2_zero",
+      "formula": "=HEX2BIN(\"F\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "hex2bin_arg2_negative",
+      "formula": "=HEX2BIN(\"F\",-8)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "hex2dec_arg1_na_cell",
+      "formula": "=HEX2DEC(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "hex2dec_arg1_blank_cell",
+      "formula": "=HEX2DEC(B2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "hex2dec_arg1_array_lifted",
+      "formula": "=INDEX(HEX2DEC({\"ff\",\"ff\"}),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 255.0
+      }
+    },
+    {
+      "id": "hex2oct_arg1_na_cell",
+      "formula": "=HEX2OCT(B1,4)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "hex2oct_arg1_blank_cell",
+      "formula": "=HEX2OCT(B2,4)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0000"
+      }
+    },
+    {
+      "id": "hex2oct_arg2_na_cell",
+      "formula": "=HEX2OCT(\"F\",B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "hex2oct_arg2_blank_cell",
+      "formula": "=HEX2OCT(\"F\",B2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "hex2oct_arg1_array_lifted",
+      "formula": "=INDEX(HEX2OCT({\"F\",\"F\"},4),2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0017"
+      }
+    },
+    {
+      "id": "hex2oct_arg2_zero",
+      "formula": "=HEX2OCT(\"F\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "hex2oct_arg2_negative",
+      "formula": "=HEX2OCT(\"F\",-4)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "imabs_arg1_na_cell",
+      "formula": "=IMABS(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "imabs_arg1_blank_cell",
+      "formula": "=IMABS(B2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "imabs_arg1_array_lifted",
+      "formula": "=INDEX(IMABS({\"3+4i\",\"3+4i\"}),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "imlog10_arg1_na_cell",
+      "formula": "=IMLOG10(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "imlog10_arg1_blank_cell",
+      "formula": "=IMLOG10(B2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "imlog10_arg1_array_lifted",
+      "formula": "=INDEX(IMLOG10({\"2+i\",\"2+i\"}),2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0.349485002168009+0.201359598136687i"
+      }
+    },
+    {
+      "id": "imlog2_arg1_na_cell",
+      "formula": "=IMLOG2(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "imlog2_arg1_blank_cell",
+      "formula": "=IMLOG2(B2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "imlog2_arg1_array_lifted",
+      "formula": "=INDEX(IMLOG2({\"2+i\",\"2+i\"}),2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "1.16096404744368+0.668902106225488i"
+      }
+    },
+    {
+      "id": "isodd_arg1_na_cell",
+      "formula": "=ISODD(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "isodd_arg1_blank_cell",
+      "formula": "=ISODD(B2)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "isodd_arg1_array_lifted",
+      "formula": "=INDEX(ISODD({3,3}),2)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "isodd_arg1_zero",
+      "formula": "=ISODD(0)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "isodd_arg1_negative",
+      "formula": "=ISODD(-3)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "isoweeknum_arg1_na_cell",
+      "formula": "=ISOWEEKNUM(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "isoweeknum_arg1_blank_cell",
+      "formula": "=ISOWEEKNUM(B2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 52.0
+      }
+    },
+    {
+      "id": "isoweeknum_arg1_array_lifted",
+      "formula": "=INDEX(ISOWEEKNUM({1,1}),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 52.0
+      }
+    },
+    {
+      "id": "isoweeknum_arg1_zero",
+      "formula": "=ISOWEEKNUM(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 52.0
+      }
+    },
+    {
+      "id": "isoweeknum_arg1_negative",
+      "formula": "=ISOWEEKNUM(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "log10_arg1_na_cell",
+      "formula": "=LOG10(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "log10_arg1_blank_cell",
+      "formula": "=LOG10(B2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "log10_arg1_array_lifted",
+      "formula": "=INDEX(LOG10({100,100}),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "log10_arg1_zero",
+      "formula": "=LOG10(0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "log10_arg1_negative",
+      "formula": "=LOG10(-100)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "mod_arg1_na_cell",
+      "formula": "=MOD(B1,3)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "mod_arg1_blank_cell",
+      "formula": "=MOD(B2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mod_arg2_na_cell",
+      "formula": "=MOD(10,B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "mod_arg2_blank_cell",
+      "formula": "=MOD(10,B2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "mod_arg1_array_lifted",
+      "formula": "=INDEX(MOD({10,10},3),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "mod_arg1_zero",
+      "formula": "=MOD(0,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mod_arg1_negative",
+      "formula": "=MOD(-10,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "month_arg1_na_cell",
+      "formula": "=MONTH(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "month_arg1_blank_cell",
+      "formula": "=MONTH(B2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "multinomial_arg1_na_cell",
+      "formula": "=MULTINOMIAL(B1,2,3)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "multinomial_arg1_blank_cell",
+      "formula": "=MULTINOMIAL(B2,2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.999999999999998
+      }
+    },
+    {
+      "id": "multinomial_arg2_na_cell",
+      "formula": "=MULTINOMIAL(1,B1,3)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "multinomial_arg2_blank_cell",
+      "formula": "=MULTINOMIAL(1,B2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "multinomial_arg3_na_cell",
+      "formula": "=MULTINOMIAL(1,2,B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "multinomial_arg3_blank_cell",
+      "formula": "=MULTINOMIAL(1,2,B2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0000000000000004
+      }
+    },
+    {
+      "id": "multinomial_arg1_array_lifted",
+      "formula": "=INDEX(MULTINOMIAL({1,1},2,3),2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "multinomial_arg1_zero",
+      "formula": "=MULTINOMIAL(0,2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 9.999999999999998
+      }
+    },
+    {
+      "id": "multinomial_arg1_negative",
+      "formula": "=MULTINOMIAL(-1,2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "nominal_arg1_na_cell",
+      "formula": "=NOMINAL(B1,12)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "nominal_arg1_blank_cell",
+      "formula": "=NOMINAL(B2,12)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "nominal_arg2_na_cell",
+      "formula": "=NOMINAL(0.053781812,B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "nominal_arg2_blank_cell",
+      "formula": "=NOMINAL(0.053781812,B2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "nominal_arg1_array_lifted",
+      "formula": "=INDEX(NOMINAL({0.053781812,0.053781812},12),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.05249992877615739
+      }
+    },
+    {
+      "id": "nominal_arg1_zero",
+      "formula": "=NOMINAL(0,12)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "nominal_arg1_negative",
+      "formula": "=NOMINAL(-0.053781812,12)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "oct2bin_arg1_na_cell",
+      "formula": "=OCT2BIN(B1,8)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "oct2bin_arg1_blank_cell",
+      "formula": "=OCT2BIN(B2,8)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "00000000"
+      }
+    },
+    {
+      "id": "oct2bin_arg2_na_cell",
+      "formula": "=OCT2BIN(\"12\",B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "oct2bin_arg2_blank_cell",
+      "formula": "=OCT2BIN(\"12\",B2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "oct2bin_arg1_array_lifted",
+      "formula": "=INDEX(OCT2BIN({\"12\",\"12\"},8),2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "00001010"
+      }
+    },
+    {
+      "id": "oct2bin_arg2_zero",
+      "formula": "=OCT2BIN(\"12\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "oct2bin_arg2_negative",
+      "formula": "=OCT2BIN(\"12\",-8)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "oct2dec_arg1_na_cell",
+      "formula": "=OCT2DEC(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "oct2dec_arg1_blank_cell",
+      "formula": "=OCT2DEC(B2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "oct2dec_arg1_array_lifted",
+      "formula": "=INDEX(OCT2DEC({\"7777777777\",\"7777777777\"}),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -1.0
+      }
+    },
+    {
+      "id": "oct2hex_arg1_na_cell",
+      "formula": "=OCT2HEX(B1,4)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "oct2hex_arg1_blank_cell",
+      "formula": "=OCT2HEX(B2,4)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "0000"
+      }
+    },
+    {
+      "id": "oct2hex_arg2_na_cell",
+      "formula": "=OCT2HEX(\"17\",B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "oct2hex_arg2_blank_cell",
+      "formula": "=OCT2HEX(\"17\",B2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "oct2hex_arg1_array_lifted",
+      "formula": "=INDEX(OCT2HEX({\"17\",\"17\"},4),2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "000F"
+      }
+    },
+    {
+      "id": "oct2hex_arg2_zero",
+      "formula": "=OCT2HEX(\"17\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "oct2hex_arg2_negative",
+      "formula": "=OCT2HEX(\"17\",-4)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "sqrtpi_arg1_na_cell",
+      "formula": "=SQRTPI(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sqrtpi_arg1_blank_cell",
+      "formula": "=SQRTPI(B2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sqrtpi_arg1_array_lifted",
+      "formula": "=INDEX(SQRTPI({1,1}),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.7724538509055159
+      }
+    },
+    {
+      "id": "sqrtpi_arg1_zero",
+      "formula": "=SQRTPI(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "sqrtpi_arg1_negative",
+      "formula": "=SQRTPI(-1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "weeknum_arg1_na_cell",
+      "formula": "=WEEKNUM(B1,2)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "weeknum_arg1_blank_cell",
+      "formula": "=WEEKNUM(B2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "weeknum_arg2_na_cell",
+      "formula": "=WEEKNUM(366,B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "weeknum_arg2_blank_cell",
+      "formula": "=WEEKNUM(366,B2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "weeknum_arg1_array_lifted",
+      "formula": "=INDEX(WEEKNUM({366,366},2),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 54.0
+      }
+    },
+    {
+      "id": "weeknum_arg1_zero",
+      "formula": "=WEEKNUM(0,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "weeknum_arg1_negative",
+      "formula": "=WEEKNUM(-366,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    }
+  ]
+}

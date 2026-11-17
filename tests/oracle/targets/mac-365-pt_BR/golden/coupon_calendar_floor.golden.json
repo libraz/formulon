@@ -1,0 +1,845 @@
+{
+  "suite": "coupon_calendar_floor",
+  "description": "Coupon functions whose previous coupon date falls before 1900-01-01, with a maturity whose schedule starts on 1900-01-01 as the control, across every basis and frequency 1, 2 and 4.\n",
+  "environment": {
+    "excel_version": "16.115",
+    "excel_locale": "pt-BR",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-11-17T00:18:05Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "couppcd_before_f2_b0",
+      "formula": "=COUPPCD(1,DATE(1900,6,15),2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "couppcd_before_f2_b1",
+      "formula": "=COUPPCD(1,DATE(1900,6,15),2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "couppcd_before_f2_b2",
+      "formula": "=COUPPCD(1,DATE(1900,6,15),2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "couppcd_before_f2_b3",
+      "formula": "=COUPPCD(1,DATE(1900,6,15),2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "couppcd_before_f2_b4",
+      "formula": "=COUPPCD(1,DATE(1900,6,15),2,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "couppcd_before_f1_b0",
+      "formula": "=COUPPCD(1,DATE(1900,6,15),1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "couppcd_before_f4_b0",
+      "formula": "=COUPPCD(1,DATE(1900,6,15),4,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "couppcd_control_f2_b0",
+      "formula": "=COUPPCD(1,DATE(1900,7,1),2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "couppcd_control_f2_b1",
+      "formula": "=COUPPCD(1,DATE(1900,7,1),2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "couppcd_control_f2_b2",
+      "formula": "=COUPPCD(1,DATE(1900,7,1),2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "couppcd_control_f2_b3",
+      "formula": "=COUPPCD(1,DATE(1900,7,1),2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "couppcd_control_f2_b4",
+      "formula": "=COUPPCD(1,DATE(1900,7,1),2,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "couppcd_control_f1_b0",
+      "formula": "=COUPPCD(1,DATE(1900,7,1),1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "couppcd_control_f4_b0",
+      "formula": "=COUPPCD(1,DATE(1900,7,1),4,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "coupncd_before_f2_b0",
+      "formula": "=COUPNCD(1,DATE(1900,6,15),2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 167.0
+      }
+    },
+    {
+      "id": "coupncd_before_f2_b1",
+      "formula": "=COUPNCD(1,DATE(1900,6,15),2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 167.0
+      }
+    },
+    {
+      "id": "coupncd_before_f2_b2",
+      "formula": "=COUPNCD(1,DATE(1900,6,15),2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 167.0
+      }
+    },
+    {
+      "id": "coupncd_before_f2_b3",
+      "formula": "=COUPNCD(1,DATE(1900,6,15),2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 167.0
+      }
+    },
+    {
+      "id": "coupncd_before_f2_b4",
+      "formula": "=COUPNCD(1,DATE(1900,6,15),2,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 167.0
+      }
+    },
+    {
+      "id": "coupncd_before_f1_b0",
+      "formula": "=COUPNCD(1,DATE(1900,6,15),1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 167.0
+      }
+    },
+    {
+      "id": "coupncd_before_f4_b0",
+      "formula": "=COUPNCD(1,DATE(1900,6,15),4,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 75.0
+      }
+    },
+    {
+      "id": "coupncd_control_f2_b0",
+      "formula": "=COUPNCD(1,DATE(1900,7,1),2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 183.0
+      }
+    },
+    {
+      "id": "coupncd_control_f2_b1",
+      "formula": "=COUPNCD(1,DATE(1900,7,1),2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 183.0
+      }
+    },
+    {
+      "id": "coupncd_control_f2_b2",
+      "formula": "=COUPNCD(1,DATE(1900,7,1),2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 183.0
+      }
+    },
+    {
+      "id": "coupncd_control_f2_b3",
+      "formula": "=COUPNCD(1,DATE(1900,7,1),2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 183.0
+      }
+    },
+    {
+      "id": "coupncd_control_f2_b4",
+      "formula": "=COUPNCD(1,DATE(1900,7,1),2,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 183.0
+      }
+    },
+    {
+      "id": "coupncd_control_f1_b0",
+      "formula": "=COUPNCD(1,DATE(1900,7,1),1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 183.0
+      }
+    },
+    {
+      "id": "coupncd_control_f4_b0",
+      "formula": "=COUPNCD(1,DATE(1900,7,1),4,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 92.0
+      }
+    },
+    {
+      "id": "coupnum_before_f2_b0",
+      "formula": "=COUPNUM(1,DATE(1900,6,15),2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "coupnum_before_f2_b1",
+      "formula": "=COUPNUM(1,DATE(1900,6,15),2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "coupnum_before_f2_b2",
+      "formula": "=COUPNUM(1,DATE(1900,6,15),2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "coupnum_before_f2_b3",
+      "formula": "=COUPNUM(1,DATE(1900,6,15),2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "coupnum_before_f2_b4",
+      "formula": "=COUPNUM(1,DATE(1900,6,15),2,4)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "coupnum_before_f1_b0",
+      "formula": "=COUPNUM(1,DATE(1900,6,15),1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "coupnum_before_f4_b0",
+      "formula": "=COUPNUM(1,DATE(1900,6,15),4,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "coupnum_control_f2_b0",
+      "formula": "=COUPNUM(1,DATE(1900,7,1),2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "coupnum_control_f2_b1",
+      "formula": "=COUPNUM(1,DATE(1900,7,1),2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "coupnum_control_f2_b2",
+      "formula": "=COUPNUM(1,DATE(1900,7,1),2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "coupnum_control_f2_b3",
+      "formula": "=COUPNUM(1,DATE(1900,7,1),2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "coupnum_control_f2_b4",
+      "formula": "=COUPNUM(1,DATE(1900,7,1),2,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "coupnum_control_f1_b0",
+      "formula": "=COUPNUM(1,DATE(1900,7,1),1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "coupnum_control_f4_b0",
+      "formula": "=COUPNUM(1,DATE(1900,7,1),4,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "coupdaybs_before_f2_b0",
+      "formula": "=COUPDAYBS(1,DATE(1900,6,15),2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "coupdaybs_before_f2_b1",
+      "formula": "=COUPDAYBS(1,DATE(1900,6,15),2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "coupdaybs_before_f2_b2",
+      "formula": "=COUPDAYBS(1,DATE(1900,6,15),2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "coupdaybs_before_f2_b3",
+      "formula": "=COUPDAYBS(1,DATE(1900,6,15),2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "coupdaybs_before_f2_b4",
+      "formula": "=COUPDAYBS(1,DATE(1900,6,15),2,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "coupdaybs_before_f1_b0",
+      "formula": "=COUPDAYBS(1,DATE(1900,6,15),1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "coupdaybs_before_f4_b0",
+      "formula": "=COUPDAYBS(1,DATE(1900,6,15),4,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "coupdaybs_control_f2_b0",
+      "formula": "=COUPDAYBS(1,DATE(1900,7,1),2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "coupdaybs_control_f2_b1",
+      "formula": "=COUPDAYBS(1,DATE(1900,7,1),2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "coupdaybs_control_f2_b2",
+      "formula": "=COUPDAYBS(1,DATE(1900,7,1),2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "coupdaybs_control_f2_b3",
+      "formula": "=COUPDAYBS(1,DATE(1900,7,1),2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "coupdaybs_control_f2_b4",
+      "formula": "=COUPDAYBS(1,DATE(1900,7,1),2,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "coupdaybs_control_f1_b0",
+      "formula": "=COUPDAYBS(1,DATE(1900,7,1),1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "coupdaybs_control_f4_b0",
+      "formula": "=COUPDAYBS(1,DATE(1900,7,1),4,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "coupdays_before_f2_b0",
+      "formula": "=COUPDAYS(1,DATE(1900,6,15),2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 180.0
+      }
+    },
+    {
+      "id": "coupdays_before_f2_b1",
+      "formula": "=COUPDAYS(1,DATE(1900,6,15),2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 182.0
+      }
+    },
+    {
+      "id": "coupdays_before_f2_b2",
+      "formula": "=COUPDAYS(1,DATE(1900,6,15),2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 180.0
+      }
+    },
+    {
+      "id": "coupdays_before_f2_b3",
+      "formula": "=COUPDAYS(1,DATE(1900,6,15),2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 182.5
+      }
+    },
+    {
+      "id": "coupdays_before_f2_b4",
+      "formula": "=COUPDAYS(1,DATE(1900,6,15),2,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 180.0
+      }
+    },
+    {
+      "id": "coupdays_before_f1_b0",
+      "formula": "=COUPDAYS(1,DATE(1900,6,15),1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 360.0
+      }
+    },
+    {
+      "id": "coupdays_before_f4_b0",
+      "formula": "=COUPDAYS(1,DATE(1900,6,15),4,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 90.0
+      }
+    },
+    {
+      "id": "coupdays_control_f2_b0",
+      "formula": "=COUPDAYS(1,DATE(1900,7,1),2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 180.0
+      }
+    },
+    {
+      "id": "coupdays_control_f2_b1",
+      "formula": "=COUPDAYS(1,DATE(1900,7,1),2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 182.0
+      }
+    },
+    {
+      "id": "coupdays_control_f2_b2",
+      "formula": "=COUPDAYS(1,DATE(1900,7,1),2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 180.0
+      }
+    },
+    {
+      "id": "coupdays_control_f2_b3",
+      "formula": "=COUPDAYS(1,DATE(1900,7,1),2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 182.5
+      }
+    },
+    {
+      "id": "coupdays_control_f2_b4",
+      "formula": "=COUPDAYS(1,DATE(1900,7,1),2,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 180.0
+      }
+    },
+    {
+      "id": "coupdays_control_f1_b0",
+      "formula": "=COUPDAYS(1,DATE(1900,7,1),1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 360.0
+      }
+    },
+    {
+      "id": "coupdays_control_f4_b0",
+      "formula": "=COUPDAYS(1,DATE(1900,7,1),4,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 90.0
+      }
+    },
+    {
+      "id": "coupdaysnc_before_f2_b0",
+      "formula": "=COUPDAYSNC(1,DATE(1900,6,15),2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 164.0
+      }
+    },
+    {
+      "id": "coupdaysnc_before_f2_b1",
+      "formula": "=COUPDAYSNC(1,DATE(1900,6,15),2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 166.0
+      }
+    },
+    {
+      "id": "coupdaysnc_before_f2_b2",
+      "formula": "=COUPDAYSNC(1,DATE(1900,6,15),2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 166.0
+      }
+    },
+    {
+      "id": "coupdaysnc_before_f2_b3",
+      "formula": "=COUPDAYSNC(1,DATE(1900,6,15),2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 166.0
+      }
+    },
+    {
+      "id": "coupdaysnc_before_f2_b4",
+      "formula": "=COUPDAYSNC(1,DATE(1900,6,15),2,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 164.0
+      }
+    },
+    {
+      "id": "coupdaysnc_before_f1_b0",
+      "formula": "=COUPDAYSNC(1,DATE(1900,6,15),1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 164.0
+      }
+    },
+    {
+      "id": "coupdaysnc_before_f4_b0",
+      "formula": "=COUPDAYSNC(1,DATE(1900,6,15),4,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 74.0
+      }
+    },
+    {
+      "id": "coupdaysnc_control_f2_b0",
+      "formula": "=COUPDAYSNC(1,DATE(1900,7,1),2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 180.0
+      }
+    },
+    {
+      "id": "coupdaysnc_control_f2_b1",
+      "formula": "=COUPDAYSNC(1,DATE(1900,7,1),2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 182.0
+      }
+    },
+    {
+      "id": "coupdaysnc_control_f2_b2",
+      "formula": "=COUPDAYSNC(1,DATE(1900,7,1),2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 182.0
+      }
+    },
+    {
+      "id": "coupdaysnc_control_f2_b3",
+      "formula": "=COUPDAYSNC(1,DATE(1900,7,1),2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 182.0
+      }
+    },
+    {
+      "id": "coupdaysnc_control_f2_b4",
+      "formula": "=COUPDAYSNC(1,DATE(1900,7,1),2,4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 180.0
+      }
+    },
+    {
+      "id": "coupdaysnc_control_f1_b0",
+      "formula": "=COUPDAYSNC(1,DATE(1900,7,1),1,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 180.0
+      }
+    },
+    {
+      "id": "coupdaysnc_control_f4_b0",
+      "formula": "=COUPDAYSNC(1,DATE(1900,7,1),4,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 90.0
+      }
+    },
+    {
+      "id": "price_before",
+      "formula": "=PRICE(1,DATE(1900,6,15),0.0575,0.065,100,2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "price_control",
+      "formula": "=PRICE(1,DATE(1900,7,1),0.0575,0.065,100,2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 99.63680387409201
+      }
+    },
+    {
+      "id": "yield_before",
+      "formula": "=YIELD(1,DATE(1900,6,15),0.0575,95.04287,100,2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "yield_control",
+      "formula": "=YIELD(1,DATE(1900,7,1),0.0575,95.04287,100,2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.16481257352603126
+      }
+    },
+    {
+      "id": "duration_before",
+      "formula": "=DURATION(1,DATE(1900,6,15),0.08,0.09,2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "duration_control",
+      "formula": "=DURATION(1,DATE(1900,7,1),0.08,0.09,2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "mduration_before",
+      "formula": "=MDURATION(1,DATE(1900,6,15),0.08,0.09,2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "mduration_control",
+      "formula": "=MDURATION(1,DATE(1900,7,1),0.08,0.09,2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.47846889952153115
+      }
+    }
+  ]
+}

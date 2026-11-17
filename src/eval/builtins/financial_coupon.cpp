@@ -34,11 +34,8 @@ namespace {
 // / basis domains, enforces `settlement < maturity`, and runs the
 // coupon-schedule engine. On success the caller receives a populated
 // `CouponDates`; on any validation failure a `#NUM!` error is
-// returned for the caller to forward to Excel. A schedule whose PCD falls
-// before the date system's first day is `#NUM!` too, unless the caller reads
-// only the PCD (`pcd_outside_calendar_ok`).
-Expected<CouponDates, ErrorCode> resolve_coupon(const Value* args, std::uint32_t arity, bool date1904,
-                                                bool pcd_outside_calendar_ok = false) {
+// returned for the caller to forward to Excel.
+Expected<CouponDates, ErrorCode> resolve_coupon(const Value* args, std::uint32_t arity, bool date1904) {
   double dates[2];
   if (auto read = read_required_numbers(args, "dd", dates); !read) {
     return std::move(read.error());
@@ -65,9 +62,6 @@ Expected<CouponDates, ErrorCode> resolve_coupon(const Value* args, std::uint32_t
   if (!compute_coupon_dates(s, m, frequency, basis, date1904, &out)) {
     return ErrorCode::Num;
   }
-  if (!out.pcd_in_calendar && !pcd_outside_calendar_ok) {
-    return ErrorCode::Num;
-  }
   return out;
 }
 
@@ -78,11 +72,11 @@ Expected<CouponDates, ErrorCode> resolve_coupon(const Value* args, std::uint32_t
 // Excel serial of the previous coupon date on or before settlement; 0 when
 // that date precedes the date system's first day.
 Value CoupPcd(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
-  auto ctx = resolve_coupon(args, arity, date1904, /*pcd_outside_calendar_ok=*/true);
+  auto ctx = resolve_coupon(args, arity, date1904);
   if (!ctx) {
     return Value::error(ctx.error());
   }
-  return to_finite_value(ctx.value().pcd_in_calendar ? ctx.value().pcd : 0.0);
+  return to_finite_value(ctx.value().pcd);
 }
 
 // --- COUPNCD(settlement, maturity, frequency, [basis=0]) ---------------
@@ -100,11 +94,15 @@ Value CoupNcd(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool dat
 //
 // Number of coupon dates strictly after settlement and up to (and
 // including) maturity. The shared engine already tracks this across
-// its backward walk, so the builtin just returns that counter.
+// its backward walk, so the builtin just returns that counter; with
+// the PCD before the date system's first day there is no count (#NUM!).
 Value CoupNum(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
   auto ctx = resolve_coupon(args, arity, date1904);
   if (!ctx) {
     return Value::error(ctx.error());
+  }
+  if (!ctx.value().pcd_in_calendar) {
+    return Value::error(ErrorCode::Num);
   }
   return to_finite_value(static_cast<double>(ctx.value().coupons_remaining));
 }

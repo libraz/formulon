@@ -67,10 +67,14 @@ bool compute_coupon_dates(double settlement, double maturity, int frequency, int
   date_time::shift_year_month(y_ncd, m_ncd, static_cast<std::int64_t>(step_months));
   const double ncd = date_time::serial_from_ymd_clamped(y_ncd, m_ncd, anchor_day, date1904);
 
+  // A PCD before the date system's first day is reported, and accrued from, as serial 0.
+  const bool pcd_in_calendar = pcd >= date_time::first_calendar_serial(date1904);
+  const double accrual_start = pcd_in_calendar ? pcd : 0.0;
+
   // Basis-adjusted day counts. `days_bs` = settlement - PCD;
   // `days_nc` = NCD - settlement. Rounded to match Excel's
   // integer day-count output.
-  const double days_bs_raw = basis_days_between(pcd, s, basis, date1904);
+  const double days_bs_raw = basis_days_between(accrual_start, s, basis, date1904);
   const double days_nc_raw = basis_days_between(s, ncd, basis, date1904);
 
   // Period length. Bases 0/4 always use 360/freq; basis 2 uses
@@ -87,19 +91,20 @@ bool compute_coupon_dates(double settlement, double maturity, int frequency, int
       period_days = 365.0 / static_cast<double>(frequency);
       break;
     case 1:
-      period_days = ncd - pcd;
+      // Excel counts a date before 1900 from 1899-12-30, past the 1900 ghost day.
+      period_days = ncd - (pcd_in_calendar || date1904 ? pcd : pcd + 1.0);
       break;
     default:
       return false;
   }
 
-  out->pcd = pcd;
+  out->pcd = accrual_start;
   out->ncd = ncd;
   out->days_bs = std::round(days_bs_raw);
   out->days_nc = std::round(days_nc_raw);
   out->period_days = period_days;
   out->coupons_remaining = coupons;
-  out->pcd_in_calendar = pcd >= date_time::first_calendar_serial(date1904);
+  out->pcd_in_calendar = pcd_in_calendar;
   // `bond_dsc` is the effective DSC for bond pricing. For bases 0/1/4
   // the raw `days_nc` already satisfies `days_bs + days_nc ==
   // period_days`, so `bond_dsc == days_nc`. For bases 2 / 3 the raw

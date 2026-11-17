@@ -42,14 +42,14 @@ namespace eval {
 /// well-formed, so they must use a re-derived effective DSC. That
 /// quantity is exposed as `bond_dsc` below.
 struct CouponDates {
-  double pcd;                      ///< Previous coupon date on or before settlement.
+  double pcd;                      ///< Previous coupon date on or before settlement; 0 outside the calendar.
   double ncd;                      ///< Next coupon date strictly after settlement.
   double days_bs;                  ///< Basis-adjusted days from PCD to settlement.
   double days_nc;                  ///< Basis-adjusted days from settlement to NCD (raw — for COUPDAYSNC).
   double bond_dsc;                 ///< Effective DSC for bond pricing (= period_days - days_bs).
   double period_days;              ///< Basis-adjusted total days in the coupon period.
   std::int32_t coupons_remaining;  ///< Coupons strictly after settlement and <= maturity.
-  bool pcd_in_calendar;            ///< Whether the PCD is a date of the workbook's date system.
+  bool pcd_in_calendar;            ///< Whether the PCD is a date of the workbook's date system; else no coupon count.
 };
 
 /// Computes the full coupon-schedule context.

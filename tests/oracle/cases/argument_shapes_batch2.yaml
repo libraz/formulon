@@ -1,0 +1,241 @@
+suite: argument_shapes_batch2
+description: >
+  Each argument position of a scalar call the existing suites pin, replaced
+  by a cell holding #N/A and by a blank cell; the first literal argument as an
+  array constant read through INDEX; the first number as zero and negated.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: gestep_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=GESTEP(B1,4)"
+  - id: gestep_arg1_blank_cell
+    formula: "=GESTEP(B2,4)"
+  - id: gestep_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=GESTEP(5,B1)"
+  - id: gestep_arg2_blank_cell
+    formula: "=GESTEP(5,B2)"
+  - id: gestep_arg1_array_lifted
+    formula: "=INDEX(GESTEP({5,5},4),2)"
+  - id: gestep_arg1_zero
+    formula: "=GESTEP(0,4)"
+  - id: gestep_arg1_negative
+    formula: "=GESTEP(-5,4)"
+  - id: hex2bin_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=HEX2BIN(B1,8)"
+  - id: hex2bin_arg1_blank_cell
+    formula: "=HEX2BIN(B2,8)"
+  - id: hex2bin_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=HEX2BIN(\"F\",B1)"
+  - id: hex2bin_arg2_blank_cell
+    formula: "=HEX2BIN(\"F\",B2)"
+  - id: hex2bin_arg1_array_lifted
+    formula: "=INDEX(HEX2BIN({\"F\",\"F\"},8),2)"
+  - id: hex2bin_arg2_zero
+    formula: "=HEX2BIN(\"F\",0)"
+  - id: hex2bin_arg2_negative
+    formula: "=HEX2BIN(\"F\",-8)"
+  - id: hex2dec_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=HEX2DEC(B1)"
+  - id: hex2dec_arg1_blank_cell
+    formula: "=HEX2DEC(B2)"
+  - id: hex2dec_arg1_array_lifted
+    formula: "=INDEX(HEX2DEC({\"ff\",\"ff\"}),2)"
+  - id: hex2oct_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=HEX2OCT(B1,4)"
+  - id: hex2oct_arg1_blank_cell
+    formula: "=HEX2OCT(B2,4)"
+  - id: hex2oct_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=HEX2OCT(\"F\",B1)"
+  - id: hex2oct_arg2_blank_cell
+    formula: "=HEX2OCT(\"F\",B2)"
+  - id: hex2oct_arg1_array_lifted
+    formula: "=INDEX(HEX2OCT({\"F\",\"F\"},4),2)"
+  - id: hex2oct_arg2_zero
+    formula: "=HEX2OCT(\"F\",0)"
+  - id: hex2oct_arg2_negative
+    formula: "=HEX2OCT(\"F\",-4)"
+  - id: imabs_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=IMABS(B1)"
+  - id: imabs_arg1_blank_cell
+    formula: "=IMABS(B2)"
+  - id: imabs_arg1_array_lifted
+    formula: "=INDEX(IMABS({\"3+4i\",\"3+4i\"}),2)"
+  - id: imlog10_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=IMLOG10(B1)"
+  - id: imlog10_arg1_blank_cell
+    formula: "=IMLOG10(B2)"
+  - id: imlog10_arg1_array_lifted
+    formula: "=INDEX(IMLOG10({\"2+i\",\"2+i\"}),2)"
+  - id: imlog2_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=IMLOG2(B1)"
+  - id: imlog2_arg1_blank_cell
+    formula: "=IMLOG2(B2)"
+  - id: imlog2_arg1_array_lifted
+    formula: "=INDEX(IMLOG2({\"2+i\",\"2+i\"}),2)"
+  - id: isodd_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=ISODD(B1)"
+  - id: isodd_arg1_blank_cell
+    formula: "=ISODD(B2)"
+  - id: isodd_arg1_array_lifted
+    formula: "=INDEX(ISODD({3,3}),2)"
+  - id: isodd_arg1_zero
+    formula: "=ISODD(0)"
+  - id: isodd_arg1_negative
+    formula: "=ISODD(-3)"
+  - id: isoweeknum_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=ISOWEEKNUM(B1)"
+  - id: isoweeknum_arg1_blank_cell
+    formula: "=ISOWEEKNUM(B2)"
+  - id: isoweeknum_arg1_array_lifted
+    formula: "=INDEX(ISOWEEKNUM({1,1}),2)"
+  - id: isoweeknum_arg1_zero
+    formula: "=ISOWEEKNUM(0)"
+  - id: isoweeknum_arg1_negative
+    formula: "=ISOWEEKNUM(-1)"
+  - id: log10_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=LOG10(B1)"
+  - id: log10_arg1_blank_cell
+    formula: "=LOG10(B2)"
+  - id: log10_arg1_array_lifted
+    formula: "=INDEX(LOG10({100,100}),2)"
+  - id: log10_arg1_zero
+    formula: "=LOG10(0)"
+  - id: log10_arg1_negative
+    formula: "=LOG10(-100)"
+  - id: mod_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=MOD(B1,3)"
+  - id: mod_arg1_blank_cell
+    formula: "=MOD(B2,3)"
+  - id: mod_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=MOD(10,B1)"
+  - id: mod_arg2_blank_cell
+    formula: "=MOD(10,B2)"
+  - id: mod_arg1_array_lifted
+    formula: "=INDEX(MOD({10,10},3),2)"
+  - id: mod_arg1_zero
+    formula: "=MOD(0,3)"
+  - id: mod_arg1_negative
+    formula: "=MOD(-10,3)"
+  - id: month_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=MONTH(B1)"
+  - id: month_arg1_blank_cell
+    formula: "=MONTH(B2)"
+  - id: multinomial_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=MULTINOMIAL(B1,2,3)"
+  - id: multinomial_arg1_blank_cell
+    formula: "=MULTINOMIAL(B2,2,3)"
+  - id: multinomial_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=MULTINOMIAL(1,B1,3)"
+  - id: multinomial_arg2_blank_cell
+    formula: "=MULTINOMIAL(1,B2,3)"
+  - id: multinomial_arg3_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=MULTINOMIAL(1,2,B1)"
+  - id: multinomial_arg3_blank_cell
+    formula: "=MULTINOMIAL(1,2,B2)"
+  - id: multinomial_arg1_array_lifted
+    formula: "=INDEX(MULTINOMIAL({1,1},2,3),2)"
+  - id: multinomial_arg1_zero
+    formula: "=MULTINOMIAL(0,2,3)"
+  - id: multinomial_arg1_negative
+    formula: "=MULTINOMIAL(-1,2,3)"
+  - id: nominal_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=NOMINAL(B1,12)"
+  - id: nominal_arg1_blank_cell
+    formula: "=NOMINAL(B2,12)"
+  - id: nominal_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=NOMINAL(0.053781812,B1)"
+  - id: nominal_arg2_blank_cell
+    formula: "=NOMINAL(0.053781812,B2)"
+  - id: nominal_arg1_array_lifted
+    formula: "=INDEX(NOMINAL({0.053781812,0.053781812},12),2)"
+  - id: nominal_arg1_zero
+    formula: "=NOMINAL(0,12)"
+  - id: nominal_arg1_negative
+    formula: "=NOMINAL(-0.053781812,12)"
+  - id: oct2bin_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=OCT2BIN(B1,8)"
+  - id: oct2bin_arg1_blank_cell
+    formula: "=OCT2BIN(B2,8)"
+  - id: oct2bin_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=OCT2BIN(\"12\",B1)"
+  - id: oct2bin_arg2_blank_cell
+    formula: "=OCT2BIN(\"12\",B2)"
+  - id: oct2bin_arg1_array_lifted
+    formula: "=INDEX(OCT2BIN({\"12\",\"12\"},8),2)"
+  - id: oct2bin_arg2_zero
+    formula: "=OCT2BIN(\"12\",0)"
+  - id: oct2bin_arg2_negative
+    formula: "=OCT2BIN(\"12\",-8)"
+  - id: oct2dec_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=OCT2DEC(B1)"
+  - id: oct2dec_arg1_blank_cell
+    formula: "=OCT2DEC(B2)"
+  - id: oct2dec_arg1_array_lifted
+    formula: "=INDEX(OCT2DEC({\"7777777777\",\"7777777777\"}),2)"
+  - id: oct2hex_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=OCT2HEX(B1,4)"
+  - id: oct2hex_arg1_blank_cell
+    formula: "=OCT2HEX(B2,4)"
+  - id: oct2hex_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=OCT2HEX(\"17\",B1)"
+  - id: oct2hex_arg2_blank_cell
+    formula: "=OCT2HEX(\"17\",B2)"
+  - id: oct2hex_arg1_array_lifted
+    formula: "=INDEX(OCT2HEX({\"17\",\"17\"},4),2)"
+  - id: oct2hex_arg2_zero
+    formula: "=OCT2HEX(\"17\",0)"
+  - id: oct2hex_arg2_negative
+    formula: "=OCT2HEX(\"17\",-4)"
+  - id: sqrtpi_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=SQRTPI(B1)"
+  - id: sqrtpi_arg1_blank_cell
+    formula: "=SQRTPI(B2)"
+  - id: sqrtpi_arg1_array_lifted
+    formula: "=INDEX(SQRTPI({1,1}),2)"
+  - id: sqrtpi_arg1_zero
+    formula: "=SQRTPI(0)"
+  - id: sqrtpi_arg1_negative
+    formula: "=SQRTPI(-1)"
+  - id: weeknum_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=WEEKNUM(B1,2)"
+  - id: weeknum_arg1_blank_cell
+    formula: "=WEEKNUM(B2,2)"
+  - id: weeknum_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=WEEKNUM(366,B1)"
+  - id: weeknum_arg2_blank_cell
+    formula: "=WEEKNUM(366,B2)"
+  - id: weeknum_arg1_array_lifted
+    formula: "=INDEX(WEEKNUM({366,366},2),2)"
+  - id: weeknum_arg1_zero
+    formula: "=WEEKNUM(0,2)"
+  - id: weeknum_arg1_negative
+    formula: "=WEEKNUM(-366,2)"
