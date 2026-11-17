@@ -224,6 +224,13 @@ TEST(XlsbPtgCodec, LegacyIntersectionsFollowExcelsFormula2) {
   // A written '@' is listed where Excel shows one, and not inside a body it covers.
   EXPECT_EQ(listed("@LET(a,A1:A3,a)"), Texts{"@LET(a,A1:A3,a)"});
   EXPECT_EQ(listed("@LET(a,A1:A3,@a)"), Texts{});
+  // An area under a value slot nested inside an array-class argument is evaluated as an array, so nothing in it is
+  // intersected: AGGREGATE's array form reads MATCH's lookup values element by element (Mac Excel 16.115 picks the
+  // k-th matching row from such a legacy formula).
+  const Texts aggregate = listed("AGGREGATE(15,6,ROW(C4:C19)/((B4:B19=J5)*ISNUMBER(MATCH(C4:C19,H4:H12,0))),2)");
+  for (const char* operand : {"C4:C19", "B4:B19", "H4:H12"}) {
+    EXPECT_EQ(std::find(aggregate.begin(), aggregate.end(), operand), aggregate.end()) << operand;
+  }
 }
 TEST(XlsbPtgCodec, BranchingCallsCarryExcelsJumpAttributes) {
   const std::vector<std::uint8_t> a1 = {0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0};

@@ -164,9 +164,13 @@ class LegacyIntersections {
       case NodeKind::Call: {
         const std::string_view name = canonical_function_name(node.as_call_name());
         const bool builtin = !shapes_.bound(node.as_call_name()) && IsBuiltin(name);
+        // A call that is an array-class operand (`AGGREGATE(15,6,ROW(A1:A3)/ISNUMBER(MATCH(A1:A3,B1:B3,0)),1)`)
+        // evaluates its arguments as arrays.
+        const bool array_operand =
+            slot.operand && SlotClass(slot, /*area=*/true, PtgEvaluation::kLegacy) != kPtgValueClass;
         for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
           const Slot arg = builtin ? Slot{shapes_.parameter_class(name, i), false} : Slot{};
-          const ArrayScope forced(in_forced_array_, arg.letter == 'F');
+          const ArrayScope forced(in_forced_array_, array_operand || arg.letter == 'F');
           walk(node.as_call_arg(i), arg, false);
         }
         return;
