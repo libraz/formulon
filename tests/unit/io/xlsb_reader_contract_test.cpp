@@ -1305,5 +1305,89 @@ TEST(XlsbChartsheet, AutomaticTabColourWritesNone) {
   EXPECT_EQ(CsRecord(bin.value().bytes, kBrtCsProp), HexBytes(kNoTab));
 }
 
+// The content type `[Content_Types].xml` gives `part`: its Override, else the Default for its extension.
+std::string ContentTypeOf(const std::string& types, const std::string& part) {
+  const auto attr_after = [&types](std::size_t at, const std::string& name) {
+    const std::size_t end = types.find("/>", at);
+    const std::size_t key = types.find(name + "=\"", at);
+    if (key == std::string::npos || key > end) {
+      return std::string();
+    }
+    const std::size_t from = key + name.size() + 2U;
+    return types.substr(from, types.find('"', from) - from);
+  };
+  const std::size_t override_at = types.find("PartName=\"/" + part + "\"");
+  if (override_at != std::string::npos) {
+    return attr_after(types.rfind("<Override", override_at), "ContentType");
+  }
+  const std::string extension = part.substr(part.rfind('.') + 1U);
+  const std::size_t default_at = types.find("Extension=\"" + extension + "\"");
+  return default_at == std::string::npos ? std::string()
+                                         : attr_after(types.rfind("<Default", default_at), "ContentType");
+}
+
+// The chartsheet's relationships part, the printer-settings part and its content type, as one package holds them.
+struct PrinterSettingsCarry {
+  std::string rels;
+  std::string part;
+  std::string content_type;
+};
+
+PrinterSettingsCarry PrinterSettingsIn(const std::vector<std::uint8_t>& package, const std::string& rels_path) {
+  constexpr const char* kPart = "xl/printerSettings/printerSettings1.bin";
+  PrinterSettingsCarry out;
+  std::string types;
+  EXPECT_TRUE(test::extract_part(test::span_of(package), rels_path, &out.rels));
+  EXPECT_TRUE(test::extract_part(test::span_of(package), kPart, &out.part));
+  EXPECT_TRUE(test::extract_part(test::span_of(package), "[Content_Types].xml", &types));
+  out.content_type = ContentTypeOf(types, kPart);
+  return out;
+}
+
+void ExpectSameCarry(const PrinterSettingsCarry& written, const PrinterSettingsCarry& excel) {
+  EXPECT_FALSE(excel.part.empty());
+  EXPECT_EQ(written.part, excel.part);
+  EXPECT_EQ(written.rels, excel.rels);
+  EXPECT_EQ(written.content_type, excel.content_type);
+  EXPECT_EQ(excel.content_type, "application/vnd.openxmlformats-officedocument.spreadsheetml.printerSettings");
+}
+
+// Excel's .xlsx and .xlsb saves of a chartsheet whose page setup names a printer-settings part. Each format saved to
+// the other carries the part, the chartsheet relationships and the part's content type as Excel's save holds them.
+TEST(XlsbChartsheet, PrinterSettingsPartConvertsBothWays) {
+  const std::vector<std::uint8_t> xlsx = test::read_file_bytes(FixturePath("chartsheet_twins/printer_settings.xlsx"));
+  const std::vector<std::uint8_t> xlsb = test::read_file_bytes(FixturePath("chartsheet_twins/printer_settings.xlsb"));
+  ASSERT_FALSE(xlsx.empty());
+  ASSERT_FALSE(xlsb.empty());
+  constexpr const char* kXmlRels = "xl/chartsheets/_rels/sheet1.xml.rels";
+  constexpr const char* kBinRels = "xl/chartsheets/_rels/sheet1.bin.rels";
+
+  auto from_xlsx = io::read_ooxml(test::span_of(xlsx));
+  ASSERT_TRUE(static_cast<bool>(from_xlsx)) << from_xlsx.error().message;
+  auto as_xlsb = io::xlsb::write_xlsb_with_result(from_xlsx.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(as_xlsb)) << as_xlsb.error().message;
+  EXPECT_EQ(as_xlsb.value().diagnostics.dropped_part_count, 0U);
+  EXPECT_EQ(as_xlsb.value().diagnostics.deferred_feature_count, 0U);
+  ExpectSameCarry(PrinterSettingsIn(as_xlsb.value().bytes, kBinRels), PrinterSettingsIn(xlsb, kBinRels));
+  std::string written_bin;
+  std::string excel_bin;
+  ASSERT_TRUE(test::extract_part(test::span_of(as_xlsb.value().bytes), "xl/chartsheets/sheet1.bin", &written_bin));
+  ASSERT_TRUE(test::extract_part(test::span_of(xlsb), "xl/chartsheets/sheet1.bin", &excel_bin));
+  EXPECT_EQ(ChartsheetRecords(written_bin), ChartsheetRecords(excel_bin));
+
+  auto from_xlsb = io::xlsb::read_xlsb(test::span_of(xlsb));
+  ASSERT_TRUE(static_cast<bool>(from_xlsb)) << from_xlsb.error().message;
+  auto as_xlsx = io::write_ooxml_with_result(from_xlsb.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(as_xlsx)) << as_xlsx.error().message;
+  EXPECT_EQ(as_xlsx.value().diagnostics.dropped_part_count, 0U);
+  EXPECT_EQ(as_xlsx.value().diagnostics.deferred_feature_count, 0U);
+  ExpectSameCarry(PrinterSettingsIn(as_xlsx.value().bytes, kXmlRels), PrinterSettingsIn(xlsx, kXmlRels));
+  std::string written_xml;
+  std::string excel_xml;
+  ASSERT_TRUE(test::extract_part(test::span_of(as_xlsx.value().bytes), "xl/chartsheets/sheet1.xml", &written_xml));
+  ASSERT_TRUE(test::extract_part(test::span_of(xlsx), "xl/chartsheets/sheet1.xml", &excel_xml));
+  EXPECT_EQ(ChartsheetBody(written_xml), ChartsheetBody(excel_xml));
+}
+
 }  // namespace
 }  // namespace formulon
