@@ -54,7 +54,9 @@
 #include "io/ooxml/external_link_reader.h"
 #include "io/ooxml/workbook_rels_reader.h"
 #include "io/ooxml_reader.h"
+#include "io/ooxml_writer.h"
 #include "io/xlsb/reader.h"
+#include "io/xlsb/writer.h"
 #include "io/zip_reader.h"
 #include "miniz.h"
 #include "pugixml.hpp"
@@ -568,6 +570,128 @@ TEST(ExternalLinkFixtureEdited, ARefreshErrorSheetWithoutCellsReadsRef) {
   EXPECT_FALSE(wb.external_links()[1].book.sheet_has_data(0));
   EXPECT_TRUE(wb.external_links()[0].book.sheet_has_data(0));
   ExpectSameAsExcel(OurAnswer(wb, 6), Value::error(ErrorCode::Ref), "[2]Data!A1");
+}
+
+// A failed-refresh sheet that still caches some cells (Mac Excel 16.115): the mark is kept on load, a single uncached
+// cell reads #REF!, a cached one its value, a range skips the uncached cells, and a save writes the mark back.
+TEST(ExternalLinkFixtureEdited, ARefreshErrorSheetWithCellsKeepsTheMark) {
+  Workbook wb = LoadBytes(EditedFixture(
+      "external_link_mixed", {{kLink2, Replace("<sheetData sheetId=\"0\"><row r=\"7\">",
+                                               "<sheetData sheetId=\"0\" refreshError=\"1\"><row r=\"7\">")},
+                              {kSheet1, AddRow6("<c r=\"A6\"><f>[2]Data!D8</f></c><c r=\"B6\"><f>[2]Data!D7</f></c>"
+                                                "<c r=\"C6\"><f>SUM([2]Data!D7:D8)</f></c>")}}));
+  const ExternalBook& book = wb.external_links()[1].book;
+  EXPECT_TRUE(book.sheet_has_data(0));
+  EXPECT_TRUE(book.sheet_refresh_failed(0));
+  ExpectSameAsExcel(OurAnswer(wb, 6), Value::error(ErrorCode::Ref), "[2]Data!D8");
+  const Cell* b6 = wb.sheet(0).cell_at(5, 1);
+  ASSERT_NE(b6, nullptr);
+  ASSERT_TRUE(b6->cached_value.is_number());
+  EXPECT_DOUBLE_EQ(b6->cached_value.as_number(), 77.0);
+  const Cell* c6 = wb.sheet(0).cell_at(5, 2);
+  ASSERT_NE(c6, nullptr);
+  ASSERT_TRUE(c6->cached_value.is_number());
+  EXPECT_DOUBLE_EQ(c6->cached_value.as_number(), 77.0);
+
+  auto saved = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  Workbook reloaded = LoadBytes(saved.value());
+  EXPECT_TRUE(reloaded.external_links()[1].book.sheet_refresh_failed(0));
+  auto xlsb = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(xlsb)) << xlsb.error().message;
+  auto from_xlsb = io::xlsb::read_xlsb(io::ByteSpan{xlsb.value().data(), xlsb.value().size()});
+  ASSERT_TRUE(static_cast<bool>(from_xlsb)) << from_xlsb.error().message;
+  EXPECT_TRUE(from_xlsb.value().workbook.external_links()[1].book.sheet_refresh_failed(0));
+}
+
+/// The named part of a zip package, empty when absent.
+std::string ZipPart(const std::vector<std::uint8_t>& package, const char* name) {
+  mz_zip_archive zip{};
+  if (mz_zip_reader_init_mem(&zip, package.data(), package.size(), 0) == MZ_FALSE) {
+    ADD_FAILURE() << "not a zip package";
+    return {};
+  }
+  std::size_t size = 0;
+  void* data = mz_zip_reader_extract_file_to_heap(&zip, name, &size, 0);
+  std::string out = data != nullptr ? std::string(static_cast<const char*>(data), size) : std::string();
+  mz_free(data);
+  mz_zip_reader_end(&zip);
+  return out;
+}
+
+/// The payload of every `BrtBeginExternTable` (363) in an xlsb external link part, in order.
+std::vector<std::string> ExternTablePayloads(const std::string& part) {
+  std::vector<std::string> out;
+  std::size_t at = 0;
+  const auto varint = [&](int max_bytes) {
+    std::uint32_t value = 0;
+    for (int i = 0; i < max_bytes && at < part.size(); ++i) {
+      const auto byte = static_cast<std::uint8_t>(part[at++]);
+      value |= static_cast<std::uint32_t>(byte & 0x7FU) << (7 * i);
+      if ((byte & 0x80U) == 0U) {
+        break;
+      }
+    }
+    return value;
+  };
+  while (at < part.size()) {
+    const std::uint32_t type = varint(2);
+    const std::uint32_t size = varint(4);
+    if (type == 363U) {
+      out.push_back(part.substr(at, size));
+    }
+    at += size;
+  }
+  return out;
+}
+
+// Excel's own saves of one book whose link marks only its second sheet as a failed refresh: the xlsx spells it
+// `<sheetData sheetId="1" refreshError="1"/>`, the xlsb sets bit 0 of the byte after the table's sheetId.
+TEST(ExternalLinkRefreshError, ExcelTwinMarksTheSameSheetInBothFormats) {
+  for (const char* extension : {".xlsx", ".xlsb"}) {
+    Workbook wb = LoadFixture("external_table_ref_closed", extension);
+    ASSERT_EQ(wb.external_links().size(), 1U) << extension;
+    const ExternalBook& book = wb.external_links()[0].book;
+    EXPECT_FALSE(book.sheet_refresh_failed(0)) << extension;
+    EXPECT_TRUE(book.sheet_refresh_failed(1)) << extension;
+  }
+}
+
+TEST(ExternalLinkRefreshError, SavesWriteTheMarkAsExcelDoes) {
+  const std::vector<std::uint8_t> excel_xlsb =
+      ReadFileBytes(std::string(FORMULON_FIXTURES_DIR) + "/excel/external_table_ref_closed.xlsb");
+  const std::vector<std::string> excel_tables =
+      ExternTablePayloads(ZipPart(excel_xlsb, "xl/externalLinks/externalLink1.bin"));
+  ASSERT_EQ(excel_tables.size(), 2U);
+  EXPECT_EQ(excel_tables[1], std::string("\x01\x00\x00\x00\x01", 5));
+
+  Workbook wb = LoadFixture("external_table_ref_closed", ".xlsx");
+  auto xlsb = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(xlsb)) << xlsb.error().message;
+  EXPECT_EQ(ExternTablePayloads(ZipPart(xlsb.value(), "xl/externalLinks/externalLink1.bin")), excel_tables);
+
+  auto xlsx = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
+  EXPECT_NE(ZipPart(xlsx.value(), "xl/externalLinks/externalLink1.xml")
+                .find("<sheetData sheetId=\"0\"/><sheetData sheetId=\"1\" refreshError=\"1\"/>"),
+            std::string::npos);
+}
+
+// A marked sheet with no cached cells survives xlsx -> xlsb -> xlsx and still reads #REF! for every address.
+TEST(ExternalLinkRefreshError, AnEmptyMarkedSheetSurvivesBothFormats) {
+  Workbook wb = LoadFixture("external_table_ref_closed", ".xlsx");
+  auto xlsb = io::xlsb::write_xlsb(wb);
+  ASSERT_TRUE(static_cast<bool>(xlsb)) << xlsb.error().message;
+  auto from_xlsb = io::xlsb::read_xlsb(io::ByteSpan{xlsb.value().data(), xlsb.value().size()});
+  ASSERT_TRUE(static_cast<bool>(from_xlsb)) << from_xlsb.error().message;
+  auto xlsx = io::write_ooxml(from_xlsb.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
+  Workbook reloaded = LoadBytes(xlsx.value());
+  const ExternalBook& book = reloaded.external_links()[0].book;
+  EXPECT_FALSE(book.sheet_refresh_failed(0));
+  EXPECT_TRUE(book.sheet_refresh_failed(1));
+  EXPECT_TRUE(book.referenced_cell(1, 0, 0).is_error());
+  EXPECT_EQ(book.referenced_cell(1, 0, 0).as_error(), ErrorCode::Ref);
 }
 
 TEST(ExternalLinkFixtureEdited, ASheetIdScopesAnExternalName) {

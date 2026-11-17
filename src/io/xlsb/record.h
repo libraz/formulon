@@ -187,6 +187,9 @@ enum class XlsbRecordType : std::uint16_t {
   BrtEndCellXFs = 618,         ///< End of the `<cellXfs>` table.
 };
 
+/// `BrtBeginExternTable`'s flag byte after `sheetId`: the cached sheet's last refresh failed (`refreshError`).
+inline constexpr std::uint8_t kExternTableRefreshError = 0x01U;
+
 /// Reads one framed record from `cursor`. On success `cursor` advances
 /// past the record (header + payload); on failure `cursor` is left in
 /// an unspecified state.

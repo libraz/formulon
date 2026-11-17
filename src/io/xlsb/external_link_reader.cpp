@@ -153,6 +153,12 @@ Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::strin
         current_sheet = sheet;
         book.sheet_data.resize(book.sheet_names.size(), false);
         book.sheet_data[current_sheet] = true;
+        // A table written without the flag byte reads as unmarked.
+        if (payload.size > 0U) {
+          ASSIGN_OR_RETURN(auto flags, read_u8(payload));
+          book.refresh_error.resize(book.sheet_names.size(), false);
+          book.refresh_error[current_sheet] = (flags & kExternTableRefreshError) != 0U;
+        }
         row_seen = false;
         break;
       }

@@ -105,6 +105,7 @@ void DecodeExternalBook(const pugi::xml_node& book_node, ExternalBook* out) {
     out->sheet_names.emplace_back(sheet.attribute("val").value());
   }
   out->sheet_data.assign(out->sheet_names.size(), false);
+  out->refresh_error.assign(out->sheet_names.size(), false);
   for (pugi::xml_node name = book_node.child("definedNames").child("definedName"); name;
        name = name.next_sibling("definedName")) {
     ExternalBookName entry;
@@ -135,10 +136,11 @@ void DecodeExternalBook(const pugi::xml_node& book_node, ExternalBook* out) {
     if (sheet_id >= out->sheet_names.size()) {
       continue;
     }
-    // Excel writes `refreshError="1"` with no cells for a sheet it never
-    // read, which holds no more data than an absent `<sheetData>`.
-    const bool refresh_failed = data.attribute("refreshError").as_bool() && !data.child("row");
-    out->sheet_data[sheet_id] = out->sheet_data[sheet_id] || !refresh_failed;
+    // `refreshError="1"` marks a sheet whose last refresh failed. With no
+    // cells it holds no more data than an absent `<sheetData>`.
+    const bool refresh_failed = data.attribute("refreshError").as_bool();
+    out->sheet_data[sheet_id] = out->sheet_data[sheet_id] || !refresh_failed || static_cast<bool>(data.child("row"));
+    out->refresh_error[sheet_id] = out->refresh_error[sheet_id] || refresh_failed;
     for (pugi::xml_node row = data.child("row"); row; row = row.next_sibling("row")) {
       for (pugi::xml_node cell = row.child("cell"); cell; cell = cell.next_sibling("cell")) {
         std::uint32_t cell_row = 0;
