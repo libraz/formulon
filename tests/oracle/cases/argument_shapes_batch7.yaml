@@ -296,6 +296,9 @@ cases:
     formula: "=ISFORMULA(A1)"
   - id: isformula_blank_cell
     formula: "=ISFORMULA(A1)"
+  - id: isformula_range_lifted
+    setup: { A1: 1, A2: "=1+1" }
+    formula: "=INDEX(ISFORMULA(A1:A2),2)"
   - id: phonetic_error_cell
     setup: { A1: "=NA()" }
     formula: "=PHONETIC(A1)"

@@ -167,7 +167,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     // so it must inspect the un-evaluated Ref AST and the bound Sheet's
     // `formula_text` directly — the eager path would flatten the argument
     // to a Value before we could see the reference.
-    {"FORMULATEXT", &eval_formulatext_lazy, LazyResultShape::kScalar, 1U, 1U, RefResult::kNone, ParamSet::kFirst},
+    {"FORMULATEXT", &eval_formulatext_lazy, LazyResultShape::kBroadcast, 1U, 1U, RefResult::kNone, ParamSet::kFirst},
     {"FREQUENCY", &eval_frequency_lazy, LazyResultShape::kArray, 2U, 2U},
     // FTEST is the pre-2010 legacy spelling of F.TEST; same impl.
     lone_value({"FTEST", &eval_f_test_lazy, LazyResultShape::kReduce, 2U, 2U}, ParamSet::kFirstAndSecond,
@@ -195,7 +195,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     // they cannot ride the eager path because it flattens references to
     // `Value` before the impl runs.
     lone_value({"IRR", &eval_irr_lazy, LazyResultShape::kScalar, 1U, 2U}, ParamSet::kFirst, ScalarArg::kRejectNum),
-    {"ISFORMULA", &eval_isformula_lazy, LazyResultShape::kScalar, 1U, 1U, RefResult::kNone, ParamSet::kFirst},
+    {"ISFORMULA", &eval_isformula_lazy, LazyResultShape::kBroadcast, 1U, 1U, RefResult::kNone, ParamSet::kFirst},
     {"ISOMITTED", &eval_isomitted_lazy, LazyResultShape::kScalar, 1U, 1U},
     {"ISOWEEKNUM", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
     {"ISREF", &eval_isref_lazy, LazyResultShape::kScalar, 1U, 1U},

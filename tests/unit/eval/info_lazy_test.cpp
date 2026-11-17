@@ -115,13 +115,29 @@ TEST(BuiltinsIsFormula, QualifiedRefToOtherSheet) {
   EXPECT_TRUE(v.as_boolean());
 }
 
-TEST(BuiltinsIsFormula, RangeArgIsValue) {
+TEST(BuiltinsIsFormula, RangeArgAnswersEachCell) {
   Workbook wb = MakeThreeSheetWorkbook();
+  wb.sheet(0).set_cell_formula(1, 0, "=1+1");
   EvalState state;
   const EvalContext ctx(wb, wb.sheet(0), state);
   const Value v = EvalWith("=ISFORMULA(A1:A2)", ctx);
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array()->rows, 2U);
+  EXPECT_FALSE(v.as_array()->cells[0].as_boolean());
+  EXPECT_TRUE(v.as_array()->cells[1].as_boolean());
+}
+
+TEST(BuiltinsFormulaText, RangeArgAnswersEachCell) {
+  Workbook wb = MakeThreeSheetWorkbook();
+  wb.sheet(0).set_cell_formula(0, 0, "=1+1");
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  const Value v = EvalWith("=FORMULATEXT(A1:A2)", ctx);
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array()->rows, 2U);
+  EXPECT_EQ(v.as_array()->cells[0].as_text(), "=1+1");
+  ASSERT_TRUE(v.as_array()->cells[1].is_error());
+  EXPECT_EQ(v.as_array()->cells[1].as_error(), ErrorCode::NA);
 }
 
 TEST(BuiltinsIsFormula, LetBoundRefReportsTargetFormulaCell) {

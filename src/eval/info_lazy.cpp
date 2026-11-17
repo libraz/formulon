@@ -157,50 +157,70 @@ std::size_t find_sheet_index(const Workbook& workbook, const Sheet& sheet) noexc
   return 0;
 }
 
-struct SingleReference {
+// The bounded rectangle a reference argument denotes, on one sheet.
+struct ReferenceRect {
   const Sheet* sheet = nullptr;
-  std::uint32_t row = 0;
-  std::uint32_t col = 0;
-};
-
-Expected<SingleReference, ErrorCode> resolve_single_reference(const parser::AstNode& node, Arena& arena,
-                                                              const FunctionRegistry& registry,
-                                                              const EvalContext& ctx) {
-  std::string_view sheet_name;
   std::uint32_t top = 0;
   std::uint32_t left = 0;
   std::uint32_t bottom = 0;
   std::uint32_t right = 0;
+};
+
+Expected<ReferenceRect, ErrorCode> resolve_reference_rect(const parser::AstNode& node, Arena& arena,
+                                                          const FunctionRegistry& registry, const EvalContext& ctx) {
+  std::string_view sheet_name;
+  ReferenceRect rect;
   if (node.kind() == parser::NodeKind::Ref) {
     const parser::Reference& ref = node.as_ref();
     if (ref.is_full_col || ref.is_full_row) {
       return ErrorCode::Value;
     }
     sheet_name = ref.sheet;
-    top = bottom = ref.row;
-    left = right = ref.col;
+    rect.top = rect.bottom = ref.row;
+    rect.left = rect.right = ref.col;
   } else if ((node.kind() == parser::NodeKind::Call && is_reference_call_name(node.as_call_name())) ||
-             node.kind() == parser::NodeKind::NameRef) {
+             node.kind() == parser::NodeKind::NameRef || node.kind() == parser::NodeKind::RangeOp) {
     RefArea area{};
     ErrorCode err = ErrorCode::Value;
     if (!eval_reference_area(node, arena, registry, ctx, &sheet_name, &area, &err)) {
       return err;
     }
-    top = area.row_first;
-    bottom = area.row_last;
-    left = area.col_first;
-    right = area.col_last;
+    if (area.whole_col != 0U || area.whole_row != 0U) {
+      return ErrorCode::Value;
+    }
+    rect.top = area.row_first;
+    rect.bottom = area.row_last;
+    rect.left = area.col_first;
+    rect.right = area.col_last;
   } else {
     return ErrorCode::Value;
   }
-  if (top != bottom || left != right) {
-    return ErrorCode::Value;
-  }
-  const Sheet* sheet = ctx.sheet_for_qualifier(sheet_name);
-  if (sheet == nullptr) {
+  rect.sheet = ctx.sheet_for_qualifier(sheet_name);
+  if (rect.sheet == nullptr) {
     return ctx.current_sheet() == nullptr ? ErrorCode::Name : ErrorCode::Ref;
   }
-  return SingleReference{sheet, top, left};
+  return rect;
+}
+
+// `at(row, col)` for the one cell of `rect`, or an array of it over each cell.
+template <typename At>
+Value map_reference_rect(const ReferenceRect& rect, Arena& arena, const At& at) {
+  if (rect.top == rect.bottom && rect.left == rect.right) {
+    return at(rect.top, rect.left);
+  }
+  const std::uint32_t rows = rect.bottom - rect.top + 1U;
+  const std::uint32_t cols = rect.right - rect.left + 1U;
+  Value* cells = nullptr;
+  ArrayValue* out = allocate_derived_array_value(rows, cols, arena, cells);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  for (std::uint32_t r = 0; r < rows; ++r) {
+    for (std::uint32_t c = 0; c < cols; ++c) {
+      cells[static_cast<std::size_t>(r) * cols + c] = at(rect.top + r, rect.left + c);
+    }
+  }
+  return Value::array(out);
 }
 
 // The cell holding the formula shown at `(row, col)`: the cell itself, or
@@ -214,61 +234,12 @@ const Cell* formula_cell_at(const Sheet& sheet, std::uint32_t row, std::uint32_t
   return block.has_value() ? sheet.cell_at(block->anchor_row, block->anchor_col) : cell;
 }
 
-}  // namespace
-
-Value eval_isformula_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                          const EvalContext& ctx) {
-  if (call.as_call_arity() != 1U) {
-    return Value::error(ErrorCode::Value);
-  }
-  // A name stands for the reference it is bound to (`=LET(c, A1, ISFORMULA(c))`); one standing for a value
-  // (`=LET(x, 5, ISFORMULA(x))`) is #VALUE!, as a value argument is.
-  const parser::AstNode& arg = call.as_call_arg(0);
-
-  // Static references and calls that preserve a reference shape share the
-  // range resolver used by ROWS/COLUMNS and CELL. This retains OFFSET and
-  // CHOOSE coordinates instead of flattening their target to a Value.
-  if (arg.kind() == parser::NodeKind::Ref || arg.kind() == parser::NodeKind::NameRef ||
-      (arg.kind() == parser::NodeKind::Call && is_reference_call_name(arg.as_call_name()))) {
-    auto target = resolve_single_reference(arg, arena, registry, ctx);
-    if (target) {
-      const Sheet& sheet = *target.value().sheet;
-      const Cell* cell = formula_cell_at(sheet, target.value().row, target.value().col);
-      return Value::boolean(((cell != nullptr) && !cell->formula_text.empty()) ||
-                            sheet.data_table_covering(target.value().row, target.value().col) != nullptr);
-    }
-    // A reference-shaped call may instead choose a scalar (for example
-    // CHOOSE(1, 42)); that is not a formula argument. Real evaluation errors
-    // still propagate through the existing value path below.
-    if (arg.kind() == parser::NodeKind::Call) {
-      const Value v = eval_node(arg, arena, registry, ctx);
-      if (v.is_error()) {
-        return v;
-      }
-      return Value::boolean(false);
-    }
-    return Value::error(target.error());
-  }
-
-  // Excel: `ISFORMULA(1)` and `ISFORMULA("A1")` both surface `#VALUE!`.
-  // RangeOp would need array-spill to answer cell-by-cell; not in the MVP.
-  return Value::error(ErrorCode::Value);
-}
-
-Value eval_formulatext_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                            const EvalContext& ctx) {
-  if (call.as_call_arity() != 1U) {
-    return Value::error(ErrorCode::Value);
-  }
-  auto target = resolve_single_reference(call.as_call_arg(0), arena, registry, ctx);
-  if (!target) {
-    return Value::error(target.error());
-  }
-  const Cell* cell = formula_cell_at(*target.value().sheet, target.value().row, target.value().col);
+// FORMULATEXT of cell `(row, col)` of `sheet`.
+Value formula_text_at(const Sheet& sheet, std::uint32_t row, std::uint32_t col, Arena& arena, const EvalContext& ctx) {
+  const Cell* cell = formula_cell_at(sheet, row, col);
   if (cell == nullptr || cell->formula_text.empty()) {
     // A data table's result cell shows its `TABLE()` formula, braced like a legacy array.
-    if (const DataTable* table = target.value().sheet->data_table_covering(target.value().row, target.value().col);
-        table != nullptr) {
+    if (const DataTable* table = sheet.data_table_covering(row, col); table != nullptr) {
       const std::string shown =
           "{" + localize_formula_text(data_table_formula_text(*table), current_eval_profile()) + "}";
       const std::string_view interned = arena.intern(shown);
@@ -285,8 +256,8 @@ Value eval_formulatext_lazy(const parser::AstNode& call, Arena& arena, const Fun
   const Workbook* wb = ctx.workbook();
   std::string_view own_table;
   if (wb != nullptr) {
-    if (const std::size_t sheet_number = find_sheet_index(*wb, *target.value().sheet); sheet_number != 0) {
-      if (const auto table = wb->table_containing(sheet_number - 1, target.value().row, target.value().col)) {
+    if (const std::size_t sheet_number = find_sheet_index(*wb, sheet); sheet_number != 0) {
+      if (const auto table = wb->table_containing(sheet_number - 1, row, col)) {
         own_table = wb->tables()[*table].display_name;
       }
     }
@@ -313,6 +284,64 @@ Value eval_formulatext_lazy(const parser::AstNode& call, Arena& arena, const Fun
     return Value::error(ErrorCode::Value);
   }
   return Value::text(copy);
+}
+
+}  // namespace
+
+Value eval_isformula_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                          const EvalContext& ctx) {
+  if (call.as_call_arity() != 1U) {
+    return Value::error(ErrorCode::Value);
+  }
+  // A name stands for the reference it is bound to (`=LET(c, A1, ISFORMULA(c))`); one standing for a value
+  // (`=LET(x, 5, ISFORMULA(x))`) is #VALUE!, as a value argument is.
+  const parser::AstNode& arg = call.as_call_arg(0);
+
+  // Static references and calls that preserve a reference shape share the
+  // range resolver used by ROWS/COLUMNS and CELL. This retains OFFSET and
+  // CHOOSE coordinates instead of flattening their target to a Value.
+  if (arg.kind() == parser::NodeKind::Ref || arg.kind() == parser::NodeKind::NameRef ||
+      arg.kind() == parser::NodeKind::RangeOp ||
+      (arg.kind() == parser::NodeKind::Call && is_reference_call_name(arg.as_call_name()))) {
+    auto target = resolve_reference_rect(arg, arena, registry, ctx);
+    if (target) {
+      const Sheet& sheet = *target.value().sheet;
+      return map_reference_rect(target.value(), arena, [&](std::uint32_t row, std::uint32_t col) {
+        const Cell* cell = formula_cell_at(sheet, row, col);
+        return Value::boolean(((cell != nullptr) && !cell->formula_text.empty()) ||
+                              sheet.data_table_covering(row, col) != nullptr);
+      });
+    }
+    // A reference-shaped call may instead choose a scalar (for example
+    // CHOOSE(1, 42)); that is not a formula argument. Real evaluation errors
+    // still propagate through the existing value path below.
+    if (arg.kind() == parser::NodeKind::Call) {
+      const Value v = eval_node(arg, arena, registry, ctx);
+      if (v.is_error()) {
+        return v;
+      }
+      return Value::boolean(false);
+    }
+    return Value::error(target.error());
+  }
+
+  // Excel: `ISFORMULA(1)` and `ISFORMULA("A1")` both surface `#VALUE!`.
+  return Value::error(ErrorCode::Value);
+}
+
+Value eval_formulatext_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                            const EvalContext& ctx) {
+  if (call.as_call_arity() != 1U) {
+    return Value::error(ErrorCode::Value);
+  }
+  auto target = resolve_reference_rect(call.as_call_arg(0), arena, registry, ctx);
+  if (!target) {
+    return Value::error(target.error());
+  }
+  const Sheet& sheet = *target.value().sheet;
+  return map_reference_rect(target.value(), arena, [&](std::uint32_t row, std::uint32_t col) {
+    return formula_text_at(sheet, row, col, arena, ctx);
+  });
 }
 
 Value eval_n_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {

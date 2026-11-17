@@ -239,3 +239,6 @@ cases:
   - id: areas_error_cell
     setup: { B1: "=NA()" }
     formula: "=AREAS(B1)"
+  - id: formulatext_range_lifted
+    setup: { A1: "=1+1", A2: "=2+2" }
+    formula: "=INDEX(FORMULATEXT(A1:A2),2)"

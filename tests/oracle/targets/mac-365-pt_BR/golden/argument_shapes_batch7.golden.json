@@ -4431,6 +4431,24 @@
       }
     },
     {
+      "id": "isformula_range_lifted",
+      "formula": "=INDEX(ISFORMULA(A1:A2),2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "formula",
+          "formula": "=1+1"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
       "id": "phonetic_error_cell",
       "formula": "=PHONETIC(A1)",
       "setup": {
