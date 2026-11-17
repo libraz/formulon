@@ -349,6 +349,27 @@ TEST(XlsbParityClaims, ValidationFormulasMatchExcel) {
   }
 }
 
+// A worksheet tab colour's BrtColor: an RGB colour with the palette index Excel writes beside it, and a tinted theme
+// colour with its rendered value.
+TEST(XlsbParityClaims, TabColorsMatchExcel) {
+  constexpr std::uint16_t kBrtWsProp = 147;
+  // BrtWsProp: two flag fields (u16, u8) precede the 8-byte BrtColor.
+  constexpr std::size_t kColorAt = 3;
+  const std::vector<std::uint8_t> ours = Converted("tab_color_kinds");
+  const std::vector<std::uint8_t> excel = ReadFile(Claim("tab_color_kinds.xlsb"));
+  for (const char* part : {"xl/worksheets/sheet1.bin", "xl/worksheets/sheet2.bin"}) {
+    SCOPED_TRACE(part);
+    const auto ours_prop = RecordsOf(Part(ours, part), kBrtWsProp);
+    const auto excel_prop = RecordsOf(Part(excel, part), kBrtWsProp);
+    ASSERT_EQ(ours_prop.size(), 1U);
+    ASSERT_EQ(excel_prop.size(), 1U);
+    ASSERT_GE(ours_prop[0].size(), kColorAt + 8U);
+    ASSERT_GE(excel_prop[0].size(), kColorAt + 8U);
+    EXPECT_EQ(std::vector<std::uint8_t>(ours_prop[0].begin() + kColorAt, ours_prop[0].begin() + kColorAt + 8),
+              std::vector<std::uint8_t>(excel_prop[0].begin() + kColorAt, excel_prop[0].begin() + kColorAt + 8));
+  }
+}
+
 }  // namespace
 }  // namespace xlsb
 }  // namespace io

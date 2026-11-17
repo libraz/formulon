@@ -1187,17 +1187,11 @@ std::string ChartsheetBody(const std::string& xml) {
 // Excel's own .xlsx and .xlsb saves of one chartsheet, each with one setting changed: protection, page setup, tab
 // colour or header. Each format saved to the other writes what Excel's save of that format holds.
 TEST(XlsbChartsheet, ExcelChartsheetSettingsConvertBothWays) {
-  struct Case {
-    const char* name;
-    std::uint32_t xlsb_unconverted;
-  };
-  // A theme tab colour stores its rendered value in the record, which the .xlsb writer does not resolve.
-  for (const Case& c :
-       {Case{"prot_contents_only", 0U}, Case{"prot_both_pw_abc", 0U}, Case{"page_first_page_number_5", 0U},
-        Case{"page_draft", 0U}, Case{"page_black_and_white", 0U}, Case{"page_portrait", 0U}, Case{"page_copies_2", 0U},
-        Case{"tab_color_rgb_red", 0U}, Case{"tab_color_theme", 1U}, Case{"header_center_HDR", 0U}}) {
-    SCOPED_TRACE(c.name);
-    const std::string base = std::string("chartsheet_twins/") + c.name;
+  for (const char* name :
+       {"prot_contents_only", "prot_both_pw_abc", "page_first_page_number_5", "page_draft", "page_black_and_white",
+        "page_portrait", "page_copies_2", "tab_color_rgb_red", "tab_color_theme", "header_center_HDR"}) {
+    SCOPED_TRACE(name);
+    const std::string base = std::string("chartsheet_twins/") + name;
     const std::vector<std::uint8_t> xlsx = test::read_file_bytes(FixturePath((base + ".xlsx").c_str()));
     const std::vector<std::uint8_t> xlsb = test::read_file_bytes(FixturePath((base + ".xlsb").c_str()));
     ASSERT_FALSE(xlsx.empty());
@@ -1220,12 +1214,10 @@ TEST(XlsbChartsheet, ExcelChartsheetSettingsConvertBothWays) {
     ASSERT_TRUE(static_cast<bool>(from_xlsx)) << from_xlsx.error().message;
     auto as_xlsb = io::xlsb::write_xlsb_with_result(from_xlsx.value().workbook);
     ASSERT_TRUE(static_cast<bool>(as_xlsb)) << as_xlsb.error().message;
-    EXPECT_EQ(as_xlsb.value().diagnostics.deferred_feature_count, c.xlsb_unconverted);
-    if (c.xlsb_unconverted == 0U) {
-      std::string written_bin;
-      ASSERT_TRUE(test::extract_part(test::span_of(as_xlsb.value().bytes), "xl/chartsheets/sheet1.bin", &written_bin));
-      EXPECT_EQ(ChartsheetRecords(written_bin), ChartsheetRecords(excel_bin));
-    }
+    EXPECT_EQ(as_xlsb.value().diagnostics.deferred_feature_count, 0U);
+    std::string written_bin;
+    ASSERT_TRUE(test::extract_part(test::span_of(as_xlsb.value().bytes), "xl/chartsheets/sheet1.bin", &written_bin));
+    EXPECT_EQ(ChartsheetRecords(written_bin), ChartsheetRecords(excel_bin));
   }
 }
 

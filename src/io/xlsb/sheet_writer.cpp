@@ -336,7 +336,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     const RichErrorVmMap* rich_error_vm, std::string_view book_directory,
     const std::optional<PhoneticProperties>& absent_phonetic, const CellStyleSavePlan* style_plan,
     std::string_view legacy_drawing_rel_id, const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks,
-    const std::vector<std::uint8_t>* custom_views) {
+    const std::vector<std::uint8_t>* custom_views, const Theme& theme) {
   std::vector<std::uint8_t> body;
   // Whether the save marks the formula at (`row`, `col`) as recalculated on open.
   const auto marked = [recalc_marks](std::uint32_t row, std::uint32_t col) {
@@ -346,7 +346,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   // Frame: BrtBeginSheet | BrtBeginSheetData | ... | BrtEndSheetData |
   // BrtEndSheet.
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginSheet), ByteSpan{});
-  emit_ws_prop(body, sheet);
+  emit_ws_prop(body, sheet, theme);
   EmitWorksheetDimensions(body, sheet);
   const auto own_index =
       static_cast<std::size_t>(std::find(sheet_names.begin(), sheet_names.end(), sheet.name()) - sheet_names.begin());

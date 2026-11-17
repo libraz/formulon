@@ -1,15 +1,19 @@
 #include "io/xlsb/chartsheet_records.h"
 
+#include <algorithm>
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <string>
 #include <vector>
 
+#include "io/xlsb/brt_color.h"
 #include "io/xlsb/print_records.h"
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_ids.h"
 #include "io/xlsb/record_writer.h"
+#include "io/xlsb/sheet_properties_records.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
 #include "sheet_layout.h"
@@ -90,8 +94,8 @@ std::optional<std::uint32_t> parse_argb(std::string_view text) {
   return value;
 }
 
-// `<sheetPr>` of a BrtCsProp payload; nullopt for a state whose XML is not measured (a code name, a tinted or
-// indexed colour, other flags).
+// `<sheetPr>` of a BrtCsProp payload; nullopt for a state whose XML is not measured (a code name, a tinted RGB or
+// an indexed colour, other flags).
 std::optional<std::string> sheet_pr_xml(ByteSpan payload) {
   if (payload.size != sizeof(kDefaultCsProp) || load_u16(payload.data) != 0x0001U ||
       load_u32(payload.data + 10) != 0U) {
@@ -105,16 +109,19 @@ std::optional<std::string> sheet_pr_xml(ByteSpan payload) {
   if (color[0] == kColorRgb && tint == 0) {
     return "<sheetPr><tabColor rgb=\"" + hex_argb(color + 4) + "\"/></sheetPr>";
   }
-  if (color[0] == kColorTheme && tint == 0) {
+  if (color[0] == kColorTheme) {
     std::string xml = "<sheetPr><tabColor";
     append_xml_attr_uint(xml, "theme", color[1]);
+    if (tint != 0) {
+      append_xml_attr_number(xml, "tint", static_cast<double>(tint) / kBrtColorTintScale);
+    }
     return xml + "/></sheetPr>";
   }
   return std::nullopt;
 }
 
 // BrtCsProp for `<sheetPr>`; nullopt when it states something without a measured record form.
-std::optional<std::vector<std::uint8_t>> cs_prop_record(const pugi::xml_node& sheet_pr) {
+std::optional<std::vector<std::uint8_t>> cs_prop_record(const pugi::xml_node& sheet_pr, const Theme& theme) {
   std::vector<std::uint8_t> payload(kDefaultCsProp, kDefaultCsProp + sizeof(kDefaultCsProp));
   if (!sheet_pr) {
     return payload;
@@ -129,28 +136,27 @@ std::optional<std::vector<std::uint8_t>> cs_prop_record(const pugi::xml_node& sh
     if (local_name(child) != "tabColor") {
       return std::nullopt;
     }
-    std::uint8_t* color = payload.data() + kCsPropColorAt;
     const pugi::xml_attribute rgb = child.attribute("rgb");
-    const pugi::xml_attribute theme = child.attribute("theme");
-    if (child.attribute("tint") || child.attribute("indexed") || child.attribute("auto") || (rgb && theme)) {
+    const pugi::xml_attribute theme_index = child.attribute("theme");
+    const pugi::xml_attribute tint = child.attribute("tint");
+    if (child.attribute("indexed") || child.attribute("auto") || (rgb && theme_index) || (tint && !theme_index)) {
       return std::nullopt;
     }
+    ColorSpec spec;
     if (rgb) {
       const std::optional<std::uint32_t> parsed = parse_argb(rgb.value());
       if (!parsed) {
         return std::nullopt;
       }
-      const std::uint32_t argb = *parsed;
-      color[0] = kColorRgb;
-      color[1] = 0xFF;
-      color[4] = static_cast<std::uint8_t>(argb >> 16U);
-      color[5] = static_cast<std::uint8_t>(argb >> 8U);
-      color[6] = static_cast<std::uint8_t>(argb);
-      color[7] = static_cast<std::uint8_t>(argb >> 24U);
-    } else if (theme) {
-      // Excel also stores the theme colour's rendered value, which this writer does not resolve.
-      return std::nullopt;
+      spec.kind = ColorSpec::Kind::kRgb;
+      spec.rgb = *parsed;
+    } else if (theme_index) {
+      spec.kind = ColorSpec::Kind::kTheme;
+      spec.theme = theme_index.as_uint();
+      spec.tint = tint.as_double();
     }
+    const std::array<std::uint8_t, 8> color = encode_tab_color(spec, theme);
+    std::copy(color.begin(), color.end(), payload.begin() + kCsPropColorAt);
   }
   return payload;
 }
@@ -464,7 +470,7 @@ Expected<ChartsheetXml, Error> chartsheet_xml_from_records(ByteSpan part) {
   return out;
 }
 
-Expected<ChartsheetBin, Error> chartsheet_records_from_xml(std::string_view xml) {
+Expected<ChartsheetBin, Error> chartsheet_records_from_xml(std::string_view xml, const Theme& theme) {
   pugi::xml_document doc;
   if (!doc.load_buffer(xml.data(), xml.size()) || local_name(doc.document_element()) != "chartsheet") {
     return make_error(FormulonErrorCode::kIoSheetCorrupt, "chartsheet part does not parse",
@@ -476,7 +482,7 @@ Expected<ChartsheetBin, Error> chartsheet_records_from_xml(std::string_view xml)
   const std::vector<std::uint8_t> none;
   emit_record(dst, kBrtBeginSheet, none);
 
-  std::optional<std::vector<std::uint8_t>> prop = cs_prop_record(child_local(root, "sheetPr"));
+  std::optional<std::vector<std::uint8_t>> prop = cs_prop_record(child_local(root, "sheetPr"), theme);
   if (!prop) {
     ++out.unconverted;
     prop.emplace(kDefaultCsProp, kDefaultCsProp + sizeof(kDefaultCsProp));

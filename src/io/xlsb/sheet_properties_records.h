@@ -5,6 +5,7 @@
 #ifndef FORMULON_IO_XLSB_SHEET_PROPERTIES_RECORDS_H_
 #define FORMULON_IO_XLSB_SHEET_PROPERTIES_RECORDS_H_
 
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -13,6 +14,8 @@
 
 #include "io/xlsb/record.h"
 #include "phonetic.h"
+#include "styles.h"
+#include "theme.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 
@@ -52,9 +55,14 @@ std::size_t unwritable_format_default_count(const SheetFormatDefaults& defaults)
 /// `<pageSetUpPr>` fitToPage. An empty fragment is fully written.
 bool sheet_pr_writes_all(std::string_view raw);
 
+/// The `BrtColor` of a tab colour as Excel stores it: the selector, with the
+/// literal colour or the theme colour rendered with its tint against `theme`
+/// beside it. No colour is the untinted automatic selector.
+std::array<std::uint8_t, 8> encode_tab_color(const ColorSpec& spec, const Theme& theme);
+
 /// Emits the worksheet-properties record which starts the mandatory
-/// worksheet prefix.
-void emit_ws_prop(std::vector<std::uint8_t>& dst, const Sheet& sheet);
+/// worksheet prefix; a theme tab colour is rendered against `theme`.
+void emit_ws_prop(std::vector<std::uint8_t>& dst, const Sheet& sheet, const Theme& theme);
 
 /// Reads `BrtPhoneticInfo` (u16 ifnt, u32 phType, u32 alcH); false for any
 /// other shape or an ordinal past 3.

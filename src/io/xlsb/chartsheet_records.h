@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "io/xlsb/record.h"
+#include "theme.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 
@@ -39,9 +40,10 @@ struct ChartsheetBin {
   std::uint32_t unconverted = 0;
 };
 
-/// Converts a `<chartsheet>` part. Fails with `kIoSheetCorrupt` when it does
-/// not parse or its root is not `chartsheet`.
-Expected<ChartsheetBin, Error> chartsheet_records_from_xml(std::string_view xml);
+/// Converts a `<chartsheet>` part, rendering a theme tab colour against
+/// `theme`. Fails with `kIoSheetCorrupt` when it does not parse or its root is
+/// not `chartsheet`.
+Expected<ChartsheetBin, Error> chartsheet_records_from_xml(std::string_view xml, const Theme& theme);
 
 }  // namespace xlsb
 }  // namespace io

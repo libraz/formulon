@@ -74,6 +74,7 @@
 #include "parser/parser.h"
 #include "passthrough_part.h"
 #include "sheet.h"
+#include "theme.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
@@ -387,6 +388,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
                                               : std::string_view{};
   // The formulas saved as recalculated on open (fAlwaysCalc) beyond what their formula says.
   const std::vector<std::unordered_set<CellAddress, CellAddressHash>> recalc_marks = workbook.saved_recalc_marks();
+  // Tab colours store a theme colour's rendered value beside its index.
+  const LoadedTheme theme = workbook.load_theme();
   for (std::size_t i = 0; i < sheet_count; ++i) {
     const NameTable sheet_name_table = BuildNameTableForScope(workbook, ordered_names, static_cast<std::int32_t>(i));
     std::unordered_set<std::string> taken_rel_ids;
@@ -423,11 +426,12 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
       }
       written_notes[i] = legacy_comments_with_stubs(workbook.sheet(i), workbook.excel_profile().locale);
     }
-    auto sheet_body_or = emit_sheet(
-        workbook.sheet(i), sst, sheet_names, sheet_ranges, sheet_name_table, sheet_hyperlink_rids[i],
-        &downgraded_formula_count, metadata.ifmd, name_shapes(workbook, i), table_rel_ids, sheet_drawing_rids[i],
-        sheet_owns_drawing[i], metadata.rich.empty() ? nullptr : &metadata.rich.vm_by_sheet[i], book_directory,
-        absent_phonetic, sheet_style_plan, comment_rids[i].vml, &recalc_marks[i], &custom_views.sheet_blocks[i]);
+    auto sheet_body_or =
+        emit_sheet(workbook.sheet(i), sst, sheet_names, sheet_ranges, sheet_name_table, sheet_hyperlink_rids[i],
+                   &downgraded_formula_count, metadata.ifmd, name_shapes(workbook, i), table_rel_ids,
+                   sheet_drawing_rids[i], sheet_owns_drawing[i],
+                   metadata.rich.empty() ? nullptr : &metadata.rich.vm_by_sheet[i], book_directory, absent_phonetic,
+                   sheet_style_plan, comment_rids[i].vml, &recalc_marks[i], &custom_views.sheet_blocks[i], theme.theme);
     if (!sheet_body_or) {
       return std::move(sheet_body_or.error());
     }
@@ -548,9 +552,10 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
         return make_error(FormulonErrorCode::kIoWriteFailed, "opaque sheet has no passthrough payload",
                           std::string(kWriteXlsbContext) + " part=" + xml_path);
       }
-      ASSIGN_OR_RETURN(const ChartsheetBin chartsheet,
-                       chartsheet_records_from_xml(
-                           std::string_view(reinterpret_cast<const char*>(xml->bytes.data()), xml->bytes.size())));
+      ASSIGN_OR_RETURN(
+          const ChartsheetBin chartsheet,
+          chartsheet_records_from_xml(
+              std::string_view(reinterpret_cast<const char*>(xml->bytes.data()), xml->bytes.size()), theme.theme));
       RETURN_IF_ERROR(AddPartBytes(writer.get(), converted, chartsheet.bytes));
       if (const PassthroughPart* rels =
               source_passthrough_index.find(source_passthrough, ooxml::rels_path_for_part(xml_path))) {

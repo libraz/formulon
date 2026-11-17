@@ -10,6 +10,7 @@
 #include <string_view>
 #include <utility>
 
+#include "color_resolve.h"
 #include "io/sheet_phonetic.h"
 #include "io/xlsb/auto_filter_records.h"
 #include "io/xlsb/brt_color.h"
@@ -116,45 +117,14 @@ void AppendTabColor(std::string& out, const ColorSpec& spec, std::uint32_t argb)
   }
 }
 
-/// The two `<sheetPr>` members `BrtWsProp` carries: the VBA code name and
-/// the tab colour, in the wire form the record wants them.
-///
-/// `color_type` is the `XColorType` selector; `0` is automatic, which
-/// together with the automatic palette index is the "no tab colour" state
-/// Excel writes for an untinted tab.
+/// The `<sheetPr>` members `BrtWsProp` carries besides the tab colour, in
+/// the wire form the record wants them.
 struct WorksheetProperties {
   std::uint16_t flags = kDefaultWsPropFlags;
   std::string code_name;
   /// `filterMode`, which only a sheet whose AutoFilter stays outside the model relies on.
   bool filter_mode = false;
-  std::uint8_t color_type = 0U;
-  std::uint8_t color_index = 0x40U;
-  std::int16_t color_tint = 0;
-  std::uint32_t color_argb = 0U;
 };
-
-/// Fills the colour fields of `out` from the typed tab colour.
-void ApplyTabColor(const ColorSpec& spec, WorksheetProperties& out) {
-  switch (spec.kind) {
-    case ColorSpec::Kind::kRgb:
-      out.color_type = 2U;
-      out.color_index = 0U;
-      out.color_argb = spec.rgb;
-      break;
-    case ColorSpec::Kind::kTheme:
-      out.color_type = 3U;
-      out.color_index = static_cast<std::uint8_t>(std::min<unsigned>(spec.theme, 0xFFU));
-      out.color_tint = encode_brt_tint(spec.tint);
-      break;
-    case ColorSpec::Kind::kIndexed:
-      out.color_type = 1U;
-      out.color_index = static_cast<std::uint8_t>(std::min<unsigned>(spec.indexed, 0xFFU));
-      break;
-    case ColorSpec::Kind::kAuto:
-    case ColorSpec::Kind::kNone:
-      break;
-  }
-}
 
 /// Reads the code name back out of the sheet's retained `<sheetPr>` fragment,
 /// the inverse of `decode_ws_prop`. The tab colour comes from the typed field.
@@ -329,11 +299,26 @@ Expected<bool, Error> decode_ws_prop(const XlsbRecord& rec, Sheet& sheet, std::s
          col_sync_or.value() == kWsPropSyncUnused;
 }
 
+std::array<std::uint8_t, 8> encode_tab_color(const ColorSpec& spec, const Theme& theme) {
+  switch (spec.kind) {
+    case ColorSpec::Kind::kRgb:
+      return encode_brt_color(spec.rgb, spec);
+    case ColorSpec::Kind::kTheme:
+      return encode_brt_color(
+          resolve_color(spec, theme, ThemeSource::kPart, IndexedPalette{}, ColorContext::kFillForeground).argb, spec);
+    case ColorSpec::Kind::kIndexed:
+      return encode_brt_color(0U, spec);
+    case ColorSpec::Kind::kAuto:
+    case ColorSpec::Kind::kNone:
+      break;
+  }
+  return {0U, kBrtColorAutoIndex, 0U, 0U, 0U, 0U, 0U, 0U};
+}
+
 /// Emits the worksheet-properties record which starts the mandatory worksheet
 /// prefix. `BrtWsDim` must follow this record before the view collection.
-void emit_ws_prop(std::vector<std::uint8_t>& dst, const Sheet& sheet) {
-  WorksheetProperties properties_model = ParseSheetProperties(sheet.print_settings().sheet_pr_xml);
-  ApplyTabColor(sheet.print_settings().tab_color, properties_model);
+void emit_ws_prop(std::vector<std::uint8_t>& dst, const Sheet& sheet, const Theme& theme) {
+  const WorksheetProperties properties_model = ParseSheetProperties(sheet.print_settings().sheet_pr_xml);
   std::vector<std::uint8_t> properties;
   emit_u16(properties, properties_model.flags);  // page breaks, publish, outline and fit-to-page
   // A modelled AutoFilter decides the filter mode; a retained one keeps what the source stated.
@@ -341,19 +326,8 @@ void emit_ws_prop(std::vector<std::uint8_t>& dst, const Sheet& sheet) {
   const bool filter_mode = filter != nullptr ? auto_filter_block_has_criteria(*filter) : properties_model.filter_mode;
   // Evaluate conditional formatting, and the filter mode the AutoFilter implies.
   emit_u8(properties, static_cast<std::uint8_t>(kDefaultWsPropFlags2 | (filter_mode ? kWsPropFilterMode : 0U)));
-  // BrtColor. An automatic type with the automatic palette index is the
-  // untinted tab; any other selector sets fValidRGB alongside it, matching
-  // how the styles writer spells the same structure.
-  emit_u8(properties,
-          properties_model.color_type == 0U
-              ? std::uint8_t{0}
-              : static_cast<std::uint8_t>((static_cast<unsigned>(properties_model.color_type) << 1U) | 0x01U));
-  emit_u8(properties, properties_model.color_index);
-  emit_u16(properties, static_cast<std::uint16_t>(properties_model.color_tint));
-  emit_u8(properties, static_cast<std::uint8_t>((properties_model.color_argb >> 16U) & 0xFFU));
-  emit_u8(properties, static_cast<std::uint8_t>((properties_model.color_argb >> 8U) & 0xFFU));
-  emit_u8(properties, static_cast<std::uint8_t>(properties_model.color_argb & 0xFFU));
-  emit_u8(properties, static_cast<std::uint8_t>((properties_model.color_argb >> 24U) & 0xFFU));
+  const std::array<std::uint8_t, 8> tab = encode_tab_color(sheet.print_settings().tab_color, theme);
+  properties.insert(properties.end(), tab.begin(), tab.end());
   emit_u32(properties, kWsPropSyncUnused);  // rwSync: unused
   emit_u32(properties, kWsPropSyncUnused);  // colSync: unused
   emit_xlwidestring(properties, properties_model.code_name);
