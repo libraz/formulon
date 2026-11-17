@@ -58,6 +58,7 @@
 #include "eval/function_registry.h"
 #include "eval/stats/special_functions.h"
 #include "utils/arena.h"
+#include "utils/elementary_math.h"
 #include "utils/expected.h"
 #include "utils/subnormal_flush.h"
 #include "value.h"
@@ -217,7 +218,7 @@ double bessj0(double x) {
   if (xx > kMaxBesselPhase) {
     return std::nan("");
   }
-  return std::sqrt(0.636619772 / ax) * (std::cos(xx) * p - z * std::sin(xx) * q);
+  return std::sqrt(0.636619772 / ax) * (elementary::cos(xx) * p - z * elementary::sin(xx) * q);
 }
 
 // J_1(x): rational polynomial for |x| < 8, asymptotic for |x| >= 8, again
@@ -246,7 +247,7 @@ double bessj1(double x) {
     if (xx > kMaxBesselPhase) {
       return std::nan("");
     }
-    ans = std::sqrt(0.636619772 / ax) * (std::cos(xx) * p - z * (std::sin(xx) * q));
+    ans = std::sqrt(0.636619772 / ax) * (elementary::cos(xx) * p - z * (elementary::sin(xx) * q));
     if (x < 0.0) {
       ans = -ans;
     }
@@ -331,7 +332,7 @@ double bessy0(double x) {
   if (xx > kMaxBesselPhase) {
     return std::nan("");
   }
-  return std::sqrt(0.636619772 / x) * (std::sin(xx) * p + z * std::cos(xx) * q);
+  return std::sqrt(0.636619772 / x) * (elementary::sin(xx) * p + z * elementary::cos(xx) * q);
 }
 
 // Y_1(x), x > 0. Rational polynomial + (2/pi)(J_1(x) ln(x) - 1/x) for
@@ -358,7 +359,7 @@ double bessy1(double x) {
   if (xx > kMaxBesselPhase) {
     return std::nan("");
   }
-  return std::sqrt(0.636619772 / x) * (std::sin(xx) * p + z * std::cos(xx) * q);
+  return std::sqrt(0.636619772 / x) * (elementary::sin(xx) * p + z * elementary::cos(xx) * q);
 }
 
 // Y_n(x), x > 0, via forward recurrence Y_{n+1} = (2n/x) Y_n - Y_{n-1}.

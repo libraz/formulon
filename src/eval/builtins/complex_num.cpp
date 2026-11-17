@@ -34,6 +34,7 @@
 #include "eval/function_registry.h"
 #include "eval/locale_text.h"
 #include "utils/arena.h"
+#include "utils/elementary_math.h"
 #include "utils/expected.h"
 #include "utils/number_text.h"
 #include "utils/subnormal_flush.h"
@@ -339,7 +340,7 @@ Value ImPower(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   }
   const double mag = power.value();
   const double ang = exponent * theta;
-  return text_complex(Complex{mag * std::cos(ang), mag * std::sin(ang), c.suffix}, arena);
+  return text_complex(Complex{mag * elementary::cos(ang), mag * elementary::sin(ang), c.suffix}, arena);
 }
 
 // ---------------------------------------------------------------------------
@@ -364,7 +365,7 @@ Value ImExp(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   if (std::isinf(mag)) {
     mag = std::numeric_limits<double>::max();
   }
-  return text_complex(Complex{mag * std::cos(c.im), mag * std::sin(c.im), c.suffix}, arena);
+  return text_complex(Complex{mag * elementary::cos(c.im), mag * elementary::sin(c.im), c.suffix}, arena);
 }
 
 // Shared kernel for IMLN / IMLOG10 / IMLOG2: ln|z| scaled by `inv_ln_base`
@@ -422,7 +423,8 @@ Value ImSqrt(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   }
   const double sqrt_r = std::sqrt(std::sqrt(sum));
   const double theta = complex_argument(c.re, c.im);
-  return text_complex(Complex{sqrt_r * std::cos(theta / 2.0), sqrt_r * std::sin(theta / 2.0), c.suffix}, arena);
+  return text_complex(Complex{sqrt_r * elementary::cos(theta / 2.0), sqrt_r * elementary::sin(theta / 2.0), c.suffix},
+                      arena);
 }
 
 }  // namespace

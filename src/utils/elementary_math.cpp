@@ -170,7 +170,83 @@ double scaled_fixed(std::uint64_t value, unsigned fraction_bits, std::uint64_t s
   return from_bits(to_bits(v) - (shift << 52));
 }
 
+// Odd kernel on head + tail: sin(r) for r = head + tail.
+double sin_kernel(double head, double tail, std::uint64_t sign) noexcept {
+  const double r = head + tail;
+  const double r2 = r * r;
+  return from_bits(to_bits(std::fma(r, r2 * sin_poly(r2), tail) + head) ^ sign);
+}
+
+// Even kernel on head + tail: cos(r), with r^2 formed as head^2 + 2 head tail.
+double cos_kernel(double head, double tail, std::uint64_t sign) noexcept {
+  double cross = head * tail;
+  cross = cross + cross;
+  return from_bits(to_bits(cos_poly(std::fma(head, head, cross))) ^ sign);
+}
+
+// Odd kernel on a reduced fraction: the scaled value split into its top 16 bits and the rest.
+double sin_kernel_fixed(const LargeReduction& red, std::uint64_t sign) noexcept {
+  const std::uint64_t t = mul_high(kPiOverTwoFixed, red.fraction);
+  const double r = scaled_fixed(t, 61, red.shift);
+  const double hi = scaled_fixed(t & 0xffff000000000000U, 61, red.shift);
+  const double lo = scaled_fixed(t & 0x0000ffffffffffffU, 61, red.shift);
+  const double r2 = r * r;
+  return from_bits(to_bits(std::fma(r, r2 * sin_poly(r2), lo) + hi) ^ sign);
+}
+
+// Even kernel on a reduced fraction, with r^2 squared in fixed point.
+double cos_kernel_fixed(const LargeReduction& red, std::uint64_t sign) noexcept {
+  std::uint64_t t = mul_high(kPiOverTwoFixed, red.fraction);
+  t = mul_high(t, t);
+  return from_bits(to_bits(cos_poly(scaled_fixed(t, 58, std::uint64_t{2} * red.shift))) ^ sign);
+}
+
+constexpr double kPiOverFour = 0x1.921fb54442d18p-1;
+
 }  // namespace
+
+double sin(double x) noexcept {
+  if (x == 0.0) {
+    return x;
+  }
+  if (!std::isfinite(x)) {
+    return x - x;
+  }
+  const double ax = std::fabs(x);
+  if (ax <= kPiOverFour) {
+    return sin_kernel(0.0, x, 0);
+  }
+  if (ax < from_bits(kMidReductionLimit)) {
+    double head;
+    double tail;
+    const std::int64_t k = reduce_mid(x, &head, &tail);
+    const std::uint64_t sign = (static_cast<std::uint64_t>(k) << 62) & kSignBit;
+    return (k & 1) != 0 ? cos_kernel(head, tail, sign) : sin_kernel(head, tail, sign);
+  }
+  const LargeReduction red = reduce_large(ax);
+  const std::uint64_t sign = ((to_bits(x) & kSignBit) ^ red.top) & kSignBit;
+  return red.odd ? cos_kernel_fixed(red, sign) : sin_kernel_fixed(red, sign);
+}
+
+double cos(double x) noexcept {
+  if (!std::isfinite(x)) {
+    return x - x;
+  }
+  const double ax = std::fabs(x);
+  if (ax <= kPiOverFour) {
+    return cos_kernel(ax, 0.0, 0);
+  }
+  if (ax < from_bits(kMidReductionLimit)) {
+    double head;
+    double tail;
+    const std::int64_t k = reduce_mid(ax, &head, &tail);
+    const std::uint64_t sign = static_cast<std::uint64_t>(k ^ (k >> 1)) << 63;
+    return (k & 1) != 0 ? sin_kernel(head, tail, sign) : cos_kernel(head, tail, sign);
+  }
+  const LargeReduction red = reduce_large(ax);
+  const std::uint64_t sign = (red.top ^ (red.top << 1)) & kSignBit;
+  return red.odd ? sin_kernel_fixed(red, sign) : cos_kernel_fixed(red, sign);
+}
 
 double tan(double x) noexcept {
   if (x == 0.0) {
@@ -183,7 +259,7 @@ double tan(double x) noexcept {
   double r;
   std::uint64_t sign = 0;
   bool odd = false;
-  if (ax < from_bits(0x3fe921fb54442d18)) {  // pi/4
+  if (ax < kPiOverFour) {
     r = x;
   } else if (ax < from_bits(kMidReductionLimit)) {
     double head;

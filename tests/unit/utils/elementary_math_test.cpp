@@ -1,6 +1,7 @@
 //
-// utils/elementary_math pinned bit for bit. tan: each of the three argument reductions (none below pi/4, the
-// three-part pi/2 below 2^19, the bits of 2/pi above) and both quadrant parities; TAN and COT evaluate through it.
+// utils/elementary_math pinned bit for bit. sin and cos: each reduction path and quadrant. tan: each of the three
+// argument reductions (none below pi/4, the three-part pi/2 below 2^19, the bits of 2/pi above) and both quadrant
+// parities; TAN and COT evaluate through it.
 
 #include "utils/elementary_math.h"
 
@@ -67,6 +68,51 @@ TEST(ElementaryTan, TanAndCotEvaluateThroughTheKernel) {
   EXPECT_EQ(Number("=COT(TRUE)"), 0.6420926159343308);
   EXPECT_EQ(Number("=TAN(134217727)"), 3.2584564256367834);
   EXPECT_EQ(Number("=COT(134217727)"), 0.30689377710631044);
+}
+
+struct SinCosPin {
+  double x;
+  double sin;
+  double cos;
+};
+
+// sin and cos on each reduction path and in all four quadrants.
+constexpr SinCosPin kSinCosPins[] = {
+    {0.5, 0.479425538604203, 0.8775825618903728},                   // none, quadrant 0
+    {-0.785, -0.706825181105366, 0.7073882691671998},               // none, quadrant 0
+    {1e-09, 1e-09, 1.0},                                            // none, quadrant 0
+    {0.7853981633974483, 0.7071067811865475, 0.7071067811865476},   // none, quadrant 0
+    {1.0, 0.8414709848078965, 0.5403023058681398},                  // three-part pi/2, quadrant 1
+    {-1.0, -0.8414709848078965, 0.5403023058681398},                // three-part pi/2, quadrant 3
+    {2.5, 0.5984721441039564, -0.8011436155469337},                 // three-part pi/2, quadrant 2
+    {3.0, 0.1411200080598672, -0.9899924966004454},                 // three-part pi/2, quadrant 2
+    {4.0, -0.7568024953079283, -0.6536436208636119},                // three-part pi/2, quadrant 3
+    {-5.5, 0.7055403255703919, 0.70866977429126},                   // three-part pi/2, quadrant 0
+    {100.0, -0.5063656411097588, 0.8623188722876839},               // three-part pi/2, quadrant 0
+    {-12345.678, 0.7040813137533816, 0.7101193587160628},           // three-part pi/2, quadrant 0
+    {524287.5, -0.32554397588580297, 0.9455269006032899},           // three-part pi/2, quadrant 0
+    {524289.0, 0.9201302731771119, 0.3916124109154527},             // bits of 2/pi, quadrant 1
+    {-1000000.0, 0.34999350217129294, 0.9367521275331447},          // bits of 2/pi, quadrant 0
+    {134217727.5, -0.9796209680098831, 0.2008550697278502},         // bits of 2/pi, quadrant 3
+    {123456789.0, 0.9901147518020355, 0.14025968153390964},         // bits of 2/pi, quadrant 1
+    {1000000000000000.0, 0.8582727931702359, -0.5131937377869702},  // bits of 2/pi, quadrant 1
+    {-7e+22, -0.4699619490293273, 0.8826866751370817},              // bits of 2/pi, quadrant 0
+    {1e+300, -0.8178819121159085, -0.5753861119575491},             // bits of 2/pi, quadrant 0
+};
+
+TEST(ElementarySinCos, MatchesPinnedValuesOnEveryReductionPath) {
+  for (const SinCosPin& p : kSinCosPins) {
+    EXPECT_EQ(elementary::sin(p.x), p.sin) << p.x;
+    EXPECT_EQ(elementary::cos(p.x), p.cos) << p.x;
+  }
+}
+
+TEST(ElementarySinCos, SineIsOddAndCosineEven) {
+  for (const SinCosPin& p : kSinCosPins) {
+    EXPECT_EQ(elementary::sin(-p.x), -p.sin) << p.x;
+    EXPECT_EQ(elementary::cos(-p.x), p.cos) << p.x;
+  }
+  EXPECT_EQ(elementary::cos(0.0), 1.0);
 }
 
 }  // namespace

@@ -182,12 +182,12 @@ Value Degrees(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 
 // SIN(x) - sine in radians. |x| >= 2^27 is `#NUM!`.
 Value Sin(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return apply_trig_math(&std::sin, args);
+  return apply_trig_math(&elementary::sin, args);
 }
 
 // COS(x) - cosine in radians.
 Value Cos(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return apply_trig_math(&std::cos, args);
+  return apply_trig_math(&elementary::cos, args);
 }
 
 // TAN(x) - tangent in radians. Excel quirk pin: even at the pole
@@ -421,7 +421,7 @@ Value Sec(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     if (!builtins_detail::trig_argument_in_range(x)) {
       return Value::error(ErrorCode::Num);
     }
-    const double c = std::cos(x);
+    const double c = elementary::cos(x);
     if (c == 0.0) {
       return Value::error(ErrorCode::Div0);
     }
@@ -435,7 +435,7 @@ Value Csc(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     if (!builtins_detail::trig_argument_in_range(x)) {
       return Value::error(ErrorCode::Num);
     }
-    const double s = std::sin(x);
+    const double s = elementary::sin(x);
     if (s == 0.0) {
       return Value::error(ErrorCode::Div0);
     }
@@ -451,7 +451,7 @@ Value Cot(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     if (!builtins_detail::trig_argument_in_range(x)) {
       return Value::error(ErrorCode::Num);
     }
-    const double s = std::sin(x);
+    const double s = elementary::sin(x);
     if (s == 0.0) {
       return Value::error(ErrorCode::Div0);
     }

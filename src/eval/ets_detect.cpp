@@ -13,6 +13,7 @@
 #include "eval/ets_series_internal.h"
 #include "eval/excel_math.h"
 #include "eval/stats/numeric_constants.h"
+#include "utils/elementary_math.h"
 #include "utils/index_sort.h"
 #include "value.h"
 
@@ -124,8 +125,8 @@ std::vector<Complex> fft_pow2(const std::vector<double>& x, std::size_t count, b
     if (inverse) {
       theta = flip_sign(theta);
     }
-    const double wpi = std::sin(theta);
-    double wt = std::sin(mul_flush(theta, 0.5));
+    const double wpi = elementary::sin(theta);
+    double wt = elementary::sin(mul_flush(theta, 0.5));
     wt = mul_flush(wt, wt);
     const double wpr = mul_flush(wt, -2.0);
     const std::size_t istep = 2U * mmax;
@@ -174,7 +175,7 @@ std::vector<Complex> dft_direct(const std::vector<double>& x, std::size_t count)
   double ang = 0.0;
   std::vector<Complex> tw(count);
   for (std::size_t k = 0; k < count; ++k) {
-    tw[k] = Complex{std::cos(ang), flip_sign(std::sin(ang))};
+    tw[k] = Complex{elementary::cos(ang), flip_sign(elementary::sin(ang))};
     ang = ang + step;
   }
   std::vector<Complex> out(count);
@@ -247,7 +248,7 @@ Periodogram make_periodogram(const std::vector<double>& y) {
   for (std::uint32_t i = 0; i < taper; ++i) {
     double w = mul_flush(static_cast<double>(2U * i + 1U), kPi);
     w = div_zero(w, two_m);
-    w = std::cos(w);
+    w = elementary::cos(w);
     w = flip_sign(w);
     w = w + 1.0;
     w = mul_flush(w, 0.5);
@@ -749,8 +750,8 @@ class Detector {
         v = mul_flush(v, 2.0);
         v = flip_sign(v);
         v = div_zero(v, period);
-        c = mul_flush(std::cos(v), y_[t]) + c;
-        sn = mul_flush(std::sin(v), y_[t]) + sn;
+        c = mul_flush(elementary::cos(v), y_[t]) + c;
+        sn = mul_flush(elementary::sin(v), y_[t]) + sn;
         ++i;
       }
       double a = mul_flush(c, c);

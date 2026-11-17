@@ -51,6 +51,7 @@
 #include "eval/stats/numeric_constants.h"
 #include "eval/stats/special_functions.h"
 #include "utils/arena.h"
+#include "utils/elementary_math.h"
 #include "utils/expected.h"
 #include "utils/subnormal_flush.h"
 #include "value.h"
@@ -304,7 +305,7 @@ double gamma_kernel(double x) noexcept {
   if (x < 0.0) {
     result = (-kPi) / result;
     const double f = frac > 0.5 ? 1.0 - frac : frac;
-    double sine = std::sin(kPi * f);
+    double sine = elementary::sin(kPi * f);
     sine = sine * ax;
     result = result / sine;
     if ((whole & 1U) != 0U) {

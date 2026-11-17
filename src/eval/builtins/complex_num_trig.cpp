@@ -95,8 +95,8 @@ Value im_csc_sec(const Value* args, Arena& arena, bool sec) {
   if (!builtins_detail::trig_argument_in_range(c.re)) {
     return Value::error(ErrorCode::Num);
   }
-  const double f1 = sec ? std::cos(c.re) : std::sin(c.re);
-  const double f2 = sec ? std::sin(c.re) : std::cos(c.re);
+  const double f1 = sec ? elementary::cos(c.re) : elementary::sin(c.re);
+  const double f2 = sec ? elementary::sin(c.re) : elementary::cos(c.re);
   const double sign2 = sec ? -2.0 : 2.0;
   if (c.im == 0.0) {
     if (f1 == 0.0) {
@@ -160,8 +160,8 @@ Value im_sin_cos(const Value* args, Arena& arena, bool cos) {
     return Value::error(ErrorCode::Num);
   }
   const double inv = 1.0 / e;
-  const double real_factor = cos ? std::cos(c.re) : std::sin(c.re);
-  const double imag_factor = cos ? -std::sin(c.re) : std::cos(c.re);
+  const double real_factor = cos ? elementary::cos(c.re) : elementary::sin(c.re);
+  const double imag_factor = cos ? -elementary::sin(c.re) : elementary::cos(c.re);
   const double imag = ((e - inv) * imag_factor) * 0.5;
   const double real = ((e + inv) * real_factor) * 0.5;
   return text_complex(Complex{real, imag, c.suffix}, arena);
@@ -197,10 +197,10 @@ Value im_tan_cot(const Value* args, Arena& arena, bool cot) {
   const double y2 = c.im * 2.0;
   const double sinh_term = neg_two_sinh(y2);
   const double cosh_term = two_cosh(y2);
-  const double t1 = cot ? std::cos(c.re) : std::sin(c.re);
+  const double t1 = cot ? elementary::cos(c.re) : elementary::sin(c.re);
   const double a = t1 * 4.0;
   const double d = (cosh_term + 2.0) - t1 * a;
-  const double t2 = cot ? std::sin(c.re) : std::cos(c.re);
+  const double t2 = cot ? elementary::sin(c.re) : elementary::cos(c.re);
   const double real = t2 * a;
   const double imag = cot ? sinh_term : -sinh_term;
   return text_complex(Complex{real / d, imag / d, c.suffix}, arena);
@@ -225,8 +225,8 @@ Value im_sinh_cosh(const Value* args, Arena& arena, bool cosh) {
   }
   if (beyond_exp_overflow(c.re)) {
     const double magnitude = std::fabs(c.re);
-    const double a = std::cos(c.im) / 2.0;
-    const double b = std::sin(c.im) / 2.0;
+    const double a = elementary::cos(c.im) / 2.0;
+    const double b = elementary::sin(c.im) / 2.0;
     if (!(a > 0.0) || !(b > 0.0)) {
       return Value::error(ErrorCode::Num);
     }
@@ -243,8 +243,8 @@ Value im_sinh_cosh(const Value* args, Arena& arena, bool cosh) {
   }
   const double sinh_term = neg_two_sinh(neg_re);
   const double cosh_term = two_cosh(neg_re);
-  const double real = (std::cos(c.im) / 2.0) * (cosh ? cosh_term : sinh_term);
-  const double imag = (std::sin(c.im) / 2.0) * (cosh ? sinh_term : cosh_term);
+  const double real = (elementary::cos(c.im) / 2.0) * (cosh ? cosh_term : sinh_term);
+  const double imag = (elementary::sin(c.im) / 2.0) * (cosh ? sinh_term : cosh_term);
   return text_complex(Complex{real, imag, c.suffix}, arena);
 }
 
@@ -276,14 +276,14 @@ Value im_csch_sech(const Value* args, Arena& arena, bool sech) {
   if (beyond_square_overflow(c.re)) {
     const double sinh_term = neg_two_sinh(c.re);
     const double cosh_term = two_cosh(c.re);
-    const double real = (std::cos(c.im) * 2.0) / (sech ? cosh_term : sinh_term);
-    const double imag = (std::sin(c.im) * 2.0) / (sech ? sinh_term : cosh_term);
+    const double real = (elementary::cos(c.im) * 2.0) / (sech ? cosh_term : sinh_term);
+    const double imag = (elementary::sin(c.im) * 2.0) / (sech ? sinh_term : cosh_term);
     return text_complex(Complex{real, imag, c.suffix}, arena);
   }
   const double sinh_term = neg_two_sinh(neg_re);
   const double cosh_term = two_cosh(neg_re);
-  const double a = std::cos(c.im) * 2.0;
-  const double b = std::sin(c.im) * -2.0;
+  const double a = elementary::cos(c.im) * 2.0;
+  const double b = elementary::sin(c.im) * -2.0;
   const double real = a * (sech ? cosh_term : sinh_term);
   const double imag = b * (sech ? sinh_term : cosh_term);
   const double d = sinh_term * sinh_term + (sech ? a * a : b * b);
