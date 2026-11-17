@@ -419,6 +419,25 @@ TEST(DynamicReferenceRecalc, LetCarriedOffsetLearnsReadsOnlyInTheTakenBranch) {
   EXPECT_FALSE(engine_graph().has_dynamic_dependencies(f1));
 }
 
+// `@` over a LET-carried OFFSET reads the one cell it projects to, so recalc
+// learns that cell and none of the rest of the rectangle.
+TEST(DynamicReferenceRecalc, ImplicitIntersectionOverACarriedOffsetLearnsTheProjectedCell) {
+  Workbook wb = Workbook::create();
+  Number(wb, {0U, kB}, 3.0);
+  Formula(wb, {0U, kA}, "=B1*1");
+  Formula(wb, {1U, kA}, "=B1*2");
+  Formula(wb, {2U, kA}, "=B1*3");
+  Formula(wb, {1U, kF}, "=@LET(r,OFFSET(A1,0,0,3),r)");
+  Recalc(wb);
+  ExpectNumberAt(wb, {1U, kF}, 6.0, "F2 projects onto A2");
+  const eval::CellNodeId f2{0U, 1U, kF};
+  const eval::DepGraph& graph = wb.recalc_engine().dep_graph();
+  const auto source = eval::DepGraph::DependencySource::kDynamicReference;
+  EXPECT_TRUE(graph.has_dependency_source(f2, eval::CellNodeId{0U, 1U, kA}, source));
+  EXPECT_FALSE(graph.has_dependency_source(f2, eval::CellNodeId{0U, 0U, kA}, source));
+  EXPECT_FALSE(graph.has_dependency_source(f2, eval::CellNodeId{0U, 2U, kA}, source));
+}
+
 // A reference bound to a LAMBDA parameter, a helper callback argument or a
 // named LAMBDA's parameter stays a reference, so OFFSET inside the body reads
 // through it and recalc learns the read; a plain reference argument remains

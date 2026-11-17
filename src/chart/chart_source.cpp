@@ -101,12 +101,13 @@ struct Resolver {
     std::uint32_t row = 0;
     std::uint32_t col = 0;
     if (const parser::AstNode* anchor = node.as_spill_ref_anchor_expr(); anchor != nullptr) {
-      std::uint32_t bottom = 0;
-      std::uint32_t right = 0;
+      RefArea area{};
       ErrorCode err = ErrorCode::Ref;
-      if (!eval::resolve_reference_rect(*anchor, arena, registry, ctx, &qualifier, &row, &col, &bottom, &right, &err)) {
+      if (!eval::eval_reference_area(*anchor, arena, registry, ctx, &qualifier, &area, &err)) {
         return invalid(formula, "spill anchor is not a reference");
       }
+      row = area.row_first;
+      col = area.col_first;
     } else {
       const parser::Reference& ref = node.as_spill_ref();
       qualifier = ref.sheet;
@@ -147,15 +148,12 @@ struct Resolver {
         return invalid(formula, "not a reference");
     }
     std::string_view qualifier;
-    std::uint32_t top = 0;
-    std::uint32_t left = 0;
-    std::uint32_t bottom = 0;
-    std::uint32_t right = 0;
+    RefArea area{};
     ErrorCode err = ErrorCode::Ref;
-    if (!eval::resolve_reference_rect(node, arena, registry, ctx, &qualifier, &top, &left, &bottom, &right, &err)) {
+    if (!eval::eval_reference_area(node, arena, registry, ctx, &qualifier, &area, &err)) {
       return invalid(formula, "not a reference");
     }
-    return push(qualifier, top, left, bottom, right);
+    return push(qualifier, area.row_first, area.col_first, area.row_last, area.col_last);
   }
 };
 

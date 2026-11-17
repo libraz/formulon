@@ -231,27 +231,16 @@ bool resolve_offset_base(const parser::AstNode& raw_arg, Arena& arena, const Fun
     out->cols = area.col_last - area.col_first + 1U;
     return true;
   }
-  if (k == parser::NodeKind::Call) {
-    // Nested INDIRECT / OFFSET as OFFSET's base: resolve to a rectangle
-    // without dereferencing, then adopt it as the base shape. Only its
-    // position is used, so it is no read of its cells.
-    std::string_view sheet;
-    std::uint32_t top = 0;
-    std::uint32_t left = 0;
-    std::uint32_t bottom = 0;
-    std::uint32_t right = 0;
-    bool is_range = false;
-    ErrorCode err = ErrorCode::Value;
-    if (!resolve_reference_call(arg, arena, registry, ctx.without_dynamic_read_callback(), &sheet, &top, &left, &bottom,
-                                &right, &is_range, &err)) {
-      *out_err = err;
+  if (k == parser::NodeKind::Call && is_reference_call_name(arg.as_call_name())) {
+    // A reference-returning call as OFFSET's base: only its position is used, so it is no read of its cells.
+    RefArea area{};
+    if (!eval_reference_area(arg, arena, registry, ctx.without_dynamic_read_callback(), &out->sheet, &area, out_err)) {
       return false;
     }
-    out->sheet = sheet;
-    out->row = top;
-    out->col = left;
-    out->rows = bottom - top + 1U;
-    out->cols = right - left + 1U;
+    out->row = area.row_first;
+    out->col = area.col_first;
+    out->rows = area.row_last - area.row_first + 1U;
+    out->cols = area.col_last - area.col_first + 1U;
     return true;
   }
   // Anything else (literal, scalar expr, array literal, or a NameRef

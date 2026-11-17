@@ -345,6 +345,11 @@ Value resolve_defined_name_ref(std::string_view name, Arena& arena, const Functi
   return evaluate_lookup_ref(lookup_name(name, ctx), arena, registry, ctx);
 }
 
+Value resolve_self_book_defined_name_ref(std::string_view name, Arena& arena, const FunctionRegistry& registry,
+                                         const EvalContext& ctx) {
+  return evaluate_lookup_ref(lookup_self_book_name(name, ctx), arena, registry, ctx);
+}
+
 Value resolve_sheet_defined_name_ref(std::string_view sheet, std::string_view name, Arena& arena,
                                      const FunctionRegistry& registry, const EvalContext& ctx) {
   return evaluate_lookup_ref(lookup_sheet_name(sheet, name, arena, ctx), arena, registry, ctx);

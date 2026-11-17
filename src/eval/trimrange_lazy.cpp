@@ -241,14 +241,15 @@ Value eval_trim(const parser::AstNode& call, Arena& arena, const FunctionRegistr
     return Value::error(ErrorCode::Value);
   }
   std::string_view sheet;
-  std::uint32_t top = 0;
-  std::uint32_t left = 0;
-  std::uint32_t bottom = 0;
-  std::uint32_t right = 0;
+  RefArea area{};
   ErrorCode err = ErrorCode::Value;
-  if (!resolve_reference_rect(call.as_call_arg(0), arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &err)) {
+  if (!eval_reference_area(call.as_call_arg(0), arena, registry, ctx, &sheet, &area, &err)) {
     return trim_array_value(call.as_call_arg(0), call, arena, registry, ctx);
   }
+  std::uint32_t top = area.row_first;
+  std::uint32_t left = area.col_first;
+  std::uint32_t bottom = area.row_last;
+  std::uint32_t right = area.col_last;
   if (!trim_resolved_rect(call, arena, registry, ctx, sheet, &top, &left, &bottom, &right, &err)) {
     return Value::error(err);
   }
@@ -257,35 +258,6 @@ Value eval_trim(const parser::AstNode& call, Arena& arena, const FunctionRegistr
 }
 
 }  // namespace
-
-bool resolve_trim_reference(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                            const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
-                            std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
-                            bool* out_is_range, ErrorCode* out_err) {
-  if (call.as_call_arity() < 1U) {
-    *out_err = ErrorCode::Value;
-    return false;
-  }
-  std::string_view sheet;
-  std::uint32_t top = 0;
-  std::uint32_t left = 0;
-  std::uint32_t bottom = 0;
-  std::uint32_t right = 0;
-  if (!resolve_reference_rect(call.as_call_arg(0), arena, registry, ctx, &sheet, &top, &left, &bottom, &right,
-                              out_err)) {
-    return false;
-  }
-  if (!trim_resolved_rect(call, arena, registry, ctx, sheet, &top, &left, &bottom, &right, out_err)) {
-    return false;
-  }
-  *out_sheet = sheet;
-  *out_top_row = top;
-  *out_bottom_row = bottom;
-  *out_left_col = left;
-  *out_right_col = right;
-  *out_is_range = top != bottom || left != right;
-  return true;
-}
 
 Value eval_trimrange_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                           const EvalContext& ctx) {

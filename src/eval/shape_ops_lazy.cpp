@@ -319,20 +319,14 @@ bool resolve_shape(const parser::AstNode& arg_node, Arena& arena, const Function
     }
     return value_shape(value, out_rows, out_cols, out_err);
   }
-  if (k == parser::NodeKind::Call) {
-    // A call reaching a reference through a name is resolved by the name.
+  if (k == parser::NodeKind::Call && is_reference_call_name(arg_node.as_call_name())) {
     std::string_view sheet;
-    std::uint32_t top = 0;
-    std::uint32_t left = 0;
-    std::uint32_t bottom = 0;
-    std::uint32_t right = 0;
-    bool is_range = false;
+    RefArea area{};
     ErrorCode err = ErrorCode::Value;
     // Only the shape is read, so the reference is no read of its cells.
-    if (resolve_reference_call(arg_node, arena, registry, ctx.without_dynamic_read_callback(), &sheet, &top, &left,
-                               &bottom, &right, &is_range, &err)) {
-      *out_rows = bottom - top + 1U;
-      *out_cols = right - left + 1U;
+    if (eval_reference_area(arg_node, arena, registry, ctx.without_dynamic_read_callback(), &sheet, &area, &err)) {
+      *out_rows = area.row_last - area.row_first + 1U;
+      *out_cols = area.col_last - area.col_first + 1U;
       return true;
     }
     // Fall through to the scalar fallback below so subtree errors
@@ -512,16 +506,12 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
   if (k == parser::NodeKind::RangeOp) {
     // A `RangeOp` over a name endpoint names its rectangle once the name is resolved.
     std::string_view sheet;
-    std::uint32_t top = 0;
-    std::uint32_t left = 0;
-    std::uint32_t bottom = 0;
-    std::uint32_t right = 0;
+    RefArea area{};
     ErrorCode err = ErrorCode::Value;
-    if (!resolve_reference_rect(arg, arena, registry, ctx.without_dynamic_read_callback(), &sheet, &top, &left, &bottom,
-                                &right, &err)) {
+    if (!eval_reference_area(arg, arena, registry, ctx.without_dynamic_read_callback(), &sheet, &area, &err)) {
       return Value::error(err);
     }
-    return index_array(top, left, bottom, right);
+    return index_array(area.row_first, area.col_first, area.row_last, area.col_last);
   }
   std::uint32_t ext_top = 0;
   std::uint32_t ext_left = 0;
@@ -531,18 +521,12 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
     // A reference into another workbook: its coordinates, not its (possibly uncached) cells.
     return index_array(ext_top, ext_left, ext_bottom, ext_right);
   }
-  if (k == parser::NodeKind::Call) {
-    // A call reaching a reference through a name is resolved by the name.
+  if (k == parser::NodeKind::Call && is_reference_call_name(arg.as_call_name())) {
     std::string_view sheet;
-    std::uint32_t top = 0;
-    std::uint32_t left = 0;
-    std::uint32_t bottom = 0;
-    std::uint32_t right = 0;
-    bool is_range = false;
+    RefArea area{};
     ErrorCode err = ErrorCode::Value;
-    if (resolve_reference_call(arg, arena, registry, ctx.without_dynamic_read_callback(), &sheet, &top, &left, &bottom,
-                               &right, &is_range, &err)) {
-      return index_array(top, left, bottom, right);
+    if (eval_reference_area(arg, arena, registry, ctx.without_dynamic_read_callback(), &sheet, &area, &err)) {
+      return index_array(area.row_first, area.col_first, area.row_last, area.col_last);
     }
     // Fall through to the scalar fallback so subtree errors propagate
     // and non-reference calls still surface `#VALUE!`.

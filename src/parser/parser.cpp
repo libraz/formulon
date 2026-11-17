@@ -897,7 +897,7 @@ AstNode* Parser::parse_expression(int min_bp, SyncContext ctx) {
       // calls (`OFFSET(...)`, `INDIRECT(...)`) as `:` endpoints; the
       // evaluator's `resolve_range_endpoint` discriminates between
       // reference-producing calls and value-producing calls (the latter
-      // surface as `#VALUE!` at eval time via `resolve_reference_call`).
+      // surface as `#VALUE!` at eval time).
       // SpillRef is rejected on both sides: `A1#:B2` and `A1:B2#` are not
       // legal Excel range expressions (the spill operator is terminal).
       // A chain already open validated its left endpoint when it started.

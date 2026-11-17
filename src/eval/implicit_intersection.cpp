@@ -5,19 +5,15 @@
 
 #include "eval/implicit_intersection.h"
 
+#include <optional>
 #include <string_view>
-#include <vector>
 
 #include "eval/declared_rect.h"
-#include "eval/dynamic_array/anchor.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
-#include "eval/lambda_value.h"
 #include "eval/lazy_impls.h"
-#include "eval/name_env.h"
-#include "eval/name_env_resolve.h"
 #include "eval/range_resolvers.h"
-#include "eval/spill_anchor.h"
+#include "eval/reference/ref_value.h"
 #include "eval/tree_walker/dispatch.h"
 #include "eval/tree_walker_lazy_table.h"
 
@@ -101,73 +97,25 @@ IntersectionProjection project_implicit_intersection(const parser::AstNode& oper
 
 namespace {
 
-// The rectangle `target` names when it yields a reference: a defined name,
-// an intersection, a spill, a reference-returning call, or a LET or lambda
-// call returning one. False when it yields none here.
-bool ReferenceResultRect(const parser::AstNode& target, Arena& arena, const FunctionRegistry& registry,
-                         const EvalContext& ctx, std::string_view* sheet, std::uint32_t* top, std::uint32_t* left,
-                         std::uint32_t* bottom, std::uint32_t* right) {
-  ErrorCode err = ErrorCode::Value;
-  switch (target.kind()) {
+// Whether `operand` can yield a reference here: a name, an intersection, a spill, a reference-returning call, or a
+// LET or lambda call returning one.
+bool may_yield_reference(const parser::AstNode& operand, const FunctionRegistry& registry) {
+  switch (operand.kind()) {
     case parser::NodeKind::NameRef:
     case parser::NodeKind::IntersectOp:
-      return resolve_reference_rect(target, arena, registry, ctx, sheet, top, left, bottom, right, &err);
-    case parser::NodeKind::Literal:
-      // A reference binding seen through `resolve_name_ast`.
-      return target.as_literal().is_ref() &&
-             resolve_reference_rect(target, arena, registry, ctx, sheet, top, left, bottom, right, &err);
-    case parser::NodeKind::ExternalRef:
-      return parser::is_self_book_name_ref(target) &&
-             resolve_reference_rect(target, arena, registry, ctx, sheet, top, left, bottom, right, &err);
-    case parser::NodeKind::SpillRef: {
-      if (!resolve_spill_anchor_node(target, arena, registry, ctx, sheet, top, left, &err)) {
-        return false;
-      }
-      const ArrayValue* spill = project_spill_at_anchor(*sheet, *top, *left, arena, ctx, &err);
-      if (spill == nullptr || spill->rows == 0U || spill->cols == 0U) {
-        return false;
-      }
-      *bottom = *top + spill->rows - 1U;
-      *right = *left + spill->cols - 1U;
+    case parser::NodeKind::SpillRef:
+    case parser::NodeKind::LetBinding:
+    case parser::NodeKind::LambdaCall:
       return true;
-    }
+    case parser::NodeKind::Literal:
+      return operand.as_literal().is_ref();
+    case parser::NodeKind::ExternalRef:
+      return parser::is_self_book_name_ref(operand);
     case parser::NodeKind::Call: {
-      const std::string_view name = target.as_call_name();
-      if (is_reference_call_name(name)) {
-        return resolve_reference_rect(target, arena, registry, ctx, sheet, top, left, bottom, right, &err);
-      }
-      if (lookup_on_current_host(registry, name) != nullptr || find_lazy_impl(strip_future_prefix(name)) != nullptr) {
-        return false;
-      }
-      // A call through a name bound to a LAMBDA.
-      const std::uint32_t arity = target.as_call_arity();
-      Value callee_err = Value::blank();
-      const parser::AstNode* callee = parser::make_name_ref(arena, name);
-      const LambdaValue* lv =
-          callee != nullptr ? resolve_callable(*callee, arity, arena, registry, ctx, &callee_err) : nullptr;
-      return lv != nullptr && resolve_lambda_reference(lv, arity, target.as_call_args(), arena, registry, ctx, sheet,
-                                                       top, left, bottom, right, &err);
-    }
-    case parser::NodeKind::LetBinding: {
-      // The bindings take the same values the evaluation gives them.
-      NameEnv env;
-      if (ctx.name_env() != nullptr) {
-        env = *ctx.name_env();
-      }
-      for (std::uint32_t i = 0; i < target.as_let_binding_count(); ++i) {
-        const Value v = eval_binding_source(target.as_let_binding_expr(i), arena, registry, ctx.with_name_env(&env));
-        env = env.extend(target.as_let_binding_name(i), v, arena);
-      }
-      return resolve_reference_rect(target.as_let_body(), arena, registry, ctx.with_name_env(&env), sheet, top, left,
-                                    bottom, right, &err);
-    }
-    case parser::NodeKind::LambdaCall: {
-      const Value callee = eval_node(target.as_lambda_call_callee(), arena, registry, ctx);
-      if (!callee.is_lambda()) {
-        return false;
-      }
-      return resolve_lambda_reference(callee.as_lambda(), target.as_lambda_call_arity(), target.as_lambda_call_args(),
-                                      arena, registry, ctx, sheet, top, left, bottom, right, &err);
+      // A reference-returning built-in, or a call through a name bound to a LAMBDA.
+      const std::string_view name = operand.as_call_name();
+      return is_reference_call_name(name) || (lookup_on_current_host(registry, name) == nullptr &&
+                                              find_lazy_impl(strip_future_prefix(name)) == nullptr);
     }
     default:
       return false;
@@ -178,29 +126,37 @@ bool ReferenceResultRect(const parser::AstNode& target, Arena& arena, const Func
 
 bool project_reference_result(const parser::AstNode& operand, Arena& arena, const FunctionRegistry& registry,
                               const EvalContext& ctx, Value* out) {
-  const parser::AstNode& target = resolve_name_ast(operand, ctx.name_env());
-  std::string_view sheet;
-  std::uint32_t top = 0;
-  std::uint32_t left = 0;
-  std::uint32_t bottom = 0;
-  std::uint32_t right = 0;
-  if (!ReferenceResultRect(target, arena, registry, ctx, &sheet, &top, &left, &bottom, &right)) {
+  if (!may_yield_reference(operand, registry)) {
     return false;
   }
+  const Value ref = eval_node_ref(operand, arena, registry, ctx);
+  if (!ref.is_ref()) {
+    return false;
+  }
+  const RefView view = ref.as_ref();
+  const RefArea& area = view.areas[0];
   parser::Reference lhs{};
-  lhs.sheet = sheet;
-  lhs.row = top;
-  lhs.col = left;
+  if (view.form != RefForm::kArea || view.book != 0U || !ref_sheet_name(ctx, area.sheet_first, &lhs.sheet)) {
+    return false;
+  }
+  lhs.row = area.row_first;
+  lhs.col = area.col_first;
   parser::Reference rhs = lhs;
-  rhs.row = bottom;
-  rhs.col = right;
-  if (top == bottom && left == right) {
-    *out = ctx.resolve_ref(lhs, arena, registry);
+  rhs.row = area.row_last;
+  rhs.col = area.col_last;
+  const std::optional<parser::Reference> cell =
+      area.row_first == area.row_last && area.col_first == area.col_last
+          ? std::optional<parser::Reference>(lhs)
+          : project_implicit_intersection(lhs, rhs, ctx.formula_row(), ctx.formula_col());
+  if (!cell.has_value()) {
+    *out = Value::error(ErrorCode::Value);
     return true;
   }
-  const std::optional<parser::Reference> cell =
-      project_implicit_intersection(lhs, rhs, ctx.formula_row(), ctx.formula_col());
-  *out = cell.has_value() ? ctx.resolve_ref(*cell, arena, registry) : Value::error(ErrorCode::Value);
+  // A dynamic reference reads only the cell it projects to.
+  if (ref.ref_is_dynamic()) {
+    ctx.note_dynamic_read(cell->sheet, DeclaredRect{cell->row, cell->row, cell->col, cell->col, /*whole_axis=*/false});
+  }
+  *out = ctx.resolve_ref(*cell, arena, registry);
   return true;
 }
 

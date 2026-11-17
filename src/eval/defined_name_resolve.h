@@ -134,6 +134,11 @@ Value resolve_sheet_defined_name(std::string_view sheet, std::string_view name, 
 Value resolve_defined_name_ref(std::string_view name, Arena& arena, const FunctionRegistry& registry,
                                const EvalContext& ctx);
 
+/// `resolve_self_book_defined_name` with the body read as in
+/// `resolve_defined_name_ref`.
+Value resolve_self_book_defined_name_ref(std::string_view name, Arena& arena, const FunctionRegistry& registry,
+                                         const EvalContext& ctx);
+
 /// `resolve_sheet_defined_name` with the body read as in
 /// `resolve_defined_name_ref`.
 Value resolve_sheet_defined_name_ref(std::string_view sheet, std::string_view name, Arena& arena,

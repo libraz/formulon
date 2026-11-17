@@ -27,7 +27,6 @@
 #include "eval/eval_profile_scope.h"
 #include "eval/implicit_intersection.h"
 #include "eval/lazy_impls.h"
-#include "eval/name_env_resolve.h"
 #include "eval/range_resolvers.h"
 #include "eval/text_format/display_text.h"
 #include "eval/text_format/number_format.h"
@@ -96,7 +95,7 @@ bool extract_topleft_ref(const parser::AstNode& ref_node, Arena& arena, const Fu
     operand = &ref_node.as_implicit_intersection_operand();
   } else if (k == parser::NodeKind::Call && ref_node.as_call_arity() == 1U &&
              strings::case_insensitive_eq(ref_node.as_call_name(), "SINGLE")) {
-    operand = &resolve_name_ast(ref_node.as_call_arg(0), ctx.name_env());
+    operand = &ref_node.as_call_arg(0);
   }
   if (operand != nullptr && ctx.projects_intersection()) {
     parser::Reference target{};
@@ -161,22 +160,6 @@ bool extract_topleft_ref(const parser::AstNode& ref_node, Arena& arena, const Fu
       return true;
     }
     // A selected value (CHOOSE(1, 42)) is evaluated below so a subtree error propagates.
-  } else if (k == parser::NodeKind::Call) {
-    std::string_view sheet;
-    std::uint32_t top = 0;
-    std::uint32_t left = 0;
-    std::uint32_t bottom = 0;
-    std::uint32_t right = 0;
-    bool is_range = false;
-    ErrorCode err = ErrorCode::Value;
-    if (resolve_reference_call(ref_node, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &is_range, &err)) {
-      *out_row = top;
-      *out_col = left;
-      *out_sheet = sheet;
-      return true;
-    }
-    // Fall through: not a reference-returning call. Evaluate so any
-    // subtree error propagates verbatim, then reject the scalar result.
   }
 
   // Anything else: evaluate the subtree and propagate a subtree error.

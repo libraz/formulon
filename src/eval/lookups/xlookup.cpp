@@ -27,7 +27,6 @@
 #include "eval/lookups/common.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
-#include "eval/range_resolvers.h"
 #include "eval/reference/ref_value.h"
 #include "eval/regex_lazy.h"
 #include "parser/ast.h"
@@ -601,50 +600,6 @@ Value eval_xlookup_lazy(const parser::AstNode& call, Arena& arena, const Functio
     buffer[i] = return_cells[start + i * stride];
   }
   return Value::array(out);
-}
-
-bool resolve_xlookup_reference(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                               const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
-                               std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
-                               ErrorCode* out_err) {
-  auto planned = plan_xlookup(call, arena, registry, ctx);
-  if (!planned) {
-    *out_err = planned.error();
-    return false;
-  }
-  const XlookupPlan& plan = planned.value();
-  // An array lookup_value yields one value per query, not one reference.
-  if (plan.lookup.is_array()) {
-    *out_err = ErrorCode::Value;
-    return false;
-  }
-  const MatchOutcome found =
-      match_query(plan.lookup_cells, plan.lookup, plan.match_mode, plan.search_mode, ctx.excel_profile());
-  if (found.kind == MatchOutcomeKind::Error) {
-    *out_err = found.error.as_error();
-    return false;
-  }
-  const std::size_t offset = found.offset;
-  if (found.kind == MatchOutcomeKind::Miss) {
-    if (!call_arg_supplied(call, 3U)) {
-      *out_err = ErrorCode::NA;
-      return false;
-    }
-    return resolve_reference_rect(call.as_call_arg(3), arena, registry, ctx, out_sheet, out_top_row, out_left_col,
-                                  out_bottom_row, out_right_col, out_err);
-  }
-  if (!resolve_reference_rect(call.as_call_arg(2), arena, registry, ctx, out_sheet, out_top_row, out_left_col,
-                              out_bottom_row, out_right_col, out_err)) {
-    return false;
-  }
-  // The matched slice: a column of return_array for a horizontal lookup, a
-  // row for a vertical one.
-  if (plan.horizontal_lookup) {
-    *out_left_col = *out_right_col = *out_left_col + static_cast<std::uint32_t>(offset);
-  } else {
-    *out_top_row = *out_bottom_row = *out_top_row + static_cast<std::uint32_t>(offset);
-  }
-  return true;
 }
 
 /// XMATCH(lookup_value, lookup_array, [match_mode], [search_mode])

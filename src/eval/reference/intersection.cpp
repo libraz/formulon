@@ -1,6 +1,6 @@
 //
 // Implementation of the rectangle-resolution routines
-// (`resolve_reference_call`, `resolve_range_endpoint`,
+// (`eval_reference_area`, `resolve_range_endpoint`,
 // `compute_intersect_rect`) that the intersect operator, ROWS/COLUMNS,
 // CELL("address",...), AREAS, and spill-anchor recovery all share. These
 // routines walk a reference-shaped AST (`Ref`, `RangeOp`, a
@@ -20,22 +20,17 @@
 #include "eval/coerce.h"
 #include "eval/declared_rect.h"
 #include "eval/defined_name_resolve.h"
-#include "eval/dynamic_array/indexing.h"
 #include "eval/eval_context.h"
 #include "eval/external_ref.h"
 #include "eval/lazy_impls.h"
-#include "eval/lookups/classic.h"
-#include "eval/lookups/xlookup.h"
 #include "eval/name_env.h"
 #include "eval/name_env_resolve.h"
 #include "eval/reference/common.h"
 #include "eval/reference/deref.h"
 #include "eval/reference/ref_value.h"
-#include "eval/special_forms_lazy.h"
 #include "eval/structured_ref_project.h"
 #include "eval/tree_walker/dispatch.h"
 #include "eval/tree_walker_lazy_table.h"
-#include "eval/trimrange_lazy.h"
 #include "parser/ast.h"
 #include "parser/reference.h"
 #include "sheet.h"
@@ -43,7 +38,6 @@
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
-#include "utils/strings.h"
 #include "value.h"
 #include "workbook.h"
 
@@ -52,129 +46,7 @@ namespace eval {
 
 namespace {
 
-// Resolves the reference a pass-through call picks (`IF`, `CHOOSE`, `IFS`,
-// `SWITCH` each return one of their arguments verbatim) as a range endpoint,
-// so plain Refs, `RangeOp`s and nested reference calls all reduce to a
-// rectangle.
-bool resolve_picked_reference(const parser::AstNode& picked, Arena& arena, const FunctionRegistry& registry,
-                              const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
-                              std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
-                              bool* out_is_range, ErrorCode* out_err) {
-  if (!resolve_range_endpoint(picked, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row,
-                              out_right_col, out_err)) {
-    return false;
-  }
-  *out_is_range = refs_internal::rect_is_range(*out_top_row, *out_left_col, *out_bottom_row, *out_right_col);
-  return true;
-}
-
-// INDIRECT / OFFSET build their reference: the rectangle of the one-area `Ref` the call returns. A dynamic one is
-// recorded here, on the caller's context, as the call's read; a caller resolving only a position strips the callback.
-bool resolve_built_reference(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                             const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
-                             std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
-                             bool* out_is_range, ErrorCode* out_err) {
-  RefArea area{};
-  if (!eval_reference_area(node, arena, registry, ctx, out_sheet, &area, out_err)) {
-    return false;
-  }
-  *out_top_row = area.row_first;
-  *out_left_col = area.col_first;
-  *out_bottom_row = area.row_last;
-  *out_right_col = area.col_last;
-  *out_is_range = refs_internal::rect_is_range(*out_top_row, *out_left_col, *out_bottom_row, *out_right_col);
-  return true;
-}
-
-// IF / CHOOSE / IFS / SWITCH pick through the same selector their value path uses; an
-// array subject selects per cell and so names no single reference.
-bool resolve_selected_branch(const parser::AstNode& node, const SelectedBranch& picked, Arena& arena,
-                             const FunctionRegistry& registry, const EvalContext& ctx, std::string_view* out_sheet,
-                             std::uint32_t* out_top_row, std::uint32_t* out_left_col, std::uint32_t* out_bottom_row,
-                             std::uint32_t* out_right_col, bool* out_is_range, ErrorCode* out_err) {
-  switch (picked.kind) {
-    case SelectedBranch::Kind::kArgument:
-      return resolve_picked_reference(node.as_call_arg(picked.arg), arena, registry, ctx, out_sheet, out_top_row,
-                                      out_left_col, out_bottom_row, out_right_col, out_is_range, out_err);
-    case SelectedBranch::Kind::kResult:
-      *out_err = picked.value.is_error() ? picked.value.as_error() : ErrorCode::Value;
-      return false;
-    case SelectedBranch::Kind::kArraySubject:
-      break;
-  }
-  *out_err = ErrorCode::Value;
-  return false;
-}
-
-bool resolve_if_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                     const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
-                     std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
-                     bool* out_is_range, ErrorCode* out_err) {
-  // `IF(cond, then, [else])` preserves reference-shape: when both
-  // branches are range references Excel routes the picked branch
-  // through verbatim, so `ROWS(IF(TRUE, A1:B3, A1:B3))` reports 3
-  // rather than degrading to the scalar-fallback 1x1. We short-circuit
-  // on `cond` exactly like `eval_if_lazy`.
-  // A missing else branch (`IF(FALSE, then)`) or an array condition names no reference: `#VALUE!` for the scalar path.
-  return resolve_selected_branch(node, select_if_branch(node, arena, registry, ctx), arena, registry, ctx, out_sheet,
-                                 out_top_row, out_left_col, out_bottom_row, out_right_col, out_is_range, out_err);
-}
-
-bool resolve_choose_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                         const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
-                         std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
-                         bool* out_is_range, ErrorCode* out_err) {
-  return resolve_selected_branch(node, select_choose_branch(node, arena, registry, ctx), arena, registry, ctx,
-                                 out_sheet, out_top_row, out_left_col, out_bottom_row, out_right_col, out_is_range,
-                                 out_err);
-}
-
-bool resolve_ifs_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                      const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
-                      std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
-                      bool* out_is_range, ErrorCode* out_err) {
-  return resolve_selected_branch(node, select_ifs_branch(node, arena, registry, ctx), arena, registry, ctx, out_sheet,
-                                 out_top_row, out_left_col, out_bottom_row, out_right_col, out_is_range, out_err);
-}
-
-bool resolve_switch_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                         const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
-                         std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
-                         bool* out_is_range, ErrorCode* out_err) {
-  return resolve_selected_branch(node, select_switch_branch(node, arena, registry, ctx), arena, registry, ctx,
-                                 out_sheet, out_top_row, out_left_col, out_bottom_row, out_right_col, out_is_range,
-                                 out_err);
-}
-
-using LookupReferenceResolver = bool (*)(const parser::AstNode&, Arena&, const FunctionRegistry&, const EvalContext&,
-                                         std::string_view*, std::uint32_t*, std::uint32_t*, std::uint32_t*,
-                                         std::uint32_t*, ErrorCode*);
-
-// INDEX / XLOOKUP own their selection logic; this adapts their resolvers to
-// the table's shape.
-template <LookupReferenceResolver kResolve>
-bool resolve_lookup_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                         const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
-                         std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
-                         bool* out_is_range, ErrorCode* out_err) {
-  if (!kResolve(node, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row, out_right_col,
-                out_err)) {
-    return false;
-  }
-  *out_is_range = refs_internal::rect_is_range(*out_top_row, *out_left_col, *out_bottom_row, *out_right_col);
-  return true;
-}
-
-using ReferenceCallResolver = bool (*)(const parser::AstNode&, Arena&, const FunctionRegistry&, const EvalContext&,
-                                       std::string_view*, std::uint32_t*, std::uint32_t*, std::uint32_t*,
-                                       std::uint32_t*, bool*, ErrorCode*);
-
 // Which argument slots can hand their reference through as the call's result, per `RefResult`.
-
-struct ReferenceCall {
-  std::string_view name;
-  ReferenceCallResolver resolve;
-};
 
 constexpr bool carries_first(std::uint32_t index, std::uint32_t /*arity*/) {
   return index == 0U;
@@ -196,35 +68,6 @@ constexpr bool carries_switch_result(std::uint32_t index, std::uint32_t arity) {
 // XLOOKUP returns a slice of return_array, or if_not_found when nothing matches.
 constexpr bool carries_xlookup_result(std::uint32_t index, std::uint32_t /*arity*/) {
   return index == 2U || index == 3U;
-}
-
-// The rectangle resolvers `resolve_reference_call` dispatches through, one per
-// reference-returning builtin. `SINGLE` has none here.
-constexpr ReferenceCall kReferenceCalls[] = {
-    {"INDIRECT", &resolve_built_reference},
-    {"OFFSET", &resolve_built_reference},
-    {"IF", &resolve_if_call},
-    {"CHOOSE", &resolve_choose_call},
-    {"IFS", &resolve_ifs_call},
-    {"SWITCH", &resolve_switch_call},
-    {"INDEX", &resolve_lookup_call<&resolve_index_reference>},
-    {"XLOOKUP", &resolve_lookup_call<&resolve_xlookup_reference>},
-    {"TAKE", &resolve_take_drop_reference},
-    {"DROP", &resolve_take_drop_reference},
-    {"TRIMRANGE", &resolve_trim_reference},
-    {"_TRO_ALL", &resolve_trim_reference},
-    {"_TRO_LEADING", &resolve_trim_reference},
-    {"_TRO_TRAILING", &resolve_trim_reference},
-};
-
-const ReferenceCall* find_reference_call(std::string_view name) noexcept {
-  const std::string_view bare = strip_future_prefix(name);
-  for (const ReferenceCall& entry : kReferenceCalls) {
-    if (strings::case_insensitive_eq(bare, entry.name)) {
-      return &entry;
-    }
-  }
-  return nullptr;
 }
 
 }  // namespace
@@ -282,26 +125,6 @@ bool eval_reference_area(const parser::AstNode& node, Arena& arena, const Functi
   return true;
 }
 
-bool resolve_reference_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                            const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
-                            std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
-                            bool* out_is_range, ErrorCode* out_err) {
-  // Callers are expected to handle Ref / RangeOp / ArrayLiteral before
-  // falling through here; anything that isn't a call is out of scope.
-  if (node.kind() != parser::NodeKind::Call) {
-    *out_err = ErrorCode::Value;
-    return false;
-  }
-  const ReferenceCall* entry = find_reference_call(node.as_call_name());
-  if (entry == nullptr) {
-    // Not a reference-returning builtin.
-    *out_err = ErrorCode::Value;
-    return false;
-  }
-  return entry->resolve(node, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row, out_right_col,
-                        out_is_range, out_err);
-}
-
 namespace {
 
 // A name standing as an endpoint (`A1:MyName`, `A1:[0]!MyName`) denotes the reference its
@@ -350,7 +173,7 @@ bool resolve_name_endpoint(const parser::AstNode& node, Arena& arena, const Func
   const parser::NodeKind k = body->kind();
   if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp || k == parser::NodeKind::NameRef ||
       parser::is_self_book_name_ref(*body) ||
-      (k == parser::NodeKind::Call && find_reference_call(body->as_call_name()) != nullptr)) {
+      (k == parser::NodeKind::Call && is_reference_call_name(body->as_call_name()))) {
     return resolve_range_endpoint(*body, arena, registry, body_ctx, out_sheet, out_top_row, out_left_col,
                                   out_bottom_row, out_right_col, out_err);
   }
@@ -402,12 +225,12 @@ bool merge_range_endpoint_sheets(const parser::AstNode& lhs, std::string_view lh
 
 namespace {
 
-// The rectangle of a literal holding a `Ref` (a reference binding seen through `resolve_name_ast`); a whole-axis
-// one only with `allow_whole_axis`, else #VALUE! as a whole-axis token gives.
-bool literal_ref_rect(const parser::AstNode& node, bool allow_whole_axis, Arena& arena,
-                      const FunctionRegistry& registry, const EvalContext& ctx, std::string_view* out_sheet,
-                      std::uint32_t* out_top_row, std::uint32_t* out_left_col, std::uint32_t* out_bottom_row,
-                      std::uint32_t* out_right_col, ErrorCode* out_err) {
+// The rectangle of the one-area reference `node` evaluates to (a reference binding, a reference-returning call); a
+// whole-axis one only with `allow_whole_axis`, else #VALUE! as a whole-axis token gives.
+bool evaluated_ref_rect(const parser::AstNode& node, bool allow_whole_axis, Arena& arena,
+                        const FunctionRegistry& registry, const EvalContext& ctx, std::string_view* out_sheet,
+                        std::uint32_t* out_top_row, std::uint32_t* out_left_col, std::uint32_t* out_bottom_row,
+                        std::uint32_t* out_right_col, ErrorCode* out_err) {
   RefArea area{};
   if (!eval_reference_area(node, arena, registry, ctx, out_sheet, &area, out_err)) {
     return false;
@@ -436,8 +259,8 @@ bool resolve_range_endpoint(const parser::AstNode& endpoint, Arena& arena, const
   // A LET-bound endpoint (`A1:r`) stands for the reference it was bound to.
   const parser::AstNode& node = resolve_name_ast(endpoint, ctx.name_env());
   if (is_literal_ref(node)) {
-    return literal_ref_rect(node, /*allow_whole_axis=*/false, arena, registry, ctx, out_sheet, out_top_row,
-                            out_left_col, out_bottom_row, out_right_col, out_err);
+    return evaluated_ref_rect(node, /*allow_whole_axis=*/false, arena, registry, ctx, out_sheet, out_top_row,
+                              out_left_col, out_bottom_row, out_right_col, out_err);
   }
   if (node.kind() == parser::NodeKind::Ref) {
     const parser::Reference& r = node.as_ref();
@@ -471,9 +294,12 @@ bool resolve_range_endpoint(const parser::AstNode& endpoint, Arena& arena, const
                                    out_right_col, out_err);
   }
   if (node.kind() == parser::NodeKind::Call) {
-    bool is_range_unused = false;
-    return resolve_reference_call(node, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row,
-                                  out_right_col, &is_range_unused, out_err);
+    if (!is_reference_call_name(node.as_call_name())) {
+      *out_err = ErrorCode::Value;
+      return false;
+    }
+    return evaluated_ref_rect(node, /*allow_whole_axis=*/true, arena, registry, ctx, out_sheet, out_top_row,
+                              out_left_col, out_bottom_row, out_right_col, out_err);
   }
   if (node.kind() == parser::NodeKind::NameRef || parser::is_self_book_name_ref(node)) {
     return resolve_name_endpoint(node, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row,
@@ -573,8 +399,8 @@ bool resolve_intersect_operand(const parser::AstNode& node, Arena& arena, const 
     return true;
   }
   if (is_literal_ref(node)) {
-    return literal_ref_rect(node, /*allow_whole_axis=*/true, arena, registry, ctx, out_sheet, out_top_row, out_left_col,
-                            out_bottom_row, out_right_col, out_err);
+    return evaluated_ref_rect(node, /*allow_whole_axis=*/true, arena, registry, ctx, out_sheet, out_top_row,
+                              out_left_col, out_bottom_row, out_right_col, out_err);
   }
   // A full-axis endpoint carries a meaningful coordinate only on its bounded
   // axis, so its rectangle comes from the shared derivation rather than from
@@ -610,15 +436,6 @@ bool resolve_intersect_operand(const parser::AstNode& node, Arena& arena, const 
 }
 
 }  // namespace
-
-bool resolve_reference_rect(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                            const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
-                            std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
-                            ErrorCode* out_err) {
-  const parser::AstNode& target = resolve_name_ast(node, ctx.name_env());
-  return resolve_intersect_operand(target, arena, registry, ctx, out_sheet, out_top_row, out_left_col, out_bottom_row,
-                                   out_right_col, out_err);
-}
 
 bool compute_intersect_rect(const parser::AstNode& lhs, const parser::AstNode& rhs, Arena& arena,
                             const FunctionRegistry& registry, const EvalContext& ctx, std::string_view* out_sheet,

@@ -18,7 +18,6 @@
 #include "eval/lazy_impls.h"
 #include "eval/name_env.h"
 #include "eval/omitted_arg.h"
-#include "eval/range_resolvers.h"
 #include "eval/tree_walker/depth_guard.h"
 #include "eval/tree_walker/dispatch.h"
 #include "eval/tree_walker_lazy_table.h"
@@ -297,25 +296,6 @@ Value invoke_lambda(const LambdaValue* lv, std::uint32_t arity, const parser::As
   }
   // The body's result as it is: a `Ref` when the body denotes one.
   return eval_node_ref(*call.lambda()->body, arena, registry, lambda_body_context(call.lambda(), env, ctx));
-}
-
-bool resolve_lambda_reference(const LambdaValue* lv, std::uint32_t arity, const parser::AstNode* const* call_args,
-                              Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
-                              std::string_view* out_sheet, std::uint32_t* out_top_row, std::uint32_t* out_left_col,
-                              std::uint32_t* out_bottom_row, std::uint32_t* out_right_col, ErrorCode* out_err) {
-  const LambdaCall call(lv, arity, arity != 0U && call_args == nullptr, arena, ctx);
-  if (call.error()) {
-    *out_err = *call.error();
-    return false;
-  }
-  lv = call.lambda();
-  NameEnv env;
-  if (const std::optional<ErrorCode> err = bind_call_site(lv, arity, call_args, arena, registry, ctx, &env)) {
-    *out_err = *err;
-    return false;
-  }
-  return resolve_reference_rect(*lv->body, arena, registry, lambda_body_context(lv, env, ctx), out_sheet, out_top_row,
-                                out_left_col, out_bottom_row, out_right_col, out_err);
 }
 
 }  // namespace eval

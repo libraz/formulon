@@ -92,9 +92,8 @@ bool resolve_indirect_reference(const parser::AstNode& call, Arena& arena, const
 // Normalises the base reference from OFFSET's first argument. Literal
 // Ref and `Ref:Ref` RangeOp shapes are accepted directly, including a
 // whole-column/whole-row endpoint (resolved to the full grid axis rather
-// than `#VALUE!`); a LET-bound NameRef is looked through to its bound
-// AST first. INDIRECT / OFFSET nested calls go through
-// `resolve_reference_call` so `OFFSET(INDIRECT("A1"), …)` and
+// than `#VALUE!`). A name or a reference-returning call is read as the area
+// its `Ref` names (`eval_reference_area`), so `OFFSET(INDIRECT("A1"), …)` and
 // `OFFSET(OFFSET(A1,0,0,2,2), …)` resolve without dereferencing the base.
 bool resolve_offset_base(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx, OffsetBase* out, ErrorCode* out_err);

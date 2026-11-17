@@ -399,6 +399,20 @@ Value eval_node(const parser::AstNode& node, Arena& arena, const FunctionRegistr
 
 namespace {
 
+NameEnv bind_let_names(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx) {
+  // Extending the caller's environment adds a head frame and keeps the parent chain.
+  NameEnv env;
+  if (ctx.name_env() != nullptr) {
+    env = *ctx.name_env();
+  }
+  for (std::uint32_t i = 0; i < node.as_let_binding_count(); ++i) {
+    const Value v = eval_binding_source(node.as_let_binding_expr(i), arena, registry, ctx.with_name_env(&env));
+    env = env.extend(node.as_let_binding_name(i), v, arena);
+  }
+  return env;
+}
+
 Shaped eval_node_shaped_body(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                              const EvalContext& ctx) {
   // Bounds linear cell-chain recursion through `EvalContext::resolve_ref`
@@ -544,20 +558,8 @@ Shaped eval_node_shaped_body(const parser::AstNode& node, Arena& arena, const Fu
       //     same name shadows earlier ones in subsequent expressions.
       //   * A reference initialiser binds as a reference, by the rule every
       //     LAMBDA argument follows too (see `eval_binding_source`).
-      NameEnv env;
-      const NameEnv* parent = ctx.name_env();
-      // Start from whatever the caller supplied; extending `NameEnv` makes
-      // `env` point at a new head frame while preserving the parent chain.
-      if (parent != nullptr) {
-        env = *parent;
-      }
-      const std::uint32_t count = node.as_let_binding_count();
-      for (std::uint32_t i = 0; i < count; ++i) {
-        const Value v = eval_binding_source(node.as_let_binding_expr(i), arena, registry, ctx.with_name_env(&env));
-        env = env.extend(node.as_let_binding_name(i), v, arena);
-      }
-      const EvalContext body_ctx = ctx.with_name_env(&env);
-      return eval_node_shaped(node.as_let_body(), arena, registry, body_ctx);
+      const NameEnv env = bind_let_names(node, arena, registry, ctx);
+      return eval_node_shaped(node.as_let_body(), arena, registry, ctx.with_name_env(&env));
     }
 
     case parser::NodeKind::ExternalRef:
@@ -768,6 +770,24 @@ Value eval_node_ref(const parser::AstNode& node, Arena& arena, const FunctionReg
       return eval_name_ref(node, arena, registry, ctx);
     case parser::NodeKind::SpillRef:
       return spill_region_ref(node, arena, registry, ctx);
+    case parser::NodeKind::StructuredRef: {
+      parser::Reference lhs{};
+      parser::Reference rhs{};
+      ErrorCode err = ErrorCode::Ref;
+      if (reference_endpoint_pair(node, &lhs, &rhs, ctx, &err)) {
+        return make_area_ref(lhs, rhs, token_origin(lhs, rhs), arena, ctx);
+      }
+      break;
+    }
+    case parser::NodeKind::ExternalRef:
+      if (parser::is_self_book_name_ref(node)) {
+        return resolve_self_book_defined_name_ref(node.as_external_ref_name(), arena, registry, ctx);
+      }
+      break;
+    case parser::NodeKind::LetBinding: {
+      const NameEnv env = bind_let_names(node, arena, registry, ctx);
+      return eval_node_ref(node.as_let_body(), arena, registry, ctx.with_name_env(&env));
+    }
     default:
       break;
   }

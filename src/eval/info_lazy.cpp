@@ -31,7 +31,6 @@
 #include "eval/implicit_intersection.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env.h"
-#include "eval/name_env_resolve.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_resolvers.h"
 #include "eval/scalar_args.h"
@@ -460,7 +459,7 @@ Value eval_single_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (call.as_call_arity() != 1U) {
     return Value::error(ErrorCode::Value);
   }
-  const parser::AstNode& arg = resolve_name_ast(call.as_call_arg(0), ctx.name_env());
+  const parser::AstNode& arg = call.as_call_arg(0);
 
   // Share the `@`-operator (NodeKind::ImplicitIntersection) projection so the
   // two spellings cannot drift on which operand shapes project or on which

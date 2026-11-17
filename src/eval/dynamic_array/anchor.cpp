@@ -76,14 +76,17 @@ bool resolve_spill_anchor_node(const parser::AstNode& node, Arena& arena, const 
       return true;
     }
     case parser::NodeKind::Call: {
-      std::uint32_t bottom_row = 0;
-      std::uint32_t right_col = 0;
-      bool is_range = false;
-      if (!resolve_reference_call(target, arena, registry, ctx, out_sheet, out_row, out_col, &bottom_row, &right_col,
-                                  &is_range, out_err)) {
+      RefArea area{};
+      if (!is_reference_call_name(target.as_call_name())) {
+        *out_err = ErrorCode::Value;
         return false;
       }
-      if (is_range) {
+      if (!eval_reference_area(target, arena, registry, ctx, out_sheet, &area, out_err)) {
+        return false;
+      }
+      *out_row = area.row_first;
+      *out_col = area.col_first;
+      if (area.row_first != area.row_last || area.col_first != area.col_last) {
         // An anchor is a single cell, and Excel does not narrow a wider
         // reference down to its top-left corner: `=SUM(OFFSET(A1,0,0,2,2)#)`
         // is `#REF!` even when A1 anchors a live spill.

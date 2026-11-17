@@ -793,36 +793,30 @@ TEST_F(BuiltRefTest, TheReadRecordsTheRectangleAndTheProducerDoesNot) {
   EXPECT_EQ(notes[0].rect.col_last, 2U);
 }
 
-TEST_F(BuiltRefTest, TheResolverRecordsOnTheCallersContext) {
+TEST_F(BuiltRefTest, TheAreaReaderRecordsOnTheCallersContext) {
   std::vector<Note> notes;
   const EvalContext ctx = Ctx().with_dynamic_read_callback(&CollectNote, &notes);
   const parser::AstNode& indirect = Parse("=INDIRECT(\"Sheet2!B2:C3\")");
   std::string_view sheet;
-  std::uint32_t top = 0;
-  std::uint32_t left = 0;
-  std::uint32_t bottom = 0;
-  std::uint32_t right = 0;
-  bool is_range = false;
+  RefArea area{};
   ErrorCode err = ErrorCode::Value;
-  ASSERT_TRUE(resolve_reference_call(indirect, arena_, default_registry(), ctx, &sheet, &top, &left, &bottom, &right,
-                                     &is_range, &err));
+  ASSERT_TRUE(eval_reference_area(indirect, arena_, default_registry(), ctx, &sheet, &area, &err));
   EXPECT_EQ(sheet, "Sheet2");
-  EXPECT_EQ(top, 1U);
-  EXPECT_EQ(left, 1U);
-  EXPECT_EQ(bottom, 2U);
-  EXPECT_EQ(right, 2U);
-  EXPECT_TRUE(is_range);
+  EXPECT_EQ(area.row_first, 1U);
+  EXPECT_EQ(area.col_first, 1U);
+  EXPECT_EQ(area.row_last, 2U);
+  EXPECT_EQ(area.col_last, 2U);
   ASSERT_EQ(notes.size(), 1U);
   EXPECT_EQ(notes[0].sheet, "Sheet2");
 
-  // A caller resolving only the position strips the callback and records nothing.
+  // A caller reading only the position strips the callback and records nothing.
   notes.clear();
-  ASSERT_TRUE(resolve_reference_call(indirect, arena_, default_registry(), ctx.without_dynamic_read_callback(), &sheet,
-                                     &top, &left, &bottom, &right, &is_range, &err));
+  ASSERT_TRUE(eval_reference_area(indirect, arena_, default_registry(), ctx.without_dynamic_read_callback(), &sheet,
+                                  &area, &err));
   EXPECT_TRUE(notes.empty());
 
-  ASSERT_FALSE(resolve_reference_call(Parse("=INDIRECT(\"Nope!A1\")"), arena_, default_registry(), ctx, &sheet, &top,
-                                      &left, &bottom, &right, &is_range, &err));
+  ASSERT_FALSE(
+      eval_reference_area(Parse("=INDIRECT(\"Nope!A1\")"), arena_, default_registry(), ctx, &sheet, &area, &err));
   EXPECT_EQ(err, ErrorCode::Ref);
 }
 
