@@ -504,3 +504,21 @@ describe('a shape reads and writes its adjust values and text direction', () => 
     });
   });
 });
+
+describe('a colour to set needs a base', () => {
+  it('a set colour with no base is refused; null removes one', () => {
+    withSheet((ws) => {
+      const none = { kind: ColorKind.None, argb: 0, theme: 0, tint: 0, indexed: 0 };
+      const shape = ws.addShape({ anchor: box, fill: { color: '#FF0000' }, line: { color: '#FF0000' } });
+      expectCode(() => shape.update({ fill: { color: none } }), StatusCode.InvalidArgument);
+      expectCode(() => shape.update({ line: { color: none } }), StatusCode.InvalidArgument);
+      const { fill, line } = shape.getProperties();
+      assert.equal(fill.color.base.argb >>> 0, 0xffff0000);
+      assert.equal(line.color.base.argb >>> 0, 0xffff0000);
+      const chart = chartOf(ws);
+      chart.updateSeries(0, 0, { labels: { showValue: true, fontColor: '#FF0000' } });
+      expectCode(() => chart.updateSeries(0, 0, { labels: { fontColor: none } }), StatusCode.InvalidArgument);
+      assert.equal(chart.getProperties().plots[0].series[0].labels.fontColor.argb >>> 0, 0xffff0000);
+    });
+  });
+});

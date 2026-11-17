@@ -26,8 +26,8 @@ namespace formulon {
 namespace c_api {
 namespace parts {
 
-/// Why `value` cannot be a chart or shape colour (None, Rgb or Theme with a tint in [-1, 1] and an
-/// index below 12); NULL when it can.
+/// Why `value` cannot be a chart or shape colour to set (Rgb, or Theme with a tint in [-1, 1] and an
+/// index below 12); NULL when it can. Only `CLEAR` removes a colour.
 inline const char* color_spec_problem(const fm_color_t& value) {
   constexpr std::uint32_t kThemeCount = 12U;
   if (value.kind == FM_COLOR_KIND_THEME) {
@@ -39,8 +39,8 @@ inline const char* color_spec_problem(const fm_color_t& value) {
     }
     return nullptr;
   }
-  if (value.kind != FM_COLOR_KIND_NONE && value.kind != FM_COLOR_KIND_RGB) {
-    return "must be a colour";
+  if (value.kind != FM_COLOR_KIND_RGB) {
+    return "must be an Rgb or Theme colour; CLEAR removes one";
   }
   return nullptr;
 }

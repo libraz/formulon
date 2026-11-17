@@ -485,6 +485,19 @@ TEST(ChartEdit, NoOpAndFailedEditsWriteNothing) {
   ExpectCode(set_chart_plot(wb, c.sheet, c.id, m.plots.size(), angle), Code::kIndexOutOfRange);
   ExpectCode(set_chart_plot(wb, c.sheet, 999U, 0, angle), Code::kNotFound);
   ExpectCode(set_chart_series(wb, c.sheet, c.id, 0, 99U, marker), Code::kNotFound);
+  // A colour to set needs an Rgb or Theme base; only Clear removes one.
+  ChartSeriesPatch baseless;
+  baseless.fill.color = ChartPatchField<DrawingColor>::Set(DrawingColor{});
+  ExpectCode(set_chart_series(wb, c.sheet, c.id, 0, m.plots[0].series[0].idx, baseless), Code::kInvalidArgument);
+  baseless = ChartSeriesPatch{};
+  baseless.line.color = ChartPatchField<DrawingColor>::Set(DrawingColor{});
+  ExpectCode(set_chart_series(wb, c.sheet, c.id, 0, m.plots[0].series[0].idx, baseless), Code::kInvalidArgument);
+  ChartLabelsPatch labels;
+  labels.show_val = true;
+  labels.font_color = ChartPatchField<ColorSpec>::Set(ColorSpec{});
+  baseless = ChartSeriesPatch{};
+  baseless.labels = ChartPatchField<ChartLabelsPatch>::Set(labels);
+  ExpectCode(set_chart_series(wb, c.sheet, c.id, 0, m.plots[0].series[0].idx, baseless), Code::kInvalidArgument);
   EXPECT_EQ(Parts(wb), before);
 }
 

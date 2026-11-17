@@ -143,6 +143,26 @@ class ShapePaintTests(unittest.TestCase):
             self.assertIsNone(plain.get_properties().fill)
             self.assertIsNone(plain.get_properties().line)
 
+    def test_set_colour_without_a_base_is_refused(self) -> None:
+        # Only None removes a colour; a colour of kind NONE is not a way to say it.
+        no_colour = Color(ColorKind.NONE)
+        with Workbook.create_default() as wb:
+            shape = wb.sheet(0).add_shape(ShapeInput(**_box(line=ChartLine(color=RED))))
+            with self.assertRaises(InvalidArgumentError):
+                shape.update(fill={"color": no_colour})
+            with self.assertRaises(InvalidArgumentError):
+                shape.update(line={"color": no_colour})
+            props = shape.get_properties()
+            self.assertEqual((props.fill.color.base, props.line.color.base), (RED, RED))
+            _grid(wb)
+            chart = wb.sheet(0).add_chart(ChartInput(type=ChartPlotType.LINE, range=SOURCE))
+            series_id = chart.get_properties().plots[0].series[0].series_id
+            chart.update_series(0, series_id, labels={"show_value": True, "font_color": RED})
+            with self.assertRaises(InvalidArgumentError):
+                chart.update_series(0, series_id, labels={"font_color": no_colour})
+            labels = chart.get_properties().plots[0].series[0].labels
+            self.assertEqual(labels.font_color.argb, RED.argb)
+
     def test_series_fill_null_when_unstated(self) -> None:
         with Workbook.create_default() as wb:
             _grid(wb)

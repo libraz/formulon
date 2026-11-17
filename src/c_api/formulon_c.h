@@ -15064,12 +15064,11 @@ typedef struct {
   /** The object's kind: shape, connector or group, an `fm_drawing_object_kind_t`. */
   int32_t kind;
   /** The shape's own fill; all zero when the shape has no element of its own and draws its style's paint, `other`
-   *  set for a paint the record cannot state. Its colour is None, Rgb or Theme (Indexed and Auto are rejected on
-   *  write). */
+   *  set for a paint the record cannot state. Its colour is None, Rgb or Theme; a colour written is Rgb or Theme. */
   fm_chart_fill_t fill;
   /** The shape's own outline; all zero when the shape has no element of its own and draws its style's paint, `other`
-   *  set for a paint the record cannot state. Its colour is None, Rgb or Theme (Indexed and Auto are rejected on
-   *  write); `width_pt` is at most 1584 points (a larger, negative or non-finite value is
+   *  set for a paint the record cannot state. Its colour is None, Rgb or Theme; a colour written is Rgb or Theme;
+   *  `width_pt` is at most 1584 points (a larger, negative or non-finite value is
    *  `FM_STATUS_INVALID_ARGUMENT` (2)). */
   fm_chart_line_t line;
   /** Clockwise rotation in degrees, stored as given to 1/60000 degree (360 reads 360, -90 reads -90); an input that
@@ -16889,7 +16888,7 @@ typedef struct {
   fm_chart_line_patch_t line;
 } fm_chart_marker_patch_t;
 
-/** @brief Data-label patch. A `SET` `font_color` is kind None, Rgb or Theme. */
+/** @brief Data-label patch. A `SET` `font_color` is kind Rgb or Theme; `CLEAR` removes it. */
 typedef struct {
   /** Patch operation for `show_value`: keep it, set it from `show_value`; clear is rejected. */
   fm_patch_op_t show_value_op;
@@ -16925,7 +16924,7 @@ typedef struct {
   const char* number_format;
   /** Patch operation for `font_color`: keep it, set it from `font_color`, or clear it. */
   fm_patch_op_t font_color_op;
-  /** The label font colour to set, kind None, RGB or theme. */
+  /** The label font colour to set, kind RGB or theme. */
   fm_color_t font_color;
   /** Patch operation for `font_size_pt`: keep it, set it from `font_size_pt`, or clear it. */
   fm_patch_op_t font_size_pt_op;

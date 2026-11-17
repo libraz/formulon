@@ -298,6 +298,35 @@ TEST(FormulonCApiDrawingColor, MalformedColourInputIsRefused) {
   EXPECT_EQ(ReadShape(wb.handle, id).fill.color.base.kind, FM_COLOR_KIND_NONE);
 }
 
+// Only CLEAR removes a colour: a SET whose base is None is refused on a shape outline and on chart label text.
+TEST(FormulonCApiDrawingColor, SetColourWithoutBaseIsRefused) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), FM_STATUS_OK);
+  fm_shape_spec_t spec = RectSpec();
+  spec.line.color.base = Rgb(0xFFFF0000U);
+  const uint32_t id = AddShape(wb.handle, spec);
+  fm_shape_patch_t line = FM_STRUCT_INIT(fm_shape_patch_t);
+  line.line.color_op = FM_PATCH_OP_SET;
+  EXPECT_EQ(fm_sheet_update_shape(wb.handle, 0, id, nullptr, &line), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(ReadShape(wb.handle, id).line.color.base.argb, 0xFFFF0000U);
+
+  FillGrid(wb.handle);
+  const std::uint32_t chart_id = InsertLineChart(wb.handle);
+  fm_chart_series_patch_t labels = FM_STRUCT_INIT(fm_chart_series_patch_t);
+  labels.labels_op = FM_PATCH_OP_SET;
+  labels.labels.show_value_op = FM_PATCH_OP_SET;
+  labels.labels.show_value = 1;
+  labels.labels.font_color_op = FM_PATCH_OP_SET;
+  labels.labels.font_color = Rgb(0xFFFF0000U);
+  ASSERT_EQ(fm_sheet_update_chart_series(wb.handle, 0, chart_id, 0, 0, &labels), FM_STATUS_OK)
+      << fm_get_last_error_message();
+  labels.labels.font_color = fm_color_t{};
+  EXPECT_EQ(fm_sheet_update_chart_series(wb.handle, 0, chart_id, 0, 0, &labels), FM_STATUS_INVALID_ARGUMENT);
+  ChartGuard chart;
+  OpenChart(wb.handle, chart_id, &chart);
+  EXPECT_EQ(Series(chart, 0).labels.font_color.argb, 0xFFFF0000U);
+}
+
 // Line ends are read, set whole, cleared and range-checked.
 TEST(FormulonCApiDrawingColor, LineEndsReadSetClearAndRefuse) {
   WorkbookGuard wb;

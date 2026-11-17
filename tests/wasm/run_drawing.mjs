@@ -349,6 +349,35 @@ export function registerDrawing(Module, test) {
     });
   });
 
+  // Only null removes a colour; a colour of kind None is not a way to say it.
+  test('a colour set with no base is refused on a shape and on chart label text', () => {
+    withWorkbook(Module, (wb) => {
+      const none = { kind: 0, argb: 0, theme: 0, tint: 0, indexed: 0 };
+      const red = { kind: 1, argb: 0xffff0000, theme: 0, tint: 0, indexed: 0 };
+      const id = wb.addShape(0, {
+        anchor: { fromRow: 1, fromCol: 1, toRow: 4, toCol: 4 },
+        presetGeometry: 'rect',
+        fill: { color: red },
+        line: { color: red },
+      });
+      expectFailure(() => wb.updateShape(0, id, { fill: { color: none } }), StatusCode.InvalidArgument);
+      expectFailure(() => wb.updateShape(0, id, { line: { color: none } }), StatusCode.InvalidArgument);
+      const shape = wb.getShape(0, id);
+      assert.equal(shape.fill.color.base.argb >>> 0, 0xffff0000);
+      assert.equal(shape.line.color.base.argb >>> 0, 0xffff0000);
+
+      wb.setNumber(0, 0, 0, 1);
+      wb.setNumber(0, 1, 0, 2);
+      const chart = wb.addChart(0, { source: 'A1:A2' });
+      wb.updateChartSeries(0, chart, 0, 0, { labels: { showValue: true, fontColor: red } });
+      expectFailure(
+        () => wb.updateChartSeries(0, chart, 0, 0, { labels: { fontColor: none } }),
+        StatusCode.InvalidArgument,
+      );
+      assert.equal(wb.getChart(0, chart).plots[0].series[0].labels.fontColor.argb >>> 0, 0xffff0000);
+    });
+  });
+
   test('sparkline groups are addressed by their id', () => {
     withWorkbook(Module, (wb) => {
       const a = wb.addSparklineGroup(0, { sparklines: [{ formula: 'Sheet1!A1:C1', location: 'D1' }] });

@@ -97,6 +97,9 @@ Expected<void, Error> apply_transparency(xml_node holder, const ChartPatchField<
 /// Colour and transparency of `holder`'s solid fill as a Theme or Rgb (`a:defRPr`).
 Expected<void, Error> apply_paint(xml_node holder, Order order, const ChartPatchField<ColorSpec>& color,
                                   const ChartPatchField<double>& transparency) {
+  if (color.is_set() && color.value.kind != ColorSpec::Kind::kRgb && color.value.kind != ColorSpec::Kind::kTheme) {
+    return bad_arg("A colour to set takes an Rgb or Theme base; CLEAR removes one");
+  }
   if (color.is_clear()) {
     drop(holder, "solidFill");
   } else if (color.is_set()) {
