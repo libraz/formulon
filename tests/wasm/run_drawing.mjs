@@ -275,7 +275,8 @@ export function registerDrawing(Module, test) {
       wb.updateShape(0, id, { fill: { color: { kind: 1, argb: 0xffff0000 } } });
       const fill = wb.getShape(0, id).fill;
       assert.equal(fill.none, false);
-      assert.equal(fill.color.argb, 0xffff0000);
+      assert.equal(fill.color.base.argb, 0xffff0000);
+      assert.equal(fill.color.resolved.argb, 0xffff0000);
       wb.updateShape(0, id, { fill: null });
       assert.equal(wb.getShape(0, id).fill, null);
 
