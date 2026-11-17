@@ -12,6 +12,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
@@ -103,20 +104,41 @@ TEST(FinancialXnpv, MismatchedRangeSizesIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
-TEST(FinancialXnpv, CountMismatchIsCheckedBeforeErrorElements) {
-  for (const char* src : {"=XNPV(0.1,{-100;60},{#N/A})", "=XNPV(0.1,{-100;#N/A},45000)"}) {
-    const Value v = EvalSource(src);
+// Mac Excel 365: a lone error value (a scalar or a one-cell reference)
+// answers before the count check, a count mismatch beats any array's error
+// element, then the earliest error position answers, the date's error first
+// for XIRR and the value's first for XNPV.
+TEST(FinancialXnpvXirr, ErrorAndCountOrder) {
+  Workbook wb = Workbook::create();
+  auto& s = wb.sheet(0);
+  s.set_cell_value(0, 1, Value::number(-100.0));
+  s.set_cell_value(1, 1, Value::error(ErrorCode::NA));
+  s.set_cell_value(0, 2, Value::number(45000.0));
+  s.set_cell_value(2, 1, Value::error(ErrorCode::NA));
+  const std::pair<const char*, ErrorCode> cases[] = {
+      {"=XNPV(0.1,{-100;60},{#N/A})", ErrorCode::Num},
+      {"=XIRR({-100;60},{#N/A})", ErrorCode::Num},
+      {"=XNPV(0.1,{-100;#N/A},45000)", ErrorCode::Num},
+      {"=XNPV(0.1,B1:B2,C1)", ErrorCode::Num},
+      {"=XNPV(0.1,CHOOSE({1;2},-100,NA()),45000)", ErrorCode::Num},
+      {"=XNPV(0.1,{-100;60},CHOOSE({1},NA()))", ErrorCode::Num},
+      {"=XIRR(B1:B2,{45000;45100;45200})", ErrorCode::Num},
+      {"=XNPV(0.1,{-100;60},1/0)", ErrorCode::Div0},
+      {"=XNPV(0.2036,B3,{44205;45070;46123;46186})", ErrorCode::NA},
+      {"=XIRR({-100,#DIV/0!,60},{45000,45050,#N/A})", ErrorCode::Div0},
+      {"=XNPV(0.1,{-100,#DIV/0!,60},{45000,45050,#N/A})", ErrorCode::Div0},
+      {"=XIRR({-100,#DIV/0!,60},{45000,45050,#VALUE!})", ErrorCode::Div0},
+      {"=XNPV(0.1,{-100,60,#VALUE!},{45000,#DIV/0!,45100})", ErrorCode::Div0},
+      {"=XIRR({-100,#N/A,60},{45000,#DIV/0!,45100})", ErrorCode::Div0},
+      {"=XIRR({-100,#DIV/0!,60},{45000,#N/A,45100})", ErrorCode::NA},
+      {"=XNPV(0.1,{-100,#N/A,60},{45000,#DIV/0!,45100})", ErrorCode::NA},
+      {"=XNPV(0.1,{-100,#DIV/0!,60},{45000,#N/A,45100})", ErrorCode::Div0},
+      {"=XNPV(0.1,B1:B2,{45000;#DIV/0!})", ErrorCode::NA},
+  };
+  for (const auto& [src, want] : cases) {
+    const Value v = EvalSourceIn(src, wb, wb.sheet(0));
     ASSERT_TRUE(v.is_error()) << src;
-    EXPECT_EQ(v.as_error(), ErrorCode::Num) << src;
-  }
-}
-
-TEST(FinancialXnpv, NAElementBeforeALaterDiv0Answers) {
-  for (const char* src :
-       {"=XNPV(0.1,{-100,#N/A,60},{45000,45050,#DIV/0!})", "=XNPV(0.1,{-100,60,#DIV/0!},{45000,#N/A,45100})"}) {
-    const Value v = EvalSource(src);
-    ASSERT_TRUE(v.is_error()) << src;
-    EXPECT_EQ(v.as_error(), ErrorCode::NA) << src;
+    EXPECT_EQ(v.as_error(), want) << src;
   }
 }
 
@@ -204,21 +226,6 @@ TEST(FinancialXirr, MismatchedRangeSizesIsNum) {
   const Value v = EvalSourceIn("=XIRR(A1:A5, B1:B4)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
-}
-
-TEST(FinancialXirr, CountMismatchIsCheckedBeforeErrorElements) {
-  const Value v = EvalSource("=XIRR({-100;60},{#N/A})");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Num);
-}
-
-TEST(FinancialXirr, NAElementBeforeALaterDiv0Answers) {
-  for (const char* src :
-       {"=XIRR({-100,#N/A,60},{45000,45050,#DIV/0!})", "=XIRR({-100,60,#DIV/0!},{45000,#N/A,45100})"}) {
-    const Value v = EvalSource(src);
-    ASSERT_TRUE(v.is_error()) << src;
-    EXPECT_EQ(v.as_error(), ErrorCode::NA) << src;
-  }
 }
 
 TEST(FinancialXirr, GuessAtMinusOneIsNum) {

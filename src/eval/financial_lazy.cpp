@@ -386,20 +386,26 @@ enum class XFinKind { Xirr, Xnpv };
 bool collect_xpairs(XFinKind which, const parser::AstNode& values_arg, const parser::AstNode& dates_arg, Arena& arena,
                     const FunctionRegistry& registry, const EvalContext& ctx, std::vector<double>* out_values,
                     std::vector<double>* out_dates, Value* out_err) {
-  std::vector<Value> value_cells;
-  std::vector<Value> date_cells;
-  if (!resolve_flat_cells(values_arg, arena, registry, ctx, &value_cells, out_err)) {
+  auto values = resolve_range_arg(values_arg, arena, registry, ctx);
+  if (!values) {
+    *out_err = Value::error(values.error());
     return false;
   }
-  if (!resolve_flat_cells(dates_arg, arena, registry, ctx, &date_cells, out_err)) {
+  auto dates = resolve_range_arg(dates_arg, arena, registry, ctx);
+  if (!dates) {
+    *out_err = Value::error(dates.error());
     return false;
   }
-  // An error read from a reference or a computed value answers before the
-  // count check; an array constant's error element only after it.
-  for (const auto& [arg, cells] :
-       {std::make_pair(&values_arg, &value_cells), std::make_pair(&dates_arg, &date_cells)}) {
-    if (const Value* error = first_error(*cells); error != nullptr && arg->kind() != parser::NodeKind::ArrayLiteral) {
-      *out_err = *error;
+  const std::vector<Value>& value_cells = values.value().cells;
+  const std::vector<Value>& date_cells = dates.value().cells;
+  // A lone value (a scalar or a one-cell reference) answers its error before
+  // the count check; an array's error element, computed or read from a range,
+  // only after it.
+  for (const auto& [arg, resolved] :
+       {std::make_pair(&values_arg, &values.value()), std::make_pair(&dates_arg, &dates.value())}) {
+    if (resolved->cells.size() == 1U && resolved->cells.front().is_error() &&
+        (resolved->from_scalar || resolve_binding_reference(*arg, arena, registry, ctx) != nullptr)) {
+      *out_err = resolved->cells.front();
       return false;
     }
   }
@@ -408,9 +414,12 @@ bool collect_xpairs(XFinKind which, const parser::AstNode& values_arg, const par
     *out_err = Value::error(ErrorCode::Num);
     return false;
   }
-  // An error cell answers next, value before date at each position.
+  // The earliest error position answers; at one position XIRR takes the
+  // date's error and XNPV the value's.
+  const std::vector<Value>* first = which == XFinKind::Xirr ? &date_cells : &value_cells;
+  const std::vector<Value>* second = which == XFinKind::Xirr ? &value_cells : &date_cells;
   for (std::size_t i = 0; i < value_cells.size(); ++i) {
-    for (const std::vector<Value>* cells : {&value_cells, &date_cells}) {
+    for (const std::vector<Value>* cells : {first, second}) {
       if ((*cells)[i].is_error()) {
         *out_err = (*cells)[i];
         return false;
