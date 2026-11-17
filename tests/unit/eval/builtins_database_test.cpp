@@ -750,12 +750,41 @@ TEST(BuiltinsDatabase, NumericFieldSelectorAllowsFractionalLastColumn) {
 // Field evaluation error propagation
 // ---------------------------------------------------------------------------
 
-TEST(BuiltinsDatabase, FieldErrorIsValue) {
+// Mac Excel 365: an error computed in the field argument propagates, while
+// one read from a cell is #VALUE!.
+TEST(BuiltinsDatabase, ComputedFieldErrorPropagates) {
   Workbook wb = MakeFruitWorkbook();
   SetSingleFruitCriterion(wb, "Apple");
-  const Value v = EvalIn("=DSUM(A1:C5, 1/0, E1:E2)", wb, wb.sheet(0));
+  const Value div0 = EvalIn("=DSUM(A1:C5, 1/0, E1:E2)", wb, wb.sheet(0));
+  ASSERT_TRUE(div0.is_error());
+  EXPECT_EQ(div0.as_error(), ErrorCode::Div0);
+  const Value na = EvalIn("=DSUM(A1:C5, NA(), E1:E2)", wb, wb.sheet(0));
+  ASSERT_TRUE(na.is_error());
+  EXPECT_EQ(na.as_error(), ErrorCode::NA);
+}
+
+TEST(BuiltinsDatabase, FieldErrorCellIsValue) {
+  Workbook wb = MakeFruitWorkbook();
+  SetSingleFruitCriterion(wb, "Apple");
+  wb.sheet(0).set_cell_value(0, 6, Value::error(ErrorCode::Div0));
+  const Value v = EvalIn("=DSUM(A1:C5, G1, E1:E2)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+// A multi-cell reference returned by a call is #VALUE! like a typed one; a
+// one-cell one reads its cell.
+TEST(BuiltinsDatabase, FieldReferenceFromACall) {
+  Workbook wb = MakeFruitWorkbook();
+  SetSingleFruitCriterion(wb, "Apple");
+  wb.sheet(0).set_cell_value(0, 6, Value::number(3.0));
+  wb.sheet(0).set_cell_value(0, 7, Value::number(3.0));
+  const Value multi = EvalIn("=DSUM(A1:C5, INDIRECT(\"G1:H1\"), E1:E2)", wb, wb.sheet(0));
+  ASSERT_TRUE(multi.is_error()) << multi.debug_to_string();
+  EXPECT_EQ(multi.as_error(), ErrorCode::Value);
+  const Value one = EvalIn("=DSUM(A1:C5, INDIRECT(\"G1\"), E1:E2)", wb, wb.sheet(0));
+  ASSERT_TRUE(one.is_number()) << one.debug_to_string();
+  EXPECT_DOUBLE_EQ(one.as_number(), 300.0);
 }
 
 TEST(BuiltinsDatabase, ArrayFieldLiftsTheCall) {

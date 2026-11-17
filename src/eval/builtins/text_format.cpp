@@ -678,8 +678,8 @@ Value eval_arraytotext_lazy(const parser::AstNode& call, Arena& arena, const Fun
     if (arr.rows == 1U && arr.cols == 1U && arr.cells[0].is_error()) {
       return arr.cells[0];
     }
-    // A lone blank cell has no strict representation.
-    if (strict && arr.rows == 1U && arr.cols == 1U && arr.cells[0].is_blank()) {
+    // A lone blank cell is #VALUE! in either format.
+    if (arr.rows == 1U && arr.cols == 1U && arr.cells[0].is_blank()) {
       return Value::error(ErrorCode::Value);
     }
     return arraytotext_from_array(arr, strict, arena);

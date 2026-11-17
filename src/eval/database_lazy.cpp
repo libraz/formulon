@@ -124,7 +124,8 @@ std::uint32_t find_header_column(const std::string& folded_needle, const FoldedH
 //    rejected with `#VALUE!` (no zero-th column).
 //  * Text  : case-insensitive ASCII equality against each header cell's
 //    `coerce_to_text` rendering; first match wins.
-//  * Blank / Error: rejected with `#VALUE!`, whatever the error.
+//  * Blank / Error: rejected with `#VALUE!`, whatever the error (the caller
+//    propagates an error computed in the argument itself).
 //
 // Returns `true` on success with the 0-indexed column written to
 // `*out_col_index`. On failure writes the propagating error Value to
@@ -316,11 +317,14 @@ bool resolve_criteria(const parser::AstNode& call, Arena& arena, const FunctionR
   return true;
 }
 
-// The `field` argument's value. A multi-cell reference is `#VALUE!`; an array
-// value lifts the call.
+// The `field` argument's value, with `*from_reference` telling whether it was
+// read through a reference (a cell, or a reference-returning call or name).
+// A multi-cell reference is `#VALUE!`; an array value lifts the call.
 Value field_arg_value(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                      const EvalContext& ctx) {
-  const parser::AstNode& field_node = call.as_call_arg(1);
+                      const EvalContext& ctx, bool* from_reference) {
+  const parser::AstNode* ref = resolve_binding_reference(call.as_call_arg(1), arena, registry, ctx);
+  *from_reference = ref != nullptr;
+  const parser::AstNode& field_node = ref != nullptr ? *ref : call.as_call_arg(1);
   if (field_node.kind() == parser::NodeKind::RangeOp) {
     const parser::AstNode& lhs = field_node.as_range_operand(0);
     const parser::AstNode& rhs = field_node.as_range_operand(1);
@@ -334,7 +338,7 @@ Value field_arg_value(const parser::AstNode& call, Arena& arena, const FunctionR
     }
   }
   const Value v = eval_node(field_node, arena, registry, ctx);
-  if (v.is_array() && is_reference_shape(field_node)) {
+  if (v.is_array() && (ref != nullptr || is_reference_shape(field_node))) {
     return Value::error(ErrorCode::Value);
   }
   return v;
@@ -368,7 +372,13 @@ Value eval_dfunction(const parser::AstNode& call, Arena& arena, const FunctionRe
   if (!resolve_database(call, arena, registry, ctx, &t, &err)) {
     return err;
   }
-  const Value field = field_arg_value(call, arena, registry, ctx);
+  bool field_from_reference = false;
+  const Value field = field_arg_value(call, arena, registry, ctx, &field_from_reference);
+  // An error computed in the argument propagates; one read from a cell is
+  // #VALUE! (resolve_field_column).
+  if (field.is_error() && !field_from_reference) {
+    return field;
+  }
   const ExcelProfile profile = ctx.excel_profile();
   std::uint32_t field_col = 0;
   if (!field.is_array() && !resolve_field_column(field, t.db, t.db_cols, profile, &field_col, &err)) {

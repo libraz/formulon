@@ -116,6 +116,35 @@ TEST(BuiltinsSeriesSum, NonNumericMIsValue) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
+// Mac Excel 365: numeric text in x, n or m coerces (`"2"` reads as 2),
+// whether typed or read from a cell, while a Boolean is #VALUE!.
+TEST(BuiltinsSeriesSum, NumericTextScalarsCoerce) {
+  for (const char* src :
+       {"=SERIESSUM(\"2\", 0, 1, {1;1})", "=SERIESSUM(2, \"0\", 1, {1;1})", "=SERIESSUM(2, 0, \"1\", {1;1})"}) {
+    const Value v = EvalSource(src);
+    ASSERT_TRUE(v.is_number()) << src;
+    EXPECT_DOUBLE_EQ(v.as_number(), 3.0) << src;
+  }
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 1, Value::text("2"));
+  const Value v = EvalSourceIn("=SERIESSUM(B1, 0, 1, {1;1})", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number());
+  EXPECT_DOUBLE_EQ(v.as_number(), 3.0);
+}
+
+TEST(BuiltinsSeriesSum, BooleanScalarIsValue) {
+  for (const char* src : {"=SERIESSUM(TRUE, 0, 1, {1;1})", "=SERIESSUM(2, 0, TRUE, {1;1})"}) {
+    const Value v = EvalSource(src);
+    ASSERT_TRUE(v.is_error()) << src;
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << src;
+  }
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 2, Value::boolean(true));
+  const Value v = EvalSourceIn("=SERIESSUM(2, 0, C1, {1;1})", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
 TEST(BuiltinsSeriesSum, ErrorInCoefficientPropagates) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));

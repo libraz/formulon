@@ -29,23 +29,15 @@ namespace {
 
 using builtins_detail::to_finite_value;
 
-// Reads one of the three scalar arguments: a blank cell is 0, and a Boolean or
-// text is #VALUE!. Returns false with the error in `*out_err`.
+// Reads one of the three scalar arguments: a blank cell is 0, text coerces
+// as a number ("2" is 2), and a Boolean is #VALUE!. Returns false with the
+// error in `*out_err`.
 bool read_scalar_numeric(const Value& v, double* out, Value* out_err) {
-  if (v.is_error()) {
-    *out_err = v;
-    return false;
-  }
-  if (v.is_blank()) {
-    *out = 0.0;
-    return true;
-  }
-  if (!v.is_number()) {
+  if (v.is_boolean()) {
     *out_err = Value::error(ErrorCode::Value);
     return false;
   }
-  *out = v.as_number();
-  return true;
+  return number_from_value(v, *out, *out_err);
 }
 
 // Resolves the coefficients argument through the canonical

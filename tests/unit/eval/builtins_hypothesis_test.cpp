@@ -107,6 +107,15 @@ TEST(HypothesisTTest, EqualVarianceOneTailIsHalfOfTwoTail) {
   EXPECT_NEAR(one.as_number() * 2.0, two.as_number(), 1e-12);
 }
 
+// Mac Excel 365: a cell holding the text "1" reads as tails 1.
+TEST(HypothesisTTest, NumericTextFlagCoerces) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(1, 1, Value::text("1"));
+  const Value v = EvalSourceIn("=T.TEST({1,2,3,4,5}, {6,7,8,9,10}, B2, 2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_EQ(v.as_number(), 0.0005264128966832697);
+}
+
 TEST(HypothesisTTest, WelchTwoTailed) {
   // Unequal-variance two-sample with m1=6.2, v1=9.7, m2=3, v2=2.5.
   //   t ~= 2.0486, df ~= 5.9334 (Welch-Satterthwaite)

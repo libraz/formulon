@@ -129,7 +129,7 @@ bool compute_slope_intercept(const std::variant<Value, NumericPairs>& prepared, 
 
 // COVARIANCE.P / COVARIANCE.S given a scalar expression and a scalar or a
 // one-cell reference treat each as a one-element array. Returns the single
-// pair (a non-numeric scalar leaves none, a non-numeric cell is #VALUE!), or
+// pair (a non-numeric scalar or cell leaves none, a blank cell is #VALUE!), or
 // an error Value when either argument evaluates to an error; nullopt when
 // neither argument is a scalar expression or either holds more than one cell.
 std::optional<std::variant<Value, NumericPairs>> scalar_covariance_pairs(const parser::AstNode& call, Arena& arena,
@@ -152,7 +152,7 @@ std::optional<std::variant<Value, NumericPairs>> scalar_covariance_pairs(const p
     }
   }
   for (const RangeResult& r : scalars) {
-    if (!r.from_scalar && !r.cells.front().is_number()) {
+    if (!r.from_scalar && r.cells.front().is_blank()) {
       return std::variant<Value, NumericPairs>{Value::error(ErrorCode::Value)};
     }
   }

@@ -25,6 +25,7 @@
 #include "eval/lazy_impls.h"
 #include "eval/numeric_pairs.h"
 #include "eval/range_args.h"
+#include "eval/scalar_args.h"
 #include "eval/stats/hypothesis_tests.h"
 #include "eval/stats/numeric_constants.h"
 #include "eval/stats/special_functions.h"
@@ -99,25 +100,22 @@ Value eval_t_test_lazy(const parser::AstNode& call, Arena& arena, const Function
   // Evaluate `tails` and `type` scalars first; their validity decides
   // whether we even need to touch the arrays. Errors propagate with
   // their real code.
-  const Value tails_v = eval_node(call.as_call_arg(2), arena, registry, ctx);
-  if (tails_v.is_error()) {
-    return tails_v;
+  // Numeric text coerces (a cell holding "1" reads as 1); a Boolean is
+  // #VALUE!, and a blank cell reads as zero. Excel truncates (not rounds)
+  // `tails` and `type` toward zero before the domain check.
+  double flags[2] = {0.0, 0.0};
+  for (std::uint32_t i = 0; i < 2U; ++i) {
+    const Value v = eval_node(call.as_call_arg(2U + i), arena, registry, ctx);
+    if (v.is_boolean()) {
+      return Value::error(ErrorCode::Value);
+    }
+    Value err = Value::blank();
+    if (!number_from_value(v, flags[i], err)) {
+      return err;
+    }
   }
-  if (!tails_v.is_number() && !tails_v.is_blank()) {
-    return Value::error(ErrorCode::Value);
-  }
-  const Value type_v = eval_node(call.as_call_arg(3), arena, registry, ctx);
-  if (type_v.is_error()) {
-    return type_v;
-  }
-  if (!type_v.is_number() && !type_v.is_blank()) {
-    return Value::error(ErrorCode::Value);
-  }
-  // Excel truncates (not rounds) `tails` and `type` toward zero before
-  // the domain check, matching the documented behaviour.
-  // A blank cell reads as zero.
-  const double tails_d = tails_v.is_blank() ? 0.0 : std::trunc(tails_v.as_number());
-  const double type_d = type_v.is_blank() ? 0.0 : std::trunc(type_v.as_number());
+  const double tails_d = std::trunc(flags[0]);
+  const double type_d = std::trunc(flags[1]);
   if (!std::isfinite(tails_d) || (tails_d != 1.0 && tails_d != 2.0)) {
     return Value::error(ErrorCode::Num);
   }

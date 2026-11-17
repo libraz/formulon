@@ -517,6 +517,20 @@ TEST(RegressionCovariance, BlankCellBesideAScalarIsValue) {
   }
 }
 
+// Mac Excel 365: a text or Boolean cell beside a scalar leaves no pair, so
+// the result is #DIV/0!; only a blank cell is #VALUE!.
+TEST(RegressionCovariance, TextOrBooleanCellBesideAScalarLeavesNoPair) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(1, 1, Value::text("a"));
+  wb.sheet(0).set_cell_value(2, 1, Value::boolean(true));
+  for (const char* src : {"=COVAR(B2,2)", "=COVARIANCE.P(B2,2)", "=COVARIANCE.S(B2,2)", "=COVAR(B3,2)",
+                          "=COVARIANCE.P(B3,2)", "=COVARIANCE.S(B3,2)"}) {
+    const Value v = EvalSourceIn(src, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_error()) << src;
+    EXPECT_EQ(v.as_error(), ErrorCode::Div0) << src;
+  }
+}
+
 TEST(RegressionCovariance, NumberCellBesideAScalarIsOnePair) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(1, 1, Value::number(3.0));

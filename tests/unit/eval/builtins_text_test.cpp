@@ -1049,14 +1049,19 @@ TEST(BuiltinsText, TextEmptyFormatShowsOnlyTheMinusSign) {
   EXPECT_EQ(positive.as_text(), "");
 }
 
-TEST(BuiltinsText, ArrayToTextStrictLoneBlankCellIsValue) {
+// Mac Excel 365: a lone blank cell is #VALUE! in both formats, while a
+// row of blanks renders as empty elements.
+TEST(BuiltinsText, ArrayToTextLoneBlankCellIsValue) {
   Workbook wb = Workbook::create();
   const Value strict = EvalSourceIn("=ARRAYTOTEXT(B2,1)", wb, wb.sheet(0));
   ASSERT_TRUE(strict.is_error());
   EXPECT_EQ(strict.as_error(), ErrorCode::Value);
   const Value concise = EvalSourceIn("=ARRAYTOTEXT(B2)", wb, wb.sheet(0));
-  ASSERT_TRUE(concise.is_text());
-  EXPECT_EQ(concise.as_text(), "");
+  ASSERT_TRUE(concise.is_error());
+  EXPECT_EQ(concise.as_error(), ErrorCode::Value);
+  const Value row = EvalSourceIn("=ARRAYTOTEXT(B2:C2,1)", wb, wb.sheet(0));
+  ASSERT_TRUE(row.is_text()) << row.debug_to_string();
+  EXPECT_EQ(row.as_text(), "{,}");
 }
 
 }  // namespace
