@@ -411,10 +411,10 @@ std::string BuildColsXml(const SheetLayout& layout, const CellStyleSavePlan* sty
       // present so a reload preserves the column metric.
       emit_xsd_bool_attr(out, "customWidth", true);
     }
-    // A style written as xf 0 is left out; the width stays.
-    if (col.has_style && !(style_plan != nullptr && style_plan->collapsed_to_default(col.style_xf))) {
-      append_xml_attr_uint(out, "style",
-                           style_plan != nullptr ? style_plan->cell_xf_index(col.style_xf) : col.style_xf);
+    // A style written as xf 0 is left out, as Excel leaves it; the width stays.
+    if (const std::uint32_t xf = style_plan != nullptr ? style_plan->cell_xf_index(col.style_xf) : col.style_xf;
+        col.has_style && xf != 0U) {
+      append_xml_attr_uint(out, "style", xf);
     }
     if (col.hidden) {
       emit_xsd_bool_attr(out, "hidden", true);

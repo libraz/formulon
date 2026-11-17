@@ -94,6 +94,15 @@ bool PhantomForcesDefaultStyle(const Sheet& sheet, std::uint32_t row, std::uint3
   return !explicit_default_observable(sheet.layout(), row, col, end).empty();
 }
 
+// Whether any column carries a style not written as xf 0. Every row crosses every column, so a row style equal to
+// xf 0 is then observable and is kept as a bare customFormat row.
+bool StyledColumnCrossesEveryRow(const SheetLayout& layout, const CellStyleSavePlan* style_plan) {
+  return std::any_of(layout.columns.begin(), layout.columns.end(), [&](const ColumnLayout& col) {
+    return col.has_style && col.style_xf != 0U &&
+           !(style_plan != nullptr && style_plan->collapsed_to_default(col.style_xf));
+  });
+}
+
 // Emits an `s="N"` attribute when `xf_index` is non-zero. The default
 // xf (index 0) is omitted for byte parity with Excel's writer unless `force`
 // is set (see `PhantomForcesDefaultStyle`).
@@ -545,8 +554,11 @@ bool AppendCellXml(std::string& out, const Sheet& sheet, std::uint32_t row, std:
 // override field is emitted only when it differs from the OOXML
 // default (height -> none, hidden -> "0", outlineLevel -> 0); `hidden="0"`
 // is never written. Excel emits `customHeight="1"` only for an explicit
-// override, so an auto height stays auto across a save.
-void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout, const CellStyleSavePlan* style_plan) {
+// override, so an auto height stays auto across a save. `default_observable`
+// says a column style crosses the row, so a row style equal to xf 0 still
+// differs from what the row would show without it.
+void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout, const CellStyleSavePlan* style_plan,
+                            bool default_observable) {
   if (layout.has_height || layout.height > 0.0) {
     out.append(" ht=\"");
     // Shortest round-trip spelling, the same one cell values use: a
@@ -570,9 +582,11 @@ void AppendRowOverrideAttrs(std::string& out, const RowLayout& layout, const Cel
   if (layout.show_phonetic) {
     emit_xsd_bool_attr(out, "ph", true);
   }
-  if (layout.has_style && !(style_plan != nullptr && style_plan->collapsed_to_default(layout.style_xf))) {
+  if (layout.has_style &&
+      (default_observable || !(style_plan != nullptr && style_plan->collapsed_to_default(layout.style_xf)))) {
     // OOXML row style is effective only with customFormat=1, which alone
-    // reads as xf 0; Excel omits `s` for xf 0. A style equal to xf 0 is not written.
+    // reads as xf 0; Excel omits `s` for xf 0. A style equal to xf 0 is
+    // written only where a column style crosses the row, as customFormat alone.
     const std::uint32_t xf = saved_cell_xf(style_plan, layout.style_xf);
     if (xf != 0U) {
       append_xml_attr_uint(out, "s", xf);
@@ -749,10 +763,12 @@ std::optional<SheetDimension> sheet_dimension(const Sheet& sheet, const CellStyl
     }
   }
   const SheetLayout& layout = sheet.layout();
+  const bool default_observable = StyledColumnCrossesEveryRow(layout, style_plan);
   for (const RowLayout& entry : layout.row_overrides) {
-    // A row whose only override is a style written as xf 0 is not written.
-    const bool style_only = entry.has_style && collapsed(entry.style_xf) && !entry.has_height && entry.height <= 0.0 &&
-                            !entry.hidden && entry.outline_level == 0U && !entry.collapsed && !entry.show_phonetic;
+    // A row whose only override is a style written as xf 0 is not written, unless a styled column crosses it.
+    const bool style_only = entry.has_style && collapsed(entry.style_xf) && !default_observable && !entry.has_height &&
+                            entry.height <= 0.0 && !entry.hidden && entry.outline_level == 0U && !entry.collapsed &&
+                            !entry.show_phonetic;
     if (entry.row < Sheet::kMaxRows && !style_only) {
       widen(rows, entry.row, entry.row);
     }
@@ -820,12 +836,13 @@ void AppendSheetDataXml(std::string& out, const Sheet& sheet, const SharedString
   std::unordered_map<std::uint64_t, bool> always_by_anchor;
   const SharedRoles shared_roles = CollectSharedRoles(sheet, name_shapes);
   MergedCellIndex merged_cells(style_plan != nullptr ? sheet.merges() : std::vector<MergeRange>{});
+  const bool default_observable = StyledColumnCrossesEveryRow(sheet.layout(), style_plan);
   for (std::uint32_t row : row_indices) {
     std::string override_attrs;
     const bool zero_height = sheet.format_defaults().zero_height;
     const RowLayout* row_layout = find_row_override(sheet.layout(), row);
     if (row_layout != nullptr) {
-      AppendRowOverrideAttrs(override_attrs, *row_layout, style_plan);
+      AppendRowOverrideAttrs(override_attrs, *row_layout, style_plan, default_observable);
     }
     // Under zeroHeight a present row is visible unless it says otherwise; an entry-less row is hidden.
     const bool keep_empty_row = zero_height && row_layout != nullptr && !row_layout->hidden;
@@ -847,7 +864,7 @@ void AppendSheetDataXml(std::string& out, const Sheet& sheet, const SharedString
       converted.has_style = true;
       converted.style_xf = 0U;
       override_attrs.clear();
-      AppendRowOverrideAttrs(override_attrs, converted, style_plan);
+      AppendRowOverrideAttrs(override_attrs, converted, style_plan, default_observable);
       implicit_hidden = false;
     }
     AppendRowXml(out, sheet, row, row_cells, plan.runs,

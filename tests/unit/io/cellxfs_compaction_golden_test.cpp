@@ -393,6 +393,43 @@ TEST_P(XfCollapseGolden, XlsxSaveIsIdempotent) {
 
 INSTANTIATE_TEST_SUITE_P(Cases, XfCollapseGolden, ::testing::ValuesIn(XfCollapseCases()), CaseName);
 
+// A style equal to xf 0 on one axis crossing a real style on the other: a row keeps customFormat without `s` (R1,
+// R2), a column drops its style (C1, C2), and an `s="0"` or equal-to-xf-0 blank cell stays as a bare `<c>` (X1-X3).
+const std::vector<Case>& XfCrossCases() {
+  static const std::vector<Case> cases = {
+      {"xfcollapse", "xc_R1_row_dup_xf0_col_styled"}, {"xfcollapse", "xc_R2_row_s0_col_styled"},
+      {"xfcollapse", "xc_C1_col_dup_xf0_row_styled"}, {"xfcollapse", "xc_C2_col_s0_row_styled"},
+      {"xfcollapse", "xc_X1_blank_s0_col_styled"},    {"xfcollapse", "xc_X2_blank_dup_xf0_col_styled"},
+      {"xfcollapse", "xc_X3_blank_s0_row_styled"},
+  };
+  return cases;
+}
+
+class XfCrossGolden : public XfCollapseGolden {};
+
+TEST_P(XfCrossGolden, XlsxMatchesExcel) {
+  const auto wb = LoadAuthored(GetParam());
+  ASSERT_TRUE(wb);
+  Bytes ours;
+  ASSERT_TRUE(SaveXlsx(*wb, &ours));
+  const Bytes excel = test::read_file_bytes(FixturePath(GetParam(), "_resaved.xlsx"));
+  EXPECT_EQ(CellXfLines(excel), CellXfLines(ours)) << Msg();
+  EXPECT_EQ(SheetRefLines(excel), SheetRefLines(ours)) << Msg();
+  EXPECT_EQ(DimensionRef(excel), DimensionRef(ours)) << Msg();
+}
+
+TEST_P(XfCrossGolden, XlsbMatchesExcel) {
+  const auto wb = LoadAuthored(GetParam());
+  ASSERT_TRUE(wb);
+  Bytes ours;
+  ASSERT_TRUE(SaveXlsb(*wb, &ours));
+  const Bytes excel = test::read_file_bytes(FixturePath(GetParam(), "_resaved.xlsb"));
+  EXPECT_EQ(XlsbCellXfLines(excel), XlsbCellXfLines(ours)) << Msg();
+  EXPECT_EQ(XlsbSheetRefLines(excel), XlsbSheetRefLines(ours)) << Msg();
+}
+
+INSTANTIATE_TEST_SUITE_P(Cases, XfCrossGolden, ::testing::ValuesIn(XfCrossCases()), CaseName);
+
 // Excel recomputes the apply flags on save, so two cell xfs that differ only in
 // applyNumberFormat collapse there, and Formulon collapses them the same way.
 TEST(CellXfsCompactionGoldenApplyFlags, CellXfsDifferingOnlyInApplyFlagsCollapse) {
