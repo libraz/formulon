@@ -28,6 +28,15 @@
       }
     },
     {
+      "id": "disc_arg1_blank_cell",
+      "formula": "=DISC(B2,DATE(2018,6,15),97.975,100,1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.00017094681444898113
+      }
+    },
+    {
       "id": "disc_arg2_na_cell",
       "formula": "=DISC(DATE(2018,1,25),B1,97.975,100,1)",
       "setup": {
@@ -449,6 +458,15 @@
       }
     },
     {
+      "id": "fvschedule_arg1_blank_cell",
+      "formula": "=FVSCHEDULE(B2,0.05)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
       "id": "fvschedule_arg2_na_cell",
       "formula": "=FVSCHEDULE(1000,B1)",
       "setup": {
@@ -469,6 +487,15 @@
       "expect": {
         "kind": "number",
         "value": 1000.0
+      }
+    },
+    {
+      "id": "fvschedule_arg1_array_lifted",
+      "formula": "=INDEX(FVSCHEDULE({1000,1000},0.05),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1050.0
       }
     },
     {

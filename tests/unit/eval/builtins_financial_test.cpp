@@ -334,6 +334,23 @@ TEST(FinancialNPV, MixedScalarAndRange) {
   EXPECT_NEAR(v.as_number(), expected, 1e-10);
 }
 
+TEST(FinancialNPV, BlankRateCellIsZero) {
+  // The rate is a single value, so a blank cell reads 0 instead of being
+  // dropped like a blank cash-flow cell.
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=NPV(B2,100,200,300)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 600.0);
+}
+
+TEST(FinancialNPV, ArrayRateLiftsTheCall) {
+  const Value v = EvalSource("=NPV({0.1;0},100,200)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array()->rows, 2U);
+  EXPECT_NEAR(v.as_array()->cells[0].as_number(), 100.0 / 1.1 + 200.0 / 1.21, 1e-10);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[1].as_number(), 300.0);
+}
+
 TEST(FinancialNPV, ArityTooFew) {
   const Value v = EvalSource("=NPV(0.1)");
   ASSERT_TRUE(v.is_error());

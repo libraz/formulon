@@ -59,6 +59,13 @@ TEST(FinancialDisc, MicrosoftDocExample) {
   EXPECT_NEAR(v.as_number(), 0.05242, 1e-4);
 }
 
+TEST(FinancialDisc, SettlementSerialZeroCountsFrom1900) {
+  // Serial 0 is 1900-01-00, so the actual/actual year average spans 1900..2018.
+  const Value v = EvalSource("=DISC(0,DATE(2018,6,15),97.975,100,1)");
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_NEAR(v.as_number(), 0.00017094681444898113, 1e-18);
+}
+
 TEST(FinancialDisc, DefaultBasisZero) {
   // Basis 0 (US 30/360) is the default when the arg is omitted.
   const Value v = EvalSource("=DISC(DATE(2018,1,25), DATE(2018,6,15), 97.975, 100)");

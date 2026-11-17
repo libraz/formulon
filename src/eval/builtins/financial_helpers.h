@@ -246,8 +246,9 @@ inline Expected<DayCountSpan, ErrorCode> day_count_span(double start, double end
     case 4:
       return DayCountSpan{date_time::basis_days_between(s, e, basis, date1904), 360.0};
     case 1: {
-      const date_time::YMD a = date_time::ymd_from_serial(s, date1904);
-      const date_time::YMD b = date_time::ymd_from_serial(e, date1904);
+      // Serial 0 of the 1900 system is 1900-01-00, so its year is 1900.
+      const date_time::YMD a = date1904 ? date_time::ymd_from_serial(s, true) : date_time::legacy_1900_ymd(s);
+      const date_time::YMD b = date1904 ? date_time::ymd_from_serial(e, true) : date_time::legacy_1900_ymd(e);
       return DayCountSpan{e - s, date_time::actual_actual_year_length(a.y, a.m, a.d, b.y, b.m, b.d)};
     }
     case 2:

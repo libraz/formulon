@@ -539,9 +539,9 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
   bool literal_text_not_numeric = false;
   // The origin slot when that literal failed: its #VALUE! is the left error and keeps that state.
   std::optional<ErrorOriginSnapshot> literal_text_origin;
-  // The array a `last_arg_scalar` function's last argument evaluated to; the
-  // call is then evaluated once per element.
-  const ArrayValue* lifted_last_arg = nullptr;
+  // Set when a `first_arg_scalar` / `last_arg_scalar` slot evaluated to an
+  // array or grid; the call is then evaluated once per element.
+  bool lift_scalar_slot = false;
   const std::uint32_t evaluated_arity =
       def->analysis_toolpak_args && !def->atp_omitted_optional_is_na
           ? atp_evaluated_arity(node, def->min_arity, def->max_arity)
@@ -554,7 +554,7 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
       values.push_back(omitted_default);
       continue;
     }
-    if (def->last_arg_scalar && i > 0U && i + 1U == evaluated_arity) {
+    if ((def->last_arg_scalar && i > 0U && i + 1U == evaluated_arity) || (def->first_arg_scalar && i == 0U)) {
       const Value v = densify(eval_node_shaped(raw_arg, arena, registry, ctx), arena);
       if (v.is_error()) {
         if (def->propagate_errors) {
@@ -562,8 +562,18 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
         }
         forget_error_origin();
       }
-      if (v.is_array()) {
-        lifted_last_arg = v.as_array();
+      std::uint32_t lift_rows = 0;
+      std::uint32_t lift_cols = 0;
+      if (lift_extent(&v, 1U, nullptr, &lift_rows, &lift_cols)) {
+        lift_scalar_slot = true;
+      } else if (def->analysis_toolpak_args) {
+        const Value err = atp_arg_error(raw_arg, v, atp_slot_required(i, def->min_arity, def->max_arity));
+        if (err.is_error()) {
+          if (!absorb_arg_error(*def, err, &values)) {
+            return err;
+          }
+          continue;
+        }
       }
       values.push_back(v);
       continue;
@@ -740,8 +750,10 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
   if (!streamed.empty()) {
     return fold_with_tails(*def, values, streamed);
   }
-  if (lifted_last_arg != nullptr) {
-    return lift_last_arg_call(*def, std::move(values), *lifted_last_arg, arena);
+  if (lift_scalar_slot) {
+    return lift_over_array_args(
+        values.data(), static_cast<std::uint32_t>(values.size()), arena,
+        [&](const Value* cell_args, std::uint32_t n) { return def->impl(cell_args, n, arena); });
   }
   // Hand the post-expansion size to the impl; aggregator bodies walk the
   // flattened vector directly.

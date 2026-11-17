@@ -212,6 +212,10 @@ struct FunctionDef {
   /// null. A slot without an entry is passed as blank. See `OmittedArgDefault`.
   const OmittedArgDefault* omitted_defaults = nullptr;
   std::uint32_t omitted_default_count = 0;
+  /// For a range-aware function whose first argument is a single value (the
+  /// rate of NPV, the principal of FVSCHEDULE): the `last_arg_scalar` rule
+  /// applied to that argument.
+  bool first_arg_scalar = false;
 };
 
 static_assert(sizeof(FunctionDef) == (sizeof(void*) == 8 ? 72 : 48), "FunctionDef must not grow");

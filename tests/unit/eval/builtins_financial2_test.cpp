@@ -206,6 +206,27 @@ TEST(FinancialFvSchedule, ScalarRatesWork) {
   EXPECT_NEAR(v.as_number(), 132.0, 1e-10);
 }
 
+TEST(FinancialFvSchedule, BlankPrincipalCellIsZero) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=FVSCHEDULE(B2,0.05)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+}
+
+TEST(FinancialFvSchedule, ArrayPrincipalLiftsTheCall) {
+  const Value v = EvalSource("=FVSCHEDULE({1000,2000},0.05)");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array()->cols, 2U);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[0].as_number(), 1050.0);
+  EXPECT_DOUBLE_EQ(v.as_array()->cells[1].as_number(), 2100.0);
+}
+
+TEST(FinancialFvSchedule, BooleanPrincipalIsValue) {
+  const Value v = EvalSource("=FVSCHEDULE(TRUE,0.05)");
+  ASSERT_TRUE(v.is_error()) << v.debug_to_string();
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
 TEST(FinancialFvSchedule, RangeSkipsTextCells) {
   // `range_filter_numeric_only` drops Text cells silently, matching NPV's
   // behaviour. 1000 * 1.05 * 1.10 = 1155.

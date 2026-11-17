@@ -357,21 +357,6 @@ Value broadcast_scalar_call(const FunctionDef& def, const std::vector<Value>& ar
   });
 }
 
-// Evaluates a `last_arg_scalar` function once per element of `last`, the
-// array its last argument evaluated to, with `values` holding the other
-// arguments. The result has the shape of `last`, 1x1 included.
-Value lift_last_arg_call(const FunctionDef& def, std::vector<Value> values, const ArrayValue& last, Arena& arena) {
-  return map_array_with(
-      last,
-      [&](const Value& cell) {
-        values.back() = cell;
-        return def.propagate_errors && cell.is_error()
-                   ? cell
-                   : def.impl(values.data(), static_cast<std::uint32_t>(values.size()), arena);
-      },
-      arena);
-}
-
 // `broadcast_scalar_call` for arguments of which `tails[i]` (when non-null) is
 // a whole column / row standing in for `args[i]`. Arguments on one axis give a
 // `TailArray`: the function is applied to the head cells and once to the tail

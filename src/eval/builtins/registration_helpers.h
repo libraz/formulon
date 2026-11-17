@@ -46,6 +46,7 @@ struct BuiltinRegistration {
   const FoldOps* fold = nullptr;
   const OmittedArgDefault* omitted_defaults = nullptr;
   std::uint32_t omitted_default_count = 0;
+  bool first_arg_scalar = false;
 };
 
 /// Gives a range-aware reducer its one-value-at-a-time form; see `FoldOps`.
@@ -84,6 +85,14 @@ constexpr BuiltinRegistration analysis_toolpak_no_omitted_default(BuiltinRegistr
 /// result can be an array.
 constexpr BuiltinRegistration scalar_last_arg(BuiltinRegistration def) noexcept {
   def.last_arg_scalar = true;
+  def.result_shape = FunctionDef::ResultShape::kArray;
+  return def;
+}
+
+/// Marks the first argument of a range-aware `def` as a single value; see
+/// `FunctionDef::first_arg_scalar`.
+constexpr BuiltinRegistration scalar_first_arg(BuiltinRegistration def) noexcept {
+  def.first_arg_scalar = true;
   def.result_shape = FunctionDef::ResultShape::kArray;
   return def;
 }
@@ -151,6 +160,7 @@ inline void register_builtin_functions(FunctionRegistry& registry, const Builtin
     fn.fold = def.fold;
     fn.omitted_defaults = def.omitted_defaults;
     fn.omitted_default_count = def.omitted_default_count;
+    fn.first_arg_scalar = def.first_arg_scalar;
     registry.register_function(fn);
   }
 }

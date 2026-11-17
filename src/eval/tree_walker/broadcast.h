@@ -111,11 +111,6 @@ Shaped broadcast_unary(parser::UnaryOp op, const Shaped& operand, Arena& arena);
 Value broadcast_scalar_call(const FunctionDef& def, const std::vector<Value>& args, std::uint32_t out_rows,
                             std::uint32_t out_cols, Arena& arena);
 
-// Evaluates a `last_arg_scalar` function once per element of `last`, the
-// array its last argument evaluated to, with `values` holding the other
-// arguments. A 1x1 result unwraps to a scalar.
-Value lift_last_arg_call(const FunctionDef& def, std::vector<Value> values, const ArrayValue& last, Arena& arena);
-
 // `broadcast_scalar_call` for arguments of which `tails[i]` (when non-null) is
 // a whole column / row standing in for `args[i]`. Arguments on one axis give a
 // `TailArray`: the function is applied to the head cells and once to the tail

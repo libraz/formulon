@@ -549,7 +549,7 @@ void register_financial_builtins(FunctionRegistry& registry) {
       {"FV", 3u, 5u, &Fv},
       {"PMT", 3u, 5u, &Pmt},
       {"NPER", 3u, 5u, &Nper},
-      {"NPV", 2u, kVariadic, &Npv, true, true, true},
+      builtins_detail::scalar_first_arg({"NPV", 2u, kVariadic, &Npv, true, true, true}),
       {"RATE", 3u, 6u, &Rate},
       {"IPMT", 4u, 6u, &Ipmt},
       {"PPMT", 4u, 6u, &Ppmt},
@@ -567,7 +567,8 @@ void register_financial_builtins(FunctionRegistry& registry) {
       {"PDURATION", 3u, 3u, &financial_detail::PDuration},
       {"RRI", 3u, 3u, &financial_detail::Rri},
       {"ISPMT", 4u, 4u, &financial_detail::IsPmt},
-      builtins_detail::analysis_toolpak({"FVSCHEDULE", 2u, 2u, &financial_detail::FvSchedule, true, true, true}),
+      builtins_detail::scalar_first_arg(
+          builtins_detail::analysis_toolpak({"FVSCHEDULE", 2u, 2u, &financial_detail::FvSchedule, true, true, true})),
       {"STOCKHISTORY", 2u, kVariadic, &financial_detail::StockHistory},
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));

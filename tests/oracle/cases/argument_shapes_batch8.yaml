@@ -119,6 +119,8 @@ cases:
   - id: npv_arg1_na_cell
     setup: { B1: "=NA()" }
     formula: "=NPV(B1,100,200,300)"
+  - id: npv_arg1_blank_cell
+    formula: "=NPV(B2,100,200,300)"
   - id: pivotby_arg5_na_cell
     setup: { B1: "=NA()" }
     formula: "=PIVOTBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{\"c\";\"d\";\"c\";\"d\";\"c\"},{5;2;3;4;1},SUM,B1,1,2,1,,,0)"
