@@ -22,6 +22,7 @@
 #include "eval/stats/flushed_ops.h"
 #include "eval/x87_arith.h"
 #include "utils/arena.h"
+#include "utils/elementary_math.h"
 #include "utils/subnormal_flush.h"
 #include "value.h"
 
@@ -195,7 +196,7 @@ Value Cos(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // so we do NOT pre-reject pole-adjacent inputs - only true Inf/NaN is
 // reported as `#NUM!`.
 Value Tan(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return apply_trig_math(&std::tan, args);
+  return apply_trig_math(&elementary::tan, args);
 }
 
 // asin / acos on [-1, 1] through atan: r = sqrt((2 - (1 - x)) * (1 - x)) is
@@ -454,7 +455,7 @@ Value Cot(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     if (s == 0.0) {
       return Value::error(ErrorCode::Div0);
     }
-    return to_finite_value(1.0 / std::tan(x));
+    return to_finite_value(1.0 / elementary::tan(x));
   });
 }
 

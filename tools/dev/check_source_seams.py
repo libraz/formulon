@@ -62,6 +62,15 @@ Checks:
                    Not checked: ceilings reached through a variable, codes
                    chosen in a callee, and whether a tag is semantically true.
 
+  elementary-math  Elementary functions implemented in
+                   `utils/elementary_math` are called through it.
+
+                   Those implementations use integer and double arithmetic
+                   only, so a result is the same bits on every host; a
+                   direct `std::` call takes the host math library's last
+                   bits instead. `ELEMENTARY_FUNCTIONS` lists the functions
+                   implemented there.
+
   all              Run every check above (default).
 
 Stdlib only; no build artifacts or network access required.
@@ -347,6 +356,22 @@ def check_xml_passthrough() -> bool:
     )
 
 
+# Functions implemented in utils/elementary_math.
+ELEMENTARY_FUNCTIONS = ("tan",)
+
+
+def check_elementary_math() -> bool:
+    seams = {SRC_ROOT / "utils" / "elementary_math.cpp"}
+    names = "|".join(ELEMENTARY_FUNCTIONS)
+    hits = _scan(re.compile(rf"(?<!\w)(?:std)?::(?:{names})\b"), seams)
+    return _report(
+        "elementary-math",
+        hits,
+        "Call `elementary::<name>` from utils/elementary_math.h; only the\n"
+        "utils/elementary_math sources may compute these functions themselves.",
+    )
+
+
 LIMIT_TAGS = frozenset({"engine", "excel", "format", "internal"})
 
 # Facade sources that define limit constants outside src/.
@@ -504,6 +529,7 @@ CHECKS = {
     "xml-passthrough": check_xml_passthrough,
     "layers": check_layers,
     "limit-origin": check_limit_origin,
+    "elementary-math": check_elementary_math,
 }
 
 

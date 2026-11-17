@@ -113,6 +113,7 @@ set(FORMULON_CORE_SOURCES
   src/utils/derived_guid.cpp
   src/utils/double_format.cpp
   src/utils/double_parse.cpp
+  src/utils/elementary_math.cpp
   src/utils/error.cpp
   src/utils/index_sort.cpp
   src/utils/iso_date.cpp

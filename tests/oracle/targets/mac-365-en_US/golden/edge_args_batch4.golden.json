@@ -184,8 +184,7 @@
       "expect": {
         "kind": "number",
         "value": 0.6420926159343308
-      },
-      "compare_mode": "host_libm"
+      }
     },
     {
       "id": "cot_first_arg_blank_cell",
@@ -1692,8 +1691,7 @@
       "expect": {
         "kind": "number",
         "value": 1.557407724654902
-      },
-      "compare_mode": "host_libm"
+      }
     },
     {
       "id": "tan_first_arg_blank_cell",

@@ -625,6 +625,8 @@ TEST(ExcelExactTrigLog, MatchesExcelBitForBit) {
       {"=ACOT(0.001)", 1.5697963271282298},
       {"=ACOT(1E+300)", 1e-300},
       {"=ACOT(3)", 0.3217505543966422},
+      {"=COT(0.9)", 0.7935511478423173},
+      {"=COT(0.1)", 9.96664442325924},
   };
   for (const Case& c : cases) {
     const Value v = EvalSource(c.formula);
@@ -633,8 +635,6 @@ TEST(ExcelExactTrigLog, MatchesExcelBitForBit) {
   }
   // Host libm last bits; exact on macOS.
   const Case host_cases[] = {
-      {"=COT(0.9)", 0.7935511478423173},
-      {"=COT(0.1)", 9.96664442325924},
       {"=ACOT(0.5)", 1.1071487177940906},
   };
   for (const Case& c : host_cases) {
@@ -658,21 +658,12 @@ TEST(TrigRules, MatchesExcelValues) {
       {"=ACOSH(1E+100)", 230.95165647996453},        {"=CSCH(0.5)", 1.9190347513349437},
       {"=CSCH(3.7)", 0.04947729607451755},           {"=SECH(0.5)", 0.886818883970074},
       {"=SECH(3.7)", 0.04941684675665245},           {"=SECH(1000)", 0.0},
+      {"=TAN(134217727)", 3.2584564256367834},       {"=COT(134217727)", 0.30689377710631044},
   };
   for (const Case& c : cases) {
     const Value v = EvalSource(c.formula);
     ASSERT_TRUE(v.is_number()) << c.formula;
     EXPECT_EQ(v.as_number(), c.expected) << c.formula;
-  }
-  // Host libm last bits; exact on macOS.
-  const Case host_cases[] = {
-      {"=TAN(134217727)", 3.2584564256367834},
-      {"=COT(134217727)", 0.30689377710631044},
-  };
-  for (const Case& c : host_cases) {
-    const Value v = EvalSource(c.formula);
-    ASSERT_TRUE(v.is_number()) << c.formula;
-    EXPECT_TRUE(testing_support::HostLibmEq(v.as_number(), c.expected)) << c.formula;
   }
 }
 

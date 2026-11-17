@@ -14,6 +14,7 @@
 #include "eval/stats/incomplete_gamma.h"
 #include "eval/stats/numeric_constants.h"
 #include "eval/stats/special_functions.h"
+#include "utils/elementary_math.h"
 
 namespace formulon {
 namespace eval {
@@ -385,7 +386,7 @@ double t_inv_excel(double p, double df) noexcept {
   const double q = (0.5 - p) + 0.5;
   double out;
   if (df == 1.0) {
-    out = div(1.0, std::tan(mul(p < 0.5 ? p : q, kPi)));
+    out = div(1.0, elementary::tan(mul(p < 0.5 ? p : q, kPi)));
   } else {
     const double pp = p < q ? mul(2.0, p) : mul(2.0, q);
     const double a = mul(df, 0.5);

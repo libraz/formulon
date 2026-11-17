@@ -13,6 +13,7 @@
 #include "eval/builtins/registration_helpers.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
+#include "utils/elementary_math.h"
 #include "value.h"
 
 namespace formulon {
@@ -183,7 +184,7 @@ Value im_tan_cot(const Value* args, Arena& arena, bool cot) {
     if (!builtins_detail::trig_argument_in_range(c.re)) {
       return Value::error(ErrorCode::Num);
     }
-    const double t = std::tan(c.re);
+    const double t = elementary::tan(c.re);
     return text_complex(Complex{cot ? 1.0 / t : t, 0.0, c.suffix}, arena);
   }
   if (beyond_square_overflow(c.im)) {

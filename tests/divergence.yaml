@@ -953,18 +953,6 @@ entries:
     last_verified_excel_version: "16.114"
 
   - ids:
-      - trig_rules_tan_below_limit
-      - trig_rules_cot_below_limit
-      - tan_first_arg_bool
-      - cot_first_arg_bool
-    applies_to: [mac]
-    compare_mode: host_libm
-    reason: "These values come from the host libm. Mac Excel's last bits match Apple's libm and are reproduced exactly on macOS; Linux and WebAssembly return the correctly rounded value, which Windows Excel also returns, within 1-2 ulp."
-    prefer: mac-excel-365
-    first_noted: 2026-10-19
-    last_verified_excel_version: "16.113.4"
-
-  - ids:
       - forecast_ets_far_target_monthly_1e15
       - forecast_ets_far_target_monthly_1e300
       - forecast_ets_far_target_monthly_neg_1e300
