@@ -203,14 +203,11 @@ TEST(FinancialXirr, GuessBelowMinusOneIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
-TEST(FinancialXirr, NonRangeValuesIsValue) {
-  // The lazy dispatcher requires the values argument to resolve to a
-  // range, a bare Ref, or an inline ArrayLiteral. Passing a scalar
-  // arithmetic expression surfaces #VALUE! (not a usable cash-flow
-  // source).
+TEST(FinancialXirr, LoneValueAgainstTwoDatesIsNum) {
+  // A lone value is a one-flow series, so two dates do not pair with it.
   const Value v = EvalSource("=XIRR(1+2, {1,2})");
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 TEST(FinancialXirr, ArgumentErrorPropagates) {

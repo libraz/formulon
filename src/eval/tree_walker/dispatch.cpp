@@ -121,8 +121,14 @@ std::optional<ErrorCode> lone_value_error(ScalarArg policy, const Value& v) {
       return ErrorCode::Value;
     case ScalarArg::kRejectNA:
       return ErrorCode::NA;
+    case ScalarArg::kRejectNum:
+      return ErrorCode::Num;
+    case ScalarArg::kRejectDiv0:
+      return ErrorCode::Div0;
     case ScalarArg::kRejectNAOrTextValue:
       return v.is_text() ? ErrorCode::Value : ErrorCode::NA;
+    case ScalarArg::kRejectTextValue:
+      return v.is_text() ? std::optional<ErrorCode>(ErrorCode::Value) : std::nullopt;
   }
   return std::nullopt;
 }

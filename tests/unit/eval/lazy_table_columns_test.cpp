@@ -126,10 +126,10 @@ TEST(LazyTableColumns, LoneValuePolicyRows) {
   };
   const Row rows[] = {
       {"MATCH", ParamSet::kSecond, ScalarArg::kRejectNAOrTextValue},
-      {"IRR", ParamSet::kFirst, ScalarArg::kRejectValue},
-      {"MIRR", ParamSet::kFirst, ScalarArg::kRejectValue},
-      {"XIRR", ParamSet::kFirstAndSecond, ScalarArg::kRejectValue},
-      {"XNPV", ParamSet::kAllButFirst, ScalarArg::kRejectValue},
+      {"IRR", ParamSet::kFirst, ScalarArg::kRejectNum},
+      {"MIRR", ParamSet::kFirst, ScalarArg::kRejectDiv0},
+      {"XIRR", ParamSet::kFirstAndSecond, ScalarArg::kRejectTextValue},
+      {"XNPV", ParamSet::kAllButFirst, ScalarArg::kRejectTextValue},
       {"RANK", ParamSet::kSecond, ScalarArg::kRejectValue},
       {"RANK.EQ", ParamSet::kSecond, ScalarArg::kRejectValue},
       {"RANK.AVG", ParamSet::kSecond, ScalarArg::kRejectValue},

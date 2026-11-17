@@ -194,7 +194,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     // ISFORMULA / ISREF inspect the un-evaluated AST of their argument;
     // they cannot ride the eager path because it flattens references to
     // `Value` before the impl runs.
-    lone_value({"IRR", &eval_irr_lazy, LazyResultShape::kScalar, 1U, 2U}, ParamSet::kFirst, ScalarArg::kRejectValue),
+    lone_value({"IRR", &eval_irr_lazy, LazyResultShape::kScalar, 1U, 2U}, ParamSet::kFirst, ScalarArg::kRejectNum),
     {"ISFORMULA", &eval_isformula_lazy, LazyResultShape::kScalar, 1U, 1U, RefResult::kNone, ParamSet::kFirst},
     {"ISOMITTED", &eval_isomitted_lazy, LazyResultShape::kScalar, 1U, 1U},
     {"ISOWEEKNUM", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
@@ -215,7 +215,7 @@ constexpr LazyEntry kLazyDispatch[] = {
      ParamSet::kFirstAndOdd},
     {"MINUTE", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
     {"MINVERSE", &eval_minverse_lazy, LazyResultShape::kArray, 1U, 1U},
-    lone_value({"MIRR", &eval_mirr_lazy, LazyResultShape::kScalar, 3U, 3U}, ParamSet::kFirst, ScalarArg::kRejectValue),
+    lone_value({"MIRR", &eval_mirr_lazy, LazyResultShape::kScalar, 3U, 3U}, ParamSet::kFirst, ScalarArg::kRejectDiv0),
     {"MMULT", &eval_mmult_lazy, LazyResultShape::kArray, 2U, 2U},
     {"MONTH", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
     {"N", &eval_n_lazy, LazyResultShape::kBroadcast, 1U, 1U},
@@ -321,12 +321,13 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"WORKDAY.INTL", &eval_workday_intl_lazy, LazyResultShape::kScalar, 2U, 4U},
     {"WRAPCOLS", &eval_wrapcols_lazy, LazyResultShape::kArray, 2U, 3U},
     {"WRAPROWS", &eval_wraprows_lazy, LazyResultShape::kArray, 2U, 3U},
+    // XIRR / XNPV read a lone number as a one-flow series (`XNPV(0.1,5,45000)` is 5).
     lone_value({"XIRR", &eval_xirr_lazy, LazyResultShape::kScalar, 2U, 3U}, ParamSet::kFirstAndSecond,
-               ScalarArg::kRejectValue),
+               ScalarArg::kRejectTextValue),
     {"XLOOKUP", &eval_xlookup_lazy, LazyResultShape::kArray, 3U, 6U, RefResult::kXlookupResult, ParamSet::kNone},
     {"XMATCH", &eval_xmatch_lazy, LazyResultShape::kArray, 2U, 4U},
     lone_value({"XNPV", &eval_xnpv_lazy, LazyResultShape::kScalar, 3U, 3U}, ParamSet::kAllButFirst,
-               ScalarArg::kRejectValue),
+               ScalarArg::kRejectTextValue),
     {"YEAR", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
     {"YEARFRAC", &eval_datetime_lazy, LazyResultShape::kBroadcast, 2U, 3U},
     {"YIELD", &eval_financial_date_lazy, LazyResultShape::kBroadcast, 6U, 7U},

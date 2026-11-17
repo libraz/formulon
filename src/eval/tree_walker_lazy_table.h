@@ -101,7 +101,10 @@ enum class ScalarArg : std::uint8_t {
   kAccept,
   kRejectValue,          ///< #VALUE!
   kRejectNA,             ///< #N/A
+  kRejectNum,            ///< #NUM!
+  kRejectDiv0,           ///< #DIV/0!
   kRejectNAOrTextValue,  ///< #N/A, or #VALUE! for text
+  kRejectTextValue,      ///< #VALUE! for text; any other lone value is read
 };
 
 /// `LazyEntry::min_arity` / `max_arity` value of an open argument list.

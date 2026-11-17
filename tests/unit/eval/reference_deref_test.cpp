@@ -1083,9 +1083,10 @@ TEST_F(SelectedRefTest, LoneValuesAnswerTheirPolicy) {
   ExpectSame(Eval("=MATCH(11,{11},0)"), Eval("=1"), "an array constant");
   ExpectSame(Eval("=MATCH(31,OFFSET(A1,0,0,5),0)"), Eval("=3"), "a built reference");
   ExpectSame(Eval("=MATCH(41,A1:A5*1,0)"), Eval("=4"), "a computed array");
-  ExpectError(Eval("=IRR(5)"), ErrorCode::Value, "IRR");
-  ExpectError(Eval("=IRR(A1+1)"), ErrorCode::Value, "IRR over a computed value");
-  ExpectError(Eval("=XNPV(0.1,5,A1)"), ErrorCode::Value, "XNPV values");
+  ExpectError(Eval("=IRR(5)"), ErrorCode::Num, "IRR");
+  ExpectError(Eval("=IRR(A1+1)"), ErrorCode::Num, "IRR over a computed value");
+  ExpectError(Eval("=MIRR(A1+1,0.1,0.1)"), ErrorCode::Div0, "MIRR over a computed value");
+  ExpectSame(Eval("=XNPV(0.1,A1+1,A1)"), Eval("=12"), "XNPV reads a computed value as one flow");
   ExpectError(Eval("=RANK(11,IF(TRUE,5))"), ErrorCode::Value, "RANK");
   ExpectError(Eval("=T.TEST(1,A1:A5,2,1)"), ErrorCode::NA, "T.TEST");
   ExpectError(Eval("=Z.TEST(1,2)"), ErrorCode::NA, "Z.TEST");

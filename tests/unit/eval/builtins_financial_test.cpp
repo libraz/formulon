@@ -3,6 +3,7 @@
 #include <cmath>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
@@ -448,11 +449,42 @@ TEST(FinancialIRR, ArityTooMany) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(FinancialIRR, ScalarFirstArgIsValue) {
-  // A bare scalar cannot be walked as a cash flow sequence.
-  const Value v = EvalSource("=IRR(5)");
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+TEST(FinancialIRR, LoneValuesAnswerAsExcel) {
+  // IRR answers #NUM! and MIRR #DIV/0! for a lone value of any type; XIRR and XNPV read a lone number as a one-flow
+  // series and refuse lone text.
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  s.set_cell_value(0, 0, Value::number(1.0));
+  s.set_cell_value(1, 0, Value::number(-1.0));
+  s.set_cell_value(0, 1, Value::number(45000.0));
+  s.set_cell_value(1, 1, Value::number(45100.0));
+  const std::pair<const char*, ErrorCode> errors[] = {
+      {"=IRR(5)", ErrorCode::Num},
+      {"=IRR(-5)", ErrorCode::Num},
+      {"=IRR(0)", ErrorCode::Num},
+      {"=IRR(\"a\")", ErrorCode::Num},
+      {"=IRR(\"5\")", ErrorCode::Num},
+      {"=IRR(TRUE)", ErrorCode::Num},
+      {"=IRR(5,0.1)", ErrorCode::Num},
+      {"=IRR(-1/0)", ErrorCode::Div0},
+      {"=LET(r,A1,IRR(r))", ErrorCode::Num},
+      {"=MIRR(5,0.1,0.1)", ErrorCode::Div0},
+      {"=MIRR(-5,0.1,0.1)", ErrorCode::Div0},
+      {"=MIRR(\"a\",0.1,0.1)", ErrorCode::Div0},
+      {"=XIRR(5,45000)", ErrorCode::NA},
+      {"=XIRR(-5,45000)", ErrorCode::NA},
+      {"=XIRR(\"a\",45000)", ErrorCode::Value},
+      {"=XIRR(A1:A2,45000)", ErrorCode::Num},
+      {"=XNPV(0.1,\"a\",45000)", ErrorCode::Value},
+      {"=XNPV(0.1,A1:A2,B1)", ErrorCode::Num},
+  };
+  for (const auto& [src, code] : errors) {
+    const Value v = EvalSourceIn(src, wb, s);
+    EXPECT_TRUE(v.is_error() && v.as_error() == code) << src << " -> " << v.debug_to_string();
+  }
+  const Value one_flow = EvalSourceIn("=XNPV(0.1,5,45000)", wb, s);
+  ASSERT_TRUE(one_flow.is_number()) << one_flow.debug_to_string();
+  EXPECT_EQ(one_flow.as_number(), 5.0);
 }
 
 TEST(FinancialIRR, OverflowedDiscountFactorIsDiv0) {

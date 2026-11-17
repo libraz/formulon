@@ -118,7 +118,7 @@ TEST(LazyRangeArgShapes, IrrStillRejectsBareScalar) {
   // not turn it into a 1-element series.
   const Value v = EvalSource("=IRR(5)");
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
 TEST(LazyRangeArgShapes, MirrMatchesAcrossValueShapes) {
