@@ -136,7 +136,13 @@ TEST_P(OracleTest, Matches) {
   // (e.g. setup formulas calling FORMULATEXT(<test-cell>)) see the cell as a
   // formula cell. The actual value comes from `eval::evaluate` below; the
   // formula_text stored here is only consulted by FORMULATEXT / ISFORMULA.
-  wb.sheet(0).set_cell_formula(case_row, case_col, formula_src);
+  // The external corpus keeps only the formulas its workbooks store without the dynamic-array mark, so each one is a
+  // legacy formula: it is entered as the reader loads one, with an `@` wherever Excel 365 shows it intersecting.
+  const JsonValue* source_v = param.environment.find("source");
+  const bool legacy_formulas = source_v != nullptr && source_v->is_string() && source_v->as_string() == "ironcalc";
+  const std::string case_formula =
+      legacy_formulas ? Workbook::normalize_formula_text(formula_src, Workbook::FormulaSource::kEntered) : formula_src;
+  wb.sheet(0).set_cell_formula(case_row, case_col, case_formula);
 
   if (const JsonValue* merges = param.raw_case.find("merges"); merges != nullptr) {
     const char* err_msg = apply_merge_ranges(*merges, wb.sheet(0));
@@ -185,11 +191,20 @@ TEST_P(OracleTest, Matches) {
       const JsonValue* setup_formula_v = entry.second.find("formula");
       if (kind_v != nullptr && kind_v->is_string() && kind_v->as_string() == "formula" && setup_formula_v != nullptr &&
           setup_formula_v->is_string()) {
-        Sheet::CellRead stored;
-        target_sheet->read_formula_cell(row, col, stored);
-        setup_formulas.push_back({target_sheet_index, row, col, std::string(stored.formula_text())});
+        if (legacy_formulas) {
+          target_sheet->set_cell_dynamic_array(row, col, false);
+        }
+        setup_formulas.push_back({target_sheet_index, row, col, std::string()});
       }
     }
+  }
+  if (legacy_formulas) {
+    wb.apply_legacy_implicit_intersections();
+  }
+  for (SetupFormulaCell& setup_formula : setup_formulas) {
+    Sheet::CellRead stored;
+    wb.sheet(setup_formula.sheet_index).read_formula_cell(setup_formula.row, setup_formula.col, stored);
+    setup_formula.formula = std::string(stored.formula_text());
   }
 
   // Materialise setup formulas before evaluating the formula under test.
@@ -224,7 +239,8 @@ TEST_P(OracleTest, Matches) {
   // Parse and evaluate the formula through the default registry. Leading '='
   // is stripped to match Formulon's parser expectation (the tokenizer treats
   // the formula body as starting at the first token after '=').
-  std::string_view body = formula_src;
+  const std::string entered = legacy_formulas ? wb.with_legacy_intersections(case_formula, 0) : formula_src;
+  std::string_view body = entered;
   if (!body.empty() && body.front() == '=')
     body.remove_prefix(1);
 
