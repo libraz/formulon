@@ -110,9 +110,10 @@ ColorSpec rgb_spec(std::uint32_t argb) {
   return spec;
 }
 
-// --- Rendering. Excel holds each channel in linear light on the 1/100000 `scrgbClr` grid between
-// transforms. Hue, saturation and luminance transforms run on float HSL of the sRGB value (a run of
-// them in one pass); shade, tint, inversion and channel transforms run on the linear value.
+// --- Rendering. Excel holds each channel in linear light and rounds it to the 1/100000 `scrgbClr` grid
+// between two steps, except where `gamma` or `invGamma` is on either side; the base and the output are
+// always on the grid. Hue, saturation and luminance transforms run on float HSL of the sRGB value (a
+// run of them in one pass); shade, tint, inversion and channel transforms run on the linear value.
 
 double to_linear(double v) {
   return v <= 0.04045 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4);
@@ -122,8 +123,10 @@ double from_linear(double v) {
   return v <= 0.0031308 ? v * 12.92 : 1.055 * std::pow(v, 1.0 / 2.4) - 0.055;
 }
 
+// Divides by the step rather than multiplying by its inverse: values on an exact half step round as Excel's do.
 double on_grid(double v) {
-  return std::floor(v * static_cast<double>(kUnit) + 0.5) / static_cast<double>(kUnit);
+  constexpr double kStep = 1e-5;
+  return std::floor(v / kStep + 0.5) * kStep;
 }
 
 struct Hls {
@@ -274,9 +277,20 @@ ResolvedPaint resolve_transforms(std::uint32_t base_argb, const std::vector<Colo
     const auto byte = static_cast<double>((base_argb >> (16 - 8 * i)) & 0xFFU);
     lin[i] = on_grid(to_linear(byte / 255.0));
   }
+  // Whether the previous step was `gamma` or `invGamma`, whose edges stay off the grid.
+  bool raw = false;
+  const auto settle = [&lin](bool keep) {
+    if (!keep) {
+      for (double& x : lin) {
+        x = on_grid(x);
+      }
+    }
+  };
   for (std::size_t i = 0; i < transforms.size();) {
     const ColorTransform& t = transforms[i];
     if (is_hls_transform(t.name)) {
+      settle(raw);
+      raw = false;
       // A run of hue, saturation and luminance transforms shares one HSL pass.
       Hls c = to_hls(from_linear(lin[0]), from_linear(lin[1]), from_linear(lin[2]));
       for (; i < transforms.size() && is_hls_transform(transforms[i].name); ++i) {
@@ -287,7 +301,7 @@ ResolvedPaint resolve_transforms(std::uint32_t base_argb, const std::vector<Colo
       double rgb[3];
       from_hls(c, rgb);
       for (int k = 0; k < 3; ++k) {
-        lin[k] = on_grid(to_linear(rgb[k]));
+        lin[k] = to_linear(rgb[k]);
       }
       continue;
     }
@@ -297,38 +311,41 @@ ResolvedPaint resolve_transforms(std::uint32_t base_argb, const std::vector<Colo
     if (needs_value && !t.value) {
       return out;
     }
+    const bool gamma = name == "gamma" || name == "invGamma";
+    settle(raw || gamma);
+    raw = gamma;
     if (name == "shade") {
       for (double& x : lin) {
-        x = on_grid(x * v);
+        x *= v;
       }
     } else if (name == "tint") {
       for (double& x : lin) {
-        x = on_grid(1.0 - (1.0 - x) * v);
+        x = 1.0 - (1.0 - x) * v;
       }
     } else if (name == "inv") {
       for (double& x : lin) {
-        x = on_grid(1.0 - x);
+        x = 1.0 - x;
       }
     } else if (name == "gray") {
       const double g = 0.2126 * from_linear(lin[0]) + 0.7152 * from_linear(lin[1]) + 0.0722 * from_linear(lin[2]);
-      lin[0] = lin[1] = lin[2] = on_grid(to_linear(g));
+      lin[0] = lin[1] = lin[2] = to_linear(g);
     } else if (name == "gamma") {
-      // Off the grid: the next transform or the output quantises it.
       for (double& x : lin) {
         x = from_linear(x);
       }
     } else if (name == "invGamma") {
       for (double& x : lin) {
-        x = on_grid(to_linear(x));
+        x = to_linear(x);
       }
     } else if (const int ch = channel_of(name); ch >= 0) {
       const std::string_view op = name.substr(name[0] == 'r' ? 3 : name[0] == 'g' ? 5 : 4);
-      lin[ch] = on_grid(op.empty() ? v : op == "Mod" ? lin[ch] * v : lin[ch] + v);
+      lin[ch] = op.empty() ? v : op == "Mod" ? lin[ch] * v : lin[ch] + v;
     } else {
       return out;
     }
     ++i;
   }
+  settle(false);
   std::uint32_t argb = 0xFF000000U;
   for (int i = 0; i < 3; ++i) {
     const double v = std::clamp(from_linear(std::clamp(lin[i], 0.0, 1.0)) * 255.0, 0.0, 255.0);

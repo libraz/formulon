@@ -201,6 +201,33 @@ TEST(DrawingColorResolve, TransformsApplyInTheirWrittenOrder) {
   EXPECT_EQ(Resolved(0xE97132, {{"gamma", std::nullopt}, {"shade", 50000}, {"invGamma", std::nullopt}}), 0xFF743919U);
 }
 
+// Excel 16.115: the grid rounding is skipped on the edges into and out of gamma and invGamma; the 030303 and
+// 060606 rows land on an exact half step of the grid.
+TEST(DrawingColorResolve, GammaEdgesStayOffTheGrid) {
+  EXPECT_EQ(Resolved(0x232323, {{"gamma", std::nullopt}, {"shade", 50000}, {"invGamma", std::nullopt}}), 0xFF121212U);
+  EXPECT_EQ(Resolved(0x8D8D8D, {{"gamma", std::nullopt}, {"shade", 50000}, {"invGamma", std::nullopt}}), 0xFF474747U);
+  EXPECT_EQ(Resolved(0x6E6E6E, {{"gamma", std::nullopt}, {"shade", 75000}, {"invGamma", std::nullopt}}), 0xFF535353U);
+  EXPECT_EQ(Resolved(0xAFAFAF, {{"gamma", std::nullopt}, {"shade", 90000}, {"invGamma", std::nullopt}}), 0xFF9D9D9DU);
+  EXPECT_EQ(Resolved(0x212121, {{"gamma", std::nullopt}, {"tint", 25000}, {"invGamma", std::nullopt}}), 0xFFC8C8C8U);
+  EXPECT_EQ(Resolved(0x6D6D6D, {{"gamma", std::nullopt}, {"tint", 25000}, {"invGamma", std::nullopt}}), 0xFFDBDBDBU);
+  EXPECT_EQ(Resolved(0x363636, {{"gamma", std::nullopt}, {"tint", 50000}, {"invGamma", std::nullopt}}), 0xFF9B9B9BU);
+  EXPECT_EQ(Resolved(0x818181, {{"gamma", std::nullopt}, {"tint", 75000}, {"invGamma", std::nullopt}}), 0xFFA1A1A1U);
+  EXPECT_EQ(Resolved(0xFA5CA3, {{"gamma", std::nullopt}, {"lumMod", 50000}, {"invGamma", std::nullopt}}), 0xFF970026U);
+  EXPECT_EQ(Resolved(0xACACAC, {{"lumMod", 75000}, {"gamma", std::nullopt}}), 0xFFBDBDBDU);
+  EXPECT_EQ(Resolved(0x1FAC61, {{"lumMod", 75000}, {"gamma", std::nullopt}}), 0xFF55BD92U);
+  EXPECT_EQ(Resolved(0xB021AC, {{"lumMod", 75000}, {"gamma", std::nullopt}}), 0xFFBE58BDU);
+  EXPECT_EQ(Resolved(0x7DED0E, {{"gamma", std::nullopt}, {"lumMod", 75000}, {"invGamma", std::nullopt}}), 0xFF51C001U);
+  EXPECT_EQ(Resolved(0x55F46C, {{"gamma", std::nullopt}, {"lumMod", 75000}, {"invGamma", std::nullopt}}), 0xFF0BE91DU);
+  EXPECT_EQ(Resolved(0x161616, {{"shade", 25000}, {"invGamma", std::nullopt}}), 0xFF010101U);
+  EXPECT_EQ(Resolved(0x030303, {{"gamma", std::nullopt}, {"shade", 50000}, {"invGamma", std::nullopt}}), 0xFF010101U);
+  EXPECT_EQ(Resolved(0x909090, {{"invGamma", std::nullopt}, {"shade", 75000}}), 0xFF3D3D3DU);
+  EXPECT_EQ(Resolved(0x0D0D0D, {{"invGamma", std::nullopt}, {"lumMod", 50000}}), 0xFF010101U);
+  EXPECT_EQ(Resolved(0x4F86FC, {{"invGamma", std::nullopt}, {"lumMod", 75000}}), 0xFF0628C3U);
+  EXPECT_EQ(Resolved(0x2C0146, {{"invGamma", std::nullopt}, {"satMod", 150000}}), 0xFF060013U);
+  EXPECT_EQ(Resolved(0x060606, {{"gamma", std::nullopt}, {"shade", 25000}, {"invGamma", std::nullopt}}), 0xFF010101U);
+  EXPECT_EQ(Resolved(0x060606, {{"gamma", std::nullopt}, {"shade", 75000}, {"invGamma", std::nullopt}}), 0xFF050505U);
+}
+
 TEST(DrawingColorResolve, UnmodelledTransformsHaveNoColour) {
   const std::vector<std::vector<ColorTransform>> cases = {
       {{"alphaMod", std::nullopt}}, {{"fooBar", 1}},           {{"redModx", 1}},
