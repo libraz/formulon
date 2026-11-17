@@ -162,11 +162,26 @@ std::optional<std::int32_t> adjust_value_of(std::string_view fmla) {
   return static_cast<std::int32_t>(v);
 }
 
+// The `val` guides of `geom` its preset defines, each once; the save leaves any other guide out.
 std::vector<ShapeAdjust> read_adjust_values(const pugi::xml_node& geom) {
   std::vector<ShapeAdjust> out;
+  const std::optional<std::size_t> preset = preset_geometry::index_of(geom.attribute("prst").value());
+  if (!preset) {
+    return out;
+  }
+  const std::vector<preset_geometry::AdjustGuide> defined = preset_geometry::adjust_guides(*preset);
+  std::vector<std::string_view> seen;
   for (const pugi::xml_node& gd : children_local(child_local(geom, "avLst"), "gd")) {
+    const std::string_view name = gd.attribute("name").value();
+    const bool known = std::any_of(defined.begin(), defined.end(),
+                                   [name](const preset_geometry::AdjustGuide& g) { return g.name == name; });
+    const bool repeated = std::find(seen.begin(), seen.end(), name) != seen.end();
+    seen.push_back(name);
+    if (!known || repeated) {
+      continue;
+    }
     if (const std::optional<std::int32_t> v = adjust_value_of(gd.attribute("fmla").value())) {
-      out.push_back(ShapeAdjust{gd.attribute("name").value(), *v});
+      out.push_back(ShapeAdjust{std::string(name), *v});
     }
   }
   return out;

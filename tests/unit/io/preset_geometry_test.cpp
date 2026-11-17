@@ -160,6 +160,13 @@ TEST(PresetGeometry, SitesMatchExcel) {
       {"wedgeRectCallout", 2032000, 1270000, {{"adj1", -20833}, {"adj2", 62500}}, 2, 1016000, 1270000},
       {"wedgeRectCallout", 2032000, 1270000, {{"adj1", -20833}, {"adj2", 62500}}, 3, 2032000, 635000},
       {"wedgeRectCallout", 2032000, 1270000, {{"adj1", -20833}, {"adj2", 62500}}, 4, 592673, 1428750},
+      // upArrow, which the published definitions omit, as Excel places its sites (default and adj2 70000).
+      {"upArrow", 1524000, 1016000, {}, 0, 762000, 0},
+      {"upArrow", 1524000, 1016000, {}, 1, 0, 508000},
+      {"upArrow", 1524000, 1016000, {}, 2, 762000, 1016000},
+      {"upArrow", 1524000, 1016000, {}, 3, 1524000, 508000},
+      {"upArrow", 2032000, 1270000, {{"adj2", 70000}}, 1, 0, 889000},
+      {"upArrow", 2032000, 1270000, {{"adj2", 70000}}, 3, 2032000, 889000},
   };
   for (const Row& row : rows) {
     const std::vector<Point> sites = connection_sites(*index_of(row.prst), row.w, row.h, row.adjusts);

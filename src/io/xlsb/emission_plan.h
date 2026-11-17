@@ -29,6 +29,11 @@ namespace xlsb {
 
 struct EmissionPlan {
   std::vector<const PassthroughPart*> passthrough_kept;
+  // Drawing parts written without the adjust guides their presets do not define
+  // (`drawing_guides::without_undefined_guides`), listed in `passthrough_kept`
+  // in place of the read ones; reserved before it is filled, so its entries
+  // never move.
+  std::vector<PassthroughPart> repaired_drawing_parts;
   // Shared membership index over the finalized kept list. The list and its
   // pointed-to parts remain immutable for the rest of the write.
   PassthroughPathIndex passthrough_path_index;

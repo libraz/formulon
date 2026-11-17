@@ -208,6 +208,7 @@ set(FORMULON_CORE_SOURCES
   src/io/ooxml/package_rels_reader.cpp
   src/io/ooxml/package_validator.cpp
   src/io/ooxml/preset_geometry.cpp
+  src/io/ooxml/drawing_guides.cpp
   src/io/ooxml/pivot_target_reader.cpp
   src/io/ooxml/part_dom.cpp
   src/io/ooxml/part_graph.cpp

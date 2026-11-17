@@ -122,6 +122,11 @@ struct EmissionPlan {
   // `passthrough_kept` in place of the read ones. `passthrough_kept` points
   // into this vector, so the plan is moved, never copied.
   std::vector<PassthroughPart> rich_value_rel_parts;
+  // Drawing parts written without the adjust guides their presets do not define
+  // (`drawing_guides::without_undefined_guides`), listed in `passthrough_kept`
+  // in place of the read ones; reserved before it is filled, so its entries
+  // never move.
+  std::vector<PassthroughPart> repaired_drawing_parts;
   // True when the writer generates `kPersonsPartPath` from `Workbook::persons()`.
   bool generated_persons = false;
   // The canonical folder of `Workbook::location()`, or empty without one;

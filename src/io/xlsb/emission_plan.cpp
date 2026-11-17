@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <tuple>
@@ -18,6 +19,7 @@
 
 #include "default_content_type.h"
 #include "hyperlink_address.h"
+#include "io/ooxml/drawing_guides.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/relationship_writer.h"
 #include "io/ooxml_defs.h"
@@ -284,6 +286,7 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
       converted_chartsheet_parts.insert(ooxml::rels_path_for_part(wb.sheet(i).opaque_ooxml_part_path()));
     }
   }
+  plan.repaired_drawing_parts.reserve(wb.passthrough_parts().size());
   for (const PassthroughPart& part : wb.passthrough_parts()) {
     if (!ooxml::is_safe_part_name(part.path)) {
       return make_error(FormulonErrorCode::kIoZipSlip, "passthrough part name escapes package root; refusing to write",
@@ -331,6 +334,21 @@ Expected<EmissionPlan, Error> BuildEmissionPlan(const Workbook& wb, bool sst_pre
                           "Default-typed passthrough part has no matching Default registration",
                           std::string(kWriteXlsbContext) + " part=" + part.path + " extension=" + extension);
       }
+    }
+    // A Default-typed part's type is its extension's registration.
+    const auto registered = source_defaults.find(ooxml::extension_of_part(part.path));
+    const std::string_view content_type = !part.content_type.empty()            ? std::string_view(part.content_type)
+                                          : registered != source_defaults.end() ? std::string_view(registered->second)
+                                                                                : std::string_view();
+    std::size_t refused = 0;
+    if (std::optional<PassthroughPart> repaired =
+            drawing_guides::without_undefined_guides(part, content_type, &refused)) {
+      plan.repaired_drawing_parts.push_back(std::move(*repaired));
+      plan.passthrough_kept.push_back(&plan.repaired_drawing_parts.back());
+      if (diagnostics != nullptr) {
+        diagnostics->deferred_feature_count += static_cast<std::uint32_t>(refused);
+      }
+      continue;
     }
     plan.passthrough_kept.push_back(&part);
   }

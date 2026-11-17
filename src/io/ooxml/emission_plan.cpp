@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_set>
@@ -19,6 +20,7 @@
 #include "default_content_type.h"
 #include "external_link.h"
 #include "io/dynamic_array_formula.h"
+#include "io/ooxml/drawing_guides.h"
 #include "io/ooxml/external_link_writer.h"
 #include "io/ooxml/package_validator.h"
 #include "io/ooxml/relationship_writer.h"
@@ -639,6 +641,7 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
       }
     }
   }
+  plan.repaired_drawing_parts.reserve(wb.passthrough_parts().size());
   for (const PassthroughPart& part : wb.passthrough_parts()) {
     // The relationships of a binary part that is not written would dangle.
     if (const std::string owner = RelsOwner(part.path); !owner.empty() && binary_parts.count(owner) != 0U) {
@@ -679,6 +682,16 @@ EmissionPlan BuildEmissionPlan(const Workbook& wb, bool generated_shared_strings
             .field("reason", std::string_view("xlsb_binary_part"))
             .warn();
         CountDroppedPart(part.path, diagnostics);
+      }
+      continue;
+    }
+    std::size_t refused = 0;
+    if (std::optional<PassthroughPart> repaired =
+            drawing_guides::without_undefined_guides(part, EffectiveContentType(wb, part), &refused)) {
+      plan.repaired_drawing_parts.push_back(std::move(*repaired));
+      plan.passthrough_kept.push_back(&plan.repaired_drawing_parts.back());
+      if (diagnostics != nullptr) {
+        diagnostics->deferred_feature_count += static_cast<std::uint32_t>(refused);
       }
       continue;
     }

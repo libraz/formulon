@@ -556,6 +556,8 @@ class SaveDiagnostics:
     #: stored because their rich-data layout cannot be regenerated, each PivotTable of an XLSB source the reader could
     #: not model, each custom view of an XLSB source with no XLSX form (one holding an automatic page break), and
     #: each print record family of an XLSB sheet the model cannot state exactly, which is kept for an XLSB save only.
+    #: Both: each drawing adjust guide left out because its preset does not define it or it repeats one (a file Excel
+    #: refuses to open); a guide of a preset without adjust guides is left out uncounted, as Excel leaves it out.
     deferred_feature_count: int
     #: The number of passthrough parts dropped for colliding with a generated path, or for two entries claiming one
     #: path. Applies to both containers.
