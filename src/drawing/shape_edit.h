@@ -44,6 +44,17 @@ struct ShapeConnection {
   bool operator==(const ShapeConnection& o) const { return object_id == o.object_id && site_index == o.site_index; }
 };
 
+/// `a:bodyPr/@vert`, the text direction (`ST_TextVerticalType`).
+enum class ShapeTextVert : std::int32_t {
+  kHorz = 0,
+  kVert = 1,
+  kVert270 = 2,
+  kEaVert = 3,
+  kWordArtVert = 4,
+  kWordArtVertRtl = 5,
+  kMongolianVert = 6
+};
+
 /// One `a:prstGeom/a:avLst/a:gd` adjust value, `fmla="val <value>"`, in the preset's raw DrawingML units.
 struct ShapeAdjust {
   std::string name;  ///< `@name`: `adj`, `adj1`, ...
@@ -65,8 +76,10 @@ struct ShapeInfo {
   std::string prst;  ///< `a:prstGeom/@prst`; empty for custom geometry or a group.
   /// The `a:avLst` guides stated as `val <int32>`, in document order; a guide holding another formula is not listed.
   std::vector<ShapeAdjust> adjust_values;
-  std::string text;           ///< Paragraphs joined with `\n`; empty for connectors and groups.
-  bool text_box = false;      ///< `cNvSpPr/@txBox`.
+  std::string text;       ///< Paragraphs joined with `\n`; empty for connectors and groups.
+  bool text_box = false;  ///< `cNvSpPr/@txBox`.
+  /// `txBody/a:bodyPr/@vert` as stated; unset when absent (Excel keeps it absent) or not a known token.
+  std::optional<ShapeTextVert> text_vert;
   std::int32_t rotation = 0;  ///< `a:xfrm/@rot` in 60000ths of a degree, as stored.
   bool flip_h = false;        ///< `a:xfrm/@flipH`.
   bool flip_v = false;        ///< `a:xfrm/@flipV`.
@@ -90,7 +103,8 @@ inline constexpr std::uint32_t kRotation = 1U << 5;
 inline constexpr std::uint32_t kHidden = 1U << 6;
 inline constexpr std::uint32_t kFlipH = 1U << 7;
 inline constexpr std::uint32_t kFlipV = 1U << 8;
-inline constexpr std::uint32_t kAll = (1U << 9) - 1U;
+inline constexpr std::uint32_t kTextVert = 1U << 9;
+inline constexpr std::uint32_t kAll = (1U << 10) - 1U;
 }  // namespace shape_field
 
 /// Values for an insert or update; fields outside `fields` are ignored.
@@ -104,6 +118,7 @@ struct ShapeSpec {
   std::string prst;
   std::string text;
   bool text_box = false;
+  std::optional<ShapeTextVert> text_vert;  ///< `kTextVert`; unset removes `vert`. A shape only.
   AnchorKind anchor_kind = AnchorKind::kTwoCell;
   EditAs edit_as = EditAs::kTwoCell;
   AnchorPoint from;

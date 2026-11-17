@@ -1126,5 +1126,97 @@ TEST(ShapeAdjustValues, BadEditsAreRefusedWhole) {
   EXPECT_NE(ShapeWithId(wb, id.value()).object.name, "Renamed");
 }
 
+// The `txBody` of the shape with `cNvPr/@id` == `id` in sheet 0's drawing, printed raw; empty when it has none.
+std::string TextBodyXml(const Workbook& wb, std::uint32_t id) {
+  pugi::xml_document doc;
+  ParseDrawing(wb, 0, doc);
+  const pugi::xml_node cnvpr = doc.document_element().find_node(
+      [id](const pugi::xml_node& n) { return local_name(n) == "cNvPr" && n.attribute("id").as_uint() == id; });
+  std::ostringstream out;
+  cnvpr.parent().parent().child("xdr:txBody").print(out, "", pugi::format_raw);
+  return out.str();
+}
+
+TEST(ShapeTextVert, EveryDirectionWritesAndRoundTripsInBothFormats) {
+  const std::pair<ShapeTextVert, const char*> directions[] = {
+      {ShapeTextVert::kHorz, "horz"},
+      {ShapeTextVert::kVert, "vert"},
+      {ShapeTextVert::kVert270, "vert270"},
+      {ShapeTextVert::kEaVert, "eaVert"},
+      {ShapeTextVert::kWordArtVert, "wordArtVert"},
+      {ShapeTextVert::kWordArtVertRtl, "wordArtVertRtl"},
+      {ShapeTextVert::kMongolianVert, "mongolianVert"},
+  };
+  for (const auto& [vert, token] : directions) {
+    Workbook wb = Workbook::create();
+    ShapeSpec spec = OneCellShape("rect");
+    spec.fields |= shape_field::kText | shape_field::kTextVert;
+    spec.text = "A";
+    spec.text_vert = vert;
+    auto id = insert_shape(wb, 0, spec);
+    ASSERT_TRUE(static_cast<bool>(id));
+    EXPECT_NE(TextBodyXml(wb, id.value()).find(std::string(" vert=\"") + token + "\""), std::string::npos) << token;
+    const Workbook xlsx = RoundTrip(wb);
+    const Workbook xlsb = XlsbRoundTrip(wb);
+    for (const Workbook* again : {&xlsx, &xlsb}) {
+      EXPECT_EQ(ShapeWithId(*again, id.value()).text_vert, std::optional<ShapeTextVert>(vert)) << token;
+    }
+  }
+}
+
+TEST(ShapeTextVert, AbsentStaysAbsentAndUnsetRemoves) {
+  Workbook wb = Workbook::create();
+  ShapeSpec spec = OneCellShape("rect");
+  spec.fields |= shape_field::kText;
+  spec.text = "A";
+  auto id = insert_shape(wb, 0, spec);
+  ASSERT_TRUE(static_cast<bool>(id));
+  EXPECT_FALSE(ShapeWithId(RoundTrip(wb), id.value()).text_vert.has_value());
+  EXPECT_EQ(TextBodyXml(wb, id.value()).find(" vert="), std::string::npos);
+
+  ShapeSpec set;
+  set.fields = shape_field::kTextVert;
+  set.text_vert = ShapeTextVert::kVert270;
+  ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, id.value(), set)));
+  ShapeSpec unset;
+  unset.fields = shape_field::kTextVert;
+  ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, id.value(), unset)));
+  EXPECT_EQ(TextBodyXml(wb, id.value()).find(" vert="), std::string::npos);
+  EXPECT_NE(TextBodyXml(wb, id.value()).find("<a:t>A</a:t>"), std::string::npos);
+
+  // An unknown token reads as unset and stays in the file.
+  pugi::xml_document doc;
+  ParseDrawing(wb, 0, doc);
+  const std::string drawing_path = wb.sheet(0).drawing_rel_target();
+  std::ostringstream text;
+  doc.save(text, "", pugi::format_raw);
+  std::string xml = text.str();
+  const std::string body = "<a:bodyPr ";
+  xml.replace(xml.find(body), body.size(), "<a:bodyPr vert=\"sideways\" ");
+  ASSERT_TRUE(static_cast<bool>(wb.replace_passthrough_part(drawing_path, ToBytes(xml))));
+  EXPECT_FALSE(ShapeWithId(wb, id.value()).text_vert.has_value());
+  EXPECT_NE(TextBodyXml(RoundTrip(wb), id.value()).find("vert=\"sideways\""), std::string::npos);
+}
+
+TEST(ShapeTextVert, ShapeWithoutTextGetsABodyOnlyWhenSet) {
+  Workbook wb = ConnectorFixture();
+  ShapeSpec unset;
+  unset.fields = shape_field::kTextVert;
+  ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, 2, unset)));
+  EXPECT_EQ(TextBodyXml(wb, 2), "");
+
+  ShapeSpec set;
+  set.fields = shape_field::kTextVert;
+  set.text_vert = ShapeTextVert::kEaVert;
+  ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, 2, set)));
+  EXPECT_NE(TextBodyXml(wb, 2).find("vert=\"eaVert\"/><a:lstStyle/><a:p/></xdr:txBody>"), std::string::npos);
+  EXPECT_EQ(ShapeWithId(wb, 2).text_vert, std::optional<ShapeTextVert>(ShapeTextVert::kEaVert));
+
+  // A connector carries no text, and a value outside the enum is refused.
+  EXPECT_EQ(Code(update_shape(wb, 0, 4, set)), FormulonErrorCode::kInvalidArgument);
+  set.text_vert = static_cast<ShapeTextVert>(7);
+  EXPECT_EQ(Code(update_shape(wb, 0, 2, set)), FormulonErrorCode::kInvalidArgument);
+}
+
 }  // namespace
 }  // namespace formulon

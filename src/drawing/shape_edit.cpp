@@ -192,6 +192,19 @@ std::optional<ShapeConnection> read_connection(const pugi::xml_node& node) {
   return ShapeConnection{*id, *idx};
 }
 
+constexpr const char* kTextVertTokens[] = {"horz",        "vert",           "vert270",      "eaVert",
+                                           "wordArtVert", "wordArtVertRtl", "mongolianVert"};
+
+std::optional<ShapeTextVert> read_text_vert(const pugi::xml_node& content) {
+  const pugi::xml_attribute vert = child_local(child_local(content, "txBody"), "bodyPr").attribute("vert");
+  for (std::size_t i = 0; vert && i < std::size(kTextVertTokens); ++i) {
+    if (std::string_view(vert.value()) == kTextVertTokens[i]) {
+      return static_cast<ShapeTextVert>(i);
+    }
+  }
+  return std::nullopt;
+}
+
 /// The value of a guide formula `val <int32>`; unset for any other formula.
 std::optional<std::int32_t> adjust_value_of(std::string_view fmla) {
   constexpr std::string_view kVal = "val ";
@@ -261,6 +274,7 @@ ShapeInfo read_shape(const Workbook& wb, pugi::xml_node anchor, DrawingObject ob
   info.adjust_values = read_adjust_values(child_local(props, "prstGeom"));
   info.text = read_text(content);
   info.text_box = child_local(child_local(content, "nvSpPr"), "cNvSpPr").attribute("txBox").as_bool();
+  info.text_vert = read_text_vert(content);
   const drawing_edit::XfrmTransform transform = drawing_edit::read_xfrm_transform(child_local(props, "xfrm"));
   info.rotation = transform.rot;
   info.flip_h = transform.flip_h;
@@ -406,10 +420,11 @@ Expected<void, Error> place(const Workbook& wb, std::size_t sheet, pugi::xml_nod
   return Expected<void, Error>::Ok();
 }
 
-void set_text(pugi::xml_node content, const std::string& text) {
-  const std::string ap = a_prefix(content);
+/// The shape's `txBody`, created with one empty paragraph when absent.
+pugi::xml_node ensure_text_body(pugi::xml_node content) {
   pugi::xml_node body = child_local(content, "txBody");
   if (!body) {
+    const std::string ap = a_prefix(content);
     body = content.append_child((xdr_prefix(content) + "txBody").c_str());
     pugi::xml_node pr = body.append_child((ap + "bodyPr").c_str());
     pr.append_attribute("vertOverflow").set_value("clip");
@@ -417,7 +432,31 @@ void set_text(pugi::xml_node content, const std::string& text) {
     pr.append_attribute("rtlCol").set_value("0");
     pr.append_attribute("anchor").set_value("t");
     body.append_child((ap + "lstStyle").c_str());
+    body.append_child((ap + "p").c_str());
   }
+  return body;
+}
+
+void set_text_vert(pugi::xml_node content, std::optional<ShapeTextVert> vert) {
+  if (!vert && !child_local(content, "txBody")) {
+    return;
+  }
+  pugi::xml_node body = ensure_text_body(content);
+  pugi::xml_node pr = child_local(body, "bodyPr");
+  if (!pr) {
+    pr = body.prepend_child((a_prefix(content) + "bodyPr").c_str());
+  }
+  if (!vert) {
+    pr.remove_attribute("vert");
+    return;
+  }
+  (pr.attribute("vert") ? pr.attribute("vert") : pr.append_attribute("vert"))
+      .set_value(kTextVertTokens[static_cast<std::size_t>(*vert)]);
+}
+
+void set_text(pugi::xml_node content, const std::string& text) {
+  const std::string ap = a_prefix(content);
+  pugi::xml_node body = ensure_text_body(content);
   // The first paragraph's properties and first run's formatting serve every new paragraph.
   pugi::xml_node first = child_local(body, "p");
   pugi::xml_node ppr = child_local(first, "pPr");
@@ -507,8 +546,12 @@ Expected<void, Error> apply_fields(pugi::xml_node anchor, pugi::xml_node content
   if (!spec.adjust_values.empty() && !child_local(props, "prstGeom") && (f & shape_field::kPrst) == 0U) {
     return invalid("adjust_values apply only to preset geometry");
   }
-  if ((f & (shape_field::kText | shape_field::kTextBox)) != 0U && kind != "sp") {
-    return invalid("text and text_box apply only to a shape");
+  if ((f & (shape_field::kText | shape_field::kTextBox | shape_field::kTextVert)) != 0U && kind != "sp") {
+    return invalid("text, text_box and text_vert apply only to a shape");
+  }
+  if ((f & shape_field::kTextVert) != 0U && spec.text_vert &&
+      static_cast<std::size_t>(*spec.text_vert) >= std::size(kTextVertTokens)) {
+    return invalid("text_vert must be a DrawingML text direction");
   }
   if ((f & shape_field::kText) != 0U && std::any_of(spec.text.begin(), spec.text.end(), [](unsigned char c) {
         return c < 0x20U && c != '\n' && c != '\t';
@@ -571,6 +614,9 @@ Expected<void, Error> apply_fields(pugi::xml_node anchor, pugi::xml_node content
   }
   if ((f & shape_field::kText) != 0U) {
     set_text(content, spec.text);
+  }
+  if ((f & shape_field::kTextVert) != 0U) {
+    set_text_vert(content, spec.text_vert);
   }
   return apply_paint_records(props, spec);
 }
