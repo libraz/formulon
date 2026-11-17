@@ -94,20 +94,16 @@ inline bool spans_all_cols(std::uint32_t col_first, std::uint32_t col_last) noex
 bool is_reference_shape(const parser::AstNode& node) noexcept;
 
 /// Returns the static `Ref` / `RangeOp` a reference-valued `expr` denotes (`A1`,
-/// `A1:B2`, a reference-returning call resolved to its rectangle, a name bound
-/// to one), or nullptr for any other source.
+/// `A1:B2`, a reference-returning call or a name resolved to its rectangle),
+/// or nullptr for any other source.
 const parser::AstNode* resolve_binding_reference(const parser::AstNode& expr, Arena& arena,
                                                  const FunctionRegistry& registry, const EvalContext& ctx);
 
 /// Evaluates the source of a LET binding or a LAMBDA argument, the one rule
-/// both follow. A reference source also yields in `*out_ast` the AST from
-/// `resolve_binding_reference` for the binding to record, so the bound name
-/// stays a reference; array literals and `A1#` spill references are recorded
-/// as written. Any other source binds by value alone and `*out_ast` is nullptr.
-/// A recorded AST never names a binding, so it reads the same inside a lambda
-/// body whose scope is not the caller's.
+/// both follow: the source as the reference it denotes (`eval_node_ref`), so a
+/// name bound to a reference stays that reference, else its value.
 Value eval_binding_source(const parser::AstNode& expr, Arena& arena, const FunctionRegistry& registry,
-                          const EvalContext& ctx, const parser::AstNode** out_ast);
+                          const EvalContext& ctx);
 
 // Invokes a runtime `LambdaValue` with the given argument-AST accessor
 // and arity. Shared between the `LambdaCall` AST case (a parser-emitted

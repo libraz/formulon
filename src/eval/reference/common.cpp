@@ -218,6 +218,19 @@ bool resolve_offset_base(const parser::AstNode& raw_arg, Arena& arena, const Fun
     out->cols = c_hi - c_lo + 1U;
     return true;
   }
+  if (k == parser::NodeKind::Literal && arg.as_literal().is_ref()) {
+    // A name bound to a reference: its one area is the base. Only its position is used, so it is no read of its
+    // cells.
+    RefArea area{};
+    if (!eval_reference_area(arg, arena, registry, ctx.without_dynamic_read_callback(), &out->sheet, &area, out_err)) {
+      return false;
+    }
+    out->row = area.row_first;
+    out->col = area.col_first;
+    out->rows = area.row_last - area.row_first + 1U;
+    out->cols = area.col_last - area.col_first + 1U;
+    return true;
+  }
   if (k == parser::NodeKind::Call) {
     // Nested INDIRECT / OFFSET as OFFSET's base: resolve to a rectangle
     // without dereferencing, then adopt it as the base shape. Only its

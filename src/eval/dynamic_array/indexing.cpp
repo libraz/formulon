@@ -107,13 +107,15 @@ Value eval_choose_lanes(const parser::AstNode& call, Arena& arena, const Functio
 /// remove, which `resolve_take_drop_range` decides from `take`.
 // Whether `node` denotes a reference, so TAKE / DROP over it yield a reference.
 bool denotes_reference(const parser::AstNode& node, const EvalContext& ctx) {
-  const parser::AstNode& source = resolve_range_binding(node, ctx.name_env(), /*accept_ref=*/true);
+  const parser::AstNode& source = resolve_name_ast(node, ctx.name_env());
   switch (source.kind()) {
     case parser::NodeKind::Ref:
     case parser::NodeKind::RangeOp:
     case parser::NodeKind::SpillRef:
     case parser::NodeKind::StructuredRef:
       return true;
+    case parser::NodeKind::Literal:
+      return source.as_literal().is_ref();
     default:
       return false;
   }

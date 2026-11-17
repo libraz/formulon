@@ -110,14 +110,17 @@ struct CriteriaShape {
 /// True when the range argument is a reference into a supporting workbook,
 /// which the range-taking conditional aggregates reject as a closed book.
 bool is_external_range_arg(const parser::AstNode& arg, const EvalContext& ctx) {
-  return resolve_range_binding(arg, ctx.name_env(), /*accept_ref=*/false).kind() == parser::NodeKind::ExternalRef;
+  const parser::AstNode& node = resolve_name_ast(arg, ctx.name_env());
+  return node.kind() == parser::NodeKind::ExternalRef ||
+         (node.kind() == parser::NodeKind::Literal && node.as_literal().is_ref() &&
+          node.as_literal().as_ref().book != 0U);
 }
 
-/// True when `node` is a reference a call returns, or a `:` over one
-/// (`A1:OFFSET(...)`), read as the `Ref` it evaluates to.
+/// True when `node` is a reference a call returns, a `:` over one
+/// (`A1:OFFSET(...)`) or a name, read as the `Ref` it evaluates to.
 bool is_returned_reference(const parser::AstNode& node, const EvalContext& ctx) {
   const parser::NodeKind k = node.kind();
-  if (k != parser::NodeKind::Call && k != parser::NodeKind::RangeOp) {
+  if (k != parser::NodeKind::Call && k != parser::NodeKind::RangeOp && k != parser::NodeKind::NameRef) {
     return false;
   }
   parser::Reference lhs{};
@@ -125,7 +128,7 @@ bool is_returned_reference(const parser::AstNode& node, const EvalContext& ctx) 
   if (k == parser::NodeKind::RangeOp && reference_endpoint_pair(node, &lhs, &rhs, ctx)) {
     return false;
   }
-  return evaluates_to_reference(node) && !carries_name_reference(node);
+  return evaluates_to_reference(node);
 }
 
 /// Reads a range argument of the range-taking conditional aggregates, which
@@ -134,13 +137,12 @@ bool is_returned_reference(const parser::AstNode& node, const EvalContext& ctx) 
 Expected<ConditionalRange, ErrorCode> resolve_conditional_range(const parser::AstNode& arg, Arena& arena,
                                                                 const FunctionRegistry& registry,
                                                                 const EvalContext& ctx) {
-  const parser::AstNode& node = resolve_range_binding(arg, ctx.name_env(), /*accept_ref=*/false);
-  if (node.kind() == parser::NodeKind::Ref3D) {
-    return three_d_reference_error(node);
+  if (arg.kind() == parser::NodeKind::Ref3D) {
+    return three_d_reference_error(arg);
   }
   ConditionalRange out;
-  if (is_returned_reference(node, ctx)) {
-    const Value ref = eval_node_ref(node, arena, registry, ctx);
+  if (is_returned_reference(arg, ctx)) {
+    const Value ref = eval_node_ref(arg, arena, registry, ctx);
     if (ref.is_error()) {
       return ref.as_error();
     }
@@ -311,13 +313,12 @@ bool resolve_optional_value_range(const parser::AstNode& arg, std::uint32_t crit
                                   std::size_t criteria_size, Arena& arena, const FunctionRegistry& registry,
                                   const EvalContext& ctx, std::vector<Value>* out_cells, Value* out_err_value) {
   // A static reference value range, of any size, is anchored at its top-left
-  // cell and takes the criteria range's shape. LET bindings pass through, so
-  // `=LET(b, B1, SUMIF(A1:A3,"x",b))` reads B1:B3 like the literal form.
+  // cell and takes the criteria range's shape.
   parser::Reference lhs{};
   parser::Reference rhs{};
   const bool criteria_rectangular = criteria_rows > 0U && criteria_cols > 0U &&
                                     static_cast<std::size_t>(criteria_rows) * criteria_cols == criteria_size;
-  if (criteria_rectangular && reference_endpoint_pair(resolve_name_ast(arg, ctx.name_env()), &lhs, &rhs, ctx)) {
+  if (criteria_rectangular && reference_endpoint_pair(arg, &lhs, &rhs, ctx)) {
     const auto rect = ctx.declared_range_rect(lhs, rhs);
     const auto sheet = merge_sheet_qualifiers(lhs.sheet, rhs.sheet, ctx.workbook());
     if (rect && sheet && !rect.value().whole_axis) {
@@ -332,10 +333,10 @@ bool resolve_optional_value_range(const parser::AstNode& arg, std::uint32_t crit
       return true;
     }
   }
-  // A returned one-area reference is anchored the same way: `SUMIF(A1:A3,"x",OFFSET(B1,0,0))` reads B1:B3.
-  const parser::AstNode& node = resolve_range_binding(arg, ctx.name_env(), /*accept_ref=*/false);
-  if (criteria_rectangular && is_returned_reference(node, ctx)) {
-    const Value ref = eval_node_ref(node, arena, registry, ctx);
+  // A returned one-area reference, or a name standing for one, is anchored the same way:
+  // `SUMIF(A1:A3,"x",OFFSET(B1,0,0))` and `LET(b, B1, SUMIF(A1:A3,"x",b))` read B1:B3.
+  if (criteria_rectangular && is_returned_reference(arg, ctx)) {
+    const Value ref = eval_node_ref(arg, arena, registry, ctx);
     if (ref.is_error()) {
       *out_err_value = ref;
       return false;

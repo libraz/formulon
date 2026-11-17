@@ -65,13 +65,8 @@ bool is_hangul(std::uint32_t cp) noexcept {
 // include reference-returning calls (`is_reference_call_name`); those need
 // evaluation to confirm they produce a ref at runtime.
 //
-// A bare `NameRef` is intentionally NOT treated as ref-shaped here: a LET
-// binding such as `=LET(x, 5, ISREF(x))` carries a scalar value, not a
-// reference. Callers must first resolve a `NameRef` through
-// `resolve_name_ast` so a range-bound name (`=LET(r, A1, ISREF(r))`)
-// surfaces its underlying `Ref` / `RangeOp` AST, which this function then
-// recognises. An unresolved (scalar-bound) name stays a `NameRef` and
-// falls through to FALSE.
+// A bare `NameRef` is not ref-shaped here: whether a name stands for a
+// reference is known only from its evaluation (`eval_node_ref`).
 bool is_static_reference_shape(const parser::AstNode& node) noexcept {
   switch (node.kind()) {
     case parser::NodeKind::Ref:
@@ -124,32 +119,19 @@ Value eval_first_cell_coercion(const parser::AstNode& call, Arena& arena, const 
   if (call.as_call_arity() != 1U) {
     return Value::error(ErrorCode::Value);
   }
-  const parser::AstNode& target = resolve_name_ast(call.as_call_arg(0), ctx.name_env());
+  const parser::AstNode& target = call.as_call_arg(0);
   const parser::NodeKind kind = target.kind();
   if (kind == parser::NodeKind::Ref || kind == parser::NodeKind::RangeOp || kind == parser::NodeKind::IntersectOp ||
       kind == parser::NodeKind::NameRef ||
       (kind == parser::NodeKind::Call && is_reference_call_name(target.as_call_name()))) {
     std::string_view sheet;
-    std::uint32_t top = 0;
-    std::uint32_t left = 0;
-    std::uint32_t bottom = 0;
-    std::uint32_t right = 0;
+    RefArea area{};
     ErrorCode err = ErrorCode::Value;
-    // A name is resolved by the name until names bind as references.
-    bool resolved = false;
-    if (carries_name_reference(target)) {
-      resolved = resolve_reference_rect(target, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &err);
-    } else {
-      RefArea area{};
-      resolved = eval_reference_area(target, arena, registry, ctx, &sheet, &area, &err);
-      top = area.row_first;
-      left = area.col_first;
-    }
-    if (resolved) {
+    if (eval_reference_area(target, arena, registry, ctx, &sheet, &area, &err)) {
       parser::Reference first{};
       first.sheet = sheet;
-      first.row = top;
-      first.col = left;
+      first.row = area.row_first;
+      first.col = area.col_first;
       return coerce(ctx.resolve_ref(first, arena, registry));
     }
   }
@@ -198,14 +180,8 @@ Expected<SingleReference, ErrorCode> resolve_single_reference(const parser::AstN
     sheet_name = ref.sheet;
     top = bottom = ref.row;
     left = right = ref.col;
-  } else if (node.kind() == parser::NodeKind::Call && carries_name_reference(node)) {
-    bool is_range = false;
-    ErrorCode err = ErrorCode::Value;
-    if (!resolve_reference_call(node, arena, registry, ctx, &sheet_name, &top, &left, &bottom, &right, &is_range,
-                                &err)) {
-      return err;
-    }
-  } else if (node.kind() == parser::NodeKind::Call && is_reference_call_name(node.as_call_name())) {
+  } else if ((node.kind() == parser::NodeKind::Call && is_reference_call_name(node.as_call_name())) ||
+             node.kind() == parser::NodeKind::NameRef) {
     RefArea area{};
     ErrorCode err = ErrorCode::Value;
     if (!eval_reference_area(node, arena, registry, ctx, &sheet_name, &area, &err)) {
@@ -246,17 +222,14 @@ Value eval_isformula_lazy(const parser::AstNode& call, Arena& arena, const Funct
   if (call.as_call_arity() != 1U) {
     return Value::error(ErrorCode::Value);
   }
-  // Look through a LET / LAMBDA `NameRef` to its bound source AST so a
-  // reference-bound name (`=LET(c, A1, ISFORMULA(c))`) inspects the cell it
-  // resolves to. A scalar-bound name (`=LET(x, 5, ISFORMULA(x))`) carries no
-  // AST: `resolve_name_ast` returns the `NameRef` unchanged and the
-  // non-reference `#VALUE!` tail handles it.
-  const parser::AstNode& arg = resolve_name_ast(call.as_call_arg(0), ctx.name_env());
+  // A name stands for the reference it is bound to (`=LET(c, A1, ISFORMULA(c))`); one standing for a value
+  // (`=LET(x, 5, ISFORMULA(x))`) is #VALUE!, as a value argument is.
+  const parser::AstNode& arg = call.as_call_arg(0);
 
   // Static references and calls that preserve a reference shape share the
   // range resolver used by ROWS/COLUMNS and CELL. This retains OFFSET and
   // CHOOSE coordinates instead of flattening their target to a Value.
-  if (arg.kind() == parser::NodeKind::Ref ||
+  if (arg.kind() == parser::NodeKind::Ref || arg.kind() == parser::NodeKind::NameRef ||
       (arg.kind() == parser::NodeKind::Call && is_reference_call_name(arg.as_call_name()))) {
     auto target = resolve_single_reference(arg, arena, registry, ctx);
     if (target) {
@@ -288,8 +261,7 @@ Value eval_formulatext_lazy(const parser::AstNode& call, Arena& arena, const Fun
   if (call.as_call_arity() != 1U) {
     return Value::error(ErrorCode::Value);
   }
-  const parser::AstNode& arg = resolve_name_ast(call.as_call_arg(0), ctx.name_env());
-  auto target = resolve_single_reference(arg, arena, registry, ctx);
+  auto target = resolve_single_reference(call.as_call_arg(0), arena, registry, ctx);
   if (!target) {
     return Value::error(target.error());
   }
@@ -357,15 +329,15 @@ Value eval_isref_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   if (call.as_call_arity() != 1U) {
     return Value::error(ErrorCode::Value);
   }
-  // Look through a LET / LAMBDA `NameRef` to its bound source AST. A
-  // range-shaped binding (`=LET(r, A1, ISREF(r))`) resolves to the
-  // underlying `Ref` / `RangeOp` and counts as a reference; a scalar-bound
-  // name (`=LET(x, 5, ISREF(x))`) carries no AST, so `resolve_name_ast`
-  // returns the `NameRef` unchanged and every branch below evaluates to
-  // FALSE.
-  const parser::AstNode& arg = resolve_name_ast(call.as_call_arg(0), ctx.name_env());
+  const parser::AstNode& arg = call.as_call_arg(0);
   if (is_static_reference_shape(arg)) {
     return Value::boolean(true);
+  }
+  // A name is a reference when it stands for one (`=LET(r, A1, ISREF(r))`), not when it stands for a value
+  // (`=LET(x, 5, ISREF(x))`).
+  if (arg.kind() == parser::NodeKind::NameRef) {
+    const Value v = eval_node_ref(arg, arena, registry, ctx.without_dynamic_read_callback());
+    return Value::boolean(v.is_ref() && (v.ref_form() == RefForm::kArea || v.ref_form() == RefForm::kUnion));
   }
   if (arg.kind() == parser::NodeKind::Call && is_reference_call_name(arg.as_call_name())) {
     // Reference-returning calls must actually produce a non-error
@@ -373,15 +345,6 @@ Value eval_isref_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     // is FALSE because INDIRECT surfaces `#REF!`.
     std::string_view sheet;
     ErrorCode err = ErrorCode::Value;
-    if (carries_name_reference(arg)) {
-      std::uint32_t top = 0;
-      std::uint32_t left = 0;
-      std::uint32_t bottom = 0;
-      std::uint32_t right = 0;
-      bool is_range = false;
-      return Value::boolean(resolve_reference_call(arg, arena, registry, ctx.without_dynamic_read_callback(), &sheet,
-                                                   &top, &left, &bottom, &right, &is_range, &err));
-    }
     RefArea area{};
     return Value::boolean(
         eval_reference_area(arg, arena, registry, ctx.without_dynamic_read_callback(), &sheet, &area, &err));
@@ -448,13 +411,18 @@ Value eval_sheet_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     return current_sheet_number();
   }
 
-  const parser::AstNode& arg = resolve_name_ast(call.as_call_arg(0), ctx.name_env());
+  const parser::AstNode& arg = call.as_call_arg(0);
 
   // Reference AST: the answer is determined by the sheet qualifier
   // without needing to evaluate the reference.
   std::string_view sheet_qualifier;
   bool have_ref_shape = false;
-  if (arg.kind() == parser::NodeKind::Ref) {
+  if (arg.kind() == parser::NodeKind::NameRef) {
+    // A name standing for a reference names its sheet; one standing for a value is read below.
+    RefArea area{};
+    ErrorCode err = ErrorCode::Value;
+    have_ref_shape = eval_reference_area(arg, arena, registry, ctx, &sheet_qualifier, &area, &err);
+  } else if (arg.kind() == parser::NodeKind::Ref) {
     sheet_qualifier = arg.as_ref().sheet;
     have_ref_shape = true;
   } else if (arg.kind() == parser::NodeKind::RangeOp) {

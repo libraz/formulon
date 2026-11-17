@@ -52,17 +52,10 @@ bool is_reference_call_name(std::string_view name) noexcept;
 /// name `is_reference_call_name` rejects. Answers from the lazy table's `ref_result`.
 bool is_reference_carrying_arg(std::string_view call_name, std::uint32_t arg_index, std::uint32_t arity) noexcept;
 
-/// True when `node` can denote a reference only through a name: a LET-bound or defined name, or a
-/// reference-returning call whose carried argument (`is_reference_carrying_arg`) does, at any depth. Such a node
-/// yields a value, not a `Ref`, from `eval_node_ref` until names bind as references, so a reader that needs the
-/// rectangle goes through `resolve_reference_call` / `resolve_reference_rect` for it.
-bool carries_name_reference(const parser::AstNode& node) noexcept;
-
 /// Evaluates `node` as the reference it denotes (`eval_node_ref`), reading none of its cells. True for a one-area
 /// reference into this workbook, with its area and sheet qualifier (empty = the formula's own sheet); a dynamic one
 /// (OFFSET, INDIRECT) is reported to `ctx` as read. Otherwise false with `*out_err`: the error the node evaluates to,
-/// `#REF!` for any other reference, `#VALUE!` for any other value. A node that `carries_name_reference` evaluates to
-/// a value here.
+/// `#REF!` for any other reference, `#VALUE!` for any other value.
 bool eval_reference_area(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx, std::string_view* out_sheet, RefArea* out_area, ErrorCode* out_err);
 

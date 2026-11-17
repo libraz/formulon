@@ -11,7 +11,6 @@
 #include "eval/array_alloc.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
-#include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
 #include "eval/range_resolvers.h"
 #include "eval/scalar_ops.h"
@@ -59,10 +58,7 @@ using detail::make_array_value;
 
 Value eval_node_as_array(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx) {
-  // LET-binding NameRef passthrough: mirror the pattern used by the other
-  // shape-aware seams so `=LET(r, A1:A3, r+1)` sees the bound RangeOp / Call
-  // AST rather than the NameRef wrapper.
-  const parser::AstNode& target = resolve_range_binding(node, ctx.name_env(), /*accept_ref=*/true);
+  const parser::AstNode& target = node;
   const parser::NodeKind k = target.kind();
 
   // BinaryOp -> recurse into the cellwise broadcaster.

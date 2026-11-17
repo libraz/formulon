@@ -112,17 +112,12 @@ class LambdaCall {
   std::optional<ErrorCode> error_;
 };
 
-// Evaluates each call-site argument into `*args`, recording in `*bound_asts`
-// the AST `eval_binding_source` chose to bind alongside it.
+// Evaluates each call-site argument into `*args` by the binding rule.
 void evaluate_call_args(const parser::AstNode* const* call_args, std::uint32_t arity, Arena& arena,
-                        const FunctionRegistry& registry, const EvalContext& ctx, std::vector<Value>* args,
-                        std::vector<const parser::AstNode*>* bound_asts) {
+                        const FunctionRegistry& registry, const EvalContext& ctx, std::vector<Value>* args) {
   args->reserve(arity);
-  bound_asts->reserve(arity);
   for (std::uint32_t i = 0; i < arity; ++i) {
-    const parser::AstNode* bound = nullptr;
-    args->push_back(eval_binding_source(*call_args[i], arena, registry, ctx, &bound));
-    bound_asts->push_back(bound);
+    args->push_back(eval_binding_source(*call_args[i], arena, registry, ctx));
   }
 }
 
@@ -130,10 +125,8 @@ void evaluate_call_args(const parser::AstNode* const* call_args, std::uint32_t a
 // instead when the arity does not fit or the lambda has no body.
 // `syntax_args` is the call site's argument AST, consulted for one thing
 // only: telling a syntactically omitted slot (`f(1, , 3)`) from a supplied
-// one. It is deliberately separate from `ast_args`, the per-argument AST
-// `eval_binding_source` chose to record on the binding.
+// one.
 std::optional<ErrorCode> bind_lambda_params(const LambdaValue* lv, std::uint32_t arity, const Value* args,
-                                            const parser::AstNode* const* ast_args,
                                             const parser::AstNode* const* syntax_args, Arena& arena, NameEnv* out) {
   if (!lambda_accepts_arity(lv, arity)) {
     return ErrorCode::Value;
@@ -146,7 +139,6 @@ std::optional<ErrorCode> bind_lambda_params(const LambdaValue* lv, std::uint32_t
     env = *lv->captured_env;
   }
   for (std::uint32_t i = 0; i < arity; ++i) {
-    const parser::AstNode* expr = (ast_args != nullptr) ? ast_args[i] : nullptr;
     // `f(1, , 3)` supplies the slot syntactically and omits its value, and
     // Excel treats that as omitted wherever it appears -- leading, middle
     // or trailing -- not only past the end of the argument list. Binding
@@ -155,12 +147,12 @@ std::optional<ErrorCode> bind_lambda_params(const LambdaValue* lv, std::uint32_t
     // ISOMITTED the wrong thing, which is the whole of what that function
     // is for. Only the AST can answer this: by the time the argument is a
     // Value, an omitted slot and a blank cell are the same blank.
-    const parser::AstNode* syntax = (syntax_args != nullptr) ? syntax_args[i] : expr;
+    const parser::AstNode* syntax = (syntax_args != nullptr) ? syntax_args[i] : nullptr;
     if (syntax != nullptr && is_omitted_arg(*syntax)) {
       env = env.extend_omitted(lv->params[i], arena);
       continue;
     }
-    env = env.extend(lv->params[i], args[i], expr, arena);
+    env = env.extend(lv->params[i], args[i], arena);
   }
   for (std::uint32_t i = arity; i < lv->param_count; ++i) {
     env = env.extend_omitted(lv->params[i], arena);
@@ -179,8 +171,19 @@ EvalContext lambda_body_context(const LambdaValue* lv, const NameEnv& env, const
 Value invoke_lambda_values_impl(const LambdaValue* lv, std::uint32_t arity, const Value* args,
                                 const parser::AstNode* const* ast_args, const parser::AstNode* const* syntax_args,
                                 Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
+  // An argument that comes with a reference AST binds as that reference.
+  std::vector<Value> bound;
+  if (ast_args != nullptr) {
+    bound.assign(args, args + arity);
+    for (std::uint32_t i = 0; i < arity; ++i) {
+      if (ast_args[i] != nullptr && evaluates_to_reference(*ast_args[i])) {
+        bound[i] = eval_node_ref(*ast_args[i], arena, registry, ctx);
+      }
+    }
+    args = bound.data();
+  }
   NameEnv env;
-  if (const std::optional<ErrorCode> err = bind_lambda_params(lv, arity, args, ast_args, syntax_args, arena, &env)) {
+  if (const std::optional<ErrorCode> err = bind_lambda_params(lv, arity, args, syntax_args, arena, &env)) {
     return Value::error(*err);
   }
   return eval_node(*lv->body, arena, registry, lambda_body_context(lv, env, ctx));
@@ -235,10 +238,8 @@ std::optional<ErrorCode> bind_call_site(const LambdaValue* lv, std::uint32_t ari
     return ErrorCode::Value;
   }
   std::vector<Value> args;
-  std::vector<const parser::AstNode*> bound_asts;
-  evaluate_call_args(call_args, arity, arena, registry, ctx, &args, &bound_asts);
-  return bind_lambda_params(lv, arity, args.empty() ? nullptr : args.data(),
-                            bound_asts.empty() ? nullptr : bound_asts.data(), call_args, arena, env);
+  evaluate_call_args(call_args, arity, arena, registry, ctx, &args);
+  return bind_lambda_params(lv, arity, args.empty() ? nullptr : args.data(), call_args, arena, env);
 }
 
 // A lambda is callable by a helper when it accepts `call_arity` arguments

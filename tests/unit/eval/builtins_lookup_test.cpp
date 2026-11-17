@@ -441,6 +441,36 @@ TEST(BuiltinsMatch, ScalarLookupArrayErrorFollowsItsType) {
   }
 }
 
+// A LET name or a defined name standing for a reference is that reference, a one-cell one included: MATCH searches
+// it as a lookup array and ISREF is TRUE (Mac Excel 16.115).
+TEST(BuiltinsMatch, NameStandingForAReferenceIsAReference) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  for (std::uint32_t r = 0; r < 3U; ++r) {
+    s.set_cell_value(r, 0, Value::number(static_cast<double>(r + 1U)));  // A1:A3
+  }
+  const std::string sheet = std::string(s.name());
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("nm_1", "=" + sheet + "!$A$1")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("nm_3", "=" + sheet + "!$A$1:$A$3")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("nmo", "=OFFSET(" + sheet + "!$A$1,0,0)")));
+  const auto number = [&](const char* src) {
+    const Value v = EvalSourceIn(src, wb, s);
+    EXPECT_TRUE(v.is_number()) << src << " -> " << v.debug_to_string();
+    return v.is_number() ? v.as_number() : -1.0;
+  };
+  EXPECT_DOUBLE_EQ(number("=LET(r,A1,MATCH(1,r,0))"), 1.0);
+  EXPECT_DOUBLE_EQ(number("=MATCH(1,nm_1,0)"), 1.0);
+  EXPECT_DOUBLE_EQ(number("=MATCH(1,nmo,0)"), 1.0);
+  EXPECT_DOUBLE_EQ(number("=LET(r,OFFSET(A1,0,0),MATCH(1,r,0))"), 1.0);
+  EXPECT_DOUBLE_EQ(number("=LET(r,A1:A3,MATCH(2,r,0))"), 2.0);
+  EXPECT_DOUBLE_EQ(number("=MATCH(2,nm_3,0)"), 2.0);
+  for (const char* src : {"=LET(r,A1,ISREF(r))", "=ISREF(nm_1)", "=ISREF(nmo)"}) {
+    const Value v = EvalSourceIn(src, wb, s);
+    ASSERT_TRUE(v.is_boolean()) << src << " -> " << v.debug_to_string();
+    EXPECT_TRUE(v.as_boolean()) << src;
+  }
+}
+
 // An approximate lookup bisects a whole-axis vector over its declared length, the blank cells past the populated ones
 // included: on a column that is not sorted (ascending values, then a tail of small ones, then blanks) the whole column
 // lands in the tail where the bounded reference lands on the sorted position (Mac Excel 16.115).

@@ -29,6 +29,7 @@
 #include "eval/name_env.h"
 #include "eval/name_env_resolve.h"
 #include "eval/reference/common.h"
+#include "eval/reference/deref.h"
 #include "eval/reference/ref_value.h"
 #include "eval/special_forms_lazy.h"
 #include "eval/structured_ref_project.h"
@@ -260,33 +261,6 @@ bool is_reference_carrying_arg(std::string_view call_name, std::uint32_t arg_ind
   return false;
 }
 
-bool carries_name_reference(const parser::AstNode& node) noexcept {
-  switch (node.kind()) {
-    case parser::NodeKind::NameRef:
-      return true;
-    case parser::NodeKind::ExternalRef:
-      return parser::is_self_book_name_ref(node);
-    case parser::NodeKind::RangeOp:
-      for (std::uint32_t i = 0; i < node.as_range_arity(); ++i) {
-        if (carries_name_reference(node.as_range_operand(i))) {
-          return true;
-        }
-      }
-      return false;
-    case parser::NodeKind::Call: {
-      const std::uint32_t arity = node.as_call_arity();
-      for (std::uint32_t i = 0; i < arity; ++i) {
-        if (is_reference_carrying_arg(node.as_call_name(), i, arity) && carries_name_reference(node.as_call_arg(i))) {
-          return true;
-        }
-      }
-      return false;
-    }
-    default:
-      return false;
-  }
-}
-
 bool eval_reference_area(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx, std::string_view* out_sheet, RefArea* out_area, ErrorCode* out_err) {
   const Value ref = eval_node_ref(node, arena, registry, ctx);
@@ -357,7 +331,9 @@ bool resolve_name_endpoint(const parser::AstNode& node, Arena& arena, const Func
     // reference; one reaching here is bound to a plain value.
     if (ctx.name_env() != nullptr) {
       if (const auto* binding = ctx.name_env()->lookup(node.as_name()); binding != nullptr) {
-        const auto read = [&](const parser::AstNode& ref) { return eval_node_shaped(ref, arena, registry, ctx); };
+        const auto read = [&](const Value& ref) {
+          return deref_shaped(ref, arena, registry, ctx, ReadCount::kCounted);
+        };
         const Value bound = NameEnv::binding_value(*binding, arena, read);
         *out_err = bound.is_error() ? bound.as_error() : ErrorCode::Value;
         return false;
@@ -424,12 +400,45 @@ bool merge_range_endpoint_sheets(const parser::AstNode& lhs, std::string_view lh
   return false;
 }
 
+namespace {
+
+// The rectangle of a literal holding a `Ref` (a reference binding seen through `resolve_name_ast`); a whole-axis
+// one only with `allow_whole_axis`, else #VALUE! as a whole-axis token gives.
+bool literal_ref_rect(const parser::AstNode& node, bool allow_whole_axis, Arena& arena,
+                      const FunctionRegistry& registry, const EvalContext& ctx, std::string_view* out_sheet,
+                      std::uint32_t* out_top_row, std::uint32_t* out_left_col, std::uint32_t* out_bottom_row,
+                      std::uint32_t* out_right_col, ErrorCode* out_err) {
+  RefArea area{};
+  if (!eval_reference_area(node, arena, registry, ctx, out_sheet, &area, out_err)) {
+    return false;
+  }
+  if (!allow_whole_axis && (area.whole_col != 0U || area.whole_row != 0U)) {
+    *out_err = ErrorCode::Value;
+    return false;
+  }
+  *out_top_row = area.row_first;
+  *out_left_col = area.col_first;
+  *out_bottom_row = area.row_last;
+  *out_right_col = area.col_last;
+  return true;
+}
+
+bool is_literal_ref(const parser::AstNode& node) {
+  return node.kind() == parser::NodeKind::Literal && node.as_literal().is_ref();
+}
+
+}  // namespace
+
 bool resolve_range_endpoint(const parser::AstNode& endpoint, Arena& arena, const FunctionRegistry& registry,
                             const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
                             std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
                             ErrorCode* out_err) {
   // A LET-bound endpoint (`A1:r`) stands for the reference it was bound to.
   const parser::AstNode& node = resolve_name_ast(endpoint, ctx.name_env());
+  if (is_literal_ref(node)) {
+    return literal_ref_rect(node, /*allow_whole_axis=*/false, arena, registry, ctx, out_sheet, out_top_row,
+                            out_left_col, out_bottom_row, out_right_col, out_err);
+  }
   if (node.kind() == parser::NodeKind::Ref) {
     const parser::Reference& r = node.as_ref();
     // Whole-column / whole-row refs cannot anchor an endpoint composition
@@ -562,6 +571,10 @@ bool resolve_intersect_operand(const parser::AstNode& node, Arena& arena, const 
       return false;
     }
     return true;
+  }
+  if (is_literal_ref(node)) {
+    return literal_ref_rect(node, /*allow_whole_axis=*/true, arena, registry, ctx, out_sheet, out_top_row, out_left_col,
+                            out_bottom_row, out_right_col, out_err);
   }
   // A full-axis endpoint carries a meaningful coordinate only on its bounded
   // axis, so its rectangle comes from the shared derivation rather than from

@@ -22,6 +22,7 @@
 #include "eval/name_env_resolve.h"
 #include "eval/range_resolvers.h"
 #include "eval/reference/deref.h"
+#include "eval/reference/ref_value.h"
 #include "eval/spill_anchor.h"
 #include "eval/structured_ref_project.h"
 #include "parser/ast.h"
@@ -121,12 +122,10 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
   if (out_scalar != nullptr) {
     *out_scalar = false;
   }
-  // LET-binding passthrough: when a caller wrote `VLOOKUP(key, t, 2, FALSE)`
-  // with `t` bound to a RangeOp / OFFSET-call / ArrayLiteral via LET, the
-  // shape decisions below need the original AST, not the NameRef. Single-
-  // cell Refs and scalar bindings are intentionally left as-is so the
-  // existing 1-cell / scalar-fallback semantics are preserved.
-  const parser::AstNode& arg_node = resolve_range_binding(raw_arg, ctx.name_env(), /*accept_ref=*/false);
+  // A name bound to a reference (`VLOOKUP(key, t, 2, FALSE)` with `t` bound by
+  // LET) is read as that reference; a name bound to a value is read as that
+  // value by the generic fallback.
+  const parser::AstNode& arg_node = resolve_name_ast(raw_arg, ctx.name_env());
   // 3-D reference: the cells of the span, flattened (no rectangle shape).
   if (arg_node.kind() == parser::NodeKind::Ref3D) {
     if (is_grouped_ref3d(arg_node)) {
@@ -559,6 +558,32 @@ struct AxisSpan {
   bool whole_axis = false;
 };
 
+// The endpoints of a literal holding a one-area own-workbook `Ref` (a
+// reference binding seen through `resolve_name_ast`), spelled as the token
+// pair `reference_endpoint_pair` gives for the same rectangle.
+bool literal_ref_endpoints(const parser::AstNode& node, const EvalContext& ctx, parser::Reference* out_lhs,
+                           parser::Reference* out_rhs) {
+  if (node.kind() != parser::NodeKind::Literal || !node.as_literal().is_ref()) {
+    return false;
+  }
+  const RefView view = node.as_literal().as_ref();
+  std::string_view sheet;
+  if (view.form != RefForm::kArea || view.book != 0U || !ref_sheet_name(ctx, view.areas[0].sheet_first, &sheet)) {
+    return false;
+  }
+  const RefArea& area = view.areas[0];
+  *out_lhs = parser::Reference{};
+  *out_rhs = parser::Reference{};
+  out_lhs->sheet = sheet;
+  out_lhs->row = area.row_first;
+  out_lhs->col = area.col_first;
+  out_rhs->row = area.row_last;
+  out_rhs->col = area.col_last;
+  out_lhs->is_full_col = out_rhs->is_full_col = area.whole_col != 0U;
+  out_lhs->is_full_row = out_rhs->is_full_row = area.whole_row != 0U;
+  return true;
+}
+
 // Collects the axis-spanning static references `node` reads without a call
 // dispatch of its own: operands of operators, LET-bound names, and the
 // reference-shaped calls `resolve_range_arg` expands in place. Any other call
@@ -577,7 +602,8 @@ void collect_axis_spans(const parser::AstNode& node, const EvalContext& ctx, std
     return;
   }
   AxisSpan span;
-  if (reference_endpoint_pair(node, &span.lhs, &span.rhs, ctx)) {
+  if (reference_endpoint_pair(node, &span.lhs, &span.rhs, ctx) ||
+      literal_ref_endpoints(node, ctx, &span.lhs, &span.rhs)) {
     const auto rect = declared_rect(span.lhs, span.rhs);
     if (!rect) {
       return;
@@ -673,7 +699,8 @@ bool static_reference_shape(const parser::AstNode& arg_node, const EvalContext& 
                             std::uint32_t* out_cols) {
   parser::Reference lhs{};
   parser::Reference rhs{};
-  if (!reference_endpoint_pair(resolve_name_ast(arg_node, ctx.name_env()), &lhs, &rhs, ctx)) {
+  const parser::AstNode& node = resolve_name_ast(arg_node, ctx.name_env());
+  if (!reference_endpoint_pair(node, &lhs, &rhs, ctx) && !literal_ref_endpoints(node, ctx, &lhs, &rhs)) {
     return false;
   }
   const auto rect = ctx.declared_range_rect(lhs, rhs);

@@ -290,7 +290,6 @@ Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, con
 /// Shared inputs of REDUCE / SCAN: seed, source array and the 2-arity callable.
 struct FoldInputs {
   Value acc = Value::blank();
-  const parser::AstNode* acc_ast = nullptr;
   const ArrayValue* in = nullptr;
   const LambdaValue* lv = nullptr;
   SourceOrigin origin;
@@ -304,7 +303,7 @@ bool read_fold_inputs(const parser::AstNode& call, Arena& arena, const FunctionR
     return false;
   }
   // The seed binds like a LAMBDA argument, so a reference seed stays a reference for the first call.
-  fi->acc = eval_binding_source(call.as_call_arg(0), arena, registry, ctx, &fi->acc_ast);
+  fi->acc = eval_binding_source(call.as_call_arg(0), arena, registry, ctx);
   if (fi->acc.is_error()) {
     *out_err = fi->acc;
     return false;
@@ -435,8 +434,8 @@ namespace {
 Value fold_step(const FoldInputs& fi, std::size_t i, const Value& acc, Arena& arena, const FunctionRegistry& registry,
                 const EvalContext& ctx) {
   Value args[2] = {acc, fi.in->cells[i]};
-  // Only the seed can be a reference; every later accumulator is a result.
-  const parser::AstNode* arg_asts[2] = {i == 0U ? fi.acc_ast : nullptr, element_ast(fi.origin, fi.in, i, arena)};
+  // Only the seed can be a reference (a `Ref` accumulator); every later accumulator is a result.
+  const parser::AstNode* arg_asts[2] = {nullptr, element_ast(fi.origin, fi.in, i, arena)};
   return invoke_lambda_values_with_ast(fi.lv, 2U, args, arg_asts, arena, registry, ctx);
 }
 

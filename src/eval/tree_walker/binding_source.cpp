@@ -1,123 +1,107 @@
 //
-// LET / LAMBDA binding-source resolution: decides whether a binding records a
-// reference (so the bound name reads it where it is used) or an evaluated
-// value. The public contract is declared in `tree_walker/dispatch.h`.
+// LET / LAMBDA binding-source evaluation, and the static AST of a reference
+// source for readers that dispatch on the AST. The public contract is
+// declared in `tree_walker/dispatch.h`.
 
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
 
 #include "eval/declared_rect.h"
 #include "eval/eval_context.h"
-#include "eval/function_registry.h"
+#include "eval/external_ref.h"
 #include "eval/lazy_impls.h"
-#include "eval/name_env.h"
-#include "eval/name_env_resolve.h"
 #include "eval/range_resolvers.h"
+#include "eval/reference/ref_value.h"
 #include "eval/structured_ref_project.h"
 #include "eval/tree_walker/dispatch.h"
 #include "parser/ast.h"
-#include "sheet.h"
 #include "utils/arena.h"
 #include "value.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace eval {
 namespace {
 
-// True when `node` reads no lexical binding, so it evaluates the same in any
-// scope. Conservative: a shape it does not know is not scope-free.
-bool is_scope_free(const parser::AstNode& node, const NameEnv* env) {
-  switch (node.kind()) {
-    case parser::NodeKind::Literal:
-    case parser::NodeKind::ErrorLiteral:
-    case parser::NodeKind::Ref:
-    case parser::NodeKind::Ref3D:
-    case parser::NodeKind::ArrayLiteral:
-      return true;
-    case parser::NodeKind::SpillRef:
-      return node.as_spill_ref_anchor_expr() == nullptr;
-    case parser::NodeKind::UnaryOp:
-      return is_scope_free(node.as_unary_operand(), env);
-    case parser::NodeKind::BinaryOp:
-    case parser::NodeKind::RangeOp:
-      return !parser::any_child_node(node,
-                                     [&](const parser::AstNode& operand) { return !is_scope_free(operand, env); });
-    case parser::NodeKind::IntersectOp:
-      return is_scope_free(node.as_intersect_lhs(), env) && is_scope_free(node.as_intersect_rhs(), env);
-    case parser::NodeKind::UnionOp:
-      for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
-        if (!is_scope_free(node.as_union_child(i), env)) {
-          return false;
-        }
-      }
-      return true;
-    case parser::NodeKind::Call:
-      if (env != nullptr && env->lookup(node.as_call_name()) != nullptr) {
-        return false;
-      }
-      for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
-        if (!is_scope_free(node.as_call_arg(i), env)) {
-          return false;
-        }
-      }
-      return true;
-    default:
-      return false;
+// A cell or range of a supporting workbook as a `Ref` into that book's cache; null when `expr` is no such reference
+// or its book is no external link of this workbook.
+const Value* external_reference(const parser::AstNode& expr, Arena& arena, const EvalContext& ctx, Value* out) {
+  const parser::Reference* lhs = nullptr;
+  const parser::Reference* rhs = nullptr;
+  const Workbook* wb = ctx.workbook();
+  if (wb == nullptr || !external_ref_declared_endpoints(expr, &lhs, &rhs)) {
+    return nullptr;
   }
+  const Expected<ExternalRect, ErrorCode> rect = resolve_external_rect(expr, ctx);
+  if (!rect) {
+    *out = Value::error(rect.error());
+    return out;
+  }
+  const auto& links = wb->external_links();
+  for (std::size_t i = 0; i < links.size(); ++i) {
+    if (&links[i].book == rect.value().book) {
+      const auto sheet = static_cast<std::uint16_t>(rect.value().sheet);
+      const RefArea area = make_ref_area(rect.value().declared, sheet, sheet, RefOrigin::kSpelled);
+      *out = make_ref(arena, RefForm::kArea, static_cast<std::uint16_t>(i + 1U), &area, 1U);
+      return out;
+    }
+  }
+  return nullptr;
 }
 
-// Resolves a binding source that returns a reference (a reference-returning
-// call, a `:` over one, or an intersection) to the static `RangeOp` it names,
-// so the binding carries that rectangle rather than the call. Returns nullptr
-// for any other shape or when the call picks a non-reference (`INDEX({1,2},1)`).
-const parser::AstNode* resolve_computed_reference(const parser::AstNode& expr, Arena& arena,
-                                                  const FunctionRegistry& registry, const EvalContext& ctx) {
-  if (expr.kind() == parser::NodeKind::Call) {
-    const NameEnv* env = ctx.name_env();
-    if (!is_reference_call_name(expr.as_call_name()) ||
-        (env != nullptr && env->lookup(expr.as_call_name()) != nullptr)) {
-      return nullptr;
-    }
-  } else if (expr.kind() == parser::NodeKind::RangeOp) {
-    parser::Reference lhs{};
-    parser::Reference rhs{};
-    if (reference_endpoint_pair(expr, &lhs, &rhs, ctx)) {
-      return nullptr;
-    }
-  } else if (expr.kind() != parser::NodeKind::IntersectOp) {
+}  // namespace
+
+Value eval_binding_source(const parser::AstNode& expr, Arena& arena, const FunctionRegistry& registry,
+                          const EvalContext& ctx) {
+  if (Value external = Value::blank(); external_reference(expr, arena, ctx, &external) != nullptr) {
+    return external;
+  }
+  return eval_node_ref(expr, arena, registry, ctx);
+}
+
+const parser::AstNode* resolve_binding_reference(const parser::AstNode& expr, Arena& arena,
+                                                 const FunctionRegistry& registry, const EvalContext& ctx) {
+  parser::Reference first{};
+  parser::Reference last{};
+  if (expr.kind() == parser::NodeKind::Ref || reference_endpoint_pair(expr, &first, &last, ctx)) {
+    return &expr;
+  }
+  if (expr.kind() == parser::NodeKind::ExternalRef) {
+    // The defined-name form (`[Book.xlsx]!Name`, `[0]!Name`) is not a cell.
+    return expr.as_external_ref_name().empty() ? &expr : nullptr;
+  }
+  if (!evaluates_to_reference(expr)) {
     return nullptr;
   }
   std::string_view sheet;
-  std::uint32_t top = 0;
-  std::uint32_t left = 0;
-  std::uint32_t bottom = 0;
-  std::uint32_t right = 0;
+  RefArea area{};
   ErrorCode err = ErrorCode::Value;
-  if (!resolve_reference_rect(expr, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &err)) {
+  if (!eval_reference_area(expr, arena, registry, ctx, &sheet, &area, &err)) {
     return nullptr;
   }
-  parser::Reference first{};
-  parser::Reference last{};
+  first = parser::Reference{};
+  last = parser::Reference{};
   first.sheet = sheet;
   last.sheet = sheet;
-  if (spans_all_rows(top, bottom)) {
+  if (area.whole_col != 0U) {
     first.is_full_col = true;
     last.is_full_col = true;
-    first.col = left;
-    last.col = right;
-  } else if (spans_all_cols(left, right)) {
+    first.col = area.col_first;
+    last.col = area.col_last;
+  } else if (area.whole_row != 0U) {
     first.is_full_row = true;
     last.is_full_row = true;
-    first.row = top;
-    last.row = bottom;
+    first.row = area.row_first;
+    last.row = area.row_last;
   } else {
-    first.row = top;
-    first.col = left;
-    last.row = bottom;
-    last.col = right;
+    first.row = area.row_first;
+    first.col = area.col_first;
+    last.row = area.row_last;
+    last.col = area.col_last;
   }
-  // Always a `RangeOp`, even for one cell (`D1:D1`): a bare `Ref` binding is
-  // the scalar-provenance shape, and a reference-returning call is not.
+  // Always a `RangeOp`, even for one cell (`D1:D1`): a bare `Ref` is the
+  // scalar-provenance shape, and a reference-returning call is not.
   parser::AstNode* lhs = parser::make_ref(arena, first);
   parser::AstNode* rhs = parser::make_ref(arena, last);
   if (lhs == nullptr || rhs == nullptr) {
@@ -125,62 +109,6 @@ const parser::AstNode* resolve_computed_reference(const parser::AstNode& expr, A
   }
   // A whole-axis rectangle is one `A:C` token.
   return parser::make_range_op(arena, lhs, rhs, /*spliced=*/first.is_full_col || first.is_full_row);
-}
-
-}  // namespace
-
-const parser::AstNode* resolve_binding_reference(const parser::AstNode& expr, Arena& arena,
-                                                 const FunctionRegistry& registry, const EvalContext& ctx) {
-  parser::Reference lhs{};
-  parser::Reference rhs{};
-  switch (expr.kind()) {
-    case parser::NodeKind::Ref:
-      return &expr;
-    case parser::NodeKind::ExternalRef:
-      // The defined-name form (`[Book.xlsx]!Name`, `[0]!Name`) is not a cell.
-      return expr.as_external_ref_name().empty() ? &expr : nullptr;
-    case parser::NodeKind::RangeOp:
-      if (reference_endpoint_pair(expr, &lhs, &rhs, ctx)) {
-        return &expr;
-      }
-      break;
-    case parser::NodeKind::NameRef: {
-      const NameEnv* env = ctx.name_env();
-      const parser::AstNode* bound =
-          (env != nullptr && expr.as_name_sheet().empty()) ? env->lookup_ast(expr.as_name()) : nullptr;
-      if (bound != nullptr && (bound->kind() == parser::NodeKind::Ref || bound->kind() == parser::NodeKind::RangeOp ||
-                               bound->kind() == parser::NodeKind::ExternalRef)) {
-        return bound;
-      }
-      return nullptr;
-    }
-    default:
-      break;
-  }
-  return resolve_computed_reference(expr, arena, registry, ctx);
-}
-
-Value eval_binding_source(const parser::AstNode& expr, Arena& arena, const FunctionRegistry& registry,
-                          const EvalContext& ctx, const parser::AstNode** out_ast) {
-  const parser::AstNode* ref = resolve_binding_reference(expr, arena, registry, ctx);
-  *out_ast = ref;
-  // A union, or a range-shaped call naming no single rectangle (one picking a
-  // union), is recorded as written when it reads the same in any scope.
-  const bool unresolved_range =
-      ref == nullptr && (expr.kind() == parser::NodeKind::UnionOp ||
-                         (expr.kind() == parser::NodeKind::Call && is_range_shaped_ast(expr)));
-  if (expr.kind() == parser::NodeKind::ArrayLiteral ||
-      (expr.kind() == parser::NodeKind::SpillRef && expr.as_spill_ref_anchor_expr() == nullptr) ||
-      (unresolved_range && is_scope_free(expr, ctx.name_env()))) {
-    *out_ast = &expr;
-  } else if (expr.kind() == parser::NodeKind::NameRef && expr.as_name_sheet().empty() && ctx.name_env() != nullptr) {
-    *out_ast = ctx.name_env()->lookup_ast(expr.as_name());
-  }
-  // A reference is read where the bound name is used, not here.
-  if (ref != nullptr) {
-    return Value::blank();
-  }
-  return eval_node(expr, arena, registry, ctx);
 }
 
 }  // namespace eval

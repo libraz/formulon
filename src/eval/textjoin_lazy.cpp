@@ -12,7 +12,6 @@
 #include "eval/error_origin.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
-#include "eval/name_env_resolve.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "eval/tail_array.h"
@@ -154,7 +153,7 @@ bool flatten_text_arg(const parser::AstNode& node, Arena& arena, const FunctionR
                       const EvalContext& ctx, TextRuns* out, Value* out_err) {
   // An operator over a whole column / row is joined at its declared size, the
   // way SUMPRODUCT reads it: `A:A&""` keeps every row past the used range.
-  const parser::AstNode& target = resolve_range_binding(node, ctx.name_env(), /*accept_ref=*/false);
+  const parser::AstNode& target = node;
   const parser::NodeKind k = target.kind();
   if (k == parser::NodeKind::BinaryOp || k == parser::NodeKind::UnaryOp || k == parser::NodeKind::NameRef ||
       k == parser::NodeKind::ExternalRef) {

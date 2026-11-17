@@ -1,16 +1,9 @@
 //
-// Helper that "looks through" a `NameRef` AST node to its LET-bound source
-// AST when the binding has range shape. Used by every site that decides
-// argument expansion based on `node.kind()` (the eager dispatcher's
-// `accepts_ranges` paths, `resolve_range_arg`, and the `eval_count_lazy`
-// special form). Without it, the dispatch sees `NodeKind::NameRef` for a
-// LET binding such as `=LET(r, A1:A3, SUM(r))` and falls back to the
-// scalar-Value path, collapsing the range to its spill-anchor cell.
-//
-// The helper is intentionally side-effect free and cheap: a single linked
-// walk of the `NameEnv` chain followed by a kind check. It is safe to call
-// on any AST node — non-NameRef inputs (and unbound / Value-only bindings)
-// pass through unchanged.
+// Helper that "looks through" a LET / LAMBDA-bound `NameRef` to the `Literal`
+// holding the `Ref` it stands for, for the sites that decide argument handling
+// by `node.kind()`. Side-effect free and cheap: one walk of the `NameEnv`
+// chain. Any other node, and a name bound to anything but a reference, passes
+// through unchanged.
 
 #ifndef FORMULON_EVAL_NAME_ENV_RESOLVE_H_
 #define FORMULON_EVAL_NAME_ENV_RESOLVE_H_
@@ -22,51 +15,21 @@
 namespace formulon {
 namespace eval {
 
-/// Returns the effective AST node for `node` after walking through any
-/// LET-bound `NameRef -> AST` chain. Stops as soon as the current node is
-/// not a `NameRef`, the name is unbound, or the binding has no AST (the
-/// scalar / Value-only case). The returned reference always refers to a
-/// node that outlives the LET scope: bound ASTs come from the same parser
-/// arena that owns the LET node itself.
+/// Returns the `Literal` holding the `Ref` a LET / LAMBDA-bound `NameRef` `node` stands for; any other node, and a
+/// name bound to anything but a reference, unchanged. A sheet-qualified name (`Sheet1!r`) is a workbook name, never
+/// a binding.
 inline const parser::AstNode& resolve_name_ast(const parser::AstNode& node, const NameEnv* env) noexcept {
-  if (env == nullptr) {
+  if (env == nullptr || node.kind() != parser::NodeKind::NameRef || !node.as_name_sheet().empty()) {
     return node;
   }
-  const parser::AstNode* current = &node;
-  // Bound chains are practically shallow (LET depth in user formulas peaks
-  // in the single digits). A bounded loop also defends against a future
-  // pathological `LET(a, b, LET(b, a, ...))` without per-call cycle state.
-  for (int hops = 0; hops < 32; ++hops) {
-    // A sheet-qualified name (`Sheet1!r`) is a workbook name, never a binding.
-    if (current->kind() != parser::NodeKind::NameRef || !current->as_name_sheet().empty()) {
-      return *current;
-    }
-    const parser::AstNode* next = env->lookup_ast(current->as_name());
-    if (next == nullptr) {
-      return *current;
-    }
-    current = next;
-  }
-  return *current;
+  const parser::AstNode* bound = env->lookup_ast(node.as_name());
+  return bound != nullptr ? *bound : node;
 }
 
-/// True when `node` is one of the AST shapes that the eager dispatcher and
-/// `resolve_range_arg` treat as range-producing: a `RangeOp` (`A1:B2`), an
-/// `ArrayLiteral` (`{1,2;3,4}`), a `SpillRef` (`A1#`), or one of the
-/// reference-producing calls (`OFFSET`, `CHOOSE`, `INDIRECT`, `IF`). Single-
-/// cell `Ref` is intentionally excluded so that LET passthrough does not
-/// silently change the scalar-vs-range provenance of a `=LET(r, A1,
-/// SUM(r,B1))` formula.
-///
-/// `IF` is included because Mac Excel preserves reference-shape through the
-/// picked branch: `=LET(r, IF(TRUE, A1:A3, B1:B3), SUM(r))` evaluates as if
-/// `r` were `A1:A3`. The companion logic in `resolve_range_arg` short-
-/// circuits the condition and recurses into the chosen branch.
-///
-/// `SpillRef` is included so `=LET(s, A1#, SUM(s))` re-dispatches the
-/// SpillRef AST through the eager dispatcher's existing `SpillRef` branch
-/// (and, for non-aggregator consumers, through `resolve_range_arg`'s
-/// matching branch) rather than collapsing the binding to its anchor scalar.
+/// True when `node` is one of the AST shapes read as range-producing: a
+/// `RangeOp` (`A1:B2`), an `ArrayLiteral` (`{1,2;3,4}`), a `SpillRef` (`A1#`),
+/// or one of the reference-producing calls (`OFFSET`, `CHOOSE`, `INDIRECT`,
+/// `IF`). A single-cell `Ref` is excluded: it keeps its scalar provenance.
 inline bool is_range_shaped_ast(const parser::AstNode& node) noexcept {
   switch (node.kind()) {
     case parser::NodeKind::RangeOp:
@@ -81,22 +44,6 @@ inline bool is_range_shaped_ast(const parser::AstNode& node) noexcept {
     default:
       return false;
   }
-}
-
-/// Returns the LET binding behind a `NameRef` `node` when that binding is
-/// range-shaped, a reference into another workbook (`ExternalRef`), or, with
-/// `accept_ref`, a single-cell `Ref`; otherwise returns `node` unchanged.
-inline const parser::AstNode& resolve_range_binding(const parser::AstNode& node, const NameEnv* env,
-                                                    bool accept_ref) noexcept {
-  if (node.kind() != parser::NodeKind::NameRef) {
-    return node;
-  }
-  const parser::AstNode& resolved = resolve_name_ast(node, env);
-  if (&resolved != &node && (is_range_shaped_ast(resolved) || resolved.kind() == parser::NodeKind::ExternalRef ||
-                             (accept_ref && resolved.kind() == parser::NodeKind::Ref))) {
-    return resolved;
-  }
-  return node;
 }
 
 }  // namespace eval

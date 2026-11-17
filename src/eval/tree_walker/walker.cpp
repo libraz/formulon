@@ -512,7 +512,9 @@ Shaped eval_node_shaped_body(const parser::AstNode& node, Arena& arena, const Fu
       }
       const NameEnv* env = ctx.name_env();
       if (env != nullptr) {
-        const auto read = [&](const parser::AstNode& ref) { return eval_node_shaped(ref, arena, registry, ctx); };
+        const auto read = [&](const Value& ref) {
+          return deref_shaped(ref, arena, registry, ctx, ReadCount::kCounted);
+        };
         if (const auto* binding = env->lookup(node.as_name()); binding != nullptr) {
           return NameEnv::read_shaped(*binding, read);
         }
@@ -551,10 +553,8 @@ Shaped eval_node_shaped_body(const parser::AstNode& node, Arena& arena, const Fu
       }
       const std::uint32_t count = node.as_let_binding_count();
       for (std::uint32_t i = 0; i < count; ++i) {
-        const parser::AstNode* bound_ast = nullptr;
-        const Value v =
-            eval_binding_source(node.as_let_binding_expr(i), arena, registry, ctx.with_name_env(&env), &bound_ast);
-        env = env.extend(node.as_let_binding_name(i), v, bound_ast, arena);
+        const Value v = eval_binding_source(node.as_let_binding_expr(i), arena, registry, ctx.with_name_env(&env));
+        env = env.extend(node.as_let_binding_name(i), v, arena);
       }
       const EvalContext body_ctx = ctx.with_name_env(&env);
       return eval_node_shaped(node.as_let_body(), arena, registry, body_ctx);
@@ -635,6 +635,10 @@ bool evaluates_to_reference(const parser::AstNode& node) {
       return evaluates_to_reference(node.as_intersect_lhs()) && evaluates_to_reference(node.as_intersect_rhs());
     case parser::NodeKind::Call:
       return is_reference_call_name(node.as_call_name());
+    case parser::NodeKind::Literal:
+      return node.as_literal().is_ref();
+    case parser::NodeKind::NameRef:
+      return true;
     default:
       return false;
   }
@@ -669,6 +673,46 @@ namespace {
       return ref_intersect(lhs, eval_node_ref(node.as_intersect_rhs(), arena, registry, ctx), arena, ctx);
     }
   }
+}
+
+// `X#` as the reference to the spill region anchored at X; over a computed anchor the reference is dynamic.
+[[gnu::noinline]] Value spill_region_ref(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                                         const EvalContext& ctx) {
+  std::string_view sheet;
+  std::uint32_t row = 0;
+  std::uint32_t col = 0;
+  ErrorCode err = ErrorCode::Ref;
+  if (!resolve_spill_anchor_node(node, arena, registry, ctx, &sheet, &row, &col, &err)) {
+    return Value::error(err);
+  }
+  const ArrayValue* region = project_spill_at_anchor(sheet, row, col, arena, ctx, &err);
+  if (region == nullptr) {
+    return Value::error(err);
+  }
+  const DeclaredRect rect{row, row + region->rows - 1U, col, col + region->cols - 1U};
+  const Value ref = make_rect_ref(sheet, rect, sheet.empty() ? RefOrigin::kImplicit : RefOrigin::kSpelled, arena, ctx);
+  return node.as_spill_ref_anchor_expr() != nullptr && ref.is_ref() ? ref.with_ref_dynamic() : ref;
+}
+
+// A name as the reference it denotes: a LET / LAMBDA binding of a reference, or a defined name whose body
+// evaluates to one. Any other name reads as its value.
+[[gnu::noinline]] Value eval_name_ref(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                                      const EvalContext& ctx) {
+  if (const std::string_view sheet = node.as_name_sheet(); !sheet.empty()) {
+    return resolve_sheet_defined_name_ref(sheet, node.as_name(), arena, registry, ctx);
+  }
+  if (const NameEnv* env = ctx.name_env(); env != nullptr) {
+    if (const NameEnv::Binding* binding = env->lookup(node.as_name()); binding != nullptr) {
+      if (const Value* ref = binding->reference(); ref != nullptr) {
+        return *ref;
+      }
+      return eval_node(node, arena, registry, ctx);
+    }
+  }
+  if (find_defined_name(ctx, node.as_name()) != nullptr) {
+    return resolve_defined_name_ref(node.as_name(), arena, registry, ctx);
+  }
+  return eval_node(node, arena, registry, ctx);
 }
 
 }  // namespace
@@ -720,6 +764,10 @@ Value eval_node_ref(const parser::AstNode& node, Arena& arena, const FunctionReg
       const Shaped out = eval_node_shaped_body(node, arena, registry, ctx);
       return out.value.is_ref() ? out.value : contain_escape(densify(out, arena));
     }
+    case parser::NodeKind::NameRef:
+      return eval_name_ref(node, arena, registry, ctx);
+    case parser::NodeKind::SpillRef:
+      return spill_region_ref(node, arena, registry, ctx);
     default:
       break;
   }

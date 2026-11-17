@@ -230,6 +230,23 @@ Shaped evaluate_defined_name_shaped(const DefinedName* def, Arena& arena, const 
   return Shaped{eval_node(*root, arena, registry, def_ctx), nullptr};
 }
 
+// `evaluate_defined_name` reading a body that evaluates to a reference through
+// `eval_node_ref`.
+Value evaluate_defined_name_ref(const DefinedName* def, Arena& arena, const FunctionRegistry& registry,
+                                const EvalContext& ctx) {
+  DefinedNameFrame frame;
+  EvalContext def_ctx = ctx;
+  ErrorCode err = ErrorCode::Name;
+  const parser::AstNode* root = prepare_defined_name_body(def, arena, ctx, &frame, &def_ctx, &err);
+  if (root == nullptr) {
+    return Value::error(err);
+  }
+  if (evaluates_to_reference(*root)) {
+    return eval_node_ref(*root, arena, registry, def_ctx);
+  }
+  return evaluate_defined_name(def, arena, registry, ctx);
+}
+
 }  // namespace
 
 namespace {
@@ -295,6 +312,11 @@ Value evaluate_lookup(const NameLookup& lookup, Arena& arena, const FunctionRegi
   return lookup.resolved ? lookup.value : evaluate_defined_name(lookup.def, arena, registry, ctx);
 }
 
+Value evaluate_lookup_ref(const NameLookup& lookup, Arena& arena, const FunctionRegistry& registry,
+                          const EvalContext& ctx) {
+  return lookup.resolved ? lookup.value : evaluate_defined_name_ref(lookup.def, arena, registry, ctx);
+}
+
 Shaped evaluate_lookup_shaped(const NameLookup& lookup, Arena& arena, const FunctionRegistry& registry,
                               const EvalContext& ctx) {
   return lookup.resolved ? Shaped{lookup.value, nullptr}
@@ -316,6 +338,16 @@ Value resolve_self_book_defined_name(std::string_view name, Arena& arena, const 
 Value resolve_sheet_defined_name(std::string_view sheet, std::string_view name, Arena& arena,
                                  const FunctionRegistry& registry, const EvalContext& ctx) {
   return evaluate_lookup(lookup_sheet_name(sheet, name, arena, ctx), arena, registry, ctx);
+}
+
+Value resolve_defined_name_ref(std::string_view name, Arena& arena, const FunctionRegistry& registry,
+                               const EvalContext& ctx) {
+  return evaluate_lookup_ref(lookup_name(name, ctx), arena, registry, ctx);
+}
+
+Value resolve_sheet_defined_name_ref(std::string_view sheet, std::string_view name, Arena& arena,
+                                     const FunctionRegistry& registry, const EvalContext& ctx) {
+  return evaluate_lookup_ref(lookup_sheet_name(sheet, name, arena, ctx), arena, registry, ctx);
 }
 
 Shaped resolve_defined_name_shaped(std::string_view name, Arena& arena, const FunctionRegistry& registry,

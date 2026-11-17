@@ -122,12 +122,24 @@ OperationShape generator_shape(const parser::AstNode& call, Arena& arena, const 
 OperationShape operation_shape(const parser::AstNode& raw, Arena& arena, const FunctionRegistry& registry,
                                const EvalContext& ctx, std::uint32_t* out_rows, std::uint32_t* out_cols,
                                Value* out_err) {
-  const parser::AstNode& node = resolve_range_binding(raw, ctx.name_env(), /*accept_ref=*/false);
+  const parser::AstNode& node = resolve_name_ast(raw, ctx.name_env());
   switch (node.kind()) {
-    case parser::NodeKind::Literal:
+    case parser::NodeKind::Literal: {
+      // A reference binding seen through `resolve_name_ast` is its one area.
+      const Value& literal = node.as_literal();
+      if (literal.is_ref()) {
+        if (literal.ref_form() != RefForm::kArea) {
+          return OperationShape::kUnknown;
+        }
+        const RefArea& area = literal.as_ref().areas[0];
+        *out_rows = area.row_last - area.row_first + 1U;
+        *out_cols = area.col_last - area.col_first + 1U;
+        return OperationShape::kSized;
+      }
       *out_rows = 1U;
       *out_cols = 1U;
       return OperationShape::kSized;
+    }
     case parser::NodeKind::ArrayLiteral:
       *out_rows = node.as_array_rows();
       *out_cols = node.as_array_cols();
@@ -235,14 +247,8 @@ bool value_shape(const Value& v, std::uint32_t* out_rows, std::uint32_t* out_col
 // For an `ArrayLiteral` both dimensions come from the AST directly. For
 // any other kind we simply evaluate it to determine whether it is an
 // error (and propagate if so); the shape is 1x1 otherwise.
-bool resolve_shape(const parser::AstNode& raw_arg, Arena& arena, const FunctionRegistry& registry,
+bool resolve_shape(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
                    const EvalContext& ctx, std::uint32_t* out_rows, std::uint32_t* out_cols, Value* out_err) {
-  // LET-binding passthrough: `LET(x, A1:C3, ROWS(x))` parses `x` as a
-  // NameRef; we want the bound RangeOp / ArrayLiteral / OFFSET-call AST
-  // so the kind dispatch below sees the same shape it would for a literal
-  // `=ROWS(A1:C3)`. Single-cell Refs and scalar bindings are left as-is
-  // (the scalar fallback already returns 1x1 for them).
-  const parser::AstNode& arg_node = resolve_range_binding(raw_arg, ctx.name_env(), /*accept_ref=*/false);
   if (is_three_d_reference(arg_node)) {
     *out_err = Value::error(three_d_reference_error(arg_node));
     return false;
@@ -277,7 +283,7 @@ bool resolve_shape(const parser::AstNode& raw_arg, Arena& arena, const FunctionR
     }
     // A `RangeOp` composed from reference-returning calls (`A1:OFFSET(...)`) has no static rectangle; it is
     // measured as the reference it evaluates to.
-    if (evaluates_to_reference(arg_node) && !carries_name_reference(arg_node)) {
+    if (evaluates_to_reference(arg_node)) {
       RefArea area{};
       Value value = Value::blank();
       if (reference_area(arg_node, arena, registry, ctx, &area, &value)) {
@@ -301,9 +307,9 @@ bool resolve_shape(const parser::AstNode& raw_arg, Arena& arena, const FunctionR
     *out_cols = arg_node.as_array_cols();
     return true;
   }
-  if (k == parser::NodeKind::Call && evaluates_to_reference(arg_node) && !carries_name_reference(arg_node)) {
-    // A reference-returning call is measured as the reference it returns, which reads none of its cells:
-    // `ROWS(INDIRECT("A1:B3"))` is 3.
+  if ((k == parser::NodeKind::Call || k == parser::NodeKind::NameRef) && evaluates_to_reference(arg_node)) {
+    // A reference-returning call, or a name standing for a reference, is measured as that reference, which reads
+    // none of its cells: `ROWS(INDIRECT("A1:B3"))` is 3. A name standing for a value is measured as that value.
     RefArea area{};
     Value value = Value::blank();
     if (reference_area(arg_node, arena, registry, ctx, &area, &value)) {
@@ -476,14 +482,7 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
     const std::uint32_t out_cols = want_row ? 1U : span;
     return array_value_or_num_error(make_array_value(arena, out_rows, out_cols, cells));
   };
-  const parser::AstNode& raw_arg = call.as_call_arg(0);
-  // LET-binding passthrough: `=LET(r, A1:A3, ROW(r))` parses `r` as a
-  // NameRef, but Mac Excel returns the first row of the bound rectangle
-  // rather than `#VALUE!`. Look through the NameRef to the bound AST and
-  // accept the broader "Ref OR range-shaped" set: ROW(single-cell Ref)
-  // is meaningful (returns its row), so unlike the SUM-style passthrough
-  // we do not exclude bare Refs here.
-  const parser::AstNode& arg = resolve_range_binding(raw_arg, ctx.name_env(), /*accept_ref=*/true);
+  const parser::AstNode& arg = call.as_call_arg(0);
   const parser::NodeKind k = arg.kind();
   parser::Reference rect_lhs{};
   parser::Reference rect_rhs{};
@@ -499,10 +498,10 @@ Value eval_row_or_column(const parser::AstNode& call, Arena& arena, const Functi
     }
     return index_array(rect.value().row_first, rect.value().col_first, rect.value().row_last, rect.value().col_last);
   }
-  if ((k == parser::NodeKind::RangeOp || k == parser::NodeKind::Call) && evaluates_to_reference(arg) &&
-      !carries_name_reference(arg)) {
-    // A reference-returning call, or a `RangeOp` over one (`A1:INDEX(...)`), names its rectangle without a cell
-    // read: `ROW(INDIRECT("A5"))` is 5.
+  if ((k == parser::NodeKind::RangeOp || k == parser::NodeKind::Call || k == parser::NodeKind::NameRef) &&
+      evaluates_to_reference(arg)) {
+    // A reference-returning call, a `RangeOp` over one (`A1:INDEX(...)`) or a name standing for a reference
+    // names its rectangle without a cell read: `ROW(INDIRECT("A5"))` is 5, `LET(r, A1:A3, ROW(r))` is 1.
     RefArea area{};
     Value value = Value::blank();
     if (reference_area(arg, arena, registry, ctx, &area, &value)) {
@@ -609,14 +608,8 @@ Value eval_sumproduct_lazy(const parser::AstNode& call, Arena& arena, const Func
   all_args.reserve(arity);
 
   for (std::uint32_t i = 0; i < arity; ++i) {
-    const parser::AstNode& raw_arg = call.as_call_arg(i);
-    // LET-binding passthrough: `=LET(r, A1:A3, SUMPRODUCT(r))` parses `r`
-    // as a NameRef; we want the bound RangeOp / ArrayLiteral / OFFSET-call
-    // / CHOOSE-call / IF-call AST so the kind dispatch below sees the same
-    // shape it would for a literal `=SUMPRODUCT(A1:A3)`. Single-cell Refs
-    // and scalar bindings are left as-is (the scalar fallback already
-    // returns 1x1 for them). This mirrors `resolve_shape` above.
-    const parser::AstNode& arg_node = resolve_range_binding(raw_arg, ctx.name_env(), /*accept_ref=*/false);
+    // A name reads through `eval_node_shaped`, keeping a whole column / row it stands for at its declared size.
+    const parser::AstNode& arg_node = call.as_call_arg(i);
     const parser::NodeKind k = arg_node.kind();
     ArgArray a{};
     // A reference that names a whole column or row is read at its declared

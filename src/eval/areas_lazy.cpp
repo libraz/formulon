@@ -26,7 +26,6 @@
 #include "eval/eval_context.h"
 #include "eval/external_ref.h"
 #include "eval/lazy_impls.h"
-#include "eval/name_env_resolve.h"
 #include "eval/range_resolvers.h"
 #include "eval/special_forms_lazy.h"
 #include "parser/ast.h"
@@ -65,16 +64,19 @@ std::int64_t count_areas(const parser::AstNode& n, Arena& arena, const FunctionR
   if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp || k == parser::NodeKind::SpillRef) {
     return 1;
   }
-  // A LET binding is transparent to the structural count, so
-  // `=LET(s, A1#, AREAS(s))` and `=LET(r, CHOOSE(2, A1:B2, (C1,D1)),
-  // AREAS(r))` see the bound reference shape rather than the opaque
-  // NameRef. Bindings that carry no AST (scalar / Value-only) pass through
-  // unchanged and fall to the `#VALUE!` tail below.
+  // A name counts the areas of the reference it stands for, so
+  // `=LET(s, A1#, AREAS(s))` is 1 and `=LET(r, CHOOSE(2, A1:B2, (C1,D1)),
+  // AREAS(r))` is 2. A name standing for anything else is #VALUE!.
   if (k == parser::NodeKind::NameRef) {
-    const parser::AstNode& bound = resolve_name_ast(n, ctx.name_env());
-    if (&bound != &n) {
-      return count_areas(bound, arena, registry, ctx, propagated);
+    const Value v = eval_node_ref(n, arena, registry, ctx.without_dynamic_read_callback());
+    if (!v.is_ref()) {
+      return kAreasInvalid;
     }
+    const RefView view = v.as_ref();
+    if (view.form == RefForm::kUnion) {
+      return static_cast<std::int64_t>(view.area_count);
+    }
+    return view.form == RefForm::kArea ? 1 : kAreasInvalid;
   }
   if (is_grouped_ref3d(n)) {
     *propagated = ErrorCode::Name;
@@ -142,21 +144,8 @@ std::int64_t count_areas(const parser::AstNode& n, Arena& arena, const FunctionR
     if (is_reference_call_name(fname)) {
       std::string_view sheet;
       ErrorCode err = ErrorCode::Value;
-      bool resolved = false;
-      if (carries_name_reference(n)) {
-        // A name is resolved by the name until names bind as references.
-        std::uint32_t r1 = 0;
-        std::uint32_t c1 = 0;
-        std::uint32_t r2 = 0;
-        std::uint32_t c2 = 0;
-        bool is_range = false;
-        resolved = resolve_reference_call(n, arena, registry, ctx.without_dynamic_read_callback(), &sheet, &r1, &c1,
-                                          &r2, &c2, &is_range, &err);
-      } else {
-        RefArea area{};
-        resolved = eval_reference_area(n, arena, registry, ctx.without_dynamic_read_callback(), &sheet, &area, &err);
-      }
-      if (!resolved) {
+      RefArea area{};
+      if (!eval_reference_area(n, arena, registry, ctx.without_dynamic_read_callback(), &sheet, &area, &err)) {
         *propagated = err;
         return kAreasPropagate;
       }

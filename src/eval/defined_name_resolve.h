@@ -128,6 +128,17 @@ Value resolve_self_book_defined_name(std::string_view name, Arena& arena, const 
 Value resolve_sheet_defined_name(std::string_view sheet, std::string_view name, Arena& arena,
                                  const FunctionRegistry& registry, const EvalContext& ctx);
 
+/// `resolve_defined_name` reading the body as the reference it denotes
+/// (`eval_node_ref`): a body that evaluates to a reference yields that `Ref`,
+/// any other body its value.
+Value resolve_defined_name_ref(std::string_view name, Arena& arena, const FunctionRegistry& registry,
+                               const EvalContext& ctx);
+
+/// `resolve_sheet_defined_name` with the body read as in
+/// `resolve_defined_name_ref`.
+Value resolve_sheet_defined_name_ref(std::string_view sheet, std::string_view name, Arena& arena,
+                                     const FunctionRegistry& registry, const EvalContext& ctx);
+
 /// `resolve_defined_name` keeping a whole column / row body (`=L!$B:$B`, or
 /// an expression over one) at its declared size as a `TailArray`. A body that
 /// is a reference-returning call keeps the `Value` version's reading.

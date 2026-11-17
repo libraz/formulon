@@ -57,6 +57,24 @@ bool resolve_spill_anchor_node(const parser::AstNode& node, Arena& arena, const 
       // A collapsed anchor (`#REF!#`) answers with its own error.
       *out_err = target.as_error_literal();
       return false;
+    case parser::NodeKind::Literal: {
+      // A name bound to a reference anchors on it when it is one cell.
+      RefArea area{};
+      if (!target.as_literal().is_ref() ||
+          !eval_reference_area(target, arena, registry, ctx, out_sheet, &area, out_err)) {
+        if (!target.as_literal().is_ref()) {
+          *out_err = ErrorCode::Value;
+        }
+        return false;
+      }
+      if (area.row_first != area.row_last || area.col_first != area.col_last) {
+        *out_err = ErrorCode::Ref;
+        return false;
+      }
+      *out_row = area.row_first;
+      *out_col = area.col_first;
+      return true;
+    }
     case parser::NodeKind::Call: {
       std::uint32_t bottom_row = 0;
       std::uint32_t right_col = 0;

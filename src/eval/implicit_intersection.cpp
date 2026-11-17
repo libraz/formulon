@@ -112,6 +112,10 @@ bool ReferenceResultRect(const parser::AstNode& target, Arena& arena, const Func
     case parser::NodeKind::NameRef:
     case parser::NodeKind::IntersectOp:
       return resolve_reference_rect(target, arena, registry, ctx, sheet, top, left, bottom, right, &err);
+    case parser::NodeKind::Literal:
+      // A reference binding seen through `resolve_name_ast`.
+      return target.as_literal().is_ref() &&
+             resolve_reference_rect(target, arena, registry, ctx, sheet, top, left, bottom, right, &err);
     case parser::NodeKind::ExternalRef:
       return parser::is_self_book_name_ref(target) &&
              resolve_reference_rect(target, arena, registry, ctx, sheet, top, left, bottom, right, &err);
@@ -151,10 +155,8 @@ bool ReferenceResultRect(const parser::AstNode& target, Arena& arena, const Func
         env = *ctx.name_env();
       }
       for (std::uint32_t i = 0; i < target.as_let_binding_count(); ++i) {
-        const parser::AstNode* bound_ast = nullptr;
-        const Value v =
-            eval_binding_source(target.as_let_binding_expr(i), arena, registry, ctx.with_name_env(&env), &bound_ast);
-        env = env.extend(target.as_let_binding_name(i), v, bound_ast, arena);
+        const Value v = eval_binding_source(target.as_let_binding_expr(i), arena, registry, ctx.with_name_env(&env));
+        env = env.extend(target.as_let_binding_name(i), v, arena);
       }
       return resolve_reference_rect(target.as_let_body(), arena, registry, ctx.with_name_env(&env), sheet, top, left,
                                     bottom, right, &err);

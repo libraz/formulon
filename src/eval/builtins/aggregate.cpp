@@ -312,19 +312,9 @@ Value CountA(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
 // extracted from it.
 bool sum_arg_for_percentof(const parser::AstNode& raw_arg, Arena& arena, const FunctionRegistry& registry,
                            const EvalContext& ctx, double* out_total, Value* out_err) {
-  // LET-binding passthrough: `=LET(r, A1:A3, PERCENTOF(r, A1:A10))` parses
-  // `r` as a `NameRef`; we want to see the bound RangeOp / ArrayLiteral /
-  // OFFSET-call shape so the kind dispatch below treats it the same way as
-  // the literal argument. Single-cell Refs and pure scalar bindings stay as
-  // NameRef so the scalar-coerce branch handles them via `eval_node`.
-  const parser::AstNode* effective = &raw_arg;
-  if (raw_arg.kind() == parser::NodeKind::NameRef) {
-    const parser::AstNode& resolved = resolve_name_ast(raw_arg, ctx.name_env());
-    if (&resolved != &raw_arg && is_range_shaped_ast(resolved)) {
-      effective = &resolved;
-    }
-  }
-  const parser::AstNode& arg_node = *effective;
+  // A LET / LAMBDA name bound to a reference (`=LET(r, A1:A3, PERCENTOF(r, A1:A10))`) is read as that reference;
+  // a name bound to anything else stays a `NameRef` for the scalar-coerce branch.
+  const parser::AstNode& arg_node = resolve_name_ast(raw_arg, ctx.name_env());
   const parser::NodeKind k = arg_node.kind();
 
   // A non-finite total is #NUM!.
@@ -352,7 +342,8 @@ bool sum_arg_for_percentof(const parser::AstNode& raw_arg, Arena& arena, const F
   // Range-shaped args (and the reference-producing calls that expand to
   // rectangles) go through `resolve_range_arg`; cells receive the
   // numeric-only provenance filter.
-  const bool is_range_call = k == parser::NodeKind::Call && evaluates_to_reference(arg_node);
+  const bool is_range_call =
+      (k == parser::NodeKind::Call || k == parser::NodeKind::Literal) && evaluates_to_reference(arg_node);
   if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp || k == parser::NodeKind::SpillRef ||
       is_range_call) {
     auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);

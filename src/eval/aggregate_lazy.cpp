@@ -381,8 +381,8 @@ void append_ref_cells(const Value& ref, Arena& arena, const FunctionRegistry& re
 }
 
 // Appends every scalar Value produced by `arg_node` to `out_cells`, mirroring
-// PERCENTOF's `sum_arg_for_percentof` provenance walk. LET-bound NameRefs
-// resolve to their bound AST when range-shaped. On any expansion failure
+// PERCENTOF's `sum_arg_for_percentof` provenance walk. A name standing for a
+// reference is read as that reference. On any expansion failure
 // (e.g. `#REF!` from a missing sheet) returns false with the propagating
 // error in `*out_err`. Returns true on a clean walk.
 //
@@ -395,10 +395,9 @@ void append_ref_cells(const Value& ref, Arena& arena, const FunctionRegistry& re
 // per-mode rules (numeric branches drop non-numerics; COUNTA counts them;
 // the error-ignore bit decides whether errors short-circuit) are applied
 // later by `apply_filters`.
-bool collect_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
-                 const EvalContext& ctx, HiddenScope scope, std::vector<Value>* out_cells,
-                 std::vector<bool>* out_hidden, std::vector<bool>* out_nested, Value* out_err) {
-  const parser::AstNode& node = resolve_range_binding(arg_node, ctx.name_env(), /*accept_ref=*/false);
+bool collect_arg(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                 HiddenScope scope, std::vector<Value>* out_cells, std::vector<bool>* out_hidden,
+                 std::vector<bool>* out_nested, Value* out_err) {
   const parser::NodeKind k = node.kind();
 
   if (k == parser::NodeKind::UnionOp) {
@@ -415,10 +414,12 @@ bool collect_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRe
     return true;
   }
 
-  // A reference a call returns, or a `:` over one (`A1:OFFSET(...)`), is read
-  // as that reference, so `SUBTOTAL(109, OFFSET(...))` skips hidden rows.
-  if ((k == parser::NodeKind::Call || (k == parser::NodeKind::RangeOp && !has_static_endpoints(node, ctx))) &&
-      evaluates_to_reference(node) && !carries_name_reference(node)) {
+  // A reference a call returns, a `:` over one (`A1:OFFSET(...)`) or a name
+  // standing for one is read as that reference, so `SUBTOTAL(109, OFFSET(...))`
+  // skips hidden rows.
+  if ((k == parser::NodeKind::Call || k == parser::NodeKind::NameRef ||
+       (k == parser::NodeKind::RangeOp && !has_static_endpoints(node, ctx))) &&
+      evaluates_to_reference(node)) {
     const Value ref = eval_node_ref(node, arena, registry, ctx);
     if (ref.is_ref()) {
       append_ref_cells(ref, arena, registry, ctx, scope, out_cells, out_hidden, out_nested);
@@ -824,7 +825,7 @@ Value eval_countblank_lazy(const parser::AstNode& call, Arena& arena, const Func
     }
   };
   for (std::uint32_t i = 0; i < arity; ++i) {
-    const parser::AstNode& node = resolve_range_binding(call.as_call_arg(i), ctx.name_env(), /*accept_ref=*/true);
+    const parser::AstNode& node = call.as_call_arg(i);
     if (node.kind() == parser::NodeKind::ExternalRef) {
       return Value::error(ErrorCode::Value);
     }
@@ -832,12 +833,17 @@ Value eval_countblank_lazy(const parser::AstNode& call, Arena& arena, const Func
       return Value::error(ErrorCode::Name);
     }
     const parser::NodeKind k = node.kind();
-    if ((k == parser::NodeKind::Call || (k == parser::NodeKind::RangeOp && !has_static_endpoints(node, ctx))) &&
-        evaluates_to_reference(node) && !carries_name_reference(node)) {
+    if ((k == parser::NodeKind::Call || k == parser::NodeKind::NameRef ||
+         (k == parser::NodeKind::RangeOp && !has_static_endpoints(node, ctx))) &&
+        evaluates_to_reference(node)) {
       // A returned reference counts every cell of its rectangle, populated or not: `COUNTBLANK(INDIRECT("C:C"))`.
       const Value ref = eval_node_ref(node, arena, registry, ctx);
       if (ref.is_error()) {
         return ref;
+      }
+      // A reference into a supporting workbook is #VALUE!, as one written in place is.
+      if (ref.is_ref() && ref.as_ref().book != 0U) {
+        return Value::error(ErrorCode::Value);
       }
       if (ref.is_ref() && ref.as_ref().form == RefForm::kArea) {
         auto read = deref_cells(ref, /*allow_span3d=*/false, arena, registry, ctx, ReadCount::kCounted);

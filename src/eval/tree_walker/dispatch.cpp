@@ -49,6 +49,7 @@
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "eval/range_resolvers.h"
+#include "eval/reference/deref.h"
 #include "eval/tail_array.h"
 #include "eval/tree_walker/broadcast.h"
 #include "eval/tree_walker/depth_guard.h"
@@ -195,10 +196,10 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
   // Unbound names fall through to the existing registry path.
   if (const NameEnv* env = ctx.name_env(); env != nullptr) {
     if (const auto* binding = env->lookup(name); binding != nullptr) {
-      if (const parser::AstNode* ast = env->lookup_ast(name); ast != nullptr && is_reference_shape(*ast)) {
+      if (binding->reference() != nullptr) {
         return Value::error(ErrorCode::Ref);
       }
-      const auto read = [&](const parser::AstNode& ref) { return eval_node_shaped(ref, arena, registry, ctx); };
+      const auto read = [&](const Value& ref) { return deref_shaped(ref, arena, registry, ctx, ReadCount::kCounted); };
       const Value bound = NameEnv::binding_value(*binding, arena, read);
       if (bound.is_lambda()) {
         return invoke_lambda(bound.as_lambda(), arity, node.as_call_args(), arena, registry, ctx);
@@ -319,14 +320,10 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
       values.push_back(v);
       continue;
     }
-    // LET-binding passthrough: when the caller wrote `SUM(r)` where `r` is
-    // bound to a RangeOp / ArrayLiteral / OFFSET / CHOOSE / INDIRECT, the
-    // dispatcher must see the underlying range AST or it would fall back
-    // to the scalar path and collapse the binding to its spill anchor.
-    // Substitute only when the resolved AST is genuinely range-shaped so
-    // that a NameRef bound to a scalar (or a single-cell Ref) continues to
-    // flow through the existing scalar branch with its original provenance.
-    const parser::AstNode& arg_node = resolve_range_binding(raw_arg, ctx.name_env(), /*accept_ref=*/false);
+    // A name bound to a reference (`SUM(r)` with `r` bound by LET) is read as
+    // that reference, so its cells take the range filters; a name bound to a
+    // value flows through the scalar branch below.
+    const parser::AstNode& arg_node = resolve_name_ast(raw_arg, ctx.name_env());
     Value range_arg_result = Value::blank();
     switch (collect_range_arg(*def, arg_node, arena, registry, ctx, values, had_range_shaped_arg, range_arg_result)) {
       case RangeArgOutcome::kCollected:

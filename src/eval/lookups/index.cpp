@@ -714,7 +714,21 @@ Expected<const parser::AstNode*, ErrorCode> select_index_area(const parser::AstN
     }
   }
   std::vector<const parser::AstNode*> areas;
-  collect_union_areas(call.as_call_arg(0), ctx, &areas);
+  if (source.kind() == parser::NodeKind::Literal && source.as_literal().is_ref() &&
+      source.as_literal().ref_form() == RefForm::kUnion) {
+    // A name bound to a union supplies each of its areas as a one-area reference.
+    const RefView view = source.as_literal().as_ref();
+    for (std::uint32_t i = 0; i < view.area_count; ++i) {
+      const parser::AstNode* area =
+          parser::make_literal(arena, make_ref(arena, RefForm::kArea, view.book, &view.areas[i], 1U));
+      if (area == nullptr) {
+        return ErrorCode::Num;
+      }
+      areas.push_back(area);
+    }
+  } else {
+    collect_union_areas(call.as_call_arg(0), ctx, &areas);
+  }
   std::uint32_t area_idx = 1U;
   if (call_arg_supplied(call, 3U)) {
     const DecodedIndex area =
@@ -880,9 +894,12 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   Expected<bool, ErrorCode> by_reference = false;
   ErrorCode source_error = ErrorCode::Value;
   std::optional<IndexSource> source;
-  if (picks_reference && source_node.kind() == parser::NodeKind::Call) {
+  const bool evaluated_source = source_node.kind() == parser::NodeKind::Call ||
+                                source_node.kind() == parser::NodeKind::NameRef ||
+                                source_node.kind() == parser::NodeKind::Literal;
+  if (picks_reference && evaluated_source) {
     by_reference = true;
-  } else if (source_node.kind() == parser::NodeKind::Call && evaluates_to_reference(source_node)) {
+  } else if (evaluated_source && evaluates_to_reference(source_node)) {
     // The call answered a value or an error, read as the source's cells.
     if (source_ref.is_error()) {
       source_error = source_ref.as_error();

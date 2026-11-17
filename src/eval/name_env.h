@@ -50,19 +50,18 @@ class NameEnv {
   NameEnv() noexcept = default;
 
   /// One frame of the environment. The bound value is private: it is read
-  /// only through `read_shaped` / `binding_value`, so no reader can miss a
-  /// whole column / row held unexpanded in `tail_array`.
+  /// only through `read_shaped` / `binding_value` (or, for a reference, as the
+  /// `Ref` itself through `reference`), so no reader can miss a whole column /
+  /// row held unexpanded in `tail_array`.
   class Binding {
    public:
     // `Value`'s default constructor is private; initialise explicitly via
     // `blank()` so this class is default-constructible for placement-new in
     // `Arena::create<Binding>()`.
-    Binding() noexcept : value(Value::blank()) {}
+    Binding() noexcept : value(Value::blank()), deref_cache(Value::blank()) {}
     std::string_view name;
-    /// Optional pointer to the AST node the name was bound to. Non-null only
-    /// for range-shaped initialisers; consumers must keep the parsing arena
-    /// alive for the duration of evaluation (the same invariant as for the
-    /// AST nodes themselves).
+    /// For a binding of a reference, a `Literal` node holding the bound `Ref`, so a reader that dispatches on the
+    /// AST sees the reference; null for any other binding.
     const parser::AstNode* expr = nullptr;
     /// Set when the binding represents an "omitted" trailing-optional
     /// LAMBDA parameter slot. ISOMITTED reports TRUE for these and FALSE
@@ -70,16 +69,19 @@ class NameEnv {
     bool is_omitted = false;
     const Binding* prev = nullptr;
 
+    /// The bound `Ref` of a binding of a reference, else null. Its cells are read through `read_shaped`.
+    const Value* reference() const noexcept { return value.is_ref() ? &value : nullptr; }
+
    private:
     friend class NameEnv;
-    /// Mutable so a reference binding can keep the value its first read
-    /// produced; the frame is otherwise immutable once linked.
-    mutable Value value;
-    /// Set for a `Ref` / `RangeOp` / `ExternalRef` binding whose cells are not
-    /// read yet; `value` holds nothing until `read_shaped` reads them.
-    mutable bool read_pending = false;
-    /// Set while a whole-axis read is held in `tail_array` and `value` has not
-    /// been expanded from it yet.
+    /// The bound value: a `Ref` for a binding of a reference.
+    Value value;
+    /// The cells a `Ref` binding read, kept from its first read; the frame is otherwise immutable once linked.
+    mutable Value deref_cache;
+    /// Set once a `Ref` binding's cells are read into `deref_cache` / `tail_array`.
+    mutable bool read_done = false;
+    /// Set while a whole-axis read is held in `tail_array` and `deref_cache` has
+    /// not been expanded from it yet.
     mutable bool dense_pending = false;
     /// The declared-size array a reference binding read, kept unexpanded.
     mutable const TailArray* tail_array = nullptr;
@@ -99,13 +101,9 @@ class NameEnv {
     return nullptr;
   }
 
-  /// Returns the AST node a `name` was bound to, or `nullptr` when the name
-  /// is unbound or its binding carries only a `Value` (the common case for
-  /// scalar initialisers). Range-shaped initialisers (`A1:B2`, `OFFSET(...)`,
-  /// `CHOOSE(...)`, `{1;2;3}`) record their AST so range-aware consumers
-  /// (SUM, COUNT, VLOOKUP, ...) can treat the bound name as if the original
-  /// range AST had been written inline. Walks frames head-to-tail so a
-  /// freshly extended binding shadows earlier ones.
+  /// Returns the `Literal` node holding the `Ref` a `name` is bound to, or `nullptr` when the name is unbound or bound
+  /// to anything else. Range-aware consumers that dispatch on the AST read the bound name as that reference written
+  /// inline. Walks frames head-to-tail so a freshly extended binding shadows earlier ones.
   const parser::AstNode* lookup_ast(std::string_view name) const noexcept {
     for (const Binding* b = head_; b != nullptr; b = b->prev) {
       if (strings::case_insensitive_eq(b->name, name)) {
@@ -128,21 +126,11 @@ class NameEnv {
     return false;
   }
 
-  /// Returns a new environment with `(name, value)` pushed on top. The
-  /// returned env shares its tail with `*this`; the underlying `Binding`
-  /// node lives in `arena`. Returns a copy of `*this` unchanged if arena
-  /// allocation fails (the caller surfaces the resulting `#NAME?` on lookup).
+  /// Returns a new environment with `(name, value)` pushed on top; a `Ref` value binds the name as that reference.
+  /// The returned env shares its tail with `*this`; the underlying `Binding` node lives in `arena`. Returns a copy of
+  /// `*this` unchanged if arena allocation fails (the caller surfaces the resulting `#NAME?` on lookup).
   NameEnv extend(std::string_view name, Value value, Arena& arena) const noexcept {
-    return extend(name, value, /*expr=*/nullptr, arena);
-  }
-
-  /// Like `extend(name, value, arena)` but additionally records `expr` as the
-  /// AST source of the binding. Range-aware consumers can recover this AST
-  /// via `lookup_ast` and re-dispatch on the original RangeOp / ArrayLiteral
-  /// / OFFSET-call shape. Pass `nullptr` for `expr` to opt back into the
-  /// Value-only behaviour (equivalent to the 3-argument overload).
-  NameEnv extend(std::string_view name, Value value, const parser::AstNode* expr, Arena& arena) const noexcept {
-    return push_binding(name, value, expr, /*omitted=*/false, arena);
+    return push_binding(name, value, /*omitted=*/false, arena);
   }
 
   /// Pushes a frame marking `name` as an omitted optional LAMBDA parameter.
@@ -150,7 +138,7 @@ class NameEnv {
   /// reads through the omitted name); ISOMITTED detects the omitted flag via
   /// `lookup_omitted`.
   NameEnv extend_omitted(std::string_view name, Arena& arena) const noexcept {
-    return push_binding(name, Value::blank(), nullptr, /*omitted=*/true, arena);
+    return push_binding(name, Value::blank(), /*omitted=*/true, arena);
   }
 
   /// Returns the number of bindings currently visible. O(depth); intended
@@ -164,8 +152,7 @@ class NameEnv {
   }
 
  private:
-  NameEnv push_binding(std::string_view name, Value value, const parser::AstNode* expr, bool omitted,
-                       Arena& arena) const noexcept {
+  NameEnv push_binding(std::string_view name, Value value, bool omitted, Arena& arena) const noexcept {
     auto* frame = arena.create<Binding>();
     if (frame == nullptr) {
       return *this;
@@ -176,10 +163,12 @@ class NameEnv {
     // the invariant explicit for future callers (e.g. LAMBDA).
     frame->name = arena.intern(name);
     frame->value = value;
-    frame->expr = expr;
-    frame->read_pending =
-        expr != nullptr && (expr->kind() == parser::NodeKind::Ref || expr->kind() == parser::NodeKind::RangeOp ||
-                            expr->kind() == parser::NodeKind::ExternalRef);
+    if (value.is_ref()) {
+      frame->expr = parser::make_literal(arena, value);
+      if (frame->expr == nullptr) {
+        return *this;
+      }
+    }
     frame->is_omitted = omitted;
     frame->prev = head_;
     NameEnv next;
@@ -188,42 +177,44 @@ class NameEnv {
   }
 
  public:
-  /// Reads `b` keeping a whole column / row at its declared size. A reference
-  /// binding is read on first use through `read(ast)` (a `Shaped` evaluation
-  /// of the bound reference) and the result is kept.
+  /// Reads `b` keeping a whole column / row at its declared size. A `Ref` binding is read on first use through
+  /// `read(ref)` (the `Shaped` dereference of the bound reference) and the result is kept.
   template <typename Read>
   static Shaped read_shaped(const Binding& b, Read&& read) {
-    if (b.read_pending) {
-      const Shaped s = read(*b.expr);
-      b.read_pending = false;
+    if (!b.value.is_ref()) {
+      return Shaped{b.value, nullptr};
+    }
+    if (!b.read_done) {
+      const Shaped s = read(b.value);
+      b.read_done = true;
       if (s.tail_array != nullptr) {
         b.tail_array = s.tail_array;
         b.dense_pending = true;
       } else {
-        b.value = s.value;
+        b.deref_cache = s.value;
       }
     }
     Shaped out;
     if (b.tail_array != nullptr) {
       out.tail_array = b.tail_array;
     } else {
-      out.value = b.value;
+      out.value = b.deref_cache;
     }
     return out;
   }
 
-  /// Dense value of `b`: a whole column / row is expanded on the first call and
-  /// the expansion is kept.
+  /// Dense value of `b`: a whole column / row is expanded on the first call and the expansion is kept.
   template <typename Read>
   static Value binding_value(const Binding& b, Arena& arena, Read&& read) {
-    (void)read_shaped(b, read);
+    const Shaped s = read_shaped(b, read);
+    if (s.tail_array == nullptr) {
+      return s.value;
+    }
     if (b.dense_pending) {
-      Shaped s;
-      s.tail_array = b.tail_array;
-      b.value = densify(s, arena);
+      b.deref_cache = densify(s, arena);
       b.dense_pending = false;
     }
-    return b.value;
+    return b.deref_cache;
   }
 
  private:

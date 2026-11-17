@@ -149,10 +149,10 @@ bool extract_topleft_ref(const parser::AstNode& ref_node, Arena& arena, const Fu
     return true;
   }
 
-  // Reference-returning call: OFFSET / INDIRECT / nested CHOOSE / IF, read as the `Ref` it returns. A call
-  // reaching a reference through a name is resolved by the name.
-  if (k == parser::NodeKind::Call && is_reference_call_name(ref_node.as_call_name()) &&
-      !carries_name_reference(ref_node)) {
+  // Reference-returning call (OFFSET / INDIRECT / nested CHOOSE / IF) or a name standing for a reference, read as
+  // the `Ref` it evaluates to.
+  if ((k == parser::NodeKind::Call && is_reference_call_name(ref_node.as_call_name())) ||
+      k == parser::NodeKind::NameRef) {
     RefArea area{};
     ErrorCode err = ErrorCode::Value;
     if (eval_reference_area(ref_node, arena, registry, ctx, out_sheet, &area, &err)) {
@@ -467,11 +467,9 @@ bool resolve_topleft_or_formula_cell(const parser::AstNode& call, Arena& arena, 
     *out_sheet = std::string_view{};
     return true;
   }
-  // Two-argument form: extract from the supplied reference AST, looking
-  // through a LET binding to the reference it names.
+  // Two-argument form: extract from the supplied reference AST.
   Value err = Value::blank();
-  if (!extract_topleft_ref(resolve_name_ast(call.as_call_arg(1), ctx.name_env()), arena, registry, ctx, out_row,
-                           out_col, out_sheet, &err)) {
+  if (!extract_topleft_ref(call.as_call_arg(1), arena, registry, ctx, out_row, out_col, out_sheet, &err)) {
     *out_result = err;
     return false;
   }

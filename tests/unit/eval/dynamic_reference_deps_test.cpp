@@ -386,6 +386,39 @@ TEST(DynamicReferenceRecalc, ReplacingAReaderDropsItsLearnedEdges) {
   EXPECT_FALSE(engine_graph().has_dynamic_dependencies(c1));
 }
 
+// A LET name bound to OFFSET's reference is read where the formula uses its
+// cells, not where it is bound: only the branch that sums them learns edges.
+TEST(DynamicReferenceRecalc, LetCarriedOffsetLearnsReadsOnlyInTheTakenBranch) {
+  constexpr std::uint32_t kG = 6U;
+  Workbook wb = Workbook::create();
+  Number(wb, {0U, kB}, 3.0);
+  Number(wb, {0U, kD}, 3.0);
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, kG, Value::boolean(false))));
+  Formula(wb, {0U, kA}, "=B1*1");
+  Formula(wb, {1U, kA}, "=B1*2");
+  Formula(wb, {2U, kA}, "=B1*3");
+  Formula(wb, {0U, kF}, "=LET(r,OFFSET(A1,0,0,3),IF(G1,SUM(r),ROWS(r)))");
+  Recalc(wb);
+  const eval::CellNodeId f1{0U, 0U, kF};
+  const eval::CellNodeId a2{0U, 1U, kA};
+  auto engine_graph = [&]() -> const eval::DepGraph& { return wb.recalc_engine().dep_graph(); };
+  ExpectNumberAt(wb, {0U, kF}, 3.0, "F1 ROWS branch");
+  EXPECT_FALSE(engine_graph().has_dynamic_dependencies(f1));
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, kG, Value::boolean(true))));
+  Number(wb, {0U, kB}, 4.0);
+  auto sum_pass = wb.partial_recalc(eval::default_registry(), eval::SheetCellRange{0U, 0U, 0U, kF, kF});
+  ASSERT_TRUE(static_cast<bool>(sum_pass)) << sum_pass.error().message;
+  ExpectNumberAt(wb, {0U, kF}, 24.0, "F1 SUM branch");
+  EXPECT_TRUE(engine_graph().has_dependency_source(f1, a2, eval::DepGraph::DependencySource::kDynamicReference));
+
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, kG, Value::boolean(false))));
+  auto rows_pass = wb.partial_recalc(eval::default_registry(), eval::SheetCellRange{0U, 0U, 0U, kF, kF});
+  ASSERT_TRUE(static_cast<bool>(rows_pass)) << rows_pass.error().message;
+  ExpectNumberAt(wb, {0U, kF}, 3.0, "F1 ROWS branch again");
+  EXPECT_FALSE(engine_graph().has_dynamic_dependencies(f1));
+}
+
 // A reference bound to a LAMBDA parameter, a helper callback argument or a
 // named LAMBDA's parameter stays a reference, so OFFSET inside the body reads
 // through it and recalc learns the read; a plain reference argument remains
