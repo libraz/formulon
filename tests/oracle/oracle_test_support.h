@@ -12,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include "auto_filter.h"
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
 #include "eval/formula_entry.h"
@@ -182,6 +183,39 @@ inline const char* apply_merge_ranges(const JsonValue& spec, Sheet& sheet) {
       last_col = tmp;
     }
     sheet.mutable_merges().push_back(MergeRange{first_row, first_col, last_row, last_col});
+  }
+  return nullptr;
+}
+
+// Applies the environment's row visibility: `hidden_rows` (1-based) hides
+// those rows, and `filter_criteria: true` gives the sheet an AutoFilter with a
+// criterion, which makes every hidden row of it count as filter-hidden.
+inline const char* apply_row_visibility(const JsonValue& environment, Sheet& sheet) {
+  if (const JsonValue* rows = environment.find("hidden_rows"); rows != nullptr) {
+    if (!rows->is_array()) {
+      return "environment 'hidden_rows' is not an array";
+    }
+    for (const JsonValue& item : rows->as_array()) {
+      if (!item.is_number() || item.as_number() < 1.0 || item.as_number() != std::floor(item.as_number())) {
+        return "hidden row is not a positive integer";
+      }
+      RowLayout layout;
+      layout.row = static_cast<std::uint32_t>(item.as_number()) - 1U;
+      layout.hidden = true;
+      sheet.mutable_layout().row_overrides.push_back(layout);
+    }
+  }
+  if (const JsonValue* filtered = environment.find("filter_criteria"); filtered != nullptr) {
+    if (!filtered->is_bool()) {
+      return "environment 'filter_criteria' is not a boolean";
+    }
+    if (filtered->as_bool()) {
+      FilterColumn column;
+      column.kind = FilterKind::kCustom;
+      AutoFilter filter;
+      filter.columns.push_back(column);
+      sheet.set_auto_filter(std::move(filter));
+    }
   }
   return nullptr;
 }

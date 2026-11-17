@@ -586,21 +586,6 @@ entries:
     reason: "=_xlfn.SHEET(\"Hidden\") -- expects tab index 3 in the live workbook. Single-sheet driver has no \"Hidden\" sheet, so Formulon returns #N/A. Structural flatten limitation."
     prefer: mac
     first_noted: 2026-05-02
-  - id: ironcalc_calc_test_no_export_tables_filters.B8
-    cause: importer-flatten
-    reason: "=SUBTOTAL(9,B3:B6) over a live filtered table; Mac=4 (only B3 visible after filter), Formulon=16 (sums all four importer-imported values). Importer drops auto-filter state, which Formulon does not model either."
-    prefer: mac
-    first_noted: 2026-05-02
-  - id: ironcalc_calc_test_no_export_tables_filters.B11
-    cause: importer-flatten
-    reason: "=SUBTOTAL(109,OFFSET(A1,1,1):OFFSET(A1,6,1)); Mac=4 (visible-only), Formulon=17. Importer supplies no hidden-row state, and the OFFSET endpoints carry no static row provenance for the 101..111 filter to key on."
-    prefer: mac
-    first_noted: 2026-05-02
-  - id: ironcalc_calc_test_no_export_tables_filters.C12
-    cause: importer-flatten
-    reason: "=SUBTOTAL(109,INDIRECT(\"B2\"):INDIRECT(\"B6\")); Mac=4, Formulon=17. Same pair of reasons as filters.B11 — no imported hidden-row state, and INDIRECT endpoints carry no static row provenance."
-    prefer: mac
-    first_noted: 2026-05-02
 
   # -- SHEETS() with multi-sheet workbook flatten -------------------------
   - id: ironcalc_calc_tests__INFORMATION_SHEET_SHEETS_SHEET_SHEETS.C2

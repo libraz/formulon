@@ -40,6 +40,11 @@ Design notes
   `abs=5e-8, rel=1e-12`; the abs bound matches the IronCalc runner's
   hard-coded `EPS`.
 
+* **Row visibility.** A sheet's hidden rows travel as the environment's
+  `hidden_rows` (1-based). OOXML stores no per-row filtered flag; a row
+  is filter-hidden when an AutoFilter on its sheet (the sheet's own or a
+  table's) carries a criterion, recorded as `filter_criteria: true`.
+
 * **Error names.** openpyxl returns Excel errors as strings like
   `#DIV/0!`. We keep the literal and emit `{kind: error, code: ...}`
   so the Formulon runner's `display_name_to_code` table handles them.
@@ -658,6 +663,15 @@ def _build_setup_for(
     return setup
 
 
+def _row_visibility(sheet) -> Tuple[List[int], bool]:
+    """The sheet's hidden rows (1-based, ascending) and whether an AutoFilter on it carries a criterion."""
+
+    hidden = sorted(row for row, dim in sheet.row_dimensions.items() if dim.hidden)
+    filters = [sheet.auto_filter] + [table.autoFilter for table in sheet.tables.values()]
+    filtered = any(f is not None and f.filterColumn for f in filters)
+    return hidden, filtered
+
+
 def _convert_sheet(
     sheet,
     cached_sheet,
@@ -867,6 +881,11 @@ def _convert_sheet(
     profile_id = _evaluation_profile_id(saved_by, locale)
     if profile_id is not None:
         doc["environment"]["profile_id"] = profile_id
+    hidden_rows, filtered = _row_visibility(sheet)
+    if hidden_rows:
+        doc["environment"]["hidden_rows"] = hidden_rows
+        if filtered:
+            doc["environment"]["filter_criteria"] = True
     return doc, stats
 
 

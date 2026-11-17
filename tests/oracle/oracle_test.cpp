@@ -152,6 +152,11 @@ TEST_P(OracleTest, Matches) {
     }
   }
 
+  if (const char* err_msg = apply_row_visibility(param.environment, wb.sheet(0)); err_msg != nullptr) {
+    FAIL() << param.suite << "." << param.case_id << ": " << err_msg;
+    return;
+  }
+
   eval::EnteredCallSpellings entered_calls;
   if (const JsonValue* setup = param.raw_case.find("setup"); setup && setup->is_object()) {
     // In the order the case states, as the capture writes it: entered text
