@@ -225,6 +225,31 @@ Shape Shapes::of_array_operand(const parser::AstNode& node) {
              : Shape::kScalar;
 }
 
+Shape Shapes::of_unspread(const parser::AstNode& node) {
+  if (node.kind() == parser::NodeKind::Call &&
+      strings::case_insensitive_eq(canonical_function_name(node.as_call_name()), "OFFSET")) {
+    return offset_shape(node, /*spread=*/false);
+  }
+  return of(node);
+}
+
+Shape Shapes::offset_shape(const parser::AstNode& node, bool spread) {
+  // One cell from a one-cell base whose height and width are 1 or absent,
+  // unless an array argument makes it an array of references.
+  const std::uint32_t arity = node.as_call_arity();
+  for (std::uint32_t i = 1; spread && i < arity; ++i) {
+    if (of(node.as_call_arg(i)) == Shape::kArray) {
+      return Shape::kReference;
+    }
+  }
+  if (arity < 3U || of(node.as_call_arg(0)) != Shape::kScalar ||
+      (arity >= 4U && !positive_int(node.as_call_arg(3), 1U)) ||
+      (arity >= 5U && !positive_int(node.as_call_arg(4), 1U))) {
+    return Shape::kReference;
+  }
+  return Shape::kScalar;
+}
+
 Shape Shapes::call_shape(const parser::AstNode& node) {
   const std::string_view name = canonical_function_name(node.as_call_name());
   if (bound(node.as_call_name()) || !IsBuiltin(name)) {
@@ -251,12 +276,17 @@ Shape Shapes::call_shape(const parser::AstNode& node) {
   if (is("INDEX")) {
     // Positive integer constants pick one cell of a reference by a row alone, and one element of an array only by a
     // row and a column (`INDEX({1;2;3},2)` may still be a row).
-    const Shape source = arity == 0U ? Shape::kReference : of_array_operand(node.as_call_arg(0));
+    // A union is several areas until an area number picks one.
+    const Shape source = arity == 0U || node.as_call_arg(0).kind() == parser::NodeKind::UnionOp
+                             ? Shape::kReference
+                             : of_array_operand(node.as_call_arg(0));
     if (source == Shape::kScalar) {
       return source;
     }
+    // An array of area numbers still picks one area (`INDEX((A1:A2,C1:C2),1,1,@{1,2})`).
     for (std::uint32_t i = 1; i < arity; ++i) {
-      if (!positive_int(node.as_call_arg(i))) {
+      const bool area_array = i == 3U && node.as_call_arg(i).kind() == parser::NodeKind::ArrayLiteral;
+      if (!area_array && !positive_int(node.as_call_arg(i))) {
         return source;
       }
     }
@@ -266,13 +296,7 @@ Shape Shapes::call_shape(const parser::AstNode& node) {
     return source;
   }
   if (is("OFFSET")) {
-    // One cell from a one-cell base whose height and width are 1 or absent.
-    if (arity < 3U || of(node.as_call_arg(0)) != Shape::kScalar ||
-        (arity >= 4U && !positive_int(node.as_call_arg(3), 1U)) ||
-        (arity >= 5U && !positive_int(node.as_call_arg(4), 1U))) {
-      return Shape::kReference;
-    }
-    return Shape::kScalar;
+    return offset_shape(node, /*spread=*/true);
   }
   if (is("INDIRECT")) {
     return Shape::kReference;

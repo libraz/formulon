@@ -95,6 +95,10 @@ class Shapes {
   /// parameter (`INDEX(A1:A5*2,2)` indexes an array even without lifting).
   Shape of_array_operand(const parser::AstNode& node);
 
+  /// `of(node)` when each array argument of an OFFSET call gives it one value
+  /// (`OFFSET(A1,@{0;2},0)` is one cell).
+  Shape of_unspread(const parser::AstNode& node);
+
   /// Class of argument `index` of the built-in `name` in the formulas this
   /// model describes: `xlsb_legacy_parameter_class` without lifting.
   char parameter_class(std::string_view name, std::uint32_t index) const;
@@ -115,30 +119,24 @@ class Shapes {
 
   Shape call_shape(const parser::AstNode& node);
 
+  Shape offset_shape(const parser::AstNode& node, bool spread);
+
   const NameShapes& names_;
   const bool lifting_;
   std::vector<std::pair<std::string_view, Shape>> scope_;
 };
 
-/// Sets `flag` while it lives, when `enter` and the flag is not already set.
-class ArrayScope {
+/// Sets `flag` to `value` while it lives.
+class FlagScope {
  public:
-  ArrayScope(bool& flag, bool enter) : flag_(flag), entered_(enter && !flag) {
-    if (entered_) {
-      flag_ = true;
-    }
-  }
-  ~ArrayScope() {
-    if (entered_) {
-      flag_ = false;
-    }
-  }
-  ArrayScope(const ArrayScope&) = delete;
-  ArrayScope& operator=(const ArrayScope&) = delete;
+  FlagScope(bool& flag, bool value) : flag_(flag), saved_(flag) { flag_ = value; }
+  ~FlagScope() { flag_ = saved_; }
+  FlagScope(const FlagScope&) = delete;
+  FlagScope& operator=(const FlagScope&) = delete;
 
  private:
   bool& flag_;
-  const bool entered_;
+  const bool saved_;
 };
 
 }  // namespace detail

@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <initializer_list>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
@@ -23,7 +24,7 @@ namespace io {
 namespace xlsb {
 namespace {
 
-using detail::ArrayScope;
+using detail::FlagScope;
 using detail::IsBuiltin;
 using detail::kPtgValueClass;
 using detail::Shape;
@@ -101,6 +102,23 @@ bool MarksDynamic(Shapes& shapes, const parser::AstNode& node, Slot slot, bool r
   }
 }
 
+bool IsOneOf(std::string_view name, std::initializer_list<std::string_view> names) {
+  return std::any_of(names.begin(), names.end(),
+                     [&](std::string_view fn) { return strings::case_insensitive_eq(name, fn); });
+}
+
+/// Where a reference a node produces is used: `iterated` by a parameter that
+/// takes an array of references in an array context, or `kept` as a
+/// reference by a parameter that is neither value nor array class.
+struct Use {
+  bool iterated = false;
+  bool kept = false;
+  /// A value parameter of a formula saved without the mark that takes an array in Excel 365 (`TRANSPOSE`).
+  bool narrowed = false;
+  /// Evaluated as an array only because an array parameter (`ROWS`) holds it directly.
+  bool forced_by_array_parameter = false;
+};
+
 /// Walker behind `legacy_intersections`: where Excel 365 shows an `@` in a
 /// formula saved without the dynamic-array mark (cell by cell
 /// as in its formula2 text). A multi-valued node takes one wherever an
@@ -113,14 +131,31 @@ class LegacyIntersections {
   /// `covered` when the value of `node` is already the value of an
   /// intersected node, the body of an intersected LET or LAMBDA call: it
   /// takes no second `@` (`@LET(a,A1:A3,a)`).
-  void walk(const parser::AstNode& node, Slot slot, bool root, bool covered = false) {
+  void walk(const parser::AstNode& node, Slot slot, bool root, bool covered = false, Use use = {}) {
     // Everything under a forced-array or array parameter is evaluated as an
     // array, nested calls included (`SUMPRODUCT(ABS(A1:A2))`,
     // `XMATCH(TRUE,ISBLANK(B1:B3))` show no `@`).
     // A computed array takes the class of a value where an area would be array class (`TYPE(@INDEX({1;2;3},2))`).
-    const bool area = shapes_.of(node) == Shape::kReference;
-    const bool value =
-        !covered && !in_forced_array_ && (root || SlotClass(slot, area, PtgEvaluation::kLegacy) == kPtgValueClass);
+    const bool intersects_spread = this->intersects_spread(node, use);
+    const Shape shape = intersects_spread ? shapes_.of_unspread(node) : shapes_.of(node);
+    bool value_slot = root || SlotClass(slot, shape == Shape::kReference, PtgEvaluation::kLegacy) == kPtgValueClass;
+    if (!root && !slot.operand) {
+      if (node.kind() == parser::NodeKind::ArrayLiteral && (slot.letter == 'I' || (slot.letter == 'V' && array_ok_))) {
+        // An array constant is an array in an `I` parameter (`CHOOSE({1;2},1,2)`), and in a value parameter
+        // where an array is accepted (`SUM(ABS({-1,-2}))`).
+        value_slot = false;
+      } else if (shape == Shape::kArray && node.kind() == parser::NodeKind::Call) {
+        const std::string_view name = canonical_function_name(node.as_call_name());
+        // ROW and COLUMN over several cells give one value to an `S` parameter (`SUM(@ROW(A1:A3))`), and an array
+        // a built-in always returns gives one to a reference parameter outside an array context (`N(@SEQUENCE(3))`).
+        value_slot = value_slot || (slot.letter == 'S' && IsOneOf(name, {"ROW", "COLUMN"})) ||
+                     (slot.letter == 'R' && !array_ok_ && xlsb_returns_array(name));
+      }
+    }
+    // An array of references can never be an array where Excel 365 alone takes one
+    // (`TRANSPOSE(@OFFSET(A1:A3,{0;1},0))`).
+    const bool narrowed = use.narrowed && spreads_references(node) && !intersects_spread;
+    const bool value = !covered && (narrowed || (!in_forced_array_ && value_slot));
     if (node.kind() == parser::NodeKind::ImplicitIntersection) {
       // A written `@` is listed when it is the one Excel would show; its
       // operand never takes a second one.
@@ -128,18 +163,18 @@ class LegacyIntersections {
       if (value && shapes_.of(operand) != Shape::kScalar) {
         out_.push_back(&node);
       }
-      walk_children(operand, slot, root, /*covered=*/true);
+      walk_children(operand, slot, root, /*covered=*/true, use);
       return;
     }
-    const bool intersected = value && shapes_.of(node) != Shape::kScalar;
+    const bool intersected = value && shape != Shape::kScalar;
     if (intersected) {
       out_.push_back(&node);
     }
-    walk_children(node, slot, root, covered || intersected);
+    walk_children(node, slot, root, covered || intersected, use);
   }
 
  private:
-  void walk_children(const parser::AstNode& node, Slot slot, bool root, bool covered) {
+  void walk_children(const parser::AstNode& node, Slot slot, bool root, bool covered, Use use) {
     using parser::NodeKind;
     switch (node.kind()) {
       case NodeKind::UnaryOp:
@@ -152,35 +187,24 @@ class LegacyIntersections {
         return;
       case NodeKind::RangeOp:
         for (std::uint32_t i = 0; i < node.as_range_arity(); ++i) {
-          walk(node.as_range_operand(i), Slot{'R', false}, false);
+          walk(node.as_range_operand(i), Slot{'R', false}, false, false, Use{false, true});
         }
         return;
       case NodeKind::IntersectOp:
-        walk(node.as_intersect_lhs(), Slot{'R', false}, false);
-        walk(node.as_intersect_rhs(), Slot{'R', false}, false);
+        walk(node.as_intersect_lhs(), Slot{'R', false}, false, false, Use{false, true});
+        walk(node.as_intersect_rhs(), Slot{'R', false}, false, false, Use{false, true});
         return;
       case NodeKind::UnionOp:
         for (std::uint32_t i = 0; i < node.as_union_arity(); ++i) {
-          walk(node.as_union_child(i), Slot{'R', false}, false);
+          walk(node.as_union_child(i), Slot{'R', false}, false, false, Use{false, true});
         }
         return;
-      case NodeKind::Call: {
-        const std::string_view name = canonical_function_name(node.as_call_name());
-        const bool builtin = !shapes_.bound(node.as_call_name()) && IsBuiltin(name);
-        // A call that is an array-class operand (`AGGREGATE(15,6,ROW(A1:A3)/ISNUMBER(MATCH(A1:A3,B1:B3,0)),1)`)
-        // evaluates its arguments as arrays.
-        const bool array_operand =
-            slot.operand && SlotClass(slot, /*area=*/true, PtgEvaluation::kLegacy) != kPtgValueClass;
-        for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
-          const Slot arg = builtin ? Slot{shapes_.parameter_class(name, i), false} : Slot{};
-          const ArrayScope forced(in_forced_array_, array_operand || arg.letter == 'F' || arg.letter == 'X');
-          walk(node.as_call_arg(i), arg, false);
-        }
+      case NodeKind::Call:
+        walk_call(node, slot, use);
         return;
-      }
       case NodeKind::LambdaCall: {
         for (std::uint32_t i = 0; i < node.as_lambda_call_arity(); ++i) {
-          walk(node.as_lambda_call_arg(i), Slot{}, false);
+          walk(node.as_lambda_call_arg(i), Slot{}, false, false, Use{false, true});
         }
         // A LAMBDA called where it is written runs its body here, and a
         // parameter may be bound to a range (`@LAMBDA(x,@x+1)(2)`).
@@ -211,9 +235,100 @@ class LegacyIntersections {
     }
   }
 
+  void walk_call(const parser::AstNode& node, Slot slot, Use use) {
+    const std::string_view name = canonical_function_name(node.as_call_name());
+    const bool builtin = !shapes_.bound(node.as_call_name()) && IsBuiltin(name);
+    // A call that is an array-class operand (`AGGREGATE(15,6,ROW(A1:A3)/ISNUMBER(MATCH(A1:A3,B1:B3,0)),1)`)
+    // evaluates its arguments as arrays.
+    const bool array_operand = slot.operand && SlotClass(slot, /*area=*/true, PtgEvaluation::kLegacy) != kPtgValueClass;
+    const bool builds = builtin && IsOneOf(name, {"OFFSET", "INDIRECT"});
+    const bool intersect_spread = intersects_spread(node, use);
+    // INDEX and XLOOKUP give one reference: an array constant they would spread over is intersected where the result
+    // is used as a reference (`SUBTOTAL(9,INDEX(A1:B3,0,@{1,2}))`).
+    const bool picks = builtin && (use.kept || use.iterated) && IsOneOf(name, {"INDEX", "XLOOKUP"});
+    const bool per_element = builtin && IsOneOf(name, {"MAP", "REDUCE", "SCAN", "BYROW", "BYCOL"});
+    const bool call_array_ok = array_ok_;
+    for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
+      const parser::AstNode& arg = node.as_call_arg(i);
+      const Slot param = builtin ? Slot{shapes_.parameter_class(name, i), false} : Slot{};
+      if (per_element && arg.kind() == parser::NodeKind::Lambda) {
+        walk_per_element_body(arg);
+        continue;
+      }
+      const bool forced_outside = in_forced_array_;
+      const FlagScope forced(in_forced_array_,
+                             in_forced_array_ || array_operand || param.letter == 'F' || param.letter == 'X');
+      const FlagScope array_ok(array_ok_, array_ok_ || in_forced_array_ || param.letter == 'S');
+      if ((builds || picks) && param.letter == 'V' && arg.kind() == parser::NodeKind::ArrayLiteral) {
+        if (intersect_spread || picks) {
+          out_.push_back(&arg);
+        }
+        continue;
+      }
+      if (builds && param.letter == 'V' && shapes_.of_array_operand(arg) == Shape::kArray) {
+        // A computed array is intersected at its own operands (`OFFSET(A1,@ROW(A1:A3)-1,0)`) unless a forced-array
+        // parameter around the call evaluates it as an array; an array parameter holding the call does not.
+        const FlagScope lifted(in_forced_array_,
+                               in_forced_array_ && !intersects_arguments(use) && !use.forced_by_array_parameter);
+        walk(arg, param, false);
+        continue;
+      }
+      Use arg_use{false, param.letter != 'V' && param.letter != 'F'};
+      arg_use.iterated = builtin && call_array_ok && xlsb_iterates_references(name, i);
+      arg_use.narrowed = builtin && param.letter == 'V' && xlsb_parameter_class(name, i) != 'V';
+      arg_use.forced_by_array_parameter = param.letter == 'X' && !forced_outside && !array_operand;
+      walk(arg, param, false, false, arg_use);
+    }
+  }
+
+  /// OFFSET or INDIRECT spread over an array argument builds an array of references. Where that array is neither
+  /// iterated nor turned into values, each array argument is intersected instead (`ROWS(OFFSET(A1,@{0;1},0))`).
+  bool intersects_spread(const parser::AstNode& node, Use use) {
+    return intersects_arguments(use) && spreads_references(node);
+  }
+
+  bool intersects_arguments(Use use) const { return !use.iterated && !use.narrowed && (use.kept || !array_ok_); }
+
+  bool spreads_references(const parser::AstNode& node) {
+    if (node.kind() != parser::NodeKind::Call || shapes_.bound(node.as_call_name()) ||
+        !IsOneOf(canonical_function_name(node.as_call_name()), {"OFFSET", "INDIRECT"})) {
+      return false;
+    }
+    // OFFSET's base is a reference however many cells it spans. An operator is a value here, as in `Shapes`, until
+    // a forced array evaluates it.
+    const std::uint32_t first =
+        strings::case_insensitive_eq(canonical_function_name(node.as_call_name()), "OFFSET") ? 1U : 0U;
+    for (std::uint32_t i = first; i < node.as_call_arity(); ++i) {
+      if (shapes_.of(node.as_call_arg(i)) == Shape::kArray) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// The body of a LAMBDA a built-in calls once per element (`MAP(A1:A2,LAMBDA(x,@ROW(x)))`), whose parameters may be
+  /// bound to ranges; a body that is a parameter returns that element as it is.
+  void walk_per_element_body(const parser::AstNode& lambda) {
+    const std::uint32_t n = lambda.as_lambda_param_count();
+    for (std::uint32_t i = 0; i < n; ++i) {
+      shapes_.bind(lambda.as_lambda_param(i), Shape::kReference);
+    }
+    const parser::AstNode& body = lambda.as_lambda_body();
+    const bool parameter =
+        body.kind() == parser::NodeKind::NameRef && body.as_name_sheet().empty() && shapes_.bound(body.as_name());
+    {
+      const FlagScope array_ok(array_ok_, false);
+      const FlagScope forced(in_forced_array_, false);
+      walk(body, Slot{}, /*root=*/true, parameter);
+    }
+    shapes_.unbind(n);
+  }
+
   Shapes shapes_;
   std::vector<const parser::AstNode*>& out_;
   bool in_forced_array_ = false;
+  /// An array is accepted here: under an argument evaluated as an array, or an `S` parameter's.
+  bool array_ok_ = false;
 };
 
 }  // namespace

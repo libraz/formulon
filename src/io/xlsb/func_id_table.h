@@ -91,6 +91,12 @@ char xlsb_parameter_class(std::string_view name, std::uint32_t index);
 /// `TRANSPOSE(A1:A3)` intersect their argument).
 char xlsb_legacy_parameter_class(std::string_view name, std::uint32_t index);
 
+/// True when argument `index` of the built-in `name` takes an array of
+/// references one reference at a time when the call itself sits where an
+/// array is accepted (`SUM(COUNTIF(OFFSET(A1:A3,{0;1;2},0),">0"))` counts
+/// three ranges); a legacy formula takes no `@` there.
+bool xlsb_iterates_references(std::string_view name, std::uint32_t index);
+
 /// True when Excel 365 takes the result of the built-in `name` as an array
 /// whatever its arguments: it marks a call with one-cell arguments as a
 /// dynamic-array formula. OFFSET, the other built-in so marked, depends on

@@ -483,6 +483,14 @@ constexpr std::string_view kParameterClasses =
 /// class, in `kParameterClasses`' form; read by `xlsb_legacy_parameter_class`.
 constexpr std::string_view kLegacyParameterClasses = "|IFERROR:V|TRANSPOSE:V|";
 
+/// The parameters `xlsb_iterates_references` lists, as `|NAME:FLAGS|` with
+/// `I` for such a parameter and `-` otherwise, repeating as in
+/// `kParameterClasses`.
+constexpr std::string_view kIteratedReferences =
+    "|AGGREGATE:--I-|AREAS:I|AVERAGEIF:I-I|AVERAGEIFS:II-2|COLUMNS:I|COUNTBLANK:I|COUNTIF:I-|COUNTIFS:I-2|DAVERAGE:I-|"
+    "DCOUNT:I-|DCOUNTA:I-|DGET:I-|DMAX:I-|DMIN:I-|DPRODUCT:I-|DSTDEV:I-|DSTDEVP:I-|DSUM:I-|DVAR:I-|DVARP:I-|ISREF:I|"
+    "MAXIFS:II-2|MINIFS:II-2|N:I|ROWS:I|SUBTOTAL:-I|SUMIF:I-I|SUMIFS:II-2|T:I|";
+
 /// The built-ins `xlsb_returns_array` lists, as `|NAME|`: those Excel 365
 /// marks dynamic-array in the `classes-build --slot A1` probe of
 /// `tools/dev/xlsb_func_id_harvest.py` (every argument one cell), less OFFSET.
@@ -616,6 +624,11 @@ char xlsb_legacy_parameter_class(std::string_view name, std::uint32_t index) {
   static const std::vector<ClassRow> rows = BuildClassIndex(kLegacyParameterClasses);
   const char letter = ParameterClassIn(rows, name, index);
   return letter != 0 ? letter : xlsb_parameter_class(name, index);
+}
+
+bool xlsb_iterates_references(std::string_view name, std::uint32_t index) {
+  static const std::vector<ClassRow> rows = BuildClassIndex(kIteratedReferences);
+  return ParameterClassIn(rows, name, index) == 'I';
 }
 
 bool xlsb_returns_array(std::string_view name) {

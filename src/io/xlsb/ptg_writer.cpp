@@ -63,7 +63,7 @@ std::string_view ScopeName(std::string_view name) {
              : parser::cell_shaped_name_bare(name);
 }
 
-using detail::ArrayScope;
+using detail::FlagScope;
 using detail::kPtgArrayClass;
 using detail::kPtgReferenceClass;
 using detail::kPtgValueClass;
@@ -368,9 +368,10 @@ class Encoder {
     // is evaluated as an array, and so is everything inside it; in an array
     // (CSE) formula, any argument under such a parameter is.
     const bool non_value_parameter = slot.letter != 0 && slot.letter != 'V';
-    const ArrayScope scope(in_array_operand_,
-                           non_value_parameter && ((evaluation_ == PtgEvaluation::kConditionalFormat && slot.operand) ||
-                                                   evaluation_ == PtgEvaluation::kLegacyArray));
+    const FlagScope scope(in_array_operand_,
+                          in_array_operand_ || (non_value_parameter &&
+                                                ((evaluation_ == PtgEvaluation::kConditionalFormat && slot.operand) ||
+                                                 evaluation_ == PtgEvaluation::kLegacyArray)));
     // A reference's class follows its slot in a cell formula and a defined
     // name's body; other formulas without a value root keep reference class.
     auto cls = [&](bool area) -> std::uint8_t {
@@ -688,7 +689,7 @@ class Encoder {
   /// inline `LAMBDA(...)` / curried call), then the arguments, then
   /// `PtgFuncVar` with the `id == 255` sentinel and `cparams == arity + 1`.
   Expected<void, Error> emit_lambda_call(const parser::AstNode& node, std::uint8_t cls) {
-    const ArrayScope scope(in_array_operand_, measured_calls_ && cls == kPtgArrayClass);
+    const FlagScope scope(in_array_operand_, in_array_operand_ || (measured_calls_ && cls == kPtgArrayClass));
     RETURN_IF_ERROR(emit(node.as_lambda_call_callee()));
     const std::uint32_t arity = node.as_lambda_call_arity();
     for (std::uint32_t i = 0; i < arity; ++i) {
@@ -702,7 +703,7 @@ class Encoder {
   /// `PtgFuncVar(255)`, as Excel 365 saves a call to a named LAMBDA.
   Expected<void, Error> emit_name_call(const parser::AstNode& node, std::uint8_t cls) {
     RETURN_IF_ERROR(emit_name_ref(node.as_call_name()));
-    const ArrayScope scope(in_array_operand_, measured_calls_ && cls == kPtgArrayClass);
+    const FlagScope scope(in_array_operand_, in_array_operand_ || (measured_calls_ && cls == kPtgArrayClass));
     const std::uint32_t arity = node.as_call_arity();
     for (std::uint32_t i = 0; i < arity; ++i) {
       RETURN_IF_ERROR(emit(node.as_call_arg(i)));
@@ -770,7 +771,7 @@ class Encoder {
       return unsupported_node("LetBinding(_xlfn.LET not registered)");
     }
     emit_name_ptg(kPtgName, it_let->second);  // PtgName (reference-class): the LET name-ref
-    const ArrayScope scope(in_array_operand_, measured_calls_ && cls == kPtgArrayClass);
+    const FlagScope scope(in_array_operand_, in_array_operand_ || (measured_calls_ && cls == kPtgArrayClass));
     // Bindings and the body take their argument the way an `S` parameter does.
     const Slot slot = measured_calls_ ? Slot{'S', false} : Slot{};
     const std::uint32_t n = node.as_let_binding_count();
@@ -1302,7 +1303,7 @@ class Encoder {
                         std::string(kCtx) + std::string(" fn=") + std::string(name));
     }
     const std::uint8_t token_class = reference_result ? kPtgReferenceClass : result_class;
-    const ArrayScope scope(in_array_operand_, measured_calls_ && token_class == kPtgArrayClass);
+    const FlagScope scope(in_array_operand_, in_array_operand_ || (measured_calls_ && token_class == kPtgArrayClass));
     const std::uint32_t arity = node.as_call_arity();
     std::vector<std::size_t> gotos;
     if (strings::case_insensitive_eq(name, "IF") && (arity == 2U || arity == 3U)) {
@@ -1418,7 +1419,7 @@ class Encoder {
   Expected<void, Error> emit_future_function_call(const parser::AstNode& node, std::string_view name,
                                                   std::uint8_t cls) {
     RETURN_IF_ERROR(emit_hidden_callee(name));
-    const ArrayScope scope(in_array_operand_, measured_calls_ && cls == kPtgArrayClass);
+    const FlagScope scope(in_array_operand_, in_array_operand_ || (measured_calls_ && cls == kPtgArrayClass));
     const std::uint32_t arity = node.as_call_arity();
     for (std::uint32_t i = 0; i < arity; ++i) {
       RETURN_IF_ERROR(emit_call_arg(node, name, i));

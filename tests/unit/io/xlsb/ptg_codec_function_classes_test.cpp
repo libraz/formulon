@@ -247,6 +247,50 @@ TEST(XlsbPtgCodec, LegacyIntersectionsFollowExcelsFormula2) {
                               "ROWS(INDEX(SEQUENCE(3),2))", "ISREF(INDEX(SEQUENCE(3),2))"}) {
     EXPECT_EQ(listed(formula), Texts{}) << formula;
   }
+  // OFFSET or INDIRECT over an array argument builds an array of references. A parameter that iterates references in
+  // an array context takes it whole; anywhere else that keeps a reference, or outside any array context, the array
+  // argument is intersected instead, and a one-cell base then gives one cell.
+  EXPECT_EQ(listed("OFFSET(A1:A3,{0;1;2},0)"), (Texts{"OFFSET(A1:A3,{0;1;2},0)", "{0;1;2}"}));
+  EXPECT_EQ(listed("OFFSET(A1,{1},0)"), Texts{"{1}"});
+  EXPECT_EQ(listed("ABS(OFFSET(A1,{0;2},0))"), Texts{"{0;2}"});
+  EXPECT_EQ(listed("ROWS(OFFSET(A1,{0;-1},0))"), Texts{"{0;-1}"});
+  EXPECT_EQ(listed("SUMPRODUCT(LEN(CELL(\"address\",OFFSET(A1:A3,{0;1;2},0))))"), Texts{"{0;1;2}"});
+  for (const char* formula :
+       {"SUM(ROWS(OFFSET(A1:A3,{0;1;2},0)))", "SUM(COUNTIF(OFFSET(A1:A3,,{1,2,3}),\">0\"))",
+        "SUM(SUMIF(A1:A3,\">0\",OFFSET(B1:B3,{0;1;2},0)))", "SUM(DSUM(OFFSET(A1:B3,{0;1},0),1,A1:A2))",
+        "SUMPRODUCT(LEN(INDIRECT({\"A1\",\"B1\"})))", "ROWS(OFFSET(A1,{0;1},0)*1)"}) {
+    EXPECT_EQ(listed(formula), Texts{}) << formula;
+  }
+  // In a value parameter under an array context the array of references itself is intersected.
+  EXPECT_EQ(listed("SUM(ABS(OFFSET(A1,{0;1},0)))"), Texts{"OFFSET(A1,{0;1},0)"});
+  EXPECT_EQ(listed("SUM(LEN(INDIRECT({\"A1\",\"B1\"})))"), Texts{"INDIRECT({\"A1\",\"B1\"})"});
+  // So it is under TRANSPOSE, whose parameter takes an array only in Excel 365.
+  EXPECT_EQ(listed("TRANSPOSE(OFFSET(A1:A3,{0;1;2},0))"),
+            (Texts{"TRANSPOSE(OFFSET(A1:A3,{0;1;2},0))", "OFFSET(A1:A3,{0;1;2},0)"}));
+  // A computed array argument is intersected at its operands unless a forced-array parameter evaluates it.
+  EXPECT_EQ(listed("SUM(ROWS(OFFSET(A1,ROW(A1:A3)-1,0)))"), Texts{"ROW(A1:A3)"});
+  EXPECT_EQ(listed("SUMPRODUCT(SUBTOTAL(9,OFFSET(A1,ROW(A1:A3)-1,0)))"), Texts{});
+  // INDEX and XLOOKUP give one reference, so an array constant they would spread over is intersected.
+  EXPECT_EQ(listed("SUM(SUBTOTAL(9,INDEX(A1:B3,0,{1,2})))"), Texts{"{1,2}"});
+  EXPECT_EQ(listed("SUM(SUBTOTAL(9,XLOOKUP({1;3},A1:A5,B1:B5)))"), Texts{"{1;3}"});
+  EXPECT_EQ(listed("INDEX((A1:A2,C1:C2),1,1,{1,2})"), Texts{"{1,2}"});
+  EXPECT_EQ(listed("INDEX((A1:A2,C1:C2),,,2)"), Texts{"INDEX((A1:A2,C1:C2),,,2)"});
+  // An array constant is an array where the parameter or the context takes one; the call around it may not be.
+  EXPECT_EQ(listed("CHOOSE({1;2},1,2)"), Texts{"CHOOSE({1;2},1,2)"});
+  EXPECT_EQ(listed("ABS(CHOOSE({1;2},-1,2))"), Texts{"CHOOSE({1;2},-1,2)"});
+  for (const char* formula : {"SUM(CHOOSE({1;2},A1,A2))", "SUM(ABS({-1,-2}))"}) {
+    EXPECT_EQ(listed(formula), Texts{}) << formula;
+  }
+  // ROW and COLUMN give one value to a parameter that takes a single area; a built-in that returns an array gives one
+  // to a reference parameter outside an array context.
+  EXPECT_EQ(listed("SUM(ROW(A1:A3))"), Texts{"ROW(A1:A3)"});
+  EXPECT_EQ(listed("ISREF(ROW(A1:A3))"), Texts{"ROW(A1:A3)"});
+  EXPECT_EQ(listed("N(SEQUENCE(3))"), Texts{"SEQUENCE(3)"});
+  EXPECT_EQ(listed("SUM(N(FILTER(A1:A3,A1:A3>0)))"), Texts{});
+  // A LAMBDA a built-in calls per element is a formula of its own, with parameters that may be ranges.
+  EXPECT_EQ(listed("MAP(A1:A2,LAMBDA(x,x))"), Texts{"MAP(A1:A2,LAMBDA(x,x))"});
+  EXPECT_EQ(listed("MAP(A1:A2,LAMBDA(x,x+1))"), (Texts{"MAP(A1:A2,LAMBDA(x,x+1))", "x"}));
+  EXPECT_EQ(listed("MAP(A1,LAMBDA(x,ROW(x)))"), (Texts{"MAP(A1,LAMBDA(x,ROW(x)))", "ROW(x)"}));
 }
 TEST(XlsbPtgCodec, BranchingCallsCarryExcelsJumpAttributes) {
   const std::vector<std::uint8_t> a1 = {0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0};
