@@ -955,6 +955,8 @@ entries:
   - ids:
       - trig_rules_tan_below_limit
       - trig_rules_cot_below_limit
+      - tan_first_arg_bool
+      - cot_first_arg_bool
     applies_to: [mac]
     compare_mode: host_libm
     reason: "These values come from the host libm. Mac Excel's last bits match Apple's libm and are reproduced exactly on macOS; Linux and WebAssembly return the correctly rounded value, which Windows Excel also returns, within 1-2 ulp."
