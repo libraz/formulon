@@ -182,8 +182,31 @@ Expected<void, Error> drop_unused_rels(Workbook& wb, const std::string& rels_pat
 Expected<void, Error> drop_objects(Workbook& wb, std::size_t sheet, const std::string& path, pugi::xml_document& doc,
                                    const std::vector<pugi::xml_node>& tops) {
   ASSIGN_OR_RETURN(std::vector<io::ooxml::DrawingRel> rels, load_part_rels(wb, path));
+  std::vector<std::uint32_t> gone;
   for (const pugi::xml_node& top : tops) {
+    for_each_element(top, [&gone](const pugi::xml_node& node) {
+      if (local_name(node) == "cNvPr") {
+        gone.push_back(node.attribute("id").as_uint());
+      }
+    });
     top.parent().remove_child(top);
+  }
+  // A connector glued to a removed object loses that end, as in Excel; an id still present (a restored copy) keeps it.
+  for_each_element(doc.document_element(), [&gone](const pugi::xml_node& node) {
+    if (local_name(node) == "cNvPr") {
+      gone.erase(std::remove(gone.begin(), gone.end(), node.attribute("id").as_uint()), gone.end());
+    }
+  });
+  std::vector<pugi::xml_node> dangling;
+  for_each_element(doc.document_element(), [&gone, &dangling](const pugi::xml_node& node) {
+    const std::string_view name = local_name(node);
+    if ((name == "stCxn" || name == "endCxn") &&
+        std::find(gone.begin(), gone.end(), node.attribute("id").as_uint()) != gone.end()) {
+      dangling.push_back(node);
+    }
+  });
+  for (const pugi::xml_node& node : dangling) {
+    node.parent().remove_child(node);
   }
   const std::vector<std::string> used = relationship_refs(doc);
   RETURN_IF_ERROR(io::ooxml::store_part_dom(wb, path, doc));

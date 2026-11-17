@@ -962,6 +962,87 @@ TEST(ShapeConnectorGlue, OtherEditsAndUnchangedTransformsKeepTheGlue) {
   EXPECT_EQ(shape.end_connection, std::optional<ShapeConnection>(ShapeConnection{3, 1}));
 }
 
+// Moving a connector detaches both ends; a move and a resize in one patch counts as a move.
+TEST(ShapeConnectorGlue, MovingTheConnectorDetachesBothEnds) {
+  DrawingCommonPatch down;
+  down.anchor.from_row = 11;
+  DrawingCommonPatch right;
+  right.anchor.from_col_off = 9525;
+  DrawingCommonPatch move_and_resize;
+  move_and_resize.anchor.from_row = 11;
+  move_and_resize.anchor.to_row = 20;
+  for (const DrawingCommonPatch& patch : {down, right, move_and_resize}) {
+    for (const std::uint32_t id : {4U, 5U}) {
+      Workbook wb = ConnectorFixture();
+      ASSERT_TRUE(static_cast<bool>(update_drawing(wb, 0, id, patch))) << id;
+      const ShapeInfo shape = ShapeWithId(wb, id);
+      EXPECT_FALSE(shape.start_connection.has_value()) << id;
+      EXPECT_FALSE(shape.end_connection.has_value()) << id;
+    }
+  }
+}
+
+// Resizing a connector from its fixed top-left keeps its glue, as does restating its current start.
+TEST(ShapeConnectorGlue, ResizingFromTheTopLeftKeepsTheGlue) {
+  DrawingCommonPatch taller;
+  taller.anchor.to_row = 20;
+  DrawingCommonPatch same_start;
+  same_start.anchor.from_row = 10;
+  same_start.anchor.from_col = 1;
+  for (const DrawingCommonPatch& patch : {taller, same_start}) {
+    Workbook wb = ConnectorFixture();
+    ASSERT_TRUE(static_cast<bool>(update_drawing(wb, 0, 4, patch)));
+    const ShapeInfo shape = ShapeWithId(wb, 4);
+    EXPECT_EQ(shape.start_connection, std::optional<ShapeConnection>(ShapeConnection{2, 3}));
+    EXPECT_EQ(shape.end_connection, std::optional<ShapeConnection>(ShapeConnection{3, 1}));
+  }
+}
+
+// Removing a glued shape removes only the ends that name it; the connectors keep their geometry.
+TEST(ShapeConnectorGlue, RemovingAGluedShapeDropsTheEndsThatNameIt) {
+  Workbook wb = ConnectorFixture();
+  const DrawingObject before = ObjectWithId(wb, 4);
+  ASSERT_TRUE(static_cast<bool>(remove_drawing(wb, 0, 3)));
+  const ShapeInfo both = ShapeWithId(wb, 4);
+  EXPECT_EQ(both.start_connection, std::optional<ShapeConnection>(ShapeConnection{2, 3}));
+  EXPECT_FALSE(both.end_connection.has_value());
+  const DrawingObject after = ObjectWithId(wb, 4);
+  EXPECT_EQ(std::make_pair(after.from.row, after.to.row), std::make_pair(before.from.row, before.to.row));
+  EXPECT_EQ(std::make_pair(after.from.col, after.to.col), std::make_pair(before.from.col, before.to.col));
+  EXPECT_EQ(ShapeWithId(wb, 5).start_connection, std::optional<ShapeConnection>(ShapeConnection{2, 0}));
+
+  ASSERT_TRUE(static_cast<bool>(remove_drawing(wb, 0, 2)));
+  for (const std::uint32_t id : {4U, 5U}) {
+    EXPECT_FALSE(ShapeWithId(wb, id).start_connection.has_value()) << id;
+    EXPECT_FALSE(ShapeWithId(wb, id).end_connection.has_value()) << id;
+  }
+}
+
+// A glued shape inside a removed group, or under deleted rows, goes the same way.
+TEST(ShapeConnectorGlue, RemovingAGroupOrRowsHoldingTheShapeDropsItsEnds) {
+  const std::string group =
+      "<xdr:grpSp><xdr:nvGrpSpPr><xdr:cNvPr id=\"6\" name=\"Group 5\"/><xdr:cNvGrpSpPr/>"
+      "</xdr:nvGrpSpPr><xdr:grpSpPr/>" +
+      Sp(3, "Rectangle 2", "", "") + "</xdr:grpSp>";
+  const std::string drawing = std::string(kWsDrOpen) + Anchor(0, Sp(2, "Rectangle 1", "", "")) + Anchor(5, group) +
+                              Anchor(10, Cxn(4, "<a:stCxn id=\"2\" idx=\"3\"/><a:endCxn id=\"3\" idx=\"1\"/>")) +
+                              "</xdr:wsDr>";
+  Workbook grouped = Workbook::create();
+  ASSERT_TRUE(
+      static_cast<bool>(grouped.add_passthrough_part(PassthroughPart(kDrawingPath, kCtDrawing, ToBytes(drawing)))));
+  grouped.sheet(0).set_drawing_rel_target(kDrawingPath);
+  ASSERT_TRUE(static_cast<bool>(remove_drawing(grouped, 0, 6)));
+  EXPECT_EQ(ShapeWithId(grouped, 4).start_connection, std::optional<ShapeConnection>(ShapeConnection{2, 3}));
+  EXPECT_FALSE(ShapeWithId(grouped, 4).end_connection.has_value());
+
+  // Rows 5..8 hold rectangle 3 whole; the connector below them moves up and keeps its start.
+  Workbook rows = ConnectorFixture();
+  const std::vector<std::uint32_t> removed = shift_drawing_anchors(rows, 0, 5, 4, true, true);
+  EXPECT_EQ(removed, std::vector<std::uint32_t>{3});
+  EXPECT_EQ(ShapeWithId(rows, 4).start_connection, std::optional<ShapeConnection>(ShapeConnection{2, 3}));
+  EXPECT_FALSE(ShapeWithId(rows, 4).end_connection.has_value());
+}
+
 // Excel's own save after a horizontal flip of a connector glued at both ends: the same edit on the glued connector
 // writes what Excel wrote.
 TEST(ShapeConnectorGlue, FlipMatchesExcelsSave) {

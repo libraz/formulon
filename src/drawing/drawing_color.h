@@ -39,8 +39,8 @@ struct DrawingColor {
   /// Opaque 0xFFRRGGBB as Excel renders the colour; unset when a transform is one the engine
   /// does not model. Computed on read, ignored on input.
   std::optional<std::uint32_t> resolved_argb;
-  /// Opacity Excel renders, 0..100000 (100000 opaque); unset when an alpha transform is one the
-  /// engine does not model or `resolved_argb` is unset. Computed on read, ignored on input.
+  /// Opacity Excel renders, 0..100000 (100000 opaque); unset while an alpha transform is present or
+  /// `resolved_argb` is unset. Computed on read, ignored on input.
   std::optional<std::uint32_t> resolved_alpha;
 };
 

@@ -164,6 +164,13 @@ pugi::xml_node props_of(pugi::xml_node content) {
   return child_local(content, local_name(content) == "grpSp" ? "grpSpPr" : "spPr");
 }
 
+// Drops the glue at both ends of a connector; any other kind of `content` is left as it is.
+void detach_connector(pugi::xml_node content) {
+  pugi::xml_node cxn = child_local(child_local(content, "nvCxnSpPr"), "cNvCxnSpPr");
+  cxn.remove_child(child_local(cxn, "stCxn"));
+  cxn.remove_child(child_local(cxn, "endCxn"));
+}
+
 std::string read_text(pugi::xml_node content) {
   std::string out;
   bool first = true;
@@ -360,6 +367,16 @@ void convert_anchor(pugi::xml_node anchor, AnchorKind kind) {
   } else {
     prepend_marker("from");
   }
+}
+
+// The top-left corner of `anchor` in EMU from the sheet's origin.
+std::pair<std::int64_t, std::int64_t> anchor_origin(const Workbook& wb, std::size_t sheet, pugi::xml_node anchor) {
+  const DrawingObject obj = read_drawing_object(anchor, {});
+  if (obj.anchor_kind == AnchorKind::kAbsolute) {
+    return {obj.from.col_off, obj.from.row_off};
+  }
+  const Geometry geo(wb, wb.sheet(sheet));
+  return {geo.offset(false, obj.from.col) + obj.from.col_off, geo.offset(true, obj.from.row) + obj.from.row_off};
 }
 
 // Writes the anchor fields of `spec` into the existing `anchor` and the matching `a:xfrm`, converting the
@@ -610,9 +627,7 @@ Expected<void, Error> apply_fields(pugi::xml_node anchor, pugi::xml_node content
     if (wanted != current) {
       drawing_edit::write_xfrm_transform(ensure_xfrm(props), wanted);
       // Excel detaches a connector at both ends when it is flipped or rotated.
-      pugi::xml_node cxn = child_local(child_local(content, "nvCxnSpPr"), "cNvCxnSpPr");
-      cxn.remove_child(child_local(cxn, "stCxn"));
-      cxn.remove_child(child_local(cxn, "endCxn"));
+      detach_connector(content);
     }
   }
   if ((f & shape_field::kText) != 0U) {
@@ -750,7 +765,12 @@ Expected<void, Error> edit_shape(Workbook& wb, std::size_t sheet, std::uint32_t 
   }
   pugi::xml_node content = anchor_content(anchor);
   if ((spec.fields & shape_field::kAnchor) != 0U) {
+    const std::pair<std::int64_t, std::int64_t> before = anchor_origin(wb, sheet, anchor);
     RETURN_IF_ERROR(place(wb, sheet, anchor, content, spec));
+    // Excel detaches a connector that is moved; resizing it from a fixed top-left keeps its glue.
+    if (anchor_origin(wb, sheet, anchor) != before) {
+      detach_connector(content);
+    }
   }
   ShapeSpec rest = spec;
   rest.fields &= ~shape_field::kAnchor;

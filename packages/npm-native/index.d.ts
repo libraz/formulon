@@ -5854,8 +5854,8 @@ export interface DrawingColor {
   readonly transforms: readonly ColorTransform[];
   /** The colour Excel renders, opaque; `null` when a transform is one the engine does not model. */
   readonly resolved: ResolvedColor | null;
-  /** The transparency Excel renders as a percentage (0..100), 0 without an `alpha` transform; `null` when an opacity
-   *  transform is one the engine does not model or `resolved` is `null`. */
+  /** The transparency Excel renders as a percentage (0..100), 0 without an `alpha` transform; `null` while an `alpha`
+   *  transform is present or `resolved` is `null`. */
   readonly resolvedTransparencyPct: number | null;
 }
 
