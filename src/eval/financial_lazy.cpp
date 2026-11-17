@@ -67,10 +67,11 @@ using builtins_detail::to_finite_value;
 //
 // Returns `true` on success with the cash flows written to `*out_flows`.
 // On failure writes an Excel error into `*out_err` and returns `false`.
-// An error cell encountered during resolution propagates as the IRR
-// call's result.
+// An error cell encountered during resolution is written to `*out_err`;
+// `*out_cell_error` (when given) tells whether it came from a reference.
 bool collect_cash_flows(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
-                        const EvalContext& ctx, std::vector<double>* out_flows, Value* out_err) {
+                        const EvalContext& ctx, std::vector<double>* out_flows, Value* out_err,
+                        bool* out_cell_error = nullptr) {
   out_flows->clear();
   auto resolved = resolve_range_arg(arg, arena, registry, ctx);
   if (!resolved) {
@@ -81,6 +82,9 @@ bool collect_cash_flows(const parser::AstNode& arg, Arena& arena, const Function
   for (const Value& v : resolved.value().cells) {
     if (v.is_error()) {
       *out_err = v;
+      if (out_cell_error != nullptr) {
+        *out_cell_error = !literal && !resolved.value().from_scalar;
+      }
       return false;
     }
     if (!literal) {
@@ -223,35 +227,53 @@ double mirr_closed_form(const std::vector<double>& flows, double finance_rate, d
   return financial_detail::excel_power(base, 1.0 / static_cast<double>(n - 1)) - 1.0;
 }
 
-// Reads an optional guess argument into `*guess`; a blank leaves the caller's default so a trailing
-// comma matches an omitted argument; `*supplied` (when given) is set when a value was read. `analysis_toolpak` (XIRR)
-// rejects a boolean guess with #VALUE!. Returns false with the error in `*out_err` on error or non-numeric.
-bool read_optional_guess(const parser::AstNode& arg, Arena& arena, const FunctionRegistry& registry,
-                         const EvalContext& ctx, bool analysis_toolpak, double* guess, Value* out_err,
-                         bool* supplied = nullptr) {
-  const Value guess_v = eval_node(arg, arena, registry, ctx);
-  if (guess_v.is_error()) {
-    *out_err = guess_v;
+// Reads one guess or rate value into `*out`: a blank cell is 0. `arg` is the
+// argument it came from; with `analysis_toolpak` (XIRR, XNPV) a boolean is
+// #VALUE!. Returns false with the error in `*out_err` on an error or a
+// non-numeric value.
+bool read_rate_value(const parser::AstNode& arg, const Value& v, bool analysis_toolpak, double* out, Value* out_err) {
+  if (v.is_error()) {
+    *out_err = v;
     return false;
   }
   if (analysis_toolpak) {
-    if (const Value atp = atp_arg_error(arg, guess_v, /*required=*/false); atp.is_error()) {
+    if (const Value atp = atp_arg_error(arg, v, /*required=*/false); atp.is_error()) {
       *out_err = atp;
       return false;
     }
   }
-  if (!guess_v.is_blank()) {
-    auto coerced = coerce_to_number(guess_v);
-    if (!coerced) {
-      *out_err = Value::error(coerced.error());
-      return false;
-    }
-    *guess = coerced.value();
-    if (supplied != nullptr) {
-      *supplied = true;
-    }
+  auto coerced = coerce_to_number(v);
+  if (!coerced) {
+    *out_err = Value::error(coerced.error());
+    return false;
   }
+  *out = coerced.value();
   return true;
+}
+
+// Evaluates `rate_args` scalar rate arguments of `call` starting at `first` and
+// runs `cell` on their numbers, element by element when one is an array. An
+// omitted slot reads `defaults[i]`.
+template <std::uint32_t kCount, typename Cell>
+Value lift_rates(const parser::AstNode& call, std::uint32_t first, const double (&defaults)[kCount],
+                 bool analysis_toolpak, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                 const Cell& cell) {
+  std::vector<Value> args(kCount, Value::blank());
+  for (std::uint32_t i = 0; i < kCount; ++i) {
+    args[i] = call_arg_supplied(call, first + i) ? eval_node(call.as_call_arg(first + i), arena, registry, ctx)
+                                                 : Value::number(defaults[i]);
+  }
+  return lift_over_array_args(args.data(), kCount, arena, [&](const Value* vals, std::uint32_t) {
+    double rates[kCount];
+    for (std::uint32_t i = 0; i < kCount; ++i) {
+      Value err = Value::blank();
+      const parser::AstNode& arg = call.as_call_arity() > first + i ? call.as_call_arg(first + i) : call;
+      if (!read_rate_value(arg, vals[i], analysis_toolpak, &rates[i], &err)) {
+        return err;
+      }
+    }
+    return cell(rates);
+  });
 }
 
 }  // namespace
@@ -263,10 +285,12 @@ Value eval_irr_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
     return Value::error(ErrorCode::Value);
   }
 
+  // An error cell read through a reference is #VALUE!, whatever the error.
   std::vector<double> flows;
   Value collect_err = Value::blank();
-  if (!collect_cash_flows(call.as_call_arg(0), arena, registry, ctx, &flows, &collect_err)) {
-    return collect_err;
+  bool cell_error = false;
+  if (!collect_cash_flows(call.as_call_arg(0), arena, registry, ctx, &flows, &collect_err, &cell_error)) {
+    return cell_error ? Value::error(ErrorCode::Value) : collect_err;
   }
 
   // IRR requires at least one positive and one negative cash flow so the
@@ -276,14 +300,13 @@ Value eval_irr_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
     return Value::error(ErrorCode::Num);
   }
 
-  double rate = 0.1;  // default guess per Excel.
-  bool guess_given = false;
-  Value guess_err = Value::blank();
-  if (arity == 2U && !read_optional_guess(call.as_call_arg(1), arena, registry, ctx, /*analysis_toolpak=*/false, &rate,
-                                          &guess_err, &guess_given)) {
-    return guess_err;
+  // An omitted guess starts from 0.1 and skips the first restart.
+  if (!call_arg_supplied(call, 1U)) {
+    return irr_solve(flows, 0.1, /*guess_given=*/false);
   }
-  return irr_solve(flows, rate, guess_given);
+  constexpr double kNoDefault[1] = {0.0};
+  return lift_rates(call, 1U, kNoDefault, /*analysis_toolpak=*/false, arena, registry, ctx,
+                    [&](const double* rates) { return irr_solve(flows, rates[0], /*guess_given=*/true); });
 }
 
 Value eval_mirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -309,27 +332,10 @@ Value eval_mirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return Value::error(ErrorCode::Div0);
   }
 
-  // Evaluate the two trailing rate arguments. Errors propagate directly
-  // (we bypass the eager dispatcher, so the short-circuit is manual).
-  const Value finance_v = eval_node(call.as_call_arg(1), arena, registry, ctx);
-  if (finance_v.is_error()) {
-    return finance_v;
-  }
-  auto finance = coerce_to_number(finance_v);
-  if (!finance) {
-    return Value::error(finance.error());
-  }
-  const Value reinvest_v = eval_node(call.as_call_arg(2), arena, registry, ctx);
-  if (reinvest_v.is_error()) {
-    return reinvest_v;
-  }
-  auto reinvest = coerce_to_number(reinvest_v);
-  if (!reinvest) {
-    return Value::error(reinvest.error());
-  }
-
-  const double result = mirr_closed_form(flows, finance.value(), reinvest.value());
-  return to_finite_value(result);
+  // The finance and reinvestment rates lift element by element.
+  constexpr double kNoDefaults[2] = {0.0, 0.0};
+  return lift_rates(call, 1U, kNoDefaults, /*analysis_toolpak=*/false, arena, registry, ctx,
+                    [&](const double* rates) { return to_finite_value(mirr_closed_form(flows, rates[0], rates[1])); });
 }
 
 // ---------------------------------------------------------------------------
@@ -388,6 +394,16 @@ bool collect_xpairs(XFinKind which, const parser::AstNode& values_arg, const par
   if (!resolve_flat_cells(dates_arg, arena, registry, ctx, &date_cells, out_err)) {
     return false;
   }
+  // An error cell answers before the count check, value before date at
+  // each position.
+  for (std::size_t i = 0; i < std::max(value_cells.size(), date_cells.size()); ++i) {
+    for (const std::vector<Value>* cells : {&value_cells, &date_cells}) {
+      if (i < cells->size() && (*cells)[i].is_error()) {
+        *out_err = (*cells)[i];
+        return false;
+      }
+    }
+  }
   // Excel requires the two ranges to have the same total cell count
   // (dimensionality differences that share a count — e.g. 1x4 vs 4x1 —
   // are tolerated: both flatten to a 4-element vector).
@@ -402,14 +418,6 @@ bool collect_xpairs(XFinKind which, const parser::AstNode& values_arg, const par
   for (std::size_t i = 0; i < value_cells.size(); ++i) {
     const Value& v = value_cells[i];
     const Value& d = date_cells[i];
-    if (v.is_error()) {
-      *out_err = v;
-      return false;
-    }
-    if (d.is_error()) {
-      *out_err = d;
-      return false;
-    }
     // Blank on the date side always skips the pair — an undated cash
     // flow has no schedule slot. The value-side rule differs between
     // XIRR (skip) and XNPV (#NUM!).
@@ -624,27 +632,24 @@ Value eval_xirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return err;
   }
 
-  double guess = 0.1;  // default guess per Excel.
-  if (arity == 3U &&
-      !read_optional_guess(call.as_call_arg(2), arena, registry, ctx, /*analysis_toolpak=*/true, &guess, &err)) {
-    return err;
-  }
-  // A guess of -1 or below is outside the rate domain; a single flow has no
-  // rate to find, and the flows must include both signs.
-  if (!(guess > -1.0)) {
-    return Value::error(ErrorCode::Num);
-  }
-  if (values.size() < 2U) {
-    return Value::error(ErrorCode::NA);
-  }
-  if (!has_opposite_cash_flow_signs(values)) {
-    return Value::error(ErrorCode::Num);
-  }
-  const double rate = xirr_solve(values, dates, guess == 0.0 ? 1.0e-5 : guess);
-  if (std::isfinite(rate)) {
-    return Value::number(rate);
-  }
-  return Value::error(ErrorCode::Num);
+  // The guess defaults to 0.1 and lifts element by element.
+  constexpr double kDefaultGuess[1] = {0.1};
+  return lift_rates(call, 2U, kDefaultGuess, /*analysis_toolpak=*/true, arena, registry, ctx, [&](const double* g) {
+    const double guess = g[0];
+    // A guess of -1 or below is outside the rate domain; a single flow has no
+    // rate to find, and the flows must include both signs.
+    if (!(guess > -1.0)) {
+      return Value::error(ErrorCode::Num);
+    }
+    if (values.size() < 2U) {
+      return Value::error(ErrorCode::NA);
+    }
+    if (!has_opposite_cash_flow_signs(values)) {
+      return Value::error(ErrorCode::Num);
+    }
+    const double rate = xirr_solve(values, dates, guess == 0.0 ? 1.0e-5 : guess);
+    return std::isfinite(rate) ? Value::number(rate) : Value::error(ErrorCode::Num);
+  });
 }
 
 Value eval_xnpv_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -654,8 +659,8 @@ Value eval_xnpv_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return Value::error(ErrorCode::Value);
   }
 
-  // Rate is a scalar numeric argument; evaluate it first so a rate-side
-  // error short-circuits before we flatten the parallel ranges.
+  // The rate is read first, so a rate error answers before the schedule's;
+  // an array rate lifts element by element.
   const Value rate_v = eval_node(call.as_call_arg(0), arena, registry, ctx);
   if (rate_v.is_error()) {
     return rate_v;
@@ -663,30 +668,28 @@ Value eval_xnpv_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   if (const Value atp = atp_arg_error(call.as_call_arg(0), rate_v, /*required=*/true); atp.is_error()) {
     return atp;
   }
-  auto rate = coerce_to_number(rate_v);
-  if (!rate) {
-    return Value::error(rate.error());
-  }
-  // Mac Excel 365 rejects rate <= 0 outright. Mathematically rate == 0
-  // would just collapse XNPV to sum(values), but Excel treats it as an
-  // input error so we mirror that for 1-bit parity.
-  if (rate.value() <= 0.0) {
-    return Value::error(ErrorCode::Num);
-  }
-
-  if (const Value omitted = first_omitted_arg_error(call, 1U, 3U); omitted.is_error()) {
-    return omitted;
-  }
-  std::vector<double> values;
-  std::vector<double> dates;
-  Value err = Value::blank();
-  if (!collect_xpairs(XFinKind::Xnpv, call.as_call_arg(1), call.as_call_arg(2), arena, registry, ctx, &values, &dates,
-                      &err)) {
-    return err;
-  }
-
-  const double result = xnpv_sum(values, dates, rate.value());
-  return to_finite_value(result);
+  return lift_over_array_args(&rate_v, 1U, arena, [&](const Value* args, std::uint32_t) {
+    double rate = 0.0;
+    Value err = Value::blank();
+    if (!read_rate_value(call.as_call_arg(0), args[0], /*analysis_toolpak=*/true, &rate, &err)) {
+      return err;
+    }
+    // Mac Excel 365 rejects rate <= 0 outright, though rate 0 would only
+    // collapse XNPV to sum(values).
+    if (rate <= 0.0) {
+      return Value::error(ErrorCode::Num);
+    }
+    if (const Value omitted = first_omitted_arg_error(call, 1U, 3U); omitted.is_error()) {
+      return omitted;
+    }
+    std::vector<double> values;
+    std::vector<double> dates;
+    if (!collect_xpairs(XFinKind::Xnpv, call.as_call_arg(1), call.as_call_arg(2), arena, registry, ctx, &values, &dates,
+                        &err)) {
+      return err;
+    }
+    return to_finite_value(xnpv_sum(values, dates, rate));
+  });
 }
 
 const FinancialDateEntry* find_financial_date_entry(std::string_view name) noexcept {

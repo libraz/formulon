@@ -16,6 +16,7 @@
 #include "eval/lazy_impls.h"
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
+#include "eval/scalar_args.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -28,22 +29,16 @@ namespace {
 
 using builtins_detail::to_finite_value;
 
-// Evaluates a scalar numeric argument. Returns `true` and writes the
-// numeric value to `*out` on success; on failure writes the Excel error
-// to `*out_err` and returns `false`. An omitted slot is `#N/A` under the
-// Analysis-ToolPak rule; Bool / Text / Blank all resolve to `#VALUE!` -
-// SERIESSUM's three scalar arguments are documented as numeric and Excel
-// rejects non-numeric scalars.
-bool eval_scalar_numeric(const parser::AstNode& arg_node, Arena& arena, const FunctionRegistry& registry,
-                         const EvalContext& ctx, double* out, Value* out_err) {
-  const Value v = eval_node(arg_node, arena, registry, ctx);
+// Reads one of the three scalar arguments: a blank cell is 0, and a Boolean or
+// text is #VALUE!. Returns false with the error in `*out_err`.
+bool read_scalar_numeric(const Value& v, double* out, Value* out_err) {
   if (v.is_error()) {
     *out_err = v;
     return false;
   }
-  if (const Value atp = atp_arg_error(arg_node, v, /*required=*/true); atp.is_error()) {
-    *out_err = atp;
-    return false;
+  if (v.is_blank()) {
+    *out = 0.0;
+    return true;
   }
   if (!v.is_number()) {
     *out_err = Value::error(ErrorCode::Value);
@@ -85,22 +80,26 @@ Value eval_series_sum_lazy(const parser::AstNode& call, Arena& arena, const Func
     return Value::error(ErrorCode::Value);
   }
 
-  // Evaluate the scalars left-to-right so errors propagate in Excel's
-  // documented argument order (x, n, m).
-  double x = 0.0;
-  double n = 0.0;
-  double m = 0.0;
-  Value err = Value::blank();
-  if (!eval_scalar_numeric(call.as_call_arg(0), arena, registry, ctx, &x, &err)) {
-    return err;
-  }
-  if (!eval_scalar_numeric(call.as_call_arg(1), arena, registry, ctx, &n, &err)) {
-    return err;
-  }
-  if (!eval_scalar_numeric(call.as_call_arg(2), arena, registry, ctx, &m, &err)) {
-    return err;
+  // Evaluate the scalars left to right so errors answer in argument order
+  // (x, n, m), ahead of the coefficients'. An omitted slot is #N/A under the
+  // Analysis-ToolPak rule.
+  Value scalars[3] = {Value::blank(), Value::blank(), Value::blank()};
+  for (std::uint32_t i = 0; i < 3U; ++i) {
+    const parser::AstNode& arg = call.as_call_arg(i);
+    scalars[i] = eval_node(arg, arena, registry, ctx);
+    if (scalars[i].is_error()) {
+      return scalars[i];
+    }
+    if (const Value atp = atp_arg_error(arg, scalars[i], /*required=*/true); atp.is_error()) {
+      return atp;
+    }
+    double unused = 0.0;
+    if (!scalars[i].is_array() && !read_scalar_numeric(scalars[i], &unused, &scalars[i])) {
+      return scalars[i];
+    }
   }
 
+  Value err = Value::blank();
   std::vector<Value> coefficients;
   bool direct_scalar = false;
   if (!resolve_coefficients(call.as_call_arg(3), arena, registry, ctx, &coefficients, &direct_scalar, &err)) {
@@ -129,31 +128,44 @@ Value eval_series_sum_lazy(const parser::AstNode& call, Arena& arena, const Func
     coefficients.front() = Value::number(coerced.value());
   }
 
-  // Accumulate sum(coeff_i * x^e_i) with e_0 = n and e_{i+1} = e_i + m, so the
-  // exponent advances by repeated addition. Range-sourced cells that are not
-  // numbers (Blank, Bool, Text) are skipped, but the exponent still advances.
-  // A negative base with a non-integral exponent contributes 0 to the sum.
-  // Otherwise each power follows the `^` operator: 0^0 is #NUM! and 0^negative
-  // is #DIV/0!.
-  double total = 0.0;
-  double e = n;
-  for (const Value& v : coefficients) {
-    const double power = e;
-    e += m;
-    if (!v.is_number()) {
-      continue;
-    }
-    double term_value = 0.0;
-    if (!(x < 0.0 && (power < 0.0 ? std::ceil(power) : std::floor(power)) != power)) {
-      auto term = apply_pow(x, power);
-      if (!term) {
-        return Value::error(term.error());
+  // x, n and m lift element by element.
+  return lift_over_array_args(scalars, 3U, arena, [&](const Value* args, std::uint32_t) {
+    double xnm[3] = {0.0, 0.0, 0.0};
+    Value scalar_err = Value::blank();
+    for (std::uint32_t i = 0; i < 3U; ++i) {
+      if (!read_scalar_numeric(args[i], &xnm[i], &scalar_err)) {
+        return scalar_err;
       }
-      term_value = term.value();
     }
-    total += flush_subnormal(v.as_number() * term_value);
-  }
-  return to_finite_value(total);
+    const double x = xnm[0];
+    const double n = xnm[1];
+    const double m = xnm[2];
+    // Accumulate sum(coeff_i * x^e_i) with e_0 = n and e_{i+1} = e_i + m, so the
+    // exponent advances by repeated addition. Range-sourced cells that are not
+    // numbers (Blank, Bool, Text) are skipped, but the exponent still advances.
+    // A negative base with a non-integral exponent contributes 0 to the sum.
+    // Otherwise each power follows the `^` operator: 0^0 is #NUM! and 0^negative
+    // is #DIV/0!.
+    double total = 0.0;
+    double e = n;
+    for (const Value& v : coefficients) {
+      const double power = e;
+      e += m;
+      if (!v.is_number()) {
+        continue;
+      }
+      double term_value = 0.0;
+      if (!(x < 0.0 && (power < 0.0 ? std::ceil(power) : std::floor(power)) != power)) {
+        auto term = apply_pow(x, power);
+        if (!term) {
+          return Value::error(term.error());
+        }
+        term_value = term.value();
+      }
+      total += flush_subnormal(v.as_number() * term_value);
+    }
+    return to_finite_value(total);
+  });
 }
 
 }  // namespace eval

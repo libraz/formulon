@@ -962,6 +962,20 @@
       }
     },
     {
+      "id": "irr_arg1_na_cell",
+      "formula": "=IRR(B1,0.15)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
       "id": "irr_arg1_blank_cell",
       "formula": "=IRR(B2,0.15)",
       "setup": {},
@@ -987,6 +1001,15 @@
     {
       "id": "irr_arg2_blank_cell",
       "formula": "=IRR({-100;60;60},B2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.1306623862918075
+      }
+    },
+    {
+      "id": "irr_arg2_array_lifted",
+      "formula": "=INDEX(IRR({-100;60;60},{0.15,0.15}),2)",
       "setup": {},
       "expect": {
         "kind": "number",

@@ -106,6 +106,15 @@
       }
     },
     {
+      "id": "mirr_arg2_array_lifted",
+      "formula": "=INDEX(MIRR({-1000, 500, 700},{0.1,0.1},0.1),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.1180339887498949
+      }
+    },
+    {
       "id": "mirr_arg2_zero",
       "formula": "=MIRR({-1000, 500, 700},0,0.1)",
       "setup": {},
@@ -806,6 +815,15 @@
       }
     },
     {
+      "id": "seriessum_arg1_blank_cell",
+      "formula": "=SERIESSUM(B2,0,1,{1;1;1;1})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
       "id": "seriessum_arg2_na_cell",
       "formula": "=SERIESSUM(2,B1,1,{1;1;1;1})",
       "setup": {
@@ -820,6 +838,15 @@
       }
     },
     {
+      "id": "seriessum_arg2_blank_cell",
+      "formula": "=SERIESSUM(2,B2,1,{1;1;1;1})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 15.0
+      }
+    },
+    {
       "id": "seriessum_arg3_na_cell",
       "formula": "=SERIESSUM(2,0,B1,{1;1;1;1})",
       "setup": {
@@ -831,6 +858,15 @@
       "expect": {
         "kind": "error",
         "code": "#N/A"
+      }
+    },
+    {
+      "id": "seriessum_arg3_blank_cell",
+      "formula": "=SERIESSUM(2,0,B2,{1;1;1;1})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 4.0
       }
     },
     {
@@ -854,6 +890,15 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      }
+    },
+    {
+      "id": "seriessum_arg1_array_lifted",
+      "formula": "=INDEX(SERIESSUM({2,2},0,1,{1;1;1;1}),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 15.0
       }
     },
     {

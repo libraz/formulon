@@ -558,14 +558,30 @@ TEST(FinancialIRR, QuotientOverflowOnLastFlowIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
-TEST(FinancialIRR, RangeErrorPropagates) {
+TEST(FinancialIRR, RangeErrorIsValue) {
   Workbook wb = Workbook::create();
   wb.sheet(0).set_cell_value(0, 0, Value::number(-1000.0));
   wb.sheet(0).set_cell_value(1, 0, Value::error(ErrorCode::Div0));
   wb.sheet(0).set_cell_value(2, 0, Value::number(500.0));
   const Value v = EvalSourceIn("=IRR(A1:A3)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(FinancialIRR, ArrayGuessLiftsTheCall) {
+  const Value v = EvalSource("=IRR({-100;60;60},{0.15,0.15})");
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array()->cols, 2U);
+  const Value& second = v.as_array()->cells[1];
+  ASSERT_TRUE(second.is_number()) << second.debug_to_string();
+  EXPECT_NEAR(second.as_number(), 0.130662, 1e-6);
+}
+
+TEST(FinancialSeriesSum, BlankScalarCellIsZero) {
+  Workbook wb = Workbook::create();
+  const Value v = EvalSourceIn("=SERIESSUM(2,B2,1,{1;1;1;1})", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
+  EXPECT_DOUBLE_EQ(v.as_number(), 15.0);
 }
 
 TEST(FinancialIRR, RangeSkipsNonNumeric) {

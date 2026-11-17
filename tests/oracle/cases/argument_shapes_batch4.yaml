@@ -211,6 +211,9 @@ cases:
     formula: "=IMPRODUCT(\"1+i\",\"1+i\",B2)"
   - id: improduct_arg1_array_lifted
     formula: "=INDEX(IMPRODUCT({\"1+i\",\"1+i\"},\"1+i\",\"1+i\"),2)"
+  - id: irr_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=IRR(B1,0.15)"
   - id: irr_arg1_blank_cell
     formula: "=IRR(B2,0.15)"
   - id: irr_arg2_na_cell
@@ -218,6 +221,8 @@ cases:
     formula: "=IRR({-100;60;60},B1)"
   - id: irr_arg2_blank_cell
     formula: "=IRR({-100;60;60},B2)"
+  - id: irr_arg2_array_lifted
+    formula: "=INDEX(IRR({-100;60;60},{0.15,0.15}),2)"
   - id: irr_arg2_zero
     formula: "=IRR({-100;60;60},0)"
   - id: irr_arg2_negative
