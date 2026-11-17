@@ -1021,8 +1021,9 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     return eval_index_array_selector(source_ok ? *source : no_source, source_ok && rows != 0U && cols != 0U,
                                      source_error, row_val, col_explicit ? &col_val : nullptr, col_explicit, arena);
   }
+  // A source that failed answers its own error; an empty one has no cell to pick.
   if (!source_ok || rows == 0U || cols == 0U) {
-    return Value::error(source_error == ErrorCode::Value ? ErrorCode::Ref : source_error);
+    return Value::error(source_ok ? ErrorCode::Ref : source_error);
   }
   DecodedIndex row;
   DecodedIndex col;

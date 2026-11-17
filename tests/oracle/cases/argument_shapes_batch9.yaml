@@ -236,6 +236,12 @@ cases:
   - id: vstack_blank_cell_argument
     setup: { A1: 1, B1: 2 }
     formula: "=INDEX(VSTACK(A1:B1,B2),2,1)"
+  - id: mmult_blank_cell_in_range
+    setup: { A1: 1, B1: 2, A2: 3 }
+    formula: "=INDEX(MMULT(A1:B2,A1:B2),1,1)"
+  - id: minverse_blank_cell_in_range
+    setup: { A1: 1, B1: 2, A2: 3 }
+    formula: "=INDEX(MINVERSE(A1:B2),1,1)"
   - id: areas_error_cell
     setup: { B1: "=NA()" }
     formula: "=AREAS(B1)"

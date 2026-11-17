@@ -1505,6 +1505,50 @@
       }
     },
     {
+      "id": "mmult_blank_cell_in_range",
+      "formula": "=INDEX(MMULT(A1:B2,A1:B2),1,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "minverse_blank_cell_in_range",
+      "formula": "=INDEX(MINVERSE(A1:B2),1,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
       "id": "areas_error_cell",
       "formula": "=AREAS(B1)",
       "setup": {
