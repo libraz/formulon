@@ -24,6 +24,7 @@
 #include <utility>
 #include <vector>
 
+#include "drawing/drawing_edit.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/ooxml_writer.h"
@@ -536,6 +537,39 @@ TEST(RetainedChildrenEditFixture, IgnoredErrorsCutAndWatchesStay) {
   const std::vector<std::string> after_delete = XlsxCoordinates(Save(deleted, false));
   EXPECT_NE(std::find(after_delete.begin(), after_delete.end(), "cellWatch r=C5"), after_delete.end());
   EXPECT_NE(std::find(after_delete.begin(), after_delete.end(), "cellWatch r=E7"), after_delete.end());
+}
+
+// A slicer frame stores no size (its xfrm is zero). Under a row delete an absolute frame stays where it is; a
+// move-only one keeps its height, its top clamped to the first deleted row when the delete covers it. Mac Excel
+// 16.115 saves under `tests/fixtures/excel/slicer_row_delete/`.
+TEST(RetainedChildrenEditFixture, SlicerFrameRowDelete) {
+  const auto anchors = [](const Workbook& wb) {
+    std::vector<std::pair<std::uint32_t, std::uint64_t>> out;
+    auto objects = list_drawing_objects(wb, 0);
+    EXPECT_TRUE(static_cast<bool>(objects));
+    for (const DrawingObject& o : objects ? objects.value() : std::vector<DrawingObject>{}) {
+      out.emplace_back(o.from.row, static_cast<std::uint64_t>(o.from.row_off));
+      out.emplace_back(o.to.row, static_cast<std::uint64_t>(o.to.row_off));
+    }
+    return out;
+  };
+  const std::vector<std::pair<const char*, std::function<Expected<void, Error>(Workbook&)>>> edits = {
+      {"del_all", [](Workbook& wb) { return wb.delete_rows(0, 4, 13); }},
+      {"del_top", [](Workbook& wb) { return wb.delete_rows(0, 2, 6); }},
+      {"del_bot", [](Workbook& wb) { return wb.delete_rows(0, 9, 11); }},
+  };
+  for (const char* kind : {"absolute", "oneCell"}) {
+    const std::vector<std::uint8_t> base = ReadFixture(std::string("../slicer_row_delete/base_") + kind + ".xlsx");
+    for (const auto& [name, apply] : edits) {
+      SCOPED_TRACE(std::string(name) + "_" + kind);
+      Workbook wb = Load(base, false);
+      ASSERT_TRUE(static_cast<bool>(apply(wb)));
+      const Workbook excel =
+          Load(ReadFixture(std::string("../slicer_row_delete/") + name + "_" + kind + ".xlsx"), false);
+      EXPECT_FALSE(anchors(excel).empty());
+      EXPECT_EQ(anchors(wb), anchors(excel));
+    }
+  }
 }
 
 }  // namespace

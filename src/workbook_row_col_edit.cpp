@@ -983,6 +983,9 @@ Expected<void, Error> apply_row_col_edit(const Workbook& wb, std::size_t sheet_i
     target.edit_cells_in_band(edit);
     shift_retained_extension_ranges(target, edit);
   } else {
+    // A move-only slicer frame stores no size, so it is measured before the lines move.
+    const std::vector<std::pair<std::uint32_t, std::int64_t>> slicer_extents =
+        slicer_frame_extents(wb, sheet_index, edit.row_axis);
     if (edit.row_axis) {
       if (edit.is_delete) {
         target.delete_rows(origin, count);
@@ -1000,7 +1003,7 @@ Expected<void, Error> apply_row_col_edit(const Workbook& wb, std::size_t sheet_i
     shift_retained_extension_ranges(target, edit);
     const std::vector<std::string> framed_slicers_before = framed_slicers(wb, sheet_index);
     for (const std::uint32_t id :
-         shift_drawing_anchors(wb, sheet_index, origin, count, edit.is_delete, edit.row_axis)) {
+         shift_drawing_anchors(wb, sheet_index, origin, count, edit.is_delete, edit.row_axis, slicer_extents)) {
       if (std::find(removed_objects.begin(), removed_objects.end(), id) == removed_objects.end()) {
         removed_objects.push_back(id);
       }

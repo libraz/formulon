@@ -36,6 +36,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "drawing/drawing_xml.h"
@@ -240,14 +241,22 @@ Expected<std::uint32_t, Error> restore_drawing(Workbook& wb, std::size_t sheet, 
 /// `kInvalidArgument` for an object no edit models (SmartArt, a content part).
 Expected<void, Error> remove_drawing(Workbook& wb, std::size_t sheet, std::uint32_t object_id);
 
+/// The extent along the row (`row_axis`) or column axis of each move-only
+/// slicer frame of sheet `sheet`, by `cNvPr/@id`. A slicer frame stores no
+/// size, so this is read from its markers before an edit moves the lines.
+std::vector<std::pair<std::uint32_t, std::int64_t>> slicer_frame_extents(const Workbook& wb, std::size_t sheet,
+                                                                         bool row_axis);
+
 /// Moves sheet `sheet`'s anchors for a row (`row_axis`) or column edit of
 /// `count` lines at `index`, after the sheet's own cells and layout moved. A
 /// delete covering every line of a move-and-size object removes it with the
-/// parts only it used, and the drawing part once it is empty. Returns the
-/// `cNvPr/@id` of each removed object. A drawing that does not parse is left
-/// untouched.
-std::vector<std::uint32_t> shift_drawing_anchors(Workbook& wb, std::size_t sheet, std::uint32_t index,
-                                                 std::uint32_t count, bool is_delete, bool row_axis);
+/// parts only it used, and the drawing part once it is empty. A move-only
+/// slicer frame keeps its `slicer_extents` size, read before the edit.
+/// Returns the `cNvPr/@id` of each removed object. A drawing that does not
+/// parse is left untouched.
+std::vector<std::uint32_t> shift_drawing_anchors(
+    Workbook& wb, std::size_t sheet, std::uint32_t index, std::uint32_t count, bool is_delete, bool row_axis,
+    const std::vector<std::pair<std::uint32_t, std::int64_t>>& slicer_extents = {});
 
 }  // namespace formulon
 

@@ -648,8 +648,30 @@ Expected<void, Error> remove_drawing(Workbook& wb, std::size_t sheet, std::uint3
   return refuse_object(root, object_id, kNoObject);
 }
 
-std::vector<std::uint32_t> shift_drawing_anchors(Workbook& wb, std::size_t sheet, std::uint32_t index,
-                                                 std::uint32_t count, bool is_delete, bool row_axis) {
+std::vector<std::pair<std::uint32_t, std::int64_t>> slicer_frame_extents(const Workbook& wb, std::size_t sheet,
+                                                                         bool row_axis) {
+  std::vector<std::pair<std::uint32_t, std::int64_t>> extents;
+  const std::string path = wb.sheet(sheet).drawing_rel_target();
+  pugi::xml_document doc;
+  if (path.empty() || !load_drawing_part(wb, path, doc)) {
+    return extents;
+  }
+  const Geometry geo(wb, wb.sheet(sheet));
+  for (const pugi::xml_node& anchor : drawing_anchors(doc.document_element(), true)) {
+    const DrawingObject obj = read_drawing_object(anchor, {});
+    if (obj.anchor_kind == AnchorKind::kTwoCell && obj.edit_as == EditAs::kOneCell && is_slicer_frame(anchor)) {
+      const auto at = [&](const AnchorPoint& p) {
+        return geo.offset(row_axis, row_axis ? p.row : p.col) + (row_axis ? p.row_off : p.col_off);
+      };
+      extents.emplace_back(obj.object_id, at(obj.to) - at(obj.from));
+    }
+  }
+  return extents;
+}
+
+std::vector<std::uint32_t> shift_drawing_anchors(
+    Workbook& wb, std::size_t sheet, std::uint32_t index, std::uint32_t count, bool is_delete, bool row_axis,
+    const std::vector<std::pair<std::uint32_t, std::int64_t>>& slicer_extents) {
   std::vector<std::uint32_t> removed_ids;
   const std::string path = wb.sheet(sheet).drawing_rel_target();
   pugi::xml_document doc;
@@ -683,7 +705,12 @@ std::vector<std::uint32_t> shift_drawing_anchors(Workbook& wb, std::size_t sheet
       removed_ids.push_back(obj.object_id);
       continue;
     }
-    const std::int64_t extent = row_axis ? obj.cy : obj.cx;
+    std::int64_t extent = row_axis ? obj.cy : obj.cx;
+    for (const auto& [id, size] : slicer_extents) {
+      if (id == obj.object_id && extent == 0 && is_slicer_frame(anchor)) {
+        extent = size;
+      }
+    }
     // A move-only object with no stored size (a form control or OLE object
     // keeps its xfrm zero) keeps its line span.
     io::move_cell_anchor(from_line, to_line_at, !(two_cell && obj.edit_as == EditAs::kOneCell && extent == 0), edit);
