@@ -75,10 +75,10 @@ RefView Value::as_ref() const {
   FM_CHECK(kind_ == ValueKind::Ref, "Value::as_ref() on non-Ref");
   const RefForm form = static_cast<RefForm>(ref_form_ & ~(kRefOutOfLine | kRefDynamic));
   if ((ref_form_ & kRefOutOfLine) == 0) {
-    return RefView{&data_.area, nullptr, 1, 0, 0, 0, form};
+    return RefView{&data_.area, nullptr, 1, 0, 0, 0, form, nullptr};
   }
   const RefValue* rv = data_.ref;
-  return RefView{rv->areas, rv->element_books, rv->area_count, rv->rows, rv->cols, rv->book, form};
+  return RefView{rv->areas, rv->element_books, rv->area_count, rv->rows, rv->cols, rv->book, form, rv->element_values};
 }
 
 Value contain_escape(Value v) noexcept {
@@ -87,7 +87,8 @@ Value contain_escape(Value v) noexcept {
 }
 
 Value make_ref(Arena& arena, RefForm form, std::uint16_t book, const RefArea* areas, std::uint32_t area_count,
-               std::uint32_t rows, std::uint32_t cols, const std::uint16_t* element_books) {
+               std::uint32_t rows, std::uint32_t cols, const std::uint16_t* element_books,
+               const Value* element_values) {
   const bool single = form == RefForm::kArea || form == RefForm::kSpan3D;
   FM_CHECK(!single || area_count == 1, "make_ref: kArea / kSpan3D takes exactly one area");
   if (single && book == 0) {
@@ -113,7 +114,19 @@ Value make_ref(Arena& arena, RefForm form, std::uint16_t book, const RefArea* ar
     }
     books = b;
   }
+  const Value* values = nullptr;
+  if (element_values != nullptr) {
+    Value* v = arena.create_array<Value>(area_count);
+    if (v == nullptr && area_count != 0) {
+      return Value::error(ErrorCode::Calc);
+    }
+    for (std::uint32_t i = 0; i < area_count; ++i) {
+      v[i] = element_values[i];
+    }
+    values = v;
+  }
   const bool span = single && areas[0].sheet_first != areas[0].sheet_last;
+  rv->element_values = values;
   rv->areas = copy;
   rv->element_books = books;
   rv->area_count = area_count;

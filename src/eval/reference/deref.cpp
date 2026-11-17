@@ -108,6 +108,10 @@ DeclaredRect external_walked(const ExternalBook& book, std::uint32_t sheet, cons
   return walked;
 }
 
+std::uint16_t element_book(const RefView& view, std::size_t index) noexcept {
+  return view.element_books != nullptr ? view.element_books[index] : view.book;
+}
+
 // Reads the areas of one `Ref` and collects the dynamic reads they make.
 class Reader {
  public:
@@ -210,6 +214,13 @@ class Reader {
     }
     const DeclaredRect declared = rect_of(a);
     return make_reference_tail(arena_, declared.rows(), declared.cols(), head_len, axis, stored);
+  }
+
+  // Reads element `i` of the grid `view`: an error or value element is itself,
+  // an area its top-left cell.
+  Value read_element(const RefView& view, std::size_t i) {
+    Value own = Value::blank();
+    return grid_element_value(view, i, &own) ? own : read_top_left(view.areas[i], element_book(view, i));
   }
 
   // Reads the top-left cell of `a` (its first sheet); an error element is its
@@ -404,10 +415,6 @@ class Reader {
   std::vector<Note> notes_;
 };
 
-std::uint16_t element_book(const RefView& view, std::size_t index) noexcept {
-  return view.element_books != nullptr ? view.element_books[index] : view.book;
-}
-
 }  // namespace
 
 Expected<RefCells, ErrorCode> deref_cells(const Value& ref, bool allow_span3d, Arena& arena,
@@ -470,7 +477,8 @@ Value deref_top_left(const Value& ref, Arena& arena, const FunctionRegistry& reg
     return Value::error(ErrorCode::Value);
   }
   Reader reader(arena, registry, ctx, count, ref.ref_is_dynamic());
-  const Value v = reader.read_top_left(view.areas[0], element_book(view, 0));
+  const Value v = view.form == RefForm::kGrid ? reader.read_element(view, 0)
+                                              : reader.read_top_left(view.areas[0], element_book(view, 0));
   reader.flush();
   return v;
 }
@@ -510,7 +518,7 @@ Value materialise_grid(const Value& ref, GridArg cls, const FunctionDef* def, Ar
   if (cls == GridArg::kTopLeft) {
     std::vector<Value> kept;
     for (std::size_t i = 0; i < n; ++i) {
-      Value v = reader.read_top_left(view.areas[i], element_book(view, i));
+      Value v = reader.read_element(view, i);
       if (v.is_blank()) {
         v = Value::blank(BlankGridProjection::kReferenceGridZero);
       }
@@ -542,8 +550,7 @@ Value materialise_grid(const Value& ref, GridArg cls, const FunctionDef* def, Ar
   }
   for (std::size_t i = 0; i < n; ++i) {
     const RefArea& element = view.areas[i];
-    if (element.is_error_element()) {
-      cells[i] = Value::error(element.error_code());
+    if (grid_element_value(view, i, &cells[i])) {
       continue;
     }
     switch (cls) {

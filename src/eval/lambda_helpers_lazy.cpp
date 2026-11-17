@@ -16,6 +16,7 @@
 #include "eval/lazy_impls.h"
 #include "eval/name_env.h"
 #include "eval/omitted_arg.h"
+#include "eval/reference/ref_value.h"
 #include "eval/structured_ref_project.h"
 #include "eval/tree_walker/dispatch.h"
 #include "parser/ast.h"
@@ -79,15 +80,23 @@ bool store_scalar_result(const Value& res, Value* slot) {
 // Excel binds each callback argument taken from such a source as the cell
 // (MAP, REDUCE, SCAN) or the row / column (BYROW, BYCOL) it came from, so
 // ISREF, ROW or OFFSET inside the body see a reference. `valid` is false for
-// an array or computed source, whose elements bind by value.
+// an array or computed source, whose elements bind by value. A grid of
+// references (`grid`) binds each element as its own reference, a value
+// element as its value, and a row / column as a grid slice.
 struct SourceOrigin {
   bool valid = false;
   parser::Reference top_left{};
+  Value grid = Value::blank();
 };
 
 SourceOrigin source_origin(const parser::AstNode& node, const ArrayValue* arr, Arena& arena,
                            const FunctionRegistry& registry, const EvalContext& ctx) {
   SourceOrigin out;
+  if (node.kind() == parser::NodeKind::Literal && node.as_literal().is_ref() &&
+      node.as_literal().ref_form() == RefForm::kGrid) {
+    out.grid = node.as_literal();
+    return out;
+  }
   const parser::AstNode* ref = resolve_binding_reference(node, arena, registry, ctx);
   parser::Reference lhs{};
   parser::Reference rhs{};
@@ -110,10 +119,13 @@ SourceOrigin source_origin(const parser::AstNode& node, const ArrayValue* arr, A
 
 // The `RangeOp` over rows `[r1, r2]` x columns `[c1, c2]` of `origin`'s source
 // (a single cell stays a one-cell `RangeOp`, the shape a resolved reference
-// binds as). Returns nullptr when the source is not a reference or the arena
-// is exhausted.
+// binds as), or that block of a grid source. Returns nullptr when the source
+// is not a reference or the arena is exhausted.
 const parser::AstNode* origin_rect_ast(const SourceOrigin& origin, std::uint32_t r1, std::uint32_t c1, std::uint32_t r2,
                                        std::uint32_t c2, Arena& arena) {
+  if (origin.grid.is_ref()) {
+    return parser::make_literal(arena, grid_slice(origin.grid, r1, c1, r2 - r1 + 1U, c2 - c1 + 1U, arena));
+  }
   if (!origin.valid) {
     return nullptr;
   }
@@ -131,12 +143,21 @@ const parser::AstNode* origin_rect_ast(const SourceOrigin& origin, std::uint32_t
   return parser::make_range_op(arena, lhs, rhs, /*spliced=*/false);
 }
 
-// The one-cell reference of row-major element `i` of `arr`, or nullptr for a
-// non-reference source.
-const parser::AstNode* element_ast(const SourceOrigin& origin, const ArrayValue* arr, std::size_t i, Arena& arena) {
+// Binds row-major element `i` of `arr`: `*ast` its one-cell reference (nullptr
+// for a non-reference source), `*value` the value it binds otherwise. A grid
+// element binds as its own reference, a value or error element as itself.
+void bind_element(const SourceOrigin& origin, const ArrayValue* arr, std::size_t i, Arena& arena, Value* value,
+                  const parser::AstNode** ast) {
+  if (origin.grid.is_ref()) {
+    const Value element = grid_element(origin.grid.as_ref(), i, arena);
+    *value = element.is_ref() ? arr->cells[i] : element;
+    *ast = element.is_ref() ? parser::make_literal(arena, element) : nullptr;
+    return;
+  }
   const auto r = static_cast<std::uint32_t>(i / arr->cols);
   const auto c = static_cast<std::uint32_t>(i % arr->cols);
-  return origin_rect_ast(origin, r, c, r, c, arena);
+  *value = arr->cells[i];
+  *ast = origin_rect_ast(origin, r, c, r, c, arena);
 }
 
 // Evaluates an argument in array context, returning the `ArrayValue*` on
@@ -266,9 +287,10 @@ Value byrow_or_bycol(const parser::AstNode& call, bool by_row, Arena& arena, con
     // otherwise a synthetic ArrayLiteral AST lets range-aware functions
     // inside the body (`SUM(r)`, ...) flatten the slice through the
     // dispatcher's ArrayLiteral branch.
-    const parser::AstNode* slice_ast = origin.valid ? (by_row ? origin_rect_ast(origin, i, 0U, i, cols_in - 1U, arena)
-                                                              : origin_rect_ast(origin, 0U, i, rows_in - 1U, i, arena))
-                                                    : array_literal_ast(slice_arr, arena);
+    const parser::AstNode* slice_ast = origin.valid || origin.grid.is_ref()
+                                           ? (by_row ? origin_rect_ast(origin, i, 0U, i, cols_in - 1U, arena)
+                                                     : origin_rect_ast(origin, 0U, i, rows_in - 1U, i, arena))
+                                           : array_literal_ast(slice_arr, arena);
     if (slice_ast == nullptr) {
       return Value::error(ErrorCode::Num);
     }
@@ -411,8 +433,8 @@ Value eval_map_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
         args[k] = Value::error(ErrorCode::NA);
         arg_asts[k] = nullptr;
       } else {
-        args[k] = arrays[k]->cells[static_cast<std::size_t>(r) * arrays[k]->cols + c];
-        arg_asts[k] = origin_rect_ast(origins[k], r, c, r, c, arena);
+        bind_element(origins[k], arrays[k], static_cast<std::size_t>(r) * arrays[k]->cols + c, arena, &args[k],
+                     &arg_asts[k]);
       }
     }
     const Value res = invoke_lambda_values_with_ast(lv, array_count, args, arg_asts, arena, registry, ctx);
@@ -433,9 +455,10 @@ namespace {
 // accumulator.
 Value fold_step(const FoldInputs& fi, std::size_t i, const Value& acc, Arena& arena, const FunctionRegistry& registry,
                 const EvalContext& ctx) {
-  Value args[2] = {acc, fi.in->cells[i]};
+  Value args[2] = {acc, Value::blank()};
   // Only the seed can be a reference (a `Ref` accumulator); every later accumulator is a result.
-  const parser::AstNode* arg_asts[2] = {nullptr, element_ast(fi.origin, fi.in, i, arena)};
+  const parser::AstNode* arg_asts[2] = {nullptr, nullptr};
+  bind_element(fi.origin, fi.in, i, arena, &args[1], &arg_asts[1]);
   return invoke_lambda_values_with_ast(fi.lv, 2U, args, arg_asts, arena, registry, ctx);
 }
 

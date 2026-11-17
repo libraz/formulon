@@ -202,28 +202,45 @@ Value run_lifted_call(const Value* elements, std::uint32_t arity, const void* st
   return run_lazy_call(*call, lift.entry, lift.arena, lift.registry, lift.ctx);
 }
 
-// The per-position results of a lift as one value: a grid when any is a
-// reference (an error, or any other value, an error element), an array
-// otherwise (an array result keeps its top-left element).
-Value collect_lifted(const std::vector<Value>& results, std::uint32_t rows, std::uint32_t cols, Arena& arena) {
-  const bool references = std::any_of(results.begin(), results.end(), [](const Value& v) { return v.is_ref(); });
-  if (references) {
-    std::vector<RefArea> areas(results.size());
-    std::vector<std::uint16_t> books(results.size(), 0U);
-    bool other_book = false;
-    for (std::size_t i = 0; i < results.size(); ++i) {
-      const Value& v = results[i];
-      if (v.is_ref() && v.ref_form() == RefForm::kArea) {
-        const RefView view = v.as_ref();
-        areas[i] = view.areas[0];
-        books[i] = view.book;
-        other_book = other_book || view.book != 0U;
-      } else {
-        areas[i] = RefArea::error_element(v.is_error() ? v.as_error() : ErrorCode::Value);
-      }
+// A value that stands as one element of a grid: its first cell for an array.
+Value element_of(const Value& v) {
+  return v.is_array() ? v.as_array()->cells[0] : v;
+}
+
+// `results` (rows x cols) as one grid: a one-area reference is an element,
+// an error an error element, any other reference #VALUE!, and any other value
+// a value element.
+Value collect_grid(const std::vector<Value>& results, std::uint32_t rows, std::uint32_t cols, Arena& arena) {
+  std::vector<RefArea> areas(results.size());
+  std::vector<std::uint16_t> books(results.size(), 0U);
+  std::vector<Value> values(results.size(), Value::blank());
+  bool other_book = false;
+  bool has_values = false;
+  for (std::size_t i = 0; i < results.size(); ++i) {
+    const Value& v = results[i];
+    if (v.is_ref() && v.ref_form() == RefForm::kArea) {
+      const RefView view = v.as_ref();
+      areas[i] = view.areas[0];
+      books[i] = view.book;
+      other_book = other_book || view.book != 0U;
+    } else if (v.is_ref() || v.is_error()) {
+      areas[i] = RefArea::error_element(v.is_error() ? v.as_error() : ErrorCode::Value);
+    } else {
+      areas[i] = RefArea::value_element();
+      values[i] = element_of(v);
+      has_values = true;
     }
-    return make_ref(arena, RefForm::kGrid, 0U, areas.data(), static_cast<std::uint32_t>(areas.size()), rows, cols,
-                    other_book ? books.data() : nullptr);
+  }
+  return make_ref(arena, RefForm::kGrid, 0U, areas.data(), static_cast<std::uint32_t>(areas.size()), rows, cols,
+                  other_book ? books.data() : nullptr, has_values ? values.data() : nullptr);
+}
+
+// The per-position results of a lift as one value: a grid when any is a
+// reference (`collect_grid`), an array otherwise (an array result keeps its
+// top-left element).
+Value collect_lifted(const std::vector<Value>& results, std::uint32_t rows, std::uint32_t cols, Arena& arena) {
+  if (std::any_of(results.begin(), results.end(), [](const Value& v) { return v.is_ref(); })) {
+    return collect_grid(results, rows, cols, arena);
   }
   Value* cells = nullptr;
   ArrayValue* out = allocate_derived_array_value(rows, cols, arena, cells);
@@ -231,22 +248,87 @@ Value collect_lifted(const std::vector<Value>& results, std::uint32_t rows, std:
     return Value::error(ErrorCode::Num);
   }
   for (std::size_t i = 0; i < results.size(); ++i) {
-    const Value& v = results[i];
-    cells[i] = v.is_array() ? v.as_array()->cells[0] : v;
+    cells[i] = element_of(results[i]);
   }
   return Value::array(out);
+}
+
+// The elements of the grids a reshaping call was given, in the order their
+// `Value::grid_element` indices count them.
+struct ReshapeSource {
+  std::vector<RefArea> areas;
+  std::vector<std::uint16_t> books;
+  std::vector<Value> values;
+};
+
+// The grid `ref`'s elements appended to `source`, as an array of
+// `Value::grid_element` indices of the grid's shape.
+Value index_grid_elements(const Value& ref, ReshapeSource* source, Arena& arena) {
+  const RefView view = ref.as_ref();
+  Value* cells = nullptr;
+  ArrayValue* out = allocate_derived_array_value(view.rows, view.cols, arena, cells);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  const std::size_t n = static_cast<std::size_t>(view.rows) * view.cols;
+  for (std::size_t i = 0; i < n; ++i) {
+    cells[i] = Value::grid_element(static_cast<std::uint32_t>(source->areas.size()));
+    source->areas.push_back(view.areas[i]);
+    source->books.push_back(view.element_books != nullptr ? view.element_books[i] : view.book);
+    source->values.push_back(view.element_values != nullptr ? view.element_values[i] : Value::blank());
+  }
+  return Value::array(out);
+}
+
+// A reshaping call's result mapped back onto the elements of `source`: a grid
+// of the result's shape, an index cell its element, any other cell a value
+// element.
+Value map_reshaped(const Value& result, const ReshapeSource& source, Arena& arena) {
+  if (result.is_ref()) {
+    return result;
+  }
+  const std::uint32_t rows = result.is_array() ? result.as_array()->rows : 1U;
+  const std::uint32_t cols = result.is_array() ? result.as_array()->cols : 1U;
+  const Value* cells = result.is_array() ? result.as_array()->cells : &result;
+  const std::size_t n = static_cast<std::size_t>(rows) * cols;
+  std::vector<RefArea> areas(n);
+  std::vector<std::uint16_t> books(n, 0U);
+  std::vector<Value> values(n, Value::blank());
+  bool other_book = false;
+  bool has_values = false;
+  for (std::size_t i = 0; i < n; ++i) {
+    const Value& v = cells[i];
+    if (v.is_grid_element() && v.grid_element_index() < source.areas.size()) {
+      const std::uint32_t k = v.grid_element_index();
+      areas[i] = source.areas[k];
+      books[i] = source.books[k];
+      values[i] = source.values[k];
+    } else if (v.is_error()) {
+      areas[i] = RefArea::error_element(v.as_error());
+    } else {
+      areas[i] = RefArea::value_element();
+      values[i] = v;
+    }
+    other_book = other_book || books[i] != 0U;
+    has_values = has_values || areas[i].is_value_element();
+  }
+  return make_ref(arena, RefForm::kGrid, 0U, areas.data(), static_cast<std::uint32_t>(n), rows, cols,
+                  other_book ? books.data() : nullptr, has_values ? values.data() : nullptr);
 }
 
 // Evaluates the arguments of a lazy call that `entry` reads before its impl:
 // a lone value under the lone-value policy is replaced by the error the
 // policy answers; a grid in a classed position is read by its class, and one
-// in a `kPerRef` position, like an array in a lift position, lifts the call.
-// A constant, an omitted slot and a written reference stay in place. Returns
-// the call to run, or null with `*result` holding the lifted call's value (or
-// the error of an arena that cannot hold the new call).
+// in a `kPerRef` position, like an array in a lift position, lifts the call;
+// one in a `kReshape` position is given as an array of element indices, its
+// elements appended to `*reshape`. A constant, an omitted slot and a written
+// reference stay in place. Returns the call to run, or null with `*result`
+// holding the lifted call's value (or the error of an arena that cannot hold
+// the new call).
 [[gnu::noinline]] const parser::AstNode* prepare_lazy_args(const parser::AstNode& call, const LazyEntry& entry,
                                                            Arena& arena, const FunctionRegistry& registry,
-                                                           const EvalContext& ctx, Value* result) {
+                                                           const EvalContext& ctx, ReshapeSource* reshape,
+                                                           Value* result) {
   const std::uint32_t arity = call.as_call_arity();
   std::vector<const parser::AstNode*> args(arity);
   for (std::uint32_t i = 0; i < arity; ++i) {
@@ -290,7 +372,9 @@ Value collect_lifted(const std::vector<Value>& results, std::uint32_t rows, std:
     }
     const GridArg cls = grid_class(entry, grid_params, i);
     const bool scalar = param_in_set(entry.scalar_params, i);
-    if ((!scalar && cls == GridArg::kElementError) || is_written_reference(arg) ||
+    // Outside the lone-value policy only something that may be a reference can be a grid; anything else stays
+    // in place, so a derived whole column keeps its declared size (`A:A&""`).
+    if ((!scalar && (cls == GridArg::kElementError || !evaluates_to_reference(arg))) || is_written_reference(arg) ||
         arg.kind() == parser::NodeKind::ArrayLiteral || arg.kind() == parser::NodeKind::ErrorLiteral) {
       continue;
     }
@@ -303,8 +387,12 @@ Value collect_lifted(const std::vector<Value>& results, std::uint32_t rows, std:
         lifts = true;
         continue;
       }
-      const bool kept = cls == GridArg::kKeepRef || cls == GridArg::kReshape || cls == GridArg::kLambdaElement;
-      if (!replace(i, kept ? v : materialise_grid(v, cls, nullptr, arena, registry, ctx, ReadCount::kCounted))) {
+      const bool kept = cls == GridArg::kKeepRef || cls == GridArg::kLambdaElement;
+      const Value read =
+          cls == GridArg::kReshape
+              ? index_grid_elements(v, reshape, arena)
+              : (kept ? v : materialise_grid(v, cls, nullptr, arena, registry, ctx, ReadCount::kCounted));
+      if (!replace(i, read)) {
         break;
       }
       continue;
@@ -665,9 +753,10 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
 Value run_lazy_call(const parser::AstNode& node, const LazyEntry& entry, Arena& arena, const FunctionRegistry& registry,
                     const EvalContext& ctx) {
   const parser::AstNode* call = &node;
+  ReshapeSource reshape;
   if (prepares_args(entry)) {
     Value prepared = Value::blank();
-    call = prepare_lazy_args(node, entry, arena, registry, ctx, &prepared);
+    call = prepare_lazy_args(node, entry, arena, registry, ctx, &reshape, &prepared);
     if (call == nullptr) {
       return prepared;
     }
@@ -678,7 +767,8 @@ Value run_lazy_call(const parser::AstNode& node, const LazyEntry& entry, Arena& 
   // have no shape to agree on.
   WholeAxisScope scope;
   scope.call = call;
-  return entry.impl(*call, arena, registry, ctx.with_whole_axis_scope(&scope));
+  const Value result = entry.impl(*call, arena, registry, ctx.with_whole_axis_scope(&scope));
+  return reshape.areas.empty() ? result : map_reshaped(result, reshape, arena);
 }
 
 Shaped dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,

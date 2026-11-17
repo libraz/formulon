@@ -1289,6 +1289,89 @@ TEST_F(LiftTest, FormDependentPositionsResolveAgainstTheFirstArgument) {
   EXPECT_EQ(g_lifted_calls, 1);
 }
 
+// ---------------------------------------------------------------------------
+// Reshaping a grid, binding its elements and slicing it
+// ---------------------------------------------------------------------------
+
+class GridShapeTest : public LiftTest {
+ protected:
+  // `name`'s lazy entry with every position reading a grid as `cls`.
+  LazyEntry Classed(const char* name, GridArg cls) {
+    const LazyEntry* real = find_lazy_entry(name);
+    EXPECT_NE(real, nullptr) << name;
+    LazyEntry entry = *real;
+    entry.grid_params = ParamSet::kAll;
+    entry.grid_sel = cls;
+    return entry;
+  }
+
+  // A1 (11), B2 (22) and C3 (33) as a 3 x 1 grid.
+  Value Diagonal() { return Grid({Area(0, 0, 0, 0), Area(1, 1, 1, 1), Area(2, 2, 2, 2)}, 3, 1); }
+
+  // The grid `v`'s elements as text: "r,c" for an area's top-left, the value otherwise.
+  static std::vector<std::string> Elements(const Value& v) {
+    std::vector<std::string> out;
+    if (!v.is_ref() || v.ref_form() != RefForm::kGrid) {
+      out.push_back("not a grid: " + v.debug_to_string());
+      return out;
+    }
+    const RefView view = v.as_ref();
+    for (std::size_t i = 0; i < static_cast<std::size_t>(view.rows) * view.cols; ++i) {
+      Value own = Value::blank();
+      out.push_back(grid_element_value(view, i, &own)
+                        ? own.debug_to_string()
+                        : std::to_string(view.areas[i].row_first) + "," + std::to_string(view.areas[i].col_first));
+    }
+    return out;
+  }
+
+  const parser::AstNode* Parsed(const char* source) {
+    parser::Parser p(source, parse_arena_);
+    return p.parse();
+  }
+};
+
+TEST_F(GridShapeTest, ReshapingKeepsTheElementsAsReferences) {
+  using Texts = std::vector<std::string>;
+  const Value transposed = Run(Classed("TRANSPOSE", GridArg::kReshape), {Diagonal()});
+  EXPECT_EQ(Elements(transposed), (Texts{"0,0", "1,1", "2,2"}));
+  EXPECT_EQ(transposed.as_ref().rows, 1U);
+  EXPECT_EQ(Elements(Run(Classed("TAKE", GridArg::kReshape), {Diagonal(), Value::number(-2)})), (Texts{"1,1", "2,2"}));
+  // A cell that is no input element is a value element; a 1 x 1 result stays a grid.
+  EXPECT_EQ(Elements(Run(Classed("EXPAND", GridArg::kReshape),
+                         {Diagonal(), Value::number(4), Value::number(1), Value::number(5)})),
+            (Texts{"0,0", "1,1", "2,2", Value::number(5).debug_to_string()}));
+  EXPECT_EQ(Elements(Run(Classed("TAKE", GridArg::kReshape), {Diagonal(), Value::number(1)})), (Texts{"0,0"}));
+  EXPECT_EQ(Elements(Run(Classed("VSTACK", GridArg::kReshape), {Diagonal(), Diagonal()})),
+            (Texts{"0,0", "1,1", "2,2", "0,0", "1,1", "2,2"}));
+  // A value element read as a value is its value.
+  const Value expanded =
+      Run(Classed("EXPAND", GridArg::kReshape), {Diagonal(), Value::number(4), Value::number(1), Value::number(5)});
+  ExpectSame(
+      materialise_grid(expanded, GridArg::kPerValue, nullptr, arena_, default_registry(), Ctx(), ReadCount::kCounted),
+      Array(4, 1, {Value::number(11), Value::number(22), Value::number(33), Value::number(5)}), "per value");
+}
+
+TEST_F(GridShapeTest, LambdaHelpersBindElementsAsReferencesAndRowsAsSlices) {
+  // MAP binds each element as its own reference.
+  const parser::AstNode* lambda = Parsed("=LAMBDA(e,ROW(e)*ISREF(e))");
+  ASSERT_NE(lambda, nullptr);
+  const parser::AstNode* map_args[2] = {parser::make_literal(arena_, Diagonal()), lambda};
+  const parser::AstNode* map = parser::make_call(arena_, "MAP", map_args, 2U);
+  ExpectSame(run_lazy_call(*map, *find_lazy_entry("MAP"), arena_, default_registry(), Ctx()),
+             Array(3, 1, {Value::number(1), Value::number(2), Value::number(3)}), "MAP");
+  // REDUCE folds over the same bindings.
+  const parser::AstNode* fold = Parsed("=LAMBDA(a,e,a+COLUMN(e))");
+  const parser::AstNode* reduce_args[3] = {parser::make_literal(arena_, Value::number(0)),
+                                           parser::make_literal(arena_, Diagonal()), fold};
+  const parser::AstNode* reduce = parser::make_call(arena_, "REDUCE", reduce_args, 3U);
+  EXPECT_EQ(run_lazy_call(*reduce, *find_lazy_entry("REDUCE"), arena_, default_registry(), Ctx()), Value::number(6));
+  // A slice keeps the elements as a grid.
+  const Value two_by_two = Grid({Area(0, 0, 0, 0), Area(1, 1, 1, 1), Area(2, 2, 2, 2), Area(3, 3, 3, 3)}, 2, 2);
+  EXPECT_EQ(Elements(grid_slice(two_by_two, 1, 0, 1, 2, arena_)), (std::vector<std::string>{"2,2", "3,3"}));
+  EXPECT_EQ(Elements(grid_slice(two_by_two, 0, 1, 2, 1, arena_)), (std::vector<std::string>{"1,1", "3,3"}));
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

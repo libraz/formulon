@@ -73,6 +73,9 @@ enum class BlankGridProjection : std::uint8_t {
   /// A blank standing for a reference-grid element that holds no cell. It
   /// exists only inside the evaluator and never crosses a value boundary.
   kOpaqueElement = 3,
+  /// A blank standing for element `n` of the grids a reshaping function is
+  /// given (`Value::grid_element`). Evaluator-internal, as `kOpaqueElement`.
+  kGridElement = 4,
 };
 
 /// Shape of a reference value.
@@ -83,7 +86,7 @@ enum class RefForm : std::uint8_t {
   kUnion,
   /// One area repeated over a run of sheets (`first:last!A1`).
   kSpan3D,
-  /// A rows x cols array whose elements are each an area or an error.
+  /// A rows x cols array whose elements are each an area, an error or a value.
   kGrid,
 };
 
@@ -91,12 +94,16 @@ enum class RefForm : std::uint8_t {
 enum class RefOrigin : std::uint8_t { kImplicit = 0, kSpelled = 1, kDerived = 2 };
 
 /// One rectangular reference. Trivially copyable, 16 bytes. An error element
-/// has `sheet_first == kErrorElement` and the `ErrorCode` in `row_first`.
+/// has `sheet_first == kErrorElement` and the `ErrorCode` in `row_first`; a
+/// grid's value element has `sheet_first == kValueElement`, its value at the
+/// same index of `RefValue::element_values`.
 struct RefArea {
   /// `sheet_first` / `sheet_last` value meaning the formula's own sheet.
   static constexpr std::uint16_t kHomeSheet = 0xFFFF;
   /// `sheet_first` value marking an error element.
   static constexpr std::uint16_t kErrorElement = 0xFFFE;
+  /// `sheet_first` value marking a value element.
+  static constexpr std::uint16_t kValueElement = 0xFFFD;
 
   std::uint32_t row_first;  ///< Inclusive.
   std::uint32_t row_last;   ///< Inclusive.
@@ -115,10 +122,19 @@ struct RefArea {
     a.sheet_first = kErrorElement;
     return a;
   }
+  /// Builds a value element; its value is stored beside it in the grid.
+  static RefArea value_element() noexcept {
+    RefArea a{};
+    a.sheet_first = kValueElement;
+    return a;
+  }
   bool is_error_element() const noexcept { return sheet_first == kErrorElement; }
+  bool is_value_element() const noexcept { return sheet_first == kValueElement; }
   /// Precondition: `is_error_element()`.
   ErrorCode error_code() const noexcept { return static_cast<ErrorCode>(row_first); }
 };
+
+class Value;
 
 /// Out-of-line reference payload. Arena-allocated, trivially destructible.
 struct RefValue {
@@ -129,6 +145,7 @@ struct RefValue {
   std::uint32_t cols;
   std::uint16_t book;  ///< 0 = this workbook, n = `external_links()[n-1]`.
   RefForm form;
+  const Value* element_values;  ///< kGrid only; per element, read at value elements; nullptr when none.
 };
 
 /// Read-only view of any `Ref`, inline or out-of-line. Valid while the
@@ -141,6 +158,7 @@ struct RefView {
   std::uint32_t cols;  ///< kGrid only; 0 otherwise.
   std::uint16_t book;
   RefForm form;
+  const Value* element_values;  ///< kGrid only; nullptr when the grid has no value element.
 };
 
 /// Excel-visible error codes that surface in cell values.
@@ -402,6 +420,16 @@ class Value {
     return is_blank() && blank_projection_ == BlankGridProjection::kOpaqueElement;
   }
 
+  /// A Blank standing for element `index` of the grids a reshaping function is given.
+  static Value grid_element(std::uint32_t index) noexcept {
+    Value v = blank(BlankGridProjection::kGridElement);
+    v.data_.number = static_cast<double>(index);
+    return v;
+  }
+  bool is_grid_element() const noexcept { return is_blank() && blank_projection_ == BlankGridProjection::kGridElement; }
+  /// Precondition: `is_grid_element()`.
+  std::uint32_t grid_element_index() const noexcept { return static_cast<std::uint32_t>(data_.number); }
+
   /// Returns the form of a `Ref`. Aborts if `kind() != Ref`.
   RefForm ref_form() const;
 
@@ -565,18 +593,20 @@ static_assert(sizeof(Value) == 24, "Value must be exactly 24 bytes");
 
 /// Builds a `Ref` of `form` over `area_count` areas, copying the areas (and,
 /// for `kGrid`, `element_books` of `rows * cols` entries when non-null) into
-/// `arena`. An own-workbook single area is stored inline (`kSpan3D` when its
+/// `arena`; `element_values`, for `kGrid`, holds one value per element, read
+/// at its value elements. An own-workbook single area is stored inline (`kSpan3D` when its
 /// sheets differ); every other shape is an arena-backed `RefValue`. `rows`
 /// and `cols` apply to `kGrid` only. Aborts when `form` is `kArea` /
 /// `kSpan3D` and `area_count != 1`.
 Value make_ref(Arena& arena, RefForm form, std::uint16_t book, const RefArea* areas, std::uint32_t area_count,
-               std::uint32_t rows = 0, std::uint32_t cols = 0, const std::uint16_t* element_books = nullptr);
+               std::uint32_t rows = 0, std::uint32_t cols = 0, const std::uint16_t* element_books = nullptr,
+               const Value* element_values = nullptr);
 
 /// Returns whether `v` must never cross a value boundary (binding, spill,
 /// cached cell value, memo, evaluation result): a `Ref` of any form, or a
 /// Blank marking a reference-grid element.
 inline bool escapes_boundary(const Value& v) noexcept {
-  return v.is_ref() || v.is_opaque_element();
+  return v.is_ref() || v.is_opaque_element() || v.is_grid_element();
 }
 
 /// `v` unless it would escape the evaluator; an escaping value asserts in

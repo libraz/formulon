@@ -7,6 +7,7 @@
 #ifndef FORMULON_EVAL_REFERENCE_REF_VALUE_H_
 #define FORMULON_EVAL_REFERENCE_REF_VALUE_H_
 
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
 
@@ -59,6 +60,19 @@ Value make_union_ref(Arena& arena, const RefArea* areas, std::uint32_t count);
 /// A `kGrid` of `rows` x `cols` own-workbook elements, row-major. An element
 /// is a rectangle on one sheet or an error element.
 Value make_grid_ref(Arena& arena, const RefArea* elements, std::uint32_t rows, std::uint32_t cols);
+
+/// Element `index` of a grid when it is no reference: an error element's error
+/// or a value element's value. False for an element that is an area.
+bool grid_element_value(const RefView& view, std::size_t index, Value* out);
+
+/// Element `index` of a grid as a value of its own: a one-area `Ref` for an
+/// area, the error or value otherwise.
+Value grid_element(const RefView& view, std::size_t index, Arena& arena);
+
+/// The `rows` x `cols` block of the grid `grid` at (`row_first`, `col_first`),
+/// a grid itself even at 1 x 1.
+Value grid_slice(const Value& grid, std::uint32_t row_first, std::uint32_t col_first, std::uint32_t rows,
+                 std::uint32_t cols, Arena& arena);
 
 }  // namespace eval
 }  // namespace formulon

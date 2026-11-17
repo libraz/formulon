@@ -7,6 +7,7 @@
 #include "eval/coerce.h"
 #include "eval/lazy_impls.h"
 #include "eval/omitted_arg.h"
+#include "eval/reference/ref_value.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
 
@@ -116,14 +117,7 @@ bool lift_element(const Value& arg, std::uint32_t rows, std::uint32_t cols, std:
     *out = arg.as_array()->cells[idx];
     return true;
   }
-  const RefView view = arg.as_ref();
-  const RefArea& area = view.areas[idx];
-  if (area.is_error_element()) {
-    *out = Value::error(area.error_code());
-    return true;
-  }
-  const std::uint16_t book = view.element_books != nullptr ? view.element_books[idx] : view.book;
-  *out = make_ref(arena, RefForm::kArea, book, &area, 1U);
+  *out = grid_element(arg.as_ref(), idx, arena);
   return true;
 }
 
