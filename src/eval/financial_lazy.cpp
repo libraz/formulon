@@ -394,22 +394,28 @@ bool collect_xpairs(XFinKind which, const parser::AstNode& values_arg, const par
   if (!resolve_flat_cells(dates_arg, arena, registry, ctx, &date_cells, out_err)) {
     return false;
   }
-  // An error cell answers before the count check, value before date at
-  // each position.
-  for (std::size_t i = 0; i < std::max(value_cells.size(), date_cells.size()); ++i) {
+  // An error read from a reference or a computed value answers before the
+  // count check; an array constant's error element only after it.
+  for (const auto& [arg, cells] :
+       {std::make_pair(&values_arg, &value_cells), std::make_pair(&dates_arg, &date_cells)}) {
+    if (const Value* error = first_error(*cells); error != nullptr && arg->kind() != parser::NodeKind::ArrayLiteral) {
+      *out_err = *error;
+      return false;
+    }
+  }
+  // The two must hold the same number of cells (1x4 against 4x1 is fine).
+  if (value_cells.size() != date_cells.size()) {
+    *out_err = Value::error(ErrorCode::Num);
+    return false;
+  }
+  // An error cell answers next, value before date at each position.
+  for (std::size_t i = 0; i < value_cells.size(); ++i) {
     for (const std::vector<Value>* cells : {&value_cells, &date_cells}) {
-      if (i < cells->size() && (*cells)[i].is_error()) {
+      if ((*cells)[i].is_error()) {
         *out_err = (*cells)[i];
         return false;
       }
     }
-  }
-  // Excel requires the two ranges to have the same total cell count
-  // (dimensionality differences that share a count — e.g. 1x4 vs 4x1 —
-  // are tolerated: both flatten to a 4-element vector).
-  if (value_cells.size() != date_cells.size()) {
-    *out_err = Value::error(ErrorCode::Num);
-    return false;
   }
   // Collect into a paired vector first so the final sort does not
   // desynchronise values and dates.

@@ -103,6 +103,23 @@ TEST(FinancialXnpv, MismatchedRangeSizesIsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
+TEST(FinancialXnpv, CountMismatchIsCheckedBeforeErrorElements) {
+  for (const char* src : {"=XNPV(0.1,{-100;60},{#N/A})", "=XNPV(0.1,{-100;#N/A},45000)"}) {
+    const Value v = EvalSource(src);
+    ASSERT_TRUE(v.is_error()) << src;
+    EXPECT_EQ(v.as_error(), ErrorCode::Num) << src;
+  }
+}
+
+TEST(FinancialXnpv, NAElementBeforeALaterDiv0Answers) {
+  for (const char* src :
+       {"=XNPV(0.1,{-100,#N/A,60},{45000,45050,#DIV/0!})", "=XNPV(0.1,{-100,60,#DIV/0!},{45000,#N/A,45100})"}) {
+    const Value v = EvalSource(src);
+    ASSERT_TRUE(v.is_error()) << src;
+    EXPECT_EQ(v.as_error(), ErrorCode::NA) << src;
+  }
+}
+
 TEST(FinancialXnpv, ArgumentErrorPropagates) {
   Workbook wb = MakeMicrosoftFixture();
   // The rate arg is `1/0` which is #DIV/0!; that error must win.
@@ -187,6 +204,21 @@ TEST(FinancialXirr, MismatchedRangeSizesIsNum) {
   const Value v = EvalSourceIn("=XIRR(A1:A5, B1:B4)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_error());
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(FinancialXirr, CountMismatchIsCheckedBeforeErrorElements) {
+  const Value v = EvalSource("=XIRR({-100;60},{#N/A})");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Num);
+}
+
+TEST(FinancialXirr, NAElementBeforeALaterDiv0Answers) {
+  for (const char* src :
+       {"=XIRR({-100,#N/A,60},{45000,45050,#DIV/0!})", "=XIRR({-100,60,#DIV/0!},{45000,#N/A,45100})"}) {
+    const Value v = EvalSource(src);
+    ASSERT_TRUE(v.is_error()) << src;
+    EXPECT_EQ(v.as_error(), ErrorCode::NA) << src;
+  }
 }
 
 TEST(FinancialXirr, GuessAtMinusOneIsNum) {
