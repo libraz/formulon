@@ -1,6 +1,7 @@
 // End-to-end date/time built-in tests: week numbering, year fractions, date differences, and workdays.
 
 #include <string>
+#include <utility>
 
 #include "builtins_datetime_test_helpers.h"
 namespace formulon {
@@ -207,6 +208,27 @@ TEST(DateTimeYearfrac, NegativeIntervalSwaps) {
   ASSERT_TRUE(a.is_number());
   ASSERT_TRUE(b.is_number());
   EXPECT_EQ(a.as_number(), b.as_number());
+}
+
+// Mac Excel 365: serial 0 is 1900-01-00, so actual/actual averages the 119
+// years 1900..2018 rather than starting in 1899.
+TEST(DateTimeYearfrac, Basis1FromSerialZeroStartsIn1900) {
+  const Value v = EvalSource("=YEARFRAC(0,DATE(2018,6,15),1)");
+  ASSERT_TRUE(v.is_number());
+  EXPECT_EQ(v.as_number(), 118.4578961899503);
+}
+
+TEST(DateTimeYearfrac, SerialZeroAcrossBases) {
+  const std::pair<const char*, double> cases[] = {
+      {"=YEARFRAC(0,DATE(2018,5,31),0)", 118.41944444444445}, {"=YEARFRAC(0,DATE(2018,5,31),4)", 118.41666666666667},
+      {"=YEARFRAC(0,DATE(2018,6,15),0)", 118.45833333333333}, {"=YEARFRAC(0,DATE(1900,12,31),1)", 1.0027397260273974},
+      {"=YEARFRAC(0,DATE(1901,3,1),1)", 1.167123287671233},
+  };
+  for (const auto& [src, want] : cases) {
+    const Value v = EvalSource(src);
+    ASSERT_TRUE(v.is_number()) << src;
+    EXPECT_EQ(v.as_number(), want) << src;
+  }
 }
 
 TEST(DateTimeYearfrac, InvalidBasisIsNum) {

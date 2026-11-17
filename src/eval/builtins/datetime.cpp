@@ -677,8 +677,8 @@ YearfracEndpoint make_yearfrac_endpoint(const CoercedDateArg& arg, bool date1904
     // are Numbers already expressed in the workbook coordinate.
     return YearfracEndpoint{workbook_serial - kDate1904EpochGap, date_time::legacy_1900_ymd(workbook_serial)};
   }
-  return YearfracEndpoint{
-      workbook_serial, date_time::ymd_from_serial(std::floor(normal_date_serial(arg, date1904)), /*date1904=*/false)};
+  // Serial 0 is 1900-01-00, as YEAR / MONTH / DAY read it, not 1899-12-31.
+  return YearfracEndpoint{workbook_serial, date_time::legacy_1900_ymd(std::floor(normal_date_serial(arg, date1904)))};
 }
 
 /// YEARFRAC(start, end, [basis]). Returns the positive (sign-stripped)
