@@ -114,6 +114,7 @@ set(FORMULON_CORE_SOURCES
   src/utils/double_format.cpp
   src/utils/double_parse.cpp
   src/utils/elementary_math.cpp
+  src/utils/elementary_math_exp_log.cpp
   src/utils/error.cpp
   src/utils/index_sort.cpp
   src/utils/iso_date.cpp
@@ -650,6 +651,12 @@ add_library(formulon_core OBJECT ${FORMULON_CORE_SOURCES})
 formulon_apply_common_deps(formulon_core)
 
 formulon_apply_warnings(formulon_core)
+
+# The elementary kernels' bits assume no fused multiply-add contraction; pin it per file, not only target-wide.
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  set_source_files_properties(src/utils/elementary_math.cpp src/utils/elementary_math_exp_log.cpp
+    PROPERTIES COMPILE_OPTIONS -ffp-contract=off)
+endif()
 
 # `FM_API` resolves to dllexport while the core objects are compiled, so the
 # shared library built from them exports the C ABI on Windows.

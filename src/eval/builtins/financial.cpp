@@ -37,6 +37,7 @@
 #include "eval/function_registry.h"
 #include "eval/rate_secant.h"
 #include "utils/arena.h"
+#include "utils/elementary_math.h"
 #include "utils/expected.h"
 #include "value.h"
 
@@ -298,7 +299,7 @@ Value Nper(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   if (ratio <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double result = std::log(ratio) / std::log(1.0 + r);
+  const double result = elementary::log(ratio) / elementary::log(1.0 + r);
   return to_finite_value(result);
 }
 

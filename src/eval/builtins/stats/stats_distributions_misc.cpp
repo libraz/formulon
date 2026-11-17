@@ -26,6 +26,7 @@
 #include "eval/stats/numeric_constants.h"
 #include "eval/stats/special_functions.h"
 #include "utils/arena.h"
+#include "utils/elementary_math.h"
 #include "utils/expected.h"
 #include "utils/subnormal_flush.h"
 #include "value.h"
@@ -126,7 +127,7 @@ Value Fisher(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (!(x > -1.0 && x < 1.0)) {
     return Value::error(ErrorCode::Num);
   }
-  return to_finite_value(0.5 * std::log((1.0 + x) / (1.0 - x)));
+  return to_finite_value(0.5 * elementary::log((1.0 + x) / (1.0 - x)));
 }
 
 // FISHERINV(y) - inverse Fisher: (exp(2y) - 1) / (exp(2y) + 1). Defined for
@@ -137,7 +138,7 @@ Value FisherInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(y_arg.error());
   }
   const double y = y_arg.value();
-  const double e2y = std::exp(2.0 * y);
+  const double e2y = elementary::exp(2.0 * y);
   if (std::isinf(e2y)) {
     return Value::number(1.0);
   }

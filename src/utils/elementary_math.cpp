@@ -9,7 +9,13 @@
 
 #include <cmath>
 #include <cstdint>
-#include <cstring>
+
+#include "utils/elementary_math_bits.h"
+
+// The bits assume no contraction of a * b + c into one fused operation; explicit std::fma calls are unaffected.
+#if defined(__clang__)
+#pragma clang fp contract(off)
+#endif
 
 namespace formulon {
 namespace elementary {
@@ -17,17 +23,8 @@ namespace {
 
 constexpr std::uint64_t kSignBit = std::uint64_t{1} << 63;
 
-double from_bits(std::uint64_t u) noexcept {
-  double d;
-  std::memcpy(&d, &u, sizeof(d));
-  return d;
-}
-
-std::uint64_t to_bits(double d) noexcept {
-  std::uint64_t u;
-  std::memcpy(&u, &d, sizeof(u));
-  return u;
-}
+using detail::from_bits;
+using detail::to_bits;
 
 // High 64 bits of the 128-bit product a * b.
 std::uint64_t mul_high(std::uint64_t a, std::uint64_t b) noexcept {

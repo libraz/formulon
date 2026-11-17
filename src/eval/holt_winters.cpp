@@ -19,6 +19,7 @@
 #include <vector>
 
 #include "eval/excel_math.h"
+#include "utils/elementary_math.h"
 #include "utils/error.h"
 #include "utils/subnormal_flush.h"
 #include "value.h"
@@ -496,7 +497,7 @@ double HoltWintersFit::zero_if_negligible(double r) const {
     if (std::fabs(ratio) > DBL_MAX || std::fabs(ratio) < DBL_MIN) {
       ratio = 0.0;
     }
-    if (std::fabs(std::log10(ratio)) >= static_cast<double>(kTinyResultDecades)) {
+    if (std::fabs(elementary::log10(ratio)) >= static_cast<double>(kTinyResultDecades)) {
       return 0.0;
     }
   }

@@ -6,6 +6,9 @@
 //   sin(x), cos(x)   odd and even polynomial kernels on x reduced to [-pi/4, pi/4].
 //   tan(x)           their quotient on the same reduction.
 //   atan(x)          polynomials on intervals of |x| up to 2, a series in 1/|x| above.
+//   exp(x)           a 2^(j/128) table and a polynomial in the remainder.
+//   log(x), log10(x) a reciprocal and logarithm table and a polynomial in m/c - 1.
+//   pow(x, y)        2^(y log2 x) with y log2 x formed as a double-double.
 
 #ifndef FORMULON_UTILS_ELEMENTARY_MATH_H_
 #define FORMULON_UTILS_ELEMENTARY_MATH_H_
@@ -20,6 +23,12 @@ double tan(double x) noexcept;
 
 /// Arctangent of x in [-pi/2, pi/2]. NaN gives NaN.
 double atan(double x) noexcept;
+
+/// e^x, ln x, log10 x and x^y with the IEEE special cases (ln 0 = -inf, ln of a negative = NaN, ...).
+double exp(double x) noexcept;
+double log(double x) noexcept;
+double log10(double x) noexcept;
+double pow(double x, double y) noexcept;
 
 }  // namespace elementary
 }  // namespace formulon

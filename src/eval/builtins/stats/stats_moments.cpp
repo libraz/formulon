@@ -23,6 +23,7 @@
 #include "eval/builtins/stats/stats_helpers.h"
 #include "eval/stats/flushed_ops.h"
 #include "utils/arena.h"
+#include "utils/elementary_math.h"
 #include "utils/subnormal_flush.h"
 #include "value.h"
 
@@ -72,8 +73,8 @@ Value GeoMean(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   const long long q = exponent / n;
   const long long rem = exponent - q * n;
   const double scaled = std::ldexp(mantissa, static_cast<int>(rem));
-  const double r =
-      std::exp(flush_subnormal(std::log(scaled) * stats::flushed::guarded_div(1.0, static_cast<double>(n))));
+  const double r = elementary::exp(
+      flush_subnormal(elementary::log(scaled) * stats::flushed::guarded_div(1.0, static_cast<double>(n))));
   return to_finite_value(std::ldexp(r, static_cast<int>(q)));
 }
 

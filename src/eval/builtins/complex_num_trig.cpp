@@ -32,10 +32,10 @@ using complex_detail::text_complex;
 double two_cosh(double y) noexcept {
   const double ay = std::fabs(y);
   if (ay > 20.0) {
-    return std::exp(ay);
+    return elementary::exp(ay);
   }
   if (ay > 0.0001) {
-    const double e = std::exp(y);
+    const double e = elementary::exp(y);
     return (1.0 / e) + e;
   }
   const double y2 = y * y;
@@ -45,11 +45,11 @@ double two_cosh(double y) noexcept {
 double neg_two_sinh(double y) noexcept {
   const double ay = std::fabs(y);
   if (ay > 20.0) {
-    const double e = std::exp(ay);
+    const double e = elementary::exp(ay);
     return y > 0.0 ? -e : e;
   }
   if (ay > 0.01) {
-    const double e = std::exp(y);
+    const double e = elementary::exp(y);
     return (1.0 / e) - e;
   }
   const double ny = -y;
@@ -142,7 +142,7 @@ double bounded_exp(double y) noexcept {
   if (y > 709.782712893384 || y < -708.3964185322641) {
     return std::numeric_limits<double>::quiet_NaN();
   }
-  return std::exp(y);
+  return elementary::exp(y);
 }
 
 // IMSIN (sin x cosh y + i cos x sinh y) and IMCOS (cos x cosh y - i sin x sinh y).
@@ -230,8 +230,8 @@ Value im_sinh_cosh(const Value* args, Arena& arena, bool cosh) {
     if (!(a > 0.0) || !(b > 0.0)) {
       return Value::error(ErrorCode::Num);
     }
-    double real = std::exp(std::log(a) + magnitude);
-    double imag = std::exp(std::log(b) + magnitude);
+    double real = elementary::exp(elementary::log(a) + magnitude);
+    double imag = elementary::exp(elementary::log(b) + magnitude);
     if (c.re < 0.0) {
       if (cosh) {
         imag = -imag;

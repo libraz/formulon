@@ -356,12 +356,12 @@ Value ImExp(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   }
   const Complex c = z.value();
   if (c.im == 0.0) {
-    return text_complex(Complex{std::exp(c.re), 0.0, c.suffix}, arena);
+    return text_complex(Complex{elementary::exp(c.re), 0.0, c.suffix}, arena);
   }
   if (!builtins_detail::trig_argument_in_range(c.im)) {
     return Value::error(ErrorCode::Num);
   }
-  double mag = std::exp(c.re);
+  double mag = elementary::exp(c.re);
   if (std::isinf(mag)) {
     mag = std::numeric_limits<double>::max();
   }
@@ -383,13 +383,13 @@ Value ImExp(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   }
   double ln_r;
   if (c.re == 0.0 || c.im == 0.0) {
-    ln_r = std::log(c.re == 0.0 ? std::fabs(c.im) : std::fabs(c.re));
+    ln_r = elementary::log(c.re == 0.0 ? std::fabs(c.im) : std::fabs(c.re));
   } else {
     const double sum = square_sum(c.re, c.im);
     if (std::isnan(sum) || sum == 0.0) {
       return Value::error(ErrorCode::Num);
     }
-    ln_r = std::log(sum) / 2.0;
+    ln_r = elementary::log(sum) / 2.0;
   }
   const double theta = complex_argument(c.re, c.im);
   return text_complex(Complex{ln_r * inv_ln_base, theta * inv_ln_base, c.suffix}, arena);
@@ -400,11 +400,11 @@ Value ImLn(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 }
 
 Value ImLog10(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  return im_log_base(1.0 / std::log(10.0), args, arena);
+  return im_log_base(1.0 / elementary::log(10.0), args, arena);
 }
 
 Value ImLog2(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
-  return im_log_base(1.0 / std::log(2.0), args, arena);
+  return im_log_base(1.0 / elementary::log(2.0), args, arena);
 }
 
 // IMSQRT: the naive magnitude sqrt(a*a + b*b) (no pure-part shortcut), then the polar form.

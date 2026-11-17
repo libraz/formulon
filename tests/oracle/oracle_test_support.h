@@ -28,7 +28,6 @@
 #include "tests/oracle/oracle_anchor.h"
 #include "tests/oracle/oracle_runner.h"
 #include "tests/oracle/shown_precision.h"
-#include "tests/support/host_libm_expect.h"
 #include "utils/arena.h"
 #include "utils/error.h"
 #include "value.h"
@@ -425,9 +424,7 @@ inline std::string compare_json_scalar(const JsonValue& expect, const Value& act
   if (expect.is_number()) {
     if (!actual.is_number())
       return "expected number, got " + format_value(actual);
-    const bool match = compare_mode == "host_libm"
-                           ? testing_support::HostLibmMatch(expect.as_number(), actual.as_number())
-                           : numbers_match(expect.as_number(), actual.as_number(), tol_abs, tol_rel);
+    const bool match = numbers_match(expect.as_number(), actual.as_number(), tol_abs, tol_rel);
     return match ? std::string{}
                  : "number mismatch: expected " + std::to_string(expect.as_number()) + ", got " +
                        std::to_string(actual.as_number());
@@ -536,8 +533,7 @@ inline std::string compare_value(const JsonValue& expect, const Value& raw_actua
     // Exact equality is the strict path. When tolerances are non-zero, we
     // accept a match if either absolute or relative diff fits. NaN matches
     // NaN (Excel treats NaN as #NUM!, so this usually doesn't arise).
-    if (compare_mode == "host_libm" ? testing_support::HostLibmMatch(want, got)
-                                    : numbers_match(want, got, tol_abs, tol_rel))
+    if (numbers_match(want, got, tol_abs, tol_rel))
       return {};
     return "number mismatch: expected " + std::to_string(want) + ", got " + std::to_string(got);
   }

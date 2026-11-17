@@ -31,6 +31,7 @@
 #include "eval/stats/numeric_constants.h"
 #include "eval/stats/special_functions.h"
 #include "utils/arena.h"
+#include "utils/elementary_math.h"
 #include "utils/expected.h"
 #include "utils/subnormal_flush.h"
 #include "value.h"
@@ -46,7 +47,7 @@ double normal_pdf_excel(double x, double mean, double sd) {
   double t = flush_subnormal((x - mean) / sd);
   t = flush_subnormal(t * t);
   t = flush_subnormal(t * -0.5);
-  t = std::exp(t);
+  t = elementary::exp(t);
   t = flush_subnormal(t / sd);
   return flush_subnormal(t * stats::kInvSqrt2Pi);
 }
@@ -311,7 +312,7 @@ Value ExponDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   const double z = -flush_subnormal(lambda * x);
-  const double r = input.value().cumulative ? 0.0 - excel_expm1(z) : flush_subnormal(std::exp(z) * lambda);
+  const double r = input.value().cumulative ? 0.0 - excel_expm1(z) : flush_subnormal(elementary::exp(z) * lambda);
   return to_finite_value(r);
 }
 

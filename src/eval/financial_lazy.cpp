@@ -36,6 +36,7 @@
 #include "eval/tree_walker/dispatch.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
+#include "utils/elementary_math.h"
 #include "utils/error.h"
 #include "utils/index_sort.h"
 #include "utils/strings.h"
@@ -495,7 +496,7 @@ double xnpv_sum(const std::vector<double>& values, const std::vector<double>& da
   double total = 0.0;
   for (std::size_t i = 0; i < values.size(); ++i) {
     const double t = (dates[i] - anchor) / 365.0;
-    total = total + values[i] / std::exp(std::log(base) * t);
+    total = total + values[i] / elementary::exp(elementary::log(base) * t);
   }
   return total;
 }
@@ -506,7 +507,7 @@ bool xirr_rest(const std::vector<double>& values, const std::vector<double>& dat
   const double base = x + 1.0;
   double total = 0.0;
   for (std::size_t i = 1; i < values.size(); ++i) {
-    const double p = std::pow(base, (dates[i] - dates[0]) / 365.0);
+    const double p = elementary::pow(base, (dates[i] - dates[0]) / 365.0);
     if (!std::isfinite(p) || p == 0.0) {
       return false;
     }

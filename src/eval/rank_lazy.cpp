@@ -41,6 +41,7 @@
 #include "eval/tree_walker/broadcast.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
+#include "utils/elementary_math.h"
 #include "utils/error.h"
 #include "value.h"
 
@@ -125,7 +126,7 @@ std::variant<Value, double> coerce_scalar_number(const parser::AstNode& arg, Are
 // truncates toward zero rather than rounding; implemented as
 // `trunc(raw * 10^sig) / 10^sig`.
 double truncate_to_significance(double raw, std::int64_t significance) {
-  const double mult = std::pow(10.0, static_cast<double>(significance));
+  const double mult = elementary::pow(10.0, static_cast<double>(significance));
   return std::trunc(raw * mult) / mult;
 }
 

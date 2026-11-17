@@ -7,7 +7,6 @@
 #include <cmath>
 
 #include "gtest/gtest.h"
-#include "support/host_libm_expect.h"
 
 namespace formulon {
 namespace eval {
@@ -43,10 +42,6 @@ const Pair kGammaInv[] = {
     {0.7421875, 120.0, 1.0, 126.91836049278105},
     {0.8564453125, 120.0, 1.0, 131.68942100685305},
 };
-// Host libm last bits; exact on macOS.
-const Pair kBetaInvHostLibm[] = {
-    {0.302734375, 0.5, 0.5, 0.2095930209521177},
-};
 const Pair kBetaInv[] = {
     {0.9697265625, 0.5, 0.5, 0.9977403777459635},
     {0.3740234375, 2.0, 3.0, 0.3145397044262991},
@@ -67,6 +62,7 @@ const Pair kBetaInv[] = {
     {0.25, 50.0, 0.01, 0.9999999999999963},
     {0.99, 0.01, 50.0, 0.005339634466883014},
     {0.75, 0.01, 50.0, 3.6637359812630166e-15},
+    {0.302734375, 0.5, 0.5, 0.2095930209521177},
 };
 const Pair kFInv[] = {
     {0.140625, 1.0, 1.0, 0.05042607499071263},       {0.4443359375, 1.0, 1.0, 0.7036009142349744},
@@ -138,10 +134,6 @@ TEST(InverseDistributions, GammaNegativeInitialGuessIsNaN) {
 TEST(InverseDistributions, BetaFamilyMatchesExcelValues) {
   for (const Pair& q : kBetaInv) {
     EXPECT_EQ(beta_inv_excel(q.p, q.a, q.b, 0.0, 1.0), q.value) << q.p << " " << q.a << " " << q.b;
-  }
-  for (const Pair& q : kBetaInvHostLibm) {
-    EXPECT_TRUE(testing_support::HostLibmEq(beta_inv_excel(q.p, q.a, q.b, 0.0, 1.0), q.value))
-        << q.p << " " << q.a << " " << q.b;
   }
   for (const Single& q : kTInv) {
     EXPECT_EQ(t_inv_excel(q.p, q.df), q.value) << q.p << " " << q.df;

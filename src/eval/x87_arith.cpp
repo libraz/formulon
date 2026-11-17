@@ -6,6 +6,8 @@
 #include <cstring>
 #include <limits>
 
+#include "utils/elementary_math.h"
+
 namespace formulon::eval {
 
 namespace {
@@ -201,7 +203,7 @@ double x87_div(double a, double b) {
 
 double x87_exp(double x) {
   if (!(std::fabs(x) <= 709.0)) {
-    return std::exp(x);
+    return elementary::exp(x);
   }
   const DD t = round_to_64_bits(dd_mul(log2e_64(), {x, 0.0}));
   double n = std::nearbyint(t.hi);
@@ -221,7 +223,7 @@ double x87_exp(double x) {
 
 double x87_ln(double x) {
   if (!(x > 0.0) || !std::isfinite(x)) {
-    return std::log(x);
+    return elementary::log(x);
   }
   int k = 0;
   double m = std::frexp(x, &k);

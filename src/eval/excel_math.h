@@ -16,6 +16,7 @@
 #include <cstdint>
 #include <cstring>
 
+#include "utils/elementary_math.h"
 #include "utils/subnormal_flush.h"
 
 namespace formulon {
@@ -60,7 +61,7 @@ inline double excel_log1p(double x) noexcept {
     return x;
   }
   if (((excel_math_detail::bits_of(x) >> 51) & 0xfffU) >= 0x7fbU) {
-    return std::log(x + 1.0);
+    return elementary::log(x + 1.0);
   }
   if (std::fabs(x) <= 4.440892098500626e-16) {
     return flush_subnormal((flush_subnormal(x * -0.5) + 1.0) * x);
@@ -76,19 +77,19 @@ inline double round_away(double v) noexcept {
 inline double excel_expm1(double x) noexcept {
   const double ax = std::fabs(x);
   if (ax > 1.0) {
-    return std::exp(x) - 1.0;
+    return elementary::exp(x) - 1.0;
   }
   if (ax <= 2.220446049250313e-16) {
     return x;
   }
-  const double u = std::exp(x);
+  const double u = elementary::exp(x);
   const double v = u + -1.0;
   const double e1 = v - u;
   const double w2 = v - e1;
   const double w3 = -1.0 - e1;
   const double c = (u - w2) + w3;
   const double y = v + c;
-  return flush_subnormal(flush_subnormal(y * x) / std::log(u));
+  return flush_subnormal(flush_subnormal(y * x) / elementary::log(u));
 }
 
 }  // namespace eval

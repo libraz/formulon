@@ -21,6 +21,7 @@
 #include "utils/a1_ref.h"
 #include "utils/arena.h"
 #include "utils/date_time.h"
+#include "utils/elementary_math.h"
 #include "utils/expected.h"
 #include "value.h"
 
@@ -317,7 +318,7 @@ inline double annuity_h(double rate, double m) noexcept {
 }
 
 inline double annuity_v(double rate, double m) noexcept {
-  return std::exp(excel_log1p(rate) * m);
+  return elementary::exp(excel_log1p(rate) * m);
 }
 
 inline double payment_factor(double rate, double type) noexcept {

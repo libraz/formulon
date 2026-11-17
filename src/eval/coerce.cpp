@@ -16,6 +16,7 @@
 #include "eval/x87_arith.h"
 #include "excel_locale.h"
 #include "utils/double_parse.h"
+#include "utils/elementary_math.h"
 #include "utils/expected.h"
 #include "utils/strings.h"
 #include "utils/subnormal_flush.h"
@@ -85,7 +86,7 @@ double excel_magnitude_pow(double base, double exp, bool x87) {
     return std::sqrt(base);
   }
   const double magnitude = std::fabs(base);
-  const double r = x87 ? x87_exp(x87_mul(x87_ln(magnitude), exp)) : std::exp(std::log(magnitude) * exp);
+  const double r = x87 ? x87_exp(x87_mul(x87_ln(magnitude), exp)) : elementary::exp(elementary::log(magnitude) * exp);
   return base < 0.0 && std::fmod(exp, 2.0) == 1.0 ? -r : r;
 }
 
@@ -285,7 +286,7 @@ Expected<double, ErrorCode> apply_pow_with(double base, double exp, bool x87) {
     const double root = 1.0 / exp;
     const double k = std::round(root);
     if (std::fmod(std::fabs(k), 2.0) != 1.0 ||
-        std::fabs(root - k) > 0.5 * std::pow(10.0, std::floor(std::log10(std::fabs(k))) - 14.0)) {
+        std::fabs(root - k) > 0.5 * elementary::pow(10.0, std::floor(elementary::log10(std::fabs(k))) - 14.0)) {
       return ErrorCode::Num;
     }
     auto odd_root = signed_exponent_pow(-base, exp, x87);

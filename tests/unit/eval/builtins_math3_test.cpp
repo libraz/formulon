@@ -15,7 +15,6 @@
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
-#include "support/host_libm_expect.h"
 #include "util/test_eval_helpers.h"
 #include "utils/arena.h"
 #include "value.h"
@@ -627,20 +626,12 @@ TEST(ExcelExactTrigLog, MatchesExcelBitForBit) {
       {"=ACOT(3)", 0.3217505543966422},
       {"=COT(0.9)", 0.7935511478423173},
       {"=COT(0.1)", 9.96664442325924},
+      {"=ACOT(0.5)", 1.1071487177940906},
   };
   for (const Case& c : cases) {
     const Value v = EvalSource(c.formula);
     ASSERT_TRUE(v.is_number()) << c.formula;
     EXPECT_EQ(v.as_number(), c.expected) << c.formula;
-  }
-  // Host libm last bits; exact on macOS.
-  const Case host_cases[] = {
-      {"=ACOT(0.5)", 1.1071487177940906},
-  };
-  for (const Case& c : host_cases) {
-    const Value v = EvalSource(c.formula);
-    ASSERT_TRUE(v.is_number()) << c.formula;
-    EXPECT_TRUE(testing_support::HostLibmEq(v.as_number(), c.expected)) << c.formula;
   }
 }
 

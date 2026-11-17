@@ -69,7 +69,8 @@ Checks:
                    only, so a result is the same bits on every host; a
                    direct `std::` call takes the host math library's last
                    bits instead. `ELEMENTARY_FUNCTIONS` lists the functions
-                   implemented there.
+                   implemented there; comments and string literals are not
+                   scanned.
 
   all              Run every check above (default).
 
@@ -357,13 +358,21 @@ def check_xml_passthrough() -> bool:
 
 
 # Functions implemented in utils/elementary_math.
-ELEMENTARY_FUNCTIONS = ("sin", "cos", "tan", "atan")
+ELEMENTARY_FUNCTIONS = ("sin", "cos", "tan", "atan", "exp", "log", "log10", "pow")
 
 
 def check_elementary_math() -> bool:
-    seams = {SRC_ROOT / "utils" / "elementary_math.cpp"}
+    seams = {SRC_ROOT / "utils" / "elementary_math.cpp", SRC_ROOT / "utils" / "elementary_math_exp_log.cpp"}
     names = "|".join(ELEMENTARY_FUNCTIONS)
-    hits = _scan(re.compile(rf"(?<!\w)(?:std)?::(?:{names})\b"), seams)
+    pattern = re.compile(rf"(?<!\w)(?:std)?::(?:{names})\b")
+    hits: list[str] = []
+    for path in sorted(SRC_ROOT.rglob("*")):
+        if path.suffix not in SOURCE_SUFFIXES or path in seams:
+            continue
+        code = _blank_comments_and_strings(path.read_text(encoding="utf-8")).splitlines()
+        for lineno, line in enumerate(code, start=1):
+            if pattern.search(line):
+                hits.append(f"{path.relative_to(REPO_ROOT)}:{lineno}: {line.strip()}")
     return _report(
         "elementary-math",
         hits,

@@ -27,6 +27,7 @@
 #include "eval/shape_ops_lazy.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
+#include "utils/elementary_math.h"
 #include "utils/error.h"
 #include "value.h"
 
@@ -335,12 +336,12 @@ void transpose_into(const std::vector<double>& src, std::uint32_t m, std::uint32
 void fill_coeff_row(const std::vector<double>& coeffs, std::uint32_t k, bool with_const, bool log_form, Value* cells) {
   for (std::uint32_t j = 0; j < k; ++j) {
     const double raw = coeffs[j];
-    const double v = log_form ? std::exp(raw) : raw;
+    const double v = log_form ? elementary::exp(raw) : raw;
     cells[k - 1U - j] = std::isfinite(v) ? Value::number(v) : Value::error(ErrorCode::Num);
   }
   if (with_const) {
     const double raw = coeffs[k];
-    const double v = log_form ? std::exp(raw) : raw;
+    const double v = log_form ? elementary::exp(raw) : raw;
     cells[k] = std::isfinite(v) ? Value::number(v) : Value::error(ErrorCode::Num);
   } else {
     cells[k] = Value::number(log_form ? 1.0 : 0.0);
@@ -468,9 +469,9 @@ ArrayValue* build_prediction_output(const std::vector<double>& coeffs, const std
     double v = exp_result ? 1.0 : 0.0;
     for (std::uint32_t j = 0; j < k; ++j) {
       const double t = coeffs[j] * pred_design[static_cast<std::size_t>(i) * p + j];
-      v = exp_result ? v * std::exp(t) : v + t;
+      v = exp_result ? v * elementary::exp(t) : v + t;
     }
-    v = exp_result ? v * std::exp(a) : v + a;
+    v = exp_result ? v * elementary::exp(a) : v + a;
     cells.push_back(std::isfinite(v) ? Value::number(v) : Value::error(ErrorCode::Num));
   }
 
@@ -548,7 +549,7 @@ bool log_transform_y(DesignMatrix& dm) {
     if (!(dm.y[i] > 0.0)) {
       return false;
     }
-    dm.y[i] = std::log(dm.y[i]);
+    dm.y[i] = elementary::log(dm.y[i]);
   }
   return true;
 }

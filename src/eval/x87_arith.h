@@ -24,11 +24,11 @@ double x87_div(double a, double b);
 
 /// `e^x` evaluated as Windows Excel does: a 64-bit `log2(e)` argument
 /// reduction, `2^f - 1`, `+ 1`, then scaling by a power of two.
-/// Arguments with `|x| > 709` return `std::exp(x)`.
+/// Arguments with `|x| > 709` return `elementary::exp(x)`.
 double x87_exp(double x);
 
 /// Natural logarithm rounded to a 64-bit significand and then to double.
-/// Arguments that are not finite and positive return `std::log(x)`.
+/// Arguments that are not finite and positive return `elementary::log(x)`.
 double x87_ln(double x);
 
 }  // namespace formulon::eval

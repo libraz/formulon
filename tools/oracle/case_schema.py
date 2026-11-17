@@ -38,7 +38,6 @@ KINDS = {"blank", "number", "bool", "text", "error", "formula"}
 COMPARE_MODES = {
     "exact",
     "complex_text",
-    "host_libm",
     "numeric_text",
 }
 

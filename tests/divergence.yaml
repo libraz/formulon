@@ -83,7 +83,7 @@
 #                                          # REQUIRED when mode is
 #                                          # skip-oracle; see above
 #       tolerance: { abs: 1e-10, rel: 0 }
-#       compare_mode: exact | complex_text | numeric_text | host_libm | ...
+#       compare_mode: exact | complex_text | numeric_text | ...
 #       prefer: mac-excel-365 | win-excel-365 | formulon
 #       first_noted: YYYY-MM-DD
 #       last_verified_excel_version: "16.xx.x (Build ...)"

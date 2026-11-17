@@ -11,6 +11,7 @@
 
 #include "utils/double_format.h"
 #include "utils/double_parse.h"
+#include "utils/elementary_math.h"
 #include "utils/number_text.h"
 
 namespace formulon {
@@ -26,8 +27,8 @@ inline double round_to_15_significant_digits(double value) noexcept {
   if (value == 0.0 || !std::isfinite(value)) {
     return value;
   }
-  const double exponent = std::floor(std::log10(std::fabs(value)));
-  const double quantum = std::pow(10.0, exponent - 14.0);
+  const double exponent = std::floor(elementary::log10(std::fabs(value)));
+  const double quantum = elementary::pow(10.0, exponent - 14.0);
   if (quantum == 0.0 || !std::isfinite(quantum)) {
     return value;
   }

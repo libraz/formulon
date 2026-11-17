@@ -10,6 +10,7 @@
 #include "eval/builtins/numeric_helpers.h"
 #include "eval/coerce.h"
 #include "utils/arena.h"
+#include "utils/elementary_math.h"
 #include "utils/expected.h"
 #include "value.h"
 
@@ -47,9 +48,9 @@ Expected<double, ErrorCode> dollar_scale_from_denom(double denom_raw) {
   }
   // ceil(log10(denom)) counts the decimal digits of denom. For denom == 1,
   // log10(1) == 0 and we want scale == 1 (no shift).
-  const double logd = std::log10(denom);
+  const double logd = elementary::log10(denom);
   const double digits = std::ceil(logd);
-  return std::pow(10.0, digits);
+  return elementary::pow(10.0, digits);
 }
 
 Value dollar_fractional_quote(const Value* args, bool to_decimal) {
@@ -95,7 +96,7 @@ Value compound_rate_conversion(const Value* args, bool nominal_to_effective) {
     }
     result = grown.value() - 1.0;
   } else {
-    result = npery * (std::pow(1.0 + rate, 1.0 / npery) - 1.0);
+    result = npery * (elementary::pow(1.0 + rate, 1.0 / npery) - 1.0);
   }
   return to_finite_value(result);
 }
@@ -208,7 +209,7 @@ Value PDuration(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (rate <= 0.0 || pv <= 0.0 || fv <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double result = (std::log(fv) - std::log(pv)) / std::log(rate + 1.0);
+  const double result = (elementary::log(fv) - elementary::log(pv)) / elementary::log(rate + 1.0);
   return to_finite_value(result);
 }
 
@@ -230,7 +231,7 @@ Value Rri(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (nper <= 0.0 || pv <= 0.0 || fv < 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double result = std::exp(std::log(fv / pv) * (1.0 / nper)) - 1.0;
+  const double result = elementary::exp(elementary::log(fv / pv) * (1.0 / nper)) - 1.0;
   return to_finite_value(result);
 }
 

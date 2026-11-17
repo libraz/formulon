@@ -71,7 +71,7 @@ constexpr double kGuessPoly6[] = {
 
 // log(v), or log(1 - v) when `flag` is set.
 double log_or_log1m(double v, bool flag) noexcept {
-  return flag ? excel_log1p(mul(v, -1.0)) : std::log(v);
+  return flag ? excel_log1p(mul(v, -1.0)) : elementary::log(v);
 }
 
 // Wilson-Hilferty style polynomial correction in u and the normal deviate z.
@@ -103,8 +103,8 @@ double gamma_guess(double a, double p, double q, bool has_q) noexcept {
   const double lp = log_or_log1m(target, has_q);
   if (mul(lp, -0.62) > a) {
     double x = lgamma_excel(a) + lp;
-    x += std::log(a);
-    return std::exp(div(x, a));
+    x += elementary::log(a);
+    return elementary::exp(div(x, a));
   }
   const double u = div(0.5, a);
   double z = normal_quantile(target);
@@ -117,7 +117,7 @@ double gamma_guess(double a, double p, double q, bool has_q) noexcept {
       return x0;
     }
     const double lq = log_or_log1m(target, !has_q);
-    const double t = mul(std::log(x0), a - 1.0);
+    const double t = mul(elementary::log(x0), a - 1.0);
     return (lgamma_excel(a) + lq) + t;
   }
   const double tt = div(1.0, mul(a, 9.0));
@@ -144,7 +144,7 @@ double beta_guess(double a, double b, double p) noexcept {
     w = mul(w, y);
     w = div(w, h) - v;
     w = mul(w, 2.0);
-    w = mul(std::exp(w), b);
+    w = mul(elementary::exp(w), b);
     return div(a, a + w);
   }
   const double tt = div(1.0, mul(b, 9.0));
@@ -156,16 +156,16 @@ double beta_guess(double a, double b, double p) noexcept {
   if (w < 0.0) {
     const double l = excel_log1p(mul(p, -1.0));
     const double bl = beta_log_excel(a, b);
-    double e = std::log(b) + bl;
+    double e = elementary::log(b) + bl;
     e += l;
     return mul(excel_expm1(div(e, b)), -1.0);
   }
   if (!(t > w)) {
-    const double lp = std::log(p);
+    const double lp = elementary::log(p);
     const double bl = beta_log_excel(a, b);
-    double e = std::log(a) + bl;
+    double e = elementary::log(a) + bl;
     e += lp;
-    return std::exp(div(e, a));
+    return elementary::exp(div(e, a));
   }
   return 1.0 - div(2.0, div(t, w) + 1.0);
 }
@@ -282,7 +282,7 @@ double beta_inverse_excel(double a, double b, double p, bool upper, double* comp
       }
       const double f2 = mul(f, f);
       if (f2 == 0.0) {
-        if (!(std::log(acu) < mul(std::log(std::fabs(d)) - std::log(std::fabs(f)), 2.0))) {
+        if (!(elementary::log(acu) < mul(elementary::log(std::fabs(d)) - elementary::log(std::fabs(f)), 2.0))) {
           break;
         }
       } else {
@@ -291,7 +291,7 @@ double beta_inverse_excel(double a, double b, double p, bool upper, double* comp
           if (y2 != 0.0 || d == 0.0) {
             break;
           }
-          if (!(std::log(acu) < mul(std::log(std::fabs(d)) - std::log(std::fabs(f)), 2.0))) {
+          if (!(elementary::log(acu) < mul(elementary::log(std::fabs(d)) - elementary::log(std::fabs(f)), 2.0))) {
             break;
           }
         }
@@ -416,23 +416,23 @@ double f_inv_excel(double p, double d1, double d2, bool upper) noexcept {
   }
   const double a1 = mul(d1, 0.5);
   const double a2 = mul(d2, 0.5);
-  const double ld2 = std::log(d2);
+  const double ld2 = elementary::log(d2);
   double z2;
   const double z = upper ? beta_inverse_excel(a2, a1, p, true, &z2) : beta_inverse_excel(a1, a2, p, false, &z2);
   double l1;
   double l2;
   if (z2 < z) {
     l1 = excel_log1p(mul(z2, -1.0));
-    l2 = std::log(z2);
+    l2 = elementary::log(z2);
   } else {
-    l1 = std::log(z);
+    l1 = elementary::log(z);
     l2 = excel_log1p(mul(z, -1.0));
   }
-  const double terms[] = {ld2, l1, mul(std::log(d1), -1.0), mul(l2, -1.0)};
+  const double terms[] = {ld2, l1, mul(elementary::log(d1), -1.0), mul(l2, -1.0)};
   double sum;
   double err;
   compensated_sum(terms, 4, &sum, &err);
-  return mul(std::exp(sum), std::exp(err));
+  return mul(elementary::exp(sum), elementary::exp(err));
 }
 
 double binom_inv_excel(double n, double p, double alpha) noexcept {

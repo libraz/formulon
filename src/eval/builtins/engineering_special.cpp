@@ -321,7 +321,7 @@ double bessy0(double x) {
                      y * (7062834065.0 + y * (-512359803.6 + y * (10879881.29 + y * (-86327.92757 + y * 228.4622733))));
     const double s =
         40076544269.0 + y * (745249964.8 + y * (7189466.438 + y * (47447.26470 + y * (226.1030244 + y * 1.0))));
-    return r / s + (std::log(x) * bessj0(x)) * 0.636619772;
+    return r / s + (elementary::log(x) * bessj0(x)) * 0.636619772;
   }
   const double z = 8.0 / x;
   const double y = z * z;
@@ -348,7 +348,7 @@ double bessy1(double x) {
         0.2499580570e14 +
         y * (0.4244419664e12 +
              y * (0.3733650367e10 + y * (0.2245904002e8 + y * (0.1020426050e6 + y * (0.3549632885e3 + y * 1.0)))));
-    return r / s + 0.636619772 * (bessj1(x) * std::log(x) - 1.0 / x);
+    return r / s + 0.636619772 * (bessj1(x) * elementary::log(x) - 1.0 / x);
   }
   const double z = 8.0 / x;
   const double y = z * z;
@@ -394,7 +394,7 @@ double bessi0(double x) {
            y * (3.5156229 + y * (3.0899424 + y * (1.2067492 + y * (0.2659732 + y * (0.0360768 + y * 0.0045813)))));
   }
   const double y = 3.75 / ax;
-  return (std::exp(ax) / std::sqrt(ax)) *
+  return (elementary::exp(ax) / std::sqrt(ax)) *
          (0.39894228 +
           y * (0.01328592 +
                y * (0.00225319 +
@@ -421,7 +421,7 @@ double bessi1(double x) {
                y * (-0.00362018 +
                     y * (0.00163801 + y * (-0.01031555 +
                                            y * (0.02282967 + y * (-0.02895312 + y * (0.01787654 - y * 0.00420059)))))));
-    ans *= std::exp(ax) / std::sqrt(ax);
+    ans *= elementary::exp(ax) / std::sqrt(ax);
   }
   return x < 0.0 ? -ans : ans;
 }
@@ -470,14 +470,14 @@ double bessi(int n, double x) {
 double bessk0(double x) {
   if (x <= 2.0) {
     const double y = x * x / 4.0;
-    return -std::log(x / 2.0) * bessi0(x) +
+    return -elementary::log(x / 2.0) * bessi0(x) +
            (-0.57721566 +
             y * (0.42278420 +
                  y * (0.23069756 + y * (0.3488590e-1 + y * (0.262698e-2 + y * (0.10750e-3 + y * 0.74e-5))))));
   }
   const double y = 2.0 / x;
   return flush_subnormal(
-      flush_subnormal(std::exp(-x) / std::sqrt(x)) *
+      flush_subnormal(elementary::exp(-x) / std::sqrt(x)) *
       (1.25331414 +
        y * (-0.7832358e-1 +
             y * (0.2189568e-1 + y * (-0.1062446e-1 + y * (0.587872e-2 + y * (-0.251540e-2 + y * 0.53208e-3)))))));
@@ -488,7 +488,7 @@ double bessk0(double x) {
 double bessk1(double x) {
   if (x <= 2.0) {
     const double y = x * x / 4.0;
-    return std::log(x / 2.0) * bessi1(x) +
+    return elementary::log(x / 2.0) * bessi1(x) +
            (1.0 / x) *
                (1.0 + y * (0.15443144 +
                            y * (-0.67278579 +
@@ -496,7 +496,7 @@ double bessk1(double x) {
   }
   const double y = 2.0 / x;
   return flush_subnormal(
-      flush_subnormal(std::exp(-x) / std::sqrt(x)) *
+      flush_subnormal(elementary::exp(-x) / std::sqrt(x)) *
       (1.25331414 +
        y * (0.23498619 +
             y * (-0.3655620e-1 + y * (0.1504268e-1 + y * (-0.780353e-2 + y * (0.325614e-2 + y * (-0.68245e-3))))))));

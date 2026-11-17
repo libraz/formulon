@@ -19,6 +19,7 @@
 
 #include "eval/stats/horner.h"
 #include "eval/stats/numeric_constants.h"
+#include "utils/elementary_math.h"
 #include "utils/subnormal_flush.h"
 
 namespace formulon {
@@ -137,7 +138,7 @@ double erfc_positive(double v) noexcept {
   if (v > 100.0) {
     return 0.0;
   }
-  const double e = std::exp(-flush_subnormal(v * v));
+  const double e = elementary::exp(-flush_subnormal(v * v));
   const double r = v > 4.0 ? flush_subnormal(horner(kErfcNumBig, v) / horner(kErfcDenBig, v))
                            : flush_subnormal(horner(kErfcNumMid, v) / horner(kErfcDenMid, v));
   return flush_subnormal(r * e);
@@ -147,7 +148,7 @@ double erfc_positive(double v) noexcept {
 // probability and `b` its complement.
 double tail_quantile(double a, double b) noexcept {
   const bool upper = a > 0.5;
-  const double w = std::sqrt(-std::log(upper ? b : a));
+  const double w = std::sqrt(-elementary::log(upper ? b : a));
   double s = w - 5.0;
   double r;
   if (s > 0.0) {
@@ -174,7 +175,7 @@ double erfinv_core(double y) noexcept {
     const double b = flush_subnormal((1.0 - v) * 0.5);
     r = flush_subnormal(tail_quantile(a, b) * kInvSqrt2);
   } else {
-    const double w = std::sqrt(-std::log(1.0 - v));
+    const double w = std::sqrt(-elementary::log(1.0 - v));
     if (v > 0.85) {
       const double u = v - 0.87890625;
       r = flush_subnormal(horner(kInvOuterNum, u) / horner(kInvOuterDen, u));

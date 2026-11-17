@@ -14,6 +14,7 @@
 #include "eval/stats/horner.h"
 #include "eval/stats/numeric_constants.h"
 #include "eval/stats/special_functions.h"
+#include "utils/elementary_math.h"
 
 namespace formulon {
 namespace eval {
@@ -270,10 +271,10 @@ double small_shape_upper(double a, double x) noexcept {
     }
     k += 1.0;
   }
-  const double alx = mul(std::log(x), a);
-  s = mul(std::exp(alx), s);
+  const double alx = mul(elementary::log(x), a);
+  s = mul(elementary::exp(alx), s);
   s = neg_nz(excel_expm1(alx)) + s;
-  const double g = mul(std::exp(lgamma_excel(a)), a);
+  const double g = mul(elementary::exp(lgamma_excel(a)), a);
   s = div(s, g);
   return s - recip_gamma_m1(a);
 }
@@ -306,8 +307,8 @@ double uniform_expansion(double a, double x) noexcept {
     acc = mul(acc, eta);
     acc += cf[i];
   }
-  const double r = div(acc, std::exp(stirlerr(a)));
-  double d = std::exp(neg_nz(e18));
+  const double r = div(acc, elementary::exp(stirlerr(a)));
+  double d = elementary::exp(neg_nz(e18));
   d = mul(d, kPhi0);
   d = div(d, std::sqrt(a));
   d = mul(d, r);
@@ -320,7 +321,7 @@ double uniform_expansion(double a, double x) noexcept {
 
 // Exact finite form of Q(a, x) for integer a: exp(-x) * sum_{k<a} x^k / k!.
 double upper_integer_shape(double a, double x) noexcept {
-  const double e = std::exp(mul(x, -1.0));
+  const double e = elementary::exp(mul(x, -1.0));
   const int n = to_int(a);
   double acc = kRecipFactorial[22 - n];
   int idx = 23 - n;
@@ -342,9 +343,9 @@ double upper_half_integer_shape(double a, double x) noexcept {
     acc = mul(acc, x);
     acc += kHalfIntSeries[idx++];
   }
-  double l = mul(std::log(x), 0.5);
+  double l = mul(elementary::log(x), 0.5);
   l += x;
-  double e = std::exp(-l);
+  double e = elementary::exp(-l);
   e = mul(e, kInvSqrtPi);
   e = mul(e, acc);
   return e + ec;
@@ -357,7 +358,7 @@ double log1pmx(double x) noexcept {
     return 0.0;
   }
   if (!(x < 1.0) || !(x > -0.99)) {
-    return std::log(x + 1.0) - x;
+    return elementary::log(x + 1.0) - x;
   }
   const double r = div(x, x + 2.0);
   const double y = mul(r, r);
@@ -408,7 +409,7 @@ double bd0(double x, double np) noexcept {
     a = neg_nz(mul(t, v)) + a;
     return mul(v, d) + a;
   }
-  return mul(std::log(div(x, np)), x) - d;
+  return mul(elementary::log(div(x, np)), x) - d;
 }
 
 double lgamma_excel(double x) noexcept {
@@ -417,14 +418,14 @@ double lgamma_excel(double x) noexcept {
   }
   if (x > 2.0) {
     if (x >= 8.0) {
-      double t = mul(x - 0.5, std::log(x));
+      double t = mul(x - 0.5, elementary::log(x));
       t = (t - x) + kLnSqrt2Pi;
       return t + stirlerr(x);
     }
     if (x > 3.0) {
       const int n = to_int(x - 2.0);
       const double y = x - static_cast<double>(n);
-      const double lp = std::log(shifted_product(x, n));
+      const double lp = elementary::log(shifted_product(x, n));
       const double p = div(horner(kLgNum23, y), horner(kLgDen23, y));
       return mul(p, y - 2.0) + lp;
     }
@@ -432,12 +433,12 @@ double lgamma_excel(double x) noexcept {
   }
   const auto bits = static_cast<std::int64_t>(flushed::bits_of(x));
   if (bits < 0x3cb0000000000000LL) {
-    return x > 0.0 ? -std::log(x) : kNaN;
+    return x > 0.0 ? -elementary::log(x) : kNaN;
   }
   double add = 0.0;
   double y = x;
   if (bits <= 0x3fe6666666666665LL) {
-    add = -std::log(x);
+    add = -elementary::log(x);
     y = x + 1.0;
   }
   double p;
@@ -454,11 +455,11 @@ double lgamma_excel(double x) noexcept {
 
 double dpois_raw(double lambda, double k) noexcept {
   if (lambda > 1.1 && k > 1.1) {
-    const double e = std::exp(neg_nz(stirlerr(k) + bd0(k, lambda)));
+    const double e = elementary::exp(neg_nz(stirlerr(k) + bd0(k, lambda)));
     return div(e, std::sqrt(mul(k, kTwoPi)));
   }
   const double nlg = neg_nz(lgamma_excel(k + 1.0));
-  const double t1 = mul(std::log(lambda), k);
+  const double t1 = mul(elementary::log(lambda), k);
   const double t2 = neg_nz(lambda);
   double s1;
   double e1;
@@ -466,8 +467,8 @@ double dpois_raw(double lambda, double k) noexcept {
   double e2;
   two_sum(t1, t2, &s1, &e1);
   two_sum(s1, nlg, &s2, &e2);
-  const double r = mul(std::exp(s2), std::exp(e1));
-  return mul(r, std::exp(e2));
+  const double r = mul(elementary::exp(s2), elementary::exp(e1));
+  return mul(r, elementary::exp(e2));
 }
 
 double dbinom_raw(double n, double p, double k) noexcept {
@@ -480,19 +481,19 @@ double dbinom_raw(double n, double p, double k) noexcept {
     return 1.0;
   }
   if (k == 0.0) {
-    return std::exp(mul(n, excel_log1p(neg_nz(p))));
+    return elementary::exp(mul(n, excel_log1p(neg_nz(p))));
   }
   if (k == n) {
-    return std::exp(mul(std::log(p), n));
+    return elementary::exp(mul(elementary::log(p), n));
   }
   const double nk = n - k;
   double lc = stirlerr(n) - stirlerr(k);
   lc -= bd0(k, mul(n, p));
   lc -= stirlerr(nk);
   lc -= bd0(nk, mul(n, 1.0 - p));
-  const double t1 = mul(std::log(n), 0.5);
-  const double t2 = neg_nz(mul(std::log(k), 0.5));
-  const double t3 = neg_nz(mul(std::log(nk), 0.5));
+  const double t1 = mul(elementary::log(n), 0.5);
+  const double t2 = neg_nz(mul(elementary::log(k), 0.5));
+  const double t3 = neg_nz(mul(elementary::log(nk), 0.5));
   double sum;
   double e;
   double err;
@@ -504,7 +505,7 @@ double dbinom_raw(double n, double p, double k) noexcept {
   err += e;
   two_sum(sum, -kLnSqrt2Pi, &sum, &e);
   err += e;
-  return mul(std::exp(sum), std::exp(err));
+  return mul(elementary::exp(sum), elementary::exp(err));
 }
 
 double gamma_ratio_excel(double a, double x, bool upper) noexcept {
@@ -516,7 +517,7 @@ double gamma_ratio_excel(double a, double x, bool upper) noexcept {
   }
   if (a == 1.0) {
     const double t = 0.0 - x;
-    return upper ? std::exp(t) : 0.0 - excel_expm1(t);
+    return upper ? elementary::exp(t) : 0.0 - excel_expm1(t);
   }
   if (a == 0.5) {
     const double s = std::sqrt(x);
@@ -527,7 +528,7 @@ double gamma_ratio_excel(double a, double x, bool upper) noexcept {
   if (a <= 20.0) {
     if (a < 1.0) {
       if (x < 1.1) {
-        const double t = x > 0.5 ? x + 0.25 : div(kNegLn2, std::log(x));
+        const double t = x > 0.5 ? x + 0.25 : div(kNegLn2, elementary::log(x));
         if (t < a) {
           r = continued_fraction_lower(a, x);
           complement = false;

@@ -10,6 +10,7 @@
 #include <cstring>
 #include <limits>
 
+#include "utils/elementary_math.h"
 #include "utils/subnormal_flush.h"
 
 namespace formulon {
@@ -58,7 +59,7 @@ inline double neg(double v) noexcept {
 /// exponent and is NaN for any other exponent, and -0 is NaN.
 inline double power(double x, double y) noexcept {
   if (x > 0.0) {
-    return std::exp(mul(std::log(x), y));
+    return elementary::exp(mul(elementary::log(x), y));
   }
   if (x == 0.0) {
     return std::signbit(x) ? std::numeric_limits<double>::quiet_NaN() : 0.0;
@@ -66,7 +67,7 @@ inline double power(double x, double y) noexcept {
   if (!(x < 0.0) || y != std::trunc(y)) {
     return std::numeric_limits<double>::quiet_NaN();
   }
-  const double r = std::exp(mul(std::log(-x), y));
+  const double r = elementary::exp(mul(elementary::log(-x), y));
   const bool odd = std::fabs(std::fmod(y, 2.0)) == 1.0;
   return odd ? -r : r;
 }

@@ -22,6 +22,7 @@
 #include "excel_locale.h"
 #include "utils/double_format.h"
 #include "utils/double_parse.h"
+#include "utils/elementary_math.h"
 #include "utils/number_text.h"
 #include "utils/subnormal_flush.h"
 
@@ -100,7 +101,7 @@ void format_fixed_digits(double v, int decimals, bool* negative, std::string* in
   const int requested_decimals = decimals < 0 ? 0 : decimals;
   int rendered_decimals = requested_decimals;
   if (abs_v != 0.0) {
-    const int exponent = static_cast<int>(std::floor(std::log10(abs_v)));
+    const int exponent = static_cast<int>(std::floor(elementary::log10(abs_v)));
     // Once the 15 significant digits have been emitted, any extra fixed
     // places are known zeros. Rendering them from the binary double would
     // reintroduce representation residue (0.1 + 0.2 -> ...00004).
@@ -286,7 +287,7 @@ void append_dbnum_general(std::string& out, const DbnumStyle* style, bool keep_s
     int_digits = general.substr(0, dot);
     frac_digits = dot == std::string::npos ? std::string() : general.substr(dot + 1U);
   } else if (abs_v >= 1.0 && !keep_scientific) {
-    const int exp10 = static_cast<int>(std::floor(std::log10(abs_v)));
+    const int exp10 = static_cast<int>(std::floor(elementary::log10(abs_v)));
     bool negative = false;
     format_fixed_digits(abs_v, std::max(0, kExcelSignificantDigits - 1 - exp10), &negative, &int_digits, &frac_digits);
     while (!frac_digits.empty() && frac_digits.back() == '0') {

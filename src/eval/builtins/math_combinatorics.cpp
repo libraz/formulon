@@ -27,6 +27,7 @@
 #include "eval/coerce.h"
 #include "eval/function_registry.h"
 #include "utils/arena.h"
+#include "utils/elementary_math.h"
 #include "utils/expected.h"
 #include "utils/strings.h"
 #include "utils/utf8_length.h"
@@ -321,12 +322,12 @@ Value Multinomial(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
   }
   double log_sum = 0.0;
   for (std::uint64_t k = 2; k <= total; ++k) {
-    log_sum = std::log10(static_cast<double>(k)) + log_sum;
+    log_sum = elementary::log10(static_cast<double>(k)) + log_sum;
   }
   for (std::uint32_t i = arity; i-- > 0;) {
     const std::uint64_t a = read_nonneg_uint_arg(args, i, kMaxSum).value();
     for (std::uint64_t k = 2; k <= a; ++k) {
-      log_sum = (-std::log10(static_cast<double>(k))) + log_sum;
+      log_sum = (-elementary::log10(static_cast<double>(k))) + log_sum;
     }
   }
   auto result = apply_pow(10.0, log_sum);

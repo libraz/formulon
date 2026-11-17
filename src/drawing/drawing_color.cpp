@@ -10,6 +10,7 @@
 
 #include "color_resolve.h"
 #include "io/xml_utils.h"
+#include "utils/elementary_math.h"
 #include "utils/number_text.h"
 #include "utils/strings.h"
 
@@ -126,11 +127,11 @@ ColorSpec rgb_spec(std::uint32_t argb) {
 // run of them in one pass); shade, tint, inversion and channel transforms run on the linear value.
 
 double to_linear(double v) {
-  return v <= 0.04045 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4);
+  return v <= 0.04045 ? v / 12.92 : elementary::pow((v + 0.055) / 1.055, 2.4);
 }
 
 double from_linear(double v) {
-  return v <= 0.0031308 ? v * 12.92 : 1.055 * std::pow(v, 1.0 / 2.4) - 0.055;
+  return v <= 0.0031308 ? v * 12.92 : 1.055 * elementary::pow(v, 1.0 / 2.4) - 0.055;
 }
 
 // Divides by the step rather than multiplying by its inverse: values on an exact half step round as Excel's do.

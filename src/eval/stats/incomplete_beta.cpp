@@ -134,15 +134,15 @@ SeriesResult power_series(double a, double b, double x, double y) noexcept {
     n += 1.0;
   }
   const double nbl = mul(beta_log_excel(a, b), -1.0);
-  double l = x >= 0.99 ? excel_log1p(0.0 - y) : std::log(x);
+  double l = x >= 0.99 ? excel_log1p(0.0 - y) : elementary::log(x);
   l = mul(l, a);
   double sum;
   double err;
   two_sum(nbl, l, &sum, &err);
-  const double r = mul(std::exp(sum), s);
-  const double out = mul(std::exp(err), r);
+  const double r = mul(elementary::exp(sum), s);
+  const double out = mul(elementary::exp(err), r);
   if (out == 0.0 && s > 0.0) {
-    return {out, (std::log(s) + sum) + err, true};
+    return {out, (elementary::log(s) + sum) + err, true};
   }
   return {out, 0.0, false};
 }
@@ -249,7 +249,7 @@ double continued_fraction(double a, double b, double x, double y) noexcept {
 
 // Correction terms of the large-a, small-b expansion, scaled by powers of z.
 void small_b_terms(double b, double x, double y, double (&out)[16]) noexcept {
-  const double z = x >= 0.99 ? 0.0 - excel_log1p(0.0 - y) : neg(std::log(x));
+  const double z = x >= 0.99 ? 0.0 - excel_log1p(0.0 - y) : neg(elementary::log(x));
   const double z2 = mul(z, z);
   double c[9];
   for (int i = 0; i < 9; ++i) {
@@ -296,10 +296,10 @@ void small_b_terms(double b, double x, double y, double (&out)[16]) noexcept {
 // Expansion for large a and small b in 1 / nu; returns 0 on total underflow.
 double small_b_expansion(double a, double b, double x, double y) noexcept {
   const double nu = mul(b - 1.0, 0.5) + a;
-  const double lnnu = neg(std::log(nu));
+  const double lnnu = neg(elementary::log(nu));
   double co[16];
   small_b_terms(b, x, y, co);
-  const double lnx = x >= 0.99 ? excel_log1p(mul(y, -1.0)) : std::log(x);
+  const double lnx = x >= 0.99 ? excel_log1p(mul(y, -1.0)) : elementary::log(x);
   const double w = mul(lnx, nu);
   double s;
   double e1;
@@ -307,9 +307,9 @@ double small_b_expansion(double a, double b, double x, double y) noexcept {
   two_sum(w, lnnu, &s, &e1);
   const double nbl = mul(beta_log_excel(a, b), -1.0);
   two_sum(s, nbl, &s, &e2);
-  double p = std::exp(s);
-  p = mul(std::exp(e1), p);
-  p = mul(std::exp(e2), p);
+  double p = elementary::exp(s);
+  p = mul(elementary::exp(e1), p);
+  p = mul(elementary::exp(e2), p);
   const double inv = div(1.0, nu);
   double acc = co[0];
   for (int k = 1; k < 16; ++k) {
@@ -366,7 +366,7 @@ double uniform_expansion_beta(double a, double b, double lam) noexcept {
   double f = mul(log1pmx(div(lam, na)), na);
   const double nb = mul(-1.0, b);
   f += mul(log1pmx(div(lam, b)), nb);
-  const double tt = std::exp(0.0 - f);
+  const double tt = elementary::exp(0.0 - f);
   if (tt == 0.0) {
     return 0.0;
   }
@@ -384,7 +384,7 @@ double uniform_expansion_beta(double a, double b, double lam) noexcept {
   if (z0 > 26.641747557046326) {
     j0 = scaled_erfc_asymptotic(z0);
   } else {
-    j0 = mul(std::exp(mul(z0, z0)), erfc_excel(z0));
+    j0 = mul(elementary::exp(mul(z0, z0)), erfc_excel(z0));
   }
   j0 = mul(j0, kQuarterSqrtPi);
   double j1 = kTwoPowNeg1p5;
@@ -452,7 +452,7 @@ double uniform_expansion_beta(double a, double b, double lam) noexcept {
   const double smax = a > b ? sa : sb;
   const double smin = a > b ? sb : sa;
   const double bc = (smax - ss) + smin;
-  double u = std::exp(0.0 - bc);
+  double u = elementary::exp(0.0 - bc);
   u = mul(u, s);
   u = mul(u, tt);
   return mul(u, kTwoOverSqrtPi);
@@ -519,10 +519,10 @@ double hyp_lower(double a, double b, double c, double x) noexcept {
 
 double beta_log_excel(double a, double b) noexcept {
   if (a == 1.0) {
-    return neg(std::log(b));
+    return neg(elementary::log(b));
   }
   if (b == 1.0) {
-    return neg(std::log(a));
+    return neg(elementary::log(a));
   }
   const double p = a > b ? a : b;
   const double q = a > b ? b : a;
@@ -537,7 +537,7 @@ double beta_log_excel(double a, double b) noexcept {
       t = mul(t, -1.0);
       t -= mul(p, l);
       t += kLnSqrt2Pi;
-      const double v = mul(std::log(div(s, mul(q, p))), 0.5);
+      const double v = mul(elementary::log(div(s, mul(q, p))), 0.5);
       t = v + t;
       t += stirlerr(q);
       return t + ds;
@@ -545,7 +545,7 @@ double beta_log_excel(double a, double b) noexcept {
     double t = lgamma_excel(q) + ds;
     t += mul(l, 0.5);
     t += q;
-    t -= mul(std::log(s), q);
+    t -= mul(elementary::log(s), q);
     return t - mul(excel_log1p(r), p);
   }
   const double lp = lgamma_excel(p);
@@ -569,29 +569,29 @@ double beta_density_excel(double a, double b, double x) noexcept {
     const double nk = n - k;
     lc -= stirlerr(nk);
     lc -= bd0(nk, mul(1.0 - x, n));
-    const double hn = mul(std::log(n), 0.5);
-    const double hk = mul(std::log(k), -0.5);
+    const double hn = mul(elementary::log(n), 0.5);
+    const double hk = mul(elementary::log(k), -0.5);
     two_sum(lc, hn, &sum, &err);
     double e;
     two_sum(sum, hk, &sum, &e);
     err += e;
-    two_sum(sum, mul(std::log(nk), -0.5), &sum, &e);
+    two_sum(sum, mul(elementary::log(nk), -0.5), &sum, &e);
     err += e;
     two_sum(sum, -kLnSqrt2Pi, &sum, &e);
     err += e;
-    two_sum(sum, std::log(apb - 1.0), &sum, &e);
+    two_sum(sum, elementary::log(apb - 1.0), &sum, &e);
     err += e;
   } else {
     double l1 = excel_log1p(0.0 - x);
     l1 = mul(b - 1.0, l1);
     const double nbl = mul(beta_log_excel(a, b), -1.0);
-    const double lx = mul(std::log(x), a - 1.0);
+    const double lx = mul(elementary::log(x), a - 1.0);
     two_sum(l1, lx, &sum, &err);
     double e;
     two_sum(sum, nbl, &sum, &e);
     err += e;
   }
-  return mul(std::exp(err), std::exp(sum));
+  return mul(elementary::exp(err), elementary::exp(sum));
 }
 
 double beta_ratio_excel(double a, double b, double x, bool upper, double y) noexcept {
@@ -610,7 +610,7 @@ double beta_ratio_excel(double a, double b, double x, bool upper, double y) noex
   }
   if (b == 1.0) {
     if (x > 0.9) {
-      return finish(mul(-1.0, excel_expm1(mul(std::log(x), a))), true, upper);
+      return finish(mul(-1.0, excel_expm1(mul(elementary::log(x), a))), true, upper);
     }
     return finish(power(x, a), false, upper);
   }
@@ -626,7 +626,7 @@ double beta_ratio_excel(double a, double b, double x, bool upper, double y) noex
     const bool low = x < 0.9;
     double v = asin_excel(std::sqrt(low ? x : 1.0 - x));
     v = mul(v, 2.0);
-    v = div(v, std::exp(beta_log_excel(a, b)));
+    v = div(v, elementary::exp(beta_log_excel(a, b)));
     return finish(v, !low, upper);
   }
   if (y < 0.0) {
@@ -680,8 +680,8 @@ double beta_ratio_excel(double a, double b, double x, bool upper, double y) noex
       if (v != 0.0 || w > kUnder) {
         v += w;
       } else if (series && w > 0.0 && has_log) {
-        const double t = std::exp(std::log(w) + kRescale);
-        const double u = std::exp(lv + kRescale);
+        const double t = elementary::exp(elementary::log(w) + kRescale);
+        const double u = elementary::exp(lv + kRescale);
         v = mul(u + t, kUnder);
       }
       return finish(v, comp, upper);
@@ -712,7 +712,7 @@ double beta_ratio_excel(double a, double b, double x, bool upper, double y) noex
       return finish(power_series(b0, a0, y0, x0).value, swapped_comp, upper);
     }
     if (x0 < 0.1) {
-      const double t = mul(std::log(mul(b0, x0)), a0);
+      const double t = mul(elementary::log(mul(b0, x0)), a0);
       if (!(t > kLog07)) {
         return finish(power_series(a0, b0, x0, y0).value, comp, upper);
       }
@@ -728,7 +728,7 @@ double beta_ratio_excel(double a, double b, double x, bool upper, double y) noex
     return finish(v, swapped_comp, upper);
   }
   if (a0 < b0 && a0 < 0.2) {
-    const double t = mul(std::log(x0), a0);
+    const double t = mul(elementary::log(x0), a0);
     if (t > kLog09) {
       double v;
       if (x0 < 0.3) {
@@ -781,7 +781,7 @@ double binom_cdf_excel(double k, double n, double p) noexcept {
     return 0.0;
   }
   if (kk == 0.0) {
-    return std::exp(mul(excel_log1p(mul(-1.0, p)), nn));
+    return elementary::exp(mul(excel_log1p(mul(-1.0, p)), nn));
   }
   return beta_ratio_excel(1.0 + kk, nn - kk, p, true);
 }
@@ -816,7 +816,7 @@ double negbinom_pmf_excel(double k, double r, double p) noexcept {
   const double kk = std::trunc(k);
   const double rr = std::trunc(r);
   if (kk == 0.0) {
-    return std::exp(mul(std::log(p), rr));
+    return elementary::exp(mul(elementary::log(p), rr));
   }
   return mul(beta_density_excel(rr, kk + 1.0, p), div(p, kk + rr));
 }
@@ -825,7 +825,7 @@ double negbinom_cdf_excel(double k, double r, double p) noexcept {
   const double kk = std::trunc(k);
   const double rr = std::trunc(r);
   if (kk == 0.0) {
-    return std::exp(mul(std::log(p), rr));
+    return elementary::exp(mul(elementary::log(p), rr));
   }
   return beta_ratio_excel(rr, kk + 1.0, p, false);
 }
@@ -864,11 +864,11 @@ double f_dist_pdf_excel(double x, double d1, double d2) noexcept {
   constexpr double c4 = 1.2655121234846454;
   const double mn = a < b ? a : b;
   const double mx = a < b ? b : a;
-  const double c5 = mul(std::log(mn) - excel_log1p(div(mn, mx)), -0.5);
+  const double c5 = mul(elementary::log(mn) - excel_log1p(div(mn, mx)), -0.5);
   const bool big = mul(a, x) > b;
   const double x26 = big ? a : b;
   const double x27 = big ? b : a;
-  const double c6a = mul(mul(std::log(x), x27), big ? 0.5 : -0.5);
+  const double c6a = mul(mul(elementary::log(x), x27), big ? 0.5 : -0.5);
   const double l2 = excel_log1p(div(x27, x26));
   const double ax = mul(a, x);
   const double ratio = big ? div(b, ax) : div(ax, b);
@@ -877,8 +877,8 @@ double f_dist_pdf_excel(double x, double d1, double d2) noexcept {
   double sum;
   double err;
   compensated_sum(terms, 6, &sum, &err);
-  const double e = div(std::exp(neg(err)), x);
-  return mul(std::exp(neg(sum)), e);
+  const double e = div(elementary::exp(neg(err)), x);
+  return mul(elementary::exp(neg(sum)), e);
 }
 
 double t_dist_pdf_excel(double x, double df) noexcept {
@@ -891,7 +891,7 @@ double t_dist_pdf_excel(double x, double df) noexcept {
     return div(1.0, mul(kPi, 1.0 + x2));
   }
   if (df == 2.0) {
-    return std::exp(mul(std::log(x2 + 2.0), -1.5));
+    return elementary::exp(mul(elementary::log(x2 + 2.0), -1.5));
   }
   const double n1h = div(df + 1.0, 2.0);
   const double nh = div(df, 2.0);
@@ -906,7 +906,7 @@ double t_dist_pdf_excel(double x, double df) noexcept {
     u = mul(nh, excel_log1p(div(x2, df)));
   }
   const double r = div(kInvSqrt2Pi, std::sqrt(div(x2, df) + 1.0));
-  return mul(std::exp(t - u), r);
+  return mul(elementary::exp(t - u), r);
 }
 
 double t_dist_2t_excel(double x, double df) noexcept {

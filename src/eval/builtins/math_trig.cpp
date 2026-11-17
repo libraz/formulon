@@ -109,7 +109,7 @@ Value Exp(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (current_eval_profile().host == ExcelHost::kWin365) {
     return apply_unary_math(&x87_exp, args);
   }
-  return apply_unary_math(&std::exp, args);
+  return apply_unary_math(&elementary::exp, args);
 }
 
 // LN(x) - natural logarithm. Excel rejects `x <= 0` with `#NUM!`.
@@ -117,7 +117,7 @@ Value Ln(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (current_eval_profile().host == ExcelHost::kWin365) {
     return apply_guarded_unary_math(&x87_ln, &positive_domain, args);
   }
-  return apply_guarded_unary_math(&std::log, &positive_domain, args);
+  return apply_guarded_unary_math(&elementary::log, &positive_domain, args);
 }
 
 // LOG(x, [base]) - logarithm with an optional base. The one-argument form
@@ -146,19 +146,19 @@ Value Log(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   if (arity < 2) {
-    return to_finite_value(std::log10(x.value()));
+    return to_finite_value(elementary::log10(x.value()));
   }
-  const double denom = std::log(base);
+  const double denom = elementary::log(base);
   if (denom == 0.0) {
     return Value::error(ErrorCode::Div0);
   }
-  const double r = std::log(x.value()) / denom;
+  const double r = elementary::log(x.value()) / denom;
   return to_finite_value(r);
 }
 
 // LOG10(x) - base-10 logarithm. `x <= 0` -> `#NUM!`.
 Value Log10(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return apply_guarded_unary_math(&std::log10, &positive_domain, args);
+  return apply_guarded_unary_math(&elementary::log10, &positive_domain, args);
 }
 
 // PI() - the constant pi. Zero-argument; the registry's arity check rejects
@@ -275,11 +275,11 @@ Value Atan2(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // Excel builds the hyperbolics from EXP; for |x| < 1 SINH and TANH use Kahan's
 // expm1 (exp(x) - 1 corrected by log(exp(x))) instead.
 double hyp_exp(double x) {
-  return current_eval_profile().host == ExcelHost::kWin365 ? x87_exp(x) : std::exp(x);
+  return current_eval_profile().host == ExcelHost::kWin365 ? x87_exp(x) : elementary::exp(x);
 }
 
 double hyp_log(double x) {
-  return current_eval_profile().host == ExcelHost::kWin365 ? x87_ln(x) : std::log(x);
+  return current_eval_profile().host == ExcelHost::kWin365 ? x87_ln(x) : elementary::log(x);
 }
 
 double expm1_kahan(double x) {
@@ -339,7 +339,7 @@ Value Tanh(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // closed form `sign(x) * ln(|x| + sqrt(x*x + 1))` without cancellation guards.
 Value Asinh(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return apply_unary_value(args, [](double x) {
-    const double magnitude = std::log(std::fabs(x) + std::sqrt(x * x + 1.0));
+    const double magnitude = elementary::log(std::fabs(x) + std::sqrt(x * x + 1.0));
     return to_finite_value(x < 0.0 ? -magnitude : magnitude);
   });
 }
@@ -349,8 +349,8 @@ Value Asinh(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // domain check above.
 Value Acosh(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   // log(x + sqrt(x*x - 1)); x*x overflowing (x > ~1.34e154) is #NUM!.
-  return apply_guarded_unary_math([](double x) { return std::log(x + std::sqrt(x * x - 1.0)); }, &at_least_one_domain,
-                                  args);
+  return apply_guarded_unary_math([](double x) { return elementary::log(x + std::sqrt(x * x - 1.0)); },
+                                  &at_least_one_domain, args);
 }
 
 // atanh on (-1, 1): the cubic x + x * (x * (x * (1/3))) below 1.0288e-4, otherwise
@@ -364,7 +364,7 @@ double excel_atanh(double x) noexcept {
     t = stats::flushed::mul(x, t);
     return x + t;
   }
-  return stats::flushed::mul(std::log(stats::flushed::guarded_div(x + 1.0, 1.0 - x)), 0.5);
+  return stats::flushed::mul(elementary::log(stats::flushed::guarded_div(x + 1.0, 1.0 - x)), 0.5);
 }
 
 // acoth on |x| > 1: log((1 + a) / (a - 1)) / 2 below a = 3.69662725; from there the series
@@ -375,7 +375,7 @@ double excel_acoth(double x) noexcept {
   const double a = std::fabs(x);
   double result;
   if (a < kSeriesFrom) {
-    result = stats::flushed::guarded_div(std::log(stats::flushed::guarded_div(1.0 + a, a - 1.0)), 2.0);
+    result = stats::flushed::guarded_div(elementary::log(stats::flushed::guarded_div(1.0 + a, a - 1.0)), 2.0);
   } else {
     result = stats::flushed::guarded_div(1.0, a);
     double k = 3.0;

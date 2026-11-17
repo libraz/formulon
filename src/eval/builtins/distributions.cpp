@@ -292,12 +292,12 @@ double gamma_kernel(double x) noexcept {
   const double t = 1.0 / ax;
   const double series = horner_series(kGammaStirling, t);
   const double root = std::sqrt(t);
-  const double e = std::exp(-ax) * root;
+  const double e = elementary::exp(-ax) * root;
   const double half = ax * 0.5;
   const double m = std::trunc(half);
   const double r = half - m;
   double power = integer_power(ax, static_cast<std::uint64_t>(m));
-  power = std::exp(std::log(ax) * r) * power;
+  power = elementary::exp(elementary::log(ax) * r) * power;
   double v = e * power;
   v = v * power;
   v = v * kSqrtHalfPi;
@@ -406,7 +406,7 @@ Value WeibullDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
   const double x = parsed.value().first;
   const double alpha = parsed.value().second;
   const double beta_scale = parsed.value().third;
-  const double scaled_power = std::exp(std::log(x / beta_scale) * alpha);
+  const double scaled_power = elementary::exp(elementary::log(x / beta_scale) * alpha);
   // An overflowing (x / beta)^alpha is #NUM! for the cdf and the density alike.
   if (!std::isfinite(scaled_power)) {
     return Value::error(ErrorCode::Num);
@@ -415,9 +415,9 @@ Value WeibullDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
     return to_finite_value(0.0 - excel_expm1(-scaled_power));
   }
   // At x == 0 the x^(alpha-1) factor is 0 for every alpha, so the density there is 0.
-  const double x_power = x != 0.0 ? std::exp(std::log(x) * (alpha - 1.0)) : 0.0;
-  const double r =
-      flush_subnormal(((alpha / std::exp(std::log(beta_scale) * alpha)) * x_power) * std::exp(-scaled_power));
+  const double x_power = x != 0.0 ? elementary::exp(elementary::log(x) * (alpha - 1.0)) : 0.0;
+  const double r = flush_subnormal(((alpha / elementary::exp(elementary::log(beta_scale) * alpha)) * x_power) *
+                                   elementary::exp(-scaled_power));
   return to_finite_value(r);
 }
 
@@ -429,21 +429,21 @@ Value WeibullDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
 // z = (ln x - mu)^2 / (2 sigma^2). The exponent is summed with error terms
 // kept, and the rounding errors re-enter as a second exp factor.
 double lognormal_pdf(double x, double mean, double sd) noexcept {
-  const double d = std::log(x) - mean;
+  const double d = elementary::log(x) - mean;
   const double z = (d * d) / (2.0 * (sd * sd));
   double first_sum;
   double first_error;
-  stats::flushed::two_sum(std::log(sd), z, &first_sum, &first_error);
+  stats::flushed::two_sum(elementary::log(sd), z, &first_sum, &first_error);
   double second_sum;
   double second_error;
   stats::flushed::two_sum(first_sum, stats::kLnSqrt2Pi, &second_sum, &second_error);
-  const double log_x = std::log(x);
+  const double log_x = elementary::log(x);
   // The final sum swaps the roles of its operands in the error term.
   const double total = log_x + second_sum;
   const double bb = total - second_sum;
   const double third_error = (second_sum - (total - bb)) + (log_x - bb);
   const double error = (first_error + second_error) + third_error;
-  return std::exp(-total) * std::exp(error);
+  return elementary::exp(-total) * elementary::exp(error);
 }
 
 // LOGNORM.DIST(x, mean, sd, cumulative). The log-normal distribution
@@ -462,7 +462,7 @@ Value LognormDist(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) 
   if (x <= 0.0 || sd <= 0.0) {
     return Value::error(ErrorCode::Num);
   }
-  const double z = (std::log(x) - mean) / sd;
+  const double z = (elementary::log(x) - mean) / sd;
   if (parsed.value().cumulative) {
     return to_finite_value(stats::normal_cdf(z));
   }
@@ -482,7 +482,7 @@ Value LognormInv(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
     return Value::error(ErrorCode::Num);
   }
   const double z = stats_detail::InverseStandardNormal(p);
-  return to_finite_value(std::exp(mean + sd * z));
+  return to_finite_value(elementary::exp(mean + sd * z));
 }
 
 // ---------------------------------------------------------------------------

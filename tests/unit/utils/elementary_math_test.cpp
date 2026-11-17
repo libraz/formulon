@@ -150,5 +150,102 @@ TEST(ElementaryAtan, MatchesPinnedValuesInEveryRange) {
   EXPECT_EQ(elementary::atan(std::numeric_limits<double>::infinity()), 1.5707963267948966);
 }
 
+struct ExpPin {
+  double x;
+  double exp;
+};
+
+// exp across the normal range, near overflow and into subnormal results.
+constexpr ExpPin kExpPins[] = {
+    {-745.2, 0.0},
+    {-720.0, 2.0322308024e-313},
+    {-1.0, 0.36787944117144233},
+    {1e-10, 1.0000000001},
+    {0.5, 1.6487212707001282},
+    {1.0, 2.718281828459045},
+    {100.0, 2.6881171418161356e+43},
+    {709.78, 1.7928227943945155e+308},
+};
+
+struct LogPin {
+  double x;
+  double log;
+  double log10;
+};
+
+// log and log10 on subnormal and normal arguments, including the exponent-0 path near 1.
+constexpr LogPin kLogPins[] = {
+    {5e-324, -744.4400719213812, -323.3062153431158},
+    {1e-310, -713.8013788281542, -310.0},
+    {0.5, -0.6931471805599453, -0.3010299956639812},
+    {0.75, -0.2876820724517809, -0.12493873660829995},
+    {1.0, 0.0, 0.0},
+    {1.3, 0.26236426446749106, 0.11394335230683679},
+    {2.0, 0.6931471805599453, 0.3010299956639812},
+    {1e+300, 690.7755278982137, 300.0},
+};
+
+struct PowPin {
+  double x;
+  double y;
+  double pow;
+};
+
+// pow on exact powers of two and ten, a near-1 base with a large exponent, a negative base and tiny exponents.
+constexpr PowPin kPowPins[] = {
+    {2.0, 0.5, 1.4142135623730951},
+    {10.0, -5.0, 1e-05},
+    {10.0, 22.0, 1e+22},
+    {10.0, -308.0, 1e-308},
+    {1.0001, 100000.0, 22015.456048527954},
+    {-2.0, 3.0, -8.0},
+    {0.5, -1074.0, std::numeric_limits<double>::infinity()},
+    {2.5, 1e-70, 1.0},
+    {7.0, 0.3333333333333333, 1.912931182772389},
+    {1e-300, -1.5, std::numeric_limits<double>::infinity()},
+};
+
+TEST(ElementaryExpLog, MatchesPinnedValues) {
+  for (const ExpPin& p : kExpPins) {
+    EXPECT_EQ(elementary::exp(p.x), p.exp) << p.x;
+  }
+  for (const LogPin& p : kLogPins) {
+    EXPECT_EQ(elementary::log(p.x), p.log) << p.x;
+    EXPECT_EQ(elementary::log10(p.x), p.log10) << p.x;
+  }
+  for (const PowPin& p : kPowPins) {
+    EXPECT_EQ(elementary::pow(p.x, p.y), p.pow) << p.x << "^" << p.y;
+  }
+}
+
+// log10 arguments whose result moves by one ulp when the kernel's multiply-adds are contracted.
+struct Log10Pin {
+  double x;
+  double log10;
+};
+
+constexpr Log10Pin kLog10ContractionPins[] = {
+    {689.875, 2.83877040707332},   {518.203, 2.7144999228907833}, {34.6829, 1.5401154037217513},
+    {402.459, 2.6047216437580167}, {8.7077, 0.9399034581976156},  {276.38, 2.4415066124941145},
+    {17.2043, 1.2356370069585836},
+};
+
+TEST(ElementaryExpLog, Log10IsNotContracted) {
+  for (const Log10Pin& p : kLog10ContractionPins) {
+    EXPECT_EQ(elementary::log10(p.x), p.log10) << p.x;
+  }
+}
+
+TEST(ElementaryExpLog, SpecialArguments) {
+  EXPECT_EQ(elementary::log(0.0), -std::numeric_limits<double>::infinity());
+  EXPECT_TRUE(std::isnan(elementary::log(-1.0)));
+  EXPECT_EQ(elementary::exp(-1000.0), 0.0);
+  EXPECT_EQ(elementary::exp(1000.0), std::numeric_limits<double>::infinity());
+  EXPECT_TRUE(std::isnan(elementary::pow(-8.0, 1.0 / 3.0)));
+  EXPECT_EQ(elementary::pow(0.0, -1.0), std::numeric_limits<double>::infinity());
+  EXPECT_EQ(elementary::pow(-0.0, -3.0), -std::numeric_limits<double>::infinity());
+  EXPECT_EQ(elementary::pow(1.0, std::numeric_limits<double>::quiet_NaN()), 1.0);
+}
+
 }  // namespace
 }  // namespace formulon
