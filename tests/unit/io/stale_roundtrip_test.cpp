@@ -21,6 +21,7 @@
 #include "eval/dep_graph.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
+#include "eval/scheduler.h"
 #include "excel_profile.h"
 #include "gtest/gtest.h"
 #include "io/ooxml/zip_part_writer.h"
@@ -699,6 +700,111 @@ TEST(StaleRoundtrip, RetargetingANameAfterLoadInvalidatesTheArrayBlocks) {
     EXPECT_EQ(Number(manual, sheet, 5U, 0U), 6.0);
     EXPECT_EQ(Number(manual, sheet, 6U, 0U), 0.0);
   }
+}
+
+namespace {
+
+// A1 = 1; B1 = A1+1 cached 99; C1 = "a"&" " cached "a".
+constexpr std::string_view kStaleCacheRow =
+    "<row r=\"1\"><c r=\"A1\"><v>1</v></c><c r=\"B1\"><f>A1+1</f><v>99</v></c>"
+    "<c r=\"C1\" t=\"str\"><f>\"a\"&amp;\" \"</f><v>a</v></c></row>";
+
+// Whether B1 or C1 of the stale-cache book awaits a recalc.
+bool AwaitsRecalc(const Workbook& wb) {
+  return wb.recalc_engine().awaits_recalc(Node(0, 0, 1)) || wb.recalc_engine().awaits_recalc(Node(0, 0, 2));
+}
+
+std::string Text(const Workbook& wb, std::uint32_t row, std::uint32_t col) {
+  const Value v = wb.sheet(0).resolve_cell_value(row, col);
+  EXPECT_TRUE(v.is_text()) << "row " << row << " col " << col;
+  return v.is_text() ? std::string(v.as_text()) : std::string();
+}
+
+}  // namespace
+
+// A book that opens with its cache keeps a stale number and a stale text until a full recalculation.
+TEST(StaleRoundtrip, FullRecalcRecomputesTheCachedValuesABookOpensWith) {
+  for (const char* calc_pr : {"calcId=\"191029\"", "calcId=\"191029\" calcMode=\"manual\""}) {
+    SCOPED_TRACE(calc_pr);
+    Workbook wb = Load(Package(calc_pr, kStaleCacheRow));
+    EXPECT_FALSE(wb.opens_with_recalc());
+    EXPECT_FALSE(AwaitsRecalc(wb));
+    ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+    EXPECT_EQ(Number(wb, 0, 0, 1), 99.0);
+    EXPECT_EQ(Text(wb, 0, 2), "a");
+
+    auto stats = wb.recalc_full(eval::default_registry());
+    ASSERT_TRUE(static_cast<bool>(stats));
+    EXPECT_EQ(stats.value().cells_evaluated, 2U);
+    EXPECT_EQ(Number(wb, 0, 0, 1), 2.0);
+    EXPECT_EQ(Text(wb, 0, 2), "a ");
+    EXPECT_FALSE(AwaitsRecalc(wb));
+  }
+}
+
+// fullCalcOnLoad makes the same book open dirty, so a plain recalc computes it.
+TEST(StaleRoundtrip, FullCalcOnLoadBookIsComputedByAPlainRecalc) {
+  Workbook wb = Load(Package("calcId=\"191029\" fullCalcOnLoad=\"1\"", kStaleCacheRow));
+  EXPECT_TRUE(wb.opens_with_recalc());
+  EXPECT_TRUE(AwaitsRecalc(wb));
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  EXPECT_EQ(Number(wb, 0, 0, 1), 2.0);
+  EXPECT_EQ(Text(wb, 0, 2), "a ");
+}
+
+// The parallel full recalculation computes the same values and counts the same cells.
+TEST(StaleRoundtrip, ParallelFullRecalcMatchesTheSerialOne) {
+  for (const std::uint32_t threads : {1U, 4U}) {
+    SCOPED_TRACE(threads);
+    Workbook wb = Load(Package("calcId=\"191029\"", kStaleCacheRow));
+    eval::SchedulerConfig config;
+    config.num_threads = threads;
+    eval::SchedulerStats stats;
+    ASSERT_TRUE(static_cast<bool>(wb.recalc_full_parallel(eval::default_registry(), config, &stats)));
+    EXPECT_EQ(stats.cells_evaluated, 2U);
+    EXPECT_EQ(Number(wb, 0, 0, 1), 2.0);
+    EXPECT_EQ(Text(wb, 0, 2), "a ");
+    EXPECT_FALSE(AwaitsRecalc(wb));
+  }
+}
+
+// Called from inside a recalc on the same thread, both forms are refused without waiting on the engine.
+TEST(StaleRoundtrip, FullRecalcFromInsideARecalcIsRefused) {
+  // A1 = B1+1, B1 = A1/2 runs the iterative solver, whose progress callback re-enters.
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=B1+1")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=A1/2")));
+  IterativeOptions options;
+  options.enabled = true;
+  options.max_iterations = 2U;
+  wb.set_iterative_options(options);
+  struct Probe {
+    Workbook* wb = nullptr;
+    bool called = false;
+    FormulonErrorCode serial = FormulonErrorCode::kOk;
+    FormulonErrorCode parallel = FormulonErrorCode::kOk;
+  } probe;
+  probe.wb = &wb;
+  wb.set_iterative_progress(
+      [](std::uint32_t, double, std::uint32_t, void* data) {
+        auto& p = *static_cast<Probe*>(data);
+        if (p.called) {
+          return true;
+        }
+        p.called = true;
+        auto serial = p.wb->recalc_full(eval::default_registry());
+        p.serial = serial ? FormulonErrorCode::kOk : serial.error().code;
+        auto parallel = p.wb->recalc_full_parallel(eval::default_registry(), eval::SchedulerConfig{}, nullptr);
+        p.parallel = parallel ? FormulonErrorCode::kOk : parallel.error().code;
+        return true;
+      },
+      &probe);
+  const auto outer = wb.recalc(eval::default_registry());
+  wb.set_iterative_progress(nullptr, nullptr);
+  ASSERT_TRUE(static_cast<bool>(outer));
+  ASSERT_TRUE(probe.called);
+  EXPECT_EQ(probe.serial, FormulonErrorCode::kGraphRecalcReentrant);
+  EXPECT_EQ(probe.parallel, FormulonErrorCode::kGraphRecalcReentrant);
 }
 
 }  // namespace formulon

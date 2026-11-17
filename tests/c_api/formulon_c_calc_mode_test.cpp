@@ -6,10 +6,13 @@
 
 #include <cstdint>
 #include <limits>
+#include <string>
+#include <vector>
 
 #include "c_api/formulon_c.h"
 #include "formulon_c_setters.h"
 #include "gtest/gtest.h"
+#include "support/ooxml_package_fixture.h"
 #include "utils/error.h"
 
 namespace {
@@ -294,4 +297,135 @@ TEST(FormulonCApiCalcMode, AutoModeOmitsCalcPrFromOoxml) {
   int32_t mode = FM_CALC_MODE_MANUAL;  // poison
   ASSERT_EQ(fm_workbook_get_calc_mode(wb2.handle, &mode), 0);
   EXPECT_EQ(mode, FM_CALC_MODE_AUTO);
+}
+
+namespace {
+
+constexpr fm_status_t kNullPointer = static_cast<fm_status_t>(formulon::FormulonErrorCode::kBindingNullPointer);
+constexpr fm_status_t kReentrant = static_cast<fm_status_t>(formulon::FormulonErrorCode::kGraphRecalcReentrant);
+constexpr fm_status_t kResourceLimit = static_cast<fm_status_t>(formulon::FormulonErrorCode::kSecurityResourceLimit);
+
+// A1 = 1, B1 = A1+1 caching 99 and C1 = "a"&" " caching "a", in an automatic workbook with the current calcId
+// (`full_calc_on_load` adds fullCalcOnLoad).
+void LoadStaleCacheBook(WorkbookGuard* out, bool full_calc_on_load = false) {
+  const std::string calc_pr =
+      full_calc_on_load ? "<calcPr calcId=\"191029\" fullCalcOnLoad=\"1\"/>" : "<calcPr calcId=\"191029\"/>";
+  std::string workbook(formulon::test::kOneSheetWorkbookXml);
+  workbook.insert(workbook.find("</workbook>"), calc_pr);
+  const std::string sheet =
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData><row r=\"1\">"
+      "<c r=\"A1\"><v>1</v></c><c r=\"B1\"><f>A1+1</f><v>99</v></c>"
+      "<c r=\"C1\" t=\"str\"><f>\"a\"&amp;\" \"</f><v>a</v></c></row></sheetData></worksheet>";
+  const std::vector<std::uint8_t> package =
+      formulon::test::BuildOoxmlPackage(formulon::test::OoxmlContentTypes(formulon::test::kXlsxWorkbookContentType),
+                                        sheet, workbook, formulon::test::kOneSheetWorkbookRels);
+  ASSERT_EQ(fm_workbook_load(package.data(), package.size(), nullptr, &out->handle), 0);
+}
+
+int32_t HasDirty(const fm_workbook_t* wb) {
+  int32_t dirty = -1;
+  EXPECT_EQ(fm_workbook_has_dirty_cells(wb, &dirty), 0);
+  return dirty;
+}
+
+double NumberAt(const fm_workbook_t* wb, uint32_t col) {
+  fm_value_t v{};
+  EXPECT_EQ(fm_sheet_get_value(wb, 0, 0, col, &v), 0);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
+  return v.kind == FM_VALUE_KIND_NUMBER ? v.u.number : -1.0;
+}
+
+std::string TextAt(const fm_workbook_t* wb, uint32_t col) {
+  fm_value_t v{};
+  EXPECT_EQ(fm_sheet_get_value(wb, 0, 0, col, &v), 0);
+  EXPECT_EQ(v.kind, FM_VALUE_KIND_TEXT);
+  return v.kind == FM_VALUE_KIND_TEXT && v.u.text != nullptr ? std::string(v.u.text) : std::string();
+}
+
+}  // namespace
+
+TEST(FormulonCApiCalcMode, FullRecalcRecomputesTheValuesABookOpensWith) {
+  for (const int32_t mode : {FM_CALC_MODE_AUTO, FM_CALC_MODE_MANUAL}) {
+    SCOPED_TRACE(mode);
+    WorkbookGuard wb;
+    LoadStaleCacheBook(&wb);
+    ASSERT_EQ(fm_workbook_set_calc_mode(wb.handle, mode), 0);
+    EXPECT_EQ(HasDirty(wb.handle), 0);
+    EXPECT_EQ(NumberAt(wb.handle, 1), 99.0);
+    EXPECT_EQ(TextAt(wb.handle, 2), "a");
+    ASSERT_EQ(fm_workbook_recalc_full(wb.handle), 0);
+    EXPECT_EQ(NumberAt(wb.handle, 1), 2.0);
+    EXPECT_EQ(TextAt(wb.handle, 2), "a ");
+    EXPECT_EQ(HasDirty(wb.handle), 0);
+  }
+}
+
+TEST(FormulonCApiCalcMode, FullCalcOnLoadBookOpensDirty) {
+  WorkbookGuard wb;
+  LoadStaleCacheBook(&wb, true);
+  EXPECT_EQ(HasDirty(wb.handle), 1);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  EXPECT_EQ(NumberAt(wb.handle, 1), 2.0);
+  EXPECT_EQ(TextAt(wb.handle, 2), "a ");
+}
+
+TEST(FormulonCApiCalcMode, ParallelFullRecalcReportsTheCellsItComputed) {
+  WorkbookGuard wb;
+  LoadStaleCacheBook(&wb);
+  fm_parallel_recalc_stats_info_t stats = FM_STRUCT_INIT(fm_parallel_recalc_stats_info_t);
+  ASSERT_EQ(fm_workbook_recalc_full_parallel(wb.handle, 1U, &stats), 0) << fm_get_last_error_message();
+  EXPECT_EQ(stats.cells_evaluated, 2U);
+  EXPECT_EQ(NumberAt(wb.handle, 1), 2.0);
+  EXPECT_EQ(TextAt(wb.handle, 2), "a ");
+  EXPECT_EQ(fm_workbook_recalc_full_parallel(wb.handle, 4U, nullptr), 0);
+}
+
+TEST(FormulonCApiCalcMode, FullRecalcRefusalsMarkNothingDirty) {
+  EXPECT_EQ(fm_workbook_recalc_full(nullptr), kNullPointer);
+  WorkbookGuard wb;
+  LoadStaleCacheBook(&wb);
+  const fm_parallel_recalc_stats_info_t poison = {sizeof(fm_parallel_recalc_stats_info_t), 1U, 2U, 3U, 4U, 5U, 6U, 7U};
+  fm_parallel_recalc_stats_info_t stats = poison;
+  EXPECT_EQ(fm_workbook_recalc_full_parallel(nullptr, 1U, &stats), kNullPointer);
+  EXPECT_EQ(stats.cells_evaluated, 0U);
+  stats = poison;
+  EXPECT_EQ(fm_workbook_recalc_full_parallel(wb.handle, 9U, &stats), kResourceLimit);
+  EXPECT_EQ(stats.cells_evaluated, 0U);
+  stats = poison;
+  stats.struct_size = 4U;
+  EXPECT_EQ(fm_workbook_recalc_full_parallel(wb.handle, 1U, &stats), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(HasDirty(wb.handle), 0);
+  EXPECT_EQ(NumberAt(wb.handle, 1), 99.0);
+}
+
+TEST(FormulonCApiCalcMode, FullRecalcFromAProgressCallbackIsReentrant) {
+  struct Probe {
+    fm_workbook_t* wb = nullptr;
+    bool called = false;
+    fm_status_t serial = 0;
+    fm_status_t parallel = 0;
+  } probe;
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=B1+1"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 1, "=A1/2"), 0);
+  ASSERT_EQ(SetIterative(wb.handle, 1, 2, -1.0), 0);
+  probe.wb = wb.handle;
+  ASSERT_EQ(fm_workbook_set_iterative_progress(
+                wb.handle,
+                [](uint32_t, double, uint32_t, void* data) -> int32_t {
+                  auto& p = *static_cast<Probe*>(data);
+                  if (!p.called) {
+                    p.called = true;
+                    p.serial = fm_workbook_recalc_full(p.wb);
+                    p.parallel = fm_workbook_recalc_full_parallel(p.wb, 1U, nullptr);
+                  }
+                  return 1;
+                },
+                &probe),
+            0);
+  EXPECT_EQ(fm_workbook_recalc(wb.handle), 0);
+  ASSERT_TRUE(probe.called);
+  EXPECT_EQ(probe.serial, kReentrant);
+  EXPECT_EQ(probe.parallel, kReentrant);
 }

@@ -180,11 +180,15 @@ class JsWorkbook {
   // ---- Recalc / calc mode ------------------------------------------------
 
   void recalc();
+  /// `fm_workbook_recalc_full`: recomputes every formula, dirty or not.
+  void recalcFull();
   /// Takes the raw JS argument so the binding can reject non-numeric,
   /// fractional, non-finite, and out-of-range values before embind's normal
   /// integer coercion would silently change them.
   JsParallelRecalcStats recalcParallel(emscripten::val threadCount);
-  /// True when a change has not been applied by a full recalc yet. See
+  /// `fm_workbook_recalc_full_parallel`; takes `threadCount` as `recalcParallel` does.
+  JsParallelRecalcStats recalcFullParallel(emscripten::val threadCount);
+  /// True when a change has not been applied by a recalc yet. See
   /// `fm_workbook_has_dirty_cells`.
   bool hasDirtyCells() const;
   /// Applies `patch` (`{ enabled?, maxIterations?, maxChange? }`); an omitted

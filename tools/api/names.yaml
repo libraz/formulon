@@ -5683,6 +5683,22 @@ entries:
     params: { thread_count: { default: 0 } }
     surfaces: [c, wasm, native]
     was: { c: fm_workbook_recalc_parallel, js: recalcParallel }
+  full.recalc:
+    kind: op
+    scope: workbook
+    noun: full
+    c: fm_workbook_recalc_full
+    js: recalcFull
+    py: recalc_full
+    surfaces: [c, wasm, native, py]
+  full_parallel.recalc:
+    kind: op
+    scope: workbook
+    noun: full_parallel
+    c: fm_workbook_recalc_full_parallel
+    js: recalcFullParallel
+    params: { thread_count: { default: 0 } }
+    surfaces: [c, wasm, native]
   iterative.set:
     kind: op
     scope: workbook

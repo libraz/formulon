@@ -7056,8 +7056,11 @@ export type ProtectedRangeRef = number | string;
  *  Under `CalcMode.Auto` (the default) a value read or a save first computes the cells a change left dirty,
  *  so a read after a write sees the new value without a `recalc()`. Such a read may run the iterative-progress
  *  callback and fail with a recalculation status (4000-4006). Under `CalcMode.Manual` a read returns the
- *  values as of the last recalc; call `setCalcMode(CalcMode.Manual)` right after `load` to read the cached
- *  values a file carries. `hasDirtyCells()` tells whether any cell is dirty.
+ *  values as of the last recalc. A workbook loads with every formula dirty only when Excel would recalculate it on
+ *  open; any other opens with its stored values, apart from the formulas the file marks for recalculation and those
+ *  without a cached value. Call `setCalcMode(CalcMode.Manual)` right after `load` to read the cached values a file
+ *  that loads dirty carries. `hasDirtyCells()` tells whether any cell is dirty, and `recalcFull()` recomputes every
+ *  formula.
  *
  *  The XF-level style tables and the XML passthrough parts are reached through `ooxml`; the named styles are on
  *  the workbook itself.
@@ -7171,7 +7174,7 @@ export interface Workbook {
 
   /** Computes every dirty cell now, serially on the caller thread, whatever the calc mode. Under
    *  `CalcMode.Auto` a read does this on its own; call it to choose when the work happens, or under
-   *  `CalcMode.Manual`.
+   *  `CalcMode.Manual`. See `recalcFull()` to recompute every formula.
    *
    *  When an installed `IterativeProgressCallback` throws, the pass stops and this call rethrows
    *  that same exception.
@@ -7184,6 +7187,13 @@ export interface Workbook {
    *  const total = ws.getValue('B1');
    *  ``` */
   recalc(): void;
+  /** Computes every formula in every sheet now, serially on the caller thread, whether or not it is dirty
+   *  (Excel's "calculate full"), under any calc mode. `recalc()` computes only the dirty cells, and a workbook
+   *  saved under the current Excel calculation engine opens with its stored values; call this to compute
+   *  all of them afresh. Data tables follow the calc mode as in `recalc()`: under `CalcMode.AutoNoTable` call
+   *  `recalcDataTables()` for them. A call that throws leaves every formula dirty. When an installed
+   *  `IterativeProgressCallback` throws, the pass stops and this call rethrows that same exception. */
+  recalcFull(): void;
   /**
    * Recalculates all dirty cells using the parallel SCC scheduler and returns
    * per-call telemetry. This call is synchronous: it returns after all
@@ -7201,12 +7211,29 @@ export interface Workbook {
    * serially with `workerThreadsStarted` at 0.
    */
   recalcParallel(threadCount?: number): ParallelRecalcStats;
-  /** `true` while any cell is dirty: a change (a cell, a defined name, the profile, the file name, a row or column
+  /**
+   * As `recalcFull()`, scheduled as `recalcParallel`: recalculates every formula whether or not it is dirty and
+   * returns per-call telemetry. This call is synchronous: it returns after all workers have joined.
+   * `threadCount` is optional (0 = automatic, capped at 8); a non-number is `TypeError`, a fractional or
+   * non-finite number `RangeError`, a negative number `StatusCode.InvalidArgument`, one above 8
+   * `StatusCode.SecurityResourceLimit`; a call refused for its `threadCount` marks nothing dirty.
+   * The 64-bit counters in `stats` are JavaScript numbers and are exact
+   * through `Number.MAX_SAFE_INTEGER` (2^53 - 1).
+   * As with `recalc`, an exception thrown by an `IterativeProgressCallback` is
+   * rethrown from this call.
+   * Only `@libraz/formulon/threads` starts workers. The default
+   * `@libraz/formulon` build has no pthreads, so the same pass runs
+   * serially with `workerThreadsStarted` at 0.
+   */
+  recalcFullParallel(threadCount?: number): ParallelRecalcStats;
+  /** `true` while any cell is dirty: a change (a cell, a defined name, the profile, a row or column
    *  insert / delete, a sheet removal) has left its value uncomputed, until a read under `CalcMode.Auto` or
-   *  `recalc` / `recalcParallel` computes it. Volatile formulas do not count, and neither does a freshly created
-   *  workbook. Under manual calculation a loaded workbook holds dirty only the formulas its file marks for
-   *  recalculation and those without a cached value; under automatic calculation, every formula until the first
-   *  recalc. `recalcViewport` does not clear it, and a recalc that throws leaves it set. */
+   *  a recalc (`recalc`, `recalcParallel`, `recalcFull`, `recalcFullParallel`) computes it. Volatile formulas do
+   *  not count, and neither does a freshly created workbook. A loaded workbook holds every formula dirty when Excel
+   *  would recalculate it on open (the file sets `<calcPr fullCalcOnLoad>`, or does not carry the current calculation
+   *  engine's `<calcPr calcId>`, and the calculation mode is not manual); otherwise it holds dirty only the formulas its
+   *  file marks for recalculation and those without a cached value. `recalcViewport`
+   *  does not clear it, and a recalc that throws leaves it set. */
   hasDirtyCells(): boolean;
 
   /** Updates the iterative-calculation settings; an omitted key keeps its value. When disabled (the default) cyclic
@@ -9431,9 +9458,11 @@ export interface WorkbookCtor {
    *  the `StatusCode.Io*` codes (`StatusCode.IoZipCorrupt` for bytes that are not a ZIP archive), and a
    *  value that is not a `Uint8Array`, an `ArrayBuffer` or an `ArrayBufferView` (a string, `null`) throws
    *  `TypeError`, as does every other method that takes bytes; read a `Blob` with
-   *  `await blob.arrayBuffer()`. The formulas load dirty, so under `CalcMode.Auto` the first value read or
-   *  save recomputes the workbook; to read the cached values the file carries, call
-   *  `setCalcMode(CalcMode.Manual)` first (and `setCalcOnSave(false)` to save them unchanged).
+   *  `await blob.arrayBuffer()`. A workbook that is not manual-calculation and either sets `<calcPr fullCalcOnLoad>` or
+   *  does not carry the current calculation engine's `<calcPr calcId>` loads with every formula dirty, so under
+   *  `CalcMode.Auto` the first value read or save computes them. Any other workbook (an automatic one with the
+   *  current `<calcPr calcId>`, or a manual one) opens with its stored values; only the formulas the file marks for
+   *  recalculation and those without a cached value are dirty. `recalcFull()` recomputes every formula.
    *
    *  `options.profileId` gives the workbook an Excel profile as part of the load. Calling `setProfileId` after the
    *  load would make every formula dirty, whereas the profile of the load leaves the dirty set of a

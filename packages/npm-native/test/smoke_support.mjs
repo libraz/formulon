@@ -1,4 +1,4 @@
-// Shared staged-module loader and ZIP helper for the native smoke-test topics.
+// Shared staged-module loader and ZIP helpers for the native smoke-test topics.
 
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
@@ -100,9 +100,61 @@ function appendEmptyZipEntry(bytes, name) {
   return Uint8Array.from(out);
 }
 
+const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k += 1) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  return c >>> 0;
+});
+
+function crc32(bytes) {
+  let c = 0xffffffff;
+  for (const b of bytes) c = CRC_TABLE[(c ^ b) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+// A stored (uncompressed) ZIP archive of `parts`, each `[name, text]`.
+function zipStore(parts) {
+  const encoder = new TextEncoder();
+  const out = [];
+  const central = [];
+  const u16 = (to, v) => to.push(v & 0xff, (v >>> 8) & 0xff);
+  const u32 = (to, v) => to.push(v & 0xff, (v >>> 8) & 0xff, (v >>> 16) & 0xff, (v >>> 24) & 0xff);
+  for (const [name, text] of parts) {
+    const encodedName = encoder.encode(name);
+    const body = encoder.encode(text);
+    const crc = crc32(body);
+    const offset = out.length;
+    u32(out, 0x04034b50);
+    for (const v of [20, 0, 0, 0, 0]) u16(out, v);
+    u32(out, crc);
+    u32(out, body.length);
+    u32(out, body.length);
+    u16(out, encodedName.length);
+    u16(out, 0);
+    out.push(...encodedName, ...body);
+    u32(central, 0x02014b50);
+    for (const v of [20, 20, 0, 0, 0, 0]) u16(central, v);
+    u32(central, crc);
+    u32(central, body.length);
+    u32(central, body.length);
+    for (const v of [encodedName.length, 0, 0, 0, 0]) u16(central, v);
+    u32(central, 0);
+    u32(central, offset);
+    central.push(...encodedName);
+  }
+  const centralOffset = out.length;
+  out.push(...central);
+  u32(out, 0x06054b50);
+  for (const v of [0, 0, parts.length, parts.length]) u16(out, v);
+  u32(out, central.length);
+  u32(out, centralOffset);
+  u16(out, 0);
+  return Uint8Array.from(out);
+}
+
 // Predicate for `assert.throws`: a host failure, optionally with a given code.
 function isFormulonError(error, code) {
   return error?.name === 'FormulonError' && (code === undefined || error.code === code);
 }
 
-export { appendEmptyZipEntry, assert, getModule, isFormulonError, loadStagedModule, path, pkgRoot, readFile };
+export { appendEmptyZipEntry, assert, getModule, isFormulonError, loadStagedModule, path, pkgRoot, readFile, zipStore };

@@ -169,20 +169,23 @@ test('byte inputs accept Uint8Array, ArrayBuffer and views, and refuse anything 
   });
 });
 
-test('recalcParallel: threadCount is optional, a non-number is TypeError, a fraction or non-finite RangeError, a negative InvalidArgument, above 8 SecurityResourceLimit', async () => {
+test('recalcParallel and recalcFullParallel: threadCount is optional, a non-number is TypeError, a fraction or non-finite RangeError, a negative InvalidArgument, above 8 SecurityResourceLimit', async () => {
   await withWorkbook((wb, { StatusCode }) => {
-    assert.equal(typeof wb.recalcParallel(), 'object');
-    assert.equal(typeof wb.recalcParallel(undefined), 'object');
-    assert.equal(typeof wb.recalcParallel(0), 'object');
-    assert.equal(typeof wb.recalcParallel(8), 'object');
-    for (const bad of [1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
-      assert.throws(() => wb.recalcParallel(bad), RangeError, String(bad));
+    for (const method of ['recalcParallel', 'recalcFullParallel']) {
+      const run = (...args) => wb[method](...args);
+      assert.equal(typeof run(), 'object');
+      assert.equal(typeof run(undefined), 'object');
+      assert.equal(typeof run(0), 'object');
+      assert.equal(typeof run(8), 'object');
+      for (const bad of [1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]) {
+        assert.throws(() => run(bad), RangeError, `${method} ${String(bad)}`);
+      }
+      for (const bad of ['2', null, true, {}]) {
+        assert.throws(() => run(bad), TypeError, `${method} ${String(bad)}`);
+      }
+      rejectsWith(() => run(-1), StatusCode.InvalidArgument, `${method} negative`);
+      rejectsWith(() => run(9), StatusCode.SecurityResourceLimit, `${method} above the cap`);
     }
-    for (const bad of ['2', null, true, {}]) {
-      assert.throws(() => wb.recalcParallel(bad), TypeError, String(bad));
-    }
-    rejectsWith(() => wb.recalcParallel(-1), StatusCode.InvalidArgument, 'negative');
-    rejectsWith(() => wb.recalcParallel(9), StatusCode.SecurityResourceLimit, 'above the cap');
   });
 });
 
@@ -198,6 +201,7 @@ test('an engine ceiling fails with SecurityResourceLimit and a part, requested a
     ceiling(() => wb.sheet(0).getValues(wide), 'values_range', 2049 * 2048, 4194304);
     ceiling(() => wb.sheet(0).getTypedValues(wide), 'values_range', 2049 * 2048, 4194304);
     ceiling(() => wb.recalcParallel(9), 'threads', 9, 8);
+    ceiling(() => wb.recalcFullParallel(9), 'threads', 9, 8);
     const sheetPr = `<sheetPr>${'x'.repeat(9000)}</sheetPr>`;
     ceiling(() => wb.sheet(0).ooxml.setSheetPrXml(sheetPr), 'sheet_pr_xml', sheetPr.length, 8192);
   });

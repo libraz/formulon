@@ -418,9 +418,9 @@ int run_dump(const ArgList& args, std::ostream& out, std::ostream& err) {
     scope.range = ref.rect;
   }
 
-  // The values view runs a recalc so cached values reflect the
-  // post-load state. The formulas and metadata views deliberately
-  // skip recalc to keep the dump cheap and side-effect-free.
+  // The values view shows what the file stores plus whatever the load left
+  // dirty, as Excel shows on open. The formulas and metadata views skip the
+  // recalc to keep the dump cheap and side-effect-free.
   if (mode == DumpMode::kValues) {
     if (auto rc = fm_workbook_recalc(wb.handle); rc != 0) {
       return fail_with_last_error(err, "dump", rc);

@@ -564,6 +564,9 @@ export function workbookSurface(): void {
   void wb.listExternalLinks()[0].index;
   void [toNative, mergeFunctionMetadata];
   wb.recalcParallel();
+  wb.recalcFull();
+  wb.recalcFullParallel();
+  wb.recalcFullParallel(2);
   sheet.getPrecedents('A1');
   sheet.evaluateCfRange('A1:B9');
   const id: ProfileId = wb.getProfileId();

@@ -50,7 +50,7 @@ int32_t FormatArg(const Napi::CallbackInfo& info) {
 // Reads `threadCount`: a non-number is a TypeError, a fractional, non-finite
 // or too-large number a RangeError and a negative integer InvalidArgument.
 // The C ABI rejects a count past its scheduler limit.
-bool ReadThreadCount(const Napi::CallbackInfo& info, uint32_t& thread_count) {
+bool ReadThreadCount(const Napi::CallbackInfo& info, const char* method, uint32_t& thread_count) {
   const Napi::Value value = info[0];
   if (!value.IsNumber()) {
     ThrowArgumentTypeError(info.Env(), "threadCount", "must be a number");
@@ -58,7 +58,7 @@ bool ReadThreadCount(const Napi::CallbackInfo& info, uint32_t& thread_count) {
   }
   const double number = NumberValue(value, 0.0);
   if (!std::isfinite(number) || std::trunc(number) != number || number < 0.0 || number > kUint32MaxNumber) {
-    ThrowIntegerRefusal(info.Env(), "Workbook.recalcParallel", "threadCount", number, 0.0);
+    ThrowIntegerRefusal(info.Env(), method, "threadCount", number, 0.0);
     return false;
   }
   thread_count = static_cast<uint32_t>(number);
@@ -303,41 +303,59 @@ Napi::Value Workbook::SetLocation(const Napi::CallbackInfo& info) {
 
 // ---- Recalc + save --------------------------------------------------
 
-Napi::Value Workbook::Recalc(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::RunRecalc(const Napi::CallbackInfo& info, fm_status_t (*recalc)(fm_workbook_t*)) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
-  const fm_status_t rc = fm_workbook_recalc(handle_);
+  const fm_status_t rc = recalc(handle_);
   // Raise the failure before the memory query below clears the thread-local
   // diagnostics. An exception the progress callback raised stays pending,
   // and that exception is what the caller sees.
   const Napi::Value result = ValueOrThrow(env, rc, env.Undefined());
-  // A full recalc is the coarsest boundary the binding has and the one
-  // after which the footprint has most likely moved (spilled arrays,
-  // newly cached text), so the external-memory figure is refreshed here
-  // rather than on every cell write.
+  // A recalc is the coarsest boundary the binding has and the one after
+  // which the footprint has most likely moved (spilled arrays, newly cached
+  // text), so the external-memory figure is refreshed here rather than on
+  // every cell write.
   SyncExternalMemory(env);
   return result;
 }
 
-Napi::Value Workbook::RecalcParallel(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::RunParallelRecalc(const Napi::CallbackInfo& info, const char* method,
+                                        fm_status_t (*recalc)(fm_workbook_t*, uint32_t,
+                                                              fm_parallel_recalc_stats_info_t*)) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);
   }
   uint32_t thread_count = 0;
-  if (!ReadThreadCount(info, thread_count)) {
+  if (!ReadThreadCount(info, method, thread_count)) {
     return env.Undefined();
   }
   fm_parallel_recalc_stats_info_t stats = FM_STRUCT_INIT(fm_parallel_recalc_stats_info_t);
-  const fm_status_t rc = fm_workbook_recalc_parallel(handle_, thread_count, &stats);
+  const fm_status_t rc = recalc(handle_, thread_count, &stats);
   const Napi::Value result =
       rc == 0 && !env.IsExceptionPending() ? Napi::Value(ParallelRecalcStatsToJs(env, stats)) : ThrowStatus(env, rc);
   // Parallel recalc can change cached values and spill geometry just like the
   // serial entry point, so keep V8's external-memory estimate in sync.
   SyncExternalMemory(env);
   return result;
+}
+
+Napi::Value Workbook::Recalc(const Napi::CallbackInfo& info) {
+  return RunRecalc(info, fm_workbook_recalc);
+}
+
+Napi::Value Workbook::RecalcFull(const Napi::CallbackInfo& info) {
+  return RunRecalc(info, fm_workbook_recalc_full);
+}
+
+Napi::Value Workbook::RecalcParallel(const Napi::CallbackInfo& info) {
+  return RunParallelRecalc(info, "Workbook.recalcParallel", fm_workbook_recalc_parallel);
+}
+
+Napi::Value Workbook::RecalcFullParallel(const Napi::CallbackInfo& info) {
+  return RunParallelRecalc(info, "Workbook.recalcFullParallel", fm_workbook_recalc_full_parallel);
 }
 
 Napi::Value Workbook::PartialRecalc(const Napi::CallbackInfo& info) {

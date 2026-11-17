@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { StatusCode } from '../../packages/npm/common.mjs';
-import { expectFailure, VAL } from './smoke_support.mjs';
+import { expectFailure, readZipEntryText, VAL, zipNames, zipStore } from './smoke_support.mjs';
 
 /** The single cell of a 1 x 1 module `evaluateFormula` result. */
 function scalar(result) {
@@ -9,7 +9,92 @@ function scalar(result) {
   return result.cells[0][0];
 }
 
+/** Replaces the one occurrence of `from` in `text`. */
+function replaceOnce(text, from, to) {
+  assert.equal(text.split(from).length, 2, from);
+  return text.replace(from, to);
+}
+
+/**
+ * A1 = 1, B1 = A1+1 and C1 = "a"&" " in an automatic workbook with the current calcId, B1 storing 99 and C1
+ * storing "a"; `fullCalcOnLoad` asks for a recalculation on open.
+ */
+function staleCacheBook(Module, fullCalcOnLoad) {
+  const wb = Module.Workbook.createDefault();
+  let bytes;
+  try {
+    wb.setNumber(0, 0, 0, 1);
+    wb.setFormula(0, 0, 1, '=A1+1');
+    wb.setFormula(0, 0, 2, '="a"&" "');
+    wb.recalc();
+    bytes = wb.save();
+  } finally {
+    wb.delete();
+  }
+  const calcPr = fullCalcOnLoad ? '<calcPr calcId="191029" fullCalcOnLoad="1"/>' : '<calcPr calcId="191029"/>';
+  const parts = zipNames(bytes).map((name) => {
+    let body = readZipEntryText(bytes, name);
+    if (name === 'xl/workbook.xml') body = replaceOnce(body, '</sheets>', `</sheets>${calcPr}`);
+    if (name === 'xl/worksheets/sheet1.xml') {
+      body = replaceOnce(
+        replaceOnce(body, '<v>2</v>', '<v>99</v>'),
+        '<v xml:space="preserve">a </v>',
+        '<v xml:space="preserve">a</v>',
+      );
+    }
+    return [name, body];
+  });
+  return Module.Workbook.load(zipStore(parts));
+}
+
 export function registerSurfaceRecalc(Module, test, threadsBuild) {
+  test('a workbook saved under the current calculation engine opens with its stored values until recalcFull', () => {
+    // 0 is automatic calculation, 1 manual.
+    for (const mode of [0, 1]) {
+      const wb = staleCacheBook(Module, false);
+      try {
+        wb.setCalcMode(mode);
+        assert.equal(wb.hasDirtyCells(), false);
+        assert.equal(wb.getValue(0, 0, 1).number, 99);
+        assert.equal(wb.getValue(0, 0, 2).text, 'a');
+        wb.recalcFull();
+        assert.equal(wb.getValue(0, 0, 1).number, 2);
+        assert.equal(wb.getValue(0, 0, 2).text, 'a ');
+        assert.equal(wb.hasDirtyCells(), false);
+      } finally {
+        wb.delete();
+      }
+    }
+    const asked = staleCacheBook(Module, true);
+    try {
+      assert.equal(asked.hasDirtyCells(), true);
+      asked.recalc();
+      assert.equal(asked.getValue(0, 0, 1).number, 2);
+      assert.equal(asked.getValue(0, 0, 2).text, 'a ');
+    } finally {
+      asked.delete();
+    }
+  });
+
+  test('Workbook.recalcFullParallel recomputes every formula and refuses before marking anything', () => {
+    const wb = staleCacheBook(Module, false);
+    try {
+      expectFailure(() => wb.recalcFullParallel(9), StatusCode.SecurityResourceLimit);
+      expectFailure(() => wb.recalcFullParallel(-1), StatusCode.InvalidArgument);
+      assert.throws(() => wb.recalcFullParallel(1.5), RangeError);
+      assert.throws(() => wb.recalcFullParallel(undefined), TypeError);
+      assert.equal(wb.hasDirtyCells(), false);
+      assert.equal(wb.getValue(0, 0, 1).number, 99);
+      const stats = wb.recalcFullParallel(1);
+      assert.equal(stats.cellsEvaluated, 2);
+      assert.equal(stats.workerThreadsStarted, 0);
+      assert.equal(wb.getValue(0, 0, 1).number, 2);
+      assert.equal(wb.getValue(0, 0, 2).text, 'a ');
+    } finally {
+      wb.delete();
+    }
+  });
+
   test('getVersion is non-empty', () => {
     const v = Module.getVersion();
     assert.equal(typeof v, 'string');

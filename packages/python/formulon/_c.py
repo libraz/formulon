@@ -994,6 +994,7 @@ _STATUS_RETURNING_EXPORT_NAMES = (
     "fm_workbook_get_diagnostics",
     "fm_workbook_has_dirty_cells",
     "fm_workbook_recalc",
+    "fm_workbook_recalc_full",
     "fm_workbook_recalc_data_tables",
     "fm_workbook_get_ref_mode",
     "fm_workbook_remove_person",

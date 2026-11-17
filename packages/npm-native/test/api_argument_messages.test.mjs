@@ -163,6 +163,18 @@ test('argument errors read Class.method param constraint', async () => {
   });
 });
 
+test('a fractional threadCount names the recalc entry it was passed to', async () => {
+  await withWorkbook((wb) => {
+    for (const method of ['recalcParallel', 'recalcFullParallel']) {
+      assert.throws(
+        () => wb[method](1.5),
+        (e) => e instanceof RangeError && e.message.startsWith(`Workbook.${method} threadCount `),
+        method,
+      );
+    }
+  });
+});
+
 test('ooxml and drawing calls name their own class', async () => {
   await withWorkbook((wb, f) => {
     const { ws, table, chart, shape, picture } = makeHandles(f, wb);

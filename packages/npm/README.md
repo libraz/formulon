@@ -149,8 +149,8 @@ A handle of a removed object throws `FormulonError` with `StatusCode.NotFound`. 
 
 | Import | Threads | Hosting requirement |
 | --- | --- | --- |
-| `@libraz/formulon` | none; `recalcParallel` runs serially | none; loads in any page, worker, Electron `file://` page, or Node |
-| `@libraz/formulon/threads` | up to 8 workers for `recalcParallel` | a browser page must be cross-origin isolated (COOP / COEP); bundlers need ES module workers |
+| `@libraz/formulon` | none; `recalcParallel` and `recalcFullParallel` run serially | none; loads in any page, worker, Electron `file://` page, or Node |
+| `@libraz/formulon/threads` | up to 8 workers for `recalcParallel` and `recalcFullParallel` | a browser page must be cross-origin isolated (COOP / COEP); bundlers need ES module workers |
 
 Bundler settings for Vite, webpack and esbuild are in [Bundler requirements](https://formulon.libraz.net/runtimes/wasm#bundler-requirements).
 

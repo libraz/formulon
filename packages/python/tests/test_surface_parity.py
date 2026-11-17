@@ -157,6 +157,7 @@ class SurfaceParityTests(unittest.TestCase):
         "get_data_table",
         "remove_data_table",
         "recalc_data_tables",
+        "recalc_full",
         "get_pinned_now",
         "set_pinned_now",
         "get_profile_id",

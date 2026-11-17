@@ -73,6 +73,18 @@ extern "C" fm_status_t fm_workbook_recalc(fm_workbook_t* wb) {
   return 0;
 }
 
+extern "C" fm_status_t fm_workbook_recalc_full(fm_workbook_t* wb) {
+  clear_last_error();
+  if (wb == nullptr) {
+    return null_argument("wb");
+  }
+  auto r = wb->workbook().recalc_full(formulon::eval::default_registry());
+  if (!r) {
+    return set_last_error(r.error());
+  }
+  return 0;
+}
+
 extern "C" fm_status_t fm_workbook_has_dirty_cells(const fm_workbook_t* wb, int32_t* out_has_dirty) {
   clear_last_error();
   if (wb == nullptr || out_has_dirty == nullptr) {
@@ -171,8 +183,11 @@ extern "C" fm_status_t fm_sheet_is_cell_stale(const fm_workbook_t* wb, std::size
   return 0;
 }
 
-extern "C" fm_status_t fm_workbook_recalc_parallel(fm_workbook_t* wb, uint32_t thread_count,
-                                                   fm_parallel_recalc_stats_info_t* out_stats) {
+namespace {
+
+// Shared body of the two parallel entry points; `full` marks every formula dirty first, after the refusals.
+fm_status_t recalc_parallel_entry(fm_workbook_t* wb, uint32_t thread_count, fm_parallel_recalc_stats_info_t* out_stats,
+                                  bool full) {
   clear_last_error();
   if (out_stats != nullptr) {
     if (auto rc = check_record_size(*out_stats); rc != 0) {
@@ -194,7 +209,8 @@ extern "C" fm_status_t fm_workbook_recalc_parallel(fm_workbook_t* wb, uint32_t t
   formulon::eval::SchedulerConfig config;
   config.num_threads = thread_count;
   formulon::eval::SchedulerStats stats;
-  auto result = wb->workbook().recalc_parallel(formulon::eval::default_registry(), config, &stats);
+  auto result = full ? wb->workbook().recalc_full_parallel(formulon::eval::default_registry(), config, &stats)
+                     : wb->workbook().recalc_parallel(formulon::eval::default_registry(), config, &stats);
   if (!result) {
     // `stats` is intentionally not copied on failure. The public contract
     // promises an all-zero output for every failed entry, including an
@@ -211,6 +227,18 @@ extern "C" fm_status_t fm_workbook_recalc_parallel(fm_workbook_t* wb, uint32_t t
     out_stats->worker_threads_used = stats.worker_threads_used;
   }
   return 0;
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_workbook_recalc_parallel(fm_workbook_t* wb, uint32_t thread_count,
+                                                   fm_parallel_recalc_stats_info_t* out_stats) {
+  return recalc_parallel_entry(wb, thread_count, out_stats, false);
+}
+
+extern "C" fm_status_t fm_workbook_recalc_full_parallel(fm_workbook_t* wb, uint32_t thread_count,
+                                                        fm_parallel_recalc_stats_info_t* out_stats) {
+  return recalc_parallel_entry(wb, thread_count, out_stats, true);
 }
 
 extern "C" fm_status_t fm_workbook_update_iterative(fm_workbook_t* wb, const fm_iterative_settings_patch_t* patch) {

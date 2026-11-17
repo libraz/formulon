@@ -28,6 +28,7 @@ import formulon
 from formulon import (
     UNCHANGED,
     AlreadyExistsError,
+    CalcMode,
     CellAddress,
     CellRect,
     ErrorCode,
@@ -627,6 +628,52 @@ class DirtyCellsTests(unittest.TestCase):
                 self.assertTrue(loaded.has_dirty_cells())
                 loaded.recalc()
                 self.assertFalse(loaded.has_dirty_cells())
+
+    @staticmethod
+    def _stale_cache_book(full_calc_on_load: bool) -> Workbook:
+        """A1 = 1, B1 = A1+1 storing 99 and C1 = "a"&" " storing "a", saved under the current calcId."""
+        with _open() as wb:
+            ws = wb.sheet(0)
+            ws.set_number(0, 0, 1.0)
+            ws.set_formula(0, 1, "=A1+1")
+            ws.set_formula(0, 2, '="a"&" "')
+            wb.recalc()
+            saved = wb.save()
+        calc_pr = '<calcPr calcId="191029"' + (' fullCalcOnLoad="1"' if full_calc_on_load else "") + "/>"
+        out = io.BytesIO()
+        with zipfile.ZipFile(io.BytesIO(saved)) as src, zipfile.ZipFile(out, "w") as dst:
+            for name in src.namelist():
+                body = src.read(name)
+                if name == "xl/workbook.xml":
+                    assert body.count(b"</sheets>") == 1
+                    body = body.replace(b"</sheets>", b"</sheets>" + calc_pr.encode())
+                if name == "xl/worksheets/sheet1.xml":
+                    assert body.count(b"<v>2</v>") == 1 and body.count(b'<v xml:space="preserve">a </v>') == 1
+                    body = body.replace(b"<v>2</v>", b"<v>99</v>").replace(
+                        b'<v xml:space="preserve">a </v>', b'<v xml:space="preserve">a</v>'
+                    )
+                dst.writestr(name, body)
+        return Workbook.load(out.getvalue())
+
+    def test_recalc_full_recomputes_the_values_a_book_opens_with(self) -> None:
+        for mode in (CalcMode.AUTO, CalcMode.MANUAL):
+            with self.subTest(mode=mode), self._stale_cache_book(False) as wb:
+                wb.set_calc_mode(mode)
+                ws = wb.sheet(0)
+                self.assertFalse(wb.has_dirty_cells())
+                self.assertEqual(ws.get_value(0, 1), 99.0)
+                self.assertEqual(ws.get_value(0, 2), "a")
+                wb.recalc_full()
+                self.assertEqual(ws.get_value(0, 1), 2.0)
+                self.assertEqual(ws.get_value(0, 2), "a ")
+                self.assertFalse(wb.has_dirty_cells())
+
+    def test_full_calc_on_load_book_opens_dirty(self) -> None:
+        with self._stale_cache_book(True) as wb:
+            self.assertTrue(wb.has_dirty_cells())
+            wb.recalc()
+            self.assertEqual(wb.sheet(0).get_value(0, 1), 2.0)
+            self.assertEqual(wb.sheet(0).get_value(0, 2), "a ")
 
     def test_edits_make_the_workbook_dirty(self) -> None:
         def formula_book() -> Workbook:

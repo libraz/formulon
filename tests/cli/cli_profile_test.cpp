@@ -102,22 +102,31 @@ TEST(FormulonCli, ProfileFlagAppliesAfterRecalcLoad) {
 }
 
 // --profile is applied at load, so a manual-calculation book keeps the file's cached values: its formula is not
-// stale, and recalculating computes nothing.
+// stale, and the values view shows what the file stores.
 TEST(FormulonCli, ProfileFlagKeepsAManualBookCached) {
   const std::string input = temp_path("profile_manual_input.xlsx");
   PathGuard input_guard(input);
   ASSERT_TRUE(write_formula_fixture(input, "=DOLLAR(1234.5)", /*manual=*/true));
-  const std::string baseline = temp_path("profile_manual_output_default.xlsx");
-  PathGuard baseline_guard(baseline);
-  const CliRun plain = run_cli({"recalc", input, "-o", baseline, "--quiet"});
-  ASSERT_EQ(plain.exit_code, 0) << plain.stderr_text;
+
+  for (const ProfileCase& profile : kProfiles) {
+    const CliRun result = run_cli({"dump", "--profile", profile.id, "--view", "values", input});
+    ASSERT_EQ(result.exit_code, 0) << profile.id << " stderr=" << result.stderr_text;
+    EXPECT_NE(result.stdout_text.find("$1,234.50"), std::string::npos) << profile.id;
+  }
+}
+
+// recalc recomputes every formula, so a manual-calculation book is computed under the profile.
+TEST(FormulonCli, ProfileFlagRecalcComputesAManualBookUnderTheProfile) {
+  const std::string input = temp_path("profile_manual_recalc_input.xlsx");
+  PathGuard input_guard(input);
+  ASSERT_TRUE(write_formula_fixture(input, "=DOLLAR(1234.5)", /*manual=*/true));
 
   for (const ProfileCase& profile : kProfiles) {
     const std::string output = temp_path(std::string("profile_manual_output_") + profile.id + ".xlsx");
     PathGuard output_guard(output);
     const CliRun result = run_cli({"recalc", "--profile", profile.id, input, "-o", output, "--quiet"});
     ASSERT_EQ(result.exit_code, 0) << profile.id << " stderr=" << result.stderr_text;
-    EXPECT_EQ(first_cell_text(output), first_cell_text(baseline)) << profile.id;
+    EXPECT_EQ(first_cell_text(output), profile.expected) << profile.id;
   }
 }
 

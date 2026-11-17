@@ -1,5 +1,45 @@
 import test from 'node:test';
-import { assert, getModule, isFormulonError } from './smoke_support.mjs';
+import { assert, getModule, isFormulonError, zipStore } from './smoke_support.mjs';
+
+const MAIN_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+const REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const PKG_REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
+
+// A1 = 1, B1 = A1+1 storing 99 and C1 = "a"&" " storing "a", in an automatic workbook with the current calcId;
+// `fullCalcOnLoad` asks for a recalculation on open.
+function staleCacheBook(mod, fullCalcOnLoad) {
+  const calcPr = fullCalcOnLoad ? '<calcPr calcId="191029" fullCalcOnLoad="1"/>' : '<calcPr calcId="191029"/>';
+  return mod.Workbook.load(
+    zipStore([
+      [
+        '[Content_Types].xml',
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+          '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+          '<Default Extension="xml" ContentType="application/xml"/>' +
+          '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+          '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+          '</Types>',
+      ],
+      [
+        '_rels/.rels',
+        `<Relationships xmlns="${PKG_REL_NS}"><Relationship Id="rId1" Type="${REL_NS}/officeDocument" Target="xl/workbook.xml"/></Relationships>`,
+      ],
+      [
+        'xl/workbook.xml',
+        `<workbook xmlns="${MAIN_NS}" xmlns:r="${REL_NS}"><sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets>${calcPr}</workbook>`,
+      ],
+      [
+        'xl/_rels/workbook.xml.rels',
+        `<Relationships xmlns="${PKG_REL_NS}"><Relationship Id="rId1" Type="${REL_NS}/worksheet" Target="worksheets/sheet1.xml"/></Relationships>`,
+      ],
+      [
+        'xl/worksheets/sheet1.xml',
+        `<worksheet xmlns="${MAIN_NS}"><sheetData><row r="1"><c r="A1"><v>1</v></c><c r="B1"><f>A1+1</f><v>99</v></c>` +
+          '<c r="C1" t="str"><f>"a"&amp;" "</f><v>a</v></c></row></sheetData></worksheet>',
+      ],
+    ]),
+  );
+}
 
 test("Workbook.createDefault + setFormula '=1+2' + recalc -> 3", async () => {
   const mod = await getModule();
@@ -128,6 +168,51 @@ test('Unicode sheet identity rejects folded duplicate and permits casing rename'
   const sn = wb.sheet(0).name;
   assert.equal(sn, 'ä');
   assert.equal(wb.sheet(1).name, 'Ö');
+  wb.dispose();
+});
+
+test('a workbook saved under the current calculation engine opens with its stored values until recalcFull', async () => {
+  const mod = await getModule();
+  for (const mode of [mod.CalcMode.Auto, mod.CalcMode.Manual]) {
+    const wb = staleCacheBook(mod, false);
+    wb.setCalcMode(mode);
+    assert.equal(wb.hasDirtyCells(), false);
+    assert.equal(wb.sheet(0).getTypedValue(0, 1).number, 99);
+    assert.equal(wb.sheet(0).getTypedValue(0, 2).text, 'a');
+    wb.recalcFull();
+    assert.equal(wb.sheet(0).getTypedValue(0, 1).number, 2);
+    assert.equal(wb.sheet(0).getTypedValue(0, 2).text, 'a ');
+    assert.equal(wb.hasDirtyCells(), false);
+    wb.dispose();
+  }
+  const asked = staleCacheBook(mod, true);
+  assert.equal(asked.hasDirtyCells(), true);
+  asked.recalc();
+  assert.equal(asked.sheet(0).getTypedValue(0, 1).number, 2);
+  assert.equal(asked.sheet(0).getTypedValue(0, 2).text, 'a ');
+  asked.dispose();
+});
+
+test('recalcFullParallel recomputes every formula and refuses before marking anything', async () => {
+  const mod = await getModule();
+  const wb = staleCacheBook(mod, false);
+  assert.throws(
+    () => wb.recalcFullParallel(9),
+    (e) => isFormulonError(e, mod.StatusCode.SecurityResourceLimit),
+  );
+  assert.throws(
+    () => wb.recalcFullParallel(-1),
+    (e) => isFormulonError(e, mod.StatusCode.InvalidArgument),
+  );
+  assert.throws(() => wb.recalcFullParallel(1.5), RangeError);
+  assert.throws(() => wb.recalcFullParallel(null), TypeError);
+  assert.equal(wb.hasDirtyCells(), false);
+  assert.equal(wb.sheet(0).getTypedValue(0, 1).number, 99);
+  const stats = wb.recalcFullParallel(1);
+  assert.equal(stats.cellsEvaluated, 2);
+  assert.equal(stats.workerThreadsStarted, 0);
+  assert.equal(wb.sheet(0).getTypedValue(0, 1).number, 2);
+  assert.equal(typeof wb.recalcFullParallel(), 'object');
   wb.dispose();
 });
 

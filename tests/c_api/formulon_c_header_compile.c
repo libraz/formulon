@@ -71,6 +71,9 @@ int main(void) {
   int version_matches = FM_CHECK_VERSION();
   fm_status_t (*parallel_recalc)(fm_workbook_t*, uint32_t, fm_parallel_recalc_stats_info_t*) =
       fm_workbook_recalc_parallel;
+  fm_status_t (*full_recalc)(fm_workbook_t*) = fm_workbook_recalc_full;
+  fm_status_t (*full_parallel_recalc)(fm_workbook_t*, uint32_t, fm_parallel_recalc_stats_info_t*) =
+      fm_workbook_recalc_full_parallel;
   fm_status_t (*save_diagnostics)(fm_workbook_t*, int32_t, uint8_t**, size_t*, fm_save_diagnostics_info_t*) =
       fm_workbook_save_with_diagnostics;
   fm_status_t (*read_diagnostics)(const fm_workbook_t*, fm_read_diagnostics_info_t*) = fm_workbook_get_diagnostics;
@@ -621,6 +624,8 @@ int main(void) {
   (void)add_styles_batch;
   (void)print_area_at;
   (void)parallel_recalc;
+  (void)full_recalc;
+  (void)full_parallel_recalc;
   (void)stats;
   (void)rule;
   (void)version_matches;

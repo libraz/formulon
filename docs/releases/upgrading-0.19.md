@@ -333,8 +333,9 @@ Read [Every binding](#every-binding) first, then the section for your binding. [
   the id or name in place of a position, `fm_sheet_get_cf_rule` is new, and
   `fm_sheet_get_protected_range` reads by name; the positional reads are
   `fm_sheet_get_cf_rule_at` and `fm_sheet_get_protected_range_at`. A rule's
-  `id` is a brace-wrapped GUID; one that is omitted, empty or already used on
-  the sheet is replaced by an upper-case one the engine generates. See
+  `id` is a brace-wrapped GUID; one that is omitted or already used on the
+  sheet is replaced by an upper-case one the engine generates, and an empty
+  one is `InvalidArgument`. See
   [C ABI changes](#c-abi-changes).
 
 ### C ABI callers
@@ -1175,7 +1176,7 @@ argument is a keyword-only argument list there (see
 | `pivotFieldSetAxis(..., axis \| -1)` | `pivot.setFieldAxis(field, axis: PivotAxis \| null)` |
 | `pivotCacheCreate(requestedId = 0)` | `addPivotCache(requestedId?: number)` (omitted picks one) |
 | `pivotFieldSetNumberFormat(..., utf8)` | `pivot.updateField(field, { numberFormat })` takes a format code |
-| `set*Xml(sheet, '')`, `setCellPhonetic(..., '')`, empty captions, custom names, number formats and style names clearing a value | pass `null`; the matching getters return `null` instead of `''` |
+| `set*Xml(sheet, '')` and style names clearing a value | pass `null`; `''` is `InvalidArgument` (see [Empty strings](#empty-strings)). These getters, and those of empty captions, custom names and number formats, return `null` instead of `''`; `setCellPhonetic(..., '')` still clears, as `null` does |
 | `setSheetPrintArea(sheet, '')` | `ws.setPrintArea(null)` and `ws.setPrintArea([])` both clear |
 | `setSheetPageSetup`, `setSheetPageMargins`, `setSheetPrintOptions`, `setSheetHeaderFooter` | `ws.updatePageSetup`, `updatePageMargins`, `updatePrintOptions`, `updateHeaderFooter`; each merges the keys of the patch |
 | `pivotGetStyleInfo`, `pivotSetStyleInfo` | `ws.pivot(p).getStyleOptions()`, `updateStyleOptions(patch)`; `Table` has the same pair |
@@ -1813,6 +1814,49 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
   with `other` clear. A Theme colour given with a `tint` reads back as its `lumMod` / `lumOff` transforms. Read the
   displayed colour from `resolved`, and the stored one from `base` and `transforms`.
 - The system and long dash presets read as their own `ChartLineDash` members instead of `Other`.
+
+### Empty strings
+
+An empty string is no longer read as "absent" on input. Where `''` is not a
+value Excel can store it is `InvalidArgument`, and `null` (Python `None`, C
+`NULL` or `FM_PATCH_OP_CLEAR`) is the absent value; elsewhere it is a literal
+value. Python 0.18 sent `""` as `None` for most fields and defaulted many of
+them to `""`, so code that relied on those defaults now fails the same way.
+Names are JavaScript; Python and C use the matching snake_case fields.
+
+| Field | `''` in 0.18 | `''` now |
+|---|---|---|
+| `setDefinedName` `formula` | removed the name | `InvalidArgument`; use `removeDefinedName` |
+| `setComment` `text` | removed the note | a note with empty text; `null` removes it |
+| `setHyperlink` `target` | an in-workbook link | `InvalidArgument`; `null` is an in-workbook link |
+| `setHyperlink` `location` | no location | `InvalidArgument`; omit it |
+| Validation `formula1`, `formula2` | no formula | `InvalidArgument`; omit it. The titles and messages still read `''` as none |
+| Conditional-format `id` | a generated id | `InvalidArgument`; omit it to have one generated |
+| Conditional-format `formula1`, `formula2` | no formula (the text, blank, error and time-period rules derived theirs) | `InvalidArgument`; omit it |
+| Conditional-format `text` (JavaScript, Python) | no text | an empty operand, which every non-error cell matches |
+| Colour-scale, data-bar and icon-set threshold `value` | an empty value | `InvalidArgument` |
+| Threaded comment `parentId` | a new thread | `InvalidArgument`; `null` opens a thread |
+| Person `providerId` | none | `InvalidArgument`; omit it |
+| `addTable` `styleName` | no style | `InvalidArgument`; `styled: false` is an unstyled table |
+| `Table.updateStyleOptions` `styleName` | removed the style | `InvalidArgument`; `null` removes the style name |
+| Totals-row `totalsRowLabel`, `totalsRowFormula` | no label; a formula ignored unless `custom` | `InvalidArgument`; `null` clears |
+| Sheet, workbook and protected-range `algorithmName`, `hashValue`, `saltValue`, `legacyPasswordHash`, `securityDescriptor` | absent | `InvalidArgument`; omit it, or `null` in an update |
+| `addPivot` `name`, `Pivot.rename` | an empty pivot name | `InvalidArgument` |
+| `PivotDataFieldInput.name` | the derived name (`Sum of X`) | an empty caption; omit it to derive the name |
+| `Pivot.updateStyleOptions` `styleName` | no style | `InvalidArgument`; `null` removes it |
+| `updateTableStyleDefaults` `tableStyleName`, `pivotStyleName` | removed the default | `InvalidArgument`; `null` removes it |
+| `PivotCache.setWorksheetSource` `range`, `sheet`, `name` | an absent attribute | `InvalidArgument`; omit it |
+| `addPicture`, `addChart` placement `name` | `Picture <id>` / `Chart <id>` | `InvalidArgument`; omit it for that default |
+| `addShape` `name`, `Drawing.update` `name` | an empty name | `InvalidArgument`; omit it on add for `Shape <id>` |
+| `addSlicer` `caption` | an empty caption | the column name, as when omitted |
+| `addSlicer`, `Slicer.update` `styleName` | no style; removed the style on update | `InvalidArgument`; `null` is no style |
+| `addChart` `title` | no title | `InvalidArgument`; `null` is no title |
+| `Chart.updateSeries` `name`, `categories`, `x` | removed that reference | `InvalidArgument`; `null` removes it |
+| Sparkline group `dateAxisRange` | no date range; removed it on update | `InvalidArgument`; `null` removes it |
+| `ooxml.setPageSetupXml`, `setPageMarginsXml`, `setPrintOptionsXml`, `setHeaderFooterXml`, `setSheetPrXml`, `setAutoFilterXml` | removed the element | `InvalidArgument`; `null` removes it |
+| `setPrintTitles` `rows`, `columns` (span text) | that axis does not repeat | refused as a span; `null` does not repeat |
+| `setPrintArea` | cleared the print area | refused as a range; `null` or `[]` clears |
+| Differential-format `numberFormat` | a number format with an empty code | no number format, as `null` |
 
 ## Reference tables
 

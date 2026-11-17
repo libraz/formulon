@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `Workbook.recalcFull()` and `recalcFullParallel(threadCount?)` (Python `recalc_full()`, C `fm_workbook_recalc_full` / `fm_workbook_recalc_full_parallel`) recompute every formula in every sheet whether or not it is dirty, under any calculation mode, as Excel's full calculation does. A workbook Excel saved under the current calculation engine opens with its stored values, and this is the call that computes all of them afresh.
 - `PivotCell` carries `expansion` (Python `expansion`, C `fm_pivot_cell_info_t::expansion`), the expand / collapse button of a projected PivotTable cell: `PivotCellExpansion.Collapsed` (Python `PivotCellExpansion.COLLAPSED`, C `FM_PIVOT_CELL_EXPANSION_COLLAPSED`) for a row or column item label whose inner-field items are hidden, `Expanded` when they show, and `null` (Python `None`, C `FM_PIVOT_CELL_EXPANSION_ABSENT`) for a cell with no button, so a host can draw the buttons Excel draws.
 - Status `FM_STATUS_IO_FEATURE_NOT_WRITABLE` (5028; JS `StatusCode.IoFeatureNotWritable`, Python `StatusCode.IO_FEATURE_NOT_WRITABLE`, raised as `IoError`): an `.xlsb` save (`fm_workbook_save`, `fm_workbook_save_with_diagnostics`, JS `save` / `saveWithDiagnostics`, Python `save` / `save_with_diagnostics`, CLI `recalc -o *.xlsb`) of a workbook holding a feature this writer cannot write to xlsb fails with it and writes nothing. The error context's `kind=` names the feature and, for a sheet-scoped one, `sheet_index=` the sheet.
 - `PivotCache.getWorksheetSourceRange()` (Python `get_worksheet_source_range()`, C `fm_workbook_get_pivot_cache_worksheet_source_range`) reports the sheet and rectangle a cache's worksheet source resolves to now: a table's header row through its last data row, a defined name's current range, or the range as written. It is `null` / `None` / `out_present == 0` when the source does not resolve, for example after its table or name is deleted.
@@ -111,6 +112,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `formulon recalc` recomputes every formula, in manual calculation as well, so a workbook saved by the current Excel calculation engine is no longer written back with the values it stored.
 - `DrawingAnchorPatch.kind` (Python `DrawingAnchorInput.kind` on update, C
   `fm_drawing_anchor_patch_t::kind`) accepts `AnchorKind.Absolute` on a picture,
   chart or shape whose anchor is absolute, so such an object can be moved and
@@ -152,9 +154,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `fm_workbook_load` takes a `const fm_load_options_spec_t*` before its
   out-parameter; pass NULL for the defaults.
-- The CLI applies `--profile` when it loads a workbook, so `recalc --profile`
-  on a manual-calculation workbook computes what the file left stale and
-  nothing else, as without `--profile`, instead of every formula.
+- The CLI applies `--profile` when it loads a workbook, so `dump --profile`
+  on a manual-calculation workbook shows the values the file stores, as
+  without `--profile`.
 - `fm_sheet_update_format_defaults` (`Sheet.updateFormatDefaults`, Python `update_format_defaults`) refuses a default column width above 255, a default row height above 409.6 and a base column width that is fractional or above 255 with `FM_STATUS_INVALID_ARGUMENT`. Excel refuses to open a workbook holding a larger width or base.
 - Reading `.xlsx`: a default row height is truncated to whole twips and capped at 409.6 points, a custom default height of 0 hides rows by default, and a fractional base column width reads as its whole part, as Excel opens them. Of two sheet views naming one workbook window the later is kept, a `view` other than `pageBreakPreview` or `pageLayout` reads as normal, and `<pivotSelection>` is no longer read or written; Excel keeps it in neither format.
 - Reading `.xlsb`: a default row height above 409.5 points reads as 409.5, as Excel opens it; a sheet view with an unknown view mode reads as normal, and a sheet view of a window the workbook does not have, or a default-format record with a width, base or outline level Excel does not open, is left out and counted in `skippedFeatureCount`.
@@ -672,6 +674,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The load contract (`Workbook.load`, the `Workbook` class notes) and `hasDirtyCells` (Python `has_dirty_cells`, C `fm_workbook_has_dirty_cells`) now state which loaded workbooks hold their formulas dirty, and no longer list a file location change as one that dirties cells.
 - Changing a theme's colours or fonts (`setThemeColors`, `setThemeFonts`, `setThemeScriptFont`, Python
   `set_theme_colors` / `set_theme_fonts` / `set_theme_script_font`, C `fm_workbook_set_theme_colors` /
   `fm_workbook_set_theme_fonts` / `fm_workbook_set_theme_script_font`) now removes the default theme version

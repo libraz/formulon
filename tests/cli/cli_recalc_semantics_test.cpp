@@ -264,3 +264,40 @@ TEST(FormulonCli, RecalcFormatMustAgreeWithAKnownExtension) {
   EXPECT_EQ(run_cli({"recalc", "--quiet", "--format", "pdf", in, "-o", out_path}).exit_code, 64);
   EXPECT_EQ(run_cli({"recalc", "--quiet", "--format", "xlsb", in, "-o", out_path}).exit_code, 0);
 }
+
+TEST(FormulonCli, RecalcRecomputesTheValuesABookStores) {
+  // An automatic book with the current calcId opens with its cache: B1 = A1+1 stores 99.
+  std::string workbook(formulon::test::kOneSheetWorkbookXml);
+  workbook.insert(workbook.find("</workbook>"), "<calcPr calcId=\"191029\"/>");
+  const std::vector<std::uint8_t> package = formulon::test::BuildOoxmlPackage(
+      formulon::test::OoxmlContentTypes(formulon::test::kXlsxWorkbookContentType),
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData><row r=\"1\">"
+      "<c r=\"A1\"><v>1</v></c><c r=\"B1\"><f>A1+1</f><v>99</v></c></row></sheetData></worksheet>",
+      workbook, formulon::test::kOneSheetWorkbookRels);
+  for (const bool threads : {false, true}) {
+    SCOPED_TRACE(threads ? "threads" : "serial");
+    const std::string in = temp_path("stale_cache_in.xlsx");
+    const std::string out = temp_path("stale_cache_out.xlsx");
+    PathGuard in_guard(in);
+    PathGuard out_guard(out);
+    ASSERT_TRUE(write_bytes(in, std::string_view(reinterpret_cast<const char*>(package.data()), package.size())));
+    std::vector<std::string> args = {"recalc", "--quiet", in, "-o", out};
+    if (threads) {
+      args.insert(args.begin() + 1, {"--threads", "2"});
+    }
+    const CliRun r = run_cli(args);
+    ASSERT_EQ(r.exit_code, 0) << r.stderr_text;
+
+    std::ifstream f(out, std::ios::binary);
+    const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(f)), std::istreambuf_iterator<char>());
+    fm_workbook_t* wb = nullptr;
+    ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &wb), 0);
+    // Manual mode reads the value the output file stores.
+    ASSERT_EQ(fm_workbook_set_calc_mode(wb, FM_CALC_MODE_MANUAL), 0);
+    fm_value_t v{};
+    ASSERT_EQ(fm_sheet_get_value(wb, 0, 0, 1, &v), 0);
+    EXPECT_EQ(v.kind, FM_VALUE_KIND_NUMBER);
+    EXPECT_EQ(v.u.number, 2.0);
+    fm_workbook_destroy(wb);
+  }
+}

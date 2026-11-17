@@ -134,9 +134,11 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
 
   // Recalc + save.
   Napi::Value Recalc(const Napi::CallbackInfo& info);
+  Napi::Value RecalcFull(const Napi::CallbackInfo& info);
   Napi::Value RecalcParallel(const Napi::CallbackInfo& info);
+  Napi::Value RecalcFullParallel(const Napi::CallbackInfo& info);
   Napi::Value PartialRecalc(const Napi::CallbackInfo& info);
-  /// `hasDirtyCells()`: true when a change has not been applied by a full recalc yet.
+  /// `hasDirtyCells()`: true when a change has not been applied by a recalc yet.
   Napi::Value HasDirtyCells(const Napi::CallbackInfo& info);
   Napi::Value SetIterative(const Napi::CallbackInfo& info);
   /// The stored iterative-calculation settings as `{enabled,
@@ -881,6 +883,11 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   /// safe to invoke after any operation that may have changed the
   /// footprint. Destroying the handle reports the whole amount back.
   void SyncExternalMemory(Napi::Env env);
+  /// The shared body of `recalc` / `recalcFull`: runs `recalc`, then syncs the external-memory figure.
+  Napi::Value RunRecalc(const Napi::CallbackInfo& info, fm_status_t (*recalc)(fm_workbook_t*));
+  /// The shared body of the parallel pair; `method` names the caller in a refused `threadCount`.
+  Napi::Value RunParallelRecalc(const Napi::CallbackInfo& info, const char* method,
+                                fm_status_t (*recalc)(fm_workbook_t*, uint32_t, fm_parallel_recalc_stats_info_t*));
   /// Applies an already measured footprint to V8's external-memory count.
   void ApplyExternalMemoryEstimate(Napi::Env env, size_t bytes);
 

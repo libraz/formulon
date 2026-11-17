@@ -710,7 +710,7 @@ class Workbook {
   /// them, and restoring the inputs; `partial_recalc` leaves tables alone.
   Expected<void, Error> recalc_data_tables(const eval::FunctionRegistry& registry);
 
-  /// Drives a full incremental recalc using the embedded recalc engine.
+  /// Recalculates the dirty cells using the embedded recalc engine.
   ///
   /// `registry` supplies the function dispatch table — typically
   /// `eval::default_registry()`. Returns the engine's `RecalcStats` on
@@ -719,6 +719,14 @@ class Workbook {
   /// dependents recalculated in further passes, at most one more than the
   /// blocked reports at the start.
   Expected<eval::RecalcStats, Error> recalc(const eval::FunctionRegistry& registry);
+
+  /// Excel's "calculate full": every formula in every sheet recomputes whether
+  /// or not it is dirty, under any calc mode. Marks every formula dirty, then
+  /// runs `recalc(registry)`. Data tables follow the calc mode exactly as in
+  /// `recalc` (`kAutoNoTable` leaves them to `recalc_data_tables`). A failure
+  /// leaves every formula dirty. Called from inside a recalc on this thread it
+  /// fails with `kGraphRecalcReentrant` before marking anything.
+  Expected<eval::RecalcStats, Error> recalc_full(const eval::FunctionRegistry& registry);
 
   /// Brings cached values up to date before a value read or a save: unless
   /// the calc mode is `kManual`, runs `recalc(registry)` when the dirty set
@@ -755,6 +763,12 @@ class Workbook {
   /// inline).
   Expected<void, Error> recalc_parallel(const eval::FunctionRegistry& registry, const eval::SchedulerConfig& cfg,
                                         eval::SchedulerStats* stats);
+
+  /// As `recalc_full`, scheduled as `recalc_parallel`: every formula recomputes
+  /// whether or not it is dirty, under any calc mode, and a failure leaves
+  /// every formula dirty.
+  Expected<void, Error> recalc_full_parallel(const eval::FunctionRegistry& registry, const eval::SchedulerConfig& cfg,
+                                             eval::SchedulerStats* stats);
 
   /// Sets iterative-calc options for the workbook's recalc engine.
   /// Defaults match Excel's out-of-the-box settings:

@@ -316,6 +316,7 @@ WORKBOOK_METHODS = (
     "pivot_cache",
     "recalc",
     "recalc_data_tables",
+    "recalc_full",
     "remove_cell_style",
     "remove_defined_name",
     "remove_person",

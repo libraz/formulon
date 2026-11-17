@@ -9414,7 +9414,11 @@ class Workbook(_NoCopy):
       calculate whatever changed, so a read never returns a stale value.
       Under ``CalcMode.MANUAL`` a read returns the value as of the last
       :meth:`recalc`; :meth:`has_dirty_cells` reports whether a change has
-      happened since.
+      happened since. A loaded workbook that Excel would recalculate on open
+      (it sets ``fullCalcOnLoad``, or does not carry the current calculation
+      engine's ``calcId``, and is not manual) holds every formula dirty; any
+      other opens with its stored values, and :meth:`recalc_full` recomputes
+      every formula.
 
     Lifetime:
       Always release via :meth:`close`, ideally through ``with`` syntax::
@@ -9534,6 +9538,14 @@ class Workbook(_NoCopy):
 
         Auto-detects ``.xlsx`` vs ``.xlsb`` from the package contents; a
         path's extension is not consulted.
+
+        A workbook that is not manual-calculation and either sets
+        ``fullCalcOnLoad`` or does not carry the current calculation engine's
+        ``calcId`` loads with every formula dirty, so under ``CalcMode.AUTO``
+        the first value read or save computes them. Any other workbook opens
+        with its stored values; only the formulas the file marks for
+        recalculation and those without a cached value are dirty.
+        :meth:`recalc_full` recomputes every formula.
 
         ``profile_id`` gives the loaded workbook that Excel profile (see
         :meth:`set_profile_id`) as part of the load. Under manual calculation the workbook then
@@ -9948,7 +9960,8 @@ class Workbook(_NoCopy):
 
         Under ``CalcMode.AUTO`` reads already do this; call it under
         ``CalcMode.MANUAL``, or to re-evaluate volatile functions. The wheel
-        always recalculates serially.
+        always recalculates serially. See :meth:`recalc_full` to recompute
+        every formula.
 
         Example::
 
@@ -9960,16 +9973,37 @@ class Workbook(_NoCopy):
         status = LIB.fm_workbook_recalc(h)
         _check(status)
 
+    def recalc_full(self) -> None:
+        """Calculate every formula now, whether or not it is dirty.
+
+        :meth:`recalc` computes only the cells a change or the file left dirty,
+        and a workbook saved under the current Excel calculation engine opens
+        with its stored values; use this to compute all of them afresh. Works
+        under every calculation mode, including ``CalcMode.MANUAL``. Data tables
+        follow the calc mode as in :meth:`recalc`: under
+        ``CalcMode.AUTO_NO_TABLE`` call :meth:`recalc_data_tables` for them. A
+        failed call leaves every formula dirty.
+
+        Example::
+
+            wb = Workbook.load("book.xlsx")
+            wb.recalc_full()
+        """
+        h = self._require()
+        status = LIB.fm_workbook_recalc_full(h)
+        _check(status)
+
     def has_dirty_cells(self) -> bool:
         """Whether any cell is dirty: a change has left its value uncomputed since the last :meth:`recalc`.
 
-        Edits to cells, defined names, the profile or the file name, row /
-        column inserts and deletes, and sheet removal make cells dirty;
-        volatile functions do not, and neither does a freshly created
-        workbook. Under manual calculation a loaded workbook holds dirty only
-        the formulas its file marks for recalculation and those without a
-        cached value; under automatic calculation, every formula until the
-        first recalc. :meth:`Sheet.recalc_viewport` does not clean it, and a
+        Edits to cells, defined names, the profile, row / column inserts and
+        deletes, and sheet removal make cells dirty; volatile functions do not,
+        and neither does a freshly created workbook. A loaded workbook holds
+        every formula dirty when Excel would recalculate it on open (the file
+        sets ``fullCalcOnLoad``, or does not carry the current calculation
+        engine's ``calcId``, and the calculation mode is not manual); otherwise it holds dirty only the formulas its
+        file marks for recalculation and those without a cached value.
+        :meth:`Sheet.recalc_viewport` does not clean it, and a
         failed recalc leaves it dirty. Under ``CalcMode.AUTO`` a value read
         calculates first, so this is mostly of use under ``CalcMode.MANUAL``.
         """
@@ -10419,8 +10453,9 @@ class Workbook(_NoCopy):
     def set_calc_mode(self, mode: CalcMode) -> None:
         """Set the workbook's calc mode (see :class:`CalcMode`).
 
-        To read the values a loaded file has cached, set ``CalcMode.MANUAL``
-        right after :meth:`load`; to keep them through a save as well, also
+        To read the values cached by a loaded file that opens with every formula
+        dirty (see :meth:`load`), set ``CalcMode.MANUAL`` right after
+        :meth:`load`; to keep them through a save as well, also
         :meth:`set_calc_on_save` ``False``.
         """
         h = self._require()

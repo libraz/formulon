@@ -6,8 +6,9 @@
 // bindings. The CLI handler:
 //
 //   1. Reads `in` into memory (binary mode).
-//   2. Calls `fm_workbook_load`, then the serial `fm_workbook_recalc` or
-//      opt-in `fm_workbook_recalc_parallel`, then
+//   2. Calls `fm_workbook_load`, then the serial `fm_workbook_recalc_full` or
+//      opt-in `fm_workbook_recalc_full_parallel`, so every formula is
+//      computed whatever the file stores, then
 //      `fm_workbook_save_with_diagnostics` with a format derived from
 //      `-o`'s extension (`.xlsx`, `.xlsb`) or `--format`.
 //   3. Writes the saved buffer back out to `out`.
@@ -15,7 +16,7 @@
 // `--iterative` enables iterative-calc while preserving any iteration cap
 // and convergence threshold loaded from the workbook. `--threads N` opts
 // into the parallel scheduler; omitting it deliberately preserves the
-// serial `recalc` contract. `--quiet` suppresses the `Recalculated ...`
+// serial contract. `--quiet` suppresses the `Recalculated ...`
 // status line on stderr; otherwise we print one per successful run.
 
 #include <cerrno>
@@ -53,7 +54,7 @@ void print_recalc_usage(std::ostream& out) {
       << "       formulon recalc [--iterative] [--threads N] [--quiet] [--json] [--format xlsx|xlsb] -o <out> -- "
          "<in.xlsx-or-xlsb>\n"
       << "\n"
-      << "Load <in.xlsx-or-xlsb>, drive a full recalc, and write the result to <out.xlsx-or-xlsb>.\n"
+      << "Load <in.xlsx-or-xlsb>, recalculate every formula, and write the result to <out.xlsx-or-xlsb>.\n"
       << "The output format is chosen from -o's extension: '.xlsx' writes OOXML, '.xlsb' writes MS-XLSB.\n"
       << "Any other extension needs --format xlsx|xlsb (exit 64 without it); --format must agree with\n"
       << "a .xlsx or .xlsb extension. '-o -' writes .xlsx unless --format says otherwise.\n"
@@ -250,11 +251,11 @@ int run_recalc(const ArgList& args, std::ostream& out, std::ostream& err) {
 
   fm_parallel_recalc_stats_info_t parallel_stats = FM_STRUCT_INIT(fm_parallel_recalc_stats_info_t);
   if (parallel) {
-    if (auto rc = fm_workbook_recalc_parallel(wb.handle, thread_count, &parallel_stats); rc != 0) {
+    if (auto rc = fm_workbook_recalc_full_parallel(wb.handle, thread_count, &parallel_stats); rc != 0) {
       return fail_with_last_error(err, "recalc", rc);
     }
   } else {
-    if (auto rc = fm_workbook_recalc(wb.handle); rc != 0) {
+    if (auto rc = fm_workbook_recalc_full(wb.handle); rc != 0) {
       return fail_with_last_error(err, "recalc", rc);
     }
   }

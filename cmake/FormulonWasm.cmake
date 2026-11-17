@@ -23,8 +23,9 @@
 #     embind, no JS glue, no pthread. Compiles src/c_api/formulon_c.cpp
 #     + formulon_static, link line is --no-entry + -sSTANDALONE_WASM=1,
 #     exports the Python-required fm_* C ABI plus _malloc / _free. It
-#     deliberately does not export `fm_workbook_recalc_parallel`: this
-#     no-pthread artifact exposes only serial recalc to the Python wheel.
+#     deliberately does not export `fm_workbook_recalc_parallel` or
+#     `fm_workbook_recalc_full_parallel`: this no-pthread artifact
+#     exposes only serial recalc to the Python wheel.
 #     Output: `<build>/formulon_capi.wasm` (no companion .js).
 #
 # Activated only when FM_BUILD_WASM=ON, which itself is meaningful only

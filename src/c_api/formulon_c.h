@@ -4301,33 +4301,61 @@ FM_API fm_status_t fm_workbook_remove_person(fm_workbook_t* wb, const char* id);
 /* -------------------------------------------------------------------------- */
 
 /**
- * @brief Drives a full incremental recalc using the default function
- *        registry (`eval::default_registry()`).
+ * @brief Recalculates the dirty cells using the default function registry
+ *        (`eval::default_registry()`).
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_GRAPH_RECALC_REENTRANT` (4005) when called from inside a
+ *         recalc on the same thread (an iterative-progress callback);
  *         an `FM_STATUS_EVAL_*` or `FM_STATUS_GRAPH_*` code on engine failure.
  */
 FM_API fm_status_t fm_workbook_recalc(fm_workbook_t* wb);
 
 /**
+ * @brief Recalculates every formula in every sheet, whether or not it is
+ *        dirty (Excel's "calculate full"), under any calculation mode.
+ *
+ * `fm_workbook_recalc` computes only the dirty cells: a change's dependents,
+ * the formulas a loaded file marks for recalculation and those without a
+ * cached value. A workbook that Excel saved under the current calculation
+ * engine opens with its stored values, so this call is the way to compute all
+ * of them afresh. It marks every formula dirty and then recalculates, so a
+ * failed call leaves every formula dirty. Data tables follow the calc mode as
+ * in `fm_workbook_recalc`: computed, except under `FM_CALC_MODE_AUTO_NO_TABLE`
+ * where `fm_workbook_recalc_data_tables` computes them.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_GRAPH_RECALC_REENTRANT` (4005) when called from inside a
+ *         recalc on the same thread (an iterative-progress callback);
+ *         an `FM_STATUS_EVAL_*` or `FM_STATUS_GRAPH_*` code on engine failure.
+ */
+FM_API fm_status_t fm_workbook_recalc_full(fm_workbook_t* wb);
+
+/**
  * @brief Writes `1` to `*out_has_dirty` when the workbook holds a change that
- *        no full recalc (`fm_workbook_recalc` / `fm_workbook_recalc_parallel`)
+ *        no recalc (`fm_workbook_recalc` / `fm_workbook_recalc_parallel`)
  *        has applied yet, else `0`.
  *
- * Cell reads report the values of the last full recalc, so a `1` means some
+ * Cell reads report the values of the last recalc, so a `1` means some
  * of them may be stale. A cell is dirty while a change has left its value
  * uncomputed. A change is a cell write, a defined-name edit that a
- * formula reads, a row / column insert or delete, a sheet removal, a file
- * name change, or a profile change on a workbook with formulas; setting the
- * current profile or file name to its current value is not. Volatile cells (`NOW()`, `RAND()`) do not count: they
+ * formula reads, a row / column insert or delete, a sheet removal, or a
+ * profile change on a workbook with formulas; setting the current profile to
+ * its current value is not. Setting the file location marks nothing dirty:
+ * `CELL` and `FORMULATEXT` are volatile and refresh at the next recalc.
+ * Volatile cells (`NOW()`, `RAND()`) do not count: they
  * re-evaluate on every recalc, and a workbook holding only them reads `0`
- * after a recalc. A freshly created workbook reads `0`. Under manual
- * calculation a loaded workbook holds dirty only the formulas its file marks
- * for recalculation and those without a cached value; under automatic
- * calculation, every formula until the first recalc.
+ * after a recalc. A freshly created workbook reads `0`. A loaded workbook
+ * holds every formula dirty when Excel would recalculate it on open (the file
+ * sets `fullCalcOnLoad`, or does not carry the current calculation engine's
+ * `calcId`, and the calculation mode is not manual); otherwise it holds dirty
+ * only the formulas its file marks for recalculation and those without a
+ * cached value.
+ * `fm_workbook_recalc_full` recomputes every formula.
  * `fm_sheet_recalc_viewport` leaves the cells it skipped dirty, so the
- * answer stays `1` after it; a failed full recalc keeps every dirty cell.
+ * answer stays `1` after it; a failed recalc keeps every dirty cell.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if any pointer argument is `NULL`;
@@ -4423,7 +4451,7 @@ typedef struct {
 } fm_parallel_recalc_stats_info_t;
 
 /**
- * @brief Drives a full incremental recalc using the parallel SCC scheduler.
+ * @brief Recalculates the dirty cells using the parallel SCC scheduler.
  *
  * `thread_count == 0` selects automatic detection (capped at 8); `1` keeps
  * all evaluation on the caller thread and starts no worker OS threads; values
@@ -4441,6 +4469,7 @@ typedef struct {
  * is always invoked on the caller thread for cyclic layers.
  *
  * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if `out_stats->struct_size` is below the v1 size;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when `thread_count > 8` (context
  *           `part=threads requested=<n> limit=8`);
@@ -4450,6 +4479,38 @@ typedef struct {
  */
 FM_API fm_status_t fm_workbook_recalc_parallel(fm_workbook_t* wb, uint32_t thread_count,
                                                fm_parallel_recalc_stats_info_t* out_stats);
+
+/**
+ * @brief As `fm_workbook_recalc_full`, scheduled as `fm_workbook_recalc_parallel`:
+ *        recalculates every formula whether or not it is dirty.
+ *
+ * `thread_count == 0` selects automatic detection (capped at 8); `1` keeps
+ * all evaluation on the caller thread and starts no worker OS threads; values
+ * `2..8` select the maximum worker count. The scheduler may start fewer
+ * workers when the operating system refuses a launch and then completes the
+ * pass through serial fallback. Workers are created once per complete call,
+ * including any internal dynamic-array spill retry waves, and are joined
+ * before this function returns.
+ *
+ * `out_stats` is optional. When non-NULL it is zeroed on entry and remains
+ * zero on every failure path. On success it reports the work performed by
+ * this call; `worker_threads_started` counts successfully launched OS
+ * workers and `worker_threads_used` counts distinct launched workers that
+ * claimed at least one SCC task. A configured iterative-progress callback
+ * is always invoked on the caller thread for cyclic layers.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) if `out_stats->struct_size` is below the v1 size;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb == NULL`;
+ *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) when `thread_count > 8` (context
+ *           `part=threads requested=<n> limit=8`);
+ *         `FM_STATUS_GRAPH_RECALC_REENTRANT` (4005) when called recursively from a recalc
+ *         callback (including a scheduler worker);
+ *         an `FM_STATUS_EVAL_*` or `FM_STATUS_GRAPH_*` code on engine failure.
+ *         Every refusal before the engine runs marks nothing dirty.
+ */
+FM_API fm_status_t fm_workbook_recalc_full_parallel(fm_workbook_t* wb, uint32_t thread_count,
+                                                    fm_parallel_recalc_stats_info_t* out_stats);
 
 /**
  * @brief The iterative-calculation settings stored on a workbook

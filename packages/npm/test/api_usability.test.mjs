@@ -654,7 +654,7 @@ test('criterion 5: hasDirtyCells is false for a new workbook, a value-only load 
     assert.equal(wb.hasDirtyCells(), true);
     wb.recalc();
     assert.equal(wb.hasDirtyCells(), false);
-    // A loaded formula is dirty until the first full recalc.
+    // A workbook saved without the current calcId loads with its formulas dirty.
     const reloaded = f.Workbook.load(wb.save());
     try {
       assert.equal(reloaded.hasDirtyCells(), true);

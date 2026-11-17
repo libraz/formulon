@@ -436,6 +436,16 @@ std::size_t count_blocked_pivots(const std::vector<Sheet>& sheets) {
   return count;
 }
 
+// Marking takes the engine mutex a recalc on this thread already holds, so a nested call is refused first.
+std::optional<Error> full_recalc_reentry_error(const char* what) {
+  if (!eval::detail::g_in_recalc) {
+    return std::nullopt;
+  }
+  return make_error(FormulonErrorCode::kGraphRecalcReentrant,
+                    std::string("Workbook::") + what + " called recursively on the same thread",
+                    "the engine does not support nested recalc; the inner call is rejected");
+}
+
 }  // namespace
 
 bool Workbook::has_dirty_cells() const {
@@ -507,6 +517,23 @@ Expected<void, Error> Workbook::recalc_parallel(const eval::FunctionRegistry& re
     calc_options_.calc_completed = true;
   }
   return Expected<void, Error>::Ok();
+}
+
+Expected<eval::RecalcStats, Error> Workbook::recalc_full(const eval::FunctionRegistry& registry) {
+  if (auto reentry = full_recalc_reentry_error("recalc_full")) {
+    return *reentry;
+  }
+  mark_all_formulas_dirty();
+  return recalc(registry);
+}
+
+Expected<void, Error> Workbook::recalc_full_parallel(const eval::FunctionRegistry& registry,
+                                                     const eval::SchedulerConfig& cfg, eval::SchedulerStats* stats) {
+  if (auto reentry = full_recalc_reentry_error("recalc_full_parallel")) {
+    return *reentry;
+  }
+  mark_all_formulas_dirty();
+  return recalc_parallel(registry, cfg, stats);
 }
 
 namespace {

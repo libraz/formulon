@@ -252,7 +252,7 @@ class RecalcEngine {
   /// Marks `cell` as dirty for the next `recalc()` pass. Idempotent.
   void mark_dirty(CellNodeId cell);
 
-  /// Performs a full incremental recalc against `workbook`.
+  /// Recalculates the dirty cells of `workbook`.
   ///
   /// The pass proceeds in five phases:
   ///   1. Seed the dirty set with every volatile cell so they re-execute

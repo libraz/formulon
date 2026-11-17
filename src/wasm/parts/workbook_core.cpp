@@ -484,13 +484,29 @@ void JsWorkbook::recalc() {
   succeeded(rc);
 }
 
-JsParallelRecalcStats JsWorkbook::recalcParallel(emscripten::val threadCount) {
-  JsParallelRecalcStats r;
+void JsWorkbook::recalcFull() {
   if (handle_ == nullptr) {
     record_invalid_handle();
-    return r;
+    return;
   }
+  progress_callback_threw_ = false;
+  fm_status_t rc = fm_workbook_recalc_full(handle_);
+  const bool callback_threw = progress_callback_threw_;
+  progress_callback_threw_ = false;
+  // An engine failure wins: it carries its own diagnostic and is the more
+  // specific answer. Otherwise a throwing progress callback, which the
+  // engine only saw as a cancellation, becomes the reported failure.
+  if (rc == 0 && callback_threw) {
+    record_progress_callback_threw();
+    return;
+  }
+  succeeded(rc);
+}
 
+namespace {
+
+// Reads the thread count of a parallel recalc; records the failure and returns false on a bad argument.
+bool read_recalc_thread_count(const emscripten::val& threadCount, const std::string& method, uint32_t* out) {
   // Do not bind this parameter as uint32_t: embind would otherwise coerce
   // e.g. -0.5, 1.5, NaN, Infinity, null, and a missing argument before this
   // method could apply the public 0..8 integer contract.
@@ -498,29 +514,85 @@ JsParallelRecalcStats JsWorkbook::recalcParallel(emscripten::val threadCount) {
   // or non-finite number a RangeError, a negative integer an InvalidArgument;
   // the 0..8 limit is the C ABI's.
   if (!threadCount.isNumber()) {
-    record_type_error("Workbook.recalcParallel threadCount must be a number");
-    return r;
+    record_type_error((method + " threadCount must be a number").c_str());
+    return false;
   }
   const emscripten::val number = emscripten::val::global("Number");
   const double requested = threadCount.as<double>();
   if (!number.call<bool>("isInteger", threadCount)) {
-    record_range_error("Workbook.recalcParallel threadCount must be an integer");
-    return r;
+    record_range_error((method + " threadCount must be an integer").c_str());
+    return false;
   }
   if (requested < 0.0) {
-    record_binding_failure(FM_STATUS_INVALID_ARGUMENT, "Workbook.recalcParallel threadCount must not be negative",
+    record_binding_failure(FM_STATUS_INVALID_ARGUMENT, (method + " threadCount must not be negative").c_str(),
                            ("threadCount=" + std::to_string(static_cast<long long>(requested))).c_str());
-    return r;
+    return false;
   }
   if (requested > 4294967295.0) {
-    record_range_error("Workbook.recalcParallel threadCount is too large");
+    record_range_error((method + " threadCount is too large").c_str());
+    return false;
+  }
+  *out = static_cast<uint32_t>(requested);
+  return true;
+}
+
+}  // namespace
+
+JsParallelRecalcStats JsWorkbook::recalcParallel(emscripten::val threadCount) {
+  JsParallelRecalcStats r;
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return r;
+  }
+
+  uint32_t native_thread_count = 0;
+  if (!read_recalc_thread_count(threadCount, "Workbook.recalcParallel", &native_thread_count)) {
     return r;
   }
 
   fm_parallel_recalc_stats_info_t stats = FM_STRUCT_INIT(fm_parallel_recalc_stats_info_t);
-  const uint32_t native_thread_count = static_cast<uint32_t>(requested);
   progress_callback_threw_ = false;
   const fm_status_t rc = fm_workbook_recalc_parallel(handle_, native_thread_count, &stats);
+  const bool callback_threw = progress_callback_threw_;
+  progress_callback_threw_ = false;
+  if (!succeeded(rc)) {
+    return r;
+  }
+  if (callback_threw) {
+    // Same shape as an engine failure: the pass did not finish, so the
+    // counters are not reported.
+    record_progress_callback_threw();
+    return r;
+  }
+
+  // Keep these counters as JS numbers. Values through 2^53-1 are represented
+  // exactly by a double, and the public TypeScript contract documents that
+  // precision boundary rather than leaking a runtime-dependent BigInt.
+  r.cellsEvaluated = static_cast<double>(stats.cells_evaluated);
+  r.sccsProcessed = static_cast<double>(stats.sccs_processed);
+  r.parallelSteps = static_cast<double>(stats.parallel_steps);
+  r.serialFallbackSteps = static_cast<double>(stats.serial_fallback_steps);
+  r.cycleRecoveries = static_cast<double>(stats.cycle_recoveries);
+  r.workerThreadsStarted = stats.worker_threads_started;
+  r.workerThreadsUsed = stats.worker_threads_used;
+  return r;
+}
+
+JsParallelRecalcStats JsWorkbook::recalcFullParallel(emscripten::val threadCount) {
+  JsParallelRecalcStats r;
+  if (handle_ == nullptr) {
+    record_invalid_handle();
+    return r;
+  }
+
+  uint32_t native_thread_count = 0;
+  if (!read_recalc_thread_count(threadCount, "Workbook.recalcFullParallel", &native_thread_count)) {
+    return r;
+  }
+
+  fm_parallel_recalc_stats_info_t stats = FM_STRUCT_INIT(fm_parallel_recalc_stats_info_t);
+  progress_callback_threw_ = false;
+  const fm_status_t rc = fm_workbook_recalc_full_parallel(handle_, native_thread_count, &stats);
   const bool callback_threw = progress_callback_threw_;
   progress_callback_threw_ = false;
   if (!succeeded(rc)) {
