@@ -565,6 +565,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/print/sheet_geometry_test.cpp
   unit/font_metrics_test.cpp
   unit/drawing/drawing_color_test.cpp
+  unit/drawing/preset_geometry_test.cpp
   unit/drawing/drawing_xml_test.cpp
   unit/drawing/image_header_test.cpp
   unit/drawing/drawing_clone_test.cpp

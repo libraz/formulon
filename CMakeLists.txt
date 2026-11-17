@@ -382,6 +382,7 @@ set(FORMULON_CORE_SOURCES
   src/drawing/drawing_clone.cpp
   src/drawing/drawing_edit.cpp
   src/drawing/drawing_snapshot.cpp
+  src/drawing/preset_geometry.cpp
   src/drawing/shape_edit.cpp
   src/drawing/slicer_edit.cpp
   src/chart/chart_xml.cpp
