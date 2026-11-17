@@ -137,6 +137,23 @@ TEST_F(CountBlankCountIfTail, CountBlankOverNonReferenceArgumentsCountsEvaluated
   ExpectNumber("=COUNTBLANK(0,\"\",\"x\",\"\")", 2.0);
 }
 
+TEST_F(CountBlankCountIfTail, CountBlankOverAReturnedReferenceCountsItsWholeRectangle) {
+  ExpectNumber("=COUNTBLANK(INDIRECT(\"L!C:C\"))", 1048576.0);
+  ExpectNumber("=COUNTBLANK(OFFSET(L!A1,0,0,1048576))", 1048572.0);
+  ExpectNumber("=COUNTBLANK(INDEX(L!A:A,0))", 1048572.0);
+  ExpectNumber("=COUNTBLANK(L!A1:INDEX(L!A:A,5))", 1.0);
+  ExpectNumber("=COUNTBLANK(INDEX(L!A1:A5,4))", 1.0);
+}
+
+TEST_F(CountBlankCountIfTail, CountBlankFailsOnAReturnedReferenceError) {
+  const Value offset = Eval("=COUNTBLANK(OFFSET(L!A1,-1,0))");
+  ASSERT_TRUE(offset.is_error()) << offset.debug_to_string();
+  EXPECT_EQ(offset.as_error(), ErrorCode::Ref);
+  const Value index = Eval("=COUNTBLANK(INDEX(L!A1:A3,5))");
+  ASSERT_TRUE(index.is_error()) << index.debug_to_string();
+  EXPECT_EQ(index.as_error(), ErrorCode::Ref);
+}
+
 TEST_F(CountBlankCountIfTail, ExternalReferencesAreAClosedBook) {
   ExpectValueError("=COUNTBLANK([Src.xlsx]S!A1:A5)");
   ExpectValueError("=COUNTIF([Src.xlsx]S!A1:A5,\"k2\")");

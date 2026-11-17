@@ -216,6 +216,27 @@ TEST(BuiltinsSubtotal, Code109ExcludesHiddenRows) {
   EXPECT_NE(v9.as_number(), v109.as_number());
 }
 
+TEST(BuiltinsSubtotal, ReturnedReferenceExcludesHiddenRows) {
+  Workbook wb = MakeNumericRange();
+  HideRow(wb.sheet(0), 1);  // A2 = 20
+  HideRow(wb.sheet(0), 3);  // A4 = 40
+  const struct {
+    const char* formula;
+    double expected;
+  } cases[] = {
+      {"=SUBTOTAL(9,OFFSET(A1,0,0,5))", 150.0},    {"=SUBTOTAL(109,OFFSET(A1,0,0,5))", 90.0},
+      {"=SUBTOTAL(109,OFFSET(A1,0,0,5,2))", 90.0}, {"=SUBTOTAL(109,INDIRECT(\"A1:A5\"))", 90.0},
+      {"=SUBTOTAL(109,INDEX(A1:A5,0))", 90.0},     {"=SUBTOTAL(109,A1:OFFSET(A1,4,0))", 90.0},
+      {"=SUBTOTAL(109,OFFSET(A1,1,0,3))", 30.0},   {"=SUBTOTAL(109,INDEX(A1:A5,2))", 0.0},
+      {"=AGGREGATE(9,5,OFFSET(A1,0,0,5))", 90.0},  {"=AGGREGATE(9,4,OFFSET(A1,0,0,5))", 150.0},
+  };
+  for (const auto& c : cases) {
+    const Value v = EvalSourceIn(c.formula, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_number()) << c.formula << " -> " << v.debug_to_string();
+    EXPECT_DOUBLE_EQ(v.as_number(), c.expected) << c.formula;
+  }
+}
+
 TEST(BuiltinsSubtotal, Code101AveragesVisibleRowsOnly) {
   Workbook wb = MakeNumericRange();
   HideRow(wb.sheet(0), 0);  // A1 = 10
@@ -628,6 +649,20 @@ TEST(SubtotalNested, InvalidQualifiedBuiltinCellPropagatesToOuterSubtotal) {
   ASSERT_NE(outer, nullptr);
   ASSERT_TRUE(outer->cached_value.is_error()) << outer->cached_value.debug_to_string();
   EXPECT_EQ(outer->cached_value.as_error(), ErrorCode::Name);
+}
+
+TEST(SubtotalNested, ReturnedReferenceSkipsNestedSubtotals) {
+  Workbook wb = Workbook::create();
+  FillReportBlock(wb);
+  SetFormula(wb, 0U, 2U, "=SUBTOTAL(9,OFFSET(A1,0,0,7))");
+  SetFormula(wb, 1U, 2U, "=AGGREGATE(9,0,INDIRECT(\"A1:A7\"))");
+  SetFormula(wb, 2U, 2U, "=SUBTOTAL(9,A1:INDEX(A1:A7,7))");
+  SetFormula(wb, 3U, 2U, "=AGGREGATE(9,4,OFFSET(A1,0,0,7))");
+  Recalc(wb);
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 0U, 2U), 1500.0);
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 1U, 2U), 1500.0);
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 2U, 2U), 1500.0);
+  EXPECT_DOUBLE_EQ(NumberAt(wb, 3U, 2U), 3000.0);
 }
 
 TEST(SubtotalNested, SpillCellsFollowTheAnchorFormula) {

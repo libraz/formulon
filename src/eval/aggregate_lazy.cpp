@@ -17,13 +17,17 @@
 #include "eval/builtins/numeric_helpers.h"
 #include "eval/builtins/subtotal.h"
 #include "eval/coerce.h"
+#include "eval/declared_rect.h"
 #include "eval/eval_context.h"
 #include "eval/external_ref.h"
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
 #include "eval/range_resolvers.h"
+#include "eval/reference/deref.h"
+#include "eval/reference/ref_value.h"
 #include "eval/structured_ref_project.h"
+#include "eval/tail_array.h"
 #include "eval/tree_walker/dispatch.h"
 #include "numeric_aggregate_kernels.h"
 #include "parser/ast.h"
@@ -96,7 +100,8 @@ Expected<double, ErrorCode> read_scalar(const parser::AstNode& node, Arena& aren
 // (`Sheet::layout().row_overrides`), so it is only knowable for an argument
 // that still carries the rows its cells came from.
 //
-// A plain `Ref` and a `Ref:Ref` RangeOp do carry that provenance. An inline
+// A plain `Ref`, a `Ref:Ref` RangeOp and the reference a call returns
+// (`OFFSET`, `INDIRECT`, `INDEX`, ...) do carry that provenance. An inline
 // array literal, a computed array (`SORT(...)`), a scalar and a spilled-range
 // reference do not: their cells have no sheet row behind them, or the anchor
 // is not resolved here. Those arguments contribute every cell, which is both
@@ -120,6 +125,12 @@ enum class HiddenScope : std::uint8_t {
 bool static_ref_endpoints(const parser::AstNode& node, const EvalContext& ctx, parser::Reference* first,
                           parser::Reference* second) {
   return reference_endpoint_pair(node, first, second, ctx);
+}
+
+bool has_static_endpoints(const parser::AstNode& node, const EvalContext& ctx) {
+  parser::Reference first{};
+  parser::Reference second{};
+  return static_ref_endpoints(node, ctx, &first, &second);
 }
 
 // Resolves the sheet a reference-shaped argument reads from, together with
@@ -156,14 +167,12 @@ const Sheet* reference_arg_origin(const parser::AstNode& node, const EvalContext
   return sheet;
 }
 
-// Appends `count` visibility flags for the cells of one argument, given the
-// argument's resolved shape. Cells on a hidden row within `scope` are marked
-// true.
-void append_visibility(const parser::AstNode& node, const EvalContext& ctx, HiddenScope scope, std::uint32_t rows,
-                       std::uint32_t cols, std::vector<bool>* out_hidden) {
+// Appends one visibility flag per cell of a `rows` x `cols` block whose first
+// row is `top` on `sheet` (null: no row provenance, nothing flagged). Cells on
+// a hidden row within `scope` are marked true.
+void append_row_visibility(const Sheet* sheet, std::uint32_t top, const EvalContext& ctx, HiddenScope scope,
+                           std::uint32_t rows, std::uint32_t cols, std::vector<bool>* out_hidden) {
   const std::size_t count = static_cast<std::size_t>(rows) * static_cast<std::size_t>(cols);
-  std::uint32_t top = 0;
-  const Sheet* sheet = reference_arg_origin(node, ctx, &top);
   if (sheet == nullptr || rows == 0U || cols == 0U ||
       (scope == HiddenScope::kFiltered && !sheet_has_filter_criteria(ctx.workbook(), *sheet))) {
     out_hidden->resize(out_hidden->size() + count, false);
@@ -187,6 +196,15 @@ void append_visibility(const parser::AstNode& node, const EvalContext& ctx, Hidd
   for (std::uint32_t r = 0; r < rows; ++r) {
     out_hidden->resize(out_hidden->size() + cols, hidden_row[r]);
   }
+}
+
+// Appends the visibility flags of a static reference argument, given its
+// resolved shape.
+void append_visibility(const parser::AstNode& node, const EvalContext& ctx, HiddenScope scope, std::uint32_t rows,
+                       std::uint32_t cols, std::vector<bool>* out_hidden) {
+  std::uint32_t top = 0;
+  const Sheet* sheet = reference_arg_origin(node, ctx, &top);
+  append_row_visibility(sheet, top, ctx, scope, rows, cols, out_hidden);
 }
 
 // --- Nested SUBTOTAL / AGGREGATE exclusion --------------------------------
@@ -243,7 +261,43 @@ bool cell_formula_has_nested_call(const Sheet& sheet, std::uint32_t row, std::ui
   return root != nullptr && ast_has_nested_call(*root);
 }
 
-// Appends one flag per cell of the reference-shaped argument `node`, true for
+// Marks the cells of `rect` on `sheet` that are nested subtotals in
+// `out_nested`, which holds `rect`'s cells row-major from `base` on.
+void mark_nested_cells(const Sheet& sheet, const DeclaredRect& rect, std::size_t base, std::vector<bool>* out_nested) {
+  const std::uint32_t cols = rect.cols();
+  const auto mark = [&](std::uint32_t row, std::uint32_t col) {
+    (*out_nested)[base + static_cast<std::size_t>(row - rect.row_first) * cols + (col - rect.col_first)] = true;
+  };
+
+  for (const CellAddress addr : sheet.formula_cells_in(rect.row_first, rect.col_first, rect.row_last, rect.col_last)) {
+    if (cell_formula_has_nested_call(sheet, addr.row, addr.col)) {
+      mark(addr.row, addr.col);
+    }
+  }
+  // A spill's phantom cells carry no formula of their own; the anchor's
+  // formula decides for the whole footprint, even when the anchor lies
+  // outside the rectangle.
+  for (const SpillFootprint& fp : sheet.committed_spill_footprints()) {
+    if (fp.rows == 0U || fp.cols == 0U || fp.anchor_row > rect.row_last || fp.anchor_col > rect.col_last ||
+        fp.anchor_row + fp.rows - 1U < rect.row_first || fp.anchor_col + fp.cols - 1U < rect.col_first) {
+      continue;
+    }
+    if (!cell_formula_has_nested_call(sheet, fp.anchor_row, fp.anchor_col)) {
+      continue;
+    }
+    const std::uint32_t r0 = std::max(fp.anchor_row, rect.row_first);
+    const std::uint32_t r1 = std::min(fp.anchor_row + fp.rows - 1U, rect.row_last);
+    const std::uint32_t c0 = std::max(fp.anchor_col, rect.col_first);
+    const std::uint32_t c1 = std::min(fp.anchor_col + fp.cols - 1U, rect.col_last);
+    for (std::uint32_t r = r0; r <= r1; ++r) {
+      for (std::uint32_t c = c0; c <= c1; ++c) {
+        mark(r, c);
+      }
+    }
+  }
+}
+
+// Appends one flag per cell of the static reference argument `node`, true for
 // cells that must be excluded as nested subtotals. Arguments without sheet
 // provenance (literals, computed arrays, `A1#`) are never flagged.
 void append_nested_flags(const parser::AstNode& node, const EvalContext& ctx, std::uint32_t rows, std::uint32_t cols,
@@ -266,36 +320,7 @@ void append_nested_flags(const parser::AstNode& node, const EvalContext& ctx, st
   if (rect.rows() != rows || rect.cols() != cols) {
     return;  // Shape disagrees with the resolver: flag nothing.
   }
-  const auto mark = [&](std::uint32_t row, std::uint32_t col) {
-    (*out_nested)[base + static_cast<std::size_t>(row - rect.row_first) * cols + (col - rect.col_first)] = true;
-  };
-
-  for (const CellAddress addr : sheet->formula_cells_in(rect.row_first, rect.col_first, rect.row_last, rect.col_last)) {
-    if (cell_formula_has_nested_call(*sheet, addr.row, addr.col)) {
-      mark(addr.row, addr.col);
-    }
-  }
-  // A spill's phantom cells carry no formula of their own; the anchor's
-  // formula decides for the whole footprint, even when the anchor lies
-  // outside the rectangle.
-  for (const SpillFootprint& fp : sheet->committed_spill_footprints()) {
-    if (fp.rows == 0U || fp.cols == 0U || fp.anchor_row > rect.row_last || fp.anchor_col > rect.col_last ||
-        fp.anchor_row + fp.rows - 1U < rect.row_first || fp.anchor_col + fp.cols - 1U < rect.col_first) {
-      continue;
-    }
-    if (!cell_formula_has_nested_call(*sheet, fp.anchor_row, fp.anchor_col)) {
-      continue;
-    }
-    const std::uint32_t r0 = std::max(fp.anchor_row, rect.row_first);
-    const std::uint32_t r1 = std::min(fp.anchor_row + fp.rows - 1U, rect.row_last);
-    const std::uint32_t c0 = std::max(fp.anchor_col, rect.col_first);
-    const std::uint32_t c1 = std::min(fp.anchor_col + fp.cols - 1U, rect.col_last);
-    for (std::uint32_t r = r0; r <= r1; ++r) {
-      for (std::uint32_t c = c0; c <= c1; ++c) {
-        mark(r, c);
-      }
-    }
-  }
+  mark_nested_cells(*sheet, rect, base, out_nested);
 }
 
 // Appends `n` unflagged (visible, not nested) entries to the flag vectors.
@@ -303,6 +328,55 @@ void append_unflagged(std::vector<bool>* out_hidden, std::vector<bool>* out_nest
   out_hidden->resize(out_hidden->size() + n, false);
   if (out_nested != nullptr) {
     out_nested->resize(out_nested->size() + n, false);
+  }
+}
+
+// Appends the cells of a value with no row provenance, unflagged. An array is
+// flattened in row-major order so AGGREGATE's code-3 COUNTA path sees the same
+// marker-bearing cells as the eager COUNTA dispatcher; a scalar is one cell.
+void append_value_cells(const Value& v, std::vector<Value>* out_cells, std::vector<bool>* out_hidden,
+                        std::vector<bool>* out_nested) {
+  if (v.is_array()) {
+    const ArrayValue* array = v.as_array();
+    const std::size_t n = static_cast<std::size_t>(array->rows) * static_cast<std::size_t>(array->cols);
+    out_cells->insert(out_cells->end(), array->cells, array->cells + n);
+    append_unflagged(out_hidden, out_nested, n);
+    return;
+  }
+  out_cells->push_back(v);
+  append_unflagged(out_hidden, out_nested, 1U);
+}
+
+// Appends the cells of `ref`, the `Ref` a call or a `:` over one returned. A
+// one-area reference into this workbook keeps the rows its cells sit on, so its
+// hidden-row and nested-subtotal flags are those of the same typed range; any
+// other `Ref` reads as its value does.
+void append_ref_cells(const Value& ref, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
+                      HiddenScope scope, std::vector<Value>* out_cells, std::vector<bool>* out_hidden,
+                      std::vector<bool>* out_nested) {
+  const Value v = densify(deref_shaped(ref, arena, registry, ctx, ReadCount::kCounted), arena);
+  const RefView view = ref.as_ref();
+  std::string_view sheet_name;
+  const Sheet* sheet = nullptr;
+  if (view.form == RefForm::kArea && view.book == 0U && !v.is_error() &&
+      ref_sheet_name(ctx, view.areas[0].sheet_first, &sheet_name)) {
+    sheet = ctx.sheet_for_qualifier(sheet_name);
+  }
+  if (sheet == nullptr) {
+    append_value_cells(v, out_cells, out_hidden, out_nested);
+    return;
+  }
+  const RefArea& area = view.areas[0];
+  const std::uint32_t rows = v.is_array() ? v.as_array()->rows : 1U;
+  const std::uint32_t cols = v.is_array() ? v.as_array()->cols : 1U;
+  const std::size_t base = out_hidden->size();
+  append_value_cells(v, out_cells, out_hidden, out_nested);
+  out_hidden->resize(base);
+  append_row_visibility(sheet, area.row_first, ctx, scope, rows, cols, out_hidden);
+  if (out_nested != nullptr) {
+    mark_nested_cells(
+        *sheet, DeclaredRect{area.row_first, area.row_first + rows - 1U, area.col_first, area.col_first + cols - 1U},
+        base, out_nested);
   }
 }
 
@@ -337,6 +411,23 @@ bool collect_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRe
                        out_err)) {
         return false;
       }
+    }
+    return true;
+  }
+
+  // A reference a call returns, or a `:` over one (`A1:OFFSET(...)`), is read
+  // as that reference, so `SUBTOTAL(109, OFFSET(...))` skips hidden rows.
+  if ((k == parser::NodeKind::Call || (k == parser::NodeKind::RangeOp && !has_static_endpoints(node, ctx))) &&
+      evaluates_to_reference(node) && !carries_name_reference(node)) {
+    const Value ref = eval_node_ref(node, arena, registry, ctx);
+    if (ref.is_ref()) {
+      append_ref_cells(ref, arena, registry, ctx, scope, out_cells, out_hidden, out_nested);
+    } else if (k == parser::NodeKind::RangeOp && ref.is_error()) {
+      // A range that fails to resolve fails the aggregate, as a typed one does.
+      *out_err = ref;
+      return false;
+    } else {
+      append_value_cells(ref, out_cells, out_hidden, out_nested);
     }
     return true;
   }
@@ -382,19 +473,8 @@ bool collect_arg(const parser::AstNode& arg_node, Arena& arena, const FunctionRe
   }
 
   // Anything else (literal scalar, arithmetic expression, function call) is
-  // evaluated normally. Array-valued calls are flattened in row-major order
-  // so AGGREGATE's code-3 COUNTA path sees the same marker-bearing cells as
-  // the eager COUNTA dispatcher; scalar values remain one direct argument.
-  const Value v = eval_node(node, arena, registry, ctx);
-  if (v.is_array()) {
-    const ArrayValue* array = v.as_array();
-    const std::size_t n = static_cast<std::size_t>(array->rows) * static_cast<std::size_t>(array->cols);
-    out_cells->insert(out_cells->end(), array->cells, array->cells + n);
-    append_unflagged(out_hidden, out_nested, n);
-    return true;
-  }
-  out_cells->push_back(v);
-  append_unflagged(out_hidden, out_nested, 1U);
+  // evaluated normally.
+  append_value_cells(eval_node(node, arena, registry, ctx), out_cells, out_hidden, out_nested);
   return true;
 }
 
@@ -729,6 +809,20 @@ Value eval_countblank_lazy(const parser::AstNode& call, Arena& arena, const Func
   }
   const auto is_empty = [](const Value& v) { return v.is_blank() || (v.is_text() && v.as_text().empty()); };
   double total = 0.0;
+  // A value with no rectangle behind it counts its empty elements.
+  const auto count_value_blanks = [&](const Value& v) {
+    if (v.is_array()) {
+      const ArrayValue* array = v.as_array();
+      const std::size_t n = static_cast<std::size_t>(array->rows) * static_cast<std::size_t>(array->cols);
+      for (std::size_t j = 0; j < n; ++j) {
+        if (is_empty(array->cells[j])) {
+          total += 1.0;
+        }
+      }
+    } else if (is_empty(v)) {
+      total += 1.0;
+    }
+  };
   for (std::uint32_t i = 0; i < arity; ++i) {
     const parser::AstNode& node = resolve_range_binding(call.as_call_arg(i), ctx.name_env(), /*accept_ref=*/true);
     if (node.kind() == parser::NodeKind::ExternalRef) {
@@ -737,7 +831,36 @@ Value eval_countblank_lazy(const parser::AstNode& call, Arena& arena, const Func
     if (is_grouped_ref3d(node)) {
       return Value::error(ErrorCode::Name);
     }
-    if (node.kind() == parser::NodeKind::Ref || is_range_shaped_ast(node)) {
+    const parser::NodeKind k = node.kind();
+    if ((k == parser::NodeKind::Call || (k == parser::NodeKind::RangeOp && !has_static_endpoints(node, ctx))) &&
+        evaluates_to_reference(node) && !carries_name_reference(node)) {
+      // A returned reference counts every cell of its rectangle, populated or not: `COUNTBLANK(INDIRECT("C:C"))`.
+      const Value ref = eval_node_ref(node, arena, registry, ctx);
+      if (ref.is_error()) {
+        return ref;
+      }
+      if (ref.is_ref() && ref.as_ref().form == RefForm::kArea) {
+        auto read = deref_cells(ref, /*allow_span3d=*/false, arena, registry, ctx, ReadCount::kCounted);
+        if (!read) {
+          return Value::error(read.error());
+        }
+        const RefArea& area = ref.as_ref().areas[0];
+        double occupied = 0.0;
+        for (const Value& cell : read.value().cells) {
+          if (!is_empty(cell)) {
+            occupied += 1.0;
+          }
+        }
+        total += static_cast<double>(area.row_last - area.row_first + 1U) *
+                     static_cast<double>(area.col_last - area.col_first + 1U) -
+                 occupied;
+        continue;
+      }
+      count_value_blanks(ref.is_ref() ? densify(deref_shaped(ref, arena, registry, ctx, ReadCount::kCounted), arena)
+                                      : ref);
+      continue;
+    }
+    if (k == parser::NodeKind::Ref || is_range_shaped_ast(node)) {
       auto resolved = resolve_range_arg(node, arena, registry, ctx);
       if (!resolved) {
         return Value::error(resolved.error());
@@ -758,18 +881,7 @@ Value eval_countblank_lazy(const parser::AstNode& call, Arena& arena, const Func
       total += declared - occupied;
       continue;
     }
-    const Value v = eval_node(node, arena, registry, ctx);
-    if (v.is_array()) {
-      const ArrayValue* array = v.as_array();
-      const std::size_t n = static_cast<std::size_t>(array->rows) * static_cast<std::size_t>(array->cols);
-      for (std::size_t k = 0; k < n; ++k) {
-        if (is_empty(array->cells[k])) {
-          total += 1.0;
-        }
-      }
-    } else if (is_empty(v)) {
-      total += 1.0;
-    }
+    count_value_blanks(eval_node(node, arena, registry, ctx));
   }
   return Value::number(total);
 }
