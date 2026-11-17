@@ -816,6 +816,7 @@ Expected<SheetDecodeState, Error> DecodeSheetBin(
   ApplyDecodedRowHeaders(wb.sheet(sheet_index), state.row_headers);
   decode_print_records(state.tail.after_hyperlinks, wb.sheet(sheet_index).mutable_print_settings());
   wb.sheet(sheet_index).apply_blank_slot_rule();
+  take_range_protections14(state.tail.after_hyperlinks, state.protected_ranges);
   if (!state.protected_ranges.empty()) {
     write_protected_ranges(wb.sheet(sheet_index).mutable_raw_extensions(), state.protected_ranges);
   }

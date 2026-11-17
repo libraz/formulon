@@ -94,6 +94,13 @@ bool base64_decode(const std::string& text, std::vector<std::uint8_t>& out);
 //     ranges and title): dwSpinCount u32, UncheckedSqRfX,
 //     RangeProtectionTitleSDRel, then IsoPasswordData (hash and salt as
 //     u32-length blobs, algorithm as an XLNullableWideString).
+//   * BrtRangeProtection14 (1103), for a range of more than
+//     `kMaxProtectedRangeRects` areas, alone in a BrtFRTBegin / BrtFRTEnd
+//     block among the worksheet future records: FRTHeader (flags u32 2, one
+//     FRTSqref with flags u32 2 and an UncheckedSqRfX of any length), protPwd
+//     u16, RangeProtectionTitleSDRel.
+
+inline constexpr std::uint16_t kBrtRangeProtection14 = 1103;
 
 /// How a BrtRangeProtection record (with its Iso record) decoded.
 enum class RangeProtectionRead : std::uint8_t {
@@ -110,15 +117,29 @@ enum class RangeProtectionRead : std::uint8_t {
 /// before it (empty when none). `out` is set only for `kDecoded`.
 RangeProtectionRead decode_range_protection(ByteSpan payload, ByteSpan iso, ProtectedRange& out);
 
-/// Emits ([BrtRangeProtectionIso] BrtRangeProtection) for each range, the Iso
-/// record when a modern hash is set. Fails with `kIoFeatureNotWritable`
+/// Emits ([BrtRangeProtectionIso] BrtRangeProtection) for each range of at
+/// most `kMaxProtectedRangeRects` areas, the Iso record when a modern hash is
+/// set; longer ranges are left to `add_range_protections14`. Fails with `kIoFeatureNotWritable`
 /// (context `kind=` and `sheet_index=`) on a range the records cannot carry:
 /// SDDL text, a name outside 1..`kMaxProtectedRangeNameUnits` UTF-16 units,
-/// or an sqref that does not parse to 1..`kMaxProtectedRangeRects` ranges.
-/// Fails with `kInvalidArgument` on a hash, salt or legacy password the
-/// records cannot carry.
+/// an sqref that does not parse, or more than `kMaxProtectedRangeRects`
+/// ranges under a modern hash. Fails with `kInvalidArgument` on a hash, salt
+/// or legacy password the records cannot carry.
 Expected<void, Error> emit_range_protections(std::vector<std::uint8_t>& dst, const std::vector<ProtectedRange>& ranges,
                                              std::size_t sheet_index);
+
+/// Inserts one FRT block of BrtRangeProtection14 records, one per range of
+/// more than `kMaxProtectedRangeRects` areas, into the worksheet tail
+/// `records`: after the x14 CF, DVals14 and sparkline-group containers,
+/// ahead of any later future record and a trailing revision-uid block. Same
+/// failure contract as `emit_range_protections`.
+Expected<void, Error> add_range_protections14(std::vector<std::uint8_t>& records,
+                                              const std::vector<ProtectedRange>& ranges, std::size_t sheet_index);
+
+/// Moves the ranges of every FRT block in the worksheet tail `records` that
+/// holds only decodable BrtRangeProtection14 records into `out`, removing the
+/// block; any other block stays as read.
+void take_range_protections14(std::vector<std::uint8_t>& records, std::vector<ProtectedRange>& out);
 
 }  // namespace xlsb
 }  // namespace io

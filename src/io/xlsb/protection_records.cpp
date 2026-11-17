@@ -2,6 +2,7 @@
 
 #include "io/xlsb/protection_records.h"
 
+#include <algorithm>
 #include <array>
 #include <optional>
 #include <string>
@@ -10,6 +11,8 @@
 
 #include "io/protection_xml.h"
 #include "io/sqref_text.h"
+#include "io/xlsb/cf_x14_link.h"
+#include "io/xlsb/frt_records.h"
 #include "io/xlsb/record.h"
 #include "io/xlsb/record_writer.h"
 #include "io/xml_utils.h"
@@ -374,9 +377,13 @@ Expected<bool, Error> emit_book_protection(std::vector<std::uint8_t>& dst, const
 
 namespace {
 
-bool ReadSqRfx(ByteSpan& p, std::vector<MergeRange>& out) {
+// FRTHeader flags (fSqref) and FRTSqref flags (fDoAdjust) of BrtRangeProtection14.
+constexpr std::uint32_t kFrtHeaderSqref = 2U;
+constexpr std::uint32_t kFrtSqrefDoAdjust = 2U;
+
+bool ReadSqRfx(ByteSpan& p, std::vector<MergeRange>& out, std::size_t max_count) {
   auto count = read_u32(p);
-  if (!count || count.value() == 0U || count.value() > kMaxProtectedRangeRects || p.size / 16U < count.value()) {
+  if (!count || count.value() == 0U || count.value() > max_count || p.size / 16U < count.value()) {
     return false;
   }
   for (std::uint32_t i = 0; i < count.value(); ++i) {
@@ -393,13 +400,9 @@ bool ReadSqRfx(ByteSpan& p, std::vector<MergeRange>& out) {
   return true;
 }
 
-/// Reads sqRfX and RangeProtectionTitleSDRel, skipping the descriptor bytes;
+/// Reads RangeProtectionTitleSDRel, skipping the descriptor bytes;
 /// `descriptor_size` receives dwsdRel.
-bool ReadRangeAndTitle(ByteSpan& p, std::vector<MergeRange>& ranges, std::string& title,
-                       std::uint32_t& descriptor_size) {
-  if (!ReadSqRfx(p, ranges)) {
-    return false;
-  }
+bool ReadTitle(ByteSpan& p, std::string& title, std::uint32_t& descriptor_size) {
   auto name = read_xlwidestring(p);
   auto sd_size = read_u32(p);
   if (!name || name.value().empty() || utf16_units_in(name.value()) > kMaxProtectedRangeNameUnits || !sd_size ||
@@ -413,18 +416,114 @@ bool ReadRangeAndTitle(ByteSpan& p, std::vector<MergeRange>& ranges, std::string
   return true;
 }
 
-void EmitRangeAndTitle(std::vector<std::uint8_t>& dst, const std::vector<MergeRange>& ranges,
-                       const std::string& title) {
+/// Reads sqRfX and RangeProtectionTitleSDRel.
+bool ReadRangeAndTitle(ByteSpan& p, std::vector<MergeRange>& ranges, std::string& title,
+                       std::uint32_t& descriptor_size) {
+  return ReadSqRfx(p, ranges, kMaxProtectedRangeRects) && ReadTitle(p, title, descriptor_size);
+}
+
+void EmitRects(std::vector<std::uint8_t>& dst, const std::vector<MergeRange>& ranges) {
   emit_u32(dst, static_cast<std::uint32_t>(ranges.size()));
   for (const MergeRange& range : ranges) {
     emit_rfx(dst, range);
   }
+}
+
+void EmitTitle(std::vector<std::uint8_t>& dst, const std::string& title) {
   emit_xlwidestring(dst, title);
   emit_u32(dst, 0U);  // dwsdRel: no security descriptor
 }
 
+void EmitRangeAndTitle(std::vector<std::uint8_t>& dst, const std::vector<MergeRange>& ranges,
+                       const std::string& title) {
+  EmitRects(dst, ranges);
+  EmitTitle(dst, title);
+}
+
 Error RangeNotWritable(const char* kind, std::size_t sheet_index) {
   return not_writable(kind, sheet_index);
+}
+
+RangeProtectionRead DecodeRangeProtection14(ByteSpan payload, ProtectedRange& out) {
+  ByteSpan p = payload;
+  auto flags = read_u32(p);
+  auto sqrefs = read_u32(p);
+  auto sqref_flags = read_u32(p);
+  if (!flags || flags.value() != kFrtHeaderSqref || !sqrefs || sqrefs.value() != 1U || !sqref_flags ||
+      sqref_flags.value() != kFrtSqrefDoAdjust) {
+    return RangeProtectionRead::kUndecodable;
+  }
+  std::vector<MergeRange> ranges;
+  std::string title;
+  std::uint32_t descriptor = 0;
+  if (!ReadSqRfx(p, ranges, p.size / 16U)) {
+    return RangeProtectionRead::kUndecodable;
+  }
+  auto pwd = read_u16(p);
+  if (!pwd || !ReadTitle(p, title, descriptor) || p.size != 0U) {
+    return RangeProtectionRead::kUndecodable;
+  }
+  if (descriptor != 0U) {
+    return RangeProtectionRead::kSecurityDescriptor;
+  }
+  ProtectedRange range;
+  if (pwd.value() != 0U) {
+    range.password = LegacyHex(pwd.value());
+  }
+  range.name = std::move(title);
+  range.sqref = format_sqref_text(ranges);
+  out = std::move(range);
+  return RangeProtectionRead::kDecoded;
+}
+
+/// A writable range's areas and legacy verifier.
+struct RangeFields {
+  std::vector<MergeRange> rects;
+  std::uint16_t pwd = 0;
+};
+
+Expected<RangeFields, Error> CheckRange(const ProtectedRange& range, std::size_t sheet_index) {
+  // SDDL text has no encoder to the binary descriptor the record carries.
+  if (!range.security_descriptor.empty()) {
+    return RangeNotWritable("protected_range_descriptor", sheet_index);
+  }
+  const std::size_t units = utf16_units_in(range.name);
+  if (units == 0U || units > kMaxProtectedRangeNameUnits) {
+    return RangeNotWritable("protected_range_title", sheet_index);
+  }
+  RangeFields fields;
+  if (!parse_sqref_text(range.sqref, fields.rects) || fields.rects.empty()) {
+    return RangeNotWritable("protected_range_sqref", sheet_index);
+  }
+  // BrtRangeProtection14 has no Iso companion to carry a modern hash.
+  if (fields.rects.size() > kMaxProtectedRangeRects && !range.hash_value.empty()) {
+    return RangeNotWritable("protected_range_rects", sheet_index);
+  }
+  if (!range.password.empty() && !ParseLegacyHex(range.password, fields.pwd)) {
+    return make_error(FormulonErrorCode::kInvalidArgument, "Protected range password is not a 16-bit hex hash",
+                      kWriteXlsbContext);
+  }
+  return fields;
+}
+
+/// Where the BrtRangeProtection14 block goes; see `add_range_protections14`.
+std::size_t RangeProtection14InsertionPoint(const std::vector<FramedRecord>& recs, std::size_t size) {
+  for (std::size_t i = 0; i < recs.size(); ++i) {
+    if (recs[i].type != kFrtBegin) {
+      continue;
+    }
+    const std::uint16_t first = i + 1U < recs.size() ? recs[i + 1U].type : 0U;
+    if (first != kBeginCfs14 && first != kBeginDVals14 && first != kBeginSparklineGroups) {
+      return recs[i].begin;
+    }
+    while (i + 1U < recs.size() && recs[i].type != kFrtEnd) {
+      ++i;
+    }
+  }
+  if (recs.size() >= 3U && recs[recs.size() - 3U].type == kAcBegin && recs.back().type == kAcEnd) {
+    return recs[recs.size() - 3U].begin;
+  }
+  return size;
 }
 
 }  // namespace
@@ -475,27 +574,15 @@ RangeProtectionRead decode_range_protection(ByteSpan payload, ByteSpan iso, Prot
 Expected<void, Error> emit_range_protections(std::vector<std::uint8_t>& dst, const std::vector<ProtectedRange>& ranges,
                                              std::size_t sheet_index) {
   for (const ProtectedRange& range : ranges) {
-    // SDDL text has no encoder to the binary descriptor the record carries.
-    if (!range.security_descriptor.empty()) {
-      return RangeNotWritable("protected_range_descriptor", sheet_index);
+    auto fields = CheckRange(range, sheet_index);
+    if (!fields) {
+      return std::move(fields.error());
     }
-    const std::size_t units = utf16_units_in(range.name);
-    if (units == 0U || units > kMaxProtectedRangeNameUnits) {
-      return RangeNotWritable("protected_range_title", sheet_index);
-    }
-    std::vector<MergeRange> rfx;
-    if (!parse_sqref_text(range.sqref, rfx) || rfx.empty()) {
-      return RangeNotWritable("protected_range_sqref", sheet_index);
-    }
-    // Excel stores a longer list in BrtRangeProtection14, which is not written.
+    const std::vector<MergeRange>& rfx = fields.value().rects;
     if (rfx.size() > kMaxProtectedRangeRects) {
-      return RangeNotWritable("protected_range_rects", sheet_index);
+      continue;
     }
-    std::uint16_t pwd = 0;
-    if (!range.password.empty() && !ParseLegacyHex(range.password, pwd)) {
-      return make_error(FormulonErrorCode::kInvalidArgument, "Protected range password is not a 16-bit hex hash",
-                        kWriteXlsbContext);
-    }
+    std::uint16_t pwd = fields.value().pwd;
     std::vector<std::uint8_t> payload;
     if (!range.hash_value.empty()) {
       std::vector<std::uint8_t> hash;
@@ -522,6 +609,76 @@ Expected<void, Error> emit_range_protections(std::vector<std::uint8_t>& dst, con
     emit_record(dst, kBrtRangeProtection, payload);
   }
   return Expected<void, Error>::Ok();
+}
+
+Expected<void, Error> add_range_protections14(std::vector<std::uint8_t>& records,
+                                              const std::vector<ProtectedRange>& ranges, std::size_t sheet_index) {
+  std::vector<std::uint8_t> body;
+  for (const ProtectedRange& range : ranges) {
+    auto fields = CheckRange(range, sheet_index);
+    if (!fields) {
+      return std::move(fields.error());
+    }
+    if (fields.value().rects.size() <= kMaxProtectedRangeRects) {
+      continue;
+    }
+    std::vector<std::uint8_t> payload;
+    emit_u32(payload, kFrtHeaderSqref);
+    emit_u32(payload, 1U);
+    emit_u32(payload, kFrtSqrefDoAdjust);
+    EmitRects(payload, fields.value().rects);
+    emit_u16(payload, fields.value().pwd);
+    EmitTitle(payload, range.name);
+    emit_record(body, kBrtRangeProtection14, payload);
+  }
+  if (body.empty()) {
+    return Expected<void, Error>::Ok();
+  }
+  const std::vector<FramedRecord> recs = split_records(records);
+  std::vector<std::uint8_t> block;
+  // Excel refuses a future-record block directly after the last legacy one.
+  const bool has_print = std::any_of(recs.begin(), recs.end(), [](const FramedRecord& r) {
+    return r.type == kBrtPrintOptions || r.type == kBrtMargins || r.type == kBrtPageSetup;
+  });
+  if (!has_print) {
+    const std::array<std::uint8_t, 2> default_print_options = {0x10, 0x00};
+    emit_record(block, kBrtPrintOptions, ByteSpan{default_print_options.data(), default_print_options.size()});
+  }
+  emit_frt_begin(block, kFrtVersionWord);
+  block.insert(block.end(), body.begin(), body.end());
+  emit_record(block, kFrtEnd, ByteSpan{});
+  const std::size_t at = RangeProtection14InsertionPoint(recs, records.size());
+  records.insert(records.begin() + static_cast<std::ptrdiff_t>(at), block.begin(), block.end());
+  return Expected<void, Error>::Ok();
+}
+
+void take_range_protections14(std::vector<std::uint8_t>& records, std::vector<ProtectedRange>& out) {
+  const std::vector<FramedRecord> recs = split_records(records);
+  std::vector<std::pair<std::size_t, std::size_t>> cuts;
+  for (std::size_t i = 0; i < recs.size(); ++i) {
+    if (recs[i].type != kFrtBegin || i + 1U >= recs.size() || recs[i + 1U].type != kBrtRangeProtection14) {
+      continue;
+    }
+    std::vector<ProtectedRange> block;
+    std::size_t j = i + 1U;
+    bool decoded = true;
+    for (; j < recs.size() && recs[j].type == kBrtRangeProtection14; ++j) {
+      ProtectedRange range;
+      decoded = decoded && DecodeRangeProtection14(recs[j].payload, range) == RangeProtectionRead::kDecoded;
+      block.push_back(std::move(range));
+    }
+    if (decoded && j < recs.size() && recs[j].type == kFrtEnd) {
+      cuts.emplace_back(recs[i].begin, recs[j].end);
+      for (ProtectedRange& range : block) {
+        out.push_back(std::move(range));
+      }
+    }
+    i = j;
+  }
+  for (auto it = cuts.rbegin(); it != cuts.rend(); ++it) {
+    records.erase(records.begin() + static_cast<std::ptrdiff_t>(it->first),
+                  records.begin() + static_cast<std::ptrdiff_t>(it->second));
+  }
 }
 
 }  // namespace xlsb

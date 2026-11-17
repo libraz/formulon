@@ -672,6 +672,8 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   }
   // Table parts are model-owned; their BrtListPart records join the tail.
   splice_list_parts(tail.after_hyperlinks, table_part_rel_ids);
+  RETURN_IF_ERROR(
+      add_range_protections14(tail.after_hyperlinks, read_protected_ranges(sheet.raw_extensions()), own_index));
   // Sheet and range protection, conditional formatting and data validation
   // are emitted from the model. Protection leads the tail: the one record the grammar
   // puts ahead of it (BrtSheetCalcProp) is one Excel does not persist.

@@ -11,6 +11,7 @@
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/protection_xml.h"
+#include "io/xlsb/frt_records.h"
 #include "io/xlsb/protection_records.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/record.h"
@@ -73,7 +74,8 @@ std::vector<ProtectedRange> Ranges(const Workbook& wb) {
   return read_protected_ranges(wb.sheet(0).raw_extensions());
 }
 
-/// The range-protection records (680, 536) of the first worksheet part, type and payload.
+/// The range-protection records (680, 536, 1103) of the first worksheet part, type and payload; a 1103 record
+/// is preceded by its BrtFRTBegin.
 std::vector<std::pair<std::uint16_t, Bytes>> RangeRecords(const Bytes& package) {
   ZipReader zip;
   EXPECT_TRUE(static_cast<bool>(zip.open(SpanOf(package))));
@@ -81,8 +83,14 @@ std::vector<std::pair<std::uint16_t, Bytes>> RangeRecords(const Bytes& package) 
   EXPECT_TRUE(static_cast<bool>(part));
   std::vector<std::pair<std::uint16_t, Bytes>> out;
   if (part) {
-    for (const FramedRecord& rec : split_records(part.value())) {
-      if (rec.type == kBrtRangeProtection || rec.type == kBrtRangeProtectionIso) {
+    const std::vector<FramedRecord> recs = split_records(part.value());
+    for (std::size_t i = 0; i < recs.size(); ++i) {
+      const FramedRecord& rec = recs[i];
+      if (rec.type == kBrtRangeProtection14 && i > 0U && recs[i - 1U].type == kFrtBegin) {
+        const FramedRecord& begin = recs[i - 1U];
+        out.emplace_back(begin.type, Bytes(begin.payload.data, begin.payload.data + begin.payload.size));
+      }
+      if (rec.type == kBrtRangeProtection || rec.type == kBrtRangeProtectionIso || rec.type == kBrtRangeProtection14) {
         out.emplace_back(rec.type, Bytes(rec.payload.data, rec.payload.data + rec.payload.size));
       }
     }
@@ -120,8 +128,25 @@ void ExpectNotWritable(const Workbook& wb, const std::string& kind) {
   EXPECT_NE(saved.error().context.find("sheet_index=0"), std::string::npos) << saved.error().context;
 }
 
+/// Record types of the first worksheet part from the first BrtFRTBegin on.
+std::vector<std::uint16_t> FutureRecordTypes(const Bytes& package) {
+  ZipReader zip;
+  EXPECT_TRUE(static_cast<bool>(zip.open(SpanOf(package))));
+  auto part = zip.read_entry("xl/worksheets/sheet1.bin");
+  EXPECT_TRUE(static_cast<bool>(part));
+  std::vector<std::uint16_t> out;
+  if (part) {
+    for (const FramedRecord& rec : split_records(part.value())) {
+      if (rec.type == kFrtBegin || !out.empty()) {
+        out.push_back(rec.type);
+      }
+    }
+  }
+  return out;
+}
+
 // Sources Excel opened and wrote without a security descriptor.
-const char* const kWritableCases[] = {"hash_legacy", "hash_sha512", "title_255", "rects_8191"};
+const char* const kWritableCases[] = {"hash_legacy", "hash_sha512", "title_255", "rects_8191", "rects_8192"};
 
 TEST(XlsbParityProtectedRange, RecordsMatchExcel) {
   for (const char* name : kWritableCases) {
@@ -196,10 +221,37 @@ TEST(XlsbParityProtectedRange, RefusedTitlesLoadAndAreNotWritable) {
   }
 }
 
-TEST(XlsbParityProtectedRange, RectsPastCapAreNotWritable) {
-  // Excel writes a 8192-cell range as BrtRangeProtection14, which is not written.
+TEST(XlsbParityProtectedRange, RectsPastCapGoToFutureRecords) {
+  // Past 8191 areas Excel writes BrtRangeProtection14 in its own FRT block, ahead of the sheet's revision uid.
   const Workbook wb = LoadXlsx(Fixture("rects_8192_src.xlsx"));
-  ASSERT_EQ(Ranges(wb).size(), 1U);
+  auto saved = write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  EXPECT_EQ(FutureRecordTypes(saved.value().bytes), FutureRecordTypes(Fixture("rects_8192.xlsb")));
+}
+
+TEST(XlsbParityProtectedRange, RectsPastCapReadAndResaveAsExcel) {
+  const Workbook wb = LoadXlsb(Fixture("rects_8192.xlsb"));
+  ExpectSameRanges(Ranges(wb), Ranges(LoadXlsx(Fixture("rects_8192_src.xlsx"))));
+  auto saved = write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  const auto ours = RangeRecords(saved.value().bytes);
+  const auto theirs = RangeRecords(Fixture("rects_8192.2.xlsb"));
+  ASSERT_EQ(theirs.size(), 2U);
+  EXPECT_TRUE(ours == theirs) << "ours: " << Describe(ours) << " Excel: " << Describe(theirs);
+  EXPECT_EQ(FutureRecordTypes(saved.value().bytes), FutureRecordTypes(Fixture("rects_8192.2.xlsb")));
+}
+
+TEST(XlsbParityProtectedRange, HashedRectsPastCapAreNotWritable) {
+  Workbook wb = LoadXlsx(Fixture("rects_8192_src.xlsx"));
+  std::vector<ProtectedRange> ranges = Ranges(wb);
+  ASSERT_EQ(ranges.size(), 1U);
+  const std::vector<ProtectedRange> hashed = Ranges(LoadXlsx(Fixture("hash_sha512_src.xlsx")));
+  ASSERT_EQ(hashed.size(), 1U);
+  ranges[0].algorithm_name = hashed[0].algorithm_name;
+  ranges[0].hash_value = hashed[0].hash_value;
+  ranges[0].salt_value = hashed[0].salt_value;
+  ranges[0].spin_count = hashed[0].spin_count;
+  write_protected_ranges(wb.sheet(0).mutable_raw_extensions(), ranges);
   ExpectNotWritable(wb, "protected_range_rects");
 }
 
