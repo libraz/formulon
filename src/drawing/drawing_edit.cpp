@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "chart/chart_ns.h"
+#include "drawing/connector_route.h"
 #include "drawing/drawing_edit_internal.h"
 #include "drawing/drawing_geometry.h"
 #include "drawing/image_header.h"
@@ -305,21 +306,6 @@ pugi::xml_node insertion_point(const pugi::xml_node& root, const pugi::xml_node&
 
 namespace {
 
-// A picture's `spPr/a:xfrm` or a graphic frame's `xdr:xfrm`.
-pugi::xml_node object_xfrm(const pugi::xml_node& anchor) {
-  const pugi::xml_node content = anchor_content(anchor);
-  const pugi::xml_node own = child_local(content, "xfrm");
-  return own ? own : child_local(child_local(content, "spPr"), "xfrm");
-}
-
-// Excel lays a picture rotated into [45, 135) or [225, 315) degrees out in a
-// box with width and height swapped.
-bool swaps_box(const pugi::xml_node& xfrm) {
-  std::int64_t deg = xfrm.attribute("rot").as_llong() / 60000 % 360;
-  deg = deg < 0 ? deg + 360 : deg;
-  return (deg >= 45 && deg < 135) || (deg >= 225 && deg < 315);
-}
-
 std::string prefix_of(const pugi::xml_node& node) {
   return std::string(io::qname_prefix_colon(node.name()));
 }
@@ -338,15 +324,19 @@ pugi::xml_node put_marker(pugi::xml_node anchor, const pugi::xml_node& after, co
   return marker;
 }
 
-// A resolved `set_drawing_anchor` placement.
-struct Placement {
-  AnchorKind kind = AnchorKind::kOneCell;
-  EditAs edit_as = EditAs::kTwoCell;
-  AnchorPoint from, to;
-  std::int64_t box_w = 0, box_h = 0;
-  std::int64_t off_x = 0, off_y = 0;
-  std::int64_t cx = 0, cy = 0;
-};
+}  // namespace
+
+pugi::xml_node object_xfrm(const pugi::xml_node& anchor) {
+  const pugi::xml_node content = anchor_content(anchor);
+  const pugi::xml_node own = child_local(content, "xfrm");
+  return own ? own : child_local(child_local(content, "spPr"), "xfrm");
+}
+
+bool swaps_box(const pugi::xml_node& xfrm) {
+  std::int64_t deg = xfrm.attribute("rot").as_llong() / 60000 % 360;
+  deg = deg < 0 ? deg + 360 : deg;
+  return (deg >= 45 && deg < 135) || (deg >= 225 && deg < 315);
+}
 
 void place_anchor(pugi::xml_node anchor, const Placement& p) {
   const DrawingObject current = read_drawing_object(anchor, {});
@@ -397,8 +387,6 @@ void place_anchor(pugi::xml_node anchor, const Placement& p) {
     io::set_attr(ext, "cy", p.cy);
   }
 }
-
-}  // namespace
 
 std::string next_rel_id(const std::vector<io::ooxml::DrawingRel>& rels) {
   for (std::uint32_t n = 1;; ++n) {
@@ -810,6 +798,7 @@ Expected<void, Error> set_drawing_anchor(Workbook& wb, std::size_t sheet, std::u
   // `a:off` is the unrotated rectangle sharing the box's centre.
   p.off_x = geo.offset(false, p.from.col) + p.from.col_off + (p.box_w - p.cx) / 2;
   p.off_y = geo.offset(true, p.from.row) + p.from.row_off + (p.box_h - p.cy) / 2;
+  const std::vector<GluedEnd> glued = glued_ends(root);
   const pugi::xml_node top = top_of(root, target);
   for (const pugi::xml_node& other : drawing_anchors(root, true)) {
     const DrawingObject candidate = read_drawing_object(other, {});
@@ -817,6 +806,7 @@ Expected<void, Error> set_drawing_anchor(Workbook& wb, std::size_t sheet, std::u
       place_anchor(other, p);
     }
   }
+  follow_glued_shapes(wb, sheet, root, glued);
   return io::ooxml::store_part_dom(wb, path, doc);
 }
 
@@ -1152,7 +1142,9 @@ Expected<void, Error> update_picture(Workbook& wb, std::size_t sheet, std::uint3
       xfrm = props.prepend_child(
           (prefix_of(child_local(child_local(anchor_content(target), "blipFill"), "blip")) + "xfrm").c_str());
     }
+    const std::vector<GluedEnd> glued = glued_ends(root);
     write_xfrm_transform(xfrm, wanted);
+    follow_glued_shapes(wb, sheet, root, glued);
     RETURN_IF_ERROR(io::ooxml::store_part_dom(wb, path, doc));
   }
   if (common == nullptr) {

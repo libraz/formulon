@@ -186,6 +186,22 @@ TEST(PresetGeometry, StatedAdjustValuesMoveTheSites) {
   EXPECT_EQ(connection_sites(p, 1524000.0, 1016000.0, {{"adj9", 1}})[2].x, plain);
 }
 
+// A stated guide holds one operator over numbers and built-in guide names.
+TEST(PresetGeometry, GuideValueEvaluatesAStatedFormula) {
+  EXPECT_EQ(guide_value("val 30000", 100.0, 50.0), std::optional<double>(30000.0));
+  EXPECT_EQ(guide_value("val -5", 100.0, 50.0), std::optional<double>(-5.0));
+  EXPECT_EQ(guide_value("*/ 60000 1 2", 100.0, 50.0), std::optional<double>(30000.0));
+  EXPECT_EQ(guide_value("+- w h 10", 100.0, 50.0), std::optional<double>(140.0));
+  EXPECT_EQ(guide_value("*/ ss 1 1", 100.0, 50.0), std::optional<double>(50.0));
+  EXPECT_EQ(guide_value("val wd4", 100.0, 50.0), std::optional<double>(25.0));
+  EXPECT_EQ(guide_value("val ssd8", 100.0, 50.0), std::optional<double>(6.25));
+  EXPECT_EQ(guide_value("val cd4", 100.0, 50.0), std::optional<double>(5400000.0));
+  EXPECT_EQ(guide_value("max hc vc", 100.0, 50.0), std::optional<double>(50.0));
+  for (const char* bad : {"", "val", "val 1 2", "*/ 1 2", "nope 1", "val adj", "val wd0", "val wdx", "val 1.5"}) {
+    EXPECT_FALSE(guide_value(bad, 100.0, 50.0).has_value()) << bad;
+  }
+}
+
 }  // namespace
 }  // namespace preset_geometry
 }  // namespace formulon

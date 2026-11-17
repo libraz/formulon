@@ -14,6 +14,7 @@
 #include "chart/chart_edit_internal.h"
 #include "chart/chart_ns.h"
 #include "chart/chart_xml.h"
+#include "drawing/connector_route.h"
 #include "drawing/drawing_edit.h"
 #include "drawing/drawing_edit_internal.h"
 #include "drawing/drawing_geometry.h"
@@ -718,6 +719,7 @@ Expected<void, Error> edit_shape(Workbook& wb, std::size_t sheet, std::uint32_t 
     return drawing_edit::refuse_object(doc.document_element(), object_id, kNoShape);
   }
   pugi::xml_node content = anchor_content(anchor);
+  const std::vector<drawing_edit::GluedEnd> glued = drawing_edit::glued_ends(doc.document_element());
   if ((spec.fields & shape_field::kAnchor) != 0U) {
     const std::pair<std::int64_t, std::int64_t> before = anchor_origin(wb, sheet, anchor);
     RETURN_IF_ERROR(place(wb, sheet, anchor, content, spec));
@@ -729,6 +731,7 @@ Expected<void, Error> edit_shape(Workbook& wb, std::size_t sheet, std::uint32_t 
   ShapeSpec rest = spec;
   rest.fields &= ~shape_field::kAnchor;
   RETURN_IF_ERROR(apply_fields(anchor, content, rest));
+  drawing_edit::follow_glued_shapes(wb, sheet, doc.document_element(), glued);
   if (!store) {
     return Expected<void, Error>::Ok();
   }

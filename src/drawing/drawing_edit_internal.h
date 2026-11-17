@@ -192,6 +192,28 @@ inline bool is_orderable(const pugi::xml_node& anchor, DrawingObjectKind kind) {
 // (a null node).
 pugi::xml_node insertion_point(const pugi::xml_node& root, const pugi::xml_node& moving, std::size_t index);
 
+// A picture's `spPr/a:xfrm`, a shape's or connector's, or a graphic frame's `xdr:xfrm`.
+pugi::xml_node object_xfrm(const pugi::xml_node& anchor);
+
+// Excel lays an object rotated into [45, 135) or [225, 315) degrees out in a
+// box with width and height swapped.
+bool swaps_box(const pugi::xml_node& xfrm);
+
+// A resolved anchor placement: the anchor's kind, markers and box, and the
+// `a:xfrm` rectangle laid out in it.
+struct Placement {
+  AnchorKind kind = AnchorKind::kOneCell;
+  EditAs edit_as = EditAs::kTwoCell;
+  AnchorPoint from, to;
+  std::int64_t box_w = 0, box_h = 0;
+  std::int64_t off_x = 0, off_y = 0;
+  std::int64_t cx = 0, cy = 0;
+};
+
+// Writes `p` into the top-level `anchor`: its kind, markers or position and
+// size, and its object's `a:xfrm` offset and extent.
+void place_anchor(pugi::xml_node anchor, const Placement& p);
+
 std::string next_rel_id(const std::vector<io::ooxml::DrawingRel>& rels);
 
 Expected<void, Error> load_rels_doc(const Workbook& wb, const std::string& rels_path, pugi::xml_document& rels_doc);

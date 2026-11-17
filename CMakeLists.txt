@@ -383,6 +383,7 @@ set(FORMULON_CORE_SOURCES
   src/drawing/drawing_xml.cpp
   src/drawing/image_header.cpp
   src/drawing/drawing_clone.cpp
+  src/drawing/connector_route.cpp
   src/drawing/drawing_edit.cpp
   src/drawing/drawing_snapshot.cpp
   src/drawing/shape_edit.cpp

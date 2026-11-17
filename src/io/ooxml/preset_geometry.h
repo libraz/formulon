@@ -5,7 +5,6 @@
 #define FORMULON_IO_OOXML_PRESET_GEOMETRY_H_
 
 #include <cstddef>
-#include <cstdint>
 #include <optional>
 #include <string_view>
 #include <vector>
@@ -20,14 +19,20 @@ std::optional<std::size_t> index_of(std::string_view prst);
 std::size_t preset_count();
 std::string_view name_at(std::size_t index);
 
-/// An adjust guide of a preset: its name and default value, in the preset's raw DrawingML units.
+/// An adjust guide of a preset: its name and value, in the preset's raw DrawingML units. A preset's own
+/// guides carry their defaults, which are whole numbers.
 struct AdjustGuide {
   std::string_view name;
-  std::int32_t value = 0;
+  double value = 0.0;
 };
 
 /// The adjust guides of preset `index`, in the order the preset lists them; empty for a preset without any.
 std::vector<AdjustGuide> adjust_guides(std::size_t index);
+
+/// The value of the guide formula `fmla` (ECMA-376 Part 1, 20.1.9.11) on a `w` x `h` EMU shape, as a stated
+/// adjust guide holds it: one operator over numbers and built-in guide names (`w`, `hc`, `ssd8`, `cd4`...).
+/// Unset for a formula naming anything else or with the wrong number of operands.
+std::optional<double> guide_value(std::string_view fmla, double w, double h);
 
 /// A point in a shape's own frame, in EMU from its top-left corner before rotation and flips.
 struct Point {

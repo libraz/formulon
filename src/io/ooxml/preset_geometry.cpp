@@ -1,11 +1,13 @@
 #include "io/ooxml/preset_geometry.h"
 
 #include <array>
+#include <charconv>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <string_view>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -143,6 +145,53 @@ double apply(std::uint8_t op, const double* a) {
   }
 }
 
+// The operator names, in the order of `apply`.
+constexpr std::array<std::string_view, 17> kOperators = {"*/",   "+-",  "+/",   "?:",  "abs", "at2",
+                                                         "cat2", "cos", "max",  "min", "mod", "pin",
+                                                         "sat2", "sin", "sqrt", "tan", "val"};
+
+// A positive decimal count such as the 4 of `wd4`, or 0 for anything else.
+double divisor_of(std::string_view digits) {
+  std::int32_t n = 0;
+  const auto [end, ec] = std::from_chars(digits.data(), digits.data() + digits.size(), n);
+  return ec == std::errc() && end == digits.data() + digits.size() && n > 0 ? n : 0.0;
+}
+
+// The value of operand `token` of a stated guide on a `w` x `h` shape: a number, or a built-in guide name.
+std::optional<double> builtin_value(std::string_view token, double w, double h) {
+  const double ss = w < h ? w : h;
+  const double ls = w < h ? h : w;
+  constexpr std::pair<std::string_view, double> kAngles[] = {
+      {"cd2", 10800000.0}, {"cd4", 5400000.0},   {"cd8", 2700000.0},  {"3cd4", 16200000.0},
+      {"3cd8", 8100000.0}, {"5cd8", 13500000.0}, {"7cd8", 18900000.0}};
+  for (const auto& [name, value] : kAngles) {
+    if (token == name) {
+      return value;
+    }
+  }
+  const std::pair<std::string_view, double> fixed[] = {{"w", w},        {"h", h},        {"ss", ss}, {"ls", ls},
+                                                       {"hc", w / 2.0}, {"vc", h / 2.0}, {"l", 0.0}, {"t", 0.0},
+                                                       {"r", w},        {"b", h}};
+  for (const auto& [name, value] : fixed) {
+    if (token == name) {
+      return value;
+    }
+  }
+  const std::pair<std::string_view, double> scaled[] = {{"ssd", ss}, {"wd", w}, {"hd", h}};
+  for (const auto& [prefix, base] : scaled) {
+    if (token.size() > prefix.size() && token.substr(0, prefix.size()) == prefix) {
+      const double n = divisor_of(token.substr(prefix.size()));
+      return n > 0.0 ? std::optional<double>(base / n) : std::nullopt;
+    }
+  }
+  std::int64_t n = 0;
+  const auto [end, ec] = std::from_chars(token.data(), token.data() + token.size(), n);
+  if (ec == std::errc() && end == token.data() + token.size()) {
+    return static_cast<double>(n);
+  }
+  return std::nullopt;
+}
+
 // Reads the operands of one preset's code: shared values, adjust guides and earlier guides.
 class Evaluator {
  public:
@@ -217,9 +266,43 @@ std::vector<AdjustGuide> adjust_guides(std::size_t index) {
   out.reserve(entry.adjust_count);
   for (std::size_t i = 0; i < entry.adjust_count; ++i) {
     const PresetAdjust& a = kPresetAdjusts[entry.adjust_first + i];
-    out.push_back(AdjustGuide{kPresetAdjustNames[a.name], a.value});
+    out.push_back(AdjustGuide{kPresetAdjustNames[a.name], static_cast<double>(a.value)});
   }
   return out;
+}
+
+std::optional<double> guide_value(std::string_view fmla, double w, double h) {
+  std::array<std::string_view, 5> tokens{};
+  std::size_t count = 0;
+  while (!fmla.empty()) {
+    const std::size_t space = fmla.find(' ');
+    const std::string_view token = fmla.substr(0, space);
+    if (!token.empty()) {
+      if (count == tokens.size()) {
+        return std::nullopt;
+      }
+      tokens[count++] = token;
+    }
+    fmla = space == std::string_view::npos ? std::string_view() : fmla.substr(space + 1U);
+  }
+  for (std::size_t op = 0; op < kOperators.size(); ++op) {
+    if (count == 0 || tokens[0] != kOperators[op]) {
+      continue;
+    }
+    if (count != kArity[op] + 1U) {
+      return std::nullopt;
+    }
+    double args[3] = {0.0, 0.0, 0.0};
+    for (std::size_t k = 0; k < kArity[op]; ++k) {
+      const std::optional<double> v = builtin_value(tokens[k + 1U], w, h);
+      if (!v) {
+        return std::nullopt;
+      }
+      args[k] = *v;
+    }
+    return apply(static_cast<std::uint8_t>(op), args);
+  }
+  return std::nullopt;
 }
 
 std::vector<Point> connection_sites(std::size_t index, double w, double h, const std::vector<AdjustGuide>& stated) {
