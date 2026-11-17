@@ -3,6 +3,7 @@
 // shaped like the criteria range, whatever the value range's own size. The
 // *IFS variants keep rejecting a shape mismatch with #VALUE!.
 
+#include <cstdint>
 #include <string_view>
 
 #include "eval/eval_context.h"
@@ -53,6 +54,52 @@ Workbook DiagonalWorkbook() {
 void ExpectNumber(const Value& v, double expected) {
   ASSERT_TRUE(v.is_number()) << "kind=" << static_cast<int>(v.kind());
   EXPECT_DOUBLE_EQ(v.as_number(), expected);
+}
+
+// A1:A5 = "x","y","x",(blank),"x"; B1:B5 = 10..50.
+Workbook KeyedColumns() {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  const char* keys[] = {"x", "y", "x", nullptr, "x"};
+  for (std::uint32_t r = 0; r < 5U; ++r) {
+    if (keys[r] != nullptr) {
+      s.set_cell_value(r, 0, Value::text(keys[r]));
+    }
+    s.set_cell_value(r, 1, Value::number(10.0 * (r + 1U)));
+  }
+  return wb;
+}
+
+// A reference a call returns is read as the same typed range: its value range
+// is anchored and resized, its whole-axis tail counts, and its declared shape
+// is compared.
+TEST(SumIfRangeResize, ReturnedReferencesReadAsTypedRanges) {
+  const Workbook wb = KeyedColumns();
+  const struct {
+    const char* formula;
+    double expected;
+  } numbers[] = {
+      {"=COUNTIF(INDIRECT(\"A:A\"),\"\")", 1048572.0},
+      {"=SUMIF(A1:A3,\"x\",OFFSET(B1,0,0))", 40.0},
+      {"=COUNTIFS(INDIRECT(\"A:A\"),\"x\",INDIRECT(\"B:B\"),\">0\")", 3.0},
+      {"=SUMIF(A1:A5,\"x\",INDEX(B:B,1))", 90.0},
+      {"=AVERAGEIF(A1:A3,\"x\",INDIRECT(\"B1\"))", 20.0},
+      {"=SUMIF(INDIRECT(\"A:A\"),\"\",B:B)", 40.0},
+      {"=SUMIFS(OFFSET(B1,0,0,5),OFFSET(A1,0,0,5),\"x\")", 90.0},
+      {"=SUMIF(OFFSET(A1,0,0,5),\"x\",OFFSET(B1:B2,1,0))", 60.0},
+      {"=MAXIFS(INDIRECT(\"B1:B5\"),A1:A5,\"x\")", 50.0},
+      {"=SUMIFS(B1:B5,INDIRECT(\"A1:A5\"),\"x\",OFFSET(A1,0,1,5),\">15\")", 80.0},
+  };
+  for (const auto& c : numbers) {
+    SCOPED_TRACE(c.formula);
+    ExpectNumber(EvalSourceIn(c.formula, wb, wb.sheet(0)), c.expected);
+  }
+  for (const char* src : {"=COUNTIFS(INDIRECT(\"A:A\"),\"x\",B1:B5,\">0\")",
+                          "=COUNTIFS(OFFSET(A1,0,0,3),\"x\",OFFSET(B1,0,0,1,3),\">0\")"}) {
+    const Value v = EvalSourceIn(src, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_error()) << src;
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << src;
+  }
 }
 
 TEST(SumIfRangeResize, ColumnSumRangeTakesCriteriaShape) {

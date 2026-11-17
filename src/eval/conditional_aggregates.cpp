@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -23,6 +24,9 @@
 #include "eval/lazy_impls.h"
 #include "eval/name_env_resolve.h"
 #include "eval/range_args.h"
+#include "eval/range_resolvers.h"
+#include "eval/reference/deref.h"
+#include "eval/reference/ref_value.h"
 #include "eval/structured_ref_project.h"
 #include "eval/tree_walker/broadcast.h"
 #include "parser/ast.h"
@@ -43,6 +47,16 @@ namespace {
 // `#VALUE!` in Excel 365 — stricter than SUMIF's clamp-to-min behaviour,
 // which we also match here.
 
+/// A range argument read once: its cells, and the rectangle it declares when it
+/// is a reference, typed (`A:A`, `B1:B5`) or returned by a call
+/// (`INDIRECT("A:A")`, `OFFSET(B1,0,0,5)`).
+struct ConditionalRange {
+  RangeResult range;
+  bool declared = false;
+  std::uint32_t declared_rows = 0;
+  std::uint32_t declared_cols = 0;
+};
+
 /// The shape every range in one `*IFS` call has to agree on.
 ///
 /// Cell count alone does not decide it: a 3x1 column and a 1x3 row hold the
@@ -57,22 +71,25 @@ struct CriteriaShape {
   std::uint32_t rows = 0;
   std::uint32_t cols = 0;
   bool rectangular = false;
-  // The declared shape, when the range is a static reference.
+  // The declared shape, when the range is a reference.
   bool declared = false;
   std::uint32_t declared_rows = 0;
   std::uint32_t declared_cols = 0;
 
-  /// Two static references compare declared shapes, so `A:A` and `B1:B5`
+  /// Two references compare declared shapes, so `A:A` and `B1:B5`
   /// disagree even when column A holds five values. Whole-axis references
   /// among one call's arguments are walked to one length, so their cell
   /// counts agree whenever their declared shapes do.
-  static CriteriaShape of(const RangeResult& resolved, const parser::AstNode& arg, const EvalContext& ctx) {
+  static CriteriaShape of(const ConditionalRange& read) {
+    const RangeResult& resolved = read.range;
     CriteriaShape shape;
     shape.size = resolved.cells.size();
     shape.rows = resolved.rows;
     shape.cols = resolved.cols;
     shape.rectangular = static_cast<std::size_t>(resolved.rows) * static_cast<std::size_t>(resolved.cols) == shape.size;
-    shape.declared = static_reference_shape(arg, ctx, &shape.declared_rows, &shape.declared_cols);
+    shape.declared = read.declared;
+    shape.declared_rows = read.declared_rows;
+    shape.declared_cols = read.declared_cols;
     return shape;
   }
 
@@ -96,15 +113,59 @@ bool is_external_range_arg(const parser::AstNode& arg, const EvalContext& ctx) {
   return resolve_range_binding(arg, ctx.name_env(), /*accept_ref=*/false).kind() == parser::NodeKind::ExternalRef;
 }
 
-/// `resolve_range_arg` for the range-taking conditional aggregates, which
-/// reject a 3-D reference with `#VALUE!` (`#NAME?` when grouped).
-Expected<RangeResult, ErrorCode> resolve_conditional_range(const parser::AstNode& arg, Arena& arena,
-                                                           const FunctionRegistry& registry, const EvalContext& ctx) {
+/// True when `node` is a reference a call returns, or a `:` over one
+/// (`A1:OFFSET(...)`), read as the `Ref` it evaluates to.
+bool is_returned_reference(const parser::AstNode& node, const EvalContext& ctx) {
+  const parser::NodeKind k = node.kind();
+  if (k != parser::NodeKind::Call && k != parser::NodeKind::RangeOp) {
+    return false;
+  }
+  parser::Reference lhs{};
+  parser::Reference rhs{};
+  if (k == parser::NodeKind::RangeOp && reference_endpoint_pair(node, &lhs, &rhs, ctx)) {
+    return false;
+  }
+  return evaluates_to_reference(node) && !carries_name_reference(node);
+}
+
+/// Reads a range argument of the range-taking conditional aggregates, which
+/// reject a 3-D reference with `#VALUE!` (`#NAME?` when grouped). A returned
+/// one-area reference declares its rectangle as a typed one does.
+Expected<ConditionalRange, ErrorCode> resolve_conditional_range(const parser::AstNode& arg, Arena& arena,
+                                                                const FunctionRegistry& registry,
+                                                                const EvalContext& ctx) {
   const parser::AstNode& node = resolve_range_binding(arg, ctx.name_env(), /*accept_ref=*/false);
   if (node.kind() == parser::NodeKind::Ref3D) {
     return three_d_reference_error(node);
   }
-  return resolve_range_arg(arg, arena, registry, ctx);
+  ConditionalRange out;
+  if (is_returned_reference(node, ctx)) {
+    const Value ref = eval_node_ref(node, arena, registry, ctx);
+    if (ref.is_error()) {
+      return ref.as_error();
+    }
+    if (ref.is_ref() && ref.as_ref().form == RefForm::kArea) {
+      auto read = deref_cells(ref, /*allow_span3d=*/false, arena, registry, ctx, ReadCount::kCounted);
+      if (!read) {
+        return read.error();
+      }
+      const RefArea& area = ref.as_ref().areas[0];
+      out.range.cells = std::move(read.value().cells);
+      out.range.rows = read.value().rows;
+      out.range.cols = read.value().cols;
+      out.declared = true;
+      out.declared_rows = area.row_last - area.row_first + 1U;
+      out.declared_cols = area.col_last - area.col_first + 1U;
+      return out;
+    }
+  }
+  auto resolved = resolve_range_arg(arg, arena, registry, ctx);
+  if (!resolved) {
+    return resolved.error();
+  }
+  out.range = std::move(resolved.value());
+  out.declared = static_reference_shape(arg, ctx, &out.declared_rows, &out.declared_cols);
+  return out;
 }
 
 /// True when any argument of `call` in `[first, arity)`, stepping by `step`,
@@ -119,16 +180,14 @@ bool any_external_range_arg(const parser::AstNode& call, std::uint32_t first, st
   return false;
 }
 
-/// Cells a static reference declares beyond the ones `resolved` walked: the
-/// unpopulated tail of a whole-axis range. Zero for any other argument.
-double unpopulated_tail(const RangeResult& resolved, const parser::AstNode& arg, const EvalContext& ctx) {
-  std::uint32_t rows = 0;
-  std::uint32_t cols = 0;
-  if (!static_reference_shape(arg, ctx, &rows, &cols)) {
+/// Cells a reference declares beyond the ones `read` walked: the unpopulated
+/// tail of a whole-axis range. Zero for any other argument.
+double unpopulated_tail(const ConditionalRange& read) {
+  if (!read.declared) {
     return 0.0;
   }
-  const double declared = static_cast<double>(rows) * static_cast<double>(cols);
-  const double walked = static_cast<double>(resolved.cells.size());
+  const double declared = static_cast<double>(read.declared_rows) * static_cast<double>(read.declared_cols);
+  const double walked = static_cast<double>(read.range.cells.size());
   return declared > walked ? declared - walked : 0.0;
 }
 
@@ -161,11 +220,11 @@ bool resolve_criteria_pairs(const parser::AstNode& call, std::uint32_t first_pai
       *out_err_value = Value::error(resolved.error());
       return false;
     }
-    if (!CriteriaShape::of(resolved.value(), call.as_call_arg(range_idx), ctx).agrees_with(expected)) {
+    if (!CriteriaShape::of(resolved.value()).agrees_with(expected)) {
       *out_err_value = Value::error(ErrorCode::Value);
       return false;
     }
-    std::vector<Value> cells = std::move(resolved.value().cells);
+    std::vector<Value> cells = std::move(resolved.value().range.cells);
     // An error-valued criterion is NOT propagated: Excel's *IFS functions
     // accept an error criterion as a filter over error cells with the
     // matching code (see `parse_criterion` ValueKind::Error branch).
@@ -273,13 +332,40 @@ bool resolve_optional_value_range(const parser::AstNode& arg, std::uint32_t crit
       return true;
     }
   }
+  // A returned one-area reference is anchored the same way: `SUMIF(A1:A3,"x",OFFSET(B1,0,0))` reads B1:B3.
+  const parser::AstNode& node = resolve_range_binding(arg, ctx.name_env(), /*accept_ref=*/false);
+  if (criteria_rectangular && is_returned_reference(node, ctx)) {
+    const Value ref = eval_node_ref(node, arena, registry, ctx);
+    if (ref.is_error()) {
+      *out_err_value = ref;
+      return false;
+    }
+    std::string_view sheet;
+    if (ref.is_ref() && ref.as_ref().form == RefForm::kArea && ref.as_ref().book == 0U &&
+        ref.as_ref().areas[0].whole_col == 0U && ref.as_ref().areas[0].whole_row == 0U &&
+        ref_sheet_name(ctx, ref.as_ref().areas[0].sheet_first, &sheet)) {
+      const RefArea& area = ref.as_ref().areas[0];
+      const DeclaredRect anchored{area.row_first, area.row_first + criteria_rows - 1U, area.col_first,
+                                  area.col_first + criteria_cols - 1U};
+      if (ref.ref_is_dynamic()) {
+        ctx.note_dynamic_read(sheet, anchored);
+      }
+      ErrorCode err = ErrorCode::Ref;
+      if (!expand_resolved_rect_cells(sheet, anchored.row_first, anchored.col_first, anchored.row_last,
+                                      anchored.col_last, arena, registry, ctx, out_cells, &err, nullptr, nullptr)) {
+        *out_err_value = Value::error(err);
+        return false;
+      }
+      return true;
+    }
+  }
 
   auto resolved = resolve_conditional_range(arg, arena, registry, ctx);
   if (!resolved) {
     *out_err_value = Value::error(resolved.error());
     return false;
   }
-  *out_cells = std::move(resolved.value().cells);
+  *out_cells = std::move(resolved.value().range.cells);
   return true;
 }
 
@@ -297,8 +383,8 @@ bool resolve_ifs_inputs(const parser::AstNode& call, Arena& arena, const Functio
     *out_err_value = Value::error(value_resolved.error());
     return false;
   }
-  const CriteriaShape expected = CriteriaShape::of(value_resolved.value(), call.as_call_arg(0), ctx);
-  out->value_cells = std::move(value_resolved.value().cells);
+  const CriteriaShape expected = CriteriaShape::of(value_resolved.value());
+  out->value_cells = std::move(value_resolved.value().range.cells);
   out->expected_size = expected.size;
 
   const std::uint32_t pair_count = (call.as_call_arity() - 1U) / 2U;
@@ -413,15 +499,15 @@ bool resolve_if_inputs(const parser::AstNode& call, std::uint32_t arity, Arena& 
     *out_err = Value::error(crit_resolved.error());
     return false;
   }
-  out->criteria_cells = std::move(crit_resolved.value().cells);
+  out->criteria_cells = std::move(crit_resolved.value().range.cells);
   // Error criterion is NOT propagated; `parse_criterion` converts it to a
   // filter over error cells with the same code.
   out->criterion = eval_node(call.as_call_arg(1), arena, registry, ctx);
   out->has_value_range = arity == 3;
   return !out->has_value_range ||
-         resolve_optional_value_range(call.as_call_arg(2), crit_resolved.value().rows, crit_resolved.value().cols,
-                                      out->criteria_cells.size(), arena, registry, ctx, &out->explicit_value_cells,
-                                      out_err);
+         resolve_optional_value_range(call.as_call_arg(2), crit_resolved.value().range.rows,
+                                      crit_resolved.value().range.cols, out->criteria_cells.size(), arena, registry,
+                                      ctx, &out->explicit_value_cells, out_err);
 }
 
 /// Shared body of SUMIF / AVERAGEIF: sums the matching numeric cells of the
@@ -583,9 +669,9 @@ Value eval_countifs_lazy(const parser::AstNode& call, Arena& arena, const Functi
   if (!first_resolved) {
     return Value::error(first_resolved.error());
   }
-  const CriteriaShape expected = CriteriaShape::of(first_resolved.value(), call.as_call_arg(0), ctx);
-  const double tail = unpopulated_tail(first_resolved.value(), call.as_call_arg(0), ctx);
-  std::vector<Value> first_cells = std::move(first_resolved.value().cells);
+  const CriteriaShape expected = CriteriaShape::of(first_resolved.value());
+  const double tail = unpopulated_tail(first_resolved.value());
+  std::vector<Value> first_cells = std::move(first_resolved.value().range.cells);
   const std::size_t expected_size = expected.size;
   // Error criterion is NOT propagated; it filters error cells (see
   // `parse_criterion` ValueKind::Error).
