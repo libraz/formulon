@@ -201,6 +201,94 @@ double cos_kernel_fixed(const LargeReduction& red, std::uint64_t sign) noexcept 
   return from_bits(to_bits(cos_poly(scaled_fixed(t, 58, std::uint64_t{2} * red.shift))) ^ sign);
 }
 
+// Arctangent: |x| up to 2 in intervals, each a polynomial in |x| - centre.
+struct ArctanInterval {
+  std::uint64_t upper;             // largest |x| in the interval
+  std::uint64_t centre;            // minus the expansion point
+  int count;                       // coefficients in use
+  std::uint64_t coefficients[13];  // highest degree first, the constant term last
+};
+
+constexpr ArctanInterval kArctanIntervals[5] = {
+    {0x3fe8000000000000,
+     0xbfe4000000000027,
+     13,
+     {0x3f710f3e20f6a2e2, 0xbf8d88d31abc3ae5, 0x3f8950e69dcdd967, 0x3f7ff3b7c531aa4a, 0xbfa09bc0ab7f914c,
+      0x3fa094966be2b531, 0x3f8a759263f377f2, 0xbfb519e110f61b54, 0x3fba1247ca5d9475, 0x3f95d0b7e9e69054,
+      0xbfd4af2b78215a1b, 0x3fe702e05c0b8155, 0x3fe1e00babdefed0}},
+    {0x3ff0000000000000,
+     0xbfec0000000f4213,
+     12,
+     {0x3f1ca7cde5de9bd7, 0xbf7265ef51b17db7, 0x3f8152311b180e6c, 0xbf7ac1645739e676, 0xbf791f7e2a7a338f,
+      0x3f9c90e92ac8d86c, 0xbfa63b543effa4ef, 0x3f959bc93f81895a, 0x3fb41b15e5e8dcd0, 0xbfd1f6a8499714a2,
+      0x3fe21fb781196ac3, 0x3fe700a7c580ea7e}},
+    {0x3ff5555555555555,
+     0xbff2aaaaaaaaaa96,
+     13,
+     {0xbf3883d8959134b3, 0x3f4a89224ff69018, 0xbf50120e602f6336, 0x3f2cbd49da316282, 0x3f62fcdacdd6e5b5,
+      0xbf7c0b993a09ce31, 0x3f873a9328786665, 0xbf82b01fc60cc37a, 0xbf8bc317394714b7, 0x3fb3fd2b9f586a67,
+      0xbfcac97826d58470, 0x3fdb1b1b1b1b1b3d, 0x3feb96e5a78c5c40}},
+    {0x3ffaaaaaaaaaaaab,
+     0xbff8000000000003,
+     12,
+     {0x3f00280537f097f3, 0x3f1b4e30d1ba3819, 0xbf3e4eef429eb680, 0x3f525bad4d85cbe1, 0xbf5f4ac1342182d2,
+      0x3f5dfaa5e77b7375, 0x3f613a254d6e5b7c, 0xbf9135a0938ec462, 0x3fac963c83985742, 0xbfc22d719c06115e,
+      0x3fd3b13b13b13b0c, 0x3fef730bd281f69d}},
+    {0x4000000000000000,
+     0xbffd555555461337,
+     11,
+     {0x3f100b6a460ac05d, 0xbf23045b70e93129, 0x3f310f884eac0e0a, 0xbf32b9ad13db35a8, 0xbf33182219e21362,
+      0x3f68cb82a74e0699, 0xbf8881ec3d15241f, 0x3fa2b090aad5f9dc, 0xbfb8ad3c44f10dc3, 0x3fcd59ae78c11c49,
+      0x3ff124a85750fb5c}},
+};
+
+// atan(x) = x + x * x^2 * P(x^2) for |x| <= 1/2, highest degree first.
+constexpr std::uint64_t kArctanSmall[12] = {0x3f84a9f5c4724056, 0xbf9c0eb85f543412, 0x3fa56cdb5d887934,
+                                            0xbfaa38cf590469ec, 0x3fadfe7b9674ae37, 0xbfb10f31279ec05d,
+                                            0x3fb3b113f18ac049, 0xbfb745cf51795b21, 0x3fbc71c7096c2725,
+                                            0xbfc2492492179ca3, 0x3fc99999999918d8, 0xbfd555555555551b};
+
+// atan(t) = t + t * t^2 * P(t^2) for t = 1/|x| with |x| > 2, highest degree first.
+constexpr std::uint64_t kArctanReciprocal[11] = {0xbf883dafda7bd3fd, 0x3fa007733e06ceb3, 0xbfa81d33e401836d,
+                                                 0x3fad78252fa69c1c, 0xbfb104146b1a1ae8, 0x3fb3afd7a0e6eb75,
+                                                 0xbfb745b7f2d72663, 0x3fbc71c5edfed480, 0xbfc249248e1422e3,
+                                                 0x3fc999999989ebca, 0xbfd5555555554a51};
+
+// x + x * x^2 * P(x^2), P in Horner form.
+double odd_series(double x, const std::uint64_t* coefficients, int count) noexcept {
+  const double x2 = x * x;
+  double p = from_bits(coefficients[0]);
+  for (int i = 1; i < count; ++i) {
+    p = std::fma(p, x2, from_bits(coefficients[i]));
+  }
+  return std::fma(x2 * p, x, x);
+}
+
+double arctan_positive(double ax) noexcept {
+  if (ax <= from_bits(0x3e4d12ed0af1a27f)) {  // below this atan(x) rounds to x
+    return ax;
+  }
+  if (ax <= 0.5) {
+    return odd_series(ax, kArctanSmall, 12);
+  }
+  for (const ArctanInterval& iv : kArctanIntervals) {
+    if (ax <= from_bits(iv.upper)) {
+      const double u = ax + from_bits(iv.centre);
+      double p = from_bits(iv.coefficients[0]);
+      for (int j = 1; j < iv.count; ++j) {
+        p = std::fma(p, u, from_bits(iv.coefficients[j]));
+      }
+      return p;
+    }
+  }
+  const double half_pi_hi = from_bits(0x3ff921fb54442d18);  // pi/2, leading part
+  if (ax >= 0x1p53) {
+    return half_pi_hi + from_bits(0x0010000000000000);
+  }
+  const double half_pi_lo = from_bits(0x3c91a62633145c07);  // pi/2 - half_pi_hi
+  return (half_pi_lo - odd_series(1.0 / ax, kArctanReciprocal, 11)) + half_pi_hi;
+}
+
 constexpr double kPiOverFour = 0x1.921fb54442d18p-1;
 
 }  // namespace
@@ -246,6 +334,16 @@ double cos(double x) noexcept {
   const LargeReduction red = reduce_large(ax);
   const std::uint64_t sign = (red.top ^ (red.top << 1)) & kSignBit;
   return red.odd ? sin_kernel_fixed(red, sign) : cos_kernel_fixed(red, sign);
+}
+
+double atan(double x) noexcept {
+  if (std::isnan(x)) {
+    return x - x;
+  }
+  if (x == 0.0) {
+    return x;
+  }
+  return x < 0.0 ? -arctan_positive(-x) : arctan_positive(x);
 }
 
 double tan(double x) noexcept {

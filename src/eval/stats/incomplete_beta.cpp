@@ -14,6 +14,7 @@
 #include "eval/stats/incomplete_gamma.h"
 #include "eval/stats/numeric_constants.h"
 #include "eval/stats/special_functions.h"
+#include "utils/elementary_math.h"
 #include "utils/subnormal_flush.h"
 
 namespace formulon {
@@ -99,7 +100,7 @@ double asin_excel(double v) noexcept {
   if (u == 0.0) {
     return v < 0.0 ? -1.5707963267948966 : 1.5707963267948966;
   }
-  return std::atan(div(v, u));
+  return elementary::atan(div(v, u));
 }
 
 double finish(double v, bool complement, bool upper) noexcept {

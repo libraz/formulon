@@ -5,6 +5,7 @@
 //
 //   sin(x), cos(x)   odd and even polynomial kernels on x reduced to [-pi/4, pi/4].
 //   tan(x)           their quotient on the same reduction.
+//   atan(x)          polynomials on intervals of |x| up to 2, a series in 1/|x| above.
 
 #ifndef FORMULON_UTILS_ELEMENTARY_MATH_H_
 #define FORMULON_UTILS_ELEMENTARY_MATH_H_
@@ -16,6 +17,9 @@ namespace elementary {
 double sin(double x) noexcept;
 double cos(double x) noexcept;
 double tan(double x) noexcept;
+
+/// Arctangent of x in [-pi/2, pi/2]. NaN gives NaN.
+double atan(double x) noexcept;
 
 }  // namespace elementary
 }  // namespace formulon

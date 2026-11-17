@@ -88,10 +88,10 @@ double naive_abs(Complex z) noexcept {
 // Argument of a non-zero z: atan(b / a), moved by +-pi (the sign of b) when a < 0.
 double complex_argument(double a, double b) noexcept {
   if (a > 0.0) {
-    return std::atan(b / a);
+    return elementary::atan(b / a);
   }
   if (a < 0.0) {
-    return std::atan(b / a) + (b >= 0.0 ? kPi : -kPi);
+    return elementary::atan(b / a) + (b >= 0.0 ? kPi : -kPi);
   }
   return b < 0.0 ? -(kPi / 2.0) : kPi / 2.0;
 }

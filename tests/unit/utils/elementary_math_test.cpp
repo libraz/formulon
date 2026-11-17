@@ -1,11 +1,12 @@
 //
-// utils/elementary_math pinned bit for bit. sin and cos: each reduction path and quadrant. tan: each of the three
-// argument reductions (none below pi/4, the three-part pi/2 below 2^19, the bits of 2/pi above) and both quadrant
-// parities; TAN and COT evaluate through it.
+// utils/elementary_math pinned bit for bit. sin and cos: each reduction path and quadrant. atan: each range and range
+// edge. tan: each of the three argument reductions (none below pi/4, the three-part pi/2 below 2^19, the bits of 2/pi
+// above) and both quadrant parities; TAN and COT evaluate through it.
 
 #include "utils/elementary_math.h"
 
 #include <cmath>
+#include <limits>
 #include <string_view>
 
 #include "gtest/gtest.h"
@@ -113,6 +114,40 @@ TEST(ElementarySinCos, SineIsOddAndCosineEven) {
     EXPECT_EQ(elementary::cos(-p.x), p.cos) << p.x;
   }
   EXPECT_EQ(elementary::cos(0.0), 1.0);
+}
+
+struct AtanPin {
+  double x;
+  double atan;
+};
+
+// atan in each of its ranges and on the range edges.
+constexpr AtanPin kAtanPins[] = {
+    {1e-09, 1e-09},
+    {0.3, 0.2914567944778671},
+    {0.5, 0.46364760900080615},
+    {0.6, 0.5404195002705842},
+    {0.75, 0.6435011087932844},
+    {0.8, 0.6747409422235527},
+    {1.0, 0.7853981633974483},
+    {1.2, 0.8760580505981934},
+    {1.3333333333333333, 0.9272952180016122},
+    {1.5, 0.982793723247329},
+    {1.6666666666666667, 1.0303768265243125},
+    {1.9, 1.0863183977578734},
+    {2.0, 1.1071487177940906},
+    {2.5, 1.1902899496825317},
+    {100.0, 1.5607966601082315},
+    {10000000000.0, 1.5707963266948965},
+    {1e+300, 1.5707963267948966},
+};
+
+TEST(ElementaryAtan, MatchesPinnedValuesInEveryRange) {
+  for (const AtanPin& p : kAtanPins) {
+    EXPECT_EQ(elementary::atan(p.x), p.atan) << p.x;
+    EXPECT_EQ(elementary::atan(-p.x), -p.atan) << p.x;
+  }
+  EXPECT_EQ(elementary::atan(std::numeric_limits<double>::infinity()), 1.5707963267948966);
 }
 
 }  // namespace

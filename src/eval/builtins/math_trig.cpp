@@ -208,7 +208,7 @@ double excel_asin(double x) noexcept {
   if (r == 0.0) {
     return x < 0.0 ? -(kPi / 2.0) : kPi / 2.0;
   }
-  return std::atan(x / r);
+  return elementary::atan(x / r);
 }
 
 double excel_acos(double x) noexcept {
@@ -218,7 +218,7 @@ double excel_acos(double x) noexcept {
   if (r == 0.0) {
     return x < 0.0 ? kPi : 0.0;
   }
-  return (kPi / 2.0) - std::atan(x / r);
+  return (kPi / 2.0) - elementary::atan(x / r);
 }
 
 // ASIN(x) - arcsine. Domain [-1, 1]; outside -> `#NUM!`. Result in
@@ -236,7 +236,7 @@ Value Acos(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // ATAN(x) - arctangent. No domain restriction. Result in (-pi/2, pi/2)
 // radians.
 Value Atan(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return apply_unary_math(&std::atan, args);
+  return apply_unary_math(&elementary::atan, args);
 }
 
 // ATAN2(x, y) - two-argument arctangent. Excel's argument order is
@@ -257,7 +257,7 @@ Value Atan2(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   if (x == 0.0) {
     return Value::number(y < 0.0 ? -(kPi / 2.0) : kPi / 2.0);
   }
-  double r = std::atan(y / x);
+  double r = elementary::atan(y / x);
   if (x < 0.0) {
     r = r + (y < 0.0 ? -kPi : kPi);
   }
@@ -464,7 +464,7 @@ Value Cot(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // precision for large `|x|`, where `PI/2 - atan(x)` cancels to zero.
 Value Acot(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   return apply_unary_value(args, [](double x) {
-    const double r = std::atan(1.0 / x);
+    const double r = elementary::atan(1.0 / x);
     return to_finite_value(x < 0.0 ? r + kPi : r);
   });
 }

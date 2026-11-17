@@ -357,7 +357,7 @@ def check_xml_passthrough() -> bool:
 
 
 # Functions implemented in utils/elementary_math.
-ELEMENTARY_FUNCTIONS = ("sin", "cos", "tan")
+ELEMENTARY_FUNCTIONS = ("sin", "cos", "tan", "atan")
 
 
 def check_elementary_math() -> bool:
