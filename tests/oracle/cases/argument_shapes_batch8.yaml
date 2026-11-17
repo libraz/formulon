@@ -1,0 +1,295 @@
+suite: argument_shapes_batch8
+description: >
+  For a function no other suite calls with an error, a blank cell or an array:
+  its first literal argument replaced by a cell holding #N/A, a blank cell, or
+  an array constant read through INDEX; or, when every call takes a range, one
+  number inside the range set to #N/A or left blank.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: edate_arg2_array_lifted
+    formula: "=INDEX(EDATE(DATE(2024,4,22),{3,3}),2)"
+  - id: edate_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=EDATE(DATE(2024,4,22),B1)"
+  - id: edate_arg2_blank_cell
+    formula: "=EDATE(DATE(2024,4,22),B2)"
+  - id: filterxml_arg1_array_lifted
+    formula: "=INDEX(FILTERXML({\"<r><a>hello</a></r>\",\"<r><a>hello</a></r>\"},\"//a\"),2)"
+  - id: filterxml_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=FILTERXML(B1,\"//a\")"
+  - id: filterxml_arg1_blank_cell
+    formula: "=FILTERXML(B2,\"//a\")"
+  - id: lower_arg1_array_lifted
+    formula: "=INDEX(LOWER({\"HELLO\",\"HELLO\"}),2)"
+  - id: lower_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=LOWER(B1)"
+  - id: lower_arg1_blank_cell
+    formula: "=LOWER(B2)"
+  - id: abs_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=ABS(B1)"
+  - id: abs_arg1_blank_cell
+    formula: "=ABS(B2)"
+  - id: aggregate_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=AGGREGATE(B1,4,{0.5,-0.4,-0.1})"
+  - id: aggregate_arg1_blank_cell
+    formula: "=AGGREGATE(B2,4,{0.5,-0.4,-0.1})"
+  - id: asc_arg1_array_lifted
+    formula: "=INDEX(ASC({\"Ａ\",\"Ａ\"}),2)"
+  - id: asc_arg1_blank_cell
+    formula: "=ASC(B2)"
+  - id: averageif_range_cell_b6_na
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, A5: 50, A6: 60, A7: 70, B1: "35", B2: true, B3: "2", B4: 0.5, B5: -0.4, B6: "=NA()", B7: "abc" }
+    formula: "=AVERAGEIF(B4:B6,\"<>x\")"
+  - id: averageif_range_cell_b6_blank
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, A5: 50, A6: 60, A7: 70, B1: "35", B2: true, B3: "2", B4: 0.5, B5: -0.4, B7: "abc" }
+    formula: "=AVERAGEIF(B4:B6,\"<>x\")"
+  - id: concat_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=CONCAT(B1,1,TRUE)"
+  - id: concat_arg1_blank_cell
+    formula: "=CONCAT(B2,1,TRUE)"
+  - id: countifs_range_cell_b6_na
+    setup: { A1: "a😀b", A2: "😀", A3: "ab", A4: "😀😀", A5: "x😀", A6: "a?b", B1: 1, B2: 2, B3: 4, B4: 8, B5: 16, B6: "=NA()" }
+    formula: "=COUNTIFS(A1:A6,\"???\",B1:B6,\">0\")"
+  - id: countifs_range_cell_b6_blank
+    setup: { A1: "a😀b", A2: "😀", A3: "ab", A4: "😀😀", A5: "x😀", A6: "a?b", B1: 1, B2: 2, B3: 4, B4: 8, B5: 16 }
+    formula: "=COUNTIFS(A1:A6,\"???\",B1:B6,\">0\")"
+  - id: daverage_range_cell_e4_blank
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, A5: 50, A6: 60, A7: 70, B3: "2", B4: 0.5, C1: 1, C2: 3, D1: 0.5, D2: -0.4, D3: -0.1, B5: 0.5, B6: -0.4, B7: -0.1, E1: "v", E2: 0.5, E3: -0.4, F1: "v", F2: "<>x" }
+    formula: "=DAVERAGE(E1:E4,1,F1:F2)"
+  - id: dbcs_arg1_array_lifted
+    formula: "=INDEX(DBCS({\"abc\",\"abc\"}),2)"
+  - id: dbcs_arg1_blank_cell
+    formula: "=DBCS(B2)"
+  - id: dcount_range_cell_c5_na
+    setup: { A1: "Fruit", B1: "Region", C1: "Sales", A2: "Apple", B2: "East", C2: 100, A3: "Apple", B3: "West", C3: 200, A4: "Pear", B4: "East", C4: 50, A5: "Banana", B5: "West", C5: "=NA()", E1: "Fruit" }
+    formula: "=DCOUNT(A1:C5, \"Sales\", E1:E1)"
+  - id: dcount_range_cell_c5_blank
+    setup: { A1: "Fruit", B1: "Region", C1: "Sales", A2: "Apple", B2: "East", C2: 100, A3: "Apple", B3: "West", C3: 200, A4: "Pear", B4: "East", C4: 50, A5: "Banana", B5: "West", E1: "Fruit" }
+    formula: "=DCOUNT(A1:C5, \"Sales\", E1:E1)"
+  - id: dget_range_cell_c5_na
+    setup: { A1: "Fruit", B1: "Region", C1: "Sales", A2: "Apple", B2: "East", C2: 100, A3: "Apple", B3: "West", C3: 200, A4: "Pear", B4: "East", C4: 50, A5: "Banana", B5: "West", C5: "=NA()", E1: "Fruit", E2: "Pear" }
+    formula: "=DGET(A1:C5, \"Sales\", E1:E2)"
+  - id: dget_range_cell_c5_blank
+    setup: { A1: "Fruit", B1: "Region", C1: "Sales", A2: "Apple", B2: "East", C2: 100, A3: "Apple", B3: "West", C3: 200, A4: "Pear", B4: "East", C4: 50, A5: "Banana", B5: "West", E1: "Fruit", E2: "Pear" }
+    formula: "=DGET(A1:C5, \"Sales\", E1:E2)"
+  - id: dsum_range_cell_c5_na
+    setup: { A1: "Fruit", B1: "Region", C1: "Sales", A2: "Apple", B2: "East", C2: 100, A3: "Apple", B3: "West", C3: 200, A4: "Pear", B4: "East", C4: 50, A5: "Banana", B5: "West", C5: "=NA()", E1: "Fruit", E2: "Apple" }
+    formula: "=DSUM(A1:C5, \"Sales\", E1:E2)"
+  - id: dsum_range_cell_c5_blank
+    setup: { A1: "Fruit", B1: "Region", C1: "Sales", A2: "Apple", B2: "East", C2: 100, A3: "Apple", B3: "West", C3: 200, A4: "Pear", B4: "East", C4: 50, A5: "Banana", B5: "West", E1: "Fruit", E2: "Apple" }
+    formula: "=DSUM(A1:C5, \"Sales\", E1:E2)"
+  - id: groupby_arg4_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,B1,0,,,0)"
+  - id: groupby_arg4_blank_cell
+    formula: "=GROUPBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{5;2;3;4;1},SUM,B2,0,,,0)"
+  - id: indirect_arg1_array_lifted
+    formula: "=INDEX(INDIRECT({\"not a ref\",\"not a ref\"}),2)"
+  - id: indirect_arg1_blank_cell
+    formula: "=INDIRECT(B2)"
+  - id: isnontext_arg1_array_lifted
+    formula: "=INDEX(ISNONTEXT({\"hello\",\"hello\"}),2)"
+  - id: isnontext_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=ISNONTEXT(B1)"
+  - id: isnumber_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=ISNUMBER(B1)"
+  - id: isnumber_arg1_blank_cell
+    formula: "=ISNUMBER(B2)"
+  - id: mid_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=MID(B1,2,3)"
+  - id: mid_arg1_blank_cell
+    formula: "=MID(B2,2,3)"
+  - id: not_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=NOT(B1)"
+  - id: not_arg1_blank_cell
+    formula: "=NOT(B2)"
+  - id: npv_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=NPV(B1,100,200,300)"
+  - id: pivotby_arg5_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=PIVOTBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{\"c\";\"d\";\"c\";\"d\";\"c\"},{5;2;3;4;1},SUM,B1,1,2,1,,,0)"
+  - id: pivotby_arg5_blank_cell
+    formula: "=PIVOTBY({\"b\",\"p\";\"a\",\"q\";\"b\",\"a\";\"a\",\"z\";\"b\",\"q\"},{\"c\";\"d\";\"c\";\"d\";\"c\"},{5;2;3;4;1},SUM,B2,1,2,1,,,0)"
+  - id: reduce_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=REDUCE(B1,{1,2,3},LAMBDA(a, v, a+v))"
+  - id: reduce_arg1_blank_cell
+    formula: "=REDUCE(B2,{1,2,3},LAMBDA(a, v, a+v))"
+  - id: right_arg1_array_lifted
+    formula: "=INDEX(RIGHT({\"abcdef\",\"abcdef\"},3),2)"
+  - id: right_arg1_blank_cell
+    formula: "=RIGHT(B2,3)"
+  - id: round_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=ROUND(AVERAGE(1/0,2,3),B1)"
+  - id: round_arg2_blank_cell
+    formula: "=ROUND(AVERAGE(1/0,2,3),B2)"
+  - id: sqrt_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=SQRT(B1)"
+  - id: sqrt_arg1_blank_cell
+    formula: "=SQRT(B2)"
+  - id: subtotal_range_cell_a3_na
+    setup: { A1: 0.5, A2: -0.4, A3: "=NA()", B1: "=0.5-0.4-0.1" }
+    formula: "=SUBTOTAL(9,A1:A3)"
+  - id: subtotal_range_cell_a3_blank
+    setup: { A1: 0.5, A2: -0.4, B1: "=0.5-0.4-0.1" }
+    formula: "=SUBTOTAL(9,A1:A3)"
+  - id: sumif_range_cell_a3_na
+    setup: { A1: 0.5, A2: -0.4, A3: "=NA()", B1: "=0.5-0.4-0.1" }
+    formula: "=SUMIF(A1:A3,\"<>x\")"
+  - id: sumif_range_cell_a3_blank
+    setup: { A1: 0.5, A2: -0.4, B1: "=0.5-0.4-0.1" }
+    formula: "=SUMIF(A1:A3,\"<>x\")"
+  - id: timevalue_arg1_array_lifted
+    formula: "=INDEX(TIMEVALUE({\"13:30\",\"13:30\"}),2)"
+  - id: timevalue_arg1_blank_cell
+    formula: "=TIMEVALUE(B2)"
+  - id: transpose_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=TRANSPOSE(B1)"
+  - id: transpose_arg1_blank_cell
+    formula: "=TRANSPOSE(B2)"
+  - id: trimrange_range_cell_c3_na
+    setup: { B2: 1, C2: 2, B3: 3, C3: "=NA()" }
+    formula: "=TRIMRANGE(A1:D5)"
+  - id: trimrange_range_cell_c3_blank
+    setup: { B2: 1, C2: 2, B3: 3 }
+    formula: "=TRIMRANGE(A1:D5)"
+  - id: upper_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=UPPER(B1)"
+  - id: upper_arg1_blank_cell
+    formula: "=UPPER(B2)"
+  - id: valuetotext_arg1_array_lifted
+    formula: "=INDEX(VALUETOTEXT({\"hello\",\"hello\"},1),2)"
+  - id: valuetotext_arg1_blank_cell
+    formula: "=VALUETOTEXT(B2,1)"
+  - id: and_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=AND(B1,TRUE,TRUE)"
+  - id: average_arg1_blank_cell
+    formula: "=AVERAGE(B2,4,,6,7)"
+  - id: averagea_arg1_blank_cell
+    formula: "=AVERAGEA(B2,2,3,4,5)"
+  - id: averageifs_range_cell_b7_na
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, A5: 50, A6: 60, A7: 70, B3: "2", B4: 0.5, C1: 1, C2: 3, D1: 0.5, D2: -0.4, D3: -0.1, B5: 0.5, B6: -0.4, B7: "=NA()", E1: "v", E2: 0.5, E3: -0.4, E4: -0.1, F1: "v", F2: "<>x" }
+    formula: "=AVERAGEIFS(B5:B7,B5:B7,\"<>x\")"
+  - id: bycol_range_cell_d3_blank
+    setup: { B1: 1, B2: 2, B3: 4, D1: 3, D2: 5 }
+    formula: "=BYCOL(B1:D3,LAMBDA(r,SUM(r)))"
+  - id: byrow_range_cell_d3_blank
+    setup: { B1: 1, B2: 2, B3: 4, D1: 3, D2: 5 }
+    formula: "=BYROW(B1:D3,LAMBDA(r,SUM(r)))"
+  - id: cell_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=CELL(B1)"
+  - id: chisq_test_range_cell_b3_blank
+    setup: { B1: 1, B2: 2, C1: 2, C2: 3, C3: 7 }
+    formula: "=CHISQ.TEST(B1:B3,C1:C3)"
+  - id: chitest_range_cell_b3_blank
+    setup: { B1: 1, B2: 2, C1: 2, C2: 3, C3: 7 }
+    formula: "=CHITEST(B1:B3,C1:C3)"
+  - id: columns_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=COLUMNS(B1)"
+  - id: concatenate_arg1_array_lifted
+    formula: "=INDEX(CONCATENATE({\"x\",\"x\"},1,\"y\"),2)"
+  - id: correl_range_cell_b3_blank
+    setup: { B1: 1, B2: 2, C1: 2, C2: 3, C3: 7 }
+    formula: "=CORREL(B1:B3,C1:C3)"
+  - id: cot_arg1_array_lifted
+    formula: "=INDEX(COT({134217727,134217727}),2)"
+  - id: countblank_range_cell_a3_na
+    setup: { A1: 1, A3: "=NA()" }
+    formula: "=COUNTBLANK(A1:A3)"
+  - id: coupdaybs_arg3_blank_cell
+    formula: "=COUPDAYBS(DATE(2024,1,15),DATE(2026,11,15),B2,0)"
+  - id: coupdays_arg3_blank_cell
+    formula: "=COUPDAYS(DATE(2024,1,15),DATE(2026,11,15),B2,0)"
+  - id: coupdaysnc_arg3_blank_cell
+    formula: "=COUPDAYSNC(DATE(2024,1,15),DATE(2026,11,15),B2,0)"
+  - id: coupncd_arg3_blank_cell
+    formula: "=COUPNCD(DATE(2024,1,15),DATE(2026,11,15),B2,0)"
+  - id: coupnum_arg3_blank_cell
+    formula: "=COUPNUM(DATE(2024,1,15),DATE(2026,11,15),B2,0)"
+  - id: couppcd_arg3_blank_cell
+    formula: "=COUPPCD(DATE(2024,1,15),DATE(2026,11,15),B2,0)"
+  - id: csc_arg1_array_lifted
+    formula: "=INDEX(CSC({134217727,134217727}),2)"
+  - id: cumipmt_arg2_array_lifted
+    formula: "=INDEX(CUMIPMT(0.05/12,{60,60},25000,1,60,0),2)"
+  - id: cumprinc_arg2_array_lifted
+    formula: "=INDEX(CUMPRINC(0.05/12,{60,60},25000,1,60,0),2)"
+  - id: datevalue_arg1_array_lifted
+    formula: "=INDEX(DATEVALUE({\"2024-03-15\",\"2024-03-15\"}),2)"
+  - id: day_arg1_array_lifted
+    formula: "=INDEX(DAY({0,0}),2)"
+  - id: days_arg1_array_lifted
+    formula: "=INDEX(DAYS({\"2024-05-01\",\"2024-05-01\"},\"2024-04-22\"),2)"
+  - id: dcounta_range_cell_c5_blank
+    setup: { A1: "Fruit", B1: "Region", C1: "Sales", A2: "Apple", B2: "East", C2: 100, A3: "Apple", B3: "West", C3: 200, A4: "Pear", B4: "East", C4: 50, A5: "Banana", B5: "West", E1: "Fruit" }
+    formula: "=DCOUNTA(A1:C5, \"Sales\", E1:E1)"
+  - id: degrees_arg1_array_lifted
+    formula: "=INDEX(DEGREES({0,0}),2)"
+  - id: dmax_range_cell_c5_blank
+    setup: { A1: "Fruit", B1: "Region", C1: "Sales", A2: "Apple", B2: "East", C2: 100, A3: "Apple", B3: "West", C3: 200, A4: "Pear", B4: "East", C4: 50, A5: "Banana", B5: "West", E1: "Fruit", E2: "Apple" }
+    formula: "=DMAX(A1:C5, \"Sales\", E1:E2)"
+  - id: dmin_range_cell_c5_blank
+    setup: { A1: "Fruit", B1: "Region", C1: "Sales", A2: "Apple", B2: "East", C2: 100, A3: "Apple", B3: "West", C3: 200, A4: "Pear", B4: "East", C4: 50, A5: "Banana", B5: "West", E1: "Fruit", E2: "Apple" }
+    formula: "=DMIN(A1:C5, \"Sales\", E1:E2)"
+  - id: dproduct_range_cell_c5_blank
+    setup: { A1: "Fruit", B1: "Region", C1: "Sales", A2: "Apple", B2: "East", C2: 100, A3: "Apple", B3: "West", C3: 200, A4: "Pear", B4: "East", C4: 50, A5: "Banana", B5: "West", E1: "Fruit", E2: "Apple" }
+    formula: "=DPRODUCT(A1:C5, \"Sales\", E1:E2)"
+  - id: drop_arg2_blank_cell
+    formula: "=DROP({1,2,3;4,5,6},B2,1)"
+  - id: dstdev_range_cell_c5_blank
+    setup: { A1: "Fruit", B1: "Region", C1: "Sales", A2: "Apple", B2: "East", C2: 100, A3: "Apple", B3: "West", C3: 200, A4: "Pear", B4: "East", C4: 50, A5: "Banana", B5: "West", E1: "Fruit", E2: "Apple" }
+    formula: "=DSTDEV(A1:C5, \"Sales\", E1:E2)"
+  - id: dstdevp_range_cell_c5_blank
+    setup: { A1: "Fruit", B1: "Region", C1: "Sales", A2: "Apple", B2: "East", C2: 100, A3: "Apple", B3: "West", C3: 200, A4: "Pear", B4: "East", C4: 50, A5: "Banana", B5: "West", E1: "Fruit", E2: "Apple" }
+    formula: "=DSTDEVP(A1:C5, \"Sales\", E1:E2)"
+  - id: dvar_range_cell_c5_blank
+    setup: { A1: "Fruit", B1: "Region", C1: "Sales", A2: "Apple", B2: "East", C2: 100, A3: "Apple", B3: "West", C3: 200, A4: "Pear", B4: "East", C4: 50, A5: "Banana", B5: "West", E1: "Fruit", E2: "Apple" }
+    formula: "=DVAR(A1:C5, \"Sales\", E1:E2)"
+  - id: dvarp_range_cell_c5_blank
+    setup: { A1: "Fruit", B1: "Region", C1: "Sales", A2: "Apple", B2: "East", C2: 100, A3: "Apple", B3: "West", C3: 200, A4: "Pear", B4: "East", C4: 50, A5: "Banana", B5: "West", E1: "Fruit", E2: "Apple" }
+    formula: "=DVARP(A1:C5, \"Sales\", E1:E2)"
+  - id: error_type_arg1_blank_cell
+    formula: "=ERROR.TYPE(B2)"
+  - id: f_test_range_cell_b3_blank
+    setup: { B1: 1, B2: 2, C1: 2, C2: 3, C3: 7 }
+    formula: "=F.TEST(B1:B3,C1:C3)"
+  - id: filter_arg3_blank_cell
+    formula: "=FILTER({1;2;3},{FALSE;FALSE;FALSE},B2)"
+  - id: fisherinv_arg1_array_lifted
+    formula: "=INDEX(FISHERINV({0,0}),2)"
+  - id: floor_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=FLOOR(B1,-1)"
+  - id: forecast_range_cell_b3_blank
+    setup: { B1: 1, B2: 2, C1: 2, C2: 3, C3: 7 }
+    formula: "=FORECAST(4,B1:B3,C1:C3)"
+  - id: forecast_ets_arg1_blank_cell
+    formula: "=FORECAST.ETS(B2,{14.5;12.25;10.5;11;13.75;12.5;11.5;16;18;15.5;19;21.5},{5;3;1;2;3;4;3;6;7;8;9;10},0,1,1)"
+  - id: forecast_ets_confint_arg1_blank_cell
+    formula: "=FORECAST.ETS.CONFINT(B2,{100;104;109;103;108;114;107;113;119;111;118;125},{44927;44958;44986;45017;45047;45078;45108;45139;45170;45200;45231;45261},0.95,0)"
+  - id: forecast_ets_seasonality_range_cell_j12_blank
+    setup: { J1: 3, J2: 5, J3: 4, J4: 6, J5: 8, J6: 7, J7: 9, J8: 11, J9: 10, J10: 12, J11: 14, K1: 1, K2: 2, K3: 3, K4: 4, K5: 5, K6: 6, K7: 7, K8: 8, K9: 9, K10: 10, K11: 11, K12: 12 }
+    formula: "=FORECAST.ETS.SEASONALITY(J1:J12,K1:K12,1,1)"
+  - id: forecast_ets_stat_arg3_blank_cell
+    formula: "=FORECAST.ETS.STAT({10.0;12.5;11.0;14.0;13.5;16.0;15.0;18.5;17.0;20.0;19.5;22.0},{1.0;2.0;3.0;4.0;5.0;6.0;7.0;8.0;9.0;10.0;11.0;12.0},B2,0)"
+  - id: forecast_linear_range_cell_b3_blank
+    setup: { B1: 1, B2: 2, C1: 2, C2: 3, C3: 7 }
+    formula: "=FORECAST.LINEAR(4,B1:B3,C1:C3)"

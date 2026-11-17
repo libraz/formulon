@@ -1,0 +1,234 @@
+suite: argument_shapes_batch9
+description: >
+  For a function no other suite calls with an error, a blank cell or an array:
+  its first literal argument replaced by a cell holding #N/A, a blank cell, or
+  an array constant read through INDEX; or, when every call takes a range, one
+  number inside the range set to #N/A or left blank.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: frequency_arg1_blank_cell
+    formula: "=FREQUENCY(B2,{2,0,2})"
+  - id: ftest_range_cell_b3_blank
+    setup: { B1: 1, B2: 2, C1: 2, C2: 3, C3: 7 }
+    formula: "=FTEST(B1:B3,C1:C3)"
+  - id: fv_arg2_array_lifted
+    formula: "=INDEX(FV(0.08/12,{120,120},-200,0,1),2)"
+  - id: gamma_inv_arg2_array_lifted
+    formula: "=INDEX(GAMMA.INV(GAMMA.DIST(4, 3, 2, TRUE),{3,3},2),2)"
+  - id: gcd_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=GCD(B1,0,0)"
+  - id: hlookup_arg1_blank_cell
+    formula: "=HLOOKUP(B2,{1;2;3},1.9999999,FALSE)"
+  - id: hour_arg1_array_lifted
+    formula: "=INDEX(HOUR({0,0}),2)"
+  - id: iferror_arg2_blank_cell
+    formula: "=IFERROR(MATCH(\"ß\",{\"ss\";\"zz\"},0),B2)"
+  - id: ifna_arg1_blank_cell
+    formula: "=IFNA(B2,\"fallback\")"
+  - id: ifs_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=IFS(B1,1,TRUE,2)"
+  - id: imsum_arg1_blank_cell
+    formula: "=IMSUM(B2,\"2+2i\",\"3+3i\")"
+  - id: info_arg1_array_lifted
+    formula: "=INDEX(INFO({TRUE,TRUE}),2)"
+  - id: intercept_range_cell_b3_blank
+    setup: { B1: 1, B2: 2, C1: 2, C2: 3, C3: 7 }
+    formula: "=INTERCEPT(B1:B3,C1:C3)"
+  - id: ipmt_arg2_array_lifted
+    formula: "=INDEX(IPMT(0.05/12,{1,1},60,25000,0,1),2)"
+  - id: isblank_range_cell_a3_na
+    setup: { A1: 2, A3: "=NA()" }
+    formula: "=ISBLANK(INDEX(SORT(A1:A3),3,1))"
+  - id: iserr_arg1_array_lifted
+    formula: "=INDEX(ISERR({42,42}),2)"
+  - id: isna_arg1_array_lifted
+    formula: "=INDEX(ISNA({42,42}),2)"
+  - id: isref_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=ISREF(B1)"
+  - id: istext_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=ISTEXT(B1)"
+  - id: large_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=LARGE({10;20;30},B1)"
+  - id: lcm_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=LCM(B1,0,0)"
+  - id: len_arg1_blank_cell
+    formula: "=LEN(B2)"
+  - id: lookup_range_cell_a3_na
+    setup: { A1: 10, A2: 20, A3: "=NA()", B1: "low", B2: "mid", B3: "high" }
+    formula: "=LOOKUP(20,A1:A3,B1:B3)"
+  - id: map_range_cell_a3_blank
+    setup: { A1: 10, A2: 20 }
+    formula: "=MAP(A1:A3, LAMBDA(x, ISREF(x)))"
+  - id: maxa_arg1_blank_cell
+    formula: "=MAXA(B2,2,3,4,5)"
+  - id: maxifs_range_cell_a3_na
+    setup: { A1: 10, A2: "=1/0", A3: "=NA()", B1: "red", B2: "white", B3: "blue" }
+    formula: "=MAXIFS(A1:A3,B1:B3,\">c\")"
+  - id: median_arg1_blank_cell
+    formula: "=MEDIAN(B2,2,3,4,5)"
+  - id: mina_arg1_blank_cell
+    formula: "=MINA(B2,2,3,4,5)"
+  - id: minifs_range_cell_a3_na
+    setup: { A1: 10, A2: "=1/0", A3: "=NA()", B1: "red", B2: "white", B3: "blue" }
+    formula: "=MINIFS(A1:A3,B1:B3,\">c\")"
+  - id: minute_arg1_array_lifted
+    formula: "=INDEX(MINUTE({0,0}),2)"
+  - id: mode_mult_arg1_blank_cell
+    formula: "=MODE.MULT(B2,2,1,2,3)"
+  - id: month_arg1_array_lifted
+    formula: "=INDEX(MONTH({0,0}),2)"
+  - id: n_arg1_array_lifted
+    formula: "=INDEX(N({\"2024-03-15\",\"2024-03-15\"}),2)"
+  - id: nper_arg2_array_lifted
+    formula: "=INDEX(NPER(0.05/12,{-500,-500},25000,0,1),2)"
+  - id: numbervalue_arg1_array_lifted
+    formula: "=INDEX(NUMBERVALUE({\"1.500\",\"1.500\"},\"x\",\";\"),2)"
+  - id: offset_range_cell_b2_na
+    setup: { A1: 100, B1: 200, A2: 300, B2: "=NA()" }
+    formula: "=OFFSET(A1:B2,0,0,1,1)"
+  - id: pearson_range_cell_b3_blank
+    setup: { B1: 1, B2: 2, C1: 2, C2: 3, C3: 7 }
+    formula: "=PEARSON(B1:B3,C1:C3)"
+  - id: percentile_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=PERCENTILE({1;2;3;4;5},B1)"
+  - id: percentile_exc_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=PERCENTILE.EXC({1;2;3;4;5;6;7;8;9;10},B1)"
+  - id: percentile_inc_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=PERCENTILE.INC({1;2;3;4;5},B1)"
+  - id: percentof_arg1_blank_cell
+    formula: "=PERCENTOF(B2,10)"
+  - id: percentrank_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=PERCENTRANK({1;2;3;4;5},B1)"
+  - id: percentrank_exc_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=PERCENTRANK.EXC({1;2;3;4;5},B1,2)"
+  - id: percentrank_inc_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=PERCENTRANK.INC({1;2;3;4;5},B1,2)"
+  - id: pmt_arg2_array_lifted
+    formula: "=INDEX(PMT(0.05/12,{60,60},25000,0,1),2)"
+  - id: ppmt_arg2_array_lifted
+    formula: "=INDEX(PPMT(0.05/12,{1,1},60,25000,0,1),2)"
+  - id: prob_range_cell_b3_blank
+    setup: { B1: 1, B2: 2, H1: 0.2, H2: 0.3, H3: 0.5 }
+    formula: "=PROB(B1:B3,H1:H3,2,4)"
+  - id: product_arg1_blank_cell
+    formula: "=PRODUCT(B2,4,,6,7)"
+  - id: pv_arg2_array_lifted
+    formula: "=INDEX(PV(0.05/12,{60,60},-500,0,1),2)"
+  - id: quartile_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=QUARTILE({1;2;3;4;5},B1)"
+  - id: quartile_exc_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=QUARTILE.EXC({1;2;3;4;5;6;7;8;9;10},B1)"
+  - id: quartile_inc_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=QUARTILE.INC({1;2;3;4;5;6;7;8;9},B1)"
+  - id: rows_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=ROWS(B1)"
+  - id: rsq_range_cell_b3_blank
+    setup: { B1: 1, B2: 2, C1: 2, C2: 3, C3: 7 }
+    formula: "=RSQ(B1:B3,C1:C3)"
+  - id: scan_arg1_blank_cell
+    formula: "=SCAN(B2,{1,2,3},LAMBDA(a, v, a+v))"
+  - id: sec_arg1_array_lifted
+    formula: "=INDEX(SEC({134217727,134217727}),2)"
+  - id: second_arg1_array_lifted
+    formula: "=INDEX(SECOND({0,0}),2)"
+  - id: sheets_arg1_blank_cell
+    formula: "=SHEETS(B2)"
+  - id: slope_range_cell_b3_blank
+    setup: { B1: 1, B2: 2, C1: 2, C2: 3, C3: 7 }
+    formula: "=SLOPE(B1:B3,C1:C3)"
+  - id: small_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=SMALL({10;20;30},B1)"
+  - id: sort_arg2_blank_cell
+    formula: "=SORT({3,1,2},B2,1,TRUE)"
+  - id: sortby_arg3_blank_cell
+    formula: "=SORTBY({\"A\";\"B\";\"C\";\"D\"},{1;1;2;2},B2,{2;1;2;1},1)"
+  - id: stdev_arg1_blank_cell
+    formula: "=STDEV(B2,2,3,4,5)"
+  - id: stdeva_arg1_blank_cell
+    formula: "=STDEVA(B2,2,3,4,5)"
+  - id: stdevpa_arg1_blank_cell
+    formula: "=STDEVPA(B2,2,3,4,5)"
+  - id: steyx_range_cell_b3_blank
+    setup: { B1: 1, B2: 2, C1: 2, C2: 3, C3: 7 }
+    formula: "=STEYX(B1:B3,C1:C3)"
+  - id: sumifs_range_cell_d3_blank
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, A5: 50, A6: 60, A7: 70, B3: "2", B4: 0.5, C1: 1, C2: 3, D1: 0.5, D2: -0.4, B5: 0.5, B6: -0.4, B7: -0.1, E1: "v", E2: 0.5, E3: -0.4, E4: -0.1, F1: "v", F2: "<>x" }
+    formula: "=SUMIFS(D1:D3,D1:D3,\"<>x\")"
+  - id: sumsq_arg1_blank_cell
+    formula: "=SUMSQ(B2,4,,6,7)"
+  - id: sumx2my2_range_cell_b3_blank
+    setup: { B1: 1, B2: 2, C1: 2, C2: 3, C3: 7 }
+    formula: "=SUMX2MY2(B1:B3,C1:C3)"
+  - id: sumx2py2_range_cell_b3_blank
+    setup: { B1: 1, B2: 2, C1: 2, C2: 3, C3: 7 }
+    formula: "=SUMX2PY2(B1:B3,C1:C3)"
+  - id: sumxmy2_range_cell_b3_blank
+    setup: { B1: 1, B2: 2, C1: 2, C2: 3, C3: 7 }
+    formula: "=SUMXMY2(B1:B3,C1:C3)"
+  - id: switch_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=SWITCH(B1,\"a\",1,\"b\",2,\"c\",3)"
+  - id: tan_arg1_array_lifted
+    formula: "=INDEX(TAN({0,0}),2)"
+  - id: textsplit_arg1_blank_cell
+    formula: "=TEXTSPLIT(B2,\",\",\";\",FALSE,0,\"x\")"
+  - id: tocol_arg2_blank_cell
+    formula: "=TOCOL({1,2;3,4},B2,TRUE)"
+  - id: torow_arg2_blank_cell
+    formula: "=TOROW({1,2;3,4},B2,TRUE)"
+  - id: trimmean_arg2_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=TRIMMEAN({1;2;3;4;5;6;7;8;9;10},B1)"
+  - id: ttest_range_cell_b3_blank
+    setup: { B1: 1, B2: 2, C1: 2, C2: 3, C3: 7 }
+    formula: "=TTEST(B1:B3,C1:C3,2,1)"
+  - id: value_arg1_blank_cell
+    formula: "=VALUE(B2)"
+  - id: var_arg1_blank_cell
+    formula: "=VAR(B2,2,3,4,5)"
+  - id: vara_arg1_blank_cell
+    formula: "=VARA(B2,2,3,4,5)"
+  - id: varpa_arg1_blank_cell
+    formula: "=VARPA(B2,2,3,4,5)"
+  - id: weekday_arg2_array_lifted
+    formula: "=INDEX(WEEKDAY(DATE(2024,4,22),{2,2}),2)"
+  - id: wrapcols_arg2_blank_cell
+    formula: "=WRAPCOLS({1,2,3,4,5},B2,0)"
+  - id: xlookup_range_cell_a7_na
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, A5: 50, A6: 60, A7: "=NA()", B3: "2", B4: 0.5, C1: 1, C2: 3 }
+    formula: "=AGGREGATE(9,4,XLOOKUP(10,A1:A7,A1:A7))"
+  - id: year_arg1_array_lifted
+    formula: "=INDEX(YEAR({0,0}),2)"
+  - id: z_test_range_cell_b3_blank
+    setup: { B1: 1, B2: 2 }
+    formula: "=Z.TEST(B1:B3,2,1)"
+  - id: ztest_range_cell_b3_blank
+    setup: { B1: 1, B2: 2 }
+    formula: "=ZTEST(B1:B3,2,1)"
+  - id: hstack_blank_cell_argument
+    setup: { A1: 1, A2: 2 }
+    formula: "=INDEX(HSTACK(A1:A2,B2),2,2)"
+  - id: vstack_blank_cell_argument
+    setup: { A1: 1, B1: 2 }
+    formula: "=INDEX(VSTACK(A1:B1,B2),2,1)"
+  - id: areas_error_cell
+    setup: { B1: "=NA()" }
+    formula: "=AREAS(B1)"

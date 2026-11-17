@@ -1,0 +1,1706 @@
+{
+  "suite": "argument_shapes_batch5",
+  "description": "Each argument position of a scalar call the existing suites pin, replaced by a cell holding #N/A and by a blank cell; the first literal argument as an array constant read through INDEX; the first number as zero and negated.\n",
+  "environment": {
+    "excel_version": "16.115",
+    "excel_locale": "de-DE",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-11-17T11:44:02Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "mdeterm_arg1_na_cell",
+      "formula": "=MDETERM(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "mdeterm_arg1_blank_cell",
+      "formula": "=MDETERM(B2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mirr_arg1_na_cell",
+      "formula": "=MIRR(B1,0.1,0.1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "mirr_arg1_blank_cell",
+      "formula": "=MIRR(B2,0.1,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "mirr_arg2_na_cell",
+      "formula": "=MIRR({-1000, 500, 700},B1,0.1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "mirr_arg2_blank_cell",
+      "formula": "=MIRR({-1000, 500, 700},B2,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.1180339887498949
+      }
+    },
+    {
+      "id": "mirr_arg3_na_cell",
+      "formula": "=MIRR({-1000, 500, 700},0.1,B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "mirr_arg3_blank_cell",
+      "formula": "=MIRR({-1000, 500, 700},0.1,B2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.09544511501033215
+      }
+    },
+    {
+      "id": "mirr_arg2_zero",
+      "formula": "=MIRR({-1000, 500, 700},0,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.1180339887498949
+      }
+    },
+    {
+      "id": "mirr_arg2_negative",
+      "formula": "=MIRR({-1000, 500, 700},-0.1,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.1180339887498949
+      }
+    },
+    {
+      "id": "mround_arg1_na_cell",
+      "formula": "=MROUND(B1,0)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "mround_arg1_blank_cell",
+      "formula": "=MROUND(B2,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mround_arg2_na_cell",
+      "formula": "=MROUND(0,B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "mround_arg2_blank_cell",
+      "formula": "=MROUND(0,B2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mround_arg1_array_lifted",
+      "formula": "=INDEX(MROUND({0,0},0),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "mround_arg1_negative",
+      "formula": "=MROUND(-0,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "n_arg1_na_cell",
+      "formula": "=N(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "n_arg1_blank_cell",
+      "formula": "=N(B2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "networkdays_arg1_na_cell",
+      "formula": "=NETWORKDAYS(B1,DATE(2024,1,5),{45292,45293})",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "networkdays_arg1_blank_cell",
+      "formula": "=NETWORKDAYS(B2,DATE(2024,1,5),{45292,45293})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 32353.0
+      }
+    },
+    {
+      "id": "networkdays_arg2_na_cell",
+      "formula": "=NETWORKDAYS(DATE(2024,1,1),B1,{45292,45293})",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "networkdays_arg2_blank_cell",
+      "formula": "=NETWORKDAYS(DATE(2024,1,1),B2,{45292,45293})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -32350.0
+      }
+    },
+    {
+      "id": "networkdays_arg3_na_cell",
+      "formula": "=NETWORKDAYS(DATE(2024,1,1),DATE(2024,1,5),B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "networkdays_arg3_blank_cell",
+      "formula": "=NETWORKDAYS(DATE(2024,1,1),DATE(2024,1,5),B2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "or_arg1_na_cell",
+      "formula": "=OR(B1,FALSE,FALSE)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "or_arg1_blank_cell",
+      "formula": "=OR(B2,FALSE,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "or_arg2_na_cell",
+      "formula": "=OR(FALSE,B1,FALSE)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "or_arg2_blank_cell",
+      "formula": "=OR(FALSE,B2,FALSE)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "or_arg3_na_cell",
+      "formula": "=OR(FALSE,FALSE,B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "or_arg3_blank_cell",
+      "formula": "=OR(FALSE,FALSE,B2)",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": false
+      }
+    },
+    {
+      "id": "or_arg1_array_lifted",
+      "formula": "=INDEX(OR({FALSE,FALSE},FALSE,FALSE),2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "power_arg1_na_cell",
+      "formula": "=POWER(B1,2)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "power_arg1_blank_cell",
+      "formula": "=POWER(B2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "power_arg2_na_cell",
+      "formula": "=POWER(5,B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "power_arg2_blank_cell",
+      "formula": "=POWER(5,B2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "power_arg1_array_lifted",
+      "formula": "=INDEX(POWER({5,5},2),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 25.0
+      }
+    },
+    {
+      "id": "power_arg1_zero",
+      "formula": "=POWER(0,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "power_arg1_negative",
+      "formula": "=POWER(-5,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 25.0
+      }
+    },
+    {
+      "id": "proper_arg1_na_cell",
+      "formula": "=PROPER(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "proper_arg1_blank_cell",
+      "formula": "=PROPER(B2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": ""
+      }
+    },
+    {
+      "id": "proper_arg1_array_lifted",
+      "formula": "=INDEX(PROPER({\"hello world\",\"hello world\"}),2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "Hello World"
+      }
+    },
+    {
+      "id": "quotient_arg1_na_cell",
+      "formula": "=QUOTIENT(B1,3)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "quotient_arg1_blank_cell",
+      "formula": "=QUOTIENT(B2,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "quotient_arg2_na_cell",
+      "formula": "=QUOTIENT(10,B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "quotient_arg2_blank_cell",
+      "formula": "=QUOTIENT(10,B2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "quotient_arg1_array_lifted",
+      "formula": "=INDEX(QUOTIENT({10,10},3),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "quotient_arg1_zero",
+      "formula": "=QUOTIENT(0,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "quotient_arg1_negative",
+      "formula": "=QUOTIENT(-10,3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -3.0
+      }
+    },
+    {
+      "id": "regexreplace_arg1_na_cell",
+      "formula": "=REGEXREPLACE(B1,\"X\",\"-\",1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "regexreplace_arg1_blank_cell",
+      "formula": "=REGEXREPLACE(B2,\"X\",\"-\",1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": ""
+      }
+    },
+    {
+      "id": "regexreplace_arg2_na_cell",
+      "formula": "=REGEXREPLACE(\"aXbXcX\",B1,\"-\",1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "regexreplace_arg2_blank_cell",
+      "formula": "=REGEXREPLACE(\"aXbXcX\",B2,\"-\",1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "-aXbXcX"
+      }
+    },
+    {
+      "id": "regexreplace_arg3_na_cell",
+      "formula": "=REGEXREPLACE(\"aXbXcX\",\"X\",B1,1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "regexreplace_arg3_blank_cell",
+      "formula": "=REGEXREPLACE(\"aXbXcX\",\"X\",B2,1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "abXcX"
+      }
+    },
+    {
+      "id": "regexreplace_arg4_na_cell",
+      "formula": "=REGEXREPLACE(\"aXbXcX\",\"X\",\"-\",B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "regexreplace_arg4_blank_cell",
+      "formula": "=REGEXREPLACE(\"aXbXcX\",\"X\",\"-\",B2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a-b-c-"
+      }
+    },
+    {
+      "id": "regexreplace_arg1_array_lifted",
+      "formula": "=INDEX(REGEXREPLACE({\"aXbXcX\",\"aXbXcX\"},\"X\",\"-\",1),2)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a-bXcX"
+      }
+    },
+    {
+      "id": "regexreplace_arg4_zero",
+      "formula": "=REGEXREPLACE(\"aXbXcX\",\"X\",\"-\",0)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "a-b-c-"
+      }
+    },
+    {
+      "id": "regexreplace_arg4_negative",
+      "formula": "=REGEXREPLACE(\"aXbXcX\",\"X\",\"-\",-1)",
+      "setup": {},
+      "expect": {
+        "kind": "text",
+        "value": "aXbXc-"
+      }
+    },
+    {
+      "id": "sequence_arg1_na_cell",
+      "formula": "=SEQUENCE(B1,2,10,5)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sequence_arg1_blank_cell",
+      "formula": "=SEQUENCE(B2,2,10,5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
+    },
+    {
+      "id": "sequence_arg2_na_cell",
+      "formula": "=SEQUENCE(2,B1,10,5)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sequence_arg2_blank_cell",
+      "formula": "=SEQUENCE(2,B2,10,5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
+    },
+    {
+      "id": "sequence_arg3_na_cell",
+      "formula": "=SEQUENCE(2,2,B1,5)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sequence_arg3_blank_cell",
+      "formula": "=SEQUENCE(2,2,B2,5)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          0.0,
+          5.0,
+          10.0,
+          15.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "sequence_arg4_na_cell",
+      "formula": "=SEQUENCE(2,2,10,B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "sequence_arg4_blank_cell",
+      "formula": "=SEQUENCE(2,2,10,B2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          10.0,
+          10.0,
+          10.0,
+          10.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "sequence_arg1_array_lifted",
+      "formula": "=INDEX(SEQUENCE({2,2},2,10,5),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "sequence_arg1_zero",
+      "formula": "=SEQUENCE(0,2,10,5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
+    },
+    {
+      "id": "sequence_arg1_negative",
+      "formula": "=SEQUENCE(-2,2,10,5)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "seriessum_arg1_na_cell",
+      "formula": "=SERIESSUM(B1,0,1,{1;1;1;1})",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "seriessum_arg2_na_cell",
+      "formula": "=SERIESSUM(2,B1,1,{1;1;1;1})",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "seriessum_arg3_na_cell",
+      "formula": "=SERIESSUM(2,0,B1,{1;1;1;1})",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "seriessum_arg4_na_cell",
+      "formula": "=SERIESSUM(2,0,1,B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "seriessum_arg4_blank_cell",
+      "formula": "=SERIESSUM(2,0,1,B2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "seriessum_arg1_zero",
+      "formula": "=SERIESSUM(0,0,1,{1;1;1;1})",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "seriessum_arg1_negative",
+      "formula": "=SERIESSUM(-2,0,1,{1;1;1;1})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -5.0
+      }
+    },
+    {
+      "id": "single_arg1_na_cell",
+      "formula": "=SINGLE(B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "single_arg1_blank_cell",
+      "formula": "=SINGLE(B2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "single_arg1_array_lifted",
+      "formula": "=INDEX(SINGLE({42,42}),2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "single_arg1_zero",
+      "formula": "=SINGLE(0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "single_arg1_negative",
+      "formula": "=SINGLE(-42)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -42.0
+      }
+    },
+    {
+      "id": "stdev_p_arg1_na_cell",
+      "formula": "=STDEV.P(B1,2,3,4,5)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "stdev_p_arg1_blank_cell",
+      "formula": "=STDEV.P(B2,2,3,4,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.118033988749895
+      }
+    },
+    {
+      "id": "stdev_p_arg2_na_cell",
+      "formula": "=STDEV.P(1,B1,3,4,5)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "stdev_p_arg2_blank_cell",
+      "formula": "=STDEV.P(1,B2,3,4,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.479019945774904
+      }
+    },
+    {
+      "id": "stdev_p_arg3_na_cell",
+      "formula": "=STDEV.P(1,2,B1,4,5)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "stdev_p_arg3_blank_cell",
+      "formula": "=STDEV.P(1,2,B2,4,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5811388300841898
+      }
+    },
+    {
+      "id": "stdev_p_arg4_na_cell",
+      "formula": "=STDEV.P(1,2,3,B1,5)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "stdev_p_arg4_blank_cell",
+      "formula": "=STDEV.P(1,2,3,B2,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.479019945774904
+      }
+    },
+    {
+      "id": "stdev_p_arg5_na_cell",
+      "formula": "=STDEV.P(1,2,3,4,B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "stdev_p_arg5_blank_cell",
+      "formula": "=STDEV.P(1,2,3,4,B2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.118033988749895
+      }
+    },
+    {
+      "id": "stdev_p_arg1_array_lifted",
+      "formula": "=INDEX(STDEV.P({1,1},2,3,4,5),2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "stdev_p_arg1_zero",
+      "formula": "=STDEV.P(0,2,3,4,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.7204650534085253
+      }
+    },
+    {
+      "id": "stdev_p_arg1_negative",
+      "formula": "=STDEV.P(-1,2,3,4,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0591260281974
+      }
+    },
+    {
+      "id": "stdev_s_arg1_na_cell",
+      "formula": "=STDEV.S(B1,2,3,4,5)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "stdev_s_arg1_blank_cell",
+      "formula": "=STDEV.S(B2,2,3,4,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.2909944487358056
+      }
+    },
+    {
+      "id": "stdev_s_arg2_na_cell",
+      "formula": "=STDEV.S(1,B1,3,4,5)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "stdev_s_arg2_blank_cell",
+      "formula": "=STDEV.S(1,B2,3,4,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.707825127659933
+      }
+    },
+    {
+      "id": "stdev_s_arg3_na_cell",
+      "formula": "=STDEV.S(1,2,B1,4,5)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "stdev_s_arg3_blank_cell",
+      "formula": "=STDEV.S(1,2,B2,4,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.8257418583505538
+      }
+    },
+    {
+      "id": "stdev_s_arg4_na_cell",
+      "formula": "=STDEV.S(1,2,3,B1,5)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "stdev_s_arg4_blank_cell",
+      "formula": "=STDEV.S(1,2,3,B2,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.707825127659933
+      }
+    },
+    {
+      "id": "stdev_s_arg5_na_cell",
+      "formula": "=STDEV.S(1,2,3,4,B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "stdev_s_arg5_blank_cell",
+      "formula": "=STDEV.S(1,2,3,4,B2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.2909944487358056
+      }
+    },
+    {
+      "id": "stdev_s_arg1_array_lifted",
+      "formula": "=INDEX(STDEV.S({1,1},2,3,4,5),2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "stdev_s_arg1_zero",
+      "formula": "=STDEV.S(0,2,3,4,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.9235384061671343
+      }
+    },
+    {
+      "id": "stdev_s_arg1_negative",
+      "formula": "=STDEV.S(-1,2,3,4,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.302172886644268
+      }
+    },
+    {
+      "id": "stdevp_arg1_na_cell",
+      "formula": "=STDEVP(B1,2,3,4,5)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "stdevp_arg1_blank_cell",
+      "formula": "=STDEVP(B2,2,3,4,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.118033988749895
+      }
+    },
+    {
+      "id": "stdevp_arg2_na_cell",
+      "formula": "=STDEVP(1,B1,3,4,5)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "stdevp_arg2_blank_cell",
+      "formula": "=STDEVP(1,B2,3,4,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.479019945774904
+      }
+    },
+    {
+      "id": "stdevp_arg3_na_cell",
+      "formula": "=STDEVP(1,2,B1,4,5)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "stdevp_arg3_blank_cell",
+      "formula": "=STDEVP(1,2,B2,4,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.5811388300841898
+      }
+    },
+    {
+      "id": "stdevp_arg4_na_cell",
+      "formula": "=STDEVP(1,2,3,B1,5)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "stdevp_arg4_blank_cell",
+      "formula": "=STDEVP(1,2,3,B2,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.479019945774904
+      }
+    },
+    {
+      "id": "stdevp_arg5_na_cell",
+      "formula": "=STDEVP(1,2,3,4,B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "stdevp_arg5_blank_cell",
+      "formula": "=STDEVP(1,2,3,4,B2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.118033988749895
+      }
+    },
+    {
+      "id": "stdevp_arg1_array_lifted",
+      "formula": "=INDEX(STDEVP({1,1},2,3,4,5),2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#REF!"
+      }
+    },
+    {
+      "id": "stdevp_arg1_zero",
+      "formula": "=STDEVP(0,2,3,4,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.7204650534085253
+      }
+    },
+    {
+      "id": "stdevp_arg1_negative",
+      "formula": "=STDEVP(-1,2,3,4,5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0591260281974
+      }
+    },
+    {
+      "id": "t_dist_arg1_na_cell",
+      "formula": "=T.DIST(B1,5,TRUE)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "t_dist_arg1_blank_cell",
+      "formula": "=T.DIST(B2,5,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "t_dist_arg2_na_cell",
+      "formula": "=T.DIST(0,B1,TRUE)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "t_dist_arg2_blank_cell",
+      "formula": "=T.DIST(0,B2,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "t_dist_arg3_na_cell",
+      "formula": "=T.DIST(0,5,B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "t_dist_arg3_blank_cell",
+      "formula": "=T.DIST(0,5,B2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.3796066898224945
+      }
+    },
+    {
+      "id": "t_dist_arg1_array_lifted",
+      "formula": "=INDEX(T.DIST({0,0},5,TRUE),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "t_dist_arg1_negative",
+      "formula": "=T.DIST(-0,5,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.5
+      }
+    },
+    {
+      "id": "t_inv_2t_arg1_na_cell",
+      "formula": "=T.INV.2T(B1,10)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "t_inv_2t_arg1_blank_cell",
+      "formula": "=T.INV.2T(B2,10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "t_inv_2t_arg2_na_cell",
+      "formula": "=T.INV.2T(0.05,B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "t_inv_2t_arg2_blank_cell",
+      "formula": "=T.INV.2T(0.05,B2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "t_inv_2t_arg1_array_lifted",
+      "formula": "=INDEX(T.INV.2T({0.05,0.05},10),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.2281388519862744
+      }
+    },
+    {
+      "id": "t_inv_2t_arg1_zero",
+      "formula": "=T.INV.2T(0,10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "t_inv_2t_arg1_negative",
+      "formula": "=T.INV.2T(-0.05,10)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "take_arg1_na_cell",
+      "formula": "=TAKE(B1,2,2)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "take_arg1_blank_cell",
+      "formula": "=TAKE(B2,2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "take_arg2_na_cell",
+      "formula": "=TAKE({1,2,3;4,5,6},B1,2)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "take_arg2_blank_cell",
+      "formula": "=TAKE({1,2,3;4,5,6},B2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
+    },
+    {
+      "id": "take_arg3_na_cell",
+      "formula": "=TAKE({1,2,3;4,5,6},2,B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "take_arg3_blank_cell",
+      "formula": "=TAKE({1,2,3;4,5,6},2,B2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
+    },
+    {
+      "id": "take_arg2_zero",
+      "formula": "=TAKE({1,2,3;4,5,6},0,2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#CALC!"
+      }
+    },
+    {
+      "id": "take_arg2_negative",
+      "formula": "=TAKE({1,2,3;4,5,6},-2,2)",
+      "setup": {},
+      "expect": {
+        "kind": "array",
+        "value": [
+          1.0,
+          2.0,
+          4.0,
+          5.0
+        ],
+        "shape": [
+          2,
+          2
+        ]
+      }
+    },
+    {
+      "id": "tbillprice_arg1_na_cell",
+      "formula": "=TBILLPRICE(B1,DATE(2008,6,1),0.09)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "tbillprice_arg1_blank_cell",
+      "formula": "=TBILLPRICE(B2,DATE(2008,6,1),0.09)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "tbillprice_arg2_na_cell",
+      "formula": "=TBILLPRICE(DATE(2008,3,31),B1,0.09)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "tbillprice_arg2_blank_cell",
+      "formula": "=TBILLPRICE(DATE(2008,3,31),B2,0.09)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "tbillprice_arg3_na_cell",
+      "formula": "=TBILLPRICE(DATE(2008,3,31),DATE(2008,6,1),B1)",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "tbillprice_arg3_blank_cell",
+      "formula": "=TBILLPRICE(DATE(2008,3,31),DATE(2008,6,1),B2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "tbillprice_arg3_array_lifted",
+      "formula": "=INDEX(TBILLPRICE(DATE(2008,3,31),DATE(2008,6,1),{0.09,0.09}),2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 98.45
+      }
+    },
+    {
+      "id": "tbillprice_arg3_zero",
+      "formula": "=TBILLPRICE(DATE(2008,3,31),DATE(2008,6,1),0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "tbillprice_arg3_negative",
+      "formula": "=TBILLPRICE(DATE(2008,3,31),DATE(2008,6,1),-0.09)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    }
+  ]
+}

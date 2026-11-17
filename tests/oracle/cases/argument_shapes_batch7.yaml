@@ -1,0 +1,237 @@
+suite: argument_shapes_batch7
+description: >
+  Range-argument functions with an error, a blank or text in the range, a
+  blank or #N/A scalar argument, an array scalar argument read through INDEX,
+  and a criterion or number that matches nothing.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: dcounta_field_error_in_matched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: "=NA()", D1: "k", D2: "a" }
+    formula: "=DCOUNTA(A1:B4,2,D1:D2)"
+  - id: dcounta_field_error_in_unmatched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: "=NA()", A4: "a", B4: 30, D1: "k", D2: "a" }
+    formula: "=DCOUNTA(A1:B4,2,D1:D2)"
+  - id: dcounta_field_blank_in_matched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", D1: "k", D2: "a" }
+    formula: "=DCOUNTA(A1:B4,2,D1:D2)"
+  - id: dcounta_field_text_in_matched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: "x", D1: "k", D2: "a" }
+    formula: "=DCOUNTA(A1:B4,2,D1:D2)"
+  - id: dcounta_criteria_value_blank
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k" }
+    formula: "=DCOUNTA(A1:B4,2,D1:D2)"
+  - id: dmax_field_error_in_unmatched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: "=NA()", A4: "a", B4: 30, D1: "k", D2: "a" }
+    formula: "=DMAX(A1:B4,2,D1:D2)"
+  - id: dmax_field_blank_in_matched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", D1: "k", D2: "a" }
+    formula: "=DMAX(A1:B4,2,D1:D2)"
+  - id: dmax_field_text_in_matched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: "x", D1: "k", D2: "a" }
+    formula: "=DMAX(A1:B4,2,D1:D2)"
+  - id: dmax_criteria_value_blank
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k" }
+    formula: "=DMAX(A1:B4,2,D1:D2)"
+  - id: dmin_field_error_in_unmatched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: "=NA()", A4: "a", B4: 30, D1: "k", D2: "a" }
+    formula: "=DMIN(A1:B4,2,D1:D2)"
+  - id: dmin_field_blank_in_matched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", D1: "k", D2: "a" }
+    formula: "=DMIN(A1:B4,2,D1:D2)"
+  - id: dmin_field_text_in_matched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: "x", D1: "k", D2: "a" }
+    formula: "=DMIN(A1:B4,2,D1:D2)"
+  - id: dmin_criteria_value_blank
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k" }
+    formula: "=DMIN(A1:B4,2,D1:D2)"
+  - id: dproduct_field_error_in_unmatched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: "=NA()", A4: "a", B4: 30, D1: "k", D2: "a" }
+    formula: "=DPRODUCT(A1:B4,2,D1:D2)"
+  - id: dproduct_field_blank_in_matched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", D1: "k", D2: "a" }
+    formula: "=DPRODUCT(A1:B4,2,D1:D2)"
+  - id: dproduct_field_text_in_matched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: "x", D1: "k", D2: "a" }
+    formula: "=DPRODUCT(A1:B4,2,D1:D2)"
+  - id: dproduct_criteria_value_blank
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k" }
+    formula: "=DPRODUCT(A1:B4,2,D1:D2)"
+  - id: dstdev_field_error_in_unmatched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: "=NA()", A4: "a", B4: 30, D1: "k", D2: "a" }
+    formula: "=DSTDEV(A1:B4,2,D1:D2)"
+  - id: dstdev_field_blank_in_matched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", D1: "k", D2: "a" }
+    formula: "=DSTDEV(A1:B4,2,D1:D2)"
+  - id: dstdev_field_text_in_matched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: "x", D1: "k", D2: "a" }
+    formula: "=DSTDEV(A1:B4,2,D1:D2)"
+  - id: dstdev_criteria_value_blank
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k" }
+    formula: "=DSTDEV(A1:B4,2,D1:D2)"
+  - id: dstdevp_field_error_in_unmatched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: "=NA()", A4: "a", B4: 30, D1: "k", D2: "a" }
+    formula: "=DSTDEVP(A1:B4,2,D1:D2)"
+  - id: dstdevp_field_blank_in_matched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", D1: "k", D2: "a" }
+    formula: "=DSTDEVP(A1:B4,2,D1:D2)"
+  - id: dstdevp_field_text_in_matched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: "x", D1: "k", D2: "a" }
+    formula: "=DSTDEVP(A1:B4,2,D1:D2)"
+  - id: dstdevp_criteria_value_blank
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k" }
+    formula: "=DSTDEVP(A1:B4,2,D1:D2)"
+  - id: dvar_field_error_in_unmatched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: "=NA()", A4: "a", B4: 30, D1: "k", D2: "a" }
+    formula: "=DVAR(A1:B4,2,D1:D2)"
+  - id: dvar_field_blank_in_matched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", D1: "k", D2: "a" }
+    formula: "=DVAR(A1:B4,2,D1:D2)"
+  - id: dvar_field_text_in_matched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: "x", D1: "k", D2: "a" }
+    formula: "=DVAR(A1:B4,2,D1:D2)"
+  - id: dvar_criteria_value_blank
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k" }
+    formula: "=DVAR(A1:B4,2,D1:D2)"
+  - id: dvarp_field_error_in_unmatched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: "=NA()", A4: "a", B4: 30, D1: "k", D2: "a" }
+    formula: "=DVARP(A1:B4,2,D1:D2)"
+  - id: dvarp_field_blank_in_matched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", D1: "k", D2: "a" }
+    formula: "=DVARP(A1:B4,2,D1:D2)"
+  - id: dvarp_field_text_in_matched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: "x", D1: "k", D2: "a" }
+    formula: "=DVARP(A1:B4,2,D1:D2)"
+  - id: dvarp_criteria_value_blank
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k" }
+    formula: "=DVARP(A1:B4,2,D1:D2)"
+  - id: maxifs_error_in_matched_value
+    setup: { A1: 10, A2: 20, A3: "=NA()", A4: 40, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=MAXIFS(A1:A4,B1:B4,\"a\")"
+  - id: maxifs_error_in_unmatched_value
+    setup: { A1: 10, A2: "=NA()", A3: 30, A4: 40, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=MAXIFS(A1:A4,B1:B4,\"a\")"
+  - id: maxifs_error_in_criteria_range
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, B1: "a", B2: "=NA()", B3: "a", B4: "a" }
+    formula: "=MAXIFS(A1:A4,B1:B4,\"a\")"
+  - id: maxifs_blank_in_matched_value
+    setup: { A1: 10, A2: 20, A4: 40, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=MAXIFS(A1:A4,B1:B4,\"a\")"
+  - id: maxifs_criteria_blank_cell
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=MAXIFS(A1:A4,B1:B4,D9)"
+  - id: maxifs_criteria_array_lifted
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=INDEX(MAXIFS(A1:A4,B1:B4,{\"a\",\"b\"}),2)"
+  - id: maxifs_no_match
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=MAXIFS(A1:A4,B1:B4,\"z\")"
+  - id: minifs_error_in_matched_value
+    setup: { A1: 10, A2: 20, A3: "=NA()", A4: 40, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=MINIFS(A1:A4,B1:B4,\"a\")"
+  - id: minifs_error_in_unmatched_value
+    setup: { A1: 10, A2: "=NA()", A3: 30, A4: 40, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=MINIFS(A1:A4,B1:B4,\"a\")"
+  - id: minifs_error_in_criteria_range
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, B1: "a", B2: "=NA()", B3: "a", B4: "a" }
+    formula: "=MINIFS(A1:A4,B1:B4,\"a\")"
+  - id: minifs_blank_in_matched_value
+    setup: { A1: 10, A2: 20, A4: 40, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=MINIFS(A1:A4,B1:B4,\"a\")"
+  - id: minifs_criteria_blank_cell
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=MINIFS(A1:A4,B1:B4,D9)"
+  - id: minifs_criteria_array_lifted
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=INDEX(MINIFS(A1:A4,B1:B4,{\"a\",\"b\"}),2)"
+  - id: minifs_no_match
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=MINIFS(A1:A4,B1:B4,\"z\")"
+  - id: averageifs_error_in_matched_value
+    setup: { A1: 10, A2: 20, A3: "=NA()", A4: 40, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=AVERAGEIFS(A1:A4,B1:B4,\"a\")"
+  - id: averageifs_error_in_unmatched_value
+    setup: { A1: 10, A2: "=NA()", A3: 30, A4: 40, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=AVERAGEIFS(A1:A4,B1:B4,\"a\")"
+  - id: averageifs_error_in_criteria_range
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, B1: "a", B2: "=NA()", B3: "a", B4: "a" }
+    formula: "=AVERAGEIFS(A1:A4,B1:B4,\"a\")"
+  - id: averageifs_blank_in_matched_value
+    setup: { A1: 10, A2: 20, A4: 40, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=AVERAGEIFS(A1:A4,B1:B4,\"a\")"
+  - id: averageifs_criteria_blank_cell
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=AVERAGEIFS(A1:A4,B1:B4,D9)"
+  - id: averageifs_criteria_array_lifted
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=INDEX(AVERAGEIFS(A1:A4,B1:B4,{\"a\",\"b\"}),2)"
+  - id: averageifs_no_match
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=AVERAGEIFS(A1:A4,B1:B4,\"z\")"
+  - id: rank_number_na_cell
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, B1: "a", B2: "b", B3: "a", B4: "a", F1: "=NA()" }
+    formula: "=RANK(F1,A1:A4)"
+  - id: rank_number_blank_cell
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=RANK(F2,A1:A4)"
+  - id: rank_error_in_ref
+    setup: { A1: 10, A2: 20, A3: 30, A4: "=NA()", B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=RANK(20,A1:A4)"
+  - id: rank_blank_in_ref
+    setup: { A1: 10, A2: 20, A3: 30, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=RANK(20,A1:A4)"
+  - id: rank_order_blank_cell
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=RANK(20,A1:A4,F2)"
+  - id: rank_number_not_in_ref
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=RANK(25,A1:A4)"
+  - id: rank_avg_number_na_cell
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, B1: "a", B2: "b", B3: "a", B4: "a", F1: "=NA()" }
+    formula: "=RANK.AVG(F1,A1:A4)"
+  - id: rank_avg_number_blank_cell
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=RANK.AVG(F2,A1:A4)"
+  - id: rank_avg_error_in_ref
+    setup: { A1: 10, A2: 20, A3: 30, A4: "=NA()", B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=RANK.AVG(20,A1:A4)"
+  - id: rank_avg_blank_in_ref
+    setup: { A1: 10, A2: 20, A3: 30, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=RANK.AVG(20,A1:A4)"
+  - id: rank_avg_order_blank_cell
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=RANK.AVG(20,A1:A4,F2)"
+  - id: rank_avg_number_not_in_ref
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=RANK.AVG(25,A1:A4)"
+  - id: rank_eq_number_na_cell
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, B1: "a", B2: "b", B3: "a", B4: "a", F1: "=NA()" }
+    formula: "=RANK.EQ(F1,A1:A4)"
+  - id: rank_eq_number_blank_cell
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=RANK.EQ(F2,A1:A4)"
+  - id: rank_eq_error_in_ref
+    setup: { A1: 10, A2: 20, A3: 30, A4: "=NA()", B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=RANK.EQ(20,A1:A4)"
+  - id: rank_eq_blank_in_ref
+    setup: { A1: 10, A2: 20, A3: 30, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=RANK.EQ(20,A1:A4)"
+  - id: rank_eq_order_blank_cell
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=RANK.EQ(20,A1:A4,F2)"
+  - id: rank_eq_number_not_in_ref
+    setup: { A1: 10, A2: 20, A3: 30, A4: 40, B1: "a", B2: "b", B3: "a", B4: "a" }
+    formula: "=RANK.EQ(25,A1:A4)"
+  - id: isformula_error_cell
+    setup: { A1: "=NA()" }
+    formula: "=ISFORMULA(A1)"
+  - id: isformula_blank_cell
+    formula: "=ISFORMULA(A1)"
+  - id: phonetic_error_cell
+    setup: { A1: "=NA()" }
+    formula: "=PHONETIC(A1)"
+  - id: phonetic_blank_cell
+    formula: "=PHONETIC(A1)"
+  - id: phonetic_number_cell
+    setup: { A1: 42 }
+    formula: "=PHONETIC(A1)"
