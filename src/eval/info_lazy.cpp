@@ -135,7 +135,17 @@ Value eval_first_cell_coercion(const parser::AstNode& call, Arena& arena, const 
     std::uint32_t bottom = 0;
     std::uint32_t right = 0;
     ErrorCode err = ErrorCode::Value;
-    if (resolve_reference_rect(target, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &err)) {
+    // A name is resolved by the name until names bind as references.
+    bool resolved = false;
+    if (carries_name_reference(target)) {
+      resolved = resolve_reference_rect(target, arena, registry, ctx, &sheet, &top, &left, &bottom, &right, &err);
+    } else {
+      RefArea area{};
+      resolved = eval_reference_area(target, arena, registry, ctx, &sheet, &area, &err);
+      top = area.row_first;
+      left = area.col_first;
+    }
+    if (resolved) {
       parser::Reference first{};
       first.sheet = sheet;
       first.row = top;
@@ -188,13 +198,23 @@ Expected<SingleReference, ErrorCode> resolve_single_reference(const parser::AstN
     sheet_name = ref.sheet;
     top = bottom = ref.row;
     left = right = ref.col;
-  } else if (node.kind() == parser::NodeKind::Call) {
+  } else if (node.kind() == parser::NodeKind::Call && carries_name_reference(node)) {
     bool is_range = false;
     ErrorCode err = ErrorCode::Value;
     if (!resolve_reference_call(node, arena, registry, ctx, &sheet_name, &top, &left, &bottom, &right, &is_range,
                                 &err)) {
       return err;
     }
+  } else if (node.kind() == parser::NodeKind::Call && is_reference_call_name(node.as_call_name())) {
+    RefArea area{};
+    ErrorCode err = ErrorCode::Value;
+    if (!eval_reference_area(node, arena, registry, ctx, &sheet_name, &area, &err)) {
+      return err;
+    }
+    top = area.row_first;
+    bottom = area.row_last;
+    left = area.col_first;
+    right = area.col_last;
   } else {
     return ErrorCode::Value;
   }
@@ -352,14 +372,19 @@ Value eval_isref_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     // result to count as "ref". E.g. `ISREF(INDIRECT("not a ref"))`
     // is FALSE because INDIRECT surfaces `#REF!`.
     std::string_view sheet;
-    std::uint32_t top = 0;
-    std::uint32_t left = 0;
-    std::uint32_t bottom = 0;
-    std::uint32_t right = 0;
-    bool is_range = false;
     ErrorCode err = ErrorCode::Value;
-    return Value::boolean(resolve_reference_call(arg, arena, registry, ctx.without_dynamic_read_callback(), &sheet,
-                                                 &top, &left, &bottom, &right, &is_range, &err));
+    if (carries_name_reference(arg)) {
+      std::uint32_t top = 0;
+      std::uint32_t left = 0;
+      std::uint32_t bottom = 0;
+      std::uint32_t right = 0;
+      bool is_range = false;
+      return Value::boolean(resolve_reference_call(arg, arena, registry, ctx.without_dynamic_read_callback(), &sheet,
+                                                   &top, &left, &bottom, &right, &is_range, &err));
+    }
+    RefArea area{};
+    return Value::boolean(
+        eval_reference_area(arg, arena, registry, ctx.without_dynamic_read_callback(), &sheet, &area, &err));
   }
   return Value::boolean(false);
 }

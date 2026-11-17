@@ -1112,6 +1112,36 @@ TEST_F(SelectedRefTest, ShapeFunctionsMeasureReturnedReferences) {
   ExpectError(Eval("=ROWS(INDIRECT(\"nope\"))"), ErrorCode::Ref, "ROWS over a failed INDIRECT");
 }
 
+// N / T / ISREF / CELL / AREAS / ISFORMULA / FORMULATEXT read a reference-returning call as the reference it
+// returns; a call that returns a value is read as that value.
+TEST_F(SelectedRefTest, InfoFunctionsReadReturnedReferences) {
+  ExpectSame(Eval("=N(OFFSET(A1,1,1,2,2))"), Eval("=22"), "N over OFFSET");
+  ExpectSame(Eval("=T(INDEX(A1:D1,4))"), Eval("=\"x\""), "T over INDEX");
+  ExpectSame(Eval("=N(IF(TRUE,5))"), Eval("=5"), "N over a selected value");
+  ExpectSame(Eval("=ISREF(TAKE(A1:B3,1))"), Eval("=TRUE"), "ISREF over TAKE");
+  ExpectSame(Eval("=ISREF(INDIRECT(\"nope\"))"), Eval("=FALSE"), "ISREF over a failed INDIRECT");
+  ExpectSame(Eval("=CELL(\"col\",CHOOSE(2,A1,Sheet2!B2))"), Eval("=2"), "CELL over CHOOSE");
+  ExpectSame(Eval("=CELL(\"contents\",OFFSET(A1,2,2))"), Eval("=33"), "CELL contents over OFFSET");
+  ExpectError(Eval("=CELL(\"row\",IF(TRUE,5))"), ErrorCode::Value, "CELL over a selected value");
+  ExpectSame(Eval("=AREAS(DROP(A1:C3,1))"), Eval("=1"), "AREAS over DROP");
+  ExpectError(Eval("=AREAS(OFFSET(A1,-1,0))"), ErrorCode::Ref, "AREAS over an OFFSET off the grid");
+  ExpectSame(Eval("=ISFORMULA(OFFSET(A1,0,0))"), Eval("=FALSE"), "ISFORMULA over OFFSET");
+  ExpectError(Eval("=FORMULATEXT(INDEX(A1:A5,2))"), ErrorCode::NA, "FORMULATEXT over a value cell");
+}
+
+// FORMULATEXT reads no value, so the cell an OFFSET names is reported as read for recalculation.
+TEST_F(SelectedRefTest, FormulaTextReportsTheDynamicCellItNames) {
+  std::vector<Note> notes;
+  const EvalContext ctx = Ctx().with_dynamic_read_callback(&CollectNote, &notes);
+  const Value v = evaluate(Parse("=FORMULATEXT(OFFSET(A1,2,1))"), arena_, default_registry(), ctx);
+  ExpectError(v, ErrorCode::NA, "FORMULATEXT over a value cell");
+  ASSERT_EQ(notes.size(), 1U);
+  EXPECT_EQ(notes[0].sheet, "");
+  EXPECT_EQ(notes[0].rect.row_first, 2U);
+  EXPECT_EQ(notes[0].rect.col_first, 1U);
+  EXPECT_TRUE(notes[0].rect.single_cell());
+}
+
 // A two-argument IF whose condition fails selects the value FALSE, which a range argument reads as a direct value;
 // a selected reference stays one.
 TEST_F(SelectedRefTest, MissingElseArmIsTheValueFalse) {

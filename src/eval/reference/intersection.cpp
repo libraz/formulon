@@ -73,15 +73,8 @@ bool resolve_built_reference(const parser::AstNode& node, Arena& arena, const Fu
                              const EvalContext& ctx, std::string_view* out_sheet, std::uint32_t* out_top_row,
                              std::uint32_t* out_left_col, std::uint32_t* out_bottom_row, std::uint32_t* out_right_col,
                              bool* out_is_range, ErrorCode* out_err) {
-  const Value ref = eval_node_ref(node, arena, registry, ctx);
-  if (!ref.is_ref()) {
-    *out_err = ref.is_error() ? ref.as_error() : ErrorCode::Value;
-    return false;
-  }
-  const RefView view = ref.as_ref();
-  const RefArea& area = view.areas[0];
-  if (view.form != RefForm::kArea || view.book != 0U || !ref_sheet_name(ctx, area.sheet_first, out_sheet)) {
-    *out_err = ErrorCode::Ref;
+  RefArea area{};
+  if (!eval_reference_area(node, arena, registry, ctx, out_sheet, &area, out_err)) {
     return false;
   }
   *out_top_row = area.row_first;
@@ -89,10 +82,6 @@ bool resolve_built_reference(const parser::AstNode& node, Arena& arena, const Fu
   *out_bottom_row = area.row_last;
   *out_right_col = area.col_last;
   *out_is_range = refs_internal::rect_is_range(*out_top_row, *out_left_col, *out_bottom_row, *out_right_col);
-  if (ref.ref_is_dynamic()) {
-    ctx.note_dynamic_read(*out_sheet, DeclaredRect{area.row_first, area.row_last, area.col_first, area.col_last,
-                                                   /*whole_axis=*/area.whole_col != 0U || area.whole_row != 0U});
-  }
   return true;
 }
 
@@ -296,6 +285,27 @@ bool carries_name_reference(const parser::AstNode& node) noexcept {
     default:
       return false;
   }
+}
+
+bool eval_reference_area(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx, std::string_view* out_sheet, RefArea* out_area, ErrorCode* out_err) {
+  const Value ref = eval_node_ref(node, arena, registry, ctx);
+  if (!ref.is_ref()) {
+    *out_err = ref.is_error() ? ref.as_error() : ErrorCode::Value;
+    return false;
+  }
+  const RefView view = ref.as_ref();
+  const RefArea& area = view.areas[0];
+  if (view.form != RefForm::kArea || view.book != 0U || !ref_sheet_name(ctx, area.sheet_first, out_sheet)) {
+    *out_err = ErrorCode::Ref;
+    return false;
+  }
+  *out_area = area;
+  if (ref.ref_is_dynamic()) {
+    ctx.note_dynamic_read(*out_sheet, DeclaredRect{area.row_first, area.row_last, area.col_first, area.col_last,
+                                                   /*whole_axis=*/area.whole_col != 0U || area.whole_row != 0U});
+  }
+  return true;
 }
 
 bool resolve_reference_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,

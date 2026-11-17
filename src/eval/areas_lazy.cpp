@@ -14,8 +14,8 @@
 // 1 area and a failure — including a comma union such as `"A1,B2"`, which
 // is not a reference INDIRECT can build — surfaces through AREAS as that
 // same error. Every other reference-returning call (`is_reference_call_name`)
-// resolves through `resolve_reference_call`: 1 area on success, its error
-// otherwise.
+// is read as the `Ref` it returns (`eval_reference_area`): 1 area on success,
+// its error otherwise.
 
 #include "eval/areas_lazy.h"
 
@@ -141,14 +141,22 @@ std::int64_t count_areas(const parser::AstNode& n, Arena& arena, const FunctionR
     // resolves; the resolution error is what AREAS reports otherwise.
     if (is_reference_call_name(fname)) {
       std::string_view sheet;
-      std::uint32_t r1 = 0;
-      std::uint32_t c1 = 0;
-      std::uint32_t r2 = 0;
-      std::uint32_t c2 = 0;
-      bool is_range = false;
       ErrorCode err = ErrorCode::Value;
-      if (!resolve_reference_call(n, arena, registry, ctx.without_dynamic_read_callback(), &sheet, &r1, &c1, &r2, &c2,
-                                  &is_range, &err)) {
+      bool resolved = false;
+      if (carries_name_reference(n)) {
+        // A name is resolved by the name until names bind as references.
+        std::uint32_t r1 = 0;
+        std::uint32_t c1 = 0;
+        std::uint32_t r2 = 0;
+        std::uint32_t c2 = 0;
+        bool is_range = false;
+        resolved = resolve_reference_call(n, arena, registry, ctx.without_dynamic_read_callback(), &sheet, &r1, &c1,
+                                          &r2, &c2, &is_range, &err);
+      } else {
+        RefArea area{};
+        resolved = eval_reference_area(n, arena, registry, ctx.without_dynamic_read_callback(), &sheet, &area, &err);
+      }
+      if (!resolved) {
         *propagated = err;
         return kAreasPropagate;
       }

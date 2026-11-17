@@ -74,7 +74,7 @@ Value arena_text(Arena& arena, std::string_view s) {
 //     normalise the rectangle's top-left as the smallest (row, col)
 //     across both endpoints.
 //   * Reference-returning Call (OFFSET / INDIRECT / nested CHOOSE / IF)
-//     - `resolve_reference_call` produces the rectangle directly.
+//     - the area of the `Ref` it returns (`eval_reference_area`).
 //   * Anything else - evaluate via `eval_node` so a subtree error
 //     propagates with the correct code; if the result is a non-error
 //     non-reference scalar, surface `#VALUE!` (CELL needs a reference,
@@ -149,9 +149,19 @@ bool extract_topleft_ref(const parser::AstNode& ref_node, Arena& arena, const Fu
     return true;
   }
 
-  // Reference-returning call: OFFSET / INDIRECT / nested CHOOSE / IF.
-  // `resolve_reference_call` walks these and produces a rectangle.
-  if (k == parser::NodeKind::Call) {
+  // Reference-returning call: OFFSET / INDIRECT / nested CHOOSE / IF, read as the `Ref` it returns. A call
+  // reaching a reference through a name is resolved by the name.
+  if (k == parser::NodeKind::Call && is_reference_call_name(ref_node.as_call_name()) &&
+      !carries_name_reference(ref_node)) {
+    RefArea area{};
+    ErrorCode err = ErrorCode::Value;
+    if (eval_reference_area(ref_node, arena, registry, ctx, out_sheet, &area, &err)) {
+      *out_row = area.row_first;
+      *out_col = area.col_first;
+      return true;
+    }
+    // A selected value (CHOOSE(1, 42)) is evaluated below so a subtree error propagates.
+  } else if (k == parser::NodeKind::Call) {
     std::string_view sheet;
     std::uint32_t top = 0;
     std::uint32_t left = 0;
