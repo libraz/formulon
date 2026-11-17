@@ -48,7 +48,12 @@ probes (one argument shape each) run in the Excel that is already open::
           --slot "$slot" --out "/path/classes_$slot.xlsb"
     done
     tools/oracle/.venv/bin/python tools/dev/xlsb_func_id_harvest.py classes-emit \\
-        <A1:A2 probe> <A1 probe> <A1:A2+0 probe> <A1+0 probe>
+        <A1:A2 probe> <A1 probe> <A1:A2+0 probe> <A1+0 probe> \\
+        --value-only-out tests/fixtures/excel/parameter_class_value_only.txt
+
+The names Excel classified V in every slot are left out of the blob and
+listed in that file instead, so a built-in Excel never classified fails
+`EveryBuiltinParameterClassIsMeasured` rather than reading V by default.
 
 `emit` exits 1 when a decoded id would displace an existing table row. Such a
 row is withheld from the output and reported as a `// collision:` comment
@@ -880,15 +885,55 @@ def _formula_streams(buf: bytes) -> Dict[Tuple[int, int], bytes]:
     return {key: arrays.get(key, rgce) if rgce[:1] == b"\x01" else rgce for key, rgce in cells.items()}
 
 
+BRT_CELL_ST = 6
+BRT_CELL_ISST = 7
+BRT_SST_ITEM = 19
+
+
+def _wide_string(buf: bytes, at: int) -> str:
+    """The `XLWideString` at `at`: a u32 character count, then UTF-16LE."""
+
+    return buf[at + 4 : at + 4 + 2 * _u32(buf, at)].decode("utf-16-le")
+
+
+def _text_cells(zf: zipfile.ZipFile, part: str) -> Dict[Tuple[int, int], str]:
+    """Every text cell of a sheet part, shared or inline, by `(row, col)`."""
+
+    shared: List[str] = []
+    if "xl/sharedStrings.bin" in zf.namelist():
+        sst = zf.read("xl/sharedStrings.bin")
+        shared = [_wide_string(sst, rec.offset + 1) for rec in iter_records(sst) if rec.type == BRT_SST_ITEM]
+    buf = zf.read(part)
+    cells: Dict[Tuple[int, int], str] = {}
+    row = -1
+    for rec in iter_records(buf):
+        if rec.type == BRT_ROW_HDR:
+            row = _u32(buf, rec.offset)
+        elif rec.type == BRT_CELL_ISST:
+            cells[(row, _u32(buf, rec.offset))] = shared[_u32(buf, rec.offset + 8)]
+        elif rec.type == BRT_CELL_ST:
+            cells[(row, _u32(buf, rec.offset))] = _wide_string(buf, rec.offset + 8)
+    return cells
+
+
 def classes(xlsb_path: str) -> Tuple[Dict[str, str], List[str]]:
-    """Per-function parameter classes (`R`/`V`/`A` per slot), plus unresolved names."""
+    """Per-function parameter classes (`R`/`V`/`A` per slot), plus unresolved names.
+
+    Each probe row is read under the name in its label cell, so a workbook
+    built before the function table gained rows still reads correctly.
+    """
 
     with zipfile.ZipFile(xlsb_path) as zf:
         streams = _formula_streams(zf.read("xl/worksheets/sheet1.bin"))
+        labels = _text_cells(zf, "xl/worksheets/sheet1.bin")
+    slot_counts = dict(class_probes())
     out: Dict[str, str] = {}
     unresolved: List[str] = []
-    for i, (name, slots) in enumerate(class_probes()):
-        rgce = streams.get((PROBE_ROW_0 + i, FORMULA_COL))
+    for (row, col), name in sorted(labels.items()):
+        if col != LABEL_COL or row < PROBE_ROW_0:
+            continue
+        slots = slot_counts.get(name, CLASS_SLOTS_MAX)
+        rgce = streams.get((row, FORMULA_COL))
         letters = ""
         at = 0
         while rgce is not None and at < len(rgce):
@@ -923,17 +968,18 @@ _SLOT_LETTER = {
 }
 
 
-def classes_emit(area: str, cell: str, area_op: str, cell_op: str) -> List[str]:
-    """Formats the four class probes as `func_id_table.cpp`'s class blob.
+def classes_emit(area: str, cell: str, area_op: str, cell_op: str) -> Tuple[List[str], List[str]]:
+    """Formats the four class probes as `func_id_table.cpp`'s class blob, plus the names left out of it.
 
     Each entry is the shortest prefix of the per-slot letters that, repeating
     its last letter (or last two, marked by a trailing `2`), regenerates what
     was probed. Functions whose every slot is `V` are left out: that is the
-    lookup's default for a built-in.
+    lookup's default for a built-in, and are returned as the second list.
     """
 
     probes = [classes(path)[0] for path in (area, cell, area_op, cell_op)]
     lines: List[str] = []
+    value_only: List[str] = []
     for name in sorted(probes[0]):
         width = len(probes[0][name])
         letters = ""
@@ -954,7 +1000,9 @@ def classes_emit(area: str, cell: str, area_op: str, cell_op: str) -> List[str]:
                     break
         if set(best.rstrip("2")) != {"V"}:
             lines.append(f"{name}:{best}")
-    return lines
+        else:
+            value_only.append(name)
+    return lines, value_only
 
 
 # ---------------------------------------------------------------------------
@@ -989,11 +1037,17 @@ def main(argv: Optional[List[str]] = None) -> int:
     p_cemit.add_argument("cell", help='probe built with --slot "A1"')
     p_cemit.add_argument("area_op", help='probe built with --slot "A1:A2+0"')
     p_cemit.add_argument("cell_op", help='probe built with --slot "A1+0"')
+    p_cemit.add_argument(
+        "--value-only-out", help="write the names whose every slot is V, one per line (the class-coverage test's list)"
+    )
 
     args = parser.parse_args(argv)
 
     if args.command == "classes-emit":
-        entries = classes_emit(args.area, args.cell, args.area_op, args.cell_op)
+        entries, value_only = classes_emit(args.area, args.cell, args.area_op, args.cell_op)
+        if args.value_only_out:
+            with open(args.value_only_out, "w", encoding="utf-8") as fh:
+                fh.write("".join(f"{name}\n" for name in value_only))
         blob = "|" + "|".join(entries) + "|"
         for at in range(0, len(blob), 100):
             print(f'    "{blob[at : at + 100]}"')

@@ -11,6 +11,7 @@
 
 #include "eval/function_registry.h"
 #include "eval/tree_walker.h"
+#include "eval/tree_walker_lazy_table.h"
 #include "gtest/gtest.h"
 #include "io/future_functions.h"
 #include "io/xlsb/func_id_table.h"
@@ -335,6 +336,64 @@ TEST(XlsbPtgCodec, EveryBuiltinHasAnXlsbEncoding) {
     check(*p);
   }
   EXPECT_TRUE(missing.empty()) << (missing.empty() ? "" : missing.front());
+}
+// A built-in either has a class row or is one Excel classified V in every
+// slot (`parameter_class_value_only.txt`, written by the class harvest), so
+// none reads V only because nobody asked Excel.
+TEST(XlsbPtgCodec, EveryBuiltinParameterClassIsMeasured) {
+  std::unordered_set<std::string> value_only;
+  {
+    const std::string path = std::string(FORMULON_FIXTURES_DIR) + "/excel/parameter_class_value_only.txt";
+    FILE* f = std::fopen(path.c_str(), "rb");
+    ASSERT_NE(f, nullptr) << path;
+    char line[128];
+    while (std::fgets(line, sizeof(line), f) != nullptr) {
+      std::string name(line);
+      while (!name.empty() && (name.back() == '\n' || name.back() == '\r')) {
+        name.pop_back();
+      }
+      value_only.insert(name);
+    }
+    std::fclose(f);
+  }
+  ASSERT_FALSE(value_only.empty());
+  std::vector<std::string> unmeasured;
+  auto check = [&](std::string_view name, std::uint32_t max_arity) {
+    const std::string stored(canonical_function_name(name));
+    // Excel stores JIS as DBCS, which is measured; it refuses an explicit
+    // ANCHORARRAY call, reachable only through `#`, whose operand is
+    // reference class; and it refuses PY through its formula interfaces.
+    if (max_arity == 0U || stored == "JIS" || stored == "ANCHORARRAY" || stored == "PY" ||
+        value_only.count(stored) != 0U) {
+      return;
+    }
+    for (std::uint32_t i = 0; i < 8U && i < max_arity; ++i) {
+      if (xlsb_parameter_class(stored, i) != 'V') {
+        return;
+      }
+    }
+    unmeasured.push_back(stored);
+  };
+  struct Ctx {
+    decltype(check)* fn;
+  } ctx{&check};
+  eval::default_registry().for_each_name(
+      [](std::string_view name, void* raw) {
+        const eval::FunctionDef* def = eval::default_registry().lookup(name);
+        (*static_cast<Ctx*>(raw)->fn)(name, def != nullptr ? def->max_arity : 1U);
+      },
+      &ctx);
+  for (const char* const* p = eval::lazy_form_names(); *p != nullptr; ++p) {
+    std::uint32_t min_arity = 0;
+    std::uint32_t max_arity = 1;
+    eval::find_lazy_arity(*p, &min_arity, &max_arity);
+    check(*p, max_arity);
+  }
+  std::string listed;
+  for (const std::string& name : unmeasured) {
+    listed += name + ' ';
+  }
+  EXPECT_TRUE(unmeasured.empty()) << listed;
 }
 TEST(XlsbPtgCodec, RelativeReferencesAgainstABaseCellMatchExcelBytes) {
   struct Case {
