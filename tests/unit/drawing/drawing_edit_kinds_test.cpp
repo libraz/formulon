@@ -1035,5 +1035,96 @@ TEST(ShapePaintRecord, ConnectorEndsAndDashRoundTripInBothFormats) {
   EXPECT_NE(xml.find("<a:ln><a:headEnd type=\"triangle\"/></a:ln>"), std::string::npos);
 }
 
+// The `a:avLst` of the object with `cNvPr/@id` == `id` in sheet 0's drawing, printed raw.
+std::string AvLstXml(const Workbook& wb, std::uint32_t id) {
+  pugi::xml_document doc;
+  ParseDrawing(wb, 0, doc);
+  const pugi::xml_node cnvpr = doc.document_element().find_node(
+      [id](const pugi::xml_node& n) { return local_name(n) == "cNvPr" && n.attribute("id").as_uint() == id; });
+  const pugi::xml_node av = cnvpr.parent().parent().child("xdr:spPr").child("a:prstGeom").child("a:avLst");
+  std::ostringstream out;
+  av.print(out, "", pugi::format_raw);
+  return out.str();
+}
+
+ShapeAdjustPatch Adjust(std::string name, std::optional<std::int32_t> value) {
+  ShapeAdjustPatch patch;
+  patch.name = std::move(name);
+  patch.value = value;
+  return patch;
+}
+
+TEST(ShapeAdjustValues, InsertSetsAndRoundTripsInBothFormats) {
+  Workbook wb = Workbook::create();
+  ShapeSpec spec = OneCellShape("roundRect");
+  spec.adjust_values = {Adjust("adj", 25000)};
+  auto id = insert_shape(wb, 0, spec);
+  ASSERT_TRUE(static_cast<bool>(id));
+  EXPECT_EQ(AvLstXml(wb, id.value()), "<a:avLst><a:gd name=\"adj\" fmla=\"val 25000\"/></a:avLst>");
+  const Workbook xlsx = RoundTrip(wb);
+  const Workbook xlsb = XlsbRoundTrip(wb);
+  for (const Workbook* again : {&xlsx, &xlsb}) {
+    EXPECT_EQ(ShapeWithId(*again, id.value()).adjust_values, std::vector<ShapeAdjust>({{"adj", 25000}}));
+  }
+}
+
+TEST(ShapeAdjustValues, PatchSetsRemovesAndKeepsByName) {
+  std::string drawing = std::string(kWsDrOpen) + Anchor(0, Sp(2, "Callout 1", "", "")) + "</xdr:wsDr>";
+  const std::string rect = "<a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom>";
+  drawing.replace(drawing.find(rect), rect.size(),
+                  "<a:prstGeom prst=\"wedgeRectCallout\"><a:avLst><a:gd name=\"adj1\" fmla=\"val -20833\"/>"
+                  "<a:gd name=\"adj2\" fmla=\"*/ 1 2 3\"/></a:avLst></a:prstGeom>");
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart(kDrawingPath, kCtDrawing, ToBytes(drawing)))));
+  wb.sheet(0).set_drawing_rel_target(kDrawingPath);
+
+  // Only the `val` guide reads; the formula guide is not listed but stays in the file.
+  EXPECT_EQ(ShapeWithId(wb, 2).adjust_values, std::vector<ShapeAdjust>({{"adj1", -20833}}));
+
+  ShapeSpec patch;
+  patch.adjust_values = {Adjust("adj2", 62500), Adjust("adj3", 16667)};
+  ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, 2, patch)));
+  EXPECT_EQ(AvLstXml(wb, 2),
+            "<a:avLst><a:gd name=\"adj1\" fmla=\"val -20833\"/><a:gd name=\"adj2\" fmla=\"val 62500\"/>"
+            "<a:gd name=\"adj3\" fmla=\"val 16667\"/></a:avLst>");
+
+  patch.adjust_values = {Adjust("adj1", std::nullopt), Adjust("adj9", std::nullopt)};
+  ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, 2, patch)));
+  EXPECT_EQ(ShapeWithId(wb, 2).adjust_values, std::vector<ShapeAdjust>({{"adj2", 62500}, {"adj3", 16667}}));
+
+  // A preset change drops every guide, then the patch's guides apply.
+  patch.fields = shape_field::kPrst;
+  patch.prst = "roundRect";
+  patch.adjust_values = {Adjust("adj", 5000)};
+  ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, 2, patch)));
+  EXPECT_EQ(AvLstXml(wb, 2), "<a:avLst><a:gd name=\"adj\" fmla=\"val 5000\"/></a:avLst>");
+}
+
+TEST(ShapeAdjustValues, BadEditsAreRefusedWhole) {
+  Workbook wb = Workbook::create();
+  auto id = insert_shape(wb, 0, OneCellShape("roundRect"));
+  ASSERT_TRUE(static_cast<bool>(id));
+  const std::string before = AvLstXml(wb, id.value());
+  const std::vector<std::vector<ShapeAdjustPatch>> bad = {
+      {Adjust("", 1)},
+      {Adjust("1adj", 1)},
+      {Adjust("adj-1", 1)},
+      {Adjust(std::string(33, 'a'), 1)},
+      {Adjust("adj", 1), Adjust("adj", std::nullopt)},
+  };
+  for (const std::vector<ShapeAdjustPatch>& edits : bad) {
+    ShapeSpec patch;
+    patch.fields = shape_field::kName;
+    patch.name = "Renamed";
+    patch.adjust_values = edits;
+    EXPECT_EQ(Code(update_shape(wb, 0, id.value(), patch)), FormulonErrorCode::kInvalidArgument);
+  }
+  ShapeSpec many;
+  many.adjust_values.assign(kMaxAdjustPatches + 1, Adjust("adj", 1));
+  EXPECT_EQ(Code(update_shape(wb, 0, id.value(), many)), FormulonErrorCode::kSecurityResourceLimit);
+  EXPECT_EQ(AvLstXml(wb, id.value()), before);
+  EXPECT_NE(ShapeWithId(wb, id.value()).object.name, "Renamed");
+}
+
 }  // namespace
 }  // namespace formulon

@@ -192,12 +192,73 @@ std::optional<ShapeConnection> read_connection(const pugi::xml_node& node) {
   return ShapeConnection{*id, *idx};
 }
 
+/// The value of a guide formula `val <int32>`; unset for any other formula.
+std::optional<std::int32_t> adjust_value_of(std::string_view fmla) {
+  constexpr std::string_view kVal = "val ";
+  if (fmla.substr(0, kVal.size()) != kVal) {
+    return std::nullopt;
+  }
+  std::string_view digits = fmla.substr(kVal.size());
+  const bool negative = !digits.empty() && digits.front() == '-';
+  digits.remove_prefix(negative ? 1U : 0U);
+  if (digits.empty() || digits.size() > 10U) {
+    return std::nullopt;
+  }
+  std::int64_t v = 0;
+  for (const char c : digits) {
+    if (c < '0' || c > '9') {
+      return std::nullopt;
+    }
+    v = v * 10 + (c - '0');
+  }
+  v = negative ? -v : v;
+  if (v < INT32_MIN || v > INT32_MAX) {
+    return std::nullopt;
+  }
+  return static_cast<std::int32_t>(v);
+}
+
+std::vector<ShapeAdjust> read_adjust_values(const pugi::xml_node& geom) {
+  std::vector<ShapeAdjust> out;
+  for (const pugi::xml_node& gd : children_local(child_local(geom, "avLst"), "gd")) {
+    if (const std::optional<std::int32_t> v = adjust_value_of(gd.attribute("fmla").value())) {
+      out.push_back(ShapeAdjust{gd.attribute("name").value(), *v});
+    }
+  }
+  return out;
+}
+
+bool adjust_name_ok(std::string_view name) {
+  const auto alpha = [](char c) { return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'); };
+  return !name.empty() && name.size() <= 32U && alpha(name.front()) &&
+         std::all_of(name.begin(), name.end(), [&alpha](char c) { return alpha(c) || (c >= '0' && c <= '9'); });
+}
+
+Expected<void, Error> check_adjust_values(const std::vector<ShapeAdjustPatch>& patches) {
+  if (patches.size() > kMaxAdjustPatches) {
+    return make_error(FormulonErrorCode::kSecurityResourceLimit, "adjust_values holds too many guides",
+                      limit_context("adjust_values", patches.size(), kMaxAdjustPatches));
+  }
+  for (std::size_t i = 0; i < patches.size(); ++i) {
+    if (!adjust_name_ok(patches[i].name)) {
+      return invalid("An adjust value name must be [A-Za-z][A-Za-z0-9]* of at most 32 characters");
+    }
+    for (std::size_t j = 0; j < i; ++j) {
+      if (patches[j].name == patches[i].name) {
+        return invalid("adjust_values names a guide twice");
+      }
+    }
+  }
+  return Expected<void, Error>::Ok();
+}
+
 ShapeInfo read_shape(const Workbook& wb, pugi::xml_node anchor, DrawingObject object) {
   ShapeInfo info;
   info.object = std::move(object);
   pugi::xml_node content = anchor_content(anchor);
   pugi::xml_node props = props_of(content);
   info.prst = child_local(props, "prstGeom").attribute("prst").value();
+  info.adjust_values = read_adjust_values(child_local(props, "prstGeom"));
   info.text = read_text(content);
   info.text_box = child_local(child_local(content, "nvSpPr"), "cNvSpPr").attribute("txBox").as_bool();
   const drawing_edit::XfrmTransform transform = drawing_edit::read_xfrm_transform(child_local(props, "xfrm"));
@@ -410,6 +471,26 @@ Expected<void, Error> apply_paint_records(pugi::xml_node props, const ShapeSpec&
   return Expected<void, Error>::Ok();
 }
 
+/// Sets or removes each named guide of `geom`'s `a:avLst`; a new guide goes last.
+void apply_adjust_values(pugi::xml_node geom, const std::string& ap, const std::vector<ShapeAdjustPatch>& patches) {
+  pugi::xml_node guides = ensure_child(geom, ap + "avLst");
+  for (const ShapeAdjustPatch& patch : patches) {
+    pugi::xml_node gd = guides.find_child([&patch](const pugi::xml_node& n) {
+      return local_name(n) == "gd" && patch.name == n.attribute("name").value();
+    });
+    if (!patch.value) {
+      guides.remove_child(gd);
+      continue;
+    }
+    if (!gd) {
+      gd = guides.append_child((ap + "gd").c_str());
+      gd.append_attribute("name").set_value(patch.name.c_str());
+    }
+    const std::string fmla = "val " + std::to_string(*patch.value);
+    (gd.attribute("fmla") ? gd.attribute("fmla") : gd.append_attribute("fmla")).set_value(fmla.c_str());
+  }
+}
+
 // Applies the non-anchor fields of `spec` to `content`; `anchor` names its `cNvPr`.
 Expected<void, Error> apply_fields(pugi::xml_node anchor, pugi::xml_node content, const ShapeSpec& spec) {
   const std::uint32_t f = spec.fields;
@@ -421,6 +502,10 @@ Expected<void, Error> apply_fields(pugi::xml_node anchor, pugi::xml_node content
   }
   if ((f & shape_field::kPrst) != 0U && (group || !is_preset(spec.prst))) {
     return invalid("preset_geometry must be a DrawingML shape type on a shape or connector");
+  }
+  RETURN_IF_ERROR(check_adjust_values(spec.adjust_values));
+  if (!spec.adjust_values.empty() && !child_local(props, "prstGeom") && (f & shape_field::kPrst) == 0U) {
+    return invalid("adjust_values apply only to preset geometry");
   }
   if ((f & (shape_field::kText | shape_field::kTextBox)) != 0U && kind != "sp") {
     return invalid("text and text_box apply only to a shape");
@@ -460,6 +545,9 @@ Expected<void, Error> apply_fields(pugi::xml_node anchor, pugi::xml_node content
       }
       (geom.attribute("prst") ? geom.attribute("prst") : geom.append_attribute("prst")).set_value(spec.prst.c_str());
     }
+  }
+  if (!spec.adjust_values.empty()) {
+    apply_adjust_values(child_local(props, "prstGeom"), a_prefix(props), spec.adjust_values);
   }
   if ((f & (shape_field::kRotation | shape_field::kFlipH | shape_field::kFlipV)) != 0U) {
     const drawing_edit::XfrmTransform current = drawing_edit::read_xfrm_transform(child_local(props, "xfrm"));

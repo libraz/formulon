@@ -44,9 +44,27 @@ struct ShapeConnection {
   bool operator==(const ShapeConnection& o) const { return object_id == o.object_id && site_index == o.site_index; }
 };
 
+/// One `a:prstGeom/a:avLst/a:gd` adjust value, `fmla="val <value>"`, in the preset's raw DrawingML units.
+struct ShapeAdjust {
+  std::string name;  ///< `@name`: `adj`, `adj1`, ...
+  std::int32_t value = 0;
+  bool operator==(const ShapeAdjust& o) const { return name == o.name && value == o.value; }
+};
+
+/// One adjust-value edit: a value writes `fmla="val <value>"`, unset removes the guide so the preset default applies.
+struct ShapeAdjustPatch {
+  std::string name;
+  std::optional<std::int32_t> value;
+};
+
+/// Most adjust edits one patch may carry.
+inline constexpr std::size_t kMaxAdjustPatches = 64;  // @limit: engine
+
 struct ShapeInfo {
   DrawingObject object;
-  std::string prst;           ///< `a:prstGeom/@prst`; empty for custom geometry or a group.
+  std::string prst;  ///< `a:prstGeom/@prst`; empty for custom geometry or a group.
+  /// The `a:avLst` guides stated as `val <int32>`, in document order; a guide holding another formula is not listed.
+  std::vector<ShapeAdjust> adjust_values;
   std::string text;           ///< Paragraphs joined with `\n`; empty for connectors and groups.
   bool text_box = false;      ///< `cNvSpPr/@txBox`.
   std::int32_t rotation = 0;  ///< `a:xfrm/@rot` in 60000ths of a degree, as stored.
@@ -100,6 +118,9 @@ struct ShapeSpec {
   /// `fields` says; a Clear field returns that part to the style's paint.
   ChartFillPatch paint_fill;
   ChartLinePatch paint_line;
+  /// Adjust-value edits by guide name, applied whatever `fields` says and after a `kPrst` change (which drops every
+  /// guide); a guide the patch does not name is kept. A name the preset does not define is stored as given.
+  std::vector<ShapeAdjustPatch> adjust_values;
 };
 
 /// The shapes, connectors and groups of sheet `sheet`'s drawing in z-order
@@ -115,7 +136,8 @@ Expected<std::vector<ShapeInfo>, Error> list_shapes(const Workbook& wb, std::siz
 /// an ECMA-376 `ST_ShapeType` name, a paint patch `write_paint_properties`
 /// refuses, an offset or size outside [0, 2^31) EMU, a cell outside the
 /// sheet, a two-cell `to` before `from`, a fill or outline that is not solid,
-/// none or unset, or text with control characters.
+/// none or unset, text with control characters, or an adjust-value edit with a bad or repeated name or a target
+/// without preset geometry; with `kSecurityResourceLimit` for more than `kMaxAdjustPatches` adjust edits.
 Expected<std::uint32_t, Error> insert_shape(Workbook& wb, std::size_t sheet, const ShapeSpec& spec);
 
 /// Applies the fields `spec.fields` names to the shape, connector or group
