@@ -40,7 +40,8 @@ inline Value implicit_intersect_value(Value value) {
 ///
 /// The rectangle comes from `declared_rect`, so a full-axis endpoint spans its
 /// grid axis instead of contributing the unspecified coordinate the parser left
-/// in that field. A single-column rectangle takes the formula row, a single-row
+/// in that field. A one-cell rectangle yields that cell from any formula
+/// position. A single-column rectangle takes the formula row, a single-row
 /// rectangle takes the formula column, and a 2-D rectangle intersects on both
 /// axes. A formula cell outside the relevant span — and a pair that declares no
 /// rectangle at all — has nothing to project onto and yields `std::nullopt`,

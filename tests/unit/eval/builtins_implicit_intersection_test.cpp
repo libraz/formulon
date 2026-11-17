@@ -343,6 +343,21 @@ TEST(ImplicitIntersection, BoundedSingleRefStaysScalar) {
   EXPECT_EQ(v.as_number(), 11.0);
 }
 
+TEST(ImplicitIntersection, OneCellRangeReadsItsCellFromAnyPosition) {
+  // `=@D1:D1` in B10 (the stored form of a legacy `=D1:D1`) reads D1; an empty D1 reads as 0.
+  Workbook wb = Workbook::create();
+  const Value blank = EvalSourceAt("=@D1:D1", wb, wb.sheet(0), 9U, 1U);
+  ASSERT_TRUE(blank.is_number());
+  EXPECT_EQ(blank.as_number(), 0.0);
+  wb.sheet(0).set_cell_value(0, 3, Value::number(7.0));
+  const Value at = EvalSourceAt("=@D1:D1", wb, wb.sheet(0), 9U, 1U);
+  const Value single = EvalSourceAt("=_xlfn.SINGLE(D1:D1)", wb, wb.sheet(0), 9U, 25U);
+  ASSERT_TRUE(at.is_number());
+  ASSERT_TRUE(single.is_number());
+  EXPECT_EQ(at.as_number(), 7.0);
+  EXPECT_EQ(single.as_number(), 7.0);
+}
+
 // ---------------------------------------------------------------------------
 // Intersect operator: a genuinely multi-cell overlap is a range and
 // materialises wherever `RangeOp` does.

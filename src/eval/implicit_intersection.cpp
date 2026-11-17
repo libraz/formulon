@@ -35,6 +35,12 @@ std::optional<parser::Reference> project_implicit_intersection(const parser::Ref
   parser::Reference target{};
   target.sheet = lhs.sheet;
   target.sheet_quoted = lhs.sheet_quoted;
+  if (box.col_first == box.col_last && box.row_first == box.row_last) {
+    // A one-cell rectangle is its own intersection: `=@D1:D1` reads D1 from any formula position.
+    target.row = box.row_first;
+    target.col = box.col_first;
+    return target;
+  }
   if (box.col_first == box.col_last) {
     // Single-column rectangle: project the formula row. A whole-column
     // reference lands here with the full grid height, so every formula row
