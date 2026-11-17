@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstdlib>
 #include <ostream>
 #include <sstream>
 #include <string>
@@ -815,14 +816,205 @@ TEST(ConnectorRoute, AnEditLeavingTheSitesInPlaceMovesNothing) {
   EXPECT_EQ(ConnectorXfrm(wb, 4), off_site);
 }
 
-// A glued end names a site its shape has; one past the list moves nothing, so the other glued end alone moves the
-// connector.
-TEST(ConnectorRoute, AnEndNamingNoSiteCountsAsFree) {
+// An end naming a site past its shape's list keeps its point when the shape moves, yet the connector is routed
+// again between its two ends: as an end that leaves rightwards with no box to go around.
+TEST(ConnectorRoute, AnEndNamingNoSiteStaysWhereItIs) {
+  struct Row {
+    const char* what;
+    const char* prst;
+    const char* end_prst;
+    std::uint32_t start_site, end_site;
+    std::string guides;
+    Xfrm authored;
+    std::string routed_guides;
+    std::int32_t rotation;
+    Xfrm routed;
+  };
+  const Box start_shape{508000, kTop - 254000, 508000, 508000};
+  const Box end_shape{3302000, kTop - 762000, 1016000, 762000};
+  const Box moved{3937000, kTop - 381000, 1016000, 762000};
+  const std::string bent4 = "<a:gd name=\"adj1\" fmla=\"val 40909\"/><a:gd name=\"adj2\" fmla=\"val -1700000\"/>";
+  const Xfrm line{1016000, kTop, 2794000, 0, false, false};
+  const Xfrm elbow{1016000, kTop, 2794000, 12700, false, false};
+  const Row rows[] = {
+      {"straight, end past the list", "straightConnector1", "rect", 3, 4, "", line, "", 0, line},
+      {"bent, end past the list", "bentConnector4", "rect", 3, 4, bent4, elbow,
+       "<a:gd name=\"adj1\" fmla=\"val 108182\"/>", 0, elbow},
+      {"bent, both ends past the list", "bentConnector4", "rect", 4, 4, bent4, elbow,
+       "<a:gd name=\"adj1\" fmla=\"val 108182\"/>", 0, elbow},
+      {"bent, end past a triangle's list",
+       "bentConnector4",
+       "triangle",
+       3,
+       7,
+       "<a:gd name=\"adj1\" fmla=\"val 50000\"/><a:gd name=\"adj2\" fmla=\"val -1700000\"/>",
+       {1016000, kTop, 2286000, 12700, false, false},
+       "<a:gd name=\"adj1\" fmla=\"val 110000\"/>",
+       0,
+       {1016000, kTop, 2286000, 12700, false, false}},
+      {"bent, both ends on a site",
+       "bentConnector4",
+       "rect",
+       3,
+       1,
+       bent4,
+       elbow,
+       "<a:gd name=\"adj1\" fmla=\"val 50000\"/>",
+       0,
+       {1016000, kTop, 2921000, 12700, false, false}},
+      {"bent, back through the start's shape",
+       "bentConnector4",
+       "rect",
+       1,
+       1,
+       bent4,
+       elbow,
+       "<a:gd name=\"adj1\" fmla=\"val -6667\"/><a:gd name=\"adj2\" fmla=\"val -3800000\"/>"
+       "<a:gd name=\"adj3\" fmla=\"val 57407\"/>",
+       10800000,
+       {508000, kTop, 3429000, 12700, true, false}},
+      {"straight, both ends on a site",
+       "straightConnector1",
+       "rect",
+       1,
+       1,
+       "",
+       line,
+       "",
+       0,
+       {508000, kTop, 3429000, 0, false, false}},
+  };
+  for (const Row& row : rows) {
+    Workbook wb =
+        Book(Absolute(start_shape, Sp(2, "rect", start_shape)) + Absolute(end_shape, Sp(3, row.end_prst, end_shape)) +
+             Absolute(BoxOf(row.authored),
+                      Cxn(4, row.prst, row.authored, Glue("stCxn", 2, row.start_site) + Glue("endCxn", 3, row.end_site),
+                          row.guides)));
+    Move(wb, 3, moved);
+    const std::string prst = std::string(row.prst) == "straightConnector1"         ? "straightConnector1"
+                             : row.routed_guides.find("adj3") != std::string::npos ? "bentConnector5"
+                                                                                   : "bentConnector3";
+    EXPECT_EQ(GeometryXml(wb, 4),
+              "<a:prstGeom prst=\"" + prst + "\">" +
+                  (row.routed_guides.empty() ? "<a:avLst/>" : "<a:avLst>" + row.routed_guides + "</a:avLst>") +
+                  "</a:prstGeom>")
+        << row.what;
+    EXPECT_EQ(ConnectorXfrm(wb, 4), row.routed) << row.what;
+    EXPECT_EQ(ConnectorRotation(wb, 4), row.rotation) << row.what;
+  }
+}
+
+// With the end past the list on the shape that stays, the end on the moving shape follows it and the other stays.
+TEST(ConnectorRoute, AnEndOnASiteFollowsWhileTheOtherStays) {
   Workbook wb = Book(Absolute(kStartShape, Sp(2, "rect", kStartShape)) + Absolute(kEndShape, Sp(3, "rect", kEndShape)) +
                      Absolute(BoxOf(kBothRoute),
                               Cxn(4, "straightConnector1", kBothRoute, Glue("stCxn", 2, 9) + Glue("endCxn", 3, 1))));
   Move(wb, 3, Box{kEndShape.x + 635000, kEndShape.y + 381000, kEndShape.w, kEndShape.h});
-  EXPECT_EQ(ConnectorXfrm(wb, 4), (Xfrm{3048000 + 635000, kTop + 381000, 1016000, 762000, false, false}));
+  EXPECT_EQ(ConnectorXfrm(wb, 4), (Xfrm{3048000, kTop, 1651000, 1143000, false, false}));
+}
+
+struct EdgeRow {
+  const char* what;
+  Box start_shape;
+  int start_rotation_deg;
+  Box end_shape;
+  std::uint32_t start_site, end_site;
+  int segments;
+  std::vector<std::int32_t> adjust;
+  int quarter_turns;
+  bool flip_h, flip_v;
+  Box box;
+};
+
+// Mac Excel 16.115 routes at the edges of the arrangement: shapes of unequal size (U), a start shape turned 45
+// degrees (Q), ends in line across (Z), and overlapping shapes (O).
+// clang-format off
+const EdgeRow kEdges[] = {
+    {"U_NE_11", {1270000, 2032000, 508000, 508000}, 0, {3302000, 508000, 1524000, 1016000}, 0, 0, 3, {115000}, 1, true, true, {2032000, 0, 1524000, 2540000}},
+    {"U_NE_12", {1270000, 2032000, 508000, 508000}, 0, {3302000, 508000, 1524000, 1016000}, 0, 1, 2, {}, 1, true, true, {1905000, 635000, 1016000, 1778000}},
+    {"U_NE_13", {1270000, 2032000, 508000, 508000}, 0, {3302000, 508000, 1524000, 1016000}, 0, 2, 3, {50000}, 1, true, true, {2540000, 508000, 508000, 2540000}},
+    {"U_NE_14", {1270000, 2032000, 508000, 508000}, 0, {3302000, 508000, 1524000, 1016000}, 0, 3, 4, {25000, 106923}, 1, true, true, {2667000, -127000, 1016000, 3302000}},
+    {"U_NE_21", {1270000, 2032000, 508000, 508000}, 0, {3302000, 508000, 1524000, 1016000}, 1, 0, 4, {-8182, 112857}, 2, true, false, {1270000, 508000, 2794000, 1778000}},
+    {"U_NE_22", {1270000, 2032000, 508000, 508000}, 0, {3302000, 508000, 1524000, 1016000}, 1, 1, 3, {-11250}, 2, true, false, {1270000, 1016000, 2032000, 1270000}},
+    {"U_NE_23", {1270000, 2032000, 508000, 508000}, 0, {3302000, 508000, 1524000, 1016000}, 1, 2, 4, {-8182, 66667}, 2, true, false, {1270000, 1524000, 2794000, 762000}},
+    {"U_NE_24", {1270000, 2032000, 508000, 508000}, 0, {3302000, 508000, 1524000, 1016000}, 1, 3, 5, {-6429, 40000, 106429}, 2, true, false, {1270000, 1016000, 3556000, 1270000}},
+    {"U_NE_31", {1270000, 2032000, 508000, 508000}, 0, {3302000, 508000, 1524000, 1016000}, 2, 0, 5, {-11250, 40000, 111250}, 1, true, true, {1778000, 254000, 2032000, 2540000}},
+    {"U_NE_32", {1270000, 2032000, 508000, 508000}, 0, {3302000, 508000, 1524000, 1016000}, 2, 1, 4, {-15000, 57143}, 1, true, true, {1651000, 889000, 1524000, 1778000}},
+    {"U_NE_33", {1270000, 2032000, 508000, 508000}, 0, {3302000, 508000, 1524000, 1016000}, 2, 2, 3, {-22500}, 1, true, true, {2286000, 762000, 1016000, 2540000}},
+    {"U_NE_34", {1270000, 2032000, 508000, 508000}, 0, {3302000, 508000, 1524000, 1016000}, 2, 3, 4, {-15000, 106923}, 1, true, true, {2413000, 127000, 1524000, 3302000}},
+    {"U_NE_41", {1270000, 2032000, 508000, 508000}, 0, {3302000, 508000, 1524000, 1016000}, 3, 0, 4, {33333, 112857}, 0, false, true, {1778000, 508000, 2286000, 1778000}},
+    {"U_NE_42", {1270000, 2032000, 508000, 508000}, 0, {3302000, 508000, 1524000, 1016000}, 3, 1, 3, {50000}, 0, false, true, {1778000, 1016000, 1524000, 1270000}},
+    {"U_NE_43", {1270000, 2032000, 508000, 508000}, 0, {3302000, 508000, 1524000, 1016000}, 3, 2, 2, {}, 0, false, true, {1778000, 1524000, 2286000, 762000}},
+    {"U_NE_44", {1270000, 2032000, 508000, 508000}, 0, {3302000, 508000, 1524000, 1016000}, 3, 3, 3, {107500}, 0, false, true, {1778000, 1016000, 3048000, 1270000}},
+    {"U_SE_11", {1270000, 2032000, 508000, 508000}, 0, {3302000, 3048000, 1524000, 1016000}, 0, 0, 3, {-22500}, 3, true, false, {2286000, 1270000, 1016000, 2540000}},
+    {"U_SE_12", {1270000, 2032000, 508000, 508000}, 0, {3302000, 3048000, 1524000, 1016000}, 0, 1, 4, {-15000, 57143}, 3, true, false, {1651000, 1905000, 1524000, 1778000}},
+    {"U_SE_13", {1270000, 2032000, 508000, 508000}, 0, {3302000, 3048000, 1524000, 1016000}, 0, 2, 5, {-11250, 40000, 111250}, 3, true, false, {1778000, 1778000, 2032000, 2540000}},
+    {"U_SE_14", {1270000, 2032000, 508000, 508000}, 0, {3302000, 3048000, 1524000, 1016000}, 0, 3, 4, {-15000, 106923}, 3, true, false, {2413000, 1143000, 1524000, 3302000}},
+    {"U_SE_21", {1270000, 2032000, 508000, 508000}, 0, {3302000, 3048000, 1524000, 1016000}, 1, 0, 4, {-8182, 66667}, 2, true, true, {1270000, 2286000, 2794000, 762000}},
+    {"U_SE_22", {1270000, 2032000, 508000, 508000}, 0, {3302000, 3048000, 1524000, 1016000}, 1, 1, 3, {-11250}, 2, true, true, {1270000, 2286000, 2032000, 1270000}},
+    {"U_SE_23", {1270000, 2032000, 508000, 508000}, 0, {3302000, 3048000, 1524000, 1016000}, 1, 2, 4, {-8182, 112857}, 2, true, true, {1270000, 2286000, 2794000, 1778000}},
+    {"U_SE_24", {1270000, 2032000, 508000, 508000}, 0, {3302000, 3048000, 1524000, 1016000}, 1, 3, 5, {-6429, 40000, 106429}, 2, true, true, {1270000, 2286000, 3556000, 1270000}},
+    {"U_SE_31", {1270000, 2032000, 508000, 508000}, 0, {3302000, 3048000, 1524000, 1016000}, 2, 0, 3, {50000}, 3, true, false, {2540000, 1524000, 508000, 2540000}},
+    {"U_SE_32", {1270000, 2032000, 508000, 508000}, 0, {3302000, 3048000, 1524000, 1016000}, 2, 1, 2, {}, 3, true, false, {1905000, 2159000, 1016000, 1778000}},
+    {"U_SE_33", {1270000, 2032000, 508000, 508000}, 0, {3302000, 3048000, 1524000, 1016000}, 2, 2, 3, {115000}, 3, true, false, {2032000, 2032000, 1524000, 2540000}},
+    {"U_SE_34", {1270000, 2032000, 508000, 508000}, 0, {3302000, 3048000, 1524000, 1016000}, 2, 3, 4, {25000, 106923}, 3, true, false, {2667000, 1397000, 1016000, 3302000}},
+    {"U_SE_41", {1270000, 2032000, 508000, 508000}, 0, {3302000, 3048000, 1524000, 1016000}, 3, 0, 2, {}, 0, false, false, {1778000, 2286000, 2286000, 762000}},
+    {"U_SE_42", {1270000, 2032000, 508000, 508000}, 0, {3302000, 3048000, 1524000, 1016000}, 3, 1, 3, {50000}, 0, false, false, {1778000, 2286000, 1524000, 1270000}},
+    {"U_SE_43", {1270000, 2032000, 508000, 508000}, 0, {3302000, 3048000, 1524000, 1016000}, 3, 2, 4, {33333, 112857}, 0, false, false, {1778000, 2286000, 2286000, 1778000}},
+    {"U_SE_44", {1270000, 2032000, 508000, 508000}, 0, {3302000, 3048000, 1524000, 1016000}, 3, 3, 3, {107500}, 0, false, false, {1778000, 2286000, 3048000, 1270000}},
+    {"Q_1_left", {1270000, 2032000, 1016000, 508000}, 45, {4064000, 3810000, 1016000, 508000}, 0, 1, 3, {50000}, 0, false, false, {1957605, 2106395, 2106395, 1957605}},
+    {"Q_1_top", {1270000, 2032000, 1016000, 508000}, 45, {4064000, 3810000, 1016000, 508000}, 0, 0, 2, {}, 0, false, false, {1957605, 2106395, 2614395, 1703605}},
+    {"Q_2_left", {1270000, 2032000, 1016000, 508000}, 45, {4064000, 3810000, 1016000, 508000}, 1, 1, 4, {-10696, 66392}, 3, true, false, {1672790, 1672790, 2137210, 2645210}},
+    {"Q_2_top", {1270000, 2032000, 1016000, 508000}, 45, {4064000, 3810000, 1016000, 508000}, 1, 0, 3, {-6552}, 3, true, false, {2053790, 1291790, 1883210, 3153210}},
+    {"Q_3_left", {1270000, 2032000, 1016000, 508000}, 45, {4064000, 3810000, 1016000, 508000}, 2, 1, 3, {-22591}, 2, true, true, {1598394, 2465604, 2465605, 1598395}},
+    {"Q_3_top", {1270000, 2032000, 1016000, 508000}, 45, {4064000, 3810000, 1016000, 508000}, 2, 0, 4, {-7688, 52767}, 2, true, true, {1598394, 2465604, 2973605, 1344395}},
+    {"Q_4_left", {1270000, 2032000, 1016000, 508000}, 45, {4064000, 3810000, 1016000, 508000}, 3, 1, 2, {}, 3, true, false, {2391210, 2391210, 1418790, 1926790}},
+    {"Q_4_top", {1270000, 2032000, 1016000, 508000}, 45, {4064000, 3810000, 1016000, 508000}, 3, 0, 3, {50000}, 3, true, false, {2772210, 2010210, 1164790, 2434790}},
+    {"Z_x_facing", {1270000, 1270000, 1016000, 508000}, 0, {1270000, 3810000, 1016000, 508000}, 2, 0, 3, {50000}, 1, false, false, {762000, 2794000, 2032000, 12700}},
+    {"Z_x_same", {1270000, 1270000, 1016000, 508000}, 0, {1270000, 3810000, 1016000, 508000}, 2, 2, 5, {40000, 5800000, 109000}, 1, false, false, {508000, 3048000, 2540000, 12700}},
+    {"Z_x_away", {1270000, 1270000, 1016000, 508000}, 0, {1270000, 3810000, 1016000, 508000}, 0, 2, 5, {-7500, 5800000, 107500}, 3, true, false, {254000, 2794000, 3048000, 12700}},
+    {"Z_y_facing", {1270000, 1270000, 1016000, 508000}, 0, {3810000, 1270000, 1016000, 508000}, 3, 1, 3, {50000}, 0, false, false, {2286000, 1524000, 1524000, 12700}},
+    {"Z_y_same", {1270000, 1270000, 1016000, 508000}, 0, {3810000, 1270000, 1016000, 508000}, 3, 3, 5, {30000, 3800000, 109000}, 0, false, false, {2286000, 1524000, 2540000, 12700}},
+    {"Z_y_away", {1270000, 1270000, 1016000, 508000}, 0, {3810000, 1270000, 1016000, 508000}, 1, 3, 5, {-6429, 3800000, 106429}, 2, true, false, {1270000, 1524000, 3556000, 12700}},
+    {"O_h_facing", {1270000, 1270000, 1016000, 508000}, 0, {1778000, 1524000, 1016000, 508000}, 3, 1, 5, {-45000, 290000, 145000}, 0, true, false, {1778000, 1524000, 508000, 254000}},
+    {"O_h_same", {1270000, 1270000, 1016000, 508000}, 0, {1778000, 1524000, 1016000, 508000}, 3, 3, 3, {145000}, 0, false, false, {2286000, 1524000, 508000, 254000}},
+    {"O_v_facing", {1270000, 1270000, 1016000, 508000}, 0, {1778000, 1524000, 1016000, 508000}, 2, 0, 5, {-90000, 245000, 190000}, 1, true, true, {1905000, 1397000, 254000, 508000}},
+    {"O_v_same", {1270000, 1270000, 1016000, 508000}, 0, {1778000, 1524000, 1016000, 508000}, 2, 2, 3, {190000}, 3, true, false, {1905000, 1651000, 254000, 508000}},
+};
+// clang-format on
+
+TEST(ConnectorRoute, BentConnectorsRouteAtTheEdgesAsExcelDoes) {
+  constexpr std::int64_t kPt = 12700;
+  for (const EdgeRow& row : kEdges) {
+    const std::string turn =
+        row.start_rotation_deg != 0 ? " rot=\"" + std::to_string(row.start_rotation_deg * 60000) + "\"" : "";
+    const Xfrm authored{0, 0, 0, 0, false, false};
+    Workbook wb = Book(Absolute(row.start_shape, Sp(2, "rect", row.start_shape, turn)) +
+                       Absolute(row.end_shape, Sp(3, "rect", row.end_shape)) +
+                       Absolute(Box{0, 0, 0, 0}, Cxn(4, "bentConnector3", authored,
+                                                     Glue("stCxn", 2, row.start_site) + Glue("endCxn", 3, row.end_site),
+                                                     "<a:gd name=\"adj1\" fmla=\"val 50000\"/>")));
+    const Box& e = row.end_shape;
+    Move(wb, 3, Box{e.x + kPt, e.y, e.w, e.h});
+    Move(wb, 3, e);
+    std::string guides;
+    for (std::size_t i = 0; i < row.adjust.size(); ++i) {
+      guides += "<a:gd name=\"adj" + std::to_string(i + 1U) + "\" fmla=\"val " + std::to_string(row.adjust[i]) + "\"/>";
+    }
+    EXPECT_EQ(GeometryXml(wb, 4), "<a:prstGeom prst=\"bentConnector" + std::to_string(row.segments) + "\">" +
+                                      (guides.empty() ? "<a:avLst/>" : "<a:avLst>" + guides + "</a:avLst>") +
+                                      "</a:prstGeom>")
+        << row.what;
+    // Excel places a turned shape's sites with 1 EMU of float noise.
+    const Xfrm got = ConnectorXfrm(wb, 4);
+    EXPECT_LE(std::abs(got.x - row.box.x), 1) << row.what;
+    EXPECT_LE(std::abs(got.y - row.box.y), 1) << row.what;
+    EXPECT_EQ(got.cx, row.box.w) << row.what;
+    EXPECT_EQ(got.cy, row.box.h) << row.what;
+    EXPECT_EQ(got.flip_h, row.flip_h) << row.what;
+    EXPECT_EQ(got.flip_v, row.flip_v) << row.what;
+    EXPECT_EQ(ConnectorRotation(wb, 4), row.quarter_turns * 5400000) << row.what;
+  }
 }
 
 std::string Group(std::uint32_t id, const Box& b, const std::string& children) {

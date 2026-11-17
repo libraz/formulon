@@ -31,6 +31,8 @@ constexpr double kRadiansPerUnit = 3.14159265358979323846 / (180.0 * 60000.0);
 constexpr double kQuarterTurn = 5400000.0;
 // How far a bent or curved connector runs past a shape it has to go around: 18 pt.
 constexpr double kClearance = 228600.0;
+// The side a routed connector's box has where its two ends line up: 1 pt.
+constexpr double kMinimumSide = 12700.0;
 
 std::int64_t emu(const pugi::xml_node& node, const char* name) {
   return node.attribute(name).as_llong();
@@ -69,11 +71,13 @@ Frame frame_of(const pugi::xml_node& content) {
 }
 
 // A site placed on the sheet: its point, the direction it leaves the shape in (60000ths of a degree, clockwise),
-// and the corners of the shape it is on.
+// and two opposite corners of the shape's unrotated box; `on_site` is false for an index past the preset's list,
+// which leaves only the box.
 struct PlacedSite {
+  bool on_site = true;
   Point at;
   double angle = 0.0;
-  Point corners[4];
+  Point box[2];
 };
 
 // Site `idx` of the shape or picture `content`: the preset's site on the current size and stated adjust guides,
@@ -96,10 +100,6 @@ std::optional<PlacedSite> place_site(const pugi::xml_node& content, std::uint32_
     }
   }
   const std::vector<preset_geometry::ConnectionSite> sites = preset_geometry::connection_sites(*preset, w, h, stated);
-  // An end naming a site past the preset's list is read as a free end.
-  if (idx >= sites.size()) {
-    return std::nullopt;
-  }
   const XfrmTransform t = read_xfrm_transform(xfrm);
   const double rot = static_cast<double>(t.rot) * kRadiansPerUnit;
   const double c = t.rot != 0 ? elementary::cos(rot) : 1.0;
@@ -115,15 +115,18 @@ std::optional<PlacedSite> place_site(const pugi::xml_node& content, std::uint32_
     return frame.to_sheet(Point{off.x + w / 2.0 + dx * c - dy * s, off.y + h / 2.0 + dx * s + dy * c});
   };
   PlacedSite placed;
+  // Routing goes around the box the shape has before it is rotated.
+  placed.box[0] = frame.to_sheet(off);
+  placed.box[1] = frame.to_sheet(Point{off.x + w, off.y + h});
+  placed.on_site = idx < sites.size();
+  if (!placed.on_site) {
+    return placed;
+  }
   placed.at = place(sites[idx].x, sites[idx].y);
   double angle = sites[idx].angle;
   angle = t.flip_h ? 2.0 * kQuarterTurn - angle : angle;
   angle = t.flip_v ? -angle : angle;
   placed.angle = angle + static_cast<double>(t.rot);
-  placed.corners[0] = place(0.0, 0.0);
-  placed.corners[1] = place(w, 0.0);
-  placed.corners[2] = place(0.0, h);
-  placed.corners[3] = place(w, h);
   return placed;
 }
 
@@ -152,13 +155,33 @@ const GluedEnd* find_end(const std::vector<GluedEnd>& ends, const pugi::xml_node
   return nullptr;
 }
 
+// Whether a glued end's point moved; an end at no site never moves.
 bool moved(const GluedEnd* before, const GluedEnd& after) {
-  return before == nullptr || before->x != after.x || before->y != after.y;
+  if (before != nullptr && !before->on_site && !after.on_site) {
+    return false;
+  }
+  return before == nullptr || before->on_site != after.on_site || before->x != after.x || before->y != after.y;
 }
 
 bool changed(const GluedEnd* before, const GluedEnd& after) {
   return moved(before, after) || before->direction != after.direction || before->left != after.left ||
          before->top != after.top || before->right != after.right || before->bottom != after.bottom;
+}
+
+// The start or end point of the connector `cxn` in its own frame: a corner of its box, flipped and turned with it.
+Point end_point(const pugi::xml_node& cxn, bool start) {
+  const pugi::xml_node xfrm = child_local(child_local(cxn, "spPr"), "xfrm");
+  const XfrmTransform t = read_xfrm_transform(xfrm);
+  const double w = emu_d(child_local(xfrm, "ext"), "cx");
+  const double h = emu_d(child_local(xfrm, "ext"), "cy");
+  const double dx = ((start != t.flip_h) ? 0.0 : w) - w / 2.0;
+  const double dy = ((start != t.flip_v) ? 0.0 : h) - h / 2.0;
+  const double rot = static_cast<double>(t.rot) * kRadiansPerUnit;
+  const double c = t.rot != 0 ? elementary::cos(rot) : 1.0;
+  const double s = t.rot != 0 ? elementary::sin(rot) : 0.0;
+  const double cx = emu_d(child_local(xfrm, "off"), "x") + w / 2.0;
+  const double cy = emu_d(child_local(xfrm, "off"), "y") + h / 2.0;
+  return Point{cx + dx * c - dy * s, cy + dx * s + dy * c};
 }
 
 // `v` turned `quarters` quarter turns counterclockwise: the inverse of a clockwise `a:xfrm` rotation.
@@ -172,7 +195,7 @@ Point unturn(Point v, int quarters) {
 constexpr Point kDirections[] = {{1.0, 0.0}, {0.0, 1.0}, {-1.0, 0.0}, {0.0, -1.0}};
 
 std::int32_t adjust(double v, double span) {
-  return span != 0.0 ? static_cast<std::int32_t>(std::llround(v / span * 100000.0)) : 0;
+  return static_cast<std::int32_t>(std::llround(v / span * 100000.0));
 }
 
 void write_geometry(pugi::xml_node geom, std::string_view family, int segments, const std::vector<std::int32_t>& adj) {
@@ -195,8 +218,8 @@ void write_geometry(pugi::xml_node geom, std::string_view family, int segments, 
 
 // A bent or curved connector glued at both ends, routed as Excel routes it. The connector's frame is turned so
 // that it leaves the start along its local x axis and flipped so that the end lies at (w, h); in that frame the
-// path turns halfway across the gap between the two shapes, or runs `kClearance` past them where it has to come
-// back, and the number of segments follows from the two directions.
+// path turns halfway from the start to the end's shape, or runs `kClearance` past the shapes' unrotated boxes
+// where it has to come back, and the number of segments follows from the two directions.
 void route_elbow(pugi::xml_node xfrm, pugi::xml_node geom, std::string_view family, const GluedEnd& start,
                  const GluedEnd& end) {
   int r = start.direction;
@@ -214,11 +237,16 @@ void route_elbow(pugi::xml_node xfrm, pugi::xml_node geom, std::string_view fami
     v = unturn(v, r);
     return Point{flip_h ? -v.x : v.x, flip_v ? -v.y : v.y};
   };
+  // An end at no site has no box to go around, only its point.
   const auto local_box = [&](const GluedEnd& e) {
     double box[4] = {0.0, 0.0, 0.0, 0.0};  // left, right, top, bottom
     bool first = true;
-    for (const double x : {e.left, e.right}) {
-      for (const double y : {e.top, e.bottom}) {
+    const double xs[2] = {e.on_site ? e.left : static_cast<double>(e.x),
+                          e.on_site ? e.right : static_cast<double>(e.x)};
+    const double ys[2] = {e.on_site ? e.top : static_cast<double>(e.y),
+                          e.on_site ? e.bottom : static_cast<double>(e.y)};
+    for (const double x : xs) {
+      for (const double y : ys) {
         const Point p = local(Point{x - static_cast<double>(start.x), y - static_cast<double>(start.y)});
         box[0] = first ? p.x : std::min(box[0], p.x);
         box[1] = first ? p.x : std::max(box[1], p.x);
@@ -230,24 +258,36 @@ void route_elbow(pugi::xml_node xfrm, pugi::xml_node geom, std::string_view fami
     return std::array<double, 4>{box[0], box[1], box[2], box[3]};
   };
   const Point span = local(Point{static_cast<double>(end.x - start.x), static_cast<double>(end.y - start.y)});
-  const double w = span.x;
-  const double h = span.y;
+  const std::int64_t cx = static_cast<std::int64_t>(std::llround(span.x));
+  const std::int64_t cy = static_cast<std::int64_t>(std::llround(span.y));
+  // A side of no length counts as 1 pt.
+  const double w = cx != 0 ? span.x : kMinimumSide;
+  const double h = cy != 0 ? span.y : kMinimumSide;
   const std::array<double, 4> b1 = local_box(start);
   const std::array<double, 4> b2 = local_box(end);
   const bool out_forward = local(kDirections[start.direction]).x > 0.0;
   const Point to_end = local(kDirections[end.direction]);
-  const double beyond_x = std::max(b1[1], b2[1]) + kClearance;
+  // Where the shapes overlap across the path, it runs past the far side of both instead of between them, and
+  // clears only the shape it leaves or enters.
+  const bool apart = b1[3] <= b2[2];
+  const double beyond_x = (apart ? std::max(b1[1], b2[1]) : b2[1]) + kClearance;
   const double beyond_y = std::max(b1[3], b2[3]) + kClearance;
-  const double gap_x = (b1[1] + b2[0]) / 2.0;
-  const double gap_y = (b1[3] + b2[2]) / 2.0;
-  const double back_x = std::min(b1[0], b2[0]) - kClearance;
+  const double gap_x = b2[0] / 2.0;
+  const double gap_y = apart ? (b1[3] + b2[2]) / 2.0 : beyond_y;
+  const double back_x = (apart ? std::min(b1[0], b2[0]) : b1[0]) - kClearance;
   int segments = 3;
   std::vector<std::int32_t> adj;
   if (out_forward) {
     if (to_end.x < 0.0) {
       adj = {adjust(gap_x, w)};
     } else if (to_end.x > 0.0) {
-      adj = {adjust(beyond_x, w)};
+      // The end's shape standing across the way out is gone around.
+      if (b2[0] > 0.0 && b2[2] < 0.0 && b2[3] > 0.0) {
+        segments = 5;
+        adj = {adjust(gap_x, w), adjust(beyond_y, h), adjust(beyond_x, w)};
+      } else {
+        adj = {adjust(beyond_x, w)};
+      }
     } else if (to_end.y < 0.0) {
       segments = 2;
     } else {
@@ -255,22 +295,26 @@ void route_elbow(pugi::xml_node xfrm, pugi::xml_node geom, std::string_view fami
       adj = {adjust(gap_x, w), adjust(beyond_y, h)};
     }
   } else if (to_end.x < 0.0) {
-    adj = {adjust(back_x, w)};
+    // The start's shape standing across the way back is gone around on the side away from the end.
+    if (b1[2] < h && h < b1[3]) {
+      segments = 5;
+      adj = {adjust(back_x, w), adjust(b1[2] - kClearance, h), adjust((b1[1] + b2[0]) / 2.0, w)};
+    } else {
+      adj = {adjust(back_x, w)};
+    }
   } else if (to_end.x > 0.0) {
     segments = 5;
     adj = {adjust(back_x, w), adjust(gap_y, h), adjust(beyond_x, w)};
   } else {
     segments = 4;
-    adj = {adjust(back_x, w), adjust(to_end.y < 0.0 ? gap_y : beyond_y, h)};
+    adj = {adjust(std::min(0.0, b2[0]) - kClearance, w), adjust(to_end.y < 0.0 ? gap_y : beyond_y, h)};
   }
   write_geometry(geom, family, segments, adj);
   // The box is the start-to-end box, turned with the frame about its centre.
-  const std::int64_t cx = static_cast<std::int64_t>(std::llround(w));
-  const std::int64_t cy = static_cast<std::int64_t>(std::llround(h));
   io::set_attr(child_local(xfrm, "off"), "x", (start.x + end.x - cx) / 2);
   io::set_attr(child_local(xfrm, "off"), "y", (start.y + end.y - cy) / 2);
-  io::set_attr(child_local(xfrm, "ext"), "cx", cx);
-  io::set_attr(child_local(xfrm, "ext"), "cy", cy);
+  io::set_attr(child_local(xfrm, "ext"), "cx", cx != 0 ? cx : static_cast<std::int64_t>(kMinimumSide));
+  io::set_attr(child_local(xfrm, "ext"), "cy", cy != 0 ? cy : static_cast<std::int64_t>(kMinimumSide));
   write_xfrm_transform(xfrm, XfrmTransform{static_cast<std::int32_t>(r) * 5400000, flip_h, flip_v});
 }
 
@@ -353,22 +397,20 @@ std::vector<GluedEnd> glued_ends(const pugi::xml_node& root) {
         GluedEnd glued;
         glued.connector = node;
         glued.start = start;
-        const Point at = own.from_sheet(site->at);
+        glued.on_site = site->on_site;
+        // An end at no site stays where the connector has it and counts as leaving rightwards.
+        const Point at = site->on_site ? own.from_sheet(site->at) : end_point(node, start);
         glued.x = std::llround(at.x);
         glued.y = std::llround(at.y);
         // Frames scale without turning, so the direction is the sheet's, snapped to the nearest axis.
         const double quarters = std::fmod(site->angle / kQuarterTurn, 4.0);
         glued.direction = static_cast<int>(std::llround(quarters < 0.0 ? quarters + 4.0 : quarters) % 4);
-        const Point first = own.from_sheet(site->corners[0]);
-        glued.left = glued.right = first.x;
-        glued.top = glued.bottom = first.y;
-        for (const Point& corner : site->corners) {
-          const Point p = own.from_sheet(corner);
-          glued.left = std::min(glued.left, p.x);
-          glued.right = std::max(glued.right, p.x);
-          glued.top = std::min(glued.top, p.y);
-          glued.bottom = std::max(glued.bottom, p.y);
-        }
+        const Point a = own.from_sheet(site->box[0]);
+        const Point b = own.from_sheet(site->box[1]);
+        glued.left = std::min(a.x, b.x);
+        glued.right = std::max(a.x, b.x);
+        glued.top = std::min(a.y, b.y);
+        glued.bottom = std::max(a.y, b.y);
         out.push_back(glued);
       }
     }
