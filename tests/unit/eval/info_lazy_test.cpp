@@ -438,16 +438,23 @@ TEST(BuiltinsSheet, UnknownNameIsNA) {
   EXPECT_EQ(v.as_error(), ErrorCode::NA);
 }
 
-TEST(BuiltinsSheet, ArrayOfNamesLooksUpEachElement) {
+// Mac Excel 365: an array argument is one #N/A, even when every element
+// names a sheet, and even for one element or a computed array.
+TEST(BuiltinsSheet, ArrayArgumentIsOneNA) {
   Workbook wb = MakeThreeSheetWorkbook();
+  wb.sheet(0).set_cell_value(0, 5, Value::text("Sheet2"));
+  wb.sheet(0).set_cell_value(1, 5, Value::text("Sheet3"));
   EvalState state;
   const EvalContext ctx(wb, wb.sheet(0), state);
-  const Value v = EvalWith("=SHEET({\"Missing\",\"Sheet2\"})", ctx);
-  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
-  ASSERT_EQ(v.as_array()->cols, 2U);
-  ASSERT_TRUE(v.as_array()->cells[0].is_error());
-  EXPECT_EQ(v.as_array()->cells[0].as_error(), ErrorCode::NA);
-  EXPECT_EQ(v.as_array()->cells[1].as_number(), 2.0);
+  for (const char* src : {"=SHEET({\"Sheet2\",\"Sheet3\"})", "=SHEET({\"Sheet3\"})", "=SHEET({1,\"Sheet2\"})",
+                          "=SHEET(F1:F2&\"\")", "=SHEET(TRANSPOSE(F1:F2))"}) {
+    const Value v = EvalWith(src, ctx);
+    ASSERT_TRUE(v.is_error()) << src << " " << v.debug_to_string();
+    EXPECT_EQ(v.as_error(), ErrorCode::NA) << src;
+  }
+  const Value ref = EvalWith("=SHEET(INDEX(F1:F2,0,1))", ctx);
+  ASSERT_TRUE(ref.is_number()) << ref.debug_to_string();
+  EXPECT_EQ(ref.as_number(), 1.0);
 }
 
 TEST(BuiltinsSheet, UnboundContextReturnsValue) {

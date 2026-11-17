@@ -200,8 +200,13 @@ cases:
     formula: "=SERIESSUM(0,0,1,{1;1;1;1})"
   - id: seriessum_arg1_negative
     formula: "=SERIESSUM(-2,0,1,{1;1;1;1})"
-  - id: sheet_arg1_array_lifted
-    formula: "=INDEX(SHEET({\"NoSuchSheet\",\"NoSuchSheet\"}),2)"
+  - id: sheet_arg1_array_not_lifted
+    formula: "=ROWS(SHEET({\"NoSuchSheet\";\"NoSuchSheet\"}))"
+  - id: sheet_arg1_na_cell
+    setup: { B1: "=NA()" }
+    formula: "=SHEET(B1)=SHEET()"
+  - id: sheet_arg1_blank_cell
+    formula: "=SHEET(B2)=SHEET()"
   - id: single_arg1_na_cell
     setup: { B1: "=NA()" }
     formula: "=SINGLE(B1)"

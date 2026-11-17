@@ -6,7 +6,7 @@
     "excel_locale": "es-MX",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-11-17T11:53:01Z"
+    "generated_at": "2026-11-17T22:20:02Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -920,12 +920,35 @@
       }
     },
     {
-      "id": "sheet_arg1_array_lifted",
-      "formula": "=INDEX(SHEET({\"NoSuchSheet\",\"NoSuchSheet\"}),2)",
+      "id": "sheet_arg1_array_not_lifted",
+      "formula": "=ROWS(SHEET({\"NoSuchSheet\";\"NoSuchSheet\"}))",
       "setup": {},
       "expect": {
         "kind": "error",
         "code": "#N/A"
+      }
+    },
+    {
+      "id": "sheet_arg1_na_cell",
+      "formula": "=SHEET(B1)=SHEET()",
+      "setup": {
+        "B1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "sheet_arg1_blank_cell",
+      "formula": "=SHEET(B2)=SHEET()",
+      "setup": {},
+      "expect": {
+        "kind": "bool",
+        "value": true
       }
     },
     {

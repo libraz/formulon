@@ -232,7 +232,7 @@ TEST(FunctionRegistry, SpillPotentialCoversLazyReturnShapes) {
   EXPECT_TRUE(FormulaMaySpill("=REDUCE(0,A1:B2,LAMBDA(a,b,a+b))"));
   EXPECT_TRUE(FormulaMaySpill("=MODE.MULT(1,2,1,2)"));
   EXPECT_FALSE(FormulaMaySpill("=SHEET(\"Sheet1\")"));
-  EXPECT_TRUE(FormulaMaySpill("=SHEET({\"Sheet1\",\"Sheet2\"})"));
+  EXPECT_FALSE(FormulaMaySpill("=SHEET({\"Sheet1\",\"Sheet2\"})"));
   EXPECT_FALSE(FormulaMaySpill("=ISFORMULA(A1)"));
   EXPECT_TRUE(FormulaMaySpill("=ISFORMULA(A1:A2)"));
   EXPECT_TRUE(FormulaMaySpill("=FORMULATEXT(A1:A2)"));

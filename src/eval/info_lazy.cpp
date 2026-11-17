@@ -456,6 +456,15 @@ Value eval_sheet_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
       sheet_qualifier = lhs.as_ref().sheet;
       have_ref_shape = true;
     }
+  } else if (arg.kind() == parser::NodeKind::Call && is_reference_call_name(arg.as_call_name())) {
+    // A call that returns a reference names that reference's sheet (`SHEET(INDEX(F1:F2,0,1))`); one that fails
+    // answers its error, and one that returns a value is read below.
+    RefArea area{};
+    ErrorCode err = ErrorCode::Value;
+    have_ref_shape = eval_reference_area(arg, arena, registry, ctx, &sheet_qualifier, &area, &err);
+    if (!have_ref_shape && err != ErrorCode::Value) {
+      return Value::error(err);
+    }
   }
   if (have_ref_shape) {
     if (sheet_qualifier.empty()) {
@@ -467,15 +476,17 @@ Value eval_sheet_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   }
 
   // Non-reference AST: a value coercing to text is a sheet-name lookup, any
-  // other is `#VALUE!`; an array looks up each element.
+  // other is `#VALUE!`. An array, whatever it holds, is one #N/A: Excel does
+  // not look up its elements.
   const Value v = eval_node(arg, arena, registry, ctx);
   if (v.is_error()) {
     return v;
   }
-  return lift_over_array_args(&v, 1U, arena, [&](const Value* cell, std::uint32_t) {
-    auto text_e = coerce_to_text(cell[0]);
-    return text_e ? named_sheet_number(text_e.value()) : Value::error(ErrorCode::Value);
-  });
+  if (v.is_array()) {
+    return Value::error(ErrorCode::NA);
+  }
+  auto text_e = coerce_to_text(v);
+  return text_e ? named_sheet_number(text_e.value()) : Value::error(ErrorCode::Value);
 }
 
 Value eval_single_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
