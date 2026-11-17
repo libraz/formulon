@@ -7,8 +7,10 @@
 // BrtBeginList idList), colFirst and colLast (u16, relative to the table).
 //
 // A reference is resolved against the workbook's tables by id on read and by
-// name on write; one into another workbook (nonresident) or an invalid one is
-// not decoded.
+// name on write; an invalid one is not decoded. One into another workbook
+// (nonresident) carries listIndex 0xFFFFFFFF and no column bits: the table
+// and column names follow in the formula's rgcb, and its ixti names the
+// link's file-stem sheet entry.
 
 #ifndef FORMULON_IO_XLSB_PTG_LIST_H_
 #define FORMULON_IO_XLSB_PTG_LIST_H_
@@ -41,6 +43,28 @@ inline constexpr std::uint8_t kEptgList = 0x19;
 /// nonresident.
 Expected<parser::AstNode*, Error> decode_ptg_list(ByteSpan& cursor, Arena& arena,
                                                   const std::vector<TableMetadata>* tables);
+
+/// True when the PtgList at `cursor` (its 0x18 byte included) names a table
+/// of another workbook.
+bool ptg_list_is_nonresident(const ByteSpan& cursor);
+
+/// Decodes the nonresident PtgList at `cursor` into an ExternalRef naming a
+/// table of link `book` (1-based), reading its names from `extra` (the
+/// formula's rgcb), and advances both. Only a table's data rows
+/// (`[1]!Tbl[#Data]`) and one column (`[1]!Tbl[col]`) are read; any other
+/// form is `kIoXlsbUnsupportedPtg`.
+Expected<parser::AstNode*, Error> decode_external_ptg_list(ByteSpan& cursor, ByteSpan& extra, std::uint32_t book,
+                                                           Arena& arena);
+
+/// True when the external table reference `node` (an ExternalRef with a
+/// structured payload) has a PtgList form: data rows or one column.
+bool external_ptg_list_encodable(const parser::AstNode& node);
+
+/// Appends the external table reference `node` as a nonresident PtgList of
+/// Ptg class `cls` through XTI `ixti`, and its names to `extra`.
+/// `kIoXlsbUnsupportedPtg` when `external_ptg_list_encodable` is false.
+Expected<void, Error> encode_external_ptg_list(std::vector<std::uint8_t>& out, std::vector<std::uint8_t>& extra,
+                                               const parser::AstNode& node, std::uint8_t cls, std::uint16_t ixti);
 
 /// The `idList` a table's part carries: its own id when non-zero and not
 /// taken by an earlier table or in `reserved`, otherwise the smallest id no

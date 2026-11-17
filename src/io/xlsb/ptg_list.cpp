@@ -110,6 +110,65 @@ std::optional<std::uint8_t> RowTypeFor(std::uint8_t selectors) {
   }
 }
 
+/// The PtgList data type (flag bits 10-11) of Ptg class `cls`.
+std::uint16_t ListType(std::uint8_t cls) {
+  return cls == 0x20U ? 0U : cls == 0x60U ? 2U : 1U;
+}
+
+/// A nonresident PtgList's listIndex: the table is named in the rgcb instead.
+constexpr std::uint32_t kExternalListIndex = 0xFFFFFFFFU;
+/// The rgcb words between an external reference's table and column names.
+constexpr std::uint16_t kExternalColumnTail[] = {0U, 1U, 2U};
+
+/// The forms of an external table reference whose bytes are known: every data row (`Tbl[#Data]`, row type 4, no
+/// column) and one column without a reserved character (`Tbl[col]`, row type 0).
+struct ExternalListShape {
+  std::uint8_t row_type = kRowsData;
+  std::string column;
+};
+
+bool HasReservedCharacter(std::string_view name) {
+  return name.find_first_of("[]#'") != std::string_view::npos;
+}
+
+std::optional<ExternalListShape> ExternalShape(std::string_view structured) {
+  using Spec = parser::StructuredRefSpecifiers;
+  const auto payload = parser::parse_structured_ref_payload_text(structured);
+  if (!payload) {
+    return std::nullopt;
+  }
+  if (payload->specifiers == Spec::kData && payload->columns.empty()) {
+    return ExternalListShape{kRowsData2, {}};
+  }
+  if (payload->specifiers == 0U && payload->columns.size() == 1U && !payload->columns.front().empty() &&
+      !HasReservedCharacter(payload->columns.front())) {
+    return ExternalListShape{kRowsData, payload->columns.front()};
+  }
+  return std::nullopt;
+}
+
+/// Reads an rgcb name: a u16 count of UTF-16 code units, then the units.
+Expected<std::string, Error> ReadExtraName(ByteSpan& extra) {
+  ASSIGN_OR_RETURN(const std::uint16_t units, read_u16(extra));
+  std::string out;
+  if (!read_utf16_units(extra, units, &out)) {
+    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "PtgList table name truncated",
+                      "context=xlsb_ptg_list");
+  }
+  return out;
+}
+
+Expected<void, Error> EmitExtraName(std::vector<std::uint8_t>& extra, std::string_view name) {
+  const std::size_t count_at = extra.size();
+  emit_u16(extra, 0U);
+  const std::size_t units = emit_utf16_units(extra, name);
+  if (units > 0xFFFFU) {
+    return Unsupported("external table or column name is too long");
+  }
+  store_u16(extra.data() + count_at, static_cast<std::uint16_t>(units));
+  return Expected<void, Error>::Ok();
+}
+
 std::optional<std::uint16_t> ColumnIndex(const TableMetadata& table, const std::string& name) {
   const std::size_t found = sheet_names::resolve_named(table.columns, name);
   if (found == sheet_names::kNotFound) {
@@ -218,6 +277,87 @@ Expected<parser::AstNode*, Error> decode_ptg_list(ByteSpan& cursor, Arena& arena
   return node;
 }
 
+bool ptg_list_is_nonresident(const ByteSpan& cursor) {
+  return cursor.size >= 6U && ((cursor.data[4] | (cursor.data[5] << 8U)) & kNonresidentBit) != 0U;
+}
+
+Expected<parser::AstNode*, Error> decode_external_ptg_list(ByteSpan& cursor, ByteSpan& extra, std::uint32_t book,
+                                                           Arena& arena) {
+  if (cursor.size < kPtgListSize) {
+    return make_error(FormulonErrorCode::kIoXlsbRecordTruncated, "PtgList payload truncated", "context=xlsb_ptg_list");
+  }
+  cursor.data += 2;
+  cursor.size -= 2;
+  // The ixti names the link's file-stem sheet entry, which the formula text does not spell.
+  ASSIGN_OR_RETURN(const std::uint16_t ixti, read_u16(cursor));
+  (void)ixti;
+  ASSIGN_OR_RETURN(const std::uint16_t flags, read_u16(cursor));
+  ASSIGN_OR_RETURN(const std::uint32_t list_index, read_u32(cursor));
+  ASSIGN_OR_RETURN(const std::uint16_t col_first, read_u16(cursor));
+  ASSIGN_OR_RETURN(const std::uint16_t col_last, read_u16(cursor));
+  const std::uint8_t row_type = static_cast<std::uint8_t>((flags >> kRowTypeShift) & kRowTypeMask);
+  if ((flags & (kInvalidBit | kColumnsMask)) != 0U || list_index != kExternalListIndex || col_first != 0U ||
+      col_last != 0U || (row_type != kRowsData && row_type != kRowsData2)) {
+    return Unsupported("external PtgList has no readable form");
+  }
+  ASSIGN_OR_RETURN(const std::uint8_t has_column, read_u8(extra));
+  ASSIGN_OR_RETURN(const std::uint16_t extra_row_type, read_u16(extra));
+  ASSIGN_OR_RETURN(std::string table, ReadExtraName(extra));
+  if (extra_row_type != row_type || has_column != (row_type == kRowsData ? 1U : 0U) || table.empty()) {
+    return Unsupported("external PtgList names have no readable form");
+  }
+  std::string payload = "#Data";
+  if (has_column != 0U) {
+    for (const std::uint16_t want : kExternalColumnTail) {
+      ASSIGN_OR_RETURN(const std::uint16_t word, read_u16(extra));
+      if (word != want) {
+        return Unsupported("external PtgList column has no readable form");
+      }
+    }
+    ASSIGN_OR_RETURN(payload, ReadExtraName(extra));
+    if (payload.empty() || HasReservedCharacter(payload)) {
+      return Unsupported("external PtgList column has no readable form");
+    }
+  }
+  parser::AstNode* node = parser::make_external_structured_ref(arena, {}, std::to_string(book), {}, table, payload);
+  if (node == nullptr) {
+    return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgList)", "context=xlsb_ptg_list");
+  }
+  return node;
+}
+
+bool external_ptg_list_encodable(const parser::AstNode& node) {
+  return ExternalShape(node.as_external_ref_structured()).has_value();
+}
+
+Expected<void, Error> encode_external_ptg_list(std::vector<std::uint8_t>& out, std::vector<std::uint8_t>& extra,
+                                               const parser::AstNode& node, std::uint8_t cls, std::uint16_t ixti) {
+  const std::optional<ExternalListShape> shape = ExternalShape(node.as_external_ref_structured());
+  if (!shape) {
+    return Unsupported("external table reference has no PtgList form");
+  }
+  std::uint16_t flags = kNonresidentBit;
+  flags |= static_cast<std::uint16_t>(shape->row_type << kRowTypeShift);
+  flags |= static_cast<std::uint16_t>(ListType(cls) << kTypeShift);
+  emit_u8(out, kPtgList);
+  emit_u8(out, kEptgList);
+  emit_u16(out, ixti);
+  emit_u16(out, flags);
+  emit_u32(out, kExternalListIndex);
+  emit_u16(out, 0U);
+  emit_u16(out, 0U);
+  emit_u8(extra, shape->column.empty() ? 0U : 1U);
+  emit_u16(extra, shape->row_type);
+  RETURN_IF_ERROR(EmitExtraName(extra, node.as_external_ref_name()));
+  if (!shape->column.empty()) {
+    for (const std::uint16_t word : kExternalColumnTail) {
+      emit_u16(extra, word);
+    }
+    RETURN_IF_ERROR(EmitExtraName(extra, shape->column));
+  }
+  return Expected<void, Error>::Ok();
+}
+
 std::uint32_t xlsb_table_id(const std::vector<TableMetadata>& tables, std::size_t index,
                             const std::unordered_set<std::uint32_t>& reserved) {
   const std::uint32_t own = tables[index].id;
@@ -312,10 +452,9 @@ Expected<void, Error> encode_ptg_list(std::vector<std::uint8_t>& out, const pars
   if (xti == ranges.xti.end()) {
     return Unsupported("structured reference's table sheet has no ExternSheet entry");
   }
-  const std::uint16_t type = cls == 0x20U ? 0U : cls == 0x60U ? 2U : 1U;
   std::uint16_t flags = columns;
   flags |= static_cast<std::uint16_t>(*row_type << kRowTypeShift);
-  flags |= static_cast<std::uint16_t>(type << kTypeShift);
+  flags |= static_cast<std::uint16_t>(ListType(cls) << kTypeShift);
   emit_u8(out, kPtgList);
   emit_u8(out, kEptgList);
   emit_u16(out, static_cast<std::uint16_t>(xti - ranges.xti.begin()));

@@ -132,6 +132,10 @@ struct XlsbLinkTables {
   /// any a formula names that the cache lacks. `PtgNameX` names entry `i`
   /// as `ilbl == i + 1`.
   std::vector<std::string> names;
+  /// The `sheet_names` entry an external table reference's XTI names: the
+  /// one spelled as the supporting file's name without its extension, when
+  /// it is the last entry; -1 otherwise, and such a reference is not encoded.
+  int table_itab = -1;
 };
 
 /// A table part kept verbatim, as much of it as a structured reference needs.

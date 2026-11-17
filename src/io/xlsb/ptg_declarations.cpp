@@ -72,10 +72,14 @@ void AddExternalRef(const parser::AstNode& node, SheetRangeTable& ranges, std::u
   if (position == 0U) {
     return;  // The encode reports the unknown book.
   }
-  if (node.kind() == parser::NodeKind::ExternalRef && !node.as_external_ref_structured().empty()) {
-    return;  // A table is no link name; the encode reports it.
-  }
   XlsbLinkTables& link = ranges.links[position - 1U];
+  if (node.kind() == parser::NodeKind::ExternalRef && !node.as_external_ref_structured().empty()) {
+    // A table resolves through the link's file-stem sheet; an unencodable one gets no XTI, and the encode reports it.
+    if (link.table_itab >= 0 && external_ptg_list_encodable(node)) {
+      AddXti(position, link.table_itab, link.table_itab, ranges, seen);
+    }
+    return;
+  }
   const std::string_view name = node.kind() == parser::NodeKind::NameRef ? node.as_name() : node.as_external_ref_name();
   if (!name.empty()) {
     // Saved book-scope whatever its sheet: the part records no name scope.

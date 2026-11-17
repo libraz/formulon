@@ -469,7 +469,11 @@ class Encoder {
           return emit_self_book_name_ref(node.as_external_ref_name(),
                                          cls(measured_calls_ && shapes_.of(node) != Shape::kScalar));
         }
-        // A name's class follows a local name's; a cell's or an area's a local reference's.
+        // A table's class follows a local table's, a name's a local name's, a cell's or an area's a local
+        // reference's.
+        if (!node.as_external_ref_structured().empty()) {
+          return emit_external_ref(node, cls(true), promote);
+        }
         return emit_external_ref(
             node, cls(node.as_external_ref_name().empty() ? shapes_.of(node) != Shape::kScalar : measured_calls_),
             promote);
@@ -915,8 +919,9 @@ class Encoder {
 
   /// Encodes a cross-workbook reference through the XTI naming its link: a
   /// defined name as `PtgNameX` into the link part's name list, a cell or
-  /// rectangle as `PtgRef3d` / `PtgArea3d` over the link's sheets. A span
-  /// across sheets keeps reference class, as a local 3-D one does.
+  /// rectangle as `PtgRef3d` / `PtgArea3d` over the link's sheets, a table as
+  /// a nonresident `PtgList` over the link's file-stem sheet. A span across
+  /// sheets keeps reference class, as a local 3-D one does.
   Expected<void, Error> emit_external_ref(const parser::AstNode& node, std::uint8_t cls, bool promote) {
     const std::uint32_t position = external_link_position(sheet_ranges_, node);
     if (position == 0U) {
@@ -927,11 +932,14 @@ class Encoder {
     const XlsbLinkTables& link = sheet_ranges_.links[position - 1U];
     const std::string_view name =
         node.kind() == parser::NodeKind::NameRef ? node.as_name() : node.as_external_ref_name();
-    // A table of the other workbook has no stored form: the link part lists names and sheets only.
     if (node.kind() == parser::NodeKind::ExternalRef && !node.as_external_ref_structured().empty()) {
-      return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
-                        "xlsb encoder: external table reference not in its link's name list",
-                        std::string(kCtx) + std::string(" name=") + std::string(name));
+      if (link.table_itab < 0) {
+        return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
+                          "xlsb encoder: external table reference's link has no file-stem sheet",
+                          std::string(kCtx) + std::string(" name=") + std::string(name));
+      }
+      ASSIGN_OR_RETURN(const std::uint16_t ixti, resolve_range_ixti(link.table_itab, link.table_itab, position));
+      return encode_external_ptg_list(out_, extra_, node, cls, ixti);
     }
     if (!name.empty()) {
       const std::uint32_t ilbl = external_name_ilbl(link, name);

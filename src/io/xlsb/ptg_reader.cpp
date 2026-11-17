@@ -748,7 +748,17 @@ Expected<parser::AstNode*, Error> decode_ptgs(
     bool keeps_pending_space = false;
     const std::uint8_t first_byte = cursor.data[0];
     if (first_byte == kPtgList && cursor.size >= 2U && cursor.data[1] == kEptgList) {
-      ASSIGN_OR_RETURN(auto list, decode_ptg_list(cursor, arena, tables));
+      parser::AstNode* list = nullptr;
+      if (ptg_list_is_nonresident(cursor)) {
+        const IxtiTarget target = classify_ixti(static_cast<std::uint32_t>(cursor.data[2] | (cursor.data[3] << 8U)));
+        if (target.kind != IxtiTarget::Kind::External || target.book == 0) {
+          return make_error(FormulonErrorCode::kIoXlsbUnsupportedPtg,
+                            "PtgList names a table of an external workbook this reader cannot bind", kCtx);
+        }
+        ASSIGN_OR_RETURN(list, decode_external_ptg_list(cursor, extra, target.book, arena));
+      } else {
+        ASSIGN_OR_RETURN(list, decode_ptg_list(cursor, arena, tables));
+      }
       stack.push_back(list);
       if (pending_spaces != 0) {
         record_space(PtgKind::Area, stack.back());

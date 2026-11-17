@@ -10,6 +10,7 @@ excel/cf_custom_icon_set.xlsb
 excel/chart_xlsb.xlsb
 excel/external_link_cell_kinds.xlsb
 excel/external_link_mixed.xlsb
+excel/external_table_ref_closed.xlsb
 excel/function_value_storage.xlsb
 excel/lambda_name.xlsb
 excel/let_a1_names.xlsb

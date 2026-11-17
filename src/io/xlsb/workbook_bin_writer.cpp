@@ -537,6 +537,17 @@ Expected<SheetRangeTable, Error> SeedFromRetainedTails(const Workbook& wb, const
   return seed;
 }
 
+/// The link sheet an external table reference names: the supporting file's name without its extension, when that
+/// is the last sheet entry.
+int ExternalTableItab(const ExternalLinkRecord& link) {
+  const std::string_view target = link.target;
+  const std::size_t slash = target.find_last_of("/\\");
+  std::string_view stem = slash == std::string_view::npos ? target : target.substr(slash + 1U);
+  stem = stem.substr(0, stem.rfind('.'));
+  const int itab = resolve_ixti(link.book.sheet_names, stem);
+  return !stem.empty() && itab >= 0 && static_cast<std::size_t>(itab) + 1U == link.book.sheet_names.size() ? itab : -1;
+}
+
 }  // namespace
 
 /// Builds the `BrtExternSheet` table for the whole workbook: every
@@ -556,6 +567,7 @@ Expected<SheetRangeTable, Error> BuildSheetRangeTable(const Workbook& wb, const 
     XlsbLinkTables tables;
     tables.index = link->index;
     tables.sheet_names = link->book.sheet_names;
+    tables.table_itab = ExternalTableItab(*link);
     for (const ExternalBookName& name : link->book.names) {
       tables.names.push_back(name.name);
     }
