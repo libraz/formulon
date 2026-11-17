@@ -333,9 +333,11 @@ Value eval_isref_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     return Value::boolean(true);
   }
   // A name is a reference when it stands for one (`=LET(r, A1, ISREF(r))`), not when it stands for a value
-  // (`=LET(x, 5, ISREF(x))`).
-  if (arg.kind() == parser::NodeKind::NameRef) {
-    const Value v = eval_node_ref(arg, arena, registry, ctx.without_dynamic_read_callback());
+  // (`=LET(x, 5, ISREF(x))`); an evaluated argument is one when it holds an area or a union, not a grid.
+  if (arg.kind() == parser::NodeKind::NameRef || arg.kind() == parser::NodeKind::Literal) {
+    const Value v = arg.kind() == parser::NodeKind::Literal
+                        ? arg.as_literal()
+                        : eval_node_ref(arg, arena, registry, ctx.without_dynamic_read_callback());
     return Value::boolean(v.is_ref() && (v.ref_form() == RefForm::kArea || v.ref_form() == RefForm::kUnion));
   }
   if (arg.kind() == parser::NodeKind::Call && is_reference_call_name(arg.as_call_name())) {
@@ -440,18 +442,16 @@ Value eval_sheet_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     return named_sheet_number(sheet_qualifier);
   }
 
-  // Non-reference AST: evaluate the argument. If it coerces to text,
-  // treat as a sheet-name lookup. Otherwise surface `#VALUE!` (or the
-  // propagated error).
+  // Non-reference AST: a value coercing to text is a sheet-name lookup, any
+  // other is `#VALUE!`; an array looks up each element.
   const Value v = eval_node(arg, arena, registry, ctx);
   if (v.is_error()) {
     return v;
   }
-  auto text_e = coerce_to_text(v);
-  if (!text_e) {
-    return Value::error(ErrorCode::Value);
-  }
-  return named_sheet_number(text_e.value());
+  return lift_over_array_args(&v, 1U, arena, [&](const Value* cell, std::uint32_t) {
+    auto text_e = coerce_to_text(cell[0]);
+    return text_e ? named_sheet_number(text_e.value()) : Value::error(ErrorCode::Value);
+  });
 }
 
 Value eval_single_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,

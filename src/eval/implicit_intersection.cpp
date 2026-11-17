@@ -13,6 +13,7 @@
 #include "eval/function_registry.h"
 #include "eval/lazy_impls.h"
 #include "eval/range_resolvers.h"
+#include "eval/reference/deref.h"
 #include "eval/reference/ref_value.h"
 #include "eval/tree_walker/dispatch.h"
 #include "eval/tree_walker_lazy_table.h"
@@ -134,6 +135,12 @@ bool project_reference_result(const parser::AstNode& operand, Arena& arena, cons
     return false;
   }
   const RefView view = ref.as_ref();
+  // A grid gives its first element, a reference read whole (`@OFFSET(A1:A3,,{1,2,3})` is B1:B3).
+  if (view.form == RefForm::kGrid) {
+    const Value first = grid_element(view, 0U, arena);
+    *out = first.is_ref() ? deref_shaped(first, arena, registry, ctx, ReadCount::kCounted).value : first;
+    return true;
+  }
   const RefArea& area = view.areas[0];
   parser::Reference lhs{};
   if (view.form != RefForm::kArea || view.book != 0U || !ref_sheet_name(ctx, area.sheet_first, &lhs.sheet)) {

@@ -1372,6 +1372,52 @@ TEST_F(GridShapeTest, LambdaHelpersBindElementsAsReferencesAndRowsAsSlices) {
   EXPECT_EQ(Elements(grid_slice(two_by_two, 0, 1, 2, 1, arena_)), (std::vector<std::string>{"1,1", "3,3"}));
 }
 
+// ---------------------------------------------------------------------------
+// Consumers that read a grid's shape or pick from it
+// ---------------------------------------------------------------------------
+
+TEST_F(GridShapeTest, ShapeAndReferenceTestsReadTheGridItself) {
+  const LazyEntry rows = *find_lazy_entry("ROWS");
+  const LazyEntry cols = *find_lazy_entry("COLUMNS");
+  const LazyEntry isref = *find_lazy_entry("ISREF");
+  EXPECT_EQ(Run(rows, {Diagonal()}), Value::number(3));
+  EXPECT_EQ(Run(cols, {Diagonal()}), Value::number(1));
+  EXPECT_EQ(Run(isref, {Diagonal()}), Value::boolean(false));
+  EXPECT_EQ(Run(isref, {Grid({Area(0, 0, 0, 0)}, 1, 1)}), Value::boolean(false));
+  EXPECT_EQ(Run(isref, {AreaRef(0, 0, 1, 1)}), Value::boolean(true));
+  EXPECT_EQ(Run(rows, {AreaRef(0, 0, 1, 2)}), Value::number(2));
+  const RefArea two[2] = {Area(0, 0, 0, 0), Area(2, 2, 2, 2)};
+  ExpectError(Run(rows, {make_union_ref(arena_, two, 2U)}), ErrorCode::Ref, "ROWS of a union");
+}
+
+TEST_F(GridShapeTest, IndexPicksAnElementOrKeepsASlice) {
+  using Texts = std::vector<std::string>;
+  const LazyEntry index = *find_lazy_entry("INDEX");
+  const Value row = Grid({Area(0, 0, 0, 0), Area(1, 1, 1, 1), Area(2, 2, 2, 2)}, 1, 3);
+  // One index into a one-row grid is its column: the element itself.
+  const Value third = Run(index, {row, Value::number(3)});
+  ASSERT_TRUE(third.is_ref() && third.ref_form() == RefForm::kArea) << third.debug_to_string();
+  EXPECT_EQ(third.as_ref().areas[0].row_first, 2U);
+  // One index into a column is its row: a 1 x 1 slice that stays a grid.
+  EXPECT_EQ(Elements(Run(index, {Diagonal(), Value::number(2)})), (Texts{"1,1"}));
+  const Value picked = Run(index, {Diagonal(), Value::number(3), Value::number(1)});
+  ASSERT_TRUE(picked.is_ref() && picked.ref_form() == RefForm::kArea) << picked.debug_to_string();
+  EXPECT_EQ(Elements(Run(index, {row, Value::number(0), Value::number(3)})), (Texts{"2,2"}));
+  EXPECT_EQ(Elements(Run(index, {Diagonal(), Value::number(0), Value::number(1)})), (Texts{"0,0", "1,1", "2,2"}));
+  ExpectError(Run(index, {Diagonal(), Value::number(4)}), ErrorCode::Ref, "past the grid");
+  ExpectSame(Run(index, {Diagonal(), Array(2, 1, {Value::number(1), Value::number(2)})}),
+             Array(2, 1, {Value::error(ErrorCode::Value), Value::error(ErrorCode::Value)}), "array index");
+}
+
+TEST_F(GridShapeTest, IntersectionTakesTheFirstElementWhole) {
+  // `@` over a grid whose first element is A1:A2 reads A1:A2.
+  auto* literal = parser::make_literal(arena_, Grid({Area(0, 0, 1, 0), Area(2, 2, 2, 2)}, 2, 1));
+  const parser::AstNode* at = parser::make_implicit_intersection(arena_, literal);
+  const EvalContext ctx = Ctx().with_formula_cell(9, 9);
+  ExpectSame(evaluate(*at, arena_, default_registry(), ctx), Array(2, 1, {Value::number(11), Value::number(21)}),
+             "@ grid");
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

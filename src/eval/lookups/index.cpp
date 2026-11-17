@@ -5,6 +5,7 @@
 // vocabulary.
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <limits>
@@ -870,6 +871,68 @@ Value eval_choose_lazy(const parser::AstNode& call, Arena& arena, const Function
 //     `INDEX(row_vector, 0)` -> the whole row `row` as a horizontal array.
 //   * `INDEX(array, 0, 0)` -> the whole array.
 // A 1x1 source collapses any zero index to its sole cell.
+namespace {
+
+// INDEX over a grid of references. A row and a column pick one element, the
+// element itself; a zero index keeps that whole row or column as a grid slice.
+// One index into a one-row grid is its column; into any other grid, its row.
+// An array index gives #VALUE! per element.
+Value index_grid(const parser::AstNode& call, const Value& grid, Arena& arena, const FunctionRegistry& registry,
+                 const EvalContext& ctx) {
+  const RefView view = grid.as_ref();
+  const std::uint32_t arity = call.as_call_arity();
+  const bool col_explicit = arity >= 3U;
+  Value indices[2] = {eval_node(call.as_call_arg(1), arena, registry, ctx),
+                      col_explicit ? eval_node(call.as_call_arg(2), arena, registry, ctx) : Value::number(0.0)};
+  if (indices[0].is_array() || indices[1].is_array()) {
+    const Value lift_args[2] = {indices[0], indices[1]};
+    return lift_over_array_args(lift_args, 2U, arena,
+                                [](const Value*, std::uint32_t) { return Value::error(ErrorCode::Value); });
+  }
+  double picked[2] = {0.0, 0.0};
+  for (int i = 0; i < 2; ++i) {
+    if (indices[i].is_error()) {
+      return indices[i];
+    }
+    const auto n = coerce_to_number(indices[i]);
+    if (!n) {
+      return Value::error(n.error());
+    }
+    picked[i] = std::trunc(n.value());
+    if (picked[i] < 0.0) {
+      return Value::error(ErrorCode::Value);
+    }
+  }
+  if (arity == 4U) {
+    const Value area = eval_node(call.as_call_arg(3), arena, registry, ctx);
+    const auto n = area.is_error() ? Expected<double, ErrorCode>(area.as_error()) : coerce_to_number(area);
+    if (!n) {
+      return Value::error(n.error());
+    }
+    if (std::trunc(n.value()) != 1.0) {
+      return Value::error(ErrorCode::Ref);
+    }
+  }
+  double row = picked[0];
+  double col = picked[1];
+  if (!col_explicit && view.rows == 1U) {
+    row = 1.0;
+    col = picked[0];
+  }
+  if (row > view.rows || col > view.cols) {
+    return Value::error(ErrorCode::Ref);
+  }
+  const auto r = static_cast<std::uint32_t>(row);
+  const auto c = static_cast<std::uint32_t>(col);
+  if (r != 0U && c != 0U) {
+    return grid_element(view, static_cast<std::size_t>(r - 1U) * view.cols + (c - 1U), arena);
+  }
+  return grid_slice(grid, r == 0U ? 0U : r - 1U, c == 0U ? 0U : c - 1U, r == 0U ? view.rows : 1U,
+                    c == 0U ? view.cols : 1U, arena);
+}
+
+}  // namespace
+
 Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
@@ -887,6 +950,9 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   // A source that evaluates to a `Ref` is picked as a reference; its cells are read only for array indices.
   const Value source_ref =
       evaluates_to_reference(source_node) ? eval_node_ref(source_node, arena, registry, ctx) : Value::blank();
+  if (source_ref.is_ref() && source_ref.ref_form() == RefForm::kGrid) {
+    return index_grid(call, source_ref, arena, registry, ctx);
+  }
   const bool picks_reference = is_one_area_ref(source_ref);
   // A single-cell pick reads one cell by its declared position, so the
   // whole-axis extent walk waits until a selection spans a line or more.

@@ -259,6 +259,27 @@ bool resolve_shape(const parser::AstNode& arg_node, Arena& arena, const Function
     return false;
   }
   const parser::NodeKind k = arg_node.kind();
+  // An evaluated reference measures by its form: a grid by its own shape, a
+  // union #REF!, a 3-D span #VALUE!.
+  if (k == parser::NodeKind::Literal && arg_node.as_literal().is_ref()) {
+    const RefView view = arg_node.as_literal().as_ref();
+    switch (view.form) {
+      case RefForm::kGrid:
+        *out_rows = view.rows;
+        *out_cols = view.cols;
+        return true;
+      case RefForm::kArea:
+        *out_rows = view.areas[0].row_last - view.areas[0].row_first + 1U;
+        *out_cols = view.areas[0].col_last - view.areas[0].col_first + 1U;
+        return true;
+      case RefForm::kUnion:
+        *out_err = Value::error(ErrorCode::Ref);
+        return false;
+      case RefForm::kSpan3D:
+        *out_err = Value::error(ErrorCode::Value);
+        return false;
+    }
+  }
   const parser::Reference* external_lhs = nullptr;
   const parser::Reference* external_rhs = nullptr;
   if (external_ref_declared_endpoints(arg_node, &external_lhs, &external_rhs)) {
