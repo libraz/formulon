@@ -306,6 +306,49 @@ export function registerDrawing(Module, test) {
     });
   });
 
+  test('patching a glued shape reroutes or moves its connectors', () => {
+    withWorkbook(Module, (wb) => {
+      const at = (fromCol, widthEmu, heightEmu) => ({
+        anchor: { kind: AnchorKind.OneCell, fromRow: 1, fromCol, widthEmu, heightEmu },
+      });
+      const start = wb.addShape(0, { ...at(1, 914400, 457200), presetGeometry: 'rect' });
+      const end = wb.addShape(0, { ...at(6, 914400, 457200), presetGeometry: 'rect' });
+      const both = wb.addShape(0, { ...at(2, 914400, 1), presetGeometry: 'straightConnector1' });
+      const one = wb.addShape(0, { ...at(3, 914400, 1), presetGeometry: 'straightConnector1' });
+      const saved = wb.save();
+      const entries = zipNames(saved).map((name) => [name, readZipEntryText(saved, name)]);
+      const drawing = entries.find(([name]) => name.startsWith('xl/drawings/drawing'));
+      const glue = (id, ends) => {
+        const pattern = new RegExp(`(<xdr:cNvPr id="${id}"[^>]*/>\\s*)<xdr:cNvCxnSpPr/>`);
+        assert.ok(pattern.test(drawing[1]), drawing[1]);
+        drawing[1] = drawing[1].replace(pattern, `$1<xdr:cNvCxnSpPr>${ends}</xdr:cNvCxnSpPr>`);
+      };
+      glue(both, `<a:stCxn id="${start}" idx="3"/><a:endCxn id="${end}" idx="1"/>`);
+      glue(one, `<a:endCxn id="${end}" idx="1"/>`);
+      const loaded = Module.Workbook.load(zipStore(entries));
+      try {
+        const box = (id) => loaded.getDrawingObject(0, id).anchor;
+        loaded.updateShape(0, end, { anchor: { fromColOffsetEmu: 254000 } });
+        const routed = box(both);
+        const moved = box(one);
+        loaded.updateShape(0, end, { anchor: { fromColOffsetEmu: 381000 } });
+        // Glued at both ends, the connector runs between the two sites; glued at one, it moves whole.
+        const rerouted = box(both);
+        assert.equal(rerouted.widthEmu, routed.widthEmu + 127000);
+        assert.equal(rerouted.heightEmu, 0);
+        assert.equal(rerouted.fromColOffsetEmu, routed.fromColOffsetEmu);
+        const translated = box(one);
+        assert.equal(translated.widthEmu, moved.widthEmu);
+        assert.equal(translated.fromColOffsetEmu, moved.fromColOffsetEmu + 127000);
+        const shape = loaded.getShape(0, both);
+        assert.equal(shape.startConnection.objectId, start);
+        assert.equal(shape.endConnection.siteIndex, 1);
+      } finally {
+        loaded.dispose();
+      }
+    });
+  });
+
   test('sparkline groups are addressed by their id', () => {
     withWorkbook(Module, (wb) => {
       const a = wb.addSparklineGroup(0, { sparklines: [{ formula: 'Sheet1!A1:C1', location: 'D1' }] });
