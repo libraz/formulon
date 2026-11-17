@@ -203,8 +203,8 @@ TEST(DrawingColorResolve, TransformsApplyInTheirWrittenOrder) {
 
 TEST(DrawingColorResolve, UnmodelledTransformsHaveNoColour) {
   const std::vector<std::vector<ColorTransform>> cases = {
-      {{"alphaMod", 50000}},      {{"fooBar", 1}},           {{"redModx", 1}},
-      {{"lumMod", std::nullopt}}, {{"shade", std::nullopt}}, {{"tint", 50000}, {"hueMod", std::nullopt}},
+      {{"alphaMod", std::nullopt}}, {{"fooBar", 1}},           {{"redModx", 1}},
+      {{"lumMod", std::nullopt}},   {{"shade", std::nullopt}}, {{"tint", 50000}, {"hueMod", std::nullopt}},
   };
   for (const auto& t : cases) {
     const ResolvedPaint got = drawing_color::resolve_transforms(0xFF123456U, t);
@@ -213,12 +213,36 @@ TEST(DrawingColorResolve, UnmodelledTransformsHaveNoColour) {
   }
 }
 
-TEST(DrawingColorResolve, AlphaKeepsTheColourAndLeavesTheOpacityToTheModel) {
-  const ResolvedPaint plain = drawing_color::resolve_transforms(0xFF123456U, {{"shade", 50000}});
-  EXPECT_EQ(plain.alpha, std::optional<std::uint32_t>(100000U));
-  const ResolvedPaint alpha = drawing_color::resolve_transforms(0xFF123456U, {{"alpha", 40000}, {"shade", 50000}});
-  EXPECT_EQ(alpha.argb, plain.argb);
-  EXPECT_FALSE(alpha.alpha.has_value());
+std::optional<std::uint32_t> Opacity(const std::vector<ColorTransform>& transforms) {
+  return drawing_color::resolve_transforms(0xFFE97132U, transforms).alpha;
+}
+
+// Excel 16.115: the alpha transforms apply in their written order, alphaMod and alphaOff clamped to opaque and
+// clear; a later alpha replaces an earlier one.
+TEST(DrawingColorResolve, OpacityMatchesExcel) {
+  EXPECT_EQ(Opacity({}), std::optional<std::uint32_t>(100000U));
+  EXPECT_EQ(Opacity({{"alpha", 25000}}), std::optional<std::uint32_t>(25000U));
+  EXPECT_EQ(Opacity({{"alphaMod", 50000}}), std::optional<std::uint32_t>(50000U));
+  EXPECT_EQ(Opacity({{"alphaMod", 150000}}), std::optional<std::uint32_t>(100000U));
+  EXPECT_EQ(Opacity({{"alphaOff", -30000}}), std::optional<std::uint32_t>(70000U));
+  EXPECT_EQ(Opacity({{"alphaOff", 20000}}), std::optional<std::uint32_t>(100000U));
+  EXPECT_EQ(Opacity({{"alpha", 50000}, {"alphaMod", 50000}}), std::optional<std::uint32_t>(25000U));
+  EXPECT_EQ(Opacity({{"alphaMod", 50000}, {"alpha", 50000}}), std::optional<std::uint32_t>(50000U));
+  EXPECT_EQ(Opacity({{"alpha", 50000}, {"alphaOff", -20000}}), std::optional<std::uint32_t>(30000U));
+  EXPECT_EQ(Opacity({{"alphaOff", -20000}, {"alpha", 50000}}), std::optional<std::uint32_t>(50000U));
+  EXPECT_EQ(Opacity({{"alpha", 40000}, {"alpha", 70000}}), std::optional<std::uint32_t>(70000U));
+  EXPECT_EQ(Opacity({{"alpha", 70000}, {"alpha", 40000}}), std::optional<std::uint32_t>(40000U));
+  EXPECT_FALSE(Opacity({{"alpha", std::nullopt}}).has_value());
+}
+
+// The colour is the same in either order with the alpha transforms (accent2 lumMod 75000 -> C04F15, tint 50000 ->
+// F4C9BE).
+TEST(DrawingColorResolve, AlphaTransformsLeaveTheColour) {
+  EXPECT_EQ(Resolved(0xE97132, {{"lumMod", 75000}, {"alpha", 50000}}), 0xFFC04F15U);
+  EXPECT_EQ(Resolved(0xE97132, {{"alphaMod", 50000}, {"lumMod", 75000}}), 0xFFC04F15U);
+  EXPECT_EQ(Resolved(0xE97132, {{"tint", 50000}, {"alphaOff", -30000}}), 0xFFF4C9BEU);
+  EXPECT_EQ(Resolved(0x7F3F9F, {{"alpha", 50000}, {"lumMod", 75000}}), 0xFF5F2F77U);
+  EXPECT_EQ(Resolved(0x7F3F9F, {{"tint", 50000}, {"alpha", 50000}}), 0xFFCCC0D6U);
 }
 
 TEST(DrawingColorRead, BaseTransformsAndRenderedColour) {

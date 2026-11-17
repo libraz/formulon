@@ -39,8 +39,8 @@ struct DrawingColor {
   /// Opaque 0xFFRRGGBB as Excel renders the colour; unset when a transform is one the engine
   /// does not model. Computed on read, ignored on input.
   std::optional<std::uint32_t> resolved_argb;
-  /// Opacity Excel renders, 0..100000 (100000 opaque); unset while an alpha transform is present or
-  /// `resolved_argb` is unset. Computed on read, ignored on input.
+  /// Opacity Excel renders, 0..100000 (100000 opaque); unset when `resolved_argb` is. Computed on read,
+  /// ignored on input.
   std::optional<std::uint32_t> resolved_alpha;
 };
 
@@ -75,9 +75,8 @@ std::optional<DrawingColor> read_drawing_color(const Workbook& wb, const pugi::x
 std::optional<DrawingColor> read_written_color(const pugi::xml_node& clr);
 
 /// The colour and opacity Excel renders for `base_argb` under `transforms`, applied in order. `alpha`
-/// leaves the colour as it is. The colour is unset when a transform is not modelled (`alphaMod`,
-/// `alphaOff`, an unknown name) or lacks the value it needs; the opacity is 100000 without an alpha
-/// transform and unset with one, or when the colour is unset.
+/// sets the opacity, `alphaMod` scales it and `alphaOff` adds to it, each clamped to 0..100000, and none
+/// of them changes the colour. Both are unset when a transform is unknown or lacks the value it needs.
 ResolvedPaint resolve_transforms(std::uint32_t base_argb, const std::vector<ColorTransform>& transforms);
 
 /// `color` with a Theme tint expanded into its `lumMod` / `lumOff` transforms.

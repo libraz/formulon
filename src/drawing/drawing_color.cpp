@@ -251,10 +251,24 @@ std::string_view scheme_name_of(std::uint32_t theme) {
 
 }  // namespace
 
-ResolvedPaint resolve_transforms(std::uint32_t base_argb, const std::vector<ColorTransform>& transforms) {
+ResolvedPaint resolve_transforms(std::uint32_t base_argb, const std::vector<ColorTransform>& all) {
   ResolvedPaint out;
-  bool has_alpha = false;
   const double unit = static_cast<double>(kUnit);
+  // Opacity is a pass of its own over the alpha transforms, in their written order; the colour never sees them.
+  double opacity = 1.0;
+  std::vector<ColorTransform> transforms;
+  for (const ColorTransform& t : all) {
+    const std::string_view name = t.name;
+    if (name != "alpha" && name != "alphaMod" && name != "alphaOff") {
+      transforms.push_back(t);
+      continue;
+    }
+    if (!t.value) {
+      return out;
+    }
+    const double v = static_cast<double>(*t.value) / unit;
+    opacity = std::clamp(name == "alpha" ? v : name == "alphaMod" ? opacity * v : opacity + v, 0.0, 1.0);
+  }
   double lin[3];
   for (int i = 0; i < 3; ++i) {
     const auto byte = static_cast<double>((base_argb >> (16 - 8 * i)) & 0xFFU);
@@ -283,9 +297,7 @@ ResolvedPaint resolve_transforms(std::uint32_t base_argb, const std::vector<Colo
     if (needs_value && !t.value) {
       return out;
     }
-    if (name == "alpha") {
-      has_alpha = true;
-    } else if (name == "shade") {
+    if (name == "shade") {
       for (double& x : lin) {
         x = on_grid(x * v);
       }
@@ -323,9 +335,7 @@ ResolvedPaint resolve_transforms(std::uint32_t base_argb, const std::vector<Colo
     argb |= static_cast<std::uint32_t>(std::floor(v + 0.5)) << (16 - 8 * i);
   }
   out.argb = argb;
-  if (!has_alpha) {
-    out.alpha = static_cast<std::uint32_t>(kUnit);
-  }
+  out.alpha = static_cast<std::uint32_t>(std::floor(opacity * unit + 0.5));
   return out;
 }
 

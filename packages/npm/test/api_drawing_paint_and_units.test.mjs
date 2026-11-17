@@ -95,8 +95,7 @@ describe('a shape paints with the chart fill and line records', () => {
       assert.equal(fill.color.base.kind, ColorKind.Rgb);
       assert.equal(fill.color.base.argb & 0xffffff, 0xff0000);
       assert.equal(fill.color.resolved.argb >>> 0, 0xffff0000);
-      // The stated transparency is an alpha transform, which leaves the rendered opacity unknown.
-      assert.equal(fill.color.resolvedTransparencyPct, null);
+      assert.equal(fill.color.resolvedTransparencyPct, 25);
       assert.equal(fill.transparencyPct, 25);
       assert.equal(fill.none, false);
       assert.equal(fill.other, false);
@@ -266,11 +265,11 @@ describe('a paint colour carries its transforms', () => {
     });
   });
 
-  it('an alpha transform leaves the rendered transparency unknown, and a read record passes back as input', () => {
+  it('an alpha transform reads as the rendered transparency, and a read record passes back as input', () => {
     withSheet((ws) => {
       const shape = shapeWith(ws, { base: '#FF0000', transforms: [{ name: 'alpha', value: 60000 }] });
       const { fill } = shape.getProperties();
-      assert.equal(fill.color.resolvedTransparencyPct, null);
+      assert.equal(fill.color.resolvedTransparencyPct, 40);
       const copy = ws.addShape({ anchor: box });
       copy.update({ fill });
       assert.deepEqual(copy.getProperties().fill.color, fill.color);

@@ -3402,8 +3402,8 @@ class DrawingColor:
     transforms: List[ColorTransform] = field(default_factory=list)
     #: The colour Excel renders, opaque; ``None`` when a transform is one the engine does not model.
     resolved: Optional[ResolvedColor] = None
-    #: The transparency Excel renders as a percentage (0..100), 0 without an ``alpha`` transform; ``None`` while an
-    #: ``alpha`` transform is present or ``resolved`` is ``None``.
+    #: The transparency Excel renders as a percentage (0..100) after the ``alpha``, ``alphaMod`` and ``alphaOff``
+    #: transforms in their written order, 0 without one; ``None`` when ``resolved`` is ``None``.
     resolved_transparency_pct: Optional[float] = None
 
 

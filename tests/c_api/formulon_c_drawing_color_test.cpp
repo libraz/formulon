@@ -184,7 +184,7 @@ TEST(FormulonCApiDrawingColor, PlainColourAndAbsentColour) {
 TEST(FormulonCApiDrawingColor, UnmodelledTransformLeavesTheRenderedColourUnset) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), FM_STATUS_OK);
-  const fm_color_transform_t transforms[] = {Transform("alphaMod", 50000)};
+  const fm_color_transform_t transforms[] = {Transform("fooBar", 7)};
   fm_shape_spec_t spec = RectSpec();
   spec.fill.color.base = Rgb(0xFF336699U);
   spec.fill.color.transforms = transforms;
@@ -192,9 +192,26 @@ TEST(FormulonCApiDrawingColor, UnmodelledTransformLeavesTheRenderedColourUnset) 
   const uint32_t id = AddShape(wb.handle, spec);
   const fm_shape_info_t out = ReadShape(wb.handle, id);
   ASSERT_EQ(out.fill.color.transform_count, 1U);
-  EXPECT_STREQ(out.fill.color.transforms[0].name, "alphaMod");
+  EXPECT_STREQ(out.fill.color.transforms[0].name, "fooBar");
   EXPECT_EQ(out.fill.color.has_resolved, 0);
   EXPECT_EQ(out.fill.color.has_resolved_transparency_pct, 0);
+}
+
+// alphaMod and alphaOff scale and offset the rendered opacity in order; the colour is unchanged.
+TEST(FormulonCApiDrawingColor, AlphaModAndOffRenderTheTransparency) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), FM_STATUS_OK);
+  const fm_color_transform_t transforms[] = {Transform("alphaMod", 50000), Transform("alphaOff", -20000)};
+  fm_shape_spec_t spec = RectSpec();
+  spec.fill.color.base = Rgb(0xFF336699U);
+  spec.fill.color.transforms = transforms;
+  spec.fill.color.transform_count = 2;
+  const uint32_t id = AddShape(wb.handle, spec);
+  const fm_shape_info_t out = ReadShape(wb.handle, id);
+  ASSERT_EQ(out.fill.color.has_resolved, 1);
+  EXPECT_EQ(out.fill.color.resolved, 0xFF336699U);
+  ASSERT_EQ(out.fill.color.has_resolved_transparency_pct, 1);
+  EXPECT_DOUBLE_EQ(out.fill.color.resolved_transparency_pct, 70.0);
 }
 
 // An `alpha` transform and `transparency_pct` in one write must agree; either alone states the opacity.

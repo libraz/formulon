@@ -14779,11 +14779,10 @@ typedef struct {
   int32_t has_resolved;
   /** The colour Excel renders, opaque 0xFFRRGGBB; meaningful when `has_resolved` is set. */
   uint32_t resolved;
-  /** 1 on a read when `resolved_transparency_pct` is set; 0 while an `alpha` transform is present or `has_resolved`
-   *  is 0. */
+  /** 1 on a read when `resolved_transparency_pct` is set; 0 when `has_resolved` is 0. */
   int32_t has_resolved_transparency_pct;
-  /** The transparency Excel renders as a percentage (0..100); 0 without an `alpha` transform. Meaningful when
-   *  `has_resolved_transparency_pct` is set. */
+  /** The transparency Excel renders as a percentage (0..100) after the `alpha`, `alphaMod` and `alphaOff`
+   *  transforms in their written order; 0 without one. Meaningful when `has_resolved_transparency_pct` is set. */
   double resolved_transparency_pct;
 } fm_drawing_color_t;
 

@@ -256,8 +256,7 @@ describe('a drawing colour carries its transforms and the colour Excel renders',
         { name: 'alpha', value: 40000 },
       ]);
       assert.equal(color.resolved.resolution, f.ColorResolution.Exact);
-      // An alpha transform leaves the rendered opacity unknown.
-      assert.equal(color.resolvedTransparencyPct, null);
+      assert.equal(color.resolvedTransparencyPct, 60);
     });
   });
 

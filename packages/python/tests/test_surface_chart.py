@@ -457,8 +457,7 @@ class ChartEditTests(unittest.TestCase):
             self.assertEqual((color.base, color.transforms), (_rgb(0xFFFF0000), transforms))
             self.assertEqual(color.resolved.resolution, ColorResolution.EXACT)
             self.assertEqual(color.resolved.argb >> 24, 0xFF)
-            # An alpha transform leaves the rendered opacity unknown.
-            self.assertIsNone(color.resolved_transparency_pct)
+            self.assertEqual(color.resolved_transparency_pct, 50.0)
             # A transform without a value, and a plain colour (no transforms, opaque).
             green = DrawingColorInput(base="#FF00FF00", transforms=[ColorTransform("gray")])
             # A colour patch keeps the stored transparency, so it is cleared here as well.
