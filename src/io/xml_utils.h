@@ -138,6 +138,11 @@ std::optional<std::uint32_t> parse_xml_u32_attr_strict(const pugi::xml_attribute
 /// malformed, or out-of-range input returns `default_value`.
 std::int32_t parse_xml_i32_attr(const pugi::xml_attribute& attr, std::int32_t default_value);
 
+/// Parses a NUL-terminated signed 32-bit decimal: `std::nullopt` on null,
+/// empty, malformed, trailing characters or a value outside `int32_t`, the
+/// same answer on every target whatever the width of `long`.
+std::optional<std::int32_t> parse_xml_i32(const char* raw);
+
 /// Parses an OOXML boolean attribute body. Returns true for "1" or
 /// "true", false for everything else (including a missing attribute).
 /// Matches the lexicon Excel emits for the majority of `xs:boolean`

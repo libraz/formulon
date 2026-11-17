@@ -9,13 +9,13 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <cstdlib>
 #include <iterator>
 #include <string>
 #include <vector>
 
 #include "c_api/binding_message.h"
 #include "c_api/formulon_c.h"
+#include "io/xml_utils.h"
 #include "wasm/parts/embind_common.h"
 #include "wasm/parts/workbook.h"
 
@@ -57,9 +57,7 @@ int32_t xml_int(const std::string& xml, const char* name, int32_t dflt) {
   if (!xml_attribute(xml, name, &text) || text.empty()) {
     return dflt;
   }
-  char* end = nullptr;
-  const long parsed = std::strtol(text.c_str(), &end, 10);
-  return end != text.c_str() ? static_cast<int32_t>(parsed) : dflt;
+  return io::parse_xml_i32(text.c_str()).value_or(dflt);
 }
 
 bool xml_flag(const std::string& xml, const char* name, bool dflt) {

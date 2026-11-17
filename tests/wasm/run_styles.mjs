@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { StatusCode } from '../../packages/npm/common.mjs';
-import { expectFailure, readAll } from './smoke_support.mjs';
+import { expectFailure, readAll, readZipEntryText, zipNames, zipStore } from './smoke_support.mjs';
 
 const isNestedRangeValue = (value) => typeof value === 'number';
 const rgb = (value) => ({ kind: 1, argb: value, theme: 0, tint: 0, indexed: 0 });
@@ -379,6 +379,39 @@ export function registerStyles(Module, test) {
         assert.equal(loadedAlignmentAgain, alignment);
         const loadedProtectionAgain = loaded.addDxf(loadedProtection);
         assert.equal(loadedProtectionAgain, protection);
+      } finally {
+        loaded.delete();
+      }
+    } finally {
+      wb.delete();
+    }
+  });
+
+  // The value is read at a fixed width, so the same file reads the same on every target.
+  test('a dxf alignment number outside the 32-bit range or with trailing text reads as its default', () => {
+    const wb = Module.Workbook.createDefault();
+    try {
+      const dxfIndex = wb.addDxf({ alignment: { horizontal: 2, indent: 3, textRotation: 45 } });
+      wb.addCfRule(0, {
+        ranges: [{ firstRow: 0, firstCol: 0, lastRow: 0, lastCol: 0 }],
+        type: 1,
+        operator: 6,
+        formula1: '10',
+        dxfIndex,
+      });
+      const saved = wb.save();
+      const entries = zipNames(saved).map((name) => [name, readZipEntryText(saved, name)]);
+      const styles = entries.find(([name]) => name === 'xl/styles.xml');
+      assert.ok(styles[1].includes('indent="3"') && styles[1].includes('textRotation="45"'), styles[1]);
+      styles[1] = styles[1]
+        .replace('indent="3"', 'indent="2147483648"')
+        .replace('textRotation="45"', 'textRotation="45x"');
+      const loaded = Module.Workbook.load(zipStore(entries));
+      try {
+        const alignment = loaded.getDxf(0).alignment;
+        assert.equal(alignment.indent, 0);
+        assert.equal(alignment.textRotation, 0);
+        assert.equal(alignment.horizontal, 2);
       } finally {
         loaded.delete();
       }

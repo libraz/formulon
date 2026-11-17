@@ -152,12 +152,12 @@ std::optional<std::uint32_t> parse_xml_u32_attr_strict(const pugi::xml_attribute
 }
 
 std::int32_t parse_xml_i32_attr(const pugi::xml_attribute& attr, std::int32_t default_value) {
-  if (!attr) {
-    return default_value;
-  }
-  const char* raw = attr.value();
+  return attr ? parse_xml_i32(attr.value()).value_or(default_value) : default_value;
+}
+
+std::optional<std::int32_t> parse_xml_i32(const char* raw) {
   if (raw == nullptr || *raw == '\0') {
-    return default_value;
+    return std::nullopt;
   }
   errno = 0;
   char* end = nullptr;
@@ -165,7 +165,7 @@ std::int32_t parse_xml_i32_attr(const pugi::xml_attribute& attr, std::int32_t de
   if (end == raw || *end != '\0' || errno != 0 ||
       parsed > static_cast<long>(std::numeric_limits<std::int32_t>::max()) ||
       parsed < static_cast<long>(std::numeric_limits<std::int32_t>::min())) {
-    return default_value;
+    return std::nullopt;
   }
   return static_cast<std::int32_t>(parsed);
 }

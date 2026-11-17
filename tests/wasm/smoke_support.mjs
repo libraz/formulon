@@ -212,6 +212,21 @@ function appendEmptyZipEntry(bytes, name) {
   return new Uint8Array(out);
 }
 
+// Every entry name of the ZIP `bytes`, from its central directory.
+function zipNames(bytes) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let eocd = bytes.length - 22;
+  while (eocd >= 0 && view.getUint32(eocd, true) !== 0x06054b50) eocd -= 1;
+  const names = [];
+  let cursor = view.getUint32(eocd + 16, true);
+  for (let i = view.getUint16(eocd + 10, true); i > 0; i -= 1) {
+    const nameSize = view.getUint16(cursor + 28, true);
+    names.push(new TextDecoder().decode(bytes.slice(cursor + 46, cursor + 46 + nameSize)));
+    cursor += 46 + nameSize + view.getUint16(cursor + 30, true) + view.getUint16(cursor + 32, true);
+  }
+  return names;
+}
+
 function buildPivotWorkbookBytes() {
   const sheetXml =
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
@@ -329,5 +344,6 @@ export {
   readAll,
   readZipEntryText,
   VAL,
+  zipNames,
   zipStore,
 };

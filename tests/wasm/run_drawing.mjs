@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { deflateSync } from 'node:zlib';
 import { AnchorEditAs, AnchorKind, DrawingObjectKind, ImageFormat, StatusCode } from '../../packages/npm/common.mjs';
-import { expectFailure, readZipEntryText, zipStore } from './smoke_support.mjs';
+import { expectFailure, readZipEntryText, zipNames, zipStore } from './smoke_support.mjs';
 
 const EMU_PER_PX = 9525;
 
@@ -40,21 +40,6 @@ function makePng(width, height) {
       chunk('IEND', Buffer.alloc(0)),
     ]),
   );
-}
-
-// Every entry name of the ZIP `bytes`, from its central directory.
-function zipNames(bytes) {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  let eocd = bytes.length - 22;
-  while (eocd >= 0 && view.getUint32(eocd, true) !== 0x06054b50) eocd -= 1;
-  const names = [];
-  let cursor = view.getUint32(eocd + 16, true);
-  for (let i = view.getUint16(eocd + 10, true); i > 0; i -= 1) {
-    const nameSize = view.getUint16(cursor + 28, true);
-    names.push(new TextDecoder().decode(bytes.slice(cursor + 46, cursor + 46 + nameSize)));
-    cursor += 46 + nameSize + view.getUint16(cursor + 30, true) + view.getUint16(cursor + 32, true);
-  }
-  return names;
 }
 
 function withWorkbook(Module, fn) {
