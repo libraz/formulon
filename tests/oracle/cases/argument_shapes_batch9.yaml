@@ -270,3 +270,11 @@ cases:
   - id: dsum_arg2_indirect_range
     setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, D1: "k", D2: "a", F1: 2, G1: 2 }
     formula: "=DSUM(A1:B3,INDIRECT(\"F1:G1\"),D1:D2)"
+  - id: yearfrac_basis1_serial_zero
+    formula: "=YEARFRAC(0,DATE(2018,6,15),1)"
+  - id: yearfrac_basis1_serial_zero_first_year
+    formula: "=YEARFRAC(0,DATE(1900,12,31),1)"
+  - id: yearfrac_basis0_serial_zero_end_31
+    formula: "=YEARFRAC(0,DATE(2018,5,31),0)"
+  - id: yearfrac_basis4_serial_zero_end_31
+    formula: "=YEARFRAC(0,DATE(2018,5,31),4)"

@@ -6,7 +6,7 @@
     "excel_locale": "en-US",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-11-17T22:11:24Z"
+    "generated_at": "2026-11-17T22:40:34Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -1760,6 +1760,42 @@
       "expect": {
         "kind": "error",
         "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "yearfrac_basis1_serial_zero",
+      "formula": "=YEARFRAC(0,DATE(2018,6,15),1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 118.4578961899503
+      }
+    },
+    {
+      "id": "yearfrac_basis1_serial_zero_first_year",
+      "formula": "=YEARFRAC(0,DATE(1900,12,31),1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.0027397260273974
+      }
+    },
+    {
+      "id": "yearfrac_basis0_serial_zero_end_31",
+      "formula": "=YEARFRAC(0,DATE(2018,5,31),0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 118.41944444444445
+      }
+    },
+    {
+      "id": "yearfrac_basis4_serial_zero_end_31",
+      "formula": "=YEARFRAC(0,DATE(2018,5,31),4)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 118.41666666666667
       }
     }
   ]
