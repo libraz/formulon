@@ -9,6 +9,7 @@
 #include <string_view>
 #include <vector>
 
+#include "eval/array_alloc.h"
 #include "eval/declared_rect.h"
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
@@ -20,6 +21,8 @@
 #include "eval/reference/ref_value.h"
 #include "eval/tail_array.h"
 #include "eval/tree_walker.h"
+#include "eval/tree_walker/dispatch.h"
+#include "eval/tree_walker_lazy_table.h"
 #include "gtest/gtest.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
@@ -1150,6 +1153,140 @@ TEST_F(SelectedRefTest, MissingElseArmIsTheValueFalse) {
   ExpectSame(Eval("=SUM(IF(TRUE,D1:D3))"), Eval("=SUM(D1:D3)"), "selected reference skips text");
   ExpectError(Eval("=LOOKUP(1,IF(FALSE,A1:A3))"), ErrorCode::NA, "LOOKUP");
   ExpectSame(Eval("=INDEX(IF(FALSE,A1:A3),1)"), Eval("=FALSE"), "INDEX");
+}
+
+// ---------------------------------------------------------------------------
+// The lift: a grid in a kPerRef position or an array in a lift position runs
+// the call once per element
+// ---------------------------------------------------------------------------
+
+int g_lifted_calls = 0;
+
+// Its first argument as a reference.
+Value EchoRef(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
+  ++g_lifted_calls;
+  return eval_node_ref(call.as_call_arg(0), arena, registry, ctx);
+}
+
+// The top-left cell of its first argument plus its second.
+Value TopLeftPlus(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
+  ++g_lifted_calls;
+  const Value ref = eval_node_ref(call.as_call_arg(0), arena, registry, ctx);
+  const Value cell = deref_top_left(ref, arena, registry, ctx, ReadCount::kCounted);
+  const Value n = eval_node(call.as_call_arg(1), arena, registry, ctx);
+  if (!cell.is_number() || !n.is_number()) {
+    return Value::error(ErrorCode::Value);
+  }
+  return Value::number(cell.as_number() + n.as_number());
+}
+
+// The rows of its first argument read as a value.
+Value RowsOf(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
+  const Value v = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  return Value::number(v.is_array() ? v.as_array_rows() : 1.0);
+}
+
+class LiftTest : public DerefTest {
+ protected:
+  Value Run(const LazyEntry& entry, std::vector<Value> args) {
+    std::vector<const parser::AstNode*> nodes;
+    for (const Value& v : args) {
+      nodes.push_back(parser::make_literal(arena_, v));
+    }
+    const parser::AstNode* call =
+        parser::make_call(arena_, entry.name, nodes.data(), static_cast<std::uint32_t>(nodes.size()));
+    g_lifted_calls = 0;
+    return run_lazy_call(*call, entry, arena_, default_registry(), Ctx());
+  }
+
+  Value Array(std::uint32_t rows, std::uint32_t cols, std::vector<Value> cells) {
+    Value* out = nullptr;
+    ArrayValue* a = allocate_derived_array_value(rows, cols, arena_, out);
+    for (std::size_t i = 0; i < cells.size(); ++i) {
+      out[i] = cells[i];
+    }
+    return Value::array(a);
+  }
+};
+
+TEST_F(LiftTest, PerRefGridCollectsReferenceResultsIntoAGrid) {
+  const LazyEntry echo{"ECHO",          &EchoRef,         LazyResultShape::kArray, 1U, 1U, RefResult::kNone,
+                       ParamSet::kNone, ParamSet::kFirst, GridArg::kPerRef};
+  std::vector<RefArea> elements;
+  const Value out = Run(echo, {MixedGrid(&elements)});
+  ASSERT_TRUE(out.is_ref() && out.ref_form() == RefForm::kGrid) << out.debug_to_string();
+  const RefView view = out.as_ref();
+  ASSERT_EQ(view.rows, 2U);
+  ASSERT_EQ(view.cols, 2U);
+  for (std::size_t i = 0; i < 4U; ++i) {
+    EXPECT_EQ(view.areas[i].is_error_element(), elements[i].is_error_element()) << i;
+    EXPECT_EQ(view.areas[i].row_first, elements[i].row_first) << i;
+    EXPECT_EQ(view.areas[i].col_last, elements[i].col_last) << i;
+  }
+  // The error element takes no call.
+  EXPECT_EQ(g_lifted_calls, 3);
+}
+
+TEST_F(LiftTest, GridAndLiftArrayBroadcastTogether) {
+  const LazyEntry plus{"TLPLUS",
+                       &TopLeftPlus,
+                       LazyResultShape::kArray,
+                       2U,
+                       2U,
+                       RefResult::kNone,
+                       ParamSet::kNone,
+                       ParamSet::kFirst,
+                       GridArg::kPerRef,
+                       GridArg::kElementError,
+                       ParamSet::kNone,
+                       ScalarArg::kAccept,
+                       ParamSet::kSecond};
+  // A 2 x 1 grid (A1 = 11, B2 = 22) against a 1 x 2 array: 2 x 2.
+  const Value grid = Grid({Area(0, 0, 0, 0), Area(1, 1, 1, 1)}, 2, 1);
+  ExpectSame(Run(plus, {grid, Array(1, 2, {Value::number(1), Value::number(2)})}),
+             Array(2, 2, {Value::number(12), Value::number(13), Value::number(23), Value::number(24)}),
+             "2 x 1 grid by 1 x 2 array");
+  EXPECT_EQ(g_lifted_calls, 4);
+  // Mismatched lengths on one axis pad with #N/A.
+  ExpectSame(Run(plus, {grid, Array(3, 1, {Value::number(1), Value::number(2), Value::number(3)})}),
+             Array(3, 1, {Value::number(12), Value::number(24), Value::error(ErrorCode::NA)}), "padded");
+  // An array alone in the lift position lifts too.
+  ExpectSame(Run(plus, {AreaRef(0, 0, 0, 0), Array(1, 2, {Value::number(1), Value::number(2)})}),
+             Array(1, 2, {Value::number(12), Value::number(13)}), "lift array only");
+  // Neither: one call.
+  ExpectSame(Run(plus, {AreaRef(0, 0, 0, 0), Value::number(1)}), Value::number(12), "no lift");
+  EXPECT_EQ(g_lifted_calls, 1);
+}
+
+TEST_F(LiftTest, ClassedPositionReadsTheGridByItsClass) {
+  std::vector<RefArea> elements;
+  const LazyEntry per_value{"ROWSOF",        &RowsOf,          LazyResultShape::kArray, 1U, 1U, RefResult::kNone,
+                            ParamSet::kNone, ParamSet::kFirst, GridArg::kPerValue};
+  EXPECT_EQ(Run(per_value, {MixedGrid(&elements)}), Value::number(2));
+  const LazyEntry top_left{"ROWSOF",        &RowsOf,          LazyResultShape::kArray, 1U, 1U, RefResult::kNone,
+                           ParamSet::kNone, ParamSet::kFirst, GridArg::kTopLeft};
+  // Top-left reads give one column of the elements.
+  EXPECT_EQ(Run(top_left, {MixedGrid(&elements)}), Value::number(4));
+}
+
+TEST_F(LiftTest, FormDependentPositionsResolveAgainstTheFirstArgument) {
+  // Positions 3+ read per reference only when the first argument is a function number 1-19.
+  const LazyEntry form{"FORM",
+                       [](const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                          const EvalContext& ctx) { return EchoRef(call, arena, registry, ctx); },
+                       LazyResultShape::kArray,
+                       1U,
+                       kLazyVariadic,
+                       RefResult::kNone,
+                       ParamSet::kNone,
+                       ParamSet::kFourthOnByForm,
+                       GridArg::kPerRef};
+  const Value grid = Grid({Area(0, 0, 0, 0), Area(1, 1, 1, 1)}, 2, 1);
+  const Value per_ref = Run(form, {Value::number(9), Value::number(0), Value::number(0), grid});
+  EXPECT_TRUE(per_ref.is_array() || per_ref.is_ref()) << per_ref.debug_to_string();
+  EXPECT_EQ(g_lifted_calls, 2);
+  Run(form, {Value::number(20), Value::number(0), Value::number(0), grid});
+  EXPECT_EQ(g_lifted_calls, 1);
 }
 
 }  // namespace

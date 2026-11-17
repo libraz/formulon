@@ -48,6 +48,7 @@ namespace eval {
 class EvalContext;
 class FunctionRegistry;
 struct LambdaValue;
+struct LazyEntry;
 
 // Special-cased function-call dispatch. Routes `Call` AST nodes through
 // (in order):
@@ -64,6 +65,13 @@ struct LambdaValue;
 /// with them and Excel strips the tag on load, so the bare name is the only
 /// one the registry and every name-keyed table know.
 std::string_view strip_future_prefix(std::string_view name) noexcept;
+
+/// Runs the lazy call `node` under `entry`: its prepared arguments (the
+/// lone-value policy, grid classes, and the lift over a `kPerRef` grid or a
+/// lift-position array, which runs the call once per element and collects the
+/// results into a grid of references or an array), then `entry.impl`.
+Value run_lazy_call(const parser::AstNode& node, const LazyEntry& entry, Arena& arena, const FunctionRegistry& registry,
+                    const EvalContext& ctx);
 
 /// The result is a `TailArray` only for a scalar function applied element-wise
 /// over a whole column / row argument; every other call yields a plain value.

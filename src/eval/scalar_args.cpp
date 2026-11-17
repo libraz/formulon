@@ -84,52 +84,110 @@ Value eval_scalar_call_args(const parser::AstNode& call, std::uint32_t min_arity
   return Value::blank();
 }
 
-Value lift_over_array_args(const Value* args, std::uint32_t arity, Arena& arena, LiftedCellFn cell, const void* state) {
-  std::uint32_t rows = 1U;
-  std::uint32_t cols = 1U;
-  bool has_array = false;
+namespace {
+
+// The rows x cols of a lifting argument, or false for one that does not lift.
+bool lift_dims(const Value& arg, std::uint32_t* rows, std::uint32_t* cols) {
+  if (arg.is_array()) {
+    *rows = arg.as_array()->rows;
+    *cols = arg.as_array()->cols;
+    return true;
+  }
+  if (arg.is_ref() && arg.ref_form() == RefForm::kGrid) {
+    const RefView view = arg.as_ref();
+    *rows = view.rows;
+    *cols = view.cols;
+    return true;
+  }
+  return false;
+}
+
+// Element (r, c) of the lifting argument `arg` (rows x cols), a size-1 axis
+// stretching; false when it has no such element.
+bool lift_element(const Value& arg, std::uint32_t rows, std::uint32_t cols, std::uint32_t r, std::uint32_t c,
+                  Arena& arena, Value* out) {
+  const std::uint32_t rr = rows == 1U ? 0U : r;
+  const std::uint32_t cc = cols == 1U ? 0U : c;
+  if (rr >= rows || cc >= cols) {
+    return false;
+  }
+  const std::size_t idx = static_cast<std::size_t>(rr) * cols + cc;
+  if (arg.is_array()) {
+    *out = arg.as_array()->cells[idx];
+    return true;
+  }
+  const RefView view = arg.as_ref();
+  const RefArea& area = view.areas[idx];
+  if (area.is_error_element()) {
+    *out = Value::error(area.error_code());
+    return true;
+  }
+  const std::uint16_t book = view.element_books != nullptr ? view.element_books[idx] : view.book;
+  *out = make_ref(arena, RefForm::kArea, book, &area, 1U);
+  return true;
+}
+
+}  // namespace
+
+bool lift_extent(const Value* args, std::uint32_t arity, const AreaEnds* ends, std::uint32_t* rows,
+                 std::uint32_t* cols) {
+  bool lifts = false;
+  *rows = 1U;
+  *cols = 1U;
   for (std::uint32_t i = 0; i < arity; ++i) {
-    if (args[i].is_array()) {
-      const ArrayValue* a = args[i].as_array();
-      rows = std::max(rows, a->rows);
-      cols = std::max(cols, a->cols);
-      has_array = true;
+    std::uint32_t r = 0;
+    std::uint32_t c = 0;
+    if ((ends == nullptr || !ends[i].active) && lift_dims(args[i], &r, &c)) {
+      *rows = std::max(*rows, r);
+      *cols = std::max(*cols, c);
+      lifts = true;
     }
   }
-  if (!has_array) {
-    return cell(args, arity, state);
+  return lifts;
+}
+
+void lift_positions(const Value* args, std::uint32_t arity, const AreaEnds* ends, std::uint32_t rows,
+                    std::uint32_t cols, Arena& arena, LiftedCellFn cell, const void* state, Value* out) {
+  std::vector<Value> cell_args(arity, Value::blank());
+  std::size_t k = 0;
+  for (std::uint32_t r = 0; r < rows; ++r) {
+    for (std::uint32_t c = 0; c < cols; ++c, ++k) {
+      bool missing = false;
+      for (std::uint32_t i = 0; i < arity && !missing; ++i) {
+        std::uint32_t ar = 0;
+        std::uint32_t ac = 0;
+        if (ends != nullptr && ends[i].active) {
+          cell_args[i] = k == 0U ? Value::error(ErrorCode::Value) : (k == 1U ? ends[i].first : ends[i].last);
+        } else if (lift_dims(args[i], &ar, &ac)) {
+          missing = !lift_element(args[i], ar, ac, r, c, arena, &cell_args[i]);
+        } else {
+          cell_args[i] = args[i];
+        }
+      }
+      if (missing) {
+        out[k] = Value::error(ErrorCode::NA);
+        continue;
+      }
+      const auto error = std::find_if(cell_args.begin(), cell_args.end(), [](const Value& v) { return v.is_error(); });
+      out[k] = error != cell_args.end() ? *error : cell(cell_args.data(), arity, state);
+    }
+  }
+}
+
+Value lift_over_array_args(const Value* args, std::uint32_t arity, Arena& arena, LiftedCellFn cell, const void* state,
+                           const AreaEnds* ends) {
+  std::uint32_t rows = 1U;
+  std::uint32_t cols = 1U;
+  if (!lift_extent(args, arity, ends, &rows, &cols)) {
+    const bool masked = ends != nullptr && std::any_of(ends, ends + arity, [](const AreaEnds& e) { return e.active; });
+    return masked ? Value::error(ErrorCode::Value) : cell(args, arity, state);
   }
   Value* cells = nullptr;
   ArrayValue* out = allocate_derived_array_value(rows, cols, arena, cells);
   if (out == nullptr) {
     return Value::error(ErrorCode::Num);
   }
-  std::vector<Value> cell_args(arity, Value::blank());
-  std::size_t idx = 0;
-  for (std::uint32_t r = 0; r < rows; ++r) {
-    for (std::uint32_t c = 0; c < cols; ++c, ++idx) {
-      bool missing = false;
-      for (std::uint32_t i = 0; i < arity && !missing; ++i) {
-        if (!args[i].is_array()) {
-          cell_args[i] = args[i];
-          continue;
-        }
-        const ArrayValue* a = args[i].as_array();
-        const std::uint32_t rr = a->rows == 1U ? 0U : r;
-        const std::uint32_t cc = a->cols == 1U ? 0U : c;
-        missing = rr >= a->rows || cc >= a->cols;
-        if (!missing) {
-          cell_args[i] = a->cells[static_cast<std::size_t>(rr) * a->cols + cc];
-        }
-      }
-      if (missing) {
-        cells[idx] = Value::error(ErrorCode::NA);
-        continue;
-      }
-      const auto error = std::find_if(cell_args.begin(), cell_args.end(), [](const Value& v) { return v.is_error(); });
-      cells[idx] = error != cell_args.end() ? *error : cell(cell_args.data(), arity, state);
-    }
-  }
+  lift_positions(args, arity, ends, rows, cols, arena, cell, state, cells);
   return Value::array(out);
 }
 

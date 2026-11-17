@@ -121,9 +121,10 @@ const Value* first_error(const std::vector<Value>& cells);
 /// Evaluates `call`, a call returning a reference (`evaluates_to_reference`)
 /// or a literal holding one, and reads its cells into `*out` (a union or a 3-D span as one column).
 /// Returns false with the result in `*out_value` when it is no reference
-/// (a value, an array, an error), or a grid of references, read as its array.
+/// (a value, an array, an error), or a grid of references, read as its array
+/// by `def`'s `grid_arg` class (`kElementError` without `def`).
 bool read_reference_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                         const EvalContext& ctx, RangeResult* out, Value* out_value);
+                         const EvalContext& ctx, RangeResult* out, Value* out_value, const FunctionDef* def = nullptr);
 
 /// Writes the declared shape of `arg_node` when it is a static reference
 /// (after LET passthrough) and returns true; returns false, leaving the

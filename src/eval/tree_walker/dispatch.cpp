@@ -26,6 +26,7 @@
 #include "eval/tree_walker/dispatch.h"
 
 #include <algorithm>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -50,6 +51,7 @@
 #include "eval/range_args.h"
 #include "eval/range_resolvers.h"
 #include "eval/reference/deref.h"
+#include "eval/scalar_args.h"
 #include "eval/tail_array.h"
 #include "eval/tree_walker/broadcast.h"
 #include "eval/tree_walker/depth_guard.h"
@@ -146,43 +148,208 @@ bool is_written_reference(const parser::AstNode& node) {
   }
 }
 
-// `call` with each argument under the lone-value policy evaluated once and
-// replaced by its result, a lone value by the error the policy answers. A
-// constant, an omitted slot and a written reference stay in place. Null when
-// the arena cannot hold the new call.
+// A node whose value is fixed where it is written: re-reading it reads no cell.
+bool is_constant_node(const parser::AstNode& node) {
+  return node.kind() == parser::NodeKind::Literal || node.kind() == parser::NodeKind::ArrayLiteral ||
+         node.kind() == parser::NodeKind::ErrorLiteral;
+}
+
+// The class position `index` reads a grid with, `grid_params` resolved for the call.
+GridArg grid_class(const LazyEntry& entry, ParamSet grid_params, std::uint32_t index) {
+  return param_in_set(grid_params, index) ? entry.grid_sel : entry.grid_rest;
+}
+
+// `entry.grid_params` for one call: a form-dependent set selected when the
+// call's evaluated first argument `first` is a function number 1-19.
+ParamSet resolve_grid_params(const LazyEntry& entry, const Value& first) {
+  if (entry.grid_params != ParamSet::kFourthOnByForm) {
+    return entry.grid_params;
+  }
+  const double form = first.is_number() ? std::trunc(first.as_number()) : 0.0;
+  return form >= 1.0 && form <= 19.0 ? ParamSet::kFourthOn : ParamSet::kNone;
+}
+
+// Whether any argument of `entry` is evaluated before its impl runs.
+bool prepares_args(const LazyEntry& entry) {
+  return entry.scalar_params != ParamSet::kNone || entry.grid_params != ParamSet::kNone ||
+         entry.grid_rest != GridArg::kElementError || entry.lift_params != ParamSet::kNone;
+}
+
+// One synthesized call of a lift: the prepared arguments, a lifted position
+// taking its element.
+struct LiftCall {
+  const parser::AstNode& call;
+  const LazyEntry& entry;
+  const parser::AstNode* const* nodes;
+  const std::uint8_t* lifted;
+  Arena& arena;
+  const FunctionRegistry& registry;
+  const EvalContext& ctx;
+};
+
+Value run_lifted_call(const Value* elements, std::uint32_t arity, const void* state) {
+  const LiftCall& lift = *static_cast<const LiftCall*>(state);
+  std::vector<const parser::AstNode*> args(lift.nodes, lift.nodes + arity);
+  for (std::uint32_t i = 0; i < arity; ++i) {
+    if (lift.lifted[i] != 0U && (args[i] = parser::make_literal(lift.arena, elements[i])) == nullptr) {
+      return Value::error(ErrorCode::Num);
+    }
+  }
+  const parser::AstNode* call = parser::make_call(lift.arena, lift.call.as_call_name(), args.data(), arity);
+  if (call == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  return run_lazy_call(*call, lift.entry, lift.arena, lift.registry, lift.ctx);
+}
+
+// The per-position results of a lift as one value: a grid when any is a
+// reference (an error, or any other value, an error element), an array
+// otherwise (an array result keeps its top-left element).
+Value collect_lifted(const std::vector<Value>& results, std::uint32_t rows, std::uint32_t cols, Arena& arena) {
+  const bool references = std::any_of(results.begin(), results.end(), [](const Value& v) { return v.is_ref(); });
+  if (references) {
+    std::vector<RefArea> areas(results.size());
+    std::vector<std::uint16_t> books(results.size(), 0U);
+    bool other_book = false;
+    for (std::size_t i = 0; i < results.size(); ++i) {
+      const Value& v = results[i];
+      if (v.is_ref() && v.ref_form() == RefForm::kArea) {
+        const RefView view = v.as_ref();
+        areas[i] = view.areas[0];
+        books[i] = view.book;
+        other_book = other_book || view.book != 0U;
+      } else {
+        areas[i] = RefArea::error_element(v.is_error() ? v.as_error() : ErrorCode::Value);
+      }
+    }
+    return make_ref(arena, RefForm::kGrid, 0U, areas.data(), static_cast<std::uint32_t>(areas.size()), rows, cols,
+                    other_book ? books.data() : nullptr);
+  }
+  Value* cells = nullptr;
+  ArrayValue* out = allocate_derived_array_value(rows, cols, arena, cells);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  for (std::size_t i = 0; i < results.size(); ++i) {
+    const Value& v = results[i];
+    cells[i] = v.is_array() ? v.as_array()->cells[0] : v;
+  }
+  return Value::array(out);
+}
+
+// Evaluates the arguments of a lazy call that `entry` reads before its impl:
+// a lone value under the lone-value policy is replaced by the error the
+// policy answers; a grid in a classed position is read by its class, and one
+// in a `kPerRef` position, like an array in a lift position, lifts the call.
+// A constant, an omitted slot and a written reference stay in place. Returns
+// the call to run, or null with `*result` holding the lifted call's value (or
+// the error of an arena that cannot hold the new call).
 [[gnu::noinline]] const parser::AstNode* prepare_lazy_args(const parser::AstNode& call, const LazyEntry& entry,
                                                            Arena& arena, const FunctionRegistry& registry,
-                                                           const EvalContext& ctx) {
+                                                           const EvalContext& ctx, Value* result) {
   const std::uint32_t arity = call.as_call_arity();
-  std::vector<const parser::AstNode*> args;
+  std::vector<const parser::AstNode*> args(arity);
   for (std::uint32_t i = 0; i < arity; ++i) {
-    const parser::AstNode& arg = call.as_call_arg(i);
-    if (!param_in_set(entry.scalar_params, i) || is_omitted_arg(arg) || is_written_reference(arg) ||
+    args[i] = &call.as_call_arg(i);
+  }
+  std::vector<Value> lifting(arity, Value::blank());
+  std::vector<std::uint8_t> lifted(arity, 0U);
+  bool changed = false;
+  bool lifts = false;
+  auto replace = [&](std::uint32_t i, const Value& v) {
+    args[i] = parser::make_literal(arena, v);
+    changed = true;
+    return args[i] != nullptr;
+  };
+  ParamSet grid_params = entry.grid_params;
+  if (grid_params == ParamSet::kFourthOnByForm && arity > 0U) {
+    const parser::AstNode& first = call.as_call_arg(0);
+    const Value v = is_constant_node(first) ? eval_node(first, arena, registry, ctx)
+                                            : densify(eval_node_shaped(first, arena, registry, ctx), arena);
+    grid_params = resolve_grid_params(entry, v);
+    if (!is_constant_node(first) && !replace(0U, v)) {
+      *result = Value::error(ErrorCode::Num);
+      return nullptr;
+    }
+  }
+  for (std::uint32_t i = 0; i < arity; ++i) {
+    const parser::AstNode& arg = *args[i];
+    if (is_omitted_arg(arg)) {
+      continue;
+    }
+    if (param_in_set(entry.lift_params, i)) {
+      const Value v = densify(eval_node_shaped(arg, arena, registry, ctx), arena);
+      if (v.is_array()) {
+        lifting[i] = v;
+        lifted[i] = 1U;
+        lifts = true;
+      } else if (!is_constant_node(arg) && !replace(i, v)) {
+        break;
+      }
+      continue;
+    }
+    const GridArg cls = grid_class(entry, grid_params, i);
+    const bool scalar = param_in_set(entry.scalar_params, i);
+    if ((!scalar && cls == GridArg::kElementError) || is_written_reference(arg) ||
         arg.kind() == parser::NodeKind::ArrayLiteral || arg.kind() == parser::NodeKind::ErrorLiteral) {
       continue;
     }
     const bool constant = arg.kind() == parser::NodeKind::Literal;
     const Value v = constant ? arg.as_literal() : eval_node_ref(arg, arena, registry, ctx);
-    const std::optional<ErrorCode> rejected = lone_value_error(entry.scalar_error, v);
+    if (v.is_ref() && v.ref_form() == RefForm::kGrid && cls != GridArg::kElementError) {
+      if (cls == GridArg::kPerRef) {
+        lifting[i] = v;
+        lifted[i] = 1U;
+        lifts = true;
+        continue;
+      }
+      const bool kept = cls == GridArg::kKeepRef || cls == GridArg::kReshape || cls == GridArg::kLambdaElement;
+      if (!replace(i, kept ? v : materialise_grid(v, cls, nullptr, arena, registry, ctx, ReadCount::kCounted))) {
+        break;
+      }
+      continue;
+    }
+    const std::optional<ErrorCode> rejected = scalar ? lone_value_error(entry.scalar_error, v) : std::nullopt;
     if (constant && !rejected) {
       continue;
     }
-    const parser::AstNode* replaced = parser::make_literal(arena, rejected ? Value::error(*rejected) : v);
-    if (replaced == nullptr) {
-      return nullptr;
+    if (!replace(i, rejected ? Value::error(*rejected) : v)) {
+      break;
     }
-    if (args.empty()) {
-      args.reserve(arity);
-      for (std::uint32_t j = 0; j < arity; ++j) {
-        args.push_back(&call.as_call_arg(j));
+  }
+  if (std::find(args.begin(), args.end(), nullptr) != args.end()) {
+    *result = Value::error(ErrorCode::Num);
+    return nullptr;
+  }
+  if (lifts) {
+    // Every other argument is read once, not once per element.
+    for (std::uint32_t i = 0; i < arity; ++i) {
+      const parser::AstNode& arg = *args[i];
+      if (lifted[i] != 0U || is_constant_node(arg) || is_omitted_arg(arg)) {
+        continue;
+      }
+      if (!replace(i, eval_node_ref(arg, arena, registry, ctx))) {
+        *result = Value::error(ErrorCode::Num);
+        return nullptr;
       }
     }
-    args[i] = replaced;
+    std::uint32_t rows = 1U;
+    std::uint32_t cols = 1U;
+    lift_extent(lifting.data(), arity, nullptr, &rows, &cols);
+    const LiftCall lift{call, entry, args.data(), lifted.data(), arena, registry, ctx};
+    std::vector<Value> results(static_cast<std::size_t>(rows) * cols, Value::blank());
+    lift_positions(lifting.data(), arity, nullptr, rows, cols, arena, &run_lifted_call, &lift, results.data());
+    *result = collect_lifted(results, rows, cols, arena);
+    return nullptr;
   }
-  if (args.empty()) {
+  if (!changed) {
     return &call;
   }
-  return parser::make_call(arena, call.as_call_name(), args.data(), arity);
+  const parser::AstNode* prepared = parser::make_call(arena, call.as_call_name(), args.data(), arity);
+  if (prepared == nullptr) {
+    *result = Value::error(ErrorCode::Num);
+  }
+  return prepared;
 }
 
 // The body of `dispatch_call`. A scalar function applied over a whole column /
@@ -238,20 +405,7 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
   }
 
   if (const LazyEntry* entry = find_lazy_entry(name); entry != nullptr) {
-    const parser::AstNode* call = &node;
-    if (entry->scalar_params != ParamSet::kNone) {
-      call = prepare_lazy_args(node, *entry, arena, registry, ctx);
-      if (call == nullptr) {
-        return Value::error(ErrorCode::Num);
-      }
-    }
-    // Lazy callees read their arguments as rectangles, so whole-axis
-    // references among them are walked to one shared length and agree on
-    // shape however far each is populated. Eager callees flatten ranges and
-    // have no shape to agree on.
-    WholeAxisScope scope;
-    scope.call = call;
-    return entry->impl(*call, arena, registry, ctx.with_whole_axis_scope(&scope));
+    return run_lazy_call(node, *entry, arena, registry, ctx);
   }
 
   const FunctionDef* def = lookup_on_current_host(registry, name);
@@ -507,6 +661,25 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
 }
 
 }  // namespace
+
+Value run_lazy_call(const parser::AstNode& node, const LazyEntry& entry, Arena& arena, const FunctionRegistry& registry,
+                    const EvalContext& ctx) {
+  const parser::AstNode* call = &node;
+  if (prepares_args(entry)) {
+    Value prepared = Value::blank();
+    call = prepare_lazy_args(node, entry, arena, registry, ctx, &prepared);
+    if (call == nullptr) {
+      return prepared;
+    }
+  }
+  // Lazy callees read their arguments as rectangles, so whole-axis
+  // references among them are walked to one shared length and agree on
+  // shape however far each is populated. Eager callees flatten ranges and
+  // have no shape to agree on.
+  WholeAxisScope scope;
+  scope.call = call;
+  return entry.impl(*call, arena, registry, ctx.with_whole_axis_scope(&scope));
+}
 
 Shaped dispatch_call(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx) {

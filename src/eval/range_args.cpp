@@ -342,14 +342,17 @@ bool resolve_range_arg_into(const parser::AstNode& raw_arg, Arena& arena, const 
 }  // namespace
 
 bool read_reference_call(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                         const EvalContext& ctx, RangeResult* out, Value* out_value) {
+                         const EvalContext& ctx, RangeResult* out, Value* out_value, const FunctionDef* def) {
   const Value result = eval_node_ref(call, arena, registry, ctx);
   if (!result.is_ref()) {
     *out_value = result;
     return false;
   }
   if (result.ref_form() == RefForm::kGrid) {
-    *out_value = deref_shaped(result, arena, registry, ctx, ReadCount::kCounted).value;
+    const GridArg cls = def != nullptr ? def->grid_arg : GridArg::kElementError;
+    const Value read = materialise_grid(result, cls, def, arena, registry, ctx, ReadCount::kCounted);
+    // A class the dispatcher handles itself leaves the grid; an eager impl reads it element by element as a value.
+    *out_value = read.is_ref() ? deref_shaped(result, arena, registry, ctx, ReadCount::kCounted).value : read;
     return false;
   }
   auto read = deref_cells(result, /*allow_span3d=*/true, arena, registry, ctx, ReadCount::kCounted);

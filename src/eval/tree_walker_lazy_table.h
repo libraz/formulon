@@ -63,8 +63,11 @@ enum class ParamSet : std::uint8_t {
   kFirstAndThird,   ///< 0, 2
   kAllButFirst,     ///< 1, 2, ...
   kEven,            ///< 0, 2, 4, ...
+  kEvenFromThird,   ///< 2, 4, 6, ...
+  kOdd,             ///< 1, 3, 5, ...
   kFirstAndOdd,     ///< 0, 1, 3, 5, ...
   kFourthOn,        ///< 3, 4, ...
+  kFourthOnByForm,  ///< 3, 4, ... when the first argument is a function number 1-19, else none (resolved per call)
   kAll,             ///< every position
 };
 
@@ -85,9 +88,14 @@ constexpr bool param_in_set(ParamSet set, std::uint32_t index) noexcept {
       return index >= 1U;
     case ParamSet::kEven:
       return index % 2U == 0U;
+    case ParamSet::kEvenFromThird:
+      return index >= 2U && index % 2U == 0U;
+    case ParamSet::kOdd:
+      return index % 2U == 1U;
     case ParamSet::kFirstAndOdd:
       return index == 0U || index % 2U == 1U;
     case ParamSet::kFourthOn:
+    case ParamSet::kFourthOnByForm:
       return index >= 3U;
     case ParamSet::kAll:
       return true;

@@ -59,12 +59,36 @@ Value eval_scalar_call_args(const parser::AstNode& call, std::uint32_t min_arity
 /// One scalar evaluation of a lifted call over `arity` per-element arguments.
 using LiftedCellFn = Value (*)(const Value* args, std::uint32_t arity, const void* state);
 
-/// Applies a scalar function element by element when an argument is an array.
-/// The result spans the widest extent on each axis and a size-1 axis stretches;
-/// a position some argument cannot supply is #N/A, and a position whose
-/// arguments hold an error takes the left-most one. Without an array argument
-/// `cell` runs once on `args`.
-Value lift_over_array_args(const Value* args, std::uint32_t arity, Arena& arena, LiftedCellFn cell, const void* state);
+/// A multi-cell reference in a scalar parameter that does not lift: it takes no
+/// part in the result's extent, and at result position k (row-major) it gives
+/// #VALUE! (k = 0), its first cell (k = 1) or its last cell (k >= 2).
+struct AreaEnds {
+  bool active = false;
+  Value first;
+  Value last;
+};
+
+/// The extent of a lift over `args`: the widest array or grid argument on each
+/// axis, an argument with an active `ends` entry left out (`ends` may be null).
+/// False when no argument lifts.
+bool lift_extent(const Value* args, std::uint32_t arity, const AreaEnds* ends, std::uint32_t* rows,
+                 std::uint32_t* cols);
+
+/// Runs `cell` at each position of a `rows` x `cols` lift over `args`, writing
+/// row-major into `out`. An array or grid argument gives its element there (a
+/// size-1 axis stretches; a grid element is a one-area `Ref`, an error element
+/// its error), an active `ends` entry its `AreaEnds` value, any other argument
+/// itself. A position some argument cannot supply is #N/A, and a position whose
+/// arguments hold an error takes the left-most one without running `cell`.
+void lift_positions(const Value* args, std::uint32_t arity, const AreaEnds* ends, std::uint32_t rows,
+                    std::uint32_t cols, Arena& arena, LiftedCellFn cell, const void* state, Value* out);
+
+/// Applies a scalar function element by element when an argument is an array
+/// (`lift_extent`, `lift_positions`), collecting the results into an array.
+/// Without a lifting argument `cell` runs once on `args`, unless an `ends`
+/// entry is active, which makes the call #VALUE!.
+Value lift_over_array_args(const Value* args, std::uint32_t arity, Arena& arena, LiftedCellFn cell, const void* state,
+                           const AreaEnds* ends = nullptr);
 
 /// `lift_over_array_args` with a const callable `cell(const Value*, std::uint32_t)`.
 template <typename Cell>
