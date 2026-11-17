@@ -15075,7 +15075,8 @@ typedef struct {
   /** Vertical flip, as `flip_h`. Excel's Flip command toggles this flag and sets the rotation to (360 - r) mod 360. */
   int32_t flip_v; /* fm_tristate_t */
   /** The adjust values to write, each a guide of the preset; `NULL` with a zero count writes none. An empty, malformed
-   *  or repeated name is `FM_STATUS_INVALID_ARGUMENT` (2), and more than 64 entries
+   *  or repeated name, or one the preset does not define (any name on a preset without adjust guides), is
+   *  `FM_STATUS_INVALID_ARGUMENT` (2), and more than 64 entries
    *  `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005). */
   const fm_shape_adjust_t* adjust_values;
   /** The number of entries of `adjust_values`. */
@@ -15134,7 +15135,8 @@ typedef struct {
   int32_t flip_v;
   /** Adjust-value edits by guide name, applied after a `preset_geometry` change (which drops every guide); a guide no
    *  entry names is kept. `NULL` with a zero count changes nothing. An entry whose `value_op` is `KEEP` or outside
-   *  0..2, an empty, malformed or repeated name, or an object without preset geometry is
+   *  0..2, an empty, malformed or repeated name, a name the shape's preset does not define, or an object without
+   *  preset geometry is
    *  `FM_STATUS_INVALID_ARGUMENT` (2); more than 64 entries is `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005). */
   const fm_shape_adjust_patch_t* adjust_values;
   /** The number of entries of `adjust_values`. */
@@ -15184,7 +15186,8 @@ FM_API fm_status_t fm_sheet_get_shape(const fm_workbook_t* wb, size_t sheet_inde
  *         `other` set on `fill` or `line`, an Indexed or Auto colour, a colour given with
  *         `none`, a transparency without a solid colour, a line width, dash or line end out of
  *         range, text with control characters, a `text_vert` on a connector or group, or an
- *         adjust value with a bad or repeated name or on an object without preset geometry;
+ *         adjust value with a bad or repeated name, a name the preset does not define, or on an object
+ *         without preset geometry;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a string is not valid UTF-8;
  *         `FM_STATUS_SECURITY_RESOURCE_LIMIT` (6005) for more than 64 adjust values or colour
  *         transforms;

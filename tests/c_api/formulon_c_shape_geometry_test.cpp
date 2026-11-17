@@ -230,7 +230,9 @@ TEST(FormulonCApiShapeGeometry, AdjustValueRefusals) {
   const fm_shape_adjust_patch_t empty[] = {{"", FM_PATCH_OP_SET, 1}};
   EXPECT_EQ(patch_with(empty, 1), FM_STATUS_INVALID_ARGUMENT);
   const fm_shape_adjust_patch_t repeated[] = {{"adj1", FM_PATCH_OP_SET, 1}, {"adj1", FM_PATCH_OP_CLEAR, 0}};
+  const fm_shape_adjust_patch_t undefined[] = {{"adj3", FM_PATCH_OP_SET, 1}};
   EXPECT_EQ(patch_with(repeated, 2), FM_STATUS_INVALID_ARGUMENT);
+  EXPECT_EQ(patch_with(undefined, 1), FM_STATUS_INVALID_ARGUMENT);
   const fm_shape_adjust_patch_t bad_utf8[] = {{"adj\xC3", FM_PATCH_OP_SET, 1}};
   EXPECT_EQ(patch_with(bad_utf8, 1), FM_STATUS_BINDING_UTF8ENCODING_ERROR);
   EXPECT_EQ(patch_with(nullptr, 1), FM_STATUS_INVALID_ARGUMENT);

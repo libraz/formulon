@@ -1086,7 +1086,8 @@ class Shape(_Snapshotable):
         rotation to (360 - r) mod 360; a flip or rotation patched on a connector unglues both of its ends.
         ``adjust_values`` merges by guide name after a ``preset_geometry`` change, which drops every guide: a
         value sets the guide, ``None`` removes it so the preset's default applies, and a guide no entry names
-        is kept. ``text_vert`` is the text direction and ``None`` removes it. Every argument is checked before
+        is kept; a name the shape's preset does not define is an ``InvalidArgumentError``. ``text_vert`` is the
+        text direction and ``None`` removes it. Every argument is checked before
         anything changes, and the call changes everything or nothing.
 
         Raises:

@@ -5491,7 +5491,8 @@ export interface ShapeInput extends DrawingPlacementInput {
    *  Excel's Flip command toggles this flag and sets the rotation to (360 - r) mod 360. */
   flipV?: boolean;
   /** Adjust values of the preset geometry by guide name, in the preset's raw DrawingML units; omitted writes none, and
-   *  `null` is a `TypeError`. A malformed name, or a guide on a shape without preset geometry, fails with
+   *  `null` is a `TypeError`. A malformed name, a name the preset does not define (any name on a preset without
+   *  adjust guides), or a guide on a shape without preset geometry, fails with
    *  `StatusCode.InvalidArgument`; more than 64 guides fails with `StatusCode.SecurityResourceLimit`. */
   adjustValues?: Record<string, number>;
   /** The text direction; omitted states none, `null` is a `TypeError`, and a connector or group fails with
@@ -5527,8 +5528,9 @@ export interface ShapePatch {
    *  Excel's Flip command toggles this flag and sets the rotation to (360 - r) mod 360. */
   flipV?: boolean;
   /** Adjust values by guide name, applied after a `presetGeometry` change (which drops every guide): a number sets the
-   *  guide, `null` removes it so the preset's default applies, and a guide not named is kept. A malformed name, or an
-   *  object without preset geometry, fails with `StatusCode.InvalidArgument`; more than 64 entries fails with
+   *  guide, `null` removes it so the preset's default applies, and a guide not named is kept. A malformed name, a name
+   *  the shape's preset does not define, or an object without preset geometry, fails with
+   *  `StatusCode.InvalidArgument`; more than 64 entries fails with
    *  `StatusCode.SecurityResourceLimit`. */
   adjustValues?: Record<string, number | null>;
   /** The new text direction; `null` removes it. Applies to a shape only. */

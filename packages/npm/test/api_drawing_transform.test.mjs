@@ -221,10 +221,10 @@ describe('shape adjust values, text direction and connections', () => {
       const shape = callout(ws, { adjustValues: { adj1: 1000, adj2: 2000 } });
       shape.update({ adjustValues: { adj1: 5000, adj2: null } });
       assert.deepEqual(shape.getProperties().adjustValues, { adj1: 5000 });
-      shape.update({ adjustValues: { adj3: 16667 } });
-      assert.deepEqual(shape.getProperties().adjustValues, { adj1: 5000, adj3: 16667 });
+      shape.update({ adjustValues: { adj2: 16667 } });
+      assert.deepEqual(shape.getProperties().adjustValues, { adj1: 5000, adj2: 16667 });
       shape.update({ adjustValues: {} });
-      assert.deepEqual(shape.getProperties().adjustValues, { adj1: 5000, adj3: 16667 });
+      assert.deepEqual(shape.getProperties().adjustValues, { adj1: 5000, adj2: 16667 });
     });
   });
 
@@ -252,6 +252,9 @@ describe('shape adjust values, text direction and connections', () => {
       expectTypeError(() => callout(ws, { adjustValues: { adj1: 'wide' } }));
       expectCode(() => callout(ws, { adjustValues: { '': 1 } }), f.StatusCode.InvalidArgument);
       expectCode(() => shape.update({ adjustValues: { '1adj': 1 } }), f.StatusCode.InvalidArgument);
+      // A name the preset does not define, and any name on a preset without adjust guides.
+      expectCode(() => shape.update({ adjustValues: { adj3: 1 } }), f.StatusCode.InvalidArgument);
+      expectCode(() => ws.addShape({ anchor: box, adjustValues: { adj: 1 } }), f.StatusCode.InvalidArgument);
       const many = Object.fromEntries(Array.from({ length: 65 }, (_, i) => [`g${i}`, i]));
       expectCode(() => callout(ws, { adjustValues: many }), f.StatusCode.SecurityResourceLimit);
       expectCode(() => shape.update({ adjustValues: many }), f.StatusCode.SecurityResourceLimit);

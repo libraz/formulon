@@ -256,6 +256,11 @@ class ShapeAdjustAndTextDirectionTests(unittest.TestCase):
                 shape.update(adjust_values={"": 1})
             with self.assertRaises(InvalidArgumentError):
                 shape.update(adjust_values={"1adj": None})
+            # A name the preset does not define, and any name on a preset without adjust guides.
+            with self.assertRaises(InvalidArgumentError):
+                shape.update(adjust_values={"adj1": 1})
+            with self.assertRaises(InvalidArgumentError):
+                wb.sheet(0).add_shape(ShapeInput(**_box(preset_geometry="rect", adjust_values={"adj": 1})))
             many = {f"adj{i}": i for i in range(65)}
             with self.assertRaises(SecurityError):
                 wb.sheet(0).add_shape(ShapeInput(**_box(adjust_values=many)))

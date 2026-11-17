@@ -2855,7 +2855,8 @@ class ShapeInput(DrawingPlacementInput):
     #: Excel's Flip command toggles this flag and sets the rotation to (360 - r) mod 360.
     flip_v: Optional[bool] = None
     #: Adjust values by guide name, each a guide of the preset, in its raw DrawingML units; ``None`` writes none. An
-    #: empty, malformed or repeated name is an ``InvalidArgumentError``, and more than 64 entries a
+    #: empty, malformed or repeated name, or one the preset does not define (any name on a preset without adjust
+    #: guides), is an ``InvalidArgumentError``, and more than 64 entries a
     #: ``SecurityError``.
     adjust_values: Optional[Mapping[str, int]] = None
     #: The text direction; ``None`` states none. A shape only.

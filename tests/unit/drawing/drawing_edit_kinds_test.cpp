@@ -1153,7 +1153,7 @@ TEST(ShapeAdjustValues, PatchSetsRemovesAndKeepsByName) {
   std::string drawing = std::string(kWsDrOpen) + Anchor(0, Sp(2, "Callout 1", "", "")) + "</xdr:wsDr>";
   const std::string rect = "<a:prstGeom prst=\"rect\"><a:avLst/></a:prstGeom>";
   drawing.replace(drawing.find(rect), rect.size(),
-                  "<a:prstGeom prst=\"wedgeRectCallout\"><a:avLst><a:gd name=\"adj1\" fmla=\"val -20833\"/>"
+                  "<a:prstGeom prst=\"wedgeRoundRectCallout\"><a:avLst><a:gd name=\"adj1\" fmla=\"val -20833\"/>"
                   "<a:gd name=\"adj2\" fmla=\"*/ 1 2 3\"/></a:avLst></a:prstGeom>");
   Workbook wb = Workbook::create();
   ASSERT_TRUE(static_cast<bool>(wb.add_passthrough_part(PassthroughPart(kDrawingPath, kCtDrawing, ToBytes(drawing)))));
@@ -1169,7 +1169,7 @@ TEST(ShapeAdjustValues, PatchSetsRemovesAndKeepsByName) {
             "<a:avLst><a:gd name=\"adj1\" fmla=\"val -20833\"/><a:gd name=\"adj2\" fmla=\"val 62500\"/>"
             "<a:gd name=\"adj3\" fmla=\"val 16667\"/></a:avLst>");
 
-  patch.adjust_values = {Adjust("adj1", std::nullopt), Adjust("adj9", std::nullopt)};
+  patch.adjust_values = {Adjust("adj1", std::nullopt)};
   ASSERT_TRUE(static_cast<bool>(update_shape(wb, 0, 2, patch)));
   EXPECT_EQ(ShapeWithId(wb, 2).adjust_values, std::vector<ShapeAdjust>({{"adj2", 62500}, {"adj3", 16667}}));
 
@@ -1192,6 +1192,9 @@ TEST(ShapeAdjustValues, BadEditsAreRefusedWhole) {
       {Adjust("adj-1", 1)},
       {Adjust(std::string(33, 'a'), 1)},
       {Adjust("adj", 1), Adjust("adj", std::nullopt)},
+      // Excel refuses to open a file whose avLst names a guide the preset does not define.
+      {Adjust("adj1", 1)},
+      {Adjust("adj", 1), Adjust("adj2", std::nullopt)},
   };
   for (const std::vector<ShapeAdjustPatch>& edits : bad) {
     ShapeSpec patch;
@@ -1200,6 +1203,15 @@ TEST(ShapeAdjustValues, BadEditsAreRefusedWhole) {
     patch.adjust_values = edits;
     EXPECT_EQ(Code(update_shape(wb, 0, id.value(), patch)), FormulonErrorCode::kInvalidArgument);
   }
+  // A preset without adjust guides takes none, on insert or update.
+  ShapeSpec plain = OneCellShape("rect");
+  plain.adjust_values = {Adjust("adj", 1)};
+  EXPECT_EQ(Code(insert_shape(wb, 0, plain)), FormulonErrorCode::kInvalidArgument);
+  ShapeSpec to_rect;
+  to_rect.fields = shape_field::kPrst;
+  to_rect.prst = "rect";
+  to_rect.adjust_values = {Adjust("adj", 1)};
+  EXPECT_EQ(Code(update_shape(wb, 0, id.value(), to_rect)), FormulonErrorCode::kInvalidArgument);
   ShapeSpec many;
   many.adjust_values.assign(kMaxAdjustPatches + 1, Adjust("adj", 1));
   EXPECT_EQ(Code(update_shape(wb, 0, id.value(), many)), FormulonErrorCode::kSecurityResourceLimit);

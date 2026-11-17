@@ -484,8 +484,23 @@ Expected<void, Error> apply_fields(pugi::xml_node anchor, pugi::xml_node content
     return invalid("preset_geometry must be a DrawingML shape type on a shape or connector");
   }
   RETURN_IF_ERROR(check_adjust_values(spec.adjust_values));
-  if (!spec.adjust_values.empty() && !child_local(props, "prstGeom") && (f & shape_field::kPrst) == 0U) {
-    return invalid("adjust_values apply only to preset geometry");
+  if (!spec.adjust_values.empty()) {
+    const pugi::xml_node geom = child_local(props, "prstGeom");
+    if (!geom && (f & shape_field::kPrst) == 0U) {
+      return invalid("adjust_values apply only to preset geometry");
+    }
+    // Excel refuses to open a file whose avLst names a guide its preset does not define.
+    const std::string_view prst =
+        (f & shape_field::kPrst) != 0U ? std::string_view(spec.prst) : std::string_view(geom.attribute("prst").value());
+    const std::optional<std::size_t> preset = preset_geometry::index_of(prst);
+    const std::vector<preset_geometry::AdjustGuide> guides =
+        preset ? preset_geometry::adjust_guides(*preset) : std::vector<preset_geometry::AdjustGuide>{};
+    for (const ShapeAdjustPatch& patch : spec.adjust_values) {
+      if (std::none_of(guides.begin(), guides.end(),
+                       [&patch](const preset_geometry::AdjustGuide& g) { return g.name == patch.name; })) {
+        return invalid("adjust_values names a guide preset_geometry does not define");
+      }
+    }
   }
   if ((f & (shape_field::kText | shape_field::kTextBox)) != 0U && kind != "sp") {
     return invalid("text and text_box apply only to a shape");
