@@ -1005,6 +1005,45 @@ TEST(ChartXml, ChartAndPlotAreaPaintReadAsStated) {
   EXPECT_TRUE(cx.chart_area.fill.other);
 }
 
+TEST(ChartXml, LineEndsAndDashPresetsReadAsStated) {
+  const Workbook wb = Workbook::create();
+  const auto plot_line = [&wb](const std::string& ln) {
+    return Read(
+               "<c:chartSpace xmlns:c=\"http://schemas.openxmlformats.org/drawingml/2006/chart\" "
+               "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\"><c:chart><c:plotArea><c:layout/>"
+               "<c:spPr><a:ln>" +
+                   ln + "</a:ln></c:spPr></c:plotArea></c:chart></c:chartSpace>",
+               wb)
+        .plot_area.line;
+  };
+  const ChartLine both = plot_line(
+      "<a:prstDash val=\"lgDashDotDot\"/><a:headEnd type=\"oval\" w=\"sm\" len=\"lg\"/><a:tailEnd type=\"triangle\"/>");
+  EXPECT_EQ(both.dash, std::optional<ChartLineDash>(ChartLineDash::kLgDashDotDot));
+  ASSERT_TRUE(both.head_end.has_value());
+  EXPECT_EQ(both.head_end->type, ChartLineEndType::kOval);
+  EXPECT_EQ(both.head_end->width, std::optional<ChartLineEndSize>(ChartLineEndSize::kSmall));
+  EXPECT_EQ(both.head_end->length, std::optional<ChartLineEndSize>(ChartLineEndSize::kLarge));
+  ASSERT_TRUE(both.tail_end.has_value());
+  EXPECT_EQ(both.tail_end->type, ChartLineEndType::kTriangle);
+  EXPECT_FALSE(both.tail_end->width.has_value());
+  EXPECT_FALSE(both.tail_end->length.has_value());
+
+  // An end with no type is the schema default none; an unknown token reads as no end.
+  const ChartLine odd = plot_line(
+      "<a:custDash><a:ds d=\"100000\" sp=\"50000\"/></a:custDash><a:headEnd/>"
+      "<a:tailEnd type=\"hook\"/>");
+  EXPECT_EQ(odd.dash, std::optional<ChartLineDash>(ChartLineDash::kOther));
+  EXPECT_EQ(odd.dash_name, "");
+  EXPECT_EQ(odd.head_end, std::optional<ChartLineEnd>(ChartLineEnd{}));
+  EXPECT_FALSE(odd.tail_end.has_value());
+  EXPECT_FALSE(plot_line("<a:tailEnd type=\"arrow\" w=\"huge\"/>").tail_end.has_value());
+
+  const ChartLine plain = plot_line("<a:solidFill><a:srgbClr val=\"000000\"/></a:solidFill>");
+  EXPECT_FALSE(plain.dash.has_value());
+  EXPECT_FALSE(plain.head_end.has_value());
+  EXPECT_FALSE(plain.tail_end.has_value());
+}
+
 TEST(ChartXml, ChartLevelFlagsTitleLegendAndStyle) {
   const Workbook wb = Workbook::create();
   const std::string space =
@@ -1127,7 +1166,7 @@ TEST(ChartXml, SeriesFormatForms) {
   ASSERT_TRUE(s0.line.color.has_value());
   EXPECT_EQ(s0.line.color->rgb, 0xFF112233U);
   EXPECT_EQ(s0.line.dash_name, "sysDot");
-  EXPECT_EQ(s0.line.dash, ChartLineDash::kOther);
+  EXPECT_EQ(s0.line.dash, ChartLineDash::kSysDot);
   ASSERT_TRUE(s0.marker.has_value());
   EXPECT_EQ(s0.marker->symbol, ChartMarkerSymbol::kStar);
   EXPECT_EQ(s0.marker->symbol_name, "star");

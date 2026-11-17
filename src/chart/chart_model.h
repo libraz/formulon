@@ -114,7 +114,43 @@ enum class ChartLegendPosition : std::int32_t {
   kTopRight = 5
 };
 
-enum class ChartLineDash : std::int32_t { kSolid = 0, kDash = 1, kDot = 2, kDashDot = 3, kOther = 4 };
+/// `a:prstDash` presets; `kOther` is a `custDash` or an unknown token.
+enum class ChartLineDash : std::int32_t {
+  kSolid = 0,
+  kDash = 1,
+  kDot = 2,
+  kDashDot = 3,
+  kOther = 4,
+  kSysDot = 5,
+  kSysDash = 6,
+  kLgDash = 7,
+  kLgDashDot = 8,
+  kLgDashDotDot = 9,
+  kSysDashDot = 10,
+  kSysDashDotDot = 11
+};
+
+/// `a:headEnd` / `a:tailEnd` decoration (`ST_LineEndType`).
+enum class ChartLineEndType : std::int32_t {
+  kNone = 0,
+  kTriangle = 1,
+  kStealth = 2,
+  kDiamond = 3,
+  kOval = 4,
+  kArrow = 5
+};
+
+/// `ST_LineEndWidth` / `ST_LineEndLength`.
+enum class ChartLineEndSize : std::int32_t { kSmall = 0, kMedium = 1, kLarge = 2 };
+
+/// One end of a line. Excel draws ends only on open geometry (lines, connectors, arcs); a closed shape keeps the
+/// element and ignores it.
+struct ChartLineEnd {
+  ChartLineEndType type = ChartLineEndType::kNone;
+  std::optional<ChartLineEndSize> width;   ///< `w`; unset when absent (schema default `med`).
+  std::optional<ChartLineEndSize> length;  ///< `len`; unset when absent (schema default `med`).
+  bool operator==(const ChartLineEnd& o) const { return type == o.type && width == o.width && length == o.length; }
+};
 
 enum class ChartMarkerSymbol : std::int32_t {
   kNone = 0,
@@ -152,7 +188,11 @@ enum class ChartAxisCrosses : std::uint8_t { kAbsent = 0, kAutoZero = 1, kMin = 
 
 // XML tokens by enum value, shared by the chart reader and the editors. Index 0 of the tables for enums with an
 // absent/none member is the empty token.
-inline constexpr const char* kChartDashTokens[] = {"solid", "dash", "dot", "dashDot"};
+inline constexpr const char* kChartDashTokens[] = {"solid",     "dash",         "dot",        "dashDot",
+                                                   "",          "sysDot",       "sysDash",    "lgDash",
+                                                   "lgDashDot", "lgDashDotDot", "sysDashDot", "sysDashDotDot"};
+inline constexpr const char* kChartLineEndTokens[] = {"none", "triangle", "stealth", "diamond", "oval", "arrow"};
+inline constexpr const char* kChartLineEndSizeTokens[] = {"sm", "med", "lg"};
 inline constexpr const char* kChartSymbolTokens[] = {"none", "auto", "circle", "square", "diamond", "triangle",
                                                      "x",    "star", "plus",   "dot",    "dash",    "picture"};
 inline constexpr const char* kChartLabelPositionTokens[] = {"bestFit", "ctr", "inBase", "inEnd", "outEnd",
@@ -205,9 +245,11 @@ struct ChartLine {
   std::optional<std::uint32_t> alpha;  ///< 0..100000.
   std::optional<std::int64_t> width_emu;
   std::optional<ChartLineDash> dash;
-  std::string dash_name;  ///< `a:prstDash/@val` verbatim; empty when absent.
-  bool none = false;      ///< `a:ln` holds `a:noFill`.
-  bool other = false;     ///< `a:ln` holds a paint the record cannot state, as `ChartFill::other`.
+  std::string dash_name;                 ///< `a:prstDash/@val` verbatim; empty when absent.
+  std::optional<ChartLineEnd> head_end;  ///< `a:headEnd`; unset when absent or not a known end.
+  std::optional<ChartLineEnd> tail_end;  ///< `a:tailEnd`; unset when absent or not a known end.
+  bool none = false;                     ///< `a:ln` holds `a:noFill`.
+  bool other = false;                    ///< `a:ln` holds a paint the record cannot state, as `ChartFill::other`.
 };
 
 /// The `spPr` of the chart area (`c:chartSpace`) or the plot area: what the file states; an element that states no
@@ -522,6 +564,8 @@ struct ChartLinePatch {
   ChartPatchField<double> transparency_pct;
   ChartPatchField<double> width_pt;
   ChartPatchField<ChartLineDash> dash;
+  ChartPatchField<ChartLineEnd> head_end;  ///< Clear removes `a:headEnd`.
+  ChartPatchField<ChartLineEnd> tail_end;  ///< Clear removes `a:tailEnd`.
   std::optional<bool> none;
 };
 

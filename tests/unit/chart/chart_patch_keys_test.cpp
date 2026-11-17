@@ -271,6 +271,66 @@ TEST(ChartPatchKeys, DisplayChartAndPlotAreaPaint) {
   EXPECT_EQ(PartText(wb), text);
 }
 
+TEST(ChartPatchKeys, LineDashPresetsAndEndsWriteAndRoundTrip) {
+  Workbook wb = GridBook();
+  const std::uint32_t id = InsertColumn(wb);
+  const ChartLineDash presets[] = {
+      ChartLineDash::kSolid,        ChartLineDash::kDot,        ChartLineDash::kDash,         ChartLineDash::kDashDot,
+      ChartLineDash::kSysDot,       ChartLineDash::kSysDash,    ChartLineDash::kLgDash,       ChartLineDash::kLgDashDot,
+      ChartLineDash::kLgDashDotDot, ChartLineDash::kSysDashDot, ChartLineDash::kSysDashDotDot};
+  for (const ChartLineDash dash : presets) {
+    ChartDisplayPatch p;
+    p.plot_area.line.dash = ChartPatchField<ChartLineDash>::Set(dash);
+    MustOk(set_chart_display(wb, 0, id, p));
+    const ChartLine line = Must(get_chart(OoxmlRoundTrip(wb), 0, id)).plot_area.line;
+    EXPECT_EQ(line.dash, std::optional<ChartLineDash>(dash));
+    EXPECT_EQ(line.dash_name, kChartDashTokens[static_cast<int>(dash)]);
+  }
+
+  ChartLineEnd oval;
+  oval.type = ChartLineEndType::kOval;
+  oval.width = ChartLineEndSize::kSmall;
+  oval.length = ChartLineEndSize::kLarge;
+  ChartLineEnd triangle;
+  triangle.type = ChartLineEndType::kTriangle;
+  ChartDisplayPatch ends;
+  ends.plot_area.line.head_end = ChartPatchField<ChartLineEnd>::Set(oval);
+  ends.plot_area.line.tail_end = ChartPatchField<ChartLineEnd>::Set(triangle);
+  MustOk(set_chart_display(wb, 0, id, ends));
+  EXPECT_NE(PartText(wb).find("<a:prstDash val=\"sysDashDotDot\"/><a:headEnd type=\"oval\" w=\"sm\" len=\"lg\"/>"
+                              "<a:tailEnd type=\"triangle\"/></a:ln>"),
+            std::string::npos);
+  ChartLine line = Must(get_chart(OoxmlRoundTrip(wb), 0, id)).plot_area.line;
+  EXPECT_EQ(line.head_end, std::optional<ChartLineEnd>(oval));
+  EXPECT_EQ(line.tail_end, std::optional<ChartLineEnd>(triangle));
+
+  // Set replaces the element whole; Clear removes it; Keep leaves the other end alone.
+  ChartDisplayPatch swap;
+  swap.plot_area.line.head_end = ChartPatchField<ChartLineEnd>::Set(triangle);
+  swap.plot_area.line.tail_end = ChartPatchField<ChartLineEnd>::Clear();
+  MustOk(set_chart_display(wb, 0, id, swap));
+  EXPECT_NE(PartText(wb).find("<a:headEnd type=\"triangle\"/></a:ln>"), std::string::npos);
+  line = Must(get_chart(wb, 0, id)).plot_area.line;
+  EXPECT_EQ(line.head_end, std::optional<ChartLineEnd>(triangle));
+  EXPECT_FALSE(line.tail_end.has_value());
+
+  // Other is not a preset to write, and an end outside the enums is refused; neither writes anything.
+  const std::string text = PartText(wb);
+  ChartDisplayPatch other;
+  other.plot_area.line.dash = ChartPatchField<ChartLineDash>::Set(ChartLineDash::kOther);
+  ExpectCode(set_chart_display(wb, 0, id, other), Code::kInvalidArgument);
+  ChartLineEnd bad;
+  bad.type = static_cast<ChartLineEndType>(6);
+  ChartDisplayPatch bad_type;
+  bad_type.plot_area.line.tail_end = ChartPatchField<ChartLineEnd>::Set(bad);
+  ExpectCode(set_chart_display(wb, 0, id, bad_type), Code::kInvalidArgument);
+  bad.type = ChartLineEndType::kArrow;
+  bad.length = static_cast<ChartLineEndSize>(3);
+  bad_type.plot_area.line.tail_end = ChartPatchField<ChartLineEnd>::Set(bad);
+  ExpectCode(set_chart_display(wb, 0, id, bad_type), Code::kInvalidArgument);
+  EXPECT_EQ(PartText(wb), text);
+}
+
 TEST(ChartPatchKeys, SeriesLiteralSourcesWriteAndRoundTrip) {
   Workbook wb = GridBook();
   const std::uint32_t id = InsertColumn(wb);

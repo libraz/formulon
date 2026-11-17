@@ -1007,5 +1007,33 @@ TEST(ShapeConnectorGlue, FlipMatchesExcelsSave) {
   EXPECT_EQ(ConnectorXml(wb, 4), excel);
 }
 
+TEST(ShapePaintRecord, ConnectorEndsAndDashRoundTripInBothFormats) {
+  Workbook wb = Workbook::create();
+  ShapeSpec spec = OneCellShape("straightConnector1");
+  ChartLineEnd arrow;
+  arrow.type = ChartLineEndType::kTriangle;
+  spec.paint_line.tail_end = ChartPatchField<ChartLineEnd>::Set(arrow);
+  spec.paint_line.dash = ChartPatchField<ChartLineDash>::Set(ChartLineDash::kSysDash);
+  auto id = insert_shape(wb, 0, spec);
+  ASSERT_TRUE(static_cast<bool>(id));
+  const Workbook xlsx = RoundTrip(wb);
+  const Workbook xlsb = XlsbRoundTrip(wb);
+  for (const Workbook* again : {&xlsx, &xlsb}) {
+    const ShapeInfo read = ShapeWithId(*again, id.value());
+    EXPECT_EQ(read.paint_line.tail_end, std::optional<ChartLineEnd>(arrow));
+    EXPECT_FALSE(read.paint_line.head_end.has_value());
+    EXPECT_EQ(read.paint_line.dash, std::optional<ChartLineDash>(ChartLineDash::kSysDash));
+  }
+
+  // An end on a glued connector is a style edit: the glue stays.
+  Workbook glued = ConnectorFixture();
+  ShapeSpec ends;
+  ends.paint_line.head_end = ChartPatchField<ChartLineEnd>::Set(arrow);
+  ASSERT_TRUE(static_cast<bool>(update_shape(glued, 0, 4, ends)));
+  const std::string xml = ConnectorXml(glued, 4);
+  EXPECT_NE(xml.find("<a:stCxn id=\"2\" idx=\"3\"/><a:endCxn id=\"3\" idx=\"1\"/>"), std::string::npos);
+  EXPECT_NE(xml.find("<a:ln><a:headEnd type=\"triangle\"/></a:ln>"), std::string::npos);
+}
+
 }  // namespace
 }  // namespace formulon

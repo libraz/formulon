@@ -360,7 +360,7 @@ inline bool fill_empty(const ChartFillPatch& p) {
 
 inline bool line_empty(const ChartLinePatch& p) {
   return p.color.is_keep() && p.transparency_pct.is_keep() && p.width_pt.is_keep() && p.dash.is_keep() &&
-         !p.none.has_value();
+         p.head_end.is_keep() && p.tail_end.is_keep() && !p.none.has_value();
 }
 
 /// Applies `fill` and `line` to the existing shape-properties element `sp`.

@@ -203,11 +203,6 @@ const char* legend_pos_name(ChartLegendPosition p) {
   return kNames[static_cast<std::size_t>(p)];
 }
 
-const char* dash_name(ChartLineDash d) {
-  static const char* const kNames[] = {"solid", "dash", "dot", "dashDot", "other"};
-  return kNames[static_cast<std::size_t>(d)];
-}
-
 const char* marker_name(ChartMarkerSymbol s) {
   static const char* const kNames[] = {"none", "auto", "circle", "square", "diamond", "triangle",
                                        "x",    "star", "plus",   "dot",    "dash",    "picture"};
@@ -405,7 +400,8 @@ void write_line(Json& j, const ChartLine& l) {
   j.key("width");
   j.opt_num(l.width_emu);
   j.key("dash");
-  l.dash ? j.str(*l.dash == ChartLineDash::kOther ? l.dash_name : dash_name(*l.dash)) : j.null();
+  // `dash_name` is the preset token as written; a `custDash` has none.
+  l.dash ? j.str(l.dash_name.empty() ? std::string("custDash") : l.dash_name) : j.null();
   j.close('}');
 }
 

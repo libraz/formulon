@@ -127,18 +127,18 @@ Expected<void, Error> patch_source(const Workbook& wb, Chart& c, std::string_vie
   return ok();
 }
 
-/// True when `patch` clears every member of a point's override.
+/// True when `patch` clears every member of a point's override; the line ends need only not be set.
 bool clears_all(const ChartPointPatch& patch) {
   const ChartFillPatch& f = patch.fill;
   const ChartLinePatch& l = patch.line;
   return f.color.is_clear() && f.transparency_pct.is_clear() && !f.none.value_or(false) && l.color.is_clear() &&
-         l.transparency_pct.is_clear() && l.width_pt.is_clear() && l.dash.is_clear() && !l.none.value_or(false) &&
-         patch.marker.is_clear();
+         l.transparency_pct.is_clear() && l.width_pt.is_clear() && l.dash.is_clear() && !l.head_end.is_set() &&
+         !l.tail_end.is_set() && !l.none.value_or(false) && patch.marker.is_clear();
 }
 
 bool line_patch_sets(const ChartLinePatch& p) {
   return p.color.is_set() || p.transparency_pct.is_set() || p.width_pt.is_set() || p.dash.is_set() ||
-         p.none.value_or(false);
+         p.head_end.is_set() || p.tail_end.is_set() || p.none.value_or(false);
 }
 
 bool point_patch_sets(const ChartPointPatch& p) {

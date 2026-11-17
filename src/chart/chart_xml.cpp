@@ -146,6 +146,33 @@ ChartLineDash dash_of(std::string_view name) {
   return i < 0 ? ChartLineDash::kOther : static_cast<ChartLineDash>(i);
 }
 
+std::optional<ChartLineEndSize> end_size_of(const xml_node& end, const char* name, bool& known) {
+  const pugi::xml_attribute a = end.attribute(name);
+  if (!a) {
+    return std::nullopt;
+  }
+  const int i = chart_token_index(kChartLineEndSizeTokens, std::size(kChartLineEndSizeTokens), a.value());
+  known = known && i >= 0;
+  return i < 0 ? std::nullopt : std::optional<ChartLineEndSize>(static_cast<ChartLineEndSize>(i));
+}
+
+/// An absent `type` is the schema default `none`; an unknown token reads as no end.
+std::optional<ChartLineEnd> read_line_end(const xml_node& end) {
+  if (!end) {
+    return std::nullopt;
+  }
+  ChartLineEnd out;
+  bool known = true;
+  if (const pugi::xml_attribute type = end.attribute("type")) {
+    const int i = chart_token_index(kChartLineEndTokens, std::size(kChartLineEndTokens), type.value());
+    known = i >= 0;
+    out.type = static_cast<ChartLineEndType>(i < 0 ? 0 : i);
+  }
+  out.width = end_size_of(end, "w", known);
+  out.length = end_size_of(end, "len", known);
+  return known ? std::optional<ChartLineEnd>(out) : std::nullopt;
+}
+
 ChartLine read_line(const ColorEnv& env, const xml_node& sp_pr) {
   ChartLine line;
   const xml_node ln = kid(sp_pr, "ln");
@@ -163,7 +190,11 @@ ChartLine read_line(const ColorEnv& env, const xml_node& sp_pr) {
   if (const xml_node dash = kid(ln, "prstDash")) {
     line.dash_name = val_of(dash);
     line.dash = dash_of(line.dash_name);
+  } else if (kid(ln, "custDash")) {
+    line.dash = ChartLineDash::kOther;
   }
+  line.head_end = read_line_end(kid(ln, "headEnd"));
+  line.tail_end = read_line_end(kid(ln, "tailEnd"));
   return line;
 }
 

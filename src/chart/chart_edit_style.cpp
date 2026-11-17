@@ -103,6 +103,32 @@ Expected<void, Error> apply_paint(xml_node holder, Order order, const ChartPatch
   return ok();
 }
 
+/// Replaces `a:headEnd` / `a:tailEnd` whole, so a size the patch omits is dropped rather than kept stale.
+Expected<void, Error> apply_line_end(xml_node ln, const char* qname, const ChartPatchField<ChartLineEnd>& end) {
+  if (end.is_keep()) {
+    return ok();
+  }
+  const ChartLineEnd& e = end.value;
+  if (end.is_set() && (!chart_token_valid(kChartLineEndTokens, static_cast<int>(e.type)) ||
+                       (e.width && !chart_token_valid(kChartLineEndSizeTokens, static_cast<int>(*e.width))) ||
+                       (e.length && !chart_token_valid(kChartLineEndSizeTokens, static_cast<int>(*e.length))))) {
+    return bad_arg("A line end must be none, triangle, stealth, diamond, oval or arrow, sized sm, med or lg");
+  }
+  drop(ln, std::string_view(qname).substr(2));
+  if (end.is_clear()) {
+    return ok();
+  }
+  xml_node node = ensure(ln, qname, kLineOrder);
+  io::set_attr(node, "type", kChartLineEndTokens[static_cast<int>(e.type)]);
+  if (e.width) {
+    io::set_attr(node, "w", kChartLineEndSizeTokens[static_cast<int>(*e.width)]);
+  }
+  if (e.length) {
+    io::set_attr(node, "len", kChartLineEndSizeTokens[static_cast<int>(*e.length)]);
+  }
+  return ok();
+}
+
 }  // namespace
 
 Expected<void, Error> apply_paint_properties(xml_node sp, const ChartFillPatch& fill, const ChartLinePatch& line) {
@@ -127,12 +153,14 @@ Expected<void, Error> apply_paint_properties(xml_node sp, const ChartFillPatch& 
     drop(ln, "prstDash");
   } else if (line.dash.is_set()) {
     const int d = static_cast<int>(line.dash.value);
-    if (!chart_token_valid(kChartDashTokens, d)) {
-      return bad_arg("dash must be solid, dash, dot or dashDot");
+    if (!chart_token_valid(kChartDashTokens, d) || line.dash.value == ChartLineDash::kOther) {
+      return bad_arg("dash must be a preset line dash");
     }
     drop(ln, "custDash");
     put_val(ln, "a:prstDash", kLineOrder, kChartDashTokens[d]);
   }
+  RETURN_IF_ERROR(apply_line_end(ln, "a:headEnd", line.head_end));
+  RETURN_IF_ERROR(apply_line_end(ln, "a:tailEnd", line.tail_end));
   return ok();
 }
 

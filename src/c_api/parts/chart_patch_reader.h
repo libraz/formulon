@@ -6,6 +6,7 @@
 #ifndef FORMULON_C_API_PARTS_CHART_PATCH_READER_H_
 #define FORMULON_C_API_PARTS_CHART_PATCH_READER_H_
 
+#include <algorithm>
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -240,7 +241,8 @@ inline fm_chart_line_t chart_line_to_c(const formulon::ChartLine& l) {
   out.has_width_pt = l.width_emu ? 1 : 0;
   out.width_pt = l.width_emu ? static_cast<double>(*l.width_emu) / kEmuPerPt : 0.0;
   out.has_dash = l.dash ? 1 : 0;
-  out.dash = l.dash ? static_cast<std::int32_t>(*l.dash) : 0;
+  // The C enum ends at Other; the later presets read as Other.
+  out.dash = l.dash ? static_cast<std::int32_t>(std::min(*l.dash, formulon::ChartLineDash::kOther)) : 0;
   out.none = l.none ? 1 : 0;
   out.other = l.other ? 1 : 0;
   return out;
