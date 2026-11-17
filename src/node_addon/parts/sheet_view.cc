@@ -130,6 +130,28 @@ Napi::Value Workbook::GetVisibility(const Napi::CallbackInfo& info) {
   return ValueOrThrow(env, rc, Napi::Number::New(env, visibility));
 }
 
+Napi::Value Workbook::GetKind(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  int32_t kind = 0;
+  const fm_status_t rc = fm_sheet_get_kind(handle_, static_cast<std::size_t>(ArgU32(info, 0)), &kind);
+  return ValueOrThrow(env, rc, Napi::Number::New(env, kind));
+}
+
+Napi::Value Workbook::GetChartsheetChart(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  int32_t present = 0;
+  uint32_t object_id = 0;
+  const fm_status_t rc =
+      fm_sheet_get_chartsheet_chart(handle_, static_cast<std::size_t>(ArgU32(info, 0)), &present, &object_id);
+  return OptionalOrNull(env, rc, present, Napi::Number::New(env, object_id));
+}
+
 Napi::Value Workbook::SetVisibility(const Napi::CallbackInfo& info) {
   return InvokeSheetCall(info, &fm_sheet_set_visibility);
 }

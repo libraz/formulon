@@ -2190,6 +2190,17 @@ export const SheetVisibility: Readonly<{
 /** Union of the {@link SheetVisibility} ordinals. */
 export type SheetVisibility = 0 | 1 | 2;
 
+/** The type of a sheet: the part its workbook entry points at. Only a `Worksheet` has cells. */
+export const SheetKind: Readonly<{
+  Worksheet: 0;
+  Chartsheet: 1;
+  Dialogsheet: 2;
+  Macrosheet: 3;
+  Other: 4;
+}>;
+/** Union of the {@link SheetKind} ordinals. */
+export type SheetKind = 0 | 1 | 2 | 3 | 4;
+
 /** The `<sheetView view>` mode of a sheet. */
 export const SheetViewMode: Readonly<{
   Normal: 0;
@@ -7570,6 +7581,9 @@ export interface Sheet {
   readonly index: number;
   /** The sheet's current name. */
   readonly name: string;
+  /** The sheet's type. A sheet that is not a `Worksheet` keeps its tab, name and visibility and carries its part
+   *  through a save; it has no cells. */
+  readonly kind: SheetKind;
   /** Renames the sheet; this handle keeps addressing it under the new name. Fails with
    *  `StatusCode.InvalidSheetName` under the `Workbook.addSheet` naming rules. */
   rename(newName: string): void;
@@ -8026,6 +8040,10 @@ export interface Sheet {
   picture(objectId: number | Drawing): Picture;
   /** The `Chart` handle of `objectId`; fails as `picture` does when it is not a chart. */
   chart(objectId: number | Drawing): Chart;
+  /** The `Chart` handle of a chartsheet's chart, the first chart of its drawing; `null` on a sheet that is not a
+   *  chartsheet and on a chartsheet without a chart. It is the handle `chart(objectId)` returns for that chart.
+   *  Fails with `StatusCode.IoDrawingUnparseable` when the chartsheet's drawing part does not parse. */
+  getChart(): Chart | null;
   /** The `Shape` handle of `objectId` (a shape, connector or group); fails as `picture` does otherwise. */
   shape(objectId: number | Drawing): Shape;
   /** The `Slicer` handle of `objectId` (a table slicer's frame); fails as `picture` does otherwise. */
@@ -9578,6 +9596,8 @@ export interface Formulon {
   DisplayStatus: typeof DisplayStatus;
   /** The `SheetVisibility` enum. */
   SheetVisibility: typeof SheetVisibility;
+  /** The `SheetKind` enum. */
+  SheetKind: typeof SheetKind;
   /** The `LogLevel` enum. */
   LogLevel: typeof LogLevel;
   /** The `ExternalLinkKind` enum. */

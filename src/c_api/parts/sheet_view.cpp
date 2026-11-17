@@ -12,6 +12,7 @@
 #include "c_api/formulon_c.h"
 #include "c_api/parts/common.h"
 #include "c_api/parts/struct_v1_sizes.h"
+#include "drawing/drawing_xml.h"
 #include "io/sqref_text.h"
 #include "sheet.h"
 #include "utils/a1_ref.h"
@@ -27,6 +28,7 @@ using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::patch_op_ok_without_clear;
+using formulon::c_api::parts::set_last_error;
 
 namespace {
 
@@ -271,6 +273,46 @@ extern "C" fm_status_t fm_sheet_get_visibility(const fm_workbook_t* wb, size_t s
   // `visibility()` resolves the model's two bits, including the
   // combination no writer should produce.
   *out_visibility = static_cast<int32_t>(wb->workbook().sheet(sheet_index).view().visibility());
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_get_kind(const fm_workbook_t* wb, size_t sheet_index, int32_t* out_kind) {
+  clear_last_error();
+  if (out_kind == nullptr) {
+    return null_argument("out_kind");
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  *out_kind = static_cast<int32_t>(wb->workbook().sheet(sheet_index).kind());
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_get_chartsheet_chart(const fm_workbook_t* wb, size_t sheet_index, int32_t* out_present,
+                                                     uint32_t* out_object_id) {
+  clear_last_error();
+  if (out_present == nullptr) {
+    return null_argument("out_present");
+  }
+  if (out_object_id == nullptr) {
+    return null_argument("out_object_id");
+  }
+  *out_present = 0;
+  *out_object_id = 0;
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (wb->workbook().sheet(sheet_index).kind() != formulon::SheetKind::kChartsheet) {
+    return 0;
+  }
+  auto parts = formulon::list_chart_parts(wb->workbook(), sheet_index);
+  if (!parts) {
+    return set_last_error(parts.error());
+  }
+  if (!parts.value().empty()) {
+    *out_present = 1;
+    *out_object_id = parts.value().front().object_id;
+  }
   return 0;
 }
 

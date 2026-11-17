@@ -110,6 +110,7 @@ export {
   ReadingOrder,
   RefMode,
   ShapeTextVert,
+  SheetKind,
   SheetViewMode,
   SheetVisibility,
   SlicerCrossFilter,

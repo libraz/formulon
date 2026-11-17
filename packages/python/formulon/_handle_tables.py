@@ -7,7 +7,7 @@ HANDLE_FORWARDERS = {
     "Chart.add_series": "add_chart_series",
     "Chart.get_data": "get_chart_data",
     "Chart.get_preview": "get_chart_preview",
-    "Chart.get_properties": "get_chart",
+    "Chart.get_properties": "get_chart_properties",
     "Chart.remove_series": "remove_chart_series",
     "Chart.set_filter": "set_chart_filter",
     "Chart.set_legend": "set_chart_legend",

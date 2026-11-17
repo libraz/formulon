@@ -506,7 +506,7 @@ Napi::Object ChartDataToJs(Napi::Env env, const fm_chart_data_t* data, fm_status
 
 // ---- Reads ----------------------------------------------------------
 
-Napi::Value Workbook::GetChart(const Napi::CallbackInfo& info) {
+Napi::Value Workbook::GetChartProperties(const Napi::CallbackInfo& info) {
   Napi::Env env = info.Env();
   if (handle_ == nullptr) {
     return ThrowInvalidHandle(env);

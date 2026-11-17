@@ -169,6 +169,7 @@ from ._workbook import (
     ShapeInput,
     SheetComment,
     SheetFormatDefaults,
+    SheetKind,
     SheetProtection,
     SheetProtectionInput,
     SheetRect,
@@ -397,6 +398,7 @@ SHEET_METHODS = (
     "get_cell_show_phonetic",
     "get_cells_in_range",
     "get_cf_rule",
+    "get_chart",
     "get_column_width_pt",
     "get_comment",
     "get_comment_visible",
@@ -442,6 +444,7 @@ SHEET_METHODS = (
     "insert_rows",
     "is_cell_stale",
     "iter_rows",
+    "kind",
     "list_cells",
     "list_cf_rules",
     "list_charts",
@@ -634,6 +637,7 @@ HANDWRITTEN = (
     "get_cell_format",
     "get_cell_phonetic_runs",
     "get_cells_in_range",
+    "get_chart",
     "get_column_xf_index",
     "get_date",
     "get_default_font",
@@ -649,6 +653,7 @@ HANDWRITTEN = (
     "get_values",
     "insert_hyperlink_at",
     "iter_rows",
+    "kind",
     "list_cells",
     "list_charts",
     "list_drawings",
@@ -1467,6 +1472,24 @@ class Sheet(_NoCopy):
         """
         self._index()
         return self._name
+
+    @property
+    def kind(self) -> SheetKind:
+        """The sheet's type: a worksheet, a chartsheet, a dialog sheet, a macro sheet or another type.
+
+        Only a worksheet has cells; any other kind keeps its tab, name and visibility and carries its part
+        through a save.
+
+        Raises:
+          NotFoundError: when the sheet was removed.
+          WorkbookClosedError: when the workbook is closed.
+        """
+        sheet = self._index()
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            out = scope.out_ptr()
+            _check(LIB.fm_sheet_get_kind(h, _uint(sheet, "sheet_index", role="sheet"), out))
+            return SheetKind(LIB.read_i32(out))
 
     def _index(self) -> int:
         self._workbook._require()
@@ -4682,6 +4705,26 @@ class Sheet(_NoCopy):
         from ._drawing import Chart
 
         return cast("Chart", self._typed_drawing(object_id, Chart, "object_id"))
+
+    def get_chart(self) -> Optional[Chart]:
+        """Return the :class:`Chart` handle of a chartsheet's chart, the first chart of its drawing.
+
+        It is the handle :meth:`chart` returns for that chart. ``None`` on a sheet that is not a chartsheet and
+        on a chartsheet without a chart.
+
+        Raises:
+          NotFoundError: when the sheet was removed.
+          FormulonError: when the chartsheet's drawing part does not parse.
+        """
+        sheet = self._index()
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            present = scope.out_ptr()
+            object_id = scope.out_ptr()
+            _check(LIB.fm_sheet_get_chartsheet_chart(h, _uint(sheet, "sheet_index", role="sheet"), present, object_id))
+            if not LIB.read_u32(present):
+                return None
+            return self.chart(LIB.read_u32(object_id))
 
     def shape(self, object_id: Union[int, Drawing]) -> Shape:
         """Return the :class:`Shape` handle of ``object_id`` (a shape, connector or group); fails as :meth:`picture` does otherwise."""

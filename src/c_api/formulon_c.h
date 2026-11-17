@@ -10393,6 +10393,20 @@ typedef enum {
   FM_SHEET_VISIBILITY_VERY_HIDDEN = 2,
 } fm_sheet_visibility_t;
 
+/**
+ * @brief Sheet type, from the workbook relationship the sheet's `<sheet>` entry points at.
+ *
+ * Only a worksheet has cells; the other kinds keep their tab, name and visibility and carry
+ * their own part through a save.
+ */
+typedef enum {
+  FM_SHEET_KIND_WORKSHEET = 0,
+  FM_SHEET_KIND_CHARTSHEET = 1,
+  FM_SHEET_KIND_DIALOGSHEET = 2,
+  FM_SHEET_KIND_MACROSHEET = 3, /**< Excel 4.0 macro sheet, international or not. */
+  FM_SHEET_KIND_OTHER = 4,      /**< Any other sheet type. */
+} fm_sheet_kind_t;
+
 /** @brief `<sheetView view>` (`fm_sheet_view_info_t::view_mode`). */
 typedef enum {
   FM_SHEET_VIEW_MODE_NORMAL = 0, /**< The default; the attribute is absent. */
@@ -10697,6 +10711,30 @@ FM_API fm_status_t fm_sheet_get_visibility(const fm_workbook_t* wb, size_t sheet
  *         `FM_STATUS_PRECONDITION_FAILED` (9) when it hides the only visible sheet.
  */
 FM_API fm_status_t fm_sheet_set_visibility(fm_workbook_t* wb, size_t sheet_index, int32_t visibility);
+
+/**
+ * @brief Reads the sheet's type as an `fm_sheet_kind_t`.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_kind` is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range.
+ */
+FM_API fm_status_t fm_sheet_get_kind(const fm_workbook_t* wb, size_t sheet_index, int32_t* out_kind);
+
+/**
+ * @brief Reads the object id of the chartsheet's chart, the first chart frame of its drawing.
+ *
+ * `*out_present` is `1` and `*out_object_id` holds the id that `fm_sheet_get_chart` takes when
+ * the sheet is a chartsheet with a chart; otherwise `*out_present` is `0` and `*out_object_id`
+ * is `0` (still `FM_STATUS_OK` (0)), as for a worksheet.
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `out_present` or `out_object_id` is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_IO_DRAWING_UNPARSEABLE` (5024) when the chartsheet's drawing part does not parse.
+ */
+FM_API fm_status_t fm_sheet_get_chartsheet_chart(const fm_workbook_t* wb, size_t sheet_index, int32_t* out_present,
+                                                 uint32_t* out_object_id);
 
 /**
  * @brief Reads the active pane's selection: the active cell and its ranges.

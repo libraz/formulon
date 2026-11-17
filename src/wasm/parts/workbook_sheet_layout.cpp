@@ -199,6 +199,22 @@ void JsWorkbook::setVisibility(uint32_t sheet, int32_t visibility) {
   succeeded(handle_ != nullptr ? fm_sheet_set_visibility(handle_, sheet, visibility) : kBindingInvalidHandle);
 }
 
+int32_t JsWorkbook::getKind(uint32_t sheet) const {
+  int32_t kind = 0;
+  if (!succeeded(handle_ != nullptr ? fm_sheet_get_kind(handle_, sheet, &kind) : kBindingInvalidHandle)) {
+    return 0;
+  }
+  return kind;
+}
+
+emscripten::val JsWorkbook::getChartsheetChart(uint32_t sheet) const {
+  int32_t present = 0;
+  uint32_t objectId = 0;
+  const fm_status_t rc =
+      handle_ != nullptr ? fm_sheet_get_chartsheet_chart(handle_, sheet, &present, &objectId) : kBindingInvalidHandle;
+  return optional_or_null(rc, present, emscripten::val(objectId));
+}
+
 JsSheetView JsWorkbook::getSheetView(uint32_t sheet) const {
   JsSheetView r;
   fm_sheet_view_info_t v = FM_STRUCT_INIT(fm_sheet_view_info_t);

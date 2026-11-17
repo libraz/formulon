@@ -68,8 +68,8 @@
       "record": "ChartLegend",
       "get": {
         "op": "chart.get",
-        "js": "getChart",
-        "py": "get_chart",
+        "js": "getChartProperties",
+        "py": "get_chart_properties",
         "path": "legend"
       },
       "set": {

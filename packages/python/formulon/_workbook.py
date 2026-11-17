@@ -364,6 +364,7 @@ __all__ = [
     "ShapeTextVert",
     "SheetComment",
     "SheetFormatDefaults",
+    "SheetKind",
     "SheetProtection",
     "SheetProtectionInput",
     "SheetRect",
@@ -1716,6 +1717,20 @@ class SheetVisibility(IntEnum):
     VISIBLE = 0
     HIDDEN = 1
     VERY_HIDDEN = 2
+
+
+class SheetKind(IntEnum):
+    """The type of a sheet: the part its workbook entry points at.
+
+    Only a ``WORKSHEET`` has cells; any other kind keeps its tab, name and
+    visibility and carries its part through a save.
+    """
+
+    WORKSHEET = 0
+    CHARTSHEET = 1
+    DIALOGSHEET = 2
+    MACROSHEET = 3
+    OTHER = 4
 
 
 class LogLevel(IntEnum):

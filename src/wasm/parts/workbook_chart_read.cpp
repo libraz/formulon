@@ -663,7 +663,7 @@ val chart_line_to_val(const fm_chart_line_t& line) {
 
 // ---- Reads ----------------------------------------------------------
 
-val JsWorkbook::getChart(uint32_t sheet, uint32_t objectId) const {
+val JsWorkbook::getChartProperties(uint32_t sheet, uint32_t objectId) const {
   int32_t present = 0;
   fm_chart_t* raw = nullptr;
   fm_status_t rc =

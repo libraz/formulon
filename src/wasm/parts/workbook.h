@@ -339,6 +339,10 @@ class JsWorkbook {
   /// The sheet tab's visibility as an `fm_sheet_visibility_t` ordinal, and its setter.
   int32_t getVisibility(uint32_t sheet) const;
   void setVisibility(uint32_t sheet, int32_t visibility);
+  /// The sheet's type as an `fm_sheet_kind_t` ordinal.
+  int32_t getKind(uint32_t sheet) const;
+  /// The object id of a chartsheet's chart; `null` on any other sheet or a chartsheet without a chart.
+  emscripten::val getChartsheetChart(uint32_t sheet) const;
   /// The sheet protection record, `null` when the sheet is not protected.
   emscripten::val getSheetProtection(uint32_t sheet) const;
   /// Protects the sheet with the record; `null` unprotects it.
@@ -591,7 +595,7 @@ class JsWorkbook {
   void updateSparklineGroup(uint32_t sheet, const std::string& groupId, emscripten::val spec);
   void removeSparklineGroup(uint32_t sheet, const std::string& groupId);
 
-  emscripten::val getChart(uint32_t sheet, uint32_t objectId) const;
+  emscripten::val getChartProperties(uint32_t sheet, uint32_t objectId) const;
   emscripten::val getChartData(uint32_t sheet, uint32_t objectId) const;
   emscripten::val previewChartData(uint32_t sheet, uint32_t objectId, emscripten::val overrides) const;
   uint32_t insertChart(uint32_t sheet, emscripten::val options);

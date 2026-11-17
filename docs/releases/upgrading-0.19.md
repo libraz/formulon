@@ -1434,6 +1434,11 @@ raises `IndexOutOfRangeError`. `formulon.UNCHANGED` is a public name, and
 
 ## Behaviour changes under an unchanged name
 
+- `getChart` / `get_chart` names a different call. The 0.18 `getChart(sheet, objectId)`
+  (Python `get_chart(...)`) is now `ws.chart(objectId).getProperties()` (Python
+  `.get_properties()`); `Sheet.getChart()` (Python `Sheet.get_chart()`) takes no
+  argument and returns a chartsheet's chart handle, or `null` (`None`) on any
+  other sheet.
 - `localizeFormula` requotes sheet qualifiers by the profile's display rule
   (de `'Z1S1'!A1`, which would otherwise read back as a reference) and quotes a
   defined name that reads as a reference in the profile's R1C1 letters (de
@@ -2908,7 +2913,6 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `FunctionMetadata.signatureTemplate` | `FunctionMetadata.signature` |
 | `FunctionMetadataResult` | removed |
 | `functionNames()` | `listFunctionNames()` |
-| `getChart()` | `ws.chart(...).getProperties()` |
 | `getChartData()` | `ws.chart(...).getData()` |
 | `getCommentResult()` | removed; use `getComment()` |
 | `getComments()` | `listComments()` |
@@ -3449,7 +3453,6 @@ Names are JavaScript; Python and C use the matching snake_case fields.
 | `FontRecord.size` | `Font.size_pt` |
 | `FontRecord` | `Font` |
 | `full_precision()` | `get_full_precision()` |
-| `get_chart()` | `ws.chart(...).get_properties()` |
 | `get_chart_data()` | `ws.chart(...).get_data()` |
 | `get_col_breaks()` | `list_column_breaks()` |
 | `get_comments()` | `list_comments()` |

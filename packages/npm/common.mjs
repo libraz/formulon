@@ -395,6 +395,7 @@ export const CompatibilityVersion = Object.freeze({ Version1: 1, Version2: 2, Ve
 export const RefMode = Object.freeze({ A1: 0, R1C1: 1 });
 export const CollationStrength = Object.freeze({ Compare: 0, Dynamic: 1, ClassicExact: 2 });
 export const SheetVisibility = Object.freeze({ Visible: 0, Hidden: 1, VeryHidden: 2 });
+export const SheetKind = Object.freeze({ Worksheet: 0, Chartsheet: 1, Dialogsheet: 2, Macrosheet: 3, Other: 4 });
 export const SheetViewMode = Object.freeze({ Normal: 0, PageBreakPreview: 1, PageLayout: 2 });
 export const PageOrientation = Object.freeze({ Portrait: 0, Landscape: 1 });
 export const LocaleDateOrder = Object.freeze({ Mdy: 0, Ymd: 1, Dmy: 2 });
@@ -912,6 +913,7 @@ export const FORMULON_MEMBERS = Object.freeze([
   'GeometryMode',
   'DisplayStatus',
   'SheetVisibility',
+  'SheetKind',
   'LogLevel',
   'ExternalLinkKind',
   'FilterKind',
@@ -1386,6 +1388,7 @@ const SHEET_METHODS = Object.freeze([
   'getCellShowPhonetic',
   'getCellsInRange',
   'getCfRule',
+  'getChart',
   'getColumnWidthPt',
   'getComment',
   'getCommentVisible',
@@ -1431,6 +1434,7 @@ const SHEET_METHODS = Object.freeze([
   'insertRows',
   'isCellStale',
   'iterRows',
+  'kind',
   'listCells',
   'listCfRules',
   'listCharts',
@@ -1629,6 +1633,7 @@ const HANDWRITTEN = Object.freeze([
   'getCellFormat',
   'getCellPhoneticRuns',
   'getCellsInRange',
+  'getChart',
   'getColumnXfIndex',
   'getDate',
   'getDefaultFont',
@@ -1645,6 +1650,7 @@ const HANDWRITTEN = Object.freeze([
   'hasSheet',
   'insertHyperlinkAt',
   'iterRows',
+  'kind',
   'listCells',
   'listCharts',
   'listDrawings',
@@ -1688,7 +1694,7 @@ const HANDLE_FORWARDERS = Object.freeze({
   'Chart.addSeries': 'addChartSeries',
   'Chart.getData': 'getChartData',
   'Chart.getPreview': 'getChartPreview',
-  'Chart.getProperties': 'getChart',
+  'Chart.getProperties': 'getChartProperties',
   'Chart.removeSeries': 'removeChartSeries',
   'Chart.setFilter': 'setChartFilter',
   'Chart.setLegend': 'setChartLegend',
@@ -3660,6 +3666,7 @@ const METHOD_ARITY = Object.freeze({
   'Sheet.getCellXfIndex': 2,
   'Sheet.getCellsInRange': 2,
   'Sheet.getCfRule': 1,
+  'Sheet.getChart': 0,
   'Sheet.getColumnWidthPt': 2,
   'Sheet.getColumnXfIndex': 1,
   'Sheet.getComment': 2,
@@ -4987,7 +4994,7 @@ function rawDrawingPatch(common) {
 /** The axis id a `ChartAxisRef` of chart `id` names: a number is the id, a `{ kind, plot? }` key is looked up. */
 function chartAxisId(raw, sheet, id, axis, label) {
   if (typeof axis === 'number') {
-    const known = raw.getChart(sheet, id);
+    const known = raw.getChartProperties(sheet, id);
     if (known !== null && !known.axes.some((a) => a.id === axis)) {
       const kind = enumName(ChartAxisKind, axis) ?? 'Value';
       throw new FormulonError(
@@ -5006,7 +5013,7 @@ function chartAxisId(raw, sheet, id, axis, label) {
   }
   const kind = requireInteger(axis.kind, `${label}.kind`);
   const plot = axis.plot === undefined ? 0 : requireIndex(axis.plot, `${label}.plot`, 'position');
-  const properties = raw.getChart(sheet, id);
+  const properties = raw.getChartProperties(sheet, id);
   if (properties === null) {
     throw new FormulonError(StatusCode.NotFound, 'the drawing object has no such part', `object_id=${id}`);
   }
@@ -7230,7 +7237,7 @@ function makeFacade(Raw, registry, runtime) {
     // The raw source carries qualified reference text, which reads as a `SheetRect` here.
     getProperties() {
       const [raw, sheet, id] = drawingState.locate(this);
-      const properties = raw.getChart(sheet, id);
+      const properties = raw.getChartProperties(sheet, id);
       if (properties === null) {
         throw new FormulonError(StatusCode.NotFound, 'the drawing object has no such part', `object_id=${id}`);
       }
@@ -7398,6 +7405,10 @@ function makeFacade(Raw, registry, runtime) {
     get name() {
       this.#current();
       return this.#name;
+    }
+
+    get kind() {
+      return rawOf(this.#workbook).getKind(this.#current());
     }
 
     rename(newName) {
@@ -7947,6 +7958,13 @@ function makeFacade(Raw, registry, runtime) {
 
     chart(objectId) {
       return this.#typedDrawing(objectId, Chart, 'chart');
+    }
+
+    getChart() {
+      const raw = rawOf(this.#workbook);
+      const sheet = this.#current();
+      const objectId = raw.getChartsheetChart(sheet);
+      return objectId === null ? null : this.chart(objectId);
     }
 
     shape(objectId) {

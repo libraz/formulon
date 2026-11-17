@@ -1,0 +1,70 @@
+// Sheet.kind and Sheet.getChart on a worksheet and on an Excel-saved chartsheet, from both containers.
+
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import test from 'node:test';
+import { fileURLToPath } from 'node:url';
+
+import { getModule, isFormulonError } from './smoke_support.mjs';
+
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+const fixtureDir = path.join(repoRoot, 'tests', 'fixtures', 'excel', 'chartsheet_twins');
+
+// `Sheet1` (a worksheet) then `Chart1` (a chartsheet holding one chart).
+function fixture(ext) {
+  return new Uint8Array(readFileSync(path.join(fixtureDir, `tab_color_rgb_red.${ext}`)));
+}
+
+test('SheetKind is the frozen numeric enum', async () => {
+  const f = await getModule();
+  assert.deepEqual({ ...f.SheetKind }, { Worksheet: 0, Chartsheet: 1, Dialogsheet: 2, Macrosheet: 3, Other: 4 });
+  assert.ok(Object.isFrozen(f.SheetKind));
+});
+
+for (const ext of ['xlsx', 'xlsb']) {
+  test(`kind and getChart tell a worksheet from a chartsheet (${ext})`, async () => {
+    const f = await getModule();
+    const wb = f.Workbook.load(fixture(ext));
+    try {
+      const [worksheet, chartsheet] = wb.listSheets();
+      assert.equal(worksheet.kind, f.SheetKind.Worksheet);
+      assert.equal(chartsheet.kind, f.SheetKind.Chartsheet);
+
+      assert.equal(worksheet.getChart(), null);
+      const chart = chartsheet.getChart();
+      assert.notEqual(chart, null);
+      assert.equal(chart.getProperties().onChartsheet, true);
+      // The handle `chart(objectId)` returns for that chart.
+      assert.equal(chartsheet.chart(chart.objectId), chart);
+      assert.equal(chartsheet.getChart(), chart);
+    } finally {
+      wb.dispose();
+    }
+  });
+}
+
+test('a new workbook holds worksheets and kind is read-only', async () => {
+  const f = await getModule();
+  const wb = f.Workbook.createDefault();
+  try {
+    const added = wb.addSheet('Second');
+    assert.equal(wb.sheet(0).kind, f.SheetKind.Worksheet);
+    assert.equal(added.kind, f.SheetKind.Worksheet);
+    assert.equal(added.getChart(), null);
+    assert.throws(() => {
+      added.kind = f.SheetKind.Chartsheet;
+    }, TypeError);
+    wb.removeSheet(added);
+    assert.throws(
+      () => added.kind,
+      (e) => isFormulonError(e, f.StatusCode.NotFound),
+    );
+    assert.throws(
+      () => added.getChart(),
+      (e) => isFormulonError(e, f.StatusCode.NotFound),
+    );
+  } finally {
+    wb.dispose();
+  }
+});

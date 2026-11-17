@@ -53,6 +53,17 @@ namespace formulon {
 
 class Arena;
 
+/// The sheet type a workbook's `<sheet>` entry points at. Opaque sheets are
+/// classified by their workbook-relationship type; every other sheet is a
+/// worksheet.
+enum class SheetKind : std::uint8_t {
+  kWorksheet = 0,
+  kChartsheet = 1,
+  kDialogsheet = 2,
+  kMacrosheet = 3,  ///< Excel 4.0 macro sheet, international or not.
+  kOther = 4,       ///< Any other opaque sheet type.
+};
+
 namespace cf {
 struct ConditionalFormat;
 }  // namespace cf
@@ -342,6 +353,10 @@ class Sheet {
 
   const std::string& opaque_ooxml_part_path() const noexcept { return opaque_ooxml_part_path_; }
   const std::string& opaque_ooxml_relationship_type() const noexcept { return opaque_ooxml_relationship_type_; }
+
+  /// The sheet type: `kWorksheet` unless the sheet is opaque, then by the
+  /// last segment of its relationship type.
+  SheetKind kind() const noexcept;
 
   /// Stores a literal value at `(row, col)`.
   ///

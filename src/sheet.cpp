@@ -27,6 +27,7 @@
 #include "utils/arena.h"
 #include "utils/derived_guid.h"
 #include "utils/index_sort.h"
+#include "utils/strings.h"
 #include "utils/utf8_length.h"
 #include "value.h"
 
@@ -146,6 +147,23 @@ Sheet::Sheet(Sheet&&) noexcept = default;
 Sheet& Sheet::operator=(Sheet&&) noexcept = default;
 
 Sheet::~Sheet() = default;
+
+SheetKind Sheet::kind() const noexcept {
+  if (!is_opaque_ooxml_sheet()) {
+    return SheetKind::kWorksheet;
+  }
+  const std::string_view type = opaque_ooxml_relationship_type_;
+  if (strings::ends_with(type, "/chartsheet")) {
+    return SheetKind::kChartsheet;
+  }
+  if (strings::ends_with(type, "/dialogsheet")) {
+    return SheetKind::kDialogsheet;
+  }
+  if (strings::ends_with(type, "/xlMacrosheet") || strings::ends_with(type, "/xlIntlMacrosheet")) {
+    return SheetKind::kMacrosheet;
+  }
+  return SheetKind::kOther;
+}
 
 namespace sheet_copy {
 

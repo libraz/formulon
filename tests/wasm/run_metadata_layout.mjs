@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { StatusCode } from '../../packages/npm/common.mjs';
 import { expectFailure, readAll } from './smoke_support.mjs';
 
@@ -58,9 +59,9 @@ export function registerMetadataLayout(Module, test) {
       wb.setNumber(0, 0, 0, 1);
       wb.setNumber(0, 1, 0, 2);
       const insert = (extra) => wb.addChart(0, { source: 'A1:A2', ...extra });
-      assert.equal(wb.getChart(0, insert({})).title.kind, 3);
-      assert.equal(wb.getChart(0, insert({ title: null })).title, null);
-      const text = wb.getChart(0, insert({ title: 'Sales' })).title;
+      assert.equal(wb.getChartProperties(0, insert({})).title.kind, 3);
+      assert.equal(wb.getChartProperties(0, insert({ title: null })).title, null);
+      const text = wb.getChartProperties(0, insert({ title: 'Sales' })).title;
       assert.deepEqual([text.kind, text.text], [1, 'Sales']);
       expectFailure(() => insert({ title: '' }), StatusCode.InvalidArgument);
     } finally {
@@ -586,6 +587,36 @@ export function registerMetadataLayout(Module, test) {
       setVisibility(0, 2);
       expectFailure(() => setVisibility(0, 3), StatusCode.InvalidArgument);
       assert.equal(read(), 2);
+    } finally {
+      wb.delete();
+    }
+  });
+
+  test('getKind and getChartsheetChart tell a worksheet from an Excel chartsheet in both containers', () => {
+    const fixture = (ext) =>
+      new Uint8Array(
+        readFileSync(new URL(`../fixtures/excel/chartsheet_twins/tab_color_rgb_red.${ext}`, import.meta.url)),
+      );
+    for (const ext of ['xlsx', 'xlsb']) {
+      const wb = Module.Workbook.load(fixture(ext));
+      try {
+        // `Sheet1` is the worksheet, `Chart1` the chartsheet.
+        assert.equal(wb.getKind(0), 0);
+        assert.equal(wb.getKind(1), 1);
+        assert.equal(wb.getChartsheetChart(0), null);
+        const id = wb.getChartsheetChart(1);
+        assert.equal(typeof id, 'number', ext);
+        assert.equal(wb.getChartProperties(1, id).onChartsheet, true, ext);
+        expectFailure(() => wb.getKind(9), StatusCode.SheetIndexOutOfRange);
+        expectFailure(() => wb.getChartsheetChart(9), StatusCode.SheetIndexOutOfRange);
+      } finally {
+        wb.delete();
+      }
+    }
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.equal(wb.getKind(0), 0);
+      assert.equal(wb.getChartsheetChart(0), null);
     } finally {
       wb.delete();
     }

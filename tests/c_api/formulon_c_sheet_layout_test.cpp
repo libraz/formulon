@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <fstream>
 #include <iterator>
 #include <limits>
 #include <string>
@@ -149,6 +150,80 @@ TEST(FormulonCApiSheetLayout, GetVisibilityReadsVisibleByDefault) {
   EXPECT_EQ(fm_sheet_get_visibility(wb.handle, 0, nullptr), FM_STATUS_BINDING_NULL_POINTER);
   int32_t out = 0;
   EXPECT_EQ(fm_sheet_get_visibility(wb.handle, 99U, &out), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+}
+
+// Loads tests/fixtures/excel/chartsheet_twins/tab_color_rgb_red.<ext>: the worksheet `Sheet1` then the chartsheet
+// `Chart1`, which holds one chart.
+void LoadChartsheetFixture(const char* ext, WorkbookGuard* out) {
+  std::string dir = __FILE__;
+  dir = dir.substr(0, dir.find_last_of("/\\"));
+  std::ifstream in(dir + "/../fixtures/excel/chartsheet_twins/tab_color_rgb_red." + ext, std::ios::binary);
+  ASSERT_TRUE(in.good()) << ext;
+  const std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &out->handle), 0) << fm_get_last_error_message();
+}
+
+TEST(FormulonCApiSheetLayout, SheetKindEnumOrdinals) {
+  EXPECT_EQ(FM_SHEET_KIND_WORKSHEET, 0);
+  EXPECT_EQ(FM_SHEET_KIND_CHARTSHEET, 1);
+  EXPECT_EQ(FM_SHEET_KIND_DIALOGSHEET, 2);
+  EXPECT_EQ(FM_SHEET_KIND_MACROSHEET, 3);
+  EXPECT_EQ(FM_SHEET_KIND_OTHER, 4);
+}
+
+TEST(FormulonCApiSheetLayout, GetKindReadsWorksheetByDefaultAndRefusesBadArguments) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  int32_t kind = -1;
+  ASSERT_EQ(fm_sheet_get_kind(wb.handle, 0, &kind), 0);
+  EXPECT_EQ(kind, FM_SHEET_KIND_WORKSHEET);
+  EXPECT_EQ(fm_sheet_get_kind(wb.handle, 0, nullptr), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_sheet_get_kind(nullptr, 0, &kind), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_sheet_get_kind(wb.handle, 99U, &kind), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+}
+
+TEST(FormulonCApiSheetLayout, GetKindAndChartsheetChartReadAnExcelChartsheet) {
+  for (const char* ext : {"xlsx", "xlsb"}) {
+    SCOPED_TRACE(ext);
+    WorkbookGuard wb;
+    LoadChartsheetFixture(ext, &wb);
+    ASSERT_NE(wb.handle, nullptr);
+
+    int32_t kind = -1;
+    ASSERT_EQ(fm_sheet_get_kind(wb.handle, 0, &kind), 0);
+    EXPECT_EQ(kind, FM_SHEET_KIND_WORKSHEET);
+    ASSERT_EQ(fm_sheet_get_kind(wb.handle, 1, &kind), 0);
+    EXPECT_EQ(kind, FM_SHEET_KIND_CHARTSHEET);
+
+    int32_t present = -1;
+    uint32_t object_id = 99U;
+    ASSERT_EQ(fm_sheet_get_chartsheet_chart(wb.handle, 0, &present, &object_id), 0);
+    EXPECT_EQ(present, 0);
+    EXPECT_EQ(object_id, 0U);
+
+    ASSERT_EQ(fm_sheet_get_chartsheet_chart(wb.handle, 1, &present, &object_id), 0);
+    ASSERT_EQ(present, 1);
+    // The id is the one `fm_sheet_get_chart` takes.
+    int32_t chart_present = 0;
+    fm_chart_t* chart = nullptr;
+    ASSERT_EQ(fm_sheet_get_chart(wb.handle, 1, object_id, &chart_present, &chart), 0) << fm_get_last_error_message();
+    ASSERT_EQ(chart_present, 1);
+    fm_chart_info_t info = FM_STRUCT_INIT(fm_chart_info_t);
+    EXPECT_EQ(fm_chart_get_info(chart, &info), 0);
+    EXPECT_EQ(info.on_chartsheet, 1);
+    fm_chart_destroy(chart);
+  }
+}
+
+TEST(FormulonCApiSheetLayout, GetChartsheetChartRefusesBadArguments) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  int32_t present = -1;
+  uint32_t object_id = 0;
+  EXPECT_EQ(fm_sheet_get_chartsheet_chart(wb.handle, 0, nullptr, &object_id), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_sheet_get_chartsheet_chart(wb.handle, 0, &present, nullptr), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_sheet_get_chartsheet_chart(nullptr, 0, &present, &object_id), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_sheet_get_chartsheet_chart(wb.handle, 99U, &present, &object_id), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }
 
 TEST(FormulonCApiSheetLayout, SetVisibilityStatesAllThreeTabStates) {

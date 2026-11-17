@@ -374,7 +374,7 @@ export function registerDrawing(Module, test) {
         () => wb.updateChartSeries(0, chart, 0, 0, { labels: { fontColor: none } }),
         StatusCode.InvalidArgument,
       );
-      assert.equal(wb.getChart(0, chart).plots[0].series[0].labels.fontColor.argb >>> 0, 0xffff0000);
+      assert.equal(wb.getChartProperties(0, chart).plots[0].series[0].labels.fontColor.argb >>> 0, 0xffff0000);
     });
   });
 

@@ -1024,6 +1024,12 @@ entries:
     py: SheetVisibility
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_visibility_t, js: SheetVisibility, py: SheetVisibility }
+  enum.sheet_kind:
+    kind: enum
+    c: fm_sheet_kind_t
+    js: SheetKind
+    py: SheetKind
+    surfaces: [c, wasm, native, py]
   record.sheet_view:
     kind: record
     role: result
@@ -9728,10 +9734,11 @@ entries:
     scope: sheet
     noun: chart
     c: fm_sheet_get_chart
-    js: getChart
-    py: get_chart
+    js: getChartProperties
+    py: get_chart_properties
     surfaces: [c, wasm, native, py]
-    was: { c: fm_sheet_chart_open, js: getChart, py: get_chart }
+    exception: "the raw name carries the record (ChartProperties) because Sheet.getChart is the chartsheet accessor; the Chart handle publishes it as getProperties"
+    was: { c: fm_sheet_chart_open }
     missing: null
     handle: { class: Chart, supplies: [sheet, object_id] }
   chart.destroy:
@@ -11621,6 +11628,31 @@ entries:
     enum: enum.sheet_visibility
     surfaces: [c]
     was: { c: FM_SHEET_VERY_HIDDEN }
+  constant.fm_sheet_kind_worksheet:
+    kind: constant
+    c: FM_SHEET_KIND_WORKSHEET
+    enum: enum.sheet_kind
+    surfaces: [c]
+  constant.fm_sheet_kind_chartsheet:
+    kind: constant
+    c: FM_SHEET_KIND_CHARTSHEET
+    enum: enum.sheet_kind
+    surfaces: [c]
+  constant.fm_sheet_kind_dialogsheet:
+    kind: constant
+    c: FM_SHEET_KIND_DIALOGSHEET
+    enum: enum.sheet_kind
+    surfaces: [c]
+  constant.fm_sheet_kind_macrosheet:
+    kind: constant
+    c: FM_SHEET_KIND_MACROSHEET
+    enum: enum.sheet_kind
+    surfaces: [c]
+  constant.fm_sheet_kind_other:
+    kind: constant
+    c: FM_SHEET_KIND_OTHER
+    enum: enum.sheet_kind
+    surfaces: [c]
   constant.fm_date_time_grouping_year:
     kind: constant
     c: FM_DATE_TIME_GROUPING_YEAR
@@ -14232,6 +14264,23 @@ entries:
     py: chart
     surfaces: [wasm, native, py]
     exception: "binding accessor: the Chart handle of a drawing object"
+    facade: handwritten
+  binding.chartsheet_chart:
+    kind: op
+    scope: sheet
+    js: getChart
+    py: get_chart
+    surfaces: [wasm, native, py]
+    exception: "binding accessor: the Chart handle of a chartsheet's chart, null on any other sheet"
+    facade: handwritten
+    missing: null
+  binding.sheet_kind:
+    kind: op
+    scope: sheet
+    js: kind
+    py: kind
+    surfaces: [wasm, native, py]
+    exception: "binding accessor: the sheet's kind as the readonly property kind"
     facade: handwritten
   binding.shape:
     kind: op
@@ -18458,6 +18507,25 @@ entries:
     js: getVisibility
     py: get_visibility
     surfaces: [c, wasm, native, py]
+  kind.get:
+    kind: op
+    scope: sheet
+    noun: kind
+    c: fm_sheet_get_kind
+    js: getKind
+    surfaces: [c, wasm, native]
+    exception: "internal: the bindings publish binding.sheet_kind"
+    internal: true
+  chartsheet_chart.get:
+    kind: op
+    scope: sheet
+    noun: chartsheet_chart
+    c: fm_sheet_get_chartsheet_chart
+    js: getChartsheetChart
+    surfaces: [c, wasm, native]
+    exception: "internal: the bindings compose this read with the chart handle into binding.chartsheet_chart"
+    internal: true
+    missing: null
   profile_id.get_count:
     kind: op
     scope: process

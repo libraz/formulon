@@ -413,6 +413,8 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   // Sheet view / layout.
   Napi::Value GetSheetView(const Napi::CallbackInfo& info);
   Napi::Value GetVisibility(const Napi::CallbackInfo& info);
+  Napi::Value GetKind(const Napi::CallbackInfo& info);
+  Napi::Value GetChartsheetChart(const Napi::CallbackInfo& info);
   Napi::Value SetVisibility(const Napi::CallbackInfo& info);
   Napi::Value GetSheetProtection(const Napi::CallbackInfo& info);
   Napi::Value SetSheetProtection(const Napi::CallbackInfo& info);
@@ -616,7 +618,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value RemoveSparklineGroup(const Napi::CallbackInfo& info);
 
   // Charts: typed reads, resolved data, creation and typed edits.
-  Napi::Value GetChart(const Napi::CallbackInfo& info);
+  Napi::Value GetChartProperties(const Napi::CallbackInfo& info);
   Napi::Value GetChartData(const Napi::CallbackInfo& info);
   Napi::Value PreviewChartData(const Napi::CallbackInfo& info);
   Napi::Value InsertChart(const Napi::CallbackInfo& info);

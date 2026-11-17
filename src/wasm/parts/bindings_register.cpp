@@ -129,6 +129,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       // th_TH,es_ES,es_MX,pt_BR,ru_RU,zh_TW,it_IT,nl_NL}. New workbooks default to win-365-en_US.
       .function("getProfileId", &JsWorkbook::profileId)
       .function("getVisibility", &JsWorkbook::getVisibility)
+      .function("getKind", &JsWorkbook::getKind)
+      .function("getChartsheetChart", &JsWorkbook::getChartsheetChart)
       .function("getLocation", &JsWorkbook::getLocation)
       .function("getFillCount", &JsWorkbook::fillCount)
       .function("getFontCount", &JsWorkbook::fontCount)
@@ -209,7 +211,7 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .function("addSparklineGroup", &JsWorkbook::addSparklineGroup)
       .function("updateSparklineGroup", &JsWorkbook::updateSparklineGroup)
       .function("removeSparklineGroup", &JsWorkbook::removeSparklineGroup)
-      .function("getChart", &JsWorkbook::getChart)
+      .function("getChartProperties", &JsWorkbook::getChartProperties)
       .function("getChartData", &JsWorkbook::getChartData)
       .function("getChartPreview", &JsWorkbook::previewChartData)
       .function("addChart", &JsWorkbook::insertChart)

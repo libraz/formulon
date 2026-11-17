@@ -407,6 +407,9 @@ int main(void) {
   fm_status_t (*delete_columns)(fm_workbook_t*, size_t, uint32_t, uint32_t) = fm_sheet_delete_columns;
   fm_status_t (*set_value)(fm_workbook_t*, size_t, uint32_t, uint32_t, const fm_value_t*) = fm_sheet_set_value;
   fm_status_t (*get_visibility)(const fm_workbook_t*, size_t, int32_t*) = fm_sheet_get_visibility;
+  fm_status_t (*get_kind)(const fm_workbook_t*, size_t, int32_t*) = fm_sheet_get_kind;
+  fm_status_t (*get_chartsheet_chart)(const fm_workbook_t*, size_t, int32_t*, uint32_t*) =
+      fm_sheet_get_chartsheet_chart;
   fm_status_t (*set_visibility)(fm_workbook_t*, size_t, int32_t) = fm_sheet_set_visibility;
   fm_status_t (*profile_id_count)(size_t*) = fm_get_profile_id_count;
   fm_status_t (*profile_id_at)(size_t, const char**) = fm_get_profile_id_at;
@@ -492,6 +495,8 @@ int main(void) {
   (void)delete_columns;
   (void)set_value;
   (void)get_visibility;
+  (void)get_kind;
+  (void)get_chartsheet_chart;
   (void)set_visibility;
   (void)profile_id_count;
   (void)profile_id_at;
