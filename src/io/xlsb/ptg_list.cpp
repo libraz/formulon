@@ -117,32 +117,65 @@ std::uint16_t ListType(std::uint8_t cls) {
 
 /// A nonresident PtgList's listIndex: the table is named in the rgcb instead.
 constexpr std::uint32_t kExternalListIndex = 0xFFFFFFFFU;
-/// The rgcb words between an external reference's table and column names.
-constexpr std::uint16_t kExternalColumnTail[] = {0U, 1U, 2U};
+/// Flag bit 9, which Excel sets on a nonresident `#This Row` reference.
+constexpr std::uint16_t kExternalThisRowBit = 0x0200U;
+/// The columns field of an external column range; one column or none leaves it 0.
+constexpr std::uint16_t kExternalRangeColumns = 2U;
+/// The rgcb word before each column name of an external reference.
+constexpr std::uint16_t kExternalColumnKind = 2U;
 
-/// The forms of an external table reference whose bytes are known: every data row (`Tbl[#Data]`, row type 4, no
-/// column) and one column without a reserved character (`Tbl[col]`, row type 0).
+/// An external table reference as its PtgList and rgcb spell it: a row type and no, one or two (a range's ends)
+/// unescaped column names.
 struct ExternalListShape {
   std::uint8_t row_type = kRowsData;
-  std::string column;
+  std::vector<std::string> columns;
 };
 
-bool HasReservedCharacter(std::string_view name) {
-  return name.find_first_of("[]#'") != std::string_view::npos;
+/// The specifier set a nonresident row type stands for: `Tbl[col]` (no specifier) is row type 0 and an explicit
+/// `#Data` row type 4. Totals rows have no measured form.
+std::optional<std::uint8_t> ExternalSpecifiers(std::uint8_t row_type) {
+  using Spec = parser::StructuredRefSpecifiers;
+  switch (row_type) {
+    case kRowsData:
+      return 0U;
+    case kRowsAll:
+      return Spec::kAll;
+    case kRowsHeaders:
+      return Spec::kHeaders;
+    case kRowsData2:
+      return Spec::kData;
+    case kRowsDataHeaders:
+      return Spec::kHeaders | Spec::kData;
+    case kRowsCurrent:
+      return Spec::kThisRow;
+    default:
+      return std::nullopt;
+  }
+}
+
+/// Whether `columns` names suit row type `row_type`: no specifier needs a column and `#This Row` exactly one.
+bool ExternalColumnsFit(std::uint8_t row_type, std::size_t columns) {
+  if (row_type == kRowsData) {
+    return columns != 0U;
+  }
+  return row_type != kRowsCurrent || columns == 1U;
 }
 
 std::optional<ExternalListShape> ExternalShape(std::string_view structured) {
-  using Spec = parser::StructuredRefSpecifiers;
   const auto payload = parser::parse_structured_ref_payload_text(structured);
   if (!payload) {
     return std::nullopt;
   }
-  if (payload->specifiers == Spec::kData && payload->columns.empty()) {
-    return ExternalListShape{kRowsData2, {}};
-  }
-  if (payload->specifiers == 0U && payload->columns.size() == 1U && !payload->columns.front().empty() &&
-      !HasReservedCharacter(payload->columns.front())) {
-    return ExternalListShape{kRowsData, payload->columns.front()};
+  for (const std::uint8_t row_type : {kRowsData, kRowsAll, kRowsHeaders, kRowsData2, kRowsDataHeaders, kRowsCurrent}) {
+    if (ExternalSpecifiers(row_type) != payload->specifiers) {
+      continue;
+    }
+    if (!ExternalColumnsFit(row_type, payload->columns.size()) ||
+        std::any_of(payload->columns.begin(), payload->columns.end(),
+                    [](const std::string& column) { return column.empty(); })) {
+      return std::nullopt;
+    }
+    return ExternalListShape{row_type, payload->columns};
   }
   return std::nullopt;
 }
@@ -183,11 +216,13 @@ bool structured_ref_is_single_cell(const parser::AstNode& node) {
   if (node.as_structured_ref_modifier() == parser::StructuredRefModifier::At) {
     return true;
   }
+  return node.as_structured_ref_modifier() == parser::StructuredRefModifier::None &&
+         structured_payload_is_single_cell(node.as_structured_ref_column());
+}
+
+bool structured_payload_is_single_cell(std::string_view structured) {
   using Spec = parser::StructuredRefSpecifiers;
-  if (node.as_structured_ref_modifier() != parser::StructuredRefModifier::None) {
-    return false;
-  }
-  const auto payload = parser::parse_structured_ref_payload_text(node.as_structured_ref_column());
+  const auto payload = parser::parse_structured_ref_payload_text(structured);
   if (!payload || payload->columns.size() != 1U) {
     return false;
   }
@@ -296,30 +331,42 @@ Expected<parser::AstNode*, Error> decode_external_ptg_list(ByteSpan& cursor, Byt
   ASSIGN_OR_RETURN(const std::uint16_t col_first, read_u16(cursor));
   ASSIGN_OR_RETURN(const std::uint16_t col_last, read_u16(cursor));
   const std::uint8_t row_type = static_cast<std::uint8_t>((flags >> kRowTypeShift) & kRowTypeMask);
-  if ((flags & (kInvalidBit | kColumnsMask)) != 0U || list_index != kExternalListIndex || col_first != 0U ||
-      col_last != 0U || (row_type != kRowsData && row_type != kRowsData2)) {
+  const std::optional<std::uint8_t> specifiers = ExternalSpecifiers(row_type);
+  const std::uint16_t column_bits = flags & kColumnsMask;
+  if ((flags & kInvalidBit) != 0U || (column_bits != 0U && column_bits != kExternalRangeColumns) ||
+      list_index != kExternalListIndex || col_first != 0U || col_last != 0U || !specifiers) {
     return Unsupported("external PtgList has no readable form");
   }
-  ASSIGN_OR_RETURN(const std::uint8_t has_column, read_u8(extra));
+  ASSIGN_OR_RETURN(const std::uint8_t has_columns, read_u8(extra));
   ASSIGN_OR_RETURN(const std::uint16_t extra_row_type, read_u16(extra));
   ASSIGN_OR_RETURN(std::string table, ReadExtraName(extra));
-  if (extra_row_type != row_type || has_column != (row_type == kRowsData ? 1U : 0U) || table.empty()) {
+  if (extra_row_type != row_type || has_columns > 1U || table.empty()) {
     return Unsupported("external PtgList names have no readable form");
   }
-  std::string payload = "#Data";
-  if (has_column != 0U) {
-    for (const std::uint16_t want : kExternalColumnTail) {
-      ASSIGN_OR_RETURN(const std::uint16_t word, read_u16(extra));
-      if (word != want) {
+  parser::StructuredRefPayload payload;
+  payload.specifiers = *specifiers;
+  if (has_columns != 0U) {
+    ASSIGN_OR_RETURN(const std::uint16_t lead, read_u16(extra));
+    ASSIGN_OR_RETURN(const std::uint8_t count, read_u8(extra));
+    if (lead != 0U || count == 0U || count > 2U) {
+      return Unsupported("external PtgList columns have no readable form");
+    }
+    for (std::uint8_t i = 0; i < count; ++i) {
+      ASSIGN_OR_RETURN(const std::uint8_t more, read_u8(extra));
+      ASSIGN_OR_RETURN(const std::uint16_t kind, read_u16(extra));
+      ASSIGN_OR_RETURN(std::string column, ReadExtraName(extra));
+      if (more != (i + 1U < count ? 1U : 0U) || kind != kExternalColumnKind || column.empty()) {
         return Unsupported("external PtgList column has no readable form");
       }
-    }
-    ASSIGN_OR_RETURN(payload, ReadExtraName(extra));
-    if (payload.empty() || HasReservedCharacter(payload)) {
-      return Unsupported("external PtgList column has no readable form");
+      payload.columns.push_back(std::move(column));
     }
   }
-  parser::AstNode* node = parser::make_external_structured_ref(arena, {}, std::to_string(book), {}, table, payload);
+  if (!ExternalColumnsFit(row_type, payload.columns.size()) ||
+      (column_bits == kExternalRangeColumns) != (payload.columns.size() == 2U)) {
+    return Unsupported("external PtgList columns do not fit its row type");
+  }
+  const std::string text = parser::stored_payload(payload);
+  parser::AstNode* node = parser::make_external_structured_ref(arena, {}, std::to_string(book), {}, table, text);
   if (node == nullptr) {
     return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (PtgList)", "context=xlsb_ptg_list");
   }
@@ -337,8 +384,14 @@ Expected<void, Error> encode_external_ptg_list(std::vector<std::uint8_t>& out, s
     return Unsupported("external table reference has no PtgList form");
   }
   std::uint16_t flags = kNonresidentBit;
+  if (shape->columns.size() == 2U) {
+    flags |= kExternalRangeColumns;
+  }
   flags |= static_cast<std::uint16_t>(shape->row_type << kRowTypeShift);
   flags |= static_cast<std::uint16_t>(ListType(cls) << kTypeShift);
+  if (shape->row_type == kRowsCurrent) {
+    flags |= kExternalThisRowBit;
+  }
   emit_u8(out, kPtgList);
   emit_u8(out, kEptgList);
   emit_u16(out, ixti);
@@ -346,14 +399,17 @@ Expected<void, Error> encode_external_ptg_list(std::vector<std::uint8_t>& out, s
   emit_u32(out, kExternalListIndex);
   emit_u16(out, 0U);
   emit_u16(out, 0U);
-  emit_u8(extra, shape->column.empty() ? 0U : 1U);
+  emit_u8(extra, shape->columns.empty() ? 0U : 1U);
   emit_u16(extra, shape->row_type);
   RETURN_IF_ERROR(EmitExtraName(extra, node.as_external_ref_name()));
-  if (!shape->column.empty()) {
-    for (const std::uint16_t word : kExternalColumnTail) {
-      emit_u16(extra, word);
+  if (!shape->columns.empty()) {
+    emit_u16(extra, 0U);
+    emit_u8(extra, static_cast<std::uint8_t>(shape->columns.size()));
+    for (std::size_t i = 0; i < shape->columns.size(); ++i) {
+      emit_u8(extra, i + 1U < shape->columns.size() ? 1U : 0U);
+      emit_u16(extra, kExternalColumnKind);
+      RETURN_IF_ERROR(EmitExtraName(extra, shape->columns[i]));
     }
-    RETURN_IF_ERROR(EmitExtraName(extra, shape->column));
   }
   return Expected<void, Error>::Ok();
 }

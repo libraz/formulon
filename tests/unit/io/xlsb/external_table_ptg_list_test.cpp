@@ -5,6 +5,7 @@
 //   A1  =ROWS([1]!Tbl[#Data])        A2  =SUM([1]!Tbl[v])
 //   A3  =ISREF([1]!Tbl[v])           B3  =ISREF([src.xlsx]Sheet1!Tbl[v]), stored as A3 is
 //   A4  {=[1]!Tbl[v]}                (legacy array formula)
+// and `external_table_forms/` holds Excel's saves of every other measured form, each xlsb with its xlsx twin.
 
 #include <cstdint>
 #include <cstdio>
@@ -161,9 +162,9 @@ TEST(ExternalTablePtgList, AnXlsbSaveReadsBackInBothFormats) {
   }
 }
 
-// Only every data row and one plain column have known bytes; any other form is saved as its cached value.
+// A totals-row form and a `#This Row` with other than one column have no known bytes; they are saved as their value.
 TEST(ExternalTablePtgList, AnUnmeasuredFormIsSavedAsItsValue) {
-  for (const char* payload : {"#Headers", "#All", "[#Data],[v]", "[v]:[w]", "@v", "a'#b"}) {
+  for (const char* payload : {"#Totals", "[#Data],[#Totals]", "[#Totals],[v]", "#This Row", "[#This Row],[v]:[w]"}) {
     Workbook wb = ReadXlsx(FixtureBytes("external_table_ref_closed.xlsx"));
     // A2 is `=SUM(<table>[v])`.
     const std::string sum = FormulaAt(wb, 1U, 0U);
@@ -186,6 +187,69 @@ TEST(ExternalTablePtgList, ALinkWithoutItsFileStemSheetSavesTheValue) {
   auto saved = io::xlsb::write_xlsb_with_result(wb);
   ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
   EXPECT_EQ(saved.value().diagnostics.downgraded_formula_count, 5U);
+}
+
+// Excel's saves of every measured form, the link's source closed: each xlsb next to its xlsx twin.
+constexpr const char* kFormBooks[] = {"selectors", "column_ranges", "column_names", "two_tables",
+                                      "table_on_second_sheet"};
+
+std::vector<std::uint8_t> FormBook(const std::string& book, const char* extension) {
+  return FixtureBytes(("external_table_forms/" + book + extension).c_str());
+}
+
+bool IsTotalsForm(const std::string& formula) {
+  return formula.find("#Totals") != std::string::npos;
+}
+
+TEST(ExternalTablePtgList, EveryMeasuredFormReadsAsItsXlsxTwin) {
+  for (const char* book : kFormBooks) {
+    SCOPED_TRACE(book);
+    const Workbook from_xlsb = ReadXlsb(FormBook(book, ".xlsb"));
+    const Workbook from_xlsx = ReadXlsx(FormBook(book, ".xlsx"));
+    std::size_t compared = 0;
+    for (const CellAddress& at : from_xlsx.sheet(0).all_formula_cells()) {
+      const std::string text = FormulaAt(from_xlsx, at.row, at.col);
+      if (IsTotalsForm(text)) {
+        continue;
+      }
+      EXPECT_EQ(FormulaAt(from_xlsb, at.row, at.col), text) << at.row << "," << at.col;
+      ++compared;
+    }
+    EXPECT_GT(compared, 0U);
+  }
+}
+
+TEST(ExternalTablePtgList, SavingEveryMeasuredFormWritesExcelsTokens) {
+  for (const char* book : kFormBooks) {
+    SCOPED_TRACE(book);
+    const Workbook from_xlsx = ReadXlsx(FormBook(book, ".xlsx"));
+    std::map<CellKey, std::string> want = FormulaRecords(ZipPart(FormBook(book, ".xlsb"), "xl/worksheets/sheet1.bin"));
+    std::size_t totals = 0;
+    for (const CellAddress& at : from_xlsx.sheet(0).all_formula_cells()) {
+      if (IsTotalsForm(FormulaAt(from_xlsx, at.row, at.col))) {
+        ++totals;
+        for (auto it = want.begin(); it != want.end();) {
+          it = std::get<0>(it->first) == at.row && std::get<1>(it->first) == at.col ? want.erase(it) : std::next(it);
+        }
+      }
+    }
+    auto saved = io::xlsb::write_xlsb_with_result(from_xlsx);
+    ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+    EXPECT_EQ(saved.value().diagnostics.downgraded_formula_count, totals);
+    EXPECT_EQ(FormulaRecords(ZipPart(saved.value().bytes, "xl/worksheets/sheet1.bin")), want);
+  }
+}
+
+// `[@v]` is stored as its long form, a plain formula: one row of one column does not spill.
+TEST(ExternalTablePtgList, AnEnteredThisRowFormIsStoredLongAndPlain) {
+  Workbook wb = ReadXlsx(FormBook("selectors", ".xlsx"));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 80U, 0U, "=src_a.xlsx!Tbl[@v]")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 81U, 0U, "=src_a.xlsx!Tbl[#Headers]")));
+  auto xlsx = io::write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
+  const std::string sheet = ZipPart(xlsx.value(), "xl/worksheets/sheet1.xml");
+  EXPECT_NE(sheet.find("<f>[1]!Tbl[[#This Row],[v]]</f>"), std::string::npos) << sheet;
+  EXPECT_NE(sheet.find("<f t=\"array\" ref=\"A82\">[1]!Tbl[#Headers]</f>"), std::string::npos) << sheet;
 }
 
 }  // namespace

@@ -97,6 +97,9 @@ Shape Shapes::of(const parser::AstNode& node) {
       if (parser::is_self_book_name_ref(node)) {
         return name_shape(node);
       }
+      if (const std::string_view structured = node.as_external_ref_structured(); !structured.empty()) {
+        return structured_payload_is_single_cell(structured) ? Shape::kScalar : Shape::kReference;
+      }
       return node.as_external_ref_is_range() || !node.as_external_ref_name().empty() ||
                      !node.as_external_ref_sheet_end().empty() || node.as_external_ref_cell().is_full_col ||
                      node.as_external_ref_cell().is_full_row

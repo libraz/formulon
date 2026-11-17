@@ -8,9 +8,13 @@
 //
 // A reference is resolved against the workbook's tables by id on read and by
 // name on write; an invalid one is not decoded. One into another workbook
-// (nonresident) carries listIndex 0xFFFFFFFF and no column bits: the table
+// (nonresident) carries listIndex 0xFFFFFFFF, column bits 2 for a column
+// range and 0 otherwise, and zero column indexes: the table
 // and column names follow in the formula's rgcb, and its ixti names the
-// link's file-stem sheet entry.
+// link's file-stem sheet entry. The rgcb holds a has-columns byte, the row
+// type (u16) and the table name, then for columns a u16 0, a count byte and
+// per column a more-follows byte, a u16 2 and the unescaped name; names are
+// a u16 count of UTF-16 units. `#This Row` also sets flag bit 9.
 
 #ifndef FORMULON_IO_XLSB_PTG_LIST_H_
 #define FORMULON_IO_XLSB_PTG_LIST_H_
@@ -18,6 +22,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string_view>
 #include <unordered_set>
 #include <vector>
 
@@ -50,14 +55,14 @@ bool ptg_list_is_nonresident(const ByteSpan& cursor);
 
 /// Decodes the nonresident PtgList at `cursor` into an ExternalRef naming a
 /// table of link `book` (1-based), reading its names from `extra` (the
-/// formula's rgcb), and advances both. Only a table's data rows
-/// (`[1]!Tbl[#Data]`) and one column (`[1]!Tbl[col]`) are read; any other
-/// form is `kIoXlsbUnsupportedPtg`.
+/// formula's rgcb), and advances both. The payload is the stored long form.
+/// A totals-row form is `kIoXlsbUnsupportedPtg`.
 Expected<parser::AstNode*, Error> decode_external_ptg_list(ByteSpan& cursor, ByteSpan& extra, std::uint32_t book,
                                                            Arena& arena);
 
 /// True when the external table reference `node` (an ExternalRef with a
-/// structured payload) has a PtgList form: data rows or one column.
+/// structured payload) has a PtgList form: any selector but `#Totals`, with
+/// no column, one column or a column range.
 bool external_ptg_list_encodable(const parser::AstNode& node);
 
 /// Appends the external table reference `node` as a nonresident PtgList of
@@ -76,6 +81,9 @@ std::uint32_t xlsb_table_id(const std::vector<TableMetadata>& tables, std::size_
 /// `[[#This Row],[Col]]`, `[[#Headers],[Col]]` or `[[#Totals],[Col]]`.
 /// Excel gives such a reference no implicit intersection.
 bool structured_ref_is_single_cell(const parser::AstNode& node);
+
+/// The same test on a bracket payload's text, for a reference into another workbook's table.
+bool structured_payload_is_single_cell(std::string_view structured);
 
 /// The 0-based sheet of the model or verbatim table a StructuredRef names, or nullopt.
 std::optional<std::int32_t> structured_ref_sheet(const parser::AstNode& node, const SheetRangeTable& ranges);

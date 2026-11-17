@@ -12,6 +12,7 @@
 #include <array>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -256,11 +257,16 @@ void AppendStructuredPayload(std::string_view structured, std::string& out) {
   }
 }
 
-void FormatExternalRef(const AstNode& node, std::string& out, const ExternalBookIndexer* indexer = nullptr) {
+// `storage` spells a table reference's payload in the long form Excel stores (`[#This Row],[v]` for `@v`).
+void FormatExternalRef(const AstNode& node, std::string& out, const ExternalBookIndexer* indexer = nullptr,
+                       bool storage = false) {
   AppendExternalQualifier(node, /*r1c1=*/false, indexer, out);
   if (const std::string_view name = node.as_external_ref_name(); !name.empty()) {
     out.append(name);
-    AppendStructuredPayload(node.as_external_ref_structured(), out);
+    const std::string_view structured = node.as_external_ref_structured();
+    const auto payload = storage && !structured.empty() ? parse_structured_ref_payload_text(structured) : std::nullopt;
+    const std::string stored = payload ? stored_payload(*payload) : std::string(structured);
+    AppendStructuredPayload(stored, out);
     return;
   }
   AppendSheetlessArea(node.as_external_ref_cell(), node.as_external_ref_cell_end(), node.as_external_ref_is_range(),
@@ -673,7 +679,7 @@ struct StorageEmitter {
         FormatRef3D(node, out);
         return;
       case NodeKind::ExternalRef:
-        FormatExternalRef(node, out, indexer);
+        FormatExternalRef(node, out, indexer, /*storage=*/true);
         return;
       case NodeKind::StructuredRef:
         FormatStructuredRef(node, out);
