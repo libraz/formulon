@@ -60,7 +60,8 @@ bool remaps_color_map(const pugi::xml_node& clr_map_ovr);
 std::optional<DrawingColor> read_drawing_color(const Workbook& wb, const pugi::xml_node& clr,
                                                const pugi::xml_node& clr_map_ovr);
 
-/// The colour Excel renders for `base_argb` under `transforms`; unset when one is not modelled.
+/// The colour Excel renders for `base_argb` under `transforms`, applied in order; unset when one is
+/// not modelled (the alpha transforms, an unknown name) or lacks the value it needs.
 std::optional<std::uint32_t> resolve_transforms(std::uint32_t base_argb, const std::vector<ColorTransform>& transforms);
 
 /// `color` with a Theme tint expanded into its `lumMod` / `lumOff` transforms.

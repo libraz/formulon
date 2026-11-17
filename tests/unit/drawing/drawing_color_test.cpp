@@ -166,18 +166,45 @@ TEST(DrawingColorResolve, LuminanceMatchesExcel) {
   EXPECT_EQ(Resolved(0x123456, {}), 0xFF123456U);
 }
 
-TEST(DrawingColorResolve, ShadeWorksInLinearLight) {
+TEST(DrawingColorResolve, LinearLightTransformsMatchExcel) {
   EXPECT_EQ(Resolved(0xFFFFFF, {{"shade", 50000}}), 0xFFBCBCBCU);  // lt1 shade 50000 -> 188
+  EXPECT_EQ(Resolved(0xE97132, {{"tint", 50000}}), 0xFFF4C9BEU);
+  EXPECT_EQ(Resolved(0xE97132, {{"inv", std::nullopt}}), 0xFF77ECFBU);
+  EXPECT_EQ(Resolved(0xE97132, {{"redMod", 50000}}), 0xFFAB7132U);
+  EXPECT_EQ(Resolved(0xE97132, {{"greenMod", 50000}}), 0xFFE95132U);
+  EXPECT_EQ(Resolved(0xE97132, {{"red", 50000}}), 0xFFBC7132U);
+  EXPECT_EQ(Resolved(0xE97132, {{"redOff", 20000}}), 0xFFFF7132U);  // clamps at the output
+  EXPECT_EQ(Resolved(0xE97132, {{"gamma", std::nullopt}}), 0xFFF5B27AU);
+  EXPECT_EQ(Resolved(0xE97132, {{"invGamma", std::nullopt}}), 0xFFD02A08U);
+  // Gray weighs the sRGB channels 0.2126 / 0.7152 / 0.0722.
+  EXPECT_EQ(Resolved(0xE97132, {{"gray", std::nullopt}}), 0xFF868686U);
+  EXPECT_EQ(Resolved(0x7F3F9F, {{"gray", std::nullopt}}), 0xFF545454U);
+}
+
+TEST(DrawingColorResolve, HueAndSaturationMatchExcel) {
+  EXPECT_EQ(Resolved(0xE97132, {{"hueOff", 5400000}}), 0xFF4FE932U);
+  EXPECT_EQ(Resolved(0xE97132, {{"hueOff", -5400000}}), 0xFFCC32E9U);  // wraps
+  EXPECT_EQ(Resolved(0xE97132, {{"hueMod", 200000}}), 0xFFE9B032U);
+  EXPECT_EQ(Resolved(0xE97132, {{"comp", std::nullopt}}), 0xFF32AAE9U);
+  EXPECT_EQ(Resolved(0xE97132, {{"sat", 0}}), 0xFF8E8E8EU);
+  // Saturation is not clamped: past 1 the channels clip, below 0 the hue turns to its complement.
+  EXPECT_EQ(Resolved(0xE97132, {{"satMod", 150000}}), 0xFFFF6304U);
+  EXPECT_EQ(Resolved(0x7F3F9F, {{"satOff", -50000}}), 0xFF6D7767U);
+  EXPECT_EQ(Resolved(0x7F3F9F, {{"lum", 0}}), 0xFF000000U);
+}
+
+TEST(DrawingColorResolve, TransformsApplyInTheirWrittenOrder) {
+  EXPECT_EQ(Resolved(0xE97132, {{"shade", 50000}, {"lumMod", 75000}}), 0xFF803D19U);
+  EXPECT_EQ(Resolved(0xE97132, {{"lumMod", 75000}, {"shade", 50000}}), 0xFF8C380CU);
+  EXPECT_EQ(Resolved(0xE97132, {{"tint", 50000}, {"satMod", 150000}}), 0xFFFFC1B1U);
+  EXPECT_EQ(Resolved(0xE97132, {{"lumMod", 60000}, {"lumOff", 40000}, {"shade", 75000}}), 0xFFD59574U);
+  EXPECT_EQ(Resolved(0xE97132, {{"gamma", std::nullopt}, {"shade", 50000}, {"invGamma", std::nullopt}}), 0xFF743919U);
 }
 
 TEST(DrawingColorResolve, UnmodelledTransformsHaveNoColour) {
   const std::vector<std::vector<ColorTransform>> cases = {
-      {{"satMod", 120000}},
-      {{"tint", 50000}},
-      {{"lumOff", 10000}, {"lumMod", 50000}},
-      {{"shade", 50000}, {"lumMod", 50000}},
-      {{"lumMod", std::nullopt}},
-      {{"comp", std::nullopt}},
+      {{"alphaMod", 50000}},      {{"fooBar", 1}},           {{"redModx", 1}},
+      {{"lumMod", std::nullopt}}, {{"shade", std::nullopt}}, {{"tint", 50000}, {"hueMod", std::nullopt}},
   };
   for (const auto& t : cases) {
     EXPECT_FALSE(drawing_color::resolve_transforms(0xFF123456U, t).has_value()) << t.front().name;

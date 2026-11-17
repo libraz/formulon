@@ -110,9 +110,9 @@ ColorSpec rgb_spec(std::uint32_t argb) {
   return spec;
 }
 
-// --- Rendering. Excel takes each channel through linear light held in 1/100000 units (the
-// `scrgbClr` grid) on the way in and out; luminance transforms run on float HSL in between and
-// `shade` on the linear value.
+// --- Rendering. Excel holds each channel in linear light on the 1/100000 `scrgbClr` grid between
+// transforms. Hue, saturation and luminance transforms run on float HSL of the sRGB value (a run of
+// them in one pass); shade, tint, inversion and channel transforms run on the linear value.
 
 double to_linear(double v) {
   return v <= 0.04045 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4);
@@ -177,6 +177,59 @@ void from_hls(const Hls& c, double rgb[3]) {
   rgb[2] = hue_channel(m1, m2, c.h - 1.0 / 3.0);
 }
 
+bool is_hls_transform(std::string_view name) {
+  return name == "lum" || name == "lumMod" || name == "lumOff" || name == "sat" || name == "satMod" ||
+         name == "satOff" || name == "hue" || name == "hueMod" || name == "hueOff" || name == "comp";
+}
+
+// Applies one HSL transform; false when it needs a value it lacks. Luminance clamps to 0..1; saturation does
+// not, and hue wraps.
+bool apply_hls(const ColorTransform& t, Hls& c) {
+  if (t.name == "comp") {
+    c.h += 0.5;
+    c.h -= std::floor(c.h);
+    return true;
+  }
+  if (!t.value) {
+    return false;
+  }
+  const double v = static_cast<double>(*t.value) / static_cast<double>(kUnit);
+  constexpr double kAngleUnit = 21600000.0;  // 60000ths of a degree in a turn.
+  const std::string_view name = t.name;
+  if (name == "lum") {
+    c.l = std::clamp(v, 0.0, 1.0);
+  } else if (name == "lumMod") {
+    c.l = std::clamp(c.l * v, 0.0, 1.0);
+  } else if (name == "lumOff") {
+    c.l = std::clamp(c.l + v, 0.0, 1.0);
+  } else if (name == "sat") {
+    c.s = v;
+  } else if (name == "satMod") {
+    c.s *= v;
+  } else if (name == "satOff") {
+    c.s += v;
+  } else {
+    c.h = name == "hue"      ? static_cast<double>(*t.value) / kAngleUnit
+          : name == "hueMod" ? c.h * v
+                             : c.h + static_cast<double>(*t.value) / kAngleUnit;
+    c.h -= std::floor(c.h);
+  }
+  return true;
+}
+
+// The channel (0 red, 1 green, 2 blue) a `red`/`redMod`/`redOff`-style transform names; -1 otherwise.
+int channel_of(std::string_view name) {
+  constexpr std::string_view kChannels[] = {"red", "green", "blue"};
+  for (int i = 0; i < 3; ++i) {
+    const std::string_view ch = kChannels[i];
+    if (strings::starts_with(name, ch)) {
+      const std::string_view rest = name.substr(ch.size());
+      return rest.empty() || rest == "Mod" || rest == "Off" ? i : -1;
+    }
+  }
+  return -1;
+}
+
 bool valid_transform_name(std::string_view name) {
   if (name.empty() || name.size() > 32U || !std::isalpha(static_cast<unsigned char>(name[0]))) {
     return false;
@@ -200,53 +253,70 @@ std::string_view scheme_name_of(std::uint32_t theme) {
 
 std::optional<std::uint32_t> resolve_transforms(std::uint32_t base_argb,
                                                 const std::vector<ColorTransform>& transforms) {
-  // Modelled: a luminance pair (`lumMod` then `lumOff`, either alone) or one `shade`.
-  bool shade = false;
-  long mod = kUnit;
-  long off = 0;
-  bool seen_mod = false;
-  bool seen_off = false;
-  for (const ColorTransform& t : transforms) {
-    if (!t.value) {
-      return std::nullopt;
-    }
-    if (t.name == "lumMod" && !seen_mod && !seen_off && !shade) {
-      seen_mod = true;
-      mod = *t.value;
-    } else if (t.name == "lumOff" && !seen_off && !shade) {
-      seen_off = true;
-      off = *t.value;
-    } else if (t.name == "shade" && transforms.size() == 1U) {
-      shade = true;
-      mod = *t.value;
-    } else {
-      return std::nullopt;
-    }
-  }
+  const double unit = static_cast<double>(kUnit);
   double lin[3];
   for (int i = 0; i < 3; ++i) {
     const auto byte = static_cast<double>((base_argb >> (16 - 8 * i)) & 0xFFU);
     lin[i] = on_grid(to_linear(byte / 255.0));
   }
-  if (shade) {
-    const double factor = std::clamp(static_cast<double>(mod) / static_cast<double>(kUnit), 0.0, 1.0);
-    for (double& v : lin) {
-      v *= factor;
+  for (std::size_t i = 0; i < transforms.size();) {
+    const ColorTransform& t = transforms[i];
+    if (is_hls_transform(t.name)) {
+      // A run of hue, saturation and luminance transforms shares one HSL pass.
+      Hls c = to_hls(from_linear(lin[0]), from_linear(lin[1]), from_linear(lin[2]));
+      for (; i < transforms.size() && is_hls_transform(transforms[i].name); ++i) {
+        if (!apply_hls(transforms[i], c)) {
+          return std::nullopt;
+        }
+      }
+      double rgb[3];
+      from_hls(c, rgb);
+      for (int k = 0; k < 3; ++k) {
+        lin[k] = on_grid(to_linear(rgb[k]));
+      }
+      continue;
     }
-  } else if (seen_mod || seen_off) {
-    Hls c = to_hls(from_linear(lin[0]), from_linear(lin[1]), from_linear(lin[2]));
-    c.l = std::clamp(c.l * static_cast<double>(mod) / static_cast<double>(kUnit) +
-                         static_cast<double>(off) / static_cast<double>(kUnit),
-                     0.0, 1.0);
-    double rgb[3];
-    from_hls(c, rgb);
-    for (int i = 0; i < 3; ++i) {
-      lin[i] = to_linear(std::clamp(rgb[i], 0.0, 1.0));
+    const std::string_view name = t.name;
+    const double v = t.value ? static_cast<double>(*t.value) / unit : 0.0;
+    const bool needs_value = name != "inv" && name != "gray" && name != "gamma" && name != "invGamma";
+    if (needs_value && !t.value) {
+      return std::nullopt;
     }
+    if (name == "shade") {
+      for (double& x : lin) {
+        x = on_grid(x * v);
+      }
+    } else if (name == "tint") {
+      for (double& x : lin) {
+        x = on_grid(1.0 - (1.0 - x) * v);
+      }
+    } else if (name == "inv") {
+      for (double& x : lin) {
+        x = on_grid(1.0 - x);
+      }
+    } else if (name == "gray") {
+      const double g = 0.2126 * from_linear(lin[0]) + 0.7152 * from_linear(lin[1]) + 0.0722 * from_linear(lin[2]);
+      lin[0] = lin[1] = lin[2] = on_grid(to_linear(g));
+    } else if (name == "gamma") {
+      // Off the grid: the next transform or the output quantises it.
+      for (double& x : lin) {
+        x = from_linear(x);
+      }
+    } else if (name == "invGamma") {
+      for (double& x : lin) {
+        x = on_grid(to_linear(x));
+      }
+    } else if (const int ch = channel_of(name); ch >= 0) {
+      const std::string_view op = name.substr(name[0] == 'r' ? 3 : name[0] == 'g' ? 5 : 4);
+      lin[ch] = on_grid(op.empty() ? v : op == "Mod" ? lin[ch] * v : lin[ch] + v);
+    } else {
+      return std::nullopt;
+    }
+    ++i;
   }
   std::uint32_t argb = 0xFF000000U;
   for (int i = 0; i < 3; ++i) {
-    const double v = std::clamp(from_linear(on_grid(lin[i])) * 255.0, 0.0, 255.0);
+    const double v = std::clamp(from_linear(std::clamp(lin[i], 0.0, 1.0)) * 255.0, 0.0, 255.0);
     argb |= static_cast<std::uint32_t>(std::floor(v + 0.5)) << (16 - 8 * i);
   }
   return argb;
