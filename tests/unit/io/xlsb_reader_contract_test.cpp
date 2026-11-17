@@ -1192,9 +1192,10 @@ TEST(XlsbChartsheet, ExcelChartsheetSettingsConvertBothWays) {
     std::uint32_t xlsb_unconverted;
   };
   // A theme tab colour stores its rendered value in the record, which the .xlsb writer does not resolve.
-  for (const Case& c : {Case{"prot_contents_only", 0U}, Case{"prot_both_pw_abc", 0U},
-                        Case{"page_first_page_number_5", 0U}, Case{"page_draft", 0U}, Case{"page_black_and_white", 0U},
-                        Case{"tab_color_rgb_red", 0U}, Case{"tab_color_theme", 1U}, Case{"header_center_HDR", 0U}}) {
+  for (const Case& c :
+       {Case{"prot_contents_only", 0U}, Case{"prot_both_pw_abc", 0U}, Case{"page_first_page_number_5", 0U},
+        Case{"page_draft", 0U}, Case{"page_black_and_white", 0U}, Case{"page_portrait", 0U}, Case{"page_copies_2", 0U},
+        Case{"tab_color_rgb_red", 0U}, Case{"tab_color_theme", 1U}, Case{"header_center_HDR", 0U}}) {
     SCOPED_TRACE(c.name);
     const std::string base = std::string("chartsheet_twins/") + c.name;
     const std::vector<std::uint8_t> xlsx = test::read_file_bytes(FixturePath((base + ".xlsx").c_str()));

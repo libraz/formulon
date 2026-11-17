@@ -166,8 +166,7 @@ std::optional<std::string> page_setup_xml(ByteSpan payload) {
   const std::uint32_t copies = load_u32(payload.data + 12);
   const std::uint16_t first = load_u16(payload.data + 16);
   const std::uint16_t flags = load_u16(payload.data + 18);
-  if ((flags & ~kPageKnownFlags) != 0U || (flags & kPageLandscape) == 0U || copies != 1U ||
-      ((flags & kPageUseFirstPage) == 0U && first != 1U)) {
+  if ((flags & ~kPageKnownFlags) != 0U || copies == 0U || ((flags & kPageUseFirstPage) == 0U && first != 1U)) {
     return std::nullopt;
   }
   std::string xml = "<pageSetup";
@@ -175,7 +174,7 @@ std::optional<std::string> page_setup_xml(ByteSpan payload) {
   if ((flags & kPageUseFirstPage) != 0U) {
     append_xml_attr_uint(xml, "firstPageNumber", first);
   }
-  xml.append(" orientation=\"landscape\"");
+  xml.append((flags & kPageLandscape) != 0U ? " orientation=\"landscape\"" : " orientation=\"portrait\"");
   if ((flags & kPageBlackAndWhite) != 0U) {
     xml.append(" blackAndWhite=\"1\"");
   }
@@ -187,6 +186,9 @@ std::optional<std::string> page_setup_xml(ByteSpan payload) {
   }
   append_xml_attr_uint(xml, "horizontalDpi", h_dpi);
   append_xml_attr_uint(xml, "verticalDpi", v_dpi);
+  if (copies != 1U) {
+    append_xml_attr_uint(xml, "copies", copies);
+  }
   xml.append("/>");
   return xml;
 }
@@ -196,8 +198,10 @@ std::optional<std::vector<std::uint8_t>> cs_page_setup_record(const pugi::xml_no
   std::uint32_t paper = 1;
   std::uint32_t h_dpi = 0;
   std::uint32_t v_dpi = 0;
+  std::uint32_t copies = 1;
   std::uint16_t first = 1;
   std::uint16_t flags = 0;
+  bool oriented = false;
   for (const pugi::xml_attribute attr : page_setup.attributes()) {
     const std::string_view name = attr.name();
     if (name == "paperSize") {
@@ -208,8 +212,13 @@ std::optional<std::vector<std::uint8_t>> cs_page_setup_record(const pugi::xml_no
       v_dpi = attr.as_uint();
     } else if (name == "firstPageNumber") {
       first = static_cast<std::uint16_t>(attr.as_uint());
+    } else if (name == "copies" && attr.as_uint() != 0U) {
+      copies = attr.as_uint();
     } else if (name == "orientation" && std::string_view(attr.value()) == "landscape") {
       flags |= kPageLandscape;
+      oriented = true;
+    } else if (name == "orientation" && std::string_view(attr.value()) == "portrait") {
+      oriented = true;
     } else if (name == "blackAndWhite" && attr.as_bool()) {
       flags |= kPageBlackAndWhite;
     } else if (name == "draft" && attr.as_bool()) {
@@ -220,14 +229,14 @@ std::optional<std::vector<std::uint8_t>> cs_page_setup_record(const pugi::xml_no
       return std::nullopt;
     }
   }
-  if ((flags & kPageLandscape) == 0U) {
+  if (!oriented) {
     return std::nullopt;
   }
   std::vector<std::uint8_t> payload;
   emit_u32(payload, paper);
   emit_u32(payload, h_dpi);
   emit_u32(payload, v_dpi);
-  emit_u32(payload, 1U);
+  emit_u32(payload, copies);
   emit_u16(payload, first);
   emit_u16(payload, flags);
   emit_u32(payload, 0xFFFFFFFFU);
