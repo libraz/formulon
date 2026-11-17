@@ -170,23 +170,18 @@ Expected<ReferenceRect, ErrorCode> resolve_reference_rect(const parser::AstNode&
                                                           const FunctionRegistry& registry, const EvalContext& ctx) {
   std::string_view sheet_name;
   ReferenceRect rect;
-  if (node.kind() == parser::NodeKind::Ref) {
+  if (node.kind() == parser::NodeKind::Ref && !node.as_ref().is_full_col && !node.as_ref().is_full_row) {
     const parser::Reference& ref = node.as_ref();
-    if (ref.is_full_col || ref.is_full_row) {
-      return ErrorCode::Value;
-    }
     sheet_name = ref.sheet;
     rect.top = rect.bottom = ref.row;
     rect.left = rect.right = ref.col;
   } else if ((node.kind() == parser::NodeKind::Call && is_reference_call_name(node.as_call_name())) ||
-             node.kind() == parser::NodeKind::NameRef || node.kind() == parser::NodeKind::RangeOp) {
+             node.kind() == parser::NodeKind::NameRef || node.kind() == parser::NodeKind::RangeOp ||
+             node.kind() == parser::NodeKind::Ref) {
     RefArea area{};
     ErrorCode err = ErrorCode::Value;
     if (!eval_reference_area(node, arena, registry, ctx, &sheet_name, &area, &err)) {
       return err;
-    }
-    if (area.whole_col != 0U || area.whole_row != 0U) {
-      return ErrorCode::Value;
     }
     rect.top = area.row_first;
     rect.bottom = area.row_last;

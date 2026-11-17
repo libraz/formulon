@@ -15,7 +15,8 @@
 //   * `=PHONETIC(A1)` text cell, no annotation -> surface text.
 //   * `=PHONETIC(A1)` blank cell -> "".
 //   * `=PHONETIC(A1)` number / boolean cell -> #N/A.
-//   * Whole-row / whole-column ref -> #VALUE!.
+//   * A range, whole rows and columns included -> its cells' readings
+//     joined row by row.
 //   * Non-Ref args (literal text, arithmetic, ...) ride the eager arm
 //     in `eval_phonetic_lazy` and surface the same passthrough rule.
 
@@ -321,22 +322,40 @@ TEST(BuiltinsPhoneticLazy, AnnotatedNumberCellPrefersKana) {
 // Ref shape: full row / column / range
 // ---------------------------------------------------------------------------
 
-TEST(BuiltinsPhoneticLazy, FullColumnRefReturnsValue) {
+TEST(BuiltinsPhoneticLazy, FullColumnJoinsItsPopulatedCells) {
+  // Mac Excel 365 ja-JP: `=PHONETIC(A:A)` with "a" in A1 reads "a".
   Workbook wb = MakeSingleSheetWorkbook();
+  wb.sheet(0).set_cell_value(0, 0, Value::text("a"));
+  wb.sheet(0).set_cell_value(5, 0, Value::text("kanji"));
+  wb.sheet(0).set_cell_phonetic(5, 0, "kana");
+  wb.sheet(0).set_cell_value(9, 0, Value::number(3.0));
+  wb.sheet(0).set_cell_value(0, 1, Value::text("other column"));
   EvalState state;
   const EvalContext ctx(wb, wb.sheet(0), state);
   const Value v = EvalWith("=PHONETIC(A:A)", ctx);
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "akana");
 }
 
-TEST(BuiltinsPhoneticLazy, FullRowRefReturnsValue) {
+TEST(BuiltinsPhoneticLazy, FullRowJoinsItsPopulatedCells) {
   Workbook wb = MakeSingleSheetWorkbook();
+  wb.sheet(0).set_cell_value(0, 0, Value::text("x"));
+  wb.sheet(0).set_cell_value(0, 16383, Value::text("y"));
+  wb.sheet(0).set_cell_value(1, 0, Value::text("other row"));
   EvalState state;
   const EvalContext ctx(wb, wb.sheet(0), state);
   const Value v = EvalWith("=PHONETIC(1:1)", ctx);
-  ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "xy");
+}
+
+TEST(BuiltinsPhoneticLazy, EmptyFullColumnReadsEmptyText) {
+  Workbook wb = MakeSingleSheetWorkbook();
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  const Value v = EvalWith("=PHONETIC(B:C)", ctx);
+  ASSERT_TRUE(v.is_text());
+  EXPECT_EQ(v.as_text(), "");
 }
 
 TEST(BuiltinsPhoneticLazy, OneByOneRangeReadsTheCellAnnotation) {

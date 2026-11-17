@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "cell.h"
@@ -126,15 +127,10 @@ Value eval_phonetic_lazy(const parser::AstNode& call, Arena& arena, const Functi
   }
   const parser::AstNode& arg = call.as_call_arg(0);
 
-  // Ref path: look up the target cell's phonetic_text directly. Mirrors
-  // ISFORMULA / FORMULATEXT's handling in info_lazy.cpp, including the
-  // whole-row / whole-column #VALUE! surface and the broken-qualifier
-  // #REF! / #NAME? mapping.
-  if (arg.kind() == parser::NodeKind::Ref) {
+  // One cell: its reading directly, with ISFORMULA / FORMULATEXT's
+  // broken-qualifier #REF! / #NAME? mapping.
+  if (arg.kind() == parser::NodeKind::Ref && !arg.as_ref().is_full_col && !arg.as_ref().is_full_row) {
     const parser::Reference& r = arg.as_ref();
-    if (r.is_full_col || r.is_full_row) {
-      return Value::error(ErrorCode::Value);
-    }
     const Sheet* target = ctx.sheet_for_qualifier(r.sheet);
     if (target == nullptr) {
       // Unbound context: #NAME?. Missing qualified sheet: #REF!. Same
@@ -146,33 +142,41 @@ Value eval_phonetic_lazy(const parser::AstNode& call, Arena& arena, const Functi
     return cell_phonetic(*target, r, ctx.without_read_observer(), arena);
   }
 
-  // A range: the readings of its cells joined row by row.
-  if (arg.kind() == parser::NodeKind::RangeOp) {
+  // A range, whole columns and rows included: the readings of its
+  // populated cells joined row by row (a blank cell reads as "").
+  if (arg.kind() == parser::NodeKind::RangeOp || arg.kind() == parser::NodeKind::Ref) {
     std::string_view qualifier;
     RefArea area{};
     ErrorCode err = ErrorCode::Value;
     if (!eval_reference_area(arg, arena, registry, ctx, &qualifier, &area, &err)) {
       return Value::error(err);
     }
-    if (area.whole_col != 0U || area.whole_row != 0U) {
-      return Value::error(ErrorCode::Value);
-    }
     const Sheet* target = ctx.sheet_for_qualifier(qualifier);
     if (target == nullptr) {
       return Value::error(ctx.current_sheet() == nullptr ? ErrorCode::Name : ErrorCode::Ref);
+    }
+    std::vector<std::pair<std::uint32_t, std::uint32_t>> populated;
+    std::uint64_t cursor = 0;
+    while (cursor != Sheet::kCellCursorEnd) {
+      cursor = target->cells_in_range(
+          area.row_first, area.col_first, area.row_last, area.col_last, cursor, 4096U,
+          [](const Sheet::RangeCell& cell, void* out) {
+            static_cast<std::vector<std::pair<std::uint32_t, std::uint32_t>>*>(out)->emplace_back(cell.row, cell.col);
+          },
+          &populated);
     }
     const EvalContext text_ctx = ctx.without_read_observer();
     std::string joined;
     parser::Reference r{};
     r.sheet = qualifier;
-    for (r.row = area.row_first; r.row <= area.row_last; ++r.row) {
-      for (r.col = area.col_first; r.col <= area.col_last; ++r.col) {
-        const Value part = cell_phonetic(*target, r, text_ctx, arena);
-        if (!part.is_text()) {
-          return part;
-        }
-        joined.append(part.as_text());
+    for (const auto& at : populated) {
+      r.row = at.first;
+      r.col = at.second;
+      const Value part = cell_phonetic(*target, r, text_ctx, arena);
+      if (!part.is_text()) {
+        return part;
       }
+      joined.append(part.as_text());
     }
     return Value::text(arena.intern(joined));
   }

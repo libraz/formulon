@@ -140,6 +140,36 @@ TEST(BuiltinsFormulaText, RangeArgAnswersEachCell) {
   EXPECT_EQ(v.as_array()->cells[1].as_error(), ErrorCode::NA);
 }
 
+// Mac Excel 365: `=ISFORMULA(A:A)` and `=FORMULATEXT(1:1)` lift over the
+// whole axis, so mid-sheet they surface #SPILL! (off the grid).
+TEST(BuiltinsIsFormula, WholeColumnAnswersEachRow) {
+  Workbook wb = MakeThreeSheetWorkbook();
+  wb.sheet(0).set_cell_formula(1, 0, "=1+1");
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  const Value v = EvalWith("=ISFORMULA(A:A)", ctx);
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array()->rows, Sheet::kMaxRows);
+  ASSERT_EQ(v.as_array()->cols, 1U);
+  EXPECT_FALSE(v.as_array()->cells[0].as_boolean());
+  EXPECT_TRUE(v.as_array()->cells[1].as_boolean());
+  EXPECT_FALSE(v.as_array()->cells[Sheet::kMaxRows - 1U].as_boolean());
+}
+
+TEST(BuiltinsFormulaText, WholeRowAnswersEachColumn) {
+  Workbook wb = MakeThreeSheetWorkbook();
+  wb.sheet(0).set_cell_formula(0, 2, "=1+1");
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  const Value v = EvalWith("=FORMULATEXT(1:1)", ctx);
+  ASSERT_TRUE(v.is_array()) << v.debug_to_string();
+  ASSERT_EQ(v.as_array()->rows, 1U);
+  ASSERT_EQ(v.as_array()->cols, Sheet::kMaxCols);
+  EXPECT_EQ(v.as_array()->cells[2].as_text(), "=1+1");
+  ASSERT_TRUE(v.as_array()->cells[0].is_error());
+  EXPECT_EQ(v.as_array()->cells[0].as_error(), ErrorCode::NA);
+}
+
 TEST(BuiltinsIsFormula, LetBoundRefReportsTargetFormulaCell) {
   // `=LET(c, A1, ISFORMULA(c))` must look through the LET binding to A1 and
   // report whether A1 holds a formula. A1 is a formula cell -> TRUE.
