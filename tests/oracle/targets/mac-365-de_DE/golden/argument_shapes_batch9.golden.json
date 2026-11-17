@@ -6,7 +6,7 @@
     "excel_locale": "de-DE",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-11-17T13:28:14Z"
+    "generated_at": "2026-11-17T22:13:10Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -1534,6 +1534,232 @@
       "expect": {
         "kind": "text",
         "value": "=2+2"
+      }
+    },
+    {
+      "id": "seriessum_arg1_numeric_text",
+      "formula": "=SERIESSUM(\"2\",0,1,{1;1})",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "seriessum_arg2_text_cell",
+      "formula": "=SERIESSUM(2,B1,1,{1;1})",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "0"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "seriessum_arg3_boolean_cell",
+      "formula": "=SERIESSUM(2,0,B1,{1;1})",
+      "setup": {
+        "B1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "covar_arg1_text_cell",
+      "formula": "=COVAR(B1,2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "a"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "covariance_s_arg1_boolean_cell",
+      "formula": "=COVARIANCE.S(B1,2)",
+      "setup": {
+        "B1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "t_test_arg3_text_cell",
+      "formula": "=T.TEST({1,2,3,4,5},{6,7,8,9,10},B1,2)",
+      "setup": {
+        "B1": {
+          "kind": "text",
+          "value": "1"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0005264128966832697
+      }
+    },
+    {
+      "id": "arraytotext_arg1_blank_cell_concise",
+      "formula": "=ARRAYTOTEXT(B2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "dsum_arg2_computed_error",
+      "formula": "=DSUM(A1:B3,1/0,D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "a"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "dsum_arg2_error_cell",
+      "formula": "=DSUM(A1:B3,F1,D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=1/0"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "dsum_arg2_indirect_range",
+      "formula": "=DSUM(A1:B3,INDIRECT(\"F1:G1\"),D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "F1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 2.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
       }
     }
   ]

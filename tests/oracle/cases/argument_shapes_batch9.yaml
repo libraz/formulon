@@ -242,3 +242,31 @@ cases:
   - id: formulatext_range_lifted
     setup: { A1: "=1+1", A2: "=2+2" }
     formula: "=INDEX(FORMULATEXT(A1:A2),2)"
+  - id: seriessum_arg1_numeric_text
+    formula: "=SERIESSUM(\"2\",0,1,{1;1})"
+  - id: seriessum_arg2_text_cell
+    setup: { B1: "0" }
+    formula: "=SERIESSUM(2,B1,1,{1;1})"
+  - id: seriessum_arg3_boolean_cell
+    setup: { B1: true }
+    formula: "=SERIESSUM(2,0,B1,{1;1})"
+  - id: covar_arg1_text_cell
+    setup: { B1: "a" }
+    formula: "=COVAR(B1,2)"
+  - id: covariance_s_arg1_boolean_cell
+    setup: { B1: true }
+    formula: "=COVARIANCE.S(B1,2)"
+  - id: t_test_arg3_text_cell
+    setup: { B1: "1" }
+    formula: "=T.TEST({1,2,3,4,5},{6,7,8,9,10},B1,2)"
+  - id: arraytotext_arg1_blank_cell_concise
+    formula: "=ARRAYTOTEXT(B2)"
+  - id: dsum_arg2_computed_error
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, D1: "k", D2: "a" }
+    formula: "=DSUM(A1:B3,1/0,D1:D2)"
+  - id: dsum_arg2_error_cell
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, D1: "k", D2: "a", F1: "=1/0" }
+    formula: "=DSUM(A1:B3,F1,D1:D2)"
+  - id: dsum_arg2_indirect_range
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, D1: "k", D2: "a", F1: 2, G1: 2 }
+    formula: "=DSUM(A1:B3,INDIRECT(\"F1:G1\"),D1:D2)"
