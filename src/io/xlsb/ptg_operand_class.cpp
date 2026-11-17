@@ -246,17 +246,21 @@ Shape Shapes::call_shape(const parser::AstNode& node) {
     return passed;
   }
   if (is("INDEX")) {
-    // A reference indexed by positive integer constants is one cell.
+    // Positive integer constants pick one cell of a reference by a row alone, and one element of an array only by a
+    // row and a column (`INDEX({1;2;3},2)` may still be a row).
     const Shape source = arity == 0U ? Shape::kReference : of_array_operand(node.as_call_arg(0));
-    if (source != Shape::kReference) {
+    if (source == Shape::kScalar) {
       return source;
     }
     for (std::uint32_t i = 1; i < arity; ++i) {
       if (!positive_int(node.as_call_arg(i))) {
-        return Shape::kReference;
+        return source;
       }
     }
-    return arity < 2U ? Shape::kReference : Shape::kScalar;
+    if (arity >= 3U || (arity == 2U && source == Shape::kReference)) {
+      return Shape::kScalar;
+    }
+    return source;
   }
   if (is("OFFSET")) {
     // One cell from a one-cell base whose height and width are 1 or absent.

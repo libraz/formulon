@@ -231,6 +231,22 @@ TEST(XlsbPtgCodec, LegacyIntersectionsFollowExcelsFormula2) {
   for (const char* operand : {"C4:C19", "B4:B19", "H4:H12"}) {
     EXPECT_EQ(std::find(aggregate.begin(), aggregate.end(), operand), aggregate.end()) << operand;
   }
+  // So is a value-class call written directly in an array-class argument; one in a reference argument is not.
+  for (const char* formula : {"MATCH(TRUE,INDEX(ISBLANK(B1:B3),0),0)", "ROWS(FILTER(A1:A3,ISNUMBER(A1:A3)))",
+                              "XMATCH(TRUE,ISBLANK(B1:B3))"}) {
+    EXPECT_EQ(listed(formula), Texts{}) << formula;
+  }
+  EXPECT_EQ(listed("SUM(--ISBLANK(B1:B3))"), Texts{"B1:B3"});
+  // INDEX over an array with the column omitted may return a row of it.
+  for (const char* formula : {"TYPE(INDEX({1;2;3},2))", "TYPE(INDEX(SEQUENCE(3),2))", "TYPE(INDEX(SEQUENCE(1,3),2))",
+                              "TYPE(INDEX(UNIQUE(A1:A3),2))"}) {
+    const std::string_view text(formula);
+    EXPECT_EQ(listed(formula), Texts{std::string(text.substr(5, text.size() - 6))}) << formula;
+  }
+  for (const char* formula : {"TYPE(INDEX({1;2;3},2,1))", "TYPE(INDEX(SEQUENCE(3),2,1))", "TYPE(INDEX(A1:A3,2))",
+                              "ROWS(INDEX(SEQUENCE(3),2))", "ISREF(INDEX(SEQUENCE(3),2))"}) {
+    EXPECT_EQ(listed(formula), Texts{}) << formula;
+  }
 }
 TEST(XlsbPtgCodec, BranchingCallsCarryExcelsJumpAttributes) {
   const std::vector<std::uint8_t> a1 = {0x44, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0};

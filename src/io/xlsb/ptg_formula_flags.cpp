@@ -114,10 +114,13 @@ class LegacyIntersections {
   /// intersected node, the body of an intersected LET or LAMBDA call: it
   /// takes no second `@` (`@LET(a,A1:A3,a)`).
   void walk(const parser::AstNode& node, Slot slot, bool root, bool covered = false) {
-    // Everything under a forced-array parameter is evaluated as an array,
-    // nested calls included (`SUMPRODUCT(ABS(A1:A2))` shows no `@`).
-    const bool value = !covered && !in_forced_array_ &&
-                       (root || SlotClass(slot, /*area=*/true, PtgEvaluation::kLegacy) == kPtgValueClass);
+    // Everything under a forced-array or array parameter is evaluated as an
+    // array, nested calls included (`SUMPRODUCT(ABS(A1:A2))`,
+    // `XMATCH(TRUE,ISBLANK(B1:B3))` show no `@`).
+    // A computed array takes the class of a value where an area would be array class (`TYPE(@INDEX({1;2;3},2))`).
+    const bool area = shapes_.of(node) == Shape::kReference;
+    const bool value =
+        !covered && !in_forced_array_ && (root || SlotClass(slot, area, PtgEvaluation::kLegacy) == kPtgValueClass);
     if (node.kind() == parser::NodeKind::ImplicitIntersection) {
       // A written `@` is listed when it is the one Excel would show; its
       // operand never takes a second one.
@@ -170,7 +173,7 @@ class LegacyIntersections {
             slot.operand && SlotClass(slot, /*area=*/true, PtgEvaluation::kLegacy) != kPtgValueClass;
         for (std::uint32_t i = 0; i < node.as_call_arity(); ++i) {
           const Slot arg = builtin ? Slot{shapes_.parameter_class(name, i), false} : Slot{};
-          const ArrayScope forced(in_forced_array_, array_operand || arg.letter == 'F');
+          const ArrayScope forced(in_forced_array_, array_operand || arg.letter == 'F' || arg.letter == 'X');
           walk(node.as_call_arg(i), arg, false);
         }
         return;
