@@ -296,6 +296,20 @@ TEST(StructuredRefSpellingDisplay, UnchangedText) {
   EXPECT_EQ(display_structured_refs("=tblSales[#Bogus]", "tblSales"), "=tblSales[#Bogus]");
 }
 
+// A table of another workbook keeps its name and qualifier; `#This Row` with one column shows as `@`, every other
+// measured form as stored.
+TEST(StructuredRefSpellingDisplay, ExternalTableReference) {
+  EXPECT_EQ(display_structured_refs("=src_a.xlsx!Tbl[[#This Row],[v]]", "Tbl"), "=src_a.xlsx!Tbl[@v]");
+  EXPECT_EQ(display_structured_refs("='/d/src_a.xlsx'!Tbl[[#This Row],[v]]&\"x\"", ""),
+            "='/d/src_a.xlsx'!Tbl[@v]&\"x\"");
+  EXPECT_EQ(display_structured_refs("=SUM(src_a.xlsx!Tbl[[#This Row],[v]],1)", ""), "=SUM(src_a.xlsx!Tbl[@v],1)");
+  for (const char* kept :
+       {"=a.xlsx!Tbl[#Headers]", "=a.xlsx!Tbl[[#Data],[v]]", "=a.xlsx!Tbl[[#Headers],[#Data],[a]:[c]]",
+        "=a.xlsx!Tbl[[a]:[c]]", "=n.xlsx!Nm[x'[y]", "=n.xlsx!Nm[o''k]", "=n.xlsx!Nm[sp ace]", "=a.xlsx!Tbl[v]"}) {
+    EXPECT_EQ(display_structured_refs(kept, ""), kept);
+  }
+}
+
 // FormulaR1C1 matches Formula for every structured reference (D3).
 TEST(StructuredRefSpellingDisplay, R1C1MatchesA1) {
   for (const D1Row& row : kD1) {

@@ -62,6 +62,28 @@ std::string Splice(std::string_view text, std::size_t body_at, const std::vector
   return out;
 }
 
+// A table reference into another workbook: its `Table[...]` tail as the formula bar shows it, the book qualifier
+// kept. A formula never sits inside another workbook's table, so the table name always stays.
+void CollectExternalDisplay(const AstNode& node, std::string_view body, std::vector<Edit>* edits) {
+  const std::string_view table = node.as_external_ref_name();
+  const std::string_view raw = node.as_external_ref_structured();
+  const std::optional<StructuredRefPayload> payload = parse_structured_ref_payload_text(raw);
+  if (!payload) {
+    return;
+  }
+  const Edit span = NodeSpan(node, body);
+  const std::size_t tail = table.size() + raw.size() + 2U;
+  const std::string_view written = body.substr(span.start, span.end - span.start);
+  if (written.size() < tail || written.substr(written.size() - raw.size() - 1U, raw.size()) != raw ||
+      written.back() != ']') {
+    return;
+  }
+  Edit edit{span.end - tail, span.end, display_structured_ref(table, *payload, /*inside_own_table=*/false)};
+  if (body.substr(edit.start, tail) != edit.text) {
+    edits->push_back(std::move(edit));
+  }
+}
+
 void CollectDisplay(const AstNode& node, std::string_view body, std::string_view own_table,
                     const sheet_names::NameList* table_list, std::vector<Edit>* edits) {
   if (node.kind() == NodeKind::StructuredRef) {
@@ -74,6 +96,10 @@ void CollectDisplay(const AstNode& node, std::string_view body, std::string_view
     if (body.substr(edit.start, edit.end - edit.start) != edit.text) {
       edits->push_back(std::move(edit));
     }
+    return;
+  }
+  if (node.kind() == NodeKind::ExternalRef && !node.as_external_ref_structured().empty()) {
+    CollectExternalDisplay(node, body, edits);
     return;
   }
   any_child_node(node, [&](const AstNode& child) {
