@@ -29,6 +29,8 @@
 #include "eval/jp_fold.h"
 #include "eval/lazy_impls.h"
 #include "eval/range_args.h"
+#include "eval/scalar_args.h"
+#include "eval/tree_walker/dispatch.h"
 #include "excel_locale.h"
 #include "numeric_aggregate_kernels.h"
 #include "parser/ast.h"
@@ -122,17 +124,13 @@ std::uint32_t find_header_column(const std::string& folded_needle, const FoldedH
 //    rejected with `#VALUE!` (no zero-th column).
 //  * Text  : case-insensitive ASCII equality against each header cell's
 //    `coerce_to_text` rendering; first match wins.
-//  * Blank / Error: rejected with `#VALUE!`.
+//  * Blank / Error: rejected with `#VALUE!`, whatever the error.
 //
 // Returns `true` on success with the 0-indexed column written to
 // `*out_col_index`. On failure writes the propagating error Value to
 // `*out_err` and returns `false`.
 bool resolve_field_column(const Value& field_value, const std::vector<Value>& db_cells, std::uint32_t db_cols,
                           ExcelProfile profile, std::uint32_t* out_col_index, Value* out_err) {
-  if (field_value.is_error()) {
-    *out_err = field_value;
-    return false;
-  }
   if (field_value.is_number() || field_value.is_boolean()) {
     // Bool coerces to 0/1 just like Excel's other integer-index arguments
     // (CHOOSE, INDEX). FALSE -> 0 falls through the `< 1` check below and
@@ -275,148 +273,141 @@ bool record_matches(std::uint32_t r, const std::vector<Value>& db_cells, std::ui
   return false;
 }
 
-// Full argument resolution shared by every D-function. Writes the two
-// resolved tables, the resolved 0-indexed field column, and (on error)
-// the propagating error Value. Returns `true` on success.
-bool resolve_common(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx,
-                    std::vector<Value>* out_db, std::uint32_t* out_db_rows, std::uint32_t* out_db_cols,
-                    std::vector<Value>* out_crit, std::uint32_t* out_crit_rows, std::uint32_t* out_crit_cols,
-                    std::uint32_t* out_field_col, Value* out_err) {
+// The resolved `database` and `criteria` tables of a D-function call.
+struct DTables {
+  std::vector<Value> db;
+  std::uint32_t db_rows = 0;
+  std::uint32_t db_cols = 0;
+  std::vector<Value> crit;
+  std::uint32_t crit_rows = 0;
+  std::uint32_t crit_cols = 0;
+};
+
+// Resolves `database` (at least one data row beneath the header row) into
+// `*out`. Returns `false` with the error in `*out_err`.
+bool resolve_database(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx, DTables* out, Value* out_err) {
   if (call.as_call_arity() != 3U) {
     *out_err = Value::error(ErrorCode::Value);
     return false;
   }
-  if (!resolve_table_arg(call.as_call_arg(0), arena, registry, ctx, out_db, out_db_rows, out_db_cols, out_err)) {
+  if (!resolve_table_arg(call.as_call_arg(0), arena, registry, ctx, &out->db, &out->db_rows, &out->db_cols, out_err)) {
     return false;
   }
-  // A D-function requires a database with at least one data row beneath
-  // the header row; a single-row range (just the labels) surfaces
-  // `#VALUE!` per Mac Excel 365. This also short-circuits the subsequent
-  // field / criteria resolution, which would otherwise do useful work
-  // before discovering there is nothing to aggregate.
-  if (*out_db_rows < 2U) {
-    *out_err = Value::error(ErrorCode::Value);
-    return false;
-  }
-  // D-functions reject a multi-cell range as the field arg per Mac Excel
-  // 365: =DCOUNT(_, $E$1:$F$1, _) yields #VALUE! rather than projecting to
-  // a spill anchor. Without this guard, the post-spill RangeOp evaluator
-  // would silently swallow the multi-cell shape into the top-left value.
-  // Verified against `tests/oracle/cases/dfunc_field_range_arg.yaml`.
-  {
-    const parser::AstNode& field_node = call.as_call_arg(1);
-    if (field_node.kind() == parser::NodeKind::RangeOp) {
-      const parser::AstNode& lhs = field_node.as_range_operand(0);
-      const parser::AstNode& rhs = field_node.as_range_operand(1);
-      if (field_node.as_range_arity() == 2U && lhs.kind() == parser::NodeKind::Ref &&
-          rhs.kind() == parser::NodeKind::Ref) {
-        const auto& lhs_ref = lhs.as_ref();
-        const auto& rhs_ref = rhs.as_ref();
-        if (lhs_ref.row != rhs_ref.row || lhs_ref.col != rhs_ref.col) {
-          *out_err = Value::error(ErrorCode::Value);
-          return false;
-        }
-      }
-    }
-  }
-  // The `field` argument is a scalar; evaluate it eagerly so any error
-  // in the subtree propagates with its real code.
-  const Value field_val = eval_node(call.as_call_arg(1), arena, registry, ctx);
-  if (!resolve_field_column(field_val, *out_db, *out_db_cols, ctx.excel_profile(), out_field_col, out_err)) {
-    return false;
-  }
-  if (!resolve_table_arg(call.as_call_arg(2), arena, registry, ctx, out_crit, out_crit_rows, out_crit_cols, out_err)) {
-    return false;
-  }
-  // Mac Excel 365 (16.108.1, ja-JP) rejects a criteria block that has
-  // only its header row with `#VALUE!`: the contract requires at least
-  // one criterion row beneath the headers. Mirror that here rather than
-  // silently treating "no criterion rows" as "match every record" — the
-  // latter would over-count records and silently drift from Excel.
-  if (*out_crit_rows < 2U) {
+  if (out->db_rows < 2U) {
     *out_err = Value::error(ErrorCode::Value);
     return false;
   }
   return true;
 }
 
-// Collects the field-column cells of every matching record. Preserves
-// original Value shape (Blank / Bool / Text / Number / Error) — the
-// caller decides which shapes survive its aggregator.
-std::vector<Value> collect_matching_field_values(const std::vector<Value>& db_cells, std::uint32_t db_rows,
-                                                 std::uint32_t db_cols, const std::vector<Value>& crit_cells,
-                                                 std::uint32_t crit_rows, std::uint32_t crit_cols,
-                                                 std::uint32_t field_col, ExcelProfile profile) {
-  std::vector<Value> out;
-  if (db_rows <= 1U) {
-    return out;
+// Resolves `criteria` (at least one criterion row beneath its headers) into
+// `*out`. Returns `false` with the error in `*out_err`.
+bool resolve_criteria(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx, DTables* out, Value* out_err) {
+  if (!resolve_table_arg(call.as_call_arg(2), arena, registry, ctx, &out->crit, &out->crit_rows, &out->crit_cols,
+                         out_err)) {
+    return false;
   }
+  if (out->crit_rows < 2U) {
+    *out_err = Value::error(ErrorCode::Value);
+    return false;
+  }
+  return true;
+}
+
+// The `field` argument's value. A multi-cell reference is `#VALUE!`; an array
+// value lifts the call.
+Value field_arg_value(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx) {
+  const parser::AstNode& field_node = call.as_call_arg(1);
+  if (field_node.kind() == parser::NodeKind::RangeOp) {
+    const parser::AstNode& lhs = field_node.as_range_operand(0);
+    const parser::AstNode& rhs = field_node.as_range_operand(1);
+    if (field_node.as_range_arity() == 2U && lhs.kind() == parser::NodeKind::Ref &&
+        rhs.kind() == parser::NodeKind::Ref) {
+      const auto& lhs_ref = lhs.as_ref();
+      const auto& rhs_ref = rhs.as_ref();
+      if (lhs_ref.row != rhs_ref.row || lhs_ref.col != rhs_ref.col) {
+        return Value::error(ErrorCode::Value);
+      }
+    }
+  }
+  const Value v = eval_node(field_node, arena, registry, ctx);
+  if (v.is_array() && is_reference_shape(field_node)) {
+    return Value::error(ErrorCode::Value);
+  }
+  return v;
+}
+
+// The field-column cells of every matching record, in record order.
+std::vector<Value> collect_matching_field_values(const DTables& t, std::uint32_t field_col, ExcelProfile profile) {
+  std::vector<Value> out;
   const std::vector<CompiledCriterionRow> compiled_criteria =
-      compile_criteria(db_cells, db_cols, crit_cells, crit_rows, crit_cols, profile);
-  out.reserve(db_rows - 1U);
-  for (std::uint32_t r = 1; r < db_rows; ++r) {
-    if (record_matches(r, db_cells, db_cols, compiled_criteria, profile)) {
-      out.push_back(db_cells[(static_cast<std::size_t>(r) * db_cols) + field_col]);
+      compile_criteria(t.db, t.db_cols, t.crit, t.crit_rows, t.crit_cols, profile);
+  out.reserve(t.db_rows - 1U);
+  for (std::uint32_t r = 1; r < t.db_rows; ++r) {
+    if (record_matches(r, t.db, t.db_cols, compiled_criteria, profile)) {
+      out.push_back(t.db[(static_cast<std::size_t>(r) * t.db_cols) + field_col]);
     }
   }
   return out;
 }
 
-// Distils the numeric subset of `field_values` via `coerce_to_number`.
-// Cells that fail to coerce (e.g. non-numeric text) or that carry an
-// error are silently dropped, matching the SUM-over-range behaviour.
-std::vector<double> collect_matching_numbers(const std::vector<Value>& field_values) {
-  // Excel's range-aware numeric aggregators (SUM, AVERAGE, COUNT, MIN,
-  // MAX, …) skip non-Number cells outright: Bool, Text (including numeric
-  // text), Blank, and Error are all ignored. The D-family mirrors that
-  // rule, so we reject anything that isn't a pure Number here instead of
-  // piping through `coerce_to_number`, which would fold Bool -> 1/0.
-  std::vector<double> out;
-  out.reserve(field_values.size());
-  for (const Value& v : field_values) {
+// The reduction a D-function applies to the field values of its matching
+// records.
+using FieldReduce = Value (*)(const std::vector<Value>& vals);
+
+// Runs the argument shape every D-function shares — `database`, `field`,
+// `criteria` — and reduces the field values of the matching records. An
+// array `field` lifts the call element by element.
+Value eval_dfunction(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx, FieldReduce reduce) {
+  DTables t;
+  Value err = Value::blank();
+  if (!resolve_database(call, arena, registry, ctx, &t, &err)) {
+    return err;
+  }
+  const Value field = field_arg_value(call, arena, registry, ctx);
+  const ExcelProfile profile = ctx.excel_profile();
+  std::uint32_t field_col = 0;
+  if (!field.is_array() && !resolve_field_column(field, t.db, t.db_cols, profile, &field_col, &err)) {
+    return err;
+  }
+  if (!resolve_criteria(call, arena, registry, ctx, &t, &err)) {
+    return err;
+  }
+  if (!field.is_array()) {
+    return reduce(collect_matching_field_values(t, field_col, profile));
+  }
+  return lift_over_array_args(&field, 1U, arena, [&](const Value* args, std::uint32_t) {
+    std::uint32_t col = 0;
+    Value col_err = Value::blank();
+    if (!resolve_field_column(args[0], t.db, t.db_cols, profile, &col, &col_err)) {
+      return col_err;
+    }
+    return reduce(collect_matching_field_values(t, col, profile));
+  });
+}
+
+// The numbers among the matched field values; text, Booleans and blanks are
+// skipped as a range aggregate skips them. Returns `false` with the first
+// error value in `*out_err`.
+bool matching_numbers(const std::vector<Value>& vals, std::vector<double>* out, Value* out_err) {
+  out->reserve(vals.size());
+  for (const Value& v : vals) {
+    if (v.is_error()) {
+      *out_err = v;
+      return false;
+    }
     if (v.kind() != ValueKind::Number) {
       continue;
     }
     const double d = v.as_number();
-    if (std::isnan(d) || std::isinf(d)) {
-      continue;
+    if (std::isfinite(d)) {
+      out->push_back(d);
     }
-    out.push_back(d);
   }
-  return out;
-}
-
-// Runs the argument shape every D-function shares — `database`,
-// `field`, `criteria` — and yields the field-column value of each
-// matching record. Returns `false` with the propagating error written to
-// `*out_err` when any of the three arguments fails to resolve.
-bool resolve_field_values(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                          const EvalContext& ctx, std::vector<Value>* out_vals, Value* out_err) {
-  std::vector<Value> db;
-  std::vector<Value> crit;
-  std::uint32_t db_rows = 0;
-  std::uint32_t db_cols = 0;
-  std::uint32_t crit_rows = 0;
-  std::uint32_t crit_cols = 0;
-  std::uint32_t field_col = 0;
-  if (!resolve_common(call, arena, registry, ctx, &db, &db_rows, &db_cols, &crit, &crit_rows, &crit_cols, &field_col,
-                      out_err)) {
-    return false;
-  }
-  *out_vals =
-      collect_matching_field_values(db, db_rows, db_cols, crit, crit_rows, crit_cols, field_col, ctx.excel_profile());
-  return true;
-}
-
-// Resolves the D-function arguments and keeps only the numeric field values
-// of the matching records. Same failure contract as `resolve_field_values`.
-bool resolve_matching_numbers(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                              const EvalContext& ctx, std::vector<double>* out_nums, Value* out_err) {
-  std::vector<Value> vals;
-  if (!resolve_field_values(call, arena, registry, ctx, &vals, out_err)) {
-    return false;
-  }
-  *out_nums = collect_matching_numbers(vals);
   return true;
 }
 
@@ -430,39 +421,28 @@ double sum_of(const std::vector<double>& nums) {
   return sum;
 }
 
-}  // namespace
-
-// ---------------------------------------------------------------------------
-// Public impls
-// ---------------------------------------------------------------------------
-
-Value eval_dsum_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                     const EvalContext& ctx) {
+Value reduce_sum(const std::vector<Value>& vals) {
   std::vector<double> nums;
   Value err = Value::blank();
-  if (!resolve_matching_numbers(call, arena, registry, ctx, &nums, &err)) {
+  if (!matching_numbers(vals, &nums, &err)) {
     return err;
   }
   return to_finite_value(sum_of(nums));
 }
 
-Value eval_dcount_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                       const EvalContext& ctx) {
-  std::vector<double> nums;
-  Value err = Value::blank();
-  if (!resolve_matching_numbers(call, arena, registry, ctx, &nums, &err)) {
-    return err;
+// DCOUNT counts the numbers and skips everything else, errors included.
+Value reduce_count(const std::vector<Value>& vals) {
+  double count = 0.0;
+  for (const Value& v : vals) {
+    if (v.kind() == ValueKind::Number && std::isfinite(v.as_number())) {
+      count += 1.0;
+    }
   }
-  return Value::number(static_cast<double>(nums.size()));
+  return Value::number(count);
 }
 
-Value eval_dcounta_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                        const EvalContext& ctx) {
-  std::vector<Value> vals;
-  Value err = Value::blank();
-  if (!resolve_field_values(call, arena, registry, ctx, &vals, &err)) {
-    return err;
-  }
+// DCOUNTA counts every non-blank value, errors included.
+Value reduce_counta(const std::vector<Value>& vals) {
   double count = 0.0;
   for (const Value& v : vals) {
     if (!v.is_blank()) {
@@ -472,11 +452,10 @@ Value eval_dcounta_lazy(const parser::AstNode& call, Arena& arena, const Functio
   return Value::number(count);
 }
 
-Value eval_daverage_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                         const EvalContext& ctx) {
+Value reduce_average(const std::vector<Value>& vals) {
   std::vector<double> nums;
   Value err = Value::blank();
-  if (!resolve_matching_numbers(call, arena, registry, ctx, &nums, &err)) {
+  if (!matching_numbers(vals, &nums, &err)) {
     return err;
   }
   if (nums.empty()) {
@@ -485,15 +464,13 @@ Value eval_daverage_lazy(const parser::AstNode& call, Arena& arena, const Functi
   return to_finite_value(sum_of(nums) / static_cast<double>(nums.size()));
 }
 
-namespace {
-
 // DMAX and DMIN differ only in which way the comparison runs; an empty
 // match set is 0 for both, as it is for the range-aware MAX / MIN.
-Value aggregate_extremum(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                         const EvalContext& ctx, bool want_max) {
+template <bool kWantMax>
+Value reduce_extremum(const std::vector<Value>& vals) {
   std::vector<double> nums;
   Value err = Value::blank();
-  if (!resolve_matching_numbers(call, arena, registry, ctx, &nums, &err)) {
+  if (!matching_numbers(vals, &nums, &err)) {
     return err;
   }
   if (nums.empty()) {
@@ -501,30 +478,17 @@ Value aggregate_extremum(const parser::AstNode& call, Arena& arena, const Functi
   }
   double best = nums[0];
   for (std::size_t i = 1; i < nums.size(); ++i) {
-    if (want_max ? (nums[i] > best) : (nums[i] < best)) {
+    if (kWantMax ? (nums[i] > best) : (nums[i] < best)) {
       best = nums[i];
     }
   }
   return to_finite_value(best);
 }
 
-}  // namespace
-
-Value eval_dmax_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                     const EvalContext& ctx) {
-  return aggregate_extremum(call, arena, registry, ctx, /*want_max=*/true);
-}
-
-Value eval_dmin_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                     const EvalContext& ctx) {
-  return aggregate_extremum(call, arena, registry, ctx, /*want_max=*/false);
-}
-
-Value eval_dproduct_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                         const EvalContext& ctx) {
+Value reduce_product(const std::vector<Value>& vals) {
   std::vector<double> nums;
   Value err = Value::blank();
-  if (!resolve_matching_numbers(call, arena, registry, ctx, &nums, &err)) {
+  if (!matching_numbers(vals, &nums, &err)) {
     return err;
   }
   if (nums.empty()) {
@@ -537,76 +501,31 @@ Value eval_dproduct_lazy(const parser::AstNode& call, Arena& arena, const Functi
   return to_finite_value(prod);
 }
 
-namespace {
-
-// Variance driver shared by DVAR / DVARP / DSTDEV / DSTDEVP. `sample`
-// selects the unbiased sample-variance estimator (divisor `n - 1`);
-// otherwise the biased population estimator (divisor `n`). Caller
-// handles the `sqrt` for standard-deviation functions.
-//
-// Returns `false` with `*out_err` written when the match set is too
-// small for the chosen estimator; on success writes the variance to
-// `*out_var`. Sample estimator requires `n >= 2`; population requires
-// `n >= 1`.
-bool compute_variance(const std::vector<double>& nums, bool sample, double* out_var, Value* out_err) {
-  if (nums.size() < (sample ? 2U : 1U)) {
-    *out_err = Value::error(ErrorCode::Div0);
-    return false;
-  }
-  *out_var = numeric_aggregate_kernels::dispersion_variance(nums, sample);
-  return true;
-}
-
-Value aggregate_variance(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                         const EvalContext& ctx, bool sample, bool stddev) {
+// Variance driver shared by DVAR / DVARP / DSTDEV / DSTDEVP. `kSample`
+// selects the unbiased estimator (divisor `n - 1`, needs `n >= 2`),
+// otherwise the population one (divisor `n`, needs `n >= 1`).
+template <bool kSample, bool kStddev>
+Value reduce_variance(const std::vector<Value>& vals) {
   std::vector<double> nums;
   Value err = Value::blank();
-  if (!resolve_matching_numbers(call, arena, registry, ctx, &nums, &err)) {
+  if (!matching_numbers(vals, &nums, &err)) {
     return err;
   }
-  double var = 0.0;
-  if (!compute_variance(nums, sample, &var, &err)) {
-    return err;
+  if (nums.size() < (kSample ? 2U : 1U)) {
+    return Value::error(ErrorCode::Div0);
   }
-  if (stddev) {
-    if (var < 0.0) {
-      // Numerical noise guard; mathematically variance is non-negative.
-      return Value::error(ErrorCode::Num);
-    }
-    return to_finite_value(std::sqrt(var));
+  const double var = numeric_aggregate_kernels::dispersion_variance(nums, kSample);
+  if (!kStddev) {
+    return to_finite_value(var);
   }
-  return to_finite_value(var);
-}
-
-}  // namespace
-
-Value eval_dstdev_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                       const EvalContext& ctx) {
-  return aggregate_variance(call, arena, registry, ctx, /*sample=*/true, /*stddev=*/true);
-}
-
-Value eval_dstdevp_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                        const EvalContext& ctx) {
-  return aggregate_variance(call, arena, registry, ctx, /*sample=*/false, /*stddev=*/true);
-}
-
-Value eval_dvar_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                     const EvalContext& ctx) {
-  return aggregate_variance(call, arena, registry, ctx, /*sample=*/true, /*stddev=*/false);
-}
-
-Value eval_dvarp_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                      const EvalContext& ctx) {
-  return aggregate_variance(call, arena, registry, ctx, /*sample=*/false, /*stddev=*/false);
-}
-
-Value eval_dget_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                     const EvalContext& ctx) {
-  std::vector<Value> vals;
-  Value err = Value::blank();
-  if (!resolve_field_values(call, arena, registry, ctx, &vals, &err)) {
-    return err;
+  if (var < 0.0) {
+    // Numerical noise guard; mathematically variance is non-negative.
+    return Value::error(ErrorCode::Num);
   }
+  return to_finite_value(std::sqrt(var));
+}
+
+Value reduce_get(const std::vector<Value>& vals) {
   if (vals.empty()) {
     return Value::error(ErrorCode::Value);
   }
@@ -614,6 +533,72 @@ Value eval_dget_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return Value::error(ErrorCode::Num);
   }
   return vals[0];
+}
+
+}  // namespace
+
+// ---------------------------------------------------------------------------
+// Public impls
+// ---------------------------------------------------------------------------
+
+Value eval_dsum_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx) {
+  return eval_dfunction(call, arena, registry, ctx, reduce_sum);
+}
+
+Value eval_dcount_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx) {
+  return eval_dfunction(call, arena, registry, ctx, reduce_count);
+}
+
+Value eval_dcounta_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx) {
+  return eval_dfunction(call, arena, registry, ctx, reduce_counta);
+}
+
+Value eval_daverage_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx) {
+  return eval_dfunction(call, arena, registry, ctx, reduce_average);
+}
+
+Value eval_dmax_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx) {
+  return eval_dfunction(call, arena, registry, ctx, reduce_extremum<true>);
+}
+
+Value eval_dmin_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx) {
+  return eval_dfunction(call, arena, registry, ctx, reduce_extremum<false>);
+}
+
+Value eval_dproduct_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                         const EvalContext& ctx) {
+  return eval_dfunction(call, arena, registry, ctx, reduce_product);
+}
+
+Value eval_dstdev_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                       const EvalContext& ctx) {
+  return eval_dfunction(call, arena, registry, ctx, reduce_variance<true, true>);
+}
+
+Value eval_dstdevp_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                        const EvalContext& ctx) {
+  return eval_dfunction(call, arena, registry, ctx, reduce_variance<false, true>);
+}
+
+Value eval_dvar_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx) {
+  return eval_dfunction(call, arena, registry, ctx, reduce_variance<true, false>);
+}
+
+Value eval_dvarp_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx) {
+  return eval_dfunction(call, arena, registry, ctx, reduce_variance<false, false>);
+}
+
+Value eval_dget_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                     const EvalContext& ctx) {
+  return eval_dfunction(call, arena, registry, ctx, reduce_get);
 }
 
 }  // namespace eval

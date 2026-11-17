@@ -306,16 +306,28 @@ TEST(BuiltinsDatabase, DSumCriteriaHeaderOnlyReturnsValueError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(BuiltinsDatabase, DSumErrorCellsInDatabaseSilentlySkipped) {
+TEST(BuiltinsDatabase, ErrorInAMatchedRecordPropagates) {
   Workbook wb = MakeFruitWorkbook();
   auto& s = wb.sheet(0);
-  // Corrupt one record with an error cell in the Sales column.
+  // An error cell in the Sales column of a matched record.
   s.set_cell_value(2, 2, Value::error(ErrorCode::Div0));
   SetSingleFruitCriterion(wb, "Apple");
   const Value v = EvalIn("=DSUM(A1:C5, \"Sales\", E1:E2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+  // DCOUNT skips it as COUNT does.
+  const Value count = EvalIn("=DCOUNT(A1:C5, \"Sales\", E1:E2)", wb, wb.sheet(0));
+  ASSERT_TRUE(count.is_number());
+  EXPECT_DOUBLE_EQ(count.as_number(), 1.0);
+}
+
+TEST(BuiltinsDatabase, ErrorInAnUnmatchedRecordIsIgnored) {
+  Workbook wb = MakeFruitWorkbook();
+  auto& s = wb.sheet(0);
+  s.set_cell_value(2, 2, Value::error(ErrorCode::Div0));
+  SetSingleFruitCriterion(wb, "Pear");
+  const Value v = EvalIn("=DMAX(A1:C5, \"Sales\", E1:E2)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_number());
-  // Only the remaining Apple (row 2, 100) contributes.
-  EXPECT_DOUBLE_EQ(v.as_number(), 100.0);
 }
 
 TEST(BuiltinsDatabase, DSumNonNumericCellsSilentlySkipped) {
@@ -738,12 +750,23 @@ TEST(BuiltinsDatabase, NumericFieldSelectorAllowsFractionalLastColumn) {
 // Field evaluation error propagation
 // ---------------------------------------------------------------------------
 
-TEST(BuiltinsDatabase, FieldErrorPropagates) {
+TEST(BuiltinsDatabase, FieldErrorIsValue) {
   Workbook wb = MakeFruitWorkbook();
   SetSingleFruitCriterion(wb, "Apple");
   const Value v = EvalIn("=DSUM(A1:C5, 1/0, E1:E2)", wb, wb.sheet(0));
   ASSERT_TRUE(v.is_error());
-  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
+}
+
+TEST(BuiltinsDatabase, ArrayFieldLiftsTheCall) {
+  Workbook wb = MakeFruitWorkbook();
+  SetSingleFruitCriterion(wb, "Apple");
+  const Value v = EvalIn("=DSUM(A1:C5, {3,1}, E1:E2)", wb, wb.sheet(0));
+  ASSERT_TRUE(v.is_array());
+  ASSERT_EQ(v.as_array_cols(), 2U);
+  EXPECT_TRUE(v.as_array_cells()[0].is_number());
+  ASSERT_TRUE(v.as_array_cells()[1].is_number());
+  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 0.0);
 }
 
 // ---------------------------------------------------------------------------

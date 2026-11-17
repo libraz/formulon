@@ -18,9 +18,18 @@ cases:
   - id: dcounta_field_text_in_matched_row
     setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: "x", D1: "k", D2: "a" }
     formula: "=DCOUNTA(A1:B4,2,D1:D2)"
+  - id: dcounta_field_arg_na_cell
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k", D2: "a", F1: "=NA()" }
+    formula: "=DCOUNTA(A1:B4,F1,D1:D2)"
+  - id: dcounta_field_arg_array_lifted
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k", D2: "a" }
+    formula: "=INDEX(DCOUNTA(A1:B4,{2,2},D1:D2),2)"
   - id: dcounta_criteria_value_blank
     setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k" }
     formula: "=DCOUNTA(A1:B4,2,D1:D2)"
+  - id: dmax_field_error_in_matched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: "=NA()", D1: "k", D2: "a" }
+    formula: "=DMAX(A1:B4,2,D1:D2)"
   - id: dmax_field_error_in_unmatched_row
     setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: "=NA()", A4: "a", B4: 30, D1: "k", D2: "a" }
     formula: "=DMAX(A1:B4,2,D1:D2)"
@@ -30,9 +39,18 @@ cases:
   - id: dmax_field_text_in_matched_row
     setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: "x", D1: "k", D2: "a" }
     formula: "=DMAX(A1:B4,2,D1:D2)"
+  - id: dmax_field_arg_na_cell
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k", D2: "a", F1: "=NA()" }
+    formula: "=DMAX(A1:B4,F1,D1:D2)"
+  - id: dmax_field_arg_array_lifted
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k", D2: "a" }
+    formula: "=INDEX(DMAX(A1:B4,{2,2},D1:D2),2)"
   - id: dmax_criteria_value_blank
     setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k" }
     formula: "=DMAX(A1:B4,2,D1:D2)"
+  - id: dmin_field_error_in_matched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: "=NA()", D1: "k", D2: "a" }
+    formula: "=DMIN(A1:B4,2,D1:D2)"
   - id: dmin_field_error_in_unmatched_row
     setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: "=NA()", A4: "a", B4: 30, D1: "k", D2: "a" }
     formula: "=DMIN(A1:B4,2,D1:D2)"
@@ -42,9 +60,18 @@ cases:
   - id: dmin_field_text_in_matched_row
     setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: "x", D1: "k", D2: "a" }
     formula: "=DMIN(A1:B4,2,D1:D2)"
+  - id: dmin_field_arg_na_cell
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k", D2: "a", F1: "=NA()" }
+    formula: "=DMIN(A1:B4,F1,D1:D2)"
+  - id: dmin_field_arg_array_lifted
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k", D2: "a" }
+    formula: "=INDEX(DMIN(A1:B4,{2,2},D1:D2),2)"
   - id: dmin_criteria_value_blank
     setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k" }
     formula: "=DMIN(A1:B4,2,D1:D2)"
+  - id: dproduct_field_error_in_matched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: "=NA()", D1: "k", D2: "a" }
+    formula: "=DPRODUCT(A1:B4,2,D1:D2)"
   - id: dproduct_field_error_in_unmatched_row
     setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: "=NA()", A4: "a", B4: 30, D1: "k", D2: "a" }
     formula: "=DPRODUCT(A1:B4,2,D1:D2)"
@@ -54,9 +81,18 @@ cases:
   - id: dproduct_field_text_in_matched_row
     setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: "x", D1: "k", D2: "a" }
     formula: "=DPRODUCT(A1:B4,2,D1:D2)"
+  - id: dproduct_field_arg_na_cell
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k", D2: "a", F1: "=NA()" }
+    formula: "=DPRODUCT(A1:B4,F1,D1:D2)"
+  - id: dproduct_field_arg_array_lifted
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k", D2: "a" }
+    formula: "=INDEX(DPRODUCT(A1:B4,{2,2},D1:D2),2)"
   - id: dproduct_criteria_value_blank
     setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k" }
     formula: "=DPRODUCT(A1:B4,2,D1:D2)"
+  - id: dstdev_field_error_in_matched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: "=NA()", D1: "k", D2: "a" }
+    formula: "=DSTDEV(A1:B4,2,D1:D2)"
   - id: dstdev_field_error_in_unmatched_row
     setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: "=NA()", A4: "a", B4: 30, D1: "k", D2: "a" }
     formula: "=DSTDEV(A1:B4,2,D1:D2)"
@@ -66,9 +102,18 @@ cases:
   - id: dstdev_field_text_in_matched_row
     setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: "x", D1: "k", D2: "a" }
     formula: "=DSTDEV(A1:B4,2,D1:D2)"
+  - id: dstdev_field_arg_na_cell
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k", D2: "a", F1: "=NA()" }
+    formula: "=DSTDEV(A1:B4,F1,D1:D2)"
+  - id: dstdev_field_arg_array_lifted
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k", D2: "a" }
+    formula: "=INDEX(DSTDEV(A1:B4,{2,2},D1:D2),2)"
   - id: dstdev_criteria_value_blank
     setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k" }
     formula: "=DSTDEV(A1:B4,2,D1:D2)"
+  - id: dstdevp_field_error_in_matched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: "=NA()", D1: "k", D2: "a" }
+    formula: "=DSTDEVP(A1:B4,2,D1:D2)"
   - id: dstdevp_field_error_in_unmatched_row
     setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: "=NA()", A4: "a", B4: 30, D1: "k", D2: "a" }
     formula: "=DSTDEVP(A1:B4,2,D1:D2)"
@@ -78,9 +123,18 @@ cases:
   - id: dstdevp_field_text_in_matched_row
     setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: "x", D1: "k", D2: "a" }
     formula: "=DSTDEVP(A1:B4,2,D1:D2)"
+  - id: dstdevp_field_arg_na_cell
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k", D2: "a", F1: "=NA()" }
+    formula: "=DSTDEVP(A1:B4,F1,D1:D2)"
+  - id: dstdevp_field_arg_array_lifted
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k", D2: "a" }
+    formula: "=INDEX(DSTDEVP(A1:B4,{2,2},D1:D2),2)"
   - id: dstdevp_criteria_value_blank
     setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k" }
     formula: "=DSTDEVP(A1:B4,2,D1:D2)"
+  - id: dvar_field_error_in_matched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: "=NA()", D1: "k", D2: "a" }
+    formula: "=DVAR(A1:B4,2,D1:D2)"
   - id: dvar_field_error_in_unmatched_row
     setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: "=NA()", A4: "a", B4: 30, D1: "k", D2: "a" }
     formula: "=DVAR(A1:B4,2,D1:D2)"
@@ -90,9 +144,18 @@ cases:
   - id: dvar_field_text_in_matched_row
     setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: "x", D1: "k", D2: "a" }
     formula: "=DVAR(A1:B4,2,D1:D2)"
+  - id: dvar_field_arg_na_cell
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k", D2: "a", F1: "=NA()" }
+    formula: "=DVAR(A1:B4,F1,D1:D2)"
+  - id: dvar_field_arg_array_lifted
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k", D2: "a" }
+    formula: "=INDEX(DVAR(A1:B4,{2,2},D1:D2),2)"
   - id: dvar_criteria_value_blank
     setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k" }
     formula: "=DVAR(A1:B4,2,D1:D2)"
+  - id: dvarp_field_error_in_matched_row
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: "=NA()", D1: "k", D2: "a" }
+    formula: "=DVARP(A1:B4,2,D1:D2)"
   - id: dvarp_field_error_in_unmatched_row
     setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: "=NA()", A4: "a", B4: 30, D1: "k", D2: "a" }
     formula: "=DVARP(A1:B4,2,D1:D2)"
@@ -102,6 +165,12 @@ cases:
   - id: dvarp_field_text_in_matched_row
     setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: "x", D1: "k", D2: "a" }
     formula: "=DVARP(A1:B4,2,D1:D2)"
+  - id: dvarp_field_arg_na_cell
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k", D2: "a", F1: "=NA()" }
+    formula: "=DVARP(A1:B4,F1,D1:D2)"
+  - id: dvarp_field_arg_array_lifted
+    setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k", D2: "a" }
+    formula: "=INDEX(DVARP(A1:B4,{2,2},D1:D2),2)"
   - id: dvarp_criteria_value_blank
     setup: { A1: "k", B1: "v", A2: "a", B2: 10, A3: "b", B3: 20, A4: "a", B4: 30, D1: "k" }
     formula: "=DVARP(A1:B4,2,D1:D2)"

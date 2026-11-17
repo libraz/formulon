@@ -210,6 +210,110 @@
       }
     },
     {
+      "id": "dcounta_field_arg_na_cell",
+      "formula": "=DCOUNTA(A1:B4,F1,D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "dcounta_field_arg_array_lifted",
+      "formula": "=INDEX(DCOUNTA(A1:B4,{2,2},D1:D2),2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "a"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
       "id": "dcounta_criteria_value_blank",
       "formula": "=DCOUNTA(A1:B4,2,D1:D2)",
       "setup": {
@@ -253,6 +357,56 @@
       "expect": {
         "kind": "number",
         "value": 3.0
+      }
+    },
+    {
+      "id": "dmax_field_error_in_matched_row",
+      "formula": "=DMAX(A1:B4,2,D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "a"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
       }
     },
     {
@@ -402,6 +556,110 @@
       }
     },
     {
+      "id": "dmax_field_arg_na_cell",
+      "formula": "=DMAX(A1:B4,F1,D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "dmax_field_arg_array_lifted",
+      "formula": "=INDEX(DMAX(A1:B4,{2,2},D1:D2),2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "a"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
       "id": "dmax_criteria_value_blank",
       "formula": "=DMAX(A1:B4,2,D1:D2)",
       "setup": {
@@ -445,6 +703,56 @@
       "expect": {
         "kind": "number",
         "value": 30.0
+      }
+    },
+    {
+      "id": "dmin_field_error_in_matched_row",
+      "formula": "=DMIN(A1:B4,2,D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "a"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
       }
     },
     {
@@ -594,6 +902,110 @@
       }
     },
     {
+      "id": "dmin_field_arg_na_cell",
+      "formula": "=DMIN(A1:B4,F1,D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "dmin_field_arg_array_lifted",
+      "formula": "=INDEX(DMIN(A1:B4,{2,2},D1:D2),2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "a"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
       "id": "dmin_criteria_value_blank",
       "formula": "=DMIN(A1:B4,2,D1:D2)",
       "setup": {
@@ -637,6 +1049,56 @@
       "expect": {
         "kind": "number",
         "value": 10.0
+      }
+    },
+    {
+      "id": "dproduct_field_error_in_matched_row",
+      "formula": "=DPRODUCT(A1:B4,2,D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "a"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
       }
     },
     {
@@ -786,6 +1248,110 @@
       }
     },
     {
+      "id": "dproduct_field_arg_na_cell",
+      "formula": "=DPRODUCT(A1:B4,F1,D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "dproduct_field_arg_array_lifted",
+      "formula": "=INDEX(DPRODUCT(A1:B4,{2,2},D1:D2),2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "a"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 300.0
+      }
+    },
+    {
       "id": "dproduct_criteria_value_blank",
       "formula": "=DPRODUCT(A1:B4,2,D1:D2)",
       "setup": {
@@ -829,6 +1395,56 @@
       "expect": {
         "kind": "number",
         "value": 6000.0
+      }
+    },
+    {
+      "id": "dstdev_field_error_in_matched_row",
+      "formula": "=DSTDEV(A1:B4,2,D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "a"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
       }
     },
     {
@@ -978,6 +1594,110 @@
       }
     },
     {
+      "id": "dstdev_field_arg_na_cell",
+      "formula": "=DSTDEV(A1:B4,F1,D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "dstdev_field_arg_array_lifted",
+      "formula": "=INDEX(DSTDEV(A1:B4,{2,2},D1:D2),2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "a"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 14.142135623730951
+      }
+    },
+    {
       "id": "dstdev_criteria_value_blank",
       "formula": "=DSTDEV(A1:B4,2,D1:D2)",
       "setup": {
@@ -1021,6 +1741,56 @@
       "expect": {
         "kind": "number",
         "value": 10.0
+      }
+    },
+    {
+      "id": "dstdevp_field_error_in_matched_row",
+      "formula": "=DSTDEVP(A1:B4,2,D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "a"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
       }
     },
     {
@@ -1170,6 +1940,110 @@
       }
     },
     {
+      "id": "dstdevp_field_arg_na_cell",
+      "formula": "=DSTDEVP(A1:B4,F1,D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "dstdevp_field_arg_array_lifted",
+      "formula": "=INDEX(DSTDEVP(A1:B4,{2,2},D1:D2),2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "a"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
       "id": "dstdevp_criteria_value_blank",
       "formula": "=DSTDEVP(A1:B4,2,D1:D2)",
       "setup": {
@@ -1213,6 +2087,56 @@
       "expect": {
         "kind": "number",
         "value": 8.16496580927726
+      }
+    },
+    {
+      "id": "dvar_field_error_in_matched_row",
+      "formula": "=DVAR(A1:B4,2,D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "a"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
       }
     },
     {
@@ -1362,6 +2286,110 @@
       }
     },
     {
+      "id": "dvar_field_arg_na_cell",
+      "formula": "=DVAR(A1:B4,F1,D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "dvar_field_arg_array_lifted",
+      "formula": "=INDEX(DVAR(A1:B4,{2,2},D1:D2),2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "a"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 200.0
+      }
+    },
+    {
       "id": "dvar_criteria_value_blank",
       "formula": "=DVAR(A1:B4,2,D1:D2)",
       "setup": {
@@ -1405,6 +2433,56 @@
       "expect": {
         "kind": "number",
         "value": 100.0
+      }
+    },
+    {
+      "id": "dvarp_field_error_in_matched_row",
+      "formula": "=DVARP(A1:B4,2,D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "formula",
+          "formula": "=NA()"
+        },
+        "D1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "a"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
       }
     },
     {
@@ -1551,6 +2629,110 @@
       "expect": {
         "kind": "number",
         "value": 0.0
+      }
+    },
+    {
+      "id": "dvarp_field_arg_na_cell",
+      "formula": "=DVARP(A1:B4,F1,D1:D2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "dvarp_field_arg_array_lifted",
+      "formula": "=INDEX(DVARP(A1:B4,{2,2},D1:D2),2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "B1": {
+          "kind": "text",
+          "value": "v"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "b"
+        },
+        "B3": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "A4": {
+          "kind": "text",
+          "value": "a"
+        },
+        "B4": {
+          "kind": "number",
+          "value": 30.0
+        },
+        "D1": {
+          "kind": "text",
+          "value": "k"
+        },
+        "D2": {
+          "kind": "text",
+          "value": "a"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 100.0
       }
     },
     {
