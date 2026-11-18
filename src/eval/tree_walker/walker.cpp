@@ -647,6 +647,8 @@ bool evaluates_to_reference(const parser::AstNode& node) {
       return node.as_literal().is_ref();
     case parser::NodeKind::NameRef:
       return true;
+    case parser::NodeKind::LetBinding:
+      return evaluates_to_reference(node.as_let_body());
     default:
       return false;
   }
@@ -657,7 +659,8 @@ bool is_returned_reference(const parser::AstNode& node, const EvalContext& ctx) 
   if (k == parser::NodeKind::Literal) {
     return node.as_literal().is_ref();
   }
-  if (k != parser::NodeKind::Call && k != parser::NodeKind::RangeOp && k != parser::NodeKind::NameRef) {
+  if (k != parser::NodeKind::Call && k != parser::NodeKind::RangeOp && k != parser::NodeKind::NameRef &&
+      k != parser::NodeKind::LetBinding) {
     return false;
   }
   parser::Reference lhs{};

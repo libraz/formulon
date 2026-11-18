@@ -422,6 +422,11 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
     Value picked = Value::blank();
     if (read_reference_call(arg_node, arena, registry, ctx, &read, &picked, &def)) {
       had_range_shaped_arg = true;
+      // The in-order readers refuse a returned multi-area reference as they refuse a written union.
+      if (read.multi_area && reads_range_errors_in_order(def)) {
+        values.push_back(Value::error(ErrorCode::Value));
+        return RangeArgOutcome::kCollected;
+      }
       return append_sourced_outcome(def, read.cells.data(), read.cells.size(), values, result);
     }
     if (picked.is_error()) {

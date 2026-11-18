@@ -258,6 +258,18 @@ TEST_F(DerefTest, UnionReadsEveryArea) {
               "union as value");
 }
 
+TEST_F(DerefTest, LetReturnsAUnionAsAReference) {
+  const Value sum = Eval("SUM(LET(u,(A1,B1),u))");
+  ASSERT_TRUE(sum.is_number());
+  EXPECT_EQ(sum.as_number(), 23.0);
+  const Value areas = Eval("SUM(LET(u,(A1:A2,C1:C2),u))");
+  ASSERT_TRUE(areas.is_number());
+  EXPECT_EQ(areas.as_number(), 68.0);
+  // A function reading its values in order refuses the returned union as it refuses a written one.
+  ExpectError(Eval("GCD(LET(u,(A1,B1),u))"), ErrorCode::Value, "GCD of a LET union");
+  ExpectError(Eval("CONCAT(LET(u,(A1,B1),u))"), ErrorCode::Value, "CONCAT of a LET union");
+}
+
 TEST_F(DerefTest, DynamicMarkLeavesTheFormIntact) {
   const Value plain = AreaRef(0, 0, 1, 1);
   const Value marked = plain.with_ref_dynamic();

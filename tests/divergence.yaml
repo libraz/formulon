@@ -1087,16 +1087,6 @@ entries:
     first_noted: 2026-11-18
     last_verified_excel_version: "16.115"
 
-  # -- A multi-area reference returned by LET --
-  - id: ua_sum_let_bound
-    applies_to: [mac-365-ja_JP]
-    cause: engine-gap
-    mode: skip-oracle
-    reason: "=SUM(LET(u,(A1,B1),u)): Excel reads the multi-area reference LET returns and sums both areas (10). Formulon evaluates the LET call as a value, so the union is #VALUE!."
-    prefer: excel
-    first_noted: 2026-11-18
-    last_verified_excel_version: "16.115"
-
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a

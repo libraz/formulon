@@ -72,6 +72,7 @@ struct RangeResult {
   std::uint32_t rows = 0;
   std::uint32_t cols = 0;
   bool from_scalar = false;
+  bool multi_area = false;  // read from a union: the areas' cells in order, `rows` x 1
 };
 
 /// Expands a resolved rectangle and reports its dimensions. Callers perform

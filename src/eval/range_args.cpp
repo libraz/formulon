@@ -369,6 +369,7 @@ bool read_reference_call(const parser::AstNode& call, Arena& arena, const Functi
   out->rows = one_area ? read.value().rows : static_cast<std::uint32_t>(out->cells.size());
   out->cols = one_area ? read.value().cols : 1U;
   out->from_scalar = false;
+  out->multi_area = !one_area;
   return true;
 }
 
