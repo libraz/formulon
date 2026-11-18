@@ -106,9 +106,10 @@ std::string_view own_entry_name(const void* ctx, parser::EnteredNameKind kind, s
     }
   }
   const auto local = entry.sheet != Workbook::kNoSheet ? static_cast<std::int32_t>(entry.sheet) : -1;
-  const bool builtins = qualifier == Workbook::kNoSheet;
-  for (const bool builtin : {false, builtins}) {
-    for (const std::int32_t scope : {local, -1}) {
+  // A qualified name falls back to a workbook built-in, never the entry sheet's.
+  const std::int32_t builtin_local = qualifier == Workbook::kNoSheet ? local : -1;
+  for (const bool builtin : {false, true}) {
+    for (const std::int32_t scope : {builtin ? builtin_local : local, -1}) {
       if (const DefinedName* name = scoped_name(book, typed, scope, builtin)) {
         return name->name;
       }

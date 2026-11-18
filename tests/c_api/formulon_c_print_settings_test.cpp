@@ -443,6 +443,41 @@ TEST(FormulonCApiPrintSettings, TypedPrintAreaNameReachesTheVisibleBuiltIn) {
   }
 }
 
+// A sheet without its own print area sees a workbook-scope one, typed bare
+// or qualified with that sheet; the sheet that has one keeps its own.
+TEST(FormulonCApiPrintSettings, TypedPrintAreaNameFallsBackToTheWorkbookBuiltIn) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  std::size_t second = 0;
+  std::size_t third = 0;
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Sheet2", 1, &second), 0);
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Sheet3", 2, &third), 0);
+  const fm_cell_rect_t area{0, 0, 1, 1};
+  ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, &area, 1), 0);
+  ASSERT_TRUE(static_cast<bool>(wb.handle->workbook().set_defined_name("_xlnm.Print_Area", "Sheet3!$A$1")));
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 9, 0, "=ROWS(Print_Area)"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, second, 0, 0, "=ROWS(Print_Area)"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, second, 1, 0, "=ROWS(Sheet3!Print_Area)"), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  struct Case {
+    std::size_t sheet;
+    uint32_t row;
+    const char* stored;
+    double rows;
+  };
+  for (const Case& c : {Case{0, 9, "=ROWS(_xlnm.Print_Area)", 2.0}, Case{second, 0, "=ROWS(_xlnm.Print_Area)", 1.0},
+                        Case{second, 1, "=ROWS(Sheet3!_xlnm.Print_Area)", 1.0}}) {
+    SCOPED_TRACE(c.stored);
+    const formulon::Cell* cell = wb.handle->workbook().sheet(c.sheet).cell_at(c.row, 0);
+    ASSERT_NE(cell, nullptr);
+    EXPECT_EQ(cell->formula_text, c.stored);
+    fm_value_t value{};
+    ASSERT_EQ(fm_sheet_get_value(wb.handle, c.sheet, c.row, 0, &value), 0);
+    ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
+    EXPECT_EQ(value.u.number, c.rows);
+  }
+}
+
 TEST(FormulonCApiPrintSettings, EmptyPrintAreaRemovesTheDefinedName) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
