@@ -1,0 +1,57 @@
+suite: lookup_array
+description: >
+  LOOKUP with an array lookup value: one result per element, in the lookup
+  value's shape, for the vector and array forms.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: lka_vec3_col
+    setup: { A1: 0, A2: 90, A3: 180, B1: 1, B2: 2, B3: 3 }
+    formula: '=LOOKUP({100;5},A1:A3,B1:B3)'
+  - id: lka_vec2_col
+    setup: { A1: 0, A2: 90, A3: 180, B1: 1, B2: 2, B3: 3 }
+    formula: '=LOOKUP({100;5},A1:A3)'
+  - id: lka_range_expr
+    setup: { A1: 0, A2: 90, A3: 180, B1: 1, B2: 2, B3: 3 }
+    formula: '=LOOKUP(A1:A3+1,A1:A3,B1:B3)'
+  - id: lka_range_minus
+    setup: { A1: 0, A2: 90, A3: 180, B1: 1, B2: 2, B3: 3 }
+    formula: '=LOOKUP(200-A1:A3,A1:A3,B1:B3)'
+  - id: lka_array_form_tall
+    setup: { A1: 0, A2: 90, A3: 180, B1: 1, B2: 2, B3: 3 }
+    formula: '=LOOKUP({100;5},A1:B3)'
+  - id: lka_row_shape
+    setup: { A1: 0, A2: 90, A3: 180, B1: 1, B2: 2, B3: 3 }
+    formula: '=LOOKUP({100,5,-1},A1:A3,B1:B3)'
+  - id: lka_grid_shape
+    setup: { A1: 0, A2: 90, A3: 180, B1: 1, B2: 2, B3: 3 }
+    formula: '=LOOKUP({100,5;180,-1},A1:A3,B1:B3)'
+  - id: lka_element_errors
+    setup: { A1: 0, A2: 90, A3: 180, B1: 1, B2: 2, B3: 3 }
+    formula: '=LOOKUP({#DIV/0!;-1;200;#N/A},A1:A3,B1:B3)'
+  - id: lka_text_elements
+    setup: { A1: a, A2: m, A3: x, B1: 1, B2: 2, B3: 3 }
+    formula: '=LOOKUP({"b";"z";"0";"M"},A1:A3,B1:B3)'
+  - id: lka_horizontal_vectors
+    setup: { A5: 0, B5: 90, C5: 180, A6: 1, B6: 2, C6: 3 }
+    formula: '=LOOKUP({100;5},A5:C5,A6:C6)'
+  - id: lka_array_form_wide
+    setup: { A5: 0, B5: 90, C5: 180, A6: 1, B6: 2, C6: 3 }
+    formula: '=LOOKUP({100;5},A5:C6)'
+  - id: lka_constant_vectors
+    formula: '=LOOKUP({100;5},{0;90;180},{1;2;3})'
+  - id: lka_result_vector_error
+    setup: { A1: 0, A2: 90, A3: 180 }
+    formula: '=LOOKUP({100;-1},A1:A3,1/0)'
+  - id: lka_rows_of_result
+    setup: { A1: 0, A2: 90, A3: 180, B1: 1, B2: 2, B3: 3 }
+    formula: '=ROWS(LOOKUP({100;5;7},A1:A3,B1:B3))'
+  - id: lka_sum_of_result
+    setup: { A1: 0, A2: 90, A3: 180, B1: 1, B2: 2, B3: 3 }
+    formula: '=SUM(LOOKUP(A1:A3+1,A1:A3,B1:B3))'
+  - id: lka_blank_element
+    setup: { A1: 0, A2: 90, A3: 180, B1: 1, B2: 2, B3: 3, E2: 100 }
+    formula: '=LOOKUP(E1:E2,A1:A3,B1:B3)'
+  - id: lka_vlookup_control
+    setup: { A1: 0, A2: 90, A3: 180, B1: 1, B2: 2, B3: 3 }
+    formula: '=VLOOKUP({100;5},A1:B3,2)'

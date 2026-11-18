@@ -627,8 +627,8 @@ Value eval_lookup_lazy(const parser::AstNode& call, Arena& arena, const Function
                                               /*approximate=*/true, ctx.excel_profile(), false, declared_line);
   };
 
-  // The result vector is read once; a failure to read it surfaces only on a
-  // query that matched.
+  // The result vector is read once; a failure to read it is every lane's
+  // result, a lane that matches nothing included.
   std::vector<Value> result_cells;
   std::uint32_t rrows = 0U;
   std::uint32_t rcols = 0U;
@@ -658,6 +658,9 @@ Value eval_lookup_lazy(const parser::AstNode& call, Arena& arena, const Function
   }
 
   const auto lane = [&](const Value& query) -> Value {
+    if (result_error) {
+      return *result_error;
+    }
     const std::size_t off = scan(query);
     if (off == SIZE_MAX) {
       return Value::error(ErrorCode::NA);
@@ -672,9 +675,6 @@ Value eval_lookup_lazy(const parser::AstNode& call, Arena& arena, const Function
                                    ? (off * static_cast<std::size_t>(lcols)) + (static_cast<std::size_t>(lcols) - 1U)
                                    : ((static_cast<std::size_t>(lrows) - 1U) * static_cast<std::size_t>(lcols)) + off;
       return flat < lookup_cells.size() ? lookup_cells[flat] : Value::error(ErrorCode::NA);
-    }
-    if (result_error) {
-      return *result_error;
     }
     const std::size_t flat = raxis == LookupAxis::Column ? (off * static_cast<std::size_t>(rcols)) : off;
     if (flat < result_cells.size()) {

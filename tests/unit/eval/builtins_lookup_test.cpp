@@ -414,6 +414,8 @@ TEST(BuiltinsLookup, ArrayLookupValueSearchesEachElement) {
   expect_column("=LOOKUP({100;5},A1:B3)", {Value::number(2.0), Value::number(1.0)});
   expect_column("=LOOKUP({#DIV/0!;-1;200},A1:A3,B1:B3)",
                 {Value::error(ErrorCode::Div0), Value::error(ErrorCode::NA), Value::number(3.0)});
+  // A result vector that fails is every lane's result, a lane matching nothing included.
+  expect_column("=LOOKUP({100;-1},A1:A3,1/0)", {Value::error(ErrorCode::Div0), Value::error(ErrorCode::Div0)});
 }
 
 // A whole-axis vector is read in its declared shape: how far its populated
