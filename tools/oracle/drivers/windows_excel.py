@@ -116,6 +116,7 @@ _com_text = windows_com.com_text
 _split_sheet_qualified_addr = case_sheet.split_sheet_qualified_addr
 _get_or_add_sheet = case_sheet.get_or_add_sheet
 _apply_merges = case_sheet.apply_merges
+_apply_names = case_sheet.apply_names
 _sanitize_sheet_name = case_sheet.sanitize_sheet_name
 _error_constant = case_sheet.error_constant
 _resolve_print_sheet = case_sheet.resolve_print_sheet
@@ -336,7 +337,7 @@ class WindowsExcelOracle(OracleDriver):
         # Detect that at the suite level and isolate each such case in
         # its own workbook. Suites without cross-sheet setup keep the
         # historical fast path: one shared workbook, one sheet per case.
-        cross_sheet = any(any("!" in addr for addr in (case.get("setup") or {})) for case in cases)
+        cross_sheet = any(case_sheet.needs_own_workbook(case) for case in cases)
         if cross_sheet:
             return self._run_suite_per_case_workbook(suite_name, cases, date1904=date1904, iterative=iterative)
 
@@ -508,6 +509,7 @@ class WindowsExcelOracle(OracleDriver):
                             sheet_name, bare_addr = _split_sheet_qualified_addr(addr)
                             target_sht = sht if sheet_name is None else _get_or_add_sheet(wb, sheet_name)
                             _write_cell(target_sht, bare_addr, rec)
+                        _apply_names(wb, case.get("names") or {})
                         result_cell = sht.range(case_formula_cell(case))
                         try:
                             result_cell.number_format = "General"

@@ -163,6 +163,8 @@ def _case_input(case: case_schema.Case) -> Dict[str, object]:
         result["samples"] = list(case.samples)
     if case.merges:
         result["merges"] = list(case.merges)
+    if case.names:
+        result["names"] = dict(case.names)
     return result
 
 
@@ -180,6 +182,8 @@ def _case_record(case: case_schema.Case) -> Dict[str, object]:
         record["capture"] = case.capture
     if case.merges:
         record["merges"] = list(case.merges)
+    if case.names:
+        record["names"] = dict(case.names)
     return record
 
 

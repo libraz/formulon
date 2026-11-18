@@ -121,6 +121,12 @@ class Case:
     apply these ranges before evaluating the formula so merged-cell spill
     collisions are observed consistently.
 
+    `names`, when present, maps workbook-scope defined names to their
+    English refers-to text (for example ``{"u": "=Sheet1!$A$1,Sheet1!$B$1"}``).
+    Drivers and the native verifier define them after the setup cells and
+    before the formula under test; a case carrying names runs in its own
+    workbook, so the default sheet is ``Sheet1``.
+
     `tolerance`, if set, overrides the suite default for this case only.
 
     `compare_mode`, if set, switches the C++ verifier to a structured
@@ -145,6 +151,8 @@ class Case:
     # cases keep these ranges on the case so the native verifier and Excel
     # drivers observe the same sheet metadata.
     merges: List[str] = field(default_factory=list)
+    # Optional workbook-scope defined names, name -> English refers-to text.
+    names: Dict[str, str] = field(default_factory=dict)
     description: str = ""
     tolerance: Optional[Tolerance] = None
     compare_mode: Optional[str] = None
@@ -292,6 +300,23 @@ def _normalise_merges(raw: Any, *, where: str) -> List[str]:
     return merges
 
 
+def _normalise_names(raw: Any, *, where: str) -> Dict[str, str]:
+    """Validate and copy optional workbook-scope defined names."""
+
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ValueError(f"{where}: names must be a mapping of name to refers-to text")
+    names: Dict[str, str] = {}
+    for name, refers_to in raw.items():
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError(f"{where}/names: expected a non-empty name")
+        if not isinstance(refers_to, str) or not refers_to.startswith("="):
+            raise ValueError(f"{where}/names[{name}]: refers-to text must start with '='")
+        names[name] = refers_to
+    return names
+
+
 def load_suite(path: Path) -> Suite:
     """Parses a single `<category>.yaml` file into a :class:`Suite`.
 
@@ -344,6 +369,7 @@ def load_suite(path: Path) -> Suite:
             setup[addr] = _normalise_value(value, where=f"case '{cid}', setup[{addr}]")
 
         merges = _normalise_merges(raw.get("merges"), where=f"case '{cid}'")
+        names = _normalise_names(raw.get("names"), where=f"case '{cid}'")
 
         formula_cell = _normalise_formula_cell(raw.get("formula_cell"), where=f"{path}: case '{cid}'")
 
@@ -379,6 +405,7 @@ def load_suite(path: Path) -> Suite:
                 capture=capture,
                 samples=samples,
                 merges=merges,
+                names=names,
                 description=raw.get("description", "") or "",
                 tolerance=case_tol if raw.get("tolerance") is not None else None,
                 compare_mode=compare_mode,

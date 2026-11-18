@@ -211,6 +211,7 @@ def _cell_displayed_text(cell) -> Optional[str]:
 _split_sheet_qualified_addr = case_sheet.split_sheet_qualified_addr
 _get_or_add_sheet = case_sheet.get_or_add_sheet
 _apply_merges = case_sheet.apply_merges
+_apply_names = case_sheet.apply_names
 _sanitize_sheet_name = case_sheet.sanitize_sheet_name
 _error_constant = case_sheet.error_constant
 _resolve_print_sheet = case_sheet.resolve_print_sheet
@@ -399,7 +400,7 @@ class ExcelOracle(OracleDriver):
 
         # Cross-sheet setup ("Sheet2!A1") must be isolated per case --
         # see the windows_excel.py counterpart for the rationale.
-        cross_sheet = any(any("!" in addr for addr in (case.get("setup") or {})) for case in cases)
+        cross_sheet = any(case_sheet.needs_own_workbook(case) for case in cases)
         # Excel stops iterating only when every circular cell in the workbook has
         # converged, so iterative cases must not share a workbook.
         if cross_sheet or iterative:
@@ -543,6 +544,7 @@ class ExcelOracle(OracleDriver):
                                 rec,
                                 context=f"case {case['id']!r} setup {addr!r}",
                             )
+                        _apply_names(wb, case.get("names") or {})
                         result_cell = sht.range(case_formula_cell(case))
                         try:
                             result_cell.number_format = "General"

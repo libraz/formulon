@@ -49,6 +49,19 @@ def apply_merges(sht, merges: List[str]) -> None:
         sht.range(ref).merge()
 
 
+def apply_names(wb, names: Dict[str, str]) -> None:
+    """Define the case's workbook-scope names from their English refers-to text."""
+
+    for name, refers_to in names.items():
+        wb.names.add(name, refers_to)
+
+
+def needs_own_workbook(case: Dict[str, Any]) -> bool:
+    """A case with a sheet-qualified setup key or defined names runs in its own workbook."""
+
+    return bool(case.get("names")) or any("!" in addr for addr in (case.get("setup") or {}))
+
+
 SHEET_FORBIDDEN = set("\\/?*[]:")
 
 

@@ -220,6 +220,38 @@ entries:
 """
 
 
+class DefinedNamesSchemaTest(unittest.TestCase):
+    """`names` validation and its path into the driver input, golden and workbook choice."""
+
+    def _load(self, names: str) -> case_schema.Suite:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "names.yaml"
+            path.write_text(
+                f'suite: n\ncases:\n  - id: c\n    formula: "=SUM(u)"\n    names: {names}\n', encoding="utf-8"
+            )
+            return case_schema.load_suite(path)
+
+    def test_names_reach_driver_input_and_golden_record(self) -> None:
+        suite = self._load("{u: '=Sheet1!$A$1,Sheet1!$B$1'}")
+        case = suite.cases[0]
+        self.assertEqual(case.names, {"u": "=Sheet1!$A$1,Sheet1!$B$1"})
+        self.assertEqual(oracle_gen._case_input(case)["names"], case.names)
+        self.assertEqual(oracle_gen._case_record(case)["names"], case.names)
+        self.assertNotIn("names", oracle_gen._case_input(case_schema.Case(id="d", formula="=1")))
+
+    def test_rejected_names_name_the_case(self) -> None:
+        for raw in ("[u]", "{u: 'Sheet1!$A$1'}", "{u: 1}", "{'': '=A1'}"):
+            with self.subTest(raw=raw), self.assertRaisesRegex(ValueError, "case 'c'"):
+                self._load(raw)
+
+    def test_a_case_with_names_runs_in_its_own_workbook(self) -> None:
+        from tools.oracle.drivers import case_sheet
+
+        self.assertTrue(case_sheet.needs_own_workbook({"names": {"u": "=Sheet1!$A$1"}}))
+        self.assertTrue(case_sheet.needs_own_workbook({"setup": {"Sheet2!A1": {}}}))
+        self.assertFalse(case_sheet.needs_own_workbook({"setup": {"A1": {}}}))
+
+
 def _probe_suite() -> case_schema.Suite:
     return case_schema.Suite(
         name="probe_suite",

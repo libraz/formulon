@@ -203,6 +203,13 @@ TEST_P(OracleTest, Matches) {
       }
     }
   }
+  if (const JsonValue* names = param.raw_case.find("names"); names != nullptr) {
+    const char* err_msg = apply_defined_names(*names, wb);
+    if (err_msg != nullptr) {
+      FAIL() << param.suite << "." << param.case_id << ": " << err_msg;
+      return;
+    }
+  }
   if (legacy_formulas) {
     wb.apply_legacy_implicit_intersections();
   }

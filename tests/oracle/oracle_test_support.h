@@ -186,6 +186,24 @@ inline const char* apply_merge_ranges(const JsonValue& spec, Sheet& sheet) {
   return nullptr;
 }
 
+// Applies the optional case-level `names` map: workbook-scope defined names
+// keyed by name, each holding its English refers-to text.
+inline const char* apply_defined_names(const JsonValue& spec, Workbook& book) {
+  if (!spec.is_object()) {
+    return "case 'names' is not an object";
+  }
+  for (const std::string& name : spec.object_keys()) {
+    const JsonValue& refers_to = spec.as_object().find(name)->second;
+    if (!refers_to.is_string() || refers_to.as_string().empty() || refers_to.as_string().front() != '=') {
+      return "defined name refers-to is not a string starting with '='";
+    }
+    if (!book.set_defined_name(name, refers_to.as_string().substr(1U))) {
+      return "defined name refused";
+    }
+  }
+  return nullptr;
+}
+
 // Applies the environment's row visibility: `hidden_rows` (1-based) hides
 // those rows, and `filter_criteria: true` gives the sheet an AutoFilter with a
 // criterion, which makes every hidden row of it count as filter-hidden.
