@@ -121,7 +121,8 @@ int main(void) {
   // definition of either record is miscompiled rather than diagnosed.
   _Static_assert(sizeof(fm_cell_xf_t) == 136, "fm_cell_xf_t ABI layout changed");
   _Static_assert(sizeof(fm_row_layout_info_t) == 48, "fm_row_layout_info_t ABI layout changed");
-  _Static_assert(sizeof(fm_sheet_view_info_t) == 80, "fm_sheet_view_info_t ABI layout changed");
+  _Static_assert(sizeof(fm_sheet_view_info_t) == 88, "fm_sheet_view_info_t ABI layout changed");
+  _Static_assert(offsetof(fm_sheet_view_info_t, zoom_to_fit) == 80, "fm_sheet_view_info_t.zoom_to_fit offset changed");
   _Static_assert(sizeof(fm_sheet_view_patch_t) == 152, "fm_sheet_view_patch_t ABI layout changed");
   // The three records a C consumer marshals without help from any binding:
   // `fm_value_t` comes back from every cell read, `fm_cell_rect_t` from
