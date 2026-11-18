@@ -16,11 +16,8 @@ Usage::
     tools/catalog/behaviors.py --missing    # list behaviours observed missing
     tools/catalog/behaviors.py --expected diverged
 
-The `--check` mode is wired into ctest as the `BehaviorDrift` test. If
-PyYAML is not importable (CI sandbox, fresh macOS), the script prints a
-warning to stderr and exits 0 — mirroring the soft-import pattern in
-`tools/oracle/oracle_gen.py::_load_divergence_skips` so that ctest stays
-green without a hard dependency.
+The `--check` mode is wired into ctest as the `BehaviorDrift` test. It needs
+PyYAML, which the test configure requires of the interpreter it registers.
 """
 
 from __future__ import annotations
@@ -93,31 +90,12 @@ class Observation:
     diverged_sources: Tuple[str, ...] = ()
 
 
-# ---- Soft YAML import ----------------------------------------------------
-
-
-def _try_import_yaml():
-    """Returns the `yaml` module or None. Mirrors the soft-import style of
-    `tools/oracle/oracle_gen.py::_load_divergence_skips`: we would rather
-    ship a slightly reduced `behaviors.py` than add PyYAML to the hard
-    dependency set of the native test harness."""
-    try:
-        import yaml  # type: ignore
-
-        return yaml
-    except Exception:
-        return None
-
-
 # ---- Loaders -------------------------------------------------------------
 
 
 def load_behaviors(path: Path) -> List[Group]:
     """Parses `behaviors.yaml`. Raises FileNotFoundError if the file is
     missing; raises ValueError on malformed entries."""
-    yaml = _try_import_yaml()
-    if yaml is None:
-        raise RuntimeError("PyYAML not available")
     if not path.exists():
         raise FileNotFoundError(str(path))
     doc = load_yaml(path.read_text(encoding="utf-8")) or {}
@@ -172,9 +150,6 @@ def load_divergence(path: Path) -> Dict[str, str]:
     the "missing file / bad YAML -> empty dict" tolerance."""
     if not path.exists():
         return {}
-    yaml = _try_import_yaml()
-    if yaml is None:
-        return {}
     try:
         doc = load_yaml(path.read_text(encoding="utf-8")) or {}
     except Exception:
@@ -199,9 +174,6 @@ def load_oracle_cases(cases_dir: Path) -> List[Case]:
     setup-only cases) by skipping them; tolerates missing dir by
     returning an empty list."""
     if not cases_dir.exists():
-        return []
-    yaml = _try_import_yaml()
-    if yaml is None:
         return []
     cases: List[Case] = []
     for yaml_path in sorted(cases_dir.glob("*.yaml")):
@@ -426,16 +398,6 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         f"`expected` equals STATUS (one of {VALID_EXPECTED}).",
     )
     args = parser.parse_args(argv)
-
-    yaml = _try_import_yaml()
-    if yaml is None:
-        # Soft-fail: keep CI green on hosts without PyYAML. The check mode
-        # still exits 0 so ctest passes.
-        print(
-            "behaviors.py: PyYAML not available; skipping drift check. Install with `pip install pyyaml` to enable.",
-            file=sys.stderr,
-        )
-        return 0
 
     try:
         groups = load_behaviors(BEHAVIORS_PATH)
