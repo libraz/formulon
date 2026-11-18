@@ -35,7 +35,8 @@ void CacheNumber(ExternalBook& book, std::uint32_t row, std::uint32_t col, doubl
 
 void CacheText(ExternalBook& book, std::uint32_t row, std::uint32_t col, const char* text) {
   ExternalCell cell;
-  cell.value = Value::text(text);
+  cell.value = Value::text("");
+  cell.text = text;
   book.cells.emplace(ExternalBook::cell_key(0, row, col), std::move(cell));
 }
 
@@ -154,8 +155,26 @@ TEST_F(CountBlankCountIfTail, CountBlankFailsOnAReturnedReferenceError) {
   EXPECT_EQ(index.as_error(), ErrorCode::Ref);
 }
 
+TEST_F(CountBlankCountIfTail, TheLinkCacheHoldsTheSourceText) {
+  for (const auto& [formula, expected] :
+       {std::pair<const char*, const char*>{"=[Src.xlsx]S!A2", "k2"}, {"=INDEX([Src.xlsx]S!A1:A5,5)", "k5"}}) {
+    const Value v = Eval(formula);
+    ASSERT_TRUE(v.is_text()) << formula << " -> " << v.debug_to_string();
+    EXPECT_EQ(v.as_text(), expected) << formula;
+  }
+  ExpectNumber("=SUMPRODUCT(([Src.xlsx]S!A1:A5=\"\")*1)", 1.0);
+}
+
+TEST_F(CountBlankCountIfTail, CountBlankCountsAnExternalRectangleFromTheLinkCache) {
+  ExpectNumber("=COUNTBLANK([Src.xlsx]S!A1:A5)", 1.0);
+  ExpectNumber("=COUNTBLANK([Src.xlsx]S!A1)", 0.0);
+  ExpectNumber("=COUNTBLANK([Src.xlsx]S!A4)", 1.0);
+  ExpectNumber("=COUNTBLANK([Src.xlsx]S!A1:B6)", 3.0);
+  ExpectNumber("=COUNTBLANK([Src.xlsx]S!A:A)", 1048572.0);
+  ExpectNumber("=COUNTBLANK([Src.xlsx]S!C:C)", 1048576.0);
+}
+
 TEST_F(CountBlankCountIfTail, ExternalReferencesAreAClosedBook) {
-  ExpectValueError("=COUNTBLANK([Src.xlsx]S!A1:A5)");
   ExpectValueError("=COUNTIF([Src.xlsx]S!A1:A5,\"k2\")");
   ExpectValueError("=COUNTIFS([Src.xlsx]S!A1:A5,\"k2\",[Src.xlsx]S!B1:B5,\">0\")");
   ExpectValueError("=SUMIF([Src.xlsx]S!A:A,\"k2\",[Src.xlsx]S!B:B)");

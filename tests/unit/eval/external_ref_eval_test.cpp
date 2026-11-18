@@ -387,11 +387,16 @@ TEST_F(ExternalRefBlank, AWholeColumnKeepsItsDeclaredShapeInExpressions) {
 
 TEST_F(ExternalRefBlank, RangeCriteriaFunctionsReadAClosedBookAsValue) {
   for (const std::string formula :
-       {"=COUNTBLANK([Src.xlsx]S!A1:A5)", "=COUNTIF([Src.xlsx]S!A1:A5,\"k2\")", "=COUNTIFS([Src.xlsx]S!A1:A5,\"k2\")",
+       {"=COUNTIF([Src.xlsx]S!A1:A5,\"k2\")", "=COUNTIFS([Src.xlsx]S!A1:A5,\"k2\")",
         "=SUMIF([Src.xlsx]S!A:A,\"k2\",[Src.xlsx]S!B:B)", "=SUMIFS([Src.xlsx]S!B:B,[Src.xlsx]S!A:A,\"k2\")",
         "=AVERAGEIF([Src.xlsx]S!A:A,\"k2\",[Src.xlsx]S!B:B)", "=MAXIFS([Src.xlsx]S!B:B,[Src.xlsx]S!A:A,\"k2\")"}) {
     ExpectError(formula, ErrorCode::Value);
   }
+}
+
+TEST_F(ExternalRefBlank, CountBlankCountsTheUncachedCellsOfTheDeclaredShape) {
+  ExpectNumber("=COUNTBLANK([Src.xlsx]S!A1:A5)", 1.0);
+  ExpectNumber("=COUNTBLANK([Src.xlsx]S!A:A)", 1048572.0);
 }
 
 TEST_F(ExternalRefBlank, LookupsOverAnExternalTableReadTheUncachedCellAsBlank) {

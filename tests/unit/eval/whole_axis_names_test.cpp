@@ -185,7 +185,8 @@ TEST_F(WholeAxisNames, LetBoundExternalRangeIsValueToRangeCriteriaFunctions) {
   ExpectNumber("=LET(x,L!A1:A5,COUNTIF(x,\"k2\"))", 1.0);
   ExpectError("=LET(x,[Src.xlsx]S!A1:A5,COUNTIF(x,\"k2\"))", ErrorCode::Value);
   ExpectError("=LET(x,[Src.xlsx]S!A:A,COUNTIF(x,\"k2\"))", ErrorCode::Value);
-  ExpectError("=LET(x,[Src.xlsx]S!A1:A5,COUNTBLANK(x))", ErrorCode::Value);
+  ExpectNumber("=LET(x,[Src.xlsx]S!A1:A5,COUNTBLANK(x))", 1.0);
+  ExpectNumber("=LET(x,[Src.xlsx]S!A:A,COUNTBLANK(x))", 1048572.0);
   ExpectError("=LET(a,[Src.xlsx]S!A:A,b,[Src.xlsx]S!B:B,SUMIF(a,\"k2\",b))", ErrorCode::Value);
 }
 

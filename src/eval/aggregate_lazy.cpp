@@ -844,22 +844,36 @@ Value eval_countblank_lazy(const parser::AstNode& call, Arena& arena, const Func
   };
   for (std::uint32_t i = 0; i < arity; ++i) {
     const parser::AstNode& node = call.as_call_arg(i);
-    if (node.kind() == parser::NodeKind::ExternalRef) {
-      return Value::error(ErrorCode::Value);
-    }
     if (is_grouped_ref3d(node)) {
       return Value::error(ErrorCode::Name);
     }
     const parser::NodeKind k = node.kind();
+    if (k == parser::NodeKind::ExternalRef) {
+      // A supporting-workbook rectangle counts every declared cell its cache does not hold a value for.
+      if (is_three_d_reference(node)) {
+        return Value::error(ErrorCode::Value);
+      }
+      const Expected<ExternalRect, ErrorCode> rect = resolve_external_rect(node, ctx);
+      if (!rect) {
+        return Value::error(rect.error());
+      }
+      const ExternalRect& r = rect.value();
+      double occupied = 0.0;
+      for (std::uint32_t row = r.walked.row_first; row <= r.walked.row_last; ++row) {
+        for (std::uint32_t col = r.walked.col_first; col <= r.walked.col_last; ++col) {
+          if (!is_empty(read_external_cell(*r.book, r.sheet, row, col, arena))) {
+            occupied += 1.0;
+          }
+        }
+      }
+      total += static_cast<double>(r.declared.rows()) * static_cast<double>(r.declared.cols()) - occupied;
+      continue;
+    }
     if (is_returned_reference(node, ctx)) {
       // A returned reference counts every cell of its rectangle, populated or not: `COUNTBLANK(INDIRECT("C:C"))`.
       const Value ref = eval_node_ref(node, arena, registry, ctx);
       if (ref.is_error()) {
         return ref;
-      }
-      // A reference into a supporting workbook is #VALUE!, as one written in place is.
-      if (ref.is_ref() && ref.as_ref().book != 0U) {
-        return Value::error(ErrorCode::Value);
       }
       if (ref.is_ref() && ref.as_ref().form == RefForm::kArea) {
         auto read = deref_cells(ref, /*allow_span3d=*/false, arena, registry, ctx, ReadCount::kCounted);

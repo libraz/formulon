@@ -842,6 +842,18 @@ entries:
     prefer: formulon
     first_noted: 2026-10-07
     last_verified_excel_version: "16.113.3"
+  # Excel re-reads a closed supporting workbook from disk when COUNTBLANK over
+  # it is entered; Formulon reads the cached link part only.
+  - id: countblank_external_entry_rereads_closed_book
+    applies_to: [mac-365-ja_JP]
+    cause: accepted-divergence
+    mode: skip-oracle
+    scope: unit-test
+    evidence: [tests/unit/eval/countblank_countif_tail_test.cpp, tests/unit/eval/external_ref_eval_test.cpp]
+    reason: "COUNTBLANK over a reference into a closed supporting workbook counts the declared shape, with every cell the link cache does not hold as blank: on open and under CalculateFull, a cache holding only S!A1 gives COUNTBLANK([1]S!A1) 0, [1]S!A4 1, [1]S!A1:A5 4 and [1]S!A:A 1048575, as Formulon does. When the same formulas are entered with the source closed, Mac Excel reads the source file itself and counts its populated cells (A1:A5 3 and A:A 1048574 for a source holding A1 and A2), then saves those cells into the link cache. Formulon has no file access at entry and keeps the cache count; after the re-saved cache is loaded the two agree. COUNTIF and the other *IF functions over the same references are #VALUE! on every route."
+    prefer: formulon
+    first_noted: 2026-11-19
+    last_verified_excel_version: "16.115"
 
 
   # Retired the INDIRECT R1C1 entries (`indirect_r1c1_style_deferred`,
