@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -376,8 +377,12 @@ TEST(XlsbWriterExternalLink, AnEnteredLinkIsTheFirstSupportingBook) {
   EXPECT_EQ(tabs->payload, std::string("\x01\x00\x00\x00\x06\x00\x00\x00S\0h\0e\0e\0t\0"
                                        "1\0",
                                        20));
-  // A sheet created by entry has no cache.
-  EXPECT_TRUE(std::none_of(recs.begin(), recs.end(), [](const Rec& r) { return r.type == 363; }));
+  // A sheet created by entry has no cache, so it is written as an empty failed refresh.
+  const auto table = std::find_if(recs.begin(), recs.end(), [](const Rec& r) { return r.type == 363; });
+  ASSERT_NE(table, recs.end());
+  EXPECT_EQ(table->payload, std::string("\x00\x00\x00\x00\x01", 5));
+  ASSERT_NE(std::next(table), recs.end());
+  EXPECT_EQ(std::next(table)->type, 364);
 
   const std::string rels = Entry(bytes, "xl/externalLinks/_rels/externalLink1.bin.rels");
   EXPECT_NE(rels.find("Id=\"rId1\""), std::string::npos) << rels;

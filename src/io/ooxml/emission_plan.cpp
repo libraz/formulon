@@ -295,6 +295,17 @@ bool HasRetainedPart(const Workbook& wb, const std::vector<const PassthroughPart
   return part != nullptr && !IsXlsbBinaryContentType(EffectiveContentType(wb, *part));
 }
 
+/// Whether a save adds Excel's failed-refresh mark to a listed sheet the loaded body
+/// carries without cached data, so the body cannot be kept verbatim.
+bool GainsRefreshMark(const ExternalBook& book) {
+  for (std::uint32_t s = 0; s < book.sheet_names.size(); ++s) {
+    if (!book.sheet_has_data(s) && !book.sheet_refresh_failed(s)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /// Plans every external link in index order. A loaded body the model still
 /// matches is kept; an OLE / DDE link without one cannot be rebuilt and is
 /// not written; every other link gets a generated body, at its own `.xml`
@@ -318,7 +329,8 @@ void PlanExternalLinks(const Workbook& wb, const std::vector<const PassthroughPa
     entry.record = &rec;
     entry.workbook_rid = static_cast<std::uint32_t>(first_rid + i);
     entry.part_path = rec.part_path;
-    if (!rec.body_stale && HasRetainedPart(wb, source_parts, source_index, rec.part_path)) {
+    if (!rec.body_stale && !GainsRefreshMark(rec.book) &&
+        HasRetainedPart(wb, source_parts, source_index, rec.part_path)) {
       entry.written = true;
     } else if (rec.kind != ExternalLinkRecord::Kind::kOleLink && rec.kind != ExternalLinkRecord::Kind::kDdeLink) {
       if (!strings::ends_with(rec.part_path, ".xml")) {

@@ -144,6 +144,12 @@ struct ExternalBook {
     return sheet < refresh_error.size() && refresh_error[sheet];
   }
 
+  /// Whether a save marks `sheet`'s cache as a failed refresh: Excel lists every
+  /// sheet and writes the mark for one whose refresh failed or that has no data.
+  bool sheet_saves_refresh_error(std::uint32_t sheet) const noexcept {
+    return sheet_refresh_failed(sheet) || !sheet_has_data(sheet);
+  }
+
   /// The value a reference to the single cell `(sheet, row, col)` reads: the
   /// cached value, or for a cell never cached `#REF!` on a sheet whose refresh
   /// failed and a blank otherwise. A cell read as part of a range is

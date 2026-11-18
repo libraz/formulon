@@ -130,7 +130,7 @@ void AppendSheetData(std::string& out, const ExternalBook& book, std::uint32_t s
   out.append("<sheetData sheetId=\"");
   out.append(std::to_string(sheet));
   out.append("\"");
-  if (book.sheet_refresh_failed(sheet)) {
+  if (book.sheet_saves_refresh_error(sheet)) {
     out.append(" refreshError=\"1\"");
   }
   // Excel self-closes a sheet with no cached cells.
@@ -255,14 +255,12 @@ std::string BuildExternalLinkXml(const ExternalLinkRecord& rec) {
     while (next_key < sorted_cell_keys.size() && CachedCellSheet(sorted_cell_keys[next_key]) == s) {
       ++next_key;
     }
-    if (!book.sheet_has_data(s) && !book.sheet_refresh_failed(s)) {
-      continue;
-    }
     if (!any_data) {
       out.append("<sheetDataSet>");
       any_data = true;
     }
-    AppendSheetData(out, book, s, sorted_cell_keys, begin, next_key);
+    // A sheet without cached data writes none of the cells its cache may still hold.
+    AppendSheetData(out, book, s, sorted_cell_keys, begin, book.sheet_has_data(s) ? next_key : begin);
   }
   if (any_data) {
     out.append("</sheetDataSet>");

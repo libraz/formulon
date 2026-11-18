@@ -107,7 +107,7 @@ void EmitSheetTable(std::vector<std::uint8_t>& out, const ExternalBook& book, st
                     const std::uint64_t* first, const std::uint64_t* last) {
   std::vector<std::uint8_t> p;
   emit_u32(p, sheet);
-  emit_u8(p, book.sheet_refresh_failed(sheet) ? kExternTableRefreshError : std::uint8_t{0});
+  emit_u8(p, book.sheet_saves_refresh_error(sheet) ? kExternTableRefreshError : std::uint8_t{0});
   emit_record(out, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginExternTable), p);
   const std::uint64_t base = ExternalBook::cell_key(sheet, 0, 0);
   const std::uint64_t row_unit = ExternalBook::cell_key(0, 1, 0);
@@ -206,11 +206,10 @@ std::vector<std::uint8_t> build_external_link_bin(const ExternalLinkRecord& link
 
   const std::vector<std::uint64_t> keys = book.sorted_cell_keys();
   for (std::uint32_t sheet = 0; sheet < tables.sheet_names.size(); ++sheet) {
-    if (!book.sheet_has_data(sheet) && !book.sheet_refresh_failed(sheet)) {
-      continue;
-    }
     const auto lo = std::lower_bound(keys.begin(), keys.end(), ExternalBook::cell_key(sheet, 0, 0));
-    const auto hi = std::lower_bound(lo, keys.end(), ExternalBook::cell_key(sheet + 1U, 0, 0));
+    // A sheet without cached data writes none of the cells its cache may still hold.
+    const auto hi =
+        book.sheet_has_data(sheet) ? std::lower_bound(lo, keys.end(), ExternalBook::cell_key(sheet + 1U, 0, 0)) : lo;
     EmitSheetTable(out, book, sheet, keys.data() + (lo - keys.begin()), keys.data() + (hi - keys.begin()));
   }
 

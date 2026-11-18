@@ -401,13 +401,15 @@ TEST(OoxmlExternalLinkWriter, GeneratedBodyCarriesSheetsNamesAndCachedData) {
   EXPECT_STREQ(local.attribute("refersTo").value(), "='Data'!$A$1:$B$2");
   EXPECT_STREQ(local.attribute("sheetId").value(), "0");
 
-  // Only the sheet that has cached data gets a `<sheetData>`.
-  std::size_t sheet_data_count = 0;
+  // Every listed sheet gets a `<sheetData>`; one with no cached data is an empty failed refresh.
+  std::vector<std::string> sheet_ids;
   for (pugi::xml_node d = book.child("sheetDataSet").child("sheetData"); d; d = d.next_sibling("sheetData")) {
-    ++sheet_data_count;
-    EXPECT_STREQ(d.attribute("sheetId").value(), "0");
+    sheet_ids.emplace_back(d.attribute("sheetId").value());
+    const bool cached = sheet_ids.size() == 1U;
+    EXPECT_EQ(static_cast<bool>(d.attribute("refreshError")), !cached);
+    EXPECT_EQ(static_cast<bool>(d.first_child()), cached);
   }
-  EXPECT_EQ(sheet_data_count, 1U);
+  EXPECT_EQ(sheet_ids, (std::vector<std::string>{"0", "1"}));
 }
 
 TEST(OoxmlExternalLinkWriter, GeneratedBodyReadsBackToTheSameCache) {
@@ -477,9 +479,9 @@ TEST(OoxmlExternalLinkWriter, CachedCellsKeepSheetAndRowMajorOrder) {
     cell_refs_by_sheet.push_back(std::move(cells));
   }
 
-  EXPECT_EQ(sheet_ids, (std::vector<std::string>{"0", "1", "3"}));
-  EXPECT_EQ(row_refs_by_sheet, (std::vector<std::vector<std::string>>{{"1", "3", "9"}, {}, {"2"}}));
-  EXPECT_EQ(cell_refs_by_sheet, (std::vector<std::vector<std::string>>{{"B1", "E1", "A3", "C9"}, {}, {"A2"}}));
+  EXPECT_EQ(sheet_ids, (std::vector<std::string>{"0", "1", "2", "3"}));
+  EXPECT_EQ(row_refs_by_sheet, (std::vector<std::vector<std::string>>{{"1", "3", "9"}, {}, {}, {"2"}}));
+  EXPECT_EQ(cell_refs_by_sheet, (std::vector<std::vector<std::string>>{{"B1", "E1", "A3", "C9"}, {}, {}, {"A2"}}));
 }
 
 TEST(OoxmlExternalLinkWriter, CachedTextSurvivesTwoOoxmlCycles) {

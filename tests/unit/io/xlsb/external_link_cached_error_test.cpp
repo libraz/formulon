@@ -24,7 +24,7 @@ ErrorCode CachedErrorAfterWrite(ErrorCode written) {
   link.index = 1;
   link.kind = ExternalLinkRecord::Kind::kExternalBook;
   link.book.sheet_names = {"S"};
-  link.book.sheet_data = {true};  // the writer emits only sheets flagged as cached
+  link.book.sheet_data = {true};
   link.book.cells[ExternalBook::cell_key(0, 0, 0)].value = Value::error(written);
   XlsbLinkTables tables;
   tables.index = 1;
