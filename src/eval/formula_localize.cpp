@@ -88,8 +88,7 @@ bool is_function_name_token(parser::TokenKind kind) noexcept {
 }
 
 // A built-in defined name and its spelling per locale, in `ExcelLocale`
-// order; an empty field is the English name. es_ES and es_MX agree. The
-// last four have no local spellings on record and stay English.
+// order; an empty field is the English name. es_ES and es_MX agree.
 struct BuiltinNameSpelling {
   std::string_view english;
   std::string_view local[14];
@@ -128,6 +127,18 @@ constexpr BuiltinNameSpelling kBuiltinNameSpellings[] = {
     {"Recorder",
      {"", "", "Aufzeichnung", "Fonction_enregistrement", "录音机", "", "", "Grabación", "Grabación", "Gravador",
       "Рекордер", "", "Registratore", "Opname"}},
+    {"Auto_Close",
+     {"", "", "Auto_schließen", "Auto_fermer", "", "", "", "Auto_cerrar", "Auto_cerrar", "Fechar_auto", "Авто_закрыть",
+      "", "Auto_chiudi", "Auto_sluiten"}},
+    {"Data_Form",
+     {"", "", "Datenmaske", "Grille", "", "", "", "Ficha_de_datos", "Ficha_de_datos", "Formulario_de_dados",
+      "Форма_данных", "", "Modulo_dati", "Gegevensformulier"}},
+    {"Auto_Activate",
+     {"", "", "Auto_aktivieren", "Auto_activer", "", "", "", "Auto_activar", "Auto_activar", "Ativar_auto",
+      "Авто_активизировать", "", "Auto_attiva", "Auto_activeren"}},
+    {"Auto_Deactivate",
+     {"", "", "Auto_deaktivieren", "Auto_desactiver", "", "", "", "Auto_desactivar", "Auto_desactivar",
+      "Desativar_auto", "Авто_дезактивизировать", "", "Auto_disattiva", "Auto_deactiveren"}},
 };
 
 }  // namespace

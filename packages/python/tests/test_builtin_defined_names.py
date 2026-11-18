@@ -32,6 +32,10 @@ BUILT_IN_NAMES = (
     "Sheet_Title",
     "Auto_Open",
     "Recorder",
+    "Auto_Close",
+    "Data_Form",
+    "Auto_Activate",
+    "Auto_Deactivate",
 )
 SHEET_BUILT_INS = ("Print_Area", "Print_Titles")
 

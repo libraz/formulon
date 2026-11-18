@@ -135,6 +135,12 @@ TEST(FormulaLocalize, BuiltInDefinedNamesTakeTheLocaleSpelling) {
   EXPECT_EQ(canonicalize_in(ExcelLocale::kDeDE, "=ZEILEN(auto_öffnen)+ZEILEN(KONSOLIDIERUNGSBEREICH)"),
             "=ROWS(_xlnm.Auto_Open)+ROWS(_xlnm.Consolidate_Area)");
   EXPECT_EQ(canonicalize_in(ExcelLocale::kPtBR, "=LINS(título_de_planilha)"), "=ROWS(_xlnm.Sheet_Title)");
+  EXPECT_EQ(localize_in(ExcelLocale::kFrFR, "=ROWS(_xlnm.Data_Form)+ROWS(_xlnm.Auto_Close)"),
+            "=LIGNES(Grille)+LIGNES(Auto_fermer)");
+  EXPECT_EQ(canonicalize_in(ExcelLocale::kRuRU, "=ЧСТРОК(авто_дезактивизировать)"), "=ROWS(_xlnm.Auto_Deactivate)");
+  EXPECT_EQ(canonicalize_in(ExcelLocale::kNlNL, "=RIJEN(Auto_activeren)+RIJEN(Data_Form)"),
+            "=ROWS(_xlnm.Auto_Activate)+ROWS(Data_Form)");
+  EXPECT_EQ(localize_in(ExcelLocale::kJaJP, "=ROWS(_xlnm.Auto_Close)"), "=ROWS(Auto_Close)");
   // The English spelling is not the local name where the locale has its own.
   EXPECT_EQ(canonicalize_in(ExcelLocale::kDeDE, "=ZEILEN(Criteria)"), "=ROWS(Criteria)");
 }
