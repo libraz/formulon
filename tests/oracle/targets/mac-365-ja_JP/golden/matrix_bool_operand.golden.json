@@ -1,0 +1,4289 @@
+{
+  "suite": "matrix_bool_operand",
+  "description": "Whether the numeric-matrix functions refuse a boolean, text, numeric text, blank or empty-text cell in a matrix operand, and whether an array constant with a boolean behaves like the range.\n",
+  "environment": {
+    "excel_version": "16.115",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-11-18T15:04:05Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "mb_mmult_bool",
+      "formula": "=MMULT(A1:B2,G1:H2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_mmult_text",
+      "formula": "=MMULT(A1:B2,G1:H2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_mmult_numtext",
+      "formula": "=MMULT(A1:B2,G1:H2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_mmult_blank",
+      "formula": "=MMULT(A1:B2,G1:H2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_mmult_emptytext",
+      "formula": "=MMULT(A1:B2,G1:H2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_minverse_bool",
+      "formula": "=MINVERSE(A1:B2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_minverse_text",
+      "formula": "=MINVERSE(A1:B2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_minverse_numtext",
+      "formula": "=MINVERSE(A1:B2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_minverse_blank",
+      "formula": "=MINVERSE(A1:B2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_minverse_emptytext",
+      "formula": "=MINVERSE(A1:B2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_mdeterm_bool",
+      "formula": "=MDETERM(A1:B2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "bool",
+          "value": true
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_mdeterm_text",
+      "formula": "=MDETERM(A1:B2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_mdeterm_numtext",
+      "formula": "=MDETERM(A1:B2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "text",
+          "value": "2"
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_mdeterm_blank",
+      "formula": "=MDETERM(A1:B2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_mdeterm_emptytext",
+      "formula": "=MDETERM(A1:B2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_linest_y_bool",
+      "formula": "=LINEST(D1:D4,E1:E4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "bool",
+          "value": true
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_linest_y_text",
+      "formula": "=LINEST(D1:D4,E1:E4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_linest_y_numtext",
+      "formula": "=LINEST(D1:D4,E1:E4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "text",
+          "value": "2"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_linest_y_blank",
+      "formula": "=LINEST(D1:D4,E1:E4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_linest_y_emptytext",
+      "formula": "=LINEST(D1:D4,E1:E4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_linest_x_bool",
+      "formula": "=LINEST(D1:D4,E1:E4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "bool",
+          "value": true
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_linest_x_text",
+      "formula": "=LINEST(D1:D4,E1:E4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_linest_x_numtext",
+      "formula": "=LINEST(D1:D4,E1:E4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "text",
+          "value": "2"
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_linest_x_blank",
+      "formula": "=LINEST(D1:D4,E1:E4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_linest_x_emptytext",
+      "formula": "=LINEST(D1:D4,E1:E4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_logest_y_bool",
+      "formula": "=LOGEST(D1:D4,E1:E4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "bool",
+          "value": true
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_logest_y_text",
+      "formula": "=LOGEST(D1:D4,E1:E4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_logest_y_numtext",
+      "formula": "=LOGEST(D1:D4,E1:E4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "text",
+          "value": "2"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_logest_y_blank",
+      "formula": "=LOGEST(D1:D4,E1:E4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_logest_y_emptytext",
+      "formula": "=LOGEST(D1:D4,E1:E4)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_trend_y_bool",
+      "formula": "=TREND(D1:D4,E1:E4,5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "bool",
+          "value": true
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_trend_y_text",
+      "formula": "=TREND(D1:D4,E1:E4,5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_trend_y_numtext",
+      "formula": "=TREND(D1:D4,E1:E4,5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "text",
+          "value": "2"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_trend_y_blank",
+      "formula": "=TREND(D1:D4,E1:E4,5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_trend_y_emptytext",
+      "formula": "=TREND(D1:D4,E1:E4,5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_trend_newx_bool",
+      "formula": "=TREND(D1:D4,E1:E4,F1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_trend_newx_text",
+      "formula": "=TREND(D1:D4,E1:E4,F1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F1": {
+          "kind": "text",
+          "value": "x"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_trend_newx_numtext",
+      "formula": "=TREND(D1:D4,E1:E4,F1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F1": {
+          "kind": "text",
+          "value": "2"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_trend_newx_blank",
+      "formula": "=TREND(D1:D4,E1:E4,F1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_trend_newx_emptytext",
+      "formula": "=TREND(D1:D4,E1:E4,F1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "F1": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_growth_y_bool",
+      "formula": "=GROWTH(D1:D4,E1:E4,5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "bool",
+          "value": true
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_growth_y_text",
+      "formula": "=GROWTH(D1:D4,E1:E4,5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_growth_y_numtext",
+      "formula": "=GROWTH(D1:D4,E1:E4,5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "text",
+          "value": "2"
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_growth_y_blank",
+      "formula": "=GROWTH(D1:D4,E1:E4,5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_growth_y_emptytext",
+      "formula": "=GROWTH(D1:D4,E1:E4,5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_growth_x_bool",
+      "formula": "=GROWTH(D1:D4,E1:E4,5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "bool",
+          "value": true
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_growth_x_text",
+      "formula": "=GROWTH(D1:D4,E1:E4,5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_growth_x_numtext",
+      "formula": "=GROWTH(D1:D4,E1:E4,5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "text",
+          "value": "2"
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_growth_x_blank",
+      "formula": "=GROWTH(D1:D4,E1:E4,5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_growth_x_emptytext",
+      "formula": "=GROWTH(D1:D4,E1:E4,5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_mmult_const_bool",
+      "formula": "=MMULT({1,TRUE;3,4},{1,0;0,1})",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_mmult_const_text",
+      "formula": "=MMULT({1,\"x\";3,4},{1,0;0,1})",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_mdeterm_const_bool",
+      "formula": "=MDETERM({1,TRUE;3,4})",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_minverse_const_bool",
+      "formula": "=MINVERSE({1,TRUE;3,4})",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_linest_const_bool",
+      "formula": "=LINEST({1;TRUE;4;8},{1;2;3;4})",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_growth_const_bool",
+      "formula": "=GROWTH({1;TRUE;4;8},{1;2;3;4},5)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_mmult_computed_bool",
+      "formula": "=MMULT(A1:B2>0,G1:H2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "mb_mdeterm_computed_bool",
+      "formula": "=MDETERM(A1:B2>2)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "D2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "D3": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "D4": {
+          "kind": "number",
+          "value": 8.0
+        },
+        "E1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "E2": {
+          "kind": "number",
+          "value": 2.0
+        },
+        "E3": {
+          "kind": "number",
+          "value": 3.0
+        },
+        "E4": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "G1": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "G2": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "H2": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

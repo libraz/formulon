@@ -548,16 +548,12 @@ TEST(MatrixStrictNumber, NumberPassesThrough) {
   EXPECT_DOUBLE_EQ(r.value(), 2.5);
 }
 
-TEST(MatrixStrictNumber, BoolTrueIsOne) {
-  auto r = matrix_strict_number(Value::boolean(true));
-  ASSERT_TRUE(r.has_value());
-  EXPECT_DOUBLE_EQ(r.value(), 1.0);
-}
-
-TEST(MatrixStrictNumber, BoolFalseIsZero) {
-  auto r = matrix_strict_number(Value::boolean(false));
-  ASSERT_TRUE(r.has_value());
-  EXPECT_DOUBLE_EQ(r.value(), 0.0);
+TEST(MatrixStrictNumber, BoolIsValueError) {
+  for (const bool b : {true, false}) {
+    auto r = matrix_strict_number(Value::boolean(b));
+    ASSERT_FALSE(r.has_value());
+    EXPECT_EQ(r.error(), ErrorCode::Value);
+  }
 }
 
 TEST(MatrixStrictNumber, NumericLookingTextRejected) {

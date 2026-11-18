@@ -322,16 +322,14 @@ Expected<double, ErrorCode> apply_pow_ieee(double base, double exp) {
 
 Expected<double, ErrorCode> matrix_strict_number(const Value& v) {
   // Number passes through raw (NaN / Inf included — matrix-strict callers
-  // run their own finite-result guard at the end), Bool coerces to 1/0,
-  // Error propagates, everything else (Blank, Text, Array, Ref, Lambda) is
-  // `#VALUE!`. The Text rejection is the point of the strict variant.
+  // run their own finite-result guard at the end), Error propagates,
+  // everything else (Bool, Blank, Text, Array, Ref, Lambda) is `#VALUE!`.
   switch (v.kind()) {
     case ValueKind::Number:
       return v.as_number();
-    case ValueKind::Bool:
-      return v.as_boolean() ? 1.0 : 0.0;
     case ValueKind::Error:
       return v.as_error();
+    case ValueKind::Bool:
     case ValueKind::Blank:
     case ValueKind::Text:
     case ValueKind::Array:

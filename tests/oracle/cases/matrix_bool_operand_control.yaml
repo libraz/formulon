@@ -1,0 +1,207 @@
+suite: matrix_bool_operand_control
+description: >
+  All-numeric controls for matrix_bool_operand: the same setups with the swapped
+  cell numeric, so the refusal cases are measured against a working baseline.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: mbc_mmult
+    setup:
+      A1: 1
+      B1: 2
+      A2: 3
+      B2: 4
+      D1: 1
+      D2: 2
+      D3: 4
+      D4: 8
+      E1: 1
+      E2: 2
+      E3: 3
+      E4: 4
+      F1: 5
+      G1: 1
+      G2: 0
+      H1: 0
+      H2: 1
+    formula: '=MMULT(A1:B2,G1:H2)'
+  - id: mbc_minverse
+    setup:
+      A1: 1
+      B1: 2
+      A2: 3
+      B2: 4
+      D1: 1
+      D2: 2
+      D3: 4
+      D4: 8
+      E1: 1
+      E2: 2
+      E3: 3
+      E4: 4
+      F1: 5
+      G1: 1
+      G2: 0
+      H1: 0
+      H2: 1
+    formula: '=MINVERSE(A1:B2)'
+  - id: mbc_mdeterm
+    setup:
+      A1: 1
+      B1: 2
+      A2: 3
+      B2: 4
+      D1: 1
+      D2: 2
+      D3: 4
+      D4: 8
+      E1: 1
+      E2: 2
+      E3: 3
+      E4: 4
+      F1: 5
+      G1: 1
+      G2: 0
+      H1: 0
+      H2: 1
+    formula: '=MDETERM(A1:B2)'
+  - id: mbc_linest
+    setup:
+      A1: 1
+      B1: 2
+      A2: 3
+      B2: 4
+      D1: 1
+      D2: 2
+      D3: 4
+      D4: 8
+      E1: 1
+      E2: 2
+      E3: 3
+      E4: 4
+      F1: 5
+      G1: 1
+      G2: 0
+      H1: 0
+      H2: 1
+    formula: '=LINEST(D1:D4,E1:E4)'
+  - id: mbc_logest
+    setup:
+      A1: 1
+      B1: 2
+      A2: 3
+      B2: 4
+      D1: 1
+      D2: 2
+      D3: 4
+      D4: 8
+      E1: 1
+      E2: 2
+      E3: 3
+      E4: 4
+      F1: 5
+      G1: 1
+      G2: 0
+      H1: 0
+      H2: 1
+    formula: '=LOGEST(D1:D4,E1:E4)'
+  - id: mbc_trend
+    setup:
+      A1: 1
+      B1: 2
+      A2: 3
+      B2: 4
+      D1: 1
+      D2: 2
+      D3: 4
+      D4: 8
+      E1: 1
+      E2: 2
+      E3: 3
+      E4: 4
+      F1: 5
+      G1: 1
+      G2: 0
+      H1: 0
+      H2: 1
+    formula: '=TREND(D1:D4,E1:E4,5)'
+  - id: mbc_trend_newx
+    setup:
+      A1: 1
+      B1: 2
+      A2: 3
+      B2: 4
+      D1: 1
+      D2: 2
+      D3: 4
+      D4: 8
+      E1: 1
+      E2: 2
+      E3: 3
+      E4: 4
+      F1: 5
+      G1: 1
+      G2: 0
+      H1: 0
+      H2: 1
+    formula: '=TREND(D1:D4,E1:E4,F1)'
+  - id: mbc_growth
+    setup:
+      A1: 1
+      B1: 2
+      A2: 3
+      B2: 4
+      D1: 1
+      D2: 2
+      D3: 4
+      D4: 8
+      E1: 1
+      E2: 2
+      E3: 3
+      E4: 4
+      F1: 5
+      G1: 1
+      G2: 0
+      H1: 0
+      H2: 1
+    formula: '=GROWTH(D1:D4,E1:E4,5)'
+  - id: mbc_mmult_const
+    setup:
+      A1: 1
+      B1: 2
+      A2: 3
+      B2: 4
+      D1: 1
+      D2: 2
+      D3: 4
+      D4: 8
+      E1: 1
+      E2: 2
+      E3: 3
+      E4: 4
+      F1: 5
+      G1: 1
+      G2: 0
+      H1: 0
+      H2: 1
+    formula: '=MMULT({1,2;3,4},{1,0;0,1})'
+  - id: mbc_mdeterm_const
+    setup:
+      A1: 1
+      B1: 2
+      A2: 3
+      B2: 4
+      D1: 1
+      D2: 2
+      D3: 4
+      D4: 8
+      E1: 1
+      E2: 2
+      E3: 3
+      E4: 4
+      F1: 5
+      G1: 1
+      G2: 0
+      H1: 0
+      H2: 1
+    formula: '=MDETERM({1,2;3,4})'

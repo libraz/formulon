@@ -1123,27 +1123,3 @@ entries:
     reason: "Near a pole of the function the result is ill-conditioned: Formulon and a fresh Mac Excel calculation differ from the cached value around the 8th significant digit, beyond the corpus tolerance but at the limit of the argument's precision. Formula: =TAN(A46)"
     prefer: mac
     first_noted: 2026-10-09
-
-  # -- MMULT over logical values -----------------------------------------
-  - id: ironcalc_calc_tests__MATH_AND_TRIGONOMETRY_MMULT_Sheet1.E70
-    cause: engine-gap
-    reason: "A logical value in either matrix makes MMULT #VALUE!; Formulon multiplies it as 1 or 0. Cached by Excel 16.0300 and reproduced by Mac Excel 16.115. Formula: =MMULT(A70:B71,C70:D71)"
-    prefer: ironcalc
-    first_noted: 2026-11-18
-  - id: ironcalc_calc_tests__MATH_AND_TRIGONOMETRY_MMULT_Sheet1.E72
-    cause: engine-gap
-    reason: "A logical value in either matrix makes MMULT #VALUE!; Formulon multiplies it as 1 or 0. Cached by Excel 16.0300 and reproduced by Mac Excel 16.115. Formula: =MMULT(A72:B73,C72:D73)"
-    prefer: ironcalc
-    first_noted: 2026-11-18
-  - id: ironcalc_calc_tests__MATH_AND_TRIGONOMETRY_MMULT_Sheet1.E74
-    cause: engine-gap
-    reason: "A logical value in either matrix makes MMULT #VALUE!; Formulon multiplies it as 1 or 0. Cached by Excel 16.0300 and reproduced by Mac Excel 16.115. Formula: =MMULT(A74:B75,C74:D75)"
-    prefer: ironcalc
-    first_noted: 2026-11-18
-
-  # -- GROWTH over logical values ----------------------------------------
-  - id: ironcalc_calc_tests__STATISTICAL_TREND_GROWTH_Sheet1.E10
-    cause: engine-gap
-    reason: "A logical value in the known values makes GROWTH #VALUE!; Formulon fits it as 1 or 0. Cached by Excel 16.0300 and reproduced by Mac Excel 16.115. Formula: =GROWTH(A2:A7,B2:B7)"
-    prefer: ironcalc
-    first_noted: 2026-11-18

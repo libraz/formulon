@@ -508,9 +508,7 @@ TEST(BuiltinsLinest, UnderdeterminedSystemReturnsNum) {
   EXPECT_EQ(v.as_error(), ErrorCode::Num);
 }
 
-TEST(BuiltinsLinest, BooleanCellsCoerceToNumeric) {
-  // Booleans coerce to 1/0. With y={2,4,6,8} and x={TRUE,2,3,4}={1,2,3,4}
-  // we get the same perfect-fit answer as before.
+TEST(BuiltinsLinest, BooleanCellsAreValueError) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
@@ -518,9 +516,8 @@ TEST(BuiltinsLinest, BooleanCellsCoerceToNumeric) {
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=LINEST({2,4,6,8}, {TRUE,2,3,4})", &parse_arena, &eval_arena, ctx);
-  ASSERT_TRUE(v.is_array());
-  EXPECT_NEAR(v.as_array_cells()[0].as_number(), 2.0, kEps);
-  EXPECT_NEAR(v.as_array_cells()[1].as_number(), 0.0, kEps);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 // ---------------------------------------------------------------------------

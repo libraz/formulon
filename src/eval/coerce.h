@@ -180,9 +180,8 @@ Expected<double, ErrorCode> apply_pow_ieee(double base, double exp);
 /// * `Number` is returned as-is (including NaN / Inf; matrix-strict
 ///   callers expect raw passthrough rather than the `coerce_to_number`
 ///   finiteness guard).
-/// * `Bool` becomes 1.0 / 0.0.
 /// * `Error` propagates its code unchanged.
-/// * `Blank`, `Text`, `Array`, `Ref`, `Lambda` all yield `#VALUE!`. In
+/// * `Bool`, `Blank`, `Text`, `Array`, `Ref`, `Lambda` all yield `#VALUE!`. In
 ///   particular Text — even numeric-looking text like `"3.14"` — is
 ///   rejected, which is the whole point of the strict variant.
 Expected<double, ErrorCode> matrix_strict_number(const Value& v);

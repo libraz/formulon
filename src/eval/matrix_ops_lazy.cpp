@@ -6,7 +6,7 @@
 //      family). Range / Ref / ArrayLiteral all keep their 2D rectangle;
 //      scalar args become (1, 1).
 //   2. Coerces every cell to `double` via `coerce_to_number_strict`, which
-//      rejects Text / Blank with `#VALUE!` per Mac Excel's matrix-cell
+//      rejects Bool / Text / Blank with `#VALUE!` per Mac Excel's matrix-cell
 //      contract. Errors short-circuit in row-major scan order.
 //   3. Runs the hand-rolled algorithm (triple loop / Gauss elimination /
 //      Gauss-Jordan) on a flat `std::vector<double>` working buffer.

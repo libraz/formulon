@@ -190,8 +190,7 @@ TEST(BuiltinsMmult, OneArgRejected) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(BuiltinsMmult, BooleanCellsCoerceToNumeric) {
-  // TRUE/FALSE coerce to 1/0 just like the rest of the matrix family.
+TEST(BuiltinsMmult, BooleanCellsAreValueError) {
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
@@ -199,11 +198,8 @@ TEST(BuiltinsMmult, BooleanCellsCoerceToNumeric) {
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=MMULT({TRUE,FALSE;FALSE,TRUE}, {2;3})", &parse_arena, &eval_arena, ctx);
-  ASSERT_TRUE(v.is_array());
-  ASSERT_EQ(v.as_array_rows(), 2U);
-  ASSERT_EQ(v.as_array_cols(), 1U);
-  EXPECT_DOUBLE_EQ(v.as_array_cells()[0].as_number(), 2.0);
-  EXPECT_DOUBLE_EQ(v.as_array_cells()[1].as_number(), 3.0);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 // ---------------------------------------------------------------------------
