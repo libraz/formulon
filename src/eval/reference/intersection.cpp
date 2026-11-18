@@ -246,10 +246,6 @@ bool evaluated_ref_rect(const parser::AstNode& node, bool allow_whole_axis, Aren
   return true;
 }
 
-bool is_literal_ref(const parser::AstNode& node) {
-  return node.kind() == parser::NodeKind::Literal && node.as_literal().is_ref();
-}
-
 }  // namespace
 
 bool resolve_range_endpoint(const parser::AstNode& endpoint, Arena& arena, const FunctionRegistry& registry,
@@ -258,7 +254,7 @@ bool resolve_range_endpoint(const parser::AstNode& endpoint, Arena& arena, const
                             ErrorCode* out_err) {
   // A LET-bound endpoint (`A1:r`) stands for the reference it was bound to.
   const parser::AstNode& node = resolve_name_ast(endpoint, ctx.name_env());
-  if (is_literal_ref(node)) {
+  if (is_literal_reference(node)) {
     return evaluated_ref_rect(node, /*allow_whole_axis=*/false, arena, registry, ctx, out_sheet, out_top_row,
                               out_left_col, out_bottom_row, out_right_col, out_err);
   }
@@ -398,7 +394,7 @@ bool resolve_intersect_operand(const parser::AstNode& node, Arena& arena, const 
     }
     return true;
   }
-  if (is_literal_ref(node)) {
+  if (is_literal_reference(node)) {
     return evaluated_ref_rect(node, /*allow_whole_axis=*/true, arena, registry, ctx, out_sheet, out_top_row,
                               out_left_col, out_bottom_row, out_right_col, out_err);
   }

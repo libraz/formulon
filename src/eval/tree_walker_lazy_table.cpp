@@ -66,11 +66,16 @@ constexpr LazyEntry lone_value(LazyEntry entry, ParamSet params, ScalarArg answe
   return entry;
 }
 
+// `entry` reading a grid in each of `params` by `cls`.
+constexpr LazyEntry reads_grid(LazyEntry entry, ParamSet params, GridArg cls) {
+  entry.grid_params = params;
+  entry.grid_sel = cls;
+  return entry;
+}
+
 // `entry` reading a grid in each of its reference-only parameters one element at a time.
 constexpr LazyEntry per_ref(LazyEntry entry) {
-  entry.grid_params = entry.ref_params;
-  entry.grid_sel = GridArg::kPerRef;
-  return entry;
+  return reads_grid(entry, entry.ref_params, GridArg::kPerRef);
 }
 
 // `entry` with the value parameters `params` joining the lift.
@@ -97,7 +102,9 @@ constexpr LazyEntry kLazyDispatch[] = {
     // `eval_datetime_lazy` -- see `eval/financial_lazy.h`.
     {"ACCRINT", &eval_financial_date_lazy, LazyResultShape::kBroadcast, 6U, 8U},
     {"ACCRINTM", &eval_financial_date_lazy, LazyResultShape::kBroadcast, 4U, 5U},
-    {"AGGREGATE", &eval_aggregate_lazy, LazyResultShape::kReduce, 3U, kLazyVariadic},
+    // The reference form reads a grid from ref2 on one element at a time; the array form reads its grids itself.
+    reads_grid({"AGGREGATE", &eval_aggregate_lazy, LazyResultShape::kReduce, 3U, kLazyVariadic},
+               ParamSet::kFourthOnByForm, GridArg::kPerRef),
     {"AMORDEGRC", &eval_financial_date_lazy, LazyResultShape::kBroadcast, 6U, 7U},
     {"AMORLINC", &eval_financial_date_lazy, LazyResultShape::kBroadcast, 6U, 7U},
     // ANCHORARRAY is the OOXML internal encoding of the postfix `#`
@@ -106,7 +113,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     // See `eval_anchorarray_lazy`.
     {"ANCHORARRAY", &eval_anchorarray_lazy, LazyResultShape::kArray, 1U, 1U},
     {"AND", &eval_and_lazy, LazyResultShape::kReduce, 1U, kLazyVariadic},
-    {"AREAS", &eval_areas_lazy, LazyResultShape::kReduce, 1U, 1U, RefResult::kNone, ParamSet::kFirst},
+    per_ref({"AREAS", &eval_areas_lazy, LazyResultShape::kReduce, 1U, 1U, RefResult::kNone, ParamSet::kFirst}),
     {"ARRAYTOTEXT", &eval_arraytotext_lazy, LazyResultShape::kScalar, 1U, 2U},
     value_lifting(per_ref({"AVERAGEIF", &eval_averageif_lazy, LazyResultShape::kReduce, 2U, 3U, RefResult::kNone,
                            ParamSet::kFirstAndThird}),
@@ -116,7 +123,7 @@ constexpr LazyEntry kLazyDispatch[] = {
                   ParamSet::kEvenFromThird),
     {"BYCOL", &eval_bycol_lazy, LazyResultShape::kArray, 1U, 2U},
     {"BYROW", &eval_byrow_lazy, LazyResultShape::kArray, 1U, 2U},
-    {"CELL", &eval_cell_lazy, LazyResultShape::kArray, 1U, 2U, RefResult::kNone, ParamSet::kSecond},
+    per_ref({"CELL", &eval_cell_lazy, LazyResultShape::kArray, 1U, 2U, RefResult::kNone, ParamSet::kSecond}),
     // CHITEST is the pre-2010 legacy spelling of CHISQ.TEST; same impl.
     {"CHISQ.TEST", &eval_chisq_test_lazy, LazyResultShape::kReduce, 2U, 2U},
     {"CHITEST", &eval_chisq_test_lazy, LazyResultShape::kReduce, 2U, 2U},
@@ -125,12 +132,14 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"CHOOSECOLS", &eval_choosecols_lazy, LazyResultShape::kArray, 2U, kLazyVariadic},
     {"CHOOSEROWS", &eval_chooserows_lazy, LazyResultShape::kArray, 2U, kLazyVariadic},
     {"CODE", &eval_code_lazy, LazyResultShape::kBroadcast, 1U, 1U},
-    {"COLUMN", &eval_column_lazy, LazyResultShape::kBroadcast, 0U, 1U, RefResult::kNone, ParamSet::kFirst},
+    per_ref({"COLUMN", &eval_column_lazy, LazyResultShape::kBroadcast, 0U, 1U, RefResult::kNone, ParamSet::kFirst}),
     {"COLUMNS", &eval_columns_lazy, LazyResultShape::kReduce, 1U, 1U},
     {"CORREL", &eval_correl_lazy, LazyResultShape::kReduce, 2U, 2U},
     {"COUNT", &eval_count_lazy, LazyResultShape::kReduce, 1U, kLazyVariadic},
-    {"COUNTBLANK", &eval_countblank_lazy, LazyResultShape::kReduce, 1U, 1U, RefResult::kNone, ParamSet::kFirst},
-    value_lifting(
+    per_ref(
+        {"COUNTBLANK", &eval_countblank_lazy, LazyResultShape::kReduce, 1U, 1U, RefResult::kNone, ParamSet::kFirst}),
+    // Criteria join the dispatcher's lift, so a grid range and an array criteria broadcast together.
+    lifting(
         per_ref({"COUNTIF", &eval_countif_lazy, LazyResultShape::kReduce, 2U, 2U, RefResult::kNone, ParamSet::kFirst}),
         ParamSet::kSecond),
     value_lifting(per_ref({"COUNTIFS", &eval_countifs_lazy, LazyResultShape::kReduce, 2U, kLazyVariadic,
@@ -154,40 +163,52 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"DATE", &eval_datetime_lazy, LazyResultShape::kBroadcast, 3U, 3U},
     {"DATEDIF", &eval_datetime_lazy, LazyResultShape::kBroadcast, 3U, 3U},
     {"DATEVALUE", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
-    value_lifting(
-        {"DAVERAGE", &eval_daverage_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
-        ParamSet::kSecond),
+    value_lifting(per_ref({"DAVERAGE", &eval_daverage_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone,
+                           ParamSet::kFirst}),
+                  ParamSet::kSecond),
     {"DAY", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
     {"DAYS", &eval_datetime_lazy, LazyResultShape::kBroadcast, 2U, 2U},
     {"DAYS360", &eval_datetime_lazy, LazyResultShape::kBroadcast, 2U, 3U},
-    value_lifting({"DCOUNT", &eval_dcount_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
-                  ParamSet::kSecond),
-    value_lifting({"DCOUNTA", &eval_dcounta_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
-                  ParamSet::kSecond),
-    value_lifting({"DGET", &eval_dget_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
-                  ParamSet::kSecond),
-    {"DISC", &eval_financial_date_lazy, LazyResultShape::kBroadcast, 4U, 5U},
-    value_lifting({"DMAX", &eval_dmax_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
-                  ParamSet::kSecond),
-    value_lifting({"DMIN", &eval_dmin_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
-                  ParamSet::kSecond),
     value_lifting(
-        {"DPRODUCT", &eval_dproduct_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
+        per_ref({"DCOUNT", &eval_dcount_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst}),
         ParamSet::kSecond),
+    value_lifting(
+        per_ref({"DCOUNTA", &eval_dcounta_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst}),
+        ParamSet::kSecond),
+    value_lifting(
+        per_ref({"DGET", &eval_dget_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst}),
+        ParamSet::kSecond),
+    {"DISC", &eval_financial_date_lazy, LazyResultShape::kBroadcast, 4U, 5U},
+    value_lifting(
+        per_ref({"DMAX", &eval_dmax_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst}),
+        ParamSet::kSecond),
+    value_lifting(
+        per_ref({"DMIN", &eval_dmin_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst}),
+        ParamSet::kSecond),
+    value_lifting(per_ref({"DPRODUCT", &eval_dproduct_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone,
+                           ParamSet::kFirst}),
+                  ParamSet::kSecond),
     {"DROP", &eval_drop_lazy, LazyResultShape::kArray, 2U, 3U, RefResult::kArg0, ParamSet::kNone},
-    value_lifting({"DSTDEV", &eval_dstdev_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
-                  ParamSet::kSecond),
-    value_lifting({"DSTDEVP", &eval_dstdevp_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
-                  ParamSet::kSecond),
-    value_lifting({"DSUM", &eval_dsum_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
-                  ParamSet::kSecond),
+    value_lifting(
+        per_ref({"DSTDEV", &eval_dstdev_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst}),
+        ParamSet::kSecond),
+    value_lifting(
+        per_ref({"DSTDEVP", &eval_dstdevp_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst}),
+        ParamSet::kSecond),
+    value_lifting(
+        per_ref({"DSUM", &eval_dsum_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst}),
+        ParamSet::kSecond),
     {"DURATION", &eval_financial_date_lazy, LazyResultShape::kBroadcast, 5U, 6U},
-    value_lifting({"DVAR", &eval_dvar_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
-                  ParamSet::kSecond),
-    value_lifting({"DVARP", &eval_dvarp_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
-                  ParamSet::kSecond),
-    {"EDATE", &eval_datetime_lazy, LazyResultShape::kBroadcast, 2U, 2U},
-    {"EOMONTH", &eval_datetime_lazy, LazyResultShape::kBroadcast, 2U, 2U},
+    value_lifting(
+        per_ref({"DVAR", &eval_dvar_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst}),
+        ParamSet::kSecond),
+    value_lifting(
+        per_ref({"DVARP", &eval_dvarp_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst}),
+        ParamSet::kSecond),
+    reads_grid({"EDATE", &eval_datetime_lazy, LazyResultShape::kBroadcast, 2U, 2U}, ParamSet::kFirst,
+               GridArg::kPerValue),
+    reads_grid({"EOMONTH", &eval_datetime_lazy, LazyResultShape::kBroadcast, 2U, 2U}, ParamSet::kFirst,
+               GridArg::kPerValue),
     {"EXPAND", &eval_expand_lazy, LazyResultShape::kArray, 2U, 4U},
     lone_value({"F.TEST", &eval_f_test_lazy, LazyResultShape::kReduce, 2U, 2U}, ParamSet::kFirstAndSecond,
                ScalarArg::kRejectNA),
@@ -207,7 +228,8 @@ constexpr LazyEntry kLazyDispatch[] = {
     // so it must inspect the un-evaluated Ref AST and the bound Sheet's
     // `formula_text` directly — the eager path would flatten the argument
     // to a Value before we could see the reference.
-    {"FORMULATEXT", &eval_formulatext_lazy, LazyResultShape::kBroadcast, 1U, 1U, RefResult::kNone, ParamSet::kFirst},
+    per_ref({"FORMULATEXT", &eval_formulatext_lazy, LazyResultShape::kBroadcast, 1U, 1U, RefResult::kNone,
+             ParamSet::kFirst}),
     {"FREQUENCY", &eval_frequency_lazy, LazyResultShape::kArray, 2U, 2U},
     // FTEST is the pre-2010 legacy spelling of F.TEST; same impl.
     lone_value({"FTEST", &eval_f_test_lazy, LazyResultShape::kReduce, 2U, 2U}, ParamSet::kFirstAndSecond,
@@ -239,7 +261,8 @@ constexpr LazyEntry kLazyDispatch[] = {
     value_lifting(
         lone_value({"IRR", &eval_irr_lazy, LazyResultShape::kScalar, 1U, 2U}, ParamSet::kFirst, ScalarArg::kRejectNum),
         ParamSet::kSecond),
-    {"ISFORMULA", &eval_isformula_lazy, LazyResultShape::kBroadcast, 1U, 1U, RefResult::kNone, ParamSet::kFirst},
+    per_ref(
+        {"ISFORMULA", &eval_isformula_lazy, LazyResultShape::kBroadcast, 1U, 1U, RefResult::kNone, ParamSet::kFirst}),
     {"ISOMITTED", &eval_isomitted_lazy, LazyResultShape::kScalar, 1U, 1U},
     {"ISOWEEKNUM", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
     {"ISREF", &eval_isref_lazy, LazyResultShape::kScalar, 1U, 1U},
@@ -266,7 +289,7 @@ constexpr LazyEntry kLazyDispatch[] = {
                   ParamSet::kSecondAndThird),
     {"MMULT", &eval_mmult_lazy, LazyResultShape::kArray, 2U, 2U},
     {"MONTH", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
-    {"N", &eval_n_lazy, LazyResultShape::kBroadcast, 1U, 1U},
+    reads_grid({"N", &eval_n_lazy, LazyResultShape::kBroadcast, 1U, 1U}, ParamSet::kFirst, GridArg::kPerRef),
     value_lifting({"NETWORKDAYS", &eval_networkdays_lazy, LazyResultShape::kScalar, 2U, 3U}, ParamSet::kFirstAndSecond),
     value_lifting({"NETWORKDAYS.INTL", &eval_networkdays_intl_lazy, LazyResultShape::kScalar, 2U, 4U},
                   ParamSet::kFirstThree),
@@ -293,24 +316,27 @@ constexpr LazyEntry kLazyDispatch[] = {
     // PHONETIC reads the cell's <rPh> annotation off the un-evaluated
     // Ref AST; the eager dispatcher would flatten the argument to a
     // Value before the impl could consult `Cell::phonetic_text`.
-    {"PHONETIC", &eval_phonetic_lazy, LazyResultShape::kScalar, 1U, 1U, RefResult::kNone, ParamSet::kFirst},
+    per_ref({"PHONETIC", &eval_phonetic_lazy, LazyResultShape::kScalar, 1U, 1U, RefResult::kNone, ParamSet::kFirst}),
     {"PIVOTBY", &eval_pivotby_lazy, LazyResultShape::kArray, 4U, 11U},
     {"PRICE", &eval_financial_date_lazy, LazyResultShape::kBroadcast, 6U, 7U},
     {"PRICEDISC", &eval_financial_date_lazy, LazyResultShape::kBroadcast, 4U, 5U},
     {"PRICEMAT", &eval_financial_date_lazy, LazyResultShape::kBroadcast, 5U, 6U},
     {"PROB", &eval_prob_lazy, LazyResultShape::kScalar, 3U, 4U},
-    lone_value({"RANK", &eval_rank_eq_lazy, LazyResultShape::kScalar, 2U, 3U, RefResult::kNone, ParamSet::kSecond},
-               ParamSet::kSecond, ScalarArg::kRejectValue),
-    lone_value({"RANK.AVG", &eval_rank_avg_lazy, LazyResultShape::kScalar, 2U, 3U, RefResult::kNone, ParamSet::kSecond},
-               ParamSet::kSecond, ScalarArg::kRejectValue),
-    lone_value({"RANK.EQ", &eval_rank_eq_lazy, LazyResultShape::kScalar, 2U, 3U, RefResult::kNone, ParamSet::kSecond},
-               ParamSet::kSecond, ScalarArg::kRejectValue),
+    per_ref(
+        lone_value({"RANK", &eval_rank_eq_lazy, LazyResultShape::kScalar, 2U, 3U, RefResult::kNone, ParamSet::kSecond},
+                   ParamSet::kSecond, ScalarArg::kRejectValue)),
+    per_ref(lone_value(
+        {"RANK.AVG", &eval_rank_avg_lazy, LazyResultShape::kScalar, 2U, 3U, RefResult::kNone, ParamSet::kSecond},
+        ParamSet::kSecond, ScalarArg::kRejectValue)),
+    per_ref(lone_value(
+        {"RANK.EQ", &eval_rank_eq_lazy, LazyResultShape::kScalar, 2U, 3U, RefResult::kNone, ParamSet::kSecond},
+        ParamSet::kSecond, ScalarArg::kRejectValue)),
     {"RECEIVED", &eval_financial_date_lazy, LazyResultShape::kBroadcast, 4U, 5U},
     {"REDUCE", &eval_reduce_lazy, LazyResultShape::kArray, 3U, 3U},
     {"REGEXEXTRACT", &eval_regexextract_lazy, LazyResultShape::kArray, 2U, 4U},
     {"REGEXREPLACE", &eval_regexreplace_lazy, LazyResultShape::kBroadcast, 3U, 5U},
     {"REGEXTEST", &eval_regextest_lazy, LazyResultShape::kBroadcast, 2U, 3U},
-    {"ROW", &eval_row_lazy, LazyResultShape::kBroadcast, 0U, 1U, RefResult::kNone, ParamSet::kFirst},
+    per_ref({"ROW", &eval_row_lazy, LazyResultShape::kBroadcast, 0U, 1U, RefResult::kNone, ParamSet::kFirst}),
     {"ROWS", &eval_rows_lazy, LazyResultShape::kReduce, 1U, 1U},
     {"RSQ", &eval_rsq_lazy, LazyResultShape::kScalar, 2U, 2U},
     {"SCAN", &eval_scan_lazy, LazyResultShape::kArray, 3U, 3U},
@@ -348,7 +374,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"SUMXMY2", &eval_sumxmy2_lazy, LazyResultShape::kReduce, 2U, 2U},
     {"SWITCH", &eval_switch_lazy, LazyResultShape::kBroadcast, 3U, kLazyVariadic, RefResult::kSwitchResult,
      ParamSet::kNone},
-    {"T", &eval_t_lazy, LazyResultShape::kBroadcast, 1U, 1U},
+    reads_grid({"T", &eval_t_lazy, LazyResultShape::kBroadcast, 1U, 1U}, ParamSet::kFirst, GridArg::kPerRef),
     lone_value({"T.TEST", &eval_t_test_lazy, LazyResultShape::kReduce, 4U, 4U}, ParamSet::kFirstAndSecond,
                ScalarArg::kRejectNA),
     {"TAKE", &eval_take_lazy, LazyResultShape::kArray, 2U, 3U, RefResult::kArg0, ParamSet::kNone},

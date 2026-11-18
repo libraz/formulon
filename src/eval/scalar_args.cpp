@@ -178,7 +178,8 @@ bool lift_extent(const Value* args, std::uint32_t arity, const AreaEnds* ends, s
 }
 
 void lift_positions(const Value* args, std::uint32_t arity, const AreaEnds* ends, std::uint32_t rows,
-                    std::uint32_t cols, Arena& arena, LiftedCellFn cell, const void* state, Value* out) {
+                    std::uint32_t cols, Arena& arena, LiftedCellFn cell, const void* state, Value* out,
+                    const std::uint8_t* errors_pass) {
   std::vector<Value> cell_args(arity, Value::blank());
   std::size_t k = 0;
   for (std::uint32_t r = 0; r < rows; ++r) {
@@ -199,8 +200,13 @@ void lift_positions(const Value* args, std::uint32_t arity, const AreaEnds* ends
         out[k] = Value::error(ErrorCode::NA);
         continue;
       }
-      const auto error = std::find_if(cell_args.begin(), cell_args.end(), [](const Value& v) { return v.is_error(); });
-      out[k] = error != cell_args.end() ? *error : cell(cell_args.data(), arity, state);
+      const Value* error = nullptr;
+      for (std::uint32_t i = 0; i < arity && error == nullptr; ++i) {
+        if (cell_args[i].is_error() && (errors_pass == nullptr || errors_pass[i] == 0U)) {
+          error = &cell_args[i];
+        }
+      }
+      out[k] = error != nullptr ? *error : cell(cell_args.data(), arity, state);
       // A position whose call answers an array holds that array's top-left element.
       if (out[k].is_array()) {
         out[k] = out[k].as_array()->cells[0];

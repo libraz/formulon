@@ -413,6 +413,11 @@ bool collect_arg(const parser::AstNode& node, Arena& arena, const FunctionRegist
   // reference, so `SUBTOTAL(109, OFFSET(...))` skips hidden rows.
   if (is_returned_reference(node, ctx)) {
     const Value ref = eval_node_ref(node, arena, registry, ctx);
+    // A grid of references read as a whole is no range.
+    if (ref.is_ref() && ref.ref_form() == RefForm::kGrid) {
+      *out_err = Value::error(ErrorCode::Value);
+      return false;
+    }
     if (ref.is_ref()) {
       append_ref_cells(ref, arena, registry, ctx, scope, out_cells, out_hidden, out_nested);
     } else if (k == parser::NodeKind::RangeOp && ref.is_error()) {
@@ -654,6 +659,27 @@ Value eval_subtotal_lazy(const parser::AstNode& call, Arena& arena, const Functi
   return subtotal_apply(argv.data(), static_cast<std::uint32_t>(argv.size()), arena);
 }
 
+namespace {
+
+// The array form's k: a reference reads as its one cell (a larger one is #VALUE!), and a grid of references
+// lifts the call over its elements' top-left cells.
+Value read_k(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry, const EvalContext& ctx) {
+  if (!evaluates_to_reference(node)) {
+    return eval_node(node, arena, registry, ctx);
+  }
+  const Value ref = eval_node_ref(node, arena, registry, ctx);
+  if (!ref.is_ref()) {
+    return ref;
+  }
+  if (ref.ref_form() == RefForm::kGrid) {
+    return materialise_grid(ref, GridArg::kTopLeft, nullptr, arena, registry, ctx, ReadCount::kCounted);
+  }
+  const Value read = deref_shaped(ref, arena, registry, ctx, ReadCount::kCounted).value;
+  return read.is_array() ? Value::error(ErrorCode::Value) : read;
+}
+
+}  // namespace
+
 Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                           const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
@@ -705,7 +731,7 @@ Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const Funct
     aggregate_filter_detail::compact_by_flags(&cells, hidden, ignore_hidden, nested, ignore_nested);
     if (!apply_filters(&cells, code, ignore_errors, &err)) {
       // An array k fails per element with the data error.
-      const Value k_for_error = eval_node(call.as_call_arg(3), arena, registry, ctx);
+      const Value k_for_error = read_k(call.as_call_arg(3), arena, registry, ctx);
       if (k_for_error.is_array()) {
         return map_array_with(*k_for_error.as_array(), [&err](const Value&) { return err; }, arena);
       }
@@ -746,7 +772,7 @@ Value eval_aggregate_lazy(const parser::AstNode& call, Arena& arena, const Funct
           return Value::error(ErrorCode::Value);
       }
     };
-    const Value k_value = eval_node(call.as_call_arg(3), arena, registry, ctx);
+    const Value k_value = read_k(call.as_call_arg(3), arena, registry, ctx);
     if (k_value.is_array()) {
       return map_array_with(*k_value.as_array(), [&](const Value& k) { return at_k(k, /*last=*/false); }, arena);
     }

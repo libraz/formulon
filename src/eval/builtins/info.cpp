@@ -255,8 +255,8 @@ void register_info_builtins(FunctionRegistry& registry) {
       {"ISNA", 1u, 1u, &IsNa, false},
       // NA() injects #N/A explicitly; typically paired with IFNA / ISNA.
       {"NA", 0u, 0u, &builtins_detail::fixed_error_stub<ErrorCode::NA>},
-      builtins_detail::analysis_toolpak({"ISEVEN", 1u, 1u, &IsEven}),
-      builtins_detail::analysis_toolpak({"ISODD", 1u, 1u, &IsOdd}),
+      builtins_detail::grid_per_value(builtins_detail::analysis_toolpak({"ISEVEN", 1u, 1u, &IsEven})),
+      builtins_detail::grid_per_value(builtins_detail::analysis_toolpak({"ISODD", 1u, 1u, &IsOdd})),
       {"ISNONTEXT", 1u, 1u, &IsNonText, false},
       {"ERROR.TYPE", 1u, 1u, &ErrorType, false},
       {"INFO", 1u, 1u, &Info},

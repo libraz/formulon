@@ -562,6 +562,55 @@ TEST(BuiltinsOffset, IndirectOverTextsGivesOneReferencePerText) {
   EXPECT_TRUE(mixed.is_error() && mixed.as_error() == ErrorCode::Ref) << mixed.debug_to_string();
 }
 
+// Reference-information functions, N / T, COUNTBLANK, RANK, AGGREGATE's ref form and COUNTIF run once per
+// element; ISODD / EDATE read a one-cell element as its value; AGGREGATE's array form reads k by top-left.
+TEST(BuiltinsOffset, GridConsumersReadOneElementAtATime) {
+  Workbook wb = Workbook::create();
+  Sheet& s = wb.sheet(0);
+  s.set_cell_value(0, 0, Value::number(1.0));
+  s.set_cell_value(2, 0, Value::number(3.0));
+  s.set_cell_value(3, 0, Value::number(4.0));
+  s.set_cell_value(0, 2, Value::text("t"));
+  const std::pair<const char*, double> rows[] = {
+      {"=INDEX(ROW(OFFSET(A1:A3,{0;1;2},0)),3,1)", 3.0},
+      {"=INDEX(COLUMN(OFFSET(A1,0,{1,2})),1,2)", 3.0},
+      {"=SUM(AREAS(OFFSET(A1,{0;1},0)))", 2.0},
+      {"=INDEX(N(OFFSET(A1:A3,{0;1;2},0)),3,1)", 3.0},
+      {"=INDEX(N(OFFSET(A1:A3,{0;1;2},0)),2,1)", 0.0},
+      {"=INDEX(COUNTBLANK(OFFSET(A1:A2,{0;1;2},0)),2,1)", 1.0},
+      {"=INDEX(COUNTBLANK(OFFSET(A1:A2,{0;1;2},0)),3,1)", 0.0},
+      {"=INDEX(RANK(3,OFFSET(A1:A3,{0;1},0)),2,1)", 2.0},
+      {"=INDEX(AGGREGATE(9,0,A1:A4,OFFSET(A1,{0;2},0)),2,1)", 11.0},
+      {"=INDEX(AGGREGATE(14,6,A1:A4,OFFSET(A1:A2,{0;2},0)),1,1)", 4.0},
+      {"=INDEX(AGGREGATE(14,6,A1:A4,OFFSET(A1:A2,{0;2},0)),2,1)", 1.0},
+      {"=INDEX(EDATE(OFFSET(A3,{0;1},0),1),2,1)", 35.0},
+      {"=INDEX(COUNTIF(OFFSET(A1:A3,{0;1;2},0),{\">0\",\">2\"}),1,2)", 1.0},
+      {"=INDEX(COUNTIF(OFFSET(A1:A3,{0;1;2},0),{\">0\",\">2\"}),3,2)", 2.0},
+      {"=COLUMNS(COUNTIF(OFFSET(A1:A3,{0;1;2},0),{\">0\",\">2\"}))", 2.0},
+  };
+  for (const auto& [src, expected] : rows) {
+    const Value v = EvalSourceIn(src, wb, s);
+    EXPECT_TRUE(v.is_number() && v.as_number() == expected) << src << " -> " << v.debug_to_string();
+  }
+  const Value odd = EvalSourceIn("=INDEX(ISODD(OFFSET(A1,{0;2},0)),2,1)", wb, s);
+  EXPECT_TRUE(odd.is_boolean() && odd.as_boolean()) << odd.debug_to_string();
+  const Value text = EvalSourceIn("=INDEX(T(OFFSET(C1:C2,{0;1},0)),1,1)", wb, s);
+  EXPECT_TRUE(text.is_text() && text.as_text() == "t") << text.debug_to_string();
+  const Value address = EvalSourceIn("=INDEX(CELL(\"address\",OFFSET(A1,{0;1},0)),2,1)", wb, s);
+  EXPECT_TRUE(address.is_text() && address.as_text() == "$A$2") << address.debug_to_string();
+  for (const char* src : {
+           "=INDEX(ISODD(OFFSET(A1:A2,{0;2},0)),1,1)",          // a multi-cell element is no value
+           "=AGGREGATE(14,6,A1:A4,A1:A2)",                      // a plain multi-cell k
+           "=INDEX(AGGREGATE(14,6,OFFSET(A1,{0;1},0),1),1,1)",  // a grid as the array form's array
+       }) {
+    const Value v = EvalSourceIn(src, wb, s);
+    EXPECT_TRUE(v.is_error() && v.as_error() == ErrorCode::Value) << src << " -> " << v.debug_to_string();
+  }
+  // INDIRECT text naming a union is no reference.
+  const Value areas = EvalSourceIn("=INDEX(AREAS(INDIRECT({\"A1:A2,C1:C2\"})),1,1)", wb, s);
+  EXPECT_TRUE(areas.is_error() && areas.as_error() == ErrorCode::Ref) << areas.debug_to_string();
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

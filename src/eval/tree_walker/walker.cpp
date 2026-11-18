@@ -654,6 +654,10 @@ bool evaluates_to_reference(const parser::AstNode& node) {
   }
 }
 
+bool is_literal_reference(const parser::AstNode& node) {
+  return node.kind() == parser::NodeKind::Literal && node.as_literal().is_ref();
+}
+
 bool is_returned_reference(const parser::AstNode& node, const EvalContext& ctx) {
   const parser::NodeKind k = node.kind();
   if (k == parser::NodeKind::Literal) {

@@ -144,7 +144,7 @@ Value eval_phonetic_lazy(const parser::AstNode& call, Arena& arena, const Functi
 
   // A range, whole columns and rows included: the readings of its
   // populated cells joined row by row (a blank cell reads as "").
-  if (arg.kind() == parser::NodeKind::RangeOp || arg.kind() == parser::NodeKind::Ref) {
+  if (arg.kind() == parser::NodeKind::RangeOp || arg.kind() == parser::NodeKind::Ref || is_literal_reference(arg)) {
     std::string_view qualifier;
     RefArea area{};
     ErrorCode err = ErrorCode::Value;

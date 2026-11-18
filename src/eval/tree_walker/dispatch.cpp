@@ -129,6 +129,19 @@ Value call_scalar_function(const FunctionDef& def, std::vector<Value>& values, s
   return call_scalar_impl(def, values.data(), static_cast<std::uint32_t>(values.size()), arena);
 }
 
+// A reference argument of the scalar function `def`, a grid read by `def`'s grid class.
+Shaped read_classed_arg(const FunctionDef& def, const parser::AstNode& arg, Arena& arena,
+                        const FunctionRegistry& registry, const EvalContext& ctx) {
+  const Value ref = eval_node_ref(arg, arena, registry, ctx);
+  if (!ref.is_ref()) {
+    return Shaped{ref, nullptr};
+  }
+  if (ref.ref_form() == RefForm::kGrid) {
+    return Shaped{materialise_grid(ref, def.grid_arg, &def, arena, registry, ctx, ReadCount::kCounted), nullptr};
+  }
+  return deref_shaped(ref, arena, registry, ctx, ReadCount::kCounted);
+}
+
 // The `#VALUE!` of a text literal that failed ahead of an error argument, with the origin slot as it stood then.
 Value literal_text_failure(const std::optional<ErrorOriginSnapshot>& origin) {
   if (origin.has_value()) {
@@ -187,13 +200,13 @@ GridArg grid_class(const LazyEntry& entry, ParamSet grid_params, std::uint32_t i
 }
 
 // `entry.grid_params` for one call: a form-dependent set selected when the
-// call's evaluated first argument `first` is a function number 1-19.
+// call's evaluated first argument `first` is a reference-form function number 1-13.
 ParamSet resolve_grid_params(const LazyEntry& entry, const Value& first) {
   if (entry.grid_params != ParamSet::kFourthOnByForm) {
     return entry.grid_params;
   }
   const double form = first.is_number() ? std::trunc(first.as_number()) : 0.0;
-  return form >= 1.0 && form <= 19.0 ? ParamSet::kFourthOn : ParamSet::kNone;
+  return form >= 1.0 && form <= 13.0 ? ParamSet::kFourthOn : ParamSet::kNone;
 }
 
 // Whether any argument of `entry` is evaluated before its impl runs.
@@ -270,10 +283,11 @@ Value collect_grid(const std::vector<Value>& results, std::uint32_t rows, std::u
 }
 
 // The per-position results of a lift as one value: a grid when any is a
-// reference (`collect_grid`), an array otherwise (an array result keeps its
-// top-left element).
-Value collect_lifted(const std::vector<Value>& results, std::uint32_t rows, std::uint32_t cols, Arena& arena) {
-  if (std::any_of(results.begin(), results.end(), [](const Value& v) { return v.is_ref(); })) {
+// reference or the call builds references (`collect_grid`), an array otherwise
+// (an array result keeps its top-left element).
+Value collect_lifted(const std::vector<Value>& results, std::uint32_t rows, std::uint32_t cols, bool builds,
+                     Arena& arena) {
+  if (builds || std::any_of(results.begin(), results.end(), [](const Value& v) { return v.is_ref(); })) {
     return collect_grid(results, rows, cols, arena);
   }
   Value* cells = nullptr;
@@ -431,6 +445,10 @@ Value map_reshaped(const Value& result, const ReshapeSource& source, Arena& aren
       }
       continue;
     }
+    // A per-ref position holding a value or an error, not a reference, is read by the impl as written.
+    if (cls == GridArg::kPerRef && !scalar && !v.is_ref()) {
+      continue;
+    }
     const std::optional<ErrorCode> rejected = scalar ? lone_value_error(entry.scalar_error, v) : std::nullopt;
     if (constant && !rejected) {
       continue;
@@ -460,8 +478,14 @@ Value map_reshaped(const Value& result, const ReshapeSource& source, Arena& aren
     lift_extent(lifting.data(), arity, nullptr, &rows, &cols);
     const LiftCall lift{call, entry, args.data(), lifted.data(), arena, registry, ctx};
     std::vector<Value> results(static_cast<std::size_t>(rows) * cols, Value::blank());
-    lift_positions(lifting.data(), arity, nullptr, rows, cols, arena, &run_lifted_call, &lift, results.data());
-    *result = collect_lifted(results, rows, cols, arena);
+    // An error element of a lifted value is the impl's argument (a COUNTIF criterion); one of a grid is the answer.
+    std::vector<std::uint8_t> errors_pass(arity, 0U);
+    for (std::uint32_t i = 0; i < arity; ++i) {
+      errors_pass[i] = param_in_set(entry.lift_params, i) ? 1U : 0U;
+    }
+    lift_positions(lifting.data(), arity, nullptr, rows, cols, arena, &run_lifted_call, &lift, results.data(),
+                   errors_pass.data());
+    *result = collect_lifted(results, rows, cols, entry.ref_result == RefResult::kBuilds, arena);
     return nullptr;
   }
   if (!changed) {
@@ -654,9 +678,13 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
       case RangeArgOutcome::kNotRange:
         break;
     }
+    // A scalar function with a grid class reads a reference call's grid by that class.
+    const bool classed = !def->accepts_ranges && def->grid_arg != GridArg::kElementError &&
+                         arg_node.kind() == parser::NodeKind::Call && evaluates_to_reference(arg_node);
     // A scalar function keeps a whole column / row at its declared size for
     // the element-wise broadcast below; a range-aware one takes it expanded.
-    const Shaped shaped_arg = eval_node_shaped(arg_node, arena, registry, ctx);
+    const Shaped shaped_arg = classed ? read_classed_arg(*def, arg_node, arena, registry, ctx)
+                                      : eval_node_shaped(arg_node, arena, registry, ctx);
     if (shaped_arg.tail_array != nullptr && !def->accepts_ranges) {
       tails.resize(values.size() + 1U, nullptr);
       tails[values.size()] = shaped_arg.tail_array;

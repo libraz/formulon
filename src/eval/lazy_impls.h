@@ -69,6 +69,9 @@ bool evaluates_to_reference(const parser::AstNode& node);
 /// callers expand them directly.
 bool is_returned_reference(const parser::AstNode& node, const EvalContext& ctx);
 
+/// Whether `node` is a literal holding a `Ref`, as an element of a reference grid is when a call runs once per element.
+bool is_literal_reference(const parser::AstNode& node);
+
 /// Signature of every lazy (short-circuit / range-aware) function impl.
 /// The central dispatch table in `tree_walker.cpp` stores pointers of
 /// this type.
