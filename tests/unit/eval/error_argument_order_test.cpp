@@ -99,13 +99,24 @@ TEST(ErrorArgumentOrder, UnfilteredRangeFunctionsReadCellsInArgumentOrder) {
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 1U, Value::error(ErrorCode::Div0))));
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 2U, Value::error(ErrorCode::Num))));
   const std::vector<std::pair<std::string, ErrorCode>> table = {
-      {"=GCD(A1:B1)", ErrorCode::Value},         {"=GCD(B1:C1)", ErrorCode::Div0},
-      {"=GCD(C1,A1:B1)", ErrorCode::Num},        {"=GCD(A1,B1:C1)", ErrorCode::Value},
-      {"=LCM(A1:B1)", ErrorCode::Value},         {"=LCM(A1,B1:C1)", ErrorCode::Value},
-      {"=MULTINOMIAL(A1:B1)", ErrorCode::Value}, {"=MULTINOMIAL(B1:C1)", ErrorCode::Div0},
-      {"=IMSUM(A1:B1)", ErrorCode::Num},         {"=IMSUM(B1:C1)", ErrorCode::Div0},
-      {"=IMPRODUCT(A1:B1)", ErrorCode::Num},     {"=IMPRODUCT(C1,B1:C1)", ErrorCode::Num},
-      {"=CONCAT(B1:C1)", ErrorCode::Div0},       {"=CONCAT(LAMBDA(x,x),B1:C1)", ErrorCode::Value},
+      {"=GCD(A1:B1)", ErrorCode::Value},
+      {"=GCD(B1:C1)", ErrorCode::Div0},
+      {"=GCD(C1,A1:B1)", ErrorCode::Num},
+      {"=GCD(A1,B1:C1)", ErrorCode::Value},
+      {"=LCM(A1:B1)", ErrorCode::Value},
+      {"=LCM(A1,B1:C1)", ErrorCode::Value},
+      {"=MULTINOMIAL(A1:B1)", ErrorCode::Value},
+      {"=MULTINOMIAL(B1:C1)", ErrorCode::Div0},
+      {"=IMSUM(A1:B1)", ErrorCode::Num},
+      {"=IMSUM(B1:C1)", ErrorCode::Div0},
+      {"=IMPRODUCT(A1:B1)", ErrorCode::Num},
+      {"=IMPRODUCT(C1,B1:C1)", ErrorCode::Num},
+      {"=CONCAT(B1:C1)", ErrorCode::Div0},
+      {"=CONCAT(LAMBDA(x,x),B1:C1)", ErrorCode::Value},
+      {"=GCD((B1,C1))", ErrorCode::Value},
+      {"=CONCAT(C1,(A1:A1,A1:A1))", ErrorCode::Num},
+      {"=CONCAT((A1:A1,A1:A1),C1)", ErrorCode::Value},
+      {"=TEXTJOIN(\",\",TRUE,(A1,A1),C1)", ErrorCode::Value},
   };
   for (const auto& [formula, want] : table) {
     Arena arena;

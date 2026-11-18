@@ -381,6 +381,12 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
       }
       return RangeArgOutcome::kCollected;
     }
+    // A function reading its values in order refuses a multi-area reference,
+    // a union of one area with itself included.
+    if (reads_range_errors_in_order(def)) {
+      values.push_back(Value::error(ErrorCode::Value));
+      return RangeArgOutcome::kCollected;
+    }
     const std::uint32_t area_count = arg_node.as_union_arity();
     Value range_err = Value::blank();
     bool short_circuit = false;

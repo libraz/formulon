@@ -1,0 +1,1403 @@
+{
+  "suite": "union_args",
+  "description": "A multi-area reference as a function argument: which functions read every area and which refuse it, as the only argument and beside another one, against a same-area union and a parenthesised single area.\n",
+  "environment": {
+    "excel_version": "16.115",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-11-18T09:53:21Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "ua_concat_two_areas_alone",
+      "formula": "=CONCAT((A1,B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_concat_two_areas_beside",
+      "formula": "=CONCAT(A2,(A1,B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_concat_same_area_alone",
+      "formula": "=CONCAT((A1:A2,A1:A2))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_concat_same_area_beside",
+      "formula": "=CONCAT(A2,(A1:A2,A1:A2))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_concat_one_area_alone",
+      "formula": "=CONCAT((A1:B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "46"
+      }
+    },
+    {
+      "id": "ua_concat_one_area_beside",
+      "formula": "=CONCAT(A2,(A1:B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "846"
+      }
+    },
+    {
+      "id": "ua_textjoin_two_areas_alone",
+      "formula": "=TEXTJOIN(\",\",TRUE,(A1,B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_textjoin_two_areas_beside",
+      "formula": "=TEXTJOIN(\",\",TRUE,A2,(A1,B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_textjoin_same_area_alone",
+      "formula": "=TEXTJOIN(\",\",TRUE,(A1:A2,A1:A2))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_textjoin_same_area_beside",
+      "formula": "=TEXTJOIN(\",\",TRUE,A2,(A1:A2,A1:A2))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_textjoin_one_area_alone",
+      "formula": "=TEXTJOIN(\",\",TRUE,(A1:B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "4,6"
+      }
+    },
+    {
+      "id": "ua_textjoin_one_area_beside",
+      "formula": "=TEXTJOIN(\",\",TRUE,A2,(A1:B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "8,4,6"
+      }
+    },
+    {
+      "id": "ua_gcd_two_areas_alone",
+      "formula": "=GCD((A1,B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_gcd_two_areas_beside",
+      "formula": "=GCD(A2,(A1,B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_gcd_same_area_alone",
+      "formula": "=GCD((A1:A2,A1:A2))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_gcd_same_area_beside",
+      "formula": "=GCD(A2,(A1:A2,A1:A2))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_gcd_one_area_alone",
+      "formula": "=GCD((A1:B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "ua_gcd_one_area_beside",
+      "formula": "=GCD(A2,(A1:B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "ua_lcm_two_areas_alone",
+      "formula": "=LCM((A1,B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_lcm_two_areas_beside",
+      "formula": "=LCM(A2,(A1,B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_lcm_same_area_alone",
+      "formula": "=LCM((A1:A2,A1:A2))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_lcm_same_area_beside",
+      "formula": "=LCM(A2,(A1:A2,A1:A2))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_lcm_one_area_alone",
+      "formula": "=LCM((A1:B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 12.0
+      }
+    },
+    {
+      "id": "ua_lcm_one_area_beside",
+      "formula": "=LCM(A2,(A1:B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 24.0
+      }
+    },
+    {
+      "id": "ua_multinomial_two_areas_alone",
+      "formula": "=MULTINOMIAL((A1,B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_multinomial_two_areas_beside",
+      "formula": "=MULTINOMIAL(A2,(A1,B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_multinomial_same_area_alone",
+      "formula": "=MULTINOMIAL((A1:A2,A1:A2))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_multinomial_same_area_beside",
+      "formula": "=MULTINOMIAL(A2,(A1:A2,A1:A2))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_multinomial_one_area_alone",
+      "formula": "=MULTINOMIAL((A1:B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 209.99999999999977
+      }
+    },
+    {
+      "id": "ua_multinomial_one_area_beside",
+      "formula": "=MULTINOMIAL(A2,(A1:B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 9189180.000000019
+      }
+    },
+    {
+      "id": "ua_imsum_two_areas_alone",
+      "formula": "=IMSUM((A1,B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_imsum_two_areas_beside",
+      "formula": "=IMSUM(A2,(A1,B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_imsum_same_area_alone",
+      "formula": "=IMSUM((A1:A2,A1:A2))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_imsum_same_area_beside",
+      "formula": "=IMSUM(A2,(A1:A2,A1:A2))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_imsum_one_area_alone",
+      "formula": "=IMSUM((A1:B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "10"
+      }
+    },
+    {
+      "id": "ua_imsum_one_area_beside",
+      "formula": "=IMSUM(A2,(A1:B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "18"
+      }
+    },
+    {
+      "id": "ua_improduct_two_areas_alone",
+      "formula": "=IMPRODUCT((A1,B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_improduct_two_areas_beside",
+      "formula": "=IMPRODUCT(A2,(A1,B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_improduct_same_area_alone",
+      "formula": "=IMPRODUCT((A1:A2,A1:A2))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_improduct_same_area_beside",
+      "formula": "=IMPRODUCT(A2,(A1:A2,A1:A2))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_improduct_one_area_alone",
+      "formula": "=IMPRODUCT((A1:B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "24"
+      }
+    },
+    {
+      "id": "ua_improduct_one_area_beside",
+      "formula": "=IMPRODUCT(A2,(A1:B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "text",
+        "value": "192"
+      }
+    },
+    {
+      "id": "ua_sum_two_areas_alone",
+      "formula": "=SUM((A1,B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "ua_sum_two_areas_beside",
+      "formula": "=SUM(A2,(A1,B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 18.0
+      }
+    },
+    {
+      "id": "ua_sum_same_area_alone",
+      "formula": "=SUM((A1:A2,A1:A2))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 24.0
+      }
+    },
+    {
+      "id": "ua_sum_same_area_beside",
+      "formula": "=SUM(A2,(A1:A2,A1:A2))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 32.0
+      }
+    },
+    {
+      "id": "ua_sum_one_area_alone",
+      "formula": "=SUM((A1:B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "ua_sum_one_area_beside",
+      "formula": "=SUM(A2,(A1:B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 18.0
+      }
+    },
+    {
+      "id": "ua_count_two_areas_alone",
+      "formula": "=COUNT((A1,B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "ua_count_two_areas_beside",
+      "formula": "=COUNT(A2,(A1,B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "ua_count_same_area_alone",
+      "formula": "=COUNT((A1:A2,A1:A2))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
+    },
+    {
+      "id": "ua_count_same_area_beside",
+      "formula": "=COUNT(A2,(A1:A2,A1:A2))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "ua_count_one_area_alone",
+      "formula": "=COUNT((A1:B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "ua_count_one_area_beside",
+      "formula": "=COUNT(A2,(A1:B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "ua_and_two_areas_alone",
+      "formula": "=AND((A1,B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "ua_and_two_areas_beside",
+      "formula": "=AND(A2,(A1,B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "ua_and_same_area_alone",
+      "formula": "=AND((A1:A2,A1:A2))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "ua_and_same_area_beside",
+      "formula": "=AND(A2,(A1:A2,A1:A2))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "ua_and_one_area_alone",
+      "formula": "=AND((A1:B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "ua_and_one_area_beside",
+      "formula": "=AND(A2,(A1:B1))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "bool",
+        "value": true
+      }
+    },
+    {
+      "id": "ua_concat_let_bound",
+      "formula": "=CONCAT(LET(u,(A1,B1),u))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_gcd_let_bound",
+      "formula": "=GCD(LET(u,(A1,B1),u))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ua_sum_let_bound",
+      "formula": "=SUM(LET(u,(A1,B1),u))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 4.0
+        },
+        "B1": {
+          "kind": "number",
+          "value": 6.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 8.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    }
+  ]
+}

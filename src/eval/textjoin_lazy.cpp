@@ -155,6 +155,11 @@ bool flatten_text_arg(const parser::AstNode& node, Arena& arena, const FunctionR
   // way SUMPRODUCT reads it: `A:A&""` keeps every row past the used range.
   const parser::AstNode& target = node;
   const parser::NodeKind k = target.kind();
+  // A multi-area reference is refused, a union of one area with itself included.
+  if (k == parser::NodeKind::UnionOp) {
+    *out_err = Value::error(ErrorCode::Value);
+    return false;
+  }
   if (k == parser::NodeKind::BinaryOp || k == parser::NodeKind::UnaryOp || k == parser::NodeKind::NameRef ||
       k == parser::NodeKind::ExternalRef) {
     const Shaped shaped = eval_node_shaped(target, arena, registry, ctx);

@@ -1,0 +1,197 @@
+suite: union_args
+description: >
+  A multi-area reference as a function argument: which functions read every
+  area and which refuse it, as the only argument and beside another one,
+  against a same-area union and a parenthesised single area.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: ua_concat_two_areas_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=CONCAT((A1,B1))'
+  - id: ua_concat_two_areas_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=CONCAT(A2,(A1,B1))'
+  - id: ua_concat_same_area_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=CONCAT((A1:A2,A1:A2))'
+  - id: ua_concat_same_area_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=CONCAT(A2,(A1:A2,A1:A2))'
+  - id: ua_concat_one_area_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=CONCAT((A1:B1))'
+  - id: ua_concat_one_area_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=CONCAT(A2,(A1:B1))'
+  - id: ua_textjoin_two_areas_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=TEXTJOIN(",",TRUE,(A1,B1))'
+  - id: ua_textjoin_two_areas_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=TEXTJOIN(",",TRUE,A2,(A1,B1))'
+  - id: ua_textjoin_same_area_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=TEXTJOIN(",",TRUE,(A1:A2,A1:A2))'
+  - id: ua_textjoin_same_area_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=TEXTJOIN(",",TRUE,A2,(A1:A2,A1:A2))'
+  - id: ua_textjoin_one_area_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=TEXTJOIN(",",TRUE,(A1:B1))'
+  - id: ua_textjoin_one_area_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=TEXTJOIN(",",TRUE,A2,(A1:B1))'
+  - id: ua_gcd_two_areas_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=GCD((A1,B1))'
+  - id: ua_gcd_two_areas_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=GCD(A2,(A1,B1))'
+  - id: ua_gcd_same_area_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=GCD((A1:A2,A1:A2))'
+  - id: ua_gcd_same_area_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=GCD(A2,(A1:A2,A1:A2))'
+  - id: ua_gcd_one_area_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=GCD((A1:B1))'
+  - id: ua_gcd_one_area_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=GCD(A2,(A1:B1))'
+  - id: ua_lcm_two_areas_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=LCM((A1,B1))'
+  - id: ua_lcm_two_areas_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=LCM(A2,(A1,B1))'
+  - id: ua_lcm_same_area_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=LCM((A1:A2,A1:A2))'
+  - id: ua_lcm_same_area_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=LCM(A2,(A1:A2,A1:A2))'
+  - id: ua_lcm_one_area_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=LCM((A1:B1))'
+  - id: ua_lcm_one_area_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=LCM(A2,(A1:B1))'
+  - id: ua_multinomial_two_areas_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=MULTINOMIAL((A1,B1))'
+  - id: ua_multinomial_two_areas_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=MULTINOMIAL(A2,(A1,B1))'
+  - id: ua_multinomial_same_area_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=MULTINOMIAL((A1:A2,A1:A2))'
+  - id: ua_multinomial_same_area_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=MULTINOMIAL(A2,(A1:A2,A1:A2))'
+  - id: ua_multinomial_one_area_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=MULTINOMIAL((A1:B1))'
+  - id: ua_multinomial_one_area_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=MULTINOMIAL(A2,(A1:B1))'
+  - id: ua_imsum_two_areas_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=IMSUM((A1,B1))'
+  - id: ua_imsum_two_areas_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=IMSUM(A2,(A1,B1))'
+  - id: ua_imsum_same_area_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=IMSUM((A1:A2,A1:A2))'
+  - id: ua_imsum_same_area_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=IMSUM(A2,(A1:A2,A1:A2))'
+  - id: ua_imsum_one_area_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=IMSUM((A1:B1))'
+  - id: ua_imsum_one_area_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=IMSUM(A2,(A1:B1))'
+  - id: ua_improduct_two_areas_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=IMPRODUCT((A1,B1))'
+  - id: ua_improduct_two_areas_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=IMPRODUCT(A2,(A1,B1))'
+  - id: ua_improduct_same_area_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=IMPRODUCT((A1:A2,A1:A2))'
+  - id: ua_improduct_same_area_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=IMPRODUCT(A2,(A1:A2,A1:A2))'
+  - id: ua_improduct_one_area_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=IMPRODUCT((A1:B1))'
+  - id: ua_improduct_one_area_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=IMPRODUCT(A2,(A1:B1))'
+  - id: ua_sum_two_areas_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=SUM((A1,B1))'
+  - id: ua_sum_two_areas_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=SUM(A2,(A1,B1))'
+  - id: ua_sum_same_area_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=SUM((A1:A2,A1:A2))'
+  - id: ua_sum_same_area_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=SUM(A2,(A1:A2,A1:A2))'
+  - id: ua_sum_one_area_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=SUM((A1:B1))'
+  - id: ua_sum_one_area_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=SUM(A2,(A1:B1))'
+  - id: ua_count_two_areas_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=COUNT((A1,B1))'
+  - id: ua_count_two_areas_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=COUNT(A2,(A1,B1))'
+  - id: ua_count_same_area_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=COUNT((A1:A2,A1:A2))'
+  - id: ua_count_same_area_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=COUNT(A2,(A1:A2,A1:A2))'
+  - id: ua_count_one_area_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=COUNT((A1:B1))'
+  - id: ua_count_one_area_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=COUNT(A2,(A1:B1))'
+  - id: ua_and_two_areas_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=AND((A1,B1))'
+  - id: ua_and_two_areas_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=AND(A2,(A1,B1))'
+  - id: ua_and_same_area_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=AND((A1:A2,A1:A2))'
+  - id: ua_and_same_area_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=AND(A2,(A1:A2,A1:A2))'
+  - id: ua_and_one_area_alone
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=AND((A1:B1))'
+  - id: ua_and_one_area_beside
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=AND(A2,(A1:B1))'
+  - id: ua_concat_let_bound
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=CONCAT(LET(u,(A1,B1),u))'
+  - id: ua_gcd_let_bound
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=GCD(LET(u,(A1,B1),u))'
+  - id: ua_sum_let_bound
+    setup: { A1: 4, B1: 6, A2: 8 }
+    formula: '=SUM(LET(u,(A1,B1),u))'
