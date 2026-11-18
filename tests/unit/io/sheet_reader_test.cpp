@@ -321,7 +321,7 @@ TEST(SheetReader, IgnoresArrayFormulaWhoseRefDoesNotStartAtItsAnchor) {
 TEST(SheetReader, RetainsSingleCellArrayFormulaAnchor) {
   pugi::xml_document doc;
   ASSERT_TRUE(
-      doc.load_string("<worksheet><sheetData><row r=\"1\"><c r=\"A1\"><f t=\"array\" ref=\"A1\">IFS(TRUE,1)</f>"
+      doc.load_string("<worksheet><sheetData><row r=\"1\"><c r=\"A1\"><f t=\"array\" ref=\"A1\">_xlfn.IFS(TRUE,1)</f>"
                       "<v>1</v></c></row></sheetData></worksheet>"));
   Workbook wb = Workbook::create();
   SheetReadContext ctx;

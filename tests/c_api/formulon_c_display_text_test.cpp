@@ -115,7 +115,7 @@ Bytes PackageWithColumnPercentSpill(fm_workbook_t* wb, uint32_t column_xf) {
       "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
       "<cols><col min=\"2\" max=\"2\" style=\"" +
       std::to_string(column_xf) +
-      "\"/></cols><sheetData><row r=\"1\"><c r=\"A1\" cm=\"1\"><f>SEQUENCE(1,2)</f><v>1</v></c>"
+      "\"/></cols><sheetData><row r=\"1\"><c r=\"A1\" cm=\"1\"><f>_xlfn.SEQUENCE(1,2)</f><v>1</v></c>"
       "</row></sheetData></worksheet>";
   return PackageWithSheetXml(wb, sheet);
 }
@@ -243,7 +243,7 @@ TEST(FormulonCApiDisplayText, SpillPhantomsUseColumnRowAndCellStylePrecedence) {
       "<cols><col min=\"2\" max=\"2\" style=\"" +
       std::to_string(column_xf) +
       "\"/></cols><sheetData>"
-      "<row r=\"1\"><c r=\"A1\" cm=\"1\"><f>SEQUENCE(2,2)</f><v>1</v></c></row>"
+      "<row r=\"1\"><c r=\"A1\" cm=\"1\"><f>_xlfn.SEQUENCE(2,2)</f><v>1</v></c></row>"
       "<row r=\"2\" s=\"" +
       std::to_string(row_xf) + "\" customFormat=\"1\"><c r=\"C2\" s=\"" + std::to_string(cell_xf) +
       "\"><v>0.125</v></c></row>"
@@ -310,7 +310,7 @@ TEST(FormulonCApiDisplayText, SpillPhantomUsesNonGeneralDefaultXfZero) {
   const std::string sheet =
       "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
       "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
-      "<sheetData><row r=\"1\"><c r=\"A1\" cm=\"1\"><f>SEQUENCE(2,2)</f><v>1</v></c></row></sheetData>"
+      "<sheetData><row r=\"1\"><c r=\"A1\" cm=\"1\"><f>_xlfn.SEQUENCE(2,2)</f><v>1</v></c></row></sheetData>"
       "</worksheet>";
   WorkbookGuard loaded;
   LoadPackage(PackageWithNonGeneralDefaultXf(wb.handle, sheet), &loaded);
@@ -334,7 +334,7 @@ TEST(FormulonCApiDisplayText, InvalidRowXfFallsBackToDefaultRecord) {
   const std::string sheet =
       "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
       "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
-      "<sheetData><row r=\"1\"><c r=\"A1\" cm=\"1\"><f>SEQUENCE(2,2)</f><v>1</v></c></row>"
+      "<sheetData><row r=\"1\"><c r=\"A1\" cm=\"1\"><f>_xlfn.SEQUENCE(2,2)</f><v>1</v></c></row>"
       "<row r=\"2\" s=\"9999\" customFormat=\"1\"/></sheetData>"
       "</worksheet>";
   WorkbookGuard loaded;
@@ -368,7 +368,7 @@ TEST(FormulonCApiDisplayText, MaterializedBlankGapDoesNotShadowColumnStyle) {
       "<cols><col min=\"2\" max=\"2\" style=\"" +
       std::to_string(column_xf) +
       "\"/></cols><sheetData>"
-      "<row r=\"1\"><c r=\"A1\" cm=\"1\"><f>SEQUENCE(1,2)</f><v>1</v></c>"
+      "<row r=\"1\"><c r=\"A1\" cm=\"1\"><f>_xlfn.SEQUENCE(1,2)</f><v>1</v></c>"
       "<c r=\"C1\"><f>B1</f><v>2</v></c></row>"
       "</sheetData></worksheet>";
   WorkbookGuard loaded;

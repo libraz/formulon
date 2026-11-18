@@ -404,7 +404,7 @@ TEST(OoxmlSaxMetadata, ArraySpillFromCacheDoesNotCollideOnRecalc) {
       "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n"
       "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">\n"
       "<sheetData>\n"
-      "<row r=\"6\"><c r=\"F6\"><f t=\"array\" ref=\"F6:F8\">SEQUENCE(3)</f><v>1</v></c></row>\n"
+      "<row r=\"6\"><c r=\"F6\"><f t=\"array\" ref=\"F6:F8\">_xlfn.SEQUENCE(3)</f><v>1</v></c></row>\n"
       "<row r=\"7\"><c r=\"F7\"><v>2</v></c></row>\n"
       "<row r=\"8\"><c r=\"F8\"><v>3</v></c></row>\n"
       "</sheetData>\n</worksheet>\n";
