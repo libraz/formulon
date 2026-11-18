@@ -1124,28 +1124,6 @@ entries:
     prefer: mac
     first_noted: 2026-10-09
 
-  # -- SHEET over a structured reference ---------------------------------
-  - id: ironcalc_calc_test_no_export_tables_Sheet1.A5
-    cause: engine-gap
-    reason: "SHEET over a whole-table structured reference gives the number of the sheet holding the table; Formulon returns #N/A. Excel 16.0300. Formula: =SHEET(Table1[])"
-    prefer: ironcalc
-    first_noted: 2026-11-18
-  - id: ironcalc_calc_test_no_export_tables_Sheet1.A6
-    cause: engine-gap
-    reason: "SHEET over a whole-table structured reference gives the number of the sheet holding the table; Formulon returns #N/A. Excel 16.0300. Formula: =SHEET(Table2[])"
-    prefer: ironcalc
-    first_noted: 2026-11-18
-  - id: ironcalc_calc_test_no_export_tables_Sheet1.A7
-    cause: engine-gap
-    reason: "SHEET over a whole-table structured reference gives the number of the sheet holding the table; Formulon returns #N/A. Excel 16.0300. Formula: =SHEET(Table3[])"
-    prefer: ironcalc
-    first_noted: 2026-11-18
-  - id: ironcalc_calc_test_no_export_tables_Sheet1.A8
-    cause: engine-gap
-    reason: "SHEET over a whole-table structured reference gives the number of the sheet holding the table; Formulon returns #N/A. Excel 16.0300. Formula: =SHEET(Table4[])"
-    prefer: ironcalc
-    first_noted: 2026-11-18
-
   # -- FLOOR / CEILING with an error in each argument --------------------
   - id: ironcalc_calc_tests__MATH_AND_TRIGONOMETRY_FLOOR_CEILING_FLOOR.W17
     cause: engine-gap

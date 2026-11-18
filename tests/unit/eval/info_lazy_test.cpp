@@ -11,17 +11,21 @@
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "eval/eval_context.h"
 #include "eval/eval_profile_scope.h"
 #include "eval/eval_state.h"
 #include "eval/function_registry.h"
+#include "eval/recalc_engine.h"
 #include "eval/tree_walker.h"
 #include "excel_profile.h"
 #include "gtest/gtest.h"
+#include "io/ooxml_reader.h"
 #include "parser/ast.h"
 #include "parser/parser.h"
 #include "sheet.h"
+#include "support/roundtrip_symmetry.h"
 #include "table.h"
 #include "utils/arena.h"
 #include "utils/error.h"
@@ -418,6 +422,69 @@ TEST(BuiltinsSheet, QualifiedRefResolvesToTargetSheet) {
   const Value v = EvalWith("=SHEET(Data!A1)", ctx);
   ASSERT_TRUE(v.is_number());
   EXPECT_EQ(v.as_number(), 3.0);
+}
+
+// A table reference names the table's sheet, whatever sheet the formula is on.
+TEST(BuiltinsSheet, TableReferenceIsTheTablesSheet) {
+  Workbook wb = MakeThreeSheetWorkbook();
+  TableMetadata table;
+  table.sheet_index = 2;
+  table.name = "Tbl";
+  table.display_name = "Tbl";
+  table.ref = "A1:B3";
+  for (const char* name : {"Jan", "Feb"}) {
+    TableColumn column;
+    column.name = name;
+    table.columns.push_back(std::move(column));
+  }
+  ASSERT_TRUE(wb.add_table(std::move(table)).has_value());
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  for (const char* formula : {"=SHEET(Tbl[])", "=SHEET(Tbl[Feb])", "=SHEET(Tbl[#All])"}) {
+    const Value v = EvalWith(formula, ctx);
+    ASSERT_TRUE(v.is_number()) << formula;
+    EXPECT_EQ(v.as_number(), 3.0) << formula;
+  }
+}
+
+TEST(BuiltinsSheets, TableReferenceIsOneSheet) {
+  Workbook wb = MakeThreeSheetWorkbook();
+  TableMetadata table;
+  table.sheet_index = 2;
+  table.name = "Tbl";
+  table.display_name = "Tbl";
+  table.ref = "A1:B3";
+  for (const char* name : {"Jan", "Feb"}) {
+    TableColumn column;
+    column.name = name;
+    table.columns.push_back(std::move(column));
+  }
+  ASSERT_TRUE(wb.add_table(std::move(table)).has_value());
+  EvalState state;
+  const EvalContext ctx(wb, wb.sheet(0), state);
+  for (const char* formula : {"=SHEETS(Tbl[])", "=SHEETS(Tbl[Feb])"}) {
+    const Value v = EvalWith(formula, ctx);
+    ASSERT_TRUE(v.is_number()) << formula;
+    EXPECT_EQ(v.as_number(), 1.0) << formula;
+  }
+}
+
+// An Excel-saved book's `SHEET(TableN[])` cells, one table per sheet, recalculate to the sheet numbers Excel cached.
+TEST(BuiltinsSheet, ExcelSavedTableReferencesGiveTheirSheets) {
+  const std::vector<std::uint8_t> bytes = test::read_file_bytes(
+      FORMULON_FIXTURES_DIR "/../oracle/external/ironcalc/fixtures/calc_test_no_export/tables.xlsx");
+  ASSERT_FALSE(bytes.empty());
+  auto loaded = io::read_ooxml(test::span_of(bytes));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  Workbook& wb = loaded.value().workbook;
+  ASSERT_TRUE(static_cast<bool>(wb.recalc_full(default_registry())));
+  const Sheet& s = wb.sheet(wb.sheet_index_by_name("Sheet1"));
+  for (std::uint32_t row = 4U; row < 8U; ++row) {
+    SCOPED_TRACE(row);
+    const Value v = s.resolve_cell_value(row, 0U);
+    ASSERT_TRUE(v.is_number());
+    EXPECT_EQ(v.as_number(), static_cast<double>(row - 3U));
+  }
 }
 
 TEST(BuiltinsSheet, TextLookupResolvesByName) {

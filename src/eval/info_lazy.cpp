@@ -442,8 +442,8 @@ Value eval_sheet_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   // without needing to evaluate the reference.
   std::string_view sheet_qualifier;
   bool have_ref_shape = false;
-  if (arg.kind() == parser::NodeKind::NameRef) {
-    // A name standing for a reference names its sheet; one standing for a value is read below.
+  if (arg.kind() == parser::NodeKind::NameRef || arg.kind() == parser::NodeKind::StructuredRef) {
+    // A name or table reference standing for a reference names its sheet; one standing for a value is read below.
     RefArea area{};
     ErrorCode err = ErrorCode::Value;
     have_ref_shape = eval_reference_area(arg, arena, registry, ctx, &sheet_qualifier, &area, &err);
