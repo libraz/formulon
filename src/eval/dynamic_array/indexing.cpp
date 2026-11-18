@@ -217,15 +217,45 @@ bool slice_reference(const Value& source, const SliceCounts& counts, bool take, 
   return true;
 }
 
+// TAKE / DROP under an array count. A reference source gives #VALUE! at every element and a source error
+// fills every element; an array source is sliced per element.
+Value take_drop_lifted(const parser::AstNode& call, const SliceCounts& counts, bool take, Arena& arena,
+                       const FunctionRegistry& registry, const EvalContext& ctx) {
+  const Value args[2] = {counts.rows, counts.cols};
+  const auto every = [&](const Value& fill) {
+    return lift_over_array_args(args, 2U, arena, [&fill](const Value*, std::uint32_t) { return fill; });
+  };
+  Value source = Value::blank();
+  if (evaluates_to_reference(call.as_call_arg(0))) {
+    source = eval_node_ref(call.as_call_arg(0), arena, registry, ctx);
+    if (source.is_ref()) {
+      return every(Value::error(ErrorCode::Value));
+    }
+  } else {
+    source = eval_node(call.as_call_arg(0), arena, registry, ctx);
+  }
+  if (source.is_error()) {
+    return every(source);
+  }
+  return lift_over_array_args(args, 2U, arena, [&](const Value* a, std::uint32_t) {
+    SliceCounts one = counts;
+    one.rows = a[0];
+    one.cols = a[1];
+    return take_drop_value(call, source, one, take, arena, ctx);
+  });
+}
+
 Value eval_take_drop(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx, bool take) {
   const std::uint32_t arity = call.as_call_arity();
   const bool counted = arity >= 2U && arity <= 3U;
   const SliceCounts counts = counted ? eval_slice_counts(call, arena, registry, ctx) : SliceCounts{};
   // An array count lifts the call: each element holds the top-left of the slice its counts select.
-  const bool lifted = counts.rows.is_array() || counts.cols.is_array();
+  if (counts.rows.is_array() || counts.cols.is_array()) {
+    return take_drop_lifted(call, counts, take, arena, registry, ctx);
+  }
   // A cell or range token is read as its reference; a reference-returning call is evaluated once here.
-  if (counted && !lifted && evaluates_to_reference(call.as_call_arg(0))) {
+  if (counted && evaluates_to_reference(call.as_call_arg(0))) {
     const Value source = eval_node_ref(call.as_call_arg(0), arena, registry, ctx);
     if (Value sliced = Value::blank(); slice_reference(source, counts, take, arena, &sliced)) {
       return sliced;
@@ -240,16 +270,7 @@ Value eval_take_drop(const parser::AstNode& call, Arena& arena, const FunctionRe
   if (array == nullptr) {
     return err;
   }
-  if (!lifted) {
-    return slice_array(call, *array, counts, take, arena, ctx);
-  }
-  const Value args[2] = {counts.rows, counts.cols};
-  return lift_over_array_args(args, 2U, arena, [&](const Value* a, std::uint32_t) {
-    SliceCounts one = counts;
-    one.rows = a[0];
-    one.cols = a[1];
-    return slice_array(call, *array, one, take, arena, ctx);
-  });
+  return slice_array(call, *array, counts, take, arena, ctx);
 }
 
 }  // namespace

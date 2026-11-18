@@ -18,6 +18,7 @@
 #include <string_view>
 #include <vector>
 
+#include "eval/array_alloc.h"
 #include "eval/coerce.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
@@ -258,9 +259,34 @@ struct WorkdayCall {
   bool add_days;
   bool date1904;
   const std::vector<double>* holidays;
-  const Value* weekend_error;  // a lone weekend error, as the function reports it, or blank
   const Value* holiday_error;  // the holiday argument's error, or blank
 };
+
+// An error weekend, alone or as an element, reads as an invalid selector: #NUM! for WORKDAY.INTL, #VALUE! for
+// NETWORKDAYS.INTL. Each error becomes a weekend value `parse_weekend_arg` rejects with that code.
+Value invalid_weekend_for_errors(const Value& weekend, bool add_days, Arena& arena) {
+  const Value invalid = add_days ? Value::number(0.0) : Value::text("");
+  if (weekend.is_error()) {
+    return invalid;
+  }
+  if (!weekend.is_array()) {
+    return weekend;
+  }
+  const std::size_t count = static_cast<std::size_t>(weekend.as_array_rows()) * weekend.as_array_cols();
+  const Value* cells = weekend.as_array_cells();
+  if (std::none_of(cells, cells + count, [](const Value& v) { return v.is_error(); })) {
+    return weekend;
+  }
+  Value* buf = nullptr;
+  ArrayValue* out = allocate_derived_array_value(weekend.as_array_rows(), weekend.as_array_cols(), arena, buf);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  for (std::size_t i = 0; i < count; ++i) {
+    buf[i] = cells[i].is_error() ? invalid : cells[i];
+  }
+  return Value::array(out);
+}
 
 // `a[0]` is the start, `a[1]` the day count or end date and, for the .INTL forms, `a[2]` the weekend.
 Value workday_cell(const WorkdayCall& c, const Value* a, std::uint32_t n) {
@@ -278,9 +304,6 @@ Value workday_cell(const WorkdayCall& c, const Value* a, std::uint32_t n) {
   if (!is_valid_workday_serial(start, c.date1904) ||
       !(c.add_days ? is_valid_workday_count(second, c.date1904) : is_valid_workday_serial(second, c.date1904))) {
     return Value::error(ErrorCode::Num);
-  }
-  if (c.weekend_error->is_error()) {
-    return *c.weekend_error;
   }
   std::uint8_t mask = kSatSunWeekendMask;
   if (n > 2U) {
@@ -307,29 +330,27 @@ Value eval_workdays_driver(const parser::AstNode& call, Arena& arena, const Func
   // Trailing omitted optional slots take their defaults.
   const std::uint32_t arity = atp_evaluated_arity(call, 2U, intl ? 4U : 3U);
   Value args[3] = {Value::blank(), Value::blank(), Value::blank()};
+  // An error argument is held, not returned: beside a lifting argument it fills every element.
+  const Value* first_error = nullptr;
   for (std::uint32_t i = 0; i < 2U; ++i) {
     const parser::AstNode& arg = call.as_call_arg(i);
     args[i] = eval_node(arg, arena, registry, ctx);
     if (args[i].is_error()) {
-      return args[i];
+      first_error = first_error != nullptr ? first_error : &args[i];
+      continue;
     }
     if (args[i].is_array() && is_reference_shape(arg)) {
-      return Value::error(ErrorCode::Value);
+      return first_error != nullptr ? *first_error : Value::error(ErrorCode::Value);
     }
     if (const Value atp = atp_arg_error(arg, args[i], /*required=*/true); atp.is_error()) {
-      return atp;
+      args[i] = atp;
+      first_error = first_error != nullptr ? first_error : &args[i];
     }
   }
   std::uint32_t lifted = 2U;
-  Value weekend_error = Value::blank();
   if (intl && arity >= 3U && !is_omitted_arg(call.as_call_arg(2))) {
-    args[2] = eval_node(call.as_call_arg(2), arena, registry, ctx);
-    if (args[2].is_error()) {
-      // Any error in `weekend` reads as #NUM! for WORKDAY.INTL, #VALUE! for NETWORKDAYS.INTL.
-      weekend_error = Value::error(add_days ? ErrorCode::Num : ErrorCode::Value);
-    } else {
-      lifted = 3U;
-    }
+    args[2] = invalid_weekend_for_errors(eval_node(call.as_call_arg(2), arena, registry, ctx), add_days, arena);
+    lifted = 3U;
   }
   std::vector<double> holidays;
   Value holiday_error = Value::blank();
@@ -337,7 +358,7 @@ Value eval_workdays_driver(const parser::AstNode& call, Arena& arena, const Func
   if (arity > holiday_slot) {
     collect_holidays_from_arg(call.as_call_arg(holiday_slot), arena, registry, ctx, &holidays, &holiday_error);
   }
-  const WorkdayCall c{add_days, ctx.date1904(), &holidays, &weekend_error, &holiday_error};
+  const WorkdayCall c{add_days, ctx.date1904(), &holidays, &holiday_error};
   return lift_over_array_args(args, lifted, arena,
                               [&c](const Value* a, std::uint32_t n) { return workday_cell(c, a, n); });
 }

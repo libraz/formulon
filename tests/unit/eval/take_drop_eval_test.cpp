@@ -476,7 +476,8 @@ TEST(BuiltinsTakeDropLift, ArrayAndReferenceCountsLiftToTheTopLeftOfEachSlice) {
       {"=TAKE({1,2;3,4},{1;2})", 2U, 1U, {1.0, 1.0}},  {"=TAKE({1,2;3,4},1,{1,2})", 1U, 2U, {1.0, 1.0}},
       {"=TAKE({1,2;3,4},F1:F2)", 2U, 1U, {1.0, 1.0}},  {"=TAKE({1,2;3,4},1,G1:H1)", 1U, 2U, {1.0, 1.0}},
       {"=DROP({1,2;3,4},{1;1})", 2U, 1U, {3.0, 3.0}},  {"=DROP({1,2;3,4},0,{1,1})", 1U, 2U, {2.0, 2.0}},
-      {"=DROP({1,2;3,4},F1:F2)", 2U, 1U, {3.0, calc}},
+      {"=DROP({1,2;3,4},F1:F2)", 2U, 1U, {3.0, calc}}, {"=TAKE({1,2;3,4},{1;2},{1,2})", 2U, 2U, {1.0, 1.0, 1.0, 1.0}},
+      {"=TAKE({1,2;3,4},{0,1})", 1U, 2U, {calc, 1.0}}, {"=TAKE({1,2;3,4},-1,{1,-1})", 1U, 2U, {3.0, 4.0}},
   };
   for (const Case& c : cases) {
     Arena parse_arena;
@@ -501,6 +502,45 @@ TEST(BuiltinsTakeDropLift, ArrayAndReferenceCountsLiftToTheTopLeftOfEachSlice) {
   const Value rows = EvalUnder("=ROWS(TAKE({1,2;3,4},{1;2}))", &parse_arena, &eval_arena, ctx);
   ASSERT_TRUE(rows.is_number());
   EXPECT_EQ(rows.as_number(), 2.0);
+}
+
+// Under an array count, a reference source is #VALUE! and a source or count error is that error, element by
+// element.
+TEST(BuiltinsTakeDropLift, ReferenceSourcesAndErrorsFillTheirElements) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  Populate3x4(sheet);
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  struct Case {
+    const char* formula;
+    std::uint32_t rows;
+    std::uint32_t cols;
+    std::vector<ErrorCode> errors;  // ErrorCode::Null marks a number cell
+  };
+  const Case cases[] = {
+      {"=TAKE(NA(),{1,2})", 1U, 2U, {ErrorCode::NA, ErrorCode::NA}},
+      {"=TAKE(A1:B2,{1;2})", 2U, 1U, {ErrorCode::Value, ErrorCode::Value}},
+      {"=DROP(A1:B2,{1;1},{1,0})", 2U, 2U, {ErrorCode::Value, ErrorCode::Value, ErrorCode::Value, ErrorCode::Value}},
+      {"=TAKE({1,2;3,4},{1,#N/A})", 1U, 2U, {ErrorCode::Null, ErrorCode::NA}},
+  };
+  for (const Case& c : cases) {
+    Arena parse_arena;
+    Arena eval_arena;
+    const Value v = EvalUnder(c.formula, &parse_arena, &eval_arena, ctx);
+    ASSERT_TRUE(v.is_array()) << c.formula;
+    ASSERT_EQ(v.as_array_rows(), c.rows) << c.formula;
+    ASSERT_EQ(v.as_array_cols(), c.cols) << c.formula;
+    for (std::size_t i = 0; i < c.errors.size(); ++i) {
+      const Value& cell = v.as_array_cells()[i];
+      if (c.errors[i] == ErrorCode::Null) {
+        EXPECT_TRUE(cell.is_number()) << c.formula << " [" << i << "]";
+      } else {
+        ASSERT_TRUE(cell.is_error()) << c.formula << " [" << i << "]";
+        EXPECT_EQ(cell.as_error(), c.errors[i]) << c.formula << " [" << i << "]";
+      }
+    }
+  }
 }
 
 }  // namespace

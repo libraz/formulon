@@ -687,6 +687,43 @@ TEST(DateTimeWorkdayLift, MultiCellReferenceInADateOrCountSlotIsValue) {
   ExpectLiftedNumbers(EvalSourceIn("=WORKDAY(45292,A1:A2*1)", wb, wb.sheet(0)), {45293.0, 45294.0}, "computed");
 }
 
+TEST(DateTimeWorkdayLift, AScalarErrorBesideALiftingArgumentFillsEveryElement) {
+  const std::pair<const char*, ErrorCode> cases[] = {
+      {"=WORKDAY(NA(),{1,2})", ErrorCode::NA},
+      {"=WORKDAY(45292,{1,2}*1,1/0)", ErrorCode::Div0},
+      {"=NETWORKDAYS({45292,45293},1/0)", ErrorCode::Div0},
+      {"=WORKDAY.INTL(NA(),1,{1,2})", ErrorCode::NA},
+  };
+  for (const auto& [formula, code] : cases) {
+    const std::vector<Value> cells = LiftedCells(EvalSource(formula));
+    ASSERT_EQ(cells.size(), 2U) << formula;
+    for (const Value& cell : cells) {
+      ASSERT_TRUE(cell.is_error()) << formula;
+      EXPECT_EQ(cell.as_error(), code) << formula;
+    }
+  }
+}
+
+TEST(DateTimeWorkdayLift, AnErrorWeekendElementReadsAsAnInvalidWeekend) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(1, 0, Value::error(ErrorCode::NA));
+  const std::pair<const char*, std::pair<double, ErrorCode>> cases[] = {
+      {"=WORKDAY.INTL(45292,1,{1,#N/A})", {45293.0, ErrorCode::Num}},
+      {"=NETWORKDAYS.INTL(45292,45300,{1,#DIV/0!})", {7.0, ErrorCode::Value}},
+      {"=WORKDAY.INTL(45292,1,A1:A2)", {45293.0, ErrorCode::Num}},
+      {"=NETWORKDAYS.INTL(45292,45300,A1:A2)", {7.0, ErrorCode::Value}},
+  };
+  for (const auto& [formula, want] : cases) {
+    const std::vector<Value> cells = LiftedCells(EvalSourceIn(formula, wb, wb.sheet(0)));
+    ASSERT_EQ(cells.size(), 2U) << formula;
+    ASSERT_TRUE(cells[0].is_number()) << formula;
+    EXPECT_EQ(cells[0].as_number(), want.first) << formula;
+    ASSERT_TRUE(cells[1].is_error()) << formula;
+    EXPECT_EQ(cells[1].as_error(), want.second) << formula;
+  }
+}
+
 TEST(DateTimeWorkdayLift, HolidaysAreReadWholeNotLifted) {
   const Value v = EvalSource("=WORKDAY(45292,1,{45293,45294})");
   ASSERT_TRUE(v.is_number());
