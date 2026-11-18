@@ -109,7 +109,9 @@ Expected<std::vector<DefinedName>, Error> read_defined_names(const pugi::xml_doc
     // so downstream consumers that re-parse `entry.formula` do not need to
     // special-case the prefixed spelling. A stored `SINGLE(x)` /
     // `ANCHORARRAY(x)` reads back as the `@x` / `x#` the formula bar shows.
-    entry.formula = parser::spell_storage_operators(parser::strip_storage_prefixes(entry.formula, &has_storage_prefix));
+    // A future function spelled bare reads as a user-defined one.
+    entry.formula = parser::spell_storage_operators(parser::strip_storage_prefixes(
+        parser::spell_bare_calls_as_udf(entry.formula, &bare_call_reads_as_udf), &has_storage_prefix));
 
     out.push_back(std::move(entry));
   }

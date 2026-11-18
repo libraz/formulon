@@ -102,6 +102,13 @@ bool xlsb_uses_hidden_name(std::string_view canonical_name);
 /// for these (`parser::strip_storage_prefixes`).
 bool has_storage_prefix(std::string_view canonical_name);
 
+/// True when Excel reads a call to `name` (any case) spelled bare in stored
+/// formula text as a user-defined function: any `_xlfn.` function but
+/// `ANCHORARRAY`, which stays bare. Such a formula evaluates to `#NAME?` and
+/// saves as `_xludf.NAME` (`parser::spell_bare_calls_as_udf`), in a cell, a
+/// defined name, a conditional format or a validation alike.
+bool bare_call_reads_as_udf(std::string_view name);
+
 /// Returns the name Excel stores for the built-in `name` used as a value
 /// rather than called (`=TYPE(SUM)`): `_xleta.` plus the upper-cased
 /// `canonical_function_name`. The prefix is dropped on ingestion

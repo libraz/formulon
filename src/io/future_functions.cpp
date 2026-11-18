@@ -22,6 +22,7 @@
 #include <string_view>
 
 #include "parser/ast_format.h"
+#include "parser/formula_prefix.h"
 #include "utils/strings.h"
 
 namespace formulon {
@@ -159,6 +160,11 @@ bool xlsb_uses_hidden_name(std::string_view canonical_name) {
 bool has_storage_prefix(std::string_view canonical_name) {
   return classify_storage_prefix(canonical_name) != parser::StoragePrefixKind::None ||
          xlsb_uses_hidden_name(canonical_name);
+}
+
+bool bare_call_reads_as_udf(std::string_view name) {
+  const std::string upper = strings::to_ascii_upper(name);
+  return classify_storage_prefix(upper) == parser::StoragePrefixKind::Xlfn && upper != parser::kAnchorArrayFn;
 }
 
 std::string function_value_storage_name(std::string_view name) {

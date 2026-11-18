@@ -816,7 +816,8 @@ Expected<std::vector<cf::ConditionalFormat>, Error> read_conditional_formats(con
 }
 
 std::string canonical_feature_formula(std::string_view stored) {
-  return parser::spell_storage_operators(parser::strip_storage_prefixes(stored, &has_storage_prefix));
+  return parser::spell_storage_operators(parser::strip_storage_prefixes(
+      parser::spell_bare_calls_as_udf(stored, &bare_call_reads_as_udf), &has_storage_prefix));
 }
 
 void ingest_feature_formulas(Workbook& wb, Workbook::FormulaSource source) {

@@ -207,6 +207,12 @@ std::string display_cell_shaped_names(std::string_view formula) {
         ++end;
       }
       const std::string_view run = formula.substr(i, end - i);
+      if (end < formula.size() && formula[end] == '(' && run.size() > kUdfPrefix.size() &&
+          strings::case_insensitive_starts_with(run, kUdfPrefix)) {
+        out.append(run.substr(kUdfPrefix.size()));
+        i = end;
+        continue;
+      }
       const std::string_view prefix = cell_shaped_name_prefix(run);
       if (!prefix.empty()) {
         const std::string_view bare = run.substr(prefix.size());
@@ -220,6 +226,49 @@ std::string display_cell_shaped_names(std::string_view formula) {
         i = end;
         continue;
       }
+    }
+    out.push_back(c);
+    ++i;
+  }
+  return out;
+}
+
+std::string spell_bare_calls_as_udf(std::string_view formula, bool (*reads_as_udf)(std::string_view)) {
+  std::string out;
+  out.reserve(formula.size());
+  std::size_t bracket_depth = 0;
+  for (std::size_t i = 0; i < formula.size();) {
+    const char c = formula[i];
+    if (c == '\'' && bracket_depth > 0U) {
+      out.append(formula.substr(i, 2));
+      i += 2;
+      continue;
+    }
+    if (c == '"' || c == '\'') {
+      const std::size_t end = quoted_run_end(formula, i, c);
+      out.append(formula.substr(i, end - i));
+      i = end;
+      continue;
+    }
+    if (c == '[') {
+      ++bracket_depth;
+    } else if (c == ']' && bracket_depth > 0U) {
+      --bracket_depth;
+    } else if (bracket_depth == 0U && formula_prefix_is_ident_byte(c) &&
+               (out.empty() || (!formula_prefix_is_ident_byte(out.back()) && out.back() != '!'))) {
+      std::size_t end = i;
+      while (end < formula.size() && formula_prefix_is_ident_byte(formula[end])) {
+        ++end;
+      }
+      const std::string_view run = formula.substr(i, end - i);
+      if (end < formula.size() && formula[end] == '(' && run.front() != '_' && reads_as_udf(run)) {
+        out.append(kUdfPrefix);
+        out.append(strings::to_ascii_upper(run));
+      } else {
+        out.append(run);
+      }
+      i = end;
+      continue;
     }
     out.push_back(c);
     ++i;

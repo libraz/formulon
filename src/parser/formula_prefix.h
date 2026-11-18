@@ -74,6 +74,8 @@ inline constexpr std::string_view kNamePrefix = "_xlnm.";
 inline constexpr std::string_view kFnPrefix = "_xlfn.";
 /// Storage prefix of a built-in function named as a value.
 inline constexpr std::string_view kEtaPrefix = "_xleta.";
+/// Storage prefix of a call to a user-defined (unknown) function.
+inline constexpr std::string_view kUdfPrefix = "_xludf.";
 /// Storage calls that stand for the `@x` and `x#` operators.
 inline constexpr std::string_view kSingleFn = "SINGLE";
 inline constexpr std::string_view kAnchorArrayFn = "ANCHORARRAY";
@@ -161,8 +163,16 @@ std::string_view cell_shaped_name_prefix(std::string_view name) noexcept;
 /// The formula-bar spelling of the cell-shaped names in stored text: outside
 /// string literals and quoted sheet names, at an identifier boundary,
 /// `_xlpm.X` becomes `X` and `_xlnm.X` becomes `'X'` for a cell-shaped `X`
-/// (`Sheet1!_xlnm.B1` -> `Sheet1!'B1'`). Every other byte is copied.
+/// (`Sheet1!_xlnm.B1` -> `Sheet1!'B1'`), and a call `_xludf.F(` shows as
+/// `F(`. Every other byte is copied.
 std::string display_cell_shaped_names(std::string_view formula);
+
+/// Stored `<f>` text with each bare call to a name `reads_as_udf` accepts
+/// spelled `_xludf.NAME(` (upper case): outside string literals, quoted sheet
+/// names and brackets, at an identifier boundary, an unprefixed identifier
+/// directly followed by `(`. Excel reads such a call as a user-defined
+/// function rather than the built-in of that name.
+std::string spell_bare_calls_as_udf(std::string_view formula, bool (*reads_as_udf)(std::string_view));
 
 /// Respells each one-argument call to `SINGLE` / `ANCHORARRAY` / `_TRO_*` in
 /// `formula` (a leading `=` optional) as the `@x` / `x#` / `A1:.A10` operator

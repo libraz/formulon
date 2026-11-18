@@ -275,6 +275,7 @@ Expected<void, Error> ResolveFormula(const pugi::xml_node& c_node,
   if (ftype != "shared") {
     // Plain formula (or an unhandled variant we treat as plain).
     ReadFormulaElementText(formula_out, f_node);
+    formula_out = parser::spell_bare_calls_as_udf(formula_out, &bare_call_reads_as_udf);
     return Expected<void, Error>::Ok();
   }
 
@@ -290,6 +291,7 @@ Expected<void, Error> ResolveFormula(const pugi::xml_node& c_node,
   ReadFormulaElementText(body, f_node);
   if (!body.empty()) {
     // Master occurrence: register and use as formula text.
+    body = parser::spell_bare_calls_as_udf(body, &bare_call_reads_as_udf);
     shared[si] = SharedFormulaMaster{body, row, col, nullptr, false};
     formula_out = std::move(body);
     return Expected<void, Error>::Ok();
@@ -568,16 +570,16 @@ struct SaxApplyState {
 Expected<std::string, Error> ResolveSharedFromRecord(const CellRecord& rec,
                                                      std::unordered_map<std::uint32_t, SharedFormulaMaster>& shared) {
   if (rec.f_t != "shared") {
-    return std::string(rec.formula);
+    return parser::spell_bare_calls_as_udf(rec.formula, &bare_call_reads_as_udf);
   }
   if (rec.f_si.empty()) {
     return make_error(FormulonErrorCode::kIoSheetCorrupt, "shared formula: <f t='shared'> missing 'si'",
                       "context=sheet_reader_sax");
   }
   ASSIGN_OR_RETURN(const std::uint32_t si, ParseSharedFormulaSi(rec.f_si));
-  std::string body(rec.formula);
+  std::string body = parser::spell_bare_calls_as_udf(rec.formula, &bare_call_reads_as_udf);
   if (!body.empty()) {
-    // Master occurrence: register and use its body verbatim.
+    // Master occurrence: register and use its body.
     shared[si] = SharedFormulaMaster{body, rec.row, rec.col, nullptr, false};
     return body;
   }

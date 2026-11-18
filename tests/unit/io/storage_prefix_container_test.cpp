@@ -31,16 +31,26 @@
 // as `#NAME?`.
 
 #include <cstdint>
+#include <deque>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "cell.h"
+#include "eval/function_registry.h"
+#include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
+#include "io/cf_reader.h"
 #include "io/future_functions.h"
+#include "io/ooxml_reader.h"
+#include "io/sheet_reader.h"
 #include "io/xlsb/reader.h"
 #include "io/xlsb/writer.h"
+#include "parser/formula_prefix.h"
 #include "sheet.h"
+#include "support/ooxml_package_fixture.h"
 #include "support/roundtrip_symmetry.h"
+#include "value.h"
 #include "workbook.h"
 
 #ifndef FORMULON_FIXTURES_DIR
@@ -312,6 +322,155 @@ TEST(StoragePrefixContainers, IsoCeilingStaysBareOnOoxmlSave) {
   ASSERT_TRUE(static_cast<bool>(got_sheet)) << got_sheet.message();
   EXPECT_NE(sheet.find(">ISO.CEILING(4.3)<"), std::string::npos) << sheet;
   EXPECT_EQ(sheet.find("_xlfn.ISO.CEILING"), std::string::npos) << sheet;
+}
+
+// A future function spelled bare in `<f>` is a call to a user-defined
+// function of that name, not the built-in: Excel 365 shows `#NAME?`, the
+// formula bar shows the bare name under the implicit-intersection `@` a
+// user-defined call takes, and a save writes `_xludf.NAME`. The `_xlfn.`
+// spelling is the built-in.
+constexpr std::string_view kBareFutureCallsSheet =
+    "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData>"
+    "<row r=\"1\">"
+    "<c r=\"A1\"><f>IMAGE(\"https://example.invalid/x.png\")</f></c>"
+    "<c r=\"B1\"><f>XLOOKUP(1,{1},{2})</f></c>"
+    "<c r=\"C1\"><f>concat(\"a\",\"b\")</f></c>"
+    "<c r=\"D1\"><f>_xlfn.CONCAT(\"a\",\"b\")</f></c>"
+    "<c r=\"E1\"><f>_xludf.IMAGE(\"https://example.invalid/x.png\")</f></c>"
+    "<c r=\"F1\"><f t=\"shared\" ref=\"F1:F2\" si=\"0\">CONCAT(\"a\",G1)</f></c>"
+    "<c r=\"G1\"><f>SUM(1,2)&amp;\"IMAGE(\"</f></c>"
+    "<c r=\"H1\"><f>_xludf.SUM(1,2)</f></c>"
+    "<c r=\"I1\"><f>LET(x,1,x+1)</f></c>"
+    "<c r=\"J1\"><f>NORM.DIST(1,0,1,TRUE)</f></c>"
+    "</row>"
+    "<row r=\"2\"><c r=\"F2\"><f t=\"shared\" si=\"0\"/></c></row>"
+    "</sheetData></worksheet>";
+
+struct BareCallRow {
+  std::uint32_t row;
+  std::uint32_t col;
+  const char* sheet_read;  // the sheet reader's text, before the workbook places the legacy `@`
+  const char* stored;
+  const char* shown;
+};
+
+constexpr BareCallRow kBareCallRows[] = {
+    {0U, 0U, "=_xludf.IMAGE(\"https://example.invalid/x.png\")", "=@_xludf.IMAGE(\"https://example.invalid/x.png\")",
+     "=@IMAGE(\"https://example.invalid/x.png\")"},
+    {0U, 1U, "=_xludf.XLOOKUP(1,{1},{2})", "=@_xludf.XLOOKUP(1,{1},{2})", "=@XLOOKUP(1,{1},{2})"},
+    {0U, 2U, "=_xludf.CONCAT(\"a\",\"b\")", "=@_xludf.CONCAT(\"a\",\"b\")", "=@CONCAT(\"a\",\"b\")"},
+    {0U, 3U, "=CONCAT(\"a\",\"b\")", "=CONCAT(\"a\",\"b\")", "=CONCAT(\"a\",\"b\")"},
+    {0U, 4U, "=_xludf.IMAGE(\"https://example.invalid/x.png\")", "=@_xludf.IMAGE(\"https://example.invalid/x.png\")",
+     "=@IMAGE(\"https://example.invalid/x.png\")"},
+    {0U, 5U, "=_xludf.CONCAT(\"a\",G1)", "=@_xludf.CONCAT(\"a\",G1)", "=@CONCAT(\"a\",G1)"},
+    {1U, 5U, "=_xludf.CONCAT(\"a\",G2)", "=@_xludf.CONCAT(\"a\",G2)", "=@CONCAT(\"a\",G2)"},
+    {0U, 6U, "=SUM(1,2)&\"IMAGE(\"", "=SUM(1,2)&\"IMAGE(\"", "=SUM(1,2)&\"IMAGE(\""},
+    {0U, 7U, "=_xludf.SUM(1,2)", "=@_xludf.SUM(1,2)", "=@SUM(1,2)"},
+    {0U, 8U, "=_xludf.LET(x,1,x+1)", "=@_xludf.LET(x,1,@x+1)", "=@LET(x,1,@x+1)"},
+    {0U, 9U, "=_xludf.NORM.DIST(1,0,1,TRUE)", "=@_xludf.NORM.DIST(1,0,1,TRUE)", "=@NORM.DIST(1,0,1,TRUE)"},
+};
+
+void ExpectBareCallText(const Workbook& wb, bool whole_package) {
+  for (const BareCallRow& r : kBareCallRows) {
+    SCOPED_TRACE(r.stored);
+    const Cell* cell = wb.sheet(0).cell_at(r.row, r.col);
+    ASSERT_NE(cell, nullptr);
+    if (!whole_package) {
+      EXPECT_EQ(cell->formula_text, r.sheet_read);
+      continue;
+    }
+    EXPECT_EQ(cell->formula_text, r.stored);
+    EXPECT_EQ(parser::display_cell_shaped_names(cell->formula_text), r.shown);
+  }
+}
+
+TEST(StoragePrefixContainers, BareFutureCallReadsAsUserDefinedOnBothReadPaths) {
+  const std::vector<std::uint8_t> bytes =
+      test::BuildOoxmlPackage(test::OoxmlContentTypes(test::kXlsxWorkbookContentType), kBareFutureCallsSheet);
+  auto loaded = read_ooxml(test::span_of(bytes));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  ExpectBareCallText(loaded.value().workbook, /*whole_package=*/true);
+
+  Workbook sax = Workbook::create();
+  SheetReadContext ctx;
+  auto rs = read_sheet_data_sax(
+      ByteSpan{reinterpret_cast<const std::uint8_t*>(kBareFutureCallsSheet.data()), kBareFutureCallsSheet.size()}, 0U,
+      sax, ctx, sax.mutable_text_storage());
+  ASSERT_TRUE(static_cast<bool>(rs)) << rs.error().message;
+  ExpectBareCallText(sax, /*whole_package=*/false);
+}
+
+TEST(StoragePrefixContainers, BareFutureCallIsNameErrorAndSavesAsUserDefined) {
+  const std::vector<std::uint8_t> bytes =
+      test::BuildOoxmlPackage(test::OoxmlContentTypes(test::kXlsxWorkbookContentType), kBareFutureCallsSheet);
+  auto loaded = read_ooxml(test::span_of(bytes));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  Workbook& wb = loaded.value().workbook;
+  auto recalc = wb.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(recalc)) << recalc.error().message;
+  for (const std::uint32_t col : {0U, 1U, 2U, 4U, 5U, 7U, 8U, 9U}) {
+    SCOPED_TRACE(col);
+    const Value v = wb.sheet(0).resolve_cell_value(0U, col);
+    ASSERT_TRUE(v.is_error());
+    EXPECT_EQ(v.as_error(), ErrorCode::Name);
+  }
+  const Value d1 = wb.sheet(0).resolve_cell_value(0U, 3U);
+  ASSERT_TRUE(d1.is_text());
+  EXPECT_EQ(d1.as_text(), "ab");
+
+  auto saved = wb.save();
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  std::string sheet;
+  const ::testing::AssertionResult got_sheet =
+      test::extract_part(test::span_of(saved.value()), "xl/worksheets/sheet1.xml", &sheet);
+  ASSERT_TRUE(static_cast<bool>(got_sheet)) << got_sheet.message();
+  EXPECT_NE(sheet.find(">_xludf.IMAGE(&quot;https://example.invalid/x.png&quot;)<"), std::string::npos) << sheet;
+  EXPECT_NE(sheet.find(">_xludf.XLOOKUP(1,{1},{2})<"), std::string::npos) << sheet;
+  EXPECT_NE(sheet.find(">_xludf.CONCAT(&quot;a&quot;,&quot;b&quot;)<"), std::string::npos) << sheet;
+  EXPECT_NE(sheet.find(">_xlfn.CONCAT(&quot;a&quot;,&quot;b&quot;)<"), std::string::npos) << sheet;
+}
+
+TEST(StoragePrefixContainers, BareCallSpellingSkipsQuotedTextAndOperatorFunctions) {
+  const auto spell = [](std::string_view f) { return parser::spell_bare_calls_as_udf(f, &bare_call_reads_as_udf); };
+  EXPECT_EQ(spell("IMAGE(\"IMAGE(\")"), "_xludf.IMAGE(\"IMAGE(\")");
+  EXPECT_EQ(spell("'IMAGE(x'!A1+Image(1)"), "'IMAGE(x'!A1+_xludf.IMAGE(1)");
+  EXPECT_EQ(spell("T[IMAGE(]+1"), "T[IMAGE(]+1");
+  EXPECT_EQ(spell("_xlfn.IMAGE(1)+MY.IMAGE(1)+IMAGE2(1)"), "_xlfn.IMAGE(1)+MY.IMAGE(1)+IMAGE2(1)");
+  EXPECT_EQ(spell("SUM(1)+NORM.DIST(1,0,1,TRUE)"), "SUM(1)+_xludf.NORM.DIST(1,0,1,TRUE)");
+  // LET, LAMBDA and SINGLE read as user-defined too, their parameters left
+  // unprefixed; ANCHORARRAY stays bare.
+  EXPECT_EQ(spell("LET(x,1,x+1)+LAMBDA(x,x)(1)+SINGLE(A1)+ANCHORARRAY(A1)"),
+            "_xludf.LET(x,1,x+1)+_xludf.LAMBDA(x,x)(1)+_xludf.SINGLE(A1)+ANCHORARRAY(A1)");
+  EXPECT_EQ(spell("FILTER({1},{TRUE})"), "FILTER({1},{TRUE})");
+}
+
+TEST(StoragePrefixContainers, BareFutureCallInNameAndFeatureFormulasReadsAsUserDefined) {
+  EXPECT_EQ(canonical_feature_formula("IMAGE(\"https://example.invalid/x.png\")"),
+            "_xludf.IMAGE(\"https://example.invalid/x.png\")");
+  EXPECT_EQ(canonical_feature_formula("_xlfn.SINGLE(A1)>0"), "@A1>0");
+
+  constexpr std::string_view kWorkbook =
+      "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+      "<workbook xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+      "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\">"
+      "<sheets><sheet name=\"Sheet1\" sheetId=\"1\" r:id=\"rId1\"/></sheets>"
+      "<definedNames><definedName name=\"nm\">IMAGE(\"https://example.invalid/x.png\")</definedName></definedNames>"
+      "</workbook>";
+  constexpr std::string_view kSheet =
+      "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData>"
+      "<row r=\"1\"><c r=\"A1\"><f>nm</f></c></row></sheetData></worksheet>";
+  const std::vector<std::uint8_t> bytes = test::BuildOoxmlPackage(
+      test::OoxmlContentTypes(test::kXlsxWorkbookContentType), kSheet, kWorkbook, test::kOneSheetWorkbookRels);
+  auto loaded = read_ooxml(test::span_of(bytes));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  Workbook& wb = loaded.value().workbook;
+  ASSERT_EQ(wb.defined_names().size(), 1U);
+  EXPECT_EQ(wb.defined_names()[0].formula, "_xludf.IMAGE(\"https://example.invalid/x.png\")");
+  auto recalc = wb.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(recalc)) << recalc.error().message;
+  const Value a1 = wb.sheet(0).resolve_cell_value(0U, 0U);
+  ASSERT_TRUE(a1.is_error());
+  EXPECT_EQ(a1.as_error(), ErrorCode::Name);
 }
 
 }  // namespace
