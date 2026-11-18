@@ -32,6 +32,7 @@
 
 #include <cstdint>
 #include <deque>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -47,6 +48,7 @@
 #include "io/xlsb/reader.h"
 #include "io/xlsb/writer.h"
 #include "parser/formula_prefix.h"
+#include "pugixml.hpp"
 #include "sheet.h"
 #include "support/ooxml_package_fixture.h"
 #include "support/roundtrip_symmetry.h"
@@ -471,6 +473,105 @@ TEST(StoragePrefixContainers, BareFutureCallInNameAndFeatureFormulasReadsAsUserD
   const Value a1 = wb.sheet(0).resolve_cell_value(0U, 0U);
   ASSERT_TRUE(a1.is_error());
   EXPECT_EQ(a1.as_error(), ErrorCode::Name);
+}
+
+// Excel 365 saves NETWORKDAYS.INTL and WORKDAY.INTL bare in `<f>`: every such cell of these Excel-saved books reads
+// as the built-in and recalculates to the value Excel cached.
+TEST(StoragePrefixContainers, ExcelSavedBareIntlWorkdayCallsAreBuiltins) {
+  const std::string dir =
+      std::string(FORMULON_FIXTURES_DIR) + "/../oracle/external/ironcalc/fixtures/calc_tests/DATE_AND_TIME/";
+  for (const char* book : {"NETWORKDAYS_NETWORKDAYS.INTL.xlsx", "WORKDAY_WORKDAY.INTL.xlsx"}) {
+    SCOPED_TRACE(book);
+    const std::vector<std::uint8_t> bytes = test::read_file_bytes(dir + book);
+    ASSERT_FALSE(bytes.empty());
+    std::string sheet_xml;
+    const ::testing::AssertionResult got_sheet =
+        test::extract_part(test::span_of(bytes), "xl/worksheets/sheet1.xml", &sheet_xml);
+    ASSERT_TRUE(static_cast<bool>(got_sheet)) << got_sheet.message();
+    auto loaded = read_ooxml(test::span_of(bytes));
+    ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+    Workbook& wb = loaded.value().workbook;
+    ASSERT_TRUE(static_cast<bool>(wb.recalc_full(eval::default_registry())));
+    pugi::xml_document doc;
+    ASSERT_TRUE(static_cast<bool>(doc.load_buffer(sheet_xml.data(), sheet_xml.size())));
+    std::size_t checked = 0U;
+    for (const pugi::xml_node row : doc.child("worksheet").child("sheetData").children("row")) {
+      for (const pugi::xml_node cell : row.children("c")) {
+        const std::string_view formula = cell.child("f").text().get();
+        if (formula.rfind("NETWORKDAYS.INTL(", 0) != 0 && formula.rfind("WORKDAY.INTL(", 0) != 0) {
+          continue;
+        }
+        const std::string ref = cell.attribute("r").value();
+        // Its date-text arguments were cached #VALUE! by the saving host's regional settings; Mac Excel parses them.
+        if (ref == "D60") {
+          continue;
+        }
+        SCOPED_TRACE(ref);
+        std::uint32_t col = 0U;
+        std::size_t i = 0U;
+        for (; i < ref.size() && ref[i] >= 'A' && ref[i] <= 'Z'; ++i) {
+          col = col * 26U + static_cast<std::uint32_t>(ref[i] - 'A' + 1);
+        }
+        const std::uint32_t row_index = static_cast<std::uint32_t>(std::stoul(ref.substr(i))) - 1U;
+        const Value got = wb.sheet(0).resolve_cell_value(row_index, col - 1U);
+        const std::string cached = cell.child("v").text().get();
+        if (std::string_view(cell.attribute("t").value()) == "e") {
+          ASSERT_TRUE(got.is_error());
+          EXPECT_EQ(std::optional<ErrorCode>(got.as_error()), error_from_display_name(cached));
+        } else {
+          ASSERT_TRUE(got.is_number());
+          EXPECT_EQ(got.as_number(), std::stod(cached));
+        }
+        ++checked;
+      }
+    }
+    EXPECT_GT(checked, 0U);
+  }
+}
+
+// The two save bare in `<f>` and by an `_xlfn.` hidden name in `.xlsb`, as Excel saves them, and read back as the
+// built-ins from both containers.
+TEST(StoragePrefixContainers, IntlWorkdayCallsSaveAsExcelDoes) {
+  Workbook wb = Workbook::create_empty();
+  Sheet& s = wb.sheet(wb.add_sheet("F"));
+  s.set_cell_formula(0U, 0U, "=NETWORKDAYS.INTL(45658,45672)");
+  s.set_cell_formula(0U, 1U, "=WORKDAY.INTL(45658,10)");
+
+  auto xlsx = wb.save();
+  ASSERT_TRUE(static_cast<bool>(xlsx)) << xlsx.error().message;
+  std::string sheet;
+  const ::testing::AssertionResult got_sheet =
+      test::extract_part(test::span_of(xlsx.value()), "xl/worksheets/sheet1.xml", &sheet);
+  ASSERT_TRUE(static_cast<bool>(got_sheet)) << got_sheet.message();
+  EXPECT_NE(sheet.find(">NETWORKDAYS.INTL(45658,45672)<"), std::string::npos) << sheet;
+  EXPECT_NE(sheet.find(">WORKDAY.INTL(45658,10)<"), std::string::npos) << sheet;
+  EXPECT_EQ(sheet.find("_xlfn."), std::string::npos) << sheet;
+
+  auto xlsb = xlsb::write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(xlsb)) << xlsb.error().message;
+  EXPECT_EQ(xlsb.value().diagnostics.downgraded_formula_count, 0U);
+  std::string workbook;
+  const ::testing::AssertionResult got_workbook =
+      test::extract_part(test::span_of(xlsb.value().bytes), "xl/workbook.bin", &workbook);
+  ASSERT_TRUE(static_cast<bool>(got_workbook)) << got_workbook.message();
+  EXPECT_TRUE(ContainsUtf16Le(workbook, "_xlfn.NETWORKDAYS.INTL"));
+  EXPECT_TRUE(ContainsUtf16Le(workbook, "_xlfn.WORKDAY.INTL"));
+
+  auto from_xlsx = read_ooxml(test::span_of(xlsx.value()));
+  ASSERT_TRUE(static_cast<bool>(from_xlsx)) << from_xlsx.error().message;
+  auto from_xlsb = xlsb::read_xlsb(test::span_of(xlsb.value().bytes));
+  ASSERT_TRUE(static_cast<bool>(from_xlsb)) << from_xlsb.error().message;
+  for (Workbook* back : {&from_xlsx.value().workbook, &from_xlsb.value().workbook}) {
+    ASSERT_TRUE(static_cast<bool>(back->recalc_full(eval::default_registry())));
+    const Sheet& rt = back->sheet(0);
+    for (std::uint32_t col = 0U; col < 2U; ++col) {
+      SCOPED_TRACE(col);
+      const Cell* cell = rt.cell_at(0U, col);
+      ASSERT_NE(cell, nullptr);
+      EXPECT_EQ(cell->formula_text, col == 0U ? "=NETWORKDAYS.INTL(45658,45672)" : "=WORKDAY.INTL(45658,10)");
+      EXPECT_TRUE(rt.resolve_cell_value(0U, col).is_number());
+    }
+  }
 }
 
 }  // namespace

@@ -50,10 +50,16 @@ TEST(ClassifyStoragePrefix, ClassicFunctionsAreNotPrefixed) {
   }
 }
 
-// ISO.CEILING arrived with Excel 2010 yet Excel stores it bare, so the
-// classification cannot be derived from the introduction date alone.
-TEST(ClassifyStoragePrefix, IsoCeilingIsNotPrefixed) {
-  EXPECT_EQ(classify_storage_prefix("ISO.CEILING"), StoragePrefixKind::None);
+// ISO.CEILING, NETWORKDAYS.INTL and WORKDAY.INTL arrived with Excel 2010 yet
+// Excel stores them bare, so the classification cannot be derived from the
+// introduction date alone. The `.xlsb` encodes all three by hidden name.
+TEST(ClassifyStoragePrefix, BareExcel2010FunctionsAreNotPrefixed) {
+  for (const char* name : {"ISO.CEILING", "NETWORKDAYS.INTL", "WORKDAY.INTL"}) {
+    SCOPED_TRACE(name);
+    EXPECT_EQ(classify_storage_prefix(name), StoragePrefixKind::None);
+    EXPECT_EQ(storage_function_name(name), name);
+    EXPECT_TRUE(xlsb_uses_hidden_name(name));
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -62,34 +68,11 @@ TEST(ClassifyStoragePrefix, IsoCeilingIsNotPrefixed) {
 // ---------------------------------------------------------------------------
 
 TEST(ClassifyStoragePrefix, FutureFunctionsCarryXlfn) {
-  for (const char* name : {"XLOOKUP",
-                           "XMATCH",
-                           "TEXTJOIN",
-                           "CONCAT",
-                           "IFS",
-                           "SEQUENCE",
-                           "LET",
-                           "LAMBDA",
-                           "UNIQUE",
-                           "SORTBY",
-                           "STDEV.P",
-                           "PERCENTILE.INC",
-                           "CEILING.MATH",
-                           "NORM.S.DIST",
-                           "FORMULATEXT",
-                           "ISFORMULA",
-                           "ISOWEEKNUM",
-                           "UNICODE",
-                           "XOR",
-                           "RRI",
-                           "PDURATION",
-                           "AGGREGATE",
-                           "NETWORKDAYS.INTL",
-                           "GROUPBY",
-                           "REGEXTEST",
-                           "TEXTSPLIT",
-                           "HSTACK",
-                           "TAKE"}) {
+  for (const char* name : {"XLOOKUP",      "XMATCH",      "TEXTJOIN",    "CONCAT",    "IFS",        "SEQUENCE",
+                           "LET",          "LAMBDA",      "UNIQUE",      "SORTBY",    "STDEV.P",    "PERCENTILE.INC",
+                           "CEILING.MATH", "NORM.S.DIST", "FORMULATEXT", "ISFORMULA", "ISOWEEKNUM", "UNICODE",
+                           "XOR",          "RRI",         "PDURATION",   "AGGREGATE", "STDEV.S",    "GROUPBY",
+                           "REGEXTEST",    "TEXTSPLIT",   "HSTACK",      "TAKE"}) {
     SCOPED_TRACE(name);
     EXPECT_EQ(classify_storage_prefix(name), StoragePrefixKind::Xlfn);
     EXPECT_EQ(storage_function_name(name), std::string("_xlfn.") + name);
