@@ -646,6 +646,10 @@ std::vector<std::string> random_ascii(std::size_t count) {
   std::mt19937 rng(20261011u);
   const std::string alphabet = " !\"#$%&'()*+,-./0123456789:;<=>?@AZaz[\\]^_`{|}~bBmMyY";
   std::vector<std::string> out = {"", "a", "A", "ab", "a b", "a-b", "a'b", "co-op", "coop", "10", "9"};
+  // Every character alone, so each pair of characters is compared once.
+  for (const char c : alphabet) {
+    out.emplace_back(1U, c);
+  }
   while (out.size() < count) {
     std::string s;
     const std::size_t len = 1 + rng() % 6;
@@ -658,7 +662,7 @@ std::vector<std::string> random_ascii(std::size_t count) {
 }
 
 TEST(CollationFastPath, AsciiMatchesGeneralPath) {
-  const std::vector<std::string> strings = random_ascii(160);
+  const std::vector<std::string> strings = random_ascii(96);
   // Outside zh, U+0001 is ignorable before other characters, so a leading one
   // forces the general path without changing the key.
   const std::string lead = u8(0x01);

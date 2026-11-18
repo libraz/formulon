@@ -695,6 +695,9 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
             tests/codegen/collation_generated_test.py
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
   )
+  # Regenerating every collation table takes ~12 s, over a third of the
+  # fast-tier timeout.
+  set_tests_properties(CollationTableDrift PROPERTIES LABELS "SLOW")
   add_test(
     NAME LocaleFunctionNamesDrift
     COMMAND ${_FORMULON_BEHAVIOR_PY} -m unittest
