@@ -54,7 +54,7 @@ CPP_GLOB := $(shell find $(SRC_DIRS) -type f \( -name '*.cpp' -o -name '*.h' \) 
 .PHONY: all build release build-type test test-slow test-all format format-check lint clean \
         wasm wasm-threads wasm-debug wasm-capi test-wasm test-python size-check \
         npm-package npm-test npm-pack npm-check-dts npm-typecheck \
-        node-native node-package node-test \
+        node-native node-package node-test surface-parity \
         python-package python-test python-wheel docs-snippets \
         parity-test \
         oracle-setup oracle-setup-mac oracle-setup-wsl \
@@ -489,6 +489,11 @@ node-package: node-native
 
 node-test: node-package
 	(cd $(NODE_NATIVE_PKG_DIR) && $(NODE) --test 'test/*.test.mjs')
+
+# `make surface-parity` -> the checks that load both the WASM and the native package,
+#   kept out of npm-test and node-test so each of those needs only its own package.
+surface-parity: npm-package node-package
+	$(NODE) --test 'packages/npm/test/cross/*.test.mjs'
 
 # -- Documentation snippets -----------------------------------------------
 # `make docs-snippets FORMULON_DOCS_DIR=../formulon-homepage/src` -> run the

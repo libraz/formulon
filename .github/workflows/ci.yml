@@ -266,3 +266,13 @@ jobs:
 
       - name: WASM smoke test (Node)
         run: make test-wasm
+
+      - name: Configure the native addon without the test targets
+        # The oracle test targets need python3 with PyYAML at configure time;
+        # surface-parity builds only the addon, as prebuild.yml does.
+        run: /usr/bin/cmake -B build -DCMAKE_BUILD_TYPE=Release -DFM_BUILD_NODE_ADDON=ON -DFM_BUILD_TESTING=OFF
+
+      - name: Cross-package surface parity
+        # Loads the staged WASM and native packages side by side; the only
+        # place either package is checked against the other.
+        run: make CMAKE=/usr/bin/cmake surface-parity
