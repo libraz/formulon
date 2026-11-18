@@ -358,6 +358,14 @@ TEST_F(ExternalRefBlank, AnUncachedCellConcatenatesAsEmptyAndIsBlank) {
   ExpectNumber("=[Src.xlsx]S!A4", 0.0);
 }
 
+// As a blank cell: an uncached address counts for neither COUNTA nor COUNT, while a cached one does.
+TEST_F(ExternalRefBlank, AnUncachedCellIsNotCounted) {
+  ExpectNumber("=COUNTA([Src.xlsx]S!A4)", 0.0);
+  ExpectNumber("=COUNT([Src.xlsx]S!A4)", 0.0);
+  ExpectNumber("=COUNTA([Src.xlsx]S!A3)", 1.0);
+  ExpectNumber("=COUNT([Src.xlsx]S!B4)", 1.0);
+}
+
 TEST_F(ExternalRefBlank, AWholeColumnSpillsAtItsDeclaredHeight) {
   ExpectTailSpill("=[Src.xlsx]S!B:B", 10.0, 50.0);
   ExpectTailSpill("=[Src.xlsx]S!B:B+0", 10.0, 50.0);
