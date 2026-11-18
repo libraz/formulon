@@ -63,6 +63,15 @@ TEST(ExternalBookSpellingRewrite, BookScopeName) {
   EXPECT_EQ(Spell("[3]!SrcTotal"), "'My Book.xlsx'!SrcTotal");
 }
 
+TEST(ExternalBookSpellingRewrite, BookLevelRefErrorReadsOnTheBookStemSheet) {
+  EXPECT_EQ(Spell("COUNTA([1]!#REF!)"),
+            "COUNTA('/Users/libraz/Documents/ext_link_probe/[ExtSource.xlsx]ExtSource'!#REF!)");
+  EXPECT_EQ(Spell("[2]!#REF!"), "[ExtSource.xlsx]ExtSource!#REF!");
+  EXPECT_EQ(Spell("[3]!#REF!"), "'[My Book.xlsx]My Book'!#REF!");
+  EXPECT_EQ(Spell("[6]!#REF!"), "[Src]Src!#REF!");
+  EXPECT_EQ(Spell("[2]!Rate"), "ExtSource.xlsx!Rate");
+}
+
 TEST(ExternalBookSpellingRewrite, QuotedInputIsRequotedByRule) {
   EXPECT_EQ(Spell("'[2]Sheet 1'!A1"), "'[ExtSource.xlsx]Sheet 1'!A1");
   EXPECT_EQ(Spell("'[2]Data'!A1"), "[ExtSource.xlsx]Data!A1");

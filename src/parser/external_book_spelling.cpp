@@ -3,12 +3,15 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 
 #include "parser/ast_format.h"
 #include "parser/formula_prefix.h"
 #include "parser/parser_detail.h"
 #include "parser/reference.h"
+#include "sheet_name.h"
 #include "utils/strings.h"
+#include "utils/text_ops.h"
 
 namespace formulon {
 namespace parser {
@@ -81,6 +84,29 @@ void AppendSpelled(std::string* out, const Qualifier& q, const ExternalBookResol
     out->push_back('\'');
   }
   out->push_back('!');
+}
+
+// The sheet a book-level `[N]!#REF!` names: the link's file name without its extension, cut to a sheet name's
+// length.
+std::string BookStemSheet(std::uint32_t index, const ExternalBookResolver& resolver) {
+  ExternalBookDisplay link;
+  if (!resolver.resolve(resolver.ctx, index, &link)) {
+    return std::to_string(index);
+  }
+  const std::size_t dot = link.book.rfind('.');
+  const std::string_view stem =
+      dot == std::string::npos || dot == 0 ? std::string_view(link.book) : std::string_view(link.book).substr(0, dot);
+  return std::string(stem.substr(0, utf16_to_byte_offset_floor(stem, sheet_names::kMaxNameUnits)));
+}
+
+// Gives a book-level qualifier followed by `#REF!` at `next` the sheet Excel reads it on; `stem` holds the name.
+void SheetForBookLevelRefError(std::string_view stored, std::size_t next, const ExternalBookResolver& resolver,
+                               Qualifier* q, std::string* stem) {
+  constexpr std::string_view kRefError = "#REF!";
+  if (q->sheet.empty() && stored.substr(next, kRefError.size()) == kRefError) {
+    *stem = BookStemSheet(q->index, resolver);
+    q->sheet = *stem;
+  }
 }
 
 // Reads `[digits]` at `pos`; returns the index after `]`, or npos.
@@ -254,6 +280,7 @@ std::string spell_external_books(std::string_view stored, const ExternalBookReso
   std::string out;
   out.reserve(stored.size() + 32);
   std::string content;
+  std::string stem;
   int depth = 0;
   std::size_t i = 0;
   while (i < stored.size()) {
@@ -266,6 +293,7 @@ std::string spell_external_books(std::string_view stored, const ExternalBookReso
       Qualifier q;
       const std::size_t next = ParseQuotedQualifier(stored, i, &content, &q);
       if (next != std::string_view::npos) {
+        SheetForBookLevelRefError(stored, next, resolver, &q, &stem);
         AppendSpelled(&out, q, resolver);
         i = next;
         continue;
@@ -280,6 +308,7 @@ std::string spell_external_books(std::string_view stored, const ExternalBookReso
         Qualifier q;
         const std::size_t next = ParseBareQualifier(stored, i, &q);
         if (next != std::string_view::npos) {
+          SheetForBookLevelRefError(stored, next, resolver, &q, &stem);
           AppendSpelled(&out, q, resolver);
           i = next;
           continue;

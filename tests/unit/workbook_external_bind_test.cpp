@@ -227,6 +227,31 @@ TEST(WorkbookExternalBind, IngestSpellsALoadedIndexWithItsAbsolutePath) {
   EXPECT_EQ(wb.external_links().size(), 2U);
 }
 
+TEST(WorkbookExternalBind, IngestReadsABookLevelRefErrorOnTheBookStemSheet) {
+  Workbook wb = OneSheet();
+  std::vector<ExternalLinkRecord> links;
+  links.push_back(LoadedLink(1, "ShortBook1.xlsx", ""));
+  wb.set_external_links(std::move(links));
+  EXPECT_EQ(wb.ingest_stored_formula("=COUNTA([1]!#REF!)", Workbook::FormulaSource::kEntered),
+            "=COUNTA([ShortBook1.xlsx]ShortBook1!#REF!)");
+  const std::vector<std::string> expected{"Data", "ShortBook1"};
+  EXPECT_EQ(wb.external_links()[0].book.sheet_names, expected);
+  EXPECT_EQ(wb.ingest_stored_formula("=[1]ShortBook1!A1", Workbook::FormulaSource::kEntered),
+            "=[ShortBook1.xlsx]ShortBook1!A1");
+  EXPECT_EQ(wb.external_links()[0].book.sheet_names, expected);
+}
+
+TEST(WorkbookExternalBind, ABookLevelRefErrorSheetIsCutToThirtyOneCharacters) {
+  Workbook wb = OneSheet();
+  std::vector<ExternalLinkRecord> links;
+  links.push_back(LoadedLink(1, "LongExternalWorkbookNameForProbe1.xlsx", ""));
+  wb.set_external_links(std::move(links));
+  EXPECT_EQ(wb.ingest_stored_formula("=[1]!#REF!", Workbook::FormulaSource::kEntered),
+            "=[LongExternalWorkbookNameForProbe1.xlsx]LongExternalWorkbookNameForProb!#REF!");
+  const std::vector<std::string> expected{"Data", "LongExternalWorkbookNameForProb"};
+  EXPECT_EQ(wb.external_links()[0].book.sheet_names, expected);
+}
+
 TEST(WorkbookExternalBind, IngestOfAnIndexWithNoLinkCreatesOne) {
   Workbook wb = OneSheet();
   std::vector<ExternalLinkRecord> links;
