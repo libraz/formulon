@@ -214,9 +214,9 @@ struct FunctionDef {
   /// whatever the arguments evaluate to.
   bool absent_on_mac = false;
   /// The function checks its arguments last to first: when two arguments
-  /// fail, the later one's failure is reported (DELTA, DEC2BIN / DEC2OCT /
-  /// DEC2HEX). Every other function
-  /// reports the first failing argument in argument order.
+  /// fail, the later one's failure is reported (DELTA, GESTEP, RANDBETWEEN,
+  /// VALUETOTEXT and the base conversions taking a places argument). Every
+  /// other function reports the first failing argument in argument order.
   bool checks_args_last_first = false;
   /// How the function reads a grid-of-references argument. See `GridArg`.
   GridArg grid_arg = GridArg::kElementError;

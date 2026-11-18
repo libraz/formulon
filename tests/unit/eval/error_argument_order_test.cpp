@@ -79,6 +79,26 @@ TEST(ErrorArgumentOrder, ScalarFunctionsReportTheFirstFailingArgument) {
   EXPECT_TRUE(mismatches.empty()) << mismatches;
 }
 
+// The functions measured to check their arguments last to first, and no
+// others, carry the flag the scalar test above reads.
+TEST(ErrorArgumentOrder, ArgumentsCheckedLastToFirst) {
+  const FunctionRegistry& registry = default_registry();
+  std::vector<std::string> names;
+  registry.for_each_name(&CollectName, &names);
+  std::vector<std::string> flagged;
+  for (const std::string& name : names) {
+    const FunctionDef* def = registry.lookup(name);
+    if (def != nullptr && def->checks_args_last_first) {
+      flagged.push_back(name);
+    }
+  }
+  std::sort(flagged.begin(), flagged.end());
+  const std::vector<std::string> want = {"BIN2HEX", "BIN2OCT",     "DEC2BIN",    "DEC2HEX", "DEC2OCT",
+                                         "DELTA",   "GESTEP",      "HEX2BIN",    "HEX2OCT", "OCT2BIN",
+                                         "OCT2HEX", "RANDBETWEEN", "VALUETOTEXT"};
+  EXPECT_EQ(flagged, want);
+}
+
 // A range-aware function with no range filter reads its range cells in
 // argument order: a cell it cannot read ahead of an error cell is reported.
 TEST(ErrorArgumentOrder, UnfilteredRangeFunctionsReadCellsInArgumentOrder) {

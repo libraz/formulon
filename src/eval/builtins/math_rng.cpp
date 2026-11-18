@@ -39,13 +39,14 @@ Value Rand_(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
 /// Volatile: each call draws a fresh sample from the thread-local
 /// Mersenne Twister.
 Value RandBetween_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  auto bounds = builtins_detail::read_number_pair(args, 0, 1);
+  // `top` is read before `bottom`.
+  auto bounds = builtins_detail::read_number_pair(args, 1, 0);
   if (!bounds) {
     return Value::error(bounds.error());
   }
   const auto& pair = bounds.value();
-  const double lo_d = std::ceil(pair.first);
-  const double hi_d = std::floor(pair.second);
+  const double lo_d = std::ceil(pair.second);
+  const double hi_d = std::floor(pair.first);
   if (!std::isfinite(lo_d) || !std::isfinite(hi_d)) {
     return Value::error(ErrorCode::Num);
   }
@@ -60,7 +61,8 @@ Value RandBetween_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/)
 void register_math_rng_builtins(FunctionRegistry& registry) {
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
       {"RAND", 0u, 0u, &Rand_},
-      builtins_detail::analysis_toolpak({"RANDBETWEEN", 2u, 2u, &RandBetween_}),
+      builtins_detail::checks_args_last_first(
+          builtins_detail::analysis_toolpak({"RANDBETWEEN", 2u, 2u, &RandBetween_})),
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }

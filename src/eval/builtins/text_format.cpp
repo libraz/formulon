@@ -489,13 +489,14 @@ Expected<bool, ErrorCode> read_text_format_arg(const Value* args, std::uint32_t 
 // (matching Excel's behaviour where `VALUETOTEXT(#DIV/0!)` returns
 // `#DIV/0!`, not the text "#DIV/0!").
 Value ValueToText_(const Value* args, std::uint32_t arity, Arena& arena) {
-  const Value& v = args[0];
-  if (v.is_error()) {
-    return v;
-  }
+  // The format is read before the value.
   auto format = read_text_format_arg(args, arity);
   if (!format) {
     return Value::error(format.error());
+  }
+  const Value& v = args[0];
+  if (v.is_error()) {
+    return v;
   }
   const bool strict = format.value();
   if (strict && v.is_text()) {
@@ -708,7 +709,7 @@ void register_text_format_builtins(FunctionRegistry& registry) {
   // `find_date_entry` hook (VM), which pass `EvalContext::date1904()` /
   // `EvalContext::wall_clock()` into `text_builtin_impl` / `value_builtin_impl`.
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
-      {"VALUETOTEXT", 1u, 2u, &ValueToText_},
+      builtins_detail::checks_args_last_first({"VALUETOTEXT", 1u, 2u, &ValueToText_}),
       {"ARRAYTOTEXT", 1u, 2u, &ArrayToText_},
       builtins_detail::with_omitted_defaults({"FIXED", 1u, 3u, &Fixed_}, kFixedOmitted),
       {"DOLLAR", 1u, 2u, &Dollar_},

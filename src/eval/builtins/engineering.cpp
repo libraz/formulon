@@ -231,6 +231,13 @@ Value encode_with_places(std::int64_t value, const Value* args, std::uint32_t ar
 // surface #NUM!, matching Excel's behaviour for e.g. HEX2BIN("200").
 Value convert_bases(const Value* args, std::uint32_t arity, Arena& arena, const BaseSpec& src, const BaseSpec& dst,
                     bool allow_places) {
+  // `places` is validated before the number is read.
+  if (allow_places && arity >= 2) {
+    auto places = coerce_places(args[1]);
+    if (!places) {
+      return Value::error(places.error());
+    }
+  }
   auto decoded = decode_source_arg(args[0], src);
   if (!decoded) {
     return Value::error(decoded.error());
@@ -438,43 +445,30 @@ Value BitRShift(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // DELTA / GESTEP
 // ---------------------------------------------------------------------------
 
-// `step_first` coerces the step before the number (DELTA's check order).
-Value compare_with_optional_step(const Value* args, std::uint32_t arity, bool greater_equal, bool step_first) {
+// The step is coerced before the number.
+Value compare_with_optional_step(const Value* args, std::uint32_t arity, bool greater_equal) {
   // DELTA / GESTEP reject a direct Bool with #VALUE! rather than coercing it to 0 / 1.
   double step = 0.0;
-  const auto read_step = [&]() -> Value {
-    if (arity >= 2) {
-      auto sv = builtins_detail::coerce_to_number_no_bool(args[1]);
-      if (!sv) {
-        return Value::error(sv.error());
-      }
-      step = sv.value();
+  if (arity >= 2) {
+    auto sv = builtins_detail::coerce_to_number_no_bool(args[1]);
+    if (!sv) {
+      return Value::error(sv.error());
     }
-    return Value::blank();
-  };
-  if (step_first) {
-    if (const Value err = read_step(); err.is_error()) {
-      return err;
-    }
+    step = sv.value();
   }
   auto a = builtins_detail::coerce_to_number_no_bool(args[0]);
   if (!a) {
     return Value::error(a.error());
   }
-  if (!step_first) {
-    if (const Value err = read_step(); err.is_error()) {
-      return err;
-    }
-  }
   return Value::number((greater_equal ? a.value() >= step : a.value() == step) ? 1.0 : 0.0);
 }
 
 Value Delta(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  return compare_with_optional_step(args, arity, /*greater_equal=*/false, /*step_first=*/true);
+  return compare_with_optional_step(args, arity, /*greater_equal=*/false);
 }
 
 Value Gestep(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  return compare_with_optional_step(args, arity, /*greater_equal=*/true, /*step_first=*/false);
+  return compare_with_optional_step(args, arity, /*greater_equal=*/true);
 }
 
 }  // namespace
@@ -504,14 +498,14 @@ void register_engineering_builtins(FunctionRegistry& registry) {
   // one argument (no `places`); all others accept an optional `places`.
   static constexpr builtins_detail::BuiltinRegistration functions[] = {
       builtins_detail::analysis_toolpak({"BIN2DEC", 1u, 1u, &Bin2Dec}),
-      builtins_detail::analysis_toolpak({"BIN2OCT", 1u, 2u, &Bin2Oct}),
-      builtins_detail::analysis_toolpak({"BIN2HEX", 1u, 2u, &Bin2Hex}),
+      builtins_detail::checks_args_last_first(builtins_detail::analysis_toolpak({"BIN2OCT", 1u, 2u, &Bin2Oct})),
+      builtins_detail::checks_args_last_first(builtins_detail::analysis_toolpak({"BIN2HEX", 1u, 2u, &Bin2Hex})),
       builtins_detail::analysis_toolpak({"OCT2DEC", 1u, 1u, &Oct2Dec}),
-      builtins_detail::analysis_toolpak({"OCT2BIN", 1u, 2u, &Oct2Bin}),
-      builtins_detail::analysis_toolpak({"OCT2HEX", 1u, 2u, &Oct2Hex}),
+      builtins_detail::checks_args_last_first(builtins_detail::analysis_toolpak({"OCT2BIN", 1u, 2u, &Oct2Bin})),
+      builtins_detail::checks_args_last_first(builtins_detail::analysis_toolpak({"OCT2HEX", 1u, 2u, &Oct2Hex})),
       builtins_detail::analysis_toolpak({"HEX2DEC", 1u, 1u, &Hex2Dec}),
-      builtins_detail::analysis_toolpak({"HEX2BIN", 1u, 2u, &Hex2Bin}),
-      builtins_detail::analysis_toolpak({"HEX2OCT", 1u, 2u, &Hex2Oct}),
+      builtins_detail::checks_args_last_first(builtins_detail::analysis_toolpak({"HEX2BIN", 1u, 2u, &Hex2Bin})),
+      builtins_detail::checks_args_last_first(builtins_detail::analysis_toolpak({"HEX2OCT", 1u, 2u, &Hex2Oct})),
       builtins_detail::checks_args_last_first(builtins_detail::analysis_toolpak({"DEC2BIN", 1u, 2u, &Dec2Bin})),
       builtins_detail::checks_args_last_first(builtins_detail::analysis_toolpak({"DEC2OCT", 1u, 2u, &Dec2Oct})),
       builtins_detail::checks_args_last_first(builtins_detail::analysis_toolpak({"DEC2HEX", 1u, 2u, &Dec2Hex})),
@@ -521,7 +515,7 @@ void register_engineering_builtins(FunctionRegistry& registry) {
       {"BITLSHIFT", 2u, 2u, &BitLShift},
       {"BITRSHIFT", 2u, 2u, &BitRShift},
       builtins_detail::checks_args_last_first(builtins_detail::analysis_toolpak({"DELTA", 1u, 2u, &Delta})),
-      builtins_detail::analysis_toolpak({"GESTEP", 1u, 2u, &Gestep}),
+      builtins_detail::checks_args_last_first(builtins_detail::analysis_toolpak({"GESTEP", 1u, 2u, &Gestep})),
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }
