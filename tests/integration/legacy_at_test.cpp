@@ -526,6 +526,42 @@ TEST(LegacyAt, LoadedLegacyIndexAndOffsetReadAsExcelShowsThem) {
   ExpectExcelsFormula2AndValues(kLegacyIndexOffset, true);
 }
 
+// Excel 365 (Mac, ja-JP) opening a legacy workbook with B2:B7 = 1,2,0,0,-1,3 and C2:C7 = -1,0,-2,0,-3,0: an array
+// constant, and an operator over array constants, stays an array, so the criteria pairs are counted element-wise.
+TEST(LegacyAt, LoadedLegacyArrayConstantOperatorsStayArrays) {
+  constexpr LegacyCase kCases[] = {
+      {"=SUM(COUNTIFS(B2:B7,{\">\",\">\",\"=\"}&0,C2:C7,{\"<\",\"=\",\"<\"}&0))",
+       "=SUM(COUNTIFS(B2:B7,{\">\",\">\",\"=\"}&0,C2:C7,{\"<\",\"=\",\"<\"}&0))", "4"},
+      {"=SUM(COUNTIF(B2:B7,{\">0\",\"<0\"}))", "=SUM(COUNTIF(B2:B7,{\">0\",\"<0\"}))", "4"},
+      {"=SUM(ABS({-1,-2}))", "=SUM(ABS({-1,-2}))", "3"},
+      {"=SUM({1,2}*{3,4})", "=SUM({1,2}*{3,4})", "11"},
+      {"=TYPE({1,2}&0)", "=TYPE({1,2}&0)", "64"},
+      {"=SUM(COUNTIFS(B2:B7,\">\"&{0,1}))", "=SUM(COUNTIFS(B2:B7,\">\"&{0,1}))", "5"},
+  };
+  const double b[] = {1, 2, 0, 0, -1, 3};
+  const double c[] = {-1, 0, -2, 0, -3, 0};
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  Sheet& s = wb.sheet(0);
+  for (std::uint32_t r = 0; r < 6U; ++r) {
+    s.set_cell_value(r + 1U, 1U, Value::number(b[r]));
+    s.set_cell_value(r + 1U, 2U, Value::number(c[r]));
+  }
+  constexpr std::uint32_t kCount = sizeof(kCases) / sizeof(kCases[0]);
+  for (std::uint32_t i = 0; i < kCount; ++i) {
+    EXPECT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, i + 1U, 4U, kCases[i].stored)));
+    s.set_cell_dynamic_array(i + 1U, 4U, false);
+  }
+  wb.apply_legacy_implicit_intersections();
+  ASSERT_TRUE(static_cast<bool>(wb.recalc(eval::default_registry())));
+  for (std::uint32_t i = 0; i < kCount; ++i) {
+    const Cell* cell = wb.sheet(0).cell_at(i + 1U, 4U);
+    ASSERT_NE(cell, nullptr) << kCases[i].stored;
+    EXPECT_EQ(cell->formula_text, kCases[i].formula2) << "E" << (i + 2U);
+    EXPECT_EQ(DisplayOf(cell->cached_value), kCases[i].value) << "E" << (i + 2U) << " " << cell->formula_text;
+  }
+}
+
 std::string Decimal(std::uint32_t n) {
   std::ostringstream out;
   out << n;

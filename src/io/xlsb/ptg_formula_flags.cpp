@@ -102,6 +102,30 @@ bool MarksDynamic(Shapes& shapes, const parser::AstNode& node, Slot slot, bool r
   }
 }
 
+/// True when `node` is an array constant, or an operator whose array operands all are (`{">","="}&0`).
+bool IsConstantArray(const parser::AstNode& node) {
+  using parser::NodeKind;
+  bool any = false;
+  switch (node.kind()) {
+    case NodeKind::ArrayLiteral:
+      return true;
+    case NodeKind::UnaryOp:
+      return IsConstantArray(node.as_unary_operand());
+    case NodeKind::BinaryOp:
+      for (std::uint32_t i = 0; i < node.as_binary_arity(); ++i) {
+        const parser::AstNode& operand = node.as_binary_operand(i);
+        if (IsConstantArray(operand)) {
+          any = true;
+        } else if (operand.kind() != NodeKind::Literal || operand.as_literal().is_ref()) {
+          return false;
+        }
+      }
+      return any;
+    default:
+      return false;
+  }
+}
+
 bool IsOneOf(std::string_view name, std::initializer_list<std::string_view> names) {
   return std::any_of(names.begin(), names.end(),
                      [&](std::string_view fn) { return strings::case_insensitive_eq(name, fn); });
@@ -139,12 +163,14 @@ class LegacyIntersections {
     const bool intersects_spread = this->intersects_spread(node, use);
     const Shape shape = intersects_spread ? shapes_.of_unspread(node) : shapes_.of(node);
     bool value_slot = root || SlotClass(slot, shape == Shape::kReference, PtgEvaluation::kLegacy) == kPtgValueClass;
-    if (!root && !slot.operand) {
-      if (node.kind() == parser::NodeKind::ArrayLiteral && (slot.letter == 'I' || (slot.letter == 'V' && array_ok_))) {
-        // An array constant is an array in an `I` parameter (`CHOOSE({1;2},1,2)`), and in a value parameter
-        // where an array is accepted (`SUM(ABS({-1,-2}))`).
-        value_slot = false;
-      } else if (shape == Shape::kArray && node.kind() == parser::NodeKind::Call) {
+    if (!root && IsConstantArray(node) &&
+        (slot.letter == 'I' || slot.letter == 'S' || (slot.letter == 'V' && array_ok_))) {
+      // An array constant, or an operator over array constants, is an array in an `I` or `S` parameter
+      // (`CHOOSE({1;2},1,2)`, `SUM({1,2}*{3,4})`), and in a value parameter where an array is accepted
+      // (`SUM(ABS({-1,-2}))`, `SUM(COUNTIFS(A1:A3,{">","="}&0))`); an operand takes its operator's parameter.
+      value_slot = false;
+    } else if (!root && !slot.operand) {
+      if (shape == Shape::kArray && node.kind() == parser::NodeKind::Call) {
         const std::string_view name = canonical_function_name(node.as_call_name());
         // ROW and COLUMN over several cells give one value to an `S` parameter (`SUM(@ROW(A1:A3))`), and an array
         // a built-in always returns gives one to a reference parameter outside an array context (`N(@SEQUENCE(3))`).
