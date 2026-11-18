@@ -326,6 +326,32 @@ std::optional<ParseFailure> refused_typed_table_reference(std::string_view formu
   return shifted(failure, prefix_units(formula, body));
 }
 
+// The refusal of typed `formula` text naming a chartsheet of `book` as the
+// sheet of a cell reference: Excel stores no formula that reads one.
+std::optional<ParseFailure> refused_chartsheet_reference(std::string_view formula, const Workbook& book) {
+  const std::string_view body = strip_formula_prefix(formula);
+  Arena arena;
+  ParseFailure ignored;
+  const AstNode* root = parse_formula_entry_with_diagnostics(body, arena, &ignored);
+  const AstNode* ref = root != nullptr
+                           ? find_reference_to_sheet(
+                                 *root,
+                                 [](const void* ctx, std::string_view sheet) {
+                                   const Sheet* found = static_cast<const Workbook*>(ctx)->sheet_by_name(sheet);
+                                   return found != nullptr && found->kind() == SheetKind::kChartsheet;
+                                 },
+                                 &book)
+                           : nullptr;
+  if (ref == nullptr) {
+    return std::nullopt;
+  }
+  ParseFailure failure;
+  failure.code = ParseErrorCode::InvalidReference;
+  failure.range = ref->range();
+  failure.message = parser::default_message(failure.code);
+  return shifted(failure, prefix_units(formula, body));
+}
+
 // The refusal of an `ANCHORARRAY` call in typed `formula`, in the coordinates
 // of its body. Run on the text as typed: normalization respells the call as
 // the `#` operator Excel accepts.
@@ -380,6 +406,10 @@ EntryResult enter_outside_cell(const Workbook& book, EnteredCallSpellings& calls
     return EntryResult::kRefused;
   }
   if (const std::optional<ParseFailure> refused = refused_typed_table_reference(formula, book)) {
+    *failure = *refused;
+    return EntryResult::kRefused;
+  }
+  if (const std::optional<ParseFailure> refused = refused_chartsheet_reference(formula, book)) {
     *failure = *refused;
     return EntryResult::kRefused;
   }
@@ -447,6 +477,10 @@ EntryResult enter_cell_formula(const Workbook& book, EnteredCallSpellings& calls
     return EntryResult::kRefused;
   }
   if (const std::optional<ParseFailure> refused = refused_typed_table_reference(formula, book)) {
+    *failure = *refused;
+    return EntryResult::kRefused;
+  }
+  if (const std::optional<ParseFailure> refused = refused_chartsheet_reference(formula, book)) {
     *failure = *refused;
     return EntryResult::kRefused;
   }

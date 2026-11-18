@@ -86,6 +86,12 @@ const parser::AstNode* find_anchor_array_call(const parser::AstNode& root);
 /// entered text only: files carry such names verbatim.
 const parser::AstNode* find_overlong_external_sheet(const parser::AstNode& root);
 
+/// Returns the first cell or spill reference in `root` qualified with a sheet
+/// for which `refused(ctx, sheet)` holds. nullptr when there is none.
+const parser::AstNode* find_reference_to_sheet(const parser::AstNode& root,
+                                               bool (*refused)(const void* ctx, std::string_view sheet),
+                                               const void* ctx);
+
 /// Returns the first structured reference in `root` whose table name opens
 /// with an R1C1 reference spelled with `row_letter` / `col_letter` (a
 /// locale's R1C1 tokens) and for which `is_table(ctx, name)` holds, which

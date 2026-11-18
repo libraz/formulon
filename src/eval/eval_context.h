@@ -366,7 +366,8 @@ class EvalContext {
 
   /// Returns the sheet a reference qualifier names: the current sheet when
   /// `sheet_name` is empty, otherwise the bound workbook's sheet of that
-  /// name. `nullptr` when no workbook is bound or the sheet is missing.
+  /// name. `nullptr` when no workbook is bound or the sheet is missing or a
+  /// chartsheet.
   const Sheet* sheet_for_qualifier(std::string_view sheet_name) const noexcept;
 
   /// Returns the populated content extent of `sheet` inside the rectangle.

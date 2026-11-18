@@ -57,6 +57,13 @@ EvalContext EvalContext::workbook_only(const Workbook& workbook, const Sheet& cu
 
 namespace {
 
+// The sheet of `workbook` a reference qualifier `sheet_name` reaches: a
+// chartsheet holds no cells a reference can read, so it reaches none.
+const Sheet* referenced_sheet(const Workbook& workbook, std::string_view sheet_name) {
+  const Sheet* target = workbook.sheet_by_name(sheet_name);
+  return target != nullptr && target->kind() != SheetKind::kChartsheet ? target : nullptr;
+}
+
 // Resolves the target sheet for a reference given a (possibly empty) sheet
 // name, the bound current sheet, and the bound workbook.
 //
@@ -75,7 +82,7 @@ const Sheet* resolve_target_sheet(std::string_view sheet_name, const Sheet* curr
     *out_err = ErrorCode::Ref;
     return nullptr;
   }
-  const Sheet* target = workbook->sheet_by_name(sheet_name);
+  const Sheet* target = referenced_sheet(*workbook, sheet_name);
   if (target == nullptr) {
     *out_err = ErrorCode::Ref;
     return nullptr;
@@ -148,7 +155,7 @@ const Sheet* EvalContext::sheet_for_qualifier(std::string_view sheet_name) const
   if (workbook_ == nullptr) {
     return nullptr;
   }
-  return workbook_->sheet_by_name(sheet_name);
+  return referenced_sheet(*workbook_, sheet_name);
 }
 
 std::optional<Sheet::PopulatedExtent> EvalContext::populated_extent(const Sheet& sheet, std::uint32_t first_row,

@@ -483,6 +483,10 @@ bool expand_ref3d_cells(const parser::AstNode& node, Arena& arena, const Functio
   // span, so the cross-product (sheets * area cells) flows into the
   // range-aware function.
   for (std::size_t s = lo; s <= hi; ++s) {
+    // A chartsheet inside the span holds no cells.
+    if (wb->sheet(s).kind() == SheetKind::kChartsheet) {
+      continue;
+    }
     const std::string_view sheet_name = wb->sheet(s).name();
     // Each sheet walks through EvalContext, so whole-axis bounds follow the 2-D extent and overlay rules.
     parser::Reference lhs = cell;

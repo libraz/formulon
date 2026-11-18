@@ -947,6 +947,64 @@ TEST(FormulonCApiFormulaEntry, OverlongExternalSheetNameIsRefusedOnEntryButLoads
   EXPECT_EQ(GetFormula(loaded.handle, 0, 1), loaded_text);
 }
 
+// A chartsheet holds no cells: a formula naming one as a reference's sheet is
+// refused when typed, a reference that reaches one is #REF!, and a 3-D span
+// counts it as a tab while it adds nothing to an aggregate.
+TEST(FormulonCApiFormulaEntry, ChartsheetIsNoReferenceTarget) {
+  constexpr fm_status_t kInvalidReference =
+      static_cast<fm_status_t>(formulon::FormulonErrorCode::kParserInvalidReference);
+  constexpr std::int32_t kRef = static_cast<std::int32_t>(formulon::ErrorCode::Ref);
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  for (const char* name : {"Chart1", "Sheet2"}) {
+    ASSERT_EQ(fm_workbook_add_sheet(wb.handle, name, append_position(wb.handle), ignored_index()), 0);
+  }
+  wb.handle->workbook().sheet(1).set_opaque_ooxml_sheet(
+      "xl/chartsheets/sheet1.xml", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chartsheet");
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 1.0), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 2, 0, 0, 2.0), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 1, "=1"), 0);
+  for (const char* refused :
+       {"=Chart1!A1", "=SUM(Chart1!A1:B2)", "=ISREF(Chart1!A1)", "=CELL(\"address\",Chart1!A1)", "=chart1!A1#"}) {
+    SCOPED_TRACE(refused);
+    EXPECT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 1, refused), kInvalidReference);
+    EXPECT_EQ(GetFormula(wb.handle, 0, 1), "=1");
+    EXPECT_EQ(SetDefinedName(wb.handle, "Chart", refused), kInvalidReference);
+  }
+  const fm_cell_rect_t sqref{0, 0, 9, 0};
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, "=Chart1!A1>0", nullptr)), ignored_id()),
+            kInvalidReference);
+
+  const char* const accepted[] = {"=INDIRECT(\"Chart1!A1\")",  "=SHEET(\"Chart1\")",
+                                  "=SHEET(Sheet2!A1)",         "=SHEETS()",
+                                  "=SHEETS(Sheet1:Sheet2!A1)", "=SUM(Sheet1:Sheet2!A1)"};
+  std::uint32_t row = 10;
+  for (const char* formula : accepted) {
+    ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, row++, 1, formula), 0) << formula;
+  }
+  // Excel stores no formula reading a chartsheet; one carried in anyway reads #REF!.
+  ASSERT_TRUE(wb.handle->workbook().set_cell_formula(0, row, 1, "=Chart1!A1"));
+  ASSERT_TRUE(wb.handle->workbook().set_cell_formula(0, row + 1, 1, "=SUM(Chart1!A1:B2)"));
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  const auto value_at = [&](std::uint32_t r) {
+    fm_value_t v{};
+    EXPECT_EQ(fm_sheet_get_value(wb.handle, 0, r, 1, &v), 0);
+    return v;
+  };
+  EXPECT_EQ(value_at(10).kind, FM_VALUE_KIND_ERROR);
+  EXPECT_EQ(value_at(10).u.error_code, kRef);
+  const double counts[] = {2.0, 3.0, 3.0, 3.0, 3.0};
+  for (std::uint32_t i = 0; i < 5U; ++i) {
+    SCOPED_TRACE(accepted[i + 1]);
+    ASSERT_EQ(value_at(11 + i).kind, FM_VALUE_KIND_NUMBER);
+    EXPECT_EQ(value_at(11 + i).u.number, counts[i]);
+  }
+  for (std::uint32_t r = row; r < row + 2U; ++r) {
+    EXPECT_EQ(value_at(r).kind, FM_VALUE_KIND_ERROR);
+    EXPECT_EQ(value_at(r).u.error_code, kRef);
+  }
+}
+
 // `wb` saved as .xlsx: the package bytes and its first worksheet part.
 std::pair<std::vector<std::uint8_t>, std::string> SaveXlsx(fm_workbook_t* wb) {
   std::uint8_t* bytes = nullptr;

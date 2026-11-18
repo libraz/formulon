@@ -256,6 +256,25 @@ const AstNode* find_overlong_external_sheet(const AstNode& root) {
   return hit;
 }
 
+const AstNode* find_reference_to_sheet(const AstNode& root, bool (*refused)(const void* ctx, std::string_view sheet),
+                                       const void* ctx) {
+  const parser::Reference* ref = nullptr;
+  if (root.kind() == NodeKind::Ref) {
+    ref = &root.as_ref();
+  } else if (root.kind() == NodeKind::SpillRef && root.as_spill_ref_anchor_expr() == nullptr) {
+    ref = &root.as_spill_ref();
+  }
+  if (ref != nullptr && !ref->sheet.empty() && refused(ctx, ref->sheet)) {
+    return &root;
+  }
+  const AstNode* hit = nullptr;
+  parser::any_child_node(root, [&](const AstNode& child) {
+    hit = find_reference_to_sheet(child, refused, ctx);
+    return hit != nullptr;
+  });
+  return hit;
+}
+
 const AstNode* find_anchor_array_call(const AstNode& root) {
   if (root.kind() == NodeKind::Call &&
       strings::case_insensitive_eq(parser::strip_storage_prefixes(root.as_call_name()), parser::kAnchorArrayFn)) {

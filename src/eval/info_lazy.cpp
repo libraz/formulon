@@ -547,8 +547,16 @@ Value eval_sheets_lazy(const parser::AstNode& call, Arena& arena, const Function
   }
 
   const parser::AstNode& arg = call.as_call_arg(0);
-  // Reference or range: MVP returns 1 (no 3D references yet). Errors
-  // in the argument subtree still propagate if we evaluate.
+  // A 3-D span counts every tab between its ends, whatever kind of sheet.
+  if (arg.kind() == parser::NodeKind::Ref3D) {
+    const std::size_t first = wb != nullptr ? wb->sheet_index_by_name(arg.as_ref3d_sheet_begin()) : Workbook::kNoSheet;
+    const std::size_t last = wb != nullptr ? wb->sheet_index_by_name(arg.as_ref3d_sheet_end()) : Workbook::kNoSheet;
+    if (first == Workbook::kNoSheet || last == Workbook::kNoSheet) {
+      return Value::error(ErrorCode::Ref);
+    }
+    return Value::number(static_cast<double>((first < last ? last - first : first - last) + 1U));
+  }
+  // A single-sheet reference or range counts one sheet.
   if (arg.kind() == parser::NodeKind::Ref || arg.kind() == parser::NodeKind::RangeOp ||
       arg.kind() == parser::NodeKind::StructuredRef) {
     return Value::number(1.0);

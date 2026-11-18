@@ -127,7 +127,12 @@ class Reader {
                   std::uint32_t* cols, ErrorCode* err) {
     const std::uint16_t first = std::min(a.sheet_first, a.sheet_last);
     const std::uint16_t last = std::max(a.sheet_first, a.sheet_last);
+    const Workbook* wb = ctx_.workbook();
     for (std::uint32_t s = first; s <= last; ++s) {
+      // A chartsheet inside a span holds no cells.
+      if (first != last && book == 0U && wb->sheet(s).kind() == SheetKind::kChartsheet) {
+        continue;
+      }
       if (!sheet_cells(a, static_cast<std::uint16_t>(s), book, out, rows, cols, err)) {
         return false;
       }
