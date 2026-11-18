@@ -8002,10 +8002,10 @@ export interface Sheet {
    *  name `=Sheet!#REF!`), one partly deleted shrinks; a range whose extent along the shift lies inside the deleted
    *  interval and that touches the band on one side shrinks to its part outside the band. Conditional formatting that
    *  ends up as adjacent rectangles of one rule joins into one range. For conditional formatting and validation alike,
-   *  the moved part of a range the edit splits joins each piece of a split range it forms one rectangle with; two
-   *  unmoved parts stay apart, and a validation range that only moved is not joined to another. A merge that only
-   *  partly meets the deleted range is unmerged, and the values of deleted cells are lost. A table or data table lying
-   *  wholly inside the deleted range is removed, as a row or column delete would.
+   *  the moved part of a range the edit splits joins each piece of a split range it forms one rectangle with, and two
+   *  unmoved parts stay apart; a validation range that only moved joins the same way, a conditional formatting one
+   *  joins nothing. A merge that only partly meets the deleted range is unmerged, and the values of deleted cells are
+   *  lost. A table or data table lying wholly inside the deleted range is removed, as a row or column delete would.
    *
    *  `StatusCode.InvalidArgument` for `Down` / `Right`, a shift outside the enum, or a whole-column range with `Up`
    *  (whole-row with `Left`); `StatusCode.PreconditionFailed` for the refusals of `insertCells`, a partial-table

@@ -578,15 +578,14 @@ bool JoinsAsRectangle(const MergeRange& a, const MergeRange& b) noexcept {
 
 // What a piece is to the edit that produced it.
 enum class Piece : std::uint8_t {
-  kWhole,      // A range the edit did not split.
+  kWhole,      // A range the edit leaves where it is, or one that only moved in a `kCf` sqref.
   kRemainder,  // The unmoved part of a split range.
-  kMoved,      // The moved part of a split range.
+  kMoved,      // The moved part of a split range, or a range that only moved in a `kShift` sqref.
 };
 
-// Joins, pairwise until none is left, a moved part of a split range with
-// another split piece when their union is a rectangle; the joined piece is a
-// moved part and takes the earlier one's place. Two remainders never join, and
-// a range that only moved stays apart.
+// Joins, pairwise until none is left, a moved piece with another moved piece
+// or a remainder when their union is a rectangle; the joined piece is a moved
+// piece and takes the earlier one's place. Two remainders never join.
 void JoinSplitPieces(std::vector<MergeRange>& ranges, std::vector<Piece>& kinds) {
   for (std::size_t i = 0; i < ranges.size(); ++i) {
     for (std::size_t j = i + 1U; kinds[i] != Piece::kWhole && j < ranges.size(); ++j) {
@@ -652,7 +651,7 @@ void EditSqrefRanges(std::vector<MergeRange>& ranges, const StructuralEdit& edit
       axial_first = edit.index;
     }
     out.push_back(moving);
-    kinds.push_back(splits_range ? Piece::kMoved : Piece::kWhole);
+    kinds.push_back(splits_range || mode == SqrefMode::kShift ? Piece::kMoved : Piece::kWhole);
   }
   JoinSplitPieces(out, kinds);
   ranges = std::move(out);

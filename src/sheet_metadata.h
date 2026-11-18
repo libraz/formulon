@@ -114,14 +114,16 @@ BandFit band_fit(const MergeRange& rect, const StructuralEdit& edit) noexcept;
 
 /// `shift_sqref_ranges` for `edit`, band or not. Under a band, the part of a
 /// range in the moving region moves and the rest stays, split row by row
-/// around it; an insert inside the range covers the inserted cells. The moved
-/// part of a split range then joins each piece of a split range it makes one
-/// rectangle with; two unmoved parts, and a range that only moved, stay apart.
+/// around it; an insert inside the range covers the inserted cells. A moved
+/// piece -- the moved part of a split range, or a range that only moved -- then
+/// joins each other moved piece or unmoved part of a split range it makes one
+/// rectangle with; two unmoved parts stay apart.
 void shift_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit);
 
-/// `shift_sqref_ranges` for a conditional format's sqref, legacy or x14: a
-/// band delete also joins the ranges it brings together into the one
-/// rectangle they now tile, unless they tiled it before the edit.
+/// `shift_sqref_ranges` for a conditional format's sqref, legacy or x14,
+/// except that a range that only moved joins nothing; a band delete also joins
+/// the ranges it brings together into the one rectangle they now tile, unless
+/// they tiled it before the edit.
 void shift_cf_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit);
 
 /// Moves retained ranges that follow references (protected ranges, sort and
