@@ -1,0 +1,275 @@
+{
+  "suite": "ecma_ceiling",
+  "description": "ECMA.CEILING beside CEILING: values, signs, coercion of text, booleans and blanks, which argument's failure is reported, and the spill over a range argument.\n",
+  "environment": {
+    "excel_version": "16.115",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-11-18T09:52:59Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "ec_pos_pos",
+      "formula": "=ECMA.CEILING(4.3,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "ec_neg_pos",
+      "formula": "=ECMA.CEILING(-4.3,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -4.0
+      }
+    },
+    {
+      "id": "ec_neg_neg",
+      "formula": "=ECMA.CEILING(-4.3,-2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": -6.0
+      }
+    },
+    {
+      "id": "ec_pos_neg",
+      "formula": "=ECMA.CEILING(4.3,-2)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "ec_pos_zero",
+      "formula": "=ECMA.CEILING(4.3,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "ec_zero_zero",
+      "formula": "=ECMA.CEILING(0,0)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "ec_zero_pos",
+      "formula": "=ECMA.CEILING(0,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "ec_fraction_significance",
+      "formula": "=ECMA.CEILING(4.3,2.5)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 5.0
+      }
+    },
+    {
+      "id": "ec_inexact_step",
+      "formula": "=ECMA.CEILING(0.7,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.7000000000000001
+      }
+    },
+    {
+      "id": "ec_large",
+      "formula": "=ECMA.CEILING(1E+307,3E+306)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 1.2e+307
+      }
+    },
+    {
+      "id": "ec_text_number",
+      "formula": "=ECMA.CEILING(\"4.3\",2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
+    },
+    {
+      "id": "ec_bool_number",
+      "formula": "=ECMA.CEILING(TRUE,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "ec_bool_significance",
+      "formula": "=ECMA.CEILING(2,TRUE)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "ec_blank_number",
+      "formula": "=ECMA.CEILING(H3,2)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "ec_blank_significance",
+      "formula": "=ECMA.CEILING(4.3,H3)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "ec_text_cell_then_error",
+      "formula": "=ECMA.CEILING(J1,H1)",
+      "setup": {
+        "J1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ec_error_then_text_cell",
+      "formula": "=ECMA.CEILING(H1,J1)",
+      "setup": {
+        "J1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ec_text_literal_then_error",
+      "formula": "=ECMA.CEILING(\"x\",1/0)",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ec_error_then_text_literal",
+      "formula": "=ECMA.CEILING(1/0,\"x\")",
+      "setup": {},
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ec_range_spill",
+      "formula": "=ECMA.CEILING(K1:K3,2)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 4.3
+        },
+        "K2": {
+          "kind": "number",
+          "value": -4.3
+        },
+        "K3": {
+          "kind": "number",
+          "value": 0.7
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          6.0,
+          -4.0,
+          2.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    },
+    {
+      "id": "ec_ceiling_inexact_step",
+      "formula": "=CEILING(0.7,0.1)",
+      "setup": {},
+      "expect": {
+        "kind": "number",
+        "value": 0.7000000000000001
+      }
+    },
+    {
+      "id": "ec_ceiling_range_spill",
+      "formula": "=CEILING(K1:K3,2)",
+      "setup": {
+        "K1": {
+          "kind": "number",
+          "value": 4.3
+        },
+        "K2": {
+          "kind": "number",
+          "value": -4.3
+        },
+        "K3": {
+          "kind": "number",
+          "value": 0.7
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          6.0,
+          -4.0,
+          2.0
+        ],
+        "shape": [
+          3,
+          1
+        ]
+      }
+    }
+  ]
+}

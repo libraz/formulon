@@ -255,6 +255,7 @@ constexpr RichValueIftabRow kRichValueIftabRows[] = {
     {515U, 0x0003U, 0x0000U, 0U, 0U},  // T.INV
     {516U, 0x0003U, 0x0000U, 0U, 0U},  // T.INV.2T
     {519U, 0x000FU, 0x0000U, 0U, 0U},  // WEIBULL.DIST
+    {522U, 0x0003U, 0x0000U, 0U, 0U},  // ECMA.CEILING
     {523U, 0x0003U, 0x0000U, 0U, 0U},  // ISO.CEILING
     {525U, 0x003FU, 0x0000U, 0U, 0U},  // BETA.DIST
     {526U, 0x001FU, 0x0000U, 0U, 0U},  // BETA.INV
@@ -372,6 +373,7 @@ constexpr char kRichValueIftabNameText[] =
     "DAYS\0"
     "DECIMAL\0"
     "DROP\0"
+    "ECMA.CEILING\0"
     "EXPAND\0"
     "EXPON.DIST\0"
     "F.DIST\0"
@@ -495,89 +497,90 @@ constexpr std::uint16_t kRichValueIftabNameOffsets[] = {
     345U,  // DAYS
     350U,  // DECIMAL
     358U,  // DROP
-    363U,  // EXPAND
-    370U,  // EXPON.DIST
-    381U,  // F.DIST
-    388U,  // F.DIST.RT
-    398U,  // F.INV
-    404U,  // F.INV.RT
-    413U,  // F.TEST
-    420U,  // FLOOR.MATH
-    431U,  // FORECAST.LINEAR
-    447U,  // GAMMA
-    453U,  // GAMMA.DIST
-    464U,  // GAMMA.INV
-    474U,  // GAMMALN.PRECISE
-    490U,  // GAUSS
-    496U,  // GROUPBY
-    504U,  // HYPGEOM.DIST
-    517U,  // ISO.CEILING
-    529U,  // ISOWEEKNUM
-    540U,  // LOGNORM.DIST
-    553U,  // LOGNORM.INV
-    565U,  // MAKEARRAY
-    575U,  // MAP
-    579U,  // MAXIFS
-    586U,  // MINIFS
-    593U,  // MODE.MULT
-    603U,  // MODE.SNGL
-    613U,  // MUNIT
-    619U,  // NEGBINOM.DIST
-    633U,  // NETWORKDAYS.INTL
-    650U,  // NORM.DIST
-    660U,  // NORM.INV
-    669U,  // NORM.S.DIST
-    681U,  // NORM.S.INV
-    692U,  // NUMBERVALUE
-    704U,  // PDURATION
-    714U,  // PERCENTILE.EXC
-    729U,  // PERCENTILE.INC
-    744U,  // PERCENTRANK.EXC
-    760U,  // PERCENTRANK.INC
-    776U,  // PERMUTATIONA
-    789U,  // PHI
-    793U,  // PIVOTBY
-    801U,  // POISSON.DIST
-    814U,  // QUARTILE.EXC
-    827U,  // QUARTILE.INC
-    840U,  // RANK.AVG
-    849U,  // RANK.EQ
-    857U,  // REDUCE
-    864U,  // REGEXEXTRACT
-    877U,  // REGEXREPLACE
-    890U,  // REGEXTEST
-    900U,  // RRI
-    904U,  // SCAN
-    909U,  // SEC
-    913U,  // SECH
-    918U,  // SEQUENCE
-    927U,  // SORT
-    932U,  // SORTBY
-    939U,  // T.DIST
-    946U,  // T.DIST.2T
-    956U,  // T.DIST.RT
-    966U,  // T.INV
-    972U,  // T.INV.2T
-    981U,  // T.TEST
-    988U,  // TAKE
-    993U,  // TEXTAFTER
-    1003U,  // TEXTBEFORE
-    1014U,  // TEXTJOIN
-    1023U,  // TEXTSPLIT
-    1033U,  // TOCOL
-    1039U,  // TOROW
-    1045U,  // TRIMRANGE
-    1055U,  // UNICHAR
-    1063U,  // UNICODE
-    1071U,  // UNIQUE
-    1078U,  // VALUETOTEXT
-    1090U,  // WEIBULL.DIST
-    1103U,  // WORKDAY.INTL
-    1116U,  // WRAPCOLS
-    1125U,  // WRAPROWS
-    1134U,  // XLOOKUP
-    1142U,  // XMATCH
-    1149U,  // Z.TEST
+    363U,  // ECMA.CEILING
+    376U,  // EXPAND
+    383U,  // EXPON.DIST
+    394U,  // F.DIST
+    401U,  // F.DIST.RT
+    411U,  // F.INV
+    417U,  // F.INV.RT
+    426U,  // F.TEST
+    433U,  // FLOOR.MATH
+    444U,  // FORECAST.LINEAR
+    460U,  // GAMMA
+    466U,  // GAMMA.DIST
+    477U,  // GAMMA.INV
+    487U,  // GAMMALN.PRECISE
+    503U,  // GAUSS
+    509U,  // GROUPBY
+    517U,  // HYPGEOM.DIST
+    530U,  // ISO.CEILING
+    542U,  // ISOWEEKNUM
+    553U,  // LOGNORM.DIST
+    566U,  // LOGNORM.INV
+    578U,  // MAKEARRAY
+    588U,  // MAP
+    592U,  // MAXIFS
+    599U,  // MINIFS
+    606U,  // MODE.MULT
+    616U,  // MODE.SNGL
+    626U,  // MUNIT
+    632U,  // NEGBINOM.DIST
+    646U,  // NETWORKDAYS.INTL
+    663U,  // NORM.DIST
+    673U,  // NORM.INV
+    682U,  // NORM.S.DIST
+    694U,  // NORM.S.INV
+    705U,  // NUMBERVALUE
+    717U,  // PDURATION
+    727U,  // PERCENTILE.EXC
+    742U,  // PERCENTILE.INC
+    757U,  // PERCENTRANK.EXC
+    773U,  // PERCENTRANK.INC
+    789U,  // PERMUTATIONA
+    802U,  // PHI
+    806U,  // PIVOTBY
+    814U,  // POISSON.DIST
+    827U,  // QUARTILE.EXC
+    840U,  // QUARTILE.INC
+    853U,  // RANK.AVG
+    862U,  // RANK.EQ
+    870U,  // REDUCE
+    877U,  // REGEXEXTRACT
+    890U,  // REGEXREPLACE
+    903U,  // REGEXTEST
+    913U,  // RRI
+    917U,  // SCAN
+    922U,  // SEC
+    926U,  // SECH
+    931U,  // SEQUENCE
+    940U,  // SORT
+    945U,  // SORTBY
+    952U,  // T.DIST
+    959U,  // T.DIST.2T
+    969U,  // T.DIST.RT
+    979U,  // T.INV
+    985U,  // T.INV.2T
+    994U,  // T.TEST
+    1001U,  // TAKE
+    1006U,  // TEXTAFTER
+    1016U,  // TEXTBEFORE
+    1027U,  // TEXTJOIN
+    1036U,  // TEXTSPLIT
+    1046U,  // TOCOL
+    1052U,  // TOROW
+    1058U,  // TRIMRANGE
+    1068U,  // UNICHAR
+    1076U,  // UNICODE
+    1084U,  // UNIQUE
+    1091U,  // VALUETOTEXT
+    1103U,  // WEIBULL.DIST
+    1116U,  // WORKDAY.INTL
+    1129U,  // WRAPCOLS
+    1138U,  // WRAPROWS
+    1147U,  // XLOOKUP
+    1155U,  // XMATCH
+    1162U,  // Z.TEST
 };
 constexpr std::uint16_t kRichValueIftabNameIds[] = {
     548U,  // ACOT
@@ -619,6 +622,7 @@ constexpr std::uint16_t kRichValueIftabNameIds[] = {
     573U,  // DAYS
     572U,  // DECIMAL
     661U,  // DROP
+    522U,  // ECMA.CEILING
     659U,  // EXPAND
     494U,  // EXPON.DIST
     531U,  // F.DIST

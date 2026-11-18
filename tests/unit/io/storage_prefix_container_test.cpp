@@ -197,6 +197,42 @@ TEST(StoragePrefixContainers, IsoCeilingSurvivesXlsbSaveWithoutDowngrade) {
   EXPECT_EQ(a2->formula_text, "=ISO.CEILING(4.3,1)");
 }
 
+// One workbook Excel saved as both containers: `ECMA.CEILING` is bare in
+// `<f>` and goes through a hidden `_xlfn.` name in `.xlsb`, like ISO.CEILING.
+TEST(StoragePrefixContainers, EcmaCeilingReadsFromBothExcelContainersAndWritesBack) {
+  const std::string dir = std::string(FORMULON_FIXTURES_DIR) + "/excel/";
+  const std::vector<std::uint8_t> xlsx = test::read_file_bytes(dir + "ecma_ceiling_saved.xlsx");
+  ASSERT_FALSE(xlsx.empty());
+  const std::vector<std::uint8_t> xlsb = test::read_file_bytes(dir + "ecma_ceiling_saved.xlsb");
+  ASSERT_FALSE(xlsb.empty());
+  std::string excel_workbook;
+  ASSERT_TRUE(static_cast<bool>(test::extract_part(test::span_of(xlsb), "xl/workbook.bin", &excel_workbook)));
+  EXPECT_TRUE(ContainsUtf16Le(excel_workbook, "_xlfn.ECMA.CEILING"));
+
+  auto from_xlsx = read_ooxml(test::span_of(xlsx));
+  ASSERT_TRUE(static_cast<bool>(from_xlsx)) << from_xlsx.error().message;
+  auto from_xlsb = xlsb::read_xlsb(test::span_of(xlsb));
+  ASSERT_TRUE(static_cast<bool>(from_xlsb)) << from_xlsb.error().message;
+  for (const Workbook* wb : {&from_xlsx.value().workbook, &from_xlsb.value().workbook}) {
+    const Cell* a1 = wb->sheet(0).cell_at(0U, 0U);
+    ASSERT_NE(a1, nullptr);
+    EXPECT_EQ(a1->formula_text, "=ECMA.CEILING(4.3,-2)");
+  }
+
+  auto write_or = xlsb::write_xlsb_with_result(from_xlsx.value().workbook);
+  ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message << " | " << write_or.error().context;
+  EXPECT_EQ(write_or.value().diagnostics.downgraded_formula_count, 0U);
+  std::string written_workbook;
+  ASSERT_TRUE(static_cast<bool>(
+      test::extract_part(test::span_of(write_or.value().bytes), "xl/workbook.bin", &written_workbook)));
+  EXPECT_TRUE(ContainsUtf16Le(written_workbook, "_xlfn.ECMA.CEILING"));
+  auto read_or = xlsb::read_xlsb(test::span_of(write_or.value().bytes));
+  ASSERT_TRUE(static_cast<bool>(read_or)) << read_or.error().message;
+  const Cell* a1 = read_or.value().workbook.sheet(0).cell_at(0U, 0U);
+  ASSERT_NE(a1, nullptr);
+  EXPECT_EQ(a1->formula_text, "=ECMA.CEILING(4.3,-2)");
+}
+
 TEST(StoragePrefixContainers, LocalisedNameResolvesToOneStoredSpelling) {
   // `JIS` is the ja-JP formula-bar spelling of `DBCS`; Excel resolves it
   // at entry and never stores it. Both storage paths therefore consult

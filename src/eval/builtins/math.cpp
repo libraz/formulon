@@ -474,6 +474,7 @@ void register_math_builtins(FunctionRegistry& registry) {
       {"EVEN", 1u, 1u, &Even},
       {"ODD", 1u, 1u, &Odd},
       {"CEILING", 2u, 2u, &Ceiling},
+      {"ECMA.CEILING", 2u, 2u, &Ceiling},
       {"FLOOR", 2u, 2u, &Floor},
       builtins_detail::analysis_toolpak({"MROUND", 2u, 2u, &MRound}),
       builtins_detail::with_omitted_defaults({"CEILING.MATH", 1u, 3u, &CeilingMath}, kRoundingMathOmitted),

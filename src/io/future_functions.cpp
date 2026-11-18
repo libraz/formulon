@@ -72,7 +72,10 @@ constexpr std::string_view kXlfnFunctions =
 /// `NETWORKDAYS.INTL` and `WORKDAY.INTL` are the same case: Excel 365
 /// saves them bare in `<f>`, and its `.xlsb` saves name them
 /// `_xlfn.NETWORKDAYS.INTL` / `_xlfn.WORKDAY.INTL` in `BrtName`.
-constexpr std::string_view kXlsbHiddenNameFunctions = "|ISO.CEILING|NETWORKDAYS.INTL|WORKDAY.INTL|";
+/// So is `ECMA.CEILING`: `<f>ECMA.CEILING(4.3,-2)</f>` in `.xlsx`, and in
+/// `.xlsb` a `BrtName` `_xlfn.ECMA.CEILING` with `PtgName`, `PtgNum`,
+/// `PtgNum`, `PtgFuncVar(cparams=3, id=255)`.
+constexpr std::string_view kXlsbHiddenNameFunctions = "|ECMA.CEILING|ISO.CEILING|NETWORKDAYS.INTL|WORKDAY.INTL|";
 
 /// One localised formula-bar spelling and the name Excel stores for it.
 ///

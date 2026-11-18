@@ -1357,16 +1357,6 @@ entries:
     first_noted: 2026-11-18
     last_verified_excel_version: "16.115"
 
-  # -- Error order: ECMA.CEILING is not registered --
-  - id: ep_ecma_ceiling_0_1
-    applies_to: [mac-365-ja_JP]
-    cause: engine-gap
-    mode: skip-oracle
-    reason: "=ECMA.CEILING(H1,H2): Excel accepts ECMA.CEILING and reports an argument error from it. Formulon does not register the name and answers #NAME?."
-    prefer: excel
-    first_noted: 2026-11-18
-    last_verified_excel_version: "16.115"
-
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a

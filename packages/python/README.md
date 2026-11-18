@@ -15,7 +15,7 @@ Known differences from Excel are listed case by case in [`tests/divergence.yaml`
 
 ## What's inside
 
-- **Formula engine** — 526 Excel function names, 511 implemented locally; dynamic arrays, `LET` / `LAMBDA`, and `REGEX*`. [Coverage](https://formulon.libraz.net/compatibility/formula-coverage)
+- **Formula engine** — 527 Excel function names, 512 implemented locally; dynamic arrays, `LET` / `LAMBDA`, and `REGEX*`. [Coverage](https://formulon.libraz.net/compatibility/formula-coverage)
 - **Workbook I/O** — read, recalculate and write `.xlsx` and `.xlsb`, including styles, conditional formatting, tables, pivot tables, charts and print layout. [File formats](https://formulon.libraz.net/compatibility/file-format-support)
 - **Workbook editing** — cells, sheets, rows and columns, styles, merges, comments, validations, pivot tables, print settings and furigana, through typed `Workbook` and `Sheet` APIs. [API](https://formulon.libraz.net/api/python)
 - **Locale profiles** — 28 Excel behavior profiles across fourteen locales on Mac and Windows hosts. [Locale profiles](https://formulon.libraz.net/compatibility/locale-profiles)

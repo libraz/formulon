@@ -1042,6 +1042,42 @@
   "raw": "<c r=\"E1110\" t=\"e\" vm=\"39\"><f>INT(C5)</f><v>#VALUE!</v></c>"
  },
  {
+  "fn": "ECMA.CEILING",
+  "ftab_or_internal_id": 522,
+  "argpos": 1,
+  "result": "iftab",
+  "iftab": 522,
+  "cm": false,
+  "formula": "=ECMA.CEILING(C5,1)",
+  "stored_formula": "=ECMA.CEILING(C5,1)",
+  "shown": "#VALUE!",
+  "rv": {
+   "errorType": "2",
+   "iftab": "522",
+   "propagated": "1"
+  },
+  "raw": "<c r=\"E10\" t=\"e\" vm=\"2\"><f>ECMA.CEILING(C5,1)</f><v>#VALUE!</v></c>",
+  "id_source": "measured iftab"
+ },
+ {
+  "fn": "ECMA.CEILING",
+  "ftab_or_internal_id": 522,
+  "argpos": 2,
+  "result": "iftab",
+  "iftab": 522,
+  "cm": false,
+  "formula": "=ECMA.CEILING(1,C5)",
+  "stored_formula": "=ECMA.CEILING(1,C5)",
+  "shown": "#VALUE!",
+  "rv": {
+   "errorType": "2",
+   "iftab": "522",
+   "propagated": "1"
+  },
+  "raw": "<c r=\"E30\" t=\"e\" vm=\"2\"><f>ECMA.CEILING(1,C5)</f><v>#VALUE!</v></c>",
+  "id_source": "measured iftab"
+ },
+ {
   "fn": "ISO.CEILING",
   "ftab_or_internal_id": 523,
   "argpos": 1,

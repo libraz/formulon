@@ -295,6 +295,7 @@ constexpr ExpectedArity kExpectedArity[] = {
     {"CEILING", 2U, 2U},
     {"CEILING.MATH", 1U, 3U},
     {"CEILING.PRECISE", 1U, 2U},
+    {"ECMA.CEILING", 2U, 2U},
     {"CELL", 1U, 2U},
     {"CHAR", 1U, 1U},
     {"CHIDIST", 2U, 2U},

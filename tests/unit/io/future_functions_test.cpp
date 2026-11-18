@@ -53,11 +53,12 @@ TEST(ClassifyStoragePrefix, ClassicFunctionsAreNotPrefixed) {
   }
 }
 
-// ISO.CEILING, NETWORKDAYS.INTL and WORKDAY.INTL arrived with Excel 2010 yet
-// Excel stores them bare, so the classification cannot be derived from the
-// introduction date alone. The `.xlsb` encodes all three by hidden name.
+// ECMA.CEILING, ISO.CEILING, NETWORKDAYS.INTL and WORKDAY.INTL arrived with
+// Excel 2010 yet Excel stores them bare, so the classification cannot be
+// derived from the introduction date alone. The `.xlsb` encodes all four by
+// hidden name.
 TEST(ClassifyStoragePrefix, BareExcel2010FunctionsAreNotPrefixed) {
-  for (const char* name : {"ISO.CEILING", "NETWORKDAYS.INTL", "WORKDAY.INTL"}) {
+  for (const char* name : {"ECMA.CEILING", "ISO.CEILING", "NETWORKDAYS.INTL", "WORKDAY.INTL"}) {
     SCOPED_TRACE(name);
     EXPECT_EQ(classify_storage_prefix(name), StoragePrefixKind::None);
     EXPECT_EQ(storage_function_name(name), name);

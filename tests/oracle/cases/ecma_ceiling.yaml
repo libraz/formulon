@@ -1,0 +1,56 @@
+suite: ecma_ceiling
+description: >
+  ECMA.CEILING beside CEILING: values, signs, coercion of text, booleans and
+  blanks, which argument's failure is reported, and the spill over a range
+  argument.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: ec_pos_pos
+    formula: '=ECMA.CEILING(4.3,2)'
+  - id: ec_neg_pos
+    formula: '=ECMA.CEILING(-4.3,2)'
+  - id: ec_neg_neg
+    formula: '=ECMA.CEILING(-4.3,-2)'
+  - id: ec_pos_neg
+    formula: '=ECMA.CEILING(4.3,-2)'
+  - id: ec_pos_zero
+    formula: '=ECMA.CEILING(4.3,0)'
+  - id: ec_zero_zero
+    formula: '=ECMA.CEILING(0,0)'
+  - id: ec_zero_pos
+    formula: '=ECMA.CEILING(0,2)'
+  - id: ec_fraction_significance
+    formula: '=ECMA.CEILING(4.3,2.5)'
+  - id: ec_inexact_step
+    formula: '=ECMA.CEILING(0.7,0.1)'
+  - id: ec_large
+    formula: '=ECMA.CEILING(1E+307,3E+306)'
+  - id: ec_text_number
+    formula: '=ECMA.CEILING("4.3",2)'
+  - id: ec_bool_number
+    formula: '=ECMA.CEILING(TRUE,2)'
+  - id: ec_bool_significance
+    formula: '=ECMA.CEILING(2,TRUE)'
+  - id: ec_blank_number
+    formula: '=ECMA.CEILING(H3,2)'
+  - id: ec_blank_significance
+    formula: '=ECMA.CEILING(4.3,H3)'
+  - id: ec_text_cell_then_error
+    setup: { J1: x, H1: { kind: error, code: '#DIV/0!' } }
+    formula: '=ECMA.CEILING(J1,H1)'
+  - id: ec_error_then_text_cell
+    setup: { J1: x, H1: { kind: error, code: '#DIV/0!' } }
+    formula: '=ECMA.CEILING(H1,J1)'
+  - id: ec_text_literal_then_error
+    formula: '=ECMA.CEILING("x",1/0)'
+  - id: ec_error_then_text_literal
+    formula: '=ECMA.CEILING(1/0,"x")'
+  - id: ec_range_spill
+    setup: { K1: 4.3, K2: -4.3, K3: 0.7 }
+    formula: '=ECMA.CEILING(K1:K3,2)'
+  - id: ec_ceiling_inexact_step
+    formula: '=CEILING(0.7,0.1)'
+  - id: ec_ceiling_range_spill
+    setup: { K1: 4.3, K2: -4.3, K3: 0.7 }
+    formula: '=CEILING(K1:K3,2)'
