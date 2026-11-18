@@ -464,6 +464,13 @@ entries:
     py: SheetProtection
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_protection_t, js: SheetProtection, py: SheetProtection }
+  record.chartsheet_protection:
+    kind: record
+    role: result
+    c: fm_chartsheet_protection_info_t
+    js: ChartsheetProtection
+    py: ChartsheetProtection
+    surfaces: [c, wasm, native, py]
   record.sheet_protection_input:
     kind: record
     role: input
@@ -6055,7 +6062,6 @@ entries:
     py: get_sheet_protection
     surfaces: [c, wasm, native, py]
     was: { c: fm_sheet_get_protection, js: getSheetProtection, py: get_sheet_protection }
-    total: "an unprotected sheet reads as the all-off record"
   sheet_protection.set:
     kind: op
     scope: sheet
@@ -18863,6 +18869,16 @@ entries:
     surfaces: [c, wasm, native]
     exception: "internal: the bindings compose this read with the chart handle into binding.chartsheet_chart"
     internal: true
+    missing: null
+  chartsheet_protection.get:
+    kind: op
+    scope: sheet
+    sheet_kinds: all
+    noun: chartsheet_protection
+    c: fm_sheet_get_chartsheet_protection
+    js: getChartsheetProtection
+    py: get_chartsheet_protection
+    surfaces: [c, wasm, native, py]
     missing: null
   profile_id.get_count:
     kind: op

@@ -99,6 +99,7 @@ from ._workbook import (
     CfValueObject,
     CfValueObjectType,
     ChartInput,
+    ChartsheetProtection,
     Color,
     ColorInput,
     ColorKind,
@@ -400,6 +401,7 @@ SHEET_METHODS = (
     "get_cells_in_range",
     "get_cf_rule",
     "get_chart",
+    "get_chartsheet_protection",
     "get_column_width_pt",
     "get_comment",
     "get_comment_visible",
@@ -3878,7 +3880,10 @@ class Sheet(_NoCopy):
     _PROTECT_TRISTATE = frozenset(("allow_select_locked_cells", "allow_select_unlocked_cells"))
 
     def get_sheet_protection(self) -> Optional[SheetProtection]:
-        """Read the sheet's ``<sheetProtection>`` record, or ``None`` when the sheet is not protected."""
+        """Read the sheet's ``<sheetProtection>`` record, or ``None`` when the sheet is not protected.
+
+        A chartsheet's protection is read by :meth:`get_chartsheet_protection`.
+        """
         sheet = self._index()
         h = self._workbook._require()
         with _ArgScope() as scope:
@@ -3898,6 +3903,39 @@ class Sheet(_NoCopy):
                     flag: S.tristate_flag(d[flag]) if flag in self._PROTECT_TRISTATE else d[flag] != 0
                     for flag in S.SHEET_PROTECTION_ALLOW_FLAGS
                 },
+            )
+
+    def get_chartsheet_protection(self) -> Optional[ChartsheetProtection]:
+        """Read the protection a chartsheet's part states.
+
+        An ``.xlsx`` part states one when it has a ``<sheetProtection>``, even a bare one; an ``.xlsb`` part when
+        its stored flags are not all zero or it carries a hash, so a bare element read from ``.xlsx`` reads
+        ``None`` after an ``.xlsb`` save. The values are those the part stores. A worksheet's protection is read
+        by :meth:`get_sheet_protection`.
+
+        Returns:
+          The :class:`ChartsheetProtection`, or ``None`` on a worksheet or a chartsheet that states none.
+
+        Raises:
+          NotFoundError: when the sheet was removed.
+        """
+        sheet = self._index()
+        h = self._workbook._require()
+        with _ArgScope() as scope:
+            present = scope.out_ptr()
+            ptr = scope.struct(S.CHARTSHEET_PROTECTION)
+            _check(LIB.fm_sheet_get_chartsheet_protection(h, _uint(sheet, "sheet_index", role="sheet"), present, ptr))
+            if not LIB.read_i32(present):
+                return None
+            d = S.CHARTSHEET_PROTECTION.unpack(LIB, ptr)
+            return ChartsheetProtection(
+                algorithm_name=LIB.read_cstr(d["algorithm_name"]) or None,
+                hash_value=LIB.read_cstr(d["hash_value"]) or None,
+                salt_value=LIB.read_cstr(d["salt_value"]) or None,
+                spin_count=d["spin_count"],
+                legacy_password_hash=LIB.read_cstr(d["legacy_password_hash"]) or None,
+                allow_edit_content=d["allow_edit_content"] != 0,
+                allow_edit_objects=d["allow_edit_objects"] != 0,
             )
 
     def set_sheet_protection(self, protection: Union[SheetProtectionInput, SheetProtection, None]) -> None:

@@ -622,6 +622,46 @@ export function registerMetadataLayout(Module, test) {
     }
   });
 
+  test('getChartsheetProtection reads what a chartsheet part states in both containers', () => {
+    const fixture = (name, ext) =>
+      new Uint8Array(readFileSync(new URL(`../fixtures/excel/chartsheet_twins/${name}.${ext}`, import.meta.url)));
+    for (const ext of ['xlsx', 'xlsb']) {
+      const contentsOnly = Module.Workbook.load(fixture('prot_contents_only', ext));
+      const both = Module.Workbook.load(fixture('prot_both_pw_abc', ext));
+      const plain = Module.Workbook.load(fixture('tab_color_rgb_red', ext));
+      try {
+        assert.deepEqual(contentsOnly.getChartsheetProtection(1), {
+          algorithmName: null,
+          hashValue: null,
+          saltValue: null,
+          spinCount: 0,
+          legacyPasswordHash: null,
+          allowEditContent: false,
+          allowEditObjects: true,
+        });
+        const hashed = both.getChartsheetProtection(1);
+        assert.equal(hashed.algorithmName, 'SHA-512');
+        assert.equal(hashed.saltValue, 'BAMwdck9CSCcwdaFLEANaA==');
+        assert.equal(hashed.spinCount, 100000);
+        assert.equal(hashed.allowEditContent, false);
+        assert.equal(hashed.allowEditObjects, false);
+        assert.equal(contentsOnly.getChartsheetProtection(0), null);
+        assert.equal(plain.getChartsheetProtection(1), null);
+        expectFailure(() => plain.getChartsheetProtection(9), StatusCode.SheetIndexOutOfRange);
+      } finally {
+        contentsOnly.delete();
+        both.delete();
+        plain.delete();
+      }
+    }
+    const wb = Module.Workbook.createDefault();
+    try {
+      assert.equal(wb.getChartsheetProtection(0), null);
+    } finally {
+      wb.delete();
+    }
+  });
+
   test('getIterative reads back what setIterative stored', () => {
     const wb = Module.Workbook.createDefault();
     try {

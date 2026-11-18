@@ -5224,7 +5224,8 @@ typedef struct {
  *
  * `*out_present` is `1` when the sheet is protected and `*out` then holds the
  * record; otherwise `*out_present` is `0` and `*out` is zero-filled except
- * `struct_size` (still `FM_STATUS_OK` (0)).
+ * `struct_size` (still `FM_STATUS_OK` (0)). A chartsheet's protection is read by
+ * `fm_sheet_get_chartsheet_protection`.
  *
  * Lifetime: transient.
  *
@@ -10841,11 +10842,11 @@ FM_API fm_status_t fm_sheet_set_visibility(fm_workbook_t* wb, size_t sheet_index
  *
  * Most `fm_sheet_*` calls need a worksheet and return `FM_STATUS_INVALID_ARGUMENT` (2) on any other kind, with a
  * message leading "sheet_index is a <kind>, but this call needs a worksheet". `fm_sheet_get_kind`,
- * `fm_sheet_get_visibility`, `fm_sheet_set_visibility` and `fm_sheet_get_chartsheet_chart` serve every kind. A
- * chartsheet also answers the calls that read its own part (view, tab colour, page setup, margins, header / footer,
- * and its chart and drawing), and the list and count reads of worksheet content answer empty there. A setter for
- * something the part stores succeeds on a chartsheet only when it restates what the getter reports, except
- * `fm_sheet_update_view`.
+ * `fm_sheet_get_visibility`, `fm_sheet_set_visibility`, `fm_sheet_get_chartsheet_chart` and
+ * `fm_sheet_get_chartsheet_protection` serve every kind. A chartsheet also answers the calls that read its own part
+ * (view, tab colour, page setup, margins, header / footer, and its chart and drawing), and the list and count reads of
+ * worksheet content answer empty there. A setter for something the part stores succeeds on a chartsheet only when it
+ * restates what the getter reports, except `fm_sheet_update_view`.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `out_kind` is `NULL`;
@@ -10867,6 +10868,57 @@ FM_API fm_status_t fm_sheet_get_kind(const fm_workbook_t* wb, size_t sheet_index
  */
 FM_API fm_status_t fm_sheet_get_chartsheet_chart(const fm_workbook_t* wb, size_t sheet_index, int32_t* out_present,
                                                  uint32_t* out_object_id);
+
+/**
+ * @brief A chartsheet's protection as its part states it (ECMA-376 `<sheetProtection>` of a `<chartsheet>`).
+ *
+ * Read-only: no call sets it. The password fields are flat, as in `fm_sheet_protection_t`; strings are
+ * NUL-terminated UTF-8 and an absent one is `NULL`, never `""`. They are read-scratch-backed, valid until the
+ * next scratch-backed read on the same workbook handle, or until the handle is destroyed.
+ */
+typedef struct {
+  uint32_t struct_size;
+  /** The name of the hash algorithm that produced `hash_value`; `NULL` when the part states none. */
+  const char* algorithm_name;
+  /** The password hash as base64 text, as stored; `NULL` when the part states none. */
+  const char* hash_value;
+  /** The salt the password hash was computed with, as base64 text, as stored; `NULL` when the part states none. */
+  const char* salt_value;
+  /** The number of hash iterations; 0 when the part states none. */
+  uint32_t spin_count;
+  /** The legacy 16-bit password hash as four hex digits; `NULL` when the part states none. */
+  const char* legacy_password_hash;
+  /** 1 when users may edit the chart sheet's content; 0 when the protection locks it. */
+  int32_t allow_edit_content;
+  /** 1 when users may edit the chart sheet's objects; 0 when the protection locks them. */
+  int32_t allow_edit_objects;
+} fm_chartsheet_protection_info_t;
+
+/**
+ * @brief Reads the protection a chartsheet's part states.
+ *
+ * `*out_present` is `1` when the sheet is a chartsheet whose part states a protection and `*out` then holds
+ * it; otherwise `*out_present` is `0` and `*out` is zero-filled except `struct_size` (still `FM_STATUS_OK` (0)),
+ * as for a worksheet. An .xlsx part states one when it has a `<sheetProtection>`, even a bare one; an .xlsb part
+ * when its BrtCsProtection is not all zero or a hash record accompanies it, so a bare `<sheetProtection/>` read
+ * from .xlsx is absent after an .xlsb save. The values are those the part stores, a legacy password beside a hash
+ * included. A worksheet's protection is read by `fm_sheet_get_sheet_protection`.
+ *
+ * Lifetime: transient.
+ *
+ * @param wb           Workbook handle. Must not be NULL.
+ * @param sheet_index  Sheet index, 0-based.
+ * @param out_present  Set to `1` when the chartsheet states a protection, else `0`.
+ * @param out          Populated on success; its `struct_size` must be set (`FM_STRUCT_INIT`).
+ *
+ * @return `FM_STATUS_OK` (0) on success;
+ *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `out_present` or `out` is `NULL`;
+ *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `out->struct_size` is below the v1 size or larger with a non-zero
+ *         unknown tail.
+ */
+FM_API fm_status_t fm_sheet_get_chartsheet_protection(const fm_workbook_t* wb, size_t sheet_index, int32_t* out_present,
+                                                      fm_chartsheet_protection_info_t* out);
 
 /**
  * @brief Reads the active pane's selection: the active cell and its ranges.

@@ -72,6 +72,7 @@ constexpr const char* kSheetMethods[] = {
     "getChartPreview",
     "getChartProperties",
     "getChartsheetChart",
+    "getChartsheetProtection",
     "getColumnWidthPt",
     "getColumnXfIndex",
     "getComment",

@@ -153,6 +153,32 @@ Napi::Value Workbook::GetChartsheetChart(const Napi::CallbackInfo& info) {
   return OptionalOrNull(env, rc, present, Napi::Number::New(env, object_id));
 }
 
+Napi::Value Workbook::GetChartsheetProtection(const Napi::CallbackInfo& info) {
+  Napi::Env env = info.Env();
+  if (handle_ == nullptr) {
+    return ThrowInvalidHandle(env);
+  }
+  int32_t present = 0;
+  fm_chartsheet_protection_info_t p = FM_STRUCT_INIT(fm_chartsheet_protection_info_t);
+  const fm_status_t rc =
+      fm_sheet_get_chartsheet_protection(handle_, static_cast<std::size_t>(ArgU32(info, 0)), &present, &p);
+  if (rc != 0) {
+    return ThrowStatus(env, rc);
+  }
+  if (present == 0) {
+    return env.Null();
+  }
+  Napi::Object pr = Napi::Object::New(env);
+  pr.Set("algorithmName", JsStringOrNull(env, p.algorithm_name));
+  pr.Set("hashValue", JsStringOrNull(env, p.hash_value));
+  pr.Set("saltValue", JsStringOrNull(env, p.salt_value));
+  pr.Set("spinCount", Napi::Number::New(env, p.spin_count));
+  pr.Set("legacyPasswordHash", JsStringOrNull(env, p.legacy_password_hash));
+  pr.Set("allowEditContent", JsBool(env, p.allow_edit_content));
+  pr.Set("allowEditObjects", JsBool(env, p.allow_edit_objects));
+  return pr;
+}
+
 Napi::Value Workbook::SetVisibility(const Napi::CallbackInfo& info) {
   return InvokeSheetCall(info, &fm_sheet_set_visibility);
 }

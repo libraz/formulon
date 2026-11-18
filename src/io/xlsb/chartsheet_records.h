@@ -69,6 +69,34 @@ std::optional<ChartsheetView> chartsheet_view_from_xml(std::string_view xml);
 /// none or a record overruns the part.
 std::optional<ChartsheetView> chartsheet_view_from_records(ByteSpan part);
 
+/// The protection a chartsheet part states, as stored: `<sheetProtection>`, or BrtCsProtection with an optional
+/// BrtCsProtectionIso. Empty strings and a zero `spin_count` stand for a value the part does not state.
+struct ChartsheetProtection {
+  std::string algorithm_name;
+  /// Base64 text, as `<sheetProtection hashValue>` holds it.
+  std::string hash_value;
+  /// Base64 text, as `<sheetProtection saltValue>` holds it.
+  std::string salt_value;
+  std::uint32_t spin_count = 0;
+  /// The legacy 16-bit password hash as four hex digits.
+  std::string legacy_password_hash;
+  bool content_locked = false;
+  bool objects_locked = false;
+  bool operator==(const ChartsheetProtection& other) const {
+    return algorithm_name == other.algorithm_name && hash_value == other.hash_value && salt_value == other.salt_value &&
+           spin_count == other.spin_count && legacy_password_hash == other.legacy_password_hash &&
+           content_locked == other.content_locked && objects_locked == other.objects_locked;
+  }
+  bool operator!=(const ChartsheetProtection& other) const { return !(*this == other); }
+};
+
+/// The protection of a `<chartsheet>` part; nullopt when it has no `<sheetProtection>` or the part does not parse.
+std::optional<ChartsheetProtection> chartsheet_protection_from_xml(std::string_view xml);
+
+/// The protection of a chartsheet part's BrtCsProtection; nullopt when it has none, it is all zero with no
+/// BrtCsProtectionIso, or a record overruns the part.
+std::optional<ChartsheetProtection> chartsheet_protection_from_records(ByteSpan part);
+
 /// `xml` with its first `<sheetView>` stating `view`: `tabSelected` (left out
 /// when false), `zoomScale` (left out at 100) and `zoomToFit`. Every byte
 /// outside those attributes is kept; a part without a view is returned unchanged.

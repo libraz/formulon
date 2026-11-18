@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -13,10 +14,13 @@
 #include "c_api/parts/common.h"
 #include "c_api/parts/struct_v1_sizes.h"
 #include "drawing/drawing_xml.h"
+#include "io/passthrough_part_index.h"
 #include "io/sqref_text.h"
+#include "io/xlsb/chartsheet_records.h"
 #include "sheet.h"
 #include "utils/a1_ref.h"
 #include "utils/error.h"
+#include "utils/strings.h"
 #include "workbook.h"
 
 using formulon::c_api::parts::check_cell_coord;
@@ -26,12 +30,14 @@ using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_use;
 using formulon::c_api::parts::clear_last_error;
+using formulon::c_api::parts::fresh_read_scratch;
 using formulon::c_api::parts::invalid_argument;
 using formulon::c_api::parts::null_argument;
 using formulon::c_api::parts::patch_op_ok_without_clear;
 using formulon::c_api::parts::refuse_opaque_change;
 using formulon::c_api::parts::set_last_error;
 using formulon::c_api::parts::SheetUse;
+using formulon::c_api::parts::store_cstr;
 
 namespace {
 
@@ -370,6 +376,56 @@ extern "C" fm_status_t fm_sheet_get_chartsheet_chart(const fm_workbook_t* wb, si
     *out_present = 1;
     *out_object_id = parts.value().front().object_id;
   }
+  return 0;
+}
+
+extern "C" fm_status_t fm_sheet_get_chartsheet_protection(const fm_workbook_t* wb, size_t sheet_index,
+                                                          int32_t* out_present, fm_chartsheet_protection_info_t* out) {
+  clear_last_error();
+  if (out_present == nullptr || out == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
+  const std::uint32_t struct_size = out->struct_size;
+  *out = fm_chartsheet_protection_info_t{};
+  out->struct_size = struct_size;
+  *out_present = 0;
+  const formulon::Sheet& sheet = wb->workbook().sheet(sheet_index);
+  if (sheet.kind() != formulon::SheetKind::kChartsheet) {
+    return 0;
+  }
+  const formulon::io::PassthroughPartIndex index(wb->workbook().passthrough_parts());
+  const formulon::PassthroughPart* part = index.find(sheet.opaque_ooxml_part_path());
+  if (part == nullptr) {
+    return 0;
+  }
+  std::optional<formulon::io::xlsb::ChartsheetProtection> stored;
+  if (formulon::strings::ends_with(part->path, ".bin")) {
+    stored = formulon::io::xlsb::chartsheet_protection_from_records(
+        formulon::io::ByteSpan{part->bytes.data(), part->bytes.size()});
+  } else {
+    stored = formulon::io::xlsb::chartsheet_protection_from_xml(
+        std::string_view(reinterpret_cast<const char*>(part->bytes.data()), part->bytes.size()));
+  }
+  if (!stored) {
+    return 0;
+  }
+  // Several strings are live at once, so they share one scratch generation.
+  formulon::c_api::parts::TextStore& store = fresh_read_scratch(wb);
+  const auto text = [&store](const std::string& value) { return value.empty() ? nullptr : store_cstr(store, value); };
+  out->algorithm_name = text(stored->algorithm_name);
+  out->hash_value = text(stored->hash_value);
+  out->salt_value = text(stored->salt_value);
+  out->spin_count = stored->spin_count;
+  out->legacy_password_hash = text(stored->legacy_password_hash);
+  out->allow_edit_content = stored->content_locked ? 0 : 1;
+  out->allow_edit_objects = stored->objects_locked ? 0 : 1;
+  *out_present = 1;
   return 0;
 }
 

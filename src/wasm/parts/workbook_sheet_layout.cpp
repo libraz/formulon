@@ -315,6 +315,27 @@ emscripten::val JsWorkbook::getSheetProtection(uint32_t sheet) const {
   return o;
 }
 
+emscripten::val JsWorkbook::getChartsheetProtection(uint32_t sheet) const {
+  int32_t present = 0;
+  fm_chartsheet_protection_info_t p = FM_STRUCT_INIT(fm_chartsheet_protection_info_t);
+  if (!succeeded(handle_ != nullptr ? fm_sheet_get_chartsheet_protection(handle_, sheet, &present, &p)
+                                    : kBindingInvalidHandle)) {
+    return emscripten::val::undefined();
+  }
+  if (present == 0) {
+    return emscripten::val::null();
+  }
+  emscripten::val o = emscripten::val::object();
+  js_set_cstr_or_null_fields(o, {{"algorithmName", p.algorithm_name},
+                                 {"hashValue", p.hash_value},
+                                 {"saltValue", p.salt_value},
+                                 {"legacyPasswordHash", p.legacy_password_hash}});
+  o.set("spinCount", p.spin_count);
+  o.set("allowEditContent", p.allow_edit_content != 0);
+  o.set("allowEditObjects", p.allow_edit_objects != 0);
+  return o;
+}
+
 // `null` unprotects the sheet; a record protects it with every omitted key at Excel's dialog default.
 void JsWorkbook::setSheetProtection(uint32_t sheet, emscripten::val input) {
   if (handle_ == nullptr) {

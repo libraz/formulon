@@ -11,6 +11,7 @@
 #include <iterator>
 #include <limits>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "c_api/formulon_c.h"
@@ -331,6 +332,227 @@ TEST(FormulonCApiSheetLayout, GetChartsheetChartRefusesBadArguments) {
   EXPECT_EQ(fm_sheet_get_chartsheet_chart(wb.handle, 0, &present, nullptr), FM_STATUS_BINDING_NULL_POINTER);
   EXPECT_EQ(fm_sheet_get_chartsheet_chart(nullptr, 0, &present, &object_id), FM_STATUS_BINDING_NULL_POINTER);
   EXPECT_EQ(fm_sheet_get_chartsheet_chart(wb.handle, 99U, &present, &object_id), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+}
+
+// Loads tests/fixtures/excel/chartsheet_twins/<name>: the worksheet `Sheet1` then a protected chartsheet.
+std::vector<uint8_t> ChartsheetTwinBytes(const std::string& name) {
+  std::string dir = __FILE__;
+  dir = dir.substr(0, dir.find_last_of("/\\"));
+  std::ifstream in(dir + "/../fixtures/excel/chartsheet_twins/" + name, std::ios::binary);
+  EXPECT_TRUE(in.good()) << name;
+  return std::vector<uint8_t>((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+}
+
+void LoadBytes(const std::vector<uint8_t>& bytes, WorkbookGuard* out) {
+  ASSERT_EQ(fm_workbook_load(bytes.data(), bytes.size(), nullptr, &out->handle), 0) << fm_get_last_error_message();
+}
+
+// The chartsheet's protection with its strings copied out of the read scratch.
+struct ProtectionRead {
+  int32_t present = -1;
+  std::string algorithm_name;
+  bool has_algorithm_name = false;
+  std::string hash_value;
+  bool has_hash_value = false;
+  std::string salt_value;
+  bool has_salt_value = false;
+  std::string legacy_password_hash;
+  bool has_legacy_password_hash = false;
+  uint32_t spin_count = 0;
+  int32_t allow_edit_content = -1;
+  int32_t allow_edit_objects = -1;
+  bool operator==(const ProtectionRead& o) const {
+    return present == o.present && algorithm_name == o.algorithm_name && has_algorithm_name == o.has_algorithm_name &&
+           hash_value == o.hash_value && has_hash_value == o.has_hash_value && salt_value == o.salt_value &&
+           has_salt_value == o.has_salt_value && legacy_password_hash == o.legacy_password_hash &&
+           has_legacy_password_hash == o.has_legacy_password_hash && spin_count == o.spin_count &&
+           allow_edit_content == o.allow_edit_content && allow_edit_objects == o.allow_edit_objects;
+  }
+};
+
+ProtectionRead ReadChartsheetProtection(const fm_workbook_t* wb, size_t sheet) {
+  ProtectionRead r;
+  fm_chartsheet_protection_info_t info = FM_STRUCT_INIT(fm_chartsheet_protection_info_t);
+  EXPECT_EQ(fm_sheet_get_chartsheet_protection(wb, sheet, &r.present, &info), 0) << fm_get_last_error_message();
+  const auto copy = [](const char* text, std::string* out, bool* has) {
+    *has = text != nullptr;
+    if (text != nullptr) {
+      *out = text;
+    }
+  };
+  copy(info.algorithm_name, &r.algorithm_name, &r.has_algorithm_name);
+  copy(info.hash_value, &r.hash_value, &r.has_hash_value);
+  copy(info.salt_value, &r.salt_value, &r.has_salt_value);
+  copy(info.legacy_password_hash, &r.legacy_password_hash, &r.has_legacy_password_hash);
+  r.spin_count = info.spin_count;
+  r.allow_edit_content = info.allow_edit_content;
+  r.allow_edit_objects = info.allow_edit_objects;
+  return r;
+}
+
+const formulon::PassthroughPart* ChartsheetPart(const WorkbookGuard& wb) {
+  const std::string& path = wb.handle->wb->sheet(1).opaque_ooxml_part_path();
+  for (const formulon::PassthroughPart& part : wb.handle->wb->passthrough_parts()) {
+    if (part.path == path) {
+      return &part;
+    }
+  }
+  return nullptr;
+}
+
+TEST(FormulonCApiSheetLayout, GetChartsheetProtectionReadsAWorksheetAsAbsent) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_chartsheet_protection_info_t info = FM_STRUCT_INIT(fm_chartsheet_protection_info_t);
+  info.spin_count = 7U;
+  info.allow_edit_content = 1;
+  int32_t present = -1;
+  ASSERT_EQ(fm_sheet_get_chartsheet_protection(wb.handle, 0, &present, &info), 0);
+  EXPECT_EQ(present, 0);
+  EXPECT_EQ(info.struct_size, sizeof(fm_chartsheet_protection_info_t));
+  EXPECT_EQ(info.algorithm_name, nullptr);
+  EXPECT_EQ(info.hash_value, nullptr);
+  EXPECT_EQ(info.salt_value, nullptr);
+  EXPECT_EQ(info.legacy_password_hash, nullptr);
+  EXPECT_EQ(info.spin_count, 0U);
+  EXPECT_EQ(info.allow_edit_content, 0);
+  EXPECT_EQ(info.allow_edit_objects, 0);
+}
+
+TEST(FormulonCApiSheetLayout, GetChartsheetProtectionRefusesBadArguments) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_chartsheet_protection_info_t info = FM_STRUCT_INIT(fm_chartsheet_protection_info_t);
+  int32_t present = -1;
+  EXPECT_EQ(fm_sheet_get_chartsheet_protection(wb.handle, 0, nullptr, &info), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_sheet_get_chartsheet_protection(wb.handle, 0, &present, nullptr), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_sheet_get_chartsheet_protection(nullptr, 0, &present, &info), FM_STATUS_BINDING_NULL_POINTER);
+  EXPECT_EQ(fm_sheet_get_chartsheet_protection(wb.handle, 99U, &present, &info), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
+  info.struct_size = 0;
+  EXPECT_EQ(fm_sheet_get_chartsheet_protection(wb.handle, 0, &present, &info), kInvalidArgument);
+}
+
+TEST(FormulonCApiSheetLayout, GetChartsheetProtectionReadsTheExcelFixturesInBothFormats) {
+  const ProtectionRead contents_only = [] {
+    ProtectionRead r;
+    r.present = 1;
+    r.allow_edit_content = 0;
+    r.allow_edit_objects = 1;
+    return r;
+  }();
+  ProtectionRead hashed;
+  hashed.present = 1;
+  hashed.algorithm_name = "SHA-512";
+  hashed.has_algorithm_name = true;
+  hashed.hash_value = "FEOoOgNU+lu/gQaYkcJsMsJCAdolOUZsju7crdLGfmo6yGCo62jHPQ2LfHdvg+umnjLNWsGZoZgG16ju/+taFQ==";
+  hashed.has_hash_value = true;
+  hashed.salt_value = "BAMwdck9CSCcwdaFLEANaA==";
+  hashed.has_salt_value = true;
+  hashed.spin_count = 100000U;
+  hashed.allow_edit_content = 0;
+  hashed.allow_edit_objects = 0;
+  for (const char* ext : {"xlsx", "xlsb"}) {
+    SCOPED_TRACE(ext);
+    WorkbookGuard only_content;
+    LoadBytes(ChartsheetTwinBytes(std::string("prot_contents_only.") + ext), &only_content);
+    ASSERT_NE(only_content.handle, nullptr);
+    EXPECT_TRUE(ReadChartsheetProtection(only_content.handle, 1) == contents_only);
+    EXPECT_EQ(ReadChartsheetProtection(only_content.handle, 0).present, 0);
+
+    WorkbookGuard both;
+    LoadBytes(ChartsheetTwinBytes(std::string("prot_both_pw_abc.") + ext), &both);
+    ASSERT_NE(both.handle, nullptr);
+    EXPECT_TRUE(ReadChartsheetProtection(both.handle, 1) == hashed);
+  }
+}
+
+TEST(FormulonCApiSheetLayout, GetChartsheetProtectionReadsAChartsheetWithoutOneAsAbsent) {
+  for (const char* ext : {"xlsx", "xlsb"}) {
+    SCOPED_TRACE(ext);
+    WorkbookGuard wb;
+    LoadChartsheetFixture(ext, &wb);
+    ASSERT_NE(wb.handle, nullptr);
+    EXPECT_EQ(ReadChartsheetProtection(wb.handle, 1).present, 0);
+  }
+}
+
+TEST(FormulonCApiSheetLayout, ChartsheetProtectionSurvivesASaveAndReload) {
+  for (const char* fixture : {"prot_contents_only", "prot_both_pw_abc"}) {
+    for (const char* ext : {"xlsx", "xlsb"}) {
+      SCOPED_TRACE(std::string(fixture) + "." + ext);
+      WorkbookGuard source;
+      LoadBytes(ChartsheetTwinBytes(std::string(fixture) + "." + ext), &source);
+      ASSERT_NE(source.handle, nullptr);
+      const ProtectionRead before = ReadChartsheetProtection(source.handle, 1);
+      ASSERT_EQ(before.present, 1);
+      const formulon::PassthroughPart* stored = ChartsheetPart(source);
+      ASSERT_NE(stored, nullptr);
+
+      for (const fm_workbook_format_t format : {FM_WORKBOOK_FORMAT_XLSX, FM_WORKBOOK_FORMAT_XLSB}) {
+        BufferGuard saved;
+        ASSERT_EQ(fm_workbook_save(source.handle, format, &saved.data, &saved.len), 0) << fm_get_last_error_message();
+        WorkbookGuard reloaded;
+        ASSERT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0) << fm_get_last_error_message();
+        EXPECT_TRUE(ReadChartsheetProtection(reloaded.handle, 1) == before) << "format " << format;
+        if ((format == FM_WORKBOOK_FORMAT_XLSX) == (std::string(ext) == "xlsx")) {
+          const formulon::PassthroughPart* kept = ChartsheetPart(reloaded);
+          ASSERT_NE(kept, nullptr);
+          EXPECT_EQ(kept->bytes, stored->bytes);
+        }
+      }
+    }
+  }
+}
+
+// Loads tests/fixtures/chartsheet_protection/<name>: Excel's content-only twin with its `<sheetProtection>` replaced.
+std::vector<uint8_t> AuthoredProtectionBytes(const std::string& name) {
+  std::string dir = __FILE__;
+  dir = dir.substr(0, dir.find_last_of("/\\"));
+  std::ifstream in(dir + "/../fixtures/chartsheet_protection/" + name, std::ios::binary);
+  EXPECT_TRUE(in.good()) << name;
+  return std::vector<uint8_t>((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+}
+
+ProtectionRead ReadAfterXlsbSave(const WorkbookGuard& source) {
+  BufferGuard saved;
+  EXPECT_EQ(fm_workbook_save(source.handle, FM_WORKBOOK_FORMAT_XLSB, &saved.data, &saved.len), 0)
+      << fm_get_last_error_message();
+  WorkbookGuard reloaded;
+  EXPECT_EQ(fm_workbook_load(saved.data, saved.len, nullptr, &reloaded.handle), 0) << fm_get_last_error_message();
+  return reloaded.handle == nullptr ? ProtectionRead{} : ReadChartsheetProtection(reloaded.handle, 1);
+}
+
+TEST(FormulonCApiSheetLayout, GetChartsheetProtectionReadsObjectsOnlyLegacyOnlyAndBareParts) {
+  ProtectionRead objects_only;
+  objects_only.present = 1;
+  objects_only.allow_edit_content = 1;
+  objects_only.allow_edit_objects = 0;
+  ProtectionRead legacy_only;
+  legacy_only.present = 1;
+  legacy_only.legacy_password_hash = "CBEB";
+  legacy_only.has_legacy_password_hash = true;
+  legacy_only.allow_edit_content = 0;
+  legacy_only.allow_edit_objects = 1;
+  ProtectionRead bare;
+  bare.present = 1;
+  bare.allow_edit_content = 1;
+  bare.allow_edit_objects = 1;
+  const std::pair<const char*, ProtectionRead> cases[] = {
+      {"objects_only.xlsx", objects_only}, {"legacy_only.xlsx", legacy_only}, {"bare.xlsx", bare}};
+  for (const auto& [name, expected] : cases) {
+    SCOPED_TRACE(name);
+    WorkbookGuard wb;
+    LoadBytes(AuthoredProtectionBytes(name), &wb);
+    ASSERT_NE(wb.handle, nullptr);
+    EXPECT_TRUE(ReadChartsheetProtection(wb.handle, 1) == expected);
+    // An xlsb part states protection only through set flags or a hash, so a bare element reads absent there.
+    const ProtectionRead via_xlsb = ReadAfterXlsbSave(wb);
+    if (std::string(name) == "bare.xlsx") {
+      EXPECT_EQ(via_xlsb.present, 0);
+    } else {
+      EXPECT_TRUE(via_xlsb == expected);
+    }
+  }
 }
 
 TEST(FormulonCApiSheetLayout, SetVisibilityStatesAllThreeTabStates) {

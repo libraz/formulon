@@ -344,6 +344,8 @@ class JsWorkbook {
   int32_t getKind(uint32_t sheet) const;
   /// The object id of a chartsheet's chart; `null` on any other sheet or a chartsheet without a chart.
   emscripten::val getChartsheetChart(uint32_t sheet) const;
+  /// The protection a chartsheet's part states; `null` on any other sheet or a chartsheet that states none.
+  emscripten::val getChartsheetProtection(uint32_t sheet) const;
   /// The sheet protection record, `null` when the sheet is not protected.
   emscripten::val getSheetProtection(uint32_t sheet) const;
   /// Protects the sheet with the record; `null` unprotects it.

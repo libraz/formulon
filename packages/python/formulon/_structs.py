@@ -96,6 +96,7 @@ RECORD_NAMES = frozenset(
         "fm_chart_series_patch_t",
         "fm_chart_spec_t",
         "fm_chart_unresolved_info_t",
+        "fm_chartsheet_protection_info_t",
         "fm_column_break_t",
         "fm_column_layout_info_t",
         "fm_comment_t",
@@ -479,6 +480,19 @@ SHEET_PROTECTION = Struct(
         ("legacy_password_hash", PTR),
     ]
     + [(name, I32) for name in SHEET_PROTECTION_ALLOW_FLAGS],
+)
+
+CHARTSHEET_PROTECTION = Struct(
+    "fm_chartsheet_protection_info_t",
+    [
+        ("algorithm_name", PTR),
+        ("hash_value", PTR),
+        ("salt_value", PTR),
+        ("spin_count", U32),
+        ("legacy_password_hash", PTR),
+        ("allow_edit_content", I32),
+        ("allow_edit_objects", I32),
+    ],
 )
 
 SHEET_PROTECTION_PATCH = Struct(

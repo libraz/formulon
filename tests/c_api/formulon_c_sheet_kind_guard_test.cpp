@@ -189,8 +189,8 @@ TEST(FormulonCApiSheetKindGuard, OnlyTheSheetIdentityCallsServeEveryKind) {
       served.insert(entry.name);
     }
   }
-  const std::set<std::string> expected = {"fm_sheet_get_chartsheet_chart", "fm_sheet_get_kind",
-                                          "fm_sheet_get_visibility", "fm_sheet_set_visibility"};
+  const std::set<std::string> expected = {"fm_sheet_get_chartsheet_chart", "fm_sheet_get_chartsheet_protection",
+                                          "fm_sheet_get_kind", "fm_sheet_get_visibility", "fm_sheet_set_visibility"};
   EXPECT_EQ(served, expected);
 }
 

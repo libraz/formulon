@@ -300,6 +300,53 @@ std::optional<std::vector<std::uint8_t>> cs_page_setup_record(const pugi::xml_no
   return payload;
 }
 
+// The hash fields of a BrtCsProtectionIso payload (spin count, content and objects flags, hash, salt, algorithm
+// name); nullopt when it is truncated.
+struct IsoHash {
+  std::uint32_t spin_count = 0;
+  std::string hash;
+  std::string salt;
+  std::string algorithm;
+};
+
+std::optional<IsoHash> parse_protection_iso(ByteSpan iso) {
+  ByteSpan p = iso;
+  auto spin = read_u32(p);
+  auto iso_content = read_u32(p);
+  auto iso_objects = read_u32(p);
+  auto hash_size = read_u32(p);
+  if (!spin || !iso_content || !iso_objects || !hash_size || hash_size.value() > p.size) {
+    return std::nullopt;
+  }
+  IsoHash out;
+  out.spin_count = spin.value();
+  out.hash = base64_encode(p.data, hash_size.value());
+  p.data += hash_size.value();
+  p.size -= hash_size.value();
+  auto salt_size = read_u32(p);
+  if (!salt_size || salt_size.value() > p.size) {
+    return std::nullopt;
+  }
+  out.salt = base64_encode(p.data, salt_size.value());
+  p.data += salt_size.value();
+  p.size -= salt_size.value();
+  auto algorithm = read_xlwidestring(p);
+  if (!algorithm || p.size != 0U) {
+    return std::nullopt;
+  }
+  out.algorithm = std::move(algorithm.value());
+  return out;
+}
+
+// A legacy password hash as the four hex digits `<sheetProtection password>` holds.
+std::string legacy_password_text(std::uint16_t password) {
+  std::string text;
+  for (int shift = 12; shift >= 0; shift -= 4) {
+    text.push_back(kHexDigits[(password >> shift) & 0x0FU]);
+  }
+  return text;
+}
+
 // `<sheetProtection>` of BrtCsProtection and an optional BrtCsProtectionIso; empty when unprotected, nullopt for
 // a state whose XML is not measured (a legacy password beside a hash).
 std::optional<std::string> protection_xml(ByteSpan legacy, ByteSpan iso) {
@@ -314,39 +361,17 @@ std::optional<std::string> protection_xml(ByteSpan legacy, ByteSpan iso) {
     if (iso.size > 0U) {
       return std::nullopt;
     }
-    xml.append(" password=\"");
-    for (int shift = 12; shift >= 0; shift -= 4) {
-      xml.push_back(kHexDigits[(password >> shift) & 0x0FU]);
-    }
-    xml.push_back('"');
+    xml.append(" password=\"").append(legacy_password_text(password)).push_back('"');
   }
   if (iso.size > 0U) {
-    ByteSpan p = iso;
-    auto spin = read_u32(p);
-    auto iso_content = read_u32(p);
-    auto iso_objects = read_u32(p);
-    auto hash_size = read_u32(p);
-    if (!spin || !iso_content || !iso_objects || !hash_size || hash_size.value() > p.size) {
+    const std::optional<IsoHash> hash = parse_protection_iso(iso);
+    if (!hash) {
       return std::nullopt;
     }
-    const std::string hash = base64_encode(p.data, hash_size.value());
-    p.data += hash_size.value();
-    p.size -= hash_size.value();
-    auto salt_size = read_u32(p);
-    if (!salt_size || salt_size.value() > p.size) {
-      return std::nullopt;
-    }
-    const std::string salt = base64_encode(p.data, salt_size.value());
-    p.data += salt_size.value();
-    p.size -= salt_size.value();
-    auto algorithm = read_xlwidestring(p);
-    if (!algorithm || p.size != 0U) {
-      return std::nullopt;
-    }
-    append_xml_attr(xml, "algorithmName", algorithm.value());
-    append_xml_attr(xml, "hashValue", hash);
-    append_xml_attr(xml, "saltValue", salt);
-    append_xml_attr_uint(xml, "spinCount", spin.value());
+    append_xml_attr(xml, "algorithmName", hash->algorithm);
+    append_xml_attr(xml, "hashValue", hash->hash);
+    append_xml_attr(xml, "saltValue", hash->salt);
+    append_xml_attr_uint(xml, "spinCount", hash->spin_count);
   }
   if (!content && !objects && xml.empty()) {
     return std::string();
@@ -550,6 +575,71 @@ std::optional<ChartsheetView> chartsheet_view_from_records(ByteSpan part) {
   view.zoom_to_fit = (flags & kCsViewZoomToFit) != 0U;
   view.zoom_scale = valid_zoom(load_u32(record->data + 2));
   return view;
+}
+
+std::optional<ChartsheetProtection> chartsheet_protection_from_xml(std::string_view xml) {
+  pugi::xml_document doc;
+  if (!doc.load_buffer(xml.data(), xml.size())) {
+    return std::nullopt;
+  }
+  const pugi::xml_node root = doc.document_element();
+  if (local_name(root) != "chartsheet") {
+    return std::nullopt;
+  }
+  for (const pugi::xml_node child : root.children()) {
+    if (child.type() != pugi::node_element || local_name(child) != "sheetProtection") {
+      continue;
+    }
+    ChartsheetProtection out;
+    out.algorithm_name = child.attribute("algorithmName").value();
+    out.hash_value = child.attribute("hashValue").value();
+    out.salt_value = child.attribute("saltValue").value();
+    out.spin_count = child.attribute("spinCount").as_uint();
+    out.legacy_password_hash = child.attribute("password").value();
+    out.content_locked = child.attribute("content").as_bool();
+    out.objects_locked = child.attribute("objects").as_bool();
+    return out;
+  }
+  return std::nullopt;
+}
+
+std::optional<ChartsheetProtection> chartsheet_protection_from_records(ByteSpan part) {
+  std::optional<ByteSpan> legacy;
+  std::optional<ByteSpan> iso;
+  ByteSpan cursor = part;
+  while (cursor.size > 0) {
+    Expected<XlsbRecord, Error> rec = read_record(cursor);
+    if (!rec) {
+      return std::nullopt;
+    }
+    if (rec.value().type == kBrtCsProtectionIso) {
+      iso = rec.value().payload;
+    } else if (rec.value().type == kBrtCsProtection && rec.value().payload.size == kCsProtectionBytes) {
+      legacy = rec.value().payload;
+      break;
+    }
+  }
+  if (!legacy) {
+    return std::nullopt;
+  }
+  const std::uint16_t password = load_u16(legacy->data);
+  ChartsheetProtection out;
+  out.content_locked = load_u32(legacy->data + 2) != 0U;
+  out.objects_locked = load_u32(legacy->data + 6) != 0U;
+  if (password != 0U) {
+    out.legacy_password_hash = legacy_password_text(password);
+  }
+  if (iso && iso->size > 0U) {
+    if (const std::optional<IsoHash> hash = parse_protection_iso(*iso)) {
+      out.algorithm_name = hash->algorithm;
+      out.hash_value = hash->hash;
+      out.salt_value = hash->salt;
+      out.spin_count = hash->spin_count;
+    }
+  } else if (password == 0U && !out.content_locked && !out.objects_locked) {
+    return std::nullopt;
+  }
+  return out;
 }
 
 std::string chartsheet_xml_with_view(std::string_view xml, ChartsheetView view) {

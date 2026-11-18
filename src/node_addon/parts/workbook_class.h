@@ -416,6 +416,7 @@ class Workbook : public Napi::ObjectWrap<Workbook> {
   Napi::Value GetVisibility(const Napi::CallbackInfo& info);
   Napi::Value GetKind(const Napi::CallbackInfo& info);
   Napi::Value GetChartsheetChart(const Napi::CallbackInfo& info);
+  Napi::Value GetChartsheetProtection(const Napi::CallbackInfo& info);
   Napi::Value SetVisibility(const Napi::CallbackInfo& info);
   Napi::Value GetSheetProtection(const Napi::CallbackInfo& info);
   Napi::Value SetSheetProtection(const Napi::CallbackInfo& info);

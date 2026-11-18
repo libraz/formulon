@@ -651,6 +651,7 @@ Napi::Function Workbook::GetClass(Napi::Env env) {
           GuardedInstanceMethod<&Workbook::GetVisibility, 0x1ULL>("getVisibility"),
           GuardedInstanceMethod<&Workbook::GetKind, 0x1ULL>("getKind"),
           GuardedInstanceMethod<&Workbook::GetChartsheetChart, 0x1ULL>("getChartsheetChart"),
+          GuardedInstanceMethod<&Workbook::GetChartsheetProtection, 0x1ULL>("getChartsheetProtection"),
           GuardedInstanceMethod<&Workbook::SetVisibility, 0x1ULL, 0x2ULL>("setVisibility"),
           GuardedInstanceMethod<&Workbook::PivotCacheRecordGetValue, 0x7ULL>("getPivotCacheRecordValue"),
           GuardedInstanceMethod<&Workbook::ListThemeScriptFonts, 0x0ULL, 0x1ULL>("listThemeScriptFonts"),

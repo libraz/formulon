@@ -2350,6 +2350,29 @@ export interface SheetProtection {
   readonly allowPivotTables: boolean;
 }
 
+/**
+ * Protection a chartsheet's part states (`<sheetProtection>` of a `<chartsheet>`, ECMA-376 §18.3.1.85), as
+ * `Sheet.getChartsheetProtection()` returns it. Read-only: no call sets it. An `.xlsx` part states one when it has a
+ * `<sheetProtection>`, even a bare one; an `.xlsb` part when its stored flags are not all zero or it carries a hash,
+ * so a bare element read from `.xlsx` reads `null` after an `.xlsb` save. The values are those the part stores.
+ */
+export interface ChartsheetProtection {
+  /** The name of the hash algorithm that produced `hashValue`; `null` when the part states none. */
+  readonly algorithmName: string | null;
+  /** The password hash as base64 text, as stored; `null` when the part states none. */
+  readonly hashValue: string | null;
+  /** The salt the password hash was computed with, as base64 text, as stored; `null` when the part states none. */
+  readonly saltValue: string | null;
+  /** The number of hash iterations; 0 when the part states none. */
+  readonly spinCount: number;
+  /** The legacy 16-bit password hash as four hex digits; `null` when the part states none. */
+  readonly legacyPasswordHash: string | null;
+  /** `true` when users may edit the chart sheet's content; `false` when the protection locks it. */
+  readonly allowEditContent: boolean;
+  /** `true` when users may edit the chart sheet's objects; `false` when the protection locks them. */
+  readonly allowEditObjects: boolean;
+}
+
 /** Argument of `Sheet.setSheetProtection`: the whole protection of a protected sheet. Every key is optional and an
  *  omitted `allow*` flag takes Excel's dialog default. The record `Sheet.getSheetProtection()` returns is accepted as
  *  is. A hash, salt or algorithm string that is omitted or `null` is absent; an empty one fails with
@@ -8305,8 +8328,8 @@ export interface Sheet {
    *  kept. */
   setSelection(selection: SheetSelectionInput): void;
 
-  /** Reads the sheet's protection; `null` when the sheet is not protected. The returned object is independent
-   *  of the workbook's storage. */
+  /** Reads the sheet's protection; `null` when the sheet is not protected. A chartsheet's protection is read by
+   *  {@link Sheet.getChartsheetProtection}. The returned object is independent of the workbook's storage. */
   getSheetProtection(): SheetProtection | null;
   /** Protects the sheet with `protection`, replacing any protection it has (an omitted key takes its
    *  {@link SheetProtectionInput} default), or with `null` unprotects it (doing nothing when it is not
@@ -8315,6 +8338,10 @@ export interface Sheet {
   /** Merges `patch` into the sheet's protection. On an unprotected sheet the patch applies to the
    *  {@link SheetProtectionInput} defaults and protects the sheet, unless every key is omitted. */
   updateSheetProtection(patch: SheetProtectionPatch): void;
+  /** Reads the protection a chartsheet's part states; `null` on a worksheet or a chartsheet that states none. A
+   *  worksheet's protection is read by {@link Sheet.getSheetProtection}. The returned object is independent of the
+   *  workbook's storage. */
+  getChartsheetProtection(): ChartsheetProtection | null;
 
   /** Returns the column-layout overrides on the sheet in storage order. */
   listColumnOverrides(): readonly ColumnLayout[];

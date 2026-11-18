@@ -4349,6 +4349,32 @@ class WorkbookLocationInput:
 
 
 @dataclass(frozen=True)
+class ChartsheetProtection:
+    """The protection a chartsheet's part states (:meth:`Sheet.get_chartsheet_protection`).
+
+    Read-only: no call sets it. An ``.xlsx`` part states one when it has a ``<sheetProtection>``, even a bare one;
+    an ``.xlsb`` part when its stored flags are not all zero or it carries a hash, so a bare element read from
+    ``.xlsx`` reads ``None`` after an ``.xlsb`` save. The values are those the part stores. A text field the part
+    does not state is ``None``.
+    """
+
+    #: The name of the hash algorithm that produced ``hash_value``; ``None`` when the part states none.
+    algorithm_name: Optional[str] = None
+    #: The password hash as base64 text, as stored; ``None`` when the part states none.
+    hash_value: Optional[str] = None
+    #: The salt the password hash was computed with, as base64 text, as stored; ``None`` when the part states none.
+    salt_value: Optional[str] = None
+    #: The number of hash iterations; 0 when the part states none.
+    spin_count: int = 0
+    #: The legacy 16-bit password hash as four hex digits; ``None`` when the part states none.
+    legacy_password_hash: Optional[str] = None
+    #: ``True`` when users may edit the chart sheet's content; ``False`` when the protection locks it.
+    allow_edit_content: bool = False
+    #: ``True`` when users may edit the chart sheet's objects; ``False`` when the protection locks them.
+    allow_edit_objects: bool = False
+
+
+@dataclass(frozen=True)
 class SheetProtection:
     """The protection of a protected sheet (:meth:`Sheet.get_sheet_protection`).
 

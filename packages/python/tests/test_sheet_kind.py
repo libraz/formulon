@@ -6,7 +6,16 @@ import unittest
 from enum import IntEnum
 from pathlib import Path
 
-from formulon import InvalidArgumentError, NotFoundError, SheetKind, SheetVisibility, Workbook
+from formulon import (
+    ChartsheetProtection,
+    InvalidArgumentError,
+    NotFoundError,
+    SheetKind,
+    SheetProtectionInput,
+    SheetVisibility,
+    Workbook,
+    WorkbookFormat,
+)
 
 _FIXTURES = Path(__file__).resolve().parents[3] / "tests/fixtures/excel/chartsheet_twins"
 
@@ -68,6 +77,67 @@ class SheetKindTests(unittest.TestCase):
                 _ = added.kind
             with self.assertRaises(NotFoundError):
                 added.get_chart()
+
+
+class ChartsheetProtectionTests(unittest.TestCase):
+    def test_reads_what_a_chartsheet_part_states(self) -> None:
+        for ext in ("xlsx", "xlsb"):
+            contents_bytes = (_FIXTURES / f"prot_contents_only.{ext}").read_bytes()
+            both_bytes = (_FIXTURES / f"prot_both_pw_abc.{ext}").read_bytes()
+            with (
+                self.subTest(ext=ext),
+                Workbook.load(contents_bytes) as contents_only,
+                Workbook.load(both_bytes) as both,
+                Workbook.load(_fixture(ext)) as plain,
+            ):
+                self.assertEqual(
+                    contents_only.sheet(1).get_chartsheet_protection(),
+                    ChartsheetProtection(allow_edit_content=False, allow_edit_objects=True),
+                )
+                hashed = both.sheet(1).get_chartsheet_protection()
+                assert hashed is not None
+                self.assertEqual(hashed.algorithm_name, "SHA-512")
+                self.assertEqual(hashed.salt_value, "BAMwdck9CSCcwdaFLEANaA==")
+                self.assertEqual(hashed.spin_count, 100000)
+                self.assertIsNone(hashed.legacy_password_hash)
+                self.assertFalse(hashed.allow_edit_content)
+                self.assertFalse(hashed.allow_edit_objects)
+                # A worksheet, and a chartsheet that states none, read None.
+                self.assertIsNone(contents_only.sheet(0).get_chartsheet_protection())
+                self.assertIsNone(plain.sheet(1).get_chartsheet_protection())
+                # A chartsheet refuses the worksheet protection calls, and the record is not their input.
+                with self.assertRaises(InvalidArgumentError):
+                    contents_only.sheet(1).get_sheet_protection()
+                with self.assertRaises(TypeError):
+                    plain.sheet(0).set_sheet_protection(hashed)  # type: ignore[arg-type]
+
+    def test_a_worksheet_reads_none_and_a_removed_sheet_raises(self) -> None:
+        with Workbook.create_default() as wb:
+            added = wb.add_sheet("Second")
+            self.assertIsNone(wb.sheet(0).get_chartsheet_protection())
+            added.set_sheet_protection(SheetProtectionInput())
+            self.assertIsNone(added.get_chartsheet_protection())
+            wb.remove_sheet(added)
+            with self.assertRaises(NotFoundError):
+                added.get_chartsheet_protection()
+
+    def test_reads_objects_only_legacy_only_and_bare_parts(self) -> None:
+        authored = Path(__file__).resolve().parents[3] / "tests/fixtures/chartsheet_protection"
+        cases = (
+            ("objects_only", ChartsheetProtection(allow_edit_content=True, allow_edit_objects=False), True),
+            (
+                "legacy_only",
+                ChartsheetProtection(legacy_password_hash="CBEB", allow_edit_content=False, allow_edit_objects=True),
+                True,
+            ),
+            # An xlsb part states protection only through set flags or a hash, so a bare element reads None there.
+            ("bare", ChartsheetProtection(allow_edit_content=True, allow_edit_objects=True), False),
+        )
+        for name, expected, survives_xlsb in cases:
+            with self.subTest(name=name), Workbook.load((authored / f"{name}.xlsx").read_bytes()) as wb:
+                self.assertEqual(wb.sheet(1).get_chartsheet_protection(), expected)
+                with Workbook.load(wb.save(format=WorkbookFormat.XLSB)) as reloaded:
+                    self.assertEqual(reloaded.sheet(1).get_chartsheet_protection(), expected if survives_xlsb else None)
 
 
 if __name__ == "__main__":

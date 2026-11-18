@@ -40,6 +40,7 @@ class StructLayoutTests(unittest.TestCase):
         "DATA_VALIDATION_PATCH": 120,
         "CF_RULE_PATCH": 472,
         "SHEET_PROTECTION": 84,
+        "CHARTSHEET_PROTECTION": 32,
         "SHEET_PROTECTION_PATCH": 164,
         "WORKBOOK_PROTECTION": 56,
         "WORKBOOK_LOCATION": 12,

@@ -116,3 +116,100 @@ for (const ext of ['xlsx', 'xlsb']) {
     }
   });
 }
+
+function protectedFixture(name, ext) {
+  return new Uint8Array(readFileSync(path.join(fixtureDir, `${name}.${ext}`)));
+}
+
+const hashedProtection = {
+  algorithmName: 'SHA-512',
+  hashValue: 'FEOoOgNU+lu/gQaYkcJsMsJCAdolOUZsju7crdLGfmo6yGCo62jHPQ2LfHdvg+umnjLNWsGZoZgG16ju/+taFQ==',
+  saltValue: 'BAMwdck9CSCcwdaFLEANaA==',
+  spinCount: 100000,
+  legacyPasswordHash: null,
+  allowEditContent: false,
+  allowEditObjects: false,
+};
+
+for (const ext of ['xlsx', 'xlsb']) {
+  test(`getChartsheetProtection reads what a chartsheet's part states (${ext})`, async () => {
+    const f = await getModule();
+    const contentsOnly = f.Workbook.load(protectedFixture('prot_contents_only', ext));
+    const both = f.Workbook.load(protectedFixture('prot_both_pw_abc', ext));
+    const plain = f.Workbook.load(fixture(ext));
+    try {
+      assert.deepEqual(contentsOnly.sheet(1).getChartsheetProtection(), {
+        algorithmName: null,
+        hashValue: null,
+        saltValue: null,
+        spinCount: 0,
+        legacyPasswordHash: null,
+        allowEditContent: false,
+        allowEditObjects: true,
+      });
+      assert.deepEqual(both.sheet(1).getChartsheetProtection(), hashedProtection);
+      // A worksheet, and a chartsheet that states none, read null.
+      assert.equal(contentsOnly.sheet(0).getChartsheetProtection(), null);
+      assert.equal(plain.sheet(1).getChartsheetProtection(), null);
+      // A worksheet's protection is read by getSheetProtection, which a chartsheet refuses.
+      assert.throws(
+        () => contentsOnly.sheet(1).getSheetProtection(),
+        (e) => isFormulonError(e, f.StatusCode.InvalidArgument),
+      );
+      assert.throws(
+        () => contentsOnly.sheet(1).setSheetProtection(null),
+        (e) => isFormulonError(e, f.StatusCode.InvalidArgument),
+      );
+      // The record is not a SheetProtectionInput.
+      assert.throws(() => plain.sheet(0).setSheetProtection(both.sheet(1).getChartsheetProtection()), TypeError);
+    } finally {
+      contentsOnly.dispose();
+      both.dispose();
+      plain.dispose();
+    }
+  });
+}
+
+test('getChartsheetProtection reads a worksheet as null and refuses a removed sheet', async () => {
+  const f = await getModule();
+  const wb = f.Workbook.createDefault();
+  try {
+    const added = wb.addSheet('Second');
+    assert.equal(wb.sheet(0).getChartsheetProtection(), null);
+    added.setSheetProtection({});
+    assert.equal(added.getChartsheetProtection(), null);
+    wb.removeSheet(added);
+    assert.throws(
+      () => added.getChartsheetProtection(),
+      (e) => isFormulonError(e, f.StatusCode.NotFound),
+    );
+  } finally {
+    wb.dispose();
+  }
+});
+
+const authoredDir = path.join(repoRoot, 'tests', 'fixtures', 'chartsheet_protection');
+const unlocked = { algorithmName: null, hashValue: null, saltValue: null, spinCount: 0, legacyPasswordHash: null };
+
+test('getChartsheetProtection reads objects-only, legacy-only and bare parts, and the bare one reads null after an xlsb save', async () => {
+  const f = await getModule();
+  const cases = [
+    ['objects_only', { ...unlocked, allowEditContent: true, allowEditObjects: false }, true],
+    ['legacy_only', { ...unlocked, legacyPasswordHash: 'CBEB', allowEditContent: false, allowEditObjects: true }, true],
+    ['bare', { ...unlocked, allowEditContent: true, allowEditObjects: true }, false],
+  ];
+  for (const [name, expected, survivesXlsb] of cases) {
+    const wb = f.Workbook.load(new Uint8Array(readFileSync(path.join(authoredDir, `${name}.xlsx`))));
+    try {
+      assert.deepEqual(wb.sheet(1).getChartsheetProtection(), expected, name);
+      const reloaded = f.Workbook.load(wb.save(f.WorkbookFormat.Xlsb));
+      try {
+        assert.deepEqual(reloaded.sheet(1).getChartsheetProtection(), survivesXlsb ? expected : null, name);
+      } finally {
+        reloaded.dispose();
+      }
+    } finally {
+      wb.dispose();
+    }
+  }
+});
