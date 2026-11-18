@@ -159,10 +159,12 @@ std::vector<const ExternalLinkRecord*> written_external_links(const Workbook& wb
   // An OLE or DDE link is no supporting workbook; a formula naming one
   // keeps its cached value.
   std::vector<const ExternalLinkRecord*> links = wb.external_links_by_index(/*skip_ole_dde=*/true);
-  const std::uint32_t last = last_written_external_link(wb);
-  links.erase(
-      std::remove_if(links.begin(), links.end(), [last](const ExternalLinkRecord* r) { return r->index > last; }),
-      links.end());
+  const std::vector<std::uint32_t> kept = written_external_link_indices(wb);
+  links.erase(std::remove_if(links.begin(), links.end(),
+                             [&kept](const ExternalLinkRecord* r) {
+                               return !std::binary_search(kept.begin(), kept.end(), r->index);
+                             }),
+              links.end());
   return links;
 }
 

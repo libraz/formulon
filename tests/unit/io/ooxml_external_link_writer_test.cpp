@@ -833,9 +833,11 @@ TEST(OoxmlExternalLinkWriter, ExtensionlessBookScopeNameIsStoredWithItsLinkOrdin
   second.book.cells[ExternalBook::cell_key(0, 0, 0)].value = Value::number(7.0);
   wb.set_external_links({first, second});
   SetFormula(wb, 0, 0, "='Src2'!Total");
+  // The first link is referenced too, so the second keeps ordinal 2.
+  SetFormula(wb, 1, 0, "=[Book.xlsx]Data!A1");
 
   const std::vector<std::uint8_t> pkg = Save(wb);
-  EXPECT_EQ(FormulaTexts(Part(pkg, "xl/worksheets/sheet1.xml")), (std::vector<std::string>{"[2]!Total"}));
+  EXPECT_EQ(FormulaTexts(Part(pkg, "xl/worksheets/sheet1.xml")), (std::vector<std::string>{"[2]!Total", "[1]Data!A1"}));
   Workbook reloaded = Load(pkg);
   EXPECT_EQ(FormulaAt(reloaded, 0, 0, 0), "='Src2'!Total");
   const Value value = ValueAt(reloaded, 0, 0, 0);

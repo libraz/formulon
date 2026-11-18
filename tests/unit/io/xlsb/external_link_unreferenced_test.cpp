@@ -1,6 +1,7 @@
-// Excel's save drops the trailing external links nothing references, in both formats; a link that is
-// referenced, or that precedes a referenced one, stays. The model keeps every link.
+// Excel's save drops every external link nothing references and renumbers the rest densely, in both formats;
+// a link a verbatim holder names, and every link before it, stays. The model keeps every link.
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <string>
@@ -8,6 +9,7 @@
 #include <vector>
 
 #include "cf/cf_types.h"
+#include "defined_name.h"
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "external_link.h"
@@ -35,6 +37,9 @@ namespace io {
 namespace xlsb {
 namespace {
 
+constexpr std::uint16_t kBeginExternals = 353;
+constexpr std::uint16_t kEndExternals = 354;
+constexpr std::uint16_t kExternSheet = 362;
 constexpr std::uint16_t kSupBookSrc = 355;
 
 std::vector<std::uint8_t> FixtureBytes(const std::string& name) {
@@ -192,14 +197,14 @@ void ExpectBothFormatsWrite(const Workbook& wb, std::size_t links) {
   EXPECT_EQ(SupBookCount(SaveXlsb(wb)), links);
 }
 
-TEST(ExternalLinkUnreferenced, AReferenceFromAnyHolderKeepsTheLinkBeforeIt) {
+TEST(ExternalLinkUnreferenced, EachHolderKeepsTheLinkItNames) {
   Workbook cell = HostBook(2);
   AddCellRef(cell, 2);
-  ExpectBothFormatsWrite(cell, 2U);
+  ExpectBothFormatsWrite(cell, 1U);
 
   Workbook name = HostBook(2);
   ASSERT_TRUE(static_cast<bool>(name.set_defined_name("Ext", "=" + Ref(2))));
-  ExpectBothFormatsWrite(name, 2U);
+  ExpectBothFormatsWrite(name, 1U);
 
   Workbook rule_book = HostBook(2);
   cf::ConditionalFormat format;
@@ -209,7 +214,7 @@ TEST(ExternalLinkUnreferenced, AReferenceFromAnyHolderKeepsTheLinkBeforeIt) {
   rule.formula1 = Ref(2) + ">0";
   format.rules.push_back(rule);
   rule_book.sheet(0).mutable_conditional_formats().push_back(format);
-  ExpectBothFormatsWrite(rule_book, 2U);
+  ExpectBothFormatsWrite(rule_book, 1U);
 
   Workbook validation_book = HostBook(2);
   DataValidation validation;
@@ -217,8 +222,9 @@ TEST(ExternalLinkUnreferenced, AReferenceFromAnyHolderKeepsTheLinkBeforeIt) {
   validation.type = 1;
   validation.formula1 = Ref(2);
   validation_book.sheet(0).mutable_validations().push_back(validation);
-  ExpectBothFormatsWrite(validation_book, 2U);
+  ExpectBothFormatsWrite(validation_book, 1U);
 
+  // A chart writes `[2]` as stored, so the link before it cannot be dropped.
   Workbook chart = HostBook(2);
   const std::string xml = "<c:chartSpace><c:f>[2]Sheet1!$A$1</c:f></c:chartSpace>";
   chart.set_passthrough_parts(
@@ -227,21 +233,162 @@ TEST(ExternalLinkUnreferenced, AReferenceFromAnyHolderKeepsTheLinkBeforeIt) {
   ExpectBothFormatsWrite(chart, 2U);
 }
 
-TEST(ExternalLinkUnreferenced, AnUnreferencedLinkBeforeAReferencedOneStays) {
+TEST(ExternalLinkUnreferenced, AnUnreferencedLinkBetweenReferencedOnesIsDroppedAndTheRestRenumbered) {
   Workbook wb = HostBook(3);
   AddCellRef(wb, 1);
   AddCellRef(wb, 3);
-  ExpectBothFormatsWrite(wb, 3U);
+  ExpectBothFormatsWrite(wb, 2U);
+  EXPECT_EQ(written_external_link_indices(wb), (std::vector<std::uint32_t>{1U, 3U}));
+  const std::string sheet = Entry(SaveXlsx(wb), "xl/worksheets/sheet1.xml");
+  EXPECT_NE(sheet.find("<f>[2]Sheet1!A1</f>"), std::string::npos) << sheet;
+  EXPECT_EQ(sheet.find("[3]"), std::string::npos) << sheet;
 }
 
-TEST(ExternalLinkUnreferenced, ATrailingOleLinkIsKept) {
-  Workbook wb = HostBook(2);
-  AddCellRef(wb, 1);
-  EXPECT_EQ(last_written_external_link(wb), 1U);
+TEST(ExternalLinkUnreferenced, AnOleLinkKeepsEveryLinkBeforeIt) {
+  Workbook wb = HostBook(3);
+  AddCellRef(wb, 3);
+  EXPECT_EQ(written_external_link_indices(wb), (std::vector<std::uint32_t>{3U}));
   std::vector<ExternalLinkRecord> links = wb.external_links();
   links[1].kind = ExternalLinkRecord::Kind::kOleLink;
   wb.set_external_links(std::move(links));
-  EXPECT_EQ(last_written_external_link(wb), 2U);
+  EXPECT_EQ(written_external_link_indices(wb), (std::vector<std::uint32_t>{1U, 2U, 3U}));
+}
+
+// Excel's saves of one book (sources S1..S3, cells A1..A3 each naming one) after each edit. The nameonly save is
+// the input: A1 names S1, A3 names S3, and the name KeepTwo names S2.
+Workbook LoadNameOnly() {
+  auto read_or = read_ooxml(SpanOf(FixtureBytes("extlink_gap_nameonly_excel.xlsx")));
+  EXPECT_TRUE(static_cast<bool>(read_or));
+  return read_or ? std::move(read_or.value().workbook) : Workbook::create_empty();
+}
+
+// `book`'s defined names with `name` removed.
+void RemoveName(Workbook& book, const std::string& name) {
+  std::vector<DefinedName> names = book.defined_names();
+  names.erase(std::remove_if(names.begin(), names.end(), [&name](const DefinedName& n) { return n.name == name; }),
+              names.end());
+  book.set_defined_names(std::move(names));
+}
+
+// The externals block of `xl/workbook.bin` (BrtBeginExternals .. BrtEndExternals), as record type and payload.
+std::vector<std::pair<std::uint16_t, std::string>> ExternalsBlock(const std::vector<std::uint8_t>& xlsb) {
+  const std::string stream = Entry(xlsb, "xl/workbook.bin");
+  ByteSpan cursor{reinterpret_cast<const std::uint8_t*>(stream.data()), stream.size()};
+  std::vector<std::pair<std::uint16_t, std::string>> out;
+  bool inside = false;
+  while (cursor.size > 0U) {
+    auto rec = read_record(cursor);
+    if (!rec) {
+      ADD_FAILURE() << rec.error().message;
+      break;
+    }
+    inside = inside || rec.value().type == kBeginExternals;
+    if (inside) {
+      out.emplace_back(rec.value().type,
+                       std::string(reinterpret_cast<const char*>(rec.value().payload.data), rec.value().payload.size));
+    }
+    if (rec.value().type == kEndExternals) {
+      break;
+    }
+  }
+  return out;
+}
+
+// The `<f>` texts, defined names and link targets of an xlsx package, the parts a renumbering moves together.
+std::string XlsxLinkView(const std::vector<std::uint8_t>& xlsx) {
+  std::string out;
+  const auto collect = [&out](const std::string& text, const std::string& open, const std::string& close) {
+    for (std::size_t at = text.find(open); at != std::string::npos; at = text.find(open, at + 1U)) {
+      const std::size_t end = text.find(close, at);
+      out.append(text, at, end == std::string::npos ? std::string::npos : end + close.size() - at);
+      out.push_back('\n');
+    }
+  };
+  collect(Entry(xlsx, "xl/worksheets/sheet1.xml"), "<f>", "</f>");
+  collect(Entry(xlsx, "xl/workbook.xml"), "<definedName ", "</definedName>");
+  for (const char* k : {"1", "2", "3", "4"}) {
+    const std::string rels =
+        Entry(xlsx, (std::string("xl/externalLinks/_rels/externalLink") + k + ".xml.rels").c_str());
+    if (rels.empty()) {
+      continue;
+    }
+    out.append(std::string("part ") + k + "\n");
+    collect(rels, "Target=\"", "\"");
+  }
+  return out;
+}
+
+// `block` with its BrtExternSheet entries sorted: the renumbering decides which SupBook each entry names, not the
+// order the entries are listed in.
+std::vector<std::pair<std::uint16_t, std::string>> WithSortedXtis(
+    std::vector<std::pair<std::uint16_t, std::string>> block) {
+  constexpr std::size_t kXtiBytes = 12U;
+  for (auto& [type, payload] : block) {
+    if (type != kExternSheet || payload.size() < 4U) {
+      continue;
+    }
+    std::vector<std::string> entries;
+    for (std::size_t at = 4U; at + kXtiBytes <= payload.size(); at += kXtiBytes) {
+      entries.push_back(payload.substr(at, kXtiBytes));
+    }
+    std::sort(entries.begin(), entries.end());
+    std::string sorted = payload.substr(0U, 4U);
+    for (const std::string& entry : entries) {
+      sorted += entry;
+    }
+    payload = sorted;
+  }
+  return block;
+}
+
+void ExpectSavesLike(const Workbook& wb, const std::string& excel_stem) {
+  const std::vector<std::uint8_t> excel_xlsx = FixtureBytes(excel_stem + ".xlsx");
+  EXPECT_EQ(XlsxLinkView(SaveXlsx(wb)), XlsxLinkView(excel_xlsx)) << excel_stem;
+  EXPECT_EQ(WithSortedXtis(ExternalsBlock(SaveXlsb(wb))),
+            WithSortedXtis(ExternalsBlock(FixtureBytes(excel_stem + ".xlsb"))))
+      << excel_stem;
+}
+
+TEST(ExternalLinkUnreferenced, ALinkOnlyANameReferencesIsKept) {
+  ExpectSavesLike(LoadNameOnly(), "extlink_gap_nameonly_excel");
+}
+
+TEST(ExternalLinkUnreferenced, AMiddleLinkNothingReferencesIsDroppedAsExcelDoes) {
+  Workbook wb = LoadNameOnly();
+  RemoveName(wb, "KeepTwo");
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("N", "=[S3.xlsx]S!$A$1")));
+  ExpectSavesLike(wb, "extlink_gap_mid_excel");
+  EXPECT_EQ(wb.external_links().size(), 3U);
+}
+
+TEST(ExternalLinkUnreferenced, ALeadingLinkNothingReferencesIsDroppedAsExcelDoes) {
+  Workbook wb = LoadNameOnly();
+  RemoveName(wb, "KeepTwo");
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("N", "=[S3.xlsx]S!$A$1")));
+  wb.sheet(0).erase_cell(0U, 0U);
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 1U, 0U, "=[S2.xlsx]S!A1")));
+  ExpectSavesLike(wb, "extlink_gap_lead_excel");
+}
+
+TEST(ExternalLinkUnreferenced, ASaveLeavesTheModelSoALaterSaveWritesTheLinkAgain) {
+  Workbook wb = LoadNameOnly();
+  RemoveName(wb, "KeepTwo");
+  ASSERT_TRUE(static_cast<bool>(wb.set_defined_name("N", "=[S3.xlsx]S!$A$1")));
+  ExpectBothFormatsWrite(wb, 2U);
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 1U, 0U, "=[S2.xlsx]S!A1")));
+  ExpectBothFormatsWrite(wb, 3U);
+  const std::string sheet = Entry(SaveXlsx(wb), "xl/worksheets/sheet1.xml");
+  EXPECT_NE(sheet.find("<f>[2]S!A1</f>"), std::string::npos) << sheet;
+  EXPECT_NE(sheet.find("<f>[3]S!A1</f>"), std::string::npos) << sheet;
+
+  // A dropped link's cached values survive in the model and read back after a reload of the later save.
+  auto reread = read_ooxml(SpanOf(SaveXlsx(wb)));
+  ASSERT_TRUE(static_cast<bool>(reread));
+  Workbook& back = reread.value().workbook;
+  ASSERT_TRUE(static_cast<bool>(back.recalc_full(eval::default_registry())));
+  const Cell* a2 = back.sheet(0).cell_at(1U, 0U);
+  ASSERT_NE(a2, nullptr);
+  EXPECT_EQ(a2->cached_value, Value::number(22.0));
 }
 
 }  // namespace

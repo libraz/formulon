@@ -5,7 +5,7 @@
 // `external_link_reader.cpp` decodes, reproduced byte for byte against
 // Excel-written parts.
 //
-// Every workbook link record up to the last one anything references is
+// Every workbook link record a save keeps (`written_external_link_indices`) is
 // written, in `ExternalLinkRecord::index` order (OLE and DDE links are not), and its
 // 1-based position in that order is the `<N>` of its part and the position
 // of its `BrtSupBookSrc` in `xl/workbook.bin`. Record indices may have gaps;

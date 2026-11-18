@@ -19,6 +19,7 @@
 #include "sheet.h"
 #include "utils/arena.h"
 #include "utils/formula_text.h"
+#include "utils/index_sort.h"
 #include "utils/strings.h"
 #include "workbook.h"
 
@@ -30,20 +31,28 @@ namespace {
 // @limit: engine
 constexpr std::size_t kMaxIndexDigits = 9;
 
-/// Tracks the highest referenced link index, stopping once every link is used.
+/// Collects the links a save keeps: those a rewritten holder references, and every link up to the highest index a
+/// verbatim holder names.
 class LinkUse {
  public:
-  LinkUse(const Workbook& wb, std::uint32_t last) : wb_(wb), last_(last), indexer_(wb.external_book_indexer()) {}
+  LinkUse(const Workbook& wb, std::uint32_t last)
+      : wb_(wb), last_(last), referenced_(last + 1U, false), indexer_(wb.external_book_indexer()) {}
 
-  bool done() const noexcept { return kept_ == last_; }
-  std::uint32_t kept() const noexcept { return kept_; }
-  void mark(std::uint32_t index) noexcept {
-    if (index > kept_ && index <= last_) {
-      kept_ = index;
+  /// True once every link is kept whatever else is found.
+  bool done() const noexcept { return verbatim_max_ == last_; }
+
+  void mark(std::uint32_t index) {
+    if (index != 0U && index <= last_) {
+      referenced_[index] = true;
+    }
+  }
+  void mark_verbatim(std::uint32_t index) noexcept {
+    if (index > verbatim_max_ && index <= last_) {
+      verbatim_max_ = index;
     }
   }
 
-  /// Marks every `[n]` in `text` whose `n` names a link.
+  /// Marks, as verbatim, every `[n]` in `text` whose `n` names a link.
   void scan_raw(std::string_view text) {
     for (std::size_t at = text.find('['); at != std::string_view::npos && !done(); at = text.find('[', at + 1U)) {
       std::size_t end = at + 1U;
@@ -53,13 +62,14 @@ class LinkUse {
         ++end;
       }
       if (end > at + 1U && end < text.size() && text[end] == ']' && has_link(n)) {
-        mark(n);
+        mark_verbatim(n);
       }
     }
   }
 
-  /// Parses `text` as a formula or name body and marks the links its references name.
-  void scan_formula(std::string_view text) {
+  /// Parses `text` as a formula or name body and marks the links its references name, as verbatim when the writer
+  /// copies `text` unchanged.
+  void scan_formula(std::string_view text, bool verbatim) {
     text = strip_formula_prefix(text);
     if (done() || text.find_first_of("[!") == std::string_view::npos) {
       return;
@@ -70,32 +80,50 @@ class LinkUse {
     const parser::AstNode* root = parser.parse();
     if (root == nullptr || !parser.errors().empty()) {
       // Text the scan cannot read may name any link.
-      mark(last_);
+      mark_verbatim(last_);
       return;
     }
+    const auto use = [this, verbatim](std::uint32_t index) {
+      if (verbatim) {
+        mark_verbatim(index);
+      } else {
+        mark(index);
+      }
+    };
     std::vector<const parser::AstNode*> pending{root};
-    while (!pending.empty() && !done()) {
+    while (!pending.empty()) {
       const parser::AstNode* node = pending.back();
       pending.pop_back();
       if (node->kind() == parser::NodeKind::ExternalRef) {
         if (!parser::is_self_book_name_ref(*node)) {
-          mark(indexer_.index(indexer_.ctx, node->as_external_ref_path(), node->as_external_ref_book()));
+          use(indexer_.index(indexer_.ctx, node->as_external_ref_path(), node->as_external_ref_book()));
         }
         continue;
       }
       if (node->kind() == parser::NodeKind::ErrorLiteral) {
         const parser::RefErrorSite* site = node->as_ref_error_site();
         if (site != nullptr && site->form == parser::RefErrorSite::Form::kExternal) {
-          mark(indexer_.index(indexer_.ctx, site->path, site->book));
+          use(indexer_.index(indexer_.ctx, site->path, site->book));
           continue;
         }
       }
       if (node->kind() == parser::NodeKind::NameRef && !node->as_name_sheet().empty()) {
-        mark(indexer_.qualifier_index(indexer_.ctx, node->as_name_sheet()));
+        use(indexer_.qualifier_index(indexer_.ctx, node->as_name_sheet()));
       }
       const std::vector<const parser::AstNode*> children = parser::child_nodes(*node);
       pending.insert(pending.end(), children.rbegin(), children.rend());
     }
+  }
+
+  std::vector<std::uint32_t> kept() const {
+    std::vector<std::uint32_t> out;
+    for (const ExternalLinkRecord& rec : wb_.external_links()) {
+      if (rec.index <= verbatim_max_ || referenced_[rec.index]) {
+        out.push_back(rec.index);
+      }
+    }
+    sort_ascending(out);
+    return out;
   }
 
  private:
@@ -106,7 +134,8 @@ class LinkUse {
 
   const Workbook& wb_;
   std::uint32_t last_;
-  std::uint32_t kept_ = 0;
+  std::uint32_t verbatim_max_ = 0;
+  std::vector<bool> referenced_;
   parser::ExternalBookIndexer indexer_;
 };
 
@@ -116,27 +145,28 @@ bool IsXmlPartPath(const std::string& path) {
 
 }  // namespace
 
-std::uint32_t last_written_external_link(const Workbook& wb) {
+std::vector<std::uint32_t> written_external_link_indices(const Workbook& wb) {
   std::uint32_t last = 0;
   for (const ExternalLinkRecord& rec : wb.external_links()) {
     last = std::max(last, rec.index);
   }
   if (last == 0U) {
-    return 0U;
+    return {};
   }
   LinkUse use(wb, last);
   // An OLE or DDE link's references live in raw `<oleObjects>` XML nothing parses.
   for (const ExternalLinkRecord& rec : wb.external_links()) {
     if (rec.kind == ExternalLinkRecord::Kind::kOleLink || rec.kind == ExternalLinkRecord::Kind::kDdeLink) {
-      use.mark(rec.index);
+      use.mark_verbatim(rec.index);
     }
   }
   // A binary macro or dialog sheet's formulas cannot be read.
   for (std::size_t i = 0; i < wb.sheet_count() && !use.done(); ++i) {
     if (strings::ends_with(wb.sheet(i).opaque_ooxml_part_path(), ".bin")) {
-      use.mark(last);
+      use.mark_verbatim(last);
     }
   }
+  // A retained xlsb sheet tail names links by index, which the xlsb writer maps to positions.
   for (std::size_t i = 0; i < wb.sheet_count() && !use.done(); ++i) {
     for (const XlsbExternSheetEntry& entry : wb.sheet(i).xlsb_tail().extern_sheets) {
       use.mark(entry.external_book);
@@ -163,16 +193,17 @@ std::uint32_t last_written_external_link(const Workbook& wb) {
     }
     use.scan_raw(std::string_view(reinterpret_cast<const char*>(part.bytes.data()), part.bytes.size()));
   }
+  // An xlsx save writes table formulas as stored.
+  ForEachTableFormula(wb, [&use](std::string_view text, std::size_t) { use.scan_formula(text, /*verbatim=*/true); });
   for (std::size_t i = 0; i < wb.sheet_count() && !use.done(); ++i) {
     ForEachSheetFormula(wb.sheet(i), [&use](std::string_view text, SheetFormulaSite) {
       if (!text.empty()) {
-        use.scan_formula(text);
+        use.scan_formula(text, /*verbatim=*/false);
       }
     });
   }
-  ForEachTableFormula(wb, [&use](std::string_view text, std::size_t) { use.scan_formula(text); });
   for (const DefinedName& name : wb.defined_names()) {
-    use.scan_formula(name.formula);
+    use.scan_formula(name.formula, /*verbatim=*/false);
   }
   return use.kept();
 }

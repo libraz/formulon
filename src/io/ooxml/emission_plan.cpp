@@ -312,20 +312,31 @@ bool GainsRefreshMark(const ExternalBook& book) {
 /// matches is kept; an OLE / DDE link without one cannot be rebuilt and is
 /// not written; every other link gets a generated body, at its own `.xml`
 /// path or else at the smallest `externalLink<k>.xml` no record or loaded
-/// part uses. A trailing link nothing references is not planned; its loaded
-/// part and rels go into `dropped_paths`.
+/// part uses. A link the save drops (`written_external_link_indices`) is not
+/// planned, and each link after it takes `externalLink<k>.xml` for its new
+/// position `k`, rebuilt there when it was loaded elsewhere. Every
+/// loaded part and rels left behind goes into `dropped_paths`.
 void PlanExternalLinks(const Workbook& wb, const std::vector<const PassthroughPart*>& source_parts,
                        const PassthroughPathIndex& source_index, std::size_t first_rid, EmissionPlan& plan,
                        std::unordered_set<std::string>& dropped_paths) {
-  const std::uint32_t last_written = last_written_external_link(wb);
+  const std::vector<std::uint32_t> kept = written_external_link_indices(wb);
   std::vector<const ExternalLinkRecord*> records = wb.external_links_by_index(/*skip_ole_dde=*/false);
   const auto first_dropped = std::stable_partition(
-      records.begin(), records.end(), [last_written](const ExternalLinkRecord* r) { return r->index <= last_written; });
+      records.begin(), records.end(),
+      [&kept](const ExternalLinkRecord* r) { return std::binary_search(kept.begin(), kept.end(), r->index); });
+  // Only a link after the first dropped one changes its position.
+  std::uint32_t first_dropped_index = std::numeric_limits<std::uint32_t>::max();
   for (auto it = first_dropped; it != records.end(); ++it) {
-    if (!(*it)->part_path.empty()) {
-      dropped_paths.insert((*it)->part_path);
-      dropped_paths.insert(ooxml::rels_path_for_part((*it)->part_path));
+    first_dropped_index = std::min(first_dropped_index, (*it)->index);
+  }
+  const auto leave_behind = [&dropped_paths](const std::string& path) {
+    if (!path.empty()) {
+      dropped_paths.insert(path);
+      dropped_paths.insert(ooxml::rels_path_for_part(path));
     }
+  };
+  for (auto it = first_dropped; it != records.end(); ++it) {
+    leave_behind((*it)->part_path);
   }
   records.erase(first_dropped, records.end());
   std::unordered_set<std::string> used_paths;
@@ -343,11 +354,17 @@ void PlanExternalLinks(const Workbook& wb, const std::vector<const PassthroughPa
     entry.record = &rec;
     entry.workbook_rid = static_cast<std::uint32_t>(first_rid + i);
     entry.part_path = rec.part_path;
-    if (!rec.body_stale && !GainsRefreshMark(rec.book) &&
+    const std::string dense_path =
+        NumberedPartPath("xl/externalLinks/externalLink", static_cast<std::uint32_t>(i + 1U), ".xml");
+    const bool moves = rec.index > first_dropped_index && rec.part_path != dense_path;
+    if (!moves && !rec.body_stale && !GainsRefreshMark(rec.book) &&
         HasRetainedPart(wb, source_parts, source_index, rec.part_path)) {
       entry.written = true;
     } else if (rec.kind != ExternalLinkRecord::Kind::kOleLink && rec.kind != ExternalLinkRecord::Kind::kDdeLink) {
-      if (!strings::ends_with(rec.part_path, ".xml")) {
+      if (moves) {
+        leave_behind(rec.part_path);
+        entry.part_path = dense_path;
+      } else if (!strings::ends_with(rec.part_path, ".xml")) {
         while (used_paths.count(NumberedPartPath("xl/externalLinks/externalLink", next_part_id, ".xml")) != 0U) {
           ++next_part_id;
         }

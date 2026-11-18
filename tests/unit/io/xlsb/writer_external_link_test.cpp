@@ -469,10 +469,11 @@ TEST(XlsbWriterExternalLink, EveryRecordIsWrittenInIndexOrderWithoutGaps) {
   links[1].book.sheet_names = {"T"};
   links[1].book.sheet_data = {true};
   wb.set_external_links(std::move(links));
-  // Only the second link is referenced; the first is written all the same.
+  // Record indices 2 and 5 are written at positions 1 and 2.
   SetFormula(wb, 0, "=[Second.xlsx]T!A1");
+  SetFormula(wb, 1, "=[First.xlsx]S!A1");
   const std::vector<std::uint8_t> bytes = Save(wb);
-  EXPECT_EQ(XtiTable(ExternalsBlock(bytes)), (std::vector<Xti>{{1U, 0, 0}}));
+  EXPECT_EQ(XtiTable(ExternalsBlock(bytes)), (std::vector<Xti>{{1U, 0, 0}, {0U, 0, 0}}));
   Workbook reloaded = Load(bytes);
   ASSERT_EQ(reloaded.external_links().size(), 2U);
   EXPECT_EQ(reloaded.external_links()[0].target, "First.xlsx");
