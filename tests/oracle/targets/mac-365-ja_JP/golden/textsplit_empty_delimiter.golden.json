@@ -1,0 +1,311 @@
+{
+  "suite": "textsplit_empty_delimiter",
+  "description": "TEXTSPLIT when the column and row delimiters are empty, omitted or blank, alone and beside a non-empty delimiter or array element.\n",
+  "environment": {
+    "excel_version": "16.115",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-11-18T15:03:26Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "tse_both_omitted",
+      "formula": "=TEXTSPLIT(\"a,b\",)",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "tse_col_empty_lit",
+      "formula": "=TEXTSPLIT(\"a,b\",\"\")",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "tse_col_empty_row_omitted",
+      "formula": "=TEXTSPLIT(\"a,b\",\"\",)",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "tse_col_omitted_row_empty",
+      "formula": "=TEXTSPLIT(\"a,b\",,\"\")",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "tse_col_empty_row_comma",
+      "formula": "=TEXTSPLIT(\"a,b\",\"\",\",\")",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "tse_col_omitted_row_comma",
+      "formula": "=TEXTSPLIT(\"a,b\",,\",\")",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "b"
+        ],
+        "shape": [
+          2,
+          1
+        ]
+      }
+    },
+    {
+      "id": "tse_col_comma_row_empty",
+      "formula": "=TEXTSPLIT(\"a,b\",\",\",\"\")",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "tse_col_blank_cell",
+      "formula": "=TEXTSPLIT(\"a,b\",B1)",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "tse_col_blank_cell_row_comma",
+      "formula": "=TEXTSPLIT(\"a,b\",B1,\",\")",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "tse_col_array_all_empty",
+      "formula": "=TEXTSPLIT(\"a,b\",{\"\",\"\"})",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "tse_col_array_empty_and_comma",
+      "formula": "=TEXTSPLIT(\"a,b\",{\"\",\",\"})",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "tse_col_array_comma_and_empty",
+      "formula": "=TEXTSPLIT(\"a,b\",{\",\",\"\"})",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "tse_col_empty_ignore_true",
+      "formula": "=TEXTSPLIT(\"a,b\",\"\",,TRUE)",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "tse_col_empty_pad",
+      "formula": "=TEXTSPLIT(\"a,b\",\"\",,,,\"p\")",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "tse_empty_text_empty_delim",
+      "formula": "=TEXTSPLIT(\"\",\"\")",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "tse_empty_text_empty_delim_ignore",
+      "formula": "=TEXTSPLIT(\"\",\"\",,TRUE)",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "tse_col_empty_err_row",
+      "formula": "=TEXTSPLIT(\"a,b\",\"\",1/0)",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "tse_col_err_row_empty",
+      "formula": "=TEXTSPLIT(\"a,b\",1/0,\"\")",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "tse_col_formula_empty",
+      "formula": "=TEXTSPLIT(\"a,b\",B2)",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "tse_col_space_text",
+      "formula": "=TEXTSPLIT(\"a b\",\" \")",
+      "setup": {
+        "B2": {
+          "kind": "formula",
+          "formula": "=\"\""
+        }
+      },
+      "expect": {
+        "kind": "array",
+        "value": [
+          "a",
+          "b"
+        ],
+        "shape": [
+          1,
+          2
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+suite: textsplit_empty_delimiter
+description: >
+  TEXTSPLIT when the column and row delimiters are empty, omitted or blank,
+  alone and beside a non-empty delimiter or array element.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: tse_both_omitted
+    setup:
+      B2: { kind: formula, formula: "=\"\"" }
+    formula: '=TEXTSPLIT("a,b",)'
+  - id: tse_col_empty_lit
+    setup:
+      B2: { kind: formula, formula: "=\"\"" }
+    formula: '=TEXTSPLIT("a,b","")'
+  - id: tse_col_empty_row_omitted
+    setup:
+      B2: { kind: formula, formula: "=\"\"" }
+    formula: '=TEXTSPLIT("a,b","",)'
+  - id: tse_col_omitted_row_empty
+    setup:
+      B2: { kind: formula, formula: "=\"\"" }
+    formula: '=TEXTSPLIT("a,b",,"")'
+  - id: tse_col_empty_row_comma
+    setup:
+      B2: { kind: formula, formula: "=\"\"" }
+    formula: '=TEXTSPLIT("a,b","",",")'
+  - id: tse_col_omitted_row_comma
+    setup:
+      B2: { kind: formula, formula: "=\"\"" }
+    formula: '=TEXTSPLIT("a,b",,",")'
+  - id: tse_col_comma_row_empty
+    setup:
+      B2: { kind: formula, formula: "=\"\"" }
+    formula: '=TEXTSPLIT("a,b",",","")'
+  - id: tse_col_blank_cell
+    setup:
+      B2: { kind: formula, formula: "=\"\"" }
+    formula: '=TEXTSPLIT("a,b",B1)'
+  - id: tse_col_blank_cell_row_comma
+    setup:
+      B2: { kind: formula, formula: "=\"\"" }
+    formula: '=TEXTSPLIT("a,b",B1,",")'
+  - id: tse_col_array_all_empty
+    setup:
+      B2: { kind: formula, formula: "=\"\"" }
+    formula: '=TEXTSPLIT("a,b",{"",""})'
+  - id: tse_col_array_empty_and_comma
+    setup:
+      B2: { kind: formula, formula: "=\"\"" }
+    formula: '=TEXTSPLIT("a,b",{"",","})'
+  - id: tse_col_array_comma_and_empty
+    setup:
+      B2: { kind: formula, formula: "=\"\"" }
+    formula: '=TEXTSPLIT("a,b",{",",""})'
+  - id: tse_col_empty_ignore_true
+    setup:
+      B2: { kind: formula, formula: "=\"\"" }
+    formula: '=TEXTSPLIT("a,b","",,TRUE)'
+  - id: tse_col_empty_pad
+    setup:
+      B2: { kind: formula, formula: "=\"\"" }
+    formula: '=TEXTSPLIT("a,b","",,,,"p")'
+  - id: tse_empty_text_empty_delim
+    setup:
+      B2: { kind: formula, formula: "=\"\"" }
+    formula: '=TEXTSPLIT("","")'
+  - id: tse_empty_text_empty_delim_ignore
+    setup:
+      B2: { kind: formula, formula: "=\"\"" }
+    formula: '=TEXTSPLIT("","",,TRUE)'
+  - id: tse_col_empty_err_row
+    setup:
+      B2: { kind: formula, formula: "=\"\"" }
+    formula: '=TEXTSPLIT("a,b","",1/0)'
+  - id: tse_col_err_row_empty
+    setup:
+      B2: { kind: formula, formula: "=\"\"" }
+    formula: '=TEXTSPLIT("a,b",1/0,"")'
+  - id: tse_col_formula_empty
+    setup:
+      B2: { kind: formula, formula: "=\"\"" }
+    formula: '=TEXTSPLIT("a,b",B2)'
+  - id: tse_col_space_text
+    setup:
+      B2: { kind: formula, formula: "=\"\"" }
+    formula: '=TEXTSPLIT("a b"," ")'

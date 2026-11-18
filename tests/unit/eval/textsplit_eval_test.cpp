@@ -81,14 +81,16 @@ TEST(BuiltinsTextSplit, EmptyTextIsValueError) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(BuiltinsTextSplit, EmptyDelimiterIsNoOp) {
-  // An empty col_delimiter at the only level keeps the whole text as a
-  // single token (Mac Excel: TEXTSPLIT("abc", "") -> {"abc"}).
-  const Value v = EvalSrc("=TEXTSPLIT(\"abc\", \"\")");
-  ASSERT_TRUE(v.is_array());
-  EXPECT_EQ(v.as_array_rows(), 1U);
-  EXPECT_EQ(v.as_array_cols(), 1U);
-  EXPECT_EQ(v.as_array_cells()[0].as_text(), "abc");
+TEST(BuiltinsTextSplit, EmptyDelimiterIsValueError) {
+  for (const char* src : {"=TEXTSPLIT(\"abc\", \"\")", "=TEXTSPLIT(\"a,b\", \",\", \"\")", "=TEXTSPLIT(\"a,b\",)"}) {
+    const Value v = EvalSrc(src);
+    ASSERT_TRUE(v.is_error()) << src;
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << src;
+  }
+  // An error in either delimiter wins over the empty one.
+  const Value v = EvalSrc("=TEXTSPLIT(\"a,b\", \"\", 1/0)");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
 
 TEST(BuiltinsTextSplit, AdjacentDelimitersProduceEmptyTokens) {
@@ -127,12 +129,10 @@ TEST(BuiltinsTextSplit, ArrayOfColDelimitersSplitsOnAny) {
   EXPECT_EQ(v.as_array_cells()[3].as_text(), "d");
 }
 
-TEST(BuiltinsTextSplit, EmptyEntriesInDelimArrayDropped) {
-  // {",",""} is equivalent to {","} — empty entries are filtered.
+TEST(BuiltinsTextSplit, EmptyEntryInDelimArrayIsValueError) {
   const Value v = EvalSrc("=TEXTSPLIT(\"a,b\", {\",\",\"\"})");
-  ASSERT_TRUE(v.is_array());
-  EXPECT_EQ(v.as_array_rows(), 1U);
-  EXPECT_EQ(v.as_array_cols(), 2U);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(BuiltinsTextSplit, LongerDelimiterTakesPrecedence) {
@@ -186,12 +186,10 @@ TEST(BuiltinsTextSplit, CaseInsensitiveOverlappingDelimitersKeepLongestMatch) {
   EXPECT_EQ(v.as_array_cells()[2].as_text(), "Y");
 }
 
-TEST(BuiltinsTextSplit, AllEmptyDelimiterListsRemainNoOps) {
+TEST(BuiltinsTextSplit, AllEmptyDelimiterListsAreValueError) {
   const Value v = EvalSrc("=TEXTSPLIT(\"a;b\", {\"\",\"\"}, {\"\",\"\"})");
-  ASSERT_TRUE(v.is_array());
-  ASSERT_EQ(v.as_array_rows(), 1U);
-  ASSERT_EQ(v.as_array_cols(), 1U);
-  EXPECT_EQ(v.as_array_cells()[0].as_text(), "a;b");
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
 TEST(BuiltinsTextSplit, IgnoreEmptyAllEmptyTwoDimensionalGridReturnsCalc) {
@@ -205,8 +203,8 @@ TEST(BuiltinsTextSplit, IgnoreEmptyAllEmptyTwoDimensionalGridReturnsCalc) {
 // ---------------------------------------------------------------------------
 
 TEST(BuiltinsTextSplit, RowDelimiterOnlyYieldsColumn) {
-  // Empty col_delimiter (no-op) + row split into 3 -> 3x1.
-  const Value v = EvalSrc("=TEXTSPLIT(\"a;b;c\", \"\", \";\")");
+  // Omitted col_delimiter + row split into 3 -> 3x1.
+  const Value v = EvalSrc("=TEXTSPLIT(\"a;b;c\", , \";\")");
   ASSERT_TRUE(v.is_array());
   EXPECT_EQ(v.as_array_rows(), 3U);
   EXPECT_EQ(v.as_array_cols(), 1U);

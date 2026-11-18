@@ -12,6 +12,7 @@
 #include "eval/coerce.h"
 #include "eval/error_origin.h"
 #include "eval/lazy_impls.h"
+#include "eval/omitted_arg.h"
 #include "eval/scalar_args.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -24,14 +25,13 @@ namespace eval {
 
 namespace {
 
-// Reads a delimiter argument (col or row) into a list of non-empty
-// strings. Empty entries inside an array are dropped silently (Mac Excel
-// observed behaviour: `{",",""}` behaves identically to `{","}`); a
-// scalar empty string yields an empty list which means "no splitting at
-// this level". 2D delimiter arrays surface `#VALUE!` because the
-// orientation is ambiguous. Errors propagate via *out_err.
+// Reads a delimiter argument (col or row) into its list of strings, setting
+// *has_empty when any element reads as "" (an empty string or a blank cell),
+// which the caller refuses once every delimiter error has had its turn. 2D
+// delimiter arrays surface `#VALUE!` because the orientation is ambiguous.
+// Errors propagate via *out_err.
 std::vector<std::string> extract_delimiters(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
-                                            const EvalContext& ctx, Value* out_err) {
+                                            const EvalContext& ctx, Value* out_err, bool* has_empty) {
   std::vector<std::string> result;
   const Value v = eval_node_as_array(node, arena, registry, ctx);
   if (v.is_error()) {
@@ -47,7 +47,9 @@ std::vector<std::string> extract_delimiters(const parser::AstNode& node, Arena& 
       *out_err = Value::error(t.error());
       return result;
     }
-    if (!t.value().empty()) {
+    if (t.value().empty()) {
+      *has_empty = true;
+    } else {
       result.push_back(std::move(t.value()));
     }
     return result;
@@ -72,7 +74,9 @@ std::vector<std::string> extract_delimiters(const parser::AstNode& node, Arena& 
       *out_err = Value::error(t.error());
       return result;
     }
-    if (!t.value().empty()) {
+    if (t.value().empty()) {
+      *has_empty = true;
+    } else {
       result.push_back(std::move(t.value()));
     }
   }
@@ -199,18 +203,29 @@ Value eval_textsplit_lazy(const parser::AstNode& call, Arena& arena, const Funct
   }
   const std::string text = std::move(text_c.value());
 
+  // An omitted delimiter is absent; an empty element in a given one, or
+  // both delimiters absent, is #VALUE! once both have been read.
   Value err = Value::blank();
-  std::vector<std::string> col_delims = extract_delimiters(call.as_call_arg(1), arena, registry, ctx, &err);
-  if (err.is_error()) {
-    return err;
-  }
-
-  std::vector<std::string> row_delims;
-  if (arity >= 3U) {
-    row_delims = extract_delimiters(call.as_call_arg(2), arena, registry, ctx, &err);
+  bool has_empty = false;
+  const bool has_col = !is_omitted_arg(call.as_call_arg(1));
+  std::vector<std::string> col_delims;
+  if (has_col) {
+    col_delims = extract_delimiters(call.as_call_arg(1), arena, registry, ctx, &err, &has_empty);
     if (err.is_error()) {
       return err;
     }
+  }
+
+  const bool has_row = arity >= 3U && !is_omitted_arg(call.as_call_arg(2));
+  std::vector<std::string> row_delims;
+  if (has_row) {
+    row_delims = extract_delimiters(call.as_call_arg(2), arena, registry, ctx, &err, &has_empty);
+    if (err.is_error()) {
+      return err;
+    }
+  }
+  if (has_empty || (!has_col && !has_row)) {
+    return Value::error(ErrorCode::Value);
   }
 
   bool ignore_empty = false;
@@ -266,8 +281,8 @@ Value eval_textsplit_lazy(const parser::AstNode& call, Arena& arena, const Funct
     }
   }
 
-  // Split into rows first. When `row_delims` is empty (omitted or all
-  // empty entries), we have a single row containing the whole text.
+  // Split into rows first. When the row delimiter is omitted, we have a
+  // single row containing the whole text.
   const std::vector<std::string> raw_rows = split_by_any(text, row_delims, case_insensitive);
 
   // Then split each row into columns. Track each row's column tokens; the
