@@ -9,6 +9,9 @@
 
 #include "io/future_functions.h"
 
+#include <cstddef>
+#include <fstream>
+#include <sstream>
 #include <string>
 
 #include "gtest/gtest.h"
@@ -86,6 +89,11 @@ TEST(ClassifyStoragePrefix, WorksheetOnlyDynamicArrayFunctionsCarryXlfnXlws) {
   EXPECT_EQ(storage_function_name("SORT"), "_xlfn._xlws.SORT");
 }
 
+TEST(ClassifyStoragePrefix, PythonCallCarriesXlfnXlws) {
+  EXPECT_EQ(classify_storage_prefix("PY"), StoragePrefixKind::XlfnXlws);
+  EXPECT_EQ(storage_function_name("PY"), "_xlfn._xlws.PY");
+}
+
 // SORTBY / UNIQUE sit next to FILTER / SORT in the same dynamic-array
 // family but Excel writes them with the single prefix.
 TEST(ClassifyStoragePrefix, DynamicArraySiblingsDoNotCarryXlws) {
@@ -119,6 +127,34 @@ TEST(ClassifyStoragePrefix, PartialNamesDoNotMatch) {
 TEST(ClassifyStoragePrefix, UnknownNamesAreStoredAsSpelled) {
   EXPECT_EQ(classify_storage_prefix("MY.UDF"), StoragePrefixKind::None);
   EXPECT_EQ(storage_function_name("MY.UDF"), "MY.UDF");
+}
+
+// Every name in the committed map of stored spellings Excel 365 writes to `<f>` classifies to that spelling.
+TEST(ClassifyStoragePrefix, MatchesTheSpellingExcelStores) {
+  std::ifstream in(FORMULON_FIXTURES_DIR "/excel/function_storage_spelling.txt");
+  ASSERT_TRUE(in.good());
+  std::size_t checked = 0U;
+  std::string line;
+  while (std::getline(in, line)) {
+    if (line.empty() || line[0] == '#') {
+      continue;
+    }
+    std::istringstream fields(line);
+    std::string name;
+    std::string spelling;
+    ASSERT_TRUE(static_cast<bool>(fields >> name >> spelling)) << line;
+    StoragePrefixKind want = StoragePrefixKind::None;
+    if (spelling == "_xlfn.") {
+      want = StoragePrefixKind::Xlfn;
+    } else if (spelling == "_xlfn._xlws.") {
+      want = StoragePrefixKind::XlfnXlws;
+    } else {
+      ASSERT_EQ(spelling, "bare") << line;
+    }
+    EXPECT_EQ(classify_storage_prefix(name), want) << name;
+    ++checked;
+  }
+  EXPECT_GT(checked, 500U);
 }
 
 }  // namespace

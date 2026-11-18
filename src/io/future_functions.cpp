@@ -50,7 +50,7 @@ constexpr std::string_view kXlfnFunctions =
     "MAXIFS|MINIFS|SWITCH|TEXTJOIN|"
     // Excel 2019 / Microsoft 365.
     "ANCHORARRAY|ARRAYTOTEXT|BYCOL|BYROW|CHOOSECOLS|CHOOSEROWS|COPILOT|DETECTLANGUAGE|DROP|EXPAND|GROUPBY|"
-    "HSTACK|IMAGE|ISOMITTED|LAMBDA|LET|MAKEARRAY|MAP|PERCENTOF|PIVOTBY|PY|RANDARRAY|REDUCE|REGEXEXTRACT|"
+    "HSTACK|IMAGE|ISOMITTED|LAMBDA|LET|MAKEARRAY|MAP|PERCENTOF|PIVOTBY|RANDARRAY|REDUCE|REGEXEXTRACT|"
     "REGEXREPLACE|REGEXTEST|SCAN|SEQUENCE|SINGLE|SORTBY|STOCKHISTORY|TAKE|TEXTAFTER|TEXTBEFORE|TEXTSPLIT|"
     "TOCOL|TOROW|TRANSLATE|TRIMRANGE|UNIQUE|VALUETOTEXT|VSTACK|WRAPCOLS|WRAPROWS|XLOOKUP|XMATCH|"
     // The trim-reference operators `.:`, `:.`, `.:.`.
@@ -93,9 +93,9 @@ constexpr FunctionNameAlias kFunctionNameAliases[] = {
 
 /// The subset Excel additionally marks worksheet-only, stored as
 /// `_xlfn._xlws.<NAME>`. The sibling dynamic-array functions (SORTBY,
-/// UNIQUE, SEQUENCE, ...) take the plain `_xlfn.` form; only these two
+/// UNIQUE, SEQUENCE, ...) take the plain `_xlfn.` form; only these
 /// carry the doubled prefix in Excel-authored files.
-constexpr std::string_view kXlwsFunctions = "|FILTER|SORT|";
+constexpr std::string_view kXlwsFunctions = "|FILTER|PY|SORT|";
 
 /// True when `blob` lists `upper` as a whole `|`-delimited entry.
 bool BlobContains(std::string_view blob, std::string_view upper) {
