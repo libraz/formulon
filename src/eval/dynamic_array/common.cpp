@@ -307,18 +307,18 @@ bool resolve_sort_order_arg(const parser::AstNode& node, Arena& arena, const Fun
   return false;
 }
 
-bool resolve_take_drop_range(const parser::AstNode* node, std::uint32_t axis_size, bool take, Arena& arena,
-                             const FunctionRegistry& registry, const EvalContext& ctx, std::uint32_t& lo,
+bool resolve_take_drop_range(const Value* count_value, std::uint32_t axis_size, bool take, std::uint32_t& lo,
                              std::uint32_t& hi, Value& error_out) {
-  if (node == nullptr) {
+  if (count_value == nullptr) {
     lo = 0;
     hi = axis_size;
     return true;
   }
   double count = 0.0;
-  if (!eval_truncated_number_arg(*node, arena, registry, ctx, count, error_out)) {
+  if (!number_from_value(*count_value, count, error_out)) {
     return false;
   }
+  count = std::trunc(count);
   if (take) {
     if (count == 0.0) {
       note_calc_sub_type(3U);

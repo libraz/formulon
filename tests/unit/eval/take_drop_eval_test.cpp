@@ -7,8 +7,11 @@
 // explicit zero on either axis surfaces #CALC! (the result has zero
 // cells along that axis).
 
+#include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <string_view>
+#include <vector>
 
 #include "eval/eval_context.h"
 #include "eval/eval_state.h"
@@ -445,6 +448,59 @@ TEST(BuiltinsDrop, OmittedRowsAndColumnsKeepSourceAxes) {
   EXPECT_EQ(omitted_columns.as_array_rows(), 2U);
   EXPECT_EQ(omitted_columns.as_array_cols(), 4U);
   EXPECT_DOUBLE_EQ(omitted_columns.as_array_cells()[0].as_number(), 5.0);
+}
+
+// ---------------------------------------------------------------------------
+// Array counts
+// ---------------------------------------------------------------------------
+
+// An array or multi-cell count lifts the call: each element holds the top-left
+// cell of the slice its count selects, and an empty slice is #CALC! there.
+TEST(BuiltinsTakeDropLift, ArrayAndReferenceCountsLiftToTheTopLeftOfEachSlice) {
+  Workbook wb = Workbook::create();
+  Sheet& sheet = wb.sheet(0);
+  sheet.set_cell_value(0, 5, Value::number(1.0));  // F1
+  sheet.set_cell_value(1, 5, Value::number(2.0));  // F2
+  sheet.set_cell_value(0, 6, Value::number(1.0));  // G1
+  sheet.set_cell_value(0, 7, Value::number(2.0));  // H1
+  EvalState state;
+  const EvalContext ctx = test::mac_context(wb, sheet, state);
+  struct Case {
+    const char* formula;
+    std::uint32_t rows;
+    std::uint32_t cols;
+    std::vector<double> numbers;  // NaN marks #CALC!
+  };
+  const double calc = std::nan("");
+  const Case cases[] = {
+      {"=TAKE({1,2;3,4},{1;2})", 2U, 1U, {1.0, 1.0}},  {"=TAKE({1,2;3,4},1,{1,2})", 1U, 2U, {1.0, 1.0}},
+      {"=TAKE({1,2;3,4},F1:F2)", 2U, 1U, {1.0, 1.0}},  {"=TAKE({1,2;3,4},1,G1:H1)", 1U, 2U, {1.0, 1.0}},
+      {"=DROP({1,2;3,4},{1;1})", 2U, 1U, {3.0, 3.0}},  {"=DROP({1,2;3,4},0,{1,1})", 1U, 2U, {2.0, 2.0}},
+      {"=DROP({1,2;3,4},F1:F2)", 2U, 1U, {3.0, calc}},
+  };
+  for (const Case& c : cases) {
+    Arena parse_arena;
+    Arena eval_arena;
+    const Value v = EvalUnder(c.formula, &parse_arena, &eval_arena, ctx);
+    ASSERT_TRUE(v.is_array()) << c.formula;
+    ASSERT_EQ(v.as_array_rows(), c.rows) << c.formula;
+    ASSERT_EQ(v.as_array_cols(), c.cols) << c.formula;
+    for (std::size_t i = 0; i < c.numbers.size(); ++i) {
+      const Value& cell = v.as_array_cells()[i];
+      if (std::isnan(c.numbers[i])) {
+        ASSERT_TRUE(cell.is_error()) << c.formula << " [" << i << "]";
+        EXPECT_EQ(cell.as_error(), ErrorCode::Calc) << c.formula << " [" << i << "]";
+      } else {
+        ASSERT_TRUE(cell.is_number()) << c.formula << " [" << i << "]";
+        EXPECT_EQ(cell.as_number(), c.numbers[i]) << c.formula << " [" << i << "]";
+      }
+    }
+  }
+  Arena parse_arena;
+  Arena eval_arena;
+  const Value rows = EvalUnder("=ROWS(TAKE({1,2;3,4},{1;2}))", &parse_arena, &eval_arena, ctx);
+  ASSERT_TRUE(rows.is_number());
+  EXPECT_EQ(rows.as_number(), 2.0);
 }
 
 }  // namespace

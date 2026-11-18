@@ -20,6 +20,7 @@
 #include "eval/omitted_arg.h"
 #include "eval/range_args.h"
 #include "eval/reference/ref_value.h"
+#include "eval/scalar_args.h"
 #include "eval/tree_walker/dispatch.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -120,20 +121,43 @@ bool denotes_reference(const parser::AstNode& node, const EvalContext& ctx) {
   }
 }
 
+// TAKE / DROP's evaluated row and column counts; an omitted count reads as null.
+struct SliceCounts {
+  Value rows = Value::blank();
+  Value cols = Value::blank();
+  bool has_rows = false;
+  bool has_cols = false;
+
+  const Value* row() const { return has_rows ? &rows : nullptr; }
+  const Value* col() const { return has_cols ? &cols : nullptr; }
+};
+
+SliceCounts eval_slice_counts(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                              const EvalContext& ctx) {
+  SliceCounts counts;
+  counts.has_rows = !is_omitted_arg(call.as_call_arg(1));
+  counts.has_cols = call_arg_supplied(call, 2U);
+  if (counts.has_rows) {
+    counts.rows = eval_node(call.as_call_arg(1), arena, registry, ctx);
+  }
+  if (counts.has_cols) {
+    counts.cols = eval_node(call.as_call_arg(2), arena, registry, ctx);
+  }
+  return counts;
+}
+
 // Slices `array` by TAKE / DROP's counts.
-Value slice_array(const parser::AstNode& call, const ArrayValue& array, bool take, Arena& arena,
-                  const FunctionRegistry& registry, const EvalContext& ctx) {
+Value slice_array(const parser::AstNode& call, const ArrayValue& array, const SliceCounts& counts, bool take,
+                  Arena& arena, const EvalContext& ctx) {
   Value err = Value::error(ErrorCode::Value);
   std::uint32_t row_lo = 0;
   std::uint32_t row_hi = 0;
-  const parser::AstNode* row_arg = is_omitted_arg(call.as_call_arg(1)) ? nullptr : &call.as_call_arg(1);
-  if (!dynamic_array::resolve_take_drop_range(row_arg, array.rows, take, arena, registry, ctx, row_lo, row_hi, err)) {
+  if (!dynamic_array::resolve_take_drop_range(counts.row(), array.rows, take, row_lo, row_hi, err)) {
     return err;
   }
   std::uint32_t col_lo = 0;
   std::uint32_t col_hi = array.cols;
-  const parser::AstNode* col_arg = call_arg_supplied(call, 2U) ? &call.as_call_arg(2) : nullptr;
-  if (!dynamic_array::resolve_take_drop_range(col_arg, array.cols, take, arena, registry, ctx, col_lo, col_hi, err)) {
+  if (!dynamic_array::resolve_take_drop_range(counts.col(), array.cols, take, col_lo, col_hi, err)) {
     return err;
   }
 
@@ -149,13 +173,13 @@ Value slice_array(const parser::AstNode& call, const ArrayValue& array, bool tak
 }
 
 // TAKE / DROP over a source call that answered a value: the value read as an array.
-Value take_drop_value(const parser::AstNode& call, const Value& source, bool take, Arena& arena,
-                      const FunctionRegistry& registry, const EvalContext& ctx) {
+Value take_drop_value(const parser::AstNode& call, const Value& source, const SliceCounts& counts, bool take,
+                      Arena& arena, const EvalContext& ctx) {
   if (source.is_error()) {
     return source;
   }
   if (source.is_array()) {
-    return slice_array(call, *source.as_array(), take, arena, registry, ctx);
+    return slice_array(call, *source.as_array(), counts, take, arena, ctx);
   }
   Value* buf = nullptr;
   ArrayValue* one = allocate_derived_array_value(1U, 1U, arena, buf);
@@ -163,13 +187,12 @@ Value take_drop_value(const parser::AstNode& call, const Value& source, bool tak
     return Value::error(ErrorCode::Num);
   }
   buf[0] = source;
-  return slice_array(call, *one, take, arena, registry, ctx);
+  return slice_array(call, *one, counts, take, arena, ctx);
 }
 
 // TAKE / DROP over a one-area reference: the kept rectangle as a reference. `source` is the evaluated
 // source; over a whole axis the counts run over the whole grid line, as Excel's do.
-bool slice_reference(const parser::AstNode& call, const Value& source, bool take, Arena& arena,
-                     const FunctionRegistry& registry, const EvalContext& ctx, Value* out) {
+bool slice_reference(const Value& source, const SliceCounts& counts, bool take, Arena& arena, Value* out) {
   if (!is_one_area_ref(source)) {
     return false;
   }
@@ -179,12 +202,10 @@ bool slice_reference(const parser::AstNode& call, const Value& source, bool take
   Value err = Value::error(ErrorCode::Value);
   std::uint32_t row_lo = 0;
   std::uint32_t row_hi = 0;
-  const parser::AstNode* row_arg = is_omitted_arg(call.as_call_arg(1)) ? nullptr : &call.as_call_arg(1);
   std::uint32_t col_lo = 0;
   std::uint32_t col_hi = cols;
-  const parser::AstNode* col_arg = call_arg_supplied(call, 2U) ? &call.as_call_arg(2) : nullptr;
-  if (!dynamic_array::resolve_take_drop_range(row_arg, rows, take, arena, registry, ctx, row_lo, row_hi, err) ||
-      !dynamic_array::resolve_take_drop_range(col_arg, cols, take, arena, registry, ctx, col_lo, col_hi, err)) {
+  if (!dynamic_array::resolve_take_drop_range(counts.row(), rows, take, row_lo, row_hi, err) ||
+      !dynamic_array::resolve_take_drop_range(counts.col(), cols, take, col_lo, col_hi, err)) {
     *out = err;
     return true;
   }
@@ -199,14 +220,18 @@ bool slice_reference(const parser::AstNode& call, const Value& source, bool take
 Value eval_take_drop(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
                      const EvalContext& ctx, bool take) {
   const std::uint32_t arity = call.as_call_arity();
+  const bool counted = arity >= 2U && arity <= 3U;
+  const SliceCounts counts = counted ? eval_slice_counts(call, arena, registry, ctx) : SliceCounts{};
+  // An array count lifts the call: each element holds the top-left of the slice its counts select.
+  const bool lifted = counts.rows.is_array() || counts.cols.is_array();
   // A cell or range token is read as its reference; a reference-returning call is evaluated once here.
-  if (arity >= 2U && arity <= 3U && evaluates_to_reference(call.as_call_arg(0))) {
+  if (counted && !lifted && evaluates_to_reference(call.as_call_arg(0))) {
     const Value source = eval_node_ref(call.as_call_arg(0), arena, registry, ctx);
-    if (Value sliced = Value::blank(); slice_reference(call, source, take, arena, registry, ctx, &sliced)) {
+    if (Value sliced = Value::blank(); slice_reference(source, counts, take, arena, &sliced)) {
       return sliced;
     }
     if (call.as_call_arg(0).kind() == parser::NodeKind::Call && !source.is_ref()) {
-      return take_drop_value(call, source, take, arena, registry, ctx);
+      return take_drop_value(call, source, counts, take, arena, ctx);
     }
   }
   Value err = Value::error(ErrorCode::Value);
@@ -215,7 +240,16 @@ Value eval_take_drop(const parser::AstNode& call, Arena& arena, const FunctionRe
   if (array == nullptr) {
     return err;
   }
-  return slice_array(call, *array, take, arena, registry, ctx);
+  if (!lifted) {
+    return slice_array(call, *array, counts, take, arena, ctx);
+  }
+  const Value args[2] = {counts.rows, counts.cols};
+  return lift_over_array_args(args, 2U, arena, [&](const Value* a, std::uint32_t) {
+    SliceCounts one = counts;
+    one.rows = a[0];
+    one.cols = a[1];
+    return slice_array(call, *array, one, take, arena, ctx);
+  });
 }
 
 }  // namespace

@@ -161,10 +161,9 @@ bool resolve_sort_order_arg(const parser::AstNode& node, Arena& arena, const Fun
 /// `[lo, hi)` slice of the source axis. `take == true` selects cells to
 /// retain; `take == false` selects cells to drop (and the retained range
 /// is the complement). On success populates `lo` / `hi`; on failure
-/// writes the caller-visible error and returns `false`. Omitted argument
-/// is signalled by passing `nullptr` for `node`.
-bool resolve_take_drop_range(const parser::AstNode* node, std::uint32_t axis_size, bool take, Arena& arena,
-                             const FunctionRegistry& registry, const EvalContext& ctx, std::uint32_t& lo,
+/// writes the caller-visible error and returns `false`. `count_value` is
+/// the evaluated argument, or `nullptr` when it is omitted.
+bool resolve_take_drop_range(const Value* count_value, std::uint32_t axis_size, bool take, std::uint32_t& lo,
                              std::uint32_t& hi, Value& error_out);
 
 }  // namespace dynamic_array
