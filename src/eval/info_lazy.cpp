@@ -358,7 +358,10 @@ Value eval_isref_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
   }
   // A name is a reference when it stands for one (`=LET(r, A1, ISREF(r))`), not when it stands for a value
   // (`=LET(x, 5, ISREF(x))`); an evaluated argument is one when it holds an area or a union, not a grid.
-  if (arg.kind() == parser::NodeKind::NameRef || arg.kind() == parser::NodeKind::Literal) {
+  // A union expression is one when it evaluates to a union: `ISREF((A1:A2,C1:C2))` is TRUE, while a 3-D operand
+  // makes the union an error and the answer FALSE.
+  if (arg.kind() == parser::NodeKind::NameRef || arg.kind() == parser::NodeKind::Literal ||
+      arg.kind() == parser::NodeKind::UnionOp) {
     const Value v = arg.kind() == parser::NodeKind::Literal
                         ? arg.as_literal()
                         : eval_node_ref(arg, arena, registry, ctx.without_dynamic_read_callback());

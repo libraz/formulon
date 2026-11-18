@@ -704,11 +704,14 @@ void collect_union_areas(const parser::AstNode& node, const EvalContext& ctx,
 
 // The area INDEX reads from: the `area_num`-th area of its first argument
 // (default 1), where a parenthesised union supplies several areas and any
-// other argument is its only area. An area past the end is `#REF!`.
-Expected<const parser::AstNode*, ErrorCode> select_index_area(const parser::AstNode& call, Arena& arena,
-                                                              const FunctionRegistry& registry,
-                                                              const EvalContext& ctx) {
+// other argument is its only area. An area past the end is `#REF!`; a 3-D
+// span is `#VALUE!` whatever the area.
+Expected<const parser::AstNode*, ErrorCode> select_index_area(const parser::AstNode& call, const Value* area_num,
+                                                              Arena& arena, const EvalContext& ctx) {
   const parser::AstNode& source = resolve_name_ast(call.as_call_arg(0), ctx.name_env());
+  if (is_three_d_reference(source)) {
+    return three_d_reference_error(source);
+  }
   if (source.kind() == parser::NodeKind::UnionOp) {
     if (const std::optional<ErrorCode> invalid = union_reference_error(source, ctx)) {
       return *invalid;
@@ -731,9 +734,8 @@ Expected<const parser::AstNode*, ErrorCode> select_index_area(const parser::AstN
     collect_union_areas(call.as_call_arg(0), ctx, &areas);
   }
   std::uint32_t area_idx = 1U;
-  if (call_arg_supplied(call, 3U)) {
-    const DecodedIndex area =
-        decode_index_cell(eval_node(call.as_call_arg(3), arena, registry, ctx), IndexSnap::kNearInteger);
+  if (area_num != nullptr) {
+    const DecodedIndex area = decode_index_cell(*area_num, IndexSnap::kNearInteger);
     if (area.state == IndexAxisState::kError) {
       return area.error;
     }
@@ -931,22 +933,15 @@ Value index_grid(const parser::AstNode& call, const Value& grid, Arena& arena, c
                     c == 0U ? view.cols : 1U, arena);
 }
 
-}  // namespace
-
-Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
-                      const EvalContext& ctx) {
+// INDEX with its `area_num` already evaluated (null when omitted).
+Value index_in_area(const parser::AstNode& call, const Value* area_num, Arena& arena, const FunctionRegistry& registry,
+                    const EvalContext& ctx) {
   const std::uint32_t arity = call.as_call_arity();
-  if (arity < 2U || arity > 4U) {
-    return Value::error(ErrorCode::Value);
-  }
-  const auto area = select_index_area(call, arena, registry, ctx);
+  const auto area = select_index_area(call, area_num, arena, ctx);
   if (!area) {
     return Value::error(area.error());
   }
   const parser::AstNode& source_node = *area.value();
-  if (is_three_d_reference(source_node)) {
-    return Value::error(three_d_reference_error(source_node));
-  }
   // A source that evaluates to a `Ref` is picked as a reference; its cells are read only for array indices.
   const Value source_ref =
       evaluates_to_reference(source_node) ? eval_node_ref(source_node, arena, registry, ctx) : Value::blank();
@@ -1066,6 +1061,37 @@ Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionR
     return Value::array(one);
   }
   return cell;
+}
+
+}  // namespace
+
+Value eval_index_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
+                      const EvalContext& ctx) {
+  const std::uint32_t arity = call.as_call_arity();
+  if (arity < 2U || arity > 4U) {
+    return Value::error(ErrorCode::Value);
+  }
+  if (!call_arg_supplied(call, 3U)) {
+    return index_in_area(call, nullptr, arena, registry, ctx);
+  }
+  const Value area_num = eval_node(call.as_call_arg(3), arena, registry, ctx);
+  if (!area_num.is_array()) {
+    return index_in_area(call, &area_num, arena, registry, ctx);
+  }
+  // An array area_num lifts the call: each element picks from its area, and the picks are read as values.
+  const ArrayValue* areas = area_num.as_array();
+  Value* cells = nullptr;
+  ArrayValue* out = allocate_derived_array_value(areas->rows, areas->cols, arena, cells);
+  if (out == nullptr) {
+    return Value::error(ErrorCode::Num);
+  }
+  const std::size_t n = static_cast<std::size_t>(areas->rows) * areas->cols;
+  for (std::size_t i = 0; i < n; ++i) {
+    const Value pick = index_in_area(call, &areas->cells[i], arena, registry, ctx);
+    const Value read = pick.is_ref() ? deref_shaped(pick, arena, registry, ctx, ReadCount::kCounted).value : pick;
+    cells[i] = read.is_array() ? read.as_array()->cells[0] : read;
+  }
+  return Value::array(out);
 }
 
 }  // namespace eval

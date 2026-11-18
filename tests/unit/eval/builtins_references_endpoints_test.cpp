@@ -111,6 +111,51 @@ TEST(ReferenceCall, IndexAreaNumSelectsFromUnion) {
              "CELL of whole area 2");
 }
 
+TEST(ReferenceCall, UnionAndThreeDSpanAsWholeReferences) {
+  // A1:B2 = {1,2;3,4}, D1:E2 = {10,20;30,40}; Sheet2 / Sheet3 exist for a 3-D span.
+  Workbook wb = Workbook::create();
+  wb.add_sheet("Sheet2");
+  wb.add_sheet("Sheet3");
+  for (std::uint32_t r = 0; r < 2U; ++r) {
+    for (std::uint32_t c = 0; c < 2U; ++c) {
+      const double v = static_cast<double>(r * 2U + c + 1U);
+      wb.sheet(0).set_cell_value(r, c, Value::number(v));
+      wb.sheet(0).set_cell_value(r, c + 3U, Value::number(v * 10.0));
+    }
+  }
+  const Value isref = EvalSourceIn("=ISREF((A1:B2,D1:E2))", wb, wb.sheet(0));
+  ASSERT_TRUE(isref.is_boolean());
+  EXPECT_TRUE(isref.as_boolean());
+  const Value repeated = EvalSourceIn("=ISREF((A1,A1))", wb, wb.sheet(0));
+  ASSERT_TRUE(repeated.is_boolean());
+  EXPECT_TRUE(repeated.as_boolean());
+  ExpectNumber(EvalSourceIn("=AREAS((A1,A1))", wb, wb.sheet(0)), 2.0, "AREAS of a repeated cell");
+  // A union has no single shape, even when its areas coincide.
+  for (const char* formula :
+       {"=ROWS((A1:B2,D1:E2))", "=COLUMNS((A1:A2,D1:D2))", "=ROWS((A1:A2,A1:A2))", "=ROWS((A1,D1))"}) {
+    const Value v = EvalSourceIn(formula, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Ref) << formula;
+  }
+  // An array area_num picks one area per element.
+  ExpectNumber(EvalSourceIn("=SUM(INDEX((A1:B2,D1:E2),1,1,{1,2}))", wb, wb.sheet(0)), 11.0, "array area_num");
+  ExpectNumber(EvalSourceIn("=SUM(INDEX((A1:B2,D1:E2),2,2,{2;1;2}))", wb, wb.sheet(0)), 84.0, "column area_num");
+  // The picks are read as values, so the lifted call spills them.
+  const Value picks = EvalSourceIn("=INDEX((A1:B2,D1:E2),1,1,{1,2})", wb, wb.sheet(0));
+  ASSERT_TRUE(picks.is_array());
+  ASSERT_EQ(picks.as_array()->rows, 1U);
+  ASSERT_EQ(picks.as_array()->cols, 2U);
+  EXPECT_EQ(picks.as_array()->cells[0].as_number(), 1.0);
+  EXPECT_EQ(picks.as_array()->cells[1].as_number(), 10.0);
+  // A 3-D span is #VALUE! before its area_num is checked.
+  for (const char* formula : {"=INDEX(Sheet2:Sheet3!A1,1,1,2)", "=INDEX(Sheet2:Sheet3!A1,,,2)",
+                              "=SUM(INDEX(Sheet2:Sheet3!A1,,,2))", "=INDEX(Sheet2:Sheet3!A1:B2,1,1,1)"}) {
+    const Value v = EvalSourceIn(formula, wb, wb.sheet(0));
+    ASSERT_TRUE(v.is_error()) << formula;
+    EXPECT_EQ(v.as_error(), ErrorCode::Value) << formula;
+  }
+}
+
 TEST(ReferenceCall, XlookupAsReference) {
   // A1:A3 = a/b/c, B1:C3 = {1,10;2,20;3,30}.
   Workbook wb = Workbook::create();

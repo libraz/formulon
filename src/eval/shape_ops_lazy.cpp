@@ -259,10 +259,16 @@ bool resolve_shape(const parser::AstNode& arg_node, Arena& arena, const Function
     return false;
   }
   const parser::NodeKind k = arg_node.kind();
+  // A union expression measures as the reference it evaluates to.
+  const Value united = k == parser::NodeKind::UnionOp ? eval_node_ref(arg_node, arena, registry, ctx) : Value::blank();
+  if (united.is_error()) {
+    *out_err = united;
+    return false;
+  }
   // An evaluated reference measures by its form: a grid by its own shape, a
   // union #REF!, a 3-D span #VALUE!.
-  if (k == parser::NodeKind::Literal && arg_node.as_literal().is_ref()) {
-    const RefView view = arg_node.as_literal().as_ref();
+  if (united.is_ref() || (k == parser::NodeKind::Literal && arg_node.as_literal().is_ref())) {
+    const RefView view = united.is_ref() ? united.as_ref() : arg_node.as_literal().as_ref();
     switch (view.form) {
       case RefForm::kGrid:
         *out_rows = view.rows;
