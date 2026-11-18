@@ -545,11 +545,62 @@ void CutOneRange(const MergeRange& range, std::uint32_t index, std::uint32_t cou
 
 // How an sqref follows a `StructuralEdit`; the modes differ only under a band.
 enum class SqrefMode : std::uint8_t {
-  kShift,      // A straddling range splits into its moved and unmoved parts.
+  kShift,      // A range reaching the moving region splits into its unmoved and moved parts.
   kCf,         // `kShift`, then a delete joins what it brings into one tiled rectangle.
   kReference,  // Only a range inside the band moves.
   kCut,        // Only a range inside the band is cut.
 };
+
+// Appends `rect` minus `hole` (which lies inside it) row by row: the rows
+// above, the parts left and right of it in its rows, the rows below.
+void AppendDifference(const MergeRange& rect, const MergeRange& hole, std::vector<MergeRange>& out) {
+  if (rect.first_row < hole.first_row) {
+    out.push_back(MergeRange{rect.first_row, rect.first_col, hole.first_row - 1U, rect.last_col});
+  }
+  if (rect.first_col < hole.first_col) {
+    out.push_back(MergeRange{hole.first_row, rect.first_col, hole.last_row, hole.first_col - 1U});
+  }
+  if (hole.last_col < rect.last_col) {
+    out.push_back(MergeRange{hole.first_row, hole.last_col + 1U, hole.last_row, rect.last_col});
+  }
+  if (hole.last_row < rect.last_row) {
+    out.push_back(MergeRange{hole.last_row + 1U, rect.first_col, rect.last_row, rect.last_col});
+  }
+}
+
+// Whether `a` and `b` together are exactly one rectangle, edge to edge.
+bool JoinsAsRectangle(const MergeRange& a, const MergeRange& b) noexcept {
+  const bool same_cols = a.first_col == b.first_col && a.last_col == b.last_col;
+  const bool same_rows = a.first_row == b.first_row && a.last_row == b.last_row;
+  return (same_cols && (a.last_row + 1U == b.first_row || b.last_row + 1U == a.first_row)) ||
+         (same_rows && (a.last_col + 1U == b.first_col || b.last_col + 1U == a.first_col));
+}
+
+// What a piece is to the edit that produced it.
+enum class Piece : std::uint8_t {
+  kWhole,      // A range the edit did not split.
+  kRemainder,  // The unmoved part of a split range.
+  kMoved,      // The moved part of a split range.
+};
+
+// Joins, pairwise until none is left, a moved part of a split range with
+// another split piece when their union is a rectangle; the joined piece is a
+// moved part and takes the earlier one's place. Two remainders never join, and
+// a range that only moved stays apart.
+void JoinSplitPieces(std::vector<MergeRange>& ranges, std::vector<Piece>& kinds) {
+  for (std::size_t i = 0; i < ranges.size(); ++i) {
+    for (std::size_t j = i + 1U; kinds[i] != Piece::kWhole && j < ranges.size(); ++j) {
+      const bool moved = kinds[i] == Piece::kMoved || kinds[j] == Piece::kMoved;
+      if (moved && kinds[j] != Piece::kWhole && JoinsAsRectangle(ranges[i], ranges[j])) {
+        ranges[i] = BoundingBox(ranges[i], ranges[j]);
+        kinds[i] = Piece::kMoved;
+        ranges.erase(ranges.begin() + static_cast<std::ptrdiff_t>(j));
+        kinds.erase(kinds.begin() + static_cast<std::ptrdiff_t>(j));
+        j = i;
+      }
+    }
+  }
+}
 
 void EditSqrefRanges(std::vector<MergeRange>& ranges, const StructuralEdit& edit, SqrefMode mode) {
   if (!edit.band.has_value()) {
@@ -565,40 +616,45 @@ void EditSqrefRanges(std::vector<MergeRange>& ranges, const StructuralEdit& edit
   const Band band = *edit.band;
   std::vector<MergeRange> out;
   out.reserve(ranges.size() * 3U);
-  // `range` narrowed to the perpendicular interval [first, last].
-  const auto across = [&edit](MergeRange range, std::uint32_t first, std::uint32_t last) {
-    (edit.row_axis ? range.first_col : range.first_row) = first;
-    (edit.row_axis ? range.last_col : range.last_row) = last;
-    return range;
-  };
+  std::vector<Piece> kinds;
   for (const MergeRange& range : ranges) {
     const BandFit fit = band_fit(range, edit);
     if (fit == BandFit::kOutside || (fit == BandFit::kStraddles && !splits)) {
       out.push_back(range);
+      kinds.resize(out.size(), Piece::kWhole);
       continue;
     }
     if (mode == SqrefMode::kCut) {
       CutOneRange(range, edit.index, edit.count, edit.is_delete, edit.row_axis, out);
+      kinds.resize(out.size(), Piece::kWhole);
       continue;
     }
+    // The part in the moving region (the band from the edit's edge on) moves;
+    // the rest of the range stays where it is.
     MergeRange moving = range;
-    if (fit == BandFit::kStraddles) {
-      const std::uint32_t first = edit.row_axis ? range.first_col : range.first_row;
-      const std::uint32_t last = edit.row_axis ? range.last_col : range.last_row;
-      if (first < band.first) {
-        out.push_back(across(range, first, band.first - 1U));
-      }
-      if (last > band.last) {
-        out.push_back(across(range, band.last + 1U, last));
-      }
-      moving = across(range, std::max(first, band.first), std::min(last, band.last));
-    }
+    std::uint32_t& axial_first = edit.row_axis ? moving.first_row : moving.first_col;
+    axial_first = std::max(axial_first, edit.index);
+    (edit.row_axis ? moving.first_col : moving.first_row) =
+        std::max(edit.row_axis ? range.first_col : range.first_row, band.first);
+    (edit.row_axis ? moving.last_col : moving.last_row) =
+        std::min(edit.row_axis ? range.last_col : range.last_row, band.last);
+    const std::size_t before = out.size();
+    AppendDifference(range, moving, out);
+    const bool splits_range = out.size() > before;
+    kinds.resize(out.size(), Piece::kRemainder);
     bool drop = false;
     ShiftAxisRange(moving, edit.index, edit.count, edit.is_delete, edit.row_axis, &drop);
-    if (!drop) {
-      out.push_back(moving);
+    if (drop) {
+      continue;
     }
+    // An insert inside the range leaves the inserted cells covered.
+    if (!edit.is_delete && (edit.row_axis ? range.first_row : range.first_col) < edit.index) {
+      axial_first = edit.index;
+    }
+    out.push_back(moving);
+    kinds.push_back(splits_range ? Piece::kMoved : Piece::kWhole);
   }
+  JoinSplitPieces(out, kinds);
   ranges = std::move(out);
   if (!join_tiles || !TilesOneRectangle(ranges)) {
     return;

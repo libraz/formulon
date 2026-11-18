@@ -21,6 +21,8 @@
 #include "eval/function_registry.h"
 #include "eval/recalc_engine.h"
 #include "gtest/gtest.h"
+#include "io/ooxml_writer.h"
+#include "io/zip_reader.h"
 #include "merge_range.h"
 #include "pivot/pivot_cache.h"
 #include "pivot/pivot_table.h"
@@ -2521,6 +2523,118 @@ TEST(InsertDeleteCells, RuleHyperlinkAcrossTheEdgeShrinksOnDeleteLeft) {
   AddLink(wb, "A3:D4", "https://x.example");
   ExpectOk(Edit(wb, "B3:C4", CellShift::kLeft));
   EXPECT_EQ(LinkAt(wb, "https://x.example"), "A3:B4");
+}
+
+// Every sqref the saved sheet part writes inside `<tag ... sqref="...">` (legacy)
+// or `<xm:sqref>` (x14) under an element named `owner`, each as its sorted
+// pieces.
+std::vector<std::string> SavedSqrefs(const std::string& xml, std::string_view owner, bool x14) {
+  std::vector<std::string> out;
+  const std::string open = "<" + std::string(owner);
+  for (std::size_t at = xml.find(open); at != std::string::npos; at = xml.find(open, at + 1U)) {
+    const char next = xml[at + open.size()];
+    if (next != ' ' && next != '>') {
+      continue;
+    }
+    std::string text;
+    if (x14) {
+      const std::size_t begin = xml.find("<xm:sqref>", at) + std::string_view("<xm:sqref>").size();
+      text = xml.substr(begin, xml.find("</xm:sqref>", begin) - begin);
+    } else {
+      const std::size_t begin = xml.find("sqref=\"", at) + std::string_view("sqref=\"").size();
+      text = xml.substr(begin, xml.find('"', begin) - begin);
+    }
+    std::vector<std::string> parts;
+    for (std::size_t from = 0; from <= text.size();) {
+      const std::size_t space = std::min(text.find(' ', from), text.size());
+      parts.push_back(text.substr(from, space - from));
+      from = space + 1U;
+    }
+    out.push_back(Joined(std::move(parts)));
+  }
+  return out;
+}
+
+std::string SavedSheetXml(const Workbook& wb) {
+  const Expected<std::vector<std::uint8_t>, Error> saved = io::write_ooxml(wb);
+  if (!saved.has_value()) {
+    ADD_FAILURE() << "save failed";
+    return {};
+  }
+  io::ZipReader zip;
+  if (!zip.open(io::ByteSpan{saved.value().data(), saved.value().size()}).has_value()) {
+    ADD_FAILURE() << "saved package does not open";
+    return {};
+  }
+  const Expected<std::vector<std::uint8_t>, Error> part = zip.read_entry("xl/worksheets/sheet1.xml");
+  if (!part.has_value()) {
+    ADD_FAILURE() << "no sheet1.xml";
+    return {};
+  }
+  return std::string(part.value().begin(), part.value().end());
+}
+
+// A rule on `rect` of each kind, legacy and x14: a conditional format, a data
+// validation, and the x14 copy of each that the sheet's extLst retains.
+void AddRulesWithX14Copies(Workbook& wb, std::string_view rect) {
+  AddCf(wb, {rect});
+  AddDv(wb, {rect});
+  const std::string sqref(rect);
+  wb.sheet(0).set_ext_lst_xml(
+      "<extLst><ext uri=\"{78C0D931-6437-407d-A8EE-F0AAD7539E65}\" "
+      "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\" "
+      "xmlns:xm=\"http://schemas.microsoft.com/office/excel/2006/main\">"
+      "<x14:conditionalFormattings><x14:conditionalFormatting>"
+      "<x14:cfRule type=\"expression\" id=\"{5A9D8B1C-3E4F-4A2B-9C1D-1234567890AB}\"><xm:f>TRUE</xm:f></x14:cfRule>"
+      "<xm:sqref>" +
+      sqref +
+      "</xm:sqref></x14:conditionalFormatting></x14:conditionalFormattings></ext>"
+      "<ext uri=\"{CCE6A557-97BC-4b89-ADB6-D9C93CAAB3DF}\" "
+      "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\" "
+      "xmlns:xm=\"http://schemas.microsoft.com/office/excel/2006/main\">"
+      "<x14:dataValidations count=\"1\"><x14:dataValidation type=\"list\" allowBlank=\"1\">"
+      "<x14:formula1><xm:f>Sheet2!$A$1:$A$2</xm:f></x14:formula1>"
+      "<xm:sqref>" +
+      sqref + "</xm:sqref></x14:dataValidation></x14:dataValidations></ext></extLst>");
+}
+
+// The cells each rule covers after an Insert / Delete Cells edit, and the
+// pieces they form, in the saved sheet part, legacy and x14 alike. Excel
+// (Mac 16.115) wrote these piece sets for a rule on B2:B4 or B2:D4.
+TEST(InsertDeleteCells, SavedSqrefPiecesFollowTheEdit) {
+  struct Step {
+    const char* range;
+    CellShift shift;
+    const char* pieces;
+  };
+  struct Case {
+    const char* rule;
+    std::vector<Step> steps;
+  };
+  const std::vector<Case> cases = {
+      {"B2:B4", {{"B2:C3", CellShift::kDown, "B4:B6"}}},
+      {"B2:B4", {{"B2:C3", CellShift::kRight, "B4 D2:D3"}}},
+      {"B2:B4", {{"B3:C3", CellShift::kRight, "B2 B4 D3"}}},
+      {"B2:B4", {{"B3", CellShift::kDown, "B2:B5"}}},
+      {"B2:D4", {{"C3", CellShift::kRight, "B2:D2 B3:E3 B4:D4"}, {"C3", CellShift::kUp, "B2:D2 B3:E3 B4 D4"}}},
+      {"B2:D4",
+       {{"C3", CellShift::kDown, "B2:D2 B3:B4 C3:C5 D3:D4"}, {"C3", CellShift::kLeft, "B2:D2 B3:B4 C3:C5 D4"}}},
+  };
+  for (const Case& c : cases) {
+    Workbook wb = Workbook::create();
+    wb.add_sheet("Sheet2");
+    AddRulesWithX14Copies(wb, c.rule);
+    for (const Step& step : c.steps) {
+      SCOPED_TRACE(std::string(c.rule) + " " + step.range + " " + ShiftName(step.shift));
+      ExpectOk(Edit(wb, step.range, step.shift));
+      const std::string xml = SavedSheetXml(wb);
+      const std::vector<std::string> expected{step.pieces};
+      EXPECT_EQ(SavedSqrefs(xml, "conditionalFormatting", false), expected);
+      EXPECT_EQ(SavedSqrefs(xml, "dataValidation", false), expected);
+      EXPECT_EQ(SavedSqrefs(xml, "x14:conditionalFormatting", true), expected);
+      EXPECT_EQ(SavedSqrefs(xml, "x14:dataValidation", true), expected);
+    }
+  }
 }
 
 }  // namespace

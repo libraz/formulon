@@ -112,9 +112,11 @@ enum class BandFit : std::uint8_t {
 /// Classifies `rect` against `edit`, which must carry a band.
 BandFit band_fit(const MergeRange& rect, const StructuralEdit& edit) noexcept;
 
-/// `shift_sqref_ranges` for `edit`, band or not. Under a band, a range inside
-/// it follows the span rules, one straddling the moving region splits into
-/// its moved and unmoved parts, and nothing is joined.
+/// `shift_sqref_ranges` for `edit`, band or not. Under a band, the part of a
+/// range in the moving region moves and the rest stays, split row by row
+/// around it; an insert inside the range covers the inserted cells. The moved
+/// part of a split range then joins each piece of a split range it makes one
+/// rectangle with; two unmoved parts, and a range that only moved, stay apart.
 void shift_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit);
 
 /// `shift_sqref_ranges` for a conditional format's sqref, legacy or x14: a
