@@ -436,6 +436,19 @@ TEST(PartialRecalc, DirectPhantomReadPullsPotentialProducerBeforeFirstCommit) {
   EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(1U, 0U).as_number(), 2.0);
 }
 
+// A reducing function lifted over an array criterion spills, so it is a potential producer too.
+TEST(PartialRecalc, DirectPhantomReadPullsALiftedReducerBeforeFirstCommit) {
+  Workbook wb = Workbook::create();
+  wb.set_excel_profile(mac_365_ja_jp_profile());
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 0U, "=COUNTIF({1,2,2},{1;2})")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, 0U, 1U, "=A2")));
+
+  ASSERT_TRUE(static_cast<bool>(wb.partial_recalc(default_registry(), SingleCell(0U, 1U))));
+
+  EXPECT_DOUBLE_EQ(CellValue(wb, 0U, 0U, 1U).as_number(), 2.0);
+  EXPECT_DOUBLE_EQ(wb.sheet(0).resolve_cell_value(1U, 0U).as_number(), 2.0);
+}
+
 TEST(PartialRecalc, CrossSheetDirectPhantomReadRefreshesAfterProducerRewrite) {
   Workbook wb = Workbook::create();
   wb.set_excel_profile(mac_365_ja_jp_profile());

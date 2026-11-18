@@ -82,11 +82,11 @@ constexpr BuiltinRegistration analysis_toolpak_no_omitted_default(BuiltinRegistr
 }
 
 /// Marks the last argument of a range-aware `def` as a single value; see
-/// `FunctionDef::last_arg_scalar`. An array there lifts the call, so the
-/// result can be an array.
+/// `FunctionDef::last_arg_scalar`. The call reduces to one value unless an
+/// array there lifts it.
 constexpr BuiltinRegistration scalar_last_arg(BuiltinRegistration def) noexcept {
   def.last_arg_scalar = true;
-  def.result_shape = FunctionDef::ResultShape::kArray;
+  def.result_shape = FunctionDef::ResultShape::kReduce;
   return def;
 }
 
@@ -94,7 +94,7 @@ constexpr BuiltinRegistration scalar_last_arg(BuiltinRegistration def) noexcept 
 /// `FunctionDef::first_arg_scalar`.
 constexpr BuiltinRegistration scalar_first_arg(BuiltinRegistration def) noexcept {
   def.first_arg_scalar = true;
-  def.result_shape = FunctionDef::ResultShape::kArray;
+  def.result_shape = FunctionDef::ResultShape::kReduce;
   return def;
 }
 

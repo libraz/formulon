@@ -68,6 +68,22 @@ SpillPotential lookup_let_shape(std::string_view name, const std::vector<LetShap
 }
 
 SpillPotential spill_potential_impl(const AstNode& root, const FunctionRegistry* registry,
+                                    std::vector<LetShape>* let_env) noexcept;
+
+// A call that reduces or answers one value spills only through the arguments it lifts over.
+template <typename Lifts>
+SpillPotential lifted_potential(const AstNode& call, const FunctionRegistry* registry, std::vector<LetShape>* let_env,
+                                const Lifts& lifts) noexcept {
+  SpillPotential result = SpillPotential::kNever;
+  for (std::uint32_t i = 0; i < call.as_call_arity(); ++i) {
+    if (lifts(i)) {
+      result = combine_potential(result, spill_potential_impl(call.as_call_arg(i), registry, let_env));
+    }
+  }
+  return result;
+}
+
+SpillPotential spill_potential_impl(const AstNode& root, const FunctionRegistry* registry,
                                     std::vector<LetShape>* let_env) noexcept {
   switch (root.kind()) {
     case NodeKind::Literal:
@@ -147,12 +163,15 @@ SpillPotential spill_potential_impl(const AstNode& root, const FunctionRegistry*
     }
     case NodeKind::Call: {
       const std::string_view name = root.as_call_name();
-      switch (find_lazy_result_shape(name)) {
+      const LazyEntry* lazy = find_lazy_entry(name);
+      switch (lazy == nullptr ? LazyResultShape::kNotLazy : lazy->shape) {
         case LazyResultShape::kArray:
           return SpillPotential::kMaySpill;
         case LazyResultShape::kReduce:
         case LazyResultShape::kScalar:
-          return SpillPotential::kNever;
+          return lifted_potential(root, registry, let_env, [lazy](std::uint32_t i) {
+            return param_in_set(lazy->lift_params, i) || param_in_set(lazy->value_lifts, i);
+          });
         case LazyResultShape::kBroadcast: {
           SpillPotential result = SpillPotential::kNever;
           for (std::uint32_t i = 0; i < root.as_call_arity(); ++i) {
@@ -169,8 +188,12 @@ SpillPotential spill_potential_impl(const AstNode& root, const FunctionRegistry*
             case FunctionDef::ResultShape::kArray:
               return SpillPotential::kMaySpill;
             case FunctionDef::ResultShape::kReduce:
-            case FunctionDef::ResultShape::kScalar:
-              return SpillPotential::kNever;
+            case FunctionDef::ResultShape::kScalar: {
+              const std::uint32_t arity = root.as_call_arity();
+              return lifted_potential(root, registry, let_env, [def, arity](std::uint32_t i) {
+                return (def->first_arg_scalar && i == 0U) || (def->last_arg_scalar && i > 0U && i + 1U == arity);
+              });
+            }
             case FunctionDef::ResultShape::kBroadcast: {
               SpillPotential result = SpillPotential::kNever;
               for (std::uint32_t i = 0; i < root.as_call_arity(); ++i) {

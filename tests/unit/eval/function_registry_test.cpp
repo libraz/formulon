@@ -238,6 +238,29 @@ TEST(FunctionRegistry, SpillPotentialCoversLazyReturnShapes) {
   EXPECT_TRUE(FormulaMaySpill("=FORMULATEXT(A1:A2)"));
 }
 
+// A reducing or one-value call spills only through a slot it lifts over; a range anywhere else is its data.
+TEST(FunctionRegistry, SpillPotentialFollowsTheLiftedSlotsOnly) {
+  EXPECT_FALSE(FormulaMaySpill("=COUNTIF(A:A,B1)"));
+  EXPECT_TRUE(FormulaMaySpill("=COUNTIF(A:A,B1:B2)"));
+  EXPECT_FALSE(FormulaMaySpill("=SUMIFS(A:A,B:B,1,C:C,D1)"));
+  EXPECT_TRUE(FormulaMaySpill("=SUMIFS(A:A,B:B,1,C:C,{1,2})"));
+  EXPECT_FALSE(FormulaMaySpill("=IRR(A1:A3,B1)"));
+  EXPECT_TRUE(FormulaMaySpill("=IRR(A1:A3,B1:B2)"));
+  EXPECT_FALSE(FormulaMaySpill("=XNPV(B1,C1:C3,D1:D3)"));
+  EXPECT_TRUE(FormulaMaySpill("=XNPV(SEQUENCE(2),C1:C3,D1:D3)"));
+  EXPECT_FALSE(FormulaMaySpill("=DSUM(A1:C3,B1,E1:E2)"));
+  EXPECT_TRUE(FormulaMaySpill("=DSUM(A1:C3,{1,2},E1:E2)"));
+  EXPECT_FALSE(FormulaMaySpill("=PERCENTRANK(A:A,B1)"));
+  EXPECT_TRUE(FormulaMaySpill("=PERCENTRANK(A:A,B1,C1:C2)"));
+  EXPECT_FALSE(FormulaMaySpill("=SERIESSUM(1,1,1,A1:A3)"));
+  EXPECT_TRUE(FormulaMaySpill("=SERIESSUM(1,B1:B2,1,A1:A3)"));
+  // Eager: the single-value first or last argument of a range-aware function.
+  EXPECT_FALSE(FormulaMaySpill("=LARGE(A:A,1)"));
+  EXPECT_TRUE(FormulaMaySpill("=LARGE(A:A,B1:B2)"));
+  EXPECT_FALSE(FormulaMaySpill("=NPV(0.1,A1:A3)"));
+  EXPECT_TRUE(FormulaMaySpill("=NPV({0.1,0.2},A1:A3)"));
+}
+
 TEST(FunctionRegistry, SpillPotentialLetUsesOnlyTheBodyShape) {
   EXPECT_FALSE(FormulaMaySpill("=LET(x,SEQUENCE(1,2),42)"));
   EXPECT_TRUE(FormulaMaySpill("=LET(x,SEQUENCE(1,2),x)"));

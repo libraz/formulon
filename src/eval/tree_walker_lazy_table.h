@@ -60,7 +60,10 @@ enum class ParamSet : std::uint8_t {
   kFirst,           ///< 0
   kSecond,          ///< 1
   kFirstAndSecond,  ///< 0, 1
+  kThird,           ///< 2
   kFirstAndThird,   ///< 0, 2
+  kSecondAndThird,  ///< 1, 2
+  kFirstThree,      ///< 0, 1, 2
   kAllButFirst,     ///< 1, 2, ...
   kEven,            ///< 0, 2, 4, ...
   kEvenFromThird,   ///< 2, 4, 6, ...
@@ -82,8 +85,14 @@ constexpr bool param_in_set(ParamSet set, std::uint32_t index) noexcept {
       return index == 1U;
     case ParamSet::kFirstAndSecond:
       return index <= 1U;
+    case ParamSet::kThird:
+      return index == 2U;
     case ParamSet::kFirstAndThird:
       return index == 0U || index == 2U;
+    case ParamSet::kSecondAndThird:
+      return index == 1U || index == 2U;
+    case ParamSet::kFirstThree:
+      return index <= 2U;
     case ParamSet::kAllButFirst:
       return index >= 1U;
     case ParamSet::kEven:
@@ -140,6 +149,9 @@ struct LazyEntry {
   ParamSet scalar_params = ParamSet::kNone;  // parameters under the lone-value policy
   ScalarArg scalar_error = ScalarArg::kAccept;
   ParamSet lift_params = ParamSet::kNone;  // value parameters evaluated once to join the lift
+  // Value parameters over whose array argument the impl itself lifts the call. Declarative only:
+  // dispatch never reads it; spill_potential does, and a table drift test holds the impls to it.
+  ParamSet value_lifts = ParamSet::kNone;
 };
 
 static_assert(sizeof(LazyEntry) == (sizeof(void*) == 8 ? 32 : 20), "LazyEntry must not grow");
@@ -154,10 +166,6 @@ const LazyEntry* find_lazy_entry(std::string_view name) noexcept;
 /// invoke the returned pointer directly with the `Call` AST node + the
 /// usual `Arena` / `FunctionRegistry` / `EvalContext` triple.
 LazyImpl find_lazy_impl(std::string_view name) noexcept;
-
-/// Returns the result-shape policy for a lazy form, or `kNotLazy` when the
-/// name is not present in the dispatch table.
-LazyResultShape find_lazy_result_shape(std::string_view name) noexcept;
 
 /// Stores the inclusive argument-count bounds of the lazy form `name` (the
 /// meaning of `FunctionDef::min_arity` / `max_arity`, `kVariadic` for an

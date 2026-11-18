@@ -6,13 +6,19 @@
 #include <set>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include "eval/function_registry.h"
 #include "eval/range_resolvers.h"
+#include "eval/spill_potential.h"
 #include "eval/tree_walker.h"
 #include "eval/tree_walker_lazy_table.h"
 #include "gtest/gtest.h"
 #include "io/xlsb/func_id_table.h"
+#include "parser/parser.h"
+#include "util/test_eval_helpers.h"
+#include "utils/arena.h"
+#include "value.h"
 
 namespace formulon {
 namespace eval {
@@ -163,6 +169,92 @@ TEST(LazyTableColumns, ReferenceCallsAreTheResultsCarryingARectangle) {
     const RefResult result = find_lazy_entry(*p)->ref_result;
     EXPECT_EQ(is_reference_call_name(*p), result != RefResult::kNone && result != RefResult::kProjected) << *p;
   }
+}
+
+// Every reducing or one-value row that lifts over an array argument, with valid scalar arguments and, per slot, a
+// two-element array valid there. An array in a slot lifts the call, and makes it a possible spill, exactly when the
+// row's lift_params or value_lifts holds the slot.
+TEST(LazyTableColumns, LiftedSlotsAreTheDeclaredOnes) {
+  struct Row {
+    const char* name;
+    std::vector<const char*> scalars;
+    std::vector<const char*> arrays;
+  };
+  const char* const kDatabase = "{\"a\";1;2}";
+  const char* const kCriteria = "{\"a\";1}";
+  const std::vector<const char*> kDatabaseScalars = {kDatabase, "\"a\"", kCriteria};
+  const std::vector<const char*> kDatabaseArrays = {kDatabase, "{1,1}", kCriteria};
+  const std::vector<const char*> kRankScalars = {"{1,2,3}", "2", "3"};
+  const std::vector<const char*> kRankArrays = {"{1,2,3}", "{1,2}", "{1,2}"};
+  const std::vector<const char*> kIfsScalars = {"{1,2}", "{1,2}", "1"};
+  const std::vector<const char*> kIfsArrays = {"{1,2}", "{1,2}", "{1,2}"};
+  const std::vector<const char*> kIfScalars = {"{1,2}", "1", "{1,2}"};
+  const std::vector<const char*> kIfArrays = {"{1,2}", "{1,2}", "{1,2}"};
+  const Row rows[] = {
+      {"AVERAGEIF", kIfScalars, kIfArrays},
+      {"AVERAGEIFS", kIfsScalars, kIfsArrays},
+      {"COUNTIF", {"{1,2}", "1"}, {"{1,2}", "{1,2}"}},
+      {"COUNTIFS", {"{1,2}", "1", "{1,2}", "1"}, {"{1,2}", "{1,2}", "{1,2}", "{1,2}"}},
+      {"DAVERAGE", kDatabaseScalars, kDatabaseArrays},
+      {"DCOUNT", kDatabaseScalars, kDatabaseArrays},
+      {"DCOUNTA", kDatabaseScalars, kDatabaseArrays},
+      {"DGET", kDatabaseScalars, kDatabaseArrays},
+      {"DMAX", kDatabaseScalars, kDatabaseArrays},
+      {"DMIN", kDatabaseScalars, kDatabaseArrays},
+      {"DPRODUCT", kDatabaseScalars, kDatabaseArrays},
+      {"DSTDEV", kDatabaseScalars, kDatabaseArrays},
+      {"DSTDEVP", kDatabaseScalars, kDatabaseArrays},
+      {"DSUM", kDatabaseScalars, kDatabaseArrays},
+      {"DVAR", kDatabaseScalars, kDatabaseArrays},
+      {"DVARP", kDatabaseScalars, kDatabaseArrays},
+      {"IRR", {"{-10,6,6}", "0.1"}, {"{-10,6,6}", "{0.1,0.2}"}},
+      {"MAXIFS", kIfsScalars, kIfsArrays},
+      {"MINIFS", kIfsScalars, kIfsArrays},
+      {"MIRR", {"{-10,6,6}", "0.1", "0.1"}, {"{-10,6,6}", "{0.1,0.2}", "{0.1,0.2}"}},
+      {"PERCENTRANK", kRankScalars, kRankArrays},
+      {"PERCENTRANK.EXC", kRankScalars, kRankArrays},
+      {"PERCENTRANK.INC", kRankScalars, kRankArrays},
+      {"SERIESSUM", {"1", "1", "1", "{1,2}"}, {"{1,2}", "{1,2}", "{1,2}", "{1,2}"}},
+      {"SUMIF", kIfScalars, kIfArrays},
+      {"SUMIFS", kIfsScalars, kIfsArrays},
+      {"XIRR", {"{-10,6}", "{1,400}", "0.1"}, {"{-10,6}", "{1,400}", "{0.1,0.2}"}},
+      {"XNPV", {"0.1", "{-10,6}", "{1,400}"}, {"{0.1,0.2}", "{-10,6}", "{1,400}"}},
+  };
+  // Rows whose lifted slots depend on the call's function number are checked by their own tests.
+  const std::set<std::string> by_form = {"AGGREGATE"};
+  std::set<std::string> expected;
+  for (const char* const* p = lazy_form_names(); *p != nullptr; ++p) {
+    const LazyEntry* entry = find_lazy_entry(*p);
+    const bool one_value = entry->shape == LazyResultShape::kScalar || entry->shape == LazyResultShape::kReduce;
+    if (one_value && (entry->lift_params != ParamSet::kNone || entry->value_lifts != ParamSet::kNone) &&
+        by_form.count(*p) == 0U) {
+      expected.insert(*p);
+    }
+  }
+  std::set<std::string> actual;
+  for (const Row& row : rows) {
+    actual.insert(row.name);
+    const LazyEntry* entry = find_lazy_entry(row.name);
+    ASSERT_NE(entry, nullptr) << row.name;
+    ASSERT_EQ(row.scalars.size(), row.arrays.size()) << row.name;
+    for (std::size_t slot = 0; slot < row.arrays.size(); ++slot) {
+      std::string formula = std::string("=") + row.name + "(";
+      for (std::size_t i = 0; i < row.arrays.size(); ++i) {
+        formula += (i == 0U ? "" : ",");
+        formula += i == slot ? row.arrays[i] : row.scalars[i];
+      }
+      formula += ")";
+      const auto i = static_cast<std::uint32_t>(slot);
+      const bool lifts = param_in_set(entry->lift_params, i) || param_in_set(entry->value_lifts, i);
+      const Value v = formulon::test::EvalSource(formula);
+      EXPECT_EQ(v.is_array() && v.as_array_rows() * v.as_array_cols() == 2U, lifts) << formula;
+      Arena arena;
+      const parser::AstNode* root = parser::parse_strict(std::string_view(formula).substr(1), arena);
+      ASSERT_NE(root, nullptr) << formula;
+      EXPECT_EQ(spill_potential(*root, default_registry()) == SpillPotential::kMaySpill, lifts) << formula;
+    }
+  }
+  EXPECT_EQ(actual, expected);
 }
 
 TEST(LazyTableColumns, VariadicArityIsReportedAsVariadic) {

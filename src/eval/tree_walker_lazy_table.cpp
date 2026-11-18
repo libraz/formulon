@@ -79,6 +79,12 @@ constexpr LazyEntry lifting(LazyEntry entry, ParamSet params) {
   return entry;
 }
 
+// `entry` whose impl lifts the call over an array argument in each of `params`.
+constexpr LazyEntry value_lifting(LazyEntry entry, ParamSet params) {
+  entry.value_lifts = params;
+  return entry;
+}
+
 constexpr LazyEntry kLazyDispatch[] = {
     // The trim-reference operators `.:`, `:.`, `.:.` (see
     // `parser::trim_ref_function_name`); `_` sorts first under the lookup's
@@ -102,10 +108,12 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"AND", &eval_and_lazy, LazyResultShape::kReduce, 1U, kLazyVariadic},
     {"AREAS", &eval_areas_lazy, LazyResultShape::kReduce, 1U, 1U, RefResult::kNone, ParamSet::kFirst},
     {"ARRAYTOTEXT", &eval_arraytotext_lazy, LazyResultShape::kScalar, 1U, 2U},
-    per_ref({"AVERAGEIF", &eval_averageif_lazy, LazyResultShape::kReduce, 2U, 3U, RefResult::kNone,
-             ParamSet::kFirstAndThird}),
-    per_ref({"AVERAGEIFS", &eval_averageifs_lazy, LazyResultShape::kReduce, 3U, kLazyVariadic, RefResult::kNone,
-             ParamSet::kFirstAndOdd}),
+    value_lifting(per_ref({"AVERAGEIF", &eval_averageif_lazy, LazyResultShape::kReduce, 2U, 3U, RefResult::kNone,
+                           ParamSet::kFirstAndThird}),
+                  ParamSet::kSecond),
+    value_lifting(per_ref({"AVERAGEIFS", &eval_averageifs_lazy, LazyResultShape::kReduce, 3U, kLazyVariadic,
+                           RefResult::kNone, ParamSet::kFirstAndOdd}),
+                  ParamSet::kEvenFromThird),
     {"BYCOL", &eval_bycol_lazy, LazyResultShape::kArray, 1U, 2U},
     {"BYROW", &eval_byrow_lazy, LazyResultShape::kArray, 1U, 2U},
     {"CELL", &eval_cell_lazy, LazyResultShape::kArray, 1U, 2U, RefResult::kNone, ParamSet::kSecond},
@@ -122,9 +130,12 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"CORREL", &eval_correl_lazy, LazyResultShape::kReduce, 2U, 2U},
     {"COUNT", &eval_count_lazy, LazyResultShape::kReduce, 1U, kLazyVariadic},
     {"COUNTBLANK", &eval_countblank_lazy, LazyResultShape::kReduce, 1U, 1U, RefResult::kNone, ParamSet::kFirst},
-    per_ref({"COUNTIF", &eval_countif_lazy, LazyResultShape::kReduce, 2U, 2U, RefResult::kNone, ParamSet::kFirst}),
-    per_ref({"COUNTIFS", &eval_countifs_lazy, LazyResultShape::kReduce, 2U, kLazyVariadic, RefResult::kNone,
-             ParamSet::kEven}),
+    value_lifting(
+        per_ref({"COUNTIF", &eval_countif_lazy, LazyResultShape::kReduce, 2U, 2U, RefResult::kNone, ParamSet::kFirst}),
+        ParamSet::kSecond),
+    value_lifting(per_ref({"COUNTIFS", &eval_countifs_lazy, LazyResultShape::kReduce, 2U, kLazyVariadic,
+                           RefResult::kNone, ParamSet::kEven}),
+                  ParamSet::kOdd),
     {"COUPDAYBS", &eval_financial_date_lazy, LazyResultShape::kBroadcast, 3U, 4U},
     {"COUPDAYS", &eval_financial_date_lazy, LazyResultShape::kBroadcast, 3U, 4U},
     {"COUPDAYSNC", &eval_financial_date_lazy, LazyResultShape::kBroadcast, 3U, 4U},
@@ -143,24 +154,38 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"DATE", &eval_datetime_lazy, LazyResultShape::kBroadcast, 3U, 3U},
     {"DATEDIF", &eval_datetime_lazy, LazyResultShape::kBroadcast, 3U, 3U},
     {"DATEVALUE", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
-    {"DAVERAGE", &eval_daverage_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
+    value_lifting(
+        {"DAVERAGE", &eval_daverage_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
+        ParamSet::kSecond),
     {"DAY", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
     {"DAYS", &eval_datetime_lazy, LazyResultShape::kBroadcast, 2U, 2U},
     {"DAYS360", &eval_datetime_lazy, LazyResultShape::kBroadcast, 2U, 3U},
-    {"DCOUNT", &eval_dcount_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
-    {"DCOUNTA", &eval_dcounta_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
-    {"DGET", &eval_dget_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
+    value_lifting({"DCOUNT", &eval_dcount_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
+                  ParamSet::kSecond),
+    value_lifting({"DCOUNTA", &eval_dcounta_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
+                  ParamSet::kSecond),
+    value_lifting({"DGET", &eval_dget_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
+                  ParamSet::kSecond),
     {"DISC", &eval_financial_date_lazy, LazyResultShape::kBroadcast, 4U, 5U},
-    {"DMAX", &eval_dmax_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
-    {"DMIN", &eval_dmin_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
-    {"DPRODUCT", &eval_dproduct_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
+    value_lifting({"DMAX", &eval_dmax_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
+                  ParamSet::kSecond),
+    value_lifting({"DMIN", &eval_dmin_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
+                  ParamSet::kSecond),
+    value_lifting(
+        {"DPRODUCT", &eval_dproduct_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
+        ParamSet::kSecond),
     {"DROP", &eval_drop_lazy, LazyResultShape::kArray, 2U, 3U, RefResult::kArg0, ParamSet::kNone},
-    {"DSTDEV", &eval_dstdev_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
-    {"DSTDEVP", &eval_dstdevp_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
-    {"DSUM", &eval_dsum_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
+    value_lifting({"DSTDEV", &eval_dstdev_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
+                  ParamSet::kSecond),
+    value_lifting({"DSTDEVP", &eval_dstdevp_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
+                  ParamSet::kSecond),
+    value_lifting({"DSUM", &eval_dsum_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
+                  ParamSet::kSecond),
     {"DURATION", &eval_financial_date_lazy, LazyResultShape::kBroadcast, 5U, 6U},
-    {"DVAR", &eval_dvar_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
-    {"DVARP", &eval_dvarp_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
+    value_lifting({"DVAR", &eval_dvar_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
+                  ParamSet::kSecond),
+    value_lifting({"DVARP", &eval_dvarp_lazy, LazyResultShape::kReduce, 3U, 3U, RefResult::kNone, ParamSet::kFirst},
+                  ParamSet::kSecond),
     {"EDATE", &eval_datetime_lazy, LazyResultShape::kBroadcast, 2U, 2U},
     {"EOMONTH", &eval_datetime_lazy, LazyResultShape::kBroadcast, 2U, 2U},
     {"EXPAND", &eval_expand_lazy, LazyResultShape::kArray, 2U, 4U},
@@ -210,7 +235,9 @@ constexpr LazyEntry kLazyDispatch[] = {
     // ISFORMULA / ISREF inspect the un-evaluated AST of their argument;
     // they cannot ride the eager path because it flattens references to
     // `Value` before the impl runs.
-    lone_value({"IRR", &eval_irr_lazy, LazyResultShape::kScalar, 1U, 2U}, ParamSet::kFirst, ScalarArg::kRejectNum),
+    value_lifting(
+        lone_value({"IRR", &eval_irr_lazy, LazyResultShape::kScalar, 1U, 2U}, ParamSet::kFirst, ScalarArg::kRejectNum),
+        ParamSet::kSecond),
     {"ISFORMULA", &eval_isformula_lazy, LazyResultShape::kBroadcast, 1U, 1U, RefResult::kNone, ParamSet::kFirst},
     {"ISOMITTED", &eval_isomitted_lazy, LazyResultShape::kScalar, 1U, 1U},
     {"ISOWEEKNUM", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
@@ -223,15 +250,19 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"MAP", &eval_map_lazy, LazyResultShape::kArray, 2U, kLazyVariadic},
     lone_value({"MATCH", &eval_match_lazy, LazyResultShape::kArray, 2U, 3U}, ParamSet::kSecond,
                ScalarArg::kRejectNAOrTextValue),
-    per_ref({"MAXIFS", &eval_maxifs_lazy, LazyResultShape::kReduce, 3U, kLazyVariadic, RefResult::kNone,
-             ParamSet::kFirstAndOdd}),
+    value_lifting(per_ref({"MAXIFS", &eval_maxifs_lazy, LazyResultShape::kReduce, 3U, kLazyVariadic, RefResult::kNone,
+                           ParamSet::kFirstAndOdd}),
+                  ParamSet::kEvenFromThird),
     {"MDETERM", &eval_mdeterm_lazy, LazyResultShape::kScalar, 1U, 1U},
     {"MDURATION", &eval_financial_date_lazy, LazyResultShape::kBroadcast, 5U, 6U},
-    per_ref({"MINIFS", &eval_minifs_lazy, LazyResultShape::kReduce, 3U, kLazyVariadic, RefResult::kNone,
-             ParamSet::kFirstAndOdd}),
+    value_lifting(per_ref({"MINIFS", &eval_minifs_lazy, LazyResultShape::kReduce, 3U, kLazyVariadic, RefResult::kNone,
+                           ParamSet::kFirstAndOdd}),
+                  ParamSet::kEvenFromThird),
     {"MINUTE", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
     {"MINVERSE", &eval_minverse_lazy, LazyResultShape::kArray, 1U, 1U},
-    lone_value({"MIRR", &eval_mirr_lazy, LazyResultShape::kScalar, 3U, 3U}, ParamSet::kFirst, ScalarArg::kRejectDiv0),
+    value_lifting(lone_value({"MIRR", &eval_mirr_lazy, LazyResultShape::kScalar, 3U, 3U}, ParamSet::kFirst,
+                             ScalarArg::kRejectDiv0),
+                  ParamSet::kSecondAndThird),
     {"MMULT", &eval_mmult_lazy, LazyResultShape::kArray, 2U, 2U},
     {"MONTH", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
     {"N", &eval_n_lazy, LazyResultShape::kBroadcast, 1U, 1U},
@@ -251,9 +282,12 @@ constexpr LazyEntry kLazyDispatch[] = {
     // correlation coefficient); Excel keeps both names for back-compat.
     {"PEARSON", &eval_correl_lazy, LazyResultShape::kReduce, 2U, 2U},
     {"PERCENTOF", &eval_percentof_lazy, LazyResultShape::kScalar, 2U, 2U},
-    {"PERCENTRANK", &eval_percentrank_inc_lazy, LazyResultShape::kScalar, 2U, 3U},
-    {"PERCENTRANK.EXC", &eval_percentrank_exc_lazy, LazyResultShape::kScalar, 2U, 3U},
-    {"PERCENTRANK.INC", &eval_percentrank_inc_lazy, LazyResultShape::kScalar, 2U, 3U},
+    value_lifting({"PERCENTRANK", &eval_percentrank_inc_lazy, LazyResultShape::kScalar, 2U, 3U},
+                  ParamSet::kSecondAndThird),
+    value_lifting({"PERCENTRANK.EXC", &eval_percentrank_exc_lazy, LazyResultShape::kScalar, 2U, 3U},
+                  ParamSet::kSecondAndThird),
+    value_lifting({"PERCENTRANK.INC", &eval_percentrank_inc_lazy, LazyResultShape::kScalar, 2U, 3U},
+                  ParamSet::kSecondAndThird),
     // PHONETIC reads the cell's <rPh> annotation off the un-evaluated
     // Ref AST; the eager dispatcher would flatten the argument to a
     // Value before the impl could consult `Cell::phonetic_text`.
@@ -279,7 +313,7 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"RSQ", &eval_rsq_lazy, LazyResultShape::kScalar, 2U, 2U},
     {"SCAN", &eval_scan_lazy, LazyResultShape::kArray, 3U, 3U},
     {"SECOND", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
-    {"SERIESSUM", &eval_series_sum_lazy, LazyResultShape::kScalar, 4U, 4U},
+    value_lifting({"SERIESSUM", &eval_series_sum_lazy, LazyResultShape::kScalar, 4U, 4U}, ParamSet::kFirstThree),
     // SHEET / SHEETS consult the bound Workbook + current Sheet on the
     // EvalContext; AST introspection of an optional reference argument
     // tells them which sheet to answer for.
@@ -300,9 +334,12 @@ constexpr LazyEntry kLazyDispatch[] = {
     // sheet. See `eval_subtotal_lazy`.
     per_ref({"SUBTOTAL", &eval_subtotal_lazy, LazyResultShape::kReduce, 2U, kLazyVariadic, RefResult::kNone,
              ParamSet::kAllButFirst}),
-    per_ref({"SUMIF", &eval_sumif_lazy, LazyResultShape::kReduce, 2U, 3U, RefResult::kNone, ParamSet::kFirstAndThird}),
-    per_ref({"SUMIFS", &eval_sumifs_lazy, LazyResultShape::kReduce, 3U, kLazyVariadic, RefResult::kNone,
-             ParamSet::kFirstAndOdd}),
+    value_lifting(per_ref({"SUMIF", &eval_sumif_lazy, LazyResultShape::kReduce, 2U, 3U, RefResult::kNone,
+                           ParamSet::kFirstAndThird}),
+                  ParamSet::kSecond),
+    value_lifting(per_ref({"SUMIFS", &eval_sumifs_lazy, LazyResultShape::kReduce, 3U, kLazyVariadic, RefResult::kNone,
+                           ParamSet::kFirstAndOdd}),
+                  ParamSet::kEvenFromThird),
     {"SUMPRODUCT", &eval_sumproduct_lazy, LazyResultShape::kReduce, 1U, kLazyVariadic},
     {"SUMX2MY2", &eval_sumx2my2_lazy, LazyResultShape::kReduce, 2U, 2U},
     {"SUMX2PY2", &eval_sumx2py2_lazy, LazyResultShape::kReduce, 2U, 2U},
@@ -340,12 +377,14 @@ constexpr LazyEntry kLazyDispatch[] = {
     {"WRAPCOLS", &eval_wrapcols_lazy, LazyResultShape::kArray, 2U, 3U},
     {"WRAPROWS", &eval_wraprows_lazy, LazyResultShape::kArray, 2U, 3U},
     // XIRR / XNPV read a lone number as a one-flow series (`XNPV(0.1,5,45000)` is 5).
-    lone_value({"XIRR", &eval_xirr_lazy, LazyResultShape::kScalar, 2U, 3U}, ParamSet::kFirstAndSecond,
-               ScalarArg::kRejectTextValue),
+    value_lifting(lone_value({"XIRR", &eval_xirr_lazy, LazyResultShape::kScalar, 2U, 3U}, ParamSet::kFirstAndSecond,
+                             ScalarArg::kRejectTextValue),
+                  ParamSet::kThird),
     {"XLOOKUP", &eval_xlookup_lazy, LazyResultShape::kArray, 3U, 6U, RefResult::kXlookupResult, ParamSet::kNone},
     {"XMATCH", &eval_xmatch_lazy, LazyResultShape::kArray, 2U, 4U},
-    lone_value({"XNPV", &eval_xnpv_lazy, LazyResultShape::kScalar, 3U, 3U}, ParamSet::kAllButFirst,
-               ScalarArg::kRejectTextValue),
+    value_lifting(lone_value({"XNPV", &eval_xnpv_lazy, LazyResultShape::kScalar, 3U, 3U}, ParamSet::kAllButFirst,
+                             ScalarArg::kRejectTextValue),
+                  ParamSet::kFirst),
     {"YEAR", &eval_datetime_lazy, LazyResultShape::kBroadcast, 1U, 1U},
     {"YEARFRAC", &eval_datetime_lazy, LazyResultShape::kBroadcast, 2U, 3U},
     {"YIELD", &eval_financial_date_lazy, LazyResultShape::kBroadcast, 6U, 7U},
@@ -393,11 +432,6 @@ const LazyEntry* find_lazy_entry(std::string_view name) noexcept {
 LazyImpl find_lazy_impl(std::string_view name) noexcept {
   const LazyEntry* entry = find_lazy_entry(name);
   return entry != nullptr ? entry->impl : nullptr;
-}
-
-LazyResultShape find_lazy_result_shape(std::string_view name) noexcept {
-  const LazyEntry* entry = find_lazy_entry(name);
-  return entry != nullptr ? entry->shape : LazyResultShape::kNotLazy;
 }
 
 bool find_lazy_arity(std::string_view name, std::uint32_t* min_arity, std::uint32_t* max_arity) noexcept {
