@@ -95,9 +95,8 @@ Value IsNa(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // *not* coerce TRUE/FALSE to 1/0 here, unlike most numeric contexts).
 // All other inputs go through `coerce_to_number` (blank->0, numeric text
 // parsed), then truncate toward zero and check the low bit. Non-numeric
-// coercion failure surfaces as `#VALUE!`. Errors propagate through the
-// dispatcher's default short-circuit (no `propagate_errors = false`
-// opt-out here).
+// coercion failure surfaces as `#VALUE!`. An error argument coerces to its
+// own error (no `propagate_errors = false` opt-out here).
 //
 // Example: `ISEVEN(-2.9)` truncates to `-2` -> TRUE. `ISEVEN(TRUE)` ->
 // `#VALUE!`. `ISEVEN("3")` -> text "3" parses as number 3 -> FALSE.

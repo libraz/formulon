@@ -569,7 +569,8 @@ void register_financial_builtins(FunctionRegistry& registry) {
       {"ISPMT", 4u, 4u, &financial_detail::IsPmt},
       builtins_detail::scalar_first_arg(
           builtins_detail::analysis_toolpak({"FVSCHEDULE", 2u, 2u, &financial_detail::FvSchedule, true, true, true})),
-      {"STOCKHISTORY", 2u, kVariadic, &financial_detail::StockHistory},
+      // A market-data service: the engine performs no network I/O.
+      {"STOCKHISTORY", 2u, kVariadic, &builtins_detail::fixed_error_stub<ErrorCode::Value>},
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));
 }

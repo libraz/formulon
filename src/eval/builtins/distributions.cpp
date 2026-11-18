@@ -7,8 +7,8 @@
 //   HYPGEOM.DIST
 //
 // Every entry is scalar-only (no range expansion). Arguments are coerced
-// via `coerce_to_number` / `coerce_to_bool`; error-typed arguments
-// short-circuit via the dispatcher before the impl runs. The CDF and quantile
+// via `coerce_to_number` / `coerce_to_bool` in argument order, an error
+// argument failing with its own error. The CDF and quantile
 // routines come from `eval/stats/incomplete_gamma.h`,
 // `eval/stats/incomplete_beta.h` and `eval/stats/inverse_distributions.h`.
 //

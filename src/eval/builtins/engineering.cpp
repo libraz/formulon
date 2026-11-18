@@ -186,6 +186,8 @@ Expected<std::string, ErrorCode> input_digit_string(const Value& v) {
       // treats BIN2OCT(blank) as BIN2OCT(0) -> "0" (likewise for the other
       // *2* conversions). Reproduced by IronCalc on calc_tests/Decimal I32.
       return std::string("0");
+    case ValueKind::Error:
+      return v.as_error();
     default:
       // Array / Ref / Lambda fall through. The eager dispatcher surfaces
       // scalar mismatches as #VALUE! -- mirror that here defensively.
@@ -436,29 +438,43 @@ Value BitRShift(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
 // DELTA / GESTEP
 // ---------------------------------------------------------------------------
 
-Value compare_with_optional_step(const Value* args, std::uint32_t arity, bool greater_equal) {
+// `step_first` coerces the step before the number (DELTA's check order).
+Value compare_with_optional_step(const Value* args, std::uint32_t arity, bool greater_equal, bool step_first) {
   // DELTA / GESTEP reject a direct Bool with #VALUE! rather than coercing it to 0 / 1.
+  double step = 0.0;
+  const auto read_step = [&]() -> Value {
+    if (arity >= 2) {
+      auto sv = builtins_detail::coerce_to_number_no_bool(args[1]);
+      if (!sv) {
+        return Value::error(sv.error());
+      }
+      step = sv.value();
+    }
+    return Value::blank();
+  };
+  if (step_first) {
+    if (const Value err = read_step(); err.is_error()) {
+      return err;
+    }
+  }
   auto a = builtins_detail::coerce_to_number_no_bool(args[0]);
   if (!a) {
     return Value::error(a.error());
   }
-  double step = 0.0;
-  if (arity >= 2) {
-    auto sv = builtins_detail::coerce_to_number_no_bool(args[1]);
-    if (!sv) {
-      return Value::error(sv.error());
+  if (!step_first) {
+    if (const Value err = read_step(); err.is_error()) {
+      return err;
     }
-    step = sv.value();
   }
   return Value::number((greater_equal ? a.value() >= step : a.value() == step) ? 1.0 : 0.0);
 }
 
 Value Delta(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  return compare_with_optional_step(args, arity, /*greater_equal=*/false);
+  return compare_with_optional_step(args, arity, /*greater_equal=*/false, /*step_first=*/true);
 }
 
 Value Gestep(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
-  return compare_with_optional_step(args, arity, /*greater_equal=*/true);
+  return compare_with_optional_step(args, arity, /*greater_equal=*/true, /*step_first=*/false);
 }
 
 }  // namespace
@@ -496,15 +512,15 @@ void register_engineering_builtins(FunctionRegistry& registry) {
       builtins_detail::analysis_toolpak({"HEX2DEC", 1u, 1u, &Hex2Dec}),
       builtins_detail::analysis_toolpak({"HEX2BIN", 1u, 2u, &Hex2Bin}),
       builtins_detail::analysis_toolpak({"HEX2OCT", 1u, 2u, &Hex2Oct}),
-      builtins_detail::analysis_toolpak({"DEC2BIN", 1u, 2u, &Dec2Bin}),
-      builtins_detail::analysis_toolpak({"DEC2OCT", 1u, 2u, &Dec2Oct}),
-      builtins_detail::analysis_toolpak({"DEC2HEX", 1u, 2u, &Dec2Hex}),
+      builtins_detail::checks_args_last_first(builtins_detail::analysis_toolpak({"DEC2BIN", 1u, 2u, &Dec2Bin})),
+      builtins_detail::checks_args_last_first(builtins_detail::analysis_toolpak({"DEC2OCT", 1u, 2u, &Dec2Oct})),
+      builtins_detail::checks_args_last_first(builtins_detail::analysis_toolpak({"DEC2HEX", 1u, 2u, &Dec2Hex})),
       {"BITAND", 2u, 2u, &BitAnd},
       {"BITOR", 2u, 2u, &BitOr},
       {"BITXOR", 2u, 2u, &BitXor},
       {"BITLSHIFT", 2u, 2u, &BitLShift},
       {"BITRSHIFT", 2u, 2u, &BitRShift},
-      builtins_detail::analysis_toolpak({"DELTA", 1u, 2u, &Delta}),
+      builtins_detail::checks_args_last_first(builtins_detail::analysis_toolpak({"DELTA", 1u, 2u, &Delta})),
       builtins_detail::analysis_toolpak({"GESTEP", 1u, 2u, &Gestep}),
   };
   builtins_detail::register_builtin_functions(registry, functions, sizeof(functions) / sizeof(functions[0]));

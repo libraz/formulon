@@ -20,9 +20,8 @@
 //                        external API; #NAME? matches the offline-service
 //                        surface).
 //
-// All host-service stubs ride the eager dispatch path
-// (`accepts_ranges = false`, default `propagate_errors = true`) so an
-// error argument short-circuits before the fixed return fires -- this
+// All host-service stubs ride the eager dispatch path and return their first
+// error argument ahead of the fixed error -- this
 // matches the WEBSERVICE / PY stubs in `src/eval/builtins/web.cpp` and
 // keeps the surface consistent with real functions for formulas that
 // propagate errors through service calls.

@@ -1,0 +1,2261 @@
+suite: error_pair_3
+description: 'For every catalog function Excel accepts, two arguments hold different
+  errors (#DIV/0! in the earlier slot, #NUM! in the later one): which slot''s error
+  the function reports.
+
+  '
+tolerance:
+  abs: 0
+  rel: 0
+locale: ja-JP
+cases:
+- id: ep_negbinomdist_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NEGBINOMDIST(H1,H2,1)
+- id: ep_negbinomdist_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NEGBINOMDIST(H1,1,H2)
+- id: ep_negbinomdist_1_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NEGBINOMDIST(1,H1,H2)
+- id: ep_networkdays_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NETWORKDAYS(H1,H2)
+- id: ep_networkdays_intl_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NETWORKDAYS.INTL(H1,H2)
+- id: ep_nominal_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NOMINAL(H1,H2)
+- id: ep_norm_dist_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NORM.DIST(H1,H2,1,1)
+- id: ep_norm_dist_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NORM.DIST(H1,1,H2,1)
+- id: ep_norm_dist_0_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NORM.DIST(H1,1,1,H2)
+- id: ep_norm_dist_1_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NORM.DIST(1,H1,H2,1)
+- id: ep_norm_dist_1_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NORM.DIST(1,H1,1,H2)
+- id: ep_norm_dist_2_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NORM.DIST(1,1,H1,H2)
+- id: ep_norm_inv_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NORM.INV(H1,H2,1)
+- id: ep_norm_inv_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NORM.INV(H1,1,H2)
+- id: ep_norm_inv_1_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NORM.INV(1,H1,H2)
+- id: ep_norm_s_dist_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NORM.S.DIST(H1,H2)
+- id: ep_normdist_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NORMDIST(H1,H2,1,1)
+- id: ep_normdist_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NORMDIST(H1,1,H2,1)
+- id: ep_normdist_0_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NORMDIST(H1,1,1,H2)
+- id: ep_normdist_1_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NORMDIST(1,H1,H2,1)
+- id: ep_normdist_1_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NORMDIST(1,H1,1,H2)
+- id: ep_normdist_2_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NORMDIST(1,1,H1,H2)
+- id: ep_norminv_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NORMINV(H1,H2,1)
+- id: ep_norminv_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NORMINV(H1,1,H2)
+- id: ep_norminv_1_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NORMINV(1,H1,H2)
+- id: ep_nper_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NPER(H1,H2,1)
+- id: ep_nper_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NPER(H1,1,H2)
+- id: ep_nper_1_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NPER(1,H1,H2)
+- id: ep_npv_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NPV(H1,H2)
+- id: ep_numbervalue_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =NUMBERVALUE(H1,H2)
+- id: ep_oct2bin_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =OCT2BIN(H1,H2)
+- id: ep_oct2hex_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =OCT2HEX(H1,H2)
+- id: ep_oddfprice_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(H1,H2,1,1,1,1,1,1)
+- id: ep_oddfprice_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(H1,1,H2,1,1,1,1,1)
+- id: ep_oddfprice_0_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(H1,1,1,H2,1,1,1,1)
+- id: ep_oddfprice_0_4
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(H1,1,1,1,H2,1,1,1)
+- id: ep_oddfprice_0_5
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(H1,1,1,1,1,H2,1,1)
+- id: ep_oddfprice_0_6
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(H1,1,1,1,1,1,H2,1)
+- id: ep_oddfprice_0_7
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(H1,1,1,1,1,1,1,H2)
+- id: ep_oddfprice_1_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(1,H1,H2,1,1,1,1,1)
+- id: ep_oddfprice_1_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(1,H1,1,H2,1,1,1,1)
+- id: ep_oddfprice_1_4
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(1,H1,1,1,H2,1,1,1)
+- id: ep_oddfprice_1_5
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(1,H1,1,1,1,H2,1,1)
+- id: ep_oddfprice_1_6
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(1,H1,1,1,1,1,H2,1)
+- id: ep_oddfprice_1_7
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(1,H1,1,1,1,1,1,H2)
+- id: ep_oddfprice_2_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(1,1,H1,H2,1,1,1,1)
+- id: ep_oddfprice_2_4
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(1,1,H1,1,H2,1,1,1)
+- id: ep_oddfprice_2_5
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(1,1,H1,1,1,H2,1,1)
+- id: ep_oddfprice_2_6
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(1,1,H1,1,1,1,H2,1)
+- id: ep_oddfprice_2_7
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(1,1,H1,1,1,1,1,H2)
+- id: ep_oddfprice_3_4
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(1,1,1,H1,H2,1,1,1)
+- id: ep_oddfprice_3_5
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(1,1,1,H1,1,H2,1,1)
+- id: ep_oddfprice_3_6
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(1,1,1,H1,1,1,H2,1)
+- id: ep_oddfprice_3_7
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(1,1,1,H1,1,1,1,H2)
+- id: ep_oddfprice_4_5
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(1,1,1,1,H1,H2,1,1)
+- id: ep_oddfprice_4_6
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(1,1,1,1,H1,1,H2,1)
+- id: ep_oddfprice_4_7
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(1,1,1,1,H1,1,1,H2)
+- id: ep_oddfprice_5_6
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(1,1,1,1,1,H1,H2,1)
+- id: ep_oddfprice_5_7
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(1,1,1,1,1,H1,1,H2)
+- id: ep_oddfprice_6_7
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFPRICE(1,1,1,1,1,1,H1,H2)
+- id: ep_oddfyield_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(H1,H2,1,1,1,1,1,1)
+- id: ep_oddfyield_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(H1,1,H2,1,1,1,1,1)
+- id: ep_oddfyield_0_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(H1,1,1,H2,1,1,1,1)
+- id: ep_oddfyield_0_4
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(H1,1,1,1,H2,1,1,1)
+- id: ep_oddfyield_0_5
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(H1,1,1,1,1,H2,1,1)
+- id: ep_oddfyield_0_6
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(H1,1,1,1,1,1,H2,1)
+- id: ep_oddfyield_0_7
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(H1,1,1,1,1,1,1,H2)
+- id: ep_oddfyield_1_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(1,H1,H2,1,1,1,1,1)
+- id: ep_oddfyield_1_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(1,H1,1,H2,1,1,1,1)
+- id: ep_oddfyield_1_4
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(1,H1,1,1,H2,1,1,1)
+- id: ep_oddfyield_1_5
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(1,H1,1,1,1,H2,1,1)
+- id: ep_oddfyield_1_6
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(1,H1,1,1,1,1,H2,1)
+- id: ep_oddfyield_1_7
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(1,H1,1,1,1,1,1,H2)
+- id: ep_oddfyield_2_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(1,1,H1,H2,1,1,1,1)
+- id: ep_oddfyield_2_4
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(1,1,H1,1,H2,1,1,1)
+- id: ep_oddfyield_2_5
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(1,1,H1,1,1,H2,1,1)
+- id: ep_oddfyield_2_6
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(1,1,H1,1,1,1,H2,1)
+- id: ep_oddfyield_2_7
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(1,1,H1,1,1,1,1,H2)
+- id: ep_oddfyield_3_4
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(1,1,1,H1,H2,1,1,1)
+- id: ep_oddfyield_3_5
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(1,1,1,H1,1,H2,1,1)
+- id: ep_oddfyield_3_6
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(1,1,1,H1,1,1,H2,1)
+- id: ep_oddfyield_3_7
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(1,1,1,H1,1,1,1,H2)
+- id: ep_oddfyield_4_5
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(1,1,1,1,H1,H2,1,1)
+- id: ep_oddfyield_4_6
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(1,1,1,1,H1,1,H2,1)
+- id: ep_oddfyield_4_7
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(1,1,1,1,H1,1,1,H2)
+- id: ep_oddfyield_5_6
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(1,1,1,1,1,H1,H2,1)
+- id: ep_oddfyield_5_7
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(1,1,1,1,1,H1,1,H2)
+- id: ep_oddfyield_6_7
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDFYIELD(1,1,1,1,1,1,H1,H2)
+- id: ep_oddlprice_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLPRICE(H1,H2,1,1,1,1,1)
+- id: ep_oddlprice_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLPRICE(H1,1,H2,1,1,1,1)
+- id: ep_oddlprice_0_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLPRICE(H1,1,1,H2,1,1,1)
+- id: ep_oddlprice_0_4
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLPRICE(H1,1,1,1,H2,1,1)
+- id: ep_oddlprice_0_5
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLPRICE(H1,1,1,1,1,H2,1)
+- id: ep_oddlprice_0_6
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLPRICE(H1,1,1,1,1,1,H2)
+- id: ep_oddlprice_1_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLPRICE(1,H1,H2,1,1,1,1)
+- id: ep_oddlprice_1_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLPRICE(1,H1,1,H2,1,1,1)
+- id: ep_oddlprice_1_4
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLPRICE(1,H1,1,1,H2,1,1)
+- id: ep_oddlprice_1_5
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLPRICE(1,H1,1,1,1,H2,1)
+- id: ep_oddlprice_1_6
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLPRICE(1,H1,1,1,1,1,H2)
+- id: ep_oddlprice_2_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLPRICE(1,1,H1,H2,1,1,1)
+- id: ep_oddlprice_2_4
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLPRICE(1,1,H1,1,H2,1,1)
+- id: ep_oddlprice_2_5
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLPRICE(1,1,H1,1,1,H2,1)
+- id: ep_oddlprice_2_6
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLPRICE(1,1,H1,1,1,1,H2)
+- id: ep_oddlprice_3_4
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLPRICE(1,1,1,H1,H2,1,1)
+- id: ep_oddlprice_3_5
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLPRICE(1,1,1,H1,1,H2,1)
+- id: ep_oddlprice_3_6
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLPRICE(1,1,1,H1,1,1,H2)
+- id: ep_oddlprice_4_5
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLPRICE(1,1,1,1,H1,H2,1)
+- id: ep_oddlprice_4_6
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLPRICE(1,1,1,1,H1,1,H2)
+- id: ep_oddlprice_5_6
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLPRICE(1,1,1,1,1,H1,H2)
+- id: ep_oddlyield_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLYIELD(H1,H2,1,1,1,1,1)
+- id: ep_oddlyield_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLYIELD(H1,1,H2,1,1,1,1)
+- id: ep_oddlyield_0_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLYIELD(H1,1,1,H2,1,1,1)
+- id: ep_oddlyield_0_4
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLYIELD(H1,1,1,1,H2,1,1)
+- id: ep_oddlyield_0_5
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLYIELD(H1,1,1,1,1,H2,1)
+- id: ep_oddlyield_0_6
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLYIELD(H1,1,1,1,1,1,H2)
+- id: ep_oddlyield_1_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLYIELD(1,H1,H2,1,1,1,1)
+- id: ep_oddlyield_1_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLYIELD(1,H1,1,H2,1,1,1)
+- id: ep_oddlyield_1_4
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLYIELD(1,H1,1,1,H2,1,1)
+- id: ep_oddlyield_1_5
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLYIELD(1,H1,1,1,1,H2,1)
+- id: ep_oddlyield_1_6
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLYIELD(1,H1,1,1,1,1,H2)
+- id: ep_oddlyield_2_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLYIELD(1,1,H1,H2,1,1,1)
+- id: ep_oddlyield_2_4
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLYIELD(1,1,H1,1,H2,1,1)
+- id: ep_oddlyield_2_5
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLYIELD(1,1,H1,1,1,H2,1)
+- id: ep_oddlyield_2_6
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLYIELD(1,1,H1,1,1,1,H2)
+- id: ep_oddlyield_3_4
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLYIELD(1,1,1,H1,H2,1,1)
+- id: ep_oddlyield_3_5
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLYIELD(1,1,1,H1,1,H2,1)
+- id: ep_oddlyield_3_6
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLYIELD(1,1,1,H1,1,1,H2)
+- id: ep_oddlyield_4_5
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLYIELD(1,1,1,1,H1,H2,1)
+- id: ep_oddlyield_4_6
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLYIELD(1,1,1,1,H1,1,H2)
+- id: ep_oddlyield_5_6
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ODDLYIELD(1,1,1,1,1,H1,H2)
+- id: ep_offset_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =OFFSET(H1,H2,A1)
+- id: ep_offset_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =OFFSET(H1,A1,H2)
+- id: ep_offset_1_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =OFFSET(A1,H1,H2)
+- id: ep_or_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =OR(H1,H2)
+- id: ep_pduration_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PDURATION(H1,H2,1)
+- id: ep_pduration_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PDURATION(H1,1,H2)
+- id: ep_pduration_1_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PDURATION(1,H1,H2)
+- id: ep_pearson_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PEARSON(H1,H2)
+- id: ep_percentile_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PERCENTILE(H1,H2)
+- id: ep_percentile_exc_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PERCENTILE.EXC(H1,H2)
+- id: ep_percentile_inc_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PERCENTILE.INC(H1,H2)
+- id: ep_percentof_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PERCENTOF(H1,H2)
+- id: ep_percentrank_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PERCENTRANK(H1,H2)
+- id: ep_percentrank_exc_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PERCENTRANK.EXC(H1,H2)
+- id: ep_percentrank_inc_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PERCENTRANK.INC(H1,H2)
+- id: ep_permut_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PERMUT(H1,H2)
+- id: ep_permutationa_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PERMUTATIONA(H1,H2)
+- id: ep_pivotby_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PIVOTBY(H1,H2,1,1)
+- id: ep_pivotby_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PIVOTBY(H1,1,H2,1)
+- id: ep_pivotby_0_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PIVOTBY(H1,1,1,H2)
+- id: ep_pivotby_1_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PIVOTBY(1,H1,H2,1)
+- id: ep_pivotby_1_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PIVOTBY(1,H1,1,H2)
+- id: ep_pivotby_2_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PIVOTBY(1,1,H1,H2)
+- id: ep_pmt_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PMT(H1,H2,1)
+- id: ep_pmt_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PMT(H1,1,H2)
+- id: ep_pmt_1_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PMT(1,H1,H2)
+- id: ep_poisson_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =POISSON(H1,H2,1)
+- id: ep_poisson_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =POISSON(H1,1,H2)
+- id: ep_poisson_1_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =POISSON(1,H1,H2)
+- id: ep_poisson_dist_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =POISSON.DIST(H1,H2,1)
+- id: ep_poisson_dist_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =POISSON.DIST(H1,1,H2)
+- id: ep_poisson_dist_1_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =POISSON.DIST(1,H1,H2)
+- id: ep_power_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =POWER(H1,H2)
+- id: ep_ppmt_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PPMT(H1,H2,1,1)
+- id: ep_ppmt_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PPMT(H1,1,H2,1)
+- id: ep_ppmt_0_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PPMT(H1,1,1,H2)
+- id: ep_ppmt_1_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PPMT(1,H1,H2,1)
+- id: ep_ppmt_1_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PPMT(1,H1,1,H2)
+- id: ep_ppmt_2_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PPMT(1,1,H1,H2)
+- id: ep_price_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICE(H1,H2,1,1,1,1)
+- id: ep_price_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICE(H1,1,H2,1,1,1)
+- id: ep_price_0_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICE(H1,1,1,H2,1,1)
+- id: ep_price_0_4
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICE(H1,1,1,1,H2,1)
+- id: ep_price_0_5
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICE(H1,1,1,1,1,H2)
+- id: ep_price_1_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICE(1,H1,H2,1,1,1)
+- id: ep_price_1_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICE(1,H1,1,H2,1,1)
+- id: ep_price_1_4
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICE(1,H1,1,1,H2,1)
+- id: ep_price_1_5
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICE(1,H1,1,1,1,H2)
+- id: ep_price_2_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICE(1,1,H1,H2,1,1)
+- id: ep_price_2_4
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICE(1,1,H1,1,H2,1)
+- id: ep_price_2_5
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICE(1,1,H1,1,1,H2)
+- id: ep_price_3_4
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICE(1,1,1,H1,H2,1)
+- id: ep_price_3_5
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICE(1,1,1,H1,1,H2)
+- id: ep_price_4_5
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICE(1,1,1,1,H1,H2)
+- id: ep_pricedisc_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICEDISC(H1,H2,1,1)
+- id: ep_pricedisc_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICEDISC(H1,1,H2,1)
+- id: ep_pricedisc_0_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICEDISC(H1,1,1,H2)
+- id: ep_pricedisc_1_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICEDISC(1,H1,H2,1)
+- id: ep_pricedisc_1_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICEDISC(1,H1,1,H2)
+- id: ep_pricedisc_2_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICEDISC(1,1,H1,H2)
+- id: ep_pricemat_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICEMAT(H1,H2,1,1,1)
+- id: ep_pricemat_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICEMAT(H1,1,H2,1,1)
+- id: ep_pricemat_0_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICEMAT(H1,1,1,H2,1)
+- id: ep_pricemat_0_4
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICEMAT(H1,1,1,1,H2)
+- id: ep_pricemat_1_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICEMAT(1,H1,H2,1,1)
+- id: ep_pricemat_1_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICEMAT(1,H1,1,H2,1)
+- id: ep_pricemat_1_4
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICEMAT(1,H1,1,1,H2)
+- id: ep_pricemat_2_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICEMAT(1,1,H1,H2,1)
+- id: ep_pricemat_2_4
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICEMAT(1,1,H1,1,H2)
+- id: ep_pricemat_3_4
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRICEMAT(1,1,1,H1,H2)
+- id: ep_prob_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PROB(H1,H2,1)
+- id: ep_prob_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PROB(H1,1,H2)
+- id: ep_prob_1_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PROB(1,H1,H2)
+- id: ep_product_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PRODUCT(H1,H2)
+- id: ep_pv_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PV(H1,H2,1)
+- id: ep_pv_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PV(H1,1,H2)
+- id: ep_pv_1_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =PV(1,H1,H2)
+- id: ep_quartile_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =QUARTILE(H1,H2)
+- id: ep_quartile_exc_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =QUARTILE.EXC(H1,H2)
+- id: ep_quartile_inc_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =QUARTILE.INC(H1,H2)
+- id: ep_quotient_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =QUOTIENT(H1,H2)
+- id: ep_randbetween_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =RANDBETWEEN(H1,H2)
+- id: ep_rank_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =RANK(H1,H2)
+- id: ep_rank_avg_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =RANK.AVG(H1,H2)
+- id: ep_rank_eq_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =RANK.EQ(H1,H2)
+- id: ep_rate_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =RATE(H1,H2,1)
+- id: ep_rate_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =RATE(H1,1,H2)
+- id: ep_rate_1_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =RATE(1,H1,H2)
+- id: ep_received_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =RECEIVED(H1,H2,1,1)
+- id: ep_received_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =RECEIVED(H1,1,H2,1)
+- id: ep_received_0_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =RECEIVED(H1,1,1,H2)
+- id: ep_received_1_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =RECEIVED(1,H1,H2,1)
+- id: ep_received_1_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =RECEIVED(1,H1,1,H2)
+- id: ep_received_2_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =RECEIVED(1,1,H1,H2)
+- id: ep_regexextract_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =REGEXEXTRACT(H1,H2)
+- id: ep_regexreplace_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =REGEXREPLACE(H1,H2,1)
+- id: ep_regexreplace_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =REGEXREPLACE(H1,1,H2)
+- id: ep_regexreplace_1_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =REGEXREPLACE(1,H1,H2)
+- id: ep_regextest_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =REGEXTEST(H1,H2)
+- id: ep_replace_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =REPLACE(H1,H2,1,1)
+- id: ep_replace_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =REPLACE(H1,1,H2,1)
+- id: ep_replace_0_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =REPLACE(H1,1,1,H2)
+- id: ep_replace_1_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =REPLACE(1,H1,H2,1)
+- id: ep_replace_1_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =REPLACE(1,H1,1,H2)
+- id: ep_replace_2_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =REPLACE(1,1,H1,H2)
+- id: ep_replaceb_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =REPLACEB(H1,H2,1,1)
+- id: ep_replaceb_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =REPLACEB(H1,1,H2,1)
+- id: ep_replaceb_0_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =REPLACEB(H1,1,1,H2)
+- id: ep_replaceb_1_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =REPLACEB(1,H1,H2,1)
+- id: ep_replaceb_1_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =REPLACEB(1,H1,1,H2)
+- id: ep_replaceb_2_3
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =REPLACEB(1,1,H1,H2)
+- id: ep_rept_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =REPT(H1,H2)
+- id: ep_right_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =RIGHT(H1,H2)
+- id: ep_rightb_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =RIGHTB(H1,H2)
+- id: ep_roman_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ROMAN(H1,H2)
+- id: ep_round_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ROUND(H1,H2)
+- id: ep_rounddown_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ROUNDDOWN(H1,H2)
+- id: ep_roundup_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =ROUNDUP(H1,H2)
+- id: ep_rri_0_1
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =RRI(H1,H2,1)
+- id: ep_rri_0_2
+  setup:
+    H1:
+      kind: error
+      code: '#DIV/0!'
+    H2:
+      kind: error
+      code: '#NUM!'
+  formula: =RRI(H1,1,H2)

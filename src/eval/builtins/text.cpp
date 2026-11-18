@@ -495,12 +495,15 @@ Value Proper(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
 // text (the link argument is documented as a URL, so the cell value is a
 // string regardless of whether the input was a number). Formulon has no
 // concept of clickable cells, so the function exists purely to mirror
-// Excel's pure-value behaviour. Error arguments propagate through the
-// dispatcher's default short-circuit. Mac Excel preserves the original
+// Excel's pure-value behaviour. Error arguments propagate (the first
+// failing argument is reported). Mac Excel preserves the original
 // type for friendly_name: `=HYPERLINK("x", 42)` yields the number 42,
 // not the text "42"; booleans stay booleans; blanks render as 0 (Excel's
 // usual blank-as-zero rule for non-text-context outputs).
 Value Hyperlink(const Value* args, std::uint32_t arity, Arena& arena) {
+  if (args[0].is_error()) {
+    return args[0];
+  }
   if (arity >= 2) {
     const Value& friendly = args[1];
     // Blank friendly_name renders as 0 in Mac Excel (the cell shows 0

@@ -1,0 +1,801 @@
+suite: range_raw_order
+description: >
+  Which argument's failure a function that reads every value as given
+  reports when one value cannot be read and another is an error: as
+  direct arguments, inside one range, and across separate ranges.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: rr_gcd_cell_text_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=GCD(A1,B1)'
+  - id: rr_gcd_cell_err_text
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=GCD(B1,A1)'
+  - id: rr_gcd_lit_text_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=GCD("x",1/0)'
+  - id: rr_gcd_lit_err_text
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=GCD(1/0,"x")'
+  - id: rr_gcd_range_text_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=GCD(A2:B2)'
+  - id: rr_gcd_range_err_text
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=GCD(A3:B3)'
+  - id: rr_gcd_ranges_text_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=GCD(A4:B4,A5:B5)'
+  - id: rr_gcd_ranges_err_text
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=GCD(A5:B5,A4:B4)'
+  - id: rr_gcd_range_then_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=GCD(A4:B4,B1)'
+  - id: rr_gcd_err_then_range
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=GCD(B1,A4:B4)'
+  - id: rr_lcm_cell_text_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=LCM(A1,B1)'
+  - id: rr_lcm_cell_err_text
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=LCM(B1,A1)'
+  - id: rr_lcm_lit_text_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=LCM("x",1/0)'
+  - id: rr_lcm_lit_err_text
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=LCM(1/0,"x")'
+  - id: rr_lcm_range_text_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=LCM(A2:B2)'
+  - id: rr_lcm_range_err_text
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=LCM(A3:B3)'
+  - id: rr_lcm_ranges_text_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=LCM(A4:B4,A5:B5)'
+  - id: rr_lcm_ranges_err_text
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=LCM(A5:B5,A4:B4)'
+  - id: rr_lcm_range_then_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=LCM(A4:B4,B1)'
+  - id: rr_lcm_err_then_range
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=LCM(B1,A4:B4)'
+  - id: rr_multinomial_cell_text_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=MULTINOMIAL(A1,B1)'
+  - id: rr_multinomial_cell_err_text
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=MULTINOMIAL(B1,A1)'
+  - id: rr_multinomial_lit_text_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=MULTINOMIAL("x",1/0)'
+  - id: rr_multinomial_lit_err_text
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=MULTINOMIAL(1/0,"x")'
+  - id: rr_multinomial_range_text_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=MULTINOMIAL(A2:B2)'
+  - id: rr_multinomial_range_err_text
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=MULTINOMIAL(A3:B3)'
+  - id: rr_multinomial_ranges_text_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=MULTINOMIAL(A4:B4,A5:B5)'
+  - id: rr_multinomial_ranges_err_text
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=MULTINOMIAL(A5:B5,A4:B4)'
+  - id: rr_multinomial_range_then_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=MULTINOMIAL(A4:B4,B1)'
+  - id: rr_multinomial_err_then_range
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=MULTINOMIAL(B1,A4:B4)'
+  - id: rr_imsum_cell_text_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=IMSUM(A1,B1)'
+  - id: rr_imsum_cell_err_text
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=IMSUM(B1,A1)'
+  - id: rr_imsum_lit_text_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=IMSUM("x",1/0)'
+  - id: rr_imsum_lit_err_text
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=IMSUM(1/0,"x")'
+  - id: rr_imsum_range_text_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=IMSUM(A2:B2)'
+  - id: rr_imsum_range_err_text
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=IMSUM(A3:B3)'
+  - id: rr_imsum_ranges_text_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=IMSUM(A4:B4,A5:B5)'
+  - id: rr_imsum_ranges_err_text
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=IMSUM(A5:B5,A4:B4)'
+  - id: rr_imsum_range_then_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=IMSUM(A4:B4,B1)'
+  - id: rr_imsum_err_then_range
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=IMSUM(B1,A4:B4)'
+  - id: rr_improduct_cell_text_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=IMPRODUCT(A1,B1)'
+  - id: rr_improduct_cell_err_text
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=IMPRODUCT(B1,A1)'
+  - id: rr_improduct_lit_text_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=IMPRODUCT("x",1/0)'
+  - id: rr_improduct_lit_err_text
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=IMPRODUCT(1/0,"x")'
+  - id: rr_improduct_range_text_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=IMPRODUCT(A2:B2)'
+  - id: rr_improduct_range_err_text
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=IMPRODUCT(A3:B3)'
+  - id: rr_improduct_ranges_text_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=IMPRODUCT(A4:B4,A5:B5)'
+  - id: rr_improduct_ranges_err_text
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=IMPRODUCT(A5:B5,A4:B4)'
+  - id: rr_improduct_range_then_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=IMPRODUCT(A4:B4,B1)'
+  - id: rr_improduct_err_then_range
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=IMPRODUCT(B1,A4:B4)'
+  - id: rr_trimmean_cell_text_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=TRIMMEAN(A1,B1)'
+  - id: rr_trimmean_cell_err_text
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=TRIMMEAN(B1,A1)'
+  - id: rr_trimmean_lit_text_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=TRIMMEAN("x",1/0)'
+  - id: rr_trimmean_lit_err_text
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=TRIMMEAN(1/0,"x")'
+  - id: rr_trimmean_range_err_text
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=TRIMMEAN(A5:B5,A1)'
+  - id: rr_trimmean_range_text_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=TRIMMEAN(A4:B4,B1)'
+  - id: rr_concat_lambda_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=CONCAT(LAMBDA(x,x),B1)'
+  - id: rr_concat_err_lambda
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=CONCAT(B1,LAMBDA(x,x))'
+  - id: rr_concat_lambda_alone
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=CONCAT(LAMBDA(x,x),"a")'
+  - id: rr_concat_multiarea_err
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=CONCAT((A4,B4),B1)'
+  - id: rr_concat_err_text
+    setup:
+      A1: "x"
+      B1: { kind: error, code: "#DIV/0!" }
+      A2: "x"
+      B2: { kind: error, code: "#DIV/0!" }
+      A3: { kind: error, code: "#DIV/0!" }
+      B3: "x"
+      A4: 1
+      B4: "x"
+      A5: 1
+      B5: { kind: error, code: "#DIV/0!" }
+    formula: '=CONCAT(B1,A1)'

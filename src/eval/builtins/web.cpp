@@ -58,7 +58,7 @@ namespace {
 //   * Number  -> shortest-roundtrip textual form.
 //   * Bool    -> "TRUE" / "FALSE" (Excel's canonical literals).
 //   * Blank   -> "".
-//   * Error   -> propagated (dispatcher short-circuits before we run).
+//   * Error   -> propagated (the first failing argument is reported).
 //
 // Uppercase hex matches Excel output; RFC 3986 §2.1 also recommends
 // uppercase for consistency.

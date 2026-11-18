@@ -21,9 +21,7 @@
 // the dispatcher's `range_filter_numeric_only` filter), but a DIRECT Bool,
 // numeric-Text or omitted argument counts (TRUE = 1, omitted = 0) and other
 // direct Text is #VALUE!. SMALL / LARGE / PERCENTILE / QUARTILE use `collect_direct_scalar_coerced`,
-// the same rule without the omitted-slot term. The dispatcher runs with
-// `propagate_errors = true` so error-typed arguments always short-circuit
-// before the impl executes.
+// the same rule without the omitted-slot term.
 
 #include "eval/builtins/stats.h"
 
@@ -60,11 +58,8 @@ namespace stats_detail {
 // `eval/coerce.cpp`.
 
 std::vector<double> collect_numerics(const Value* args, std::uint32_t count) {
-  // Errors never reach this helper because every caller is registered
-  // with `propagate_errors = true`, so the dispatcher short-circuits
-  // before the impl runs. The default policy still has
-  // `error_on_error_cell = true`, but an Error cell at this stage is
-  // unreachable; calling `.value()` directly is safe.
+  // Every caller is range-aware with `propagate_errors = true`, so the
+  // dispatcher short-circuits error arguments before the impl runs.
   NumericCollectPolicy policy;  // Defaults: numbers only.
   auto collected = eval::collect_numerics(args, count, policy);
   if (!collected) {
@@ -315,8 +310,8 @@ void register_stats_builtins(FunctionRegistry& registry) {
 
   // Probability-distribution family. Scalar-only: `accepts_ranges` is left
   // at its default `false`, and `propagate_errors` stays `true` so the
-  // dispatcher short-circuits error arguments before the impl runs. Impls
-  // live in `stats/stats_distributions.cpp`.
+  // first failing argument is reported. Impls live in
+  // `stats/stats_distributions.cpp`.
   static constexpr builtins_detail::BuiltinRegistration scalar_stats[] = {
       {"STANDARDIZE", 3u, 3u, &stats_detail::Standardize},
       {"NORM.DIST", 4u, 4u, &stats_detail::NormDist},

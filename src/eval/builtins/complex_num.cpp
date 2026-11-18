@@ -140,9 +140,12 @@ Value Complex_fn(const Value* args, std::uint32_t arity, Arena& arena) {
   const auto& pair = real_imaginary.value();
   char suffix = 'i';
   if (arity >= 3) {
-    // Suffix argument: must be Text "i" or "j"; Blank defaults to "i";
-    // anything else is #VALUE!.
+    // Suffix argument: must be Text "i" or "j"; Blank defaults to "i"; an
+    // error is itself; anything else is #VALUE!.
     const Value& s = args[2];
+    if (s.is_error()) {
+      return s;
+    }
     if (s.is_blank()) {
       suffix = 'i';
     } else if (s.is_text()) {

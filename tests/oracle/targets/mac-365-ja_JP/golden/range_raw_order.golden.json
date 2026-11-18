@@ -1,0 +1,3067 @@
+{
+  "suite": "range_raw_order",
+  "description": "Which argument's failure a function that reads every value as given reports when one value cannot be read and another is an error: as direct arguments, inside one range, and across separate ranges.\n",
+  "environment": {
+    "excel_version": "16.115",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-11-18T07:32:18Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "rr_gcd_cell_text_err",
+      "formula": "=GCD(A1,B1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rr_gcd_cell_err_text",
+      "formula": "=GCD(B1,A1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_gcd_lit_text_err",
+      "formula": "=GCD(\"x\",1/0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rr_gcd_lit_err_text",
+      "formula": "=GCD(1/0,\"x\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_gcd_range_text_err",
+      "formula": "=GCD(A2:B2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rr_gcd_range_err_text",
+      "formula": "=GCD(A3:B3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_gcd_ranges_text_err",
+      "formula": "=GCD(A4:B4,A5:B5)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rr_gcd_ranges_err_text",
+      "formula": "=GCD(A5:B5,A4:B4)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_gcd_range_then_err",
+      "formula": "=GCD(A4:B4,B1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rr_gcd_err_then_range",
+      "formula": "=GCD(B1,A4:B4)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_lcm_cell_text_err",
+      "formula": "=LCM(A1,B1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rr_lcm_cell_err_text",
+      "formula": "=LCM(B1,A1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_lcm_lit_text_err",
+      "formula": "=LCM(\"x\",1/0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rr_lcm_lit_err_text",
+      "formula": "=LCM(1/0,\"x\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_lcm_range_text_err",
+      "formula": "=LCM(A2:B2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rr_lcm_range_err_text",
+      "formula": "=LCM(A3:B3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_lcm_ranges_text_err",
+      "formula": "=LCM(A4:B4,A5:B5)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rr_lcm_ranges_err_text",
+      "formula": "=LCM(A5:B5,A4:B4)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_lcm_range_then_err",
+      "formula": "=LCM(A4:B4,B1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rr_lcm_err_then_range",
+      "formula": "=LCM(B1,A4:B4)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_multinomial_cell_text_err",
+      "formula": "=MULTINOMIAL(A1,B1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rr_multinomial_cell_err_text",
+      "formula": "=MULTINOMIAL(B1,A1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_multinomial_lit_text_err",
+      "formula": "=MULTINOMIAL(\"x\",1/0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rr_multinomial_lit_err_text",
+      "formula": "=MULTINOMIAL(1/0,\"x\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_multinomial_range_text_err",
+      "formula": "=MULTINOMIAL(A2:B2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rr_multinomial_range_err_text",
+      "formula": "=MULTINOMIAL(A3:B3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_multinomial_ranges_text_err",
+      "formula": "=MULTINOMIAL(A4:B4,A5:B5)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rr_multinomial_ranges_err_text",
+      "formula": "=MULTINOMIAL(A5:B5,A4:B4)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_multinomial_range_then_err",
+      "formula": "=MULTINOMIAL(A4:B4,B1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rr_multinomial_err_then_range",
+      "formula": "=MULTINOMIAL(B1,A4:B4)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_imsum_cell_text_err",
+      "formula": "=IMSUM(A1,B1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "rr_imsum_cell_err_text",
+      "formula": "=IMSUM(B1,A1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_imsum_lit_text_err",
+      "formula": "=IMSUM(\"x\",1/0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "rr_imsum_lit_err_text",
+      "formula": "=IMSUM(1/0,\"x\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_imsum_range_text_err",
+      "formula": "=IMSUM(A2:B2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "rr_imsum_range_err_text",
+      "formula": "=IMSUM(A3:B3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_imsum_ranges_text_err",
+      "formula": "=IMSUM(A4:B4,A5:B5)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "rr_imsum_ranges_err_text",
+      "formula": "=IMSUM(A5:B5,A4:B4)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_imsum_range_then_err",
+      "formula": "=IMSUM(A4:B4,B1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "rr_imsum_err_then_range",
+      "formula": "=IMSUM(B1,A4:B4)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_improduct_cell_text_err",
+      "formula": "=IMPRODUCT(A1,B1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "rr_improduct_cell_err_text",
+      "formula": "=IMPRODUCT(B1,A1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_improduct_lit_text_err",
+      "formula": "=IMPRODUCT(\"x\",1/0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "rr_improduct_lit_err_text",
+      "formula": "=IMPRODUCT(1/0,\"x\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_improduct_range_text_err",
+      "formula": "=IMPRODUCT(A2:B2)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "rr_improduct_range_err_text",
+      "formula": "=IMPRODUCT(A3:B3)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_improduct_ranges_text_err",
+      "formula": "=IMPRODUCT(A4:B4,A5:B5)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "rr_improduct_ranges_err_text",
+      "formula": "=IMPRODUCT(A5:B5,A4:B4)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_improduct_range_then_err",
+      "formula": "=IMPRODUCT(A4:B4,B1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "rr_improduct_err_then_range",
+      "formula": "=IMPRODUCT(B1,A4:B4)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_trimmean_cell_text_err",
+      "formula": "=TRIMMEAN(A1,B1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_trimmean_cell_err_text",
+      "formula": "=TRIMMEAN(B1,A1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rr_trimmean_lit_text_err",
+      "formula": "=TRIMMEAN(\"x\",1/0)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rr_trimmean_lit_err_text",
+      "formula": "=TRIMMEAN(1/0,\"x\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_trimmean_range_err_text",
+      "formula": "=TRIMMEAN(A5:B5,A1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rr_trimmean_range_text_err",
+      "formula": "=TRIMMEAN(A4:B4,B1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_concat_lambda_err",
+      "formula": "=CONCAT(LAMBDA(x,x),B1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rr_concat_err_lambda",
+      "formula": "=CONCAT(B1,LAMBDA(x,x))",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "rr_concat_lambda_alone",
+      "formula": "=CONCAT(LAMBDA(x,x),\"a\")",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rr_concat_multiarea_err",
+      "formula": "=CONCAT((A4,B4),B1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "rr_concat_err_text",
+      "formula": "=CONCAT(B1,A1)",
+      "setup": {
+        "A1": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A2": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B2": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "A3": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "B3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A4": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B4": {
+          "kind": "text",
+          "value": "x"
+        },
+        "A5": {
+          "kind": "number",
+          "value": 1.0
+        },
+        "B5": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    }
+  ]
+}

@@ -5,6 +5,7 @@
 
 #include "eval/array_alloc.h"
 #include "eval/coerce.h"
+#include "eval/error_origin.h"
 #include "eval/lazy_impls.h"
 #include "eval/omitted_arg.h"
 #include "eval/reference/ref_value.h"
@@ -62,27 +63,63 @@ bool eval_truncated_number_arg(const parser::AstNode& node, Arena& arena, const 
   return true;
 }
 
-Value eval_scalar_call_args(const parser::AstNode& call, std::uint32_t min_arity, std::uint32_t max_arity,
-                            bool atp_rule, std::uint32_t logical_args, Arena& arena, const FunctionRegistry& registry,
-                            const EvalContext& ctx, std::vector<Value>& out) {
+void eval_scalar_call_args(const parser::AstNode& call, std::uint32_t min_arity, std::uint32_t max_arity, bool atp_rule,
+                           std::uint32_t logical_args, Arena& arena, const FunctionRegistry& registry,
+                           const EvalContext& ctx, std::vector<Value>& out,
+                           std::optional<ErrorOriginSnapshot>& first_error_origin) {
   const std::uint32_t evaluated = atp_rule ? atp_evaluated_arity(call, min_arity, max_arity) : call.as_call_arity();
   out.clear();
   out.reserve(evaluated);
+  first_error_origin.reset();
   for (std::uint32_t i = 0; i < evaluated; ++i) {
     Value v = eval_node(call.as_call_arg(i), arena, registry, ctx);
-    if (v.is_error()) {
-      return v;
-    }
-    if (atp_rule) {
+    if (!v.is_error() && atp_rule) {
       const bool logical = ((logical_args >> i) & 1U) != 0U;
       const Value atp = atp_arg_error(call.as_call_arg(i), v, atp_slot_required(i, min_arity, max_arity), logical);
       if (atp.is_error()) {
-        return atp;
+        v = atp;
       }
+    }
+    if (v.is_error() && !first_error_origin.has_value()) {
+      first_error_origin = snapshot_error_origin();
     }
     out.push_back(v);
   }
-  return Value::blank();
+  if (first_error_origin.has_value()) {
+    forget_error_origin();
+  }
+}
+
+const Value* reported_error_arg(const Value* args, std::uint32_t arity, bool last_first) {
+  const Value* found = nullptr;
+  for (std::uint32_t i = 0; i < arity; ++i) {
+    if (args[i].is_error()) {
+      found = &args[i];
+      if (!last_first) {
+        break;
+      }
+    }
+  }
+  return found;
+}
+
+Value report_error_arg(const Value& result, const Value* args, std::uint32_t arity, bool last_first) {
+  if (result.is_error()) {
+    return result;
+  }
+  const Value* reported = reported_error_arg(args, arity, last_first);
+  return reported != nullptr ? *reported : result;
+}
+
+void restore_reported_origin(const Value& result, const Value* args, std::uint32_t arity, bool last_first,
+                             const std::optional<ErrorOriginSnapshot>& reported_origin) {
+  if (!reported_origin.has_value() || !result.is_error() || error_origin() != ErrorOrigin::kNone) {
+    return;
+  }
+  const Value* reported = reported_error_arg(args, arity, last_first);
+  if (reported != nullptr && reported->as_error() == result.as_error()) {
+    restore_error_origin(*reported_origin);
+  }
 }
 
 namespace {

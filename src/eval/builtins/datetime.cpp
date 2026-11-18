@@ -804,8 +804,14 @@ Value Datedif_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, boo
 }
 
 /// DAYS(end, start). Both arguments are truncated to their date component;
-/// the result is the signed day difference and may be negative.
+/// the result is the signed day difference and may be negative. An error
+/// argument is reported before either argument is coerced.
 Value Days_(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/, bool date1904) {
+  for (std::uint32_t i = 0; i < 2U; ++i) {
+    if (args[i].is_error()) {
+      return args[i];
+    }
+  }
   auto dates = coerce_bounded_date_pair(args, date1904);
   if (!dates) {
     return Value::error(dates.error());

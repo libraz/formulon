@@ -1,6 +1,6 @@
 //
 // Implementation of the closed-form bond-pricing built-ins:
-// PRICEDISC, PRICEMAT, YIELDDISC, YIELDMAT — and the STOCKHISTORY stub.
+// PRICEDISC, PRICEMAT, YIELDDISC, YIELDMAT.
 // Registered from `financial.cpp` via `register_financial_builtins`.
 //
 // All four closed-form helpers share the following conventions with the
@@ -11,12 +11,6 @@
 //     PRICEDISC / YIELDDISC require `settlement < maturity`; PRICEMAT /
 //     YIELDMAT additionally require `issue < settlement`.
 //   * `basis` (where present) must be in {0, 1, 2, 3, 4} after truncation.
-//
-// STOCKHISTORY is an intentional stub: Formulon is a pure calculation
-// engine and does not perform network or market-data I/O. The stub body
-// follows the WEBSERVICE/PY pattern from `web.cpp` — it relies on the
-// dispatcher's eager-argument evaluation to propagate any error inside
-// an argument before its fixed `#VALUE!` return fires.
 
 #include "eval/builtins/financial_bond_simple.h"
 
@@ -246,20 +240,6 @@ Value YieldMat(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
   }
   const double result = ((1.0 + dim_span.value().days / dim_year * rate) - accrued) / accrued * (dsm_year / dsm_days);
   return to_finite_value(result);
-}
-
-// --- STOCKHISTORY(stock, start_date, [end_date], [interval], [headers], [properties...]) ---
-//
-// Always returns `#VALUE!`. Excel's STOCKHISTORY retrieves historical
-// market data from a cloud data service; Formulon is a pure calculation
-// engine with no network or market-data integration, so there is no
-// realistic value to return. This matches the pattern used by
-// WEBSERVICE / PY in `web.cpp`: the stub fires *after* the dispatcher has
-// eagerly evaluated every argument, so an error inside any argument (e.g.
-// `1/0`) still short-circuits via the default `propagate_errors = true`
-// dispatch flag before we are called.
-Value StockHistory(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
-  return Value::error(ErrorCode::Value);
 }
 
 }  // namespace financial_detail

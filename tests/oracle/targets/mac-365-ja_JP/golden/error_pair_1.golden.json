@@ -1,0 +1,4517 @@
+{
+  "suite": "error_pair_1",
+  "description": "For every catalog function Excel accepts, two arguments hold different errors (#DIV/0! in the earlier slot, #NUM! in the later one): which slot's error the function reports.\n",
+  "environment": {
+    "excel_version": "16.115",
+    "excel_locale": "ja-JP",
+    "date1904": false,
+    "iterative": false,
+    "generated_at": "2026-11-18T07:33:50Z"
+  },
+  "tolerance": {
+    "abs": 0.0,
+    "rel": 0.0
+  },
+  "cases": [
+    {
+      "id": "ep_accrint_0_1",
+      "formula": "=ACCRINT(H1,H2,1,1,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_accrint_0_2",
+      "formula": "=ACCRINT(H1,1,H2,1,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_accrint_0_3",
+      "formula": "=ACCRINT(H1,1,1,H2,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_accrint_0_4",
+      "formula": "=ACCRINT(H1,1,1,1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_accrint_0_5",
+      "formula": "=ACCRINT(H1,1,1,1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_accrint_1_2",
+      "formula": "=ACCRINT(1,H1,H2,1,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_accrint_1_3",
+      "formula": "=ACCRINT(1,H1,1,H2,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_accrint_1_4",
+      "formula": "=ACCRINT(1,H1,1,1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_accrint_1_5",
+      "formula": "=ACCRINT(1,H1,1,1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_accrint_2_3",
+      "formula": "=ACCRINT(1,1,H1,H2,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_accrint_2_4",
+      "formula": "=ACCRINT(1,1,H1,1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_accrint_2_5",
+      "formula": "=ACCRINT(1,1,H1,1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_accrint_3_4",
+      "formula": "=ACCRINT(1,1,1,H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_accrint_3_5",
+      "formula": "=ACCRINT(1,1,1,H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_accrint_4_5",
+      "formula": "=ACCRINT(1,1,1,1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_accrintm_0_1",
+      "formula": "=ACCRINTM(H1,H2,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_accrintm_0_2",
+      "formula": "=ACCRINTM(H1,1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_accrintm_0_3",
+      "formula": "=ACCRINTM(H1,1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_accrintm_1_2",
+      "formula": "=ACCRINTM(1,H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_accrintm_1_3",
+      "formula": "=ACCRINTM(1,H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_accrintm_2_3",
+      "formula": "=ACCRINTM(1,1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_address_0_1",
+      "formula": "=ADDRESS(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_aggregate_0_1",
+      "formula": "=AGGREGATE(H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_aggregate_0_2",
+      "formula": "=AGGREGATE(H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_aggregate_1_2",
+      "formula": "=AGGREGATE(1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amordegrc_0_1",
+      "formula": "=AMORDEGRC(H1,H2,1,1,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amordegrc_0_2",
+      "formula": "=AMORDEGRC(H1,1,H2,1,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amordegrc_0_3",
+      "formula": "=AMORDEGRC(H1,1,1,H2,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amordegrc_0_4",
+      "formula": "=AMORDEGRC(H1,1,1,1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amordegrc_0_5",
+      "formula": "=AMORDEGRC(H1,1,1,1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amordegrc_1_2",
+      "formula": "=AMORDEGRC(1,H1,H2,1,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amordegrc_1_3",
+      "formula": "=AMORDEGRC(1,H1,1,H2,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amordegrc_1_4",
+      "formula": "=AMORDEGRC(1,H1,1,1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amordegrc_1_5",
+      "formula": "=AMORDEGRC(1,H1,1,1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amordegrc_2_3",
+      "formula": "=AMORDEGRC(1,1,H1,H2,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amordegrc_2_4",
+      "formula": "=AMORDEGRC(1,1,H1,1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amordegrc_2_5",
+      "formula": "=AMORDEGRC(1,1,H1,1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amordegrc_3_4",
+      "formula": "=AMORDEGRC(1,1,1,H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amordegrc_3_5",
+      "formula": "=AMORDEGRC(1,1,1,H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amordegrc_4_5",
+      "formula": "=AMORDEGRC(1,1,1,1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amorlinc_0_1",
+      "formula": "=AMORLINC(H1,H2,1,1,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amorlinc_0_2",
+      "formula": "=AMORLINC(H1,1,H2,1,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amorlinc_0_3",
+      "formula": "=AMORLINC(H1,1,1,H2,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amorlinc_0_4",
+      "formula": "=AMORLINC(H1,1,1,1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amorlinc_0_5",
+      "formula": "=AMORLINC(H1,1,1,1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amorlinc_1_2",
+      "formula": "=AMORLINC(1,H1,H2,1,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amorlinc_1_3",
+      "formula": "=AMORLINC(1,H1,1,H2,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amorlinc_1_4",
+      "formula": "=AMORLINC(1,H1,1,1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amorlinc_1_5",
+      "formula": "=AMORLINC(1,H1,1,1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amorlinc_2_3",
+      "formula": "=AMORLINC(1,1,H1,H2,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amorlinc_2_4",
+      "formula": "=AMORLINC(1,1,H1,1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amorlinc_2_5",
+      "formula": "=AMORLINC(1,1,H1,1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amorlinc_3_4",
+      "formula": "=AMORLINC(1,1,1,H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amorlinc_3_5",
+      "formula": "=AMORLINC(1,1,1,H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_amorlinc_4_5",
+      "formula": "=AMORLINC(1,1,1,1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_and_0_1",
+      "formula": "=AND(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_arraytotext_0_1",
+      "formula": "=ARRAYTOTEXT(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_atan2_0_1",
+      "formula": "=ATAN2(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_avedev_0_1",
+      "formula": "=AVEDEV(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_average_0_1",
+      "formula": "=AVERAGE(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_averagea_0_1",
+      "formula": "=AVERAGEA(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_averageif_0_1",
+      "formula": "=AVERAGEIF(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_averageifs_0_1",
+      "formula": "=AVERAGEIFS(H1,H2,A1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_averageifs_0_2",
+      "formula": "=AVERAGEIFS(H1,A1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_averageifs_1_2",
+      "formula": "=AVERAGEIFS(A1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_base_0_1",
+      "formula": "=BASE(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_besseli_0_1",
+      "formula": "=BESSELI(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_besselj_0_1",
+      "formula": "=BESSELJ(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_besselk_0_1",
+      "formula": "=BESSELK(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_bessely_0_1",
+      "formula": "=BESSELY(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_beta_dist_0_1",
+      "formula": "=BETA.DIST(H1,H2,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_beta_dist_0_2",
+      "formula": "=BETA.DIST(H1,1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_beta_dist_0_3",
+      "formula": "=BETA.DIST(H1,1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_beta_dist_1_2",
+      "formula": "=BETA.DIST(1,H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_beta_dist_1_3",
+      "formula": "=BETA.DIST(1,H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_beta_dist_2_3",
+      "formula": "=BETA.DIST(1,1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_beta_inv_0_1",
+      "formula": "=BETA.INV(H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_beta_inv_0_2",
+      "formula": "=BETA.INV(H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_beta_inv_1_2",
+      "formula": "=BETA.INV(1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_betadist_0_1",
+      "formula": "=BETADIST(H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_betadist_0_2",
+      "formula": "=BETADIST(H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_betadist_1_2",
+      "formula": "=BETADIST(1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_betainv_0_1",
+      "formula": "=BETAINV(H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_betainv_0_2",
+      "formula": "=BETAINV(H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_betainv_1_2",
+      "formula": "=BETAINV(1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_bin2hex_0_1",
+      "formula": "=BIN2HEX(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "ep_bin2oct_0_1",
+      "formula": "=BIN2OCT(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "ep_binom_dist_0_1",
+      "formula": "=BINOM.DIST(H1,H2,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_binom_dist_0_2",
+      "formula": "=BINOM.DIST(H1,1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_binom_dist_0_3",
+      "formula": "=BINOM.DIST(H1,1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_binom_dist_1_2",
+      "formula": "=BINOM.DIST(1,H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_binom_dist_1_3",
+      "formula": "=BINOM.DIST(1,H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_binom_dist_2_3",
+      "formula": "=BINOM.DIST(1,1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_binom_dist_range_0_1",
+      "formula": "=BINOM.DIST.RANGE(H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_binom_dist_range_0_2",
+      "formula": "=BINOM.DIST.RANGE(H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_binom_dist_range_1_2",
+      "formula": "=BINOM.DIST.RANGE(1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_binom_inv_0_1",
+      "formula": "=BINOM.INV(H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_binom_inv_0_2",
+      "formula": "=BINOM.INV(H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_binom_inv_1_2",
+      "formula": "=BINOM.INV(1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_binomdist_0_1",
+      "formula": "=BINOMDIST(H1,H2,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_binomdist_0_2",
+      "formula": "=BINOMDIST(H1,1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_binomdist_0_3",
+      "formula": "=BINOMDIST(H1,1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_binomdist_1_2",
+      "formula": "=BINOMDIST(1,H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_binomdist_1_3",
+      "formula": "=BINOMDIST(1,H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_binomdist_2_3",
+      "formula": "=BINOMDIST(1,1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_bitand_0_1",
+      "formula": "=BITAND(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_bitlshift_0_1",
+      "formula": "=BITLSHIFT(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_bitor_0_1",
+      "formula": "=BITOR(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_bitrshift_0_1",
+      "formula": "=BITRSHIFT(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_bitxor_0_1",
+      "formula": "=BITXOR(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_ceiling_0_1",
+      "formula": "=CEILING(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_ceiling_math_0_1",
+      "formula": "=CEILING.MATH(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_ceiling_precise_0_1",
+      "formula": "=CEILING.PRECISE(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cell_0_1",
+      "formula": "=CELL(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_chidist_0_1",
+      "formula": "=CHIDIST(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_chiinv_0_1",
+      "formula": "=CHIINV(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_chisq_dist_0_1",
+      "formula": "=CHISQ.DIST(H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_chisq_dist_0_2",
+      "formula": "=CHISQ.DIST(H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_chisq_dist_1_2",
+      "formula": "=CHISQ.DIST(1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_chisq_dist_rt_0_1",
+      "formula": "=CHISQ.DIST.RT(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_chisq_inv_0_1",
+      "formula": "=CHISQ.INV(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_chisq_inv_rt_0_1",
+      "formula": "=CHISQ.INV.RT(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_chisq_test_0_1",
+      "formula": "=CHISQ.TEST(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_chitest_0_1",
+      "formula": "=CHITEST(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_choose_0_1",
+      "formula": "=CHOOSE(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_choosecols_0_1",
+      "formula": "=CHOOSECOLS(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "ep_chooserows_0_1",
+      "formula": "=CHOOSEROWS(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "ep_combin_0_1",
+      "formula": "=COMBIN(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_combina_0_1",
+      "formula": "=COMBINA(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_complex_0_1",
+      "formula": "=COMPLEX(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_concat_0_1",
+      "formula": "=CONCAT(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_concatenate_0_1",
+      "formula": "=CONCATENATE(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_confidence_0_1",
+      "formula": "=CONFIDENCE(H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_confidence_0_2",
+      "formula": "=CONFIDENCE(H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_confidence_1_2",
+      "formula": "=CONFIDENCE(1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_confidence_norm_0_1",
+      "formula": "=CONFIDENCE.NORM(H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_confidence_norm_0_2",
+      "formula": "=CONFIDENCE.NORM(H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_confidence_norm_1_2",
+      "formula": "=CONFIDENCE.NORM(1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_confidence_t_0_1",
+      "formula": "=CONFIDENCE.T(H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_confidence_t_0_2",
+      "formula": "=CONFIDENCE.T(H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_confidence_t_1_2",
+      "formula": "=CONFIDENCE.T(1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_convert_0_1",
+      "formula": "=CONVERT(H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_convert_0_2",
+      "formula": "=CONVERT(H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_convert_1_2",
+      "formula": "=CONVERT(1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_correl_0_1",
+      "formula": "=CORREL(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_count_0_1",
+      "formula": "=COUNT(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "ep_counta_0_1",
+      "formula": "=COUNTA(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "ep_countif_0_1",
+      "formula": "=COUNTIF(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "ep_countifs_0_1",
+      "formula": "=COUNTIFS(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 0.0
+      }
+    },
+    {
+      "id": "ep_coupdaybs_0_1",
+      "formula": "=COUPDAYBS(H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_coupdaybs_0_2",
+      "formula": "=COUPDAYBS(H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_coupdaybs_1_2",
+      "formula": "=COUPDAYBS(1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_coupdays_0_1",
+      "formula": "=COUPDAYS(H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_coupdays_0_2",
+      "formula": "=COUPDAYS(H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_coupdays_1_2",
+      "formula": "=COUPDAYS(1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_coupdaysnc_0_1",
+      "formula": "=COUPDAYSNC(H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_coupdaysnc_0_2",
+      "formula": "=COUPDAYSNC(H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_coupdaysnc_1_2",
+      "formula": "=COUPDAYSNC(1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_coupncd_0_1",
+      "formula": "=COUPNCD(H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_coupncd_0_2",
+      "formula": "=COUPNCD(H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_coupncd_1_2",
+      "formula": "=COUPNCD(1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_coupnum_0_1",
+      "formula": "=COUPNUM(H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_coupnum_0_2",
+      "formula": "=COUPNUM(H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_coupnum_1_2",
+      "formula": "=COUPNUM(1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_couppcd_0_1",
+      "formula": "=COUPPCD(H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_couppcd_0_2",
+      "formula": "=COUPPCD(H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_couppcd_1_2",
+      "formula": "=COUPPCD(1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_covar_0_1",
+      "formula": "=COVAR(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_covariance_p_0_1",
+      "formula": "=COVARIANCE.P(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_covariance_s_0_1",
+      "formula": "=COVARIANCE.S(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_critbinom_0_1",
+      "formula": "=CRITBINOM(H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_critbinom_0_2",
+      "formula": "=CRITBINOM(H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_critbinom_1_2",
+      "formula": "=CRITBINOM(1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumipmt_0_1",
+      "formula": "=CUMIPMT(H1,H2,1,1,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumipmt_0_2",
+      "formula": "=CUMIPMT(H1,1,H2,1,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumipmt_0_3",
+      "formula": "=CUMIPMT(H1,1,1,H2,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumipmt_0_4",
+      "formula": "=CUMIPMT(H1,1,1,1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumipmt_0_5",
+      "formula": "=CUMIPMT(H1,1,1,1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumipmt_1_2",
+      "formula": "=CUMIPMT(1,H1,H2,1,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumipmt_1_3",
+      "formula": "=CUMIPMT(1,H1,1,H2,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumipmt_1_4",
+      "formula": "=CUMIPMT(1,H1,1,1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumipmt_1_5",
+      "formula": "=CUMIPMT(1,H1,1,1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumipmt_2_3",
+      "formula": "=CUMIPMT(1,1,H1,H2,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumipmt_2_4",
+      "formula": "=CUMIPMT(1,1,H1,1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumipmt_2_5",
+      "formula": "=CUMIPMT(1,1,H1,1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumipmt_3_4",
+      "formula": "=CUMIPMT(1,1,1,H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumipmt_3_5",
+      "formula": "=CUMIPMT(1,1,1,H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumipmt_4_5",
+      "formula": "=CUMIPMT(1,1,1,1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumprinc_0_1",
+      "formula": "=CUMPRINC(H1,H2,1,1,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumprinc_0_2",
+      "formula": "=CUMPRINC(H1,1,H2,1,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumprinc_0_3",
+      "formula": "=CUMPRINC(H1,1,1,H2,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumprinc_0_4",
+      "formula": "=CUMPRINC(H1,1,1,1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumprinc_0_5",
+      "formula": "=CUMPRINC(H1,1,1,1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumprinc_1_2",
+      "formula": "=CUMPRINC(1,H1,H2,1,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumprinc_1_3",
+      "formula": "=CUMPRINC(1,H1,1,H2,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumprinc_1_4",
+      "formula": "=CUMPRINC(1,H1,1,1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumprinc_1_5",
+      "formula": "=CUMPRINC(1,H1,1,1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumprinc_2_3",
+      "formula": "=CUMPRINC(1,1,H1,H2,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumprinc_2_4",
+      "formula": "=CUMPRINC(1,1,H1,1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumprinc_2_5",
+      "formula": "=CUMPRINC(1,1,H1,1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumprinc_3_4",
+      "formula": "=CUMPRINC(1,1,1,H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumprinc_3_5",
+      "formula": "=CUMPRINC(1,1,1,H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_cumprinc_4_5",
+      "formula": "=CUMPRINC(1,1,1,1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_date_0_1",
+      "formula": "=DATE(H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_date_0_2",
+      "formula": "=DATE(H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_date_1_2",
+      "formula": "=DATE(1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_datedif_0_1",
+      "formula": "=DATEDIF(H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_datedif_0_2",
+      "formula": "=DATEDIF(H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_datedif_1_2",
+      "formula": "=DATEDIF(1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_daverage_0_1",
+      "formula": "=DAVERAGE(H1,H2,A1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ep_daverage_0_2",
+      "formula": "=DAVERAGE(H1,A1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ep_daverage_1_2",
+      "formula": "=DAVERAGE(A1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ep_days_0_1",
+      "formula": "=DAYS(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_days360_0_1",
+      "formula": "=DAYS360(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_db_0_1",
+      "formula": "=DB(H1,H2,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_db_0_2",
+      "formula": "=DB(H1,1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_db_0_3",
+      "formula": "=DB(H1,1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_db_1_2",
+      "formula": "=DB(1,H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_db_1_3",
+      "formula": "=DB(1,H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_db_2_3",
+      "formula": "=DB(1,1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_dcount_0_1",
+      "formula": "=DCOUNT(H1,H2,A1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ep_dcount_0_2",
+      "formula": "=DCOUNT(H1,A1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ep_dcount_1_2",
+      "formula": "=DCOUNT(A1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ep_dcounta_0_1",
+      "formula": "=DCOUNTA(H1,H2,A1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ep_dcounta_0_2",
+      "formula": "=DCOUNTA(H1,A1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ep_dcounta_1_2",
+      "formula": "=DCOUNTA(A1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ep_ddb_0_1",
+      "formula": "=DDB(H1,H2,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_ddb_0_2",
+      "formula": "=DDB(H1,1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_ddb_0_3",
+      "formula": "=DDB(H1,1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_ddb_1_2",
+      "formula": "=DDB(1,H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_ddb_1_3",
+      "formula": "=DDB(1,H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_ddb_2_3",
+      "formula": "=DDB(1,1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_dec2bin_0_1",
+      "formula": "=DEC2BIN(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "ep_dec2hex_0_1",
+      "formula": "=DEC2HEX(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "ep_dec2oct_0_1",
+      "formula": "=DEC2OCT(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "ep_decimal_0_1",
+      "formula": "=DECIMAL(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_delta_0_1",
+      "formula": "=DELTA(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#NUM!"
+      }
+    },
+    {
+      "id": "ep_devsq_0_1",
+      "formula": "=DEVSQ(H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_dget_0_1",
+      "formula": "=DGET(H1,H2,A1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ep_dget_0_2",
+      "formula": "=DGET(H1,A1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ep_dget_1_2",
+      "formula": "=DGET(A1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ep_disc_0_1",
+      "formula": "=DISC(H1,H2,1,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_disc_0_2",
+      "formula": "=DISC(H1,1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_disc_0_3",
+      "formula": "=DISC(H1,1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_disc_1_2",
+      "formula": "=DISC(1,H1,H2,1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_disc_1_3",
+      "formula": "=DISC(1,H1,1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_disc_2_3",
+      "formula": "=DISC(1,1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#DIV/0!"
+      }
+    },
+    {
+      "id": "ep_dmax_0_1",
+      "formula": "=DMAX(H1,H2,A1)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ep_dmax_0_2",
+      "formula": "=DMAX(H1,A1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    },
+    {
+      "id": "ep_dmax_1_2",
+      "formula": "=DMAX(A1,H1,H2)",
+      "setup": {
+        "H1": {
+          "kind": "error",
+          "code": "#DIV/0!"
+        },
+        "H2": {
+          "kind": "error",
+          "code": "#NUM!"
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#VALUE!"
+      }
+    }
+  ]
+}

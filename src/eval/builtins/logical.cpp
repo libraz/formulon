@@ -32,10 +32,8 @@ Value False_(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
 }
 
 // NOT(value) -------------------------------------------------------------
-// Coerces the single argument to bool and negates. Errors propagate (the
-// dispatcher already short-circuits on argument errors before invoking
-// this body, so by the time we run the input is non-error). A coercion
-// failure (e.g. non-numeric text) surfaces as #VALUE!.
+// Coerces the single argument to bool and negates. An error argument
+// coerces to its own error; non-numeric text surfaces as #VALUE!.
 Value Not(const Value* args, std::uint32_t /*arity*/, Arena& /*arena*/) {
   auto coerced = coerce_to_bool(args[0]);
   if (!coerced) {

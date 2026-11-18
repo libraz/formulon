@@ -415,6 +415,7 @@ set(FORMULON_UNIT_TEST_SOURCES
   unit/eval/stats/hypothesis_tests_test.cpp
   unit/eval/coerce_test.cpp
   unit/eval/criteria_test.cpp
+  unit/eval/error_argument_order_test.cpp
   unit/eval/criteria_error_text_test.cpp
   unit/eval/dfunc_empty_criterion_test.cpp
   unit/eval/sumif_range_resize_test.cpp

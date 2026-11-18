@@ -314,7 +314,8 @@ Value snap_array_result(const Value& out, const Value& lhs, const Value& rhs, Ar
   return Value::array(snapped);
 }
 
-// A scalar error on the left is the result whatever the right operand holds,
+// A left operand that already decides the result (an error, or text an
+// arithmetic operator cannot coerce) wins whatever the right operand holds,
 // so the right operand's evaluation leaves the left error's origin in place.
 Shaped eval_operand_after_left_error(const parser::AstNode& operand, Arena& arena, const FunctionRegistry& registry,
                                      const EvalContext& ctx) {
@@ -329,20 +330,25 @@ Shaped eval_operand_after_left_error(const parser::AstNode& operand, Arena& aren
 // cell by cell when it is an array.
 Shaped eval_binary_op(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                       const EvalContext& ctx, bool snap_cancellation_result) {
-  // Left-most wins between scalars; a scalar error against an array operand
-  // fills every position of the broadcast instead (`ROWS(1/0+{1;2;3})` is 3).
+  // Left-most failure wins between scalars: a left error, or a left operand
+  // an arithmetic operator cannot coerce (`"x"+1/0` is #VALUE!). A scalar
+  // error against an array operand fills every position of the broadcast
+  // instead (`ROWS(1/0+{1;2;3})` is 3).
   Shaped lhs = eval_node_shaped(node.as_binary_operand(0), arena, registry, ctx);
   const std::uint32_t arity = node.as_binary_arity();
   for (std::uint32_t i = 1; i < arity; ++i) {
-    const Shaped rhs = lhs.tail_array == nullptr && lhs.value.is_error()
-                           ? eval_operand_after_left_error(node.as_binary_operand(i), arena, registry, ctx)
-                           : eval_node_shaped(node.as_binary_operand(i), arena, registry, ctx);
+    const bool lhs_scalar = lhs.tail_array == nullptr && !lhs.value.is_array();
+    const bool lhs_fails =
+        lhs_scalar && (lhs.value.is_error() || (lhs.value.is_text() && is_arithmetic_op(node.as_binary_op(i - 1U)) &&
+                                                !coerce_to_number(lhs.value)));
+    const Shaped rhs = lhs_fails ? eval_operand_after_left_error(node.as_binary_operand(i), arena, registry, ctx)
+                                 : eval_node_shaped(node.as_binary_operand(i), arena, registry, ctx);
     const bool lhs_array = lhs.tail_array != nullptr || lhs.value.is_array();
     const bool rhs_array = rhs.tail_array != nullptr || rhs.value.is_array();
     if (!rhs_array && lhs.tail_array == nullptr && lhs.value.is_error()) {
       return lhs;
     }
-    if (!lhs_array && rhs.tail_array == nullptr && rhs.value.is_error()) {
+    if (!lhs_array && rhs.tail_array == nullptr && rhs.value.is_error() && !lhs_fails) {
       return rhs;
     }
     // Cellwise broadcast when either operand is an array (SpillRef #,

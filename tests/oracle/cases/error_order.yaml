@@ -1,0 +1,743 @@
+suite: error_order
+description: >
+  Which argument's failure an eager function reports when one argument is
+  uncoercible text and another is an error: the first failing argument in
+  order, or the error ahead of any coercion.
+tolerance: { abs: 0, rel: 0 }
+locale: ja-JP
+cases:
+  - id: eo_floor_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=FLOOR(A1,B1)"
+  - id: eo_floor_err_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=FLOOR(B1,A1)"
+  - id: eo_floor_empty_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=FLOOR(C1,D1)"
+  - id: eo_floor_lit_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=FLOOR(\"x\",1/0)"
+  - id: eo_ceiling_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=CEILING(A1,B1)"
+  - id: eo_ceiling_err_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=CEILING(B1,A1)"
+  - id: eo_ceiling_empty_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=CEILING(C1,D1)"
+  - id: eo_ceiling_lit_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=CEILING(\"x\",1/0)"
+  - id: eo_ceiling_math_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=_xlfn.CEILING.MATH(A1,B1)"
+  - id: eo_ceiling_math_err_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=_xlfn.CEILING.MATH(B1,A1)"
+  - id: eo_ceiling_math_empty_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=_xlfn.CEILING.MATH(C1,D1)"
+  - id: eo_ceiling_math_lit_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=_xlfn.CEILING.MATH(\"x\",1/0)"
+  - id: eo_floor_math_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=_xlfn.FLOOR.MATH(A1,B1)"
+  - id: eo_floor_math_err_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=_xlfn.FLOOR.MATH(B1,A1)"
+  - id: eo_floor_math_empty_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=_xlfn.FLOOR.MATH(C1,D1)"
+  - id: eo_floor_math_lit_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=_xlfn.FLOOR.MATH(\"x\",1/0)"
+  - id: eo_mod_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=MOD(A1,B1)"
+  - id: eo_mod_err_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=MOD(B1,A1)"
+  - id: eo_mod_empty_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=MOD(C1,D1)"
+  - id: eo_mod_lit_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=MOD(\"x\",1/0)"
+  - id: eo_power_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=POWER(A1,B1)"
+  - id: eo_power_err_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=POWER(B1,A1)"
+  - id: eo_power_empty_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=POWER(C1,D1)"
+  - id: eo_power_lit_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=POWER(\"x\",1/0)"
+  - id: eo_round_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=ROUND(A1,B1)"
+  - id: eo_round_err_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=ROUND(B1,A1)"
+  - id: eo_round_empty_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=ROUND(C1,D1)"
+  - id: eo_round_lit_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=ROUND(\"x\",1/0)"
+  - id: eo_atan2_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=ATAN2(A1,B1)"
+  - id: eo_atan2_err_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=ATAN2(B1,A1)"
+  - id: eo_atan2_empty_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=ATAN2(C1,D1)"
+  - id: eo_atan2_lit_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=ATAN2(\"x\",1/0)"
+  - id: eo_log_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=LOG(A1,B1)"
+  - id: eo_log_err_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=LOG(B1,A1)"
+  - id: eo_log_empty_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=LOG(C1,D1)"
+  - id: eo_log_lit_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=LOG(\"x\",1/0)"
+  - id: eo_quotient_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=QUOTIENT(A1,B1)"
+  - id: eo_quotient_err_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=QUOTIENT(B1,A1)"
+  - id: eo_quotient_empty_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=QUOTIENT(C1,D1)"
+  - id: eo_quotient_lit_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=QUOTIENT(\"x\",1/0)"
+  - id: eo_mround_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=MROUND(A1,B1)"
+  - id: eo_mround_err_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=MROUND(B1,A1)"
+  - id: eo_mround_empty_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=MROUND(C1,D1)"
+  - id: eo_mround_lit_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=MROUND(\"x\",1/0)"
+  - id: eo_combin_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=COMBIN(A1,B1)"
+  - id: eo_combin_err_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=COMBIN(B1,A1)"
+  - id: eo_combin_empty_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=COMBIN(C1,D1)"
+  - id: eo_combin_lit_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=COMBIN(\"x\",1/0)"
+  - id: eo_permut_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=PERMUT(A1,B1)"
+  - id: eo_permut_err_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=PERMUT(B1,A1)"
+  - id: eo_permut_empty_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=PERMUT(C1,D1)"
+  - id: eo_permut_lit_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=PERMUT(\"x\",1/0)"
+  - id: eo_edate_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=EDATE(A1,B1)"
+  - id: eo_edate_err_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=EDATE(B1,A1)"
+  - id: eo_edate_empty_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=EDATE(C1,D1)"
+  - id: eo_edate_lit_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=EDATE(\"x\",1/0)"
+  - id: eo_eomonth_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=EOMONTH(A1,B1)"
+  - id: eo_eomonth_err_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=EOMONTH(B1,A1)"
+  - id: eo_eomonth_empty_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=EOMONTH(C1,D1)"
+  - id: eo_eomonth_lit_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=EOMONTH(\"x\",1/0)"
+  - id: eo_days_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=_xlfn.DAYS(A1,B1)"
+  - id: eo_days_err_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=_xlfn.DAYS(B1,A1)"
+  - id: eo_days_empty_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=_xlfn.DAYS(C1,D1)"
+  - id: eo_days_lit_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=_xlfn.DAYS(\"x\",1/0)"
+  - id: eo_gcd_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=GCD(A1,B1)"
+  - id: eo_gcd_err_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=GCD(B1,A1)"
+  - id: eo_gcd_empty_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=GCD(C1,D1)"
+  - id: eo_gcd_lit_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=GCD(\"x\",1/0)"
+  - id: eo_bitand_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=BITAND(A1,B1)"
+  - id: eo_bitand_err_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=BITAND(B1,A1)"
+  - id: eo_bitand_empty_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=BITAND(C1,D1)"
+  - id: eo_bitand_lit_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=BITAND(\"x\",1/0)"
+  - id: eo_delta_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=DELTA(A1,B1)"
+  - id: eo_delta_err_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=DELTA(B1,A1)"
+  - id: eo_delta_empty_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=DELTA(C1,D1)"
+  - id: eo_delta_lit_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=DELTA(\"x\",1/0)"
+  - id: eo_trunc_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=TRUNC(A1,B1)"
+  - id: eo_trunc_err_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=TRUNC(B1,A1)"
+  - id: eo_trunc_empty_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=TRUNC(C1,D1)"
+  - id: eo_trunc_lit_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=TRUNC(\"x\",1/0)"
+  - id: eo_left_err_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=LEFT(B1,A1)"
+  - id: eo_left_text_errn
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=LEFT(A1,B1)"
+  - id: eo_rept_err_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=REPT(B1,A1)"
+  - id: eo_rept_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=REPT(A1,B1)"
+  - id: eo_mid_text_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=MID(A1,A1,B1)"
+  - id: eo_mid_err_text_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=MID(B1,A1,A1)"
+  - id: eo_mid_s_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=MID(\"abc\",A1,B1)"
+  - id: eo_char_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=CHAR(A1)"
+  - id: eo_text_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=TEXT(A1,B1)"
+  - id: eo_text_err_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=TEXT(B1,A1)"
+  - id: eo_date_text_err_1
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=DATE(A1,B1,1)"
+  - id: eo_date_err_text_1
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=DATE(B1,A1,1)"
+  - id: eo_date_1_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=DATE(1,A1,B1)"
+  - id: eo_normdist_text_1_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=NORM.DIST(A1,1,B1,TRUE)"
+  - id: eo_normdist_err_1_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=NORM.DIST(B1,1,A1,TRUE)"
+  - id: eo_binomdist_text_err_1
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=BINOM.DIST(A1,B1,0.5,FALSE)"
+  - id: eo_pmt_text_err_1
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=PMT(A1,B1,100)"
+  - id: eo_pmt_err_text_1
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=PMT(B1,A1,100)"
+  - id: eo_fv_1_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=FV(0.1,A1,B1)"
+  - id: eo_if_err_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=IF(B1,A1)"
+  - id: eo_add_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=A1+B1"
+  - id: eo_add_err_text
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=B1+A1"
+  - id: eo_sum_text_err
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=SUM(\"x\",1/0)"
+  - id: eo_mod_two_errors
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=MOD(D1,B1)"
+  - id: eo_floor_two_errors
+    setup:
+      A1: "x"
+      B1: { kind: formula, formula: "=1/0" }
+      C1: { kind: formula, formula: "=\"\"" }
+      D1: { kind: formula, formula: "=NA()" }
+    formula: "=FLOOR(D1,B1)"

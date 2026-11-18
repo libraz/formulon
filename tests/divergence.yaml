@@ -1087,6 +1087,672 @@ entries:
     first_noted: 2026-11-18
     last_verified_excel_version: "16.115"
 
+  # -- Error order: values read in argument order, range cells included --
+  - id: eo_gcd_empty_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=GCD(C1,D1): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: eo_gcd_lit_text_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=GCD(\"x\",1/0): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: eo_gcd_text_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=GCD(A1,B1): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_concat_lambda_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=CONCAT(LAMBDA(x,x),B1): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_concat_multiarea_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=CONCAT((A4,B4),B1): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_gcd_cell_text_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=GCD(A1,B1): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_gcd_lit_text_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=GCD(\"x\",1/0): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_gcd_range_text_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=GCD(A2:B2): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_gcd_range_then_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=GCD(A4:B4,B1): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_gcd_ranges_text_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=GCD(A4:B4,A5:B5): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_improduct_cell_text_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=IMPRODUCT(A1,B1): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_improduct_lit_text_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=IMPRODUCT(\"x\",1/0): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_improduct_range_text_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=IMPRODUCT(A2:B2): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_improduct_range_then_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=IMPRODUCT(A4:B4,B1): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_improduct_ranges_text_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=IMPRODUCT(A4:B4,A5:B5): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_imsum_cell_text_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=IMSUM(A1,B1): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_imsum_lit_text_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=IMSUM(\"x\",1/0): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_imsum_range_text_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=IMSUM(A2:B2): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_imsum_range_then_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=IMSUM(A4:B4,B1): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_imsum_ranges_text_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=IMSUM(A4:B4,A5:B5): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_lcm_cell_text_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=LCM(A1,B1): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_lcm_lit_text_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=LCM(\"x\",1/0): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_lcm_range_text_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=LCM(A2:B2): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_lcm_range_then_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=LCM(A4:B4,B1): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_lcm_ranges_text_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=LCM(A4:B4,A5:B5): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_multinomial_cell_text_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=MULTINOMIAL(A1,B1): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_multinomial_lit_text_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=MULTINOMIAL(\"x\",1/0): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_multinomial_range_text_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=MULTINOMIAL(A2:B2): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_multinomial_range_then_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=MULTINOMIAL(A4:B4,B1): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_multinomial_ranges_text_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=MULTINOMIAL(A4:B4,A5:B5): GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT and CONCAT read every value in argument order, the cells of a range included, and report the first value that fails: a text value ahead of an error gives the text's error. Formulon reports an error value ahead of an earlier value it cannot read."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+
+  # -- Error order: range-sourced errors rank after scalar arguments --
+  - id: ep_irr_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=IRR(H1,H2): For a function that takes an array or values argument beside scalar arguments (LARGE, SMALL, PERCENTILE, QUARTILE, PERCENTRANK, TRIMMEAN, IRR, MIRR, TEXTJOIN), Excel ranks an error read from a cell of that argument after the scalar arguments' failures. Formulon reports the cell's error first."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_large_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=LARGE(H1,H2): For a function that takes an array or values argument beside scalar arguments (LARGE, SMALL, PERCENTILE, QUARTILE, PERCENTRANK, TRIMMEAN, IRR, MIRR, TEXTJOIN), Excel ranks an error read from a cell of that argument after the scalar arguments' failures. Formulon reports the cell's error first."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_mirr_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=MIRR(H1,H2,1): For a function that takes an array or values argument beside scalar arguments (LARGE, SMALL, PERCENTILE, QUARTILE, PERCENTRANK, TRIMMEAN, IRR, MIRR, TEXTJOIN), Excel ranks an error read from a cell of that argument after the scalar arguments' failures. Formulon reports the cell's error first."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_mirr_0_2
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=MIRR(H1,1,H2): For a function that takes an array or values argument beside scalar arguments (LARGE, SMALL, PERCENTILE, QUARTILE, PERCENTRANK, TRIMMEAN, IRR, MIRR, TEXTJOIN), Excel ranks an error read from a cell of that argument after the scalar arguments' failures. Formulon reports the cell's error first."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_percentile_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=PERCENTILE(H1,H2): For a function that takes an array or values argument beside scalar arguments (LARGE, SMALL, PERCENTILE, QUARTILE, PERCENTRANK, TRIMMEAN, IRR, MIRR, TEXTJOIN), Excel ranks an error read from a cell of that argument after the scalar arguments' failures. Formulon reports the cell's error first."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_percentile_exc_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=PERCENTILE.EXC(H1,H2): For a function that takes an array or values argument beside scalar arguments (LARGE, SMALL, PERCENTILE, QUARTILE, PERCENTRANK, TRIMMEAN, IRR, MIRR, TEXTJOIN), Excel ranks an error read from a cell of that argument after the scalar arguments' failures. Formulon reports the cell's error first."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_percentile_inc_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=PERCENTILE.INC(H1,H2): For a function that takes an array or values argument beside scalar arguments (LARGE, SMALL, PERCENTILE, QUARTILE, PERCENTRANK, TRIMMEAN, IRR, MIRR, TEXTJOIN), Excel ranks an error read from a cell of that argument after the scalar arguments' failures. Formulon reports the cell's error first."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_percentrank_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=PERCENTRANK(H1,H2): For a function that takes an array or values argument beside scalar arguments (LARGE, SMALL, PERCENTILE, QUARTILE, PERCENTRANK, TRIMMEAN, IRR, MIRR, TEXTJOIN), Excel ranks an error read from a cell of that argument after the scalar arguments' failures. Formulon reports the cell's error first."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_percentrank_exc_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=PERCENTRANK.EXC(H1,H2): For a function that takes an array or values argument beside scalar arguments (LARGE, SMALL, PERCENTILE, QUARTILE, PERCENTRANK, TRIMMEAN, IRR, MIRR, TEXTJOIN), Excel ranks an error read from a cell of that argument after the scalar arguments' failures. Formulon reports the cell's error first."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_percentrank_inc_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=PERCENTRANK.INC(H1,H2): For a function that takes an array or values argument beside scalar arguments (LARGE, SMALL, PERCENTILE, QUARTILE, PERCENTRANK, TRIMMEAN, IRR, MIRR, TEXTJOIN), Excel ranks an error read from a cell of that argument after the scalar arguments' failures. Formulon reports the cell's error first."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_quartile_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=QUARTILE(H1,H2): For a function that takes an array or values argument beside scalar arguments (LARGE, SMALL, PERCENTILE, QUARTILE, PERCENTRANK, TRIMMEAN, IRR, MIRR, TEXTJOIN), Excel ranks an error read from a cell of that argument after the scalar arguments' failures. Formulon reports the cell's error first."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_quartile_exc_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=QUARTILE.EXC(H1,H2): For a function that takes an array or values argument beside scalar arguments (LARGE, SMALL, PERCENTILE, QUARTILE, PERCENTRANK, TRIMMEAN, IRR, MIRR, TEXTJOIN), Excel ranks an error read from a cell of that argument after the scalar arguments' failures. Formulon reports the cell's error first."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_quartile_inc_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=QUARTILE.INC(H1,H2): For a function that takes an array or values argument beside scalar arguments (LARGE, SMALL, PERCENTILE, QUARTILE, PERCENTRANK, TRIMMEAN, IRR, MIRR, TEXTJOIN), Excel ranks an error read from a cell of that argument after the scalar arguments' failures. Formulon reports the cell's error first."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_small_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=SMALL(H1,H2): For a function that takes an array or values argument beside scalar arguments (LARGE, SMALL, PERCENTILE, QUARTILE, PERCENTRANK, TRIMMEAN, IRR, MIRR, TEXTJOIN), Excel ranks an error read from a cell of that argument after the scalar arguments' failures. Formulon reports the cell's error first."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_textjoin_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=TEXTJOIN(H1,H2,1): For a function that takes an array or values argument beside scalar arguments (LARGE, SMALL, PERCENTILE, QUARTILE, PERCENTRANK, TRIMMEAN, IRR, MIRR, TEXTJOIN), Excel ranks an error read from a cell of that argument after the scalar arguments' failures. Formulon reports the cell's error first."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_trimmean_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=TRIMMEAN(H1,H2): For a function that takes an array or values argument beside scalar arguments (LARGE, SMALL, PERCENTILE, QUARTILE, PERCENTRANK, TRIMMEAN, IRR, MIRR, TEXTJOIN), Excel ranks an error read from a cell of that argument after the scalar arguments' failures. Formulon reports the cell's error first."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_trimmean_cell_err_text
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=TRIMMEAN(B1,A1): For a function that takes an array or values argument beside scalar arguments (LARGE, SMALL, PERCENTILE, QUARTILE, PERCENTRANK, TRIMMEAN, IRR, MIRR, TEXTJOIN), Excel ranks an error read from a cell of that argument after the scalar arguments' failures. Formulon reports the cell's error first."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_trimmean_lit_text_err
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=TRIMMEAN(\"x\",1/0): For a function that takes an array or values argument beside scalar arguments (LARGE, SMALL, PERCENTILE, QUARTILE, PERCENTRANK, TRIMMEAN, IRR, MIRR, TEXTJOIN), Excel ranks an error read from a cell of that argument after the scalar arguments' failures. Formulon reports the cell's error first."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: rr_trimmean_range_err_text
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=TRIMMEAN(A5:B5,A1): For a function that takes an array or values argument beside scalar arguments (LARGE, SMALL, PERCENTILE, QUARTILE, PERCENTRANK, TRIMMEAN, IRR, MIRR, TEXTJOIN), Excel ranks an error read from a cell of that argument after the scalar arguments' failures. Formulon reports the cell's error first."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+
+  # -- Error order: arguments checked last to first --
+  - id: ep_bin2hex_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=BIN2HEX(H1,H2): Excel checks this function's arguments last to first: when two arguments hold errors, the later one is reported. Formulon reports the earlier one."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_bin2oct_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=BIN2OCT(H1,H2): Excel checks this function's arguments last to first: when two arguments hold errors, the later one is reported. Formulon reports the earlier one."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_gestep_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=GESTEP(H1,H2): Excel checks this function's arguments last to first: when two arguments hold errors, the later one is reported. Formulon reports the earlier one."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_hex2bin_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=HEX2BIN(H1,H2): Excel checks this function's arguments last to first: when two arguments hold errors, the later one is reported. Formulon reports the earlier one."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_hex2oct_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=HEX2OCT(H1,H2): Excel checks this function's arguments last to first: when two arguments hold errors, the later one is reported. Formulon reports the earlier one."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_oct2bin_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=OCT2BIN(H1,H2): Excel checks this function's arguments last to first: when two arguments hold errors, the later one is reported. Formulon reports the earlier one."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_oct2hex_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=OCT2HEX(H1,H2): Excel checks this function's arguments last to first: when two arguments hold errors, the later one is reported. Formulon reports the earlier one."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_randbetween_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=RANDBETWEEN(H1,H2): Excel checks this function's arguments last to first: when two arguments hold errors, the later one is reported. Formulon reports the earlier one."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_valuetotext_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=VALUETOTEXT(H1,H2): Excel checks this function's arguments last to first: when two arguments hold errors, the later one is reported. Formulon reports the earlier one."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+
+  # -- Error order: the array argument checked first --
+  - id: ep_arraytotext_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=ARRAYTOTEXT(H1,H2): Excel checks this function's array or data argument before its other arguments, so an error there is reported ahead of an error in an earlier or later option. Formulon reports the other argument's error."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_expand_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=EXPAND(H1,H2): Excel checks this function's array or data argument before its other arguments, so an error there is reported ahead of an error in an earlier or later option. Formulon reports the other argument's error."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_forecast_ets_1_2
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=FORECAST.ETS(1,H1,H2): Excel checks this function's array or data argument before its other arguments, so an error there is reported ahead of an error in an earlier or later option. Formulon reports the other argument's error."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_forecast_ets_confint_1_2
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=FORECAST.ETS.CONFINT(1,H1,H2): Excel checks this function's array or data argument before its other arguments, so an error there is reported ahead of an error in an earlier or later option. Formulon reports the other argument's error."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_forecast_ets_seasonality_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=FORECAST.ETS.SEASONALITY(H1,H2): Excel checks this function's array or data argument before its other arguments, so an error there is reported ahead of an error in an earlier or later option. Formulon reports the other argument's error."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_forecast_ets_stat_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=FORECAST.ETS.STAT(H1,H2,1): Excel checks this function's array or data argument before its other arguments, so an error there is reported ahead of an error in an earlier or later option. Formulon reports the other argument's error."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_groupby_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=GROUPBY(H1,H2,1): Excel checks this function's array or data argument before its other arguments, so an error there is reported ahead of an error in an earlier or later option. Formulon reports the other argument's error."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_groupby_1_2
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=GROUPBY(1,H1,H2): Excel checks this function's array or data argument before its other arguments, so an error there is reported ahead of an error in an earlier or later option. Formulon reports the other argument's error."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_pivotby_0_2
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=PIVOTBY(H1,1,H2,1): Excel checks this function's array or data argument before its other arguments, so an error there is reported ahead of an error in an earlier or later option. Formulon reports the other argument's error."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_pivotby_1_2
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=PIVOTBY(1,H1,H2,1): Excel checks this function's array or data argument before its other arguments, so an error there is reported ahead of an error in an earlier or later option. Formulon reports the other argument's error."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_pivotby_2_3
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=PIVOTBY(1,1,H1,H2): Excel checks this function's array or data argument before its other arguments, so an error there is reported ahead of an error in an earlier or later option. Formulon reports the other argument's error."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_sort_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=SORT(H1,H2): Excel checks this function's array or data argument before its other arguments, so an error there is reported ahead of an error in an earlier or later option. Formulon reports the other argument's error."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_t_test_0_2
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=T.TEST(H1,1,H2,1): Excel checks this function's array or data argument before its other arguments, so an error there is reported ahead of an error in an earlier or later option. Formulon reports the other argument's error."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_t_test_0_3
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=T.TEST(H1,1,1,H2): Excel checks this function's array or data argument before its other arguments, so an error there is reported ahead of an error in an earlier or later option. Formulon reports the other argument's error."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_t_test_1_2
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=T.TEST(1,H1,H2,1): Excel checks this function's array or data argument before its other arguments, so an error there is reported ahead of an error in an earlier or later option. Formulon reports the other argument's error."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_t_test_1_3
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=T.TEST(1,H1,1,H2): Excel checks this function's array or data argument before its other arguments, so an error there is reported ahead of an error in an earlier or later option. Formulon reports the other argument's error."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_ttest_0_2
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=TTEST(H1,1,H2,1): Excel checks this function's array or data argument before its other arguments, so an error there is reported ahead of an error in an earlier or later option. Formulon reports the other argument's error."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_ttest_0_3
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=TTEST(H1,1,1,H2): Excel checks this function's array or data argument before its other arguments, so an error there is reported ahead of an error in an earlier or later option. Formulon reports the other argument's error."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_ttest_1_2
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=TTEST(1,H1,H2,1): Excel checks this function's array or data argument before its other arguments, so an error there is reported ahead of an error in an earlier or later option. Formulon reports the other argument's error."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_ttest_1_3
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=TTEST(1,H1,1,H2): Excel checks this function's array or data argument before its other arguments, so an error there is reported ahead of an error in an earlier or later option. Formulon reports the other argument's error."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_unique_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=UNIQUE(H1,H2): Excel checks this function's array or data argument before its other arguments, so an error there is reported ahead of an error in an earlier or later option. Formulon reports the other argument's error."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_wrapcols_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=WRAPCOLS(H1,H2): Excel checks this function's array or data argument before its other arguments, so an error there is reported ahead of an error in an earlier or later option. Formulon reports the other argument's error."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+  - id: ep_wraprows_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=WRAPROWS(H1,H2): Excel checks this function's array or data argument before its other arguments, so an error there is reported ahead of an error in an earlier or later option. Formulon reports the other argument's error."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+
+  # -- Error order: ECMA.CEILING is not registered --
+  - id: ep_ecma_ceiling_0_1
+    applies_to: [mac-365-ja_JP]
+    cause: engine-gap
+    mode: skip-oracle
+    reason: "=ECMA.CEILING(H1,H2): Excel accepts ECMA.CEILING and reports an argument error from it. Formulon does not register the name and answers #NAME?."
+    prefer: excel
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
+
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
 #    the diff: is the spread within expected floating point drift? Is it a

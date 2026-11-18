@@ -16,9 +16,14 @@ namespace builtins_detail {
 
 using BuiltinImpl = Value (*)(const Value*, std::uint32_t, Arena&);
 
-/// Impl of a host-service stub: ignores its arguments and returns the fixed error `E`.
+/// Impl of a host-service stub: the first error argument, else the fixed error `E`.
 template <ErrorCode E>
-Value fixed_error_stub(const Value* /*args*/, std::uint32_t /*arity*/, Arena& /*arena*/) {
+Value fixed_error_stub(const Value* args, std::uint32_t arity, Arena& /*arena*/) {
+  for (std::uint32_t i = 0; i < arity; ++i) {
+    if (args[i].is_error()) {
+      return args[i];
+    }
+  }
   return Value::error(E);
 }
 
@@ -43,6 +48,7 @@ struct BuiltinRegistration {
   bool atp_omitted_optional_is_na = false;
   bool last_arg_scalar = false;
   bool absent_on_mac = false;
+  bool checks_args_last_first = false;
   const FoldOps* fold = nullptr;
   const OmittedArgDefault* omitted_defaults = nullptr;
   std::uint32_t omitted_default_count = 0;
@@ -118,6 +124,13 @@ constexpr BuiltinRegistration absent_on_mac(BuiltinRegistration def) noexcept {
   return def;
 }
 
+/// Marks `def` as checking its arguments last to first; see
+/// `FunctionDef::checks_args_last_first`.
+constexpr BuiltinRegistration checks_args_last_first(BuiltinRegistration def) noexcept {
+  def.checks_args_last_first = true;
+  return def;
+}
+
 inline bool registration_name_is(std::string_view name, std::string_view expected) noexcept {
   return strings::case_insensitive_eq(name, expected);
 }
@@ -165,6 +178,7 @@ inline void register_builtin_functions(FunctionRegistry& registry, const Builtin
     fn.atp_omitted_optional_is_na = def.atp_omitted_optional_is_na;
     fn.last_arg_scalar = def.last_arg_scalar;
     fn.absent_on_mac = def.absent_on_mac;
+    fn.checks_args_last_first = def.checks_args_last_first;
     fn.fold = def.fold;
     fn.grid_arg = def.grid_arg;
     fn.omitted_defaults = def.omitted_defaults;

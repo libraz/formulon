@@ -76,6 +76,15 @@ void widen_shape(const ArrayView& v, std::uint32_t* rows, std::uint32_t* cols);
 // `scalar_ops.h` helpers.
 Value apply_binop_per_cell(parser::BinOp op, const Value& lhs, const Value& rhs, Arena& arena);
 
+// `+ - * / ^`, whose operands coerce to numbers.
+bool is_arithmetic_op(parser::BinOp op) noexcept;
+
+// Calls a scalar function's impl on arguments that may hold errors. One that
+// propagates errors reports the first failing argument in its check order:
+// the impl's own coercion, which runs in that order, finds it, and an error
+// argument the impl does not read still wins over its result.
+Value call_scalar_impl(const FunctionDef& def, const Value* args, std::uint32_t arity, Arena& arena);
+
 // Shape-aware binary-operator broadcast. When either operand is an
 // `ArrayValue`, walks the result rectangle (with 1x1 scalar broadcast on
 // either side) and produces a `Value::Array` whose cells are the
@@ -105,9 +114,8 @@ Shaped broadcast_unary(parser::UnaryOp op, const Shaped& operand, Arena& arena);
 // spilled `Value::Array`. `out_rows` / `out_cols` are the max extents
 // over the array arguments; scalars broadcast to every cell. A 1x1
 // result unwraps to a plain scalar so a single-cell range argument does
-// not spill. Per-cell error propagation mirrors the scalar dispatch
-// path: with `propagate_errors`, the first error argument short-circuits
-// that cell before the impl runs.
+// not spill. Each cell is one `call_scalar_impl`, as on the scalar
+// dispatch path.
 Value broadcast_scalar_call(const FunctionDef& def, const std::vector<Value>& args, std::uint32_t out_rows,
                             std::uint32_t out_cols, Arena& arena);
 

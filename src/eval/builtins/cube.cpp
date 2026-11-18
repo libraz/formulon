@@ -8,11 +8,8 @@
 // function returns `#N/A`, which is what Excel 365 returns for a CUBE*
 // formula whose connection does not exist.
 //
-// Argument evaluation: each stub's `impl` simply returns the fixed error
-// once invoked. The dispatcher (`tree_walker.cpp`) pre-evaluates every
-// argument with `propagate_errors = true` (the default), so an error in
-// any argument short-circuits to `#DIV/0!` / `#VALUE!` / etc. before this
-// body runs. That preserves Excel's "errors beat stubs" invariant.
+// Argument evaluation: each stub returns its first error argument, else the
+// fixed error, so an argument error beats the stub as in Excel.
 
 #include "eval/builtins/cube.h"
 

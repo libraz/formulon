@@ -103,17 +103,18 @@ struct FunctionDef {
   std::uint32_t min_arity;
   /// Inclusive maximum number of arguments. Use `kVariadic` for unlimited.
   std::uint32_t max_arity;
-  /// Implementation. The dispatcher pre-evaluates every argument and
-  /// short-circuits on the left-most error before invoking `impl`. The
-  /// callee is responsible for any further per-argument coercion.
+  /// Implementation. The dispatcher pre-evaluates every argument; the callee
+  /// coerces each one in its check order, an error argument coercing to its
+  /// own error.
   Value (*impl)(const Value* args, std::uint32_t arity, Arena& arena);
   /// When true (the default, matching Excel for the vast majority of
-  /// functions), the dispatcher in `tree_walker` short-circuits on the
-  /// left-most argument that evaluates to an error and never invokes the
-  /// `impl` callback. When false, errors are passed through as raw `Value`
-  /// arguments - required by the IS* type-predicate family
-  /// (`ISERROR`, `ISERR`, `ISNA`, `ISNUMBER`, `ISTEXT`, `ISBLANK`,
-  /// `ISLOGICAL`), which must be able to inspect error-typed inputs.
+  /// functions), the call reports its first failing argument: a scalar
+  /// function's impl receives error arguments in their slots and fails on the
+  /// first one it coerces, and an error argument it does not read still wins
+  /// over a non-error result; a range-aware function short-circuits on the
+  /// left-most error argument. When false, errors are ordinary arguments -
+  /// required by the IS* type-predicate family (`ISERROR`, `ISERR`, `ISNA`,
+  /// `ISNUMBER`, `ISTEXT`, `ISBLANK`, `ISLOGICAL`).
   bool propagate_errors = true;
 
   /// When true, the dispatcher in `tree_walker` expands any argument whose
@@ -208,6 +209,11 @@ struct FunctionDef {
   /// is unknown: the call is `#NAME?` before arity or arguments are checked,
   /// whatever the arguments evaluate to.
   bool absent_on_mac = false;
+  /// The function checks its arguments last to first: when two arguments
+  /// fail, the later one's failure is reported (DELTA, DEC2BIN / DEC2OCT /
+  /// DEC2HEX). Every other function
+  /// reports the first failing argument in argument order.
+  bool checks_args_last_first = false;
   /// How the function reads a grid-of-references argument. See `GridArg`.
   GridArg grid_arg = GridArg::kElementError;
   /// One-value-at-a-time form of a range-aware reducer, or null. See `FoldOps`.

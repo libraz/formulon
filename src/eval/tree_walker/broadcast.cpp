@@ -36,6 +36,7 @@
 #include "eval/coerce.h"
 #include "eval/error_origin.h"
 #include "eval/function_registry.h"
+#include "eval/scalar_args.h"
 #include "eval/scalar_ops.h"
 #include "parser/ast.h"
 #include "utils/arena.h"
@@ -80,7 +81,9 @@ Value apply_binop_per_cell(parser::BinOp op, const Value& lhs, const Value& rhs,
   if (lhs.is_error()) {
     return lhs;
   }
-  if (rhs.is_error()) {
+  // The left operand is checked whole before the right: an uncoercible left
+  // operand is #VALUE! even beside a right-hand error.
+  if (rhs.is_error() && !is_arithmetic_op(op)) {
     return rhs;
   }
   switch (op) {
@@ -110,6 +113,27 @@ Value apply_binop_per_cell(parser::BinOp op, const Value& lhs, const Value& rhs,
       return apply_comparison(op, lhs, rhs);
   }
   return Value::error(ErrorCode::Value);
+}
+
+bool is_arithmetic_op(parser::BinOp op) noexcept {
+  switch (op) {
+    case parser::BinOp::Add:
+    case parser::BinOp::Sub:
+    case parser::BinOp::Mul:
+    case parser::BinOp::Div:
+    case parser::BinOp::Pow:
+      return true;
+    default:
+      return false;
+  }
+}
+
+Value call_scalar_impl(const FunctionDef& def, const Value* args, std::uint32_t arity, Arena& arena) {
+  const Value result = def.impl(args, arity, arena);
+  if (!def.propagate_errors || result.is_error()) {
+    return result;
+  }
+  return report_error_arg(result, args, arity, def.checks_args_last_first);
 }
 
 void widen_shape(const ArrayView& v, std::uint32_t* rows, std::uint32_t* cols) {
@@ -318,20 +342,17 @@ Value broadcast_element(const BroadcastArg& arg, std::uint32_t r, std::uint32_t 
   return cell != nullptr ? *cell : Value::error(ErrorCode::NA);
 }
 
-// `def` applied to the arguments at output position (r, c); with `propagate_errors`
-// the first error argument short-circuits the cell before the impl runs.
+// `def` applied to the arguments at output position (r, c), errors included;
+// see `call_scalar_impl`.
 Value eval_broadcast_cell(const FunctionDef& def, const std::vector<BroadcastArg>& views, std::vector<Value>& cell_args,
                           std::uint32_t r, std::uint32_t c, Arena& arena) {
   for (std::size_t a = 0; a < views.size(); ++a) {
     cell_args[a] = broadcast_element(views[a], r, c);
-    if (cell_args[a].is_error()) {
-      if (def.propagate_errors) {
-        return cell_args[a];
-      }
+    if (cell_args[a].is_error() && !def.propagate_errors) {
       forget_error_origin();
     }
   }
-  return def.impl(cell_args.data(), static_cast<std::uint32_t>(cell_args.size()), arena);
+  return call_scalar_impl(def, cell_args.data(), static_cast<std::uint32_t>(cell_args.size()), arena);
 }
 
 }  // namespace
@@ -341,9 +362,8 @@ Value eval_broadcast_cell(const FunctionDef& def, const std::vector<BroadcastArg
 // spilled `Value::Array`. `out_rows` / `out_cols` are the max extents
 // over the array arguments; scalars broadcast to every cell. A 1x1
 // result stays an array, as in Excel (a single-cell range argument never
-// reaches here). Per-cell error propagation mirrors the scalar dispatch
-// path: with `propagate_errors`, the first error argument short-circuits
-// that cell before the impl runs.
+// reaches here). Each cell is one `call_scalar_impl`, as on the scalar
+// dispatch path.
 Value broadcast_scalar_call(const FunctionDef& def, const std::vector<Value>& args, std::uint32_t out_rows,
                             std::uint32_t out_cols, Arena& arena) {
   std::vector<BroadcastArg> views;

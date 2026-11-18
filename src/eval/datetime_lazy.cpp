@@ -9,6 +9,7 @@
 #include "eval/datetime_lazy.h"
 
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 #include "eval/eval_context.h"
@@ -38,7 +39,11 @@ Value invoke_date_entry(const DateEntry& entry, const Value* args, std::uint32_t
     }
     return entry.impl(a, n, arena, date1904);
   };
-  return lift_over_array_args(args, arity, arena, invoke_impl);
+  // An error argument the impl does not read still wins over its result.
+  const auto invoke_reporting = [&](const Value* a, std::uint32_t n) -> Value {
+    return report_error_arg(invoke_impl(a, n), a, n, false);
+  };
+  return lift_over_array_args(args, arity, arena, invoke_reporting);
 }
 
 Value eval_datetime_lazy(const parser::AstNode& call, Arena& arena, const FunctionRegistry& registry,
@@ -52,17 +57,17 @@ Value eval_datetime_lazy(const parser::AstNode& call, Arena& arena, const Functi
   if (arity < entry->min_arity || arity > entry->max_arity) {
     return Value::error(ErrorCode::Value);
   }
-  // Calendar functions propagate the left-most argument error (they never
-  // opt out of `propagate_errors`), matching the eager dispatcher's
-  // pre-evaluation contract; `invoke_date_entry` lifts over arrays.
+  // Calendar functions report the first failing argument, as the eager
+  // dispatcher does; `invoke_date_entry` lifts over arrays.
   std::vector<Value> args;
-  if (const Value err = eval_scalar_call_args(call, entry->min_arity, entry->max_arity, entry->analysis_toolpak, 0U,
-                                              arena, registry, ctx, args);
-      err.is_error()) {
-    return err;
-  }
-  return invoke_date_entry(*entry, args.empty() ? nullptr : args.data(), static_cast<std::uint32_t>(args.size()), arena,
-                           ctx.date1904(), ctx.wall_clock());
+  std::optional<ErrorOriginSnapshot> error_arg_origin;
+  eval_scalar_call_args(call, entry->min_arity, entry->max_arity, entry->analysis_toolpak, 0U, arena, registry, ctx,
+                        args, error_arg_origin);
+  const auto arity_n = static_cast<std::uint32_t>(args.size());
+  const Value result =
+      invoke_date_entry(*entry, args.empty() ? nullptr : args.data(), arity_n, arena, ctx.date1904(), ctx.wall_clock());
+  restore_reported_origin(result, args.data(), arity_n, false, error_arg_origin);
+  return result;
 }
 
 }  // namespace eval

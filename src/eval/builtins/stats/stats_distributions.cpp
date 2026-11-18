@@ -545,6 +545,9 @@ Value TDistLegacy(const Value* args, std::uint32_t /*arity*/, Arena& arena) {
   if (!x_arg) {
     return Value::error(x_arg.error());
   }
+  if (auto df_arg = read_required_number(args, 1); !df_arg) {
+    return Value::error(df_arg.error());
+  }
   auto tails_arg = read_required_number(args, 2);
   if (!tails_arg) {
     return Value::error(tails_arg.error());

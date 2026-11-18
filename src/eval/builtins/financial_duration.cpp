@@ -119,9 +119,7 @@ Value Duration(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool da
 //
 // Modified duration: DURATION / (1 + yld/frequency). Re-reads the yld and
 // frequency arguments because `compute_macaulay` does not surface them; the
-// argument coercions are idempotent (any error inside an arg has already
-// been short-circuited by the dispatcher's `propagate_errors = true`
-// path).
+// argument coercions are idempotent.
 Value MDuration(const Value* args, std::uint32_t arity, Arena& /*arena*/, bool date1904) {
   auto d = compute_macaulay(args, arity, date1904);
   if (!d) {

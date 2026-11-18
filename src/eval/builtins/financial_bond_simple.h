@@ -1,8 +1,8 @@
 //
 // Internal header — do not include outside `src/eval/builtins/financial*`.
 //
-// Forward declarations for the closed-form bond-pricing builtins and the
-// STOCKHISTORY stub. Implementations live in `financial_bond_simple.cpp`
+// Forward declarations for the closed-form bond-pricing builtins.
+// Implementations live in `financial_bond_simple.cpp`
 // and are registered from `financial.cpp` via
 // `register_financial_builtins`.
 //
@@ -13,9 +13,6 @@
 //   * YIELDDISC   -- annual yield for a discounted security.
 //   * YIELDMAT    -- annual yield for a security paying interest at
 //                    maturity.
-//   * STOCKHISTORY -- intentional stub returning `#VALUE!`; Formulon does
-//                    not perform network I/O (see the WEBSERVICE/PY
-//                    precedent in `web.cpp`).
 
 #ifndef FORMULON_EVAL_BUILTINS_FINANCIAL_BOND_SIMPLE_H_
 #define FORMULON_EVAL_BUILTINS_FINANCIAL_BOND_SIMPLE_H_
@@ -33,7 +30,6 @@ Value PriceDisc(const Value* args, std::uint32_t arity, Arena& arena, bool date1
 Value PriceMat(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
 Value YieldDisc(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
 Value YieldMat(const Value* args, std::uint32_t arity, Arena& arena, bool date1904);
-Value StockHistory(const Value* args, std::uint32_t arity, Arena& arena);
 
 }  // namespace financial_detail
 }  // namespace eval

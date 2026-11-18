@@ -101,7 +101,7 @@ bool decode_mode(double raw, Mode* out) {
 // through `*err`; range-sourced non-numeric cells never produce errors here
 // because the dispatcher would have routed them through that filter. SUBTOTAL
 // is registered with `propagate_errors=false` precisely so errors flow into
-// this helper instead of being short-circuited at the dispatcher, letting the
+// this helper instead of being reported by the dispatcher, letting the
 // numeric branches reject them but COUNTA (which counts errors) still see
 // them via `run_counta`.
 //

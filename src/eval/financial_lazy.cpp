@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <string_view>
 #include <utility>
 #include <vector>
@@ -768,18 +769,21 @@ Value eval_financial_date_lazy(const parser::AstNode& call, Arena& arena, const 
   if (arity < entry->min_arity || arity > entry->max_arity) {
     return Value::error(ErrorCode::Value);
   }
-  // This family follows the Analysis-ToolPak argument rule, propagates the
-  // left-most argument error, and lifts element by element over array
-  // arguments, as the calendar family does.
+  // This family follows the Analysis-ToolPak argument rule, reports the first
+  // failing argument, and lifts element by element over array arguments, as
+  // the calendar family does.
   std::vector<Value> args;
-  if (const Value err = eval_scalar_call_args(call, entry->min_arity, entry->max_arity, /*atp_rule=*/true,
-                                              entry->logical_args, arena, registry, ctx, args);
-      err.is_error()) {
-    return err;
-  }
+  std::optional<ErrorOriginSnapshot> error_arg_origin;
+  eval_scalar_call_args(call, entry->min_arity, entry->max_arity, /*atp_rule=*/true, entry->logical_args, arena,
+                        registry, ctx, args, error_arg_origin);
   const bool date1904 = ctx.date1904();
-  return lift_over_array_args(args.empty() ? nullptr : args.data(), static_cast<std::uint32_t>(args.size()), arena,
-                              [&](const Value* a, std::uint32_t n) { return entry->impl(a, n, arena, date1904); });
+  const auto evaluated = static_cast<std::uint32_t>(args.size());
+  const Value result = lift_over_array_args(args.empty() ? nullptr : args.data(), evaluated, arena,
+                                            [&](const Value* a, std::uint32_t n) {
+                                              return report_error_arg(entry->impl(a, n, arena, date1904), a, n, false);
+                                            });
+  restore_reported_origin(result, args.data(), evaluated, false, error_arg_origin);
+  return result;
 }
 
 }  // namespace eval

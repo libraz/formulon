@@ -102,6 +102,33 @@ bool is_full_axis_range(const parser::Reference& lhs, const parser::Reference& r
 
 namespace {
 
+// A scalar (non-range-aware) function applied to its collected arguments:
+// element-wise over an array or whole column / row argument, else once.
+Value call_scalar_function(const FunctionDef& def, std::vector<Value>& values, std::vector<const TailArray*>& tails,
+                           Arena& arena, const TailArray** tail_out) {
+  if (!tails.empty()) {
+    tails.resize(values.size(), nullptr);
+    const Shaped result = broadcast_scalar_call_shaped(def, values, tails, arena);
+    *tail_out = result.tail_array;
+    return result.value;
+  }
+  std::uint32_t out_rows = 1;
+  std::uint32_t out_cols = 1;
+  bool any_array = false;
+  for (const Value& v : values) {
+    if (v.is_array()) {
+      any_array = true;
+      const ArrayValue* a = v.as_array();
+      out_rows = std::max(out_rows, a->rows);
+      out_cols = std::max(out_cols, a->cols);
+    }
+  }
+  if (any_array) {
+    return broadcast_scalar_call(def, values, out_rows, out_cols, arena);
+  }
+  return call_scalar_impl(def, values.data(), static_cast<std::uint32_t>(values.size()), arena);
+}
+
 // The `#VALUE!` of a text literal that failed ahead of an error argument, with the origin slot as it stood then.
 Value literal_text_failure(const std::optional<ErrorOriginSnapshot>& origin) {
   if (origin.has_value()) {
@@ -516,12 +543,13 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
     return Value::error(ErrorCode::Value);
   }
 
-  // Pre-evaluate arguments left-to-right. By default the first error wins
-  // and the impl is never invoked; functions that need to inspect error
-  // arguments (e.g. `ISERROR`) clear `propagate_errors` to opt out. When
-  // the function is range-aware (`accepts_ranges`), any argument whose AST
-  // node is a simple RangeOp (Ref:Ref) is flattened into the values vector
-  // in row-major order.
+  // Pre-evaluate arguments left-to-right. A range-aware function stops at the
+  // first error; a scalar one evaluates every argument and hands errors to
+  // its impl, whose coercion reports the first failing argument
+  // (`call_scalar_impl`). Functions that inspect error arguments (e.g.
+  // `ISERROR`) clear `propagate_errors`. For a range-aware function, any
+  // argument whose AST node is a simple RangeOp (Ref:Ref) is flattened into
+  // the values vector in row-major order.
   std::vector<Value> values;
   values.reserve(arity);
   // Parallel to `values`: the whole column / row a scalar function's argument
@@ -549,6 +577,16 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
   // Set when a `first_arg_scalar` / `last_arg_scalar` slot evaluated to an
   // array or grid; the call is then evaluated once per element.
   bool lift_scalar_slot = false;
+  // A scalar function that propagates errors keeps an error argument in its
+  // slot; the origin of the one it reports is kept for the result.
+  const bool passes_errors = def->propagate_errors && !def->accepts_ranges;
+  std::optional<ErrorOriginSnapshot> reported_origin;
+  const auto pass_error = [&](const Value& err) {
+    if (!reported_origin.has_value() || def->checks_args_last_first) {
+      reported_origin = snapshot_error_origin();
+    }
+    values.push_back(err);
+  };
   const std::uint32_t evaluated_arity =
       def->analysis_toolpak_args && !def->atp_omitted_optional_is_na
           ? atp_evaluated_arity(node, def->min_arity, def->max_arity)
@@ -634,6 +672,10 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
       continue;
     }
     Value v = densify(shaped_arg, arena);
+    if (v.is_error() && passes_errors) {
+      pass_error(v);
+      continue;
+    }
     if (v.is_error()) {
       // A text literal that cannot be a number already failed ahead of this
       // error, and the earlier failure is the one reported.
@@ -678,7 +720,9 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
       const bool required = def->atp_omitted_optional_is_na || atp_slot_required(i, def->min_arity, def->max_arity);
       const Value err = atp_arg_error(arg_node, v, required);
       if (err.is_error()) {
-        if (!absorb_arg_error(*def, err, &values)) {
+        if (passes_errors) {
+          pass_error(err);
+        } else if (!absorb_arg_error(*def, err, &values)) {
           return err;
         }
         continue;
@@ -733,26 +777,15 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
   // spills the result. Range-aware aggregators already flattened their
   // array arguments into `values`, so they never take this path.
   if (!def->accepts_ranges) {
-    if (!tails.empty()) {
-      tails.resize(values.size(), nullptr);
-      const Shaped result = broadcast_scalar_call_shaped(*def, values, tails, arena);
-      *tail_out = result.tail_array;
-      return result.value;
+    if (reported_origin.has_value()) {
+      forget_error_origin();
     }
-    std::uint32_t out_rows = 1;
-    std::uint32_t out_cols = 1;
-    bool any_array = false;
-    for (const Value& v : values) {
-      if (v.is_array()) {
-        any_array = true;
-        const ArrayValue* a = v.as_array();
-        out_rows = std::max(out_rows, a->rows);
-        out_cols = std::max(out_cols, a->cols);
-      }
-    }
-    if (any_array) {
-      return broadcast_scalar_call(*def, values, out_rows, out_cols, arena);
-    }
+    const Value result = call_scalar_function(*def, values, tails, arena, tail_out);
+    // The impl's own failure keeps what it noted; a reported error argument
+    // keeps the origin it arrived with.
+    restore_reported_origin(result, values.data(), static_cast<std::uint32_t>(values.size()),
+                            def->checks_args_last_first, reported_origin);
+    return result;
   }
   if (!streamed.empty()) {
     return fold_with_tails(*def, values, streamed);
