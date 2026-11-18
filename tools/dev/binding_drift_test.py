@@ -334,12 +334,18 @@ class ReadmeFactsTest(unittest.TestCase):
         self.assertEqual(readme_checks.check_readme_facts(), [])
 
     def test_each_fact_catches_a_stale_claim(self) -> None:
+        # The claims a routine change moves are built from the same sources the check reads.
+        total, _ = readme_checks._function_counts()
+        _, brotli = readme_checks._size_ceilings()
+        default = readme_checks._default_profile_id()
+        other = next(i for i in sorted(readme_checks._profile_ids()) if i != default)
+        node = readme_checks._node_min()
         stale = {
-            "function-counts": ("526 Excel function names", "525 Excel function names"),
-            "size-ceilings": ("1344 KiB Brotli", "1280 KiB Brotli"),
-            "default-profile": ("New workbooks use `win-365-en_US`", "New workbooks use `mac-365-ja_JP`"),
+            "function-counts": (f"{total} Excel function names", f"{int(total) - 1} Excel function names"),
+            "size-ceilings": (f"{brotli} KiB Brotli", f"{int(brotli) - 1} KiB Brotli"),
+            "default-profile": (f"New workbooks use `{default}`", f"New workbooks use `{other}`"),
             "profile-ids": (",nl_NL}", ",nl_NL,pl_PL}"),
-            "node-min": ("Node 22+", "Node 20+"),
+            "node-min": (f"Node {node}+", f"Node {int(node) - 1}+"),
             "cli-platforms": ("`linux-arm64` are on", "`win-x64` are on"),
         }
         for fact, (old, new) in stale.items():
