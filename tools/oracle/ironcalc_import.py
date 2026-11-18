@@ -341,6 +341,18 @@ def _decode_ooxml_text(value: str) -> str:
     return "".join(out)
 
 
+class _ExcelError(str):
+    """A value stored as an error (`t="e"`), as opposed to text spelling one."""
+
+
+def _cell_value(cell: Cell) -> Any:
+    """The cell's value, with an error-typed one marked as an error."""
+
+    if cell.data_type == "e" and isinstance(cell.value, str):
+        return _ExcelError(cell.value)
+    return cell.value
+
+
 def _value_to_record(value: Any, *, where: str) -> Dict[str, Any]:
     """Normalises a Python cell value into the uniform `{kind, ...}`.
 
@@ -355,8 +367,10 @@ def _value_to_record(value: Any, *, where: str) -> Dict[str, Any]:
     True
     >>> _value_to_record("_xD83D_", where="doctest")["value"]
     '_xD83D_'
-    >>> _value_to_record("#VALUE!", where="doctest")
+    >>> _value_to_record(_ExcelError("#VALUE!"), where="doctest")
     {'kind': 'error', 'code': '#VALUE!'}
+    >>> _value_to_record("#VALUE!", where="doctest")
+    {'kind': 'text', 'value': '#VALUE!'}
     """
 
     if value is None:
@@ -366,10 +380,13 @@ def _value_to_record(value: Any, *, where: str) -> Dict[str, Any]:
     if isinstance(value, (int, float)):
         f = float(value)
         return {"kind": "number", "value": f}
+    if isinstance(value, _ExcelError):
+        if value not in EXCEL_ERROR_NAMES:
+            raise ValueError(f"{where}: unknown error value {value!r}")
+        return {"kind": "error", "code": str(value)}
     if isinstance(value, str):
-        # IronCalc's cached error values come through as plain strings.
-        if value.startswith("#") and value in EXCEL_ERROR_NAMES:
-            return {"kind": "error", "code": value}
+        # Text stays text even when it spells an error name: only a cell
+        # stored as an error (`t="e"`) is one.
         return {"kind": "text", "value": _decode_ooxml_text(value)}
     # openpyxl auto-converts any cell carrying a date-style number format
     # into a datetime/date/time object — e.g. YEARFRAC.xlsx A2 arrives as
@@ -398,14 +415,9 @@ def _expect_from_cached(cell: Cell, *, where: str) -> Optional[Dict[str, Any]]:
     Excel, or formula is volatile). The caller must skip such cases.
     """
 
-    value = cell.value
+    value = _cell_value(cell)
     if value is None:
-        # data_type 'e' with value None should not happen, but guard
-        # against openpyxl quirks.
         return None
-    # openpyxl exposes cached errors with data_type == 'e' and value
-    # like '#DIV/0!'. With data_only=True the value IS that string, so
-    # _value_to_record routes it correctly already.
     return _value_to_record(value, where=where)
 
 
@@ -734,11 +746,11 @@ def _convert_sheet(
         if cell.data_type == "f" and isinstance(cell.value, str) and cell.value.strip() != "=":
             formula_cells[cell.coordinate] = cell.value
         elif cell.data_type == "f":
-            cached_value = cached_sheet[cell.coordinate].value
+            cached_value = _cell_value(cached_sheet[cell.coordinate])
             if cached_value is not None:
                 non_formula_cells[cell.coordinate] = cached_value
         else:
-            non_formula_cells[cell.coordinate] = cell.value
+            non_formula_cells[cell.coordinate] = _cell_value(cell)
 
     stats.formula_cells = len(formula_cells)
 

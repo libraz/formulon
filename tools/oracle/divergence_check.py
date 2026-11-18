@@ -638,6 +638,8 @@ def validate(path: Path, *, strict: bool) -> int:
 #                      decoding the fixture (CHAR `_x0001_`, a row shift,
 #                      or lost reference dependencies). Repair the import
 #                      before adjudicating the resulting case in Excel.
+#   engine-gap         Excel's cached answer stands and Formulon differs; the
+#                      entry is removed by the change that fixes the engine.
 #   unadjudicated      The remaining case has not yet been adjudicated on Mac;
 #                      it stays visible until the separate adjudication flow
 #                      assigns a more specific cause.
@@ -650,6 +652,7 @@ IRONCALC_CAUSES = {
     "host",
     "unrecorded-region",
     "importer-decode",
+    "engine-gap",
     "unadjudicated",
 }
 

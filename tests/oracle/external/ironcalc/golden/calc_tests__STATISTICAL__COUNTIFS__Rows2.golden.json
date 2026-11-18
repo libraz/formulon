@@ -8,7 +8,7 @@
     "excel_locale": "unknown",
     "saved_by": "Microsoft Excel",
     "saved_by_version": "16.0300",
-    "generated_at": "2026-10-08T18:35:55Z",
+    "generated_at": "2026-11-18T04:00:31Z",
     "profile_id": "win-365-en_US"
   },
   "tolerance": {
@@ -401,8 +401,8 @@
           "value": "<>*brown"
         },
         "R11": {
-          "kind": "error",
-          "code": "#DIV/0!"
+          "kind": "text",
+          "value": "#DIV/0!"
         },
         "R9": {
           "kind": "error",
@@ -467,8 +467,8 @@
           "value": 0.0
         },
         "V5": {
-          "kind": "error",
-          "code": "#N/A"
+          "kind": "text",
+          "value": "#N/A"
         },
         "V4": {
           "kind": "error",
@@ -491,7 +491,10 @@
           "formula": "=\"\""
         }
       },
-      "skipped": "COUNTIFS(V2:V15, #N/A criterion) counts all 2 #N/A cells; IronCalc=1. Probe: countif_edges (countif_error_criterion_na_over_two_na)."
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
     },
     {
       "id": "Y2",
@@ -506,8 +509,8 @@
           "value": 0.0
         },
         "V5": {
-          "kind": "error",
-          "code": "#N/A"
+          "kind": "text",
+          "value": "#N/A"
         },
         "V4": {
           "kind": "error",
@@ -530,7 +533,10 @@
           "formula": "=\"\""
         }
       },
-      "skipped": "COUNTIFS(V2:V8, CONCAT(<>, W2=#N/A)). Mac criterion is #N/A; counts 2 #N/A cells. IronCalc=1. Probe: countif_edges (countif_concat_ne_error_mixed_range)."
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
     },
     {
       "id": "AD2",
@@ -1001,8 +1007,8 @@
           "value": "=*brown"
         },
         "R11": {
-          "kind": "error",
-          "code": "#DIV/0!"
+          "kind": "text",
+          "value": "#DIV/0!"
         },
         "R9": {
           "kind": "error",
@@ -1072,8 +1078,8 @@
           "value": 0.0
         },
         "V5": {
-          "kind": "error",
-          "code": "#N/A"
+          "kind": "text",
+          "value": "#N/A"
         },
         "V4": {
           "kind": "error",
@@ -1114,8 +1120,8 @@
           "value": 0.0
         },
         "V5": {
-          "kind": "error",
-          "code": "#N/A"
+          "kind": "text",
+          "value": "#N/A"
         },
         "V4": {
           "kind": "error",
@@ -1188,7 +1194,10 @@
           "value": true
         }
       },
-      "skipped": "COUNTIFS(AB2:AB15, AC3=TRUE) — same Pattern D over the COUNTIFS suite; Mac=4, IronCalc=3. Probe: countif_edges (countif_cell_criterion_bool_true_with_text)."
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
     },
     {
       "id": "AE3",
@@ -1231,7 +1240,10 @@
           "value": true
         }
       },
-      "skipped": "COUNTIFS(AB2:AB15, CONCAT(<>, AC3=TRUE)) — same Pattern E over the COUNTIFS suite; Mac=10, IronCalc=11. Probe: countif_edges (countif_concat_ne_bool_true_over_range_with_blanks)."
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
     },
     {
       "id": "C4",
@@ -1618,8 +1630,8 @@
           "value": "<brown"
         },
         "R11": {
-          "kind": "error",
-          "code": "#DIV/0!"
+          "kind": "text",
+          "value": "#DIV/0!"
         },
         "R9": {
           "kind": "error",
@@ -1662,15 +1674,18 @@
           "formula": "=1/0"
         }
       },
-      "skipped": "COUNTIFS(R2:R15, S4='<brown') over the same name+error mix; Mac=3, IronCalc=4. Probe: countif_edges (countif_lex_lt_brown_names)."
+      "expect": {
+        "kind": "number",
+        "value": 4.0
+      }
     },
     {
       "id": "X4",
       "formula": "=COUNTIFS($V$2:$V$15, W4)",
       "setup": {
         "W4": {
-          "kind": "error",
-          "code": "#N/A"
+          "kind": "text",
+          "value": "#N/A"
         },
         "V10": {
           "kind": "number",
@@ -1681,8 +1696,8 @@
           "value": 0.0
         },
         "V5": {
-          "kind": "error",
-          "code": "#N/A"
+          "kind": "text",
+          "value": "#N/A"
         },
         "V4": {
           "kind": "error",
@@ -1705,23 +1720,26 @@
           "formula": "=\"\""
         }
       },
-      "skipped": "Same as X2 with criterion W4; Mac=2, IronCalc=1. Probe: countif_edges (countif_error_criterion_na_over_two_na)."
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
     },
     {
       "id": "Y4",
       "formula": "=COUNTIFS($V$2:$V$8, _xlfn.CONCAT(\"<>\", W4))",
       "setup": {
         "W4": {
-          "kind": "error",
-          "code": "#N/A"
+          "kind": "text",
+          "value": "#N/A"
         },
         "V6": {
           "kind": "number",
           "value": 0.0
         },
         "V5": {
-          "kind": "error",
-          "code": "#N/A"
+          "kind": "text",
+          "value": "#N/A"
         },
         "V4": {
           "kind": "error",
@@ -1744,7 +1762,10 @@
           "formula": "=\"\""
         }
       },
-      "skipped": "Same as Y2 with criterion W4; Mac=2, IronCalc=6. Probe: countif_edges (countif_concat_ne_error_mixed_range)."
+      "expect": {
+        "kind": "number",
+        "value": 6.0
+      }
     },
     {
       "id": "AD4",
@@ -2223,8 +2244,8 @@
           "value": ">brown"
         },
         "R11": {
-          "kind": "error",
-          "code": "#DIV/0!"
+          "kind": "text",
+          "value": "#DIV/0!"
         },
         "R9": {
           "kind": "error",
@@ -2285,8 +2306,8 @@
           "value": 0.0
         },
         "V5": {
-          "kind": "error",
-          "code": "#N/A"
+          "kind": "text",
+          "value": "#N/A"
         },
         "V4": {
           "kind": "error",
@@ -2327,8 +2348,8 @@
           "value": 0.0
         },
         "V5": {
-          "kind": "error",
-          "code": "#N/A"
+          "kind": "text",
+          "value": "#N/A"
         },
         "V4": {
           "kind": "error",
@@ -2833,8 +2854,8 @@
       "formula": "=COUNTIFS($R$2:$R$15, S6)",
       "setup": {
         "R11": {
-          "kind": "error",
-          "code": "#DIV/0!"
+          "kind": "text",
+          "value": "#DIV/0!"
         },
         "R9": {
           "kind": "error",
@@ -2895,8 +2916,8 @@
           "value": 0.0
         },
         "V5": {
-          "kind": "error",
-          "code": "#N/A"
+          "kind": "text",
+          "value": "#N/A"
         },
         "V4": {
           "kind": "error",
@@ -2933,8 +2954,8 @@
           "value": 0.0
         },
         "V5": {
-          "kind": "error",
-          "code": "#N/A"
+          "kind": "text",
+          "value": "#N/A"
         },
         "V4": {
           "kind": "error",
@@ -3003,7 +3024,10 @@
           "value": true
         }
       },
-      "skipped": "Same as AD3 with criterion AC6; Mac=4, IronCalc=3. Probe: countif_edges (countif_cell_criterion_bool_true_with_text)."
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
     },
     {
       "id": "AE6",
@@ -3046,7 +3070,10 @@
           "value": true
         }
       },
-      "skipped": "Same as AE3 with criterion AC6; Mac=10, IronCalc=11. Probe: countif_edges (countif_concat_ne_bool_true_over_range_with_blanks)."
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
     },
     {
       "id": "C7",
@@ -3438,8 +3465,8 @@
       "formula": "=COUNTIFS($R$2:$R$15, S7)",
       "setup": {
         "R11": {
-          "kind": "error",
-          "code": "#DIV/0!"
+          "kind": "text",
+          "value": "#DIV/0!"
         },
         "R9": {
           "kind": "error",
@@ -3504,8 +3531,8 @@
           "value": 0.0
         },
         "V5": {
-          "kind": "error",
-          "code": "#N/A"
+          "kind": "text",
+          "value": "#N/A"
         },
         "V4": {
           "kind": "error",
@@ -3542,8 +3569,8 @@
           "value": 0.0
         },
         "V5": {
-          "kind": "error",
-          "code": "#N/A"
+          "kind": "text",
+          "value": "#N/A"
         },
         "V4": {
           "kind": "error",
@@ -4053,8 +4080,8 @@
       "formula": "=COUNTIFS($R$2:$R$15, S8)",
       "setup": {
         "R11": {
-          "kind": "error",
-          "code": "#DIV/0!"
+          "kind": "text",
+          "value": "#DIV/0!"
         },
         "R9": {
           "kind": "error",
@@ -4101,7 +4128,10 @@
           "formula": "=1/0"
         }
       },
-      "skipped": "COUNTIFS(R2:R15, #DIV/0! criterion via =1/0) counts all 3 #DIV/0! cells; IronCalc=2. Probe: countif_edges (countif_error_criterion_div0_mixed_source)."
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
     },
     {
       "id": "X8",
@@ -4116,8 +4146,8 @@
           "value": 0.0
         },
         "V5": {
-          "kind": "error",
-          "code": "#N/A"
+          "kind": "text",
+          "value": "#N/A"
         },
         "V4": {
           "kind": "error",
@@ -4154,8 +4184,8 @@
           "value": 0.0
         },
         "V5": {
-          "kind": "error",
-          "code": "#N/A"
+          "kind": "text",
+          "value": "#N/A"
         },
         "V4": {
           "kind": "error",
@@ -4502,12 +4532,12 @@
       "formula": "=COUNTIFS($R$2:$R$15, S9)",
       "setup": {
         "S9": {
-          "kind": "error",
-          "code": "#N/A"
+          "kind": "text",
+          "value": "#N/A"
         },
         "R11": {
-          "kind": "error",
-          "code": "#DIV/0!"
+          "kind": "text",
+          "value": "#DIV/0!"
         },
         "R9": {
           "kind": "error",
@@ -4874,12 +4904,12 @@
       "formula": "=COUNTIFS($R$2:$R$15, S10)",
       "setup": {
         "S10": {
-          "kind": "error",
-          "code": "#DIV/0!"
+          "kind": "text",
+          "value": "#DIV/0!"
         },
         "R11": {
-          "kind": "error",
-          "code": "#DIV/0!"
+          "kind": "text",
+          "value": "#DIV/0!"
         },
         "R9": {
           "kind": "error",
@@ -4922,7 +4952,10 @@
           "formula": "=1/0"
         }
       },
-      "skipped": "Same as T8 with literal #DIV/0! criterion; Mac=3, IronCalc=2. Probe: countif_edges (countif_error_criterion_div0_mixed_source)."
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
     },
     {
       "id": "AD10",
@@ -4965,7 +4998,10 @@
           "value": true
         }
       },
-      "skipped": "Same as AD3 with criterion AC10; Mac=4, IronCalc=3. Probe: countif_edges (countif_cell_criterion_bool_true_with_text)."
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
     },
     {
       "id": "AE10",
@@ -5008,7 +5044,10 @@
           "value": true
         }
       },
-      "skipped": "Same as AE3 with criterion AC10; Mac=10, IronCalc=11. Probe: countif_edges (countif_concat_ne_bool_true_over_range_with_blanks)."
+      "expect": {
+        "kind": "number",
+        "value": 11.0
+      }
     },
     {
       "id": "L11",
@@ -5245,8 +5284,8 @@
       "formula": "=COUNTIFS($R$2:$R$15, S11)",
       "setup": {
         "R11": {
-          "kind": "error",
-          "code": "#DIV/0!"
+          "kind": "text",
+          "value": "#DIV/0!"
         },
         "R9": {
           "kind": "error",
@@ -5622,8 +5661,8 @@
       "formula": "=COUNTIFS($R$2:$R$15, S12)",
       "setup": {
         "R11": {
-          "kind": "error",
-          "code": "#DIV/0!"
+          "kind": "text",
+          "value": "#DIV/0!"
         },
         "R9": {
           "kind": "error",
@@ -5999,8 +6038,8 @@
       "formula": "=COUNTIFS($R$2:$R$15, S13)",
       "setup": {
         "R11": {
-          "kind": "error",
-          "code": "#DIV/0!"
+          "kind": "text",
+          "value": "#DIV/0!"
         },
         "R9": {
           "kind": "error",
