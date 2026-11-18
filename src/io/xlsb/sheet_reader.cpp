@@ -481,7 +481,8 @@ Expected<RecordDisposition, Error> DispatchSheetRecord(const XlsbRecord& rec, Xl
       layout.first = first_or.value();
       layout.last = last_or.value();
       layout.width = static_cast<double>(width_or.value()) / 256.0;
-      layout.has_width = width_or.value() != 0U || (flags_or.value() & kColUserSet) != 0U;
+      layout.custom_width = (flags_or.value() & kColUserSet) != 0U;
+      layout.has_width = width_or.value() != 0U || layout.custom_width;
       // BrtColInfo always carries ixfe; unlike OOXML there is no separate
       // style-presence bit. Treat the mandatory value as an effective style
       // (including ixfe=0), so an XLSB round-trip may canonicalize a

@@ -386,8 +386,9 @@ std::string BuildSheetProtectionXml(const SheetProtection& p) {
 /// Emits `<cols>...</cols>` containing one `<col>` per
 /// `ColumnLayout` entry. Returns an empty string when there are no
 /// column layout overrides. `style_plan` renumbers each `style`; null writes
-/// model indices.
-std::string BuildColsXml(const SheetLayout& layout, const CellStyleSavePlan* style_plan) {
+/// model indices. A column with no width of its own is written at
+/// `unsized_width`, the sheet default, without `customWidth`.
+std::string BuildColsXml(const SheetLayout& layout, const CellStyleSavePlan* style_plan, double unsized_width) {
   if (layout.columns.empty()) {
     return std::string();
   }
@@ -403,7 +404,6 @@ std::string BuildColsXml(const SheetLayout& layout, const CellStyleSavePlan* sty
     // Excel never writes a column style of xf 0.
     const std::uint32_t xf = style_plan != nullptr ? style_plan->cell_xf_index(col.style_xf) : col.style_xf;
     const bool has_style = col.has_style && xf != 0U;
-    // Excel reads a `<col>` with no width as a hidden zero-width column, so one with nothing to state is left out.
     if (!has_width && !has_style && !col.hidden && col.outline_level == 0U && !col.collapsed && !col.show_phonetic) {
       continue;
     }
@@ -411,20 +411,20 @@ std::string BuildColsXml(const SheetLayout& layout, const CellStyleSavePlan* sty
     out.append("<col");
     append_xml_attr_uint(out, "min", col.first + 1U);
     append_xml_attr_uint(out, "max", col.last + 1U);
-    if (has_width) {
-      // Shortest round-trip spelling, the same one cell values use: a
-      // recalc-save neither drifts the column metric nor respells 8.7 as
-      // 8.6999999999999993. Matches the row-height writer.
-      append_xml_attr_number(out, "width", col.width);
-      // Excel emits `customWidth="1"` whenever an explicit `width` is
-      // present so a reload preserves the column metric.
-      emit_xsd_bool_attr(out, "customWidth", true);
-    }
+    // Shortest round-trip spelling, the same one cell values use: a
+    // recalc-save neither drifts the column metric nor respells 8.7 as
+    // 8.6999999999999993. Matches the row-height writer. Excel reads a
+    // `<col>` with no width as a hidden zero-width column, so every one carries a width.
+    append_xml_attr_number(out, "width", has_width ? col.width : unsized_width);
     if (has_style) {
       append_xml_attr_uint(out, "style", xf);
     }
     if (col.hidden) {
       emit_xsd_bool_attr(out, "hidden", true);
+    }
+    // Excel's attribute order: customWidth follows hidden.
+    if (has_width && col.custom_width) {
+      emit_xsd_bool_attr(out, "customWidth", true);
     }
     if (col.outline_level != 0U) {
       append_xml_attr_uint(out, "outlineLevel", col.outline_level);
@@ -464,22 +464,20 @@ std::string BuildDimensionXml(const Sheet& sheet, const CellStyleSavePlan* style
 
 }  // namespace
 
-std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
-                              const std::vector<std::string>& table_rids,
-                              const std::vector<std::string>& hyperlink_rids, std::string_view printer_settings_rid,
-                              std::string_view drawing_rid, std::string_view legacy_drawing_rid,
-                              const SharedStrings* shared_strings, const std::vector<DifferentialFormat>& dxfs,
-                              std::size_t sheet_index, std::uint32_t dynamic_array_cm_index,
-                              const xlsb::NameShapes& name_shapes, const parser::ExternalBookIndexer* indexer,
-                              const std::vector<std::string>* sheet_names, const RichErrorVmMap* rich_error_vm,
-                              std::string_view book_directory, const std::optional<PhoneticProperties>& absent_phonetic,
-                              const CellStyleSavePlan* style_plan,
-                              const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks,
-                              std::string_view custom_sheet_views_xml) {
+std::string BuildWorksheetXml(
+    const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
+    const std::vector<std::string>& table_rids, const std::vector<std::string>& hyperlink_rids,
+    std::string_view printer_settings_rid, std::string_view drawing_rid, std::string_view legacy_drawing_rid,
+    const SharedStrings* shared_strings, const std::vector<DifferentialFormat>& dxfs, std::size_t sheet_index,
+    std::uint32_t dynamic_array_cm_index, const xlsb::NameShapes& name_shapes,
+    const parser::ExternalBookIndexer* indexer, double unsized_column_width,
+    const std::vector<std::string>* sheet_names, const RichErrorVmMap* rich_error_vm, std::string_view book_directory,
+    const std::optional<PhoneticProperties>& absent_phonetic, const CellStyleSavePlan* style_plan,
+    const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks, std::string_view custom_sheet_views_xml) {
   const std::string sheet_view_xml = BuildSheetViewXml(sheet.view());
   const std::string sheet_format_xml =
       BuildSheetFormatPrXml(WithDerivedOutlineLevels(sheet.format_defaults(), sheet.layout()));
-  const std::string cols_xml = BuildColsXml(sheet.layout(), style_plan);
+  const std::string cols_xml = BuildColsXml(sheet.layout(), style_plan, unsized_column_width);
   const SheetPrintSettings& print = sheet.print_settings();
   const WorksheetRawExtensions& raw_extensions = sheet.raw_extensions();
   const std::string page_setup_xml = PageSetupWithRelationshipId(print.page_setup_xml, printer_settings_rid);

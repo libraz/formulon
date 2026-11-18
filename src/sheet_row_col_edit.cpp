@@ -872,6 +872,7 @@ void Sheet::inherit_inserted_formatting_locked(const StructuralEdit& edit) {
     entry.has_style = span->has_style;
     entry.style_xf = span->has_style ? span->style_xf : 0U;
     entry.has_width = HasExplicitColumnWidth(*span);
+    entry.custom_width = span->custom_width;
     entry.width = span->width;
     layout_.columns.insert(span + 1, entry);
   }

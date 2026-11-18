@@ -25,6 +25,7 @@
 #include "cell_style_save_plan.h"
 #include "cf/cf_types.h"
 #include "chart/chart_cache.h"
+#include "column_width.h"
 #include "external_link.h"
 #include "io/comments_writer.h"
 #include "io/dxf_save_plan.h"
@@ -390,6 +391,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   const std::vector<std::unordered_set<CellAddress, CellAddressHash>> recalc_marks = workbook.saved_recalc_marks();
   // Tab colours store a theme colour's rendered value beside its index.
   const LoadedTheme theme = workbook.load_theme();
+  const ColumnWidthModel column_width_model =
+      resolve_column_width_model(workbook, workbook.excel_profile(), GeometryMode::kDisplay);
   for (std::size_t i = 0; i < sheet_count; ++i) {
     const NameTable sheet_name_table = BuildNameTableForScope(workbook, ordered_names, static_cast<std::int32_t>(i));
     std::unordered_set<std::string> taken_rel_ids;
@@ -428,8 +431,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
     }
     auto sheet_body_or =
         emit_sheet(workbook.sheet(i), sst, sheet_names, sheet_ranges, sheet_name_table, sheet_hyperlink_rids[i],
-                   &downgraded_formula_count, metadata.ifmd, name_shapes(workbook, i), table_rel_ids,
-                   sheet_drawing_rids[i], sheet_owns_drawing[i],
+                   default_column_width_chars(workbook.sheet(i), column_width_model), &downgraded_formula_count,
+                   metadata.ifmd, name_shapes(workbook, i), table_rel_ids, sheet_drawing_rids[i], sheet_owns_drawing[i],
                    metadata.rich.empty() ? nullptr : &metadata.rich.vm_by_sheet[i], book_directory, absent_phonetic,
                    sheet_style_plan, comment_rids[i].vml, &recalc_marks[i], &custom_views.sheet_blocks[i], theme.theme);
     if (!sheet_body_or) {

@@ -63,6 +63,8 @@ class SharedStrings;
 /// model indices. `recalc_marks` is this sheet's `EmissionPlan::recalc_marks` (null for none).
 /// `custom_sheet_views_xml` is a `<customSheetViews>` decoded from the
 /// sheet's `.xlsb` records, written where the element goes (empty for none).
+/// `unsized_column_width` is the width a `<col>` with none of its own is
+/// written at (`default_column_width_chars`).
 std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan::PerSheetTable>& sheet_tables,
                               const std::vector<std::string>& table_rids,
                               const std::vector<std::string>& hyperlink_rids, std::string_view printer_settings_rid,
@@ -70,7 +72,7 @@ std::string BuildWorksheetXml(const Sheet& sheet, const std::vector<EmissionPlan
                               const SharedStrings* shared_strings, const std::vector<DifferentialFormat>& dxfs,
                               std::size_t sheet_index, std::uint32_t dynamic_array_cm_index,
                               const xlsb::NameShapes& name_shapes, const parser::ExternalBookIndexer* indexer,
-                              const std::vector<std::string>* sheet_names = nullptr,
+                              double unsized_column_width, const std::vector<std::string>* sheet_names = nullptr,
                               const RichErrorVmMap* rich_error_vm = nullptr, std::string_view book_directory = {},
                               const std::optional<PhoneticProperties>& absent_phonetic = std::nullopt,
                               const CellStyleSavePlan* style_plan = nullptr,

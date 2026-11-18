@@ -162,6 +162,7 @@ void ApplyColumnLayouts(const pugi::xml_node& worksheet, SheetLayout& layout) {
     if (parse_xsd_nonneg_double(attr_str(col, "width"), &width)) {
       entry.width = width;
       entry.has_width = true;
+      entry.custom_width = read_xsd_bool(col, "customWidth", false);
     }
     if (pugi::xml_attribute style_attr = col.attribute("style"); style_attr) {
       entry.style_xf = attr_u32(col, "style", 0U);

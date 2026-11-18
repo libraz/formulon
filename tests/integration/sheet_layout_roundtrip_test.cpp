@@ -7,11 +7,14 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <fstream>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <vector>
 
 #include "c_api/formulon_c.h"
+#include "column_width.h"
 #include "gtest/gtest.h"
 #include "io/ooxml_reader.h"
 #include "io/xlsb/reader.h"
@@ -47,6 +50,12 @@ std::string ReadPartText(const std::vector<std::uint8_t>& bytes, const char* par
 /// Extracts `xl/worksheets/sheet1.xml` from a saved package as a string.
 std::string ReadSheet1Xml(const std::vector<std::uint8_t>& bytes) {
   return ReadPartText(bytes, "xl/worksheets/sheet1.xml");
+}
+
+/// The `<col>` element starting at 1-based column `min`, or "" when there is none.
+std::string ColElement(const std::string& xml, std::uint32_t min) {
+  const std::size_t at = xml.find("<col min=\"" + std::to_string(min) + "\" ");
+  return at == std::string::npos ? std::string() : xml.substr(at, xml.find("/>", at) + 2U - at);
 }
 
 TEST(SheetLayoutRoundTrip, DimensionReflectsPopulatedBoundingBox) {
@@ -384,6 +393,7 @@ TEST(SheetLayoutRoundTrip, AttributePresenceSurvivesWithoutCellMaterialization) 
   width_zero.first = 1U;
   width_zero.last = 1U;
   width_zero.has_width = true;
+  width_zero.custom_width = true;
   width_zero.width = 0.0;
   layout.columns.push_back(width_zero);
 
@@ -420,13 +430,13 @@ TEST(SheetLayoutRoundTrip, AttributePresenceSurvivesWithoutCellMaterialization) 
 
   const std::vector<std::uint8_t> bytes = SaveOrDie(src);
   const std::string xml = ReadSheet1Xml(bytes);
-  // Excel never writes a column style of xf 0, and reads a `<col>` with no width as hidden, so a column carrying
-  // only xf 0 writes no `<col>`.
-  EXPECT_EQ(xml.find("<col min=\"1\" "), std::string::npos) << xml;
-  EXPECT_NE(xml.find("<col min=\"2\" max=\"2\" width=\"0\" customWidth=\"1\"/>"), std::string::npos) << xml;
-  EXPECT_NE(xml.find("<col min=\"3\" max=\"3\" hidden=\"1\"/>"), std::string::npos) << xml;
-  EXPECT_NE(xml.find("<col min=\"4\" max=\"4\" outlineLevel=\"2\"/>"), std::string::npos) << xml;
-  EXPECT_NE(xml.find("<col min=\"5\" max=\"5\" style=\"3\"/>"), std::string::npos) << xml;
+  // Excel never writes a column style of xf 0, so a column carrying only xf 0 writes no `<col>`; the others
+  // without a width of their own carry the sheet default.
+  EXPECT_EQ(ColElement(xml, 1U), "") << xml;
+  EXPECT_EQ(ColElement(xml, 2U), "<col min=\"2\" max=\"2\" width=\"0\" customWidth=\"1\"/>") << xml;
+  EXPECT_EQ(ColElement(xml, 3U), "<col min=\"3\" max=\"3\" width=\"9.140625\" hidden=\"1\"/>") << xml;
+  EXPECT_EQ(ColElement(xml, 4U), "<col min=\"4\" max=\"4\" width=\"9.140625\" outlineLevel=\"2\"/>") << xml;
+  EXPECT_EQ(ColElement(xml, 5U), "<col min=\"5\" max=\"5\" width=\"9.140625\" style=\"3\"/>") << xml;
   // customFormat alone is the xf-0 row format; Excel omits `s` for it.
   EXPECT_NE(xml.find("<row r=\"13\" customFormat=\"1\"/>"), std::string::npos) << xml;
   EXPECT_NE(xml.find("<row r=\"14\" s=\"3\" customFormat=\"1\"/>"), std::string::npos) << xml;
@@ -436,6 +446,7 @@ TEST(SheetLayoutRoundTrip, AttributePresenceSurvivesWithoutCellMaterialization) 
   const Sheet& loaded = result_or.value().workbook.sheet(0);
   ASSERT_EQ(loaded.layout().columns.size(), 4U);
   EXPECT_TRUE(loaded.layout().columns[0].has_width);
+  EXPECT_TRUE(loaded.layout().columns[0].custom_width);
   EXPECT_DOUBLE_EQ(loaded.layout().columns[0].width, 0.0);
   EXPECT_TRUE(loaded.layout().columns[1].hidden);
   EXPECT_FALSE(loaded.layout().columns[1].has_width);
@@ -443,6 +454,7 @@ TEST(SheetLayoutRoundTrip, AttributePresenceSurvivesWithoutCellMaterialization) 
   EXPECT_FALSE(loaded.layout().columns[2].has_width);
   EXPECT_TRUE(loaded.layout().columns[3].has_style);
   EXPECT_EQ(loaded.layout().columns[3].style_xf, 3U);
+  EXPECT_FALSE(loaded.layout().columns[3].has_width);
 
   ASSERT_EQ(loaded.layout().row_overrides.size(), 2U);
   std::vector<RowLayout> rows = loaded.layout().row_overrides;
@@ -455,6 +467,154 @@ TEST(SheetLayoutRoundTrip, AttributePresenceSurvivesWithoutCellMaterialization) 
   EXPECT_EQ(rows[1].style_xf, 3U);
   EXPECT_EQ(loaded.cell_at(12U, 0U), nullptr);
   EXPECT_EQ(loaded.cell_at(13U, 0U), nullptr);
+}
+
+/// Compares the width and outline state of two column lists; `with_style` also compares the style selector.
+void ExpectSameColumns(const std::vector<ColumnLayout>& actual, const std::vector<ColumnLayout>& expected,
+                       bool with_style) {
+  ASSERT_EQ(actual.size(), expected.size());
+  for (std::size_t i = 0; i < expected.size(); ++i) {
+    SCOPED_TRACE(i);
+    EXPECT_EQ(actual[i].first, expected[i].first);
+    EXPECT_EQ(actual[i].last, expected[i].last);
+    EXPECT_EQ(actual[i].has_width, expected[i].has_width);
+    EXPECT_EQ(actual[i].custom_width, expected[i].custom_width);
+    EXPECT_DOUBLE_EQ(actual[i].width, expected[i].width);
+    EXPECT_EQ(actual[i].hidden, expected[i].hidden);
+    EXPECT_EQ(actual[i].outline_level, expected[i].outline_level);
+    if (with_style) {
+      EXPECT_EQ(actual[i].has_style, expected[i].has_style);
+      EXPECT_EQ(actual[i].style_xf, expected[i].style_xf);
+    }
+  }
+}
+
+TEST(SheetLayoutRoundTrip, UnsizedColumnsCarryTheSheetDefaultWidth) {
+  // The width Excel writes, without customWidth, on a column that has none of its own: a new sheet's default.
+  struct Case {
+    ExcelProfile profile;
+    const char* width_text;
+    double width;
+  };
+  for (const Case& c : {Case{mac_365_ja_jp_profile(), "10.7109375", 10.7109375},
+                        Case{mac_365_en_us_profile(), "10.83203125", 10.83203125}}) {
+    SCOPED_TRACE(c.width_text);
+    Workbook src = Workbook::create_for_profile(c.profile);
+    CellXf dated = src.styles().cell_xfs[0];
+    dated.num_fmt_id = 14U;
+    src.mutable_styles().cell_xfs.push_back(dated);
+    std::vector<ColumnLayout>& columns = src.sheet(0).mutable_layout().columns;
+    ColumnLayout style_only;
+    style_only.has_style = true;
+    style_only.style_xf = 1U;
+    ColumnLayout outlined;
+    outlined.first = outlined.last = 1U;
+    outlined.outline_level = 1U;
+    ColumnLayout hidden;
+    hidden.first = hidden.last = 2U;
+    hidden.hidden = true;
+    ColumnLayout sized;
+    sized.first = sized.last = 3U;
+    sized.has_width = true;
+    sized.custom_width = true;
+    sized.width = 20.0;
+    columns = {style_only, outlined, hidden, sized};
+
+    const std::vector<std::uint8_t> bytes = SaveOrDie(src);
+    const std::string xml = ReadSheet1Xml(bytes);
+    const std::string w = std::string("width=\"") + c.width_text + "\"";
+    EXPECT_EQ(ColElement(xml, 1U), "<col min=\"1\" max=\"1\" " + w + " style=\"1\"/>") << xml;
+    EXPECT_EQ(ColElement(xml, 2U), "<col min=\"2\" max=\"2\" " + w + " outlineLevel=\"1\"/>") << xml;
+    EXPECT_EQ(ColElement(xml, 3U), "<col min=\"3\" max=\"3\" " + w + " hidden=\"1\"/>") << xml;
+    EXPECT_EQ(ColElement(xml, 4U), "<col min=\"4\" max=\"4\" width=\"20\" customWidth=\"1\"/>") << xml;
+
+    io::ReadOptions options;
+    options.profile = c.profile;
+    auto xlsx_or = io::read_ooxml(SpanOf(bytes), options);
+    ASSERT_TRUE(static_cast<bool>(xlsx_or)) << xlsx_or.error().message;
+    ExpectSameColumns(xlsx_or.value().workbook.sheet(0).layout().columns, columns, true);
+
+    auto xlsb_or = io::xlsb::write_xlsb(src);
+    ASSERT_TRUE(static_cast<bool>(xlsb_or)) << xlsb_or.error().message;
+    auto xlsb_read_or = io::xlsb::read_xlsb(SpanOf(xlsb_or.value()), options);
+    ASSERT_TRUE(static_cast<bool>(xlsb_read_or)) << xlsb_read_or.error().message;
+    ExpectSameColumns(xlsb_read_or.value().workbook.sheet(0).layout().columns, columns, false);
+
+    // Read where that width is not the default, the stored figure stays: coldx is the default, fUserSet clear.
+    auto other_or = io::xlsb::read_xlsb(SpanOf(xlsb_or.value()));
+    ASSERT_TRUE(static_cast<bool>(other_or)) << other_or.error().message;
+    const std::vector<ColumnLayout>& other = other_or.value().workbook.sheet(0).layout().columns;
+    ASSERT_EQ(other.size(), 4U);
+    for (std::size_t i = 0; i < 3U; ++i) {
+      EXPECT_TRUE(other[i].has_width) << i;
+      EXPECT_FALSE(other[i].custom_width) << i;
+      EXPECT_DOUBLE_EQ(other[i].width, c.width) << i;
+    }
+    EXPECT_TRUE(other[3].custom_width);
+  }
+}
+
+/// Reads `tests/fixtures/excel/column_default_width/<name>` under `profile`.
+Workbook ReadDefaultWidthFixture(const char* name, const ExcelProfile& profile) {
+  const std::string path = std::string(FORMULON_FIXTURES_DIR) + "/excel/column_default_width/" + name;
+  std::ifstream in(path, std::ios::binary);
+  EXPECT_TRUE(in.good()) << path;
+  const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  io::ReadOptions options;
+  options.profile = profile;
+  auto read_or = io::read_ooxml(SpanOf(bytes), options);
+  EXPECT_TRUE(static_cast<bool>(read_or)) << read_or.error().message;
+  return std::move(read_or.value().workbook);
+}
+
+// Excel-saved books with a styled, an outlined and a hidden column on a new sheet: the first two at the default
+// width without customWidth, the hidden one at width 0 with customWidth.
+constexpr const char* kExcelDefaultWidthCols[] = {
+    "<col min=\"1\" max=\"1\" width=\"10.7109375\" style=\"1\"/>",
+    "<col min=\"2\" max=\"2\" width=\"10.7109375\" outlineLevel=\"1\"/>",
+    "<col min=\"3\" max=\"3\" width=\"0\" hidden=\"1\" customWidth=\"1\"/>",
+};
+
+TEST(SheetLayoutRoundTrip, ExcelDefaultWidthColumnsResaveByteEqual) {
+  Workbook wb = ReadDefaultWidthFixture("mac_ja_JP.xlsx", mac_365_ja_jp_profile());
+  const std::vector<ColumnLayout>& columns = wb.sheet(0).layout().columns;
+  ASSERT_EQ(columns.size(), 3U);
+  EXPECT_FALSE(columns[0].has_width);
+  EXPECT_FALSE(columns[1].has_width);
+  EXPECT_TRUE(columns[2].custom_width);
+  const std::string xml = ReadSheet1Xml(SaveOrDie(wb));
+  for (std::uint32_t i = 0; i < 3U; ++i) {
+    EXPECT_EQ(ColElement(xml, i + 1U), kExcelDefaultWidthCols[i]) << xml;
+  }
+}
+
+TEST(SheetLayoutRoundTrip, ForeignDefaultWidthIsKeptAndResavedUnchanged) {
+  // Each book read under a profile whose default width is not the one the book was written with.
+  struct Case {
+    const char* file;
+    ExcelProfile profile;
+    double stored;
+    const char* stored_text;
+  };
+  for (const Case& c : {Case{"mac_ja_JP.xlsx", win_365_ja_jp_profile(), 10.7109375, "10.7109375"},
+                        Case{"mac_en_US.xlsx", mac_365_ja_jp_profile(), 10.83203125, "10.83203125"}}) {
+    SCOPED_TRACE(c.file);
+    Workbook wb = ReadDefaultWidthFixture(c.file, c.profile);
+    const ColumnWidthModel model = resolve_column_width_model(wb, wb.excel_profile(), GeometryMode::kDisplay);
+    ASSERT_NE(default_column_width_chars(wb.sheet(0), model), c.stored);
+    const std::vector<ColumnLayout>& columns = wb.sheet(0).layout().columns;
+    ASSERT_EQ(columns.size(), 3U);
+    for (std::size_t i = 0; i < 2U; ++i) {
+      EXPECT_TRUE(columns[i].has_width) << i;
+      EXPECT_FALSE(columns[i].custom_width) << i;
+      EXPECT_DOUBLE_EQ(columns[i].width, c.stored) << i;
+    }
+    const std::string xml = ReadSheet1Xml(SaveOrDie(wb));
+    const std::string w = std::string("width=\"") + c.stored_text + "\"";
+    EXPECT_EQ(ColElement(xml, 1U), "<col min=\"1\" max=\"1\" " + w + " style=\"1\"/>") << xml;
+    EXPECT_EQ(ColElement(xml, 2U), "<col min=\"2\" max=\"2\" " + w + " outlineLevel=\"1\"/>") << xml;
+    EXPECT_EQ(ColElement(xml, 3U), kExcelDefaultWidthCols[2]) << xml;
+  }
 }
 
 TEST(SheetLayoutRoundTrip, ColumnWidthAndRowHeightPreserveFullPrecision) {

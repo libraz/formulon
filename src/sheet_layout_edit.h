@@ -17,8 +17,8 @@ namespace formulon {
 
 inline bool SameColumnLayoutState(const ColumnLayout& lhs, const ColumnLayout& rhs) {
   return lhs.width == rhs.width && lhs.hidden == rhs.hidden && lhs.outline_level == rhs.outline_level &&
-         lhs.collapsed == rhs.collapsed && lhs.has_width == rhs.has_width && lhs.has_style == rhs.has_style &&
-         lhs.style_xf == rhs.style_xf && lhs.show_phonetic == rhs.show_phonetic;
+         lhs.collapsed == rhs.collapsed && lhs.has_width == rhs.has_width && lhs.custom_width == rhs.custom_width &&
+         lhs.has_style == rhs.has_style && lhs.style_xf == rhs.style_xf && lhs.show_phonetic == rhs.show_phonetic;
 }
 
 // Orders column spans by start, then by end. This lives at namespace scope

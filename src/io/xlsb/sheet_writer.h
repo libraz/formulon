@@ -78,7 +78,9 @@ std::vector<std::string> hyperlink_relationship_ids(const Sheet& sheet);
 /// A sparkline group the records cannot hold fails the save with
 /// `kIoFeatureNotWritable`.
 /// `hyperlink_ids` is `hyperlink_relationship_ids(sheet)`, which the caller
-/// also needs for the sheet's relationships part.
+/// also needs for the sheet's relationships part. `unsized_column_width` is
+/// the width a column with none of its own is written at
+/// (`default_column_width_chars`).
 /// `owns_drawing` drops every retained BrtDrawing record; a non-empty
 /// `drawing_rel_id` then writes the one record naming the sheet's drawing.
 /// `rich_error_vm` gives the value-metadata index of each error cell saved
@@ -97,10 +99,11 @@ std::vector<std::string> hyperlink_relationship_ids(const Sheet& sheet);
 Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     const Sheet& sheet, SstBuilder& sst, const std::vector<std::string>& sheet_names,
     const SheetRangeTable& sheet_ranges, const NameTable& name_table, const std::vector<std::string>& hyperlink_ids,
-    std::uint32_t* downgraded_formula_count = nullptr, std::uint32_t dynamic_array_ifmd = 0,
-    const NameShapes& name_shapes = NameShapes(), const std::vector<std::string>& table_part_rel_ids = {},
-    std::string_view drawing_rel_id = {}, bool owns_drawing = false, const RichErrorVmMap* rich_error_vm = nullptr,
-    std::string_view book_directory = {}, const std::optional<PhoneticProperties>& absent_phonetic = std::nullopt,
+    double unsized_column_width, std::uint32_t* downgraded_formula_count = nullptr,
+    std::uint32_t dynamic_array_ifmd = 0, const NameShapes& name_shapes = NameShapes(),
+    const std::vector<std::string>& table_part_rel_ids = {}, std::string_view drawing_rel_id = {},
+    bool owns_drawing = false, const RichErrorVmMap* rich_error_vm = nullptr, std::string_view book_directory = {},
+    const std::optional<PhoneticProperties>& absent_phonetic = std::nullopt,
     const CellStyleSavePlan* style_plan = nullptr, std::string_view legacy_drawing_rel_id = {},
     const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks = nullptr,
     const std::vector<std::uint8_t>* custom_views = nullptr, const Theme& theme = default_theme());

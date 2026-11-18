@@ -136,7 +136,8 @@ void EmitRowHeader(std::vector<std::uint8_t>& dst, std::uint32_t row, const RowL
   emit_record(dst, static_cast<std::uint16_t>(XlsbRecordType::BrtRowHdr), p);
 }
 
-void EmitColumnInfos(std::vector<std::uint8_t>& dst, const SheetLayout& layout, const CellStyleSavePlan* style_plan) {
+void EmitColumnInfos(std::vector<std::uint8_t>& dst, const SheetLayout& layout, const CellStyleSavePlan* style_plan,
+                     double unsized_width) {
   if (layout.columns.empty()) {
     return;
   }
@@ -149,13 +150,14 @@ void EmitColumnInfos(std::vector<std::uint8_t>& dst, const SheetLayout& layout, 
     p.clear();
     emit_u32(p, column.first);
     emit_u32(p, column.last);
+    // A zero coldx is a zero-width column, so one with no width of its own takes the sheet default.
     const bool has_width = HasExplicitColumnWidth(column);
-    const double width256 = has_width ? std::floor(std::max(0.0, column.width) * 256.0) : 0.0;
+    const double width256 = std::floor(std::max(0.0, has_width ? column.width : unsized_width) * 256.0);
     emit_u32(p, static_cast<std::uint32_t>(std::clamp(width256, 0.0, 65535.0)));
     // BrtColInfo has no style-presence bit; ixfe is mandatory. OOXML spans
     // without a style therefore canonicalize to style 0 on an XLSB reload.
     emit_u32(p, column.has_style ? saved_cell_xf(style_plan, column.style_xf) : 0U);  // ixfe
-    std::uint16_t flags = has_width ? kColUserSet : 0U;
+    std::uint16_t flags = has_width && column.custom_width ? kColUserSet : 0U;
     if (column.hidden) {
       flags |= kColHidden;
     }
@@ -331,9 +333,9 @@ std::vector<std::string> hyperlink_relationship_ids(const Sheet& sheet) {
 Expected<std::vector<std::uint8_t>, Error> emit_sheet(
     const Sheet& sheet, SstBuilder& sst, const std::vector<std::string>& sheet_names,
     const SheetRangeTable& sheet_ranges, const NameTable& name_table, const std::vector<std::string>& hyperlink_ids,
-    std::uint32_t* downgraded_formula_count, std::uint32_t dynamic_array_ifmd, const NameShapes& name_shapes,
-    const std::vector<std::string>& table_part_rel_ids, std::string_view drawing_rel_id, bool owns_drawing,
-    const RichErrorVmMap* rich_error_vm, std::string_view book_directory,
+    double unsized_column_width, std::uint32_t* downgraded_formula_count, std::uint32_t dynamic_array_ifmd,
+    const NameShapes& name_shapes, const std::vector<std::string>& table_part_rel_ids, std::string_view drawing_rel_id,
+    bool owns_drawing, const RichErrorVmMap* rich_error_vm, std::string_view book_directory,
     const std::optional<PhoneticProperties>& absent_phonetic, const CellStyleSavePlan* style_plan,
     std::string_view legacy_drawing_rel_id, const std::unordered_set<CellAddress, CellAddressHash>* recalc_marks,
     const std::vector<std::uint8_t>* custom_views, const Theme& theme) {
@@ -361,7 +363,7 @@ Expected<std::vector<std::uint8_t>, Error> emit_sheet(
   const auto default_row_twips =
       static_cast<std::uint16_t>(std::clamp(std::floor(format_defaults.default_row_height * 20.0), 0.0, 65535.0));
   RETURN_IF_ERROR(EmitWorksheetViewsAndFormatting(body, sheet.view(), format_defaults, own_index));
-  EmitColumnInfos(body, sheet.layout(), style_plan);
+  EmitColumnInfos(body, sheet.layout(), style_plan, unsized_column_width);
   emit_record(body, static_cast<std::uint16_t>(XlsbRecordType::BrtBeginSheetData), ByteSpan{});
 
   // Spilled dynamic-array formulas need special treatment: Excel stores

@@ -34,6 +34,9 @@ struct ColumnLayout {
   // default. The style selector follows the same rule, including an
   // explicit `style="0"`.
   bool has_width = false;
+  /// True when the width is the caller's own (`customWidth="1"` / BrtColInfo
+  /// fUserSet); false for the sheet default Excel writes on an unsized column.
+  bool custom_width = false;
   bool has_style = false;
   std::uint32_t style_xf = 0;
   /// OOXML `<col phonetic="1">`: cells in the span show their phonetic guide.

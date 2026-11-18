@@ -72,7 +72,9 @@ constexpr const char* kTwoWindows = "<bookViews><workbookView/><workbookView/></
 
 std::vector<std::uint8_t> EmitSheetBody(const Sheet& sheet) {
   SstBuilder sst;
-  auto body = emit_sheet(sheet, sst, {sheet.name()}, SheetRangeTable{}, NameTable{}, hyperlink_relationship_ids(sheet));
+  // Calibri 11 default width; no sheet here has a column entry.
+  auto body = emit_sheet(sheet, sst, {sheet.name()}, SheetRangeTable{}, NameTable{}, hyperlink_relationship_ids(sheet),
+                         9.140625);
   EXPECT_TRUE(static_cast<bool>(body)) << body.error().message;
   return body.value();
 }

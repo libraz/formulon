@@ -181,6 +181,7 @@ extern "C" fm_status_t fm_sheet_set_column_width(fm_workbook_t* wb, size_t sheet
       [](formulon::ColumnLayout& entry, const void* ctx) {
         entry.width = *static_cast<const double*>(ctx);
         entry.has_width = true;
+        entry.custom_width = true;
       },
       &width);
   return 0;
@@ -198,6 +199,7 @@ extern "C" fm_status_t fm_sheet_reset_column_width(fm_workbook_t* wb, size_t she
       [](formulon::ColumnLayout& entry, const void*) {
         entry.width = 0.0;
         entry.has_width = false;
+        entry.custom_width = false;
       },
       nullptr);
   drop_stateless_columns(layout);

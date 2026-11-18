@@ -34,6 +34,7 @@
 
 #include "cell_style_save_plan.h"
 #include "chart/chart_cache.h"
+#include "column_width.h"
 #include "eval/eval_profile_scope.h"
 #include "external_link.h"
 #include "io/auto_filter_xml.h"
@@ -376,6 +377,8 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   // declares at least one relationship).
   // A CF / DV formula's sheet spellings resolve among these to decide x14 placement.
   std::vector<std::string> sheet_names = sheet_names_of(wb);
+  const ColumnWidthModel column_width_model =
+      resolve_column_width_model(wb, wb.excel_profile(), GeometryMode::kDisplay);
   for (std::size_t i = 0; i < sheet_count; ++i) {
     if (wb.sheet(i).is_opaque_ooxml_sheet()) {
       continue;
@@ -388,7 +391,8 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     std::string sheet_xml = BuildWorksheetXml(
         wb.sheet(i), sheet_tables, rels_result.table_rids, rels_result.hyperlink_rids, rels_result.printer_settings_rid,
         rels_result.drawing_rid, rels_result.legacy_drawing_rid, &shared_strings, wb.styles().dxfs, i,
-        dynamic_array_cm_index, name_shapes(wb, i), &external_book_indexer, &sheet_names,
+        dynamic_array_cm_index, name_shapes(wb, i), &external_book_indexer,
+        default_column_width_chars(wb.sheet(i), column_width_model), &sheet_names,
         plan.rich_errors.empty() ? nullptr : &plan.rich_errors.vm_by_sheet[i], plan.book_directory,
         font_plan.absent_sheet_phonetic(), &style_plan, &plan.recalc_marks[i], plan.custom_views.sheet_xml[i]);
     // No dxf reference precedes `</sheetData>`.

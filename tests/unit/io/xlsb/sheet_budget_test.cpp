@@ -26,6 +26,8 @@ namespace xlsb {
 namespace {
 
 constexpr std::uint64_t kRowHeaderBytes = sizeof(SheetDecodeState::DecodedRowHeader);
+// Calibri 11 default width; no sheet here has a column entry.
+constexpr double kUnsizedColumnWidth = 9.140625;
 
 Workbook StyledWorkbook() {
   Workbook wb = Workbook::create();
@@ -35,7 +37,8 @@ Workbook StyledWorkbook() {
 
 std::vector<std::uint8_t> EmitBody(const Sheet& sheet) {
   SstBuilder sst;
-  auto body = emit_sheet(sheet, sst, {sheet.name()}, SheetRangeTable{}, NameTable{}, hyperlink_relationship_ids(sheet));
+  auto body = emit_sheet(sheet, sst, {sheet.name()}, SheetRangeTable{}, NameTable{}, hyperlink_relationship_ids(sheet),
+                         kUnsizedColumnWidth);
   EXPECT_TRUE(static_cast<bool>(body)) << body.error().message;
   return body.value();
 }
