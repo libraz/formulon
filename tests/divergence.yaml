@@ -1076,6 +1076,16 @@ entries:
     prefer: excel
     first_noted: 2026-11-14
     last_verified_excel_version: "16.115"
+  - id: dynamic_array_extent_kept_beside_legacy_map
+    applies_to: [mac-365-ja_JP]
+    cause: non-identifiable
+    mode: skip-oracle
+    scope: unit-test
+    evidence: [tests/unit/io/stale_roundtrip_test.cpp]
+    reason: "After a legacy-entered MAP formula, Excel calculates any dynamic-array formula entered later, MAP and SEQUENCE alike, to a one-cell extent and saves that extent; a legacy SUM or an inline LAMBDA call does not do it, and the same formulas entered in another order spill in full. On reopen and CalculateFull Excel keeps a stored one-cell extent only while a legacy-entered MAP formula is present in the book: either condition alone re-spills, and the calculation chain's order or absence makes no difference. The extent therefore depends on entry history, not on the workbook's formulas. Formulon shows the cached cell until a full recalculation and then spills the extent the formula defines; stale_roundtrip_test pins both states."
+    prefer: formulon
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
 
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect

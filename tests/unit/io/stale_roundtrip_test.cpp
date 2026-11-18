@@ -163,7 +163,7 @@ Workbook ManualChain() {
 
 // A one-sheet package with `<calcPr calc_pr/>` (none when empty) and `sheet_data` as its cells.
 std::vector<std::uint8_t> Package(std::string_view calc_pr, std::string_view sheet_data,
-                                  std::string_view sheet_name = "Sheet1") {
+                                  std::string_view sheet_name = "Sheet1", std::string_view metadata_xml = {}) {
   const std::string decl = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>\n";
   const std::string rels_ns = "http://schemas.openxmlformats.org/package/2006/relationships";
   const std::string doc_rel = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -197,6 +197,9 @@ std::vector<std::uint8_t> Package(std::string_view calc_pr, std::string_view she
                                       "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\">"
                                       "<sheetData>" +
                                       std::string(sheet_data) + "</sheetData></worksheet>");
+  if (!metadata_xml.empty()) {
+    add("xl/metadata.xml", decl + std::string(metadata_xml));
+  }
   auto out = io::FinalizeArchive(writer, "stale_roundtrip_test");
   EXPECT_TRUE(static_cast<bool>(out));
   return out ? std::move(out.value()) : std::vector<std::uint8_t>{};
@@ -653,6 +656,35 @@ TEST(StaleRoundtrip, ArrayBlockReferencingANameKeepsItsMembersOnLoad) {
     expect_block(manual);
     EXPECT_TRUE(StaleFormulas(manual).empty());
     expect_block(Load(Save(manual)));
+  }
+}
+
+// Excel can save a dynamic-array MAP anchor with a one-cell extent where the formula spills two rows: it keeps the
+// shrunken extent through a reopen and CalculateFull while a legacy-entered lambda-helper cell sits in the same book.
+// The workbook's formulas do not determine that extent, so Formulon shows the cached cell until a full recalculation
+// and then spills what the formula defines.
+TEST(StaleRoundtrip, ShrunkenDynamicArrayExtentHoldsUntilAFullRecalc) {
+  constexpr std::string_view kMetadata =
+      "<metadata xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+      "xmlns:xda=\"http://schemas.microsoft.com/office/spreadsheetml/2017/dynamicarray\">"
+      "<metadataTypes count=\"1\"><metadataType name=\"XLDAPR\" minSupportedVersion=\"120000\" copy=\"1\" "
+      "pasteAll=\"1\" pasteValues=\"1\" merge=\"1\" splitFirst=\"1\" rowColShift=\"1\" clearFormats=\"1\" "
+      "clearComments=\"1\" assign=\"1\" coerce=\"1\" cellMeta=\"1\"/></metadataTypes>"
+      "<futureMetadata name=\"XLDAPR\" count=\"1\"><bk><extLst><ext uri=\"{bdbb8cdc-fa1e-496e-a857-3c3f30c029c3}\">"
+      "<xda:dynamicArrayProperties fDynamic=\"1\" fCollapsed=\"0\"/></ext></extLst></bk></futureMetadata>"
+      "<cellMetadata count=\"1\"><bk><rc t=\"1\" v=\"0\"/></bk></cellMetadata></metadata>";
+  constexpr std::string_view kRows =
+      "<row r=\"22\"><c r=\"B22\"><f ca=\"1\">_xlfn.MAP(A1:A2,_xlfn.LAMBDA(_xlpm.x,ROW(_xlpm.x)))</f>"
+      "<v>0</v></c><c r=\"F22\" cm=\"1\"><f t=\"array\" aca=\"1\" ref=\"F22\" ca=\"1\">"
+      "_xlfn.MAP(A1:A2,_xlfn.LAMBDA(_xlpm.x,ROW(_xlpm.x)))</f><v>1</v></c></row>";
+  for (const bool sax : {false, true}) {
+    SCOPED_TRACE(sax ? "sax" : "dom");
+    Workbook wb = Load(Package("calcId=\"191029\"", kRows, "Sheet1", kMetadata), sax);
+    EXPECT_EQ(Number(wb, 0, 21, 5), 1.0);
+    EXPECT_TRUE(wb.sheet(0).resolve_cell_value(22U, 5U).is_blank());
+    ASSERT_TRUE(static_cast<bool>(wb.recalc_full(eval::default_registry())));
+    EXPECT_EQ(Number(wb, 0, 21, 5), 1.0);
+    EXPECT_EQ(Number(wb, 0, 22, 5), 2.0);
   }
 }
 
