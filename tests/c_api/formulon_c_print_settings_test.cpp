@@ -494,6 +494,27 @@ TEST(FormulonCApiPrintSettings, UnresolvedBuiltInNameTakesItsCanonicalSpelling) 
   EXPECT_EQ(value.u.error_code, 4);  // #NAME?
 }
 
+// Excel leaves =ZEILEN(Suchkriterien) #NAME? beside a user name Criteria but
+// stores it as ROWS(Criteria); the canonical text binds that user name here.
+TEST(FormulonCApiPrintSettings, LocalBuiltInSpellingBindsASameNamedUserName) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  fm_defined_name_t name = FM_STRUCT_INIT(fm_defined_name_t);
+  name.name = "Criteria";
+  name.formula = "=Sheet1!$A$1:$B$3";
+  name.local_sheet_id = FM_DEFINED_NAME_SCOPE_WORKBOOK;
+  ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, &name), 0) << fm_get_last_error_message();
+  const char* canonical = nullptr;
+  ASSERT_EQ(fm_canonicalize_formula("=ZEILEN(Suchkriterien)", "mac-365-de_DE", nullptr, &canonical), 0);
+  ASSERT_STREQ(canonical, "=ROWS(Criteria)");
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 9, 0, canonical), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  fm_value_t value{};
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 9, 0, &value), 0);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
+  EXPECT_EQ(value.u.number, 3.0);
+}
+
 TEST(FormulonCApiPrintSettings, EmptyPrintAreaRemovesTheDefinedName) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);

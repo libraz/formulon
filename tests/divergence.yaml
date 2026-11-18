@@ -1096,6 +1096,16 @@ entries:
     prefer: formulon
     first_noted: 2026-11-18
     last_verified_excel_version: "16.115"
+  - id: local_builtin_name_spelling_binds_a_same_named_user_name
+    applies_to: [mac-365-de_DE, mac-365-fr_FR, mac-365-es_ES, mac-365-es_MX, mac-365-pt_BR, mac-365-ru_RU, mac-365-it_IT, mac-365-nl_NL, mac-365-zh_CN]
+    cause: accepted-divergence
+    mode: skip-oracle
+    scope: api-contract
+    evidence: [tests/c_api/formulon_c_print_settings_test.cpp, tests/unit/eval/formula_localize_test.cpp]
+    reason: "In a locale whose spelling of a built-in name differs from English, a user name equal to the English spelling and the locale's built-in spelling are two names at entry: with a workbook name Criteria, de =ZEILEN(Suchkriterien) is #NAME? while =ZEILEN(Criteria) binds the user name, yet Excel stores both as ROWS(Criteria). Likewise, with only the built-in Criteria defined, de =ZEILEN(Criteria) is #NAME? at entry and is stored as the same ROWS(Criteria). Canonical formula text has no spelling that keeps the two apart, so Formulon canonicalizes either spelling to ROWS(Criteria) and binds it as a reopened book does."
+    prefer: formulon
+    first_noted: 2026-11-18
+    last_verified_excel_version: "16.115"
 
 # -- How to add ------------------------------------------------------------
 # 1. Run `make oracle-gen` on a Mac. If a case fails the verifier, inspect
