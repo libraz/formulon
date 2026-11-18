@@ -350,11 +350,17 @@ foreach(_gate_target IN LISTS _formula_gate_targets)
   )
   formulon_apply_warnings(${_gate_exe})
 
-  add_test(
-    NAME ${_gate_exe}
-    COMMAND ${_gate_exe} --gtest_brief=1 --gtest_fail_if_no_test_selected
-  )
-  set_tests_properties(${_gate_exe} PROPERTIES LABELS "oracle")
+  # Four gtest shards per gate, so each stays well inside the fast-tier timeout in a Debug build.
+  foreach(_gate_shard RANGE 3)
+    add_test(
+      NAME ${_gate_exe}.shard${_gate_shard}
+      COMMAND ${_gate_exe} --gtest_brief=1 --gtest_fail_if_no_test_selected
+    )
+    set_tests_properties(${_gate_exe}.shard${_gate_shard} PROPERTIES
+      LABELS "oracle"
+      ENVIRONMENT "GTEST_TOTAL_SHARDS=4;GTEST_SHARD_INDEX=${_gate_shard}"
+    )
+  endforeach()
 
   if(DEFINED _FORMULON_BEHAVIOR_PY)
     add_test(
