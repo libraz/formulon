@@ -330,6 +330,33 @@ bool TilesOneRectangle(const std::vector<MergeRange>& ranges) {
                      (bounds.last_col - bounds.first_col + 1U);
 }
 
+// The order a band edit leaves a conditional format's sqref pieces in: the
+// value, text, blank, error and date rules share one; any other rule keeps
+// each range's pieces in place.
+SqrefOrder CfSqrefOrder(const std::vector<cf::CFRule>& rules) noexcept {
+  bool value_rules = !rules.empty();
+  for (const cf::CFRule& rule : rules) {
+    switch (rule.type) {
+      case cf::RuleType::Expression:
+      case cf::RuleType::CellIs:
+      case cf::RuleType::ContainsText:
+      case cf::RuleType::NotContainsText:
+      case cf::RuleType::BeginsWith:
+      case cf::RuleType::EndsWith:
+      case cf::RuleType::ContainsBlanks:
+      case cf::RuleType::NotContainsBlanks:
+      case cf::RuleType::ContainsErrors:
+      case cf::RuleType::NotContainsErrors:
+      case cf::RuleType::TimePeriod:
+        break;
+      default:
+        value_rules = false;
+        break;
+    }
+  }
+  return value_rules ? SqrefOrder::kValueRule : SqrefOrder::kInPlace;
+}
+
 void ShiftConditionalFormats(std::vector<cf::ConditionalFormat>& formats, const StructuralEdit& edit) {
   std::vector<cf::ConditionalFormat> retained_formats;
   retained_formats.reserve(formats.size());
@@ -339,7 +366,7 @@ void ShiftConditionalFormats(std::vector<cf::ConditionalFormat>& formats, const 
     for (const cf::CFCellRange& range : format.sqref) {
       ranges.push_back(MergeRange{range.first.row, range.first.col, range.last.row, range.last.col});
     }
-    shift_cf_sqref_ranges(ranges, edit);
+    shift_cf_sqref_ranges(ranges, edit, CfSqrefOrder(format.rules));
     format.sqref.clear();
     for (const MergeRange& range : ranges) {
       format.sqref.push_back(
@@ -583,25 +610,40 @@ enum class Piece : std::uint8_t {
   kMoved,      // The moved part of a split range, or a range that only moved in a `kShift` sqref.
 };
 
+// How a band edit arranges the pieces of the ranges it splits or cuts.
+enum class Arrangement : std::uint8_t {
+  kInPlace,  // Each range's pieces where the range was; a join takes the earlier piece's place.
+  kToEnd,    // After the other ranges, in order; a join takes the moved piece's place.
+};
+
 // Joins, pairwise until none is left, a moved piece with another moved piece
 // or a remainder when their union is a rectangle; the joined piece is a moved
-// piece and takes the earlier one's place. Two remainders never join.
-void JoinSplitPieces(std::vector<MergeRange>& ranges, std::vector<Piece>& kinds) {
-  for (std::size_t i = 0; i < ranges.size(); ++i) {
-    for (std::size_t j = i + 1U; kinds[i] != Piece::kWhole && j < ranges.size(); ++j) {
-      const bool moved = kinds[i] == Piece::kMoved || kinds[j] == Piece::kMoved;
-      if (moved && kinds[j] != Piece::kWhole && JoinsAsRectangle(ranges[i], ranges[j])) {
-        ranges[i] = BoundingBox(ranges[i], ranges[j]);
-        kinds[i] = Piece::kMoved;
-        ranges.erase(ranges.begin() + static_cast<std::ptrdiff_t>(j));
-        kinds.erase(kinds.begin() + static_cast<std::ptrdiff_t>(j));
-        j = i;
+// piece. Two remainders never join. Under `kToEnd` the joined piece takes the
+// moved piece's place (the earlier one when both moved), else the earlier one's.
+void JoinSplitPieces(std::vector<MergeRange>& ranges, std::vector<Piece>& kinds, Arrangement arrangement) {
+  bool joined = true;
+  while (joined) {
+    joined = false;
+    for (std::size_t i = 0; !joined && i < ranges.size(); ++i) {
+      for (std::size_t j = i + 1U; !joined && kinds[i] != Piece::kWhole && j < ranges.size(); ++j) {
+        const bool moved = kinds[i] == Piece::kMoved || kinds[j] == Piece::kMoved;
+        if (!moved || kinds[j] == Piece::kWhole || !JoinsAsRectangle(ranges[i], ranges[j])) {
+          continue;
+        }
+        const bool later = arrangement == Arrangement::kToEnd && kinds[i] != Piece::kMoved;
+        const std::size_t kept = later ? j : i;
+        const std::size_t gone = later ? i : j;
+        ranges[kept] = BoundingBox(ranges[i], ranges[j]);
+        kinds[kept] = Piece::kMoved;
+        ranges.erase(ranges.begin() + static_cast<std::ptrdiff_t>(gone));
+        kinds.erase(kinds.begin() + static_cast<std::ptrdiff_t>(gone));
+        joined = true;
       }
     }
   }
 }
 
-void EditSqrefRanges(std::vector<MergeRange>& ranges, const StructuralEdit& edit, SqrefMode mode) {
+void EditSqrefRanges(std::vector<MergeRange>& ranges, const StructuralEdit& edit, SqrefMode mode, SqrefOrder order) {
   if (!edit.band.has_value()) {
     if (mode == SqrefMode::kCut) {
       cut_sqref_ranges(ranges, edit.index, edit.count, edit.is_delete, edit.row_axis);
@@ -613,9 +655,13 @@ void EditSqrefRanges(std::vector<MergeRange>& ranges, const StructuralEdit& edit
   const bool join_tiles = mode == SqrefMode::kCf && edit.is_delete && !TilesOneRectangle(ranges);
   const bool splits = mode == SqrefMode::kShift || mode == SqrefMode::kCf;
   const Band band = *edit.band;
+  const Arrangement arrangement = order == SqrefOrder::kInPlace ? Arrangement::kInPlace : Arrangement::kToEnd;
   std::vector<MergeRange> out;
   out.reserve(ranges.size() * 3U);
   std::vector<Piece> kinds;
+  // Under `kToEnd`, the pieces of the ranges the edit splits or cuts.
+  std::vector<MergeRange> edited;
+  std::vector<Piece> edited_kinds;
   for (const MergeRange& range : ranges) {
     const BandFit fit = band_fit(range, edit);
     if (fit == BandFit::kOutside || (fit == BandFit::kStraddles && !splits)) {
@@ -637,23 +683,37 @@ void EditSqrefRanges(std::vector<MergeRange>& ranges, const StructuralEdit& edit
         std::max(edit.row_axis ? range.first_col : range.first_row, band.first);
     (edit.row_axis ? moving.last_col : moving.last_row) =
         std::min(edit.row_axis ? range.last_col : range.last_row, band.last);
-    const std::size_t before = out.size();
-    AppendDifference(range, moving, out);
-    const bool splits_range = out.size() > before;
-    kinds.resize(out.size(), Piece::kRemainder);
+    const bool corner_moves = moving.first_row == range.first_row && moving.first_col == range.first_col;
+    const bool cuts = edit.is_delete && axial_first < edit.index + edit.count;
+    std::vector<MergeRange> remainder;
+    AppendDifference(range, moving, remainder);
+    const bool splits_range = !remainder.empty();
     bool drop = false;
     ShiftAxisRange(moving, edit.index, edit.count, edit.is_delete, edit.row_axis, &drop);
-    if (drop) {
-      continue;
-    }
     // An insert inside the range leaves the inserted cells covered.
     if (!edit.is_delete && (edit.row_axis ? range.first_row : range.first_col) < edit.index) {
       axial_first = edit.index;
     }
-    out.push_back(moving);
-    kinds.push_back(splits_range || mode == SqrefMode::kShift ? Piece::kMoved : Piece::kWhole);
+    const bool to_end = arrangement == Arrangement::kToEnd && (splits_range || cuts);
+    std::vector<MergeRange>& target = to_end ? edited : out;
+    std::vector<Piece>& target_kinds = to_end ? edited_kinds : kinds;
+    const Piece moved_kind = splits_range || mode == SqrefMode::kShift ? Piece::kMoved : Piece::kWhole;
+    // Validation puts the moved part first on a delete, and on an insert that moves the range's top-left cell.
+    const bool moved_first = !drop && to_end && order == SqrefOrder::kValidation && (edit.is_delete || corner_moves);
+    if (moved_first) {
+      target.push_back(moving);
+      target_kinds.push_back(moved_kind);
+    }
+    target.insert(target.end(), remainder.begin(), remainder.end());
+    target_kinds.resize(target.size(), Piece::kRemainder);
+    if (!drop && !moved_first) {
+      target.push_back(moving);
+      target_kinds.push_back(moved_kind);
+    }
   }
-  JoinSplitPieces(out, kinds);
+  out.insert(out.end(), edited.begin(), edited.end());
+  kinds.insert(kinds.end(), edited_kinds.begin(), edited_kinds.end());
+  JoinSplitPieces(out, kinds, arrangement);
   ranges = std::move(out);
   if (!join_tiles || !TilesOneRectangle(ranges)) {
     return;
@@ -677,20 +737,20 @@ void cut_sqref_ranges(std::vector<MergeRange>& ranges, std::uint32_t index, std:
   ranges = std::move(out);
 }
 
-void shift_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit) {
-  EditSqrefRanges(ranges, edit, SqrefMode::kShift);
+void shift_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit, SqrefOrder order) {
+  EditSqrefRanges(ranges, edit, SqrefMode::kShift, order);
 }
 
-void shift_cf_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit) {
-  EditSqrefRanges(ranges, edit, SqrefMode::kCf);
+void shift_cf_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit, SqrefOrder order) {
+  EditSqrefRanges(ranges, edit, SqrefMode::kCf, order);
 }
 
 void shift_reference_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit) {
-  EditSqrefRanges(ranges, edit, SqrefMode::kReference);
+  EditSqrefRanges(ranges, edit, SqrefMode::kReference, SqrefOrder::kInPlace);
 }
 
 void cut_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit) {
-  EditSqrefRanges(ranges, edit, SqrefMode::kCut);
+  EditSqrefRanges(ranges, edit, SqrefMode::kCut, SqrefOrder::kInPlace);
 }
 
 bool shift_auto_filter(AutoFilter& filter, const StructuralEdit& edit, bool header_delete_removes) {
@@ -791,7 +851,7 @@ void Sheet::shift_sheet_metadata(const StructuralEdit& edit) {
   ShiftDataTables(data_tables_, edit);
   for (DataValidation& dv : validations_) {
     if (edit.band.has_value()) {
-      shift_sqref_ranges(dv.ranges, edit);
+      shift_sqref_ranges(dv.ranges, edit, SqrefOrder::kValidation);
     } else {
       ShiftRangeList(dv.ranges, index, count, is_delete, row_axis);
     }

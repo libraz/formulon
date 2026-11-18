@@ -2637,6 +2637,89 @@ TEST(InsertDeleteCells, SavedSqrefPiecesFollowTheEdit) {
   }
 }
 
+// The sqref text of the first `owner` element, pieces in their stored order.
+std::string SavedSqrefText(const std::string& xml, std::string_view owner) {
+  const std::size_t at = xml.find("<" + std::string(owner) + " ");
+  if (at == std::string::npos) {
+    return "<none>";
+  }
+  const std::size_t begin = xml.find("sqref=\"", at) + std::string_view("sqref=\"").size();
+  return xml.substr(begin, xml.find('"', begin) - begin);
+}
+
+// Each case starts from the order Excel holds after loading: a conditional
+// format's pieces stably sorted by first row, a validation's as stored.
+TEST(InsertDeleteCells, SavedSqrefOrderFollowsTheEdit) {
+  enum class Owner : std::uint8_t { kExpression, kCellIs, kValidation };
+  struct Step {
+    const char* range;
+    CellShift shift;
+    const char* sqref;
+  };
+  struct Case {
+    Owner owner;
+    std::vector<std::string_view> ranges;
+    std::vector<Step> steps;
+  };
+  const std::vector<Case> cases = {
+      {Owner::kExpression, {"B2:B4", "F9"}, {{"B2:C3", CellShift::kRight, "F9 B4 D2:D3"}}},
+      {Owner::kCellIs, {"B2:B4", "F9"}, {{"B2:C3", CellShift::kRight, "F9 B4 D2:D3"}}},
+      {Owner::kExpression, {"D2:D3", "B2:B4", "H9"}, {{"B2:C3", CellShift::kRight, "F2:F3 H9 B4 D2:D3"}}},
+      {Owner::kCellIs, {"D2:D3", "B2:B4", "H9"}, {{"B2:C3", CellShift::kRight, "F2:F3 H9 B4 D2:D3"}}},
+      {Owner::kExpression, {"B2:D2", "B5:C5", "H9"}, {{"B2:C3", CellShift::kDown, "B7:C7 H9 D2 B4:C4"}}},
+      {Owner::kExpression,
+       {"B2:D4"},
+       {{"C3", CellShift::kRight, "B2:D2 B4:D4 B3:E3"}, {"C3", CellShift::kUp, "B2:D2 B4 D4 B3:E3"}}},
+      {Owner::kExpression,
+       {"B2:D4"},
+       {{"C3", CellShift::kDown, "B2:D2 B3:B4 D3:D4 C3:C5"}, {"C3", CellShift::kLeft, "B2:D2 B3:B4 D4 C3:C5"}}},
+      {Owner::kExpression, {"E2:E4", "C3:C5", "B4:B6", "H9"}, {{"B2:E2", CellShift::kUp, "C2:C4 B3:B5 H9 E2:E3"}}},
+      {Owner::kValidation, {"E5:E6", "B3", "C2"}, {{"E5", CellShift::kUp, "B3 C2 E5"}}},
+      {Owner::kValidation, {"F9", "C2:C3", "B3:B4"}, {{"B1:C1", CellShift::kUp, "F9 C1:C2 B2:B3"}}},
+      {Owner::kValidation, {"F9", "B3:B4", "C2:C3"}, {{"B1:C1", CellShift::kUp, "F9 B2:B3 C1:C2"}}},
+      {Owner::kValidation, {"F9", "C2:C4", "B3:B5"}, {{"B1:C2", CellShift::kUp, "F9 B1:B3 C1:C2"}}},
+      {Owner::kValidation, {"B2:B4", "F9"}, {{"B2:C3", CellShift::kRight, "F9 D2:D3 B4"}}},
+      {Owner::kValidation, {"B2:B4"}, {{"B3:C3", CellShift::kRight, "B2 B4 D3"}}},
+      {Owner::kValidation,
+       {"H9", "D2:D3", "F2:F3", "B2:B4"},
+       {{"B2:C3", CellShift::kRight, "H9 F2:F3 H2:H3 D2:D3 B4"}}},
+      {Owner::kValidation,
+       {"H9", "F2:F3", "B2:B4", "D2:D3"},
+       {{"B2:C3", CellShift::kRight, "H9 H2:H3 F2:F3 D2:D3 B4"}}},
+      {Owner::kValidation, {"H9", "D2", "D3", "B2:B4"}, {{"B2:C3", CellShift::kRight, "H9 F2:F3 D2:D3 B4"}}},
+      {Owner::kValidation, {"H9", "B5:C5", "B2:D2"}, {{"B2:C3", CellShift::kDown, "H9 B7:C7 B4:C4 D2"}}},
+      {Owner::kValidation, {"H9", "C3:C5", "B4:B6", "E2:E4"}, {{"B2:E2", CellShift::kUp, "H9 C2:C4 B3:B5 E2:E3"}}},
+      {Owner::kValidation, {"H9", "E2:E4", "B4:B6", "C3:C5"}, {{"B2:E2", CellShift::kUp, "H9 B3:B5 C2:C4 E2:E3"}}},
+      {Owner::kValidation,
+       {"B2:D4"},
+       {{"C3", CellShift::kRight, "B2:D2 B4:D4 B3:E3"}, {"C3", CellShift::kUp, "B2:D2 B3:E3 B4 D4"}}},
+      {Owner::kValidation,
+       {"B2:D4"},
+       {{"C3", CellShift::kDown, "B2:D2 B3:B4 D3:D4 C3:C5"}, {"C3", CellShift::kLeft, "B2:D2 B3:B4 C3:C5 D4"}}},
+  };
+  for (const Case& c : cases) {
+    Workbook wb = Workbook::create();
+    if (c.owner == Owner::kValidation) {
+      AddDv(wb, c.ranges);
+    } else {
+      AddCf(wb, c.ranges);
+      if (c.owner == Owner::kCellIs) {
+        cf::CFRule& rule = wb.sheet(0).mutable_conditional_formats().front().rules.front();
+        rule.type = cf::RuleType::CellIs;
+        rule.op = cf::CellIsOperator::GreaterThan;
+        rule.formula1 = "0";
+      }
+    }
+    const char* owner = c.owner == Owner::kValidation ? "dataValidation" : "conditionalFormatting";
+    for (const Step& step : c.steps) {
+      SCOPED_TRACE(std::string(owner) + " " + std::string(c.ranges.front()) + " " + step.range + " " +
+                   ShiftName(step.shift));
+      ExpectOk(Edit(wb, step.range, step.shift));
+      EXPECT_EQ(SavedSqrefText(SavedSheetXml(wb), owner), step.sqref);
+    }
+  }
+}
+
 TEST(InsertDeleteCells, SavedValidationJoinsPiecesThatOnlyMoved) {
   Workbook wb = Workbook::create();
   wb.add_sheet("Sheet2");

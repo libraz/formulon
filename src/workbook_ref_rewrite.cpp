@@ -347,8 +347,12 @@ bool rewrite_defined_names(std::vector<DefinedName>& names, const std::vector<co
 }
 
 void shift_retained_extension_ranges(Sheet& sheet, const StructuralEdit& edit) {
-  const io::SqrefRemap remap = [&edit](std::vector<MergeRange>& ranges) { shift_sqref_ranges(ranges, edit); };
-  const io::SqrefRemap cf_remap = [&edit](std::vector<MergeRange>& ranges) { shift_cf_sqref_ranges(ranges, edit); };
+  const io::SqrefRemap remap = [&edit](std::vector<MergeRange>& ranges) {
+    shift_sqref_ranges(ranges, edit, SqrefOrder::kInPlace);
+  };
+  const io::SqrefRemap cf_remap = [&edit](std::vector<MergeRange>& ranges) {
+    shift_cf_sqref_ranges(ranges, edit, SqrefOrder::kInPlace);
+  };
   // A row/column insert gives the new band a copy of each sparkline hosted next to it.
   const bool clones = !edit.band.has_value() && !edit.is_delete && edit.index > 0U;
   const io::SparklineClone clone{edit.row_axis, edit.index - 1U, edit.count};

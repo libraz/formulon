@@ -112,19 +112,30 @@ enum class BandFit : std::uint8_t {
 /// Classifies `rect` against `edit`, which must carry a band.
 BandFit band_fit(const MergeRange& rect, const StructuralEdit& edit) noexcept;
 
+/// The order a band edit leaves an sqref's pieces in, by the kind of its holder.
+/// Under `kValueRule` and `kValidation` the ranges the edit leaves alone or
+/// only moves keep their places, and the pieces of each range it splits or cuts
+/// follow them in order; a joined piece takes its moved piece's place.
+enum class SqrefOrder : std::uint8_t {
+  kInPlace,     ///< Each range's pieces where the range was.
+  kValueRule,   ///< Value, text, blank, error and date conditional formats: unmoved parts, then the moved part.
+  kValidation,  ///< Data validation: the moved part first on a delete, and on an insert that moves the range's
+                ///< top-left cell; otherwise unmoved parts, then the moved part.
+};
+
 /// `shift_sqref_ranges` for `edit`, band or not. Under a band, the part of a
 /// range in the moving region moves and the rest stays, split row by row
 /// around it; an insert inside the range covers the inserted cells. A moved
 /// piece -- the moved part of a split range, or a range that only moved -- then
 /// joins each other moved piece or unmoved part of a split range it makes one
 /// rectangle with; two unmoved parts stay apart.
-void shift_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit);
+void shift_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit, SqrefOrder order);
 
 /// `shift_sqref_ranges` for a conditional format's sqref, legacy or x14,
 /// except that a range that only moved joins nothing; a band delete also joins
 /// the ranges it brings together into the one rectangle they now tile, unless
 /// they tiled it before the edit.
-void shift_cf_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit);
+void shift_cf_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit, SqrefOrder order);
 
 /// Moves retained ranges that follow references (protected ranges, sort and
 /// web-publish ranges, watched cells): `shift_sqref_ranges` for a whole
