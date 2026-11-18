@@ -901,6 +901,52 @@ TEST(FormulonCApiFormulaEntry, NewerErrorLiteralsAreRefusedOnEntryButLoadAndStor
   EXPECT_EQ(GetFormula(loaded.handle, 0, 1), "=#CALC!+1");
 }
 
+// A sheet of another workbook named past 31 UTF-16 units is refused when
+// typed, in every formula setter, and kept verbatim on load.
+TEST(FormulonCApiFormulaEntry, OverlongExternalSheetNameIsRefusedOnEntryButLoads) {
+  constexpr fm_status_t kInvalidReference =
+      static_cast<fm_status_t>(formulon::FormulonErrorCode::kParserInvalidReference);
+  const std::string at_limit(31, 'a');
+  const std::string over(32, 'a');
+  // 30 ASCII units plus one astral character: 32 UTF-16 units in 31 code points.
+  const std::string astral = std::string(30, 'b') + "\xF0\x9F\x98\x80";
+  WorkbookGuard wb;
+  MakeWorkbook(&wb);
+  for (const std::string& accepted :
+       {"=[Src.xlsx]" + at_limit + "!A1", "='C:\\x\\[Src.xlsx]" + at_limit + "'!A1",
+        "=SUM([Src.xlsx]X:" + at_limit + "!A1)", "='[Src.xlsx]" + std::string(29, 'b') + "\xF0\x9F\x98\x80'!A1"}) {
+    SCOPED_TRACE(accepted);
+    EXPECT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 1, accepted.c_str()), 0) << fm_get_last_error_message();
+  }
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 1, "=1"), 0);
+  for (const std::string& refused :
+       {"=[Src.xlsx]" + over + "!A1", "='C:\\x\\[Src.xlsx]" + over + "'!A1", "=SUM([Src.xlsx]X:" + over + "!A1)",
+        "=SUM([Src.xlsx]" + over + ":X!A1)", "='[Src.xlsx]" + astral + "'!A1", "=[Src.xlsx]" + over + "!Total",
+        "=[Src.xlsx]" + over + "!#REF!"}) {
+    SCOPED_TRACE(refused);
+    EXPECT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 1, refused.c_str()), kInvalidReference);
+    EXPECT_EQ(GetFormula(wb.handle, 0, 1), "=1");
+    EXPECT_EQ(SetDefinedName(wb.handle, "Long", refused.c_str()), kInvalidReference);
+  }
+  const fm_cell_rect_t sqref{0, 0, 9, 0};
+  const std::string cf = "=[Src.xlsx]" + over + "!A1>0";
+  EXPECT_EQ(fm_sheet_add_cf_rule(wb.handle, 0, record_arg(MakeCfRule(&sqref, cf.c_str(), nullptr)), ignored_id()),
+            kInvalidReference);
+
+  WorkbookGuard source;
+  MakeWorkbook(&source);
+  const std::string loaded_text = "=[Src.xlsx]" + over + "!A1";
+  ASSERT_TRUE(source.handle->workbook().set_cell_formula(0, 0, 1, loaded_text));
+  std::uint8_t* bytes = nullptr;
+  std::size_t len = 0;
+  ASSERT_EQ(fm_workbook_save(source.handle, FM_WORKBOOK_FORMAT_XLSX, &bytes, &len), 0) << fm_get_last_error_message();
+  WorkbookGuard loaded;
+  const fm_status_t rc = fm_workbook_load(bytes, len, nullptr, &loaded.handle);
+  fm_buffer_destroy(bytes);
+  ASSERT_EQ(rc, 0) << fm_get_last_error_message();
+  EXPECT_EQ(GetFormula(loaded.handle, 0, 1), loaded_text);
+}
+
 // `wb` saved as .xlsx: the package bytes and its first worksheet part.
 std::pair<std::vector<std::uint8_t>, std::string> SaveXlsx(fm_workbook_t* wb) {
   std::uint8_t* bytes = nullptr;

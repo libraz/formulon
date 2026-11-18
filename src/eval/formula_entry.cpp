@@ -250,6 +250,8 @@ const AstNode* diagnose_entry(std::string_view src, Arena& arena, bool refusals,
     code = ParseErrorCode::LexerInvalidErrorLiteral;
   } else if ((call = find_anchor_array_call(*root)) != nullptr) {
     code = ParseErrorCode::EntryAnchorArrayCall;
+  } else if ((call = find_overlong_external_sheet(*root)) != nullptr) {
+    code = ParseErrorCode::InvalidReference;
   } else {
     return root;
   }

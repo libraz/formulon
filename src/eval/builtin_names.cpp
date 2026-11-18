@@ -9,9 +9,11 @@
 #include "eval/tree_walker_lazy_table.h"
 #include "parser/formula_prefix.h"
 #include "parser/parser.h"
+#include "sheet_name.h"
 #include "utils/arena.h"
 #include "utils/name_syntax.h"
 #include "utils/strings.h"
+#include "utils/utf8_length.h"
 
 namespace formulon {
 namespace eval {
@@ -230,6 +232,25 @@ const AstNode* find_refused_error_literal(const AstNode& root) {
   const AstNode* hit = nullptr;
   parser::any_child_node(root, [&](const AstNode& child) {
     hit = find_refused_error_literal(child);
+    return hit != nullptr;
+  });
+  return hit;
+}
+
+const AstNode* find_overlong_external_sheet(const AstNode& root) {
+  const auto overlong = [](std::string_view sheet) { return utf16_units_in(sheet) > sheet_names::kMaxNameUnits; };
+  if (root.kind() == NodeKind::ExternalRef &&
+      (overlong(root.as_external_ref_sheet()) || overlong(root.as_external_ref_sheet_end()))) {
+    return &root;
+  }
+  if (const parser::RefErrorSite* site = root.kind() == NodeKind::ErrorLiteral ? root.as_ref_error_site() : nullptr;
+      site != nullptr && site->form == parser::RefErrorSite::Form::kExternal &&
+      (overlong(site->sheet) || overlong(site->sheet_end))) {
+    return &root;
+  }
+  const AstNode* hit = nullptr;
+  parser::any_child_node(root, [&](const AstNode& child) {
+    hit = find_overlong_external_sheet(child);
     return hit != nullptr;
   });
   return hit;

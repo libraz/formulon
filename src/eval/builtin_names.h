@@ -80,6 +80,12 @@ const parser::AstNode* find_refused_error_literal(const parser::AstNode& root);
 /// refuses it when typed. nullptr when there is none.
 const parser::AstNode* find_anchor_array_call(const parser::AstNode& root);
 
+/// Returns the first reference into another workbook in `root` whose sheet,
+/// or either end of whose sheet span, is longer than a sheet name may be,
+/// which Excel refuses when typed. nullptr when there is none. Meaningful for
+/// entered text only: files carry such names verbatim.
+const parser::AstNode* find_overlong_external_sheet(const parser::AstNode& root);
+
 /// Returns the first structured reference in `root` whose table name opens
 /// with an R1C1 reference spelled with `row_letter` / `col_letter` (a
 /// locale's R1C1 tokens) and for which `is_table(ctx, name)` holds, which
