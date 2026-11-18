@@ -259,8 +259,10 @@ bool resolve_shape(const parser::AstNode& arg_node, Arena& arena, const Function
     return false;
   }
   const parser::NodeKind k = arg_node.kind();
-  // A union expression measures as the reference it evaluates to.
-  const Value united = k == parser::NodeKind::UnionOp ? eval_node_ref(arg_node, arena, registry, ctx) : Value::blank();
+  // A union expression, and a name that may stand for one, measures as the reference it evaluates to.
+  const Value united = k == parser::NodeKind::UnionOp || k == parser::NodeKind::NameRef
+                           ? eval_node_ref(arg_node, arena, registry, ctx)
+                           : Value::blank();
   if (united.is_error()) {
     *out_err = united;
     return false;

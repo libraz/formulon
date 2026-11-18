@@ -820,7 +820,8 @@ TEST(DefinedNameResolve, BareUnionBodyIsAMultiAreaReference) {
                                                                {"=SUM(uthree)", 18.0},
                                                                {"=AREAS(uthree)", 3.0},
                                                                {"=INDEX(uthree,1,1,3)", 8.0},
-                                                               {"=INDEX(u,1,1,2)", 6.0}};
+                                                               {"=INDEX(u,1,1,2)", 6.0},
+                                                               {"=INDEX(u,1,1)", 4.0}};
   std::uint32_t row = 10U;
   for (const auto& [formula, want] : numbers) {
     ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row++, 4U, formula))) << formula;
@@ -828,6 +829,7 @@ TEST(DefinedNameResolve, BareUnionBodyIsAMultiAreaReference) {
   for (const char* formula : {"=CONCAT(u)", "=GCD(u)", "=TEXTJOIN(\",\",TRUE,u)"}) {
     ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row++, 4U, formula))) << formula;
   }
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0U, row, 4U, "=ROWS(uthree)")));
   ASSERT_TRUE(static_cast<bool>(wb.recalc(default_registry())));
   row = 10U;
   for (const auto& [formula, want] : numbers) {
@@ -840,6 +842,10 @@ TEST(DefinedNameResolve, BareUnionBodyIsAMultiAreaReference) {
     ASSERT_TRUE(v.is_error()) << formula << ": " << v.debug_to_string();
     EXPECT_EQ(v.as_error(), ErrorCode::Value) << formula;
   }
+  // A union has no single shape.
+  const Value rows = wb.sheet(0).resolve_cell_value(row, 4U);
+  ASSERT_TRUE(rows.is_error()) << rows.debug_to_string();
+  EXPECT_EQ(rows.as_error(), ErrorCode::Ref);
 
   // Each area is a dependency: a change in one recalculates the sum.
   ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 1U, Value::number(16.0))));
