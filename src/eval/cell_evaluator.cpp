@@ -250,6 +250,7 @@ bool stage_formula_cell(const Sheet& sheet, std::uint32_t row, std::uint32_t col
   staged.formula_text.assign(read.formula_text());
   staged.array_block_rows = read.array_block_rows();
   staged.array_block_cols = static_cast<std::uint16_t>(read.array_block_cols());
+  staged.dynamic_array = read.dynamic_array();
   return true;
 }
 
@@ -300,6 +301,9 @@ CellResult evaluate_cell_for_recalc(Workbook& workbook, Sheet& sheet, const Cell
   ctx = ctx.with_iterative_driver_suppressed();
   if (opts.read_observer != nullptr) {
     ctx = ctx.with_state(*opts.read_observer);
+  }
+  if (!cell_data.dynamic_array && cell_data.array_block_rows == 0U) {
+    ctx = ctx.with_legacy_formula_cell();
   }
 
   // A legacy array formula fills its own block at a fixed size, never

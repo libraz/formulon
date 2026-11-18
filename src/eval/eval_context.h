@@ -493,6 +493,19 @@ class EvalContext {
   /// a formula cell is bound and `with_intersection_at_top_left` is not in force.
   bool projects_intersection() const noexcept { return has_formula_cell() && !intersection_at_top_left_; }
 
+  /// Returns a copy of `*this` evaluating a legacy formula cell: one stored
+  /// without the dynamic-array mark and outside an array block. There an `@`
+  /// over a grid of references intersects its first reference with the
+  /// formula cell (Mac Excel 16.115); a dynamic-array cell reads it whole.
+  EvalContext with_legacy_formula_cell() const noexcept {
+    EvalContext copy = *this;
+    copy.legacy_formula_cell_ = true;
+    return copy;
+  }
+
+  /// True under `with_legacy_formula_cell`.
+  bool legacy_formula_cell() const noexcept { return legacy_formula_cell_; }
+
   /// True under `with_intersection_at_top_left`.
   bool intersection_at_top_left() const noexcept { return intersection_at_top_left_; }
 
@@ -767,6 +780,8 @@ class EvalContext {
   bool suppress_iterative_driver_ = false;
   // See `with_intersection_at_top_left`.
   bool intersection_at_top_left_ = false;
+  // See `with_legacy_formula_cell`.
+  bool legacy_formula_cell_ = false;
   // Whole-axis scope of the call being dispatched; see `WholeAxisScope`.
   WholeAxisScope* whole_axis_scope_ = nullptr;
 };

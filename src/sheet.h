@@ -260,6 +260,9 @@ class Sheet {
     std::uint32_t array_block_rows() const noexcept { return array_block_rows_; }
     std::uint32_t array_block_cols() const noexcept { return array_block_cols_; }
 
+    /// Whether the formula is stored as a dynamic-array formula (`Cell::dynamic_array`).
+    bool dynamic_array() const noexcept { return dynamic_array_; }
+
     /// The coordinate's effective value, as `resolve_cell_value` defines
     /// it. A Text payload is re-pointed at this object's own copy of the
     /// bytes, so it never aliases sheet storage.
@@ -270,6 +273,7 @@ class Sheet {
 
     bool exists_ = false;
     bool is_text_ = false;
+    bool dynamic_array_ = false;
     std::uint32_t array_block_rows_ = 0;
     std::uint32_t array_block_cols_ = 0;
     std::string formula_text_;

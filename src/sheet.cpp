@@ -1159,6 +1159,7 @@ Value Sheet::resolve_cell_value(std::uint32_t row, std::uint32_t col) const noex
 void Sheet::read_formula_cell(std::uint32_t row, std::uint32_t col, CellRead& out) const {
   out.exists_ = false;
   out.is_text_ = false;
+  out.dynamic_array_ = false;
   out.formula_text_.clear();
   out.array_block_rows_ = 0U;
   out.array_block_cols_ = 0U;
@@ -1182,6 +1183,7 @@ void Sheet::read_formula_cell(std::uint32_t row, std::uint32_t col, CellRead& ou
     out.formula_text_ = cell->formula_text;
     out.array_block_rows_ = cell->array_block_rows;
     out.array_block_cols_ = cell->array_block_cols;
+    out.dynamic_array_ = cell->dynamic_array;
     value = cell->cached_value;
   } else if (const SpillRegion* covering = spill_region_covering_locked(row, col); covering != nullptr) {
     value = covering->cells[SpillCellIndex(*covering, row, col)];

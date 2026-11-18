@@ -205,6 +205,17 @@ std::vector<std::uint8_t> Package(std::string_view calc_pr, std::string_view she
   return out ? std::move(out.value()) : std::vector<std::uint8_t>{};
 }
 
+// `xl/metadata.xml` whose cell metadata 1 is the dynamic-array (XLDAPR) mark a `cm="1"` cell carries.
+constexpr std::string_view kDynamicArrayMetadata =
+    "<metadata xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
+    "xmlns:xda=\"http://schemas.microsoft.com/office/spreadsheetml/2017/dynamicarray\">"
+    "<metadataTypes count=\"1\"><metadataType name=\"XLDAPR\" minSupportedVersion=\"120000\" copy=\"1\" "
+    "pasteAll=\"1\" pasteValues=\"1\" merge=\"1\" splitFirst=\"1\" rowColShift=\"1\" clearFormats=\"1\" "
+    "clearComments=\"1\" assign=\"1\" coerce=\"1\" cellMeta=\"1\"/></metadataTypes>"
+    "<futureMetadata name=\"XLDAPR\" count=\"1\"><bk><extLst><ext uri=\"{bdbb8cdc-fa1e-496e-a857-3c3f30c029c3}\">"
+    "<xda:dynamicArrayProperties fDynamic=\"1\" fCollapsed=\"0\"/></ext></extLst></bk></futureMetadata>"
+    "<cellMetadata count=\"1\"><bk><rc t=\"1\" v=\"0\"/></bk></cellMetadata></metadata>";
+
 // A1 = 2; B1 = A1*10 cached 7 (clean); C1 = A1+1 with no cached value; D1 = A1*2 cached 0, marked ca.
 constexpr std::string_view kCachedRow =
     "<row r=\"1\"><c r=\"A1\"><v>2</v></c><c r=\"B1\"><f>A1*10</f><v>7</v></c><c r=\"C1\"><f>A1+1</f></c>"
@@ -664,27 +675,52 @@ TEST(StaleRoundtrip, ArrayBlockReferencingANameKeepsItsMembersOnLoad) {
 // The workbook's formulas do not determine that extent, so Formulon shows the cached cell until a full recalculation
 // and then spills what the formula defines.
 TEST(StaleRoundtrip, ShrunkenDynamicArrayExtentHoldsUntilAFullRecalc) {
-  constexpr std::string_view kMetadata =
-      "<metadata xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\" "
-      "xmlns:xda=\"http://schemas.microsoft.com/office/spreadsheetml/2017/dynamicarray\">"
-      "<metadataTypes count=\"1\"><metadataType name=\"XLDAPR\" minSupportedVersion=\"120000\" copy=\"1\" "
-      "pasteAll=\"1\" pasteValues=\"1\" merge=\"1\" splitFirst=\"1\" rowColShift=\"1\" clearFormats=\"1\" "
-      "clearComments=\"1\" assign=\"1\" coerce=\"1\" cellMeta=\"1\"/></metadataTypes>"
-      "<futureMetadata name=\"XLDAPR\" count=\"1\"><bk><extLst><ext uri=\"{bdbb8cdc-fa1e-496e-a857-3c3f30c029c3}\">"
-      "<xda:dynamicArrayProperties fDynamic=\"1\" fCollapsed=\"0\"/></ext></extLst></bk></futureMetadata>"
-      "<cellMetadata count=\"1\"><bk><rc t=\"1\" v=\"0\"/></bk></cellMetadata></metadata>";
   constexpr std::string_view kRows =
       "<row r=\"22\"><c r=\"B22\"><f ca=\"1\">_xlfn.MAP(A1:A2,_xlfn.LAMBDA(_xlpm.x,ROW(_xlpm.x)))</f>"
       "<v>0</v></c><c r=\"F22\" cm=\"1\"><f t=\"array\" aca=\"1\" ref=\"F22\" ca=\"1\">"
       "_xlfn.MAP(A1:A2,_xlfn.LAMBDA(_xlpm.x,ROW(_xlpm.x)))</f><v>1</v></c></row>";
   for (const bool sax : {false, true}) {
     SCOPED_TRACE(sax ? "sax" : "dom");
-    Workbook wb = Load(Package("calcId=\"191029\"", kRows, "Sheet1", kMetadata), sax);
+    Workbook wb = Load(Package("calcId=\"191029\"", kRows, "Sheet1", kDynamicArrayMetadata), sax);
     EXPECT_EQ(Number(wb, 0, 21, 5), 1.0);
     EXPECT_TRUE(wb.sheet(0).resolve_cell_value(22U, 5U).is_blank());
     ASSERT_TRUE(static_cast<bool>(wb.recalc_full(eval::default_registry())));
     EXPECT_EQ(Number(wb, 0, 21, 5), 1.0);
     EXPECT_EQ(Number(wb, 0, 22, 5), 2.0);
+  }
+}
+
+// An `@` over a grid of references takes its first reference. A legacy cell (no dynamic-array mark) intersects that
+// reference with the formula cell, so `SUM(OFFSET(A1:A3,{0;1;2},0)*1)` reads A3 on row 3 and is #VALUE! on row 10; a
+// dynamic-array cell reads it whole (4). The stored kind decides, on load and after our own save.
+TEST(StaleRoundtrip, LegacyCellIntersectsTheFirstReferenceOfAGrid) {
+  constexpr std::string_view kRows =
+      "<row r=\"1\"><c r=\"A1\"><v>1</v></c></row>"
+      "<row r=\"3\"><c r=\"A3\"><v>3</v></c>"
+      "<c r=\"B3\"><f ca=\"1\">SUM(OFFSET(A1:A3,{0;1;2},0)*1)</f><v>0</v></c></row>"
+      "<row r=\"10\"><c r=\"B10\"><f ca=\"1\">SUM(OFFSET(A1:A3,{0;1;2},0)*1)</f><v>0</v></c>"
+      "<c r=\"C10\" cm=\"1\"><f t=\"array\" aca=\"1\" ref=\"C10\" ca=\"1\">"
+      "SUM(_xlfn.SINGLE(OFFSET(A1:A3,{0;1;2},0))*1)</f><v>0</v></c></row>";
+  const std::vector<std::uint8_t> package = Package("calcId=\"191029\"", kRows, "Sheet1", kDynamicArrayMetadata);
+  const auto expect_values = [](Workbook wb) {
+    ASSERT_TRUE(static_cast<bool>(wb.recalc_full(eval::default_registry())));
+    EXPECT_EQ(Number(wb, 0, 2, 1), 3.0);
+    const Value outside = wb.sheet(0).resolve_cell_value(9U, 1U);
+    ASSERT_TRUE(outside.is_error());
+    EXPECT_EQ(outside.as_error(), ErrorCode::Value);
+    EXPECT_EQ(Number(wb, 0, 9, 2), 4.0);
+  };
+  for (const bool sax : {false, true}) {
+    SCOPED_TRACE(sax ? "sax" : "dom");
+    expect_values(Load(package, sax));
+  }
+  {
+    SCOPED_TRACE("xlsx round trip");
+    expect_values(Load(Save(Load(package))));
+  }
+  {
+    SCOPED_TRACE("xlsb round trip");
+    expect_values(LoadXlsb(SaveXlsb(Load(package))));
   }
 }
 

@@ -130,17 +130,21 @@ bool project_reference_result(const parser::AstNode& operand, Arena& arena, cons
   if (!may_yield_reference(operand, registry)) {
     return false;
   }
-  const Value ref = eval_node_ref(operand, arena, registry, ctx);
+  Value ref = eval_node_ref(operand, arena, registry, ctx);
   if (!ref.is_ref()) {
     return false;
   }
-  const RefView view = ref.as_ref();
-  // A grid gives its first element, a reference read whole (`@OFFSET(A1:A3,,{1,2,3})` is B1:B3).
-  if (view.form == RefForm::kGrid) {
-    const Value first = grid_element(view, 0U, arena);
-    *out = first.is_ref() ? deref_shaped(first, arena, registry, ctx, ReadCount::kCounted).value : first;
-    return true;
+  // A grid gives its first element. A dynamic-array cell reads that reference whole (`@OFFSET(A1:A3,,{1,2,3})` is
+  // B1:B3); a legacy cell intersects it with the formula cell like any area.
+  if (ref.as_ref().form == RefForm::kGrid) {
+    const Value first = grid_element(ref.as_ref(), 0U, arena);
+    if (!first.is_ref() || !ctx.legacy_formula_cell()) {
+      *out = first.is_ref() ? deref_shaped(first, arena, registry, ctx, ReadCount::kCounted).value : first;
+      return true;
+    }
+    ref = first;
   }
+  const RefView view = ref.as_ref();
   const RefArea& area = view.areas[0];
   parser::Reference lhs{};
   if (view.form != RefForm::kArea || view.book != 0U || !ref_sheet_name(ctx, area.sheet_first, &lhs.sheet)) {
