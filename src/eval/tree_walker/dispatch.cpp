@@ -591,9 +591,10 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
   };
   // Range cells and failed expansions reach `values` without `pass_error`; the
   // first such error keeps the origin left by the argument that produced it.
+  const bool defers_cell_errors = defers_range_cell_errors(*def);
   std::size_t origin_scanned = 0;
   const auto note_collected_error = [&]() {
-    if (!in_order_ranges || reported_origin.has_value()) {
+    if ((!in_order_ranges && !defers_cell_errors) || reported_origin.has_value()) {
       return;
     }
     for (; origin_scanned < values.size(); ++origin_scanned) {
@@ -693,6 +694,11 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
       pass_error(v);
       continue;
     }
+    // A cell reference in the array slot holds its error until the last value has coerced.
+    if (v.is_error() && defers_cell_errors && arg_node.kind() == parser::NodeKind::Ref) {
+      values.push_back(v);
+      continue;
+    }
     if (v.is_error()) {
       // A text literal that cannot be a number already failed ahead of this
       // error, and the earlier failure is the one reported.
@@ -702,7 +708,7 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
       // A function that inspects its error arguments consumes this one.
       forget_error_origin();
     }
-    if ((def->range_filter_numeric_only || def->range_filter_a_coerce) &&
+    if ((def->range_filter_numeric_only || def->range_filter_a_coerce || defers_cell_errors) &&
         arg_node.kind() == parser::NodeKind::Literal && v.is_text() && !coerce_to_number(v)) {
       if (!literal_text_not_numeric) {
         literal_text_origin = snapshot_error_origin();
@@ -788,6 +794,27 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
     return Value::error(def->blank_scalar_error);
   }
   note_collected_error();
+  if (defers_cell_errors) {
+    const auto deferred = std::find_if(values.begin(), values.end(), [](const Value& v) { return v.is_error(); });
+    if (deferred != values.end()) {
+      const Value cell_error = *deferred;
+      forget_error_origin();
+      bool reported_cell_error = false;
+      // The last value coerces first; its failure is reported ahead of the cell's error.
+      const auto after_last_value = [&](const Value* cell_args, std::uint32_t n) {
+        auto last = coerce_to_number(cell_args[n - 1U]);
+        reported_cell_error = reported_cell_error || static_cast<bool>(last);
+        return last ? cell_error : Value::error(last.error());
+      };
+      const auto size = static_cast<std::uint32_t>(values.size());
+      const Value result = lift_scalar_slot ? lift_over_array_args(values.data(), size, arena, after_last_value)
+                                            : after_last_value(values.data(), size);
+      if (result.is_error() && reported_cell_error && reported_origin.has_value()) {
+        restore_error_origin(*reported_origin);
+      }
+      return result;
+    }
+  }
   // Dynamic-array spill for scalar (non-range-aware) functions: when any
   // collected argument is an Array — a bounded range materialised above,
   // or a nested array-returning call (`=ROUND(SEQUENCE(3),0)`) — Excel 365

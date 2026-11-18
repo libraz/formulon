@@ -217,20 +217,33 @@ Value eval_textjoin_lazy(const parser::AstNode& call, Arena& arena, const Functi
   // always wraps a scalar into a 1x1 array, so `delimiters` is never
   // empty. An array delimiter is applied cyclically below, over the
   // flattened text pieces.
+  // An error held in a delimiter cell is reported once ignore_empty has coerced.
+  std::uint32_t delim_ref_rows = 0;
+  std::uint32_t delim_ref_cols = 0;
+  const bool delim_from_cells = static_reference_shape(call.as_call_arg(0), ctx, &delim_ref_rows, &delim_ref_cols);
+  Value delim_cell_error = Value::blank();
+  std::vector<std::string> delimiters;
   const Value delim_v = eval_node_as_array(call.as_call_arg(0), arena, registry, ctx);
   if (delim_v.is_error()) {
-    return delim_v;
-  }
-  const ArrayValue* delim_arr = delim_v.as_array();
-  const std::size_t delim_n = static_cast<std::size_t>(delim_arr->rows) * static_cast<std::size_t>(delim_arr->cols);
-  std::vector<std::string> delimiters;
-  delimiters.reserve(delim_n);
-  for (std::size_t i = 0; i < delim_n; ++i) {
-    auto t = coerce_to_text(delim_arr->cells[i]);
-    if (!t) {
-      return Value::error(t.error());
+    if (!delim_from_cells) {
+      return delim_v;
     }
-    delimiters.push_back(std::move(t.value()));
+    delim_cell_error = delim_v;
+  } else {
+    const ArrayValue* delim_arr = delim_v.as_array();
+    const std::size_t delim_n = static_cast<std::size_t>(delim_arr->rows) * static_cast<std::size_t>(delim_arr->cols);
+    delimiters.reserve(delim_n);
+    for (std::size_t i = 0; i < delim_n; ++i) {
+      auto t = coerce_to_text(delim_arr->cells[i]);
+      if (!t) {
+        if (!delim_from_cells) {
+          return Value::error(t.error());
+        }
+        delim_cell_error = Value::error(t.error());
+        break;
+      }
+      delimiters.push_back(std::move(t.value()));
+    }
   }
 
   // ignore_empty (arg 1): scalar only; omitted is TRUE, a blank reference FALSE.
@@ -245,6 +258,9 @@ Value eval_textjoin_lazy(const parser::AstNode& call, Arena& arena, const Functi
       return Value::error(ignore_c.error());
     }
     ignore_empty = ignore_c.value();
+  }
+  if (delim_cell_error.is_error()) {
+    return delim_cell_error;
   }
 
   // text1, [text2], ... (args 2..N): each may be scalar, range, or array;

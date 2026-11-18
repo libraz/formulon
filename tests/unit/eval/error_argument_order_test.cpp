@@ -115,6 +115,33 @@ TEST(ErrorArgumentOrder, UnfilteredRangeFunctionsReadCellsInArgumentOrder) {
   }
 }
 
+// A function taking an array beside single values reports an error held in a
+// cell of the array only once those values have coerced; an error written in
+// the array slot keeps its place in argument order.
+TEST(ErrorArgumentOrder, ArrayCellErrorsRankAfterSingleValues) {
+  const FunctionRegistry& registry = default_registry();
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::text("x"))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 7U, Value::error(ErrorCode::Div0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 7U, Value::error(ErrorCode::Num))));
+  const std::vector<std::pair<std::string, ErrorCode>> table = {
+      {"=LARGE(H1,H2)", ErrorCode::Num},          {"=SMALL(H1:H2,2)", ErrorCode::Div0},
+      {"=PERCENTILE.INC(H1,H2)", ErrorCode::Num}, {"=QUARTILE.EXC(H1,H2)", ErrorCode::Num},
+      {"=PERCENTRANK(H1,H2)", ErrorCode::Num},    {"=PERCENTRANK.EXC(H1,1,H2)", ErrorCode::Num},
+      {"=TRIMMEAN(H1,H2)", ErrorCode::Num},       {"=TRIMMEAN(H1,A1)", ErrorCode::Value},
+      {"=TRIMMEAN(A1,H1)", ErrorCode::Div0},      {"=TRIMMEAN(\"x\",1/0)", ErrorCode::Value},
+      {"=TRIMMEAN(1/0,\"x\")", ErrorCode::Div0},  {"=IRR(H1,H2)", ErrorCode::Num},
+      {"=MIRR(H1,H2,1)", ErrorCode::Num},         {"=MIRR(H1,1,H2)", ErrorCode::Num},
+      {"=TEXTJOIN(H1,H2,1)", ErrorCode::Num},     {"=TEXTJOIN(1/0,H2,1)", ErrorCode::Div0},
+  };
+  for (const auto& [formula, want] : table) {
+    Arena arena;
+    const Value got = evaluate_formula_text_array(wb, wb.sheet(0U), 4U, 0U, formula, arena, registry);
+    ASSERT_TRUE(got.is_error()) << formula;
+    EXPECT_EQ(got.as_error(), want) << formula;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

@@ -46,9 +46,14 @@ namespace {
 // count rather than into a visible error, so a gap in the expanders surfaces
 // as silence on exactly these functions.
 bool filter_range_sourced_value(const FunctionDef& def, const Value& value, Value* out, bool* keep, Value* out_err) {
-  if (def.propagate_errors && value.is_error() && !reads_range_errors_in_order(def)) {
-    *out_err = value;
-    return false;
+  if (def.propagate_errors && value.is_error()) {
+    if (!reads_range_errors_in_order(def) && !defers_range_cell_errors(def)) {
+      *out_err = value;
+      return false;
+    }
+    *out = value;
+    *keep = true;
+    return true;
   }
   if (def.range_filter_numeric_only && value.kind() != ValueKind::Number) {
     *keep = false;
@@ -413,6 +418,11 @@ bool append_range_sourced_values(const FunctionDef& def, const Value* cells, std
 
 bool append_array_sourced_value(const FunctionDef& def, const Value& value, std::vector<Value>* values,
                                 Value* out_err) {
+  // An array element is written in the call, not held in a cell.
+  if (value.is_error() && defers_range_cell_errors(def)) {
+    *out_err = value;
+    return false;
+  }
   if (def.range_filter_a_coerce && !value.is_error() && !value.is_number()) {
     // Logical elements are skipped; text elements are skipped too, except
     // that AVERAGEA still counts a text element as zero.

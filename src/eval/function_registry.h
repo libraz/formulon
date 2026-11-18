@@ -113,7 +113,9 @@ struct FunctionDef {
   /// first one it coerces, and an error argument it does not read still wins
   /// over a non-error result. A range-aware function that reads its range cells
   /// unfiltered does the same with those cells in argument order (see
-  /// `reads_range_errors_in_order`); any other one short-circuits on the
+  /// `reads_range_errors_in_order`); one with a single-value last slot reports
+  /// the error cells of its array after that value (see
+  /// `defers_range_cell_errors`); any other one short-circuits on the
   /// left-most error argument. When false, errors are ordinary arguments -
   /// required by the IS* type-predicate family (`ISERROR`, `ISERR`, `ISNA`,
   /// `ISNUMBER`, `ISTEXT`, `ISBLANK`, `ISLOGICAL`).
@@ -236,6 +238,14 @@ inline bool reads_range_errors_in_order(const FunctionDef& def) {
   return def.propagate_errors && def.accepts_ranges && !def.range_filter_numeric_only &&
          !def.range_filter_bool_coercible && !def.range_filter_a_coerce && !def.last_arg_scalar &&
          !def.first_arg_scalar;
+}
+
+/// A range-aware function taking an array beside a single-value last slot
+/// (LARGE, SMALL, PERCENTILE, QUARTILE, TRIMMEAN): an error held in a cell of
+/// the array is reported only once that value has coerced. An error written
+/// directly in the array slot keeps its place in argument order.
+inline bool defers_range_cell_errors(const FunctionDef& def) {
+  return def.propagate_errors && def.accepts_ranges && def.last_arg_scalar;
 }
 
 /// Case-insensitive function lookup table. Registry keys are stored in an

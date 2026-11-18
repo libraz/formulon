@@ -286,12 +286,21 @@ Value eval_irr_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
     return Value::error(ErrorCode::Value);
   }
 
-  // An error cell read through a reference is #VALUE!, whatever the error.
+  // An error cell read through a reference is #VALUE!, whatever the error,
+  // and is reported once the guess has coerced.
+  constexpr double kNoDefault[1] = {0.0};
   std::vector<double> flows;
   Value collect_err = Value::blank();
   bool cell_error = false;
   if (!collect_cash_flows(call.as_call_arg(0), arena, registry, ctx, &flows, &collect_err, &cell_error)) {
-    return cell_error ? Value::error(ErrorCode::Value) : collect_err;
+    if (!cell_error) {
+      return collect_err;
+    }
+    if (!call_arg_supplied(call, 1U)) {
+      return Value::error(ErrorCode::Value);
+    }
+    return lift_rates(call, 1U, kNoDefault, /*analysis_toolpak=*/false, arena, registry, ctx,
+                      [](const double*) { return Value::error(ErrorCode::Value); });
   }
 
   // IRR requires at least one positive and one negative cash flow so the
@@ -305,7 +314,6 @@ Value eval_irr_lazy(const parser::AstNode& call, Arena& arena, const FunctionReg
   if (!call_arg_supplied(call, 1U)) {
     return irr_solve(flows, 0.1, /*guess_given=*/false);
   }
-  constexpr double kNoDefault[1] = {0.0};
   return lift_rates(call, 1U, kNoDefault, /*analysis_toolpak=*/false, arena, registry, ctx,
                     [&](const double* rates) { return irr_solve(flows, rates[0], /*guess_given=*/true); });
 }
@@ -317,10 +325,17 @@ Value eval_mirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     return Value::error(ErrorCode::Value);
   }
 
+  // An error cell of the values is reported once both rates have coerced.
+  constexpr double kNoDefaults[2] = {0.0, 0.0};
   std::vector<double> flows;
   Value collect_err = Value::blank();
-  if (!collect_cash_flows(call.as_call_arg(0), arena, registry, ctx, &flows, &collect_err)) {
-    return collect_err;
+  bool cell_error = false;
+  if (!collect_cash_flows(call.as_call_arg(0), arena, registry, ctx, &flows, &collect_err, &cell_error)) {
+    if (!cell_error) {
+      return collect_err;
+    }
+    return lift_rates(call, 1U, kNoDefaults, /*analysis_toolpak=*/false, arena, registry, ctx,
+                      [&](const double*) { return collect_err; });
   }
 
   // All-positive schedules drive `npv_neg` to 0, so the closed-form
@@ -334,7 +349,6 @@ Value eval_mirr_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   }
 
   // The finance and reinvestment rates lift element by element.
-  constexpr double kNoDefaults[2] = {0.0, 0.0};
   return lift_rates(call, 1U, kNoDefaults, /*analysis_toolpak=*/false, arena, registry, ctx,
                     [&](const double* rates) { return to_finite_value(mirr_closed_form(flows, rates[0], rates[1])); });
 }

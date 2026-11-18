@@ -78,16 +78,22 @@ std::variant<Value, std::vector<double>> collect_rank_array(const parser::AstNod
 // PERCENTRANK's array argument. A rectangle skips its non-Numbers like
 // `collect_rank_array`; a directly supplied scalar coerces as LARGE's does
 // (Bool and numeric text convert, other text is `#VALUE!`).
+// An error held in a cell lands in `*cell_error` with an empty array, to be
+// reported once `x` and `significance` have coerced.
 std::variant<Value, std::vector<double>> collect_percentrank_array(const parser::AstNode& arg_node, Arena& arena,
                                                                    const FunctionRegistry& registry,
-                                                                   const EvalContext& ctx) {
+                                                                   const EvalContext& ctx, Value* cell_error) {
   auto resolved = resolve_range_arg(arg_node, arena, registry, ctx);
   if (!resolved) {
     return Value::error(resolved.error());
   }
   const RangeResult& range = resolved.value();
   if (const Value* error_cell = first_error(range.cells)) {
-    return *error_cell;
+    if (range.from_scalar || arg_node.kind() == parser::NodeKind::ArrayLiteral) {
+      return *error_cell;
+    }
+    *cell_error = *error_cell;
+    return std::vector<double>{};
   }
   std::vector<double> nums;
   nums.reserve(range.cells.size());
@@ -276,7 +282,8 @@ std::size_t percentrank_floor_index(const std::vector<double>& sorted, double x)
 // numeric array. The inclusive form ranks exact matches at k / (N - 1); the
 // exclusive one uses 1-based positions over (N + 1), so an exact match at
 // sorted[k] yields (k + 1) / (N + 1).
-Value percentrank_cell(const std::vector<double>& sorted, const Value& x_v, const Value& sig_v, bool exclusive) {
+Value percentrank_cell(const std::vector<double>& sorted, const Value& x_v, const Value& sig_v, bool exclusive,
+                       const Value& cell_error) {
   if (x_v.is_error()) {
     return x_v;
   }
@@ -290,6 +297,9 @@ Value percentrank_cell(const std::vector<double>& sorted, const Value& x_v, cons
   const auto sig_or = coerce_to_number(sig_v);
   if (!sig_or) {
     return Value::error(sig_or.error());
+  }
+  if (cell_error.is_error()) {
+    return cell_error;
   }
   // Significance truncates toward zero and must be at least 1.
   const double sig_d = std::trunc(sig_or.value());
@@ -351,7 +361,8 @@ Value percentrank_impl(const parser::AstNode& call, Arena& arena, const Function
   if (arity < 2U || arity > 3U) {
     return Value::error(ErrorCode::Value);
   }
-  auto arr = collect_percentrank_array(call.as_call_arg(0), arena, registry, ctx);
+  Value cell_error = Value::blank();
+  auto arr = collect_percentrank_array(call.as_call_arg(0), arena, registry, ctx, &cell_error);
   if (std::holds_alternative<Value>(arr)) {
     return std::get<Value>(arr);
   }
@@ -363,7 +374,7 @@ Value percentrank_impl(const parser::AstNode& call, Arena& arena, const Function
                           ? eval_node(call.as_call_arg(2), arena, registry, ctx)
                           : Value::number(3.0);
   if (!x_v.is_array() && !sig_v.is_array()) {
-    return percentrank_cell(sorted, x_v, sig_v, exclusive);
+    return percentrank_cell(sorted, x_v, sig_v, exclusive, cell_error);
   }
   Value x_slot = Value::blank();
   Value sig_slot = Value::blank();
@@ -379,7 +390,7 @@ Value percentrank_impl(const parser::AstNode& call, Arena& arena, const Function
   for (std::uint32_t r = 0; r < rows; ++r) {
     for (std::uint32_t c = 0; c < cols; ++c) {
       cells[static_cast<std::size_t>(r) * cols + c] =
-          percentrank_cell(sorted, cell_or_na(xv, r, c), cell_or_na(sv, r, c), exclusive);
+          percentrank_cell(sorted, cell_or_na(xv, r, c), cell_or_na(sv, r, c), exclusive, cell_error);
     }
   }
   return rows == 1U && cols == 1U ? cells[0] : Value::array(out);
