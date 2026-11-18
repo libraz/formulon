@@ -160,7 +160,9 @@ TEST(CellShapedNames, StorageMatchesExcelWithoutDoublePrefix) {
             "_xlfn.LET(_xlpm.B1,_xlfn.LAMBDA(_xlpm.x,_xlpm.x+1),_xlpm.B1(2))");
   // A non-cell-shaped binding already spelled with the prefix gets no second one.
   EXPECT_EQ(Store("LET(_xlpm.x,1,_xlpm.x+1)"), "_xlfn.LET(_xlpm.x,1,_xlpm.x+1)");
-  EXPECT_EQ(Store("LAMBDA([_xlpm.B1],_xlpm.B1)"), "_xlfn.LAMBDA([_xlpm.B1],_xlpm.B1)");
+  // An optional parameter is declared `_xlop.`, never `_xlop._xlpm.`.
+  EXPECT_EQ(Store("LAMBDA([_xlpm.B1],_xlpm.B1)"), "_xlfn.LAMBDA(_xlop.B1,_xlpm.B1)");
+  EXPECT_EQ(Store("LAMBDA([_xlpm.x],_xlpm.x)"), "_xlfn.LAMBDA(_xlop.x,_xlpm.x)");
 }
 
 TEST(CellShapedNames, BindingScopeDecidesThePrefix) {

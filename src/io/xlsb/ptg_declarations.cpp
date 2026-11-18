@@ -260,9 +260,14 @@ void CollectNamesScoped(const parser::AstNode& node, std::vector<std::string>& n
     case parser::NodeKind::Lambda: {
       add(std::string(parser::kFnPrefix) + "LAMBDA");
       const std::uint32_t n = node.as_lambda_param_count();
+      const std::uint32_t first_optional = n - node.as_lambda_optional_count();
       const std::size_t scope_base = scope.size();
       for (std::uint32_t i = 0; i < n; ++i) {
         const std::string_view bare = parser::cell_shaped_name_bare(node.as_lambda_param(i));
+        // An optional parameter is declared through `_xlop.<name>`; its uses still go through `_xlpm.<name>`.
+        if (i >= first_optional) {
+          add(std::string(parser::kOptionalParamPrefix) + std::string(bare));
+        }
         add(std::string(parser::kParamPrefix) + std::string(bare));
         scope.push_back(bare);
       }

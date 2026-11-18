@@ -93,6 +93,14 @@ void AppendLambdaParams(const AstNode& node, bool storage, NameScope& scope, std
     }
     const std::string_view param = node.as_lambda_param(i);
     const bool optional = i >= first_optional;
+    if (optional && storage) {
+      // Excel stores an optional parameter's declaration as `_xlop.b`, not `[_xlpm.b]`.
+      const std::string_view bare = HasParamPrefix(param) ? param.substr(kParamPrefix.size()) : param;
+      out.append(kOptionalParamPrefix);
+      out.append(bare);
+      scope.push_back(cell_shaped_name_bare(param));
+      continue;
+    }
     if (optional) {
       out.push_back('[');
     }

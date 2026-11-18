@@ -715,24 +715,26 @@ class Encoder {
   /// Encodes a `Lambda` as Excel 365 saves one: `PtgName(_xlfn.LAMBDA)`, a
   /// `PtgName(_xlpm.<param>)` per parameter, the body with the parameters
   /// in scope, then `PtgFuncVar(255)` with `cparams == params + 2`.
-  /// Optional `[param]`s have no known encoding and are refused.
+  /// An optional `[param]` is declared by `PtgName(_xlop.<param>)` instead.
   Expected<void, Error> emit_lambda(const parser::AstNode& node) {
-    if (node.as_lambda_optional_count() != 0) {
-      return unsupported_node("Lambda(optional parameter)");
-    }
     const auto it_lambda = name_table_.find(std::string(parser::kFnPrefix) + "LAMBDA");
     if (it_lambda == name_table_.end()) {
       return unsupported_node("Lambda(_xlfn.LAMBDA not registered)");
     }
     emit_name_ptg(kPtgName, it_lambda->second);  // PtgName (reference-class): the LAMBDA name-ref
     const std::uint32_t n = node.as_lambda_param_count();
+    const std::uint32_t first_optional = n - node.as_lambda_optional_count();
     for (std::uint32_t i = 0; i < n; ++i) {
       const std::string_view raw_name = parser::cell_shaped_name_bare(node.as_lambda_param(i));
+      // The body's uses go through `_xlpm.<name>`; an optional parameter is declared by `_xlop.<name>`.
       const auto it_param = name_table_.find(param_storage_name(raw_name));
-      if (it_param == name_table_.end()) {
+      const auto it_declared = i >= first_optional
+                                   ? name_table_.find(std::string(parser::kOptionalParamPrefix) + std::string(raw_name))
+                                   : it_param;
+      if (it_param == name_table_.end() || it_declared == name_table_.end()) {
         return unsupported_node("Lambda(param name not registered)");
       }
-      emit_name_ptg(kPtgName, it_param->second);  // PtgName (reference-class): the parameter name-ref
+      emit_name_ptg(kPtgName, it_declared->second);  // PtgName (reference-class): the parameter name-ref
       let_scope_.emplace_back(raw_name, it_param->second);
       shapes_.bind(node.as_lambda_param(i), Shape::kArray);  // bound to whatever a call passes
     }

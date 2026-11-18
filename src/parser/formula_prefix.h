@@ -11,6 +11,8 @@
 //                       dynamic-array functions (FILTER, SORT, ...).
 //   * `_xlws.`        — a legacy standalone worksheet marker.
 //   * `_xlpm.`        — LET / LAMBDA parameter names.
+//   * `_xlop.`        — an optional LAMBDA parameter's declaration, shown
+//                       `[name]`.
 //   * `_xleta.`       — a built-in function named as a value (`TYPE(SUM)`).
 //
 // Excel's formula bar shows the names WITHOUT these prefixes. Formulon's
@@ -68,6 +70,8 @@ inline void append_unquoted(std::string_view inner, char quote, std::string& out
 
 /// Storage prefix of a LET / LAMBDA parameter name.
 inline constexpr std::string_view kParamPrefix = "_xlpm.";
+/// Storage prefix of an optional LAMBDA parameter's declaration.
+inline constexpr std::string_view kOptionalParamPrefix = "_xlop.";
 /// Storage prefix of a cell-shaped defined name.
 inline constexpr std::string_view kNamePrefix = "_xlnm.";
 /// Storage prefix of a post-2007 function name.
@@ -105,6 +109,8 @@ inline bool formula_prefix_is_ident_byte(char c) noexcept {
 /// file), and the writers re-apply it only to the names they know. `_xleta.`
 /// always goes, and so does `_xlpm.` unless the identifier run after it is
 /// A1 cell-shaped (`_xlpm.B1`), which keeps it so it cannot read as a cell.
+/// `_xlop.b` becomes the bracketed declaration `[b]` (`[_xlpm.B1]` when
+/// cell-shaped).
 inline std::string strip_storage_prefixes(std::string_view formula, bool (*known)(std::string_view) = nullptr) {
   // Longest first so `_xlfn._xlws.` is consumed as a unit before `_xlfn.`.
   static constexpr std::array<std::string_view, 5> kPrefixes = {"_xlfn._xlws.", kFnPrefix, "_xlws.", kParamPrefix,
@@ -121,6 +127,22 @@ inline std::string strip_storage_prefixes(std::string_view formula, bool (*known
     }
     if (c == '_') {
       const bool at_boundary = out.empty() || !formula_prefix_is_ident_byte(out.back());
+      if (at_boundary && strings::case_insensitive_starts_with(formula.substr(i), kOptionalParamPrefix)) {
+        std::size_t end = i + kOptionalParamPrefix.size();
+        while (end < formula.size() && formula_prefix_is_ident_byte(formula[end])) {
+          ++end;
+        }
+        const std::string_view name =
+            formula.substr(i + kOptionalParamPrefix.size(), end - i - kOptionalParamPrefix.size());
+        out.push_back('[');
+        if (is_a1_cell_shaped(name)) {
+          out.append(kParamPrefix);
+        }
+        out.append(name);
+        out.push_back(']');
+        i = end;
+        continue;
+      }
       if (at_boundary) {
         bool matched = false;
         for (const std::string_view prefix : kPrefixes) {

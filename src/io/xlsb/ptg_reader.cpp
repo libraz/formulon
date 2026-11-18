@@ -549,6 +549,8 @@ Expected<parser::AstNode*, Error> decode_ptgs(
       if (param_count != 0 && params == nullptr) {
         return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (LAMBDA parameters)", kCtx);
       }
+      // `_xlop.<name>` declares an optional parameter; optional ones are trailing.
+      std::uint32_t optional_count = 0;
       for (std::uint32_t i = 0; i < param_count; ++i) {
         const parser::AstNode* param = ops[1 + i];
         if (param->kind() != parser::NodeKind::NameRef || !param->as_name_sheet().empty()) {
@@ -556,10 +558,18 @@ Expected<parser::AstNode*, Error> decode_ptgs(
                             kCtx);
         }
         const std::string_view raw = param->as_name();
-        params[i] = strip_param_prefix(raw);
+        if (strings::case_insensitive_starts_with(raw, parser::kOptionalParamPrefix)) {
+          params[i] = raw.substr(parser::kOptionalParamPrefix.size());
+          ++optional_count;
+        } else if (optional_count != 0) {
+          return make_error(FormulonErrorCode::kIoXlsbCorrupt, "xlsb LAMBDA: required parameter after an optional one",
+                            kCtx);
+        } else {
+          params[i] = strip_param_prefix(raw);
+        }
       }
       auto* body = const_cast<parser::AstNode*>(ops[cparams - 1]);
-      parser::AstNode* n = parser::make_lambda(arena, params, param_count, /*optional_count=*/0, body);
+      parser::AstNode* n = parser::make_lambda(arena, params, param_count, optional_count, body);
       if (n == nullptr) {
         return make_error(FormulonErrorCode::kOutOfMemory, "arena exhausted (LAMBDA node)", kCtx);
       }

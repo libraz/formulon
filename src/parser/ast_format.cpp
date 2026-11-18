@@ -977,6 +977,8 @@ std::string respell_storage_over_source(std::string_view source, std::string_vie
   };
   skip_stored_space();
   bool written_space = false;
+  // A written `[b]` against a stored `_xlop.b`: 1 after `[`, 2 after the name (already written), 0 outside.
+  int in_optional = 0;
   for (const Token& token : written) {
     if (token.kind == TokenKind::Whitespace) {
       out.append(token.lexeme);
@@ -992,6 +994,31 @@ std::string respell_storage_over_source(std::string_view source, std::string_vie
       return std::string(storage);
     }
     if (token.kind == TokenKind::At && counterpart.kind != TokenKind::At) {
+      continue;
+    }
+    if (token.kind == TokenKind::LBracket && in_optional == 0 && counterpart.kind == TokenKind::Ident &&
+        strings::case_insensitive_starts_with(counterpart.lexeme, kOptionalParamPrefix)) {
+      in_optional = 1;
+      continue;
+    }
+    if (in_optional == 1) {
+      if (token.kind != TokenKind::Ident ||
+          !strings::case_insensitive_eq(cell_shaped_name_bare(token.lexeme),
+                                        counterpart.lexeme.substr(kOptionalParamPrefix.size()))) {
+        return std::string(storage);
+      }
+      out.append(counterpart.lexeme);
+      in_optional = 2;
+      continue;
+    }
+    if (in_optional == 2) {
+      if (token.kind != TokenKind::RBracket) {
+        return std::string(storage);
+      }
+      in_optional = 0;
+      written_space = false;
+      ++j;
+      skip_stored_space();
       continue;
     }
     if (token.kind == counterpart.kind && token.lexeme == counterpart.lexeme) {

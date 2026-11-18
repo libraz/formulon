@@ -177,7 +177,8 @@ bool ReadBrtNameHeader(ByteSpan& p, BrtNameHeader& out) {
 /// user chose to hide from the Name Manager, and both this reader's
 /// writer counterpart and Excel itself store the two the same way.
 bool IsStoragePlaceholderName(std::string_view name) {
-  constexpr std::string_view kPrefixes[] = {parser::kFnPrefix, parser::kParamPrefix, parser::kEtaPrefix};
+  constexpr std::string_view kPrefixes[] = {parser::kFnPrefix, parser::kParamPrefix, parser::kOptionalParamPrefix,
+                                            parser::kEtaPrefix};
   for (const std::string_view prefix : kPrefixes) {
     if (strings::case_insensitive_starts_with(name, prefix)) {
       return true;

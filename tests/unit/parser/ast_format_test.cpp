@@ -831,6 +831,7 @@ TEST(AstFormat, RespelledStorageKeepsSourceWhitespace) {
       {"MINIFS(A1:B2 B1:C3, A1:A2, 1)", false, "_xlfn.MINIFS(A1:B2 B1:C3, A1:A2, 1)"},
       {"LET(x, 1, x + 1)", false, "_xlfn.LET(_xlpm.x, 1, _xlpm.x + 1)"},
       {"LAMBDA(a, b,\n  a * b)(2, 3)", false, "_xlfn.LAMBDA(_xlpm.a, _xlpm.b,\n  _xlpm.a * _xlpm.b)(2, 3)"},
+      {"LAMBDA(a, [b], a + b)(1, 2)", false, "_xlfn.LAMBDA(_xlpm.a, _xlop.b, _xlpm.a + _xlpm.b)(1, 2)"},
       {"@INDEX(A1:A2, MATCH(1,A1:A2,0))", true, "INDEX(A1:A2, MATCH(1,A1:A2,0))"},
       {"IF(A1, @A1:A2,\n MINIFS(A1:A2, A1:A2, 1))", true, "IF(A1, A1:A2,\n _xlfn.MINIFS(A1:A2, A1:A2, 1))"},
       {"SUM(A1, A2)", false, "SUM(A1, A2)"},
@@ -853,6 +854,20 @@ TEST(AstFormat, RespelledStorageKeepsSourceWhitespace) {
     EXPECT_EQ(StripUnquotedWhitespace(respelled), StripUnquotedWhitespace(storage)) << c.src;
     EXPECT_EQ(respelled, c.expected != nullptr ? std::string(c.expected) : storage) << c.src;
   }
+}
+
+// An optional LAMBDA parameter is declared `_xlop.b` in storage and `[b]` in the formula bar; its uses keep `_xlpm.`.
+TEST(AstFormat, OptionalLambdaParameterStoresAsXlop) {
+  Arena arena;
+  Parser parser("LAMBDA(a,[b],IF(ISOMITTED(b),a/2,a*b))(A5)", arena);
+  AstNode* root = parser.parse();
+  ASSERT_NE(root, nullptr);
+  ASSERT_TRUE(parser.errors().empty());
+  const std::string storage = format_formula_storage(*root, &SpellPrefixed);
+  EXPECT_EQ(storage, "_xlfn.LAMBDA(_xlpm.a,_xlop.b,IF(ISOMITTED(_xlpm.b),_xlpm.a/2,_xlpm.a*_xlpm.b))(A5)");
+  EXPECT_EQ(strip_storage_prefixes(storage), "LAMBDA(a,[b],IF(ISOMITTED(b),a/2,a*b))(A5)");
+  EXPECT_EQ(strip_storage_prefixes("_xlfn.LAMBDA(_xlop.B1,1)"), "LAMBDA([_xlpm.B1],1)");
+  EXPECT_EQ(strip_storage_prefixes("\"_xlop.b\""), "\"_xlop.b\"");
 }
 
 TEST(AstFormat, RespelledStorageFallsBackOnTokenMismatch) {

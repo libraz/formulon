@@ -574,6 +574,100 @@ TEST(StoragePrefixContainers, IntlWorkdayCallsSaveAsExcelDoes) {
   }
 }
 
+// Excel saves an optional LAMBDA parameter's declaration as `_xlop.b`: it reads as `[b]`, evaluates, and saves back
+// as Excel stored it.
+TEST(StoragePrefixContainers, ExcelSavedOptionalLambdaParameter) {
+  const std::vector<std::uint8_t> bytes = test::read_file_bytes(
+      FORMULON_FIXTURES_DIR "/../oracle/external/ironcalc/fixtures/calc_tests/INFORMATION/ISOMITTED.xlsx");
+  ASSERT_FALSE(bytes.empty());
+  auto loaded = read_ooxml(test::span_of(bytes));
+  ASSERT_TRUE(static_cast<bool>(loaded)) << loaded.error().message;
+  Workbook& wb = loaded.value().workbook;
+  ASSERT_TRUE(static_cast<bool>(wb.recalc_full(eval::default_registry())));
+  const Sheet& s = wb.sheet(0);
+  ASSERT_NE(s.cell_at(5U, 0U), nullptr);
+  EXPECT_EQ(s.cell_at(5U, 0U)->formula_text, "=LAMBDA(a,[b],IF(ISOMITTED(b),a/2,a*b))(A5)");
+  EXPECT_EQ(s.resolve_cell_value(5U, 0U).as_number(), 6.0);
+  EXPECT_EQ(s.resolve_cell_value(6U, 0U).as_number(), 36.0);
+
+  auto saved = wb.save();
+  ASSERT_TRUE(static_cast<bool>(saved)) << saved.error().message;
+  std::string sheet;
+  const ::testing::AssertionResult got_sheet =
+      test::extract_part(test::span_of(saved.value()), "xl/worksheets/sheet1.xml", &sheet);
+  ASSERT_TRUE(static_cast<bool>(got_sheet)) << got_sheet.message();
+  EXPECT_NE(
+      sheet.find(">_xlfn.LAMBDA(_xlpm.a,_xlop.b,IF(_xlfn.ISOMITTED(_xlpm.b),_xlpm.a/2,_xlpm.a*_xlpm.b))(A5, B5)<"),
+      std::string::npos)
+      << sheet;
+}
+
+// Both containers of one Excel-saved book declare the optional parameter as `_xlop.b` (an `.xlsb` `PtgName` to a
+// hidden `BrtName`) and read as `[b]`; a re-save of either writes the same spelling.
+TEST(StoragePrefixContainers, OptionalLambdaParameterInBothContainers) {
+  const std::string kLambda = "LAMBDA(a,[b],IF(ISOMITTED(b),a/2,a*b))";
+  const std::vector<std::uint8_t> xlsx =
+      test::read_file_bytes(FORMULON_FIXTURES_DIR "/excel/lambda_optional_param.xlsx");
+  const std::vector<std::uint8_t> xlsb =
+      test::read_file_bytes(FORMULON_FIXTURES_DIR "/excel/lambda_optional_param.xlsb");
+  ASSERT_FALSE(xlsx.empty());
+  ASSERT_FALSE(xlsb.empty());
+  auto from_xlsx = read_ooxml(test::span_of(xlsx));
+  ASSERT_TRUE(static_cast<bool>(from_xlsx)) << from_xlsx.error().message;
+  auto from_xlsb = xlsb::read_xlsb(test::span_of(xlsb));
+  ASSERT_TRUE(static_cast<bool>(from_xlsb)) << from_xlsb.error().message;
+  EXPECT_EQ(from_xlsb.value().undecoded_defined_name_count, 0U);
+
+  auto check = [&](Workbook& wb) {
+    ASSERT_TRUE(static_cast<bool>(wb.recalc_full(eval::default_registry())));
+    std::vector<std::string> formulas;
+    for (const DefinedName& dn : wb.defined_names()) {
+      formulas.push_back(dn.name + "=" + dn.formula);
+    }
+    EXPECT_EQ(formulas, (std::vector<std::string>{"F=" + kLambda}));
+    const Sheet& s = wb.sheet(0);
+    ASSERT_NE(s.cell_at(5U, 0U), nullptr);
+    EXPECT_EQ(s.cell_at(5U, 0U)->formula_text, "=" + kLambda + "(A5)");
+    EXPECT_EQ(s.resolve_cell_value(5U, 0U).as_number(), 6.0);
+    EXPECT_EQ(s.resolve_cell_value(6U, 0U).as_number(), 36.0);
+    EXPECT_EQ(s.resolve_cell_value(7U, 0U).as_number(), 6.0);
+  };
+  {
+    SCOPED_TRACE("xlsx");
+    check(from_xlsx.value().workbook);
+  }
+  {
+    SCOPED_TRACE("xlsb");
+    check(from_xlsb.value().workbook);
+  }
+
+  for (Workbook* wb : {&from_xlsx.value().workbook, &from_xlsb.value().workbook}) {
+    auto saved_xlsx = wb->save();
+    ASSERT_TRUE(static_cast<bool>(saved_xlsx)) << saved_xlsx.error().message;
+    std::string workbook_xml;
+    const ::testing::AssertionResult got_xml =
+        test::extract_part(test::span_of(saved_xlsx.value()), "xl/workbook.xml", &workbook_xml);
+    ASSERT_TRUE(static_cast<bool>(got_xml)) << got_xml.message();
+    EXPECT_NE(
+        workbook_xml.find(">_xlfn.LAMBDA(_xlpm.a,_xlop.b,IF(_xlfn.ISOMITTED(_xlpm.b),_xlpm.a/2,_xlpm.a*_xlpm.b))<"),
+        std::string::npos)
+        << workbook_xml;
+
+    auto saved_xlsb = xlsb::write_xlsb_with_result(*wb);
+    ASSERT_TRUE(static_cast<bool>(saved_xlsb)) << saved_xlsb.error().message << " | " << saved_xlsb.error().context;
+    EXPECT_EQ(saved_xlsb.value().diagnostics.downgraded_formula_count, 0U);
+    std::string workbook_bin;
+    const ::testing::AssertionResult got_bin =
+        test::extract_part(test::span_of(saved_xlsb.value().bytes), "xl/workbook.bin", &workbook_bin);
+    ASSERT_TRUE(static_cast<bool>(got_bin)) << got_bin.message();
+    EXPECT_TRUE(ContainsUtf16Le(workbook_bin, "_xlop.b"));
+    auto back = xlsb::read_xlsb(test::span_of(saved_xlsb.value().bytes));
+    ASSERT_TRUE(static_cast<bool>(back)) << back.error().message;
+    SCOPED_TRACE("xlsb re-save");
+    check(back.value().workbook);
+  }
+}
+
 }  // namespace
 }  // namespace io
 }  // namespace formulon
