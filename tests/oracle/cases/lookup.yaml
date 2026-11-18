@@ -2614,3 +2614,252 @@ cases:
       A7: 20
       A8: 10
     formula: '=IFERROR(MATCH(45,A1:A8,1),"#"&ERROR.TYPE(MATCH(45,A1:A8,1)))'
+
+  - id: vlookup_blank_value_skips_blank_key
+    description: 'a blank lookup value is 0 and never finds a blank key: #N/A'
+    setup:
+      A2: 7
+      A3: 'x'
+      B1: 20
+      B2: 10
+      B3: 30
+    formula: '=VLOOKUP(D1,A1:B3,2,FALSE)'
+
+  - id: vlookup_omitted_value_skips_blank_key
+    description: 'an omitted lookup value is 0 and never finds a blank key: #N/A'
+    setup:
+      A2: 7
+      A3: 'x'
+      B1: 20
+      B2: 10
+      B3: 30
+    formula: '=VLOOKUP(,A1:B3,2,FALSE)'
+
+  - id: vlookup_zero_skips_blank_key
+    description: '0 never finds a blank key: #N/A'
+    setup:
+      A2: 7
+      A3: 'x'
+      B1: 20
+      B2: 10
+      B3: 30
+    formula: '=VLOOKUP(0,A1:B3,2,FALSE)'
+
+  - id: vlookup_blank_value_finds_zero_key
+    description: 'a blank lookup value finds a 0 key: 20'
+    setup:
+      A1: 0
+      A2: 7
+      A3: 'x'
+      B1: 20
+      B2: 10
+      B3: 30
+    formula: '=VLOOKUP(D1,A1:B3,2,FALSE)'
+
+  - id: vlookup_empty_text_finds_empty_key
+    description: '"" finds a "" key: 20'
+    setup:
+      A1: '=""'
+      A2: 7
+      A3: 'x'
+      B1: 20
+      B2: 10
+      B3: 30
+    formula: '=VLOOKUP("",A1:B3,2,FALSE)'
+
+  - id: vlookup_empty_text_skips_blank_key
+    description: '"" never finds a blank key: #N/A'
+    setup:
+      A2: 7
+      A3: 'x'
+      B1: 20
+      B2: 10
+      B3: 30
+    formula: '=VLOOKUP("",A1:B3,2,FALSE)'
+
+  - id: vlookup_blank_value_skips_text_zero_key
+    description: 'a blank lookup value never finds a "0" key: #N/A'
+    setup:
+      A1: '="0"'
+      A2: 7
+      A3: 'x'
+      B1: 20
+      B2: 10
+      B3: 30
+    formula: '=VLOOKUP(D1,A1:B3,2,FALSE)'
+
+  - id: vlookup_approx_blank_value_skips_blank_key
+    description: 'approximate: a blank lookup value never finds a blank key: #N/A'
+    setup:
+      A2: 7
+      A3: 'x'
+      B1: 20
+      B2: 10
+      B3: 30
+    formula: '=VLOOKUP(D1,A1:B3,2,TRUE)'
+
+  - id: match_blank_value_finds_zero_key
+    description: 'MATCH 0 reads a blank lookup value as 0: 1'
+    setup:
+      A1: 0
+      A2: 7
+      A3: 'x'
+      B1: 20
+      B2: 10
+      B3: 30
+    formula: '=MATCH(D1,A1:A3,0)'
+
+  - id: match_omitted_value_finds_zero_key
+    description: 'MATCH 0 reads an omitted lookup value as 0: 1'
+    setup:
+      A1: 0
+      A2: 7
+      A3: 'x'
+      B1: 20
+      B2: 10
+      B3: 30
+    formula: '=MATCH(,A1:A3,0)'
+
+  - id: match_blank_value_skips_blank_key
+    description: 'MATCH 0 never finds a blank key: #N/A'
+    setup:
+      A2: 7
+      A3: 'x'
+      B1: 20
+      B2: 10
+      B3: 30
+    formula: '=MATCH(D1,A1:A3,0)'
+
+  - id: match_desc_blank_value_blank_key
+    description: 'MATCH -1 over an unsorted table: 2'
+    setup:
+      A2: 7
+      A3: 'x'
+      B1: 20
+      B2: 10
+      B3: 30
+    formula: '=MATCH(D1,A1:A3,-1)'
+
+  - id: lookup_blank_value_finds_zero_key
+    description: 'LOOKUP reads a blank lookup value as 0: 20'
+    setup:
+      A1: 0
+      A2: 7
+      A3: 'x'
+      B1: 20
+      B2: 10
+      B3: 30
+    formula: '=LOOKUP(D1,A1:A3,B1:B3)'
+
+  - id: index_match_blank_value_finds_zero_key
+    description: 'INDEX/MATCH reads a blank lookup value as 0: 20'
+    setup:
+      A1: 0
+      A2: 7
+      A3: 'x'
+      B1: 20
+      B2: 10
+      B3: 30
+    formula: '=INDEX(B1:B3,MATCH(D1,A1:A3,0))'
+
+  - id: xlookup_blank_value_finds_blank_key
+    description: 'XLOOKUP keeps a blank lookup value blank and finds a blank key: 20'
+    setup:
+      A2: 7
+      A3: 'x'
+      B1: 20
+      B2: 10
+      B3: 30
+    formula: '=XLOOKUP(D1,A1:A3,B1:B3,,0)'
+
+  - id: xlookup_blank_value_skips_zero_key
+    description: 'a blank lookup value under XLOOKUP never finds a 0 key: #N/A'
+    setup:
+      A1: 0
+      A2: 7
+      A3: 'x'
+      B1: 20
+      B2: 10
+      B3: 30
+    formula: '=XLOOKUP(D1,A1:A3,B1:B3,,0)'
+
+  - id: xlookup_zero_skips_blank_key
+    description: '0 never finds a blank key: #N/A'
+    setup:
+      A2: 7
+      A3: 'x'
+      B1: 20
+      B2: 10
+      B3: 30
+    formula: '=XLOOKUP(0,A1:A3,B1:B3,,0)'
+
+  - id: xlookup_smaller_blank_value_takes_largest
+    description: 'a blank sorts above text and numbers, so next smaller is the largest key: 30'
+    setup:
+      A1: '=""'
+      A2: 7
+      A3: 'x'
+      B1: 20
+      B2: 10
+      B3: 30
+    formula: '=XLOOKUP(D1,A1:A3,B1:B3,,-1)'
+
+  - id: xlookup_larger_blank_value_finds_none
+    description: 'nothing sorts above a blank: #N/A'
+    setup:
+      A1: 0
+      A2: 7
+      A3: 'x'
+      B1: 20
+      B2: 10
+      B3: 30
+    formula: '=XLOOKUP(D1,A1:A3,B1:B3,,1)'
+
+  - id: xlookup_larger_zero_passes_blank_key
+    description: 'a blank key sorts above 7, so next larger than 0 is 7: 10'
+    setup:
+      A2: 7
+      A3: 'x'
+      B1: 20
+      B2: 10
+      B3: 30
+    formula: '=XLOOKUP(0,A1:A3,B1:B3,,1)'
+
+  - id: xmatch_blank_value_finds_blank_key
+    description: 'XMATCH finds a blank key for a blank lookup value: 1'
+    setup:
+      A2: 7
+      A3: 'x'
+      B1: 20
+      B2: 10
+      B3: 30
+    formula: '=XMATCH(D1,A1:A3)'
+
+  - id: xmatch_smaller_blank_value_takes_largest
+    description: 'a blank sorts above text and numbers: 3'
+    setup:
+      A1: '="0"'
+      A2: 7
+      A3: 'x'
+      B1: 20
+      B2: 10
+      B3: 30
+    formula: '=XMATCH(D1,A1:A3,-1)'
+
+  - id: xmatch_smaller_blank_value_passes_boolean
+    description: 'a blank sorts above booleans: 1'
+    setup:
+      A1: true
+    formula: '=XMATCH(D1,A1,-1)'
+
+  - id: xmatch_smaller_blank_value_passes_error
+    description: 'a blank sorts above errors: 1'
+    setup:
+      A1: '=NA()'
+    formula: '=XMATCH(D1,A1,-1)'
+
+  - id: xmatch_larger_boolean_finds_blank_key
+    description: 'a blank key is next larger than TRUE: 1'
+    setup:
+      B1: 1
+    formula: '=XMATCH(TRUE,A1,1)'

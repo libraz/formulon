@@ -6,7 +6,7 @@
     "excel_locale": "ja-JP",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-11-16T03:20:24Z"
+    "generated_at": "2026-11-16T14:26:31Z"
   },
   "tolerance": {
     "abs": 0.0,
@@ -10181,6 +10181,752 @@
       "expect": {
         "kind": "number",
         "value": 8.0
+      }
+    },
+    {
+      "id": "vlookup_blank_value_skips_blank_key",
+      "formula": "=VLOOKUP(D1,A1:B3,2,FALSE)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "vlookup_omitted_value_skips_blank_key",
+      "formula": "=VLOOKUP(,A1:B3,2,FALSE)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "vlookup_zero_skips_blank_key",
+      "formula": "=VLOOKUP(0,A1:B3,2,FALSE)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "vlookup_blank_value_finds_zero_key",
+      "formula": "=VLOOKUP(D1,A1:B3,2,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "vlookup_empty_text_finds_empty_key",
+      "formula": "=VLOOKUP(\"\",A1:B3,2,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "vlookup_empty_text_skips_blank_key",
+      "formula": "=VLOOKUP(\"\",A1:B3,2,FALSE)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "vlookup_blank_value_skips_text_zero_key",
+      "formula": "=VLOOKUP(D1,A1:B3,2,FALSE)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        },
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "vlookup_approx_blank_value_skips_blank_key",
+      "formula": "=VLOOKUP(D1,A1:B3,2,TRUE)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "match_blank_value_finds_zero_key",
+      "formula": "=MATCH(D1,A1:A3,0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "match_omitted_value_finds_zero_key",
+      "formula": "=MATCH(,A1:A3,0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "match_blank_value_skips_blank_key",
+      "formula": "=MATCH(D1,A1:A3,0)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "match_desc_blank_value_blank_key",
+      "formula": "=MATCH(D1,A1:A3,-1)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 2.0
+      }
+    },
+    {
+      "id": "lookup_blank_value_finds_zero_key",
+      "formula": "=LOOKUP(D1,A1:A3,B1:B3)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "index_match_blank_value_finds_zero_key",
+      "formula": "=INDEX(B1:B3,MATCH(D1,A1:A3,0))",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "xlookup_blank_value_finds_blank_key",
+      "formula": "=XLOOKUP(D1,A1:A3,B1:B3,,0)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 20.0
+      }
+    },
+    {
+      "id": "xlookup_blank_value_skips_zero_key",
+      "formula": "=XLOOKUP(D1,A1:A3,B1:B3,,0)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "xlookup_zero_skips_blank_key",
+      "formula": "=XLOOKUP(0,A1:A3,B1:B3,,0)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "xlookup_smaller_blank_value_takes_largest",
+      "formula": "=XLOOKUP(D1,A1:A3,B1:B3,,-1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"\""
+        },
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 30.0
+      }
+    },
+    {
+      "id": "xlookup_larger_blank_value_finds_none",
+      "formula": "=XLOOKUP(D1,A1:A3,B1:B3,,1)",
+      "setup": {
+        "A1": {
+          "kind": "number",
+          "value": 0.0
+        },
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "error",
+        "code": "#N/A"
+      }
+    },
+    {
+      "id": "xlookup_larger_zero_passes_blank_key",
+      "formula": "=XLOOKUP(0,A1:A3,B1:B3,,1)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 10.0
+      }
+    },
+    {
+      "id": "xmatch_blank_value_finds_blank_key",
+      "formula": "=XMATCH(D1,A1:A3)",
+      "setup": {
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "xmatch_smaller_blank_value_takes_largest",
+      "formula": "=XMATCH(D1,A1:A3,-1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=\"0\""
+        },
+        "A2": {
+          "kind": "number",
+          "value": 7.0
+        },
+        "A3": {
+          "kind": "text",
+          "value": "x"
+        },
+        "B1": {
+          "kind": "number",
+          "value": 20.0
+        },
+        "B2": {
+          "kind": "number",
+          "value": 10.0
+        },
+        "B3": {
+          "kind": "number",
+          "value": 30.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 3.0
+      }
+    },
+    {
+      "id": "xmatch_smaller_blank_value_passes_boolean",
+      "formula": "=XMATCH(D1,A1,-1)",
+      "setup": {
+        "A1": {
+          "kind": "bool",
+          "value": true
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "xmatch_smaller_blank_value_passes_error",
+      "formula": "=XMATCH(D1,A1,-1)",
+      "setup": {
+        "A1": {
+          "kind": "formula",
+          "formula": "=NA()"
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
+      }
+    },
+    {
+      "id": "xmatch_larger_boolean_finds_blank_key",
+      "formula": "=XMATCH(TRUE,A1,1)",
+      "setup": {
+        "B1": {
+          "kind": "number",
+          "value": 1.0
+        }
+      },
+      "expect": {
+        "kind": "number",
+        "value": 1.0
       }
     }
   ]
