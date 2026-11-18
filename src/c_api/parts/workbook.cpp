@@ -596,15 +596,18 @@ extern "C" fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const fm_
     return invalid_argument("formula must not be empty", "name=" + std::string(input->name));
   }
   auto& book = wb->workbook();
-  const std::int32_t scope = input->local_sheet_id;
-  if (auto result = book.set_defined_name_scoped(std::string(input->name), std::move(stored), scope); !result) {
+  formulon::DefinedNameKey key;
+  if (auto result =
+          book.set_defined_name_scoped(std::string(input->name), std::move(stored), input->local_sheet_id, &key);
+      !result) {
     return finish_status(std::move(result));
   }
   // The record replaces the whole entry, so absent attributes reset to their defaults.
-  if (auto result = book.set_defined_name_comment(input->name, scope, text_or_empty(input->comment)); !result) {
+  if (auto result = book.set_defined_name_comment(key.name, key.local_sheet_id, text_or_empty(input->comment));
+      !result) {
     return finish_status(std::move(result));
   }
-  return finish_status(book.set_defined_name_hidden(input->name, scope, input->hidden != 0));
+  return finish_status(book.set_defined_name_hidden(key.name, key.local_sheet_id, input->hidden != 0));
 }
 
 extern "C" fm_status_t fm_sheet_insert_rows(fm_workbook_t* wb, size_t sheet_index, uint32_t first, uint32_t last) {
@@ -752,10 +755,11 @@ extern "C" fm_status_t fm_workbook_get_defined_name_at(const fm_workbook_t* wb, 
 
 namespace {
 
-// Position of the defined name `name` resolves to (`sheet_names::resolve_by`) in scope `local_sheet_id`, or the
-// list size.
-std::size_t find_defined_name_index(const fm_workbook_t* wb, const char* name, int32_t local_sheet_id) {
+// Position of the defined name `name` resolves to (`stored_defined_name`, then `sheet_names::resolve_by`) in
+// scope `local_sheet_id`, or the list size.
+std::size_t find_defined_name_index(const fm_workbook_t* wb, const char* name_in, int32_t local_sheet_id) {
   const auto& names = wb->workbook().defined_names();
+  const std::string name = wb->workbook().stored_defined_name(name_in);
   const std::size_t found =
       formulon::sheet_names::resolve_by(names.size(), [&](std::size_t i, formulon::sheet_names::Fold fold) {
         return names[i].local_sheet_id == local_sheet_id && formulon::sheet_names::same(names[i].name, name, fold);

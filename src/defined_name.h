@@ -22,6 +22,14 @@ enum class NameMacroKind : std::uint8_t {
   kFunction = 2,
 };
 
+/// Where `Workbook::set_defined_name_scoped` stored a name. A name that
+/// spells a built-in can be stored under another spelling and scope than
+/// the ones asked for.
+struct DefinedNameKey {
+  std::string name;
+  std::int32_t local_sheet_id = -1;
+};
+
 /// In-memory representation of one `<definedName>` element from
 /// `xl/workbook.xml`. `name` is preserved with its authored case
 /// (although Excel matches names case-insensitively at use-site);

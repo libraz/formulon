@@ -867,6 +867,11 @@ std::string_view bare_builtin_defined_name(ExcelLocale locale, std::string_view 
                                                                           : localized_builtin_name(locale, name);
 }
 
+std::string_view entered_builtin_defined_name(ExcelLocale locale, std::string_view name) noexcept {
+  const std::string_view local = canonical_builtin_name(locale, name);
+  return local.empty() ? bare_builtin_defined_name(locale, name) : local;
+}
+
 const char* localized_function_name(ExcelLocale locale, std::string_view canonical) noexcept {
   return find_function_name(locale, [canonical](const char* name, const char* field) -> const char* {
     return strings::case_insensitive_eq(name, canonical) ? field : nullptr;

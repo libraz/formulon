@@ -889,12 +889,26 @@ class Workbook {
   /// keeps its hidden flag, comment and macro kind.
   /// The formula passes through `bind_self_book_names`.
   ///
+  /// `name` is first taken through `stored_defined_name`. A `Print_Area` or
+  /// `Print_Titles` it promotes is stored in the scope of the sheet the
+  /// formula's first reference names, whatever `local_sheet_id` asks for; a
+  /// formula that names no sheet keeps `local_sheet_id`. `stored_key`, when
+  /// given, receives the spelling and scope the entry was looked up under.
+  ///
   /// Returns `kInvalidArgument` when `name` is empty, is not a valid new
-  /// name, or `local_sheet_id` names a sheet outside the workbook, and
+  /// name, is a new `_xlnm.Print_Area` or `_xlnm.Print_Titles` in workbook
+  /// scope, or `local_sheet_id` names a sheet outside the workbook, and
   /// `kAlreadyExists` when a new name collides (`sheet_names::write_collides`)
   /// with a table's name or with a name of the same scope it does not
   /// resolve to.
-  Expected<void, Error> set_defined_name_scoped(std::string name, std::string formula, std::int32_t local_sheet_id);
+  Expected<void, Error> set_defined_name_scoped(std::string name, std::string formula, std::int32_t local_sheet_id,
+                                                DefinedNameKey* stored_key = nullptr);
+
+  /// The spelling a defined-name store or lookup uses for `name`:
+  /// `_xlnm.X` when `name` is the profile locale's spelling of the built-in
+  /// name X (`eval::entered_builtin_defined_name`), with `name`'s letter case
+  /// under en-US and X's elsewhere; else `name` unchanged.
+  std::string stored_defined_name(std::string_view name) const;
 
   /// Sets the hidden flag of the defined name `name` in `local_sheet_id`
   /// scope (`-1` for workbook scope). Returns `kInvalidArgument` when no

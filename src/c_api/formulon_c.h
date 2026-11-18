@@ -1045,12 +1045,14 @@ FM_API fm_status_t fm_workbook_rename_sheet(fm_workbook_t* wb, size_t sheet_inde
  */
 typedef struct {
   uint32_t struct_size;
-  /** The name, non-empty UTF-8; on read, the stored spelling as a model-backed view. */
+  /** The name, non-empty UTF-8; on read, the stored spelling as a model-backed view (a built-in name reads as
+   *  `_xlnm.Print_Area`, under en-US in the letter case typed). */
   const char* name;
   /** The formula text, non-empty on input with at most one leading `=`; on read, spelled as the sheet formula getter
    *  spells it, with the `=`. */
   const char* formula;
-  /** The 0-based index of the sheet the name is local to, or `FM_DEFINED_NAME_SCOPE_WORKBOOK` for workbook scope. */
+  /** The 0-based index of the sheet the name is local to, or `FM_DEFINED_NAME_SCOPE_WORKBOOK` for workbook scope;
+   *  `fm_workbook_set_defined_name` moves a built-in `Print_Area` or `Print_Titles` to the sheet its formula names. */
   int32_t local_sheet_id;
   /** The Name Manager note; `NULL` or empty on input means none (api-conventions.md §5 rule 30), and a read returns
    *  `NULL` when there is none. */
@@ -1079,14 +1081,25 @@ typedef struct {
  * uses the profile at the time of the call, so a loaded name is never
  * re-checked.
  *
+ * A name that is the profile locale's spelling of a built-in name is stored
+ * as that built-in (`Print_Area` under en-US is stored as
+ * `_xlnm.Print_Area`); en-US keeps the letter case typed (`PRINT_AREA` is
+ * stored as `_xlnm.PRINT_AREA`), every other locale stores the canonical
+ * case. `Print_Area` and `Print_Titles` are then stored in the
+ * scope of the sheet the formula's first reference names, whatever
+ * `local_sheet_id` asks for; a formula that names no sheet keeps
+ * `local_sheet_id`. A new `_xlnm.Print_Area` or `_xlnm.Print_Titles` in
+ * workbook scope is refused.
+ *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb`, `name`, `name->name` or
  *         `name->formula` is `NULL`;
  *         `FM_STATUS_BINDING_UTF8ENCODING_ERROR` (7002) when a string is malformed UTF-8;
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `local_sheet_id` is neither
  *         `FM_DEFINED_NAME_SCOPE_WORKBOOK` nor a sheet of the workbook;
- *         `FM_STATUS_INVALID_ARGUMENT` (2) when `name` or `formula` is empty, or a new `name`
- *         breaks the name syntax or opens with an R1C1 reference in the profile locale's letters;
+ *         `FM_STATUS_INVALID_ARGUMENT` (2) when `name` or `formula` is empty, a new `name`
+ *         breaks the name syntax or opens with an R1C1 reference in the profile locale's letters, or a new
+ *         `_xlnm.Print_Area` / `_xlnm.Print_Titles` is in workbook scope;
  *         `FM_STATUS_ALREADY_EXISTS` (7) when a new `name` is a table's name;
  *         a parser status (1000-1014; `fm_get_last_parse_error` gives the code and position) when `formula` does not
  * parse.
@@ -2298,6 +2311,9 @@ FM_API fm_status_t fm_workbook_get_defined_name_at(const fm_workbook_t* wb, size
  *        `0`, the strings of `*out` `NULL` and `hidden` `0` (still
  *        `FM_STATUS_OK` (0)).
  *
+ * `name` also resolves as `fm_workbook_set_defined_name` stores it, so
+ * `Print_Area` finds `_xlnm.Print_Area`; the scope stays part of the key.
+ *
  * Lifetime: transient; the views in `*out` follow
  * `fm_workbook_get_defined_name_at`.
  *
@@ -2314,6 +2330,9 @@ FM_API fm_status_t fm_workbook_get_defined_name(const fm_workbook_t* wb, const c
  * @brief Removes the defined name `name` (Unicode simple case folding) in scope
  *        `local_sheet_id` (`FM_DEFINED_NAME_SCOPE_WORKBOOK` for workbook scope,
  *        else a 0-based sheet index), refreshing the formulas that reference it.
+ *
+ * `name` also resolves as `fm_workbook_set_defined_name` stores it, so
+ * `Print_Area` finds `_xlnm.Print_Area`; the scope stays part of the key.
  *
  * @return `FM_STATUS_OK` (0) on success;
  *         `FM_STATUS_BINDING_NULL_POINTER` (7001) if `wb` or `name` is `NULL`;

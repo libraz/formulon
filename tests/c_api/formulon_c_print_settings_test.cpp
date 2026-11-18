@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <initializer_list>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "c_api/formulon_c.h"
@@ -455,7 +456,10 @@ TEST(FormulonCApiPrintSettings, TypedPrintAreaNameFallsBackToTheWorkbookBuiltIn)
   ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Sheet3", 2, &third), 0);
   const fm_cell_rect_t area{0, 0, 1, 1};
   ASSERT_EQ(fm_sheet_set_print_area(wb.handle, 0, &area, 1), 0);
-  ASSERT_TRUE(static_cast<bool>(wb.handle->workbook().set_defined_name("_xlnm.Print_Area", "Sheet3!$A$1")));
+  // A workbook-scope print area comes only from a file; the setter refuses one.
+  std::vector<formulon::DefinedName> names = wb.handle->workbook().defined_names();
+  names.emplace_back("_xlnm.Print_Area", "Sheet3!$A$1", -1, false, "");
+  wb.handle->workbook().set_defined_names(std::move(names));
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 9, 0, "=ROWS(Print_Area)"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, second, 0, 0, "=ROWS(Print_Area)"), 0);
   ASSERT_EQ(fm_sheet_set_formula(wb.handle, second, 1, 0, "=ROWS(Sheet3!Print_Area)"), 0);
@@ -498,10 +502,11 @@ TEST(FormulonCApiPrintSettings, UnresolvedBuiltInNameTakesItsCanonicalSpelling) 
 // stores it as ROWS(Criteria), which binds that user name here.
 TEST(FormulonCApiPrintSettings, LocalBuiltInSpellingBindsASameNamedUserName) {
   WorkbookGuard wb;
-  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_workbook_create_for_profile("mac-365-de_DE", &wb.handle), 0);
+  const std::string body = "=" + wb.handle->workbook().sheet(0).name() + "!$A$1:$B$3";
   fm_defined_name_t name = FM_STRUCT_INIT(fm_defined_name_t);
   name.name = "Criteria";
-  name.formula = "=Sheet1!$A$1:$B$3";
+  name.formula = body.c_str();
   name.local_sheet_id = FM_DEFINED_NAME_SCOPE_WORKBOOK;
   ASSERT_EQ(fm_workbook_set_defined_name(wb.handle, &name), 0) << fm_get_last_error_message();
   const char* canonical = nullptr;
@@ -587,6 +592,154 @@ TEST(FormulonCApiPrintSettings, BareFilterDatabaseLeavesBuiltInNamesUnprefixed) 
   EXPECT_STREQ(text, "=ROWS(_FilterDatabase)");
   ASSERT_EQ(fm_sheet_get_formula(reloaded.handle, 0, 9, 0, &present, &text), 0);
   EXPECT_STREQ(text, "=AREAS(Print_Area)");
+}
+
+namespace {
+
+fm_status_t DefineName(fm_workbook_t* wb, const char* name, const char* formula, int32_t scope,
+                       const char* comment = nullptr, int32_t hidden = 0) {
+  fm_defined_name_t input = FM_STRUCT_INIT(fm_defined_name_t);
+  input.name = name;
+  input.formula = formula;
+  input.local_sheet_id = scope;
+  input.comment = comment;
+  input.hidden = hidden;
+  return fm_workbook_set_defined_name(wb, &input);
+}
+
+// The stored name and scope of every defined name, in list order.
+std::vector<std::pair<std::string, int32_t>> StoredNames(const fm_workbook_t* wb) {
+  std::vector<std::pair<std::string, int32_t>> out;
+  for (const formulon::DefinedName& name : wb->workbook().defined_names()) {
+    out.emplace_back(name.name, name.local_sheet_id);
+  }
+  return out;
+}
+
+using NameList = std::vector<std::pair<std::string, int32_t>>;
+
+}  // namespace
+
+// Excel's Names.Add stores the locale's spelling of Print_Area as the print
+// area of the sheet the formula names, whatever scope was asked for.
+TEST(FormulonCApiPrintSettings, LocaleSpellingOfPrintAreaDefinesTheSheetPrintArea) {
+  for (const char* typed : {"Print_Area", "print_area", "PRINT_AREA"}) {
+    SCOPED_TRACE(typed);
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create_for_profile("mac-365-ja_JP", &wb.handle), 0);
+    std::size_t second = 0;
+    ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Sheet2", 1, &second), 0);
+    ASSERT_EQ(DefineName(wb.handle, typed, "=Sheet2!$A$1:$B$2", FM_DEFINED_NAME_SCOPE_WORKBOOK, "note", 1), 0)
+        << fm_get_last_error_message();
+    EXPECT_EQ(StoredNames(wb.handle), (NameList{{"_xlnm.Print_Area", 1}}));
+    const formulon::DefinedName& stored = wb.handle->workbook().defined_names().front();
+    EXPECT_EQ(stored.comment, "note");
+    EXPECT_TRUE(stored.hidden);
+    fm_cell_rect_t out[2]{};
+    std::size_t count = 0;
+    ASSERT_EQ(fm_sheet_get_print_area(wb.handle, second, out, 2, &count), 0);
+    ASSERT_EQ(count, 1U);
+    EXPECT_EQ(out[0].last_row, 1U);
+    EXPECT_EQ(out[0].last_col, 1U);
+    ASSERT_EQ(fm_sheet_get_print_area(wb.handle, 0, out, 2, &count), 0);
+    EXPECT_EQ(count, 0U);
+
+    // The typed spelling finds it in its sheet's scope only.
+    int32_t present = 0;
+    fm_defined_name_t read = FM_STRUCT_INIT(fm_defined_name_t);
+    ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, typed, 1, &present, &read), 0);
+    ASSERT_EQ(present, 1);
+    EXPECT_STREQ(read.name, "_xlnm.Print_Area");
+    EXPECT_STREQ(read.formula, "=Sheet2!$A$1:$B$2");
+    ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, typed, FM_DEFINED_NAME_SCOPE_WORKBOOK, &present, &read), 0);
+    EXPECT_EQ(present, 0);
+
+    // The print API and the setter edit the same entry.
+    const fm_cell_rect_t area{0, 0, 4, 3};
+    ASSERT_EQ(fm_sheet_set_print_area(wb.handle, second, &area, 1), 0);
+    ASSERT_EQ(DefineName(wb.handle, typed, "=Sheet2!$A$1:$C$3", 1), 0) << fm_get_last_error_message();
+    EXPECT_EQ(StoredNames(wb.handle), (NameList{{"_xlnm.Print_Area", 1}}));
+    ASSERT_EQ(fm_sheet_get_print_area(wb.handle, second, out, 2, &count), 0);
+    ASSERT_EQ(count, 1U);
+    EXPECT_EQ(out[0].last_row, 2U);
+    ASSERT_EQ(fm_workbook_remove_defined_name(wb.handle, typed, 1), 0);
+    EXPECT_TRUE(wb.handle->workbook().defined_names().empty());
+  }
+}
+
+// A name is a built-in only in the locale's own spelling: de promotes
+// Druckbereich and Drucktitel, and keeps the English spellings as user names.
+TEST(FormulonCApiPrintSettings, OnlyTheLocaleSpellingDefinesABuiltInName) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_for_profile("mac-365-de_DE", &wb.handle), 0);
+  const std::string sheet = wb.handle->workbook().sheet(0).name();
+  const std::string body = "=" + sheet + "!$A$1:$B$2";
+  const std::string rows = "=" + sheet + "!$1:$2";
+  ASSERT_EQ(DefineName(wb.handle, "Print_Area", body.c_str(), FM_DEFINED_NAME_SCOPE_WORKBOOK), 0)
+      << fm_get_last_error_message();
+  ASSERT_EQ(DefineName(wb.handle, "Criteria", body.c_str(), FM_DEFINED_NAME_SCOPE_WORKBOOK), 0);
+  ASSERT_EQ(DefineName(wb.handle, "druckbereich", body.c_str(), FM_DEFINED_NAME_SCOPE_WORKBOOK), 0);
+  ASSERT_EQ(DefineName(wb.handle, "Drucktitel", rows.c_str(), FM_DEFINED_NAME_SCOPE_WORKBOOK), 0);
+  ASSERT_EQ(DefineName(wb.handle, "Datenbank", body.c_str(), FM_DEFINED_NAME_SCOPE_WORKBOOK), 0);
+  EXPECT_EQ(StoredNames(wb.handle), (NameList{{"Print_Area", -1},
+                                              {"Criteria", -1},
+                                              {"_xlnm.Print_Area", 0},
+                                              {"_xlnm.Print_Titles", 0},
+                                              {"_xlnm.Database", -1}}));
+  fm_print_titles_t titles = FM_STRUCT_INIT(fm_print_titles_t);
+  ASSERT_EQ(fm_sheet_get_print_titles(wb.handle, 0, &titles), 0);
+  EXPECT_EQ(titles.has_rows, 1);
+  EXPECT_EQ(titles.last_row, 1U);
+}
+
+// en-US stores a built-in name in the letter case typed; ja stores the canonical one.
+TEST(FormulonCApiPrintSettings, EnglishLocaleKeepsTheTypedCaseOfABuiltInName) {
+  struct Case {
+    const char* profile;
+    const char* stored;
+  };
+  for (const Case& c : {Case{"mac-365-en_US", "_xlnm.PRINT_AREA"}, Case{"mac-365-ja_JP", "_xlnm.Print_Area"}}) {
+    SCOPED_TRACE(c.profile);
+    WorkbookGuard wb;
+    ASSERT_EQ(fm_workbook_create_for_profile(c.profile, &wb.handle), 0);
+    const std::string body = "=" + wb.handle->workbook().sheet(0).name() + "!$A$1:$B$2";
+    ASSERT_EQ(DefineName(wb.handle, "PRINT_AREA", body.c_str(), FM_DEFINED_NAME_SCOPE_WORKBOOK), 0)
+        << fm_get_last_error_message();
+    EXPECT_EQ(StoredNames(wb.handle), (NameList{{c.stored, 0}}));
+    fm_cell_rect_t out[1]{};
+    std::size_t count = 0;
+    ASSERT_EQ(fm_sheet_get_print_area(wb.handle, 0, out, 1, &count), 0);
+    EXPECT_EQ(count, 1U);
+  }
+}
+
+// Other built-in names keep the scope asked for; a print area whose formula
+// names no sheet keeps it too.
+TEST(FormulonCApiPrintSettings, BuiltInNamesOtherThanThePrintAreaKeepTheirScope) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_for_profile("mac-365-ja_JP", &wb.handle), 0);
+  ASSERT_EQ(DefineName(wb.handle, "Criteria", "=Sheet1!$A$1:$B$2", FM_DEFINED_NAME_SCOPE_WORKBOOK), 0)
+      << fm_get_last_error_message();
+  ASSERT_EQ(DefineName(wb.handle, "criteria", "=Sheet1!$A$1:$B$2", 0), 0);
+  ASSERT_EQ(DefineName(wb.handle, "Auto_Open", "=Sheet1!$A$1", FM_DEFINED_NAME_SCOPE_WORKBOOK), 0);
+  ASSERT_EQ(DefineName(wb.handle, "Print_Titles", "=$1:$1", FM_DEFINED_NAME_SCOPE_WORKBOOK), 0);
+  EXPECT_EQ(
+      StoredNames(wb.handle),
+      (NameList{{"_xlnm.Criteria", -1}, {"_xlnm.Criteria", 0}, {"_xlnm.Auto_Open", -1}, {"_xlnm.Print_Titles", -1}}));
+}
+
+// The stored spelling of the print area is refused in workbook scope and
+// taken as is in a sheet's scope.
+TEST(FormulonCApiPrintSettings, StoredPrintAreaSpellingNeedsASheetScope) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_for_profile("mac-365-ja_JP", &wb.handle), 0);
+  EXPECT_EQ(DefineName(wb.handle, "_xlnm.Print_Area", "=Sheet1!$A$1:$B$2", FM_DEFINED_NAME_SCOPE_WORKBOOK),
+            kInvalidArgument);
+  EXPECT_EQ(DefineName(wb.handle, "_xlnm.Print_Titles", "=Sheet1!$1:$1", FM_DEFINED_NAME_SCOPE_WORKBOOK),
+            kInvalidArgument);
+  EXPECT_TRUE(wb.handle->workbook().defined_names().empty());
+  ASSERT_EQ(DefineName(wb.handle, "_xlnm.Print_Area", "=Sheet1!$A$1:$B$2", 0), 0) << fm_get_last_error_message();
+  EXPECT_EQ(StoredNames(wb.handle), (NameList{{"_xlnm.Print_Area", 0}}));
 }
 
 TEST(FormulonCApiPrintSettings, EmptyPrintAreaRemovesTheDefinedName) {

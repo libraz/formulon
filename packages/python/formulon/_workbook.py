@@ -874,7 +874,8 @@ class RangeCell:
 class DefinedName:
     """One defined name, as ``Workbook.list_defined_names()`` and ``Workbook.get_defined_name()`` return it."""
 
-    #: The name as stored.
+    #: The name as stored; a built-in name reads as ``_xlnm.Print_Area``,
+    #: under en-US in the letter case typed.
     name: str
     #: The formula text, spelled as the sheet formula getter spells formulas.
     formula: str
@@ -894,7 +895,8 @@ class DefinedNameInput:
     name: str
     #: The formula text; a leading ``=`` is optional.
     formula: str
-    #: The sheet the name is local to; omitted or ``None`` makes it workbook scope.
+    #: The sheet the name is local to; omitted or ``None`` makes it workbook scope, unless
+    #: :meth:`Workbook.set_defined_name`'s built-in rule moves it.
     scope: Optional[SheetRef] = None
     #: The Name Manager note; omitted or ``None`` means no comment.
     comment: Optional[str] = None
@@ -10381,12 +10383,22 @@ class Workbook(_NoCopy):
         name read from an ``.xlsb`` stays one (an ``.xlsx`` save leaves it
         out); remove it first to set a plain name.
 
+        A name that is the profile locale's spelling of a built-in name is
+        stored as that built-in (``Print_Area`` under en-US is stored as
+        ``_xlnm.Print_Area``); en-US keeps the letter case typed (``PRINT_AREA``
+        is stored as ``_xlnm.PRINT_AREA``), every other locale stores the
+        canonical case. ``Print_Area`` and ``Print_Titles`` are then
+        stored in the scope of the sheet the formula's first reference names,
+        whatever ``scope`` asks for; a formula that names no sheet keeps
+        ``scope``.
+
         Raises:
           InvalidArgumentError: when ``formula`` is empty (remove a name with
             :meth:`remove_defined_name`), or the name is malformed. A new name that is,
             or starts with, a reference in the profile locale's R1C1 letters (de ``Z1S1``) is
             refused; redefining an existing name stays allowed. The check uses the profile
-            at the time of the call, so a loaded name is never re-checked.
+            at the time of the call, so a loaded name is never re-checked. A new
+            ``_xlnm.Print_Area`` or ``_xlnm.Print_Titles`` in workbook scope is refused.
           AlreadyExistsError: when the name equals a table's name.
           IndexOutOfRangeError: when ``scope`` is a sheet index past the sheet count.
         """
@@ -10427,6 +10439,8 @@ class Workbook(_NoCopy):
         """Return the defined name ``name`` (compared case-insensitively under Unicode simple case folding) in ``scope``, or ``None``.
 
         ``scope`` is ``None`` for workbook scope, else the sheet the name is local to.
+        ``name`` also resolves as :meth:`set_defined_name` stores it, so ``Print_Area``
+        finds ``_xlnm.Print_Area``; the scope stays part of the key.
 
         Raises:
           IndexOutOfRangeError: when ``scope`` is a sheet index past the sheet count.
@@ -10448,6 +10462,8 @@ class Workbook(_NoCopy):
 
     def remove_defined_name(self, name: str, scope: Optional[SheetRef] = None) -> None:
         """Remove the defined name ``name`` in ``scope`` (``None`` for workbook scope, else a sheet).
+
+        ``name`` resolves as in :meth:`get_defined_name`.
 
         Raises:
           NotFoundError: when the scope has no such name.

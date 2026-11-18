@@ -14,15 +14,20 @@
 #include <vector>
 
 #include "defined_name.h"
+#include "eval/formula_localize.h"
 #include "eval/recalc_engine.h"
 #include "excel_locale.h"
 #include "io/xlsb/table_records.h"
 #include "parser/ast.h"
 #include "parser/external_book_spelling.h"
+#include "parser/formula_prefix.h"
+#include "parser/parser.h"
 #include "sheet_name.h"
+#include "utils/arena.h"
 #include "utils/error.h"
 #include "utils/expected.h"
 #include "utils/name_syntax.h"
+#include "utils/strings.h"
 #include "workbook.h"
 #include "workbook_formula_index.h"
 #include "workbook_internal.h"
@@ -40,6 +45,32 @@ using detail::kFilterDatabaseName;
 /// `scope=<sheet index>` (a workbook-scope id is -1).
 std::string scope_context(std::int32_t local_sheet_id) {
   return local_sheet_id == -1 ? std::string("scope=workbook") : "scope=" + std::to_string(local_sheet_id);
+}
+
+/// True for the built-ins a sheet owns: `Print_Area` and `Print_Titles`.
+bool is_sheet_builtin(std::string_view builtin) {
+  return builtin == "Print_Area" || builtin == "Print_Titles";
+}
+
+/// The sheet the first qualified reference of `formula` names, or -1.
+std::int32_t first_reference_sheet(const Workbook& wb, std::string_view formula) {
+  Arena arena;
+  const parser::AstNode* root = parser::parse_strict(formula, arena);
+  std::vector<const parser::AstNode*> pending;
+  if (root != nullptr) {
+    pending.push_back(root);
+  }
+  while (!pending.empty()) {
+    const parser::AstNode* node = pending.back();
+    pending.pop_back();
+    if (node->kind() == parser::NodeKind::Ref && !node->as_ref().sheet.empty()) {
+      const std::size_t sheet = wb.sheet_index_by_name(node->as_ref().sheet);
+      return sheet == Workbook::kNoSheet ? -1 : static_cast<std::int32_t>(sheet);
+    }
+    const std::vector<const parser::AstNode*> children = parser::child_nodes(*node);
+    pending.insert(pending.end(), children.rbegin(), children.rend());
+  }
+  return -1;
 }
 
 }  // namespace
@@ -118,8 +149,17 @@ Expected<void, Error> Workbook::set_defined_name(std::string name, std::string f
   return set_defined_name_scoped(std::move(name), std::move(formula), -1);
 }
 
+std::string Workbook::stored_defined_name(std::string_view name) const {
+  const std::string_view builtin = eval::entered_builtin_defined_name(excel_profile_.locale, name);
+  if (builtin.empty()) {
+    return std::string(name);
+  }
+  // en-US keeps the letter case typed (`_xlnm.print_area`); every other locale stores the canonical one.
+  return std::string(parser::kNamePrefix).append(excel_profile_.locale == ExcelLocale::kEnUS ? name : builtin);
+}
+
 Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::string formula,
-                                                        std::int32_t local_sheet_id) {
+                                                        std::int32_t local_sheet_id, DefinedNameKey* stored_key) {
   // Validation, mutation, and the dependent graph rebuild must share one
   // critical section. Otherwise a concurrent sheet removal can change the
   // count between validation and insertion, or a recalc can observe the
@@ -136,6 +176,22 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
     formula = parser::bind_self_book_names(formula, file_name());
   }
   bind_external_books_unlocked(std::string_view(formula));
+  // A built-in spelled the locale's way is stored as `_xlnm.X`; the print
+  // area and titles go to the sheet their formula names, as Excel's
+  // Names.Add files them.
+  const bool typed_builtin = strings::case_insensitive_starts_with(name, parser::kNamePrefix);
+  if (!typed_builtin) {
+    std::string stored = stored_defined_name(name);
+    if (stored != name && is_sheet_builtin(eval::builtin_defined_name(stored))) {
+      if (const std::int32_t sheet = first_reference_sheet(*this, formula); sheet >= 0) {
+        local_sheet_id = sheet;
+      }
+    }
+    name = std::move(stored);
+  }
+  if (stored_key != nullptr) {
+    *stored_key = DefinedNameKey{name, local_sheet_id};
+  }
   // An upsert: the name resolves within the requested scope only, and the
   // entry found takes the new spelling and formula and keeps its hidden flag,
   // comment and macro kind, as an Excel RefersTo edit does.
@@ -179,6 +235,10 @@ Expected<void, Error> Workbook::set_defined_name_scoped(std::string name, std::s
   const LocaleFacts& locale = locale_facts(excel_profile_);
   if (!is_valid_defined_name(name) || opens_with_r1c1(name, locale.r1c1_row, locale.r1c1_col)) {
     return make_error(FormulonErrorCode::kInvalidArgument, "name is not a valid defined name", "name=" + name);
+  }
+  if (typed_builtin && local_sheet_id < 0 && is_sheet_builtin(eval::builtin_defined_name(name))) {
+    return make_error(FormulonErrorCode::kInvalidArgument,
+                      "name is a print area or print titles, which needs a sheet scope", "name=" + name);
   }
   if (std::any_of(tables_.begin(), tables_.end(), table_named) ||
       std::any_of(retained.begin(), retained.end(), table_named)) {

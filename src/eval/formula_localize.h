@@ -35,6 +35,12 @@ std::string_view builtin_defined_name(std::string_view name) noexcept;
 /// does, so empty for any other name.
 std::string_view bare_builtin_defined_name(ExcelLocale locale, std::string_view name) noexcept;
 
+/// Canonical spelling of the built-in defined name that `name` (ASCII
+/// case-insensitive, no `_xlnm.` prefix) defines under `locale`: `name` must
+/// be the locale's spelling, which is the English one only where the locale
+/// spells it in English. Empty for any other name.
+std::string_view entered_builtin_defined_name(ExcelLocale locale, std::string_view name) noexcept;
+
 /// Renders stored (en-invariant, storage-prefix-free) formula text as Excel
 /// displays it under `profile`: localized function names, separators,
 /// booleans, error names and built-in defined names, and number literals in their normalized form

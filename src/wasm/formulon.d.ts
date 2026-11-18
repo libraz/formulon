@@ -457,7 +457,8 @@ export type WorkbookFormat = 0 | 1;
 
 /** A defined name, as `Workbook.getDefinedName` and `Workbook.listDefinedNames` return it. */
 export interface DefinedName {
-  /** The name as stored. */
+  /** The name as stored; a built-in name reads as `_xlnm.Print_Area`, under en-US in the letter
+   *  case typed. */
   readonly name: string;
   /** The formula text, spelled as the sheet formula getter spells formulas. */
   readonly formula: string;
@@ -475,7 +476,8 @@ export interface DefinedNameInput {
   name: string;
   /** The formula text; a leading `=` is optional. */
   formula: string;
-  /** The sheet the name is local to; omitted or `null` makes it workbook scope. */
+  /** The sheet the name is local to; omitted or `null` makes it workbook scope, unless `setDefinedName`'s built-in
+   *  rule moves it. */
   scope?: SheetRef | null;
   /** The Name Manager note; omitted, `null` or an empty string means no comment (api-conventions §5 rule 30). */
   comment?: string | null;
@@ -7378,10 +7380,11 @@ export interface Workbook {
   /** Lists the defined names, workbook- and sheet-scoped alike, in file order. */
   listDefinedNames(): readonly DefinedName[];
   /** Reads the defined name `name` (resolved by name identity, see {@link Workbook}) in the sheet scope `scope`, or the
-   *  workbook scope when `scope` is omitted or `null`; `null` when the scope has no such name. */
+   *  workbook scope when `scope` is omitted or `null`; `null` when the scope has no such name. `name` also resolves
+   *  as `setDefinedName` stores it, so `Print_Area` finds `_xlnm.Print_Area`; the scope stays part of the key. */
   getDefinedName(name: string, scope?: SheetRef | null): DefinedName | null;
-  /** Removes the defined name `name` in scope `scope` (as `getDefinedName`); `StatusCode.NotFound` when the scope
-   *  has no such name. */
+  /** Removes the defined name `name` in scope `scope` (as `getDefinedName`, so `Print_Area` finds
+   *  `_xlnm.Print_Area`); `StatusCode.NotFound` when the scope has no such name. */
   removeDefinedName(name: string, scope?: SheetRef | null): void;
   /** Adds a defined name, or replaces every attribute of an existing one in the same scope: an omitted `comment` /
    *  `hidden` returns to its default. A macro name read from an `.xlsb` stays one (an `.xlsx` save leaves it out);
@@ -7389,7 +7392,13 @@ export interface Workbook {
    *  not parse with a parser status (1000-1014; `FormulonError.parseError` gives the position). A name that matches
    *  a table fails with `StatusCode.AlreadyExists`, a malformed one with `StatusCode.InvalidArgument`, and a
    *  `scope` past the last sheet with `StatusCode.SheetIndexOutOfRange`; `removeDefinedName` removes a name.
-   *  A new name that is, or starts with, a reference in the profile locale's R1C1 letters (de `Z1S1`) is refused; redefining or renaming to an existing name stays allowed. The check uses the profile at the time of the call, so a loaded name is never re-checked. */
+   *  A new name that is, or starts with, a reference in the profile locale's R1C1 letters (de `Z1S1`) is refused; redefining or renaming to an existing name stays allowed. The check uses the profile at the time of the call, so a loaded name is never re-checked.
+   *  A name that is the profile locale's spelling of a built-in name is stored as that built-in (`Print_Area` under
+   *  en-US is stored as `_xlnm.Print_Area`); en-US keeps the letter case typed (`PRINT_AREA` is stored as
+   *  `_xlnm.PRINT_AREA`), every other locale stores the canonical case. `Print_Area` and `Print_Titles` are then
+   *  stored in the scope of the sheet the formula's first reference names, whatever `scope` asks for; a formula that
+   *  names no sheet keeps `scope`. A new `_xlnm.Print_Area` or `_xlnm.Print_Titles` in workbook scope fails with
+   *  `StatusCode.InvalidArgument`. */
   setDefinedName(definedName: DefinedNameInput): void;
   /** The handle of the table named `name` on any sheet, resolved by name identity (see {@link Workbook}); a table's
    *  stored display name, when a loaded file gives it one, also resolves. The one workbook-wide table lookup (tables
