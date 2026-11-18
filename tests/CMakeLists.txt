@@ -621,19 +621,19 @@ target_compile_definitions(formulon_unit_tests
     FORMULON_COLLATION_DATA_DIR="${CMAKE_SOURCE_DIR}/tools/collation/data"
 )
 
-# `gtest_discover_tests` registers the suite but cannot apply
-# per-case CTest labels at configure time — its discovery script runs
-# post-build, so `set_property(TEST ...)` would fail with "test does
-# not exist". To keep the slowest zip-bomb / cumulative-cap unit cases
-# (`ZipReader.ReadEntryRejectsZipBombSizedEntry`,
-# `ZipReader.ReadEntryRejectsCumulativeTotal`,
-# `ZipReader.ReadEntryRejectsHighRatioEntry`) out of the fast loop we
-# rely on the `-j N` parallelism added to `make test`; they run
-# alongside the rest in <2 s wall-clock on a modern workstation.
-# Separating them into a dedicated SLOW binary would force the gtest
-# fixture to be duplicated, which is a worse trade.
+# `gtest_discover_tests` runs after the build, so a single case cannot be
+# labelled with `set_property(TEST ...)`; a case that belongs in SLOW is
+# instead discovered by its own filtered call. A derived whole-axis array
+# past the 10M-element ceiling streams every element, about 9 s in a Debug
+# build.
 # Listing the coverage-instrumented binary overran the 5 s default on CI.
-gtest_discover_tests(formulon_unit_tests DISCOVERY_TIMEOUT 120)
+set(_FORMULON_SLOW_UNIT_CASES "WholeAxisShape.ReducersStreamADerivedWholeAxisPastTheArrayCeiling")
+gtest_discover_tests(formulon_unit_tests DISCOVERY_TIMEOUT 120 TEST_FILTER "-${_FORMULON_SLOW_UNIT_CASES}")
+gtest_discover_tests(formulon_unit_tests
+  DISCOVERY_TIMEOUT 120
+  TEST_FILTER "${_FORMULON_SLOW_UNIT_CASES}"
+  PROPERTIES LABELS "SLOW"
+)
 
 # Behavior-vocabulary drift check. Parallel to RegistryCatalog.AllRegisteredInCatalog
 # but for function sub-behaviors (format codes, era strings, locale separators).
