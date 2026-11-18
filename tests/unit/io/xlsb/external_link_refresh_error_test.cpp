@@ -2,6 +2,7 @@
 // books: a sheet the link lists with no cached data, or referenced but not listed, is written as a
 // failed refresh (`refreshError="1"`, `BrtBeginExternTable` flag bit 0); an empty cache stays empty.
 
+#include <cstdint>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -76,6 +77,21 @@ Value MissingCell(Workbook& wb) {
   return cell == nullptr ? Value::blank() : cell->cached_value;
 }
 
+// A1:B7 after a full recalc, or as cached when `recalc` is false.
+std::vector<Value> Grid(Workbook& wb, bool recalc) {
+  if (recalc) {
+    EXPECT_TRUE(static_cast<bool>(wb.recalc_full(eval::default_registry())));
+  }
+  std::vector<Value> out;
+  for (std::uint32_t row = 0; row < 7U; ++row) {
+    for (std::uint32_t col = 0; col < 2U; ++col) {
+      const Cell* cell = wb.sheet(0).cell_at(row, col);
+      out.push_back(cell == nullptr ? Value::blank() : cell->cached_value);
+    }
+  }
+  return out;
+}
+
 TEST(ExternalLinkRefreshError, XlsxSaveWritesEachCacheStateAsExcelDoes) {
   for (const char* state : kStates) {
     const Workbook wb = Load(std::string("extlink_cache_") + state + ".xlsx");
@@ -117,6 +133,18 @@ TEST(ExternalLinkRefreshError, ACellOfTheSheetReadsTheSameThroughEitherSave) {
     auto via_xlsb = read_xlsb(SpanOf(xlsb.value()));
     ASSERT_TRUE(static_cast<bool>(via_xlsb)) << state;
     EXPECT_EQ(MissingCell(via_xlsb.value().workbook), expected) << state;
+  }
+}
+
+TEST(ExternalLinkRefreshError, EveryFormulaReadsExcelsValuesThroughAnXlsbSave) {
+  for (const char* state : kStates) {
+    Workbook wb = Load(std::string("extlink_cache_") + state + ".xlsx");
+    Workbook excel = Load(std::string("extlink_cache_") + state + "_excel.xlsx");
+    auto xlsb = write_xlsb(wb);
+    ASSERT_TRUE(static_cast<bool>(xlsb)) << state;
+    auto via_xlsb = read_xlsb(SpanOf(xlsb.value()));
+    ASSERT_TRUE(static_cast<bool>(via_xlsb)) << state;
+    EXPECT_EQ(Grid(via_xlsb.value().workbook, true), Grid(excel, false)) << state;
   }
 }
 

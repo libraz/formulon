@@ -152,13 +152,16 @@ Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::strin
         }
         current_sheet = sheet;
         book.sheet_data.resize(book.sheet_names.size(), false);
-        book.sheet_data[current_sheet] = true;
         // A table written without the flag byte reads as unmarked.
+        bool refresh_failed = false;
         if (payload.size > 0U) {
           ASSIGN_OR_RETURN(auto flags, read_u8(payload));
+          refresh_failed = (flags & kExternTableRefreshError) != 0U;
           book.refresh_error.resize(book.sheet_names.size(), false);
-          book.refresh_error[current_sheet] = (flags & kExternTableRefreshError) != 0U;
+          book.refresh_error[current_sheet] = book.refresh_error[current_sheet] || refresh_failed;
         }
+        // A failed refresh holds data only when it still carries rows.
+        book.sheet_data[current_sheet] = book.sheet_data[current_sheet] || !refresh_failed;
         row_seen = false;
         break;
       }
@@ -169,6 +172,9 @@ Expected<ExternalBook, Error> read_external_link_bin(ByteSpan cursor, std::strin
       case XlsbRecordType::BrtExternRowHdr: {
         ASSIGN_OR_RETURN(current_row, read_u32(payload));
         row_seen = true;
+        if (current_sheet != ExternalBook::kNoSheet) {
+          book.sheet_data[current_sheet] = true;
+        }
         break;
       }
       case XlsbRecordType::BrtExternCellReal: {
