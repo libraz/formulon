@@ -103,6 +103,9 @@ Value eval_unique_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (array == nullptr) {
     return err;
   }
+  if (const Value* lone = lone_error_cell(*array)) {
+    return *lone;
+  }
 
   // Optional flags. Both default to FALSE; both go through `coerce_to_bool`
   // so that 0/1, "TRUE"/"FALSE", and Blank scalars behave as Excel does
@@ -175,6 +178,9 @@ Value eval_sort_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
   if (array == nullptr) {
     return err;
   }
+  if (const Value* lone = lone_error_cell(*array)) {
+    return *lone;
+  }
 
   // Optional args. by_col is parsed first because it determines the valid
   // range of sort_index (column-bound for row-sort, row-bound for col-sort).
@@ -245,9 +251,8 @@ Value eval_sortby_lazy(const parser::AstNode& call, Arena& arena, const Function
     return err;
   }
   // A one-cell error argument is the error itself, not an array to shape-check.
-  const auto lone_error = [](const ArrayValue& a) { return a.rows == 1U && a.cols == 1U && a.cells[0].is_error(); };
-  if (lone_error(*array)) {
-    return array->cells[0];
+  if (const Value* lone = lone_error_cell(*array)) {
+    return *lone;
   }
 
   // Axis inference + per-key collection. The first by_array picks the axis;
@@ -269,8 +274,8 @@ Value eval_sortby_lazy(const parser::AstNode& call, Arena& arena, const Function
       return Value::error(ErrorCode::Value);
     }
     const ArrayValue* by = by_v.as_array();
-    if (lone_error(*by)) {
-      return by->cells[0];
+    if (const Value* lone = lone_error_cell(*by)) {
+      return *lone;
     }
 
     // Decide axis from the first key, then enforce match on the rest.

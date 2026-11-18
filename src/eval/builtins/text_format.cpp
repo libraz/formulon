@@ -662,31 +662,38 @@ Value eval_arraytotext_lazy(const parser::AstNode& call, Arena& arena, const Fun
   if (arity < 1U || arity > 2U) {
     return Value::error(ErrorCode::Value);
   }
+  const parser::AstNode& array_arg = call.as_call_arg(0);
+  if (array_arg.kind() == parser::NodeKind::ArrayLiteral) {
+    bool strict = false;
+    const Value fmt_status = parse_arraytotext_format(call, arena, registry, ctx, &strict);
+    if (fmt_status.is_error()) {
+      return fmt_status;
+    }
+    return arraytotext_from_array_literal(array_arg, strict, arena, registry, ctx);
+  }
+  // A lone error argument propagates, ahead of the format, rather than
+  // rendering as the error's display text.
+  const Value array_v = eval_node_as_array(array_arg, arena, registry, ctx);
+  if (array_v.is_error()) {
+    return array_v;
+  }
+  if (array_v.is_array()) {
+    if (const Value* lone = lone_error_cell(*array_v.as_array())) {
+      return *lone;
+    }
+  }
   bool strict = false;
   const Value fmt_status = parse_arraytotext_format(call, arena, registry, ctx, &strict);
   if (fmt_status.is_error()) {
     return fmt_status;
   }
-  const parser::AstNode& array_arg = call.as_call_arg(0);
-  if (array_arg.kind() == parser::NodeKind::ArrayLiteral) {
-    return arraytotext_from_array_literal(array_arg, strict, arena, registry, ctx);
-  }
-  const Value array_v = eval_node_as_array(array_arg, arena, registry, ctx);
   if (array_v.is_array()) {
     const ArrayValue& arr = *array_v.as_array();
-    // A lone 1x1 error argument propagates rather than rendering as the
-    // error's display text (eval_node_as_array wraps scalar args).
-    if (arr.rows == 1U && arr.cols == 1U && arr.cells[0].is_error()) {
-      return arr.cells[0];
-    }
     // A lone blank cell is #VALUE! in either format.
     if (arr.rows == 1U && arr.cols == 1U && arr.cells[0].is_blank()) {
       return Value::error(ErrorCode::Value);
     }
     return arraytotext_from_array(arr, strict, arena);
-  }
-  if (array_v.is_error()) {
-    return array_v;
   }
   return arraytotext_scalar(array_v, strict, arena);
 }

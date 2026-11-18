@@ -20,6 +20,7 @@
 #include <variant>
 #include <vector>
 
+#include "eval/array_context.h"
 #include "eval/builtins/numeric_helpers.h"
 #include "eval/eval_context.h"
 #include "eval/lazy_impls.h"
@@ -97,9 +98,24 @@ Value eval_t_test_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (call.as_call_arity() != 4U) {
     return Value::error(ErrorCode::Value);
   }
-  // Evaluate `tails` and `type` scalars first; their validity decides
-  // whether we even need to touch the arrays. Errors propagate with
-  // their real code.
+  // `tails` and `type` are read before the arrays, but a lone error in
+  // either array is reported ahead of their failure. A lone value, which the
+  // dispatcher has already answered with a literal, is checked after them.
+  const auto flag_failure = [&](const Value& failure) -> Value {
+    for (std::uint32_t i = 0; i < 2U; ++i) {
+      if (call.as_call_arg(i).kind() == parser::NodeKind::Literal) {
+        continue;
+      }
+      const Value a = eval_node_as_array(call.as_call_arg(i), arena, registry, ctx);
+      if (a.is_error()) {
+        return a;
+      }
+      if (const Value* lone = a.is_array() ? lone_error_cell(*a.as_array()) : nullptr) {
+        return *lone;
+      }
+    }
+    return failure;
+  };
   // Numeric text coerces (a cell holding "1" reads as 1); a Boolean is
   // #VALUE!, and a blank cell reads as zero. Excel truncates (not rounds)
   // `tails` and `type` toward zero before the domain check.
@@ -107,20 +123,20 @@ Value eval_t_test_lazy(const parser::AstNode& call, Arena& arena, const Function
   for (std::uint32_t i = 0; i < 2U; ++i) {
     const Value v = eval_node(call.as_call_arg(2U + i), arena, registry, ctx);
     if (v.is_boolean()) {
-      return Value::error(ErrorCode::Value);
+      return flag_failure(Value::error(ErrorCode::Value));
     }
     Value err = Value::blank();
     if (!number_from_value(v, flags[i], err)) {
-      return err;
+      return flag_failure(err);
     }
   }
   const double tails_d = std::trunc(flags[0]);
   const double type_d = std::trunc(flags[1]);
   if (!std::isfinite(tails_d) || (tails_d != 1.0 && tails_d != 2.0)) {
-    return Value::error(ErrorCode::Num);
+    return flag_failure(Value::error(ErrorCode::Num));
   }
   if (!std::isfinite(type_d) || (type_d != 1.0 && type_d != 2.0 && type_d != 3.0)) {
-    return Value::error(ErrorCode::Num);
+    return flag_failure(Value::error(ErrorCode::Num));
   }
   const int tails = static_cast<int>(tails_d);
   const int type = static_cast<int>(type_d);

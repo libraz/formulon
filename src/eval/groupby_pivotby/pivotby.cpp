@@ -12,6 +12,7 @@
 #include <utility>
 #include <vector>
 
+#include "eval/array_context.h"
 #include "eval/error_origin.h"
 #include "eval/eval_context.h"
 #include "eval/function_registry.h"
@@ -50,6 +51,10 @@ Value eval_pivotby_lazy(const parser::AstNode& call, Arena& arena, const Functio
   const ArrayValue* values = read_array_arg(call.as_call_arg(2), arena, registry, ctx, &err);
   if (values == nullptr) {
     return err;
+  }
+  // A lone error in values is reported ahead of the other arguments.
+  if (const Value* lone = lone_error_cell(*values)) {
+    return *lone;
   }
 
   // Row-count consistency across all three rectangles. Mac Excel surfaces

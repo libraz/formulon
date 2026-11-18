@@ -349,13 +349,8 @@ TEST(BuiltinsUnique, FourArgsRejected) {
   EXPECT_EQ(v.as_error(), ErrorCode::Value);
 }
 
-TEST(BuiltinsUnique, ScalarErrorArrayArgPreservedAsCell) {
-  // `1/0` evaluates to a 1x1 array containing #DIV/0! (the array-context
-  // seam wraps scalars). UNIQUE treats it as a single lane and returns a
-  // 1x1 array carrying that error cell verbatim. When this 1x1 array
-  // spills to a worksheet cell, the user sees #DIV/0!. Consistent with
-  // `ErrorsWithSameCodeCollapse`: error cells are values, not propagated
-  // call-level errors.
+TEST(BuiltinsUnique, ScalarErrorArrayArgIsTheResult) {
+  // A lone error in the array argument is the result itself, not a spilled cell.
   Workbook wb = Workbook::create();
   Sheet& sheet = wb.sheet(0);
   EvalState state;
@@ -363,11 +358,8 @@ TEST(BuiltinsUnique, ScalarErrorArrayArgPreservedAsCell) {
   Arena parse_arena;
   Arena eval_arena;
   const Value v = EvalUnder("=UNIQUE(1/0)", &parse_arena, &eval_arena, ctx);
-  ASSERT_TRUE(v.is_array());
-  ASSERT_EQ(v.as_array_rows(), 1U);
-  ASSERT_EQ(v.as_array_cols(), 1U);
-  EXPECT_TRUE(v.as_array_cells()[0].is_error());
-  EXPECT_EQ(v.as_array_cells()[0].as_error(), ErrorCode::Div0);
+  ASSERT_TRUE(v.is_error());
+  EXPECT_EQ(v.as_error(), ErrorCode::Div0);
 }
 
 // ---------------------------------------------------------------------------

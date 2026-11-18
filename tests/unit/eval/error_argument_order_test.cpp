@@ -173,6 +173,23 @@ TEST(ErrorArgumentOrder, ArrayCellErrorsRankAfterSingleValues) {
   }
 }
 
+// A one-cell data argument holding an error is reported as that error, ahead
+// of the other arguments and without a spill.
+TEST(ErrorArgumentOrder, LoneErrorCellArgumentIsTheResult) {
+  const FunctionRegistry& registry = default_registry();
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 2U, 0U, Value::error(ErrorCode::Div0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 1U, 1U, Value::number(2.0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 2U, 1U, Value::number(3.0))));
+  for (const char* formula : {"=EXPAND(A3,2,2)", "=EXPAND(A3,1,3)", "=WRAPCOLS(A3,2)", "=GROUPBY(B2,A3,SUM)",
+                              "=PIVOTBY(B2,B3,A3,SUM)", "=T.TEST(A3,B2:B3,2,2)", "=SORT(A3,5)", "=UNIQUE(A3)"}) {
+    Arena arena;
+    const Value got = evaluate_formula_text_array(wb, wb.sheet(0U), 4U, 0U, formula, arena, registry);
+    ASSERT_TRUE(got.is_error()) << formula;
+    EXPECT_EQ(got.as_error(), ErrorCode::Div0) << formula;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

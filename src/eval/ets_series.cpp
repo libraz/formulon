@@ -140,7 +140,8 @@ namespace {
 constexpr std::int64_t kMaxMissingPercent = 30;
 
 // Pairs the cells in order. A pair with a blank, text or boolean timeline or
-// value cell is dropped, except that an error cell propagates, text values
+// value cell is dropped, except that the first error by position propagates
+// (the value cell ahead of the timeline cell at one position), text values
 // count as 1 under COUNTA and blank values read as 0 without interpolation.
 // Under COUNT/COUNTA every kept value is 1.
 bool read_pairs(const std::vector<SeriesCell>& values, const std::vector<SeriesCell>& times, int completion,
@@ -153,12 +154,12 @@ bool read_pairs(const std::vector<SeriesCell>& values, const std::vector<SeriesC
   for (std::size_t i = 0; i < values.size(); ++i) {
     const SeriesCell& tc = times[i];
     SeriesCell yc = values[i];
-    if (tc.kind == SeriesCell::Kind::kError) {
-      *err = tc.error;
-      return false;
-    }
     if (yc.kind == SeriesCell::Kind::kError) {
       *err = yc.error;
+      return false;
+    }
+    if (tc.kind == SeriesCell::Kind::kError) {
+      *err = tc.error;
       return false;
     }
     if (tc.kind != SeriesCell::Kind::kNumber) {

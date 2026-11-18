@@ -155,6 +155,9 @@ Value eval_expand_lazy(const parser::AstNode& call, Arena& arena, const Function
   if (array == nullptr) {
     return err;
   }
+  if (const Value* lone = lone_error_cell(*array)) {
+    return *lone;
+  }
 
   // Resolve the new row count. An omitted `rows` slot keeps the source
   // height, matching Excel's optional-argument default.

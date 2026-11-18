@@ -204,6 +204,31 @@ TEST(ForecastEts, ErrorInTimelinePropagates) {
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
+// Values in A1:A4, timeline in B1:B4: the first error by position wins, and
+// at one position the value cell wins over the timeline cell.
+TEST(ForecastEts, FirstErrorByPositionWinsValuesAheadOfTimeline) {
+  struct Case {
+    std::uint32_t value_row;
+    std::uint32_t time_row;
+    ErrorCode expected;
+  };
+  for (const Case& c : {Case{2U, 0U, ErrorCode::NA}, Case{2U, 3U, ErrorCode::Div0}, Case{0U, 0U, ErrorCode::Div0}}) {
+    Workbook wb = Workbook::create();
+    Sheet& s = wb.sheet(0);
+    for (std::uint32_t r = 0; r < 4U; ++r) {
+      s.set_cell_value(r, 0, Value::number(static_cast<double>(10 * (r + 1))));
+      s.set_cell_value(r, 1, Value::number(static_cast<double>(r + 1)));
+    }
+    s.set_cell_value(c.value_row, 0, Value::error(ErrorCode::Div0));
+    s.set_cell_value(c.time_row, 1, Value::error(ErrorCode::NA));
+    for (const char* src : {"=FORECAST.ETS(5,A1:A4,B1:B4)", "=FORECAST.ETS.STAT(A1:A4,B1:B4,1)"}) {
+      const Value v = EvalSourceIn(src, wb, wb.sheet(0));
+      ASSERT_TRUE(v.is_error()) << src;
+      EXPECT_EQ(v.as_error(), c.expected) << src << " value_row=" << c.value_row << " time_row=" << c.time_row;
+    }
+  }
+}
+
 TEST(ForecastEts, TextInTimelineDropsThePair) {
   Workbook wb = Workbook::create();
   Sheet& s = wb.sheet(0);

@@ -46,6 +46,13 @@ class FunctionRegistry;
 Value eval_node_as_array(const parser::AstNode& node, Arena& arena, const FunctionRegistry& registry,
                          const EvalContext& ctx);
 
+/// The error a one-cell array holds, or nullptr. A function that checks its
+/// data argument first reports this error ahead of its other arguments; an
+/// error among several cells is data and does not.
+inline const Value* lone_error_cell(const ArrayValue& a) {
+  return a.rows == 1U && a.cols == 1U && a.cells[0].is_error() ? &a.cells[0] : nullptr;
+}
+
 /// Evaluates a `BinaryOp` AST in array context, broadcasting cellwise.
 ///
 /// Recursively evaluates both operands via `eval_node_as_array`. Shape

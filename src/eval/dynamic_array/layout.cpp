@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 
+#include "eval/array_context.h"
 #include "eval/dynamic_array/common.h"
 #include "eval/error_origin.h"
 #include "eval/lazy_impls.h"
@@ -98,6 +99,10 @@ bool resolve_wrap_args(const parser::AstNode& call, std::uint32_t arity, Arena& 
   }
   const ArrayValue* arr = nullptr;
   if (!resolve_array_value(call.as_call_arg(0), arena, registry, ctx, &arr, &error_out)) {
+    return false;
+  }
+  if (const Value* lone = lone_error_cell(*arr)) {
+    error_out = *lone;
     return false;
   }
   // `vector` must be 1D in either orientation; a 2D rectangle is rejected
