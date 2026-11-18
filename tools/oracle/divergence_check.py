@@ -708,9 +708,9 @@ def load_ironcalc_fixture_cells(fixture_dir: Path | None = None) -> set[str]:
     """
 
     try:
-        from tools.oracle.ironcalc_import import suite_name
+        from tools.oracle.external_suite_names import suite_name
     except ImportError:  # run as a script from tools/oracle
-        from ironcalc_import import suite_name  # type: ignore
+        from external_suite_names import suite_name  # type: ignore
 
     ids: set[str] = set()
     root = fixture_dir or IRONCALC_FIXTURE_DIR

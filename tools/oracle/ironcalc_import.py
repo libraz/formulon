@@ -74,9 +74,13 @@ from openpyxl.xml.functions import iterparse
 
 try:
     from tools.oracle.emit_skip_list import load_external_skips
+    from tools.oracle.external_suite_names import scrub_filename as _scrub_filename
+    from tools.oracle.external_suite_names import suite_name
 except ImportError:  # run as a script: the repository root holds tools/
     sys.path.append(str(Path(__file__).resolve().parents[2]))
     from tools.oracle.emit_skip_list import load_external_skips
+    from tools.oracle.external_suite_names import scrub_filename as _scrub_filename
+    from tools.oracle.external_suite_names import suite_name
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SOURCE_DIR = REPO_ROOT / "tests" / "oracle" / "external" / "ironcalc" / "fixtures"
@@ -145,10 +149,6 @@ CROSS_SHEET_RE = re.compile(r"(?:'[^']*'|[A-Za-z_][A-Za-z0-9_\.]*)!")
 # value never matched against.
 DYNAMIC_REF_RE = re.compile(r"\b(?:_xlfn\.)?(?:OFFSET|INDIRECT)\s*\(", re.IGNORECASE)
 
-# Characters we can't put in an output filename. openpyxl will happily
-# accept sheet names with slashes, spaces, etc.
-_FILENAME_SCRUB = re.compile(r"[^A-Za-z0-9._-]+")
-
 
 logger = logging.getLogger("ironcalc_import")
 
@@ -210,13 +210,6 @@ def _evaluation_profile_id(saved_by: Optional[str], locale: str) -> Optional[str
     if saved_by and "Macintosh" in saved_by:
         return "mac-365-en_US"
     return "win-365-en_US"
-
-
-def _scrub_filename(part: str) -> str:
-    """Folds a path component into filesystem-safe characters."""
-
-    cleaned = _FILENAME_SCRUB.sub("_", part).strip("._") or "sheet"
-    return cleaned
 
 
 def _read_shared_strings_preserving_escapes(xml_source: Any) -> List[str]:
@@ -873,21 +866,6 @@ def _iter_xlsx(source_dir: Path) -> List[Path]:
 
     files = sorted(p for p in source_dir.rglob("*.xlsx") if p.is_file() and not p.name.startswith("."))
     return files
-
-
-def suite_name(rel_source: str, sheet_title: str) -> str:
-    """The suite of one fixture sheet; `<suite>.<addr>` is a case's id.
-
-    `tests/ironcalc_divergence.yaml` keys its entries by that id, and the
-    loaded-file gate derives the same name for every sheet it reads.
-    """
-
-    xlsx_stem = _scrub_filename(Path(rel_source).stem)
-    sheet_slug = _scrub_filename(sheet_title)
-    rel_dir = _scrub_filename(str(Path(rel_source).parent).replace("/", "__"))
-    if rel_dir in ("", "."):
-        return f"ironcalc_{xlsx_stem}_{sheet_slug}"
-    return f"ironcalc_{rel_dir}_{xlsx_stem}_{sheet_slug}"
 
 
 def _out_filename(rel_source: str, xlsx_stem: str, sheet_title: str) -> str:
