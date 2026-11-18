@@ -125,6 +125,12 @@ TEST(FormulaLocalize, BuiltInDefinedNamesTakeTheLocaleSpelling) {
   EXPECT_EQ(canonicalize_in(ExcelLocale::kRuRU, "=ЧСТРОК(область_печати)"), "=ROWS(Print_Area)");
   EXPECT_EQ(canonicalize_in(ExcelLocale::kEsES, "=FILAS(área_de_impresión)"), "=ROWS(Print_Area)");
   EXPECT_EQ(canonicalize_in(ExcelLocale::kZhCN, "=ROWS(提取)"), "=ROWS(Extract)");
+  EXPECT_EQ(localize_in(ExcelLocale::kFrFR, "=ROWS(_xlnm.Sheet_Title)+ROWS(Recorder)"),
+            "=LIGNES(Titre_de_la_feuille)+LIGNES(Fonction_enregistrement)");
+  EXPECT_EQ(localize_in(ExcelLocale::kZhCN, "=ROWS(Auto_Open)+ROWS(Recorder)"), "=ROWS(Auto_Open)+ROWS(录音机)");
+  EXPECT_EQ(canonicalize_in(ExcelLocale::kDeDE, "=ZEILEN(auto_öffnen)+ZEILEN(KONSOLIDIERUNGSBEREICH)"),
+            "=ROWS(Auto_Open)+ROWS(Consolidate_Area)");
+  EXPECT_EQ(canonicalize_in(ExcelLocale::kPtBR, "=LINS(título_de_planilha)"), "=ROWS(Sheet_Title)");
   // The English spelling is not the local name where the locale has its own.
   EXPECT_EQ(canonicalize_in(ExcelLocale::kDeDE, "=ZEILEN(Criteria)"), "=ROWS(Criteria)");
 }

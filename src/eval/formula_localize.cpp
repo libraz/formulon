@@ -115,10 +115,19 @@ constexpr BuiltinNameSpelling kBuiltinNameSpellings[] = {
     {"Database",
      {"", "", "Datenbank", "Base_de_donnees", "", "", "", "BaseDeDatos", "BaseDeDatos", "Banco_de_dados", "База_данных",
       "", "", ""}},
-    {"Consolidate_Area", {}},
-    {"Sheet_Title", {}},
-    {"Auto_Open", {}},
-    {"Recorder", {}},
+    {"Consolidate_Area",
+     {"", "", "Konsolidierungsbereich", "Zone_de_consolidation", "", "", "", "Área_de_consolidación",
+      "Área_de_consolidación", "Area_de_consolidacao", "Область_консолидации", "", "Area_unifica",
+      "Consolidatiebereik"}},
+    {"Sheet_Title",
+     {"", "", "Tabellenüberschrift", "Titre_de_la_feuille", "", "", "", "Título_hoja", "Título_hoja",
+      "Título_de_planilha", "Название_листа", "", "Titolo_foglio", "Bladtitel"}},
+    {"Auto_Open",
+     {"", "", "Auto_öffnen", "Auto_ouvrir", "", "", "", "Auto_abrir", "Auto_abrir", "Abrir_auto", "Авто_открыть", "",
+      "Auto_apri", "Auto_openen"}},
+    {"Recorder",
+     {"", "", "Aufzeichnung", "Fonction_enregistrement", "录音机", "", "", "Grabación", "Grabación", "Gravador",
+      "Рекордер", "", "Registratore", "Opname"}},
 };
 
 // `locale`'s spelling of the built-in name `name` (`_xlnm.Print_Area` or
