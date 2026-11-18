@@ -842,6 +842,18 @@ entries:
     prefer: formulon
     first_noted: 2026-10-07
     last_verified_excel_version: "16.113.3"
+  # The XLSB encoder has no token for such a qualifier, so the cell saves its
+  # cached value only.
+  - id: xlsb_save_drops_formula_with_unknown_sheet_qualifier
+    applies_to: all
+    cause: engine-gap
+    mode: skip-oracle
+    scope: unit-test
+    evidence: [src/io/xlsb/workbook_bin_writer.cpp, tests/unit/io/xlsb/writer_formula_test.cpp]
+    reason: "A formula whose sheet qualifier names no sheet of the workbook (`=Nope!A1`, `=SUM(Data:Nope!A1)` with Nope absent) is written to XLSB as its cached value alone, with no formula, while an XLSX save keeps the formula text. Excel holds such a qualifier as a link to an external book of that name (see missing_local_sheet_qualifier_binds_external_book) and saves the formula through that link in both formats."
+    prefer: excel
+    first_noted: 2026-11-19
+    last_verified_excel_version: "16.113.3"
   # Excel re-reads a closed supporting workbook from disk when COUNTBLANK over
   # it is entered; Formulon reads the cached link part only.
   - id: countblank_external_entry_rereads_closed_book

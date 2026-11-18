@@ -1039,6 +1039,39 @@ TEST(XlsbWriter, SpillOfAnotherSheetsAnchorRegistersItsXti) {
   EXPECT_EQ(cell->formula_text, "=Sheet3!D5#");
 }
 
+TEST(XlsbWriter, AFormulaQualifiedByNoSheetOfTheWorkbookSavesItsCachedValueOnly) {
+  // The encoder has no token for a qualifier naming no sheet, so the XLSB cell keeps only its value; XLSX keeps the
+  // text.
+  Workbook wb = Workbook::create_empty();
+  wb.add_sheet("Host");
+  wb.add_sheet("Data");
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 0U, 0U, "=Nope!A1")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 1U, 0U, "=SUM(Data:Nope!A1)")));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_formula(0, 2U, 0U, "=Data!A1")));
+  auto recalc_or = wb.recalc(eval::default_registry());
+  ASSERT_TRUE(static_cast<bool>(recalc_or)) << recalc_or.error().message;
+
+  auto xlsx_or = write_ooxml(wb);
+  ASSERT_TRUE(static_cast<bool>(xlsx_or)) << xlsx_or.error().message;
+  auto from_xlsx = read_ooxml(SpanOf(xlsx_or.value()));
+  ASSERT_TRUE(static_cast<bool>(from_xlsx)) << from_xlsx.error().message;
+  const Sheet& via_xlsx = from_xlsx.value().workbook.sheet(0);
+  EXPECT_EQ(via_xlsx.cell_at(0U, 0U)->formula_text, "=Nope!A1");
+  EXPECT_EQ(via_xlsx.cell_at(1U, 0U)->formula_text, "=SUM(Data:Nope!A1)");
+
+  auto write_or = write_xlsb_with_result(wb);
+  ASSERT_TRUE(static_cast<bool>(write_or)) << write_or.error().message;
+  EXPECT_EQ(write_or.value().diagnostics.downgraded_formula_count, 2U);
+  auto from_xlsb = read_xlsb(SpanOf(write_or.value().bytes));
+  ASSERT_TRUE(static_cast<bool>(from_xlsb)) << from_xlsb.error().message;
+  const Sheet& via_xlsb = from_xlsb.value().workbook.sheet(0);
+  EXPECT_TRUE(via_xlsb.cell_at(0U, 0U)->formula_text.empty());
+  EXPECT_EQ(via_xlsb.cell_at(0U, 0U)->cached_value, Value::error(ErrorCode::Ref));
+  EXPECT_TRUE(via_xlsb.cell_at(1U, 0U)->formula_text.empty());
+  EXPECT_EQ(via_xlsb.cell_at(1U, 0U)->cached_value, Value::error(ErrorCode::Name));
+  EXPECT_EQ(via_xlsb.cell_at(2U, 0U)->formula_text, "=Data!A1");
+}
+
 }  // namespace
 }  // namespace xlsb
 }  // namespace io
