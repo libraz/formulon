@@ -182,6 +182,98 @@ TEST(FormulonCApiSheetLayout, GetKindReadsWorksheetByDefaultAndRefusesBadArgumen
   EXPECT_EQ(fm_sheet_get_kind(wb.handle, 99U, &kind), FM_STATUS_SHEET_INDEX_OUT_OF_RANGE);
 }
 
+// A patch stating every field of `view` as SET.
+fm_sheet_view_patch_t RestatingPatch(const fm_sheet_view_info_t& view) {
+  fm_sheet_view_patch_t patch = FM_STRUCT_INIT(fm_sheet_view_patch_t);
+  patch.zoom_pct_op = FM_PATCH_OP_SET;
+  patch.zoom_pct = view.zoom_pct;
+  patch.freeze_rows_op = FM_PATCH_OP_SET;
+  patch.freeze_rows = view.freeze_rows;
+  patch.freeze_cols_op = FM_PATCH_OP_SET;
+  patch.freeze_cols = view.freeze_cols;
+  patch.show_grid_lines_op = FM_PATCH_OP_SET;
+  patch.show_grid_lines = view.show_grid_lines;
+  patch.show_row_column_headers_op = FM_PATCH_OP_SET;
+  patch.show_row_column_headers = view.show_row_column_headers;
+  patch.show_zeros_op = FM_PATCH_OP_SET;
+  patch.show_zeros = view.show_zeros;
+  patch.right_to_left_op = FM_PATCH_OP_SET;
+  patch.right_to_left = view.right_to_left;
+  patch.tab_selected_op = FM_PATCH_OP_SET;
+  patch.tab_selected = view.tab_selected;
+  patch.view_mode_op = FM_PATCH_OP_SET;
+  patch.view_mode = view.view_mode;
+  patch.top_left_row_op = FM_PATCH_OP_SET;
+  patch.top_left_row = view.top_left_row;
+  patch.top_left_col_op = FM_PATCH_OP_SET;
+  patch.top_left_col = view.top_left_col;
+  patch.pane_top_left_row_op = FM_PATCH_OP_SET;
+  patch.pane_top_left_row = view.pane_top_left_row;
+  patch.pane_top_left_col_op = FM_PATCH_OP_SET;
+  patch.pane_top_left_col = view.pane_top_left_col;
+  patch.split_x_twips_op = FM_PATCH_OP_SET;
+  patch.split_x_twips = view.split_x_twips;
+  patch.split_y_twips_op = FM_PATCH_OP_SET;
+  patch.split_y_twips = view.split_y_twips;
+  patch.show_formulas_op = FM_PATCH_OP_SET;
+  patch.show_formulas = view.show_formulas;
+  patch.show_outline_symbols_op = FM_PATCH_OP_SET;
+  patch.show_outline_symbols = view.show_outline_symbols;
+  return patch;
+}
+
+fm_sheet_view_info_t ViewOf(fm_workbook_t* wb, std::size_t sheet) {
+  fm_sheet_view_info_t view = FM_STRUCT_INIT(fm_sheet_view_info_t);
+  EXPECT_EQ(fm_sheet_get_view(wb, sheet, &view), 0) << fm_get_last_error_message();
+  return view;
+}
+
+TEST(FormulonCApiSheetLayout, ChartsheetViewTakesOnlyANewZoom) {
+  for (const char* ext : {"xlsx", "xlsb"}) {
+    SCOPED_TRACE(ext);
+    WorkbookGuard wb;
+    LoadChartsheetFixture(ext, &wb);
+    ASSERT_NE(wb.handle, nullptr);
+    // The fixture's chartsheet view states zoomToFit and no zoomScale.
+    EXPECT_EQ(ViewOf(wb.handle, 1).zoom_pct, 100U);
+    EXPECT_TRUE(wb.handle->wb->sheet(1).view().zoom_to_fit);
+
+    // Restating the reported view changes nothing, zoom-to-fit included.
+    const fm_sheet_view_patch_t same = RestatingPatch(ViewOf(wb.handle, 1));
+    ASSERT_EQ(fm_sheet_update_view(wb.handle, 1, &same), 0) << fm_get_last_error_message();
+    EXPECT_TRUE(wb.handle->wb->sheet(1).view().zoom_to_fit);
+
+    EXPECT_EQ(SetViewFreeze(wb.handle, 1, 1, 0), kInvalidArgument);
+    EXPECT_EQ(UpdateViewField(wb.handle, 1, &fm_sheet_view_patch_t::show_grid_lines_op,
+                              &fm_sheet_view_patch_t::show_grid_lines, 0),
+              kInvalidArgument);
+    // A refused patch writes nothing, its zoom included.
+    fm_sheet_view_patch_t mixed = same;
+    mixed.zoom_pct = 80U;
+    mixed.tab_selected = 1 - mixed.tab_selected;
+    EXPECT_EQ(fm_sheet_update_view(wb.handle, 1, &mixed), kInvalidArgument);
+    EXPECT_EQ(ViewOf(wb.handle, 1).zoom_pct, 100U);
+    EXPECT_TRUE(wb.handle->wb->sheet(1).view().zoom_to_fit);
+
+    ASSERT_EQ(SetViewZoom(wb.handle, 1, 80U), 0) << fm_get_last_error_message();
+    EXPECT_EQ(ViewOf(wb.handle, 1).zoom_pct, 80U);
+    EXPECT_FALSE(wb.handle->wb->sheet(1).view().zoom_to_fit);
+  }
+}
+
+TEST(FormulonCApiSheetLayout, OtherNonWorksheetViewTakesNoChange) {
+  WorkbookGuard wb;
+  LoadChartsheetFixture("xlsx", &wb);
+  ASSERT_NE(wb.handle, nullptr);
+  formulon::Sheet& sheet = wb.handle->wb->sheet(1);
+  sheet.set_opaque_ooxml_sheet(sheet.opaque_ooxml_part_path(),
+                               "http://schemas.openxmlformats.org/officeDocument/2006/relationships/dialogsheet");
+  const fm_sheet_view_patch_t same = RestatingPatch(ViewOf(wb.handle, 1));
+  EXPECT_EQ(fm_sheet_update_view(wb.handle, 1, &same), 0) << fm_get_last_error_message();
+  EXPECT_EQ(SetViewZoom(wb.handle, 1, 80U), kInvalidArgument);
+  EXPECT_EQ(ViewOf(wb.handle, 1).zoom_pct, 100U);
+}
+
 TEST(FormulonCApiSheetLayout, GetKindAndChartsheetChartReadAnExcelChartsheet) {
   for (const char* ext : {"xlsx", "xlsb"}) {
     SCOPED_TRACE(ext);

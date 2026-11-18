@@ -5,8 +5,11 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
+#include "io/passthrough_part_index.h"
 #include "io/xlsb/brt_color.h"
 #include "io/xlsb/print_records.h"
 #include "io/xlsb/protection_records.h"
@@ -16,8 +19,12 @@
 #include "io/xlsb/sheet_properties_records.h"
 #include "io/xml_utils.h"
 #include "pugixml.hpp"
+#include "sheet.h"
 #include "sheet_layout.h"
+#include "utils/a1_ref.h"
 #include "utils/status_macros.h"
+#include "utils/strings.h"
+#include "workbook.h"
 
 namespace formulon {
 namespace io {
@@ -416,7 +423,205 @@ bool emit_cs_protection(std::vector<std::uint8_t>& dst, const pugi::xml_node& pr
   return true;
 }
 
+/// One attribute of a start tag: its raw text with the whitespace before it, its name and its value.
+struct TagAttribute {
+  std::string_view raw;
+  std::string_view name;
+  std::string_view value;
+};
+
+/// The first `<sheetView` start tag of a chartsheet part (any namespace prefix), split into its attributes.
+struct ViewTag {
+  std::size_t begin = 0;
+  std::size_t end = 0;
+  std::string_view head;
+  std::vector<TagAttribute> attributes;
+  std::string_view tail;
+};
+
+std::optional<ViewTag> first_view_tag(std::string_view xml) {
+  constexpr std::string_view kNameEnd = " \t\r\n/>";
+  for (std::size_t at = xml.find('<'); at != std::string_view::npos; at = xml.find('<', at + 1U)) {
+    const std::size_t name_end = xml.find_first_of(kNameEnd, at + 1U);
+    if (name_end == std::string_view::npos) {
+      return std::nullopt;
+    }
+    std::string_view name = xml.substr(at + 1U, name_end - at - 1U);
+    if (const std::size_t colon = name.find(':'); colon != std::string_view::npos) {
+      name.remove_prefix(colon + 1U);
+    }
+    if (name != "sheetView") {
+      continue;
+    }
+    ViewTag tag;
+    tag.begin = at;
+    tag.head = xml.substr(at, name_end - at);
+    std::size_t pos = name_end;
+    while (true) {
+      const std::size_t start = pos;
+      pos = xml.find_first_not_of(" \t\r\n", pos);
+      if (pos == std::string_view::npos) {
+        return std::nullopt;
+      }
+      if (xml[pos] == '/' || xml[pos] == '>') {
+        const std::size_t close = xml.find('>', pos);
+        if (close == std::string_view::npos) {
+          return std::nullopt;
+        }
+        tag.tail = xml.substr(start, close + 1U - start);
+        tag.end = close + 1U;
+        return tag;
+      }
+      const std::size_t eq = xml.find('=', pos);
+      const std::size_t quote = eq == std::string_view::npos ? eq : xml.find_first_of("\"'", eq);
+      const std::size_t value_end = quote == std::string_view::npos ? quote : xml.find(xml[quote], quote + 1U);
+      if (value_end == std::string_view::npos) {
+        return std::nullopt;
+      }
+      const std::size_t name_stop = xml.find_first_of(" \t\r\n=", pos);
+      tag.attributes.push_back(TagAttribute{xml.substr(start, value_end + 1U - start), xml.substr(pos, name_stop - pos),
+                                            xml.substr(quote + 1U, value_end - quote - 1U)});
+      pos = value_end + 1U;
+    }
+  }
+  return std::nullopt;
+}
+
+// A stored zoom, or the default when it is outside the 10..400 a view can hold, as a worksheet view reads it.
+std::uint32_t valid_zoom(std::uint32_t zoom) {
+  return zoom >= 10U && zoom <= 400U ? zoom : kDefaultZoom;
+}
+
+ChartsheetZoom zoom_of(const ViewTag& tag) {
+  ChartsheetZoom zoom;
+  for (const TagAttribute& attr : tag.attributes) {
+    if (attr.name == "zoomScale") {
+      std::size_t pos = 0;
+      std::uint32_t value = 0;
+      const bool whole = a1::parse_uint(attr.value, &pos, &value) && pos == attr.value.size();
+      zoom.zoom_scale = whole ? valid_zoom(value) : kDefaultZoom;
+    } else if (attr.name == "zoomToFit") {
+      zoom.zoom_to_fit = attr.value == "1" || attr.value == "true";
+    }
+  }
+  return zoom;
+}
+
+/// The first BrtBeginCsView of `part` that carries the whole view, or nullopt.
+std::optional<ByteSpan> first_cs_view(ByteSpan part) {
+  ByteSpan cursor = part;
+  while (cursor.size > 0) {
+    Expected<XlsbRecord, Error> rec = read_record(cursor);
+    if (!rec) {
+      return std::nullopt;
+    }
+    if (rec.value().type == kBrtBeginCsView && rec.value().payload.size >= kCsViewBytes) {
+      return rec.value().payload;
+    }
+  }
+  return std::nullopt;
+}
+
 }  // namespace
+
+std::optional<ChartsheetZoom> chartsheet_zoom_from_xml(std::string_view xml) {
+  const std::optional<ViewTag> tag = first_view_tag(xml);
+  if (!tag) {
+    return std::nullopt;
+  }
+  return zoom_of(*tag);
+}
+
+std::optional<ChartsheetZoom> chartsheet_zoom_from_records(ByteSpan part) {
+  const std::optional<ByteSpan> view = first_cs_view(part);
+  if (!view) {
+    return std::nullopt;
+  }
+  ChartsheetZoom zoom;
+  zoom.zoom_to_fit = (load_u16(view->data) & kCsViewZoomToFit) != 0U;
+  zoom.zoom_scale = valid_zoom(load_u32(view->data + 2));
+  return zoom;
+}
+
+std::string chartsheet_xml_with_zoom(std::string_view xml, ChartsheetZoom zoom) {
+  const std::optional<ViewTag> tag = first_view_tag(xml);
+  if (!tag || zoom_of(*tag) == zoom) {
+    return std::string(xml);
+  }
+  std::string scale;
+  if (zoom.zoom_scale != kDefaultZoom) {
+    append_xml_attr_uint(scale, "zoomScale", zoom.zoom_scale);
+  }
+  std::string out(xml.substr(0, tag->begin));
+  out.append(tag->head);
+  // A new zoomScale goes before workbookViewId and zoomToFit last, the order Excel writes them in.
+  bool scale_placed = false;
+  for (const TagAttribute& attr : tag->attributes) {
+    if (attr.name == "zoomToFit") {
+      continue;
+    }
+    if (attr.name == "zoomScale" || (attr.name == "workbookViewId" && !scale_placed)) {
+      out.append(scale);
+      scale_placed = true;
+      if (attr.name == "zoomScale") {
+        continue;
+      }
+    }
+    out.append(attr.raw);
+  }
+  if (!scale_placed) {
+    out.append(scale);
+  }
+  if (zoom.zoom_to_fit) {
+    out.append(" zoomToFit=\"1\"");
+  }
+  out.append(tag->tail);
+  out.append(xml.substr(tag->end));
+  return out;
+}
+
+std::vector<std::uint8_t> chartsheet_records_with_zoom(ByteSpan part, ChartsheetZoom zoom) {
+  std::vector<std::uint8_t> out(part.data, part.data + part.size);
+  if (const std::optional<ByteSpan> view = first_cs_view(part)) {
+    std::uint8_t* at = out.data() + (view->data - part.data);
+    const std::uint16_t flags = load_u16(view->data);
+    store_u16(at, zoom.zoom_to_fit ? static_cast<std::uint16_t>(flags | kCsViewZoomToFit)
+                                   : static_cast<std::uint16_t>(flags & ~kCsViewZoomToFit));
+    store_u32(at + 2, zoom.zoom_scale);
+  }
+  return out;
+}
+
+std::vector<PassthroughPart> rezoomed_chartsheet_parts(const Workbook& wb) {
+  std::vector<PassthroughPart> out;
+  const PassthroughPartIndex index(wb.passthrough_parts());
+  for (std::size_t i = 0; i < wb.sheet_count(); ++i) {
+    const Sheet& sheet = wb.sheet(i);
+    const PassthroughPart* part =
+        sheet.kind() == SheetKind::kChartsheet ? index.find(sheet.opaque_ooxml_part_path()) : nullptr;
+    if (part == nullptr) {
+      continue;
+    }
+    const ChartsheetZoom zoom{sheet.view().zoom_scale, sheet.view().zoom_to_fit};
+    const ByteSpan bytes{part->bytes.data(), part->bytes.size()};
+    if (strings::ends_with(part->path, ".bin")) {
+      const std::optional<ChartsheetZoom> stored = chartsheet_zoom_from_records(bytes);
+      if (stored && *stored != zoom) {
+        out.push_back(*part);
+        out.back().bytes = chartsheet_records_with_zoom(bytes, zoom);
+      }
+      continue;
+    }
+    const std::string_view xml(reinterpret_cast<const char*>(bytes.data), bytes.size);
+    const std::optional<ChartsheetZoom> stored = chartsheet_zoom_from_xml(xml);
+    if (stored && *stored != zoom) {
+      const std::string rewritten = chartsheet_xml_with_zoom(xml, zoom);
+      out.push_back(*part);
+      out.back().bytes.assign(rewritten.begin(), rewritten.end());
+    }
+  }
+  return out;
+}
 
 Expected<ChartsheetXml, Error> chartsheet_xml_from_records(ByteSpan part) {
   ChartsheetXml out;

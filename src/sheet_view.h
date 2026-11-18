@@ -49,6 +49,9 @@ struct SheetView {
   static constexpr std::uint32_t kDefaultZoomScale = 100U;
 
   std::uint32_t zoom_scale = kDefaultZoomScale;
+  /// A chartsheet's `zoomToFit`: the chart is sized to the window. Always
+  /// false on a worksheet, whose `<sheetView>` has no such attribute.
+  bool zoom_to_fit = false;
   std::uint32_t freeze_rows = 0;  // 0 = no row freeze
   std::uint32_t freeze_cols = 0;  // 0 = no column freeze
   /// A frozen view saved as `frozenSplit`: a freeze that also keeps a

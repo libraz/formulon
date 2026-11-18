@@ -648,7 +648,10 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
     const PassthroughPart* bin = source_index.find(wb.sheet(i).opaque_ooxml_part_path());
     ASSIGN_OR_RETURN(const xlsb::ChartsheetXml chartsheet,
                      xlsb::chartsheet_xml_from_records(ByteSpan{bin->bytes.data(), bin->bytes.size()}));
-    RETURN_IF_ERROR(AddPart(writer.get(), converted, chartsheet.xml, &written_paths));
+    const SheetView& view = wb.sheet(i).view();
+    RETURN_IF_ERROR(AddPart(writer.get(), converted,
+                            xlsb::chartsheet_xml_with_zoom(chartsheet.xml, {view.zoom_scale, view.zoom_to_fit}),
+                            &written_paths));
     if (const PassthroughPart* rels =
             source_index.find(ooxml::rels_path_for_part(wb.sheet(i).opaque_ooxml_part_path()))) {
       RETURN_IF_ERROR(AddPartBytes(writer.get(), ooxml::rels_path_for_part(converted), rels->bytes, &written_paths));
@@ -672,6 +675,8 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
   }
   const std::vector<PassthroughPart>& refreshed = refreshed_or.value();
   const PassthroughPartIndex refreshed_index(refreshed);
+  const std::vector<PassthroughPart> rezoomed = xlsb::rezoomed_chartsheet_parts(wb);
+  const PassthroughPartIndex rezoomed_index(rezoomed);
   for (const PassthroughPart* part : plan.passthrough_kept) {
     // Never emit a traversal-shaped part name, even if one reached the model
     // through a path other than the reader (which already rejects them).
@@ -680,6 +685,9 @@ Expected<OoxmlWriteResult, Error> write_ooxml_with_result(const Workbook& wb) {
                         "context=write_ooxml part=" + part->path);
     }
     const PassthroughPart* replacement = refreshed_index.find(part->path);
+    if (replacement == nullptr) {
+      replacement = rezoomed_index.find(part->path);
+    }
     const auto& bytes = replacement != nullptr ? replacement->bytes : part->bytes;
     RETURN_IF_ERROR(AddPartBytes(writer.get(), part->path, bytes, &written_paths));
   }

@@ -10485,7 +10485,8 @@ typedef struct {
  */
 typedef struct {
   uint32_t struct_size;
-  /** Operation on `zoom_pct`: keep leaves it, set writes it; it cannot be cleared. */
+  /** Operation on `zoom_pct`: keep leaves it, set writes it; it cannot be cleared. On a chartsheet, setting a zoom
+   *  other than the current one ends zoom-to-fit. */
   fm_patch_op_t zoom_pct_op;
   /** The zoom percentage to set, in [10, 400]; a value outside it is refused, not clamped. */
   uint32_t zoom_pct;
@@ -10686,8 +10687,14 @@ FM_API fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_index
  *         `FM_STATUS_SHEET_INDEX_OUT_OF_RANGE` (10) when `sheet_index` is out of range;
  *         `FM_STATUS_INVALID_ARGUMENT` (2) when an op is outside 0..2, any op is `CLEAR`, a `SET`
  *           value is outside the domain its field states, a non-zero freeze and a non-zero
- *           split are set together, or the pane origin does not fit the view's panes.
+ *           split are set together, the pane origin does not fit the view's panes, or the
+ *           sheet is not a worksheet and the patch sets a field to a value other than the one
+ *           `fm_sheet_get_view` reports, except `zoom_pct` on a chartsheet.
  *         Nothing is written on failure.
+ *
+ * A sheet that is not a worksheet keeps its stored view, so a patch restating the view
+ * `fm_sheet_get_view` reports succeeds and changes nothing. On a chartsheet a new
+ * `zoom_pct` is written as `zoomScale` and ends zoom-to-fit (`zoomToFit` is removed).
  */
 FM_API fm_status_t fm_sheet_update_view(fm_workbook_t* wb, size_t sheet_index, const fm_sheet_view_patch_t* patch);
 

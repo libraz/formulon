@@ -73,20 +73,8 @@ void activate_successor_if_hidden(formulon::Workbook& workbook, std::uint32_t in
   }
 }
 
-}  // namespace
-
-extern "C" fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_index, fm_sheet_view_info_t* out) {
-  clear_last_error();
-  if (out == nullptr) {
-    return null_argument();
-  }
-  if (auto rc = check_record_size(*out); rc != 0) {
-    return rc;
-  }
-  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
-    return rc;
-  }
-  const formulon::SheetView& v = wb->workbook().sheet(sheet_index).view();
+// The fields of `out` after `struct_size`, as `fm_sheet_get_view` reports `v`.
+void fill_view_info(const formulon::SheetView& v, fm_sheet_view_info_t* out) {
   out->zoom_pct = v.zoom_scale;
   out->freeze_rows = v.freeze_rows;
   out->freeze_cols = v.freeze_cols;
@@ -104,6 +92,22 @@ extern "C" fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_i
   out->split_y_twips = v.is_frozen() ? 0.0 : v.split_y;
   out->show_formulas = v.show_formulas ? 1 : 0;
   out->show_outline_symbols = v.show_outline_symbols ? 1 : 0;
+}
+
+}  // namespace
+
+extern "C" fm_status_t fm_sheet_get_view(const fm_workbook_t* wb, size_t sheet_index, fm_sheet_view_info_t* out) {
+  clear_last_error();
+  if (out == nullptr) {
+    return null_argument();
+  }
+  if (auto rc = check_record_size(*out); rc != 0) {
+    return rc;
+  }
+  if (auto rc = check_sheet_index(wb, sheet_index); rc != 0) {
+    return rc;
+  }
+  fill_view_info(wb->workbook().sheet(sheet_index).view(), out);
   return 0;
 }
 
@@ -126,6 +130,33 @@ bool states_non_zero(fm_patch_op_t op, T value) {
 template <typename T>
 T patched(fm_patch_op_t op, T value, T current) {
   return op == FM_PATCH_OP_SET ? value : current;
+}
+
+// Whether `op` / `value` sets a field to something other than its reported `current`.
+template <typename T>
+bool changes(fm_patch_op_t op, T value, T current) {
+  return op == FM_PATCH_OP_SET && value != current;
+}
+
+// Whether `patch` changes any field of a view reported as `current` other than the zoom.
+bool changes_beyond_zoom(const fm_sheet_view_patch_t& patch, const fm_sheet_view_info_t& current) {
+  return changes(patch.freeze_rows_op, patch.freeze_rows, current.freeze_rows) ||
+         changes(patch.freeze_cols_op, patch.freeze_cols, current.freeze_cols) ||
+         changes(patch.view_mode_op, patch.view_mode, current.view_mode) ||
+         changes(patch.top_left_row_op, patch.top_left_row, current.top_left_row) ||
+         changes(patch.top_left_col_op, patch.top_left_col, current.top_left_col) ||
+         changes(patch.pane_top_left_row_op, patch.pane_top_left_row, current.pane_top_left_row) ||
+         changes(patch.pane_top_left_col_op, patch.pane_top_left_col, current.pane_top_left_col) ||
+         changes(patch.split_x_twips_op, patch.split_x_twips, current.split_x_twips) ||
+         changes(patch.split_y_twips_op, patch.split_y_twips, current.split_y_twips) ||
+         changes(patch.show_grid_lines_op, patch.show_grid_lines != 0, current.show_grid_lines != 0) ||
+         changes(patch.show_row_column_headers_op, patch.show_row_column_headers != 0,
+                 current.show_row_column_headers != 0) ||
+         changes(patch.show_zeros_op, patch.show_zeros != 0, current.show_zeros != 0) ||
+         changes(patch.show_formulas_op, patch.show_formulas != 0, current.show_formulas != 0) ||
+         changes(patch.show_outline_symbols_op, patch.show_outline_symbols != 0, current.show_outline_symbols != 0) ||
+         changes(patch.right_to_left_op, patch.right_to_left != 0, current.right_to_left != 0) ||
+         changes(patch.tab_selected_op, patch.tab_selected != 0, current.tab_selected != 0);
 }
 
 }  // namespace
@@ -186,6 +217,21 @@ extern "C" fm_status_t fm_sheet_update_view(fm_workbook_t* wb, size_t sheet_inde
 
   formulon::Workbook& workbook = wb->workbook();
   const formulon::SheetView& current = workbook.sheet(sheet_index).view();
+  // A sheet that is not a worksheet keeps its stored view; a chartsheet takes a new zoom, which ends zoom-to-fit.
+  if (const formulon::Sheet& sheet = workbook.sheet(sheet_index); sheet.is_opaque_ooxml_sheet()) {
+    fm_sheet_view_info_t reported{};
+    fill_view_info(current, &reported);
+    const bool new_zoom = changes(patch->zoom_pct_op, patch->zoom_pct, reported.zoom_pct);
+    if (changes_beyond_zoom(*patch, reported) || (new_zoom && sheet.kind() != formulon::SheetKind::kChartsheet)) {
+      return invalid_argument(
+          "patch changes a field other than a chartsheet's zoom_pct on a sheet that is not a worksheet");
+    }
+    if (new_zoom) {
+      workbook.sheet(sheet_index).mutable_view().zoom_scale = patch->zoom_pct;
+      workbook.sheet(sheet_index).mutable_view().zoom_to_fit = false;
+    }
+    return 0;
+  }
   formulon::SheetView next = current;
 
   const std::uint32_t freeze_rows = patched(patch->freeze_rows_op, patch->freeze_rows, current.freeze_rows);

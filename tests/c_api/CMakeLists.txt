@@ -130,13 +130,17 @@ set(FORMULON_C_API_TEST_SOURCES
 )
 
 # The sheet-index status test calls every sheet-scoped function through a
-# table generated from the header and the name ledger.
+# table generated from the header and the name ledger (PyYAML required).
+if(NOT DEFINED _FORMULON_BEHAVIOR_PY)
+  find_package(Python3 COMPONENTS Interpreter REQUIRED)
+  set(_FORMULON_BEHAVIOR_PY "${Python3_EXECUTABLE}")
+endif()
 set(_FM_SHEET_INDEX_CALLS_SCRIPT "${CMAKE_SOURCE_DIR}/tools/codegen/gen_sheet_index_calls.py")
 set(_FM_SHEET_INDEX_CALLS_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
 set(_FM_SHEET_INDEX_CALLS_INC "${_FM_SHEET_INDEX_CALLS_DIR}/sheet_index_calls.inc")
 add_custom_command(
   OUTPUT "${_FM_SHEET_INDEX_CALLS_INC}"
-  COMMAND ${FORMULON_TEST_PYTHON} "${_FM_SHEET_INDEX_CALLS_SCRIPT}" --output "${_FM_SHEET_INDEX_CALLS_INC}"
+  COMMAND ${_FORMULON_BEHAVIOR_PY} "${_FM_SHEET_INDEX_CALLS_SCRIPT}" --output "${_FM_SHEET_INDEX_CALLS_INC}"
   DEPENDS
     "${_FM_SHEET_INDEX_CALLS_SCRIPT}"
     "${CMAKE_SOURCE_DIR}/src/c_api/formulon_c.h"

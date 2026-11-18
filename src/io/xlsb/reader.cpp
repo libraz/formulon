@@ -46,6 +46,7 @@
 #include "io/rich_values.h"
 #include "io/sheet_phonetic.h"
 #include "io/threaded_comments_io.h"
+#include "io/xlsb/chartsheet_records.h"
 #include "io/xlsb/comments_records.h"
 #include "io/xlsb/drawing_record.h"
 #include "io/xlsb/external_link_reader.h"
@@ -965,6 +966,14 @@ Expected<XlsbReadResult, Error> read_xlsb(ByteSpan bytes, const ReadOptions& opt
 
   for (std::size_t i = 0; i < sheet_part_paths.size(); ++i) {
     const std::string& sheet_path = sheet_part_paths[i];
+    if (wb.sheet(i).kind() == SheetKind::kChartsheet && zip.has_entry(sheet_path)) {
+      ASSIGN_OR_RETURN(const auto chartsheet_bytes, zip.read_entry(sheet_path));
+      if (const std::optional<ChartsheetZoom> zoom =
+              chartsheet_zoom_from_records(ByteSpan{chartsheet_bytes.data(), chartsheet_bytes.size()})) {
+        wb.sheet(i).mutable_view().zoom_scale = zoom->zoom_scale;
+        wb.sheet(i).mutable_view().zoom_to_fit = zoom->zoom_to_fit;
+      }
+    }
     if (wb.sheet(i).is_opaque_ooxml_sheet()) {
       continue;
     }

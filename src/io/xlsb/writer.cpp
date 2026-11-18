@@ -559,7 +559,11 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
           const ChartsheetBin chartsheet,
           chartsheet_records_from_xml(
               std::string_view(reinterpret_cast<const char*>(xml->bytes.data()), xml->bytes.size()), theme.theme));
-      RETURN_IF_ERROR(AddPartBytes(writer.get(), converted, chartsheet.bytes));
+      const SheetView& view = workbook.sheet(i).view();
+      RETURN_IF_ERROR(
+          AddPartBytes(writer.get(), converted,
+                       chartsheet_records_with_zoom(ByteSpan{chartsheet.bytes.data(), chartsheet.bytes.size()},
+                                                    {view.zoom_scale, view.zoom_to_fit})));
       if (const PassthroughPart* rels =
               source_passthrough_index.find(source_passthrough, ooxml::rels_path_for_part(xml_path))) {
         RETURN_IF_ERROR(AddPartBytes(writer.get(), ooxml::rels_path_for_part(converted), rels->bytes));
@@ -642,6 +646,8 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
   // the model is untouched.
   ASSIGN_OR_RETURN(auto refreshed, refreshed_chart_parts(workbook));
   const io::PassthroughPartIndex refreshed_index(refreshed);
+  const std::vector<PassthroughPart> rezoomed = rezoomed_chartsheet_parts(workbook);
+  const io::PassthroughPartIndex rezoomed_index(rezoomed);
   for (const PassthroughPart* part : plan.passthrough_kept) {
     // Never emit a traversal-shaped part name, even if one reached the model
     // through a path other than the reader (which already rejects them).
@@ -654,6 +660,9 @@ Expected<XlsbWriteResult, Error> write_xlsb_with_result(const Workbook& workbook
       return std::move(fresh.error());
     }
     const PassthroughPart* replacement = refreshed_index.find(part->path);
+    if (replacement == nullptr) {
+      replacement = rezoomed_index.find(part->path);
+    }
     const auto copy = dxf_copies.find(part->path);
     const auto& part_bytes = copy != dxf_copies.end() ? copy->second
                              : replacement != nullptr ? replacement->bytes

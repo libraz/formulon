@@ -10,17 +10,19 @@
 # fixture's expectation.
 
 if(FM_BUILD_TESTING)
-  find_package(Python3 COMPONENTS Interpreter REQUIRED)
-  add_test(
-    NAME parity_test
-    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/parity/run_parity.py
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
-  set_tests_properties(parity_test PROPERTIES LABELS "PARITY")
-  set_tests_properties(parity_test PROPERTIES SKIP_RETURN_CODE 77)
-  add_test(
-    NAME parity_runner_test
-    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/parity/run_parity_test.py
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  )
+  find_package(Python3 COMPONENTS Interpreter)
+  if(Python3_Interpreter_FOUND)
+    add_test(
+      NAME parity_test
+      COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/parity/run_parity.py
+      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    )
+    set_tests_properties(parity_test PROPERTIES LABELS "PARITY")
+    set_tests_properties(parity_test PROPERTIES SKIP_RETURN_CODE 77)
+    add_test(
+      NAME parity_runner_test
+      COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/parity/run_parity_test.py
+      WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    )
+  endif()
 endif()

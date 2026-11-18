@@ -7,6 +7,7 @@
 set(FORMULON_INTEGRATION_TEST_SOURCES
   active_sheet_open_rule_test.cpp
   cf_databar_union_sqref_fixture_test.cpp
+  chartsheet_zoom_roundtrip_test.cpp
   external_links_roundtrip_test.cpp
   formula_corpus_fixture_smoke_test.cpp
   legacy_at_test.cpp

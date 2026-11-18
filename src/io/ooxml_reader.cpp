@@ -25,6 +25,7 @@
 #include <cstring>
 #include <deque>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -63,6 +64,7 @@
 #include "io/tables_reader.h"
 #include "io/threaded_comments_io.h"
 #include "io/workbook_kind_ooxml.h"
+#include "io/xlsb/chartsheet_records.h"
 #include "io/xml_utils.h"
 #include "io/zip_reader.h"
 #include "passthrough_part.h"
@@ -901,6 +903,14 @@ static Expected<OoxmlReadResult, Error> ReadOoxmlWithThreshold(ByteSpan bytes, s
         std::string ctx("context=ooxml_reader opaque_sheet_path=");
         ctx.append(sheet_path);
         return make_error(FormulonErrorCode::kIoSheetCorrupt, "opaque sheet part missing from package", std::move(ctx));
+      }
+      if (wb.sheet(i).kind() == SheetKind::kChartsheet) {
+        ASSIGN_OR_RETURN(const auto chartsheet_bytes, zip.read_entry(sheet_path));
+        if (const std::optional<xlsb::ChartsheetZoom> zoom = xlsb::chartsheet_zoom_from_xml(
+                std::string_view(reinterpret_cast<const char*>(chartsheet_bytes.data()), chartsheet_bytes.size()))) {
+          wb.sheet(i).mutable_view().zoom_scale = zoom->zoom_scale;
+          wb.sheet(i).mutable_view().zoom_to_fit = zoom->zoom_to_fit;
+        }
       }
       continue;
     }
