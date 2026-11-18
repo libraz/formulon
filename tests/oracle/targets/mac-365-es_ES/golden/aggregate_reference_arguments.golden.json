@@ -2,11 +2,11 @@
   "suite": "aggregate_reference_arguments",
   "description": "AGGREGATE functions 1-13 accept references only; the array form's k and a fourth array argument evaluate per element",
   "environment": {
-    "excel_version": "16.114.1",
+    "excel_version": "16.115",
     "excel_locale": "es-ES",
     "date1904": false,
     "iterative": false,
-    "generated_at": "2026-10-25T11:32:55Z"
+    "generated_at": "2026-11-18T12:06:19Z"
   },
   "tolerance": {
     "abs": 0.0,
