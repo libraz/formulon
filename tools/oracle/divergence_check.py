@@ -31,6 +31,8 @@ import functools
 import json
 import re
 import sys
+import xml.etree.ElementTree as ElementTree
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -50,6 +52,7 @@ DEFAULT_DIVERGENCE = REPO_ROOT / "tests" / "divergence.yaml"
 IRONCALC_DIVERGENCE = REPO_ROOT / "tests" / "ironcalc_divergence.yaml"
 GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "targets" / "mac-365-ja_JP" / "golden"
 IRONCALC_GOLDEN_DIR = REPO_ROOT / "tests" / "oracle" / "external" / "ironcalc" / "golden"
+IRONCALC_FIXTURE_DIR = REPO_ROOT / "tests" / "oracle" / "external" / "ironcalc" / "fixtures"
 VARIANTS_DIR = REPO_ROOT / "tests" / "oracle" / "targets"
 TARGETS_FILE = REPO_ROOT / "tools" / "oracle" / "targets.yaml"
 # The explicit every-target value of `applies_to`; `oracle_gen.py` reads it too.
@@ -690,6 +693,50 @@ def load_ironcalc_catalog(golden_dir: Path | None = None) -> tuple[set[str], int
     return ids, goldens
 
 
+def _package_target(target: str) -> str:
+    """A workbook relationship target as a package part name."""
+
+    return target.lstrip("/") if target.startswith("/") else f"xl/{target}"
+
+
+def load_ironcalc_fixture_cells(fixture_dir: Path | None = None) -> set[str]:
+    """Load `<suite>.<addr>` for every formula cell of every fixture sheet.
+
+    The loaded-file gate reads cells the importer leaves out (over its
+    per-sheet cap, or on a shape it cannot flatten), so an entry may name
+    one of those as well as an imported case.
+    """
+
+    try:
+        from tools.oracle.ironcalc_import import suite_name
+    except ImportError:  # run as a script from tools/oracle
+        from ironcalc_import import suite_name  # type: ignore
+
+    ids: set[str] = set()
+    root = fixture_dir or IRONCALC_FIXTURE_DIR
+    for path in sorted(root.rglob("*.xlsx")):
+        relative = path.relative_to(root).as_posix()
+        try:
+            with zipfile.ZipFile(path) as package:
+                workbook = ElementTree.fromstring(package.read("xl/workbook.xml"))
+                rels = ElementTree.fromstring(package.read("xl/_rels/workbook.xml.rels"))
+                targets = {rel.get("Id"): rel.get("Target", "") for rel in rels}
+                for sheet in workbook.iter():
+                    if not sheet.tag.endswith("}sheet"):
+                        continue
+                    rel_id = next((v for k, v in sheet.attrib.items() if k.endswith("}id")), None)
+                    part = _package_target(targets.get(rel_id, ""))
+                    if part not in package.namelist():
+                        continue
+                    suite = suite_name(relative, sheet.get("name", ""))
+                    for cell in ElementTree.fromstring(package.read(part)).iter():
+                        if cell.tag.endswith("}c") and any(child.tag.endswith("}f") for child in cell):
+                            ids.add(f"{suite}.{cell.get('r')}")
+        except (OSError, KeyError, zipfile.BadZipFile, ElementTree.ParseError):
+            continue
+    return ids
+
+
 def load_probe_names(golden_dir: Path | None = None) -> set[str]:
     """Names an entry may cite as probe evidence: file stem, suite or case.
 
@@ -741,11 +788,18 @@ def cited_probes(entry: dict) -> list[str]:
     return names
 
 
-def validate_ironcalc(path: Path, *, golden_dir: Path | None = None, probe_dir: Path | None = None) -> int:
+def validate_ironcalc(
+    path: Path,
+    *,
+    golden_dir: Path | None = None,
+    probe_dir: Path | None = None,
+    fixture_dir: Path | None = None,
+) -> int:
     """Validate `tests/ironcalc_divergence.yaml` against the imported corpus.
 
-    Every entry names one imported case, so entries and removed cases are
-    the same unit here; the tally is still printed against the corpus size
+    Every entry names one imported case, or a fixture formula cell only the
+    loaded-file gate reads, so entries and removed cases are the same unit
+    here; the tally is still printed against the corpus size
     because that is the denominator the skips come out of.
     """
 
@@ -760,6 +814,7 @@ def validate_ironcalc(path: Path, *, golden_dir: Path | None = None, probe_dir: 
         return 1
 
     case_ids, goldens = load_ironcalc_catalog(golden_dir)
+    fixture_cells = load_ironcalc_fixture_cells(fixture_dir)
     probe_names = load_probe_names(probe_dir)
 
     errors: list[str] = []
@@ -777,8 +832,8 @@ def validate_ironcalc(path: Path, *, golden_dir: Path | None = None, probe_dir: 
         if case_id in seen:
             errors.append(f"{case_id}: duplicate id")
         seen.add(case_id)
-        if case_id not in case_ids:
-            errors.append(f"{case_id}: orphan id; no imported IronCalc case carries it")
+        if case_id not in case_ids and case_id not in fixture_cells:
+            errors.append(f"{case_id}: orphan id; no imported IronCalc case or fixture formula cell carries it")
         mode = entry.get("mode", "skip-oracle")
         if mode != "skip-oracle":
             errors.append(f"{case_id}: mode must be skip-oracle; got {mode!r}")

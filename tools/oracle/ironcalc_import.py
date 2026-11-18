@@ -689,7 +689,6 @@ def _convert_sheet(
     cached_sheet,
     *,
     rel_source: str,
-    xlsx_stem: str,
     abs_tol: float,
     rel_tol: float,
     locale: str,
@@ -716,12 +715,7 @@ def _convert_sheet(
     # Suite name is needed up-front so we can build composite skip ids
     # while iterating cases. The downstream `doc` reuses the same
     # value so the goldens and the skip map stay in sync.
-    sheet_slug = _scrub_filename(sheet.title)
-    rel_dir = _scrub_filename(str(Path(rel_source).parent).replace("/", "__"))
-    if rel_dir in ("", "."):
-        suite = f"ironcalc_{xlsx_stem}_{sheet_slug}"
-    else:
-        suite = f"ironcalc_{rel_dir}_{xlsx_stem}_{sheet_slug}"
+    suite = suite_name(rel_source, sheet.title)
 
     # Gather values up-front so we can produce setup per formula cell.
     # Three classes of cells:
@@ -911,6 +905,21 @@ def _iter_xlsx(source_dir: Path) -> List[Path]:
 
     files = sorted(p for p in source_dir.rglob("*.xlsx") if p.is_file() and not p.name.startswith("."))
     return files
+
+
+def suite_name(rel_source: str, sheet_title: str) -> str:
+    """The suite of one fixture sheet; `<suite>.<addr>` is a case's id.
+
+    `tests/ironcalc_divergence.yaml` keys its entries by that id, and the
+    loaded-file gate derives the same name for every sheet it reads.
+    """
+
+    xlsx_stem = _scrub_filename(Path(rel_source).stem)
+    sheet_slug = _scrub_filename(sheet_title)
+    rel_dir = _scrub_filename(str(Path(rel_source).parent).replace("/", "__"))
+    if rel_dir in ("", "."):
+        return f"ironcalc_{xlsx_stem}_{sheet_slug}"
+    return f"ironcalc_{rel_dir}_{xlsx_stem}_{sheet_slug}"
 
 
 def _out_filename(rel_source: str, xlsx_stem: str, sheet_title: str) -> str:
@@ -1104,7 +1113,6 @@ def main(argv: Optional[List[str]] = None) -> int:
                     sheet,
                     cached_sheet,
                     rel_source=rel_source,
-                    xlsx_stem=xlsx_stem,
                     abs_tol=abs_tol,
                     rel_tol=rel_tol,
                     locale=locale,

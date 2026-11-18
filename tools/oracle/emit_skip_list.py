@@ -19,6 +19,9 @@ tracks do not share one. `--track` picks which primary to resolve against;
 `--target` overrides it outright, and may be repeated when one binary
 loads cases from several variant tags at once.
 
+The `external` track projects `tests/ironcalc_divergence.yaml` instead, for
+the loaded-file gate over the external corpus; that registry has no targets.
+
 Usage:
     python3 tools/oracle/emit_skip_list.py --out PATH [--track NAME] [--target NAME ...]
 """
@@ -45,9 +48,11 @@ except ImportError:  # pragma: no cover
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DIVERGENCE = REPO_ROOT / "tests" / "divergence.yaml"
+EXTERNAL_DIVERGENCE = REPO_ROOT / "tests" / "ironcalc_divergence.yaml"
 FORMULA_CASES_DIR = REPO_ROOT / "tests" / "oracle" / "cases"
 
 TRACKS = ("formula", "workbook", "chart")
+EXTERNAL_TRACK = "external"
 
 
 def track_primary(targets_doc: dict, track: str) -> str:
@@ -157,13 +162,29 @@ def emit_many(
     return len(merged)
 
 
+def emit_external(divergence: Path, out: Path) -> int:
+    """Writes `{case_id: reason}` for the external corpus; returns the count."""
+
+    try:
+        from tools.oracle.ironcalc_import import _load_divergence_skips as load_external_skips
+    except ImportError:  # pragma: no cover
+        from ironcalc_import import _load_divergence_skips as load_external_skips  # type: ignore
+
+    skips = load_external_skips(divergence)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps({"skips": skips}, indent=2, ensure_ascii=False) + "\n"
+    if not out.is_file() or out.read_text(encoding="utf-8") != payload:
+        out.write_text(payload, encoding="utf-8")
+    return len(skips)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--divergence", type=Path, default=DEFAULT_DIVERGENCE)
+    parser.add_argument("--divergence", type=Path, default=None)
     parser.add_argument(
         "--track",
         default="workbook",
-        choices=TRACKS,
+        choices=(*TRACKS, EXTERNAL_TRACK),
         help="Oracle track whose primary target the `applies_to` scoping resolves against.",
     )
     parser.add_argument(
@@ -179,13 +200,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--targets-file", type=Path, default=Path(__file__).resolve().parent / "targets.yaml")
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args(argv)
+    if args.track == EXTERNAL_TRACK:
+        try:
+            count = emit_external(args.divergence or EXTERNAL_DIVERGENCE, args.out)
+        except (OSError, ImportError) as exc:
+            print(f"emit-skip-list: {exc}", file=sys.stderr)
+            return 1
+        print(f"emit-skip-list: {count} skip-oracle case(s) for the external corpus")
+        return 0
+    divergence = args.divergence or DEFAULT_DIVERGENCE
     try:
         targets_doc = _load_targets(args.targets_file)
         targets = args.target or [track_primary(targets_doc, args.track)]
         if len(targets) == 1:
-            count = emit(args.divergence, targets[0], args.out, track=args.track, targets_doc=targets_doc)
+            count = emit(divergence, targets[0], args.out, track=args.track, targets_doc=targets_doc)
         else:
-            count = emit_many(args.divergence, targets, args.out, track=args.track, targets_doc=targets_doc)
+            count = emit_many(divergence, targets, args.out, track=args.track, targets_doc=targets_doc)
     except (OSError, RuntimeError) as exc:
         print(f"emit-skip-list: {exc}", file=sys.stderr)
         return 1

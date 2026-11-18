@@ -15,6 +15,7 @@ import io
 import json
 import tempfile
 import unittest
+import zipfile
 from pathlib import Path
 
 from tools.oracle import divergence_check
@@ -389,14 +390,37 @@ class IronCalcRegistryTest(unittest.TestCase):
 
     GOLDEN = {"suite": "ironcalc_demo_Sheet1", "cases": [{"id": "A1"}, {"id": "A2"}]}
     PROBE = {"suite": "demo_probes", "cases": [{"id": "demo_case"}]}
+    # A fixture whose Sheet1 holds a value in A7 and a formula in B7, cells
+    # the imported golden does not carry.
+    FIXTURE_PARTS = {
+        "xl/workbook.xml": (
+            '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" '
+            'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
+            '<sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets></workbook>'
+        ),
+        "xl/_rels/workbook.xml.rels": (
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Id="rId1" Type="worksheet" Target="worksheets/sheet1.xml"/></Relationships>'
+        ),
+        "xl/worksheets/sheet1.xml": (
+            '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>'
+            '<row r="7"><c r="A7"><v>1</v></c><c r="B7"><f>A7+1</f><v>2</v></c></row>'
+            "</sheetData></worksheet>"
+        ),
+    }
 
     def _run(self, body: str) -> tuple[int, str]:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             golden_dir = root / "ironcalc"
             probe_dir = root / "probes"
+            fixture_dir = root / "fixtures"
             golden_dir.mkdir()
             probe_dir.mkdir()
+            (fixture_dir / "calc").mkdir(parents=True)
+            with zipfile.ZipFile(fixture_dir / "calc" / "demo.xlsx", "w") as package:
+                for name, text in self.FIXTURE_PARTS.items():
+                    package.writestr(name, text)
             (golden_dir / "demo__Sheet1.golden.json").write_text(json.dumps(self.GOLDEN), encoding="utf-8")
             (probe_dir / "demo_probes.golden.json").write_text(json.dumps(self.PROBE), encoding="utf-8")
             path = root / "ironcalc_divergence.yaml"
@@ -404,7 +428,9 @@ class IronCalcRegistryTest(unittest.TestCase):
             out = io.StringIO()
             err = io.StringIO()
             with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-                status = divergence_check.validate_ironcalc(path, golden_dir=golden_dir, probe_dir=probe_dir)
+                status = divergence_check.validate_ironcalc(
+                    path, golden_dir=golden_dir, probe_dir=probe_dir, fixture_dir=fixture_dir
+                )
             return status, out.getvalue() + err.getvalue()
 
     def _entry(self, **overrides: str) -> str:
@@ -426,6 +452,20 @@ class IronCalcRegistryTest(unittest.TestCase):
 
     def test_orphan_id_fails(self) -> None:
         status, output = self._run(self._entry(id="ironcalc_demo_Sheet1.Z99"))
+        self.assertEqual(status, 1)
+        self.assertIn("orphan id", output)
+
+    def test_fixture_formula_cell_outside_the_golden_is_accepted(self) -> None:
+        status, output = self._run(
+            self._entry(id="ironcalc_calc_demo_Sheet1.B7", reason='"Formulon differs."', cause="engine-gap")
+        )
+        self.assertEqual(status, 0, output)
+        self.assertIn("engine-gap: 1", output)
+
+    def test_fixture_value_cell_is_an_orphan(self) -> None:
+        status, output = self._run(
+            self._entry(id="ironcalc_calc_demo_Sheet1.A7", reason='"Formulon differs."', cause="engine-gap")
+        )
         self.assertEqual(status, 1)
         self.assertIn("orphan id", output)
 

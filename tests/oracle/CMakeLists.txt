@@ -1005,3 +1005,46 @@ if(DEFINED _FORMULON_BEHAVIOR_PY)
   )
   set_tests_properties(pivot_edit_golden_integrity PROPERTIES LABELS "oracle;oracle-metadata")
 endif()
+
+# ---------------------------------------------------------------------------
+# External corpus, loaded-file mode
+#
+# Reads every vendored workbook under `external/*/fixtures/` through the
+# package reader (DOM and streaming sheet paths), recalculates it in full and
+# compares each formula cell with its cached value. One test per workbook and
+# reader path. Cells `tests/ironcalc_divergence.yaml` lists are left out; the
+# registry is projected to JSON here, as for the oracle tracks.
+# ---------------------------------------------------------------------------
+
+set(_external_loaded_skip_file "")
+if(Python3_Interpreter_FOUND)
+  set(_external_loaded_skip_file "${CMAKE_CURRENT_BINARY_DIR}/external_loaded_skips.json")
+  execute_process(
+    COMMAND ${_formulon_oracle_python} ${CMAKE_SOURCE_DIR}/tools/oracle/emit_skip_list.py
+            --track external
+            --out ${_external_loaded_skip_file}
+    RESULT_VARIABLE _external_loaded_skip_rc
+    OUTPUT_QUIET
+    ERROR_QUIET
+  )
+  if(NOT _external_loaded_skip_rc EQUAL 0)
+    set(_external_loaded_skip_file "")
+  endif()
+  set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/tests/ironcalc_divergence.yaml")
+endif()
+
+add_executable(formulon_external_corpus_loaded_tests json_reader.cpp oracle_anchor.cpp oracle_runner.cpp
+               external_corpus_loaded_test.cpp)
+target_link_libraries(formulon_external_corpus_loaded_tests PRIVATE formulon_static gtest_main)
+target_include_directories(formulon_external_corpus_loaded_tests PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR})
+target_compile_definitions(formulon_external_corpus_loaded_tests
+  PRIVATE
+    FORMULON_EXTERNAL_CORPUS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/external"
+    FORMULON_ORACLE_SKIP_FILE="${_external_loaded_skip_file}"
+)
+formulon_apply_warnings(formulon_external_corpus_loaded_tests)
+gtest_discover_tests(formulon_external_corpus_loaded_tests
+  DISCOVERY_MODE PRE_TEST
+  DISCOVERY_TIMEOUT 120
+  PROPERTIES LABELS "oracle"
+)
