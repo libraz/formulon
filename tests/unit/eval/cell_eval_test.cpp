@@ -169,12 +169,33 @@ TEST(BuiltinsCellContents, NumberCell) {
   EXPECT_DOUBLE_EQ(v.as_number(), 42.0);
 }
 
-TEST(BuiltinsCellContents, BlankCellReturnsZero) {
-  // Excel's blank-as-zero rule: CELL("contents", blank_cell) -> 0.
+TEST(BuiltinsCellContents, BlankCellIsBlankShownAsZero) {
   Workbook wb = Workbook::create();
   const Value v = EvalSourceIn("=CELL(\"contents\", A1)", wb, wb.sheet(0));
-  ASSERT_TRUE(v.is_number());
+  ASSERT_TRUE(v.is_number()) << v.debug_to_string();
   EXPECT_DOUBLE_EQ(v.as_number(), 0.0);
+  const Value isblank = EvalSourceIn("=ISBLANK(CELL(\"contents\", A1))", wb, wb.sheet(0));
+  ASSERT_TRUE(isblank.is_boolean());
+  EXPECT_TRUE(isblank.as_boolean());
+  const Value len = EvalSourceIn("=LEN(CELL(\"contents\", A1))", wb, wb.sheet(0));
+  ASSERT_TRUE(len.is_number());
+  EXPECT_DOUBLE_EQ(len.as_number(), 0.0);
+  const Value text = EvalSourceIn("=CELL(\"contents\", A1:A2)&\"\"", wb, wb.sheet(0));
+  ASSERT_TRUE(text.is_text());
+  EXPECT_EQ(std::string(text.as_text()), "");
+}
+
+TEST(BuiltinsCellContents, BlankElementOfAGridIsBlank) {
+  Workbook wb = Workbook::create();
+  wb.sheet(0).set_cell_value(0, 0, Value::number(1.0));
+  wb.sheet(0).set_cell_value(2, 0, Value::number(3.0));
+  const Value len = EvalSourceIn("=SUMPRODUCT(LEN(CELL(\"contents\",OFFSET(A1:A3,{0;1;2},0))))", wb, wb.sheet(0));
+  ASSERT_TRUE(len.is_number());
+  EXPECT_DOUBLE_EQ(len.as_number(), 2.0);
+  const Value blanks =
+      EvalSourceIn("=SUMPRODUCT(--ISBLANK(CELL(\"contents\",OFFSET(A1:A3,{0;1;2},0))))", wb, wb.sheet(0));
+  ASSERT_TRUE(blanks.is_number()) << blanks.debug_to_string();
+  EXPECT_DOUBLE_EQ(blanks.as_number(), 1.0);
 }
 
 TEST(BuiltinsCellContents, TextCell) {

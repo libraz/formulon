@@ -603,9 +603,9 @@ Value eval_cell_lazy(const parser::AstNode& call, Arena& arena, const FunctionRe
     // "contents" / "type" both need the resolved cell's value.
     const Value resolved = resolve_topleft_value(sheet, row, col, arena, registry, ctx);
     if (key == CellKey::kContents) {
-      // Excel's blank-as-zero rule for CELL("contents", blank_cell).
+      // A blank cell reads as a blank (ISBLANK, LEN 0, &"" ""), shown as 0 where it lands in a cell or spill.
       if (resolved.is_blank()) {
-        return Value::number(0.0);
+        return Value::blank(BlankGridProjection::kReferenceGridZero);
       }
       return resolved;
     }
