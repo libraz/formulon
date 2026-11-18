@@ -118,6 +118,7 @@ struct JsSheetView {
   double splitYTwips = 0.0;
   bool showFormulas = false;
   bool showOutlineSymbols = true;
+  bool zoomToFit = false;
 };
 
 // ---- Failure builders ---------------------------------------------------

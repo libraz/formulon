@@ -2248,11 +2248,14 @@ export interface SheetView {
   readonly showFormulas: boolean;
   /** `true` when the outline gutter's group symbols are shown; the default is `true`. */
   readonly showOutlineSymbols: boolean;
+  /** `true` when a chartsheet's chart is sized to the window (`zoomToFit`); always `false` on a worksheet. Read-only:
+   *  setting a chartsheet's `zoomPct` to a new value ends it. */
+  readonly zoomToFit: boolean;
 }
 
 /** Argument of `Sheet.updateView`. No key has a cleared form. `topLeft` and `paneTopLeft` take a
  *  {@link CellAddress} or an A1 cell (`'C5'`). */
-export type SheetViewPatch = Patch<Omit<SheetView, 'topLeft' | 'paneTopLeft'>> & {
+export type SheetViewPatch = Patch<Omit<SheetView, 'topLeft' | 'paneTopLeft' | 'zoomToFit'>> & {
   /** The scroll origin (the first visible cell) to set, as a cell address or an A1 cell such as `'C5'`; omitted keeps
    *  it, and there is no cleared form. */
   topLeft?: CellAddress | string;
@@ -8241,7 +8244,9 @@ export interface Sheet {
    *  `[10, 400]` is rejected), `viewMode`, `rightToLeft`, `tabSelected`. The pane origin must lie past the frozen rows
    *  and columns. Every key is checked before anything is written; a failure changes nothing. A `zoomPct` outside `[10,
    *  400]` or a pane origin other than `0, 0` without panes is checked against the merged view and fails with
-   *  `StatusCode.InvalidArgument`. An unknown key (`visibility` included) throws `TypeError`. */
+   *  `StatusCode.InvalidArgument`. On a sheet that is not a worksheet only a chartsheet's `zoomPct` can change (ending
+   *  `zoomToFit`); any other change fails with `StatusCode.InvalidArgument`, and restating the read view is a no-op.
+   *  An unknown key (`visibility` included) throws `TypeError`. */
   updateView(patch: SheetViewPatch): void;
   /** The sheet's tab colour (`<sheetPr><tabColor>`); `null` when the tab has none. */
   getTabColor(): Color | null;

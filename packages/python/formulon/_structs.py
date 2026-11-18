@@ -1181,6 +1181,7 @@ SHEET_VIEW = Struct(
         ("split_y_twips", F64),
         ("show_formulas", I32),
         ("show_outline_symbols", I32),
+        ("zoom_to_fit", I32),
     ],
 )
 

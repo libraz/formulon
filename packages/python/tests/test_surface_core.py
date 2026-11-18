@@ -72,7 +72,7 @@ class StructLayoutTests(unittest.TestCase):
         "FUNCTION_METADATA": 32,
         "LOCALE_FACTS": 60,
         "CIVIL_TIME": 24,
-        "SHEET_VIEW": 80,
+        "SHEET_VIEW": 88,
         "COLUMN_LAYOUT": 48,
         "ROW_LAYOUT": 48,
         "CELL_XF": 136,

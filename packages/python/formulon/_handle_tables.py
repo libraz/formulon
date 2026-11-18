@@ -208,6 +208,7 @@ READ_ONLY_KEYS = {
     "Sheet.update_sparkline_group": ("id",),
     "Sheet.update_threaded_comment": ("cell", "created", "id", "parent_id", "person_id"),
     "Sheet.update_validation": ("id",),
+    "Sheet.update_view": ("zoom_to_fit",),
     "Slicer.update": ("cache_name", "column_name", "kind", "object_id", "table_name"),
     "Table.update": ("name",),
     "Workbook.set_theme_colors": ("source",),

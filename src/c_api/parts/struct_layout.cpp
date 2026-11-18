@@ -272,7 +272,7 @@ static_assert(offsetof(fm_spill_info_t, rect) == 12U);
 static_assert(offsetof(fm_spill_info_t, blocked) == 28U);
 static_assert(offsetof(fm_spill_info_t, cause) == 32U);
 
-static_assert(sizeof(fm_sheet_view_info_t) == 80U);
+static_assert(sizeof(fm_sheet_view_info_t) == 88U);
 static_assert(offsetof(fm_sheet_view_info_t, zoom_pct) == 4U);
 static_assert(offsetof(fm_sheet_view_info_t, freeze_rows) == 8U);
 static_assert(offsetof(fm_sheet_view_info_t, freeze_cols) == 12U);
@@ -290,6 +290,7 @@ static_assert(offsetof(fm_sheet_view_info_t, split_x_twips) == 56U);
 static_assert(offsetof(fm_sheet_view_info_t, split_y_twips) == 64U);
 static_assert(offsetof(fm_sheet_view_info_t, show_formulas) == 72U);
 static_assert(offsetof(fm_sheet_view_info_t, show_outline_symbols) == 76U);
+static_assert(offsetof(fm_sheet_view_info_t, zoom_to_fit) == 80U);
 static_assert(sizeof(fm_sheet_view_patch_t) == 152U);
 static_assert(offsetof(fm_sheet_view_patch_t, zoom_pct_op) == 4U);
 static_assert(offsetof(fm_sheet_view_patch_t, zoom_pct) == 8U);

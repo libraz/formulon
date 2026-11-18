@@ -2340,6 +2340,7 @@ const PATCH_KEYS = Object.freeze({
       'topLeft',
       'viewMode',
       'zoomPct',
+      'zoomToFit',
     ],
   ],
   'Slicer.update': [
@@ -3401,6 +3402,7 @@ const READ_ONLY_KEYS = Object.freeze({
   'Sheet.updateSparklineGroup': ['id'],
   'Sheet.updateThreadedComment': ['cell', 'created', 'id', 'parentId', 'personId'],
   'Sheet.updateValidation': ['id'],
+  'Sheet.updateView': ['zoomToFit'],
   'Slicer.update': ['cacheName', 'columnName', 'kind', 'objectId', 'tableName'],
   'Table.update': ['name'],
   'Workbook.setThemeColors': ['source'],
@@ -8107,8 +8109,9 @@ function makeFacade(Raw, registry, runtime) {
       const fields = PATCH_FIELDS[where];
       checkPatch(where, patch, fields);
       const raw = rawOf(this.#workbook);
-      // `topLeft` and `paneTopLeft` reach the raw layer as their row / column pairs.
+      // `topLeft` and `paneTopLeft` reach the raw layer as their row / column pairs; a read-only key stays here.
       patch = { ...patch };
+      for (const read of READ_ONLY_KEYS[where]) delete patch[read];
       for (const [key, rowKey, colKey] of [
         ['topLeft', 'topLeftRow', 'topLeftCol'],
         ['paneTopLeft', 'paneTopLeftRow', 'paneTopLeftCol'],

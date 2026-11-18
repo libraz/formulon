@@ -5577,6 +5577,7 @@ class Sheet(_NoCopy):
                 split_y_twips=d["split_y_twips"],
                 show_formulas=bool(d["show_formulas"]),
                 show_outline_symbols=bool(d["show_outline_symbols"]),
+                zoom_to_fit=bool(d["zoom_to_fit"]),
             )
 
     def update_view(
@@ -5600,7 +5601,8 @@ class Sheet(_NoCopy):
     ) -> None:
         """Update the sheet view in one call; an omitted argument keeps its value.
 
-        Arguments are the :class:`SheetView` fields. ``zoom_pct`` outside
+        Arguments are the :class:`SheetView` fields except the read-only
+        ``zoom_to_fit``. ``zoom_pct`` outside
         ``[10, 400]`` is rejected. ``split_x_twips`` / ``split_y_twips`` are in
         twips; a split replaces any freeze and a freeze any split, and
         changing either resets the pane origin unless ``pane_top_left`` is
@@ -5615,7 +5617,9 @@ class Sheet(_NoCopy):
           TypeError: when an argument is ``None`` or a flag is not a ``bool``.
           InvalidArgumentError: when a non-zero freeze and a non-zero split
             are both given, for a pane origin on a view without panes, or for
-            a value outside its domain.
+            a value outside its domain; on a sheet that is not a worksheet, for
+            any change other than a chartsheet's ``zoom_pct`` (which ends
+            ``zoom_to_fit``); restating the read view there is a no-op.
         """
         flag_keys = (
             "show_grid_lines",

@@ -92,6 +92,7 @@ void fill_view_info(const formulon::SheetView& v, fm_sheet_view_info_t* out) {
   out->split_y_twips = v.is_frozen() ? 0.0 : v.split_y;
   out->show_formulas = v.show_formulas ? 1 : 0;
   out->show_outline_symbols = v.show_outline_symbols ? 1 : 0;
+  out->zoom_to_fit = v.zoom_to_fit ? 1 : 0;
 }
 
 }  // namespace

@@ -41,7 +41,7 @@ static_assert(sizeof(fm_row_layout_info_t) == 48U);
 // the end of its own storage rather than getting a diagnosable error. Pin the
 // size here: changing the struct must break the build and be acknowledged,
 // not merely be reflected in the bindings afterwards.
-static_assert(sizeof(fm_sheet_view_info_t) == 80U);
+static_assert(sizeof(fm_sheet_view_info_t) == 88U);
 static_assert(offsetof(fm_sheet_view_info_t, tab_selected) == 32U);
 static_assert(offsetof(fm_sheet_view_info_t, view_mode) == 36U);
 static_assert(offsetof(fm_sheet_view_info_t, top_left_row) == 40U);
@@ -234,14 +234,15 @@ TEST(FormulonCApiSheetLayout, ChartsheetViewTakesOnlyANewZoom) {
     WorkbookGuard wb;
     LoadChartsheetFixture(ext, &wb);
     ASSERT_NE(wb.handle, nullptr);
-    // The fixture's chartsheet view states zoomToFit and no zoomScale.
+    // The fixture's chartsheet view states zoomToFit and no zoomScale; a worksheet never fits.
     EXPECT_EQ(ViewOf(wb.handle, 1).zoom_pct, 100U);
-    EXPECT_TRUE(wb.handle->wb->sheet(1).view().zoom_to_fit);
+    EXPECT_EQ(ViewOf(wb.handle, 0).zoom_to_fit, 0);
+    EXPECT_EQ(ViewOf(wb.handle, 1).zoom_to_fit, 1);
 
     // Restating the reported view changes nothing, zoom-to-fit included.
     const fm_sheet_view_patch_t same = RestatingPatch(ViewOf(wb.handle, 1));
     ASSERT_EQ(fm_sheet_update_view(wb.handle, 1, &same), 0) << fm_get_last_error_message();
-    EXPECT_TRUE(wb.handle->wb->sheet(1).view().zoom_to_fit);
+    EXPECT_EQ(ViewOf(wb.handle, 1).zoom_to_fit, 1);
 
     EXPECT_EQ(SetViewFreeze(wb.handle, 1, 1, 0), kInvalidArgument);
     EXPECT_EQ(UpdateViewField(wb.handle, 1, &fm_sheet_view_patch_t::show_grid_lines_op,
@@ -253,11 +254,11 @@ TEST(FormulonCApiSheetLayout, ChartsheetViewTakesOnlyANewZoom) {
     mixed.tab_selected = 1 - mixed.tab_selected;
     EXPECT_EQ(fm_sheet_update_view(wb.handle, 1, &mixed), kInvalidArgument);
     EXPECT_EQ(ViewOf(wb.handle, 1).zoom_pct, 100U);
-    EXPECT_TRUE(wb.handle->wb->sheet(1).view().zoom_to_fit);
+    EXPECT_EQ(ViewOf(wb.handle, 1).zoom_to_fit, 1);
 
     ASSERT_EQ(SetViewZoom(wb.handle, 1, 80U), 0) << fm_get_last_error_message();
     EXPECT_EQ(ViewOf(wb.handle, 1).zoom_pct, 80U);
-    EXPECT_FALSE(wb.handle->wb->sheet(1).view().zoom_to_fit);
+    EXPECT_EQ(ViewOf(wb.handle, 1).zoom_to_fit, 0);
   }
 }
 

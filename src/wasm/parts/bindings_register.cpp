@@ -68,7 +68,8 @@ EMSCRIPTEN_BINDINGS(formulon) {
       .field("splitXTwips", &JsSheetView::splitXTwips)
       .field("splitYTwips", &JsSheetView::splitYTwips)
       .field("showFormulas", &JsSheetView::showFormulas)
-      .field("showOutlineSymbols", &JsSheetView::showOutlineSymbols);
+      .field("showOutlineSymbols", &JsSheetView::showOutlineSymbols)
+      .field("zoomToFit", &JsSheetView::zoomToFit);
 
   // @size-budget: 14 KB
   // Covers the sheet protection bridge methods (getSheetProtection /

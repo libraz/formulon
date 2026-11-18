@@ -117,6 +117,7 @@ Napi::Value Workbook::GetSheetView(const Napi::CallbackInfo& info) {
   view.Set("splitYTwips", Napi::Number::New(env, v.split_y_twips));
   view.Set("showFormulas", JsBool(env, v.show_formulas));
   view.Set("showOutlineSymbols", JsBool(env, v.show_outline_symbols));
+  view.Set("zoomToFit", JsBool(env, v.zoom_to_fit));
   return view;
 }
 

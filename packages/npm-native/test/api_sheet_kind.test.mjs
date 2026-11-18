@@ -44,6 +44,27 @@ for (const ext of ['xlsx', 'xlsb']) {
   });
 }
 
+for (const ext of ['xlsx', 'xlsb']) {
+  test(`zoomToFit reads a chartsheet's stored fit and a new zoom ends it (${ext})`, async () => {
+    const f = await getModule();
+    const wb = f.Workbook.load(fixture(ext));
+    try {
+      const [worksheet, chartsheet] = wb.listSheets();
+      assert.equal(worksheet.getView().zoomToFit, false);
+      const view = chartsheet.getView();
+      assert.equal(view.zoomToFit, true);
+      // The read view goes back unchanged: zoomToFit is read-only and the rest restates the view.
+      chartsheet.updateView(view);
+      assert.deepEqual(chartsheet.getView(), view);
+      chartsheet.updateView({ zoomPct: 80 });
+      assert.equal(chartsheet.getView().zoomPct, 80);
+      assert.equal(chartsheet.getView().zoomToFit, false);
+    } finally {
+      wb.dispose();
+    }
+  });
+}
+
 test('a new workbook holds worksheets and kind is read-only', async () => {
   const f = await getModule();
   const wb = f.Workbook.createDefault();

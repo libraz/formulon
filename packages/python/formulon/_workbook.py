@@ -4470,6 +4470,9 @@ class SheetView:
     show_formulas: bool = False
     #: ``True`` when the outline gutter's group symbols are shown; the default is ``True``.
     show_outline_symbols: bool = True
+    #: ``True`` when a chartsheet's chart is sized to the window (``zoomToFit``); always ``False`` on a worksheet.
+    #: Read-only: setting a chartsheet's ``zoom_pct`` to a new value ends it.
+    zoom_to_fit: bool = False
 
 
 @dataclass(frozen=True)

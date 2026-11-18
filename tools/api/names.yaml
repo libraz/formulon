@@ -138,7 +138,7 @@ enum_distinct:
   - { enums: [enum.pivot_sort_order, enum.slicer_sort], reason: "share Ascending / Descending: each zero is its OOXML default, Manual for a pivot field and Ascending for a slicer" }
   - { enums: [enum.chart_axis_position, enum.chart_legend_position], reason: "share Bottom / Top / Left / Right: axis side vs legend placement; the legend's zero is its OOXML default Right" }
 # R42: field and parameter names that carry a dimension word but no unit; reasons in the R42-11 row.
-unitless: [indent, relative_indent, text_rotation, fit_to_width, fit_to_height, custom_height, zero_height, scale_with_doc, align_with_margins, struct_size, column_offset, offset_unit]
+unitless: [indent, relative_indent, text_rotation, fit_to_width, fit_to_height, custom_height, zero_height, scale_with_doc, align_with_margins, struct_size, column_offset, offset_unit, zoom_to_fit]
 entries:
   type.status:
     kind: typedef
@@ -14475,6 +14475,7 @@ entries:
     js: SheetViewPatch
     surfaces: [c, wasm, native]
     clearable: []
+    read_only_keys: [zoom_to_fit]
   record.pivot_field_patch:
     kind: record
     role: patch

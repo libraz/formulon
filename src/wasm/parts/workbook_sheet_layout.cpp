@@ -238,6 +238,7 @@ JsSheetView JsWorkbook::getSheetView(uint32_t sheet) const {
   r.splitYTwips = v.split_y_twips;
   r.showFormulas = v.show_formulas != 0;
   r.showOutlineSymbols = v.show_outline_symbols != 0;
+  r.zoomToFit = v.zoom_to_fit != 0;
   return r;
 }
 

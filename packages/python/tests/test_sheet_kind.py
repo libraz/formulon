@@ -6,7 +6,7 @@ import unittest
 from enum import IntEnum
 from pathlib import Path
 
-from formulon import NotFoundError, SheetKind, Workbook
+from formulon import InvalidArgumentError, NotFoundError, SheetKind, Workbook
 
 _FIXTURES = Path(__file__).resolve().parents[3] / "tests/fixtures/excel/chartsheet_twins"
 
@@ -39,6 +39,21 @@ class SheetKindTests(unittest.TestCase):
                 # The handle `chart(object_id)` returns for that chart.
                 self.assertIs(chartsheet.chart(chart.object_id), chart)
                 self.assertIs(chartsheet.get_chart(), chart)
+
+    def test_zoom_to_fit_reads_the_stored_fit_and_a_new_zoom_ends_it(self) -> None:
+        for ext in ("xlsx", "xlsb"):
+            with self.subTest(ext=ext), Workbook.load(_fixture(ext)) as wb:
+                worksheet, chartsheet = wb.list_sheets()
+                self.assertFalse(worksheet.get_view().zoom_to_fit)
+                self.assertTrue(chartsheet.get_view().zoom_to_fit)
+                with self.assertRaises(TypeError):
+                    chartsheet.update_view(zoom_to_fit=False)  # type: ignore[call-arg]
+                with self.assertRaises(InvalidArgumentError):
+                    chartsheet.update_view(show_grid_lines=not chartsheet.get_view().show_grid_lines)
+                chartsheet.update_view(zoom_pct=80)
+                view = chartsheet.get_view()
+                self.assertEqual(view.zoom_pct, 80)
+                self.assertFalse(view.zoom_to_fit)
 
     def test_a_new_workbook_holds_worksheets_and_kind_is_read_only(self) -> None:
         with Workbook.create_default() as wb:

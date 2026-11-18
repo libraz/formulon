@@ -10468,6 +10468,9 @@ typedef struct {
   int32_t show_formulas;
   /** `1` when the outline gutter's group symbols are shown; the default is `1`. */
   int32_t show_outline_symbols;
+  /** `1` when a chartsheet's chart is sized to the window (`zoomToFit`); always `0` on a worksheet. Read-only:
+   *  setting a chartsheet's `zoom_pct` to a new value ends it. */
+  int32_t zoom_to_fit;
 } fm_sheet_view_info_t;
 
 /**
