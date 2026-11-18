@@ -21,7 +21,8 @@ namespace formulon {
 namespace eval {
 
 // A failed argument either aborts the call or, for a function that inspects
-// its error arguments, lands in `values` like any other value. Returns false
+// its error arguments or reads them in order, lands in `values` like any other
+// value. Returns false
 // when the call must abort with `err`.
 bool absorb_arg_error(const FunctionDef& def, const Value& err, std::vector<Value>* values);
 

@@ -578,8 +578,10 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
   // array or grid; the call is then evaluated once per element.
   bool lift_scalar_slot = false;
   // A scalar function that propagates errors keeps an error argument in its
-  // slot; the origin of the one it reports is kept for the result.
-  const bool passes_errors = def->propagate_errors && !def->accepts_ranges;
+  // slot, as does a range-aware one that reads its values in order; the origin
+  // of the one it reports is kept for the result.
+  const bool in_order_ranges = reads_range_errors_in_order(*def);
+  const bool passes_errors = def->propagate_errors && (!def->accepts_ranges || in_order_ranges);
   std::optional<ErrorOriginSnapshot> reported_origin;
   const auto pass_error = [&](const Value& err) {
     if (!reported_origin.has_value() || def->checks_args_last_first) {
@@ -587,11 +589,26 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
     }
     values.push_back(err);
   };
+  // Range cells and failed expansions reach `values` without `pass_error`; the
+  // first such error keeps the origin left by the argument that produced it.
+  std::size_t origin_scanned = 0;
+  const auto note_collected_error = [&]() {
+    if (!in_order_ranges || reported_origin.has_value()) {
+      return;
+    }
+    for (; origin_scanned < values.size(); ++origin_scanned) {
+      if (values[origin_scanned].is_error()) {
+        reported_origin = snapshot_error_origin();
+        return;
+      }
+    }
+  };
   const std::uint32_t evaluated_arity =
       def->analysis_toolpak_args && !def->atp_omitted_optional_is_na
           ? atp_evaluated_arity(node, def->min_arity, def->max_arity)
           : (def->omitted_defaults != nullptr ? trim_absent_omitted_args(node, *def, arity) : arity);
   for (std::uint32_t i = 0; i < evaluated_arity; ++i) {
+    note_collected_error();
     const parser::AstNode& raw_arg = node.as_call_arg(i);
     // An omitted slot with a declared default takes it; a blank reference does not.
     Value omitted_default = Value::blank();
@@ -770,6 +787,7 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
       values.empty() && !had_range_shaped_arg) {
     return Value::error(def->blank_scalar_error);
   }
+  note_collected_error();
   // Dynamic-array spill for scalar (non-range-aware) functions: when any
   // collected argument is an Array — a bounded range materialised above,
   // or a nested array-returning call (`=ROUND(SEQUENCE(3),0)`) — Excel 365
@@ -797,7 +815,16 @@ Value dispatch_call_impl(const parser::AstNode& node, Arena& arena, const Functi
   }
   // Hand the post-expansion size to the impl; aggregator bodies walk the
   // flattened vector directly.
-  return def->impl(values.data(), static_cast<std::uint32_t>(values.size()), arena);
+  if (!in_order_ranges) {
+    return def->impl(values.data(), static_cast<std::uint32_t>(values.size()), arena);
+  }
+  if (reported_origin.has_value()) {
+    forget_error_origin();
+  }
+  const auto size = static_cast<std::uint32_t>(values.size());
+  const Value result = report_error_arg(def->impl(values.data(), size, arena), values.data(), size, false);
+  restore_reported_origin(result, values.data(), size, false, reported_origin);
+  return result;
 }
 
 }  // namespace

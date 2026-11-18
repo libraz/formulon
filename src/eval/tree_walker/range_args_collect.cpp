@@ -35,9 +35,13 @@ namespace formulon {
 namespace eval {
 
 // A failed argument either aborts the call or, for a function that inspects
-// its error arguments, lands in `values` like any other value. Returns false
-// when the call must abort with `err`.
+// its error arguments or reads them in order, lands in `values` like any other
+// value. Returns false when the call must abort with `err`.
 bool absorb_arg_error(const FunctionDef& def, const Value& err, std::vector<Value>* values) {
+  if (reads_range_errors_in_order(def)) {
+    values->push_back(err);
+    return true;
+  }
   if (def.propagate_errors) {
     return false;
   }
@@ -148,6 +152,10 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
       // A boolean inside an array literal is #VALUE! under the
       // Analysis-ToolPak rule (`GCD({TRUE,2})`).
       if (def.analysis_toolpak_args && value.is_boolean()) {
+        if (reads_range_errors_in_order(def)) {
+          values.push_back(Value::error(ErrorCode::Value));
+          continue;
+        }
         result = Value::error(ErrorCode::Value);
         return RangeArgOutcome::kReturn;
       }
@@ -440,7 +448,7 @@ RangeArgOutcome collect_range_arg(const FunctionDef& def, const parser::AstNode&
     // range-filter pipeline). The array-shaped path applies the filters
     // exactly like the RangeOp / SpillRef branches.
     Value sr_val = eval_node(arg_node, arena, registry, ctx);
-    if (sr_val.is_error()) {
+    if (sr_val.is_error() && !reads_range_errors_in_order(def)) {
       if (def.propagate_errors) {
         result = sr_val;
         return RangeArgOutcome::kReturn;

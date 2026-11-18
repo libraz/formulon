@@ -111,7 +111,9 @@ struct FunctionDef {
   /// functions), the call reports its first failing argument: a scalar
   /// function's impl receives error arguments in their slots and fails on the
   /// first one it coerces, and an error argument it does not read still wins
-  /// over a non-error result; a range-aware function short-circuits on the
+  /// over a non-error result. A range-aware function that reads its range cells
+  /// unfiltered does the same with those cells in argument order (see
+  /// `reads_range_errors_in_order`); any other one short-circuits on the
   /// left-most error argument. When false, errors are ordinary arguments -
   /// required by the IS* type-predicate family (`ISERROR`, `ISERR`, `ISNA`,
   /// `ISNUMBER`, `ISTEXT`, `ISBLANK`, `ISLOGICAL`).
@@ -225,6 +227,16 @@ struct FunctionDef {
 };
 
 static_assert(sizeof(FunctionDef) == (sizeof(void*) == 8 ? 72 : 48), "FunctionDef must not grow");
+
+/// A range-aware function that reads every value as given - no range filter
+/// and no single-value slot (GCD, LCM, MULTINOMIAL, IMSUM, IMPRODUCT, CONCAT):
+/// its range cells, error cells included, reach the impl in argument order and
+/// the first value that fails is the result.
+inline bool reads_range_errors_in_order(const FunctionDef& def) {
+  return def.propagate_errors && def.accepts_ranges && !def.range_filter_numeric_only &&
+         !def.range_filter_bool_coercible && !def.range_filter_a_coerce && !def.last_arg_scalar &&
+         !def.first_arg_scalar;
+}
 
 /// Case-insensitive function lookup table. Registry keys are stored in an
 /// owned UPPERCASE form internally; lookup folds ASCII bytes while hashing and

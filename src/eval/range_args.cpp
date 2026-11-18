@@ -46,7 +46,7 @@ namespace {
 // count rather than into a visible error, so a gap in the expanders surfaces
 // as silence on exactly these functions.
 bool filter_range_sourced_value(const FunctionDef& def, const Value& value, Value* out, bool* keep, Value* out_err) {
-  if (def.propagate_errors && value.is_error()) {
+  if (def.propagate_errors && value.is_error() && !reads_range_errors_in_order(def)) {
     *out_err = value;
     return false;
   }

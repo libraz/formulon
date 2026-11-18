@@ -5,9 +5,11 @@
 // result, the later one for a function that checks its arguments last to
 // first.
 
+#include <algorithm>
 #include <cstdint>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include "eval/adhoc_eval.h"
@@ -75,6 +77,42 @@ TEST(ErrorArgumentOrder, ScalarFunctionsReportTheFirstFailingArgument) {
   }
   EXPECT_GT(calls, 0U);
   EXPECT_TRUE(mismatches.empty()) << mismatches;
+}
+
+// A range-aware function with no range filter reads its range cells in
+// argument order: a cell it cannot read ahead of an error cell is reported.
+TEST(ErrorArgumentOrder, UnfilteredRangeFunctionsReadCellsInArgumentOrder) {
+  const FunctionRegistry& registry = default_registry();
+  std::vector<std::string> names;
+  registry.for_each_name(&CollectName, &names);
+  std::vector<std::string> in_order;
+  for (const std::string& name : names) {
+    if (reads_range_errors_in_order(*registry.lookup(name))) {
+      in_order.push_back(name);
+    }
+  }
+  std::sort(in_order.begin(), in_order.end());
+  EXPECT_EQ(in_order, (std::vector<std::string>{"CONCAT", "GCD", "IMPRODUCT", "IMSUM", "LCM", "MULTINOMIAL"}));
+
+  Workbook wb = Workbook::create();
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 0U, Value::text("x"))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 1U, Value::error(ErrorCode::Div0))));
+  ASSERT_TRUE(static_cast<bool>(wb.set_cell_value(0U, 0U, 2U, Value::error(ErrorCode::Num))));
+  const std::vector<std::pair<std::string, ErrorCode>> table = {
+      {"=GCD(A1:B1)", ErrorCode::Value},         {"=GCD(B1:C1)", ErrorCode::Div0},
+      {"=GCD(C1,A1:B1)", ErrorCode::Num},        {"=GCD(A1,B1:C1)", ErrorCode::Value},
+      {"=LCM(A1:B1)", ErrorCode::Value},         {"=LCM(A1,B1:C1)", ErrorCode::Value},
+      {"=MULTINOMIAL(A1:B1)", ErrorCode::Value}, {"=MULTINOMIAL(B1:C1)", ErrorCode::Div0},
+      {"=IMSUM(A1:B1)", ErrorCode::Num},         {"=IMSUM(B1:C1)", ErrorCode::Div0},
+      {"=IMPRODUCT(A1:B1)", ErrorCode::Num},     {"=IMPRODUCT(C1,B1:C1)", ErrorCode::Num},
+      {"=CONCAT(B1:C1)", ErrorCode::Div0},       {"=CONCAT(LAMBDA(x,x),B1:C1)", ErrorCode::Value},
+  };
+  for (const auto& [formula, want] : table) {
+    Arena arena;
+    const Value got = evaluate_formula_text_array(wb, wb.sheet(0U), 4U, 0U, formula, arena, registry);
+    ASSERT_TRUE(got.is_error()) << formula;
+    EXPECT_EQ(got.as_error(), want) << formula;
+  }
 }
 
 }  // namespace
