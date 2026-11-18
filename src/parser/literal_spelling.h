@@ -59,14 +59,23 @@ std::string spell_entered_formula(std::string_view formula);
 /// What a name in entered text may denote, for `EnteredNames::own`.
 enum class EnteredNameKind : std::uint8_t { kSheet, kDefinedName, kTable };
 
+/// How `EnteredNames::own` reads a typed name.
+struct OwnName {
+  /// The spelling to store, or empty to keep the typed text.
+  std::string_view spelling;
+  /// A qualified defined name its sheet does not define, reached at workbook
+  /// scope and stored as `[0]!Name`.
+  bool workbook_scope = false;
+};
+
 /// What `spell_entered_names` reads from outside the formula.
 struct EnteredNames {
   /// Canonical spelling of the built-in `name`, or nullptr when it is none.
   const char* (*builtin)(std::string_view name);
   /// The workbook's own spelling of the sheet, defined name or table `typed`
-  /// resolves to, or empty when none does. `sheet` is the unquoted sheet a
-  /// defined name is qualified with (`Sheet1!Name`), empty otherwise.
-  std::string_view (*own)(const void* ctx, EnteredNameKind kind, std::string_view typed, std::string_view sheet);
+  /// resolves to. `sheet` is the unquoted sheet a defined name is qualified
+  /// with (`Sheet1!Name`), empty otherwise.
+  OwnName (*own)(const void* ctx, EnteredNameKind kind, std::string_view typed, std::string_view sheet);
   /// The spelling of a call of the unknown function `typed`: the first one
   /// the workbook has seen, `typed` itself when it is the first (and is
   /// remembered as such).
@@ -79,7 +88,8 @@ struct EnteredNames {
 /// TRUE / FALSE (also as `FALSE()`), error literals and A1 cell, column and
 /// range references upper-cased; a sheet qualifier, a defined name and the
 /// table of a structured reference respelled to what they name, a qualifier
-/// quoted only where needed; every use of a LET / LAMBDA parameter in the
+/// quoted only where needed, a qualified name its sheet does not define
+/// requalified as `[0]!` when it is a workbook-scope name; every use of a LET / LAMBDA parameter in the
 /// spelling of its definition; an unknown function as `unknown_call` spells
 /// it. A name that resolves to nothing, string literals, the inside of
 /// structured-reference brackets, external qualifiers and whitespace are

@@ -88,7 +88,8 @@ bool is_function_name_token(parser::TokenKind kind) noexcept {
 }
 
 // A built-in defined name and its spelling per locale, in `ExcelLocale`
-// order; an empty field is the English name. es_ES and es_MX agree.
+// order; an empty field is the English name. es_ES and es_MX agree. The
+// last four have no local spellings on record and stay English.
 struct BuiltinNameSpelling {
   std::string_view english;
   std::string_view local[14];
@@ -114,6 +115,10 @@ constexpr BuiltinNameSpelling kBuiltinNameSpellings[] = {
     {"Database",
      {"", "", "Datenbank", "Base_de_donnees", "", "", "", "BaseDeDatos", "BaseDeDatos", "Banco_de_dados", "База_данных",
       "", "", ""}},
+    {"Consolidate_Area", {}},
+    {"Sheet_Title", {}},
+    {"Auto_Open", {}},
+    {"Recorder", {}},
 };
 
 // `locale`'s spelling of the built-in name `name` (`_xlnm.Print_Area` or
@@ -823,6 +828,15 @@ parser::TextRange MappedFormulaText::source_range(std::string_view source, parse
   mapped.end = utf16_units_in(source.substr(0, in_end));
   line_and_column(source, in_start, mapped);
   return mapped;
+}
+
+std::string_view builtin_defined_name(std::string_view name) noexcept {
+  for (const BuiltinNameSpelling& spelling : kBuiltinNameSpellings) {
+    if (strings::case_insensitive_eq(spelling.english, name)) {
+      return spelling.english;
+    }
+  }
+  return {};
 }
 
 const char* localized_function_name(ExcelLocale locale, std::string_view canonical) noexcept {

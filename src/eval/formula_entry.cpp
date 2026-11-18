@@ -11,6 +11,7 @@
 
 #include "eval/builtin_names.h"
 #include "eval/formula_entry_r1c1.h"
+#include "eval/formula_localize.h"
 #include "excel_locale.h"
 #include "parser/ast.h"
 #include "parser/formula_prefix.h"
@@ -77,49 +78,58 @@ const DefinedName* scoped_name(const Workbook& book, std::string_view typed, std
   return nullptr;
 }
 
-// The workbook's own spelling of the sheet, defined name or table `typed` names, or empty.
-std::string_view own_entry_name(const void* ctx, parser::EnteredNameKind kind, std::string_view typed,
-                                std::string_view sheet) {
+// The workbook's own spelling of the sheet, defined name or table `typed` names.
+parser::OwnName own_entry_name(const void* ctx, parser::EnteredNameKind kind, std::string_view typed,
+                               std::string_view sheet) {
   const auto& entry = *static_cast<const EntrySpellingContext*>(ctx);
   const Workbook& book = *entry.book;
   switch (kind) {
     case parser::EnteredNameKind::kSheet: {
       const Sheet* found = book.sheet_by_name(typed);
-      return found != nullptr ? std::string_view(found->name()) : std::string_view();
+      return {found != nullptr ? std::string_view(found->name()) : std::string_view()};
     }
     case parser::EnteredNameKind::kTable: {
       const std::size_t index = sheet_names::resolve_table(book.tables(), typed);
-      return index != sheet_names::kNotFound ? std::string_view(book.tables()[index].display_name) : std::string_view();
+      return {index != sheet_names::kNotFound ? std::string_view(book.tables()[index].display_name)
+                                              : std::string_view()};
     }
     case parser::EnteredNameKind::kDefinedName:
       break;
   }
   // A typed built-in name without its `_xlnm.` prefix reaches the visible
-  // built-in; a stored exact spelling wins, and a sheet-local name hides a
-  // workbook one. A sheet qualifier looks in that sheet's names first.
-  const std::size_t qualifier = sheet.empty() ? Workbook::kNoSheet : book.sheet_index_by_name(sheet);
-  if (qualifier != Workbook::kNoSheet) {
-    for (const bool builtin : {false, true}) {
-      if (const DefinedName* name = scoped_name(book, typed, static_cast<std::int32_t>(qualifier), builtin)) {
-        return name->name;
+  // built-in, and a stored exact spelling wins. Unqualified, a sheet-local
+  // name hides a workbook one; a qualified name its sheet does not define is
+  // read at workbook scope. A built-in that resolves to nothing still takes
+  // its canonical spelling.
+  if (!sheet.empty()) {
+    const std::size_t qualifier = book.sheet_index_by_name(sheet);
+    if (qualifier != Workbook::kNoSheet) {
+      for (const bool builtin : {false, true}) {
+        if (const DefinedName* name = scoped_name(book, typed, static_cast<std::int32_t>(qualifier), builtin)) {
+          return {name->name};
+        }
+      }
+      for (const bool builtin : {false, true}) {
+        if (const DefinedName* name = scoped_name(book, typed, -1, builtin)) {
+          return {name->name, true};
+        }
       }
     }
+    return {builtin_defined_name(typed)};
   }
   const auto local = entry.sheet != Workbook::kNoSheet ? static_cast<std::int32_t>(entry.sheet) : -1;
-  // A qualified name falls back to a workbook built-in, never the entry sheet's.
-  const std::int32_t builtin_local = qualifier == Workbook::kNoSheet ? local : -1;
   for (const bool builtin : {false, true}) {
-    for (const std::int32_t scope : {builtin ? builtin_local : local, -1}) {
+    for (const std::int32_t scope : {local, -1}) {
       if (const DefinedName* name = scoped_name(book, typed, scope, builtin)) {
-        return name->name;
+        return {name->name};
       }
     }
   }
-  return {};
+  return {builtin_defined_name(typed)};
 }
 
-std::string_view no_entry_name(const void*, parser::EnteredNameKind, std::string_view, std::string_view) {
-  return std::string_view();
+parser::OwnName no_entry_name(const void*, parser::EnteredNameKind, std::string_view, std::string_view) {
+  return {};
 }
 
 std::string_view entry_unknown_call(const void* ctx, std::string_view typed) {

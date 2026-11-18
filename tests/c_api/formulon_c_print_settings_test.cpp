@@ -444,7 +444,8 @@ TEST(FormulonCApiPrintSettings, TypedPrintAreaNameReachesTheVisibleBuiltIn) {
 }
 
 // A sheet without its own print area sees a workbook-scope one, typed bare
-// or qualified with that sheet; the sheet that has one keeps its own.
+// or qualified with that sheet (stored `[0]!`); the sheet that has one keeps
+// its own.
 TEST(FormulonCApiPrintSettings, TypedPrintAreaNameFallsBackToTheWorkbookBuiltIn) {
   WorkbookGuard wb;
   ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
@@ -466,7 +467,7 @@ TEST(FormulonCApiPrintSettings, TypedPrintAreaNameFallsBackToTheWorkbookBuiltIn)
     double rows;
   };
   for (const Case& c : {Case{0, 9, "=ROWS(_xlnm.Print_Area)", 2.0}, Case{second, 0, "=ROWS(_xlnm.Print_Area)", 1.0},
-                        Case{second, 1, "=ROWS(Sheet3!_xlnm.Print_Area)", 1.0}}) {
+                        Case{second, 1, "=ROWS([0]!_xlnm.Print_Area)", 1.0}}) {
     SCOPED_TRACE(c.stored);
     const formulon::Cell* cell = wb.handle->workbook().sheet(c.sheet).cell_at(c.row, 0);
     ASSERT_NE(cell, nullptr);
@@ -476,6 +477,21 @@ TEST(FormulonCApiPrintSettings, TypedPrintAreaNameFallsBackToTheWorkbookBuiltIn)
     ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
     EXPECT_EQ(value.u.number, c.rows);
   }
+}
+
+// A built-in name nothing defines keeps its canonical spelling and is #NAME?.
+TEST(FormulonCApiPrintSettings, UnresolvedBuiltInNameTakesItsCanonicalSpelling) {
+  WorkbookGuard wb;
+  ASSERT_EQ(fm_workbook_create_default(&wb.handle), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 0, 0, "=ROWS(print_titles)+ROWS(consolidate_area)"), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  const formulon::Cell* cell = wb.handle->workbook().sheet(0).cell_at(0, 0);
+  ASSERT_NE(cell, nullptr);
+  EXPECT_EQ(cell->formula_text, "=ROWS(Print_Titles)+ROWS(Consolidate_Area)");
+  fm_value_t value{};
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 0, 0, &value), 0);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_ERROR);
+  EXPECT_EQ(value.u.error_code, 4);  // #NAME?
 }
 
 TEST(FormulonCApiPrintSettings, EmptyPrintAreaRemovesTheDefinedName) {

@@ -490,7 +490,11 @@ const char* TestBuiltin(std::string_view name) {
   return nullptr;
 }
 
-std::string_view TestOwn(const void*, EnteredNameKind kind, std::string_view typed, std::string_view) {
+// `BookName` is a workbook-scope name no sheet defines.
+OwnName TestOwn(const void*, EnteredNameKind kind, std::string_view typed, std::string_view sheet) {
+  if (kind == EnteredNameKind::kDefinedName && strings::case_insensitive_eq(typed, "BookName")) {
+    return {"BookName", !sheet.empty()};
+  }
   std::vector<std::string_view> own;
   switch (kind) {
     case EnteredNameKind::kSheet:
@@ -505,10 +509,10 @@ std::string_view TestOwn(const void*, EnteredNameKind kind, std::string_view typ
   }
   for (const std::string_view name : own) {
     if (strings::case_insensitive_eq(typed, name)) {
-      return name;
+      return {name};
     }
   }
-  return std::string_view();
+  return {};
 }
 
 // First spellings of unknown calls, as a workbook records them.
@@ -552,6 +556,14 @@ TEST(SpellEnteredNames, KeepsStringsNamesStructuredRefsAndWhitespace) {
   EXPECT_EQ(SpellNames("=sum(table1[[#this row],[col a]])"), "=SUM(Table1[[#this row],[col a]])");
   EXPECT_EQ(SpellNames("=sum( a1 ,\n b2 )"), "=SUM( A1 ,\n B2 )");
   EXPECT_EQ(SpellNames("=[Book.xlsx]sheet1!a1"), "=[Book.xlsx]sheet1!A1");
+}
+
+TEST(SpellEnteredNames, RequalifiesAWorkbookNameItsSheetDoesNotDefine) {
+  EXPECT_EQ(SpellNames("=sheet2!bookname+sheet2!myname+bookname"), "=[0]!BookName+Sheet2!MyName+BookName");
+  EXPECT_EQ(SpellNames("='my data'!bookname"), "=[0]!BookName");
+  // A 3-D or external qualifier is not requalified.
+  EXPECT_EQ(SpellNames("=sheet1:sheet2!bookname"), "=Sheet1:Sheet2!BookName");
+  EXPECT_EQ(SpellNames("=[1]sheet2!x"), "=[1]sheet2!x");
 }
 
 TEST(SpellEnteredNames, RespellsSheetQualifiers) {

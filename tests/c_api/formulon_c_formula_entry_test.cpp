@@ -272,6 +272,23 @@ TEST(FormulonCApiFormulaEntry, DefinedNameAcceptsABareReferenceUnion) {
   EXPECT_EQ(value.u.number, 2.0);
 }
 
+// A name qualified with a sheet that does not define it reaches the
+// workbook-scope name and is stored as `[0]!Name`.
+TEST(FormulonCApiFormulaEntry, QualifiedWorkbookNameIsStoredWithTheBookQualifier) {
+  WorkbookGuard wb;
+  MakeWorkbook(&wb);
+  std::size_t second = 0;
+  ASSERT_EQ(fm_workbook_add_sheet(wb.handle, "Sheet2", 1, &second), 0);
+  ASSERT_EQ(SetDefinedName(wb.handle, "wbn", "Sheet1!$A$1:$B$2"), 0) << fm_get_last_error_message();
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, second, 0, 0, "=ROWS(Sheet1!WBN)"), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  EXPECT_EQ(wb.handle->workbook().sheet(second).cell_at(0, 0)->formula_text, "=ROWS([0]!wbn)");
+  fm_value_t value{};
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, second, 0, 0, &value), 0);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
+  EXPECT_EQ(value.u.number, 2.0);
+}
+
 // A workbook of `profile`.
 void MakeProfileWorkbook(WorkbookGuard* wb, const char* profile) {
   ASSERT_EQ(fm_workbook_create_for_profile(profile, &wb->handle), 0) << fm_get_last_error_message();
