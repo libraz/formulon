@@ -366,6 +366,65 @@ TEST(WorkbookTables, ThisRowReferenceFollowsItsOwnRow) {
   EXPECT_EQ(At(wb, 2, 2), Value::number(80.0));
 }
 
+// A table reference passed to OFFSET is the area it denotes: the shifted area reads past the table, and an edit
+// there recalculates the formula.
+TEST(WorkbookTables, OffsetOverATableReferenceFollowsTheShiftedArea) {
+  Workbook wb = Workbook::create();
+  FillSales(wb);
+  ASSERT_TRUE(wb.add_table(make_table("Sales", "A1:B4", 2)).has_value());
+  ASSERT_TRUE(wb.set_cell_formula(0, 0, 4, "=SUM(OFFSET(Sales[C2],1,0))"));
+  ASSERT_TRUE(wb.set_cell_formula(0, 1, 4, "=ROWS(Sales[C2]:B9)"));
+  Recalc(wb);
+  EXPECT_EQ(At(wb, 0, 4), Value::number(5.0));
+  EXPECT_EQ(At(wb, 1, 4), Value::number(8.0));
+
+  ASSERT_TRUE(wb.set_cell_value(0, 4, 1, Value::number(40.0)));
+  Recalc(wb);
+  EXPECT_EQ(At(wb, 0, 4), Value::number(45.0));
+}
+
+// `@` over a table reference intersects it like the area it denotes, from beside the table (G3, A3), below it (C7)
+// and inside its body (E3), where `#Data` includes the formula cell itself.
+TEST(WorkbookTables, AtOverATableReferenceIntersectsByPosition) {
+  Workbook wb = Workbook::create();
+  for (std::uint32_t r = 1; r <= 3; ++r) {
+    ASSERT_TRUE(wb.set_cell_value(0, r, 2, Value::number(static_cast<double>(r))));
+    ASSERT_TRUE(wb.set_cell_value(0, r, 3, Value::number(static_cast<double>(r * 10))));
+  }
+  ASSERT_TRUE(wb.set_cell_value(0, 0, 2, Value::text("C1")));
+  ASSERT_TRUE(wb.add_table(make_table("Table1", "C1:E4", 3)).has_value());
+  struct Position {
+    std::uint32_t row;
+    std::uint32_t col;
+  };
+  const Position beside_right{2, 6};
+  const Position beside_left{2, 0};
+  const Position below{6, 2};
+  const Position inside{2, 4};
+  struct Case {
+    const char* formula;
+    Value right, left, under, body;
+  };
+  const Case cases[] = {
+      {"=@Table1[C1]", Value::number(2.0), Value::number(2.0), Value::error(ErrorCode::Value), Value::number(2.0)},
+      {"=@Table1[[#Data],[C1]]", Value::number(2.0), Value::number(2.0), Value::error(ErrorCode::Value),
+       Value::number(2.0)},
+      {"=@Table1[#Data]", Value::error(ErrorCode::Value), Value::error(ErrorCode::Value),
+       Value::error(ErrorCode::Value), Value::number(0.0)},
+      {"=@Table1[[#Headers],[C1]]", Value::text("C1"), Value::text("C1"), Value::text("C1"), Value::text("C1")},
+  };
+  for (const Case& c : cases) {
+    for (const Position p : {beside_right, beside_left, below, inside}) {
+      ASSERT_TRUE(wb.set_cell_formula(0, p.row, p.col, c.formula)) << c.formula;
+    }
+    Recalc(wb);
+    EXPECT_EQ(At(wb, beside_right.row, beside_right.col), c.right) << c.formula;
+    EXPECT_EQ(At(wb, beside_left.row, beside_left.col), c.left) << c.formula;
+    EXPECT_EQ(At(wb, below.row, below.col), c.under) << c.formula;
+    EXPECT_EQ(At(wb, inside.row, inside.col), c.body) << c.formula;
+  }
+}
+
 // Excel refuses a spill of more than one cell that touches a table, anchor
 // included, and lets it through again once the table is gone.
 TEST(WorkbookTables, ASpillTouchingATableIsRefused) {

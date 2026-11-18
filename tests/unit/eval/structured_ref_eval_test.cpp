@@ -498,6 +498,75 @@ TEST(StructuredRefEval, HeadersOnTableWithoutHeadersIsRef) {
   EXPECT_EQ(v.as_error(), ErrorCode::Ref);
 }
 
+// Evaluates `form` with `<T>` replaced by `ref` from (`row`, D).
+std::string EvalTwin(const Workbook& wb, std::string form, std::string_view ref, std::uint32_t row) {
+  for (std::size_t at = form.find("<T>"); at != std::string::npos; at = form.find("<T>", at + ref.size())) {
+    form.replace(at, 3, ref);
+  }
+  Arena arena;
+  return EvalAt(wb, "=" + form, row, arena).debug_to_string();
+}
+
+struct TwinCase {
+  const char* form;
+  Value expected;
+};
+
+// A table reference is a reference wherever the area it denotes is one: each form reads the same through
+// `Sales[Amount]` as through `$C$2:$C$4`.
+TEST(StructuredRefEval, TableReferenceIsTheAreaItDenotes) {
+  Workbook wb = MakeWorkbookWithSalesTable(/*with_totals_row=*/false);
+  const TwinCase cases[] = {
+      {"@<T>", Value::number(20.0)},
+      {"@(<T>)", Value::number(20.0)},
+      {"LET(a,<T>,@a)", Value::number(20.0)},
+      {"@INDEX(<T>,0)", Value::number(20.0)},
+      {"@INDEX(<T>,0,1)", Value::number(20.0)},
+      {"@OFFSET(<T>,0,0)", Value::number(20.0)},
+      {"@IF(TRUE,<T>)", Value::number(20.0)},
+      {"@CHOOSE(1,<T>)", Value::number(20.0)},
+      {"@TAKE(<T>,2)", Value::number(20.0)},
+      {"ISREF(<T>)", Value::boolean(true)},
+      {"ISREF((<T>))", Value::boolean(true)},
+      {"ISREF(INDEX(<T>,1))", Value::boolean(true)},
+      {"ISREF(TAKE(<T>,1))", Value::boolean(true)},
+      {"ISREF(IF(TRUE,<T>))", Value::boolean(true)},
+      {"AND(MAP(<T>,LAMBDA(x,ISREF(x))))", Value::boolean(true)},
+      {"SUM(MAP(<T>,LAMBDA(x,ROW(x))))", Value::number(9.0)},
+      {"ROWS(<T>)", Value::number(3.0)},
+      {"ROWS(<T>:C9)", Value::number(8.0)},
+      {"AREAS(<T>)", Value::number(1.0)},
+      {"SUM(OFFSET(<T>,1,0))", Value::number(50.0)},
+      {"CELL(\"address\",<T>)", Value::text("$C$2")},
+      {"COLUMN(<T>)", Value::number(3.0)},
+      {"SUM(ROW(<T>))", Value::number(9.0)},
+      {"SHEET(<T>)", Value::number(1.0)},
+      {"N(<T>)", Value::number(10.0)},
+      {"OR(ISFORMULA(<T>))", Value::boolean(false)},
+      {"SUM(--ISNA(FORMULATEXT(<T>)))", Value::number(3.0)},
+  };
+  for (const TwinCase& c : cases) {
+    const std::string table = EvalTwin(wb, c.form, "Sales[Amount]", /*row=*/2);
+    EXPECT_EQ(table, EvalTwin(wb, c.form, "$C$2:$C$4", /*row=*/2)) << c.form;
+    EXPECT_EQ(table, c.expected.debug_to_string()) << c.form;
+  }
+}
+
+// `@` over a table reference intersects the formula row like `@` over its area: a row beside the column reads that
+// row's cell, the header row and a row below the table have no intersection.
+TEST(StructuredRefEval, AtOverTableReferenceIntersectsTheFormulaRow) {
+  Workbook wb = MakeWorkbookWithSalesTable(/*with_totals_row=*/false);
+  const char* const forms[] = {"@<T>", "LET(a,<T>,@a)", "@OFFSET(<T>,0,0)", "@TAKE(<T>,3)"};
+  for (const char* form : forms) {
+    for (const std::uint32_t row : {0U, 6U}) {
+      const std::string table = EvalTwin(wb, form, "Sales[Amount]", row);
+      EXPECT_EQ(table, EvalTwin(wb, form, "$C$2:$C$4", row)) << form << " row " << row;
+      EXPECT_EQ(table, Value::error(ErrorCode::Value).debug_to_string()) << form << " row " << row;
+    }
+    EXPECT_EQ(EvalTwin(wb, form, "Sales[Amount]", /*row=*/3U), Value::number(30.0).debug_to_string()) << form;
+  }
+}
+
 }  // namespace
 }  // namespace eval
 }  // namespace formulon

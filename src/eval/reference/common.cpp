@@ -218,9 +218,9 @@ bool resolve_offset_base(const parser::AstNode& raw_arg, Arena& arena, const Fun
     out->cols = c_hi - c_lo + 1U;
     return true;
   }
-  if (k == parser::NodeKind::Literal && arg.as_literal().is_ref()) {
-    // A name bound to a reference: its one area is the base. Only its position is used, so it is no read of its
-    // cells.
+  if (k == parser::NodeKind::StructuredRef || (k == parser::NodeKind::Literal && arg.as_literal().is_ref())) {
+    // A table reference, or a name bound to a reference: its one area is the base. Only its position is used, so it
+    // is no read of its cells.
     RefArea area{};
     if (!eval_reference_area(arg, arena, registry, ctx.without_dynamic_read_callback(), &out->sheet, &area, out_err)) {
       return false;

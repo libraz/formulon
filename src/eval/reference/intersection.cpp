@@ -172,7 +172,7 @@ bool resolve_name_endpoint(const parser::AstNode& node, Arena& arena, const Func
   }
   const parser::NodeKind k = body->kind();
   if (k == parser::NodeKind::Ref || k == parser::NodeKind::RangeOp || k == parser::NodeKind::NameRef ||
-      parser::is_self_book_name_ref(*body) ||
+      k == parser::NodeKind::StructuredRef || parser::is_self_book_name_ref(*body) ||
       (k == parser::NodeKind::Call && is_reference_call_name(body->as_call_name()))) {
     return resolve_range_endpoint(*body, arena, registry, body_ctx, out_sheet, out_top_row, out_left_col,
                                   out_bottom_row, out_right_col, out_err);

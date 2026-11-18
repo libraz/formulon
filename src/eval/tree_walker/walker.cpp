@@ -646,6 +646,7 @@ bool evaluates_to_reference(const parser::AstNode& node) {
   switch (node.kind()) {
     case parser::NodeKind::Ref:
     case parser::NodeKind::Ref3D:
+    case parser::NodeKind::StructuredRef:
       return true;
     case parser::NodeKind::RangeOp:
       for (std::uint32_t i = 0; i < node.as_range_arity(); ++i) {

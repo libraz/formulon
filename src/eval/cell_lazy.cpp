@@ -151,7 +151,7 @@ bool extract_topleft_ref(const parser::AstNode& ref_node, Arena& arena, const Fu
   // Reference-returning call (OFFSET / INDIRECT / nested CHOOSE / IF) or a name standing for a reference, read as
   // the `Ref` it evaluates to.
   if ((k == parser::NodeKind::Call && is_reference_call_name(ref_node.as_call_name())) ||
-      k == parser::NodeKind::NameRef || is_literal_reference(ref_node)) {
+      k == parser::NodeKind::NameRef || k == parser::NodeKind::StructuredRef || is_literal_reference(ref_node)) {
     RefArea area{};
     ErrorCode err = ErrorCode::Value;
     if (eval_reference_area(ref_node, arena, registry, ctx, out_sheet, &area, &err)) {

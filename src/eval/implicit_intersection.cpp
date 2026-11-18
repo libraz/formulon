@@ -98,11 +98,12 @@ IntersectionProjection project_implicit_intersection(const parser::AstNode& oper
 
 namespace {
 
-// Whether `operand` can yield a reference here: a name, an intersection, a spill, a reference-returning call, or a
-// LET or lambda call returning one.
+// Whether `operand` can yield a reference here: a name, a table reference, an intersection, a spill, a
+// reference-returning call, or a LET or lambda call returning one.
 bool may_yield_reference(const parser::AstNode& operand, const FunctionRegistry& registry) {
   switch (operand.kind()) {
     case parser::NodeKind::NameRef:
+    case parser::NodeKind::StructuredRef:
     case parser::NodeKind::IntersectOp:
     case parser::NodeKind::SpillRef:
     case parser::NodeKind::LetBinding:
