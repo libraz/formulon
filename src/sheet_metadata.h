@@ -131,10 +131,9 @@ enum class SqrefOrder : std::uint8_t {
 /// rectangle with; two unmoved parts stay apart.
 void shift_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit, SqrefOrder order);
 
-/// `shift_sqref_ranges` for a conditional format's sqref, legacy or x14,
-/// except that a range that only moved joins nothing; a band delete also joins
-/// the ranges it brings together into the one rectangle they now tile, unless
-/// they tiled it before the edit.
+/// `shift_sqref_ranges` for a conditional format's sqref, legacy or x14: a
+/// band delete also joins the ranges it brings together into the one
+/// rectangle they now tile, unless they tiled it before the edit.
 void shift_cf_sqref_ranges(std::vector<MergeRange>& ranges, const StructuralEdit& edit, SqrefOrder order);
 
 /// Moves retained ranges that follow references (protected ranges, sort and

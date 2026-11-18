@@ -605,9 +605,9 @@ bool JoinsAsRectangle(const MergeRange& a, const MergeRange& b) noexcept {
 
 // What a piece is to the edit that produced it.
 enum class Piece : std::uint8_t {
-  kWhole,      // A range the edit leaves where it is, or one that only moved in a `kCf` sqref.
+  kWhole,      // A range the edit leaves where it is.
   kRemainder,  // The unmoved part of a split range.
-  kMoved,      // The moved part of a split range, or a range that only moved in a `kShift` sqref.
+  kMoved,      // The moved part of a split range, or a range that only moved.
 };
 
 // How a band edit arranges the pieces of the ranges it splits or cuts.
@@ -697,18 +697,17 @@ void EditSqrefRanges(std::vector<MergeRange>& ranges, const StructuralEdit& edit
     const bool to_end = arrangement == Arrangement::kToEnd && (splits_range || cuts);
     std::vector<MergeRange>& target = to_end ? edited : out;
     std::vector<Piece>& target_kinds = to_end ? edited_kinds : kinds;
-    const Piece moved_kind = splits_range || mode == SqrefMode::kShift ? Piece::kMoved : Piece::kWhole;
     // Validation puts the moved part first on a delete, and on an insert that moves the range's top-left cell.
     const bool moved_first = !drop && to_end && order == SqrefOrder::kValidation && (edit.is_delete || corner_moves);
     if (moved_first) {
       target.push_back(moving);
-      target_kinds.push_back(moved_kind);
+      target_kinds.push_back(Piece::kMoved);
     }
     target.insert(target.end(), remainder.begin(), remainder.end());
     target_kinds.resize(target.size(), Piece::kRemainder);
     if (!drop && !moved_first) {
       target.push_back(moving);
-      target_kinds.push_back(moved_kind);
+      target_kinds.push_back(Piece::kMoved);
     }
   }
   out.insert(out.end(), edited.begin(), edited.end());

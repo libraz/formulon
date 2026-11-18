@@ -2576,10 +2576,16 @@ std::string SavedSheetXml(const Workbook& wb) {
 
 // A rule on `rect` of each kind, legacy and x14: a conditional format, a data
 // validation, and the x14 copy of each that the sheet's extLst retains.
-void AddRulesWithX14Copies(Workbook& wb, std::string_view rect) {
-  AddCf(wb, {rect});
-  AddDv(wb, {rect});
-  const std::string sqref(rect);
+void AddRulesWithX14Copies(Workbook& wb, std::string_view sqref_text) {
+  std::vector<std::string_view> pieces;
+  for (std::size_t from = 0; from <= sqref_text.size();) {
+    const std::size_t space = std::min(sqref_text.find(' ', from), sqref_text.size());
+    pieces.push_back(sqref_text.substr(from, space - from));
+    from = space + 1U;
+  }
+  AddCf(wb, pieces);
+  AddDv(wb, pieces);
+  const std::string sqref(sqref_text);
   wb.sheet(0).set_ext_lst_xml(
       "<extLst><ext uri=\"{78C0D931-6437-407d-A8EE-F0AAD7539E65}\" "
       "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\" "
@@ -2720,21 +2726,16 @@ TEST(InsertDeleteCells, SavedSqrefOrderFollowsTheEdit) {
   }
 }
 
-TEST(InsertDeleteCells, SavedValidationJoinsPiecesThatOnlyMoved) {
+TEST(InsertDeleteCells, SavedSqrefJoinsPiecesThatOnlyMoved) {
   Workbook wb = Workbook::create();
   wb.add_sheet("Sheet2");
-  AddDv(wb, {"H9", "D2", "D3", "B2:B4"});
-  wb.sheet(0).set_ext_lst_xml(
-      "<extLst><ext uri=\"{CCE6A557-97BC-4b89-ADB6-D9C93CAAB3DF}\" "
-      "xmlns:x14=\"http://schemas.microsoft.com/office/spreadsheetml/2009/9/main\" "
-      "xmlns:xm=\"http://schemas.microsoft.com/office/excel/2006/main\">"
-      "<x14:dataValidations count=\"1\"><x14:dataValidation type=\"list\" allowBlank=\"1\">"
-      "<x14:formula1><xm:f>Sheet2!$A$1:$A$2</xm:f></x14:formula1>"
-      "<xm:sqref>H9 D2 D3 B2:B4</xm:sqref></x14:dataValidation></x14:dataValidations></ext></extLst>");
+  AddRulesWithX14Copies(wb, "H9 D2 D3 B2:B4");
   ExpectOk(Edit(wb, "B2:C3", CellShift::kRight));
   const std::string xml = SavedSheetXml(wb);
   const std::vector<std::string> expected{"B4 D2:D3 F2:F3 H9"};
+  EXPECT_EQ(SavedSqrefs(xml, "conditionalFormatting", false), expected);
   EXPECT_EQ(SavedSqrefs(xml, "dataValidation", false), expected);
+  EXPECT_EQ(SavedSqrefs(xml, "x14:conditionalFormatting", true), expected);
   EXPECT_EQ(SavedSqrefs(xml, "x14:dataValidation", true), expected);
 }
 
