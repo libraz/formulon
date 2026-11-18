@@ -246,6 +246,32 @@ TEST(FormulonCApiFormulaEntry, DefinedNameAcceptsParseableText) {
   ASSERT_EQ(count_of(fm_workbook_get_defined_name_count, wb.handle), 4U);
 }
 
+// A name body may be a bare comma list of references, stored as written and
+// evaluated as one multi-area reference; a dangling comma is still refused.
+TEST(FormulonCApiFormulaEntry, DefinedNameAcceptsABareReferenceUnion) {
+  WorkbookGuard wb;
+  MakeWorkbook(&wb);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 0, 4.0), 0);
+  ASSERT_EQ(fm_sheet_set_number(wb.handle, 0, 0, 1, 6.0), 0);
+  ASSERT_EQ(SetDefinedName(wb.handle, "u", "Sheet1!$A$1,Sheet1!$B$1"), 0) << fm_get_last_error_message();
+  ExpectParseRefusal(SetDefinedName(wb.handle, "Fresh", "Sheet1!$A$1,"), "Sheet1!$A$1,");
+  fm_defined_name_t entry = FM_STRUCT_INIT(fm_defined_name_t);
+  int32_t present = 0;
+  ASSERT_EQ(fm_workbook_get_defined_name(wb.handle, "u", FM_DEFINED_NAME_SCOPE_WORKBOOK, &present, &entry), 0);
+  ASSERT_EQ(present, 1);
+  EXPECT_STREQ(entry.formula, "=Sheet1!$A$1,Sheet1!$B$1");
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 2, 0, "=SUM(u)"), 0);
+  ASSERT_EQ(fm_sheet_set_formula(wb.handle, 0, 3, 0, "=AREAS(u)"), 0);
+  ASSERT_EQ(fm_workbook_recalc(wb.handle), 0);
+  fm_value_t value{};
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 2, 0, &value), 0);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
+  EXPECT_EQ(value.u.number, 10.0);
+  ASSERT_EQ(fm_sheet_get_value(wb.handle, 0, 3, 0, &value), 0);
+  ASSERT_EQ(value.kind, FM_VALUE_KIND_NUMBER);
+  EXPECT_EQ(value.u.number, 2.0);
+}
+
 // A workbook of `profile`.
 void MakeProfileWorkbook(WorkbookGuard* wb, const char* profile) {
   ASSERT_EQ(fm_workbook_create_for_profile(profile, &wb->handle), 0) << fm_get_last_error_message();

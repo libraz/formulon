@@ -158,6 +158,11 @@ fm_status_t check_cell_text_length(std::string_view text, const char* field);
 fm_status_t check_stored_formula(const fm_workbook_t* wb, std::string_view formula, std::string_view context,
                                  std::string* out);
 
+// `check_stored_formula` for a defined-name body, which may also be a bare
+// comma list of references (`Sheet1!$A$1,Sheet1!$B$1`).
+fm_status_t check_stored_name_body(const fm_workbook_t* wb, std::string_view formula, std::string_view context,
+                                   std::string* out);
+
 // Stored form of a `formula` that passed `check_stored_formula`, taken as the
 // entry commits: `Workbook::ingest_entered_formula` (which binds the books it
 // names) without the one leading '='. An empty `formula` yields "".

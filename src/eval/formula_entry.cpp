@@ -170,8 +170,12 @@ const AstNode* call_taking(const AstNode& node, const AstNode* arg) {
 // reference-only parameter (`SUBTOTAL(9,)`), an argument count the callee
 // does not take (`ROWS()`), a newer error literal (`#CALC!`), or a typed
 // `ANCHORARRAY` call.
-const AstNode* diagnose_entry(std::string_view src, Arena& arena, bool refusals, ParseFailure* failure) {
-  const AstNode* root = parse_formula_entry_with_diagnostics(src, arena, failure);
+// The grammar entry parses in: a cell formula's, or a defined-name body's.
+using EntryParse = AstNode* (*)(std::string_view, Arena&, ParseFailure*);
+
+const AstNode* diagnose_entry(std::string_view src, Arena& arena, bool refusals, ParseFailure* failure,
+                              EntryParse parse = &parse_formula_entry_with_diagnostics) {
+  const AstNode* root = parse(src, arena, failure);
   if (root == nullptr || !refusals) {
     return root;
   }
@@ -198,8 +202,8 @@ const AstNode* diagnose_entry(std::string_view src, Arena& arena, bool refusals,
 // `caller` after normalization), placed in `caller`: as is when `parsed` and
 // `caller` agree up to its end, else as a re-diagnosis of `caller` finds it
 // when that yields the same code, else over all of `caller`.
-ParseFailure place_failure(std::string_view caller, std::string_view parsed, bool refusals,
-                           const ParseFailure& failure) {
+ParseFailure place_failure(std::string_view caller, std::string_view parsed, bool refusals, const ParseFailure& failure,
+                           EntryParse parse = &parse_formula_entry_with_diagnostics) {
   const ParseFailure at = shifted(failure, prefix_units(parsed, strip_formula_prefix(parsed)));
   const std::size_t bytes = utf8_prefix_bytes(parsed, at.range.end);
   if (caller.substr(0, bytes) == parsed.substr(0, bytes)) {
@@ -208,7 +212,7 @@ ParseFailure place_failure(std::string_view caller, std::string_view parsed, boo
   const std::string_view body = strip_formula_prefix(caller);
   Arena arena;
   ParseFailure again;
-  if (diagnose_entry(body, arena, refusals, &again) == nullptr && again.code == failure.code) {
+  if (diagnose_entry(body, arena, refusals, &again, parse) == nullptr && again.code == failure.code) {
     return shifted(again, prefix_units(caller, body));
   }
   return whole_text_failure(failure.code, caller);
@@ -285,22 +289,51 @@ std::optional<ParseFailure> refused_anchor_array_call(std::string_view formula) 
 // which `formula` binds): whitespace Excel refuses, or a stored spelling
 // `diagnose_entry` refuses, or an `ANCHORARRAY` call as typed.
 const AstNode* parse_entered_formula(std::string_view caller, std::string_view formula, Arena& arena,
-                                     std::string* stored, ParseFailure* failure) {
+                                     std::string* stored, ParseFailure* failure,
+                                     EntryParse parse = &parse_formula_entry_with_diagnostics) {
   *stored = Workbook::normalize_formula_text(std::string(formula), Workbook::FormulaSource::kEntered);
   if (parser::has_refused_whitespace(formula, &is_builtin_function_name)) {
     *failure = whole_text_failure(ParseErrorCode::EntryRefusedWhitespace, caller);
     return nullptr;
   }
   if (const std::optional<ParseFailure> typed = refused_anchor_array_call(formula); typed.has_value()) {
-    *failure = place_failure(caller, formula, /*refusals=*/true, *typed);
+    *failure = place_failure(caller, formula, /*refusals=*/true, *typed, parse);
     return nullptr;
   }
   ParseFailure raw;
-  const AstNode* root = diagnose_entry(strip_formula_prefix(*stored), arena, /*refusals=*/true, &raw);
+  const AstNode* root = diagnose_entry(strip_formula_prefix(*stored), arena, /*refusals=*/true, &raw, parse);
   if (root == nullptr) {
-    *failure = place_failure(caller, *stored, /*refusals=*/true, raw);
+    *failure = place_failure(caller, *stored, /*refusals=*/true, raw, parse);
   }
   return root;
+}
+
+// Entry of `formula` stored outside a cell, parsed by `parse`.
+EntryResult enter_outside_cell(const Workbook& book, EnteredCallSpellings& calls, std::string_view formula,
+                               std::string* stored, ParseFailure* failure, EntryParse parse) {
+  // The parser skips one '=' of its own, so a second one is refused here.
+  if (const std::optional<ParseFailure> refused = refused_entry_prefix(formula)) {
+    *failure = *refused;
+    return EntryResult::kRefused;
+  }
+  if (const std::optional<ParseFailure> refused = refused_typed_table_reference(formula, book)) {
+    *failure = *refused;
+    return EntryResult::kRefused;
+  }
+  if (!sheet_names::valid_utf8(formula)) {
+    return EntryResult::kInvalidUtf8;
+  }
+  if (has_entered_cell_shaped_param(formula)) {
+    *failure = whole_text_failure(ParseErrorCode::EntryParamShapedName, formula);
+    return EntryResult::kRefused;
+  }
+  std::string normalized;
+  Arena arena;
+  if (parse_entered_formula(formula, formula, arena, &normalized, failure, parse) == nullptr) {
+    return EntryResult::kRefused;
+  }
+  *stored = spell_entered_names_in(book, calls, Workbook::kNoSheet, normalized);
+  return EntryResult::kStored;
 }
 
 }  // namespace
@@ -389,29 +422,12 @@ EntryResult enter_cell_formula(const Workbook& book, EnteredCallSpellings& calls
 
 EntryResult enter_stored_formula(const Workbook& book, EnteredCallSpellings& calls, std::string_view formula,
                                  std::string* stored, ParseFailure* failure) {
-  // The parser skips one '=' of its own, so a second one is refused here.
-  if (const std::optional<ParseFailure> refused = refused_entry_prefix(formula)) {
-    *failure = *refused;
-    return EntryResult::kRefused;
-  }
-  if (const std::optional<ParseFailure> refused = refused_typed_table_reference(formula, book)) {
-    *failure = *refused;
-    return EntryResult::kRefused;
-  }
-  if (!sheet_names::valid_utf8(formula)) {
-    return EntryResult::kInvalidUtf8;
-  }
-  if (has_entered_cell_shaped_param(formula)) {
-    *failure = whole_text_failure(ParseErrorCode::EntryParamShapedName, formula);
-    return EntryResult::kRefused;
-  }
-  std::string normalized;
-  Arena arena;
-  if (parse_entered_formula(formula, formula, arena, &normalized, failure) == nullptr) {
-    return EntryResult::kRefused;
-  }
-  *stored = spell_entered_names_in(book, calls, Workbook::kNoSheet, normalized);
-  return EntryResult::kStored;
+  return enter_outside_cell(book, calls, formula, stored, failure, &parse_formula_entry_with_diagnostics);
+}
+
+EntryResult enter_name_body(const Workbook& book, EnteredCallSpellings& calls, std::string_view formula,
+                            std::string* stored, ParseFailure* failure) {
+  return enter_outside_cell(book, calls, formula, stored, failure, &parse_name_body_with_diagnostics);
 }
 
 std::string spell_loaded_cell_formula(const Workbook& book, std::size_t sheet, std::string_view formula) {

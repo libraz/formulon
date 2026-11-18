@@ -1074,8 +1074,13 @@ fm_status_t entry_status(formulon::eval::EntryResult result, std::string_view fo
 
 }  // namespace
 
-fm_status_t check_stored_formula(const fm_workbook_t* wb, std::string_view formula, std::string_view context,
-                                 std::string* out) {
+namespace {
+
+using StoredEntry = formulon::eval::EntryResult (*)(const formulon::Workbook&, formulon::eval::EnteredCallSpellings&,
+                                                    std::string_view, std::string*, formulon::parser::ParseFailure*);
+
+fm_status_t check_stored_entry(const fm_workbook_t* wb, std::string_view formula, std::string_view context,
+                               std::string* out, StoredEntry enter) {
   if (formula.empty()) {
     out->clear();
     return 0;
@@ -1083,12 +1088,24 @@ fm_status_t check_stored_formula(const fm_workbook_t* wb, std::string_view formu
   std::string stored;
   formulon::parser::ParseFailure failure;
   const formulon::eval::EntryResult result =
-      formulon::eval::enter_stored_formula(wb->workbook(), wb->entered_call_spellings, formula, &stored, &failure);
+      enter(wb->workbook(), wb->entered_call_spellings, formula, &stored, &failure);
   if (auto rc = entry_status(result, formula, failure, context); rc != 0) {
     return rc;
   }
   *out = std::string(strip_formula_prefix(stored));
   return 0;
+}
+
+}  // namespace
+
+fm_status_t check_stored_formula(const fm_workbook_t* wb, std::string_view formula, std::string_view context,
+                                 std::string* out) {
+  return check_stored_entry(wb, formula, context, out, &formulon::eval::enter_stored_formula);
+}
+
+fm_status_t check_stored_name_body(const fm_workbook_t* wb, std::string_view formula, std::string_view context,
+                                   std::string* out) {
+  return check_stored_entry(wb, formula, context, out, &formulon::eval::enter_name_body);
 }
 
 std::string ingest_entered_formula(fm_workbook_t* wb, std::string_view formula) {

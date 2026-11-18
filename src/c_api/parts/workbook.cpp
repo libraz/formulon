@@ -42,7 +42,7 @@ using formulon::c_api::parts::check_profile_id;
 using formulon::c_api::parts::check_record_size;
 using formulon::c_api::parts::check_sheet_index;
 using formulon::c_api::parts::check_sheet_rect;
-using formulon::c_api::parts::check_stored_formula;
+using formulon::c_api::parts::check_stored_name_body;
 using formulon::c_api::parts::check_utf8;
 using formulon::c_api::parts::clear_last_error;
 using formulon::c_api::parts::copy_owned_bytes;
@@ -586,7 +586,7 @@ extern "C" fm_status_t fm_workbook_set_defined_name(fm_workbook_t* wb, const fm_
     return rc;
   }
   std::string stored;
-  if (auto rc = check_stored_formula(wb, input->formula, "field=formula", &stored); rc != 0) {
+  if (auto rc = check_stored_name_body(wb, input->formula, "field=formula", &stored); rc != 0) {
     return rc;
   }
   // The model reads an empty formula as a removal; a name always has one.
